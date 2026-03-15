@@ -33,8 +33,16 @@ Each decision has:
 2. **Dual solver** (deep dive design) — Navier-Stokes + wave equation on separate grids, coupled. Physically accurate surfing. Research-level complexity.
 3. **Wave equation only** (never seriously considered) — would lose the fluid feel entirely.
 
-**Where it landed:** Option 1. Single sim with faked waves.
-**Door status:** Open. If the single sim ships and feels good by Wednesday, the wave solver could be a stretch goal. Greg labeled it "a sidequest, not a prerequisite."
+| Mar 15 (late) | Greg reopens: "let's parallelize here. run two experiments, maybe we merge them." Aligns with new Pillar 6 (Run It Twice) — agent compute is cheap, design regret is expensive. |
+
+**Options:**
+1. **Single fluid sim + oscillating force injection** (Forge's recommendation) — fake waves through periodic force patterns from gravity wells. Simpler, proven, shippable.
+2. **Dual solver** (deep dive design) — Navier-Stokes + wave equation on separate grids, coupled. Physically accurate surfing. Research-level complexity.
+3. **Wave equation only** (never seriously considered) — would lose the fluid feel entirely.
+4. **Parallel experiments** (Greg's current position) — run both approaches simultaneously as two agent tasks. Compare results. Merge if they complement each other, pick the winner if not.
+
+**Where it landed:** Option 4. Both get built in parallel Monday night. Two agents, two sims, compare Tuesday morning.
+**Door status:** Open. Experiments will converge or one will win.
 
 ---
 
