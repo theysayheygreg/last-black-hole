@@ -10,20 +10,20 @@ The good news is that this is now fixable with discipline rather than redesign.
 
 ## Showstoppers
 
-### 1. Monday night is still overloaded
+### 1. Monday night is only overloaded if every experiment is treated as equal
 
-You have five things fighting for the same ten-hour window:
+You have five things competing for the same ten-hour window:
 - N1a single-sim prototype
 - N1b dual-solver prototype
 - N3 ASCII pass
 - N2 dev panel
 - N0 test harness
 
-That is too much if you expect all five to land well.
+That is too much if you expect all five to land as peer deliverables.
 
-The parallel experiment itself is fine. The problem is trying to fully support the experiment, the visual identity, the tuning infrastructure, and the automated harness in the same first night.
+The parallel experiment itself is fine. The problem is trying to fully support the experiment, the visual identity, the tuning infrastructure, and the automated harness in the same first night without distinguishing between the mainline and the probes.
 
-If two strong agents are running, the likely failure mode is not "nothing works." The likely failure mode is "everything exists, but nothing is settled enough to judge cleanly Tuesday morning."
+If you have many agents, the likely failure mode is not "nothing works." The likely failure mode is "six interesting things exist, but nothing is settled enough to judge cleanly Tuesday morning."
 
 ### 2. The dual-solver experiment still needs a kill rule
 
@@ -113,7 +113,32 @@ That is my order for one reason: Tuesday morning must produce a build that Greg 
 
 A surfable single-sim build with live tuning and the real visual language is more valuable than a clever dual-solver prototype with no margin around it.
 
-If two agents are available, yes, let one pursue N1b. But if time collapses, N1b is the first thing I would let degrade or die.
+If two agents are available, yes, let one pursue N1b. If you have many agents, let several side probes happen. But if time collapses, N1b is still the first thing I would let degrade or die in the mainline.
+
+### Recommendation 1b: Parallelize exploration, serialize adoption
+
+This is the real staffing rule for the jam.
+
+Run many probes in parallel if you have the token budget:
+- single-sim prototype
+- dual-solver prototype
+- ASCII pass
+- thin dev panel
+- thin smoke harness
+- alternate control model
+- small audio probe
+
+That is fine.
+
+But only one lane should count as the integration lane. My recommendation is:
+- **Mainline:** single-sim movement + live tuning + enough ASCII to judge the feel
+- **Probes:** dual-solver, fancier control variants, richer visuals, deeper testing, side experiments
+
+If a probe clearly wins, promote it into the mainline. If it does not, drop it immediately.
+
+Parallelize exploration. Serialize adoption.
+
+That is how you use high agent capacity without drowning in coordination overhead.
 
 ### Recommendation 2: Tuesday fallback if both prototypes feel wrong
 
