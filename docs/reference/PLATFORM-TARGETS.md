@@ -12,8 +12,61 @@ That path is real, and it fits the game well long-term, but it is a rewrite, not
 
 1. keep the web build as the gameplay source of truth
 2. make controller support rock-solid there
-3. package it for desktop so it can be tested on macOS and Steam Deck
-4. only then decide whether the game has earned a full native renderer
+3. ship the browser build to itch.io for fast private sharing
+4. package it for desktop so it can be tested on macOS and Steam Deck
+5. only then decide whether the game has earned a full native renderer
+
+## itch.io
+
+### Why itch belongs in the plan
+
+For this project, itch.io is not just a storefront. It is the fastest way to get a real playable build in front of friends without building account systems, hosting, or a launcher.
+
+The official docs back that up:
+
+- HTML5 uploads: [Uploading HTML5 games](https://itch.io/docs/creators/html5)
+- page visibility and private sharing: [Access control](https://itch.io/docs/creators/access-control)
+- project setup basics: [Your first itch.io page](https://itch.io/docs/creators/getting-started)
+
+### What itch supports well
+
+Itch will host an HTML5 build directly in the browser if you upload either:
+
+- a ZIP with an `index.html` entry point
+- or a single self-contained HTML file
+
+For a normal jam web build, the ZIP route is the right one.
+
+The docs also make the important constraints explicit:
+
+- use relative paths, not absolute paths
+- filenames are case-sensitive
+- HTML5 projects are meant to stay reasonably small
+- the default extracted-size limits are real enough that giant sloppy exports are a bad fit
+
+That makes itch a good target for a tight browser game and a bad target for a bloated export.
+
+### Private friend sharing
+
+This is the useful part for `Last Black Hole`.
+
+Itch gives you two clean ways to keep the page semi-private:
+
+- **Restricted** access for explicitly approved people
+- **Public but unlisted in search and browse** if you just want a secret-ish shareable link
+
+For quick friend playtests, public-but-unlisted is probably the best default. If you want tighter control, restricted access is there.
+
+### What I would do
+
+For the jam itself:
+
+- make the web build itch-clean
+- upload it as HTML5 ZIP
+- use an unlisted page for friend testing
+- only worry about broader packaging after the game is worth carrying forward
+
+That gets you a live shareable build faster than any native port discussion.
 
 ## macOS
 
@@ -123,16 +176,18 @@ The most important early outcome is not "special Deck code." It is "the game is 
 
 After the jam:
 
-First, make the browser build controller-clean.
+First, make the browser build controller-clean and itch-clean.
 
-Second, make a desktop package and test it on macOS and Steam Deck.
+Second, put it on itch.io for private friend sharing and fast iteration.
 
-Third, decide whether the game has earned a native renderer.
+Third, make a desktop package and test it on macOS and Steam Deck.
+
+Fourth, decide whether the game has earned a native renderer.
 
 If it has, start with macOS native only if you want the game to become a long-term polished product. Otherwise keep the web runtime and spend your time on content, feel, and survival.
 
 ## Strong opinion
 
-The first post-jam target should be a desktop-wrapped web build with strong controller support, not a SwiftUI + Metal rewrite.
+The first post-jam target should be an itch-ready web build with strong controller support, not a SwiftUI + Metal rewrite.
 
 That path teaches you more, faster, and it does not force you to reinvent the game before you know the game is worth carrying forward.
