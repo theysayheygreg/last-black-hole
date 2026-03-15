@@ -135,10 +135,12 @@ See `docs/project/JAM-CONTRACT.md` for full "When Done" checklist, journal trigg
 
 ## Testing
 
-- Manual playtesting. No test framework.
+- **Automated:** `node tests/run-all.js` — Puppeteer-based smoke + physics + gameloop tests. Run after every commit. See `docs/design/AGENT-TESTING.md`.
+- **Manual:** playtesting for feel, art direction, balance. No unit test framework.
 - `console.log` is fine. Remove before ship day (Sunday).
 - Performance matters: 60fps on a mid-range laptop. Profile if you're unsure.
-- Self-verify: open the game in browser, confirm your change works, then commit.
+- Expose `window.__TEST_API` for automated test access to game state (see AGENT-TESTING.md).
+- Self-verify: run tests + open the game in browser, confirm your change works, then commit.
 
 ## Playtest Notes
 

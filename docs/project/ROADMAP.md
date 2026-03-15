@@ -139,8 +139,25 @@ Fluid Sim ──────── ┤                             ├── Ent
   - [ ] Panel works in both prototype HTML files
 - **Scope:** Small (but critical)
 
+#### Task N0: Smoke + Physics Tests (Small, 1hr) — EITHER AGENT (after N1a/N1b + N2)
+- **What:** Automated test harness using Puppeteer. Agents run these after every commit. Greg never has to verify "does it load?"
+- **Files:** `tests/smoke.js`, `tests/physics.js`, `tests/run-all.js`, `package.json` (puppeteer dep)
+- **Dependencies:** At least one prototype running with `__TEST_API` exposed
+- **Deliverables:**
+  - `npm install` adds puppeteer
+  - `node tests/smoke.js` — loads page, checks canvas, WebGL, no errors, 60fps, CONFIG exists (<10s)
+  - `node tests/physics.js` — ship moves on thrust, drifts in current, well pulls, waves oscillate, fluid coupling correct (~30s)
+  - `node tests/run-all.js` — runs all test files, reports pass/fail summary
+  - Game exposes `window.__TEST_API` (see AGENT-TESTING.md): state readers (ship, fluid, wells, fps) + state mutators (teleport, time scale, config)
+- **Acceptance Criteria:**
+  - [ ] `node tests/run-all.js` passes all tests against the winning prototype
+  - [ ] Tests run headless (no visible browser window needed)
+  - [ ] Test output is clear: `PASS: ship moves on thrust` / `FAIL: fps dropped to 42`
+  - [ ] __TEST_API is accessible from Puppeteer's page.evaluate
+- **Scope:** Small
+
 #### Night Report
-- Agent writes `docs/journal/reports/2026-03-16-night.md` — MUST include comparative notes on both prototypes: feel, performance, surfability, visual quality, implementation complexity.
+- Agent writes `docs/journal/reports/2026-03-16-night.md` — MUST include: comparative notes on both prototypes (feel, performance, surfability, visual quality, implementation complexity) AND test pass/fail summary.
 
 ---
 

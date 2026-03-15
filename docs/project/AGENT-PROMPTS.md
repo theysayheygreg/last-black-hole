@@ -45,6 +45,14 @@ TECH STACK:
 - No frameworks, no Three.js, no build step
 - File structure: src/ for JS modules, src/shaders/ for GLSL if separate
 
+CRITICAL: TEST API
+Expose window.__TEST_API on the game window. This is how automated tests
+and the dev panel interact with game state. See docs/design/AGENT-TESTING.md
+for the full interface. At minimum for L0:
+- getShipPos(), getShipVel(), getFluidVelAt(x,y), getFPS()
+- teleportShip(x,y), setTimeScale(scale)
+- getConfig(), setConfig(path, value)
+
 CRITICAL: CONFIG OBJECT PATTERN
 Every tunable value MUST live in a single CONFIG object at the top of your code.
 Every system reads from CONFIG every frame (not cached at init). Example:
