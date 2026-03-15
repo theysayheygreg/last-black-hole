@@ -690,6 +690,7 @@ Greg checks:
 - Title screen: black → grid fades in → gravity well pulses → title in bold serif → "Click to begin"
 - Game over screen: universe collapse animation (wells consume everything, ASCII chars drain to center)
 - Extraction success screen: loot summary, Exotic Matter gained, return to metagame
+- **Player primer / "How to Play" doc** — write for someone who's never seen the game. What are you? What do you do? What kills you? What are the controls? Keep it short (fits on an itch.io page). Covers: surfing concept, thrust/drift, signal, portals, the Inhibitor. This goes on the itch.io page and optionally as an in-game first-run overlay.
 - If ahead: fauna (Signal Moths — simple entities near wrecks, attracted by signal >15%, swarm behavior, contact adds +5% signal)
 
 ### Evening Handoff (midnight)
