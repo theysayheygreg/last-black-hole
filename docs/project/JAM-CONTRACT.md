@@ -87,7 +87,7 @@ Quick pulse checks during the day:
 4. Playtest anything new. Quick feedback in a commit message or note.
 
 ### Night Report (Agent writes this)
-At the end of a night shift, the working agent writes `docs/reports/YYYY-MM-DD-night.md`:
+At the end of a night shift, the working agent writes `docs/journal/reports/YYYY-MM-DD-night.md`:
 
 ```markdown
 # Night Report — [date]
@@ -192,7 +192,9 @@ Estimated scope: [small: <1hr, medium: 1-3hr, large: 3-8hr]
 ## When Done
 - [ ] All criteria met
 - [ ] Working state committed
-- [ ] If night shift: update night report
+- [ ] If any design doc changed: update CHANGELOG.md in the same commit
+- [ ] If a design decision was made: add DECISION-LOG.md entry
+- [ ] If night shift: update night report in docs/journal/reports/
 - [ ] If more tasks remain on this layer: proceed to [next task]
 - [ ] If layer complete: STOP and wait for Greg's review
 ```
@@ -257,6 +259,68 @@ Check these at each morning review:
 - Cut to minimum viable: one portal, no fauna, simplified scavenger AI
 - All agent time goes to closing the gap to "playable game"
 - Greg focuses on the single most important feel issue
+
+---
+
+## Documentation Structure
+
+### Folder Layout
+
+```
+docs/
+  design/           # What we're building — feature specs
+  project/          # How we work — process, plans, contracts
+  reference/        # Why we made those choices — research, reviews
+  journal/          # The record — what happened, what we decided
+```
+
+**`docs/design/`** — Living design docs. These are the specs agents build from and Greg playtests against. They reflect the current state of each feature, not the history. When a design changes, the doc changes.
+
+**`docs/project/`** — Process docs. This contract, the build plan, the roadmap, Forge review briefs, research checklists. How the team coordinates.
+
+**`docs/reference/`** — Research that informed design decisions. EVE wormhole mechanics, Stellaris patterns, Forge's delivered reviews. These don't change — they're the record of what we studied.
+
+**`docs/journal/`** — The full creative record. Designed to be mined for content after the jam and to let us revisit earlier thinking.
+
+### Journal Files
+
+**`DEVLOG.md`** — Reverse-chronological narrative of the jam. One entry per day (or per shift if a lot happened). Covers what was built, what was cut, design pivots, memorable moments, playtest reactions. The high-level story of the project.
+
+**`DECISION-LOG.md`** — Full decision trees for every significant design fork. Tracks: the question, all options considered, who advocated what, where it landed, and whether the door is still open. When we revisit a decision, we add a new dated entry — never overwrite. This is the record of our thinking, including the roads not taken.
+
+**`CHANGELOG.md`** — Human-readable version history of design docs. Git is authoritative, but this is for quick scanning without `git log`. Updated whenever a design doc changes meaningfully.
+
+**`CONTENT-PLAN.md`** — Post-jam content plan. Twitter threads, blog posts, YouTube video concepts. What to capture during the jam for later.
+
+### Who Updates What, When
+
+| Document | Who | When |
+|----------|-----|------|
+| **Design docs** | Agent doing the work | When the feature spec changes due to implementation discoveries or Greg feedback |
+| **DEVLOG.md** | Orrery (or active coordinating agent) | At each checkpoint: morning review, evening handoff, after major pivots |
+| **DECISION-LOG.md** | Whoever is present when a design fork is discussed | Immediately when a decision is made or revisited. Don't batch these — capture the options while they're fresh |
+| **CHANGELOG.md** | Agent that modified a design doc | Same commit as the design doc change |
+| **Night reports** | Night shift agent | End of night shift, in `docs/journal/reports/` |
+| **CONTENT-PLAN.md** | Greg or Orrery | When new content-worthy moments happen |
+
+### Journal Update Triggers
+
+The journal must be updated at these moments:
+
+1. **Morning review** — Orrery adds a DEVLOG entry summarizing overnight work and Greg's reactions
+2. **Evening handoff** — Orrery adds a DEVLOG entry summarizing the day's work, playtest notes, and the night shift plan
+3. **Design pivot** — Whoever is present adds a DECISION-LOG entry with the full option tree
+4. **Design doc change** — The modifying agent adds a CHANGELOG entry in the same commit
+5. **Forge review lands** — Orrery adds DEVLOG + DECISION-LOG entries for any decisions the review influenced
+6. **Scope ratchet** — DEVLOG entry explaining what was cut and why
+7. **Memorable moment** — DEVLOG entry with enough detail to write a tweet or blog post later
+
+### Rules
+
+- **Decision Log entries are append-only.** Never edit a past entry. If a decision is revisited, add a new dated row to the table and update "Where it landed."
+- **Devlog entries are narrative.** Write them like you're telling someone the story of the day, not filing a report.
+- **Changelog is mechanical.** Just the facts: what file changed, what changed in it.
+- **Capture screenshots and recordings.** Note them in the devlog even if we can't embed them. `[Screenshot: first time ASCII shader looked right, 2026-03-17 3pm]` is enough.
 
 ---
 
