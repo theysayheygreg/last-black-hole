@@ -90,16 +90,51 @@ These textures start clean and degrade over the run, encoding the "universe dyin
 
 **Nobody has combined WebGL fluid sim + WebGL ASCII shader in a browser game before.** This is novel.
 
-### 4-Pass GPU Pipeline
+### Layered Rendering Pipeline
+
+The screen has four z-layers, bottom to top. The ASCII substrate is the fabric of spacetime. Things that exist *in* spacetime are ASCII. Things that exist *on top of* spacetime — physical objects and energy events — render as clean vector shapes above the ASCII.
 
 ```
-Pass 1: Fluid sim (advect, diffuse, project)        → fluid FBO (512×512)
-Pass 2: Render fluid density/velocity as color       → scene FBO (full res)
-Pass 3: Feedback blend with previous frame (trails)  → feedback FBO
-Pass 4: ASCII post-process (cell → atlas lookup)     → screen
+Layer 0: ASCII Substrate (the fluid, the fabric)
+  Pass 1: Fluid sim (advect, diffuse, project)       → fluid FBO (256×256+)
+  Pass 2: Render fluid density/velocity as color      → scene FBO (full res)
+  Pass 3: Feedback blend with previous frame (trails) → feedback FBO
+  Pass 4: ASCII post-process (cell → atlas lookup)    → substrate FBO
+
+Layer 1: Entity Overlay (physical objects in spacetime)
+  Pass 5: Render entities as vector shapes / sprites  → entity FBO (alpha-composited)
+  - Ship: small geometric glyph (▶, ◇) or vector triangle, clean edges
+  - Wrecks: geometric clusters, gold/amber, could be vector or dense ASCII
+  - Portals: pulsing rings, clean geometry, glow
+  - Fauna: simple shapes, pale blue
+  - Inhibitor: glitch characters or geometric wrongness
+
+Layer 2: VFX Overlay (energy events, transient effects)
+  Pass 6: Render VFX as additive-blend geometry       → composited on top
+  - Thrust trail: fading line/particles behind ship
+  - Wave catch flash: brief glow when magnetism engages
+  - Portal evaporation shockwave: expanding ring
+  - Inhibitor beam/slash: hot pink vector line (ref: Prompt 8)
+  - Merger shockwave: radial burst
+  - Loot pickup sparkle: brief ascending particles
+  - Screen shake: applied as UV offset to all layers below
+
+Layer 3: HUD (DOM overlay, not WebGL)
+  - DOM elements with z-index above canvas
+  - Corner panels, center warnings, signal bar
+  - CSS CRT effects, scan lines
+  - Inhibitor corruption: CSS jitter on HUD panels
 ```
 
-Total: ~3-5ms per frame. Well within 16ms budget for 60fps even on integrated GPUs.
+**The key distinction:** Layer 0 (ASCII) reacts to the fluid sim — it IS the visualization of spacetime. Layers 1-2 are rendered independently and composited on top. This means:
+- Entities are always readable against the ASCII background (no character collision)
+- VFX pop visually because they're a different rendering language than the substrate
+- The ASCII aesthetic is preserved for the environment while objects get clean, sharp rendering
+- The contrast between messy ASCII substrate and clean entity geometry creates visual hierarchy
+
+**Exploration note:** Whether entities are vector sprites or just differently-rendered ASCII is a Monday tuning question. Start with clean vector shapes on top. If the contrast feels too jarring, try rendering entities as ASCII-styled glyphs but on the entity layer (still composited above the substrate, but using the same visual language). The layer architecture supports both approaches.
+
+**Performance:** ~5-7ms per frame total. Layers 1-2 add minimal cost (a few dozen quads max). The fluid sim and ASCII post-process remain the expensive passes.
 
 ### Font Atlas Generation
 

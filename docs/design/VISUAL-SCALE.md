@@ -95,6 +95,56 @@ From Gemini pre-vis images (assets/pre-vis/), Greg's feedback:
 | Prompt 7 | Ship design variety (lore interest). | Way too detailed for ASCII game. Ship is a glyph, not a sprite. | Post-jam lore art only. |
 | Prompt 8 | Hot pink slash through corrupted space. Math-symbol corruption. Viscerally threatening. | Inhibitor as a "line" is wrong — should be a moving presence. | **Inhibitor energy and color. Corruption spreading.** |
 
+---
+
+## Rendering Layers and Visual Hierarchy
+
+Objects exist in two places simultaneously: they disturb the ASCII substrate (Layer 0) AND render above it (Layer 1). This dual presence is what makes the world feel physical.
+
+### The Four Layers (bottom to top)
+
+```
+Layer 0: ASCII Substrate — the fluid, the fabric of spacetime
+Layer 1: Entity Overlay — physical objects (ship, wrecks, portals, Inhibitor)
+Layer 2: VFX Overlay — energy events (thrust trail, explosions, Inhibitor beam)
+Layer 3: HUD — DOM overlay (signal, portals, warnings)
+```
+
+### How Objects Touch Both Layers
+
+| Object | Layer 0 (substrate disturbance) | Layer 1/2 (above substrate) |
+|--------|-------------------------------|---------------------------|
+| **Ship** | Thrust injects force → wake visible in ASCII behind ship. Denser, warmer characters in the wake cone. | Clean vector triangle or glyph. Always readable. |
+| **Wrecks** | Deflect flow → eddies and lee zones in the ASCII. Calm patch downstream, turbulent edges. | Gold geometric cluster or vector shape on top. |
+| **Portals** | Act as fluid sinks → ASCII swirls inward around them. Characters spiral toward center. | Clean pulsing cyan ring on top. Glow bleeds into substrate via color. |
+| **Gravity wells** | ARE the substrate disturbance. No Layer 1 presence — they're expressed entirely through the ASCII (void center, dense ring, flow patterns). | No overlay — wells are pure environment. |
+| **Inhibitor** | Corrupts the ASCII — characters shift to wrong glyphs, math symbols, equation fragments. Corruption spreads ahead of its path. | Magenta geometric form or glitch shape on Layer 1. Hot pink energy effects on Layer 2. |
+| **Thrust trail** | Wake in the ASCII (Layer 0). | Fading line or particles on Layer 2. |
+| **Merger shockwave** | Massive wave pulse in the ASCII (Layer 0). | Bright expanding ring on Layer 2. |
+| **Wave catch** | Wave crest brightens in ASCII (Layer 0 affordance cue). | Brief flash/glow on Layer 2 confirming the catch. |
+
+### Why This Dual Presence Matters
+
+The substrate disturbance says "this object affects the physics." The overlay says "this object is here, you can interact with it." Without the disturbance, objects would feel like stickers on a background. Without the overlay, objects would be lost in the ASCII noise.
+
+**The visual hierarchy:**
+- Layer 0 (ASCII) is dense, noisy, alive — the ocean
+- Layer 1 (entities) is clean, geometric, sparse — the things in the ocean
+- Layer 2 (VFX) is bright, transient, additive — energy events
+- Layer 3 (HUD) is crisp, informational — the cockpit
+
+The contrast between messy substrate and clean overlay IS the aesthetic. It's what makes the game look like nothing else.
+
+### What to Explore Monday
+
+This is a visual direction, not a locked spec. Monday's parallel experiments should test:
+- Do clean vector entities on top of ASCII look good, or too jarring?
+- If jarring: render entities as ASCII-styled glyphs but still on the overlay layer (separate from substrate, same visual language)
+- Does the entity layer need transparency/blend modes to sit naturally?
+- How much substrate disturbance is enough? Subtle eddies or dramatic flow warping?
+
+---
+
 ### Key Takeaways for Implementation
 
 1. **Ship = glyph, not sprite.** `>` or `▶` at most. Identity through trail and color, not detail.

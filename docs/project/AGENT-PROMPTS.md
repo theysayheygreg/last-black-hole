@@ -126,11 +126,25 @@ gravity wells:
 This is the simpler approach. The bet: Navier-Stokes with clever force
 injection can produce surfable waves without a separate wave equation solver.
 
-GPU PIPELINE (4 passes):
-1. Fluid sim (advect → diffuse → force injection → pressure solve → divergence correction) → fluid FBO
-2. Render fluid density/velocity as color → scene FBO
-3. Feedback blend with previous frame (trails/persistence) → feedback FBO
-4. ASCII post-process (cell → luminance → atlas lookup → color multiply) → screen
+LAYERED RENDERING PIPELINE:
+The screen has layers. ASCII is the substrate (spacetime fabric).
+Entities and VFX render ON TOP of the ASCII, not inside it.
+Objects disturb the substrate (wakes, eddies) AND render above it.
+
+Layer 0 — ASCII substrate:
+  1. Fluid sim (advect → diffuse → force inject → pressure → divergence) → fluid FBO
+  2. Render fluid density/velocity as color → scene FBO
+  3. Feedback blend with previous frame (trails) → feedback FBO
+  4. ASCII post-process (cell → luminance → atlas lookup → color) → substrate FBO
+
+Layer 1 — Entity overlay:
+  5. Render ship, wrecks, portals as clean vector shapes → composited on top
+  Ship is a small geometric shape (▶, ◇), NOT ASCII. Clean edges, always readable.
+
+Layer 2 — VFX overlay:
+  6. Thrust trail, wave catch flash, shockwaves → additive blend on top
+
+Layer 3 — HUD (DOM, not WebGL)
 
 KEY REFERENCES:
 - PavelDoGreat/WebGL-Fluid-Simulation — shader pipeline to fork
@@ -201,12 +215,23 @@ COUPLING:
 - The wave equation creates the long-range propagation
 - The fluid sim creates the local navigation feel
 
-GPU PIPELINE (5 passes):
-1. Wave equation step (separate FBO, 128×128) → wave FBO
-2. Fluid sim + wave force injection (256×256) → fluid FBO
-3. Render fluid density/velocity as color → scene FBO
-4. Feedback blend with previous frame → feedback FBO
-5. ASCII post-process → screen
+LAYERED RENDERING PIPELINE:
+Same layered approach as Approach A — ASCII substrate below, entities above.
+
+Layer 0 — ASCII substrate:
+  1. Wave equation step (separate FBO, 128×128) → wave FBO
+  2. Fluid sim + wave force injection (256×256) → fluid FBO
+  3. Render fluid density/velocity as color → scene FBO
+  4. Feedback blend with previous frame → feedback FBO
+  5. ASCII post-process → substrate FBO
+
+Layer 1 — Entity overlay:
+  6. Render ship as clean vector shape → composited on top
+
+Layer 2 — VFX overlay:
+  7. Thrust trail, wave catch flash → additive blend on top
+
+Layer 3 — HUD (DOM, not WebGL)
 
 KEY REFERENCES:
 - GPU Gems Chapter 38 (Jos Stam) — Navier-Stokes algorithm
