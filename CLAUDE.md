@@ -2,8 +2,44 @@
 
 ## Project
 
-Roguelike extraction game. Browser/WebGL. Game jam: March 16-22, 2026.
-Design docs live in `docs/`. Code starts Monday 12:01a.
+Roguelike extraction game. Browser/WebGL. ASCII-dithered fluid sim. Game jam: March 16-22, 2026.
+Vanilla JS, ES modules, no frameworks, no TypeScript, no build step. Code starts Monday 12:01a.
+
+## Read These First
+
+Before starting ANY task, load these into context:
+1. `docs/design/PILLARS.md` — 6 design lenses, ordered by priority
+2. `docs/design/DESIGN.md` — the game bible
+3. `docs/project/ROADMAP.md` — hour-by-hour jam plan with task IDs
+4. `docs/journal/DECISION-LOG.md` — what's decided, what's open, what was rejected
+5. `docs/design/MOVEMENT.md` — control affordances and tuning variables
+
+For your specific layer, also read:
+- L0: `docs/design/DESIGN-DEEP-DIVE.md` (physics architecture), `docs/project/PRE-MONDAY-RESEARCH.md`
+- L1-L2: `docs/design/SIGNAL-DESIGN.md`, `docs/design/COMBAT.md`
+- L4: `docs/design/DESIGN-DEEP-DIVE.md` (ASCII renderer section), HUD section
+- L5: `docs/design/SCALING.md`
+
+## Design Pillars (decision lenses, in priority order)
+
+1. **Art Is Product** — the ASCII shader is core identity, not polish
+2. **Movement Is the Game** — if surfing isn't fun, nothing else matters
+3. **Signal Is Consequence** — signal taxes ambition, never buys capability
+4. **Universe Is the Clock** — entropy is the timer, not a countdown
+5. **Dread Over Difficulty** — tension from atmosphere, not punishment
+6. **Run It Twice** — when unsure, prototype both and compare
+
+See `docs/design/PILLARS.md` for full descriptions and tests.
+
+## Important Constraints
+
+- **No code before 12:01a Monday March 16**
+- **Art Is Product is non-negotiable** — ASCII shader goes in Monday, not Friday
+- **Forge is the architectural brake** — flag concerns in night reports, don't just ship
+- **Signal does NOT buy capability** — see SIGNAL-DESIGN.md
+- **Layer boundaries need Greg's sign-off** — don't advance to L1 until L0 passes "is it fun to fly around?"
+- **Target 60fps** — performance is a hard constraint, not a nice-to-have
+- **Multiplayer is a stretch goal** — no networking code unless ahead by Thursday
 
 ## Git Rules
 
@@ -79,11 +115,30 @@ Docs: resolved portal charge-time question (instant for v1)
 
 ## Code Style
 
-- Vanilla JS, no framework, no TypeScript (jam speed)
-- Single HTML file if possible, split only when a file exceeds ~500 lines
-- WebGL shaders as template literals or separate `.glsl` files — dealer's choice based on what's cleaner
+- Vanilla JS, ES modules, no framework, no TypeScript (jam speed)
+- One system per file: `fluid.js`, `ship.js`, `ascii-renderer.js`, `wells.js`, etc.
+- WebGL shaders as template literals or separate `.glsl` files — pick one and be consistent within the project
+- File structure: `src/` for code, `src/shaders/` for GLSL if separate, `assets/` for static files
 - No build step unless we absolutely need it (Vite if forced)
 - Comments for "why" not "what" — and especially for magic numbers in physics/rendering
+- Keep files under ~500 lines. Split when they grow.
+
+## Documentation Workflow
+
+After completing a task, before reporting done:
+1. Update `docs/journal/CHANGELOG.md` with what changed
+2. If you made a design decision, append to `docs/journal/DECISION-LOG.md`
+3. If your work invalidates anything in the design docs, update or flag it
+4. Note tuning changes in commit messages (what it felt like before/after)
+
+See `docs/project/JAM-CONTRACT.md` for full "When Done" checklist, journal triggers, and ownership table.
+
+## Testing
+
+- Manual playtesting. No test framework.
+- `console.log` is fine. Remove before ship day (Sunday).
+- Performance matters: 60fps on a mid-range laptop. Profile if you're unsure.
+- Self-verify: open the game in browser, confirm your change works, then commit.
 
 ## Playtest Notes
 

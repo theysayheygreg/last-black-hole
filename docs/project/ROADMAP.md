@@ -14,7 +14,7 @@
 - 4x4 screens with frustum rendering
 - 60fps target on integrated GPUs
 - Deploy to itch.io
-- Single fluid sim (no dual solver — Forge review)
+- Physics approach TBD Tuesday AM — two parallel experiments run Monday night (Pillar 6: Run It Twice)
 - Minimum shippable game: ship + fluid + wells + wrecks + one portal + Inhibitor
 
 ## Dependency Graph
@@ -23,8 +23,8 @@
                     ┌─ ASCII Shader ─────────────┐
                     │                             │
 Fluid Sim ──────── ┤                             ├── Entity Rendering ── Signal ── Inhibitor
-                    │                             │
-                    └─ Ship Controls ─────────────┘
+(winner from       │                             │
+ Tue AM review)    └─ Ship Controls ─────────────┘
 
                                                   HUD (independent, DOM-based)
                                                   Sound (independent, Web Audio)
@@ -37,58 +37,63 @@ Fluid Sim ──────── ┤                             ├── Ent
 
 ### Night Shift (Sun→Mon, 12:01am-10am) — FIRST AGENT SHIFT
 
-**Goal:** Playable fluid sim with a ship flying through it. The entire bet rides on this feeling good.
+**Goal:** Two parallel physics prototypes, each with a ship flying through fluid. Pillar 6: Run It Twice. Agent compute is cheap, design regret is expensive.
 
-#### Task N1: Scaffold + Fluid Sim (Large, 3-5hr)
-- **What:** Fork PavelDoGreat WebGL-Fluid-Simulation into a single HTML file. Strip the demo UI. Get the sim running fullscreen on a canvas.
-- **Files:** `index.html` (main game file), inline shaders or `shaders/` dir
+#### Task N1a: Approach A — Single Fluid Sim + Oscillating Force Injection (Large, 3-5hr) — AGENT 1
+- **What:** Fork PavelDoGreat WebGL-Fluid-Simulation into a single HTML file. Strip the demo UI. Get the sim running fullscreen on a canvas. Fake gravity waves via oscillating force injection from wells.
+- **Files:** `index-a.html` (Approach A prototype), inline shaders or `shaders/` dir
 - **Dependencies:** None — this is the foundation
+- **Approach:** Navier-Stokes only. Waves are created by oscillating force injection amplitude at well locations: `source(t) = amplitude * sin(frequency * t)` applied as periodic radial pulses. Simpler, proven, shippable. (Forge's recommendation.)
 - **Deliverables:**
   - Single HTML file opens in browser, fullscreen WebGL canvas
   - Fluid sim running at 60fps on a 256x256 grid (or 128x128 if 256 chokes)
   - One gravity well at map center injecting radial force: `F = G * mass / r^2` (clamped)
   - Fluid visibly drains toward the well, forming accretion-like patterns
-  - Oscillating force injection from the well to fake gravity waves: `source(t) = amplitude * sin(frequency * t)` applied as periodic radial pulses
+  - Oscillating force injection from the well to fake gravity waves
   - Visible wave-like ripples propagating outward from the well through the fluid
+  - Ship that reads fluid velocity and adds thrust (mouse-aim, click-to-thrust)
+  - Ship carried by currents when not thrusting, pulled toward well by inflow
+  - Surfing a wave crest should feel like a speed boost
 - **Acceptance Criteria:**
-  - [ ] `index.html` loads in Chrome/Firefox without errors
+  - [ ] `index-a.html` loads in Chrome/Firefox without errors
   - [ ] Fluid sim renders colored density field
   - [ ] Gravity well creates visible inward flow
   - [ ] Oscillating pulses create visible outward-propagating ripples
+  - [ ] Ship responds to fluid: drift, thrust, surf
   - [ ] Steady 60fps (check with `requestAnimationFrame` timestamp delta)
   - [ ] Console logs sim resolution and frame time
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
 - **Scope:** Large
 
-#### Task N2: Ship Controls (Medium, 2-3hr)
-- **What:** Player ship that reads fluid velocity and adds thrust. Mouse-aim, click-to-thrust.
-- **Files:** `index.html` (add ship module/section)
-- **Dependencies:** Task N1 (fluid sim must be rendering to an FBO the ship can sample)
+#### Task N1b: Approach B — Dual Solver (Large, 3-5hr) — AGENT 2
+- **What:** Build a dual-solver physics prototype: Navier-Stokes for local fluid flow + wave equation solver for gravity wave propagation on separate grids, coupled together.
+- **Files:** `index-b.html` (Approach B prototype), inline shaders or `shaders/` dir
+- **Dependencies:** None — parallel track
+- **Approach:** Two physics systems. Navier-Stokes handles local flow (advection, diffusion, pressure). Wave equation (`u(t+1) = 2*u(t) - u(t-1) + c^2*nabla^2*u(t) - damping*u(t)`) handles gravity wave propagation. Wave amplitude feeds into the fluid sim as a force multiplier — where waves crest, fluid velocity increases. Physically accurate surfing. Research-level complexity. (Deep dive design.)
 - **Deliverables:**
-  - Ship rendered as a bright triangle/chevron overlay on the fluid canvas
-  - Mouse position sets thrust direction (ship nose points at cursor)
-  - Click/hold applies thrust force in that direction
-  - Release = drift. Ship velocity = thrust + fluid velocity at ship position (bilinear sample)
-  - Ship carried by currents when not thrusting
-  - Ship pulled toward gravity well by fluid inflow
-  - Ship can escape well if thrust is strong enough; can get trapped if too close
-  - World is 4x4 screens. Camera follows ship with smooth lerp (factor 0.08-0.12). Ship stays roughly centered with slight look-ahead toward thrust direction.
+  - Single HTML file opens in browser, fullscreen WebGL canvas
+  - Navier-Stokes fluid sim running on a 256x256 grid (or 128x128)
+  - Wave equation solver running on a separate grid, coupled to fluid sim
+  - One gravity well generating periodic perturbations into the wave solver
+  - Wave amplitude visibly feeds back into fluid velocity
+  - Surfable wavefronts propagating outward from the well
+  - Ship that reads fluid velocity and adds thrust (mouse-aim, click-to-thrust)
+  - Ship carried by currents when not thrusting, surfable wave crests
 - **Acceptance Criteria:**
-  - [ ] Ship visible and distinct from fluid background
-  - [ ] Mouse aim responsive, no perceptible input lag
-  - [ ] Holding click accelerates ship in aim direction
-  - [ ] Releasing click: ship drifts with fluid current (not stopping dead)
-  - [ ] Near gravity well: ship visibly pulled inward without thrust
-  - [ ] Surfing a wave crest feels like a speed boost (velocity noticeably higher when riding outbound pulse)
-  - [ ] Camera follows ship smoothly, world scrolls, ship can traverse the full 4x4 screen area
-  - [ ] Frustum rendering: only visible viewport + 1 screen buffer is drawn
-  - [ ] 60fps maintained with ship + fluid
-- **Scope:** Medium
+  - [ ] `index-b.html` loads in Chrome/Firefox without errors
+  - [ ] Fluid sim renders colored density field
+  - [ ] Wave equation produces visible propagating wavefronts
+  - [ ] Waves visibly affect fluid velocity (coupling works)
+  - [ ] Ship responds to fluid: drift, thrust, surf
+  - [ ] Steady 60fps (check with `requestAnimationFrame` timestamp delta) — if not achievable, note the perf cost
+  - [ ] Console logs sim resolution, wave grid resolution, and frame time
+  - [ ] Committed per CLAUDE.md rules (atomic commits per system)
+- **Scope:** Large
 
-#### Task N3: ASCII Dithering Post-Process (Medium, 2-3hr)
-- **What:** The signature visual. Render fluid to FBO, post-process into ASCII characters.
-- **Files:** `index.html` (add ASCII shader pass)
-- **Dependencies:** Task N1 (fluid renders to FBO). Can parallelize with Task N2 if a second agent is available.
+#### Task N3: ASCII Dithering Post-Process (Medium, 2-3hr) — EITHER AGENT (once an FBO exists)
+- **What:** The signature visual. Render fluid to FBO, post-process into ASCII characters. Write this against whichever prototype has a working FBO first; it should be portable to the other.
+- **Files:** ASCII shader pass (portable between index-a.html and index-b.html)
+- **Dependencies:** Task N1a or N1b (fluid renders to FBO). Can start as soon as either prototype has a working render target.
 - **Deliverables:**
   - Font atlas texture generated at init: rasterize density ramp characters (`. : ; = + * # % @ █`) onto a 1024x1024 canvas, upload as GPU texture
   - Post-process shader: divide screen into character cells (~8x12px each), sample fluid density per cell, look up character from atlas by luminance, tint with sampled color
@@ -106,26 +111,35 @@ Fluid Sim ──────── ┤                             ├── Ent
 - **Scope:** Medium
 
 #### Night Report
-- Agent writes `docs/journal/reports/2026-03-16-night.md` per template in JAM-CONTRACT.md
+- Agent writes `docs/journal/reports/2026-03-16-night.md` — MUST include comparative notes on both prototypes: feel, performance, surfability, visual quality, implementation complexity.
 
 ---
 
-### Morning Review (10am)
+### Morning Review (10am) — PHYSICS COMPARISON + MERGE DECISION
 
 Greg checks:
 1. `git log --oneline --since="midnight"` — what shipped
-2. Open `index.html` in browser — does it work?
-3. Read the night report
-4. **THE QUESTION:** Is it fun to just fly around? Does surfing the waves feel good? Does drifting with the current feel distinct from thrusting against it?
-5. If yes: green-light Day Shift work. If no: what's wrong? Write specific feedback (e.g., "waves too weak," "thrust too strong," "no sense of speed").
+2. Open BOTH `index-a.html` and `index-b.html` in browser. Play each for 10+ minutes.
+3. Read the night report's comparative notes.
+4. **THE COMPARISON:**
+   - Which feels better to surf? Which produces better wave patterns?
+   - Which runs at 60fps more comfortably? What's the perf overhead of the dual solver?
+   - Does the dual solver's physical accuracy produce a noticeably different (better?) feel, or does the single sim's force injection fake it well enough?
+   - Could the wave equation be layered onto the single sim later, or are the architectures incompatible?
+5. **THE DECISION (one of three outcomes):**
+   - **Pick A:** Single sim wins. Rename `index-a.html` to `index.html`, archive Approach B. Proceed with proven path.
+   - **Pick B:** Dual solver wins. Rename `index-b.html` to `index.html`, archive Approach A. Accept the complexity.
+   - **Merge:** Both have value. Integrate the wave equation as an optional layer on top of the single sim. Spec the merge as a Day Shift task.
+6. All downstream work builds on whichever approach wins this review.
 
 ### Day Shift (10am-midnight)
 
 **Greg priorities (in order):**
-1. **Play the fluid prototype for 30+ minutes.** Note what feels good and bad. Tune constants live if possible (expose thrust, wave amplitude, well strength as URL params or on-screen sliders).
-2. **Art-direct the ASCII shader.** Is the character density right? Colors? Cell size? This is the visual identity — get it right early.
-3. **Decide:** Is the wave feel good enough with oscillating force injection, or does it need more work? If the single-sim approach is working, proceed to L1 Tuesday. If not, the entire Monday night shift goes to fixing the feel.
-4. **If ahead:** Add 2-3 gravity wells and see how wave interference feels. Add directional character variants (horizontal flow = `~ -`, vertical = `| !`).
+1. **Play the winning fluid prototype for 30+ minutes.** Note what feels good and bad. Tune constants live if possible (expose thrust, wave amplitude, well strength as URL params or on-screen sliders).
+2. **If "Merge" was chosen:** spec and oversee the merge — integrate the wave equation layer into the winning sim. This is the Day Shift's top agent task.
+3. **Art-direct the ASCII shader.** Is the character density right? Colors? Cell size? This is the visual identity — get it right early.
+4. **Confirm the wave feel.** Is it good enough to proceed to L1 Tuesday, or does the physics need more work?
+5. **If ahead:** Add 2-3 gravity wells and see how wave interference feels. Add directional character variants (horizontal flow = `~ -`, vertical = `| !`).
 
 **Parallel agent work (if Greg is playing):**
 - Stub out the game state module: entity data structures for wrecks, portals, ship state, signal level. Plain data objects, no rendering yet. This is the "clean data boundary" that makes everything else composable.
@@ -137,15 +151,16 @@ Greg writes the Mon→Tue night prompt:
 - **If feel is good:** Spec L1 tasks: wrecks, portals, extraction, black hole growth. Include Greg's tuning notes from the day.
 - **If feel needs work:** Spec specific physics tuning: what to change, what to try, what "good" looks like. Hold L1.
 - Commit any constant changes and design notes from the day.
+- Archive the losing prototype (if one was picked) with a commit message documenting why.
 
 ### Scope Ratchet (end of Monday)
 
 | Status | Action |
 |--------|--------|
-| **Ahead** (all three night tasks done + feel confirmed good) | Add multi-well, directional ASCII chars, feedback buffer (motion trails) |
-| **On track** (fluid + ship + ASCII working, feel promising) | Stay the course. Proceed to L1. |
-| **Behind** (fluid works but ASCII not in yet) | ASCII is critical — it IS the product. Night shift finishes ASCII before starting L1. |
-| **Crisis** (fluid sim not working) | All hands on fluid. Nothing else matters until the sim runs and feels good. |
+| **Ahead** (both prototypes done + feel confirmed good + winner chosen) | Add multi-well, directional ASCII chars, feedback buffer (motion trails) |
+| **On track** (both prototypes working, comparison done, winner chosen, feel promising) | Stay the course. Proceed to L1. |
+| **Behind** (only one prototype working, or ASCII not in yet) | ASCII is critical — it IS the product. Night shift finishes ASCII before starting L1. Use whichever prototype works. |
+| **Crisis** (neither fluid sim working) | All hands on fluid. Nothing else matters until the sim runs and feels good. |
 
 ---
 
@@ -153,12 +168,12 @@ Greg writes the Mon→Tue night prompt:
 
 ### Night Shift (Mon→Tue, midnight-10am)
 
-**Goal:** The core extraction loop exists. Wrecks to loot, portals to escape through, a universe that's dying around you.
+**Goal:** The core extraction loop exists. Wrecks to loot, portals to escape through, a universe that's dying around you. All work builds on the physics approach chosen in Tuesday AM review (now consolidated into `index.html`).
 
 #### Task N4: Wrecks + Loot Pickup (Medium, 2-3hr)
 - **What:** Static wreck objects in the world. Fly near to loot.
 - **Files:** `index.html` (entity system, wreck rendering)
-- **Dependencies:** Ship controls + ASCII renderer (Tasks N2, N3)
+- **Dependencies:** Ship controls from winning physics prototype (chosen Tue AM)
 - **Deliverables:**
   - 10-15 wrecks spawned at init, placed in clusters between gravity wells (not inside danger radius)
   - Wrecks rendered as dense ASCII character clusters (gold/amber `#D4A843`, distinct from fluid colors)
@@ -180,7 +195,7 @@ Greg writes the Mon→Tue night prompt:
 #### Task N5: Portals + Extraction (Medium, 2-3hr)
 - **What:** Extraction points. Fly to a portal to escape with your loot. Portals evaporate over time.
 - **Files:** `index.html` (portal entity, extraction logic, run end state)
-- **Dependencies:** Ship controls (Task N2)
+- **Dependencies:** Ship controls from winning physics prototype (chosen Tue AM)
 - **Deliverables:**
   - 3-5 portals spawned at map edges/midpoints, never within 30% radius of a well
   - Portal rendering: pulsing cyan-green (`#58F2A5`) ring of ASCII characters, size oscillates every 2-3 seconds
@@ -203,11 +218,11 @@ Greg writes the Mon→Tue night prompt:
 #### Task N6: Black Hole Growth + Universe Clock (Medium, 1-2hr)
 - **What:** The universe dying is the timer. Wells grow, space shrinks, viscosity increases.
 - **Files:** `index.html` (well growth logic, viscosity ramp)
-- **Dependencies:** Fluid sim (Task N1)
+- **Dependencies:** Fluid sim (winning approach from Tue AM review)
 - **Deliverables:**
   - Black hole mass increases over time (~1% per 10 seconds). Force injection scales with mass.
   - Playable space visibly shrinks as wells pull harder
-  - Wave amplitude grows with well mass (bigger waves late-game)
+  - Wave amplitude grows with well mass (bigger waves late-game) — implementation depends on winning physics approach (force injection amplitude for Approach A, wave equation source amplitude for Approach B/Merge)
   - Viscosity increases over the run (+5%/min). Late-game movement feels heavier, sluggish.
   - Optional: wave frequency decreases with mass (slower, more powerful waves)
 - **Acceptance Criteria:**
@@ -243,7 +258,7 @@ Greg checks:
 
 **Parallel agent work:**
 - Wreck-as-fluid-obstacle polish: ensure eddies form cleanly behind wrecks, tune boundary condition implementation
-- Add second and third gravity wells. Place them at 40-70% map radius. Test wave interference patterns. Tune force injection so the multi-well flow field creates interesting navigation decisions.
+- Add second and third gravity wells. Place them at 40-70% map radius. Test wave interference patterns. Tune force injection (or wave equation sources, depending on winning approach) so the multi-well flow field creates interesting navigation decisions.
 - If HUD stubs exist: wire real data into them (portal count, inventory count, placeholder signal bar)
 
 ### Evening Handoff (midnight)
@@ -819,8 +834,9 @@ Tasks that CAN run simultaneously (with two agents):
 
 | Time Slot | Agent 1 | Agent 2 |
 |-----------|---------|---------|
-| Mon night | N1: Fluid Sim → N2: Ship Controls | N3: ASCII Shader (once N1 FBO exists) |
-| Mon day | Greg plays + tunes | Stub game state + HUD layout |
+| Mon night | N1a: Approach A (single sim + force injection + ship) | N1b: Approach B (dual solver + ship). N3: ASCII shader (once either FBO exists) |
+| Mon morning | **PHYSICS COMPARISON** — Greg plays both, picks winner or merges | |
+| Mon day | Greg plays winner + tunes | Stub game state + HUD layout. Merge task if needed. |
 | Tue night | N4: Wrecks → N5: Portals | N6: Well Growth (independent of entities) |
 | Tue day | Greg tunes extraction loop | Multi-well + wreck-fluid polish |
 | Wed night | N7: Signal → N8: Inhibitor | Audio foundation (reads game state, doesn't modify) |
@@ -858,7 +874,8 @@ That is a game. Everything else makes it a better game.
 
 | Day | Gate Question | If Yes | If No |
 |-----|-------------|--------|-------|
-| Mon | Does surfing feel good? | Proceed to L1 | Fix physics. Hold everything. |
+| Mon AM | Do both prototypes work? Which feels better? | Pick winner (or merge). Proceed to L1. | Use whichever works. Fix the other or abandon it. |
+| Mon PM | Does surfing feel good in the winning sim? | Proceed to L1 | Fix physics. Hold everything. |
 | Tue | Does push-your-luck work? | Proceed to L2 | Tune extraction timing. Simplify. |
 | Wed | Is signal interesting (not punitive)? | Proceed to L3/L4 | Add signal upside per Forge. Re-tune. |
 | Thu | Is this game fun to play for 15 minutes? | Proceed to L5 | Cut scope. Polish what works. |
