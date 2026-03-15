@@ -58,6 +58,8 @@ These textures start clean and degrade over the run, encoding the "universe dyin
 
 ### Object-Fluid Coupling
 
+> For ship physics model, input schemes, and per-device tuning, see [CONTROLS.md](CONTROLS.md). For tuning workflow and dev panel, see [TUNING.md](TUNING.md). For automated test harness, see [AGENT-TESTING.md](AGENT-TESTING.md).
+
 **Ship → Fluid:**
 - Thrust injects force into the fluid at ship position (small radial push)
 - Creates a wake behind the ship — visible in the ASCII render as disturbed characters

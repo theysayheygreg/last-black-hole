@@ -40,7 +40,7 @@ This is ONLY physics + ship + shader. Nothing else.
 
 TECH STACK:
 - Vanilla JS, ES modules
-- Single index.html entry point
+- Entry point: `index-a.html` (Approach A) or `index-b.html` (Approach B) — winner renamed to `index.html` Tuesday AM
 - WebGL 2 (fallback to WebGL 1 only if necessary)
 - No frameworks, no Three.js, no build step
 - File structure: src/ for JS modules, src/shaders/ for GLSL if separate
@@ -162,7 +162,7 @@ FILE NAMING:
 - src/ascii-renderer.js — ASCII post-process shader
 - src/wells.js — gravity well force injection + oscillation
 - src/main.js — game loop, canvas setup, wiring
-- index.html — entry point
+- index-a.html — entry point (Approach A prototype)
 ```
 
 ---
@@ -246,7 +246,7 @@ FILE NAMING:
 - src/ascii-renderer.js — ASCII post-process shader
 - src/wells.js — gravity well force injection into both systems
 - src/main.js — game loop, canvas setup, wiring
-- index.html — entry point
+- index-b.html — entry point (Approach B prototype)
 ```
 
 ---

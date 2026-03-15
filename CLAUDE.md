@@ -15,7 +15,7 @@ Before starting ANY task, load these into context:
 5. `docs/design/MOVEMENT.md` — control affordances and tuning variables
 
 For your specific layer, also read:
-- L0: `docs/design/DESIGN-DEEP-DIVE.md` (physics architecture), `docs/project/PRE-MONDAY-RESEARCH.md`
+- L0: `docs/design/DESIGN-DEEP-DIVE.md` (physics architecture), `docs/design/CONTROLS.md` (ship physics, input schemes, tuning variables), `docs/design/TUNING.md` (dev panel, CONFIG object, tuning workflow), `docs/design/AGENT-TESTING.md` (test harness, `__TEST_API`), `docs/project/PRE-MONDAY-RESEARCH.md`
 - L1-L2: `docs/design/SIGNAL-DESIGN.md`, `docs/design/COMBAT.md`
 - L4: `docs/design/DESIGN-DEEP-DIVE.md` (ASCII renderer section), HUD section
 - L5: `docs/design/SCALING.md`

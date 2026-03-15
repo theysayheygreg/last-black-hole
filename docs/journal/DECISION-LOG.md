@@ -219,6 +219,88 @@ Each decision has:
 
 ---
 
+## Dev Panel & Tuning Architecture
+
+### Q: Is the dev panel a mandatory build requirement or optional polish?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | TUNING.md written. Dev panel defined as "Monday morning task — ships alongside or immediately after the physics prototype. It's not optional." Without it, every tuning cycle requires agent code changes + Greg reloads. |
+| Mar 15 | ROADMAP.md assigns Task N2 (Dev Panel + CONFIG Object) as a Monday night deliverable, ordered after N1a/N1b but before morning review. |
+
+**Options:**
+1. **Mandatory Monday deliverable** (current position) — Greg cannot tune without it. Every hour without sliders is an hour of "change code, reload, play for 2 minutes" loops.
+2. **Nice-to-have, build when convenient** (rejected) — risks burning Greg's most valuable time (Monday morning review) on the reload cycle.
+
+**Where it landed:** Option 1. Dev panel is a first-night deliverable, not polish.
+**Door status:** Closed.
+
+---
+
+### Q: How should tunable constants be organized in code?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | TUNING.md and AGENT-PROMPTS.md define the CONFIG object pattern: single object, every system reads every frame (not cached at init), dev panel sliders write to it, "Copy Config" serializes to JSON. |
+
+**Options:**
+1. **Single CONFIG object** (current position) — all tunables in one place, live-editable, serializable. Dev panel binds directly.
+2. **Per-system constants** (rejected) — scatter tunables across fluid.js, ship.js, etc. Dev panel has to hunt for them. No single "Copy Config" export.
+3. **External config file** (never considered for jam) — adds a build/load step.
+
+**Where it landed:** Option 1. Single CONFIG object is an architectural requirement enforced in agent prompts.
+**Door status:** Closed.
+
+---
+
+### Q: How do agents verify their own work?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | AGENT-TESTING.md written. Puppeteer-based test harness. Game exposes `window.__TEST_API` for automated access to game state. Tests run after every commit. |
+
+**Options:**
+1. **Puppeteer smoke + physics tests** (current position) — headless Chrome, ~690 lines total across 6 test files, built incrementally per layer. Agents run after every commit.
+2. **No automated testing** (rejected) — Greg spends morning review time on "does it load? does it crash?" instead of "does it feel good?"
+3. **Unit test framework** (rejected) — overkill for a jam. WebGL state is hard to unit test. Puppeteer tests the actual game.
+
+**Where it landed:** Option 1. Puppeteer + `__TEST_API`.
+**Door status:** Closed.
+
+---
+
+### Q: Which mouse control model should be the default?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | CONTROLS.md analyzes three mouse models. Model 1 (distance = thrust intensity) ranked as RECOMMENDED START. Model 2 (binary click) as safe fallback. Model 3 (drag magnet) as "probably wrong for LBH." |
+
+**Options:**
+1. **Model 1: Mouse = aim, distance = thrust intensity** (recommended) — gives analog thrust from a mouse. Cursor distance from ship = thrust power. Risk: managing position AND direction simultaneously.
+2. **Model 2: Mouse = aim, click = binary thrust** (fallback) — simpler. No nudge/burn distinction. Fluid does the analog work.
+3. **Model 3: Mouse = velocity target (drag magnet)** (likely rejected) — intuitive but removes "fighting the current" as a skill.
+
+**Where it landed:** Model 1 recommended start, Model 2 as fallback if Model 1 feels bad. Model 3 worth 20 minutes of testing to confirm it's wrong. Dev panel should include a dropdown to swap models live.
+**Door status:** Playtesting. Monday morning will decide.
+
+---
+
+### Q: When does DualSense controller support get added?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | CONTROLS.md defines full DualSense mapping (analog triggers, adaptive resistance, HD haptics). ROADMAP.md places it as Tuesday/Wednesday work. |
+
+**Options:**
+1. **Monday night alongside physics** (rejected) — adds complexity to the critical first build. Two input methods to debug on day one.
+2. **Tuesday/Wednesday after physics is locked** (current position) — physics experiment runs mouse-only (simpler). Once the winning physics is chosen, add Gamepad API. Affordance tuning may need separate values per input.
+3. **Never (mouse-only jam)** (fallback) — if behind schedule, controller support is cut.
+
+**Where it landed:** Option 2. Tuesday/Wednesday stretch. Mouse-only for Monday.
+**Door status:** Open. Depends on Tuesday velocity.
+
+---
+
 ## Template for New Entries
 
 ```

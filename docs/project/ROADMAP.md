@@ -339,7 +339,7 @@ Greg specs Tue→Wed night shift:
 #### Task N7: Signal System (Medium, 2-3hr)
 - **What:** Every action emits signal. Signal attracts consequences. This is the core risk/reward dial.
 - **Files:** `index.html` (signal module, ship signal tracking, HUD signal display)
-- **Dependencies:** Ship controls, wreck looting (Tasks N2, N4)
+- **Dependencies:** Ship controls, wreck looting (Tasks N1a/N1b winner, N4)
 - **Deliverables:**
   - Global signal level tracked as 0-100% float
   - Signal sources:

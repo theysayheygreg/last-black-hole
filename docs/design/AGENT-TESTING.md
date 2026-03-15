@@ -269,6 +269,274 @@ Puppeteer dependency: `npm init -y && npm install puppeteer` in the game repo. O
 
 ---
 
+## Test File Structure
+
+```
+tests/
+  smoke.js
+  physics.js
+  gameloop.js
+  signal.js
+  integration.js
+  visual.js
+  run-all.js
+  screenshots/
+    (auto-generated, gitignored)
+  baselines/
+    (committed reference screenshots)
+```
+
+`tests/screenshots/` is `.gitignore`d — these are ephemeral artifacts generated each run. `tests/baselines/` is committed — these are the reference images that visual regression tests compare against. When a visual change is intentional, update the baselines and commit them.
+
+---
+
+## Screenshot Review Pipeline
+
+Agents take screenshots at defined game moments so Greg can visual-review overnight work without launching the game. Screenshots are the bridge between "tests pass" and "it looks right."
+
+### Key Moments
+
+| Moment | When to capture | Why Greg cares |
+|--------|----------------|----------------|
+| Title screen | On first render after load | Does the title screen exist and look intentional? |
+| 30s into run | 30s after run start (real or fast-forwarded) | Is the playing field populated? Do wells/wrecks/portals look right? |
+| Near a well | Ship teleported to well + 100px | Do waves render? Is the well visually pulling? |
+| Wave catching | Ship aligned with a wave crest, magnetism engaged | Does the catch look like surfing? |
+| Wreck looting | Ship at wreck position, loot triggered | Does the wreck dim? Does inventory feel like it updated? |
+| Portal approach | Ship within 200px of active portal | Does the portal look like a way out? |
+| Inhibitor spawn | Signal pushed above threshold, Inhibitor appears | Is the Inhibitor visible and distinct? |
+| Extraction | Ship enters portal, success state | Does the success screen render? |
+| Death | All portals gone or Inhibitor contact | Does the death screen render? |
+
+### Filename Convention
+
+```
+tests/screenshots/{moment}-{ISO-timestamp}.png
+```
+
+Examples:
+```
+tests/screenshots/title-screen-2026-03-17T034512Z.png
+tests/screenshots/near-well-2026-03-17T034530Z.png
+tests/screenshots/inhibitor-spawn-2026-03-17T034545Z.png
+```
+
+### Puppeteer Screenshot Pattern
+
+```js
+const puppeteer = require('puppeteer');
+const path = require('path');
+const fs = require('fs');
+
+const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
+if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+
+function screenshotName(moment) {
+  const ts = new Date().toISOString().replace(/[:.]/g, '');
+  return path.join(SCREENSHOT_DIR, `${moment}-${ts}.png`);
+}
+
+async function captureKeyMoments(page) {
+  // Title screen — captured right after load
+  await page.waitForSelector('canvas');
+  await page.screenshot({ path: screenshotName('title-screen') });
+
+  // Start a run, wait 30s (or fast-forward)
+  await page.evaluate(() => window.__TEST_API.triggerRestart());
+  await page.evaluate(() => window.__TEST_API.setTimeScale(10)); // 3s real = 30s game
+  await new Promise(r => setTimeout(r, 3000));
+  await page.evaluate(() => window.__TEST_API.setTimeScale(1));
+  await page.screenshot({ path: screenshotName('30s-into-run') });
+
+  // Near a well
+  const wells = await page.evaluate(() => window.__TEST_API.getWells());
+  if (wells.length > 0) {
+    await page.evaluate((w) => window.__TEST_API.teleportShip(w.x + 100, w.y), wells[0]);
+    await new Promise(r => setTimeout(r, 500));
+    await page.screenshot({ path: screenshotName('near-well') });
+  }
+
+  // Clip region example — capture just the ship area (300x300 around ship)
+  const shipPos = await page.evaluate(() => window.__TEST_API.getShipPos());
+  await page.screenshot({
+    path: screenshotName('ship-closeup'),
+    clip: {
+      x: Math.max(0, shipPos.x - 150),
+      y: Math.max(0, shipPos.y - 150),
+      width: 300,
+      height: 300
+    }
+  });
+
+  // Inhibitor spawn
+  await page.evaluate(() => window.__TEST_API.setSignal(0.96));
+  await new Promise(r => setTimeout(r, 6000));
+  const inhibitor = await page.evaluate(() => window.__TEST_API.getInhibitor());
+  if (inhibitor) {
+    await page.screenshot({ path: screenshotName('inhibitor-spawn') });
+  }
+
+  // Extraction
+  const portals = await page.evaluate(() => window.__TEST_API.getPortals());
+  const active = portals.find(p => p.active);
+  if (active) {
+    await page.evaluate((p) => window.__TEST_API.teleportShip(p.x, p.y), active);
+    await new Promise(r => setTimeout(r, 1000));
+    await page.screenshot({ path: screenshotName('extraction') });
+  }
+
+  // Death — start fresh run, remove all portals via fast-forward
+  await page.evaluate(() => window.__TEST_API.triggerRestart());
+  await page.evaluate(() => window.__TEST_API.setTimeScale(100));
+  await new Promise(r => setTimeout(r, 5000));
+  await page.screenshot({ path: screenshotName('death') });
+}
+```
+
+### Morning Report Integration
+
+The night report includes a screenshots section:
+
+```
+## Screenshots
+
+Title screen: tests/screenshots/title-screen-2026-03-17T034512Z.png
+30s into run: tests/screenshots/30s-into-run-2026-03-17T034520Z.png
+Near well:    tests/screenshots/near-well-2026-03-17T034530Z.png
+Inhibitor:    tests/screenshots/inhibitor-spawn-2026-03-17T034545Z.png
+Extraction:   tests/screenshots/extraction-2026-03-17T034550Z.png
+Death:        tests/screenshots/death-2026-03-17T034600Z.png
+
+No visual anomalies detected. Wells rendering correctly.
+Inhibitor sprite visible and distinct from background.
+```
+
+Greg reviews these in 60 seconds instead of booting the game and playing through every state.
+
+---
+
+## Regression Guard
+
+After Greg tunes via the dev panel and commits new CONFIG values, the agent runs the full test suite automatically. The test suite acts as a safety net: tuning should change feel, not break mechanics.
+
+### Workflow
+
+1. Greg opens the dev panel, drags sliders, finds settings that feel good
+2. Greg commits the new CONFIG values (e.g., `Tune: widened catch window to 45deg, surfing feels more forgiving`)
+3. Agent detects the commit (or Greg asks the agent to verify)
+4. Agent runs `node tests/run-all.js`
+5. If all tests pass: agent confirms in report, Greg's tuning is safe
+6. If a test fails: agent reports which test broke and why, with a concrete explanation
+
+### Concrete Example: Catch Window Too Wide
+
+Greg is tuning the wave catch mechanic. The default catch window is 30 degrees. Greg widens it to 120 degrees because it feels more forgiving in play.
+
+```
+CONFIG.ship.catchWindowDeg = 120; // was 30
+```
+
+Greg commits. Agent runs the test suite. `tests/physics.js` has this test:
+
+**"Waves exist"** — samples fluid velocity at a fixed point over 5 seconds and checks for periodic variation. With a 120-degree catch window, the magnetism force is almost always active, which means the ship is almost always being pulled toward wave crests. The test that checks "ship drifts freely when not catching" now fails, because at 120 degrees the ship is always catching.
+
+The agent reports:
+
+```
+FAIL: physics.js — "Ship drifts freely when not catching"
+  Expected ship to drift without magnetism force when not aligned with wave.
+  With catchWindowDeg=120, the ship is aligned with a wave crest >90% of the time.
+  The magnetism force is nearly always active, so "free drift" never happens.
+
+  Suggestion: The catch window may be too wide for the physics model.
+  Greg should verify in-game whether 120deg still feels like "catching"
+  or if it just feels like "always being pulled." If 120deg is intentional,
+  the test threshold for "free drift" needs updating.
+```
+
+Greg reads this, realizes 120 was too aggressive, tries 55 degrees instead. Agent re-runs, all tests pass. The tuning and the test suite stay in sync.
+
+### What the Regression Guard Catches
+
+- Tuning that breaks existing mechanics (catch window so wide it eliminates free drift)
+- Tuning that breaks thresholds (signal decay so fast the Inhibitor never spawns)
+- Tuning that breaks timing (portal evaporation so slow that "death by timeout" never triggers in tests)
+- Tuning that breaks physics assumptions (thrust so high the ship escapes gravity wells, breaking the "well pulls" test)
+
+### What It Does NOT Catch
+
+- Whether the new tuning feels better (that is Greg's job)
+- Whether the new tuning is balanced (that is playtesting)
+- Whether the new tuning looks right (that is screenshot review)
+
+---
+
+## Night Shift Test Protocol
+
+Numbered checklist the night shift agent follows. Every night shift, every time.
+
+1. **After each commit:** run smoke tests (`node tests/smoke.js`). If smoke fails, fix before moving to the next task. Do not accumulate broken commits.
+
+2. **After completing a task:** run the layer-appropriate test suite.
+   - Physics work (ship, fluid, wells, waves) → `node tests/physics.js`
+   - Entity/loop work (wrecks, portals, extraction) → `node tests/gameloop.js`
+   - Signal/threat work (signal, Inhibitor, fauna) → `node tests/signal.js`
+   - Cross-system work or unsure → `node tests/integration.js`
+
+3. **After all tasks for the night are complete:** run the full suite (`node tests/run-all.js`). This is the final gate before the night report.
+
+4. **Take screenshots at each key moment** (see Screenshot Review Pipeline above). Run the screenshot capture after the full suite passes, so screenshots reflect the final working state — not an intermediate broken one.
+
+5. **Include test summary and screenshots in the night report:**
+   - Total tests: X passed, Y failed, Z skipped
+   - Per-layer breakdown if any failures
+   - Screenshot links/embeds for each key moment
+   - Any new baselines committed (and why the visual changed)
+
+6. **If tests fail and you cannot fix them:**
+   - Do not silently skip. Document in the night report:
+     - Which test failed
+     - What the expected vs. actual result was
+     - What you tried to fix it
+     - Your best guess at root cause
+     - Whether it blocks the next task or is isolated
+   - Tag it clearly so Greg sees it first thing:
+     ```
+     ## TEST FAILURE — needs morning review
+     physics.js: "Catch window engages when aligned"
+     Expected magnetism force > 0 when ship is within 30deg of wave crest.
+     Got: force = 0. Suspect the wave phase calculation changed when I
+     refactored well oscillation. Did not revert because the new oscillation
+     pattern is correct per DESIGN.md — the test assertion may need updating.
+     ```
+
+---
+
+## Codex Compatibility
+
+The test harness is CI-agnostic. Any agent that can run shell commands can verify the build.
+
+**Requirements to run the tests:**
+- Node.js (for Puppeteer and test scripts)
+- A shell (`bash`, `zsh`, whatever)
+- `npm install` (installs Puppeteer, which bundles Chromium)
+
+**No Claude-specific dependencies.** The tests do not use Claude APIs, MCP tools, or any agent-specific infrastructure. They are plain Node.js scripts that launch a headless browser and check game state.
+
+**Running the full suite:**
+
+```
+cd /path/to/last-black-hole
+npm install
+node tests/run-all.js
+```
+
+That is it. OpenAI's Codex, Claude Code, a GitHub Action, a local dev machine — anything that can run those three lines can verify the build. The test output is stdout text (pass/fail per test, summary at end) and screenshots written to `tests/screenshots/`.
+
+If Codex or another agent is running the night shift, it follows the same Night Shift Test Protocol above. The protocol is agent-agnostic — it describes what to do, not which agent does it.
+
+---
+
 ## What This Does NOT Replace
 
 - **Feel testing.** No automated test can tell you if surfing feels good.

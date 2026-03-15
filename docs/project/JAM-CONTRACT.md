@@ -189,6 +189,11 @@ Estimated scope: [small: <1hr, medium: 1-3hr, large: 3-8hr]
 - [Repos to reference]
 - [Design doc sections]
 
+## Architecture Requirements
+- [ ] All tunables in the `CONFIG` object (see TUNING.md) — systems read CONFIG every frame, not cached at init
+- [ ] Expose `window.__TEST_API` for automated test access (see AGENT-TESTING.md)
+- [ ] Add dev panel sliders for any new tunable constants
+
 ## When Done
 - [ ] All criteria met
 - [ ] Working state committed

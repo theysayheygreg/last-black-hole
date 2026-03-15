@@ -24,6 +24,12 @@ This is the whole bet. If the fluid sim + thrust control isn't fun to navigate, 
 - [ ] Drift when not thrusting — feel the current carry you
 - [ ] One black hole pulling, waves propagating — can you surf them?
 
+**Monday also delivers:**
+- [ ] Dev panel with live tuning sliders for all L0 constants (toggle with backtick key) — see TUNING.md
+- [ ] Single `CONFIG` object that every system reads every frame — see TUNING.md, AGENT-PROMPTS.md
+- [ ] `window.__TEST_API` exposing game state for automated tests — see AGENT-TESTING.md
+- [ ] Smoke + physics tests via Puppeteer (`node tests/run-all.js`) — see AGENT-TESTING.md
+
 **Playtest question:** Is it fun to just fly around in this? If yes, proceed. If no, fix the physics until it is.
 
 **Stretch:** Add 2-3 black holes. See how wave interference patterns feel to navigate.
