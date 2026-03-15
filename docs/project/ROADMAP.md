@@ -16,7 +16,7 @@
 - Deploy to itch.io
 - Physics approach TBD Tuesday AM — two parallel experiments run Monday night (Pillar 6: Run It Twice)
 - Minimum shippable game: ship + fluid + wells + wrecks + one portal + Inhibitor
-- Parallelize exploration, serialize adoption. Run many probes if agent capacity allows. Only one lane is the integration mainline. Probes promote into mainline if they clearly win, die immediately if they don't. (Forge Review #2)
+- Parallelize exploration, serialize adoption. Run many probes if agent capacity allows. Only one lane is the integration mainline. Probes promote into mainline if they clearly win, get backlogged immediately if they don't. See `BACKLOG.md`. (Forge Review #2)
 
 ## Dependency Graph
 
@@ -95,7 +95,7 @@ If time collapses, this is the priority order: N1a > N2 > N3 > N0 > N1b. The mai
   - [ ] Console logs sim resolution, wave grid resolution, and frame time
   - [ ] All tunables stored in a single `CONFIG` object (dev panel will bind to this)
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
-- **Kill rule:** If Approach B is not clearly better in feel by Tuesday 10am, it dies immediately. No merging good bits, no keeping it around. (Forge Review #2)
+- **Decision rule:** If Approach B is not clearly better in feel by Tuesday 10am, backlog it immediately and proceed with Approach A. No merging good bits, no keeping it around as an active option. The work isn't wasted — it's in `BACKLOG.md` with full context for post-jam revival. (Forge Review #2)
 - **Scope:** Large
 
 #### Task N3: ASCII Dithering Post-Process (Medium, 2-3hr) — EITHER AGENT (once an FBO exists)
