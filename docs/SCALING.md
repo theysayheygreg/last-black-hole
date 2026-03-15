@@ -14,8 +14,8 @@ What we're building. One player, AI scavengers, local simulation.
 - The game is designed so that scavengers already teach the player the multiplayer dynamics: portal competition, signal awareness, territorial behavior
 - **Key insight:** if the solo game feels like a multiplayer game with bots, the multiplayer transition is smooth
 
-### Phase 2: Small Lobby (10 Players)
-The natural next step. A shared collapsing universe, 10 human surfers.
+### Phase 2: Small Lobby (2-3 Players — Jam Goal)
+Target for the jam week. A shared collapsing universe, 2-3 human surfers. If we ship single-player only that's fine, but we have agent horsepower to take a real swing at this.
 
 **Architecture: Authoritative Server + Client Prediction**
 
@@ -98,19 +98,19 @@ This is a different game. Not just "bigger lobby" — needs architectural change
 
 ## Universe Scaling: Small → Vast
 
-### Current Design: Small (Jam Week)
-- 2-4 screens square (~4000×3000 pixels of game world)
-- Fluid sim: 256×256 or 512×512 grid
-- Everything fits in memory, single WebGL context
+### Jam Week: 4×4 Screens with Frustum
+- 4 screens square = 16 total screens of game world (~7680×4320 pixels)
+- Fluid sim: 512×512 or 1024×1024 grid (covers full universe)
+- **Frustum rendering from day one** — ASCII post-process only on visible viewport + 1 screen buffer
 - Camera follows player with edge markers for off-screen entities
+- Enough space to "wander" and bump into things without feeling like a fishbowl
+- Camera zoom/scale TBD through iteration — the ratio of ship size to visible area drives how "vast" it feels
+- Entity updates run everywhere, entity rendering only in frustum
 
-### Medium: Scrollable Universe (Post-Jam v1)
+### Medium: Scrollable Universe (Post-Jam)
 - 8-16 screens square
-- Fluid sim: 512×512 or 1024×1024 grid
+- Fluid sim: 1024×1024 grid
 - Still runs client-side for solo play
-- **Player viewing frustum:** render the screen + 1 screen of buffer in each direction
-- Off-screen: entities update positions but don't render
-- Fluid sim runs everywhere (it's GPU-side, resolution is the constraint not viewport size)
 
 **The frustum optimization:**
 ```
@@ -160,13 +160,13 @@ The ASCII post-process shader is the biggest per-pixel cost. Only running it on 
 
 | Decision | Jam Week | Post-Jam | Dream |
 |----------|----------|----------|-------|
-| Fluid sim location | Client | Client (solo) / Server (multi) | Server (sharded) |
-| Sim resolution | 256-512 | 512-1024 | Adaptive per-shard |
-| Player count | 1 | 2-10 | 10-100+ |
-| Universe size | 2-4 screens | 8-16 screens | 32+ screens |
-| Networking | None | WebSocket, 10Hz state | WebSocket + WebRTC P2P |
+| Fluid sim location | Client (solo) / Server (multi) | Server | Server (sharded) |
+| Sim resolution | 512-1024 | 1024 | Adaptive per-shard |
+| Player count | 1-3 | 2-10 | 10-100+ |
+| Universe size | 4×4 screens | 8-16 screens | 32+ screens |
+| Networking | WebSocket (stretch) | WebSocket, 10Hz state | WebSocket + WebRTC P2P |
 | Entity update | All always | All always | Spatial indexing, LOD |
-| ASCII render | Full viewport | Viewport + buffer | Viewport + LOD |
+| ASCII render | Frustum + buffer | Frustum + buffer | Frustum + LOD |
 
 ---
 
