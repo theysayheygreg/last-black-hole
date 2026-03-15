@@ -36,6 +36,27 @@ Night shift work must be:
 
 ---
 
+## Forge's Role
+
+Forge is not the main planner and not the main builder. Forge is the architectural brake and the code-shape check.
+
+Forge should be invoked in two places:
+
+1. **Before risky work starts** — when a task involves engine choice, rendering architecture, simulation complexity, or a build-order fork.
+2. **After implementation lands** — before Greg burns playtest time on something that is obviously overbuilt, technically fragile, or pointed at the wrong target.
+
+In practice:
+
+- Greg sets the direction and taste.
+- Orrery turns that into a concrete plan and task framing.
+- Orb routes implementation work to the right agents.
+- Forge checks whether the planned work is the simplest build that can succeed this week.
+- After the work lands, Forge reviews whether it is technically sound enough to hand back to Greg for playtest.
+
+Forge should be used as an architecture review before work and a code review after work. That is the simplest place for it in the loop.
+
+---
+
 ## Checkpoint Protocol
 
 ### Morning Review (~10am)
@@ -52,16 +73,18 @@ Greg goes to sleep. Before signing off:
 
 1. Play the current build, note what feels good and what doesn't
 2. Write the night shift prompt(s) — specific tasks with deliverables
-3. Update the layer checklist in BUILD-PLAN.md
-4. Commit any design decisions or tuning notes
-5. Launch the agent(s)
+3. If the next task is technically risky, get a Forge review before launching it
+4. Update the layer checklist in BUILD-PLAN.md
+5. Commit any design decisions or tuning notes
+6. Launch the agent(s)
 
 ### Mid-Day Check-in (~3pm, ~7pm)
 Quick pulse checks during the day:
 
 1. Is the current agent task still on track? (check git log)
 2. Any blocking decisions needed? Make them now, don't let agents spin.
-3. Playtest anything new. Quick feedback in a commit message or note.
+3. If a large task just landed, run it through Forge review before full playtest
+4. Playtest anything new. Quick feedback in a commit message or note.
 
 ### Night Report (Agent writes this)
 At the end of a night shift, the working agent writes `docs/reports/YYYY-MM-DD-night.md`:
@@ -106,6 +129,7 @@ An agent can autonomously start the next task when ALL of these are true:
 - **Layer boundary**: Never start a new layer without Greg's sign-off. Layer 0 → Layer 1 requires Greg to play it and say "yes, surfing feels good, proceed."
 - **Feel/vibe question**: "Is this fun?" is never an agent decision. Stop and leave a note.
 - **Architecture fork**: If there are two valid approaches (e.g., DOM HUD vs canvas HUD), don't pick one — document both and stop.
+- **Technical overreach**: If the task starts turning into infrastructure, research, or future-proofing that is not needed for the current layer, stop and ask for a scope cut.
 - **Breaking change**: If the next task would require reworking something Greg already approved, stop and ask.
 - **Performance cliff**: If you discover the approach won't hit 60fps, stop. Don't optimize — flag it. The fix might be a design change, not a code change.
 
@@ -242,3 +266,4 @@ Check these at each morning review:
 - **No silent failures** — if something doesn't work, commit it broken with a `WIP:` prefix and explain in the message
 - **Design decisions in commits** — if you chose approach A over B, say why in the commit message. Future agents (and future Greg) need this.
 - **Night report is mandatory** — even if "nothing went wrong, everything on the list is done," write the report. Greg's morning review depends on it.
+- **Forge review is a gate, not decoration** — use it before risky architecture work and after major implementation work.
