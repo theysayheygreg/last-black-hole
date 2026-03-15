@@ -91,6 +91,92 @@ LBH needs equivalent affordances for fluid navigation. The player's intent is of
 - **Late forgiveness** — if the player taps thrust 50-100ms after a wave crest passes, still give partial wave-catch benefit. The window is shorter because late reactions should be penalized more than early ones.
 - **Thrust smoothing** — mouse-based thrust direction should have slight smoothing to prevent jitter. The ship should feel like it has inertia in its facing, not just its position.
 
+### Near-Miss Correction
+
+**Concept:** When the player barely misses a navigation target (wreck loot range, portal entry zone, wave crest), nudge them. Celeste does this with pixel-level corner correction — the player hits a corner and gets shifted 2-5px to clear it. Same principle, fluid context.
+
+**Explore during tuning:**
+- **Wreck near-miss** — if ship trajectory passes within N% of a wreck's loot radius without entering it, bend the path slightly inward. Only when the player is clearly heading *at* the wreck, not tangentially past it.
+- **Portal near-miss** — same but stronger. Missing a portal because a current nudged you 10 pixels is a control failure, not a skill failure.
+- **Wave near-miss** — if the player is *almost* aligned with a wave crest (just outside the catch window), apply a weaker version of the wave magnetism. Partial catch > total miss.
+- **Kill radius grace** — if the ship barely clips a well's commitment point, give a 1-2 frame "are you sure?" where escape thrust is amplified. Not infinite — just enough to save a near-miss from becoming a death.
+
+### Counter-Steer Damping
+
+**Concept:** Racing games damp counter-steer to prevent snap oversteer. In LBH, when a player is escaping a well's pull and thrusting away, they tend to overcorrect — they fight the pull, overshoot, then oscillate back and forth. The game should damp this oscillation.
+
+**Explore during tuning:**
+- **Oscillation detection** — if the thrust vector has reversed direction 2+ times within N frames while near a well, the player is fighting the physics. Apply damping to smooth the escape trajectory.
+- **Escape trajectory smoothing** — in the well's shoulder zone, blend the ship's thrust direction with the ideal escape vector by a small percentage. Makes escape feel like a clean arc, not a zigzag.
+- This is related to **well escape assist** but specifically targets the *feel* of the escape maneuver, not just whether escape is possible.
+
+### Beginner Drift Guard
+
+**Concept:** Mario Kart's "Smart Steering" applies an invisible nudge to keep the kart on-track. For LBH beginners, we could apply a subtle auto-correction that prevents passive drift toward wells when the player clearly isn't trying to go there.
+
+**Explore during tuning:**
+- **Passive drift correction** — if the ship is drifting (no thrust) and moving toward a well, apply a tiny perpendicular force that curves the drift path into an orbit rather than a collision. Experienced players won't notice because they're always thrusting. Beginners survive their first 30 seconds.
+- **Skill gate** — this assist could weaken as the player demonstrates wave-catching or intentional well approaches. Or it could be a setting. Or it could just be the well's escape assist tuned generously enough.
+- **Risk:** if this is too strong, the wells lose their dread. The well should always *feel* dangerous even if beginners don't die in the first 10 seconds.
+
+### Visual Affordances for Invisible Assists
+
+**Concept:** Every invisible assist should have a visible cue so the player learns the system, not just benefits from it. (Ref: Skate's grind sparks, AC's white scratches on ledges, stealth games' awareness meters.)
+
+**Explore during tuning:**
+- **Wave catch zone** — when the player enters the catch window, the ASCII characters in the wave crest could brighten or shift to denser glyphs (`#` → `@`). The player learns to read "bright = rideable."
+- **Well danger gradient** — ASCII density increases near the commitment point. `·` in safe zone → `:` in shoulder → `#` near commitment → `█` inside. The terrain itself communicates the stakes.
+- **Assist-active indicator** — when any magnetism/stickiness assist is active, a subtle visual change on the ship (trail color? glyph change?) confirms "the game is helping you." This teaches the player what good positioning looks like.
+- **This ties directly to Pillar 1 (Art Is Product)** — the visual language isn't decorative, it's functional.
+
+---
+
+## Ship Control Model
+
+The ship isn't just a point that reads fluid velocity. It's a physical object with mass, facing, and thrust — and how those parameters are tuned determines whether movement feels like piloting, skating, or fighting.
+
+### Turn Speed and Curves
+
+**Concept:** The ship's facing (where it points / where thrust goes) shouldn't snap to the mouse. It should rotate toward the mouse aim point with tunable speed, and that speed should depend on *how far* the aim point is from current facing.
+
+**Parameters to explore:**
+- **Turn rate** — degrees per second the ship can rotate. Starting point: ~180°/s (half rotation per second). Too fast = twitchy. Too slow = unresponsive.
+- **Turn speed curve** — nonlinear response. Small aim offsets (nudging) should produce slow, precise rotation. Large aim offsets (reversing direction) should ramp faster. This gives the player fine control AND quick reversals.
+  - **Curve shape:** quadratic or cubic ease-in. `turnSpeed = baseTurnRate * pow(aimOffset / maxOffset, curvePower)` where curvePower 1.5-2.5.
+  - **Dead zone** — below ~5° offset, no rotation at all. Prevents jitter when the mouse is near the ship's facing.
+- **Turn rate vs. speed** — turning could be faster at low speed and slower at high speed (like a car). This rewards slowing down before maneuvers and makes high-speed surfing feel committed.
+
+### Ship Mass and Inertia
+
+**Concept:** The ship has mass. Mass affects how quickly it accelerates, decelerates, and how much the fluid can push it around.
+
+**Parameters to explore:**
+- **Mass** — affects acceleration (`a = F / mass`). Heavier ship = slower response to thrust, but also less buffeted by small currents. Lighter ship = responsive but thrown around by turbulence.
+- **Acceleration curve** — thrust could ramp up over time rather than being instant. Tap thrust = small burst. Hold thrust = builds to full force over 200-500ms. This creates a difference between "nudge" and "burn."
+- **Deceleration / drag** — how quickly the ship loses its own momentum when not thrusting. Low drag = ice-skating feel (momentum carries). High drag = responsive stops. Starting point: low drag when in-current, higher drag when fighting the flow.
+- **Fluid coupling as mass interaction** — heavier ships could have lower fluid coupling (they resist currents more). Lighter ships get carried more. This could be a progression axis: start light and wild, upgrade to heavier and controlled.
+
+### Gravity Response
+
+**Concept:** The ship's relationship with gravity wells isn't just "wells pull, ship thrusts away." There's a richer physics vocabulary.
+
+**Parameters to explore:**
+- **Gravitational acceleration** — should the ship accelerate toward wells like real gravity (`F = G*m/r²`), or use a gentler falloff? Real inverse-square creates very sharp pull near the well. A softer curve (`1/r` or `1/r^1.5`) might feel better for gameplay.
+- **Terminal velocity near wells** — cap the infall speed so players always have *some* reaction time near wells, even at close range. Without this, the inverse-square pull creates instant death at close range.
+- **Tidal effects** — at advanced play, the ship could feel differential gravity: the side closer to the well is pulled harder than the far side. This creates a rotational torque that makes close approaches physically destabilizing. (May be too complex for jam — note for post-jam.)
+- **Slingshot mechanics** — deliberately approaching a well and using its pull to gain speed before thrusting tangentially. The physics should support this naturally, but the tuning determines whether it's viable or suicidal. The well escape assist's shoulder width directly controls slingshot viability.
+
+### Thrust Model
+
+**Concept:** How thrust translates to force.
+
+**Parameters to explore:**
+- **Thrust modes** — continuous (hold to thrust) vs. burst (tap for impulse). Current design is continuous, but a secondary burst/dodge could be a skill tool.
+  - **Burst/dodge** — a short, high-force impulse on a cooldown. The "duck dive" verb from the surfing metaphor. Costs extra signal.
+- **Thrust direction** — always forward (toward mouse)? Or could the player thrust in a direction while facing another? (Probably too complex for jam. Forward-only is clean.)
+- **Thrust feedback into fluid** — the ship's thrust creates a wake in the fluid. How strong? Strong enough to see in the ASCII? Strong enough for other players to read? This is also a signal mechanic tie-in.
+- **Reverse thrust** — can the player brake actively, or only by thrusting in the opposite direction? Active brake (holding a key to decelerate) is more forgiving. Requiring 180° turn to slow down rewards skill.
+
 ---
 
 ## The Fabric: Anomalies and Substrate Interactions
@@ -189,14 +275,36 @@ Ideas for fabric-level anomalies that create new movement verbs:
 
 These are all day-one tunables. Expect to change them hourly during Monday playtesting.
 
+### Affordances
+
 | Variable | Starting Value | What It Affects |
 |----------|---------------|-----------------|
-| Thrust force | TBD (relative to well pull at mid-range) | How fast you can fight the current |
-| Fluid coupling | 0.8 (ship velocity = 80% fluid + 20% own) | How much the flow carries you |
 | Wave magnetism catch window | ±15 degrees, ±20% velocity match | How easy it is to catch a wave |
 | Wave magnetism lock strength | 10% of wave force | How much the wave holds you |
 | Well escape shoulder width | 20% of pull radius | How forgiving the well edge is |
 | Wreck approach cone | 30 degrees | How much the game helps you reach wrecks |
+| Wreck near-miss radius | 120% of loot radius | How much the game corrects near-misses |
+| Portal near-miss radius | 150% of entry radius | Stronger correction than wrecks |
 | Input buffer (wave catch) | 150ms before, 75ms after | Timing forgiveness for wave riding |
-| Thrust smoothing | 50ms lerp | How quickly the ship changes facing |
 | Deceleration near wrecks | 30% speed reduction in loot range | How much the game slows you for looting |
+| Counter-steer damping | 30% blend toward ideal escape vector | How much the game smooths well escapes |
+| Beginner drift guard | TBD (may cut — risk of removing dread) | Perpendicular nudge force near wells when drifting |
+
+### Ship Controls
+
+| Variable | Starting Value | What It Affects |
+|----------|---------------|-----------------|
+| Ship mass | TBD (1.0 as baseline, scale from there) | Acceleration response, fluid buffeting |
+| Thrust force | TBD (relative to well pull at mid-range) | How fast you can fight the current |
+| Thrust ramp time | 200ms to full force | Tap = nudge, hold = burn. Acceleration feel. |
+| Turn rate (base) | 180°/s | How fast the ship rotates toward aim |
+| Turn speed curve power | 2.0 (quadratic ease-in) | Nudge precision vs. fast reversal |
+| Turn dead zone | 5° | Prevents jitter near current facing |
+| Turn rate speed scaling | 0.7× at max speed | Committed feel at high speed |
+| Fluid coupling | 0.8 (ship velocity = 80% fluid + 20% own) | How much the flow carries you |
+| Ship drag (in-current) | Low (TBD) | Momentum carry when riding flow |
+| Ship drag (against-current) | Higher (TBD) | Resistance when fighting flow |
+| Thrust smoothing | 50ms lerp on facing | How quickly the ship changes direction |
+| Gravity falloff power | 2.0 (inverse square) | How sharp the pull curve is near wells |
+| Terminal infall speed | TBD (cap so player always has reaction time) | Prevents instant death at close range |
+| Burst/dodge impulse | TBD (stretch goal — may cut) | The "duck dive" verb. High force, short, cooldown. |
