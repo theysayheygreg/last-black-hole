@@ -25,6 +25,8 @@ We need a workflow where:
 
 A persistent, collapsible overlay panel with sliders for every tunable constant. This is the **minimum viable tuning tool** and it ships on day one alongside the physics prototype.
 
+Monday version is deliberately minimal: sliders + debug toggles + copy config + reset. No presets, no localStorage, no fancy grouping. Those are Tuesday+ if they come cheap. (Forge Review #2)
+
 **What it looks like:**
 - Floating `<div>` with `position: fixed`, top-right, toggle with backtick (`` ` ``) key
 - Sliders grouped by system (ship, fluid, wells, affordances)

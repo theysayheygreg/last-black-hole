@@ -301,6 +301,25 @@ Each decision has:
 
 ---
 
+## Signal Upside Contingency
+
+### Q: Signal Upside Contingency (if tax-only fails Wednesday)
+
+| Date | Event |
+|------|-------|
+| Mar 15 | Forge Review #2 flags that signal-as-pure-tax may teach players to "do less." Recommends pre-speccing the contingency now so Wednesday is implementation, not debate. |
+
+**Options:**
+1. **High signal improves wreck detection** (Forge's recommendation) — above 50% nearby unrevealed wrecks pulse, above 70% loot radius +20-30%, above 85% portal direction improves. Gives signal a clear upside without inventing a second economy.
+2. **Signal increases loot pickup radius only** (simpler) — ugly but fast to implement and easy to understand.
+3. **Do nothing** (current design) — signal remains pure tax. The actions that generate signal are the upside.
+
+**Where it landed:** Option 1 is the pre-specced contingency. Implement Wednesday night if playtesting shows "do less" is optimal.
+**Door status:** Open — awaits Wednesday playtest.
+**Advocate:** Forge.
+
+---
+
 ## Template for New Entries
 
 ```

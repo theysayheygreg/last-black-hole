@@ -16,6 +16,7 @@
 - Deploy to itch.io
 - Physics approach TBD Tuesday AM — two parallel experiments run Monday night (Pillar 6: Run It Twice)
 - Minimum shippable game: ship + fluid + wells + wrecks + one portal + Inhibitor
+- Parallelize exploration, serialize adoption. Run many probes if agent capacity allows. Only one lane is the integration mainline. Probes promote into mainline if they clearly win, die immediately if they don't. (Forge Review #2)
 
 ## Dependency Graph
 
@@ -38,6 +39,10 @@ Fluid Sim ──────── ┤                             ├── Ent
 ### Night Shift (Sun→Mon, 12:01am-10am) — FIRST AGENT SHIFT
 
 **Goal:** Two parallel physics prototypes, each with a ship flying through fluid. Pillar 6: Run It Twice. Agent compute is cheap, design regret is expensive.
+
+#### Monday Night Priority Ranking
+
+If time collapses, this is the priority order: N1a > N2 > N3 > N0 > N1b. The mainline is: single-sim + live tuning + ASCII. Everything else is a probe. (Forge Review #2)
 
 #### Task N1a: Approach A — Single Fluid Sim + Oscillating Force Injection (Large, 3-5hr) — AGENT 1
 - **What:** Fork PavelDoGreat WebGL-Fluid-Simulation into a single HTML file. Strip the demo UI. Get the sim running fullscreen on a canvas. Fake gravity waves via oscillating force injection from wells.
@@ -90,6 +95,7 @@ Fluid Sim ──────── ┤                             ├── Ent
   - [ ] Console logs sim resolution, wave grid resolution, and frame time
   - [ ] All tunables stored in a single `CONFIG` object (dev panel will bind to this)
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
+- **Kill rule:** If Approach B is not clearly better in feel by Tuesday 10am, it dies immediately. No merging good bits, no keeping it around. (Forge Review #2)
 - **Scope:** Large
 
 #### Task N3: ASCII Dithering Post-Process (Medium, 2-3hr) — EITHER AGENT (once an FBO exists)
@@ -177,6 +183,8 @@ Greg checks:
    - **Pick B:** Dual solver wins. Rename `index-b.html` to `index.html`, archive Approach A. Accept the complexity.
    - **Merge:** Both have value. Integrate the wave equation as an optional layer on top of the single sim. Spec the merge as a Day Shift task.
 6. All downstream work builds on whichever approach wins this review.
+
+**If both feel wrong:** Choose Approach A anyway (simpler). Cut all new feature work Tuesday. Spend the day only on movement tuning, wave readability, and well danger. Do not proceed to L1 until the movement fantasy is alive. A jam can survive a lost day. It cannot survive building five layers on bad movement. (Forge Review #2)
 
 ### Day Shift (10am-midnight)
 

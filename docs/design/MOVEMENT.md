@@ -109,6 +109,7 @@ LBH needs equivalent affordances for fluid navigation. The player's intent is of
 - **Oscillation detection** — if the thrust vector has reversed direction 2+ times within N frames while near a well, the player is fighting the physics. Apply damping to smooth the escape trajectory.
 - **Escape trajectory smoothing** — in the well's shoulder zone, blend the ship's thrust direction with the ideal escape vector by a small percentage. Makes escape feel like a clean arc, not a zigzag.
 - This is related to **well escape assist** but specifically targets the *feel* of the escape maneuver, not just whether escape is possible.
+- **Forge: start conservative.** This is the kind of assist that makes motion feel 'mysteriously mushy' if overdone.
 
 ### Beginner Drift Guard
 
@@ -118,8 +119,11 @@ LBH needs equivalent affordances for fluid navigation. The player's intent is of
 - **Passive drift correction** — if the ship is drifting (no thrust) and moving toward a well, apply a tiny perpendicular force that curves the drift path into an orbit rather than a collision. Experienced players won't notice because they're always thrusting. Beginners survive their first 30 seconds.
 - **Skill gate** — this assist could weaken as the player demonstrates wave-catching or intentional well approaches. Or it could be a setting. Or it could just be the well's escape assist tuned generously enough.
 - **Risk:** if this is too strong, the wells lose their dread. The well should always *feel* dangerous even if beginners don't die in the first 10 seconds.
+- **Forge says cut this first** if the ship starts feeling over-managed. The well shoulder already buys enough grace.
 
 ### Visual Affordances for Invisible Assists
+
+**Forge's concern: affordance stacking.** Individually the assists are thoughtful. Together they may blur physical honesty. The risk is not 'too easy' — it's that the player can't form a clear mental model of why the ship moved the way it did. Be ready to disable assists that don't pull their weight. (Forge Review #2)
 
 **Concept:** Every invisible assist should have a visible cue so the player learns the system, not just benefits from it. (Ref: Skate's grind sparks, AC's white scratches on ledges, stealth games' awareness meters.)
 

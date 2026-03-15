@@ -74,6 +74,7 @@ Three models to explore, in order of preference:
 - **Why this works:** gives us analog thrust from a mouse without extra keys. The spatial relationship between cursor and ship becomes the core skill input.
 - **Distance curve:** needs a dead zone near the ship (no thrust below ~30px), ramp zone (30-200px), and a clamp (>200px = full thrust). Probably quadratic: `thrustPct = clamp(pow((dist - deadZone) / rampRange, 0.7), 0, 1)`
 - **Risk:** requires the player to manage cursor position AND direction simultaneously. Could feel like patting your head and rubbing your stomach. Needs playtesting.
+- **Forge's rule:** if Model 1 doesn't feel obvious in the first 5 minutes of play, fall back to Model 2 immediately. Do not die on the hill of the fancier mouse model.
 
 **Model 2: Mouse = aim, click = binary thrust**
 - Ship facing rotates toward cursor. Click to thrust at full power in that direction.
@@ -159,6 +160,8 @@ The DualSense gives us **three things mouse doesn't have:**
 **The tradeoff:** mouse aim is more precise. In a game where precise positioning matters (threading between two wells, catching a narrow wave window), mouse might win. But LBH has magnetism and forgiveness affordances *specifically because* precision shouldn't be the skill gate — reading the flow and positioning are.
 
 #### The parallel experiment
+
+**Forge: cut DualSense ambition hard.** Basic controller input is fine if it comes for free. Adaptive triggers and haptics are post-jam candy. Do not spend real jam hours here unless everything core is already working.
 
 Could run mouse vs. controller as a parallel test alongside the physics experiment Monday night. But this is lower priority — the physics must work first. Better approach:
 

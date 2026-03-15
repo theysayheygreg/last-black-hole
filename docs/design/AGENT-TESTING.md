@@ -243,6 +243,8 @@ window.__TEST_API = {
 
 ## Implementation Budget
 
+Monday only needs: page loads, no JS errors, FPS above floor, ship moves on thrust, ship drifts when thrust stops, well pull exists. That is enough. Do not build the whole testing cathedral Monday night. (Forge Review #2)
+
 | Component | Lines of Code | When Built | By Whom |
 |-----------|--------------|------------|---------|
 | `window.__TEST_API` | ~50 | Monday night (part of N1a/N1b) | Physics agent |
