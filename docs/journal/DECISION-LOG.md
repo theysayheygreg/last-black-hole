@@ -314,9 +314,21 @@ Each decision has:
 2. **Signal increases loot pickup radius only** (simpler) — ugly but fast to implement and easy to understand.
 3. **Do nothing** (current design) — signal remains pure tax. The actions that generate signal are the upside.
 
-**Where it landed:** Option 1 is the pre-specced contingency. Implement Wednesday night if playtesting shows "do less" is optimal.
-**Door status:** Open — awaits Wednesday playtest.
-**Advocate:** Forge.
+| Mar 15 (late) | Greg + Orrery pushback on Forge's approach. The "do less" problem is real but the fix is wrong. Signal-as-buff solves a mechanical problem with a mechanical hammer. The game wants players to make their own calculus — is this wreck worth the noise given the portal situation, the current map, what entities I can see? That's emergent and situational. A loot radius buff flattens it into "am I above or below the threshold?" Forge is thinking like a machine optimizing a system, not like a player reading a situation. |
+
+**Where it landed:** Option 3 (do nothing) is the current position. Signal remains pure tax. The "do less" failure mode is addressed by making the things that generate signal irresistibly valuable AND making inaction costly (portals evaporate, universe dies, you leave empty-handed).
+
+**Greg's framing:** The tension isn't "loud vs quiet." It's "ambitious vs conservative." Both are valid strategies with different risk/reward curves. The game doesn't need to mechanically reward noise — it needs to make the *rewards of noisy actions* worth the risk. That's a content/tuning problem, not a systems problem.
+
+**Three levers if "do less" appears in playtesting (before reaching for signal-as-buff):**
+1. Make loot more tempting — core wrecks near wells have dramatically better rewards
+2. Make safe routes unreliable — drifting is quiet but unpredictable, you go where the flow goes
+3. Make time pressure real — portal evaporation forces action, you can't tiptoe forever
+
+**Alternative considered but not acted on:** "Mapped terrain" — areas you've traveled through stay slightly brighter in the ASCII, giving route knowledge. Not a buff from signal level, but a natural consequence of having moved through space. Interesting but adds complexity. Backlogged.
+
+**Door status:** Open — awaits Wednesday playtest. If all three levers fail AND the game still rewards passivity, then Forge's Option 1 is the emergency fallback. But we try the design-coherent fixes first.
+**Advocates:** Greg (Option 3), Forge (Option 1 as contingency).
 
 ---
 
