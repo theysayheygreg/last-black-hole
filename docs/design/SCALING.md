@@ -14,8 +14,8 @@ What we're building. One player, AI scavengers, local simulation.
 - The game is designed so that scavengers already teach the player the multiplayer dynamics: portal competition, signal awareness, territorial behavior
 - **Key insight:** if the solo game feels like a multiplayer game with bots, the multiplayer transition is smooth
 
-### Phase 2: Small Lobby (2-3 Players — Jam Goal)
-Target for the jam week. A shared collapsing universe, 2-3 human surfers. If we ship single-player only that's fine, but we have agent horsepower to take a real swing at this.
+### Phase 2: Small Lobby (2-3 Players — Stretch Goal)
+Greg wants this but it's a labeled stretch goal, not the jam plan. No networking code unless we're ahead by Thursday. The jam build uses clean architecture that *happens* to be multiplayer-ready (separate sim from rendering, entity state as plain data). See DECISION-LOG.md multiplayer entry.
 
 **Architecture: Authoritative Server + Client Prediction**
 

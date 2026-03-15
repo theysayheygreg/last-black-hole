@@ -28,7 +28,7 @@
 - [ ] Generate a texture atlas: grid of all ASCII glyphs we'll use
 - [ ] Characters needed: `. : ; - = + * # % @ ~ | / \ ! > < ( ) [ ] { } ○ ◇ ▶ █ ▓ ▒`
 - [ ] Plus directional variants: `═ ║ ╱ ╲ ≡ ‖`
-- [ ] Atlas layout: 16×8 grid (128 characters), each glyph in an N×M pixel cell
+- [ ] Atlas layout: 16×16 grid (256 characters), each glyph in an N×M pixel cell (matches pmndrs ASCIITexture 1024×1024 atlas)
 
 ### Shader Architecture
 - [ ] Study `pmndrs/postprocessing` ASCIIEffect — our recommended starting point

@@ -6,29 +6,29 @@
 
 ## 1. Fluid Simulation Architecture
 
-### The Dual-System Approach
+### Physics Architecture: Parallel Experiments
 
-Two physics layers running simultaneously, each serving a different gameplay purpose:
+> **Status:** Two approaches will be built in parallel Monday night (see DECISION-LOG.md, Pillar 6: Run It Twice). Compare Tuesday morning, merge if complementary, pick the winner if not.
 
-**Layer A: Navier-Stokes Fluid (Local Physics)**
-- Governs local movement — currents, eddies, drag, thrust interaction
-- Based on Jos Stam's "Stable Fluids" (GPU Gems Chapter 38)
+**Approach A: Single Fluid Sim + Oscillating Force Injection** (Forge's recommendation)
+- Navier-Stokes only. Fake waves through periodic force patterns from gravity wells.
+- Based on Jos Stam's "Stable Fluids" (GPU Gems Chapter 38) / PavelDoGreat fork
 - Runs on a 256×256 grid for the prototype (tunable)
 - Operations per step: advection → diffusion → force injection → pressure solve (Jacobi iteration, 20-40 steps) → divergence correction
 - Ship reads velocity at its position and adds it to its own velocity vector
+- Waves are created by oscillating the force injection amplitude at well locations — simpler, proven, shippable
 
-**Layer B: Wave Equation Solver (Gravity Waves)**
-- Governs large-scale spacetime distortion — ripples propagating from black holes and collisions
-- Simple 2D wave equation: `u(t+1) = 2*u(t) - u(t-1) + c²*∇²u(t) - damping*u(t)`
-- Runs on a coarser grid (128×128 or same as fluid, sampled less frequently)
+**Approach B: Dual Solver** (deep dive design)
+- Navier-Stokes (local physics) + wave equation solver (gravity wave propagation) on separate grids, coupled
+- Wave equation: `u(t+1) = 2*u(t) - u(t-1) + c²*∇²u(t) - damping*u(t)`
 - Wave amplitude feeds into the fluid sim as a force multiplier — where waves crest, fluid velocity increases
-- Creates the "surfable" waves that are the core skill axis
+- Physically accurate surfing. Research-level complexity.
 
-**Why two systems instead of one:**
-- Pure Navier-Stokes doesn't naturally produce the long-range propagating waves we need for surfing
-- Pure wave equation doesn't give us the local fluid dynamics (eddies, drag, currents) that make movement feel physical
-- Combined: waves propagate across the map (surfable), fluid creates local navigation challenges (steerable)
-- Computationally: both are GPU-friendly, run independently, coupled via force injection
+**Why run both:**
+- Pure Navier-Stokes may not naturally produce the long-range propagating waves we need for surfing — or it might, if the force injection is tuned right
+- The dual solver is more physically accurate but may be overbuilt for a jam
+- Agent compute is cheap. Design regret is expensive. (Pillar 6)
+- Both get built Monday night, compared Tuesday morning
 
 ### Gravity Well Implementation
 

@@ -52,11 +52,13 @@ This is the whole bet. If the fluid sim + thrust control isn't fun to navigate, 
 
 - [ ] Signal mechanic: thrust, looting, scanning all add to signal level
 - [ ] Signal decay: signal drops slowly when you're passive/drifting
-- [ ] Fauna: simple entities that patrol near wrecks, move toward signal sources
+- [ ] Fauna: simple entities that patrol near wrecks, move toward signal sources (stretch for Wed — simpler AI)
 - [ ] Fauna damage: contact = hull damage, enough damage = death
-- [ ] Scavenger AI: other "ships" that navigate the fluid, loot wrecks, head for portals
+- [ ] Scavenger AI: other "ships" that navigate the fluid, loot wrecks, head for portals (only if ahead of schedule)
 - [ ] Scavengers use portals — a used portal is gone
 - [ ] Basic collision/damage model
+
+> **Priority note:** Inhibitor is the only essential threat (see DECISION-LOG.md). Fauna is the stretch goal for Wednesday, scavengers only if ahead. This layer's core is signal + one simpler threat.
 
 **Playtest question:** Does signal management create interesting decisions? Is passive play boring or tense?
 
