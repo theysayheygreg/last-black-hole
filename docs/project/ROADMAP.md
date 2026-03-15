@@ -62,6 +62,7 @@ Fluid Sim ──────── ┤                             ├── Ent
   - [ ] Ship responds to fluid: drift, thrust, surf
   - [ ] Steady 60fps (check with `requestAnimationFrame` timestamp delta)
   - [ ] Console logs sim resolution and frame time
+  - [ ] All tunables stored in a single `CONFIG` object (dev panel will bind to this)
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
 - **Scope:** Large
 
@@ -87,6 +88,7 @@ Fluid Sim ──────── ┤                             ├── Ent
   - [ ] Ship responds to fluid: drift, thrust, surf
   - [ ] Steady 60fps (check with `requestAnimationFrame` timestamp delta) — if not achievable, note the perf cost
   - [ ] Console logs sim resolution, wave grid resolution, and frame time
+  - [ ] All tunables stored in a single `CONFIG` object (dev panel will bind to this)
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
 - **Scope:** Large
 
@@ -109,6 +111,33 @@ Fluid Sim ──────── ┤                             ├── Ent
   - [ ] 60fps maintained with the ASCII post-process pass added
   - [ ] Looks distinctly different from any existing browser game
 - **Scope:** Medium
+
+#### Task N2: Dev Panel + CONFIG Object (Small, 1-2hr) — EITHER AGENT (after N1a or N1b)
+
+> **Non-negotiable.** Greg must have live tuning sliders before the morning review. Without this, every tuning cycle requires code changes and reloads. See `docs/design/TUNING.md`.
+
+- **What:** A floating dev panel with sliders for every tunable constant. All game systems read from a single `CONFIG` object. Sliders write to `CONFIG` live.
+- **Files:** Dev panel code in both `index-a.html` and `index-b.html` (or shared module)
+- **Dependencies:** At least one prototype running (N1a or N1b)
+- **Deliverables:**
+  - Single `CONFIG` object at top of main code. Every system reads from it every frame (not cached at init).
+  - Floating DOM panel, toggle with backtick (`` ` ``), top-right corner, collapsible
+  - Sliders grouped by system: Ship, Fluid, Wells, Affordances, ASCII, Debug
+  - L0 sliders (see TUNING.md for full list): thrust, fluid coupling, turn rate, turn curve, drag, mass, viscosity, gravity strength/falloff, wave amplitude/frequency, catch window, lock strength, shoulder width, ASCII cell size, color temperature
+  - Debug toggles: velocity field overlay, well radii visualization, catch window highlight, FPS counter
+  - "Copy Config" button → dumps CONFIG as JSON to clipboard
+  - "Reset" button → restores defaults
+  - "Presets" dropdown → save/load named configs to localStorage
+  - Changes apply instantly — no reload required
+- **Acceptance Criteria:**
+  - [ ] Panel toggles with backtick key
+  - [ ] All L0 tunables have sliders with labeled ranges
+  - [ ] Dragging a slider changes the game feel immediately (no reload)
+  - [ ] "Copy Config" produces valid JSON of current settings
+  - [ ] "Reset" restores all values to code defaults
+  - [ ] Panel doesn't obscure critical game area (collapsible, semi-transparent)
+  - [ ] Panel works in both prototype HTML files
+- **Scope:** Small (but critical)
 
 #### Night Report
 - Agent writes `docs/journal/reports/2026-03-16-night.md` — MUST include comparative notes on both prototypes: feel, performance, surfability, visual quality, implementation complexity.
@@ -135,13 +164,15 @@ Greg checks:
 ### Day Shift (10am-midnight)
 
 **Greg priorities (in order):**
-1. **Play the winning fluid prototype for 30+ minutes.** Note what feels good and bad. Tune constants live if possible (expose thrust, wave amplitude, well strength as URL params or on-screen sliders).
+1. **Tune the winning prototype using the dev panel.** Open the panel (`` ` ``), play for 30+ minutes, adjust sliders live. Focus on: does surfing feel like surfing? Is thrust responsive? Are wells dangerous but escapable? When something feels right, "Copy Config" and commit.
 2. **If "Merge" was chosen:** spec and oversee the merge — integrate the wave equation layer into the winning sim. This is the Day Shift's top agent task.
-3. **Art-direct the ASCII shader.** Is the character density right? Colors? Cell size? This is the visual identity — get it right early.
-4. **Confirm the wave feel.** Is it good enough to proceed to L1 Tuesday, or does the physics need more work?
-5. **If ahead:** Add 2-3 gravity wells and see how wave interference feels. Add directional character variants (horizontal flow = `~ -`, vertical = `| !`).
+3. **Art-direct the ASCII shader via dev panel.** Cell size slider, color temperature, character density ramp. Iterate live — this is the visual identity.
+4. **Test mouse control models.** The dev panel should include a dropdown for mouse model (distance-thrust vs binary-click vs drag-magnet). Play each for 10 minutes. See CONTROLS.md.
+5. **Confirm the wave feel.** Is it good enough to proceed to L1 Tuesday, or does the physics need more work?
+6. **If ahead:** Add 2-3 gravity wells and see how wave interference feels. Add directional character variants (horizontal flow = `~ -`, vertical = `| !`).
 
-**Parallel agent work (if Greg is playing):**
+**Parallel agent work (while Greg tunes):**
+- **Sandbox mode:** Pause/resume sim, click-to-teleport ship, click-to-spawn-well, drag-to-move-well, slow motion (0.25x-2x), wave visualizer overlay. See TUNING.md Mode 2. This lets Greg test specific situations without playing full runs.
 - Stub out the game state module: entity data structures for wrecks, portals, ship state, signal level. Plain data objects, no rendering yet. This is the "clean data boundary" that makes everything else composable.
 - Stub the HUD as DOM elements over the canvas: signal meter placeholder, portal count placeholder, hull bar placeholder. No real data yet — just the layout. Use NERV-style colors (`#58F2A5` green, `#F0903A` orange, `#E81900` red). Monospace font for data, bold serif for warnings.
 
@@ -251,15 +282,18 @@ Greg checks:
 ### Day Shift (10am-midnight)
 
 **Greg priorities:**
-1. **Play 3-5 complete runs.** Tune: wreck density, portal evaporation timing, well growth rate, viscosity curve. The extraction loop must feel right before adding threats.
-2. **Art-direct wreck appearance.** Do they read as "dead civilizations"? Is the loot feedback satisfying?
-3. **Wire up real HUD data.** The DOM stubs from Monday's parallel work should now show real signal (placeholder), portal count, and inventory. Spend 30 min making this feel EVA/NERV.
-4. **Write wreck name generator.** Pure JS string generation: civilization name + death cause + age. `"Wreck of the Ascending Chorus — collapsed attempting dimensional transit — 4.7B years"`. This is independent work Greg can do while the loop gestates.
+1. **Play 3-5 complete runs using dev panel to tune extraction feel.** New L1 sliders: wreck count, loot radius, approach cone, decel assist, portal count, evap timing, well growth rate, viscosity curve. Tune live, "Copy Config" when it feels right.
+2. **Use sandbox mode** to test specific interactions: place ship near a wreck and tune approach stickiness. Place ship near portal and tune alignment magnetism. Drag wells closer together to test late-game feel without playing for 8 minutes.
+3. **Art-direct wreck appearance.** Do they read as "dead civilizations"? Is the loot feedback satisfying?
+4. **Wire up real HUD data.** The DOM stubs from Monday's parallel work should now show real signal (placeholder), portal count, and inventory. Spend 30 min making this feel EVA/NERV.
+5. **Write wreck name generator.** Pure JS string generation: civilization name + death cause + age. `"Wreck of the Ascending Chorus — collapsed attempting dimensional transit — 4.7B years"`. This is independent work Greg can do while the loop gestates.
 
 **Parallel agent work:**
+- **Add L1 sliders to dev panel** — wreck, portal, and universe tunables (see TUNING.md Tuesday section)
 - Wreck-as-fluid-obstacle polish: ensure eddies form cleanly behind wrecks, tune boundary condition implementation
 - Add second and third gravity wells. Place them at 40-70% map radius. Test wave interference patterns. Tune force injection (or wave equation sources, depending on winning approach) so the multi-well flow field creates interesting navigation decisions.
 - If HUD stubs exist: wire real data into them (portal count, inventory count, placeholder signal bar)
+- **If Monday's controller decision went "yes":** Add Gamepad API support (basic: stick aim + trigger thrust, no haptics yet). See CONTROLS.md.
 
 ### Evening Handoff (midnight)
 
@@ -358,12 +392,14 @@ Greg checks:
 ### Day Shift (10am-midnight)
 
 **Greg priorities:**
-1. **Playtest signal extensively.** This is the most important design validation of the week. Tune signal rates, decay curve, threshold value. If the "do less" failure mode appears, make a design call: add signal upside (Forge's recommendation) or increase the reward density for loud actions.
-2. **Playtest the Inhibitor.** Tune speed, tracking interval, search pattern. It should feel inevitable but not instant. The 1.5x speed ratio is a starting point — adjust.
+1. **Playtest signal using dev panel + scenario snapshots.** New L2 sliders: signal emission rates, decay curve, loot spikes, threshold, variance, Inhibitor speed/tracking. Save scenarios: "pre-threshold" (signal at 80%), "chase" (Inhibitor hunting), "silent hide" (drifting near wreck). Replay scenarios with different tuning to A/B the feel.
+2. **Playtest the Inhibitor.** Use sandbox to spawn the Inhibitor manually at different distances. Tune speed, tracking interval, search pattern. It should feel inevitable but not instant. The 1.5x speed ratio is a starting point — adjust via slider.
 3. **If signal works:** Write DECISION-LOG entry confirming signal-as-tax or pivoting to signal-buys-capability. This decision gates Thursday's work.
-4. **Art-direct Inhibitor appearance.** Is the glitch effect readable? Too subtle? Too over-the-top?
+4. **Art-direct Inhibitor appearance.** Is the glitch effect readable? Too subtle? Too over-the-top? Tune UI corruption rate via dev panel slider.
 
 **Parallel agent work:**
+- **Add L2 sliders to dev panel** — signal, Inhibitor tunables (see TUNING.md Wednesday section)
+- **Scenario snapshot system** (TUNING.md Mode 3): save/load game state, named scenarios for rapid A/B testing of signal balance
 - Basic audio: Web Audio API drone layer + thrust sound + loot chime + Inhibitor warning tone. See MUSIC.md Layer 1 (drone) and Layer 5 (Inhibitor presence). Even placeholder audio massively improves feel testing.
 - Wreck name/history generator: civilization name + death cause + age + one visual differentiator (per Forge's "one memorable detail" recommendation). Show on loot pickup in HUD.
 
@@ -494,16 +530,18 @@ Greg checks:
 ### Day Shift (10am-midnight)
 
 **Greg priorities:**
-1. **Full playtest session.** This is the first time the game has all its core systems. Play 5-10 runs. Note balance issues. Tune run length, loot density, portal timing, signal rates, well growth.
-2. **Art-direct the HUD.** Adjust panel sizes, font sizes, warning text content. The HUD should feel alive — flickering, overlapping, stressed.
-3. **Audio mixing.** Adjust relative volumes. Make sure the wave rhythm teaches surfing (can you hear the crest?). Make sure the Inhibitor tone creates dread.
+1. **Full playtest session with all dev tools.** This is the first time the game has all its core systems. Play 5-10 runs. Use the full dev panel (now 50+ sliders across all systems). Use scenario snapshots to A/B specific moments.
+2. **Art-direct the HUD via dev panel.** New sliders: panel opacity, warning hold time, corruption intensity, font sizes. The HUD should feel alive — tune the degradation rate when Inhibitor is active.
+3. **Audio mixing via dev panel.** New sliders: master volume, per-layer volumes (drone, harmonics, signal choir, Inhibitor). Make sure the wave rhythm teaches surfing (can you hear the crest?). Make sure the Inhibitor tone creates dread.
 4. **Make the design call on signal.** After playing many runs: is signal-as-tax working? Write the definitive DECISION-LOG entry. If it needs upside, spec exactly what.
 5. **Name the Inhibitor.** "The Silence"? "The Threshold"? "The Warden"? Decision needed for HUD text.
 
 **Parallel agent work:**
+- **Add L3/L4 sliders to dev panel** — HUD, audio, visual tunables (see TUNING.md Thursday section)
 - Between-run flow: title screen → run → success/failure → title screen. Simple but complete.
 - Procgen wreck names displayed in HUD on loot pickup
 - If ahead: feedback buffer (motion trails) — blend previous frame's ASCII output with current at 85-95% decay
+- **If controller is in:** Add Gamepad API rumble (basic vibration via `navigator.getGamepads()` haptic actuators). Map wave crests, well proximity, Inhibitor to vibration patterns. See CONTROLS.md HD haptics section.
 
 ### Evening Handoff (midnight)
 
@@ -834,9 +872,9 @@ Tasks that CAN run simultaneously (with two agents):
 
 | Time Slot | Agent 1 | Agent 2 |
 |-----------|---------|---------|
-| Mon night | N1a: Approach A (single sim + force injection + ship) | N1b: Approach B (dual solver + ship). N3: ASCII shader (once either FBO exists) |
-| Mon morning | **PHYSICS COMPARISON** — Greg plays both, picks winner or merges | |
-| Mon day | Greg plays winner + tunes | Stub game state + HUD layout. Merge task if needed. |
+| Mon night | N1a: Approach A (single sim + force injection + ship) | N1b: Approach B (dual solver + ship). N3: ASCII shader (once either FBO exists). N2: Dev panel (once either prototype runs). |
+| Mon morning | **PHYSICS COMPARISON** — Greg plays both prototypes, tunes via dev panel, picks winner or merges | |
+| Mon day | Greg tunes winner via dev panel + sandbox | Sandbox mode + stub game state + HUD layout. Merge task if needed. |
 | Tue night | N4: Wrecks → N5: Portals | N6: Well Growth (independent of entities) |
 | Tue day | Greg tunes extraction loop | Multi-well + wreck-fluid polish |
 | Wed night | N7: Signal → N8: Inhibitor | Audio foundation (reads game state, doesn't modify) |

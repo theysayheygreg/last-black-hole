@@ -15,6 +15,8 @@ READ THESE FILES BEFORE WRITING ANY CODE:
 - CLAUDE.md (root) — commit conventions, code style, constraints
 - docs/design/PILLARS.md — design lenses (Art Is Product is #1)
 - docs/design/MOVEMENT.md — surfing metaphor, control affordances, tuning variables
+- docs/design/CONTROLS.md — ship physics model, mouse control models, tuning variables
+- docs/design/TUNING.md — dev panel requirements, CONFIG object pattern, tuning workflow
 - docs/design/DESIGN-DEEP-DIVE.md — physics architecture (Section 1), ASCII renderer (Section 2)
 - docs/project/PRE-MONDAY-RESEARCH.md — fluid sim research, shader references, key questions
 
@@ -42,6 +44,23 @@ TECH STACK:
 - WebGL 2 (fallback to WebGL 1 only if necessary)
 - No frameworks, no Three.js, no build step
 - File structure: src/ for JS modules, src/shaders/ for GLSL if separate
+
+CRITICAL: CONFIG OBJECT PATTERN
+Every tunable value MUST live in a single CONFIG object at the top of your code.
+Every system reads from CONFIG every frame (not cached at init). Example:
+
+const CONFIG = {
+  ship: { thrustForce: 5, fluidCoupling: 0.8, turnRate: 180, mass: 1.0 },
+  fluid: { viscosity: 0.001, resolution: 256 },
+  wells: { gravity: 10, falloff: 2.0, waveAmplitude: 1.0, waveFrequency: 1.0 },
+  affordances: { catchWindow: 15, lockStrength: 0.1, shoulderWidth: 0.2 },
+  ascii: { cellSize: 8 }
+};
+
+This is NOT optional. A dev panel will bind to this object so Greg can
+tune values live with sliders. If values are hardcoded in shader code
+or scattered across files, the dev panel can't reach them and tuning
+requires code changes + reloads instead of slider drags.
 
 TUNING VARIABLES (starting points — expect hourly changes):
 - Fluid grid: 256×256
