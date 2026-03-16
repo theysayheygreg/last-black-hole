@@ -79,7 +79,7 @@ Orb should pull these in priority order. N1a starts immediately. N2 and N3 can s
   - [ ] `CONFIG` object exists, all tunables are in it, systems read from it every frame
   - [ ] `window.__TEST_API` is accessible and returns valid data
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
-- **Self-test before handoff:** Run `node tests/run-all.js` if N0 is complete. Otherwise manually verify all acceptance criteria and document in the commit.
+- **Self-test before handoff:** Run `npm install && node tests/run-all.js index-a.html`. The test harness is pre-built in the repo. Smoke tests work immediately; physics tests require `__TEST_API` to be exposed. Commit test pass/fail evidence before claiming the task is done.
 - **Scope:** Large
 
 #### Task N1b: Approach B — Dual Solver (Large, 3-5hr)
