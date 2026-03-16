@@ -35,10 +35,10 @@ export const CONFIG = {
     clampRadius: 15,          // sim-space singularity prevention
     terminalInflowSpeed: 0.3, // cap fluid speed near well center
     gravityClampDist: 40,     // pixel-space min distance for ship gravity calc
-    accretionRate: 0.008,     // density injection rate for accretion disk — higher = brighter disk
-    accretionRadius: 0.06,    // UV radius of the accretion ring injection
+    accretionRate: 0.015,     // density injection rate for accretion disk — LOUD for now, dial back later
+    accretionRadius: 0.07,    // UV radius of the accretion ring injection
     accretionSpinRate: 0.8,   // how fast the accretion injection points rotate (radians/sec)
-    accretionPoints: 6,       // number of injection points around the ring
+    accretionPoints: 8,       // number of injection points per ring
   },
   events: {
     waveSpeed: 150,           // pixels/sec ring expansion

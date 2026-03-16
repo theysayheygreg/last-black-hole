@@ -72,39 +72,77 @@ export class WellSystem {
         cfg.terminalInflowSpeed
       );
 
-      // === SPINNING ACCRETION DISK ===
-      // Per-instance parameters with CONFIG fallback
+      // === SPINNING ACCRETION DISK — VISUALLY LOUD ===
       const spinAngle = totalTime * well.getAccretionSpinRate() * well.orbitalDir;
-      const ringR = well.getAccretionRadius() * well.mass;
       const numPts = well.getAccretionPoints();
       const rate = well.getAccretionRate() * well.mass;
 
-      for (let i = 0; i < numPts; i++) {
-        const angle = spinAngle + (i / numPts) * Math.PI * 2;
-        const px = fu + Math.cos(angle) * ringR;
-        const py = fv + Math.sin(angle) * ringR;
+      // Multi-ring injection: inner ring (hot white/yellow), outer ring (amber/red)
+      // Gap pattern: only inject at odd-numbered points to create visible spiral arms
+      const rings = [
+        { radiusMult: 0.5, brightness: 5.0, r: 1.0, g: 0.9, b: 0.5, splatR: 0.005 },  // inner — hot white-yellow
+        { radiusMult: 0.8, brightness: 3.0, r: 1.0, g: 0.6, b: 0.15, splatR: 0.006 },  // mid — bright amber
+        { radiusMult: 1.2, brightness: 1.5, r: 0.8, g: 0.3, b: 0.05, splatR: 0.008 },  // outer — dim red-orange
+      ];
 
-        // Inject density with slight tangential velocity to feed the orbital flow
-        const tangVx = -Math.sin(angle) * 0.0005 * well.orbitalDir;
-        const tangVy = Math.cos(angle) * 0.0005 * well.orbitalDir;
+      for (const ring of rings) {
+        const ringR = well.getAccretionRadius() * well.mass * ring.radiusMult;
 
-        fluid.splat(
-          px, py,
-          tangVx, tangVy,
-          0.004,
-          rate * 0.8,   // r — warm
-          rate * 0.35,   // g
-          rate * 0.1     // b — amber/orange accretion glow
-        );
+        for (let i = 0; i < numPts; i++) {
+          // Gap pattern: skip every other point for spiral arm effect
+          // Use sine modulation so arms have bright cores and dim edges
+          const armPhase = (i / numPts) * Math.PI * 2;
+          const armBrightness = 0.3 + 0.7 * Math.pow(Math.max(0, Math.cos(armPhase * numPts * 0.5)), 2);
+
+          const angle = spinAngle + armPhase;
+          const px = fu + Math.cos(angle) * ringR;
+          const py = fv + Math.sin(angle) * ringR;
+
+          // Tangential velocity — stronger to visibly feed the swirl
+          const tangStr = 0.002 * ring.radiusMult;
+          const tangVx = -Math.sin(angle) * tangStr * well.orbitalDir;
+          const tangVy = Math.cos(angle) * tangStr * well.orbitalDir;
+
+          const b = rate * ring.brightness * armBrightness;
+          fluid.splat(
+            px, py,
+            tangVx, tangVy,
+            ring.splatR,
+            b * ring.r,
+            b * ring.g,
+            b * ring.b
+          );
+        }
       }
 
-      // Inner core glow — constant, dim, marks the center
+      // === EVENT HORIZON — dark center with bright edge contrast ===
+      // Instead of glowing at center, inject NEGATIVE density to darken it
+      // This creates the void-with-bright-ring look
+      // (Negative density values get clamped by the shader but reduce the
+      //  accumulated density from other splats, creating relative darkness)
       fluid.splat(
         fu, fv,
         0, 0,
-        0.001,
-        rate * 0.3, rate * 0.1, rate * 0.03
+        0.003,           // small radius — tight dark core
+        -0.05, -0.05, -0.05  // subtract density — creates the void
       );
+
+      // Bright innermost ring — the edge of the event horizon
+      const horizonPts = 12;
+      const horizonR = well.getAccretionRadius() * well.mass * 0.3;
+      for (let i = 0; i < horizonPts; i++) {
+        const angle = spinAngle * 1.5 + (i / horizonPts) * Math.PI * 2;
+        const px = fu + Math.cos(angle) * horizonR;
+        const py = fv + Math.sin(angle) * horizonR;
+        fluid.splat(
+          px, py,
+          0, 0,
+          0.003,
+          rate * 8.0,   // VERY bright white
+          rate * 7.0,
+          rate * 4.0
+        );
+      }
     }
   }
 
