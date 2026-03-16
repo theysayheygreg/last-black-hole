@@ -29,7 +29,6 @@ export class Well {
     this.accretionSpinRate = opts.accretionSpinRate ?? null;
     this.accretionPoints = opts.accretionPoints ?? null;
     this.killRadius = opts.killRadius ?? 20;       // pixel-space death radius
-    this.color = opts.color ?? [1.0, 0.6, 0.15];  // per-well color identity (RGB, 0-1)
   }
 
   // Read a per-instance value, falling back to CONFIG default
@@ -78,14 +77,12 @@ export class WellSystem {
       const numPts = well.getAccretionPoints();
       const rate = well.getAccretionRate() * well.mass;
 
-      // Multi-ring injection tinted by per-well color identity
-      // Inner rings are hotter (whiter), outer rings are more saturated in well color
-      const wc = well.color;
+      // Multi-ring injection: inner ring (hot white/yellow), outer ring (amber/red)
+      // Gap pattern: only inject at odd-numbered points to create visible spiral arms
       const rings = [
-        { radiusMult: 0.5, brightness: 8.0, r: 0.6+wc[0]*0.4, g: 0.5+wc[1]*0.4, b: 0.3+wc[2]*0.4, splatR: 0.005 },  // inner — hot, slightly white-shifted
-        { radiusMult: 0.8, brightness: 4.0, r: wc[0], g: wc[1]*0.7, b: wc[2]*0.4, splatR: 0.007 },  // mid — saturated well color
-        { radiusMult: 1.2, brightness: 2.0, r: wc[0]*0.7, g: wc[1]*0.4, b: wc[2]*0.2, splatR: 0.009 },  // outer — dimmer, more saturated
-        { radiusMult: 1.6, brightness: 0.8, r: wc[0]*0.4, g: wc[1]*0.2, b: wc[2]*0.1, splatR: 0.012 },  // far outer — faint halo
+        { radiusMult: 0.5, brightness: 5.0, r: 1.0, g: 0.9, b: 0.5, splatR: 0.005 },  // inner — hot white-yellow
+        { radiusMult: 0.8, brightness: 3.0, r: 1.0, g: 0.6, b: 0.15, splatR: 0.006 },  // mid — bright amber
+        { radiusMult: 1.2, brightness: 1.5, r: 0.8, g: 0.3, b: 0.05, splatR: 0.008 },  // outer — dim red-orange
       ];
 
       for (const ring of rings) {
@@ -130,8 +127,8 @@ export class WellSystem {
         -0.05, -0.05, -0.05  // subtract density — creates the void
       );
 
-      // Bright innermost ring — the edge of the event horizon, tinted by well color
-      const horizonPts = 16;
+      // Bright innermost ring — the edge of the event horizon
+      const horizonPts = 12;
       const horizonR = well.getAccretionRadius() * well.mass * 0.3;
       for (let i = 0; i < horizonPts; i++) {
         const angle = spinAngle * 1.5 + (i / horizonPts) * Math.PI * 2;
@@ -140,10 +137,10 @@ export class WellSystem {
         fluid.splat(
           px, py,
           0, 0,
-          0.004,
-          rate * 12.0 * (0.5 + wc[0] * 0.5),   // VERY bright, well-tinted
-          rate * 10.0 * (0.5 + wc[1] * 0.5),
-          rate * 6.0 * (0.5 + wc[2] * 0.5)
+          0.003,
+          rate * 8.0,   // VERY bright white
+          rate * 7.0,
+          rate * 4.0
         );
       }
     }

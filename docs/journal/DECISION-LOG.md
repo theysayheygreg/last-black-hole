@@ -362,6 +362,30 @@ Each decision has:
 
 ---
 
+## Fluid Sim Tuning
+
+### Q: Why did the display shader produce a washed-out white screen?
+
+| Date | Event |
+|------|-------|
+| Mar 16 | Shader tuning session: adjusted display colors, contrast, tone mapping — everything still white. Velocity field arrows triggering across entire screen. |
+| Mar 16 | Root cause analysis: density values accumulate to ~3850x the display range. Accretion injects ~7.7 density/frame across 4 wells. Dissipation 0.998 = only 0.2% decay/frame. Steady-state = 7.7 / 0.002 = 3850. Display shader clamps at 1.0 → everything white. |
+| Mar 16 | Velocity is non-zero everywhere because wells pull constantly — explains direction chars triggering across whole screen. |
+
+**Options:**
+1. **Increase dissipation uniformly** — quick fix but kills the accretion disk richness that looked good initially
+2. **Lower accretion injection rate** — would fix brightness but produce anemic accretion disks
+3. **Distance-based dissipation** (chosen) — near wells: persistent (0.998), far from wells: fast fadeout (0.985). Creates natural gradient matching the pre-vis look. Steady-state near wells: 3850 (still high, but that's the display shader's job to map). Far from wells: ~0.013 (appropriately faint).
+4. **Log/tone mapping in display shader only** — cosmetic fix, doesn't solve the underlying accumulation problem
+
+**Where it landed:** Option 3 + diagnostic overlay. Distance-based dissipation creates spatial structure in the density field. Diagnostic overlay (`showFluidDiagnostic` debug flag) shows actual values at key positions so future tuning sessions work from real data, not guesswork.
+
+**Key learning:** An aesthetically pleasing early result doesn't mean you understand the sim. The fluid looked alive because density was accumulating unchecked — it was always going to saturate. Building diagnostic readouts BEFORE tuning sessions prevents blind parameter sweeps.
+
+**Door status:** Open — display shader still needs to be revisited with the diagnostic data. Log mapping or moderate amplification should now work since the density field has real spatial contrast.
+
+---
+
 ## Template for New Entries
 
 ```

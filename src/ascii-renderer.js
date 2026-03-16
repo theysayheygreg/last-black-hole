@@ -4,10 +4,9 @@
  * Layer 0 of the rendering pipeline:
  *   Fluid FBO -> display shader -> scene FBO -> ASCII post-process -> screen
  *
- * V2: Velocity-directed character selection.
- *   - Low speed areas: luminance -> density ramp (sparse to dense)
- *   - High speed areas: velocity angle -> directional chars (- / | \)
- *   - Per-well colored density shows through as tinted ASCII characters
+ * The fluid sim's color output is divided into character cells.
+ * Each cell's luminance maps to a glyph from a pre-generated font atlas.
+ * The glyph is tinted by the fluid color at that cell.
  *
  * This IS the product (Pillar 1: Art Is Product).
  */
@@ -24,25 +23,23 @@ void main() {
   gl_Position = vec4(a_position, 0.0, 1.0);
 }`;
 
-// ASCII post-process fragment shader with velocity-directed character selection
+// ASCII post-process fragment shader
+// Reads the scene color FBO, divides into character cells,
+// looks up a glyph from the font atlas based on luminance,
+// and tints it with the scene color.
 const FRAG_ASCII = `#version 300 es
 precision highp float;
 
 uniform sampler2D u_scene;      // fluid display color FBO
 uniform sampler2D u_fontAtlas;  // pre-generated glyph atlas
-uniform sampler2D u_velocity;   // fluid velocity FBO (sim resolution)
 uniform vec2 u_resolution;     // screen resolution in pixels
 uniform float u_cellSize;      // character cell width in pixels
 uniform float u_contrast;      // luminance mapping curve power
-uniform float u_numDensityChars; // number of characters in the density ramp
-uniform float u_dirStart;      // atlas index where direction chars begin
-uniform float u_dirThreshold;  // min speed for directional char selection
+uniform float u_numChars;      // number of characters in the density ramp
 uniform float u_cellAspect;    // cell height / cell width (e.g. 1.5 for 8x12)
 
 in vec2 v_uv;
 out vec4 fragColor;
-
-const float PI = 3.14159265;
 
 void main() {
   // Cell dimensions in pixels
@@ -58,38 +55,15 @@ void main() {
   vec2 cellCenter = (cellIndex + 0.5) * vec2(cellW, cellH) / u_resolution;
   vec4 sceneColor = texture(u_scene, cellCenter);
 
-  // Sample velocity at cell center (velocity texture is at sim resolution, GL handles the scaling)
-  vec2 vel = texture(u_velocity, cellCenter).xy;
-  float speed = length(vel);
-
   // Luminance — perceptual weights
   float lum = dot(sceneColor.rgb, vec3(0.299, 0.587, 0.114));
 
   // Apply contrast curve to spread the character range
   lum = pow(clamp(lum, 0.0, 1.0), u_contrast);
 
-  // === CHARACTER SELECTION ===
-  float charIndex;
-
-  // Blend between density ramp and direction chars based on speed and brightness
-  float directionMix = smoothstep(u_dirThreshold, u_dirThreshold * 3.0, speed)
-                      * smoothstep(0.03, 0.12, lum);
-
-  if (directionMix > 0.4) {
-    // === DIRECTIONAL CHARACTER ===
-    // Negate vel.y to convert from fluid UV (Y-up) to screen space (Y-down)
-    float angle = atan(-vel.y, vel.x);
-    // Map to 0-PI range (opposite directions use same char)
-    float normAngle = mod(angle + PI, PI);
-    // 4 directions: 0=horizontal(-), 1=diag(/), 2=vertical(|), 3=diag(backslash)
-    float dirIdx = floor(normAngle / PI * 4.0);
-    dirIdx = clamp(dirIdx, 0.0, 3.0);
-    charIndex = u_dirStart + dirIdx;
-  } else {
-    // === DENSITY RAMP CHARACTER ===
-    charIndex = floor(lum * (u_numDensityChars - 0.001));
-    charIndex = clamp(charIndex, 0.0, u_numDensityChars - 1.0);
-  }
+  // Map luminance to character index (0 = sparse, N-1 = dense)
+  float charIndex = floor(lum * (u_numChars - 0.001));
+  charIndex = clamp(charIndex, 0.0, u_numChars - 1.0);
 
   // Atlas lookup: 16x16 grid, character at (col, row)
   float atlasCol = mod(charIndex, 16.0);
@@ -103,11 +77,11 @@ void main() {
 
   float glyphAlpha = texture(u_fontAtlas, atlasUV).r;
 
-  // Boost scene color so characters pop — brighter tint for loud visuals
-  vec3 tintColor = sceneColor.rgb * 1.4 + vec3(0.02, 0.03, 0.05);
+  // Boost scene color slightly so dark areas still show faint characters
+  vec3 tintColor = sceneColor.rgb + vec3(0.03, 0.04, 0.06);
 
-  // Background between characters — very dark for maximum contrast
-  vec3 bgColor = sceneColor.rgb * 0.04;
+  // Darken the background between characters for contrast
+  vec3 bgColor = sceneColor.rgb * 0.08;
 
   vec3 finalColor = mix(bgColor, tintColor, glyphAlpha);
 
@@ -119,17 +93,11 @@ void main() {
 // Characters sorted by visual weight (sparse -> dense)
 const DENSITY_RAMP = ' .`\':;-~=+*!?/%#&$@';
 
-// Direction characters: horizontal, forward-diagonal, vertical, back-diagonal
-const DIRECTION_CHARS = '-/|\\';
-
-// All characters in atlas order
-const ALL_CHARS = DENSITY_RAMP + DIRECTION_CHARS;
-
 /**
  * Generate a 1024x1024 font atlas texture.
  * 16x16 grid = 64x64px per glyph cell.
  * White glyphs on transparent background.
- * First 20 chars: density ramp. Next 4: direction chars.
+ * Returns an HTMLCanvasElement ready for GPU upload.
  */
 function generateFontAtlas() {
   const atlasSize = 1024;
@@ -149,14 +117,15 @@ function generateFontAtlas() {
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  // Use a monospace font, sized to fill the cell well
   ctx.font = `${Math.floor(cellSize * 0.85)}px monospace`;
 
-  for (let i = 0; i < ALL_CHARS.length; i++) {
+  for (let i = 0; i < DENSITY_RAMP.length; i++) {
     const col = i % gridSize;
     const row = Math.floor(i / gridSize);
     const cx = col * cellSize + cellSize / 2;
     const cy = row * cellSize + cellSize / 2;
-    ctx.fillText(ALL_CHARS[i], cx, cy);
+    ctx.fillText(DENSITY_RAMP[i], cx, cy);
   }
 
   return canvas;
@@ -235,8 +204,7 @@ export class ASCIIRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    this.numDensityChars = DENSITY_RAMP.length;
-    this.dirStart = DENSITY_RAMP.length; // direction chars start after density ramp
+    this.numChars = DENSITY_RAMP.length;
   }
 
   /**
@@ -296,10 +264,8 @@ export class ASCIIRenderer {
    * Run the ASCII post-process pass.
    * Call this AFTER fluid.render(sceneTarget, ...) has filled the scene FBO.
    * Renders the ASCII result to the screen (framebuffer null).
-   *
-   * @param {WebGLTexture} velocityTex - fluid velocity FBO texture for direction chars
    */
-  render(velocityTex) {
+  render() {
     const gl = this.gl;
     const ascii = CONFIG.ascii;
 
@@ -318,18 +284,11 @@ export class ASCIIRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.fontAtlasTex);
     gl.uniform1i(this.uniforms['u_fontAtlas'], 1);
 
-    // Bind velocity texture for directional character selection
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, velocityTex);
-    gl.uniform1i(this.uniforms['u_velocity'], 2);
-
     // Set uniforms
     gl.uniform2f(this.uniforms['u_resolution'], gl.canvas.width, gl.canvas.height);
     gl.uniform1f(this.uniforms['u_cellSize'], ascii.cellSize);
     gl.uniform1f(this.uniforms['u_contrast'], ascii.contrast);
-    gl.uniform1f(this.uniforms['u_numDensityChars'], this.numDensityChars);
-    gl.uniform1f(this.uniforms['u_dirStart'], this.dirStart);
-    gl.uniform1f(this.uniforms['u_dirThreshold'], ascii.directionThreshold);
+    gl.uniform1f(this.uniforms['u_numChars'], this.numChars);
     gl.uniform1f(this.uniforms['u_cellAspect'], ascii.cellAspect);
 
     // Draw fullscreen quad

@@ -73,26 +73,22 @@ function init() {
   // Spread across the map so orbital currents and inter-well channels form
   wellSystem = new WellSystem();
 
-  // Each well is a unique instance with its own personality and color identity
+  // Each well is a unique instance with its own personality
   wellSystem.addWell(0.35, 0.40, {
     mass: 1.5, orbitalDir: 1, killRadius: 25,
-    accretionSpinRate: 0.6, accretionPoints: 10,  // big, slow, dramatic
-    color: [1.0, 0.35, 0.08],  // deep red-orange — the dominant well
+    accretionSpinRate: 0.6, accretionPoints: 8,  // big, slow, dramatic
   });
   wellSystem.addWell(0.70, 0.30, {
     mass: 0.8, orbitalDir: -1, killRadius: 15,
-    accretionSpinRate: 1.4, accretionPoints: 5,  // small, fast, tight
-    color: [0.15, 0.9, 0.5],   // green-cyan — alien, cool
+    accretionSpinRate: 1.4, accretionPoints: 4,  // small, fast, tight
   });
   wellSystem.addWell(0.65, 0.72, {
     mass: 1.2, orbitalDir: 1, killRadius: 20,
-    accretionSpinRate: 0.9, accretionPoints: 7,  // medium, moderate
-    color: [0.6, 0.2, 1.0],    // purple-violet — mysterious
+    accretionSpinRate: 0.9, accretionPoints: 6,  // medium, moderate
   });
   wellSystem.addWell(0.20, 0.75, {
     mass: 0.5, orbitalDir: -1, killRadius: 12,
-    accretionSpinRate: 1.8, accretionPoints: 4,  // tiny, rapid, sparse
-    color: [1.0, 0.8, 0.15],   // amber-yellow — hot and fast
+    accretionSpinRate: 1.8, accretionPoints: 3,  // tiny, rapid, sparse
   });
 
   // Init wave ring system (event-driven waves)
@@ -221,8 +217,10 @@ function gameLoop(now) {
     fpsTimer = 0;
   }
 
-  // 1. Fluid sim step
+  // 1. Fluid sim step — pass well positions for distance-based dissipation
   const simDt = 1 / 60; // fixed sim timestep for stability
+  const wellUVsForSim = wellSystem.getUVPositions();
+  fluid.setWellPositions(wellUVsForSim);
   fluid.step(simDt);
 
   // 2. Well forces (inject into fluid) — constant radial + orbital + spinning accretion disk
@@ -291,8 +289,8 @@ function gameLoop(now) {
   // Render fluid display colors into the ASCII renderer's scene FBO (not to screen)
   const sceneTarget = asciiRenderer.getSceneTarget();
   fluid.render(sceneTarget, wellUVs);
-  // ASCII post-process: read scene FBO + velocity texture, render character grid to screen
-  asciiRenderer.render(fluid.getVelocityTexture());
+  // ASCII post-process: read scene FBO, render character grid to screen
+  asciiRenderer.render();
 
   // 8. Render overlay (Layer 1/2 — 2D canvas: wave rings + ship)
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
@@ -309,6 +307,73 @@ function gameLoop(now) {
     ctx.fillText(`Vel: (${ship.vx.toFixed(1)}, ${ship.vy.toFixed(1)})`, 10, 56);
     ctx.fillText(`Fluid: (${ship.lastFluidVel.x.toFixed(2)}, ${ship.lastFluidVel.y.toFixed(2)})`, 10, 74);
     ctx.fillText(`Rings: ${waveRings.getActiveCount()}`, 10, 92);
+    ctx.restore();
+  }
+
+  // 9b. Fluid diagnostic overlay — real-time density/velocity at key positions
+  if (CONFIG.debug.showFluidDiagnostic) {
+    ctx.save();
+    ctx.fillStyle = '#00ff00';
+    ctx.font = '11px monospace';
+    let diagY = 116; // below existing FPS readout
+
+    // Ship position density
+    const shipUV = screenToFluidUV(ship.x, ship.y, overlayCanvas.width, overlayCanvas.height);
+    const shipDens = fluid.readDensityAt(shipUV[0], shipUV[1]);
+    const shipDensMag = Math.sqrt(shipDens[0] ** 2 + shipDens[1] ** 2 + shipDens[2] ** 2);
+    ctx.fillText(`--- FLUID DIAG ---`, 10, diagY); diagY += 16;
+    ctx.fillText(`Ship dens: ${shipDensMag.toFixed(2)} (${shipDens[0].toFixed(2)}, ${shipDens[1].toFixed(2)}, ${shipDens[2].toFixed(2)})`, 10, diagY); diagY += 14;
+
+    // Each well center (offset slightly to avoid the void)
+    const wells = wellSystem.wells;
+    for (let i = 0; i < wells.length; i++) {
+      const w = wells[i];
+      const [wfu, wfv] = wellToFluidUV(w.x, w.y);
+      // Offset by 0.03 UV to sample near the accretion zone, not the void center
+      const sampleU = wfu + 0.03;
+      const sampleV = wfv + 0.03;
+      const dens = fluid.readDensityAt(sampleU, sampleV);
+      const densMag = Math.sqrt(dens[0] ** 2 + dens[1] ** 2 + dens[2] ** 2);
+      const vel = fluid.readVelocityAt(sampleU, sampleV);
+      const speed = Math.sqrt(vel[0] ** 2 + vel[1] ** 2);
+      ctx.fillText(`W${i} dens:${densMag.toFixed(1)} vel:${speed.toFixed(3)}`, 10, diagY); diagY += 14;
+    }
+
+    // Midpoint between the two closest wells
+    if (wells.length >= 2) {
+      let bestDist = Infinity, bestI = 0, bestJ = 1;
+      for (let i = 0; i < wells.length; i++) {
+        for (let j = i + 1; j < wells.length; j++) {
+          const dx = wells[i].x - wells[j].x;
+          const dy = wells[i].y - wells[j].y;
+          const d = dx * dx + dy * dy;
+          if (d < bestDist) { bestDist = d; bestI = i; bestJ = j; }
+        }
+      }
+      const midX = (wells[bestI].x + wells[bestJ].x) / 2;
+      const midY = (wells[bestI].y + wells[bestJ].y) / 2;
+      const [mfu, mfv] = wellToFluidUV(midX, midY);
+      const midDens = fluid.readDensityAt(mfu, mfv);
+      const midDensMag = Math.sqrt(midDens[0] ** 2 + midDens[1] ** 2 + midDens[2] ** 2);
+      const midVel = fluid.readVelocityAt(mfu, mfv);
+      const midSpeed = Math.sqrt(midVel[0] ** 2 + midVel[1] ** 2);
+      ctx.fillText(`Mid(${bestI}-${bestJ}) dens:${midDensMag.toFixed(1)} vel:${midSpeed.toFixed(3)}`, 10, diagY); diagY += 14;
+    }
+
+    // Min/max across a sparse 8x8 grid
+    let minDens = Infinity, maxDens = 0;
+    for (let gx = 0; gx < 8; gx++) {
+      for (let gy = 0; gy < 8; gy++) {
+        const gu = (gx + 0.5) / 8;
+        const gv = (gy + 0.5) / 8;
+        const gd = fluid.readDensityAt(gu, gv);
+        const gdm = Math.sqrt(gd[0] ** 2 + gd[1] ** 2 + gd[2] ** 2);
+        if (gdm < minDens) minDens = gdm;
+        if (gdm > maxDens) maxDens = gdm;
+      }
+    }
+    ctx.fillText(`Grid min:${minDens.toFixed(2)} max:${maxDens.toFixed(1)}`, 10, diagY); diagY += 14;
+
     ctx.restore();
   }
 
