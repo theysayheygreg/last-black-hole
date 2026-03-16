@@ -92,7 +92,7 @@ export class Ship {
       // Scale from sim-space to pixel-space (canvas width as reference)
       const scale = this.canvasWidth;
       fluidVel.x = fvx * scale;
-      fluidVel.y = fvy * scale;
+      fluidVel.y = -fvy * scale; // Negate: fluid Y-up → canvas Y-down
     }
 
     this.lastFluidVel = fluidVel;

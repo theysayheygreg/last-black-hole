@@ -639,7 +639,8 @@ export class FluidSim {
   readVelocityAt(uvX, uvY) {
     const gl = this.gl;
     const pixelX = Math.floor(uvX * this.res);
-    const pixelY = Math.floor(uvY * this.res);
+    // Flip Y: caller uses screen coords (Y-down), fluid texture is Y-up
+    const pixelY = Math.floor((1.0 - uvY) * this.res);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.velocity.read.fbo);
 
