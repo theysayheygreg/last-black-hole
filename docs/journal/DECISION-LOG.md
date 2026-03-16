@@ -341,6 +341,27 @@ Each decision has:
 
 ---
 
+## Coordinate Systems
+
+### Q: How do we handle coordinate systems across rendering and physics?
+
+| Date | Event |
+|------|-------|
+| Mar 16 | Y-axis mismatch discovered: visual black holes (dark voids in ASCII shader) don't align with physics wells (where ship gets pulled). Multiple attempts to fix by ad-hoc Y flips in various places all failed — some fixes corrected one display path while breaking another. |
+| Mar 16 | Root cause diagnosed: no single source of truth for coordinate conventions. Well positions used directly by both the fluid sim (WebGL Y-up) and the screen overlay (canvas Y-down). A well at y=0.3 appeared at 30% from the bottom in the shader but 30% from the top in the overlay. |
+
+**Options:**
+1. **Ad-hoc flips at each boundary** (what we tried — failed) — sprinkle `1.0 - y` wherever things look wrong. Creates double-flips, triple-flips, and a debugging nightmare. Every new feature that crosses the coordinate boundary risks introducing a new mismatch.
+2. **Single conversion module with tested helpers** (what we're doing now) — create `coords.js` as THE coordinate authority. All coordinate spaces named and documented. All conversions go through named functions. No inline `1.0 - y` anywhere in the codebase.
+
+**Where it landed:** Option 2. Create `coords.js` as the single coordinate authority. Three named spaces: screen (Y-down, pixels), well (Y-down, 0-1 normalized), and fluid UV (Y-up, 0-1 normalized). Every conversion between these spaces goes through a named function in coords.js. No inline flips allowed.
+
+**Key learning:** Coordinate mismatches across WebGL (Y-up) and canvas (Y-down) WILL recur as we add features. Must be solved once structurally, not per-bug. 30+ minutes of Greg's playtesting time was wasted on a bug that should have been caught automatically.
+
+**Door status:** Closed. This is now an architectural rule.
+
+---
+
 ## Template for New Entries
 
 ```

@@ -68,11 +68,24 @@ Rebuilt the physics: removed oscillation, added constant pull + orbital currents
 
 **Open problem:** Flow direction still isn't readable enough in the ASCII. The characters show density (how much stuff) not velocity (which way it's moving). Directional ASCII characters (different chars for horizontal vs vertical flow) is on the backlog but needs a shader pass refactor.
 
+### The Y-Flip Debugging Saga
+
+After the physics pivot landed, a persistent visual bug emerged: the dark voids in the ASCII shader (where black holes eat light) weren't lining up with where the physics thought the gravity wells were. The ship would get pulled toward invisible points that didn't match the visible dark spots on screen.
+
+**Multiple fix attempts failed.** Each time, adding a `1.0 - y` flip in one place would fix one display path but break another. The fluid sim uses WebGL coordinates (Y-up, origin at bottom-left) but the canvas overlay uses screen coordinates (Y-down, origin at top-left). Well positions were stored in a vague "UV space" that both systems interpreted differently.
+
+**What went wrong:** No single coordinate convention existed. Well positions at `y=0.3` meant "30% from the bottom" to the fluid shader but "30% from the top" to the overlay renderer. Ad-hoc flips created double-flips and triple-flips. Each "fix" was a guess, not a diagnosis.
+
+**The retro:** The solution is structural, not surgical. Created `coords.js` as the single coordinate authority — three named spaces (screen, well, fluid UV), named conversion functions, no inline flips anywhere. Also added a visual diagnostic mode and an automated coordinate mismatch test so this class of bug gets caught before it reaches a playtest.
+
+**Time cost:** 30+ minutes of Greg's playtesting time wasted on a bug that should have been caught automatically. The dev panel and test harness proved their value again — without them, this would have been even worse.
+
 ### State at End of Night
 
 - V2 physics running: steady currents + orbital flow + event wave rings
 - Ship simplified to 5 CONFIG values
 - Display shader encodes flow direction as color bands
+- Coordinate system formalized in `coords.js` — no more inline Y-flips
 - Three feel variations being built for morning A/B testing:
   - "Ocean" — high coupling, gentle wells, ride the currents
   - "Spacecraft" — low coupling, strong thrust, currents are decoration

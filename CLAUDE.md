@@ -113,6 +113,26 @@ Docs: resolved portal charge-time question (instant for v1)
 - Never `git reset --hard` — we might want to recover a direction that didn't work
 - If you need to revert, use `git revert` (creates a new commit) not `git reset`
 
+## Coordinate Conventions
+
+Three coordinate spaces exist in the game. All conversions between them go through `src/coords.js`. No inline `1.0 - y` flips anywhere in the codebase.
+
+| Space | Origin | Y direction | Range | Used by |
+|-------|--------|-------------|-------|---------|
+| **Screen** | top-left | Y-down | pixels (0,0) to (W,H) | canvas overlay, ship position, mouse input, wave ring rendering |
+| **Well** | top-left | Y-down | normalized (0,0) to (1,1) | well definitions, gravity calculations, test API |
+| **Fluid UV** | bottom-left | Y-up | normalized (0,0) to (1,1) | WebGL shaders, fluid sim textures, readPixels, display shader |
+
+Key conversion functions in `coords.js`:
+- `wellToFluidUV(wx, wy)` — flip Y for shader use
+- `fluidUVToWell(fu, fv)` — flip Y back from shader
+- `screenToFluidUV(sx, sy, W, H)` — normalize + flip Y
+- `fluidUVToScreen(fu, fv, W, H)` — denormalize + flip Y
+- `wellToScreen(wx, wy, W, H)` — same convention, just scale
+- `fluidVelToScreen(fvx, fvy)` — negate Y velocity component
+
+**Rule:** If you need to convert between these spaces, import from `coords.js`. If you find yourself writing `1.0 - y` inline, you are doing it wrong.
+
 ## Code Style
 
 - Vanilla JS, ES modules, no framework, no TypeScript (jam speed)
