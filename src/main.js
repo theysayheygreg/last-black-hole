@@ -259,8 +259,7 @@ function gameLoop(now) {
       for (let py = gridStep / 2; py < overlayCanvas.height; py += gridStep) {
         const uvX = px / overlayCanvas.width;
         const uvY = py / overlayCanvas.height;
-        const [fvx, rawFvy] = fluid.readVelocityAt(uvX, uvY);
-        const fvy = -rawFvy; // Flip Y: WebGL Y-up → canvas Y-down
+        const [fvx, fvy] = fluid.readVelocityAt(uvX, uvY);
         const speed = Math.sqrt(fvx * fvx + fvy * fvy);
         if (speed < 0.0001) continue;
 

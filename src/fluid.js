@@ -639,8 +639,7 @@ export class FluidSim {
   readVelocityAt(uvX, uvY) {
     const gl = this.gl;
     const pixelX = Math.floor(uvX * this.res);
-    // Flip Y: WebGL has Y=0 at bottom, screen has Y=0 at top
-    const pixelY = Math.floor((1.0 - uvY) * this.res);
+    const pixelY = Math.floor(uvY * this.res);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.velocity.read.fbo);
 
