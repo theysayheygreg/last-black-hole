@@ -71,8 +71,11 @@ export class Ship {
 
   /**
    * Main update. Reads fluid, applies thrust, updates position.
+   * @param {number} dt - frame delta in seconds
+   * @param {FluidSim} fluid - fluid sim for velocity sampling
+   * @param {WellSystem} [wellSystem] - for direct gravitational pull on ship
    */
-  update(dt, fluid) {
+  update(dt, fluid, wellSystem) {
     const cfg = CONFIG.ship;
     const affCfg = CONFIG.affordances;
 
@@ -132,6 +135,27 @@ export class Ship {
     const clamped = Math.min(blendRate, 0.5); // don't overshoot
     this.vx = this.vx * (1 - clamped) + fluidVel.x * clamped;
     this.vy = this.vy * (1 - clamped) + fluidVel.y * clamped;
+
+    // 6b. Direct gravitational pull from wells (acts on ship mass, not through fluid)
+    if (wellSystem) {
+      const wellCfg = CONFIG.wells;
+      for (const well of wellSystem.wells) {
+        const dwx = well.x * this.canvasWidth - this.x;
+        const dwy = well.y * this.canvasHeight - this.y;
+        const dist = Math.sqrt(dwx * dwx + dwy * dwy);
+        if (dist < 1) continue;
+        const minDist = 40; // pixel-space clamp radius
+        const safeDist = Math.max(dist, minDist);
+        // Direct gravitational acceleration: G * mass / r^falloff
+        // Scale factor converts UV-space gravity to pixel-space acceleration
+        const gravScale = 50000; // tuning factor
+        const gravAccel = wellCfg.gravity * well.mass * gravScale / Math.pow(safeDist, wellCfg.falloff);
+        const nx = dwx / dist;
+        const ny = dwy / dist;
+        this.vx += nx * gravAccel * dt;
+        this.vy += ny * gravAccel * dt;
+      }
+    }
 
     // 7. Drag
     const shipSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);

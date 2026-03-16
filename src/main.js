@@ -172,8 +172,8 @@ function gameLoop(now) {
   // 2. Well forces (inject into fluid)
   wellSystem.update(fluid, simDt, totalTime);
 
-  // 3. Ship update (reads fluid, applies thrust)
-  ship.update(dt, fluid);
+  // 3. Ship update (reads fluid, applies thrust, feels gravity)
+  ship.update(dt, fluid, wellSystem);
 
   // 4. Render fluid (Layer 0 — WebGL canvas)
   const wellUVs = wellSystem.getUVPositions();
