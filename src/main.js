@@ -11,13 +11,14 @@ import { CONFIG } from './config.js';
 import { FluidSim } from './fluid.js';
 import { Ship } from './ship.js';
 import { WellSystem } from './wells.js';
+import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 
 // ---- State ----
 let glCanvas, gl;
 let overlayCanvas, ctx;
-let fluid, ship, wellSystem;
+let fluid, ship, wellSystem, asciiRenderer;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -59,6 +60,9 @@ function init() {
   // Init fluid sim
   fluid = new FluidSim(gl);
 
+  // Init ASCII post-process renderer (Layer 0 visual identity)
+  asciiRenderer = new ASCIIRenderer(gl);
+
   // Init well system — start with 1 well at center
   wellSystem = new WellSystem();
   wellSystem.addWell(0.5, 0.5, 1.0);
@@ -87,6 +91,7 @@ function init() {
     overlayCanvas.height = window.innerHeight;
     ship.canvasWidth = glCanvas.width;
     ship.canvasHeight = glCanvas.height;
+    asciiRenderer.resize(glCanvas.width, glCanvas.height);
   });
 
   // Seed initial density so the fluid is visible from the start
@@ -179,9 +184,13 @@ function gameLoop(now) {
   // 3. Ship update (reads fluid, applies thrust, feels gravity)
   ship.update(dt, fluid, wellSystem);
 
-  // 4. Render fluid (Layer 0 — WebGL canvas)
+  // 4. Render fluid -> ASCII post-process (Layer 0 — the fabric of spacetime)
   const wellUVs = wellSystem.getUVPositions();
-  fluid.render(null, wellUVs);
+  // Render fluid display colors into the ASCII renderer's scene FBO (not to screen)
+  const sceneTarget = asciiRenderer.getSceneTarget();
+  fluid.render(sceneTarget, wellUVs);
+  // ASCII post-process: read scene FBO, render character grid to screen
+  asciiRenderer.render();
 
   // 5. Render ship overlay (Layer 1 — 2D canvas, separate from fluid)
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);

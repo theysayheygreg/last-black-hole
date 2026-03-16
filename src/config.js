@@ -47,6 +47,12 @@ export const CONFIG = {
     nearWell: [0.9, 0.4, 0.1],          // amber
     hotWell: [0.9, 0.1, 0.05],          // red
   },
+  ascii: {
+    cellSize: 8,            // character cell width in pixels
+    cellAspect: 1.5,        // cell height/width ratio (1.5 = 8x12 for readable monospace)
+    contrast: 0.8,          // luminance-to-character curve power (<1 = more chars visible in dark areas)
+    colorTemperature: 0.0,  // shift warm(+) / cold(-), applied to scene before ASCII pass
+  },
   debug: {
     showVelocityField: false,
     showWellRadii: false,

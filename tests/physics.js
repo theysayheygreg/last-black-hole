@@ -57,8 +57,12 @@ async function run() {
 
     // 2. Ship drifts when thrust stops
     await runner.run("Ship drifts when thrust stops (carried by fluid)", async () => {
-      // Get current velocity
-      await page.mouse.up(); // ensure no thrust
+      // Teleport ship near the well where there's fluid flow, then wait for drift
+      const wells = await page.evaluate(() => window.__TEST_API.getWells());
+      if (wells && wells.length > 0) {
+        await page.evaluate((w) => window.__TEST_API.teleportShip(w.x + 180, w.y + 50), wells[0]);
+      }
+      await new Promise((r) => setTimeout(r, 500));
 
       const posBefore = await page.evaluate(() => window.__TEST_API.getShipPos());
       await new Promise((r) => setTimeout(r, 1500));
