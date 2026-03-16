@@ -146,10 +146,12 @@ export class Ship {
         if (dist < 1) continue;
         const minDist = 40; // pixel-space clamp radius
         const safeDist = Math.max(dist, minDist);
-        // Direct gravitational acceleration: G * mass / r^falloff
-        // Scale factor converts UV-space gravity to pixel-space acceleration
-        const gravScale = 50000; // tuning factor
-        const gravAccel = wellCfg.gravity * well.mass * gravScale / Math.pow(safeDist, wellCfg.falloff);
+        // Direct gravitational acceleration on ship
+        // Strong enough to overcome outward fluid flow from wave propagation
+        // At 150px: accel ~ 800 * 1/(1.5^1.5) = ~435 px/s^2
+        const pullStrength = 800; // pixels/sec^2 at 100px distance
+        const normDist = safeDist / 100;
+        const gravAccel = pullStrength * well.mass / Math.pow(normDist, 1.5);
         const nx = dwx / dist;
         const ny = dwy / dist;
         this.vx += nx * gravAccel * dt;
