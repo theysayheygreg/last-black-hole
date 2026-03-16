@@ -1,13 +1,13 @@
 /**
- * wells.js — Gravity well force injection + oscillation.
+ * wells.js — Gravity well force injection with orbital currents.
+ *
+ * V2: Wells inject CONSTANT radial pull + tangential force for orbital flow.
+ * No oscillation. Waves come from the event system (wave-rings.js).
  *
  * Each well has:
  *   - Position (in UV space, 0-1)
- *   - Mass (affects gravity strength and wave amplitude/frequency)
- *   - Oscillation phase (creates wave pulses)
- *
- * Wells inject force into the fluid every step. The oscillating component
- * creates expanding rings of high-velocity fluid — the surfable waves.
+ *   - Mass (affects gravity strength)
+ *   - Orbital direction (+1 = CCW, -1 = CW)
  */
 
 import { CONFIG } from './config.js';
@@ -17,7 +17,7 @@ export class Well {
     this.x = uvX;
     this.y = uvY;
     this.mass = mass;
-    this.phase = 0;
+    this.orbitalDir = 1; // +1 = counterclockwise, -1 = clockwise
   }
 }
 
@@ -35,57 +35,30 @@ export class WellSystem {
   /**
    * Apply all well forces to the fluid sim and inject density.
    * Called once per simulation step.
+   * V2: constant radial pull + tangential orbital force. No oscillation.
    */
-  update(fluid, dt, totalTime) {
+  update(fluid, dt) {
     const cfg = CONFIG.wells;
 
     for (const well of this.wells) {
-      // Oscillation: amplitude * sin(frequency * time)
-      // Frequency decreases with mass (bigger = slower, more powerful)
-      const freq = cfg.waveFrequency / Math.sqrt(well.mass);
-      const amp = cfg.waveAmplitude * well.mass;
-      const waveAmp = amp * Math.sin(freq * totalTime * Math.PI * 2 + well.phase);
-
-      // Apply gravitational + wave force to velocity field
+      // Apply gravitational + orbital force to velocity field
       fluid.applyWellForce(
         [well.x, well.y],
         cfg.gravity * well.mass,
         cfg.falloff,
         cfg.clampRadius,
-        waveAmp,
+        cfg.orbitalStrength * well.orbitalDir,
         dt,
         cfg.terminalInflowSpeed
       );
 
-      // Inject density near the well — creates visible accretion and wave fronts
-      // Constant ambient density at well center (accretion glow)
+      // Inject density near the well — creates visible accretion glow
       fluid.splat(
         well.x, well.y,
         0, 0,
         0.002,
         0.15, 0.06, 0.02  // warm amber
       );
-
-      // Pulsed density ring during wave peaks — makes waves visible
-      const densityPulse = Math.max(0, waveAmp * 0.15);
-      if (densityPulse > 0.01) {
-        // Inject at several points in a ring around the well
-        const ringRadius = 0.08;
-        const numPoints = 8;
-        for (let i = 0; i < numPoints; i++) {
-          const angle = (i / numPoints) * Math.PI * 2;
-          const px = well.x + Math.cos(angle) * ringRadius;
-          const py = well.y + Math.sin(angle) * ringRadius;
-          fluid.splat(
-            px, py,
-            0, 0,
-            0.003,
-            densityPulse * 0.5,       // r
-            densityPulse * 0.3,        // g
-            densityPulse * 0.15        // b — teal-amber
-          );
-        }
-      }
     }
   }
 

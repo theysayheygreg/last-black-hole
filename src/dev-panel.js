@@ -40,12 +40,20 @@ const RANGE_HINTS = {
 
   'wells.gravity':          { min: 0, max: 0.01, step: 0.0001, tip: 'Fluid-space gravity constant. Controls how strongly the well pulls the FLUID' },
   'wells.falloff':          { min: 1, max: 3, step: 0.1, tip: 'Gravity distance exponent. 1 = gentle. 2 = inverse-square. 3 = sharp' },
-  'wells.waveAmplitude':    { min: 0, max: 10, step: 0.1, tip: 'Oscillating force strength. Creates the "wave pulses" radiating outward' },
-  'wells.waveFrequency':    { min: 0.1, max: 5, step: 0.1, tip: 'Wave pulse frequency in Hz. 0.5 = slow majestic waves. 2 = rapid pulses' },
   'wells.clampRadius':      { min: 1, max: 50, step: 1, tip: 'Minimum radius in sim cells to prevent singularity at well center' },
   'wells.terminalInflowSpeed':{ min: 0, max: 2, step: 0.01, tip: 'Cap on fluid speed near the well. Prevents runaway acceleration' },
   'wells.shipPullStrength': { min: 0, max: 1000, step: 10, tip: 'Direct gravitational pull on the SHIP in px/s² at 100px. THIS is what traps you' },
   'wells.shipPullFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship pull distance exponent. 1.5 = softer than real gravity. 2 = inverse-square' },
+  'wells.orbitalStrength':  { min: 0, max: 1, step: 0.01, tip: 'Tangential force fraction. 0 = pure infall. 0.3 = gentle orbits. 1.0 = strong whirlpools' },
+
+  'events.waveSpeed':       { min: 50, max: 500, step: 10, tip: 'Wave ring expansion speed in px/sec. 150 = stately. 400 = dramatic.' },
+  'events.waveWidth':       { min: 10, max: 100, step: 5, tip: 'Wavefront thickness in pixels. Wider = easier to surf, less precise' },
+  'events.waveDecay':       { min: 0.9, max: 1, step: 0.005, tip: 'Amplitude multiplier per frame. 0.97 = fades fast. 0.99 = rings travel far' },
+  'events.waveMaxRadius':   { min: 200, max: 2000, step: 50, tip: 'Ring death radius in pixels. Larger = waves cross the whole map' },
+  'events.waveShipPush':    { min: 50, max: 1000, step: 25, tip: 'Force on ship when a ring passes through. 300 = noticeable shove' },
+  'events.growthInterval':  { min: 5, max: 60, step: 1, tip: 'Seconds between well growth events. 20 = calm rhythm. 5 = constant drama' },
+  'events.growthAmount':    { min: 0.01, max: 0.2, step: 0.01, tip: 'Mass added to each well per growth event. Compounds over time.' },
+  'events.growthWaveAmplitude':{ min: 0.1, max: 3, step: 0.1, tip: 'Initial amplitude of growth wave rings. 1.0 = standard. 2.0 = dramatic' },
 
   'affordances.catchWindowDeg':   { min: 0, max: 45, step: 1, tip: 'Angle threshold for wave magnetism to engage (degrees)' },
   'affordances.catchWindowVelPct':{ min: 0, max: 1, step: 0.05, tip: 'Velocity match threshold (20% = ship must be within 20% of wave speed)' },

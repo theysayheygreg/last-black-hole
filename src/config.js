@@ -34,12 +34,21 @@ export const CONFIG = {
   wells: {
     gravity: 0.001,          // G constant for fluid-space force (UV-space units) — dominant inward pull in sim
     falloff: 1.5,            // exponent: 1.5 = softer than inverse square
-    waveAmplitude: 2.0,      // oscillation force amplitude multiplier (< gravity for net inward)
-    waveFrequency: 0.6,      // Hz — slower for more visible propagation
     clampRadius: 15,         // minimum radius in sim cells to prevent singularity
     terminalInflowSpeed: 0.3,// cap infall speed in sim velocity units
     shipPullStrength: 300,   // direct gravitational pull on ship in pixels/sec² at 100px distance
     shipPullFalloff: 1.5,    // exponent for ship pull distance falloff
+    orbitalStrength: 0.3,    // tangential force as fraction of radial pull (creates orbital currents)
+  },
+  events: {
+    waveSpeed: 150,          // pixels/sec ring propagation
+    waveWidth: 40,           // pixels — wavefront thickness
+    waveDecay: 0.97,         // amplitude multiplier per frame
+    waveMaxRadius: 800,      // pixels — ring dies at this radius
+    waveShipPush: 300,       // pixels/sec² force on ship when ring passes
+    growthInterval: 20,      // seconds between well growth events
+    growthAmount: 0.05,      // mass increase per growth event
+    growthWaveAmplitude: 1.0,// initial wave ring amplitude from growth
   },
   affordances: {
     catchWindowDeg: 15,      // wave magnetism angle threshold

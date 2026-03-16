@@ -108,7 +108,8 @@ void main() {
   fragColor = vec4(base + strength * u_value, 1.0);
 }`;
 
-// Radial force for gravity wells — applied to velocity field
+// Radial + tangential force for gravity wells — applied to velocity field
+// V2: constant radial pull + tangential orbital force. No oscillation.
 const FRAG_WELL_FORCE = `#version 300 es
 precision highp float;
 uniform sampler2D u_velocity;
@@ -116,7 +117,7 @@ uniform vec2 u_wellPos;     // UV coords
 uniform float u_gravity;
 uniform float u_falloff;
 uniform float u_clampRadius;
-uniform float u_waveAmp;    // oscillation amplitude this frame (signed)
+uniform float u_orbitalStrength; // tangential force as signed fraction of radial (positive = CCW)
 uniform float u_dt;
 uniform float u_terminalSpeed;
 uniform float u_aspectRatio;
@@ -136,21 +137,18 @@ void main() {
   // Direction toward well (safe normalize)
   vec2 dir = dist > 0.0001 ? diff / dist : vec2(0.0);
 
-  // === GRAVITY: persistent inward pull ===
-  // Force falls off with distance, clamped near center
+  // === GRAVITY: constant inward pull ===
   float gravityMag = u_gravity / pow(safeDist, u_falloff);
   vec2 pullForce = dir * gravityMag;
 
-  // === WAVES: oscillating radial perturbation ===
-  // Wave profile peaks at moderate distance, zero at center and far away
-  // This creates expanding ring pulses
-  float waveProfile = exp(-dist * 6.0) * dist * 15.0; // peaks around dist=0.16
-  // Limit wave force to fraction of gravity so pull always dominates
-  float maxWaveFraction = 0.6;
-  float waveMag = u_waveAmp * waveProfile * maxWaveFraction;
-  vec2 waveForce = -dir * waveMag; // positive waveAmp = outward push
+  // === ORBITAL: tangential force perpendicular to radial ===
+  // Rotate radial direction 90 degrees to get tangential
+  // CCW: (-dir.y, dir.x), CW: (dir.y, -dir.x)
+  vec2 tangent = vec2(-dir.y, dir.x); // CCW base direction
+  float orbitalMag = gravityMag * u_orbitalStrength;
+  vec2 orbitalForce = tangent * orbitalMag;
 
-  vec2 totalForce = (pullForce + waveForce) * u_dt;
+  vec2 totalForce = (pullForce + orbitalForce) * u_dt;
   vel += totalForce;
 
   // Clamp terminal speed near well to prevent singularity buildup
@@ -429,7 +427,7 @@ export class FluidSim {
    * Apply gravity well forces to the velocity field.
    * Called once per well per step.
    */
-  applyWellForce(wellUV, gravity, falloff, clampRadius, waveAmp, dt, terminalSpeed) {
+  applyWellForce(wellUV, gravity, falloff, clampRadius, orbitalStrength, dt, terminalSpeed) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.wellForce);
     gl.uniform1i(u['u_velocity'], 0);
@@ -439,7 +437,7 @@ export class FluidSim {
     gl.uniform1f(u['u_gravity'], gravity);
     gl.uniform1f(u['u_falloff'], falloff);
     gl.uniform1f(u['u_clampRadius'], clampRadius);
-    gl.uniform1f(u['u_waveAmp'], waveAmp);
+    gl.uniform1f(u['u_orbitalStrength'], orbitalStrength);
     gl.uniform1f(u['u_dt'], dt);
     gl.uniform1f(u['u_terminalSpeed'], terminalSpeed);
     gl.uniform1f(u['u_aspectRatio'], 1.0); // square sim texture
