@@ -8,6 +8,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { screenToFluidUV, fluidVelToScreen, wellToScreen } from './coords.js';
 
 export class Ship {
   constructor(canvasWidth, canvasHeight) {
@@ -81,18 +82,20 @@ export class Ship {
     }
 
     // 3. Sample fluid velocity at ship position
-    const uvX = this.x / this.canvasWidth;
-    const uvY = this.y / this.canvasHeight;
+    // Convert screen pixels (Y-down) to fluid UV (Y-up) via coords.js
+    const [fuv_x, fuv_y] = screenToFluidUV(this.x, this.y, this.canvasWidth, this.canvasHeight);
     let fluidVel = { x: 0, y: 0 };
-    if (fluid && uvX >= 0 && uvX <= 1 && uvY >= 0 && uvY <= 1) {
+    if (fluid && fuv_x >= 0 && fuv_x <= 1 && fuv_y >= 0 && fuv_y <= 1) {
       const [fvx, fvy] = fluid.readVelocityAt(
-        Math.max(0, Math.min(1, uvX)),
-        Math.max(0, Math.min(1, uvY))
+        Math.max(0, Math.min(1, fuv_x)),
+        Math.max(0, Math.min(1, fuv_y))
       );
+      // Convert fluid velocity (Y-up) to screen velocity (Y-down) via coords.js
+      const [svx, svy] = fluidVelToScreen(fvx, fvy);
       // Scale from sim-space to pixel-space (canvas width as reference)
       const scale = this.canvasWidth;
-      fluidVel.x = fvx * scale;
-      fluidVel.y = fvy * scale;
+      fluidVel.x = svx * scale;
+      fluidVel.y = svy * scale;
     }
 
     this.lastFluidVel = fluidVel;
@@ -106,8 +109,10 @@ export class Ship {
     // 5. Direct gravitational pull from wells (acts on ship, not through fluid)
     if (wellSystem) {
       for (const well of wellSystem.wells) {
-        const dwx = well.x * this.canvasWidth - this.x;
-        const dwy = well.y * this.canvasHeight - this.y;
+        // Convert well-space to screen pixels via coords.js
+        const [wellScreenX, wellScreenY] = wellToScreen(well.x, well.y, this.canvasWidth, this.canvasHeight);
+        const dwx = wellScreenX - this.x;
+        const dwy = wellScreenY - this.y;
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
         if (dist < 1) continue;
         const safeDist = Math.max(dist, wellCfg.gravityClampDist);
@@ -138,8 +143,8 @@ export class Ship {
     // 9. Inject thrust wake into fluid — MUCH stronger than before
     //    Player should see their thrust disturbing the ASCII field
     if (this.thrusting && fluid) {
-      const wakeUVx = this.x / this.canvasWidth;
-      const wakeUVy = this.y / this.canvasHeight;
+      // Convert screen pixels to fluid UV via coords.js
+      const [wakeUVx, wakeUVy] = screenToFluidUV(this.x, this.y, this.canvasWidth, this.canvasHeight);
       const wakeForceMag = 0.002;
       const wakeRadius = 0.01;
       fluid.splat(

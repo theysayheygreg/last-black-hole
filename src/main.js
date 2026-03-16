@@ -15,7 +15,7 @@ import { WaveRingSystem } from './wave-rings.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
-import { wellToFluidUV, wellToScreen } from './coords.js';
+import { wellToFluidUV, wellToScreen, screenToFluidUV, fluidVelToScreen } from './coords.js';
 
 // ---- State ----
 let glCanvas, gl;
@@ -140,11 +140,13 @@ function init() {
 function seedInitialFluid() {
   // Inject density around each well so the fluid is visible from frame 1
   for (const well of wellSystem.wells) {
+    // Convert well-space to fluid UV for splat injection
+    const [wellFU, wellFV] = wellToFluidUV(well.x, well.y);
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2;
       const dist = 0.05 + Math.random() * 0.12;
-      const x = well.x + Math.cos(angle) * dist;
-      const y = well.y + Math.sin(angle) * dist;
+      const x = wellFU + Math.cos(angle) * dist;
+      const y = wellFV + Math.sin(angle) * dist;
       fluid.splat(
         x, y,
         Math.cos(angle) * 0.0005, Math.sin(angle) * 0.0005,
@@ -258,14 +260,16 @@ function gameLoop(now) {
     const arrowScale = 800; // velocity to arrow length multiplier
     for (let px = gridStep / 2; px < overlayCanvas.width; px += gridStep) {
       for (let py = gridStep / 2; py < overlayCanvas.height; py += gridStep) {
-        const uvX = px / overlayCanvas.width;
-        const uvY = py / overlayCanvas.height;
-        const [fvx, fvy] = fluid.readVelocityAt(uvX, uvY);
+        // Convert screen pixel to fluid UV via coords.js
+        const [fuv_x, fuv_y] = screenToFluidUV(px, py, overlayCanvas.width, overlayCanvas.height);
+        const [fvx, fvy] = fluid.readVelocityAt(fuv_x, fuv_y);
         const speed = Math.sqrt(fvx * fvx + fvy * fvy);
         if (speed < 0.0001) continue;
 
+        // Convert fluid velocity to screen velocity via coords.js
+        const [svx, svy] = fluidVelToScreen(fvx, fvy);
         const len = Math.min(speed * arrowScale, gridStep * 0.8);
-        const angle = Math.atan2(fvy, fvx);
+        const angle = Math.atan2(svy, svx);
 
         // Arrow color: brighter = faster flow
         const alpha = Math.min(0.8, speed * 200);

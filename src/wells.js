@@ -11,6 +11,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { wellToFluidUV, wellToScreen } from './coords.js';
 
 export class Well {
   constructor(uvX, uvY, mass = 1.0) {
@@ -41,10 +42,12 @@ export class WellSystem {
     const cfg = CONFIG.wells;
 
     for (const well of this.wells) {
+      // Convert well-space (Y-down) to fluid UV (Y-up) for GPU operations
+      const [fu, fv] = wellToFluidUV(well.x, well.y);
+
       // Apply gravitational + orbital force to velocity field
-      // Well positions are in UV space — same as the fluid sim
       fluid.applyWellForce(
-        [well.x, well.y],
+        [fu, fv],
         cfg.gravity * well.mass,
         cfg.falloff,
         cfg.clampRadius,
@@ -55,7 +58,7 @@ export class WellSystem {
 
       // Inject density near the well — creates visible accretion glow
       fluid.splat(
-        well.x, well.y,
+        fu, fv,
         0, 0,
         0.002,
         0.15, 0.06, 0.02  // warm amber
@@ -68,19 +71,26 @@ export class WellSystem {
    * Returns positions in pixel coords given canvas dimensions.
    */
   getWellData(canvasWidth, canvasHeight) {
-    return this.wells.map(w => ({
-      x: w.x * canvasWidth,
-      y: w.y * canvasHeight,
-      uvX: w.x,
-      uvY: w.y,
-      mass: w.mass,
-    }));
+    return this.wells.map(w => {
+      const [sx, sy] = wellToScreen(w.x, w.y, canvasWidth, canvasHeight);
+      return {
+        x: sx,
+        y: sy,
+        uvX: w.x,
+        uvY: w.y,
+        mass: w.mass,
+      };
+    });
   }
 
   /**
    * Get UV positions for the display shader.
    */
+  /**
+   * Get fluid UV positions for the display shader.
+   * Converts from well-space (Y-down) to fluid UV (Y-up).
+   */
   getUVPositions() {
-    return this.wells.map(w => [w.x, w.y]);
+    return this.wells.map(w => wellToFluidUV(w.x, w.y));
   }
 }

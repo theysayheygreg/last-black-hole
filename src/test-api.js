@@ -5,6 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { screenToFluidUV, fluidVelToScreen } from './coords.js';
 
 export function initTestAPI(getState) {
   window.__TEST_API = {
@@ -21,13 +22,15 @@ export function initTestAPI(getState) {
     getFluidVelAt(pixelX, pixelY) {
       const { fluid, canvasWidth, canvasHeight } = getState();
       if (!fluid) return { x: 0, y: 0 };
-      const uvX = pixelX / canvasWidth;
-      const uvY = pixelY / canvasHeight;
-      const [vx, vy] = fluid.readVelocityAt(
-        Math.max(0, Math.min(1, uvX)),
-        Math.max(0, Math.min(1, uvY))
+      // Convert screen pixels to fluid UV via coords.js
+      const [fuv_x, fuv_y] = screenToFluidUV(pixelX, pixelY, canvasWidth, canvasHeight);
+      const [fvx, fvy] = fluid.readVelocityAt(
+        Math.max(0, Math.min(1, fuv_x)),
+        Math.max(0, Math.min(1, fuv_y))
       );
-      return { x: vx, y: vy };
+      // Convert fluid velocity to screen velocity via coords.js
+      const [svx, svy] = fluidVelToScreen(fvx, fvy);
+      return { x: svx, y: svy };
     },
 
     getFPS() {
