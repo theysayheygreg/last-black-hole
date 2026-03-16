@@ -42,11 +42,14 @@ Fluid Sim ──────── ┤                             ├── Ent
 
 #### Monday Night Priority Ranking
 
-If time collapses, this is the priority order: N1a > N2 > N3 > N0 > N1b. The mainline is: single-sim + live tuning + ASCII. Everything else is a probe. (Forge Review #2)
+If time collapses, this is the priority order: **N1a > N2 > N3 > N0 > N1b**. The mainline is: single-sim + live tuning + ASCII. Everything else is a probe. (Forge Review #2)
 
-#### Task N1a: Approach A — Single Fluid Sim + Oscillating Force Injection (Large, 3-5hr) — AGENT 1
-- **What:** Fork PavelDoGreat WebGL-Fluid-Simulation into a single HTML file. Strip the demo UI. Get the sim running fullscreen on a canvas. Fake gravity waves via oscillating force injection from wells.
-- **Files:** `index-a.html` (Approach A prototype), inline shaders or `shaders/` dir
+Orb should pull these in priority order. N1a starts immediately. N2 and N3 can start as soon as N1a has a running FBO. N0 can start as soon as `__TEST_API` is exposed. N1b runs in parallel if a second agent is available.
+
+#### Task N1a: Approach A — Single Fluid Sim + Oscillating Force Injection (Large, 3-5hr)
+- **Lane:** `mainline`
+- **What:** Fork PavelDoGreat WebGL-Fluid-Simulation into a single HTML file. Strip the demo UI. Get the sim running fullscreen on a canvas. Fake gravity waves via oscillating force injection from wells. Wire up ship controls. Expose test API.
+- **Files:** `index-a.html`, `src/fluid.js`, `src/ship.js`, `src/wells.js`, `src/main.js`, `src/config.js`, `src/test-api.js`
 - **Dependencies:** None — this is the foundation
 - **Approach:** Navier-Stokes only. Waves are created by oscillating force injection amplitude at well locations: `source(t) = amplitude * sin(frequency * t)` applied as periodic radial pulses. Simpler, proven, shippable. (Forge's recommendation.)
 - **Deliverables:**
@@ -57,25 +60,34 @@ If time collapses, this is the priority order: N1a > N2 > N3 > N0 > N1b. The mai
   - Oscillating force injection from the well to fake gravity waves
   - Visible wave-like ripples propagating outward from the well through the fluid
   - Ship that reads fluid velocity and adds thrust (mouse-aim, click-to-thrust)
+  - Ship rendered as clean vector geometry on a separate layer ABOVE the fluid (see VISUAL-SCALE.md). Ship thrust creates a visible wake disturbance in the fluid layer below.
   - Ship carried by currents when not thrusting, pulled toward well by inflow
   - Surfing a wave crest should feel like a speed boost
+  - Tier 1 affordances implemented: wave magnetism (catch window + lock strength), thrust smoothing (facing lerp), input buffering (coyote time for wave catch). See MOVEMENT.md and BACKLOG.md affordance priority queue.
+  - `CONFIG` object with all tunables (see TUNING.md for structure and CONTROLS.md for starting values)
+  - `window.__TEST_API` exposed (see AGENT-TESTING.md for interface): getShipPos, getShipVel, getFluidVelAt, getFPS, getConfig, teleportShip, setTimeScale, setConfig
 - **Acceptance Criteria:**
   - [ ] `index-a.html` loads in Chrome/Firefox without errors
   - [ ] Fluid sim renders colored density field
   - [ ] Gravity well creates visible inward flow
   - [ ] Oscillating pulses create visible outward-propagating ripples
+  - [ ] Ship renders on a separate layer above the fluid (not embedded in the fluid texture)
   - [ ] Ship responds to fluid: drift, thrust, surf
+  - [ ] Wave magnetism engages when ship is within catch window of a wave crest
   - [ ] Steady 60fps (check with `requestAnimationFrame` timestamp delta)
   - [ ] Console logs sim resolution and frame time
-  - [ ] All tunables stored in a single `CONFIG` object (dev panel will bind to this)
+  - [ ] `CONFIG` object exists, all tunables are in it, systems read from it every frame
+  - [ ] `window.__TEST_API` is accessible and returns valid data
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
+- **Self-test before handoff:** Run `node tests/run-all.js` if N0 is complete. Otherwise manually verify all acceptance criteria and document in the commit.
 - **Scope:** Large
 
-#### Task N1b: Approach B — Dual Solver (Large, 3-5hr) — AGENT 2
+#### Task N1b: Approach B — Dual Solver (Large, 3-5hr)
+- **Lane:** `probe-a` — only if a parallel agent is available. Not mainline.
 - **What:** Build a dual-solver physics prototype: Navier-Stokes for local fluid flow + wave equation solver for gravity wave propagation on separate grids, coupled together.
-- **Files:** `index-b.html` (Approach B prototype), inline shaders or `shaders/` dir
+- **Files:** `index-b.html`, `src/fluid.js`, `src/waves.js`, `src/ship.js`, `src/wells.js`, `src/main.js`, `src/config.js`, `src/test-api.js`
 - **Dependencies:** None — parallel track
-- **Approach:** Two physics systems. Navier-Stokes handles local flow (advection, diffusion, pressure). Wave equation (`u(t+1) = 2*u(t) - u(t-1) + c^2*nabla^2*u(t) - damping*u(t)`) handles gravity wave propagation. Wave amplitude feeds into the fluid sim as a force multiplier — where waves crest, fluid velocity increases. Physically accurate surfing. Research-level complexity. (Deep dive design.)
+- **Approach:** Two physics systems. Navier-Stokes handles local flow (advection, diffusion, pressure). Wave equation (`u(t+1) = 2*u(t) - u(t-1) + c^2*nabla^2*u(t) - damping*u(t)`) handles gravity wave propagation. Wave amplitude feeds into the fluid sim as a force multiplier — where waves crest, fluid velocity increases. Physically accurate surfing. Research-level complexity.
 - **Deliverables:**
   - Single HTML file opens in browser, fullscreen WebGL canvas
   - Navier-Stokes fluid sim running on a 256x256 grid (or 128x128)
@@ -84,56 +96,35 @@ If time collapses, this is the priority order: N1a > N2 > N3 > N0 > N1b. The mai
   - Wave amplitude visibly feeds back into fluid velocity
   - Surfable wavefronts propagating outward from the well
   - Ship that reads fluid velocity and adds thrust (mouse-aim, click-to-thrust)
+  - Ship rendered on separate layer above fluid (same pattern as N1a)
   - Ship carried by currents when not thrusting, surfable wave crests
+  - Same Tier 1 affordances, `CONFIG` object, and `__TEST_API` as N1a
 - **Acceptance Criteria:**
   - [ ] `index-b.html` loads in Chrome/Firefox without errors
   - [ ] Fluid sim renders colored density field
   - [ ] Wave equation produces visible propagating wavefronts
   - [ ] Waves visibly affect fluid velocity (coupling works)
+  - [ ] Ship renders on separate layer above fluid
   - [ ] Ship responds to fluid: drift, thrust, surf
-  - [ ] Steady 60fps (check with `requestAnimationFrame` timestamp delta) — if not achievable, note the perf cost
+  - [ ] Steady 60fps — if not achievable, note the perf cost
   - [ ] Console logs sim resolution, wave grid resolution, and frame time
-  - [ ] All tunables stored in a single `CONFIG` object (dev panel will bind to this)
-  - [ ] Committed per CLAUDE.md rules (atomic commits per system)
-- **Decision rule:** If Approach B is not clearly better in feel by Tuesday 10am, backlog it immediately and proceed with Approach A. No merging good bits, no keeping it around as an active option. The work isn't wasted — it's in `BACKLOG.md` with full context for post-jam revival. (Forge Review #2)
+  - [ ] `CONFIG` and `__TEST_API` match N1a interface
+  - [ ] Committed per CLAUDE.md rules
+- **Decision rule:** If Approach B is not clearly better in feel by Tuesday 10am, backlog it immediately. See `BACKLOG.md`. (Forge Review #2)
 - **Scope:** Large
 
-#### Task N3: ASCII Dithering Post-Process (Medium, 2-3hr) — EITHER AGENT (once an FBO exists)
-- **What:** The signature visual. Render fluid to FBO, post-process into ASCII characters. Write this against whichever prototype has a working FBO first; it should be portable to the other.
-- **Files:** ASCII shader pass (portable between index-a.html and index-b.html)
-- **Dependencies:** Task N1a or N1b (fluid renders to FBO). Can start as soon as either prototype has a working render target.
+#### Task N2: Dev Panel (Small, 1-2hr)
+- **Lane:** `support` — starts as soon as N1a has a running prototype
+- **What:** Floating dev panel with sliders bound to the CONFIG object. Monday version is minimal: sliders + debug toggles + copy config + reset. No presets, no localStorage. (Forge Review #2)
+- **Files:** `src/dev-panel.js` (or inline in prototype HTML)
+- **Dependencies:** N1a (or N1b) running with CONFIG object
 - **Deliverables:**
-  - Font atlas texture generated at init: rasterize density ramp characters (`. : ; = + * # % @ █`) onto a 1024x1024 canvas, upload as GPU texture
-  - Post-process shader: divide screen into character cells (~8x12px each), sample fluid density per cell, look up character from atlas by luminance, tint with sampled color
-  - Color mapping: cold void = deep blue, warm radiation near well = amber/red, neutral = teal
-  - Ship rendered as clean overlay ON TOP of the ASCII layer (not ASCII-ified)
-  - The fluid world should look like a flowing field of colored ASCII characters
-- **Acceptance Criteria:**
-  - [ ] Screen shows ASCII characters, not smooth fluid gradients
-  - [ ] Character density visually tracks fluid density (dense flow = heavy chars, vacuum = sparse)
-  - [ ] Colors shift from blue (void) through teal to amber/red (near well)
-  - [ ] Ship is clearly visible against ASCII background
-  - [ ] Character grid is readable (not a blurry mess)
-  - [ ] 60fps maintained with the ASCII post-process pass added
-  - [ ] Looks distinctly different from any existing browser game
-- **Scope:** Medium
-
-#### Task N2: Dev Panel + CONFIG Object (Small, 1-2hr) — EITHER AGENT (after N1a or N1b)
-
-> **Non-negotiable.** Greg must have live tuning sliders before the morning review. Without this, every tuning cycle requires code changes and reloads. See `docs/design/TUNING.md`.
-
-- **What:** A floating dev panel with sliders for every tunable constant. All game systems read from a single `CONFIG` object. Sliders write to `CONFIG` live.
-- **Files:** Dev panel code in both `index-a.html` and `index-b.html` (or shared module)
-- **Dependencies:** At least one prototype running (N1a or N1b)
-- **Deliverables:**
-  - Single `CONFIG` object at top of main code. Every system reads from it every frame (not cached at init).
   - Floating DOM panel, toggle with backtick (`` ` ``), top-right corner, collapsible
   - Sliders grouped by system: Ship, Fluid, Wells, Affordances, ASCII, Debug
   - L0 sliders (see TUNING.md for full list): thrust, fluid coupling, turn rate, turn curve, drag, mass, viscosity, gravity strength/falloff, wave amplitude/frequency, catch window, lock strength, shoulder width, ASCII cell size, color temperature
   - Debug toggles: velocity field overlay, well radii visualization, catch window highlight, FPS counter
   - "Copy Config" button → dumps CONFIG as JSON to clipboard
   - "Reset" button → restores defaults
-  - "Presets" dropdown → save/load named configs to localStorage
   - Changes apply instantly — no reload required
 - **Acceptance Criteria:**
   - [ ] Panel toggles with backtick key
@@ -143,23 +134,53 @@ If time collapses, this is the priority order: N1a > N2 > N3 > N0 > N1b. The mai
   - [ ] "Reset" restores all values to code defaults
   - [ ] Panel doesn't obscure critical game area (collapsible, semi-transparent)
   - [ ] Panel works in both prototype HTML files
+- **NOT Monday:** presets, localStorage, fancy grouping. Those are Tuesday+ if they come cheap.
 - **Scope:** Small (but critical)
 
-#### Task N0: Smoke + Physics Tests (Small, 1hr) — EITHER AGENT (after N1a/N1b + N2)
-- **What:** Automated test harness using Puppeteer. Agents run these after every commit. Greg never has to verify "does it load?"
+#### Task N3: ASCII Dithering Post-Process (Medium, 2-3hr)
+- **Lane:** `signature-visual` — starts as soon as either prototype has a working FBO
+- **What:** The signature visual. Render fluid to FBO, post-process into ASCII characters. Implement the layered rendering pipeline (see VISUAL-SCALE.md, DESIGN-DEEP-DIVE.md).
+- **Files:** `src/ascii-renderer.js`, font atlas generation code
+- **Dependencies:** N1a or N1b (fluid renders to FBO). Can start as soon as either prototype has a working render target. Should be portable between both.
+- **Deliverables:**
+  - Font atlas texture generated at init: rasterize density ramp characters (`. : ; = + * # % @ █`) onto a 1024x1024 canvas, upload as GPU texture
+  - Post-process shader: divide screen into character cells (~8x12px each), sample fluid density per cell, look up character from atlas by luminance, tint with sampled color
+  - Color mapping: cold void = deep blue, warm radiation near well = amber/red, neutral = teal
+  - Layered rendering pipeline:
+    - Layer 0: ASCII substrate renders the fluid
+    - Layer 1: Entity overlay renders ship (and later wrecks/portals) as clean geometry above ASCII
+    - Layer 2: VFX overlay for thrust trail, shockwaves (additive blend)
+    - Layer 3: HUD (DOM, handled separately)
+  - Ship is always readable against the ASCII background — the layer separation ensures this
+  - The fluid world should look like a flowing field of colored ASCII characters
+  - ASCII cell size and color temperature added as CONFIG tunables (dev panel can adjust)
+- **Acceptance Criteria:**
+  - [ ] Screen shows ASCII characters, not smooth fluid gradients
+  - [ ] Character density visually tracks fluid density (dense flow = heavy chars, vacuum = sparse)
+  - [ ] Colors shift from blue (void) through teal to amber/red (near well)
+  - [ ] Ship is clearly visible on Layer 1 against ASCII Layer 0 background
+  - [ ] Character grid is readable (not a blurry mess)
+  - [ ] 60fps maintained with the ASCII post-process pass added
+  - [ ] ASCII cell size is tunable via CONFIG (dev panel can adjust if N2 is done)
+  - [ ] Looks distinctly different from any existing browser game
+- **Scope:** Medium
+
+#### Task N0: Smoke + Physics Tests (Small, 1hr)
+- **Lane:** `verification` — starts as soon as any prototype exposes `__TEST_API`
+- **What:** Automated test harness using Puppeteer. Agents run these after every commit. Greg never has to verify "does it load?" Monday scope is deliberately thin: 6 checks max. (Forge Review #2)
 - **Files:** `tests/smoke.js`, `tests/physics.js`, `tests/run-all.js`, `package.json` (puppeteer dep)
-- **Dependencies:** At least one prototype running with `__TEST_API` exposed
+- **Dependencies:** At least one prototype running with `__TEST_API` exposed. Does NOT depend on N2 (dev panel).
 - **Deliverables:**
   - `npm install` adds puppeteer
-  - `node tests/smoke.js` — loads page, checks canvas, WebGL, no errors, 60fps, CONFIG exists (<10s)
-  - `node tests/physics.js` — ship moves on thrust, drifts in current, well pulls, waves oscillate, fluid coupling correct (~30s)
+  - `node tests/smoke.js` — page loads, canvas exists, WebGL context, no JS errors, 60fps, CONFIG exists (<10s)
+  - `node tests/physics.js` — ship moves on thrust, drifts when thrust stops, well pull exists, waves oscillate (~30s)
   - `node tests/run-all.js` — runs all test files, reports pass/fail summary
-  - Game exposes `window.__TEST_API` (see AGENT-TESTING.md): state readers (ship, fluid, wells, fps) + state mutators (teleport, time scale, config)
 - **Acceptance Criteria:**
-  - [ ] `node tests/run-all.js` passes all tests against the winning prototype
+  - [ ] `node tests/run-all.js` passes all tests against the prototype
   - [ ] Tests run headless (no visible browser window needed)
   - [ ] Test output is clear: `PASS: ship moves on thrust` / `FAIL: fps dropped to 42`
-  - [ ] __TEST_API is accessible from Puppeteer's page.evaluate
+  - [ ] Any agent can run `npm install && node tests/run-all.js` to verify the build
+- **NOT Monday:** gameloop tests, signal tests, screenshot pipeline, visual regression. Those grow with the game. See AGENT-TESTING.md.
 - **Scope:** Small
 
 #### Night Report
