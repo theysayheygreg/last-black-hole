@@ -127,8 +127,11 @@ export class Ship {
     this.vy += accelY * dt;
 
     // Blend toward fluid velocity (coupling)
-    this.vx = this.vx * (1 - coupling * dt * 2) + fluidVel.x * coupling * dt * 2;
-    this.vy = this.vy * (1 - coupling * dt * 2) + fluidVel.y * coupling * dt * 2;
+    // Rate scales with coupling strength — at 0.8, ship strongly follows fluid
+    const blendRate = coupling * dt * 4.0;
+    const clamped = Math.min(blendRate, 0.5); // don't overshoot
+    this.vx = this.vx * (1 - clamped) + fluidVel.x * clamped;
+    this.vy = this.vy * (1 - clamped) + fluidVel.y * clamped;
 
     // 7. Drag
     const shipSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);

@@ -18,20 +18,20 @@ export const CONFIG = {
     size: 12,                // ship triangle radius in pixels
   },
   fluid: {
-    viscosity: 0.0003,
+    viscosity: 0.0001,
     resolution: 256,         // sim grid resolution
     pressureIterations: 30,  // Jacobi solver iterations
-    curl: 0.3,               // vorticity confinement strength
-    dissipation: 0.98,       // velocity dissipation per step (1.0 = no dissipation)
-    densityDissipation: 0.97,
+    curl: 0.4,               // vorticity confinement strength
+    dissipation: 0.995,      // velocity dissipation per step (closer to 1 = longer waves)
+    densityDissipation: 0.99, // density persists longer for visible wave fronts
   },
   wells: {
-    gravity: 0.0004,         // G constant for force (in UV-space units)
+    gravity: 0.0006,         // G constant for force (in UV-space units)
     falloff: 1.5,            // exponent: 1.5 = softer than inverse square
-    waveAmplitude: 2.5,      // oscillation force amplitude multiplier
-    waveFrequency: 0.8,      // Hz
-    clampRadius: 20,         // minimum radius in sim cells to prevent singularity
-    terminalInflowSpeed: 0.5,// cap infall speed in sim velocity units
+    waveAmplitude: 4.0,      // oscillation force amplitude multiplier
+    waveFrequency: 0.6,      // Hz — slower for more visible propagation
+    clampRadius: 15,         // minimum radius in sim cells to prevent singularity
+    terminalInflowSpeed: 0.4,// cap infall speed in sim velocity units
   },
   affordances: {
     catchWindowDeg: 15,      // wave magnetism angle threshold

@@ -226,23 +226,40 @@ void main() {
   float speed = length(vel);
   float density = length(dens);
 
-  // Base color: deep void to teal based on density
-  vec3 col = mix(u_voidColor, u_normalColor, clamp(density * 2.0, 0.0, 1.0));
+  // Combine density and velocity for a richer signal
+  // Velocity divergence approximation (local speed variation = wave fronts)
+  float combined = density + speed * 0.8;
 
-  // Add velocity brightness
-  col += speed * 0.3;
+  // Base color: deep void to teal based on combined signal
+  vec3 col = mix(u_voidColor, u_normalColor, clamp(combined * 1.5, 0.0, 1.0));
+
+  // Velocity-based brightness boost — makes wave fronts shimmer
+  float speedBrightness = smoothstep(0.0, 0.3, speed);
+  col += speedBrightness * vec3(0.05, 0.12, 0.15);
+
+  // High-velocity regions get a cyan highlight (wave crests)
+  float waveCrest = smoothstep(0.15, 0.4, speed);
+  col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.4);
 
   // Tint near wells: shift toward amber/red
   for (int i = 0; i < 4; i++) {
     if (i >= u_wellCount) break;
     float dist = distance(v_uv, u_wellPositions[i]);
-    float wellInfluence = smoothstep(0.3, 0.02, dist);
+    float wellInfluence = smoothstep(0.35, 0.02, dist);
     vec3 wellColor = mix(u_nearWellColor, u_hotWellColor, smoothstep(0.15, 0.02, dist));
     col = mix(col, wellColor, wellInfluence * 0.6);
-    // Void center
-    float voidStrength = smoothstep(0.04, 0.01, dist);
+    // Hot glow at moderate distance (accretion ring)
+    float ringGlow = smoothstep(0.08, 0.04, dist) * (1.0 - smoothstep(0.02, 0.01, dist));
+    col += ringGlow * vec3(0.3, 0.1, 0.02);
+    // Void center — pitch black
+    float voidStrength = smoothstep(0.035, 0.008, dist);
     col = mix(col, vec3(0.0), voidStrength);
   }
+
+  // Subtle vignette at screen edges
+  vec2 fromCenter = v_uv - 0.5;
+  float vignette = 1.0 - dot(fromCenter, fromCenter) * 0.5;
+  col *= vignette;
 
   fragColor = vec4(col, 1.0);
 }`;
