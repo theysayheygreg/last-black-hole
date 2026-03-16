@@ -90,9 +90,10 @@ export class Ship {
         Math.max(0, Math.min(1, uvY))
       );
       // Scale from sim-space to pixel-space (canvas width as reference)
+      // Negate Y: WebGL velocity Y-up → canvas Y-down
       const scale = this.canvasWidth;
       fluidVel.x = fvx * scale;
-      fluidVel.y = fvy * scale;
+      fluidVel.y = -fvy * scale;
     }
 
     this.lastFluidVel = fluidVel;
