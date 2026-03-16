@@ -15,6 +15,7 @@ import { WaveRingSystem } from './wave-rings.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
+import { wellToFluidUV, wellToScreen } from './coords.js';
 
 // ---- State ----
 let glCanvas, gl;
@@ -292,7 +293,31 @@ function gameLoop(now) {
     ctx.restore();
   }
 
-  // 11. Debug: well radii
+  // 11. Debug: coordinate diagnostic — bright green splats in fluid + overlay dots
+  if (CONFIG.debug.showCoordDiagnostic) {
+    // Inject bright green density into the fluid at each well's FLUID UV position
+    // If coords are correct, these green blobs should align with the overlay dots below
+    for (const well of wellSystem.wells) {
+      const [fu, fv] = wellToFluidUV(well.x, well.y);
+      fluid.splat(fu, fv, 0, 0, 0.008, 0.0, 1.0, 0.0);  // bright green
+    }
+
+    // Draw bright green dots on the overlay at each well's SCREEN position
+    ctx.save();
+    for (const well of wellSystem.wells) {
+      const [sx, sy] = wellToScreen(well.x, well.y, overlayCanvas.width, overlayCanvas.height);
+      ctx.fillStyle = '#00ff00';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '12px monospace';
+      ctx.fillText(`well(${well.x.toFixed(2)}, ${well.y.toFixed(2)})`, sx + 12, sy - 4);
+    }
+    ctx.restore();
+  }
+
+  // 12. Debug: well radii
   if (CONFIG.debug.showWellRadii) {
     ctx.save();
     const wellData = wellSystem.getWellData(overlayCanvas.width, overlayCanvas.height);

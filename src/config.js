@@ -60,5 +60,6 @@ export const CONFIG = {
     showVelocityField: false,
     showWellRadii: false,
     showFPS: true,
+    showCoordDiagnostic: false,  // bright green splats at well fluid UV positions + overlay dots
   },
 };
