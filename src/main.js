@@ -250,7 +250,49 @@ function gameLoop(now) {
     ctx.restore();
   }
 
-  // 10. Debug: well radii
+  // 10. Debug: flow field arrows
+  if (CONFIG.debug.showVelocityField && fluid) {
+    ctx.save();
+    const gridStep = 60; // pixels between arrows
+    const arrowScale = 800; // velocity to arrow length multiplier
+    for (let px = gridStep / 2; px < overlayCanvas.width; px += gridStep) {
+      for (let py = gridStep / 2; py < overlayCanvas.height; py += gridStep) {
+        const uvX = px / overlayCanvas.width;
+        const uvY = py / overlayCanvas.height;
+        const [fvx, fvy] = fluid.readVelocityAt(uvX, uvY);
+        const speed = Math.sqrt(fvx * fvx + fvy * fvy);
+        if (speed < 0.0001) continue;
+
+        const len = Math.min(speed * arrowScale, gridStep * 0.8);
+        const angle = Math.atan2(fvy, fvx);
+
+        // Arrow color: brighter = faster flow
+        const alpha = Math.min(0.8, speed * 200);
+        ctx.strokeStyle = `rgba(100, 255, 200, ${alpha})`;
+        ctx.lineWidth = 1.5;
+
+        // Draw arrow line
+        const ex = px + Math.cos(angle) * len;
+        const ey = py + Math.sin(angle) * len;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+
+        // Arrowhead
+        const headLen = Math.min(len * 0.3, 6);
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - Math.cos(angle - 0.5) * headLen, ey - Math.sin(angle - 0.5) * headLen);
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - Math.cos(angle + 0.5) * headLen, ey - Math.sin(angle + 0.5) * headLen);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // 11. Debug: well radii
   if (CONFIG.debug.showWellRadii) {
     ctx.save();
     const wellData = wellSystem.getWellData(overlayCanvas.width, overlayCanvas.height);
