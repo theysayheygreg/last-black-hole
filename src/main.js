@@ -73,22 +73,26 @@ function init() {
   // Spread across the map so orbital currents and inter-well channels form
   wellSystem = new WellSystem();
 
-  // Each well is a unique instance with its own personality
+  // Each well is a unique instance with its own personality and color identity
   wellSystem.addWell(0.35, 0.40, {
     mass: 1.5, orbitalDir: 1, killRadius: 25,
-    accretionSpinRate: 0.6, accretionPoints: 8,  // big, slow, dramatic
+    accretionSpinRate: 0.6, accretionPoints: 10,  // big, slow, dramatic
+    color: [1.0, 0.35, 0.08],  // deep red-orange — the dominant well
   });
   wellSystem.addWell(0.70, 0.30, {
     mass: 0.8, orbitalDir: -1, killRadius: 15,
-    accretionSpinRate: 1.4, accretionPoints: 4,  // small, fast, tight
+    accretionSpinRate: 1.4, accretionPoints: 5,  // small, fast, tight
+    color: [0.15, 0.9, 0.5],   // green-cyan — alien, cool
   });
   wellSystem.addWell(0.65, 0.72, {
     mass: 1.2, orbitalDir: 1, killRadius: 20,
-    accretionSpinRate: 0.9, accretionPoints: 6,  // medium, moderate
+    accretionSpinRate: 0.9, accretionPoints: 7,  // medium, moderate
+    color: [0.6, 0.2, 1.0],    // purple-violet — mysterious
   });
   wellSystem.addWell(0.20, 0.75, {
     mass: 0.5, orbitalDir: -1, killRadius: 12,
-    accretionSpinRate: 1.8, accretionPoints: 3,  // tiny, rapid, sparse
+    accretionSpinRate: 1.8, accretionPoints: 4,  // tiny, rapid, sparse
+    color: [1.0, 0.8, 0.15],   // amber-yellow — hot and fast
   });
 
   // Init wave ring system (event-driven waves)
@@ -287,8 +291,8 @@ function gameLoop(now) {
   // Render fluid display colors into the ASCII renderer's scene FBO (not to screen)
   const sceneTarget = asciiRenderer.getSceneTarget();
   fluid.render(sceneTarget, wellUVs);
-  // ASCII post-process: read scene FBO, render character grid to screen
-  asciiRenderer.render();
+  // ASCII post-process: read scene FBO + velocity texture, render character grid to screen
+  asciiRenderer.render(fluid.getVelocityTexture());
 
   // 8. Render overlay (Layer 1/2 — 2D canvas: wave rings + ship)
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);

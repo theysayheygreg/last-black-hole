@@ -204,9 +204,9 @@ void main() {
 }`;
 
 // Display shader — maps fluid state to visible colors
-// V2: encodes flow direction so players can read orbital currents
-// - Velocity magnitude boosts brightness (fast flow = brighter/denser ASCII chars)
-// - Flow direction tints color: toward a well = amber, away = teal
+// V3: density RGB IS the color. Wells inject their own colored density,
+// so each well automatically gets its own color identity.
+// Speed boosts brightness. Void centers are truly black.
 const FRAG_DISPLAY = `#version 300 es
 precision highp float;
 uniform sampler2D u_velocity;
@@ -215,7 +215,6 @@ uniform vec3 u_voidColor;
 uniform vec3 u_normalColor;
 uniform vec3 u_nearWellColor;
 uniform vec3 u_hotWellColor;
-// Well positions for coloring (up to 4)
 uniform vec2 u_wellPositions[4];
 uniform int u_wellCount;
 in vec2 v_uv;
@@ -224,64 +223,51 @@ out vec4 fragColor;
 void main() {
   vec2 vel = texture(u_velocity, v_uv).xy;
   vec3 dens = texture(u_density, v_uv).xyz;
-
   float speed = length(vel);
   float density = length(dens);
 
-  // Combine density and velocity magnitude for brightness signal
-  // Fast-flowing areas are brighter = denser ASCII characters
-  float combined = density + speed * 1.2;
+  // === BASE: deep void ===
+  vec3 col = u_voidColor;
 
-  // Base color: deep void to teal based on combined signal
-  vec3 col = mix(u_voidColor, u_normalColor, clamp(combined * 1.5, 0.0, 1.0));
+  // === DENSITY COLOR — the primary visual signal ===
+  // Wells inject colored density. Use it directly — this IS the per-well color identity.
+  // Amplify heavily so accretion disks are visually loud.
+  col += dens * 4.0;
 
-  // Velocity magnitude brightness boost — makes currents visible as brighter bands
-  float speedBrightness = smoothstep(0.0, 0.2, speed);
-  col += speedBrightness * vec3(0.08, 0.18, 0.22);
+  // === SPEED BRIGHTNESS — fast flow = brighter characters ===
+  // Use density hue for speed coloring (fast currents glow in their well's color)
+  vec3 speedHue = density > 0.01 ? dens / density : vec3(0.03, 0.06, 0.10);
+  col += speed * 3.0 * speedHue;
 
-  // High-velocity regions get a cyan highlight (wave crests / strong currents)
-  float waveCrest = smoothstep(0.1, 0.35, speed);
-  col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.5);
+  // Faint ambient teal for any flow in empty space (makes currents readable even without density)
+  col += smoothstep(0.0, 0.1, speed) * vec3(0.02, 0.05, 0.07);
 
-  // === FLOW DIRECTION TINTING ===
-  // For each well, compute whether flow is toward or away from it.
-  // Toward well = warmer (amber), away = cooler (teal).
-  // This makes orbital currents visible as color bands around wells.
+  // === WELL PROXIMITY EFFECTS ===
   for (int i = 0; i < 4; i++) {
     if (i >= u_wellCount) break;
     float dist = distance(v_uv, u_wellPositions[i]);
 
-    // Direction from this pixel toward the well
-    vec2 toWell = normalize(u_wellPositions[i] - v_uv + vec2(0.0001));
+    // Hot accretion glow — bright ring at moderate distance
+    float ringGlow = smoothstep(0.14, 0.04, dist) * (1.0 - smoothstep(0.025, 0.008, dist));
+    col += ringGlow * dens * 2.0; // glow in the well's own color
 
-    // How much is the flow pointed toward this well? (-1 = away, +1 = toward)
-    float flowAlignment = speed > 0.001 ? dot(normalize(vel), toWell) : 0.0;
-
-    // Flow direction tint — only visible where there IS flow and near-ish to a well
-    float flowInfluence = smoothstep(0.5, 0.05, dist) * smoothstep(0.0, 0.08, speed);
-
-    // Warm (amber) for inward flow, cool (teal) for outward flow
-    vec3 warmTint = vec3(0.25, 0.12, 0.02);  // amber
-    vec3 coolTint = vec3(0.02, 0.12, 0.18);  // teal
-    vec3 flowTint = mix(coolTint, warmTint, flowAlignment * 0.5 + 0.5);
-    col += flowTint * flowInfluence * 0.4;
-
-    // Well proximity coloring (amber/red near wells)
-    float wellInfluence = smoothstep(0.35, 0.02, dist);
-    vec3 wellColor = mix(u_nearWellColor, u_hotWellColor, smoothstep(0.15, 0.02, dist));
-    col = mix(col, wellColor, wellInfluence * 0.6);
-    // Hot glow at moderate distance (accretion ring)
-    float ringGlow = smoothstep(0.08, 0.04, dist) * (1.0 - smoothstep(0.02, 0.01, dist));
-    col += ringGlow * vec3(0.3, 0.1, 0.02);
-    // Void center — pitch black
-    float voidStrength = smoothstep(0.035, 0.008, dist);
+    // Void center — truly black, completely empty
+    float voidStrength = smoothstep(0.04, 0.002, dist);
     col = mix(col, vec3(0.0), voidStrength);
   }
 
   // Subtle vignette at screen edges
   vec2 fromCenter = v_uv - 0.5;
-  float vignette = 1.0 - dot(fromCenter, fromCenter) * 0.5;
+  float vignette = 1.0 - dot(fromCenter, fromCenter) * 0.4;
   col *= vignette;
+
+  // Boost saturation before tone mapping — prevents wash to white near wells
+  float colLum = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(colLum), col, 1.6); // 1.6x saturation boost
+
+  // Reinhard tone mapping — preserves color in 0-1 range for RGBA8 scene FBO
+  col = max(col, 0.0);
+  col = col / (col + 0.8); // 0.8 midpoint = brighter overall
 
   fragColor = vec4(col, 1.0);
 }`;
@@ -629,6 +615,13 @@ export class FluidSim {
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
       this._drawQuad();
     }
+  }
+
+  /**
+   * Get the current velocity texture for external use (e.g., ASCII direction shader).
+   */
+  getVelocityTexture() {
+    return this.velocity.read.tex;
   }
 
   /**

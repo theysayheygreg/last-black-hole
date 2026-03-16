@@ -23,8 +23,8 @@ export const CONFIG = {
     curl: 0.3,                // vorticity confinement — creates visible eddies and swirls
     dissipation: 0.999,       // velocity persistence — higher = disturbances last longer, richer patterns
     densityDissipation: 0.998,// how long visible color persists — higher = living, persistent fabric
-    ambientTurbulence: 0.0004,// random force injection per frame — quantum fluctuation feel
-    ambientDensity: 0.0002,   // random density injection — keeps the fabric textured even in calm areas
+    ambientTurbulence: 0.0006,// random force injection per frame — quantum fluctuation feel
+    ambientDensity: 0.0004,   // random density injection — keeps the fabric textured even in calm areas
   },
   wells: {
     gravity: 0.0015,          // fluid-space gravity constant — how strongly wells shape the currents
@@ -35,10 +35,10 @@ export const CONFIG = {
     clampRadius: 15,          // sim-space singularity prevention
     terminalInflowSpeed: 0.3, // cap fluid speed near well center
     gravityClampDist: 40,     // pixel-space min distance for ship gravity calc
-    accretionRate: 0.015,     // density injection rate for accretion disk — LOUD for now, dial back later
-    accretionRadius: 0.07,    // UV radius of the accretion ring injection
+    accretionRate: 0.035,     // density injection rate — CRANKED for visual loudness
+    accretionRadius: 0.09,    // UV radius of the accretion ring injection — wider for more drama
     accretionSpinRate: 0.8,   // how fast the accretion injection points rotate (radians/sec)
-    accretionPoints: 8,       // number of injection points per ring
+    accretionPoints: 10,      // number of injection points per ring — more = denser disk
   },
   events: {
     waveSpeed: 150,           // pixels/sec ring expansion
@@ -51,13 +51,14 @@ export const CONFIG = {
     growthWaveAmplitude: 1.0, // initial wave amplitude from growth
   },
   ascii: {
-    cellSize: 8,
+    cellSize: 6,              // smaller cells = denser character packing (pre-vis look)
     cellAspect: 1.5,
-    contrast: 0.8,
+    contrast: 1.3,            // higher = more extreme density mapping (sparse void, packed disk)
     colorTemperature: 0.0,
+    directionThreshold: 0.02, // min velocity speed to show directional chars
   },
   color: {
-    voidColor: [0.0, 0.0, 0.13],
+    voidColor: [0.0, 0.0, 0.06],  // deeper void — nearly black
     normalSpace: [0.0, 0.5, 0.5],
     nearWell: [0.9, 0.4, 0.1],
     hotWell: [0.9, 0.1, 0.05],
