@@ -136,25 +136,26 @@ void main() {
   // Direction toward well (safe normalize)
   vec2 dir = dist > 0.0001 ? diff / dist : vec2(0.0);
 
-  // Radial inward force: gravity / r^falloff
+  // === GRAVITY: persistent inward pull ===
   // Force falls off with distance, clamped near center
-  float forceMag = u_gravity / pow(safeDist, u_falloff);
+  float gravityMag = u_gravity / pow(safeDist, u_falloff);
+  vec2 pullForce = dir * gravityMag;
 
-  // Persistent inward pull — always toward well
-  vec2 pullForce = dir * forceMag;
-
-  // Oscillating wave: positive waveAmp pushes outward, negative pulls inward
-  // This creates the expanding wave rings
-  // Wave force is strongest at moderate distance (not at center or far away)
-  float waveProfile = exp(-dist * 8.0) * dist * 20.0; // peaks around dist=0.12
-  vec2 waveForce = -dir * u_waveAmp * waveProfile;
+  // === WAVES: oscillating radial perturbation ===
+  // Wave profile peaks at moderate distance, zero at center and far away
+  // This creates expanding ring pulses
+  float waveProfile = exp(-dist * 6.0) * dist * 15.0; // peaks around dist=0.16
+  // Limit wave force to fraction of gravity so pull always dominates
+  float maxWaveFraction = 0.6;
+  float waveMag = u_waveAmp * waveProfile * maxWaveFraction;
+  vec2 waveForce = -dir * waveMag; // positive waveAmp = outward push
 
   vec2 totalForce = (pullForce + waveForce) * u_dt;
   vel += totalForce;
 
   // Clamp terminal speed near well to prevent singularity buildup
   float speed = length(vel);
-  if (speed > u_terminalSpeed && safeDist < 0.2) {
+  if (speed > u_terminalSpeed && safeDist < 0.25) {
     vel *= u_terminalSpeed / speed;
   }
 

@@ -26,12 +26,12 @@ export const CONFIG = {
     densityDissipation: 0.99, // density persists longer for visible wave fronts
   },
   wells: {
-    gravity: 0.0006,         // G constant for force (in UV-space units)
+    gravity: 0.001,          // G constant for force (in UV-space units) — dominant inward pull
     falloff: 1.5,            // exponent: 1.5 = softer than inverse square
-    waveAmplitude: 4.0,      // oscillation force amplitude multiplier
+    waveAmplitude: 2.0,      // oscillation force amplitude multiplier (< gravity for net inward)
     waveFrequency: 0.6,      // Hz — slower for more visible propagation
     clampRadius: 15,         // minimum radius in sim cells to prevent singularity
-    terminalInflowSpeed: 0.4,// cap infall speed in sim velocity units
+    terminalInflowSpeed: 0.3,// cap infall speed in sim velocity units
   },
   affordances: {
     catchWindowDeg: 15,      // wave magnetism angle threshold
