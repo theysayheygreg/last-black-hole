@@ -9,23 +9,29 @@ export const PRESETS = {
   Default: null, // signals "restore DEFAULTS" — handled by caller
 
   Ocean: {
-    ship:   { thrustAccel: 1500, fluidCoupling: 0.85, turnRate: 240, drag: 0.015, size: 12 },
-    wells:  { gravity: 0.002, orbitalStrength: 0.5, shipPullStrength: 150, shipPullFalloff: 1.3 },
-    fluid:  { dissipation: 0.998, curl: 0.4, viscosity: 0.00005 },
+    ship:   { thrustAccel: 1200, fluidCoupling: 0.85, turnRate: 240, drag: 0.015, size: 12 },
+    wells:  { gravity: 0.002, orbitalStrength: 0.5, shipPullStrength: 120, shipPullFalloff: 1.3,
+              accretionRate: 0.01, accretionRadius: 0.07, accretionSpinRate: 0.6 },
+    fluid:  { dissipation: 0.999, curl: 0.4, viscosity: 0.00005,
+              ambientTurbulence: 0.0003, ambientDensity: 0.0002 },
     events: { growthInterval: 25, waveShipPush: 400 },
   },
 
   Spacecraft: {
     ship:   { thrustAccel: 4000, fluidCoupling: 0.3, turnRate: 540, drag: 0.05, size: 10 },
-    wells:  { gravity: 0.001, orbitalStrength: 0.2, shipPullStrength: 400, shipPullFalloff: 2.0 },
-    fluid:  { dissipation: 0.993, curl: 0.2, viscosity: 0.0002 },
+    wells:  { gravity: 0.001, orbitalStrength: 0.2, shipPullStrength: 350, shipPullFalloff: 2.0,
+              accretionRate: 0.005, accretionRadius: 0.04, accretionSpinRate: 1.2 },
+    fluid:  { dissipation: 0.996, curl: 0.2, viscosity: 0.0002,
+              ambientTurbulence: 0.0002, ambientDensity: 0.0001 },
     events: { growthInterval: 15, waveShipPush: 200 },
   },
 
   Surfer: {
-    ship:   { thrustAccel: 2000, fluidCoupling: 0.7, turnRate: 360, drag: 0.025, size: 12 },
-    wells:  { gravity: 0.0018, orbitalStrength: 0.6, shipPullStrength: 200, shipPullFalloff: 1.5 },
-    fluid:  { dissipation: 0.997, curl: 0.35, viscosity: 0.00008 },
+    ship:   { thrustAccel: 1800, fluidCoupling: 0.75, turnRate: 360, drag: 0.02, size: 12 },
+    wells:  { gravity: 0.0018, orbitalStrength: 0.55, shipPullStrength: 175, shipPullFalloff: 1.5,
+              accretionRate: 0.008, accretionRadius: 0.06, accretionSpinRate: 0.8 },
+    fluid:  { dissipation: 0.999, curl: 0.35, viscosity: 0.00008,
+              ambientTurbulence: 0.0004, ambientDensity: 0.0002 },
     events: { growthInterval: 18, waveShipPush: 350 },
   },
 };

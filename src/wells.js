@@ -38,7 +38,7 @@ export class WellSystem {
    * Called once per simulation step.
    * V2: constant radial pull + tangential orbital force. No oscillation.
    */
-  update(fluid, dt) {
+  update(fluid, dt, totalTime) {
     const cfg = CONFIG.wells;
 
     for (const well of this.wells) {
@@ -56,12 +56,40 @@ export class WellSystem {
         cfg.terminalInflowSpeed
       );
 
-      // Inject density near the well — creates visible accretion glow
+      // === SPINNING ACCRETION DISK ===
+      // Inject density at rotating points around the well to create
+      // visible spiral arms that get swept by the orbital flow.
+      // The injection rotates, the fluid carries it into spiral patterns.
+      const spinAngle = totalTime * cfg.accretionSpinRate * well.orbitalDir;
+      const ringR = cfg.accretionRadius * well.mass;
+      const numPts = cfg.accretionPoints;
+      const rate = cfg.accretionRate * well.mass;
+
+      for (let i = 0; i < numPts; i++) {
+        const angle = spinAngle + (i / numPts) * Math.PI * 2;
+        const px = fu + Math.cos(angle) * ringR;
+        const py = fv + Math.sin(angle) * ringR;
+
+        // Inject density with slight tangential velocity to feed the orbital flow
+        const tangVx = -Math.sin(angle) * 0.0005 * well.orbitalDir;
+        const tangVy = Math.cos(angle) * 0.0005 * well.orbitalDir;
+
+        fluid.splat(
+          px, py,
+          tangVx, tangVy,
+          0.004,
+          rate * 0.8,   // r — warm
+          rate * 0.35,   // g
+          rate * 0.1     // b — amber/orange accretion glow
+        );
+      }
+
+      // Inner core glow — constant, dim, marks the center
       fluid.splat(
         fu, fv,
         0, 0,
-        0.002,
-        0.15, 0.06, 0.02  // warm amber
+        0.001,
+        rate * 0.3, rate * 0.1, rate * 0.03
       );
     }
   }

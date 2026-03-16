@@ -21,8 +21,10 @@ export const CONFIG = {
     resolution: 256,          // sim grid size
     pressureIterations: 30,   // Jacobi solver accuracy
     curl: 0.3,                // vorticity confinement — creates visible eddies and swirls
-    dissipation: 0.997,       // velocity persistence. 0.99 = fades fast. 0.999 = currents carry far
-    densityDissipation: 0.995,// how long visible color persists. Higher = longer trails
+    dissipation: 0.999,       // velocity persistence — higher = disturbances last longer, richer patterns
+    densityDissipation: 0.998,// how long visible color persists — higher = living, persistent fabric
+    ambientTurbulence: 0.0004,// random force injection per frame — quantum fluctuation feel
+    ambientDensity: 0.0002,   // random density injection — keeps the fabric textured even in calm areas
   },
   wells: {
     gravity: 0.0015,          // fluid-space gravity constant — how strongly wells shape the currents
@@ -33,6 +35,10 @@ export const CONFIG = {
     clampRadius: 15,          // sim-space singularity prevention
     terminalInflowSpeed: 0.3, // cap fluid speed near well center
     gravityClampDist: 40,     // pixel-space min distance for ship gravity calc
+    accretionRate: 0.008,     // density injection rate for accretion disk — higher = brighter disk
+    accretionRadius: 0.06,    // UV radius of the accretion ring injection
+    accretionSpinRate: 0.8,   // how fast the accretion injection points rotate (radians/sec)
+    accretionPoints: 6,       // number of injection points around the ring
   },
   events: {
     waveSpeed: 150,           // pixels/sec ring expansion

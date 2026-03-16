@@ -203,8 +203,31 @@ function gameLoop(now) {
   const simDt = 1 / 60; // fixed sim timestep for stability
   fluid.step(simDt);
 
-  // 2. Well forces (inject into fluid) — constant radial + orbital, no oscillation
-  wellSystem.update(fluid, simDt);
+  // 2. Well forces (inject into fluid) — constant radial + orbital + spinning accretion disk
+  wellSystem.update(fluid, simDt, totalTime);
+
+  // 2b. Ambient turbulence — quantum fluctuation feel
+  // Random small force/density splats to keep the fabric alive and textured
+  const turbStr = CONFIG.fluid.ambientTurbulence;
+  const densStr = CONFIG.fluid.ambientDensity;
+  if (turbStr > 0 || densStr > 0) {
+    // A few random splats per frame — enough for texture, not enough for chaos
+    for (let i = 0; i < 3; i++) {
+      const rx = Math.random();
+      const ry = Math.random();
+      const angle = Math.random() * Math.PI * 2;
+      const forceMag = turbStr * (0.5 + Math.random());
+      fluid.splat(
+        rx, ry,
+        Math.cos(angle) * forceMag,
+        Math.sin(angle) * forceMag,
+        0.005 + Math.random() * 0.01,
+        densStr * (0.3 + Math.random() * 0.7),
+        densStr * (0.5 + Math.random() * 0.5),
+        densStr * (0.6 + Math.random() * 0.4)
+      );
+    }
+  }
 
   // 3. Well growth events — periodic mass increase spawns wave rings
   growthTimer += dt;
