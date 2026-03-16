@@ -99,8 +99,7 @@ export class Ship {
         Math.max(0, Math.min(1, uvY))
       );
       // Scale from sim-space to pixel-space
-      // Fluid velocity is in grid cells/step, convert to pixels/sec
-      const scale = this.canvasWidth * 2.0;
+      const scale = this.canvasWidth * cfg.fluidVelScale;
       fluidVel.x = fvx * scale;
       fluidVel.y = fvy * scale;
     }
@@ -112,7 +111,7 @@ export class Ship {
     }
 
     // 4. Compute thrust force
-    const thrustMag = cfg.thrustForce * this.thrustRamp * 200; // scale to pixels/sec^2
+    const thrustMag = cfg.thrustForce * this.thrustRamp * cfg.thrustScale;
     const thrustFx = Math.cos(this.facing) * thrustMag;
     const thrustFy = Math.sin(this.facing) * thrustMag;
 
@@ -131,7 +130,7 @@ export class Ship {
 
     // Blend toward fluid velocity (coupling)
     // Rate scales with coupling strength — at 0.8, ship strongly follows fluid
-    const blendRate = coupling * dt * 4.0;
+    const blendRate = coupling * dt * cfg.fluidBlendRate;
     const clamped = Math.min(blendRate, 0.5); // don't overshoot
     this.vx = this.vx * (1 - clamped) + fluidVel.x * clamped;
     this.vy = this.vy * (1 - clamped) + fluidVel.y * clamped;
@@ -144,14 +143,9 @@ export class Ship {
         const dwy = well.y * this.canvasHeight - this.y;
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
         if (dist < 1) continue;
-        const minDist = 40; // pixel-space clamp radius
-        const safeDist = Math.max(dist, minDist);
-        // Direct gravitational acceleration on ship
-        // Strong enough to overcome outward fluid flow from wave propagation
-        // At 150px: accel ~ 800 * 1/(1.5^1.5) = ~435 px/s^2
-        const pullStrength = 800; // pixels/sec^2 at 100px distance
+        const safeDist = Math.max(dist, cfg.gravityClampDist);
         const normDist = safeDist / 100;
-        const gravAccel = pullStrength * well.mass / Math.pow(normDist, 1.5);
+        const gravAccel = wellCfg.shipPullStrength * well.mass / Math.pow(normDist, wellCfg.shipPullFalloff);
         const nx = dwx / dist;
         const ny = dwy / dist;
         this.vx += nx * gravAccel * dt;
@@ -185,12 +179,12 @@ export class Ship {
     if (this.thrustRamp > 0.1 && fluid) {
       const wakeUVx = this.x / this.canvasWidth;
       const wakeUVy = this.y / this.canvasHeight;
-      const wakeForceMag = this.thrustRamp * 0.0003;
+      const wakeForceMag = this.thrustRamp * cfg.wakeForceMag;
       fluid.splat(
         wakeUVx, wakeUVy,
         Math.cos(this.facing) * wakeForceMag,
         Math.sin(this.facing) * wakeForceMag,
-        0.0003,
+        cfg.wakeRadius,
         0.1, 0.3, 0.4  // teal wake color
       );
     }

@@ -83,8 +83,8 @@ async function run() {
 
       const well = wells[0];
 
-      // Teleport ship near the well (but not inside it)
-      const testX = well.x + 150;
+      // Teleport ship near the well (close enough to feel pull, not inside clamp)
+      const testX = well.x + 120;
       const testY = well.y;
       await page.evaluate(
         (x, y) => window.__TEST_API.teleportShip(x, y),

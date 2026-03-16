@@ -11,40 +11,53 @@ import { CONFIG } from './config.js';
 // Deep-clone CONFIG at import time for reset
 const DEFAULTS = JSON.parse(JSON.stringify(CONFIG));
 
-// Slider range hints per key. Keys not listed get sensible auto-ranges.
+// Slider range hints and tooltips per key.
 const RANGE_HINTS = {
-  'ship.thrustForce':       { min: 0.1, max: 20, step: 0.1 },
-  'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01 },
-  'ship.turnRate':          { min: 30, max: 360, step: 1 },
-  'ship.turnCurvePower':    { min: 1, max: 4, step: 0.1 },
-  'ship.turnDeadZone':      { min: 0, max: 30, step: 1 },
-  'ship.mass':              { min: 0.1, max: 5, step: 0.1 },
-  'ship.dragInCurrent':     { min: 0, max: 1, step: 0.005 },
-  'ship.dragAgainstCurrent':{ min: 0, max: 1, step: 0.005 },
-  'ship.thrustSmoothing':   { min: 0.01, max: 0.5, step: 0.01 },
-  'ship.thrustRampTime':    { min: 0.01, max: 1, step: 0.01 },
-  'ship.size':              { min: 4, max: 30, step: 1 },
+  'ship.thrustForce':       { min: 0.1, max: 20, step: 0.1, tip: 'Base thrust multiplier — higher = faster acceleration' },
+  'ship.thrustScale':       { min: 100, max: 2000, step: 50, tip: 'Converts thrustForce to pixels/sec². thrustForce × thrustScale = max acceleration' },
+  'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01, tip: '0 = ship ignores fluid. 1 = ship is pure fluid. 0.8 = mostly carried by flow' },
+  'ship.fluidBlendRate':    { min: 0.5, max: 10, step: 0.5, tip: 'How fast ship velocity blends toward fluid. Higher = snappier response to currents' },
+  'ship.fluidVelScale':     { min: 0.5, max: 5, step: 0.1, tip: 'Multiplier from sim velocity to pixel velocity. Higher = fluid feels faster' },
+  'ship.turnRate':          { min: 30, max: 360, step: 1, tip: 'Degrees/sec the ship rotates toward cursor' },
+  'ship.turnCurvePower':    { min: 1, max: 4, step: 0.1, tip: 'Turn speed curve. 1 = linear. 2+ = slow nudge, fast reversal' },
+  'ship.turnDeadZone':      { min: 0, max: 30, step: 1, tip: 'Degrees of aim offset below which the ship won\'t rotate (prevents jitter)' },
+  'ship.mass':              { min: 0.1, max: 5, step: 0.1, tip: 'Affects acceleration (a = F/mass). Heavier = slower response, less buffeted' },
+  'ship.dragInCurrent':     { min: 0, max: 1, step: 0.005, tip: 'Velocity damping when riding WITH the flow. Low = ice-skating momentum' },
+  'ship.dragAgainstCurrent':{ min: 0, max: 1, step: 0.005, tip: 'Velocity damping when fighting AGAINST the flow. Higher = sluggish resistance' },
+  'ship.thrustSmoothing':   { min: 0.01, max: 0.5, step: 0.01, tip: 'Facing lerp time in seconds (50ms = responsive, 200ms = floaty)' },
+  'ship.thrustRampTime':    { min: 0.01, max: 1, step: 0.01, tip: 'Seconds to reach full thrust. Short = instant. Long = tap vs hold matters' },
+  'ship.size':              { min: 4, max: 30, step: 1, tip: 'Ship triangle size in pixels' },
+  'ship.gravityClampDist':  { min: 10, max: 100, step: 5, tip: 'Minimum distance for gravity calc (prevents instant death at center)' },
+  'ship.wakeForceMag':      { min: 0, max: 0.005, step: 0.0001, tip: 'How much the ship\'s thrust disturbs the fluid behind it' },
+  'ship.wakeRadius':        { min: 0, max: 0.005, step: 0.0001, tip: 'Size of the thrust wake splat in the fluid' },
 
-  'fluid.viscosity':        { min: 0, max: 0.01, step: 0.00005 },
-  'fluid.resolution':       { min: 64, max: 512, step: 64 },
-  'fluid.pressureIterations':{ min: 5, max: 80, step: 1 },
-  'fluid.curl':             { min: 0, max: 2, step: 0.05 },
-  'fluid.dissipation':      { min: 0.9, max: 1, step: 0.001 },
-  'fluid.densityDissipation':{ min: 0.9, max: 1, step: 0.001 },
+  'fluid.viscosity':        { min: 0, max: 0.01, step: 0.00005, tip: 'Fluid thickness. 0 = water. Higher = syrup. Damps small-scale motion' },
+  'fluid.resolution':       { min: 64, max: 512, step: 64, tip: 'Sim grid size. 256 = good balance. 128 = fast. 512 = detailed but slow' },
+  'fluid.pressureIterations':{ min: 5, max: 80, step: 1, tip: 'Jacobi solver iterations. More = more accurate pressure. 30 = fine' },
+  'fluid.curl':             { min: 0, max: 2, step: 0.05, tip: 'Vorticity confinement. Higher = more swirly eddies' },
+  'fluid.dissipation':      { min: 0.9, max: 1, step: 0.001, tip: 'Velocity persistence per step. 0.99 = waves fade fast. 0.999 = waves travel far' },
+  'fluid.densityDissipation':{ min: 0.9, max: 1, step: 0.001, tip: 'How long visible density (color) persists. Higher = longer trails' },
 
-  'wells.gravity':          { min: 0, max: 0.01, step: 0.0001 },
-  'wells.falloff':          { min: 1, max: 3, step: 0.1 },
-  'wells.waveAmplitude':    { min: 0, max: 10, step: 0.1 },
-  'wells.waveFrequency':    { min: 0.1, max: 5, step: 0.1 },
-  'wells.clampRadius':      { min: 1, max: 50, step: 1 },
-  'wells.terminalInflowSpeed':{ min: 0, max: 2, step: 0.01 },
+  'wells.gravity':          { min: 0, max: 0.01, step: 0.0001, tip: 'Fluid-space gravity constant. Controls how strongly the well pulls the FLUID' },
+  'wells.falloff':          { min: 1, max: 3, step: 0.1, tip: 'Gravity distance exponent. 1 = gentle. 2 = inverse-square. 3 = sharp' },
+  'wells.waveAmplitude':    { min: 0, max: 10, step: 0.1, tip: 'Oscillating force strength. Creates the "wave pulses" radiating outward' },
+  'wells.waveFrequency':    { min: 0.1, max: 5, step: 0.1, tip: 'Wave pulse frequency in Hz. 0.5 = slow majestic waves. 2 = rapid pulses' },
+  'wells.clampRadius':      { min: 1, max: 50, step: 1, tip: 'Minimum radius in sim cells to prevent singularity at well center' },
+  'wells.terminalInflowSpeed':{ min: 0, max: 2, step: 0.01, tip: 'Cap on fluid speed near the well. Prevents runaway acceleration' },
+  'wells.shipPullStrength': { min: 0, max: 1000, step: 10, tip: 'Direct gravitational pull on the SHIP in px/s² at 100px. THIS is what traps you' },
+  'wells.shipPullFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship pull distance exponent. 1.5 = softer than real gravity. 2 = inverse-square' },
 
-  'affordances.catchWindowDeg':   { min: 0, max: 45, step: 1 },
-  'affordances.catchWindowVelPct':{ min: 0, max: 1, step: 0.05 },
-  'affordances.lockStrength':     { min: 0, max: 1, step: 0.01 },
-  'affordances.inputBufferBefore':{ min: 0, max: 0.5, step: 0.01 },
-  'affordances.inputBufferAfter': { min: 0, max: 0.5, step: 0.01 },
-  'affordances.thrustSmoothingMs':{ min: 10, max: 200, step: 5 },
+  'affordances.catchWindowDeg':   { min: 0, max: 45, step: 1, tip: 'Angle threshold for wave magnetism to engage (degrees)' },
+  'affordances.catchWindowVelPct':{ min: 0, max: 1, step: 0.05, tip: 'Velocity match threshold (20% = ship must be within 20% of wave speed)' },
+  'affordances.lockStrength':     { min: 0, max: 1, step: 0.01, tip: 'How strongly wave magnetism steers you along the crest' },
+  'affordances.inputBufferBefore':{ min: 0, max: 0.5, step: 0.01, tip: 'Coyote time before wave arrives (seconds)' },
+  'affordances.inputBufferAfter': { min: 0, max: 0.5, step: 0.01, tip: 'Late forgiveness after wave passes (seconds)' },
+  'affordances.thrustSmoothingMs':{ min: 10, max: 200, step: 5, tip: 'Facing smoothing in milliseconds' },
+
+  'ascii.cellSize':         { min: 4, max: 20, step: 1, tip: 'Character cell width in pixels. Smaller = more detail, more GPU work' },
+  'ascii.cellAspect':       { min: 1, max: 2, step: 0.1, tip: 'Cell height/width ratio. 1.5 = readable monospace proportions' },
+  'ascii.contrast':         { min: 0.1, max: 2, step: 0.05, tip: 'Luminance curve power. <1 = more chars in dark areas. >1 = sharper contrast' },
+  'ascii.colorTemperature': { min: -1, max: 1, step: 0.05, tip: 'Global color shift. Negative = cooler/bluer. Positive = warmer/amber' },
 };
 
 /**
@@ -82,7 +95,7 @@ export function initDevPanel() {
     position: 'fixed',
     top: '8px',
     right: '8px',
-    width: '320px',
+    width: '420px',
     maxHeight: 'calc(100vh - 16px)',
     overflowY: 'auto',
     background: 'rgba(10, 10, 30, 0.85)',
@@ -246,12 +259,13 @@ function createSlider(section, key, path) {
   const hint = RANGE_HINTS[path] || autoRange(val);
 
   const label = document.createElement('span');
-  label.style.width = '120px';
+  label.style.width = '150px';
   label.style.flexShrink = '0';
   label.style.overflow = 'hidden';
   label.style.textOverflow = 'ellipsis';
+  label.style.cursor = 'help';
   label.textContent = key;
-  label.title = path;
+  label.title = hint.tip || path;
 
   const slider = document.createElement('input');
   slider.type = 'range';
