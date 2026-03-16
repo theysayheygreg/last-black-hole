@@ -15,7 +15,7 @@ Other agents may recommend updates; Orb records them.
 **Checkpoint:** L0 — The Feel
 **Goal:** Surfable fluid sim + ASCII visual identity + live tuning. Does it feel good to just fly around?
 
-**Priority order:** N1a > N2 > N3 > N0 > N1b (Forge Review #2)
+**Priority order:** N1a > N2 > N3 > N1b (Forge Review #2). Test harness is pre-built.
 
 **Status:** `ready_for_build` — orchestration is bootstrapped, all design docs finalized, ready for first Corb dispatch.
 
@@ -65,16 +65,12 @@ Other agents may recommend updates; Orb records them.
 - **Delivers:** Font atlas, ASCII shader, 4-layer pipeline (substrate/entity/VFX/HUD), color mapping
 - **Key refs:** VISUAL-SCALE.md, DESIGN-DEEP-DIVE.md
 
-### n0-smoke-physics-tests — PRIORITY 4
-- **Title:** Smoke + physics test harness
-- **Lane:** `verification`
-- **Owner:** Orb → Corb
-- **Scope:** Small (1hr)
-- **Depends on:** any prototype with `__TEST_API`
-- **Delivers:** Puppeteer smoke.js + physics.js + run-all.js. 6 checks max Monday.
-- **Key refs:** AGENT-TESTING.md
+### Test Harness — PRE-BUILT (not a task)
+- Already in repo: `tests/smoke.js`, `tests/physics.js`, `tests/run-all.js`
+- Corb runs `npm install && node tests/run-all.js index-a.html` after building
+- Grows with the game — new test files added as features land
 
-### n1b-dual-solver-probe — PRIORITY 5 (probe, not mainline)
+### n1b-dual-solver-probe — PRIORITY 4 (probe, not mainline)
 - **Title:** Approach B — dual solver probe
 - **Lane:** `probe-a`
 - **Owner:** Orb → Orrery → Corb

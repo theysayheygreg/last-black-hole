@@ -42,9 +42,9 @@ Fluid Sim ──────── ┤                             ├── Ent
 
 #### Monday Night Priority Ranking
 
-If time collapses, this is the priority order: **N1a > N2 > N3 > N0 > N1b**. The mainline is: single-sim + live tuning + ASCII. Everything else is a probe. (Forge Review #2)
+If time collapses, this is the priority order: **N1a > N2 > N3 > N1b**. The mainline is: single-sim + live tuning + ASCII. N1b is a probe. (Forge Review #2)
 
-Orb should pull these in priority order. N1a starts immediately. N2 and N3 can start as soon as N1a has a running FBO. N0 can start as soon as `__TEST_API` is exposed. N1b runs in parallel if a second agent is available.
+Orb should pull these in priority order. N1a starts immediately. N2 and N3 can start as soon as N1a has a running FBO. N1b runs in parallel if a second agent is available. The test harness is pre-built — Corb just runs `node tests/run-all.js` after building.
 
 #### Task N1a: Approach A — Single Fluid Sim + Oscillating Force Injection (Large, 3-5hr)
 - **Lane:** `mainline`
@@ -165,23 +165,25 @@ Orb should pull these in priority order. N1a starts immediately. N2 and N3 can s
   - [ ] Looks distinctly different from any existing browser game
 - **Scope:** Medium
 
-#### Task N0: Smoke + Physics Tests (Small, 1hr)
-- **Lane:** `verification` — starts as soon as any prototype exposes `__TEST_API`
-- **What:** Automated test harness using Puppeteer. Agents run these after every commit. Greg never has to verify "does it load?" Monday scope is deliberately thin: 6 checks max. (Forge Review #2)
-- **Files:** `tests/smoke.js`, `tests/physics.js`, `tests/run-all.js`, `package.json` (puppeteer dep)
-- **Dependencies:** At least one prototype running with `__TEST_API` exposed. Does NOT depend on N2 (dev panel).
-- **Deliverables:**
-  - `npm install` adds puppeteer
-  - `node tests/smoke.js` — page loads, canvas exists, WebGL context, no JS errors, 60fps, CONFIG exists (<10s)
-  - `node tests/physics.js` — ship moves on thrust, drifts when thrust stops, well pull exists, waves oscillate (~30s)
-  - `node tests/run-all.js` — runs all test files, reports pass/fail summary
-- **Acceptance Criteria:**
-  - [ ] `node tests/run-all.js` passes all tests against the prototype
-  - [ ] Tests run headless (no visible browser window needed)
-  - [ ] Test output is clear: `PASS: ship moves on thrust` / `FAIL: fps dropped to 42`
-  - [ ] Any agent can run `npm install && node tests/run-all.js` to verify the build
-- **NOT Monday:** gameloop tests, signal tests, screenshot pipeline, visual regression. Those grow with the game. See AGENT-TESTING.md.
-- **Scope:** Small
+#### Test Harness (PRE-BUILT — not a Corb task)
+
+The test harness is already in the repo. Corb just runs it after building.
+
+```
+npm install                              # first time only (installs puppeteer)
+node tests/run-all.js index-a.html       # run all tests against Approach A
+node tests/run-all.js index-b.html       # or against Approach B
+node tests/smoke.js index-a.html         # smoke only
+node tests/physics.js index-a.html       # physics only
+```
+
+**Smoke tests** (~10s): page loads, canvas exists, WebGL context, no JS errors, CONFIG exists, FPS above 30.
+
+**Physics tests** (~30s): ship moves on thrust, ship drifts when thrust stops, well pulls ship toward it, fluid velocity oscillates (waves exist). Requires `window.__TEST_API`.
+
+Tests will gracefully skip physics checks if `__TEST_API` isn't exposed yet. Smoke tests work even without the test API.
+
+**Tests grow with the game** — new test files (gameloop.js, signal.js, etc.) get added as features land. See AGENT-TESTING.md for the full progressive plan.
 
 #### Night Report
 - Agent writes `docs/journal/reports/2026-03-16-night.md` — MUST include: comparative notes on both prototypes (feel, performance, surfability, visual quality, implementation complexity) AND test pass/fail summary.

@@ -32,7 +32,7 @@
     "source": "projects/last-black-hole/docs/project/ROADMAP.md",
     "current_layer": "L0",
     "current_focus": "The Feel",
-    "priority_order": "N1a > N2 > N3 > N0 > N1b (Forge Review #2)",
+    "priority_order": "N1a > N2 > N3 > N1b (Forge Review #2). Test harness is pre-built.",
     "execution_rule": "Parallelize exploration, serialize adoption. One mainline, probes promote or get backlogged.",
     "sections": [
       {
@@ -74,16 +74,6 @@
         "depends_on": ["n1a or n1b (working FBO)"],
         "deliverables": "Font atlas, ASCII shader, 4-layer rendering (substrate/entity/VFX/HUD), color mapping",
         "notes": "Art Is Product (Pillar 1). Portable between both prototypes."
-      },
-      {
-        "slug": "n0-smoke-physics-tests",
-        "title": "Smoke + physics test harness",
-        "status": "queued",
-        "lane": "verification",
-        "scope": "small (1hr)",
-        "depends_on": ["n1a or n1b (prototype with __TEST_API)"],
-        "deliverables": "Puppeteer smoke.js + physics.js + run-all.js. 6 checks max Monday.",
-        "notes": "Any future Corb runs this to self-verify. Thin Monday, grows with the game."
       },
       {
         "slug": "n4-wrecks-loot",
