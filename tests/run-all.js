@@ -12,6 +12,7 @@ const htmlFile = process.argv[2] || "index.html";
 const suites = [
   { name: "Smoke", file: "smoke.js" },
   { name: "Physics", file: "physics.js" },
+  { name: "Coordinates", file: "coordinates.js" },
 ];
 
 console.log(`\n╔══════════════════════════════════════╗`);
