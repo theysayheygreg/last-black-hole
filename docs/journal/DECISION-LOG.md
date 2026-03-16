@@ -42,6 +42,15 @@ Each decision has:
 4. **Parallel experiments** (Greg's current position) — run both approaches simultaneously as two agent tasks. Compare results. Merge if they complement each other, pick the winner if not.
 
 **Where it landed:** Option 4. Both get built in parallel Monday night. Two agents, two sims, compare Tuesday morning.
+
+| Mar 16 (1am) | V1 prototype (single sim + oscillating force injection) built and playtested. Ship gets trapped in wells, oscillation creates chaotic unreadable movement, "surfing" feels like a washing machine. Root cause: pulsing force at the source ≠ propagating waves. The N-S sim dampens oscillation before it becomes a coherent wavefront. |
+| Mar 16 (1:30am) | Greg + Claude rethink the physics model entirely. Real black holes don't pulse — they pull constantly. Waves should come from events (mergers, growth, collapses), not from wells existing. |
+
+5. **Steady currents + event waves** (V2, Greg + Claude) — wells create constant pull + orbital flow (the readable, navigable terrain). Waves only come from discrete events (mergers, growth pulses, collapses). Two movement regimes: steady currents (90% of play, skill = reading flow) and event waves (10%, skill = positioning for the big moment). See PHYSICS-V2.md.
+
+**Where it landed:** Option 5. Oscillating force injection is dead. V2 design: steady currents for navigation, event-driven waves for drama.
+**Door status:** Open — V2 needs to be built and playtested. If steady currents aren't interesting enough, we may need to add more flow complexity.
+**Key learning:** Faking waves through force oscillation doesn't work in a Navier-Stokes sim. The sim dampens them before they propagate. Real wave propagation needs explicit ring entities, not source oscillation.
 **Door status:** Open. Experiments will converge or one will win.
 
 ---

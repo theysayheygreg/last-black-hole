@@ -11,6 +11,55 @@ Each entry covers a day (or shift). Entries include what happened, why decisions
 
 ---
 
+## Day 1: March 16, 2026 — The Feel (and the First Pivot)
+
+### The Night Shift
+
+Code started at 12:01a. Claude built the full L0 prototype in under an hour: Navier-Stokes fluid sim on GPU, ship with mouse-aim thrust and fluid coupling, gravity wells with oscillating force injection to fake waves, ASCII post-process shader, dev panel with live sliders, and a Puppeteer test harness. 10/10 tests passing.
+
+The ASCII shader looks good. The fluid field renders as colored characters — dark blue void, teal in normal space, amber near wells. The ship renders as a clean white triangle on a separate layer above the ASCII. The dev panel generates sliders dynamically from the CONFIG object. All the infrastructure works.
+
+### The First Playtest
+
+Greg opened the prototype and immediately got trapped in a gravity well. Even with thrust maxed and gravity turned way down in the dev panel, the ship couldn't escape. Root cause: the direct gravitational pull on the ship was hardcoded at 800 px/s² and didn't read from CONFIG — the slider was doing nothing.
+
+Fixed the hardcoding, dropped gravity from 800 to 300, boosted thrust scaling 2.5x. Wells became escapable.
+
+### The Physics Pivot
+
+Then we added 4 wells of different sizes to test interference patterns. This is where the real problem emerged: **oscillating force injection doesn't create surfable waves.**
+
+The oscillation (wells pulsing their force sinusoidally) was supposed to create expanding wave fronts you could ride. Instead it created chaotic turbulence — the ship got shoved around unpredictably, the flow was unreadable, and "surfing" felt like being in a washing machine. The Navier-Stokes sim dampens oscillations before they can propagate as coherent wavefronts.
+
+Greg's observation: "the pulsing is pushing the ship all over the place, very difficult to read the fabric to see where I can/should move."
+
+### The Rethink
+
+We stepped back and thought about what gravity actually does. Black holes don't pulse. They pull constantly. Gravitational waves in real physics come from *events* — mergers, collapses — not from wells just existing.
+
+This led to the V2 physics model:
+- **Steady currents (90% of gameplay)** — wells create constant inward pull plus orbital flow. The fluid becomes a readable current map you navigate through. The skill is reading the flow and choosing efficient paths.
+- **Event waves (10%, the drama)** — mergers, growth pulses, and collapses emit explicit wave rings that propagate outward at a fixed speed. These are the "big wave" moments — rare, visible, surfable if you're positioned right.
+
+This maps better to real surfing too: surfers spend most of their time reading the water and positioning. The wave is the payoff, not the constant state.
+
+### What We Learned
+
+1. Faking waves through source oscillation doesn't work in a Navier-Stokes sim. The sim dampens them before they propagate.
+2. Readable, steady flow > chaotic, oscillating flow. The player needs to be able to look at the screen and predict where they'd drift.
+3. The dev panel paid for itself in the first 10 minutes. Without live sliders, the gravity hardcoding bug would have taken much longer to diagnose.
+4. The test harness confirmed things work mechanically (10/10 tests pass) — the problem was design, not code. That's the right kind of failure.
+5. Building fast + playtesting fast + pivoting fast is the whole game jam workflow.
+
+### State at End of Night
+
+- V1 prototype is playable but the physics model is wrong
+- V2 design doc written (PHYSICS-V2.md)
+- ASCII shader, dev panel, test harness all solid
+- Next: rebuild the fluid physics around steady currents + event waves
+
+---
+
 ## Pre-Jam: March 15, 2026 — The Architecture Day
 
 ### The Story
