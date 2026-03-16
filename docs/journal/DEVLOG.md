@@ -51,12 +51,34 @@ This maps better to real surfing too: surfers spend most of their time reading t
 4. The test harness confirmed things work mechanically (10/10 tests pass) — the problem was design, not code. That's the right kind of failure.
 5. Building fast + playtesting fast + pivoting fast is the whole game jam workflow.
 
+### Second Playtest (V2 — Steady Currents)
+
+Rebuilt the physics: removed oscillation, added constant pull + orbital currents + event wave rings. Greg tested again:
+
+- **"Much more controllable"** — the chaos is gone. The ship feels like it's in a fluid, not a blender.
+- **"Still not super intelligible"** — the currents exist but you can't read them visually. The ASCII shows density but not direction.
+- **"My position vs what the fabric is doing aren't super clear"** — the ship feels desynced from the substrate. It floats above rather than feeling IN the flow.
+- **"Config complexity"** — Forge was right. Too many knobs that don't do perceptibly different things.
+
+**What we cut in response:**
+- Ship CONFIG collapsed from 17 values to 5: thrustAccel, fluidCoupling, turnRate, drag, size
+- Wave magnetism/affordances disabled entirely — they were designed for V1's oscillating waves and don't map to V2's steady currents
+- Turn curve power, dead zone, mass, thrust ramp, directional drag — all removed
+- Display shader updated to tint amber/teal based on flow direction (flowing toward vs away from wells)
+
+**Open problem:** Flow direction still isn't readable enough in the ASCII. The characters show density (how much stuff) not velocity (which way it's moving). Directional ASCII characters (different chars for horizontal vs vertical flow) is on the backlog but needs a shader pass refactor.
+
 ### State at End of Night
 
-- V1 prototype is playable but the physics model is wrong
-- V2 design doc written (PHYSICS-V2.md)
-- ASCII shader, dev panel, test harness all solid
-- Next: rebuild the fluid physics around steady currents + event waves
+- V2 physics running: steady currents + orbital flow + event wave rings
+- Ship simplified to 5 CONFIG values
+- Display shader encodes flow direction as color bands
+- Three feel variations being built for morning A/B testing:
+  - "Ocean" — high coupling, gentle wells, ride the currents
+  - "Spacecraft" — low coupling, strong thrust, currents are decoration
+  - "Surfer" — medium coupling, strong orbital highways, reward skilled navigation
+- Key remaining issue: ASCII readability of flow direction
+- Next: Greg picks a feel variation, tunes it, and we iterate on visual readability
 
 ---
 
