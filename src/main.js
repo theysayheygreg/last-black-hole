@@ -12,6 +12,7 @@ import { FluidSim } from './fluid.js';
 import { Ship } from './ship.js';
 import { WellSystem } from './wells.js';
 import { initTestAPI } from './test-api.js';
+import { initDevPanel } from './dev-panel.js';
 
 // ---- State ----
 let glCanvas, gl;
@@ -102,6 +103,9 @@ function init() {
     setTimeScale: (s) => { timeScale = s; },
     restart: () => { restart(); },
   }));
+
+  // Init dev panel (toggle with ` key)
+  initDevPanel();
 
   // Start loop
   lastFrameTime = performance.now();
