@@ -218,6 +218,7 @@ uniform vec3 u_hotWellColor;
 // Well positions for coloring (up to 4)
 uniform vec2 u_wellPositions[4];
 uniform int u_wellCount;
+uniform float u_densityScale;
 in vec2 v_uv;
 out vec4 fragColor;
 
@@ -226,22 +227,26 @@ void main() {
   vec3 dens = texture(u_density, v_uv).xyz;
 
   float speed = length(vel);
-  float density = length(dens);
+  float rawDensity = length(dens);
+
+  // Tone-map density: raw values range 0–300+, compress to 0–1 via exponential curve
+  // 1.0 - exp(-x * k) maps [0,inf) -> [0,1) with nice rolloff
+  float density = 1.0 - exp(-rawDensity * u_densityScale);
 
   // Combine density and velocity magnitude for brightness signal
-  // Fast-flowing areas are brighter = denser ASCII characters
-  float combined = density + speed * 1.2;
+  // Density is now 0–1 range, speed is ~0–0.2
+  float combined = density + speed * 1.5;
 
   // Base color: deep void to teal based on combined signal
-  vec3 col = mix(u_voidColor, u_normalColor, clamp(combined * 1.5, 0.0, 1.0));
+  vec3 col = mix(u_voidColor, u_normalColor, clamp(combined, 0.0, 1.0));
 
   // Velocity magnitude brightness boost — makes currents visible as brighter bands
-  float speedBrightness = smoothstep(0.0, 0.2, speed);
+  float speedBrightness = smoothstep(0.0, 0.15, speed);
   col += speedBrightness * vec3(0.08, 0.18, 0.22);
 
   // High-velocity regions get a cyan highlight (wave crests / strong currents)
-  float waveCrest = smoothstep(0.1, 0.35, speed);
-  col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.5);
+  float waveCrest = smoothstep(0.08, 0.25, speed);
+  col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.4);
 
   // === FLOW DIRECTION TINTING ===
   // For each well, compute whether flow is toward or away from it.
@@ -666,6 +671,7 @@ export class FluidSim {
     gl.uniform3fv(u['u_normalColor'], CONFIG.color.normalSpace);
     gl.uniform3fv(u['u_nearWellColor'], CONFIG.color.nearWell);
     gl.uniform3fv(u['u_hotWellColor'], CONFIG.color.hotWell);
+    gl.uniform1f(u['u_densityScale'], CONFIG.color.densityScale);
 
     // Set well positions for coloring
     const count = Math.min(wellPositionsUV.length, 4);

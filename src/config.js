@@ -65,6 +65,7 @@ export const CONFIG = {
     normalSpace: [0.0, 0.5, 0.5],
     nearWell: [0.9, 0.4, 0.1],
     hotWell: [0.9, 0.1, 0.05],
+    densityScale: 0.015,  // exponential tone map: 1-exp(-density*scale). At 0.015, density 50→53%, 150→89%, 300→99%
   },
   debug: {
     showVelocityField: false,
