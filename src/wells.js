@@ -14,12 +14,28 @@ import { CONFIG } from './config.js';
 import { wellToFluidUV, wellToScreen } from './coords.js';
 
 export class Well {
-  constructor(uvX, uvY, mass = 1.0) {
+  /**
+   * @param {number} uvX - well-space X (0-1, screen-normalized)
+   * @param {number} uvY - well-space Y (0-1, screen-normalized)
+   * @param {Object} opts - per-instance parameters
+   */
+  constructor(uvX, uvY, opts = {}) {
     this.x = uvX;
     this.y = uvY;
-    this.mass = mass;
-    this.orbitalDir = 1; // +1 = counterclockwise, -1 = clockwise
+    this.mass = opts.mass ?? 1.0;
+    this.orbitalDir = opts.orbitalDir ?? 1;       // +1 = CCW, -1 = CW
+    this.accretionRate = opts.accretionRate ?? null;     // null = use CONFIG default
+    this.accretionRadius = opts.accretionRadius ?? null;
+    this.accretionSpinRate = opts.accretionSpinRate ?? null;
+    this.accretionPoints = opts.accretionPoints ?? null;
+    this.killRadius = opts.killRadius ?? 20;       // pixel-space death radius
   }
+
+  // Read a per-instance value, falling back to CONFIG default
+  getAccretionRate() { return this.accretionRate ?? CONFIG.wells.accretionRate; }
+  getAccretionRadius() { return this.accretionRadius ?? CONFIG.wells.accretionRadius; }
+  getAccretionSpinRate() { return this.accretionSpinRate ?? CONFIG.wells.accretionSpinRate; }
+  getAccretionPoints() { return this.accretionPoints ?? CONFIG.wells.accretionPoints; }
 }
 
 export class WellSystem {
@@ -27,8 +43,8 @@ export class WellSystem {
     this.wells = [];
   }
 
-  addWell(uvX, uvY, mass = 1.0) {
-    const well = new Well(uvX, uvY, mass);
+  addWell(uvX, uvY, opts = {}) {
+    const well = new Well(uvX, uvY, opts);
     this.wells.push(well);
     return well;
   }
@@ -57,13 +73,11 @@ export class WellSystem {
       );
 
       // === SPINNING ACCRETION DISK ===
-      // Inject density at rotating points around the well to create
-      // visible spiral arms that get swept by the orbital flow.
-      // The injection rotates, the fluid carries it into spiral patterns.
-      const spinAngle = totalTime * cfg.accretionSpinRate * well.orbitalDir;
-      const ringR = cfg.accretionRadius * well.mass;
-      const numPts = cfg.accretionPoints;
-      const rate = cfg.accretionRate * well.mass;
+      // Per-instance parameters with CONFIG fallback
+      const spinAngle = totalTime * well.getAccretionSpinRate() * well.orbitalDir;
+      const ringR = well.getAccretionRadius() * well.mass;
+      const numPts = well.getAccretionPoints();
+      const rate = well.getAccretionRate() * well.mass;
 
       for (let i = 0; i < numPts; i++) {
         const angle = spinAngle + (i / numPts) * Math.PI * 2;
@@ -98,6 +112,21 @@ export class WellSystem {
    * Get well data for external use (test API, rendering).
    * Returns positions in pixel coords given canvas dimensions.
    */
+  /**
+   * Check if the ship is inside any well's kill radius.
+   * Returns the killing well or null.
+   */
+  checkDeath(shipX, shipY, canvasWidth, canvasHeight) {
+    for (const well of this.wells) {
+      const [sx, sy] = wellToScreen(well.x, well.y, canvasWidth, canvasHeight);
+      const dx = shipX - sx;
+      const dy = shipY - sy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < well.killRadius) return well;
+    }
+    return null;
+  }
+
   getWellData(canvasWidth, canvasHeight) {
     return this.wells.map(w => {
       const [sx, sy] = wellToScreen(w.x, w.y, canvasWidth, canvasHeight);

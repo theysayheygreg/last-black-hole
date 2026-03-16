@@ -29,6 +29,8 @@ let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
 let growthTimer = 0; // timer for well growth events
+let gamePhase = 'playing'; // 'playing' | 'dead'
+let deathTimer = 0; // seconds since death (for showing death screen)
 
 // ---- Init ----
 
@@ -70,16 +72,24 @@ function init() {
   // Different masses create different gravity strengths
   // Spread across the map so orbital currents and inter-well channels form
   wellSystem = new WellSystem();
-  wellSystem.addWell(0.35, 0.40, 1.5);  // large well, left-center — strong pull, wide orbits
-  wellSystem.addWell(0.70, 0.30, 0.8);  // medium well, upper-right — moderate currents
-  wellSystem.addWell(0.65, 0.72, 1.2);  // medium-large, lower-right — strong orbits
-  wellSystem.addWell(0.20, 0.75, 0.5);  // small well, lower-left — gentle pull
 
-  // Alternate orbital directions for interesting inter-well flow patterns
-  wellSystem.wells[0].orbitalDir = 1;   // CCW
-  wellSystem.wells[1].orbitalDir = -1;  // CW — creates shear between wells 0 and 1
-  wellSystem.wells[2].orbitalDir = 1;   // CCW
-  wellSystem.wells[3].orbitalDir = -1;  // CW
+  // Each well is a unique instance with its own personality
+  wellSystem.addWell(0.35, 0.40, {
+    mass: 1.5, orbitalDir: 1, killRadius: 25,
+    accretionSpinRate: 0.6, accretionPoints: 8,  // big, slow, dramatic
+  });
+  wellSystem.addWell(0.70, 0.30, {
+    mass: 0.8, orbitalDir: -1, killRadius: 15,
+    accretionSpinRate: 1.4, accretionPoints: 4,  // small, fast, tight
+  });
+  wellSystem.addWell(0.65, 0.72, {
+    mass: 1.2, orbitalDir: 1, killRadius: 20,
+    accretionSpinRate: 0.9, accretionPoints: 6,  // medium, moderate
+  });
+  wellSystem.addWell(0.20, 0.75, {
+    mass: 0.5, orbitalDir: -1, killRadius: 12,
+    accretionSpinRate: 1.8, accretionPoints: 3,  // tiny, rapid, sparse
+  });
 
   // Init wave ring system (event-driven waves)
   waveRings = new WaveRingSystem();
@@ -94,7 +104,15 @@ function init() {
     ship.setMouse(e.clientX, e.clientY);
   });
   overlayCanvas.addEventListener('mousedown', (e) => {
-    if (e.button === 0) ship.setThrust(true);
+    if (e.button === 0) {
+      if (gamePhase === 'dead' && deathTimer > 1.0) {
+        // Restart
+        restart();
+        gamePhase = 'playing';
+      } else {
+        ship.setThrust(true);
+      }
+    }
   });
   overlayCanvas.addEventListener('mouseup', (e) => {
     if (e.button === 0) ship.setThrust(false);
@@ -248,7 +266,21 @@ function gameLoop(now) {
   waveRings.applyToShip(ship, glCanvas.width, glCanvas.height);
 
   // 6. Ship update (reads fluid, applies thrust, feels gravity)
-  ship.update(dt, fluid, wellSystem);
+  if (gamePhase === 'playing') {
+    ship.update(dt, fluid, wellSystem);
+
+    // 6b. Death check — did the ship fall into a well?
+    const killingWell = wellSystem.checkDeath(
+      ship.x, ship.y, glCanvas.width, glCanvas.height
+    );
+    if (killingWell) {
+      gamePhase = 'dead';
+      deathTimer = 0;
+      ship.setThrust(false);
+    }
+  } else if (gamePhase === 'dead') {
+    deathTimer += dt;
+  }
 
   // 7. Render fluid -> ASCII post-process (Layer 0 — the fabric of spacetime)
   const wellUVs = wellSystem.getUVPositions();
@@ -365,6 +397,28 @@ function gameLoop(now) {
       ctx.beginPath();
       ctx.arc(w.x, w.y, 4, 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // === DEATH SCREEN ===
+  if (gamePhase === 'dead') {
+    ctx.save();
+    // Darken overlay
+    const fadeAlpha = Math.min(deathTimer * 0.8, 0.7);
+    ctx.fillStyle = `rgba(0, 0, 0, ${fadeAlpha})`;
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+    if (deathTimer > 0.5) {
+      // Death text
+      ctx.fillStyle = `rgba(255, 30, 30, ${Math.min((deathTimer - 0.5) * 2, 1)})`;
+      ctx.font = 'bold 48px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('CONSUMED', overlayCanvas.width / 2, overlayCanvas.height / 2 - 20);
+
+      ctx.fillStyle = `rgba(200, 200, 200, ${Math.min((deathTimer - 1.0) * 2, 1)})`;
+      ctx.font = '20px monospace';
+      ctx.fillText('Click to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
     }
     ctx.restore();
   }
