@@ -258,9 +258,8 @@ function gameLoop(now) {
     for (let px = gridStep / 2; px < overlayCanvas.width; px += gridStep) {
       for (let py = gridStep / 2; py < overlayCanvas.height; py += gridStep) {
         const uvX = px / overlayCanvas.width;
-        const uvY = 1.0 - py / overlayCanvas.height; // Canvas Y-down → fluid UV Y-up
-        const [fvx, rawFvy] = fluid.readVelocityAt(uvX, uvY);
-        const fvy = -rawFvy; // Fluid Y-up → canvas Y-down
+        const uvY = py / overlayCanvas.height;
+        const [fvx, fvy] = fluid.readVelocityAt(uvX, uvY);
         const speed = Math.sqrt(fvx * fvx + fvy * fvy);
         if (speed < 0.0001) continue;
 
