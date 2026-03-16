@@ -79,7 +79,7 @@ Orb should pull these in priority order. N1a starts immediately. N2 and N3 can s
   - [ ] `CONFIG` object exists, all tunables are in it, systems read from it every frame
   - [ ] `window.__TEST_API` is accessible and returns valid data
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
-- **Self-test before handoff:** Run `npm install && node tests/run-all.js index-a.html`. The test harness is pre-built in the repo. Smoke tests work immediately; physics tests require `__TEST_API` to be exposed. Commit test pass/fail evidence before claiming the task is done.
+- **Self-test before handoff:** Run `node tests/run-all.js index-a.html` (harness is pre-built, puppeteer already installed). Commit test pass/fail evidence before claiming the task is done.
 - **Scope:** Large
 
 #### Task N1b: Approach B — Dual Solver (Large, 3-5hr)
@@ -110,6 +110,7 @@ Orb should pull these in priority order. N1a starts immediately. N2 and N3 can s
   - [ ] Console logs sim resolution, wave grid resolution, and frame time
   - [ ] `CONFIG` and `__TEST_API` match N1a interface
   - [ ] Committed per CLAUDE.md rules
+- **Self-test before handoff:** Run `node tests/run-all.js index-b.html`. Commit test pass/fail evidence.
 - **Decision rule:** If Approach B is not clearly better in feel by Tuesday 10am, backlog it immediately. See `BACKLOG.md`. (Forge Review #2)
 - **Scope:** Large
 
@@ -135,6 +136,7 @@ Orb should pull these in priority order. N1a starts immediately. N2 and N3 can s
   - [ ] Panel doesn't obscure critical game area (collapsible, semi-transparent)
   - [ ] Panel works in both prototype HTML files
 - **NOT Monday:** presets, localStorage, fancy grouping. Those are Tuesday+ if they come cheap.
+- **Self-test before handoff:** Run `node tests/run-all.js index-a.html` to verify the dev panel didn't break anything. Commit test pass/fail evidence.
 - **Scope:** Small (but critical)
 
 #### Task N3: ASCII Dithering Post-Process (Medium, 2-3hr)
@@ -163,6 +165,7 @@ Orb should pull these in priority order. N1a starts immediately. N2 and N3 can s
   - [ ] 60fps maintained with the ASCII post-process pass added
   - [ ] ASCII cell size is tunable via CONFIG (dev panel can adjust if N2 is done)
   - [ ] Looks distinctly different from any existing browser game
+- **Self-test before handoff:** Run `node tests/run-all.js index-a.html` (or whichever prototype the shader was applied to). Commit test pass/fail evidence.
 - **Scope:** Medium
 
 #### Test Harness (PRE-BUILT — not a Corb task)
