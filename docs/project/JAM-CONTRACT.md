@@ -33,6 +33,7 @@ Night shift work must be:
 - **Independently verifiable** (agent can check its own work — does it render? does it run? do the tests pass?)
 - **Safely mergeable** (work on separate systems that don't conflict, or sequential on the same branch)
 - **Committed atomically** (every working state gets a commit per CLAUDE.md rules)
+- **Commit-driven at handoff boundaries** — if the work is real enough to hand to the next actor, it is real enough to commit
 
 ---
 
@@ -297,28 +298,88 @@ docs/
 
 **`CONTENT-PLAN.md`** — Post-jam content plan. Twitter threads, blog posts, YouTube video concepts. What to capture during the jam for later.
 
+### Commit-Driven Handoffs (critical rule)
+
+The repo history is the orchestration spine.
+
+**Rule:** every handoff-worthy unit of work becomes a commit.
+If an actor has produced something the next actor should react to — a pulled card, a plan, a review, a revision, a build result, test evidence, a journal entry, a state transition — that work gets written to the repo and committed before the handoff completes.
+
+This means:
+- Orb pulling a task and updating project state/board is a commit
+- Orrery writing or revising a plan/design doc is a commit
+- Forge review output saved into `docs/reference/reviews/` is a commit
+- Corb implementation progress is a sequence of commits, not one end-of-task dump
+- Test results written into project docs/reports are committed
+- Journal/report/state updates are committed at the moment they become true
+
+**Operational consequence:** Orb should treat commits as the default machine heartbeat. A new commit from the active actor is the primary trigger that the next handoff can proceed. Discord can carry the narration and invocation, but the repo is the durable proof that a step actually landed.
+
 ### Who Updates What, When
 
-| Document | Who | When |
-|----------|-----|------|
-| **Design docs** | Agent doing the work | When the feature spec changes due to implementation discoveries or Greg feedback |
-| **DEVLOG.md** | Orrery (or active coordinating agent) | At each checkpoint: morning review, evening handoff, after major pivots |
-| **DECISION-LOG.md** | Whoever is present when a design fork is discussed | Immediately when a decision is made or revisited. Don't batch these — capture the options while they're fresh |
-| **CHANGELOG.md** | Agent that modified a design doc | Same commit as the design doc change |
-| **Night reports** | Night shift agent | End of night shift, in `docs/journal/reports/` |
-| **CONTENT-PLAN.md** | Greg or Orrery | When new content-worthy moments happen |
+| Document | Owner | When | Commits? |
+|----------|-------|------|----------|
+| **Design docs** | Corb (during build) or Orrery (during planning) | When the feature spec changes due to implementation discoveries or Greg feedback | Yes — same commit as the code change if Corb, separate `Docs:` commit if Orrery |
+| **DEVLOG.md** | Orb | At each `ready_for_greg` transition, morning review, evening handoff, and after major pivots | Yes — Orb commits journal updates with `Docs:` prefix |
+| **DECISION-LOG.md** | Orrery (design decisions) or Greg/Orrery via Claude (during sessions) | Immediately when a design fork is decided or revisited. Don't batch. | Yes — whoever writes the entry commits it |
+| **CHANGELOG.md** | Orb (at state transitions) or Corb (when modifying design docs during build) | When design docs change meaningfully. Orb appends at each completed section. | Yes — same commit as the doc change, or batched by Orb at section completion |
+| **Night reports** | Orb (compiled from Corb build reports + Forge review + test results) | End of each night shift cycle, in `docs/journal/reports/` | Yes — Orb commits the report |
+| **CONTENT-PLAN.md** | Greg or Orrery | When new content-worthy moments happen | Yes |
+| **PROJECT-STATE.json** | Orb | Every state transition | Yes — Orb commits state changes |
+| **PROJECT-BOARD.md** | Orb | Every state transition (mirrors PROJECT-STATE.json for humans) | Yes — same commit as JSON update |
+
+### Commit Responsibilities by Actor
+
+The old question was "who commits which categories?"
+The tighter rule is: **everyone commits their own handoff-worthy work.**
+If the next step depends on it, it should exist as a commit first.
+
+**Orb commits:**
+- `PROJECT-STATE.json` and `PROJECT-BOARD.md` state transitions
+- task pulls / card movement / orchestration-state updates
+- `DEVLOG.md` entries at checkpoints
+- `CHANGELOG.md` batched updates at section completion (or sooner if needed for handoff clarity)
+- Night reports compiled from build/test/review evidence
+- Forge review files when Forge review lands and Orb is the recorder for that step
+- Commit prefix: `Docs:` for journal/review docs, `State:` for project state
+
+**Orrery commits:**
+- planning docs, spec docs, and plan revisions produced during task shaping
+- `DECISION-LOG.md` entries when design forks are resolved during planning
+- design doc updates when plans reshape feature specs
+- Commit prefix: `Docs:`
+
+**Corb commits:**
+- code in small, atomic units (prefix: `L0:`, `L1:`, etc.)
+- implementation-driven design doc updates when the spec must be clarified
+- test evidence docs/reports produced in Corb's lane before handoff
+- `CHANGELOG.md` entry in the same commit when modifying a design doc
+- Commit prefix per CLAUDE.md layer table
+
+**Forge commits:**
+- review docs or review note files when Forge is the actor producing the review artifact directly
+- otherwise, Forge review must still be written to the repo and committed before the handoff is considered complete
+- Commit prefix: `Docs:`
+
+**Greg commits:**
+- tuning changes from dev panel sessions (prefix: `Tune:`)
+- design direction changes (prefix: `Docs:`)
+- whatever Greg wants — Greg is the repo owner
+
+**Short version:** no actor gets to keep meaningful work only in chat if another actor is expected to build on it.
 
 ### Journal Update Triggers
 
-The journal must be updated at these moments:
+The journal must be updated at these moments. **Orb is responsible for ensuring these happen** — either by writing the entry itself or by verifying the responsible actor did.
 
-1. **Morning review** — Orrery adds a DEVLOG entry summarizing overnight work and Greg's reactions
-2. **Evening handoff** — Orrery adds a DEVLOG entry summarizing the day's work, playtest notes, and the night shift plan
-3. **Design pivot** — Whoever is present adds a DECISION-LOG entry with the full option tree
-4. **Design doc change** — The modifying agent adds a CHANGELOG entry in the same commit
-5. **Forge review lands** — Orrery adds DEVLOG + DECISION-LOG entries for any decisions the review influenced
-6. **Scope ratchet** — DEVLOG entry explaining what was cut and why
-7. **Memorable moment** — DEVLOG entry with enough detail to write a tweet or blog post later
+1. **Section reaches `ready_for_greg`** — Orb appends a DEVLOG entry summarizing: what was built, test results, Forge review outcome, remaining caveats. Orb commits this.
+2. **Morning review** — Orb appends a DEVLOG entry summarizing overnight work and Greg's reactions. Orb commits this.
+3. **Evening handoff** — Orb appends a DEVLOG entry summarizing the day's work, playtest notes, and the night shift plan. Orb commits this.
+4. **Design pivot** — Orrery (or Greg via Claude) appends a DECISION-LOG entry with the full option tree. Committer commits this.
+5. **Design doc change** — The modifying agent (usually Corb or Orrery) adds a CHANGELOG entry in the same commit.
+6. **Forge review lands** — Orb saves the review to `docs/reference/reviews/` and appends relevant decisions to DECISION-LOG if the review influenced any. Orb commits.
+7. **Scope ratchet** — Orb appends a DEVLOG entry explaining what was cut/deferred and why, with pointers to BACKLOG.md. Orb commits.
+8. **Memorable moment** — Whoever notices it adds a DEVLOG entry with enough detail to write a tweet or blog post later.
 
 ### Rules
 
@@ -326,6 +387,7 @@ The journal must be updated at these moments:
 - **Devlog entries are narrative.** Write them like you're telling someone the story of the day, not filing a report.
 - **Changelog is mechanical.** Just the facts: what file changed, what changed in it.
 - **Capture screenshots and recordings.** Note them in the devlog even if we can't embed them. `[Screenshot: first time ASCII shader looked right, 2026-03-17 3pm]` is enough.
+- **Orb is the journal backstop.** If a trigger fires and nobody wrote the entry, Orb writes it from available evidence (build reports, test results, state transitions). The journal never falls silent.
 
 ---
 

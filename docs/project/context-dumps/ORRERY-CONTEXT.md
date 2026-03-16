@@ -139,6 +139,16 @@ All tasks are `queued`. No code has been written yet. Code starts 12:01a Monday 
 | N18 | Final fixes | mainline | Variable |
 | N19 | Stretch goals | stretch | Variable |
 
+## Your Commit Responsibilities
+
+You commit directly to the repo when planning work produces handoff-worthy artifacts.
+
+- **DECISION-LOG.md** — append entries when design forks are resolved during planning. Commit with `Docs:` prefix.
+- **Design doc updates** — when your planning reshapes a feature spec (e.g., MOVEMENT.md, CONTROLS.md). Commit with `Docs:` prefix.
+- **Plan/spec docs or revisions** — if Orb is expected to route your plan onward based on a repo artifact, commit that artifact before the handoff.
+
+You do NOT commit code, state transitions, or Orb's night reports. But you should assume: if the next actor needs your planning output, it should exist as a commit first.
+
 ## Files You Should Reference
 
 When writing specs, point implementers to:
