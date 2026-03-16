@@ -1,0 +1,342 @@
+{
+  "project": "last-black-hole",
+  "status": "ready_for_build",
+  "current_checkpoint": {
+    "name": "L0 — The Feel",
+    "goal": "Surfable fluid sim + ASCII visual identity + live tuning. Does it feel good to just fly around?"
+  },
+  "current_section": {
+    "slug": "monday-night-l0",
+    "title": "Monday night shift — parallel physics prototypes + ASCII + dev panel + test harness",
+    "status": "ready_for_build",
+    "owner": "orb",
+    "reviewer": "greg",
+    "implementers": ["corb"],
+    "test_owner": "corb (runs project-local Puppeteer tests after build)",
+    "depends_on": [],
+    "acceptance_criteria": [
+      "At least one prototype (N1a) running with fluid sim, ship, wells, waves at 60fps",
+      "ASCII post-process shader rendering the fluid as colored characters",
+      "Ship renders on Layer 1 above ASCII substrate (Layer 0)",
+      "Dev panel with live sliders for all CONFIG tunables",
+      "Smoke + physics tests passing via node tests/run-all.js",
+      "Greg can open the prototype, play, and tune via dev panel Tuesday morning"
+    ],
+    "artifacts": [],
+    "last_result": "Orchestration bootstrap complete. All design docs, roadmap, agent prompts, context dumps, and orchestration loop finalized. Ready for first real build dispatch.",
+    "blockers": [],
+    "next_action": "Orb pulls N1a into planning, routes through Orrery for spec confirmation, then dispatches Corb. Parallel: N1b if a second Corb is available.",
+    "updated_at": "2026-03-16T00:00:00-07:00"
+  },
+  "roadmap": {
+    "source": "projects/last-black-hole/docs/project/ROADMAP.md",
+    "current_layer": "L0",
+    "current_focus": "The Feel",
+    "priority_order": "N1a > N2 > N3 > N0 > N1b (Forge Review #2)",
+    "execution_rule": "Parallelize exploration, serialize adoption. One mainline, probes promote or get backlogged.",
+    "sections": [
+      {
+        "slug": "n1a-single-sim-prototype",
+        "title": "Approach A — single fluid sim + oscillating force injection",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "large (3-5hr)",
+        "depends_on": [],
+        "deliverables": "Fluid sim, ship, wells, waves, Tier 1 affordances, CONFIG, __TEST_API, layered rendering",
+        "notes": "Mainline. First task to pull. See AGENT-PROMPTS.md Prompt A."
+      },
+      {
+        "slug": "n1b-dual-solver-probe",
+        "title": "Approach B — dual solver probe",
+        "status": "queued",
+        "lane": "probe-a",
+        "scope": "large (3-5hr)",
+        "depends_on": [],
+        "deliverables": "Same interface as N1a but with wave equation solver coupled to Navier-Stokes",
+        "notes": "Probe only. Parallel if second Corb available. Backlog if not clearly better by Tuesday AM."
+      },
+      {
+        "slug": "n2-dev-panel",
+        "title": "Dev panel — minimal Monday version",
+        "status": "queued",
+        "lane": "support",
+        "scope": "small (1-2hr)",
+        "depends_on": ["n1a (running prototype with CONFIG)"],
+        "deliverables": "Floating slider panel, copy config, reset. No presets/localStorage Monday.",
+        "notes": "Non-negotiable. Greg must have sliders before Tuesday morning review."
+      },
+      {
+        "slug": "n3-ascii-postprocess",
+        "title": "ASCII dithering post-process shader + layered rendering pipeline",
+        "status": "queued",
+        "lane": "signature-visual",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["n1a or n1b (working FBO)"],
+        "deliverables": "Font atlas, ASCII shader, 4-layer rendering (substrate/entity/VFX/HUD), color mapping",
+        "notes": "Art Is Product (Pillar 1). Portable between both prototypes."
+      },
+      {
+        "slug": "n0-smoke-physics-tests",
+        "title": "Smoke + physics test harness",
+        "status": "queued",
+        "lane": "verification",
+        "scope": "small (1hr)",
+        "depends_on": ["n1a or n1b (prototype with __TEST_API)"],
+        "deliverables": "Puppeteer smoke.js + physics.js + run-all.js. 6 checks max Monday.",
+        "notes": "Any future Corb runs this to self-verify. Thin Monday, grows with the game."
+      },
+      {
+        "slug": "n4-wrecks-loot",
+        "title": "Wrecks + loot pickup",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["n1a winner consolidated to index.html"],
+        "deliverables": "Wreck entities, fly-over loot, wreck-as-fluid-obstacle, inventory",
+        "notes": "Tuesday night. L1 starts."
+      },
+      {
+        "slug": "n5-portals-extraction",
+        "title": "Portals + extraction",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["n1a winner"],
+        "deliverables": "Portal entities, evaporation, extraction, run end states, restart loop",
+        "notes": "Tuesday night."
+      },
+      {
+        "slug": "n6-well-growth-universe-clock",
+        "title": "Black hole growth + universe clock",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (1-2hr)",
+        "depends_on": ["n1a winner"],
+        "deliverables": "Well mass growth, viscosity ramp, wave amplitude scaling, 10-min run target",
+        "notes": "Tuesday night. Can parallel with N4/N5."
+      },
+      {
+        "slug": "n7-signal-system",
+        "title": "Signal system",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["n4 (wrecks)", "n1a winner"],
+        "deliverables": "Signal tracking, emission rates, decay, tier display, visual feedback",
+        "notes": "Wednesday night. Signal is tax, not currency."
+      },
+      {
+        "slug": "n8-inhibitor",
+        "title": "The Inhibitor",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "large (3-5hr)",
+        "depends_on": ["n7 (signal)"],
+        "deliverables": "Threshold trigger, spawn, hunt AI, UI corruption, instant death, stealth counter",
+        "notes": "Wednesday night. The one threat that matters."
+      },
+      {
+        "slug": "n9-hud",
+        "title": "NERV/EVA HUD",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["n7 (signal)", "n5 (portals)", "n4 (wrecks)"],
+        "deliverables": "DOM overlay, corner panels, center warnings, CRT effects, Inhibitor corruption",
+        "notes": "Thursday night."
+      },
+      {
+        "slug": "n10-visual-juice",
+        "title": "Visual juice pass",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["n3 (ASCII)", "n4", "n5"],
+        "deliverables": "Ship trail, entity halos, screen shake, portal death animation, well visual",
+        "notes": "Thursday night."
+      },
+      {
+        "slug": "n11-audio",
+        "title": "Audio foundation",
+        "status": "queued",
+        "lane": "independent-audio",
+        "scope": "medium (2-3hr)",
+        "depends_on": [],
+        "deliverables": "Web Audio drone, well harmonics, wave rhythm, signal choir, Inhibitor tone, event sounds",
+        "notes": "Thursday night. Reads game state, doesn't modify it. Fully independent lane."
+      },
+      {
+        "slug": "n12-progression",
+        "title": "Between-run progression",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["n4 (loot)", "n5 (extraction)"],
+        "deliverables": "Metagame screen, Exotic Matter currency, 4-5 ship upgrades, localStorage persistence",
+        "notes": "Friday night."
+      },
+      {
+        "slug": "n13-procgen-universe",
+        "title": "Procedural universe identity",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "small (1-2hr)",
+        "depends_on": [],
+        "deliverables": "Per-run cosmic signature, wreck civilization names, wreck visual variety, randomized layout",
+        "notes": "Friday night."
+      },
+      {
+        "slug": "n14-balance-pass",
+        "title": "Balance pass",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["all gameplay systems"],
+        "deliverables": "All constants in CONFIG, 8-12 min run target tuned, timeline verified",
+        "notes": "Friday night."
+      },
+      {
+        "slug": "n15-title-flow-screens",
+        "title": "Title + flow screens",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "small (1-2hr)",
+        "depends_on": ["core game loop"],
+        "deliverables": "Title screen, game over (collapse + Inhibitor), extraction success, smooth transitions",
+        "notes": "Saturday night."
+      },
+      {
+        "slug": "n16-perf-optimization",
+        "title": "Performance optimization",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (1-2hr)",
+        "depends_on": ["all rendering"],
+        "deliverables": "Profile, frustum rendering, memory leak check, Firefox test",
+        "notes": "Saturday night."
+      },
+      {
+        "slug": "n17-edge-cases",
+        "title": "Edge cases + bug fixes",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "medium (2-3hr)",
+        "depends_on": ["all systems"],
+        "deliverables": "Resize, tab switch, localStorage errors, mobile message, no console errors",
+        "notes": "Saturday night."
+      },
+      {
+        "slug": "n18-final-fixes",
+        "title": "Final fixes (from Greg's Saturday notes)",
+        "status": "queued",
+        "lane": "mainline",
+        "scope": "variable",
+        "depends_on": ["greg's evening spec"],
+        "deliverables": "Whatever Greg flagged Saturday evening",
+        "notes": "Sunday night."
+      },
+      {
+        "slug": "n19-stretch-goals",
+        "title": "Stretch goals",
+        "status": "queued",
+        "lane": "stretch",
+        "scope": "variable",
+        "depends_on": ["core game complete"],
+        "deliverables": "Signal Moths, Force Pulse, Difficulty Scaling, Dynamic Audio Mixing (priority order)",
+        "notes": "Sunday night if time allows."
+      },
+      {
+        "slug": "player-primer",
+        "title": "Player primer / How to Play doc",
+        "status": "queued",
+        "lane": "independent",
+        "scope": "small (1hr)",
+        "depends_on": ["core game systems exist"],
+        "deliverables": "How-to-play for itch.io page and potential in-game overlay",
+        "notes": "Friday parallel work."
+      }
+    ]
+  },
+  "actors": {
+    "orb": {
+      "role": "state keeper, roadmap puller, orchestrator, journal backstop",
+      "adapter": "native-openclaw-session",
+      "status": "active",
+      "commits": "PROJECT-STATE.json, PROJECT-BOARD.md, DEVLOG.md, CHANGELOG.md (batched), night reports, Forge reviews"
+    },
+    "orrery": {
+      "role": "planning workshop, design decisions",
+      "adapter": "standalone-headless-discord-bot",
+      "status": "verified",
+      "commits": "DECISION-LOG.md, design doc updates from planning"
+    },
+    "forge": {
+      "role": "architecture/build reviewer",
+      "adapter": "standalone-headless-discord-bot",
+      "status": "verified",
+      "commits": "nothing directly — output goes to Orb"
+    },
+    "corb": {
+      "role": "transient implementation worker, spawned on demand by Orb",
+      "adapter": "openclaw-managed-worker",
+      "status": "available",
+      "commits": "code, design doc updates from implementation, CHANGELOG entries with doc changes"
+    },
+    "claude": {
+      "role": "Greg's direct collaborator (Claude Code / Orrery-in-terminal)",
+      "adapter": "claude-code-cli",
+      "status": "active",
+      "commits": "anything during Greg sessions"
+    }
+  },
+  "workflow": {
+    "default_loop": [
+      "Orb pulls the next roadmap item",
+      "Orrery shapes the bounded task (if planning needed)",
+      "Forge reviews the plan (if architecture review needed)",
+      "Orrery revises if Forge pushes back",
+      "Orb dispatches Corb with approved task packet",
+      "Corb builds and commits",
+      "Corb runs project-local tests (node tests/run-all.js)",
+      "Orb records pass/fail evidence",
+      "Forge reviews the tested result",
+      "Orb routes fixes (to Corb for bugs, to Orrery for architectural issues) or marks ready_for_greg",
+      "Orb commits journal updates (devlog, changelog, night report)"
+    ],
+    "board_policy": "No silent skips. If state changes, Orb updates both PROJECT-STATE.json and PROJECT-BOARD.md and commits them."
+  },
+  "in_flight": [],
+  "done": [
+    "orchestration-bootstrap",
+    "jam-context-ingested",
+    "orchestration-loop-defined",
+    "project-state-bootstrapped",
+    "first-handoff-packets-staged",
+    "forge-comprehension-check-ran",
+    "design-docs-complete",
+    "context-dumps-staged",
+    "forge-review-2-complete"
+  ],
+  "history": [
+    {
+      "timestamp": "2026-03-15T15:10:00-07:00",
+      "event": "Context imported from orb-assistant thread and last-black-hole jam docs reviewed."
+    },
+    {
+      "timestamp": "2026-03-15T15:31:00-07:00",
+      "event": "Workshop orchestration loop spec created; project state bootstrapped."
+    },
+    {
+      "timestamp": "2026-03-15T16:19:00-07:00",
+      "event": "Actor wiring verified: Orb active, Forge/Orrery verified as standalone bots, Corb available as transient worker."
+    },
+    {
+      "timestamp": "2026-03-15T22:34:00-07:00",
+      "event": "Promoted LBH into orchestrator/project-tracker mode with kanban flow."
+    },
+    {
+      "timestamp": "2026-03-16T00:00:00-07:00",
+      "event": "Orchestration bootstrap approved by Claude review. All design docs finalized. Monday night task list cleaned for Orb ingestion. Journal/commit responsibilities enumerated per actor. Ready for first build dispatch."
+    }
+  ]
+}
