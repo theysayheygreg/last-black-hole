@@ -81,8 +81,9 @@ export class Ship {
     }
 
     // 3. Sample fluid velocity at ship position
+    // Ship is in canvas coords (Y-down), fluid UV is Y-up
     const uvX = this.x / this.canvasWidth;
-    const uvY = this.y / this.canvasHeight;
+    const uvY = 1.0 - this.y / this.canvasHeight;
     let fluidVel = { x: 0, y: 0 };
     if (fluid && uvX >= 0 && uvX <= 1 && uvY >= 0 && uvY <= 1) {
       const [fvx, fvy] = fluid.readVelocityAt(
@@ -92,7 +93,7 @@ export class Ship {
       // Scale from sim-space to pixel-space (canvas width as reference)
       const scale = this.canvasWidth;
       fluidVel.x = fvx * scale;
-      fluidVel.y = -fvy * scale; // Negate: fluid Y-up → canvas Y-down
+      fluidVel.y = -fvy * scale; // Flip: fluid Y-up velocity → canvas Y-down
     }
 
     this.lastFluidVel = fluidVel;
@@ -107,7 +108,7 @@ export class Ship {
     if (wellSystem) {
       for (const well of wellSystem.wells) {
         const dwx = well.x * this.canvasWidth - this.x;
-        const dwy = well.y * this.canvasHeight - this.y;
+        const dwy = (1.0 - well.y) * this.canvasHeight - this.y; // Flip Y: well UV (Y-up) → canvas (Y-down)
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
         if (dist < 1) continue;
         const safeDist = Math.max(dist, wellCfg.gravityClampDist);

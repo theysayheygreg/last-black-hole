@@ -42,10 +42,9 @@ export class WellSystem {
 
     for (const well of this.wells) {
       // Apply gravitational + orbital force to velocity field
-      // Flip Y: well positions are in screen coords (Y-down) but fluid UV is Y-up
-      const fluidY = 1.0 - well.y;
+      // Well positions are in UV space — same as the fluid sim
       fluid.applyWellForce(
-        [well.x, fluidY],
+        [well.x, well.y],
         cfg.gravity * well.mass,
         cfg.falloff,
         cfg.clampRadius,
@@ -56,7 +55,7 @@ export class WellSystem {
 
       // Inject density near the well — creates visible accretion glow
       fluid.splat(
-        well.x, fluidY,
+        well.x, well.y,
         0, 0,
         0.002,
         0.15, 0.06, 0.02  // warm amber
@@ -71,7 +70,8 @@ export class WellSystem {
   getWellData(canvasWidth, canvasHeight) {
     return this.wells.map(w => ({
       x: w.x * canvasWidth,
-      y: w.y * canvasHeight,
+      // Flip Y: well UV is in WebGL space (Y-up), canvas overlay is Y-down
+      y: (1.0 - w.y) * canvasHeight,
       uvX: w.x,
       uvY: w.y,
       mass: w.mass,
@@ -82,7 +82,6 @@ export class WellSystem {
    * Get UV positions for the display shader.
    */
   getUVPositions() {
-    // Flip Y for WebGL UV space (Y=0 at bottom)
-    return this.wells.map(w => [w.x, 1.0 - w.y]);
+    return this.wells.map(w => [w.x, w.y]);
   }
 }
