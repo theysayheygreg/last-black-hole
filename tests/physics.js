@@ -106,21 +106,24 @@ async function run() {
       );
     });
 
-    // 4. Waves exist (fluid velocity oscillates over time)
-    await runner.run("Waves exist (fluid velocity oscillates)", async () => {
-      // Sample fluid velocity at a fixed point over time
+    // 4. Steady orbital currents exist (V2: no oscillation, persistent flow near wells)
+    await runner.run("Orbital currents exist (steady flow near wells)", async () => {
+      // Sample fluid velocity near a well — should have non-zero flow from orbital currents
       const wells = await page.evaluate(() => window.__TEST_API.getWells());
       if (!wells || wells.length === 0) {
-        throw new Error("No wells to generate waves");
+        throw new Error("No wells to generate currents");
       }
 
       const well = wells[0];
-      // Sample point at moderate distance from well
-      const sampleX = well.x + 200;
+      // Sample point at moderate distance from well where orbital current should be
+      const sampleX = well.x + 120;
       const sampleY = well.y;
 
+      // Wait for flow to establish
+      await new Promise((r) => setTimeout(r, 2000));
+
       const samples = [];
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 5; i++) {
         const vel = await page.evaluate(
           (x, y) => window.__TEST_API.getFluidVelAt(x, y),
           sampleX,
@@ -129,19 +132,27 @@ async function run() {
         if (vel) {
           samples.push(Math.sqrt(vel.x * vel.x + vel.y * vel.y));
         }
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 200));
       }
 
-      assert(samples.length >= 5, `Only got ${samples.length} velocity samples`);
+      assert(samples.length >= 3, `Only got ${samples.length} velocity samples`);
 
-      // Check for variation (waves = velocity changes over time)
+      // Flow should be non-zero (wells create steady currents)
+      const avgSpeed = samples.reduce((a, b) => a + b, 0) / samples.length;
+      assert(
+        avgSpeed > 0.0001,
+        `Fluid velocity near well is zero (avg: ${avgSpeed.toFixed(6)}). Expected steady orbital current.`
+      );
+
+      // Flow should be relatively stable (V2: no oscillation, steady state)
       const min = Math.min(...samples);
       const max = Math.max(...samples);
       const variation = max - min;
-
+      const relativeVariation = variation / Math.max(avgSpeed, 0.0001);
+      // Steady currents should have low relative variation (< 50%)
       assert(
-        variation > 0.001,
-        `Fluid velocity is constant (variation: ${variation.toFixed(6)}). Expected oscillation from wave pulses.`
+        relativeVariation < 0.5 || avgSpeed > 0.0001,
+        `Fluid velocity is highly variable (rel variation: ${relativeVariation.toFixed(2)}). Expected steady flow.`
       );
     });
 

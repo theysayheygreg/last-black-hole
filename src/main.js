@@ -11,6 +11,7 @@ import { CONFIG } from './config.js';
 import { FluidSim } from './fluid.js';
 import { Ship } from './ship.js';
 import { WellSystem } from './wells.js';
+import { WaveRingSystem } from './wave-rings.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
@@ -18,7 +19,7 @@ import { initDevPanel } from './dev-panel.js';
 // ---- State ----
 let glCanvas, gl;
 let overlayCanvas, ctx;
-let fluid, ship, wellSystem, asciiRenderer;
+let fluid, ship, wellSystem, waveRings, asciiRenderer;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -26,6 +27,7 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
+let growthTimer = 0; // timer for well growth events
 
 // ---- Init ----
 
@@ -64,19 +66,22 @@ function init() {
   asciiRenderer = new ASCIIRenderer(gl);
 
   // Init well system — multi-well test map
-  // Different masses create different wave frequencies and pull strengths
-  // Spread across the map so interference patterns form between them
+  // Different masses create different gravity strengths
+  // Spread across the map so orbital currents and inter-well channels form
   wellSystem = new WellSystem();
-  wellSystem.addWell(0.35, 0.40, 1.5);  // large well, left-center — slow powerful waves
-  wellSystem.addWell(0.70, 0.30, 0.8);  // medium well, upper-right — faster lighter waves
-  wellSystem.addWell(0.65, 0.72, 1.2);  // medium-large, lower-right — mid waves
-  wellSystem.addWell(0.20, 0.75, 0.5);  // small well, lower-left — fast ripples, weak pull
+  wellSystem.addWell(0.35, 0.40, 1.5);  // large well, left-center — strong pull, wide orbits
+  wellSystem.addWell(0.70, 0.30, 0.8);  // medium well, upper-right — moderate currents
+  wellSystem.addWell(0.65, 0.72, 1.2);  // medium-large, lower-right — strong orbits
+  wellSystem.addWell(0.20, 0.75, 0.5);  // small well, lower-left — gentle pull
 
-  // Stagger initial phases so waves don't all pulse in sync
-  wellSystem.wells[0].phase = 0;
-  wellSystem.wells[1].phase = Math.PI * 0.7;
-  wellSystem.wells[2].phase = Math.PI * 1.3;
-  wellSystem.wells[3].phase = Math.PI * 0.4;
+  // Alternate orbital directions for interesting inter-well flow patterns
+  wellSystem.wells[0].orbitalDir = 1;   // CCW
+  wellSystem.wells[1].orbitalDir = -1;  // CW — creates shear between wells 0 and 1
+  wellSystem.wells[2].orbitalDir = 1;   // CCW
+  wellSystem.wells[3].orbitalDir = -1;  // CW
+
+  // Init wave ring system (event-driven waves)
+  waveRings = new WaveRingSystem();
 
   // Init ship — start in the space between wells where interference happens
   ship = new Ship(glCanvas.width, glCanvas.height);
@@ -115,6 +120,7 @@ function init() {
     ship,
     fluid,
     wellSystem,
+    waveRings,
     canvasWidth: glCanvas.width,
     canvasHeight: glCanvas.height,
     fps,
@@ -162,6 +168,8 @@ function seedInitialFluid() {
 
 function restart() {
   totalTime = 0;
+  growthTimer = 0;
+  waveRings.rings = [];
   ship.teleport(glCanvas.width * 0.48, glCanvas.height * 0.55);
   // Re-seed fluid
   seedInitialFluid();
@@ -192,13 +200,31 @@ function gameLoop(now) {
   const simDt = 1 / 60; // fixed sim timestep for stability
   fluid.step(simDt);
 
-  // 2. Well forces (inject into fluid)
-  wellSystem.update(fluid, simDt, totalTime);
+  // 2. Well forces (inject into fluid) — constant radial + orbital, no oscillation
+  wellSystem.update(fluid, simDt);
 
-  // 3. Ship update (reads fluid, applies thrust, feels gravity)
+  // 3. Well growth events — periodic mass increase spawns wave rings
+  growthTimer += dt;
+  if (growthTimer >= CONFIG.events.growthInterval) {
+    growthTimer -= CONFIG.events.growthInterval;
+    const evtCfg = CONFIG.events;
+    for (const well of wellSystem.wells) {
+      well.mass += evtCfg.growthAmount;
+      // Spawn an expanding wave ring from this well
+      waveRings.spawn(well.x, well.y, evtCfg.growthWaveAmplitude * well.mass);
+    }
+  }
+
+  // 4. Wave ring propagation
+  waveRings.update(dt);
+
+  // 5. Wave ring forces on ship
+  waveRings.applyToShip(ship, glCanvas.width, glCanvas.height);
+
+  // 6. Ship update (reads fluid, applies thrust, feels gravity)
   ship.update(dt, fluid, wellSystem);
 
-  // 4. Render fluid -> ASCII post-process (Layer 0 — the fabric of spacetime)
+  // 7. Render fluid -> ASCII post-process (Layer 0 — the fabric of spacetime)
   const wellUVs = wellSystem.getUVPositions();
   // Render fluid display colors into the ASCII renderer's scene FBO (not to screen)
   const sceneTarget = asciiRenderer.getSceneTarget();
@@ -206,11 +232,12 @@ function gameLoop(now) {
   // ASCII post-process: read scene FBO, render character grid to screen
   asciiRenderer.render();
 
-  // 5. Render ship overlay (Layer 1 — 2D canvas, separate from fluid)
+  // 8. Render overlay (Layer 1/2 — 2D canvas: wave rings + ship)
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  waveRings.render(ctx, overlayCanvas.width, overlayCanvas.height);
   ship.render(ctx);
 
-  // 6. FPS display
+  // 9. FPS display
   if (CONFIG.debug.showFPS) {
     ctx.save();
     ctx.fillStyle = '#00ff00';
@@ -219,14 +246,15 @@ function gameLoop(now) {
     ctx.fillText(`Ship: (${ship.x.toFixed(0)}, ${ship.y.toFixed(0)})`, 10, 38);
     ctx.fillText(`Vel: (${ship.vx.toFixed(1)}, ${ship.vy.toFixed(1)})`, 10, 56);
     ctx.fillText(`Fluid: (${ship.lastFluidVel.x.toFixed(2)}, ${ship.lastFluidVel.y.toFixed(2)})`, 10, 74);
+    ctx.fillText(`Rings: ${waveRings.getActiveCount()}`, 10, 92);
     if (ship.waveMagnetismActive) {
       ctx.fillStyle = '#00ffff';
-      ctx.fillText('WAVE LOCK', 10, 92);
+      ctx.fillText('WAVE LOCK', 10, 110);
     }
     ctx.restore();
   }
 
-  // 7. Debug: well radii
+  // 10. Debug: well radii
   if (CONFIG.debug.showWellRadii) {
     ctx.save();
     const wellData = wellSystem.getWellData(overlayCanvas.width, overlayCanvas.height);
