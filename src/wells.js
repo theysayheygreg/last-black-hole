@@ -44,7 +44,7 @@ export class WellSystem {
       // Frequency decreases with mass (bigger = slower, more powerful)
       const freq = cfg.waveFrequency / Math.sqrt(well.mass);
       const amp = cfg.waveAmplitude * well.mass;
-      const waveAmp = amp * Math.sin(freq * totalTime * Math.PI * 2);
+      const waveAmp = amp * Math.sin(freq * totalTime * Math.PI * 2 + well.phase);
 
       // Apply gravitational + wave force to velocity field
       fluid.applyWellForce(

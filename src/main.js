@@ -63,12 +63,25 @@ function init() {
   // Init ASCII post-process renderer (Layer 0 visual identity)
   asciiRenderer = new ASCIIRenderer(gl);
 
-  // Init well system — start with 1 well at center
+  // Init well system — multi-well test map
+  // Different masses create different wave frequencies and pull strengths
+  // Spread across the map so interference patterns form between them
   wellSystem = new WellSystem();
-  wellSystem.addWell(0.5, 0.5, 1.0);
+  wellSystem.addWell(0.35, 0.40, 1.5);  // large well, left-center — slow powerful waves
+  wellSystem.addWell(0.70, 0.30, 0.8);  // medium well, upper-right — faster lighter waves
+  wellSystem.addWell(0.65, 0.72, 1.2);  // medium-large, lower-right — mid waves
+  wellSystem.addWell(0.20, 0.75, 0.5);  // small well, lower-left — fast ripples, weak pull
 
-  // Init ship — offset from center so it's not in the well
+  // Stagger initial phases so waves don't all pulse in sync
+  wellSystem.wells[0].phase = 0;
+  wellSystem.wells[1].phase = Math.PI * 0.7;
+  wellSystem.wells[2].phase = Math.PI * 1.3;
+  wellSystem.wells[3].phase = Math.PI * 0.4;
+
+  // Init ship — start in the space between wells where interference happens
   ship = new Ship(glCanvas.width, glCanvas.height);
+  ship.x = glCanvas.width * 0.48;
+  ship.y = glCanvas.height * 0.55;
 
   // Input handlers
   overlayCanvas.addEventListener('mousemove', (e) => {
@@ -118,37 +131,38 @@ function init() {
 }
 
 function seedInitialFluid() {
-  // Inject some initial density around the well and across the field
-  // so there's something visible from frame 1
-  for (let i = 0; i < 20; i++) {
-    const angle = (i / 20) * Math.PI * 2;
-    const dist = 0.1 + Math.random() * 0.15;
-    const x = 0.5 + Math.cos(angle) * dist;
-    const y = 0.5 + Math.sin(angle) * dist;
-    fluid.splat(
-      x, y,
-      Math.cos(angle) * 0.001, Math.sin(angle) * 0.001,
-      0.002,
-      0.2 + Math.random() * 0.3,
-      0.1 + Math.random() * 0.2,
-      0.05 + Math.random() * 0.1
-    );
+  // Inject density around each well so the fluid is visible from frame 1
+  for (const well of wellSystem.wells) {
+    for (let i = 0; i < 12; i++) {
+      const angle = (i / 12) * Math.PI * 2;
+      const dist = 0.05 + Math.random() * 0.12;
+      const x = well.x + Math.cos(angle) * dist;
+      const y = well.y + Math.sin(angle) * dist;
+      fluid.splat(
+        x, y,
+        Math.cos(angle) * 0.0005, Math.sin(angle) * 0.0005,
+        0.003,
+        0.15 + Math.random() * 0.25 * well.mass,
+        0.08 + Math.random() * 0.15,
+        0.03 + Math.random() * 0.08
+      );
+    }
   }
-  // Broader ambient density
-  for (let i = 0; i < 10; i++) {
+  // Broader ambient density scattered across the field
+  for (let i = 0; i < 15; i++) {
     fluid.splat(
-      0.2 + Math.random() * 0.6,
-      0.2 + Math.random() * 0.6,
+      0.1 + Math.random() * 0.8,
+      0.1 + Math.random() * 0.8,
       0, 0,
-      0.01,
-      0.05, 0.15, 0.2
+      0.008,
+      0.04, 0.12, 0.18
     );
   }
 }
 
 function restart() {
   totalTime = 0;
-  ship.teleport(glCanvas.width * 0.7, glCanvas.height * 0.5);
+  ship.teleport(glCanvas.width * 0.48, glCanvas.height * 0.55);
   // Re-seed fluid
   seedInitialFluid();
 }
