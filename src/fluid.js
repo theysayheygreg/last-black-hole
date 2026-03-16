@@ -204,6 +204,9 @@ void main() {
 }`;
 
 // Display shader — maps fluid state to visible colors
+// V2: encodes flow direction so players can read orbital currents
+// - Velocity magnitude boosts brightness (fast flow = brighter/denser ASCII chars)
+// - Flow direction tints color: toward a well = amber, away = teal
 const FRAG_DISPLAY = `#version 300 es
 precision highp float;
 uniform sampler2D u_velocity;
@@ -225,25 +228,45 @@ void main() {
   float speed = length(vel);
   float density = length(dens);
 
-  // Combine density and velocity for a richer signal
-  // Velocity divergence approximation (local speed variation = wave fronts)
-  float combined = density + speed * 0.8;
+  // Combine density and velocity magnitude for brightness signal
+  // Fast-flowing areas are brighter = denser ASCII characters
+  float combined = density + speed * 1.2;
 
   // Base color: deep void to teal based on combined signal
   vec3 col = mix(u_voidColor, u_normalColor, clamp(combined * 1.5, 0.0, 1.0));
 
-  // Velocity-based brightness boost — makes wave fronts shimmer
-  float speedBrightness = smoothstep(0.0, 0.3, speed);
-  col += speedBrightness * vec3(0.05, 0.12, 0.15);
+  // Velocity magnitude brightness boost — makes currents visible as brighter bands
+  float speedBrightness = smoothstep(0.0, 0.2, speed);
+  col += speedBrightness * vec3(0.08, 0.18, 0.22);
 
-  // High-velocity regions get a cyan highlight (wave crests)
-  float waveCrest = smoothstep(0.15, 0.4, speed);
-  col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.4);
+  // High-velocity regions get a cyan highlight (wave crests / strong currents)
+  float waveCrest = smoothstep(0.1, 0.35, speed);
+  col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.5);
 
-  // Tint near wells: shift toward amber/red
+  // === FLOW DIRECTION TINTING ===
+  // For each well, compute whether flow is toward or away from it.
+  // Toward well = warmer (amber), away = cooler (teal).
+  // This makes orbital currents visible as color bands around wells.
   for (int i = 0; i < 4; i++) {
     if (i >= u_wellCount) break;
     float dist = distance(v_uv, u_wellPositions[i]);
+
+    // Direction from this pixel toward the well
+    vec2 toWell = normalize(u_wellPositions[i] - v_uv + vec2(0.0001));
+
+    // How much is the flow pointed toward this well? (-1 = away, +1 = toward)
+    float flowAlignment = speed > 0.001 ? dot(normalize(vel), toWell) : 0.0;
+
+    // Flow direction tint — only visible where there IS flow and near-ish to a well
+    float flowInfluence = smoothstep(0.5, 0.05, dist) * smoothstep(0.0, 0.08, speed);
+
+    // Warm (amber) for inward flow, cool (teal) for outward flow
+    vec3 warmTint = vec3(0.25, 0.12, 0.02);  // amber
+    vec3 coolTint = vec3(0.02, 0.12, 0.18);  // teal
+    vec3 flowTint = mix(coolTint, warmTint, flowAlignment * 0.5 + 0.5);
+    col += flowTint * flowInfluence * 0.4;
+
+    // Well proximity coloring (amber/red near wells)
     float wellInfluence = smoothstep(0.35, 0.02, dist);
     vec3 wellColor = mix(u_nearWellColor, u_hotWellColor, smoothstep(0.15, 0.02, dist));
     col = mix(col, wellColor, wellInfluence * 0.6);
