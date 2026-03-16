@@ -3,13 +3,17 @@
  *
  * Reads CONFIG structure dynamically and generates sliders/checkboxes.
  * Toggle with backtick (`). Top-right corner, collapsible, semi-transparent.
- * No presets, no localStorage — Monday minimal version.
+ * Preset buttons (1-4 keys or click) for quick A/B testing.
  */
 
 import { CONFIG } from './config.js';
+import { PRESETS, PRESET_NAMES, deepMerge } from './presets.js';
 
 // Deep-clone CONFIG at import time for reset
 const DEFAULTS = JSON.parse(JSON.stringify(CONFIG));
+
+// Currently active preset name (exported so other systems can read it)
+export let activePreset = 'Default';
 
 // Slider range hints and tooltips per key.
 // V2 SIMPLIFICATION: matches collapsed CONFIG — no affordances, fewer ship knobs
@@ -75,6 +79,40 @@ function fmt(v) {
   return v.toFixed(2);
 }
 
+// ---- Overlay toast for preset switching ----
+let overlayEl = null;
+let overlayTimeout = null;
+
+function showPresetOverlay(name) {
+  if (!overlayEl) {
+    overlayEl = document.createElement('div');
+    overlayEl.id = 'preset-overlay';
+    Object.assign(overlayEl.style, {
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      color: '#88f',
+      fontFamily: 'monospace',
+      fontSize: '28px',
+      fontWeight: 'bold',
+      letterSpacing: '2px',
+      textShadow: '0 0 12px rgba(100, 100, 255, 0.6)',
+      pointerEvents: 'none',
+      zIndex: '10000',
+      opacity: '1',
+      transition: 'opacity 0.5s ease-out',
+    });
+    document.body.appendChild(overlayEl);
+  }
+  overlayEl.textContent = name.toUpperCase();
+  overlayEl.style.opacity = '1';
+  if (overlayTimeout) clearTimeout(overlayTimeout);
+  overlayTimeout = setTimeout(() => {
+    overlayEl.style.opacity = '0';
+  }, 2000);
+}
+
 /**
  * Create and mount the dev panel. Call once at init.
  */
@@ -113,9 +151,25 @@ export function initDevPanel() {
     alignItems: 'center',
     cursor: 'default',
   });
-  header.innerHTML = '<span style="font-weight:bold;color:#88f;">DEV PANEL</span>';
 
-  // Buttons container
+  const headerLabel = document.createElement('span');
+  headerLabel.style.fontWeight = 'bold';
+  headerLabel.style.color = '#88f';
+  headerLabel.textContent = 'DEV PANEL';
+  header.appendChild(headerLabel);
+
+  // Active preset badge in header
+  const presetBadge = document.createElement('span');
+  Object.assign(presetBadge.style, {
+    color: '#8f8',
+    fontWeight: 'bold',
+    fontSize: '10px',
+    marginLeft: '8px',
+  });
+  presetBadge.textContent = '[Default]';
+  headerLabel.appendChild(presetBadge);
+
+  // Buttons container (Copy + Reset)
   const btnRow = document.createElement('div');
   btnRow.style.display = 'flex';
   btnRow.style.gap = '6px';
@@ -127,15 +181,39 @@ export function initDevPanel() {
   });
 
   const resetBtn = makeButton('Reset', () => {
-    applyDefaults(CONFIG, DEFAULTS);
-    // Update all slider/checkbox UI
-    panel.querySelectorAll('[data-config-path]').forEach(updateControl);
+    applyPreset('Default');
   });
 
   btnRow.appendChild(copyBtn);
   btnRow.appendChild(resetBtn);
   header.appendChild(btnRow);
   panel.appendChild(header);
+
+  // ---- Preset buttons row ----
+  const presetRow = document.createElement('div');
+  Object.assign(presetRow.style, {
+    display: 'flex',
+    gap: '4px',
+    padding: '6px 10px',
+    background: 'rgba(25, 25, 55, 0.9)',
+    borderBottom: '1px solid rgba(100, 100, 255, 0.2)',
+  });
+
+  const presetButtons = {};
+  PRESET_NAMES.forEach((name, i) => {
+    const btn = makeButton(`${i + 1}: ${name}`, () => {
+      applyPreset(name);
+    });
+    // Highlight active preset
+    if (name === 'Default') {
+      btn.style.background = 'rgba(80, 80, 160, 0.9)';
+      btn.style.color = '#fff';
+    }
+    presetButtons[name] = btn;
+    presetRow.appendChild(btn);
+  });
+
+  panel.appendChild(presetRow);
 
   // ---- Body (sections) ----
   const body = document.createElement('div');
@@ -153,13 +231,56 @@ export function initDevPanel() {
 
   document.body.appendChild(panel);
 
-  // ---- Toggle with backtick ----
+  // ---- Apply preset logic ----
+  function applyPreset(name) {
+    activePreset = name;
+
+    if (name === 'Default' || !PRESETS[name]) {
+      // Restore original defaults
+      applyDefaults(CONFIG, DEFAULTS);
+    } else {
+      // First restore defaults, then deep-merge the preset on top
+      applyDefaults(CONFIG, DEFAULTS);
+      deepMerge(CONFIG, PRESETS[name]);
+    }
+
+    // Update all slider/checkbox UI
+    panel.querySelectorAll('[data-config-path]').forEach(updateControl);
+
+    // Update preset button highlights
+    for (const [pName, pBtn] of Object.entries(presetButtons)) {
+      if (pName === name) {
+        pBtn.style.background = 'rgba(80, 80, 160, 0.9)';
+        pBtn.style.color = '#fff';
+      } else {
+        pBtn.style.background = 'rgba(60, 60, 120, 0.8)';
+        pBtn.style.color = '#aaf';
+      }
+    }
+
+    // Update header badge
+    presetBadge.textContent = ` [${name}]`;
+
+    // Show overlay toast
+    showPresetOverlay(name);
+  }
+
+  // ---- Toggle with backtick, presets with 1-4 ----
   let visible = false;
   window.addEventListener('keydown', (e) => {
     if (e.key === '`') {
       e.preventDefault();
       visible = !visible;
       panel.style.display = visible ? 'block' : 'none';
+      return;
+    }
+
+    // Preset shortcuts: 1-4 (only when not typing in an input)
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const num = parseInt(e.key, 10);
+    if (num >= 1 && num <= PRESET_NAMES.length) {
+      e.preventDefault();
+      applyPreset(PRESET_NAMES[num - 1]);
     }
   });
 }
@@ -284,7 +405,7 @@ function createSlider(section, key, path) {
     display.textContent = fmt(v);
   });
 
-  // For updateControl after reset
+  // For updateControl after reset/preset
   slider._update = () => {
     slider.value = CONFIG[section][key];
     display.textContent = fmt(CONFIG[section][key]);
