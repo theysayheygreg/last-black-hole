@@ -12,24 +12,13 @@ import { CONFIG } from './config.js';
 const DEFAULTS = JSON.parse(JSON.stringify(CONFIG));
 
 // Slider range hints and tooltips per key.
+// V2 SIMPLIFICATION: matches collapsed CONFIG — no affordances, fewer ship knobs
 const RANGE_HINTS = {
-  'ship.thrustForce':       { min: 0.1, max: 20, step: 0.1, tip: 'Base thrust multiplier — higher = faster acceleration' },
-  'ship.thrustScale':       { min: 100, max: 2000, step: 50, tip: 'Converts thrustForce to pixels/sec². thrustForce × thrustScale = max acceleration' },
-  'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01, tip: '0 = ship ignores fluid. 1 = ship is pure fluid. 0.8 = mostly carried by flow' },
-  'ship.fluidBlendRate':    { min: 0.5, max: 10, step: 0.5, tip: 'How fast ship velocity blends toward fluid. Higher = snappier response to currents' },
-  'ship.fluidVelScale':     { min: 0.5, max: 5, step: 0.1, tip: 'Multiplier from sim velocity to pixel velocity. Higher = fluid feels faster' },
-  'ship.turnRate':          { min: 30, max: 360, step: 1, tip: 'Degrees/sec the ship rotates toward cursor' },
-  'ship.turnCurvePower':    { min: 1, max: 4, step: 0.1, tip: 'Turn speed curve. 1 = linear. 2+ = slow nudge, fast reversal' },
-  'ship.turnDeadZone':      { min: 0, max: 30, step: 1, tip: 'Degrees of aim offset below which the ship won\'t rotate (prevents jitter)' },
-  'ship.mass':              { min: 0.1, max: 5, step: 0.1, tip: 'Affects acceleration (a = F/mass). Heavier = slower response, less buffeted' },
-  'ship.dragInCurrent':     { min: 0, max: 1, step: 0.005, tip: 'Velocity damping when riding WITH the flow. Low = ice-skating momentum' },
-  'ship.dragAgainstCurrent':{ min: 0, max: 1, step: 0.005, tip: 'Velocity damping when fighting AGAINST the flow. Higher = sluggish resistance' },
-  'ship.thrustSmoothing':   { min: 0.01, max: 0.5, step: 0.01, tip: 'Facing lerp time in seconds (50ms = responsive, 200ms = floaty)' },
-  'ship.thrustRampTime':    { min: 0.01, max: 1, step: 0.01, tip: 'Seconds to reach full thrust. Short = instant. Long = tap vs hold matters' },
-  'ship.size':              { min: 4, max: 30, step: 1, tip: 'Ship triangle size in pixels' },
-  'ship.gravityClampDist':  { min: 10, max: 100, step: 5, tip: 'Minimum distance for gravity calc (prevents instant death at center)' },
-  'ship.wakeForceMag':      { min: 0, max: 0.005, step: 0.0001, tip: 'How much the ship\'s thrust disturbs the fluid behind it' },
-  'ship.wakeRadius':        { min: 0, max: 0.005, step: 0.0001, tip: 'Size of the thrust wake splat in the fluid' },
+  'ship.thrustAccel':       { min: 100, max: 5000, step: 50, tip: 'Pixels/sec² when thrusting. One number, instant on/off.' },
+  'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01, tip: '0 = ship ignores fluid. 1 = pure fluid rider. How much currents carry you.' },
+  'ship.turnRate':          { min: 60, max: 720, step: 5, tip: 'Degrees/sec rotation toward cursor. 360 = instant feel.' },
+  'ship.drag':              { min: 0, max: 0.2, step: 0.005, tip: 'Velocity damping per frame. Low = ice-skating. High = responsive stops.' },
+  'ship.size':              { min: 4, max: 30, step: 1, tip: 'Ship triangle radius in pixels' },
 
   'fluid.viscosity':        { min: 0, max: 0.01, step: 0.00005, tip: 'Fluid thickness. 0 = water. Higher = syrup. Damps small-scale motion' },
   'fluid.resolution':       { min: 64, max: 512, step: 64, tip: 'Sim grid size. 256 = good balance. 128 = fast. 512 = detailed but slow' },
@@ -45,6 +34,7 @@ const RANGE_HINTS = {
   'wells.shipPullStrength': { min: 0, max: 1000, step: 10, tip: 'Direct gravitational pull on the SHIP in px/s² at 100px. THIS is what traps you' },
   'wells.shipPullFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship pull distance exponent. 1.5 = softer than real gravity. 2 = inverse-square' },
   'wells.orbitalStrength':  { min: 0, max: 1, step: 0.01, tip: 'Tangential force fraction. 0 = pure infall. 0.3 = gentle orbits. 1.0 = strong whirlpools' },
+  'wells.gravityClampDist': { min: 10, max: 100, step: 5, tip: 'Pixel-space min distance for ship gravity calc (prevents instant death at center)' },
 
   'events.waveSpeed':       { min: 50, max: 500, step: 10, tip: 'Wave ring expansion speed in px/sec. 150 = stately. 400 = dramatic.' },
   'events.waveWidth':       { min: 10, max: 100, step: 5, tip: 'Wavefront thickness in pixels. Wider = easier to surf, less precise' },
@@ -54,13 +44,6 @@ const RANGE_HINTS = {
   'events.growthInterval':  { min: 5, max: 60, step: 1, tip: 'Seconds between well growth events. 20 = calm rhythm. 5 = constant drama' },
   'events.growthAmount':    { min: 0.01, max: 0.2, step: 0.01, tip: 'Mass added to each well per growth event. Compounds over time.' },
   'events.growthWaveAmplitude':{ min: 0.1, max: 3, step: 0.1, tip: 'Initial amplitude of growth wave rings. 1.0 = standard. 2.0 = dramatic' },
-
-  'affordances.catchWindowDeg':   { min: 0, max: 45, step: 1, tip: 'Angle threshold for wave magnetism to engage (degrees)' },
-  'affordances.catchWindowVelPct':{ min: 0, max: 1, step: 0.05, tip: 'Velocity match threshold (20% = ship must be within 20% of wave speed)' },
-  'affordances.lockStrength':     { min: 0, max: 1, step: 0.01, tip: 'How strongly wave magnetism steers you along the crest' },
-  'affordances.inputBufferBefore':{ min: 0, max: 0.5, step: 0.01, tip: 'Coyote time before wave arrives (seconds)' },
-  'affordances.inputBufferAfter': { min: 0, max: 0.5, step: 0.01, tip: 'Late forgiveness after wave passes (seconds)' },
-  'affordances.thrustSmoothingMs':{ min: 10, max: 200, step: 5, tip: 'Facing smoothing in milliseconds' },
 
   'ascii.cellSize':         { min: 4, max: 20, step: 1, tip: 'Character cell width in pixels. Smaller = more detail, more GPU work' },
   'ascii.cellAspect':       { min: 1, max: 2, step: 0.1, tip: 'Cell height/width ratio. 1.5 = readable monospace proportions' },

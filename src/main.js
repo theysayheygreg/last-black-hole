@@ -247,10 +247,6 @@ function gameLoop(now) {
     ctx.fillText(`Vel: (${ship.vx.toFixed(1)}, ${ship.vy.toFixed(1)})`, 10, 56);
     ctx.fillText(`Fluid: (${ship.lastFluidVel.x.toFixed(2)}, ${ship.lastFluidVel.y.toFixed(2)})`, 10, 74);
     ctx.fillText(`Rings: ${waveRings.getActiveCount()}`, 10, 92);
-    if (ship.waveMagnetismActive) {
-      ctx.fillStyle = '#00ffff';
-      ctx.fillText('WAVE LOCK', 10, 110);
-    }
     ctx.restore();
   }
 

@@ -1,9 +1,10 @@
 /**
- * ship.js — Ship controls, thrust, fluid sampling, wave magnetism.
+ * ship.js — Ship controls, thrust, fluid sampling.
  *
- * Control model: Model 2 from CONTROLS.md (mouse = aim, click = binary thrust).
- * Ship facing rotates toward cursor. Click to thrust at full power.
- * Ship velocity = thrust + fluid velocity at position (coupling 0.8).
+ * V2 SIMPLIFICATION: Collapsed redundant knobs per config.js rewrite.
+ * Control model: mouse = aim, click = binary thrust (instant on/off).
+ * Ship velocity = thrust accel + fluid coupling lerp + well gravity.
+ * Wave magnetism removed — affordance system deferred to V2.
  */
 
 import { CONFIG } from './config.js';
@@ -28,17 +29,10 @@ export class Ship {
     this.mouseX = canvasWidth / 2;
     this.mouseY = canvasHeight / 2;
     this.thrusting = false;
-    this.thrustRamp = 0; // 0-1 ramp for thrust buildup
 
-    // Wave magnetism state
-    this.waveMagnetismActive = false;
-    this.waveMagnetismForce = { x: 0, y: 0 };
-
-    // Input buffer for wave catch timing
-    this.thrustBuffer = [];
+    // Fluid readback for HUD
     this.lastFluidVel = { x: 0, y: 0 };
     this.lastFluidSpeed = 0;
-    this.lastFluidDir = 0;
   }
 
   /**
@@ -54,9 +48,6 @@ export class Ship {
    */
   setThrust(active) {
     this.thrusting = active;
-    if (active) {
-      this.thrustBuffer.push(performance.now());
-    }
   }
 
   /**
@@ -77,16 +68,16 @@ export class Ship {
    */
   update(dt, fluid, wellSystem) {
     const cfg = CONFIG.ship;
-    const affCfg = CONFIG.affordances;
+    const wellCfg = CONFIG.wells;
 
-    // 1. Update facing — rotate toward mouse
+    // 1. Update facing — rotate toward mouse (no dead zone, no curve)
     this._updateFacing(dt, cfg);
 
-    // 2. Thrust ramp
+    // 2. Thrust — instant on/off, single accel value
     if (this.thrusting) {
-      this.thrustRamp = Math.min(1, this.thrustRamp + dt / cfg.thrustRampTime);
-    } else {
-      this.thrustRamp = Math.max(0, this.thrustRamp - dt / cfg.thrustRampTime);
+      const accelMag = cfg.thrustAccel;
+      this.vx += Math.cos(this.facing) * accelMag * dt;
+      this.vy += Math.sin(this.facing) * accelMag * dt;
     }
 
     // 3. Sample fluid velocity at ship position
@@ -98,52 +89,28 @@ export class Ship {
         Math.max(0, Math.min(1, uvX)),
         Math.max(0, Math.min(1, uvY))
       );
-      // Scale from sim-space to pixel-space
-      const scale = this.canvasWidth * cfg.fluidVelScale;
+      // Scale from sim-space to pixel-space (canvas width as reference)
+      const scale = this.canvasWidth;
       fluidVel.x = fvx * scale;
       fluidVel.y = fvy * scale;
     }
 
     this.lastFluidVel = fluidVel;
     this.lastFluidSpeed = Math.sqrt(fluidVel.x * fluidVel.x + fluidVel.y * fluidVel.y);
-    if (this.lastFluidSpeed > 0.01) {
-      this.lastFluidDir = Math.atan2(fluidVel.y, fluidVel.x);
-    }
 
-    // 4. Compute thrust force
-    const thrustMag = cfg.thrustForce * this.thrustRamp * cfg.thrustScale;
-    const thrustFx = Math.cos(this.facing) * thrustMag;
-    const thrustFy = Math.sin(this.facing) * thrustMag;
+    // 4. Fluid coupling — lerp ship velocity toward fluid velocity
+    const coupling = Math.min(cfg.fluidCoupling * dt, 0.5); // clamp to prevent overshoot
+    this.vx = this.vx * (1 - coupling) + fluidVel.x * coupling;
+    this.vy = this.vy * (1 - coupling) + fluidVel.y * coupling;
 
-    // 5. Wave magnetism check
-    this._updateWaveMagnetism(fluidVel, affCfg);
-
-    // 6. Apply forces
-    const accelX = thrustFx / cfg.mass + this.waveMagnetismForce.x;
-    const accelY = thrustFy / cfg.mass + this.waveMagnetismForce.y;
-
-    // Ship velocity = own momentum + fluid coupling
-    // Fluid coupling blends fluid vel into ship vel each frame
-    const coupling = cfg.fluidCoupling;
-    this.vx += accelX * dt;
-    this.vy += accelY * dt;
-
-    // Blend toward fluid velocity (coupling)
-    // Rate scales with coupling strength — at 0.8, ship strongly follows fluid
-    const blendRate = coupling * dt * cfg.fluidBlendRate;
-    const clamped = Math.min(blendRate, 0.5); // don't overshoot
-    this.vx = this.vx * (1 - clamped) + fluidVel.x * clamped;
-    this.vy = this.vy * (1 - clamped) + fluidVel.y * clamped;
-
-    // 6b. Direct gravitational pull from wells (acts on ship mass, not through fluid)
+    // 5. Direct gravitational pull from wells (acts on ship, not through fluid)
     if (wellSystem) {
-      const wellCfg = CONFIG.wells;
       for (const well of wellSystem.wells) {
         const dwx = well.x * this.canvasWidth - this.x;
         const dwy = well.y * this.canvasHeight - this.y;
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
         if (dist < 1) continue;
-        const safeDist = Math.max(dist, cfg.gravityClampDist);
+        const safeDist = Math.max(dist, wellCfg.gravityClampDist);
         const normDist = safeDist / 100;
         const gravAccel = wellCfg.shipPullStrength * well.mass / Math.pow(normDist, wellCfg.shipPullFalloff);
         const nx = dwx / dist;
@@ -153,38 +120,33 @@ export class Ship {
       }
     }
 
-    // 7. Drag
-    const shipSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    if (shipSpeed > 0.01) {
-      // Check if moving with or against the fluid
-      const dotProduct = (this.vx * fluidVel.x + this.vy * fluidVel.y) /
-        (shipSpeed * Math.max(0.01, this.lastFluidSpeed));
-      const drag = dotProduct > 0 ? cfg.dragInCurrent : cfg.dragAgainstCurrent;
-      const dragMult = 1 - drag;
-      this.vx *= dragMult;
-      this.vy *= dragMult;
-    }
+    // 6. Drag — single uniform value
+    const dragMult = 1 - cfg.drag;
+    this.vx *= dragMult;
+    this.vy *= dragMult;
 
-    // 8. Integrate position
+    // 7. Integrate position
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
-    // 9. Boundary wrapping (keep in canvas)
+    // 8. Boundary wrapping (keep in canvas)
     if (this.x < 0) this.x += this.canvasWidth;
     if (this.x > this.canvasWidth) this.x -= this.canvasWidth;
     if (this.y < 0) this.y += this.canvasHeight;
     if (this.y > this.canvasHeight) this.y -= this.canvasHeight;
 
-    // 10. Inject thrust wake into fluid
-    if (this.thrustRamp > 0.1 && fluid) {
+    // 9. Inject thrust wake into fluid — MUCH stronger than before
+    //    Player should see their thrust disturbing the ASCII field
+    if (this.thrusting && fluid) {
       const wakeUVx = this.x / this.canvasWidth;
       const wakeUVy = this.y / this.canvasHeight;
-      const wakeForceMag = this.thrustRamp * cfg.wakeForceMag;
+      const wakeForceMag = 0.002;
+      const wakeRadius = 0.01;
       fluid.splat(
         wakeUVx, wakeUVy,
         Math.cos(this.facing) * wakeForceMag,
         Math.sin(this.facing) * wakeForceMag,
-        cfg.wakeRadius,
+        wakeRadius,
         0.1, 0.3, 0.4  // teal wake color
       );
     }
@@ -203,16 +165,10 @@ export class Ship {
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
     const absDiff = Math.abs(angleDiff);
-    const deadZoneRad = cfg.turnDeadZone * Math.PI / 180;
 
-    if (absDiff < deadZoneRad) return; // dead zone
-
-    // Turn speed curve: faster rotation for larger offsets
-    const maxOffset = Math.PI;
-    const normalizedOffset = Math.min(absDiff / maxOffset, 1);
-    const curvedSpeed = Math.pow(normalizedOffset, cfg.turnCurvePower);
+    // Simple linear turn — no dead zone, no curve power
     const turnRateRad = cfg.turnRate * Math.PI / 180;
-    const turnAmount = curvedSpeed * turnRateRad * dt;
+    const turnAmount = turnRateRad * dt;
 
     if (absDiff < turnAmount) {
       this.facing = this.targetFacing;
@@ -223,43 +179,6 @@ export class Ship {
     // Normalize facing
     while (this.facing > Math.PI) this.facing -= Math.PI * 2;
     while (this.facing < -Math.PI) this.facing += Math.PI * 2;
-  }
-
-  _updateWaveMagnetism(fluidVel, affCfg) {
-    this.waveMagnetismActive = false;
-    this.waveMagnetismForce = { x: 0, y: 0 };
-
-    if (this.lastFluidSpeed < 5) return; // no significant flow
-
-    // Check angle alignment: is ship roughly aligned with fluid direction?
-    const shipDir = Math.atan2(this.vy, this.vx);
-    let angleDiff = this.lastFluidDir - shipDir;
-    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-
-    const catchWindowRad = affCfg.catchWindowDeg * Math.PI / 180;
-    if (Math.abs(angleDiff) > catchWindowRad) return;
-
-    // Check velocity match
-    const shipSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    if (shipSpeed < 0.01) return;
-    const speedRatio = Math.abs(shipSpeed - this.lastFluidSpeed) / this.lastFluidSpeed;
-    if (speedRatio > affCfg.catchWindowVelPct) return;
-
-    // Wave magnetism engaged! Apply corrective force along wave direction
-    this.waveMagnetismActive = true;
-
-    // Input buffer check — was there recent thrust input?
-    const now = performance.now();
-    const bufferWindow = affCfg.inputBufferBefore * 1000 + affCfg.inputBufferAfter * 1000;
-    this.thrustBuffer = this.thrustBuffer.filter(t => now - t < bufferWindow);
-
-    // Corrective force: steer ship velocity toward fluid direction
-    const lockStr = affCfg.lockStrength;
-    const correctionX = (fluidVel.x - this.vx * (this.lastFluidSpeed / Math.max(1, shipSpeed))) * lockStr;
-    const correctionY = (fluidVel.y - this.vy * (this.lastFluidSpeed / Math.max(1, shipSpeed))) * lockStr;
-
-    this.waveMagnetismForce = { x: correctionX, y: correctionY };
   }
 
   /**
@@ -281,29 +200,19 @@ export class Ship {
     ctx.lineTo(-size * 0.6, size * 0.5);   // right wing
     ctx.closePath();
 
-    // Fill
-    ctx.fillStyle = this.waveMagnetismActive ? '#66ffff' : '#ffffff';
+    // Fill — always white (no wave magnetism glow)
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
 
-    // Glow when wave magnetism is active
-    if (this.waveMagnetismActive) {
-      ctx.shadowColor = '#00ffff';
-      ctx.shadowBlur = 15;
-      ctx.strokeStyle = '#00ffff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
     // Thrust trail
-    if (this.thrustRamp > 0.1) {
-      const trailLen = size * 1.5 * this.thrustRamp;
+    if (this.thrusting) {
+      const trailLen = size * 1.5;
       ctx.beginPath();
       ctx.moveTo(-size * 0.3, -size * 0.15);
       ctx.lineTo(-size * 0.3 - trailLen, 0);
       ctx.lineTo(-size * 0.3, size * 0.15);
       ctx.closePath();
-      ctx.fillStyle = `rgba(100, 200, 255, ${this.thrustRamp * 0.7})`;
+      ctx.fillStyle = 'rgba(100, 200, 255, 0.7)';
       ctx.fill();
     }
 
