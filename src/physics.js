@@ -68,9 +68,10 @@ export function inversePowerForce(dist, strength, mass, falloff, maxRange) {
   const safeDist = Math.max(dist, FORCE_MIN_DIST);
   const normDist = safeDist / FORCE_REF_DIST;
   const baseAccel = strength * mass / Math.pow(normDist, falloff);
-  // Quadratic range fade: 1.0 at center, 0.0 at maxRange, smooth transition
+  // Linear range fade: 1.0 at center, 0.0 at maxRange.
+  // (Was quadratic — crushed gravity to 25% at half-range, making wells feel sluggish.)
   const t = dist / maxRange;
-  const rangeFade = (1 - t) * (1 - t);
+  const rangeFade = 1 - t;
   return baseAccel * rangeFade;
 }
 

@@ -68,7 +68,7 @@ export const CONFIG = {
     shipPullStrength: 0.6,    // Ship gravity in world-units/s² at FORCE_REF_DIST (0.25 world-units).
                              // This is the "how hard does it trap you" knob.
     shipPullFalloff: 1.5,     // Distance exponent for ship pull. Matches fluid falloff for consistency.
-    maxRange: 0.8,            // World-units — ship gravity fades to zero here via quadratic curve.
+    maxRange: 1.2,            // World-units — ship gravity fades to zero here via linear curve.
                              // Beyond this distance, the well exerts zero force on the ship.
                              // Creates genuine flat empty space between distant wells.
 
@@ -167,7 +167,8 @@ export const CONFIG = {
 
   portals: {
     // --- Fluid forces (weak inward pull, about 1/3 of well gravity) ---
-    gravity: 0.0005,          // Very gentle pull. Just enough to visually draw fluid inward.
+    gravity: 0.0002,          // Very gentle pull. Reduced from 0.0005 — was dragging ship via
+                             // fluid coupling from across the map (GPU gravity has no maxRange).
     falloff: 1.5,             // Same falloff curve as wells for consistency.
     fluidClampRadius: 10,     // Moderate clamp. Portal is smaller than a well.
     fluidTerminalSpeed: 0.1,  // Low terminal — portal shouldn't trap the ship via fluid alone.

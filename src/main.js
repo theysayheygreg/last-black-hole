@@ -23,7 +23,7 @@ import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 import { WORLD_SCALE, CAMERA_VIEW, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
-         worldDisplacement, screenToFluidUV, fluidVelToScreen } from './coords.js';
+         worldDistance, worldDisplacement, screenToFluidUV, fluidVelToScreen } from './coords.js';
 
 // ---- State ----
 let glCanvas, gl;
@@ -129,62 +129,27 @@ function init() {
   // Init wave ring system
   waveRings = new WaveRingSystem();
 
-  // Init ship — start in safe open space (away from wells AND stars)
+  // Init ship — find a safe spawn away from all objects
   ship = new Ship(glCanvas.width, glCanvas.height);
-  ship.wx = 1.5;
-  ship.wy = 0.45;
+  const [initX, initY] = findSafeSpawn();
+  ship.wx = initX;
+  ship.wy = initY;
 
   // Init camera to ship position
   camX = ship.wx;
   camY = ship.wy;
 
-  // Input handlers
-  overlayCanvas.addEventListener('mousemove', (e) => {
-    ship.setMouse(e.clientX, e.clientY);
-  });
-  overlayCanvas.addEventListener('mousedown', (e) => {
-    if (e.button === 0) {
-      if (gamePhase === 'paused') return;
-      if ((gamePhase === 'dead' && deathTimer > 1.0) ||
-          (gamePhase === 'escaped' && escapeTimer > 1.0)) {
-        restart();
-      } else if (gamePhase === 'playing') {
-        ship.setThrust(true);
-      }
-    }
-  });
-  overlayCanvas.addEventListener('mouseup', (e) => {
-    if (e.button === 0) ship.setThrust(false);
-  });
+  // Input: mouse is UI-only (menu clicks). Movement from keyboard/gamepad via InputManager.
   overlayCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // Pause menu
+  // Pause toggle (keyboard Escape — gamepad Start handled in game loop)
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      if (gamePhase === 'playing') {
-        gamePhase = 'paused';
-        ship.setThrust(false);
-      } else if (gamePhase === 'paused') {
-        gamePhase = 'playing';
-      }
+      togglePause();
     }
-  });
-
-  // Pause menu click handler
-  overlayCanvas.addEventListener('click', (e) => {
-    if (gamePhase !== 'paused') return;
-    const cx = overlayCanvas.width / 2;
-    const cy = overlayCanvas.height / 2;
-    const btnW = 200, btnH = 40;
-    if (e.clientX >= cx - btnW / 2 && e.clientX <= cx + btnW / 2 &&
-        e.clientY >= cy - 10 - btnH && e.clientY <= cy - 10) {
-      gamePhase = 'playing';
-    }
-    if (e.clientX >= cx - btnW / 2 && e.clientX <= cx + btnW / 2 &&
-        e.clientY >= cy + 10 && e.clientY <= cy + 10 + btnH) {
-      restart();
-    }
+    // Prevent spacebar from scrolling the page
+    if (e.code === 'Space') e.preventDefault();
   });
 
   // Handle resize
@@ -259,6 +224,48 @@ function seedInitialFluid() {
 
 const STARTING_MASSES = [1.5, 0.8, 1.2, 0.5];
 
+/**
+ * Find a random world position that is "safe" — far enough from all wells,
+ * stars, portals, and planetoids to not get immediately pulled in.
+ * Tries random positions until one meets the minimum distance, with a fallback.
+ */
+function findSafeSpawn(minDist = 0.4) {
+  const allObjects = [
+    ...wellSystem.wells.map(w => ({ wx: w.wx, wy: w.wy })),
+    ...starSystem.stars.map(s => ({ wx: s.wx, wy: s.wy })),
+    ...portalSystem.portals.map(p => ({ wx: p.wx, wy: p.wy })),
+  ];
+
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const wx = Math.random() * WORLD_SCALE;
+    const wy = Math.random() * WORLD_SCALE;
+    let safe = true;
+    for (const obj of allObjects) {
+      if (worldDistance(wx, wy, obj.wx, obj.wy) < minDist) {
+        safe = false;
+        break;
+      }
+    }
+    if (safe) return [wx, wy];
+  }
+  // Fallback: pick the best of 20 random candidates (furthest from nearest object)
+  let bestDist = 0, bestX = 1.5, bestY = 0.45;
+  for (let i = 0; i < 20; i++) {
+    const wx = Math.random() * WORLD_SCALE;
+    const wy = Math.random() * WORLD_SCALE;
+    let nearest = Infinity;
+    for (const obj of allObjects) {
+      nearest = Math.min(nearest, worldDistance(wx, wy, obj.wx, obj.wy));
+    }
+    if (nearest > bestDist) {
+      bestDist = nearest;
+      bestX = wx;
+      bestY = wy;
+    }
+  }
+  return [bestX, bestY];
+}
+
 function restart() {
   totalTime = 0;
   growthTimer = 0;
@@ -276,8 +283,9 @@ function restart() {
     wellSystem.wells[i].mass = STARTING_MASSES[i] ?? 1.0;
   }
 
-  // Reset ship
-  ship.teleport(1.5, 0.45);
+  // Reset ship to a random safe position (away from all objects)
+  const [spawnX, spawnY] = findSafeSpawn();
+  ship.teleport(spawnX, spawnY);
   camX = ship.wx;
   camY = ship.wy;
 
@@ -312,6 +320,19 @@ function updateCamera(dt) {
 }
 
 // ---- Game Loop ----
+
+// Gamepad button edge detection (only trigger on press, not hold)
+let _prevConfirm = false;
+let _prevPause = false;
+
+function togglePause() {
+  if (gamePhase === 'playing') {
+    gamePhase = 'paused';
+    ship.setThrust(false);
+  } else if (gamePhase === 'paused') {
+    gamePhase = 'playing';
+  }
+}
 
 function gameLoop(now) {
   if (!running) return;
@@ -401,13 +422,29 @@ function gameLoop(now) {
   // 5. Wave ring forces on ship
   waveRings.applyToShip(ship);
 
-  // 5b. Input
+  // 5b. Input (keyboard + gamepad)
   inputManager.poll();
+
+  // 5c. Handle confirm/pause from any input source (edge-triggered, not held)
+  const confirmNow = inputManager.confirmPressed;
+  const pauseNow = inputManager.pausePressed;
+  if (pauseNow && !_prevPause) togglePause();
+  if (confirmNow && !_prevConfirm) {
+    if (gamePhase === 'paused') {
+      gamePhase = 'playing';
+    } else if ((gamePhase === 'dead' && deathTimer > 1.0) ||
+               (gamePhase === 'escaped' && escapeTimer > 1.0)) {
+      restart();
+    }
+  }
+  _prevConfirm = confirmNow;
+  _prevPause = pauseNow;
+
   inputManager.applyToShip(ship);
 
   // 6. Ship update
   if (gamePhase === 'playing') {
-    ship.update(dt, fluid, wellSystem, camX, camY);
+    ship.update(dt, fluid, wellSystem);
 
     // Star push on ship
     starSystem.applyToShip(ship);
@@ -654,7 +691,7 @@ function gameLoop(now) {
 
       ctx.fillStyle = `rgba(200, 200, 200, ${Math.min((deathTimer - 1.0) * 2, 1)})`;
       ctx.font = '20px monospace';
-      ctx.fillText('Click to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
+      ctx.fillText('Press SPACE to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
     }
     ctx.restore();
   }
@@ -674,7 +711,7 @@ function gameLoop(now) {
 
       ctx.fillStyle = `rgba(200, 200, 220, ${Math.min((escapeTimer - 1.0) * 2, 1)})`;
       ctx.font = '20px monospace';
-      ctx.fillText('Click to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
+      ctx.fillText('Press SPACE to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
     }
     ctx.restore();
   }
@@ -683,37 +720,43 @@ function gameLoop(now) {
   if (gamePhase === 'paused') {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
-    const btnW = 200, btnH = 40;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
+    ctx.textAlign = 'center';
+
+    // Title
     ctx.fillStyle = '#88aaff';
     ctx.font = 'bold 36px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText('PAUSED', cx, cy - 70);
+    ctx.fillText('PAUSED', cx, cy - 100);
 
-    ctx.fillStyle = 'rgba(40, 40, 80, 0.9)';
-    ctx.fillRect(cx - btnW / 2, cy - 10 - btnH, btnW, btnH);
-    ctx.strokeStyle = 'rgba(100, 100, 255, 0.5)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(cx - btnW / 2, cy - 10 - btnH, btnW, btnH);
-    ctx.fillStyle = '#ccccff';
-    ctx.font = '18px monospace';
-    ctx.fillText('Continue', cx, cy - 10 - btnH / 2 + 6);
-
-    ctx.fillStyle = 'rgba(40, 40, 80, 0.9)';
-    ctx.fillRect(cx - btnW / 2, cy + 10, btnW, btnH);
-    ctx.strokeStyle = 'rgba(100, 100, 255, 0.5)';
-    ctx.strokeRect(cx - btnW / 2, cy + 10, btnW, btnH);
-    ctx.fillStyle = '#ccccff';
-    ctx.font = '18px monospace';
-    ctx.fillText('Restart', cx, cy + 10 + btnH / 2 + 6);
-
-    ctx.fillStyle = 'rgba(150, 150, 200, 0.6)';
+    // Controls reference
+    ctx.font = '14px monospace';
+    ctx.fillStyle = '#8888cc';
+    ctx.fillText('--- KEYBOARD ---', cx, cy - 60);
+    ctx.fillStyle = '#aaaadd';
     ctx.font = '13px monospace';
-    ctx.fillText('ESC to resume', cx, cy + 80);
+    ctx.fillText('Arrow Keys / WASD .... Steer', cx, cy - 40);
+    ctx.fillText('Space ................ Thrust', cx, cy - 24);
+    ctx.fillText('Ctrl ................. Brake', cx, cy - 8);
+    ctx.fillText('Escape ............... Pause', cx, cy + 8);
+
+    ctx.fillStyle = '#8888cc';
+    ctx.font = '14px monospace';
+    ctx.fillText('--- GAMEPAD ---', cx, cy + 34);
+    ctx.fillStyle = '#aaaadd';
+    ctx.font = '13px monospace';
+    ctx.fillText('Left Stick ........... Steer', cx, cy + 54);
+    ctx.fillText('R2 / Right Trigger ... Thrust', cx, cy + 70);
+    ctx.fillText('L2 / Left Trigger .... Brake', cx, cy + 86);
+    ctx.fillText('Start / Options ...... Pause', cx, cy + 102);
+
+    // Resume hint
+    ctx.fillStyle = 'rgba(150, 150, 200, 0.8)';
+    ctx.font = '16px monospace';
+    ctx.fillText('Press SPACE or ESC to resume', cx, cy + 140);
 
     ctx.restore();
   }

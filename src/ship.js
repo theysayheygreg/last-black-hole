@@ -6,8 +6,8 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
-         worldDisplacement, worldDirectionTo, fluidVelToScreen } from './coords.js';
+import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen,
+         worldDirectionTo, fluidVelToScreen } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 export class Ship {
@@ -25,9 +25,7 @@ export class Ship {
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
 
-    // Input state
-    this.mouseX = canvasWidth / 2;
-    this.mouseY = canvasHeight / 2;
+    // Input state (set by InputManager, not mouse)
     this.thrusting = false;
     this.thrustIntensity = 0;
     this.brakeIntensity = 0;
@@ -35,11 +33,6 @@ export class Ship {
     // Fluid readback for HUD
     this.lastFluidVel = { x: 0, y: 0 };
     this.lastFluidSpeed = 0;
-  }
-
-  setMouse(x, y) {
-    this.mouseX = x;
-    this.mouseY = y;
   }
 
   setThrust(active) {
@@ -77,15 +70,15 @@ export class Ship {
    * @param {number} camX - camera world X
    * @param {number} camY - camera world Y
    */
-  update(dt, fluid, wellSystem, camX, camY) {
+  update(dt, fluid, wellSystem) {
     const cfg = CONFIG.ship;
     const wellCfg = CONFIG.wells;
 
     // Pixels per world-unit (for converting pixel-based CONFIG values)
     const ppw = pxPerWorld(this.canvasWidth);
 
-    // 1. Update facing — rotate toward mouse (uses camera to convert mouse to world)
-    this._updateFacing(dt, cfg, camX, camY);
+    // 1. Facing is set directly by InputManager (keyboard arrows or gamepad stick).
+    //    No mouse-based rotation — ship holds its facing when no input is active.
 
     // 2. Thrust — CONFIG is in px/s² for feel continuity. Divide by pxPerWorld
     //    to get world-units/s². At 1200px screen: 800 / 1200 = 0.67 world-units/s².
@@ -185,32 +178,6 @@ export class Ship {
         }
       }
     }
-  }
-
-  _updateFacing(dt, cfg, camX, camY) {
-    // Convert mouse screen position to world, then compute angle
-    const [mouseWX, mouseWY] = screenToWorld(
-      this.mouseX, this.mouseY, camX, camY, this.canvasWidth, this.canvasHeight
-    );
-    // Use toroidal displacement for correct direction
-    const [dx, dy] = worldDisplacement(this.wx, this.wy, mouseWX, mouseWY);
-    this.targetFacing = Math.atan2(dy, dx);
-
-    let angleDiff = this.targetFacing - this.facing;
-    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-
-    const turnRateRad = cfg.turnRate * Math.PI / 180;
-    const turnAmount = turnRateRad * dt;
-
-    if (Math.abs(angleDiff) < turnAmount) {
-      this.facing = this.targetFacing;
-    } else {
-      this.facing += Math.sign(angleDiff) * turnAmount;
-    }
-
-    while (this.facing > Math.PI) this.facing -= Math.PI * 2;
-    while (this.facing < -Math.PI) this.facing += Math.PI * 2;
   }
 
   /**
