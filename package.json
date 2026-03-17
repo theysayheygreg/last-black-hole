@@ -7,7 +7,10 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "node tests/run-all.js"
+    "test": "node tests/run-all.js",
+    "build": "node scripts/build.js",
+    "build:web": "node scripts/build.js --targets=web",
+    "build:desktop": "node scripts/build.js --targets=web,mac,win"
   },
   "keywords": [],
   "author": "",
@@ -15,5 +18,9 @@
   "type": "commonjs",
   "dependencies": {
     "puppeteer": "^24.39.1"
+  },
+  "devDependencies": {
+    "@electron/packager": "^19.1.0",
+    "electron": "^41.0.2"
   }
 }

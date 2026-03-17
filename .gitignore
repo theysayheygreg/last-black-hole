@@ -1,5 +1,7 @@
 node_modules/
 dist/
+builds/
+release-staging/
 .DS_Store
 *.log
 tests/screenshots/
