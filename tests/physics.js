@@ -16,7 +16,7 @@ const {
   assert,
 } = require("./helpers");
 
-const htmlFile = process.argv[2] || "index.html";
+const htmlFile = process.argv[2] || "index-a.html";
 
 async function run() {
   console.log(`\n=== PHYSICS TESTS (${htmlFile}) ===\n`);

@@ -20,7 +20,7 @@ const {
   assert,
 } = require("./helpers");
 
-const htmlFile = process.argv[2] || "index.html";
+const htmlFile = process.argv[2] || "index-a.html";
 
 async function run() {
   console.log(`\n=== COORDINATE TESTS (${htmlFile}) ===\n`);
@@ -45,164 +45,49 @@ async function run() {
       return;
     }
 
-    // 1. Configure a single well at asymmetric position and check visual alignment
+    // 1. Verify the current well layout stays asymmetric in screen space.
+    // This is a coordinate-mapping test, not a screenshot-based render assertion.
     await runner.run(
-      "Dark void appears in correct quadrant for well at (0.2, 0.2)",
+      "Well screen coordinates span the expected asymmetric layout",
       async () => {
-        // Reconfigure wells: single well at (0.2, 0.2) — top-left in screen space
-        await page.evaluate(() => {
-          // Clear existing wells and add one at an asymmetric position
-          const state = window.__TEST_API;
-          // Access wellSystem through the test API's getWells
-          // We need to set config and restart
-          state.triggerRestart();
-        });
-
-        // Wait for restart to take effect
+        await page.evaluate(() => window.__TEST_API.triggerRestart());
         await new Promise((r) => setTimeout(r, 500));
 
-        // Override wells through page evaluate
-        const wellSetupOK = await page.evaluate(() => {
-          // The wellSystem is not directly exposed, but we can check
-          // the wells we get from the API — they should have screen positions
-          // corresponding to the well-space positions set in main.js
+        const layout = await page.evaluate(() => {
           const wells = window.__TEST_API.getWells();
-          return wells && wells.length > 0;
-        });
-        assert(wellSetupOK, "Well system not available");
+          if (!wells || wells.length === 0) return null;
 
-        // Let the sim run for 3 seconds to build up density patterns
-        await new Promise((r) => setTimeout(r, 3000));
+          const width = window.innerWidth;
+          const height = window.innerHeight;
+          const midX = width / 2;
+          const midY = height / 2;
 
-        // Take a screenshot and analyze quadrant brightness
-        const quadrantData = await page.evaluate(() => {
-          const canvas = document.getElementById("fluid-canvas");
-          if (!canvas) return null;
-
-          // Get the WebGL context to read pixels
-          const gl =
-            canvas.getContext("webgl2") || canvas.getContext("webgl");
-          if (!gl) return null;
-
-          const w = canvas.width;
-          const h = canvas.height;
-
-          // Read the full framebuffer
-          const pixels = new Uint8Array(w * h * 4);
-          gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-          // Compute average brightness per quadrant
-          // WebGL readPixels: (0,0) is bottom-left, so:
-          //   bottom-left = screen top-left (after ASCII shader Y-flip)
-          //   Actually, we're reading from the default framebuffer which
-          //   has the ASCII shader output. The ASCII shader flips Y,
-          //   so screen top-left = GL bottom-left in readPixels.
-          //
-          // For readPixels: row 0 = bottom of screen = bottom of viewport
-          // screen top-left quadrant = GL rows [h/2, h) cols [0, w/2)
-
-          const quadrants = {
-            topLeft: { sum: 0, count: 0 },
-            topRight: { sum: 0, count: 0 },
-            bottomLeft: { sum: 0, count: 0 },
-            bottomRight: { sum: 0, count: 0 },
+          const counts = {
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
           };
 
-          const halfW = Math.floor(w / 2);
-          const halfH = Math.floor(h / 2);
-
-          for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-              const idx = (y * w + x) * 4;
-              const brightness =
-                pixels[idx] * 0.299 +
-                pixels[idx + 1] * 0.587 +
-                pixels[idx + 2] * 0.114;
-
-              // In GL readPixels: y=0 is bottom of screen
-              // So y >= halfH means top of screen, y < halfH means bottom of screen
-              const isScreenTop = y >= halfH;
-              const isLeft = x < halfW;
-
-              if (isScreenTop && isLeft) {
-                quadrants.topLeft.sum += brightness;
-                quadrants.topLeft.count++;
-              } else if (isScreenTop && !isLeft) {
-                quadrants.topRight.sum += brightness;
-                quadrants.topRight.count++;
-              } else if (!isScreenTop && isLeft) {
-                quadrants.bottomLeft.sum += brightness;
-                quadrants.bottomLeft.count++;
-              } else {
-                quadrants.bottomRight.sum += brightness;
-                quadrants.bottomRight.count++;
-              }
-            }
+          for (const well of wells) {
+            if (well.x < midX) counts.left++;
+            if (well.x >= midX) counts.right++;
+            if (well.y < midY) counts.top++;
+            if (well.y >= midY) counts.bottom++;
           }
 
-          return {
-            topLeft:
-              quadrants.topLeft.count > 0
-                ? quadrants.topLeft.sum / quadrants.topLeft.count
-                : 0,
-            topRight:
-              quadrants.topRight.count > 0
-                ? quadrants.topRight.sum / quadrants.topRight.count
-                : 0,
-            bottomLeft:
-              quadrants.bottomLeft.count > 0
-                ? quadrants.bottomLeft.sum / quadrants.bottomLeft.count
-                : 0,
-            bottomRight:
-              quadrants.bottomRight.count > 0
-                ? quadrants.bottomRight.sum / quadrants.bottomRight.count
-                : 0,
-          };
+          return { wells, counts, width, height };
         });
 
-        if (quadrantData) {
-          console.log("        Quadrant brightness:");
-          console.log(
-            `          TL: ${quadrantData.topLeft.toFixed(2)}  TR: ${quadrantData.topRight.toFixed(2)}`
-          );
-          console.log(
-            `          BL: ${quadrantData.bottomLeft.toFixed(2)}  BR: ${quadrantData.bottomRight.toFixed(2)}`
-          );
+        assert(layout && layout.wells.length >= 4, "Expected at least four wells in the layout");
+        assert(layout.counts.left > 0, "Expected at least one well on the left side of the screen");
+        assert(layout.counts.right > 0, "Expected at least one well on the right side of the screen");
+        assert(layout.counts.top > 0, "Expected at least one well on the top half of the screen");
+        assert(layout.counts.bottom > 0, "Expected at least one well on the bottom half of the screen");
 
-          // The well at (0.35, 0.40) is in the top-left area.
-          // The dark void should make top-left the darkest,
-          // but nearby accretion glow should make it NOT the faintest overall.
-          // At minimum, verify the wells produce visual activity in the
-          // expected quadrants — wells at (0.35, 0.40) and (0.20, 0.75) are
-          // left-side, (0.70, 0.30) and (0.65, 0.72) are right-side.
-          //
-          // If Y is flipped, the top wells would appear at the bottom and vice versa.
-          // Check that the bottom-right quadrant is NOT the darkest
-          // (it has no wells near it in the current layout).
-
-          // Basic sanity: we got valid pixel data
-          const total =
-            quadrantData.topLeft +
-            quadrantData.topRight +
-            quadrantData.bottomLeft +
-            quadrantData.bottomRight;
-          if (total === 0) {
-            // readPixels returns zeros in headless Chrome when
-            // preserveDrawingBuffer is false. This is expected.
-            // The ship-drift test below is the reliable alignment check.
-            console.log(
-              "        (GL readPixels returned zeros in headless — " +
-              "quadrant check skipped, relying on ship-drift test)"
-            );
-          } else {
-            // If we got pixel data, verify the pattern makes sense
-            console.log("        Pixel data available for quadrant analysis");
-          }
-        } else {
-          console.log(
-            "        (Quadrant analysis skipped — could not read GL pixels in headless)"
-          );
-        }
+        console.log(
+          `        Layout counts — left:${layout.counts.left} right:${layout.counts.right} top:${layout.counts.top} bottom:${layout.counts.bottom}`
+        );
       }
     );
 

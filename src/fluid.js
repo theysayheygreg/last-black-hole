@@ -483,6 +483,13 @@ export class FluidSim {
     this._drawQuad();
   }
 
+  _clearTarget(target, r = 0, g = 0, b = 0, a = 1) {
+    const gl = this.gl;
+    const u = this._useProgram(this.programs.clear);
+    gl.uniform4f(u['u_clearValue'], r, g, b, a);
+    this._blit(target);
+  }
+
   _useProgram(prog) {
     this.gl.useProgram(prog.program);
     return prog.uniforms;
@@ -627,9 +634,7 @@ export class FluidSim {
     this._blit(this.divergenceFBO);
 
     // 6. Clear pressure
-    u = this._useProgram(this.programs.clear);
-    gl.uniform4f(u['u_clearValue'], 0, 0, 0, 1);
-    this._blit(this.pressure.read);
+    this._clearTarget(this.pressure.read);
 
     // 7. Pressure solve (Jacobi iteration)
     for (let i = 0; i < CONFIG.fluid.pressureIterations; i++) {
@@ -766,5 +771,19 @@ export class FluidSim {
    */
   setWellPositions(wellPositionsUV) {
     this._wellPositionsUV = wellPositionsUV;
+  }
+
+  /**
+   * Clear all simulation buffers so a restart begins from a real blank state.
+   */
+  clear() {
+    this._clearTarget(this.velocity.read);
+    this._clearTarget(this.velocity.write);
+    this._clearTarget(this.density.read);
+    this._clearTarget(this.density.write);
+    this._clearTarget(this.pressure.read);
+    this._clearTarget(this.pressure.write);
+    this._clearTarget(this.divergenceFBO);
+    this._clearTarget(this.curlFBO);
   }
 }

@@ -7,7 +7,7 @@
 const { execSync } = require("child_process");
 const path = require("path");
 
-const htmlFile = process.argv[2] || "index.html";
+const htmlFile = process.argv[2] || "index-a.html";
 
 const suites = [
   { name: "Smoke", file: "smoke.js" },

@@ -267,6 +267,10 @@ function restart() {
   escapeTimer = 0;
   waveRings.rings = [];
 
+  // Reset the fluid field itself so restart does not inherit the prior run's wakes,
+  // turbulence, or accretion density.
+  fluid.clear();
+
   // Reset well masses
   for (let i = 0; i < wellSystem.wells.length; i++) {
     wellSystem.wells[i].mass = STARTING_MASSES[i] ?? 1.0;
