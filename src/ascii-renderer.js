@@ -69,13 +69,15 @@ void main() {
   float charIdx = lum * (u_numChars - 1.0);
 
   // Quantum fluctuations: sparse cells that blink, anchored in worldspace.
-  // Reconstruct this cell's fluid UV from camera offset so the shimmer
-  // pattern stays fixed in the world when the camera moves.
+  // Intensity scales with luminance — subtle in void, intense near disturbances.
   vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_worldScale;
-  // Quantize to cell grid in world space
   vec2 worldCell = floor(fluidUV * u_resolution / vec2(cellW, cellH));
   float noise = fract(sin(dot(worldCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
-  if (noise > (1.0 - u_shimmer * 0.01)) {
+  // Scale probability by luminance: void (lum~0.01) barely twinkles,
+  // near wells (lum~0.3+) twinkles heavily. Ramp from 0.2x to 3x base rate.
+  float disturbance = smoothstep(0.0, 0.3, lum) * 2.8 + 0.2;
+  float threshold = 1.0 - u_shimmer * 0.01 * disturbance;
+  if (noise > threshold) {
     float bump = fract(noise * 7.0) * 2.0 + 1.0;
     charIdx += bump;
   }
