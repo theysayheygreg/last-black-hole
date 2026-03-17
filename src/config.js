@@ -50,10 +50,20 @@ export const CONFIG = {
     shipPullFalloff: 1.5,
     maxRange: 0.8,            // world-units — gravity fades to zero here (flat space beyond)
     killRadius: 0.04,         // world-units (~12-25px equivalent)
+    fluidClampRadius: 15,     // texels — prevents singularity in GPU force shader
+    fluidTerminalSpeed: 0.3,  // max fluid velocity near well center
     accretionRate: 0.015,
     accretionRadius: 0.023,   // fluid UV (~0.07/3)
     accretionSpinRate: 0.8,
     accretionPoints: 8,
+    accretionRings: [
+      { radiusMult: 0.5, brightness: 5.0, r: 1.0, g: 0.9, b: 0.5, splatR: 0.002 },  // inner — hot white-yellow
+      { radiusMult: 0.8, brightness: 3.0, r: 1.0, g: 0.6, b: 0.15, splatR: 0.002 }, // mid — bright amber
+      { radiusMult: 1.2, brightness: 1.5, r: 0.8, g: 0.3, b: 0.05, splatR: 0.003 }, // outer — dim red-orange
+    ],
+    accretionTangentialForce: 0.002, // tangential velocity injection per ring
+    horizonPoints: 12,
+    horizonRadiusMult: 0.3,   // fraction of accretionRadius for event horizon ring
   },
   events: {
     waveSpeed: 0.4,           // world-units/sec (was 150px/sec)
@@ -83,6 +93,8 @@ export const CONFIG = {
     falloff: 1.8,
     orbitalStrength: 0.15,
     clearing: 0.2,
+    fluidClampRadius: 20,
+    fluidTerminalSpeed: 0.2,
     rayCount: 6,
     rayLength: 0.08,          // fluid UV (~0.25/3)
     rayBrightness: 0.06,
@@ -95,6 +107,8 @@ export const CONFIG = {
   loot: {
     gravity: 0.0008,
     falloff: 3.0,
+    fluidClampRadius: 5,
+    fluidTerminalSpeed: 0.05,
     densityRate: 0.015,
     glowRadius: 0.007,        // fluid UV (~0.02/3)
     shimmerSpeed: 3.0,
@@ -104,6 +118,10 @@ export const CONFIG = {
   },
   portals: {
     gravity: 0.0005,           // weak inward pull (1/3 of well gravity)
+    falloff: 1.5,
+    fluidClampRadius: 10,
+    fluidTerminalSpeed: 0.1,
+    orbitalStrength: 0.2,
     captureRadius: 0.08,       // world-units — about 2x well kill radius
     densityRate: 0.02,         // purple glow brightness
     spiralArms: 3,
@@ -127,6 +145,11 @@ export const CONFIG = {
     size: 6,                   // overlay dot pixels
     spawnInterval: [15, 25],
     maxAlive: 6,
+  },
+  camera: {
+    lerpSpeed: 3.0,           // higher = tighter follow
+    leadAhead: 0.3,           // seconds of velocity lead-ahead
+    maxLerp: 0.5,             // clamp lerp per frame (prevents teleport)
   },
   input: {
     method: 'auto',

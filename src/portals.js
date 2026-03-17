@@ -40,11 +40,11 @@ export class PortalSystem {
       fluid.applyWellForce(
         [fu, fv],
         cfg.gravity,
-        1.5,      // falloff
-        10,       // clamp radius
-        0.2,      // slight orbital swirl
+        cfg.falloff,
+        cfg.fluidClampRadius,
+        cfg.orbitalStrength,
         dt,
-        0.1       // terminal speed
+        cfg.fluidTerminalSpeed
       );
 
       // Rotating 3-arm spiral density injection (purple/magenta)

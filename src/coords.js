@@ -106,6 +106,19 @@ export function worldDisplacement(ax, ay, bx, by) {
   return [dx, dy];
 }
 
+/**
+ * Shortest distance, displacement, and unit direction from (ax,ay) to (bx,by) on torus.
+ * Returns { dist, dx, dy, nx, ny } — distance, displacement, and unit direction.
+ * If dist < epsilon, returns zero direction. Use this instead of manually computing
+ * worldDisplacement + sqrt + normalize in every force calculation.
+ */
+export function worldDirectionTo(ax, ay, bx, by) {
+  const [dx, dy] = worldDisplacement(ax, ay, bx, by);
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 0.001) return { dist, dx, dy, nx: 0, ny: 0 };
+  return { dist, dx, dy, nx: dx / dist, ny: dy / dist };
+}
+
 // ---- Legacy well-space functions (0-1 range) ----
 // These now just delegate to world-space functions.
 // Well-space positions should be migrated to world-space over time.

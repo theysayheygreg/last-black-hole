@@ -39,10 +39,10 @@ export class LootSystem {
         [fu, fv],
         cfg.gravity,
         cfg.falloff,
-        5,
+        cfg.fluidClampRadius,
         0,
         dt,
-        0.05
+        cfg.fluidTerminalSpeed
       );
 
       // Visible glow

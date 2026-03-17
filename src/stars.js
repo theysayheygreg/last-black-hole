@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 class Star {
@@ -39,10 +39,10 @@ export class StarSystem {
         [fu, fv],
         -cfg.radiationStrength * star.mass,
         cfg.falloff,
-        20,
+        cfg.fluidClampRadius,
         cfg.orbitalStrength * star.orbitalDir,
         dt,
-        0.2
+        cfg.fluidTerminalSpeed
       );
 
       // Clearing bubble
@@ -88,11 +88,10 @@ export class StarSystem {
     const maxRange = cfg.maxRange ?? 0.6;
 
     for (const star of this.stars) {
-      const [dx, dy] = worldDisplacement(star.wx, star.wy, ship.wx, ship.wy);
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const { dist, nx, ny } = worldDirectionTo(star.wx, star.wy, ship.wx, ship.wy);
       const accel = inversePowerForce(dist, cfg.shipPushStrength, star.mass, cfg.shipPushFalloff, maxRange);
       if (accel > 0) {
-        applyForceToShip(ship, dx / dist, dy / dist, accel);
+        applyForceToShip(ship, nx, ny, accel);
       }
     }
   }

@@ -292,16 +292,13 @@ function restart() {
 // ---- Camera ----
 
 function updateCamera(dt) {
-  // Smooth lerp toward ship with velocity lead-ahead
-  const leadAmount = 0.3; // seconds of lead
-  const targetX = ship.wx + ship.vx * leadAmount;
-  const targetY = ship.wy + ship.vy * leadAmount;
+  const cam = CONFIG.camera;
+  const targetX = ship.wx + ship.vx * cam.leadAhead;
+  const targetY = ship.wy + ship.vy * cam.leadAhead;
 
-  // Toroidal displacement from cam to target
   const [dx, dy] = worldDisplacement(camX, camY, targetX, targetY);
 
-  const lerpSpeed = 3.0; // higher = tighter follow
-  const t = Math.min(lerpSpeed * dt, 0.5);
+  const t = Math.min(cam.lerpSpeed * dt, cam.maxLerp);
   camX += dx * t;
   camY += dy * t;
 

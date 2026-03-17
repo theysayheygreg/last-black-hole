@@ -7,7 +7,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
-         worldDisplacement, fluidVelToScreen } from './coords.js';
+         worldDisplacement, worldDirectionTo, fluidVelToScreen } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 export class Ship {
@@ -121,11 +121,10 @@ export class Ship {
     if (wellSystem) {
       const maxRange = wellCfg.maxRange ?? 0.8;
       for (const well of wellSystem.wells) {
-        const [dwx, dwy] = worldDisplacement(this.wx, this.wy, well.wx, well.wy);
-        const dist = Math.sqrt(dwx * dwx + dwy * dwy);
+        const { dist, nx, ny } = worldDirectionTo(this.wx, this.wy, well.wx, well.wy);
         const accel = inversePowerForce(dist, wellCfg.shipPullStrength, well.mass, wellCfg.shipPullFalloff, maxRange);
         if (accel > 0) {
-          applyForceToShip(this, dwx / dist, dwy / dist, accel, dt);
+          applyForceToShip(this, nx, ny, accel, dt);
         }
       }
     }

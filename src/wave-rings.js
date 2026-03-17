@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDirectionTo } from './coords.js';
 import { waveBandForce, applyForceToShip } from './physics.js';
 
 class WaveRing {
@@ -54,13 +54,10 @@ export class WaveRingSystem {
     const halfWidth = cfg.waveWidth * 0.5;
 
     for (const ring of this.rings) {
-      const [dx, dy] = worldDisplacement(ring.sourceWX, ring.sourceWY, ship.wx, ship.wy);
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.001) continue;
-
+      const { dist, nx, ny } = worldDirectionTo(ring.sourceWX, ring.sourceWY, ship.wx, ship.wy);
       const accel = waveBandForce(dist, ring.radius, halfWidth, cfg.waveShipPush, ring.amplitude);
       if (accel > 0) {
-        applyForceToShip(ship, dx / dist, dy / dist, accel);
+        applyForceToShip(ship, nx, ny, accel);
       }
     }
   }

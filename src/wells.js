@@ -57,10 +57,10 @@ export class WellSystem {
         [fu, fv],
         cfg.gravity * well.mass,
         cfg.falloff,
-        15,
+        cfg.fluidClampRadius,
         cfg.orbitalStrength * well.orbitalDir,
         dt,
-        0.3
+        cfg.fluidTerminalSpeed
       );
 
       // === SPINNING ACCRETION DISK ===
@@ -68,13 +68,7 @@ export class WellSystem {
       const numPts = well.getAccretionPoints();
       const rate = well.getAccretionRate() * well.mass;
 
-      const rings = [
-        { radiusMult: 0.5, brightness: 5.0, r: 1.0, g: 0.9, b: 0.5, splatR: 0.002 },
-        { radiusMult: 0.8, brightness: 3.0, r: 1.0, g: 0.6, b: 0.15, splatR: 0.002 },
-        { radiusMult: 1.2, brightness: 1.5, r: 0.8, g: 0.3, b: 0.05, splatR: 0.003 },
-      ];
-
-      for (const ring of rings) {
+      for (const ring of cfg.accretionRings) {
         const ringR = well.getAccretionRadius() * well.mass * ring.radiusMult;
 
         for (let i = 0; i < numPts; i++) {
@@ -85,7 +79,7 @@ export class WellSystem {
           const px = fu + Math.cos(angle) * ringR;
           const py = fv + Math.sin(angle) * ringR;
 
-          const tangStr = 0.002 * ring.radiusMult;
+          const tangStr = cfg.accretionTangentialForce * ring.radiusMult;
           const tangVx = -Math.sin(angle) * tangStr * well.orbitalDir;
           const tangVy = Math.cos(angle) * tangStr * well.orbitalDir;
 
@@ -104,8 +98,8 @@ export class WellSystem {
       // === EVENT HORIZON ===
       fluid.splat(fu, fv, 0, 0, 0.001, -0.05, -0.05, -0.05);
 
-      const horizonPts = 12;
-      const horizonR = well.getAccretionRadius() * well.mass * 0.3;
+      const horizonPts = cfg.horizonPoints;
+      const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult;
       for (let i = 0; i < horizonPts; i++) {
         const angle = spinAngle * 1.5 + (i / horizonPts) * Math.PI * 2;
         const px = fu + Math.cos(angle) * horizonR;

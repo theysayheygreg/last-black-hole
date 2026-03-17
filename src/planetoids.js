@@ -13,7 +13,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, worldDirectionTo } from './coords.js';
 import { proximityForce, applyForceToShip } from './physics.js';
 
 class Planetoid {
@@ -254,11 +254,10 @@ export class PlanetoidSystem {
 
     for (const p of this.planetoids) {
       if (!p.alive) continue;
-      const [dx, dy] = worldDisplacement(p.wx, p.wy, ship.wx, ship.wy);
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const { dist, nx, ny } = worldDirectionTo(p.wx, p.wy, ship.wx, ship.wy);
       const accel = proximityForce(dist, cfg.shipPushStrength, cfg.shipPushRadius);
       if (accel > 0) {
-        applyForceToShip(ship, dx / dist, dy / dist, accel);
+        applyForceToShip(ship, nx, ny, accel);
       }
     }
   }
