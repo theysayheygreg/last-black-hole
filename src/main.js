@@ -129,10 +129,10 @@ function init() {
   // Init wave ring system
   waveRings = new WaveRingSystem();
 
-  // Init ship — start between wells
+  // Init ship — start in safe open space (away from wells AND stars)
   ship = new Ship(glCanvas.width, glCanvas.height);
-  ship.wx = 1.44;
-  ship.wy = 1.65;
+  ship.wx = 1.5;
+  ship.wy = 0.45;
 
   // Init camera to ship position
   camX = ship.wx;
@@ -273,7 +273,7 @@ function restart() {
   }
 
   // Reset ship
-  ship.teleport(1.44, 1.65);
+  ship.teleport(1.5, 0.45);
   camX = ship.wx;
   camY = ship.wy;
 

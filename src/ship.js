@@ -12,8 +12,8 @@ import { WORLD_SCALE, worldToFluidUV, worldToScreen, screenToWorld,
 export class Ship {
   constructor(canvasWidth, canvasHeight) {
     // Position in world-space (0 to WORLD_SCALE)
-    this.wx = 1.44;  // start position in 3x3 world (was 0.48 * 3)
-    this.wy = 1.65;  // (was 0.55 * 3)
+    this.wx = 1.5;   // start in safe open space
+    this.wy = 0.45;
     // Velocity in world-units/sec
     this.vx = 0;
     this.vy = 0;
@@ -122,9 +122,8 @@ export class Ship {
         const [dwx, dwy] = worldDisplacement(this.wx, this.wy, well.wx, well.wy);
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
         if (dist < 0.001) continue;
-        const safeDist = Math.max(dist, 0.1); // stability guard in world-units
+        const safeDist = Math.max(dist, 0.15); // stability guard in world-units
         // Normalize distance to reference of 0.25 world-units (≈100px at 1200px screen)
-        // Without this, raw world-distances (0.3-1.0) make gravity way too strong
         const normDist = safeDist / 0.25;
         const gravAccel = wellCfg.shipPullStrength * well.mass / Math.pow(normDist, wellCfg.shipPullFalloff);
         const nx = dwx / dist;
