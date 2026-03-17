@@ -419,6 +419,7 @@ function gameLoop(now) {
 
   // 4. Wave ring propagation
   waveRings.update(dt);
+  waveRings.injectIntoFluid(fluid); // distort the ASCII fabric itself
 
   // 5. Wave ring forces on ship
   waveRings.applyToShip(ship);

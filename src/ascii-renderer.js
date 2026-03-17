@@ -66,12 +66,14 @@ void main() {
   // Map luminance to character index (0 = sparse, N-1 = dense)
   float charIdx = lum * (u_numChars - 1.0);
 
-  // Shimmer: per-cell time-varying noise that jitters the character index.
-  // Operates on the INDEX, not the color — guaranteed to show different glyphs
-  // even when luminance is nearly uniform across the screen.
-  // Noise varies per cell and over time so adjacent cells flicker independently.
-  float noise = fract(sin(dot(cellIndex + floor(u_time * 4.0) * 0.1, vec2(12.9898, 78.233))) * 43758.5453);
-  charIdx += (noise - 0.5) * u_shimmer;
+  // Quantum fluctuations: sparse individual cells that blink, not a uniform filter.
+  // Only ~2-3% of cells change per time step — creates rare twinkling, not static.
+  float noise = fract(sin(dot(cellIndex + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
+  if (noise > (1.0 - u_shimmer * 0.01)) {
+    // This cell flickers — bump it up by 1-2 characters
+    float bump = fract(noise * 7.0) * 2.0 + 1.0;
+    charIdx += bump;
+  }
 
   charIdx = clamp(floor(charIdx), 0.0, u_numChars - 1.0);
 

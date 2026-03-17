@@ -114,9 +114,9 @@ export const CONFIG = {
     cellAspect: 1.5,          // Cell height/width ratio. 1.5 = readable monospace proportions.
     contrast: 0.55,           // Power curve on luminance→character mapping. <1 = more chars in dark.
                              // Lowered from 0.8 — stretches void-to-fabric across more of the ramp.
-    shimmer: 2.5,             // Character-index jitter amplitude. Each cell gets a random +/- this
-                             // value per time step, causing adjacent cells to show different glyphs.
-                             // 0 = static, 2-3 = living texture, 5+ = noisy.
+    shimmer: 3.0,             // Quantum fluctuation probability. Controls what fraction of cells
+                             // spontaneously blink per frame. Higher = more cells twinkle.
+                             // 0 = dead static, 3 = rare sparkle, 6 = busy.
     colorTemperature: 0.0,    // Unused. Reserved for global color shift.
   },
 

@@ -243,8 +243,16 @@ void main() {
   // Tone-map density: raw values range 0–300+, compress to 0–1 via exponential curve
   float density = 1.0 - exp(-rawDensity * u_densityScale);
 
-  // Combine density and velocity magnitude for brightness signal
-  float combined = density + speed * 1.5;
+  // Fabric texture: spatial noise floor that gives the void gentle gradients.
+  // Without this, open space is uniformly lum=0.015 and all chars are identical.
+  // This is the "dark energy" of the void — slow-moving large-scale structure.
+  vec2 fabricUV = fluidUV * 12.0 + u_time * 0.02; // slow drift
+  float fabric = fract(sin(dot(fabricUV, vec2(127.1, 311.7))) * 43758.5453);
+  float fabric2 = fract(sin(dot(fabricUV * 0.5 + 3.3, vec2(269.5, 183.3))) * 43758.5453);
+  float fabricNoise = (fabric * 0.6 + fabric2 * 0.4) * 0.08; // 0-0.08 range
+
+  // Combine density, velocity, and fabric texture for brightness signal
+  float combined = density + speed * 1.5 + fabricNoise;
 
   // Base color: deep void to teal based on combined signal
   vec3 col = mix(u_voidColor, u_normalColor, clamp(combined, 0.0, 1.0));

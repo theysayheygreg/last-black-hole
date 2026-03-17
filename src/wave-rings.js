@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDirectionTo } from './coords.js';
+import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDirectionTo, worldToFluidUV } from './coords.js';
 import { waveBandForce, applyForceToShip } from './physics.js';
 
 class WaveRing {
@@ -58,6 +58,41 @@ export class WaveRingSystem {
       const accel = waveBandForce(dist, ring.radius, halfWidth, cfg.waveShipPush, ring.amplitude);
       if (accel > 0) {
         applyForceToShip(ship, nx, ny, accel);
+      }
+    }
+  }
+
+  /**
+   * Inject wave rings into the fluid sim as expanding velocity/density pulses.
+   * This makes the ASCII fabric itself distort when waves pass through,
+   * rather than waves being an overlay-only visual.
+   */
+  injectIntoFluid(fluid) {
+    const SPLATS_PER_RING = 16; // points around the circumference
+
+    for (const ring of this.rings) {
+      if (ring.amplitude < 0.05) continue;
+
+      const life = ring.amplitude / ring.initialAmplitude;
+      const [srcU, srcV] = worldToFluidUV(ring.sourceWX, ring.sourceWY);
+      const radiusUV = ring.radius / WORLD_SCALE;
+
+      // Inject splats around the ring circumference
+      const force = ring.amplitude * 0.003; // velocity outward push
+      const brightness = ring.amplitude * 0.08 * life; // density glow
+
+      for (let i = 0; i < SPLATS_PER_RING; i++) {
+        const angle = (i / SPLATS_PER_RING) * Math.PI * 2;
+        const px = srcU + Math.cos(angle) * radiusUV;
+        const py = srcV + Math.sin(angle) * radiusUV;
+
+        // Velocity: push outward from source
+        const vx = Math.cos(angle) * force;
+        const vy = Math.sin(angle) * force;
+
+        // Cyan-white density
+        fluid.splat(px, py, vx, vy, 0.004,
+          brightness * 0.3, brightness * 0.8, brightness);
       }
     }
   }
