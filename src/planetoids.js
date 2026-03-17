@@ -14,6 +14,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { proximityForce, applyForceToShip } from './physics.js';
 
 class Planetoid {
   /**
@@ -255,13 +256,10 @@ export class PlanetoidSystem {
       if (!p.alive) continue;
       const [dx, dy] = worldDisplacement(p.wx, p.wy, ship.wx, ship.wy);
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.001 || dist > cfg.shipPushRadius) continue;
-
-      const strength = cfg.shipPushStrength * (1 - dist / cfg.shipPushRadius);
-      const nx = dx / dist;
-      const ny = dy / dist;
-      ship.vx += nx * strength * (1 / 60);
-      ship.vy += ny * strength * (1 / 60);
+      const accel = proximityForce(dist, cfg.shipPushStrength, cfg.shipPushRadius);
+      if (accel > 0) {
+        applyForceToShip(ship, dx / dist, dy / dist, accel);
+      }
     }
   }
 

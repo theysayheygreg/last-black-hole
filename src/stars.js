@@ -6,6 +6,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { inversePowerForce, applyForceToShip } from './physics.js';
 
 class Star {
   constructor(wx, wy, opts = {}) {
@@ -84,24 +85,15 @@ export class StarSystem {
    */
   applyToShip(ship) {
     const cfg = CONFIG.stars;
-    const maxRange = cfg.maxRange ?? 0.6; // world-units — push drops to zero here
+    const maxRange = cfg.maxRange ?? 0.6;
 
     for (const star of this.stars) {
       const [dx, dy] = worldDisplacement(star.wx, star.wy, ship.wx, ship.wy);
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.001 || dist > maxRange) continue;
-
-      const safeDist = Math.max(dist, 0.15);
-      const normDist = safeDist / 0.25;
-      const baseAccel = cfg.shipPushStrength * star.mass / Math.pow(normDist, cfg.shipPushFalloff);
-      const rangeFrac = dist / maxRange;
-      const rangeFade = (1 - rangeFrac) * (1 - rangeFrac);
-      const pushAccel = baseAccel * rangeFade;
-      const nx = dx / dist;
-      const ny = dy / dist;
-
-      ship.vx += nx * pushAccel * (1 / 60);
-      ship.vy += ny * pushAccel * (1 / 60);
+      const accel = inversePowerForce(dist, cfg.shipPushStrength, star.mass, cfg.shipPushFalloff, maxRange);
+      if (accel > 0) {
+        applyForceToShip(ship, dx / dist, dy / dist, accel);
+      }
     }
   }
 

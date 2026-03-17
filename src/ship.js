@@ -8,6 +8,7 @@
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDisplacement, fluidVelToScreen } from './coords.js';
+import { inversePowerForce, applyForceToShip } from './physics.js';
 
 export class Ship {
   constructor(canvasWidth, canvasHeight) {
@@ -117,25 +118,15 @@ export class Ship {
     this.vy = this.vy * (1 - coupling) + fluidVelWorld.y * coupling;
 
     // 5. Direct gravitational pull from wells (world-space)
-    // Gravity has a finite range — force fades to zero beyond maxRange.
-    // This creates genuine flat empty space between distant wells.
     if (wellSystem) {
-      const maxRange = wellCfg.maxRange ?? 0.8; // world-units — gravity drops to zero here
+      const maxRange = wellCfg.maxRange ?? 0.8;
       for (const well of wellSystem.wells) {
         const [dwx, dwy] = worldDisplacement(this.wx, this.wy, well.wx, well.wy);
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
-        if (dist < 0.001 || dist > maxRange) continue;
-        const safeDist = Math.max(dist, 0.15);
-        const normDist = safeDist / 0.25;
-        const baseAccel = wellCfg.shipPullStrength * well.mass / Math.pow(normDist, wellCfg.shipPullFalloff);
-        // Smooth quadratic fade to zero at maxRange
-        const rangeFrac = dist / maxRange;
-        const rangeFade = (1 - rangeFrac) * (1 - rangeFrac); // 1 at center, 0 at edge
-        const gravAccel = baseAccel * rangeFade;
-        const nx = dwx / dist;
-        const ny = dwy / dist;
-        this.vx += nx * gravAccel * dt;
-        this.vy += ny * gravAccel * dt;
+        const accel = inversePowerForce(dist, wellCfg.shipPullStrength, well.mass, wellCfg.shipPullFalloff, maxRange);
+        if (accel > 0) {
+          applyForceToShip(this, dwx / dist, dwy / dist, accel, dt);
+        }
       }
     }
 

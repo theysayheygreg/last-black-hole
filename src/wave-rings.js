@@ -7,6 +7,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { waveBandForce, applyForceToShip } from './physics.js';
 
 class WaveRing {
   constructor(sourceWX, sourceWY, amplitude) {
@@ -53,24 +54,14 @@ export class WaveRingSystem {
     const halfWidth = cfg.waveWidth * 0.5;
 
     for (const ring of this.rings) {
-      // Toroidal displacement from ring source to ship
       const [dx, dy] = worldDisplacement(ring.sourceWX, ring.sourceWY, ship.wx, ship.wy);
       const dist = Math.sqrt(dx * dx + dy * dy);
-
       if (dist < 0.001) continue;
 
-      const distFromFront = Math.abs(dist - ring.radius);
-      if (distFromFront > halfWidth) continue;
-
-      const bandPosition = distFromFront / halfWidth;
-      const profile = Math.cos(bandPosition * Math.PI * 0.5);
-
-      const nx = dx / dist;
-      const ny = dy / dist;
-
-      const forceMag = cfg.waveShipPush * ring.amplitude * profile;
-      ship.vx += nx * forceMag * (1 / 60);
-      ship.vy += ny * forceMag * (1 / 60);
+      const accel = waveBandForce(dist, ring.radius, halfWidth, cfg.waveShipPush, ring.amplitude);
+      if (accel > 0) {
+        applyForceToShip(ship, dx / dist, dy / dist, accel);
+      }
     }
   }
 
