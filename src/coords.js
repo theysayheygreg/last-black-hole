@@ -1,14 +1,17 @@
 /**
  * coords.js — THE coordinate authority. All flips happen here, nowhere else.
  *
- * Three coordinate spaces:
+ * Four coordinate spaces:
  *
  * SCREEN: (0,0) = top-left, (W,H) = bottom-right. Y-down. Pixels.
- *   Used by: canvas overlay, ship position, mouse input, wave ring rendering.
+ *   Used by: canvas overlay, mouse input, 2D rendering.
  *
- * WELL: (0,0) = top-left, (1,1) = bottom-right. Y-down. Normalized 0-1.
- *   Used by: well definitions, gravity calculations, getWellData, test API.
- *   Same convention as screen, just scaled to 0-1.
+ * WORLD: (0,0) = top-left, (WORLD_SCALE, WORLD_SCALE) = bottom-right. Y-down.
+ *   Used by: entity positions, ship position, gravity calculations.
+ *   Toroidal (wraps at edges). 3x3 grid of the old 0-1 space.
+ *
+ * WELL (LEGACY): (0,0) = top-left, (1,1) = bottom-right. Y-down. Normalized 0-1.
+ *   Kept for backward compatibility. Thin wrappers to world-space.
  *
  * FLUID UV: (0,0) = bottom-left, (1,1) = top-right. Y-up. Normalized 0-1.
  *   Used by: WebGL shaders, fluid sim textures, readPixels, display shader.
@@ -17,7 +20,81 @@
  * If you find yourself writing `1.0 - y` inline, you are doing it wrong.
  */
 
-// ---- Well <-> Fluid UV ----
+// The world is 3x3 the old normalized space
+export const WORLD_SCALE = 3.0;
+
+// ---- World <-> Fluid UV ----
+
+/** Convert world-space (Y-down, 0-WORLD_SCALE) to fluid UV (Y-up, 0-1). */
+export function worldToFluidUV(wx, wy) {
+  return [wx / WORLD_SCALE, 1.0 - wy / WORLD_SCALE];
+}
+
+/** Convert fluid UV (Y-up, 0-1) to world-space (Y-down, 0-WORLD_SCALE). */
+export function fluidUVToWorld(fu, fv) {
+  return [fu * WORLD_SCALE, (1.0 - fv) * WORLD_SCALE];
+}
+
+// ---- World <-> Screen ----
+
+/** Convert world-space to screen pixels, accounting for camera offset.
+ *  Camera (camX, camY) is the world-space center of the screen.
+ *  Handles toroidal wrapping — returns the closest screen position. */
+export function worldToScreen(wx, wy, camX, camY, canvasW, canvasH) {
+  // Offset from camera center, with toroidal shortest path
+  let dx = wx - camX;
+  let dy = wy - camY;
+  // Wrap to [-WORLD_SCALE/2, WORLD_SCALE/2]
+  const half = WORLD_SCALE / 2;
+  if (dx > half) dx -= WORLD_SCALE;
+  if (dx < -half) dx += WORLD_SCALE;
+  if (dy > half) dy -= WORLD_SCALE;
+  if (dy < -half) dy += WORLD_SCALE;
+  // Convert world offset to pixels (screen = world * pixels-per-world-unit)
+  const pxPerWorld = canvasW / WORLD_SCALE;
+  const sx = canvasW / 2 + dx * pxPerWorld;
+  const sy = canvasH / 2 + dy * (canvasW / WORLD_SCALE); // use same scale for both axes
+  return [sx, sy];
+}
+
+/** Convert screen pixels to world-space, accounting for camera offset. */
+export function screenToWorld(sx, sy, camX, camY, canvasW, canvasH) {
+  const pxPerWorld = canvasW / WORLD_SCALE;
+  let wx = camX + (sx - canvasW / 2) / pxPerWorld;
+  let wy = camY + (sy - canvasH / 2) / pxPerWorld;
+  // Wrap to [0, WORLD_SCALE]
+  wx = ((wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+  wy = ((wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+  return [wx, wy];
+}
+
+// ---- World distance (toroidal) ----
+
+/** Shortest distance between two world-space points on a torus. */
+export function worldDistance(ax, ay, bx, by) {
+  let dx = Math.abs(ax - bx);
+  let dy = Math.abs(ay - by);
+  if (dx > WORLD_SCALE / 2) dx = WORLD_SCALE - dx;
+  if (dy > WORLD_SCALE / 2) dy = WORLD_SCALE - dy;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/** Shortest displacement vector from (ax,ay) to (bx,by) on torus.
+ *  Returns [dx, dy] where adding to (ax,ay) moves toward (bx,by). */
+export function worldDisplacement(ax, ay, bx, by) {
+  let dx = bx - ax;
+  let dy = by - ay;
+  const half = WORLD_SCALE / 2;
+  if (dx > half) dx -= WORLD_SCALE;
+  if (dx < -half) dx += WORLD_SCALE;
+  if (dy > half) dy -= WORLD_SCALE;
+  if (dy < -half) dy += WORLD_SCALE;
+  return [dx, dy];
+}
+
+// ---- Legacy well-space functions (0-1 range) ----
+// These now just delegate to world-space functions.
+// Well-space positions should be migrated to world-space over time.
 
 /** Convert well-space (Y-down 0-1) to fluid UV (Y-up 0-1). */
 export function wellToFluidUV(wx, wy) {
@@ -29,8 +106,6 @@ export function fluidUVToWell(fu, fv) {
   return [fu, 1.0 - fv];
 }
 
-// ---- Screen <-> Fluid UV ----
-
 /** Convert screen pixels (Y-down) to fluid UV (Y-up 0-1). */
 export function screenToFluidUV(sx, sy, canvasW, canvasH) {
   return [sx / canvasW, 1.0 - (sy / canvasH)];
@@ -40,8 +115,6 @@ export function screenToFluidUV(sx, sy, canvasW, canvasH) {
 export function fluidUVToScreen(fu, fv, canvasW, canvasH) {
   return [fu * canvasW, (1.0 - fv) * canvasH];
 }
-
-// ---- Well <-> Screen ----
 
 /** Convert well-space (Y-down 0-1) to screen pixels (Y-down). Same convention, just scale. */
 export function wellToScreen(wx, wy, canvasW, canvasH) {

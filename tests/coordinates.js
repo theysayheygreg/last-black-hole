@@ -217,11 +217,11 @@ async function run() {
 
         const well = wells[0];
 
-        // Teleport ship exactly to the well's screen position
+        // Teleport ship exactly to the well's world-space position
         await page.evaluate(
-          (x, y) => window.__TEST_API.teleportShip(x, y),
-          well.x,
-          well.y
+          (wx, wy) => window.__TEST_API.teleportShip(wx, wy),
+          well.wx,
+          well.wy
         );
 
         // Record position
@@ -237,24 +237,19 @@ async function run() {
         );
 
         // Ship should barely move — it's at the gravity center.
-        // Allow some drift from fluid coupling and orbital currents, but
-        // it shouldn't fly across the screen.
+        // In world-space, allow some drift from orbital currents.
         const dx = Math.abs(posAfter.x - posBefore.x);
         const dy = Math.abs(posAfter.y - posBefore.y);
         const drift = Math.sqrt(dx * dx + dy * dy);
 
         console.log(`        Well screen pos: (${well.x.toFixed(0)}, ${well.y.toFixed(0)})`);
-        console.log(`        Ship drift in 1s: ${drift.toFixed(1)}px`);
+        console.log(`        Ship drift in 1s: ${drift.toFixed(4)} world-units`);
 
-        // If coords are mismatched, the ship would be pulled toward a
-        // different position and drift significantly (100+ px).
-        // At the well center, gravity is clamped but orbital forces still
-        // exist. Allow up to 150px of drift (generous for orbital flow).
+        // In world-space, 0.5 world-units of drift would indicate a mismatch
         assert(
-          drift < 150,
-          `Ship drifted ${drift.toFixed(0)}px from well center in 1s. ` +
-            `If >150px, physics and visual coordinates likely disagree. ` +
-            `Y-axis mismatch detected.`
+          drift < 0.5,
+          `Ship drifted ${drift.toFixed(3)} world-units from well center in 1s. ` +
+            `If >0.5, physics and visual coordinates likely disagree.`
         );
       }
     );

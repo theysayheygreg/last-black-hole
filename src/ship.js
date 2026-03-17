@@ -1,26 +1,24 @@
 /**
  * ship.js — Ship controls, thrust, fluid sampling.
  *
- * V2 SIMPLIFICATION: Collapsed redundant knobs per config.js rewrite.
- * Control model: mouse = aim, click = binary thrust (instant on/off).
- * Ship velocity = thrust accel + fluid coupling lerp + well gravity.
- * Wave magnetism removed — affordance system deferred to V2.
+ * V3: World-space coordinates. Ship position (wx, wy) in world-units (0-3).
+ * Ship velocity in world-units/sec. Camera-aware rendering.
  */
 
 import { CONFIG } from './config.js';
-import { screenToFluidUV, fluidVelToScreen, wellToScreen } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, screenToWorld,
+         worldDisplacement, fluidVelToScreen } from './coords.js';
 
 export class Ship {
   constructor(canvasWidth, canvasHeight) {
-    // Position in pixel space
-    this.x = canvasWidth * 0.7;
-    this.y = canvasHeight * 0.5;
-    // Velocity in pixels/sec
+    // Position in world-space (0 to WORLD_SCALE)
+    this.wx = 1.44;  // start position in 3x3 world (was 0.48 * 3)
+    this.wy = 1.65;  // (was 0.55 * 3)
+    // Velocity in world-units/sec
     this.vx = 0;
     this.vy = 0;
     // Facing angle in radians (0 = right)
     this.facing = 0;
-    // Target facing (toward mouse)
     this.targetFacing = 0;
 
     this.canvasWidth = canvasWidth;
@@ -30,33 +28,42 @@ export class Ship {
     this.mouseX = canvasWidth / 2;
     this.mouseY = canvasHeight / 2;
     this.thrusting = false;
+    this.thrustIntensity = 0;
+    this.brakeIntensity = 0;
 
     // Fluid readback for HUD
     this.lastFluidVel = { x: 0, y: 0 };
     this.lastFluidSpeed = 0;
   }
 
-  /**
-   * Set mouse position (called from event handler).
-   */
   setMouse(x, y) {
     this.mouseX = x;
     this.mouseY = y;
   }
 
-  /**
-   * Set thrust state (called from event handler).
-   */
   setThrust(active) {
     this.thrusting = active;
+    this.thrustIntensity = active ? 1.0 : 0;
   }
 
-  /**
-   * Teleport ship to pixel coordinates (for test API / sandbox).
-   */
-  teleport(x, y) {
-    this.x = x;
-    this.y = y;
+  setThrustIntensity(intensity) {
+    this.thrustIntensity = intensity;
+    this.thrusting = intensity > 0;
+  }
+
+  setBrakeIntensity(intensity) {
+    this.brakeIntensity = intensity;
+  }
+
+  setFacingDirect(angle) {
+    this.facing = angle;
+    this.targetFacing = angle;
+  }
+
+  /** Teleport ship to world coordinates. */
+  teleport(wx, wy) {
+    this.wx = wx;
+    this.wy = wy;
     this.vx = 0;
     this.vy = 0;
   }
@@ -66,58 +73,57 @@ export class Ship {
    * @param {number} dt - frame delta in seconds
    * @param {FluidSim} fluid - fluid sim for velocity sampling
    * @param {WellSystem} [wellSystem] - for direct gravitational pull on ship
+   * @param {number} camX - camera world X
+   * @param {number} camY - camera world Y
    */
-  update(dt, fluid, wellSystem) {
+  update(dt, fluid, wellSystem, camX, camY) {
     const cfg = CONFIG.ship;
     const wellCfg = CONFIG.wells;
 
-    // 1. Update facing — rotate toward mouse (no dead zone, no curve)
-    this._updateFacing(dt, cfg);
+    // Pixels per world-unit (for converting pixel-based CONFIG values)
+    const pxPerWorld = this.canvasWidth / WORLD_SCALE;
 
-    // 2. Thrust — instant on/off, single accel value
-    if (this.thrusting) {
-      const accelMag = cfg.thrustAccel;
-      this.vx += Math.cos(this.facing) * accelMag * dt;
-      this.vy += Math.sin(this.facing) * accelMag * dt;
+    // 1. Update facing — rotate toward mouse (uses camera to convert mouse to world)
+    this._updateFacing(dt, cfg, camX, camY);
+
+    // 2. Thrust — convert px/s² to world-units/s²
+    if (this.thrustIntensity > 0) {
+      const accelWorld = cfg.thrustAccel / pxPerWorld * this.thrustIntensity;
+      this.vx += Math.cos(this.facing) * accelWorld * dt;
+      this.vy += Math.sin(this.facing) * accelWorld * dt;
     }
 
     // 3. Sample fluid velocity at ship position
-    // Convert screen pixels (Y-down) to fluid UV (Y-up) via coords.js
-    const [fuv_x, fuv_y] = screenToFluidUV(this.x, this.y, this.canvasWidth, this.canvasHeight);
-    let fluidVel = { x: 0, y: 0 };
+    const [fuv_x, fuv_y] = worldToFluidUV(this.wx, this.wy);
+    let fluidVelWorld = { x: 0, y: 0 };
     if (fluid && fuv_x >= 0 && fuv_x <= 1 && fuv_y >= 0 && fuv_y <= 1) {
       const [fvx, fvy] = fluid.readVelocityAt(
         Math.max(0, Math.min(1, fuv_x)),
         Math.max(0, Math.min(1, fuv_y))
       );
-      // Convert fluid velocity (Y-up) to screen velocity (Y-down) via coords.js
+      // Fluid velocity is in UV-units/step. Convert to world-units/sec:
+      // UV spans 0-1 for the full world (0-3), so multiply by WORLD_SCALE
       const [svx, svy] = fluidVelToScreen(fvx, fvy);
-      // Scale from sim-space to pixel-space (canvas width as reference)
-      const scale = this.canvasWidth;
-      fluidVel.x = svx * scale;
-      fluidVel.y = svy * scale;
+      fluidVelWorld.x = svx * WORLD_SCALE;
+      fluidVelWorld.y = svy * WORLD_SCALE;
     }
 
-    this.lastFluidVel = fluidVel;
-    this.lastFluidSpeed = Math.sqrt(fluidVel.x * fluidVel.x + fluidVel.y * fluidVel.y);
+    this.lastFluidVel = fluidVelWorld;
+    this.lastFluidSpeed = Math.sqrt(fluidVelWorld.x ** 2 + fluidVelWorld.y ** 2);
 
     // 4. Fluid coupling — lerp ship velocity toward fluid velocity
-    const coupling = Math.min(cfg.fluidCoupling * dt, 0.5); // clamp to prevent overshoot
-    this.vx = this.vx * (1 - coupling) + fluidVel.x * coupling;
-    this.vy = this.vy * (1 - coupling) + fluidVel.y * coupling;
+    const coupling = Math.min(cfg.fluidCoupling * dt, 0.5);
+    this.vx = this.vx * (1 - coupling) + fluidVelWorld.x * coupling;
+    this.vy = this.vy * (1 - coupling) + fluidVelWorld.y * coupling;
 
-    // 5. Direct gravitational pull from wells (acts on ship, not through fluid)
+    // 5. Direct gravitational pull from wells (world-space)
     if (wellSystem) {
       for (const well of wellSystem.wells) {
-        // Convert well-space to screen pixels via coords.js
-        const [wellScreenX, wellScreenY] = wellToScreen(well.x, well.y, this.canvasWidth, this.canvasHeight);
-        const dwx = wellScreenX - this.x;
-        const dwy = wellScreenY - this.y;
+        const [dwx, dwy] = worldDisplacement(this.wx, this.wy, well.wx, well.wy);
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
-        if (dist < 1) continue;
-        const safeDist = Math.max(dist, wellCfg.gravityClampDist);
-        const normDist = safeDist / 100;
-        const gravAccel = wellCfg.shipPullStrength * well.mass / Math.pow(normDist, wellCfg.shipPullFalloff);
+        if (dist < 0.001) continue;
+        const safeDist = Math.max(dist, 0.1); // stability guard in world-units
+        const gravAccel = wellCfg.shipPullStrength * well.mass / Math.pow(safeDist, wellCfg.shipPullFalloff);
         const nx = dwx / dist;
         const ny = dwy / dist;
         this.vx += nx * gravAccel * dt;
@@ -125,87 +131,106 @@ export class Ship {
       }
     }
 
-    // 6. Drag — single uniform value
-    const dragMult = 1 - cfg.drag;
+    // 6. Drag
+    const totalDrag = cfg.drag + this.brakeIntensity * CONFIG.input.brakeStrength;
+    const dragMult = 1 - totalDrag;
     this.vx *= dragMult;
     this.vy *= dragMult;
 
     // 7. Integrate position
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
+    this.wx += this.vx * dt;
+    this.wy += this.vy * dt;
 
-    // 8. Boundary wrapping (keep in canvas)
-    if (this.x < 0) this.x += this.canvasWidth;
-    if (this.x > this.canvasWidth) this.x -= this.canvasWidth;
-    if (this.y < 0) this.y += this.canvasHeight;
-    if (this.y > this.canvasHeight) this.y -= this.canvasHeight;
+    // 8. Boundary wrapping (toroidal)
+    this.wx = ((this.wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+    this.wy = ((this.wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
 
-    // 9. Inject thrust wake into fluid — MUCH stronger than before
-    //    Player should see their thrust disturbing the ASCII field
-    if (this.thrusting && fluid) {
-      // Convert screen pixels to fluid UV via coords.js
-      const [wakeUVx, wakeUVy] = screenToFluidUV(this.x, this.y, this.canvasWidth, this.canvasHeight);
-      const wakeForceMag = 0.002;
-      const wakeRadius = 0.01;
-      fluid.splat(
-        wakeUVx, wakeUVy,
-        Math.cos(this.facing) * wakeForceMag,
-        Math.sin(this.facing) * wakeForceMag,
-        wakeRadius,
-        0.1, 0.3, 0.4  // teal wake color
-      );
+    // 9. Bullet wake — inject into fluid
+    if (fluid) {
+      const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+      const terminalVelWorld = (cfg.thrustAccel / pxPerWorld) / (cfg.drag > 0 ? cfg.drag : 0.03);
+      const speedFraction = speed / terminalVelWorld;
+      const wake = cfg.wake;
+
+      const wakeScale = Math.max(0, Math.min(1,
+        (speedFraction - wake.speedThreshold) / Math.max(wake.speedThreshold, 0.01)
+      ));
+
+      if (wakeScale > 0) {
+        const [baseUVx, baseUVy] = worldToFluidUV(this.wx, this.wy);
+        const behindX = -Math.cos(this.facing);
+        const behindY = Math.sin(this.facing); // fluid UV is Y-up
+
+        for (let i = 0; i < wake.splatCount; i++) {
+          const offset = (i + 1) * wake.splatSpacing;
+          const sx = baseUVx + behindX * offset;
+          const sy = baseUVy + behindY * offset;
+          const falloff = 1 - (i / wake.splatCount) * 0.5;
+          const forceMag = wake.force * wakeScale * falloff;
+          const b = wake.brightness * wakeScale * falloff;
+          fluid.splat(
+            sx, sy,
+            Math.cos(this.facing) * forceMag,
+            -Math.sin(this.facing) * forceMag,
+            wake.radius,
+            b * 0.3,
+            b * 0.8,
+            b * 1.0
+          );
+        }
+      }
     }
   }
 
-  _updateFacing(dt, cfg) {
-    // Compute target angle toward mouse
-    const dx = this.mouseX - this.x;
-    const dy = this.mouseY - this.y;
+  _updateFacing(dt, cfg, camX, camY) {
+    // Convert mouse screen position to world, then compute angle
+    const [mouseWX, mouseWY] = screenToWorld(
+      this.mouseX, this.mouseY, camX, camY, this.canvasWidth, this.canvasHeight
+    );
+    // Use toroidal displacement for correct direction
+    const [dx, dy] = worldDisplacement(this.wx, this.wy, mouseWX, mouseWY);
     this.targetFacing = Math.atan2(dy, dx);
 
-    // Angular difference
     let angleDiff = this.targetFacing - this.facing;
-    // Normalize to [-PI, PI]
     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-    const absDiff = Math.abs(angleDiff);
-
-    // Simple linear turn — no dead zone, no curve power
     const turnRateRad = cfg.turnRate * Math.PI / 180;
     const turnAmount = turnRateRad * dt;
 
-    if (absDiff < turnAmount) {
+    if (Math.abs(angleDiff) < turnAmount) {
       this.facing = this.targetFacing;
     } else {
       this.facing += Math.sign(angleDiff) * turnAmount;
     }
 
-    // Normalize facing
     while (this.facing > Math.PI) this.facing -= Math.PI * 2;
     while (this.facing < -Math.PI) this.facing += Math.PI * 2;
   }
 
   /**
-   * Render the ship on a 2D canvas overlay (separate layer above fluid).
+   * Render the ship on a 2D canvas overlay.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} camX - camera world X
+   * @param {number} camY - camera world Y
    */
-  render(ctx) {
+  render(ctx, camX, camY) {
     const cfg = CONFIG.ship;
     const size = cfg.size;
+    const [sx, sy] = worldToScreen(this.wx, this.wy, camX, camY, this.canvasWidth, this.canvasHeight);
 
     ctx.save();
-    ctx.translate(this.x, this.y);
+    ctx.translate(sx, sy);
     ctx.rotate(this.facing);
 
     // Ship body — clean triangle
     ctx.beginPath();
-    ctx.moveTo(size, 0);          // nose
-    ctx.lineTo(-size * 0.6, -size * 0.5);  // left wing
-    ctx.lineTo(-size * 0.3, 0);           // inner left
-    ctx.lineTo(-size * 0.6, size * 0.5);   // right wing
+    ctx.moveTo(size, 0);
+    ctx.lineTo(-size * 0.6, -size * 0.5);
+    ctx.lineTo(-size * 0.3, 0);
+    ctx.lineTo(-size * 0.6, size * 0.5);
     ctx.closePath();
 
-    // Fill — always white (no wave magnetism glow)
     ctx.fillStyle = '#ffffff';
     ctx.fill();
 
@@ -225,12 +250,13 @@ export class Ship {
 
     // Debug: velocity vector
     if (CONFIG.debug.showVelocityField) {
+      const pxPerWorld = this.canvasWidth / WORLD_SCALE;
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(this.x, this.y);
-      ctx.lineTo(this.x + this.vx * 0.1, this.y + this.vy * 0.1);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + this.vx * pxPerWorld * 0.1, sy + this.vy * pxPerWorld * 0.1);
       ctx.stroke();
       ctx.restore();
     }

@@ -1,8 +1,8 @@
 /**
  * presets.js — Physics feel variations for A/B testing.
  *
- * Each preset is a partial CONFIG override (deep-merged, not replaced).
- * Keys not listed here (ascii, color, debug, etc.) are left untouched.
+ * V3: World-space values. Ship thrust still in px/s² (converted at use-site).
+ * Well/star ship forces now in world-units/s².
  */
 
 export const PRESETS = {
@@ -10,29 +10,29 @@ export const PRESETS = {
 
   Ocean: {
     ship:   { thrustAccel: 1200, fluidCoupling: 0.85, turnRate: 240, drag: 0.015, size: 12 },
-    wells:  { gravity: 0.002, orbitalStrength: 0.5, shipPullStrength: 120, shipPullFalloff: 1.3,
-              accretionRate: 0.01, accretionRadius: 0.07, accretionSpinRate: 0.6 },
+    wells:  { gravity: 0.002, orbitalStrength: 0.5, shipPullStrength: 0.3, shipPullFalloff: 1.3,
+              accretionRate: 0.01, accretionRadius: 0.023, accretionSpinRate: 0.6 },
     fluid:  { dissipation: 0.999, curl: 0.4, viscosity: 0.00005,
               ambientTurbulence: 0.0003, ambientDensity: 0.0002 },
-    events: { growthInterval: 25, waveShipPush: 400 },
+    events: { growthInterval: 60, waveShipPush: 1.0 },
   },
 
   Spacecraft: {
     ship:   { thrustAccel: 4000, fluidCoupling: 0.3, turnRate: 540, drag: 0.05, size: 10 },
-    wells:  { gravity: 0.001, orbitalStrength: 0.2, shipPullStrength: 350, shipPullFalloff: 2.0,
-              accretionRate: 0.005, accretionRadius: 0.04, accretionSpinRate: 1.2 },
+    wells:  { gravity: 0.001, orbitalStrength: 0.2, shipPullStrength: 0.9, shipPullFalloff: 2.0,
+              accretionRate: 0.005, accretionRadius: 0.013, accretionSpinRate: 1.2 },
     fluid:  { dissipation: 0.996, curl: 0.2, viscosity: 0.0002,
               ambientTurbulence: 0.0002, ambientDensity: 0.0001 },
-    events: { growthInterval: 15, waveShipPush: 200 },
+    events: { growthInterval: 30, waveShipPush: 0.5 },
   },
 
   Surfer: {
     ship:   { thrustAccel: 1800, fluidCoupling: 0.75, turnRate: 360, drag: 0.02, size: 12 },
-    wells:  { gravity: 0.0018, orbitalStrength: 0.55, shipPullStrength: 175, shipPullFalloff: 1.5,
-              accretionRate: 0.008, accretionRadius: 0.06, accretionSpinRate: 0.8 },
+    wells:  { gravity: 0.0018, orbitalStrength: 0.55, shipPullStrength: 0.45, shipPullFalloff: 1.5,
+              accretionRate: 0.008, accretionRadius: 0.02, accretionSpinRate: 0.8 },
     fluid:  { dissipation: 0.999, curl: 0.35, viscosity: 0.00008,
               ambientTurbulence: 0.0004, ambientDensity: 0.0002 },
-    events: { growthInterval: 18, waveShipPush: 350 },
+    events: { growthInterval: 40, waveShipPush: 0.9 },
   },
 };
 
@@ -40,7 +40,6 @@ export const PRESET_NAMES = Object.keys(PRESETS);
 
 /**
  * Deep-merge source into target — only overwrites leaves that exist in source.
- * Arrays are copied element-by-element; objects recurse; primitives overwrite.
  */
 export function deepMerge(target, source) {
   for (const k of Object.keys(source)) {

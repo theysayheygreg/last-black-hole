@@ -204,7 +204,7 @@ void main() {
 }`;
 
 // Display shader — maps fluid state to visible colors
-// V2: encodes flow direction so players can read orbital currents
+// V3: camera-aware — samples fluid at camera-offset UV, supports world wrapping
 // - Velocity magnitude boosts brightness (fast flow = brighter/denser ASCII chars)
 // - Flow direction tints color: toward a well = amber, away = teal
 const FRAG_DISPLAY = `#version 300 es
@@ -215,26 +215,34 @@ uniform vec3 u_voidColor;
 uniform vec3 u_normalColor;
 uniform vec3 u_nearWellColor;
 uniform vec3 u_hotWellColor;
-// Well positions for coloring (up to 4)
+// Well positions for coloring (up to 4) — in fluid UV space
 uniform vec2 u_wellPositions[4];
 uniform int u_wellCount;
 uniform float u_densityScale;
+// Camera offset in fluid UV space and world scale
+uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
+uniform float u_worldScale;    // fraction of fluid texture visible (1/3 = one screen)
+
 in vec2 v_uv;
 out vec4 fragColor;
 
 void main() {
-  vec2 vel = texture(u_velocity, v_uv).xy;
-  vec3 dens = texture(u_density, v_uv).xyz;
+  // Map screen UV to fluid UV via camera offset
+  // v_uv goes 0-1 across the screen; we want to see a 1/worldScale-sized slice
+  // centered on u_camOffset
+  vec2 fluidUV = u_camOffset + (v_uv - 0.5) / u_worldScale;
+  // Texture uses REPEAT wrap, so no manual wrapping needed
+
+  vec2 vel = texture(u_velocity, fluidUV).xy;
+  vec3 dens = texture(u_density, fluidUV).xyz;
 
   float speed = length(vel);
   float rawDensity = length(dens);
 
   // Tone-map density: raw values range 0–300+, compress to 0–1 via exponential curve
-  // 1.0 - exp(-x * k) maps [0,inf) -> [0,1) with nice rolloff
   float density = 1.0 - exp(-rawDensity * u_densityScale);
 
   // Combine density and velocity magnitude for brightness signal
-  // Density is now 0–1 range, speed is ~0–0.2
   float combined = density + speed * 1.5;
 
   // Base color: deep void to teal based on combined signal
@@ -249,25 +257,23 @@ void main() {
   col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.4);
 
   // === FLOW DIRECTION TINTING ===
-  // For each well, compute whether flow is toward or away from it.
-  // Toward well = warmer (amber), away = cooler (teal).
-  // This makes orbital currents visible as color bands around wells.
   for (int i = 0; i < 4; i++) {
     if (i >= u_wellCount) break;
-    float dist = distance(v_uv, u_wellPositions[i]);
+
+    // Distance in fluid UV space (with wrapping consideration)
+    vec2 diff = fluidUV - u_wellPositions[i];
+    // Toroidal shortest path in UV space
+    diff = diff - round(diff);
+    float dist = length(diff);
 
     // Direction from this pixel toward the well
-    vec2 toWell = normalize(u_wellPositions[i] - v_uv + vec2(0.0001));
+    vec2 toWell = dist > 0.0001 ? -diff / dist : vec2(0.0);
 
-    // How much is the flow pointed toward this well? (-1 = away, +1 = toward)
     float flowAlignment = speed > 0.001 ? dot(normalize(vel), toWell) : 0.0;
-
-    // Flow direction tint — only visible where there IS flow and near-ish to a well
     float flowInfluence = smoothstep(0.5, 0.05, dist) * smoothstep(0.0, 0.08, speed);
 
-    // Warm (amber) for inward flow, cool (teal) for outward flow
-    vec3 warmTint = vec3(0.25, 0.12, 0.02);  // amber
-    vec3 coolTint = vec3(0.02, 0.12, 0.18);  // teal
+    vec3 warmTint = vec3(0.25, 0.12, 0.02);
+    vec3 coolTint = vec3(0.02, 0.12, 0.18);
     vec3 flowTint = mix(coolTint, warmTint, flowAlignment * 0.5 + 0.5);
     col += flowTint * flowInfluence * 0.4;
 
@@ -275,15 +281,13 @@ void main() {
     float wellInfluence = smoothstep(0.35, 0.02, dist);
     vec3 wellColor = mix(u_nearWellColor, u_hotWellColor, smoothstep(0.15, 0.02, dist));
     col = mix(col, wellColor, wellInfluence * 0.6);
-    // Hot glow at moderate distance (accretion ring)
     float ringGlow = smoothstep(0.08, 0.04, dist) * (1.0 - smoothstep(0.02, 0.01, dist));
     col += ringGlow * vec3(0.3, 0.1, 0.02);
-    // Void center — pitch black
     float voidStrength = smoothstep(0.035, 0.008, dist);
     col = mix(col, vec3(0.0), voidStrength);
   }
 
-  // Subtle vignette at screen edges
+  // Subtle vignette at screen edges (use screen UV, not fluid UV)
   vec2 fromCenter = v_uv - 0.5;
   float vignette = 1.0 - dot(fromCenter, fromCenter) * 0.5;
   col *= vignette;
@@ -296,7 +300,7 @@ void main() {
 const FRAG_DISSIPATION = `#version 300 es
 precision highp float;
 uniform sampler2D u_density;
-uniform vec2 u_wellPositions[4];
+uniform vec2 u_wellPositions[12];
 uniform int u_wellCount;
 uniform float u_nearDissipation;
 uniform float u_farDissipation;
@@ -308,15 +312,15 @@ out vec4 fragColor;
 void main() {
   vec3 dens = texture(u_density, v_uv).xyz;
 
-  // Find distance to nearest well
+  // Find distance to nearest density source (well, star, or loot)
   float minDist = 999.0;
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 12; i++) {
     if (i >= u_wellCount) break;
     float d = distance(v_uv, u_wellPositions[i]);
     minDist = min(minDist, d);
   }
 
-  // Blend dissipation based on distance to nearest well
+  // Blend dissipation based on distance to nearest source
   float blend = smoothstep(u_farRadius, u_nearRadius, minDist);
   float dissipation = mix(u_farDissipation, u_nearDissipation, blend);
 
@@ -390,8 +394,8 @@ export class FluidSim {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
 
     const fbo = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
@@ -604,7 +608,7 @@ export class FluidSim {
       gl.uniform1f(u['u_farDissipation'], CONFIG.fluid.farDissipation);
       gl.uniform1f(u['u_nearRadius'], CONFIG.fluid.dissipationNearRadius);
       gl.uniform1f(u['u_farRadius'], CONFIG.fluid.dissipationFarRadius);
-      const count = Math.min(this._wellPositionsUV.length, 4);
+      const count = Math.min(this._wellPositionsUV.length, 12);
       gl.uniform1i(u['u_wellCount'], count);
       for (let i = 0; i < count; i++) {
         const loc = u[`u_wellPositions[${i}]`];
@@ -656,8 +660,13 @@ export class FluidSim {
 
   /**
    * Render the fluid to screen (or to a target FBO).
+   * @param {Object} target - FBO target or null for screen
+   * @param {Array} wellPositionsUV - well positions in fluid UV space
+   * @param {number} camOffsetU - camera center X in fluid UV (0-1)
+   * @param {number} camOffsetV - camera center Y in fluid UV (0-1)
+   * @param {number} worldScale - how many world-units map to the full texture (default 1 for legacy)
    */
-  render(target, wellPositionsUV) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -672,6 +681,10 @@ export class FluidSim {
     gl.uniform3fv(u['u_nearWellColor'], CONFIG.color.nearWell);
     gl.uniform3fv(u['u_hotWellColor'], CONFIG.color.hotWell);
     gl.uniform1f(u['u_densityScale'], CONFIG.color.densityScale);
+
+    // Camera uniforms
+    gl.uniform2f(u['u_camOffset'], camOffsetU, camOffsetV);
+    gl.uniform1f(u['u_worldScale'], worldScale);
 
     // Set well positions for coloring
     const count = Math.min(wellPositionsUV.length, 4);

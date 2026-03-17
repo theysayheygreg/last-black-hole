@@ -1,26 +1,36 @@
 /**
  * main.js — Game loop, canvas setup, wiring.
  *
+ * V3: 3x3 world-space with camera follow. Portals + planetoids.
+ *
  * Architecture:
  *   - WebGL canvas: fluid sim rendering (Layer 0)
- *   - 2D canvas overlay: ship rendering (Layer 1, separate from fluid)
- *   - Fluid sim runs on GPU, ship reads fluid velocity at its position
+ *   - 2D canvas overlay: ship + entities (Layer 1, separate from fluid)
+ *   - Camera follows ship with smooth lerp + velocity lead-ahead
  */
 
 import { CONFIG } from './config.js';
 import { FluidSim } from './fluid.js';
 import { Ship } from './ship.js';
 import { WellSystem } from './wells.js';
+import { StarSystem } from './stars.js';
+import { LootSystem } from './loot.js';
 import { WaveRingSystem } from './wave-rings.js';
+import { PortalSystem } from './portals.js';
+import { PlanetoidSystem } from './planetoids.js';
+import { InputManager } from './input.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
-import { wellToFluidUV, wellToScreen, screenToFluidUV, fluidVelToScreen } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, screenToWorld,
+         worldDisplacement, screenToFluidUV, fluidVelToScreen } from './coords.js';
 
 // ---- State ----
 let glCanvas, gl;
 let overlayCanvas, ctx;
-let fluid, ship, wellSystem, waveRings, asciiRenderer;
+let fluid, ship, wellSystem, starSystem, lootSystem, waveRings;
+let portalSystem, planetoidSystem;
+let inputManager, asciiRenderer;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -28,14 +38,19 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
-let growthTimer = 0; // timer for well growth events
-let gamePhase = 'playing'; // 'playing' | 'dead'
-let deathTimer = 0; // seconds since death (for showing death screen)
+let growthTimer = 0;
+let gamePhase = 'playing'; // 'playing' | 'dead' | 'escaped' | 'paused'
+let deathTimer = 0;
+let escapeTimer = 0;
+
+// Camera state — world-space center of screen
+let camX = 1.5;
+let camY = 1.5;
 
 // ---- Init ----
 
 function init() {
-  // WebGL canvas — fluid rendering
+  // WebGL canvas
   glCanvas = document.getElementById('fluid-canvas');
   glCanvas.width = window.innerWidth;
   glCanvas.height = window.innerHeight;
@@ -49,55 +64,79 @@ function init() {
     return;
   }
 
-  // Check for float texture support
   const ext1 = gl.getExtension('EXT_color_buffer_float');
-  if (!ext1) {
-    console.warn('EXT_color_buffer_float not available, trying fallback');
-  }
+  if (!ext1) console.warn('EXT_color_buffer_float not available');
   gl.getExtension('OES_texture_float_linear');
 
-  // 2D overlay canvas — ship rendering (separate layer)
+  // 2D overlay canvas
   overlayCanvas = document.getElementById('overlay-canvas');
   overlayCanvas.width = window.innerWidth;
   overlayCanvas.height = window.innerHeight;
   ctx = overlayCanvas.getContext('2d');
 
-  // Init fluid sim
+  // Init systems
   fluid = new FluidSim(gl);
-
-  // Init ASCII post-process renderer (Layer 0 visual identity)
   asciiRenderer = new ASCIIRenderer(gl);
 
-  // Init well system — multi-well test map
-  // Different masses create different gravity strengths
-  // Spread across the map so orbital currents and inter-well channels form
+  // === WELL SYSTEM — spread across 3x3 world ===
   wellSystem = new WellSystem();
-
-  // Each well is a unique instance with its own personality
-  wellSystem.addWell(0.35, 0.40, {
-    mass: 1.5, orbitalDir: 1, killRadius: 25,
-    accretionSpinRate: 0.6, accretionPoints: 8,  // big, slow, dramatic
+  wellSystem.addWell(1.0, 1.2, {
+    mass: 1.5, orbitalDir: 1, killRadius: 0.06,
+    accretionSpinRate: 0.6, accretionPoints: 8,
   });
-  wellSystem.addWell(0.70, 0.30, {
-    mass: 0.8, orbitalDir: -1, killRadius: 15,
-    accretionSpinRate: 1.4, accretionPoints: 4,  // small, fast, tight
+  wellSystem.addWell(2.1, 0.9, {
+    mass: 0.8, orbitalDir: -1, killRadius: 0.035,
+    accretionSpinRate: 1.4, accretionPoints: 4,
   });
-  wellSystem.addWell(0.65, 0.72, {
-    mass: 1.2, orbitalDir: 1, killRadius: 20,
-    accretionSpinRate: 0.9, accretionPoints: 6,  // medium, moderate
+  wellSystem.addWell(1.95, 2.16, {
+    mass: 1.2, orbitalDir: 1, killRadius: 0.05,
+    accretionSpinRate: 0.9, accretionPoints: 6,
   });
-  wellSystem.addWell(0.20, 0.75, {
-    mass: 0.5, orbitalDir: -1, killRadius: 12,
-    accretionSpinRate: 1.8, accretionPoints: 3,  // tiny, rapid, sparse
+  wellSystem.addWell(0.6, 2.25, {
+    mass: 0.5, orbitalDir: -1, killRadius: 0.03,
+    accretionSpinRate: 1.8, accretionPoints: 3,
   });
 
-  // Init wave ring system (event-driven waves)
+  // === STAR SYSTEM ===
+  starSystem = new StarSystem();
+  starSystem.addStar(1.5, 1.65, { mass: 0.8, orbitalDir: 1 });
+  starSystem.addStar(0.45, 0.75, { mass: 0.5, orbitalDir: -1 });
+
+  // === LOOT SYSTEM ===
+  lootSystem = new LootSystem();
+  lootSystem.addLoot(1.5, 1.05);
+  lootSystem.addLoot(1.35, 2.1);
+  lootSystem.addLoot(2.4, 1.65);
+
+  // === PORTAL SYSTEM — exit wormholes ===
+  portalSystem = new PortalSystem();
+  portalSystem.addPortal(0.3, 0.3);   // upper-left, near S1 push zone
+  portalSystem.addPortal(2.7, 2.7);   // lower-right, opposite corner
+
+  // === PLANETOID SYSTEM ===
+  planetoidSystem = new PlanetoidSystem();
+  // Seed initial orbiting planetoids around wells
+  planetoidSystem.spawnOrbit(wellSystem.wells[0]);
+  planetoidSystem.spawnOrbit(wellSystem.wells[2]);
+  // Seed a figure-8 between wells 0 and 1
+  if (wellSystem.wells.length >= 2) {
+    planetoidSystem.spawnFigure8(wellSystem.wells[0], wellSystem.wells[1]);
+  }
+
+  // Init input manager
+  inputManager = new InputManager();
+
+  // Init wave ring system
   waveRings = new WaveRingSystem();
 
-  // Init ship — start in the space between wells where interference happens
+  // Init ship — start between wells
   ship = new Ship(glCanvas.width, glCanvas.height);
-  ship.x = glCanvas.width * 0.48;
-  ship.y = glCanvas.height * 0.55;
+  ship.wx = 1.44;
+  ship.wy = 1.65;
+
+  // Init camera to ship position
+  camX = ship.wx;
+  camY = ship.wy;
 
   // Input handlers
   overlayCanvas.addEventListener('mousemove', (e) => {
@@ -105,11 +144,11 @@ function init() {
   });
   overlayCanvas.addEventListener('mousedown', (e) => {
     if (e.button === 0) {
-      if (gamePhase === 'dead' && deathTimer > 1.0) {
-        // Restart
+      if (gamePhase === 'paused') return;
+      if ((gamePhase === 'dead' && deathTimer > 1.0) ||
+          (gamePhase === 'escaped' && escapeTimer > 1.0)) {
         restart();
-        gamePhase = 'playing';
-      } else {
+      } else if (gamePhase === 'playing') {
         ship.setThrust(true);
       }
     }
@@ -117,8 +156,36 @@ function init() {
   overlayCanvas.addEventListener('mouseup', (e) => {
     if (e.button === 0) ship.setThrust(false);
   });
-  // Prevent context menu on right-click
   overlayCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // Pause menu
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (gamePhase === 'playing') {
+        gamePhase = 'paused';
+        ship.setThrust(false);
+      } else if (gamePhase === 'paused') {
+        gamePhase = 'playing';
+      }
+    }
+  });
+
+  // Pause menu click handler
+  overlayCanvas.addEventListener('click', (e) => {
+    if (gamePhase !== 'paused') return;
+    const cx = overlayCanvas.width / 2;
+    const cy = overlayCanvas.height / 2;
+    const btnW = 200, btnH = 40;
+    if (e.clientX >= cx - btnW / 2 && e.clientX <= cx + btnW / 2 &&
+        e.clientY >= cy - 10 - btnH && e.clientY <= cy - 10) {
+      gamePhase = 'playing';
+    }
+    if (e.clientX >= cx - btnW / 2 && e.clientX <= cx + btnW / 2 &&
+        e.clientY >= cy + 10 && e.clientY <= cy + 10 + btnH) {
+      restart();
+    }
+  });
 
   // Handle resize
   window.addEventListener('resize', () => {
@@ -131,7 +198,7 @@ function init() {
     asciiRenderer.resize(glCanvas.width, glCanvas.height);
   });
 
-  // Seed initial density so the fluid is visible from the start
+  // Seed initial density
   seedInitialFluid();
 
   // Init test API
@@ -139,15 +206,21 @@ function init() {
     ship,
     fluid,
     wellSystem,
+    starSystem,
+    lootSystem,
+    portalSystem,
+    planetoidSystem,
     waveRings,
+    inputManager,
     canvasWidth: glCanvas.width,
     canvasHeight: glCanvas.height,
+    camX, camY,
     fps,
     setTimeScale: (s) => { timeScale = s; },
     restart: () => { restart(); },
   }));
 
-  // Init dev panel (toggle with ` key)
+  // Init dev panel
   initDevPanel();
 
   // Start loop
@@ -156,44 +229,85 @@ function init() {
 }
 
 function seedInitialFluid() {
-  // Inject density around each well so the fluid is visible from frame 1
   for (const well of wellSystem.wells) {
-    // Convert well-space to fluid UV for splat injection
-    const [wellFU, wellFV] = wellToFluidUV(well.x, well.y);
+    const [wellFU, wellFV] = worldToFluidUV(well.wx, well.wy);
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2;
-      const dist = 0.05 + Math.random() * 0.12;
+      const dist = 0.015 + Math.random() * 0.04;
       const x = wellFU + Math.cos(angle) * dist;
       const y = wellFV + Math.sin(angle) * dist;
       fluid.splat(
         x, y,
         Math.cos(angle) * 0.0005, Math.sin(angle) * 0.0005,
-        0.003,
+        0.001,
         0.15 + Math.random() * 0.25 * well.mass,
         0.08 + Math.random() * 0.15,
         0.03 + Math.random() * 0.08
       );
     }
   }
-  // Broader ambient density scattered across the field
-  for (let i = 0; i < 15; i++) {
+  // Broader ambient density scattered across the fluid field
+  for (let i = 0; i < 25; i++) {
     fluid.splat(
-      0.1 + Math.random() * 0.8,
-      0.1 + Math.random() * 0.8,
-      0, 0,
-      0.008,
+      0.05 + Math.random() * 0.9,
+      0.05 + Math.random() * 0.9,
+      0, 0, 0.003,
       0.04, 0.12, 0.18
     );
   }
 }
 
+const STARTING_MASSES = [1.5, 0.8, 1.2, 0.5];
+
 function restart() {
   totalTime = 0;
   growthTimer = 0;
+  gamePhase = 'playing';
+  deathTimer = 0;
+  escapeTimer = 0;
   waveRings.rings = [];
-  ship.teleport(glCanvas.width * 0.48, glCanvas.height * 0.55);
-  // Re-seed fluid
+
+  // Reset well masses
+  for (let i = 0; i < wellSystem.wells.length; i++) {
+    wellSystem.wells[i].mass = STARTING_MASSES[i] ?? 1.0;
+  }
+
+  // Reset ship
+  ship.teleport(1.44, 1.65);
+  camX = ship.wx;
+  camY = ship.wy;
+
+  // Reset planetoids
+  planetoidSystem.planetoids = [];
+  planetoidSystem.spawnTimer = 10;
+  planetoidSystem.spawnOrbit(wellSystem.wells[0]);
+  planetoidSystem.spawnOrbit(wellSystem.wells[2]);
+  if (wellSystem.wells.length >= 2) {
+    planetoidSystem.spawnFigure8(wellSystem.wells[0], wellSystem.wells[1]);
+  }
+
   seedInitialFluid();
+}
+
+// ---- Camera ----
+
+function updateCamera(dt) {
+  // Smooth lerp toward ship with velocity lead-ahead
+  const leadAmount = 0.3; // seconds of lead
+  const targetX = ship.wx + ship.vx * leadAmount;
+  const targetY = ship.wy + ship.vy * leadAmount;
+
+  // Toroidal displacement from cam to target
+  const [dx, dy] = worldDisplacement(camX, camY, targetX, targetY);
+
+  const lerpSpeed = 3.0; // higher = tighter follow
+  const t = Math.min(lerpSpeed * dt, 0.5);
+  camX += dx * t;
+  camY += dy * t;
+
+  // Wrap camera to [0, WORLD_SCALE]
+  camX = ((camX % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+  camY = ((camY % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
 }
 
 // ---- Game Loop ----
@@ -203,8 +317,6 @@ function gameLoop(now) {
 
   const rawDt = (now - lastFrameTime) / 1000;
   lastFrameTime = now;
-
-  // Clamp dt to prevent spiral of death
   const dt = Math.min(rawDt, 1 / 30) * timeScale;
   totalTime += dt;
 
@@ -217,21 +329,34 @@ function gameLoop(now) {
     fpsTimer = 0;
   }
 
-  // 1. Fluid sim step — pass well positions for distance-based dissipation
-  const simDt = 1 / 60; // fixed sim timestep for stability
+  // === SIMULATION (frozen when paused) ===
+  if (gamePhase !== 'paused') {
+
+  // 1. Fluid sim step
+  const simDt = 1 / 60;
   const wellUVsForSim = wellSystem.getUVPositions();
-  fluid.setWellPositions(wellUVsForSim);
+  const shipUV = worldToFluidUV(ship.wx, ship.wy);
+  const allDensitySources = [
+    ...wellUVsForSim,
+    ...starSystem.getUVPositions(),
+    ...lootSystem.getUVPositions(),
+    ...portalSystem.getUVPositions(),
+    ...planetoidSystem.getUVPositions(),
+    shipUV,
+  ];
+  fluid.setWellPositions(allDensitySources);
   fluid.step(simDt);
 
-  // 2. Well forces (inject into fluid) — constant radial + orbital + spinning accretion disk
+  // 2. Well forces
   wellSystem.update(fluid, simDt, totalTime);
 
-  // 2b. Ambient turbulence — quantum fluctuation feel
-  // Random small force/density splats to keep the fabric alive and textured
+  // 2a. Star forces
+  starSystem.update(fluid, simDt, totalTime);
+
+  // 2b. Ambient turbulence
   const turbStr = CONFIG.fluid.ambientTurbulence;
   const densStr = CONFIG.fluid.ambientDensity;
   if (turbStr > 0 || densStr > 0) {
-    // A few random splats per frame — enough for texture, not enough for chaos
     for (let i = 0; i < 3; i++) {
       const rx = Math.random();
       const ry = Math.random();
@@ -241,7 +366,7 @@ function gameLoop(now) {
         rx, ry,
         Math.cos(angle) * forceMag,
         Math.sin(angle) * forceMag,
-        0.005 + Math.random() * 0.01,
+        0.003 + Math.random() * 0.005,
         densStr * (0.3 + Math.random() * 0.7),
         densStr * (0.5 + Math.random() * 0.5),
         densStr * (0.6 + Math.random() * 0.4)
@@ -249,15 +374,23 @@ function gameLoop(now) {
     }
   }
 
-  // 3. Well growth events — periodic mass increase spawns wave rings
+  // 2c. Loot anchors
+  lootSystem.update(fluid, simDt, totalTime);
+
+  // 2d. Portal fluid effects
+  portalSystem.update(fluid, simDt, totalTime);
+
+  // 2e. Planetoid fluid effects + well consumption
+  planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings);
+
+  // 3. Well growth events
   growthTimer += dt;
   if (growthTimer >= CONFIG.events.growthInterval) {
     growthTimer -= CONFIG.events.growthInterval;
     const evtCfg = CONFIG.events;
     for (const well of wellSystem.wells) {
       well.mass += evtCfg.growthAmount;
-      // Spawn an expanding wave ring from this well
-      waveRings.spawn(well.x, well.y, evtCfg.growthWaveAmplitude * well.mass);
+      waveRings.spawn(well.wx, well.wy, evtCfg.growthWaveAmplitude * well.mass);
     }
   }
 
@@ -265,73 +398,102 @@ function gameLoop(now) {
   waveRings.update(dt);
 
   // 5. Wave ring forces on ship
-  waveRings.applyToShip(ship, glCanvas.width, glCanvas.height);
+  waveRings.applyToShip(ship);
 
-  // 6. Ship update (reads fluid, applies thrust, feels gravity)
+  // 5b. Input
+  inputManager.poll();
+  inputManager.applyToShip(ship);
+
+  // 6. Ship update
   if (gamePhase === 'playing') {
-    ship.update(dt, fluid, wellSystem);
+    ship.update(dt, fluid, wellSystem, camX, camY);
 
-    // 6b. Death check — did the ship fall into a well?
-    const killingWell = wellSystem.checkDeath(
-      ship.x, ship.y, glCanvas.width, glCanvas.height
-    );
+    // Star push on ship
+    starSystem.applyToShip(ship);
+
+    // Planetoid push on ship
+    planetoidSystem.applyToShip(ship);
+
+    // Death check
+    const killingWell = wellSystem.checkDeath(ship.wx, ship.wy);
     if (killingWell) {
       gamePhase = 'dead';
       deathTimer = 0;
       ship.setThrust(false);
     }
+
+    // Extraction check
+    if (gamePhase === 'playing') {
+      const portal = portalSystem.checkExtraction(ship.wx, ship.wy);
+      if (portal) {
+        gamePhase = 'escaped';
+        escapeTimer = 0;
+        ship.setThrust(false);
+      }
+    }
   } else if (gamePhase === 'dead') {
     deathTimer += dt;
+  } else if (gamePhase === 'escaped') {
+    escapeTimer += dt;
   }
 
-  // 7. Render fluid -> ASCII post-process (Layer 0 — the fabric of spacetime)
+  // Update camera (after ship update)
+  updateCamera(dt);
+
+  } // end paused check
+
+  // 7. Render fluid -> ASCII (camera-aware)
   const wellUVs = wellSystem.getUVPositions();
-  // Render fluid display colors into the ASCII renderer's scene FBO (not to screen)
   const sceneTarget = asciiRenderer.getSceneTarget();
-  fluid.render(sceneTarget, wellUVs);
-  // ASCII post-process: read scene FBO, render character grid to screen
+  // Camera offset in fluid UV: convert camera world-space to fluid UV
+  const [camFU, camFV] = worldToFluidUV(camX, camY);
+  fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE);
   asciiRenderer.render();
 
-  // 8. Render overlay (Layer 1/2 — 2D canvas: wave rings + ship)
+  // 8. Render overlay
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  waveRings.render(ctx, overlayCanvas.width, overlayCanvas.height);
-  ship.render(ctx);
+  waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
+  starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+  lootSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+  portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+  planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
+  ship.render(ctx, camX, camY);
 
-  // 9. FPS display
+  // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {
+    const pxPerWorld = overlayCanvas.width / WORLD_SCALE;
     ctx.save();
     ctx.fillStyle = '#00ff00';
     ctx.font = '14px monospace';
     ctx.fillText(`FPS: ${fps.toFixed(0)}`, 10, 20);
-    ctx.fillText(`Ship: (${ship.x.toFixed(0)}, ${ship.y.toFixed(0)})`, 10, 38);
-    ctx.fillText(`Vel: (${ship.vx.toFixed(1)}, ${ship.vy.toFixed(1)})`, 10, 56);
+    ctx.fillText(`Ship: (${ship.wx.toFixed(2)}, ${ship.wy.toFixed(2)})`, 10, 38);
+    ctx.fillText(`Vel: (${(ship.vx * pxPerWorld).toFixed(1)}, ${(ship.vy * pxPerWorld).toFixed(1)})`, 10, 56);
     ctx.fillText(`Fluid: (${ship.lastFluidVel.x.toFixed(2)}, ${ship.lastFluidVel.y.toFixed(2)})`, 10, 74);
-    ctx.fillText(`Rings: ${waveRings.getActiveCount()}`, 10, 92);
+    ctx.fillText(`Rings: ${waveRings.getActiveCount()} | Planetoids: ${planetoidSystem.planetoids.length}`, 10, 92);
+    ctx.fillText(`Input: ${inputManager.usingGamepad ? 'Gamepad' : 'Mouse'}${inputManager.usingGamepad ? ` T:${inputManager.thrustIntensity.toFixed(2)} B:${inputManager.brakeIntensity.toFixed(2)}` : ''}`, 10, 110);
+    ctx.fillText(`Cam: (${camX.toFixed(2)}, ${camY.toFixed(2)})`, 10, 128);
     ctx.restore();
   }
 
-  // 9b. Fluid diagnostic overlay — real-time density/velocity at key positions
+  // 9b. Fluid diagnostic overlay
   if (CONFIG.debug.showFluidDiagnostic) {
     ctx.save();
     ctx.fillStyle = '#00ff00';
     ctx.font = '11px monospace';
-    let diagY = 116; // below existing FPS readout
+    let diagY = 140;
 
-    // Ship position density
-    const shipUV = screenToFluidUV(ship.x, ship.y, overlayCanvas.width, overlayCanvas.height);
-    const shipDens = fluid.readDensityAt(shipUV[0], shipUV[1]);
+    const shipUVDiag = worldToFluidUV(ship.wx, ship.wy);
+    const shipDens = fluid.readDensityAt(shipUVDiag[0], shipUVDiag[1]);
     const shipDensMag = Math.sqrt(shipDens[0] ** 2 + shipDens[1] ** 2 + shipDens[2] ** 2);
     ctx.fillText(`--- FLUID DIAG ---`, 10, diagY); diagY += 16;
-    ctx.fillText(`Ship dens: ${shipDensMag.toFixed(2)} (${shipDens[0].toFixed(2)}, ${shipDens[1].toFixed(2)}, ${shipDens[2].toFixed(2)})`, 10, diagY); diagY += 14;
+    ctx.fillText(`Ship dens: ${shipDensMag.toFixed(2)}`, 10, diagY); diagY += 14;
 
-    // Each well center (offset slightly to avoid the void)
     const wells = wellSystem.wells;
     for (let i = 0; i < wells.length; i++) {
       const w = wells[i];
-      const [wfu, wfv] = wellToFluidUV(w.x, w.y);
-      // Offset by 0.03 UV to sample near the accretion zone, not the void center
-      const sampleU = wfu + 0.03;
-      const sampleV = wfv + 0.03;
+      const [wfu, wfv] = worldToFluidUV(w.wx, w.wy);
+      const sampleU = wfu + 0.01;
+      const sampleV = wfv + 0.01;
       const dens = fluid.readDensityAt(sampleU, sampleV);
       const densMag = Math.sqrt(dens[0] ** 2 + dens[1] ** 2 + dens[2] ** 2);
       const vel = fluid.readVelocityAt(sampleU, sampleV);
@@ -339,68 +501,33 @@ function gameLoop(now) {
       ctx.fillText(`W${i} dens:${densMag.toFixed(1)} vel:${speed.toFixed(3)}`, 10, diagY); diagY += 14;
     }
 
-    // Midpoint between the two closest wells
-    if (wells.length >= 2) {
-      let bestDist = Infinity, bestI = 0, bestJ = 1;
-      for (let i = 0; i < wells.length; i++) {
-        for (let j = i + 1; j < wells.length; j++) {
-          const dx = wells[i].x - wells[j].x;
-          const dy = wells[i].y - wells[j].y;
-          const d = dx * dx + dy * dy;
-          if (d < bestDist) { bestDist = d; bestI = i; bestJ = j; }
-        }
-      }
-      const midX = (wells[bestI].x + wells[bestJ].x) / 2;
-      const midY = (wells[bestI].y + wells[bestJ].y) / 2;
-      const [mfu, mfv] = wellToFluidUV(midX, midY);
-      const midDens = fluid.readDensityAt(mfu, mfv);
-      const midDensMag = Math.sqrt(midDens[0] ** 2 + midDens[1] ** 2 + midDens[2] ** 2);
-      const midVel = fluid.readVelocityAt(mfu, mfv);
-      const midSpeed = Math.sqrt(midVel[0] ** 2 + midVel[1] ** 2);
-      ctx.fillText(`Mid(${bestI}-${bestJ}) dens:${midDensMag.toFixed(1)} vel:${midSpeed.toFixed(3)}`, 10, diagY); diagY += 14;
-    }
-
-    // Min/max across a sparse 8x8 grid
-    let minDens = Infinity, maxDens = 0;
-    for (let gx = 0; gx < 8; gx++) {
-      for (let gy = 0; gy < 8; gy++) {
-        const gu = (gx + 0.5) / 8;
-        const gv = (gy + 0.5) / 8;
-        const gd = fluid.readDensityAt(gu, gv);
-        const gdm = Math.sqrt(gd[0] ** 2 + gd[1] ** 2 + gd[2] ** 2);
-        if (gdm < minDens) minDens = gdm;
-        if (gdm > maxDens) maxDens = gdm;
-      }
-    }
-    ctx.fillText(`Grid min:${minDens.toFixed(2)} max:${maxDens.toFixed(1)}`, 10, diagY); diagY += 14;
-
     ctx.restore();
   }
 
   // 10. Debug: flow field arrows
   if (CONFIG.debug.showVelocityField && fluid) {
     ctx.save();
-    const gridStep = 60; // pixels between arrows
-    const arrowScale = 800; // velocity to arrow length multiplier
+    const gridStep = 60;
+    const arrowScale = 800;
     for (let px = gridStep / 2; px < overlayCanvas.width; px += gridStep) {
       for (let py = gridStep / 2; py < overlayCanvas.height; py += gridStep) {
-        // Convert screen pixel to fluid UV via coords.js
-        const [fuv_x, fuv_y] = screenToFluidUV(px, py, overlayCanvas.width, overlayCanvas.height);
-        const [fvx, fvy] = fluid.readVelocityAt(fuv_x, fuv_y);
+        const [worldX, worldY] = screenToWorld(px, py, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        const [fuv_x, fuv_y] = worldToFluidUV(worldX, worldY);
+        const [fvx, fvy] = fluid.readVelocityAt(
+          Math.max(0, Math.min(1, fuv_x)),
+          Math.max(0, Math.min(1, fuv_y))
+        );
         const speed = Math.sqrt(fvx * fvx + fvy * fvy);
         if (speed < 0.0001) continue;
 
-        // Convert fluid velocity to screen velocity via coords.js
         const [svx, svy] = fluidVelToScreen(fvx, fvy);
         const len = Math.min(speed * arrowScale, gridStep * 0.8);
         const angle = Math.atan2(svy, svx);
 
-        // Arrow color: brighter = faster flow
         const alpha = Math.min(0.8, speed * 200);
         ctx.strokeStyle = `rgba(100, 255, 200, ${alpha})`;
         ctx.lineWidth = 1.5;
 
-        // Draw arrow line
         const ex = px + Math.cos(angle) * len;
         const ey = py + Math.sin(angle) * len;
         ctx.beginPath();
@@ -408,7 +535,6 @@ function gameLoop(now) {
         ctx.lineTo(ex, ey);
         ctx.stroke();
 
-        // Arrowhead
         const headLen = Math.min(len * 0.3, 6);
         ctx.beginPath();
         ctx.moveTo(ex, ey);
@@ -421,65 +547,105 @@ function gameLoop(now) {
     ctx.restore();
   }
 
-  // 11. Debug: coordinate diagnostic — bright green splats in fluid + overlay dots
+  // 11. Debug: coordinate diagnostic
   if (CONFIG.debug.showCoordDiagnostic) {
-    // Inject bright green density into the fluid at each well's FLUID UV position
-    // If coords are correct, these green blobs should align with the overlay dots below
     for (const well of wellSystem.wells) {
-      const [fu, fv] = wellToFluidUV(well.x, well.y);
-      fluid.splat(fu, fv, 0, 0, 0.008, 0.0, 1.0, 0.0);  // bright green
+      const [fu, fv] = worldToFluidUV(well.wx, well.wy);
+      fluid.splat(fu, fv, 0, 0, 0.003, 0.0, 1.0, 0.0);
     }
-
-    // Draw bright green dots on the overlay at each well's SCREEN position
     ctx.save();
     for (const well of wellSystem.wells) {
-      const [sx, sy] = wellToScreen(well.x, well.y, overlayCanvas.width, overlayCanvas.height);
+      const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
       ctx.fillStyle = '#00ff00';
       ctx.beginPath();
       ctx.arc(sx, sy, 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.font = '12px monospace';
-      ctx.fillText(`well(${well.x.toFixed(2)}, ${well.y.toFixed(2)})`, sx + 12, sy - 4);
+      ctx.fillText(`well(${well.wx.toFixed(2)}, ${well.wy.toFixed(2)})`, sx + 12, sy - 4);
     }
     ctx.restore();
   }
 
-  // 12. Debug: well radii
+  // 12. Debug: well radii and labels
   if (CONFIG.debug.showWellRadii) {
+    const pxPerWorld = overlayCanvas.width / WORLD_SCALE;
     ctx.save();
-    const wellData = wellSystem.getWellData(overlayCanvas.width, overlayCanvas.height);
-    for (const w of wellData) {
+    const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
+    for (let i = 0; i < wellData.length; i++) {
+      const w = wellData[i];
       ctx.strokeStyle = 'rgba(255, 100, 0, 0.3)';
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(w.x, w.y, 50, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(w.x, w.y, 120, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(w.x, w.y, 200, 0, Math.PI * 2);
-      ctx.stroke();
-      // Well center marker
+      ctx.beginPath(); ctx.arc(w.x, w.y, 0.15 * pxPerWorld, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(w.x, w.y, 0.3 * pxPerWorld, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(w.x, w.y, 0.5 * pxPerWorld, 0, Math.PI * 2); ctx.stroke();
+      // Kill radius
+      ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+      const kr = wellSystem.wells[i].killRadius * pxPerWorld;
+      ctx.beginPath(); ctx.arc(w.x, w.y, kr, 0, Math.PI * 2); ctx.stroke();
+      // Label
       ctx.fillStyle = 'rgba(255, 50, 0, 0.5)';
-      ctx.beginPath();
-      ctx.arc(w.x, w.y, 4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(w.x, w.y, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff6633';
+      ctx.font = '11px monospace';
+      ctx.fillText(`W${i} m:${wellSystem.wells[i].mass.toFixed(2)}`, w.x + 8, w.y - 6);
     }
+
+    // Stars
+    for (let i = 0; i < starSystem.stars.length; i++) {
+      const star = starSystem.stars[i];
+      const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      const pushR1 = CONFIG.stars.rayLength * WORLD_SCALE * pxPerWorld;
+      ctx.strokeStyle = 'rgba(255, 255, 100, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(sx, sy, pushR1, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 255, 100, 0.6)';
+      ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffff66';
+      ctx.font = '11px monospace';
+      ctx.fillText(`S${i} m:${star.mass.toFixed(2)}`, sx + 8, sy - 6);
+    }
+
+    // Loot
+    for (let i = 0; i < lootSystem.anchors.length; i++) {
+      const loot = lootSystem.anchors[i];
+      if (!loot.alive) continue;
+      const [lx, ly] = worldToScreen(loot.wx, loot.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      const glowR = CONFIG.loot.glowRadius * WORLD_SCALE * pxPerWorld;
+      ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(lx, ly, glowR, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#66ccff';
+      ctx.font = '11px monospace';
+      ctx.fillText(`L${i}`, lx + 8, ly - 6);
+    }
+
+    // Portals
+    for (let i = 0; i < portalSystem.portals.length; i++) {
+      const portal = portalSystem.portals[i];
+      const [px, py] = worldToScreen(portal.wx, portal.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      const captureR = CONFIG.portals.captureRadius * pxPerWorld;
+      ctx.strokeStyle = 'rgba(180, 80, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(px, py, captureR, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#b855ff';
+      ctx.font = '11px monospace';
+      ctx.fillText(`P${i}`, px + 8, py - 6);
+    }
+
     ctx.restore();
   }
 
   // === DEATH SCREEN ===
   if (gamePhase === 'dead') {
     ctx.save();
-    // Darken overlay
     const fadeAlpha = Math.min(deathTimer * 0.8, 0.7);
     ctx.fillStyle = `rgba(0, 0, 0, ${fadeAlpha})`;
     ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
     if (deathTimer > 0.5) {
-      // Death text
       ctx.fillStyle = `rgba(255, 30, 30, ${Math.min((deathTimer - 0.5) * 2, 1)})`;
       ctx.font = 'bold 48px monospace';
       ctx.textAlign = 'center';
@@ -489,6 +655,65 @@ function gameLoop(now) {
       ctx.font = '20px monospace';
       ctx.fillText('Click to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
     }
+    ctx.restore();
+  }
+
+  // === ESCAPED SCREEN ===
+  if (gamePhase === 'escaped') {
+    ctx.save();
+    const fadeAlpha = Math.min(escapeTimer * 0.6, 0.5);
+    ctx.fillStyle = `rgba(10, 5, 30, ${fadeAlpha})`;
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+    if (escapeTimer > 0.5) {
+      ctx.fillStyle = `rgba(100, 255, 255, ${Math.min((escapeTimer - 0.5) * 2, 1)})`;
+      ctx.font = 'bold 48px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('ESCAPED', overlayCanvas.width / 2, overlayCanvas.height / 2 - 20);
+
+      ctx.fillStyle = `rgba(200, 200, 220, ${Math.min((escapeTimer - 1.0) * 2, 1)})`;
+      ctx.font = '20px monospace';
+      ctx.fillText('Click to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
+    }
+    ctx.restore();
+  }
+
+  // === PAUSE MENU ===
+  if (gamePhase === 'paused') {
+    const cx = overlayCanvas.width / 2;
+    const cy = overlayCanvas.height / 2;
+    const btnW = 200, btnH = 40;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+    ctx.fillStyle = '#88aaff';
+    ctx.font = 'bold 36px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSED', cx, cy - 70);
+
+    ctx.fillStyle = 'rgba(40, 40, 80, 0.9)';
+    ctx.fillRect(cx - btnW / 2, cy - 10 - btnH, btnW, btnH);
+    ctx.strokeStyle = 'rgba(100, 100, 255, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx - btnW / 2, cy - 10 - btnH, btnW, btnH);
+    ctx.fillStyle = '#ccccff';
+    ctx.font = '18px monospace';
+    ctx.fillText('Continue', cx, cy - 10 - btnH / 2 + 6);
+
+    ctx.fillStyle = 'rgba(40, 40, 80, 0.9)';
+    ctx.fillRect(cx - btnW / 2, cy + 10, btnW, btnH);
+    ctx.strokeStyle = 'rgba(100, 100, 255, 0.5)';
+    ctx.strokeRect(cx - btnW / 2, cy + 10, btnW, btnH);
+    ctx.fillStyle = '#ccccff';
+    ctx.font = '18px monospace';
+    ctx.fillText('Restart', cx, cy + 10 + btnH / 2 + 6);
+
+    ctx.fillStyle = 'rgba(150, 150, 200, 0.6)';
+    ctx.font = '13px monospace';
+    ctx.fillText('ESC to resume', cx, cy + 80);
+
     ctx.restore();
   }
 

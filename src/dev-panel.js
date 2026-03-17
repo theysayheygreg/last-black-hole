@@ -31,28 +31,84 @@ const RANGE_HINTS = {
   'fluid.dissipation':      { min: 0.9, max: 1, step: 0.001, tip: 'Velocity persistence per step. 0.99 = waves fade fast. 0.999 = waves travel far' },
   'fluid.densityDissipation':{ min: 0.9, max: 1, step: 0.001, tip: 'How long visible density (color) persists. Higher = longer trails' },
 
-  'wells.gravity':          { min: 0, max: 0.01, step: 0.0001, tip: 'Fluid-space gravity constant. Controls how strongly the well pulls the FLUID' },
-  'wells.falloff':          { min: 1, max: 3, step: 0.1, tip: 'Gravity distance exponent. 1 = gentle. 2 = inverse-square. 3 = sharp' },
-  'wells.clampRadius':      { min: 1, max: 50, step: 1, tip: 'Minimum radius in sim cells to prevent singularity at well center' },
-  'wells.terminalInflowSpeed':{ min: 0, max: 2, step: 0.01, tip: 'Cap on fluid speed near the well. Prevents runaway acceleration' },
-  'wells.shipPullStrength': { min: 0, max: 1000, step: 10, tip: 'Direct gravitational pull on the SHIP in px/s² at 100px. THIS is what traps you' },
-  'wells.shipPullFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship pull distance exponent. 1.5 = softer than real gravity. 2 = inverse-square' },
-  'wells.orbitalStrength':  { min: 0, max: 1, step: 0.01, tip: 'Tangential force fraction. 0 = pure infall. 0.3 = gentle orbits. 1.0 = strong whirlpools' },
-  'wells.gravityClampDist': { min: 10, max: 100, step: 5, tip: 'Pixel-space min distance for ship gravity calc (prevents instant death at center)' },
+  'wells.gravity':          { min: 0, max: 0.01, step: 0.0001, tip: 'How strongly wells pull the fluid. 0.0015 = default. Higher = faster currents' },
+  'wells.falloff':          { min: 1, max: 3, step: 0.1, tip: 'Gravity falloff. 1 = gentle, 1.5 = default, 2 = inverse-square, 3 = sharp' },
+  'wells.orbitalStrength':  { min: 0, max: 1, step: 0.01, tip: 'Swirl strength. 0 = pure infall, 0.4 = default, 1.0 = strong whirlpools' },
+  'wells.shipPullStrength': { min: 0, max: 2, step: 0.05, tip: 'How hard wells pull the ship (world-units/s²). THIS is what traps you' },
+  'wells.shipPullFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship pull falloff. 1.5 = default (softer than inverse-square)' },
+  'wells.killRadius':       { min: 0.01, max: 0.1, step: 0.005, tip: 'Death radius in world-units' },
 
-  'events.waveSpeed':       { min: 50, max: 500, step: 10, tip: 'Wave ring expansion speed in px/sec. 150 = stately. 400 = dramatic.' },
-  'events.waveWidth':       { min: 10, max: 100, step: 5, tip: 'Wavefront thickness in pixels. Wider = easier to surf, less precise' },
+  'events.waveSpeed':       { min: 0.1, max: 1.5, step: 0.05, tip: 'Wave ring expansion speed in world-units/sec' },
+  'events.waveWidth':       { min: 0.03, max: 0.3, step: 0.01, tip: 'Wavefront thickness in world-units' },
   'events.waveDecay':       { min: 0.9, max: 1, step: 0.005, tip: 'Amplitude multiplier per frame. 0.97 = fades fast. 0.99 = rings travel far' },
-  'events.waveMaxRadius':   { min: 200, max: 2000, step: 50, tip: 'Ring death radius in pixels. Larger = waves cross the whole map' },
-  'events.waveShipPush':    { min: 50, max: 1000, step: 25, tip: 'Force on ship when a ring passes through. 300 = noticeable shove' },
-  'events.growthInterval':  { min: 5, max: 60, step: 1, tip: 'Seconds between well growth events. 20 = calm rhythm. 5 = constant drama' },
-  'events.growthAmount':    { min: 0.01, max: 0.2, step: 0.01, tip: 'Mass added to each well per growth event. Compounds over time.' },
+  'events.waveMaxRadius':   { min: 0.5, max: 4, step: 0.25, tip: 'Ring death radius in world-units' },
+  'events.waveShipPush':    { min: 0.1, max: 3, step: 0.1, tip: 'Force on ship when a ring passes through (world-units/s²)' },
+  'events.growthInterval':  { min: 5, max: 120, step: 5, tip: 'Seconds between well growth events. 45 = slow. 5 = constant drama' },
+  'events.growthAmount':    { min: 0.005, max: 0.1, step: 0.005, tip: 'Mass added to each well per growth event. Compounds over time.' },
   'events.growthWaveAmplitude':{ min: 0.1, max: 3, step: 0.1, tip: 'Initial amplitude of growth wave rings. 1.0 = standard. 2.0 = dramatic' },
 
   'ascii.cellSize':         { min: 4, max: 20, step: 1, tip: 'Character cell width in pixels. Smaller = more detail, more GPU work' },
   'ascii.cellAspect':       { min: 1, max: 2, step: 0.1, tip: 'Cell height/width ratio. 1.5 = readable monospace proportions' },
   'ascii.contrast':         { min: 0.1, max: 2, step: 0.05, tip: 'Luminance curve power. <1 = more chars in dark areas. >1 = sharper contrast' },
   'ascii.colorTemperature': { min: -1, max: 1, step: 0.05, tip: 'Global color shift. Negative = cooler/bluer. Positive = warmer/amber' },
+
+  // Stars — visual: rays should be visible across screen, core should glow
+  // Stars
+  'stars.radiationStrength':{ min: 0, max: 0.005, step: 0.0002, tip: 'Outward push on fluid. 0.001 = matches well gravity' },
+  'stars.falloff':          { min: 1, max: 3, step: 0.1, tip: 'Push falloff. 1 = gentle, 2 = sharp' },
+  'stars.orbitalStrength':  { min: 0, max: 0.5, step: 0.01, tip: 'Twist on outflow. 0 = radial, 0.15 = spiral' },
+  'stars.clearing':         { min: 0, max: 0.5, step: 0.02, tip: 'Dark bubble strength + size. 0.2 = visible void. Also sets bubble radius' },
+  'stars.rayCount':         { min: 2, max: 12, step: 1, tip: 'Number of light rays' },
+  'stars.rayLength':        { min: 0.05, max: 0.4, step: 0.01, tip: 'Ray length. 0.25 = 1/4 screen' },
+  'stars.rayBrightness':    { min: 0.01, max: 0.15, step: 0.005, tip: 'Ray glow. 0.06 = visible, 0.15 = blazing' },
+  'stars.raySpinRate':      { min: 0.3, max: 2, step: 0.05, tip: 'Ray rotation (rad/s). 0.3 = stately' },
+  'stars.coreBrightness':   { min: 0.02, max: 0.5, step: 0.01, tip: 'Core glow + size. 0.2 = bright star, 0.5 = supernova' },
+  'stars.shipPushStrength': { min: 0, max: 2, step: 0.05, tip: 'Ship push (world-units/s²)' },
+  'stars.shipPushFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship push falloff' },
+
+  // Loot
+  'loot.gravity':           { min: 0, max: 0.003, step: 0.0002, tip: 'Flow obstruction pull. 0.0008 = gentle eddy, 0.002 = visible vortex' },
+  'loot.falloff':           { min: 1, max: 5, step: 0.2, tip: 'How local the pull is. 3 = tight, 1 = wide' },
+  'loot.densityRate':       { min: 0.005, max: 0.06, step: 0.002, tip: 'Glow brightness. 0.015 = gentle, 0.04 = beacon' },
+  'loot.glowRadius':        { min: 0.005, max: 0.05, step: 0.002, tip: 'Glow size (~1-12 ASCII cells)' },
+  'loot.shimmerSpeed':      { min: 0.5, max: 8, step: 0.5, tip: 'Shimmer rotation (rad/s)' },
+  'loot.shimmerRadius':     { min: 0.005, max: 0.03, step: 0.002, tip: 'Shimmer orbit size' },
+  'loot.overlaySize':       { min: 3, max: 20, step: 1, tip: 'Marker dot size (pixels)' },
+  'loot.pulseRate':         { min: 0.5, max: 4, step: 0.25, tip: 'Pulse frequency (Hz)' },
+
+  // Ship wake
+  'ship.wake.splatCount':   { min: 1, max: 8, step: 1, tip: 'Trail length (splat count)' },
+  'ship.wake.splatSpacing': { min: 0.001, max: 0.01, step: 0.0005, tip: 'Gap between trail splats (UV)' },
+  'ship.wake.radius':       { min: 0.002, max: 0.015, step: 0.001, tip: 'Trail width (UV)' },
+  'ship.wake.force':        { min: 0.001, max: 0.015, step: 0.0005, tip: 'Flow disturbance strength' },
+  'ship.wake.brightness':   { min: 0.1, max: 1.5, step: 0.05, tip: 'Trail visibility' },
+  'ship.wake.speedThreshold':{ min: 0.02, max: 0.4, step: 0.02, tip: 'Speed before wake appears' },
+
+  // Portals
+  'portals.gravity':        { min: 0, max: 0.002, step: 0.0001, tip: 'Inward pull strength' },
+  'portals.captureRadius':  { min: 0.03, max: 0.2, step: 0.01, tip: 'Extraction capture radius (world-units)' },
+  'portals.densityRate':    { min: 0.005, max: 0.06, step: 0.002, tip: 'Purple glow brightness' },
+  'portals.spiralArms':     { min: 1, max: 6, step: 1, tip: 'Number of spiral arms' },
+  'portals.spiralSpeed':    { min: 0.3, max: 3, step: 0.1, tip: 'Spiral rotation speed (rad/s)' },
+  'portals.overlaySize':    { min: 6, max: 30, step: 1, tip: 'Overlay marker size (px)' },
+  'portals.pulseRate':      { min: 0.3, max: 2, step: 0.1, tip: 'Pulse frequency (Hz)' },
+
+  // Planetoids
+  'planetoids.bowShockForce':    { min: 0.001, max: 0.01, step: 0.0005, tip: 'Bow shock disturbance' },
+  'planetoids.wakeForce':        { min: 0.0005, max: 0.008, step: 0.0005, tip: 'Wake vortex strength' },
+  'planetoids.density':          { min: 0.005, max: 0.03, step: 0.002, tip: 'Trail brightness' },
+  'planetoids.orbitSpeed':       { min: 0.1, max: 1.5, step: 0.05, tip: 'Orbit angular speed (rad/s)' },
+  'planetoids.transitSpeed':     { min: 0.05, max: 0.4, step: 0.02, tip: 'Transit speed (world-units/s)' },
+  'planetoids.shipPushStrength': { min: 0.05, max: 1, step: 0.05, tip: 'Ship push strength (world-units/s²)' },
+  'planetoids.shipPushRadius':   { min: 0.05, max: 0.3, step: 0.02, tip: 'Ship push radius (world-units)' },
+  'planetoids.mass':             { min: 0.01, max: 0.1, step: 0.005, tip: 'Mass added to well on consumption' },
+  'planetoids.size':             { min: 3, max: 15, step: 1, tip: 'Overlay dot size (px)' },
+  'planetoids.maxAlive':         { min: 2, max: 12, step: 1, tip: 'Max concurrent planetoids' },
+
+  // Input
+  'input.gamepadDeadzone':  { min: 0.05, max: 0.3, step: 0.01, tip: 'Stick dead zone radius' },
+  'input.triggerThreshold': { min: 0.01, max: 0.2, step: 0.01, tip: 'Trigger activation threshold' },
+  'input.brakeStrength':    { min: 0, max: 0.3, step: 0.01, tip: 'Extra drag from L2 brake' },
 };
 
 /**
@@ -225,7 +281,7 @@ export function initDevPanel() {
     const group = CONFIG[section];
     if (typeof group !== 'object' || group === null || Array.isArray(group)) continue;
 
-    const sec = createSection(section, group);
+    const sec = createSection(section, group, section);
     body.appendChild(sec);
   }
 
@@ -304,7 +360,7 @@ function makeButton(label, onClick) {
   return btn;
 }
 
-function createSection(name, group) {
+function createSection(name, group, sectionRoot) {
   const wrapper = document.createElement('div');
   wrapper.style.marginBottom = '2px';
 
@@ -337,25 +393,166 @@ function createSection(name, group) {
   wrapper.appendChild(hdr);
   wrapper.appendChild(content);
 
-  for (const key of Object.keys(group)) {
-    const val = group[key];
-    const path = `${name}.${key}`;
-
-    if (typeof val === 'boolean') {
-      content.appendChild(createToggle(name, key, path));
-    } else if (typeof val === 'number') {
-      content.appendChild(createSlider(name, key, path));
-    } else if (Array.isArray(val) && val.every(v => typeof v === 'number')) {
-      // Color arrays: one slider per component
-      for (let i = 0; i < val.length; i++) {
-        const compLabel = ['R', 'G', 'B', 'A'][i] || String(i);
-        content.appendChild(createArraySlider(name, key, i, compLabel, `${path}[${i}]`));
-      }
-    }
-    // skip other types silently
-  }
+  addGroupControls(content, group, name, sectionRoot);
 
   return wrapper;
+}
+
+function addGroupControls(container, group, prefix, sectionRoot) {
+  for (const key of Object.keys(group)) {
+    const val = group[key];
+    const path = `${prefix}.${key}`;
+
+    if (typeof val === 'boolean') {
+      container.appendChild(createToggleNested(group, key, path));
+    } else if (typeof val === 'number') {
+      container.appendChild(createSliderNested(group, key, path));
+    } else if (Array.isArray(val) && val.every(v => typeof v === 'number')) {
+      for (let i = 0; i < val.length; i++) {
+        const compLabel = ['R', 'G', 'B', 'A'][i] || String(i);
+        container.appendChild(createArraySliderNested(group, key, i, compLabel, `${path}[${i}]`));
+      }
+    } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+      // Nested sub-object (e.g., ship.wake) — add a sub-header and recurse
+      const subHdr = document.createElement('div');
+      Object.assign(subHdr.style, {
+        padding: '3px 4px',
+        color: '#77a',
+        fontSize: '10px',
+        fontWeight: 'bold',
+        marginTop: '4px',
+      });
+      subHdr.textContent = `— ${key} —`;
+      container.appendChild(subHdr);
+      addGroupControls(container, val, path, sectionRoot);
+    }
+  }
+}
+
+// Nested versions that work with any object reference (not just CONFIG[section])
+function createSliderNested(obj, key, path) {
+  const row = document.createElement('div');
+  Object.assign(row.style, {
+    display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 0',
+  });
+
+  const val = obj[key];
+  const hint = RANGE_HINTS[path] || autoRange(val);
+
+  const label = document.createElement('span');
+  label.style.width = '150px';
+  label.style.flexShrink = '0';
+  label.style.overflow = 'hidden';
+  label.style.textOverflow = 'ellipsis';
+  label.style.cursor = 'help';
+  label.textContent = key;
+  label.title = hint.tip || path;
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = hint.min;
+  slider.max = hint.max;
+  slider.step = hint.step;
+  slider.value = val;
+  slider.dataset.configPath = path;
+  Object.assign(slider.style, { flex: '1', accentColor: '#66f', height: '14px' });
+
+  const display = document.createElement('span');
+  display.style.width = '52px';
+  display.style.textAlign = 'right';
+  display.style.flexShrink = '0';
+  display.style.color = '#8f8';
+  display.textContent = fmt(val);
+
+  slider.addEventListener('input', () => {
+    const v = parseFloat(slider.value);
+    obj[key] = v;
+    display.textContent = fmt(v);
+  });
+
+  slider._update = () => {
+    slider.value = obj[key];
+    display.textContent = fmt(obj[key]);
+  };
+
+  row.appendChild(label);
+  row.appendChild(slider);
+  row.appendChild(display);
+  return row;
+}
+
+function createToggleNested(obj, key, path) {
+  const row = document.createElement('div');
+  Object.assign(row.style, {
+    display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0',
+  });
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = obj[key];
+  cb.dataset.configPath = path;
+  cb.style.accentColor = '#66f';
+
+  const label = document.createElement('span');
+  label.textContent = key;
+  label.title = path;
+  label.style.cursor = 'pointer';
+  label.addEventListener('click', () => { cb.click(); });
+
+  cb.addEventListener('change', () => { obj[key] = cb.checked; });
+  cb._update = () => { cb.checked = obj[key]; };
+
+  row.appendChild(cb);
+  row.appendChild(label);
+  return row;
+}
+
+function createArraySliderNested(obj, key, index, compLabel, path) {
+  const row = document.createElement('div');
+  Object.assign(row.style, {
+    display: 'flex', alignItems: 'center', gap: '4px', padding: '1px 0', paddingLeft: '8px',
+  });
+
+  const val = obj[key][index];
+
+  const label = document.createElement('span');
+  label.style.width = '112px';
+  label.style.flexShrink = '0';
+  label.style.color = '#999';
+  label.textContent = `${key}.${compLabel}`;
+  label.title = path;
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = 0;
+  slider.max = 1;
+  slider.step = 0.01;
+  slider.value = val;
+  slider.dataset.configPath = path;
+  Object.assign(slider.style, { flex: '1', accentColor: '#66f', height: '14px' });
+
+  const display = document.createElement('span');
+  display.style.width = '52px';
+  display.style.textAlign = 'right';
+  display.style.flexShrink = '0';
+  display.style.color = '#8f8';
+  display.textContent = fmt(val);
+
+  slider.addEventListener('input', () => {
+    const v = parseFloat(slider.value);
+    obj[key][index] = v;
+    display.textContent = fmt(v);
+  });
+
+  slider._update = () => {
+    slider.value = obj[key][index];
+    display.textContent = fmt(obj[key][index]);
+  };
+
+  row.appendChild(label);
+  row.appendChild(slider);
+  row.appendChild(display);
+  return row;
 }
 
 function createSlider(section, key, path) {
