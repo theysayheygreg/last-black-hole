@@ -156,6 +156,14 @@ export function worldDirectionTo(ax, ay, bx, by) {
   return { dist, dx, dy, nx: dx / dist, ny: dy / dist };
 }
 
+/**
+ * Wrap a world coordinate to [0, WORLD_SCALE). Handles negatives.
+ * Use instead of inline ((x % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE.
+ */
+export function wrapWorld(v) {
+  return ((v % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+}
+
 // ---- Legacy well-space functions (0–1 range) ----
 // The original 1×1 map used 0–1 normalized coordinates called "well-space."
 // These are kept for backward compat but nothing should add new callers.
@@ -180,3 +188,41 @@ export function screenToWell(sx, sy, canvasW, canvasH) {
 /** Fluid velocity is Y-up; screen/world velocity is Y-down. Negate Y component. */
 export function fluidVelToScreen(fvx, fvy) { return [fvx, -fvy]; }
 export function screenVelToFluid(svx, svy) { return [svx, -svy]; }
+
+// ---- Unit conversion helpers ----
+// Use these instead of inline * WORLD_SCALE or / WORLD_SCALE.
+
+/**
+ * Convert fluid UV distance/value to world-units.
+ * Fluid UV spans 0–1 across the full world (0–WORLD_SCALE).
+ * So 1 UV unit = WORLD_SCALE world-units.
+ */
+export function uvToWorld(uvValue) {
+  return uvValue * WORLD_SCALE;
+}
+
+/**
+ * Convert world-units distance/value to fluid UV.
+ * Inverse of uvToWorld.
+ */
+export function worldToUV(worldValue) {
+  return worldValue / WORLD_SCALE;
+}
+
+/**
+ * Convert fluid UV velocity to world-space velocity (Y-flipped).
+ * Combines the Y-flip (UV is Y-up, world is Y-down) with the scale conversion.
+ * Returns [worldVx, worldVy].
+ */
+export function fluidVelToWorld(fvx, fvy) {
+  return [fvx * WORLD_SCALE, -fvy * WORLD_SCALE];
+}
+
+/**
+ * Convert a world-units value to screen pixels.
+ * For consistent overlay rendering of world-space radii, distances, etc.
+ * Uses X-axis scale (canvasW). For Y-axis, pass canvasH instead.
+ */
+export function worldToPx(worldValue, screenDim) {
+  return worldValue * pxPerWorld(screenDim);
+}

@@ -13,7 +13,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, worldDirectionTo } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, worldDirectionTo, wrapWorld } from './coords.js';
 import { proximityForce, applyForceToShip } from './physics.js';
 
 class Planetoid {
@@ -64,8 +64,8 @@ export class PlanetoidSystem {
    */
   spawnFigure8(wellA, wellB) {
     const [dx, dy] = worldDisplacement(wellA.wx, wellA.wy, wellB.wx, wellB.wy);
-    const midWX = (wellA.wx + dx / 2 + WORLD_SCALE) % WORLD_SCALE;
-    const midWY = (wellA.wy + dy / 2 + WORLD_SCALE) % WORLD_SCALE;
+    const midWX = wrapWorld(wellA.wx + dx / 2);
+    const midWY = wrapWorld(wellA.wy + dy / 2);
     const halfDist = Math.sqrt(dx * dx + dy * dy) / 2;
     const speed = CONFIG.planetoids.orbitSpeed * 0.8;
     const p = new Planetoid('figure8', {
@@ -146,16 +146,16 @@ export class PlanetoidSystem {
       if (p.pathType === 'orbit') {
         const d = p.pathData;
         p.t += d.speed * dt;
-        p.wx = ((d.centerWX + Math.cos(p.t + d.tilt) * d.semiA) % WORLD_SCALE + WORLD_SCALE) % WORLD_SCALE;
-        p.wy = ((d.centerWY + Math.sin(p.t) * d.semiB) % WORLD_SCALE + WORLD_SCALE) % WORLD_SCALE;
+        p.wx = wrapWorld(d.centerWX + Math.cos(p.t + d.tilt) * d.semiA);
+        p.wy = wrapWorld(d.centerWY + Math.sin(p.t) * d.semiB);
       } else if (p.pathType === 'figure8') {
         const d = p.pathData;
         p.t += d.speed * dt;
-        p.wx = ((d.midWX + d.dx * Math.sin(p.t)) % WORLD_SCALE + WORLD_SCALE) % WORLD_SCALE;
-        p.wy = ((d.midWY + d.dy * Math.sin(p.t * 2)) % WORLD_SCALE + WORLD_SCALE) % WORLD_SCALE;
+        p.wx = wrapWorld(d.midWX + d.dx * Math.sin(p.t));
+        p.wy = wrapWorld(d.midWY + d.dy * Math.sin(p.t * 2));
       } else if (p.pathType === 'transit') {
-        p.wx = ((p.wx + p.vx * dt) % WORLD_SCALE + WORLD_SCALE) % WORLD_SCALE;
-        p.wy = ((p.wy + p.vy * dt) % WORLD_SCALE + WORLD_SCALE) % WORLD_SCALE;
+        p.wx = wrapWorld(p.wx + p.vx * dt);
+        p.wy = wrapWorld(p.wy + p.vy * dt);
         if (p.age > p.pathData.maxAge) {
           p.alive = false;
           continue;

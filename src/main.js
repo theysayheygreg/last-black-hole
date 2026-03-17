@@ -22,8 +22,9 @@ import { InputManager } from './input.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
-import { WORLD_SCALE, CAMERA_VIEW, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
-         worldDistance, worldDisplacement, screenToFluidUV, fluidVelToScreen } from './coords.js';
+import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
+         worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld,
+         fluidVelToScreen } from './coords.js';
 
 // ---- State ----
 let glCanvas, gl;
@@ -314,9 +315,8 @@ function updateCamera(dt) {
   camX += dx * t;
   camY += dy * t;
 
-  // Wrap camera to [0, WORLD_SCALE]
-  camX = ((camX % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
-  camY = ((camY % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+  camX = wrapWorld(camX);
+  camY = wrapWorld(camY);
 }
 
 // ---- Game Loop ----
@@ -639,7 +639,7 @@ function gameLoop(now) {
     for (let i = 0; i < starSystem.stars.length; i++) {
       const star = starSystem.stars[i];
       const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const pushR1 = CONFIG.stars.rayLength * WORLD_SCALE * ppw;
+      const pushR1 = worldToPx(uvToWorld(CONFIG.stars.rayLength), overlayCanvas.width);
       ctx.strokeStyle = 'rgba(255, 255, 100, 0.3)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(sx, sy, pushR1, 0, Math.PI * 2); ctx.stroke();
@@ -655,7 +655,7 @@ function gameLoop(now) {
       const loot = lootSystem.anchors[i];
       if (!loot.alive) continue;
       const [lx, ly] = worldToScreen(loot.wx, loot.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const glowR = CONFIG.loot.glowRadius * WORLD_SCALE * ppw; // UV → world → px
+      const glowR = worldToPx(uvToWorld(CONFIG.loot.glowRadius), overlayCanvas.width);
       ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(lx, ly, glowR, 0, Math.PI * 2); ctx.stroke();

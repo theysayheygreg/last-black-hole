@@ -6,8 +6,8 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen,
-         worldDirectionTo, fluidVelToScreen } from './coords.js';
+import { pxPerWorld, worldToFluidUV, worldToScreen,
+         worldDirectionTo, fluidVelToWorld, wrapWorld } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 export class Ship {
@@ -91,11 +91,10 @@ export class Ship {
         Math.max(0, Math.min(1, fuv_x)),
         Math.max(0, Math.min(1, fuv_y))
       );
-      // Fluid velocity is in UV-units/step. Convert to world-units/sec:
-      // UV spans 0-1 for the full world (0-3), so multiply by WORLD_SCALE
-      const [svx, svy] = fluidVelToScreen(fvx, fvy);
-      fluidVelWorld.x = svx * WORLD_SCALE;
-      fluidVelWorld.y = svy * WORLD_SCALE;
+      // Convert fluid velocity (UV-space, Y-up) to world velocity (Y-down, scaled)
+      const [wvx, wvy] = fluidVelToWorld(fvx, fvy);
+      fluidVelWorld.x = wvx;
+      fluidVelWorld.y = wvy;
     }
 
     this.lastFluidVel = fluidVelWorld;
@@ -133,8 +132,8 @@ export class Ship {
     this.wy += this.vy * dt;
 
     // 8. Boundary wrapping (toroidal)
-    this.wx = ((this.wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
-    this.wy = ((this.wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+    this.wx = wrapWorld(this.wx);
+    this.wy = wrapWorld(this.wy);
 
     // 9. Bullet wake — inject into fluid
     if (fluid) {
