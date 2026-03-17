@@ -72,16 +72,21 @@ export class WaveRingSystem {
       const [srcX, srcY] = worldToScreen(ring.sourceWX, ring.sourceWY, camX, camY, canvasW, canvasH);
       const radiusPx = ring.radius * ppw;
 
+      // life = 1.0 at spawn, decays toward 0 as amplitude fades.
+      // Alpha overshoots early (×1.5) then caps at 0.7 — rings start bright, fade gracefully.
       const life = ring.amplitude / ring.initialAmplitude;
       const alpha = Math.min(1, life * 1.5) * 0.7;
       if (alpha < 0.02) continue;
 
+      // Color transitions from bright cyan-white (life=1) to dim blue (life=0).
+      // R: 255→100, G: 255→200, B: always 255.
       const r = Math.floor(100 + 155 * life);
       const g = Math.floor(200 + 55 * life);
       const b = 255;
 
       ctx.save();
       ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      // Line width = 15% of the wavefront band width, thinning as amplitude fades
       ctx.lineWidth = Math.max(1, CONFIG.events.waveWidth * ppw * 0.15 * life);
       ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${alpha * 0.5})`;
       ctx.shadowBlur = 8 * life;

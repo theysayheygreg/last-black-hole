@@ -73,6 +73,8 @@ export class WellSystem {
 
         for (let i = 0; i < numPts; i++) {
           const armPhase = (i / numPts) * Math.PI * 2;
+          // Spiral arm modulation: cos² creates bright cores and dim gaps between arms.
+          // 0.3 base + 0.7 peak = arms never fully disappear, but have clear bright/dim bands.
           const armBrightness = 0.3 + 0.7 * Math.pow(Math.max(0, Math.cos(armPhase * numPts * 0.5)), 2);
 
           const angle = spinAngle + armPhase;
@@ -96,14 +98,18 @@ export class WellSystem {
       }
 
       // === EVENT HORIZON ===
+      // Negative density at center creates relative darkness (the void).
+      // radius 0.001 = very tight, only darkens the exact center.
       fluid.splat(fu, fv, 0, 0, 0.001, -0.05, -0.05, -0.05);
 
       const horizonPts = cfg.horizonPoints;
       const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult;
       for (let i = 0; i < horizonPts; i++) {
+        // Horizon ring spins 1.5× faster than the accretion disk for visual contrast
         const angle = spinAngle * 1.5 + (i / horizonPts) * Math.PI * 2;
         const px = fu + Math.cos(angle) * horizonR;
         const py = fv + Math.sin(angle) * horizonR;
+        // Very bright white-yellow horizon glow (8× / 7× / 4× base rate)
         fluid.splat(px, py, 0, 0, 0.001, rate * 8.0, rate * 7.0, rate * 4.0);
       }
     }

@@ -52,13 +52,14 @@ export class PortalSystem {
       for (let arm = 0; arm < cfg.spiralArms; arm++) {
         const baseAngle = spiralAngle + (arm / cfg.spiralArms) * Math.PI * 2;
         // 4 points per arm along a spiral
+        // 4 splats per arm, spiraling outward from center
         for (let p = 0; p < 4; p++) {
-          const t = (p + 1) / 4;
-          const dist = t * 0.025; // fluid UV radius
-          const windAngle = baseAngle + t * 1.5; // spiral twist
+          const t = (p + 1) / 4;       // 0.25 to 1.0 along arm
+          const dist = t * 0.025;       // max 0.025 UV from center (~0.075 world-units)
+          const windAngle = baseAngle + t * 1.5; // 1.5 radians of twist gives visible spiral curl
           const px = fu + Math.cos(windAngle) * dist;
           const py = fv + Math.sin(windAngle) * dist;
-          const fade = 1 - t * 0.5;
+          const fade = 1 - t * 0.5; // outer points 50% dimmer than inner
           const b = cfg.densityRate * fade;
           fluid.splat(
             px, py,

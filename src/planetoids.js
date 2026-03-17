@@ -44,7 +44,9 @@ export class PlanetoidSystem {
    * Spawn an orbiting planetoid around a well.
    */
   spawnOrbit(well) {
-    const semiA = 0.2 + Math.random() * 0.3; // semi-major axis in world-units
+    // Randomized ellipse: semi-axes 0.2–0.5 and 0.15–0.4 world-units.
+    // Keeps orbits varied but always within ~0.5 world-units of the well.
+    const semiA = 0.2 + Math.random() * 0.3;
     const semiB = 0.15 + Math.random() * 0.25;
     const tilt = Math.random() * Math.PI * 2;
     const speed = CONFIG.planetoids.orbitSpeed * (0.7 + Math.random() * 0.6);
@@ -87,7 +89,7 @@ export class PlanetoidSystem {
       case 0: // top
         startWX = Math.random() * WORLD_SCALE;
         startWY = 0;
-        heading = Math.PI / 2 + (Math.random() - 0.5) * 1.0;
+        heading = Math.PI / 2 + (Math.random() - 0.5) * 1.0; // ±0.5 rad spread from perpendicular
         break;
       case 1: // right
         startWX = WORLD_SCALE;
@@ -109,7 +111,7 @@ export class PlanetoidSystem {
 
     const p = new Planetoid('transit', {
       heading, speed,
-      maxAge: WORLD_SCALE / speed + 5, // die after crossing + buffer
+      maxAge: WORLD_SCALE / speed + 5, // time to cross the map + 5s buffer before despawn
     });
     p.wx = startWX;
     p.wy = startWY;
@@ -176,11 +178,12 @@ export class PlanetoidSystem {
       // --- Fluid injection ---
       const [fu, fv] = worldToFluidUV(p.wx, p.wy);
 
-      // Bow shock: 1 splat ahead in velocity direction
-      const bowDist = 0.008; // fluid UV ahead
-      // In fluid UV, Y is flipped relative to world Y
+      // Bow shock: 1 splat ahead of the planetoid in its velocity direction.
+      // Creates a pressure wave that the player can see and surf.
+      const bowDist = 0.008; // how far ahead in UV (~0.024 world-units)
+      // dirY is negated for UV because world is Y-down but fluid UV is Y-up
       const bowFU = fu + dirX * bowDist;
-      const bowFV = fv - dirY * bowDist; // flip Y for UV
+      const bowFV = fv - dirY * bowDist;
       fluid.splat(
         bowFU, bowFV,
         dirX * cfg.bowShockForce, -dirY * cfg.bowShockForce,
@@ -190,10 +193,11 @@ export class PlanetoidSystem {
         cfg.density * 1.0
       );
 
-      // Wake vortex: 2 lateral splats behind, opposing directions
-      const behindFU = fu - dirX * 0.005;
-      const behindFV = fv + dirY * 0.005;
-      const perpX = -dirY;
+      // Wake vortex: twin counter-rotating eddies behind the planetoid.
+      // These are surfable — the player can ride the wake like a slipstream.
+      const behindFU = fu - dirX * 0.005; // 0.005 UV behind center
+      const behindFV = fv + dirY * 0.005; // Y negated for UV
+      const perpX = -dirY; // perpendicular to velocity (in world-space)
       const perpY = dirX;
       // Left eddy
       fluid.splat(
@@ -214,6 +218,7 @@ export class PlanetoidSystem {
       for (let i = 1; i <= cfg.trailLength; i++) {
         const trailFU = fu - dirX * cfg.trailSpacing * i;
         const trailFV = fv + dirY * cfg.trailSpacing * i;
+        // Trail fades to 40% brightness at the oldest splat
         const fade = 1 - (i / cfg.trailLength) * 0.6;
         fluid.splat(
           trailFU, trailFV,
@@ -233,6 +238,7 @@ export class PlanetoidSystem {
             // Consumed by well — add mass, spawn wave, remove planetoid
             well.mass += cfg.mass;
             if (waveRings) {
+              // Wave amplitude = 5× planetoid mass. Makes consumption visually dramatic.
               waveRings.spawn(well.wx, well.wy, cfg.mass * 5);
             }
             p.alive = false;

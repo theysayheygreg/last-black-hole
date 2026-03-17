@@ -1,38 +1,50 @@
 /**
- * coords.js — THE coordinate authority. All flips happen here, nowhere else.
+ * coords.js — THE coordinate authority. All space conversions happen here.
  *
- * Four coordinate spaces:
+ * Four coordinate spaces exist in the game:
  *
- * SCREEN: (0,0) = top-left, (W,H) = bottom-right. Y-down. Pixels.
- *   Used by: canvas overlay, mouse input, 2D rendering.
- *
- * WORLD: (0,0) = top-left, (WORLD_SCALE, WORLD_SCALE) = bottom-right. Y-down.
- *   Used by: entity positions, ship position, gravity calculations.
- *   Toroidal (wraps at edges). 3x3 grid of the old 0-1 space.
- *
- * WELL (LEGACY): (0,0) = top-left, (1,1) = bottom-right. Y-down. Normalized 0-1.
- *   Kept for backward compatibility. Thin wrappers to world-space.
- *
- * FLUID UV: (0,0) = bottom-left, (1,1) = top-right. Y-up. Normalized 0-1.
- *   Used by: WebGL shaders, fluid sim textures, readPixels, display shader.
+ * ┌─────────────┬───────────┬──────────┬───────────────┬──────────────────────────┐
+ * │ Space       │ Origin    │ Y dir    │ Range         │ Used by                  │
+ * ├─────────────┼───────────┼──────────┼───────────────┼──────────────────────────┤
+ * │ SCREEN      │ top-left  │ Y-down   │ pixels (W×H)  │ canvas, mouse, overlay   │
+ * │ WORLD       │ top-left  │ Y-down   │ 0–3 (toroidal)│ entities, ship, physics  │
+ * │ WELL (old)  │ top-left  │ Y-down   │ 0–1           │ legacy compat only       │
+ * │ FLUID UV    │ bot-left  │ Y-up     │ 0–1           │ GPU shaders, textures    │
+ * └─────────────┴───────────┴──────────┴───────────────┴──────────────────────────┘
  *
  * RULE: If you need to convert between these spaces, use these functions.
  * If you find yourself writing `1.0 - y` inline, you are doing it wrong.
+ *
+ * KEY RELATIONSHIPS:
+ *   World → Fluid UV:  x÷3, flip y÷3        (worldToFluidUV)
+ *   World → Screen:    offset from camera, ×pxPerWorld   (worldToScreen)
+ *   Fluid vel → World vel:  negate Y, ×WORLD_SCALE      (done in ship.js)
  */
 
-// The world is 3x3 the old normalized space
+// ---- Scale constants ----
+
+/** Total world size. The old 0-1 space scaled up 3×. All entity positions live in 0–3. */
 export const WORLD_SCALE = 3.0;
 
-// Camera zoom: how many world-units fit across one screen axis.
-// The fluid display shader divides UV by WORLD_SCALE, showing 1/WORLD_SCALE
-// of the texture per axis. Since the texture maps to the full world,
-// one screen axis shows exactly 1 world-unit.
+/**
+ * How many world-units the camera shows per screen axis.
+ * The fluid display shader divides UV by WORLD_SCALE, showing 1/3 of the full
+ * texture on each axis. Since the texture maps to the full 3×3 world, one axis
+ * shows exactly 1 world-unit. This constant keeps the overlay in sync.
+ *
+ * Changing this zooms the camera. 0.5 = zoomed in (half a world-unit fills screen).
+ * 2.0 = zoomed out (two world-units visible). Must also update the display shader's
+ * u_worldScale uniform to match.
+ */
 export const CAMERA_VIEW = 1.0;
 
 /**
- * Pixels per world-unit for a given screen dimension.
+ * Convert a screen dimension (width or height) to pixels-per-world-unit.
  * Use this everywhere you need world→pixel scale. One source of truth.
- * For X axis: pxPerWorld(canvasW). For Y axis: pxPerWorld(canvasH).
+ *
+ * With CAMERA_VIEW=1.0: a 1200px-wide screen shows 1 world-unit, so 1200 px/world-unit.
+ * For X: pxPerWorld(canvasW). For Y: pxPerWorld(canvasH).
+ * These differ on non-square screens, which matches the fluid shader's stretch.
  */
 export function pxPerWorld(screenDim) {
   return screenDim / CAMERA_VIEW;
@@ -40,43 +52,60 @@ export function pxPerWorld(screenDim) {
 
 // ---- World <-> Fluid UV ----
 
-/** Convert world-space (Y-down, 0-WORLD_SCALE) to fluid UV (Y-up, 0-1). */
+/**
+ * Convert world-space (Y-down, 0–WORLD_SCALE) to fluid UV (Y-up, 0–1).
+ * Divides by WORLD_SCALE to normalize, flips Y because UV is Y-up.
+ * Used for: placing splats, reading fluid velocity at entity positions.
+ */
 export function worldToFluidUV(wx, wy) {
   return [wx / WORLD_SCALE, 1.0 - wy / WORLD_SCALE];
 }
 
-/** Convert fluid UV (Y-up, 0-1) to world-space (Y-down, 0-WORLD_SCALE). */
+/**
+ * Convert fluid UV (Y-up, 0–1) to world-space (Y-down, 0–WORLD_SCALE).
+ * Inverse of worldToFluidUV.
+ */
 export function fluidUVToWorld(fu, fv) {
   return [fu * WORLD_SCALE, (1.0 - fv) * WORLD_SCALE];
 }
 
 // ---- World <-> Screen ----
 
-/** Convert world-space to screen pixels, accounting for camera offset.
- *  Camera (camX, camY) is the world-space center of the screen.
- *  Handles toroidal wrapping — returns the closest screen position.
+/**
+ * Convert world-space to screen pixels, accounting for camera.
+ * Camera (camX, camY) is the world-space center of the screen.
  *
- *  Scale matches the fluid display shader which shows 1/WORLD_SCALE of the
- *  texture per screen axis. Since the texture maps to the full world, the
- *  screen shows 1 world-unit in X (across canvasW) and 1 world-unit in Y
- *  (across canvasH). Different axis scales match the fluid's aspect stretch. */
+ * Toroidal wrapping: if an entity is >1.5 world-units away on any axis,
+ * it wraps to the closer side. This means entities near the world edge
+ * appear correctly when the camera is near the opposite edge.
+ *
+ * Scale: 1 world-unit fills canvasW pixels horizontally and canvasH vertically.
+ * This matches the fluid display shader's zoom level exactly.
+ */
 export function worldToScreen(wx, wy, camX, camY, canvasW, canvasH) {
+  // Displacement from camera to entity, with toroidal shortest-path
   let dx = wx - camX;
   let dy = wy - camY;
-  const half = WORLD_SCALE / 2;
+  const half = WORLD_SCALE / 2;  // 1.5 — half the world; anything farther wraps
   if (dx > half) dx -= WORLD_SCALE;
   if (dx < -half) dx += WORLD_SCALE;
   if (dy > half) dy -= WORLD_SCALE;
   if (dy < -half) dy += WORLD_SCALE;
+  // World offset → pixel offset from screen center
   const sx = canvasW / 2 + dx * pxPerWorld(canvasW);
   const sy = canvasH / 2 + dy * pxPerWorld(canvasH);
   return [sx, sy];
 }
 
-/** Convert screen pixels to world-space, accounting for camera offset. */
+/**
+ * Convert screen pixels to world-space, accounting for camera.
+ * Inverse of worldToScreen. Used for mouse aim (screen click → world target).
+ * Result is wrapped to [0, WORLD_SCALE] on both axes.
+ */
 export function screenToWorld(sx, sy, camX, camY, canvasW, canvasH) {
   let wx = camX + (sx - canvasW / 2) / pxPerWorld(canvasW);
   let wy = camY + (sy - canvasH / 2) / pxPerWorld(canvasH);
+  // Wrap to valid world range
   wx = ((wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   wy = ((wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   return [wx, wy];
@@ -84,7 +113,11 @@ export function screenToWorld(sx, sy, camX, camY, canvasW, canvasH) {
 
 // ---- World distance (toroidal) ----
 
-/** Shortest distance between two world-space points on a torus. */
+/**
+ * Shortest distance between two points on the toroidal world.
+ * Wraps each axis independently: if the straight-line distance exceeds
+ * half the world, the wrapped path is shorter.
+ */
 export function worldDistance(ax, ay, bx, by) {
   let dx = Math.abs(ax - bx);
   let dy = Math.abs(ay - by);
@@ -93,8 +126,11 @@ export function worldDistance(ax, ay, bx, by) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-/** Shortest displacement vector from (ax,ay) to (bx,by) on torus.
- *  Returns [dx, dy] where adding to (ax,ay) moves toward (bx,by). */
+/**
+ * Shortest displacement vector from (ax,ay) to (bx,by) on the torus.
+ * Returns [dx, dy] — add this to (ax,ay) to move toward (bx,by).
+ * Used for gravity direction, camera follow, mouse aim.
+ */
 export function worldDisplacement(ax, ay, bx, by) {
   let dx = bx - ax;
   let dy = by - ay;
@@ -107,10 +143,11 @@ export function worldDisplacement(ax, ay, bx, by) {
 }
 
 /**
- * Shortest distance, displacement, and unit direction from (ax,ay) to (bx,by) on torus.
- * Returns { dist, dx, dy, nx, ny } — distance, displacement, and unit direction.
- * If dist < epsilon, returns zero direction. Use this instead of manually computing
- * worldDisplacement + sqrt + normalize in every force calculation.
+ * All-in-one: distance, displacement, and unit direction from A to B on torus.
+ * Returns { dist, dx, dy, nx, ny }. If points are coincident, direction is zero.
+ *
+ * Use this instead of manually calling worldDisplacement + sqrt + normalize.
+ * Every force calculation needs this pattern — centralized here.
  */
 export function worldDirectionTo(ax, ay, bx, by) {
   const [dx, dy] = worldDisplacement(ax, ay, bx, by);
@@ -119,48 +156,27 @@ export function worldDirectionTo(ax, ay, bx, by) {
   return { dist, dx, dy, nx: dx / dist, ny: dy / dist };
 }
 
-// ---- Legacy well-space functions (0-1 range) ----
-// These now just delegate to world-space functions.
-// Well-space positions should be migrated to world-space over time.
+// ---- Legacy well-space functions (0–1 range) ----
+// The original 1×1 map used 0–1 normalized coordinates called "well-space."
+// These are kept for backward compat but nothing should add new callers.
 
-/** Convert well-space (Y-down 0-1) to fluid UV (Y-up 0-1). */
-export function wellToFluidUV(wx, wy) {
-  return [wx, 1.0 - wy];
-}
-
-/** Convert fluid UV (Y-up 0-1) to well-space (Y-down 0-1). */
-export function fluidUVToWell(fu, fv) {
-  return [fu, 1.0 - fv];
-}
-
-/** Convert screen pixels (Y-down) to fluid UV (Y-up 0-1). */
+export function wellToFluidUV(wx, wy) { return [wx, 1.0 - wy]; }
+export function fluidUVToWell(fu, fv) { return [fu, 1.0 - fv]; }
 export function screenToFluidUV(sx, sy, canvasW, canvasH) {
   return [sx / canvasW, 1.0 - (sy / canvasH)];
 }
-
-/** Convert fluid UV (Y-up 0-1) to screen pixels (Y-down). */
 export function fluidUVToScreen(fu, fv, canvasW, canvasH) {
   return [fu * canvasW, (1.0 - fv) * canvasH];
 }
-
-/** Convert well-space (Y-down 0-1) to screen pixels (Y-down). Same convention, just scale. */
 export function wellToScreen(wx, wy, canvasW, canvasH) {
   return [wx * canvasW, wy * canvasH];
 }
-
-/** Convert screen pixels (Y-down) to well-space (Y-down 0-1). Same convention, just normalize. */
 export function screenToWell(sx, sy, canvasW, canvasH) {
   return [sx / canvasW, sy / canvasH];
 }
 
 // ---- Velocity conversions ----
 
-/** Convert fluid velocity (Y-up) to screen velocity (Y-down). Negate Y. */
-export function fluidVelToScreen(fvx, fvy) {
-  return [fvx, -fvy];
-}
-
-/** Convert screen velocity (Y-down) to fluid velocity (Y-up). Negate Y. */
-export function screenVelToFluid(svx, svy) {
-  return [svx, -svy];
-}
+/** Fluid velocity is Y-up; screen/world velocity is Y-down. Negate Y component. */
+export function fluidVelToScreen(fvx, fvy) { return [fvx, -fvy]; }
+export function screenVelToFluid(svx, svy) { return [svx, -svy]; }

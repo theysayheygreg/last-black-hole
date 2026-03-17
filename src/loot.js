@@ -45,14 +45,14 @@ export class LootSystem {
         cfg.fluidTerminalSpeed
       );
 
-      // Visible glow
+      // Visible glow — blue-cyan color (low R, medium G, high B)
       fluid.splat(fu, fv, 0, 0, cfg.glowRadius,
         cfg.densityRate * 0.4,
         cfg.densityRate * 0.8,
         cfg.densityRate * 1.0
       );
 
-      // Rotating shimmer points
+      // 4 shimmer points orbiting the anchor — gives the loot a "living" feel
       const shimmerAngle = totalTime * cfg.shimmerSpeed;
       for (let i = 0; i < 4; i++) {
         const angle = shimmerAngle + (i / 4) * Math.PI * 2;

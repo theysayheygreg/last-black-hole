@@ -87,7 +87,8 @@ export class Ship {
     // 1. Update facing — rotate toward mouse (uses camera to convert mouse to world)
     this._updateFacing(dt, cfg, camX, camY);
 
-    // 2. Thrust — convert px/s² to world-units/s²
+    // 2. Thrust — CONFIG is in px/s² for feel continuity. Divide by pxPerWorld
+    //    to get world-units/s². At 1200px screen: 800 / 1200 = 0.67 world-units/s².
     if (this.thrustIntensity > 0) {
       const accelWorld = cfg.thrustAccel / ppw * this.thrustIntensity;
       this.vx += Math.cos(this.facing) * accelWorld * dt;
@@ -112,7 +113,9 @@ export class Ship {
     this.lastFluidVel = fluidVelWorld;
     this.lastFluidSpeed = Math.sqrt(fluidVelWorld.x ** 2 + fluidVelWorld.y ** 2);
 
-    // 4. Fluid coupling — lerp ship velocity toward fluid velocity
+    // 4. Fluid coupling — lerp ship velocity toward fluid velocity.
+    //    coupling = fluidCoupling × dt, clamped to 0.5 to prevent velocity teleport.
+    //    At 60fps with coupling=1.2: 1.2 × 0.017 = 0.02 (2% per frame toward fluid vel).
     const coupling = Math.min(cfg.fluidCoupling * dt, 0.5);
     this.vx = this.vx * (1 - coupling) + fluidVelWorld.x * coupling;
     this.vy = this.vy * (1 - coupling) + fluidVelWorld.y * coupling;
@@ -129,7 +132,9 @@ export class Ship {
       }
     }
 
-    // 6. Drag
+    // 6. Drag — applied per-frame (not per-second). totalDrag is the fraction of
+    //    velocity removed each frame. Base drag + optional L2 brake from gamepad.
+    //    Terminal velocity = (thrust in world/s²) / drag. E.g. 0.67 / 0.06 = 11 world/s.
     const totalDrag = cfg.drag + this.brakeIntensity * CONFIG.input.brakeStrength;
     const dragMult = 1 - totalDrag;
     this.vx *= dragMult;
@@ -146,6 +151,7 @@ export class Ship {
     // 9. Bullet wake — inject into fluid
     if (fluid) {
       const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+      // Terminal velocity = thrust / drag. Fallback 0.03 prevents division by zero if drag is 0.
       const terminalVelWorld = (cfg.thrustAccel / ppw) / (cfg.drag > 0 ? cfg.drag : 0.03);
       const speedFraction = speed / terminalVelWorld;
       const wake = cfg.wake;
@@ -163,6 +169,7 @@ export class Ship {
           const offset = (i + 1) * wake.splatSpacing;
           const sx = baseUVx + behindX * offset;
           const sy = baseUVy + behindY * offset;
+          // Each successive splat is dimmer: splat 0 = full, last splat = 50% brightness
           const falloff = 1 - (i / wake.splatCount) * 0.5;
           const forceMag = wake.force * wakeScale * falloff;
           const b = wake.brightness * wakeScale * falloff;
@@ -171,9 +178,9 @@ export class Ship {
             Math.cos(this.facing) * forceMag,
             -Math.sin(this.facing) * forceMag,
             wake.radius,
-            b * 0.3,
-            b * 0.8,
-            b * 1.0
+            b * 0.3,   // teal wake color: low R
+            b * 0.8,   // medium G
+            b * 1.0    // high B
           );
         }
       }
