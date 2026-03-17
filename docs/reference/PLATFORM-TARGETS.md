@@ -13,8 +13,9 @@ That path is real, and it fits the game well long-term, but it is a rewrite, not
 1. keep the web build as the gameplay source of truth
 2. make controller support rock-solid there
 3. ship the browser build to itch.io for fast private sharing
-4. package it for desktop so it can be tested on macOS and Steam Deck
-5. only then decide whether the game has earned a full native renderer
+4. package it for desktop so it can be tested as a macOS `.app` and Windows `.exe`
+5. test that same package shape on Steam Deck
+6. only then decide whether the game has earned a full native renderer
 
 ## itch.io
 
@@ -107,6 +108,19 @@ The simplest post-jam move is not a rewrite. It is a shell:
 
 That buys you real macOS playtesting with almost no design churn.
 
+### Practical macOS packaging path
+
+For friend playtests, the useful output is a `.app` bundle, not a renderer rewrite.
+
+The clean path is:
+
+- keep the game as the web runtime
+- wrap it in a lightweight desktop shell
+- export a macOS `.app`
+- test fullscreen, controller support, startup friction, and save location
+
+That is enough to get the game onto another Mac without forcing a native port decision too early.
+
 ### When the native macOS port makes sense
 
 Do the SwiftUI + Metal version only if at least one of these becomes true:
@@ -115,6 +129,56 @@ Do the SwiftUI + Metal version only if at least one of these becomes true:
 - controller and haptics need tighter native integration
 - the game becomes commercial enough that native fit and polish matter
 - you want Mac to be the flagship platform rather than just a supported one
+
+## Windows
+
+### What matters for Windows playtests
+
+For Windows, the goal is not elegance. The goal is frictionless sharing.
+
+You want:
+
+- one package someone can launch without a browser ritual
+- controller behavior that matches the web and macOS builds
+- no second gameplay codepath
+
+That makes Windows a good fit for the same thin-shell strategy as macOS.
+
+### The simpler Windows path
+
+Do not build a special Windows renderer.
+
+Wrap the web build in a desktop shell and ship either:
+
+- a portable `.exe`
+- or a tiny installer that produces the same `.exe` app bundle
+
+The important thing is that Windows stays on the same gameplay runtime as the browser build.
+
+### What the Windows wrapper should prove
+
+Before you call Windows "done enough" for playtests, it should prove:
+
+- double-click launch works without manual setup
+- controller support works the same way it does in the browser
+- fullscreen and windowed behavior are both sane
+- config/save locations are predictable
+- packaging does not introduce obvious input lag or perf regressions
+
+If that holds, you have a viable Windows playtest path without any native rewrite.
+
+### Recommended desktop packaging strategy
+
+Treat macOS and Windows as one packaging track:
+
+- one web gameplay runtime
+- one desktop shell strategy
+- outputs for:
+  - macOS `.app`
+  - Windows `.exe`
+  - Steam Deck testing through the same desktop build shape
+
+That keeps the engineering honest. One game, multiple wrappers.
 
 ## Steam Deck
 
@@ -180,14 +244,16 @@ First, make the browser build controller-clean and itch-clean.
 
 Second, put it on itch.io for private friend sharing and fast iteration.
 
-Third, make a desktop package and test it on macOS and Steam Deck.
+Third, make a desktop package and test it as a macOS `.app` and Windows `.exe`.
 
-Fourth, decide whether the game has earned a native renderer.
+Fourth, test that same package shape on Steam Deck.
+
+Fifth, decide whether the game has earned a native renderer.
 
 If it has, start with macOS native only if you want the game to become a long-term polished product. Otherwise keep the web runtime and spend your time on content, feel, and survival.
 
 ## Strong opinion
 
-The first post-jam target should be an itch-ready web build with strong controller support, not a SwiftUI + Metal rewrite.
+The first post-jam target should be an itch-ready web build with strong controller support, followed by thin desktop wrappers for macOS and Windows, not a SwiftUI + Metal rewrite.
 
 That path teaches you more, faster, and it does not force you to reinvent the game before you know the game is worth carrying forward.
