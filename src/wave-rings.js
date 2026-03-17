@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
 
 class WaveRing {
   constructor(sourceWX, sourceWY, amplitude) {
@@ -78,11 +78,11 @@ export class WaveRingSystem {
    * Render wave rings on the overlay canvas (camera-aware).
    */
   render(ctx, camX, camY, canvasW, canvasH) {
-    const pxPerWorld = canvasW / WORLD_SCALE;
+    const ppw = pxPerWorld(canvasW);
 
     for (const ring of this.rings) {
       const [srcX, srcY] = worldToScreen(ring.sourceWX, ring.sourceWY, camX, camY, canvasW, canvasH);
-      const radiusPx = ring.radius * pxPerWorld;
+      const radiusPx = ring.radius * ppw;
 
       const life = ring.amplitude / ring.initialAmplitude;
       const alpha = Math.min(1, life * 1.5) * 0.7;
@@ -94,7 +94,7 @@ export class WaveRingSystem {
 
       ctx.save();
       ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      ctx.lineWidth = Math.max(1, CONFIG.events.waveWidth * pxPerWorld * 0.15 * life);
+      ctx.lineWidth = Math.max(1, CONFIG.events.waveWidth * ppw * 0.15 * life);
       ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${alpha * 0.5})`;
       ctx.shadowBlur = 8 * life;
 

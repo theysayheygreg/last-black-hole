@@ -286,7 +286,6 @@ export class PlanetoidSystem {
 
       // Velocity direction indicator (short line)
       if (speed > 0.01) {
-        const pxPerWorld = canvasW / WORLD_SCALE;
         const dirLen = 12;
         const dirX = p.vx / speed;
         const dirY = p.vy / speed;

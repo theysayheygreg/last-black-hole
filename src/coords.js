@@ -23,6 +23,21 @@
 // The world is 3x3 the old normalized space
 export const WORLD_SCALE = 3.0;
 
+// Camera zoom: how many world-units fit across one screen axis.
+// The fluid display shader divides UV by WORLD_SCALE, showing 1/WORLD_SCALE
+// of the texture per axis. Since the texture maps to the full world,
+// one screen axis shows exactly 1 world-unit.
+export const CAMERA_VIEW = 1.0;
+
+/**
+ * Pixels per world-unit for a given screen dimension.
+ * Use this everywhere you need world→pixel scale. One source of truth.
+ * For X axis: pxPerWorld(canvasW). For Y axis: pxPerWorld(canvasH).
+ */
+export function pxPerWorld(screenDim) {
+  return screenDim / CAMERA_VIEW;
+}
+
 // ---- World <-> Fluid UV ----
 
 /** Convert world-space (Y-down, 0-WORLD_SCALE) to fluid UV (Y-up, 0-1). */
@@ -53,16 +68,15 @@ export function worldToScreen(wx, wy, camX, camY, canvasW, canvasH) {
   if (dx < -half) dx += WORLD_SCALE;
   if (dy > half) dy -= WORLD_SCALE;
   if (dy < -half) dy += WORLD_SCALE;
-  // 1 world-unit fills each screen axis (matches fluid camera zoom)
-  const sx = canvasW / 2 + dx * canvasW;
-  const sy = canvasH / 2 + dy * canvasH;
+  const sx = canvasW / 2 + dx * pxPerWorld(canvasW);
+  const sy = canvasH / 2 + dy * pxPerWorld(canvasH);
   return [sx, sy];
 }
 
 /** Convert screen pixels to world-space, accounting for camera offset. */
 export function screenToWorld(sx, sy, camX, camY, canvasW, canvasH) {
-  let wx = camX + (sx - canvasW / 2) / canvasW;
-  let wy = camY + (sy - canvasH / 2) / canvasH;
+  let wx = camX + (sx - canvasW / 2) / pxPerWorld(canvasW);
+  let wy = camY + (sy - canvasH / 2) / pxPerWorld(canvasH);
   wx = ((wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   wy = ((wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   return [wx, wy];

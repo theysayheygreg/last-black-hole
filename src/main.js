@@ -22,7 +22,7 @@ import { InputManager } from './input.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, screenToWorld,
+import { WORLD_SCALE, CAMERA_VIEW, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDisplacement, screenToFluidUV, fluidVelToScreen } from './coords.js';
 
 // ---- State ----
@@ -461,13 +461,13 @@ function gameLoop(now) {
 
   // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {
-    const pxPerWorld = overlayCanvas.width; // 1 world-unit = screen width
+    const ppw = pxPerWorld(overlayCanvas.width);
     ctx.save();
     ctx.fillStyle = '#00ff00';
     ctx.font = '14px monospace';
     ctx.fillText(`FPS: ${fps.toFixed(0)}`, 10, 20);
     ctx.fillText(`Ship: (${ship.wx.toFixed(2)}, ${ship.wy.toFixed(2)})`, 10, 38);
-    ctx.fillText(`Vel: (${(ship.vx * pxPerWorld).toFixed(1)}, ${(ship.vy * pxPerWorld).toFixed(1)})`, 10, 56);
+    ctx.fillText(`Vel: (${(ship.vx * ppw).toFixed(1)}, ${(ship.vy * ppw).toFixed(1)})`, 10, 56);
     ctx.fillText(`Fluid: (${ship.lastFluidVel.x.toFixed(2)}, ${ship.lastFluidVel.y.toFixed(2)})`, 10, 74);
     ctx.fillText(`Rings: ${waveRings.getActiveCount()} | Planetoids: ${planetoidSystem.planetoids.length}`, 10, 92);
     ctx.fillText(`Input: ${inputManager.usingGamepad ? 'Gamepad' : 'Mouse'}${inputManager.usingGamepad ? ` T:${inputManager.thrustIntensity.toFixed(2)} B:${inputManager.brakeIntensity.toFixed(2)}` : ''}`, 10, 110);
@@ -569,19 +569,19 @@ function gameLoop(now) {
 
   // 12. Debug: well radii and labels
   if (CONFIG.debug.showWellRadii) {
-    const pxPerWorld = overlayCanvas.width; // 1 world-unit = screen width
+    const ppw = pxPerWorld(overlayCanvas.width);
     ctx.save();
     const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
     for (let i = 0; i < wellData.length; i++) {
       const w = wellData[i];
       ctx.strokeStyle = 'rgba(255, 100, 0, 0.3)';
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(w.x, w.y, 0.15 * pxPerWorld, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.arc(w.x, w.y, 0.3 * pxPerWorld, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.arc(w.x, w.y, 0.5 * pxPerWorld, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(w.x, w.y, 0.15 * ppw, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(w.x, w.y, 0.3 * ppw, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(w.x, w.y, 0.5 * ppw, 0, Math.PI * 2); ctx.stroke();
       // Kill radius
       ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-      const kr = wellSystem.wells[i].killRadius * pxPerWorld;
+      const kr = wellSystem.wells[i].killRadius * ppw;
       ctx.beginPath(); ctx.arc(w.x, w.y, kr, 0, Math.PI * 2); ctx.stroke();
       // Label
       ctx.fillStyle = 'rgba(255, 50, 0, 0.5)';
@@ -595,7 +595,7 @@ function gameLoop(now) {
     for (let i = 0; i < starSystem.stars.length; i++) {
       const star = starSystem.stars[i];
       const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const pushR1 = CONFIG.stars.rayLength * WORLD_SCALE * pxPerWorld;
+      const pushR1 = CONFIG.stars.rayLength * WORLD_SCALE * ppw;
       ctx.strokeStyle = 'rgba(255, 255, 100, 0.3)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(sx, sy, pushR1, 0, Math.PI * 2); ctx.stroke();
@@ -611,7 +611,7 @@ function gameLoop(now) {
       const loot = lootSystem.anchors[i];
       if (!loot.alive) continue;
       const [lx, ly] = worldToScreen(loot.wx, loot.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const glowR = CONFIG.loot.glowRadius * WORLD_SCALE * pxPerWorld; // UV → world → px
+      const glowR = CONFIG.loot.glowRadius * WORLD_SCALE * ppw; // UV → world → px
       ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(lx, ly, glowR, 0, Math.PI * 2); ctx.stroke();
@@ -624,7 +624,7 @@ function gameLoop(now) {
     for (let i = 0; i < portalSystem.portals.length; i++) {
       const portal = portalSystem.portals[i];
       const [px, py] = worldToScreen(portal.wx, portal.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const captureR = CONFIG.portals.captureRadius * pxPerWorld;
+      const captureR = CONFIG.portals.captureRadius * ppw;
       ctx.strokeStyle = 'rgba(180, 80, 255, 0.4)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);

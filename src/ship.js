@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, screenToWorld,
+import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDisplacement, fluidVelToScreen } from './coords.js';
 
 export class Ship {
@@ -81,14 +81,14 @@ export class Ship {
     const wellCfg = CONFIG.wells;
 
     // Pixels per world-unit (for converting pixel-based CONFIG values)
-    const pxPerWorld = this.canvasWidth / WORLD_SCALE;
+    const ppw = pxPerWorld(this.canvasWidth);
 
     // 1. Update facing — rotate toward mouse (uses camera to convert mouse to world)
     this._updateFacing(dt, cfg, camX, camY);
 
     // 2. Thrust — convert px/s² to world-units/s²
     if (this.thrustIntensity > 0) {
-      const accelWorld = cfg.thrustAccel / pxPerWorld * this.thrustIntensity;
+      const accelWorld = cfg.thrustAccel / ppw * this.thrustIntensity;
       this.vx += Math.cos(this.facing) * accelWorld * dt;
       this.vy += Math.sin(this.facing) * accelWorld * dt;
     }
@@ -156,7 +156,7 @@ export class Ship {
     // 9. Bullet wake — inject into fluid
     if (fluid) {
       const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-      const terminalVelWorld = (cfg.thrustAccel / pxPerWorld) / (cfg.drag > 0 ? cfg.drag : 0.03);
+      const terminalVelWorld = (cfg.thrustAccel / ppw) / (cfg.drag > 0 ? cfg.drag : 0.03);
       const speedFraction = speed / terminalVelWorld;
       const wake = cfg.wake;
 
@@ -258,13 +258,13 @@ export class Ship {
 
     // Debug: velocity vector
     if (CONFIG.debug.showVelocityField) {
-      const pxPerWorld = this.canvasWidth; // 1 world-unit = screen width
+      const ppw = pxPerWorld(this.canvasWidth);
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(sx, sy);
-      ctx.lineTo(sx + this.vx * pxPerWorld * 0.1, sy + this.vy * pxPerWorld * 0.1);
+      ctx.lineTo(sx + this.vx * ppw * 0.1, sy + this.vy * ppw * 0.1);
       ctx.stroke();
       ctx.restore();
     }
