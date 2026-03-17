@@ -46,8 +46,10 @@ export const CONFIG = {
     curl: 0.3,                // Vorticity confinement strength. Amplifies small-scale swirl.
     dissipation: 0.999,       // Velocity persistence per sim step. 0.99 = fast fade, 0.999 = long travel.
     densityDissipation: 0.998,// Base density persistence (overridden by distance-based pass below).
-    ambientTurbulence: 0.0004,// Random velocity splats per frame — keeps the fabric alive with texture.
-    ambientDensity: 0.0002,   // Random density splats per frame — faint background color.
+    ambientTurbulence: 0.0008,// Random velocity splats per frame — keeps the fabric alive with texture.
+                             // Boosted 2x from 0.0004 for more spatial variation in the ASCII field.
+    ambientDensity: 0.0005,   // Random density splats per frame — faint background color.
+                             // Boosted 2.5x from 0.0002 so void has enough signal for shimmer to work with.
     nearDissipation: 0.998,   // Density persistence near wells/stars/loot. High = persistent accretion.
     farDissipation: 0.985,    // Density persistence far from any source. Low = quick fadeout in void.
     dissipationNearRadius: 0.03, // UV radius where near-dissipation applies. Tight = only right at sources.
@@ -112,6 +114,9 @@ export const CONFIG = {
     cellAspect: 1.5,          // Cell height/width ratio. 1.5 = readable monospace proportions.
     contrast: 0.55,           // Power curve on luminance→character mapping. <1 = more chars in dark.
                              // Lowered from 0.8 — stretches void-to-fabric across more of the ramp.
+    shimmer: 2.5,             // Character-index jitter amplitude. Each cell gets a random +/- this
+                             // value per time step, causing adjacent cells to show different glyphs.
+                             // 0 = static, 2-3 = living texture, 5+ = noisy.
     colorTemperature: 0.0,    // Unused. Reserved for global color shift.
   },
 

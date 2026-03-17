@@ -37,6 +37,8 @@ uniform float u_cellSize;      // character cell width in pixels
 uniform float u_contrast;      // luminance mapping curve power
 uniform float u_numChars;      // number of characters in the density ramp
 uniform float u_cellAspect;    // cell height / cell width (e.g. 1.5 for 8x12)
+uniform float u_time;          // elapsed seconds — drives shimmer
+uniform float u_shimmer;       // shimmer amplitude in character indices (0 = off)
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -62,12 +64,20 @@ void main() {
   lum = pow(clamp(lum, 0.0, 1.0), u_contrast);
 
   // Map luminance to character index (0 = sparse, N-1 = dense)
-  float charIndex = floor(lum * (u_numChars - 0.001));
-  charIndex = clamp(charIndex, 0.0, u_numChars - 1.0);
+  float charIdx = lum * (u_numChars - 1.0);
+
+  // Shimmer: per-cell time-varying noise that jitters the character index.
+  // Operates on the INDEX, not the color — guaranteed to show different glyphs
+  // even when luminance is nearly uniform across the screen.
+  // Noise varies per cell and over time so adjacent cells flicker independently.
+  float noise = fract(sin(dot(cellIndex + floor(u_time * 4.0) * 0.1, vec2(12.9898, 78.233))) * 43758.5453);
+  charIdx += (noise - 0.5) * u_shimmer;
+
+  charIdx = clamp(floor(charIdx), 0.0, u_numChars - 1.0);
 
   // Atlas lookup: 16x16 grid, character at (col, row)
-  float atlasCol = mod(charIndex, 16.0);
-  float atlasRow = floor(charIndex / 16.0);
+  float atlasCol = mod(charIdx, 16.0);
+  float atlasRow = floor(charIdx / 16.0);
 
   // UV within the atlas cell — flip Y because canvas Y is inverted vs GL
   vec2 atlasUV = vec2(
@@ -91,10 +101,10 @@ void main() {
 // ---- Font Atlas Generation ----
 
 // Characters sorted by visual weight (sparse -> dense).
-// Extra characters in the low-mid range (,"-^) spread the dark-to-medium
-// transition across more glyphs — prevents large void regions from
-// collapsing to uniform space/period.
-const DENSITY_RAMP = ' .`\',:-;"~^=+*!?/%#&$@';
+// Heavily front-loaded with low-weight characters because most of the screen
+// lives in the sparse range. More glyphs there = more visible texture variation
+// when shimmer jitters the character index by +/-1.
+const DENSITY_RAMP = ' .`\'-,_:;"~^!/>+=*?|%#&$@';
 
 /**
  * Generate a 1024x1024 font atlas texture.
@@ -268,7 +278,7 @@ export class ASCIIRenderer {
    * Call this AFTER fluid.render(sceneTarget, ...) has filled the scene FBO.
    * Renders the ASCII result to the screen (framebuffer null).
    */
-  render() {
+  render(totalTime = 0) {
     const gl = this.gl;
     const ascii = CONFIG.ascii;
 
@@ -293,6 +303,8 @@ export class ASCIIRenderer {
     gl.uniform1f(this.uniforms['u_contrast'], ascii.contrast);
     gl.uniform1f(this.uniforms['u_numChars'], this.numChars);
     gl.uniform1f(this.uniforms['u_cellAspect'], ascii.cellAspect);
+    gl.uniform1f(this.uniforms['u_time'], totalTime);
+    gl.uniform1f(this.uniforms['u_shimmer'], ascii.shimmer);
 
     // Draw fullscreen quad
     gl.bindVertexArray(this.quadVAO);

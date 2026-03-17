@@ -258,11 +258,8 @@ void main() {
   float waveCrest = smoothstep(0.03, 0.12, speed);
   col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.4);
 
-  // Shimmer noise — time-varying luminance jitter so adjacent ASCII cells
-  // flicker between characters. Creates living texture in the fabric.
-  // Without this, large regions map to the same character and look static.
-  float shimmer = fract(sin(dot(fluidUV * 200.0 + u_time * 0.3, vec2(12.9898, 78.233))) * 43758.5453);
-  col += (shimmer - 0.5) * 0.06;
+  // (Shimmer noise moved to ASCII shader where it jitters character index directly.
+  //  Color-level noise was ineffective — luminance too low for index changes.)
 
   // === FLOW DIRECTION TINTING ===
   for (int i = 0; i < 4; i++) {

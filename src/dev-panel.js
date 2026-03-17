@@ -51,6 +51,7 @@ const RANGE_HINTS = {
   'ascii.cellSize':         { min: 4, max: 20, step: 1, tip: 'Character cell width in pixels. Smaller = more detail, more GPU work' },
   'ascii.cellAspect':       { min: 1, max: 2, step: 0.1, tip: 'Cell height/width ratio. 1.5 = readable monospace proportions' },
   'ascii.contrast':         { min: 0.1, max: 2, step: 0.05, tip: 'Luminance curve power. <1 = more chars in dark areas. >1 = sharper contrast' },
+  'ascii.shimmer':          { min: 0, max: 6, step: 0.25, tip: 'Character index jitter. 0 = static, 2-3 = living texture, 5+ = noisy' },
   'ascii.colorTemperature': { min: -1, max: 1, step: 0.05, tip: 'Global color shift. Negative = cooler/bluer. Positive = warmer/amber' },
 
   // Stars — visual: rays should be visible across screen, core should glow
