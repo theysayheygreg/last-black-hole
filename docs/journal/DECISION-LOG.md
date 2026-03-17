@@ -17,6 +17,51 @@ Each decision has:
 
 ---
 
+## Map Scale
+
+### Q: How big should the world be?
+
+| Date | Event |
+|------|-------|
+| Mar 17 | Greg playtest feedback: "world is too cramped, everything crammed into one screen, can't see effects of stars/loot at this scale" |
+| Mar 17 | Night shift implements 3x3 world expansion with camera follow. Entities spread across the map. Toroidal wrapping for seamless edges. |
+
+**Where it landed:** 3x3 world-units (was 0-1). Fluid sim still 256x256, camera shows a 1/3 slice. Ship can fly across the whole world, camera follows with smooth lerp + velocity lead-ahead.
+
+**Door status:** Open — may need 4x4 or larger if this still feels tight with more entities. The coordinate system supports any WORLD_SCALE.
+
+---
+
+## Extraction Loop
+
+### Q: How does the player extract?
+
+| Date | Event |
+|------|-------|
+| Mar 17 | Portals added as extraction points. Two portals placed in safe zones far from wells. |
+| Mar 17 | Extraction is instant (fly into capture radius → "ESCAPED"). No charge time. |
+
+**Where it landed:** Instant extraction via portal capture radius (0.08 world-units). Two portals at (0.3, 0.3) and (2.7, 2.7). "ESCAPED" screen mirrors "CONSUMED" death screen.
+
+**Door status:** Open — may add charge time, loot requirements, or multi-portal extraction in L1.
+
+---
+
+## Well Growth
+
+### Q: How should wells grow over time?
+
+| Date | Event |
+|------|-------|
+| Mar 17 | Greg: "set auto growth to low but let other stuff continually spawn and see what happens" |
+| Mar 17 | growthInterval 20→45s, growthAmount 0.05→0.02. Planetoid consumption supplements passive growth. |
+
+**Where it landed:** Slow passive growth as floor, planetoid consumption as bonus. Wells grow when they eat planetoids (adds mass + spawns wave ring).
+
+**Door status:** Playtesting — balance depends on how many planetoids orbit near wells.
+
+---
+
 ## Physics Architecture
 
 ### Q: One fluid sim or two?
@@ -52,6 +97,54 @@ Each decision has:
 **Door status:** Open — V2 needs to be built and playtested. If steady currents aren't interesting enough, we may need to add more flow complexity.
 **Key learning:** Faking waves through force oscillation doesn't work in a Navier-Stokes sim. The sim dampens them before they propagate. Real wave propagation needs explicit ring entities, not source oscillation.
 **Door status:** Open. Experiments will converge or one will win.
+
+---
+
+## Entity Expansion (Experiments 1-5)
+
+### Q: What should populate the world besides wells?
+
+| Date | Event |
+|------|-------|
+| Mar 16 | Playtesting reveals the world needs more things to navigate around. Wells alone create interesting flow, but there's nothing to route between, shelter behind, or interact with. |
+| Mar 17 | Five experiments implemented: ship slowdown, bullet wake, stars, loot anchors, controller support. |
+
+**Options considered:**
+1. More wells — rejected, already have 4, more = visual chaos
+2. Moving obstacles (planetoids) — deferred to night shift, medium complexity
+3. Static radiant sources (stars) — implemented, low complexity, high visual payoff
+4. Flow obstacles (loot anchors) — implemented, low complexity, tests lee zones
+5. AI traffic ships — deferred to night shift, linked with well consumption mechanic
+
+**Where it landed:** Stars and loot anchors shipped. Creates equilibrium zones, navigable channels, and flow obstacles. Planetoids and AI traffic deferred.
+
+**Door status:** Open. Playtesting will determine which entities earn their keep.
+
+---
+
+### Q: Ship too fast to read currents?
+
+| Date | Event |
+|------|-------|
+| Mar 16 | Ship at thrustAccel 2500 / drag 0.03 = terminal velocity ~1333 px/s. Overpowers all fluid flow. |
+| Mar 17 | Slowdown: thrustAccel 800, drag 0.06, fluidCoupling 1.2. Terminal ~213 px/s. Ship settles into flow faster. |
+
+**Where it landed:** Ship is 6x slower. Currents now carry the ship meaningfully. Risk: wells may be inescapable. `shipPullStrength` may need reduction from 250 to ~150.
+
+**Door status:** Playtesting. If wells are inescapable, reduce shipPullStrength.
+
+---
+
+### Q: Controller support timing?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | DualSense listed as Tuesday/Wednesday stretch goal |
+| Mar 17 | Pulled forward to Monday night. Mouse lacks granularity for the slower ship — analog thrust from R2 trigger is the big win for navigating fabric. |
+
+**Where it landed:** Gamepad API implemented with auto-detection. Left stick = facing, R2 = analog thrust, L2 = brake. Mouse still works as fallback.
+
+**Door status:** Closed for API. Open for feel-tuning (dead zones, response curves).
 
 ---
 
