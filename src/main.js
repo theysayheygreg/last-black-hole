@@ -491,7 +491,7 @@ function gameLoop(now) {
   const sceneTarget = asciiRenderer.getSceneTarget();
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
-  fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE);
+  fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE, totalTime);
   asciiRenderer.render();
 
   // 8. Render overlay

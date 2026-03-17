@@ -29,10 +29,11 @@ export const CONFIG = {
     wake: {
       splatCount: 3,          // Number of splats in the trail behind the ship.
       splatSpacing: 0.004,    // Gap between trail splats in fluid UV. Smaller = tighter trail.
-      radius: 0.005,          // Gaussian radius of each wake splat in UV. ~4 ASCII cells wide.
-      force: 0.004,           // Velocity injection per splat. Compare to well gravity (0.0015).
-                             // Higher = ship punches through orbital currents.
-      brightness: 0.5,        // Density injection per splat. Controls teal trail visibility.
+      radius: 0.008,          // Gaussian radius of each wake splat in UV. Wider = catches more ASCII cells.
+      force: 0.015,           // Velocity injection per splat. Compare to well gravity (0.0015).
+                             // Boosted 4x from 0.004 — ship must visibly deflect nearby fluid.
+      brightness: 2.0,        // Density injection per splat. Boosted 4x from 0.5 to match
+                             // accretion ring brightness scale (rings are 3-5).
       speedThreshold: 0.15,   // Wake appears when speed exceeds this fraction of terminal velocity.
                              // Ramps from 0→1 over [threshold, 2×threshold].
     },
@@ -109,7 +110,8 @@ export const CONFIG = {
   ascii: {
     cellSize: 8,              // Character cell width in pixels. Smaller = more detail, more GPU work.
     cellAspect: 1.5,          // Cell height/width ratio. 1.5 = readable monospace proportions.
-    contrast: 0.8,            // Power curve on luminance→character mapping. <1 = more chars in dark.
+    contrast: 0.55,           // Power curve on luminance→character mapping. <1 = more chars in dark.
+                             // Lowered from 0.8 — stretches void-to-fabric across more of the ramp.
     colorTemperature: 0.0,    // Unused. Reserved for global color shift.
   },
 
@@ -188,13 +190,13 @@ export const CONFIG = {
 
   planetoids: {
     // --- Fluid injection (creates surfable wakes) ---
-    bowShockForce: 0.003,     // Velocity injection ahead of the planetoid. Creates pressure wave.
-    bowShockRadius: 0.005,    // Gaussian radius of bow shock splat in UV.
-    wakeForce: 0.002,         // Velocity injection for lateral wake vortex pair.
-    wakeRadius: 0.003,        // Gaussian radius of each wake eddy in UV.
+    bowShockForce: 0.012,     // Velocity injection ahead of the planetoid. Boosted 4x from 0.003.
+    bowShockRadius: 0.007,    // Gaussian radius of bow shock splat in UV.
+    wakeForce: 0.008,         // Velocity injection for lateral wake vortex pair. Boosted 4x from 0.002.
+    wakeRadius: 0.005,        // Gaussian radius of each wake eddy in UV.
     trailLength: 4,           // Number of density splats in the comet trail behind.
     trailSpacing: 0.003,      // Gap between trail splats in UV.
-    density: 0.01,            // Trail brightness. Blue-white color hardcoded in planetoids.js.
+    density: 0.05,            // Trail brightness. Boosted 5x from 0.01. Blue-white color in planetoids.js.
 
     // --- Motion ---
     orbitSpeed: 0.4,          // Angular speed for orbit/figure-8 paths in rad/s.

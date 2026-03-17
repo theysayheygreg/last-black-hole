@@ -90,8 +90,11 @@ void main() {
 
 // ---- Font Atlas Generation ----
 
-// Characters sorted by visual weight (sparse -> dense)
-const DENSITY_RAMP = ' .`\':;-~=+*!?/%#&$@';
+// Characters sorted by visual weight (sparse -> dense).
+// Extra characters in the low-mid range (,"-^) spread the dark-to-medium
+// transition across more glyphs — prevents large void regions from
+// collapsing to uniform space/period.
+const DENSITY_RAMP = ' .`\',:-;"~^=+*!?/%#&$@';
 
 /**
  * Generate a 1024x1024 font atlas texture.

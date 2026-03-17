@@ -222,6 +222,7 @@ uniform float u_densityScale;
 // Camera offset in fluid UV space and world scale
 uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
 uniform float u_worldScale;    // fraction of fluid texture visible (1/3 = one screen)
+uniform float u_time;          // elapsed time in seconds (for shimmer noise)
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -249,12 +250,19 @@ void main() {
   vec3 col = mix(u_voidColor, u_normalColor, clamp(combined, 0.0, 1.0));
 
   // Velocity magnitude brightness boost — makes currents visible as brighter bands
-  float speedBrightness = smoothstep(0.0, 0.15, speed);
-  col += speedBrightness * vec3(0.08, 0.18, 0.22);
+  // Thresholds lowered so ship/planetoid wakes register against ambient density
+  float speedBrightness = smoothstep(0.0, 0.06, speed);
+  col += speedBrightness * vec3(0.12, 0.25, 0.30);
 
   // High-velocity regions get a cyan highlight (wave crests / strong currents)
-  float waveCrest = smoothstep(0.08, 0.25, speed);
+  float waveCrest = smoothstep(0.03, 0.12, speed);
   col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.4);
+
+  // Shimmer noise — time-varying luminance jitter so adjacent ASCII cells
+  // flicker between characters. Creates living texture in the fabric.
+  // Without this, large regions map to the same character and look static.
+  float shimmer = fract(sin(dot(fluidUV * 200.0 + u_time * 0.3, vec2(12.9898, 78.233))) * 43758.5453);
+  col += (shimmer - 0.5) * 0.06;
 
   // === FLOW DIRECTION TINTING ===
   for (int i = 0; i < 4; i++) {
@@ -671,7 +679,7 @@ export class FluidSim {
    * @param {number} camOffsetV - camera center Y in fluid UV (0-1)
    * @param {number} worldScale - how many world-units map to the full texture (default 1 for legacy)
    */
-  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, totalTime = 0) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -687,9 +695,10 @@ export class FluidSim {
     gl.uniform3fv(u['u_hotWellColor'], CONFIG.color.hotWell);
     gl.uniform1f(u['u_densityScale'], CONFIG.color.densityScale);
 
-    // Camera uniforms
+    // Camera + time uniforms
     gl.uniform2f(u['u_camOffset'], camOffsetU, camOffsetV);
     gl.uniform1f(u['u_worldScale'], worldScale);
+    gl.uniform1f(u['u_time'], totalTime);
 
     // Set well positions for coloring
     const count = Math.min(wellPositionsUV.length, 4);
