@@ -84,15 +84,19 @@ export class StarSystem {
    */
   applyToShip(ship) {
     const cfg = CONFIG.stars;
+    const maxRange = cfg.maxRange ?? 0.6; // world-units — push drops to zero here
 
     for (const star of this.stars) {
       const [dx, dy] = worldDisplacement(star.wx, star.wy, ship.wx, ship.wy);
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.001) continue;
+      if (dist < 0.001 || dist > maxRange) continue;
 
       const safeDist = Math.max(dist, 0.15);
-      const normDist = safeDist / 0.25; // normalize to 0.25 world-units reference
-      const pushAccel = cfg.shipPushStrength * star.mass / Math.pow(normDist, cfg.shipPushFalloff);
+      const normDist = safeDist / 0.25;
+      const baseAccel = cfg.shipPushStrength * star.mass / Math.pow(normDist, cfg.shipPushFalloff);
+      const rangeFrac = dist / maxRange;
+      const rangeFade = (1 - rangeFrac) * (1 - rangeFrac);
+      const pushAccel = baseAccel * rangeFade;
       const nx = dx / dist;
       const ny = dy / dist;
 

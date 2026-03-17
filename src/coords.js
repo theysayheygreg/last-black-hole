@@ -39,30 +39,30 @@ export function fluidUVToWorld(fu, fv) {
 
 /** Convert world-space to screen pixels, accounting for camera offset.
  *  Camera (camX, camY) is the world-space center of the screen.
- *  Handles toroidal wrapping — returns the closest screen position. */
+ *  Handles toroidal wrapping — returns the closest screen position.
+ *
+ *  Scale matches the fluid display shader which shows 1/WORLD_SCALE of the
+ *  texture per screen axis. Since the texture maps to the full world, the
+ *  screen shows 1 world-unit in X (across canvasW) and 1 world-unit in Y
+ *  (across canvasH). Different axis scales match the fluid's aspect stretch. */
 export function worldToScreen(wx, wy, camX, camY, canvasW, canvasH) {
-  // Offset from camera center, with toroidal shortest path
   let dx = wx - camX;
   let dy = wy - camY;
-  // Wrap to [-WORLD_SCALE/2, WORLD_SCALE/2]
   const half = WORLD_SCALE / 2;
   if (dx > half) dx -= WORLD_SCALE;
   if (dx < -half) dx += WORLD_SCALE;
   if (dy > half) dy -= WORLD_SCALE;
   if (dy < -half) dy += WORLD_SCALE;
-  // Convert world offset to pixels (screen = world * pixels-per-world-unit)
-  const pxPerWorld = canvasW / WORLD_SCALE;
-  const sx = canvasW / 2 + dx * pxPerWorld;
-  const sy = canvasH / 2 + dy * (canvasW / WORLD_SCALE); // use same scale for both axes
+  // 1 world-unit fills each screen axis (matches fluid camera zoom)
+  const sx = canvasW / 2 + dx * canvasW;
+  const sy = canvasH / 2 + dy * canvasH;
   return [sx, sy];
 }
 
 /** Convert screen pixels to world-space, accounting for camera offset. */
 export function screenToWorld(sx, sy, camX, camY, canvasW, canvasH) {
-  const pxPerWorld = canvasW / WORLD_SCALE;
-  let wx = camX + (sx - canvasW / 2) / pxPerWorld;
-  let wy = camY + (sy - canvasH / 2) / pxPerWorld;
-  // Wrap to [0, WORLD_SCALE]
+  let wx = camX + (sx - canvasW / 2) / canvasW;
+  let wy = camY + (sy - canvasH / 2) / canvasH;
   wx = ((wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   wy = ((wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   return [wx, wy];

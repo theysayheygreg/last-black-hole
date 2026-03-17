@@ -36,6 +36,7 @@ const RANGE_HINTS = {
   'wells.orbitalStrength':  { min: 0, max: 1, step: 0.01, tip: 'Swirl strength. 0 = pure infall, 0.4 = default, 1.0 = strong whirlpools' },
   'wells.shipPullStrength': { min: 0, max: 2, step: 0.05, tip: 'How hard wells pull the ship (world-units/s²). THIS is what traps you' },
   'wells.shipPullFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship pull falloff. 1.5 = default (softer than inverse-square)' },
+  'wells.maxRange':         { min: 0.3, max: 2.0, step: 0.05, tip: 'Gravity reach in world-units — zero force beyond this' },
   'wells.killRadius':       { min: 0.01, max: 0.1, step: 0.005, tip: 'Death radius in world-units' },
 
   'events.waveSpeed':       { min: 0.1, max: 1.5, step: 0.05, tip: 'Wave ring expansion speed in world-units/sec' },
@@ -64,6 +65,7 @@ const RANGE_HINTS = {
   'stars.raySpinRate':      { min: 0.3, max: 2, step: 0.05, tip: 'Ray rotation (rad/s). 0.3 = stately' },
   'stars.coreBrightness':   { min: 0.02, max: 0.5, step: 0.01, tip: 'Core glow + size. 0.2 = bright star, 0.5 = supernova' },
   'stars.shipPushStrength': { min: 0, max: 2, step: 0.05, tip: 'Ship push (world-units/s²)' },
+  'stars.maxRange':         { min: 0.2, max: 1.5, step: 0.05, tip: 'Push reach in world-units — zero force beyond' },
   'stars.shipPushFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship push falloff' },
 
   // Loot

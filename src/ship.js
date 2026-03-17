@@ -117,15 +117,21 @@ export class Ship {
     this.vy = this.vy * (1 - coupling) + fluidVelWorld.y * coupling;
 
     // 5. Direct gravitational pull from wells (world-space)
+    // Gravity has a finite range — force fades to zero beyond maxRange.
+    // This creates genuine flat empty space between distant wells.
     if (wellSystem) {
+      const maxRange = wellCfg.maxRange ?? 0.8; // world-units — gravity drops to zero here
       for (const well of wellSystem.wells) {
         const [dwx, dwy] = worldDisplacement(this.wx, this.wy, well.wx, well.wy);
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
-        if (dist < 0.001) continue;
-        const safeDist = Math.max(dist, 0.15); // stability guard in world-units
-        // Normalize distance to reference of 0.25 world-units (≈100px at 1200px screen)
+        if (dist < 0.001 || dist > maxRange) continue;
+        const safeDist = Math.max(dist, 0.15);
         const normDist = safeDist / 0.25;
-        const gravAccel = wellCfg.shipPullStrength * well.mass / Math.pow(normDist, wellCfg.shipPullFalloff);
+        const baseAccel = wellCfg.shipPullStrength * well.mass / Math.pow(normDist, wellCfg.shipPullFalloff);
+        // Smooth quadratic fade to zero at maxRange
+        const rangeFrac = dist / maxRange;
+        const rangeFade = (1 - rangeFrac) * (1 - rangeFrac); // 1 at center, 0 at edge
+        const gravAccel = baseAccel * rangeFade;
         const nx = dwx / dist;
         const ny = dwy / dist;
         this.vx += nx * gravAccel * dt;
@@ -252,7 +258,7 @@ export class Ship {
 
     // Debug: velocity vector
     if (CONFIG.debug.showVelocityField) {
-      const pxPerWorld = this.canvasWidth / WORLD_SCALE;
+      const pxPerWorld = this.canvasWidth; // 1 world-unit = screen width
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
       ctx.lineWidth = 1;

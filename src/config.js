@@ -48,6 +48,7 @@ export const CONFIG = {
     orbitalStrength: 0.4,
     shipPullStrength: 0.6,    // world-units/s² at 1.0 world-unit distance
     shipPullFalloff: 1.5,
+    maxRange: 0.8,            // world-units — gravity fades to zero here (flat space beyond)
     killRadius: 0.04,         // world-units (~12-25px equivalent)
     accretionRate: 0.015,
     accretionRadius: 0.023,   // fluid UV (~0.07/3)
@@ -89,6 +90,7 @@ export const CONFIG = {
     coreBrightness: 0.2,
     shipPushStrength: 0.45,   // world-units/s² at 1.0 world-unit distance
     shipPushFalloff: 1.8,
+    maxRange: 0.6,            // world-units — push fades to zero here
   },
   loot: {
     gravity: 0.0008,

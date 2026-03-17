@@ -461,7 +461,7 @@ function gameLoop(now) {
 
   // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {
-    const pxPerWorld = overlayCanvas.width / WORLD_SCALE;
+    const pxPerWorld = overlayCanvas.width; // 1 world-unit = screen width
     ctx.save();
     ctx.fillStyle = '#00ff00';
     ctx.font = '14px monospace';
@@ -569,7 +569,7 @@ function gameLoop(now) {
 
   // 12. Debug: well radii and labels
   if (CONFIG.debug.showWellRadii) {
-    const pxPerWorld = overlayCanvas.width / WORLD_SCALE;
+    const pxPerWorld = overlayCanvas.width; // 1 world-unit = screen width
     ctx.save();
     const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
     for (let i = 0; i < wellData.length; i++) {
@@ -611,7 +611,7 @@ function gameLoop(now) {
       const loot = lootSystem.anchors[i];
       if (!loot.alive) continue;
       const [lx, ly] = worldToScreen(loot.wx, loot.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const glowR = CONFIG.loot.glowRadius * WORLD_SCALE * pxPerWorld;
+      const glowR = CONFIG.loot.glowRadius * WORLD_SCALE * pxPerWorld; // UV → world → px
       ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(lx, ly, glowR, 0, Math.PI * 2); ctx.stroke();
