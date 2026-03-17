@@ -53,40 +53,33 @@ async function run() {
         await page.evaluate(() => window.__TEST_API.triggerRestart());
         await new Promise((r) => setTimeout(r, 500));
 
+        // Check well WORLD positions (not screen positions, which depend on random camera).
+        // Wells should be spread across the 3x3 map, not all clustered in one quadrant.
         const layout = await page.evaluate(() => {
           const wells = window.__TEST_API.getWells();
           if (!wells || wells.length === 0) return null;
 
-          const width = window.innerWidth;
-          const height = window.innerHeight;
-          const midX = width / 2;
-          const midY = height / 2;
-
-          const counts = {
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-          };
+          const midW = 1.5; // half of WORLD_SCALE (3.0)
+          const counts = { left: 0, right: 0, top: 0, bottom: 0 };
 
           for (const well of wells) {
-            if (well.x < midX) counts.left++;
-            if (well.x >= midX) counts.right++;
-            if (well.y < midY) counts.top++;
-            if (well.y >= midY) counts.bottom++;
+            if (well.wx < midW) counts.left++;
+            if (well.wx >= midW) counts.right++;
+            if (well.wy < midW) counts.top++;
+            if (well.wy >= midW) counts.bottom++;
           }
 
-          return { wells, counts, width, height };
+          return { wells, counts };
         });
 
         assert(layout && layout.wells.length >= 4, "Expected at least four wells in the layout");
-        assert(layout.counts.left > 0, "Expected at least one well on the left side of the screen");
-        assert(layout.counts.right > 0, "Expected at least one well on the right side of the screen");
-        assert(layout.counts.top > 0, "Expected at least one well on the top half of the screen");
-        assert(layout.counts.bottom > 0, "Expected at least one well on the bottom half of the screen");
+        assert(layout.counts.left > 0, "Expected at least one well in the left half of the world");
+        assert(layout.counts.right > 0, "Expected at least one well in the right half of the world");
+        assert(layout.counts.top > 0, "Expected at least one well in the top half of the world");
+        assert(layout.counts.bottom > 0, "Expected at least one well in the bottom half of the world");
 
         console.log(
-          `        Layout counts — left:${layout.counts.left} right:${layout.counts.right} top:${layout.counts.top} bottom:${layout.counts.bottom}`
+          `        World layout — left:${layout.counts.left} right:${layout.counts.right} top:${layout.counts.top} bottom:${layout.counts.bottom}`
         );
       }
     );

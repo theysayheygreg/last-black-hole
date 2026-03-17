@@ -1,11 +1,9 @@
 /**
- * input.js — InputManager: keyboard + gamepad abstraction layer.
+ * input.js — InputManager: keyboard + gamepad, both active simultaneously.
  *
- * Two input methods, auto-detected:
- *   Keyboard: Arrow keys = facing, Space = thrust, Ctrl = brake
- *   Gamepad:  Left stick = facing, R2 = thrust, L2 = brake
- *
- * Mouse is UI-only (menu clicks). Ship never reads mouse position.
+ * No auto-detection or switching. Both input sources are polled every frame
+ * and merged — the strongest signal wins. You can steer with the stick and
+ * thrust with spacebar in the same frame.
  *
  * Gamepad stick pipeline:
  *   1. Scaled radial deadzone (no cardinal snapping)
@@ -55,17 +53,18 @@ function smoothAngle(current, target, dt, smoothTime, smallDeg, bigDeg) {
 
 export class InputManager {
   constructor() {
-    this.usingGamepad = false;
     this.gamepadIndex = -1;
 
-    // Output state (consumed by ship)
+    // Output state (consumed by ship and menus)
     this.facing = null;           // radians, or null if no directional input
     this.thrustIntensity = 0;     // 0-1
     this.brakeIntensity = 0;      // 0-1
 
+    // For HUD display — which input contributed this frame
+    this.lastInputSource = 'keyboard'; // 'keyboard' or 'gamepad'
+
     // Keyboard state
-    this._keys = {};              // currently held keys
-    this._keyFacing = null;       // computed facing from arrow keys
+    this._keys = {};
 
     // Gamepad stick state
     this._isAiming = false;
@@ -77,13 +76,11 @@ export class InputManager {
     window.addEventListener('gamepadconnected', (e) => {
       console.log(`Gamepad connected: ${e.gamepad.id}`);
       this.gamepadIndex = e.gamepad.index;
-      this.usingGamepad = true;
     });
     window.addEventListener('gamepaddisconnected', (e) => {
       console.log(`Gamepad disconnected: ${e.gamepad.id}`);
       if (e.gamepad.index === this.gamepadIndex) {
         this.gamepadIndex = -1;
-        this.usingGamepad = false;
       }
     });
 
@@ -94,7 +91,6 @@ export class InputManager {
     window.addEventListener('keyup', (e) => {
       this._keys[e.code] = false;
     });
-    // Clear keys on window blur (prevents stuck keys when tabbing away)
     window.addEventListener('blur', () => {
       this._keys = {};
     });
@@ -103,15 +99,13 @@ export class InputManager {
   /** Is a confirm action pressed this frame? (Space, Enter, or gamepad A) */
   get confirmPressed() {
     if (this._keys['Space'] || this._keys['Enter']) return true;
-    // Gamepad A button (standard mapping: button 0)
     const gp = this._getGamepad();
     if (gp && gp.buttons.length > 0 && gp.buttons[0].pressed) return true;
     return false;
   }
 
-  /** Is pause pressed? (Escape or gamepad Start/Options — button 9) */
+  /** Is pause pressed? (gamepad Start/Options — button 9. Keyboard Escape handled in main.js) */
   get pausePressed() {
-    // Keyboard escape handled separately in main.js keydown listener
     const gp = this._getGamepad();
     if (gp && gp.buttons.length > 9 && gp.buttons[9].pressed) return true;
     return false;
@@ -130,7 +124,8 @@ export class InputManager {
   }
 
   /**
-   * Poll all input sources. Call once per frame.
+   * Poll all input sources simultaneously. Both keyboard and gamepad are
+   * always read — the strongest signal wins for each axis.
    */
   poll() {
     const cfg = CONFIG.input;
@@ -138,97 +133,96 @@ export class InputManager {
     const dt = Math.min((now - this._lastPollTime) / 1000, 1 / 30);
     this._lastPollTime = now;
 
-    // --- Try gamepad first ---
-    const gp = this._getGamepad();
+    // --- Read keyboard ---
+    let kbFacing = null;
+    let kbThrust = 0;
+    let kbBrake = 0;
 
-    if (gp) {
-      this.usingGamepad = true;
-      this._pollGamepadStick(gp, cfg, dt, now);
-      this._pollGamepadTriggers(gp, cfg);
-      return this;
-    }
-
-    // --- Fall back to keyboard ---
-    this.usingGamepad = false;
-    this._pollKeyboard(cfg);
-    return this;
-  }
-
-  _pollKeyboard(cfg) {
-    // Arrow keys → facing direction
     let dx = 0, dy = 0;
     if (this._keys['ArrowLeft'] || this._keys['KeyA']) dx -= 1;
     if (this._keys['ArrowRight'] || this._keys['KeyD']) dx += 1;
     if (this._keys['ArrowUp'] || this._keys['KeyW']) dy -= 1;
     if (this._keys['ArrowDown'] || this._keys['KeyS']) dy += 1;
+    if (dx !== 0 || dy !== 0) kbFacing = Math.atan2(dy, dx);
+    if (this._keys['Space']) kbThrust = 1.0;
+    if (this._keys['ControlLeft'] || this._keys['ControlRight']) kbBrake = 1.0;
 
-    if (dx !== 0 || dy !== 0) {
-      this.facing = Math.atan2(dy, dx);
+    // --- Read gamepad ---
+    let gpFacing = null;
+    let gpThrust = 0;
+    let gpBrake = 0;
+
+    const gp = this._getGamepad();
+    if (gp) {
+      // Stick
+      const rawX = gp.axes[0] || 0;
+      const rawY = gp.axes[1] || 0;
+      const stick = applyRadialDeadzone(rawX, rawY, cfg.gamepadDeadzone, cfg.gamepadOuterDeadzone);
+
+      // Aim state hysteresis
+      if (!this._isAiming) {
+        if (stick.mag >= cfg.gamepadAimEnter) {
+          this._isAiming = true;
+          this._belowExitSince = null;
+        }
+      } else {
+        if (stick.mag < cfg.gamepadAimExit) {
+          if (this._belowExitSince === null) this._belowExitSince = now;
+          if (now - this._belowExitSince > cfg.gamepadAimHoldMs) this._isAiming = false;
+        } else {
+          this._belowExitSince = null;
+        }
+      }
+
+      // Angle with smoothing
+      if (this._isAiming && stick.mag > 0.01) {
+        const rawAngle = Math.atan2(stick.y, stick.x);
+        this._lastAngle = smoothAngle(
+          this._lastAngle, rawAngle, dt,
+          cfg.gamepadSmoothTime, cfg.gamepadSmallAngle, cfg.gamepadBigAngle
+        );
+        gpFacing = this._lastAngle;
+      } else if (this._isAiming) {
+        gpFacing = this._lastAngle; // hold last angle while still in aim state
+      }
+
+      // Triggers
+      let r2 = 0, l2 = 0;
+      if (gp.buttons.length > 7) {
+        r2 = gp.buttons[7].value;
+        l2 = gp.buttons[6].value;
+      }
+      if (r2 === 0 && gp.axes.length > 5) {
+        r2 = Math.max(0, (gp.axes[5] + 1) / 2);
+        l2 = Math.max(0, (gp.axes[4] + 1) / 2);
+      }
+      gpThrust = r2 > cfg.triggerThreshold ? r2 : 0;
+      gpBrake = l2 > cfg.triggerThreshold ? l2 : 0;
+    }
+
+    // --- Merge: strongest signal wins ---
+    // Facing: gamepad stick takes priority if actively aiming, else keyboard
+    if (gpFacing !== null) {
+      this.facing = gpFacing;
+      this.lastInputSource = 'gamepad';
+    } else if (kbFacing !== null) {
+      this.facing = kbFacing;
+      this.lastInputSource = 'keyboard';
     } else {
       this.facing = null; // no directional input — hold current facing
     }
 
-    // Space = thrust, Ctrl = brake
-    this.thrustIntensity = (this._keys['Space']) ? 1.0 : 0;
-    this.brakeIntensity = (this._keys['ControlLeft'] || this._keys['ControlRight']) ? 1.0 : 0;
-  }
+    // Thrust/brake: take the higher value from either source
+    this.thrustIntensity = Math.max(kbThrust, gpThrust);
+    this.brakeIntensity = Math.max(kbBrake, gpBrake);
 
-  _pollGamepadStick(gp, cfg, dt, now) {
-    const rawX = gp.axes[0] || 0;
-    const rawY = gp.axes[1] || 0;
-
-    // Scaled radial deadzone
-    const stick = applyRadialDeadzone(rawX, rawY, cfg.gamepadDeadzone, cfg.gamepadOuterDeadzone);
-
-    // Aim state hysteresis
-    if (!this._isAiming) {
-      if (stick.mag >= cfg.gamepadAimEnter) {
-        this._isAiming = true;
-        this._belowExitSince = null;
-      }
-    } else {
-      if (stick.mag < cfg.gamepadAimExit) {
-        if (this._belowExitSince === null) this._belowExitSince = now;
-        if (now - this._belowExitSince > cfg.gamepadAimHoldMs) {
-          this._isAiming = false;
-        }
-      } else {
-        this._belowExitSince = null;
-      }
-    }
-
-    // Angle with smoothing
-    if (this._isAiming && stick.mag > 0.01) {
-      const rawAngle = Math.atan2(stick.y, stick.x);
-      this._lastAngle = smoothAngle(
-        this._lastAngle, rawAngle, dt,
-        cfg.gamepadSmoothTime, cfg.gamepadSmallAngle, cfg.gamepadBigAngle
-      );
-      this.facing = this._lastAngle;
-    } else {
-      this.facing = this._isAiming ? this._lastAngle : null;
-    }
-  }
-
-  _pollGamepadTriggers(gp, cfg) {
-    let r2 = 0, l2 = 0;
-    if (gp.buttons.length > 7) {
-      r2 = gp.buttons[7].value;
-      l2 = gp.buttons[6].value;
-    }
-    if (r2 === 0 && gp.axes.length > 5) {
-      r2 = Math.max(0, (gp.axes[5] + 1) / 2);
-      l2 = Math.max(0, (gp.axes[4] + 1) / 2);
-    }
-    this.thrustIntensity = r2 > cfg.triggerThreshold ? r2 : 0;
-    this.brakeIntensity = l2 > cfg.triggerThreshold ? l2 : 0;
+    return this;
   }
 
   /**
-   * Apply input state to ship. Call after poll().
+   * Apply input state to ship.
    */
   applyToShip(ship) {
-    // Facing — from keyboard or gamepad (null = hold current facing)
     if (this.facing !== null) {
       ship.setFacingDirect(this.facing);
     }

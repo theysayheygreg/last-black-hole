@@ -220,8 +220,6 @@ export const CONFIG = {
   },
 
   input: {
-    method: 'auto',           // 'auto' = gamepad if connected, else mouse. 'mouse' = force mouse.
-
     // --- Stick deadzone (scaled radial — no cardinal snapping) ---
     gamepadDeadzone: 0.15,    // Inner deadzone radius. Stick below this = zero output.
     gamepadOuterDeadzone: 0.05, // Outer deadzone. Clips near-max to ensure full-tilt is reachable.
