@@ -38,7 +38,9 @@ uniform float u_contrast;      // luminance mapping curve power
 uniform float u_numChars;      // number of characters in the density ramp
 uniform float u_cellAspect;    // cell height / cell width (e.g. 1.5 for 8x12)
 uniform float u_time;          // elapsed seconds — drives shimmer
-uniform float u_shimmer;       // shimmer amplitude in character indices (0 = off)
+uniform float u_shimmer;       // quantum fluctuation probability (0 = off)
+uniform vec2 u_camOffset;     // camera center in fluid UV (for world-anchored noise)
+uniform float u_worldScale;   // world scale (for world-anchored noise)
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -66,11 +68,14 @@ void main() {
   // Map luminance to character index (0 = sparse, N-1 = dense)
   float charIdx = lum * (u_numChars - 1.0);
 
-  // Quantum fluctuations: sparse individual cells that blink, not a uniform filter.
-  // Only ~2-3% of cells change per time step — creates rare twinkling, not static.
-  float noise = fract(sin(dot(cellIndex + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
+  // Quantum fluctuations: sparse cells that blink, anchored in worldspace.
+  // Reconstruct this cell's fluid UV from camera offset so the shimmer
+  // pattern stays fixed in the world when the camera moves.
+  vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_worldScale;
+  // Quantize to cell grid in world space
+  vec2 worldCell = floor(fluidUV * u_resolution / vec2(cellW, cellH));
+  float noise = fract(sin(dot(worldCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
   if (noise > (1.0 - u_shimmer * 0.01)) {
-    // This cell flickers — bump it up by 1-2 characters
     float bump = fract(noise * 7.0) * 2.0 + 1.0;
     charIdx += bump;
   }
@@ -280,7 +285,7 @@ export class ASCIIRenderer {
    * Call this AFTER fluid.render(sceneTarget, ...) has filled the scene FBO.
    * Renders the ASCII result to the screen (framebuffer null).
    */
-  render(totalTime = 0) {
+  render(totalTime = 0, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0) {
     const gl = this.gl;
     const ascii = CONFIG.ascii;
 
@@ -307,6 +312,8 @@ export class ASCIIRenderer {
     gl.uniform1f(this.uniforms['u_cellAspect'], ascii.cellAspect);
     gl.uniform1f(this.uniforms['u_time'], totalTime);
     gl.uniform1f(this.uniforms['u_shimmer'], ascii.shimmer);
+    gl.uniform2f(this.uniforms['u_camOffset'], camOffsetU, camOffsetV);
+    gl.uniform1f(this.uniforms['u_worldScale'], worldScale);
 
     // Draw fullscreen quad
     gl.bindVertexArray(this.quadVAO);
