@@ -111,7 +111,7 @@ function zipDir(sourceDir, zipPath) {
 }
 
 function buildWeb(targetRoot) {
-  const webDir = path.join(STAGING_ROOT, 'last-black-hole-web');
+  const webDir = path.join(targetRoot, 'last-black-hole-web');
   removeIfExists(webDir);
   ensureDir(webDir);
 
@@ -121,19 +121,14 @@ function buildWeb(targetRoot) {
     target: 'web',
     entrypointSource: 'index-a.html',
     entrypointArtifact: 'index.html',
-    artifact: `last-black-hole-web-${versionTag()}.zip`,
+    artifact: 'last-black-hole-web/',
   });
   writeJson(path.join(targetRoot, 'BUILD-INFO-web.json'), info);
-
-  const zipPath = path.join(targetRoot, `last-black-hole-web-${versionTag()}.zip`);
-  removeIfExists(zipPath);
-  zipDir(webDir, zipPath);
-  removeIfExists(webDir);
 
   return {
     target: 'web',
     outputDir: targetRoot,
-    zip: zipPath,
+    artifact: 'last-black-hole-web',
     status: 'built',
   };
 }
@@ -170,7 +165,7 @@ async function buildElectronTarget(targetRoot, target) {
     ? (process.arch === 'arm64' ? 'arm64' : 'x64')
     : 'x64';
 
-  const outDir = path.join(STAGING_ROOT, `${target}-packaged`);
+  const outDir = path.join(targetRoot, target === 'mac' ? 'last-black-hole-mac' : 'last-black-hole-win');
   removeIfExists(outDir);
   ensureDir(outDir);
 
@@ -196,12 +191,11 @@ async function buildElectronTarget(targetRoot, target) {
 
   const packagedRoot = appPaths[0];
   if (packagedRoot) {
-    const zipName = `last-black-hole-${target}-${versionTag()}.zip`;
-    const zipPath = path.join(targetRoot, zipName);
-    removeIfExists(zipPath);
-    zipDir(packagedRoot, zipPath);
-    result.zip = zipPath;
-    result.artifact = zipName;
+    const finalName = target === 'mac' ? 'Last Black Hole.app' : 'Last Black Hole-win32-x64';
+    const finalPath = path.join(targetRoot, finalName);
+    removeIfExists(finalPath);
+    fs.renameSync(packagedRoot, finalPath);
+    result.artifact = finalName;
   }
 
   writeJson(path.join(targetRoot, `BUILD-INFO-${target}.json`), makeBuildInfo({
@@ -250,6 +244,10 @@ async function main() {
     results,
   });
 
+  const playtestZip = path.join(BUILD_ROOT, `last-black-hole-playtest-${versionTag()}.zip`);
+  removeIfExists(playtestZip);
+  zipDir(targetRoot, playtestZip);
+
   removeIfExists(STAGING_ROOT);
 
   const failed = results.filter((item) => item.status !== 'built');
@@ -261,6 +259,7 @@ async function main() {
       console.log(`- ${item.target}: failed (${item.error})`);
     }
   }
+  console.log(`- playtest zip: ${playtestZip}`);
 
   if (failed.length > 0) process.exit(1);
 }

@@ -8,6 +8,7 @@ The rule is simple:
 - one build command: `npm run build`
 - versioned outputs under `builds/`
 - a manifest and per-target `BUILD-INFO-*.json` files for traceability
+- one combined playtest zip for handing to friends
 
 ## Commands
 
@@ -45,11 +46,17 @@ That folder contains:
 - `BUILD-INFO-web.json`
 - `BUILD-INFO-mac.json` if mac packaging succeeded
 - `BUILD-INFO-win.json` if Windows packaging succeeded
-- `last-black-hole-web-v<version>.zip`
-- `last-black-hole-mac-v<version>.zip` if mac packaging succeeded
-- `last-black-hole-win-v<version>.zip` if Windows packaging succeeded
+- `last-black-hole-web/`
+- `Last Black Hole.app` if mac packaging succeeded
+- `Last Black Hole-win32-x64/` if Windows packaging succeeded
 
 The build date now lives inside the manifest and build info files instead of the folder name.
+
+Alongside the version folder, the build also writes:
+
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-black-hole-playtest-v<version>.zip`
+
+That zip contains the whole version folder so you can hand one file to friends instead of three separate archives.
 
 ## Current wrapper strategy
 
@@ -65,9 +72,10 @@ That means the `.app` and `.exe` are wrappers around the same web game, not sepa
 
 This machine can build:
 
-- a shareable web artifact
-- a macOS Electron app bundle plus ZIP
-- a Windows Electron app folder with `.exe` entrypoint plus ZIP
+- a shareable web artifact folder
+- a macOS Electron app bundle
+- a Windows Electron app folder with `.exe` entrypoint
+- one combined playtest zip containing all of the above
 
 This is enough for playtest packaging. The Windows output is already useful as a portable playtest build even though it is not an installer yet.
 
@@ -83,6 +91,6 @@ Those are later concerns. This pipeline is for making dated, traceable playtest 
 
 ## Practical next step for Windows
 
-For now, treat the Windows target as a zipped app folder with a real `.exe` entrypoint.
+For now, treat the Windows target as an app folder with a real `.exe` entrypoint inside the combined playtest zip.
 
 That is enough to hand to testers. If you later want a friendlier installer, add an installer layer or CI-backed packaging step on top of this build flow instead of replacing it.
