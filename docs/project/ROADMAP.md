@@ -279,15 +279,30 @@ Greg writes the Mon→Tue night prompt:
 - [x] Camera config, accretion ring data, worldDirectionTo() helper
 - [x] Comprehensive code comment pass on all source files
 
-### Morning Review — CURRENT
+### Morning Review — DONE
 
-Greg playtesting:
-1. Does the 3x3 world feel spacious enough? Can you find flat empty space?
-2. Camera follow — does lead-ahead feel right? Too floaty? Too tight?
-3. Portals — can you find and fly into them? Is "ESCAPED" satisfying?
-4. Planetoids — are wakes visible and surfable? Do well consumptions feel dramatic?
-5. Well gravity range (0.8) — is there genuine quiet space between wells?
-6. **THE QUESTION:** Ready for L1 (wrecks, inventory, portal evaporation)?
+Greg playtest feedback (3x3 map):
+- Larger map rules, wants 10x10 with many more objects
+- Wakes imperceptible — perturbations too small against ambient density
+- ASCII visuals flat — not enough movement, charset flattens to few symbols
+- Controller jitter — stick flicker, no center snap, spring bounce issues
+- Time for map files so different layouts can be tested
+
+### Day Shift (in progress)
+
+#### Done:
+- [x] **Controller input overhaul** — Scaled radial deadzone (no cardinal snap), aim state hysteresis (enter/exit thresholds + hold timer for spring absorption), soft tiered angular smoothing (kills jitter, instant flick response), last-known-angle hold on release. All constants tunable in dev panel.
+
+#### Remaining today:
+- [ ] **Wake visibility** — Boost ship/planetoid wake injection 3-4×, lower display shader velocity thresholds. CONFIG tuning + shader change.
+- [ ] **ASCII visual depth** — Expand density ramp charset, add time-varying shimmer noise to display shader, tune contrast curve. Shader + ascii-renderer change.
+- [ ] **Map file format** — Extract entity placement from main.js into JS module map files. Enables rapid map iteration and different test layouts.
+- [ ] **5×5 prototype** (stretch) — Intermediate step toward 10×10. Validate fluid resolution scaling, force culling by camera distance.
+
+### Scope Notes
+- 10×10 map needs architectural work: fluid resolution per screen drops 3× vs current, need spatial culling for force injection, display shader well limit (4) needs to become "nearest 4." Prototype at 5×5 first.
+- AI traffic ships deferred — planetoids fill the ambient life role.
+- L1 features (wrecks, inventory, portal evaporation) waiting on visual/input foundation.
 
 ### Day Shift (10am-midnight) — L1: The Stakes
 

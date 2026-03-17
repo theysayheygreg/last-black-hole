@@ -107,8 +107,16 @@ const RANGE_HINTS = {
   'planetoids.size':             { min: 3, max: 15, step: 1, tip: 'Overlay dot size (px)' },
   'planetoids.maxAlive':         { min: 2, max: 12, step: 1, tip: 'Max concurrent planetoids' },
 
-  // Input
-  'input.gamepadDeadzone':  { min: 0.05, max: 0.3, step: 0.01, tip: 'Stick dead zone radius' },
+  // Input — stick
+  'input.gamepadDeadzone':      { min: 0.05, max: 0.3, step: 0.01, tip: 'Radial deadzone radius. Higher = less drift, less precision.' },
+  'input.gamepadOuterDeadzone': { min: 0, max: 0.15, step: 0.01, tip: 'Outer deadzone. Clips near-max so full-tilt is reachable.' },
+  'input.gamepadAimEnter':      { min: 0.1, max: 0.5, step: 0.02, tip: 'Magnitude to start aiming. Higher = must push harder.' },
+  'input.gamepadAimExit':       { min: 0.05, max: 0.25, step: 0.02, tip: 'Magnitude to stop aiming. Lower = stickier aim lock.' },
+  'input.gamepadAimHoldMs':     { min: 20, max: 200, step: 10, tip: 'Ms below exit threshold to confirm release. Absorbs spring bounce.' },
+  'input.gamepadSmoothTime':    { min: 0.02, max: 0.2, step: 0.01, tip: 'Smoothing time constant. Lower = snappier, higher = smoother.' },
+  'input.gamepadSmallAngle':    { min: 1, max: 10, step: 0.5, tip: 'Degrees — full smoothing below this. Kills sensor jitter.' },
+  'input.gamepadBigAngle':      { min: 5, max: 45, step: 1, tip: 'Degrees — zero smoothing above this. Instant response to flicks.' },
+  // Input — triggers
   'input.triggerThreshold': { min: 0.01, max: 0.2, step: 0.01, tip: 'Trigger activation threshold' },
   'input.brakeStrength':    { min: 0, max: 0.3, step: 0.01, tip: 'Extra drag from L2 brake' },
 };

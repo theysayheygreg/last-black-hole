@@ -220,8 +220,27 @@ export const CONFIG = {
 
   input: {
     method: 'auto',           // 'auto' = gamepad if connected, else mouse. 'mouse' = force mouse.
-    gamepadDeadzone: 0.15,    // Left stick dead zone radius (0-1). Higher = less drift.
-    gamepadTurnRate: 360,     // Stick turn rate in deg/s (not used when mouse overrides).
+
+    // --- Stick deadzone (scaled radial — no cardinal snapping) ---
+    gamepadDeadzone: 0.15,    // Inner deadzone radius. Stick below this = zero output.
+    gamepadOuterDeadzone: 0.05, // Outer deadzone. Clips near-max to ensure full-tilt is reachable.
+                              // Output is remapped: [deadzone..1-outer] → [0..1], no jump at edge.
+
+    // --- Aim state hysteresis (prevents flicker at deadzone boundary) ---
+    gamepadAimEnter: 0.25,    // Stick must exceed this magnitude to start aiming.
+                              // Higher than deadzone so player must push deliberately.
+    gamepadAimExit: 0.10,     // Stick must drop below this to stop aiming.
+                              // Lower than deadzone — absorbed by it.
+    gamepadAimHoldMs: 80,     // Must stay below exit threshold for this long (ms) to confirm release.
+                              // Absorbs spring oscillation when letting go of stick.
+
+    // --- Angular smoothing (kills jitter, preserves responsiveness) ---
+    gamepadSmoothTime: 0.08,  // Exponential decay time constant (seconds). Lower = snappier.
+    gamepadSmallAngle: 3,     // Degrees — changes below this get full smoothing (invisible jitter).
+    gamepadBigAngle: 15,      // Degrees — changes above this get zero smoothing (instant flick).
+                              // Between small and big: linear blend.
+
+    gamepadTurnRate: 360,     // Stick turn rate in deg/s (not currently used — facing is direct from stick).
     triggerThreshold: 0.05,   // Trigger activation threshold (0-1). Prevents ghost input.
     brakeStrength: 0.15,      // Extra drag per frame from L2 brake at full pull. Stacks with base drag.
   },
