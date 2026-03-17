@@ -91,7 +91,8 @@ export class StarSystem {
       if (dist < 0.001) continue;
 
       const safeDist = Math.max(dist, 0.1);
-      const pushAccel = cfg.shipPushStrength * star.mass / Math.pow(safeDist, cfg.shipPushFalloff);
+      const normDist = safeDist / 0.25; // normalize to 0.25 world-units reference
+      const pushAccel = cfg.shipPushStrength * star.mass / Math.pow(normDist, cfg.shipPushFalloff);
       const nx = dx / dist;
       const ny = dy / dist;
 

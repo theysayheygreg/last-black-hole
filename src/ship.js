@@ -123,7 +123,10 @@ export class Ship {
         const dist = Math.sqrt(dwx * dwx + dwy * dwy);
         if (dist < 0.001) continue;
         const safeDist = Math.max(dist, 0.1); // stability guard in world-units
-        const gravAccel = wellCfg.shipPullStrength * well.mass / Math.pow(safeDist, wellCfg.shipPullFalloff);
+        // Normalize distance to reference of 0.25 world-units (≈100px at 1200px screen)
+        // Without this, raw world-distances (0.3-1.0) make gravity way too strong
+        const normDist = safeDist / 0.25;
+        const gravAccel = wellCfg.shipPullStrength * well.mass / Math.pow(normDist, wellCfg.shipPullFalloff);
         const nx = dwx / dist;
         const ny = dwy / dist;
         this.vx += nx * gravAccel * dt;
