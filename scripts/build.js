@@ -43,6 +43,10 @@ function stamp(now = new Date()) {
   ].join('');
 }
 
+function versionTag() {
+  return `v${PKG.version}`;
+}
+
 function ensureDir(target) {
   fs.mkdirSync(target, { recursive: true });
 }
@@ -107,28 +111,28 @@ function zipDir(sourceDir, zipPath) {
 }
 
 function buildWeb(targetRoot) {
-  const webDir = path.join(targetRoot, 'last-black-hole-web');
+  const webDir = path.join(STAGING_ROOT, 'last-black-hole-web');
   removeIfExists(webDir);
   ensureDir(webDir);
 
   copyWebRuntime(webDir);
 
-  writeJson(
-    path.join(webDir, 'BUILD-INFO.json'),
-    makeBuildInfo({
-      target: 'web',
-      entrypointSource: 'index-a.html',
-      entrypointArtifact: 'index.html',
-    })
-  );
+  const info = makeBuildInfo({
+    target: 'web',
+    entrypointSource: 'index-a.html',
+    entrypointArtifact: 'index.html',
+    artifact: `last-black-hole-web-${versionTag()}.zip`,
+  });
+  writeJson(path.join(targetRoot, 'BUILD-INFO-web.json'), info);
 
-  const zipPath = path.join(targetRoot, 'last-black-hole-web.zip');
+  const zipPath = path.join(targetRoot, `last-black-hole-web-${versionTag()}.zip`);
   removeIfExists(zipPath);
   zipDir(webDir, zipPath);
+  removeIfExists(webDir);
 
   return {
     target: 'web',
-    outputDir: webDir,
+    outputDir: targetRoot,
     zip: zipPath,
     status: 'built',
   };
@@ -166,7 +170,7 @@ async function buildElectronTarget(targetRoot, target) {
     ? (process.arch === 'arm64' ? 'arm64' : 'x64')
     : 'x64';
 
-  const outDir = path.join(targetRoot, target);
+  const outDir = path.join(STAGING_ROOT, `${target}-packaged`);
   removeIfExists(outDir);
   ensureDir(outDir);
 
@@ -186,20 +190,24 @@ async function buildElectronTarget(targetRoot, target) {
     target,
     platform,
     arch,
-    outputDir: outDir,
-    appPaths,
+    outputDir: targetRoot,
     status: 'built',
   };
 
   const packagedRoot = appPaths[0];
   if (packagedRoot) {
-    const zipPath = path.join(outDir, `${path.basename(packagedRoot)}.zip`);
+    const zipName = `last-black-hole-${target}-${versionTag()}.zip`;
+    const zipPath = path.join(targetRoot, zipName);
     removeIfExists(zipPath);
     zipDir(packagedRoot, zipPath);
     result.zip = zipPath;
+    result.artifact = zipName;
   }
 
-  writeJson(path.join(outDir, 'BUILD-INFO.json'), makeBuildInfo(result));
+  writeJson(path.join(targetRoot, `BUILD-INFO-${target}.json`), makeBuildInfo({
+    ...result,
+  }));
+  removeIfExists(outDir);
   return result;
 }
 
@@ -210,8 +218,9 @@ async function main() {
   }
 
   ensureDir(BUILD_ROOT);
-  const buildId = `${stamp()}-lbh-v${PKG.version}`;
+  const buildId = versionTag();
   const targetRoot = path.join(BUILD_ROOT, buildId);
+  removeIfExists(targetRoot);
   ensureDir(targetRoot);
 
   const results = [];
@@ -236,6 +245,7 @@ async function main() {
 
   writeJson(path.join(targetRoot, 'BUILD-MANIFEST.json'), {
     buildId,
+    builtAt: new Date().toISOString(),
     version: PKG.version,
     results,
   });

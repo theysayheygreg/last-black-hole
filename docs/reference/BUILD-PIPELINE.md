@@ -7,7 +7,7 @@ The rule is simple:
 - one gameplay source of truth: the web runtime
 - one build command: `npm run build`
 - versioned outputs under `builds/`
-- a manifest and per-target `BUILD-INFO.json` for traceability
+- a manifest and per-target `BUILD-INFO-*.json` files for traceability
 
 ## Commands
 
@@ -37,18 +37,19 @@ Useful references:
 
 Builds land under:
 
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/<timestamp>-lbh-v<version>/`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v<version>/`
 
 That folder contains:
 
 - `BUILD-MANIFEST.json`
-- `last-black-hole-web/`
-- `last-black-hole-web.zip`
-- `mac/` if mac packaging succeeded
-- `win/` if Windows packaging succeeded
-- zipped desktop artifacts for any packaged desktop target
+- `BUILD-INFO-web.json`
+- `BUILD-INFO-mac.json` if mac packaging succeeded
+- `BUILD-INFO-win.json` if Windows packaging succeeded
+- `last-black-hole-web-v<version>.zip`
+- `last-black-hole-mac-v<version>.zip` if mac packaging succeeded
+- `last-black-hole-win-v<version>.zip` if Windows packaging succeeded
 
-Each built target also gets its own `BUILD-INFO.json`.
+The build date now lives inside the manifest and build info files instead of the folder name.
 
 ## Current wrapper strategy
 
