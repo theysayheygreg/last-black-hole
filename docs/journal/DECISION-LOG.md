@@ -62,6 +62,25 @@ Each decision has:
 
 ---
 
+## Controller Input
+
+### Q: Roll our own input manager or use a library?
+
+| Date | Event |
+|------|-------|
+| Mar 17 | Greg reports stick flicker, spring bounce, neutral drift during playtest |
+| Mar 17 | Surveyed 8 JS gamepad libraries (gamepad-api-mappings, Gamepads.js, joypad.js, gamecontroller.js, etc.) |
+| Mar 17 | None have the full pipeline: radial deadzone + hysteresis + angular smoothing. Best one (gamepad-api-mappings) only has deadzones. |
+| Mar 17 | Decision: keep our input.js, add ~40 lines of proper processing using proven patterns from Warhawk and JoyShockMapper. |
+
+**Where it landed:** Custom input pipeline. Scaled radial deadzone, aim state hysteresis with hold timer, soft tiered angular smoothing, last-known-angle hold. All constants tunable in dev panel. No library dependency.
+
+**Why not a library:** Every candidate either lacked critical features (smoothing, hysteresis), was framework-coupled, or would still require us to write the hard parts. 40 lines of well-understood math beats a dependency that doesn't solve the actual problem.
+
+**Door status:** Closed — the pipeline works. May tune constants per-controller.
+
+---
+
 ## Physics Architecture
 
 ### Q: One fluid sim or two?

@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-03-17 Day Shift (Controller Overhaul + Playtest Roadmap)
+
+### Controller Input Overhaul
+- **input.js** fully rewritten with proper input processing pipeline:
+  - Scaled radial deadzone (magnitude-based, no cardinal snapping, remapped 0–1 range)
+  - Aim state hysteresis (enter at 0.25, exit at 0.10, 80ms hold timer absorbs spring bounce)
+  - Soft tiered angular smoothing (full smoothing <3°, zero smoothing >15°, blend between)
+  - Last-known-angle hold on stick release (no jitter, no snap to zero)
+- All constants tunable in dev panel under input section
+- Patterns from Warhawk/Starhawk (Josh Sutphin) and JoyShockMapper (Jibb Smart)
+
+### Playtest Feedback (3x3 map)
+- Larger map works well — wants 10×10 with more objects
+- Wakes still imperceptible against ambient fluid density
+- ASCII visuals flat — not enough charset variety, fabric feels static
+- Controller jitter fixed (above)
+- Map files needed for rapid layout iteration
+
+### Roadmap Updated
+Today's remaining tasks queued: wake visibility boost, ASCII visual depth, map file format, 5×5 prototype (stretch). 10×10 deferred pending architectural decisions (fluid resolution scaling, spatial force culling).
+
+---
+
 ## 2026-03-17 Morning Session (Fixes + Refactor + Comment Pass)
 
 ### Fixes
