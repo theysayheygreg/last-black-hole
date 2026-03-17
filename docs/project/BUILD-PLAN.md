@@ -11,29 +11,45 @@ Build in layers. Each layer produces something playable. If we run out of time a
 
 ---
 
-## Layer 0: The Feel (Monday)
+## Layer 0: The Feel (Monday-Tuesday)
 **Goal:** Does surfing spacetime feel good?
 
 This is the whole bet. If the fluid sim + thrust control isn't fun to navigate, nothing else matters. Prototype this first, iterate until it clicks.
 
-- [ ] WebGL canvas, fullscreen
-- [ ] Fluid sim running (forked WebGL-Fluid-Simulation or built from GPU Gems approach)
-- [ ] Black hole as gravity source / fluid attractor (inject force into sim)
-- [ ] Ship: triangle/arrow, thrust-based mouse control
-- [ ] Ship reads fluid velocity at its position, adds to its own velocity
-- [ ] Drift when not thrusting — feel the current carry you
-- [ ] One black hole pulling, waves propagating — can you surf them?
+- [x] WebGL canvas, fullscreen
+- [x] Fluid sim running (Navier-Stokes, GPU, 256x256)
+- [x] 4 gravity wells with orbital currents + accretion disks
+- [x] Ship: triangle, thrust-based mouse control, fluid coupling
+- [x] Ship reads fluid velocity at its position, adds to its own velocity
+- [x] Drift when not thrusting — feel the current carry you
+- [x] V2 physics: steady currents + event-driven wave rings (oscillating injection abandoned)
+- [x] Dev panel with live tuning sliders (toggle with backtick)
+- [x] CONFIG object, every system reads every frame
+- [x] `window.__TEST_API` exposing game state
+- [x] Smoke + physics + coordinate tests via Puppeteer
+- [x] ASCII dithering post-process shader — the visual identity
+- [x] Distance-based dissipation (accretion zones persist, empty space fades)
+- [x] Exponential tone mapping in display shader
 
-**Monday also delivers:**
-- [ ] Dev panel with live tuning sliders for all L0 constants (toggle with backtick key) — see TUNING.md
-- [ ] Single `CONFIG` object that every system reads every frame — see TUNING.md, AGENT-PROMPTS.md
-- [ ] `window.__TEST_API` exposing game state for automated tests — see AGENT-TESTING.md
-- [ ] Smoke + physics tests via Puppeteer (`node tests/run-all.js`) — see AGENT-TESTING.md
+**L0 Expansion (Tuesday — Experiments 1-5):**
+- [x] Ship slowdown: thrustAccel 800, drag 0.06, fluidCoupling 1.2. Deliberate movement.
+- [x] Bullet wake: 3 speed-based directional splats (whisper, not shout)
+- [x] Stars: radiant outward push, rotating light rays, equilibrium zones with wells
+- [x] Loot anchors: flow obstacles with lee zones, shimmer glow, future pickup locations
+- [x] Controller support: Gamepad API, analog thrust (R2), analog brake (L2), stick facing
 
 **Playtest question:** Is it fun to just fly around in this? If yes, proceed. If no, fix the physics until it is.
 
-**Stretch:** Add 2-3 black holes. See how wave interference patterns feel to navigate.
-- [ ] ASCII dithering post-process shader (render fluid to framebuffer → character lookup by density → color tint). This IS the visual identity — get it in early.
+**Night shift (Experiments 6-8) — DONE:**
+- [ ] AI traffic ships + well consumption (deferred — planetoids fill this role for now)
+- [x] Planetoids: 3 path types (orbit, figure-8, transit), bow shock + wake vortex, well consumption
+- [x] Map expansion: 3x3 world, camera follow with lead-ahead, toroidal wrapping
+- [x] Exit wormholes (portals): extraction loop prototype, "ESCAPED" screen
+
+**Morning session — architecture cleanup:**
+- [x] Centralized physics (physics.js), coordinates (coords.js CAMERA_VIEW + pxPerWorld), config (all magic numbers extracted)
+- [x] Gravity finite range (wells 0.8, stars 0.6 world-units — flat empty space exists)
+- [x] Comprehensive code comment pass
 
 ---
 
@@ -42,7 +58,7 @@ This is the whole bet. If the fluid sim + thrust control isn't fun to navigate, 
 
 - [ ] Wrecks: static objects in the fluid field. Fly near to loot.
 - [ ] Inventory: simple list of collected items (names, no mechanics yet)
-- [ ] Portals: glowing exit points. Fly into one to extract.
+- [x] Portals: glowing exit points. Fly into one to extract. (Done in L0 night shift)
 - [ ] Portal evaporation: portals blink out over time (random intervals)
 - [ ] Black hole growth: attractors slowly increase strength over the run
 - [ ] Run end: all portals gone OR swallowed by a black hole = death. Lose everything.

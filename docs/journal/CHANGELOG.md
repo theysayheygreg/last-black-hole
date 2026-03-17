@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-03-17 Morning Session (Fixes + Refactor + Comment Pass)
+
+### Fixes
+- **Ship spawn location**: Moved from (1.44, 1.65) — which was 0.06 world-units from a star that punted the ship into a well — to (1.5, 0.45) in safe open space.
+- **Gravity normalization**: Added distance normalization (÷ 0.25 reference) to ship gravity and star push. Without it, world-space distances made forces ~10× too strong.
+- **Parallax between fluid and overlay**: `worldToScreen` was mapping 3 world-units per screen (old scale), but the fluid shader maps 1 world-unit per screen. Fixed to match.
+- **Force stability guards**: Raised FORCE_MIN_DIST from 0.1 to 0.15 world-units.
+
+### Refactoring
+- **coords.js**: Added `CAMERA_VIEW`, `pxPerWorld(screenDim)`, `worldDirectionTo()`. Eliminated scattered scale calculations across 5 files.
+- **physics.js**: New file — centralized all entity→ship force math. `inversePowerForce`, `proximityForce`, `waveBandForce`, `applyForceToShip`. Constants `FORCE_REF_DIST` (0.25) and `FORCE_MIN_DIST` (0.15).
+- **config.js**: Moved all bare magic numbers into CONFIG: `fluidClampRadius`, `fluidTerminalSpeed` for each entity system; `camera.lerpSpeed/leadAhead/maxLerp`; `wells.accretionRings[]` data; portal `falloff`/`orbitalStrength`.
+- **Gravity max range**: Wells (0.8) and stars (0.6) now fade to zero via quadratic curve. Creates genuine flat empty space.
+
+### Code Comment Pass
+- Every scalar, magic number, and tuning value in config.js, coords.js, physics.js, and all entity files now has a human-readable comment explaining what it does, its units, and how changing it affects gameplay.
+
+---
+
 ## 2026-03-17 Night Shift (Map Expansion + Portals + Planetoids)
 
 ### src/ — New Files

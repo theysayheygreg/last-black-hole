@@ -8,15 +8,15 @@
 ## Key Constraints
 
 - Vanilla JS, no framework, no TypeScript
-- Single HTML file if possible
-- WebGL fluid sim (PavelDoGreat fork as starting point)
+- Multi-file ES modules (one system per file, loaded from index-a.html)
+- WebGL 2 Navier-Stokes fluid sim (built from scratch, not forked)
 - ASCII dithering post-process shader
-- 4x4 screens with frustum rendering
+- 3x3 screen world planned (currently 1 screen — Experiment 7)
 - 60fps target on integrated GPUs
 - Deploy to itch.io
-- Physics approach TBD Tuesday AM — two parallel experiments run Monday night (Pillar 6: Run It Twice)
+- Physics approach RESOLVED: V2 steady currents + event-driven wave rings (see Decision Log)
 - Minimum shippable game: ship + fluid + wells + wrecks + one portal + Inhibitor
-- Parallelize exploration, serialize adoption. Run many probes if agent capacity allows. Only one lane is the integration mainline. Probes promote into mainline if they clearly win, get backlogged immediately if they don't. See `BACKLOG.md`. (Forge Review #2)
+- Parallelize exploration, serialize adoption. (Forge Review #2)
 
 ## Dependency Graph
 
@@ -24,8 +24,13 @@
                     ┌─ ASCII Shader ─────────────┐
                     │                             │
 Fluid Sim ──────── ┤                             ├── Entity Rendering ── Signal ── Inhibitor
-(winner from       │                             │
- Tue AM review)    └─ Ship Controls ─────────────┘
+(V2: steady        │                             │
+ currents + waves) └─ Ship Controls ─────────────┘
+                         │
+                    ┌────┴────┐
+                    │ Stars   │ Loot    (L0 expansion — done)
+                    │ Input   │ Traffic (deferred)
+                    └─────────┘
 
                                                   HUD (independent, DOM-based)
                                                   Sound (independent, Web Audio)
@@ -235,27 +240,63 @@ Greg writes the Mon→Tue night prompt:
 - Commit any constant changes and design notes from the day.
 - Archive the losing prototype (if one was picked) with a commit message documenting why.
 
-### Scope Ratchet (end of Monday)
+### Scope Ratchet (end of Monday) — RESOLVED
 
-| Status | Action |
-|--------|--------|
-| **Ahead** (both prototypes done + feel confirmed good + winner chosen) | Add multi-well, directional ASCII chars, feedback buffer (motion trails) |
-| **On track** (both prototypes working, comparison done, winner chosen, feel promising) | Stay the course. Proceed to L1. |
-| **Behind** (only one prototype working, or ASCII not in yet) | ASCII is critical — it IS the product. Night shift finishes ASCII before starting L1. Use whichever prototype works. |
-| **Crisis** (neither fluid sim working) | All hands on fluid. Nothing else matters until the sim runs and feels good. |
+**Actual status: AHEAD.** Single sim won (V2 physics). 4 wells, ASCII shader, dev panel, diagnostics, distance-based dissipation, exponential tone mapping all shipped Monday. Approach B (wave equation) was never built — V2 event waves made it unnecessary. Physics comparison resolved without needing two prototypes.
+
+**Monday→Tuesday expansion:** Used the lead time to run 5 sim expansion experiments (ship slowdown, bullet wake, stars, loot anchors, controller support) that add navigable terrain before starting L1.
 
 ---
 
-## Tuesday, March 17 — L1: The Stakes
+## Tuesday, March 17 — L0 Expansion + L1: The Stakes
 
 ### Night Shift (Mon→Tue, midnight-10am)
 
-**Goal:** The core extraction loop exists. Wrecks to loot, portals to escape through, a universe that's dying around you. All work builds on the physics approach chosen in Tuesday AM review (now consolidated into `index.html`).
+**Goal (REVISED):** L0 expansion experiments shipped — new entity types (stars, loot anchors), ship slowdown, bullet wake, controller support. These populate the world with things to navigate around before starting L1.
+
+#### Completed (Experiments 1-5):
+- [x] **Ship Slowdown** — thrustAccel 2500→800, drag 0.03→0.06, fluidCoupling 0.6→1.2. Ship 6x slower. Currents carry it.
+- [x] **Bullet Wake** — 3 speed-based directional splats, 30-40% old density/force. Whisper not shout.
+- [x] **Stars** — `src/stars.js`. Negative gravity pushes fluid outward. Rotating light rays. Ship push. 2 stars placed.
+- [x] **Loot Anchors** — `src/loot.js`. Zero-velocity splats obstruct flow. Shimmer glow. 3 anchors placed.
+- [x] **Controller Support** — `src/input.js`. Gamepad API, R2 analog thrust, L2 brake, stick facing. Auto-detect.
+- [x] **Dissipation shader** expanded to 12 density sources (was 4 wells only).
+- [x] **Dev panel** updated with nested sub-object support + range hints for all new CONFIG sections.
+- [x] **ENTITIES.md** design doc created.
+
+#### Night Shift — Experiments 6-8 (DONE):
+- [x] **Map Expansion** — 3x3 toroidal world, camera follow with velocity lead-ahead, REPEAT-wrap fluid textures, all entities spread across map. `coords.js` world-space authority, `CAMERA_VIEW` + `pxPerWorld()` centralized.
+- [x] **Exit Wormholes (Portals)** — `portals.js`. Weak inward pull + purple spiral density. Capture radius → "ESCAPED" screen. 2 portals at (0.3, 0.3) and (2.7, 2.7).
+- [x] **Planetoids** — `planetoids.js`. 3 path types (orbit, figure-8, transit). Bow shock + wake vortex fluid injection. Consumed by wells (adds mass + wave ring). Transits spawn every 15-25s.
+- [ ] **AI Traffic Ships** — deferred, planetoids fill the ambient life role for now.
+
+#### Morning Session — Fixes + Refactor:
+- [x] Ship spawn moved to safe zone (was on top of a star)
+- [x] Gravity distance normalization (FORCE_REF_DIST = 0.25)
+- [x] Parallax fix (overlay scale matched to fluid camera zoom)
+- [x] Centralized physics.js, pxPerWorld(), finite gravity range (maxRange)
+- [x] Fluid force params (clampRadius, terminalSpeed) moved to CONFIG
+- [x] Camera config, accretion ring data, worldDirectionTo() helper
+- [x] Comprehensive code comment pass on all source files
+
+### Morning Review — CURRENT
+
+Greg playtesting:
+1. Does the 3x3 world feel spacious enough? Can you find flat empty space?
+2. Camera follow — does lead-ahead feel right? Too floaty? Too tight?
+3. Portals — can you find and fly into them? Is "ESCAPED" satisfying?
+4. Planetoids — are wakes visible and surfable? Do well consumptions feel dramatic?
+5. Well gravity range (0.8) — is there genuine quiet space between wells?
+6. **THE QUESTION:** Ready for L1 (wrecks, inventory, portal evaporation)?
+
+### Day Shift (10am-midnight) — L1: The Stakes
+
+**Goal:** The core extraction loop exists. Wrecks to loot, portals to escape through, a universe that's dying around you.
 
 #### Task N4: Wrecks + Loot Pickup (Medium, 2-3hr)
 - **What:** Static wreck objects in the world. Fly near to loot.
 - **Files:** `index.html` (entity system, wreck rendering)
-- **Dependencies:** Ship controls from winning physics prototype (chosen Tue AM)
+- **Dependencies:** Ship controls (V2 physics, index-a.html)
 - **Deliverables:**
   - 10-15 wrecks spawned at init, placed in clusters between gravity wells (not inside danger radius)
   - Wrecks rendered as dense ASCII character clusters (gold/amber `#D4A843`, distinct from fluid colors)
@@ -277,7 +318,7 @@ Greg writes the Mon→Tue night prompt:
 #### Task N5: Portals + Extraction (Medium, 2-3hr)
 - **What:** Extraction points. Fly to a portal to escape with your loot. Portals evaporate over time.
 - **Files:** `index.html` (portal entity, extraction logic, run end state)
-- **Dependencies:** Ship controls from winning physics prototype (chosen Tue AM)
+- **Dependencies:** Ship controls (V2 physics, index-a.html)
 - **Deliverables:**
   - 3-5 portals spawned at map edges/midpoints, never within 30% radius of a well
   - Portal rendering: pulsing cyan-green (`#58F2A5`) ring of ASCII characters, size oscillates every 2-3 seconds
@@ -300,11 +341,11 @@ Greg writes the Mon→Tue night prompt:
 #### Task N6: Black Hole Growth + Universe Clock (Medium, 1-2hr)
 - **What:** The universe dying is the timer. Wells grow, space shrinks, viscosity increases.
 - **Files:** `index.html` (well growth logic, viscosity ramp)
-- **Dependencies:** Fluid sim (winning approach from Tue AM review)
+- **Dependencies:** Fluid sim (V2 physics, index-a.html)
 - **Deliverables:**
   - Black hole mass increases over time (~1% per 10 seconds). Force injection scales with mass.
   - Playable space visibly shrinks as wells pull harder
-  - Wave amplitude grows with well mass (bigger waves late-game) — implementation depends on winning physics approach (force injection amplitude for Approach A, wave equation source amplitude for Approach B/Merge)
+  - Wave amplitude grows with well mass (bigger waves late-game) — growth events spawn wave rings with amplitude scaled by well mass
   - Viscosity increases over the run (+5%/min). Late-game movement feels heavier, sluggish.
   - Optional: wave frequency decreases with mass (slower, more powerful waves)
 - **Acceptance Criteria:**
@@ -342,7 +383,7 @@ Greg checks:
 **Parallel agent work:**
 - **Add L1 sliders to dev panel** — wreck, portal, and universe tunables (see TUNING.md Tuesday section)
 - Wreck-as-fluid-obstacle polish: ensure eddies form cleanly behind wrecks, tune boundary condition implementation
-- Add second and third gravity wells. Place them at 40-70% map radius. Test wave interference patterns. Tune force injection (or wave equation sources, depending on winning approach) so the multi-well flow field creates interesting navigation decisions.
+- (DONE — 4 wells + 2 stars + 3 loot anchors already placed. Multi-well flow field creates interesting navigation with equilibrium zones between stars and wells.)
 - If HUD stubs exist: wire real data into them (portal count, inventory count, placeholder signal bar)
 - **If Monday's controller decision went "yes":** Add Gamepad API support (basic: stick aim + trigger thrust, no haptics yet). See CONTROLS.md.
 
