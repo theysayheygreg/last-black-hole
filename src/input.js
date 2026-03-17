@@ -96,7 +96,7 @@ export class InputManager {
     });
   }
 
-  /** Is a confirm action pressed this frame? (Space, Enter, or gamepad A) */
+  /** Is confirm pressed? (Space, Enter, or gamepad Cross/X — button 0) */
   get confirmPressed() {
     if (this._keys['Space'] || this._keys['Enter']) return true;
     const gp = this._getGamepad();
@@ -104,9 +104,17 @@ export class InputManager {
     return false;
   }
 
-  /** Is pause pressed? (gamepad Start/Options — button 9. Keyboard Escape handled in main.js) */
+  /** Is back/cancel pressed? (gamepad Circle — button 1) */
+  get backPressed() {
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 1 && gp.buttons[1].pressed) return true;
+    return false;
+  }
+
+  /** Is pause pressed? (gamepad Options/Menu — button 9. Keyboard Escape in main.js) */
   get pausePressed() {
     const gp = this._getGamepad();
+    // Button 9 = Options on DualSense, Menu on Xbox
     if (gp && gp.buttons.length > 9 && gp.buttons[9].pressed) return true;
     return false;
   }

@@ -16,8 +16,8 @@
  */
 export const CONFIG = {
   ship: {
-    thrustAccel: 800,        // px/s² — converted to world-units in ship.js via pxPerWorld().
-                             // Higher = zippier. 800 = deliberate, 2500 = old pre-slowdown feel.
+    thrustAccel: 1.7,        // world-units/s². Used directly (no px conversion).
+                             // 1.7 ≈ old 800px/s² feel. Higher = zippier. 0.5 = sluggish.
     fluidCoupling: 1.2,      // Lerp rate toward fluid velocity (per second). 0 = ship ignores
                              // currents entirely. 1+ = fluid rider — currents carry you.
                              // Clamped to max 0.5 per frame to prevent velocity teleport.

@@ -324,6 +324,7 @@ function updateCamera(dt) {
 // Gamepad button edge detection (only trigger on press, not hold)
 let _prevConfirm = false;
 let _prevPause = false;
+let _prevBack = false;
 
 function togglePause() {
   if (gamePhase === 'playing') {
@@ -425,10 +426,14 @@ function gameLoop(now) {
   // 5b. Input (keyboard + gamepad)
   inputManager.poll();
 
-  // 5c. Handle confirm/pause from any input source (edge-triggered, not held)
+  // 5c. Handle confirm/pause/back from any input source (edge-triggered, not held)
   const confirmNow = inputManager.confirmPressed;
   const pauseNow = inputManager.pausePressed;
+  const backNow = inputManager.backPressed;
   if (pauseNow && !_prevPause) togglePause();
+  if ((backNow && !_prevBack) && gamePhase === 'paused') {
+    gamePhase = 'playing'; // Circle backs out of pause menu
+  }
   if (confirmNow && !_prevConfirm) {
     if (gamePhase === 'paused') {
       gamePhase = 'playing';
@@ -439,6 +444,7 @@ function gameLoop(now) {
   }
   _prevConfirm = confirmNow;
   _prevPause = pauseNow;
+  _prevBack = backNow;
 
   inputManager.applyToShip(ship);
 

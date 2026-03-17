@@ -18,7 +18,7 @@ export let activePreset = 'Default';
 // Slider range hints and tooltips per key.
 // V2 SIMPLIFICATION: matches collapsed CONFIG — no affordances, fewer ship knobs
 const RANGE_HINTS = {
-  'ship.thrustAccel':       { min: 100, max: 5000, step: 50, tip: 'Pixels/sec² when thrusting. One number, instant on/off.' },
+  'ship.thrustAccel':       { min: 0.5, max: 5, step: 0.1, tip: 'World-units/s² when thrusting. 1.7 = default. Higher = zippier.' },
   'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01, tip: '0 = ship ignores fluid. 1 = pure fluid rider. How much currents carry you.' },
   'ship.turnRate':          { min: 60, max: 720, step: 5, tip: 'Degrees/sec rotation toward cursor. 360 = instant feel.' },
   'ship.drag':              { min: 0, max: 0.2, step: 0.005, tip: 'Velocity damping per frame. Low = ice-skating. High = responsive stops.' },

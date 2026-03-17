@@ -74,16 +74,11 @@ export class Ship {
     const cfg = CONFIG.ship;
     const wellCfg = CONFIG.wells;
 
-    // Pixels per world-unit (for converting pixel-based CONFIG values)
-    const ppw = pxPerWorld(this.canvasWidth);
-
     // 1. Facing is set directly by InputManager (keyboard arrows or gamepad stick).
-    //    No mouse-based rotation — ship holds its facing when no input is active.
 
-    // 2. Thrust — CONFIG is in px/s² for feel continuity. Divide by pxPerWorld
-    //    to get world-units/s². At 1200px screen: 800 / 1200 = 0.67 world-units/s².
+    // 2. Thrust — CONFIG value is in world-units/s² directly (no px conversion).
     if (this.thrustIntensity > 0) {
-      const accelWorld = cfg.thrustAccel / ppw * this.thrustIntensity;
+      const accelWorld = cfg.thrustAccel * this.thrustIntensity;
       this.vx += Math.cos(this.facing) * accelWorld * dt;
       this.vy += Math.sin(this.facing) * accelWorld * dt;
     }
@@ -145,7 +140,7 @@ export class Ship {
     if (fluid) {
       const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
       // Terminal velocity = thrust / drag. Fallback 0.03 prevents division by zero if drag is 0.
-      const terminalVelWorld = (cfg.thrustAccel / ppw) / (cfg.drag > 0 ? cfg.drag : 0.03);
+      const terminalVelWorld = cfg.thrustAccel / (cfg.drag > 0 ? cfg.drag : 0.03);
       const speedFraction = speed / terminalVelWorld;
       const wake = cfg.wake;
 
