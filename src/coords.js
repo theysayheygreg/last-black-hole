@@ -167,6 +167,27 @@ export function wrapWorld(v) {
   return ((v % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
 }
 
+// ---- Fluid UV scaling ----
+
+/**
+ * Reference world scale that all fluid UV-space parameters are calibrated for.
+ * All CONFIG values for splat radii, force strengths, accretion distances, etc.
+ * were tuned at this scale. When WORLD_SCALE differs, UV-space parameters must
+ * be adjusted so they produce the same world-space effect.
+ */
+export const FLUID_REF_SCALE = 3.0;
+
+/**
+ * UV-to-world scaling factor. Multiply UV-space distances/offsets by this
+ * to normalize them to the reference scale's behavior.
+ *
+ * At WORLD_SCALE=3: returns 1.0 (no change).
+ * At WORLD_SCALE=10: returns 0.3 (UV offsets 3.3x smaller to match world-space).
+ */
+export function uvScale() {
+  return FLUID_REF_SCALE / WORLD_SCALE;
+}
+
 // ---- Legacy well-space functions (0–1 range) ----
 // The original 1×1 map used 0–1 normalized coordinates called "well-space."
 // These are kept for backward compat but nothing should add new callers.

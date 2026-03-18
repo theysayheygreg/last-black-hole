@@ -69,10 +69,13 @@ void main() {
   float charIdx = lum * (u_numChars - 1.0);
 
   // Quantum fluctuations: sparse cells that blink, anchored in worldspace.
+  // Two noise layers at different frequencies for richer texture.
   // Intensity scales with luminance — subtle in void, intense near disturbances.
   vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_worldScale;
   vec2 worldCell = floor(fluidUV * u_resolution / vec2(cellW, cellH));
   float noise = fract(sin(dot(worldCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
+  // Second layer: slower frequency, different seed — creates larger-scale flicker patterns
+  float noise2 = fract(sin(dot(worldCell * 0.5 + floor(u_time * 1.1) * 0.31, vec2(269.5, 183.3))) * 43758.5453);
   // Scale probability by luminance: void (lum~0.01) barely twinkles,
   // near wells (lum~0.3+) twinkles heavily. Ramp from 0.2x to 3x base rate.
   float disturbance = smoothstep(0.0, 0.3, lum) * 2.8 + 0.2;
@@ -80,6 +83,11 @@ void main() {
   if (noise > threshold) {
     float bump = fract(noise * 7.0) * 2.0 + 1.0;
     charIdx += bump;
+  }
+  // Second layer: gentler bumps at lower probability, adds variety without busyness
+  float threshold2 = 1.0 - u_shimmer * 0.005 * disturbance;
+  if (noise2 > threshold2) {
+    charIdx += fract(noise2 * 5.0) * 1.5;
   }
 
   charIdx = clamp(floor(charIdx), 0.0, u_numChars - 1.0);

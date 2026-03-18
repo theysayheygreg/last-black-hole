@@ -7,7 +7,7 @@
 
 import { CONFIG } from './config.js';
 import { pxPerWorld, worldToFluidUV, worldToScreen,
-         worldDirectionTo, fluidVelToWorld, wrapWorld } from './coords.js';
+         worldDirectionTo, fluidVelToWorld, wrapWorld, uvScale } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 export class Ship {
@@ -151,23 +151,24 @@ export class Ship {
         const [baseUVx, baseUVy] = worldToFluidUV(this.wx, this.wy);
         const behindX = -Math.cos(this.facing);
         const behindY = Math.sin(this.facing); // fluid UV is Y-up
+        const s = uvScale();
+        const s2 = s * s;
 
         for (let i = 0; i < wake.splatCount; i++) {
-          const offset = (i + 1) * wake.splatSpacing;
+          const offset = (i + 1) * wake.splatSpacing * s;
           const sx = baseUVx + behindX * offset;
           const sy = baseUVy + behindY * offset;
-          // Each successive splat is dimmer: splat 0 = full, last splat = 50% brightness
           const falloff = 1 - (i / wake.splatCount) * 0.5;
-          const forceMag = wake.force * wakeScale * falloff;
+          const forceMag = wake.force * wakeScale * falloff * s;
           const b = wake.brightness * wakeScale * falloff;
           fluid.splat(
             sx, sy,
             Math.cos(this.facing) * forceMag,
             -Math.sin(this.facing) * forceMag,
-            wake.radius,
-            b * 0.3,   // teal wake color: low R
-            b * 0.8,   // medium G
-            b * 1.0    // high B
+            wake.radius * s2,
+            b * 0.3,
+            b * 0.8,
+            b * 1.0
           );
         }
       }

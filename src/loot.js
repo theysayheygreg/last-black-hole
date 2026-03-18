@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldToFluidUV, worldToScreen, worldDistance, CAMERA_VIEW } from './coords.js';
+import { worldToFluidUV, worldToScreen, worldDistance, CAMERA_VIEW, uvScale } from './coords.js';
 
 class LootAnchor {
   constructor(wx, wy) {
@@ -29,6 +29,8 @@ export class LootSystem {
   update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.loot;
     const cullDist = CAMERA_VIEW + 0.5;
+    const s = uvScale();
+    const s2 = s * s;
 
     for (const anchor of this.anchors) {
       if (!anchor.alive) continue;
@@ -36,31 +38,31 @@ export class LootSystem {
 
       const [fu, fv] = worldToFluidUV(anchor.wx, anchor.wy);
 
-      // Micro-well: flow obstruction
+      // Micro-well: flow obstruction (scaled for world size)
       fluid.applyWellForce(
         [fu, fv],
-        cfg.gravity,
+        cfg.gravity * Math.pow(s, cfg.falloff),
         cfg.falloff,
         cfg.fluidClampRadius,
         0,
         dt,
-        cfg.fluidTerminalSpeed
+        cfg.fluidTerminalSpeed * s
       );
 
-      // Visible glow — blue-cyan color (low R, medium G, high B)
-      fluid.splat(fu, fv, 0, 0, cfg.glowRadius,
+      // Visible glow
+      fluid.splat(fu, fv, 0, 0, cfg.glowRadius * s2,
         cfg.densityRate * 0.4,
         cfg.densityRate * 0.8,
         cfg.densityRate * 1.0
       );
 
-      // 4 shimmer points orbiting the anchor — gives the loot a "living" feel
+      // 4 shimmer points orbiting the anchor
       const shimmerAngle = totalTime * cfg.shimmerSpeed;
       for (let i = 0; i < 4; i++) {
         const angle = shimmerAngle + (i / 4) * Math.PI * 2;
-        const px = fu + Math.cos(angle) * cfg.shimmerRadius;
-        const py = fv + Math.sin(angle) * cfg.shimmerRadius;
-        fluid.splat(px, py, 0, 0, 0.001,
+        const px = fu + Math.cos(angle) * cfg.shimmerRadius * s;
+        const py = fv + Math.sin(angle) * cfg.shimmerRadius * s;
+        fluid.splat(px, py, 0, 0, 0.001 * s2,
           cfg.densityRate * 0.4,
           cfg.densityRate * 0.4,
           cfg.densityRate * 0.3

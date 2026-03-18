@@ -237,7 +237,9 @@ void main() {
   vec2 vel = texture(u_velocity, fluidUV).xy;
   vec3 dens = texture(u_density, fluidUV).xyz;
 
-  float speed = length(vel);
+  // Normalize UV velocity to world-equivalent speed so wakes look equally bright
+  // on all map sizes. Config calibrated at WORLD_SCALE=3 (reference scale).
+  float speed = length(vel) * u_worldScale / 3.0;
   float rawDensity = length(dens);
 
   // Tone-map density: raw values range 0–300+, compress to 0–1 via exponential curve

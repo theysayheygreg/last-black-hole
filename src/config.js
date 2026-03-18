@@ -27,7 +27,7 @@ export const CONFIG = {
                              // 0.06 at 800 thrust → ~33 world-units/s terminal.
     size: 12,                 // Ship triangle radius in pixels (overlay rendering only).
     wake: {
-      splatCount: 3,          // Number of splats in the trail behind the ship.
+      splatCount: 5,          // Number of splats in the trail behind the ship.
       splatSpacing: 0.004,    // Gap between trail splats in fluid UV. Smaller = tighter trail.
       radius: 0.008,          // Gaussian radius of each wake splat in UV. Wider = catches more ASCII cells.
       force: 0.015,           // Velocity injection per splat. Compare to well gravity (0.0015).

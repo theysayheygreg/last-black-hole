@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, CAMERA_VIEW } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, CAMERA_VIEW, uvScale } from './coords.js';
 
 export class Well {
   /**
@@ -50,22 +50,25 @@ export class WellSystem {
   update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.wells;
     const cullDist = CAMERA_VIEW + 0.5;
+    // UV scaling: config calibrated at WORLD_SCALE=3, normalize for current scale
+    const s = uvScale();
+    const s2 = s * s;  // for splat radii (quadratic because exp uses squared distance)
 
     for (const well of this.wells) {
-      // Skip force injection for off-screen wells (saves a GPU pass per culled well)
       if (camX != null && worldDistance(well.wx, well.wy, camX, camY) > cullDist) continue;
 
       const [fu, fv] = worldToFluidUV(well.wx, well.wy);
 
       // Apply gravitational + orbital force to velocity field
+      // Gravity scaled by s^falloff to compensate for smaller UV distances on large maps
       fluid.applyWellForce(
         [fu, fv],
-        cfg.gravity * well.mass,
+        cfg.gravity * well.mass * Math.pow(s, cfg.falloff),
         cfg.falloff,
         cfg.fluidClampRadius,
         cfg.orbitalStrength * well.orbitalDir,
         dt,
-        cfg.fluidTerminalSpeed
+        cfg.fluidTerminalSpeed * s
       );
 
       // === SPINNING ACCRETION DISK ===
@@ -74,19 +77,17 @@ export class WellSystem {
       const rate = well.getAccretionRate() * well.mass;
 
       for (const ring of cfg.accretionRings) {
-        const ringR = well.getAccretionRadius() * well.mass * ring.radiusMult;
+        const ringR = well.getAccretionRadius() * well.mass * ring.radiusMult * s;
 
         for (let i = 0; i < numPts; i++) {
           const armPhase = (i / numPts) * Math.PI * 2;
-          // Spiral arm modulation: cos² creates bright cores and dim gaps between arms.
-          // 0.3 base + 0.7 peak = arms never fully disappear, but have clear bright/dim bands.
           const armBrightness = 0.3 + 0.7 * Math.pow(Math.max(0, Math.cos(armPhase * numPts * 0.5)), 2);
 
           const angle = spinAngle + armPhase;
           const px = fu + Math.cos(angle) * ringR;
           const py = fv + Math.sin(angle) * ringR;
 
-          const tangStr = cfg.accretionTangentialForce * ring.radiusMult;
+          const tangStr = cfg.accretionTangentialForce * ring.radiusMult * s;
           const tangVx = -Math.sin(angle) * tangStr * well.orbitalDir;
           const tangVy = Math.cos(angle) * tangStr * well.orbitalDir;
 
@@ -94,7 +95,7 @@ export class WellSystem {
           fluid.splat(
             px, py,
             tangVx, tangVy,
-            ring.splatR,
+            ring.splatR * s2,
             b * ring.r,
             b * ring.g,
             b * ring.b
@@ -103,19 +104,15 @@ export class WellSystem {
       }
 
       // === EVENT HORIZON ===
-      // Negative density at center creates relative darkness (the void).
-      // radius 0.001 = very tight, only darkens the exact center.
-      fluid.splat(fu, fv, 0, 0, 0.001, -0.05, -0.05, -0.05);
+      fluid.splat(fu, fv, 0, 0, 0.001 * s2, -0.05, -0.05, -0.05);
 
       const horizonPts = cfg.horizonPoints;
-      const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult;
+      const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult * s;
       for (let i = 0; i < horizonPts; i++) {
-        // Horizon ring spins 1.5× faster than the accretion disk for visual contrast
         const angle = spinAngle * 1.5 + (i / horizonPts) * Math.PI * 2;
         const px = fu + Math.cos(angle) * horizonR;
         const py = fv + Math.sin(angle) * horizonR;
-        // Very bright white-yellow horizon glow (8× / 7× / 4× base rate)
-        fluid.splat(px, py, 0, 0, 0.001, rate * 8.0, rate * 7.0, rate * 4.0);
+        fluid.splat(px, py, 0, 0, 0.001 * s2, rate * 8.0, rate * 7.0, rate * 4.0);
       }
     }
   }

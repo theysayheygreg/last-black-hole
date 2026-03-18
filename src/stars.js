@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo, worldDistance, CAMERA_VIEW } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo, worldDistance, CAMERA_VIEW, uvScale } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 class Star {
@@ -31,31 +31,31 @@ export class StarSystem {
   update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.stars;
     const cullDist = CAMERA_VIEW + 0.5;
+    const s = uvScale();
+    const s2 = s * s;
 
     for (const star of this.stars) {
       if (camX != null && worldDistance(star.wx, star.wy, camX, camY) > cullDist) continue;
 
       const [fu, fv] = worldToFluidUV(star.wx, star.wy);
 
-      // Outward push: NEGATIVE gravity
+      // Outward push: NEGATIVE gravity (scaled for world size)
       fluid.applyWellForce(
         [fu, fv],
-        -cfg.radiationStrength * star.mass,
+        -cfg.radiationStrength * star.mass * Math.pow(s, cfg.falloff),
         cfg.falloff,
         cfg.fluidClampRadius,
         cfg.orbitalStrength * star.orbitalDir,
         dt,
-        cfg.fluidTerminalSpeed
+        cfg.fluidTerminalSpeed * s
       );
 
-      // Clearing bubble — negative density creates dark void at star center.
-      // 0.13 converts clearing strength to UV radius (~1/3 of old 0.4 factor).
-      const clearingRadius = cfg.clearing * 0.13;
+      // Clearing bubble
+      const clearingRadius = cfg.clearing * 0.13 * s2;
       fluid.splat(fu, fv, 0, 0, clearingRadius, -cfg.clearing, -cfg.clearing, -cfg.clearing);
 
-      // Bright core — warm white-yellow glow. Radius scales with brightness
-      // so brighter stars appear larger. 0.025 keeps it small in UV space.
-      const coreRadius = cfg.coreBrightness * 0.025;
+      // Bright core
+      const coreRadius = cfg.coreBrightness * 0.025 * s2;
       fluid.splat(fu, fv, 0, 0, coreRadius,
         cfg.coreBrightness * 1.0,
         cfg.coreBrightness * 0.95,
@@ -64,21 +64,18 @@ export class StarSystem {
 
       // Rotating radial rays
       const rayAngleBase = totalTime * cfg.raySpinRate;
-      const pointsPerRay = 4; // density splats per ray — more = smoother, fewer = performance
+      const pointsPerRay = 4;
 
       for (let r = 0; r < cfg.rayCount; r++) {
         const rayAngle = rayAngleBase + (r / cfg.rayCount) * Math.PI * 2;
         for (let p = 0; p < pointsPerRay; p++) {
           const t = (p + 1) / pointsPerRay;
-          const dist = t * cfg.rayLength;
+          const dist = t * cfg.rayLength * s;
           const px = fu + Math.cos(rayAngle) * dist;
           const py = fv + Math.sin(rayAngle) * dist;
-          // Ray brightness fades to 30% at the tip (1 - 1.0×0.7 = 0.3)
           const fade = 1 - t * 0.7;
           const b = cfg.rayBrightness * fade * star.mass;
-          // Color shifts along ray: warm white at base → cool blue-white at tip.
-          // R decreases (1.0→0.6), G barely drops (0.9→0.7), B increases (0.6→1.0).
-          fluid.splat(px, py, 0, 0, 0.001,
+          fluid.splat(px, py, 0, 0, 0.001 * s2,
             b * (1.0 - t * 0.4),
             b * (0.9 - t * 0.2),
             b * (0.6 + t * 0.4)

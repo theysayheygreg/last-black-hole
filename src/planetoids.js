@@ -13,7 +13,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, worldDirectionTo, wrapWorld } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, worldDirectionTo, wrapWorld, uvScale } from './coords.js';
 import { proximityForce, applyForceToShip } from './physics.js';
 
 class Planetoid {
@@ -175,55 +175,52 @@ export class PlanetoidSystem {
       const dirX = p.vx / speed;
       const dirY = p.vy / speed;
 
-      // --- Fluid injection ---
+      // --- Fluid injection (UV-scaled for world size) ---
       const [fu, fv] = worldToFluidUV(p.wx, p.wy);
+      const s = uvScale();
+      const s2 = s * s;
 
-      // Bow shock: 1 splat ahead of the planetoid in its velocity direction.
-      // Creates a pressure wave that the player can see and surf.
-      const bowDist = 0.008; // how far ahead in UV (~0.024 world-units)
-      // dirY is negated for UV because world is Y-down but fluid UV is Y-up
+      // Bow shock
+      const bowDist = 0.008 * s;
       const bowFU = fu + dirX * bowDist;
       const bowFV = fv - dirY * bowDist;
       fluid.splat(
         bowFU, bowFV,
-        dirX * cfg.bowShockForce, -dirY * cfg.bowShockForce,
-        cfg.bowShockRadius,
+        dirX * cfg.bowShockForce * s, -dirY * cfg.bowShockForce * s,
+        cfg.bowShockRadius * s2,
         cfg.density * 0.5,
         cfg.density * 0.7,
         cfg.density * 1.0
       );
 
-      // Wake vortex: twin counter-rotating eddies behind the planetoid.
-      // These are surfable — the player can ride the wake like a slipstream.
-      const behindFU = fu - dirX * 0.005; // 0.005 UV behind center
-      const behindFV = fv + dirY * 0.005; // Y negated for UV
-      const perpX = -dirY; // perpendicular to velocity (in world-space)
+      // Wake vortex
+      const behindFU = fu - dirX * 0.005 * s;
+      const behindFV = fv + dirY * 0.005 * s;
+      const perpX = -dirY;
       const perpY = dirX;
-      // Left eddy
+      const eddyOff = 0.004 * s;
       fluid.splat(
-        behindFU + perpX * 0.004, behindFV - perpY * 0.004,
-        perpX * cfg.wakeForce, -perpY * cfg.wakeForce,
-        cfg.wakeRadius,
+        behindFU + perpX * eddyOff, behindFV - perpY * eddyOff,
+        perpX * cfg.wakeForce * s, -perpY * cfg.wakeForce * s,
+        cfg.wakeRadius * s2,
         cfg.density * 0.3, cfg.density * 0.4, cfg.density * 0.6
       );
-      // Right eddy (opposite direction)
       fluid.splat(
-        behindFU - perpX * 0.004, behindFV + perpY * 0.004,
-        -perpX * cfg.wakeForce, perpY * cfg.wakeForce,
-        cfg.wakeRadius,
+        behindFU - perpX * eddyOff, behindFV + perpY * eddyOff,
+        -perpX * cfg.wakeForce * s, perpY * cfg.wakeForce * s,
+        cfg.wakeRadius * s2,
         cfg.density * 0.3, cfg.density * 0.4, cfg.density * 0.6
       );
 
-      // Density trail: several splats along recent path
+      // Density trail
       for (let i = 1; i <= cfg.trailLength; i++) {
-        const trailFU = fu - dirX * cfg.trailSpacing * i;
-        const trailFV = fv + dirY * cfg.trailSpacing * i;
-        // Trail fades to 40% brightness at the oldest splat
+        const trailFU = fu - dirX * cfg.trailSpacing * s * i;
+        const trailFV = fv + dirY * cfg.trailSpacing * s * i;
         const fade = 1 - (i / cfg.trailLength) * 0.6;
         fluid.splat(
           trailFU, trailFV,
           0, 0,
-          0.002,
+          0.002 * s2,
           cfg.density * fade * 0.6,
           cfg.density * fade * 0.8,
           cfg.density * fade * 1.0

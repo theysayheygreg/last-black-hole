@@ -741,28 +741,36 @@ function gameLoop(now) {
     const cy = overlayCanvas.height / 2;
 
     ctx.save();
-    // Semi-transparent veil over the fluid background
-    ctx.fillStyle = 'rgba(0, 0, 20, 0.6)';
-    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     ctx.textAlign = 'center';
 
-    // Title
+    // Title — soft outer glow via shadow, no overlay veil
     const titlePulse = 0.85 + 0.15 * Math.sin(totalTime * 1.5);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 20;
     ctx.fillStyle = `rgba(255, 60, 30, ${titlePulse})`;
     ctx.font = 'bold 56px monospace';
-    ctx.fillText('LAST BLACK HOLE', cx, cy - 50);
+    ctx.fillText('LAST SINGULARITY', cx, cy - 50);
+    // Double-draw for stronger glow
+    ctx.fillText('LAST SINGULARITY', cx, cy - 50);
 
     // Subtitle
-    ctx.fillStyle = 'rgba(100, 180, 220, 0.7)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = 'rgba(100, 180, 220, 0.8)';
     ctx.font = '16px monospace';
-    ctx.fillText('SURF THE CURRENTS. ESCAPE THE VOID.', cx, cy);
+    ctx.fillText('out of a dying universe', cx, cy - 10);
+
+    // Call to action
+    ctx.fillStyle = 'rgba(180, 200, 220, 0.6)';
+    ctx.font = '14px monospace';
+    ctx.fillText('surf the currents. escape the void.', cx, cy + 16);
 
     // Prompt (fades in after 0.5s)
     if (titleTimer > 0.5) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
+      ctx.shadowBlur = 8;
       ctx.fillStyle = `rgba(200, 200, 220, ${blink})`;
       ctx.font = '18px monospace';
-      ctx.fillText('PRESS SPACE TO BEGIN', cx, cy + 80);
+      ctx.fillText('press space to begin', cx, cy + 80);
     }
 
     ctx.restore();
@@ -774,11 +782,14 @@ function gameLoop(now) {
     const cy = overlayCanvas.height / 2;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 20, 0.7)';
+    // Light veil — just enough to read text, fluid still visible
+    ctx.fillStyle = 'rgba(0, 0, 20, 0.4)';
     ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
     ctx.textAlign = 'center';
 
     // Header
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 16;
     ctx.fillStyle = '#88aaff';
     ctx.font = 'bold 36px monospace';
     ctx.fillText('SELECT MAP', cx, cy - 160);

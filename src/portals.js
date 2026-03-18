@@ -7,7 +7,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldToFluidUV, worldToScreen, worldDistance, CAMERA_VIEW } from './coords.js';
+import { worldToFluidUV, worldToScreen, worldDistance, CAMERA_VIEW, uvScale } from './coords.js';
 
 class Portal {
   constructor(wx, wy) {
@@ -33,50 +33,50 @@ export class PortalSystem {
   update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.portals;
     const cullDist = CAMERA_VIEW + 0.5;
+    const s = uvScale();
+    const s2 = s * s;
 
     for (const portal of this.portals) {
       if (camX != null && worldDistance(portal.wx, portal.wy, camX, camY) > cullDist) continue;
 
       const [fu, fv] = worldToFluidUV(portal.wx, portal.wy);
 
-      // Weak inward pull (about 1/3 of well gravity)
+      // Weak inward pull (scaled for world size)
       fluid.applyWellForce(
         [fu, fv],
-        cfg.gravity,
+        cfg.gravity * Math.pow(s, cfg.falloff),
         cfg.falloff,
         cfg.fluidClampRadius,
         cfg.orbitalStrength,
         dt,
-        cfg.fluidTerminalSpeed
+        cfg.fluidTerminalSpeed * s
       );
 
       // Rotating 3-arm spiral density injection (purple/magenta)
       const spiralAngle = totalTime * cfg.spiralSpeed;
       for (let arm = 0; arm < cfg.spiralArms; arm++) {
         const baseAngle = spiralAngle + (arm / cfg.spiralArms) * Math.PI * 2;
-        // 4 points per arm along a spiral
-        // 4 splats per arm, spiraling outward from center
         for (let p = 0; p < 4; p++) {
-          const t = (p + 1) / 4;       // 0.25 to 1.0 along arm
-          const dist = t * 0.025;       // max 0.025 UV from center (~0.075 world-units)
-          const windAngle = baseAngle + t * 1.5; // 1.5 radians of twist gives visible spiral curl
+          const t = (p + 1) / 4;
+          const dist = t * 0.025 * s;
+          const windAngle = baseAngle + t * 1.5;
           const px = fu + Math.cos(windAngle) * dist;
           const py = fv + Math.sin(windAngle) * dist;
-          const fade = 1 - t * 0.5; // outer points 50% dimmer than inner
+          const fade = 1 - t * 0.5;
           const b = cfg.densityRate * fade;
           fluid.splat(
             px, py,
             0, 0,
-            0.002,
-            b * 0.6,    // purple: R component
-            b * 0.15,   // low G
-            b * 1.0     // high B
+            0.002 * s2,
+            b * 0.6,
+            b * 0.15,
+            b * 1.0
           );
         }
       }
 
-      // Core glow — bright purple-white
-      fluid.splat(fu, fv, 0, 0, 0.003,
+      // Core glow
+      fluid.splat(fu, fv, 0, 0, 0.003 * s2,
         cfg.densityRate * 0.5,
         cfg.densityRate * 0.2,
         cfg.densityRate * 0.8
