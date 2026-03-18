@@ -60,6 +60,10 @@ let currentMap = MAP_SHALLOWS;
 let startingMasses = [];
 let mapSelectIndex = 0;
 
+// Run state
+let runElapsedTime = 0;
+let inventory = [];
+
 // ---- Init ----
 
 function init() {
@@ -297,6 +301,8 @@ function startGame(map) {
   growthTimer = 0;
   deathTimer = 0;
   escapeTimer = 0;
+  runElapsedTime = 0;
+  inventory = [];
   waveRings.rings = [];
   fluid.clear();
 
@@ -421,15 +427,28 @@ function gameLoop(now) {
   // 2e. Planetoid fluid effects + well consumption
   planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings);
 
-  // 3. Well growth events
+  // 3. Run elapsed time (only during gameplay, not menus)
+  if (!inMenu) {
+    runElapsedTime += dt;
+  }
+
+  // 4. Well growth events — per-well rates for asymmetric growth
   growthTimer += dt;
   if (growthTimer >= CONFIG.events.growthInterval) {
     growthTimer -= CONFIG.events.growthInterval;
     const evtCfg = CONFIG.events;
     for (const well of wellSystem.wells) {
-      well.mass += evtCfg.growthAmount;
+      well.mass += well.growthRate;
+      well.updateKillRadius();
       waveRings.spawn(well.wx, well.wy, evtCfg.growthWaveAmplitude * well.mass);
     }
+  }
+
+  // 4b. Planetoid spawn escalation — spawn rate increases as the run progresses
+  if (!inMenu && CONFIG.universe.planetoidSpawnAccel > 0) {
+    const runProgress = Math.min(runElapsedTime / CONFIG.universe.runDuration, 1.0);
+    const intervalScale = 1.0 - runProgress * CONFIG.universe.planetoidSpawnAccel;
+    planetoidSystem._spawnIntervalScale = Math.max(0.3, intervalScale);
   }
 
   // 4. Wave ring propagation

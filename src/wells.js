@@ -18,12 +18,23 @@ export class Well {
     this.wx = wx;
     this.wy = wy;
     this.mass = opts.mass ?? 1.0;
+    this.startMass = this.mass;  // for kill radius growth calculation
     this.orbitalDir = opts.orbitalDir ?? 1;
     this.accretionRate = opts.accretionRate ?? null;
     this.accretionRadius = opts.accretionRadius ?? null;
     this.accretionSpinRate = opts.accretionSpinRate ?? null;
     this.accretionPoints = opts.accretionPoints ?? null;
-    this.killRadius = opts.killRadius ?? CONFIG.wells.killRadius;
+    this.baseKillRadius = opts.killRadius ?? CONFIG.wells.killRadius;
+    this.killRadius = this.baseKillRadius;
+    // Per-well growth rate: base + random variance for asymmetric growth
+    this.growthRate = (opts.growthRate ?? CONFIG.events.growthAmount)
+      + (Math.random() * 2 - 1) * CONFIG.universe.wellGrowthVariance;
+  }
+
+  /** Recalculate kill radius from current mass vs starting mass. */
+  updateKillRadius() {
+    const massDelta = Math.max(0, this.mass - this.startMass);
+    this.killRadius = this.baseKillRadius * (1 + massDelta * CONFIG.universe.wellKillRadiusGrowth);
   }
 
   getAccretionRate() { return this.accretionRate ?? CONFIG.wells.accretionRate; }

@@ -251,6 +251,13 @@ export const CONFIG = {
     brakeStrength: 0.15,      // Extra drag per frame from L2 brake at full pull. Stacks with base drag.
   },
 
+  universe: {
+    runDuration: 600,           // seconds — hard cap, final portal expires here
+    wellGrowthVariance: 0.01,   // random range added to per-well growth rate
+    wellKillRadiusGrowth: 0.3,  // kill radius expansion factor per unit mass gained
+    planetoidSpawnAccel: 0.5,   // how much spawn rate increases over the run (0=constant, 1=doubles by end)
+  },
+
   debug: {
     showVelocityField: false, // Draw fluid velocity arrows on overlay canvas.
     showWellRadii: false,     // Draw well kill radii, star push radii, portal capture radii.

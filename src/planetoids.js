@@ -37,7 +37,8 @@ class Planetoid {
 export class PlanetoidSystem {
   constructor() {
     this.planetoids = [];
-    this.spawnTimer = 10; // start first transit after 10 seconds
+    this.spawnTimer = 10;
+    this._spawnIntervalScale = 1.0; // set by main.js universe clock
   }
 
   /**
@@ -127,12 +128,13 @@ export class PlanetoidSystem {
   update(dt, fluid, totalTime, wellSystem, waveRings) {
     const cfg = CONFIG.planetoids;
 
-    // Spawn transit planetoids on timer
+    // Spawn transit planetoids on timer (interval scales down over run)
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0 && this.planetoids.length < cfg.maxAlive) {
       this.spawnTransit();
       const [lo, hi] = cfg.spawnInterval;
-      this.spawnTimer = lo + Math.random() * (hi - lo);
+      const scale = this._spawnIntervalScale;
+      this.spawnTimer = (lo + Math.random() * (hi - lo)) * scale;
     }
 
     for (const p of this.planetoids) {
