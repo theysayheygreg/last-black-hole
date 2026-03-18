@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, CAMERA_VIEW, uvScale } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale } from './coords.js';
 
 export class Well {
   /**
@@ -58,15 +58,15 @@ export class WellSystem {
    * Apply all well forces to the fluid sim and inject density.
    * When camX/camY are provided, culls wells beyond visible range + margin.
    */
-  update(fluid, dt, totalTime, camX, camY) {
+  update(fluid, dt, totalTime) {
     const cfg = CONFIG.wells;
-    const cullDist = CAMERA_VIEW + 0.5;
-    // UV scaling: config calibrated at WORLD_SCALE=3, normalize for current scale
+    // No camera culling for wells — they're too important to skip.
+    // Direct gravity + kill radius check ALL wells, so visual density must match.
+    // 8-20 wells is cheap enough for the GPU.
     const s = uvScale();
-    const s2 = s * s;  // for splat radii (quadratic because exp uses squared distance)
+    const s2 = s * s;
 
     for (const well of this.wells) {
-      if (camX != null && worldDistance(well.wx, well.wy, camX, camY) > cullDist) continue;
 
       const [fu, fv] = worldToFluidUV(well.wx, well.wy);
 

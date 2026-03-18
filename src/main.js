@@ -404,11 +404,11 @@ function gameLoop(now) {
   // 0.92 was too fast (invisible). 0.995 was too slow (accumulated forever).
   fluid.fadeVisualDensity(0.99);
 
-  // 2. Well forces (camera-culled on large maps)
-  wellSystem.update(fluid, simDt, totalTime, camX, camY);
+  // 2. Well forces (no culling — physics checks all wells, visuals must match)
+  wellSystem.update(fluid, simDt, totalTime);
 
-  // 2a. Star forces (camera-culled)
-  starSystem.update(fluid, simDt, totalTime, camX, camY);
+  // 2a. Star forces (no culling — ship push checks all stars)
+  starSystem.update(fluid, simDt, totalTime);
 
   // 2b. Ambient turbulence
   const turbStr = CONFIG.fluid.ambientTurbulence;

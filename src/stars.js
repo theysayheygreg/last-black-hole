@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo, worldDistance, CAMERA_VIEW, uvScale } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo, worldDistance, uvScale } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 class Star {
@@ -28,14 +28,14 @@ export class StarSystem {
     return star;
   }
 
-  update(fluid, dt, totalTime, camX, camY) {
+  update(fluid, dt, totalTime) {
     const cfg = CONFIG.stars;
-    const cullDist = CAMERA_VIEW + 0.5;
+    // No camera culling for stars — ship push force checks all stars,
+    // so visual density must always be present. 2-6 stars is cheap.
     const s = uvScale();
     const s2 = s * s;
 
     for (const star of this.stars) {
-      if (camX != null && worldDistance(star.wx, star.wy, camX, camY) > cullDist) continue;
 
       const [fu, fv] = worldToFluidUV(star.wx, star.wy);
 
