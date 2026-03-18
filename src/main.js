@@ -16,6 +16,7 @@ import { WellSystem } from './wells.js';
 import { StarSystem } from './stars.js';
 import { LootSystem } from './loot.js';
 import { WaveRingSystem } from './wave-rings.js';
+import { WreckSystem } from './wrecks.js';
 import { PortalSystem } from './portals.js';
 import { PlanetoidSystem } from './planetoids.js';
 import { InputManager } from './input.js';
@@ -35,7 +36,7 @@ const MAP_LIST = [MAP_SHALLOWS, MAP_EXPANSE, MAP_DEEP];
 // ---- State ----
 let glCanvas, gl;
 let overlayCanvas, ctx;
-let fluid, ship, wellSystem, starSystem, lootSystem, waveRings;
+let fluid, ship, wellSystem, starSystem, lootSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
 let inputManager, asciiRenderer;
 let running = true;
@@ -99,12 +100,13 @@ function init() {
   wellSystem = new WellSystem();
   starSystem = new StarSystem();
   lootSystem = new LootSystem();
+  wreckSystem = new WreckSystem();
   portalSystem = new PortalSystem();
   planetoidSystem = new PlanetoidSystem();
 
   // Load the default map
   const mapResult = loadMap(currentMap, {
-    wellSystem, starSystem, lootSystem, portalSystem, planetoidSystem, fluid,
+    wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
   });
   startingMasses = mapResult.startingMasses;
 
@@ -279,7 +281,7 @@ function restart() {
 
   // Reload the current map (resets all entities, world scale, planetoids)
   const mapResult = loadMap(currentMap, {
-    wellSystem, starSystem, lootSystem, portalSystem, planetoidSystem, fluid,
+    wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
   });
   startingMasses = mapResult.startingMasses;
 
@@ -307,7 +309,7 @@ function startGame(map) {
   fluid.clear();
 
   const mapResult = loadMap(currentMap, {
-    wellSystem, starSystem, lootSystem, portalSystem, planetoidSystem, fluid,
+    wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
   });
   startingMasses = mapResult.startingMasses;
 
@@ -384,6 +386,7 @@ function gameLoop(now) {
     ...wellUVsForSim,
     ...starSystem.getUVPositions(),
     ...lootSystem.getUVPositions(),
+    ...wreckSystem.getUVPositions(),
     ...portalSystem.getUVPositions(),
     ...planetoidSystem.getUVPositions(),
     ...(inMenu ? [] : [worldToFluidUV(ship.wx, ship.wy)]),
@@ -421,10 +424,13 @@ function gameLoop(now) {
   // 2c. Loot anchors (camera-culled)
   lootSystem.update(fluid, simDt, totalTime, camX, camY);
 
-  // 2d. Portal fluid effects (camera-culled)
+  // 2d. Wreck fluid obstruction (camera-culled)
+  wreckSystem.update(fluid, simDt, totalTime, camX, camY);
+
+  // 2e. Portal fluid effects (camera-culled)
   portalSystem.update(fluid, simDt, totalTime, camX, camY);
 
-  // 2e. Planetoid fluid effects + well consumption
+  // 2f. Planetoid fluid effects + well consumption
   planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings);
 
   // 3. Run elapsed time (only during gameplay, not menus)
@@ -513,6 +519,15 @@ function gameLoop(now) {
       starSystem.applyToShip(ship);
       planetoidSystem.applyToShip(ship);
 
+      // Wreck pickup
+      const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
+      if (newItems.length > 0) {
+        inventory.push(...newItems);
+      }
+
+      // Wreck consumption by growing wells
+      wreckSystem.checkWellConsumption(wellSystem, waveRings);
+
       const killingWell = wellSystem.checkDeath(ship.wx, ship.wy);
       if (killingWell) {
         gamePhase = 'dead';
@@ -570,6 +585,7 @@ function gameLoop(now) {
     waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     lootSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);

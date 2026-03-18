@@ -251,6 +251,12 @@ export const CONFIG = {
     brakeStrength: 0.15,      // Extra drag per frame from L2 brake at full pull. Stacks with base drag.
   },
 
+  wrecks: {
+    pickupRadius: 0.08,           // world-units — ship within this = auto-loot
+    wreckGlow: [0.015, 0.012, 0.004],  // gold density injection (rgb)
+    vaultGlow: [0.02, 0.018, 0.008],   // brighter gold for vaults
+  },
+
   universe: {
     runDuration: 600,           // seconds — hard cap, final portal expires here
     wellGrowthVariance: 0.01,   // random range added to per-well growth rate

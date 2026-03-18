@@ -19,6 +19,14 @@ export const MAP = {
     { x: 1.35, y: 2.1 },
     { x: 2.4, y: 1.65 },
   ],
+  wrecks: [
+    { x: 1.5, y: 0.5, type: 'derelict', tier: 1, size: 'medium' },
+    { x: 0.4, y: 1.4, type: 'derelict', tier: 1, size: 'small' },
+    { x: 2.5, y: 1.3, type: 'debris', tier: 1, size: 'medium' },
+    { x: 1.8, y: 1.5, type: 'derelict', tier: 2, size: 'medium' },
+    { x: 1.2, y: 2.5, type: 'derelict', tier: 2, size: 'large' },
+    { x: 0.9, y: 0.9, type: 'vault', tier: 3, size: 'small' },
+  ],
   portals: [
     { x: 0.3, y: 0.3 },
     { x: 2.7, y: 2.7 },
