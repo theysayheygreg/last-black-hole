@@ -211,6 +211,7 @@ const FRAG_DISPLAY = `#version 300 es
 precision highp float;
 uniform sampler2D u_velocity;
 uniform sampler2D u_density;
+uniform sampler2D u_visualDensity;  // cosmetic-only density (no physics)
 uniform vec3 u_voidColor;
 uniform vec3 u_normalColor;
 uniform vec3 u_nearWellColor;
@@ -236,11 +237,13 @@ void main() {
 
   vec2 vel = texture(u_velocity, fluidUV).xy;
   vec3 dens = texture(u_density, fluidUV).xyz;
+  vec3 visDens = texture(u_visualDensity, fluidUV).xyz;
+  vec3 totalDens = dens + visDens;  // combine physics + cosmetic density
 
   // Normalize UV velocity to world-equivalent speed so wakes look equally bright
   // on all map sizes. Config calibrated at WORLD_SCALE=3 (reference scale).
   float speed = length(vel) * u_worldScale / 3.0;
-  float rawDensity = length(dens);
+  float rawDensity = length(totalDens);
 
   // Tone-map density: raw values range 0–300+, compress to 0–1 via exponential curve
   float density = 1.0 - exp(-rawDensity * u_densityScale);
@@ -400,6 +403,8 @@ export class FluidSim {
     this.pressure = this._createDoubleFBO(res, res);
     this.divergenceFBO = this._createFBO(res, res);
     this.curlFBO = this._createFBO(res, res);
+    // Visual-only density buffer — cosmetic effects that don't affect physics
+    this.visualDensity = this._createDoubleFBO(res, res);
   }
 
   _createFBO(w, h) {
@@ -564,6 +569,45 @@ export class FluidSim {
   }
 
   /**
+   * Inject a visual-only density splat. Appears in the display shader
+   * but does NOT affect the physics simulation (no velocity, no dissipation).
+   */
+  visualSplat(x, y, radius, r, g, b) {
+    const gl = this.gl;
+    const u = this._useProgram(this.programs.splat);
+    gl.uniform1i(u['u_target'], 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.visualDensity.read.tex);
+    gl.uniform2f(u['u_point'], x, y);
+    gl.uniform3f(u['u_value'], r, g, b);
+    gl.uniform1f(u['u_radius'], radius);
+    gl.uniform1f(u['u_aspectRatio'], 1.0);
+    this._blit(this.visualDensity.write);
+    this.visualDensity.swap();
+  }
+
+  /**
+   * Fade the visual density buffer (called once per frame before visual splats).
+   * Provides short persistence for trails and afterglow effects.
+   */
+  fadeVisualDensity(fadeRate = 0.92) {
+    const gl = this.gl;
+    const u = this._useProgram(this.programs.advect);
+    gl.uniform1i(u['u_velocity'], 0);
+    gl.activeTexture(gl.TEXTURE0);
+    // Use a zero-velocity field so advection doesn't move anything — just dissipates
+    gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex);
+    gl.uniform1i(u['u_source'], 1);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.visualDensity.read.tex);
+    gl.uniform1f(u['u_dt'], 0);  // no advection movement
+    gl.uniform1f(u['u_dissipation'], fadeRate);
+    gl.uniform2fv(u['u_texelSize'], this.texelSize);
+    this._blit(this.visualDensity.write);
+    this.visualDensity.swap();
+  }
+
+  /**
    * Main simulation step.
    */
   step(dt) {
@@ -695,6 +739,9 @@ export class FluidSim {
     gl.uniform1i(u['u_density'], 1);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.density.read.tex);
+    gl.uniform1i(u['u_visualDensity'], 2);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.visualDensity.read.tex);
 
     gl.uniform3fv(u['u_voidColor'], CONFIG.color.voidColor);
     gl.uniform3fv(u['u_normalColor'], CONFIG.color.normalSpace);
@@ -830,5 +877,7 @@ export class FluidSim {
     this._clearTarget(this.pressure.write);
     this._clearTarget(this.divergenceFBO);
     this._clearTarget(this.curlFBO);
+    this._clearTarget(this.visualDensity.read);
+    this._clearTarget(this.visualDensity.write);
   }
 }

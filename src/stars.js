@@ -54,15 +54,15 @@ export class StarSystem {
       const clearingRadius = cfg.clearing * 0.13 * s2;
       fluid.splat(fu, fv, 0, 0, clearingRadius, -cfg.clearing, -cfg.clearing, -cfg.clearing);
 
-      // Bright core
+      // Bright core — visual only (doesn't affect dissipation)
       const coreRadius = cfg.coreBrightness * 0.025 * s2;
-      fluid.splat(fu, fv, 0, 0, coreRadius,
+      fluid.visualSplat(fu, fv, coreRadius,
         cfg.coreBrightness * 1.0,
         cfg.coreBrightness * 0.95,
         cfg.coreBrightness * 0.6
       );
 
-      // Rotating radial rays
+      // Rotating radial rays — visual only
       const rayAngleBase = totalTime * cfg.raySpinRate;
       const pointsPerRay = 4;
 
@@ -75,7 +75,7 @@ export class StarSystem {
           const py = fv + Math.sin(rayAngle) * dist;
           const fade = 1 - t * 0.7;
           const b = cfg.rayBrightness * fade * star.mass;
-          fluid.splat(px, py, 0, 0, 0.001 * s2,
+          fluid.visualSplat(px, py, 0.001 * s2,
             b * (1.0 - t * 0.4),
             b * (0.9 - t * 0.2),
             b * (0.6 + t * 0.4)
