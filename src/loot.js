@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldToFluidUV, worldToScreen, worldDistance, CAMERA_VIEW, uvScale } from './coords.js';
+import { worldToFluidUV, worldToScreen, shouldCull, uvScale } from './coords.js';
 
 class LootAnchor {
   constructor(wx, wy) {
@@ -28,13 +28,12 @@ export class LootSystem {
 
   update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.loot;
-    const cullDist = CAMERA_VIEW + 0.5;
     const s = uvScale();
     const s2 = s * s;
 
     for (const anchor of this.anchors) {
       if (!anchor.alive) continue;
-      if (camX != null && worldDistance(anchor.wx, anchor.wy, camX, camY) > cullDist) continue;
+      if (shouldCull(anchor.wx, anchor.wy, camX, camY, 0.2)) continue;
 
       const [fu, fv] = worldToFluidUV(anchor.wx, anchor.wy);
 

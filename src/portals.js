@@ -7,7 +7,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, CAMERA_VIEW, uvScale, wrapWorld } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, shouldCull, uvScale, wrapWorld } from './coords.js';
 
 class Portal {
   constructor(wx, wy, opts = {}) {
@@ -73,7 +73,6 @@ export class PortalSystem {
    */
   update(fluid, dt, totalTime, camX, camY, runElapsedTime = 0) {
     const cfg = CONFIG.portals;
-    const cullDist = CAMERA_VIEW + 0.5;
     const s = uvScale();
     const s2 = s * s;
 
@@ -119,7 +118,7 @@ export class PortalSystem {
     // --- Fluid effects (only for alive portals) ---
     for (const portal of this.portals) {
       if (!portal.alive) continue;
-      if (camX != null && worldDistance(portal.wx, portal.wy, camX, camY) > cullDist) continue;
+      if (shouldCull(portal.wx, portal.wy, camX, camY, 0.3)) continue;
 
       const [fu, fv] = worldToFluidUV(portal.wx, portal.wy);
       const strength = portal.opacity;

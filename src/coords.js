@@ -188,6 +188,30 @@ export function uvScale() {
   return FLUID_REF_SCALE / WORLD_SCALE;
 }
 
+// ---- Entity culling ----
+
+/**
+ * Should an entity be culled from fluid injection this frame?
+ *
+ * RULES:
+ * - Wells and stars: NEVER CULL. Their physics (ship gravity, kill radius,
+ *   push force) checks ALL instances regardless of camera. Visual must match.
+ * - Everything else: cull if worldDistance > visible half-extent + margin.
+ * - The margin accounts for entity visual radius and movement between frames.
+ *
+ * @param {number} entityWX - entity world X
+ * @param {number} entityWY - entity world Y
+ * @param {number} camX - camera world X
+ * @param {number} camY - camera world Y
+ * @param {number} margin - extra world-units beyond visible edge (default 0.3)
+ * @returns {boolean} true if the entity should be skipped
+ */
+export function shouldCull(entityWX, entityWY, camX, camY, margin = 0.3) {
+  if (camX == null) return false;
+  const cullDist = CAMERA_VIEW / 2 + margin;
+  return worldDistance(entityWX, entityWY, camX, camY) > cullDist;
+}
+
 // ---- Legacy well-space functions (0–1 range) ----
 // The original 1×1 map used 0–1 normalized coordinates called "well-space."
 // These are kept for backward compat but nothing should add new callers.

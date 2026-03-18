@@ -7,7 +7,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldToFluidUV, worldToScreen, worldDistance, CAMERA_VIEW, uvScale } from './coords.js';
+import { worldToFluidUV, worldToScreen, worldDistance, shouldCull, uvScale } from './coords.js';
 
 // ---- Name generation ----
 
@@ -111,13 +111,12 @@ export class WreckSystem {
    */
   update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.wrecks;
-    const cullDist = CAMERA_VIEW + 0.5;
     const s = uvScale();
     const s2 = s * s;
 
     for (const wreck of this.wrecks) {
       if (!wreck.alive) continue;
-      if (camX != null && worldDistance(wreck.wx, wreck.wy, camX, camY) > cullDist) continue;
+      if (shouldCull(wreck.wx, wreck.wy, camX, camY, 0.3)) continue;
 
       const [fu, fv] = worldToFluidUV(wreck.wx, wreck.wy);
       const sizeP = SIZE_PARAMS[wreck.size] || SIZE_PARAMS.medium;
