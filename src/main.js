@@ -894,42 +894,113 @@ function gameLoop(now) {
     ctx.restore();
   }
 
-  // === DEATH SCREEN ===
+  // === DEATH / COLLAPSED SCREEN ===
   if (gamePhase === 'dead') {
+    const cx = overlayCanvas.width / 2;
+    const cy = overlayCanvas.height / 2;
+    const t = deathTimer;
     ctx.save();
-    const fadeAlpha = Math.min(deathTimer * 0.8, 0.7);
-    ctx.fillStyle = `rgba(0, 0, 0, ${fadeAlpha})`;
-    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 16;
+    ctx.textAlign = 'center';
 
-    if (deathTimer > 0.5) {
-      ctx.fillStyle = `rgba(255, 30, 30, ${Math.min((deathTimer - 0.5) * 2, 1)})`;
+    // Determine if consumed by well or universe collapsed (no portals left)
+    const collapsed = portalSystem.activeCount === 0 && !portalSystem.hasMoreWaves;
+    const title = collapsed ? 'COLLAPSED' : 'CONSUMED';
+    const subtitle = collapsed ? 'no way out' : 'the universe won';
+    const titleColor = collapsed ? 'rgba(180, 80, 255,' : 'rgba(255, 30, 30,';
+
+    if (t > 0.3) {
+      ctx.fillStyle = `${titleColor} ${Math.min((t - 0.3) * 2, 1)})`;
       ctx.font = 'bold 48px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('CONSUMED', overlayCanvas.width / 2, overlayCanvas.height / 2 - 20);
-
-      ctx.fillStyle = `rgba(200, 200, 200, ${Math.min((deathTimer - 1.0) * 2, 1)})`;
-      ctx.font = '20px monospace';
-      ctx.fillText('Press SPACE to continue', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
+      ctx.fillText(title, cx, cy - 60);
+    }
+    if (t > 0.6) {
+      ctx.fillStyle = `rgba(150, 150, 170, ${Math.min((t - 0.6) * 2, 0.7)})`;
+      ctx.font = '16px monospace';
+      ctx.fillText(subtitle, cx, cy - 25);
+    }
+    if (t > 1.0) {
+      ctx.fillStyle = `rgba(180, 180, 200, ${Math.min((t - 1.0) * 2, 0.8)})`;
+      ctx.font = '14px monospace';
+      const mins = Math.floor(runElapsedTime / 60);
+      const secs = Math.floor(runElapsedTime % 60);
+      ctx.fillText(`survived ${mins}:${String(secs).padStart(2, '0')}`, cx, cy + 10);
+      ctx.fillText(`${inventory.length} items lost`, cx, cy + 30);
+    }
+    if (t > 1.5) {
+      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
+      ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - 1.5) * 2, 1)})`;
+      ctx.font = '18px monospace';
+      ctx.fillText('press space to continue', cx, cy + 80);
     }
     ctx.restore();
   }
 
-  // === ESCAPED SCREEN ===
+  // === EXTRACTION SCREEN ===
   if (gamePhase === 'escaped') {
+    const cx = overlayCanvas.width / 2;
+    const cy = overlayCanvas.height / 2;
+    const t = escapeTimer;
     ctx.save();
-    const fadeAlpha = Math.min(escapeTimer * 0.6, 0.5);
-    ctx.fillStyle = `rgba(10, 5, 30, ${fadeAlpha})`;
-    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 16;
+    ctx.textAlign = 'center';
 
-    if (escapeTimer > 0.5) {
-      ctx.fillStyle = `rgba(100, 255, 255, ${Math.min((escapeTimer - 0.5) * 2, 1)})`;
+    if (t > 0.3) {
+      ctx.fillStyle = `rgba(100, 255, 255, ${Math.min((t - 0.3) * 2, 1)})`;
       ctx.font = 'bold 48px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('ESCAPED', overlayCanvas.width / 2, overlayCanvas.height / 2 - 20);
+      ctx.fillText('EXTRACTED', cx, cy - 100);
+    }
+    if (t > 0.6) {
+      ctx.fillStyle = `rgba(100, 180, 220, ${Math.min((t - 0.6) * 2, 0.7)})`;
+      ctx.font = '16px monospace';
+      ctx.fillText('out of a dying universe', cx, cy - 65);
+    }
+    // Salvage list (items fade in one by one)
+    if (t > 1.0 && inventory.length > 0) {
+      ctx.font = '13px monospace';
+      const maxShow = Math.min(inventory.length, Math.floor((t - 1.0) / 0.15));
+      let itemY = cy - 30;
+      for (let i = 0; i < maxShow; i++) {
+        const item = inventory[i];
+        const tierColor = item.tier === 'unique' ? 'rgba(255, 215, 0, 0.9)'
+          : item.tier === 'rare' ? 'rgba(100, 220, 255, 0.9)'
+          : item.tier === 'uncommon' ? 'rgba(100, 255, 150, 0.9)'
+          : 'rgba(200, 200, 210, 0.8)';
+        ctx.fillStyle = tierColor;
+        ctx.fillText(item.name, cx, itemY);
+        itemY += 18;
+      }
+    }
+    // Stats + score
+    const statsT = 1.0 + inventory.length * 0.15 + 0.3;
+    if (t > statsT) {
+      ctx.fillStyle = `rgba(180, 180, 200, ${Math.min((t - statsT) * 2, 0.8)})`;
+      ctx.font = '14px monospace';
+      const mins = Math.floor(runElapsedTime / 60);
+      const secs = Math.floor(runElapsedTime % 60);
+      const statY = cy + Math.min(inventory.length, 8) * 18 - 10;
+      ctx.fillText(`${inventory.length} items from ${currentMap.name}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
 
-      ctx.fillStyle = `rgba(200, 200, 220, ${Math.min((escapeTimer - 1.0) * 2, 1)})`;
-      ctx.font = '20px monospace';
-      ctx.fillText('Press SPACE to continue', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
+      // Score
+      const totalValue = inventory.reduce((sum, item) => sum + item.value, 0);
+      if (t > statsT + 0.3) {
+        ctx.fillStyle = 'rgba(255, 255, 240, 0.9)';
+        ctx.font = 'bold 28px monospace';
+        // Count-up animation
+        const countT = Math.min((t - statsT - 0.3) / 0.5, 1);
+        const displayScore = Math.floor(totalValue * countT);
+        ctx.fillText(`${displayScore}`, cx, statY + 35);
+      }
+    }
+    // Prompt
+    const promptT = statsT + 1.0;
+    if (t > promptT) {
+      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
+      ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
+      ctx.font = '18px monospace';
+      ctx.fillText('press space to continue', cx, cy + Math.min(inventory.length, 8) * 18 + 70);
     }
     ctx.restore();
   }
