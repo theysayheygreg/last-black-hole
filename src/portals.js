@@ -163,7 +163,7 @@ export class PortalSystem {
             ? [b * 0.8, b * 0.1, b * 0.6]
             : [b * 0.6, b * 0.15, b * 1.0];
 
-          fluid.splat(px, py, 0, 0, 0.002 * s2, cr, cg, cb);
+          fluid.visualSplat(px, py, 0.002 * s2, cr, cg, cb);
         }
       }
 
@@ -171,7 +171,7 @@ export class PortalSystem {
       const [ccr, ccg, ccb] = portal.type === 'rift'
         ? [cfg.densityRate * 0.3, cfg.densityRate * 0.7, cfg.densityRate * 0.9]
         : [cfg.densityRate * 0.5, cfg.densityRate * 0.2, cfg.densityRate * 0.8];
-      fluid.splat(fu, fv, 0, 0, 0.003 * s2,
+      fluid.visualSplat(fu, fv, 0.003 * s2,
         ccr * strength, ccg * strength, ccb * strength
       );
     }

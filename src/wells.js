@@ -83,6 +83,8 @@ export class WellSystem {
       );
 
       // === SPINNING ACCRETION DISK ===
+      // Velocity injection stays in physics (drives orbital currents).
+      // Density injection moved to visual buffer (doesn't get advected away).
       const spinAngle = totalTime * well.getAccretionSpinRate() * well.orbitalDir;
       const numPts = well.getAccretionPoints();
       const rate = well.getAccretionRate() * well.mass;
@@ -98,24 +100,23 @@ export class WellSystem {
           const px = fu + Math.cos(angle) * ringR;
           const py = fv + Math.sin(angle) * ringR;
 
+          // Tangential velocity — physics (feeds the orbital current)
           const tangStr = cfg.accretionTangentialForce * ring.radiusMult * s;
           const tangVx = -Math.sin(angle) * tangStr * well.orbitalDir;
           const tangVy = Math.cos(angle) * tangStr * well.orbitalDir;
+          fluid.splat(px, py, tangVx, tangVy, ring.splatR * s2, 0, 0, 0);
 
+          // Density — visual only (stays anchored, not advected)
           const b = rate * ring.brightness * armBrightness;
-          fluid.splat(
-            px, py,
-            tangVx, tangVy,
-            ring.splatR * s2,
-            b * ring.r,
-            b * ring.g,
-            b * ring.b
+          fluid.visualSplat(px, py, ring.splatR * s2,
+            b * ring.r, b * ring.g, b * ring.b
           );
         }
       }
 
       // === EVENT HORIZON ===
-      fluid.splat(fu, fv, 0, 0, 0.001 * s2, -0.05, -0.05, -0.05);
+      // Void + glow in visual buffer so they stay centered on the well
+      fluid.visualSplat(fu, fv, 0.001 * s2, -0.05, -0.05, -0.05);
 
       const horizonPts = cfg.horizonPoints;
       const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult * s;
@@ -123,7 +124,7 @@ export class WellSystem {
         const angle = spinAngle * 1.5 + (i / horizonPts) * Math.PI * 2;
         const px = fu + Math.cos(angle) * horizonR;
         const py = fv + Math.sin(angle) * horizonR;
-        fluid.splat(px, py, 0, 0, 0.001 * s2, rate * 8.0, rate * 7.0, rate * 4.0);
+        fluid.visualSplat(px, py, 0.001 * s2, rate * 8.0, rate * 7.0, rate * 4.0);
       }
     }
   }

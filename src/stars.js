@@ -50,9 +50,9 @@ export class StarSystem {
         cfg.fluidTerminalSpeed * s
       );
 
-      // Clearing bubble
+      // Clearing bubble — visual only (stays centered, not advected by outflow)
       const clearingRadius = cfg.clearing * 0.13 * s2;
-      fluid.splat(fu, fv, 0, 0, clearingRadius, -cfg.clearing, -cfg.clearing, -cfg.clearing);
+      fluid.visualSplat(fu, fv, clearingRadius, -cfg.clearing, -cfg.clearing, -cfg.clearing);
 
       // Bright core — visual only (doesn't affect dissipation)
       const coreRadius = cfg.coreBrightness * 0.025 * s2;
