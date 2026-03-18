@@ -64,6 +64,7 @@ let mapSelectIndex = 0;
 
 // Run state
 let runElapsedTime = 0;
+let runEndTime = 0;  // frozen at moment of death/escape
 let inventory = [];
 
 // ---- Init ----
@@ -529,7 +530,9 @@ function gameLoop(now) {
       const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
       if (newItems.length > 0) {
         inventory.push(...newItems);
-        showWarning(`+${newItems.length} salvage`, 'rgba(212, 168, 67, 0.9)', 1500);
+        for (const item of newItems) {
+          showWarning(item.name, 'rgba(212, 168, 67, 0.9)', 2000);
+        }
       }
 
       // Wreck consumption by growing wells
@@ -539,6 +542,7 @@ function gameLoop(now) {
       if (killingWell) {
         gamePhase = 'dead';
         deathTimer = 0;
+        runEndTime = runElapsedTime;
         ship.setThrust(false);
       }
 
@@ -547,6 +551,7 @@ function gameLoop(now) {
         if (portal) {
           gamePhase = 'escaped';
           escapeTimer = 0;
+          runEndTime = runElapsedTime;
           ship.setThrust(false);
         }
       }
@@ -555,9 +560,10 @@ function gameLoop(now) {
       if (gamePhase === 'playing' &&
           portalSystem.activeCount === 0 &&
           !portalSystem.hasMoreWaves &&
-          runElapsedTime > 60) {  // grace period: don't trigger before first wave
+          runElapsedTime > 60) {
         gamePhase = 'dead';
         deathTimer = 0;
+        runEndTime = runElapsedTime;
         ship.setThrust(false);
       }
     } else if (gamePhase === 'dead') {
@@ -894,73 +900,40 @@ function gameLoop(now) {
     ctx.restore();
   }
 
-  // === DEATH / COLLAPSED SCREEN ===
-  if (gamePhase === 'dead') {
+  // === END SCREEN (shared for death, collapse, and extraction) ===
+  if (gamePhase === 'dead' || gamePhase === 'escaped') {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
-    const t = deathTimer;
+    const t = gamePhase === 'dead' ? deathTimer : escapeTimer;
+    const isEscape = gamePhase === 'escaped';
+    const collapsed = !isEscape && portalSystem.activeCount === 0 && !portalSystem.hasMoreWaves;
+
+    const title = isEscape ? 'EXTRACTED' : collapsed ? 'COLLAPSED' : 'CONSUMED';
+    const subtitle = isEscape ? 'out of a dying universe' : collapsed ? 'no way out' : 'the universe won';
+    const titleColor = isEscape ? 'rgba(100, 255, 255,' : collapsed ? 'rgba(180, 80, 255,' : 'rgba(255, 30, 30,';
+    const itemVerb = isEscape ? 'salvaged' : 'lost';
+
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 16;
     ctx.textAlign = 'center';
 
-    // Determine if consumed by well or universe collapsed (no portals left)
-    const collapsed = portalSystem.activeCount === 0 && !portalSystem.hasMoreWaves;
-    const title = collapsed ? 'COLLAPSED' : 'CONSUMED';
-    const subtitle = collapsed ? 'no way out' : 'the universe won';
-    const titleColor = collapsed ? 'rgba(180, 80, 255,' : 'rgba(255, 30, 30,';
-
+    // Title
     if (t > 0.3) {
       ctx.fillStyle = `${titleColor} ${Math.min((t - 0.3) * 2, 1)})`;
       ctx.font = 'bold 48px monospace';
-      ctx.fillText(title, cx, cy - 60);
+      ctx.fillText(title, cx, cy - 100);
     }
+    // Subtitle
     if (t > 0.6) {
       ctx.fillStyle = `rgba(150, 150, 170, ${Math.min((t - 0.6) * 2, 0.7)})`;
       ctx.font = '16px monospace';
-      ctx.fillText(subtitle, cx, cy - 25);
-    }
-    if (t > 1.0) {
-      ctx.fillStyle = `rgba(180, 180, 200, ${Math.min((t - 1.0) * 2, 0.8)})`;
-      ctx.font = '14px monospace';
-      const mins = Math.floor(runElapsedTime / 60);
-      const secs = Math.floor(runElapsedTime % 60);
-      ctx.fillText(`survived ${mins}:${String(secs).padStart(2, '0')}`, cx, cy + 10);
-      ctx.fillText(`${inventory.length} items lost`, cx, cy + 30);
-    }
-    if (t > 1.5) {
-      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
-      ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - 1.5) * 2, 1)})`;
-      ctx.font = '18px monospace';
-      ctx.fillText('press space to continue', cx, cy + 80);
-    }
-    ctx.restore();
-  }
-
-  // === EXTRACTION SCREEN ===
-  if (gamePhase === 'escaped') {
-    const cx = overlayCanvas.width / 2;
-    const cy = overlayCanvas.height / 2;
-    const t = escapeTimer;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 16;
-    ctx.textAlign = 'center';
-
-    if (t > 0.3) {
-      ctx.fillStyle = `rgba(100, 255, 255, ${Math.min((t - 0.3) * 2, 1)})`;
-      ctx.font = 'bold 48px monospace';
-      ctx.fillText('EXTRACTED', cx, cy - 100);
-    }
-    if (t > 0.6) {
-      ctx.fillStyle = `rgba(100, 180, 220, ${Math.min((t - 0.6) * 2, 0.7)})`;
-      ctx.font = '16px monospace';
-      ctx.fillText('out of a dying universe', cx, cy - 65);
+      ctx.fillText(subtitle, cx, cy - 65);
     }
     // Salvage list (items fade in one by one)
     if (t > 1.0 && inventory.length > 0) {
       ctx.font = '13px monospace';
-      const maxShow = Math.min(inventory.length, Math.floor((t - 1.0) / 0.15));
+      const maxShow = Math.min(inventory.length, 8, Math.floor((t - 1.0) / 0.15));
       let itemY = cy - 30;
       for (let i = 0; i < maxShow; i++) {
         const item = inventory[i];
@@ -968,34 +941,37 @@ function gameLoop(now) {
           : item.tier === 'rare' ? 'rgba(100, 220, 255, 0.9)'
           : item.tier === 'uncommon' ? 'rgba(100, 255, 150, 0.9)'
           : 'rgba(200, 200, 210, 0.8)';
-        ctx.fillStyle = tierColor;
+        ctx.fillStyle = isEscape ? tierColor : `rgba(120, 120, 130, 0.6)`;
         ctx.fillText(item.name, cx, itemY);
         itemY += 18;
       }
+      if (inventory.length > 8) {
+        ctx.fillStyle = 'rgba(150, 150, 170, 0.5)';
+        ctx.fillText(`...and ${inventory.length - 8} more`, cx, itemY);
+        itemY += 18;
+      }
     }
-    // Stats + score
-    const statsT = 1.0 + inventory.length * 0.15 + 0.3;
+    // Stats
+    const statsT = 1.0 + Math.min(inventory.length, 8) * 0.15 + 0.3;
     if (t > statsT) {
       ctx.fillStyle = `rgba(180, 180, 200, ${Math.min((t - statsT) * 2, 0.8)})`;
       ctx.font = '14px monospace';
-      const mins = Math.floor(runElapsedTime / 60);
-      const secs = Math.floor(runElapsedTime % 60);
+      const mins = Math.floor(runEndTime / 60);
+      const secs = Math.floor(runEndTime % 60);
       const statY = cy + Math.min(inventory.length, 8) * 18 - 10;
-      ctx.fillText(`${inventory.length} items from ${currentMap.name}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
+      ctx.fillText(`${inventory.length} items ${itemVerb}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
 
-      // Score
-      const totalValue = inventory.reduce((sum, item) => sum + item.value, 0);
-      if (t > statsT + 0.3) {
+      // Score (extraction only)
+      if (isEscape && t > statsT + 0.3) {
+        const totalValue = inventory.reduce((sum, item) => sum + item.value, 0);
         ctx.fillStyle = 'rgba(255, 255, 240, 0.9)';
         ctx.font = 'bold 28px monospace';
-        // Count-up animation
         const countT = Math.min((t - statsT - 0.3) / 0.5, 1);
-        const displayScore = Math.floor(totalValue * countT);
-        ctx.fillText(`${displayScore}`, cx, statY + 35);
+        ctx.fillText(`${Math.floor(totalValue * countT)}`, cx, statY + 35);
       }
     }
     // Prompt
-    const promptT = statsT + 1.0;
+    const promptT = statsT + (isEscape ? 1.0 : 0.5);
     if (t > promptT) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
       ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
