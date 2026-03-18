@@ -195,6 +195,25 @@ DOM overlay. See HUD.md for full spec.
 
 ---
 
+## Visual Buffer Compositing Modes
+
+How the display shader combines physics density and visual density. The mode affects how entity visuals interact with the fluid fabric.
+
+### Current: Max (v1)
+`totalDens = max(physDens, visDens)` — whichever signal is stronger wins per channel. No double-stacking, no moiré. Fluid currents visible where visual density is low, entity visuals dominate where they're strong.
+
+### Alternatives (for polish phase)
+
+**Additive:** `totalDens = physDens + visDens` — the original approach. Both signals stack. Creates moiré patterns where both are active because the ASCII shader maps the combined luminance to characters and the two spatial frequencies interfere. Looks noisy around accretion disks.
+
+**Replace with threshold:** `totalDens = length(visDens) > threshold ? visDens : physDens` — visual buffer takes over entirely above a threshold. Clean separation but loses "fluid flowing through the accretion disk" look. Good for UI elements or sharp-edged effects.
+
+**Multiplicative modulation:** `totalDens = physDens * (1 + visDens)` — visual buffer brightens the physics signal rather than adding its own layer. Accretion disk makes existing fluid glow brighter. Subtle, organic. Loses the "glow from nothing" in empty space where physics density is near zero.
+
+**Alpha blend:** `totalDens = mix(physDens, visDens, visDensAlpha)` — visual buffer's alpha channel controls the crossfade. Most flexible — can smoothly transition from "see through to physics" to "visual takes over." Requires the visual buffer to carry meaningful alpha (currently unused). Good for future effects like portals that should occlude the fabric, or Inhibitor corruption that replaces the ASCII with alien characters.
+
+---
+
 ## Migration Plan
 
 Don't move everything at once. The visual buffer is additive infrastructure — nothing breaks by adding it. Migration is per-effect, one at a time:

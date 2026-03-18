@@ -238,7 +238,7 @@ void main() {
   vec2 vel = texture(u_velocity, fluidUV).xy;
   vec3 dens = texture(u_density, fluidUV).xyz;
   vec3 visDens = texture(u_visualDensity, fluidUV).xyz;
-  vec3 totalDens = dens + visDens;  // combine physics + cosmetic density
+  vec3 totalDens = max(dens, visDens);  // stronger signal wins — no moiré from stacking
 
   // Normalize UV velocity to world-equivalent speed so wakes look equally bright
   // on all map sizes. Config calibrated at WORLD_SCALE=3 (reference scale).
