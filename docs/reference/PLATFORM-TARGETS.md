@@ -13,9 +13,10 @@ That path is real, and it fits the game well long-term, but it is a rewrite, not
 1. keep the web build as the gameplay source of truth
 2. make controller support rock-solid there
 3. ship the browser build to itch.io for fast private sharing
-4. package it for desktop so it can be tested as a macOS `.app` and Windows `.exe`
-5. test that same package shape on Steam Deck
-6. only then decide whether the game has earned a full native renderer
+4. package it for desktop so it can be tested as a macOS `.app`, Windows `.exe`, and Linux desktop build
+5. use that Linux/Windows desktop shape for Steam Deck testing
+6. make a controller-first iPad local-install build if handheld couch play matters
+7. only then decide whether the game has earned a full native renderer
 
 ## itch.io
 
@@ -176,9 +177,56 @@ Treat macOS and Windows as one packaging track:
 - outputs for:
   - macOS `.app`
   - Windows `.exe`
+  - Linux desktop build
   - Steam Deck testing through the same desktop build shape
 
 That keeps the engineering honest. One game, multiple wrappers.
+
+## Linux
+
+### Why Linux matters
+
+Linux is not just a nice extra here. It is the cleanest bridge to Steam Deck.
+
+If you can run the same wrapped web build natively on Linux, you learn more than you do from a Windows-only Proton path.
+
+### The simple Linux path
+
+Use the same thin desktop shell strategy as macOS and Windows.
+
+That gives you:
+
+- one gameplay runtime
+- one packaging model
+- a native Linux build to test on desktop Linux or Steam Deck Desktop Mode
+
+This is the right Deck-adjacent target to have before you start caring about Steam-specific plumbing.
+
+## iPad
+
+### What the first iPad target should be
+
+Do not start with a signed IPA pipeline.
+
+The first useful iPad target is a controller-first local web app build:
+
+- serve the build over HTTP
+- open it in Safari on iPad
+- use "Add to Home Screen"
+- play with a controller, not touch-first UI
+
+That gets you a real iPad playtest surface without committing to Apple signing, TestFlight, or a native shell.
+
+### When a real iPad app makes sense
+
+Only build a true iPad app shell if one of these becomes true:
+
+- Safari/Home Screen install proves too fragile
+- controller support needs native APIs beyond the web path
+- you want App Store or TestFlight distribution
+- you need native lifecycle, storage, or performance control
+
+Until then, the web-app install path is the simplest honest answer.
 
 ## Steam Deck
 
@@ -244,16 +292,18 @@ First, make the browser build controller-clean and itch-clean.
 
 Second, put it on itch.io for private friend sharing and fast iteration.
 
-Third, make a desktop package and test it as a macOS `.app` and Windows `.exe`.
+Third, make desktop packages and test them as a macOS `.app`, Windows `.exe`, and Linux desktop build.
 
-Fourth, test that same package shape on Steam Deck.
+Fourth, use the Linux and Windows builds for Steam Deck testing.
 
-Fifth, decide whether the game has earned a native renderer.
+Fifth, if useful, try the iPad local-install build with controller support.
+
+Sixth, decide whether the game has earned a native renderer.
 
 If it has, start with macOS native only if you want the game to become a long-term polished product. Otherwise keep the web runtime and spend your time on content, feel, and survival.
 
 ## Strong opinion
 
-The first post-jam target should be an itch-ready web build with strong controller support, followed by thin desktop wrappers for macOS and Windows, not a SwiftUI + Metal rewrite.
+The first post-jam target should be an itch-ready web build with strong controller support, followed by thin wrappers for macOS, Windows, Linux, and an iPad local-install path, not a SwiftUI + Metal rewrite.
 
 That path teaches you more, faster, and it does not force you to reinvent the game before you know the game is worth carrying forward.

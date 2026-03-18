@@ -10,7 +10,7 @@
     "test": "node tests/run-all.js",
     "build": "node scripts/build.js",
     "build:web": "node scripts/build.js --targets=web",
-    "build:desktop": "node scripts/build.js --targets=web,mac,win"
+    "build:desktop": "node scripts/build.js --targets=web,mac,win,linux,ipad"
   },
   "keywords": [],
   "author": "",

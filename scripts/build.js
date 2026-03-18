@@ -19,11 +19,14 @@ const TARGET_ALIASES = {
   win: 'win',
   windows: 'win',
   win32: 'win',
+  linux: 'linux',
+  ipad: 'ipad',
+  ios: 'ipad',
 };
 
 function parseTargets(argv) {
   const arg = argv.find((item) => item.startsWith('--targets='));
-  const raw = arg ? arg.split('=')[1] : 'web,mac,win';
+  const raw = arg ? arg.split('=')[1] : 'web,mac,win,linux,ipad';
   return raw
     .split(',')
     .map((item) => TARGET_ALIASES[item.trim().toLowerCase()])
@@ -133,6 +136,80 @@ function buildWeb(targetRoot) {
   };
 }
 
+function buildIpadWebApp(targetRoot) {
+  const ipadDir = path.join(targetRoot, 'last-black-hole-ipad-webapp');
+  removeIfExists(ipadDir);
+  ensureDir(ipadDir);
+
+  copyWebRuntime(ipadDir);
+
+  const indexPath = path.join(ipadDir, 'index.html');
+  const source = fs.readFileSync(indexPath, 'utf8');
+  const injected = source.replace(
+    '</head>',
+    [
+      '  <meta name="apple-mobile-web-app-capable" content="yes">',
+      '  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
+      '  <meta name="mobile-web-app-capable" content="yes">',
+      '  <meta name="apple-mobile-web-app-title" content="Last Black Hole">',
+      '  <link rel="manifest" href="manifest.webmanifest">',
+      '</head>',
+    ].join('\n')
+  );
+  fs.writeFileSync(indexPath, injected);
+
+  writeJson(path.join(ipadDir, 'manifest.webmanifest'), {
+    name: 'Last Black Hole',
+    short_name: 'LBH',
+    start_url: './index.html',
+    display: 'standalone',
+    orientation: 'landscape',
+    background_color: '#000033',
+    theme_color: '#000033',
+  });
+
+  fs.writeFileSync(
+    path.join(ipadDir, 'README-IPAD-INSTALL.md'),
+    [
+      '# iPad Local Install',
+      '',
+      'This is the first useful iPad target for LBH.',
+      '',
+      'It is a controller-first web app bundle prepared for Safari "Add to Home Screen", not a signed IPA.',
+      '',
+      '## Install',
+      '',
+      '1. Serve this folder over HTTP on a machine the iPad can reach.',
+      '2. Open `index.html` in Safari on the iPad.',
+      '3. Use Share → Add to Home Screen.',
+      '4. Pair a controller and launch from the home screen icon.',
+      '',
+      '## Why this target exists',
+      '',
+      '- same gameplay runtime as web/macOS/Windows/Linux',
+      '- no Xcode or signing ceremony yet',
+      '- good enough for local controller-based playtests',
+      '',
+      'A real IPA pipeline can come later if the game earns it.',
+      '',
+    ].join('\n')
+  );
+
+  writeJson(path.join(targetRoot, 'BUILD-INFO-ipad.json'), makeBuildInfo({
+    target: 'ipad',
+    outputDir: targetRoot,
+    artifact: 'last-black-hole-ipad-webapp',
+    installMode: 'Safari Add to Home Screen',
+  }));
+
+  return {
+    target: 'ipad',
+    outputDir: targetRoot,
+    artifact: 'last-black-hole-ipad-webapp',
+    status: 'built',
+  };
+}
+
 function stageElectronShell() {
   removeIfExists(STAGING_ROOT);
   ensureDir(STAGING_ROOT);
@@ -160,12 +237,22 @@ function stageElectronShell() {
 async function buildElectronTarget(targetRoot, target) {
   stageElectronShell();
 
-  const platform = target === 'mac' ? 'darwin' : 'win32';
+  const platform =
+    target === 'mac' ? 'darwin' :
+    target === 'win' ? 'win32' :
+    'linux';
   const arch = target === 'mac'
     ? (process.arch === 'arm64' ? 'arm64' : 'x64')
     : 'x64';
 
-  const outDir = path.join(targetRoot, target === 'mac' ? 'last-black-hole-mac' : 'last-black-hole-win');
+  const outDir = path.join(
+    targetRoot,
+    target === 'mac'
+      ? 'last-black-hole-mac'
+      : target === 'win'
+        ? 'last-black-hole-win'
+        : 'last-black-hole-linux'
+  );
   removeIfExists(outDir);
   ensureDir(outDir);
 
@@ -191,7 +278,12 @@ async function buildElectronTarget(targetRoot, target) {
 
   const packagedRoot = appPaths[0];
   if (packagedRoot) {
-    const finalName = target === 'mac' ? 'Last Black Hole.app' : 'Last Black Hole-win32-x64';
+    const finalName =
+      target === 'mac'
+        ? 'Last Black Hole.app'
+        : target === 'win'
+          ? 'Last Black Hole-win32-x64'
+          : 'Last Black Hole-linux-x64';
     const finalPath = path.join(targetRoot, finalName);
     removeIfExists(finalPath);
     fs.renameSync(packagedRoot, finalPath);
@@ -224,7 +316,12 @@ async function main() {
     results.push(buildWeb(targetRoot));
   }
 
-  for (const target of targets.filter((item) => item !== 'web')) {
+  if (targets.includes('ipad')) {
+    console.log('Building ipad web-app artifact...');
+    results.push(buildIpadWebApp(targetRoot));
+  }
+
+  for (const target of targets.filter((item) => !['web', 'ipad'].includes(item))) {
     console.log(`Building ${target} desktop artifact...`);
     try {
       results.push(await buildElectronTarget(targetRoot, target));

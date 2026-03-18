@@ -14,9 +14,9 @@ The rule is simple:
 
 From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 
-- `npm run build` — build `web`, `mac`, and `win`
+- `npm run build` — build `web`, `ipad`, `mac`, `win`, and `linux`
 - `npm run build:web` — build only the web playtest artifact
-- `npm run build:desktop` — build web + desktop wrapper targets
+- `npm run build:desktop` — build web + desktop/mobile wrapper targets
 
 ## Runtime prerequisites
 
@@ -44,11 +44,15 @@ That folder contains:
 
 - `BUILD-MANIFEST.json`
 - `BUILD-INFO-web.json`
+- `BUILD-INFO-ipad.json` if the iPad web-app target succeeded
 - `BUILD-INFO-mac.json` if mac packaging succeeded
 - `BUILD-INFO-win.json` if Windows packaging succeeded
+- `BUILD-INFO-linux.json` if Linux packaging succeeded
 - `last-black-hole-web/`
+- `last-black-hole-ipad-webapp/` if the iPad web-app target succeeded
 - `Last Black Hole.app` if mac packaging succeeded
 - `Last Black Hole-win32-x64/` if Windows packaging succeeded
+- `Last Black Hole-linux-x64/` if Linux packaging succeeded
 
 The build date now lives inside the manifest and build info files instead of the folder name.
 
@@ -73,8 +77,10 @@ That means the `.app` and `.exe` are wrappers around the same web game, not sepa
 This machine can build:
 
 - a shareable web artifact folder
+- a controller-first iPad web-app bundle for Safari "Add to Home Screen"
 - a macOS Electron app bundle
 - a Windows Electron app folder with `.exe` entrypoint
+- a Linux Electron app folder
 - one combined playtest zip containing all of the above
 
 This is enough for playtest packaging. The Windows output is already useful as a portable playtest build even though it is not an installer yet.
@@ -88,6 +94,19 @@ This is enough for playtest packaging. The Windows output is already useful as a
 - auto-update
 
 Those are later concerns. This pipeline is for making dated, traceable playtest builds now.
+
+## iPad note
+
+The iPad target is intentionally not a signed IPA yet.
+
+It is a local-install web app bundle meant for:
+
+- serving over HTTP
+- opening in Safari on iPad
+- using "Add to Home Screen"
+- playing with a controller and no touch-first UI assumptions
+
+A real iPad app build would need Xcode, Apple signing, and a thin native shell. That is a later layer.
 
 ## Practical next step for Windows
 
