@@ -118,6 +118,7 @@ export const CONFIG = {
                              // spontaneously blink per frame. Higher = more cells twinkle.
                              // 0 = dead static, 3 = rare sparkle, 6 = busy.
     colorTemperature: 0.0,    // Unused. Reserved for global color shift.
+    dirThreshold: 0.01,       // Speed below this = isotropic chars (world-equivalent units)
   },
 
   color: {

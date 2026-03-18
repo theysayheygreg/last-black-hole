@@ -32,15 +32,17 @@ precision highp float;
 
 uniform sampler2D u_scene;      // fluid display color FBO
 uniform sampler2D u_fontAtlas;  // pre-generated glyph atlas
+uniform sampler2D u_velocity;   // fluid velocity texture (for directional chars)
 uniform vec2 u_resolution;     // screen resolution in pixels
 uniform float u_cellSize;      // character cell width in pixels
 uniform float u_contrast;      // luminance mapping curve power
-uniform float u_numChars;      // number of characters in the density ramp
+uniform float u_numChars;      // number of characters per ramp (16)
 uniform float u_cellAspect;    // cell height / cell width (e.g. 1.5 for 8x12)
 uniform float u_time;          // elapsed seconds — drives shimmer
 uniform float u_shimmer;       // quantum fluctuation probability (0 = off)
 uniform vec2 u_camOffset;     // camera center in fluid UV (for world-anchored noise)
 uniform float u_worldScale;   // world scale (for world-anchored noise)
+uniform float u_dirThreshold; // speed threshold for directional character selection
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -65,36 +67,51 @@ void main() {
   // Apply contrast curve to spread the character range
   lum = pow(clamp(lum, 0.0, 1.0), u_contrast);
 
-  // Map luminance to character index (0 = sparse, N-1 = dense)
-  float charIdx = lum * (u_numChars - 1.0);
+  // Map luminance to character index within a 16-char ramp (0 = sparse, 15 = dense)
+  float rampSize = u_numChars;
+  float charIdx = lum * (rampSize - 1.0);
 
   // Quantum fluctuations: sparse cells that blink, anchored in worldspace.
-  // Two noise layers at different frequencies for richer texture.
-  // Intensity scales with luminance — subtle in void, intense near disturbances.
   vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_worldScale;
   vec2 worldCell = floor(fluidUV * u_resolution / vec2(cellW, cellH));
   float noise = fract(sin(dot(worldCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
-  // Second layer: slower frequency, different seed — creates larger-scale flicker patterns
   float noise2 = fract(sin(dot(worldCell * 0.5 + floor(u_time * 1.1) * 0.31, vec2(269.5, 183.3))) * 43758.5453);
-  // Scale probability by luminance: void (lum~0.01) barely twinkles,
-  // near wells (lum~0.3+) twinkles heavily. Ramp from 0.2x to 3x base rate.
   float disturbance = smoothstep(0.0, 0.3, lum) * 2.8 + 0.2;
   float threshold = 1.0 - u_shimmer * 0.01 * disturbance;
   if (noise > threshold) {
-    float bump = fract(noise * 7.0) * 2.0 + 1.0;
-    charIdx += bump;
+    charIdx += fract(noise * 7.0) * 2.0 + 1.0;
   }
-  // Second layer: gentler bumps at lower probability, adds variety without busyness
   float threshold2 = 1.0 - u_shimmer * 0.005 * disturbance;
   if (noise2 > threshold2) {
     charIdx += fract(noise2 * 5.0) * 1.5;
   }
 
-  charIdx = clamp(floor(charIdx), 0.0, u_numChars - 1.0);
+  charIdx = clamp(floor(charIdx), 0.0, rampSize - 1.0);
 
-  // Atlas lookup: 16x16 grid, character at (col, row)
-  float atlasCol = mod(charIdx, 16.0);
-  float atlasRow = floor(charIdx / 16.0);
+  // === DIRECTIONAL CHARACTER SELECTION ===
+  // Sample fluid velocity at this cell's position
+  vec2 vel = texture(u_velocity, fluidUV).xy;
+  float speed = length(vel) * u_worldScale / 3.0;
+
+  // Select ramp row based on flow direction (0=isotropic, 1=horizontal, 2=vertical, 3=diagonal)
+  float rampRow = 0.0;
+  if (speed > u_dirThreshold) {
+    float angle = abs(atan(vel.y, vel.x));
+    if (angle < 0.52 || angle > 2.62)
+      rampRow = 1.0;       // horizontal (±30°)
+    else if (angle > 1.05 && angle < 2.09)
+      rampRow = 2.0;       // vertical (60°-120°)
+    else
+      rampRow = 3.0;       // diagonal
+
+    // Probabilistic blending: directional emerges from shimmer noise at transition speeds
+    float dirStrength = smoothstep(u_dirThreshold, u_dirThreshold * 4.0, speed);
+    if (noise < (1.0 - dirStrength)) rampRow = 0.0;  // fall back to isotropic
+  }
+
+  // Atlas lookup: 16 columns per row, 4 rows (isotropic, horizontal, vertical, diagonal)
+  float atlasCol = charIdx;
+  float atlasRow = rampRow;
 
   // UV within the atlas cell — flip Y because canvas Y is inverted vs GL
   vec2 atlasUV = vec2(
@@ -117,45 +134,50 @@ void main() {
 
 // ---- Font Atlas Generation ----
 
-// Characters sorted by visual weight (sparse -> dense).
-// Heavily front-loaded with low-weight characters because most of the screen
-// lives in the sparse range. More glyphs there = more visible texture variation
-// when shimmer jitters the character index by +/-1.
-const DENSITY_RAMP = ' .`\'-,_:;"~^!/>+=*?|%#&$@';
+// Four character ramps (16 chars each) for directional ASCII.
+// Row 0: isotropic (no flow direction), Row 1: horizontal, Row 2: vertical, Row 3: diagonal.
+// Each ramp is sorted by visual weight (sparse → dense).
+const RAMPS = [
+  ' .`\'-,_:;"~^*+=#%@',        // isotropic (padded to 16 with last char repeated)
+  ' .-~-=~-=-==#%@@',            // horizontal emphasis
+  ' .:|!:|!|:|!#%@@',            // vertical emphasis
+  ' ./\\/\\x/\\/\\x#%@@',        // diagonal emphasis
+];
+const CHARS_PER_RAMP = 16;
 
 /**
  * Generate a 1024x1024 font atlas texture.
  * 16x16 grid = 64x64px per glyph cell.
+ * 4 rows × 16 columns = 4 directional ramps.
  * White glyphs on transparent background.
- * Returns an HTMLCanvasElement ready for GPU upload.
  */
 function generateFontAtlas() {
   const atlasSize = 1024;
   const gridSize = 16;
-  const cellSize = atlasSize / gridSize; // 64px
+  const cellSize = atlasSize / gridSize;
 
   const canvas = document.createElement('canvas');
   canvas.width = atlasSize;
   canvas.height = atlasSize;
   const ctx = canvas.getContext('2d');
 
-  // Clear to black (will be read as 0 alpha)
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, atlasSize, atlasSize);
 
-  // Draw each glyph
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  // Use a monospace font, sized to fill the cell well
   ctx.font = `${Math.floor(cellSize * 0.85)}px monospace`;
 
-  for (let i = 0; i < DENSITY_RAMP.length; i++) {
-    const col = i % gridSize;
-    const row = Math.floor(i / gridSize);
-    const cx = col * cellSize + cellSize / 2;
-    const cy = row * cellSize + cellSize / 2;
-    ctx.fillText(DENSITY_RAMP[i], cx, cy);
+  for (let row = 0; row < RAMPS.length; row++) {
+    const ramp = RAMPS[row];
+    for (let col = 0; col < CHARS_PER_RAMP; col++) {
+      // Use last char in ramp if ramp is shorter than 16
+      const ch = col < ramp.length ? ramp[col] : ramp[ramp.length - 1];
+      const cx = col * cellSize + cellSize / 2;
+      const cy = row * cellSize + cellSize / 2;
+      ctx.fillText(ch, cx, cy);
+    }
   }
 
   return canvas;
@@ -234,7 +256,7 @@ export class ASCIIRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    this.numChars = DENSITY_RAMP.length;
+    this.numChars = CHARS_PER_RAMP;
   }
 
   /**
@@ -295,7 +317,7 @@ export class ASCIIRenderer {
    * Call this AFTER fluid.render(sceneTarget, ...) has filled the scene FBO.
    * Renders the ASCII result to the screen (framebuffer null).
    */
-  render(totalTime = 0, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0) {
+  render(totalTime = 0, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, velocityTex = null) {
     const gl = this.gl;
     const ascii = CONFIG.ascii;
 
@@ -314,6 +336,13 @@ export class ASCIIRenderer {
     gl.bindTexture(gl.TEXTURE_2D, this.fontAtlasTex);
     gl.uniform1i(this.uniforms['u_fontAtlas'], 1);
 
+    // Bind velocity texture for directional character selection
+    if (velocityTex) {
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, velocityTex);
+      gl.uniform1i(this.uniforms['u_velocity'], 2);
+    }
+
     // Set uniforms
     gl.uniform2f(this.uniforms['u_resolution'], gl.canvas.width, gl.canvas.height);
     gl.uniform1f(this.uniforms['u_cellSize'], ascii.cellSize);
@@ -324,6 +353,7 @@ export class ASCIIRenderer {
     gl.uniform1f(this.uniforms['u_shimmer'], ascii.shimmer);
     gl.uniform2f(this.uniforms['u_camOffset'], camOffsetU, camOffsetV);
     gl.uniform1f(this.uniforms['u_worldScale'], worldScale);
+    gl.uniform1f(this.uniforms['u_dirThreshold'], ascii.dirThreshold ?? 0.01);
 
     // Draw fullscreen quad
     gl.bindVertexArray(this.quadVAO);
