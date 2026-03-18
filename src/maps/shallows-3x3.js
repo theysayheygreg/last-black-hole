@@ -1,0 +1,31 @@
+/**
+ * shallows-3x3.js — The original 3×3 layout, extracted verbatim from main.js init().
+ */
+export const MAP = {
+  name: 'The Shallows',
+  worldScale: 3.0,
+  wells: [
+    { x: 1.0, y: 1.2, mass: 1.5, orbitalDir: 1, killRadius: 0.06, spinRate: 0.6, points: 8 },
+    { x: 2.1, y: 0.9, mass: 0.8, orbitalDir: -1, killRadius: 0.035, spinRate: 1.4, points: 4 },
+    { x: 1.95, y: 2.16, mass: 1.2, orbitalDir: 1, killRadius: 0.05, spinRate: 0.9, points: 6 },
+    { x: 0.6, y: 2.25, mass: 0.5, orbitalDir: -1, killRadius: 0.03, spinRate: 1.8, points: 3 },
+  ],
+  stars: [
+    { x: 1.5, y: 1.65, mass: 0.8, orbitalDir: 1 },
+    { x: 0.45, y: 0.75, mass: 0.5, orbitalDir: -1 },
+  ],
+  loot: [
+    { x: 1.5, y: 1.05 },
+    { x: 1.35, y: 2.1 },
+    { x: 2.4, y: 1.65 },
+  ],
+  portals: [
+    { x: 0.3, y: 0.3 },
+    { x: 2.7, y: 2.7 },
+  ],
+  planetoids: [
+    { type: 'orbit', wellIndex: 0 },
+    { type: 'orbit', wellIndex: 2 },
+    { type: 'figure8', wellA: 0, wellB: 1 },
+  ],
+};

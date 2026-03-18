@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo, worldDistance, CAMERA_VIEW } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 class Star {
@@ -28,10 +28,13 @@ export class StarSystem {
     return star;
   }
 
-  update(fluid, dt, totalTime) {
+  update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.stars;
+    const cullDist = CAMERA_VIEW + 0.5;
 
     for (const star of this.stars) {
+      if (camX != null && worldDistance(star.wx, star.wy, camX, camY) > cullDist) continue;
+
       const [fu, fv] = worldToFluidUV(star.wx, star.wy);
 
       // Outward push: NEGATIVE gravity

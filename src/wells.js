@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, CAMERA_VIEW } from './coords.js';
 
 export class Well {
   /**
@@ -45,11 +45,16 @@ export class WellSystem {
 
   /**
    * Apply all well forces to the fluid sim and inject density.
+   * When camX/camY are provided, culls wells beyond visible range + margin.
    */
-  update(fluid, dt, totalTime) {
+  update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.wells;
+    const cullDist = CAMERA_VIEW + 0.5;
 
     for (const well of this.wells) {
+      // Skip force injection for off-screen wells (saves a GPU pass per culled well)
+      if (camX != null && worldDistance(well.wx, well.wy, camX, camY) > cullDist) continue;
+
       const [fu, fv] = worldToFluidUV(well.wx, well.wy);
 
       // Apply gravitational + orbital force to velocity field

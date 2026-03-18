@@ -68,8 +68,10 @@ export function initTestAPI(getState) {
     },
 
     triggerRestart() {
-      const { restart } = getState();
-      if (restart) restart();
+      const { restart, startGame, currentMap } = getState();
+      // startGame ensures we're in 'playing' phase (not stuck on title/mapSelect)
+      if (startGame && currentMap) startGame(currentMap);
+      else if (restart) restart();
     },
   };
 

@@ -22,9 +22,15 @@ import { InputManager } from './input.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
+import { loadMap } from './map-loader.js';
+import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
+import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
+import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
 import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld,
          fluidVelToScreen } from './coords.js';
+
+const MAP_LIST = [MAP_SHALLOWS, MAP_EXPANSE, MAP_DEEP];
 
 // ---- State ----
 let glCanvas, gl;
@@ -40,13 +46,19 @@ let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
 let growthTimer = 0;
-let gamePhase = 'playing'; // 'playing' | 'dead' | 'escaped' | 'paused'
+let gamePhase = 'title'; // 'title' | 'mapSelect' | 'playing' | 'dead' | 'escaped' | 'paused'
 let deathTimer = 0;
 let escapeTimer = 0;
+let titleTimer = 0;
 
 // Camera state — world-space center of screen
 let camX = 1.5;
 let camY = 1.5;
+
+// Map state
+let currentMap = MAP_SHALLOWS;
+let startingMasses = [];
+let mapSelectIndex = 0;
 
 // ---- Init ----
 
@@ -79,50 +91,18 @@ function init() {
   fluid = new FluidSim(gl);
   asciiRenderer = new ASCIIRenderer(gl);
 
-  // === WELL SYSTEM — spread across 3x3 world ===
+  // Init entity systems (empty — map loader populates them)
   wellSystem = new WellSystem();
-  wellSystem.addWell(1.0, 1.2, {
-    mass: 1.5, orbitalDir: 1, killRadius: 0.06,
-    accretionSpinRate: 0.6, accretionPoints: 8,
-  });
-  wellSystem.addWell(2.1, 0.9, {
-    mass: 0.8, orbitalDir: -1, killRadius: 0.035,
-    accretionSpinRate: 1.4, accretionPoints: 4,
-  });
-  wellSystem.addWell(1.95, 2.16, {
-    mass: 1.2, orbitalDir: 1, killRadius: 0.05,
-    accretionSpinRate: 0.9, accretionPoints: 6,
-  });
-  wellSystem.addWell(0.6, 2.25, {
-    mass: 0.5, orbitalDir: -1, killRadius: 0.03,
-    accretionSpinRate: 1.8, accretionPoints: 3,
-  });
-
-  // === STAR SYSTEM ===
   starSystem = new StarSystem();
-  starSystem.addStar(1.5, 1.65, { mass: 0.8, orbitalDir: 1 });
-  starSystem.addStar(0.45, 0.75, { mass: 0.5, orbitalDir: -1 });
-
-  // === LOOT SYSTEM ===
   lootSystem = new LootSystem();
-  lootSystem.addLoot(1.5, 1.05);
-  lootSystem.addLoot(1.35, 2.1);
-  lootSystem.addLoot(2.4, 1.65);
-
-  // === PORTAL SYSTEM — exit wormholes ===
   portalSystem = new PortalSystem();
-  portalSystem.addPortal(0.3, 0.3);   // upper-left, near S1 push zone
-  portalSystem.addPortal(2.7, 2.7);   // lower-right, opposite corner
-
-  // === PLANETOID SYSTEM ===
   planetoidSystem = new PlanetoidSystem();
-  // Seed initial orbiting planetoids around wells
-  planetoidSystem.spawnOrbit(wellSystem.wells[0]);
-  planetoidSystem.spawnOrbit(wellSystem.wells[2]);
-  // Seed a figure-8 between wells 0 and 1
-  if (wellSystem.wells.length >= 2) {
-    planetoidSystem.spawnFigure8(wellSystem.wells[0], wellSystem.wells[1]);
-  }
+
+  // Load the default map
+  const mapResult = loadMap(currentMap, {
+    wellSystem, starSystem, lootSystem, portalSystem, planetoidSystem, fluid,
+  });
+  startingMasses = mapResult.startingMasses;
 
   // Init input manager
   inputManager = new InputManager();
@@ -143,13 +123,23 @@ function init() {
   // Input: mouse is UI-only (menu clicks). Movement from keyboard/gamepad via InputManager.
   overlayCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // Pause toggle (keyboard Escape — gamepad Start handled in game loop)
+  // Escape key — context-sensitive (pause during play, back in menus)
+  // Actual state transitions handled in gameLoop via pausePressed/backPressed.
+  // This handler just prevents default browser behavior.
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      togglePause();
+      // Edge-triggered handling is in the game loop via _prevPause.
+      // ESC during play = pause. ESC during pause = quit to map select.
+      if (gamePhase === 'playing') {
+        togglePause();
+      } else if (gamePhase === 'paused') {
+        gamePhase = 'mapSelect';
+      } else if (gamePhase === 'mapSelect') {
+        gamePhase = 'title';
+        titleTimer = 0;
+      }
     }
-    // Prevent spacebar from scrolling the page
     if (e.code === 'Space') e.preventDefault();
   });
 
@@ -184,6 +174,12 @@ function init() {
     fps,
     setTimeScale: (s) => { timeScale = s; },
     restart: () => { restart(); },
+    currentMap,
+    mapList: MAP_LIST,
+    startGame,
+    setMap: (map) => { startGame(map); },
+    get gamePhase() { return gamePhase; },
+    set gamePhase(p) { gamePhase = p; },
   }));
 
   // Init dev panel
@@ -222,8 +218,6 @@ function seedInitialFluid() {
     );
   }
 }
-
-const STARTING_MASSES = [1.5, 0.8, 1.2, 0.5];
 
 /**
  * Find a random world position that is "safe" — far enough from all wells,
@@ -279,10 +273,11 @@ function restart() {
   // turbulence, or accretion density.
   fluid.clear();
 
-  // Reset well masses
-  for (let i = 0; i < wellSystem.wells.length; i++) {
-    wellSystem.wells[i].mass = STARTING_MASSES[i] ?? 1.0;
-  }
+  // Reload the current map (resets all entities, world scale, planetoids)
+  const mapResult = loadMap(currentMap, {
+    wellSystem, starSystem, lootSystem, portalSystem, planetoidSystem, fluid,
+  });
+  startingMasses = mapResult.startingMasses;
 
   // Reset ship to a random safe position (away from all objects)
   const [spawnX, spawnY] = findSafeSpawn();
@@ -290,16 +285,33 @@ function restart() {
   camX = ship.wx;
   camY = ship.wy;
 
-  // Reset planetoids
-  planetoidSystem.planetoids = [];
-  planetoidSystem.spawnTimer = 10;
-  planetoidSystem.spawnOrbit(wellSystem.wells[0]);
-  planetoidSystem.spawnOrbit(wellSystem.wells[2]);
-  if (wellSystem.wells.length >= 2) {
-    planetoidSystem.spawnFigure8(wellSystem.wells[0], wellSystem.wells[1]);
-  }
+  seedInitialFluid();
+}
+
+/**
+ * Start a game on a specific map. Called from map select.
+ */
+function startGame(map) {
+  currentMap = map;
+  totalTime = 0;
+  growthTimer = 0;
+  deathTimer = 0;
+  escapeTimer = 0;
+  waveRings.rings = [];
+  fluid.clear();
+
+  const mapResult = loadMap(currentMap, {
+    wellSystem, starSystem, lootSystem, portalSystem, planetoidSystem, fluid,
+  });
+  startingMasses = mapResult.startingMasses;
+
+  const [spawnX, spawnY] = findSafeSpawn();
+  ship.teleport(spawnX, spawnY);
+  camX = ship.wx;
+  camY = ship.wy;
 
   seedInitialFluid();
+  gamePhase = 'playing';
 }
 
 // ---- Camera ----
@@ -321,10 +333,12 @@ function updateCamera(dt) {
 
 // ---- Game Loop ----
 
-// Gamepad button edge detection (only trigger on press, not hold)
+// Button edge detection (only trigger on press, not hold)
 let _prevConfirm = false;
 let _prevPause = false;
 let _prevBack = false;
+let _prevUp = false;
+let _prevDown = false;
 
 function togglePause() {
   if (gamePhase === 'playing') {
@@ -352,29 +366,30 @@ function gameLoop(now) {
     fpsTimer = 0;
   }
 
-  // === SIMULATION (frozen when paused) ===
+  const inMenu = gamePhase === 'title' || gamePhase === 'mapSelect';
+
+  // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
 
   // 1. Fluid sim step
   const simDt = 1 / 60;
   const wellUVsForSim = wellSystem.getUVPositions();
-  const shipUV = worldToFluidUV(ship.wx, ship.wy);
   const allDensitySources = [
     ...wellUVsForSim,
     ...starSystem.getUVPositions(),
     ...lootSystem.getUVPositions(),
     ...portalSystem.getUVPositions(),
     ...planetoidSystem.getUVPositions(),
-    shipUV,
+    ...(inMenu ? [] : [worldToFluidUV(ship.wx, ship.wy)]),
   ];
   fluid.setWellPositions(allDensitySources);
   fluid.step(simDt);
 
-  // 2. Well forces
-  wellSystem.update(fluid, simDt, totalTime);
+  // 2. Well forces (camera-culled on large maps)
+  wellSystem.update(fluid, simDt, totalTime, camX, camY);
 
-  // 2a. Star forces
-  starSystem.update(fluid, simDt, totalTime);
+  // 2a. Star forces (camera-culled)
+  starSystem.update(fluid, simDt, totalTime, camX, camY);
 
   // 2b. Ambient turbulence
   const turbStr = CONFIG.fluid.ambientTurbulence;
@@ -397,11 +412,11 @@ function gameLoop(now) {
     }
   }
 
-  // 2c. Loot anchors
-  lootSystem.update(fluid, simDt, totalTime);
+  // 2c. Loot anchors (camera-culled)
+  lootSystem.update(fluid, simDt, totalTime, camX, camY);
 
-  // 2d. Portal fluid effects
-  portalSystem.update(fluid, simDt, totalTime);
+  // 2d. Portal fluid effects (camera-culled)
+  portalSystem.update(fluid, simDt, totalTime, camX, camY);
 
   // 2e. Planetoid fluid effects + well consumption
   planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings);
@@ -419,73 +434,106 @@ function gameLoop(now) {
 
   // 4. Wave ring propagation
   waveRings.update(dt);
-  waveRings.injectIntoFluid(fluid); // distort the ASCII fabric itself
+  waveRings.injectIntoFluid(fluid);
 
-  // 5. Wave ring forces on ship
-  waveRings.applyToShip(ship);
+  } // end paused check
 
-  // 5b. Input (keyboard + gamepad)
+  // === INPUT (always polled — even during menus, for navigation) ===
   inputManager.poll();
 
-  // 5c. Handle confirm/pause/back from any input source (edge-triggered, not held)
   const confirmNow = inputManager.confirmPressed;
   const pauseNow = inputManager.pausePressed;
   const backNow = inputManager.backPressed;
-  if (pauseNow && !_prevPause) togglePause();
-  if ((backNow && !_prevBack) && gamePhase === 'paused') {
-    gamePhase = 'playing'; // Circle backs out of pause menu
-  }
-  if (confirmNow && !_prevConfirm) {
-    if (gamePhase === 'paused') {
+  const upNow = inputManager.upPressed;
+  const downNow = inputManager.downPressed;
+
+  // --- Menu input (title, mapSelect) ---
+  if (gamePhase === 'title') {
+    titleTimer += dt;
+    if ((confirmNow && !_prevConfirm) && titleTimer > 0.5) {
+      gamePhase = 'mapSelect';
+    }
+    // Ambient camera drift
+    camX = wrapWorld(WORLD_SCALE / 2 + Math.cos(totalTime * 0.05) * WORLD_SCALE * 0.25);
+    camY = wrapWorld(WORLD_SCALE / 2 + Math.sin(totalTime * 0.035) * WORLD_SCALE * 0.25);
+
+  } else if (gamePhase === 'mapSelect') {
+    if (upNow && !_prevUp) mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length;
+    if (downNow && !_prevDown) mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length;
+    if (confirmNow && !_prevConfirm) {
+      startGame(MAP_LIST[mapSelectIndex]);
+    }
+    if (backNow && !_prevBack) {
+      gamePhase = 'title';
+      titleTimer = 0;
+    }
+    // Keep ambient camera drift
+    camX = wrapWorld(WORLD_SCALE / 2 + Math.cos(totalTime * 0.05) * WORLD_SCALE * 0.25);
+    camY = wrapWorld(WORLD_SCALE / 2 + Math.sin(totalTime * 0.035) * WORLD_SCALE * 0.25);
+
+  } else if (gamePhase !== 'paused') {
+    // --- Gameplay input ---
+    if (pauseNow && !_prevPause) togglePause();
+
+    if (confirmNow && !_prevConfirm) {
+      if ((gamePhase === 'dead' && deathTimer > 1.0) ||
+          (gamePhase === 'escaped' && escapeTimer > 1.0)) {
+        gamePhase = 'mapSelect';
+      }
+    }
+
+    // 5. Wave ring forces on ship
+    waveRings.applyToShip(ship);
+
+    inputManager.applyToShip(ship);
+
+    // 6. Ship update
+    if (gamePhase === 'playing') {
+      ship.update(dt, fluid, wellSystem);
+
+      starSystem.applyToShip(ship);
+      planetoidSystem.applyToShip(ship);
+
+      const killingWell = wellSystem.checkDeath(ship.wx, ship.wy);
+      if (killingWell) {
+        gamePhase = 'dead';
+        deathTimer = 0;
+        ship.setThrust(false);
+      }
+
+      if (gamePhase === 'playing') {
+        const portal = portalSystem.checkExtraction(ship.wx, ship.wy);
+        if (portal) {
+          gamePhase = 'escaped';
+          escapeTimer = 0;
+          ship.setThrust(false);
+        }
+      }
+    } else if (gamePhase === 'dead') {
+      deathTimer += dt;
+    } else if (gamePhase === 'escaped') {
+      escapeTimer += dt;
+    }
+
+    // Update camera (after ship update)
+    updateCamera(dt);
+
+  } else {
+    // --- Paused input ---
+    if (pauseNow && !_prevPause) togglePause();
+    if (backNow && !_prevBack) {
+      gamePhase = 'mapSelect';
+    }
+    if (confirmNow && !_prevConfirm) {
       gamePhase = 'playing';
-    } else if ((gamePhase === 'dead' && deathTimer > 1.0) ||
-               (gamePhase === 'escaped' && escapeTimer > 1.0)) {
-      restart();
     }
   }
+
   _prevConfirm = confirmNow;
   _prevPause = pauseNow;
   _prevBack = backNow;
-
-  inputManager.applyToShip(ship);
-
-  // 6. Ship update
-  if (gamePhase === 'playing') {
-    ship.update(dt, fluid, wellSystem);
-
-    // Star push on ship
-    starSystem.applyToShip(ship);
-
-    // Planetoid push on ship
-    planetoidSystem.applyToShip(ship);
-
-    // Death check
-    const killingWell = wellSystem.checkDeath(ship.wx, ship.wy);
-    if (killingWell) {
-      gamePhase = 'dead';
-      deathTimer = 0;
-      ship.setThrust(false);
-    }
-
-    // Extraction check
-    if (gamePhase === 'playing') {
-      const portal = portalSystem.checkExtraction(ship.wx, ship.wy);
-      if (portal) {
-        gamePhase = 'escaped';
-        escapeTimer = 0;
-        ship.setThrust(false);
-      }
-    }
-  } else if (gamePhase === 'dead') {
-    deathTimer += dt;
-  } else if (gamePhase === 'escaped') {
-    escapeTimer += dt;
-  }
-
-  // Update camera (after ship update)
-  updateCamera(dt);
-
-  } // end paused check
+  _prevUp = upNow;
+  _prevDown = downNow;
 
   // 7. Render fluid -> ASCII (camera-aware)
   const wellUVs = wellSystem.getUVPositions();
@@ -497,12 +545,16 @@ function gameLoop(now) {
 
   // 8. Render overlay
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-  waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
-  starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-  lootSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-  portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-  planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
-  ship.render(ctx, camX, camY);
+
+  if (!inMenu) {
+    // Only render game entities when playing (not on title/mapSelect)
+    waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
+    starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    lootSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
+    ship.render(ctx, camX, camY);
+  }
 
   // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {
@@ -683,6 +735,95 @@ function gameLoop(now) {
     ctx.restore();
   }
 
+  // === TITLE SCREEN ===
+  if (gamePhase === 'title') {
+    const cx = overlayCanvas.width / 2;
+    const cy = overlayCanvas.height / 2;
+
+    ctx.save();
+    // Semi-transparent veil over the fluid background
+    ctx.fillStyle = 'rgba(0, 0, 20, 0.6)';
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.textAlign = 'center';
+
+    // Title
+    const titlePulse = 0.85 + 0.15 * Math.sin(totalTime * 1.5);
+    ctx.fillStyle = `rgba(255, 60, 30, ${titlePulse})`;
+    ctx.font = 'bold 56px monospace';
+    ctx.fillText('LAST BLACK HOLE', cx, cy - 50);
+
+    // Subtitle
+    ctx.fillStyle = 'rgba(100, 180, 220, 0.7)';
+    ctx.font = '16px monospace';
+    ctx.fillText('SURF THE CURRENTS. ESCAPE THE VOID.', cx, cy);
+
+    // Prompt (fades in after 0.5s)
+    if (titleTimer > 0.5) {
+      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
+      ctx.fillStyle = `rgba(200, 200, 220, ${blink})`;
+      ctx.font = '18px monospace';
+      ctx.fillText('PRESS SPACE TO BEGIN', cx, cy + 80);
+    }
+
+    ctx.restore();
+  }
+
+  // === MAP SELECT SCREEN ===
+  if (gamePhase === 'mapSelect') {
+    const cx = overlayCanvas.width / 2;
+    const cy = overlayCanvas.height / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 20, 0.7)';
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.textAlign = 'center';
+
+    // Header
+    ctx.fillStyle = '#88aaff';
+    ctx.font = 'bold 36px monospace';
+    ctx.fillText('SELECT MAP', cx, cy - 160);
+
+    // Map list
+    const listTop = cy - 100;
+    const itemHeight = 80;
+
+    for (let i = 0; i < MAP_LIST.length; i++) {
+      const map = MAP_LIST[i];
+      const y = listTop + i * itemHeight;
+      const selected = i === mapSelectIndex;
+
+      // Selection highlight
+      if (selected) {
+        ctx.fillStyle = 'rgba(80, 120, 255, 0.15)';
+        ctx.fillRect(cx - 280, y - 20, 560, itemHeight - 8);
+        ctx.strokeStyle = 'rgba(100, 150, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - 280, y - 20, 560, itemHeight - 8);
+      }
+
+      // Map name
+      const nameAlpha = selected ? 1.0 : 0.5;
+      ctx.fillStyle = selected ? '#ffffff' : '#888899';
+      ctx.font = selected ? 'bold 22px monospace' : '20px monospace';
+      ctx.fillText(map.name, cx, y + 4);
+
+      // Map stats
+      const size = `${map.worldScale}x${map.worldScale}`;
+      const stats = `${size}  |  ${map.wells.length} wells  ${map.stars.length} stars  ${map.loot.length} loot  ${map.portals.length} portals`;
+      ctx.fillStyle = `rgba(150, 160, 180, ${selected ? 0.8 : 0.4})`;
+      ctx.font = '13px monospace';
+      ctx.fillText(stats, cx, y + 26);
+    }
+
+    // Navigation hints
+    const hintY = listTop + MAP_LIST.length * itemHeight + 30;
+    ctx.fillStyle = 'rgba(150, 150, 200, 0.6)';
+    ctx.font = '14px monospace';
+    ctx.fillText('UP/DOWN to select  |  SPACE to launch  |  ESC to go back', cx, hintY);
+
+    ctx.restore();
+  }
+
   // === DEATH SCREEN ===
   if (gamePhase === 'dead') {
     ctx.save();
@@ -698,7 +839,7 @@ function gameLoop(now) {
 
       ctx.fillStyle = `rgba(200, 200, 200, ${Math.min((deathTimer - 1.0) * 2, 1)})`;
       ctx.font = '20px monospace';
-      ctx.fillText('Press SPACE to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
+      ctx.fillText('Press SPACE to continue', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
     }
     ctx.restore();
   }
@@ -718,7 +859,7 @@ function gameLoop(now) {
 
       ctx.fillStyle = `rgba(200, 200, 220, ${Math.min((escapeTimer - 1.0) * 2, 1)})`;
       ctx.font = '20px monospace';
-      ctx.fillText('Press SPACE to drop again', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
+      ctx.fillText('Press SPACE to continue', overlayCanvas.width / 2, overlayCanvas.height / 2 + 30);
     }
     ctx.restore();
   }
@@ -760,10 +901,10 @@ function gameLoop(now) {
     ctx.fillText('L2 / Left Trigger .... Brake', cx, cy + 86);
     ctx.fillText('Start / Options ...... Pause', cx, cy + 102);
 
-    // Resume hint
+    // Navigation hints
     ctx.fillStyle = 'rgba(150, 150, 200, 0.8)';
     ctx.font = '16px monospace';
-    ctx.fillText('Press SPACE or ESC to resume', cx, cy + 140);
+    ctx.fillText('SPACE to resume  |  ESC to quit to map select', cx, cy + 140);
 
     ctx.restore();
   }

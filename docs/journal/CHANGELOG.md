@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-03-17 Night Session (Map Files + UI Flow)
+
+### Map File System
+- **coords.js** — `WORLD_SCALE` changed from `const` to `let` with `setWorldScale()` setter. ES module live binding ensures all importers see updates.
+- **map-loader.js** — New file. `loadMap(map, systems)` clears all entity arrays, sets world scale, spawns wells/stars/loot/portals/planetoids from map data. Reinitializes fluid sim if map specifies different resolution.
+- **maps/shallows-3x3.js** — Current 3×3 layout extracted verbatim from hardcoded init().
+- **maps/expanse-5x5.js** — Medium map. 8 wells, 3 stars, 6 loot, 3 portals, 5 planetoids.
+- **maps/deep-field-10x10.js** — Large map. 20 wells, 6 stars, 12 loot, 5 portals, 8 planetoids. Fluid resolution 512 for equivalent texel density.
+
+### Force Culling
+- Wells, stars, loot, portals all skip force injection for entities beyond `CAMERA_VIEW + 0.5` world-units from camera. Critical for 10×10 (20 wells = 20 GPU passes without culling).
+
+### Fluid Reinitialize
+- **fluid.js** — Added `reinitialize(newRes)` method. Destroys old framebuffers, creates new ones at specified resolution. Called automatically by map loader when needed.
+
+### UI Flow (Title Screen + Map Select)
+- **Game phases expanded:** `title` → `mapSelect` → `playing` (+ existing `dead`/`escaped`/`paused`).
+- **Title screen:** Red "LAST BLACK HOLE" title with pulsing opacity, subtitle, blinking prompt. Fluid sim runs as ambient background with slow camera drift.
+- **Map select:** Lists all 3 maps with name, size, and entity counts. Up/Down to navigate, Space to launch, ESC to go back.
+- **Phase transitions:** Title→Space→MapSelect, MapSelect→Space→Playing, Dead/Escaped→Space→MapSelect, Paused→ESC→MapSelect.
+- **input.js** — Added `upPressed`/`downPressed` getters for d-pad, arrows, and stick menu navigation.
+- **main.js** — Restructured game loop: sim runs during menus (ambient background), input always polled, ship/entity rendering skipped during menus.
+- **test-api.js** — `triggerRestart()` now calls `startGame()` to ensure playing state (skips title screen).
+
+### Refactoring
+- **main.js** — Removed all hardcoded entity creation (~40 lines). `init()` and `restart()` both use `loadMap()`. `STARTING_MASSES` constant replaced with dynamic `startingMasses` from map loader.
+
+---
+
 ## 2026-03-17 Day Shift (Controller Overhaul + Playtest Roadmap)
 
 ### Controller Input Overhaul

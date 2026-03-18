@@ -119,6 +119,25 @@ export class InputManager {
     return false;
   }
 
+  /** Menu navigation — up. Arrow up, W, or gamepad d-pad up (button 12). */
+  get upPressed() {
+    if (this._keys['ArrowUp'] || this._keys['KeyW']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 12 && gp.buttons[12].pressed) return true;
+    // Also check left stick up (below -0.5 threshold for menus)
+    if (gp && gp.axes.length > 1 && gp.axes[1] < -0.5) return true;
+    return false;
+  }
+
+  /** Menu navigation — down. Arrow down, S, or gamepad d-pad down (button 13). */
+  get downPressed() {
+    if (this._keys['ArrowDown'] || this._keys['KeyS']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 13 && gp.buttons[13].pressed) return true;
+    if (gp && gp.axes.length > 1 && gp.axes[1] > 0.5) return true;
+    return false;
+  }
+
   _getGamepad() {
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     if (this.gamepadIndex >= 0) return gamepads[this.gamepadIndex] || null;

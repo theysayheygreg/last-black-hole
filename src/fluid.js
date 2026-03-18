@@ -788,6 +788,35 @@ export class FluidSim {
   }
 
   /**
+   * Reinitialize the fluid sim at a new resolution.
+   * Destroys existing framebuffers and creates new ones.
+   */
+  reinitialize(newRes) {
+    const gl = this.gl;
+
+    // Delete old framebuffers and textures
+    const destroyFBO = (fbo) => {
+      gl.deleteTexture(fbo.tex);
+      gl.deleteFramebuffer(fbo.fbo);
+    };
+    const destroyDoubleFBO = (dfbo) => {
+      destroyFBO(dfbo.read);
+      destroyFBO(dfbo.write);
+    };
+
+    destroyDoubleFBO(this.velocity);
+    destroyDoubleFBO(this.density);
+    destroyDoubleFBO(this.pressure);
+    destroyFBO(this.divergenceFBO);
+    destroyFBO(this.curlFBO);
+
+    // Create new framebuffers at the new resolution
+    this.res = newRes;
+    this.texelSize = [1.0 / this.res, 1.0 / this.res];
+    this._createFramebuffers();
+  }
+
+  /**
    * Clear all simulation buffers so a restart begins from a real blank state.
    */
   clear() {

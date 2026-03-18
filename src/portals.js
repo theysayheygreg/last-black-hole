@@ -7,7 +7,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldToFluidUV, worldToScreen, worldDistance } from './coords.js';
+import { worldToFluidUV, worldToScreen, worldDistance, CAMERA_VIEW } from './coords.js';
 
 class Portal {
   constructor(wx, wy) {
@@ -30,10 +30,13 @@ export class PortalSystem {
   /**
    * Apply portal fluid effects: weak inward pull + purple density spiral.
    */
-  update(fluid, dt, totalTime) {
+  update(fluid, dt, totalTime, camX, camY) {
     const cfg = CONFIG.portals;
+    const cullDist = CAMERA_VIEW + 0.5;
 
     for (const portal of this.portals) {
+      if (camX != null && worldDistance(portal.wx, portal.wy, camX, camY) > cullDist) continue;
+
       const [fu, fv] = worldToFluidUV(portal.wx, portal.wy);
 
       // Weak inward pull (about 1/3 of well gravity)

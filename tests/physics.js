@@ -38,6 +38,10 @@ async function run() {
 
     // 1. Ship moves on thrust
     await runner.run("Ship moves when thrust is applied", async () => {
+      // Ensure game is in playing state (may start on title screen)
+      await page.evaluate(() => window.__TEST_API.triggerRestart());
+      await new Promise((r) => setTimeout(r, 500));
+
       const posBefore = await page.evaluate(() => window.__TEST_API.getShipPos());
 
       await page.mouse.move(900, 360);

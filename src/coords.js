@@ -23,8 +23,11 @@
 
 // ---- Scale constants ----
 
-/** Total world size. The old 0-1 space scaled up 3×. All entity positions live in 0–3. */
-export const WORLD_SCALE = 3.0;
+/** Total world size. The old 0-1 space scaled up 3×. All entity positions live in 0–WORLD_SCALE. */
+export let WORLD_SCALE = 3.0;
+
+/** Update the world scale. ES module live binding — all importers see the new value immediately. */
+export function setWorldScale(s) { WORLD_SCALE = s; }
 
 /**
  * How many world-units the camera shows per screen axis.

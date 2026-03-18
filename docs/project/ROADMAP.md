@@ -292,17 +292,18 @@ Greg playtest feedback (3x3 map):
 
 #### Done:
 - [x] **Controller input overhaul** — Scaled radial deadzone (no cardinal snap), aim state hysteresis (enter/exit thresholds + hold timer for spring absorption), soft tiered angular smoothing (kills jitter, instant flick response), last-known-angle hold on release. All constants tunable in dev panel.
+- [x] **Map file format** — `WORLD_SCALE` made mutable. `map-loader.js` loads map definitions into all game systems. Entity placement extracted from main.js into `src/maps/*.js` modules. 3 maps created: Shallows (3×3), Expanse (5×5), Deep Field (10×10).
+- [x] **5×5 and 10×10 maps** — Both created with scaled entity counts. Force culling by camera distance implemented in all entity systems (`wells.js`, `stars.js`, `loot.js`, `portals.js`). `fluid.js` gains `reinitialize(newRes)` for per-map resolution (512 for 10×10). No longer a stretch goal.
+- [x] **Title screen + Map select UI** — Full UI flow: title → mapSelect → playing. Fluid sim runs as ambient background during menus. Map select shows all maps with stats. Death/escape returns to map select. Pause → ESC quits to map select.
 
 #### Remaining today:
 - [ ] **Wake visibility** — Boost ship/planetoid wake injection 3-4×, lower display shader velocity thresholds. CONFIG tuning + shader change.
 - [ ] **ASCII visual depth** — Expand density ramp charset, add time-varying shimmer noise to display shader, tune contrast curve. Shader + ascii-renderer change.
-- [ ] **Map file format** — Extract entity placement from main.js into JS module map files. Enables rapid map iteration and different test layouts.
-- [ ] **5×5 prototype** (stretch) — Intermediate step toward 10×10. Validate fluid resolution scaling, force culling by camera distance.
 
 ### Scope Notes
-- 10×10 map needs architectural work: fluid resolution per screen drops 3× vs current, need spatial culling for force injection, display shader well limit (4) needs to become "nearest 4." Prototype at 5×5 first.
+- 10×10 map architecture complete: force culling, fluid resolution scaling, map file format all done. Display shader well limit (4) still applies to coloring but not to force injection.
 - AI traffic ships deferred — planetoids fill the ambient life role.
-- L1 features (wrecks, inventory, portal evaporation) waiting on visual/input foundation.
+- L1 features (wrecks, inventory, portal evaporation) unblocked — visual/input/map foundation complete.
 
 ### Day Shift (10am-midnight) — L1: The Stakes
 

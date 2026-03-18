@@ -26,9 +26,11 @@ Each decision has:
 | Mar 17 | Greg playtest feedback: "world is too cramped, everything crammed into one screen, can't see effects of stars/loot at this scale" |
 | Mar 17 | Night shift implements 3x3 world expansion with camera follow. Entities spread across the map. Toroidal wrapping for seamless edges. |
 
-**Where it landed:** 3x3 world-units (was 0-1). Fluid sim still 256x256, camera shows a 1/3 slice. Ship can fly across the whole world, camera follows with smooth lerp + velocity lead-ahead.
+| Mar 17 (night) | Map file system implemented. WORLD_SCALE now mutable via `setWorldScale()`. Three maps created: 3×3 (current), 5×5, 10×10. Force culling by camera distance for large maps. Fluid `reinitialize()` for resolution changes. |
 
-**Door status:** Open — may need 4x4 or larger if this still feels tight with more entities. The coordinate system supports any WORLD_SCALE.
+**Where it landed:** Multiple map sizes supported (3, 5, 10). Map select screen lets player choose. WORLD_SCALE is per-map. Fluid resolution scales with map size (256 for 3×3/5×5, 512 for 10×10).
+
+**Door status:** Open — playtesting needed on 5×5 and 10×10 feel. Cull distance may need tuning. More maps easy to add.
 
 ---
 
