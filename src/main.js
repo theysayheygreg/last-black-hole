@@ -23,6 +23,7 @@ import { InputManager } from './input.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
+import { initHUD, showHUD, hideHUD, updateHUD, showWarning } from './hud.js';
 import { loadMap } from './map-loader.js';
 import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
 import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
@@ -190,6 +191,7 @@ function init() {
 
   // Init dev panel
   initDevPanel();
+  initHUD();
 
   // Start loop
   lastFrameTime = performance.now();
@@ -320,6 +322,7 @@ function startGame(map) {
 
   seedInitialFluid();
   gamePhase = 'playing';
+  showHUD();
 }
 
 // ---- Camera ----
@@ -526,6 +529,7 @@ function gameLoop(now) {
       const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
       if (newItems.length > 0) {
         inventory.push(...newItems);
+        showWarning(`+${newItems.length} salvage`, 'rgba(212, 168, 67, 0.9)', 1500);
       }
 
       // Wreck consumption by growing wells
@@ -602,7 +606,14 @@ function gameLoop(now) {
     portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, runElapsedTime);
     planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
+
+    // Update HUD during gameplay
+    updateHUD(runElapsedTime, portalSystem, inventory);
   }
+
+  // Show/hide HUD based on phase
+  if (inMenu) hideHUD();
+  else if (gamePhase === 'playing') showHUD();
 
   // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {
