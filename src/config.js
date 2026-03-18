@@ -191,6 +191,15 @@ export const CONFIG = {
     spiralSpeed: 1.2,         // Spiral rotation in rad/s.
     overlaySize: 12,          // Overlay ring size in pixels. Bigger than loot to stand out.
     pulseRate: 0.8,           // Overlay pulse in Hz. Slower than loot — stately, inviting.
+
+    // Wave schedule: portals arrive in timed waves, each shorter-lived.
+    waves: [
+      { time: 45,  count: [2, 3], types: ['standard'],              lifespan: 90 },
+      { time: 180, count: [1, 2], types: ['standard', 'unstable'],  lifespan: 75 },
+      { time: 330, count: [1, 2], types: ['standard', 'rift'],      lifespan: 60 },
+      { time: 450, count: [1, 1], types: ['unstable'],              lifespan: 45 },
+      { time: 570, count: [1, 1], types: ['standard'],              lifespan: 30 },  // final
+    ],
   },
 
   planetoids: {

@@ -76,12 +76,11 @@ export function loadMap(map, systems) {
     }
   }
 
-  // 8. Spawn portals
-  for (const p of map.portals) {
-    portalSystem.addPortal(p.x, p.y);
-  }
+  // 8. Reset portal wave system (portals spawn via waves, not map data)
+  portalSystem.portals = [];
+  portalSystem._nextWaveIndex = 0;
 
-  // 8. Spawn planetoids by well index reference
+  // 9. Spawn planetoids by well index reference
   for (const pd of (map.planetoids || [])) {
     if (pd.type === 'orbit') {
       const well = wellSystem.wells[pd.wellIndex];

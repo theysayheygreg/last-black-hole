@@ -427,8 +427,8 @@ function gameLoop(now) {
   // 2d. Wreck fluid obstruction (camera-culled)
   wreckSystem.update(fluid, simDt, totalTime, camX, camY);
 
-  // 2e. Portal fluid effects (camera-culled)
-  portalSystem.update(fluid, simDt, totalTime, camX, camY);
+  // 2e. Portal fluid effects + wave spawning (camera-culled)
+  portalSystem.update(fluid, simDt, totalTime, camX, camY, runElapsedTime);
 
   // 2f. Planetoid fluid effects + well consumption
   planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings);
@@ -543,6 +543,16 @@ function gameLoop(now) {
           ship.setThrust(false);
         }
       }
+
+      // Universe collapsed check — no active portals and no more waves
+      if (gamePhase === 'playing' &&
+          portalSystem.activeCount === 0 &&
+          !portalSystem.hasMoreWaves &&
+          runElapsedTime > 60) {  // grace period: don't trigger before first wave
+        gamePhase = 'dead';
+        deathTimer = 0;
+        ship.setThrust(false);
+      }
     } else if (gamePhase === 'dead') {
       deathTimer += dt;
     } else if (gamePhase === 'escaped') {
@@ -586,7 +596,7 @@ function gameLoop(now) {
     starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     lootSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, runElapsedTime);
     planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
   }
