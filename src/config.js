@@ -263,8 +263,8 @@ export const CONFIG = {
 
   wrecks: {
     pickupRadius: 0.08,           // world-units — ship within this = auto-loot
-    wreckGlow: [0.015, 0.012, 0.004],  // gold density injection (rgb)
-    vaultGlow: [0.02, 0.018, 0.008],   // brighter gold for vaults
+    wreckGlow: [0.04, 0.03, 0.01],      // gold density injection (rgb) — visible against fluid
+    vaultGlow: [0.06, 0.05, 0.02],     // brighter gold for vaults
   },
 
   universe: {

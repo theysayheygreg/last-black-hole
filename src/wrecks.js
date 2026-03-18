@@ -72,10 +72,10 @@ class Wreck {
 // ---- Wreck sizes → fluid parameters ----
 
 const SIZE_PARAMS = {
-  small:    { splatRadius: 0.004, glowRadius: 0.003, overlaySize: 6 },
-  medium:   { splatRadius: 0.007, glowRadius: 0.005, overlaySize: 10 },
-  large:    { splatRadius: 0.012, glowRadius: 0.008, overlaySize: 14 },
-  scattered: { splatRadius: 0.003, glowRadius: 0.002, overlaySize: 5 },
+  small:    { splatRadius: 0.005, glowRadius: 0.004, overlaySize: 8 },
+  medium:   { splatRadius: 0.008, glowRadius: 0.006, overlaySize: 12 },
+  large:    { splatRadius: 0.014, glowRadius: 0.010, overlaySize: 16 },
+  scattered: { splatRadius: 0.004, glowRadius: 0.003, overlaySize: 6 },
 };
 
 // ---- WreckSystem ----
