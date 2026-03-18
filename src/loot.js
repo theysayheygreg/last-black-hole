@@ -49,20 +49,20 @@ export class LootSystem {
         cfg.fluidTerminalSpeed * s
       );
 
-      // Visible glow
-      fluid.splat(fu, fv, 0, 0, cfg.glowRadius * s2,
+      // Visible glow — visual buffer (stays anchored, not advected)
+      fluid.visualSplat(fu, fv, cfg.glowRadius * s2,
         cfg.densityRate * 0.4,
         cfg.densityRate * 0.8,
         cfg.densityRate * 1.0
       );
 
-      // 4 shimmer points orbiting the anchor
+      // 4 shimmer points orbiting the anchor — visual buffer
       const shimmerAngle = totalTime * cfg.shimmerSpeed;
       for (let i = 0; i < 4; i++) {
         const angle = shimmerAngle + (i / 4) * Math.PI * 2;
         const px = fu + Math.cos(angle) * cfg.shimmerRadius * s;
         const py = fv + Math.sin(angle) * cfg.shimmerRadius * s;
-        fluid.splat(px, py, 0, 0, 0.001 * s2,
+        fluid.visualSplat(px, py, 0.001 * s2,
           cfg.densityRate * 0.4,
           cfg.densityRate * 0.4,
           cfg.densityRate * 0.3

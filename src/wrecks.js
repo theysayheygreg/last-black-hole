@@ -127,15 +127,15 @@ export class WreckSystem {
         0, 0, 0  // no density from obstruction itself
       );
 
-      // Visual glow — gold for active, gray for looted
+      // Visual glow — visual buffer (stays anchored, not advected)
       if (!wreck.looted) {
         const glow = wreck.type === 'vault' ? cfg.vaultGlow : cfg.wreckGlow;
-        fluid.splat(fu, fv, 0, 0, sizeP.glowRadius * s2,
+        fluid.visualSplat(fu, fv, sizeP.glowRadius * s2,
           glow[0], glow[1], glow[2]
         );
       } else {
-        fluid.splat(fu, fv, 0, 0, sizeP.glowRadius * s2,
-          0.02, 0.02, 0.02  // dim gray
+        fluid.visualSplat(fu, fv, sizeP.glowRadius * s2,
+          0.02, 0.02, 0.02
         );
       }
     }

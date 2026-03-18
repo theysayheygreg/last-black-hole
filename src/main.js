@@ -398,9 +398,11 @@ function gameLoop(now) {
   fluid.setWellPositions(allDensitySources);
   fluid.step(simDt);
 
-  // 1b. Fade visual density buffer — rate must be close to physics dissipation (0.998)
-  // so steady-state density matches. 0.92 was way too fast (40x less accumulation).
-  fluid.fadeVisualDensity(0.995);
+  // 1b. Fade visual density buffer.
+  // 0.99/frame at 60fps: halves in ~1.15s. Entities re-inject every frame,
+  // so steady-state = injection / 0.01 = 100× per-frame injection.
+  // 0.92 was too fast (invisible). 0.995 was too slow (accumulated forever).
+  fluid.fadeVisualDensity(0.99);
 
   // 2. Well forces (camera-culled on large maps)
   wellSystem.update(fluid, simDt, totalTime, camX, camY);

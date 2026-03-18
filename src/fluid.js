@@ -856,6 +856,7 @@ export class FluidSim {
     destroyDoubleFBO(this.velocity);
     destroyDoubleFBO(this.density);
     destroyDoubleFBO(this.pressure);
+    destroyDoubleFBO(this.visualDensity);
     destroyFBO(this.divergenceFBO);
     destroyFBO(this.curlFBO);
 

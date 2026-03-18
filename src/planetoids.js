@@ -215,13 +215,13 @@ export class PlanetoidSystem {
       );
 
       // Density trail
+      // Density trail — visual buffer (cosmetic, not advected)
       for (let i = 1; i <= cfg.trailLength; i++) {
         const trailFU = fu - dirX * cfg.trailSpacing * s * i;
         const trailFV = fv + dirY * cfg.trailSpacing * s * i;
         const fade = 1 - (i / cfg.trailLength) * 0.6;
-        fluid.splat(
+        fluid.visualSplat(
           trailFU, trailFV,
-          0, 0,
           0.002 * s2,
           cfg.density * fade * 0.6,
           cfg.density * fade * 0.8,
