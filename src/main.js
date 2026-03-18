@@ -398,8 +398,9 @@ function gameLoop(now) {
   fluid.setWellPositions(allDensitySources);
   fluid.step(simDt);
 
-  // 1b. Fade visual density buffer (persistence for trails/afterglow)
-  fluid.fadeVisualDensity(0.92);
+  // 1b. Fade visual density buffer — rate must be close to physics dissipation (0.998)
+  // so steady-state density matches. 0.92 was way too fast (40x less accumulation).
+  fluid.fadeVisualDensity(0.995);
 
   // 2. Well forces (camera-culled on large maps)
   wellSystem.update(fluid, simDt, totalTime, camX, camY);
