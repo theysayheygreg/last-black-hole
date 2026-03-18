@@ -239,7 +239,11 @@ export function worldToUV(worldValue) {
  * Returns [worldVx, worldVy].
  */
 export function fluidVelToWorld(fvx, fvy) {
-  return [fvx * WORLD_SCALE, -fvy * WORLD_SCALE];
+  // Use FLUID_REF_SCALE (not WORLD_SCALE) so the ship feels the same
+  // fluid coupling regardless of map size. Force injection is already
+  // UV-scaled to produce the same UV velocity — we don't want to then
+  // amplify it by a larger WORLD_SCALE on bigger maps.
+  return [fvx * FLUID_REF_SCALE, -fvy * FLUID_REF_SCALE];
 }
 
 /**

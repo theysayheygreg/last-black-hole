@@ -275,17 +275,17 @@ void main() {
   //  Color-level noise was ineffective — luminance too low for index changes.)
 
   // === FLOW DIRECTION TINTING ===
+  // Scale UV distances to world-equivalent so well glow matches across map sizes.
+  // At reference scale (3.0): s=1.0, no change. At 5x5: s=0.6, tighter glow.
+  float uvS = 3.0 / u_worldScale;
   for (int i = 0; i < 4; i++) {
     if (i >= u_wellCount) break;
 
-    // Distance in fluid UV space (with wrapping consideration)
     vec2 diff = fluidUV - u_wellPositions[i];
-    // Toroidal shortest path in UV space
     diff = diff - round(diff);
-    float dist = length(diff);
+    float dist = length(diff) / uvS;  // normalize to reference-scale UV distance
 
-    // Direction from this pixel toward the well
-    vec2 toWell = dist > 0.0001 ? -diff / dist : vec2(0.0);
+    vec2 toWell = dist > 0.0001 ? -diff / length(diff) : vec2(0.0);
 
     float flowAlignment = speed > 0.001 ? dot(normalize(vel), toWell) : 0.0;
     float flowInfluence = smoothstep(0.5, 0.05, dist) * smoothstep(0.0, 0.08, speed);
