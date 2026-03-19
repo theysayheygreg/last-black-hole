@@ -14,6 +14,7 @@ const suites = [
   { name: "Smoke", file: "smoke.js" },
   { name: "Physics", file: "physics.js" },
   { name: "Coordinates", file: "coordinates.js" },
+  { name: "Flow", file: "flow.js" },
 ];
 
 console.log(`\n╔══════════════════════════════════════╗`);
