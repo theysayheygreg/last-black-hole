@@ -98,7 +98,7 @@ function init() {
   fluid = new FluidSim(gl);
   asciiRenderer = new ASCIIRenderer(gl);
 
-  // Init entity systems (empty — map loader populates them)
+  // Init entity systems (empty — loadScene populates them)
   wellSystem = new WellSystem();
   starSystem = new StarSystem();
   lootSystem = new LootSystem();
@@ -106,27 +106,17 @@ function init() {
   portalSystem = new PortalSystem();
   planetoidSystem = new PlanetoidSystem();
 
-  // Load the default map
-  const mapResult = loadMap(currentMap, {
-    wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
-  });
-  startingMasses = mapResult.startingMasses;
-
   // Init input manager
   inputManager = new InputManager();
 
   // Init wave ring system
   waveRings = new WaveRingSystem();
 
-  // Init ship — find a safe spawn away from all objects
+  // Init ship
   ship = new Ship(glCanvas.width, glCanvas.height);
-  const [initX, initY] = findSafeSpawn();
-  ship.wx = initX;
-  ship.wy = initY;
 
-  // Init camera to ship position
-  camX = ship.wx;
-  camY = ship.wy;
+  // Load title scene (clears everything, loads default map, seeds fluid)
+  loadTitleScene();
 
   // Input: mouse is UI-only (menu clicks). Movement from keyboard/gamepad via InputManager.
   overlayCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -144,8 +134,7 @@ function init() {
       } else if (gamePhase === 'paused') {
         togglePause();  // resume, not quit
       } else if (gamePhase === 'mapSelect') {
-        gamePhase = 'title';
-        titleTimer = 0;
+        loadTitleScene();
       }
     }
     if (e.code === 'Space') e.preventDefault();
@@ -161,9 +150,6 @@ function init() {
     ship.canvasHeight = glCanvas.height;
     asciiRenderer.resize(glCanvas.width, glCanvas.height);
   });
-
-  // Seed initial density
-  seedInitialFluid();
 
   // Init test API
   initTestAPI(() => ({
@@ -270,60 +256,74 @@ function findSafeSpawn(minDist = 0.4) {
   return [bestX, bestY];
 }
 
-function restart() {
+/**
+ * Full scene teardown + setup. The ONE authority for resetting state.
+ * Every scene transition (title, map select, gameplay) calls this.
+ * Nothing from the previous scene leaks into the next.
+ */
+function loadScene(map) {
+  // 1. Reset ALL timers
   totalTime = 0;
   growthTimer = 0;
-  gamePhase = 'playing';
   deathTimer = 0;
   escapeTimer = 0;
+  runElapsedTime = 0;
+  runEndTime = 0;
+
+  // 2. Reset gameplay state
+  inventory = [];
   waveRings.rings = [];
 
-  // Reset the fluid field itself so restart does not inherit the prior run's wakes,
-  // turbulence, or accretion density.
+  // 3. Clear ALL fluid buffers (velocity, density, pressure, visualDensity, etc.)
   fluid.clear();
 
-  // Reload the current map (resets all entities, world scale, planetoids)
+  // 4. Load map (clears + repopulates all entity systems, sets world scale,
+  //    reinitializes fluid if resolution changes)
+  currentMap = map;
   const mapResult = loadMap(currentMap, {
     wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
   });
   startingMasses = mapResult.startingMasses;
 
-  // Reset ship to a random safe position (away from all objects)
-  const [spawnX, spawnY] = findSafeSpawn();
-  ship.teleport(spawnX, spawnY);
-  camX = ship.wx;
-  camY = ship.wy;
+  // 5. Reset camera to world center
+  camX = map.worldScale / 2;
+  camY = map.worldScale / 2;
 
+  // 6. Seed fresh fluid
   seedInitialFluid();
+}
+
+/**
+ * Load the title screen scene. Runs the default map as ambient background.
+ */
+function loadTitleScene() {
+  loadScene(MAP_SHALLOWS);
+  gamePhase = 'title';
+  titleTimer = 0;
+  hideHUD();
 }
 
 /**
  * Start a game on a specific map. Called from map select.
  */
 function startGame(map) {
-  currentMap = map;
-  totalTime = 0;
-  growthTimer = 0;
-  deathTimer = 0;
-  escapeTimer = 0;
-  runElapsedTime = 0;
-  inventory = [];
-  waveRings.rings = [];
-  fluid.clear();
+  loadScene(map);
 
-  const mapResult = loadMap(currentMap, {
-    wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
-  });
-  startingMasses = mapResult.startingMasses;
-
+  // Place ship in a safe spawn
   const [spawnX, spawnY] = findSafeSpawn();
   ship.teleport(spawnX, spawnY);
   camX = ship.wx;
   camY = ship.wy;
 
-  seedInitialFluid();
   gamePhase = 'playing';
   showHUD();
+}
+
+/**
+ * Restart the current map (same map, fresh state).
+ */
+function restart() {
+  startGame(currentMap);
 }
 
 // ---- Camera ----
@@ -501,8 +501,7 @@ function gameLoop(now) {
       startGame(MAP_LIST[mapSelectIndex]);
     }
     if (backNow && !_prevBack) {
-      gamePhase = 'title';
-      titleTimer = 0;
+      loadTitleScene();
     }
     // Keep ambient camera drift
     camX = wrapWorld(WORLD_SCALE / 2 + Math.cos(totalTime * 0.05) * WORLD_SCALE * 0.25);
@@ -594,9 +593,7 @@ function gameLoop(now) {
       if (pauseMenuSelection === 0) {
         togglePause();  // return to game
       } else {
-        gamePhase = 'title';
-        titleTimer = 0;
-        hideHUD();
+        loadTitleScene();
       }
     }
   }
