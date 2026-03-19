@@ -20,10 +20,12 @@ export const MAP = {
       killRadius: 0.5,
       spinRate: 0.1,
       points: 28,
-      // Large void so negative space covers all title text
-      voidRadius: 0.012,
-      // Push accretion disk out beyond the text area
-      accretionRadius: 0.04,
+      // Massive void — dark center covers all title text (~50% of screen)
+      // The splat formula exp(-d²/r) means r=0.08 gives a black circle ~0.28 UV radius
+      // At WORLD_SCALE=3, that's ~0.84 world-units diameter = ~84% of the 1-unit camera view
+      voidRadius: 0.08,
+      // Push accretion disk out well beyond the text area
+      accretionRadius: 0.08,
     },
   ],
   stars: [],

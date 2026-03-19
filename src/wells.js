@@ -119,7 +119,9 @@ export class WellSystem {
       // === EVENT HORIZON ===
       // Void + glow in visual buffer so they stay centered on the well
       const voidR = well.getVoidRadius() * s2;
-      fluid.visualSplat(fu, fv, voidR, -0.05, -0.05, -0.05);
+      // Negative density strength scales with radius — bigger voids need stronger injection
+      const voidStr = voidR > 0.01 ? -0.3 : -0.05;
+      fluid.visualSplat(fu, fv, voidR, voidStr, voidStr, voidStr);
 
       const horizonPts = cfg.horizonPoints;
       const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult * s;
