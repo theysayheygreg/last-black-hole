@@ -125,15 +125,18 @@ void main() {
     float glitchNoise = fract(sin(dot(cellIndex + floor(u_time * 30.0) * 0.37, vec2(43.23, 71.97))) * 43758.5453);
     // Probability of corruption increases with intensity
     if (glitchNoise < u_glitchIntensity) {
-      // Random character index
+      // Random character index — bias toward heavy characters for visual impact
       float rndChar = fract(sin(dot(cellIndex * 1.3 + u_time * 17.0, vec2(127.1, 311.7))) * 43758.5453);
-      charIdx = floor(rndChar * rampSize);
+      charIdx = floor(rndChar * rampSize * 0.5 + rampSize * 0.5);  // upper half of ramp
       // Random ramp row
       float rndRow = fract(sin(dot(cellIndex * 2.7 + u_time * 11.0, vec2(269.5, 183.3))) * 43758.5453);
       rampRow = floor(rndRow * 4.0);
-      // Color corruption: shift toward white/magenta
-      float colorCorrupt = u_glitchIntensity * glitchNoise;
-      sceneColor.rgb = mix(sceneColor.rgb, vec3(0.8, 0.2, 0.6), colorCorrupt * 0.5);
+      // Force bright color — glitch must be visible against any background including black
+      float colorNoise = fract(sin(dot(cellIndex * 0.7 + u_time * 23.0, vec2(94.3, 217.9))) * 43758.5453);
+      vec3 glitchColor = colorNoise < 0.3 ? vec3(0.8, 0.1, 0.5)   // magenta
+                        : colorNoise < 0.6 ? vec3(0.1, 0.8, 0.7)   // cyan
+                        :                     vec3(0.9, 0.9, 0.9);  // white
+      sceneColor.rgb = glitchColor * (0.5 + 0.5 * u_glitchIntensity);
     }
   }
 
