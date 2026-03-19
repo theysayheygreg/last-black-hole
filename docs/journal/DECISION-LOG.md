@@ -17,6 +17,26 @@ Each decision has:
 
 ---
 
+## Incident: Map Select Crash (2026-03-18)
+
+### What happened
+Removed `portals` array from map files (portal wave system replaced static portals). The map select screen still referenced `map.portals.length` to display stats. Crash on entering map select — game stopped functioning.
+
+### Why tests didn't catch it
+All tests use `triggerRestart()` which bypasses the title→mapSelect→startGame user flow. The crash only occurred on the path real users take (select map from menu).
+
+### What we learned
+1. When removing data fields, grep for ALL consumers before committing
+2. Validation tests that flag "dead data" must also verify no live references exist
+3. Test suite needs at least one test that exercises the actual user flow (title→mapSelect→play), not just the shortcut API
+
+### Changes made
+- Fixed the crash (display wreck count instead of portal count)
+- Added memory: always grep for all consumers before removing data
+- Documented in decision log for future reference
+
+---
+
 ## Map Scale
 
 ### Q: How big should the world be?
