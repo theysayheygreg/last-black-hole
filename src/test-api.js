@@ -68,10 +68,10 @@ export function initTestAPI(getState) {
     },
 
     triggerRestart() {
-      const { restart, startGame, currentMap } = getState();
-      // startGame ensures we're in 'playing' phase (not stuck on title/mapSelect)
-      if (startGame && currentMap) startGame(currentMap);
-      else if (restart) restart();
+      const { startGame, mapList } = getState();
+      // Start the first playable map (not the title map)
+      if (startGame && mapList && mapList.length > 0) startGame(mapList[0]);
+      else if (startGame) startGame(getState().currentMap);
     },
   };
 

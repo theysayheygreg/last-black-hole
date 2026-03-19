@@ -25,6 +25,7 @@ import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, updateHUD, showWarning } from './hud.js';
 import { loadMap } from './map-loader.js';
+import { MAP as MAP_TITLE } from './maps/title-screen.js';
 import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
 import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
 import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
@@ -297,7 +298,7 @@ function loadScene(map) {
  * Load the title screen scene. Runs the default map as ambient background.
  */
 function loadTitleScene() {
-  loadScene(MAP_SHALLOWS);
+  loadScene(MAP_TITLE);
   gamePhase = 'title';
   titleTimer = 0;
   hideHUD();
