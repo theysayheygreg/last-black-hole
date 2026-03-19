@@ -24,6 +24,7 @@ export class Well {
     this.accretionRadius = opts.accretionRadius ?? null;
     this.accretionSpinRate = opts.accretionSpinRate ?? null;
     this.accretionPoints = opts.accretionPoints ?? null;
+    this.voidRadius = opts.voidRadius ?? null;  // negative density splat radius (UV-space before scaling)
     this.baseKillRadius = opts.killRadius ?? CONFIG.wells.killRadius;
     this.killRadius = this.baseKillRadius;
     // Per-well growth rate: base + random variance for asymmetric growth
@@ -37,6 +38,7 @@ export class Well {
     this.killRadius = this.baseKillRadius * (1 + massDelta * CONFIG.universe.wellKillRadiusGrowth);
   }
 
+  getVoidRadius() { return this.voidRadius ?? CONFIG.wells.voidRadius ?? 0.001; }
   getAccretionRate() { return this.accretionRate ?? CONFIG.wells.accretionRate; }
   getAccretionRadius() { return this.accretionRadius ?? CONFIG.wells.accretionRadius; }
   getAccretionSpinRate() { return this.accretionSpinRate ?? CONFIG.wells.accretionSpinRate; }
@@ -116,7 +118,8 @@ export class WellSystem {
 
       // === EVENT HORIZON ===
       // Void + glow in visual buffer so they stay centered on the well
-      fluid.visualSplat(fu, fv, 0.001 * s2, -0.05, -0.05, -0.05);
+      const voidR = well.getVoidRadius() * s2;
+      fluid.visualSplat(fu, fv, voidR, -0.05, -0.05, -0.05);
 
       const horizonPts = cfg.horizonPoints;
       const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult * s;

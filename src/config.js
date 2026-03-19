@@ -77,6 +77,7 @@ export const CONFIG = {
 
     // --- Death ---
     killRadius: 0.04,         // World-units — ship dies inside this radius. ~16px at 1200px screen.
+    voidRadius: 0.001,        // UV-space radius of the negative density splat at well center.
 
     // --- Accretion disk visuals (fluid density injection) ---
     accretionRate: 0.015,     // Base density brightness per injection point. Scaled by well mass.

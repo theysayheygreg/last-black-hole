@@ -49,6 +49,9 @@ export function loadMap(map, systems) {
       killRadius: w.killRadius,
       accretionSpinRate: w.spinRate,
       accretionPoints: w.points,
+      accretionRadius: w.accretionRadius,
+      accretionRate: w.accretionRate,
+      voidRadius: w.voidRadius,
     });
   }
 

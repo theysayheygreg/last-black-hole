@@ -26,6 +26,7 @@ import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, updateHUD, showWarning } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { loadMap } from './map-loader.js';
+import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
 import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
 import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
@@ -279,7 +280,13 @@ function findSafeSpawn(minDist = 0.4) {
  * Nothing from the previous scene leaks into the next.
  */
 function loadScene(map) {
-  // 1. Reset ALL timers
+  // 1. Revert previous scene's CONFIG overrides
+  revertSceneOverrides();
+
+  // 2. Apply new scene's CONFIG overrides
+  applySceneOverrides(CONFIG, map.configOverrides);
+
+  // 3. Reset ALL timers
   totalTime = 0;
   growthTimer = 0;
   deathTimer = 0;
@@ -287,14 +294,14 @@ function loadScene(map) {
   runElapsedTime = 0;
   runEndTime = 0;
 
-  // 2. Reset gameplay state
+  // 4. Reset gameplay state
   inventory = [];
   waveRings.rings = [];
 
-  // 3. Clear ALL fluid buffers (velocity, density, pressure, visualDensity, etc.)
+  // 5. Clear ALL fluid buffers (velocity, density, pressure, visualDensity, etc.)
   fluid.clear();
 
-  // 4. Load map (clears + repopulates all entity systems, sets world scale,
+  // 6. Load map (clears + repopulates all entity systems, sets world scale,
   //    reinitializes fluid if resolution changes)
   currentMap = map;
   const mapResult = loadMap(currentMap, {
@@ -302,11 +309,11 @@ function loadScene(map) {
   });
   startingMasses = mapResult.startingMasses;
 
-  // 5. Reset camera to world center
+  // 7. Reset camera — 'locked' = world center, 'follow' = ship sets it later
   camX = map.worldScale / 2;
   camY = map.worldScale / 2;
 
-  // 6. Seed fresh fluid
+  // 8. Seed fresh fluid
   seedInitialFluid();
 }
 
@@ -558,7 +565,7 @@ function gameLoop(now) {
     if (!transitionActive && (confirmNow && !_prevConfirm) && titleTimer > 0.5) {
       gamePhase = 'mapSelect';
     }
-    // Camera locked to world center — well sits behind title text
+    // Camera locked to world center (from map.camera = 'locked')
     camX = WORLD_SCALE / 2;
     camY = WORLD_SCALE / 2;
 
