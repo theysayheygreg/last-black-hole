@@ -217,7 +217,7 @@ uniform vec3 u_normalColor;
 uniform vec3 u_nearWellColor;
 uniform vec3 u_hotWellColor;
 // Well positions for coloring — in fluid UV space
-uniform vec2 u_wellPositions[32];
+uniform vec2 u_wellPositions[256];
 uniform int u_wellCount;
 uniform float u_densityScale;
 // Camera offset in fluid UV space and world scale
@@ -282,7 +282,7 @@ void main() {
   // Scale UV distances to world-equivalent so well glow matches across map sizes.
   // At reference scale (3.0): s=1.0, no change. At 5x5: s=0.6, tighter glow.
   float uvS = 3.0 / u_worldScale;
-  for (int i = 0; i < 32; i++) {
+  for (int i = 0; i < 256; i++) {
     if (i >= u_wellCount) break;
 
     vec2 diff = fluidUV - u_wellPositions[i];
@@ -322,7 +322,7 @@ void main() {
 const FRAG_DISSIPATION = `#version 300 es
 precision highp float;
 uniform sampler2D u_density;
-uniform vec2 u_wellPositions[32];
+uniform vec2 u_wellPositions[256];
 uniform int u_wellCount;
 uniform float u_nearDissipation;
 uniform float u_farDissipation;
@@ -336,7 +336,7 @@ void main() {
 
   // Find distance to nearest density source (well, star, or loot)
   float minDist = 999.0;
-  for (int i = 0; i < 32; i++) {
+  for (int i = 0; i < 256; i++) {
     if (i >= u_wellCount) break;
     float d = distance(v_uv, u_wellPositions[i]);
     minDist = min(minDist, d);
@@ -678,7 +678,7 @@ export class FluidSim {
       gl.uniform1f(u['u_farDissipation'], CONFIG.fluid.farDissipation);
       gl.uniform1f(u['u_nearRadius'], CONFIG.fluid.dissipationNearRadius);
       gl.uniform1f(u['u_farRadius'], CONFIG.fluid.dissipationFarRadius);
-      const count = Math.min(this._wellPositionsUV.length, 32);
+      const count = this._wellPositionsUV.length;
       gl.uniform1i(u['u_wellCount'], count);
       for (let i = 0; i < count; i++) {
         const loc = u[`u_wellPositions[${i}]`];
@@ -759,7 +759,7 @@ export class FluidSim {
     gl.uniform1f(u['u_time'], totalTime);
 
     // Set well positions for coloring
-    const count = Math.min(wellPositionsUV.length, 32);
+    const count = wellPositionsUV.length;
     gl.uniform1i(u['u_wellCount'], count);
     for (let i = 0; i < count; i++) {
       const loc = u[`u_wellPositions[${i}]`];
