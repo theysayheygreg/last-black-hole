@@ -900,7 +900,7 @@ function gameLoop(now) {
 
       // Map stats
       const size = `${map.worldScale}x${map.worldScale}`;
-      const stats = `${size}  |  ${map.wells.length} wells  ${map.stars.length} stars  ${map.loot.length} loot  ${map.portals.length} portals`;
+      const stats = `${size}  |  ${map.wells.length} wells  ${map.stars.length} stars  ${map.loot.length} loot  ${(map.wrecks || []).length} wrecks`;
       ctx.fillStyle = `rgba(150, 160, 180, ${selected ? 0.8 : 0.4})`;
       ctx.font = '13px monospace';
       ctx.fillText(stats, cx, y + 26);
