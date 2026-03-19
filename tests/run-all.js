@@ -10,6 +10,7 @@ const path = require("path");
 const htmlFile = process.argv[2] || "index-a.html";
 
 const suites = [
+  { name: "Validation", file: "validation.js" },
   { name: "Smoke", file: "smoke.js" },
   { name: "Physics", file: "physics.js" },
   { name: "Coordinates", file: "coordinates.js" },

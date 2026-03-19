@@ -44,11 +44,7 @@ export const MAP = {
     { x: 3.8, y: 1.8, type: 'vault', tier: 3, size: 'small' },
     { x: 4.5, y: 4.0, type: 'derelict', tier: 3, size: 'medium' },
   ],
-  portals: [
-    { x: 0.3, y: 0.3 },
-    { x: 4.7, y: 4.7 },
-    { x: 2.5, y: 4.5 },
-  ],
+  // portals spawn via wave system, not map data
   planetoids: [
     { type: 'orbit', wellIndex: 0 },
     { type: 'orbit', wellIndex: 3 },

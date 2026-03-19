@@ -84,13 +84,7 @@ export const MAP = {
     { x: 7.2, y: 3.2, type: 'derelict', tier: 3, size: 'medium' },
     { x: 5.0, y: 3.2, type: 'derelict', tier: 3, size: 'small' },
   ],
-  portals: [
-    { x: 0.3, y: 0.3 },
-    { x: 9.7, y: 9.7 },
-    { x: 0.3, y: 9.7 },
-    { x: 9.7, y: 0.3 },
-    { x: 5.0, y: 5.0 },  // center portal — high-risk extraction near the mega-well
-  ],
+  // portals spawn via wave system, not map data
   planetoids: [
     { type: 'orbit', wellIndex: 0 },
     { type: 'orbit', wellIndex: 1 },
