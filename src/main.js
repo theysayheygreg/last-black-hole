@@ -64,6 +64,7 @@ let camY = 1.5;
 let currentMap = MAP_SHALLOWS;
 let startingMasses = [];
 let mapSelectIndex = 0;
+let currentCameraMode = 'follow';
 const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
 
 // Run state
@@ -304,6 +305,7 @@ function loadScene(map) {
   // 6. Load map (clears + repopulates all entity systems, sets world scale,
   //    reinitializes fluid if resolution changes)
   currentMap = map;
+  currentCameraMode = map.camera ?? 'follow';
   const mapResult = loadMap(currentMap, {
     wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
   });
@@ -384,6 +386,15 @@ function transitionToGame(map) {
  */
 function restart() {
   startGame(currentMap);
+}
+
+function applySceneCamera(dt) {
+  if (currentCameraMode === 'locked') {
+    camX = currentMap.worldScale / 2;
+    camY = currentMap.worldScale / 2;
+    return;
+  }
+  updateCamera(dt);
 }
 
 // ---- Camera ----
@@ -565,9 +576,7 @@ function gameLoop(now) {
     if (!transitionActive && (confirmNow && !_prevConfirm) && titleTimer > 0.5) {
       gamePhase = 'mapSelect';
     }
-    // Camera locked to world center
-    camX = currentMap.worldScale / 2;
-    camY = currentMap.worldScale / 2;
+    applySceneCamera(dt);
 
   } else if (gamePhase === 'mapSelect') {
     if (upNow && !_prevUp) mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length;
@@ -580,9 +589,7 @@ function gameLoop(now) {
       gamePhase = 'title';
       titleTimer = 0;
     }
-    // Camera locked to world center (same scene as title)
-    camX = currentMap.worldScale / 2;
-    camY = currentMap.worldScale / 2;
+    applySceneCamera(dt);
 
   } else if (gamePhase !== 'paused') {
     // --- Gameplay input ---
@@ -657,7 +664,7 @@ function gameLoop(now) {
     }
 
     // Update camera (after ship update)
-    updateCamera(dt);
+    applySceneCamera(dt);
 
   } else {
     // --- Paused input ---

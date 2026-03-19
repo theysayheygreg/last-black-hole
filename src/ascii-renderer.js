@@ -75,7 +75,7 @@ void main() {
   // Quantum fluctuations: per-cell shimmer, world-anchored to prevent sliding.
   // Use cellIndex (screen grid) offset by camera position for world anchoring.
   vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_worldScale;
-  vec2 camCellOffset = floor(u_camOffset * u_resolution / vec2(cellW, cellH));
+  vec2 camCellOffset = floor(u_camOffset * u_worldScale * u_resolution / vec2(cellW, cellH));
   vec2 anchoredCell = cellIndex + camCellOffset;
   float noise = fract(sin(dot(anchoredCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
   float noise2 = fract(sin(dot(anchoredCell * 0.5 + floor(u_time * 1.1) * 0.31, vec2(269.5, 183.3))) * 43758.5453);
