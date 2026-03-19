@@ -138,11 +138,11 @@ function init() {
     if (e.key === 'Escape') {
       e.preventDefault();
       // Edge-triggered handling is in the game loop via _prevPause.
-      // ESC during play = pause. ESC during pause = quit to map select.
+      // ESC during play = pause. ESC during pause = resume.
       if (gamePhase === 'playing') {
         togglePause();
       } else if (gamePhase === 'paused') {
-        gamePhase = 'mapSelect';
+        togglePause();  // resume, not quit
       } else if (gamePhase === 'mapSelect') {
         gamePhase = 'title';
         titleTimer = 0;
@@ -351,10 +351,12 @@ let _prevPause = false;
 let _prevBack = false;
 let _prevUp = false;
 let _prevDown = false;
+let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
 
 function togglePause() {
   if (gamePhase === 'playing') {
     gamePhase = 'paused';
+    pauseMenuSelection = 0;  // default to "return to game"
     ship.setThrust(false);
   } else if (gamePhase === 'paused') {
     gamePhase = 'playing';
@@ -580,12 +582,22 @@ function gameLoop(now) {
 
   } else {
     // --- Paused input ---
+    // Circle/back = resume game (not quit)
+    if (backNow && !_prevBack) togglePause();
+    // Start/options = also resume
     if (pauseNow && !_prevPause) togglePause();
-    if (backNow && !_prevBack) {
-      gamePhase = 'mapSelect';
-    }
+    // Navigate menu
+    if (upNow && !_prevUp) pauseMenuSelection = 0;
+    if (downNow && !_prevDown) pauseMenuSelection = 1;
+    // Confirm selection
     if (confirmNow && !_prevConfirm) {
-      gamePhase = 'playing';
+      if (pauseMenuSelection === 0) {
+        togglePause();  // return to game
+      } else {
+        gamePhase = 'title';
+        titleTimer = 0;
+        hideHUD();
+      }
     }
   }
 
@@ -617,7 +629,7 @@ function gameLoop(now) {
     ship.render(ctx, camX, camY);
 
     // Update HUD during gameplay
-    updateHUD(runElapsedTime, portalSystem, inventory);
+    updateHUD(runElapsedTime, portalSystem, inventory, growthTimer);
   }
 
   // Show/hide HUD based on phase
@@ -992,39 +1004,43 @@ function gameLoop(now) {
     ctx.save();
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
     ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-
     ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 12;
 
     // Title
     ctx.fillStyle = '#88aaff';
     ctx.font = 'bold 36px monospace';
-    ctx.fillText('PAUSED', cx, cy - 100);
+    ctx.fillText('PAUSED', cx, cy - 120);
 
-    // Controls reference
-    ctx.font = '14px monospace';
-    ctx.fillStyle = '#8888cc';
-    ctx.fillText('--- KEYBOARD ---', cx, cy - 60);
-    ctx.fillStyle = '#aaaadd';
-    ctx.font = '13px monospace';
-    ctx.fillText('Arrow Keys / WASD .... Steer', cx, cy - 40);
-    ctx.fillText('Space ................ Thrust', cx, cy - 24);
-    ctx.fillText('Ctrl ................. Brake', cx, cy - 8);
-    ctx.fillText('Escape ............... Pause', cx, cy + 8);
+    // Menu buttons
+    const buttons = ['return to game', 'exit to title'];
+    for (let i = 0; i < buttons.length; i++) {
+      const y = cy - 40 + i * 50;
+      const selected = i === pauseMenuSelection;
 
-    ctx.fillStyle = '#8888cc';
-    ctx.font = '14px monospace';
-    ctx.fillText('--- GAMEPAD ---', cx, cy + 34);
-    ctx.fillStyle = '#aaaadd';
-    ctx.font = '13px monospace';
-    ctx.fillText('Left Stick ........... Steer', cx, cy + 54);
-    ctx.fillText('R2 / Right Trigger ... Thrust', cx, cy + 70);
-    ctx.fillText('L2 / Left Trigger .... Brake', cx, cy + 86);
-    ctx.fillText('Start / Options ...... Pause', cx, cy + 102);
+      if (selected) {
+        ctx.fillStyle = 'rgba(80, 120, 255, 0.15)';
+        ctx.fillRect(cx - 160, y - 18, 320, 36);
+        ctx.strokeStyle = 'rgba(100, 150, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - 160, y - 18, 320, 36);
+      }
 
-    // Navigation hints
-    ctx.fillStyle = 'rgba(150, 150, 200, 0.8)';
-    ctx.font = '16px monospace';
-    ctx.fillText('SPACE to resume  |  ESC to quit to map select', cx, cy + 140);
+      ctx.fillStyle = selected ? '#ffffff' : 'rgba(150, 150, 180, 0.6)';
+      ctx.font = selected ? 'bold 20px monospace' : '18px monospace';
+      ctx.fillText(buttons[i], cx, y + 6);
+    }
+
+    // Controls reference (compact)
+    ctx.font = '12px monospace';
+    ctx.fillStyle = 'rgba(130, 130, 170, 0.5)';
+    ctx.fillText('steer: stick / arrows   thrust: R2 / space   brake: L2 / ctrl', cx, cy + 70);
+
+    // Navigation hint
+    ctx.fillStyle = 'rgba(130, 130, 170, 0.4)';
+    ctx.font = '12px monospace';
+    ctx.fillText('up/down to select  ·  X / space to confirm  ·  O / esc to resume', cx, cy + 100);
 
     ctx.restore();
   }

@@ -48,16 +48,42 @@
       font-size: 14px;
       letter-spacing: 0.05em;
     }
-    #hud-timer {
-      top: 16px; left: 20px;
+    #hud-collapse {
+      top: 14px; left: 20px;
       color: rgba(150, 170, 200, 0.7);
       text-shadow: 0 0 8px rgba(150, 170, 200, 0.4);
+      line-height: 1.5;
+    }
+    #hud-collapse .hud-label {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: rgba(120, 140, 170, 0.5);
+    }
+    #hud-collapse .hud-value {
+      font-size: 16px;
+    }
+    #hud-collapse .hud-sub {
+      font-size: 11px;
+      color: rgba(130, 150, 180, 0.6);
     }
     #hud-portals {
-      top: 16px; right: 20px;
+      top: 14px; right: 20px;
       text-align: right;
       color: rgba(180, 120, 255, 0.8);
       text-shadow: 0 0 8px rgba(180, 120, 255, 0.4);
+      line-height: 1.5;
+    }
+    #hud-portals .hud-label {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      color: rgba(140, 100, 200, 0.5);
+    }
+    #hud-portals .hud-value {
+      font-size: 14px;
+    }
+    #hud-portals .hud-sub {
+      font-size: 11px;
+      color: rgba(150, 110, 210, 0.6);
     }
     #hud-salvage {
       bottom: 20px; left: 20px;
@@ -100,8 +126,16 @@
   <canvas id="fluid-canvas"></canvas>
   <canvas id="overlay-canvas"></canvas>
   <div id="hud" style="display:none;">
-    <div id="hud-timer" class="hud-panel">00:00</div>
-    <div id="hud-portals" class="hud-panel">no exits</div>
+    <div id="hud-collapse" class="hud-panel">
+      <div class="hud-label">universal collapse</div>
+      <div class="hud-value" id="hud-collapse-timer">10:00</div>
+      <div class="hud-sub" id="hud-collapse-event"></div>
+    </div>
+    <div id="hud-portals" class="hud-panel">
+      <div class="hud-label">wormholes</div>
+      <div class="hud-value" id="hud-portals-status">no active wormholes</div>
+      <div class="hud-sub" id="hud-portals-next"></div>
+    </div>
     <div id="hud-salvage" class="hud-panel"></div>
     <div id="hud-warnings"></div>
   </div>
