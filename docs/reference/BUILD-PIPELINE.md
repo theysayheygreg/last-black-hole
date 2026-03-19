@@ -6,6 +6,7 @@ The rule is simple:
 
 - one gameplay source of truth: the web runtime
 - one build command: `npm run build`
+- one runtime mode per build: `dev`, `test`, or `release`
 - versioned outputs under `builds/`
 - a manifest and per-target `BUILD-INFO-*.json` files for traceability
 - one combined playtest zip for handing to friends
@@ -15,8 +16,32 @@ The rule is simple:
 From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 
 - `npm run build` — build `web`, `ipad`, `mac`, `win`, and `linux`
+- `npm run build:release` — explicit friend-facing build with debug UX stripped
+- `npm run build:test` — build with test API enabled but dev UX stripped
+- `npm run build:dev` — build with dev panel + test API + debug overlays enabled
 - `npm run build:web` — build only the web playtest artifact
 - `npm run build:desktop` — build web + desktop/mobile wrapper targets
+
+`npm run build` currently defaults to `release` mode.
+
+## Runtime modes
+
+LBH now has three runtime modes.
+
+- `dev`
+  - dev panel enabled
+  - test API enabled
+  - debug overlay allowed
+- `test`
+  - dev panel disabled
+  - test API enabled
+  - debug overlay disabled
+- `release`
+  - dev panel disabled
+  - test API disabled
+  - debug overlay disabled
+
+The source tree stays in `dev` by default for local iteration. The build pipeline writes a generated `src/build-flags.js` into each artifact so packaged builds can behave differently without a bundler or second config system.
 
 ## Runtime prerequisites
 
@@ -39,6 +64,8 @@ Useful references:
 Builds land under:
 
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v<version>/`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v<version>-test/`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v<version>-dev/`
 
 That folder contains:
 
@@ -54,13 +81,17 @@ That folder contains:
 - `Last Black Hole-win32-x64/` if Windows packaging succeeded
 - `Last Black Hole-linux-x64/` if Linux packaging succeeded
 
-The build date now lives inside the manifest and build info files instead of the folder name.
+`release` keeps the clean `v<version>` folder because that is the friend-facing artifact. `test` and `dev` get a mode suffix so they do not overwrite the release build.
+
+The build date now lives inside the manifest and build info files instead of the folder name. The selected runtime mode is recorded in the manifest and per-target build info files.
 
 Alongside the version folder, the build also writes:
 
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-black-hole-playtest-v<version>.zip`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-black-hole-playtest-v<version>-test.zip`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-black-hole-playtest-v<version>-dev.zip`
 
-That zip contains the whole version folder so you can hand one file to friends instead of three separate archives.
+Each zip contains the whole matching build folder. In practice, the friend-facing handoff should almost always be the plain `release` zip with no mode suffix.
 
 ## Current wrapper strategy
 

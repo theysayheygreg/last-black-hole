@@ -24,6 +24,7 @@ import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, updateHUD, showWarning } from './hud.js';
+import { applyRuntimeFlags } from './runtime-flags.js';
 import { loadMap } from './map-loader.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
 import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
@@ -62,6 +63,7 @@ let camY = 1.5;
 let currentMap = MAP_SHALLOWS;
 let startingMasses = [];
 let mapSelectIndex = 0;
+const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
 
 // Run state
 let runElapsedTime = 0;
@@ -152,33 +154,35 @@ function init() {
     asciiRenderer.resize(glCanvas.width, glCanvas.height);
   });
 
-  // Init test API
-  initTestAPI(() => ({
-    ship,
-    fluid,
-    wellSystem,
-    starSystem,
-    lootSystem,
-    portalSystem,
-    planetoidSystem,
-    waveRings,
-    inputManager,
-    canvasWidth: glCanvas.width,
-    canvasHeight: glCanvas.height,
-    camX, camY,
-    fps,
-    setTimeScale: (s) => { timeScale = s; },
-    restart: () => { restart(); },
-    currentMap,
-    mapList: MAP_LIST,
-    startGame,
-    setMap: (map) => { startGame(map); },
-    get gamePhase() { return gamePhase; },
-    set gamePhase(p) { gamePhase = p; },
-  }));
+  if (RUNTIME_FLAGS.enableTestAPI) {
+    initTestAPI(() => ({
+      ship,
+      fluid,
+      wellSystem,
+      starSystem,
+      lootSystem,
+      portalSystem,
+      planetoidSystem,
+      waveRings,
+      inputManager,
+      canvasWidth: glCanvas.width,
+      canvasHeight: glCanvas.height,
+      camX, camY,
+      fps,
+      setTimeScale: (s) => { timeScale = s; },
+      restart: () => { restart(); },
+      currentMap,
+      mapList: MAP_LIST,
+      startGame,
+      setMap: (map) => { startGame(map); },
+      get gamePhase() { return gamePhase; },
+      set gamePhase(p) { gamePhase = p; },
+    }));
+  }
 
-  // Init dev panel
-  initDevPanel();
+  if (RUNTIME_FLAGS.enableDevPanel) {
+    initDevPanel();
+  }
   initHUD();
 
   // Start loop

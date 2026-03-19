@@ -33,6 +33,15 @@ function parseTargets(argv) {
     .filter(Boolean);
 }
 
+function parseMode(argv) {
+  const arg = argv.find((item) => item.startsWith('--mode='));
+  const mode = arg ? arg.split('=')[1].trim().toLowerCase() : 'release';
+  if (!['dev', 'test', 'release'].includes(mode)) {
+    throw new Error(`Invalid mode "${mode}". Use --mode=dev|test|release`);
+  }
+  return mode;
+}
+
 function stamp(now = new Date()) {
   const pad = (value) => String(value).padStart(2, '0');
   return [
@@ -48,6 +57,10 @@ function stamp(now = new Date()) {
 
 function versionTag() {
   return `v${PKG.version}`;
+}
+
+function buildIdForMode(mode) {
+  return mode === 'release' ? versionTag() : `${versionTag()}-${mode}`;
 }
 
 function ensureDir(target) {
@@ -90,12 +103,39 @@ function makeBuildInfo(base) {
   };
 }
 
-function copyWebRuntime(rendererDir) {
+function buildFlagsForMode(mode) {
+  return {
+    dev: {
+      mode,
+      enableDevPanel: true,
+      enableTestAPI: true,
+      enableDebugOverlay: true,
+    },
+    test: {
+      mode,
+      enableDevPanel: false,
+      enableTestAPI: true,
+      enableDebugOverlay: false,
+    },
+    release: {
+      mode,
+      enableDevPanel: false,
+      enableTestAPI: false,
+      enableDebugOverlay: false,
+    },
+  }[mode];
+}
+
+function copyWebRuntime(rendererDir, mode) {
   ensureDir(rendererDir);
   fs.copyFileSync(path.join(ROOT, 'index-a.html'), path.join(rendererDir, 'index.html'));
   fs.copyFileSync(path.join(ROOT, 'index-a.html'), path.join(rendererDir, 'index-a.html'));
   copyIfExists(path.join(ROOT, 'src'), path.join(rendererDir, 'src'));
   copyIfExists(path.join(ROOT, 'assets'), path.join(rendererDir, 'assets'));
+  fs.writeFileSync(
+    path.join(rendererDir, 'src', 'build-flags.js'),
+    `window.__LBH_BUILD_FLAGS__ = ${JSON.stringify(buildFlagsForMode(mode), null, 2)};\n`
+  );
 }
 
 function zipDir(sourceDir, zipPath) {
@@ -113,15 +153,16 @@ function zipDir(sourceDir, zipPath) {
   });
 }
 
-function buildWeb(targetRoot) {
+function buildWeb(targetRoot, mode) {
   const webDir = path.join(targetRoot, 'last-black-hole-web');
   removeIfExists(webDir);
   ensureDir(webDir);
 
-  copyWebRuntime(webDir);
+  copyWebRuntime(webDir, mode);
 
   const info = makeBuildInfo({
     target: 'web',
+    mode,
     entrypointSource: 'index-a.html',
     entrypointArtifact: 'index.html',
     artifact: 'last-black-hole-web/',
@@ -136,12 +177,12 @@ function buildWeb(targetRoot) {
   };
 }
 
-function buildIpadWebApp(targetRoot) {
+function buildIpadWebApp(targetRoot, mode) {
   const ipadDir = path.join(targetRoot, 'last-black-hole-ipad-webapp');
   removeIfExists(ipadDir);
   ensureDir(ipadDir);
 
-  copyWebRuntime(ipadDir);
+  copyWebRuntime(ipadDir, mode);
 
   const indexPath = path.join(ipadDir, 'index.html');
   const source = fs.readFileSync(indexPath, 'utf8');
@@ -197,6 +238,7 @@ function buildIpadWebApp(targetRoot) {
 
   writeJson(path.join(targetRoot, 'BUILD-INFO-ipad.json'), makeBuildInfo({
     target: 'ipad',
+    mode,
     outputDir: targetRoot,
     artifact: 'last-black-hole-ipad-webapp',
     installMode: 'Safari Add to Home Screen',
@@ -210,7 +252,7 @@ function buildIpadWebApp(targetRoot) {
   };
 }
 
-function stageElectronShell() {
+function stageElectronShell(mode) {
   removeIfExists(STAGING_ROOT);
   ensureDir(STAGING_ROOT);
 
@@ -231,11 +273,11 @@ function stageElectronShell() {
     path.join(STAGING_ROOT, 'electron-main.cjs')
   );
 
-  copyWebRuntime(path.join(STAGING_ROOT, 'renderer'));
+  copyWebRuntime(path.join(STAGING_ROOT, 'renderer'), mode);
 }
 
-async function buildElectronTarget(targetRoot, target) {
-  stageElectronShell();
+async function buildElectronTarget(targetRoot, target, mode) {
+  stageElectronShell(mode);
 
   const platform =
     target === 'mac' ? 'darwin' :
@@ -270,6 +312,7 @@ async function buildElectronTarget(targetRoot, target) {
 
   const result = {
     target,
+    mode,
     platform,
     arch,
     outputDir: targetRoot,
@@ -299,12 +342,13 @@ async function buildElectronTarget(targetRoot, target) {
 
 async function main() {
   const targets = parseTargets(process.argv.slice(2));
+  const mode = parseMode(process.argv.slice(2));
   if (targets.length === 0) {
     throw new Error('No valid targets requested. Use --targets=web,mac,win');
   }
 
   ensureDir(BUILD_ROOT);
-  const buildId = versionTag();
+  const buildId = buildIdForMode(mode);
   const targetRoot = path.join(BUILD_ROOT, buildId);
   removeIfExists(targetRoot);
   ensureDir(targetRoot);
@@ -313,21 +357,22 @@ async function main() {
 
   if (targets.includes('web')) {
     console.log('Building web artifact...');
-    results.push(buildWeb(targetRoot));
+    results.push(buildWeb(targetRoot, mode));
   }
 
   if (targets.includes('ipad')) {
     console.log('Building ipad web-app artifact...');
-    results.push(buildIpadWebApp(targetRoot));
+    results.push(buildIpadWebApp(targetRoot, mode));
   }
 
   for (const target of targets.filter((item) => !['web', 'ipad'].includes(item))) {
     console.log(`Building ${target} desktop artifact...`);
     try {
-      results.push(await buildElectronTarget(targetRoot, target));
+      results.push(await buildElectronTarget(targetRoot, target, mode));
     } catch (error) {
       results.push({
         target,
+        mode,
         status: 'failed',
         error: error.message,
       });
@@ -338,10 +383,14 @@ async function main() {
     buildId,
     builtAt: new Date().toISOString(),
     version: PKG.version,
+    mode,
     results,
   });
 
-  const playtestZip = path.join(BUILD_ROOT, `last-black-hole-playtest-${versionTag()}.zip`);
+  const playtestZip = path.join(
+    BUILD_ROOT,
+    `last-black-hole-playtest-${buildId}.zip`
+  );
   removeIfExists(playtestZip);
   zipDir(targetRoot, playtestZip);
 
