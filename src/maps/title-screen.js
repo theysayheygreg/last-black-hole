@@ -11,7 +11,8 @@ export const MAP = {
   worldScale: 3.0,
   wells: [
     // Central supermassive well — centered exactly at (1.5, 1.5)
-    { x: 1.5, y: 1.5, mass: 3.5, orbitalDir: 1, killRadius: 0.12, spinRate: 0.25, points: 14 },
+    // Mass 8.0 creates a void roughly as wide as the title text
+    { x: 1.5, y: 1.5, mass: 8.0, orbitalDir: 1, killRadius: 0.25, spinRate: 0.15, points: 20 },
   ],
   stars: [],
   loot: [],

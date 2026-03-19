@@ -72,12 +72,19 @@ void main() {
   float rampSize = u_numChars;
   float charIdx = lum * (rampSize - 1.0);
 
-  // Quantum fluctuations: sparse cells that blink, anchored in worldspace.
+  // Quantum fluctuations: per-cell shimmer, world-anchored to prevent sliding.
+  // Use cellIndex (screen grid) offset by camera position for world anchoring.
   vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_worldScale;
-  vec2 worldCell = floor(fluidUV * u_resolution / vec2(cellW, cellH));
-  float noise = fract(sin(dot(worldCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
-  float noise2 = fract(sin(dot(worldCell * 0.5 + floor(u_time * 1.1) * 0.31, vec2(269.5, 183.3))) * 43758.5453);
-  float disturbance = smoothstep(0.0, 0.3, lum) * 2.8 + 0.2;
+  vec2 camCellOffset = floor(u_camOffset * u_resolution / vec2(cellW, cellH));
+  vec2 anchoredCell = cellIndex + camCellOffset;
+  float noise = fract(sin(dot(anchoredCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
+  float noise2 = fract(sin(dot(anchoredCell * 0.5 + floor(u_time * 1.1) * 0.31, vec2(269.5, 183.3))) * 43758.5453);
+  // Shimmer intensity: base from luminance + extra at boundaries (high local contrast)
+  vec2 neighborOffset = vec2(cellW, cellH) / u_resolution;
+  float lumRight = dot(texture(u_scene, cellCenter + vec2(neighborOffset.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+  float lumBelow = dot(texture(u_scene, cellCenter + vec2(0.0, neighborOffset.y)).rgb, vec3(0.299, 0.587, 0.114));
+  float edgeStrength = abs(lum - lumRight) + abs(lum - lumBelow);  // high at boundaries
+  float disturbance = smoothstep(0.0, 0.3, lum) * 2.8 + 0.2 + edgeStrength * 8.0;
   float threshold = 1.0 - u_shimmer * 0.01 * disturbance;
   if (noise > threshold) {
     charIdx += fract(noise * 7.0) * 2.0 + 1.0;

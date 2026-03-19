@@ -75,9 +75,9 @@ let transitionActive = false;
 let transitionTimer = 0;
 let transitionCallback = null;  // called at midpoint to swap the scene
 let transitionFired = false;
-const TRANSITION_RAMP_UP = 0.35;   // seconds to reach full corruption
-const TRANSITION_HOLD = 0.15;      // seconds at full corruption
-const TRANSITION_RAMP_DOWN = 0.4;  // seconds to resolve into new scene
+const TRANSITION_RAMP_UP = 0.6;    // seconds to reach full corruption
+const TRANSITION_HOLD = 0.25;      // seconds at full corruption
+const TRANSITION_RAMP_DOWN = 0.6;  // seconds to resolve into new scene
 const TRANSITION_TOTAL = TRANSITION_RAMP_UP + TRANSITION_HOLD + TRANSITION_RAMP_DOWN;
 
 // ---- Init ----
