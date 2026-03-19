@@ -212,30 +212,10 @@ export function shouldCull(entityWX, entityWY, camX, camY, margin = 0.3) {
   return worldDistance(entityWX, entityWY, camX, camY) > cullDist;
 }
 
-// ---- Legacy well-space functions (0–1 range) ----
-// The original 1×1 map used 0–1 normalized coordinates called "well-space."
-// These are kept for backward compat but nothing should add new callers.
-
-export function wellToFluidUV(wx, wy) { return [wx, 1.0 - wy]; }
-export function fluidUVToWell(fu, fv) { return [fu, 1.0 - fv]; }
-export function screenToFluidUV(sx, sy, canvasW, canvasH) {
-  return [sx / canvasW, 1.0 - (sy / canvasH)];
-}
-export function fluidUVToScreen(fu, fv, canvasW, canvasH) {
-  return [fu * canvasW, (1.0 - fv) * canvasH];
-}
-export function wellToScreen(wx, wy, canvasW, canvasH) {
-  return [wx * canvasW, wy * canvasH];
-}
-export function screenToWell(sx, sy, canvasW, canvasH) {
-  return [sx / canvasW, sy / canvasH];
-}
-
 // ---- Velocity conversions ----
 
 /** Fluid velocity is Y-up; screen/world velocity is Y-down. Negate Y component. */
 export function fluidVelToScreen(fvx, fvy) { return [fvx, -fvy]; }
-export function screenVelToFluid(svx, svy) { return [svx, -svy]; }
 
 // ---- Unit conversion helpers ----
 // Use these instead of inline * WORLD_SCALE or / WORLD_SCALE.

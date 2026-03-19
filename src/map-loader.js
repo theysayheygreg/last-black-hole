@@ -52,6 +52,7 @@ export function loadMap(map, systems) {
       accretionRadius: w.accretionRadius,
       accretionRate: w.accretionRate,
       voidRadius: w.voidRadius,
+      growthRate: w.growthRate,
     });
   }
 

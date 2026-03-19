@@ -39,10 +39,14 @@ export const MAP = {
   // Scene-specific CONFIG overrides — reverted when leaving this scene
   configOverrides: {
     ascii: {
-      shimmer: 5.0,       // more dramatic shimmer on title
+      shimmer: 5.0,         // more dramatic shimmer on title
     },
     wells: {
-      accretionRate: 0.03, // brighter disk
+      accretionRate: 0.03,  // brighter disk
+    },
+    fluid: {
+      ambientTurbulence: 0.0002,  // reduce ambient noise so the void stays dark
+      ambientDensity: 0.0001,     // less random density fighting the void
     },
   },
 };

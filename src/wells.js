@@ -65,6 +65,9 @@ export class WellSystem {
     // No camera culling for wells — they're too important to skip.
     // Direct gravity + kill radius check ALL wells, so visual density must match.
     // 8-20 wells is cheap enough for the GPU.
+    // UV scaling factors. s = linear (for UV position offsets).
+    // s2 = quadratic (for splat radii — because the splat shader uses exp(-d²/r),
+    // keeping the same world-space Gaussian width requires r to scale as s²).
     const s = uvScale();
     const s2 = s * s;
 
@@ -118,9 +121,11 @@ export class WellSystem {
 
       // === EVENT HORIZON ===
       // Void + glow in visual buffer so they stay centered on the well
+      // s² because exp(-d²/r) — Gaussian width scales as sqrt(r)
       const voidR = well.getVoidRadius() * s2;
-      // Negative density strength scales with radius — bigger voids need stronger injection
-      const voidStr = voidR > 0.01 ? -0.3 : -0.05;
+      // Strength proportional to radius — bigger voids need stronger injection
+      // to overcome ambient density/turbulence at greater distances from center
+      const voidStr = -0.05 * (1 + well.getVoidRadius() * 100);
       fluid.visualSplat(fu, fv, voidR, voidStr, voidStr, voidStr);
 
       const horizonPts = cfg.horizonPoints;

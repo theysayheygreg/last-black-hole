@@ -247,7 +247,13 @@ void main() {
   // Normalize UV velocity to world-equivalent speed so wakes look equally bright
   // on all map sizes. Config calibrated at WORLD_SCALE=3 (reference scale).
   float speed = length(vel) * u_worldScale / 3.0;
-  float rawDensity = length(totalDens);
+
+  // Density magnitude — clamp negative to zero (negative = void = no density)
+  vec3 clampedDens = max(totalDens, vec3(0.0));
+  float rawDensity = length(clampedDens);
+
+  // Void darkness: where totalDens is negative, darken proportionally
+  float voidDarkness = clamp(-min(totalDens.r, min(totalDens.g, totalDens.b)) * 3.0, 0.0, 1.0);
 
   // Tone-map density: raw values range 0–300+, compress to 0–1 via exponential curve
   float density = 1.0 - exp(-rawDensity * u_densityScale);
@@ -305,9 +311,13 @@ void main() {
     col = mix(col, wellColor, wellInfluence * 0.6);
     float ringGlow = smoothstep(0.08, 0.04, dist) * (1.0 - smoothstep(0.02, 0.01, dist));
     col += ringGlow * vec3(0.3, 0.1, 0.02);
+    // Void darkening from proximity (fixed small zone near well center)
     float voidStrength = smoothstep(0.035, 0.008, dist);
     col = mix(col, vec3(0.0), voidStrength);
   }
+
+  // Void darkness from negative visual density — extends as far as the void injection reaches
+  col = mix(col, vec3(0.0), voidDarkness);
 
   // Subtle vignette at screen edges (use screen UV, not fluid UV)
   vec2 fromCenter = v_uv - 0.5;

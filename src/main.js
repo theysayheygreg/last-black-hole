@@ -565,9 +565,9 @@ function gameLoop(now) {
     if (!transitionActive && (confirmNow && !_prevConfirm) && titleTimer > 0.5) {
       gamePhase = 'mapSelect';
     }
-    // Camera locked to world center (from map.camera = 'locked')
-    camX = WORLD_SCALE / 2;
-    camY = WORLD_SCALE / 2;
+    // Camera locked to world center
+    camX = currentMap.worldScale / 2;
+    camY = currentMap.worldScale / 2;
 
   } else if (gamePhase === 'mapSelect') {
     if (upNow && !_prevUp) mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length;
@@ -581,8 +581,8 @@ function gameLoop(now) {
       titleTimer = 0;
     }
     // Camera locked to world center (same scene as title)
-    camX = WORLD_SCALE / 2;
-    camY = WORLD_SCALE / 2;
+    camX = currentMap.worldScale / 2;
+    camY = currentMap.worldScale / 2;
 
   } else if (gamePhase !== 'paused') {
     // --- Gameplay input ---
