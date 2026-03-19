@@ -43,6 +43,7 @@ uniform float u_shimmer;       // quantum fluctuation probability (0 = off)
 uniform vec2 u_camOffset;     // camera center in fluid UV (for world-anchored noise)
 uniform float u_worldScale;   // world scale (for world-anchored noise)
 uniform float u_dirThreshold; // speed threshold for directional character selection
+uniform float u_glitchIntensity; // 0.0 = normal, 1.0 = full corruption (scene transitions)
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -107,6 +108,26 @@ void main() {
     // Probabilistic blending: directional emerges from shimmer noise at transition speeds
     float dirStrength = smoothstep(u_dirThreshold, u_dirThreshold * 4.0, speed);
     if (noise < (1.0 - dirStrength)) rampRow = 0.0;  // fall back to isotropic
+  }
+
+  // === GLITCH TRANSITION ===
+  // When u_glitchIntensity > 0, corrupt characters progressively.
+  // At 1.0, every cell is a random character from a random ramp.
+  if (u_glitchIntensity > 0.0) {
+    // Per-cell noise that changes every frame (screen-space, not world-anchored)
+    float glitchNoise = fract(sin(dot(cellIndex + floor(u_time * 30.0) * 0.37, vec2(43.23, 71.97))) * 43758.5453);
+    // Probability of corruption increases with intensity
+    if (glitchNoise < u_glitchIntensity) {
+      // Random character index
+      float rndChar = fract(sin(dot(cellIndex * 1.3 + u_time * 17.0, vec2(127.1, 311.7))) * 43758.5453);
+      charIdx = floor(rndChar * rampSize);
+      // Random ramp row
+      float rndRow = fract(sin(dot(cellIndex * 2.7 + u_time * 11.0, vec2(269.5, 183.3))) * 43758.5453);
+      rampRow = floor(rndRow * 4.0);
+      // Color corruption: shift toward white/magenta
+      float colorCorrupt = u_glitchIntensity * glitchNoise;
+      sceneColor.rgb = mix(sceneColor.rgb, vec3(0.8, 0.2, 0.6), colorCorrupt * 0.5);
+    }
   }
 
   // Atlas lookup: 16 columns per row, 4 rows (isotropic, horizontal, vertical, diagonal)
@@ -317,7 +338,7 @@ export class ASCIIRenderer {
    * Call this AFTER fluid.render(sceneTarget, ...) has filled the scene FBO.
    * Renders the ASCII result to the screen (framebuffer null).
    */
-  render(totalTime = 0, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, velocityTex = null) {
+  render(totalTime = 0, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, velocityTex = null, glitchIntensity = 0) {
     const gl = this.gl;
     const ascii = CONFIG.ascii;
 
@@ -354,6 +375,7 @@ export class ASCIIRenderer {
     gl.uniform2f(this.uniforms['u_camOffset'], camOffsetU, camOffsetV);
     gl.uniform1f(this.uniforms['u_worldScale'], worldScale);
     gl.uniform1f(this.uniforms['u_dirThreshold'], ascii.dirThreshold ?? 0.01);
+    gl.uniform1f(this.uniforms['u_glitchIntensity'], glitchIntensity);
 
     // Draw fullscreen quad
     gl.bindVertexArray(this.quadVAO);

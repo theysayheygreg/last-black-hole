@@ -70,6 +70,16 @@ let runElapsedTime = 0;
 let runEndTime = 0;  // frozen at moment of death/escape
 let inventory = [];
 
+// Scene transition state
+let transitionActive = false;
+let transitionTimer = 0;
+let transitionCallback = null;  // called at midpoint to swap the scene
+let transitionFired = false;
+const TRANSITION_RAMP_UP = 0.35;   // seconds to reach full corruption
+const TRANSITION_HOLD = 0.15;      // seconds at full corruption
+const TRANSITION_RAMP_DOWN = 0.4;  // seconds to resolve into new scene
+const TRANSITION_TOTAL = TRANSITION_RAMP_UP + TRANSITION_HOLD + TRANSITION_RAMP_DOWN;
+
 // ---- Init ----
 
 function init() {
@@ -136,8 +146,10 @@ function init() {
         togglePause();
       } else if (gamePhase === 'paused') {
         togglePause();  // resume, not quit
-      } else if (gamePhase === 'mapSelect') {
-        loadTitleScene();
+      } else if (gamePhase === 'mapSelect' && !transitionActive) {
+        // No transition needed — same scene (title map), just change UI
+        gamePhase = 'title';
+        titleTimer = 0;
       }
     }
     if (e.code === 'Space') e.preventDefault();
@@ -299,13 +311,44 @@ function loadScene(map) {
 }
 
 /**
- * Load the title screen scene. Runs the default map as ambient background.
+ * Trigger a glitch transition. The callback fires at the midpoint
+ * (full corruption) to swap the scene invisibly behind the noise.
+ */
+function triggerTransition(callback) {
+  if (transitionActive) return;  // don't stack transitions
+  transitionActive = true;
+  transitionTimer = 0;
+  transitionFired = false;
+  transitionCallback = callback;
+}
+
+/** Get current glitch intensity (0-1) for the ASCII shader. */
+function getGlitchIntensity() {
+  if (!transitionActive) return 0;
+  const t = transitionTimer;
+  if (t < TRANSITION_RAMP_UP) {
+    return t / TRANSITION_RAMP_UP;  // 0 → 1
+  } else if (t < TRANSITION_RAMP_UP + TRANSITION_HOLD) {
+    return 1.0;  // full corruption
+  } else if (t < TRANSITION_TOTAL) {
+    return 1.0 - (t - TRANSITION_RAMP_UP - TRANSITION_HOLD) / TRANSITION_RAMP_DOWN;  // 1 → 0
+  }
+  return 0;
+}
+
+/**
+ * Load the title screen scene. Runs the title map as ambient background.
  */
 function loadTitleScene() {
   loadScene(MAP_TITLE);
   gamePhase = 'title';
   titleTimer = 0;
   hideHUD();
+}
+
+/** Transition to title with glitch effect. */
+function transitionToTitle() {
+  triggerTransition(() => loadTitleScene());
 }
 
 /**
@@ -322,6 +365,11 @@ function startGame(map) {
 
   gamePhase = 'playing';
   showHUD();
+}
+
+/** Transition to gameplay with glitch effect. */
+function transitionToGame(map) {
+  triggerTransition(() => startGame(map));
 }
 
 /**
@@ -383,6 +431,21 @@ function gameLoop(now) {
     fps = frameCount / fpsTimer;
     frameCount = 0;
     fpsTimer = 0;
+  }
+
+  // Scene transition: tick timer, fire callback at midpoint, end when done
+  if (transitionActive) {
+    transitionTimer += rawDt;  // use rawDt, not scaled dt
+    // Fire scene swap at the midpoint (full corruption — scene invisible)
+    if (!transitionFired && transitionTimer >= TRANSITION_RAMP_UP) {
+      transitionFired = true;
+      if (transitionCallback) transitionCallback();
+      transitionCallback = null;
+    }
+    // End transition
+    if (transitionTimer >= TRANSITION_TOTAL) {
+      transitionActive = false;
+    }
   }
 
   const inMenu = gamePhase === 'title' || gamePhase === 'mapSelect';
@@ -492,34 +555,39 @@ function gameLoop(now) {
   // --- Menu input (title, mapSelect) ---
   if (gamePhase === 'title') {
     titleTimer += dt;
-    if ((confirmNow && !_prevConfirm) && titleTimer > 0.5) {
+    if (!transitionActive && (confirmNow && !_prevConfirm) && titleTimer > 0.5) {
       gamePhase = 'mapSelect';
     }
-    // Ambient camera drift
-    camX = wrapWorld(WORLD_SCALE / 2 + Math.cos(totalTime * 0.05) * WORLD_SCALE * 0.25);
-    camY = wrapWorld(WORLD_SCALE / 2 + Math.sin(totalTime * 0.035) * WORLD_SCALE * 0.25);
+    // Camera locked to world center — well sits behind title text
+    camX = WORLD_SCALE / 2;
+    camY = WORLD_SCALE / 2;
 
   } else if (gamePhase === 'mapSelect') {
     if (upNow && !_prevUp) mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length;
     if (downNow && !_prevDown) mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length;
-    if (confirmNow && !_prevConfirm) {
-      startGame(MAP_LIST[mapSelectIndex]);
+    if (!transitionActive && confirmNow && !_prevConfirm) {
+      transitionToGame(MAP_LIST[mapSelectIndex]);
     }
-    if (backNow && !_prevBack) {
-      loadTitleScene();
+    if (!transitionActive && backNow && !_prevBack) {
+      // Same scene (title map), just switch UI — no transition needed
+      gamePhase = 'title';
+      titleTimer = 0;
     }
-    // Keep ambient camera drift
-    camX = wrapWorld(WORLD_SCALE / 2 + Math.cos(totalTime * 0.05) * WORLD_SCALE * 0.25);
-    camY = wrapWorld(WORLD_SCALE / 2 + Math.sin(totalTime * 0.035) * WORLD_SCALE * 0.25);
+    // Camera locked to world center (same scene as title)
+    camX = WORLD_SCALE / 2;
+    camY = WORLD_SCALE / 2;
 
   } else if (gamePhase !== 'paused') {
     // --- Gameplay input ---
     if (pauseNow && !_prevPause) togglePause();
 
-    if (confirmNow && !_prevConfirm) {
+    if (!transitionActive && confirmNow && !_prevConfirm) {
       if ((gamePhase === 'dead' && deathTimer > 1.0) ||
           (gamePhase === 'escaped' && escapeTimer > 1.0)) {
-        gamePhase = 'mapSelect';
+        triggerTransition(() => {
+          loadTitleScene();
+          gamePhase = 'mapSelect';  // go straight to map select, not title
+        });
       }
     }
 
@@ -597,8 +665,8 @@ function gameLoop(now) {
     if (confirmNow && !_prevConfirm) {
       if (pauseMenuSelection === 0) {
         togglePause();  // return to game
-      } else {
-        loadTitleScene();
+      } else if (!transitionActive) {
+        transitionToTitle();
       }
     }
   }
@@ -615,7 +683,7 @@ function gameLoop(now) {
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
   fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE, totalTime);
-  asciiRenderer.render(totalTime, camFU, camFV, WORLD_SCALE, fluid.velocity.read.tex);
+  asciiRenderer.render(totalTime, camFU, camFV, WORLD_SCALE, fluid.velocity.read.tex, getGlitchIntensity());
 
   // 8. Render overlay
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
