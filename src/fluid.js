@@ -238,7 +238,11 @@ void main() {
   vec2 vel = texture(u_velocity, fluidUV).xy;
   vec3 dens = texture(u_density, fluidUV).xyz;
   vec3 visDens = texture(u_visualDensity, fluidUV).xyz;
-  vec3 totalDens = max(dens, visDens);  // stronger signal wins — no moiré from stacking
+  // Positive visual density: max with physics (no moiré from stacking).
+  // Negative visual density: subtract from physics (creates voids/dark zones).
+  vec3 posVis = max(visDens, vec3(0.0));
+  vec3 negVis = min(visDens, vec3(0.0));
+  vec3 totalDens = max(dens, posVis) + negVis;
 
   // Normalize UV velocity to world-equivalent speed so wakes look equally bright
   // on all map sizes. Config calibrated at WORLD_SCALE=3 (reference scale).
