@@ -274,3 +274,20 @@ Renderer work had become entangled with feature work and too much meaning was be
 
 ### Why
 Greg wants the world sim prepared for multiplayer and for future scale without tying server cost to render cost. Current architecture review showed the sim, fluid, AI, and rendering are still too entangled. This plan defines the first clean split: authoritative gameplay state and coarse flow truth on one side, high-frequency visual reconstruction on the client.
+
+### src/ — New Files
+- **sim/flow-field.js** — New gameplay-facing flow interface. Wraps the current fluid sim behind `sample(wx, wy)` / `sampleUV(u, v)` so movement code can stop asking the GPU texture for truth directly.
+- **sim/sim-core.js** — New in-process authoritative world-step shell. Owns the fixed simulation block that used to live inline in `main.js`: fluid step, well/star updates, portal/planetoid/wreck/loot passes, combat, growth, wave propagation, and run timer progression.
+- **sim/sim-state.js** — New plain-data run-state container for `growthTimer`, `runElapsedTime`, and `runEndTime`.
+
+### src/ — Modified
+- **main.js** — Wires in `FlowField`, `SimCore`, and `SimState`. The render loop still owns input/camera/HUD, but the world-step now crosses an explicit sim boundary. Title/gameplay UI now reads run timing from `simState` rather than ad hoc globals.
+- **ship.js** — Ship movement now samples currents through `flowField.sample(wx, wy)` instead of reading the fluid texture directly. Wake injection still writes to visual fluid explicitly.
+- **test-api.js** — `getFluidVelAt()` now routes through the gameplay-facing flow-field interface instead of reaching straight into the GPU fluid object.
+- **scavengers.js** — Scavenger movement and routing now sample currents through `FlowField` instead of reading the GPU velocity texture directly.
+- **loot.js / wrecks.js / portals.js** — Sim-owned updates no longer require camera position; render-time culling stays in the render path instead of leaking into the world step.
+- **config.js** — Adds a `sim` block with `fixedHz` and `maxStepsPerFrame` so authoritative tick cadence has a real home.
+- **sim/sim-core.js** — Now owns a fixed-step accumulator. The sim advances on its own cadence instead of piggybacking directly on the client frame loop.
+
+### Why
+This is the first real decoupling cut. The game still runs in one app, but the client loop is no longer the only owner of simulation truth, and the world update no longer depends on the camera. That makes the next steps possible: move the remaining systems behind `SimCore`, lower the authoritative tick without breaking the client loop, and eventually push the same boundary into a worker or server process without rewriting the whole game.

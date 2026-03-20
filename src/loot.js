@@ -26,7 +26,7 @@ export class LootSystem {
     return anchor;
   }
 
-  update(fluid, dt, totalTime, camX, camY) {
+  update(fluid, dt, totalTime, camX = null, camY = null) {
     const cfg = CONFIG.loot;
     const s = uvScale();
     const s2 = s * s;

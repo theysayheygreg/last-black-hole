@@ -71,7 +71,7 @@ export class PortalSystem {
   /**
    * Update portal waves: spawn new waves, expire old portals, inject fluid effects.
    */
-  update(fluid, dt, totalTime, camX, camY, runElapsedTime = 0) {
+  update(fluid, dt, totalTime, camX = null, camY = null, runElapsedTime = 0) {
     const cfg = CONFIG.portals;
     const s = uvScale();
     const s2 = s * s;

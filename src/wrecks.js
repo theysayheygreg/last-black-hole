@@ -109,7 +109,7 @@ export class WreckSystem {
   /**
    * Inject fluid obstruction and visual glow for each wreck.
    */
-  update(fluid, dt, totalTime, camX, camY) {
+  update(fluid, dt, totalTime, camX = null, camY = null) {
     const cfg = CONFIG.wrecks;
     const s = uvScale();
     const s2 = s * s;

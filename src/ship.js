@@ -7,7 +7,7 @@
 
 import { CONFIG } from './config.js';
 import { pxPerWorld, worldToFluidUV, worldToScreen,
-         worldDirectionTo, fluidVelToWorld, wrapWorld, uvScale } from './coords.js';
+         worldDirectionTo, wrapWorld, uvScale } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 export class Ship {
@@ -65,12 +65,11 @@ export class Ship {
   /**
    * Main update. Reads fluid, applies thrust, updates position.
    * @param {number} dt - frame delta in seconds
-   * @param {FluidSim} fluid - fluid sim for velocity sampling
+   * @param {Object} flowField - local flow sampler with sample(wx, wy)
    * @param {WellSystem} [wellSystem] - for direct gravitational pull on ship
-   * @param {number} camX - camera world X
-   * @param {number} camY - camera world Y
+   * @param {FluidSim} [fluid] - visual fluid target for wake injection
    */
-  update(dt, fluid, wellSystem) {
+  update(dt, flowField, wellSystem, fluid = null) {
     const cfg = CONFIG.ship;
     const wellCfg = CONFIG.wells;
 
@@ -84,17 +83,9 @@ export class Ship {
     }
 
     // 3. Sample fluid velocity at ship position
-    const [fuv_x, fuv_y] = worldToFluidUV(this.wx, this.wy);
     let fluidVelWorld = { x: 0, y: 0 };
-    if (fluid && fuv_x >= 0 && fuv_x <= 1 && fuv_y >= 0 && fuv_y <= 1) {
-      const [fvx, fvy] = fluid.readVelocityAt(
-        Math.max(0, Math.min(1, fuv_x)),
-        Math.max(0, Math.min(1, fuv_y))
-      );
-      // Convert fluid velocity (UV-space, Y-up) to world velocity (Y-down, scaled)
-      const [wvx, wvy] = fluidVelToWorld(fvx, fvy);
-      fluidVelWorld.x = wvx;
-      fluidVelWorld.y = wvy;
+    if (flowField) {
+      fluidVelWorld = flowField.sample(this.wx, this.wy);
     }
 
     this.lastFluidVel = fluidVelWorld;

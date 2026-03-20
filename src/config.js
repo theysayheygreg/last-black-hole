@@ -15,6 +15,12 @@
  * tunable during playtesting, but they're not "feel" knobs.
  */
 export const CONFIG = {
+  sim: {
+    fixedHz: 60,            // Authoritative in-process sim tick. Keep 60 for jam stability now;
+                            // decoupling work can lower this later without changing the client loop.
+    maxStepsPerFrame: 4,    // Spiral-of-death guard if a frame stalls.
+  },
+
   ship: {
     thrustAccel: 1.7,        // world-units/s². Used directly (no px conversion).
                              // 1.7 ≈ old 800px/s² feel. Higher = zippier. 0.5 = sluggish.
@@ -128,9 +134,12 @@ export const CONFIG = {
     normalSpace: [0.0, 0.5, 0.5],     // Teal — baseline fluid presence, "the fabric."
     nearWell: [0.9, 0.4, 0.1],        // Amber — fluid near wells, accretion zone.
     hotWell: [0.9, 0.1, 0.05],        // Deep red — very close to well singularity.
-    densityScale: 0.015,              // Tone-mapping scale: 1-exp(-rawDensity × this). Controls how
-                                      // quickly accumulated density saturates to bright. Lower = more
-                                      // dynamic range in dense areas.
+    densityScale: 0.04,               // Tone-mapping scale: 1-exp(-rawDensity × this). Boosted from
+                                      // 0.015 so accretion rings are clearly bright (~40-50% at
+                                      // steady state). This is the PRIMARY brightness signal.
+    gravityScale: 0.002,              // Gravity field tone-mapping — SUBTLE ambient only, capped at
+                                      // 0.15 in shader. Prevents pure black near wells during
+                                      // warm-up but never dominates the density ring signal.
   },
 
   stars: {
@@ -273,6 +282,61 @@ export const CONFIG = {
     wellGrowthVariance: 0.01,   // random range added to per-well growth rate
     wellKillRadiusGrowth: 0.3,  // kill radius expansion factor per unit mass gained
     planetoidSpawnAccel: 0.5,   // how much spawn rate increases over the run (0=constant, 1=doubles by end)
+  },
+
+  scavengers: {
+    count: 3,                    // base count per map (overridden by signature layout)
+    vultureRatio: 0.3,           // fraction that spawn as vultures
+    size: 8,                     // overlay triangle radius in px (70% of player ship.size)
+    thrustAccel: 0.5,            // world-units/s², slightly slower than player (1.7)
+    drag: 0.06,                  // same as player — same terminal velocity per unit thrust
+    fluidCoupling: 1.2,          // same as player — scavengers surf the same currents
+    decisionInterval: 0.8,       // seconds between AI decision updates (not per-frame)
+    sensorRange: 1.5,            // world-units — how far scavengers "see" wrecks/portals
+    fleeWellDist: 0.15,          // world-units — flee when closer than this to a well
+    safeWellDist: 0.25,          // world-units — stop fleeing when further than this
+    lootPause: 0.8,              // seconds paused at a wreck while "looting"
+    vulturePlayerTrackInterval: 2.5, // seconds between vulture player-position updates
+    vultureSpeedBoost: 1.3,      // thrust multiplier when vulture is racing player
+    spawnStagger: 60,            // seconds over which all scavengers spawn (not all at once)
+    drifterLootTarget: 1,        // wrecks before extracting (+ random 0-1)
+    vultureLootTarget: 2,        // wrecks before extracting (+ random 0-1)
+    bumpRadius: 0.04,            // world-units — collision detection radius with player
+    bumpForce: 0.3,              // world-units/s velocity impulse on bump
+    deathSpiralDuration: 1.5,    // seconds of spiral animation before scavenger disappears
+    pulseCooldown: 12.0,         // vulture pulse cooldown (much longer than player)
+    pulseChance: 0.3,            // probability vulture fires pulse when competing for target
+  },
+
+  combat: {
+    pulseCooldown: 4.0,             // Seconds between player pulses. Long enough to be strategic.
+    pulseForce: 0.8,                // Fluid velocity injection per radial splat. Higher = more visible shockwave.
+    pulseRadius: 0.06,              // Gaussian radius of each pulse splat in UV. Wider = softer wave.
+    pulseEntityForce: 0.5,          // Peak velocity impulse on nearby entities (world-units/s).
+                                    // Linear falloff to zero at pulseEntityRadius.
+    pulseEntityRadius: 0.3,         // World-units — entities within this get pushed.
+    pulseRecoil: false,             // When true, player gets launched backward on pulse fire.
+    pulseRecoilForce: 0.4,          // Recoil velocity in world-units/s (only if pulseRecoil is true).
+    pulseWellDisruptRadius: 0.15,   // World-units — wells within this get their accretion disk scattered.
+    pulseWellDisruptDuration: 2.0,  // Seconds of counter-density disruption on hit wells.
+  },
+
+  audio: {
+    enabled: true,               // master toggle
+    masterVolume: 0.7,
+    droneVolume: 0.15,
+    droneBaseFreq: 60,           // Hz, start of run
+    droneEndFreq: 35,            // Hz, end of run (pitch drops with universe age)
+    droneDistortion: 0.3,        // waveshaper drive at end of run (0 = clean, 1 = harsh)
+    wellHarmonicVolume: 0.12,
+    wellBaseFreq: 180,           // Hz at mass 1.0
+    wellFreqScale: 0.5,          // freq = baseFreq / (mass * scale)
+    wellMaxDist: 2.0,            // world-units — beyond this, well is silent
+    scavengerMaxDist: 0.8,
+    portalMaxDist: 1.2,
+    eventVolume: 0.3,
+    pulseDuckAmount: 0.25,       // multiply other gains by this during pulse (= -12dB)
+    pulseDuckDuration: 0.5,      // seconds
   },
 
   debug: {

@@ -111,6 +111,14 @@ export class InputManager {
     return false;
   }
 
+  /** Is pulse pressed? (E key, or gamepad Square — button 2 on DualSense) */
+  get pulsePressed() {
+    if (this._keys['KeyE']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 2 && gp.buttons[2].pressed) return true;
+    return false;
+  }
+
   /** Is pause pressed? (gamepad Options/Menu — button 9. Keyboard Escape in main.js) */
   get pausePressed() {
     const gp = this._getGamepad();

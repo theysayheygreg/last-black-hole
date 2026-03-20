@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, fluidVelToScreen } from './coords.js';
+import { WORLD_SCALE } from './coords.js';
 
 export function initTestAPI(getState) {
   window.__TEST_API = {
@@ -20,15 +20,9 @@ export function initTestAPI(getState) {
     },
 
     getFluidVelAt(worldX, worldY) {
-      const { fluid } = getState();
-      if (!fluid) return { x: 0, y: 0 };
-      const [fuv_x, fuv_y] = worldToFluidUV(worldX, worldY);
-      const [fvx, fvy] = fluid.readVelocityAt(
-        Math.max(0, Math.min(1, fuv_x)),
-        Math.max(0, Math.min(1, fuv_y))
-      );
-      const [svx, svy] = fluidVelToScreen(fvx, fvy);
-      return { x: svx, y: svy };
+      const { flowField } = getState();
+      if (!flowField) return { x: 0, y: 0 };
+      return flowField.sample(worldX, worldY);
     },
 
     getFPS() {
@@ -56,6 +50,19 @@ export function initTestAPI(getState) {
       if (setTimeScale) setTimeScale(scale);
     },
 
+    loadTitleScene() {
+      const { loadTitleScene } = getState();
+      if (!loadTitleScene) return false;
+      loadTitleScene();
+      return true;
+    },
+
+    loadRendererFixture(name) {
+      const { loadRendererFixture } = getState();
+      if (!loadRendererFixture) return false;
+      return loadRendererFixture(name);
+    },
+
     setConfig(path, value) {
       const parts = path.split('.');
       let obj = CONFIG;
@@ -65,6 +72,25 @@ export function initTestAPI(getState) {
       }
       obj[parts[parts.length - 1]] = value;
       return true;
+    },
+
+    setOverlayVisible(visible) {
+      const { setOverlayVisible } = getState();
+      if (!setOverlayVisible) return false;
+      setOverlayVisible(visible);
+      return true;
+    },
+
+    setRendererView(mode) {
+      const { setRendererView } = getState();
+      if (!setRendererView) return false;
+      setRendererView(mode);
+      return true;
+    },
+
+    getRendererView() {
+      const { getRendererView } = getState();
+      return getRendererView ? getRendererView() : 'ascii';
     },
 
     triggerRestart() {

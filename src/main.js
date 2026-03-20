@@ -25,15 +25,22 @@ import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, updateHUD, showWarning } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
+import { ScavengerSystem } from './scavengers.js';
+import { CombatSystem } from './combat.js';
+import { AudioEngine } from './audio.js';
+import { rollSignature, applySignatureConfig } from './signatures.js';
+import { FlowField } from './sim/flow-field.js';
+import { SimCore } from './sim/sim-core.js';
+import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js';
 import { loadMap } from './map-loader.js';
 import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
 import { MAP as MAP_TITLE } from './maps/title-screen.js';
 import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
 import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
 import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
+import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
-         worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld,
-         fluidVelToScreen } from './coords.js';
+         worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld } from './coords.js';
 
 const MAP_LIST = [MAP_SHALLOWS, MAP_EXPANSE, MAP_DEEP];
 
@@ -42,6 +49,9 @@ let glCanvas, gl;
 let overlayCanvas, ctx;
 let fluid, ship, wellSystem, starSystem, lootSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
+let scavengerSystem, combatSystem, audioEngine;
+let flowField, simCore;
+let currentSignature = null;
 let inputManager, asciiRenderer;
 let running = true;
 let totalTime = 0;
@@ -50,7 +60,6 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
-let growthTimer = 0;
 let gamePhase = 'title'; // 'title' | 'mapSelect' | 'playing' | 'dead' | 'escaped' | 'paused'
 let deathTimer = 0;
 let escapeTimer = 0;
@@ -65,11 +74,11 @@ let currentMap = MAP_SHALLOWS;
 let startingMasses = [];
 let mapSelectIndex = 0;
 let currentCameraMode = 'follow';
+let rendererFixtureActive = false;
 const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
 
 // Run state
-let runElapsedTime = 0;
-let runEndTime = 0;  // frozen at moment of death/escape
+const simState = createSimState();
 let inventory = [];
 
 // Scene transition state
@@ -111,6 +120,7 @@ function init() {
 
   // Init systems
   fluid = new FluidSim(gl);
+  flowField = new FlowField(fluid);
   asciiRenderer = new ASCIIRenderer(gl);
 
   // Init entity systems (empty — loadScene populates them)
@@ -120,6 +130,9 @@ function init() {
   wreckSystem = new WreckSystem();
   portalSystem = new PortalSystem();
   planetoidSystem = new PlanetoidSystem();
+  scavengerSystem = new ScavengerSystem();
+  combatSystem = new CombatSystem();
+  audioEngine = new AudioEngine();
 
   // Init input manager
   inputManager = new InputManager();
@@ -129,6 +142,21 @@ function init() {
 
   // Init ship
   ship = new Ship(glCanvas.width, glCanvas.height);
+
+  simCore = new SimCore({
+    fluid,
+    flowField,
+    wellSystem,
+    starSystem,
+    lootSystem,
+    wreckSystem,
+    portalSystem,
+    planetoidSystem,
+    scavengerSystem,
+    combatSystem,
+    waveRings,
+    ship,
+  });
 
   // Load title scene (clears everything, loads default map, seeds fluid)
   loadTitleScene();
@@ -172,6 +200,7 @@ function init() {
     initTestAPI(() => ({
       ship,
       fluid,
+      flowField,
       wellSystem,
       starSystem,
       lootSystem,
@@ -184,11 +213,20 @@ function init() {
       camX, camY,
       fps,
       setTimeScale: (s) => { timeScale = s; },
+      loadTitleScene,
+      loadRendererFixture,
       restart: () => { restart(); },
       currentMap,
       mapList: MAP_LIST,
       startGame,
       setMap: (map) => { startGame(map); },
+      setOverlayVisible: (visible) => {
+        overlayCanvas.style.opacity = visible ? '1' : '0';
+      },
+      setRendererView: (mode) => {
+        asciiRenderer.setViewMode(mode);
+      },
+      getRendererView: () => asciiRenderer.getViewMode(),
       get gamePhase() { return gamePhase; },
       set gamePhase(p) { gamePhase = p; },
     }));
@@ -289,15 +327,17 @@ function loadScene(map) {
 
   // 3. Reset ALL timers
   totalTime = 0;
-  growthTimer = 0;
   deathTimer = 0;
   escapeTimer = 0;
-  runElapsedTime = 0;
-  runEndTime = 0;
+  resetSimState(simState);
+  simCore?.reset();
 
   // 4. Reset gameplay state
   inventory = [];
   waveRings.rings = [];
+  scavengerSystem.scavengers = [];
+  combatSystem.playerCooldown = 0;
+  combatSystem.wellDisruptions = [];
 
   // 5. Clear ALL fluid buffers (velocity, density, pressure, visualDensity, etc.)
   fluid.clear();
@@ -349,10 +389,25 @@ function getGlitchIntensity() {
  * Load the title screen scene. Runs the title map as ambient background.
  */
 function loadTitleScene() {
+  rendererFixtureActive = false;
   loadScene(MAP_TITLE);
   gamePhase = 'title';
   titleTimer = 0;
   hideHUD();
+}
+
+function loadRendererFixture(name) {
+  const fixture = RENDERER_FIXTURES[name];
+  if (!fixture) return false;
+
+  rendererFixtureActive = true;
+  loadScene(fixture);
+  camX = fixture.worldScale / 2;
+  camY = fixture.worldScale / 2;
+  gamePhase = 'mapSelect';
+  titleTimer = 999;
+  hideHUD();
+  return true;
 }
 
 /** Transition to title with glitch effect. */
@@ -364,13 +419,36 @@ function transitionToTitle() {
  * Start a game on a specific map. Called from map select.
  */
 function startGame(map) {
+  rendererFixtureActive = false;
   loadScene(map);
+
+  // Roll and apply cosmic signature
+  currentSignature = rollSignature(map.worldScale);
+  applySignatureConfig(currentSignature);
+
+  // Reset audio for new run
+  audioEngine.reset();
 
   // Place ship in a safe spawn
   const [spawnX, spawnY] = findSafeSpawn();
   ship.teleport(spawnX, spawnY);
   camX = ship.wx;
   camY = ship.wy;
+
+  // Spawn scavengers at map edges
+  const scavCount = CONFIG.scavengers.count;
+  const vultureCount = Math.round(scavCount * CONFIG.scavengers.vultureRatio);
+  for (let i = 0; i < scavCount; i++) {
+    const archetype = i < vultureCount ? 'vulture' : 'drifter';
+    // Spawn at random map edge positions
+    const edge = Math.floor(Math.random() * 4);
+    let sx, sy;
+    if (edge === 0) { sx = Math.random() * WORLD_SCALE; sy = 0.1; }
+    else if (edge === 1) { sx = Math.random() * WORLD_SCALE; sy = WORLD_SCALE - 0.1; }
+    else if (edge === 2) { sx = 0.1; sy = Math.random() * WORLD_SCALE; }
+    else { sx = WORLD_SCALE - 0.1; sy = Math.random() * WORLD_SCALE; }
+    scavengerSystem.spawn(sx, sy, archetype);
+  }
 
   gamePhase = 'playing';
   showHUD();
@@ -422,6 +500,7 @@ let _prevPause = false;
 let _prevBack = false;
 let _prevUp = false;
 let _prevDown = false;
+let _prevPulse = false;
 let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
 
 function togglePause() {
@@ -466,98 +545,15 @@ function gameLoop(now) {
     }
   }
 
-  const inMenu = gamePhase === 'title' || gamePhase === 'mapSelect';
+  const inMenu = gamePhase === 'title' || gamePhase === 'mapSelect' || rendererFixtureActive;
 
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
-
-  // 1. Fluid sim step
-  const simDt = 1 / 60;
-  const wellUVsForSim = wellSystem.getUVPositions();
-  const allDensitySources = [
-    ...wellUVsForSim,
-    ...starSystem.getUVPositions(),
-    ...lootSystem.getUVPositions(),
-    ...wreckSystem.getUVPositions(),
-    ...portalSystem.getUVPositions(),
-    ...planetoidSystem.getUVPositions(),
-    ...(inMenu ? [] : [worldToFluidUV(ship.wx, ship.wy)]),
-  ];
-  fluid.setWellPositions(allDensitySources);
-  fluid.step(simDt);
-
-  // 1b. Fade visual density buffer.
-  // 0.99/frame at 60fps: halves in ~1.15s. Entities re-inject every frame,
-  // so steady-state = injection / 0.01 = 100× per-frame injection.
-  // 0.92 was too fast (invisible). 0.995 was too slow (accumulated forever).
-  fluid.fadeVisualDensity(0.99);
-
-  // 2. Well forces (no culling — physics checks all wells, visuals must match)
-  wellSystem.update(fluid, simDt, totalTime);
-
-  // 2a. Star forces (no culling — ship push checks all stars)
-  starSystem.update(fluid, simDt, totalTime);
-
-  // 2b. Ambient turbulence
-  const turbStr = CONFIG.fluid.ambientTurbulence;
-  const densStr = CONFIG.fluid.ambientDensity;
-  if (turbStr > 0 || densStr > 0) {
-    for (let i = 0; i < 3; i++) {
-      const rx = Math.random();
-      const ry = Math.random();
-      const angle = Math.random() * Math.PI * 2;
-      const forceMag = turbStr * (0.5 + Math.random());
-      fluid.splat(
-        rx, ry,
-        Math.cos(angle) * forceMag,
-        Math.sin(angle) * forceMag,
-        0.003 + Math.random() * 0.005,
-        densStr * (0.3 + Math.random() * 0.7),
-        densStr * (0.5 + Math.random() * 0.5),
-        densStr * (0.6 + Math.random() * 0.4)
-      );
-    }
-  }
-
-  // 2c. Loot anchors (camera-culled)
-  lootSystem.update(fluid, simDt, totalTime, camX, camY);
-
-  // 2d. Wreck fluid obstruction (camera-culled)
-  wreckSystem.update(fluid, simDt, totalTime, camX, camY);
-
-  // 2e. Portal fluid effects + wave spawning (camera-culled)
-  portalSystem.update(fluid, simDt, totalTime, camX, camY, runElapsedTime);
-
-  // 2f. Planetoid fluid effects + well consumption
-  planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings);
-
-  // 3. Run elapsed time (only during gameplay, not menus)
-  if (!inMenu) {
-    runElapsedTime += dt;
-  }
-
-  // 4. Well growth events — per-well rates for asymmetric growth
-  growthTimer += dt;
-  if (growthTimer >= CONFIG.events.growthInterval) {
-    growthTimer -= CONFIG.events.growthInterval;
-    const evtCfg = CONFIG.events;
-    for (const well of wellSystem.wells) {
-      well.mass += well.growthRate;
-      well.updateKillRadius();
-      waveRings.spawn(well.wx, well.wy, evtCfg.growthWaveAmplitude * well.mass);
-    }
-  }
-
-  // 4b. Planetoid spawn escalation — spawn rate increases as the run progresses
-  if (!inMenu && CONFIG.universe.planetoidSpawnAccel > 0) {
-    const runProgress = Math.min(runElapsedTime / CONFIG.universe.runDuration, 1.0);
-    const intervalScale = 1.0 - runProgress * CONFIG.universe.planetoidSpawnAccel;
-    planetoidSystem._spawnIntervalScale = Math.max(0.3, intervalScale);
-  }
-
-  // 4. Wave ring propagation
-  waveRings.update(dt);
-  waveRings.injectIntoFluid(fluid);
+    simCore.update(simState, {
+      frameDt: dt,
+      totalTime,
+      inMenu,
+    });
 
   } // end paused check
 
@@ -569,6 +565,7 @@ function gameLoop(now) {
   const backNow = inputManager.backPressed;
   const upNow = inputManager.upPressed;
   const downNow = inputManager.downPressed;
+  const pulseNow = inputManager.pulsePressed;
 
   // --- Menu input (title, mapSelect) ---
   if (gamePhase === 'title') {
@@ -582,6 +579,7 @@ function gameLoop(now) {
     if (upNow && !_prevUp) mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length;
     if (downNow && !_prevDown) mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length;
     if (!transitionActive && confirmNow && !_prevConfirm) {
+      audioEngine.init();  // first user gesture — create AudioContext
       transitionToGame(MAP_LIST[mapSelectIndex]);
     }
     if (!transitionActive && backNow && !_prevBack) {
@@ -612,15 +610,23 @@ function gameLoop(now) {
 
     // 6. Ship update
     if (gamePhase === 'playing') {
-      ship.update(dt, fluid, wellSystem);
+      ship.update(dt, flowField, wellSystem, fluid);
 
       starSystem.applyToShip(ship);
       planetoidSystem.applyToShip(ship);
+
+      // Force pulse (E key / Square button, edge-triggered)
+      if (pulseNow && !_prevPulse) {
+        if (combatSystem.playerPulse(ship, fluid, waveRings, wellSystem, scavengerSystem, planetoidSystem)) {
+          audioEngine.playEvent('pulse', ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        }
+      }
 
       // Wreck pickup
       const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
       if (newItems.length > 0) {
         inventory.push(...newItems);
+        audioEngine.playEvent('loot', ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         for (const item of newItems) {
           showWarning(item.name, 'rgba(212, 168, 67, 0.9)', 2000);
         }
@@ -633,8 +639,9 @@ function gameLoop(now) {
       if (killingWell) {
         gamePhase = 'dead';
         deathTimer = 0;
-        runEndTime = runElapsedTime;
+        freezeRunEnd(simState);
         ship.setThrust(false);
+        audioEngine.playEvent('death');
       }
 
       if (gamePhase === 'playing') {
@@ -642,8 +649,9 @@ function gameLoop(now) {
         if (portal) {
           gamePhase = 'escaped';
           escapeTimer = 0;
-          runEndTime = runElapsedTime;
+          freezeRunEnd(simState);
           ship.setThrust(false);
+          audioEngine.playEvent('extract');
         }
       }
 
@@ -651,10 +659,10 @@ function gameLoop(now) {
       if (gamePhase === 'playing' &&
           portalSystem.activeCount === 0 &&
           !portalSystem.hasMoreWaves &&
-          runElapsedTime > 60) {
+          simState.runElapsedTime > 60) {
         gamePhase = 'dead';
         deathTimer = 0;
-        runEndTime = runElapsedTime;
+        freezeRunEnd(simState);
         ship.setThrust(false);
       }
     } else if (gamePhase === 'dead') {
@@ -690,13 +698,22 @@ function gameLoop(now) {
   _prevBack = backNow;
   _prevUp = upNow;
   _prevDown = downNow;
+  _prevPulse = pulseNow;
+
+  // 6b. Audio update — spatial mixing based on game state
+  if (!inMenu) {
+    audioEngine.update(dt, wellSystem.wells, ship, camX, camY,
+      overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime, CONFIG.universe.runDuration);
+  }
 
   // 7. Render fluid -> ASCII (camera-aware)
   const wellUVs = wellSystem.getUVPositions();
+  const wellMasses = wellSystem.getUVMasses();
+  const wellShapes = wellSystem.getRenderShapes();
   const sceneTarget = asciiRenderer.getSceneTarget();
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
-  fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE, totalTime);
+  fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE, totalTime, wellMasses, wellShapes);
   asciiRenderer.render(totalTime, camFU, camFV, WORLD_SCALE, fluid.velocity.read.tex, getGlitchIntensity());
 
   // 8. Render overlay
@@ -708,12 +725,45 @@ function gameLoop(now) {
     starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     lootSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, runElapsedTime);
+    portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, simState.runElapsedTime);
     planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
+    scavengerSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     ship.render(ctx, camX, camY);
+    combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
+
+    // Signature display — first 4 seconds of run
+    if (currentSignature && simState.runElapsedTime < 4.0) {
+      const cx = overlayCanvas.width / 2;
+      const cy = overlayCanvas.height * 0.3;
+      const fadeIn = Math.min(simState.runElapsedTime / 0.5, 1);
+      const fadeOut = simState.runElapsedTime > 3.0 ? 1 - (simState.runElapsedTime - 3.0) : 1;
+      const alpha = fadeIn * fadeOut;
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 12;
+
+      // Name
+      ctx.fillStyle = `rgba(150, 200, 220, ${alpha * 0.9})`;
+      ctx.font = '14px monospace';
+      ctx.fillText(`entering: ${currentSignature.name}`, cx, cy);
+
+      // Flavor text
+      ctx.fillStyle = `rgba(120, 150, 170, ${alpha * 0.7})`;
+      ctx.font = '12px monospace';
+      ctx.fillText(currentSignature.flavor, cx, cy + 22);
+
+      // Mechanical callouts
+      ctx.fillStyle = `rgba(100, 130, 150, ${alpha * 0.5})`;
+      ctx.font = '11px monospace';
+      ctx.fillText(currentSignature.mechanical, cx, cy + 40);
+
+      ctx.restore();
+    }
 
     // Update HUD during gameplay
-    updateHUD(runElapsedTime, portalSystem, inventory, growthTimer);
+    updateHUD(simState.runElapsedTime, portalSystem, inventory, simState.growthTimer);
   }
 
   // Show/hide HUD based on phase
@@ -757,8 +807,8 @@ function gameLoop(now) {
       const sampleV = wfv + 0.01;
       const dens = fluid.readDensityAt(sampleU, sampleV);
       const densMag = Math.sqrt(dens[0] ** 2 + dens[1] ** 2 + dens[2] ** 2);
-      const vel = fluid.readVelocityAt(sampleU, sampleV);
-      const speed = Math.sqrt(vel[0] ** 2 + vel[1] ** 2);
+      const vel = flowField.sampleUV(sampleU, sampleV);
+      const speed = Math.sqrt(vel.x ** 2 + vel.y ** 2);
       ctx.fillText(`W${i} dens:${densMag.toFixed(1)} vel:${speed.toFixed(3)}`, 10, diagY); diagY += 14;
     }
 
@@ -774,16 +824,11 @@ function gameLoop(now) {
       for (let py = gridStep / 2; py < overlayCanvas.height; py += gridStep) {
         const [worldX, worldY] = screenToWorld(px, py, camX, camY, overlayCanvas.width, overlayCanvas.height);
         const [fuv_x, fuv_y] = worldToFluidUV(worldX, worldY);
-        const [fvx, fvy] = fluid.readVelocityAt(
-          Math.max(0, Math.min(1, fuv_x)),
-          Math.max(0, Math.min(1, fuv_y))
-        );
-        const speed = Math.sqrt(fvx * fvx + fvy * fvy);
+        const vel = flowField.sample(worldX, worldY);
+        const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
         if (speed < 0.0001) continue;
-
-        const [svx, svy] = fluidVelToScreen(fvx, fvy);
         const len = Math.min(speed * arrowScale, gridStep * 0.8);
-        const angle = Math.atan2(svy, svx);
+        const angle = Math.atan2(vel.y, vel.x);
 
         const alpha = Math.min(0.8, speed * 200);
         ctx.strokeStyle = `rgba(100, 255, 200, ${alpha})`;
@@ -900,7 +945,7 @@ function gameLoop(now) {
   }
 
   // === TITLE SCREEN ===
-  if (gamePhase === 'title') {
+  if (!rendererFixtureActive && gamePhase === 'title') {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
 
@@ -941,7 +986,7 @@ function gameLoop(now) {
   }
 
   // === MAP SELECT SCREEN ===
-  if (gamePhase === 'mapSelect') {
+  if (!rendererFixtureActive && gamePhase === 'mapSelect') {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
 
@@ -1000,7 +1045,7 @@ function gameLoop(now) {
   }
 
   // === END SCREEN (shared for death, collapse, and extraction) ===
-  if (gamePhase === 'dead' || gamePhase === 'escaped') {
+  if (!rendererFixtureActive && (gamePhase === 'dead' || gamePhase === 'escaped')) {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
     const t = gamePhase === 'dead' ? deathTimer : escapeTimer;
@@ -1055,8 +1100,8 @@ function gameLoop(now) {
     if (t > statsT) {
       ctx.fillStyle = `rgba(180, 180, 200, ${Math.min((t - statsT) * 2, 0.8)})`;
       ctx.font = '14px monospace';
-      const mins = Math.floor(runEndTime / 60);
-      const secs = Math.floor(runEndTime % 60);
+      const mins = Math.floor(simState.runEndTime / 60);
+      const secs = Math.floor(simState.runEndTime % 60);
       const statY = cy + Math.min(inventory.length, 8) * 18 - 10;
       ctx.fillText(`${inventory.length} items ${itemVerb}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
 
@@ -1081,7 +1126,7 @@ function gameLoop(now) {
   }
 
   // === PAUSE MENU ===
-  if (gamePhase === 'paused') {
+  if (!rendererFixtureActive && gamePhase === 'paused') {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
 
@@ -1131,6 +1176,14 @@ function gameLoop(now) {
 
   requestAnimationFrame(gameLoop);
 }
+
+// ---- Error overlay (visible crash reporting) ----
+window.addEventListener('error', (e) => {
+  const div = document.createElement('div');
+  div.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:16px;background:rgba(180,0,0,0.95);color:#fff;font:14px monospace;z-index:99999;white-space:pre-wrap;';
+  div.textContent = `ERROR: ${e.message}\n${e.filename}:${e.lineno}:${e.colno}`;
+  document.body.appendChild(div);
+});
 
 // ---- Start ----
 if (document.readyState === 'loading') {

@@ -204,9 +204,8 @@ void main() {
 }`;
 
 // Display shader — maps fluid state to visible colors
-// V3: camera-aware — samples fluid at camera-offset UV, supports world wrapping
-// - Velocity magnitude boosts brightness (fast flow = brighter/denser ASCII chars)
-// - Flow direction tints color: toward a well = amber, away = teal
+// V4: gravity field as primary brightness signal — wells visible immediately, no warm-up
+// Layers: gravity field → density/velocity overlay → fabric noise → well color gradient → accretion
 const FRAG_DISPLAY = `#version 300 es
 precision highp float;
 uniform sampler2D u_velocity;
@@ -216,10 +215,13 @@ uniform vec3 u_voidColor;
 uniform vec3 u_normalColor;
 uniform vec3 u_nearWellColor;
 uniform vec3 u_hotWellColor;
-// Well positions for coloring — in fluid UV space
+// Well positions + masses for gravity field visualization
 uniform vec2 u_wellPositions[256];
+uniform float u_wellMasses[256];
+uniform vec4 u_wellShape[256]; // x=core radius, y=ring inner, z=ring outer, w=orbitalDir
 uniform int u_wellCount;
 uniform float u_densityScale;
+uniform float u_gravityScale;
 // Camera offset in fluid UV space and world scale
 uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
 uniform float u_worldScale;    // fraction of fluid texture visible (1/3 = one screen)
@@ -230,96 +232,97 @@ out vec4 fragColor;
 
 void main() {
   // Map screen UV to fluid UV via camera offset
-  // v_uv goes 0-1 across the screen; we want to see a 1/worldScale-sized slice
-  // centered on u_camOffset
   vec2 fluidUV = u_camOffset + (v_uv - 0.5) / u_worldScale;
-  // Texture uses REPEAT wrap, so no manual wrapping needed
 
   vec2 vel = texture(u_velocity, fluidUV).xy;
   vec3 dens = texture(u_density, fluidUV).xyz;
   vec3 visDens = texture(u_visualDensity, fluidUV).xyz;
-  // Positive visual density: max with physics (no moiré from stacking).
-  // Negative visual density: subtract from physics (creates voids/dark zones).
+  // Scene shaping owns two separate signals:
+  //   positive visual density = excitation / glow / accretion
+  //   negative visual density = collapse / void / absence
   vec3 posVis = max(visDens, vec3(0.0));
-  vec3 negVis = min(visDens, vec3(0.0));
-  vec3 totalDens = max(dens, posVis) + negVis;
-
-  // Normalize UV velocity to world-equivalent speed so wakes look equally bright
-  // on all map sizes. Config calibrated at WORLD_SCALE=3 (reference scale).
+  vec3 negVis = max(-visDens, vec3(0.0));
+  // Normalize UV velocity to world-equivalent speed (calibrated at WORLD_SCALE=3)
   float speed = length(vel) * u_worldScale / 3.0;
 
-  // Density magnitude — clamp negative to zero (negative = void = no density)
-  vec3 clampedDens = max(totalDens, vec3(0.0));
-  float rawDensity = length(clampedDens);
+  // Scale UV distances to world-equivalent so glow matches across map sizes
+  float uvS = 3.0 / u_worldScale;
 
-  // Void darkness: where totalDens is negative, darken proportionally
-  float voidDarkness = clamp(-min(totalDens.r, min(totalDens.g, totalDens.b)) * 3.0, 0.0, 1.0);
+  // === PRIMARY SCENE SIGNALS ===
+  // Physical density = background fabric excitation.
+  // Positive visual density = ring intensity, not whole-frame brightness.
+  // Negative visual density = explicit collapse / absence.
+  float rawExcitation = length(max(dens, vec3(0.0)));
+  float sceneExcitation = 1.0 - exp(-rawExcitation * (u_densityScale * 0.28));
+  float rawRing = length(posVis);
+  float ringSignal = 1.0 - exp(-rawRing * 0.06);
 
-  // Tone-map density: raw values range 0–300+, compress to 0–1 via exponential curve
-  float density = 1.0 - exp(-rawDensity * u_densityScale);
+  // Collapse must survive quantization as a separate, subtractive signal.
+  float rawVoid = max(negVis.r, max(negVis.g, negVis.b));
+  float voidField = 1.0 - exp(-rawVoid * 3.5);
+  float liveSpace = 1.0 - voidField;
 
-  // Fabric texture: spatial noise floor that gives the void gentle gradients.
-  // Without this, open space is uniformly lum=0.015 and all chars are identical.
-  // This is the "dark energy" of the void — slow-moving large-scale structure.
-  vec2 fabricUV = fluidUV * 12.0 + u_time * 0.02; // slow drift
+  // === FABRIC NOISE — subtle texture, strongest in darker regions ===
+  vec2 fabricUV = fluidUV * 12.0 + u_time * 0.02;
   float fabric = fract(sin(dot(fabricUV, vec2(127.1, 311.7))) * 43758.5453);
   float fabric2 = fract(sin(dot(fabricUV * 0.5 + 3.3, vec2(269.5, 183.3))) * 43758.5453);
-  float fabricNoise = (fabric * 0.6 + fabric2 * 0.4) * 0.08; // 0-0.08 range
+  float fabricNoise = (fabric * 0.6 + fabric2 * 0.4) * 0.08;
+  fabricNoise *= mix(0.3, 1.0, 1.0 - sceneExcitation);
 
-  // Combine density, velocity, and fabric texture for brightness signal
-  float combined = density + speed * 1.5 + fabricNoise;
+  // Base fabric. Keep it dark. Let rings do the bright work.
+  float baseMix = 0.04 + sceneExcitation * 0.18 + smoothstep(0.01, 0.07, speed) * 0.12 + fabricNoise * 0.45;
+  vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.35));
+  col *= liveSpace;
 
-  // Base color: deep void to teal based on combined signal
-  vec3 col = mix(u_voidColor, u_normalColor, clamp(combined, 0.0, 1.0));
+  // Currents should read, but not blow the frame out.
+  float flowLight = smoothstep(0.015, 0.08, speed);
+  col += vec3(0.03, 0.08, 0.10) * flowLight * liveSpace;
 
-  // Velocity magnitude brightness boost — makes currents visible as brighter bands
-  // Thresholds lowered so ship/planetoid wakes register against ambient density
-  float speedBrightness = smoothstep(0.0, 0.06, speed);
-  col += speedBrightness * vec3(0.12, 0.25, 0.30);
-
-  // High-velocity regions get a cyan highlight (wave crests / strong currents)
-  float waveCrest = smoothstep(0.03, 0.12, speed);
-  col = mix(col, vec3(0.1, 0.6, 0.7), waveCrest * 0.4);
-
-  // (Shimmer noise moved to ASCII shader where it jitters character index directly.
-  //  Color-level noise was ineffective — luminance too low for index changes.)
-
-  // === FLOW DIRECTION TINTING ===
-  // Scale UV distances to world-equivalent so well glow matches across map sizes.
-  // At reference scale (3.0): s=1.0, no change. At 5x5: s=0.6, tighter glow.
-  float uvS = 3.0 / u_worldScale;
+  // === PER-WELL: dark core + one readable accretion band ===
   for (int i = 0; i < 256; i++) {
     if (i >= u_wellCount) break;
 
     vec2 diff = fluidUV - u_wellPositions[i];
     diff = diff - round(diff);
-    float dist = length(diff) / uvS;  // normalize to reference-scale UV distance
+    float dist = length(diff) / uvS;
 
-    vec2 toWell = dist > 0.0001 ? -diff / length(diff) : vec2(0.0);
+    vec4 shape = u_wellShape[i];
+    float coreRadius = shape.x;
+    float ringInner = shape.y;
+    float ringOuter = shape.z;
+    float orbitalDir = shape.w;
+    float coreMask = smoothstep(coreRadius * 1.22, coreRadius * 0.82, dist);
+    float ringMask = smoothstep(ringOuter, ringInner, dist)
+                   * (1.0 - smoothstep(ringInner, coreRadius * 1.03, dist));
+    float haloMask = smoothstep(ringOuter * 1.8, ringOuter, dist)
+                   * (1.0 - smoothstep(ringOuter, ringInner, dist));
 
-    float flowAlignment = speed > 0.001 ? dot(normalize(vel), toWell) : 0.0;
-    float flowInfluence = smoothstep(0.5, 0.05, dist) * smoothstep(0.0, 0.08, speed);
+    float localLive = 1.0 - max(voidField, coreMask);
+    float localRing = ringMask * mix(0.2, 1.0, ringSignal);
+    vec3 ringColor = mix(u_nearWellColor, u_hotWellColor, clamp(ringSignal * 1.2, 0.0, 1.0));
+    vec2 radial = dist > 0.0001 ? diff / length(diff) : vec2(1.0, 0.0);
+    vec2 tangent = vec2(-radial.y, radial.x) * orbitalDir;
+    float tangentialAlignment = speed > 0.001 ? dot(normalize(vel), tangent) * 0.5 + 0.5 : 0.5;
+    float ringBias = mix(0.82, 1.18, tangentialAlignment);
 
-    vec3 warmTint = vec3(0.25, 0.12, 0.02);
-    vec3 coolTint = vec3(0.02, 0.12, 0.18);
-    vec3 flowTint = mix(coolTint, warmTint, flowAlignment * 0.5 + 0.5);
-    col += flowTint * flowInfluence * 0.4;
+    // Gentle halo outside the ring so the fabric feels disturbed, not flooded.
+    col += ringColor * haloMask * 0.12 * localLive;
 
-    // Well proximity coloring (amber/red near wells)
-    float wellInfluence = smoothstep(0.35, 0.02, dist);
-    vec3 wellColor = mix(u_nearWellColor, u_hotWellColor, smoothstep(0.15, 0.02, dist));
-    col = mix(col, wellColor, wellInfluence * 0.6);
-    float ringGlow = smoothstep(0.08, 0.04, dist) * (1.0 - smoothstep(0.02, 0.01, dist));
-    col += ringGlow * vec3(0.3, 0.1, 0.02);
-    // Void darkening from proximity (fixed small zone near well center)
-    float voidStrength = smoothstep(0.035, 0.008, dist);
-    col = mix(col, vec3(0.0), voidStrength);
+    // Main accretion band. This is the bright read, not the whole well.
+    col += ringColor * localRing * 0.8 * ringBias * localLive;
+
+    // Surf hint just outside the ring: where tangential motion is strongest,
+    // add a cool directional band instead of more brightness.
+    float surfBand = smoothstep(ringOuter * 1.55, ringOuter * 1.05, dist)
+                   * (1.0 - smoothstep(ringOuter * 2.45, ringOuter * 1.55, dist));
+    float surfHint = surfBand * smoothstep(0.012, 0.055, speed) * mix(0.45, 1.0, tangentialAlignment);
+    col += vec3(0.025, 0.14, 0.18) * surfHint * 1.1 * localLive;
+
+    // Final dark core. This must win.
+    col = mix(col, vec3(0.0), max(voidField, coreMask) * 0.985);
   }
 
-  // Void darkness from negative visual density — extends as far as the void injection reaches
-  col = mix(col, vec3(0.0), voidDarkness);
-
-  // Subtle vignette at screen edges (use screen UV, not fluid UV)
+  // Subtle vignette at screen edges
   vec2 fromCenter = v_uv - 0.5;
   float vignette = 1.0 - dot(fromCenter, fromCenter) * 0.5;
   col *= vignette;
@@ -345,10 +348,13 @@ void main() {
   vec3 dens = texture(u_density, v_uv).xyz;
 
   // Find distance to nearest density source (well, star, or loot)
+  // Uses toroidal wrapping to avoid seams at UV boundaries
   float minDist = 999.0;
   for (int i = 0; i < 256; i++) {
     if (i >= u_wellCount) break;
-    float d = distance(v_uv, u_wellPositions[i]);
+    vec2 diff = v_uv - u_wellPositions[i];
+    diff = diff - round(diff);  // toroidal shortest path
+    float d = length(diff);
     minDist = min(minDist, d);
   }
 
@@ -743,8 +749,10 @@ export class FluidSim {
    * @param {number} camOffsetU - camera center X in fluid UV (0-1)
    * @param {number} camOffsetV - camera center Y in fluid UV (0-1)
    * @param {number} worldScale - how many world-units map to the full texture (default 1 for legacy)
+   * @param {number} totalTime - elapsed time in seconds
+   * @param {Array} wellMasses - mass per well, matching wellPositionsUV order
    */
-  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, totalTime = 0) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, totalTime = 0, wellMasses = [], wellShapes = []) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -762,18 +770,23 @@ export class FluidSim {
     gl.uniform3fv(u['u_nearWellColor'], CONFIG.color.nearWell);
     gl.uniform3fv(u['u_hotWellColor'], CONFIG.color.hotWell);
     gl.uniform1f(u['u_densityScale'], CONFIG.color.densityScale);
+    gl.uniform1f(u['u_gravityScale'], CONFIG.color.gravityScale);
 
     // Camera + time uniforms
     gl.uniform2f(u['u_camOffset'], camOffsetU, camOffsetV);
     gl.uniform1f(u['u_worldScale'], worldScale);
     gl.uniform1f(u['u_time'], totalTime);
 
-    // Set well positions for coloring
+    // Set well positions and masses for gravity field visualization
     const count = wellPositionsUV.length;
     gl.uniform1i(u['u_wellCount'], count);
     for (let i = 0; i < count; i++) {
-      const loc = u[`u_wellPositions[${i}]`];
-      if (loc) gl.uniform2fv(loc, wellPositionsUV[i]);
+      const posLoc = u[`u_wellPositions[${i}]`];
+      if (posLoc) gl.uniform2fv(posLoc, wellPositionsUV[i]);
+      const massLoc = u[`u_wellMasses[${i}]`];
+      if (massLoc) gl.uniform1f(massLoc, wellMasses[i] ?? 1.0);
+      const shapeLoc = u[`u_wellShape[${i}]`];
+      if (shapeLoc) gl.uniform4fv(shapeLoc, wellShapes[i] ?? [0.01, 0.02, 0.03, 1.0]);
     }
 
     if (target) {

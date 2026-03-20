@@ -23,6 +23,17 @@ void main() {
   gl_Position = vec4(a_position, 0.0, 1.0);
 }`;
 
+const FRAG_SCENE = `#version 300 es
+precision highp float;
+
+uniform sampler2D u_scene;
+in vec2 v_uv;
+out vec4 fragColor;
+
+void main() {
+  fragColor = texture(u_scene, v_uv);
+}`;
+
 // ASCII post-process fragment shader
 // Reads the scene color FBO, divides into character cells,
 // looks up a glyph from the font atlas based on luminance,
@@ -223,6 +234,7 @@ export class ASCIIRenderer {
     this._initShader();
     this._initFontAtlas();
     this._initSceneFBO();
+    this.viewMode = 'ascii';
   }
 
   _initShader() {
@@ -273,6 +285,27 @@ export class ASCIIRenderer {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
+
+    const fsScene = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fsScene, FRAG_SCENE);
+    gl.compileShader(fsScene);
+    if (!gl.getShaderParameter(fsScene, gl.COMPILE_STATUS)) {
+      console.error('Scene frag shader error:', gl.getShaderInfoLog(fsScene));
+    }
+
+    const sceneProg = gl.createProgram();
+    gl.attachShader(sceneProg, vs);
+    gl.attachShader(sceneProg, fsScene);
+    gl.bindAttribLocation(sceneProg, 0, 'a_position');
+    gl.linkProgram(sceneProg);
+    if (!gl.getProgramParameter(sceneProg, gl.LINK_STATUS)) {
+      console.error('Scene program link error:', gl.getProgramInfoLog(sceneProg));
+    }
+
+    this.sceneProgram = sceneProg;
+    this.sceneUniforms = {
+      u_scene: gl.getUniformLocation(sceneProg, 'u_scene'),
+    };
   }
 
   _initFontAtlas() {
@@ -343,6 +376,14 @@ export class ASCIIRenderer {
     this.sceneHeight = h;
   }
 
+  setViewMode(mode = 'ascii') {
+    this.viewMode = mode === 'scene' ? 'scene' : 'ascii';
+  }
+
+  getViewMode() {
+    return this.viewMode;
+  }
+
   /**
    * Run the ASCII post-process pass.
    * Call this AFTER fluid.render(sceneTarget, ...) has filled the scene FBO.
@@ -354,6 +395,17 @@ export class ASCIIRenderer {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+    if (this.viewMode === 'scene') {
+      gl.useProgram(this.sceneProgram);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.sceneTex);
+      gl.uniform1i(this.sceneUniforms['u_scene'], 0);
+      gl.bindVertexArray(this.quadVAO);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindVertexArray(null);
+      return;
+    }
 
     gl.useProgram(this.program);
 

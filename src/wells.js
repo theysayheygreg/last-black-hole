@@ -120,14 +120,13 @@ export class WellSystem {
       }
 
       // === EVENT HORIZON ===
-      // Void + glow in visual buffer so they stay centered on the well
-      // s² because exp(-d²/r) — Gaussian width scales as sqrt(r)
-      const voidR = well.getVoidRadius() * s2;
-      // Strength proportional to radius — bigger voids need stronger injection
-      // to overcome ambient density/turbulence at greater distances from center
-      const voidStr = -0.05 * (1 + well.getVoidRadius() * 100);
+      // The black hole core must exist as a scene-shaped void before ASCII.
+      // This is visual-only: it does not change ship physics.
+      const voidR = well.getVoidRadius() * Math.max(1.0, well.mass * 0.75) * s2;
+      const voidStr = -0.5 * Math.min(2.0, 1.0 + well.mass * 0.25);
       fluid.visualSplat(fu, fv, voidR, voidStr, voidStr, voidStr);
 
+      // The bright horizon ring remains as a separate positive signal.
       const horizonPts = cfg.horizonPoints;
       const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult * s;
       for (let i = 0; i < horizonPts; i++) {
@@ -169,5 +168,30 @@ export class WellSystem {
    */
   getUVPositions() {
     return this.wells.map(w => worldToFluidUV(w.wx, w.wy));
+  }
+
+  /**
+   * Get well masses matching getUVPositions() order, for gravity field visualization.
+   */
+  getUVMasses() {
+    return this.wells.map(w => w.mass);
+  }
+
+  /**
+   * Get renderer-facing well shape data in reference-scaled units.
+   * x = core radius, y = ring inner radius, z = ring outer radius, w = orbitalDir
+   *
+   * Distances are normalized to the 3x3 reference view so the display shader
+   * can stay stable across map sizes. Kill radius drives the core because that
+   * is the actual gameplay "do not go here" signal.
+   */
+  getRenderShapes() {
+    return this.wells.map(w => {
+      const accretionRef = Math.max(0.012, w.getAccretionRadius() * w.mass);
+      const coreRef = Math.max((w.killRadius / 3.0) * 0.9, accretionRef * 0.28);
+      const ringInnerRef = Math.max(coreRef * 1.12, accretionRef * 0.72);
+      const ringOuterRef = Math.max(ringInnerRef * 1.18, accretionRef * 1.32);
+      return [coreRef, ringInnerRef, ringOuterRef, w.orbitalDir];
+    });
   }
 }
