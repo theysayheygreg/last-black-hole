@@ -173,6 +173,19 @@ Shader tuning session failed because density values accumulated to ~3850x the di
 
 ---
 
+## 2026-03-20 (Jam Day 5: Renderer Recovery Planning)
+
+### docs/project/ — New Files
+- **RENDERER-RECOVERY-PLAN.md** — New focused rendering workstream plan. Defines the 3-layer renderer contract (physics truth, scene shaping, ASCII presentation), reinterprets density as fabric excitation, defines the four player-facing reads (void, accretion, flow, surf lane), and splits work between Forge, Claude/Orrery, and Orb.
+
+### docs/journal/ — Updated
+- **DECISION-LOG.md** — Added renderer recovery entry. Commits the jam-week renderer contract: black-hole readability first, explicit scene shaping, and ASCII as presentation rather than the source of meaning.
+
+### Why
+Renderer work had become entangled with feature work and too much meaning was being compressed into one channel. This plan isolates the rendering lane so Forge can stabilize the look while Claude keeps pushing gameplay and content.
+
+---
+
 ## 2026-03-15 (Pre-Jam Day 2: Architecture Day)
 
 ### docs/design/

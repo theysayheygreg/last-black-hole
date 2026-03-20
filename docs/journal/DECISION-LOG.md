@@ -520,6 +520,31 @@ All tests use `triggerRestart()` which bypasses the title→mapSelect→startGam
 
 ---
 
+## Renderer Recovery
+
+### Q: What contract should the renderer follow for the last 3 days of the jam?
+
+| Date | Event |
+|------|-------|
+| Mar 20 | Greg pauses the feature churn and asks for a renderer-specific recovery plan. The problem is no longer "the shader is buggy" in a narrow sense. The problem is that one output channel is trying to mean too many things at once: void, heat, flow, surfability, and glitch texture. |
+| Mar 20 | Forge proposes a stricter three-layer contract: physics truth, scene shaping, and ASCII presentation. Black-hole readability becomes the first checkpoint, not an emergent side effect of density math. |
+
+**Options:**
+1. **Keep tuning the current combined shader** — quickest in theory, but every change keeps colliding with multiple meanings at once. High churn, low trust.
+2. **Refactor around three visual signals only** — better than current state, but still too fuzzy; black holes and surf lanes would remain mixed with general "brightness."
+3. **Adopt a three-layer renderer contract** (chosen) — physics truth stays honest, scene shaping defines phenomena, ASCII presentation expresses them. Void, accretion, flow, and surf opportunity become explicit player-facing reads.
+
+**Where it landed:** Option 3. For the rest of the jam, renderer work is split into:
+- physics truth
+- scene shaping
+- ASCII presentation
+
+Black holes must read in the scene-shaping layer before ASCII quantization. "Density" is no longer treated as the player-facing concept; the useful interpretation is **fabric excitation**.
+
+**Door status:** Open — this is the active renderer recovery contract until the jam ends or a playtest proves it wrong.
+
+---
+
 ## Template for New Entries
 
 ```
