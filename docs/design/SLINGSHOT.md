@@ -6,135 +6,138 @@
 
 ## Fantasy
 
-Right now, wells are pure threats — things you avoid. But the best movement games turn obstacles into tools. Grinding rails in Tony Hawk. Grappling in Titanfall. Drifting in Mario Kart. The dangerous thing becomes the fastest route if you're skilled enough.
-
-Gravity slingshot means: skilled players SEEK OUT wells for speed, while unskilled players avoid them. That's the whole skill ceiling for movement.
+Wells are currently pure threats — things you avoid. Slingshot makes them the fastest route IF you're skilled enough. Skilled players seek out wells for speed. Unskilled players avoid them. That's the whole skill ceiling for movement.
 
 ---
 
-## The Core Loop
+## Design Principles
 
-```
-APPROACH → CATCH → ORBIT → RELEASE → BOOST
-```
-
-### 1. Approach
-
-Fly toward a well at an angle — not directly at it. The skill is choosing your approach vector. Too direct = you spiral in and die. Too tangential = you don't catch the orbital band.
-
-### 2. Catch
-
-When you enter the **catch zone** (a ring between the kill radius and the outer pull boundary), AND your velocity has a strong tangential component (you're moving across the well's face, not straight at it), the game begins assisting.
-
-Visual cue: the orbital current near you brightens. Your ship trail starts curving with the orbit.
-
-**Catch condition:** `dot(normalize(velocity), tangentDirection) > tangentialThreshold`
-
-The tangent direction is perpendicular to the radial line from ship to well, in the direction of the well's orbital flow.
-
-### 3. Orbit
-
-You're swinging. The well's pull provides centripetal force. Your tangential velocity carries you around. This is where energy builds:
-- Each partial orbit accelerates you (angular momentum accumulation)
-- The fluid's orbital current pushes you in the same direction (additive)
-- An **orbital assist force** keeps you in the sweet spot band
-
-The ship is NOT on rails — you're still in the physics sim — but the assist prevents turbulence from knocking you out of orbit. Like wave magnetism, it makes the physics feel like it "wants to carry you."
-
-**Energy buildup:** speed increases by `energyPerOrbit` for each quarter-orbit completed. After a full orbit, you're significantly faster than you entered.
-
-### 4. Release
-
-Thrust to disengage. Your accumulated orbital velocity converts to linear velocity in whatever direction you're facing at the moment of release. The longer you orbited, the faster you go.
-
-**The risk:** orbiting too long is dangerous. The well grows over the run. The catch zone shrinks toward the kill radius. A slingshot that was safe at minute 2 might kill you at minute 6. Max orbit limit (2 full orbits) provides a safety valve — forced release after that.
-
-### 5. Boost
-
-Brief post-release speed multiplier. Your ship is temporarily faster than normal max speed — the slingshot gave you escape velocity. Decays over 2-3 seconds back to normal.
-
-During boost: wake is extra bright, ship feels fast, you can cover huge map distances in seconds.
+1. **Explicit player action required.** Proximity alone doesn't start a slingshot. You must press a button AND be in range. Like drift in Mario Kart (shoulder button + turning), grappling hooks (press + valid target), or rail grinds (jump + near rail + affordance conditions).
+2. **Predictable outcome.** When you press the button, you know what's going to happen. Visible lane, clear entry, readable arc. Not a physics exploit — a deliberate verb.
+3. **Player-controlled arc length.** Hold the button to orbit, release to exit with boost. Short hold = small turn + small boost. Long hold = full semicircle + max boost. The player controls the tradeoff between direction change and speed gain.
+4. **Visual affordances before, during, and after.** The player can see the slingshot opportunity before engaging, see their arc during, and see their boosted trajectory after.
 
 ---
 
-## Input Model: Hybrid (Recommended)
+## Reference Mechanics
 
-**Automatic catch + thrust-to-release.**
+### Mario Kart (drift boost)
+- **Initiate:** press shoulder button while turning. Not automatic — deliberate action.
+- **Hold:** hold the button to build charge. Longer hold = bigger boost.
+- **Release:** release button, boost fires in current direction.
+- **Key lesson:** the initiation is explicit, the duration is player-controlled, the payoff scales with commitment.
 
-- The game detects when you're in a viable slingshot and assists (no button needed)
-- NOT thrusting = orbiting (you're riding the gravity, going with it)
-- Thrusting = exit slingshot with boost (you're breaking free deliberately)
+### Grappling hook (Titanfall, Spider-Man, etc.)
+- **Initiate:** press button + aim at valid grapple point. Must be in range AND have line of sight.
+- **Ride:** physics swings you around the anchor point. You control when to let go.
+- **Release:** let go at any point, exit velocity = current swing velocity.
+- **Key lesson:** the grapple target must be visible and reachable. The swing arc is physics-driven but anchored to a clear point.
 
-This is elegant because it ties into the surfing philosophy: the game rewards you for reading the physics and going with it. Thrusting near a well = fighting gravity = the panic instinct. Drifting near a well at the right angle = slingshot = the skilled move.
+### Rail grinding (Tony Hawk, Jet Set Radio)
+- **Initiate:** jump + be near rail + moving roughly along it. The game snaps you onto the rail.
+- **Ride:** locked to the rail path. Some steering within the rail.
+- **Exit:** jump off or reach the end.
+- **Key lesson:** generous snap-to zone (you don't need pixel-perfect alignment), but you must be in the right neighborhood AND press the right button.
 
-The game teaches players: sometimes, letting go IS the power move.
-
-### Alternative input models (documented for testing)
-
-**A. Fully automatic:** No input to engage or disengage. The physics handles everything. Pro: no new keybind. Con: hard to feel deliberate, might accidentally catch.
-
-**B. Explicit key:** Hold a key to engage slingshot mode, release to disengage with boost. Pro: deliberate. Con: another keybind, feels "gamey."
-
-If hybrid doesn't feel right in playtesting, try B.
+### Kerbal Space Program (orbital mechanics)
+- **Reference for:** realistic gravity slingshots (too literal for us, but the feel of entering/exiting an orbit is instructive).
+- **What we take:** the sense that orbits have predictable geometry. You can plan a trajectory.
+- **What we don't take:** the manual precision. We want "fly near, press button, ride the lane" not "calculate burn vectors."
 
 ---
 
-## Visual Feedback
+## The Slingshot Verb
 
-Visual feedback is critical. The player needs to KNOW they're in a slingshot.
+### What the Player Sees (before engaging)
 
-### During catch
-- Ship trail color shifts (blue → amber as energy builds)
-- Orbital current near ship brightens (scene-shaping layer — coordinate with Forge)
+Around every well (and star), a **slingshot lane** is visible — a ring at a fixed distance showing where the orbital current is strongest.
 
-### During orbit
-- Trail becomes a continuous arc showing the orbit path
-- Speed indicators: trail gets longer and brighter with accumulated energy
-- Release direction indicator: a faint line or arrowhead showing where you'll go if you release NOW. This rotates as you orbit. Timing the release to point at your target is the skill.
+The lane shows:
+- **Where slingshot is possible** — the ring radius and position
+- **Current orbital direction** — which way the lane flows
+- **That a slingshot is available** — visual brightness/affordance intensifies when you're within activation range
 
-### On release
-- Burst of trail particles in the release direction
-- Boost trail: brighter, longer wake during the speed boost window
-- The fluid gets a visible disturbance from the high-speed departure
+The lane is always there, always visible. Part of reading the spacetime fabric. Like seeing a rail in Tony Hawk — you don't grind every rail, but you always know they're there.
 
-### Audio (when audio system exists)
-- Catch: rising tone, pitch proportional to orbital speed
-- Orbit: whooshing loop, pitch rising with energy
-- Release: satisfying "snap" + speed-rush sound
-- Boost: engine surge, decaying
+### What the Player Does
+
+1. **Approach** — fly toward a well or star. You can see the slingshot lane.
+2. **Enter range** — when you're within activation distance of the lane, a visual cue intensifies (lane brightens, affordance appears). You're in the "can grapple" zone.
+3. **Press X** — commit to the slingshot. Your ship snaps onto the lane and begins orbiting. This is a commitment — you're now on the rail.
+4. **Hold X** — ride the arc. Your ship follows the lane at increasing speed. The longer you hold, the further around you go, the more speed you build.
+5. **Release X** — exit the orbit. Your ship launches tangentially from the current position on the arc, with boosted velocity proportional to how long you held.
+
+### The Arc
+
+- **Entry:** snap onto the lane from any approach vector/direction. v1 has one lane at a fixed distance — the game snaps you to the nearest point on the ring.
+- **During:** ship follows the circular lane path. Speed increases over the arc. The well's gravity is doing the work.
+- **Exit:** tangential launch from current arc position. Exit direction = tangent to the circle at point of release. Exit speed = entry speed + boost accumulated during the arc.
+
+**Arc length is player-controlled:**
+- Quick tap of X (~0.3s) = small arc, small direction change, small boost. A nudge.
+- Hold X for a quarter orbit = 90° turn + medium boost. A redirect.
+- Hold X for a half orbit = 180° turn + maximum boost. The full slingshot. Reverse your direction at high speed.
+- Hold beyond 180° = continue orbiting, but no additional boost gain beyond max. Safety valve — you can orbit for positioning but the speed payoff caps at 180°.
+
+### Speed and Boost
+
+- **During orbit:** ship accelerates along the lane. Speed increases by `energyPerQuarterOrbit` each 90°.
+- **On release:** exit velocity = current orbital velocity (which is higher than entry). Plus a flat `boostMultiplier` applied to speed for `boostDuration` seconds, decaying exponentially.
+- **Bigger wells = faster slingshots.** Lane orbital velocity scales with well mass. The most dangerous wells are the fastest highways.
+- **Stars = smaller boost but safer.** No kill radius. Shallower deflection. Like a billiard bank shot instead of a full swing.
+
+---
+
+## Visual Affordances
+
+### Always visible (lane)
+- Ring around each well at slingshot distance
+- Rendered in scene-shaping layer or overlay — coordinate with Forge
+- Brightness/density indicates orbital current strength
+- Rotates with well's orbital flow direction
+
+### In activation range (ready to grapple)
+- Lane brightens or pulses when player is close enough to activate
+- Could show a subtle "entry gate" marker at the nearest point on the lane
+
+### During slingshot (on the rail)
+- Ship trail shifts color (blue → amber as speed builds)
+- Exit direction indicator: line or arrow showing where you'll go if you release NOW. Rotates as you orbit.
+- Speed buildup visual: trail gets longer/brighter
+
+### On release (boost)
+- Burst of trail particles in release direction
+- Brighter, longer wake during boost window
+- Speed lines or screen effect during boost decay
+
+---
+
+## Lane Properties
+
+### v1 (jam scope)
+- **One lane per well/star** at a fixed distance
+- **Distance scales with well mass/strength** — bigger wells have lanes further out (safer margin from kill radius)
+- **Entry from any vector** — snap to nearest point on the ring
+- **Single orbital direction** — matches well's orbital flow
+
+### v2 (future)
+- **Near/far lanes** with different speed injections based on distance (close = dangerous + fast, far = safe + slow)
+- **Direction matching bonus** — entering in the direction of the well's spin gives extra speed vs opposing spin
+- **Chain detection** — releasing from one slingshot into another well's activation range shows the next lane's entry opportunity
 
 ---
 
 ## Interaction with Other Systems
 
-### Force pulse during orbit
-Eject radially outward at high speed. Emergency abort from a slingshot gone wrong. The pulse force ADDS to your orbital velocity for extra-dramatic escape.
-
-### Scavengers can slingshot
-Vultures especially. Watching an AI ship slingshot around a well to beat you to a portal creates "oh no, they know how to do THAT?" Advanced vulture behavior — only triggers when the vulture's target is roughly on the other side of a well.
-
-### Planetoid slingshot
-Same mechanic but on moving objects. The catch zone moves with the planetoid. Harder to time, but the payoff is speed from a moving reference frame (faster total velocity). This is the expert-level maneuver.
-
-### Chaining
-Releasing from one slingshot into another well's catch zone should naturally work — you're going fast, you hit a catch zone, you orbit again. No explicit chain bonus needed; the physics reward is sufficient (compounding speed). But the VISUAL could acknowledge chains (trail color escalation, maybe a subtle screen effect on the third consecutive slingshot).
-
-### Tether + slingshot
-Tether is the safe/slow version: attach and ride passively. Slingshot is the dangerous/fast version: active orbital maneuver with skill expression. Good skill ladder for players to progress through.
-
----
-
-## Risk/Reward
-
-| Risk | Reward |
-|------|--------|
-| Well kill radius (death) | 2-3x normal max speed |
-| Signal generation from proximity (future) | Cross the map in seconds |
-| Well grows over run — catch zone shrinks | Beat scavengers to portals/wrecks |
-| Orbital path takes you through accretion disk | Chain slingshots for extreme traversal |
-| Mis-timed release = wrong direction | Route through wells instead of around them |
-
-The ideal slingshot is: approach at an angle, one half-orbit, release aimed at your target. 2-3 seconds total. High reward, medium risk. Full orbits are greedier — more speed but more time in danger.
+| System | Interaction |
+|--------|------------|
+| Wells | Primary slingshot targets. Bigger well = faster lane, wider kill margin. |
+| Stars | Secondary targets. Safer, smaller boost. Deflection rather than full orbit. |
+| Force pulse | Can be fired during slingshot. Breaks out of orbit (emergency abort) + pulse effect. |
+| Scavengers | Vultures can slingshot too (AI behavior). Creates "they know how to do THAT?" moments. |
+| Planetoids | Future: moving slingshot targets. The lane moves with the planetoid. |
+| Audio | Slingshot should have distinct audio: rising tone during orbit, snap on release, speed-rush during boost. |
+| Signal (future) | Orbiting a well probably generates signal. Slingshot is a loud, fast maneuver — skill reduces signal cost (shorter orbits). |
 
 ---
 
@@ -142,44 +145,51 @@ The ideal slingshot is: approach at an angle, one half-orbit, release aimed at y
 
 ```javascript
 slingshot: {
-  catchInnerRadius: 0.08,      // world-units, inside this = death zone
-  catchOuterRadius: 0.25,      // world-units, outside this = too far
-  tangentialThreshold: 0.5,    // min dot(vel, tangent) to qualify (0-1)
-  assistStrength: 0.4,         // orbital correction force multiplier
-  boostMultiplier: 2.5,        // speed multiplier on release
-  boostDuration: 2.0,          // seconds of boosted speed
-  boostDecay: 0.5,             // exponential decay rate
-  maxOrbits: 2.0,              // safety valve: forced release
-  energyPerQuarterOrbit: 0.15, // speed gain per quarter-orbit
-  trailColorShift: true,       // visual: trail amber during orbit
-  releaseIndicator: true,      // visual: show release direction
+  activationRange: 0.08,        // world-units, how close to the lane to press X
+  laneRadiusMult: 3.0,          // lane radius = well.killRadius * this
+  snapSpeed: 8.0,               // how fast ship snaps onto lane (world-units/s)
+  baseOrbitalSpeed: 0.4,        // world-units/s base orbital velocity
+  orbitalSpeedMassMult: 0.3,    // orbital speed += well.mass * this
+  energyPerQuarterOrbit: 0.15,  // speed gain per 90° of arc
+  maxBoostOrbits: 0.5,          // boost caps at this many orbits (0.5 = 180°)
+  boostMultiplier: 2.0,         // exit speed multiplier
+  boostDuration: 2.5,           // seconds of boosted speed
+  boostDecay: 0.5,              // exponential decay rate
+  starBoostMultiplier: 1.4,     // stars give less boost than wells
+  laneVisualRadius: 0.003,      // visual thickness of lane in UV-space
 }
 ```
 
 ---
 
-## Open Questions
+## Input
 
-1. **Input model:** hybrid (auto-catch, thrust-to-release) vs explicit key? Needs playtesting. Hybrid is the recommendation but may feel too subtle.
-2. **How readable does the trajectory need to be?** A projected arc is the clearest feedback but requires overlay rendering. Trail color change + speed buildup might be enough.
-3. **Stars too?** Stars push outward — a star "slingshot" would be a flyby that flings you. Could be interesting but might dilute the mechanic. Defer until wells feel right.
-4. **Chain bonus:** explicit reward for consecutive slingshots, or just let the compounding speed speak for itself?
-5. **Catch zone vs kill radius growth:** as wells grow, does the catch zone shrink (harder to slingshot late-game) or stay constant (always viable)? Shrinking creates natural difficulty curve.
-6. **Orbital direction:** must you orbit in the well's orbital flow direction, or can you slingshot against it? Against would be harder (fighting the current) but could create different trajectory options.
-7. **Slingshot + signal interaction (future):** does orbiting a well generate signal? If yes, slingshot is loud (risk). If no, slingshot is the quiet fast-travel (reward for skill). Recommendation: generate LESS signal than equivalent thrust distance — slingshot rewards the skilled.
-8. **When to prototype:** this is the most feel-dependent feature. Numbers won't be right on first try. Needs dedicated tuning session with Greg.
+| Input | Keyboard | DualSense | Action |
+|-------|----------|-----------|--------|
+| Engage slingshot | E (or key TBD) | X | Press while in activation range → snap to lane |
+| Hold orbit | Hold E | Hold X | Continue orbiting, building speed |
+| Release | Release E | Release X | Exit tangentially with boost |
+| Emergency abort | Spacebar (force pulse) | Square (force pulse) | Break out of orbit + fire pulse |
 
 ---
 
-## Implementation Notes
+## Open Questions
 
-The core mechanic is ~100-150 lines:
-- Detect catch condition (distance + tangential velocity check)
-- Apply orbital assist force while in catch zone and not thrusting
-- Track accumulated energy (quarter-orbits counted by angular position change)
-- On thrust (release): apply boost multiplier to velocity, decay over time
-- Overlay rendering for trail color shift and release direction indicator
+1. **Cancel without pulse?** If you release X, you get the boost. If you pulse, you abort. Is there a "cancel without boost or pulse"? Maybe tap thrust (R2) to break out at current speed, no boost. Or just: release = always boost. Keep it simple.
+2. **Lane visual ownership:** scene-shaping layer (Forge) or overlay (Claude)? For the prototype, overlay is faster. For the final game, scene-shaping is more integrated.
+3. **Star slingshot arc:** wells do a full semicircle max. Stars should probably do a shallower deflection — maybe 90° max? Since they push outward, the physics metaphor is different.
+4. **Multiple wells close together:** if two wells' lanes overlap or are very close, which one does X lock onto? Nearest well by distance? Or nearest lane by proximity to your position on the lane?
+5. **Slingshot + tether interaction:** are these mutually exclusive (can't tether while slingshotting), or could tether → slingshot be a combo (tether to a planetoid near a well, release tether, immediately slingshot the well)?
 
-Can live in `slingshot.js` or be integrated into `ship.js` as an update phase.
+---
 
-Key dependencies: ship position/velocity, well positions, well kill radii. All already accessible.
+## Prototype Plan (Saturday)
+
+1. Single lane ring rendered on overlay around each well
+2. X button (DualSense) / E key engages when in range
+3. Ship follows circular arc at fixed radius while held
+4. Speed increases per quarter-orbit
+5. Release = tangential exit with boost multiplier
+6. Exit direction indicator during orbit
+7. Tune: lane radius, activation range, boost multiplier, orbital speed
+8. Greg playtest: does it feel like a deliberate, satisfying maneuver?

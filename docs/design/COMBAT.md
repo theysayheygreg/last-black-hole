@@ -72,8 +72,40 @@ What if you can affect other entities (and future: other players) without weapon
 
 3. **Tether** (hold right-click / L1) — attach to wreck or planetoid. Ship dragged along. Zero signal while tethered. Good for hiding, anchoring during loot, free travel on planetoids. Thrust to detach.
 
-### Detailed designs in separate docs
-- Force pulse: see implementation in `src/combat.js` (building Friday)
+### Force Pulse — Resolved Decisions (2026-03-20)
+
+**Input:** spacebar (player), AI-controlled (scavengers)
+
+**Self-effect:** None initially. CONFIG flag `pulseRecoil: false` built in — likely tuning outcome is recoil (launch player backward on fire, like a shotgun). Architecture supports both from day one.
+
+**Well interaction:** Disrupts accretion disk visually. Pulse scatters density near wells for 2-3 seconds (visual splat that opposes the accretion injection). No physics change to well gravity.
+
+**Cooldown indicator:** Radial ring overlay around ship, fills clockwise. Dim while cooling, bright when ready.
+
+**Scavengers can pulse:** Yes. Vultures use it to shove player away from contested portals/wrecks. Separate cooldown config from player (`scavengers.pulseCooldown` longer than `combat.pulseCooldown`). Drifters don't pulse.
+
+**CONFIG:**
+```javascript
+combat: {
+  pulseForce: 0.8,             // fluid splat force magnitude
+  pulseRadius: 0.06,           // UV-space splat radius
+  pulseCooldown: 4.0,          // seconds between player uses
+  pulseEntityForce: 0.5,       // world-units/s velocity impulse on nearby entities
+  pulseEntityRadius: 0.3,      // world-units range for entity shove
+  pulseRecoil: false,          // if true, player gets launched backward on fire
+  pulseRecoilForce: 0.4,       // world-units/s recoil velocity (when enabled)
+  pulseWellDisruptRadius: 0.15,// world-units range for accretion disk scatter
+  pulseWellDisruptDuration: 2.0,// seconds of visual disruption
+}
+```
+
+Add to scavengers CONFIG:
+```javascript
+  pulseCooldown: 12.0,         // much longer than player — rare, impactful
+  pulseChance: 0.3,            // probability vulture fires when competing for target
+```
+
+### Signal flare and tether designs
 - Signal flare: see SIGNAL-DESIGN.md (depends on signal system — Saturday)
 - Tether: building Saturday
 

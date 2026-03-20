@@ -104,11 +104,13 @@ DRIFT → SEEK_WRECK → LOOT → SEEK_PORTAL → EXTRACT
 
 ## Spawning
 
-| Map Size | Scavenger Count | Mix |
-|----------|----------------|-----|
-| 3x3 | 2-3 | 70% drifter, 30% vulture |
-| 5x5 | 4-6 | 70% drifter, 30% vulture |
-| 10x10 | 6-8 | 70% drifter, 30% vulture |
+| Map Size | Portals | Scavenger Count | Mix | Pressure |
+|----------|---------|----------------|-----|----------|
+| 3x3 | 2 | 3 | 2 drifter, 1 vulture | Must beat at least 1 to exit |
+| 5x5 | 3 | 5 | 3 drifter, 2 vulture | Must beat at least 2 to exit |
+| 10x10 | 5 | 7 | 5 drifter, 2 vulture | Must beat at least 2 to exit |
+
+Always more scavengers than portals. The player is behind on exits from the start. Portal evaporation stacks on top — the math gets worse over time.
 
 - Spawn at map edges at run start (already in the universe when you arrive)
 - Staggered spawn times: not all at once. 1-2 at start, rest spawn over first 60 seconds.
@@ -177,19 +179,29 @@ scavengers: {
   spawnStagger: 60,            // seconds over which all scavengers spawn
   drifterLootTarget: 1,        // wrecks before extracting (1-2 random)
   vultureLootTarget: 2,        // wrecks before extracting (2-3 random)
+  bumpRadius: 0.04,            // world-units, collision detection radius
+  bumpForce: 0.3,              // world-units/s impulse on collision
+  deathSpiralDuration: 1.5,    // seconds of spiral animation before disappearing
 }
 ```
 
 ---
 
+## Resolved Decisions (2026-03-20)
+
+1. **Portal consumption: ALWAYS.** Every scavenger extraction removes a portal. Maximum pressure. Player must move.
+2. **Wreck competition: first to arrive loots.** Creates real races. Wreck marks as looted for everyone.
+3. **Collision: bump.** Both ships get a small velocity impulse apart on contact. Feels physical.
+4. **Visibility: sensor range.** Scavengers only visible within camera frustum. Creates surprise.
+5. **Balance: more scavengers than portals.** Player is always behind on exits. Will be broken until tuned — that's fine.
+6. **Vulture racing: alternate routes.** Vulture evaluates fluid alignment for different approach vectors, not just "go faster." Picks the approach with best current assist. Simpler first pass: pick approach vector with highest `dot(fluidVel, toTarget)`.
+7. **Death visual: spiral animation.** Ship visibly spirals inward over 1-2 seconds before disappearing. Atmospheric.
+
 ## Open Questions
 
-1. **Portal consumption confirmed?** Design says "a portal used by a scavenger is gone." This is brutal. Confirm this is the intent.
-2. **Can scavengers loot the same wreck the player is approaching?** If yes, creates races. If no (wrecks lock to first entity in range), creates different tension.
-3. **Do dead scavengers drop anything?** Currently no. Could drop partial loot as a reward for watching them die (salvaging the salvager).
-4. **Player-scavenger collision:** do they pass through each other, or is there contact interaction? Force pulse affects them, but baseline collision?
-5. **Scavenger count scaling with universe death:** do more spawn as the run progresses, or is it a fixed population? Fixed feels cleaner — they're a dwindling resource like portals.
-6. **Vulture awareness of player intent:** how does the vulture know you're heading for a wreck/portal? Simplest: check if player velocity vector points roughly at the same target. More complex: track player over time.
+1. **Do dead scavengers drop anything?** Currently no. Could drop partial loot as a reward for watching them die (salvaging the salvager). Defer.
+2. **Fixed population or respawning?** Currently fixed — they're a dwindling resource like portals. Could add late-game "reinforcement" spawns for more pressure.
+3. **Bump force magnitude?** Needs tuning. Too weak = imperceptible. Too strong = annoying pinball. Start at 0.3 world-units/s impulse, tune from there.
 
 ---
 
