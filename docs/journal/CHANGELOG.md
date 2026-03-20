@@ -31,6 +31,9 @@ Game needs more verbs. Fly/loot/escape is working but thin. AI opponents create 
 ### docs/project/ — New Files
 - **RENDERER-RECOVERY-PLAN.md** — New focused rendering workstream plan. Defines the 3-layer renderer contract (physics truth, scene shaping, ASCII presentation), reinterprets density as fabric excitation, defines the four player-facing reads (void, accretion, flow, surf lane), and splits work between Forge, Claude/Orrery, and Orb.
 
+### docs/reference/ — New Files
+- **RENDERER-HARNESS.md** — Documents the dedicated renderer capture path. Adds deterministic fixtures, timed captures at multiple moments, and pre-ASCII vs final ASCII outputs so renderer work is judged over time instead of from a single opportunistic frame.
+
 ### docs/journal/ — Updated
 - **DECISION-LOG.md** — Added renderer recovery entry. Commits the jam-week renderer contract: black-hole readability first, explicit scene shaping, and ASCII as presentation rather than the source of meaning.
 
@@ -260,3 +263,14 @@ Renderer work had become entangled with feature work and too much meaning was be
 
 ### docs/project/
 - **BUILD-PLAN.md** — NEW. 7-layer build plan (L0 Feel → L6 Ship). Scope ratchets. Pre-Monday prep checklist.
+
+## 2026-03-20 (Jam Day 5: Sim Decoupling Design)
+
+### docs/project/ — New Files
+- **SIM-DECOUPLING-PLAN.md** — New architecture plan for splitting authoritative world simulation from the player executable. Defines the process split (Sim Core, Client Runtime, Field Adapter), argues against making the current WebGL fluid sim authoritative, proposes a coarse-field authoritative model with client-side visual reconstruction, recommends a 15 Hz sim tick, and maps the current code seams that must be cut first.
+
+### docs/journal/ — Updated
+- **DECISION-LOG.md** — Added sim/client decoupling decision. Gameplay truth moves toward a separate authoritative sim process; visual fluid stays client-side. First milestone is interface decoupling, not running a server.
+
+### Why
+Greg wants the world sim prepared for multiplayer and for future scale without tying server cost to render cost. Current architecture review showed the sim, fluid, AI, and rendering are still too entangled. This plan defines the first clean split: authoritative gameplay state and coarse flow truth on one side, high-frequency visual reconstruction on the client.

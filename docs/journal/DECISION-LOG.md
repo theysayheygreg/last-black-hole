@@ -545,6 +545,26 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 ---
 
+## Renderer Evaluation
+
+### Q: How should renderer work be evaluated during the jam?
+
+| Date | Event |
+|------|-------|
+| Mar 20 | Greg points out that the current screenshot-based smoke/flow harness is producing false confidence for renderer work because it samples a single convenient frame from a fluid animation. |
+| Mar 20 | Forge adds a dedicated renderer harness with deterministic fixtures, timed captures, pre-ASCII scene views, final ASCII views, and a debug overlay capture. |
+
+**Options:**
+1. **Keep using smoke/flow screenshots** — easy, but they are runtime health checks, not renderer truth.
+2. **Judge only by live manual play** — useful, but too hard for agents to compare and too easy to misremember.
+3. **Add a dedicated renderer harness** (chosen) — stable fixtures, multiple timestamps, scene-vs-ASCII capture, one manifest per run.
+
+**Where it landed:** Option 3. Smoke and flow remain health checks. Renderer work is evaluated through the dedicated harness.
+
+**Door status:** Open — this remains the default evaluation path for renderer work unless something simpler proves equally trustworthy.
+
+---
+
 ## Non-Lethal Combat Tools
 
 ### Q: What gives the player "teeth" beyond fly/loot/escape?
@@ -664,3 +684,24 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 **Where it landed:** [Current answer]
 **Door status:** Closed / Open / Playtesting
 ```
+
+---
+
+## Sim / Client Decoupling
+
+### Q: How should LBH split simulation from the player executable for scale and future multiplayer?
+
+| Date | Event |
+|------|-------|
+| Mar 20 | Greg asks for a design to split the authoritative sim out of the player executable, both to prepare for multiplayer and to separate render performance from world-sim performance. |
+| Mar 20 | Current architecture review identifies the main seams: ship/scavengers sample GPU fluid directly, several systems mutate fluid as a side effect, some updates are camera-culled, and the main loop mixes fixed `simDt` and frame `dt`. |
+| Mar 20 | Decision: the current WebGL fluid sim will **not** become the authoritative server model. The authoritative side will own gameplay truth and a cheaper flow-field model; the client will own high-frequency visual reconstruction and ASCII presentation. |
+| Mar 20 | Recommended clocks set: 15 Hz authoritative sim, 10-15 Hz snapshots, 30-60 fps client render. Lower-frequency bands (5-10 Hz AI decisions, 1-2 Hz macro collapse systems) are explicitly allowed. |
+
+**Options:**
+1. **Keep one-process app forever** — simplest now, but scale and multiplayer both get worse from here.
+2. **Authoritative server runs the full WebGL fluid sim** — sounds pure, but it is the wrong shape: GPU-bound, expensive to replicate, and too tightly coupled to rendering.
+3. **Authoritative sim owns gameplay + coarse flow truth, client owns visual fluid reconstruction** (chosen) — clean separation, better scale, direct path to multiplayer.
+
+**Where it landed:** Option 3. First milestone is interface decoupling inside one app: `flowField.sample(wx, wy)`, `SimState`, and a fixed-step `SimCore`, before any actual second process exists.
+**Door status:** Open — exact field representation can evolve, but the split between gameplay truth and visual fluid is now the working direction.
