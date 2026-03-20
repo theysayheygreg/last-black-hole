@@ -64,7 +64,11 @@ function parseMapFile(filepath) {
 }
 
 const MAPS_DIR = path.join(SRC, 'maps');
-const mapFiles = fs.readdirSync(MAPS_DIR).filter(f => f.endsWith('.js'));
+const mapFiles = fs.readdirSync(MAPS_DIR).filter(f => {
+  if (!f.endsWith('.js')) return false;
+  const src = fs.readFileSync(path.join(MAPS_DIR, f), 'utf8');
+  return src.includes('export const MAP =');
+});
 const maps = mapFiles.map(f => ({
   name: f,
   data: parseMapFile(path.join(MAPS_DIR, f)),
