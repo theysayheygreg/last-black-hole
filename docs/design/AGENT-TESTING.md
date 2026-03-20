@@ -41,7 +41,7 @@ npm install puppeteer
 
 A test script:
 1. Launches headless Chrome (or headed, for screenshot review)
-2. Opens `index.html` (served via `npx serve .` or `python3 -m http.server`)
+2. Opens the target HTML file through the LBH harness server on port `8719`
 3. Waits for canvas to render
 4. Reads console output (fps, errors, sim state)
 5. Simulates mouse/keyboard input

@@ -259,6 +259,34 @@ For multiplayer or local process separation, I would use:
 - **client interpolation:** every render frame
 - **client visual fluid update:** 20-30 Hz local, decoupled from the authoritative tick if needed
 
+## Operational process model
+
+### Current shape
+
+Today the project has:
+- one long-lived **dev server** process that only serves files
+- one **client runtime** process that runs both rendering and simulation
+- one transient **harness server** process for tests
+
+That means the sim is still embedded in the client runtime.
+
+### Future shape
+
+The target shape is:
+- **sim/server process** — authoritative fixed-step world update
+- **client process** — render, input, interpolation, audio, HUD
+- **harness processes** — transient test server plus browser driver
+
+The immediate goal is not networking. The immediate goal is to make those process boundaries explicit enough that the sim can move without rewriting gameplay systems again.
+
+## Near-term implementation rail
+
+1. Keep the new in-process `SimCore` boundary stable.
+2. Move remaining world systems fully behind that boundary.
+3. Freeze a plain-data snapshot contract for sim state.
+4. Run `SimCore` out-of-process locally first.
+5. Only then add real client/server transport.
+
 That lets the client stay smooth even if the sim is comparatively sparse.
 
 ## Scale assumptions and breaking points

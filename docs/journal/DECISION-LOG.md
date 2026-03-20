@@ -699,6 +699,7 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 | Mar 20 | Recommended clocks set: 15 Hz authoritative sim, 10-15 Hz snapshots, 30-60 fps client render. Lower-frequency bands (5-10 Hz AI decisions, 1-2 Hz macro collapse systems) are explicitly allowed. |
 | Mar 20 | First implementation slice lands in-process: `FlowField.sample(wx, wy)` becomes the new gameplay-facing velocity interface, `SimState` centralizes run timers, and `SimCore` takes over the fixed world-update block from `main.js`. The app still runs in one process, but the client loop now talks to a sim boundary instead of owning the sim step directly. |
 | Mar 20 | Second implementation slice: the world update no longer depends on camera position and now runs on a fixed-step accumulator inside `SimCore`. Loot, wreck, and portal systems still inject visual/fluid effects, but they are no longer culled by the render camera during the sim step. |
+| Mar 20 | LBH now has a canonical local process model: dev server on `8080`, harness server on `8719`, and no separate sim PID yet. The future dedicated sim/server process is explicitly backlogged instead of being implied by the current app shape. |
 
 **Options:**
 1. **Keep one-process app forever** — simplest now, but scale and multiplayer both get worse from here.

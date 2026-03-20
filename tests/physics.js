@@ -44,10 +44,12 @@ async function run() {
 
       const posBefore = await page.evaluate(() => window.__TEST_API.getShipPos());
 
-      await page.mouse.move(900, 360);
-      await page.mouse.down();
+      await page.click("body");
+      await page.keyboard.down("ArrowRight");
+      await page.keyboard.down("Space");
       await new Promise((r) => setTimeout(r, 1500));
-      await page.mouse.up();
+      await page.keyboard.up("Space");
+      await page.keyboard.up("ArrowRight");
 
       const posAfter = await page.evaluate(() => window.__TEST_API.getShipPos());
 

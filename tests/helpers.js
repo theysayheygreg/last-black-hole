@@ -6,8 +6,12 @@ const fs = require("fs");
 const SCREENSHOT_DIR = path.join(__dirname, "screenshots");
 if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
-const PORT = 8719; // arbitrary high port unlikely to collide
+const PORT = 8719; // dedicated transient harness port; separate from dev server on 8080
 const ROOT = path.resolve(__dirname, "..");
+const TMP = path.join(ROOT, "tmp");
+const PID_FILE = path.join(TMP, "harness-server.pid");
+const META_FILE = path.join(TMP, "harness-server.json");
+const SERVER_SCRIPT = path.join(ROOT, "scripts", "static-server.js");
 
 let serverProcess = null;
 
@@ -17,8 +21,17 @@ let serverProcess = null;
  */
 async function startServer() {
   return new Promise((resolve, reject) => {
-    // Use python3 http.server — available on macOS/Linux, no npm dep
-    serverProcess = spawn("python3", ["-m", "http.server", String(PORT)], {
+    fs.mkdirSync(TMP, { recursive: true });
+
+    serverProcess = spawn(process.execPath, [
+      SERVER_SCRIPT,
+      "--host", "127.0.0.1",
+      "--port", String(PORT),
+      "--root", ROOT,
+      "--pid-file", PID_FILE,
+      "--meta-file", META_FILE,
+      "--label", "lbh-harness",
+    ], {
       cwd: ROOT,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -58,6 +71,11 @@ function stopServer() {
   if (serverProcess) {
     serverProcess.kill();
     serverProcess = null;
+  }
+  for (const file of [PID_FILE, META_FILE]) {
+    try {
+      fs.rmSync(file, { force: true });
+    } catch {}
   }
 }
 

@@ -291,3 +291,25 @@ Greg wants the world sim prepared for multiplayer and for future scale without t
 
 ### Why
 This is the first real decoupling cut. The game still runs in one app, but the client loop is no longer the only owner of simulation truth, and the world update no longer depends on the camera. That makes the next steps possible: move the remaining systems behind `SimCore`, lower the authoritative tick without breaking the client loop, and eventually push the same boundary into a worker or server process without rewriting the whole game.
+
+## 2026-03-20 (Jam Day 5: Dev Server and PID Discipline)
+
+### scripts/ — New Files
+- **scripts/static-server.js** — Shared static server for both human playtesting and harness runs. Serves `index-a.html` at `/` and writes pid/meta files when asked.
+- **scripts/dev-server.js** — Canonical controller for the long-lived local dev server. Supports `start`, `stop`, `status`, and `restart`.
+
+### tests/ — Modified
+- **tests/helpers.js** — Harness now uses the same shared static server implementation on its own dedicated port (`8719`) and writes transient pid/meta files under `tmp/`.
+
+### docs/ — Modified
+- **docs/reference/DEV-SERVER.md** — Documents the current LBH process model and canonical ports.
+- **docs/project/BACKLOG.md** — Adds explicit future work for a dedicated sim process, local client/server protocol, and headless sim harness.
+- **docs/project/SIM-DECOUPLING-PLAN.md** — Adds the current vs future operational process model.
+- **docs/design/AGENT-TESTING.md** — Stops telling agents to guess at ad hoc local servers.
+
+### package.json / .gitignore
+- Added `npm run dev`, `dev:stop`, `dev:status`, and `dev:restart`.
+- Ignored `tmp/` runtime pid/meta files.
+
+### Why
+Claude and Codex were guessing at different local ports and different static server processes. LBH now has one canonical playtest server path and one separate transient harness path, which is the minimum operational discipline needed before a real sim/server PID exists.

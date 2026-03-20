@@ -126,6 +126,25 @@
 - **Value if revisited:** The signal mechanic becomes social. One noisy player endangers everyone.
 - **Prerequisite:** Solo game must be fun first. Network code only after core loop is locked.
 
+### Dedicated Sim Process
+- **What:** Split the authoritative world update into its own long-lived process with a fixed tick, its own PID, and a stable local protocol for snapshots and inputs.
+- **Why backlogged:** The interface cut is in progress, but a full second process is not needed to finish the jam.
+- **State:** `docs/project/SIM-DECOUPLING-PLAN.md` defines the target shape; `FlowField`, `SimCore`, and `SimState` already exist in-process.
+- **Value if revisited:** Real multiplayer path, isolated sim perf budget, cleaner debugging, easier scale experiments on larger maps.
+- **First revival step:** Move remaining world systems fully behind `SimCore`, then run the sim in a Worker or child process before touching network code.
+
+### Client / Server Local Protocol
+- **What:** Define the minimal message contract between a render client and an authoritative sim: input commands, snapshots, events, and local flow queries.
+- **Why backlogged:** The codebase is only just getting a real sim boundary. Protocol design before that boundary settles would churn.
+- **Value if revisited:** Makes later WebSocket or local IPC transport mostly a mechanical change instead of a redesign.
+- **First revival step:** Freeze a plain-data `SimState` snapshot schema and a small input command envelope.
+
+### Headless Sim Harness
+- **What:** Run gameplay tests against a dedicated sim process instead of an in-page browser loop.
+- **Why backlogged:** The renderer harness and main flow harness are enough for the jam.
+- **Value if revisited:** Lets agents hammer the server-authoritative path directly and catch desync bugs earlier.
+- **First revival step:** Repoint one smoke test to a process-backed `SimCore` without involving the renderer.
+
 ---
 
 ## Visual & Audio

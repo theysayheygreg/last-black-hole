@@ -5,3 +5,4 @@ release-staging/
 .DS_Store
 *.log
 tests/screenshots/
+tmp/
