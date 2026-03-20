@@ -669,129 +669,155 @@ Greg specs Thu→Fri work:
 
 ---
 
-## Friday, March 20 — L4/L5: Depth + Balance
+## Friday, March 20 — The Teeth (Revised)
 
-### Night Shift (Thu→Fri, midnight-10am)
+> Original plan: progression + balance. Actual: renderer split + feature design sprint + build new gameplay systems.
+> Renderer work transferred to Forge. Signal parked until renderer stabilizes.
 
-**Goal:** Between-run progression, procedural identity, balance pass. Make it replayable.
+### Day Session — Feature Design + Build
 
-#### Task N12: Between-Run Progression (Medium, 2-3hr)
-- **What:** Meta-screen between runs. Spend salvage on ship upgrades. Give players a reason to run again.
-- **Files:** `index.html` (metagame screen, currency tracking, upgrade system)
-- **Dependencies:** Inventory/loot system (Task N4), run success/failure flow
+**Goal:** Give the game verbs beyond fly/loot/escape. Build AI opponents, combat tools, audio, and cosmic signatures.
+
+#### Task N20: AI Scavengers (Large, 3-4hr) — PRIORITY 1
+- **What:** AI ships competing for wrecks and portals. Two archetypes: drifters (passive) and vultures (competitive).
+- **Files:** `src/scavengers.js`, `src/main.js`, `src/config.js`
+- **Dependencies:** Ship physics (ship.js), wreck pickup, portal extraction, fluid sim
+- **Design doc:** `docs/design/SCAVENGERS.md`
 - **Deliverables:**
-  - Metagame screen after extraction success (not after death — you lose everything on death)
-  - Currency: Exotic Matter, accumulated from successfully extracted loot
-  - 4-5 ship upgrades, each with 3 levels:
-    - Thrust Power (faster acceleration)
-    - Hull Integrity (survive one fauna hit — future-proofing)
-    - Signal Dampening (reduce signal generation by 10/20/30%)
-    - Sensor Range (edge markers show entity type, not just direction)
-    - Current Reader (visual indicator of fluid flow direction around ship)
-  - Upgrades persist across runs (localStorage)
-  - Simple UI: grid of upgrade cards, cost displayed, click to buy
-  - "New Run" button launches a fresh universe with upgrades applied
+  - Scavenger class with same physics as player ship (thrust + fluid coupling + drag + gravity)
+  - Behavioral state machine: DRIFT → SEEK_WRECK → LOOT → SEEK_PORTAL → EXTRACT, with FLEE_WELL override
+  - Drifters: ride currents, loot conservatively, extract early
+  - Vultures: track player position loosely, race for contested wrecks/portals
+  - Portal consumption: scavenger extraction removes the portal
+  - Death by well kill radius (same as player)
+  - Bullet wake injection (same as player)
+  - Rendered on overlay: smaller triangle, drifters blue, vultures amber
+  - 2-3 scavengers on 3x3, 4-6 on 5x5, 6-8 on 10x10
 - **Acceptance Criteria:**
-  - [ ] Metagame screen appears after successful extraction
-  - [ ] Exotic Matter accumulates correctly from extracted loot
-  - [ ] All upgrades purchasable and persist across page refresh
-  - [ ] Upgrades have visible/felt effect in-game
-  - [ ] Signal Dampening doesn't break the signal system (still meaningful, just reduced)
-  - [ ] "New Run" starts a fresh universe correctly
-  - [ ] Death = lose all loot from that run (extraction game standard)
+  - [ ] Scavengers visible, moving, interacting with fluid
+  - [ ] Drifters ride currents, loot wrecks, extract via portals
+  - [ ] Vultures compete with player for wrecks/portals
+  - [ ] Portal consumed when scavenger extracts
+  - [ ] Scavengers die to wells
+  - [ ] AI decisions look natural (not jittery, not robotic)
+  - [ ] 60fps maintained
+- **Scope:** Large — but the movement physics are copy-paste from ship.js
+
+#### Task N21: Force Pulse (Small, 1hr) — PRIORITY 2
+- **What:** Spacebar fires a radial shove. The "oh shit" button.
+- **Files:** `src/combat.js`, `src/main.js`, `src/config.js`
+- **Dependencies:** Fluid sim, wave rings, scavenger system
+- **Design doc:** `docs/design/COMBAT.md`
+- **Deliverables:**
+  - Spacebar triggers massive radial `fluid.splat()` at ship position
+  - Spawns a wave ring for visible shockwave
+  - Velocity impulse on nearby scavengers and planetoids
+  - Cooldown (3-5s), visual indicator (ship dim while cooling)
+  - CONFIG section for all tunables
+- **Acceptance Criteria:**
+  - [ ] Spacebar fires pulse with visible fluid effect
+  - [ ] Nearby scavengers shoved away
+  - [ ] Wave ring propagates outward
+  - [ ] Cooldown prevents spam
+  - [ ] Can be used to escape well gravity (emergency)
+  - [ ] 60fps maintained
+- **Scope:** Small
+
+#### Task N22: Audio Foundation (Medium, 2hr) — PRIORITY 3
+- **What:** Drone + well harmonics + event sounds. All Web Audio API.
+- **Files:** `src/audio.js`, `src/main.js`, `src/config.js`
+- **Dependencies:** Well system (for harmonics), ship state (for events)
+- **Design doc:** `docs/design/AUDIO.md`
+- **Deliverables:**
+  - Layer 1: drone oscillator, pitch drops with universe age
+  - Layer 2: one oscillator per well, pitch from mass, stereo panned, distance attenuated
+  - Event sounds: thrust, loot pickup, portal evaporation, force pulse, death, extraction
+  - Audio gated behind first user interaction (browser autoplay policy)
+  - Volume slider in dev panel
+- **Acceptance Criteria:**
+  - [ ] Drone plays after first interaction
+  - [ ] Well harmonics audible, stereo-positioned
+  - [ ] Event sounds fire on correct triggers
+  - [ ] Volume controllable
+  - [ ] No frame drops from audio
 - **Scope:** Medium
 
-#### Task N13: Procedural Universe Identity (Small, 1-2hr)
-- **What:** Each run feels like a unique dead universe, not a random level.
-- **Files:** `index.html` (universe generation, wreck text, per-run signature)
-- **Dependencies:** Universe layout generation (well placement, wreck placement)
+#### Task N23: Cosmic Signatures (Small, 1hr) — PRIORITY 4
+- **What:** Per-run universe personality. CONFIG overrides + name + flavor text.
+- **Files:** `src/signatures.js`, `src/map-loader.js`, `src/main.js`
+- **Dependencies:** CONFIG system, map loader
+- **Design doc:** `docs/design/SIGNATURES.md`
 - **Deliverables:**
-  - Per-run cosmic signature (pick one dominant trait):
-    - Long slow tidal currents (low-frequency force oscillation)
-    - Violent merger pulses (high-amplitude, high-frequency)
-    - Thick and viscous from the start (high base viscosity)
-    - Rich in wrecks, poor in portals (or vice versa)
-  - Signature shown at run start: "Entering Universe: The Slow Tide" / "Entering Universe: The Shattered Merge"
-  - Wreck names include per-run civilization thematic (one dominant civ per wreck cluster)
-  - 3-5 wreck silhouette classes: use different ASCII character patterns to distinguish wreck types visually
-  - Randomized well placement (1 central ± offset, 2-4 satellites at 40-70% radius with jitter)
-  - Randomized wreck/portal placement per the rules in DESIGN-DEEP-DIVE.md
+  - 6 signatures: slow tide, shattered merge, thick dark, graveyard, rush, deep
+  - Each with CONFIG overrides and flavor text
+  - Display at run start: "entering: the slow tide" with flavor text, fades after 3s
+  - Map loader applies signature overrides
 - **Acceptance Criteria:**
-  - [ ] Each new run has a named cosmic signature
-  - [ ] Signature visibly affects gameplay (thick universe feels different from merger universe)
-  - [ ] Wreck clusters have distinct visual silhouettes
-  - [ ] Well placement varies between runs
+  - [ ] Each run shows a signature name
+  - [ ] Different signatures feel different (viscosity, growth rate, portal timing)
   - [ ] Three consecutive runs feel like three different universes
 - **Scope:** Small
 
-#### Task N14: Balance Pass (Medium, 2-3hr)
-- **What:** Tune every number in the game. Target: 8-12 minute runs, escalating tension.
-- **Files:** `index.html` (constants section / config object)
-- **Dependencies:** All gameplay systems
-- **Deliverables:**
-  - All tunable constants extracted into a single config object at top of file
-  - Run timing targets per DESIGN-DEEP-DIVE.md timeline:
-    - 0:00-2:00 Exploration (all portals, wells weak, fluid responsive)
-    - 2:00-4:00 Escalation (first portal dies, wells growing, viscosity rising)
-    - 4:00-6:00 Tension (second portal gone, wells strong, signal threshold approachable)
-    - 6:00-8:00 Crisis (1-2 portals remain, wells doubled, fluid thick)
-    - 8:00-10:00 Collapse (last portal flickering, wells dominant, extract or die)
-  - Tuned values for: thrust force, wave amplitude, well growth rate, viscosity curve, signal rates, signal decay, portal evaporation intervals, loot value distribution, Inhibitor speed, Inhibitor tracking interval
-  - Test each tuning target by playing through the timeline
-- **Acceptance Criteria:**
-  - [ ] Average run length is 8-12 minutes
-  - [ ] Tension clearly escalates over the run (early = calm, late = desperate)
-  - [ ] Signal threshold is reachable but not guaranteed (depends on playstyle)
-  - [ ] Inhibitor is avoidable through skill (drifting, hiding) but terrifying
-  - [ ] The "one more wreck" temptation is real at 4-6 minute mark
-  - [ ] Portal evaporation creates genuine urgency
-  - [ ] Config object is clean and well-commented
-- **Scope:** Medium
-
-#### Night Report
-- Agent writes `docs/journal/reports/2026-03-20-night.md`
-
----
-
-### Morning Review (10am)
-
-Greg checks:
-1. Play 3 runs with the progression system. Does upgrading feel good? Too fast? Too slow?
-2. **THE QUESTION:** Do runs feel replayable? Does the cosmic signature make each universe feel distinct?
-3. Is the balance right? Is 8-12 minutes the right run length?
-4. With all systems in place: would you play this for 30 minutes? An hour?
-
-### Day Shift (10am-midnight)
-
-**Greg priorities:**
-1. **Extended playtest session.** Play for 1-2 hours straight. This is the game-feel validation. Note everything.
-2. **Upgrade balance.** Are upgrades meaningful? Is Signal Dampening too strong (breaks the system) or too weak (not worth buying)?
-3. **Wreck text quality.** Read the procedural names and histories. Do they evoke "dead civilization" or "random word generator"? Edit the word lists.
-4. **Stream / record a run.** This is content. Capture the best run for jam submission materials.
-
-**Parallel agent work:**
-- Title screen: black → grid fades in → gravity well pulses → title in bold serif → "Click to begin"
-- Game over screen: universe collapse animation (wells consume everything, ASCII chars drain to center)
-- Extraction success screen: loot summary, Exotic Matter gained, return to metagame
-- **Player primer / "How to Play" doc** — write for someone who's never seen the game. What are you? What do you do? What kills you? What are the controls? Keep it short (fits on an itch.io page). Covers: surfing concept, thrust/drift, signal, portals, the Inhibitor. This goes on the itch.io page and optionally as an in-game first-run overlay.
-- If ahead: fauna (Signal Moths — simple entities near wrecks, attracted by signal >15%, swarm behavior, contact adds +5% signal)
-
-### Evening Handoff (midnight)
-
-Greg specs Fri→Sat work:
-- Final polish list (ranked by impact)
-- Known bugs to fix
-- Cut list for anything that's not landing
-- Deployment prep tasks
+#### Slingshot Prototype (Stretch — if time allows)
+- **Design doc:** `docs/design/SLINGSHOT.md`
+- **What:** Gravity slingshot. Approach → catch → orbit → release → boost.
+- May defer to Saturday for dedicated tuning session.
 
 ### Scope Ratchet (end of Friday)
 
 | Status | Action |
 |--------|--------|
-| **Ahead** (progression + balance + all screens done) | Add fauna. Add force pulse. Deeper audio (dynamic mixing per MUSIC.md). Difficulty scaling across runs. |
-| **On track** (progression works, balance close) | Saturday is final polish + deploy prep. No new systems. |
-| **Behind** (progression incomplete) | Cut upgrades to 2-3 (thrust + signal dampening only). Cut cosmic signatures. Ship what plays well. |
-| **Crisis** (balance is off, game isn't fun) | Cut progression entirely (each run standalone). All effort on making a single run feel good. Deploy that. |
+| **Ahead** (all 4 tasks done + slingshot prototyped) | Saturday: signal system, signal flare, tether, slingshot tuning, HUD, progression |
+| **On track** (scavengers + pulse + audio done, signatures partial) | Saturday: finish signatures, add signal system, combat tools, iterate |
+| **Behind** (scavengers incomplete) | Saturday: finish scavengers, force pulse. Cut signatures. Cut slingshot. Ship what plays. |
+| **Crisis** (nothing new works) | Saturday: fix what's broken. Cut everything new. Polish the existing fly/loot/escape loop. |
+
+---
+
+## Saturday, March 21 — Iterate + UI + Signal (Revised)
+
+> Original plan: polish + deploy. Actual: iterate Friday features, add signal/tether, HUD, progression.
+
+### Day Session
+
+**Goal:** Iterate Friday's features. Add signal system (if renderer ready), tether, HUD polish, between-run progression.
+
+#### Planned Tasks (order depends on Friday outcome + renderer state):
+- Signal system (gates Inhibitor, flare utility) — IF renderer is ready
+- Signal flare (depends on signal)
+- Tether (third combat tool)
+- Slingshot prototype/tuning (if not done Friday)
+- HUD iteration (signal bar, combat cooldowns, portal direction)
+- Between-run progression (metagame screen, upgrades, localStorage)
+- Balance pass (run timing, escalation curve)
+
+### Scope Ratchet (end of Saturday)
+
+| Status | Action |
+|--------|--------|
+| **Ahead** (signal + combat tools + progression all in) | Sunday: Inhibitor, final balance, deploy |
+| **On track** (signal works, most features in) | Sunday: Inhibitor if possible, balance, deploy |
+| **Behind** (signal not in) | Sunday: cut Inhibitor to simple fixed-timer threat. Balance. Deploy. |
+| **Crisis** (features broken) | Sunday: fix. Cut to minimum viable. Deploy. |
+
+---
+
+## Sunday, March 22 — Ship Day (Revised)
+
+> Original plan: final fixes + stretch. Actual: Inhibitor + balance + bug fixes + deploy.
+
+### Day Session
+
+**Goal:** The Inhibitor (if signal is in). Balance pass. Bug fixes. Deploy.
+
+#### Planned Tasks:
+- Inhibitor (uses scavenger AI architecture + signal threshold)
+- Balance pass (8-12 minute runs, escalating tension)
+- Bug fixes, edge cases (resize, tab switch, mobile message)
+- Deploy to itch.io
+- Player primer / how-to-play for itch.io page
+
+**No new code after 2pm.** The game is shipped.
 
 ---
 

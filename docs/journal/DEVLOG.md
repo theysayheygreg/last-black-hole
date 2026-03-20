@@ -11,6 +11,88 @@ Each entry covers a day (or shift). Entries include what happened, why decisions
 
 ---
 
+## Day 5: March 20, 2026 — The Split (and the Teeth)
+
+### The Story
+
+The renderer had been drifting for two days. Night shifts kept churning the display shader — gravity field as primary brightness, then density as primary, then gravity capped, then density boosted — each iteration mathematically clever and visually worse. The title screen was black. Wells were unreadable. Greg called time.
+
+Forge (Codex) wrote the RENDERER-RECOVERY-PLAN: stop treating `density` as the player-facing concept. Split the renderer into three layers (physics truth, scene shaping, ASCII presentation). Define four reads the player actually needs (void, accretion, flow, surf lane). Fix black holes first, everything else second.
+
+The big move: **split the workstreams.** Forge owns the renderer. Claude/Orrery owns gameplay, content, and features. Orb routes and keeps them from colliding. Signal system parked until the renderer stabilizes.
+
+Then Greg pivoted to what actually matters for the last three days: the game needs teeth.
+
+### Key Decisions
+
+**1. Non-lethal combat ships this week.**
+
+The game loop (fly, loot, escape) works but it's thin. Three physics tools designed in detail:
+- Force pulse (spacebar): radial shove, emergency escape, wave creation
+- Signal flare (shift): decoy signal source, misdirects AI
+- Tether (right-click): attach to wrecks/planetoids for anchoring or free travel
+
+These affect physics and information, not hitpoints. They integrate with the fluid sim. They work against both AI and (future) human opponents.
+
+**2. AI scavengers are the priority build.**
+
+Not just for "life in the universe" — the scavenger movement architecture directly becomes the Inhibitor. Two archetypes: drifters (passive, ride currents) and vultures (competitive, race you for exits). Same ship physics as the player. When a scavenger extracts, that portal is gone.
+
+**3. Gravity slingshot designed.**
+
+Greg's most ambitious movement idea: use wells as grappling hooks. Approach at an angle, catch the orbital band, build speed, release with a 2-3x boost aimed at your target. Wells stop being just threats and become the movement system itself. Hybrid input model: auto-catch (the game assists when you're in a viable orbit), thrust-to-release (deliberate exit with boost). This is the skill ceiling for the whole game.
+
+**4. Cosmic signatures give runs identity.**
+
+Each run rolls a universe personality: "the slow tide" (calm, long), "the shattered merge" (violent, fast), "the graveyard" (rich wrecks, few exits), etc. CONFIG overrides + flavor text. Instant replay value, ~100 lines of pure JS.
+
+**5. Audio foundation ships today.**
+
+Drone (spacetime hum), well harmonics (one oscillator per well, stereo-panned), event sounds (thrust, loot, death, extraction). All Web Audio API synthesis. No samples, no libraries.
+
+### Design Pivots
+
+**Renderer ownership transferred.** Claude/Orrery had been doing renderer work (4 shader iterations in a single session, each worse than the last). The lesson: gameplay agents shouldn't be guessing at shader math. Forge has the renderer contract. Claude has the gameplay features. Clean split.
+
+**Signal parked.** Signal is deeply tied to the renderer (visual feedback — ship glow, warm color shift, ASCII changes at high signal). Building it before the renderer stabilizes means building on sand. Revisit Saturday.
+
+**Scavengers pulled forward from stretch goal.** The design doc had scavengers as a "if ahead of schedule" feature. Greg pulled them to Friday because (a) the world feels empty without other ships, (b) the AI architecture is needed for the Inhibitor anyway, and (c) portal consumption by AI creates the most organic time pressure in the game.
+
+### What's Being Built (Friday)
+
+| Feature | Est. Lines | Priority |
+|---------|-----------|----------|
+| AI Scavengers (drifters + vultures) | 300-400 | 1 |
+| Force Pulse | 60-80 | 2 |
+| Audio (drone + harmonics + events) | ~175 | 3 |
+| Cosmic Signatures | ~100 | 4 |
+
+### What's Queued (Saturday)
+
+- Signal system (if renderer is ready)
+- Signal flare (depends on signal)
+- Tether
+- HUD iteration
+- Between-run progression
+- Slingshot prototype
+
+### What's Queued (Sunday)
+
+- Inhibitor (uses scavenger architecture + signal threshold)
+- Balance pass
+- Bug fixes, edge cases
+- Deploy to itch.io
+
+### Open Questions Going Into Tonight
+
+1. Do scavengers consume portals on extraction? (Design says yes — brutal and great)
+2. Force pulse: does it affect the player too (recoil) or just everything else?
+3. Slingshot: prototype today or save for Saturday tuning session?
+4. Well harmonics: sine (eerie) or square (industrial)?
+5. Can we ship audio + AI + combat + signatures in one day?
+
+---
+
 ## Day 1: March 16, 2026 — The Feel (and the First Pivot)
 
 ### The Night Shift

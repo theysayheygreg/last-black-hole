@@ -545,6 +545,109 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 ---
 
+## Non-Lethal Combat Tools
+
+### Q: What gives the player "teeth" beyond fly/loot/escape?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | COMBAT.md analyzes lethal vs non-lethal. Conclusion: no lethal, build interaction tools. Priority: signal flare → force pulse → tether → EMP. |
+| Mar 20 | Greg: "it needs some teeth. i think AI + big threat + dying universe actually working + some non-flight gameplay feels like a good outcome for the jam." Confirms non-lethal tools should ship this week. |
+| Mar 20 | Three tools designed in detail: force pulse (spacebar, radial shove, wave ring, emergency escape), signal flare (shift, decoy signal source, misdirects AI), tether (right-click, attach to wreck/planetoid). |
+
+**Options:**
+1. **No combat tools** — pure fly/loot/escape. Clean but thin.
+2. **Non-lethal physics tools** (chosen) — force pulse, signal flare, tether. Affect physics and information, not HP.
+3. **Lethal weapons** (rejected for jam) — projectiles through fluid, kill/loot.
+
+**Where it landed:** Option 2. Force pulse Friday, tether Saturday, signal flare Saturday (depends on signal system).
+**Door status:** Open — order and details may shift based on playtesting.
+
+---
+
+## AI Scavengers
+
+### Q: Should the world have AI opponents?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | Design doc establishes scavengers as one of three threat tiers. Forge downgrades to stretch. |
+| Mar 20 | Greg pulls scavengers forward as a Friday priority. "We need to make parts of this anyway to make inhibitors." Scavenger AI shares movement architecture with Inhibitor. |
+| Mar 20 | Two archetypes designed: drifters (passive, ride currents, loot conservatively) and vultures (aggressive, race player for wrecks/portals). Same ship physics as player. |
+
+**Key decisions:**
+- Portals consumed on scavenger extraction (confirmed by design doc)
+- Scavengers die to wells (same kill radius as player)
+- Same fluid physics as player (thrust + coupling + drag + gravity)
+- 70/30 drifter/vulture split
+
+**Where it landed:** Building Friday. See SCAVENGERS.md for full design.
+**Door status:** Open — archetype behaviors will be tuned by playtesting.
+
+---
+
+## Gravity Slingshot
+
+### Q: Can wells be used as movement tools, not just threats?
+
+| Date | Event |
+|------|-------|
+| Mar 20 | Greg proposes a "slingshot" feature — intentionally use gravity and rotational velocity around wells to hook-and-swing between stellar objects. Like grappling hooks or rail grinding. |
+| Mar 20 | Full design: approach → catch → orbit → release → boost. Hybrid input model (auto-catch, thrust-to-release). Orbital assist force prevents turbulence from breaking the maneuver. 2-3x speed boost on release. |
+
+**Why it matters:** Wells are currently pure threats. Slingshot makes them the fastest route IF you're skilled enough. Creates a movement skill ceiling that ties directly to Pillar 2 (Movement Is the Game).
+
+**Where it landed:** Designed. Prototype priority TBD — may build Friday/Saturday or cut if time collapses. See SLINGSHOT.md.
+**Door status:** Open — most feel-dependent feature on the list, needs dedicated tuning session.
+
+---
+
+## Cosmic Signatures
+
+### Q: How do we make runs feel different from each other?
+
+| Date | Event |
+|------|-------|
+| Mar 20 | Greg confirms cosmic signatures for the jam: per-run universe personality that tweaks CONFIG and gives a name. |
+| Mar 20 | 6 signatures designed: the slow tide, the shattered merge, the thick dark, the graveyard, the rush, the deep. Each has flavor text and CONFIG overrides. |
+
+**Where it landed:** Building Friday. Pure JS, ~100 lines, no dependencies. See SIGNATURES.md.
+**Door status:** Open — signature list will grow. Balance depends on base CONFIG values being stable.
+
+---
+
+## Audio for the Jam
+
+### Q: How much of MUSIC.md ships this week?
+
+| Date | Event |
+|------|-------|
+| Mar 15 | MUSIC.md designs full 5-layer procedural soundscape. |
+| Mar 20 | Jam-scoped audio plan: Layer 1 (drone), Layer 2 (well harmonics), event sounds. Layers 3-5 deferred. All Web Audio API, no libraries. |
+
+**Where it landed:** Building Friday. See AUDIO.md for jam scope. ~175 lines total.
+**Door status:** Open — additional layers slot in when their prerequisite systems exist (signal choir needs signal, Inhibitor tone needs Inhibitor).
+
+---
+
+## Workstream Split
+
+### Q: How do Forge, Claude/Orrery, and Orb divide remaining jam work?
+
+| Date | Event |
+|------|-------|
+| Mar 20 | Forge writes RENDERER-RECOVERY-PLAN.md. Proposes clean split: Forge owns renderer, Claude owns gameplay/content, Orb owns routing. |
+| Mar 20 | Greg confirms. Signal system parked until renderer stabilizes. |
+
+**Where it landed:**
+- Forge: renderer architecture, display shader, ASCII, diagnostics, scaling
+- Claude/Orrery: AI scavengers, combat tools, audio, cosmic signatures, slingshot, game systems
+- Orb: routing, handoffs, keeping workstreams isolated
+
+**Door status:** Active until jam ends.
+
+---
+
 ## Template for New Entries
 
 ```

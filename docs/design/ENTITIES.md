@@ -16,6 +16,8 @@
 | Portal | portals.js | Weak inward pull + spiral density | None | Fluid (purple vortex) + Overlay (pulsing ring) |
 | Planetoid | planetoids.js | Bow shock + wake vortex + trail | Push (proximity) | Fluid (wake) + Overlay (dot + velocity line) |
 | Ship | ship.js | Bullet wake (speed-based splats) | Self (thrust + drag + fluid coupling) | Overlay (triangle + trail) |
+| Scavenger | scavengers.js | Bullet wake (same as ship) | Same as ship (AI-driven) | Overlay (smaller triangle, tinted) |
+| Force Pulse | combat.js | Massive radial force injection | Velocity impulse on nearby entities | Wave ring + ship flash |
 | Wave Ring | wave-rings.js | Fluid distortion (injected into sim) | Outward push when wavefront passes | Overlay (expanding circle) |
 
 ---
@@ -68,13 +70,79 @@
 
 ## Interaction Matrix
 
-| | Well | Star | Loot | Ship | Wave Ring |
-|---|---|---|---|---|---|
-| **Well** | Accrete (growth events) | Equilibrium zones | Lee zone in well flow | Gravity trap / death | Spawns rings on growth |
-| **Star** | Equilibrium zones | (no interaction) | Outflow clears near loot | Push away (safe zone) | — |
-| **Loot** | Dangerous to reach | Outflow affects wake | (no interaction) | Future: pickup | — |
-| **Ship** | Pulled in, can die | Pushed away | Future: collect | — | Pushed outward |
-| **Wave Ring** | Source | — | — | Pushes ship | — |
+| | Well | Star | Loot | Ship | Scavenger | Wave Ring | Force Pulse |
+|---|---|---|---|---|---|---|---|
+| **Well** | Accrete (growth events) | Equilibrium zones | Lee zone in well flow | Gravity trap / death / slingshot | Gravity trap / death | Spawns rings on growth | — |
+| **Star** | Equilibrium zones | (no interaction) | Outflow clears near loot | Push away (safe zone) | Push away | — | — |
+| **Loot** | Dangerous to reach | Outflow affects wake | (no interaction) | Pickup | Can loot (competes) | — | — |
+| **Ship** | Pulled in, can die, can slingshot | Pushed away | Collect | — | Races for portals/wrecks | Pushed outward | Fires it |
+| **Scavenger** | Pulled in, can die | Pushed away | Can loot | Competes for exits | Ignore each other | Pushed outward | Pushed away |
+| **Wave Ring** | Source | — | — | Pushes ship | Pushes scavenger | — | — |
+| **Force Pulse** | — | — | — | Fires it | Shoves away | Creates one | — |
+
+---
+
+## Scavengers (AI Ships)
+
+**Purpose:** Contested extraction. Other ships competing for the same wrecks and portals.
+
+**File:** `scavengers.js`
+
+**Fluid force:** Bullet wake (same as player ship — speed-based directional splats behind ship).
+
+**Ship force:** None directly. Subject to same well gravity, star push, fluid coupling as player.
+
+**Movement:** Same physics model as player: thrust + fluid coupling + drag + well gravity. AI decides thrust direction and intensity via behavioral state machine. Fluid-aware: reduces thrust when current goes roughly the right way.
+
+**Visual:** Overlay triangle (70% player size). Drifters: pale blue `#8AAEC4`. Vultures: amber `#D4A060`. Thrust trail tinted to match.
+
+**Archetypes:**
+- Drifter (~70%): passive, rides currents, loots 1-2 wrecks, extracts via nearest portal
+- Vulture (~30%): competitive, tracks player, races for wrecks/portals
+
+**Key interaction:** Scavengers CONSUME portals on extraction. Each one that escapes removes one of your exits.
+
+**See:** `docs/design/SCAVENGERS.md` for full behavioral state machine and design details.
+
+---
+
+## Force Pulse (Combat Tool)
+
+**Purpose:** Non-lethal "oh shit" button. Shoves everything outward.
+
+**Trigger:** Spacebar. Cooldown 3-5s.
+
+**Fluid force:** Massive radial `fluid.splat()` at ship position. Large radius, high force.
+
+**Entity force:** Direct velocity impulse on nearby scavengers, planetoids.
+
+**Visual:** Wave ring (reuses `wave-rings.js`) + ship flash.
+
+**See:** `docs/design/COMBAT.md` for full design.
+
+---
+
+## Signal Flare (Combat Tool — Future)
+
+**Purpose:** Decoy signal source. Misdirects scavengers, fauna, Inhibitor.
+
+**Trigger:** Shift key. One active at a time.
+
+**Fluid force:** Small density injection (bright, visible).
+
+**Depends on:** Signal system.
+
+---
+
+## Tether (Combat Tool — Future)
+
+**Purpose:** Attach to wreck or planetoid. Anchor, hide, or ride.
+
+**Trigger:** Hold right-click / L1.
+
+**Physics:** Position lerp toward target. Thrust to break.
+
+---
 
 ---
 

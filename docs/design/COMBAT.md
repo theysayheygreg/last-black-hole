@@ -60,24 +60,27 @@ What if you can affect other entities (and future: other players) without weapon
 
 ---
 
-## Recommendation for the Jam
+## Decision: Non-Lethal Interaction Tools (Confirmed 2026-03-20)
 
-**No lethal combat for v1. Build the interaction tools instead.**
+**No lethal combat. Build the interaction tools.** Greg confirmed this direction on day 5 — the game needs "teeth" but through physics tools, not damage numbers.
 
-Reasons:
-1. Signal flare + force pulse + tether give players meaningful agency against threats without a damage system
-2. These tools integrate with the fluid sim (force injection, signal mechanic) — they feel like part of the world, not bolted on
-3. They work identically in solo (vs AI) and multiplayer (vs humans)
-4. They're each 1-2 hours of implementation vs 8+ hours for a full combat system
-5. If playtesters want combat after playing, we add it post-jam. If they don't miss it, we saved a week.
+### Implementation Priority (REVISED — building these for the jam)
 
-### Implementation Priority (if we have time)
-1. **Signal flare** (simplest — just spawn a signal source entity)
-2. **Force pulse** (natural extension of fluid force injection)
-3. **Tether** (needs spring physics but could be amazing for navigation)
-4. **EMP** (needs scavenger AI to respond to sensor states)
+1. **Force pulse** (spacebar) — massive radial force injection at ship position. Shoves fluid, scavengers, fauna outward. Creates surfable wave ring. Emergency well escape. Cooldown 3-5s. Signal cost: +20-25%.
 
-### If We DO Add Combat Later
+2. **Signal flare** (shift) — launch a decoy signal source in facing direction. Drifts with fluid. Scavengers/fauna/Inhibitor track it. Duration 8-10s. One active at a time. Absorbs player signal while active. Depends on signal system.
+
+3. **Tether** (hold right-click / L1) — attach to wreck or planetoid. Ship dragged along. Zero signal while tethered. Good for hiding, anchoring during loot, free travel on planetoids. Thrust to detach.
+
+### Detailed designs in separate docs
+- Force pulse: see implementation in `src/combat.js` (building Friday)
+- Signal flare: see SIGNAL-DESIGN.md (depends on signal system — Saturday)
+- Tether: building Saturday
+
+### EMP / Signal Scramble
+Deprioritized. Needs scavenger sensor states to respond to. Revisit post-jam or if ahead of schedule.
+
+### If We DO Add Lethal Combat Later
 - Projectiles ride the fluid (they have velocity from the current + their own thrust)
 - Shooting generates signal proportional to weapon power
 - Kills drop the victim's loot (extraction game standard)

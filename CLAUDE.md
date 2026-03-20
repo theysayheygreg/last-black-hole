@@ -16,9 +16,9 @@ Before starting ANY task, load these into context:
 
 For your specific layer, also read:
 - L0: `docs/design/DESIGN-DEEP-DIVE.md` (physics architecture), `docs/design/CONTROLS.md` (ship physics, input schemes, tuning variables), `docs/design/TUNING.md` (dev panel, CONFIG object, tuning workflow), `docs/design/AGENT-TESTING.md` (test harness, `__TEST_API`), `docs/project/PRE-MONDAY-RESEARCH.md`
-- L1-L2: `docs/design/SIGNAL-DESIGN.md`, `docs/design/COMBAT.md`
-- L4: `docs/design/DESIGN-DEEP-DIVE.md` (ASCII renderer section), HUD section
-- L5: `docs/design/SCALING.md`
+- L1-L2: `docs/design/SIGNAL-DESIGN.md`, `docs/design/COMBAT.md`, `docs/design/SCAVENGERS.md` (AI ships), `docs/design/SLINGSHOT.md` (gravity slingshot)
+- L3-L4: `docs/design/DESIGN-DEEP-DIVE.md` (ASCII renderer section), `docs/design/AUDIO.md`, `docs/project/RENDERER-RECOVERY-PLAN.md`, HUD section
+- L5: `docs/design/SCALING.md`, `docs/design/SIGNATURES.md` (cosmic signatures)
 
 ## Design Pillars (decision lenses, in priority order)
 

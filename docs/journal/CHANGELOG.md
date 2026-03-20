@@ -5,6 +5,40 @@
 
 ---
 
+## 2026-03-20 Day Session (Feature Design Sprint)
+
+### New Design Documents
+- **SCAVENGERS.md** — AI ship opponents. Two archetypes (drifter/vulture), behavioral state machine, same physics as player, portal consumption on extraction. Full CONFIG section.
+- **SLINGSHOT.md** — Gravity slingshot mechanic. Approach → catch → orbit → release → boost. Hybrid input (auto-catch, thrust-to-release). Orbital assist force. 2-3x speed boost. Turns wells from pure threats into movement tools.
+- **AUDIO.md** — Jam-scoped audio plan. Layer 1 (drone), Layer 2 (well harmonics), event sounds. All Web Audio API synthesis. ~175 lines total.
+- **SIGNATURES.md** — Cosmic signatures for procedural run identity. 6 universe personalities with CONFIG overrides and flavor text.
+
+### Updated Design Documents
+- **COMBAT.md** — Updated recommendation section. Non-lethal tools confirmed for jam build. Revised priority: force pulse → signal flare → tether. Detailed designs for all three tools.
+- **ENTITIES.md** — Added scavenger, force pulse, signal flare, tether entries to entity overview table and interaction matrix. Added full sections for each new entity type.
+
+### Journal Updates
+- **DECISION-LOG.md** — 6 new entries: non-lethal combat tools, AI scavengers, gravity slingshot, cosmic signatures, audio scope, workstream split.
+- **DEVLOG.md** — Day 5 entry: the renderer split, the teeth, feature design sprint, build priorities for Fri/Sat/Sun.
+
+### Why
+Game needs more verbs. Fly/loot/escape is working but thin. AI opponents create contested extraction, combat tools give player agency, slingshot creates movement skill ceiling, signatures add replay value, audio transforms feel. Building all of these over the final 3 days.
+
+---
+
+## 2026-03-20 (Jam Day 5: Renderer Recovery Planning)
+
+### docs/project/ — New Files
+- **RENDERER-RECOVERY-PLAN.md** — New focused rendering workstream plan. Defines the 3-layer renderer contract (physics truth, scene shaping, ASCII presentation), reinterprets density as fabric excitation, defines the four player-facing reads (void, accretion, flow, surf lane), and splits work between Forge, Claude/Orrery, and Orb.
+
+### docs/journal/ — Updated
+- **DECISION-LOG.md** — Added renderer recovery entry. Commits the jam-week renderer contract: black-hole readability first, explicit scene shaping, and ASCII as presentation rather than the source of meaning.
+
+### Why
+Renderer work had become entangled with feature work and too much meaning was being compressed into one channel. This plan isolates the rendering lane so Forge can stabilize the look while Claude keeps pushing gameplay and content.
+
+---
+
 ## 2026-03-17 Night Session (Map Files + UI Flow)
 
 ### Map File System
