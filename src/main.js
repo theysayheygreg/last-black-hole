@@ -501,6 +501,7 @@ let _prevBack = false;
 let _prevUp = false;
 let _prevDown = false;
 let _prevPulse = false;
+let _prevPortalCount = -1;
 let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
 
 function togglePause() {
@@ -762,8 +763,26 @@ function gameLoop(now) {
       ctx.restore();
     }
 
+    // Detect scavenger portal consumption (portal count dropped without player extracting)
+    const currentPortalCount = portalSystem.activeCount;
+    if (_prevPortalCount >= 0 && currentPortalCount < _prevPortalCount && gamePhase === 'playing') {
+      const lost = _prevPortalCount - currentPortalCount;
+      for (let i = 0; i < lost; i++) {
+        showWarning('scavenger extracted — portal consumed', 'rgba(180, 120, 255, 0.9)', 3000);
+      }
+    }
+    _prevPortalCount = currentPortalCount;
+
     // Update HUD during gameplay
-    updateHUD(simState.runElapsedTime, portalSystem, inventory, simState.growthTimer);
+    updateHUD(simState.runElapsedTime, portalSystem, inventory, simState.growthTimer, {
+      scavengerSystem,
+      combatSystem,
+      signature: currentSignature,
+      ship,
+      camX, camY,
+      canvasW: overlayCanvas.width,
+      canvasH: overlayCanvas.height,
+    });
   }
 
   // Show/hide HUD based on phase
@@ -1161,15 +1180,25 @@ function gameLoop(now) {
       ctx.fillText(buttons[i], cx, y + 6);
     }
 
+    // Signature info on pause screen
+    if (currentSignature) {
+      ctx.fillStyle = 'rgba(120, 150, 170, 0.6)';
+      ctx.font = '13px monospace';
+      ctx.fillText(currentSignature.name, cx, cy + 60);
+      ctx.fillStyle = 'rgba(100, 130, 150, 0.4)';
+      ctx.font = '11px monospace';
+      ctx.fillText(currentSignature.mechanical, cx, cy + 78);
+    }
+
     // Controls reference (compact)
     ctx.font = '12px monospace';
     ctx.fillStyle = 'rgba(130, 130, 170, 0.5)';
-    ctx.fillText('steer: stick / arrows   thrust: R2 / space   brake: L2 / ctrl', cx, cy + 70);
+    ctx.fillText('steer: stick / arrows   thrust: R2 / space   brake: L2 / ctrl   pulse: □ / E', cx, cy + 110);
 
     // Navigation hint
     ctx.fillStyle = 'rgba(130, 130, 170, 0.4)';
     ctx.font = '12px monospace';
-    ctx.fillText('up/down to select  ·  X / space to confirm  ·  O / esc to resume', cx, cy + 100);
+    ctx.fillText('up/down to select  ·  X / space to confirm  ·  O / esc to resume', cx, cy + 130);
 
     ctx.restore();
   }

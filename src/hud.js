@@ -1,16 +1,26 @@
 /**
  * hud.js — DOM-based HUD overlay.
  *
- * Two rich panels: universal collapse (left), wormholes (right).
- * Salvage count (bottom-left). Center warning system.
+ * Panels: collapse timer (top-left), wormholes (top-right),
+ * salvage (bottom-left), scavengers (bottom-right),
+ * pulse status (above salvage), signature (bottom-center),
+ * portal direction arrow (screen-space), center warnings.
+ *
  * All lowercase text, soft glow via text-shadow.
  */
 
 import { CONFIG } from './config.js';
+import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
 
-let _hudEl, _collapseTimerEl, _collapseEventEl;
-let _portalsStatusEl, _portalsNextEl, _portalsPanel;
-let _salvageEl, _warningsEl;
+let _hudEl;
+let _collapseTimerEl, _collapseEventEl;
+let _portalsStatusEl, _portalsNextEl;
+let _salvageCountEl, _salvageValueEl;
+let _scavengersCountEl, _scavengersSub;
+let _pulseEl;
+let _signatureEl;
+let _portalArrowEl;
+let _warningsEl;
 let _lastPortalCount = -1;
 let _lastCollapseStr = '';
 
@@ -20,8 +30,13 @@ export function initHUD() {
   _collapseEventEl = document.getElementById('hud-collapse-event');
   _portalsStatusEl = document.getElementById('hud-portals-status');
   _portalsNextEl = document.getElementById('hud-portals-next');
-  _portalsPanel = document.getElementById('hud-portals');
-  _salvageEl = document.getElementById('hud-salvage');
+  _salvageCountEl = document.getElementById('hud-salvage-count');
+  _salvageValueEl = document.getElementById('hud-salvage-value');
+  _scavengersCountEl = document.getElementById('hud-scavengers-count');
+  _scavengersSub = document.getElementById('hud-scavengers-sub');
+  _pulseEl = document.getElementById('hud-pulse');
+  _signatureEl = document.getElementById('hud-signature');
+  _portalArrowEl = document.getElementById('hud-portal-arrow');
   _warningsEl = document.getElementById('hud-warnings');
 }
 
@@ -42,21 +57,34 @@ function fmtTime(seconds) {
 
 /**
  * Update HUD panels. Call once per frame during 'playing' phase.
+ *
+ * @param {number} runElapsedTime
+ * @param {PortalSystem} portalSystem
+ * @param {Array} inventory
+ * @param {number} growthTimer
+ * @param {Object} opts - additional data for new HUD panels
+ * @param {Object} opts.scavengerSystem
+ * @param {Object} opts.combatSystem
+ * @param {Object} opts.signature - current cosmic signature
+ * @param {Object} opts.ship - player ship {wx, wy}
+ * @param {number} opts.camX
+ * @param {number} opts.camY
+ * @param {number} opts.canvasW
+ * @param {number} opts.canvasH
  */
-export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer) {
+export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, opts = {}) {
   if (!_hudEl) return;
 
   const runDuration = CONFIG.universe.runDuration;
   const remaining = Math.max(0, runDuration - runElapsedTime);
 
-  // === COLLAPSE TIMER — counts down from 10:00 ===
+  // === COLLAPSE TIMER ===
   const collapseStr = fmtTime(remaining);
   if (collapseStr !== _lastCollapseStr) {
     _collapseTimerEl.textContent = `collapse: ${collapseStr}`;
     _lastCollapseStr = collapseStr;
   }
 
-  // Color shifts: normal → amber at 2min → red at 1min
   const collapsePanel = _collapseTimerEl.parentElement;
   if (remaining <= 60) {
     _collapseTimerEl.style.color = 'rgba(232, 25, 0, 0.95)';
@@ -72,11 +100,10 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer) 
     collapsePanel.querySelector('.hud-label').style.color = '';
   }
 
-  // Next event: well growth timer
+  // Next event
   const growthInterval = CONFIG.events.growthInterval;
   const nextGrowth = growthInterval - (growthTimer % growthInterval);
 
-  // Find next portal wave
   const waves = CONFIG.portals.waves;
   let nextWaveTime = null;
   let nextWaveLabel = '';
@@ -90,9 +117,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer) 
     }
   }
 
-  // Pick whichever event is sooner
   let eventText = '';
-  const eventColor = '';
   if (nextWaveTime !== null && nextWaveTime < nextGrowth) {
     eventText = `next: ${nextWaveLabel} ${fmtTime(nextWaveTime)}`;
     if (isFinalWave) {
@@ -126,7 +151,6 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer) 
     _lastPortalCount = count;
   }
 
-  // Next wave countdown (always show, even with active portals)
   if (nextWaveTime !== null) {
     if (isFinalWave) {
       _portalsNextEl.textContent = `last spawn: ${fmtTime(nextWaveTime)}`;
@@ -136,7 +160,6 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer) 
       _portalsNextEl.style.color = '';
     }
   } else {
-    // All waves have spawned
     if (count > 0) {
       _portalsNextEl.textContent = 'no more spawns';
       _portalsNextEl.style.color = 'rgba(255, 80, 80, 0.6)';
@@ -146,9 +169,128 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer) 
     }
   }
 
-  // === SALVAGE ===
+  // === SALVAGE (count + total value) ===
   const salvageCount = inventory ? inventory.length : 0;
-  _salvageEl.textContent = salvageCount > 0 ? `◈ ${salvageCount} salvage` : '';
+  if (salvageCount > 0) {
+    _salvageCountEl.textContent = `◈ ${salvageCount} salvage`;
+    const totalValue = inventory.reduce((sum, item) => sum + (item.value || 0), 0);
+    _salvageValueEl.textContent = `value: ${totalValue}`;
+  } else {
+    _salvageCountEl.textContent = '';
+    _salvageValueEl.textContent = '';
+  }
+
+  // === SCAVENGERS ===
+  if (opts.scavengerSystem && _scavengersCountEl) {
+    const scavs = opts.scavengerSystem.scavengers;
+    const alive = scavs.filter(s => s.alive && s.state !== 'dying').length;
+    if (alive > 0) {
+      _scavengersCountEl.textContent = `scavengers: ${alive}`;
+      _scavengersSub.textContent = '';
+    } else {
+      _scavengersCountEl.textContent = 'no scavengers';
+      _scavengersSub.textContent = '';
+    }
+  }
+
+  // === PULSE STATUS ===
+  if (opts.combatSystem && _pulseEl) {
+    if (opts.combatSystem.playerReady) {
+      _pulseEl.textContent = 'pulse ready [E]';
+      _pulseEl.className = 'hud-panel ready';
+    } else {
+      const cd = opts.combatSystem.playerCooldown;
+      _pulseEl.textContent = `pulse ${cd.toFixed(1)}s`;
+      _pulseEl.className = 'hud-panel';
+    }
+  }
+
+  // === SIGNATURE ===
+  if (opts.signature && _signatureEl) {
+    _signatureEl.textContent = `[${opts.signature.name}]`;
+  }
+
+  // === PORTAL DIRECTION ARROW ===
+  if (opts.ship && portalSystem && _portalArrowEl && opts.canvasW) {
+    _updatePortalArrow(opts.ship, portalSystem, opts.camX, opts.camY, opts.canvasW, opts.canvasH);
+  }
+}
+
+/**
+ * Update the portal direction arrow. Points toward nearest active portal
+ * when the portal is off-screen.
+ */
+function _updatePortalArrow(ship, portalSystem, camX, camY, canvasW, canvasH) {
+  // Find nearest active portal
+  let nearestDist = Infinity;
+  let nearestPortal = null;
+  for (const portal of portalSystem.portals) {
+    if (!portal.alive) continue;
+    const dist = worldDistance(ship.wx, ship.wy, portal.wx, portal.wy);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearestPortal = portal;
+    }
+  }
+
+  if (!nearestPortal) {
+    _portalArrowEl.style.display = 'none';
+    return;
+  }
+
+  // Check if portal is on screen
+  const [sx, sy] = worldToScreen(nearestPortal.wx, nearestPortal.wy, camX, camY, canvasW, canvasH);
+  const margin = 60;
+  const onScreen = sx > margin && sx < canvasW - margin && sy > margin && sy < canvasH - margin;
+
+  if (onScreen) {
+    _portalArrowEl.style.display = 'none';
+    return;
+  }
+
+  // Portal is off-screen — show arrow at screen edge pointing toward it
+  const [dx, dy] = worldDisplacement(ship.wx, ship.wy, nearestPortal.wx, nearestPortal.wy);
+  const angle = Math.atan2(dy, dx);
+
+  // Place arrow at edge of screen in the direction of the portal
+  const edgeMargin = 40;
+  const cx = canvasW / 2;
+  const cy = canvasH / 2;
+
+  // Ray from center at angle, clamped to screen edge
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+  const maxX = (cx - edgeMargin);
+  const maxY = (cy - edgeMargin);
+
+  let t = Infinity;
+  if (Math.abs(cosA) > 0.001) t = Math.min(t, maxX / Math.abs(cosA));
+  if (Math.abs(sinA) > 0.001) t = Math.min(t, maxY / Math.abs(sinA));
+
+  const arrowX = cx + cosA * t;
+  const arrowY = cy + sinA * t;
+
+  _portalArrowEl.style.display = '';
+  _portalArrowEl.style.left = `${arrowX}px`;
+  _portalArrowEl.style.top = `${arrowY}px`;
+
+  // Render arrow as a rotated triangle via CSS border trick
+  const deg = (angle * 180 / Math.PI) + 90;  // CSS rotation: 0 = up
+  const distText = nearestDist.toFixed(1);
+  _portalArrowEl.innerHTML = `<div style="
+    transform: rotate(${deg}deg);
+    width: 0; height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 12px solid rgba(180, 120, 255, 0.8);
+    filter: drop-shadow(0 0 6px rgba(180, 120, 255, 0.5));
+  "></div>
+  <div style="
+    font: 10px monospace;
+    color: rgba(180, 120, 255, 0.6);
+    text-align: center;
+    margin-top: 2px;
+  ">${distText}</div>`;
 }
 
 /**

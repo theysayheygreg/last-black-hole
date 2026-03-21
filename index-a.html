@@ -89,6 +89,47 @@
       bottom: 20px; left: 20px;
       color: rgba(212, 168, 67, 0.8);
       text-shadow: 0 0 8px rgba(212, 168, 67, 0.4);
+      line-height: 1.5;
+    }
+    #hud-salvage .hud-sub {
+      font-size: 11px;
+      color: rgba(180, 150, 80, 0.6);
+    }
+    #hud-scavengers {
+      bottom: 20px; right: 20px;
+      text-align: right;
+      color: rgba(138, 174, 196, 0.8);
+      text-shadow: 0 0 8px rgba(138, 174, 196, 0.3);
+      line-height: 1.5;
+    }
+    #hud-scavengers .hud-sub {
+      font-size: 11px;
+      color: rgba(120, 150, 170, 0.5);
+    }
+    #hud-signature {
+      bottom: 50px; left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      font-size: 11px;
+      color: rgba(120, 150, 170, 0.4);
+      text-shadow: 0 0 6px rgba(120, 150, 170, 0.2);
+    }
+    #hud-pulse {
+      bottom: 48px; left: 20px;
+      font-size: 11px;
+      color: rgba(200, 180, 100, 0.7);
+      text-shadow: 0 0 6px rgba(200, 180, 100, 0.3);
+    }
+    #hud-pulse.ready {
+      color: rgba(100, 220, 160, 0.8);
+      text-shadow: 0 0 8px rgba(100, 220, 160, 0.4);
+    }
+    #hud-portal-arrow {
+      position: absolute;
+      bottom: 50%;
+      left: 50%;
+      width: 0; height: 0;
+      pointer-events: none;
     }
     #hud-warnings {
       position: absolute;
@@ -136,7 +177,17 @@
       <div class="hud-value" id="hud-portals-status">no active wormholes</div>
       <div class="hud-sub" id="hud-portals-next"></div>
     </div>
-    <div id="hud-salvage" class="hud-panel"></div>
+    <div id="hud-salvage" class="hud-panel">
+      <div id="hud-salvage-count"></div>
+      <div class="hud-sub" id="hud-salvage-value"></div>
+    </div>
+    <div id="hud-scavengers" class="hud-panel">
+      <div id="hud-scavengers-count"></div>
+      <div class="hud-sub" id="hud-scavengers-sub"></div>
+    </div>
+    <div id="hud-pulse" class="hud-panel"></div>
+    <div id="hud-signature" class="hud-panel"></div>
+    <div id="hud-portal-arrow"></div>
     <div id="hud-warnings"></div>
   </div>
   <script src="src/build-flags.js"></script>

@@ -322,7 +322,7 @@ export const CONFIG = {
   },
 
   audio: {
-    enabled: true,               // master toggle
+    enabled: false,              // master toggle — muted until audio is tuned
     masterVolume: 0.7,
     droneVolume: 0.15,
     droneBaseFreq: 60,           // Hz, start of run
