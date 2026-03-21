@@ -62,26 +62,8 @@ export class StarSystem {
         cfg.coreBrightness * 0.6
       );
 
-      // Rotating radial rays — visual only
-      const rayAngleBase = totalTime * cfg.raySpinRate;
-      const pointsPerRay = 4;
-
-      for (let r = 0; r < cfg.rayCount; r++) {
-        const rayAngle = rayAngleBase + (r / cfg.rayCount) * Math.PI * 2;
-        for (let p = 0; p < pointsPerRay; p++) {
-          const t = (p + 1) / pointsPerRay;
-          const dist = t * cfg.rayLength * s;
-          const px = fu + Math.cos(rayAngle) * dist;
-          const py = fv + Math.sin(rayAngle) * dist;
-          const fade = 1 - t * 0.7;
-          const b = cfg.rayBrightness * fade * star.mass;
-          fluid.visualSplat(px, py, 0.001 * s2,
-            b * (1.0 - t * 0.4),
-            b * (0.9 - t * 0.2),
-            b * (0.6 + t * 0.4)
-          );
-        }
-      }
+      // Keep star visuals cheap in the sim. The overlay renderer already draws
+      // the richer spike pattern, so the fluid layer only needs the core read.
     }
   }
 

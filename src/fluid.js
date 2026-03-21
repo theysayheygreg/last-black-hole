@@ -298,8 +298,10 @@ void main() {
                    * (1.0 - smoothstep(ringOuter, ringInner, dist));
 
     float localLive = 1.0 - max(voidField, coreMask);
-    float localRing = ringMask * mix(0.2, 1.0, ringSignal);
-    vec3 ringColor = mix(u_nearWellColor, u_hotWellColor, clamp(ringSignal * 1.2, 0.0, 1.0));
+    float analyticRing = clamp(0.25 + u_wellMasses[i] * 0.32, 0.25, 1.0);
+    float ringEnergy = max(ringSignal, analyticRing);
+    float localRing = ringMask * mix(0.28, 1.0, ringEnergy);
+    vec3 ringColor = mix(u_nearWellColor, u_hotWellColor, clamp(0.12 + ringEnergy * 0.88, 0.0, 1.0));
     vec2 radial = dist > 0.0001 ? diff / length(diff) : vec2(1.0, 0.0);
     vec2 tangent = vec2(-radial.y, radial.x) * orbitalDir;
     float tangentialAlignment = speed > 0.001 ? dot(normalize(vel), tangent) * 0.5 + 0.5 : 0.5;

@@ -35,16 +35,10 @@ export class SimCore {
     this.accumulator = 0;
   }
 
-  getDensitySources(inMenu) {
+  getDissipationAnchors() {
     return [
       ...this.wellSystem.getUVPositions(),
       ...this.starSystem.getUVPositions(),
-      ...this.lootSystem.getUVPositions(),
-      ...this.wreckSystem.getUVPositions(),
-      ...this.portalSystem.getUVPositions(),
-      ...this.planetoidSystem.getUVPositions(),
-      ...(inMenu ? [] : [worldToFluidUV(this.ship.wx, this.ship.wy)]),
-      ...(inMenu ? [] : this.scavengerSystem.getUVPositions()),
     ];
   }
 
@@ -67,7 +61,7 @@ export class SimCore {
   }
 
   step(simState, { stepDt, totalTime, inMenu }) {
-    this.fluid.setWellPositions(this.getDensitySources(inMenu));
+    this.fluid.setWellPositions(this.getDissipationAnchors());
     this.fluid.step(stepDt);
     this.fluid.fadeVisualDensity(0.99);
 

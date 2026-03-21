@@ -36,6 +36,12 @@
 - **Why backlogged:** Adds complexity to fluid sim tuning. Core viscosity ramp (uniform) is enough for jam.
 - **Value if revisited:** Regions of thick/thin spacetime, localized danger zones, visual variety in the ASCII field
 
+### Adaptive Sim Budgets by Map Scale
+- **What:** Per-map or per-mode fluid resolution, pressure iterations, and fixed sim tick profiles.
+- **Why backlogged:** Jam week needed a stable default first. The current perf cuts remove the worst pass explosion, but large-map tuning still needs a deliberate profile pass.
+- **Value if revisited:** Lets `3x3`, `5x5`, and `10x10+` maps keep different cost envelopes without pretending one solver budget fits all scales.
+- **First revival step:** Promote `fluidResolution`, `fixedHz`, and pressure-iteration overrides into explicit map/runtime profiles once gameplay feel is stable.
+
 ### Advanced Fabric Anomalies
 - **What:** Rift currents, density pockets, resonance fields, null zones, feedback loops
 - **From:** MOVEMENT.md "Future Anomaly Types"

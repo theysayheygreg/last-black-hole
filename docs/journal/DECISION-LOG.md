@@ -708,3 +708,27 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 3. First milestone is interface decoupling inside one app: `flowField.sample(wx, wy)`, `SimState`, and a fixed-step `SimCore`, before any actual second process exists.
 **Door status:** Open — exact field representation can evolve, but the split between gameplay truth and visual fluid is now the working direction.
+
+---
+
+## Large-Map Client Performance
+
+### Q: Why do `5x5` and `10x10` maps collapse in frame rate, and what is the right first fix?
+
+| Date | Event |
+|------|-------|
+| Mar 20 | Greg reports current playtest reality: `3x3` holds around 60 fps, `5x5` falls to ~15 fps, and `10x10` drops below 5 fps. |
+| Mar 20 | Perf review shows the main culprit is not view frustum or world size directly. The viewport still only shows roughly one world-unit. The real problem is that larger maps contain many more entities, and each entity was causing full-screen fluid passes every fixed sim tick. |
+| Mar 20 | Wells identified as the worst offender. Old path cost roughly `41–122` full-screen passes per well per sim step depending on point count. `Deep Field` was spending well over a thousand well-only passes per step before even counting the base fluid solver. |
+| Mar 20 | Stars identified as the second offender. Old path cost `27` full-screen passes per star per step. |
+| Mar 20 | `Deep Field` also forces `fluidResolution = 512`, compounding the pass-count explosion with ~4× the pixel cost of the default `256` sim. |
+| Mar 20 | Decision: stop using the sim as a paintbrush. Decorative accretion bands and star spikes move toward the renderer/presentation layer; the fluid sim keeps only the force field and the minimum scene-shaped signals needed for readable hazards. |
+| Mar 20 | First cuts land: distance-based dissipation only tracks wells + stars, well accretion splat storms are removed from the sim path, and star ray splats are removed from the sim path. |
+
+**Options:**
+1. **Tune frustum/camera first** — tempting, but wrong as the primary fix because the viewport is not what is scaling up.
+2. **Keep the current entity splat model and only lower resolution/tick** — helps, but preserves the real structural waste.
+3. **Move visual-only field shaping out of the sim path, then tune map-scale budgets** (chosen) — reduces the biggest cost center without giving up the long-term client/server direction.
+
+**Where it landed:** Option 3. The first perf fix is structural: cut per-entity full-screen splat work. Then revisit large-map resolution and sim tick budgets with the new baseline.
+**Door status:** Open — `10x10` likely still needs map-specific resolution or fixed-tick tuning after the structural cuts.

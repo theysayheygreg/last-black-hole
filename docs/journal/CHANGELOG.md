@@ -313,3 +313,20 @@ This is the first real decoupling cut. The game still runs in one app, but the c
 
 ### Why
 Claude and Codex were guessing at different local ports and different static server processes. LBH now has one canonical playtest server path and one separate transient harness path, which is the minimum operational discipline needed before a real sim/server PID exists.
+
+## 2026-03-20 (Jam Day 5: Client Perf Triage)
+
+### src/ — Modified
+- **sim/sim-core.js** — Distance-based density dissipation now tracks only core field anchors (wells + stars) instead of every loot/wreck/portal/planetoid/ship/scavenger position.
+- **wells.js** — Removes the accretion-ring splat storm from the sim update path. Wells now keep the actual force field plus the subtractive core signal; the renderer owns the bright accretion band analytically.
+- **stars.js** — Removes rotating star ray splats from the sim path. The fluid layer keeps the core read; richer rays remain presentation-side.
+- **fluid.js** — Display shader now gives wells an analytic ring-energy baseline from scene data, so readable black holes do not depend on dozens of live splats.
+
+### docs/reference/ — New Files
+- **PERF-ANALYSIS.md** — New perf note explaining why `3x3` holds while `5x5`/`10x10` collapse, where the full-screen pass budget was going, what cuts landed, and which levers remain (resolution, tick rate, solver budget).
+
+### docs/project/ — Modified
+- **BACKLOG.md** — Adds `Adaptive Sim Budgets by Map Scale` as explicit future work.
+
+### Why
+Large-map slowdown was not primarily a camera/frustum problem. The main bottleneck was per-entity full-screen splat work, especially wells and stars, multiplied by fixed 60 Hz sim stepping and the `512`-resolution deep-field map. This pass cuts the worst structural waste first and documents the next safe tuning levers.

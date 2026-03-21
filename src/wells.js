@@ -87,54 +87,13 @@ export class WellSystem {
         cfg.fluidTerminalSpeed * s
       );
 
-      // === SPINNING ACCRETION DISK ===
-      // Velocity injection stays in physics (drives orbital currents).
-      // Density injection moved to visual buffer (doesn't get advected away).
-      const spinAngle = totalTime * well.getAccretionSpinRate() * well.orbitalDir;
-      const numPts = well.getAccretionPoints();
-      const rate = well.getAccretionRate() * well.mass;
-
-      for (const ring of cfg.accretionRings) {
-        const ringR = well.getAccretionRadius() * well.mass * ring.radiusMult * s;
-
-        for (let i = 0; i < numPts; i++) {
-          const armPhase = (i / numPts) * Math.PI * 2;
-          const armBrightness = 0.3 + 0.7 * Math.pow(Math.max(0, Math.cos(armPhase * numPts * 0.5)), 2);
-
-          const angle = spinAngle + armPhase;
-          const px = fu + Math.cos(angle) * ringR;
-          const py = fv + Math.sin(angle) * ringR;
-
-          // Tangential velocity — physics (feeds the orbital current)
-          const tangStr = cfg.accretionTangentialForce * ring.radiusMult * s;
-          const tangVx = -Math.sin(angle) * tangStr * well.orbitalDir;
-          const tangVy = Math.cos(angle) * tangStr * well.orbitalDir;
-          fluid.splat(px, py, tangVx, tangVy, ring.splatR * s2, 0, 0, 0);
-
-          // Density — visual only (stays anchored, not advected)
-          const b = rate * ring.brightness * armBrightness;
-          fluid.visualSplat(px, py, ring.splatR * s2,
-            b * ring.r, b * ring.g, b * ring.b
-          );
-        }
-      }
-
       // === EVENT HORIZON ===
-      // The black hole core must exist as a scene-shaped void before ASCII.
-      // This is visual-only: it does not change ship physics.
+      // The renderer now owns the accretion band analytically. Keep only the
+      // subtractive void signal here so the scene stays readable without
+      // exploding the pass budget on large maps.
       const voidR = well.getVoidRadius() * Math.max(1.0, well.mass * 0.75) * s2;
       const voidStr = -0.5 * Math.min(2.0, 1.0 + well.mass * 0.25);
       fluid.visualSplat(fu, fv, voidR, voidStr, voidStr, voidStr);
-
-      // The bright horizon ring remains as a separate positive signal.
-      const horizonPts = cfg.horizonPoints;
-      const horizonR = well.getAccretionRadius() * well.mass * cfg.horizonRadiusMult * s;
-      for (let i = 0; i < horizonPts; i++) {
-        const angle = spinAngle * 1.5 + (i / horizonPts) * Math.PI * 2;
-        const px = fu + Math.cos(angle) * horizonR;
-        const py = fv + Math.sin(angle) * horizonR;
-        fluid.visualSplat(px, py, 0.001 * s2, rate * 8.0, rate * 7.0, rate * 4.0);
-      }
     }
   }
 
