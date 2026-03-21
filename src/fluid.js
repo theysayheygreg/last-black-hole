@@ -233,10 +233,11 @@ out vec4 fragColor;
 void main() {
   // Map screen UV to fluid UV via camera offset
   vec2 fluidUV = u_camOffset + (v_uv - 0.5) / u_worldScale;
+  vec2 wrappedFluidUV = fract(fluidUV);
 
-  vec2 vel = texture(u_velocity, fluidUV).xy;
-  vec3 dens = texture(u_density, fluidUV).xyz;
-  vec3 visDens = texture(u_visualDensity, fluidUV).xyz;
+  vec2 vel = texture(u_velocity, wrappedFluidUV).xy;
+  vec3 dens = texture(u_density, wrappedFluidUV).xyz;
+  vec3 visDens = texture(u_visualDensity, wrappedFluidUV).xyz;
   // Scene shaping owns two separate signals:
   //   positive visual density = excitation / glow / accretion
   //   negative visual density = collapse / void / absence
@@ -263,7 +264,7 @@ void main() {
   float liveSpace = 1.0 - voidField;
 
   // === FABRIC NOISE — subtle texture, strongest in darker regions ===
-  vec2 fabricUV = fluidUV * 12.0 + u_time * 0.02;
+  vec2 fabricUV = wrappedFluidUV * 12.0 + u_time * 0.02;
   float fabric = fract(sin(dot(fabricUV, vec2(127.1, 311.7))) * 43758.5453);
   float fabric2 = fract(sin(dot(fabricUV * 0.5 + 3.3, vec2(269.5, 183.3))) * 43758.5453);
   float fabricNoise = (fabric * 0.6 + fabric2 * 0.4) * 0.08;
@@ -282,7 +283,7 @@ void main() {
   for (int i = 0; i < 256; i++) {
     if (i >= u_wellCount) break;
 
-    vec2 diff = fluidUV - u_wellPositions[i];
+    vec2 diff = wrappedFluidUV - u_wellPositions[i];
     diff = diff - round(diff);
     float dist = length(diff) / uvS;
 
@@ -807,8 +808,10 @@ export class FluidSim {
    */
   readVelocityAt(uvX, uvY) {
     const gl = this.gl;
-    const pixelX = Math.floor(uvX * this.res);
-    const pixelY = Math.floor(uvY * this.res);
+    const wrappedX = ((uvX % 1) + 1) % 1;
+    const wrappedY = ((uvY % 1) + 1) % 1;
+    const pixelX = Math.min(this.res - 1, Math.floor(wrappedX * this.res));
+    const pixelY = Math.min(this.res - 1, Math.floor(wrappedY * this.res));
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.velocity.read.fbo);
 
@@ -837,8 +840,10 @@ export class FluidSim {
    */
   readDensityAt(uvX, uvY) {
     const gl = this.gl;
-    const pixelX = Math.floor(uvX * this.res);
-    const pixelY = Math.floor(uvY * this.res);
+    const wrappedX = ((uvX % 1) + 1) % 1;
+    const wrappedY = ((uvY % 1) + 1) % 1;
+    const pixelX = Math.min(this.res - 1, Math.floor(wrappedX * this.res));
+    const pixelY = Math.min(this.res - 1, Math.floor(wrappedY * this.res));
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.density.read.fbo);
 

@@ -86,14 +86,16 @@ void main() {
   // Quantum fluctuations: per-cell shimmer, world-anchored to prevent sliding.
   // Use cellIndex (screen grid) offset by camera position for world anchoring.
   vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_worldScale;
-  vec2 camCellOffset = floor(u_camOffset * u_worldScale * u_resolution / vec2(cellW, cellH));
-  vec2 anchoredCell = cellIndex + camCellOffset;
+  vec2 wrappedFluidUV = fract(fluidUV);
+  vec2 cellsPerScreen = u_resolution / vec2(cellW, cellH);
+  vec2 worldCell = floor(wrappedFluidUV * cellsPerScreen * u_worldScale);
+  vec2 anchoredCell = worldCell;
   float noise = fract(sin(dot(anchoredCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
   float noise2 = fract(sin(dot(anchoredCell * 0.5 + floor(u_time * 1.1) * 0.31, vec2(269.5, 183.3))) * 43758.5453);
   // Shimmer intensity: base from luminance + extra at boundaries (high local contrast)
   vec2 neighborOffset = vec2(cellW, cellH) / u_resolution;
-  float lumRight = dot(texture(u_scene, cellCenter + vec2(neighborOffset.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
-  float lumBelow = dot(texture(u_scene, cellCenter + vec2(0.0, neighborOffset.y)).rgb, vec3(0.299, 0.587, 0.114));
+  float lumRight = dot(texture(u_scene, clamp(cellCenter + vec2(neighborOffset.x, 0.0), vec2(0.0), vec2(1.0))).rgb, vec3(0.299, 0.587, 0.114));
+  float lumBelow = dot(texture(u_scene, clamp(cellCenter + vec2(0.0, neighborOffset.y), vec2(0.0), vec2(1.0))).rgb, vec3(0.299, 0.587, 0.114));
   float edgeStrength = abs(lum - lumRight) + abs(lum - lumBelow);  // high at boundaries
   float disturbance = smoothstep(0.0, 0.3, lum) * 2.8 + 0.2 + edgeStrength * 8.0;
   float threshold = 1.0 - u_shimmer * 0.01 * disturbance;
@@ -109,7 +111,7 @@ void main() {
 
   // === DIRECTIONAL CHARACTER SELECTION ===
   // Sample fluid velocity at this cell's position
-  vec2 vel = texture(u_velocity, fluidUV).xy;
+  vec2 vel = texture(u_velocity, wrappedFluidUV).xy;
   float speed = length(vel) * u_worldScale / 3.0;
 
   // Select ramp row based on flow direction (0=isotropic, 1=horizontal, 2=vertical, 3=diagonal)

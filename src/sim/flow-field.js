@@ -1,5 +1,9 @@
 import { fluidVelToWorld, worldToFluidUV } from '../coords.js';
 
+function wrapUV(value) {
+  return ((value % 1) + 1) % 1;
+}
+
 export class FlowField {
   constructor(fluid = null) {
     this.fluid = fluid;
@@ -17,8 +21,8 @@ export class FlowField {
 
   sampleUV(u, v) {
     if (!this.fluid) return { x: 0, y: 0 };
-    const sampleU = Math.max(0, Math.min(1, u));
-    const sampleV = Math.max(0, Math.min(1, v));
+    const sampleU = wrapUV(u);
+    const sampleV = wrapUV(v);
     const [fvx, fvy] = this.fluid.readVelocityAt(sampleU, sampleV);
     const [wvx, wvy] = fluidVelToWorld(fvx, fvy);
     return { x: wvx, y: wvy };

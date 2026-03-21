@@ -87,13 +87,9 @@ export class WellSystem {
         cfg.fluidTerminalSpeed * s
       );
 
-      // === EVENT HORIZON ===
-      // The renderer now owns the accretion band analytically. Keep only the
-      // subtractive void signal here so the scene stays readable without
-      // exploding the pass budget on large maps.
-      const voidR = well.getVoidRadius() * Math.max(1.0, well.mass * 0.75) * s2;
-      const voidStr = -0.5 * Math.min(2.0, 1.0 + well.mass * 0.25);
-      fluid.visualSplat(fu, fv, voidR, voidStr, voidStr, voidStr);
+      // The renderer now owns the well silhouette analytically.
+      // Do not accumulate a subtractive splat here every fixed tick — it turns
+      // large wells into blocky dark slabs once the ASCII quantization kicks in.
     }
   }
 

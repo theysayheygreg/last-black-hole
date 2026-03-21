@@ -330,3 +330,14 @@ Claude and Codex were guessing at different local ports and different static ser
 
 ### Why
 Large-map slowdown was not primarily a camera/frustum problem. The main bottleneck was per-entity full-screen splat work, especially wells and stars, multiplied by fixed 60 Hz sim stepping and the `512`-resolution deep-field map. This pass cuts the worst structural waste first and documents the next safe tuning levers.
+
+## 2026-03-21 (Jam Day 6: Renderer Seam and Tile-Boundary Pass)
+
+### src/ — Modified
+- **fluid.js** — Display shader now wraps world-space sampling consistently before reading density, velocity, visual density, and fabric noise. GPU readback helpers also wrap UVs before converting them to pixels.
+- **ascii-renderer.js** — ASCII post-process now anchors shimmer and directional velocity reads from wrapped fluid UVs instead of mixing wrapped sim data with unwrapped cell-space noise.
+- **sim/flow-field.js** — Flow-field sampling now wraps at world edges instead of clamping, so client-side gameplay reads use the same toroidal topology as the GPU sim.
+- **wells.js** — Wells stop writing subtractive visual density every fixed tick. The renderer keeps the well core analytically, which avoids large blocky dark slabs after ASCII quantization.
+
+### Why
+The sim was already toroidal, but the renderer and CPU readback path were not fully honoring the same wrap rules. That mismatch could show up as hard seams near world/tile boundaries. A second artifact came from subtractive well splats accumulating every tick, which made black holes flatten into rectangular dark regions once the ASCII pass quantized them. The fix was to make wrapping consistent end-to-end and let the renderer own the well silhouette directly.

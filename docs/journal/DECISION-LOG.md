@@ -732,3 +732,25 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 3. The first perf fix is structural: cut per-entity full-screen splat work. Then revisit large-map resolution and sim tick budgets with the new baseline.
 **Door status:** Open — `10x10` likely still needs map-specific resolution or fixed-tick tuning after the structural cuts.
+
+---
+
+## Renderer / Tile-Boundary Propagation
+
+### Q: Why were hard seams showing up near apparent world/tile edges?
+
+| Date | Event |
+|------|-------|
+| Mar 21 | Greg flags renderer boundaries that look like tile seams and asks for a review of both physics propagation and renderer propagation across world tiles. |
+| Mar 21 | Code review confirms the core physics sim is toroidal in the GPU path: fluid textures use `REPEAT`, world-space entity math uses shortest-path wrap, and well/dissipation shaders already use `diff - round(diff)`. |
+| Mar 21 | Two non-toroidal seams are found outside the core sim: the renderer was mixing wrapped sim samples with unwrapped world-noise/cell anchoring, and the CPU flow-field readback path was clamping UVs instead of wrapping them. |
+| Mar 21 | A second visual artifact is identified: wells were still writing subtractive visual density every fixed sim tick. The sim stayed continuous, but the accumulated negative field turned into large blocky dark slabs after the ASCII quantization pass. |
+| Mar 21 | Decision: world-edge behavior must match across all three layers — GPU sim, CPU readback, and ASCII presentation. The renderer should own well silhouettes analytically; the sim should not keep painting persistent subtractive well blobs into `visualDensity`. |
+
+**Options:**
+1. **Treat it as only a shader bug** — too narrow; misses the CPU readback mismatch and the per-tick visual accumulation.
+2. **Treat it as only a sim/topology bug** — incorrect; the core fluid sim was already toroidal.
+3. **Make wrapping consistent end-to-end and move well silhouettes fully into the renderer** (chosen) — fixes the real seam and removes the fake one.
+
+**Where it landed:** Option 3. The sim stays toroidal, CPU readback now wraps like the sim, the ASCII layer now anchors from wrapped world-space, and the renderer owns the black-hole core directly instead of inheriting a saturated subtractive splat field.
+**Door status:** Open — if boundary artifacts persist after this, the next suspect is cell-space quantization or scene-specific shaping, not world-topology mismatch.
