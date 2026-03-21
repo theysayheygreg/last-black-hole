@@ -75,6 +75,26 @@ function copyIfExists(from, to) {
   if (fs.existsSync(from)) fs.cpSync(from, to, { recursive: true });
 }
 
+function resolvePackagedArtifact(packagedRoot, target) {
+  if (!packagedRoot) return null;
+
+  if (target !== 'mac') return packagedRoot;
+
+  if (packagedRoot.endsWith('.app')) return packagedRoot;
+
+  if (!fs.existsSync(packagedRoot) || !fs.statSync(packagedRoot).isDirectory()) {
+    return packagedRoot;
+  }
+
+  const entries = fs.readdirSync(packagedRoot)
+    .filter((name) => name.endsWith('.app'))
+    .map((name) => path.join(packagedRoot, name));
+
+  if (entries.length === 1) return entries[0];
+
+  return packagedRoot;
+}
+
 function gitInfo() {
   const run = (command) =>
     execSync(command, { cwd: ROOT, encoding: 'utf8' }).trim();
@@ -149,6 +169,12 @@ function zipDir(sourceDir, zipPath) {
 
   execFileSync('zip', ['-rq', zipPath, path.basename(sourceDir)], {
     cwd: path.dirname(sourceDir),
+    stdio: 'inherit',
+  });
+}
+
+function signMacApp(appPath) {
+  execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], {
     stdio: 'inherit',
   });
 }
@@ -319,7 +345,7 @@ async function buildElectronTarget(targetRoot, target, mode) {
     status: 'built',
   };
 
-  const packagedRoot = appPaths[0];
+  const packagedRoot = resolvePackagedArtifact(appPaths[0], target);
   if (packagedRoot) {
     const finalName =
       target === 'mac'
@@ -330,6 +356,7 @@ async function buildElectronTarget(targetRoot, target, mode) {
     const finalPath = path.join(targetRoot, finalName);
     removeIfExists(finalPath);
     fs.renameSync(packagedRoot, finalPath);
+    if (target === 'mac') signMacApp(finalPath);
     result.artifact = finalName;
   }
 
