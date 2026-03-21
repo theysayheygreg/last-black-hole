@@ -179,6 +179,60 @@ function signMacApp(appPath) {
   });
 }
 
+function writeStartHere(targetRoot, results) {
+  const built = new Set(results.filter((item) => item.status === 'built').map((item) => item.target));
+  const lines = [
+    '# START HERE',
+    '',
+    'If you are launching this build on the same Mac that created it, start here:',
+    '',
+    '- Open `Last Black Hole.app`',
+    '- If macOS blocks it on first launch, Control-click it and choose `Open`',
+    '',
+    '## Which artifact should I use?',
+    '',
+    '- **Mac:** `Last Black Hole.app`',
+    '- **Windows:** `Last Black Hole-win32-x64/Last Black Hole.exe`',
+    '- **Linux / Steam Deck:** `Last Black Hole-linux-x64/Last Black Hole`',
+    '- **Browser fallback:** `last-black-hole-web/index.html`',
+    '- **iPad local install:** read `last-black-hole-ipad-webapp/README-IPAD-INSTALL.md`',
+    '',
+    '## What is in this folder?',
+    '',
+    '- `BUILD-MANIFEST.json` tells you what was built',
+    '- `BUILD-INFO-*.json` records per-target build metadata',
+    '',
+    '## Targets in this build',
+    '',
+  ];
+
+  for (const item of results) {
+    if (item.status === 'built') {
+      lines.push(`- ${item.target}: built`);
+    } else {
+      lines.push(`- ${item.target}: failed (${item.error})`);
+    }
+  }
+
+  lines.push('');
+  lines.push('## Notes');
+  lines.push('');
+  if (built.has('mac')) {
+    lines.push('- The macOS app is unsigned but ad-hoc signed so it should launch locally.');
+  }
+  if (built.has('win')) {
+    lines.push('- The Windows target is a portable folder, not an installer.');
+  }
+  if (built.has('linux')) {
+    lines.push('- The Linux target is the first Deck-friendly native package.');
+  }
+  if (built.has('web')) {
+    lines.push('- The web target is the source-of-truth runtime and safest fallback.');
+  }
+
+  fs.writeFileSync(path.join(targetRoot, 'START-HERE.md'), lines.join('\n') + '\n');
+}
+
 function buildWeb(targetRoot, mode) {
   const webDir = path.join(targetRoot, 'last-black-hole-web');
   removeIfExists(webDir);
@@ -413,6 +467,7 @@ async function main() {
     mode,
     results,
   });
+  writeStartHere(targetRoot, results);
 
   const playtestZip = path.join(
     BUILD_ROOT,
