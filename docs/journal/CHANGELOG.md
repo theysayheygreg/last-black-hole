@@ -341,3 +341,11 @@ Large-map slowdown was not primarily a camera/frustum problem. The main bottlene
 
 ### Why
 The sim was already toroidal, but the renderer and CPU readback path were not fully honoring the same wrap rules. That mismatch could show up as hard seams near world/tile boundaries. A second artifact came from subtractive well splats accumulating every tick, which made black holes flatten into rectangular dark regions once the ASCII pass quantized them. The fix was to make wrapping consistent end-to-end and let the renderer own the well silhouette directly.
+
+## 2026-03-21 (Jam Day 6: Multi-Well Void Regression Fix)
+
+### src/ — Modified
+- **fluid.js** — Per-well scene shaping no longer reapplies the global `voidField` inside the well loop. The loop now only blackens each well's own core mask and uses `liveSpace` once as the ambient scene-level darkness term.
+
+### Why
+The first seam/topology fix accidentally exposed a second renderer bug on real gameplay maps: the shader was applying the already-computed global void field once per well. On title this mostly hid, but on multi-well maps it stacked the darkness repeatedly and made wells disappear into giant black regions. The fix keeps the global void term global and limits per-well darkening to each well's actual core.

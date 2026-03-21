@@ -754,3 +754,6 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 3. The sim stays toroidal, CPU readback now wraps like the sim, the ASCII layer now anchors from wrapped world-space, and the renderer owns the black-hole core directly instead of inheriting a saturated subtractive splat field.
 **Door status:** Open — if boundary artifacts persist after this, the next suspect is cell-space quantization or scene-specific shaping, not world-topology mismatch.
+
+| Mar 21 | Follow-up review on real gameplay maps finds a second bug: the display shader was applying `voidField` inside the per-well loop. That meant scene-level darkness was being compounded once for every well, which made many gameplay holes vanish into broad black slabs even though the title screen still looked acceptable. |
+| Mar 21 | Decision: keep `voidField` as a scene-level term and only let each well apply its own `coreMask`. Multi-well gameplay readability matters more than squeezing both concepts through one multiply. |

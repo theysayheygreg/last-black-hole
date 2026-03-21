@@ -298,7 +298,7 @@ void main() {
     float haloMask = smoothstep(ringOuter * 1.8, ringOuter, dist)
                    * (1.0 - smoothstep(ringOuter, ringInner, dist));
 
-    float localLive = 1.0 - max(voidField, coreMask);
+    float localLive = liveSpace * (1.0 - coreMask);
     float analyticRing = clamp(0.25 + u_wellMasses[i] * 0.32, 0.25, 1.0);
     float ringEnergy = max(ringSignal, analyticRing);
     float localRing = ringMask * mix(0.28, 1.0, ringEnergy);
@@ -322,7 +322,7 @@ void main() {
     col += vec3(0.025, 0.14, 0.18) * surfHint * 1.1 * localLive;
 
     // Final dark core. This must win.
-    col = mix(col, vec3(0.0), max(voidField, coreMask) * 0.985);
+    col = mix(col, vec3(0.0), coreMask * 0.985);
   }
 
   // Subtle vignette at screen edges
