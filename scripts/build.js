@@ -179,6 +179,19 @@ function signMacApp(appPath) {
   });
 }
 
+function writeMacLauncher(targetRoot) {
+  const launcherPath = path.join(targetRoot, 'Run Last Black Hole.command');
+  const script = [
+    '#!/bin/bash',
+    'set -euo pipefail',
+    'DIR="$(cd "$(dirname "$0")" && pwd)"',
+    'open -n "$DIR/Last Black Hole.app"',
+    '',
+  ].join('\n');
+  fs.writeFileSync(launcherPath, script);
+  fs.chmodSync(launcherPath, 0o755);
+}
+
 function writeStartHere(targetRoot, results) {
   const built = new Set(results.filter((item) => item.status === 'built').map((item) => item.target));
   const lines = [
@@ -186,8 +199,9 @@ function writeStartHere(targetRoot, results) {
     '',
     'If you are launching this build on the same Mac that created it, start here:',
     '',
-    '- Open `Last Black Hole.app`',
-    '- If macOS blocks it on first launch, Control-click it and choose `Open`',
+    '- Double-click `Run Last Black Hole.command`',
+    '- Or run `open -n \"Last Black Hole.app\"` from Terminal in this folder',
+    '- Finder may still complain if you double-click the `.app` directly because this build is not notarized',
     '',
     '## Which artifact should I use?',
     '',
@@ -218,7 +232,7 @@ function writeStartHere(targetRoot, results) {
   lines.push('## Notes');
   lines.push('');
   if (built.has('mac')) {
-    lines.push('- The macOS app is unsigned but ad-hoc signed so it should launch locally.');
+    lines.push('- The macOS app is ad-hoc signed, not notarized. Use `Run Last Black Hole.command` for the least fragile local launch path.');
   }
   if (built.has('win')) {
     lines.push('- The Windows target is a portable folder, not an installer.');
@@ -467,6 +481,9 @@ async function main() {
     mode,
     results,
   });
+  if (results.some((item) => item.target === 'mac' && item.status === 'built')) {
+    writeMacLauncher(targetRoot);
+  }
   writeStartHere(targetRoot, results);
 
   const playtestZip = path.join(
