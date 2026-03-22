@@ -299,27 +299,27 @@ void main() {
                    * (1.0 - smoothstep(ringOuter, ringInner, dist));
 
     float localLive = liveSpace * (1.0 - coreMask);
-    float analyticRing = clamp(0.25 + u_wellMasses[i] * 0.32, 0.25, 1.0);
+    float analyticRing = clamp(0.34 + u_wellMasses[i] * 0.42, 0.34, 1.15);
     float ringEnergy = max(ringSignal, analyticRing);
-    float localRing = ringMask * mix(0.28, 1.0, ringEnergy);
+    float localRing = ringMask * mix(0.42, 1.08, ringEnergy);
     vec3 ringColor = mix(u_nearWellColor, u_hotWellColor, clamp(0.12 + ringEnergy * 0.88, 0.0, 1.0));
     vec2 radial = dist > 0.0001 ? diff / length(diff) : vec2(1.0, 0.0);
     vec2 tangent = vec2(-radial.y, radial.x) * orbitalDir;
     float tangentialAlignment = speed > 0.001 ? dot(normalize(vel), tangent) * 0.5 + 0.5 : 0.5;
-    float ringBias = mix(0.82, 1.18, tangentialAlignment);
+    float ringBias = mix(0.9, 1.28, tangentialAlignment);
 
     // Gentle halo outside the ring so the fabric feels disturbed, not flooded.
-    col += ringColor * haloMask * 0.12 * localLive;
+    col += ringColor * haloMask * (0.18 + 0.08 * ringEnergy) * localLive;
 
     // Main accretion band. This is the bright read, not the whole well.
-    col += ringColor * localRing * 0.8 * ringBias * localLive;
+    col += ringColor * localRing * 1.02 * ringBias * localLive;
 
     // Surf hint just outside the ring: where tangential motion is strongest,
     // add a cool directional band instead of more brightness.
-    float surfBand = smoothstep(ringOuter * 1.55, ringOuter * 1.05, dist)
-                   * (1.0 - smoothstep(ringOuter * 2.45, ringOuter * 1.55, dist));
+    float surfBand = smoothstep(ringOuter * 1.5, ringOuter * 1.04, dist)
+                   * (1.0 - smoothstep(ringOuter * 2.7, ringOuter * 1.5, dist));
     float surfHint = surfBand * smoothstep(0.012, 0.055, speed) * mix(0.45, 1.0, tangentialAlignment);
-    col += vec3(0.025, 0.14, 0.18) * surfHint * 1.1 * localLive;
+    col += vec3(0.04, 0.18, 0.24) * surfHint * 1.3 * localLive;
 
     // Final dark core. This must win.
     col = mix(col, vec3(0.0), coreMask * 0.985);

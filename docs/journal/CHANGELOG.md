@@ -349,3 +349,12 @@ The sim was already toroidal, but the renderer and CPU readback path were not fu
 
 ### Why
 The first seam/topology fix accidentally exposed a second renderer bug on real gameplay maps: the shader was applying the already-computed global void field once per well. On title this mostly hid, but on multi-well maps it stacked the darkness repeatedly and made wells disappear into giant black regions. The fix keeps the global void term global and limits per-well darkening to each well's actual core.
+
+## 2026-03-21 (Jam Day 6: Louder Gameplay Wells)
+
+### src/ — Modified
+- **wells.js** — Expands the renderer-facing ring geometry so gameplay wells read from farther out instead of collapsing to tiny hot centers.
+- **fluid.js** — Raises accretion-band energy, halo lift, and surf-band contrast while keeping the core dark and the background restrained.
+
+### Why
+After the topology and multi-well fixes, gameplay wells were structurally correct but still too quiet. This pass makes them louder tactically — broader visible band, clearer outer read, same black core — without blowing the whole scene back out.

@@ -144,8 +144,8 @@ export class WellSystem {
     return this.wells.map(w => {
       const accretionRef = Math.max(0.012, w.getAccretionRadius() * w.mass);
       const coreRef = Math.max((w.killRadius / 3.0) * 0.9, accretionRef * 0.28);
-      const ringInnerRef = Math.max(coreRef * 1.12, accretionRef * 0.72);
-      const ringOuterRef = Math.max(ringInnerRef * 1.18, accretionRef * 1.32);
+      const ringInnerRef = Math.max(coreRef * 1.18, accretionRef * 0.66);
+      const ringOuterRef = Math.max(ringInnerRef * 1.36, accretionRef * 1.8);
       return [coreRef, ringInnerRef, ringOuterRef, w.orbitalDir];
     });
   }
