@@ -358,3 +358,12 @@ The first seam/topology fix accidentally exposed a second renderer bug on real g
 
 ### Why
 After the topology and multi-well fixes, gameplay wells were structurally correct but still too quiet. This pass makes them louder tactically — broader visible band, clearer outer read, same black core — without blowing the whole scene back out.
+
+## 2026-03-21 (Jam Day 6: Honest Kill Edge)
+
+### src/ — Modified
+- **wells.js** — Visible core sizing now slightly exceeds the real gameplay kill radius instead of undershooting it.
+- **fluid.js** — Adds a thin event-horizon rim around the core so low-mass wells still show a readable lethal boundary in motion.
+
+### Why
+The remaining gameplay failure was not topology anymore. It was honesty. The ship could still die inside a region that read too softly or too small, especially on smaller wells outside the title screen. This pass makes the visible dark core cover the actual kill zone and adds a narrow horizon rim so the player can see where the danger begins.
