@@ -82,16 +82,19 @@ export class CombatSystem {
     for (const d of this.wellDisruptions) {
       const [fu, fv] = worldToFluidUV(d.well.wx, d.well.wy);
 
-      // Counter-radial splats push density outward, breaking the accretion ring
+      // Counter-radial splats push density outward, breaking the accretion ring.
+      // All UV-space values scaled by s/s2 per GPU SPLAT SCALING RULE.
       for (let i = 0; i < 8; i++) {
         const angle = (i / 8) * Math.PI * 2 + d.timer * 3;
-        const dist = 0.02 * s * d.well.mass;
+        const disruptDist = 0.02;    // UV-space: how far from well center to inject
+        const disruptForce = 0.001;  // UV-space: velocity magnitude of scatter
+        const disruptRadius = 0.003; // UV-space: splat gaussian radius
         fluid.splat(
-          fu + Math.cos(angle) * dist,
-          fv + Math.sin(angle) * dist,
-          Math.cos(angle) * 0.001 * s,
-          Math.sin(angle) * 0.001 * s,
-          0.003 * s2,
+          fu + Math.cos(angle) * disruptDist * s * d.well.mass,
+          fv + Math.sin(angle) * disruptDist * s * d.well.mass,
+          Math.cos(angle) * disruptForce * s,
+          Math.sin(angle) * disruptForce * s,
+          disruptRadius * s2,
           0, 0, 0   // no density — just scatter velocity
         );
       }
@@ -154,12 +157,13 @@ export class CombatSystem {
     const s = uvScale();
     const s2 = s * s;
 
-    // --- 1. Fluid force injection: radial outward splats ---
+    // --- 1. Fluid force injection: radial outward splats (GPU SPLAT SCALING RULE) ---
     const [fu, fv] = worldToFluidUV(wx, wy);
     const numSplats = 16;
+    const pulseSplatOffset = 0.01;  // UV-space: how far from center to place each radial splat
     for (let i = 0; i < numSplats; i++) {
       const angle = (i / numSplats) * Math.PI * 2;
-      const dist = 0.01 * s;
+      const dist = pulseSplatOffset * s;
       const px = fu + Math.cos(angle) * dist;
       const py = fv + Math.sin(angle) * dist;
       fluid.splat(

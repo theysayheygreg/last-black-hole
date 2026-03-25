@@ -90,10 +90,11 @@ export class WaveRingSystem {
         const vx = Math.cos(angle) * force;
         const vy = Math.sin(angle) * force;
 
-        // Cyan-white density — scale splat radius by uvScale² like every other system
+        // Cyan-white density — scale splat radius by uvScale² (GPU SPLAT SCALING RULE)
         const s = uvScale();
         const s2 = s * s;
-        fluid.splat(px, py, vx * s, vy * s, 0.004 * s2,
+        const splatRadius = 0.004;  // UV-space base radius for wave ring splats
+        fluid.splat(px, py, vx * s, vy * s, splatRadius * s2,
           brightness * 0.3, brightness * 0.8, brightness);
       }
     }

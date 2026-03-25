@@ -133,23 +133,39 @@ export class WellSystem {
   }
 
   /**
-   * Get renderer-facing well shape data in reference-scaled units.
-   * x = core radius, y = ring inner radius, z = ring outer radius, w = orbitalDir
+   * Get renderer-facing well shape data for the display shader.
+   * Returns [coreRadius, ringInner, ringOuter, orbitalDir] per well.
    *
-   * Distances are normalized to the 3x3 reference view so the display shader
-   * can stay stable across map sizes. Kill radius drives the core because that
-   * is the actual gameplay "do not go here" signal.
+   * ALL OUTPUT VALUES ARE IN WORLD-SPACE (SHADER DISTANCE RULE).
+   * The display shader computes: dist = length(diff_uv) / uvS  which is world-space.
+   * Shape radii must be in the same space to compare correctly.
+   *
+   * accretionRadius (CONFIG, UV-space) is converted to world-space via × WORLD_SCALE.
+   * killRadius (CONFIG, world-space) is used directly.
+   *
+   * The multiplier constants (1.08, 0.33, 1.18, 0.72, 1.48, 3.8, 2.2) are
+   * visual tuning — they size the core, inner ring, and outer ring relative
+   * to each other. They don't change with map scale.
    */
   getRenderShapes() {
     return this.wells.map(w => {
-      // accretionRadius is UV-space (0.023). Convert to world-space for the shader
-      // which compares against dist = length(diff_uv) / uvS (world-space).
-      const accretionUV = w.getAccretionRadius() * w.mass;
-      const accretionWorld = accretionUV * WORLD_SCALE;
-      const accretionRef = Math.max(0.036, accretionWorld);
-      const coreRef = Math.max((w.killRadius / 3.0) * 1.08, accretionRef * 0.33);
+      // Convert accretion from UV-space to world-space (SHADER DISTANCE RULE)
+      const accretionUV = w.getAccretionRadius() * w.mass;       // UV-space
+      const accretionWorld = accretionUV * WORLD_SCALE;           // → world-space
+      const accretionRef = Math.max(0.036, accretionWorld);       // floor: min visible size
+
+      // Core: driven by kill radius (world-space) — the "do not go here" signal
+      const coreRef = Math.max(
+        (w.killRadius / 3.0) * 1.08,   // kill radius scaled (world-space)
+        accretionRef * 0.33             // or 1/3 of accretion ring
+      );
+
+      // Inner ring: just outside the core
       const ringInnerRef = Math.max(coreRef * 1.18, accretionRef * 0.72);
+
+      // Outer ring: the visible extent of the accretion band
       const ringOuterRef = Math.max(ringInnerRef * 1.48, coreRef * 3.8, accretionRef * 2.2);
+
       return [coreRef, ringInnerRef, ringOuterRef, w.orbitalDir];
     });
   }

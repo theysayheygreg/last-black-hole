@@ -51,11 +51,13 @@ export class StarSystem {
       );
 
       // Clearing bubble — visual only (stays centered, not advected by outflow)
-      const clearingRadius = cfg.clearing * 0.13 * s2;
+      // 0.13 converts clearing CONFIG value to UV-space bubble radius
+      const clearingRadius = cfg.clearing * 0.13 * s2;  // UV-space, scaled by s2
       fluid.visualSplat(fu, fv, clearingRadius, -cfg.clearing, -cfg.clearing, -cfg.clearing);
 
       // Bright core — visual only (doesn't affect dissipation)
-      const coreRadius = cfg.coreBrightness * 0.025 * s2;
+      // 0.025 converts coreBrightness CONFIG value to UV-space core radius
+      const coreRadius = cfg.coreBrightness * 0.025 * s2;  // UV-space, scaled by s2
       fluid.visualSplat(fu, fv, coreRadius,
         cfg.coreBrightness * 1.0,
         cfg.coreBrightness * 0.95,

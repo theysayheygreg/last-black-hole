@@ -69,8 +69,10 @@ export const CONFIG = {
                              // Boosted 2.5x from 0.0002 so void has enough signal for shimmer to work with.
     nearDissipation: 0.998,   // Density persistence near wells/stars/loot. High = persistent accretion.
     farDissipation: 0.985,    // Density persistence far from any source. Low = quick fadeout in void.
-    dissipationNearRadius: 0.03, // UV radius where near-dissipation applies. Tight = only right at sources.
-    dissipationFarRadius: 0.12,  // UV radius where transition to far-dissipation completes.
+    dissipationNearRadius: 0.03, // [UV-space] radius where near-dissipation applies. Tuned for WORLD_SCALE=3.
+                                  // fluid.js scales by 3/WORLD_SCALE when passing to shader.
+    dissipationFarRadius: 0.12,  // [UV-space] radius where transition to far-dissipation completes.
+                                  // Same scaling as nearRadius.
   },
 
   wells: {
@@ -98,7 +100,8 @@ export const CONFIG = {
 
     // --- Accretion disk visuals (fluid density injection) ---
     accretionRate: 0.015,     // Base density brightness per injection point. Scaled by well mass.
-    accretionRadius: 0.023,   // Base disk radius in fluid UV. Scaled by well mass × ring.radiusMult.
+    accretionRadius: 0.023,   // [UV-space] Base disk radius in fluid UV. Scaled by well mass × ring.radiusMult.
+                              // getRenderShapes() converts to world-space via × WORLD_SCALE.
     accretionSpinRate: 0.8,   // Disk rotation in rad/s. Per-well override available.
     accretionPoints: 8,       // Injection points per ring. More = smoother disk, more GPU splats.
     accretionRings: [
