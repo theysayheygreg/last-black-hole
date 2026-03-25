@@ -298,8 +298,11 @@ void main() {
     float coreMask = smoothstep(coreRadius * 1.22, coreRadius * 0.82, dist);
     float horizonMask = smoothstep(coreRadius * 1.18, coreRadius * 1.03, dist)
                       * (1.0 - smoothstep(coreRadius * 1.03, coreRadius * 0.92, dist));
+    // Ring band: bright between inner and outer, fades to zero at both edges.
+    // Outer fade: smoothstep from outer→inner (1 at inner, 0 at outer)
+    // Inner fade: smoothstep from core→inner (0 at core, 1 at inner)
     float ringMask = smoothstep(ringOuter, ringInner, dist)
-                   * (1.0 - smoothstep(ringInner, coreRadius * 1.03, dist));
+                   * smoothstep(coreRadius * 1.03, ringInner, dist);
     float haloMask = smoothstep(ringOuter * 1.8, ringOuter, dist)
                    * (1.0 - smoothstep(ringOuter, ringInner, dist));
 
@@ -795,6 +798,7 @@ export class FluidSim {
     // Set well positions and masses for gravity field visualization
     const count = wellPositionsUV.length;
     gl.uniform1i(u['u_wellCount'], count);
+    // (debug logging removed — was temporary for well visibility investigation)
     for (let i = 0; i < count; i++) {
       const posLoc = u[`u_wellPositions[${i}]`];
       if (posLoc) gl.uniform2fv(posLoc, wellPositionsUV[i]);
