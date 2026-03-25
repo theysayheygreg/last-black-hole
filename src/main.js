@@ -174,6 +174,10 @@ function init() {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (gamePhase === 'playing' && inventoryOpen) {
+        inventoryOpen = false;
+        return;
+      }
       // Edge-triggered handling is in the game loop via _prevPause.
       // ESC during play = pause. ESC during pause = resume.
       if (gamePhase === 'playing') {
@@ -209,6 +213,7 @@ function init() {
       wellSystem,
       starSystem,
       lootSystem,
+      wreckSystem,
       portalSystem,
       planetoidSystem,
       waveRings,

@@ -55,32 +55,45 @@ async function run() {
     // ---- WRECK LOOT HAS CATEGORIES ----
 
     await runner.run('Wrecks generate categorized loot', async () => {
-      // Teleport to a wreck and check its loot
       const wreckData = await page.evaluate(() => {
         const api = window.__TEST_API;
-        const wells = api.getWells();
-        // Wrecks exist in the game — check via wreckSystem
-        const state = api;
-        // We can't directly access wreckSystem, but we can check
-        // that after looting, inventory items have categories
-        return { wellCount: wells.length };
+        const ship = api.getShipPos();
+        api.spawnTestWreck(ship.x + 0.2, ship.y, { type: 'vault', tier: 2, size: 'small' });
+        const wrecks = api.getWrecks();
+        return wrecks[wrecks.length - 1];
       });
-      assert(wreckData.wellCount > 0, 'Game has no wells — map not loaded');
+      assert(wreckData && wreckData.loot.length > 0, 'Expected spawned wreck to contain loot');
+      for (const item of wreckData.loot) {
+        assert(typeof item.category === 'string' && item.category.length > 0,
+          `Loot missing category: ${JSON.stringify(item)}`);
+        assert(typeof item.name === 'string' && item.name.length > 0,
+          `Loot missing name: ${JSON.stringify(item)}`);
+      }
     });
 
     // ---- PICKUP ADDS TO CARGO ----
 
     await runner.run('Picking up loot adds to cargo', async () => {
-      // Teleport ship near a wreck to trigger pickup
       const result = await page.evaluate(() => {
         const api = window.__TEST_API;
-        // Find a wreck position from the overlay
-        // We need to get wreck positions... let's just fly around and check
-        // Actually, let's use a more direct approach: check inventory after some time
-        return api.getInventory();
+        const ship = api.getShipPos();
+        api.spawnTestWreck(ship.x, ship.y, {
+          name: 'test pickup',
+          loot: [{
+            name: 'test artifact',
+            category: 'artifact',
+            subcategory: 'equippable',
+            tier: 'rare',
+            value: 42,
+          }],
+        });
+        const pickup = api.pickupAtShip();
+        const inv = api.getInventory();
+        return { pickup, inv };
       });
-      // At game start, cargo should be empty
-      assert(result.cargoCount === 0, `Expected empty cargo at start, got ${result.cargoCount}`);
+      assert(result.pickup.pickedUp === 1, `Expected 1 item picked up, got ${result.pickup.pickedUp}`);
+      assert(result.inv.cargoCount === 1, `Expected cargo count 1 after pickup, got ${result.inv.cargoCount}`);
+      assert(result.inv.cargo.some(i => i && i.name === 'test artifact'), 'Picked-up item not found in cargo');
     });
 
     // ---- CARGO LIMIT ENFORCED ----
@@ -93,7 +106,12 @@ async function run() {
     // ---- DROP MECHANICS ----
 
     await runner.run('Dropping from empty slot returns null', async () => {
-      const result = await page.evaluate(() => window.__TEST_API.dropFromCargo(0));
+      const result = await page.evaluate(() => {
+        const api = window.__TEST_API;
+        const inv = api.getInventory();
+        const emptySlot = inv.cargo.findIndex(item => item === null);
+        return api.dropFromCargo(emptySlot);
+      });
       assert(result === null, 'Expected null from dropping empty slot');
     });
 

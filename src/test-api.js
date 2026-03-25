@@ -122,6 +122,49 @@ export function initTestAPI(getState) {
       return inventorySystem.dropFromCargo(slotIndex);
     },
 
+    getWrecks() {
+      const { wreckSystem } = getState();
+      if (!wreckSystem) return [];
+      return wreckSystem.wrecks.map((wreck, index) => ({
+        index,
+        wx: wreck.wx,
+        wy: wreck.wy,
+        alive: wreck.alive,
+        looted: wreck.looted,
+        pickupCooldown: wreck.pickupCooldown,
+        loot: wreck.loot?.map(item => item ? { ...item } : null) || [],
+      }));
+    },
+
+    spawnTestWreck(wx, wy, opts = {}) {
+      const { wreckSystem } = getState();
+      if (!wreckSystem) return false;
+      const wreck = wreckSystem.addWreck(wx, wy, {
+        type: opts.type ?? 'derelict',
+        tier: opts.tier ?? 1,
+        size: opts.size ?? 'small',
+        pickupCooldown: opts.pickupCooldown ?? 0,
+        vx: opts.vx ?? 0,
+        vy: opts.vy ?? 0,
+      });
+      if (opts.loot) {
+        wreck.loot = opts.loot.map(item => ({ ...item }));
+      }
+      if (opts.name) wreck.name = opts.name;
+      return true;
+    },
+
+    pickupAtShip() {
+      const { wreckSystem, inventorySystem, ship } = getState();
+      if (!wreckSystem || !inventorySystem || !ship) return { pickedUp: 0, overflow: 0 };
+      const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
+      const overflow = inventorySystem.addMultipleToCargo(newItems);
+      return {
+        pickedUp: newItems.length - overflow.length,
+        overflow: overflow.length,
+      };
+    },
+
     getScavengers() {
       const { scavengerSystem } = getState();
       if (!scavengerSystem) return [];

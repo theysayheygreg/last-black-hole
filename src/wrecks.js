@@ -101,10 +101,12 @@ export class WreckSystem {
       if (wreck.vx !== 0 || wreck.vy !== 0) {
         wreck.wx = wrapWorld(wreck.wx + wreck.vx * dt);
         wreck.wy = wrapWorld(wreck.wy + wreck.vy * dt);
-        // Drag: decay to zero over ~1 second
-        const drag = 0.04;
-        wreck.vx *= (1 - drag);
-        wreck.vy *= (1 - drag);
+        // Drag: decay is time-based so ejection behavior stays consistent as FPS changes.
+        // Old behavior was 0.96x per 60 Hz frame, which is exp(-2.45 * dt).
+        const dragRate = 2.45;
+        const dragFactor = Math.exp(-dragRate * dt);
+        wreck.vx *= dragFactor;
+        wreck.vy *= dragFactor;
         if (Math.abs(wreck.vx) < 0.001 && Math.abs(wreck.vy) < 0.001) {
           wreck.vx = 0;
           wreck.vy = 0;

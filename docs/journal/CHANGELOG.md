@@ -384,3 +384,16 @@ After the topology and multi-well fixes, gameplay wells were structurally correc
 
 ### Why
 The remaining gameplay failure was not topology anymore. It was honesty. The ship could still die inside a region that read too softly or too small, especially on smaller wells outside the title screen. This pass makes the visible dark core cover the actual kill zone and adds a narrow horizon rim so the player can see where the danger begins.
+
+## 2026-03-25 (Week 2 Day 1: Review Fixes)
+
+### src/ — Modified
+- **wrecks.js** — Dropped-wreck drag now decays by elapsed time instead of by frame count, so ejection behavior stays consistent on slow maps.
+- **main.js** — Escape now closes the inventory during play instead of pausing the run behind the panel.
+- **test-api.js** — Exposes wreck inspection, test-wreck spawning, and direct pickup helpers so inventory tests can drive real item flows.
+
+### tests/ — Modified
+- **inventory.js** — Replaces two placeholder checks with actual wreck-loot validation and a real pickup-to-cargo test.
+
+### Why
+Today’s review surfaced two real gameplay bugs and one false-confidence problem. Dropped wrecks were drifting different distances at different frame rates, keyboard Escape did not actually perform the documented inventory-close action, and two inventory tests were claiming coverage they did not provide. This pass fixes the behavior and makes the test suite earn its green status.
