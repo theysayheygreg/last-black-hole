@@ -250,11 +250,17 @@ function init() {
   setDropCallback((slotIndex) => {
     const item = inventorySystem.dropFromCargo(slotIndex);
     if (item) {
-      // Create a mini-wreck at the ship's position with this single item
-      wreckSystem.addWreck(ship.wx, ship.wy, {
-        type: 'debris',
+      // Eject the wreck behind the ship so it's not immediately re-picked-up.
+      // Offset = 0.12 world-units opposite to ship facing (just outside pickup radius of 0.08).
+      const ejectDist = 0.12;
+      const dropWX = wrapWorld(ship.wx - Math.cos(ship.facing) * ejectDist);
+      const dropWY = wrapWorld(ship.wy - Math.sin(ship.facing) * ejectDist);
+
+      wreckSystem.addWreck(dropWX, dropWY, {
+        type: 'derelict',     // not 'debris' — avoids spawning extra scattered pieces
         tier: 1,
         size: 'scattered',
+        pickupCooldown: 1.5,  // 1.5 seconds before anyone can grab it
       });
       // Override the generated loot with our dropped item
       const droppedWreck = wreckSystem.wrecks[wreckSystem.wrecks.length - 1];

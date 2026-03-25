@@ -37,6 +37,7 @@ class Wreck {
     this.alive = true;
     this.looted = false;
     this.name = generateWreckName();
+    this.pickupCooldown = opts.pickupCooldown ?? 0;  // seconds before this wreck can be looted
 
     // Generate categorized loot via items.js (80/20 primary/secondary table)
     this.loot = generateLoot(this.type, this.tier, this.name);
@@ -90,6 +91,7 @@ export class WreckSystem {
 
     for (const wreck of this.wrecks) {
       if (!wreck.alive) continue;
+      if (wreck.pickupCooldown > 0) wreck.pickupCooldown -= dt;
       if (shouldCull(wreck.wx, wreck.wy, camX, camY, 0.3)) continue;
 
       const [fu, fv] = worldToFluidUV(wreck.wx, wreck.wy);
@@ -124,6 +126,7 @@ export class WreckSystem {
 
     for (const wreck of this.wrecks) {
       if (!wreck.alive || wreck.looted) continue;
+      if (wreck.pickupCooldown > 0) continue;  // recently dropped — can't grab yet
       const dist = worldDistance(shipWX, shipWY, wreck.wx, wreck.wy);
       if (dist < cfg.pickupRadius) {
         wreck.looted = true;
