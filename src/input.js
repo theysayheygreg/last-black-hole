@@ -121,11 +121,12 @@ export class InputManager {
     return false;
   }
 
-  /** Inventory toggle. (Tab or I key, or gamepad Select/Share — button 8) */
+  /** Inventory toggle. (Tab or I key, or gamepad Touchpad — button 17 on DualSense) */
   get inventoryPressed() {
     if (this._keys['Tab'] || this._keys['KeyI']) return true;
     const gp = this._getGamepad();
-    // Button 8 = Select/Share on DualSense
+    // Button 17 = touchpad click on DualSense. Fallback: button 8 = Share/Create.
+    if (gp && gp.buttons.length > 17 && gp.buttons[17].pressed) return true;
     if (gp && gp.buttons.length > 8 && gp.buttons[8].pressed) return true;
     return false;
   }
