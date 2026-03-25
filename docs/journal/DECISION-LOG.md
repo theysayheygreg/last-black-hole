@@ -17,6 +17,35 @@ Each decision has:
 
 ---
 
+## Star Clearing: Physics vs Visual Density (2026-03-25)
+
+**Question:** Should stars inject negative visual density to create a clearing bubble?
+
+**Context:** Stars push fluid outward (negative gravity). They also injected `-cfg.clearing` into the visual density buffer every tick to create a visible dark zone. This negative density accumulated and was interpreted by the display shader's `liveSpace` calculation, which multiplies all well ring/halo contributions. Wells near stars (W0/W2 on the 3×3 map) had their accretion visuals suppressed to near-invisible.
+
+**Root cause:** The visual density buffer is a single shared RGB channel. Negative injectors (stars) stomp on positive signals (well rings, wreck glow). No isolation between systems.
+
+**Where it landed:** Remove the negative visual splat. The physics push already creates a natural low-density clearing — the visual shortcut was redundant and harmful. Visual density buffer is now purely additive (positive signals only). If we need per-system visual channels later, option B (separate buffers) is on the table.
+
+**Door status:** Open for option B if other cross-talk issues emerge.
+
+---
+
+## Inventory Equip/Load Path (2026-03-25)
+
+**Question:** How should equippable artifacts and consumables move from cargo to their active slots?
+
+**Options considered:**
+- A) Submenu on confirm (select action from list)
+- B) Auto-dispatch: confirm on equippable → equip, consumable → load, other → drop
+- C) Separate keybind for equip vs drop
+
+**Where it landed:** B. Confirm does the right thing based on item subcategory. If target slots are full, swaps with slot 0. Simplest UX that works — no submenu, no extra keybinds. Action hints in the HUD update to show `[equip]`/`[load]`/`[drop]` so the player knows what will happen.
+
+**Door status:** Closed for now. May revisit if we add more slot types or the swap-with-0 feels wrong.
+
+---
+
 ## Shader Distance Units (2026-03-25)
 
 **Question:** What unit space should the display shader's per-well distance calculation use?

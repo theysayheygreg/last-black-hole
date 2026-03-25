@@ -29,8 +29,16 @@ The coordinate system is a tax that keeps getting collected. This is the third r
 
 Also flagged: ring screen coverage scales with WORLD_SCALE. The 10×10 mega-well's ring fills 126% of the visible area. Mathematically correct, possibly wrong for gameplay feel. Open design question for today.
 
+Then Codex flagged two real gaps: no UI path to equip artifacts or load consumables from cargo, and item effects were metadata-only. Built the smart confirm (auto-equip/load based on subcategory), wired `showKillRadii` as the first real equippable effect and `shieldBurst` as the first real consumable.
+
+Final bug of the day: W0 and W2 still looked suppressed even after the shader fixes. Traced it to stars injecting negative visual density every frame as a "clearing bubble." The accumulated negative density in the shared visual buffer was driving `liveSpace` to zero near Star 0, which happened to be ~0.67 world units from both W0 and W2. Removed the negative splat — the physics push already creates the clearing naturally.
+
+Broader observation: the visual density buffer is fragile because it's a single shared channel. Negative injectors stomp positive signals. Worth considering separate buffers per system if more cross-talk emerges.
+
 ### Commits
 - `96d95ab` — Fix: toroidal wrapping + world-space distance in display shader
+- `924a1ac` — Docs: Week 2 Day 1 devlog
+- `6c04bcb` — L1: wire equip/load/use loop, fix star clearing suppressing well rings
 
 ---
 

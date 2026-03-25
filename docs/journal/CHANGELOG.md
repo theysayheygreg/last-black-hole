@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-03-25 Inventory Wiring + Star Visual Fix
+
+### Gameplay
+- **Inventory equip/load loop** — confirm on cargo equippable auto-equips to first open slot (or swaps slot 0). Consumables auto-load to hotbar. Action hints show `[equip]`/`[load]`/`[drop]` per item type.
+- **showKillRadii effect** (equippable artifact) — dashed red circles at well kill zones during gameplay. First real equippable effect.
+- **shieldBurst effect** (consumable) — survive one well contact. Pulsing blue shield ring indicator. First real consumable effect.
+- Other consumable effects have stub dispatchers (fire + consume but show "not yet implemented").
+
+### Bug Fixes
+- **Star clearing suppressing well rings** — stars injected negative visual density every frame (-0.2 per tick). This accumulated in the visual density buffer and drove `liveSpace` to zero near stars, suppressing ring/halo rendering for nearby wells. W0 and W2 on the 3×3 map were both ~0.67 world units from Star 0 — inside the clearing bubble. Fix: removed the negative visual splat entirely. The star's outward push force already creates a natural low-density clearing zone via physics.
+
+### Why
+The star clearing was a visual shortcut that conflicted with well ring rendering. The visual density buffer is a shared channel — negative injectors can stomp on positive signals from other systems. Removing the shortcut and relying on physics for the clearing effect eliminates the cross-talk.
+
+---
+
 ## 2026-03-25 Shader Distance & Toroidal Wrapping Fixes
 
 ### Bug Fixes
