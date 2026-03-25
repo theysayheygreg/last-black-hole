@@ -18,9 +18,11 @@ const {
 
 const htmlFile = process.argv[2] || 'index-a.html';
 const FIXTURES = [
-  { name: 'title', expectedWells: 1, timesMs: [500, 2000, 5000] },
-  { name: 'singleWell', expectedWells: 1, timesMs: [500, 2000, 5000] },
-  { name: 'interference', expectedWells: 2, timesMs: [500, 2000, 5000] },
+  { name: 'title', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000] },
+  { name: 'singleWell', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000] },
+  { name: 'interference', expectedWells: 2, minFps: 10, timesMs: [500, 2000, 5000] },
+  { name: 'singleWell5x5', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
+  { name: 'interference10x10', expectedWells: 2, minFps: 5, timesMs: [500, 2000, 5000] },
 ];
 
 function sleep(ms) {
@@ -57,7 +59,7 @@ async function captureFixture(page, outputDir, fixture) {
   const fpsAtStart = await page.evaluate(() => window.__TEST_API.getFPS());
   assert(wellData.length === fixture.expectedWells,
     `Fixture '${fixture.name}' expected ${fixture.expectedWells} wells, got ${wellData.length}`);
-  assert(fpsAtStart > 10, `Fixture '${fixture.name}' FPS too low at start: ${fpsAtStart}`);
+  assert(fpsAtStart > fixture.minFps, `Fixture '${fixture.name}' FPS too low at start: ${fpsAtStart}`);
 
   const captures = [];
   let elapsed = 0;
@@ -95,6 +97,7 @@ async function captureFixture(page, outputDir, fixture) {
   return {
     name: fixture.name,
     expectedWells: fixture.expectedWells,
+    minFps: fixture.minFps,
     wells: wellData,
     captures,
     debugPath,

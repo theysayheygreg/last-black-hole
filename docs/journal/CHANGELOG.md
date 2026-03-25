@@ -397,3 +397,17 @@ The remaining gameplay failure was not topology anymore. It was honesty. The shi
 
 ### Why
 Today’s review surfaced two real gameplay bugs and one false-confidence problem. Dropped wrecks were drifting different distances at different frame rates, keyboard Escape did not actually perform the documented inventory-close action, and two inventory tests were claiming coverage they did not provide. This pass fixes the behavior and makes the test suite earn its green status.
+
+## 2026-03-25 (Week 2 Day 1: Renderer Scale Coverage)
+
+### src/ — Modified
+- **maps/renderer-fixtures.js** — Adds a `5x5` single-well fixture and a `10x10` interference fixture so renderer captures cover large-map scaling, not just the 3x3 reference view.
+
+### tests/ — Modified
+- **renderer.js** — Expands the harness to capture both new fixtures and adds per-fixture FPS floors so large-map captures are judged on honest expectations.
+
+### docs/ — Modified
+- **reference/RENDERER-HARNESS.md** — Documents the larger-map fixtures and their purpose.
+
+### Why
+The recent shader and coordinate fixes were specifically about UV/world conversion, toroidal wrapping, and large-map behavior, but the renderer harness only exercised 3x3 scenes. This pass adds enough 5x5 and 10x10 coverage to catch scaling regressions before they hide behind a green test run.

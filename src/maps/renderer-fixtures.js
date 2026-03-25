@@ -76,8 +76,46 @@ export const FIXTURE_INTERFERENCE = {
   planetoids: [],
 };
 
+export const FIXTURE_SINGLE_WELL_5X5 = {
+  name: 'Renderer 5x5 Single Well Fixture',
+  worldScale: 5.0,
+  camera: 'locked',
+  wells: [
+    {
+      x: 2.5, y: 2.5,
+      mass: 1.35,
+      orbitalDir: 1,
+      killRadius: 0.055,
+      spinRate: 0.75,
+      points: 8,
+      accretionRadius: 0.03,
+    },
+  ],
+  stars: [],
+  loot: [],
+  wrecks: [],
+  planetoids: [],
+};
+
+export const FIXTURE_INTERFERENCE_10X10 = {
+  name: 'Renderer 10x10 Interference Fixture',
+  worldScale: 10.0,
+  fluidResolution: 512,
+  camera: 'locked',
+  wells: [
+    { x: 4.7, y: 5.0, mass: 1.3, orbitalDir: 1, killRadius: 0.055, spinRate: 0.7, points: 8, accretionRadius: 0.03 },
+    { x: 5.3, y: 5.0, mass: 1.05, orbitalDir: -1, killRadius: 0.048, spinRate: 0.9, points: 8, accretionRadius: 0.028 },
+  ],
+  stars: [],
+  loot: [],
+  wrecks: [],
+  planetoids: [],
+};
+
 export const RENDERER_FIXTURES = {
   title: FIXTURE_TITLE,
   singleWell: FIXTURE_SINGLE_WELL,
   interference: FIXTURE_INTERFERENCE,
+  singleWell5x5: FIXTURE_SINGLE_WELL_5X5,
+  interference10x10: FIXTURE_INTERFERENCE_10X10,
 };

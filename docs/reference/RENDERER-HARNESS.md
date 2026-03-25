@@ -10,11 +10,13 @@ Outputs land under:
 
 `/Users/theysayheygreg/clawd/projects/last-black-hole/tests/screenshots/renderer-<timestamp>/`
 
-Each run captures three deterministic fixtures:
+Each run captures five deterministic fixtures:
 
 - `title`
 - `singleWell`
 - `interference`
+- `singleWell5x5`
+- `interference10x10`
 
 For each fixture, the harness captures:
 
@@ -34,6 +36,7 @@ Use it to answer:
 - does the core stay dark
 - does the ring stay visible
 - do multiple wells interfere in a controlled way
+- do ring/core reads survive `5x5` and `10x10` world scaling
 - is the pre-ASCII image strong before glyph quantization
 
 Do not use the normal smoke or flow screenshots as renderer truth. Those are still health checks, not visual evaluation.
