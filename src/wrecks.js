@@ -7,7 +7,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldToFluidUV, worldToScreen, worldDistance, shouldCull, uvScale } from './coords.js';
+import { worldToFluidUV, worldToScreen, worldDistance, shouldCull, uvScale, wrapWorld } from './coords.js';
 import { generateLoot } from './items.js';
 
 // ---- Name generation ----
@@ -38,6 +38,10 @@ class Wreck {
     this.looted = false;
     this.name = generateWreckName();
     this.pickupCooldown = opts.pickupCooldown ?? 0;  // seconds before this wreck can be looted
+
+    // Drift velocity — used for ejected/dropped wrecks. Decays to zero.
+    this.vx = opts.vx ?? 0;
+    this.vy = opts.vy ?? 0;
 
     // Generate categorized loot via items.js (80/20 primary/secondary table)
     this.loot = generateLoot(this.type, this.tier, this.name);
@@ -92,6 +96,21 @@ export class WreckSystem {
     for (const wreck of this.wrecks) {
       if (!wreck.alive) continue;
       if (wreck.pickupCooldown > 0) wreck.pickupCooldown -= dt;
+
+      // Drift: ejected wrecks move and decelerate
+      if (wreck.vx !== 0 || wreck.vy !== 0) {
+        wreck.wx = wrapWorld(wreck.wx + wreck.vx * dt);
+        wreck.wy = wrapWorld(wreck.wy + wreck.vy * dt);
+        // Drag: decay to zero over ~1 second
+        const drag = 0.04;
+        wreck.vx *= (1 - drag);
+        wreck.vy *= (1 - drag);
+        if (Math.abs(wreck.vx) < 0.001 && Math.abs(wreck.vy) < 0.001) {
+          wreck.vx = 0;
+          wreck.vy = 0;
+        }
+      }
+
       if (shouldCull(wreck.wx, wreck.wy, camX, camY, 0.3)) continue;
 
       const [fu, fv] = worldToFluidUV(wreck.wx, wreck.wy);

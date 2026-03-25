@@ -250,19 +250,29 @@ function init() {
   setDropCallback((slotIndex) => {
     const item = inventorySystem.dropFromCargo(slotIndex);
     if (item) {
-      // Eject the wreck behind the ship so it's not immediately re-picked-up.
-      // Offset = 0.12 world-units opposite to ship facing (just outside pickup radius of 0.08).
-      const ejectDist = 0.12;
-      const dropWX = wrapWorld(ship.wx - Math.cos(ship.facing) * ejectDist);
-      const dropWY = wrapWorld(ship.wy - Math.sin(ship.facing) * ejectDist);
+      // Eject in a random non-forward direction. Pick a random angle in the
+      // rear hemisphere (90°-270° relative to ship facing) so it never drops
+      // in front of you where you're headed.
+      const pickupRadius = CONFIG.wrecks.pickupRadius;
+      const ejectDist = pickupRadius * 2.5;  // guaranteed well outside pickup range
+      const rearAngle = ship.facing + Math.PI + (Math.random() - 0.5) * Math.PI; // ±90° from behind
+      const dropWX = wrapWorld(ship.wx + Math.cos(rearAngle) * ejectDist);
+      const dropWY = wrapWorld(ship.wy + Math.sin(rearAngle) * ejectDist);
+
+      // Give it ejection velocity so it drifts further away even if you're
+      // moving backward (e.g., being pulled into a well while facing away).
+      const ejectSpeed = 0.3;  // world-units/s — brisk shove, decays via drag in wrecks.js
+      const ejectVX = Math.cos(rearAngle) * ejectSpeed;
+      const ejectVY = Math.sin(rearAngle) * ejectSpeed;
 
       wreckSystem.addWreck(dropWX, dropWY, {
-        type: 'derelict',     // not 'debris' — avoids spawning extra scattered pieces
+        type: 'derelict',
         tier: 1,
         size: 'scattered',
-        pickupCooldown: 1.5,  // 1.5 seconds before anyone can grab it
+        pickupCooldown: 1.5,
+        vx: ejectVX,
+        vy: ejectVY,
       });
-      // Override the generated loot with our dropped item
       const droppedWreck = wreckSystem.wrecks[wreckSystem.wrecks.length - 1];
       droppedWreck.loot = [item];
       droppedWreck.name = `dropped: ${item.name}`;
