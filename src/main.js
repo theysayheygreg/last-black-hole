@@ -233,6 +233,10 @@ function init() {
       getRendererView: () => asciiRenderer.getViewMode(),
       get gamePhase() { return gamePhase; },
       set gamePhase(p) { gamePhase = p; },
+      inventorySystem,
+      scavengerSystem,
+      combatSystem,
+      currentSignature,
     }));
   }
 

@@ -99,6 +99,52 @@ export function initTestAPI(getState) {
       if (startGame && mapList && mapList.length > 0) startGame(mapList[0]);
       else if (startGame) startGame(getState().currentMap);
     },
+
+    // ---- Inventory API ----
+
+    getInventory() {
+      const { inventorySystem } = getState();
+      if (!inventorySystem) return null;
+      return {
+        cargo: inventorySystem.cargo.map(i => i ? { ...i } : null),
+        cargoCount: inventorySystem.cargoCount,
+        cargoMax: inventorySystem.cargoMax,
+        cargoFull: inventorySystem.cargoFull,
+        equipped: inventorySystem.equipped.map(i => i ? { ...i } : null),
+        consumables: inventorySystem.consumables.map(i => i ? { ...i } : null),
+        cargoValue: inventorySystem.getCargoValue(),
+      };
+    },
+
+    dropFromCargo(slotIndex) {
+      const { inventorySystem } = getState();
+      if (!inventorySystem) return null;
+      return inventorySystem.dropFromCargo(slotIndex);
+    },
+
+    getScavengers() {
+      const { scavengerSystem } = getState();
+      if (!scavengerSystem) return [];
+      return scavengerSystem.scavengers.map(s => ({
+        wx: s.wx, wy: s.wy, alive: s.alive, archetype: s.archetype,
+        state: s.state, lootCount: s.lootCount,
+      }));
+    },
+
+    getCombatState() {
+      const { combatSystem } = getState();
+      if (!combatSystem) return null;
+      return {
+        playerCooldown: combatSystem.playerCooldown,
+        playerReady: combatSystem.playerReady,
+        wellDisruptions: combatSystem.wellDisruptions.length,
+      };
+    },
+
+    getSignature() {
+      const { currentSignature } = getState();
+      return currentSignature ? { name: currentSignature.name, mechanical: currentSignature.mechanical } : null;
+    },
   };
 
   window.CONFIG = CONFIG;
