@@ -83,6 +83,7 @@ const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
 // Run state
 const simState = createSimState();
 let inventoryOpen = false;  // Tab toggle state
+let shieldActive = false;   // shieldBurst consumable — survive one well contact
 
 // Scene transition state
 let transitionActive = false;
@@ -383,6 +384,7 @@ function loadScene(map) {
   // 4. Reset gameplay state
   inventorySystem.clearCargo();
   inventoryOpen = false;
+  shieldActive = false;
   waveRings.rings = [];
   scavengerSystem.scavengers = [];
   combatSystem.playerCooldown = 0;
@@ -566,6 +568,31 @@ function togglePause() {
   }
 }
 
+// ---- Consumable effect dispatch ----
+
+function applyConsumableEffect(effectId) {
+  switch (effectId) {
+    case 'shieldBurst':
+      shieldActive = true;
+      showWarning('shield active — survive one well contact', 'rgba(100, 200, 255, 0.95)', 3000);
+      break;
+    case 'timeSlowLocal':
+      // TODO: slow dt for ship for 3s
+      showWarning('time slow — not yet implemented', 'rgba(200, 160, 255, 0.9)', 2000);
+      break;
+    case 'signalPurge':
+      // TODO: drop signal to 0
+      showWarning('signal purge — not yet implemented', 'rgba(200, 160, 255, 0.9)', 2000);
+      break;
+    case 'breachFlare':
+      // TODO: spawn temporary portal
+      showWarning('breach flare — not yet implemented', 'rgba(200, 160, 255, 0.9)', 2000);
+      break;
+    default:
+      showWarning(`used: ${effectId}`, 'rgba(200, 160, 255, 0.9)', 2000);
+  }
+}
+
 function gameLoop(now) {
   if (!running) return;
 
@@ -701,11 +728,11 @@ function gameLoop(now) {
       // Consumable hotkeys (d-pad left/right or 1/2) — only when inventory closed
       if (!inventoryOpen && consumable1Now && !_prevConsumable1) {
         const effect = inventorySystem.useConsumable(0);
-        if (effect) showWarning(`used: ${inventorySystem.usedConsumables[0]?.name || 'consumable'}`, 'rgba(200, 160, 255, 0.9)', 2000);
+        if (effect) applyConsumableEffect(effect);
       }
       if (!inventoryOpen && consumable2Now && !_prevConsumable2) {
         const effect = inventorySystem.useConsumable(1);
-        if (effect) showWarning(`used: ${inventorySystem.usedConsumables[0]?.name || 'consumable'}`, 'rgba(200, 160, 255, 0.9)', 2000);
+        if (effect) applyConsumableEffect(effect);
       }
 
       // Wreck pickup (blocked if cargo full)
@@ -742,11 +769,17 @@ function gameLoop(now) {
 
       const killingWell = wellSystem.checkDeath(ship.wx, ship.wy);
       if (killingWell) {
-        gamePhase = 'dead';
-        deathTimer = 0;
-        freezeRunEnd(simState);
-        ship.setThrust(false);
-        audioEngine.playEvent('death');
+        // Shield burst: survive one well contact
+        if (shieldActive) {
+          shieldActive = false;
+          showWarning('shield absorbed!', 'rgba(100, 200, 255, 0.95)', 2000);
+        } else {
+          gamePhase = 'dead';
+          deathTimer = 0;
+          freezeRunEnd(simState);
+          ship.setThrust(false);
+          audioEngine.playEvent('death');
+        }
       }
 
       if (gamePhase === 'playing') {
@@ -838,6 +871,36 @@ function gameLoop(now) {
     scavengerSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
+
+    // Equippable effect: showKillRadii — draw kill zone circles during gameplay
+    if (inventorySystem.hasEffect('showKillRadii')) {
+      const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
+      const ppw = overlayCanvas.width / WORLD_SCALE;
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      for (let i = 0; i < wellData.length; i++) {
+        const kr = wellSystem.wells[i].killRadius * ppw;
+        ctx.strokeStyle = 'rgba(255, 60, 60, 0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(wellData[i].x, wellData[i].y, kr, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // Shield burst indicator
+    if (shieldActive) {
+      const shipScreen = worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      ctx.save();
+      ctx.strokeStyle = `rgba(100, 200, 255, ${0.4 + 0.3 * Math.sin(totalTime * 4)})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(shipScreen[0], shipScreen[1], 18, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Signature display — first 4 seconds of run
     if (currentSignature && simState.runElapsedTime < 4.0) {

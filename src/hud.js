@@ -346,16 +346,42 @@ export function inventoryCursorDown() {
 
 /**
  * Confirm action on current cursor slot.
- * Cargo items: drop. Equipped: unequip to cargo. Consumable: remove to cargo.
+ * Cargo equippable → equip. Cargo consumable → load hotbar. Cargo other → drop.
+ * Equipped → unequip to cargo. Consumable → remove to cargo.
  * @param {InventorySystem} inv
  */
 export function inventoryConfirm(inv) {
   if (!inv) return;
 
   if (_invCursor < 8) {
-    // Cargo slot — drop item
-    if (_dropCallback && inv.cargo[_invCursor]) {
-      _dropCallback(_invCursor);
+    const item = inv.cargo[_invCursor];
+    if (!item) return;
+
+    if (item.subcategory === 'equippable') {
+      // Auto-equip to first open slot, or swap with slot 0
+      const openSlot = inv.equipped.indexOf(null);
+      if (openSlot !== -1) {
+        inv.removeFromCargo(_invCursor);
+        inv.equip(openSlot, item);
+      } else {
+        // Both slots full — swap with slot 0
+        const prev = inv.equip(0, item);
+        inv.cargo[_invCursor] = prev;  // put old equip in the cargo slot
+      }
+    } else if (item.subcategory === 'consumable') {
+      // Auto-load to first open hotbar slot, or swap with slot 0
+      const openSlot = inv.consumables.indexOf(null);
+      if (openSlot !== -1) {
+        inv.removeFromCargo(_invCursor);
+        inv.loadConsumable(openSlot, item);
+      } else {
+        // Both slots full — swap with slot 0
+        const prev = inv.loadConsumable(0, item);
+        inv.cargo[_invCursor] = prev;
+      }
+    } else {
+      // Salvage/component/dataCore — drop
+      if (_dropCallback) _dropCallback(_invCursor);
     }
   } else if (_invCursor < 10) {
     // Equipped slot — unequip to cargo (if space)
@@ -399,7 +425,7 @@ function _renderInventoryPanel(inv) {
   const selStyle = 'border-left: 2px solid rgba(100, 150, 255, 0.8); padding-left: 6px; background: rgba(80, 120, 255, 0.12);';
 
   // ---- Cargo ----
-  let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}  ↑↓ select  X/space drop  Tab close</div>`;
+  let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}  ↑↓ select  X/space confirm  Tab close</div>`;
 
   for (let i = 0; i < inv.cargo.length; i++) {
     const isSel = (sel === i);
@@ -408,7 +434,10 @@ function _renderInventoryPanel(inv) {
     if (item) {
       const color = tierColors[item.tier] || catColors[item.category] || '#ccc';
       const catLabel = item.category === 'artifact' ? item.subcategory : (item.category || '');
-      const action = isSel ? '<span class="inv-drop">[drop]</span>' : '';
+      let actionLabel = 'drop';
+      if (item.subcategory === 'equippable') actionLabel = 'equip';
+      else if (item.subcategory === 'consumable') actionLabel = 'load';
+      const action = isSel ? `<span class="inv-drop">[${actionLabel}]</span>` : '';
       html += `<div class="inv-item" style="${rowStyle}">
         <span class="inv-name" style="color:${color}">${item.name}</span>
         <span class="inv-cat">${catLabel}</span>

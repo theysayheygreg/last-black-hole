@@ -50,10 +50,10 @@ export class StarSystem {
         cfg.fluidTerminalSpeed * s
       );
 
-      // Clearing bubble — visual only (stays centered, not advected by outflow)
-      // 0.13 converts clearing CONFIG value to UV-space bubble radius
-      const clearingRadius = cfg.clearing * 0.13 * s2;  // UV-space, scaled by s2
-      fluid.visualSplat(fu, fv, clearingRadius, -cfg.clearing, -cfg.clearing, -cfg.clearing);
+      // No negative visual density injection. The outward push force naturally
+      // creates a low-density clearing around the star. Negative visual splats
+      // were removed because they accumulated over time and suppressed nearby
+      // well ring visuals via the liveSpace multiplier (see fluid.js display shader).
 
       // Bright core — visual only (doesn't affect dissipation)
       // 0.025 converts coreBrightness CONFIG value to UV-space core radius
@@ -63,9 +63,6 @@ export class StarSystem {
         cfg.coreBrightness * 0.95,
         cfg.coreBrightness * 0.6
       );
-
-      // Keep star visuals cheap in the sim. The overlay renderer already draws
-      // the richer spike pattern, so the fluid layer only needs the core read.
     }
   }
 
