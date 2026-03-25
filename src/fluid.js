@@ -325,10 +325,12 @@ void main() {
     // Main accretion band. This is the bright read, not the whole well.
     col += ringColor * localRing * 1.16 * ringBias * localLive;
 
-    // Surf hint just outside the ring: where tangential motion is strongest,
-    // add a cool directional band instead of more brightness.
-    float surfBand = smoothstep(ringOuter * 1.5, ringOuter * 1.04, dist)
-                   * (1.0 - smoothstep(ringOuter * 2.7, ringOuter * 1.5, dist));
+    // Surf hint just outside the ring: cool directional band where tangential
+    // motion is strongest. Visible between outer*1.04 and outer*2.7.
+    // Inner edge: fades IN from 0 at outer*1.04 to 1 at outer*1.5
+    // Outer edge: fades OUT from 1 at outer*1.5 to 0 at outer*2.7
+    float surfBand = smoothstep(ringOuter * 1.04, ringOuter * 1.5, dist)
+                   * (1.0 - smoothstep(ringOuter * 1.5, ringOuter * 2.7, dist));
     float surfHint = surfBand * smoothstep(0.012, 0.055, speed) * mix(0.45, 1.0, tangentialAlignment);
     col += vec3(0.05, 0.22, 0.3) * surfHint * 1.45 * localLive;
 
