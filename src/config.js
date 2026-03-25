@@ -17,7 +17,7 @@
  *
  * SHADER DISTANCE RULE:
  *   The display shader converts UV distance to world-equivalent via:
- *     float dist = length(diff_uv) / uvS;  where uvS = 3.0 / u_worldScale
+ *     float dist = length(diff_uv) / uvS;  where uvS = u_refScale / u_worldScale
  *   Any shape/radius values passed as uniforms must be in world-space (not UV)
  *   so they compare correctly against dist. See wells.getRenderShapes().
  *

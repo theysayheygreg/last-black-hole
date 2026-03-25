@@ -188,6 +188,24 @@ export function uvScale() {
   return FLUID_REF_SCALE / WORLD_SCALE;
 }
 
+/**
+ * Get both UV scaling factors for fluid.splat() calls.
+ * Returns { s, s2 } where:
+ *   s  = uvScale()      — multiply force magnitudes and UV offsets by this
+ *   s2 = uvScale() ** 2 — multiply splat radii (areas) by this
+ *
+ * This is the GPU SPLAT SCALING RULE in one call. Every system that injects
+ * into the fluid sim should use this instead of computing s/s2 inline.
+ *
+ * Usage:
+ *   const { s, s2 } = splatScale();
+ *   fluid.splat(u, v, forceX * s, forceY * s, radius * s2, r, g, b);
+ */
+export function splatScale() {
+  const s = FLUID_REF_SCALE / WORLD_SCALE;
+  return { s, s2: s * s };
+}
+
 // ---- Entity culling ----
 
 /**

@@ -9,7 +9,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE } from './coords.js';
+import { WORLD_SCALE, FLUID_REF_SCALE } from './coords.js';
 
 // ---- Shader sources ----
 
@@ -225,7 +225,8 @@ uniform float u_densityScale;
 uniform float u_gravityScale;
 // Camera offset in fluid UV space and world scale
 uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
-uniform float u_worldScale;    // fraction of fluid texture visible (1/3 = one screen)
+uniform float u_worldScale;    // WORLD_SCALE from coords.js — how many world-units map to the full texture
+uniform float u_refScale;      // FLUID_REF_SCALE from coords.js — the scale all UV params were tuned at (3.0)
 uniform float u_time;          // elapsed time in seconds (for shimmer noise)
 
 in vec2 v_uv;
@@ -245,10 +246,11 @@ void main() {
   vec3 posVis = max(visDens, vec3(0.0));
   vec3 negVis = max(-visDens, vec3(0.0));
   // Normalize UV velocity to world-equivalent speed (calibrated at WORLD_SCALE=3)
-  float speed = length(vel) * u_worldScale / 3.0;
+  float speed = length(vel) * u_worldScale / u_refScale;
 
-  // Scale UV distances to world-equivalent so glow matches across map sizes
-  float uvS = 3.0 / u_worldScale;
+  // Scale UV distances to world-equivalent so glow matches across map sizes.
+  // uvS = FLUID_REF_SCALE / WORLD_SCALE — same as coords.js uvScale().
+  float uvS = u_refScale / u_worldScale;
 
   // === PRIMARY SCENE SIGNALS ===
   // Physical density = background fabric excitation.
@@ -703,7 +705,7 @@ export class FluidSim {
       gl.uniform1f(u['u_farDissipation'], CONFIG.fluid.farDissipation);
       // Dissipation radii are tuned for WORLD_SCALE=3 (uvScale=1). Scale them
       // so the same world-space zone applies on larger maps where UV distances shrink.
-      const dissipScale = 3.0 / WORLD_SCALE;
+      const dissipScale = FLUID_REF_SCALE / WORLD_SCALE;
       gl.uniform1f(u['u_nearRadius'], CONFIG.fluid.dissipationNearRadius * dissipScale);
       gl.uniform1f(u['u_farRadius'], CONFIG.fluid.dissipationFarRadius * dissipScale);
       const count = this._wellPositionsUV.length;
@@ -787,6 +789,7 @@ export class FluidSim {
     // Camera + time uniforms
     gl.uniform2f(u['u_camOffset'], camOffsetU, camOffsetV);
     gl.uniform1f(u['u_worldScale'], worldScale);
+    gl.uniform1f(u['u_refScale'], FLUID_REF_SCALE);
     gl.uniform1f(u['u_time'], totalTime);
 
     // Set well positions and masses for gravity field visualization
