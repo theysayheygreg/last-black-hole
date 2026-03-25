@@ -130,15 +130,19 @@ async function run() {
     });
 
     await runner.run('Pulse fires and enters cooldown', async () => {
-      // Fire pulse via direct key dispatch (Puppeteer key names differ from code)
-      await page.evaluate(() => {
-        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'e', bubbles: true }));
-      });
-      await sleep(200);
-      await page.evaluate(() => {
-        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', key: 'e', bubbles: true }));
-      });
-      await sleep(200);
+      // Fire pulse — try multiple times since edge detection needs a frame boundary
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await page.evaluate(() => {
+          window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyE', key: 'e', bubbles: true }));
+        });
+        await sleep(150);
+        await page.evaluate(() => {
+          window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyE', key: 'e', bubbles: true }));
+        });
+        await sleep(300);
+        const check = await page.evaluate(() => window.__TEST_API.getCombatState());
+        if (check.playerCooldown > 0) break;
+      }
       const combat = await page.evaluate(() => window.__TEST_API.getCombatState());
       assert(combat.playerCooldown > 0, `Expected cooldown after pulse, got ${combat.playerCooldown}`);
       assert(combat.playerReady === false, 'Expected pulse not ready after firing');

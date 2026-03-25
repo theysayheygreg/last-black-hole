@@ -9,6 +9,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { WORLD_SCALE } from './coords.js';
 
 // ---- Shader sources ----
 
@@ -700,8 +701,11 @@ export class FluidSim {
       gl.bindTexture(gl.TEXTURE_2D, this.density.read.tex);
       gl.uniform1f(u['u_nearDissipation'], CONFIG.fluid.nearDissipation);
       gl.uniform1f(u['u_farDissipation'], CONFIG.fluid.farDissipation);
-      gl.uniform1f(u['u_nearRadius'], CONFIG.fluid.dissipationNearRadius);
-      gl.uniform1f(u['u_farRadius'], CONFIG.fluid.dissipationFarRadius);
+      // Dissipation radii are tuned for WORLD_SCALE=3 (uvScale=1). Scale them
+      // so the same world-space zone applies on larger maps where UV distances shrink.
+      const dissipScale = 3.0 / WORLD_SCALE;
+      gl.uniform1f(u['u_nearRadius'], CONFIG.fluid.dissipationNearRadius * dissipScale);
+      gl.uniform1f(u['u_farRadius'], CONFIG.fluid.dissipationFarRadius * dissipScale);
       const count = this._wellPositionsUV.length;
       gl.uniform1i(u['u_wellCount'], count);
       for (let i = 0; i < count; i++) {

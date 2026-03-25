@@ -5,10 +5,21 @@
  *
  * UNIT CONVENTIONS:
  *   - World-space: 0 to WORLD_SCALE (3.0). Ship, entities, camera all use this.
- *   - Fluid UV:    0 to 1.0. The GPU sim texture. World ÷ 3 = UV.
+ *   - Fluid UV:    0 to 1.0. The GPU sim texture. World ÷ WORLD_SCALE = UV.
  *   - Pixels:      Screen coordinates. World × pxPerWorld() = pixels.
- *   - px/s²:       Ship thrust is kept in pixel-units for feel continuity
- *                   with the original 1x1 map, and converted at use-site.
+ *
+ * GPU SPLAT SCALING RULE:
+ *   When calling fluid.splat(), UV-space radii must be scaled by uvScale()²
+ *   (i.e. s2 = s * s where s = uvScale()). Force values scale by uvScale().
+ *   This ensures splats cover the same world-space area regardless of map size.
+ *   Every system follows this: wells, stars, loot, wrecks, ship wake, combat,
+ *   planetoids, wave rings. If you add a new splat call, apply s2 to radius.
+ *
+ * SHADER DISTANCE RULE:
+ *   The display shader converts UV distance to world-equivalent via:
+ *     float dist = length(diff_uv) / uvS;  where uvS = 3.0 / u_worldScale
+ *   Any shape/radius values passed as uniforms must be in world-space (not UV)
+ *   so they compare correctly against dist. See wells.getRenderShapes().
  *
  * KNOB HYGIENE: Only expose values that produce visible changes when moved.
  * Stability guards (clamp radii, terminal speeds) live here too so they're

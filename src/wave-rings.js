@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDirectionTo, worldToFluidUV } from './coords.js';
+import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDirectionTo, worldToFluidUV, uvScale } from './coords.js';
 import { waveBandForce, applyForceToShip } from './physics.js';
 
 class WaveRing {
@@ -90,8 +90,10 @@ export class WaveRingSystem {
         const vx = Math.cos(angle) * force;
         const vy = Math.sin(angle) * force;
 
-        // Cyan-white density
-        fluid.splat(px, py, vx, vy, 0.004,
+        // Cyan-white density — scale splat radius by uvScale² like every other system
+        const s = uvScale();
+        const s2 = s * s;
+        fluid.splat(px, py, vx * s, vy * s, 0.004 * s2,
           brightness * 0.3, brightness * 0.8, brightness);
       }
     }

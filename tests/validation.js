@@ -313,6 +313,46 @@ runner.run('Display and dissipation shader well arrays are same size', () => {
     `Display shader has [${allLimits[0]}] but dissipation shader has [${allLimits[1]}] — must match`);
 });
 
+// ---- 11. UV-space vs world-space sanity checks ----
+
+runner.run('UV-space CONFIG values are plausible (< 0.5)', () => {
+  // These are all UV-space radii/distances. If any exceed 0.5, something is probably
+  // in the wrong coordinate space (world-space leaking into UV config).
+  const uvValues = [
+    ['wells.accretionRadius', CONFIG.wells.accretionRadius],
+    ['wells.voidRadius', CONFIG.wells.voidRadius],
+    ['loot.glowRadius', CONFIG.loot.glowRadius],
+    ['loot.shimmerRadius', CONFIG.loot.shimmerRadius],
+    ['ship.wake.radius', CONFIG.ship.wake.radius],
+    ['ship.wake.splatSpacing', CONFIG.ship.wake.splatSpacing],
+    ['fluid.dissipationNearRadius', CONFIG.fluid.dissipationNearRadius],
+    ['fluid.dissipationFarRadius', CONFIG.fluid.dissipationFarRadius],
+    ['combat.pulseRadius', CONFIG.combat.pulseRadius],
+  ];
+  for (const [name, value] of uvValues) {
+    assert(value < 0.5,
+      `${name}=${value} looks too large for UV-space (expected < 0.5). Is this world-space?`);
+  }
+});
+
+runner.run('World-space CONFIG values are plausible (> 0.01)', () => {
+  // These are all world-space distances. If any are < 0.01, something might be
+  // in UV-space when it should be world-space.
+  const worldValues = [
+    ['wells.killRadius', CONFIG.wells.killRadius],
+    ['wells.maxRange', CONFIG.wells.maxRange],
+    ['portals.captureRadius', CONFIG.portals.captureRadius],
+    ['combat.pulseEntityRadius', CONFIG.combat.pulseEntityRadius],
+    ['wrecks.pickupRadius', CONFIG.wrecks.pickupRadius],
+    ['scavengers.bumpRadius', CONFIG.scavengers.bumpRadius],
+    ['scavengers.fleeWellDist', CONFIG.scavengers.fleeWellDist],
+  ];
+  for (const [name, value] of worldValues) {
+    assert(value > 0.01,
+      `${name}=${value} looks too small for world-space (expected > 0.01). Is this UV-space?`);
+  }
+});
+
 // ---- Done ----
 
 const screenshotPath = null; // no browser needed for this suite
