@@ -142,7 +142,11 @@ export class WellSystem {
    */
   getRenderShapes() {
     return this.wells.map(w => {
-      const accretionRef = Math.max(0.012, w.getAccretionRadius() * w.mass);
+      // accretionRadius is UV-space (0.023). Convert to world-space for the shader
+      // which compares against dist = length(diff_uv) / uvS (world-space).
+      const accretionUV = w.getAccretionRadius() * w.mass;
+      const accretionWorld = accretionUV * WORLD_SCALE;
+      const accretionRef = Math.max(0.036, accretionWorld);
       const coreRef = Math.max((w.killRadius / 3.0) * 1.08, accretionRef * 0.33);
       const ringInnerRef = Math.max(coreRef * 1.18, accretionRef * 0.72);
       const ringOuterRef = Math.max(ringInnerRef * 1.48, coreRef * 3.8, accretionRef * 2.2);
