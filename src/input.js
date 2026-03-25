@@ -87,6 +87,8 @@ export class InputManager {
     // --- Keyboard listeners ---
     window.addEventListener('keydown', (e) => {
       this._keys[e.code] = true;
+      // Prevent Tab from switching focus (must happen here, before browser default)
+      if (e.code === 'Tab') e.preventDefault();
     });
     window.addEventListener('keyup', (e) => {
       this._keys[e.code] = false;
@@ -119,11 +121,11 @@ export class InputManager {
     return false;
   }
 
-  /** Inventory toggle. (Tab key, or gamepad touchpad — button 13 on DualSense) */
+  /** Inventory toggle. (Tab or I key, or gamepad Select/Share — button 8) */
   get inventoryPressed() {
-    if (this._keys['Tab']) return true;
+    if (this._keys['Tab'] || this._keys['KeyI']) return true;
     const gp = this._getGamepad();
-    // Button 13 = touchpad on DualSense (some mappings). Fallback: Select/Share = button 8.
+    // Button 8 = Select/Share on DualSense
     if (gp && gp.buttons.length > 8 && gp.buttons[8].pressed) return true;
     return false;
   }
