@@ -23,7 +23,8 @@ import { InputManager } from './input.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
-import { initHUD, showHUD, hideHUD, updateHUD, showWarning, setDropCallback } from './hud.js';
+import { initHUD, showHUD, hideHUD, updateHUD, showWarning, setDropCallback,
+         resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
@@ -640,7 +641,10 @@ function gameLoop(now) {
     // 5. Wave ring forces on ship
     waveRings.applyToShip(ship);
 
-    inputManager.applyToShip(ship);
+    // Suppress ship input while inventory is open (don't fly into a well while sorting loot)
+    if (!inventoryOpen) {
+      inputManager.applyToShip(ship);
+    }
 
     // 6. Ship update
     if (gamePhase === 'playing') {
@@ -656,17 +660,29 @@ function gameLoop(now) {
         }
       }
 
-      // Inventory toggle (Tab / touchpad)
+      // Inventory toggle (Tab / I / Select)
       if (inventoryNow && !_prevInventory) {
         inventoryOpen = !inventoryOpen;
+        if (inventoryOpen) resetInventoryCursor();
+      }
+      // Also close inventory with Cancel (Circle / Escape) when open
+      if (inventoryOpen && backNow && !_prevBack) {
+        inventoryOpen = false;
       }
 
-      // Consumable hotkeys (d-pad left/right or 1/2)
-      if (consumable1Now && !_prevConsumable1) {
+      // Inventory navigation (when open, up/down/confirm drive cursor)
+      if (inventoryOpen) {
+        if (upNow && !_prevUp) inventoryCursorUp();
+        if (downNow && !_prevDown) inventoryCursorDown();
+        if (confirmNow && !_prevConfirm) inventoryConfirm(inventorySystem);
+      }
+
+      // Consumable hotkeys (d-pad left/right or 1/2) — only when inventory closed
+      if (!inventoryOpen && consumable1Now && !_prevConsumable1) {
         const effect = inventorySystem.useConsumable(0);
         if (effect) showWarning(`used: ${inventorySystem.usedConsumables[0]?.name || 'consumable'}`, 'rgba(200, 160, 255, 0.9)', 2000);
       }
-      if (consumable2Now && !_prevConsumable2) {
+      if (!inventoryOpen && consumable2Now && !_prevConsumable2) {
         const effect = inventorySystem.useConsumable(1);
         if (effect) showWarning(`used: ${inventorySystem.usedConsumables[0]?.name || 'consumable'}`, 'rgba(200, 160, 255, 0.9)', 2000);
       }

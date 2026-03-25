@@ -26,6 +26,10 @@ let _dropCallback = null;  // set by main.js for drop handling
 let _lastPortalCount = -1;
 let _lastCollapseStr = '';
 
+// Inventory selection state
+let _invCursor = 0;          // which slot is selected (0-7 = cargo, 8-9 = equipped, 10-11 = consumable)
+let _invTotalSlots = 12;     // 8 cargo + 2 equip + 2 consumable
+
 export function initHUD() {
   _hudEl = document.getElementById('hud');
   _collapseTimerEl = document.getElementById('hud-collapse-timer');
@@ -318,11 +322,58 @@ function _updatePortalArrow(ship, portalSystem, camX, camY, canvasW, canvasH) {
 }
 
 /**
- * Set callback for when player clicks "drop" in inventory panel.
+ * Set callback for when player drops from inventory.
  * @param {function(slotIndex: number)} fn
  */
 export function setDropCallback(fn) {
   _dropCallback = fn;
+}
+
+/** Reset inventory cursor to slot 0. Call when inventory opens. */
+export function resetInventoryCursor() {
+  _invCursor = 0;
+}
+
+/** Move inventory cursor up. */
+export function inventoryCursorUp() {
+  _invCursor = (_invCursor - 1 + _invTotalSlots) % _invTotalSlots;
+}
+
+/** Move inventory cursor down. */
+export function inventoryCursorDown() {
+  _invCursor = (_invCursor + 1) % _invTotalSlots;
+}
+
+/**
+ * Confirm action on current cursor slot.
+ * Cargo items: drop. Equipped: unequip to cargo. Consumable: remove to cargo.
+ * @param {InventorySystem} inv
+ */
+export function inventoryConfirm(inv) {
+  if (!inv) return;
+
+  if (_invCursor < 8) {
+    // Cargo slot — drop item
+    if (_dropCallback && inv.cargo[_invCursor]) {
+      _dropCallback(_invCursor);
+    }
+  } else if (_invCursor < 10) {
+    // Equipped slot — unequip to cargo (if space)
+    const equipIdx = _invCursor - 8;
+    const item = inv.equipped[equipIdx];
+    if (item && !inv.cargoFull) {
+      inv.unequip(equipIdx);
+      inv.addToCargo(item);
+    }
+  } else {
+    // Consumable slot — remove to cargo (if space)
+    const conIdx = _invCursor - 10;
+    const item = inv.consumables[conIdx];
+    if (item && !inv.cargoFull) {
+      inv.consumables[conIdx] = null;
+      inv.addToCargo(item);
+    }
+  }
 }
 
 /**
@@ -331,7 +382,6 @@ export function setDropCallback(fn) {
 function _renderInventoryPanel(inv) {
   if (!_inventoryPanelEl) return;
 
-  // Import colors dynamically to avoid circular deps
   const catColors = {
     salvage: 'rgba(180, 180, 190, 0.9)',
     component: 'rgba(100, 200, 255, 0.9)',
@@ -345,56 +395,63 @@ function _renderInventoryPanel(inv) {
     unique: 'rgba(255, 215, 0, 0.95)',
   };
 
-  let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}</div>`;
+  const sel = _invCursor;
+  const selStyle = 'border-left: 2px solid rgba(100, 150, 255, 0.8); padding-left: 6px; background: rgba(80, 120, 255, 0.12);';
+
+  // ---- Cargo ----
+  let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}  ↑↓ select  X/space drop  Tab close</div>`;
 
   for (let i = 0; i < inv.cargo.length; i++) {
+    const isSel = (sel === i);
     const item = inv.cargo[i];
+    const rowStyle = isSel ? selStyle : '';
     if (item) {
       const color = tierColors[item.tier] || catColors[item.category] || '#ccc';
       const catLabel = item.category === 'artifact' ? item.subcategory : (item.category || '');
-      html += `<div class="inv-item">
+      const action = isSel ? '<span class="inv-drop">[drop]</span>' : '';
+      html += `<div class="inv-item" style="${rowStyle}">
         <span class="inv-name" style="color:${color}">${item.name}</span>
         <span class="inv-cat">${catLabel}</span>
-        <span class="inv-drop" data-slot="${i}">[drop]</span>
+        ${action}
       </div>`;
     } else {
-      html += `<div class="inv-item"><span class="inv-empty">— empty —</span></div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">— empty —</span></div>`;
     }
   }
 
-  // Equipped section
+  // ---- Equipped ----
   html += `<div class="inv-section"><div class="inv-header">equipped</div>`;
   for (let i = 0; i < inv.equipped.length; i++) {
+    const globalIdx = 8 + i;
+    const isSel = (sel === globalIdx);
     const item = inv.equipped[i];
+    const rowStyle = isSel ? selStyle : '';
     if (item) {
-      html += `<div class="inv-item"><span class="inv-name" style="color:${tierColors[item.tier] || '#ccc'}">${item.name}</span><span class="inv-cat">${item.effectDesc || ''}</span></div>`;
+      const action = isSel ? '<span class="inv-drop">[unequip]</span>' : '';
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${tierColors[item.tier] || '#ccc'}">${item.name}</span><span class="inv-cat">${item.effectDesc || ''}</span>${action}</div>`;
     } else {
-      html += `<div class="inv-item"><span class="inv-empty">— empty slot —</span></div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">— empty slot —</span></div>`;
     }
   }
   html += '</div>';
 
-  // Consumables section
+  // ---- Consumables ----
   html += `<div class="inv-section"><div class="inv-header">consumables [1] [2]</div>`;
   for (let i = 0; i < inv.consumables.length; i++) {
+    const globalIdx = 10 + i;
+    const isSel = (sel === globalIdx);
     const item = inv.consumables[i];
+    const rowStyle = isSel ? selStyle : '';
     if (item) {
-      html += `<div class="inv-item"><span class="inv-name" style="color:${tierColors[item.tier] || '#ccc'}">[${i + 1}] ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span></div>`;
+      const action = isSel ? '<span class="inv-drop">[remove]</span>' : '';
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${tierColors[item.tier] || '#ccc'}">[${i + 1}] ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
     } else {
-      html += `<div class="inv-item"><span class="inv-empty">[${i + 1}] — empty —</span></div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">[${i + 1}] — empty —</span></div>`;
     }
   }
   html += '</div>';
 
   _inventoryPanelEl.innerHTML = html;
-
-  // Attach drop click handlers
-  _inventoryPanelEl.querySelectorAll('.inv-drop').forEach(el => {
-    el.addEventListener('click', () => {
-      const slot = parseInt(el.dataset.slot, 10);
-      if (_dropCallback) _dropCallback(slot);
-    });
-  });
 }
 
 /**
