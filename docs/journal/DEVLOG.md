@@ -11,6 +11,29 @@ Each entry covers a day (or shift). Entries include what happened, why decisions
 
 ---
 
+## Week 2, Day 1: March 25, 2026 — The Toroid Tax
+
+### The Story
+
+Came back after 5 days off to pick up Week 2. First task: visual bugs from the night shift work. Wells on the 3×3 map were inconsistent — W1/W3 showed accretion disks, W0/W2 didn't. Sharp boundary lines cut through the fabric where it should have been smooth.
+
+Started with the display shader. The `dist` calculation used reference-scaled units (`length(diff) / uvS`) while the shape values from `getRenderShapes()` were in raw world-space. Off by a factor of 3 (FLUID_REF_SCALE). Rings for large-mass wells were so bloated their gradients were invisible — spread over the entire screen with no contrast.
+
+Fixed that, but the hard edges persisted. Greg pushed: "investigate whether this is toroidal math or tile boundaries." Turned out to be the real bug. Two simulation shaders — `FRAG_SPLAT` and `FRAG_WELL_FORCE` — computed distance using straight-line UV math instead of toroidal shortest-path. Wells near texture boundaries had their gravity and density injection cut off at the edge. The fluid field had hard discontinuities baked in.
+
+The fix was two lines (`diff = diff - round(diff)`) in each shader. Same pattern the display and dissipation shaders already used. The inconsistency was the bug.
+
+### What We Learned
+
+The coordinate system is a tax that keeps getting collected. This is the third round of UV/world-space fixes in two days. The pattern: something works on the title screen (well at UV center, no boundaries nearby) and breaks on gameplay maps (wells near edges, multiple coordinate spaces interacting). Documented a TOROIDAL WRAPPING RULE in fluid.js so the next person touching shaders knows the invariant.
+
+Also flagged: ring screen coverage scales with WORLD_SCALE. The 10×10 mega-well's ring fills 126% of the visible area. Mathematically correct, possibly wrong for gameplay feel. Open design question for today.
+
+### Commits
+- `96d95ab` — Fix: toroidal wrapping + world-space distance in display shader
+
+---
+
 ## Day 5: March 20, 2026 — The Split (and the Teeth)
 
 ### The Story
