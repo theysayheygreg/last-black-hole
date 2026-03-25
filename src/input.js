@@ -119,6 +119,31 @@ export class InputManager {
     return false;
   }
 
+  /** Inventory toggle. (Tab key, or gamepad touchpad — button 13 on DualSense) */
+  get inventoryPressed() {
+    if (this._keys['Tab']) return true;
+    const gp = this._getGamepad();
+    // Button 13 = touchpad on DualSense (some mappings). Fallback: Select/Share = button 8.
+    if (gp && gp.buttons.length > 8 && gp.buttons[8].pressed) return true;
+    return false;
+  }
+
+  /** Consumable slot 1. (D-pad left — button 14, or keyboard 1) */
+  get consumable1Pressed() {
+    if (this._keys['Digit1']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 14 && gp.buttons[14].pressed) return true;
+    return false;
+  }
+
+  /** Consumable slot 2. (D-pad right — button 15, or keyboard 2) */
+  get consumable2Pressed() {
+    if (this._keys['Digit2']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 15 && gp.buttons[15].pressed) return true;
+    return false;
+  }
+
   /** Is pause pressed? (gamepad Options/Menu — button 9. Keyboard Escape in main.js) */
   get pausePressed() {
     const gp = this._getGamepad();

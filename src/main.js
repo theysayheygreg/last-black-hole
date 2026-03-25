@@ -23,12 +23,14 @@ import { InputManager } from './input.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
-import { initHUD, showHUD, hideHUD, updateHUD, showWarning } from './hud.js';
+import { initHUD, showHUD, hideHUD, updateHUD, showWarning, setDropCallback } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
 import { AudioEngine } from './audio.js';
 import { rollSignature, applySignatureConfig } from './signatures.js';
+import { InventorySystem } from './inventory.js';
+import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
 import { FlowField } from './sim/flow-field.js';
 import { SimCore } from './sim/sim-core.js';
 import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js';
@@ -49,7 +51,7 @@ let glCanvas, gl;
 let overlayCanvas, ctx;
 let fluid, ship, wellSystem, starSystem, lootSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
-let scavengerSystem, combatSystem, audioEngine;
+let scavengerSystem, combatSystem, audioEngine, inventorySystem;
 let flowField, simCore;
 let currentSignature = null;
 let inputManager, asciiRenderer;
@@ -79,7 +81,7 @@ const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
 
 // Run state
 const simState = createSimState();
-let inventory = [];
+let inventoryOpen = false;  // Tab toggle state
 
 // Scene transition state
 let transitionActive = false;
@@ -133,6 +135,7 @@ function init() {
   scavengerSystem = new ScavengerSystem();
   combatSystem = new CombatSystem();
   audioEngine = new AudioEngine();
+  inventorySystem = new InventorySystem();
 
   // Init input manager
   inputManager = new InputManager();
@@ -183,6 +186,7 @@ function init() {
       }
     }
     if (e.code === 'Space') e.preventDefault();
+    if (e.code === 'Tab') e.preventDefault();
   });
 
   // Handle resize
@@ -236,6 +240,24 @@ function init() {
     initDevPanel();
   }
   initHUD();
+
+  // Wire drop callback: dropping an item from inventory creates a mini-wreck at ship position
+  setDropCallback((slotIndex) => {
+    const item = inventorySystem.dropFromCargo(slotIndex);
+    if (item) {
+      // Create a mini-wreck at the ship's position with this single item
+      wreckSystem.addWreck(ship.wx, ship.wy, {
+        type: 'debris',
+        tier: 1,
+        size: 'scattered',
+      });
+      // Override the generated loot with our dropped item
+      const droppedWreck = wreckSystem.wrecks[wreckSystem.wrecks.length - 1];
+      droppedWreck.loot = [item];
+      droppedWreck.name = `dropped: ${item.name}`;
+      showWarning(`dropped ${item.name}`, 'rgba(255, 150, 80, 0.8)', 1500);
+    }
+  });
 
   // Start loop
   lastFrameTime = performance.now();
@@ -333,7 +355,8 @@ function loadScene(map) {
   simCore?.reset();
 
   // 4. Reset gameplay state
-  inventory = [];
+  inventorySystem.clearCargo();
+  inventoryOpen = false;
   waveRings.rings = [];
   scavengerSystem.scavengers = [];
   combatSystem.playerCooldown = 0;
@@ -501,6 +524,9 @@ let _prevBack = false;
 let _prevUp = false;
 let _prevDown = false;
 let _prevPulse = false;
+let _prevInventory = false;
+let _prevConsumable1 = false;
+let _prevConsumable2 = false;
 let _prevPortalCount = -1;
 let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
 
@@ -567,6 +593,9 @@ function gameLoop(now) {
   const upNow = inputManager.upPressed;
   const downNow = inputManager.downPressed;
   const pulseNow = inputManager.pulsePressed;
+  const inventoryNow = inputManager.inventoryPressed;
+  const consumable1Now = inputManager.consumable1Pressed;
+  const consumable2Now = inputManager.consumable2Pressed;
 
   // --- Menu input (title, mapSelect) ---
   if (gamePhase === 'title') {
@@ -623,14 +652,48 @@ function gameLoop(now) {
         }
       }
 
-      // Wreck pickup
-      const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
-      if (newItems.length > 0) {
-        inventory.push(...newItems);
-        audioEngine.playEvent('loot', ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        for (const item of newItems) {
-          showWarning(item.name, 'rgba(212, 168, 67, 0.9)', 2000);
+      // Inventory toggle (Tab / touchpad)
+      if (inventoryNow && !_prevInventory) {
+        inventoryOpen = !inventoryOpen;
+      }
+
+      // Consumable hotkeys (d-pad left/right or 1/2)
+      if (consumable1Now && !_prevConsumable1) {
+        const effect = inventorySystem.useConsumable(0);
+        if (effect) showWarning(`used: ${inventorySystem.usedConsumables[0]?.name || 'consumable'}`, 'rgba(200, 160, 255, 0.9)', 2000);
+      }
+      if (consumable2Now && !_prevConsumable2) {
+        const effect = inventorySystem.useConsumable(1);
+        if (effect) showWarning(`used: ${inventorySystem.usedConsumables[0]?.name || 'consumable'}`, 'rgba(200, 160, 255, 0.9)', 2000);
+      }
+
+      // Wreck pickup (blocked if cargo full)
+      if (!inventorySystem.cargoFull) {
+        const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
+        if (newItems.length > 0) {
+          const overflow = inventorySystem.addMultipleToCargo(newItems);
+          const added = newItems.length - overflow.length;
+          if (added > 0) {
+            audioEngine.playEvent('loot', ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+            for (const item of newItems.slice(0, added)) {
+              const color = TIER_COLORS[item.tier] || 'rgba(212, 168, 67, 0.9)';
+              showWarning(`${item.name}`, color, 2000);
+            }
+          }
+          if (overflow.length > 0) {
+            showWarning(`cargo full — ${overflow.length} item(s) left behind`, 'rgba(255, 100, 80, 0.9)', 2500);
+          }
         }
+      } else {
+        // Still check if near a wreck — show "cargo full" warning once
+        const nearWreck = wreckSystem.wrecks.some(w =>
+          w.alive && !w.looted && worldDistance(ship.wx, ship.wy, w.wx, w.wy) < CONFIG.wrecks.pickupRadius * 1.5
+        );
+        if (nearWreck && !inventorySystem._fullWarningShown) {
+          showWarning('cargo full — open inventory [Tab] to drop', 'rgba(255, 100, 80, 0.9)', 3000);
+          inventorySystem._fullWarningShown = true;
+        }
+        if (!nearWreck) inventorySystem._fullWarningShown = false;
       }
 
       // Wreck consumption by growing wells
@@ -700,6 +763,9 @@ function gameLoop(now) {
   _prevUp = upNow;
   _prevDown = downNow;
   _prevPulse = pulseNow;
+  _prevInventory = inventoryNow;
+  _prevConsumable1 = consumable1Now;
+  _prevConsumable2 = consumable2Now;
 
   // 6b. Audio update — spatial mixing based on game state
   if (!inMenu) {
@@ -774,10 +840,13 @@ function gameLoop(now) {
     _prevPortalCount = currentPortalCount;
 
     // Update HUD during gameplay
-    updateHUD(simState.runElapsedTime, portalSystem, inventory, simState.growthTimer, {
+    const cargoItems = inventorySystem.getCargoItems();
+    updateHUD(simState.runElapsedTime, portalSystem, cargoItems, simState.growthTimer, {
       scavengerSystem,
       combatSystem,
       signature: currentSignature,
+      inventorySystem,
+      inventoryOpen,
       ship,
       camX, camY,
       canvasW: overlayCanvas.width,
@@ -1075,6 +1144,7 @@ function gameLoop(now) {
     const subtitle = isEscape ? 'out of a dying universe' : collapsed ? 'no way out' : 'the universe won';
     const titleColor = isEscape ? 'rgba(100, 255, 255,' : collapsed ? 'rgba(180, 80, 255,' : 'rgba(255, 30, 30,';
     const itemVerb = isEscape ? 'salvaged' : 'lost';
+    const endItems = inventorySystem.getCargoItems();
 
     ctx.save();
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
@@ -1094,39 +1164,37 @@ function gameLoop(now) {
       ctx.fillText(subtitle, cx, cy - 65);
     }
     // Salvage list (items fade in one by one)
-    if (t > 1.0 && inventory.length > 0) {
+    if (t > 1.0 && endItems.length > 0) {
       ctx.font = '13px monospace';
-      const maxShow = Math.min(inventory.length, 8, Math.floor((t - 1.0) / 0.15));
+      const maxShow = Math.min(endItems.length, 8, Math.floor((t - 1.0) / 0.15));
       let itemY = cy - 30;
       for (let i = 0; i < maxShow; i++) {
-        const item = inventory[i];
-        const tierColor = item.tier === 'unique' ? 'rgba(255, 215, 0, 0.9)'
-          : item.tier === 'rare' ? 'rgba(100, 220, 255, 0.9)'
-          : item.tier === 'uncommon' ? 'rgba(100, 255, 150, 0.9)'
-          : 'rgba(200, 200, 210, 0.8)';
+        const item = endItems[i];
+        const tierColor = TIER_COLORS[item.tier] || 'rgba(200, 200, 210, 0.8)';
+        const catColor = CATEGORY_COLORS[item.category] || tierColor;
         ctx.fillStyle = isEscape ? tierColor : `rgba(120, 120, 130, 0.6)`;
-        ctx.fillText(item.name, cx, itemY);
+        ctx.fillText(`${item.name} [${item.category}]`, cx, itemY);
         itemY += 18;
       }
-      if (inventory.length > 8) {
+      if (endItems.length > 8) {
         ctx.fillStyle = 'rgba(150, 150, 170, 0.5)';
-        ctx.fillText(`...and ${inventory.length - 8} more`, cx, itemY);
+        ctx.fillText(`...and ${endItems.length - 8} more`, cx, itemY);
         itemY += 18;
       }
     }
     // Stats
-    const statsT = 1.0 + Math.min(inventory.length, 8) * 0.15 + 0.3;
+    const statsT = 1.0 + Math.min(endItems.length, 8) * 0.15 + 0.3;
     if (t > statsT) {
       ctx.fillStyle = `rgba(180, 180, 200, ${Math.min((t - statsT) * 2, 0.8)})`;
       ctx.font = '14px monospace';
       const mins = Math.floor(simState.runEndTime / 60);
       const secs = Math.floor(simState.runEndTime % 60);
-      const statY = cy + Math.min(inventory.length, 8) * 18 - 10;
-      ctx.fillText(`${inventory.length} items ${itemVerb}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
+      const statY = cy + Math.min(endItems.length, 8) * 18 - 10;
+      ctx.fillText(`${endItems.length} items ${itemVerb}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
 
       // Score (extraction only)
       if (isEscape && t > statsT + 0.3) {
-        const totalValue = inventory.reduce((sum, item) => sum + item.value, 0);
+        const totalValue = endItems.reduce((sum, item) => sum + (item.value || 0), 0);
         ctx.fillStyle = 'rgba(255, 255, 240, 0.9)';
         ctx.font = 'bold 28px monospace';
         const countT = Math.min((t - statsT - 0.3) / 0.5, 1);
@@ -1139,7 +1207,7 @@ function gameLoop(now) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
       ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
       ctx.font = '18px monospace';
-      ctx.fillText('press space to continue', cx, cy + Math.min(inventory.length, 8) * 18 + 70);
+      ctx.fillText('press space to continue', cx, cy + Math.min(endItems.length, 8) * 18 + 70);
     }
     ctx.restore();
   }

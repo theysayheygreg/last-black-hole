@@ -8,6 +8,7 @@
 
 import { CONFIG } from './config.js';
 import { worldToFluidUV, worldToScreen, worldDistance, shouldCull, uvScale } from './coords.js';
+import { generateLoot } from './items.js';
 
 // ---- Name generation ----
 
@@ -17,32 +18,11 @@ const ADJ = ['Ascending', 'Crystalline', 'Shattered', 'Infinite', 'Dreaming',
 const NOUN = ['Chorus', 'Lattice', 'Meridian', 'Archive', 'Theorem',
   'Garden', 'Beacon', 'Chrysalis', 'Mandate', 'Confluence',
   'Helix', 'Axiom', 'Tempest', 'Orbit', 'Zenith'];
-const ITEM_MAT = ['Quantum', 'Exotic', 'Null', 'Phase', 'Stellar',
-  'Void', 'Dark', 'Temporal', 'Prismatic', 'Entropic'];
-const ITEM_OBJ = ['Fragment', 'Core', 'Lattice', 'Matrix', 'Coil',
-  'Lens', 'Shard', 'Seed', 'Engine', 'Key'];
-const ITEM_TIERS = ['common', 'common', 'common', 'uncommon', 'uncommon', 'rare'];
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function generateWreckName() {
   return `${pick(['Wreck', 'Remains', 'Hulk'])} of the ${pick(ADJ)} ${pick(NOUN)}`;
-}
-
-function generateItem(tier, sourceName) {
-  const tierRoll = tier === 3 ? pick(['uncommon', 'rare', 'rare', 'unique'])
-    : tier === 2 ? pick(['common', 'uncommon', 'uncommon', 'rare'])
-    : pick(ITEM_TIERS);
-  const value = tierRoll === 'unique' ? 400 + Math.floor(Math.random() * 200)
-    : tierRoll === 'rare' ? 200 + Math.floor(Math.random() * 150)
-    : tierRoll === 'uncommon' ? 80 + Math.floor(Math.random() * 80)
-    : 20 + Math.floor(Math.random() * 40);
-  return {
-    name: `${pick(ITEM_MAT)} ${pick(ITEM_OBJ)}`,
-    value,
-    tier: tierRoll,
-    source: sourceName,
-  };
 }
 
 // ---- Wreck entity ----
@@ -58,14 +38,8 @@ class Wreck {
     this.looted = false;
     this.name = generateWreckName();
 
-    // Generate loot based on type and tier
-    const itemCount = this.type === 'vault' ? 3 + Math.floor(Math.random() * 3)
-      : this.type === 'debris' ? 1 + Math.floor(Math.random() * 2)
-      : 1 + Math.floor(Math.random() * 3);
-    this.loot = [];
-    for (let i = 0; i < itemCount; i++) {
-      this.loot.push(generateItem(this.tier, this.name));
-    }
+    // Generate categorized loot via items.js (80/20 primary/secondary table)
+    this.loot = generateLoot(this.type, this.tier, this.name);
   }
 }
 
@@ -98,7 +72,7 @@ export class WreckSystem {
         const piece = new Wreck(wx + Math.cos(angle) * dist, wy + Math.sin(angle) * dist, {
           type: 'debris', tier: wreck.tier, size: 'scattered',
         });
-        piece.loot = [generateItem(wreck.tier, wreck.name)];
+        piece.loot = generateLoot('debris', wreck.tier, wreck.name, 1);
         piece.name = wreck.name;
         this.wrecks.push(piece);
       }

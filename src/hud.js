@@ -20,7 +20,9 @@ let _scavengersCountEl, _scavengersSub;
 let _pulseEl;
 let _signatureEl;
 let _portalArrowEl;
+let _inventoryPanelEl;
 let _warningsEl;
+let _dropCallback = null;  // set by main.js for drop handling
 let _lastPortalCount = -1;
 let _lastCollapseStr = '';
 
@@ -37,6 +39,7 @@ export function initHUD() {
   _pulseEl = document.getElementById('hud-pulse');
   _signatureEl = document.getElementById('hud-signature');
   _portalArrowEl = document.getElementById('hud-portal-arrow');
+  _inventoryPanelEl = document.getElementById('hud-inventory-panel');
   _warningsEl = document.getElementById('hud-warnings');
 }
 
@@ -169,15 +172,26 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     }
   }
 
-  // === SALVAGE (count + total value) ===
-  const salvageCount = inventory ? inventory.length : 0;
-  if (salvageCount > 0) {
-    _salvageCountEl.textContent = `◈ ${salvageCount} salvage`;
-    const totalValue = inventory.reduce((sum, item) => sum + (item.value || 0), 0);
-    _salvageValueEl.textContent = `value: ${totalValue}`;
-  } else {
-    _salvageCountEl.textContent = '';
-    _salvageValueEl.textContent = '';
+  // === CARGO (count/max + total value) ===
+  const inv = opts.inventorySystem;
+  if (inv) {
+    const count = inv.cargoCount;
+    const max = inv.cargoMax;
+    _salvageCountEl.textContent = count > 0 ? `◈ cargo ${count}/${max}` : `◈ cargo 0/${max}`;
+    if (count > 0) {
+      const totalValue = inv.getCargoValue();
+      _salvageValueEl.textContent = `value: ${totalValue}  [Tab]`;
+    } else {
+      _salvageValueEl.textContent = '[Tab] inventory';
+    }
+    // Warn when nearly full
+    if (count >= max) {
+      _salvageCountEl.style.color = 'rgba(255, 100, 80, 0.9)';
+    } else if (count >= max - 1) {
+      _salvageCountEl.style.color = 'rgba(240, 180, 60, 0.9)';
+    } else {
+      _salvageCountEl.style.color = '';
+    }
   }
 
   // === SCAVENGERS ===
@@ -208,6 +222,16 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   // === SIGNATURE ===
   if (opts.signature && _signatureEl) {
     _signatureEl.textContent = `[${opts.signature.name}]`;
+  }
+
+  // === INVENTORY PANEL (Tab toggle) ===
+  if (_inventoryPanelEl && inv) {
+    if (opts.inventoryOpen) {
+      _inventoryPanelEl.classList.add('open');
+      _renderInventoryPanel(inv);
+    } else {
+      _inventoryPanelEl.classList.remove('open');
+    }
   }
 
   // === PORTAL DIRECTION ARROW ===
@@ -291,6 +315,86 @@ function _updatePortalArrow(ship, portalSystem, camX, camY, canvasW, canvasH) {
     text-align: center;
     margin-top: 2px;
   ">${distText}</div>`;
+}
+
+/**
+ * Set callback for when player clicks "drop" in inventory panel.
+ * @param {function(slotIndex: number)} fn
+ */
+export function setDropCallback(fn) {
+  _dropCallback = fn;
+}
+
+/**
+ * Render the full inventory panel contents.
+ */
+function _renderInventoryPanel(inv) {
+  if (!_inventoryPanelEl) return;
+
+  // Import colors dynamically to avoid circular deps
+  const catColors = {
+    salvage: 'rgba(180, 180, 190, 0.9)',
+    component: 'rgba(100, 200, 255, 0.9)',
+    dataCore: 'rgba(200, 160, 255, 0.9)',
+    artifact: 'rgba(255, 200, 60, 0.9)',
+  };
+  const tierColors = {
+    common: 'rgba(180, 180, 190, 0.8)',
+    uncommon: 'rgba(100, 255, 150, 0.9)',
+    rare: 'rgba(100, 180, 255, 0.9)',
+    unique: 'rgba(255, 215, 0, 0.95)',
+  };
+
+  let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}</div>`;
+
+  for (let i = 0; i < inv.cargo.length; i++) {
+    const item = inv.cargo[i];
+    if (item) {
+      const color = tierColors[item.tier] || catColors[item.category] || '#ccc';
+      const catLabel = item.category === 'artifact' ? item.subcategory : (item.category || '');
+      html += `<div class="inv-item">
+        <span class="inv-name" style="color:${color}">${item.name}</span>
+        <span class="inv-cat">${catLabel}</span>
+        <span class="inv-drop" data-slot="${i}">[drop]</span>
+      </div>`;
+    } else {
+      html += `<div class="inv-item"><span class="inv-empty">— empty —</span></div>`;
+    }
+  }
+
+  // Equipped section
+  html += `<div class="inv-section"><div class="inv-header">equipped</div>`;
+  for (let i = 0; i < inv.equipped.length; i++) {
+    const item = inv.equipped[i];
+    if (item) {
+      html += `<div class="inv-item"><span class="inv-name" style="color:${tierColors[item.tier] || '#ccc'}">${item.name}</span><span class="inv-cat">${item.effectDesc || ''}</span></div>`;
+    } else {
+      html += `<div class="inv-item"><span class="inv-empty">— empty slot —</span></div>`;
+    }
+  }
+  html += '</div>';
+
+  // Consumables section
+  html += `<div class="inv-section"><div class="inv-header">consumables [1] [2]</div>`;
+  for (let i = 0; i < inv.consumables.length; i++) {
+    const item = inv.consumables[i];
+    if (item) {
+      html += `<div class="inv-item"><span class="inv-name" style="color:${tierColors[item.tier] || '#ccc'}">[${i + 1}] ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span></div>`;
+    } else {
+      html += `<div class="inv-item"><span class="inv-empty">[${i + 1}] — empty —</span></div>`;
+    }
+  }
+  html += '</div>';
+
+  _inventoryPanelEl.innerHTML = html;
+
+  // Attach drop click handlers
+  _inventoryPanelEl.querySelectorAll('.inv-drop').forEach(el => {
+    el.addEventListener('click', () => {
+      const slot = parseInt(el.dataset.slot, 10);
+      if (_dropCallback) _dropCallback(slot);
+    });
+  });
 }
 
 /**
