@@ -148,16 +148,23 @@ export class WellSystem {
    * to each other. They don't change with map scale.
    */
   getRenderShapes() {
+    // Visual tuning constants — these are artistic ratios, NOT coordinate conversions.
+    // They control how the shader's ring/core/halo map onto the well's physical radii.
+    const CORE_KILL_FRAC = 1.0 / 3.0;  // visual core = 1/3 of kill radius (die before you see black)
+    const MIN_ACCRETION_WORLD = 0.036;  // world-space floor so tiny wells still have a visible ring
+
     return this.wells.map(w => {
-      // Convert accretion from UV-space to world-space (SHADER DISTANCE RULE)
+      // Convert accretion from UV-space to world-space (SHADER DISTANCE RULE).
+      // accretionRadius (CONFIG) is in UV-space. Multiply by WORLD_SCALE to match
+      // the display shader's dist = length(diff) * worldScale.
       const accretionUV = w.getAccretionRadius() * w.mass;       // UV-space
       const accretionWorld = accretionUV * WORLD_SCALE;           // → world-space
-      const accretionRef = Math.max(0.036, accretionWorld);       // floor: min visible size
+      const accretionRef = Math.max(MIN_ACCRETION_WORLD, accretionWorld);
 
       // Core: driven by kill radius (world-space) — the "do not go here" signal
       const coreRef = Math.max(
-        (w.killRadius / 3.0) * 1.08,   // kill radius scaled (world-space)
-        accretionRef * 0.33             // or 1/3 of accretion ring
+        w.killRadius * CORE_KILL_FRAC * 1.08,  // kill radius fraction (world-space)
+        accretionRef * 0.33                     // or 1/3 of accretion ring
       );
 
       // Inner ring: just outside the core

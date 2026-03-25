@@ -17,6 +17,51 @@ Each decision has:
 
 ---
 
+## Shader Distance Units (2026-03-25)
+
+**Question:** What unit space should the display shader's per-well distance calculation use?
+
+**Options considered:**
+- A) Reference-scaled: `dist = length(diff) / uvS` — divides by FLUID_REF_SCALE/WORLD_SCALE. Produces world_distance/FLUID_REF_SCALE. Was the original code.
+- B) World-space: `dist = length(diff) * u_worldScale` — multiplies UV distance by WORLD_SCALE. Produces true world-space distance.
+
+**Where it landed:** B. Shape values from `getRenderShapes()` are in world-space (accretionRadius × WORLD_SCALE). dist must match. Option A was 3× off on the 3×3 map, making ring gradients invisible for large wells.
+
+**Door status:** Closed.
+
+---
+
+## Toroidal Wrapping in Simulation Shaders (2026-03-25)
+
+**Question:** Do GPU shaders that compute point-to-point distance need explicit toroidal wrapping?
+
+**Context:** The fluid texture is toroidal (GL_REPEAT). Texture *sampling* wraps automatically, but *distance calculations* between two UV positions don't — `length(a - b)` gives straight-line distance, not shortest-path-on-torus distance.
+
+**What broke:** `FRAG_SPLAT` and `FRAG_WELL_FORCE` used straight-line distance. Wells near UV boundaries (e.g., W0 at UV 0.33 on 3×3 map) had their gravity and density splats cut off at the texture edge instead of wrapping. This created hard edges in the velocity field that were visible as sharp fabric boundaries in the display.
+
+**Fix:** `diff = diff - round(diff)` before any distance calculation. Now documented as TOROIDAL WRAPPING RULE in fluid.js header.
+
+**Door status:** Closed. All 4 point-to-point shaders verified. The 7 neighbor-sampling shaders don't need it (GL_REPEAT handles their lookups).
+
+---
+
+## Ring Scale vs Map Size (2026-03-25)
+
+**Question:** Should accretion ring screen coverage be consistent across map sizes, or scale with WORLD_SCALE?
+
+**Current behavior:** CONFIG.wells.accretionRadius is UV-space (0.023). Multiplied by WORLD_SCALE for world-space shapes. Ring screen coverage grows with map size: ~23% on 3×3, ~51% on 5×5, ~126% on 10×10 for the largest wells.
+
+**Options:**
+- A) Keep current: rings are physically larger on bigger maps. Mega-wells feel massive.
+- B) Normalize: divide accretionWorld by some scale factor so rings have similar screen presence across maps.
+- C) Per-map tuning: override accretionRadius in each map definition.
+
+**Where it landed:** Open. Current math is correct but needs design review. Revisiting today.
+
+**Door status:** Open.
+
+---
+
 ## Incident: Map Select Crash (2026-03-18)
 
 ### What happened

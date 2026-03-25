@@ -5,6 +5,23 @@
 
 ---
 
+## 2026-03-25 Shader Distance & Toroidal Wrapping Fixes
+
+### Bug Fixes
+- **Display shader dist calculation wrong** — `dist = length(diff) / uvS` produced reference-scaled values while shape data was in world-space. Fixed to `dist = length(diff) * u_worldScale`. All well rings were 3× oversized on the 3×3 map, making large-mass wells' gradients invisible.
+- **Splat shader missing toroidal wrap** — `FRAG_SPLAT` computed straight-line distance instead of toroidal shortest-path. Density/velocity splats near UV boundaries were cut off, creating hard edges in the fluid field. Fixed by adding `diff = diff - round(diff)`.
+- **Well force shader missing toroidal wrap** — `FRAG_WELL_FORCE` had same issue. Gravity didn't wrap across texture boundaries, so wells near edges pulled asymmetrically. Fixed identically.
+
+### Hardening
+- **TOROIDAL WRAPPING RULE** documented in fluid.js header. All 4 point-to-point shaders now use consistent `// TOROIDAL WRAPPING RULE` comment (greppable). Audited all 11 shaders — the 7 neighbor-sampling shaders correctly rely on GL_REPEAT.
+- **Named magic numbers** in `getRenderShapes()`: `CORE_KILL_FRAC` (1/3, visual ratio) and `MIN_ACCRETION_WORLD` (0.036, world-space floor) — distinguished from coordinate conversions.
+- **Removed dead `uvS` variable** from display shader (leftover from old dist calculation).
+
+### Design Observation (to revisit)
+Ring screen coverage grows with map size: 3×3 wells take 8-23% of screen, 5×5 takes 15-51%, 10×10 mega-well fills 126%. This is mathematically correct (CONFIG accretionRadius is UV-space × WORLD_SCALE) but may need per-map tuning or a different scaling approach.
+
+---
+
 ## 2026-03-20 Day Session (Feature Design Sprint)
 
 ### New Design Documents

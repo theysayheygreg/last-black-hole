@@ -6,6 +6,20 @@
  *   advect velocity -> diffuse (viscosity) -> add forces -> pressure solve (Jacobi) -> subtract gradient
  *
  * All operations are fragment shader passes on ping-pong framebuffers.
+ *
+ * TOROIDAL WRAPPING RULE:
+ * The fluid texture is a torus — left wraps to right, top wraps to bottom.
+ * GL_REPEAT handles texture sampling automatically, but ANY shader that computes
+ * distance or direction between two UV positions MUST wrap toroidally:
+ *
+ *     vec2 diff = a - b;
+ *     diff = diff - round(diff);  // shortest path on torus
+ *
+ * Without this, effects near UV boundaries (0 or 1) get cut off instead of
+ * wrapping, creating hard edges in the velocity/density field. Every shader
+ * that does point-to-point distance (splat, well force, display, dissipation)
+ * must include this line. Shaders that only sample neighbors (advect, divergence,
+ * pressure, curl, vorticity) rely on GL_REPEAT and don't need it.
  */
 
 import { CONFIG } from './config.js';
@@ -89,7 +103,7 @@ void main() {
   fragColor = vec4(vel, 0.0, 1.0);
 }`;
 
-// Splat shader — injects force/density at a point
+// Splat shader — injects force/density at a point (used by splat + visualSplat)
 const FRAG_SPLAT = `#version 300 es
 precision highp float;
 uniform sampler2D u_target;
@@ -102,6 +116,7 @@ out vec4 fragColor;
 
 void main() {
   vec2 diff = v_uv - u_point;
+  diff = diff - round(diff);  // TOROIDAL WRAPPING RULE
   diff.x *= u_aspectRatio;
   float d = dot(diff, diff);
   float strength = exp(-d / u_radius);
@@ -130,6 +145,7 @@ void main() {
   vec2 vel = texture(u_velocity, v_uv).xy;
 
   vec2 diff = u_wellPos - v_uv;
+  diff = diff - round(diff);  // TOROIDAL WRAPPING RULE
   diff.x *= u_aspectRatio;
   float dist = length(diff);
   float minDist = u_clampRadius * u_texelSize.x;
@@ -248,10 +264,6 @@ void main() {
   // Normalize UV velocity to world-equivalent speed (calibrated at WORLD_SCALE=3)
   float speed = length(vel) * u_worldScale / u_refScale;
 
-  // Scale UV distances to world-equivalent so glow matches across map sizes.
-  // uvS = FLUID_REF_SCALE / WORLD_SCALE — same as coords.js uvScale().
-  float uvS = u_refScale / u_worldScale;
-
   // === PRIMARY SCENE SIGNALS ===
   // Physical density = background fabric excitation.
   // Positive visual density = ring intensity, not whole-frame brightness.
@@ -287,8 +299,10 @@ void main() {
     if (i >= u_wellCount) break;
 
     vec2 diff = wrappedFluidUV - u_wellPositions[i];
-    diff = diff - round(diff);
-    float dist = length(diff) / uvS;
+    diff = diff - round(diff);  // TOROIDAL WRAPPING RULE
+    // SHADER DISTANCE RULE: shape values from getRenderShapes() are in world-space.
+    // UV diff × worldScale = world-space distance, matching shape units.
+    float dist = length(diff) * u_worldScale;
 
     vec4 shape = u_wellShape[i];
     float coreRadius = shape.x;
@@ -369,7 +383,7 @@ void main() {
   for (int i = 0; i < 256; i++) {
     if (i >= u_wellCount) break;
     vec2 diff = v_uv - u_wellPositions[i];
-    diff = diff - round(diff);  // toroidal shortest path
+    diff = diff - round(diff);  // TOROIDAL WRAPPING RULE
     float d = length(diff);
     minDist = min(minDist, d);
   }
@@ -800,7 +814,6 @@ export class FluidSim {
     // Set well positions and masses for gravity field visualization
     const count = wellPositionsUV.length;
     gl.uniform1i(u['u_wellCount'], count);
-    // (debug logging removed — was temporary for well visibility investigation)
     for (let i = 0; i < count; i++) {
       const posLoc = u[`u_wellPositions[${i}]`];
       if (posLoc) gl.uniform2fv(posLoc, wellPositionsUV[i]);
