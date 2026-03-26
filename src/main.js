@@ -942,6 +942,95 @@ function gameLoop(now) {
       ctx.restore();
     }
 
+    // === PROXIMITY FLAVOR TEXT LABELS ===
+    // Fade in when close, fade out when far. Every named entity gets one.
+    {
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+      ctx.shadowBlur = 6;
+
+      const fadeNear = 0.15;  // fully visible below this distance
+      const fadeFar = 0.4;   // invisible beyond this distance
+
+      function labelAlpha(dist) {
+        if (dist < fadeNear) return 1.0;
+        if (dist > fadeFar) return 0.0;
+        return 1.0 - (dist - fadeNear) / (fadeFar - fadeNear);
+      }
+
+      // Wells — foreboding names, dark red, allcaps, below center
+      for (const well of wellSystem.wells) {
+        const dist = worldDistance(ship.wx, ship.wy, well.wx, well.wy);
+        const a = labelAlpha(dist);
+        if (a <= 0) continue;
+        const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        ctx.font = '11px monospace';
+        ctx.fillStyle = `rgba(180, 40, 40, ${a * 0.8})`;
+        ctx.fillText(well.name.toUpperCase(), sx, sy + well.killRadius * pxPerWorld(overlayCanvas.width) + 16);
+      }
+
+      // Stars — scientific designation, type-colored
+      for (const star of starSystem.stars) {
+        if (!star.alive) continue;
+        const dist = worldDistance(ship.wx, ship.wy, star.wx, star.wy);
+        const a = labelAlpha(dist);
+        if (a <= 0) continue;
+        const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        const [cr, cg, cb] = star.typeDef.color;
+        ctx.font = '10px monospace';
+        ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${a * 0.6})`;
+        const haloR = (60 + 20 * star.mass) * star.typeDef.sizeMult;
+        ctx.fillText(star.name, sx, sy + haloR + 10);
+      }
+
+      // Comets — names, ice blue, trailing behind body
+      for (const p of planetoidSystem.planetoids) {
+        if (!p.alive) continue;
+        const dist = worldDistance(ship.wx, ship.wy, p.wx, p.wy);
+        const a = labelAlpha(dist);
+        if (a <= 0) continue;
+        const [sx, sy] = worldToScreen(p.wx, p.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        ctx.font = '9px monospace';
+        ctx.fillStyle = `rgba(180, 210, 240, ${a * 0.6})`;
+        ctx.fillText(p.name, sx, sy + 16);
+      }
+
+      // Wrecks — name + item count, type-colored
+      for (const wreck of wreckSystem.wrecks) {
+        if (!wreck.alive) continue;
+        const dist = worldDistance(ship.wx, ship.wy, wreck.wx, wreck.wy);
+        const a = labelAlpha(dist);
+        if (a <= 0) continue;
+        const [sx, sy] = worldToScreen(wreck.wx, wreck.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        let color;
+        if (wreck.type === 'vault') color = `rgba(255, 215, 60, ${a * 0.7})`;
+        else if (wreck.type === 'debris') color = `rgba(180, 140, 80, ${a * 0.6})`;
+        else color = `rgba(160, 180, 200, ${a * 0.6})`;
+        ctx.font = '10px monospace';
+        ctx.fillStyle = color;
+        const itemText = wreck.looted ? '' : ` (${wreck.loot.length})`;
+        ctx.fillText(wreck.name + itemText, sx, sy + 18);
+      }
+
+      // Scavengers — faction + callsign, archetype-colored
+      for (const scav of scavengerSystem.scavengers) {
+        if (!scav.alive) continue;
+        const dist = worldDistance(ship.wx, ship.wy, scav.wx, scav.wy);
+        const a = labelAlpha(dist);
+        if (a <= 0) continue;
+        const [sx, sy] = worldToScreen(scav.wx, scav.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        const color = scav.archetype === 'vulture'
+          ? `rgba(212, 160, 96, ${a * 0.7})`
+          : `rgba(138, 174, 196, ${a * 0.7})`;
+        ctx.font = '9px monospace';
+        ctx.fillStyle = color;
+        ctx.fillText(scav.name, sx, sy - 14);
+      }
+
+      ctx.restore();
+    }
+
     // Time slow indicator — purple vignette
     if (timeSlowRemaining > 0) {
       const fade = Math.min(timeSlowRemaining, 0.5) * 2;  // fade out in last 0.5s

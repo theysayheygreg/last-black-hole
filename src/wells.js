@@ -8,6 +8,19 @@
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale, accretionScale } from './coords.js';
 
+// ---- Well name generation (foreboding) ----
+
+const WELL_ADJ = ['Hungering', 'Endless', 'Silent', 'Abyssal', 'Forsaken',
+  'Ravenous', 'Eternal', 'Hollow', 'Consuming', 'Inexorable'];
+const WELL_NOUN = ['Maw', 'Abyss', 'Void', 'Terminus', 'Oblivion',
+  'Singularity', 'Collapse', 'Devourer', 'Remnant', 'Eye'];
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function generateWellName() {
+  return `The ${pick(WELL_ADJ)} ${pick(WELL_NOUN)}`;
+}
+
 export class Well {
   /**
    * @param {number} wx - world-space X (0 to WORLD_SCALE)
@@ -17,6 +30,7 @@ export class Well {
   constructor(wx, wy, opts = {}) {
     this.wx = wx;
     this.wy = wy;
+    this.name = generateWellName();
     this.mass = opts.mass ?? 1.0;
     this.startMass = this.mass;  // for kill radius growth calculation
     this.orbitalDir = opts.orbitalDir ?? 1;
