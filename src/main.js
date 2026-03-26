@@ -738,7 +738,17 @@ function gameLoop(now) {
         timeSlowRemaining -= dt;
         shipDt = dt * 0.3;
       }
+      // Equippable effect: reduceWellPull — 20% less well gravity on ship
+      const hasReduceWellPull = inventorySystem.hasEffect('reduceWellPull');
+      let _savedPull;
+      if (hasReduceWellPull) {
+        _savedPull = CONFIG.wells.shipPullStrength;
+        CONFIG.wells.shipPullStrength *= 0.8;
+      }
       ship.update(shipDt, flowField, wellSystem, fluid);
+      if (hasReduceWellPull) {
+        CONFIG.wells.shipPullStrength = _savedPull;
+      }
 
       starSystem.applyToShip(ship);
       planetoidSystem.applyToShip(ship);
@@ -942,6 +952,39 @@ function gameLoop(now) {
       ctx.setLineDash([]);
       ctx.restore();
     }
+
+    // Equippable effect: showFlowArrows — draw fluid velocity indicators near ship
+    if (inventorySystem.hasEffect('showFlowArrows')) {
+      const ppw = pxPerWorld(overlayCanvas.width);
+      const shipScreen = worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
+      ctx.lineWidth = 1;
+      // Sample a grid of points around the ship
+      const gridSize = 5;
+      const spacing = 0.06;
+      for (let gx = -gridSize; gx <= gridSize; gx++) {
+        for (let gy = -gridSize; gy <= gridSize; gy++) {
+          const wx = ship.wx + gx * spacing;
+          const wy = ship.wy + gy * spacing;
+          const vel = flowField.sample(wx, wy);
+          const speed = Math.sqrt(vel[0] * vel[0] + vel[1] * vel[1]);
+          if (speed < 0.005) continue;
+          const [px, py] = worldToScreen(wx, wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+          const len = Math.min(speed * ppw * 0.3, 20);
+          const dx = (vel[0] / speed) * len;
+          const dy = (vel[1] / speed) * len;
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px + dx, py + dy);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    // Equippable effect: signalDampen — signal system not yet built, effect is passive
+    // when signal exists. No runtime code needed until then.
 
     // Shield burst indicator
     if (shieldActive) {

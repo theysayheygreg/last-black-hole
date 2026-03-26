@@ -75,7 +75,8 @@ const DATA_CORE_CATALOG = [
 const EQUIPPABLE_CATALOG = [
   { name: 'Entropic Lens',   effect: 'showKillRadii',  effectDesc: 'reveals well kill zones',              tier: 'rare' },
   { name: 'Current Whisper',  effect: 'showFlowArrows', effectDesc: 'shows flow direction near ship',       tier: 'rare' },
-  { name: 'Signal Shroud',    effect: 'signalDampen',   effectDesc: '-15% signal from all sources',         tier: 'unique' },
+  // Signal Shroud gated — signal system not yet built. Re-add when signal exists.
+  // { name: 'Signal Shroud',    effect: 'signalDampen',   effectDesc: '-15% signal from all sources',      tier: 'unique' },
   { name: 'Gravity Anchor',   effect: 'reduceWellPull', effectDesc: '-20% well pull (wider slingshot margin)', tier: 'unique' },
 ];
 
@@ -84,7 +85,8 @@ const EQUIPPABLE_CATALOG = [
 
 const CONSUMABLE_CATALOG = [
   { name: 'Temporal Seed',  useEffect: 'timeSlowLocal',  useDesc: 'slows local spacetime for 3s',           tier: 'rare' },
-  { name: 'Signal Purge',   useEffect: 'signalPurge',    useDesc: 'instantly drops signal to 0%',            tier: 'rare' },
+  // Signal Purge gated — signal system not yet built. Re-add when signal exists.
+  // { name: 'Signal Purge',   useEffect: 'signalPurge',    useDesc: 'instantly drops signal to 0%',         tier: 'rare' },
   { name: 'Shield Burst',   useEffect: 'shieldBurst',    useDesc: 'survive one well or fauna contact',       tier: 'unique' },
   { name: 'Breach Flare',   useEffect: 'breachFlare',    useDesc: 'forces a temporary portal for 15s',       tier: 'unique' },
 ];

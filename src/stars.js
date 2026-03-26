@@ -301,11 +301,11 @@ export class StarSystem {
       ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
       ctx.fill();
 
-      // Orbiting asteroids — tiny gray dots
-      const ppw = canvasW / 1.0;  // pxPerWorld for CAMERA_VIEW=1
+      // Orbiting asteroids — rendered via worldToScreen for proper toroidal wrapping
       for (const ast of star.asteroids) {
-        const ax = sx + Math.cos(ast.angle) * ast.orbitRadius * ppw;
-        const ay = sy + Math.sin(ast.angle) * ast.orbitRadius * ppw;
+        const astWX = star.wx + Math.cos(ast.angle) * ast.orbitRadius;
+        const astWY = star.wy + Math.sin(ast.angle) * ast.orbitRadius;
+        const [ax, ay] = worldToScreen(astWX, astWY, camX, camY, canvasW, canvasH);
         ctx.beginPath();
         ctx.arc(ax, ay, ast.size, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(160, 160, 170, ${0.5 + 0.2 * pulse})`;
