@@ -27,7 +27,7 @@
 export let WORLD_SCALE = 3.0;
 
 /** Update the world scale. ES module live binding — all importers see the new value immediately. */
-export function setWorldScale(s) { WORLD_SCALE = s; }
+export function setWorldScale(s) { WORLD_SCALE = s; _accretionScaleCache = Math.sqrt(s * FLUID_REF_SCALE); }
 
 /**
  * How many world-units the camera shows per screen axis.
@@ -211,10 +211,12 @@ export function splatScale() {
  * sub-linearly with map size — dramatic without overwhelming on large maps.
  * See docs/design/RING-SCALE.md for the full analysis.
  *
- * 3x3 map: 1.0×, 5x5: 1.29×, 10x10: 1.83× (vs linear: 1.0, 1.67, 3.33)
+ * Cached — recomputed only when setWorldScale() is called (on map load).
+ * 3x3 map: 3.0, 5x5: 3.87, 10x10: 5.48 (vs linear WORLD_SCALE: 3, 5, 10)
  */
+let _accretionScaleCache = Math.sqrt(WORLD_SCALE * FLUID_REF_SCALE);
 export function accretionScale() {
-  return Math.sqrt(WORLD_SCALE * FLUID_REF_SCALE);
+  return _accretionScaleCache;
 }
 
 // ---- Entity culling ----

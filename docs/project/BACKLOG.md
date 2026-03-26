@@ -31,6 +31,13 @@
 - **State when backlogged:** Full design in DESIGN-DEEP-DIVE.md, agent prompt ready in AGENT-PROMPTS.md (Prompt B), comparison criteria defined
 - **Prerequisite to revive:** Single-sim must be stable and fun first. This is an upgrade, not a replacement.
 
+### Fast sqrt Approximation for Ring Scaling
+- **What:** Replace `Math.sqrt()` in `accretionScale()` (coords.js) with a cheaper approximation or precomputed value
+- **Why backlogged:** Currently 4-20 CPU-side calls per frame — not hot. But sqrt in rendering math gets expensive fast if the pattern spreads to GPU shaders or per-pixel calculations.
+- **Options:** Precompute on map load (value only changes when WORLD_SCALE changes), lookup table for the 3 map sizes we ship (`{3: 3.0, 5: 3.873, 10: 5.477}`), Quake fast inverse sqrt if it moves to shader, or just cache the result in a module-level variable that resets on `setWorldScale()`.
+- **Simplest fix:** Cache in coords.js — recompute only when WORLD_SCALE changes. Zero per-frame cost.
+- **Added:** 2026-03-26
+
 ### Spatially-Varying Fluid Parameters
 - **What:** Viscosity texture, damping texture, temperature texture that vary across the map and degrade over time
 - **Why backlogged:** Adds complexity to fluid sim tuning. Core viscosity ramp (uniform) is enough for jam.
