@@ -180,22 +180,7 @@ export const CONFIG = {
                              // because stars are local hazards, not long-range attractors.
   },
 
-  loot: {
-    // --- Fluid forces (micro-well obstruction) ---
-    gravity: 0.0008,          // Very weak pull — just enough to create a visible eddy.
-    falloff: 3.0,             // Extremely steep falloff — effect is hyper-local. Only within a
-                             // few texels. Creates lee zones and vortex shedding.
-    fluidClampRadius: 5,      // Very tight clamp. Loot is a point obstacle, not a gravity well.
-    fluidTerminalSpeed: 0.05, // Low terminal — loot shouldn't accelerate fluid to dangerous speeds.
-
-    // --- Visuals ---
-    densityRate: 0.015,       // Glow brightness. Blue-cyan color hardcoded in loot.js.
-    glowRadius: 0.007,        // Glow size in fluid UV. ~0.02 world-units diameter.
-    shimmerSpeed: 3.0,        // Shimmer point rotation in rad/s. Faster = more lively.
-    shimmerRadius: 0.004,     // Shimmer orbit radius in UV around the anchor.
-    overlaySize: 8,           // Overlay dot size in pixels.
-    pulseRate: 1.5,           // Overlay pulse frequency in Hz. Higher = more urgent.
-  },
+  // loot section removed — loot anchors replaced with stars (see FLAVOR-PASS.md)
 
   portals: {
     // --- Fluid forces (weak inward pull, about 1/3 of well gravity) ---

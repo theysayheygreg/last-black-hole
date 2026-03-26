@@ -7,7 +7,6 @@ export class SimCore {
     flowField,
     wellSystem,
     starSystem,
-    lootSystem,
     wreckSystem,
     portalSystem,
     planetoidSystem,
@@ -20,7 +19,6 @@ export class SimCore {
     this.flowField = flowField;
     this.wellSystem = wellSystem;
     this.starSystem = starSystem;
-    this.lootSystem = lootSystem;
     this.wreckSystem = wreckSystem;
     this.portalSystem = portalSystem;
     this.planetoidSystem = planetoidSystem;
@@ -89,7 +87,6 @@ export class SimCore {
       }
     }
 
-    this.lootSystem.update(this.fluid, stepDt, totalTime);
     this.wreckSystem.update(this.fluid, stepDt, totalTime);
     this.portalSystem.update(this.fluid, stepDt, totalTime, undefined, undefined, simState.runElapsedTime);
     this.planetoidSystem.update(stepDt, this.fluid, totalTime, this.wellSystem, this.waveRings);

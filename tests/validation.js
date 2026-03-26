@@ -119,13 +119,12 @@ runner.run('Map total density sources within GLSL dissipation shader capacity', 
   const limit = allLimits[1] || allLimits[0]; // dissipation shader (second declaration)
   assert(limit != null, 'Could not find u_wellPositions array size in dissipation shader');
   for (const map of maps) {
-    // Count all density sources: wells + stars + loot + wrecks + portals (wave-spawned, estimate max) + planetoids + ship
+    // Count all density sources: wells + stars + wrecks + portals (wave-spawned, estimate max) + planetoids + ship
     // Debris wrecks spawn 2-5 extra pieces each
     const debrisCount = (map.data.wrecks || []).filter(w => w.type === 'debris').length;
     const maxDebrisPieces = debrisCount * 5;
     const totalSources = map.data.wells.length
       + map.data.stars.length
-      + map.data.loot.length
       + (map.data.wrecks || []).length + maxDebrisPieces
       + 5  // max portals from wave system
       + (CONFIG.planetoids.maxAlive || 6)
@@ -183,16 +182,7 @@ runner.run('All star positions within world bounds', () => {
 
 // ---- 4. Loot/wreck positions ----
 
-runner.run('All loot positions within world bounds', () => {
-  for (const map of maps) {
-    const ws = map.data.worldScale;
-    for (let i = 0; i < map.data.loot.length; i++) {
-      const l = map.data.loot[i];
-      assert(l.x >= 0 && l.x < ws, `${map.name} loot[${i}]: x=${l.x} outside [0, ${ws})`);
-      assert(l.y >= 0 && l.y < ws, `${map.name} loot[${i}]: y=${l.y} outside [0, ${ws})`);
-    }
-  }
-});
+// Loot position validation removed — loot anchors replaced with stars
 
 runner.run('All wreck positions within world bounds', () => {
   for (const map of maps) {
@@ -321,8 +311,6 @@ runner.run('UV-space CONFIG values are plausible (< 0.5)', () => {
   const uvValues = [
     ['wells.accretionRadius', CONFIG.wells.accretionRadius],
     ['wells.voidRadius', CONFIG.wells.voidRadius],
-    ['loot.glowRadius', CONFIG.loot.glowRadius],
-    ['loot.shimmerRadius', CONFIG.loot.shimmerRadius],
     ['ship.wake.radius', CONFIG.ship.wake.radius],
     ['ship.wake.splatSpacing', CONFIG.ship.wake.splatSpacing],
     ['fluid.dissipationNearRadius', CONFIG.fluid.dissipationNearRadius],

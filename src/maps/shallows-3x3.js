@@ -13,11 +13,10 @@ export const MAP = {
   stars: [
     { x: 1.5, y: 1.65, mass: 0.8, orbitalDir: 1 },
     { x: 0.45, y: 0.75, mass: 0.5, orbitalDir: -1 },
-  ],
-  loot: [
-    { x: 1.5, y: 1.05 },
-    { x: 1.35, y: 2.1 },
-    { x: 2.4, y: 1.65 },
+    // Former loot anchors → stars
+    { x: 1.5, y: 1.05, mass: 0.4, orbitalDir: 1 },
+    { x: 1.35, y: 2.1, mass: 0.3, orbitalDir: -1 },
+    { x: 2.4, y: 1.65, mass: 0.6, orbitalDir: 1 },
   ],
   wrecks: [
     { x: 1.5, y: 0.5, type: 'derelict', tier: 1, size: 'medium' },

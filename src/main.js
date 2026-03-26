@@ -14,7 +14,7 @@ import { FluidSim } from './fluid.js';
 import { Ship } from './ship.js';
 import { WellSystem } from './wells.js';
 import { StarSystem } from './stars.js';
-import { LootSystem } from './loot.js';
+// loot.js removed — loot anchors replaced with stars + asteroid clusters (see FLAVOR-PASS.md)
 import { WaveRingSystem } from './wave-rings.js';
 import { WreckSystem } from './wrecks.js';
 import { PortalSystem } from './portals.js';
@@ -51,7 +51,7 @@ const MAP_LIST = [MAP_SHALLOWS, MAP_EXPANSE, MAP_DEEP];
 // ---- State ----
 let glCanvas, gl;
 let overlayCanvas, ctx;
-let fluid, ship, wellSystem, starSystem, lootSystem, wreckSystem, waveRings;
+let fluid, ship, wellSystem, starSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
 let scavengerSystem, combatSystem, audioEngine, inventorySystem;
 let flowField, simCore;
@@ -138,7 +138,6 @@ function init() {
   // Init entity systems (empty — loadScene populates them)
   wellSystem = new WellSystem();
   starSystem = new StarSystem();
-  lootSystem = new LootSystem();
   wreckSystem = new WreckSystem();
   portalSystem = new PortalSystem();
   planetoidSystem = new PlanetoidSystem();
@@ -161,7 +160,7 @@ function init() {
     flowField,
     wellSystem,
     starSystem,
-    lootSystem,
+
     wreckSystem,
     portalSystem,
     planetoidSystem,
@@ -221,7 +220,7 @@ function init() {
       flowField,
       wellSystem,
       starSystem,
-      lootSystem,
+  
       wreckSystem,
       portalSystem,
       planetoidSystem,
@@ -408,7 +407,7 @@ function loadScene(map) {
   currentMap = map;
   currentCameraMode = map.camera ?? 'follow';
   const mapResult = loadMap(currentMap, {
-    wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
+    wellSystem, starSystem, wreckSystem, portalSystem, planetoidSystem, fluid,
   });
   startingMasses = mapResult.startingMasses;
 
@@ -905,7 +904,7 @@ function gameLoop(now) {
     // Only render game entities when playing (not on title/mapSelect)
     waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    lootSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    // lootSystem removed — loot anchors replaced with stars
     wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, simState.runElapsedTime);
     planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
@@ -1158,19 +1157,7 @@ function gameLoop(now) {
       ctx.fillText(`S${i} m:${star.mass.toFixed(2)}`, sx + 8, sy - 6);
     }
 
-    // Loot
-    for (let i = 0; i < lootSystem.anchors.length; i++) {
-      const loot = lootSystem.anchors[i];
-      if (!loot.alive) continue;
-      const [lx, ly] = worldToScreen(loot.wx, loot.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const glowR = worldToPx(uvToWorld(CONFIG.loot.glowRadius), overlayCanvas.width);
-      ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(lx, ly, glowR, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = '#66ccff';
-      ctx.font = '11px monospace';
-      ctx.fillText(`L${i}`, lx + 8, ly - 6);
-    }
+    // Loot anchors removed — positions converted to stars
 
     // Portals
     for (let i = 0; i < portalSystem.portals.length; i++) {
@@ -1275,7 +1262,7 @@ function gameLoop(now) {
 
       // Map stats
       const size = `${map.worldScale}x${map.worldScale}`;
-      const stats = `${size}  |  ${map.wells.length} wells  ${map.stars.length} stars  ${map.loot.length} loot  ${(map.wrecks || []).length} wrecks`;
+      const stats = `${size}  |  ${map.wells.length} wells  ${map.stars.length} stars  ${(map.wrecks || []).length} wrecks`;
       ctx.fillStyle = `rgba(150, 160, 180, ${selected ? 0.8 : 0.4})`;
       ctx.font = '13px monospace';
       ctx.fillText(stats, cx, y + 26);

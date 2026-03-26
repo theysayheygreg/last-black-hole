@@ -14,7 +14,6 @@ import { setWorldScale } from './coords.js';
  * @param {Object} systems - Game systems to populate
  * @param {WellSystem} systems.wellSystem
  * @param {StarSystem} systems.starSystem
- * @param {LootSystem} systems.lootSystem
  * @param {WreckSystem} systems.wreckSystem
  * @param {PortalSystem} systems.portalSystem
  * @param {PlanetoidSystem} systems.planetoidSystem
@@ -22,7 +21,7 @@ import { setWorldScale } from './coords.js';
  * @returns {{ startingMasses: number[] }}
  */
 export function loadMap(map, systems) {
-  const { wellSystem, starSystem, lootSystem, wreckSystem, portalSystem, planetoidSystem, fluid } = systems;
+  const { wellSystem, starSystem, wreckSystem, portalSystem, planetoidSystem, fluid } = systems;
 
   // 1. Set world scale (live binding — all importers see the new value)
   setWorldScale(map.worldScale);
@@ -30,7 +29,6 @@ export function loadMap(map, systems) {
   // 2. Clear all entity arrays
   wellSystem.wells = [];
   starSystem.stars = [];
-  lootSystem.anchors = [];
   if (wreckSystem) wreckSystem.wrecks = [];
   portalSystem.portals = [];
   planetoidSystem.planetoids = [];
@@ -64,12 +62,7 @@ export function loadMap(map, systems) {
     });
   }
 
-  // 6. Spawn loot
-  for (const l of map.loot) {
-    lootSystem.addLoot(l.x, l.y);
-  }
-
-  // 7. Spawn wrecks
+  // 6. Spawn wrecks
   for (const w of (map.wrecks || [])) {
     if (wreckSystem) {
       wreckSystem.addWreck(w.x, w.y, {

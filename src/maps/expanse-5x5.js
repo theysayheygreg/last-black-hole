@@ -21,14 +21,16 @@ export const MAP = {
     { x: 2.0, y: 1.0, mass: 0.9, orbitalDir: 1 },
     { x: 1.0, y: 3.0, mass: 0.6, orbitalDir: -1 },
     { x: 4.0, y: 2.5, mass: 0.7, orbitalDir: 1 },
-  ],
-  loot: [
-    { x: 2.5, y: 1.8 },
-    { x: 1.8, y: 3.2 },
-    { x: 3.8, y: 2.0 },
-    { x: 0.8, y: 2.5 },
-    { x: 3.0, y: 4.0 },
-    { x: 4.5, y: 1.5 },
+    // Former loot anchors → stars
+    { x: 2.5, y: 1.8, mass: 0.4, orbitalDir: -1 },
+    { x: 1.8, y: 3.2, mass: 0.5, orbitalDir: 1 },
+    { x: 3.8, y: 2.0, mass: 0.3, orbitalDir: -1 },
+    { x: 0.8, y: 2.5, mass: 0.4, orbitalDir: 1 },
+    { x: 3.0, y: 4.0, mass: 0.6, orbitalDir: -1 },
+    { x: 4.5, y: 1.5, mass: 0.3, orbitalDir: 1 },
+    // New stars to fill out the map
+    { x: 1.5, y: 4.5, mass: 0.5, orbitalDir: 1 },
+    { x: 4.0, y: 4.5, mass: 0.4, orbitalDir: -1 },
   ],
   wrecks: [
     { x: 2.0, y: 0.5, type: 'derelict', tier: 1, size: 'medium' },
