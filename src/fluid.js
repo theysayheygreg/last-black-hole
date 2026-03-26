@@ -256,27 +256,17 @@ void main() {
   vec2 vel = texture(u_velocity, wrappedFluidUV).xy;
   vec3 dens = texture(u_density, wrappedFluidUV).xyz;
   vec3 visDens = texture(u_visualDensity, wrappedFluidUV).xyz;
-  // Scene shaping owns two separate signals:
-  //   positive visual density = excitation / glow / accretion
-  //   negative visual density = collapse / void / absence
-  vec3 posVis = max(visDens, vec3(0.0));
-  vec3 negVis = max(-visDens, vec3(0.0));
+  // Visual density is purely additive (no negative injectors exist).
+  // See docs/design/VISUAL-DENSITY.md for why negative splats were removed.
   // Normalize UV velocity to world-equivalent speed (calibrated at WORLD_SCALE=3)
   float speed = length(vel) * u_worldScale / u_refScale;
 
   // === PRIMARY SCENE SIGNALS ===
   // Physical density = background fabric excitation.
-  // Positive visual density = ring intensity, not whole-frame brightness.
-  // Negative visual density = explicit collapse / absence.
+  // Visual density = ring intensity boost (additive only, no negative signals).
   float rawExcitation = length(max(dens, vec3(0.0)));
   float sceneExcitation = 1.0 - exp(-rawExcitation * (u_densityScale * 0.28));
-  float rawRing = length(posVis);
-  float ringSignal = 1.0 - exp(-rawRing * 0.06);
-
-  // Collapse must survive quantization as a separate, subtractive signal.
-  float rawVoid = max(negVis.r, max(negVis.g, negVis.b));
-  float voidField = 1.0 - exp(-rawVoid * 3.5);
-  float liveSpace = 1.0 - voidField;
+  float ringSignal = 1.0 - exp(-length(visDens) * 0.06);
 
   // === FABRIC NOISE — subtle texture, strongest in darker regions ===
   vec2 fabricUV = wrappedFluidUV * 12.0 + u_time * 0.02;
@@ -288,11 +278,10 @@ void main() {
   // Base fabric. Keep it dark. Let rings do the bright work.
   float baseMix = 0.04 + sceneExcitation * 0.18 + smoothstep(0.01, 0.07, speed) * 0.12 + fabricNoise * 0.45;
   vec3 col = mix(u_voidColor, u_normalColor, clamp(baseMix, 0.0, 0.35));
-  col *= liveSpace;
 
   // Currents should read, but not blow the frame out.
   float flowLight = smoothstep(0.015, 0.08, speed);
-  col += vec3(0.03, 0.08, 0.10) * flowLight * liveSpace;
+  col += vec3(0.03, 0.08, 0.10) * flowLight;
 
   // === PER-WELL: dark core + one readable accretion band ===
   for (int i = 0; i < 256; i++) {
@@ -320,7 +309,7 @@ void main() {
     float haloMask = smoothstep(ringOuter * 1.8, ringOuter, dist)
                    * (1.0 - smoothstep(ringOuter, ringInner, dist));
 
-    float localLive = liveSpace * (1.0 - coreMask);
+    float localLive = 1.0 - coreMask;
     float analyticRing = clamp(0.5 + u_wellMasses[i] * 0.36, 0.5, 1.2);
     float ringEnergy = max(ringSignal, analyticRing);
     float localRing = ringMask * mix(0.62, 1.18, ringEnergy);
@@ -334,7 +323,7 @@ void main() {
     col += ringColor * haloMask * (0.26 + 0.12 * ringEnergy) * localLive;
 
     // Thin event-horizon rim so the lethal edge is legible even on smaller wells.
-    col += mix(u_nearWellColor, u_hotWellColor, 0.7) * horizonMask * (0.35 + 0.18 * ringEnergy) * liveSpace;
+    col += mix(u_nearWellColor, u_hotWellColor, 0.7) * horizonMask * (0.35 + 0.18 * ringEnergy) * localLive;
 
     // Main accretion band. This is the bright read, not the whole well.
     col += ringColor * localRing * 1.16 * ringBias * localLive;
