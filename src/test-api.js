@@ -214,6 +214,17 @@ export function initTestAPI(getState) {
       const { currentSignature } = getState();
       return currentSignature ? { name: currentSignature.name, mechanical: currentSignature.mechanical } : null;
     },
+
+    getVault() {
+      const { vault } = getState();
+      if (!vault) return null;
+      return {
+        exoticMatter: vault.exoticMatter,
+        itemCount: vault.items.length,
+        totalExtractions: vault.totalExtractions,
+        bestSurvivalTime: vault.bestSurvivalTime,
+      };
+    },
   };
 
   window.CONFIG = CONFIG;

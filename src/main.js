@@ -31,6 +31,7 @@ import { CombatSystem } from './combat.js';
 import { AudioEngine } from './audio.js';
 import { rollSignature, applySignatureConfig } from './signatures.js';
 import { InventorySystem } from './inventory.js';
+import { Vault } from './vault.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
 import { FlowField } from './sim/flow-field.js';
 import { SimCore } from './sim/sim-core.js';
@@ -63,7 +64,7 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
-let gamePhase = 'title'; // 'title' | 'mapSelect' | 'playing' | 'dead' | 'escaped' | 'paused'
+let gamePhase = 'title'; // 'title' | 'mapSelect' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused'
 let deathTimer = 0;
 let escapeTimer = 0;
 let titleTimer = 0;
@@ -85,6 +86,12 @@ const simState = createSimState();
 let inventoryOpen = false;  // Tab toggle state
 let shieldActive = false;   // shieldBurst consumable — survive one well contact
 let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow remaining
+
+// Vault + meta screen
+const vault = new Vault();
+let metaExtractedItems = []; // items from the extraction, shown on meta screen
+let metaCursor = 0;          // meta screen cursor position
+let metaPhaseTimer = 0;      // animation timer for meta screen
 
 // Scene transition state
 let transitionActive = false;
@@ -245,6 +252,7 @@ function init() {
       scavengerSystem,
       combatSystem,
       currentSignature,
+      vault,
     }));
   }
 
@@ -685,11 +693,29 @@ function gameLoop(now) {
     if (pauseNow && !_prevPause) togglePause();
 
     if (!transitionActive && confirmNow && !_prevConfirm) {
-      if ((gamePhase === 'dead' && deathTimer > 1.0) ||
-          (gamePhase === 'escaped' && escapeTimer > 1.0)) {
+      if (gamePhase === 'dead' && deathTimer > 1.0) {
         triggerTransition(() => {
           loadTitleScene();
-          gamePhase = 'mapSelect';  // go straight to map select, not title
+          gamePhase = 'mapSelect';
+        });
+      }
+      if (gamePhase === 'escaped' && escapeTimer > 1.0) {
+        // Extract cargo → vault, then transition to meta screen
+        metaExtractedItems = inventorySystem.extractCargo();
+        vault.recordExtraction(simState.runEndTime);
+        vault.storeItems(metaExtractedItems.map(i => ({ ...i })));
+        inventorySystem.serializeLoadout();  // save equipped + consumables
+        triggerTransition(() => {
+          gamePhase = 'meta';
+          metaCursor = 0;
+          metaPhaseTimer = 0;
+        });
+      }
+      if (gamePhase === 'meta') {
+        // "Drop back in" — go to map select
+        triggerTransition(() => {
+          loadTitleScene();
+          gamePhase = 'mapSelect';
         });
       }
     }
@@ -1340,6 +1366,80 @@ function gameLoop(now) {
       ctx.font = '18px monospace';
       ctx.fillText('press space to continue', cx, cy + Math.min(endItems.length, 8) * 18 + 70);
     }
+    ctx.restore();
+  }
+
+  // === META SCREEN (between runs) ===
+  if (!rendererFixtureActive && gamePhase === 'meta') {
+    metaPhaseTimer += dt;
+    const cx = overlayCanvas.width / 2;
+    const cy = overlayCanvas.height / 2;
+    const t = metaPhaseTimer;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 10, 0.92)';
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 12;
+
+    // Title
+    if (t > 0.2) {
+      const a = Math.min((t - 0.2) * 2, 1);
+      ctx.fillStyle = `rgba(100, 255, 255, ${a})`;
+      ctx.font = 'bold 36px monospace';
+      ctx.fillText('SALVAGE REPORT', cx, cy - 160);
+    }
+
+    // Extracted items
+    if (t > 0.5 && metaExtractedItems.length > 0) {
+      ctx.font = '13px monospace';
+      const maxShow = Math.min(metaExtractedItems.length, 8);
+      let itemY = cy - 120;
+      for (let i = 0; i < maxShow; i++) {
+        const item = metaExtractedItems[i];
+        const a = Math.min((t - 0.5 - i * 0.1) * 3, 1);
+        if (a <= 0) continue;
+        const color = TIER_COLORS[item.tier] || 'rgba(200, 200, 210, 0.8)';
+        ctx.fillStyle = color.replace(/[\d.]+\)$/, `${a})`);
+        ctx.fillText(`${item.name} [${item.category}] — ${item.value}`, cx, itemY);
+        itemY += 20;
+      }
+      if (metaExtractedItems.length > 8) {
+        ctx.fillStyle = `rgba(150, 150, 170, ${Math.min((t - 1.3) * 2, 0.6)})`;
+        ctx.fillText(`...and ${metaExtractedItems.length - 8} more`, cx, itemY);
+        itemY += 20;
+      }
+    }
+
+    // Vault summary
+    const summaryT = 0.5 + Math.min(metaExtractedItems.length, 8) * 0.1 + 0.5;
+    if (t > summaryT) {
+      const a = Math.min((t - summaryT) * 2, 1);
+      const totalValue = metaExtractedItems.reduce((sum, i) => sum + (i.value || 0), 0);
+      ctx.font = '15px monospace';
+
+      let sy = cy + 30;
+      ctx.fillStyle = `rgba(255, 220, 100, ${a})`;
+      ctx.fillText(`+${totalValue} exotic matter`, cx, sy);
+      sy += 25;
+      ctx.fillStyle = `rgba(180, 180, 200, ${a * 0.8})`;
+      ctx.fillText(`vault: ${vault.exoticMatter} total  |  ${vault.totalExtractions} extractions`, cx, sy);
+      sy += 20;
+      const mins = Math.floor(vault.bestSurvivalTime / 60);
+      const secs = Math.floor(vault.bestSurvivalTime % 60);
+      ctx.fillText(`best survival: ${mins}:${String(secs).padStart(2, '0')}`, cx, sy);
+    }
+
+    // Prompt
+    const promptT = summaryT + 0.8;
+    if (t > promptT) {
+      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
+      ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
+      ctx.font = '18px monospace';
+      ctx.fillText('press space to drop back in', cx, cy + 120);
+    }
+
     ctx.restore();
   }
 
