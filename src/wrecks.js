@@ -123,16 +123,15 @@ export class WreckSystem {
         0, 0, 0  // no density from obstruction itself
       );
 
-      // Visual glow — visual buffer (stays anchored, not advected)
+      // Visual glow — visual buffer, type-colored
       if (!wreck.looted) {
-        const glow = wreck.type === 'vault' ? cfg.vaultGlow : cfg.wreckGlow;
-        fluid.visualSplat(fu, fv, sizeP.glowRadius * s2,
-          glow[0], glow[1], glow[2]
-        );
+        let glow;
+        if (wreck.type === 'vault') glow = cfg.vaultGlow;        // gold
+        else if (wreck.type === 'debris') glow = [0.03, 0.02, 0.005]; // warm orange
+        else glow = cfg.wreckGlow;                                // blue-gray
+        fluid.visualSplat(fu, fv, sizeP.glowRadius * s2, glow[0], glow[1], glow[2]);
       } else {
-        fluid.visualSplat(fu, fv, sizeP.glowRadius * s2,
-          0.02, 0.02, 0.02
-        );
+        fluid.visualSplat(fu, fv, sizeP.glowRadius * s2, 0.02, 0.02, 0.02);
       }
     }
   }
@@ -186,7 +185,9 @@ export class WreckSystem {
   }
 
   /**
-   * Render wreck overlay markers.
+   * Render wreck overlay markers — distinct shapes per type.
+   * Derelict: broken rectangle (gray-blue). Debris: scattered dots (dull orange).
+   * Vault: diamond with golden particle orbit.
    */
   render(ctx, camX, camY, canvasW, canvasH, totalTime) {
     for (const wreck of this.wrecks) {
@@ -198,38 +199,96 @@ export class WreckSystem {
       ctx.save();
 
       if (wreck.looted) {
-        // Dim gray marker
-        ctx.fillStyle = 'rgba(85, 85, 85, 0.4)';
+        // Dim gray marker — same for all types
+        ctx.fillStyle = 'rgba(85, 85, 85, 0.3)';
         ctx.beginPath();
-        ctx.arc(sx, sy, r * 0.6, 0, Math.PI * 2);
+        ctx.arc(sx, sy, r * 0.4, 0, Math.PI * 2);
         ctx.fill();
-      } else {
-        // Gold marker with pulse
+      } else if (wreck.type === 'vault') {
+        // Vault: golden diamond with particle orbit
         const pulse = 0.6 + 0.4 * Math.sin(totalTime * 2 + wreck.wx * 10);
-        const color = wreck.type === 'vault'
-          ? `rgba(255, 232, 160, ${pulse})`
-          : `rgba(212, 168, 67, ${pulse * 0.8})`;
+        const goldColor = `rgba(255, 215, 60, ${pulse})`;
 
-        // Outer glow
-        ctx.beginPath();
-        ctx.arc(sx, sy, r + 2, 0, Math.PI * 2);
-        ctx.strokeStyle = color;
+        // Diamond shape (rotated square)
+        ctx.translate(sx, sy);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = goldColor;
+        ctx.fillRect(-r * 0.45, -r * 0.45, r * 0.9, r * 0.9);
+        ctx.strokeStyle = `rgba(255, 240, 100, ${pulse * 0.6})`;
         ctx.lineWidth = 1;
-        ctx.stroke();
+        ctx.strokeRect(-r * 0.55, -r * 0.55, r * 1.1, r * 1.1);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-        // Inner fill
-        ctx.beginPath();
-        ctx.arc(sx, sy, r * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-
-        // Vault gets an extra bright center
-        if (wreck.type === 'vault') {
+        // Orbiting golden particles (2 particles)
+        for (let i = 0; i < 2; i++) {
+          const angle = totalTime * 2.5 + i * Math.PI + wreck.wy * 5;
+          const ox = sx + Math.cos(angle) * (r + 4);
+          const oy = sy + Math.sin(angle) * (r + 4);
           ctx.beginPath();
-          ctx.arc(sx, sy, 3, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 220, ${pulse})`;
+          ctx.arc(ox, oy, 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 255, 180, ${pulse * 0.7})`;
           ctx.fill();
         }
+
+        // Bright center
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 220, ${pulse})`;
+        ctx.fill();
+      } else if (wreck.type === 'debris') {
+        // Debris: scattered dots (dull orange)
+        const baseAlpha = 0.5 + 0.2 * Math.sin(totalTime * 1.5 + wreck.wx * 8);
+        const dotColor = `rgba(180, 140, 80, ${baseAlpha})`;
+        const dotCount = 3 + Math.floor(r / 5);
+        for (let i = 0; i < dotCount; i++) {
+          // Deterministic scatter based on wreck position + index
+          const seed = wreck.wx * 137 + wreck.wy * 251 + i * 73;
+          const angle = (seed % 628) / 100;
+          const dist = (seed % 100) / 100 * r * 0.8 + 2;
+          const dotR = 1 + (i % 2);
+          ctx.beginPath();
+          ctx.arc(sx + Math.cos(angle) * dist, sy + Math.sin(angle) * dist, dotR, 0, Math.PI * 2);
+          ctx.fillStyle = dotColor;
+          ctx.fill();
+        }
+      } else {
+        // Derelict: broken rectangle (gray-blue)
+        const pulse = 0.5 + 0.3 * Math.sin(totalTime * 1.2 + wreck.wx * 10);
+        const blueGray = `rgba(160, 180, 200, ${pulse})`;
+
+        // Two offset parallel lines (broken hull)
+        const halfW = r * 0.6;
+        const halfH = r * 0.35;
+        const tilt = (wreck.wx * 17 + wreck.wy * 31) % 3.14;  // deterministic tilt
+        ctx.translate(sx, sy);
+        ctx.rotate(tilt);
+
+        ctx.strokeStyle = blueGray;
+        ctx.lineWidth = 1.5;
+        // Top hull line (broken in middle)
+        ctx.beginPath();
+        ctx.moveTo(-halfW, -halfH);
+        ctx.lineTo(-halfW * 0.15, -halfH);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(halfW * 0.2, -halfH * 0.8);
+        ctx.lineTo(halfW, -halfH * 0.6);
+        ctx.stroke();
+        // Bottom hull line
+        ctx.beginPath();
+        ctx.moveTo(-halfW * 0.8, halfH);
+        ctx.lineTo(halfW * 0.7, halfH * 0.9);
+        ctx.stroke();
+
+        // Faint spark
+        if (pulse > 0.7) {
+          ctx.fillStyle = `rgba(200, 220, 255, ${(pulse - 0.7) * 2})`;
+          ctx.beginPath();
+          ctx.arc(halfW * 0.1, -halfH * 0.3, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
       }
 
       ctx.restore();
