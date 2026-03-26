@@ -59,7 +59,7 @@ const RANGE_HINTS = {
   'stars.radiationStrength':{ min: 0, max: 0.005, step: 0.0002, tip: 'Outward push on fluid. 0.001 = matches well gravity' },
   'stars.falloff':          { min: 1, max: 3, step: 0.1, tip: 'Push falloff. 1 = gentle, 2 = sharp' },
   'stars.orbitalStrength':  { min: 0, max: 0.5, step: 0.01, tip: 'Twist on outflow. 0 = radial, 0.15 = spiral' },
-  'stars.clearing':         { min: 0, max: 0.5, step: 0.02, tip: 'Dark bubble strength + size. 0.2 = visible void. Also sets bubble radius' },
+  // stars.clearing removed — negative visual density injection was causing well ring suppression
   'stars.rayCount':         { min: 2, max: 12, step: 1, tip: 'Number of light rays' },
   'stars.rayLength':        { min: 0.05, max: 0.4, step: 0.01, tip: 'Ray length. 0.25 = 1/4 screen' },
   'stars.rayBrightness':    { min: 0.01, max: 0.15, step: 0.005, tip: 'Ray glow. 0.06 = visible, 0.15 = blazing' },
@@ -69,15 +69,22 @@ const RANGE_HINTS = {
   'stars.maxRange':         { min: 0.2, max: 1.5, step: 0.05, tip: 'Push reach in world-units — zero force beyond' },
   'stars.shipPushFalloff':  { min: 1, max: 3, step: 0.1, tip: 'Ship push falloff' },
 
-  // Loot
-  'loot.gravity':           { min: 0, max: 0.003, step: 0.0002, tip: 'Flow obstruction pull. 0.0008 = gentle eddy, 0.002 = visible vortex' },
-  'loot.falloff':           { min: 1, max: 5, step: 0.2, tip: 'How local the pull is. 3 = tight, 1 = wide' },
-  'loot.densityRate':       { min: 0.005, max: 0.06, step: 0.002, tip: 'Glow brightness. 0.015 = gentle, 0.04 = beacon' },
-  'loot.glowRadius':        { min: 0.005, max: 0.05, step: 0.002, tip: 'Glow size (~1-12 ASCII cells)' },
-  'loot.shimmerSpeed':      { min: 0.5, max: 8, step: 0.5, tip: 'Shimmer rotation (rad/s)' },
-  'loot.shimmerRadius':     { min: 0.005, max: 0.03, step: 0.002, tip: 'Shimmer orbit size' },
-  'loot.overlaySize':       { min: 3, max: 20, step: 1, tip: 'Marker dot size (pixels)' },
-  'loot.pulseRate':         { min: 0.5, max: 4, step: 0.25, tip: 'Pulse frequency (Hz)' },
+  // Camera
+  'camera.lerpSpeed':       { min: 1, max: 20, step: 0.5, tip: 'Camera follow speed. Higher = snappier' },
+  'camera.leadAhead':       { min: 0, max: 0.3, step: 0.01, tip: 'Camera leads ship velocity. 0.1 = subtle look-ahead' },
+
+  // Wrecks
+  'wrecks.pickupRadius':    { min: 0.03, max: 0.2, step: 0.01, tip: 'Auto-loot radius in world-units' },
+
+  // Scavengers
+  'scavengers.count':       { min: 0, max: 12, step: 1, tip: 'Scavenger count per map' },
+  'scavengers.vultureRatio':{ min: 0, max: 1, step: 0.1, tip: 'Fraction that are vultures (aggressive)' },
+  'scavengers.sensorRange': { min: 0.1, max: 1, step: 0.05, tip: 'Detection range in world-units' },
+
+  // Combat
+  'combat.pulseCooldown':   { min: 0.5, max: 10, step: 0.5, tip: 'Seconds between force pulses' },
+  'combat.pulseForce':      { min: 0.5, max: 5, step: 0.25, tip: 'Radial push force strength' },
+  'combat.pulseRadius':     { min: 0.05, max: 0.3, step: 0.01, tip: 'Pulse effect radius in world-units' },
 
   // Ship wake
   'ship.wake.splatCount':   { min: 1, max: 8, step: 1, tip: 'Trail length (splat count)' },
