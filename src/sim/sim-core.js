@@ -64,7 +64,7 @@ export class SimCore {
     this.fluid.fadeVisualDensity(0.99);
 
     this.wellSystem.update(this.fluid, stepDt, totalTime);
-    this.starSystem.update(this.fluid, stepDt, totalTime);
+    this.starSystem.update(this.fluid, stepDt, totalTime, this.wellSystem, this.waveRings);
 
     const turbStr = CONFIG.fluid.ambientTurbulence;
     const densStr = CONFIG.fluid.ambientDensity;

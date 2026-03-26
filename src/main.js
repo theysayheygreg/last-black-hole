@@ -86,6 +86,8 @@ const simState = createSimState();
 let inventoryOpen = false;  // Tab toggle state
 let shieldActive = false;   // shieldBurst consumable — survive one well contact
 let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow remaining
+let _starFlashTimer = 0;    // dramatic flash when star consumed by well
+let _starFlashColor = [255, 255, 255];
 
 // Vault + meta screen
 const vault = new Vault();
@@ -394,6 +396,7 @@ function loadScene(map) {
   inventoryOpen = false;
   shieldActive = false;
   timeSlowRemaining = 0;
+  _starFlashTimer = 0;
   waveRings.rings = [];
   scavengerSystem.scavengers = [];
   combatSystem.playerCooldown = 0;
@@ -740,6 +743,16 @@ function gameLoop(now) {
       starSystem.applyToShip(ship);
       planetoidSystem.applyToShip(ship);
 
+      // Star consumption events — dramatic flash
+      for (const evt of starSystem.consumptionEvents) {
+        const [cr, cg, cb] = evt.starColor;
+        showWarning(`${evt.starName} consumed`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
+        // Brief screen tint stored for rendering
+        _starFlashTimer = 0.8;
+        _starFlashColor = evt.starColor;
+      }
+      starSystem.clearConsumptionEvents();
+
       // Force pulse (E key / Square button, edge-triggered)
       if (pulseNow && !_prevPulse) {
         if (combatSystem.playerPulse(ship, fluid, waveRings, wellSystem, scavengerSystem, planetoidSystem)) {
@@ -1028,6 +1041,17 @@ function gameLoop(now) {
         ctx.fillText(scav.name, sx, sy - 14);
       }
 
+      ctx.restore();
+    }
+
+    // Star consumption flash — brief screen tint
+    if (_starFlashTimer > 0) {
+      _starFlashTimer -= dt;
+      const flashAlpha = Math.max(0, _starFlashTimer / 0.8) * 0.25;
+      const [fr, fg, fb] = _starFlashColor;
+      ctx.save();
+      ctx.fillStyle = `rgba(${fr}, ${fg}, ${fb}, ${flashAlpha})`;
+      ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
       ctx.restore();
     }
 

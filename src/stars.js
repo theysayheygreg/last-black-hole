@@ -9,7 +9,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo, worldDistance, uvScale } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDirectionTo, worldDistance, uvScale, wrapWorld } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
 // ---- Star type definitions ----
@@ -88,6 +88,24 @@ class Star {
     this.typeDef = STAR_TYPES[this.type] || STAR_TYPES.yellowDwarf;
     this.name = generateStarName(this.type);
     this.alive = true;
+
+    // Slow drift — random direction, very slow
+    const driftSpeed = 0.001 + Math.random() * 0.002;
+    const driftAngle = Math.random() * Math.PI * 2;
+    this.driftVX = Math.cos(driftAngle) * driftSpeed;
+    this.driftVY = Math.sin(driftAngle) * driftSpeed;
+
+    // Orbiting asteroids — 2-4 tiny bodies
+    this.asteroids = [];
+    const asteroidCount = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < asteroidCount; i++) {
+      this.asteroids.push({
+        orbitRadius: 0.06 + Math.random() * 0.1,
+        angle: Math.random() * Math.PI * 2,
+        speed: (0.5 + Math.random() * 0.8) * this.orbitalDir,
+        size: 2 + Math.random() * 2,
+      });
+    }
   }
 }
 
@@ -102,14 +120,51 @@ export class StarSystem {
     return star;
   }
 
-  update(fluid, dt, totalTime) {
+  /** Pending consumption events — main.js reads + clears for dramatic effects. */
+  get consumptionEvents() { return this._consumptionEvents || []; }
+  clearConsumptionEvents() { this._consumptionEvents = []; }
+
+  update(fluid, dt, totalTime, wellSystem = null, waveRings = null) {
     const cfg = CONFIG.stars;
     const s = uvScale();
     const s2 = s * s;
+    if (!this._consumptionEvents) this._consumptionEvents = [];
 
     for (const star of this.stars) {
       if (!star.alive) continue;
       const td = star.typeDef;
+
+      // Drift
+      star.wx = wrapWorld(star.wx + star.driftVX * dt);
+      star.wy = wrapWorld(star.wy + star.driftVY * dt);
+
+      // Update asteroid orbits
+      for (const ast of star.asteroids) {
+        ast.angle += ast.speed * dt;
+      }
+
+      // Well consumption check — dramatic event
+      if (wellSystem) {
+        for (const well of wellSystem.wells) {
+          const dist = worldDistance(star.wx, star.wy, well.wx, well.wy);
+          if (dist < well.killRadius) {
+            star.alive = false;
+            well.mass += star.mass * 0.5;  // significant mass transfer
+            well.updateKillRadius();
+            if (waveRings) {
+              waveRings.spawn(well.wx, well.wy, star.mass * 3);  // large wave
+            }
+            this._consumptionEvents.push({
+              wx: well.wx, wy: well.wy,
+              starType: star.type,
+              starColor: td.color,
+              starName: star.name,
+            });
+            break;
+          }
+        }
+        if (!star.alive) continue;
+      }
       const [fu, fv] = worldToFluidUV(star.wx, star.wy);
 
       // Outward push: NEGATIVE gravity, scaled by type
@@ -245,6 +300,17 @@ export class StarSystem {
       ctx.arc(sx, sy, coreR * 0.5, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(255, 255, 255, ${pulse})`;
       ctx.fill();
+
+      // Orbiting asteroids — tiny gray dots
+      const ppw = canvasW / 1.0;  // pxPerWorld for CAMERA_VIEW=1
+      for (const ast of star.asteroids) {
+        const ax = sx + Math.cos(ast.angle) * ast.orbitRadius * ppw;
+        const ay = sy + Math.sin(ast.angle) * ast.orbitRadius * ppw;
+        ctx.beginPath();
+        ctx.arc(ax, ay, ast.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(160, 160, 170, ${0.5 + 0.2 * pulse})`;
+        ctx.fill();
+      }
 
       ctx.restore();
     }
