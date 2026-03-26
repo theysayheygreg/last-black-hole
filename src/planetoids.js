@@ -1,13 +1,13 @@
 /**
- * planetoids.js — Moving terrain that creates surfable wakes.
+ * planetoids.js — Comets: moving terrain that creates surfable wakes.
  *
  * Three path types:
  * 1. Orbit — elliptical orbit around a single well
  * 2. Figure-8 — Lissajous curve between two wells
  * 3. Transit — straight line across map, wrapping at edges
  *
- * Fluid injection: bow shock (pressure wave ahead), wake vortex (twin eddies behind),
- * density trail (visible comet tail).
+ * Visual: teardrop body with canvas-rendered tail (no fluid injection for tail).
+ * Fluid injection: bow shock (pressure wave ahead), wake vortex (twin eddies behind).
  *
  * Ship interaction: push away if close. Well consumption: eaten by wells.
  */
@@ -15,6 +15,17 @@
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, worldDirectionTo, wrapWorld, uvScale } from './coords.js';
 import { proximityForce, applyForceToShip } from './physics.js';
+
+// ---- Comet name generation ----
+
+const COMET_PREFIXES = ['Comet', 'Wanderer', 'Drifter'];
+const GREEK = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta'];
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function generateCometName() {
+  return `${pick(COMET_PREFIXES)} ${pick(GREEK)}-${Math.floor(Math.random() * 99) + 1}`;
+}
 
 class Planetoid {
   /**
@@ -31,6 +42,7 @@ class Planetoid {
     this.t = Math.random() * Math.PI * 2; // phase
     this.alive = true;
     this.age = 0;
+    this.name = generateCometName();
   }
 }
 
@@ -268,7 +280,7 @@ export class PlanetoidSystem {
   }
 
   /**
-   * Render planetoid overlay markers (small bright dots with velocity indicator).
+   * Render comets — teardrop body with trailing tail segments.
    */
   render(ctx, camX, camY, canvasW, canvasH) {
     const cfg = CONFIG.planetoids;
@@ -277,26 +289,62 @@ export class PlanetoidSystem {
       if (!p.alive) continue;
       const [sx, sy] = worldToScreen(p.wx, p.wy, camX, camY, canvasW, canvasH);
       const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      const bodyR = cfg.size * 1.2;
 
       ctx.save();
 
-      // Body — blue-white dot
-      ctx.beginPath();
-      ctx.arc(sx, sy, cfg.size, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(200, 220, 255, 0.8)';
-      ctx.fill();
-
-      // Velocity direction indicator (short line)
       if (speed > 0.01) {
-        const dirLen = 12;
         const dirX = p.vx / speed;
         const dirY = p.vy / speed;
+
+        // Canvas tail — 5 trailing segments, progressively dimmer and wider
+        const tailSegments = 5;
+        const segSpacing = 8;
+        for (let i = tailSegments; i >= 1; i--) {
+          const t = i / tailSegments;
+          const tx = sx - dirX * segSpacing * i;
+          const ty = sy - dirY * segSpacing * i;
+          const segR = 1.5 + t * 3;  // wider toward end
+          const alpha = 0.5 * (1 - t);
+          ctx.beginPath();
+          ctx.arc(tx, ty, segR, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(180, 210, 240, ${alpha})`;
+          ctx.fill();
+        }
+
+        // Coma — faint radial glow around body
+        const comaGrad = ctx.createRadialGradient(sx, sy, bodyR * 0.5, sx, sy, bodyR * 3);
+        comaGrad.addColorStop(0, 'rgba(200, 230, 255, 0.15)');
+        comaGrad.addColorStop(1, 'rgba(200, 230, 255, 0)');
         ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(sx + dirX * dirLen, sy + dirY * dirLen);
-        ctx.strokeStyle = 'rgba(150, 200, 255, 0.6)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
+        ctx.arc(sx, sy, bodyR * 3, 0, Math.PI * 2);
+        ctx.fillStyle = comaGrad;
+        ctx.fill();
+
+        // Teardrop body — elongated toward velocity direction
+        const angle = Math.atan2(dirY, dirX);
+        ctx.translate(sx, sy);
+        ctx.rotate(angle);
+
+        // Teardrop: circle at front, pointed tail behind
+        ctx.beginPath();
+        ctx.arc(0, 0, bodyR, -Math.PI * 0.5, Math.PI * 0.5);
+        ctx.lineTo(-bodyR * 2, 0);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(200, 230, 255, 0.85)';
+        ctx.fill();
+
+        // Bright leading edge
+        ctx.beginPath();
+        ctx.arc(bodyR * 0.3, 0, bodyR * 0.4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(240, 250, 255, 0.9)';
+        ctx.fill();
+      } else {
+        // Stationary — simple circle
+        ctx.beginPath();
+        ctx.arc(sx, sy, bodyR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(200, 220, 255, 0.8)';
+        ctx.fill();
       }
 
       ctx.restore();
