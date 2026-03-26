@@ -105,6 +105,22 @@ function vultureAlternateApproach(scav, targetWX, targetWY, flowField) {
 }
 
 
+// ---- Scavenger identity ----
+
+const FACTIONS = ['Collector', 'Reaper', 'Warden'];
+const DRIFTER_NAMES = ['Quiet Tide', 'Still Wake', 'Ash Petal', 'Cold Harbor',
+  'Pale Drift', 'Dim Lantern', 'Soft Echo', 'Low Ember'];
+const VULTURE_NAMES = ['Keen Edge', 'Rust Claw', 'Burnt Lance', 'Bitter Claim',
+  'Sharp Debt', 'Iron Reap', 'Hot Slag', 'Cold Cut'];
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function generateScavengerName(archetype) {
+  const faction = pick(FACTIONS);
+  const callsign = archetype === 'vulture' ? pick(VULTURE_NAMES) : pick(DRIFTER_NAMES);
+  return { faction, callsign, full: `${faction} ${callsign}` };
+}
+
 // ---- Scavenger entity ----
 
 export class Scavenger {
@@ -121,6 +137,10 @@ export class Scavenger {
 
     // Identity
     this.archetype = archetype; // 'drifter' or 'vulture'
+    const identity = generateScavengerName(archetype);
+    this.faction = identity.faction;
+    this.callsign = identity.callsign;
+    this.name = identity.full;
 
     // State machine
     this.state = 'drift';
