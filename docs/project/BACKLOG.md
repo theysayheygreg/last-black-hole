@@ -38,6 +38,13 @@
 - **Simplest fix:** Cache in coords.js — recompute only when WORLD_SCALE changes. Zero per-frame cost.
 - **Added:** 2026-03-26
 
+### Comet Tail Fluid Wake Injection
+- **What:** Inject comet tail density into the visual density buffer (and optionally velocity field) so tails interact with the fluid sim, not just the canvas overlay.
+- **Why deferred:** More splats = more GPU load. Canvas-only tails are cheap and look good enough for now. Need to profile before adding fluid injection.
+- **Value if revisited:** Comet tails that distort the ASCII field, interact with wells, and leave visible trails in the fluid. Much richer visual.
+- **First revival step:** Profile current splat budget, then add 3-5 trail splats per comet per frame behind the body.
+- **Added:** 2026-03-26
+
 ### Spatially-Varying Fluid Parameters
 - **What:** Viscosity texture, damping texture, temperature texture that vary across the map and degrade over time
 - **Why backlogged:** Adds complexity to fluid sim tuning. Core viscosity ramp (uniform) is enough for jam.

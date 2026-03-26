@@ -205,10 +205,10 @@ Items 1-2 are cleanup. Items 3-5 can be parallelized. Items 6-7 depend on 3-5 fo
 
 ---
 
-## Open Questions for Greg
+## Decisions (2026-03-26)
 
-1. **Loot anchors:** Replace with stars, convert to asteroid clusters, or just delete?
-2. **Star consumption by wells:** Dramatic event or quiet removal?
-3. **Scavenger factions:** Assign randomly from the three existing factions (collectors/reapers/wardens), or keep faction-less for now?
-4. **Label density:** All objects labeled, or only "important" ones (wells, vaults, named NPCs)?
-5. **Comet tails:** Canvas overlay only, or also inject tail density into the fluid sim?
+1. **Loot anchors:** Both — replace with stars AND add asteroid clusters. Increase object count on 5x5 and 10x10, they feel empty.
+2. **Star consumption:** Dramatic event. Manage rarity via spawn distance from wells. Target: ~1 star consumed per match, usually toward end of run.
+3. **Scavenger factions:** Assign randomly from collectors/reapers/wardens at spawn.
+4. **Label density:** All objects labeled. Try it, dial back if noisy.
+5. **Comet tails:** Canvas overlay only. Fluid wake injection deferred to tomorrow/weekend (see roadmap).
