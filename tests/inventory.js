@@ -256,6 +256,107 @@ async function run() {
       assert(!closedAgain, 'Panel should be closed after second Tab');
     });
 
+    // ---- EQUIP FROM CARGO ----
+
+    await runner.run('Equip artifact from cargo to equipped slot', async () => {
+      // Restart clean, spawn equippable, pick it up, equip it
+      await startGame(page);
+      const result = await page.evaluate(() => {
+        const api = window.__TEST_API;
+        const ship = api.getShipPos();
+        api.spawnTestWreck(ship.x, ship.y, {
+          loot: [{
+            name: 'Test Lens', category: 'artifact', subcategory: 'equippable',
+            tier: 'rare', value: 200, effect: 'showKillRadii', effectDesc: 'test',
+          }],
+        });
+        api.pickupAtShip();
+        const before = api.getInventory();
+        const cargoSlot = before.cargo.findIndex(i => i && i.name === 'Test Lens');
+        api.equipFromCargo(cargoSlot, 0);
+        const after = api.getInventory();
+        return { before, after };
+      });
+      assert(result.before.equipped[0] === null, 'Equip slot should start empty');
+      assert(result.after.equipped[0] !== null, 'Equip slot should have item after equip');
+      assert(result.after.equipped[0].name === 'Test Lens', 'Wrong item equipped');
+      assert(!result.after.cargo.some(i => i && i.name === 'Test Lens'), 'Item should be removed from cargo');
+    });
+
+    // ---- LOAD CONSUMABLE FROM CARGO ----
+
+    await runner.run('Load consumable from cargo to hotbar', async () => {
+      const result = await page.evaluate(() => {
+        const api = window.__TEST_API;
+        const ship = api.getShipPos();
+        api.spawnTestWreck(ship.x, ship.y, {
+          loot: [{
+            name: 'Test Shield', category: 'artifact', subcategory: 'consumable',
+            tier: 'rare', value: 300, useEffect: 'shieldBurst', useDesc: 'test', charges: 1,
+          }],
+        });
+        api.pickupAtShip();
+        const before = api.getInventory();
+        const cargoSlot = before.cargo.findIndex(i => i && i.name === 'Test Shield');
+        api.loadConsumableFromCargo(cargoSlot, 0);
+        const after = api.getInventory();
+        return { before, after };
+      });
+      assert(result.after.consumables[0] !== null, 'Hotbar slot should have item after load');
+      assert(result.after.consumables[0].name === 'Test Shield', 'Wrong consumable loaded');
+      assert(!result.after.cargo.some(i => i && i.name === 'Test Shield'), 'Item should be removed from cargo');
+    });
+
+    // ---- USE CONSUMABLE ----
+
+    await runner.run('Using consumable returns effect ID and removes from hotbar', async () => {
+      const result = await page.evaluate(() => {
+        const api = window.__TEST_API;
+        const inv = api.getInventory();
+        // Consumable should still be in slot 0 from previous test
+        if (!inv.consumables[0]) return { effect: null, error: 'no consumable in slot' };
+        const effect = api.useConsumable(0);
+        const after = api.getInventory();
+        return { effect, after };
+      });
+      assert(result.effect === 'shieldBurst', `Expected shieldBurst effect, got ${result.effect}`);
+      assert(result.after.consumables[0] === null, 'Hotbar slot should be empty after use');
+    });
+
+    // ---- EQUIP SLOT SWAP ----
+
+    await runner.run('Equipping when slots full swaps with target slot', async () => {
+      const result = await page.evaluate(() => {
+        const api = window.__TEST_API;
+        const ship = api.getShipPos();
+        // Fill both equip slots
+        api.spawnTestWreck(ship.x, ship.y, {
+          loot: [
+            { name: 'Lens A', category: 'artifact', subcategory: 'equippable', tier: 'rare', value: 100, effect: 'a', effectDesc: 'a' },
+            { name: 'Lens B', category: 'artifact', subcategory: 'equippable', tier: 'rare', value: 100, effect: 'b', effectDesc: 'b' },
+            { name: 'Lens C', category: 'artifact', subcategory: 'equippable', tier: 'rare', value: 100, effect: 'c', effectDesc: 'c' },
+          ],
+        });
+        api.pickupAtShip();
+        // Equip A to slot 0, B to slot 1
+        let inv = api.getInventory();
+        let slotA = inv.cargo.findIndex(i => i && i.name === 'Lens A');
+        api.equipFromCargo(slotA, 0);
+        inv = api.getInventory();
+        let slotB = inv.cargo.findIndex(i => i && i.name === 'Lens B');
+        api.equipFromCargo(slotB, 1);
+        // Now equip C to slot 0 — should swap A back to cargo
+        inv = api.getInventory();
+        let slotC = inv.cargo.findIndex(i => i && i.name === 'Lens C');
+        api.equipFromCargo(slotC, 0);
+        const after = api.getInventory();
+        return after;
+      });
+      assert(result.equipped[0].name === 'Lens C', `Slot 0 should have C, got ${result.equipped[0]?.name}`);
+      assert(result.equipped[1].name === 'Lens B', `Slot 1 should have B, got ${result.equipped[1]?.name}`);
+      assert(result.cargo.some(i => i && i.name === 'Lens A'), 'Lens A should be back in cargo after swap');
+    });
+
     // Screenshot
     const filepath = await screenshot(page, 'inventory');
     console.log(`\n  Screenshot: ${filepath}`);

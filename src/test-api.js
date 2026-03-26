@@ -122,6 +122,32 @@ export function initTestAPI(getState) {
       return inventorySystem.dropFromCargo(slotIndex);
     },
 
+    equipFromCargo(cargoSlot, equipSlot = 0) {
+      const { inventorySystem } = getState();
+      if (!inventorySystem) return null;
+      const item = inventorySystem.removeFromCargo(cargoSlot);
+      if (!item) return null;
+      const prev = inventorySystem.equip(equipSlot, item);
+      if (prev) inventorySystem.addToCargo(prev);
+      return item;
+    },
+
+    loadConsumableFromCargo(cargoSlot, hotbarSlot = 0) {
+      const { inventorySystem } = getState();
+      if (!inventorySystem) return null;
+      const item = inventorySystem.removeFromCargo(cargoSlot);
+      if (!item) return null;
+      const prev = inventorySystem.loadConsumable(hotbarSlot, item);
+      if (prev) inventorySystem.addToCargo(prev);
+      return item;
+    },
+
+    useConsumable(slotIndex) {
+      const { inventorySystem } = getState();
+      if (!inventorySystem) return null;
+      return inventorySystem.useConsumable(slotIndex);
+    },
+
     getWrecks() {
       const { wreckSystem } = getState();
       if (!wreckSystem) return [];
