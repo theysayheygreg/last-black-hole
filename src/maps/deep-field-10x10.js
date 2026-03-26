@@ -34,30 +34,33 @@ export const MAP = {
     { x: 5.0, y: 3.5, mass: 0.5, orbitalDir: 1, killRadius: 0.03, spinRate: 1.6, points: 3 },
   ],
   stars: [
-    { x: 2.0, y: 5.0, mass: 0.8, orbitalDir: 1 },
-    { x: 5.0, y: 2.0, mass: 0.7, orbitalDir: -1 },
-    { x: 8.0, y: 5.0, mass: 0.9, orbitalDir: 1 },
-    { x: 5.0, y: 8.0, mass: 0.6, orbitalDir: -1 },
-    { x: 2.5, y: 8.0, mass: 0.5, orbitalDir: 1 },
-    { x: 7.5, y: 2.0, mass: 0.7, orbitalDir: -1 },
-    // Former loot anchors → stars
-    { x: 4.0, y: 4.0, mass: 0.5, orbitalDir: 1 },
-    { x: 6.0, y: 4.0, mass: 0.4, orbitalDir: -1 },
-    { x: 6.0, y: 6.0, mass: 0.6, orbitalDir: 1 },
-    { x: 4.0, y: 6.0, mass: 0.3, orbitalDir: -1 },
-    { x: 2.0, y: 2.0, mass: 0.4, orbitalDir: 1 },
-    { x: 8.0, y: 2.0, mass: 0.5, orbitalDir: -1 },
-    { x: 8.0, y: 8.0, mass: 0.4, orbitalDir: 1 },
-    { x: 2.0, y: 8.0, mass: 0.3, orbitalDir: -1 },
-    // New stars — fill edges and gaps
-    { x: 5.0, y: 0.5, mass: 0.3, orbitalDir: 1 },
-    { x: 0.5, y: 5.0, mass: 0.4, orbitalDir: -1 },
-    { x: 9.5, y: 5.0, mass: 0.3, orbitalDir: 1 },
-    { x: 5.0, y: 9.5, mass: 0.4, orbitalDir: -1 },
-    { x: 1.0, y: 1.0, mass: 0.3, orbitalDir: 1 },
-    { x: 9.0, y: 9.0, mass: 0.3, orbitalDir: -1 },
-    { x: 3.5, y: 1.5, mass: 0.5, orbitalDir: 1 },
-    { x: 6.5, y: 8.5, mass: 0.4, orbitalDir: -1 },
+    // Core region — diverse types
+    { x: 2.0, y: 5.0, mass: 0.8, orbitalDir: 1, type: 'redGiant' },
+    { x: 5.0, y: 2.0, mass: 0.7, orbitalDir: -1, type: 'yellowDwarf' },
+    { x: 8.0, y: 5.0, mass: 0.9, orbitalDir: 1, type: 'redGiant' },
+    { x: 5.0, y: 8.0, mass: 0.6, orbitalDir: -1, type: 'whiteDwarf' },
+    { x: 2.5, y: 8.0, mass: 0.5, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 7.5, y: 2.0, mass: 0.7, orbitalDir: -1, type: 'whiteDwarf' },
+    // Inner ring
+    { x: 4.0, y: 4.0, mass: 0.5, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 6.0, y: 4.0, mass: 0.4, orbitalDir: -1, type: 'yellowDwarf' },
+    { x: 6.0, y: 6.0, mass: 0.6, orbitalDir: 1, type: 'neutronStar' },
+    { x: 4.0, y: 6.0, mass: 0.3, orbitalDir: -1, type: 'yellowDwarf' },
+    // Mid ring
+    { x: 2.0, y: 2.0, mass: 0.4, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 8.0, y: 2.0, mass: 0.5, orbitalDir: -1, type: 'yellowDwarf' },
+    { x: 8.0, y: 8.0, mass: 0.4, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 2.0, y: 8.0, mass: 0.3, orbitalDir: -1, type: 'yellowDwarf' },
+    // Edges
+    { x: 5.0, y: 0.5, mass: 0.3, orbitalDir: 1, type: 'whiteDwarf' },
+    { x: 0.5, y: 5.0, mass: 0.4, orbitalDir: -1, type: 'yellowDwarf' },
+    { x: 9.5, y: 5.0, mass: 0.3, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 5.0, y: 9.5, mass: 0.4, orbitalDir: -1, type: 'redGiant' },
+    // Corners
+    { x: 1.0, y: 1.0, mass: 0.3, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 9.0, y: 9.0, mass: 0.3, orbitalDir: -1, type: 'neutronStar' },
+    { x: 3.5, y: 1.5, mass: 0.5, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 6.5, y: 8.5, mass: 0.4, orbitalDir: -1, type: 'yellowDwarf' },
   ],
   wrecks: [
     // Surface tier — safe zones

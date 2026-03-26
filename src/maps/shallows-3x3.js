@@ -11,12 +11,11 @@ export const MAP = {
     { x: 0.6, y: 2.25, mass: 0.5, orbitalDir: -1, killRadius: 0.03, spinRate: 1.8, points: 3 },
   ],
   stars: [
-    { x: 1.5, y: 1.65, mass: 0.8, orbitalDir: 1 },
-    { x: 0.45, y: 0.75, mass: 0.5, orbitalDir: -1 },
-    // Former loot anchors → stars
-    { x: 1.5, y: 1.05, mass: 0.4, orbitalDir: 1 },
-    { x: 1.35, y: 2.1, mass: 0.3, orbitalDir: -1 },
-    { x: 2.4, y: 1.65, mass: 0.6, orbitalDir: 1 },
+    { x: 1.5, y: 1.65, mass: 0.8, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 0.45, y: 0.75, mass: 0.5, orbitalDir: -1, type: 'whiteDwarf' },
+    { x: 1.5, y: 1.05, mass: 0.4, orbitalDir: 1, type: 'yellowDwarf' },
+    { x: 1.35, y: 2.1, mass: 0.3, orbitalDir: -1, type: 'yellowDwarf' },
+    { x: 2.4, y: 1.65, mass: 0.6, orbitalDir: 1, type: 'redGiant' },
   ],
   wrecks: [
     { x: 1.5, y: 0.5, type: 'derelict', tier: 1, size: 'medium' },

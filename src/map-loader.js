@@ -59,6 +59,7 @@ export function loadMap(map, systems) {
     starSystem.addStar(s.x, s.y, {
       mass: s.mass ?? 1.0,
       orbitalDir: s.orbitalDir ?? 1,
+      type: s.type,  // yellowDwarf if omitted
     });
   }
 
