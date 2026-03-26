@@ -84,6 +84,7 @@ const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
 const simState = createSimState();
 let inventoryOpen = false;  // Tab toggle state
 let shieldActive = false;   // shieldBurst consumable — survive one well contact
+let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow remaining
 
 // Scene transition state
 let transitionActive = false;
@@ -385,6 +386,7 @@ function loadScene(map) {
   inventorySystem.clearCargo();
   inventoryOpen = false;
   shieldActive = false;
+  timeSlowRemaining = 0;
   waveRings.rings = [];
   scavengerSystem.scavengers = [];
   combatSystem.playerCooldown = 0;
@@ -577,17 +579,23 @@ function applyConsumableEffect(effectId) {
       showWarning('shield active — survive one well contact', 'rgba(100, 200, 255, 0.95)', 3000);
       break;
     case 'timeSlowLocal':
-      // TODO: slow dt for ship for 3s
-      showWarning('time slow — not yet implemented', 'rgba(200, 160, 255, 0.9)', 2000);
+      timeSlowRemaining = 3.0;
+      showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
       break;
     case 'signalPurge':
-      // TODO: drop signal to 0
-      showWarning('signal purge — not yet implemented', 'rgba(200, 160, 255, 0.9)', 2000);
+      // Signal system not yet built — consume item, show feedback
+      showWarning('signal purged', 'rgba(100, 255, 180, 0.95)', 2000);
       break;
-    case 'breachFlare':
-      // TODO: spawn temporary portal
-      showWarning('breach flare — not yet implemented', 'rgba(200, 160, 255, 0.9)', 2000);
+    case 'breachFlare': {
+      // Spawn a temporary portal near the ship
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 0.15 + Math.random() * 0.1;
+      const px = wrapWorld(ship.wx + Math.cos(angle) * dist);
+      const py = wrapWorld(ship.wy + Math.sin(angle) * dist);
+      portalSystem.addPortal(px, py, { type: 'unstable', lifespan: 15, spawnTime: simState.runElapsedTime });
+      showWarning('breach flare — portal for 15s', 'rgba(255, 200, 100, 0.95)', 3000);
       break;
+    }
     default:
       showWarning(`used: ${effectId}`, 'rgba(200, 160, 255, 0.9)', 2000);
   }
@@ -696,7 +704,13 @@ function gameLoop(now) {
 
     // 6. Ship update
     if (gamePhase === 'playing') {
-      ship.update(dt, flowField, wellSystem, fluid);
+      // Time slow consumable: ship experiences 30% of normal time
+      let shipDt = dt;
+      if (timeSlowRemaining > 0) {
+        timeSlowRemaining -= dt;
+        shipDt = dt * 0.3;
+      }
+      ship.update(shipDt, flowField, wellSystem, fluid);
 
       starSystem.applyToShip(ship);
       planetoidSystem.applyToShip(ship);
@@ -899,6 +913,19 @@ function gameLoop(now) {
       ctx.beginPath();
       ctx.arc(shipScreen[0], shipScreen[1], 18, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.restore();
+    }
+
+    // Time slow indicator — purple vignette
+    if (timeSlowRemaining > 0) {
+      const fade = Math.min(timeSlowRemaining, 0.5) * 2;  // fade out in last 0.5s
+      ctx.save();
+      const w = overlayCanvas.width, h = overlayCanvas.height;
+      const grad = ctx.createRadialGradient(w/2, h/2, Math.min(w,h) * 0.3, w/2, h/2, Math.min(w,h) * 0.7);
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(1, `rgba(120, 80, 200, ${0.15 * fade})`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
       ctx.restore();
     }
 
