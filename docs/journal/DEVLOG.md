@@ -35,10 +35,31 @@ Final bug of the day: W0 and W2 still looked suppressed even after the shader fi
 
 Broader observation: the visual density buffer is fragile because it's a single shared channel. Negative injectors stomp positive signals. Worth considering separate buffers per system if more cross-talk emerges.
 
+### Night Shift
+
+Five more commits while Greg slept:
+
+1. **Sqrt ring scaling** — per the RING-SCALE.md design doc, switched from linear to sqrt scaling for accretion ring size. 10x10 mega-well goes from 48% to 16% of screen. Cached the sqrt result on map load — zero per-frame cost.
+
+2. **All consumable effects wired** — time slow (ship at 30% dt for 3s, purple vignette), breach flare (spawns an unstable portal near ship for 15s), signal purge (fires, consumes item, stub until signal system exists).
+
+3. **Shader cleanup** — removed dead negVis/voidField/liveSpace code from display shader. Nothing injects negative visual density anymore, so these were always 0/0/1.0. 18 lines less.
+
+4. **Inventory test coverage** — 4 new tests: equip artifact from cargo, load consumable to hotbar, use consumable returns effect + clears slot, swap when equip slots full. 18 inventory tests total.
+
+5. **Vault + meta screen** — new vault.js with localStorage persistence. On extraction: cargo → vault → "SALVAGE REPORT" screen showing items, exotic matter gained, vault totals, best survival time. Space to drop back in. Death still goes straight to map select.
+
 ### Commits
 - `96d95ab` — Fix: toroidal wrapping + world-space distance in display shader
 - `924a1ac` — Docs: Week 2 Day 1 devlog
 - `6c04bcb` — L1: wire equip/load/use loop, fix star clearing suppressing well rings
+- `bf85b9e` — Docs: ring scale + visual density buffer design docs
+- `b4941a4` — Tune: sqrt ring scaling
+- `c8b1386` — L1: wire all consumable effects
+- `0963b06` — Refactor: remove dead negVis/liveSpace shader code
+- `c7f2a9a` — Tests: equip/load/use/swap loop validated
+- `337f4f9` — L5: vault + meta screen skeleton
+- `575d487` — Tune: cache accretionScale
 
 ---
 

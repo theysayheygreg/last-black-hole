@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-03-25 Night Shift: Ring Scaling, Effects, Vault
+
+### Tuning
+- **Sqrt ring scaling** — accretion rings now grow at sqrt(WORLD_SCALE × FLUID_REF_SCALE) instead of linear WORLD_SCALE. 10x10 mega-well drops from 48% to 16% of screen. Cached on map load (zero per-frame cost).
+
+### Gameplay
+- **Consumable effects wired** — timeSlowLocal (30% ship dt, 3s, purple vignette), breachFlare (spawns unstable portal near ship for 15s), signalPurge (stub until signal system).
+- **Vault + meta screen** — localStorage persistence for exotic matter, vault items, run stats. Extraction → "SALVAGE REPORT" → drop back in. Death skips vault.
+
+### Refactor
+- **Dead shader code removed** — negVis/voidField/liveSpace path in display shader was always 0/0/1.0 after star clearing removal. 18 lines cleaned up.
+
+### Tests
+- **4 new inventory tests** — equip from cargo, load consumable, use consumable, swap when full. 18 total.
+
+### Design Docs
+- **RING-SCALE.md** — full analysis of 4 scaling options with per-well screen coverage tables
+- **VISUAL-DENSITY.md** — buffer architecture, reader/writer map, cross-talk risks, design rule (no subtractive signals)
+
+---
+
 ## 2026-03-25 Inventory Wiring + Star Visual Fix
 
 ### Gameplay
