@@ -141,17 +141,24 @@ export class WreckSystem {
    * Check if ship is within pickup radius of any un-looted wreck.
    * Returns array of newly looted items (empty if none).
    */
-  checkPickup(shipWX, shipWY) {
+  checkPickup(shipWX, shipWY, cargoSlotsAvailable = Infinity) {
     const cfg = CONFIG.wrecks;
     const items = [];
 
     for (const wreck of this.wrecks) {
       if (!wreck.alive || wreck.looted) continue;
       if (wreck.pickupCooldown > 0) continue;  // recently dropped — can't grab yet
+      if (items.length >= cargoSlotsAvailable) break;  // no more room
       const dist = worldDistance(shipWX, shipWY, wreck.wx, wreck.wy);
       if (dist < cfg.pickupRadius) {
-        wreck.looted = true;
-        items.push(...wreck.loot);
+        // Take items one at a time — only mark looted when ALL items taken
+        while (wreck.loot.length > 0 && items.length < cargoSlotsAvailable) {
+          items.push(wreck.loot.shift());
+        }
+        if (wreck.loot.length === 0) {
+          wreck.looted = true;
+        }
+        // If loot remains, wreck stays active for a second pass
       }
     }
     return items;

@@ -183,7 +183,8 @@ export function initTestAPI(getState) {
     pickupAtShip() {
       const { wreckSystem, inventorySystem, ship } = getState();
       if (!wreckSystem || !inventorySystem || !ship) return { pickedUp: 0, overflow: 0 };
-      const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
+      const slotsAvailable = inventorySystem.cargoMax - inventorySystem.cargoCount;
+      const newItems = wreckSystem.checkPickup(ship.wx, ship.wy, slotsAvailable);
       const overflow = inventorySystem.addMultipleToCargo(newItems);
       return {
         pickedUp: newItems.length - overflow.length,

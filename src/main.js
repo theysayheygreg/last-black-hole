@@ -775,9 +775,10 @@ function gameLoop(now) {
         if (effect) applyConsumableEffect(effect);
       }
 
-      // Wreck pickup (blocked if cargo full)
+      // Wreck pickup (pass available slots so partial loot works correctly)
       if (!inventorySystem.cargoFull) {
-        const newItems = wreckSystem.checkPickup(ship.wx, ship.wy);
+        const slotsAvailable = inventorySystem.cargoMax - inventorySystem.cargoCount;
+        const newItems = wreckSystem.checkPickup(ship.wx, ship.wy, slotsAvailable);
         if (newItems.length > 0) {
           const overflow = inventorySystem.addMultipleToCargo(newItems);
           const added = newItems.length - overflow.length;

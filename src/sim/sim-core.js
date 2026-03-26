@@ -103,11 +103,17 @@ export class SimCore {
     this.combatSystem.update(stepDt);
     this.combatSystem.applyDisruptions(this.fluid);
 
+    // Staggered well growth — one well per event tick, round-robin.
+    // Prevents all wells spawning wave rings on the same frame (GPU spike).
     simState.growthTimer += stepDt;
-    if (simState.growthTimer >= CONFIG.events.growthInterval) {
-      simState.growthTimer -= CONFIG.events.growthInterval;
+    const perWellInterval = CONFIG.events.growthInterval / Math.max(1, this.wellSystem.wells.length);
+    if (simState.growthTimer >= perWellInterval) {
+      simState.growthTimer -= perWellInterval;
       const evtCfg = CONFIG.events;
-      for (const well of this.wellSystem.wells) {
+      const idx = (simState.growthIndex ?? 0) % this.wellSystem.wells.length;
+      simState.growthIndex = idx + 1;
+      const well = this.wellSystem.wells[idx];
+      if (well) {
         well.mass += well.growthRate;
         well.updateKillRadius();
         this.waveRings.spawn(well.wx, well.wy, evtCfg.growthWaveAmplitude * well.mass);
