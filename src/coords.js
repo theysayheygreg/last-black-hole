@@ -206,6 +206,17 @@ export function splatScale() {
   return { s, s2: s * s };
 }
 
+/**
+ * Scale factor for accretion ring visuals. Sqrt scaling ensures rings grow
+ * sub-linearly with map size — dramatic without overwhelming on large maps.
+ * See docs/design/RING-SCALE.md for the full analysis.
+ *
+ * 3x3 map: 1.0×, 5x5: 1.29×, 10x10: 1.83× (vs linear: 1.0, 1.67, 3.33)
+ */
+export function accretionScale() {
+  return Math.sqrt(WORLD_SCALE * FLUID_REF_SCALE);
+}
+
 // ---- Entity culling ----
 
 /**

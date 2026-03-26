@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, uvScale, accretionScale } from './coords.js';
 
 export class Well {
   /**
@@ -155,10 +155,10 @@ export class WellSystem {
 
     return this.wells.map(w => {
       // Convert accretion from UV-space to world-space (SHADER DISTANCE RULE).
-      // accretionRadius (CONFIG) is in UV-space. Multiply by WORLD_SCALE to match
-      // the display shader's dist = length(diff) * worldScale.
+      // accretionRadius (CONFIG) is in UV-space. Multiply by accretionScale() for
+      // sqrt scaling — rings grow sub-linearly with map size. See RING-SCALE.md.
       const accretionUV = w.getAccretionRadius() * w.mass;       // UV-space
-      const accretionWorld = accretionUV * WORLD_SCALE;           // → world-space
+      const accretionWorld = accretionUV * accretionScale();      // → world-space (sqrt-scaled)
       const accretionRef = Math.max(MIN_ACCRETION_WORLD, accretionWorld);
 
       // Core: driven by kill radius (world-space) — the "do not go here" signal
