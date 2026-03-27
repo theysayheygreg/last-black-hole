@@ -94,10 +94,39 @@ export function initTestAPI(getState) {
     },
 
     triggerRestart() {
-      const { startGame, mapList } = getState();
+      const { startGame, mapList, profileManager } = getState();
+      // Ensure a profile exists for test runs
+      if (profileManager && !profileManager.active) {
+        profileManager.createProfile(0, 'Test Pilot');
+      }
       // Start the first playable map (not the title map)
       if (startGame && mapList && mapList.length > 0) startGame(mapList[0]);
       else if (startGame) startGame(getState().currentMap);
+    },
+
+    createTestProfile(name) {
+      const { profileManager } = getState();
+      if (!profileManager) return null;
+      return profileManager.createProfile(0, name || 'Test Pilot');
+    },
+
+    getProfile() {
+      const { profileManager } = getState();
+      const p = profileManager?.active;
+      if (!p) return null;
+      return {
+        name: p.name,
+        exoticMatter: p.exoticMatter,
+        vaultCount: p.vault.length,
+        vaultCapacity: p.vaultCapacity,
+        upgrades: { ...p.upgrades },
+        loadout: {
+          equipped: p.loadout.equipped.map(i => i ? { ...i } : null),
+          consumables: p.loadout.consumables.map(i => i ? { ...i } : null),
+        },
+        totalExtractions: p.totalExtractions,
+        totalDeaths: p.totalDeaths,
+      };
     },
 
     // ---- Inventory API ----

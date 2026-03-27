@@ -752,9 +752,28 @@ function gameLoop(now) {
       const vaultLen = p ? p.vault.length : 0;
       if (downNow && !_prevDown && homeVaultCursor < vaultLen - 1) homeVaultCursor++;
       if (confirmNow && !_prevConfirm && p && p.vault[homeVaultCursor]) {
-        // Sell selected vault item
-        profileManager.sellVaultItem(homeVaultCursor);
-        if (homeVaultCursor >= (p.vault.length)) homeVaultCursor = Math.max(0, p.vault.length - 1);
+        const item = p.vault[homeVaultCursor];
+        if (item.subcategory === 'equippable') {
+          // Equip artifact — move from vault to first open loadout slot (or swap slot 0)
+          const openSlot = p.loadout.equipped.indexOf(null);
+          const targetSlot = openSlot >= 0 ? openSlot : 0;
+          const prev = p.loadout.equipped[targetSlot];
+          p.loadout.equipped[targetSlot] = profileManager.takeFromVault(homeVaultCursor);
+          if (prev) p.vault.splice(homeVaultCursor, 0, prev); // put old item back in vault
+          profileManager.save();
+        } else if (item.subcategory === 'consumable') {
+          // Load consumable — move from vault to first open hotbar slot (or swap slot 0)
+          const openSlot = p.loadout.consumables.indexOf(null);
+          const targetSlot = openSlot >= 0 ? openSlot : 0;
+          const prev = p.loadout.consumables[targetSlot];
+          p.loadout.consumables[targetSlot] = profileManager.takeFromVault(homeVaultCursor);
+          if (prev) p.vault.splice(homeVaultCursor, 0, prev);
+          profileManager.save();
+        } else {
+          // Sell for EM (salvage, components, data cores)
+          profileManager.sellVaultItem(homeVaultCursor);
+        }
+        if (homeVaultCursor >= p.vault.length) homeVaultCursor = Math.max(0, p.vault.length - 1);
       }
     } else if (homeTab === 2) { // UPGRADES
       const tracks = Object.keys(UPGRADE_TRACKS);
@@ -800,6 +819,8 @@ function gameLoop(now) {
 
     if (!transitionActive && confirmNow && !_prevConfirm) {
       if (gamePhase === 'dead' && deathTimer > 1.0) {
+        // Save loadout on death — consumed items stay consumed, equipment changes persist
+        profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
         const emLost = profileManager.recordDeath();
         triggerTransition(() => {
           loadTitleScene();
@@ -1663,8 +1684,11 @@ function gameLoop(now) {
         ctx.fillText(`${item.value} EM`, leftMargin + 360, vy);
         ctx.textAlign = 'left';
         if (selected) {
+          let action = 'sell';
+          if (item.subcategory === 'equippable') action = 'equip';
+          else if (item.subcategory === 'consumable') action = 'load';
           ctx.fillStyle = 'rgba(255, 220, 100, 0.7)';
-          ctx.fillText('[space: sell]', leftMargin + 240, vy);
+          ctx.fillText(`[space: ${action}]`, leftMargin + 240, vy);
         }
         vy += 18;
       }
