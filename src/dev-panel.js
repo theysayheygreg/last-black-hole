@@ -81,6 +81,12 @@ const RANGE_HINTS = {
   'scavengers.vultureRatio':{ min: 0, max: 1, step: 0.1, tip: 'Fraction that are vultures (aggressive)' },
   'scavengers.sensorRange': { min: 0.1, max: 1, step: 0.05, tip: 'Detection range in world-units' },
 
+  // Wreck drift
+  'wrecks.driftStrength':     { min: 0, max: 0.3, step: 0.01, tip: 'Well pull on wrecks. 0.08 = ~10% of ship gravity' },
+  'wrecks.driftDrag':         { min: 0.5, max: 5, step: 0.25, tip: 'Drift velocity damping. Higher = more sluggish' },
+  'wrecks.driftTerminalSpeed':{ min: 0.01, max: 0.15, step: 0.005, tip: 'Max drift speed in world-units/s' },
+  'wrecks.driftMaxRange':     { min: 0.3, max: 2, step: 0.1, tip: 'Drift pull range in world-units' },
+
   // Combat
   'combat.pulseCooldown':   { min: 0.5, max: 10, step: 0.5, tip: 'Seconds between force pulses' },
   'combat.pulseForce':      { min: 0.5, max: 5, step: 0.25, tip: 'Radial push force strength' },

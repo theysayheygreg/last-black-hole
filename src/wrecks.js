@@ -7,7 +7,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { worldToFluidUV, worldToScreen, worldDistance, shouldCull, uvScale, wrapWorld } from './coords.js';
+import { worldToFluidUV, worldToScreen, worldDistance, worldDirectionTo, shouldCull, uvScale, wrapWorld } from './coords.js';
 import { generateLoot } from './items.js';
 
 // ---- Name generation ----
@@ -88,7 +88,7 @@ export class WreckSystem {
   /**
    * Inject fluid obstruction and visual glow for each wreck.
    */
-  update(fluid, dt, totalTime, camX = null, camY = null) {
+  update(fluid, dt, totalTime, camX = null, camY = null, wellSystem = null) {
     const cfg = CONFIG.wrecks;
     const s = uvScale();
     const s2 = s * s;
@@ -97,17 +97,37 @@ export class WreckSystem {
       if (!wreck.alive) continue;
       if (wreck.pickupCooldown > 0) wreck.pickupCooldown -= dt;
 
-      // Drift: ejected wrecks move and decelerate
+      // Well gravity drift — wrecks fall toward wells (see docs/design/DRIFT.md)
+      if (cfg.driftEnabled && wellSystem) {
+        const driftMaxRange = cfg.driftMaxRange ?? 0.8;
+        for (const well of wellSystem.wells) {
+          const { dist, nx, ny } = worldDirectionTo(wreck.wx, wreck.wy, well.wx, well.wy);
+          if (dist > driftMaxRange || dist < 0.001) continue;
+          const pullStrength = cfg.driftStrength * well.mass;
+          const falloff = cfg.driftFalloff ?? 1.5;
+          const accel = pullStrength / Math.pow(Math.max(dist, 0.02), falloff);
+          wreck.vx += nx * accel * dt;
+          wreck.vy += ny * accel * dt;
+        }
+      }
+
+      // Movement + drag (applies to both ejection velocity and drift)
       if (wreck.vx !== 0 || wreck.vy !== 0) {
         wreck.wx = wrapWorld(wreck.wx + wreck.vx * dt);
         wreck.wy = wrapWorld(wreck.wy + wreck.vy * dt);
-        // Drag: decay is time-based so ejection behavior stays consistent as FPS changes.
-        // Old behavior was 0.96x per 60 Hz frame, which is exp(-2.45 * dt).
-        const dragRate = 2.45;
+        // Drag: time-based decay. Higher for drift stability, lower for ejection snap.
+        const dragRate = cfg.driftEnabled ? (cfg.driftDrag ?? 1.5) : 2.45;
         const dragFactor = Math.exp(-dragRate * dt);
         wreck.vx *= dragFactor;
         wreck.vy *= dragFactor;
-        if (Math.abs(wreck.vx) < 0.001 && Math.abs(wreck.vy) < 0.001) {
+        // Terminal speed clamp
+        const speed = Math.sqrt(wreck.vx * wreck.vx + wreck.vy * wreck.vy);
+        const terminal = cfg.driftTerminalSpeed ?? 0.05;
+        if (speed > terminal) {
+          wreck.vx *= terminal / speed;
+          wreck.vy *= terminal / speed;
+        }
+        if (speed < 0.0005) {
           wreck.vx = 0;
           wreck.vy = 0;
         }

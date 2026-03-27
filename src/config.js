@@ -274,6 +274,13 @@ export const CONFIG = {
     pickupRadius: 0.08,           // world-units — ship within this = auto-loot
     wreckGlow: [0.04, 0.03, 0.01],      // gold density injection (rgb) — visible against fluid
     vaultGlow: [0.06, 0.05, 0.02],     // brighter gold for vaults
+    // Drift — wrecks fall toward wells. See docs/design/DRIFT.md.
+    driftEnabled: true,
+    driftStrength: 0.08,          // fraction of well pull strength (~10-15% of ship gravity)
+    driftFalloff: 1.5,            // inverse-power falloff (matches well gravity curve)
+    driftMaxRange: 0.8,           // world-units — no drift beyond this distance
+    driftDrag: 1.5,               // velocity damping rate (higher = more sluggish)
+    driftTerminalSpeed: 0.04,     // world-units/s max drift speed
   },
 
   universe: {

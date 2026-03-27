@@ -87,7 +87,7 @@ export class SimCore {
       }
     }
 
-    this.wreckSystem.update(this.fluid, stepDt, totalTime);
+    this.wreckSystem.update(this.fluid, stepDt, totalTime, undefined, undefined, this.wellSystem);
     this.portalSystem.update(this.fluid, stepDt, totalTime, undefined, undefined, simState.runElapsedTime);
     this.planetoidSystem.update(stepDt, this.fluid, totalTime, this.wellSystem, this.waveRings);
 
