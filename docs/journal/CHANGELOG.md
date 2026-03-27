@@ -5,6 +5,69 @@
 
 ---
 
+## 2026-03-27 Drift, Audio Revamp, Code Review
+
+### Gameplay
+- **Wreck drift** — all wrecks now fall toward wells at ~10% of ship gravity. Loot has a natural lifespan. CONFIG tunable.
+- **Scavenger death drops** — scavengers scatter collected loot as debris wrecks when consumed by wells, ejected outward with drift back.
+- **Star consumption remnants** — wells eating stars spawn vault-tier wrecks "Remnant of [star name]" with rare loot.
+- **Hull upgrade wired** — grace period on well contact (0.3-0.5s by rank), rank 2+ gets one free survive per run.
+- **Sensor upgrade wired** — proximity label fade distances scale with rank (0.15/0.4 → 0.3/0.85).
+
+### Audio
+- **SNES-flavored audio engine** — full rewrite with stacked LPF (BRR + Gaussian), 12-bit waveshaper, SPC700-style feedback echo.
+- **27 sound events** — 11 gameplay (loot, pulse, shield, time slow, breach, star consumed, etc), 10 menu/UI (cursor, confirm, sell, equip, upgrade, error), 4 ambient, 2 spatial.
+- **Context-aware states** — title (deep drone), menu (quiet ambient), gameplay (full audio), meta (quiet).
+- **SNES character** — pulse-width square waves, warm low-pass filtering, echo with darkening feedback.
+
+### Visual Polish
+- Hull grace: red screen edge pulse when in kill zone
+- Well proximity: subtle red vignette approaching wells
+- Upgrade preview: shows stat change before purchase
+- Item descriptions in vault subscreen
+- Edge indicators for off-screen wells (red) and nearest wreck (gold)
+
+### Meta Screen
+- Ship tab: cursor navigation on loadout, unequip/remove back to vault
+- Vault sorting: auto-sorts by category → tier → value
+- Profile delete: confirmation step before deleting
+- Death tax display: shows EM lost on death screen
+
+### Code Review
+- Full audit after 2 days of churn: 0 bugs in 11 files reviewed
+- Fixed critical audio memory leak (voices never disconnected)
+- Fixed per-frame distortion curve allocation (cached)
+- Safari AudioContext fallback added
+- Initialized _fullWarningShown in inventory
+
+### Tests
+- New systems test suite (10 tests): stars, comets, wrecks, drift, scavengers, profiles
+- 7 test suites, 31+ tests total
+
+---
+
+## 2026-03-26-27 Flavor Pass + Meta Flow
+
+### Entity Identity
+- **4 star types** — yellow dwarf, red giant, white dwarf, neutron star with distinct visuals
+- **Comets** — planetoids converted to teardrop bodies with canvas tails and names
+- **Wreck shapes** — derelict (broken hull), debris (scattered dots), vault (golden diamond)
+- **Scavenger factions** — Collector/Reaper/Warden with themed callsigns
+- **Proximity labels** — distance-based fade on all entities: wells, stars, comets, wrecks, scavengers
+- **Star orbital systems** — 2-4 asteroids per star, slow drift, dramatic well consumption
+
+### Meta Flow
+- **Profile system** — 3 save slots, random name generator, localStorage persistence
+- **Home screen** — 4 tabs (SHIP/VAULT/UPGRADES/LAUNCH), canvas-rendered
+- **6 upgrade tracks** — thrust/hull/coupling/drag/sensor/vault, 3 ranks each, component + EM costs
+- **Full loop** — title → profile → home → map → play → home (both death and extract)
+
+### Removals
+- Loot anchors (src/loot.js) — replaced with stars, positions converted
+- vault.js — replaced by profile.js
+
+---
+
 ## 2026-03-25 Night Shift: Ring Scaling, Effects, Vault
 
 ### Tuning

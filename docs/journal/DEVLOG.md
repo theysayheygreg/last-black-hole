@@ -11,6 +11,33 @@ Each entry covers a day (or shift). Entries include what happened, why decisions
 
 ---
 
+## Week 2, Day 3 Evening: March 27, 2026 — Everything Falls, Everything Sings
+
+### The Story
+
+Three big moves in the evening session:
+
+**The drift system.** Greg asked "why doesn't loot obey gravity?" and the answer was it should. Wrecks now feel well gravity at ~10% of ship pull strength. They drift inward, accelerate near wells, and get consumed if they reach the kill radius. This single change cascaded: scavenger death now scatters loot as debris that drifts back toward the killing well (15-30s window), star consumption spawns a vault-tier remnant wreck that's already in danger. The universe's clock isn't a timer anymore — it's gravity.
+
+**The audio revamp.** Rebuilt the entire audio engine with SNES character: stacked low-pass filters (BRR compression + Gaussian interpolation), 12-bit waveshaper bit crush, SPC700-style feedback echo with darkening filter. Pulse-width square waves instead of clean sines for that 16-bit timbre. 27 sound events covering every interaction: menu blips, upgrade arpeggios, shield shimmer, star consumption booms, debris clatter. Context-aware states switch between deep title drone and full gameplay audio.
+
+**The code review.** After 2 days and 30+ commits of heavy churn, ran a full audit across all 11 source files. Found a critical memory leak in the audio engine (oscillators/voices never disconnected, accumulating in the Web Audio graph). Fixed with auto-disconnect timeouts. Everything else passed clean — phase transitions, state resets, coordinate math, entity systems all verified.
+
+### What We Learned
+
+The drift system is a case study in emergent design. One physics change (wrecks feel gravity) created natural urgency, made scavenger kills meaningful, turned star deaths into jackpot events, and made the late-game map evolve organically. No timers, no counters, just physics.
+
+### Commits
+- `1140552` — Wreck drift system
+- `688724d` — Scavenger death drops + star remnants
+- `52afc4d` — Systems test suite (10 new tests)
+- `6f24c62` — Visual polish batch (hull warning, well proximity, upgrade preview, edge indicators)
+- `04e6ebf` — Audio enabled
+- `fab2bac` — SNES audio revamp (27 events, context states)
+- `073a555` — Code review fixes (memory leaks, Safari, caching)
+
+---
+
 ## Week 2, Days 2-3: March 26-27, 2026 — The Flavor Pass & The Meta Loop
 
 ### The Story
