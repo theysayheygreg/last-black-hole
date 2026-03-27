@@ -11,6 +11,30 @@ Each entry covers a day (or shift). Entries include what happened, why decisions
 
 ---
 
+## Week 2, Days 2-3: March 26-27, 2026 — The Flavor Pass & The Meta Loop
+
+### The Story
+
+Two days of building the game's identity layer and progression system.
+
+**Day 2 (March 26):** The flavor pass. Every object in the universe got a face. Stars split into 4 types with distinct color, size, and special effects (red giant corona, white dwarf lens flare, neutron star pulsar flash). Planetoids became comets with teardrop bodies and canvas tails. Wrecks got unique shapes per type (broken hull, scattered debris, golden diamond). Every entity got a procedural name and proximity-based flavor text labels that fade in as you approach.
+
+Loot anchors (the old L objects) were revealed as decorative placeholders with no gameplay purpose — removed entirely and replaced with more stars. Maps bulked up: Shallows 2→5 stars, Expanse 3→11, Deep Field 6→22. The universe feels lived-in now.
+
+**Day 3 (March 27):** The meta loop. Built the entire between-runs progression system from scratch: 3 save slots with player profiles, a home screen with 4 tabs (ship stats, vault, upgrades, launch), and the full flow: title → profile select → home → map select → play → home (on both death and extraction).
+
+The upgrade system has 6 tracks (thrust/hull/coupling/drag/sensor/vault storage), each with 3 ranks. Rank 1 costs only exotic matter; ranks 2-3 require specific components (already defined in items.js). Hull gives grace period on well contact. Sensor extends proximity label range. Vault capacity starts at 25, expandable to 75. 10% EM death tax.
+
+Codex caught real bugs twice: loadout not saving on death (item duplication), vault has no equip path (dead inventory). Both fixed same-day.
+
+### What We Learned
+
+The visual density buffer saga from Day 1 continued to pay dividends — removing the star clearing splat unblocked the star type system, which in turn made the flavor pass possible. Cleaning up architectural debt first made the creative work much easier.
+
+The meta loop is the biggest architectural addition since the fluid sim. Three new game phases, a full save system, canvas-rendered UI with tab navigation — all in one session. It's rough but functional.
+
+---
+
 ## Week 2, Day 1: March 25, 2026 — The Toroid Tax
 
 ### The Story
