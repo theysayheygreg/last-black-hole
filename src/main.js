@@ -557,6 +557,7 @@ function startGame(map) {
   }
 
   gamePhase = 'playing';
+  audioEngine.setContext('gameplay');
   showHUD();
 }
 
@@ -632,10 +633,12 @@ function applyConsumableEffect(effectId) {
     case 'shieldBurst':
       shieldActive = true;
       showWarning('shield active — survive one well contact', 'rgba(100, 200, 255, 0.95)', 3000);
+      audioEngine.playEvent('shieldActivate');
       break;
     case 'timeSlowLocal':
       timeSlowRemaining = 3.0;
       showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
+      audioEngine.playEvent('timeSlow');
       break;
     case 'signalPurge':
       // Signal system not yet built — consume item, show feedback
@@ -649,6 +652,7 @@ function applyConsumableEffect(effectId) {
       const py = wrapWorld(ship.wy + Math.sin(angle) * dist);
       portalSystem.addPortal(px, py, { type: 'unstable', lifespan: 15, spawnTime: simState.runElapsedTime });
       showWarning('breach flare — portal for 15s', 'rgba(255, 200, 100, 0.95)', 3000);
+      audioEngine.playEvent('breachFlare');
       break;
     }
     default:
@@ -717,6 +721,9 @@ function gameLoop(now) {
   if (gamePhase === 'title') {
     titleTimer += dt;
     if (!transitionActive && (confirmNow && !_prevConfirm) && titleTimer > 0.5) {
+      audioEngine.init();  // first user gesture
+      audioEngine.setContext('title');
+      audioEngine.playEvent('menuConfirm');
       gamePhase = 'profileSelect';
       profileCursor = profileManager.activeSlot >= 0 ? profileManager.activeSlot : 0;
     }
@@ -737,17 +744,21 @@ function gameLoop(now) {
       }
       applySceneCamera(dt);
     } else {
-      if (upNow && !_prevUp) profileCursor = (profileCursor - 1 + 3) % 3;
-      if (downNow && !_prevDown) profileCursor = (profileCursor + 1) % 3;
+      if (upNow && !_prevUp) { profileCursor = (profileCursor - 1 + 3) % 3; audioEngine.playEvent('menuMove'); }
+      if (downNow && !_prevDown) { profileCursor = (profileCursor + 1) % 3; audioEngine.playEvent('menuMove'); }
       if (!transitionActive && confirmNow && !_prevConfirm) {
         if (profileManager.hasProfile(profileCursor)) {
           profileManager.loadProfile(profileCursor);
+          audioEngine.playEvent('menuConfirm');
+          audioEngine.setContext('menu');
           gamePhase = 'home';
           homeTab = 0;
           homePhaseTimer = 0;
+          audioEngine.setContext('menu');
         } else {
           nameInputActive = true;
           nameInputBuffer = generatePilotName();
+          audioEngine.playEvent('menuConfirm');
         }
       }
       // X key to delete (only on occupied slots)
@@ -764,8 +775,8 @@ function gameLoop(now) {
   } else if (gamePhase === 'home') {
     homePhaseTimer += dt;
     const tabCount = 4; // SHIP, VAULT, UPGRADES, LAUNCH
-    if (inputManager.leftPressed && !_prevLeft) homeTab = (homeTab - 1 + tabCount) % tabCount;
-    if (inputManager.rightPressed && !_prevRight) homeTab = (homeTab + 1) % tabCount;
+    if (inputManager.leftPressed && !_prevLeft) { homeTab = (homeTab - 1 + tabCount) % tabCount; audioEngine.playEvent('tabSwitch'); }
+    if (inputManager.rightPressed && !_prevRight) { homeTab = (homeTab + 1) % tabCount; audioEngine.playEvent('tabSwitch'); }
 
     if (homeTab === 0) { // SHIP — loadout management
       if (upNow && !_prevUp && homeShipCursor > 0) homeShipCursor--;
@@ -808,17 +819,18 @@ function gameLoop(now) {
           p.loadout.equipped[targetSlot] = profileManager.takeFromVault(homeVaultCursor);
           if (prev) p.vault.splice(homeVaultCursor, 0, prev); // put old item back in vault
           profileManager.save();
+          audioEngine.playEvent('equipItem');
         } else if (item.subcategory === 'consumable') {
-          // Load consumable — move from vault to first open hotbar slot (or swap slot 0)
           const openSlot = p.loadout.consumables.indexOf(null);
           const targetSlot = openSlot >= 0 ? openSlot : 0;
           const prev = p.loadout.consumables[targetSlot];
           p.loadout.consumables[targetSlot] = profileManager.takeFromVault(homeVaultCursor);
           if (prev) p.vault.splice(homeVaultCursor, 0, prev);
           profileManager.save();
+          audioEngine.playEvent('equipItem');
         } else {
-          // Sell for EM (salvage, components, data cores)
           profileManager.sellVaultItem(homeVaultCursor);
+          audioEngine.playEvent('sellItem');
         }
         if (homeVaultCursor >= p.vault.length) homeVaultCursor = Math.max(0, p.vault.length - 1);
       }
@@ -828,7 +840,12 @@ function gameLoop(now) {
       if (downNow && !_prevDown && homeUpgradeCursor < tracks.length - 1) homeUpgradeCursor++;
       if (confirmNow && !_prevConfirm) {
         const track = tracks[homeUpgradeCursor];
-        profileManager.performUpgrade(track);
+        if (profileManager.canAffordUpgrade(track)) {
+          profileManager.performUpgrade(track);
+          audioEngine.playEvent('upgrade');
+        } else {
+          audioEngine.playEvent('cantAfford');
+        }
       }
     } else if (homeTab === 3) { // LAUNCH
       if (confirmNow && !_prevConfirm) {
@@ -846,7 +863,8 @@ function gameLoop(now) {
     if (upNow && !_prevUp) mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length;
     if (downNow && !_prevDown) mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length;
     if (!transitionActive && confirmNow && !_prevConfirm) {
-      audioEngine.init();  // first user gesture — create AudioContext
+      audioEngine.init();
+      audioEngine.playEvent('launch');
       // Load loadout from profile before entering run
       const p = profileManager.active;
       if (p) {
@@ -874,6 +892,7 @@ function gameLoop(now) {
           gamePhase = 'home';
           homeTab = 0;
           homePhaseTimer = 0;
+          audioEngine.setContext('menu');
         });
       }
       if (gamePhase === 'escaped' && escapeTimer > 1.0) {
@@ -899,6 +918,7 @@ function gameLoop(now) {
           gamePhase = 'home';
           homeTab = 0;
           homePhaseTimer = 0;
+          audioEngine.setContext('menu');
         });
       }
     }
@@ -916,7 +936,9 @@ function gameLoop(now) {
       // Time slow consumable: ship experiences 30% of normal time
       let shipDt = dt;
       if (timeSlowRemaining > 0) {
+        const wasSlowed = timeSlowRemaining > 0;
         timeSlowRemaining -= dt;
+        if (wasSlowed && timeSlowRemaining <= 0) audioEngine.playEvent('timeSlowEnd');
         shipDt = dt * 0.3;
       }
       // Equippable effect: reduceWellPull — 20% less well gravity on ship
@@ -938,6 +960,7 @@ function gameLoop(now) {
       for (const evt of starSystem.consumptionEvents) {
         const [cr, cg, cb] = evt.starColor;
         showWarning(`${evt.starName} consumed — stellar remnant!`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
+        audioEngine.playEvent('starConsumed', evt.wx, evt.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         _starFlashTimer = 0.8;
         _starFlashColor = evt.starColor;
 
@@ -1036,6 +1059,7 @@ function gameLoop(now) {
           // Shield burst consumable: survive one contact
           shieldActive = false;
           showWarning('shield absorbed!', 'rgba(100, 200, 255, 0.95)', 2000);
+          audioEngine.playEvent('shieldAbsorb');
         } else if (hullHasFreePass && hullGraceTimer <= 0) {
           // Hull free pass: first contact this run is forgiven
           hullGraceUsed = true;
@@ -1484,6 +1508,7 @@ function gameLoop(now) {
         });
       }
       showWarning(`${drop.name} destroyed — loot scattered`, 'rgba(200, 140, 80, 0.9)', 3000);
+      audioEngine.playEvent('scavDeath', drop.wx, drop.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
     }
     scavengerSystem.deathDrops = [];
 
