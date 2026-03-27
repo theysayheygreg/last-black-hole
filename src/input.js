@@ -174,6 +174,24 @@ export class InputManager {
     return false;
   }
 
+  /** Menu navigation — left. Arrow left, A, or gamepad d-pad left (button 14). */
+  get leftPressed() {
+    if (this._keys['ArrowLeft'] || this._keys['KeyA']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 14 && gp.buttons[14].pressed) return true;
+    if (gp && gp.axes.length > 0 && gp.axes[0] < -0.5) return true;
+    return false;
+  }
+
+  /** Menu navigation — right. Arrow right, D, or gamepad d-pad right (button 15). */
+  get rightPressed() {
+    if (this._keys['ArrowRight'] || this._keys['KeyD']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 15 && gp.buttons[15].pressed) return true;
+    if (gp && gp.axes.length > 0 && gp.axes[0] > 0.5) return true;
+    return false;
+  }
+
   _getGamepad() {
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     if (this.gamepadIndex >= 0) return gamepads[this.gamepadIndex] || null;

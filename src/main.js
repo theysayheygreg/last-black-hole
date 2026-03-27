@@ -31,7 +31,7 @@ import { CombatSystem } from './combat.js';
 import { AudioEngine } from './audio.js';
 import { rollSignature, applySignatureConfig } from './signatures.js';
 import { InventorySystem } from './inventory.js';
-import { Vault } from './vault.js';
+import { ProfileManager, UPGRADE_TRACKS, MAX_RANK, generatePilotName } from './profile.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
 import { FlowField } from './sim/flow-field.js';
 import { SimCore } from './sim/sim-core.js';
@@ -64,7 +64,7 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
-let gamePhase = 'title'; // 'title' | 'mapSelect' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused'
+let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused'
 let deathTimer = 0;
 let escapeTimer = 0;
 let titleTimer = 0;
@@ -89,11 +89,17 @@ let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow rema
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
 
-// Vault + meta screen
-const vault = new Vault();
+// Profile + meta/home screen
+const profileManager = new ProfileManager();
 let metaExtractedItems = []; // items from the extraction, shown on meta screen
-let metaCursor = 0;          // meta screen cursor position
 let metaPhaseTimer = 0;      // animation timer for meta screen
+let profileCursor = 0;       // profile select cursor (0-2)
+let homeTab = 0;             // home screen tab (0=ship, 1=vault, 2=upgrades, 3=launch)
+let homeVaultCursor = 0;     // vault subscreen scroll position
+let homeUpgradeCursor = 0;   // upgrade subscreen cursor
+let homePhaseTimer = 0;      // animation timer for home screen
+let nameInputActive = false; // text input mode for new profile
+let nameInputBuffer = '';    // current typed name
 
 // Scene transition state
 let transitionActive = false;
@@ -202,6 +208,24 @@ function init() {
     }
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'Tab') e.preventDefault();
+
+    // Name input for profile creation
+    if (nameInputActive) {
+      e.preventDefault();
+      if (e.key === 'Enter') {
+        profileManager.createProfile(profileCursor, nameInputBuffer);
+        nameInputActive = false;
+        gamePhase = 'home';
+        homeTab = 0;
+        homePhaseTimer = 0;
+      } else if (e.key === 'Escape') {
+        nameInputActive = false;
+      } else if (e.key === 'Backspace') {
+        nameInputBuffer = nameInputBuffer.slice(0, -1);
+      } else if (e.key.length === 1 && nameInputBuffer.length < 16) {
+        nameInputBuffer += e.key;
+      }
+    }
   });
 
   // Handle resize
@@ -253,7 +277,7 @@ function init() {
       scavengerSystem,
       combatSystem,
       currentSignature,
-      vault,
+      profileManager,
     }));
   }
 
@@ -513,6 +537,17 @@ function startGame(map) {
     scavengerSystem.spawn(sx, sy, archetype);
   }
 
+  // Apply upgrade multipliers from profile
+  const prof = profileManager.active;
+  if (prof) {
+    const thrustMult = 1 + prof.upgrades.thrust * 0.15;
+    CONFIG.ship.thrustAccel *= thrustMult;
+    const couplingMult = 1 + prof.upgrades.coupling * 0.10;
+    CONFIG.ship.fluidCoupling *= couplingMult;
+    const dragMult = 1 - prof.upgrades.drag * 0.12;
+    CONFIG.ship.drag *= dragMult;
+  }
+
   gamePhase = 'playing';
   showHUD();
 }
@@ -563,6 +598,8 @@ let _prevPause = false;
 let _prevBack = false;
 let _prevUp = false;
 let _prevDown = false;
+let _prevLeft = false;
+let _prevRight = false;
 let _prevPulse = false;
 let _prevInventory = false;
 let _prevConsumable1 = false;
@@ -643,7 +680,7 @@ function gameLoop(now) {
     }
   }
 
-  const inMenu = gamePhase === 'title' || gamePhase === 'mapSelect' || rendererFixtureActive;
+  const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home' || gamePhase === 'mapSelect' || rendererFixtureActive;
 
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
@@ -672,7 +709,70 @@ function gameLoop(now) {
   if (gamePhase === 'title') {
     titleTimer += dt;
     if (!transitionActive && (confirmNow && !_prevConfirm) && titleTimer > 0.5) {
-      gamePhase = 'mapSelect';
+      gamePhase = 'profileSelect';
+      profileCursor = profileManager.activeSlot >= 0 ? profileManager.activeSlot : 0;
+    }
+    applySceneCamera(dt);
+
+  } else if (gamePhase === 'profileSelect') {
+    if (nameInputActive) {
+      // Text input handled by keydown listener (see below)
+      applySceneCamera(dt);
+    } else {
+      if (upNow && !_prevUp) profileCursor = (profileCursor - 1 + 3) % 3;
+      if (downNow && !_prevDown) profileCursor = (profileCursor + 1) % 3;
+      if (!transitionActive && confirmNow && !_prevConfirm) {
+        if (profileManager.hasProfile(profileCursor)) {
+          profileManager.loadProfile(profileCursor);
+          gamePhase = 'home';
+          homeTab = 0;
+          homePhaseTimer = 0;
+        } else {
+          // Start name input for new profile
+          nameInputActive = true;
+          nameInputBuffer = generatePilotName();
+        }
+      }
+      if (!transitionActive && backNow && !_prevBack) {
+        gamePhase = 'title';
+        titleTimer = 0;
+      }
+      applySceneCamera(dt);
+    }
+
+  } else if (gamePhase === 'home') {
+    homePhaseTimer += dt;
+    const tabCount = 4; // SHIP, VAULT, UPGRADES, LAUNCH
+    if (inputManager.leftPressed && !_prevLeft) homeTab = (homeTab - 1 + tabCount) % tabCount;
+    if (inputManager.rightPressed && !_prevRight) homeTab = (homeTab + 1) % tabCount;
+
+    if (homeTab === 1) { // VAULT
+      if (upNow && !_prevUp && homeVaultCursor > 0) homeVaultCursor--;
+      const p = profileManager.active;
+      const vaultLen = p ? p.vault.length : 0;
+      if (downNow && !_prevDown && homeVaultCursor < vaultLen - 1) homeVaultCursor++;
+      if (confirmNow && !_prevConfirm && p && p.vault[homeVaultCursor]) {
+        // Sell selected vault item
+        profileManager.sellVaultItem(homeVaultCursor);
+        if (homeVaultCursor >= (p.vault.length)) homeVaultCursor = Math.max(0, p.vault.length - 1);
+      }
+    } else if (homeTab === 2) { // UPGRADES
+      const tracks = Object.keys(UPGRADE_TRACKS);
+      if (upNow && !_prevUp && homeUpgradeCursor > 0) homeUpgradeCursor--;
+      if (downNow && !_prevDown && homeUpgradeCursor < tracks.length - 1) homeUpgradeCursor++;
+      if (confirmNow && !_prevConfirm) {
+        const track = tracks[homeUpgradeCursor];
+        profileManager.performUpgrade(track);
+      }
+    } else if (homeTab === 3) { // LAUNCH
+      if (confirmNow && !_prevConfirm) {
+        // Apply upgrades and go to map select
+        gamePhase = 'mapSelect';
+      }
+    }
+
+    if (!transitionActive && backNow && !_prevBack) {
+      gamePhase = 'profileSelect';
     }
     applySceneCamera(dt);
 
@@ -681,12 +781,16 @@ function gameLoop(now) {
     if (downNow && !_prevDown) mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length;
     if (!transitionActive && confirmNow && !_prevConfirm) {
       audioEngine.init();  // first user gesture — create AudioContext
+      // Load loadout from profile before entering run
+      const p = profileManager.active;
+      if (p) {
+        inventorySystem.equipped = p.loadout.equipped.map(i => i ? { ...i } : null);
+        inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
+      }
       transitionToGame(MAP_LIST[mapSelectIndex]);
     }
     if (!transitionActive && backNow && !_prevBack) {
-      // Same scene (title map), just switch UI — no transition needed
-      gamePhase = 'title';
-      titleTimer = 0;
+      gamePhase = 'home';
     }
     applySceneCamera(dt);
 
@@ -696,28 +800,37 @@ function gameLoop(now) {
 
     if (!transitionActive && confirmNow && !_prevConfirm) {
       if (gamePhase === 'dead' && deathTimer > 1.0) {
+        const emLost = profileManager.recordDeath();
         triggerTransition(() => {
           loadTitleScene();
-          gamePhase = 'mapSelect';
+          gamePhase = 'home';
+          homeTab = 0;
+          homePhaseTimer = 0;
         });
       }
       if (gamePhase === 'escaped' && escapeTimer > 1.0) {
-        // Extract cargo → vault, then transition to meta screen
+        // Extract cargo → profile vault, then transition to home
         metaExtractedItems = inventorySystem.extractCargo();
-        vault.recordExtraction(simState.runEndTime);
-        vault.storeItems(metaExtractedItems.map(i => ({ ...i })));
-        inventorySystem.serializeLoadout();  // save equipped + consumables
+        profileManager.recordExtraction(simState.runEndTime);
+        const overflow = profileManager.storeItems(metaExtractedItems.map(i => ({ ...i })));
+        // Sell overflow items automatically (vault full)
+        for (const item of overflow) {
+          profileManager.addEM(item.value || 0);
+        }
+        // Save loadout
+        profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
         triggerTransition(() => {
           gamePhase = 'meta';
-          metaCursor = 0;
           metaPhaseTimer = 0;
         });
       }
       if (gamePhase === 'meta') {
-        // "Drop back in" — go to map select
+        // Go to home screen after viewing salvage report
         triggerTransition(() => {
           loadTitleScene();
-          gamePhase = 'mapSelect';
+          gamePhase = 'home';
+          homeTab = 0;
+          homePhaseTimer = 0;
         });
       }
     }
@@ -899,6 +1012,8 @@ function gameLoop(now) {
   _prevBack = backNow;
   _prevUp = upNow;
   _prevDown = downNow;
+  _prevLeft = inputManager.leftPressed;
+  _prevRight = inputManager.rightPressed;
   _prevPulse = pulseNow;
   _prevInventory = inventoryNow;
   _prevConsumable1 = consumable1Now;
@@ -1374,6 +1489,249 @@ function gameLoop(now) {
     ctx.restore();
   }
 
+  // === PROFILE SELECT SCREEN ===
+  if (!rendererFixtureActive && gamePhase === 'profileSelect') {
+    const cx = overlayCanvas.width / 2;
+    let y = overlayCanvas.height * 0.25;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 10, 0.85)';
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 8;
+
+    ctx.fillStyle = 'rgba(100, 200, 220, 0.9)';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillText('SELECT PILOT', cx, y);
+    y += 50;
+
+    for (let i = 0; i < 3; i++) {
+      const selected = (profileCursor === i);
+      const profile = profileManager.slots[i];
+      const boxY = y;
+      const boxH = 60;
+
+      // Selection highlight
+      if (selected) {
+        ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+        ctx.fillRect(cx - 200, boxY - 5, 400, boxH);
+        ctx.strokeStyle = 'rgba(100, 150, 255, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - 200, boxY - 5, 400, boxH);
+      }
+
+      if (profile) {
+        ctx.fillStyle = selected ? 'rgba(220, 230, 255, 0.95)' : 'rgba(150, 160, 180, 0.7)';
+        ctx.font = '16px monospace';
+        ctx.fillText(profile.name, cx, boxY + 18);
+        ctx.font = '11px monospace';
+        ctx.fillStyle = selected ? 'rgba(255, 220, 100, 0.8)' : 'rgba(150, 150, 170, 0.5)';
+        ctx.fillText(`${profile.exoticMatter} EM  |  ${profile.totalExtractions} extractions`, cx, boxY + 38);
+      } else {
+        ctx.fillStyle = selected ? 'rgba(150, 180, 200, 0.8)' : 'rgba(100, 100, 120, 0.4)';
+        ctx.font = '14px monospace';
+        ctx.fillText('— empty slot —', cx, boxY + 25);
+      }
+
+      y += boxH + 10;
+    }
+
+    // Name input overlay
+    if (nameInputActive) {
+      ctx.fillStyle = 'rgba(0, 0, 20, 0.9)';
+      ctx.fillRect(cx - 200, overlayCanvas.height * 0.45, 400, 80);
+      ctx.strokeStyle = 'rgba(100, 200, 255, 0.6)';
+      ctx.strokeRect(cx - 200, overlayCanvas.height * 0.45, 400, 80);
+      ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
+      ctx.font = '12px monospace';
+      ctx.fillText('enter pilot name (or press enter for default)', cx, overlayCanvas.height * 0.45 + 25);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.font = '18px monospace';
+      const blink = Math.sin(totalTime * 6) > 0 ? '|' : '';
+      ctx.fillText(nameInputBuffer + blink, cx, overlayCanvas.height * 0.45 + 55);
+    }
+
+    // Controls hint
+    ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
+    ctx.font = '11px monospace';
+    ctx.fillText('↑↓ select    space: load/create    esc: back', cx, overlayCanvas.height * 0.85);
+
+    ctx.restore();
+  }
+
+  // === HOME SCREEN ===
+  if (!rendererFixtureActive && gamePhase === 'home') {
+    const cx = overlayCanvas.width / 2;
+    const p = profileManager.active;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 10, 0.88)';
+    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 8;
+
+    // Header: pilot name + EM
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(200, 210, 230, 0.9)';
+    ctx.font = '14px monospace';
+    ctx.fillText(`pilot: ${p?.name || '???'}`, cx, 30);
+    ctx.fillStyle = 'rgba(255, 220, 100, 0.9)';
+    ctx.fillText(`${p?.exoticMatter || 0} exotic matter`, cx, 50);
+
+    // Tab bar
+    const tabNames = ['SHIP', 'VAULT', 'UPGRADES', 'LAUNCH'];
+    const tabWidth = 120;
+    const tabStartX = cx - (tabNames.length * tabWidth) / 2;
+    for (let i = 0; i < tabNames.length; i++) {
+      const tx = tabStartX + i * tabWidth + tabWidth / 2;
+      const active = (homeTab === i);
+      ctx.fillStyle = active ? 'rgba(100, 150, 255, 0.9)' : 'rgba(100, 110, 130, 0.5)';
+      ctx.font = active ? 'bold 14px monospace' : '13px monospace';
+      ctx.fillText(tabNames[i], tx, 80);
+      if (active) {
+        ctx.fillStyle = 'rgba(100, 150, 255, 0.6)';
+        ctx.fillRect(tx - tabWidth / 2 + 10, 85, tabWidth - 20, 2);
+      }
+    }
+
+    // Subscreen content area
+    const contentY = 110;
+    const contentH = overlayCanvas.height - 160;
+    ctx.textAlign = 'left';
+    const leftMargin = cx - 180;
+
+    if (homeTab === 0 && p) {
+      // === SHIP subscreen ===
+      ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText('ship stats', leftMargin, contentY);
+      ctx.font = '12px monospace';
+      let sy = contentY + 25;
+      const tracks = Object.keys(UPGRADE_TRACKS);
+      for (const track of tracks) {
+        if (track === 'vault') continue;
+        const rank = p.upgrades[track] || 0;
+        const td = UPGRADE_TRACKS[track];
+        const bars = '█'.repeat(rank) + '░'.repeat(MAX_RANK - rank);
+        ctx.fillStyle = rank > 0 ? 'rgba(100, 255, 180, 0.8)' : 'rgba(120, 130, 150, 0.5)';
+        ctx.fillText(`${td.label.padEnd(10)} ${bars}  rank ${rank}/${MAX_RANK}`, leftMargin, sy);
+        sy += 20;
+      }
+
+      // Loadout
+      sy += 15;
+      ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText('loadout', leftMargin, sy);
+      sy += 20;
+      ctx.font = '12px monospace';
+      for (let i = 0; i < 2; i++) {
+        const eq = p.loadout.equipped[i];
+        ctx.fillStyle = eq ? 'rgba(255, 200, 60, 0.8)' : 'rgba(100, 100, 120, 0.4)';
+        ctx.fillText(`equip ${i + 1}: ${eq ? eq.name : '— empty —'}`, leftMargin, sy);
+        sy += 18;
+      }
+      for (let i = 0; i < 2; i++) {
+        const con = p.loadout.consumables[i];
+        ctx.fillStyle = con ? 'rgba(200, 160, 255, 0.8)' : 'rgba(100, 100, 120, 0.4)';
+        ctx.fillText(`hotbar ${i + 1}: ${con ? con.name : '— empty —'}`, leftMargin, sy);
+        sy += 18;
+      }
+
+    } else if (homeTab === 1 && p) {
+      // === VAULT subscreen ===
+      ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText(`vault  ${p.vault.length}/${p.vaultCapacity}`, leftMargin, contentY);
+      ctx.font = '12px monospace';
+      let vy = contentY + 25;
+      const maxVisible = Math.min(p.vault.length, 12);
+      const scrollStart = Math.max(0, homeVaultCursor - 6);
+      for (let i = scrollStart; i < Math.min(p.vault.length, scrollStart + maxVisible); i++) {
+        const item = p.vault[i];
+        const selected = (i === homeVaultCursor);
+        if (selected) {
+          ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+          ctx.fillRect(leftMargin - 4, vy - 12, 370, 18);
+        }
+        const tierColor = TIER_COLORS[item.tier] || 'rgba(180, 180, 190, 0.8)';
+        ctx.fillStyle = tierColor;
+        ctx.fillText(`${item.name}`, leftMargin, vy);
+        ctx.fillStyle = 'rgba(150, 150, 170, 0.5)';
+        ctx.textAlign = 'right';
+        ctx.fillText(`${item.value} EM`, leftMargin + 360, vy);
+        ctx.textAlign = 'left';
+        if (selected) {
+          ctx.fillStyle = 'rgba(255, 220, 100, 0.7)';
+          ctx.fillText('[space: sell]', leftMargin + 240, vy);
+        }
+        vy += 18;
+      }
+      if (p.vault.length === 0) {
+        ctx.fillStyle = 'rgba(100, 100, 120, 0.4)';
+        ctx.fillText('— vault empty —', leftMargin, vy);
+      }
+
+    } else if (homeTab === 2 && p) {
+      // === UPGRADES subscreen ===
+      ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText('upgrades', leftMargin, contentY);
+      ctx.font = '12px monospace';
+      let uy = contentY + 25;
+      const tracks = Object.keys(UPGRADE_TRACKS);
+      for (let ti = 0; ti < tracks.length; ti++) {
+        const track = tracks[ti];
+        const td = UPGRADE_TRACKS[track];
+        const rank = p.upgrades[track] || 0;
+        const selected = (ti === homeUpgradeCursor);
+        const cost = profileManager.getUpgradeCost(track);
+        const canAfford = profileManager.canAffordUpgrade(track);
+
+        if (selected) {
+          ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+          ctx.fillRect(leftMargin - 4, uy - 12, 370, 32);
+        }
+
+        const bars = '█'.repeat(rank) + '░'.repeat(MAX_RANK - rank);
+        ctx.fillStyle = selected ? 'rgba(220, 230, 255, 0.9)' : 'rgba(150, 160, 180, 0.6)';
+        ctx.fillText(`${td.label.padEnd(10)} ${bars}  ${td.desc}`, leftMargin, uy);
+
+        if (cost) {
+          const costText = cost.componentTarget
+            ? `${cost.em} EM + ${cost.componentTarget}`
+            : `${cost.em} EM`;
+          ctx.fillStyle = canAfford ? 'rgba(100, 255, 150, 0.7)' : 'rgba(255, 100, 100, 0.5)';
+          ctx.fillText(`  → ${costText}${selected ? '  [space: upgrade]' : ''}`, leftMargin + 20, uy + 15);
+        } else {
+          ctx.fillStyle = 'rgba(255, 220, 100, 0.6)';
+          ctx.fillText('  MAX', leftMargin + 20, uy + 15);
+        }
+
+        uy += 38;
+      }
+
+    } else if (homeTab === 3) {
+      // === LAUNCH subscreen ===
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(100, 255, 200, 0.8)';
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText('press space to launch', cx, contentY + contentH / 2 - 20);
+      ctx.fillStyle = 'rgba(120, 150, 170, 0.5)';
+      ctx.font = '13px monospace';
+      ctx.fillText('select your map on the next screen', cx, contentY + contentH / 2 + 10);
+    }
+
+    // Controls hint
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
+    ctx.font = '11px monospace';
+    ctx.fillText('← → tabs    ↑↓ select    space: confirm    esc: back', cx, overlayCanvas.height - 20);
+
+    ctx.restore();
+  }
+
   // === MAP SELECT SCREEN ===
   if (!rendererFixtureActive && gamePhase === 'mapSelect') {
     const cx = overlayCanvas.width / 2;
@@ -1568,10 +1926,11 @@ function gameLoop(now) {
       ctx.fillText(`+${totalValue} exotic matter`, cx, sy);
       sy += 25;
       ctx.fillStyle = `rgba(180, 180, 200, ${a * 0.8})`;
-      ctx.fillText(`vault: ${vault.exoticMatter} total  |  ${vault.totalExtractions} extractions`, cx, sy);
+      const prof = profileManager.active;
+      ctx.fillText(`vault: ${prof?.exoticMatter ?? 0} total  |  ${prof?.totalExtractions ?? 0} extractions`, cx, sy);
       sy += 20;
-      const mins = Math.floor(vault.bestSurvivalTime / 60);
-      const secs = Math.floor(vault.bestSurvivalTime % 60);
+      const mins = Math.floor((prof?.bestSurvivalTime ?? 0) / 60);
+      const secs = Math.floor((prof?.bestSurvivalTime ?? 0) % 60);
       ctx.fillText(`best survival: ${mins}:${String(secs).padStart(2, '0')}`, cx, sy);
     }
 

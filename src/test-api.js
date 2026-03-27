@@ -217,13 +217,16 @@ export function initTestAPI(getState) {
     },
 
     getVault() {
-      const { vault } = getState();
-      if (!vault) return null;
+      const { profileManager } = getState();
+      const p = profileManager?.active;
+      if (!p) return null;
       return {
-        exoticMatter: vault.exoticMatter,
-        itemCount: vault.items.length,
-        totalExtractions: vault.totalExtractions,
-        bestSurvivalTime: vault.bestSurvivalTime,
+        exoticMatter: p.exoticMatter,
+        itemCount: p.vault.length,
+        vaultCapacity: p.vaultCapacity,
+        totalExtractions: p.totalExtractions,
+        bestSurvivalTime: p.bestSurvivalTime,
+        upgrades: { ...p.upgrades },
       };
     },
   };
