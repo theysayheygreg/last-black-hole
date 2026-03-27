@@ -88,6 +88,9 @@ let shieldActive = false;   // shieldBurst consumable — survive one well conta
 let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow remaining
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
+let hullGraceTimer = 0;     // hull upgrade grace period (seconds remaining in kill zone before death)
+let hullGraceUsed = false;  // hull rank 2+: one free survive per run
+let lastDeathTax = 0;       // EM lost on last death (for display)
 
 // Profile + meta/home screen
 const profileManager = new ProfileManager();
@@ -95,11 +98,13 @@ let metaExtractedItems = []; // items from the extraction, shown on meta screen
 let metaPhaseTimer = 0;      // animation timer for meta screen
 let profileCursor = 0;       // profile select cursor (0-2)
 let homeTab = 0;             // home screen tab (0=ship, 1=vault, 2=upgrades, 3=launch)
+let homeShipCursor = 0;      // ship subscreen cursor (0-1 equip, 2-3 consumable)
 let homeVaultCursor = 0;     // vault subscreen scroll position
 let homeUpgradeCursor = 0;   // upgrade subscreen cursor
 let homePhaseTimer = 0;      // animation timer for home screen
 let nameInputActive = false; // text input mode for new profile
 let nameInputBuffer = '';    // current typed name
+let deleteConfirmSlot = -1;  // which slot is pending delete confirmation (-1 = none)
 
 // Scene transition state
 let transitionActive = false;
@@ -421,6 +426,9 @@ function loadScene(map) {
   shieldActive = false;
   timeSlowRemaining = 0;
   _starFlashTimer = 0;
+  hullGraceTimer = 0;
+  hullGraceUsed = false;
+  lastDeathTax = 0;
   waveRings.rings = [];
   scavengerSystem.scavengers = [];
   combatSystem.playerCooldown = 0;
@@ -718,6 +726,16 @@ function gameLoop(now) {
     if (nameInputActive) {
       // Text input handled by keydown listener (see below)
       applySceneCamera(dt);
+    } else if (deleteConfirmSlot >= 0) {
+      // Delete confirmation — Y/N
+      if (confirmNow && !_prevConfirm) {
+        profileManager.deleteProfile(deleteConfirmSlot);
+        deleteConfirmSlot = -1;
+      }
+      if (backNow && !_prevBack) {
+        deleteConfirmSlot = -1;
+      }
+      applySceneCamera(dt);
     } else {
       if (upNow && !_prevUp) profileCursor = (profileCursor - 1 + 3) % 3;
       if (downNow && !_prevDown) profileCursor = (profileCursor + 1) % 3;
@@ -728,10 +746,13 @@ function gameLoop(now) {
           homeTab = 0;
           homePhaseTimer = 0;
         } else {
-          // Start name input for new profile
           nameInputActive = true;
           nameInputBuffer = generatePilotName();
         }
+      }
+      // X key to delete (only on occupied slots)
+      if (inputManager.consumable1Pressed && profileManager.hasProfile(profileCursor)) {
+        deleteConfirmSlot = profileCursor;
       }
       if (!transitionActive && backNow && !_prevBack) {
         gamePhase = 'title';
@@ -746,7 +767,33 @@ function gameLoop(now) {
     if (inputManager.leftPressed && !_prevLeft) homeTab = (homeTab - 1 + tabCount) % tabCount;
     if (inputManager.rightPressed && !_prevRight) homeTab = (homeTab + 1) % tabCount;
 
-    if (homeTab === 1) { // VAULT
+    if (homeTab === 0) { // SHIP — loadout management
+      if (upNow && !_prevUp && homeShipCursor > 0) homeShipCursor--;
+      if (downNow && !_prevDown && homeShipCursor < 3) homeShipCursor++;
+      if (confirmNow && !_prevConfirm) {
+        const p = profileManager.active;
+        if (p) {
+          if (homeShipCursor < 2) {
+            // Unequip artifact → vault
+            const item = p.loadout.equipped[homeShipCursor];
+            if (item && p.vault.length < p.vaultCapacity) {
+              p.loadout.equipped[homeShipCursor] = null;
+              p.vault.push(item);
+              profileManager.save();
+            }
+          } else {
+            // Remove consumable → vault
+            const idx = homeShipCursor - 2;
+            const item = p.loadout.consumables[idx];
+            if (item && p.vault.length < p.vaultCapacity) {
+              p.loadout.consumables[idx] = null;
+              p.vault.push(item);
+              profileManager.save();
+            }
+          }
+        }
+      }
+    } else if (homeTab === 1) { // VAULT
       if (upNow && !_prevUp && homeVaultCursor > 0) homeVaultCursor--;
       const p = profileManager.active;
       const vaultLen = p ? p.vault.length : 0;
@@ -821,7 +868,7 @@ function gameLoop(now) {
       if (gamePhase === 'dead' && deathTimer > 1.0) {
         // Save loadout on death — consumed items stay consumed, equipment changes persist
         profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
-        const emLost = profileManager.recordDeath();
+        lastDeathTax = profileManager.recordDeath();
         triggerTransition(() => {
           loadTitleScene();
           gamePhase = 'home';
@@ -965,17 +1012,49 @@ function gameLoop(now) {
       wreckSystem.checkWellConsumption(wellSystem, waveRings);
 
       const killingWell = wellSystem.checkDeath(ship.wx, ship.wy);
+      const hullRank = profileManager.active?.upgrades?.hull ?? 0;
+      // Hull grace period: rank 1 = 0.3s, rank 2 = 0.4s, rank 3 = 0.5s
+      const hullGraceDuration = hullRank > 0 ? 0.2 + hullRank * 0.1 : 0;
+      // Hull rank 2+: one free survive per run (like built-in shield)
+      const hullHasFreePass = hullRank >= 2 && !hullGraceUsed;
+
       if (killingWell) {
-        // Shield burst: survive one well contact
         if (shieldActive) {
+          // Shield burst consumable: survive one contact
           shieldActive = false;
           showWarning('shield absorbed!', 'rgba(100, 200, 255, 0.95)', 2000);
+        } else if (hullHasFreePass && hullGraceTimer <= 0) {
+          // Hull free pass: first contact this run is forgiven
+          hullGraceUsed = true;
+          hullGraceTimer = 0.5;
+          showWarning('hull absorbed impact!', 'rgba(100, 255, 180, 0.95)', 2000);
+        } else if (hullGraceDuration > 0 && hullGraceTimer <= 0) {
+          // Start grace period — player has a moment to escape
+          hullGraceTimer = hullGraceDuration;
+        } else if (hullGraceTimer > 0) {
+          // Still in grace period — count down
+          hullGraceTimer -= dt;
+          if (hullGraceTimer <= 0) {
+            // Grace expired while still in kill zone — die
+            gamePhase = 'dead';
+            deathTimer = 0;
+            freezeRunEnd(simState);
+            ship.setThrust(false);
+            audioEngine.playEvent('death');
+          }
         } else {
+          // No hull upgrade, no shield — instant death
           gamePhase = 'dead';
           deathTimer = 0;
           freezeRunEnd(simState);
           ship.setThrust(false);
           audioEngine.playEvent('death');
+        }
+      } else {
+        // Left kill zone — reset grace timer
+        if (hullGraceTimer > 0) {
+          hullGraceTimer = 0;
+          showWarning('escaped!', 'rgba(100, 255, 180, 0.9)', 1500);
         }
       }
 
@@ -1142,8 +1221,10 @@ function gameLoop(now) {
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
       ctx.shadowBlur = 6;
 
-      const fadeNear = 0.15;  // fully visible below this distance
-      const fadeFar = 0.4;   // invisible beyond this distance
+      // Sensor upgrade extends detection range: rank 0 = 0.15/0.4, rank 3 = 0.3/0.85
+      const sensorRank = profileManager.active?.upgrades?.sensor ?? 0;
+      const fadeNear = 0.15 + sensorRank * 0.05;
+      const fadeFar = 0.4 + sensorRank * 0.15;
 
       function labelAlpha(dist) {
         if (dist < fadeNear) return 1.0;
@@ -1573,10 +1654,24 @@ function gameLoop(now) {
       ctx.fillText(nameInputBuffer + blink, cx, overlayCanvas.height * 0.45 + 55);
     }
 
+    // Delete confirmation overlay
+    if (deleteConfirmSlot >= 0) {
+      ctx.fillStyle = 'rgba(0, 0, 20, 0.85)';
+      ctx.fillRect(cx - 180, overlayCanvas.height * 0.45, 360, 70);
+      ctx.strokeStyle = 'rgba(255, 80, 80, 0.6)';
+      ctx.strokeRect(cx - 180, overlayCanvas.height * 0.45, 360, 70);
+      ctx.fillStyle = 'rgba(255, 100, 80, 0.9)';
+      ctx.font = '13px monospace';
+      ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, overlayCanvas.height * 0.45 + 28);
+      ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
+      ctx.font = '11px monospace';
+      ctx.fillText('space: confirm    esc: cancel', cx, overlayCanvas.height * 0.45 + 52);
+    }
+
     // Controls hint
     ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
     ctx.font = '11px monospace';
-    ctx.fillText('↑↓ select    space: load/create    esc: back', cx, overlayCanvas.height * 0.85);
+    ctx.fillText('↑↓ select    space: load/create    1: delete    esc: back', cx, overlayCanvas.height * 0.85);
 
     ctx.restore();
   }
@@ -1649,14 +1744,26 @@ function gameLoop(now) {
       ctx.font = '12px monospace';
       for (let i = 0; i < 2; i++) {
         const eq = p.loadout.equipped[i];
+        const sel = (homeShipCursor === i);
+        if (sel) {
+          ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+          ctx.fillRect(leftMargin - 4, sy - 12, 370, 18);
+        }
         ctx.fillStyle = eq ? 'rgba(255, 200, 60, 0.8)' : 'rgba(100, 100, 120, 0.4)';
-        ctx.fillText(`equip ${i + 1}: ${eq ? eq.name : '— empty —'}`, leftMargin, sy);
+        const action = (sel && eq) ? '  [space: unequip]' : '';
+        ctx.fillText(`equip ${i + 1}: ${eq ? eq.name : '— empty —'}${action}`, leftMargin, sy);
         sy += 18;
       }
       for (let i = 0; i < 2; i++) {
         const con = p.loadout.consumables[i];
+        const sel = (homeShipCursor === i + 2);
+        if (sel) {
+          ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+          ctx.fillRect(leftMargin - 4, sy - 12, 370, 18);
+        }
         ctx.fillStyle = con ? 'rgba(200, 160, 255, 0.8)' : 'rgba(100, 100, 120, 0.4)';
-        ctx.fillText(`hotbar ${i + 1}: ${con ? con.name : '— empty —'}`, leftMargin, sy);
+        const action = (sel && con) ? '  [space: remove]' : '';
+        ctx.fillText(`hotbar ${i + 1}: ${con ? con.name : '— empty —'}${action}`, leftMargin, sy);
         sy += 18;
       }
 
@@ -1874,6 +1981,13 @@ function gameLoop(now) {
       const secs = Math.floor(simState.runEndTime % 60);
       const statY = cy + Math.min(endItems.length, 8) * 18 - 10;
       ctx.fillText(`${endItems.length} items ${itemVerb}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
+
+      // Death tax display
+      if (!isEscape && lastDeathTax > 0 && t > statsT + 0.3) {
+        ctx.fillStyle = 'rgba(255, 100, 80, 0.8)';
+        ctx.font = '14px monospace';
+        ctx.fillText(`-${lastDeathTax} exotic matter`, cx, statY + 25);
+      }
 
       // Score (extraction only)
       if (isEscape && t > statsT + 0.3) {

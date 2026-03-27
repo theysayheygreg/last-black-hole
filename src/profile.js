@@ -175,7 +175,25 @@ export class ProfileManager {
     return true;
   }
 
-  /** Add items to vault. Returns overflow (items that didn't fit). */
+  /** Sort vault: artifacts first, then components, dataCores, salvage. Within category: tier desc, value desc. */
+  sortVault() {
+    const p = this.active;
+    if (!p) return;
+    const catOrder = { artifact: 0, component: 1, dataCore: 2, salvage: 3 };
+    const tierOrder = { unique: 0, rare: 1, uncommon: 2, common: 3 };
+    p.vault.sort((a, b) => {
+      const catA = catOrder[a.category] ?? 9;
+      const catB = catOrder[b.category] ?? 9;
+      if (catA !== catB) return catA - catB;
+      const tierA = tierOrder[a.tier] ?? 9;
+      const tierB = tierOrder[b.tier] ?? 9;
+      if (tierA !== tierB) return tierA - tierB;
+      return (b.value || 0) - (a.value || 0);
+    });
+    this.save();
+  }
+
+  /** Add items to vault. Returns overflow (items that didn't fit). Auto-sorts after. */
   storeItems(items) {
     const p = this.active;
     if (!p) return items;
@@ -187,7 +205,7 @@ export class ProfileManager {
         overflow.push(item);
       }
     }
-    this.save();
+    this.sortVault();
     return overflow;
   }
 
