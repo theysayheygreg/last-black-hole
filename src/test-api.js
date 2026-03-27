@@ -186,6 +186,8 @@ export function initTestAPI(getState) {
         wy: wreck.wy,
         alive: wreck.alive,
         looted: wreck.looted,
+        type: wreck.type,
+        name: wreck.name,
         pickupCooldown: wreck.pickupCooldown,
         loot: wreck.loot?.map(item => item ? { ...item } : null) || [],
       }));
@@ -227,6 +229,7 @@ export function initTestAPI(getState) {
       return scavengerSystem.scavengers.map(s => ({
         wx: s.wx, wy: s.wy, alive: s.alive, archetype: s.archetype,
         state: s.state, lootCount: s.lootCount,
+        name: s.name, faction: s.faction, callsign: s.callsign,
       }));
     },
 
@@ -243,6 +246,27 @@ export function initTestAPI(getState) {
     getSignature() {
       const { currentSignature } = getState();
       return currentSignature ? { name: currentSignature.name, mechanical: currentSignature.mechanical } : null;
+    },
+
+    getStars() {
+      const { starSystem } = getState();
+      if (!starSystem) return [];
+      return starSystem.stars.map(s => ({
+        wx: s.wx, wy: s.wy, mass: s.mass, type: s.type,
+        name: s.name, alive: s.alive, asteroidCount: s.asteroids.length,
+      }));
+    },
+
+    getComets() {
+      const { planetoidSystem } = getState();
+      if (!planetoidSystem) return [];
+      return planetoidSystem.planetoids.map(p => ({
+        wx: p.wx, wy: p.wy, name: p.name, alive: p.alive, pathType: p.pathType,
+      }));
+    },
+
+    getGamePhase() {
+      return getState().gamePhase;
     },
 
     getVault() {

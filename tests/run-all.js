@@ -16,6 +16,7 @@ const suites = [
   { name: "Coordinates", file: "coordinates.js" },
   { name: "Flow", file: "flow.js" },
   { name: "Inventory", file: "inventory.js" },
+  { name: "Systems", file: "systems.js" },
 ];
 
 console.log(`\n╔══════════════════════════════════════╗`);
