@@ -165,10 +165,8 @@ This is the jackpot event. A star dies, a rare wreck appears, and it's already d
 - Wrecks near wells could pulse faster as they approach the kill zone
 - A small "!" icon when a wreck is within 0.15 world-units of a kill radius (about to be consumed)
 
-## Open Questions
+## Decisions (2026-03-27)
 
-1. **Should dropped items (from player inventory) also drift?** Currently they have ejection velocity + drag decay, then stop. Adding drift would mean dropped items slowly migrate toward wells too. Consistent, but might frustrate players who drop items expecting to pick them up later.
-
-2. **Debris fields** — debris type wrecks spawn scattered pieces. Should each piece drift independently? Could create interesting spreading/converging patterns near wells.
-
-3. **Portal interaction** — should wrecks near portals get any effect? Portals have weak pull. A wreck drifting past a portal would be thematically interesting but may not matter mechanically.
+1. **Player-dropped items drift:** Yes. Consistent physics. If you drop something near a well, it drifts in.
+2. **Debris pieces drift independently:** Yes. May create interesting spreading/converging patterns. Revisit if too noisy.
+3. **Portal pull on wrecks:** No. Portals need their own design pass before we add wreck interactions.
