@@ -18,11 +18,11 @@ HOME SCREEN
         ↓
 MAP SELECT → PLAY → extract or die
     ↓ extract                ↓ die
-HOME SCREEN              MAP SELECT (cargo lost)
+HOME SCREEN              HOME SCREEN (cargo lost)
     (cargo → vault)
 ```
 
-Death skips the home screen — you lose cargo and go straight to map select. Extraction returns you home with your haul.
+Both death and extraction return to home screen. Players may want to change loadout, sell items, or upgrade between rounds regardless of outcome. Death loses cargo but you still visit home.
 
 ## Save Slots
 
@@ -141,6 +141,7 @@ Plus equipped artifact slots and consumable hotbar slots (same as in-game invent
 | Coupling | 1.2 | Fluid current influence | ship.fluidCoupling |
 | Drag | 0.06 | Velocity damping | ship.drag |
 | Sensor | 0 (new) | Wreck/portal detection range | — (extends label fade distance) |
+| Vault | 25 slots | Storage capacity | — (profile.vaultCapacity) |
 
 ### Rank requirements
 
@@ -157,6 +158,8 @@ Each track has 3 ranks. Rank 1 is cheap, rank 3 is expensive.
 **The component is consumed** when you upgrade. You need both the component AND the exotic matter.
 
 **Rank 1** requires no component — just exotic matter. This lets players start upgrading immediately after their first extraction without needing a lucky rare drop.
+
+**Vault space** is special — EM only (no component), but escalating costs: rank 1 = 500 EM (→ 35 slots), rank 2 = 1500 EM (→ 50 slots), rank 3 = 4000 EM (→ 75 slots). This is the EM sink that prevents hoarding.
 
 ### How upgrades modify gameplay
 
@@ -232,11 +235,16 @@ This creates a natural tension: sell everything for currency (safe, incremental)
 - Loadout editor (equip/unequip from vault)
 - Ship type selector (future — single type for now)
 
-## Open Questions for Greg
+## Decisions (2026-03-27)
 
-1. **Profile names:** Player-entered (keyboard input needed) or auto-generated ("Pilot Alpha", "Pilot Beta", "Pilot Gamma")?
-2. **Vault size limit:** Unlimited items in vault, or capped (e.g., 50 items)?
-3. **Component sell price:** Should components be sellable at all? If so, at what fraction of their upgrade value?
-4. **Death penalty:** Currently lose all cargo. Should there be a "death tax" on exotic matter too, or is cargo loss enough?
-5. **Upgrade respec:** Can you downgrade/respec upgrades to recover the component and EM?
-6. **Data cores:** They have `use: 'factionRep'` but no faction system. Gate from loot (like signal items) or keep dropping as EM-sellable flavor?
+1. **Profile names:** Player-entered with random name generator as default. Character limit (16). Spaces allowed. Text input sanitization backlogged.
+2. **Vault size limit:** 25 slots. Expandable via vault space upgrades (expensive EM cost, multiple ranks). Vault pressure forces sell/equip/upgrade decisions.
+3. **Components sellable:** Yes. Inventory and vault space are the forcing functions — you sell, equip, upgrade, or run out of room.
+4. **Death penalty:** Yes, some EM loss on death. Nuance deferred — death penalties are a whole feature for later.
+5. **Upgrade respec:** No for now. Pinned for future discussion.
+6. **Data cores:** Keep dropping as inventory items. Faction system comes later — they're sellable for EM in the meantime.
+
+### Additional decisions
+- **Death flow:** Always returns to home screen (not map select). Players may want to respec loadout after a death.
+- **Item quantities:** EM is a pure number (not item-based). Components and artifacts remain single-slot items. No stack sizes for now — each item occupies one slot. Vault space pressure handles the economy.
+- **Vault space upgrade:** New 6th upgrade track. Ranks increase vault capacity: 25 → 35 → 50 → 75. Costs only EM (no component), but expensive.

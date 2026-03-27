@@ -38,6 +38,27 @@
 - **Simplest fix:** Cache in coords.js — recompute only when WORLD_SCALE changes. Zero per-frame cost.
 - **Added:** 2026-03-26
 
+### Profile Name Text Input Sanitization
+- **What:** The profile name input accepts player-typed text. Needs sanitization: strip HTML/script, cap length (16 chars), handle edge cases (empty, whitespace-only, emoji, non-ASCII).
+- **Why deferred:** Text input is working. Sanitization is a polish/security concern, not a gameplay blocker.
+- **Added:** 2026-03-27
+
+### Death Penalty Design
+- **What:** Currently death loses all cargo. Greg wants EM loss on death too, but with nuance. Design the full death penalty system: EM percentage loss, insurance mechanics, hardcore mode, etc.
+- **Why deferred:** Needs playtesting to understand how punishing cargo loss alone feels before layering more penalties.
+- **Added:** 2026-03-27
+
+### Upgrade Respec
+- **What:** Allow players to downgrade upgrades and recover components/EM. Currently no respec — upgrades are permanent.
+- **Why deferred:** Pinned for future discussion. May not be needed if upgrade costs feel right.
+- **Added:** 2026-03-27
+
+### Server-Side Save
+- **What:** Persist player profiles to a server API instead of (or in addition to) localStorage. Enables cross-device play, backup, anti-cheat.
+- **Why deferred:** localStorage is sufficient for single-device play. Server save is a multiplayer/deployment concern.
+- **First revival step:** Define a REST API shape for profile CRUD. The save format is already JSON-serializable.
+- **Added:** 2026-03-27
+
 ### Comet Tail Fluid Wake Injection
 - **What:** Inject comet tail density into the visual density buffer (and optionally velocity field) so tails interact with the fluid sim, not just the canvas overlay.
 - **Why deferred:** More splats = more GPU load. Canvas-only tails are cheap and look good enough for now. Need to profile before adding fluid injection.
