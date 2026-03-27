@@ -1226,6 +1226,51 @@ function gameLoop(now) {
       ctx.restore();
     }
 
+    // === EDGE INDICATORS — off-screen wells (red) and nearest wreck (gold) ===
+    {
+      ctx.save();
+      const margin = 20;
+      const w = overlayCanvas.width, h = overlayCanvas.height;
+
+      function drawEdgeArrow(screenX, screenY, color, size) {
+        // Clamp to screen edges
+        const cx = w / 2, cy = h / 2;
+        const dx = screenX - cx, dy = screenY - cy;
+        const maxX = w / 2 - margin, maxY = h / 2 - margin;
+        if (Math.abs(dx) < maxX && Math.abs(dy) < maxY) return; // on screen
+        const scale = Math.min(maxX / Math.abs(dx || 1), maxY / Math.abs(dy || 1));
+        const ax = cx + dx * scale, ay = cy + dy * scale;
+        const angle = Math.atan2(dy, dx);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(ax + Math.cos(angle) * size, ay + Math.sin(angle) * size);
+        ctx.lineTo(ax + Math.cos(angle + 2.5) * size * 0.5, ay + Math.sin(angle + 2.5) * size * 0.5);
+        ctx.lineTo(ax + Math.cos(angle - 2.5) * size * 0.5, ay + Math.sin(angle - 2.5) * size * 0.5);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Wells — red arrows
+      for (const well of wellSystem.wells) {
+        const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, w, h);
+        drawEdgeArrow(sx, sy, 'rgba(255, 50, 30, 0.5)', 8);
+      }
+
+      // Nearest unlooted wreck — gold arrow
+      let nearestWreck = null, nearestDist = 999;
+      for (const wreck of wreckSystem.wrecks) {
+        if (!wreck.alive || wreck.looted) continue;
+        const dist = worldDistance(ship.wx, ship.wy, wreck.wx, wreck.wy);
+        if (dist < nearestDist) { nearestDist = dist; nearestWreck = wreck; }
+      }
+      if (nearestWreck) {
+        const [sx, sy] = worldToScreen(nearestWreck.wx, nearestWreck.wy, camX, camY, w, h);
+        drawEdgeArrow(sx, sy, 'rgba(255, 200, 60, 0.5)', 7);
+      }
+
+      ctx.restore();
+    }
+
     // === PROXIMITY FLAVOR TEXT LABELS ===
     // Fade in when close, fade out when far. Every named entity gets one.
     {
@@ -1315,6 +1360,47 @@ function gameLoop(now) {
       }
 
       ctx.restore();
+    }
+
+    // Hull grace warning — red screen edge pulse when in kill zone
+    if (hullGraceTimer > 0) {
+      const w = overlayCanvas.width, h = overlayCanvas.height;
+      const urgency = 0.5 + 0.5 * Math.sin(totalTime * 12);
+      const grad = ctx.createRadialGradient(w/2, h/2, Math.min(w,h) * 0.3, w/2, h/2, Math.min(w,h) * 0.6);
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(1, `rgba(255, 30, 0, ${0.25 * urgency})`);
+      ctx.save();
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+
+    // Well proximity warning — subtle red vignette as ship approaches wells
+    if (gamePhase === 'playing') {
+      let closestWellDist = 999;
+      for (const well of wellSystem.wells) {
+        const dist = worldDistance(ship.wx, ship.wy, well.wx, well.wy);
+        const dangerDist = well.killRadius * 4;
+        if (dist < dangerDist && dist < closestWellDist) closestWellDist = dist;
+      }
+      if (closestWellDist < 999) {
+        const nearestWell = wellSystem.wells.reduce((best, w) => {
+          const d = worldDistance(ship.wx, ship.wy, w.wx, w.wy);
+          return d < best.dist ? { well: w, dist: d } : best;
+        }, { well: null, dist: 999 });
+        const dangerZone = nearestWell.well.killRadius * 4;
+        const proximity = 1 - Math.min(nearestWell.dist / dangerZone, 1);
+        if (proximity > 0.1) {
+          const w = overlayCanvas.width, h = overlayCanvas.height;
+          const grad = ctx.createRadialGradient(w/2, h/2, Math.min(w,h) * 0.35, w/2, h/2, Math.min(w,h) * 0.65);
+          grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+          grad.addColorStop(1, `rgba(180, 20, 0, ${proximity * 0.12})`);
+          ctx.save();
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, w, h);
+          ctx.restore();
+        }
+      }
     }
 
     // Star consumption flash — brief screen tint
@@ -1836,6 +1922,17 @@ function gameLoop(now) {
         ctx.fillText('— vault empty —', leftMargin, vy);
       }
 
+      // Item description for selected vault item
+      if (p.vault[homeVaultCursor]) {
+        const selItem = p.vault[homeVaultCursor];
+        const descY = contentY + Math.min(p.vault.length, 12) * 18 + 45;
+        ctx.fillStyle = 'rgba(140, 150, 170, 0.6)';
+        ctx.font = '11px monospace';
+        const desc = selItem.effectDesc || selItem.useDesc || selItem.desc
+          || (selItem.upgradeTarget ? `upgrade: ${selItem.upgradeTarget}` : `${selItem.category} — ${selItem.tier}`);
+        ctx.fillText(desc, leftMargin, descY);
+      }
+
     } else if (homeTab === 2 && p) {
       // === UPGRADES subscreen ===
       ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
@@ -1866,7 +1963,15 @@ function gameLoop(now) {
             ? `${cost.em} EM + ${cost.componentTarget}`
             : `${cost.em} EM`;
           ctx.fillStyle = canAfford ? 'rgba(100, 255, 150, 0.7)' : 'rgba(255, 100, 100, 0.5)';
-          ctx.fillText(`  → ${costText}${selected ? '  [space: upgrade]' : ''}`, leftMargin + 20, uy + 15);
+          let preview = '';
+          if (selected && td.statKey) {
+            const keys = td.statKey.split('.');
+            const current = CONFIG[keys[0]][keys[1]];
+            const mult = 1 + (rank + 1) * td.multPerRank;
+            const next = (current / (1 + rank * td.multPerRank)) * mult;
+            preview = `  (${current.toFixed(2)} → ${next.toFixed(2)})`;
+          }
+          ctx.fillText(`  → ${costText}${preview}${selected ? '  [space: upgrade]' : ''}`, leftMargin + 20, uy + 15);
         } else {
           ctx.fillStyle = 'rgba(255, 220, 100, 0.6)';
           ctx.fillText('  MAX', leftMargin + 20, uy + 15);
