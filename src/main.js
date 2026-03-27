@@ -628,6 +628,41 @@ function togglePause() {
 
 // ---- Consumable effect dispatch ----
 
+// ---- Terminal UI helpers ----
+
+/** Draw subtle scanline overlay on menu/terminal screens */
+function drawScanlines(ctx, w, h, alpha = 0.04) {
+  ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+  for (let y = 0; y < h; y += 3) {
+    ctx.fillRect(0, y, w, 1);
+  }
+}
+
+/** Draw a terminal frame border with optional title */
+function drawTerminalFrame(ctx, x, y, w, h, title, color = 'rgba(80, 100, 140, 0.3)') {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+  // Corner accents
+  const c = 6;
+  ctx.strokeStyle = color.replace(/[\d.]+\)$/, '0.6)');
+  ctx.beginPath();
+  ctx.moveTo(x, y + c); ctx.lineTo(x, y); ctx.lineTo(x + c, y); // top-left
+  ctx.moveTo(x + w - c, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + c); // top-right
+  ctx.moveTo(x + w, y + h - c); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - c, y + h); // bottom-right
+  ctx.moveTo(x + c, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - c); // bottom-left
+  ctx.stroke();
+  if (title) {
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.9)';
+    const tw = ctx.measureText(title).width + 16;
+    ctx.fillRect(x + 12, y - 7, tw, 14);
+    ctx.fillStyle = color.replace(/[\d.]+\)$/, '0.7)');
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(title.toUpperCase(), x + 20, y + 3);
+  }
+}
+
 function applyConsumableEffect(effectId) {
   switch (effectId) {
     case 'shieldBurst':
@@ -1740,16 +1775,21 @@ function gameLoop(now) {
     let y = overlayCanvas.height * 0.25;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 10, 0.85)';
-    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    const w = overlayCanvas.width, h = overlayCanvas.height;
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.88)';
+    ctx.fillRect(0, 0, w, h);
+    drawScanlines(ctx, w, h);
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 8;
 
+    // Terminal frame
+    drawTerminalFrame(ctx, cx - 220, y - 30, 440, 280, 'pilot select', 'rgba(100, 200, 220, 0.25)');
+
     ctx.fillStyle = 'rgba(100, 200, 220, 0.9)';
-    ctx.font = 'bold 28px monospace';
+    ctx.font = 'bold 24px monospace';
     ctx.fillText('SELECT PILOT', cx, y);
-    y += 50;
+    y += 45;
 
     for (let i = 0; i < 3; i++) {
       const selected = (profileCursor === i);
@@ -1824,19 +1864,26 @@ function gameLoop(now) {
     const cx = overlayCanvas.width / 2;
     const p = profileManager.active;
 
+    const w = overlayCanvas.width, h = overlayCanvas.height;
+
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 10, 0.88)';
-    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.90)';
+    ctx.fillRect(0, 0, w, h);
+    drawScanlines(ctx, w, h);
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 8;
 
+    // Terminal frame around content area
+    drawTerminalFrame(ctx, cx - 220, 15, 440, h - 50, 'command deck', 'rgba(80, 100, 140, 0.2)');
+
     // Header: pilot name + EM
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(200, 210, 230, 0.9)';
-    ctx.font = '14px monospace';
-    ctx.fillText(`pilot: ${p?.name || '???'}`, cx, 30);
-    ctx.fillStyle = 'rgba(255, 220, 100, 0.9)';
-    ctx.fillText(`${p?.exoticMatter || 0} exotic matter`, cx, 50);
+    ctx.fillStyle = 'rgba(200, 210, 230, 0.8)';
+    ctx.font = '12px monospace';
+    ctx.fillText(`pilot: ${p?.name || '???'}`, cx, 35);
+    ctx.fillStyle = 'rgba(255, 220, 100, 0.85)';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(`${p?.exoticMatter || 0} EM`, cx, 55);
 
     // Tab bar
     const tabNames = ['SHIP', 'VAULT', 'UPGRADES', 'LAUNCH'];
@@ -2178,19 +2225,23 @@ function gameLoop(now) {
     const cy = overlayCanvas.height / 2;
     const t = metaPhaseTimer;
 
+    const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 10, 0.92)';
-    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.92)';
+    ctx.fillRect(0, 0, w, h);
+    drawScanlines(ctx, w, h);
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
+
+    drawTerminalFrame(ctx, cx - 200, cy - 180, 400, 320, 'extraction report', 'rgba(100, 255, 255, 0.2)');
 
     // Title
     if (t > 0.2) {
       const a = Math.min((t - 0.2) * 2, 1);
       ctx.fillStyle = `rgba(100, 255, 255, ${a})`;
-      ctx.font = 'bold 36px monospace';
-      ctx.fillText('SALVAGE REPORT', cx, cy - 160);
+      ctx.font = 'bold 28px monospace';
+      ctx.fillText('SALVAGE REPORT', cx, cy - 155);
     }
 
     // Extracted items
