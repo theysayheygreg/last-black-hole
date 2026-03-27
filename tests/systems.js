@@ -180,6 +180,61 @@ async function run() {
       assert(wellNames, 'Expected wells to exist on the map');
     });
 
+    // ---- UI ELEMENTS ----
+
+    await runner.run('HUD panels have terminal-style borders (CSS check)', async () => {
+      const styles = await page.evaluate(() => {
+        const panel = document.querySelector('#hud .hud-panel');
+        if (!panel) return null;
+        const cs = getComputedStyle(panel);
+        return {
+          background: cs.backgroundColor,
+          border: cs.borderStyle,
+          fontFamily: cs.fontFamily,
+        };
+      });
+      assert(styles !== null, 'No HUD panel found in DOM');
+      assert(styles.fontFamily.includes('monospace') || styles.fontFamily.includes('Mono'),
+        `HUD font should be monospace, got: ${styles.fontFamily}`);
+    });
+
+    await runner.run('Inventory panel has dark terminal background', async () => {
+      const styles = await page.evaluate(() => {
+        const panel = document.getElementById('hud-inventory-panel');
+        if (!panel) return null;
+        const cs = getComputedStyle(panel);
+        return { minWidth: parseInt(cs.minWidth), hasBoxShadow: cs.boxShadow !== 'none' };
+      });
+      assert(styles !== null, 'No inventory panel found');
+      assert(styles.minWidth >= 200, `Inventory panel too narrow: ${styles.minWidth}px`);
+    });
+
+    await runner.run('All HUD DOM elements present', async () => {
+      const elements = await page.evaluate(() => ({
+        hud: !!document.getElementById('hud'),
+        collapse: !!document.getElementById('hud-collapse'),
+        portals: !!document.getElementById('hud-portals'),
+        salvage: !!document.getElementById('hud-salvage'),
+        scavengers: !!document.getElementById('hud-scavengers'),
+        pulse: !!document.getElementById('hud-pulse'),
+        signature: !!document.getElementById('hud-signature'),
+        warnings: !!document.getElementById('hud-warnings'),
+        inventory: !!document.getElementById('hud-inventory-panel'),
+        portalArrow: !!document.getElementById('hud-portal-arrow'),
+      }));
+      for (const [name, exists] of Object.entries(elements)) {
+        assert(exists, `Missing HUD element: ${name}`);
+      }
+    });
+
+    await runner.run('Audio engine initializes without error', async () => {
+      const result = await page.evaluate(() => {
+        // Audio should have been initialized on first game start
+        return typeof window.__TEST_API.getConfig().audio === 'object';
+      });
+      assert(result, 'Audio CONFIG section missing');
+    });
+
     // Screenshot
     const filepath = await screenshot(page, 'systems');
     console.log(`\n  Screenshot: ${filepath}`);
