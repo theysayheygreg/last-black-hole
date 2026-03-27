@@ -23,6 +23,9 @@ export class InventorySystem {
 
     /** Items consumed this frame (main.js reads + clears to apply effects) */
     this.usedConsumables = [];
+
+    /** Cargo full warning shown this pickup cycle (prevents spam) */
+    this._fullWarningShown = false;
   }
 
   // ---- Cargo ----

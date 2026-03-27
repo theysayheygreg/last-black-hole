@@ -23,7 +23,8 @@ export class AudioEngine {
     this.drone = null;
     this.wellVoices = [];
     this.duckGain = null;
-    this._audioState = 'silent'; // 'silent' | 'title' | 'menu' | 'gameplay' | 'meta'
+    this._audioState = 'silent';
+    this._lastDistortionAmount = -1; // cache to avoid per-frame allocation
   }
 
   // ---- Lifecycle ----
@@ -31,7 +32,9 @@ export class AudioEngine {
   init() {
     if (this.initiated) return;
     if (!CONFIG.audio) return;
-    this.ctx = new AudioContext();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
     this.initiated = true;
 
     // Master output
@@ -160,7 +163,11 @@ export class AudioEngine {
         (CONFIG.audio.droneEndFreq - CONFIG.audio.droneBaseFreq) * progress;
       this.drone.osc.frequency.linearRampToValueAtTime(freq, now + ramp);
       this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume, now + ramp);
-      this.drone.shaper.curve = this._makeDistortionCurve(progress * CONFIG.audio.droneDistortion);
+      const distAmount = Math.round(progress * CONFIG.audio.droneDistortion * 100) / 100;
+      if (distAmount !== this._lastDistortionAmount) {
+        this._lastDistortionAmount = distAmount;
+        this.drone.shaper.curve = this._makeDistortionCurve(distAmount);
+      }
     }
 
     // Well harmonics (gameplay only)
@@ -305,7 +312,32 @@ export class AudioEngine {
     panner.pan.value = pan;
     gain.connect(panner);
     panner.connect(this.duckGain);
-    return { gain, panner };
+    // Auto-cleanup: schedule disconnect after a generous timeout.
+    // This catches any source that doesn't have its own onended handler.
+    const cleanup = setTimeout(() => {
+      try { gain.disconnect(); panner.disconnect(); } catch (e) {}
+    }, 5000); // 5 seconds — no event sound is longer than 3s
+    return { gain, panner, _cleanup: cleanup };
+  }
+
+  /**
+   * Wire a source (oscillator or buffer) through optional filters to a voice,
+   * with automatic disconnect on end. Prevents audio graph memory leaks.
+   */
+  _wireAndPlay(source, voice, startTime, stopTime, filters = []) {
+    let node = source;
+    for (const f of filters) { node.connect(f); node = f; }
+    node.connect(voice.gain);
+    source.start(startTime);
+    source.stop(stopTime);
+    source.onended = () => {
+      try {
+        source.disconnect();
+        for (const f of filters) f.disconnect();
+        voice.gain.disconnect();
+        voice.panner.disconnect();
+      } catch (e) {} // ignore if already disconnected
+    };
   }
 
   _createNoise(duration) {
@@ -569,7 +601,7 @@ export class AudioEngine {
       filter.type = 'bandpass';
       filter.frequency.value = 500 + Math.random() * 2000;
       filter.Q.value = 2;
-      const voice = this._createVoice(pan + (Math.random() - 0.5) * 0.3);
+      const voice = this._createVoice(Math.max(-1, Math.min(1, pan + (Math.random() - 0.5) * 0.3)));
       noise.connect(filter); filter.connect(voice.gain);
       const t = now + i * 0.04;
       voice.gain.gain.setValueAtTime(vol * 0.2, t);
