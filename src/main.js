@@ -934,13 +934,26 @@ function gameLoop(now) {
       starSystem.applyToShip(ship);
       planetoidSystem.applyToShip(ship);
 
-      // Star consumption events — dramatic flash
+      // Star consumption events — dramatic flash + stellar remnant wreck
       for (const evt of starSystem.consumptionEvents) {
         const [cr, cg, cb] = evt.starColor;
-        showWarning(`${evt.starName} consumed`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
-        // Brief screen tint stored for rendering
+        showWarning(`${evt.starName} consumed — stellar remnant!`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
         _starFlashTimer = 0.8;
         _starFlashColor = evt.starColor;
+
+        // Spawn a vault-tier wreck ejected away from the well
+        const angle = Math.random() * Math.PI * 2;
+        const ejectDist = 0.08;
+        const ejectSpeed = 0.4;
+        const rwx = wrapWorld(evt.wx + Math.cos(angle) * ejectDist);
+        const rwy = wrapWorld(evt.wy + Math.sin(angle) * ejectDist);
+        const remnant = wreckSystem.addWreck(rwx, rwy, {
+          type: 'vault', tier: 3, size: 'large',
+          vx: Math.cos(angle) * ejectSpeed,
+          vy: Math.sin(angle) * ejectSpeed,
+          pickupCooldown: 1.0,
+        });
+        remnant.name = `Remnant of ${evt.starName}`;
       }
       starSystem.clearConsumptionEvents();
 
@@ -1368,6 +1381,25 @@ function gameLoop(now) {
       }
     }
     _prevPortalCount = currentPortalCount;
+
+    // Scavenger death drops — spawn debris wrecks from dead scavengers' loot
+    for (const drop of scavengerSystem.deathDrops) {
+      for (let i = 0; i < drop.lootCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const ejectDist = 0.05 + Math.random() * 0.05;
+        const ejectSpeed = 0.2 + Math.random() * 0.2;
+        const wx = wrapWorld(drop.wx + Math.cos(angle) * ejectDist);
+        const wy = wrapWorld(drop.wy + Math.sin(angle) * ejectDist);
+        wreckSystem.addWreck(wx, wy, {
+          type: 'derelict', tier: drop.tier, size: 'scattered',
+          vx: Math.cos(angle) * ejectSpeed,
+          vy: Math.sin(angle) * ejectSpeed,
+          pickupCooldown: 0.5,
+        });
+      }
+      showWarning(`${drop.name} destroyed — loot scattered`, 'rgba(200, 140, 80, 0.9)', 3000);
+    }
+    scavengerSystem.deathDrops = [];
 
     // Update HUD during gameplay
     const cargoItems = inventorySystem.getCargoItems();

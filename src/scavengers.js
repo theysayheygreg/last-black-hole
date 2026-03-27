@@ -175,6 +175,8 @@ export class Scavenger {
 export class ScavengerSystem {
   constructor() {
     this.scavengers = [];
+    /** Death drops — main.js reads + clears to spawn debris wrecks. */
+    this.deathDrops = [];
   }
 
   /** Spawn a scavenger at a world-space position. */
@@ -540,6 +542,18 @@ export class ScavengerSystem {
 
     if (scav.deathTimer >= duration) {
       scav.alive = false;
+      // Queue death drops — scatter collected loot as debris
+      if (scav.lootCount > 0 && scav.deathWell) {
+        this.deathDrops.push({
+          wx: scav.wx,
+          wy: scav.wy,
+          wellWX: scav.deathWell.wx,
+          wellWY: scav.deathWell.wy,
+          lootCount: scav.lootCount,
+          name: scav.name,
+          tier: scav.archetype === 'vulture' ? 2 : 1,
+        });
+      }
       return;
     }
 
