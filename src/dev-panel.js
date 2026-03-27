@@ -92,6 +92,13 @@ const RANGE_HINTS = {
   'combat.pulseForce':      { min: 0.5, max: 5, step: 0.25, tip: 'Radial push force strength' },
   'combat.pulseRadius':     { min: 0.05, max: 0.3, step: 0.01, tip: 'Pulse effect radius in world-units' },
 
+  // Audio
+  'audio.masterVolume':       { min: 0, max: 1, step: 0.05, tip: 'Master volume. 0.7 = reasonable default' },
+  'audio.droneVolume':        { min: 0, max: 0.5, step: 0.01, tip: 'Background drone level. Subtle is good.' },
+  'audio.wellHarmonicVolume': { min: 0, max: 0.5, step: 0.01, tip: 'Well harmonic sine volume. Distance-attenuated.' },
+  'audio.eventVolume':        { min: 0, max: 0.8, step: 0.02, tip: 'Event sound volume (loot, pulse, death)' },
+  'audio.wellMaxDist':        { min: 0.5, max: 4, step: 0.1, tip: 'Well audibility range in world-units' },
+
   // Ship wake
   'ship.wake.splatCount':   { min: 1, max: 8, step: 1, tip: 'Trail length (splat count)' },
   'ship.wake.splatSpacing': { min: 0.001, max: 0.01, step: 0.0005, tip: 'Gap between trail splats (UV)' },
