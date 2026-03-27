@@ -259,8 +259,9 @@ export class AudioEngine {
   }
 
   _updateWellVoices(wells, ship, camX, camY, canvasW, canvasH, now, ramp) {
+    // Use toroidal worldDistance — wells near map edges should be audible from the other side
     const wellDists = wells.map((w, i) => ({
-      index: i, dist: Math.sqrt((w.wx - ship.wx) ** 2 + (w.wy - ship.wy) ** 2), well: w,
+      index: i, dist: worldDistance(ship.wx, ship.wy, w.wx, w.wy), well: w,
     })).sort((a, b) => a.dist - b.dist);
 
     for (let v = 0; v < this.wellVoices.length; v++) {

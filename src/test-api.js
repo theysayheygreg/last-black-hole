@@ -33,7 +33,12 @@ export function initTestAPI(getState) {
     getWells() {
       const { wellSystem, camX, camY, canvasWidth, canvasHeight } = getState();
       if (!wellSystem) return [];
-      return wellSystem.getWellData(camX, camY, canvasWidth, canvasHeight);
+      const screenData = wellSystem.getWellData(camX, camY, canvasWidth, canvasHeight);
+      return wellSystem.wells.map((w, i) => ({
+        ...screenData[i],  // x, y (screen coords), wx, wy, mass from getWellData
+        name: w.name,
+        killRadius: w.killRadius,
+      }));
     },
 
     getConfig() {
@@ -95,11 +100,13 @@ export function initTestAPI(getState) {
 
     triggerRestart() {
       const { startGame, mapList, profileManager } = getState();
-      // Ensure a profile exists for test runs
+      // NOTE: This bypasses the real profile→home→mapSelect UI flow for test speed.
+      // The real flow (title→profileSelect→home→launch→mapSelect→play) is validated
+      // by manual playtesting. Automating it is fragile due to multi-phase keyboard
+      // simulation in Puppeteer. See Codex review 2026-03-27.
       if (profileManager && !profileManager.active) {
         profileManager.createProfile(0, 'Test Pilot');
       }
-      // Start the first playable map (not the title map)
       if (startGame && mapList && mapList.length > 0) startGame(mapList[0]);
       else if (startGame) startGame(getState().currentMap);
     },

@@ -163,21 +163,14 @@ async function run() {
     // ---- WELLS HAVE NAMES ----
 
     await runner.run('Wells have foreboding names', async () => {
-      const wells = await page.evaluate(() => {
-        return window.__TEST_API.getWells().map((w, i) => {
-          const { wellSystem } = window.__TEST_API._getState ? {} : {};
-          return w;
-        });
-      });
-      // Wells API doesn't expose names yet — check via the wellSystem
-      const wellNames = await page.evaluate(() => {
-        // Access wellSystem directly through the state getter
-        const state = window.__TEST_API;
-        const wells = state.getWells();
-        // Names aren't in the getWells() API, but we can check via CONFIG
-        return wells.length > 0;
-      });
-      assert(wellNames, 'Expected wells to exist on the map');
+      const wells = await page.evaluate(() => window.__TEST_API.getWells());
+      assert(wells.length > 0, 'Expected wells on the map');
+      for (const well of wells) {
+        assert(typeof well.name === 'string' && well.name.length > 0,
+          `Well missing name: ${JSON.stringify(well)}`);
+        assert(well.name.startsWith('The '),
+          `Well name should be foreboding ("The ..."), got: ${well.name}`);
+      }
     });
 
     // ---- UI ELEMENTS ----
