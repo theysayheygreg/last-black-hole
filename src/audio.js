@@ -116,6 +116,10 @@ export class AudioEngine {
     if (this.drone) {
       this.drone.osc.frequency.cancelScheduledValues(now);
       this.drone.osc.frequency.value = CONFIG.audio.droneBaseFreq;
+      this.drone.subOsc.frequency.cancelScheduledValues(now);
+      this.drone.subOsc.frequency.value = CONFIG.audio.droneBaseFreq * 0.5;
+      this.drone.fifthOsc.frequency.cancelScheduledValues(now);
+      this.drone.fifthOsc.frequency.value = CONFIG.audio.droneBaseFreq * 1.5;
       this.drone.gain.gain.cancelScheduledValues(now);
       this.drone.gain.gain.value = CONFIG.audio.droneVolume;
     }
@@ -137,9 +141,11 @@ export class AudioEngine {
     const ramp = 0.3;
 
     if (state === 'title') {
-      // Deep ominous drone, no well voices
+      // Deep ominous drone — lower than gameplay, all three layers
       if (this.drone) {
         this.drone.osc.frequency.linearRampToValueAtTime(40, now + ramp);
+        this.drone.subOsc.frequency.linearRampToValueAtTime(20, now + ramp);
+        this.drone.fifthOsc.frequency.linearRampToValueAtTime(60, now + ramp);
         this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume * 1.3, now + ramp);
       }
       for (const v of this.wellVoices) v.gain.gain.linearRampToValueAtTime(0, now + ramp);
@@ -148,9 +154,11 @@ export class AudioEngine {
       if (this.drone) this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume * 0.3, now + ramp);
       for (const v of this.wellVoices) v.gain.gain.linearRampToValueAtTime(0, now + ramp);
     } else if (state === 'gameplay') {
-      // Full audio
+      // Full audio — all layers active
       if (this.drone) {
         this.drone.osc.frequency.linearRampToValueAtTime(CONFIG.audio.droneBaseFreq, now + ramp);
+        this.drone.subOsc.frequency.linearRampToValueAtTime(CONFIG.audio.droneBaseFreq * 0.5, now + ramp);
+        this.drone.fifthOsc.frequency.linearRampToValueAtTime(CONFIG.audio.droneBaseFreq * 1.5, now + ramp);
         this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume, now + ramp);
       }
     }
@@ -173,6 +181,8 @@ export class AudioEngine {
       const freq = CONFIG.audio.droneBaseFreq +
         (CONFIG.audio.droneEndFreq - CONFIG.audio.droneBaseFreq) * progress;
       this.drone.osc.frequency.linearRampToValueAtTime(freq, now + ramp);
+      this.drone.subOsc.frequency.linearRampToValueAtTime(freq * 0.5, now + ramp);
+      this.drone.fifthOsc.frequency.linearRampToValueAtTime(freq * 1.5, now + ramp);
       this.drone.gain.gain.linearRampToValueAtTime(CONFIG.audio.droneVolume, now + ramp);
       const distAmount = Math.round(progress * CONFIG.audio.droneDistortion * 100) / 100;
       if (distAmount !== this._lastDistortionAmount) {
@@ -238,34 +248,69 @@ export class AudioEngine {
   // ---- Init helpers ----
 
   _initDrone() {
+    // Primary drone — low sine
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.value = CONFIG.audio.droneBaseFreq;
+
+    // Sub-octave layer — adds weight and presence (detuned slightly for beating)
+    const subOsc = this.ctx.createOscillator();
+    subOsc.type = 'sine';
+    subOsc.frequency.value = CONFIG.audio.droneBaseFreq * 0.5; // one octave below
+    subOsc.detune.value = -3; // slight detune for organic beating
+
+    // Third layer — very quiet fifth above for harmonic richness
+    const fifthOsc = this.ctx.createOscillator();
+    fifthOsc.type = 'sine';
+    fifthOsc.frequency.value = CONFIG.audio.droneBaseFreq * 1.5;
+    const fifthGain = this.ctx.createGain();
+    fifthGain.gain.value = 0.15; // barely audible
+
     const shaper = this.ctx.createWaveShaper();
     shaper.curve = this._makeDistortionCurve(0);
     const gain = this.ctx.createGain();
     gain.gain.value = CONFIG.audio.droneVolume;
+
+    // Mix all three into the shaper
     osc.connect(shaper);
+    subOsc.connect(shaper);
+    fifthOsc.connect(fifthGain);
+    fifthGain.connect(shaper);
     shaper.connect(gain);
     gain.connect(this.duckGain);
     osc.start();
-    this.drone = { osc, gain, shaper };
+    subOsc.start();
+    fifthOsc.start();
+    this.drone = { osc, subOsc, fifthOsc, fifthGain, gain, shaper };
   }
 
   _initWellVoices(count) {
     for (let i = 0; i < count; i++) {
+      // Primary tone — sine at the well's frequency
       const osc = this.ctx.createOscillator();
       osc.type = 'sine';
       osc.frequency.value = 0;
+
+      // Sub-octave — adds the heavy, massive feel wells should have
+      const subOsc = this.ctx.createOscillator();
+      subOsc.type = 'sine';
+      subOsc.frequency.value = 0;
+      const subGain = this.ctx.createGain();
+      subGain.gain.value = 0.6; // sub is prominent but not dominant
+
       const gain = this.ctx.createGain();
       gain.gain.value = 0;
       const panner = this.ctx.createStereoPanner();
       panner.pan.value = 0;
+
       osc.connect(gain);
+      subOsc.connect(subGain);
+      subGain.connect(gain);
       gain.connect(panner);
       panner.connect(this.duckGain);
       osc.start();
-      this.wellVoices.push({ osc, gain, panner, active: false, wellIndex: -1 });
+      subOsc.start();
+      this.wellVoices.push({ osc, subOsc, subGain, gain, panner, active: false, wellIndex: -1 });
     }
   }
 
@@ -285,6 +330,7 @@ export class AudioEngine {
         const [sx] = worldToScreen(wd.well.wx, wd.well.wy, camX, camY, canvasW, canvasH);
         const pan = Math.max(-1, Math.min(1, sx * 2 / canvasW - 1));
         voice.osc.frequency.linearRampToValueAtTime(Math.max(20, freq), now + ramp);
+        voice.subOsc.frequency.linearRampToValueAtTime(Math.max(15, freq * 0.5), now + ramp);
         voice.gain.gain.linearRampToValueAtTime(distGain * CONFIG.audio.wellHarmonicVolume, now + ramp);
         voice.panner.pan.linearRampToValueAtTime(pan, now + ramp);
       } else {
@@ -471,10 +517,13 @@ export class AudioEngine {
   _playDeath(now) {
     if (this.drone) {
       this.drone.osc.frequency.linearRampToValueAtTime(15, now + 1.5);
+      this.drone.subOsc.frequency.linearRampToValueAtTime(8, now + 1.5);
+      this.drone.fifthOsc.frequency.linearRampToValueAtTime(10, now + 1.5);
       this.drone.gain.gain.linearRampToValueAtTime(0, now + 1.5);
     }
     for (const v of this.wellVoices) {
       v.osc.frequency.linearRampToValueAtTime(15, now + 1.5);
+      v.subOsc.frequency.linearRampToValueAtTime(8, now + 1.5);
       v.gain.gain.linearRampToValueAtTime(0, now + 1.5);
     }
     this.master.gain.linearRampToValueAtTime(0, now + 1.5);

@@ -335,7 +335,7 @@ export const CONFIG = {
     droneEndFreq: 35,            // Hz, end of run (pitch drops with universe age)
     droneDistortion: 0.3,        // waveshaper drive at end of run (0 = clean, 1 = harsh)
     wellHarmonicVolume: 0.12,
-    wellBaseFreq: 180,           // Hz at mass 1.0
+    wellBaseFreq: 80,            // Hz at mass 1.0 — low rumble, not a tone
     wellFreqScale: 0.5,          // freq = baseFreq / (mass * scale)
     wellMaxDist: 2.0,            // world-units — beyond this, well is silent
     scavengerMaxDist: 0.8,
