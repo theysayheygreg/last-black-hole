@@ -511,3 +511,16 @@ Today’s review surfaced two real gameplay bugs and one false-confidence proble
 
 ### Why
 The recent shader and coordinate fixes were specifically about UV/world conversion, toroidal wrapping, and large-map behavior, but the renderer harness only exercised 3x3 scenes. This pass adds enough 5x5 and 10x10 coverage to catch scaling regressions before they hide behind a green test run.
+
+## 2026-03-27 (Week 2 Day 3: Network Architecture Direction)
+
+### docs/project/ — New Files
+- **NETWORK-ARCHITECTURE-PLAN.md** — Defines the next-step architecture beyond the in-process sim boundary: mini-hosted authoritative sim, MacBook local-rendering client, first local protocol, hosted run-instance future, and deferred native/Godot migration.
+
+### docs/project/ — Modified
+- **SIM-DECOUPLING-PLAN.md** — Links the local sim split to the larger network plan so the current decoupling work has an explicit next destination.
+- **BACKLOG.md** — Adds the next-week architecture batch (`mini server + MacBook client`, `local protocol freeze`) and parks hosted instances and Godot/native client work in the right order.
+- **WEEK2-STATUS.md** — Adds a concrete next-week architecture focus section so the roadmap does not blur private remote play with public hosting or engine migration.
+
+### Why
+The architecture discussion stopped being hypothetical. LBH is multiplayer-first with solo fallback, and the immediate next move is not public hosting or a port. It is a private authoritative split between Greg's machines plus the first stable client/server protocol that later hosting can reuse.

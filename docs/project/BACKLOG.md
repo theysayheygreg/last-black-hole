@@ -180,6 +180,30 @@
 - **Value if revisited:** Makes later WebSocket or local IPC transport mostly a mechanical change instead of a redesign.
 - **First revival step:** Freeze a plain-data `SimState` snapshot schema and a small input command envelope.
 
+### Next-Week Batch: Mini Server + MacBook Client
+- **What:** Run the authoritative sim on Greg's Mac mini and a playable local-rendering client on the MacBook over Tailscale or LAN.
+- **Why now:** This is the first honest proof that the client/server split works as a real game experience instead of an in-process abstraction.
+- **Value if revisited:** Proves remote play on Greg's actual machines, separates render performance from world-truth performance, and gives the future hosted path a concrete starting point.
+- **First revival step:** Launch one run with the mini as authority, the MacBook as client, and no public internet assumptions.
+
+### Next-Week Batch: Local Client / Server Protocol
+- **What:** Freeze the first message contract between authoritative sim and render client: inputs, snapshots, events, and any coarse flow/hazard query path.
+- **Why now:** The mini-to-MacBook milestone and the future hosted milestone both need the same protocol boundary.
+- **Value if revisited:** Turns later transport choices into implementation work instead of architectural churn.
+- **First revival step:** Write the smallest viable plain-data protocol and route one playable loop through it.
+
+### Hosted Run Instances
+- **What:** Run-scoped authoritative sessions for 4-8 players, with solo fallback and AI fill where needed.
+- **Why deferred:** This is the likely multiplayer future, but not the next engineering milestone. Private remote play must work first.
+- **Value if revisited:** Matches the game's actual shape better than a persistent world or public free-for-all service.
+- **First revival step:** Reuse the local client/server protocol for one hosted run instance before any matchmaking work.
+
+### Godot / Native Client Port
+- **What:** Move the client/runtime to a more mature native or engine-backed stack once the gameplay and protocol contracts are stable.
+- **Why deferred:** The current browser/Electron stack is good enough to prove the game. A port now would mix architecture cleanup with runtime migration.
+- **Value if revisited:** Better packaging, better platform reach, cleaner renderer/runtime tooling.
+- **First revival step:** Keep the port target behind the protocol boundary. Port the game contract, not today's in-browser code structure.
+
 ### Headless Sim Harness
 - **What:** Run gameplay tests against a dedicated sim process instead of an in-page browser loop.
 - **Why backlogged:** The renderer harness and main flow harness are enough for the jam.

@@ -76,6 +76,26 @@ Cosmic storms, rift cascades, mass growth spikes. These break the steady state a
 - Upgrade cost balancing
 - Map content review (enough wrecks? right positions?)
 
+## Next Week Architecture Focus
+
+### Priority A: Mini Server + MacBook Client
+- Run the authoritative sim on the mini.
+- Run a local-rendering client on the MacBook.
+- Connect them over Tailscale or LAN.
+- Prove one playable remote run without streaming rendered frames.
+
+### Priority B: Freeze the First Local Protocol
+- Define input messages.
+- Define state snapshots.
+- Define event messages.
+- Define the minimal coarse flow / hazard contract the client needs.
+
+### Explicitly Not Next Week
+- public hosting
+- matchmaking or lobby systems
+- Godot port work
+- native renderer rewrite
+
 ## Architecture Health
 
 **Code review (March 27):** Full audit of 11 source files. 0 bugs found outside audio.js (memory leak fixed). Phase transitions complete. State resets verified. Coordinate math consistent. All toroidal wrapping correct.

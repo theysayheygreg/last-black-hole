@@ -831,3 +831,26 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 | Mar 21 | Follow-up review on real gameplay maps finds a second bug: the display shader was applying `voidField` inside the per-well loop. That meant scene-level darkness was being compounded once for every well, which made many gameplay holes vanish into broad black slabs even though the title screen still looked acceptable. |
 | Mar 21 | Decision: keep `voidField` as a scene-level term and only let each well apply its own `coreMask`. Multi-well gameplay readability matters more than squeezing both concepts through one multiply. |
+
+---
+
+## Network Architecture Direction
+
+### Q: What is the actual next-step network architecture after the in-process sim boundary?
+
+| Date | Event |
+|------|-------|
+| Mar 27 | Greg confirms the target direction: LBH is fundamentally multiplayer-first, with solo as fallback if no other players are around. |
+| Mar 27 | Greg also confirms that the correct client/server shape is a locally rendered client talking to an authoritative sim, not streamed gameplay from the mini to the MacBook. |
+| Mar 27 | The architecture discussion is split into four futures instead of one rewrite: private remote play on Greg's machines, hosted authoritative sessions, native runtime migration, and possible Godot port work. |
+| Mar 27 | Decision: next week should focus on the first two together — prove mini-hosted authoritative sim + MacBook client over Tailscale/LAN, and freeze the first local client/server protocol at the same time. |
+| Mar 27 | Hosted future is tentatively defined as run-scoped authoritative instances for 4-8 players, with solo fallback and likely AI fill. |
+| Mar 27 | Native/Godot migration is explicitly deferred until the protocol and process boundaries are real. |
+
+**Options:**
+1. **Stay effectively local for now** — keep the in-process boundary but postpone real remote play. Simpler short term, but it does not prove the architecture.
+2. **Jump straight to public hosting and matchmaking** — ambitious, but premature while the protocol and authority model are still settling.
+3. **Private authoritative split first, then hosted run instances** (chosen) — proves the right boundary on Greg's machines, then scales that model outward later.
+
+**Where it landed:** Option 3. The next real milestone is private remote play between Greg's machines with a local-rendering client and an authoritative sim, plus the first stable protocol that hosted sessions can later reuse.
+**Door status:** Open — the hosted shape and eventual runtime port remain future decisions, but the immediate next batch is now defined.

@@ -2,6 +2,8 @@
 
 > Split LBH into an authoritative simulation process and a lighter player client without losing the current movement fantasy.
 
+See also: `docs/project/NETWORK-ARCHITECTURE-PLAN.md` for the next-step network shape: mini-hosted authoritative sim, MacBook local-rendering client, and a frozen local protocol before any public hosting or engine migration work.
+
 ## Why do this now
 
 The current build runs almost everything in one browser loop:
