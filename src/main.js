@@ -748,6 +748,13 @@ function syncRemoteWorldState(world) {
     }));
     portalSystem._nextWaveIndex = world.nextPortalWaveIndex ?? portalSystem._nextWaveIndex;
   }
+
+  if (Array.isArray(world.scavengers)) {
+    scavengerSystem.scavengers = world.scavengers.map((remote) => ({
+      ...remote,
+      alive: remote.alive !== false,
+    }));
+  }
 }
 
 async function startRemoteGame(mapEntry) {

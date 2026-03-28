@@ -86,6 +86,10 @@ async function run() {
       assert(net.simUrl === "http://127.0.0.1:8788", `Unexpected sim URL: ${net.simUrl}`);
       assert(typeof net.remoteMapId === "string" && net.remoteMapId.length > 0, "Expected remote map id");
       assert(typeof net.remoteTick === "number", "Expected authoritative remote tick");
+
+      await waitFor(page, () => window.__TEST_API.getScavengers().length > 0, { timeout: 4000 });
+      const scavengers = await page.evaluate(() => window.__TEST_API.getScavengers());
+      assert(scavengers.length > 0, "Expected authoritative scavengers in remote snapshot");
     });
 
     await runner.run("Remote snapshots advance and move the ship under authoritative input", async () => {

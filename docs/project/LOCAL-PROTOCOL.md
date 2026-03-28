@@ -160,6 +160,7 @@ In the current third slice, the server also owns:
 - cargo pickup from wrecks
 - cargo loss on death
 - the first gameplay-affecting equip effect (`reduceWellPull`)
+- authoritative scavenger state for remote runs
 
 ## Client ownership
 
@@ -186,7 +187,6 @@ Keep replacing client-owned world truth with server-owned truth behind the same 
 
 The next useful transfers are:
 
-- AI/scavenger state
 - consumable effects and active item use
 - coarse authoritative flow sampling
 - real join-existing-session / lobby semantics instead of always starting a fresh run from map select

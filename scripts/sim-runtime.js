@@ -31,6 +31,17 @@ const RUN_DURATION = 600;
 const WELL_GROWTH_VARIANCE = 0.01;
 const WELL_GROWTH_AMOUNT = 0.02;
 const WELL_KILL_RADIUS_GROWTH = 0.3;
+const SCAVENGER_CONFIG = {
+  sensorRange: 1.5,
+  decisionInterval: 0.8,
+  thrustAccel: 0.5,
+  drag: 0.06,
+  fleeWellDist: 0.15,
+  pickupRadius: 0.08,
+};
+const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
+const DRIFTER_NAMES = ["Quiet Tide", "Still Wake", "Ash Petal", "Cold Harbor", "Pale Drift", "Dim Lantern"];
+const VULTURE_NAMES = ["Keen Edge", "Rust Claw", "Burnt Lance", "Bitter Claim", "Sharp Debt", "Iron Reap"];
 
 function parseArgs(argv) {
   const args = {};
@@ -280,6 +291,7 @@ function cloneMapState(mapId, worldScaleOverride = null) {
     planetoids,
     portals: [],
     nextPortalWaveIndex: 0,
+    scavengers: [],
   };
 }
 
@@ -297,6 +309,68 @@ function portalCaptureRadius(portal) {
 
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
+}
+
+function pick(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+function generateScavengerIdentity(archetype) {
+  const faction = pick(SCAVENGER_FACTIONS);
+  const callsign = archetype === "vulture" ? pick(VULTURE_NAMES) : pick(DRIFTER_NAMES);
+  return {
+    faction,
+    callsign,
+    name: `${faction} ${callsign}`,
+  };
+}
+
+function spawnServerScavengers(mapState) {
+  const count = mapState.worldScale >= 10 ? 5 : mapState.worldScale >= 5 ? 4 : 3;
+  const vultureCount = Math.max(1, Math.round(count * 0.33));
+  const scavengers = [];
+  for (let i = 0; i < count; i++) {
+    const archetype = i < vultureCount ? "vulture" : "drifter";
+    const edge = i % 4;
+    let wx;
+    let wy;
+    if (edge === 0) {
+      wx = Math.random() * mapState.worldScale;
+      wy = 0.1;
+    } else if (edge === 1) {
+      wx = Math.random() * mapState.worldScale;
+      wy = mapState.worldScale - 0.1;
+    } else if (edge === 2) {
+      wx = 0.1;
+      wy = Math.random() * mapState.worldScale;
+    } else {
+      wx = mapState.worldScale - 0.1;
+      wy = Math.random() * mapState.worldScale;
+    }
+    const identity = generateScavengerIdentity(archetype);
+    scavengers.push({
+      id: `scav-${i + 1}`,
+      archetype,
+      faction: identity.faction,
+      callsign: identity.callsign,
+      name: identity.name,
+      wx,
+      wy,
+      vx: 0,
+      vy: 0,
+      facing: Math.random() * Math.PI * 2,
+      thrustIntensity: 0,
+      alive: true,
+      state: "drift",
+      lootCount: 0,
+      lootTarget: archetype === "vulture" ? 2 : 1,
+      decisionTimer: Math.random() * SCAVENGER_CONFIG.decisionInterval,
+      driftHeading: Math.random() * Math.PI * 2,
+      targetWreckId: null,
+      targetPortalId: null,
+    });
+  }
+  return scavengers;
 }
 
 function findPortalSpawnPosition(portalType) {
@@ -456,6 +530,7 @@ function startSession(config = {}) {
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
   runtime.mapState = mapState;
+  runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState);
   runtime.tick = 0;
   runtime.simTime = 0;
   runtime.players.clear();
@@ -502,6 +577,7 @@ function snapshotBody() {
       planetoids: runtime.mapState.planetoids,
       portals: runtime.mapState.portals,
       nextPortalWaveIndex: runtime.mapState.nextPortalWaveIndex,
+      scavengers: runtime.mapState.scavengers,
     },
     recentEvents: runtime.recentEvents.slice(-32),
   };
@@ -775,6 +851,187 @@ function tickExtraction(player) {
   }
 }
 
+function nearestWell(entity) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const well of runtime.mapState.wells) {
+    const dist = worldDistance(entity.wx, entity.wy, well.wx, well.wy, runtime.session.worldScale);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { well, dist };
+    }
+  }
+  return best;
+}
+
+function nearestUnlootedWreck(entity) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const wreck of runtime.mapState.wrecks) {
+    if (wreck.alive === false || wreck.looted) continue;
+    const dist = worldDistance(entity.wx, entity.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { wreck, dist };
+    }
+  }
+  return best;
+}
+
+function nearestPortal(entity) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const portal of runtime.mapState.portals) {
+    if (portal.alive === false) continue;
+    const dist = worldDistance(entity.wx, entity.wy, portal.wx, portal.wy, runtime.session.worldScale);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { portal, dist };
+    }
+  }
+  return best;
+}
+
+function steerToward(entity, targetWX, targetWY, intensity = 1) {
+  const dx = worldDisplacement(entity.wx, targetWX, runtime.session.worldScale);
+  const dy = worldDisplacement(entity.wy, targetWY, runtime.session.worldScale);
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.0001) {
+    entity.thrustIntensity = 0;
+    return;
+  }
+  entity.facing = Math.atan2(dy, dx);
+  entity.thrustIntensity = intensity;
+}
+
+function applyWellGravityToEntity(entity, dt, pullScale = 0.02) {
+  let ax = 0;
+  let ay = 0;
+  for (const well of runtime.mapState.wells) {
+    const dx = worldDisplacement(entity.wx, well.wx, runtime.session.worldScale);
+    const dy = worldDisplacement(entity.wy, well.wy, runtime.session.worldScale);
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.0001) continue;
+    if (dist < well.killRadius) {
+      entity.alive = false;
+      entity.vx = 0;
+      entity.vy = 0;
+      publishEvent("scavenger.consumed", {
+        scavengerId: entity.id,
+        wellId: well.id,
+      });
+      return false;
+    }
+    const pull = (pullScale * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
+    ax += (dx / dist) * pull;
+    ay += (dy / dist) * pull;
+  }
+  entity.vx += ax * dt;
+  entity.vy += ay * dt;
+  return true;
+}
+
+function tickScavengers(dt) {
+  const activePortalCount = runtime.mapState.portals.filter((portal) => portal.alive !== false).length;
+
+  for (const scav of runtime.mapState.scavengers) {
+    if (scav.alive === false) continue;
+
+    scav.decisionTimer -= dt;
+    if (scav.decisionTimer <= 0) {
+      scav.decisionTimer = SCAVENGER_CONFIG.decisionInterval;
+      const nearest = nearestWell(scav);
+      if (nearest && nearest.dist < SCAVENGER_CONFIG.fleeWellDist) {
+        scav.state = "flee";
+        scav.targetWreckId = null;
+        scav.targetPortalId = null;
+      } else {
+        const wreckTarget = nearestUnlootedWreck(scav);
+        const portalTarget = nearestPortal(scav);
+        if (scav.lootCount >= scav.lootTarget || activePortalCount <= 1) {
+          scav.state = portalTarget ? "extract" : "drift";
+          scav.targetPortalId = portalTarget?.portal?.id || null;
+          scav.targetWreckId = null;
+        } else if (wreckTarget && wreckTarget.dist <= SCAVENGER_CONFIG.sensorRange) {
+          scav.state = "loot";
+          scav.targetWreckId = wreckTarget.wreck.id;
+          scav.targetPortalId = null;
+        } else {
+          scav.state = "drift";
+          scav.driftHeading = Math.random() * Math.PI * 2;
+          scav.targetWreckId = null;
+          scav.targetPortalId = null;
+        }
+      }
+    }
+
+    if (scav.state === "flee") {
+      const nearest = nearestWell(scav);
+      if (nearest) {
+        const dx = worldDisplacement(nearest.well.wx, scav.wx, runtime.session.worldScale);
+        const dy = worldDisplacement(nearest.well.wy, scav.wy, runtime.session.worldScale);
+        scav.facing = Math.atan2(dy, dx);
+        scav.thrustIntensity = 1;
+      } else {
+        scav.thrustIntensity = 0;
+      }
+    } else if (scav.state === "loot") {
+      const wreck = runtime.mapState.wrecks.find((entry) => entry.id === scav.targetWreckId && entry.alive !== false && !entry.looted);
+      if (!wreck) {
+        scav.state = "drift";
+        scav.thrustIntensity = 0;
+      } else {
+        steerToward(scav, wreck.wx, wreck.wy, scav.archetype === "vulture" ? 1 : 0.8);
+        const dist = worldDistance(scav.wx, scav.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
+        if (dist < SCAVENGER_CONFIG.pickupRadius) {
+          scav.lootCount += Math.max(1, wreck.loot?.length || 1);
+          wreck.looted = true;
+          publishEvent("scavenger.loot", {
+            scavengerId: scav.id,
+            wreckId: wreck.id,
+            lootCount: scav.lootCount,
+          });
+          scav.state = "drift";
+          scav.thrustIntensity = 0;
+        }
+      }
+    } else if (scav.state === "extract") {
+      const portal = runtime.mapState.portals.find((entry) => entry.id === scav.targetPortalId && entry.alive !== false);
+      if (!portal) {
+        scav.state = "drift";
+        scav.thrustIntensity = 0;
+      } else {
+        steerToward(scav, portal.wx, portal.wy, 1);
+        const dist = worldDistance(scav.wx, scav.wy, portal.wx, portal.wy, runtime.session.worldScale);
+        if (dist < portalCaptureRadius(portal)) {
+          scav.alive = false;
+          publishEvent("scavenger.extracted", {
+            scavengerId: scav.id,
+            portalId: portal.id,
+            lootCount: scav.lootCount,
+          });
+          continue;
+        }
+      }
+    } else {
+      scav.facing = scav.driftHeading ?? scav.facing;
+      scav.thrustIntensity = 0.2;
+    }
+
+    scav.vx += Math.cos(scav.facing) * SCAVENGER_CONFIG.thrustAccel * scav.thrustIntensity * dt;
+    scav.vy += Math.sin(scav.facing) * SCAVENGER_CONFIG.thrustAccel * scav.thrustIntensity * dt;
+    if (!applyWellGravityToEntity(scav, dt, 0.02)) continue;
+
+    const dragFactor = Math.exp(-SCAVENGER_CONFIG.drag * dt * 60);
+    scav.vx *= dragFactor;
+    scav.vy *= dragFactor;
+    scav.wx = ((scav.wx + scav.vx * dt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    scav.wy = ((scav.wy + scav.vy * dt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+  }
+
+  runtime.mapState.scavengers = runtime.mapState.scavengers.filter((scav) => scav.alive !== false);
+}
+
 function tickSim() {
   if (runtime.session.status !== "running") return;
   const dt = 1 / runtime.session.tickHz;
@@ -787,6 +1044,7 @@ function tickSim() {
   tickWrecks(dt);
   tickPlanetoids(dt);
   tickPortals(dt);
+  tickScavengers(dt);
   maybeCollapseRun();
 
   for (const player of runtime.players.values()) {
