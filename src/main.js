@@ -609,6 +609,9 @@ let _prevUp = false;
 let _prevDown = false;
 let _prevLeft = false;
 let _prevRight = false;
+let _prevTabLeft = false;
+let _prevTabRight = false;
+let _prevDelete = false;
 let _prevPulse = false;
 let _prevInventory = false;
 let _prevConsumable1 = false;
@@ -756,8 +759,8 @@ function gameLoop(now) {
   if (gamePhase === 'title') {
     titleTimer += dt;
     if (!transitionActive && (confirmNow && !_prevConfirm) && titleTimer > 0.5) {
-      audioEngine.init();  // first user gesture
-      audioEngine.setContext('title');
+      audioEngine.init();
+      audioEngine.setContext('menu');
       audioEngine.playEvent('menuConfirm');
       gamePhase = 'profileSelect';
       profileCursor = profileManager.activeSlot >= 0 ? profileManager.activeSlot : 0;
@@ -796,8 +799,8 @@ function gameLoop(now) {
           audioEngine.playEvent('menuConfirm');
         }
       }
-      // X key to delete (only on occupied slots)
-      if (inputManager.consumable1Pressed && profileManager.hasProfile(profileCursor)) {
+      // Delete pilot (X key / triangle button)
+      if (inputManager.deletePressed && !_prevDelete && profileManager.hasProfile(profileCursor)) {
         deleteConfirmSlot = profileCursor;
       }
       if (!transitionActive && backNow && !_prevBack) {
@@ -810,8 +813,9 @@ function gameLoop(now) {
   } else if (gamePhase === 'home') {
     homePhaseTimer += dt;
     const tabCount = 4; // SHIP, VAULT, UPGRADES, LAUNCH
-    if (inputManager.leftPressed && !_prevLeft) { homeTab = (homeTab - 1 + tabCount) % tabCount; audioEngine.playEvent('tabSwitch'); }
-    if (inputManager.rightPressed && !_prevRight) { homeTab = (homeTab + 1) % tabCount; audioEngine.playEvent('tabSwitch'); }
+    // Tab navigation: L1/R1 (or Q/E on keyboard) — dpad/stick reserved for in-tab scrolling
+    if (inputManager.tabLeftPressed && !_prevTabLeft) { homeTab = (homeTab - 1 + tabCount) % tabCount; audioEngine.playEvent('tabSwitch'); }
+    if (inputManager.tabRightPressed && !_prevTabRight) { homeTab = (homeTab + 1) % tabCount; audioEngine.playEvent('tabSwitch'); }
 
     if (homeTab === 0) { // SHIP — loadout management
       if (upNow && !_prevUp && homeShipCursor > 0) homeShipCursor--;
@@ -895,8 +899,8 @@ function gameLoop(now) {
     applySceneCamera(dt);
 
   } else if (gamePhase === 'mapSelect') {
-    if (upNow && !_prevUp) mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length;
-    if (downNow && !_prevDown) mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length;
+    if (upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
+    if (downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
     if (!transitionActive && confirmNow && !_prevConfirm) {
       audioEngine.init();
       audioEngine.playEvent('launch');
@@ -1186,6 +1190,9 @@ function gameLoop(now) {
   _prevDown = downNow;
   _prevLeft = inputManager.leftPressed;
   _prevRight = inputManager.rightPressed;
+  _prevTabLeft = inputManager.tabLeftPressed;
+  _prevTabRight = inputManager.tabRightPressed;
+  _prevDelete = inputManager.deletePressed;
   _prevPulse = pulseNow;
   _prevInventory = inventoryNow;
   _prevConsumable1 = consumable1Now;
@@ -1355,9 +1362,14 @@ function gameLoop(now) {
         const a = labelAlpha(dist);
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        ctx.font = '11px monospace';
-        ctx.fillStyle = `rgba(180, 40, 40, ${a * 0.8})`;
-        ctx.fillText(well.name.toUpperCase(), sx, sy + well.killRadius * pxPerWorld(overlayCanvas.width) + 16);
+        ctx.font = 'bold 10px monospace';
+        const labelY = sy + well.killRadius * pxPerWorld(overlayCanvas.width) + 18;
+        // Dark outline for readability on red accretion background
+        ctx.strokeStyle = `rgba(0, 0, 0, ${a * 0.9})`;
+        ctx.lineWidth = 3;
+        ctx.strokeText(well.name.toUpperCase(), sx, labelY);
+        ctx.fillStyle = `rgba(255, 180, 160, ${a * 0.9})`;
+        ctx.fillText(well.name.toUpperCase(), sx, labelY);
       }
 
       // Stars — scientific designation, type-colored
@@ -1732,39 +1744,49 @@ function gameLoop(now) {
   if (!rendererFixtureActive && gamePhase === 'title') {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
+    const w = overlayCanvas.width, h = overlayCanvas.height;
 
     ctx.save();
     ctx.textAlign = 'center';
 
-    // Title — soft outer glow via shadow, no overlay veil
+    // Subtle scanlines over the simulation backdrop
+    drawScanlines(ctx, w, h, 0.03);
+
+    // Title — bold red glow
     const titlePulse = 0.85 + 0.15 * Math.sin(totalTime * 1.5);
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = `rgba(255, 60, 30, ${titlePulse})`;
-    ctx.font = 'bold 56px monospace';
+    ctx.shadowColor = 'rgba(255, 40, 20, 0.4)';
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = `rgba(255, 70, 40, ${titlePulse})`;
+    ctx.font = 'bold 52px monospace';
     ctx.fillText('LAST SINGULARITY', cx, cy - 50);
-    // Double-draw for stronger glow
-    ctx.fillText('LAST SINGULARITY', cx, cy - 50);
+    ctx.fillText('LAST SINGULARITY', cx, cy - 50); // double for glow
 
     // Subtitle
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
-    ctx.fillStyle = 'rgba(100, 180, 220, 0.8)';
-    ctx.font = '16px monospace';
-    ctx.fillText('out of a dying universe', cx, cy - 10);
+    ctx.fillStyle = 'rgba(140, 210, 240, 0.9)';
+    ctx.font = '15px monospace';
+    ctx.fillText('out of a dying universe', cx, cy - 8);
 
-    // Call to action
-    ctx.fillStyle = 'rgba(180, 200, 220, 0.6)';
-    ctx.font = '14px monospace';
+    // Tagline
+    ctx.fillStyle = 'rgba(200, 210, 230, 0.7)';
+    ctx.font = '13px monospace';
     ctx.fillText('surf the currents. escape the void.', cx, cy + 16);
 
     // Prompt (fades in after 0.5s)
     if (titleTimer > 0.5) {
-      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
+      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.4;
       ctx.shadowBlur = 8;
-      ctx.fillStyle = `rgba(200, 200, 220, ${blink})`;
-      ctx.font = '18px monospace';
+      ctx.fillStyle = `rgba(220, 225, 240, ${blink})`;
+      ctx.font = '16px monospace';
       ctx.fillText('press space to begin', cx, cy + 80);
     }
+
+    // Version
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(100, 110, 130, 0.3)';
+    ctx.font = '10px monospace';
+    ctx.fillText('v0.2 — week 2 build', cx, h - 20);
 
     ctx.restore();
   }
@@ -1783,11 +1805,11 @@ function gameLoop(now) {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 8;
 
-    // Terminal frame
-    drawTerminalFrame(ctx, cx - 220, y - 30, 440, 280, 'pilot select', 'rgba(100, 200, 220, 0.25)');
+    // Terminal frame — title is the only label (no double)
+    drawTerminalFrame(ctx, cx - 220, y - 30, 440, 290, null, 'rgba(100, 200, 220, 0.25)');
 
-    ctx.fillStyle = 'rgba(100, 200, 220, 0.9)';
-    ctx.font = 'bold 24px monospace';
+    ctx.fillStyle = 'rgba(160, 230, 245, 0.95)';
+    ctx.font = 'bold 22px monospace';
     ctx.fillText('SELECT PILOT', cx, y);
     y += 45;
 
@@ -1807,15 +1829,15 @@ function gameLoop(now) {
       }
 
       if (profile) {
-        ctx.fillStyle = selected ? 'rgba(220, 230, 255, 0.95)' : 'rgba(150, 160, 180, 0.7)';
-        ctx.font = '16px monospace';
+        ctx.fillStyle = selected ? 'rgba(230, 240, 255, 1)' : 'rgba(180, 190, 210, 0.85)';
+        ctx.font = 'bold 15px monospace';
         ctx.fillText(profile.name, cx, boxY + 18);
         ctx.font = '11px monospace';
-        ctx.fillStyle = selected ? 'rgba(255, 220, 100, 0.8)' : 'rgba(150, 150, 170, 0.5)';
+        ctx.fillStyle = selected ? 'rgba(255, 225, 110, 0.95)' : 'rgba(180, 170, 140, 0.6)';
         ctx.fillText(`${profile.exoticMatter} EM  |  ${profile.totalExtractions} extractions`, cx, boxY + 38);
       } else {
-        ctx.fillStyle = selected ? 'rgba(150, 180, 200, 0.8)' : 'rgba(100, 100, 120, 0.4)';
-        ctx.font = '14px monospace';
+        ctx.fillStyle = selected ? 'rgba(170, 195, 220, 0.9)' : 'rgba(120, 130, 150, 0.5)';
+        ctx.font = '13px monospace';
         ctx.fillText('— empty slot —', cx, boxY + 25);
       }
 
@@ -1830,7 +1852,7 @@ function gameLoop(now) {
       ctx.strokeRect(cx - 200, overlayCanvas.height * 0.45, 400, 80);
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
       ctx.font = '12px monospace';
-      ctx.fillText('enter pilot name (or press enter for default)', cx, overlayCanvas.height * 0.45 + 25);
+      ctx.fillText('type name + enter to confirm    esc to cancel', cx, overlayCanvas.height * 0.45 + 25);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
       ctx.font = '18px monospace';
       const blink = Math.sin(totalTime * 6) > 0 ? '|' : '';
@@ -1854,7 +1876,7 @@ function gameLoop(now) {
     // Controls hint
     ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
     ctx.font = '11px monospace';
-    ctx.fillText('↑↓ select    space: load/create    1: delete    esc: back', cx, overlayCanvas.height * 0.85);
+    ctx.fillText('↑↓ select    space/A: load    X/Y: delete    esc/B: back', cx, overlayCanvas.height * 0.85);
 
     ctx.restore();
   }
@@ -1873,8 +1895,8 @@ function gameLoop(now) {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 8;
 
-    // Terminal frame around content area
-    drawTerminalFrame(ctx, cx - 220, 15, 440, h - 50, 'command deck', 'rgba(80, 100, 140, 0.2)');
+    // Terminal frame — no title label (header text inside is enough)
+    drawTerminalFrame(ctx, cx - 230, 15, 460, h - 50, null, 'rgba(80, 100, 140, 0.2)');
 
     // Header: pilot name + EM
     ctx.textAlign = 'center';
@@ -1892,8 +1914,8 @@ function gameLoop(now) {
     for (let i = 0; i < tabNames.length; i++) {
       const tx = tabStartX + i * tabWidth + tabWidth / 2;
       const active = (homeTab === i);
-      ctx.fillStyle = active ? 'rgba(100, 150, 255, 0.9)' : 'rgba(100, 110, 130, 0.5)';
-      ctx.font = active ? 'bold 14px monospace' : '13px monospace';
+      ctx.fillStyle = active ? 'rgba(130, 175, 255, 1)' : 'rgba(140, 150, 170, 0.65)';
+      ctx.font = active ? 'bold 13px monospace' : '12px monospace';
       ctx.fillText(tabNames[i], tx, 80);
       if (active) {
         ctx.fillStyle = 'rgba(100, 150, 255, 0.6)';
@@ -2067,7 +2089,7 @@ function gameLoop(now) {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
     ctx.font = '11px monospace';
-    ctx.fillText('← → tabs    ↑↓ select    space: confirm    esc: back', cx, overlayCanvas.height - 20);
+    ctx.fillText('Q/E or L1/R1: tabs    ↑↓ select    space/A: confirm    esc/B: back', cx, overlayCanvas.height - 20);
 
     ctx.restore();
   }
@@ -2077,56 +2099,52 @@ function gameLoop(now) {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
 
+    const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.save();
-    // Light veil — just enough to read text, fluid still visible
-    ctx.fillStyle = 'rgba(0, 0, 20, 0.4)';
-    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.7)';
+    ctx.fillRect(0, 0, w, h);
+    drawScanlines(ctx, w, h, 0.025);
     ctx.textAlign = 'center';
 
-    // Header
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 16;
-    ctx.fillStyle = '#88aaff';
-    ctx.font = 'bold 36px monospace';
-    ctx.fillText('SELECT MAP', cx, cy - 160);
+    drawTerminalFrame(ctx, cx - 250, cy - 180, 500, 320, null, 'rgba(100, 150, 255, 0.2)');
 
-    // Map list
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = 'rgba(140, 175, 255, 0.95)';
+    ctx.font = 'bold 24px monospace';
+    ctx.fillText('SELECT DESTINATION', cx, cy - 150);
+
     const listTop = cy - 100;
-    const itemHeight = 80;
+    const itemHeight = 75;
 
     for (let i = 0; i < MAP_LIST.length; i++) {
       const map = MAP_LIST[i];
       const y = listTop + i * itemHeight;
       const selected = i === mapSelectIndex;
 
-      // Selection highlight
       if (selected) {
-        ctx.fillStyle = 'rgba(80, 120, 255, 0.15)';
-        ctx.fillRect(cx - 280, y - 20, 560, itemHeight - 8);
+        ctx.fillStyle = 'rgba(60, 80, 140, 0.3)';
+        ctx.fillRect(cx - 230, y - 18, 460, itemHeight - 8);
         ctx.strokeStyle = 'rgba(100, 150, 255, 0.5)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(cx - 280, y - 20, 560, itemHeight - 8);
+        ctx.strokeRect(cx - 230, y - 18, 460, itemHeight - 8);
       }
 
-      // Map name
-      const nameAlpha = selected ? 1.0 : 0.5;
-      ctx.fillStyle = selected ? '#ffffff' : '#888899';
-      ctx.font = selected ? 'bold 22px monospace' : '20px monospace';
-      ctx.fillText(map.name, cx, y + 4);
+      ctx.fillStyle = selected ? 'rgba(240, 245, 255, 1)' : 'rgba(160, 170, 190, 0.7)';
+      ctx.font = selected ? 'bold 20px monospace' : '18px monospace';
+      ctx.fillText(map.name, cx, y + 6);
 
-      // Map stats
       const size = `${map.worldScale}x${map.worldScale}`;
       const stats = `${size}  |  ${map.wells.length} wells  ${map.stars.length} stars  ${(map.wrecks || []).length} wrecks`;
-      ctx.fillStyle = `rgba(150, 160, 180, ${selected ? 0.8 : 0.4})`;
-      ctx.font = '13px monospace';
+      ctx.fillStyle = selected ? 'rgba(180, 190, 210, 0.85)' : 'rgba(130, 140, 160, 0.5)';
+      ctx.font = '12px monospace';
       ctx.fillText(stats, cx, y + 26);
     }
 
-    // Navigation hints
-    const hintY = listTop + MAP_LIST.length * itemHeight + 30;
-    ctx.fillStyle = 'rgba(150, 150, 200, 0.6)';
-    ctx.font = '14px monospace';
-    ctx.fillText('UP/DOWN to select  |  SPACE to launch  |  ESC to go back', cx, hintY);
+    const hintY = listTop + MAP_LIST.length * itemHeight + 25;
+    ctx.fillStyle = 'rgba(150, 160, 190, 0.6)';
+    ctx.font = '11px monospace';
+    ctx.fillText('↑↓ select    space/A: launch    esc/B: back', cx, hintY);
 
     ctx.restore();
   }
@@ -2234,7 +2252,7 @@ function gameLoop(now) {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
 
-    drawTerminalFrame(ctx, cx - 200, cy - 180, 400, 320, 'extraction report', 'rgba(100, 255, 255, 0.2)');
+    drawTerminalFrame(ctx, cx - 200, cy - 180, 400, 340, null, 'rgba(100, 255, 255, 0.2)');
 
     // Title
     if (t > 0.2) {

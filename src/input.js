@@ -192,6 +192,28 @@ export class InputManager {
     return false;
   }
 
+  /** Tab navigation — L1/R1 shoulder buttons (4/5) or Q/E on keyboard. */
+  get tabLeftPressed() {
+    if (this._keys['KeyQ']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 4 && gp.buttons[4].pressed) return true;
+    return false;
+  }
+  get tabRightPressed() {
+    if (this._keys['KeyE']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 5 && gp.buttons[5].pressed) return true;
+    return false;
+  }
+
+  /** Delete action — X key or gamepad triangle/Y (button 3). */
+  get deletePressed() {
+    if (this._keys['KeyX']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 3 && gp.buttons[3].pressed) return true;
+    return false;
+  }
+
   _getGamepad() {
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     if (this.gamepadIndex >= 0) return gamepads[this.gamepadIndex] || null;
