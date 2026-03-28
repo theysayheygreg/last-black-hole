@@ -8,8 +8,9 @@
 ## 2026-03-28 Signal Decisions, Color Separation, Inhibitor Implementation Plan
 
 ### Design Docs (continued)
-- **SCAVENGERS-V2.md** — Signal-reactive AI: 5 behavior tiers (indifferent → aware → hostile → predatory → panic). Drifter informant mechanic, vulture cargo raids, portal blocking, pack hunting at FLARE+. New Hunter archetype (red-orange, 2 max per run, ignores wrecks/portals, force-pulses player toward wells). Per-scavenger signal generation feeds fauna/Inhibitor.
-- **FAUNA.md** — Three types: Drift Jellies (ambient, fluid-coupled, scenery), Signal Moths (attracted to noise, feedback loop), Rift Eels (well-orbit patrols, lunge toward well on intrusion). Ecosystem cascade: fauna → signal → more fauna → scavenger attention → Inhibitor pressure.
+- **SCAVENGERS-V2.md** — Signal-reactive AI (superseded by ENTITY-CATALOG.md, preserved for reference)
+- **FAUNA.md** — Fauna types (superseded by ENTITY-CATALOG.md, preserved for reference)
+- **ENTITY-CATALOG.md** — Four-tier entity hierarchy: ambient (5 types), active (6 types), adversarial (AI players with 5 personalities), existential (Inhibitor). Seed picks from catalog per run. AI players are full participants running the player's game loop. Replaces scavenger/fauna split.
 
 ### Decisions
 - **Inhibitor wake: threshold + variance** — random threshold per run (0.82-0.98). Consistent rules, hidden parameters. EVE wormhole pattern.
