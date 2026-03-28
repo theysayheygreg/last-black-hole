@@ -178,8 +178,15 @@ src/maps/gen-params.js    — default params + validation
 
 Next to static maps. Loader picks based on game mode.
 
-## Open Questions
+## Decisions (2026-03-28)
 
-1. **Should the player see the seed?** For sharing: "try seed 48271, it's brutal." For competition: leaderboards per seed.
-2. **Should there be a "reroll" button?** Generate preview → don't like it → reroll with new seed.
-3. **How to handle the title screen?** Title still uses a static map (MAP_TITLE). Generated maps are gameplay only.
+1. **Seed visibility:** Hidden for now. Future: expose for sharing ("try seed 48271"), daily seeds for leaderboards. Backlogged.
+2. **Reroll:** No. Doesn't mesh with persistent pilot identity — you play what the universe gives you.
+3. **Title screen:** Explore generative title screens from fixed/rotating seeds. Potential for dramatic, unique backdrops each session.
+4. **Map topology:** Always toroidal. No bounded maps.
+
+## Backlog: Seed Features
+- Daily seed mode (same seed for all players, shared leaderboard)
+- Seed display on death/extract screen
+- Seed input for challenge runs
+- Seeded leaderboards per map size
