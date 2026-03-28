@@ -144,12 +144,25 @@ If those answers are clear, a later client migration becomes much safer.
 - connect them over Tailscale or LAN
 - prove one playable remote run
 
+Current progress:
+
+- local sim server process exists
+- first local protocol exists
+- server now owns session state, map snapshots, safe spawns, and well death/respawn
+- client integration still needs to consume that authority
+
 ### Batch B — Local Protocol Freeze
 
 - define the input envelope
 - define the snapshot schema
 - define the event stream
 - define how coarse flow or hazard state is exposed to the client
+
+Current progress:
+
+- `join`, `input`, `snapshot`, `events`, `session/start`, and `maps` now exist
+- snapshot already carries world entities and player state
+- protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.
 

@@ -4,6 +4,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { loadPlayableMaps } = require("./shared-map-loader.js");
 const {
   PROTOCOL_VERSION,
   DEFAULT_TICK_HZ,
@@ -13,6 +14,8 @@ const {
   createProtocolDescription,
   normalizeInputMessage,
 } = require("./sim-protocol.js");
+
+const PLAYABLE_MAPS = loadPlayableMaps();
 
 function parseArgs(argv) {
   const args = {};
@@ -87,6 +90,57 @@ function wrapWorld(value, worldScale) {
   return wrapped;
 }
 
+function worldDisplacement(a, b, worldScale) {
+  let dx = b - a;
+  if (dx > worldScale / 2) dx -= worldScale;
+  if (dx < -worldScale / 2) dx += worldScale;
+  return dx;
+}
+
+function worldDistance(ax, ay, bx, by, worldScale) {
+  const dx = worldDisplacement(ax, bx, worldScale);
+  const dy = worldDisplacement(ay, by, worldScale);
+  return Math.hypot(dx, dy);
+}
+
+function findSafeSpawn(map) {
+  const allObjects = [
+    ...map.wells.map((well) => ({ wx: well.wx, wy: well.wy })),
+    ...map.stars.map((star) => ({ wx: star.wx, wy: star.wy })),
+  ];
+  const minDist = Math.max(0.25, map.worldScale * 0.08);
+
+  let best = { wx: map.worldScale / 2, wy: map.worldScale / 2, dist: -Infinity };
+
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const wx = Math.random() * map.worldScale;
+    const wy = Math.random() * map.worldScale;
+    let nearest = Infinity;
+    for (const obj of allObjects) {
+      nearest = Math.min(nearest, worldDistance(wx, wy, obj.wx, obj.wy, map.worldScale));
+    }
+    if (nearest >= minDist) return { wx, wy };
+    if (nearest > best.dist) best = { wx, wy, dist: nearest };
+  }
+
+  return { wx: best.wx, wy: best.wy };
+}
+
+function cloneMapState(mapId) {
+  const map = PLAYABLE_MAPS[mapId] || PLAYABLE_MAPS.shallows;
+  return {
+    id: map.id,
+    name: map.name,
+    worldScale: map.worldScale,
+    fluidResolution: map.fluidResolution,
+    wells: map.wells.map((well) => ({ ...well })),
+    stars: map.stars.map((star) => ({ ...star })),
+    wrecks: map.wrecks.map((wreck) => ({ ...wreck, alive: true })),
+    planetoids: map.planetoids.map((planetoid) => ({ ...planetoid })),
+    portals: [],
+  };
+}
+
 const args = parseArgs(process.argv.slice(2));
 const HOST = args.host || "127.0.0.1";
 const PORT = Number(args.port || 8787);
@@ -101,6 +155,7 @@ const runtime = {
     id: null,
     status: "idle",
     mapId: null,
+    mapName: null,
     worldScale: DEFAULT_WORLD_SCALE,
     tickHz: DEFAULT_TICK_HZ,
     snapshotHz: DEFAULT_SNAPSHOT_HZ,
@@ -111,6 +166,7 @@ const runtime = {
   recentEvents: [],
   nextEventSeq: 1,
   players: new Map(),
+  mapState: cloneMapState("shallows"),
 };
 
 let tickHandle = null;
@@ -145,19 +201,26 @@ function createPlayer(clientId, name) {
       pulse: false,
       timestamp: Date.now(),
     },
+    status: "alive",
+    respawnAt: null,
   };
 }
 
 function startSession(config = {}) {
+  const requestedMapId = String(config.mapId || "shallows");
+  const mapState = cloneMapState(requestedMapId);
   runtime.session = {
     id: crypto.randomUUID(),
     status: "running",
-    mapId: String(config.mapId || "rush"),
-    worldScale: Number.isFinite(Number(config.worldScale)) ? Number(config.worldScale) : DEFAULT_WORLD_SCALE,
+    mapId: mapState.id,
+    mapName: mapState.name,
+    worldScale: Number.isFinite(Number(config.worldScale)) ? Number(config.worldScale) : mapState.worldScale,
     tickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : DEFAULT_TICK_HZ,
     snapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : DEFAULT_SNAPSHOT_HZ,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
+  mapState.worldScale = runtime.session.worldScale;
+  runtime.mapState = mapState;
   runtime.tick = 0;
   runtime.simTime = 0;
   runtime.players.clear();
@@ -166,6 +229,7 @@ function startSession(config = {}) {
   publishEvent("session.started", {
     sessionId: runtime.session.id,
     mapId: runtime.session.mapId,
+    mapName: runtime.session.mapName,
     worldScale: runtime.session.worldScale,
     maxPlayers: runtime.session.maxPlayers,
   });
@@ -182,14 +246,64 @@ function snapshotBody() {
     players: Array.from(runtime.players.values()).map((player) => ({
       clientId: player.clientId,
       name: player.name,
+      status: player.status,
       wx: player.wx,
       wy: player.wy,
       vx: player.vx,
       vy: player.vy,
       lastInputSeq: player.lastInput.seq,
     })),
+    world: {
+      wells: runtime.mapState.wells,
+      stars: runtime.mapState.stars,
+      wrecks: runtime.mapState.wrecks.filter((wreck) => wreck.alive !== false),
+      planetoids: runtime.mapState.planetoids,
+      portals: runtime.mapState.portals,
+    },
     recentEvents: runtime.recentEvents.slice(-32),
   };
+}
+
+function maybeRespawnPlayer(player) {
+  if (player.status !== "dead" || player.respawnAt == null) return;
+  if (runtime.simTime < player.respawnAt) return;
+  const { wx, wy } = findSafeSpawn(runtime.mapState);
+  player.wx = wx;
+  player.wy = wy;
+  player.vx = 0;
+  player.vy = 0;
+  player.status = "alive";
+  player.respawnAt = null;
+  publishEvent("player.respawned", { clientId: player.clientId, wx, wy });
+}
+
+function applyWellGravity(player, dt) {
+  let ax = 0;
+  let ay = 0;
+  for (const well of runtime.mapState.wells) {
+    const dx = worldDisplacement(player.wx, well.wx, runtime.session.worldScale);
+    const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.0001) continue;
+    if (dist < well.killRadius) {
+      player.status = "dead";
+      player.respawnAt = runtime.simTime + 1.0;
+      player.vx = 0;
+      player.vy = 0;
+      publishEvent("player.died", {
+        clientId: player.clientId,
+        cause: "well",
+        wellId: well.id,
+        wellName: well.name || well.id,
+      });
+      return;
+    }
+    const pull = (0.025 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
+    ax += (dx / dist) * pull;
+    ay += (dy / dist) * pull;
+  }
+  player.vx += ax * dt;
+  player.vy += ay * dt;
 }
 
 function tickSim() {
@@ -199,14 +313,19 @@ function tickSim() {
   runtime.simTime += dt;
 
   for (const player of runtime.players.values()) {
+    maybeRespawnPlayer(player);
+    if (player.status !== "alive") continue;
+
     const input = player.lastInput;
     const accel = 2.5 * input.thrust;
     player.vx += input.moveX * accel * dt;
     player.vy += input.moveY * accel * dt;
+    applyWellGravity(player, dt);
+    if (player.status !== "alive") continue;
     player.vx *= Math.pow(0.92, dt * 15);
     player.vy *= Math.pow(0.92, dt * 15);
-    player.wx = wrapWorld(player.wx + player.vx * dt, runtime.session.worldScale);
-    player.wy = wrapWorld(player.wy + player.vy * dt, runtime.session.worldScale);
+    player.wx = ((player.wx + player.vx * dt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    player.wy = ((player.wy + player.vy * dt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
 
     if (input.pulse) {
       publishEvent("player.pulse", { clientId: player.clientId, wx: player.wx, wy: player.wy });
@@ -261,6 +380,24 @@ const server = http.createServer(async (req, res) => {
         tick: runtime.tick,
         simTime: runtime.simTime,
         playerCount: runtime.players.size,
+        mapId: runtime.mapState.id,
+      });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/maps") {
+      sendJson(res, 200, {
+        type: "maps",
+        maps: Object.values(PLAYABLE_MAPS).map((map) => ({
+          id: map.id,
+          name: map.name,
+          worldScale: map.worldScale,
+          fluidResolution: map.fluidResolution,
+          wellCount: map.wells.length,
+          starCount: map.stars.length,
+          wreckCount: map.wrecks.length,
+          planetoidCount: map.planetoids.length,
+        })),
       });
       return;
     }
@@ -319,8 +456,11 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         player = createPlayer(clientId, body.name);
+        const spawn = findSafeSpawn(runtime.mapState);
+        player.wx = spawn.wx;
+        player.wy = spawn.wy;
         runtime.players.set(clientId, player);
-        publishEvent("player.joined", { clientId, name: player.name });
+        publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
       } else if (body.name) {
         player.name = String(body.name);
       }

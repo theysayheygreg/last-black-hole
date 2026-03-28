@@ -856,3 +856,4 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 **Door status:** Open — the hosted shape and eventual runtime port remain future decisions, but the immediate next batch is now defined.
 
 | Mar 27 | First implementation slice lands for the network direction: a separate local sim-server shell, PID-managed control commands, and a first plain-data protocol (`join`, `input`, `snapshot`, `events`, `session/start`). It is still a stub authority, but the process boundary and message shapes now exist in code. |
+| Mar 27 | Second implementation slice lands: the sim server now loads real playable maps, owns map/entity snapshots, chooses safe spawns, and applies well death/respawn authoritatively. The server is still not the whole game, but it now owns actual run state instead of only toy movement. |

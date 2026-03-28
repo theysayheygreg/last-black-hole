@@ -540,3 +540,18 @@ The architecture discussion stopped being hypothetical. LBH is multiplayer-first
 
 ### Why
 The sim/client split needed to stop being only a design note. This first slice gives LBH a separate authoritative process shell and a concrete local protocol without pretending the full gameplay sim already lives there.
+
+## 2026-03-27 (Week 2 Day 3: Real Map Authority in Sim Server)
+
+### scripts/ — New Files
+- **shared-map-loader.js** — Reads the current playable map definitions into Node so the sim server can own real run content instead of a dummy scene.
+
+### scripts/ — Modified
+- **sim-runtime.js** — Session start now loads real playable maps, authoritative snapshots now carry wells/stars/wrecks/planetoids, joins now spawn at safe positions, and the server now applies well gravity, well death, and timed respawn.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md** — Documents the new `GET /maps` endpoint, world entity snapshots, and the fact that the server already owns session state, map state, and well death/respawn.
+- **NETWORK-ARCHITECTURE-PLAN.md** — Notes current progress so the architecture doc matches the actual code, not just the intended direction.
+
+### Why
+The first server shell was too small to prove much. This pass moves real run authority into the separate process: actual maps, actual entities, authoritative spawning, and the first piece of real gameplay consequence outside the client loop.

@@ -34,6 +34,12 @@ The client still renders locally at its own frame rate.
 
 ## Core messages
 
+### `GET /maps`
+
+Returns the authoritative playable map catalog.
+
+This is the first step toward a real launch flow where the client does not invent its own map truth.
+
 ### `POST /join`
 
 Registers a client/player with the authoritative session.
@@ -99,6 +105,13 @@ Authoritative state read.
       "lastInputSeq": 12
     }
   ],
+  "world": {
+    "wells": [],
+    "stars": [],
+    "wrecks": [],
+    "planetoids": [],
+    "portals": []
+  },
   "recentEvents": []
 }
 ```
@@ -116,11 +129,20 @@ Starts or resets the local authoritative run instance.
 The server owns:
 
 - player and AI state
+- map identity and entity state
 - collisions and run outcomes
 - run timer and collapse progression
 - item and pickup truth
 - future signal truth
 - a coarse gameplay-relevant flow model
+
+In the current first slice, the server already owns:
+
+- authoritative session lifecycle
+- authoritative player transforms and velocities
+- map entity snapshots for wells, stars, wrecks, and planetoids
+- safe spawn selection
+- well death and respawn timing
 
 ## Client ownership
 
@@ -143,4 +165,11 @@ The client owns:
 
 ## Next step after this protocol
 
-Replace the stub sim shell with real authoritative game state behind the same message shapes.
+Keep replacing client-owned world truth with server-owned truth behind the same message shapes.
+
+The next useful transfers are:
+
+- portals and run timer
+- pickups and wreck looting
+- AI/scavenger state
+- coarse authoritative flow sampling
