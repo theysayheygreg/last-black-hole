@@ -202,7 +202,6 @@ function createPlayer(clientId, name) {
       timestamp: Date.now(),
     },
     status: "alive",
-    respawnAt: null,
   };
 }
 
@@ -264,19 +263,6 @@ function snapshotBody() {
   };
 }
 
-function maybeRespawnPlayer(player) {
-  if (player.status !== "dead" || player.respawnAt == null) return;
-  if (runtime.simTime < player.respawnAt) return;
-  const { wx, wy } = findSafeSpawn(runtime.mapState);
-  player.wx = wx;
-  player.wy = wy;
-  player.vx = 0;
-  player.vy = 0;
-  player.status = "alive";
-  player.respawnAt = null;
-  publishEvent("player.respawned", { clientId: player.clientId, wx, wy });
-}
-
 function applyWellGravity(player, dt) {
   let ax = 0;
   let ay = 0;
@@ -287,7 +273,6 @@ function applyWellGravity(player, dt) {
     if (dist < 0.0001) continue;
     if (dist < well.killRadius) {
       player.status = "dead";
-      player.respawnAt = runtime.simTime + 1.0;
       player.vx = 0;
       player.vy = 0;
       publishEvent("player.died", {
@@ -313,7 +298,6 @@ function tickSim() {
   runtime.simTime += dt;
 
   for (const player of runtime.players.values()) {
-    maybeRespawnPlayer(player);
     if (player.status !== "alive") continue;
 
     const input = player.lastInput;

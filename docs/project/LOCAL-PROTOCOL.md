@@ -18,6 +18,8 @@ For the first private milestone:
 - transport can be plain HTTP over Tailscale or LAN
 - server listens locally on one fixed port
 - client polls snapshots and posts inputs
+- browser client can opt into remote authority with `?simServer=http://<host>:8787`
+- sim server can bind beyond localhost with `LBH_SIM_HOST=0.0.0.0 npm run sim`
 
 This is not the final transport. It is the simplest useful transport for proving the boundary.
 
@@ -142,7 +144,14 @@ In the current first slice, the server already owns:
 - authoritative player transforms and velocities
 - map entity snapshots for wells, stars, wrecks, and planetoids
 - safe spawn selection
-- well death and respawn timing
+- well death and run reset boundary
+
+In the current second slice, the browser client already:
+
+- starts a fresh authoritative session from map select
+- joins that session with a stable client id
+- sends thrust/pulse input across the boundary
+- renders locally from authoritative snapshots instead of local player truth
 
 ## Client ownership
 
@@ -173,3 +182,4 @@ The next useful transfers are:
 - pickups and wreck looting
 - AI/scavenger state
 - coarse authoritative flow sampling
+- real join-existing-session / lobby semantics instead of always starting a fresh run from map select

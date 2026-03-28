@@ -148,8 +148,9 @@ Current progress:
 
 - local sim server process exists
 - first local protocol exists
-- server now owns session state, map snapshots, safe spawns, and well death/respawn
-- client integration still needs to consume that authority
+- server now owns session state, map snapshots, safe spawns, and well death
+- browser client can now opt into remote authority, start a fresh authoritative run, and drive a locally rendered ship from server snapshots
+- true join-existing-session and broader gameplay authority still need to move over
 
 ### Batch B — Local Protocol Freeze
 
@@ -162,6 +163,7 @@ Current progress:
 
 - `join`, `input`, `snapshot`, `events`, `session/start`, and `maps` now exist
 - snapshot already carries world entities and player state
+- browser client now actively consumes that protocol in a playable remote-authority mode
 - protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.

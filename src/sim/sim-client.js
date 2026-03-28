@@ -1,0 +1,105 @@
+function randomClientId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `lbh-client-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export class SimClient {
+  constructor(baseUrl) {
+    this.baseUrl = String(baseUrl || '').replace(/\/+$/, '');
+    this.clientId = randomClientId();
+    this.seq = 0;
+    this.latestSnapshot = null;
+    this.lastPollAt = 0;
+    this.pollIntervalMs = 100;
+  }
+
+  get enabled() {
+    return Boolean(this.baseUrl);
+  }
+
+  async _json(path, options = {}) {
+    if (!this.enabled) throw new Error('Sim client is not configured');
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      headers: { 'content-type': 'application/json' },
+      ...options,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body?.error || `HTTP ${response.status}`);
+    }
+    return body;
+  }
+
+  async getHealth() {
+    return this._json('/health');
+  }
+
+  async getMaps() {
+    return this._json('/maps');
+  }
+
+  async startSession({ mapId, worldScale, maxPlayers = 4 }) {
+    const body = await this._json('/session/start', {
+      method: 'POST',
+      body: JSON.stringify({ mapId, worldScale, maxPlayers }),
+    });
+    this.latestSnapshot = null;
+    this.lastPollAt = 0;
+    return body.session;
+  }
+
+  async ensureSession({ mapId, worldScale, maxPlayers = 4 }) {
+    const health = await this.getHealth();
+    const session = health?.session;
+    if (session?.status === 'running' && session.mapId === mapId) {
+      return session;
+    }
+    return this.startSession({ mapId, worldScale, maxPlayers });
+  }
+
+  async resetSession() {
+    const body = await this._json('/session/reset', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    this.latestSnapshot = null;
+    this.lastPollAt = 0;
+    return body.session;
+  }
+
+  async join({ name }) {
+    return this._json('/join', {
+      method: 'POST',
+      body: JSON.stringify({
+        clientId: this.clientId,
+        name,
+      }),
+    });
+  }
+
+  async pollSnapshot(force = false) {
+    const now = Date.now();
+    if (!force && now - this.lastPollAt < this.pollIntervalMs && this.latestSnapshot) {
+      return this.latestSnapshot;
+    }
+    this.lastPollAt = now;
+    this.latestSnapshot = await this._json('/snapshot');
+    return this.latestSnapshot;
+  }
+
+  async sendInput({ moveX = 0, moveY = 0, thrust = 0, pulse = false }) {
+    this.seq += 1;
+    return this._json('/input', {
+      method: 'POST',
+      body: JSON.stringify({
+        clientId: this.clientId,
+        seq: this.seq,
+        moveX,
+        moveY,
+        thrust,
+        pulse,
+        timestamp: Date.now(),
+      }),
+    });
+  }
+}

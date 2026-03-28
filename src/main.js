@@ -35,6 +35,7 @@ import { ProfileManager, UPGRADE_TRACKS, MAX_RANK, generatePilotName } from './p
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
 import { FlowField } from './sim/flow-field.js';
 import { SimCore } from './sim/sim-core.js';
+import { SimClient } from './sim/sim-client.js';
 import { createSimState, freezeRunEnd, resetSimState } from './sim/sim-state.js';
 import { loadMap } from './map-loader.js';
 import { applySceneOverrides, revertSceneOverrides } from './scene-config.js';
@@ -46,7 +47,20 @@ import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld } from './coords.js';
 
-const MAP_LIST = [MAP_SHALLOWS, MAP_EXPANSE, MAP_DEEP];
+const PLAYABLE_MAPS = [
+  { id: 'shallows', map: MAP_SHALLOWS },
+  { id: 'expanse', map: MAP_EXPANSE },
+  { id: 'deep-field', map: MAP_DEEP },
+];
+const MAP_LIST = PLAYABLE_MAPS.map((entry) => entry.map);
+
+function getPlayableMapEntryById(id) {
+  return PLAYABLE_MAPS.find((entry) => entry.id === id) || PLAYABLE_MAPS[0];
+}
+
+function getPlayableMapEntryByMap(map) {
+  return PLAYABLE_MAPS.find((entry) => entry.map === map) || PLAYABLE_MAPS[0];
+}
 
 // ---- State ----
 let glCanvas, gl;
@@ -55,6 +69,7 @@ let fluid, ship, wellSystem, starSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
 let scavengerSystem, combatSystem, audioEngine, inventorySystem;
 let flowField, simCore;
+let simClient = null;
 let currentSignature = null;
 let inputManager, asciiRenderer;
 let running = true;
@@ -75,6 +90,12 @@ let camY = 1.5;
 
 // Map state
 let currentMap = MAP_SHALLOWS;
+let remoteAuthorityActive = false;
+let remoteMapId = null;
+let remoteSnapshot = null;
+let remoteLastAckSeq = 0;
+let remoteInputRequestInFlight = false;
+let remoteSnapshotRequestInFlight = false;
 let startingMasses = [];
 let mapSelectIndex = 0;
 let currentCameraMode = 'follow';
@@ -115,6 +136,16 @@ const TRANSITION_RAMP_UP = 0.6;    // seconds to reach full corruption
 const TRANSITION_HOLD = 0.25;      // seconds at full corruption
 const TRANSITION_RAMP_DOWN = 0.6;  // seconds to resolve into new scene
 const TRANSITION_TOTAL = TRANSITION_RAMP_UP + TRANSITION_HOLD + TRANSITION_RAMP_DOWN;
+
+function getConfiguredSimServerUrl() {
+  const url = new URL(window.location.href);
+  const fromQuery = url.searchParams.get('simServer');
+  if (fromQuery) {
+    localStorage.setItem('lbh.simServerUrl', fromQuery);
+    return fromQuery;
+  }
+  return localStorage.getItem('lbh.simServerUrl') || '';
+}
 
 // ---- Init ----
 
@@ -182,6 +213,12 @@ function init() {
     waveRings,
     ship,
   });
+
+  const simServerUrl = getConfiguredSimServerUrl();
+  if (simServerUrl) {
+    simClient = new SimClient(simServerUrl);
+    console.log(`[LBH] remote sim configured: ${simServerUrl}`);
+  }
 
   // Load title scene (clears everything, loads default map, seeds fluid)
   loadTitleScene();
@@ -283,6 +320,13 @@ function init() {
       combatSystem,
       currentSignature,
       profileManager,
+      simClient,
+      get remoteAuthorityActive() { return remoteAuthorityActive; },
+      get remoteMapId() { return remoteMapId; },
+      get remoteSnapshot() { return remoteSnapshot; },
+      get playableMaps() { return PLAYABLE_MAPS; },
+      transitionToGame,
+      transitionToRemoteGame,
     }));
   }
 
@@ -514,6 +558,12 @@ function transitionToTitle() {
  * Start a game on a specific map. Called from map select.
  */
 function startGame(map) {
+  remoteAuthorityActive = false;
+  remoteMapId = null;
+  remoteSnapshot = null;
+  remoteLastAckSeq = 0;
+  remoteInputRequestInFlight = false;
+  remoteSnapshotRequestInFlight = false;
   rendererFixtureActive = false;
   loadScene(map);
 
@@ -570,6 +620,101 @@ function startGame(map) {
 /** Transition to gameplay with glitch effect. */
 function transitionToGame(map) {
   triggerTransition(() => startGame(map));
+}
+
+function applyRemoteSnapshot(snapshot) {
+  if (!snapshot) return;
+  remoteSnapshot = snapshot;
+  simState.runElapsedTime = snapshot.simTime ?? simState.runElapsedTime;
+
+  const localPlayer = snapshot.players?.find((player) => player.clientId === simClient?.clientId);
+  if (!localPlayer) return;
+
+  ship.teleport(localPlayer.wx, localPlayer.wy);
+  ship.vx = localPlayer.vx;
+  ship.vy = localPlayer.vy;
+
+  if (inputManager?.facing != null) {
+    ship.setFacingDirect(inputManager.facing);
+  }
+
+  if (gamePhase === 'dead' && localPlayer.status === 'alive') {
+    gamePhase = 'playing';
+    deathTimer = 0;
+  } else if (gamePhase === 'playing' && localPlayer.status === 'dead') {
+    gamePhase = 'dead';
+    deathTimer = 0;
+    freezeRunEnd(simState);
+    ship.setThrust(false);
+  }
+}
+
+async function startRemoteGame(mapEntry) {
+  if (!simClient?.enabled) {
+    startGame(mapEntry.map);
+    return;
+  }
+
+  rendererFixtureActive = false;
+  remoteAuthorityActive = true;
+  remoteMapId = mapEntry.id;
+  remoteSnapshot = null;
+  remoteLastAckSeq = 0;
+  remoteInputRequestInFlight = false;
+  remoteSnapshotRequestInFlight = false;
+
+  loadScene(mapEntry.map);
+  currentSignature = rollSignature(mapEntry.map.worldScale);
+  applySignatureConfig(currentSignature);
+  audioEngine.reset();
+  audioEngine.setContext('gameplay');
+  gamePhase = 'playing';
+  showHUD();
+
+  const p = profileManager.active;
+  if (p) {
+    inventorySystem.equipped = p.loadout.equipped.map(i => i ? { ...i } : null);
+    inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
+  }
+
+  await simClient.startSession({
+    mapId: mapEntry.id,
+    worldScale: mapEntry.map.worldScale,
+    maxPlayers: 4,
+  });
+  await simClient.join({ name: profileManager.active?.name || 'Pilot' });
+  const snapshot = await simClient.pollSnapshot(true);
+  applyRemoteSnapshot(snapshot);
+}
+
+function transitionToRemoteGame(mapEntry) {
+  triggerTransition(() => {
+    void startRemoteGame(mapEntry).catch((err) => {
+      console.error('[LBH] remote start failed:', err);
+      showWarning(`remote sim failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
+      remoteAuthorityActive = false;
+      remoteMapId = null;
+      remoteSnapshot = null;
+      startGame(mapEntry.map);
+    });
+  });
+}
+
+async function restartRemoteSession() {
+  if (!simClient?.enabled || !remoteMapId) return;
+  const mapEntry = getPlayableMapEntryById(remoteMapId);
+  await simClient.resetSession();
+  await simClient.join({ name: profileManager.active?.name || 'Pilot' });
+  const snapshot = await simClient.pollSnapshot(true);
+  remoteAuthorityActive = true;
+  remoteInputRequestInFlight = false;
+  remoteSnapshotRequestInFlight = false;
+  applyRemoteSnapshot(snapshot);
+  gamePhase = 'playing';
+  deathTimer = 0;
+  escapeTimer = 0;
+  showHUD();
+  currentMap = mapEntry.map;
 }
 
 /**
@@ -742,13 +887,14 @@ function gameLoop(now) {
   }
 
   const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home' || gamePhase === 'mapSelect' || rendererFixtureActive;
+  const remoteVisualMode = remoteAuthorityActive && (gamePhase === 'playing' || gamePhase === 'dead');
 
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
     simCore.update(simState, {
       frameDt: dt,
       totalTime,
-      inMenu,
+      inMenu: inMenu || remoteVisualMode,
     });
 
   } // end paused check
@@ -921,7 +1067,9 @@ function gameLoop(now) {
         inventorySystem.equipped = p.loadout.equipped.map(i => i ? { ...i } : null);
         inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
       }
-      transitionToGame(MAP_LIST[mapSelectIndex]);
+      const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];
+      if (simClient?.enabled) transitionToRemoteGame(selectedEntry);
+      else transitionToGame(selectedEntry.map);
     }
     if (!transitionActive && backNow && !_prevBack) {
       gamePhase = 'home';
@@ -934,6 +1082,38 @@ function gameLoop(now) {
 
     if (!transitionActive && confirmNow && !_prevConfirm) {
       if (gamePhase === 'dead' && deathTimer > 1.0) {
+        if (remoteAuthorityActive) {
+          triggerTransition(() => {
+            void restartRemoteSession().catch((err) => {
+              console.error('[LBH] remote restart failed:', err);
+              showWarning(`remote restart failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
+              remoteAuthorityActive = false;
+              remoteMapId = null;
+              remoteSnapshot = null;
+              loadTitleScene();
+              gamePhase = 'home';
+              homeTab = 0;
+              homePhaseTimer = 0;
+              audioEngine.setContext('menu');
+            });
+          });
+          _prevConfirm = confirmNow;
+          _prevPause = pauseNow;
+          _prevBack = backNow;
+          _prevUp = upNow;
+          _prevDown = downNow;
+          _prevLeft = inputManager.leftPressed;
+          _prevRight = inputManager.rightPressed;
+          _prevTabLeft = inputManager.tabLeftPressed;
+          _prevTabRight = inputManager.tabRightPressed;
+          _prevDelete = inputManager.deletePressed;
+          _prevPulse = pulseNow;
+          _prevInventory = inventoryNow;
+          _prevConsumable1 = consumable1Now;
+          _prevConsumable2 = consumable2Now;
+          requestAnimationFrame(gameLoop);
+          return;
+        }
         // Save loadout on death — consumed items stay consumed, equipment changes persist
         profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
         lastDeathTax = profileManager.recordDeath();
@@ -973,16 +1153,60 @@ function gameLoop(now) {
       }
     }
 
-    // 5. Wave ring forces on ship
-    waveRings.applyToShip(ship);
+    if (remoteAuthorityActive) {
+      inventoryOpen = false;
+      if (inventoryNow && !_prevInventory) {
+        showWarning('inventory stays local-only until server loadout lands', 'rgba(255, 180, 120, 0.95)', 2000);
+      }
 
-    // Suppress ship input while inventory is open (don't fly into a well while sorting loot)
-    if (!inventoryOpen) {
       inputManager.applyToShip(ship);
-    }
 
-    // 6. Ship update
-    if (gamePhase === 'playing') {
+      if (gamePhase === 'playing') {
+        if (!remoteInputRequestInFlight) {
+          const facing = inputManager.facing ?? ship.facing;
+          const thrust = inputManager.thrustIntensity;
+          const moveMag = thrust > 0 ? 1 : 0;
+          remoteInputRequestInFlight = true;
+          void simClient.sendInput({
+            moveX: Math.cos(facing) * moveMag,
+            moveY: Math.sin(facing) * moveMag,
+            thrust,
+            pulse: pulseNow && !_prevPulse,
+          }).then((response) => {
+            remoteLastAckSeq = response.acceptedSeq ?? remoteLastAckSeq;
+          }).catch((err) => {
+            console.error('[LBH] remote input failed:', err);
+          }).finally(() => {
+            remoteInputRequestInFlight = false;
+          });
+        }
+
+        if (!remoteSnapshotRequestInFlight) {
+          remoteSnapshotRequestInFlight = true;
+          void simClient.pollSnapshot().then((snapshot) => {
+            applyRemoteSnapshot(snapshot);
+          }).catch((err) => {
+            console.error('[LBH] remote snapshot failed:', err);
+          }).finally(() => {
+            remoteSnapshotRequestInFlight = false;
+          });
+        }
+      } else if (gamePhase === 'dead') {
+        deathTimer += dt;
+      } else if (gamePhase === 'escaped') {
+        escapeTimer += dt;
+      }
+    } else {
+      // 5. Wave ring forces on ship
+      waveRings.applyToShip(ship);
+
+      // Suppress ship input while inventory is open (don't fly into a well while sorting loot)
+      if (!inventoryOpen) {
+        inputManager.applyToShip(ship);
+      }
+
+      // 6. Ship update
+      if (gamePhase === 'playing') {
       // Time slow consumable: ship experiences 30% of normal time
       let shipDt = dt;
       if (timeSlowRemaining > 0) {
@@ -1167,9 +1391,10 @@ function gameLoop(now) {
         ship.setThrust(false);
       }
     } else if (gamePhase === 'dead') {
-      deathTimer += dt;
+        deathTimer += dt;
     } else if (gamePhase === 'escaped') {
-      escapeTimer += dt;
+        escapeTimer += dt;
+    }
     }
 
     // Update camera (after ship update)

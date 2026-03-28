@@ -111,6 +111,27 @@ export function initTestAPI(getState) {
       else if (startGame) startGame(getState().currentMap);
     },
 
+    startRemoteGame(mapIndex = 0) {
+      const { playableMaps, transitionToRemoteGame } = getState();
+      if (!playableMaps || !transitionToRemoteGame) return false;
+      const entry = playableMaps[mapIndex] || playableMaps[0];
+      transitionToRemoteGame(entry);
+      return true;
+    },
+
+    getNetworkState() {
+      const { simClient, remoteAuthorityActive, remoteMapId, remoteSnapshot } = getState();
+      return {
+        simEnabled: Boolean(simClient?.enabled),
+        simUrl: simClient?.baseUrl || null,
+        clientId: simClient?.clientId || null,
+        remoteAuthorityActive: Boolean(remoteAuthorityActive),
+        remoteMapId: remoteMapId || null,
+        remoteTick: remoteSnapshot?.tick ?? null,
+        remoteSimTime: remoteSnapshot?.simTime ?? null,
+      };
+    },
+
     createTestProfile(name) {
       const { profileManager } = getState();
       if (!profileManager) return null;

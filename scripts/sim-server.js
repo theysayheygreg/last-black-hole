@@ -8,8 +8,27 @@ const { DEFAULT_SIM_PORT } = require("./sim-protocol.js");
 
 const ROOT = path.resolve(__dirname, "..");
 const TMP = path.join(ROOT, "tmp");
-const HOST = "127.0.0.1";
-const PORT = DEFAULT_SIM_PORT;
+
+function parseArgs(argv) {
+  const args = {};
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (!arg.startsWith("--")) continue;
+    const key = arg.slice(2);
+    const next = argv[i + 1];
+    if (next && !next.startsWith("--")) {
+      args[key] = next;
+      i++;
+    } else {
+      args[key] = true;
+    }
+  }
+  return args;
+}
+
+const cliArgs = parseArgs(process.argv.slice(3));
+const HOST = cliArgs.host || process.env.LBH_SIM_HOST || "127.0.0.1";
+const PORT = Number(cliArgs.port || process.env.LBH_SIM_PORT || DEFAULT_SIM_PORT);
 const PID_FILE = path.join(TMP, "sim-server.pid");
 const META_FILE = path.join(TMP, "sim-server.json");
 const LOG_FILE = path.join(TMP, "sim-server.log");

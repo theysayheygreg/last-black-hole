@@ -555,3 +555,26 @@ The sim/client split needed to stop being only a design note. This first slice g
 
 ### Why
 The first server shell was too small to prove much. This pass moves real run authority into the separate process: actual maps, actual entities, authoritative spawning, and the first piece of real gameplay consequence outside the client loop.
+
+## 2026-03-27 (Week 2 Day 3: Remote-Authority Browser Client)
+
+### src/sim/ — New Files
+- **sim-client.js** — Adds the browser-side HTTP client for the local LBH protocol, including session start/reset, join, input, and snapshot polling.
+
+### src/ — Modified
+- **main.js** — Adds remote-authority mode behind `?simServer=...`, starts a fresh authoritative run from map select, applies authoritative snapshots to the local ship, and keeps the browser renderer running as a local client instead of local gameplay authority.
+- **test-api.js** — Adds remote-network status helpers and a remote start hook so the path can be smoke-tested automatically.
+
+### scripts/ — Modified
+- **sim-runtime.js** — Removes the toy timed respawn behavior so well death matches the real run/reset flow more closely.
+- **sim-server.js** — Adds host/port overrides via CLI/env so the sim can bind beyond localhost for Tailscale/LAN use.
+
+### tests/ — Modified
+- **physics.js** — Tightens the well-pull check so it measures inward radial pull directly instead of being confused by tangential orbital flow.
+
+### docs/ — Modified
+- **project/LOCAL-PROTOCOL.md** — Documents the remote browser client path, host binding, and the current authority split.
+- **project/NETWORK-ARCHITECTURE-PLAN.md** — Updates next-step progress to reflect that the browser can now consume authoritative snapshots.
+
+### Why
+The architecture stopped being only a separate server process. The browser now has a real remote-authority path: it can start a run on the sim server, join it, send input across the boundary, and render locally from authoritative snapshots.

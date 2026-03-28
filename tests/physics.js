@@ -96,8 +96,9 @@ async function run() {
 
       const well = wells[0];
 
-      // Teleport ship near well in world-space (0.3 world-units away)
-      const testWX = well.wx + 0.3;
+      // Teleport ship near well in world-space (0.3 world-units away), choosing
+      // the inward-facing horizontal side so we can measure radial pull directly.
+      const testWX = well.wx > 1.5 ? well.wx - 0.3 : well.wx + 0.3;
       const testWY = well.wy;
       await page.evaluate(
         (x, y) => window.__TEST_API.teleportShip(x, y),
@@ -105,17 +106,16 @@ async function run() {
         testWY
       );
 
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 350));
 
       const posAfter = await page.evaluate(() => window.__TEST_API.getShipPos());
-      const distBefore = 0.3;
-      const distAfter = Math.sqrt(
-        (posAfter.x - well.wx) ** 2 + (posAfter.y - well.wy) ** 2
-      );
+      const radialTowardWell = well.wx > 1.5
+        ? (posAfter.x - testWX)            // spawned left of well; moving right is inward
+        : (testWX - posAfter.x);           // spawned right of well; moving left is inward
 
       assert(
-        distAfter < distBefore,
-        `Ship didn't move toward well (dist before: ${distBefore.toFixed(3)}, after: ${distAfter.toFixed(3)})`
+        radialTowardWell > 0.001,
+        `Ship didn't show inward pull (radial movement: ${radialTowardWell.toFixed(4)} world-units)`
       );
     });
 
