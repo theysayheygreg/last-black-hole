@@ -484,10 +484,17 @@ function _renderInventoryPanel(inv) {
 }
 
 /**
- * Show a center warning. Auto-dismisses after duration.
+ * Add an event to the events log panel (left side, fades by age).
+ * Replaces the old center-screen warning system.
+ * Max 8 visible entries — oldest removed when full.
  */
-export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs = 2500) {
+export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs = 4000) {
   if (!_warningsEl) return;
+
+  // Cap visible entries
+  while (_warningsEl.children.length >= 8) {
+    _warningsEl.removeChild(_warningsEl.firstChild);
+  }
 
   const el = document.createElement('div');
   el.className = 'hud-warning';
@@ -497,6 +504,6 @@ export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs
 
   setTimeout(() => {
     el.classList.add('fading');
-    setTimeout(() => el.remove(), 500);
+    setTimeout(() => el.remove(), 1000);
   }, durationMs);
 }

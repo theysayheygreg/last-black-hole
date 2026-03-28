@@ -2174,7 +2174,16 @@ function gameLoop(now) {
     const itemVerb = isEscape ? 'salvaged' : 'lost';
     const endItems = inventorySystem.getCargoItems();
 
+    const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.save();
+
+    // Dark overlay + scanlines + terminal frame
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.75)';
+    ctx.fillRect(0, 0, w, h);
+    drawScanlines(ctx, w, h, 0.025);
+    const frameColor = isEscape ? 'rgba(100, 255, 255, 0.2)' : 'rgba(255, 50, 30, 0.15)';
+    drawTerminalFrame(ctx, cx - 220, cy - 130, 440, 280, null, frameColor);
+
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 16;
     ctx.textAlign = 'center';
@@ -2182,8 +2191,8 @@ function gameLoop(now) {
     // Title
     if (t > 0.3) {
       ctx.fillStyle = `${titleColor} ${Math.min((t - 0.3) * 2, 1)})`;
-      ctx.font = 'bold 48px monospace';
-      ctx.fillText(title, cx, cy - 100);
+      ctx.font = 'bold 42px monospace';
+      ctx.fillText(title, cx, cy - 90);
     }
     // Subtitle
     if (t > 0.6) {
