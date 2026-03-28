@@ -211,9 +211,57 @@ Layers 2-5 all render on the existing overlay canvas — just in different passe
 
 The expensive part is the fluid sim and ASCII shader. Depth layers are all canvas draws — essentially free.
 
-## Open Questions
+## Decisions (2026-03-28)
 
-1. **Tilt direction**: Which way does the "camera" look at the accretion disk? Fixed tilt (always same angle) or per-well random tilt? Random feels more organic but adds complexity.
-2. **Depth-based brightness**: Should entities at different Z depths have different brightness? Back-depth elements are dimmer (40%), front-depth elements are brighter. Does this extend to gameplay entities too (distant wrecks dimmer)?
-3. **Speed lines**: At what ship speed do speed lines appear? Should they be fluid-coupled (stronger in high-flow areas)?
-4. **Audio depth**: Should the audio system react to Z depth? Sounds from "below" (back depth) could be filtered/muffled compared to sounds at the game plane.
+1. **Tilt direction**: Random axial tilt per well (~15-30° from vertical, random angle). Each well looks like it's viewed from a slightly different perspective. Creates visual variety without any camera changes.
+
+2. **Depth-based brightness**: Yes, but conservative — the game is already dark and we struggle with contrast. Back-depth at 60% (not 40%), front-depth at 85% (not full brightness). Don't dim gameplay entities — only depth-layer decorative elements.
+
+3. **Speed lines**: Yes on ship movement. Appear when speed exceeds a threshold. Not fluid-coupled (too complex for the visual payoff).
+
+4. **Audio depth**: Yes — sounds from back-depth (behind game plane) get a subtle low-pass filter. Future-safe spatial feature even if not all sounds use it initially. Can always disable if it muddies the mix.
+
+## The Split-Circle Cheat
+
+The cheapest way to fake Z-sorting: **draw the bottom half of an object before entities, the top half after.** No camera tilt math needed.
+
+Example for a well's black hole core:
+```
+// Layer 2 (back depth): bottom half of core circle
+ctx.beginPath();
+ctx.arc(sx, sy, coreRadius, 0, Math.PI);  // bottom semicircle
+ctx.fill();
+
+// ... render ship, entities ...
+
+// Layer 4 (front depth): top half of core circle
+ctx.beginPath();
+ctx.arc(sx, sy, coreRadius, Math.PI, Math.PI * 2);  // top semicircle
+ctx.fill();
+```
+
+The ship flies "between" the two halves. The well looks like a 3D object the ship is passing through, not a flat circle on the same plane.
+
+For the accretion disk: same trick. Bottom arc renders behind entities (dimmer), top arc renders in front (brighter, semi-transparent). With a random tilt angle per well, rotate the split line:
+
+```
+const tiltAngle = well.tiltAngle;  // random 15-30° offset from vertical
+// Back half: tiltAngle to tiltAngle + PI
+// Front half: tiltAngle + PI to tiltAngle + 2*PI
+```
+
+This is essentially free — two extra arc draws per visible well per frame. The visual payoff is enormous relative to the cost.
+
+### What Gets Split
+
+| Object | Back half (Layer 2) | Front half (Layer 4) |
+|--------|--------------------|--------------------|
+| Well core (black circle) | Bottom semicircle, full opacity | Top semicircle, full opacity |
+| Accretion disk | Far arc, 60% brightness | Near arc, 85% brightness, 70% alpha |
+| Halo ring | Back arc of ellipse | Front arc of ellipse |
+| Star halo | Outer glow, dimmer | (none — stars don't occlude) |
+| Beacon beam | (none) | Beam renders on top when passing over ship |
+
+### What Doesn't Get Split
+
+Everything at the entity plane stays flat: ship, scavengers, comets, wrecks, portals. These are all at "flight altitude." Only large cosmic objects that the ship conceptually flies through get the split treatment.
