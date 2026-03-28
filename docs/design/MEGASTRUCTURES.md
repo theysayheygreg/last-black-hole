@@ -177,9 +177,12 @@ Megastructures should be the second-most-visible thing on the map (after wells).
 4. **Beacon** — beam rendering + rotation + gameplay effects
 5. **Halo Ring** — Z-sorting rendering is the technical challenge, save for last
 
-## Open Questions
+## Decisions (2026-03-28)
 
-1. **Should megastructures persist across runs?** Same seed = same structures. But do they reset their loot? (Probably yes — loot resets, structure persists.)
+1. **Persistence:** Each run = new seed = new map = new megastructure layout. No cross-run persistence of structure state. The seed determines the stage; player choices determine the play. Revisit seed determinism when more systems interact with it (signal, inhibitor, faction state).
+
+## Open Questions (remaining)
+
 2. **Can wells consume megastructures?** Drift means they'd eventually reach a well. Dyson swarm panels definitely. Whole stations maybe. Halo rings probably not (they orbit a well). Stargates and beacons are anchored (no drift).
 3. **Should megastructures interact with the signal system?** The beacon definitely should (signal dampening zone). The station should amplify signal. Others neutral.
 4. **Art direction:** These are canvas-rendered like everything else. But they need to feel *different* from natural objects. Suggestion: use straight lines and geometric shapes exclusively (no arcs, no organic curves). Ancient tech = sharp angles against the organic fluid background.
