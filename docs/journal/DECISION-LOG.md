@@ -17,6 +17,24 @@ Each decision has:
 
 ---
 
+## Signal System: Three Open Decisions (2026-03-28)
+
+**Question 1: Inhibitor wake mechanic**
+Options: A) Hard threshold (fixed per run), B) Probability ramp (per-tick RNG), C) Threshold + variance (random threshold 0.82–0.98 set at run start)
+**Decided: C.** EVE wormhole pattern — consistent rules, hidden parameters. Each run the line is different. Variance IS the dread.
+
+**Question 2: Signal equipment**
+Options: A) No signal equipment (pure skill), B) Signal shaping (changes shape, not magnitude), C) Shaping with costs (every signal benefit has a non-signal downside)
+**Decided: C.** Dampened Thrusters = slower signal ramp but 15% less max thrust. Signal Sink = faster decay but eats a cargo slot. Every module is a tradeoff. Hardest to balance but richest decision space.
+
+**Question 3: Multiplayer signal visibility**
+Options: A) Hidden (audio only), B) Visual cues (glow/trail reveals approximate level), C) Exact HUD numbers
+**Decided: B.** Ship glow and trail brightness communicate signal state — GHOST vs BEACON is visible, exact numbers aren't. Note: this requires the fabric/shader layer to reliably render per-entity visual state, which is the same surface the Inhibitor needs. Both problems solve together or not at all.
+
+**Door status:** All closed. Equipment balance values open to tuning. Multiplayer implementation blocked on fabric-layer rendering.
+
+---
+
 ## Star Clearing: Physics vs Visual Density (2026-03-25)
 
 **Question:** Should stars inject negative visual density to create a clearing bubble?

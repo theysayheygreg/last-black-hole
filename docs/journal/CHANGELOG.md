@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-03-28 Signal Decisions, Color Separation, Inhibitor Implementation Plan
+
+### Decisions
+- **Inhibitor wake: threshold + variance** — random threshold per run (0.82-0.98). Consistent rules, hidden parameters. EVE wormhole pattern.
+- **Signal equipment: shaping with costs** — every signal benefit has a non-signal downside. Dampened Thrusters = slower ramp but less thrust. Signal Sink = faster decay but eats cargo slot.
+- **Multiplayer signal visibility: visual cues** — ship glow/trail reveals approximate signal level. No exact numbers. Requires fabric-layer per-entity rendering (same surface as Inhibitor).
+
+### Design Docs
+- **COLOR-SEPARATION.md** — Wells shift from amber/red to gold/white-hot. Inhibitors own magenta/fuchsia. 85° hue gap (was 30°). Two color families that never overlap.
+- **INHIBITOR-IMPLEMENTATION.md** — 11-step build order from pressure system through endgame. Shader strategy: new uniform block in FRAG_DISPLAY + FRAG_ASCII, NOT canvas overlay. ~300 lines new code for InhibitorSystem, ~80 lines shader additions.
+
+---
+
 ## 2026-03-27 Drift, Audio Revamp, Code Review
 
 ### Gameplay
@@ -616,3 +629,21 @@ LBH now has two browser-testing layers with different jobs. Puppeteer remains th
 
 ### Why
 The existing suite was still too willing to bypass the exact surfaces that were changing most: the profile/home flow and the remote-authority path. These new suites keep Puppeteer as deterministic truth, but stop pretending helper shortcuts are enough on their own.
+
+## 2026-03-28 (Week 2 Day 4: Server-Owned Scavengers in Remote Runs)
+
+### scripts/ — Modified
+- **sim-runtime.js** — Adds simple authoritative scavenger spawning, state, loot/extract decisions, motion, and snapshot serialization for remote runs.
+
+### src/ — Modified
+- **main.js** — Syncs authoritative scavenger snapshots back into the client so remote runs render rivals from server truth instead of local AI.
+
+### tests/ — Modified
+- **remote-authority.js** — Verifies that remote-authority snapshots now include visible scavengers.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+The remote path was still too empty to count as a real competitive run. Server-owned scavengers make the mini-hosted authority feel more like the actual game while keeping the client in a rendering role.

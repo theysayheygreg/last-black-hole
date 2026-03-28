@@ -473,9 +473,9 @@ Estimated size: ~200–250 lines for core signal. ~150 lines for Inhibitor entit
 
 | Decision | Options | Recommendation | Status |
 |----------|---------|---------------|--------|
-| Inhibitor wake mechanic | A: Hard threshold / B: Probability ramp / C: Threshold + variance | C | Needs Greg |
-| Signal equipment | A: None / B: Shaping / C: Shaping with costs | C | Needs Greg |
-| Multiplayer signal visibility | A: Hidden / B: Visual cues / C: Exact numbers | B | Needs Greg |
+| Inhibitor wake mechanic | A: Hard threshold / B: Probability ramp / C: Threshold + variance | C | **Decided: C** (2026-03-28) |
+| Signal equipment | A: None / B: Shaping / C: Shaping with costs | C | **Decided: C** (2026-03-28) |
+| Multiplayer signal visibility | A: Hidden / B: Visual cues / C: Exact numbers | B | **Decided: B** (2026-03-28). Note: requires fabric-layer per-entity glow — same surface as Inhibitor rendering |
 | Signal decay curve | Linear (implemented above) / Exponential | Linear | Decided (rationale above) |
 | Portal extraction signal | Low continuous (0.003/s, implemented above) | Low | Decided |
 | Inhibitor drift model | Signal-proportional (implemented above) | As designed | Open to tuning |
