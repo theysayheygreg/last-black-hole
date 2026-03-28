@@ -651,3 +651,24 @@ The existing suite was still too willing to bypass the exact surfaces that were 
 
 ### Why
 The remote path was still too empty to count as a real competitive run. Server-owned scavengers make the mini-hosted authority feel more like the actual game while keeping the client in a rendering role.
+
+## 2026-03-28 (Week 2 Day 4: Server-Owned Consumables and Pulse Authority)
+
+### scripts/ — Modified
+- **sim-runtime.js** — The sim server now owns remote consumable activation, active effect timers/state, shield absorption at well contact, breach-flare portal spawning, and authoritative pulse cooldown/events. One-shot remote actions are preserved across input frames instead of being stomped by later no-op inputs.
+- **sim-protocol.js** — Extends the input envelope with `consumeSlot` so the client can request authoritative item use directly.
+
+### src/ — Modified
+- **main.js** — Remote runs now sync active effect state and pulse cooldown from authoritative snapshots and play local audio/warning feedback from remote events instead of assuming local item truth.
+- **sim/sim-client.js** — `join()` now actually sends equipped and consumable loadout state, and `sendInput()` can now carry `consumeSlot`.
+- **test-api.js** — Adds lightweight profile seeding and remote input hooks for honest protocol tests.
+
+### tests/ — Modified
+- **remote-authority.js** — Extends remote coverage so the suite now proves authoritative consumable use and authoritative pulse events instead of stopping at movement alone.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+Remote authority was still only half-true. The server could own movement, loot, and scavengers, but the client was still pretending consumables and pulse timing were local. This slice moves those systems over so a remote run is closer to the real game instead of a movement demo wrapped around local gameplay shortcuts.

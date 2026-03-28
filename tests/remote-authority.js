@@ -49,6 +49,19 @@ async function enterRemoteRun(page) {
   await tap(page, "Enter", "Enter");
   await waitForPhase(page, "home");
 
+  await page.evaluate(() => {
+    window.__TEST_API.seedProfileConsumable(0, {
+      name: "Test Shield",
+      category: "artifact",
+      subcategory: "consumable",
+      tier: "rare",
+      value: 300,
+      useEffect: "shieldBurst",
+      useDesc: "test",
+      charges: 1,
+    });
+  });
+
   await tap(page, "KeyE", "e");
   await tap(page, "KeyE", "e");
   await tap(page, "KeyE", "e");
@@ -57,6 +70,47 @@ async function enterRemoteRun(page) {
 
   await tap(page, "Enter", "Enter");
   await waitForPhase(page, "playing", 12000);
+}
+
+async function getEvents(since = 0) {
+  const response = await fetch(`${SIM_URL}/events?since=${since}`);
+  const body = await response.json();
+  return body.events || [];
+}
+
+async function getSnapshot() {
+  const response = await fetch(`${SIM_URL}/snapshot`);
+  return response.json();
+}
+
+async function postInput(body) {
+  const response = await fetch(`${SIM_URL}/input`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
+async function waitForEvents(predicate, { timeout = 5000, interval = 100 } = {}) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const events = await getEvents(0);
+    if (predicate(events)) return events;
+    await sleep(interval);
+  }
+  throw new Error("Timed out waiting for remote events");
+}
+
+async function waitForSnapshotPlayer(predicate, { timeout = 5000, interval = 100 } = {}) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const snapshot = await getSnapshot();
+    const player = snapshot.players?.[0];
+    if (player && predicate(player, snapshot)) return { player, snapshot };
+    await sleep(interval);
+  }
+  throw new Error("Timed out waiting for authoritative snapshot state");
 }
 
 async function run() {
@@ -130,6 +184,52 @@ async function run() {
 
       assert(after.net.remoteTick > before.net.remoteTick, "Expected authoritative tick to advance");
       assert(moved > 0.005, `Expected ship movement under remote authority, got ${moved}`);
+    });
+
+    await runner.run("Remote consumables are consumed by the authoritative sim protocol", async () => {
+      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const seq = Date.now();
+      await postInput({
+        clientId: net.clientId,
+        seq,
+        moveX: 0,
+        moveY: 0,
+        thrust: 0,
+        pulse: false,
+        consumeSlot: 0,
+        timestamp: Date.now(),
+      });
+      const { player } = await waitForSnapshotPlayer(
+        (remotePlayer) => remotePlayer.consumables?.[0] === null && (remotePlayer.effectState?.shieldCharges ?? 0) > 0,
+        { timeout: 5000 }
+      );
+      assert(player.consumables[0] === null, "Expected authoritative consumable slot to empty after use");
+      assert((player.effectState?.shieldCharges ?? 0) > 0, "Expected shield effect to activate authoritatively");
+    });
+
+    await runner.run("Remote pulse is emitted by the authoritative sim protocol", async () => {
+      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const seq = Date.now() + 1;
+      const beforeEvents = await getEvents(0);
+      const baselineSeq = beforeEvents.reduce((max, event) => Math.max(max, event.seq || 0), 0);
+      await postInput({
+        clientId: net.clientId,
+        seq,
+        moveX: 0,
+        moveY: 0,
+        thrust: 0,
+        pulse: true,
+        consumeSlot: null,
+        timestamp: Date.now(),
+      });
+      const events = await waitForEvents(
+        (allEvents) => allEvents.some((event) => event.seq > baselineSeq && event.type === "player.pulse"),
+        { timeout: 5000 }
+      );
+      assert(
+        events.some((event) => event.seq > baselineSeq && event.type === "player.pulse"),
+        "Expected authoritative pulse event"
+      );
     });
 
     const filepath = await screenshot(page, "remote-authority");

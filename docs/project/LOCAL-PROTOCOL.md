@@ -67,6 +67,7 @@ Client input envelope.
   "moveY": -0.1,
   "thrust": 1.0,
   "pulse": false,
+  "consumeSlot": null,
   "timestamp": 1774600000000
 }
 ```
@@ -162,6 +163,13 @@ In the current third slice, the server also owns:
 - the first gameplay-affecting equip effect (`reduceWellPull`)
 - authoritative scavenger state for remote runs
 
+In the current fourth slice, the server also owns:
+
+- remote consumable activation
+- remote pulse cooldown and pulse events
+- shield and time-slow active effect state
+- breach-flare portal spawning from authoritative item use
+
 ## Client ownership
 
 The client owns:
@@ -187,6 +195,6 @@ Keep replacing client-owned world truth with server-owned truth behind the same 
 
 The next useful transfers are:
 
-- consumable effects and active item use
 - coarse authoritative flow sampling
+- broader combat consequences beyond pulse events
 - real join-existing-session / lobby semantics instead of always starting a fresh run from map select

@@ -137,6 +137,12 @@ export function initTestAPI(getState) {
       };
     },
 
+    async sendRemoteInput(message = {}) {
+      const { simClient } = getState();
+      if (!simClient?.enabled) return null;
+      return simClient.sendInput(message);
+    },
+
     createTestProfile(name) {
       const { profileManager } = getState();
       if (!profileManager) return null;
@@ -160,6 +166,20 @@ export function initTestAPI(getState) {
         totalExtractions: p.totalExtractions,
         totalDeaths: p.totalDeaths,
       };
+    },
+
+    seedProfileConsumable(slotIndex, item) {
+      const { profileManager, inventorySystem } = getState();
+      const p = profileManager?.active;
+      if (!p) return false;
+      if (slotIndex < 0 || slotIndex >= p.loadout.consumables.length) return false;
+      const nextItem = item ? { ...item } : null;
+      p.loadout.consumables[slotIndex] = nextItem;
+      profileManager.save();
+      if (inventorySystem) {
+        inventorySystem.consumables[slotIndex] = nextItem ? { ...nextItem } : null;
+      }
+      return true;
     },
 
     // ---- Inventory API ----

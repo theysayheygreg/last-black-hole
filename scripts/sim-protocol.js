@@ -15,6 +15,11 @@ function asNumber(value, fallback = 0) {
 }
 
 function normalizeInputMessage(body = {}) {
+  const consumeSlotValue = body.consumeSlot;
+  const consumeSlot =
+    consumeSlotValue === null || consumeSlotValue === undefined || consumeSlotValue === ""
+      ? null
+      : clamp(Math.floor(asNumber(consumeSlotValue, -1)), 0, 1);
   return {
     type: "input",
     clientId: String(body.clientId || "").trim(),
@@ -23,6 +28,7 @@ function normalizeInputMessage(body = {}) {
     moveY: clamp(asNumber(body.moveY, 0), -1, 1),
     thrust: clamp(asNumber(body.thrust, 0), 0, 1),
     pulse: Boolean(body.pulse),
+    consumeSlot,
     timestamp: asNumber(body.timestamp, Date.now()),
   };
 }
@@ -54,6 +60,7 @@ function createProtocolDescription() {
           moveY: "number[-1..1]",
           thrust: "number[0..1]",
           pulse: "boolean",
+          consumeSlot: "number[0..1] | null",
           timestamp: "unix-ms",
         },
       },

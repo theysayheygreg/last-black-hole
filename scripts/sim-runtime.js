@@ -39,6 +39,14 @@ const SCAVENGER_CONFIG = {
   fleeWellDist: 0.15,
   pickupRadius: 0.08,
 };
+const SERVER_COMBAT = {
+  pulseCooldown: 4.0,
+  pulseEntityForce: 0.5,
+  pulseEntityRadius: 0.3,
+  pulseRecoilForce: 0.4,
+  timeSlowScale: 0.3,
+  timeSlowDuration: 3.0,
+};
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
 const DRIFTER_NAMES = ["Quiet Tide", "Still Wake", "Ash Petal", "Cold Harbor", "Pale Drift", "Dim Lantern"];
 const VULTURE_NAMES = ["Keen Edge", "Rust Claw", "Burnt Lance", "Bitter Claim", "Sharp Debt", "Iron Reap"];
@@ -505,6 +513,7 @@ function createPlayer(clientId, name) {
       moveY: 0,
       thrust: 0,
       pulse: false,
+      consumeSlot: null,
       timestamp: Date.now(),
     },
     status: "alive",
@@ -512,6 +521,11 @@ function createPlayer(clientId, name) {
     equipped: [],
     consumables: [],
     activeEffects: [],
+    effectState: {
+      shieldCharges: 0,
+      timeSlowRemaining: 0,
+      pulseCooldownRemaining: 0,
+    },
   };
 }
 
@@ -569,6 +583,7 @@ function snapshotBody() {
       equipped: player.equipped,
       consumables: player.consumables,
       activeEffects: player.activeEffects,
+      effectState: player.effectState,
     })),
     world: {
       wells: runtime.mapState.wells,
@@ -784,6 +799,16 @@ function applyWellGravity(player, dt) {
     const dist = Math.hypot(dx, dy);
     if (dist < 0.0001) continue;
     if (dist < well.killRadius) {
+      if (player.effectState.shieldCharges > 0) {
+        player.effectState.shieldCharges -= 1;
+        refreshPlayerEffects(player);
+        publishEvent("player.shieldAbsorbed", {
+          clientId: player.clientId,
+          wellId: well.id,
+          wellName: well.name || well.id,
+        });
+        return;
+      }
       player.status = "dead";
       player.vx = 0;
       player.vy = 0;
@@ -849,6 +874,125 @@ function tickExtraction(player) {
       return;
     }
   }
+}
+
+function refreshPlayerEffects(player) {
+  const passive = player.equipped.filter(Boolean).map((item) => item.effect).filter(Boolean);
+  const active = [];
+  if (player.effectState.shieldCharges > 0) active.push("shieldBurst");
+  if (player.effectState.timeSlowRemaining > 0) active.push("timeSlowLocal");
+  player.activeEffects = [...new Set([...passive, ...active])];
+}
+
+function spawnTemporaryPortalNearPlayer(player) {
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 0.15 + Math.random() * 0.1;
+  const portal = {
+    id: `portal-breach-${player.clientId}-${runtime.tick}`,
+    wx: wrapWorld(player.wx + Math.cos(angle) * dist, runtime.session.worldScale),
+    wy: wrapWorld(player.wy + Math.sin(angle) * dist, runtime.session.worldScale),
+    type: "unstable",
+    wave: 0,
+    spawnTime: runtime.simTime,
+    lifespan: 15,
+    alive: true,
+    opacity: 1,
+  };
+  runtime.mapState.portals.push(portal);
+  publishEvent("portal.spawned", {
+    portalId: portal.id,
+    type: portal.type,
+    wx: portal.wx,
+    wy: portal.wy,
+    wave: portal.wave,
+    source: "breachFlare",
+    clientId: player.clientId,
+  });
+}
+
+function applyConsumable(player, slotIndex) {
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= player.consumables.length) return;
+  const item = player.consumables[slotIndex];
+  if (!item || (item.charges || 0) <= 0) return;
+
+  const effectId = item.useEffect;
+  item.charges = Math.max(0, (item.charges || 0) - 1);
+  if (item.charges <= 0) {
+    player.consumables[slotIndex] = null;
+  }
+
+  switch (effectId) {
+    case "shieldBurst":
+      player.effectState.shieldCharges += 1;
+      break;
+    case "timeSlowLocal":
+      player.effectState.timeSlowRemaining = SERVER_COMBAT.timeSlowDuration;
+      break;
+    case "breachFlare":
+      spawnTemporaryPortalNearPlayer(player);
+      break;
+    case "signalPurge":
+      break;
+    default:
+      break;
+  }
+
+  refreshPlayerEffects(player);
+  publishEvent("player.effectUsed", {
+    clientId: player.clientId,
+    effectId,
+    slotIndex,
+  });
+}
+
+function applyPulse(player) {
+  if (player.effectState.pulseCooldownRemaining > 0) return false;
+
+  player.effectState.pulseCooldownRemaining = SERVER_COMBAT.pulseCooldown;
+  player.vx -= player.lastInput.moveX * SERVER_COMBAT.pulseRecoilForce;
+  player.vy -= player.lastInput.moveY * SERVER_COMBAT.pulseRecoilForce;
+
+  for (const other of runtime.players.values()) {
+    if (other.clientId === player.clientId || other.status !== "alive") continue;
+    const dx = worldDisplacement(player.wx, other.wx, runtime.session.worldScale);
+    const dy = worldDisplacement(player.wy, other.wy, runtime.session.worldScale);
+    const dist = Math.hypot(dx, dy);
+    if (dist < SERVER_COMBAT.pulseEntityRadius && dist > 0.001) {
+      const force = SERVER_COMBAT.pulseEntityForce * (1 - dist / SERVER_COMBAT.pulseEntityRadius);
+      other.vx += (dx / dist) * force;
+      other.vy += (dy / dist) * force;
+    }
+  }
+
+  for (const scav of runtime.mapState.scavengers) {
+    if (scav.alive === false) continue;
+    const dx = worldDisplacement(player.wx, scav.wx, runtime.session.worldScale);
+    const dy = worldDisplacement(player.wy, scav.wy, runtime.session.worldScale);
+    const dist = Math.hypot(dx, dy);
+    if (dist < SERVER_COMBAT.pulseEntityRadius && dist > 0.001) {
+      const force = SERVER_COMBAT.pulseEntityForce * (1 - dist / SERVER_COMBAT.pulseEntityRadius);
+      scav.vx += (dx / dist) * force;
+      scav.vy += (dy / dist) * force;
+    }
+  }
+
+  for (const planetoid of runtime.mapState.planetoids) {
+    if (planetoid.alive === false) continue;
+    const dx = worldDisplacement(player.wx, planetoid.wx, runtime.session.worldScale);
+    const dy = worldDisplacement(player.wy, planetoid.wy, runtime.session.worldScale);
+    const dist = Math.hypot(dx, dy);
+    if (dist < SERVER_COMBAT.pulseEntityRadius * 0.5 && dist > 0.001) {
+      planetoid.wx = wrapWorld(planetoid.wx + (dx / dist) * 0.02, runtime.session.worldScale);
+      planetoid.wy = wrapWorld(planetoid.wy + (dy / dist) * 0.02, runtime.session.worldScale);
+    }
+  }
+
+  publishEvent("player.pulse", {
+    clientId: player.clientId,
+    wx: player.wx,
+    wy: player.wy,
+  });
+  return true;
 }
 
 function nearestWell(entity) {
@@ -1050,25 +1194,49 @@ function tickSim() {
   for (const player of runtime.players.values()) {
     if (player.status !== "alive") continue;
 
+    if (player.effectState.pulseCooldownRemaining > 0) {
+      player.effectState.pulseCooldownRemaining = Math.max(0, player.effectState.pulseCooldownRemaining - dt);
+    }
+    if (player.effectState.timeSlowRemaining > 0) {
+      const wasActive = player.effectState.timeSlowRemaining > 0;
+      player.effectState.timeSlowRemaining = Math.max(0, player.effectState.timeSlowRemaining - dt);
+      if (wasActive && player.effectState.timeSlowRemaining <= 0) {
+        refreshPlayerEffects(player);
+        publishEvent("player.effectExpired", {
+          clientId: player.clientId,
+          effectId: "timeSlowLocal",
+        });
+      }
+    }
+
     const input = player.lastInput;
+    if (input.consumeSlot !== null && input.consumeSlot !== undefined) {
+      applyConsumable(player, input.consumeSlot);
+      player.lastInput = { ...player.lastInput, consumeSlot: null };
+    }
+
+    if (input.pulse) {
+      applyPulse(player);
+      player.lastInput = { ...player.lastInput, pulse: false };
+    }
+
+    const playerDt =
+      player.effectState.timeSlowRemaining > 0
+        ? dt * SERVER_COMBAT.timeSlowScale
+        : dt;
     const accel = 2.5 * input.thrust;
-    player.vx += input.moveX * accel * dt;
-    player.vy += input.moveY * accel * dt;
-    applyWellGravity(player, dt);
+    player.vx += input.moveX * accel * playerDt;
+    player.vy += input.moveY * accel * playerDt;
+    applyWellGravity(player, playerDt);
     if (player.status !== "alive") continue;
-    player.vx *= Math.pow(0.92, dt * 15);
-    player.vy *= Math.pow(0.92, dt * 15);
-    player.wx = ((player.wx + player.vx * dt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-    player.wy = ((player.wy + player.vy * dt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    player.vx *= Math.pow(0.92, playerDt * 15);
+    player.vy *= Math.pow(0.92, playerDt * 15);
+    player.wx = ((player.wx + player.vx * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    player.wy = ((player.wy + player.vy * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
 
     tickPlayerPickups(player);
     tickExtraction(player);
     if (player.status !== "alive") continue;
-
-    if (input.pulse) {
-      publishEvent("player.pulse", { clientId: player.clientId, wx: player.wx, wy: player.wy });
-      player.lastInput = { ...player.lastInput, pulse: false };
-    }
   }
 }
 
@@ -1196,7 +1364,7 @@ const server = http.createServer(async (req, res) => {
         player = createPlayer(clientId, body.name);
         player.equipped = cloneLoadoutItems(body.equipped);
         player.consumables = cloneLoadoutItems(body.consumables);
-        player.activeEffects = player.equipped.filter(Boolean).map((item) => item.effect).filter(Boolean);
+        refreshPlayerEffects(player);
         const spawn = findSafeSpawn(runtime.mapState);
         player.wx = spawn.wx;
         player.wy = spawn.wy;
@@ -1206,7 +1374,7 @@ const server = http.createServer(async (req, res) => {
         player.name = String(body.name);
         if (Array.isArray(body.equipped)) {
           player.equipped = cloneLoadoutItems(body.equipped);
-          player.activeEffects = player.equipped.filter(Boolean).map((item) => item.effect).filter(Boolean);
+          refreshPlayerEffects(player);
         }
         if (Array.isArray(body.consumables)) {
           player.consumables = cloneLoadoutItems(body.consumables);
@@ -1233,7 +1401,14 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 200, { ok: true, ignored: true, reason: "stale-seq" });
         return;
       }
-      player.lastInput = message;
+      player.lastInput = {
+        ...message,
+        pulse: Boolean(player.lastInput.pulse || message.pulse),
+        consumeSlot:
+          message.consumeSlot === null || message.consumeSlot === undefined
+            ? player.lastInput.consumeSlot
+            : message.consumeSlot,
+      };
       sendJson(res, 200, { ok: true, acceptedSeq: message.seq, tick: runtime.tick });
       return;
     }

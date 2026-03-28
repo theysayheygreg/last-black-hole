@@ -67,12 +67,14 @@ export class SimClient {
     return body.session;
   }
 
-  async join({ name }) {
+  async join({ name, equipped = null, consumables = null }) {
     return this._json('/join', {
       method: 'POST',
       body: JSON.stringify({
         clientId: this.clientId,
         name,
+        equipped,
+        consumables,
       }),
     });
   }
@@ -87,7 +89,7 @@ export class SimClient {
     return this.latestSnapshot;
   }
 
-  async sendInput({ moveX = 0, moveY = 0, thrust = 0, pulse = false }) {
+  async sendInput({ moveX = 0, moveY = 0, thrust = 0, pulse = false, consumeSlot = null }) {
     this.seq += 1;
     return this._json('/input', {
       method: 'POST',
@@ -98,6 +100,7 @@ export class SimClient {
         moveY,
         thrust,
         pulse,
+        consumeSlot,
         timestamp: Date.now(),
       }),
     });

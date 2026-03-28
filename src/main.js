@@ -94,8 +94,11 @@ let remoteAuthorityActive = false;
 let remoteMapId = null;
 let remoteSnapshot = null;
 let remoteLastAckSeq = 0;
+let remoteLastEventSeq = 0;
 let remoteInputRequestInFlight = false;
 let remoteSnapshotRequestInFlight = false;
+let remotePendingPulse = false;
+let remotePendingConsumeSlot = null;
 let startingMasses = [];
 let mapSelectIndex = 0;
 let currentCameraMode = 'follow';
@@ -562,8 +565,11 @@ function startGame(map) {
   remoteMapId = null;
   remoteSnapshot = null;
   remoteLastAckSeq = 0;
+  remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
   remoteSnapshotRequestInFlight = false;
+  remotePendingPulse = false;
+  remotePendingConsumeSlot = null;
   rendererFixtureActive = false;
   loadScene(map);
 
@@ -647,9 +653,16 @@ function applyRemoteSnapshot(snapshot) {
   if (Array.isArray(localPlayer.consumables)) {
     inventorySystem.consumables = localPlayer.consumables.map((item) => item ? { ...item } : null);
   }
+  shieldActive = Boolean(localPlayer.effectState?.shieldCharges > 0);
+  timeSlowRemaining = Math.max(0, localPlayer.effectState?.timeSlowRemaining ?? 0);
+  combatSystem.playerCooldown = Math.max(0, localPlayer.effectState?.pulseCooldownRemaining ?? 0);
 
   if (inputManager?.facing != null) {
     ship.setFacingDirect(inputManager.facing);
+  }
+
+  if (Array.isArray(snapshot.recentEvents)) {
+    applyRemoteEvents(snapshot.recentEvents);
   }
 
   if (gamePhase === 'dead' && localPlayer.status === 'alive') {
@@ -665,6 +678,54 @@ function applyRemoteSnapshot(snapshot) {
     escapeTimer = 0;
     freezeRunEnd(simState);
     ship.setThrust(false);
+  }
+}
+
+function applyRemoteEvents(events) {
+  for (const event of events) {
+    if (!event || event.seq <= remoteLastEventSeq) continue;
+    remoteLastEventSeq = event.seq;
+    const payload = event.payload || {};
+    const isLocal = payload.clientId && payload.clientId === simClient?.clientId;
+
+    switch (event.type) {
+      case 'player.pulse':
+        audioEngine.playEvent('pulse', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        break;
+      case 'player.effectUsed':
+        if (!isLocal) break;
+        if (payload.effectId === 'shieldBurst') {
+          showWarning('shield active — survive one well contact', 'rgba(100, 200, 255, 0.95)', 3000);
+          audioEngine.playEvent('shieldActivate');
+        } else if (payload.effectId === 'timeSlowLocal') {
+          showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
+          audioEngine.playEvent('timeSlow');
+        } else if (payload.effectId === 'signalPurge') {
+          showWarning('signal purged', 'rgba(100, 255, 180, 0.95)', 2000);
+        } else if (payload.effectId === 'breachFlare') {
+          showWarning('breach flare — portal for 15s', 'rgba(255, 200, 100, 0.95)', 3000);
+          audioEngine.playEvent('breachFlare');
+        }
+        break;
+      case 'player.effectExpired':
+        if (isLocal && payload.effectId === 'timeSlowLocal') {
+          audioEngine.playEvent('timeSlowEnd');
+        }
+        break;
+      case 'player.shieldAbsorbed':
+        if (isLocal) {
+          showWarning('shield absorbed!', 'rgba(100, 200, 255, 0.95)', 2000);
+          audioEngine.playEvent('shieldAbsorb');
+        }
+        break;
+      case 'player.died':
+        if (isLocal) {
+          audioEngine.playEvent('death');
+        }
+        break;
+      default:
+        break;
+    }
   }
 }
 
@@ -768,8 +829,11 @@ async function startRemoteGame(mapEntry) {
   remoteMapId = mapEntry.id;
   remoteSnapshot = null;
   remoteLastAckSeq = 0;
+  remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
   remoteSnapshotRequestInFlight = false;
+  remotePendingPulse = false;
+  remotePendingConsumeSlot = null;
 
   loadScene(mapEntry.map);
   currentSignature = rollSignature(mapEntry.map.worldScale);
@@ -825,6 +889,9 @@ async function restartRemoteSession() {
   remoteAuthorityActive = true;
   remoteInputRequestInFlight = false;
   remoteSnapshotRequestInFlight = false;
+  remoteLastEventSeq = 0;
+  remotePendingPulse = false;
+  remotePendingConsumeSlot = null;
   applyRemoteSnapshot(snapshot);
   gamePhase = 'playing';
   deathTimer = 0;
@@ -1271,26 +1338,37 @@ function gameLoop(now) {
     }
 
     if (remoteAuthorityActive) {
-      inventoryOpen = false;
-      if (inventoryNow && !_prevInventory) {
-        showWarning('inventory stays local-only until server loadout lands', 'rgba(255, 180, 120, 0.95)', 2000);
-      }
-
       inputManager.applyToShip(ship);
 
       if (gamePhase === 'playing') {
+        if (!inventoryOpen && consumable1Now && !_prevConsumable1) {
+          remotePendingConsumeSlot = 0;
+        } else if (!inventoryOpen && consumable2Now && !_prevConsumable2) {
+          remotePendingConsumeSlot = 1;
+        }
+        if (pulseNow && !_prevPulse) {
+          remotePendingPulse = true;
+        }
+
         if (!remoteInputRequestInFlight) {
           const facing = inputManager.facing ?? ship.facing;
           const thrust = inputManager.thrustIntensity;
           const moveMag = thrust > 0 ? 1 : 0;
+          const sentPulse = remotePendingPulse;
+          const sentConsumeSlot = remotePendingConsumeSlot;
           remoteInputRequestInFlight = true;
           void simClient.sendInput({
             moveX: Math.cos(facing) * moveMag,
             moveY: Math.sin(facing) * moveMag,
             thrust,
-            pulse: pulseNow && !_prevPulse,
+            pulse: sentPulse,
+            consumeSlot: sentConsumeSlot,
           }).then((response) => {
             remoteLastAckSeq = response.acceptedSeq ?? remoteLastAckSeq;
+            if (sentPulse) remotePendingPulse = false;
+            if (sentConsumeSlot !== null && remotePendingConsumeSlot === sentConsumeSlot) {
+              remotePendingConsumeSlot = null;
+            }
           }).catch((err) => {
             console.error('[LBH] remote input failed:', err);
           }).finally(() => {
