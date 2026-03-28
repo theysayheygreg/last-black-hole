@@ -605,3 +605,14 @@ The remote path needed to stop being just a movement demo. This slice moves real
 
 ### Why
 LBH now has two browser-testing layers with different jobs. Puppeteer remains the deterministic test path. Chrome DevTools MCP is the live browser inspection and perf-debug layer for renderer work, menu/meta flow debugging, and remote-authority inspection.
+
+## 2026-03-28 (Week 2 Day 4: Honest Menu and Remote Test Coverage)
+
+### tests/ — Modified
+- **helpers.js** — Adds dedicated sim-server helpers, explicit key dispatch, and generic wait support so browser-path tests can drive the real UI more reliably.
+- **run-all.js** — Adds new `MetaFlow` and `RemoteAuthority` suites to the default deterministic harness.
+- **meta-flow.js** — Adds real title → profileSelect → home → mapSelect → playing coverage without using `triggerRestart()`.
+- **remote-authority.js** — Adds a real browser smoke that starts a dedicated sim server, launches the client with `?simServer=...`, and verifies authoritative snapshots and movement.
+
+### Why
+The existing suite was still too willing to bypass the exact surfaces that were changing most: the profile/home flow and the remote-authority path. These new suites keep Puppeteer as deterministic truth, but stop pretending helper shortcuts are enough on their own.

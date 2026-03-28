@@ -30,6 +30,11 @@ export function initTestAPI(getState) {
       return fps;
     },
 
+    getGamePhase() {
+      const { gamePhase } = getState();
+      return gamePhase;
+    },
+
     getWells() {
       const { wellSystem, camX, camY, canvasWidth, canvasHeight } = getState();
       if (!wellSystem) return [];

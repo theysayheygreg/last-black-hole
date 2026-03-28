@@ -12,6 +12,7 @@ const TMP = path.join(ROOT, "tmp");
 const PID_FILE = path.join(TMP, "harness-server.pid");
 const META_FILE = path.join(TMP, "harness-server.json");
 const SERVER_SCRIPT = path.join(ROOT, "scripts", "static-server.js");
+const SIM_SERVER_SCRIPT = path.join(ROOT, "scripts", "sim-server.js");
 
 let serverProcess = null;
 
@@ -86,6 +87,10 @@ function stopServer() {
  * @param {string} htmlFile - filename relative to project root (e.g. "index.html" or "index-a.html")
  */
 async function launchGame(htmlFile = "index.html") {
+  let target = htmlFile;
+  if (!String(target).startsWith("http://") && !String(target).startsWith("https://")) {
+    target = `http://localhost:${PORT}/${String(target).replace(/^\//, "")}`;
+  }
   const browser = await puppeteer.launch({
     headless: "new",
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -97,13 +102,75 @@ async function launchGame(htmlFile = "index.html") {
   const errors = [];
   page.on("pageerror", (err) => errors.push(err.message));
 
-  const url = `http://localhost:${PORT}/${htmlFile}`;
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 10000 });
+  await page.goto(target, { waitUntil: "domcontentloaded", timeout: 10000 });
 
   // Wait a moment for WebGL init
   await new Promise((r) => setTimeout(r, 2000));
 
   return { browser, page, errors };
+}
+
+async function startSimServer(port = 8788) {
+  fs.mkdirSync(TMP, { recursive: true });
+  const args = [SIM_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
+  return new Promise((resolve, reject) => {
+    const proc = spawn(process.execPath, args, {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (data) => { stdout += data.toString(); });
+    proc.stderr.on("data", (data) => { stderr += data.toString(); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve({ port, stdout, stderr });
+      else reject(new Error(`Failed to start sim server on ${port}: ${stderr || stdout || `exit ${code}`}`));
+    });
+  });
+}
+
+async function stopSimServer(port = 8788) {
+  const args = [SIM_SERVER_SCRIPT, "stop", "--host", "127.0.0.1", "--port", String(port)];
+  return new Promise((resolve, reject) => {
+    const proc = spawn(process.execPath, args, {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (data) => { stdout += data.toString(); });
+    proc.stderr.on("data", (data) => { stderr += data.toString(); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve({ port, stdout, stderr });
+      else reject(new Error(`Failed to stop sim server on ${port}: ${stderr || stdout || `exit ${code}`}`));
+    });
+  });
+}
+
+async function dispatchKey(page, code, key, holdMs = 60) {
+  await page.evaluate(({ code, key }) => {
+    window.dispatchEvent(new KeyboardEvent("keydown", {
+      code,
+      key,
+      bubbles: true,
+    }));
+  }, { code, key });
+  await new Promise((r) => setTimeout(r, holdMs));
+  await page.evaluate(({ code, key }) => {
+    window.dispatchEvent(new KeyboardEvent("keyup", {
+      code,
+      key,
+      bubbles: true,
+    }));
+  }, { code, key });
+}
+
+async function waitFor(page, predicate, options = {}, ...args) {
+  const timeout = options.timeout ?? 5000;
+  const polling = options.polling ?? 50;
+  return page.waitForFunction(predicate, { timeout, polling }, ...args);
 }
 
 /**
@@ -152,9 +219,13 @@ function assert(condition, message) {
 module.exports = {
   startServer,
   stopServer,
+  startSimServer,
+  stopSimServer,
   launchGame,
   screenshot,
   TestRunner,
   assert,
+  dispatchKey,
+  waitFor,
   PORT,
 };
