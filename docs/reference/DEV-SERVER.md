@@ -32,6 +32,27 @@ The harness commands remain:
 
 Those start and stop their own transient server automatically.
 
+## Browser Tooling
+
+LBH now includes project-scoped Chrome DevTools MCP config in:
+
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/.mcp.json`
+
+Use it as a live browser inspection tool, not as a replacement for the test suite.
+
+The practical split is:
+
+- `npm test` / `npm run test:renderer` = deterministic truth
+- Chrome DevTools MCP = visual inspection, console inspection, perf traces, interactive debugging
+
+When using Chrome DevTools MCP:
+
+- prefer the dev server on `http://127.0.0.1:8080/` for normal playtesting
+- use the harness server on `http://127.0.0.1:8719/` only when reproducing a test-specific path
+- keep the sim server on `http://127.0.0.1:8787/` if you are inspecting remote-authority mode
+
+This keeps the tools from stomping on each other.
+
 ## PID Files
 
 LBH writes process metadata to `tmp/`:
@@ -85,4 +106,5 @@ For day-to-day work:
 
 - use `npm run dev` for local playtesting
 - use `npm test` or `npm run test:renderer` for transient harness work
+- use Chrome DevTools MCP for live browser debugging on top of those paths
 - do not guess at ports or restart random `python3 -m http.server` processes

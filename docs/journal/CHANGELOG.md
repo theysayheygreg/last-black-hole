@@ -593,3 +593,15 @@ The architecture stopped being only a separate server process. The browser now h
 
 ### Why
 The remote path needed to stop being just a movement demo. This slice moves real run authority over: portals now exist on the server, extraction is authoritative, loot pickup is authoritative, and remote runs now keep or lose cargo based on server truth.
+
+## 2026-03-28 (Week 2 Day 4: Chrome DevTools MCP Integrated Into Workflow)
+
+### project root — Existing config adopted
+- **.mcp.json** — Project-scoped Chrome DevTools MCP server config is now treated as part of the LBH toolchain.
+
+### docs/reference/ — Modified
+- **DEV-SERVER.md** — Documents how Chrome DevTools MCP fits alongside the dev server, harness server, and sim server.
+- **RENDERER-HARNESS.md** — Clarifies that MCP complements the deterministic harness instead of replacing it.
+
+### Why
+LBH now has two browser-testing layers with different jobs. Puppeteer remains the deterministic test path. Chrome DevTools MCP is the live browser inspection and perf-debug layer for renderer work, menu/meta flow debugging, and remote-authority inspection.

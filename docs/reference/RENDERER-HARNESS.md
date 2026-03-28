@@ -40,3 +40,15 @@ Use it to answer:
 - is the pre-ASCII image strong before glyph quantization
 
 Do not use the normal smoke or flow screenshots as renderer truth. Those are still health checks, not visual evaluation.
+
+## Chrome DevTools MCP relationship
+
+Keep this harness.
+
+Chrome DevTools MCP does not replace it. The useful split is:
+
+- renderer harness = deterministic captures on known fixtures
+- Chrome DevTools MCP = live inspection of the actual running game, console, perf traces, and screenshots while tuning
+
+Use the harness when you need a repeatable before/after comparison.
+Use Chrome DevTools MCP when you need to inspect the live scene, chase a visual bug, or understand why a change feels wrong in motion.
