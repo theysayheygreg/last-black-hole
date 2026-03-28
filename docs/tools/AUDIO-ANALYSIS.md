@@ -256,15 +256,112 @@ The server definition would go in Claude Code's MCP config:
 }
 ```
 
+### Approach 0: Claude App (simplest, works now)
+
+Opus 4.6 can listen to audio natively in claude.ai — the model is multimodal. Claude Code can't pipe audio in, but the Claude app can. Two windows, one listening, one coding.
+
+**The workflow:**
+
+#### Step 1: Prepare the request in claude.ai
+
+Drop these into a claude.ai conversation:
+- The reference audio file (.wav, .mp3)
+- The current synthesis code for the sound you want to change
+- The structured prompt below
+
+#### Step 2: Use this prompt template
+
+```
+I'm building a game with Web Audio synthesis (no sample files). I need you to
+analyze this reference audio and output a structured recipe I can give to my
+coding agent.
+
+Here's the reference audio: [attach file]
+
+Here's my current synthesis code for this sound:
+[paste the _playXxx method from audio.js]
+
+Please output:
+
+1. ANALYSIS — what you hear in the reference:
+   - Pitch: starting Hz, ending Hz, sweep direction
+   - Envelope: attack (ms), sustain, decay (ms), release
+   - Timbre: waveform character (sine-like, square-like, saw-like, noise)
+   - Effects: echo/reverb, filtering (bright/dark), distortion
+   - Rhythm: single hit, arpeggio, tremolo, other pattern
+   - Overall feel in 2-3 words
+
+2. RECIPE — Web Audio parameters to match:
+   ```json
+   {
+     "oscillator": { "type": "square", "dutyCycle": 0.25 },
+     "pitch": { "startHz": 523, "endHz": 784, "curve": "linear" },
+     "envelope": {
+       "attackS": 0.02,
+       "peakGain": 0.4,
+       "decayS": 0.15,
+       "sustainGain": 0,
+       "releaseS": 0.1
+     },
+     "filter": { "type": "lowpass", "freqHz": 4500, "Q": 0.7 },
+     "noise": { "mix": 0, "type": "bandpass", "freqHz": 800 },
+     "echo": { "delayS": 0.07, "feedback": 0.3, "wetMix": 0.2 }
+   }
+   ```
+
+3. DIFF — what to change in my current code:
+   - List specific parameter changes (old value → new value)
+   - Note any structural changes needed (add filter, change waveform, etc.)
+
+Output the recipe as clean JSON so my coding agent can parse it directly.
+Do NOT output JavaScript code — just the recipe. My other agent writes the code.
+```
+
+#### Step 3: Bring the recipe to Claude Code
+
+Paste the JSON recipe from claude.ai into this conversation:
+
+```
+Here's an audio recipe from analysis of [reference name]:
+[paste JSON]
+
+Apply this to _playLootChime() in audio.js.
+```
+
+Claude Code translates the recipe to Web Audio code changes without needing to hear the audio.
+
+#### Step 4: Iterate
+
+Play the game, listen to the result. If it's not right:
+- Go back to claude.ai: "the synthesis sounds too [bright/thin/slow]. The reference has more [warmth/punch/decay]. Here's what I hear is different: [describe]. Update the recipe."
+- Bring updated recipe back to Claude Code
+
+#### Tips for good results
+
+- **Be specific about what's wrong**: "too bright" is better than "not right"
+- **Name the gap**: "attack is good but decay is too short" narrows the iteration
+- **Reference games by name**: "like the Zelda chest open sound" gives claude.ai a huge head start even without the audio file
+- **One sound at a time**: analyzing a full SFX sheet in one prompt gets noisy. Do them individually.
+- **Include the SNES context**: mention "we're targeting SNES/16-bit character with LPF + bit crush + echo" so the recipe accounts for our signal chain
+
+#### Why this works
+
+The model is the same (Opus 4.6) in both places. claude.ai-Claude can hear the audio and understand synthesis. Claude Code-Claude can write the code. The JSON recipe is the bridge — structured enough to be unambiguous, human-readable enough to sanity-check.
+
+The key insight: **don't ask claude.ai to write code**. Ask it to write a *recipe*. Code is Claude Code's job. Recipes transfer between contexts cleanly.
+
+---
+
 ## When to Use What
 
 | Scenario | Approach |
 |----------|----------|
 | Quick reference ("sounds like X") | Describe it in words — fastest |
-| Specific sound to match | Spectrogram image (Approach 1) |
-| Precise parameter matching | Structured analysis (Approach 2) |
-| Iterative sound design session | MCP server (Approach 3) |
-| Music composition | Approach 3 + MIDI output tools |
+| Have an audio file to match | Claude App (Approach 0) — drop it in, get a recipe |
+| Can't use claude.ai / want offline | Spectrogram image (Approach 1) |
+| Batch analysis of SFX library | Python script (Approach 2) |
+| Full iterative session with preview | MCP server (Approach 3) — future |
+| Music composition | Approach 0 + 3 combined |
 
 ## Dependencies
 
