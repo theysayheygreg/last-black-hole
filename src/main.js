@@ -2340,17 +2340,21 @@ function gameLoop(now) {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
 
+    const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.8)';
+    ctx.fillRect(0, 0, w, h);
+    drawScanlines(ctx, w, h, 0.03);
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
 
+    drawTerminalFrame(ctx, cx - 180, cy - 150, 360, 260, null, 'rgba(100, 150, 255, 0.2)');
+
     // Title
-    ctx.fillStyle = '#88aaff';
-    ctx.font = 'bold 36px monospace';
-    ctx.fillText('PAUSED', cx, cy - 120);
+    ctx.fillStyle = 'rgba(140, 175, 255, 0.95)';
+    ctx.font = 'bold 28px monospace';
+    ctx.fillText('PAUSED', cx, cy - 110);
 
     // Menu buttons
     const buttons = ['return to game', 'exit to title'];
@@ -2359,31 +2363,31 @@ function gameLoop(now) {
       const selected = i === pauseMenuSelection;
 
       if (selected) {
-        ctx.fillStyle = 'rgba(80, 120, 255, 0.15)';
-        ctx.fillRect(cx - 160, y - 18, 320, 36);
+        ctx.fillStyle = 'rgba(60, 80, 140, 0.3)';
+        ctx.fillRect(cx - 150, y - 16, 300, 34);
         ctx.strokeStyle = 'rgba(100, 150, 255, 0.5)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(cx - 160, y - 18, 320, 36);
+        ctx.strokeRect(cx - 150, y - 16, 300, 34);
       }
 
-      ctx.fillStyle = selected ? '#ffffff' : 'rgba(150, 150, 180, 0.6)';
-      ctx.font = selected ? 'bold 20px monospace' : '18px monospace';
+      ctx.fillStyle = selected ? 'rgba(240, 245, 255, 1)' : 'rgba(160, 170, 195, 0.65)';
+      ctx.font = selected ? 'bold 18px monospace' : '16px monospace';
       ctx.fillText(buttons[i], cx, y + 6);
     }
 
     // Signature info on pause screen
     if (currentSignature) {
-      ctx.fillStyle = 'rgba(120, 150, 170, 0.6)';
-      ctx.font = '13px monospace';
-      ctx.fillText(currentSignature.name, cx, cy + 60);
-      ctx.fillStyle = 'rgba(100, 130, 150, 0.4)';
-      ctx.font = '11px monospace';
-      ctx.fillText(currentSignature.mechanical, cx, cy + 78);
+      ctx.fillStyle = 'rgba(140, 170, 190, 0.7)';
+      ctx.font = '12px monospace';
+      ctx.fillText(currentSignature.name, cx, cy + 55);
+      ctx.fillStyle = 'rgba(120, 150, 170, 0.5)';
+      ctx.font = '10px monospace';
+      ctx.fillText(currentSignature.mechanical, cx, cy + 72);
     }
 
     // Controls reference (compact)
-    ctx.font = '12px monospace';
-    ctx.fillStyle = 'rgba(130, 130, 170, 0.5)';
+    ctx.font = '11px monospace';
+    ctx.fillStyle = 'rgba(150, 155, 185, 0.55)';
     ctx.fillText('steer: stick / arrows   thrust: R2 / space   brake: L2 / ctrl   pulse: □ / E', cx, cy + 110);
 
     // Navigation hint
