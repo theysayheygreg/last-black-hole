@@ -626,6 +626,7 @@ function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
   remoteSnapshot = snapshot;
   simState.runElapsedTime = snapshot.simTime ?? simState.runElapsedTime;
+  syncRemoteWorldState(snapshot.world);
 
   const localPlayer = snapshot.players?.find((player) => player.clientId === simClient?.clientId);
   if (!localPlayer) return;
@@ -646,6 +647,59 @@ function applyRemoteSnapshot(snapshot) {
     deathTimer = 0;
     freezeRunEnd(simState);
     ship.setThrust(false);
+  }
+}
+
+function syncRemoteWorldState(world) {
+  if (!world) return;
+
+  if (Array.isArray(world.wells)) {
+    for (let i = 0; i < Math.min(world.wells.length, wellSystem.wells.length); i++) {
+      const remote = world.wells[i];
+      const local = wellSystem.wells[i];
+      local.wx = remote.wx;
+      local.wy = remote.wy;
+      local.mass = remote.mass;
+      if (remote.killRadius) local.killRadius = remote.killRadius;
+      if (remote.name) local.name = remote.name;
+    }
+  }
+
+  if (Array.isArray(world.stars)) {
+    for (let i = 0; i < Math.min(world.stars.length, starSystem.stars.length); i++) {
+      const remote = world.stars[i];
+      const local = starSystem.stars[i];
+      local.wx = remote.wx;
+      local.wy = remote.wy;
+      local.mass = remote.mass ?? local.mass;
+      local.alive = remote.alive !== false;
+      if (remote.name) local.name = remote.name;
+    }
+  }
+
+  if (Array.isArray(world.wrecks)) {
+    for (let i = 0; i < Math.min(world.wrecks.length, wreckSystem.wrecks.length); i++) {
+      const remote = world.wrecks[i];
+      const local = wreckSystem.wrecks[i];
+      local.wx = remote.wx;
+      local.wy = remote.wy;
+      local.alive = remote.alive !== false;
+      local.looted = Boolean(remote.looted);
+      if (remote.name) local.name = remote.name;
+    }
+  }
+
+  if (Array.isArray(world.planetoids)) {
+    for (let i = 0; i < Math.min(world.planetoids.length, planetoidSystem.planetoids.length); i++) {
+      const remote = world.planetoids[i];
+      const local = planetoidSystem.planetoids[i];
+      local.wx = remote.wx;
+      local.wy = remote.wy;
+      local.vx = remote.vx ?? local.vx;
+      local.vy = remote.vy ?? local.vy;
+      local.alive = remote.alive !== false;
+      if (remote.name) local.name = remote.name;
+    }
   }
 }
 
@@ -895,6 +949,7 @@ function gameLoop(now) {
       frameDt: dt,
       totalTime,
       inMenu: inMenu || remoteVisualMode,
+      visualOnly: remoteVisualMode,
     });
 
   } // end paused check
