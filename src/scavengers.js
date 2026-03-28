@@ -560,16 +560,19 @@ export class ScavengerSystem {
     const t = scav.deathTimer / duration; // 0→1 over the spiral
     const well = scav.deathWell;
 
-    // Spiral inward: radius shrinks, angle increases
+    // Death spiral: scavenger orbits inward toward the well's center.
+    // Radius shrinks linearly (1-t), angle accelerates (4 + t*12 rad/s)
+    // to simulate gravitational acceleration — spins faster as it gets closer.
+    // Visual effect: smooth inward spiral ending at the well's exact center.
     const startDist = worldDistance(scav.deathStartWX, scav.deathStartWY, well.wx, well.wy);
     const radius = startDist * (1 - t);
-    scav.deathAngle += (4 + t * 12) * dt; // accelerating spin
+    scav.deathAngle += (4 + t * 12) * dt; // 4 rad/s at start → 16 rad/s at end
 
     scav.wx = wrapWorld(well.wx + Math.cos(scav.deathAngle) * radius);
     scav.wy = wrapWorld(well.wy + Math.sin(scav.deathAngle) * radius);
 
-    // Spin the ship body fast
-    scav.facing += 15 * dt;
+    // Body spins rapidly during death — visual distress signal
+    scav.facing += 15 * dt; // ~2.4 full rotations/s
   }
 
   // ---- Bullet wake (mirrors ship.js wake code) ----

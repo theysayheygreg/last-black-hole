@@ -189,12 +189,18 @@ export class PlanetoidSystem {
       const dirX = p.vx / speed;
       const dirY = p.vy / speed;
 
-      // --- Fluid injection (UV-scaled for world size) ---
+      // --- Fluid injection: comet creates a surfable wake in the fluid ---
+      // Three effects simulate a body moving through the medium:
+      // 1. Bow shock: pressure wave AHEAD of the comet (pushes fluid aside)
+      // 2. Wake vortex: twin counter-rotating eddies BEHIND (creates turbulence)
+      // 3. Density trail: visible glow behind the comet (cosmetic only)
+      // Together these create currents the player can surf — the design intent
+      // is that comets are moving "wave machines" that make the fluid interesting.
       const [fu, fv] = worldToFluidUV(p.wx, p.wy);
       const s = uvScale();
       const s2 = s * s;
 
-      // Bow shock
+      // Bow shock: velocity splat offset ahead of the comet along its motion
       const bowDist = 0.008 * s;
       const bowFU = fu + dirX * bowDist;
       const bowFV = fv - dirY * bowDist;
@@ -207,7 +213,8 @@ export class PlanetoidSystem {
         cfg.density * 1.0
       );
 
-      // Wake vortex
+      // Wake vortex: two opposing splats perpendicular to motion, behind the comet.
+      // Creates counter-rotating eddies that pull fluid inward — surfable current.
       const behindFU = fu - dirX * 0.005 * s;
       const behindFV = fv + dirY * 0.005 * s;
       const perpX = -dirY;

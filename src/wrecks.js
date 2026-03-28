@@ -115,7 +115,10 @@ export class WreckSystem {
       if (wreck.vx !== 0 || wreck.vy !== 0) {
         wreck.wx = wrapWorld(wreck.wx + wreck.vx * dt);
         wreck.wy = wrapWorld(wreck.wy + wreck.vy * dt);
-        // Drag: time-based decay. Higher for drift stability, lower for ejection snap.
+        // Drag: time-based exponential decay.
+        // Drift mode (1.5): lower drag so wrecks sustain slow drift toward wells.
+        // Ejection mode (2.45): higher drag so dropped items decelerate quickly and
+        // stop near where they were dropped (responsive "I put it here" feel).
         const dragRate = cfg.driftEnabled ? (cfg.driftDrag ?? 1.5) : 2.45;
         const dragFactor = Math.exp(-dragRate * dt);
         wreck.vx *= dragFactor;
@@ -256,12 +259,14 @@ export class WreckSystem {
         ctx.fillStyle = `rgba(255, 255, 220, ${pulse})`;
         ctx.fill();
       } else if (wreck.type === 'debris') {
-        // Debris: scattered dots (dull orange)
+        // Debris: scattered dots (dull orange) — looks like loose floating junk
         const baseAlpha = 0.5 + 0.2 * Math.sin(totalTime * 1.5 + wreck.wx * 8);
         const dotColor = `rgba(180, 140, 80, ${baseAlpha})`;
         const dotCount = 3 + Math.floor(r / 5);
         for (let i = 0; i < dotCount; i++) {
-          // Deterministic scatter based on wreck position + index
+          // Deterministic scatter: use wreck position as seed so dots don't
+          // jump around between frames. Prime multipliers (137, 251, 73) spread
+          // the hash space to avoid clustering.
           const seed = wreck.wx * 137 + wreck.wy * 251 + i * 73;
           const angle = (seed % 628) / 100;
           const dist = (seed % 100) / 100 * r * 0.8 + 2;

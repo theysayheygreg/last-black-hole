@@ -45,36 +45,47 @@ export class AudioEngine {
     // SNES signal chain: duckGain → snesFilter → crusher → echo → master
     this.duckGain = this.ctx.createGain();
 
-    // BRR compression LPF (~11kHz)
+    // SNES SPC700 emulation — three stacked processing stages:
+    //
+    // Stage 1: BRR compression roll-off (11kHz)
+    // The SNES stored all samples in BRR (4-bit ADPCM), which loses high-frequency
+    // detail. This LPF simulates that lossy compression warmth.
     this._brrFilter = this.ctx.createBiquadFilter();
     this._brrFilter.type = 'lowpass';
-    this._brrFilter.frequency.value = 11000;
-    this._brrFilter.Q.value = 0.5;
+    this._brrFilter.frequency.value = 11000;  // effective BRR bandwidth
+    this._brrFilter.Q.value = 0.5;           // gentle slope, no resonance peak
 
-    // Gaussian interpolation LPF (~9.5kHz)
+    // Stage 2: Gaussian interpolation roll-off (9.5kHz)
+    // The SPC700 DSP uses 4-point Gaussian interpolation when resampling,
+    // which acts as an additional soft LPF. Stacking two LPFs gives the
+    // characteristic "warm but muffled" SNES sound.
     this._gaussFilter = this.ctx.createBiquadFilter();
     this._gaussFilter.type = 'lowpass';
-    this._gaussFilter.frequency.value = 9500;
-    this._gaussFilter.Q.value = 0.707;
+    this._gaussFilter.frequency.value = 9500;  // SNES effective bandwidth ~10kHz
+    this._gaussFilter.Q.value = 0.707;        // Butterworth (maximally flat)
 
-    // Bit crush waveshaper (~12-bit effective)
+    // Stage 3: Bit crush (12-bit effective via WaveShaperNode staircase)
+    // BRR compression reduces effective bit depth from 16 to ~12 bits.
+    // This adds subtle quantization artifacts without AudioWorklet overhead.
     this._crusher = this.ctx.createWaveShaper();
     this._crusher.curve = this._makeBitCrushCurve(12);
-    this._crusher.oversample = 'none';
+    this._crusher.oversample = 'none';  // don't smooth the steps — we want the crunch
 
-    // SNES echo: feedback delay with darkening filter
+    // SPC700 echo — 8-tap FIR approximated as feedback delay with darkening filter.
+    // Real SNES echo had max ~240ms delay with configurable FIR coefficients.
+    // Most games used low-pass-heavy coefficients, making each echo repeat darker.
     this._echoDelay = this.ctx.createDelay(0.25);
-    this._echoDelay.delayTime.value = 0.07;
+    this._echoDelay.delayTime.value = 0.07;  // 70ms — common SNES echo timing
     this._echoFeedback = this.ctx.createGain();
-    this._echoFeedback.gain.value = 0.3;
+    this._echoFeedback.gain.value = 0.3;     // echo decay per repeat (~-10dB)
     this._echoLPF = this.ctx.createBiquadFilter();
     this._echoLPF.type = 'lowpass';
-    this._echoLPF.frequency.value = 5000;
+    this._echoLPF.frequency.value = 5000;    // each echo repeat loses treble (darkening)
     this._echoLPF.Q.value = 0.5;
     this._echoWet = this.ctx.createGain();
-    this._echoWet.gain.value = 0.2;
+    this._echoWet.gain.value = 0.2;          // 20% wet — SNES echo was usually subtle
     this._echoDry = this.ctx.createGain();
-    this._echoDry.gain.value = 0.8;
+    this._echoDry.gain.value = 0.8;          // 80% dry signal
 
     // Wire the chain
     this.duckGain.connect(this._brrFilter);
@@ -284,6 +295,15 @@ export class AudioEngine {
 
   // ---- Synthesis helpers ----
 
+  /**
+   * Soft-clipping distortion curve (attempt to approximate tube-like saturation).
+   * amount 0 = clean passthrough, 1 = harsh clipping.
+   * Formula: modified arctangent soft-clip where k controls drive amount.
+   * The (3+k) numerator and (PI + k*|x|) denominator create a curve that
+   * asymptotically approaches ±1 as k increases — gentle at low drive,
+   * harsh at high drive. The degree-to-radian conversion (×20×PI/180)
+   * scales the input range for musical-sounding saturation.
+   */
   _makeDistortionCurve(amount) {
     const samples = 256;
     const curve = new Float32Array(samples);

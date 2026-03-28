@@ -545,7 +545,13 @@ function startGame(map) {
     scavengerSystem.spawn(sx, sy, archetype);
   }
 
-  // Apply upgrade multipliers from profile
+  // Apply upgrade multipliers from profile to CONFIG at run start.
+  // We mutate CONFIG directly (not ship properties) so all systems that read CONFIG
+  // see the upgraded values. CONFIG reverts to defaults via revertSceneOverrides()
+  // at the start of the next loadScene().
+  //
+  // Per-rank multipliers: 15% thrust per rank, 10% coupling, -12% drag (lower = less friction).
+  // These are intentionally modest — rank 3 gives ~45% thrust boost, not 2×.
   const prof = profileManager.active;
   if (prof) {
     const thrustMult = 1 + prof.upgrades.thrust * 0.15;
@@ -601,7 +607,10 @@ function updateCamera(dt) {
 
 // ---- Game Loop ----
 
-// Button edge detection (only trigger on press, not hold)
+// Button edge detection — stores previous frame's button state so we can detect
+// the moment a button goes from unpressed→pressed (rising edge). Without this,
+// holding a button would fire the action every frame instead of once.
+// Pattern: if (buttonNow && !_prevButton) { /* fires once */ }
 let _prevConfirm = false;
 let _prevPause = false;
 let _prevBack = false;
@@ -703,6 +712,8 @@ function gameLoop(now) {
 
   const rawDt = (now - lastFrameTime) / 1000;
   lastFrameTime = now;
+  // Cap dt to 33ms (30fps floor) — prevents physics explosion after tab-away or long GC pause.
+  // Without this, a 2s pause would inject dt=2.0, launching the ship across the map.
   const dt = Math.min(rawDt, 1 / 30) * timeScale;
   totalTime += dt;
 

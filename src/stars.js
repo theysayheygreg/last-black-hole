@@ -14,46 +14,53 @@ import { inversePowerForce, applyForceToShip } from './physics.js';
 
 // ---- Star type definitions ----
 
+// Star type visual and physics tuning.
+// Each type creates a distinct gameplay feel:
+//   - sizeMult: halo + ray length multiplier (1.0 = base 60+20×mass px halo)
+//   - pushMult: radiation push force multiplier (higher = harder to approach)
+//   - rayCount: number of rotating light rays (more = softer/fuller look)
+//   - raySpinMult: ray rotation speed multiplier (1.0 = CONFIG.stars.raySpinRate)
+//   - coreDensity: [R,G,B] multipliers for visual density splat (fluid glow color)
 const STAR_TYPES = {
   yellowDwarf: {
-    color: [255, 240, 180],      // warm yellow
+    color: [255, 240, 180],      // warm yellow — baseline, most common
     haloColor: [255, 230, 160],
-    sizeMult: 1.0,
-    pushMult: 1.0,
+    sizeMult: 1.0,               // standard size
+    pushMult: 1.0,               // standard push — easy to navigate around
     rayCount: 4,
     raySpinMult: 1.0,
     coreColor: [255, 255, 240],
-    coreDensity: [1.0, 0.95, 0.6],
+    coreDensity: [1.0, 0.95, 0.6],  // warm white glow
   },
   redGiant: {
-    color: [255, 120, 60],       // deep red-orange
+    color: [255, 120, 60],       // deep red-orange — large but gentle
     haloColor: [255, 100, 40],
-    sizeMult: 1.8,
-    pushMult: 0.6,
-    rayCount: 6,
-    raySpinMult: 0.4,            // slow, stately rotation
+    sizeMult: 1.8,               // 1.8× bigger halo — dominates the screen
+    pushMult: 0.6,               // weaker push — size isn't danger, proximity is
+    rayCount: 6,                 // more rays = softer, more diffuse appearance
+    raySpinMult: 0.4,            // slow rotation — stately, ancient feel
     coreColor: [255, 180, 100],
-    coreDensity: [1.0, 0.5, 0.2],
+    coreDensity: [1.0, 0.5, 0.2],  // orange-red glow
   },
   whiteDwarf: {
-    color: [220, 230, 255],      // blue-white
+    color: [220, 230, 255],      // blue-white — compact and intense
     haloColor: [200, 210, 255],
-    sizeMult: 0.5,
-    pushMult: 2.0,
+    sizeMult: 0.5,               // tiny — half the normal size
+    pushMult: 2.0,               // 2× push — hard to get close, sharp edges
     rayCount: 4,
-    raySpinMult: 2.0,            // fast spin
+    raySpinMult: 2.0,            // fast spin — energetic, dangerous feel
     coreColor: [240, 245, 255],
-    coreDensity: [0.8, 0.9, 1.0],
+    coreDensity: [0.8, 0.9, 1.0],  // blue-white glow
   },
   neutronStar: {
-    color: [180, 255, 255],      // pale cyan
+    color: [180, 255, 255],      // pale cyan — exotic, rare
     haloColor: [160, 240, 255],
-    sizeMult: 0.3,
-    pushMult: 3.0,
-    rayCount: 2,
-    raySpinMult: 4.0,            // very fast (pulsar)
+    sizeMult: 0.3,               // very tiny — collapsed remnant
+    pushMult: 3.0,               // 3× push — approaching is dangerous
+    rayCount: 2,                 // only 2 beams — pulsar effect
+    raySpinMult: 4.0,            // 4× spin — rapid pulsar rotation
     coreColor: [200, 255, 255],
-    coreDensity: [0.6, 1.0, 1.0],
+    coreDensity: [0.6, 1.0, 1.0],  // cyan glow
   },
 };
 
@@ -89,7 +96,9 @@ class Star {
     this.name = generateStarName(this.type);
     this.alive = true;
 
-    // Slow drift — random direction, very slow
+    // Stars drift very slowly in a random direction (0.001-0.003 world-units/s).
+    // At this speed, a star takes ~500s to drift 1 world-unit — long enough that
+    // consumption by a well is rare (~1 per long match) and feels like a major event.
     const driftSpeed = 0.001 + Math.random() * 0.002;
     const driftAngle = Math.random() * Math.PI * 2;
     this.driftVX = Math.cos(driftAngle) * driftSpeed;
@@ -149,10 +158,14 @@ export class StarSystem {
           const dist = worldDistance(star.wx, star.wy, well.wx, well.wy);
           if (dist < well.killRadius) {
             star.alive = false;
-            well.mass += star.mass * 0.5;  // significant mass transfer
+            // Significant mass transfer — a star falling in is a major event.
+            // 50% of star mass converts to well growth (the rest is "radiated away").
+            well.mass += star.mass * 0.5;
             well.updateKillRadius();
             if (waveRings) {
-              waveRings.spawn(well.wx, well.wy, star.mass * 3);  // large wave
+              // 3× star mass = very large wave. This is the biggest wave event
+              // in the game — a dramatic shockwave visible across the map.
+              waveRings.spawn(well.wx, well.wy, star.mass * 3);
             }
             this._consumptionEvents.push({
               wx: well.wx, wy: well.wy,
