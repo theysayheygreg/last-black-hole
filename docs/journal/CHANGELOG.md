@@ -524,3 +524,19 @@ The recent shader and coordinate fixes were specifically about UV/world conversi
 
 ### Why
 The architecture discussion stopped being hypothetical. LBH is multiplayer-first with solo fallback, and the immediate next move is not public hosting or a port. It is a private authoritative split between Greg's machines plus the first stable client/server protocol that later hosting can reuse.
+
+## 2026-03-27 (Week 2 Day 3: First Local Sim Server Slice)
+
+### scripts/ — New Files
+- **sim-protocol.js** — Freezes the first plain-data local protocol constants and the input envelope normalization for the mini-hosted sim path.
+- **sim-runtime.js** — Adds a separate authoritative sim server shell with a fixed tick, in-memory session state, snapshots, events, and input ingestion over HTTP.
+- **sim-server.js** — Adds PID-managed start/stop/status/restart control for the local sim server, parallel to the existing dev server tooling.
+
+### docs/project/ — New Files
+- **LOCAL-PROTOCOL.md** — Documents the first client/server contract: join, input, snapshot, events, and session start.
+
+### package.json — Modified
+- Adds `npm run sim`, `sim:stop`, `sim:status`, and `sim:restart`.
+
+### Why
+The sim/client split needed to stop being only a design note. This first slice gives LBH a separate authoritative process shell and a concrete local protocol without pretending the full gameplay sim already lives there.

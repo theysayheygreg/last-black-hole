@@ -854,3 +854,5 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 3. The next real milestone is private remote play between Greg's machines with a local-rendering client and an authoritative sim, plus the first stable protocol that hosted sessions can later reuse.
 **Door status:** Open — the hosted shape and eventual runtime port remain future decisions, but the immediate next batch is now defined.
+
+| Mar 27 | First implementation slice lands for the network direction: a separate local sim-server shell, PID-managed control commands, and a first plain-data protocol (`join`, `input`, `snapshot`, `events`, `session/start`). It is still a stub authority, but the process boundary and message shapes now exist in code. |
