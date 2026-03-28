@@ -635,6 +635,19 @@ function applyRemoteSnapshot(snapshot) {
   ship.vx = localPlayer.vx;
   ship.vy = localPlayer.vy;
 
+  if (Array.isArray(localPlayer.cargo)) {
+    inventorySystem.cargo = new Array(inventorySystem.cargo.length).fill(null);
+    for (let i = 0; i < Math.min(localPlayer.cargo.length, inventorySystem.cargo.length); i++) {
+      inventorySystem.cargo[i] = localPlayer.cargo[i] ? { ...localPlayer.cargo[i] } : null;
+    }
+  }
+  if (Array.isArray(localPlayer.equipped)) {
+    inventorySystem.equipped = localPlayer.equipped.map((item) => item ? { ...item } : null);
+  }
+  if (Array.isArray(localPlayer.consumables)) {
+    inventorySystem.consumables = localPlayer.consumables.map((item) => item ? { ...item } : null);
+  }
+
   if (inputManager?.facing != null) {
     ship.setFacingDirect(inputManager.facing);
   }
@@ -645,6 +658,11 @@ function applyRemoteSnapshot(snapshot) {
   } else if (gamePhase === 'playing' && localPlayer.status === 'dead') {
     gamePhase = 'dead';
     deathTimer = 0;
+    freezeRunEnd(simState);
+    ship.setThrust(false);
+  } else if (gamePhase === 'playing' && localPlayer.status === 'escaped') {
+    gamePhase = 'escaped';
+    escapeTimer = 0;
     freezeRunEnd(simState);
     ship.setThrust(false);
   }
@@ -701,6 +719,35 @@ function syncRemoteWorldState(world) {
       if (remote.name) local.name = remote.name;
     }
   }
+
+  if (Array.isArray(world.portals)) {
+    portalSystem.portals = world.portals.map((remote) => ({
+      wx: remote.wx,
+      wy: remote.wy,
+      type: remote.type ?? 'standard',
+      wave: remote.wave ?? 0,
+      spawnTime: remote.spawnTime ?? 0,
+      lifespan: remote.lifespan ?? 90,
+      alive: remote.alive !== false,
+      opacity: remote.opacity ?? 1,
+      timeLeft(runTime) {
+        return Math.max(0, (this.spawnTime + this.lifespan) - runTime);
+      },
+      isWarning(runTime) {
+        return this.alive && this.timeLeft(runTime) < 15;
+      },
+      isCritical(runTime) {
+        return this.alive && this.timeLeft(runTime) < 5;
+      },
+      getCaptureRadius() {
+        const base = CONFIG.portals.captureRadius;
+        if (this.type === 'unstable') return base * 0.5;
+        if (this.type === 'rift') return base * 1.8;
+        return base;
+      },
+    }));
+    portalSystem._nextWaveIndex = world.nextPortalWaveIndex ?? portalSystem._nextWaveIndex;
+  }
 }
 
 async function startRemoteGame(mapEntry) {
@@ -736,7 +783,11 @@ async function startRemoteGame(mapEntry) {
     worldScale: mapEntry.map.worldScale,
     maxPlayers: 4,
   });
-  await simClient.join({ name: profileManager.active?.name || 'Pilot' });
+  await simClient.join({
+    name: profileManager.active?.name || 'Pilot',
+    equipped: inventorySystem.equipped,
+    consumables: inventorySystem.consumables,
+  });
   const snapshot = await simClient.pollSnapshot(true);
   applyRemoteSnapshot(snapshot);
 }
@@ -758,7 +809,11 @@ async function restartRemoteSession() {
   if (!simClient?.enabled || !remoteMapId) return;
   const mapEntry = getPlayableMapEntryById(remoteMapId);
   await simClient.resetSession();
-  await simClient.join({ name: profileManager.active?.name || 'Pilot' });
+  await simClient.join({
+    name: profileManager.active?.name || 'Pilot',
+    equipped: inventorySystem.equipped,
+    consumables: inventorySystem.consumables,
+  });
   const snapshot = await simClient.pollSnapshot(true);
   remoteAuthorityActive = true;
   remoteInputRequestInFlight = false;

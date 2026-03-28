@@ -153,6 +153,14 @@ In the current second slice, the browser client already:
 - sends thrust/pulse input across the boundary
 - renders locally from authoritative snapshots instead of local player truth
 
+In the current third slice, the server also owns:
+
+- portal wave spawning and expiry
+- extraction capture checks
+- cargo pickup from wrecks
+- cargo loss on death
+- the first gameplay-affecting equip effect (`reduceWellPull`)
+
 ## Client ownership
 
 The client owns:
@@ -178,8 +186,7 @@ Keep replacing client-owned world truth with server-owned truth behind the same 
 
 The next useful transfers are:
 
-- portals and run timer
-- pickups and wreck looting
 - AI/scavenger state
+- consumable effects and active item use
 - coarse authoritative flow sampling
 - real join-existing-session / lobby semantics instead of always starting a fresh run from map select

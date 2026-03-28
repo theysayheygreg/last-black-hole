@@ -578,3 +578,18 @@ The first server shell was too small to prove much. This pass moves real run aut
 
 ### Why
 The architecture stopped being only a separate server process. The browser now has a real remote-authority path: it can start a run on the sim server, join it, send input across the boundary, and render locally from authoritative snapshots.
+
+## 2026-03-28 (Week 2 Day 4: Server-Owned Run Progression and Loot)
+
+### scripts/ — Modified
+- **sim-runtime.js** — The sim server now owns portal waves, portal expiry, extraction checks, wreck pickup, cargo truth, cargo loss on death, well growth, and the first gameplay-affecting equip effect (`reduceWellPull`).
+
+### src/ — Modified
+- **main.js** — The remote client now syncs portal snapshots and authoritative cargo/loadout state from the server, and transitions into the escaped run state from authoritative status instead of local extraction checks.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md** — Records that the server now owns remote run progression beyond movement alone.
+- **NETWORK-ARCHITECTURE-PLAN.md** — Updates the current progress section so it matches the new server-owned run systems.
+
+### Why
+The remote path needed to stop being just a movement demo. This slice moves real run authority over: portals now exist on the server, extraction is authoritative, loot pickup is authoritative, and remote runs now keep or lose cargo based on server truth.
