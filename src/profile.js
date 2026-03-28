@@ -83,18 +83,20 @@ export const UPGRADE_TRACKS = {
   vault:    { label: 'vault',    desc: 'storage capacity',           statKey: null,               multPerRank: 0 },
 };
 
-// EM costs per rank (all tracks except vault)
+// EM costs per rank (all tracks except vault).
+// Balance target: rank 1 after 1-2 extractions, rank 3 after 5-8 per track,
+// full max (all tracks) after 25-30 extractions.
 const RANK_COSTS = [
-  { em: 200,  component: null },        // rank 1: EM only
-  { em: 500,  component: 'uncommon' },  // rank 2: needs uncommon component
-  { em: 1200, component: 'rare' },      // rank 3: needs rare component
+  { em: 250,  component: null },        // rank 1: EM only — achievable quickly
+  { em: 800,  component: 'uncommon' },  // rank 2: meaningful investment
+  { em: 2000, component: 'rare' },      // rank 3: serious commitment + rare drop
 ];
 
-// Vault track has its own cost schedule (EM only, expensive)
+// Vault track has its own cost schedule (EM only, steep — this is the EM sink)
 const VAULT_RANK_COSTS = [
-  { em: 500 },
-  { em: 1500 },
-  { em: 4000 },
+  { em: 800 },
+  { em: 2500 },
+  { em: 6000 },
 ];
 
 export const MAX_RANK = 3;

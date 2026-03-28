@@ -63,7 +63,7 @@ export const MAP = {
     { x: 6.5, y: 8.5, mass: 0.4, orbitalDir: -1, type: 'yellowDwarf' },
   ],
   wrecks: [
-    // Surface tier — safe zones
+    // Surface tier — safe zones, scattered around edges
     { x: 1.0, y: 2.0, type: 'derelict', tier: 1, size: 'medium' },
     { x: 2.5, y: 0.5, type: 'derelict', tier: 1, size: 'large' },
     { x: 7.5, y: 0.5, type: 'debris', tier: 1, size: 'medium' },
@@ -74,7 +74,11 @@ export const MAP = {
     { x: 4.0, y: 0.5, type: 'derelict', tier: 1, size: 'small' },
     { x: 6.0, y: 9.5, type: 'derelict', tier: 1, size: 'medium' },
     { x: 0.5, y: 4.0, type: 'debris', tier: 1, size: 'medium' },
-    // Deep tier — orbital paths
+    { x: 9.5, y: 7.0, type: 'derelict', tier: 1, size: 'small' },
+    { x: 0.5, y: 0.5, type: 'debris', tier: 1, size: 'medium' },
+    { x: 9.5, y: 0.5, type: 'derelict', tier: 1, size: 'small' },
+    { x: 0.5, y: 9.5, type: 'derelict', tier: 1, size: 'medium' },
+    // Deep tier — orbital paths, between wells
     { x: 4.0, y: 3.0, type: 'derelict', tier: 2, size: 'medium' },
     { x: 6.0, y: 3.0, type: 'derelict', tier: 2, size: 'large' },
     { x: 6.0, y: 7.0, type: 'derelict', tier: 2, size: 'medium' },
@@ -83,23 +87,42 @@ export const MAP = {
     { x: 8.0, y: 6.0, type: 'derelict', tier: 2, size: 'small' },
     { x: 3.5, y: 6.0, type: 'derelict', tier: 2, size: 'medium' },
     { x: 6.5, y: 4.0, type: 'derelict', tier: 2, size: 'large' },
-    // Core tier — near wells, high risk
+    { x: 1.5, y: 6.0, type: 'debris', tier: 2, size: 'medium' },
+    { x: 8.5, y: 4.0, type: 'derelict', tier: 2, size: 'medium' },
+    { x: 5.0, y: 6.5, type: 'derelict', tier: 2, size: 'small' },
+    { x: 5.0, y: 3.8, type: 'debris', tier: 2, size: 'medium' },
+    { x: 2.5, y: 5.5, type: 'derelict', tier: 2, size: 'large' },
+    { x: 7.5, y: 4.5, type: 'derelict', tier: 2, size: 'medium' },
+    // Core tier — near wells, high risk, high reward
     { x: 5.3, y: 5.3, type: 'vault', tier: 3, size: 'small' },
     { x: 3.3, y: 3.3, type: 'vault', tier: 3, size: 'small' },
     { x: 6.8, y: 7.2, type: 'derelict', tier: 3, size: 'medium' },
     { x: 3.2, y: 7.2, type: 'vault', tier: 3, size: 'small' },
     { x: 7.2, y: 3.2, type: 'derelict', tier: 3, size: 'medium' },
     { x: 5.0, y: 3.2, type: 'derelict', tier: 3, size: 'small' },
+    { x: 4.8, y: 4.8, type: 'vault', tier: 3, size: 'small' },
+    { x: 7.0, y: 5.0, type: 'derelict', tier: 3, size: 'large' },
+    { x: 3.0, y: 5.0, type: 'derelict', tier: 3, size: 'medium' },
+    { x: 8.5, y: 8.5, type: 'vault', tier: 3, size: 'small' },
   ],
   // portals spawn via wave system, not map data
   planetoids: [
+    // Inner wells — most active orbital zone
+    { type: 'orbit', wellIndex: 0 },
     { type: 'orbit', wellIndex: 0 },
     { type: 'orbit', wellIndex: 1 },
     { type: 'orbit', wellIndex: 2 },
     { type: 'orbit', wellIndex: 3 },
     { type: 'orbit', wellIndex: 4 },
+    // Mid wells
+    { type: 'orbit', wellIndex: 5 },
+    { type: 'orbit', wellIndex: 8 },
+    { type: 'orbit', wellIndex: 12 },
+    // Figure-8 traffic between wells
     { type: 'figure8', wellA: 0, wellB: 1 },
     { type: 'figure8', wellA: 0, wellB: 2 },
     { type: 'figure8', wellA: 1, wellB: 4 },
+    { type: 'figure8', wellA: 2, wellB: 3 },
+    { type: 'figure8', wellA: 3, wellB: 4 },
   ],
 };

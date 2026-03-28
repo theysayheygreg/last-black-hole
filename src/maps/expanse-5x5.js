@@ -31,25 +31,38 @@ export const MAP = {
     { x: 4.0, y: 4.5, mass: 0.4, orbitalDir: -1, type: 'neutronStar' },
   ],
   wrecks: [
+    // Surface tier — safe zones
     { x: 2.0, y: 0.5, type: 'derelict', tier: 1, size: 'medium' },
     { x: 4.0, y: 1.0, type: 'derelict', tier: 1, size: 'large' },
     { x: 0.5, y: 2.0, type: 'debris', tier: 1, size: 'medium' },
+    { x: 0.3, y: 0.3, type: 'derelict', tier: 1, size: 'small' },
+    { x: 4.7, y: 0.3, type: 'derelict', tier: 1, size: 'medium' },
+    { x: 0.4, y: 4.6, type: 'debris', tier: 1, size: 'medium' },
+    // Deep tier — orbital paths
     { x: 3.0, y: 2.0, type: 'derelict', tier: 2, size: 'medium' },
     { x: 1.5, y: 2.5, type: 'derelict', tier: 2, size: 'small' },
     { x: 4.0, y: 3.0, type: 'derelict', tier: 2, size: 'large' },
-    { x: 2.0, y: 4.0, type: 'debris', tier: 1, size: 'medium' },
+    { x: 2.0, y: 4.0, type: 'debris', tier: 2, size: 'medium' },
     { x: 3.5, y: 4.5, type: 'derelict', tier: 2, size: 'medium' },
     { x: 1.0, y: 4.5, type: 'derelict', tier: 1, size: 'small' },
+    { x: 1.2, y: 1.2, type: 'derelict', tier: 2, size: 'medium' },
+    { x: 3.8, y: 3.8, type: 'derelict', tier: 2, size: 'large' },
+    { x: 4.5, y: 2.0, type: 'debris', tier: 2, size: 'medium' },
+    // Core tier — near wells, high risk
     { x: 2.5, y: 2.8, type: 'vault', tier: 3, size: 'small' },
     { x: 3.8, y: 1.8, type: 'vault', tier: 3, size: 'small' },
     { x: 4.5, y: 4.0, type: 'derelict', tier: 3, size: 'medium' },
+    { x: 1.5, y: 1.3, type: 'vault', tier: 3, size: 'small' },
+    { x: 3.2, y: 3.2, type: 'derelict', tier: 3, size: 'medium' },
   ],
   // portals spawn via wave system, not map data
   planetoids: [
     { type: 'orbit', wellIndex: 0 },
     { type: 'orbit', wellIndex: 3 },
     { type: 'orbit', wellIndex: 7 },
+    { type: 'orbit', wellIndex: 5 },
     { type: 'figure8', wellA: 0, wellB: 2 },
     { type: 'figure8', wellA: 1, wellB: 3 },
+    { type: 'figure8', wellA: 4, wellB: 6 },
   ],
 };
