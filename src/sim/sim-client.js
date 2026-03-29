@@ -105,4 +105,17 @@ export class SimClient {
       }),
     });
   }
+
+  async inventoryAction({ action, cargoSlot = -1, equipSlot = -1, consumableSlot = -1 }) {
+    return this._json('/inventory/action', {
+      method: 'POST',
+      body: JSON.stringify({
+        clientId: this.clientId,
+        action,
+        cargoSlot,
+        equipSlot,
+        consumableSlot,
+      }),
+    });
+  }
 }

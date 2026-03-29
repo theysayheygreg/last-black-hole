@@ -50,6 +50,15 @@ async function enterRemoteRun(page) {
   await waitForPhase(page, "home");
 
   await page.evaluate(() => {
+    window.__TEST_API.seedProfileEquipped(0, {
+      name: "Pull Dampener",
+      category: "artifact",
+      subcategory: "equippable",
+      tier: "rare",
+      value: 450,
+      effect: "reduceWellPull",
+      effectDesc: "test",
+    });
     window.__TEST_API.seedProfileConsumable(0, {
       name: "Test Shield",
       category: "artifact",
@@ -92,6 +101,15 @@ async function postInput(body) {
   return response.json();
 }
 
+async function postInventoryAction(body) {
+  const response = await fetch(`${SIM_URL}/inventory/action`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 async function waitForEvents(predicate, { timeout = 5000, interval = 100 } = {}) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -121,6 +139,7 @@ async function run() {
   await startSimServer(SIM_PORT);
 
   let browser, page;
+  let browser2, page2;
 
   try {
     ({ browser, page } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
@@ -232,9 +251,61 @@ async function run() {
       );
     });
 
+    await runner.run("Remote inventory actions mutate authoritative cargo and loadout", async () => {
+      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+
+      let result = await postInventoryAction({
+        clientId: net.clientId,
+        action: "unequip",
+        equipSlot: 0,
+      });
+      assert(result.ok === true, "Expected unequip action to succeed");
+
+      let snapshotState = await waitForSnapshotPlayer(
+        (remotePlayer) => !remotePlayer.equipped?.[0] && remotePlayer.cargo?.some((item) => item?.name === "Pull Dampener"),
+        { timeout: 5000 }
+      );
+      assert(snapshotState.player.cargo.some((item) => item?.name === "Pull Dampener"), "Expected unequipped artifact in cargo");
+
+      const cargoSlot = snapshotState.player.cargo.findIndex((item) => item?.name === "Pull Dampener");
+      result = await postInventoryAction({
+        clientId: net.clientId,
+        action: "equipCargo",
+        cargoSlot,
+        equipSlot: 1,
+      });
+      assert(result.ok === true, "Expected equipCargo action to succeed");
+
+      snapshotState = await waitForSnapshotPlayer(
+        (remotePlayer) => remotePlayer.equipped?.[1]?.name === "Pull Dampener",
+        { timeout: 5000 }
+      );
+      assert(snapshotState.player.equipped[1]?.name === "Pull Dampener", "Expected authoritative re-equip into slot 1");
+    });
+
+    await runner.run("Second remote client joins existing authoritative session", async () => {
+      ({ browser: browser2, page: page2 } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
+      await bootstrapCleanRemotePage(page2);
+      await enterRemoteRun(page2);
+
+      await waitFor(page2, () => {
+        const net = window.__TEST_API.getNetworkState();
+        return net.simEnabled && net.remoteAuthorityActive && typeof net.remoteTick === "number";
+      }, { timeout: 12000 });
+
+      const snapshot = await getSnapshot();
+      assert(snapshot.players.length >= 2, `Expected at least 2 remote players, got ${snapshot.players.length}`);
+      assert(snapshot.session.mapId === "shallows", `Expected shared session on shallows, got ${snapshot.session.mapId}`);
+
+      await browser2.close();
+      browser2 = null;
+      page2 = null;
+    });
+
     const filepath = await screenshot(page, "remote-authority");
     console.log(`\n  Screenshot: ${filepath}`);
   } finally {
+    if (browser2) await browser2.close();
     if (browser) await browser.close();
     await stopSimServer(SIM_PORT);
     stopServer();

@@ -27,6 +27,9 @@
 ### Why
 Remote runs were still lying about one core gameplay surface: opening the inventory and changing your loadout still mutated only local UI state. This slice moves those actions over the network boundary and fixes the server inventory model so it matches the client’s real eight-slot cargo semantics.
 
+### Follow-through
+- Remote clients on the same map now join the running authoritative session instead of blindly resetting it. The remote-authority suite now proves that second-client path.
+
 ## 2026-03-28 Design Day — Signal, Color, Inhibitor, Entity Hierarchy, AI Players
 
 Major design session. No code changes — Codex running server architecture work in parallel (moving gameplay systems server-side, authoritative snapshots, client sync). All design work stays design-only until hard tech lands.

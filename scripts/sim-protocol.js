@@ -33,6 +33,18 @@ function normalizeInputMessage(body = {}) {
   };
 }
 
+function normalizeInventoryAction(body = {}) {
+  const action = String(body.action || "").trim();
+  return {
+    type: "inventoryAction",
+    clientId: String(body.clientId || "").trim(),
+    action,
+    cargoSlot: Math.max(-1, Math.floor(asNumber(body.cargoSlot, -1))),
+    equipSlot: Math.max(-1, Math.floor(asNumber(body.equipSlot, -1))),
+    consumableSlot: Math.max(-1, Math.floor(asNumber(body.consumableSlot, -1))),
+  };
+}
+
 function createProtocolDescription() {
   return {
     version: PROTOCOL_VERSION,
@@ -64,6 +76,17 @@ function createProtocolDescription() {
           timestamp: "unix-ms",
         },
       },
+      inventoryAction: {
+        direction: "client->server",
+        body: {
+          type: "inventoryAction",
+          clientId: "string",
+          action: "'dropCargo' | 'equipCargo' | 'loadConsumable' | 'unequip' | 'unloadConsumable'",
+          cargoSlot: "number | -1",
+          equipSlot: "number | -1",
+          consumableSlot: "number | -1",
+        },
+      },
       snapshot: {
         direction: "server->client",
         body: {
@@ -88,5 +111,6 @@ module.exports = {
   DEFAULT_WORLD_SCALE,
   DEFAULT_MAX_PLAYERS,
   normalizeInputMessage,
+  normalizeInventoryAction,
   createProtocolDescription,
 };

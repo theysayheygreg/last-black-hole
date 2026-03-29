@@ -182,6 +182,20 @@ export function initTestAPI(getState) {
       return true;
     },
 
+    seedProfileEquipped(slotIndex, item) {
+      const { profileManager, inventorySystem } = getState();
+      const p = profileManager?.active;
+      if (!p) return false;
+      if (slotIndex < 0 || slotIndex >= p.loadout.equipped.length) return false;
+      const nextItem = item ? { ...item } : null;
+      p.loadout.equipped[slotIndex] = nextItem;
+      profileManager.save();
+      if (inventorySystem) {
+        inventorySystem.equipped[slotIndex] = nextItem ? { ...nextItem } : null;
+      }
+      return true;
+    },
+
     // ---- Inventory API ----
 
     getInventory() {

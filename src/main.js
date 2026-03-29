@@ -24,7 +24,7 @@ import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, updateHUD, showWarning, setDropCallback,
-         resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm } from './hud.js';
+         resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
@@ -97,6 +97,7 @@ let remoteLastAckSeq = 0;
 let remoteLastEventSeq = 0;
 let remoteInputRequestInFlight = false;
 let remoteSnapshotRequestInFlight = false;
+let remoteInventoryRequestInFlight = false;
 let remotePendingPulse = false;
 let remotePendingConsumeSlot = null;
 let startingMasses = [];
@@ -568,6 +569,7 @@ function startGame(map) {
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
   remoteSnapshotRequestInFlight = false;
+  remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
   rendererFixtureActive = false;
@@ -723,10 +725,38 @@ function applyRemoteEvents(events) {
           audioEngine.playEvent('death');
         }
         break;
+      case 'player.inventoryAction':
+        if (!isLocal || !payload.itemName) break;
+        if (payload.action === 'dropCargo') {
+          showWarning(`dropped ${payload.itemName}`, 'rgba(255, 150, 80, 0.8)', 1500);
+        } else if (payload.action === 'equipCargo') {
+          showWarning(`equipped ${payload.itemName}`, 'rgba(255, 220, 120, 0.9)', 1400);
+        } else if (payload.action === 'loadConsumable') {
+          showWarning(`loaded ${payload.itemName}`, 'rgba(160, 220, 255, 0.9)', 1400);
+        } else if (payload.action === 'unequip' || payload.action === 'unloadConsumable') {
+          showWarning(`${payload.itemName} to cargo`, 'rgba(180, 180, 200, 0.9)', 1400);
+        }
+        break;
       default:
         break;
     }
   }
+}
+
+function applyRemoteInventoryAction(action) {
+  if (!remoteAuthorityActive || !simClient?.enabled || !action || remoteInventoryRequestInFlight) return;
+  remoteInventoryRequestInFlight = true;
+  void simClient.inventoryAction(action)
+    .then((response) => {
+      if (response?.snapshot) applyRemoteSnapshot(response.snapshot);
+    })
+    .catch((err) => {
+      console.error('[LBH] remote inventory action failed:', err);
+      showWarning('inventory action failed', 'rgba(255, 110, 110, 0.95)', 1800);
+    })
+    .finally(() => {
+      remoteInventoryRequestInFlight = false;
+    });
 }
 
 function syncRemoteWorldState(world) {
@@ -832,6 +862,7 @@ async function startRemoteGame(mapEntry) {
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
   remoteSnapshotRequestInFlight = false;
+  remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
 
@@ -849,7 +880,7 @@ async function startRemoteGame(mapEntry) {
     inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
   }
 
-  await simClient.startSession({
+  await simClient.ensureSession({
     mapId: mapEntry.id,
     worldScale: mapEntry.map.worldScale,
     maxPlayers: 4,
@@ -889,6 +920,7 @@ async function restartRemoteSession() {
   remoteAuthorityActive = true;
   remoteInputRequestInFlight = false;
   remoteSnapshotRequestInFlight = false;
+  remoteInventoryRequestInFlight = false;
   remoteLastEventSeq = 0;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
@@ -1341,6 +1373,22 @@ function gameLoop(now) {
       inputManager.applyToShip(ship);
 
       if (gamePhase === 'playing') {
+        if (inventoryNow && !_prevInventory) {
+          inventoryOpen = !inventoryOpen;
+          if (inventoryOpen) resetInventoryCursor();
+        }
+        if (inventoryOpen && backNow && !_prevBack) {
+          inventoryOpen = false;
+        }
+        if (inventoryOpen) {
+          if (upNow && !_prevUp) inventoryCursorUp();
+          if (downNow && !_prevDown) inventoryCursorDown();
+          if (confirmNow && !_prevConfirm) {
+            const action = getInventoryActionAtCursor(inventorySystem);
+            if (action) applyRemoteInventoryAction(action);
+          }
+        }
+
         if (!inventoryOpen && consumable1Now && !_prevConsumable1) {
           remotePendingConsumeSlot = 0;
         } else if (!inventoryOpen && consumable2Now && !_prevConsumable2) {

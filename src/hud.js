@@ -344,6 +344,60 @@ export function inventoryCursorDown() {
   _invCursor = (_invCursor + 1) % _invTotalSlots;
 }
 
+export function getInventoryActionAtCursor(inv) {
+  if (!inv) return null;
+
+  if (_invCursor < 8) {
+    const item = inv.cargo[_invCursor];
+    if (!item) return null;
+
+    if (item.subcategory === 'equippable') {
+      const openSlot = inv.equipped.indexOf(null);
+      return {
+        type: 'equipCargo',
+        cargoSlot: _invCursor,
+        equipSlot: openSlot !== -1 ? openSlot : 0,
+      };
+    }
+
+    if (item.subcategory === 'consumable') {
+      const openSlot = inv.consumables.indexOf(null);
+      return {
+        type: 'loadConsumable',
+        cargoSlot: _invCursor,
+        consumableSlot: openSlot !== -1 ? openSlot : 0,
+      };
+    }
+
+    return {
+      type: 'dropCargo',
+      cargoSlot: _invCursor,
+    };
+  }
+
+  if (_invCursor < 10) {
+    const equipIdx = _invCursor - 8;
+    const item = inv.equipped[equipIdx];
+    if (item && !inv.cargoFull) {
+      return {
+        type: 'unequip',
+        equipSlot: equipIdx,
+      };
+    }
+    return null;
+  }
+
+  const consumableIdx = _invCursor - 10;
+  const item = inv.consumables[consumableIdx];
+  if (item && !inv.cargoFull) {
+    return {
+      type: 'unloadConsumable',
+      consumableSlot: consumableIdx,
+    };
+  }
+  return null;
+}
+
 /**
  * Confirm action on current cursor slot.
  * Cargo equippable → equip. Cargo consumable → load hotbar. Cargo other → drop.
@@ -352,51 +406,40 @@ export function inventoryCursorDown() {
  */
 export function inventoryConfirm(inv) {
   if (!inv) return;
+  const action = getInventoryActionAtCursor(inv);
+  if (!action) return;
 
-  if (_invCursor < 8) {
-    const item = inv.cargo[_invCursor];
+  if (action.type === 'equipCargo') {
+    const item = inv.removeFromCargo(action.cargoSlot);
     if (!item) return;
+    const prev = inv.equip(action.equipSlot, item);
+    if (prev) inv.cargo[action.cargoSlot] = prev;
+    return;
+  }
 
-    if (item.subcategory === 'equippable') {
-      // Auto-equip to first open slot, or swap with slot 0
-      const openSlot = inv.equipped.indexOf(null);
-      if (openSlot !== -1) {
-        inv.removeFromCargo(_invCursor);
-        inv.equip(openSlot, item);
-      } else {
-        // Both slots full — swap with slot 0
-        const prev = inv.equip(0, item);
-        inv.cargo[_invCursor] = prev;  // put old equip in the cargo slot
-      }
-    } else if (item.subcategory === 'consumable') {
-      // Auto-load to first open hotbar slot, or swap with slot 0
-      const openSlot = inv.consumables.indexOf(null);
-      if (openSlot !== -1) {
-        inv.removeFromCargo(_invCursor);
-        inv.loadConsumable(openSlot, item);
-      } else {
-        // Both slots full — swap with slot 0
-        const prev = inv.loadConsumable(0, item);
-        inv.cargo[_invCursor] = prev;
-      }
-    } else {
-      // Salvage/component/dataCore — drop
-      if (_dropCallback) _dropCallback(_invCursor);
-    }
-  } else if (_invCursor < 10) {
-    // Equipped slot — unequip to cargo (if space)
-    const equipIdx = _invCursor - 8;
-    const item = inv.equipped[equipIdx];
+  if (action.type === 'loadConsumable') {
+    const item = inv.removeFromCargo(action.cargoSlot);
+    if (!item) return;
+    const prev = inv.loadConsumable(action.consumableSlot, item);
+    if (prev) inv.cargo[action.cargoSlot] = prev;
+    return;
+  }
+
+  if (action.type === 'dropCargo') {
+    if (_dropCallback) _dropCallback(action.cargoSlot);
+    return;
+  }
+
+  if (action.type === 'unequip') {
+    const item = inv.unequip(action.equipSlot);
+    if (item) inv.addToCargo(item);
+    return;
+  }
+
+  if (action.type === 'unloadConsumable') {
+    const item = inv.consumables[action.consumableSlot];
     if (item && !inv.cargoFull) {
-      inv.unequip(equipIdx);
-      inv.addToCargo(item);
-    }
-  } else {
-    // Consumable slot — remove to cargo (if space)
-    const conIdx = _invCursor - 10;
-    const item = inv.consumables[conIdx];
-    if (item && !inv.cargoFull) {
-      inv.consumables[conIdx] = null;
+      inv.consumables[action.consumableSlot] = null;
       inv.addToCargo(item);
     }
   }

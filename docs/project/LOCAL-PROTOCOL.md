@@ -78,6 +78,23 @@ This is intentionally small. It is enough to prove:
 - the server owns the authoritative player state
 - the client is no longer pretending to be the world
 
+### `POST /inventory/action`
+
+Discrete inventory/loadout mutation for authoritative runs.
+
+```json
+{
+  "type": "inventoryAction",
+  "clientId": "greg-macbook",
+  "action": "equipCargo",
+  "cargoSlot": 2,
+  "equipSlot": 1,
+  "consumableSlot": -1
+}
+```
+
+This exists because inventory management is not really part of the continuous input stream. It is a state mutation request against the authoritative run.
+
 ### `GET /snapshot`
 
 Authoritative state read.
@@ -170,6 +187,13 @@ In the current fourth slice, the server also owns:
 - shield and time-slow active effect state
 - breach-flare portal spawning from authoritative item use
 
+In the current fifth slice, the server also owns:
+
+- remote cargo/equip/consumable slot mutation during live runs
+- authoritative dropped-item wreck spawning from inventory actions
+- the canonical eight-slot cargo model instead of the old variable-length cargo list
+- same-map join-existing-session behavior for remote clients instead of always forcing a reset
+
 ## Client ownership
 
 The client owns:
@@ -197,4 +221,4 @@ The next useful transfers are:
 
 - coarse authoritative flow sampling
 - broader combat consequences beyond pulse events
-- real join-existing-session / lobby semantics instead of always starting a fresh run from map select
+- real lobby/session selection semantics instead of only "join current same-map run or start one"

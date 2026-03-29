@@ -153,7 +153,9 @@ Current progress:
 - server now also owns portal waves, extraction, cargo pickup, and the first gameplay-affecting equip effect
 - server now also owns scavenger state in remote runs, with the browser rendering scavengers from snapshots instead of local AI
 - server now also owns remote consumable activation, active item-state, and pulse cooldown/events
-- true join-existing-session and broader combat/gameplay authority still need to move over
+- server now also owns remote inventory/loadout mutation during live runs, including authoritative dropped-item wreck spawning
+- same-map clients can now join an existing authoritative run instead of always resetting it
+- broader combat/gameplay authority still needs to move over
 
 ### Batch B — Local Protocol Freeze
 
@@ -170,6 +172,8 @@ Current progress:
 - protocol now carries cargo/loadout state closely enough for remote runs to extract and lose loot honestly
 - protocol now carries enough world state for remote clients to render rival scavengers from authoritative snapshots
 - protocol now carries enough player effect state for remote clients to reflect active shield/time-slow and remote pulse cooldown honestly
+- protocol now includes discrete authoritative inventory mutation requests instead of forcing loadout changes through local-only UI state
+- protocol and browser path now support a second client joining the same running authoritative session
 - protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.

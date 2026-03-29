@@ -13,6 +13,7 @@ const {
   DEFAULT_MAX_PLAYERS,
   createProtocolDescription,
   normalizeInputMessage,
+  normalizeInventoryAction,
 } = require("./sim-protocol.js");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
@@ -517,7 +518,7 @@ function createPlayer(clientId, name) {
       timestamp: Date.now(),
     },
     status: "alive",
-    cargo: [],
+    cargo: new Array(PLAYER_CARGO_SLOTS).fill(null),
     equipped: [],
     consumables: [],
     activeEffects: [],
@@ -527,6 +528,10 @@ function createPlayer(clientId, name) {
       pulseCooldownRemaining: 0,
     },
   };
+}
+
+function getCargoCount(player) {
+  return player.cargo.filter(Boolean).length;
 }
 
 function startSession(config = {}) {
@@ -579,7 +584,7 @@ function snapshotBody() {
       vy: player.vy,
       lastInputSeq: player.lastInput.seq,
       cargo: player.cargo,
-      cargoCount: player.cargo.length,
+      cargoCount: getCargoCount(player),
       equipped: player.equipped,
       consumables: player.consumables,
       activeEffects: player.activeEffects,
@@ -687,7 +692,7 @@ function maybeCollapseRun() {
     player.status = "dead";
     player.vx = 0;
     player.vy = 0;
-    player.cargo = [];
+    player.cargo = new Array(PLAYER_CARGO_SLOTS).fill(null);
     publishEvent("player.died", {
       clientId: player.clientId,
       cause: "collapse",
@@ -812,7 +817,7 @@ function applyWellGravity(player, dt) {
       player.status = "dead";
       player.vx = 0;
       player.vy = 0;
-      player.cargo = [];
+      player.cargo = new Array(PLAYER_CARGO_SLOTS).fill(null);
       publishEvent("player.died", {
         clientId: player.clientId,
         cause: "well",
@@ -834,15 +839,17 @@ function applyWellGravity(player, dt) {
 
 function tickPlayerPickups(player) {
   if (player.status !== "alive") return;
-  if (player.cargo.length >= PLAYER_CARGO_SLOTS) return;
+  if (getCargoCount(player) >= PLAYER_CARGO_SLOTS) return;
 
   for (const wreck of runtime.mapState.wrecks) {
     if (wreck.alive === false || wreck.looted || wreck.pickupCooldown > 0) continue;
     const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
     if (dist >= 0.08) continue;
 
-    while (wreck.loot?.length > 0 && player.cargo.length < PLAYER_CARGO_SLOTS) {
-      player.cargo.push(wreck.loot.shift());
+    while (wreck.loot?.length > 0 && getCargoCount(player) < PLAYER_CARGO_SLOTS) {
+      const freeSlot = player.cargo.indexOf(null);
+      if (freeSlot === -1) break;
+      player.cargo[freeSlot] = wreck.loot.shift();
     }
     if (!wreck.loot || wreck.loot.length === 0) {
       wreck.looted = true;
@@ -850,9 +857,9 @@ function tickPlayerPickups(player) {
     publishEvent("player.loot", {
       clientId: player.clientId,
       wreckId: wreck.id,
-      cargoCount: player.cargo.length,
+      cargoCount: getCargoCount(player),
     });
-    if (player.cargo.length >= PLAYER_CARGO_SLOTS) break;
+    if (getCargoCount(player) >= PLAYER_CARGO_SLOTS) break;
   }
 }
 
@@ -869,7 +876,7 @@ function tickExtraction(player) {
         clientId: player.clientId,
         portalId: portal.id,
         portalType: portal.type,
-        cargoCount: player.cargo.length,
+        cargoCount: getCargoCount(player),
       });
       return;
     }
@@ -993,6 +1000,118 @@ function applyPulse(player) {
     wy: player.wy,
   });
   return true;
+}
+
+function addDroppedItemWreck(player, item) {
+  if (!item) return;
+  const inputAngle =
+    Math.hypot(player.lastInput.moveX, player.lastInput.moveY) > 0.1
+      ? Math.atan2(player.lastInput.moveY, player.lastInput.moveX)
+      : Math.random() * Math.PI * 2;
+  const rearAngle = inputAngle + Math.PI + (Math.random() - 0.5) * Math.PI;
+  const ejectDist = 0.18;
+  const ejectSpeed = 0.3;
+  const wreck = {
+    id: `wreck-drop-${player.clientId}-${runtime.tick}-${Math.random().toString(36).slice(2, 6)}`,
+    wx: wrapWorld(player.wx + Math.cos(rearAngle) * ejectDist, runtime.session.worldScale),
+    wy: wrapWorld(player.wy + Math.sin(rearAngle) * ejectDist, runtime.session.worldScale),
+    type: "derelict",
+    tier: item.tier || "common",
+    size: "scattered",
+    alive: true,
+    looted: false,
+    pickupCooldown: 1.5,
+    vx: Math.cos(rearAngle) * ejectSpeed,
+    vy: Math.sin(rearAngle) * ejectSpeed,
+    loot: [{ ...item }],
+    name: `dropped: ${item.name}`,
+  };
+  runtime.mapState.wrecks.push(wreck);
+}
+
+function applyInventoryAction(player, actionMessage) {
+  if (player.status !== "alive") {
+    return { ok: false, error: "Player is not alive" };
+  }
+
+  const { action, cargoSlot, equipSlot, consumableSlot } = actionMessage;
+  let changed = false;
+  let itemName = null;
+
+  switch (action) {
+    case "dropCargo": {
+      if (cargoSlot < 0 || cargoSlot >= player.cargo.length) return { ok: false, error: "Invalid cargo slot" };
+      const item = player.cargo[cargoSlot];
+      if (!item) return { ok: false, error: "No cargo item in slot" };
+      player.cargo[cargoSlot] = null;
+      addDroppedItemWreck(player, item);
+      itemName = item.name;
+      changed = true;
+      break;
+    }
+    case "equipCargo": {
+      if (cargoSlot < 0 || cargoSlot >= player.cargo.length) return { ok: false, error: "Invalid cargo slot" };
+      if (equipSlot < 0 || equipSlot >= 2) return { ok: false, error: "Invalid equip slot" };
+      const item = player.cargo[cargoSlot];
+      if (!item || item.subcategory !== "equippable") return { ok: false, error: "Cargo item is not equippable" };
+      const prev = player.equipped[equipSlot] || null;
+      player.equipped[equipSlot] = item;
+      player.cargo[cargoSlot] = prev;
+      itemName = item.name;
+      refreshPlayerEffects(player);
+      changed = true;
+      break;
+    }
+    case "loadConsumable": {
+      if (cargoSlot < 0 || cargoSlot >= player.cargo.length) return { ok: false, error: "Invalid cargo slot" };
+      if (consumableSlot < 0 || consumableSlot >= 2) return { ok: false, error: "Invalid consumable slot" };
+      const item = player.cargo[cargoSlot];
+      if (!item || item.subcategory !== "consumable") return { ok: false, error: "Cargo item is not consumable" };
+      const prev = player.consumables[consumableSlot] || null;
+      player.consumables[consumableSlot] = item;
+      player.cargo[cargoSlot] = prev;
+      itemName = item.name;
+      changed = true;
+      break;
+    }
+    case "unequip": {
+      if (equipSlot < 0 || equipSlot >= 2) return { ok: false, error: "Invalid equip slot" };
+      const item = player.equipped[equipSlot];
+      if (!item) return { ok: false, error: "No equipped item in slot" };
+      const freeCargo = player.cargo.indexOf(null);
+      if (freeCargo === -1) return { ok: false, error: "Cargo full" };
+      player.equipped[equipSlot] = null;
+      player.cargo[freeCargo] = item;
+      itemName = item.name;
+      refreshPlayerEffects(player);
+      changed = true;
+      break;
+    }
+    case "unloadConsumable": {
+      if (consumableSlot < 0 || consumableSlot >= 2) return { ok: false, error: "Invalid consumable slot" };
+      const item = player.consumables[consumableSlot];
+      if (!item) return { ok: false, error: "No consumable in slot" };
+      const freeCargo = player.cargo.indexOf(null);
+      if (freeCargo === -1) return { ok: false, error: "Cargo full" };
+      player.consumables[consumableSlot] = null;
+      player.cargo[freeCargo] = item;
+      itemName = item.name;
+      changed = true;
+      break;
+    }
+    default:
+      return { ok: false, error: "Unknown inventory action" };
+  }
+
+  if (changed) {
+    publishEvent("player.inventoryAction", {
+      clientId: player.clientId,
+      action,
+      itemName,
+    });
+  }
+
+  return { ok: changed, player };
 }
 
 function nearestWell(entity) {
@@ -1410,6 +1529,27 @@ const server = http.createServer(async (req, res) => {
             : message.consumeSlot,
       };
       sendJson(res, 200, { ok: true, acceptedSeq: message.seq, tick: runtime.tick });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/inventory/action") {
+      const body = await readJson(req);
+      const message = normalizeInventoryAction(body);
+      if (!message.clientId) {
+        sendJson(res, 400, { ok: false, error: "clientId is required" });
+        return;
+      }
+      const player = runtime.players.get(message.clientId);
+      if (!player) {
+        sendJson(res, 404, { ok: false, error: "Unknown client" });
+        return;
+      }
+      const result = applyInventoryAction(player, message);
+      if (!result.ok) {
+        sendJson(res, 409, { ok: false, error: result.error });
+        return;
+      }
+      sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
       return;
     }
 
