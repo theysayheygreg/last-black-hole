@@ -10,6 +10,7 @@
 ### Design Docs (continued)
 - **SCAVENGERS-V2.md** — Signal-reactive AI (superseded by ENTITY-CATALOG.md, preserved for reference)
 - **FAUNA.md** — Fauna types (superseded by ENTITY-CATALOG.md, preserved for reference)
+- **AI-PLAYERS.md** — Full adversarial AI system: 5 personalities (Prospector, Raider, Vulture, Ghost, Desperado) running the complete player game loop server-side. Current-aware navigation, wreck/portal/engagement scoring, extraction decision-making. Solo = 1 human + 3-7 AI. Multiplayer replaces AI slots. ~1100 lines estimated across 6 build phases.
 - **ENTITY-CATALOG.md** — Four-tier entity hierarchy: ambient (5 types), active (6 types), adversarial (AI players with 5 personalities), existential (Inhibitor). Seed picks from catalog per run. AI players are full participants running the player's game loop. Replaces scavenger/fauna split.
 
 ### Decisions
