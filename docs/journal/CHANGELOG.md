@@ -5,22 +5,68 @@
 
 ---
 
-## 2026-03-28 Signal Decisions, Color Separation, Inhibitor Implementation Plan
+## 2026-03-29 (Week 2 Day 5: Authoritative Remote Inventory Mutation)
 
-### Design Docs (continued)
-- **SCAVENGERS-V2.md** — Signal-reactive AI (superseded by ENTITY-CATALOG.md, preserved for reference)
-- **FAUNA.md** — Fauna types (superseded by ENTITY-CATALOG.md, preserved for reference)
-- **AI-PLAYERS.md** — Full adversarial AI system: 5 personalities (Prospector, Raider, Vulture, Ghost, Desperado) running the complete player game loop server-side. Current-aware navigation, wreck/portal/engagement scoring, extraction decision-making. Solo = 1 human + 3-7 AI. Multiplayer replaces AI slots. ~1100 lines estimated across 6 build phases.
-- **ENTITY-CATALOG.md** — Four-tier entity hierarchy: ambient (5 types), active (6 types), adversarial (AI players with 5 personalities), existential (Inhibitor). Seed picks from catalog per run. AI players are full participants running the player's game loop. Replaces scavenger/fauna split.
+### scripts/ — Modified
+- **sim-runtime.js** — Adds authoritative inventory/loadout mutation for remote runs (`dropCargo`, `equipCargo`, `loadConsumable`, `unequip`, `unloadConsumable`), authoritative dropped-item wreck spawning, and fixes the server cargo model to use the same fixed eight-slot layout as the client.
+- **sim-protocol.js** — Adds the `inventoryAction` request envelope alongside continuous input.
 
-### Decisions
-- **Inhibitor wake: threshold + variance** — random threshold per run (0.82-0.98). Consistent rules, hidden parameters. EVE wormhole pattern.
-- **Signal equipment: shaping with costs** — every signal benefit has a non-signal downside. Dampened Thrusters = slower ramp but less thrust. Signal Sink = faster decay but eats cargo slot.
-- **Multiplayer signal visibility: visual cues** — ship glow/trail reveals approximate signal level. No exact numbers. Requires fabric-layer per-entity rendering (same surface as Inhibitor).
+### src/ — Modified
+- **main.js** — Remote runs now support inventory UI navigation and confirm actions without falling back to local inventory mutation.
+- **hud.js** — Exposes the current inventory intent as an action description so local and remote modes can share the same cursor semantics.
+- **sim/sim-client.js** — Adds a discrete remote inventory mutation request path.
+- **test-api.js** — Adds profile seeding for equipped artifacts so remote loadout mutation can be exercised honestly.
 
-### Design Docs
-- **COLOR-SEPARATION.md** — Wells shift from amber/red to gold/white-hot. Inhibitors own magenta/fuchsia. 85° hue gap (was 30°). Two color families that never overlap.
-- **INHIBITOR-IMPLEMENTATION.md** — 11-step build order from pressure system through endgame. Shader strategy: new uniform block in FRAG_DISPLAY + FRAG_ASCII, NOT canvas overlay. ~300 lines new code for InhibitorSystem, ~80 lines shader additions.
+### tests/ — Modified
+- **remote-authority.js** — Extends the remote-authority suite to verify authoritative unequip/equip behavior through the real protocol.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+Remote runs were still lying about one core gameplay surface: opening the inventory and changing your loadout still mutated only local UI state. This slice moves those actions over the network boundary and fixes the server inventory model so it matches the client’s real eight-slot cargo semantics.
+
+## 2026-03-28 Design Day — Signal, Color, Inhibitor, Entity Hierarchy, AI Players
+
+Major design session. No code changes — Codex running server architecture work in parallel (moving gameplay systems server-side, authoritative snapshots, client sync). All design work stays design-only until hard tech lands.
+
+### Decisions Locked
+- **Inhibitor wake: threshold + variance (C)** — random threshold per run (0.82-0.98). EVE wormhole pattern.
+- **Signal equipment: shaping with costs (C)** — every signal benefit has a non-signal downside.
+- **Multiplayer signal visibility: visual cues (B)** — ship glow/trail reveals approximate signal level.
+- **Entity hierarchy: 4 tiers** — ambient (texture/tells), active (singular-directive obstacles), adversarial (AI players), existential (Inhibitor). Seed selects from catalog per run.
+- **AI player count: 4-8 per run** — humans replace AI slots on join. Solo is always full.
+- **AI visibility/detection range:** deferred — interesting but not load-bearing yet.
+- **Scope: push toward real game** — no jam constraints, scope creep goes to roadmap.
+
+### New Design Docs (7 total)
+1. **COLOR-SEPARATION.md** — Wells shift gold/white-hot (was amber/red). Inhibitors own magenta/fuchsia. 85° hue gap. Config-only change: `nearWell: [1.0, 0.85, 0.4]`, `hotWell: [1.0, 0.95, 0.8]`.
+2. **INHIBITOR-IMPLEMENTATION.md** — 11-step build order. Shader strategy: new uniform block in FRAG_DISPLAY + FRAG_ASCII. ~300 lines InhibitorSystem, ~80 lines shader.
+3. **SCAVENGERS-V2.md** — Signal-reactive scavenger AI (superseded by ENTITY-CATALOG.md, kept for reference).
+4. **FAUNA.md** — Three fauna types (superseded by ENTITY-CATALOG.md, kept for reference).
+5. **ENTITY-CATALOG.md** — Four-tier entity hierarchy. 17 entity types total, 7-10 active per seed. Replaces scavenger/fauna split with structured catalog.
+6. **AI-PLAYERS.md** — Adversarial AI running full player game loop. 5 personalities (Prospector/Raider/Vulture/Ghost/Desperado) as weight tables on shared decision code. Current-aware navigation via analytical flow model. Server-side, ~1100 lines, 6 build phases. Character classes emerged from first principles — same toolkit, different weights.
+7. **SIGNAL-SYSTEM.md** — Updated: 3 open decisions now locked.
+
+### Architecture Notes
+- AI players live server-side in `tickAIPlayers()`, same loop as `tickScavengers()`
+- Analytical flow model (well positions → tangential flow) gives AI current-awareness without GPU
+- Multiplayer slot replacement: server starts N AI slots, humans replace on join
+- Naming collision: "Drifter" used for both comets (planetoids.js) and scavenger archetype — needs rename
+
+### What's Blocked on Codex
+- Color separation config change (trivial but waiting for stable codebase)
+- Inhibitor implementation (needs signal system, which needs stable main.js)
+- AI player implementation (needs server architecture complete)
+- Entity catalog integration with map generator
+
+### What's Still Open
+- Slingshot V2: 5 pending decisions
+- Megastructures: remaining questions (well consumption, signal interaction, art direction)
+- AI player extraction visibility (do you see their haul?)
+- Active entity naming (mechanical vs lore-friendly)
+- Drifter/comet naming collision resolution
 
 ---
 

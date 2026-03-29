@@ -17,6 +17,48 @@ Each decision has:
 
 ---
 
+## Entity Hierarchy: Four Tiers (2026-03-28)
+
+**Question:** How should non-player entities be organized? The existing scavenger/fauna split was jumbled — fauna doing active-tier work (eels lunging you into wells), scavengers split between ambient (drifters vibing) and pseudo-adversarial (hunters), and no true adversarial layer at all.
+
+**Framework (from Greg):** Four tiers with distinct gameplay contracts:
+1. **Ambient** (LOW impact) — texture, tells, atmosphere. Birds in Marathon.
+2. **Active** (MODERATE impact) — singular directive, constant obstacle. ARC in Arc Raiders.
+3. **Adversarial** (HIGH impact) — full toolkit, same game as the player. Runners in Marathon.
+4. **Existential** (ABSOLUTE) — inescapable, non-interactive. Blue circle in BR.
+
+**Where it landed:** ENTITY-CATALOG.md. 17 entity types across 4 tiers. Seed picks from catalog per run (1-3 ambient, 1-2 active, always adversarial, always Inhibitor). Supersedes SCAVENGERS-V2.md and FAUNA.md.
+
+**Key reframes:**
+- Drifter scavengers → absorbed into AI players (Ghost/Prospector personalities)
+- Vulture scavengers → absorbed into AI players (Raider/Vulture personalities)
+- Rift eels → promoted from ambient to active tier (Gradient Sentries)
+- Signal moths → simplified to Signal Blooms (ambient visual tell, not mechanical threat)
+- Hunters → active tier (Current Hunters), not adversarial
+- NEW: AI players as true adversarial tier (same toolkit, same game loop)
+
+**Door status:** Tier structure closed. Individual entity types within each tier are open to addition/removal.
+
+---
+
+## AI Players: Adversarial Tier (2026-03-28)
+
+**Question:** What fills the adversarial tier? Smarter scavengers or genuinely new entities running the full player loop?
+
+**Where it landed:** Full AI players. Same Ship class, same inventory, same physics, same combat tools. 5 personalities as weight tables on shared decision code (Prospector, Raider, Vulture, Ghost, Desperado). Solo = 1 human + 3-7 AI. Multiplayer replaces AI slots with humans.
+
+**Key decisions:**
+- Player count: 4-8 per run (matches Codex server architecture scope)
+- AI visibility/detection range: deferred
+- AI lives server-side in `tickAIPlayers()`
+- Analytical flow model for navigation (no GPU needed server-side)
+- AI sees same info as human player (no map hacks, perception has noise/delay)
+- Character classes emerged from first principles: same toolkit + different weights = distinct playstyles
+
+**Door status:** Architecture closed. Personality weights open to extensive tuning. Perception fidelity (noise/delay amounts) open to tuning. Additional personalities can be added to catalog.
+
+---
+
 ## Signal System: Three Open Decisions (2026-03-28)
 
 **Question 1: Inhibitor wake mechanic**
@@ -884,3 +926,5 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 | Mar 28 | Next architecture choice: make remote runs feel like the real game by moving rival scavengers onto the authoritative server before chasing broader combat parity. This keeps the migration pointed at a competitive run, not just a solo movement demo. |
 | Mar 28 | Next follow-through: remote consumables and pulse timing should move server-side before broader combat. Otherwise remote runs still lie about item truth and player timing. |
 | Mar 28 | Implementation lands: authoritative snapshots now carry active effect state, remote join sends real loadout data, the server applies consumables and pulse events, and the remote-authority suite now verifies those protocol-level systems. |
+| Mar 29 | Next correction: remote inventory mutation also has to cross the boundary. Otherwise a remote run can move and consume items honestly, but opening the inventory still edits only local UI state. |
+| Mar 29 | Implementation lands: the protocol now includes discrete `inventoryAction` requests, the sim server owns equip/load/drop/unload mutations during live runs, dropped cargo spawns authoritative wrecks, and the server inventory model now uses the same fixed eight-slot cargo semantics as the client. |
