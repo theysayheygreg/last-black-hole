@@ -674,6 +674,24 @@ The remote path needed to stop being just a movement demo. This slice moves real
 ### Why
 LBH now has two browser-testing layers with different jobs. Puppeteer remains the deterministic test path. Chrome DevTools MCP is the live browser inspection and perf-debug layer for renderer work, menu/meta flow debugging, and remote-authority inspection.
 
+## 2026-03-30 (Week 2 Day 6: Server-Owned Hazard Contact and Remote Force Validation)
+
+### scripts/ — Modified
+- **sim-runtime.js** — The sim server now applies star push, planetoid/comet push, and scavenger bump collision to authoritative players instead of leaving those forces in the local-only gameplay loop. It also now spawns stellar-remnant wrecks when stars are consumed by wells and exposes a small debug player-state hook used by the remote-authority suite.
+
+### src/ — Modified
+- **main.js** — Remote clients now react to authoritative `star.consumed` events with the same warning/audio/star-flash feedback as the local path instead of silently relying on local side effects. They also now replay authoritative pulse/growth/consumption wave events and keep those wave rings updating/injecting locally during remote visual mode.
+
+### tests/ — Modified
+- **remote-authority.js** — Adds a real authoritative hazard-force check and simplifies the second-client proof so it validates the actual session-join behavior instead of a flaky second full-browser menu path.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+The protocol and remote path were already real, but remote runs still lied about some moment-to-moment survival contact. The server now owns the remaining ship hazard pushes that mattered most, which makes the remote client closer to a true presentation/input layer instead of a partially authoritative hybrid.
+
 ## 2026-03-28 (Week 2 Day 4: Honest Menu and Remote Test Coverage)
 
 ### tests/ — Modified

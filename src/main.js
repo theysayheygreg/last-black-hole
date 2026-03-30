@@ -692,6 +692,9 @@ function applyRemoteEvents(events) {
 
     switch (event.type) {
       case 'player.pulse':
+        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
+          waveRings.spawn(payload.wx, payload.wy, 1.5);
+        }
         audioEngine.playEvent('pulse', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         break;
       case 'player.effectUsed':
@@ -735,6 +738,28 @@ function applyRemoteEvents(events) {
           showWarning(`loaded ${payload.itemName}`, 'rgba(160, 220, 255, 0.9)', 1400);
         } else if (payload.action === 'unequip' || payload.action === 'unloadConsumable') {
           showWarning(`${payload.itemName} to cargo`, 'rgba(180, 180, 200, 0.9)', 1400);
+        }
+        break;
+      case 'star.consumed':
+        if (Array.isArray(payload.starColor) && typeof payload.starName === 'string') {
+          if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
+            waveRings.spawn(payload.wx, payload.wy, 3.0);
+          }
+          const [cr, cg, cb] = payload.starColor;
+          showWarning(`${payload.starName} consumed — stellar remnant!`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
+          audioEngine.playEvent('starConsumed', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+          _starFlashTimer = 0.8;
+          _starFlashColor = payload.starColor;
+        }
+        break;
+      case 'planetoid.consumed':
+        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
+          waveRings.spawn(payload.wx, payload.wy, 0.2);
+        }
+        break;
+      case 'well.grew':
+        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy) && Number.isFinite(payload.mass)) {
+          waveRings.spawn(payload.wx, payload.wy, CONFIG.events.growthWaveAmplitude * payload.mass);
         }
         break;
       default:
@@ -1112,6 +1137,10 @@ function gameLoop(now) {
       inMenu: inMenu || remoteVisualMode,
       visualOnly: remoteVisualMode,
     });
+    if (remoteVisualMode) {
+      waveRings.update(dt);
+      waveRings.injectIntoFluid(fluid);
+    }
 
   } // end paused check
 

@@ -48,6 +48,25 @@ const SERVER_COMBAT = {
   timeSlowScale: 0.3,
   timeSlowDuration: 3.0,
 };
+const STAR_SERVER = {
+  shipPushStrength: 0.45,
+  shipPushFalloff: 1.8,
+  maxRange: 0.6,
+};
+const PLANETOID_SERVER = {
+  shipPushStrength: 0.3,
+  shipPushRadius: 0.1,
+};
+const WAVE_SERVER = {
+  waveSpeed: 0.4,
+  waveWidth: 0.1,
+  waveDecay: 0.97,
+  waveMaxRadius: 2.0,
+  waveShipPush: 0.8,
+  growthWaveAmplitude: 1.0,
+};
+const FORCE_REF_DIST = 0.25;
+const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
 const DRIFTER_NAMES = ["Quiet Tide", "Still Wake", "Ash Petal", "Cold Harbor", "Pale Drift", "Dim Lantern"];
 const VULTURE_NAMES = ["Keen Edge", "Rust Claw", "Burnt Lance", "Bitter Claim", "Sharp Debt", "Iron Reap"];
@@ -136,6 +155,37 @@ function worldDistance(ax, ay, bx, by, worldScale) {
   const dx = worldDisplacement(ax, bx, worldScale);
   const dy = worldDisplacement(ay, by, worldScale);
   return Math.hypot(dx, dy);
+}
+
+function worldDirection(ax, ay, bx, by, worldScale) {
+  const dx = worldDisplacement(ax, bx, worldScale);
+  const dy = worldDisplacement(ay, by, worldScale);
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.000001) return { dist, nx: 0, ny: 0 };
+  return { dist, nx: dx / dist, ny: dy / dist };
+}
+
+function inversePowerForce(dist, strength, mass, falloff, maxRange) {
+  if (dist < 0.001 || dist > maxRange) return 0;
+  const safeDist = Math.max(dist, FORCE_MIN_DIST);
+  const normDist = safeDist / FORCE_REF_DIST;
+  const baseAccel = strength * mass / Math.pow(normDist, falloff);
+  const t = dist / maxRange;
+  const rangeFade = 1 - t;
+  return baseAccel * rangeFade;
+}
+
+function proximityForce(dist, strength, radius) {
+  if (dist < 0.001 || dist > radius) return 0;
+  return strength * (1 - dist / radius);
+}
+
+function waveBandForce(distFromSource, ringRadius, halfWidth, pushStrength, amplitude) {
+  const distFromFront = Math.abs(distFromSource - ringRadius);
+  if (distFromFront > halfWidth) return 0;
+  const bandPosition = distFromFront / halfWidth;
+  const profile = Math.cos(bandPosition * Math.PI * 0.5);
+  return pushStrength * amplitude * profile;
 }
 
 function hashUnit(input) {
@@ -471,6 +521,7 @@ const runtime = {
   recentEvents: [],
   nextEventSeq: 1,
   players: new Map(),
+  waveRings: [],
   mapState: {
     id: "shallows",
     name: "The Shallows",
@@ -557,6 +608,7 @@ function startSession(config = {}) {
   runtime.nextEventSeq = 1;
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
+  runtime.waveRings = [];
   publishEvent("session.started", {
     sessionId: runtime.session.id,
     mapId: runtime.session.mapId,
@@ -601,6 +653,18 @@ function snapshotBody() {
     },
     recentEvents: runtime.recentEvents.slice(-32),
   };
+}
+
+function spawnWaveRing(wx, wy, amplitude) {
+  runtime.waveRings.push({
+    id: `wave-${runtime.tick}-${Math.random().toString(36).slice(2, 6)}`,
+    sourceWX: wx,
+    sourceWY: wy,
+    radius: 0,
+    amplitude,
+    initialAmplitude: amplitude,
+    alive: true,
+  });
 }
 
 function tickWells(dt) {
@@ -672,12 +736,26 @@ function tickGrowth(dt) {
     if (!well) break;
     well.mass += well.growthRate;
     well.killRadius = wellKillRadiusForMass(well);
+    spawnWaveRing(well.wx, well.wy, WAVE_SERVER.growthWaveAmplitude * well.mass);
     publishEvent("well.grew", {
       wellId: well.id,
       mass: well.mass,
       killRadius: well.killRadius,
+      wx: well.wx,
+      wy: well.wy,
     });
   }
+}
+
+function tickWaveRings(dt) {
+  for (const ring of runtime.waveRings) {
+    ring.radius += WAVE_SERVER.waveSpeed * dt;
+    ring.amplitude *= WAVE_SERVER.waveDecay;
+    if (ring.radius > WAVE_SERVER.waveMaxRadius || ring.amplitude < 0.01) {
+      ring.alive = false;
+    }
+  }
+  runtime.waveRings = runtime.waveRings.filter((ring) => ring.alive !== false);
 }
 
 function maybeCollapseRun() {
@@ -712,9 +790,35 @@ function tickStars(dt) {
         star.alive = false;
         well.mass += (star.mass || 1) * 0.5;
         well.killRadius = wellKillRadiusForMass(well);
+        const angle = Math.random() * Math.PI * 2;
+        const ejectDist = 0.08;
+        const ejectSpeed = 0.4;
+        const remnant = {
+          id: `wreck-remnant-${star.id}-${runtime.tick}`,
+          wx: wrapWorld(well.wx + Math.cos(angle) * ejectDist, runtime.session.worldScale),
+          wy: wrapWorld(well.wy + Math.sin(angle) * ejectDist, runtime.session.worldScale),
+          type: "vault",
+          tier: 3,
+          size: "large",
+          alive: true,
+          looted: false,
+          pickupCooldown: 1.0,
+          vx: Math.cos(angle) * ejectSpeed,
+          vy: Math.sin(angle) * ejectSpeed,
+          loot: [],
+          name: `Remnant of ${star.name}`,
+        };
+        runtime.mapState.wrecks.push(remnant);
+        spawnWaveRing(well.wx, well.wy, (star.mass || 1) * 3);
         publishEvent("star.consumed", {
           starId: star.id,
+          starName: star.name,
+          starType: star.type,
+          starColor: star.typeDef?.color || null,
           wellId: well.id,
+          wx: well.wx,
+          wy: well.wy,
+          remnantWreckId: remnant.id,
         });
         break;
       }
@@ -785,12 +889,71 @@ function tickPlanetoids(dt) {
         planetoid.alive = false;
         well.mass += 0.08;
         well.killRadius = wellKillRadiusForMass(well);
+        spawnWaveRing(well.wx, well.wy, 0.2);
         publishEvent("planetoid.consumed", {
           planetoidId: planetoid.id,
           wellId: well.id,
+          wx: well.wx,
+          wy: well.wy,
         });
         break;
       }
+    }
+  }
+}
+
+function applyStarPush(player, dt) {
+  for (const star of runtime.mapState.stars) {
+    if (star.alive === false) continue;
+    const { dist, nx, ny } = worldDirection(star.wx, star.wy, player.wx, player.wy, runtime.session.worldScale);
+    const accel = inversePowerForce(
+      dist,
+      STAR_SERVER.shipPushStrength,
+      star.mass || 1,
+      STAR_SERVER.shipPushFalloff,
+      STAR_SERVER.maxRange
+    );
+    if (accel > 0) {
+      player.vx += nx * accel * dt;
+      player.vy += ny * accel * dt;
+    }
+  }
+}
+
+function applyPlanetoidPush(player, dt) {
+  for (const planetoid of runtime.mapState.planetoids) {
+    if (planetoid.alive === false) continue;
+    const { dist, nx, ny } = worldDirection(planetoid.wx, planetoid.wy, player.wx, player.wy, runtime.session.worldScale);
+    const accel = proximityForce(dist, PLANETOID_SERVER.shipPushStrength, PLANETOID_SERVER.shipPushRadius);
+    if (accel > 0) {
+      player.vx += nx * accel * dt;
+      player.vy += ny * accel * dt;
+    }
+  }
+}
+
+function applyScavengerBump(player) {
+  for (const scav of runtime.mapState.scavengers) {
+    if (scav.alive === false || scav.state === "dying") continue;
+    const { dist, nx, ny } = worldDirection(scav.wx, scav.wy, player.wx, player.wy, runtime.session.worldScale);
+    if (dist < SCAVENGER_CONFIG.bumpRadius && dist > 0.0001) {
+      const impulse = SCAVENGER_CONFIG.bumpForce;
+      player.vx += nx * impulse;
+      player.vy += ny * impulse;
+      scav.vx -= nx * impulse;
+      scav.vy -= ny * impulse;
+    }
+  }
+}
+
+function applyWaveRingPush(player, dt) {
+  const halfWidth = WAVE_SERVER.waveWidth * 0.5;
+  for (const ring of runtime.waveRings) {
+    const { dist, nx, ny } = worldDirection(ring.sourceWX, ring.sourceWY, player.wx, player.wy, runtime.session.worldScale);
+    const accel = waveBandForce(dist, ring.radius, halfWidth, WAVE_SERVER.waveShipPush, ring.amplitude);
+    if (accel > 0) {
+      player.vx += nx * accel * dt;
+      player.vy += ny * accel * dt;
     }
   }
 }
@@ -999,6 +1162,7 @@ function applyPulse(player) {
     wx: player.wx,
     wy: player.wy,
   });
+  spawnWaveRing(player.wx, player.wy, 1.5);
   return true;
 }
 
@@ -1112,6 +1276,15 @@ function applyInventoryAction(player, actionMessage) {
   }
 
   return { ok: changed, player };
+}
+
+function applyDebugPlayerState(player, body) {
+  if (Number.isFinite(Number(body.wx))) player.wx = wrapWorld(Number(body.wx), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.wy))) player.wy = wrapWorld(Number(body.wy), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.vx))) player.vx = Number(body.vx);
+  if (Number.isFinite(Number(body.vy))) player.vy = Number(body.vy);
+  if (typeof body.status === "string" && body.status) player.status = body.status;
+  return player;
 }
 
 function nearestWell(entity) {
@@ -1308,6 +1481,7 @@ function tickSim() {
   tickPlanetoids(dt);
   tickPortals(dt);
   tickScavengers(dt);
+  tickWaveRings(dt);
   maybeCollapseRun();
 
   for (const player of runtime.players.values()) {
@@ -1348,10 +1522,14 @@ function tickSim() {
     player.vy += input.moveY * accel * playerDt;
     applyWellGravity(player, playerDt);
     if (player.status !== "alive") continue;
+    applyStarPush(player, playerDt);
+    applyPlanetoidPush(player, playerDt);
+    applyWaveRingPush(player, playerDt);
     player.vx *= Math.pow(0.92, playerDt * 15);
     player.vy *= Math.pow(0.92, playerDt * 15);
     player.wx = ((player.wx + player.vx * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     player.wy = ((player.wy + player.vy * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    applyScavengerBump(player);
 
     tickPlayerPickups(player);
     tickExtraction(player);
@@ -1549,6 +1727,23 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 409, { ok: false, error: result.error });
         return;
       }
+      sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/debug/player-state") {
+      const body = await readJson(req);
+      const clientId = String(body.clientId || "").trim();
+      if (!clientId) {
+        sendJson(res, 400, { ok: false, error: "clientId is required" });
+        return;
+      }
+      const player = runtime.players.get(clientId);
+      if (!player) {
+        sendJson(res, 404, { ok: false, error: "Unknown client" });
+        return;
+      }
+      applyDebugPlayerState(player, body);
       sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
       return;
     }

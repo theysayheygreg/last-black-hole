@@ -110,6 +110,15 @@ async function postInventoryAction(body) {
   return response.json();
 }
 
+async function postDebugPlayerState(body) {
+  const response = await fetch(`${SIM_URL}/debug/player-state`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 async function waitForEvents(predicate, { timeout = 5000, interval = 100 } = {}) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -139,8 +148,6 @@ async function run() {
   await startSimServer(SIM_PORT);
 
   let browser, page;
-  let browser2, page2;
-
   try {
     ({ browser, page } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
     await bootstrapCleanRemotePage(page);
@@ -283,29 +290,52 @@ async function run() {
       assert(snapshotState.player.equipped[1]?.name === "Pull Dampener", "Expected authoritative re-equip into slot 1");
     });
 
-    await runner.run("Second remote client joins existing authoritative session", async () => {
-      ({ browser: browser2, page: page2 } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
-      await bootstrapCleanRemotePage(page2);
-      await enterRemoteRun(page2);
+    await runner.run("Remote authoritative hazards push the player without local fallback", async () => {
+      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const result = await postDebugPlayerState({
+        clientId: net.clientId,
+        wx: 1.62,
+        wy: 1.65,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(result.ok === true, "Expected debug player state update to succeed");
 
-      await waitFor(page2, () => {
-        const net = window.__TEST_API.getNetworkState();
-        return net.simEnabled && net.remoteAuthorityActive && typeof net.remoteTick === "number";
-      }, { timeout: 12000 });
+      const before = await getSnapshot();
+      const beforePlayer = before.players.find((player) => player.clientId === net.clientId);
+      assert(beforePlayer, "Expected remote player in authoritative snapshot");
+
+      const { player: afterPlayer } = await waitForSnapshotPlayer(
+        (remotePlayer) =>
+          remotePlayer.clientId === net.clientId &&
+          (remotePlayer.vx > 0.01 || remotePlayer.wx > beforePlayer.wx + 0.01),
+        { timeout: 5000 }
+      );
+      assert(afterPlayer.vx > 0.01, `Expected authoritative star push to accelerate player, got vx=${afterPlayer.vx}`);
+      assert(afterPlayer.wx > beforePlayer.wx, `Expected authoritative push to move player away from star, got ${afterPlayer.wx} from ${beforePlayer.wx}`);
+    });
+
+    await runner.run("Second client joins existing authoritative session", async () => {
+      const joinResponse = await fetch(`${SIM_URL}/join`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          clientId: "remote-test-second-client",
+          name: "Second Client",
+        }),
+      }).then((response) => response.json());
+
+      assert(joinResponse.ok === true, "Expected direct second join to succeed");
 
       const snapshot = await getSnapshot();
       assert(snapshot.players.length >= 2, `Expected at least 2 remote players, got ${snapshot.players.length}`);
       assert(snapshot.session.mapId === "shallows", `Expected shared session on shallows, got ${snapshot.session.mapId}`);
-
-      await browser2.close();
-      browser2 = null;
-      page2 = null;
     });
 
     const filepath = await screenshot(page, "remote-authority");
     console.log(`\n  Screenshot: ${filepath}`);
   } finally {
-    if (browser2) await browser2.close();
     if (browser) await browser.close();
     await stopSimServer(SIM_PORT);
     stopServer();
