@@ -511,6 +511,8 @@ const runtime = {
     status: "idle",
     mapId: null,
     mapName: null,
+    hostClientId: null,
+    hostName: null,
     worldScale: DEFAULT_WORLD_SCALE,
     tickHz: DEFAULT_TICK_HZ,
     snapshotHz: DEFAULT_SNAPSHOT_HZ,
@@ -594,6 +596,8 @@ function startSession(config = {}) {
     status: "running",
     mapId: mapState.id,
     mapName: mapState.name,
+    hostClientId: config.requesterId ? String(config.requesterId) : null,
+    hostName: config.requesterName ? String(config.requesterName) : null,
     worldScale: mapState.worldScale,
     tickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : DEFAULT_TICK_HZ,
     snapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : DEFAULT_SNAPSHOT_HZ,
@@ -613,10 +617,41 @@ function startSession(config = {}) {
     sessionId: runtime.session.id,
     mapId: runtime.session.mapId,
     mapName: runtime.session.mapName,
+    hostClientId: runtime.session.hostClientId,
+    hostName: runtime.session.hostName,
     worldScale: runtime.session.worldScale,
     maxPlayers: runtime.session.maxPlayers,
   });
   restartTickLoop();
+}
+
+function assignHost(clientId, name) {
+  runtime.session.hostClientId = clientId;
+  runtime.session.hostName = name || clientId;
+  publishEvent("session.hostAssigned", {
+    clientId,
+    name: runtime.session.hostName,
+  });
+}
+
+function ensureHostPermission(requesterId) {
+  if (!requesterId) return { ok: false, error: "requesterId is required" };
+  if (!runtime.session.hostClientId) return { ok: true };
+  if (runtime.session.hostClientId !== requesterId) {
+    return { ok: false, error: "Only the session host can do that" };
+  }
+  return { ok: true };
+}
+
+function promoteHostIfNeeded() {
+  if (runtime.players.size === 0) {
+    runtime.session.hostClientId = null;
+    runtime.session.hostName = null;
+    return;
+  }
+  if (runtime.session.hostClientId && runtime.players.has(runtime.session.hostClientId)) return;
+  const nextHost = runtime.players.values().next().value;
+  if (nextHost) assignHost(nextHost.clientId, nextHost.name);
 }
 
 function snapshotBody() {
@@ -1628,13 +1663,30 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/session/start") {
       const body = await readJson(req);
+      if (runtime.session.status === "running") {
+        const permission = ensureHostPermission(String(body.requesterId || "").trim());
+        if (!permission.ok) {
+          sendJson(res, 403, { ok: false, error: permission.error, session: runtime.session });
+          return;
+        }
+      }
       startSession(body);
       sendJson(res, 200, { ok: true, session: runtime.session });
       return;
     }
 
     if (req.method === "POST" && req.url === "/session/reset") {
-      startSession(runtime.session);
+      const body = await readJson(req);
+      const permission = ensureHostPermission(String(body.requesterId || "").trim());
+      if (!permission.ok) {
+        sendJson(res, 403, { ok: false, error: permission.error, session: runtime.session });
+        return;
+      }
+      startSession({
+        ...runtime.session,
+        requesterId: runtime.session.hostClientId,
+        requesterName: runtime.session.hostName,
+      });
       sendJson(res, 200, { ok: true, session: runtime.session });
       return;
     }
@@ -1666,6 +1718,7 @@ const server = http.createServer(async (req, res) => {
         player.wx = spawn.wx;
         player.wy = spawn.wy;
         runtime.players.set(clientId, player);
+        if (!runtime.session.hostClientId) assignHost(clientId, player.name);
         publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
       } else if (body.name) {
         player.name = String(body.name);
@@ -1699,6 +1752,7 @@ const server = http.createServer(async (req, res) => {
         clientId,
         name: player.name,
       });
+      promoteHostIfNeeded();
       sendJson(res, 200, { ok: true, session: runtime.session, playerCount: runtime.players.size });
       return;
     }

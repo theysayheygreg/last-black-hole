@@ -54,6 +54,19 @@ Registers a client/player with the authoritative session.
 }
 ```
 
+The first client to join a new run becomes the authoritative session host. If the host leaves, the server promotes another remaining client.
+
+### `POST /leave`
+
+Removes a client from the authoritative session without resetting the run.
+
+```json
+{
+  "type": "leave",
+  "clientId": "greg-macbook"
+}
+```
+
 ### `POST /input`
 
 Client input envelope.
@@ -144,6 +157,8 @@ Pull recent authoritative events without forcing the client to parse every snaps
 
 Starts or resets the local authoritative run instance.
 
+If a run is already active, only the current session host may start/reset it.
+
 ## Server ownership
 
 The server owns:
@@ -217,6 +232,12 @@ In the current ninth slice, remote clients can also leave a run cleanly:
 - the protocol now supports `POST /leave`
 - a remote browser can exit a run without resetting the authoritative session for everyone else
 - death/extraction flows no longer force a full server reset just because one remote client is done
+
+In the current tenth slice, the control plane has a real host concept:
+
+- the first joining client becomes the session host
+- only the host may start/reset an already-running session
+- when the host leaves, the server promotes another remaining client instead of leaving reset authority ambiguous
 
 ## Client ownership
 

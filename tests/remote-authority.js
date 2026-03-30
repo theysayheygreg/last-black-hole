@@ -128,6 +128,16 @@ async function postLeave(body) {
   return response.json();
 }
 
+async function postSessionReset(body) {
+  const response = await fetch(`${SIM_URL}/session/reset`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await response.json();
+  return { status: response.status, body: json };
+}
+
 async function waitForEvents(predicate, { timeout = 5000, interval = 100 } = {}) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -176,6 +186,9 @@ async function run() {
       assert(net.simUrl === "http://127.0.0.1:8788", `Unexpected sim URL: ${net.simUrl}`);
       assert(typeof net.remoteMapId === "string" && net.remoteMapId.length > 0, "Expected remote map id");
       assert(typeof net.remoteTick === "number", "Expected authoritative remote tick");
+
+      const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
+      assert(health.session.hostClientId === net.clientId, "Expected first remote browser to become session host");
 
       await waitFor(page, () => window.__TEST_API.getScavengers().length > 0, { timeout: 4000 });
       const scavengers = await page.evaluate(() => window.__TEST_API.getScavengers());
@@ -361,6 +374,9 @@ async function run() {
       const snapshot = await getSnapshot();
       assert(snapshot.session.mapId === "shallows", `Expected live authoritative map to stay on shallows, got ${snapshot.session.mapId}`);
 
+      const deniedReset = await postSessionReset({ requesterId: net.clientId });
+      assert(deniedReset.status === 403, `Expected non-host reset denial, got ${deniedReset.status}`);
+
        const leaveResponse = await postLeave({ clientId: net.clientId });
        assert(leaveResponse.ok === true, "Expected browser-backed client leave to succeed");
 
@@ -374,6 +390,18 @@ async function run() {
       await browser2.close();
       browser2 = null;
       page2 = null;
+    });
+
+    await runner.run("Host leaves and remaining player is promoted", async () => {
+      const hostNet = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const leaveResponse = await postLeave({ clientId: hostNet.clientId });
+      assert(leaveResponse.ok === true, "Expected host leave to succeed");
+
+      const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
+      assert(
+        health.session.hostClientId === "remote-test-second-client",
+        `Expected remaining client to be promoted host, got ${health.session.hostClientId}`
+      );
     });
 
     const filepath = await screenshot(page, "remote-authority");

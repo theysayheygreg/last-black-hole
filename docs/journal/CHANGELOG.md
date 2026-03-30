@@ -684,13 +684,16 @@ LBH now has two browser-testing layers with different jobs. Puppeteer remains th
 - **main.js** — Remote browser startup no longer treats the later client's local map selection as a hidden reset request. If an authoritative session is already live, the client now loads that session's map and joins it by default.
 - **main.js** — Remote death/extraction flows now leave the authoritative session cleanly instead of resetting the whole server run when one client is done.
 - **sim/sim-client.js** — Adds an explicit `leave()` request for remote clients.
+- **sim/sim-client.js** — Session control calls now identify the requester, which lets the server enforce host-owned start/reset authority.
 
 ### tests/ — Modified
 - **remote-authority.js** — Adds a real authoritative hazard-force check, proves the server-owned force math directly, and now also verifies that a second browser asking for the wrong map still joins the live authoritative run instead of resetting it.
 - **remote-authority.js** — Also now verifies that a browser-backed remote client can leave cleanly without destroying the session.
+- **remote-authority.js** — Now also verifies that the first browser becomes host, non-host reset requests are denied, and host promotion happens when the host leaves.
 
 ### scripts/ — Modified
 - **sim-runtime.js** — Adds `POST /leave` so the server can drop a client from a live authoritative run without resetting session state.
+- **sim-runtime.js** — The authoritative session now tracks a real host, restricts start/reset to that host, and promotes a new host when the old one leaves.
 
 ### docs/project/ — Modified
 - **LOCAL-PROTOCOL.md**

@@ -936,3 +936,5 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 | Mar 30 | Implementation lands: remote browser startup now treats an already-running authoritative session as truth, loads that session's map locally, and joins it instead of resetting the server to the later client's selected map. |
 | Mar 30 | Next correction: once multiple remote clients can join the same run, one dead or finished client must be able to leave cleanly without resetting the whole authoritative session for everyone else. |
 | Mar 30 | Implementation lands: the protocol now has an explicit leave path, and remote death/extraction flows exit the client from the session instead of resetting the server run out from under other players. |
+| Mar 30 | Next correction: even with join/leave working, start/reset authority was still implicit. For real multiplayer, one client has to own host control and the server has to preserve that contract when players come and go. |
+| Mar 30 | Implementation lands: the first joining client now becomes host, only the host can start/reset a live session, and host promotion happens automatically when the host leaves. |

@@ -38,10 +38,10 @@ export class SimClient {
     return this._json('/maps');
   }
 
-  async startSession({ mapId, worldScale, maxPlayers = 4 }) {
+  async startSession({ mapId, worldScale, maxPlayers = 4, requesterId = this.clientId, requesterName = null }) {
     const body = await this._json('/session/start', {
       method: 'POST',
-      body: JSON.stringify({ mapId, worldScale, maxPlayers }),
+      body: JSON.stringify({ mapId, worldScale, maxPlayers, requesterId, requesterName }),
     });
     this.latestSnapshot = null;
     this.lastPollAt = 0;
@@ -57,10 +57,10 @@ export class SimClient {
     return this.startSession({ mapId, worldScale, maxPlayers });
   }
 
-  async resetSession() {
+  async resetSession({ requesterId = this.clientId } = {}) {
     const body = await this._json('/session/reset', {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({ requesterId }),
     });
     this.latestSnapshot = null;
     this.lastPollAt = 0;

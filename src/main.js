@@ -916,6 +916,7 @@ async function startRemoteGame(mapEntry) {
       mapId: targetMapEntry.id,
       worldScale: targetMapEntry.map.worldScale,
       maxPlayers: 4,
+      requesterName: profileManager.active?.name || 'Pilot',
     });
   } else if (runningSession.mapId !== mapEntry.id) {
     showWarning(`joining live run on ${targetMapEntry.name}`, 'rgba(140, 200, 255, 0.9)', 2400);

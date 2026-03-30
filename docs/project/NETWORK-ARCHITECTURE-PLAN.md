@@ -159,6 +159,7 @@ Current progress:
 - remote clients now also mirror authoritative wave events instead of silently missing server-owned pulse/growth/consumption consequences in the visual layer
 - a later remote browser now joins the live authoritative run by default instead of resetting it to its own selected map
 - remote clients can now leave a run without resetting the authoritative session for everyone else
+- the session now has real host ownership instead of everyone implicitly being able to behave like a reset authority
 - broader combat/gameplay authority still needs to move over
 
 ### Batch B — Local Protocol Freeze
@@ -182,6 +183,7 @@ Current progress:
 - protocol and browser path now replay authoritative wave consequences through the remote visual layer instead of leaving remote runs visually quieter than local runs
 - browser startup semantics now respect the existing authoritative run as the default truth instead of treating each client as a hidden host reset button
 - protocol now includes a leave path so a dead or finished client can exit without acting like a hidden host reset button
+- protocol now has real host semantics: first joiner becomes host, only the host can start/reset a live run, and host promotion happens when the host leaves
 - protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.
