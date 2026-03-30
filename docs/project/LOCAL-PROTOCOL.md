@@ -212,6 +212,12 @@ In the current eighth slice, remote browser startup semantics are also closer to
 - if an authoritative session is already running, a new remote browser joins that live run by default instead of resetting it to its own locally selected map
 - the client now treats the authoritative session map as the source of truth at launch time, not the stale local menu selection
 
+In the current ninth slice, remote clients can also leave a run cleanly:
+
+- the protocol now supports `POST /leave`
+- a remote browser can exit a run without resetting the authoritative session for everyone else
+- death/extraction flows no longer force a full server reset just because one remote client is done
+
 ## Client ownership
 
 The client owns:

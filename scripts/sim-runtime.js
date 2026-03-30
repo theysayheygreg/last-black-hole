@@ -1682,6 +1682,27 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/leave") {
+      const body = await readJson(req);
+      const clientId = String(body.clientId || "").trim();
+      if (!clientId) {
+        sendJson(res, 400, { ok: false, error: "clientId is required" });
+        return;
+      }
+      const player = runtime.players.get(clientId);
+      if (!player) {
+        sendJson(res, 404, { ok: false, error: "Unknown client" });
+        return;
+      }
+      runtime.players.delete(clientId);
+      publishEvent("player.left", {
+        clientId,
+        name: player.name,
+      });
+      sendJson(res, 200, { ok: true, session: runtime.session, playerCount: runtime.players.size });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/input") {
       const body = await readJson(req);
       const message = normalizeInputMessage(body);

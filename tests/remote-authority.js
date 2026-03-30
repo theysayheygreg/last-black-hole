@@ -119,6 +119,15 @@ async function postDebugPlayerState(body) {
   return response.json();
 }
 
+async function postLeave(body) {
+  const response = await fetch(`${SIM_URL}/leave`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 async function waitForEvents(predicate, { timeout = 5000, interval = 100 } = {}) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -351,6 +360,16 @@ async function run() {
 
       const snapshot = await getSnapshot();
       assert(snapshot.session.mapId === "shallows", `Expected live authoritative map to stay on shallows, got ${snapshot.session.mapId}`);
+
+       const leaveResponse = await postLeave({ clientId: net.clientId });
+       assert(leaveResponse.ok === true, "Expected browser-backed client leave to succeed");
+
+       const afterLeave = await getSnapshot();
+       assert(afterLeave.session.mapId === "shallows", `Expected session map to remain shallows after leave, got ${afterLeave.session.mapId}`);
+       assert(
+         !afterLeave.players.some((player) => player.clientId === net.clientId),
+         "Expected leaving browser client to be removed from authoritative session"
+       );
 
       await browser2.close();
       browser2 = null;

@@ -942,6 +942,26 @@ function transitionToRemoteGame(mapEntry) {
   });
 }
 
+async function leaveRemoteSessionToHome() {
+  if (simClient?.enabled && remoteAuthorityActive) {
+    try {
+      await simClient.leave();
+    } catch (err) {
+      console.error('[LBH] remote leave failed:', err);
+    }
+  }
+  remoteAuthorityActive = false;
+  remoteMapId = null;
+  remoteSnapshot = null;
+  remoteLastAckSeq = 0;
+  remoteLastEventSeq = 0;
+  remoteInputRequestInFlight = false;
+  remoteSnapshotRequestInFlight = false;
+  remoteInventoryRequestInFlight = false;
+  remotePendingPulse = false;
+  remotePendingConsumeSlot = null;
+}
+
 async function restartRemoteSession() {
   if (!simClient?.enabled || !remoteMapId) return;
   const mapEntry = getPlayableMapEntryById(remoteMapId);
@@ -1339,12 +1359,10 @@ function gameLoop(now) {
       if (gamePhase === 'dead' && deathTimer > 1.0) {
         if (remoteAuthorityActive) {
           triggerTransition(() => {
-            void restartRemoteSession().catch((err) => {
-              console.error('[LBH] remote restart failed:', err);
-              showWarning(`remote restart failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
-              remoteAuthorityActive = false;
-              remoteMapId = null;
-              remoteSnapshot = null;
+            void leaveRemoteSessionToHome().catch((err) => {
+              console.error('[LBH] remote leave failed:', err);
+              showWarning(`remote exit failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
+            }).finally(() => {
               loadTitleScene();
               gamePhase = 'home';
               homeTab = 0;
@@ -1391,10 +1409,21 @@ function gameLoop(now) {
         }
         // Save loadout
         profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
-        triggerTransition(() => {
-          gamePhase = 'meta';
-          metaPhaseTimer = 0;
-        });
+        if (remoteAuthorityActive) {
+          triggerTransition(() => {
+            void leaveRemoteSessionToHome().catch((err) => {
+              console.error('[LBH] remote leave after extraction failed:', err);
+            }).finally(() => {
+              gamePhase = 'meta';
+              metaPhaseTimer = 0;
+            });
+          });
+        } else {
+          triggerTransition(() => {
+            gamePhase = 'meta';
+            metaPhaseTimer = 0;
+          });
+        }
       }
       if (gamePhase === 'meta') {
         // Go to home screen after viewing salvage report

@@ -79,6 +79,15 @@ export class SimClient {
     });
   }
 
+  async leave() {
+    return this._json('/leave', {
+      method: 'POST',
+      body: JSON.stringify({
+        clientId: this.clientId,
+      }),
+    });
+  }
+
   async pollSnapshot(force = false) {
     const now = Date.now();
     if (!force && now - this.lastPollAt < this.pollIntervalMs && this.latestSnapshot) {

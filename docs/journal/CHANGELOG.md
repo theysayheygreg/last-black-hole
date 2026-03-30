@@ -682,9 +682,15 @@ LBH now has two browser-testing layers with different jobs. Puppeteer remains th
 ### src/ — Modified
 - **main.js** — Remote clients now react to authoritative `star.consumed` events with the same warning/audio/star-flash feedback as the local path instead of silently relying on local side effects. They also now replay authoritative pulse/growth/consumption wave events and keep those wave rings updating/injecting locally during remote visual mode.
 - **main.js** — Remote browser startup no longer treats the later client's local map selection as a hidden reset request. If an authoritative session is already live, the client now loads that session's map and joins it by default.
+- **main.js** — Remote death/extraction flows now leave the authoritative session cleanly instead of resetting the whole server run when one client is done.
+- **sim/sim-client.js** — Adds an explicit `leave()` request for remote clients.
 
 ### tests/ — Modified
 - **remote-authority.js** — Adds a real authoritative hazard-force check, proves the server-owned force math directly, and now also verifies that a second browser asking for the wrong map still joins the live authoritative run instead of resetting it.
+- **remote-authority.js** — Also now verifies that a browser-backed remote client can leave cleanly without destroying the session.
+
+### scripts/ — Modified
+- **sim-runtime.js** — Adds `POST /leave` so the server can drop a client from a live authoritative run without resetting session state.
 
 ### docs/project/ — Modified
 - **LOCAL-PROTOCOL.md**
