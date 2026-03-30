@@ -879,9 +879,15 @@ async function startRemoteGame(mapEntry) {
     return;
   }
 
+  const health = await simClient.getHealth();
+  const runningSession = health?.session?.status === 'running' ? health.session : null;
+  const targetMapEntry = runningSession
+    ? (getPlayableMapEntryById(runningSession.mapId) || mapEntry)
+    : mapEntry;
+
   rendererFixtureActive = false;
   remoteAuthorityActive = true;
-  remoteMapId = mapEntry.id;
+  remoteMapId = targetMapEntry.id;
   remoteSnapshot = null;
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
@@ -891,8 +897,8 @@ async function startRemoteGame(mapEntry) {
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
 
-  loadScene(mapEntry.map);
-  currentSignature = rollSignature(mapEntry.map.worldScale);
+  loadScene(targetMapEntry.map);
+  currentSignature = rollSignature(targetMapEntry.map.worldScale);
   applySignatureConfig(currentSignature);
   audioEngine.reset();
   audioEngine.setContext('gameplay');
@@ -905,11 +911,15 @@ async function startRemoteGame(mapEntry) {
     inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
   }
 
-  await simClient.ensureSession({
-    mapId: mapEntry.id,
-    worldScale: mapEntry.map.worldScale,
-    maxPlayers: 4,
-  });
+  if (!runningSession) {
+    await simClient.startSession({
+      mapId: targetMapEntry.id,
+      worldScale: targetMapEntry.map.worldScale,
+      maxPlayers: 4,
+    });
+  } else if (runningSession.mapId !== mapEntry.id) {
+    showWarning(`joining live run on ${targetMapEntry.name}`, 'rgba(140, 200, 255, 0.9)', 2400);
+  }
   await simClient.join({
     name: profileManager.active?.name || 'Pilot',
     equipped: inventorySystem.equipped,

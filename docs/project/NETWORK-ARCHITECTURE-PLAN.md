@@ -157,6 +157,7 @@ Current progress:
 - same-map clients can now join an existing authoritative run instead of always resetting it
 - server now also owns the remaining ship-contact hazards that were still local-only: star push, planetoid push, and scavenger bump collision
 - remote clients now also mirror authoritative wave events instead of silently missing server-owned pulse/growth/consumption consequences in the visual layer
+- a later remote browser now joins the live authoritative run by default instead of resetting it to its own selected map
 - broader combat/gameplay authority still needs to move over
 
 ### Batch B — Local Protocol Freeze
@@ -178,6 +179,7 @@ Current progress:
 - protocol and browser path now support a second client joining the same running authoritative session
 - protocol now has enough debug surface to place a remote player into authoritative hazard cases and prove the server-owned contact math
 - protocol and browser path now replay authoritative wave consequences through the remote visual layer instead of leaving remote runs visually quieter than local runs
+- browser startup semantics now respect the existing authoritative run as the default truth instead of treating each client as a hidden host reset button
 - protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.

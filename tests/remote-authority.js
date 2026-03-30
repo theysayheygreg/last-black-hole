@@ -148,6 +148,7 @@ async function run() {
   await startSimServer(SIM_PORT);
 
   let browser, page;
+  let browser2, page2;
   try {
     ({ browser, page } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
     await bootstrapCleanRemotePage(page);
@@ -333,9 +334,33 @@ async function run() {
       assert(snapshot.session.mapId === "shallows", `Expected shared session on shallows, got ${snapshot.session.mapId}`);
     });
 
+    await runner.run("Remote browser joins live authoritative run instead of resetting to its selected map", async () => {
+      ({ browser: browser2, page: page2 } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
+      await bootstrapCleanRemotePage(page2);
+
+      const started = await page2.evaluate(() => window.__TEST_API.startRemoteGame(2));
+      assert(started === true, "Expected second browser to start remote game through test API");
+
+      await waitFor(page2, () => {
+        const net = window.__TEST_API.getNetworkState();
+        return net.remoteAuthorityActive && net.remoteMapId === "shallows" && typeof net.remoteTick === "number";
+      }, { timeout: 12000 });
+
+      const net = await page2.evaluate(() => window.__TEST_API.getNetworkState());
+      assert(net.remoteMapId === "shallows", `Expected second browser to join live shallows run, got ${net.remoteMapId}`);
+
+      const snapshot = await getSnapshot();
+      assert(snapshot.session.mapId === "shallows", `Expected live authoritative map to stay on shallows, got ${snapshot.session.mapId}`);
+
+      await browser2.close();
+      browser2 = null;
+      page2 = null;
+    });
+
     const filepath = await screenshot(page, "remote-authority");
     console.log(`\n  Screenshot: ${filepath}`);
   } finally {
+    if (browser2) await browser2.close();
     if (browser) await browser.close();
     await stopSimServer(SIM_PORT);
     stopServer();

@@ -207,6 +207,11 @@ In the current seventh slice, the remote client also mirrors the same wave conse
 - remote clients render growth/consumption rings from authoritative `well.grew`, `star.consumed`, and `planetoid.consumed` events
 - remote visual mode now updates and injects those rings locally so the presentation layer stays in sync with server-owned contact forces
 
+In the current eighth slice, remote browser startup semantics are also closer to a real multiplayer client:
+
+- if an authoritative session is already running, a new remote browser joins that live run by default instead of resetting it to its own locally selected map
+- the client now treats the authoritative session map as the source of truth at launch time, not the stale local menu selection
+
 ## Client ownership
 
 The client owns:
