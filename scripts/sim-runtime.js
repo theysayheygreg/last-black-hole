@@ -91,6 +91,10 @@ const MAP_SIM_SCALE_PROFILES = {
     maxRelevantPlanetoidsPerPlayer: 4,
     maxRelevantWrecksPerPlayer: 5,
     maxRelevantScavengersPerPlayer: 4,
+    maxWellInfluencesPerPlayer: 6,
+    maxWaveInfluencesPerPlayer: 6,
+    maxPickupChecksPerPlayer: 4,
+    maxPortalChecksPerPlayer: 4,
   },
   expanse: {
     profileId: "medium",
@@ -110,6 +114,10 @@ const MAP_SIM_SCALE_PROFILES = {
     maxRelevantPlanetoidsPerPlayer: 4,
     maxRelevantWrecksPerPlayer: 4,
     maxRelevantScavengersPerPlayer: 3,
+    maxWellInfluencesPerPlayer: 5,
+    maxWaveInfluencesPerPlayer: 5,
+    maxPickupChecksPerPlayer: 3,
+    maxPortalChecksPerPlayer: 3,
   },
   "deep-field": {
     profileId: "large",
@@ -129,6 +137,10 @@ const MAP_SIM_SCALE_PROFILES = {
     maxRelevantPlanetoidsPerPlayer: 3,
     maxRelevantWrecksPerPlayer: 4,
     maxRelevantScavengersPerPlayer: 3,
+    maxWellInfluencesPerPlayer: 4,
+    maxWaveInfluencesPerPlayer: 4,
+    maxPickupChecksPerPlayer: 2,
+    maxPortalChecksPerPlayer: 2,
   },
 };
 
@@ -710,6 +722,10 @@ function startSession(config = {}) {
     maxRelevantPlanetoidsPerPlayer: scaleProfile.maxRelevantPlanetoidsPerPlayer,
     maxRelevantWrecksPerPlayer: scaleProfile.maxRelevantWrecksPerPlayer,
     maxRelevantScavengersPerPlayer: scaleProfile.maxRelevantScavengersPerPlayer,
+    maxWellInfluencesPerPlayer: scaleProfile.maxWellInfluencesPerPlayer,
+    maxWaveInfluencesPerPlayer: scaleProfile.maxWaveInfluencesPerPlayer,
+    maxPickupChecksPerPlayer: scaleProfile.maxPickupChecksPerPlayer,
+    maxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
     simScaleProfile: scaleProfile.profileId,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
@@ -1100,7 +1116,14 @@ function applyScavengerBump(player, scavengers = runtime.mapState.scavengers) {
 
 function applyWaveRingPush(player, dt) {
   const halfWidth = WAVE_SERVER.waveWidth * 0.5;
-  for (const ring of runtime.waveRings) {
+  const relevantRings = collectNearestByDistance(
+    player.wx,
+    player.wy,
+    runtime.waveRings,
+    runtime.session.maxWaveInfluencesPerPlayer || runtime.waveRings.length || 1,
+    (ring) => ({ wx: ring.sourceWX, wy: ring.sourceWY })
+  );
+  for (const { entity: ring } of relevantRings) {
     const { dist, nx, ny } = worldDirection(ring.sourceWX, ring.sourceWY, player.wx, player.wy, runtime.session.worldScale);
     const accel = waveBandForce(dist, ring.radius, halfWidth, WAVE_SERVER.waveShipPush, ring.amplitude);
     if (accel > 0) {
@@ -1113,7 +1136,13 @@ function applyWaveRingPush(player, dt) {
 function applyWellGravity(player, dt) {
   let ax = 0;
   let ay = 0;
-  for (const well of runtime.mapState.wells) {
+  const relevantWells = collectNearestByDistance(
+    player.wx,
+    player.wy,
+    runtime.mapState.wells,
+    runtime.session.maxWellInfluencesPerPlayer || runtime.mapState.wells.length || 1
+  );
+  for (const { entity: well } of relevantWells) {
     const dx = worldDisplacement(player.wx, well.wx, runtime.session.worldScale);
     const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
     const dist = Math.hypot(dx, dy);
@@ -1156,9 +1185,14 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
   if (player.status !== "alive") return;
   if (getCargoCount(player) >= PLAYER_CARGO_SLOTS) return;
 
-  for (const wreck of wrecks) {
-    if (wreck.alive === false || wreck.looted || wreck.pickupCooldown > 0) continue;
-    const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
+  const nearbyWrecks = collectNearestByDistance(
+    player.wx,
+    player.wy,
+    wrecks.filter((wreck) => wreck.alive !== false && !wreck.looted && wreck.pickupCooldown <= 0),
+    runtime.session.maxPickupChecksPerPlayer || wrecks.length || 1
+  );
+
+  for (const { entity: wreck, dist } of nearbyWrecks) {
     if (dist >= 0.08) continue;
 
     while (wreck.loot?.length > 0 && getCargoCount(player) < PLAYER_CARGO_SLOTS) {
@@ -1180,9 +1214,13 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
 
 function tickExtraction(player) {
   if (player.status !== "alive") return;
-  for (const portal of runtime.mapState.portals) {
-    if (portal.alive === false) continue;
-    const dist = worldDistance(player.wx, player.wy, portal.wx, portal.wy, runtime.session.worldScale);
+  const nearbyPortals = collectNearestByDistance(
+    player.wx,
+    player.wy,
+    runtime.mapState.portals.filter((portal) => portal.alive !== false),
+    runtime.session.maxPortalChecksPerPlayer || runtime.mapState.portals.length || 1
+  );
+  for (const { entity: portal, dist } of nearbyPortals) {
     if (dist < portalCaptureRadius(portal)) {
       player.status = "escaped";
       player.vx = 0;
@@ -1493,6 +1531,20 @@ function nearestPortal(entity) {
 
 function getAlivePlayers() {
   return Array.from(runtime.players.values()).filter((player) => player.status === "alive");
+}
+
+function collectNearestByDistance(originWX, originWY, entities, limit, getPosition = null) {
+  const max = clampBudgetCount(limit, entities.length || 1);
+  const ranked = [];
+  for (const entity of entities) {
+    if (!entity) continue;
+    const pos = getPosition ? getPosition(entity) : entity;
+    if (!pos) continue;
+    const dist = worldDistance(originWX, originWY, pos.wx, pos.wy, runtime.session.worldScale);
+    ranked.push({ entity, dist });
+  }
+  ranked.sort((a, b) => a.dist - b.dist);
+  return ranked.slice(0, max);
 }
 
 function buildRelevanceView() {
@@ -1945,6 +1997,10 @@ const server = http.createServer(async (req, res) => {
             maxRelevantPlanetoidsPerPlayer: profile.maxRelevantPlanetoidsPerPlayer,
             maxRelevantWrecksPerPlayer: profile.maxRelevantWrecksPerPlayer,
             maxRelevantScavengersPerPlayer: profile.maxRelevantScavengersPerPlayer,
+            maxWellInfluencesPerPlayer: profile.maxWellInfluencesPerPlayer,
+            maxWaveInfluencesPerPlayer: profile.maxWaveInfluencesPerPlayer,
+            maxPickupChecksPerPlayer: profile.maxPickupChecksPerPlayer,
+            maxPortalChecksPerPlayer: profile.maxPortalChecksPerPlayer,
           };
         }),
       });

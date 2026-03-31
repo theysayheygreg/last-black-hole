@@ -266,6 +266,12 @@ In the current fourteenth slice, the authoritative sim also starts carrying expl
 - scale profiles also advertise per-player relevance caps for stars, planetoids, wrecks, and scavengers, so larger multiplayer sessions have an explicit upper bound on how much nearby hazard and AI work each player can force
 - the server now spawns scavengers from those budgets and uses the same per-player caps to choose which nearby entities receive full background updates on larger worlds
 
+In the current fifteenth slice, the authoritative sim also starts carrying explicit player-force budgets:
+
+- scale profiles now advertise `maxWellInfluencesPerPlayer`, `maxWaveInfluencesPerPlayer`, `maxPickupChecksPerPlayer`, and `maxPortalChecksPerPlayer`
+- larger maps no longer let every player sum against every well, wave ring, wreck, and portal on every tick
+- authoritative player motion and extraction still remain server-owned, but the expensive per-player scans now run against capped nearest-source sets instead of whole-world arrays
+
 ## Client ownership
 
 The client owns:

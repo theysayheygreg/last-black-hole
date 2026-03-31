@@ -54,6 +54,14 @@ async function run() {
         shallows.maxRelevantScavengersPerPlayer > deepField.maxRelevantScavengersPerPlayer,
         "Expected shallows scavenger relevance budget > deep-field"
       );
+      assert(
+        shallows.maxWellInfluencesPerPlayer > deepField.maxWellInfluencesPerPlayer,
+        "Expected shallows well influence budget > deep-field"
+      );
+      assert(
+        shallows.maxWaveInfluencesPerPlayer > deepField.maxWaveInfluencesPerPlayer,
+        "Expected shallows wave influence budget > deep-field"
+      );
     });
 
     await runner.run("Starting deep-field session applies the large-map server profile", async () => {
@@ -86,6 +94,14 @@ async function run() {
         body.session.maxRelevantStarsPerPlayer === 4,
         `Expected large-map maxRelevantStarsPerPlayer 4, got ${body.session.maxRelevantStarsPerPlayer}`
       );
+      assert(
+        body.session.maxWellInfluencesPerPlayer === 4,
+        `Expected large-map maxWellInfluencesPerPlayer 4, got ${body.session.maxWellInfluencesPerPlayer}`
+      );
+      assert(
+        body.session.maxPortalChecksPerPlayer === 2,
+        `Expected large-map maxPortalChecksPerPlayer 2, got ${body.session.maxPortalChecksPerPlayer}`
+      );
     });
 
     await runner.run("Starting expanse session applies the medium-map server profile", async () => {
@@ -112,6 +128,10 @@ async function run() {
       assert(
         body.session.maxRelevantScavengersPerPlayer === 3,
         `Expected medium-map maxRelevantScavengersPerPlayer 3, got ${body.session.maxRelevantScavengersPerPlayer}`
+      );
+      assert(
+        body.session.maxPickupChecksPerPlayer === 3,
+        `Expected medium-map maxPickupChecksPerPlayer 3, got ${body.session.maxPickupChecksPerPlayer}`
       );
     });
 

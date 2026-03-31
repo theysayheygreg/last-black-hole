@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-03-31 (Week 2 Day 7: Explicit Per-Player Force Budgets)
+
+### scripts/ — Modified
+- **sim-runtime.js** — Map-scale authoritative profiles now carry explicit per-player budgets for well influences, wave influences, pickup checks, and portal checks.
+- **sim-runtime.js** — Authoritative player motion, extraction, and pickup truth now use capped nearest-source sets instead of scanning every well, wave ring, wreck, and portal on every player tick.
+
+### tests/ — Modified
+- **sim-scale.js** — Extends deterministic scale coverage to assert the new per-player force-budget fields for medium and large sessions.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+Large-map server clocks, relevance radii, and AI budgets were not enough while each alive player could still sum against every force source every tick. This slice gives authoritative player motion and extraction an explicit per-player cost ceiling.
+
 ## 2026-03-31 (Week 2 Day 7: Explicit AI and Per-Player Hazard Budgets)
 
 ### scripts/ — Modified
