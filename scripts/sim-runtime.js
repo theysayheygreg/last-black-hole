@@ -34,6 +34,133 @@ const RUN_DURATION = 600;
 const WELL_GROWTH_VARIANCE = 0.01;
 const WELL_GROWTH_AMOUNT = 0.02;
 const WELL_KILL_RADIUS_GROWTH = 0.3;
+// --- Hull Definitions (Ship Classes) ---
+// Each hull is a weight table on shared physics + a unique ability kit.
+// Coefficients multiply the base physics values. 1.0 = default.
+const HULL_DEFINITIONS = {
+  drifter: {
+    name: 'Drifter',
+    // Physics coefficients
+    thrustScale: 0.7,
+    dragScale: 0.85,
+    currentCoupling: 1.6,
+    signalGenMult: 0.5,
+    signalDecayMult: 1.0,
+    pulseRadiusScale: 0.8,
+    pulseCooldownScale: 1.0,
+    pulseSignalScale: 1.0,
+    cargoSlots: 4,
+    pickupRadius: 1.0,
+    sensorRange: 1.0,
+    wellResistScale: 1.0,
+    controlDebuffResist: 1.0,
+    // Abilities
+    abilities: {
+      flowLock: { type: 'passive_trigger', alignTime: 3.0, speedBoost: 0.4, signalMult: 0.1, cooldown: 5.0 },
+      eddyBrake: { type: 'active', cooldown: 20.0, turbulenceDuration: 2.0, slowFactor: 0.5 },
+      slipStream: { type: 'passive', followDist: 0.1, speedBonus: 0.2, signalReduction: 0.3 },
+      // currentSight is client-only (HUD rendering)
+    },
+  },
+  breacher: {
+    name: 'Breacher',
+    thrustScale: 1.4,
+    dragScale: 1.0,
+    currentCoupling: 0.7,
+    signalGenMult: 1.5,
+    signalDecayMult: 0.8,
+    pulseRadiusScale: 1.0,
+    pulseCooldownScale: 1.0,
+    pulseSignalScale: 1.0,
+    cargoSlots: 4,
+    pickupRadius: 1.0,
+    sensorRange: 0.8,
+    wellResistScale: 1.2,
+    controlDebuffResist: 0.7,
+    abilities: {
+      burn: { type: 'active_toggle', fuelMax: 30.0, fuelRechargeRate: 0.5, thrustMult: 2.0, signalMult: 3.0 },
+      shockwave: { type: 'enhanced_pulse', radiusMult: 1.5, stunDuration: 2.0, signalSpike: 0.15 },
+      momentumShield: { type: 'passive', speedThreshold: 0.8, wellPullReduction: 0.25 },
+      smashGrab: { type: 'passive' }, // pickup at full speed, no slowdown required
+    },
+  },
+  resonant: {
+    name: 'Resonant',
+    thrustScale: 0.9,
+    dragScale: 0.95,
+    currentCoupling: 1.0,
+    signalGenMult: 0.8,
+    signalDecayMult: 1.0,
+    pulseRadiusScale: 1.5,
+    pulseCooldownScale: 0.6,
+    pulseSignalScale: 0.5,
+    cargoSlots: 4,
+    pickupRadius: 1.0,
+    sensorRange: 1.0,
+    wellResistScale: 1.0,
+    controlDebuffResist: 1.0,
+    abilities: {
+      harmonicPulse: { type: 'enhanced_pulse', eddyDuration: 6.0, eddyStrength: 0.03, maxEddies: 3 },
+      resonanceTap: { type: 'active', cooldown: 15.0, range: 0.3, cooldownReduction: 0.5, radiusBonus: 0.3 },
+      frequencyShift: { type: 'active', cooldown: 45.0 }, // inverts next pulse to pull
+      dampeningField: { type: 'passive', inhibitorSlowFactor: 0.3 }, // eddies slow inhibitor
+    },
+  },
+  shroud: {
+    name: 'Shroud',
+    thrustScale: 0.8,
+    dragScale: 0.90,
+    currentCoupling: 1.0,
+    signalGenMult: 0.4,
+    signalDecayMult: 1.5,
+    pulseRadiusScale: 0.6,
+    pulseCooldownScale: 1.3,
+    pulseSignalScale: 1.2,
+    cargoSlots: 3,
+    pickupRadius: 0.8,
+    sensorRange: 1.3,
+    wellResistScale: 0.9,
+    controlDebuffResist: 1.0,
+    abilities: {
+      wakeCloak: { type: 'active', cooldown: 30.0, zoneDrop: 1 }, // drop signal by 1 zone
+      ghostTrail: { type: 'passive', maxZone: 'whisper' }, // invisible below WHISPER
+      decoyFlare: { type: 'active', cooldown: 60.0, charges: 2, duration: 8.0, decayRate: 0.5 },
+      // signalSight is client-only (HUD rendering of entity signal levels)
+    },
+  },
+  hauler: {
+    name: 'Hauler',
+    thrustScale: 0.6,
+    dragScale: 1.1,
+    currentCoupling: 0.8,
+    signalGenMult: 1.0,
+    signalDecayMult: 0.9,
+    pulseRadiusScale: 0.9,
+    pulseCooldownScale: 1.0,
+    pulseSignalScale: 1.0,
+    cargoSlots: 6,
+    pickupRadius: 1.4,
+    sensorRange: 0.9,
+    wellResistScale: 0.8,
+    controlDebuffResist: 1.2,
+    abilities: {
+      salvageLock: { type: 'active', charges: 2, bonusItems: 1 },
+      reinforcedHull: { type: 'passive', wellSurvives: 1 }, // survive 1 well contact per run
+      tractorField: { type: 'active', cooldown: 25.0, range: 0.15, channelTime: 3.0, pullSpeed: 0.04 },
+      // deepScanner is client-only (wreck contents visible in HUD)
+    },
+  },
+};
+
+// Hull assignment rules for AI personalities
+const PERSONALITY_HULL_MAP = {
+  prospector: ['drifter', 'hauler'],
+  raider: ['breacher'],
+  vulture: ['resonant', 'breacher'],
+  ghost: ['shroud', 'drifter'],
+  desperado: ['breacher'],
+};
+
 const SCAVENGER_CONFIG = {
   sensorRange: 1.5,
   decisionInterval: 0.8,
@@ -848,11 +975,102 @@ function publishEvent(type, payload = {}) {
   return event;
 }
 
-function createPlayer(clientId, name) {
+// --- PlayerBrain Coefficient Resolution ---
+// Hull base × rig modifiers × salvage effects → flat coefficients the sim ticks against.
+
+const BRAIN_DEFAULTS = {
+  thrustScale: 1.0, dragScale: 1.0, currentCoupling: 1.0,
+  signalGenMult: 1.0, signalDecayMult: 1.0,
+  pulseRadiusScale: 1.0, pulseCooldownScale: 1.0, pulseSignalScale: 1.0,
+  cargoSlots: 4, pickupRadius: 1.0, sensorRange: 1.0,
+  wellResistScale: 1.0, controlDebuffResist: 1.0,
+};
+
+const BRAIN_CAPS = {
+  thrustScale: [0.3, 2.5], dragScale: [0.5, 1.5], currentCoupling: [0.3, 2.5],
+  signalGenMult: [0.2, 3.0], signalDecayMult: [0.3, 3.0],
+  pulseRadiusScale: [0.3, 2.5], pulseCooldownScale: [0.3, 2.0], pulseSignalScale: [0.2, 2.0],
+  pickupRadius: [0.5, 2.0], sensorRange: [0.5, 2.0],
+  wellResistScale: [0.5, 2.0], controlDebuffResist: [0.3, 2.0],
+};
+
+function resolvePlayerBrain(hullType, rigLevels = [0, 0, 0], equipped = []) {
+  const hull = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
+  const brain = {};
+
+  // Start with hull base multipliers
+  for (const key of Object.keys(BRAIN_DEFAULTS)) {
+    brain[key] = hull[key] !== undefined ? hull[key] : BRAIN_DEFAULTS[key];
+  }
+
+  // Rig modifiers: additive on hull base (reserved for upgrade tracks)
+  // TODO: when rig upgrade tracks are defined, apply per-track bonuses here
+
+  // Equipped artifact modifiers: multiplicative on top of hull+rig
+  for (const item of equipped) {
+    if (!item || !item.coefficients) continue;
+    for (const [key, mult] of Object.entries(item.coefficients)) {
+      if (brain[key] !== undefined && typeof brain[key] === 'number' && key !== 'cargoSlots') {
+        brain[key] *= mult;
+      }
+    }
+    if (item.coefficients.cargoSlots) brain.cargoSlots += item.coefficients.cargoSlots;
+  }
+
+  // Hard caps
+  for (const [key, [min, max]] of Object.entries(BRAIN_CAPS)) {
+    if (brain[key] !== undefined) brain[key] = Math.max(min, Math.min(max, brain[key]));
+  }
+
+  return brain;
+}
+
+function createAbilityState(hullType) {
+  const hull = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
+  const state = { hullType };
+
+  if (hullType === 'drifter') {
+    state.flowLockActive = false;
+    state.flowLockAlignTimer = 0;
+    state.flowLockCooldown = 0;
+    state.eddyBrakeCooldown = 0;
+  } else if (hullType === 'breacher') {
+    state.burnActive = false;
+    state.burnFuel = hull.abilities.burn.fuelMax;
+    state.momentumShieldActive = false;
+  } else if (hullType === 'resonant') {
+    state.eddies = [];
+    state.tapAnchor = null;
+    state.tapCooldown = 0;
+    state.frequencyShiftCooldown = 0;
+    state.nextPulseInverted = false;
+  } else if (hullType === 'shroud') {
+    state.wakeCloakCooldown = 0;
+    state.ghostTrailActive = false;
+    state.decoyCharges = hull.abilities.decoyFlare.charges;
+    state.decoyCooldown = 0;
+    state.decoys = [];
+  } else if (hullType === 'hauler') {
+    state.salvageLockCharges = hull.abilities.salvageLock.charges;
+    state.taggedWrecks = [];
+    state.wellSurvivesRemaining = hull.abilities.reinforcedHull.wellSurvives;
+    state.tractorCooldown = 0;
+    state.tractorTarget = null;
+    state.tractorChannelTimer = 0;
+  }
+
+  return state;
+}
+
+function createPlayer(clientId, name, hullType = 'drifter') {
+  const brain = resolvePlayerBrain(hullType);
   return {
     clientId,
     profileId: null,
     name: name || clientId,
+    hullType,
+    brain,
+    abilityState: createAbilityState(hullType),
     wx: 0,
     wy: 0,
     vx: 0,
@@ -863,11 +1081,13 @@ function createPlayer(clientId, name) {
       moveY: 0,
       thrust: 0,
       pulse: false,
+      ability1: false,
+      ability2: false,
       consumeSlot: null,
       timestamp: Date.now(),
     },
     status: "alive",
-    cargo: new Array(PLAYER_CARGO_SLOTS).fill(null),
+    cargo: new Array(brain.cargoSlots).fill(null),
     equipped: [],
     consumables: [],
     activeEffects: [],
@@ -881,7 +1101,7 @@ function createPlayer(clientId, name) {
       zone: "ghost",
       prevZone: "ghost",
     },
-    controlDebuff: 0, // seconds remaining — Swarm contact applies 5s of sluggish controls
+    controlDebuff: 0,
     committedOutcome: null,
   };
 }
@@ -1452,9 +1672,10 @@ function applyWellGravity(player, dt) {
       return;
     }
     let pull = (0.025 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
-    if (player.activeEffects.includes("reduceWellPull")) {
-      pull *= 0.8;
-    }
+    if (player.activeEffects.includes("reduceWellPull")) pull *= 0.8;
+    // Hull wellResistScale: lower = more pull, higher = less pull
+    const wr = player.brain ? player.brain.wellResistScale : 1.0;
+    if (wr !== 1.0) pull /= wr;
     ax += (dx / dist) * pull;
     ay += (dy / dist) * pull;
   }
@@ -1464,7 +1685,8 @@ function applyWellGravity(player, dt) {
 
 function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
   if (player.status !== "alive") return;
-  if (getCargoCount(player) >= PLAYER_CARGO_SLOTS) return;
+  const maxCargo = player.brain ? player.brain.cargoSlots : PLAYER_CARGO_SLOTS;
+  if (getCargoCount(player) >= maxCargo) return;
 
   const nearbyWrecks = collectNearestByDistance(
     player.wx,
@@ -1473,10 +1695,11 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
     runtime.session.maxPickupChecksPerPlayer || wrecks.length || 1
   );
 
+  const pickupDist = 0.08 * (player.brain ? player.brain.pickupRadius : 1.0);
   for (const { entity: wreck, dist } of nearbyWrecks) {
-    if (dist >= 0.08) continue;
+    if (dist >= pickupDist) continue;
 
-    while (wreck.loot?.length > 0 && getCargoCount(player) < PLAYER_CARGO_SLOTS) {
+    while (wreck.loot?.length > 0 && getCargoCount(player) < maxCargo) {
       const freeSlot = player.cargo.indexOf(null);
       if (freeSlot === -1) break;
       player.cargo[freeSlot] = wreck.loot.shift();
@@ -1594,9 +1817,11 @@ function applyConsumable(player, slotIndex) {
 }
 
 function applyPulse(player) {
+  const pb = player.brain || BRAIN_DEFAULTS;
   if (player.effectState.pulseCooldownRemaining > 0) return false;
 
-  player.effectState.pulseCooldownRemaining = SERVER_COMBAT.pulseCooldown;
+  player.effectState.pulseCooldownRemaining = SERVER_COMBAT.pulseCooldown * pb.pulseCooldownScale;
+  const pulseRadius = SERVER_COMBAT.pulseEntityRadius * pb.pulseRadiusScale;
   player.vx -= player.lastInput.moveX * SERVER_COMBAT.pulseRecoilForce;
   player.vy -= player.lastInput.moveY * SERVER_COMBAT.pulseRecoilForce;
 
@@ -1605,8 +1830,8 @@ function applyPulse(player) {
     const dx = worldDisplacement(player.wx, other.wx, runtime.session.worldScale);
     const dy = worldDisplacement(player.wy, other.wy, runtime.session.worldScale);
     const dist = Math.hypot(dx, dy);
-    if (dist < SERVER_COMBAT.pulseEntityRadius && dist > 0.001) {
-      const force = SERVER_COMBAT.pulseEntityForce * (1 - dist / SERVER_COMBAT.pulseEntityRadius);
+    if (dist < pulseRadius && dist > 0.001) {
+      const force = SERVER_COMBAT.pulseEntityForce * (1 - dist / pulseRadius);
       other.vx += (dx / dist) * force;
       other.vy += (dy / dist) * force;
     }
@@ -1617,8 +1842,8 @@ function applyPulse(player) {
     const dx = worldDisplacement(player.wx, scav.wx, runtime.session.worldScale);
     const dy = worldDisplacement(player.wy, scav.wy, runtime.session.worldScale);
     const dist = Math.hypot(dx, dy);
-    if (dist < SERVER_COMBAT.pulseEntityRadius && dist > 0.001) {
-      const force = SERVER_COMBAT.pulseEntityForce * (1 - dist / SERVER_COMBAT.pulseEntityRadius);
+    if (dist < pulseRadius && dist > 0.001) {
+      const force = SERVER_COMBAT.pulseEntityForce * (1 - dist / pulseRadius);
       scav.vx += (dx / dist) * force;
       scav.vy += (dy / dist) * force;
     }
@@ -1629,13 +1854,13 @@ function applyPulse(player) {
     const dx = worldDisplacement(player.wx, planetoid.wx, runtime.session.worldScale);
     const dy = worldDisplacement(player.wy, planetoid.wy, runtime.session.worldScale);
     const dist = Math.hypot(dx, dy);
-    if (dist < SERVER_COMBAT.pulseEntityRadius * 0.5 && dist > 0.001) {
+    if (dist < pulseRadius * 0.5 && dist > 0.001) {
       planetoid.wx = wrapWorld(planetoid.wx + (dx / dist) * 0.02, runtime.session.worldScale);
       planetoid.wy = wrapWorld(planetoid.wy + (dy / dist) * 0.02, runtime.session.worldScale);
     }
   }
 
-  spikePlayerSignal(player, SIGNAL_CONFIG.pulseSpike);
+  spikePlayerSignal(player, SIGNAL_CONFIG.pulseSpike * pb.pulseSignalScale);
   publishEvent("player.pulse", {
     clientId: player.clientId,
     wx: player.wx,
@@ -2212,8 +2437,9 @@ function tickPlayerSignal(player, dt) {
     }
   }
 
-  // --- Apply ---
-  sig.level = Math.max(0, Math.min(1, sig.level + (generation - decay) * dt));
+  // --- Apply (hull coefficients scale generation and decay) ---
+  const pb = player.brain || BRAIN_DEFAULTS;
+  sig.level = Math.max(0, Math.min(1, sig.level + (generation * pb.signalGenMult - decay * pb.signalDecayMult) * dt));
 
   // --- Zone crossing ---
   const newZone = signalZoneForLevel(sig.level);
@@ -3152,18 +3378,32 @@ function tickSim() {
         ? dt * SERVER_COMBAT.timeSlowScale
         : dt;
     // Tick control debuff (Swarm contact → sluggish controls)
-    if (player.controlDebuff > 0) player.controlDebuff = Math.max(0, player.controlDebuff - playerDt);
+    if (player.controlDebuff > 0) {
+      const debuffDecay = player.brain ? player.brain.controlDebuffResist : 1.0;
+      player.controlDebuff = Math.max(0, player.controlDebuff - playerDt * debuffDecay);
+    }
     const controlMult = player.controlDebuff > 0 ? INHIBITOR_CONFIG.swarmControlDebuffMult : 1.0;
-    const accel = 2.5 * input.thrust * controlMult;
+    const b = player.brain || BRAIN_DEFAULTS;
+    const accel = 2.5 * b.thrustScale * input.thrust * controlMult;
     player.vx += input.moveX * accel * playerDt;
     player.vy += input.moveY * accel * playerDt;
+
+    // Current coupling: fluid flow affects this ship more/less than default
+    // (applied as velocity bias toward flow direction — higher coupling = more flow influence)
+    if (b.currentCoupling !== 1.0) {
+      const flow = estimateFlow(player.wx, player.wy);
+      const couplingDelta = (b.currentCoupling - 1.0) * 0.5; // scale for feel
+      player.vx += flow.x * couplingDelta * playerDt;
+      player.vy += flow.y * couplingDelta * playerDt;
+    }
+
     applyWellGravity(player, playerDt);
     if (player.status !== "alive") continue;
     applyStarPush(player, playerDt, relevance.stars);
     applyPlanetoidPush(player, playerDt, relevance.planetoids);
     applyWaveRingPush(player, playerDt);
-    player.vx *= Math.pow(0.92, playerDt * 15);
-    player.vy *= Math.pow(0.92, playerDt * 15);
+    player.vx *= Math.pow(0.92 * b.dragScale, playerDt * 15);
+    player.vy *= Math.pow(0.92 * b.dragScale, playerDt * 15);
     player.wx = ((player.wx + player.vx * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     player.wy = ((player.wy + player.vy * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     applyScavengerBump(player, relevance.scavengers);
