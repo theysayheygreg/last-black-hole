@@ -112,7 +112,7 @@ export class SimClient {
     return this.latestSnapshot;
   }
 
-  async sendInput({ moveX = 0, moveY = 0, thrust = 0, pulse = false, consumeSlot = null }) {
+  async sendInput({ moveX = 0, moveY = 0, thrust = 0, pulse = false, ability1 = false, ability2 = false, consumeSlot = null }) {
     this.seq += 1;
     return this._json('/input', {
       method: 'POST',
@@ -123,6 +123,8 @@ export class SimClient {
         moveY,
         thrust,
         pulse,
+        ability1,
+        ability2,
         consumeSlot,
         timestamp: Date.now(),
       }),

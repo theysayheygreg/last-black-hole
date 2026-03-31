@@ -1758,6 +1758,8 @@ function gameLoop(now) {
             moveY: Math.sin(facing) * moveMag,
             thrust,
             pulse: sentPulse,
+            ability1: inputManager.ability1 || false,
+            ability2: inputManager.ability2 || false,
             consumeSlot: sentConsumeSlot,
           }).then((response) => {
             remoteLastAckSeq = response.acceptedSeq ?? remoteLastAckSeq;

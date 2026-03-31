@@ -128,10 +128,14 @@ class ControlPlaneStore {
   bootstrapProfile({ profileId, snapshot, fallbackName = "Pilot" }) {
     const normalized = normalizeProfileSnapshot(snapshot || {}, profileId, fallbackName);
     const existing = this.state.profiles[normalized.id];
+    // Stored profile is authoritative for durable fields (EM, vault, stats, loadout).
+    // Client snapshot only wins for transient/display fields (name) or if no stored profile exists.
     const nextProfile = existing
       ? {
-          ...normalizeProfileSnapshot(existing, normalized.id, normalized.name),
           ...normalized,
+          ...normalizeProfileSnapshot(existing, normalized.id, normalized.name),
+          // Client can update display name only
+          name: normalized.name || existing.name,
           created: existing.created || normalized.created,
         }
       : normalized;

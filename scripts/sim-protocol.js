@@ -28,6 +28,8 @@ function normalizeInputMessage(body = {}) {
     moveY: clamp(asNumber(body.moveY, 0), -1, 1),
     thrust: clamp(asNumber(body.thrust, 0), 0, 1),
     pulse: Boolean(body.pulse),
+    ability1: Boolean(body.ability1),
+    ability2: Boolean(body.ability2),
     consumeSlot,
     timestamp: asNumber(body.timestamp, Date.now()),
   };
