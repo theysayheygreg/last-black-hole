@@ -59,6 +59,18 @@ Each decision has:
 
 ---
 
+## Dead Config Audit: extractionRate and collisionSpike (2026-03-30)
+
+**Question:** SIGNAL_CONFIG defined extractionRate (0.003/s) and collisionSpike (0.08) but neither was wired to any code path. Bug or intentional?
+
+**Where it landed:** Intentional — removed both configs with comments explaining why.
+- **extractionRate:** Extraction is instant (player enters portal radius → escaped). A continuous signal rate during extraction only makes sense with a charge timer. If extraction gains a charge period, re-add at 0.003/s.
+- **collisionSpike:** No generic entity-entity collision system exists. Fauna and sentries have per-type bumpSignal values tuned to their gameplay role (0.01 for jellies/blooms, 0.05 for sentries). A single global collision spike would override these per-entity values.
+
+**Door status:** Closed unless extraction gains a charge timer (which would reopen extractionRate).
+
+---
+
 ## Signal System: Three Open Decisions (2026-03-28)
 
 **Question 1: Inhibitor wake mechanic**

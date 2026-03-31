@@ -11,6 +11,47 @@ Each entry covers a day (or shift). Entries include what happened, why decisions
 
 ---
 
+## Week 3, Day 1: March 30, 2026 — The Ecology Arrives
+
+### The Story
+
+Big feature build followed by a full audit against design docs. Six systems landed in one session:
+
+**Signal** is the foundational risk/reward meter — a 0-1 float per player that rises from thrust (scaled by flow opposition), loot, combat, and well proximity. Six zones (ghost→threshold) with visual/behavioral tells. The key insight from implementation: thrust signal generation now uses actual flow alignment via analytical estimation, not a speed proxy. Fighting the current is loud; surfing with it is quiet. This is the mechanical heart of "Signal Is Consequence."
+
+**Fauna** added the ambient tier — drift jellies (teal, always present, gentle bumps) and signal blooms (purple, attracted to noise sources, spawn rate scales with signal zone). They're the birds in the trees. You notice them when they're gone.
+
+**Gradient sentries** orbit wells at 1.2-1.8× ring radius, lunging at intruders and pushing them toward the well. The push-toward-well mechanic is the key design move — they don't damage you, they reposition you into danger.
+
+**AI players** are the big one: 5 personalities (Prospector/Raider/Vulture/Ghost/Desperado) running the full player game loop server-side. Same physics, same inventory, same signal. Personalities are weight tables on shared decision code — a Ghost samples 8 flow points and barely thrusts, a Raider samples 3 and goes full burn. Competition and threat scoring make them aware of each other and the Inhibitor.
+
+**The Inhibitor** escalates through three forms driven by signal pressure: Glitch (corruption zone), Swarm (hunting mass with cargo drain + control debuff), Vessel (geometric instant-kill with portal blocking). The control debuff was missing from the initial build — the audit caught it.
+
+### The Audit
+
+Ran both research agents in parallel against every design document. Found:
+- 2 dead config values (extractionRate, collisionSpike) — removed with rationale
+- 1 critical missing mechanic (Swarm control debuff) — added
+- 1 incorrect algorithm (thrust opposition using speed proxy) — fixed to use flow alignment
+- 3 missing AI scoring factors (competition, threat, inhibitor blocking) — added
+- 1 missing feature (personality-aware flow sampling) — added estimatePathAlignment()
+- 5 deferred features correctly identified as separate build items (signal flares, equipment, HUD degradation, AI slot replacement, tendril rendering)
+
+### What We Learned
+
+The audit pattern works: implement fast, then run design-doc comparison agents before moving on. The initial build was ~85% correct by line count, but the 15% of gaps included design-breaking issues (thrust opposition, missing debuff) that would have been hard to catch later. The dead config values were the most interesting finding — they revealed places where the design doc described a mechanic that doesn't exist in the current game (extraction charge time, generic entity collisions).
+
+### Commits
+
+- Signal system — per-player 0-1 float, 6 zones, zone crossing events
+- Inhibitor system — pressure, 3 forms, final portal guarantee
+- Fauna — drift jellies + signal blooms
+- Gradient sentries — well-orbit patrols
+- AI players — 5 personalities, full game loop
+- Audit fixes — flow alignment, control debuff, AI scoring, dead config cleanup
+
+---
+
 ## Week 2, Day 3 Evening: March 27, 2026 — Everything Falls, Everything Sings
 
 ### The Story

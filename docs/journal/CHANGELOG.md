@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-03-30 — Audit Pass: Design Compliance Fixes
+
+### Audit findings & fixes
+- **Signal: thrust opposition multiplier** — was using speed proxy, now uses actual flow alignment via analytical estimateFlow(). Surfing with current is quiet; fighting it is loud.
+- **Signal: dead configs removed** — extractionRate (extraction is instant, no charge time) and collisionSpike (no generic entity collision exists) were defined but never wired. Removed with explanatory comments.
+- **Inhibitor: Swarm control debuff** — contact now applies 5s sluggish controls (0.4× thrust). New controlDebuff field on player, in snapshot.
+- **AI: competition penalty** — wreck scoring now penalizes wrecks near other players (personality.competitionPenalty). Vulture has negative penalty (prefers contested). Portal scoring includes competition count.
+- **AI: threat assessment** — wreck scoring now penalizes wrecks near sentries and Inhibitor. Portal scoring rejects Inhibitor-blocked portals.
+- **AI: flow sampling** — new estimatePathAlignment() samples N flow points along path. N = personality.flowSamples (Ghost: 8 careful, Raider: 3 reckless). Used in wreck scoring and navigation.
+- **Comments** — added section-level design rationale comments to all new systems.
+
+### Known deferred gaps (separate features, not bugs)
+- Signal flare/decoy system (separate input + entity, not in scope for this build)
+- Signal equipment (Dampened Thrusters, Signal Sink, etc — inventory items)
+- HUD degradation near Inhibitor (client-side shader effect)
+- AI slot replacement when humans join (session management layer)
+- Swarm tendril rendering (shader visual, not simulation)
+
+---
+
 ## 2026-03-30 — Feature Build: Signal, Inhibitor, Fauna, Sentries, AI Players
 
 ### New Systems (all server-authoritative + client rendering)
