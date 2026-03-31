@@ -166,6 +166,65 @@ const SENTRY_CONFIG = {
   color: [0, 255, 136],        // #00FF88 bright mint
 };
 
+const AI_PLAYER_CONFIG = {
+  decisionInterval: 0.8,      // seconds between tactical decisions
+  strategicInterval: 3.0,     // seconds between extraction re-evaluation
+  thrustAccel: 2.5,           // same as human player
+  drag: 0.92,                 // same drag exponent base
+  pickupRadius: 0.08,
+  sensorRange: 1.2,           // wu — how far AI can "see"
+  perceptionDelay: 0.5,       // seconds of position staleness for other players
+  perceptionNoise: 0.15,      // ±fraction noise on wreck value estimates
+};
+
+const AI_PERSONALITIES = {
+  prospector: {
+    name: 'Prospector',
+    names: ['Steady Hand', 'Long Haul', 'Iron Keel', 'Patient Run', 'Clearwater', 'True North'],
+    flowSamples: 6, coastThrust: 0.05, cruiseThrust: 0.3, maxThrust: 0.7,
+    distancePenalty: 40, dangerPenalty: 60, currentBonus: 30, competitionPenalty: 25,
+    minCargoValue: 150, panicPortalCount: 3, extractionGreed: 0.5, minimumWreckScore: 20,
+    aggression: 0.15, contestThreshold: 40, signalTolerance: 0.45,
+    lootTarget: [3, 5], riskHorizon: 30,
+  },
+  raider: {
+    name: 'Raider',
+    names: ['Redline', 'Breach Point', 'Hammer Down', 'No Quarter', 'Firestorm', 'Iron Rain'],
+    flowSamples: 3, coastThrust: 0.2, cruiseThrust: 0.6, maxThrust: 1.0,
+    distancePenalty: 15, dangerPenalty: 20, currentBonus: 10, competitionPenalty: 5,
+    minCargoValue: 350, panicPortalCount: 2, extractionGreed: 0.8, minimumWreckScore: 40,
+    aggression: 0.75, contestThreshold: 10, signalTolerance: 0.70,
+    lootTarget: [5, 8], riskHorizon: 15,
+  },
+  vulture: {
+    name: 'Vulture',
+    names: ['Duskwalker', 'Still Water', 'Afterglow', 'Lastlight', 'Echo', 'Pale Wake'],
+    flowSamples: 4, coastThrust: 0.1, cruiseThrust: 0.35, maxThrust: 0.9,
+    distancePenalty: 20, dangerPenalty: 35, currentBonus: 15, competitionPenalty: -15,
+    minCargoValue: 200, panicPortalCount: 2, extractionGreed: 0.6, minimumWreckScore: 15,
+    aggression: 0.6, contestThreshold: 5, signalTolerance: 0.55,
+    lootTarget: [3, 6], riskHorizon: 20,
+  },
+  ghost: {
+    name: 'Ghost',
+    names: ['\u2014', '...', 'Nil', 'Whisper', '0', '\u2591'],
+    flowSamples: 8, coastThrust: 0.0, cruiseThrust: 0.15, maxThrust: 0.5,
+    distancePenalty: 50, dangerPenalty: 80, currentBonus: 50, competitionPenalty: 40,
+    minCargoValue: 80, panicPortalCount: 3, extractionGreed: 0.3, minimumWreckScore: 5,
+    aggression: 0.05, contestThreshold: 80, signalTolerance: 0.25,
+    lootTarget: [2, 4], riskHorizon: 45,
+  },
+  desperado: {
+    name: 'Desperado',
+    names: ['Double Down', 'All In', 'Last Call', 'One More', 'Jackpot', 'Full Send'],
+    flowSamples: 4, coastThrust: 0.15, cruiseThrust: 0.5, maxThrust: 1.0,
+    distancePenalty: 10, dangerPenalty: 10, currentBonus: 15, competitionPenalty: 15,
+    minCargoValue: 500, panicPortalCount: 1, extractionGreed: 1.0, minimumWreckScore: 60,
+    aggression: 0.5, contestThreshold: 20, signalTolerance: 0.80,
+    lootTarget: [6, 8], riskHorizon: 8,
+  },
+};
+
 const FORCE_REF_DIST = 0.25;
 const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
@@ -877,6 +936,8 @@ function startSession(config = {}) {
   runtime.players.clear();
   runtime.recentEvents = [];
   runtime.nextEventSeq = 1;
+  // Spawn AI players
+  spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
   runtime.waveRings = [];
@@ -931,6 +992,8 @@ function snapshotBody() {
     players: Array.from(runtime.players.values()).map((player) => ({
       clientId: player.clientId,
       name: player.name,
+      isAI: Boolean(player.isAI),
+      personality: player.personality || null,
       status: player.status,
       wx: player.wx,
       wy: player.wy,
@@ -2096,6 +2159,344 @@ function spikePlayerSignal(player, amount) {
   }
 }
 
+// --- AI Players (Adversarial Tier) ---
+// Full player entities with decision system instead of network input.
+// Same physics, inventory, signal as human players.
+
+function createAIPlayer(personalityKey, index) {
+  const p = AI_PERSONALITIES[personalityKey];
+  const name = p.names[index % p.names.length];
+  const lootTarget = p.lootTarget[0] + Math.floor(Math.random() * (p.lootTarget[1] - p.lootTarget[0] + 1));
+  const player = createPlayer(`ai-${personalityKey}-${index}`, name);
+  player.isAI = true;
+  player.personality = personalityKey;
+  player.personalityWeights = p;
+  player.aiState = {
+    goal: 'loot',           // loot | extract | evade | contest
+    targetWreckId: null,
+    targetPortalId: null,
+    decisionTimer: Math.random() * AI_PLAYER_CONFIG.decisionInterval, // stagger
+    strategicTimer: Math.random() * AI_PLAYER_CONFIG.strategicInterval,
+    lootTarget,
+    lootCount: 0,
+    facingAngle: Math.random() * Math.PI * 2,
+    thrustIntensity: 0,
+  };
+  return player;
+}
+
+function spawnAIPlayers(mapState, session) {
+  const personalityKeys = Object.keys(AI_PERSONALITIES);
+  // 3 AI players by default, at least 2 distinct personalities
+  const count = 3;
+  const chosen = [];
+  for (let i = 0; i < count; i++) {
+    let key;
+    if (i < 2) {
+      // First two: distinct
+      do { key = personalityKeys[Math.floor(Math.random() * personalityKeys.length)]; }
+      while (chosen.includes(key) && chosen.length < personalityKeys.length);
+    } else {
+      key = personalityKeys[Math.floor(Math.random() * personalityKeys.length)];
+    }
+    chosen.push(key);
+    const aiPlayer = createAIPlayer(key, i);
+    // Spawn at random safe position
+    const pos = findSafeSpawn(mapState);
+    aiPlayer.wx = pos.wx;
+    aiPlayer.wy = pos.wy;
+    runtime.players.set(aiPlayer.clientId, aiPlayer);
+  }
+}
+
+function findSafeSpawn(mapState) {
+  const ws = mapState.worldScale;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const wx = Math.random() * ws;
+    const wy = Math.random() * ws;
+    let safe = true;
+    for (const well of mapState.wells) {
+      if (worldDistance(wx, wy, well.wx, well.wy, ws) < 0.3) { safe = false; break; }
+    }
+    if (safe) return { wx, wy };
+  }
+  return { wx: Math.random() * ws, wy: Math.random() * ws };
+}
+
+// Analytical flow estimate from well positions (no GPU needed)
+function estimateFlow(wx, wy) {
+  const ws = runtime.session.worldScale;
+  let fx = 0, fy = 0;
+  for (const well of runtime.mapState.wells) {
+    const dx = worldDisplacement(wx, well.wx, ws);
+    const dy = worldDisplacement(wy, well.wy, ws);
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.01) continue;
+    const strength = (well.mass || 1) / Math.pow(dist, 1.5);
+    const dir = well.orbitalDir || 1;
+    fx += (-dy / dist) * dir * strength * 0.3;
+    fy += (dx / dist) * dir * strength * 0.3;
+  }
+  return { x: fx, y: fy };
+}
+
+function aiScoreWreck(ai, wreck) {
+  const ws = runtime.session.worldScale;
+  const w = ai.personalityWeights;
+  const dist = worldDistance(ai.wx, ai.wy, wreck.wx, wreck.wy, ws);
+  if (dist > AI_PLAYER_CONFIG.sensorRange) return -Infinity;
+  if (wreck.looted || wreck.alive === false) return -Infinity;
+
+  // Estimate value with noise
+  const itemCount = wreck.loot ? wreck.loot.length : 1;
+  const tierMult = (wreck.tier || 1);
+  const rawValue = itemCount * tierMult * 50;
+  const noise = 1.0 + (Math.random() - 0.5) * AI_PLAYER_CONFIG.perceptionNoise * 2;
+  let score = rawValue * noise;
+
+  // Distance penalty
+  score -= dist * w.distancePenalty;
+
+  // Well danger
+  let wellDanger = 0;
+  for (const well of runtime.mapState.wells) {
+    const wd = worldDistance(wreck.wx, wreck.wy, well.wx, well.wy, ws);
+    if (wd < 0.25) wellDanger = Math.max(wellDanger, 1 - wd / 0.25);
+  }
+  score -= wellDanger * w.dangerPenalty;
+
+  // Current alignment bonus
+  const flow = estimateFlow(ai.wx, ai.wy);
+  const toWreckX = worldDisplacement(ai.wx, wreck.wx, ws);
+  const toWreckY = worldDisplacement(ai.wy, wreck.wy, ws);
+  const toDist = Math.hypot(toWreckX, toWreckY);
+  if (toDist > 0.01) {
+    const alignment = (flow.x * toWreckX + flow.y * toWreckY) / (Math.hypot(flow.x, flow.y) * toDist + 0.001);
+    score += alignment * w.currentBonus;
+  }
+
+  return score;
+}
+
+function aiScorePortal(ai, portal) {
+  const ws = runtime.session.worldScale;
+  const w = ai.personalityWeights;
+  if (!portal.alive) return -Infinity;
+
+  const dist = worldDistance(ai.wx, ai.wy, portal.wx, portal.wy, ws);
+  const timeLeft = portal.lifespan - (runtime.simTime - portal.spawnTime);
+  if (timeLeft < 3) return -Infinity;
+
+  let score = 100;
+  // Can I reach it?
+  const estTravelTime = dist / 0.15; // rough speed estimate
+  if (estTravelTime > timeLeft - 3) score -= 200;
+
+  score -= dist * 20;
+  if (portal.type === 'rift') score += 20;
+  if (portal.type === 'unstable') score -= 15;
+
+  // Cargo value amplifies
+  const cargoValue = ai.cargo.reduce((s, item) => s + (item ? (item.value || 0) : 0), 0);
+  score += cargoValue * w.extractionGreed;
+
+  return score;
+}
+
+function aiShouldExtract(ai) {
+  const w = ai.personalityWeights;
+  const cargoValue = ai.cargo.reduce((s, item) => s + (item ? (item.value || 0) : 0), 0);
+  const cargoCount = ai.cargo.filter(Boolean).length;
+  const portalsAlive = runtime.mapState.portals.filter(p => p.alive).length;
+  const inhForm = runtime.inhibitor.form;
+
+  // Hard triggers
+  if (inhForm >= 3) return true;
+  if (portalsAlive <= 1) return true;
+  if (runtime.simTime > RUN_DURATION - 30) return true;
+
+  // Soft triggers
+  if (cargoValue >= w.minCargoValue) return true;
+  if (cargoCount >= ai.aiState.lootTarget) return true;
+  if (portalsAlive <= w.panicPortalCount) return true;
+  if (inhForm >= 2 && cargoCount >= 3) return true;
+
+  return false;
+}
+
+function aiTacticalDecision(ai) {
+  const ws = runtime.session.worldScale;
+  const w = ai.personalityWeights;
+
+  // Should I extract?
+  if (aiShouldExtract(ai)) {
+    ai.aiState.goal = 'extract';
+    // Find best portal
+    let bestScore = -Infinity, bestId = null;
+    for (const portal of runtime.mapState.portals) {
+      const score = aiScorePortal(ai, portal);
+      if (score > bestScore) { bestScore = score; bestId = portal.id; }
+    }
+    ai.aiState.targetPortalId = bestId;
+    ai.aiState.targetWreckId = null;
+    return;
+  }
+
+  // Evade inhibitor if nearby
+  if (runtime.inhibitor.form >= 2) {
+    const inhDist = worldDistance(ai.wx, ai.wy, runtime.inhibitor.wx, runtime.inhibitor.wy, ws);
+    if (inhDist < 0.4) {
+      ai.aiState.goal = 'evade';
+      ai.aiState.targetWreckId = null;
+      ai.aiState.targetPortalId = null;
+      return;
+    }
+  }
+
+  // Find best wreck
+  ai.aiState.goal = 'loot';
+  let bestScore = -Infinity, bestId = null;
+  for (const wreck of runtime.mapState.wrecks) {
+    const score = aiScoreWreck(ai, wreck);
+    if (score > bestScore) { bestScore = score; bestId = wreck.id; }
+  }
+
+  if (bestScore < w.minimumWreckScore) {
+    // Nothing worth looting — extract with what we have
+    ai.aiState.goal = 'extract';
+    let bestPortalScore = -Infinity, bestPortalId = null;
+    for (const portal of runtime.mapState.portals) {
+      const score = aiScorePortal(ai, portal);
+      if (score > bestPortalScore) { bestPortalScore = score; bestPortalId = portal.id; }
+    }
+    ai.aiState.targetPortalId = bestPortalId;
+    ai.aiState.targetWreckId = null;
+  } else {
+    ai.aiState.targetWreckId = bestId;
+    ai.aiState.targetPortalId = null;
+  }
+}
+
+function aiNavigateToward(ai, targetWX, targetWY, dt) {
+  const ws = runtime.session.worldScale;
+  const w = ai.personalityWeights;
+  const dx = worldDisplacement(ai.wx, targetWX, ws);
+  const dy = worldDisplacement(ai.wy, targetWY, ws);
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.005) { ai.aiState.thrustIntensity = 0; return; }
+
+  // Check flow alignment
+  const flow = estimateFlow(ai.wx, ai.wy);
+  const flowMag = Math.hypot(flow.x, flow.y);
+  const alignment = flowMag > 0.001 ? (flow.x * dx + flow.y * dy) / (flowMag * dist) : 0;
+
+  // Set thrust based on current alignment (signal management)
+  if (alignment > 0.5) {
+    ai.aiState.thrustIntensity = w.coastThrust;
+  } else if (alignment > 0.0) {
+    ai.aiState.thrustIntensity = w.cruiseThrust;
+  } else {
+    ai.aiState.thrustIntensity = w.maxThrust;
+  }
+
+  // Steer: bias toward current if opposing
+  let steerX = dx / dist, steerY = dy / dist;
+  if (alignment < -0.2 && flowMag > 0.005) {
+    // Try lateral offset to find better current
+    const perpX = -dy / dist, perpY = dx / dist;
+    const leftFlow = estimateFlow(
+      ((ai.wx + perpX * 0.1) % ws + ws) % ws,
+      ((ai.wy + perpY * 0.1) % ws + ws) % ws
+    );
+    const rightFlow = estimateFlow(
+      ((ai.wx - perpX * 0.1) % ws + ws) % ws,
+      ((ai.wy - perpY * 0.1) % ws + ws) % ws
+    );
+    const leftAlign = (leftFlow.x * dx + leftFlow.y * dy) / (Math.hypot(leftFlow.x, leftFlow.y) * dist + 0.001);
+    const rightAlign = (rightFlow.x * dx + rightFlow.y * dy) / (Math.hypot(rightFlow.x, rightFlow.y) * dist + 0.001);
+    if (leftAlign > alignment && leftAlign > rightAlign) {
+      steerX = perpX; steerY = perpY;
+    } else if (rightAlign > alignment) {
+      steerX = -perpX; steerY = -perpY;
+    }
+  }
+
+  ai.aiState.facingAngle = Math.atan2(steerY, steerX);
+}
+
+function tickAIPlayers(dt) {
+  const ws = runtime.session.worldScale;
+
+  for (const player of runtime.players.values()) {
+    if (!player.isAI || player.status !== "alive") continue;
+    const ai = player.aiState;
+    const w = player.personalityWeights;
+
+    // Tactical decision timer
+    ai.decisionTimer -= dt;
+    if (ai.decisionTimer <= 0) {
+      ai.decisionTimer = AI_PLAYER_CONFIG.decisionInterval;
+      aiTacticalDecision(player);
+    }
+
+    // Navigate toward current target
+    let targetWX = null, targetWY = null;
+
+    if (ai.goal === 'loot' && ai.targetWreckId) {
+      const wreck = runtime.mapState.wrecks.find(w => w.id === ai.targetWreckId);
+      if (wreck && !wreck.looted && wreck.alive !== false) {
+        targetWX = wreck.wx; targetWY = wreck.wy;
+      } else {
+        ai.decisionTimer = 0; // re-decide next tick
+      }
+    } else if (ai.goal === 'extract' && ai.targetPortalId) {
+      const portal = runtime.mapState.portals.find(p => p.id === ai.targetPortalId);
+      if (portal && portal.alive) {
+        targetWX = portal.wx; targetWY = portal.wy;
+      } else {
+        ai.decisionTimer = 0;
+      }
+    } else if (ai.goal === 'evade') {
+      // Flee away from inhibitor
+      const inhDX = worldDisplacement(runtime.inhibitor.wx, player.wx, ws);
+      const inhDY = worldDisplacement(runtime.inhibitor.wy, player.wy, ws);
+      const inhDist = Math.hypot(inhDX, inhDY);
+      if (inhDist > 0.01) {
+        targetWX = ((player.wx + (inhDX / inhDist) * 0.5) % ws + ws) % ws;
+        targetWY = ((player.wy + (inhDY / inhDist) * 0.5) % ws + ws) % ws;
+      }
+      ai.thrustIntensity = w.maxThrust;
+    }
+
+    if (targetWX !== null) {
+      aiNavigateToward(player, targetWX, targetWY, dt);
+    } else {
+      // Drift
+      ai.thrustIntensity = 0.05;
+      ai.facingAngle += (Math.random() - 0.5) * 0.1 * dt;
+    }
+
+    // Apply movement (same physics as human players)
+    const accel = AI_PLAYER_CONFIG.thrustAccel * ai.thrustIntensity;
+    player.vx += Math.cos(ai.facingAngle) * accel * dt;
+    player.vy += Math.sin(ai.facingAngle) * accel * dt;
+
+    // Gravity, star push, etc are applied in the main player loop
+    // (AI players are in runtime.players, so tickSim's per-player loop handles forces)
+
+    // Set lastInput so the main tick loop applies physics correctly
+    player.lastInput.moveX = Math.cos(ai.facingAngle) * ai.thrustIntensity;
+    player.lastInput.moveY = Math.sin(ai.facingAngle) * ai.thrustIntensity;
+    player.lastInput.thrust = ai.thrustIntensity;
+
+    // Pickup: handled by tickPlayerPickups in main loop (uses same cargo system)
+    // Track loot count
+    ai.lootCount = player.cargo.filter(Boolean).length;
+
+    // Extraction: handled by tickExtraction in main loop
+  }
+}
+
 // --- Gradient Sentries (Active Tier) ---
 // Patrol well orbits, lunge at intruders, push toward well.
 
@@ -2550,6 +2951,7 @@ function tickSim() {
     tickScavengers(stepDt, relevance.scavengers)
   );
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
+  tickAIPlayers(dt);
   tickSentries(dt);
   tickFauna(dt);
   tickInhibitor(dt);
