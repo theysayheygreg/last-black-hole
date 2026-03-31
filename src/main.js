@@ -762,6 +762,20 @@ function applyRemoteEvents(events) {
           waveRings.spawn(payload.wx, payload.wy, CONFIG.events.growthWaveAmplitude * payload.mass);
         }
         break;
+      case 'scavenger.extracted':
+        showWarning('scavenger extracted — portal consumed', 'rgba(180, 120, 255, 0.9)', 3000);
+        break;
+      case 'scavenger.consumed':
+        if (payload.name) {
+          const message = payload.lootCount > 0
+            ? `${payload.name} destroyed — loot scattered`
+            : `${payload.name} consumed`;
+          showWarning(message, 'rgba(200, 140, 80, 0.9)', 3000);
+        }
+        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
+          audioEngine.playEvent('scavDeath', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        }
+        break;
       default:
         break;
     }
@@ -2071,35 +2085,41 @@ function gameLoop(now) {
       ctx.restore();
     }
 
-    // Detect scavenger portal consumption (portal count dropped without player extracting)
-    const currentPortalCount = portalSystem.activeCount;
-    if (_prevPortalCount >= 0 && currentPortalCount < _prevPortalCount && gamePhase === 'playing') {
-      const lost = _prevPortalCount - currentPortalCount;
-      for (let i = 0; i < lost; i++) {
-        showWarning('scavenger extracted — portal consumed', 'rgba(180, 120, 255, 0.9)', 3000);
+    // Detect scavenger portal consumption in local mode.
+    if (!remoteAuthorityActive) {
+      const currentPortalCount = portalSystem.activeCount;
+      if (_prevPortalCount >= 0 && currentPortalCount < _prevPortalCount && gamePhase === 'playing') {
+        const lost = _prevPortalCount - currentPortalCount;
+        for (let i = 0; i < lost; i++) {
+          showWarning('scavenger extracted — portal consumed', 'rgba(180, 120, 255, 0.9)', 3000);
+        }
       }
+      _prevPortalCount = currentPortalCount;
+    } else {
+      _prevPortalCount = portalSystem.activeCount;
     }
-    _prevPortalCount = currentPortalCount;
 
-    // Scavenger death drops — spawn debris wrecks from dead scavengers' loot
-    for (const drop of scavengerSystem.deathDrops) {
-      for (let i = 0; i < drop.lootCount; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const ejectDist = 0.05 + Math.random() * 0.05;
-        const ejectSpeed = 0.2 + Math.random() * 0.2;
-        const wx = wrapWorld(drop.wx + Math.cos(angle) * ejectDist);
-        const wy = wrapWorld(drop.wy + Math.sin(angle) * ejectDist);
-        wreckSystem.addWreck(wx, wy, {
-          type: 'derelict', tier: drop.tier, size: 'scattered',
-          vx: Math.cos(angle) * ejectSpeed,
-          vy: Math.sin(angle) * ejectSpeed,
-          pickupCooldown: 0.5,
-        });
+    // Scavenger death drops remain local-only in local authority mode.
+    if (!remoteAuthorityActive) {
+      for (const drop of scavengerSystem.deathDrops) {
+        for (let i = 0; i < drop.lootCount; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const ejectDist = 0.05 + Math.random() * 0.05;
+          const ejectSpeed = 0.2 + Math.random() * 0.2;
+          const wx = wrapWorld(drop.wx + Math.cos(angle) * ejectDist);
+          const wy = wrapWorld(drop.wy + Math.sin(angle) * ejectDist);
+          wreckSystem.addWreck(wx, wy, {
+            type: 'derelict', tier: drop.tier, size: 'scattered',
+            vx: Math.cos(angle) * ejectSpeed,
+            vy: Math.sin(angle) * ejectSpeed,
+            pickupCooldown: 0.5,
+          });
+        }
+        showWarning(`${drop.name} destroyed — loot scattered`, 'rgba(200, 140, 80, 0.9)', 3000);
+        audioEngine.playEvent('scavDeath', drop.wx, drop.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
       }
-      showWarning(`${drop.name} destroyed — loot scattered`, 'rgba(200, 140, 80, 0.9)', 3000);
-      audioEngine.playEvent('scavDeath', drop.wx, drop.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      scavengerSystem.deathDrops = [];
     }
-    scavengerSystem.deathDrops = [];
 
     // Update HUD during gameplay
     const cargoItems = inventorySystem.getCargoItems();

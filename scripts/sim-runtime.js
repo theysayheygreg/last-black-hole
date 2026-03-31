@@ -39,6 +39,7 @@ const SCAVENGER_CONFIG = {
   drag: 0.06,
   fleeWellDist: 0.15,
   pickupRadius: 0.08,
+  deathSpiralDuration: 1.5,
 };
 const SERVER_COMBAT = {
   pulseCooldown: 4.0,
@@ -421,6 +422,13 @@ function spawnServerScavengers(mapState) {
       thrustIntensity: 0,
       alive: true,
       state: "drift",
+      deathTimer: 0,
+      deathWellId: null,
+      deathWellWX: 0,
+      deathWellWY: 0,
+      deathStartWX: 0,
+      deathStartWY: 0,
+      deathAngle: 0,
       lootCount: 0,
       lootTarget: archetype === "vulture" ? 2 : 1,
       decisionTimer: Math.random() * SCAVENGER_CONFIG.decisionInterval,
@@ -1322,6 +1330,17 @@ function applyDebugPlayerState(player, body) {
   return player;
 }
 
+function applyDebugScavengerState(scavenger, body) {
+  if (Number.isFinite(Number(body.wx))) scavenger.wx = wrapWorld(Number(body.wx), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.wy))) scavenger.wy = wrapWorld(Number(body.wy), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.vx))) scavenger.vx = Number(body.vx);
+  if (Number.isFinite(Number(body.vy))) scavenger.vy = Number(body.vy);
+  if (Number.isFinite(Number(body.lootCount))) scavenger.lootCount = Math.max(0, Number(body.lootCount));
+  if (typeof body.state === "string" && body.state) scavenger.state = body.state;
+  if (typeof body.alive === "boolean") scavenger.alive = body.alive;
+  return scavenger;
+}
+
 function nearestWell(entity) {
   let best = null;
   let bestDist = Infinity;
@@ -1384,13 +1403,18 @@ function applyWellGravityToEntity(entity, dt, pullScale = 0.02) {
     const dist = Math.hypot(dx, dy);
     if (dist < 0.0001) continue;
     if (dist < well.killRadius) {
-      entity.alive = false;
-      entity.vx = 0;
-      entity.vy = 0;
-      publishEvent("scavenger.consumed", {
-        scavengerId: entity.id,
-        wellId: well.id,
-      });
+      if (entity.state !== "dying") {
+        entity.state = "dying";
+        entity.deathTimer = 0;
+        entity.deathWellId = well.id;
+        entity.deathWellWX = well.wx;
+        entity.deathWellWY = well.wy;
+        entity.deathStartWX = entity.wx;
+        entity.deathStartWY = entity.wy;
+        entity.deathAngle = Math.atan2(entity.wy - well.wy, entity.wx - well.wx);
+        entity.vx = 0;
+        entity.vy = 0;
+      }
       return false;
     }
     const pull = (pullScale * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
@@ -1402,11 +1426,76 @@ function applyWellGravityToEntity(entity, dt, pullScale = 0.02) {
   return true;
 }
 
+function spawnScavengerDeathDrops(scav) {
+  if ((scav.lootCount || 0) <= 0) return [];
+  const tier = scav.archetype === "vulture" ? 2 : 1;
+  const drops = [];
+  for (let i = 0; i < scav.lootCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const ejectDist = 0.05 + Math.random() * 0.05;
+    const ejectSpeed = 0.2 + Math.random() * 0.2;
+    const wreck = {
+      id: `wreck-scav-${scav.id}-${runtime.tick}-${i + 1}`,
+      wx: wrapWorld(scav.wx + Math.cos(angle) * ejectDist, runtime.session.worldScale),
+      wy: wrapWorld(scav.wy + Math.sin(angle) * ejectDist, runtime.session.worldScale),
+      type: "derelict",
+      tier,
+      size: "scattered",
+      alive: true,
+      looted: false,
+      pickupCooldown: 0.5,
+      vx: Math.cos(angle) * ejectSpeed,
+      vy: Math.sin(angle) * ejectSpeed,
+      loot: [],
+      name: `${scav.name} debris`,
+    };
+    runtime.mapState.wrecks.push(wreck);
+    drops.push(wreck.id);
+  }
+  return drops;
+}
+
+function updateScavengerDeathSpiral(scav, dt) {
+  const duration = SCAVENGER_CONFIG.deathSpiralDuration;
+  scav.deathTimer += dt;
+
+  if (scav.deathTimer >= duration) {
+    scav.alive = false;
+    const dropIds = spawnScavengerDeathDrops(scav);
+    publishEvent("scavenger.consumed", {
+      scavengerId: scav.id,
+      name: scav.name,
+      wellId: scav.deathWellId,
+      wx: scav.wx,
+      wy: scav.wy,
+      lootCount: scav.lootCount || 0,
+      droppedWreckIds: dropIds,
+    });
+    return false;
+  }
+
+  const t = scav.deathTimer / duration;
+  const dx = worldDisplacement(scav.deathStartWX, scav.deathWellWX, runtime.session.worldScale);
+  const dy = worldDisplacement(scav.deathStartWY, scav.deathWellWY, runtime.session.worldScale);
+  const startDist = Math.hypot(dx, dy);
+  const radius = startDist * (1 - t);
+  scav.deathAngle += (4 + t * 12) * dt;
+  scav.wx = wrapWorld(scav.deathWellWX + Math.cos(scav.deathAngle) * radius, runtime.session.worldScale);
+  scav.wy = wrapWorld(scav.deathWellWY + Math.sin(scav.deathAngle) * radius, runtime.session.worldScale);
+  scav.facing += 15 * dt;
+  return true;
+}
+
 function tickScavengers(dt) {
   const activePortalCount = runtime.mapState.portals.filter((portal) => portal.alive !== false).length;
 
   for (const scav of runtime.mapState.scavengers) {
     if (scav.alive === false) continue;
+
+    if (scav.state === "dying") {
+      updateScavengerDeathSpiral(scav, dt);
+      continue;
+    }
 
     scav.decisionTimer -= dt;
     if (scav.decisionTimer <= 0) {
@@ -1478,6 +1567,7 @@ function tickScavengers(dt) {
           scav.alive = false;
           publishEvent("scavenger.extracted", {
             scavengerId: scav.id,
+            name: scav.name,
             portalId: portal.id,
             lootCount: scav.lootCount,
           });
@@ -1820,6 +1910,23 @@ const server = http.createServer(async (req, res) => {
       }
       applyDebugPlayerState(player, body);
       sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/debug/scavenger-state") {
+      const body = await readJson(req);
+      const scavengerId = String(body.scavengerId || "").trim();
+      if (!scavengerId) {
+        sendJson(res, 400, { ok: false, error: "scavengerId is required" });
+        return;
+      }
+      const scavenger = runtime.mapState.scavengers.find((entry) => entry.id === scavengerId);
+      if (!scavenger) {
+        sendJson(res, 404, { ok: false, error: "Unknown scavenger" });
+        return;
+      }
+      applyDebugScavengerState(scavenger, body);
+      sendJson(res, 200, { ok: true, scavenger, snapshot: snapshotBody() });
       return;
     }
 

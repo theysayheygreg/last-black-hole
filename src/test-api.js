@@ -294,6 +294,7 @@ export function initTestAPI(getState) {
       const { scavengerSystem } = getState();
       if (!scavengerSystem) return [];
       return scavengerSystem.scavengers.map(s => ({
+        id: s.id,
         wx: s.wx, wy: s.wy, alive: s.alive, archetype: s.archetype,
         state: s.state, lootCount: s.lootCount,
         name: s.name, faction: s.faction, callsign: s.callsign,

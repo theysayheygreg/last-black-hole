@@ -128,6 +128,15 @@ async function postLeave(body) {
   return response.json();
 }
 
+async function postDebugScavengerState(body) {
+  const response = await fetch(`${SIM_URL}/debug/scavenger-state`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 async function postSessionReset(body) {
   const response = await fetch(`${SIM_URL}/session/reset`, {
     method: "POST",
@@ -389,6 +398,41 @@ async function run() {
       );
       assert(afterPlayer.vx > 0.01, `Expected authoritative star push to accelerate player, got vx=${afterPlayer.vx}`);
       assert(afterPlayer.wx > beforePlayer.wx, `Expected authoritative push to move player away from star, got ${afterPlayer.wx} from ${beforePlayer.wx}`);
+    });
+
+    await runner.run("Remote scavenger death consequences stay authoritative", async () => {
+      const scavengers = await page.evaluate(() => window.__TEST_API.getScavengers());
+      assert(scavengers.length > 0, "Expected at least one scavenger for remote death test");
+      const target = scavengers[0];
+      const moved = await postDebugScavengerState({
+        scavengerId: target.id || "scav-1",
+        wx: 1.08,
+        wy: 1.22,
+        vx: 0,
+        vy: 0,
+        lootCount: 2,
+        state: "drift",
+        alive: true,
+      });
+      assert(moved.ok === true, "Expected debug scavenger move near well to succeed");
+
+      await waitFor(page, () => {
+        return window.__TEST_API.getScavengers().some((scav) => scav.state === "dying");
+      }, { timeout: 4000 });
+
+      const events = await waitForEvents(
+        (allEvents) => allEvents.some((event) => event.type === "scavenger.consumed" && event.payload?.lootCount >= 2),
+        { timeout: 6000 }
+      );
+      const consumed = events.find((event) => event.type === "scavenger.consumed" && event.payload?.lootCount >= 2);
+      assert(consumed, "Expected authoritative scavenger consumed event with loot");
+
+      await waitFor(page, (expectedName) => {
+        return window.__TEST_API.getWrecks().some((wreck) => wreck.name === expectedName);
+      }, {
+        timeout: 6000,
+        args: [`${consumed.payload.name} debris`],
+      });
     });
 
     await runner.run("Second client joins existing authoritative session", async () => {

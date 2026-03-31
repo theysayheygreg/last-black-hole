@@ -180,6 +180,7 @@ Current progress:
 - protocol now carries enough player effect state for remote clients to reflect active shield/time-slow and remote pulse cooldown honestly
 - protocol now includes discrete authoritative inventory mutation requests instead of forcing loadout changes through local-only UI state
 - protocol and browser path now support a second client joining the same running authoritative session
+- server-owned scavenger consequence chains now also survive the boundary: remote clients see authoritative death spirals, debris wrecks, and explicit consumed/extracted outcomes instead of only local approximations
 - protocol now has enough debug surface to place a remote player into authoritative hazard cases and prove the server-owned contact math
 - protocol and browser path now replay authoritative wave consequences through the remote visual layer instead of leaving remote runs visually quieter than local runs
 - browser startup semantics now respect the existing authoritative run as the default truth instead of treating each client as a hidden host reset button
