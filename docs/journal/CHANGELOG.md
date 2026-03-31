@@ -681,6 +681,8 @@ LBH now has two browser-testing layers with different jobs. Puppeteer remains th
 
 ### src/ — Modified
 - **main.js** — Remote clients now react to authoritative `star.consumed` events with the same warning/audio/star-flash feedback as the local path instead of silently relying on local side effects. They also now replay authoritative pulse/growth/consumption wave events and keep those wave rings updating/injecting locally during remote visual mode.
+- **combat.js** — Added a visual-only remote pulse reconstruction path so authoritative `player.pulse` events now recreate fluid splats, shockwave rings, and well-disruption presentation locally without reapplying gameplay truth on the client.
+- **remote-authority.js** — The remote suite now moves the player near a real well before pulsing and proves that authoritative pulses create visible well-disruption state on the client instead of only emitting the protocol event.
 - **main.js** — Remote browser startup no longer treats the later client's local map selection as a hidden reset request. If an authoritative session is already live, the client now loads that session's map and joins it by default.
 - **main.js** — Remote death/extraction flows now leave the authoritative session cleanly instead of resetting the whole server run when one client is done.
 - **sim/sim-client.js** — Adds an explicit `leave()` request for remote clients.

@@ -218,7 +218,7 @@ In the current sixth slice, the server also owns:
 
 In the current seventh slice, the remote client also mirrors the same wave consequences the server now owns:
 
-- remote clients render pulse rings from authoritative `player.pulse` events
+- remote clients reconstruct authoritative pulse visuals locally from `player.pulse` events, including the shockwave ring, fluid splats, and temporary well-disruption presentation, without re-owning gameplay force math
 - remote clients render growth/consumption rings from authoritative `well.grew`, `star.consumed`, and `planetoid.consumed` events
 - remote visual mode now updates and injects those rings locally so the presentation layer stays in sync with server-owned contact forces
 

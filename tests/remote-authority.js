@@ -258,6 +258,15 @@ async function run() {
 
     await runner.run("Remote pulse is emitted by the authoritative sim protocol", async () => {
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const moved = await postDebugPlayerState({
+        clientId: net.clientId,
+        wx: 1.08,
+        wy: 1.22,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(moved.ok === true, "Expected debug move near well before pulse");
       const seq = Date.now() + 1;
       const beforeEvents = await getEvents(0);
       const baselineSeq = beforeEvents.reduce((max, event) => Math.max(max, event.seq || 0), 0);
@@ -279,6 +288,11 @@ async function run() {
         events.some((event) => event.seq > baselineSeq && event.type === "player.pulse"),
         "Expected authoritative pulse event"
       );
+
+      await waitFor(page, () => {
+        const state = window.__TEST_API.getCombatState();
+        return state && state.wellDisruptions > 0;
+      }, { timeout: 4000 });
     });
 
     await runner.run("Remote inventory actions mutate authoritative cargo and loadout", async () => {

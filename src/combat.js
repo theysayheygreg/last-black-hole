@@ -56,6 +56,43 @@ export class CombatSystem {
   }
 
   /**
+   * Reconstruct a remote authoritative pulse locally for visuals only.
+   * This preserves shockwave and well-disruption presentation without
+   * re-applying gameplay truth on the client.
+   */
+  spawnRemotePulseVisual(wx, wy, fluid, waveRings, wellSystem) {
+    const cfg = CONFIG.combat;
+    const s = uvScale();
+    const s2 = s * s;
+    const [fu, fv] = worldToFluidUV(wx, wy);
+    const numSplats = 16;
+    const pulseSplatOffset = 0.01;
+
+    for (let i = 0; i < numSplats; i++) {
+      const angle = (i / numSplats) * Math.PI * 2;
+      const dist = pulseSplatOffset * s;
+      const px = fu + Math.cos(angle) * dist;
+      const py = fv + Math.sin(angle) * dist;
+      fluid.splat(
+        px, py,
+        Math.cos(angle) * cfg.pulseForce * s,
+        Math.sin(angle) * cfg.pulseForce * s,
+        cfg.pulseRadius * s2,
+        0.8, 0.6, 0.3
+      );
+    }
+
+    waveRings.spawn(wx, wy, 1.5);
+
+    for (const well of wellSystem.wells) {
+      const d = worldDistance(wx, wy, well.wx, well.wy);
+      if (d < cfg.pulseWellDisruptRadius) {
+        this.wellDisruptions.push({ well, timer: cfg.pulseWellDisruptDuration });
+      }
+    }
+  }
+
+  /**
    * Tick cooldowns and disruption timers.
    * @param {number} dt - frame delta in seconds
    */

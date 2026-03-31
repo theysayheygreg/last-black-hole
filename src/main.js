@@ -693,7 +693,7 @@ function applyRemoteEvents(events) {
     switch (event.type) {
       case 'player.pulse':
         if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
-          waveRings.spawn(payload.wx, payload.wy, 1.5);
+          combatSystem.spawnRemotePulseVisual(payload.wx, payload.wy, fluid, waveRings, wellSystem);
         }
         audioEngine.playEvent('pulse', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         break;
@@ -1169,6 +1169,8 @@ function gameLoop(now) {
       visualOnly: remoteVisualMode,
     });
     if (remoteVisualMode) {
+      combatSystem.update(dt);
+      combatSystem.applyDisruptions(fluid);
       waveRings.update(dt);
       waveRings.injectIntoFluid(fluid);
     }

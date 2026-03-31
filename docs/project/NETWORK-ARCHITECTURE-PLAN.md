@@ -156,7 +156,7 @@ Current progress:
 - server now also owns remote inventory/loadout mutation during live runs, including authoritative dropped-item wreck spawning
 - same-map clients can now join an existing authoritative run instead of always resetting it
 - server now also owns the remaining ship-contact hazards that were still local-only: star push, planetoid push, and scavenger bump collision
-- remote clients now also mirror authoritative wave events instead of silently missing server-owned pulse/growth/consumption consequences in the visual layer
+- remote clients now also mirror authoritative wave events instead of silently missing server-owned pulse/growth/consumption consequences in the visual layer, and they reconstruct pulse-driven disruption visuals locally so remote runs do not under-report combat feedback
 - a later remote browser now joins the live authoritative run by default instead of resetting it to its own selected map
 - remote clients can now leave a run without resetting the authoritative session for everyone else
 - the session now has real host ownership instead of everyone implicitly being able to behave like a reset authority
