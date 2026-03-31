@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-03-31 — Hull System: 5 Ship Classes with Abilities
+
+### New Systems
+- **HULL_DEFINITIONS** — 5 hulls with coefficient tables and ability definitions
+- **PlayerBrain resolution** — hull × rig × salvage → flat coefficients with stacking + caps
+- **Hull abilities** — Drifter (Flow Lock, Eddy Brake), Breacher (Burn, Momentum Shield), Resonant (Harmonic Pulse, Resonance Tap, Frequency Shift), Shroud (Wake Cloak, Ghost Trail, Decoy Flare), Hauler (Salvage Lock, Reinforced Hull, Tractor Field)
+- **AI hull assignment** — personality-constrained, complementary, no duplicates
+
+### Design Decisions (see DECISION-LOG.md)
+- All 5 hulls ship (not phased). No respec. Complementary AI hulls. Rook backlogged. Mixed loot affinity.
+
+---
+
 ## 2026-03-30 — Audit Pass: Design Compliance Fixes
 
 ### Audit findings & fixes
