@@ -93,6 +93,43 @@ const SIGNAL_CONFIG = {
   zones: ["ghost", "whisper", "presence", "beacon", "flare", "threshold"],
 };
 
+const INHIBITOR_CONFIG = {
+  // Pressure accumulation
+  pressureFromSignal: 0.008,    // pressure/s per unit signal level
+  pressureFromTime: 0.0005,     // pressure/s from elapsed time (normalized)
+  pressureFromGrowth: 0.05,     // pressure per well growth event
+  // Form thresholds (fraction of wake threshold)
+  glitchFraction: 0.7,         // Form 1 at 70% of threshold
+  // Wake threshold randomized per run
+  thresholdMin: 0.82,
+  thresholdMax: 0.98,
+  // Form 1: Glitch
+  glitchRadius: 0.1,           // world-units
+  glitchDriftSpeed: 0.02,      // wu/s toward last signal position
+  glitchDissipateTime: 10,     // seconds of silence before dissipating
+  glitchSolidifySignal: 0.35,  // signal level that solidifies glitch
+  glitchSolidifySpeed: 0.04,   // wu/s when solidified
+  // Form 2: Swarm
+  swarmRadius: 0.25,
+  swarmSpeedSilent: 0.02,
+  swarmSpeedLight: 0.05,
+  swarmSpeedHeavy: 0.10,
+  swarmSpeedFlare: 0.15,
+  swarmTrackInterval: 3.0,     // seconds between target updates
+  swarmContactDrain: 1.0,      // items/second on contact
+  swarmContactSignalSpike: 0.25,
+  swarmSearchTimeout: 5.0,     // seconds before search pattern
+  // Form 3: Vessel
+  vesselSpeed: 0.08,
+  vesselKillRadius: 0.08,
+  vesselGravityRange: 0.3,
+  vesselGravityStrength: 0.15,
+  vesselPortalBlockRange: 0.2,
+  vesselTimeToForm: 90,        // seconds after Swarm, or instant if signal hits 1.0
+  finalPortalDelay: 60,        // seconds after Vessel before guaranteed portal
+  finalPortalLifespan: 15,
+};
+
 const FORCE_REF_DIST = 0.25;
 const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
@@ -657,6 +694,21 @@ const runtime = {
   },
   players: new Map(),
   waveRings: [],
+  inhibitor: {
+    pressure: 0,
+    threshold: 0.90,  // randomized per run
+    form: 0,          // 0=inactive, 1=glitch, 2=swarm, 3=vessel
+    wx: 0, wy: 0,     // world position
+    vx: 0, vy: 0,
+    intensity: 0,      // 0-1, ramps during transitions
+    radius: 0.1,
+    localTime: 0,
+    swarmTrackTimer: 0,
+    swarmTargetX: 0, swarmTargetY: 0,
+    silenceTimer: 0,   // how long peak signal has been low
+    vesselTimer: 0,    // time since Form 2
+    finalPortalSpawned: false,
+  },
   mapState: {
     id: "shallows",
     name: "The Shallows",
@@ -772,6 +824,18 @@ function startSession(config = {}) {
     scavengers: 0,
     waves: 0,
   };
+  // Inhibitor: randomize threshold per run
+  const inh = INHIBITOR_CONFIG;
+  runtime.inhibitor = {
+    pressure: 0,
+    threshold: inh.thresholdMin + Math.random() * (inh.thresholdMax - inh.thresholdMin),
+    form: 0, wx: 0, wy: 0, vx: 0, vy: 0,
+    intensity: 0, radius: inh.glitchRadius,
+    localTime: 0, swarmTrackTimer: 0,
+    swarmTargetX: 0, swarmTargetY: 0,
+    silenceTimer: 0, vesselTimer: 0,
+    finalPortalSpawned: false,
+  };
   runtime.players.clear();
   runtime.recentEvents = [];
   runtime.nextEventSeq = 1;
@@ -851,6 +915,15 @@ function snapshotBody() {
       portals: runtime.mapState.portals,
       nextPortalWaveIndex: runtime.mapState.nextPortalWaveIndex,
       scavengers: runtime.mapState.scavengers,
+    },
+    inhibitor: {
+      form: runtime.inhibitor.form,
+      wx: runtime.inhibitor.wx,
+      wy: runtime.inhibitor.wy,
+      intensity: runtime.inhibitor.intensity,
+      radius: runtime.inhibitor.radius,
+      pressure: runtime.inhibitor.pressure,
+      localTime: runtime.inhibitor.localTime,
     },
     recentEvents: runtime.recentEvents.slice(-32),
   };
@@ -938,6 +1011,7 @@ function tickGrowth(dt) {
     well.mass += well.growthRate;
     well.killRadius = wellKillRadiusForMass(well);
     spawnWaveRing(well.wx, well.wy, WAVE_SERVER.growthWaveAmplitude * well.mass);
+    runtime.inhibitor.pressure += INHIBITOR_CONFIG.pressureFromGrowth;
     publishEvent("well.grew", {
       wellId: well.id,
       mass: well.mass,
@@ -1982,6 +2056,214 @@ function spikePlayerSignal(player, amount) {
   }
 }
 
+// --- Inhibitor System ---
+// Pressure builds from player signal + time + well growth.
+// Forms: 0=inactive, 1=glitch, 2=swarm, 3=vessel.
+
+function tickInhibitor(dt) {
+  const inh = runtime.inhibitor;
+  const cfg = INHIBITOR_CONFIG;
+  const ws = runtime.session.worldScale;
+  inh.localTime += dt;
+
+  // Find peak player signal
+  let peakSignal = 0;
+  let loudestPlayer = null;
+  for (const player of runtime.players.values()) {
+    if (player.status !== "alive") continue;
+    if (player.signal.level > peakSignal) {
+      peakSignal = player.signal.level;
+      loudestPlayer = player;
+    }
+  }
+
+  // Pressure accumulation (always, even when inactive)
+  inh.pressure += peakSignal * cfg.pressureFromSignal * dt;
+  inh.pressure += (runtime.simTime / RUN_DURATION) * cfg.pressureFromTime * dt;
+  inh.pressure = Math.min(1.5, inh.pressure); // soft cap
+
+  // --- Form transitions ---
+  const glitchThreshold = inh.threshold * cfg.glitchFraction;
+
+  if (inh.form === 0 && inh.pressure >= glitchThreshold) {
+    // Spawn Glitch at map edge farthest from loudest player
+    inh.form = 1;
+    inh.intensity = 0;
+    inh.radius = cfg.glitchRadius;
+    if (loudestPlayer) {
+      // Farthest edge point
+      inh.wx = (loudestPlayer.wx + ws / 2) % ws;
+      inh.wy = (loudestPlayer.wy + ws / 2) % ws;
+    } else {
+      inh.wx = Math.random() * ws;
+      inh.wy = Math.random() * ws;
+    }
+    inh.silenceTimer = 0;
+    publishEvent("inhibitor.form", { form: 1, pressure: inh.pressure });
+  }
+
+  if (inh.form === 1 && inh.pressure >= inh.threshold) {
+    // Irreversible: Swarm
+    inh.form = 2;
+    inh.intensity = 0;
+    inh.radius = cfg.swarmRadius;
+    inh.vesselTimer = 0;
+    inh.swarmTrackTimer = 0;
+    if (loudestPlayer) {
+      inh.swarmTargetX = loudestPlayer.wx;
+      inh.swarmTargetY = loudestPlayer.wy;
+    }
+    publishEvent("inhibitor.form", { form: 2, pressure: inh.pressure });
+    publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy });
+  }
+
+  if (inh.form === 2) {
+    inh.vesselTimer += dt;
+    if (inh.vesselTimer >= cfg.vesselTimeToForm || peakSignal >= 1.0) {
+      inh.form = 3;
+      inh.intensity = 0;
+      inh.radius = cfg.swarmRadius * 1.5;
+      publishEvent("inhibitor.form", { form: 3, pressure: inh.pressure });
+    }
+  }
+
+  // --- Form behavior ---
+  if (inh.form === 1) {
+    // Glitch: drift toward last high-signal position, dissipate if quiet
+    inh.intensity = Math.min(1, inh.intensity + dt * 0.5);
+    if (peakSignal < SIGNAL_CONFIG.ghostMax) {
+      inh.silenceTimer += dt;
+      if (inh.silenceTimer >= cfg.glitchDissipateTime) {
+        inh.form = 0;
+        inh.intensity = 0;
+        publishEvent("inhibitor.form", { form: 0, pressure: inh.pressure });
+      }
+    } else {
+      inh.silenceTimer = 0;
+    }
+    // Drift
+    if (loudestPlayer) {
+      const speed = peakSignal > cfg.glitchSolidifySignal ? cfg.glitchSolidifySpeed : cfg.glitchDriftSpeed;
+      const dx = worldDisplacement(inh.wx, loudestPlayer.wx, ws);
+      const dy = worldDisplacement(inh.wy, loudestPlayer.wy, ws);
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.01) {
+        inh.wx = ((inh.wx + (dx / dist) * speed * dt) % ws + ws) % ws;
+        inh.wy = ((inh.wy + (dy / dist) * speed * dt) % ws + ws) % ws;
+      }
+    }
+  }
+
+  if (inh.form === 2) {
+    // Swarm: hunt by signal, speed scales with player activity
+    inh.intensity = Math.min(1, inh.intensity + dt * 0.3);
+    inh.swarmTrackTimer += dt;
+    if (inh.swarmTrackTimer >= cfg.swarmTrackInterval && loudestPlayer) {
+      inh.swarmTargetX = loudestPlayer.wx;
+      inh.swarmTargetY = loudestPlayer.wy;
+      inh.swarmTrackTimer = 0;
+    }
+    // Speed from player state
+    let speed = cfg.swarmSpeedSilent;
+    if (peakSignal > SIGNAL_CONFIG.flareMax) speed = cfg.swarmSpeedFlare;
+    else if (peakSignal > SIGNAL_CONFIG.presenceMax) speed = cfg.swarmSpeedHeavy;
+    else if (peakSignal > SIGNAL_CONFIG.ghostMax) speed = cfg.swarmSpeedLight;
+
+    const dx = worldDisplacement(inh.wx, inh.swarmTargetX, ws);
+    const dy = worldDisplacement(inh.wy, inh.swarmTargetY, ws);
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0.01) {
+      inh.wx = ((inh.wx + (dx / dist) * speed * dt) % ws + ws) % ws;
+      inh.wy = ((inh.wy + (dy / dist) * speed * dt) % ws + ws) % ws;
+    }
+
+    // Contact effects
+    for (const player of runtime.players.values()) {
+      if (player.status !== "alive") continue;
+      const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
+      if (pd < inh.radius * 0.5) {
+        spikePlayerSignal(player, cfg.swarmContactSignalSpike * dt);
+        // Drain cargo
+        if (Math.random() < cfg.swarmContactDrain * dt) {
+          for (let i = player.cargo.length - 1; i >= 0; i--) {
+            if (player.cargo[i]) {
+              player.cargo[i] = null;
+              publishEvent("inhibitor.drainCargo", { clientId: player.clientId });
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (inh.form === 3) {
+    // Vessel: constant advance toward player, kills on contact
+    inh.intensity = Math.min(1, inh.intensity + dt * 0.2);
+    if (loudestPlayer) {
+      const dx = worldDisplacement(inh.wx, loudestPlayer.wx, ws);
+      const dy = worldDisplacement(inh.wy, loudestPlayer.wy, ws);
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.01) {
+        inh.wx = ((inh.wx + (dx / dist) * cfg.vesselSpeed * dt) % ws + ws) % ws;
+        inh.wy = ((inh.wy + (dy / dist) * cfg.vesselSpeed * dt) % ws + ws) % ws;
+      }
+
+      // Gravity pull
+      for (const player of runtime.players.values()) {
+        if (player.status !== "alive") continue;
+        const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
+        if (pd < cfg.vesselGravityRange && pd > 0.001) {
+          const pull = cfg.vesselGravityStrength * (1 - pd / cfg.vesselGravityRange);
+          const pdx = worldDisplacement(player.wx, inh.wx, ws);
+          const pdy = worldDisplacement(player.wy, inh.wy, ws);
+          player.vx += (pdx / pd) * pull * dt;
+          player.vy += (pdy / pd) * pull * dt;
+        }
+        // Kill on contact
+        if (pd < cfg.vesselKillRadius) {
+          player.status = "dead";
+          player.vx = 0;
+          player.vy = 0;
+          publishEvent("player.died", { clientId: player.clientId, cause: "vessel" });
+        }
+      }
+
+      // Block portals
+      for (const portal of runtime.mapState.portals) {
+        if (!portal.alive) continue;
+        const portalDist = worldDistance(inh.wx, inh.wy, portal.wx, portal.wy, ws);
+        if (portalDist < cfg.vesselPortalBlockRange) {
+          portal.alive = false;
+          publishEvent("portal.blocked", { portalId: portal.id });
+        }
+      }
+    }
+
+    // Final portal
+    if (!inh.finalPortalSpawned && inh.vesselTimer >= cfg.vesselTimeToForm + cfg.finalPortalDelay) {
+      // Spawn guaranteed portal farthest from Vessel
+      let bestDist = 0, bestX = ws / 2, bestY = ws / 2;
+      for (let i = 0; i < 8; i++) {
+        const cx = Math.random() * ws;
+        const cy = Math.random() * ws;
+        const d = worldDistance(inh.wx, inh.wy, cx, cy, ws);
+        if (d > bestDist) { bestDist = d; bestX = cx; bestY = cy; }
+      }
+      runtime.mapState.portals.push({
+        id: `portal-final-${runtime.tick}`,
+        wx: bestX, wy: bestY,
+        type: "standard", wave: 99,
+        spawnTime: runtime.simTime,
+        lifespan: cfg.finalPortalLifespan,
+        alive: true, opacity: 1,
+      });
+      inh.finalPortalSpawned = true;
+      publishEvent("inhibitor.finalPortal", { wx: bestX, wy: bestY });
+    }
+  }
+}
+
 function tickSim() {
   if (runtime.session.status !== "running") return;
   const dt = 1 / runtime.session.tickHz;
@@ -2001,6 +2283,7 @@ function tickSim() {
     tickScavengers(stepDt, relevance.scavengers)
   );
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
+  tickInhibitor(dt);
   maybeCollapseRun();
 
   for (const player of runtime.players.values()) {

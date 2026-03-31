@@ -244,6 +244,12 @@ uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
 uniform float u_worldScale;    // WORLD_SCALE from coords.js — how many world-units map to the full texture
 uniform float u_refScale;      // FLUID_REF_SCALE from coords.js — the scale all UV params were tuned at (3.0)
 uniform float u_time;          // elapsed time in seconds (for shimmer noise)
+// Inhibitor state from server
+uniform int u_inhibitorForm;           // 0=inactive, 1=glitch, 2=swarm, 3=vessel
+uniform vec2 u_inhibitorPos;           // fluid UV position
+uniform float u_inhibitorRadius;       // world-space radius
+uniform float u_inhibitorIntensity;    // 0-1 ramp
+uniform float u_inhibitorTime;         // local animation time
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -339,6 +345,46 @@ void main() {
 
     // Final dark core. This must win.
     col = mix(col, vec3(0.0), coreMask * 0.985);
+  }
+
+  // === INHIBITOR CORRUPTION ===
+  if (u_inhibitorForm > 0) {
+    vec2 inhDiff = wrappedFluidUV - u_inhibitorPos;
+    inhDiff = inhDiff - round(inhDiff);  // TOROIDAL WRAPPING RULE
+    float inhDist = length(inhDiff) * u_worldScale;
+    vec3 inhColor = vec3(1.0, 0.18, 0.48); // magenta #FF2D7B
+
+    if (u_inhibitorForm == 1) {
+      // GLITCH: faint pulsing magenta bleed
+      float glitchFade = smoothstep(u_inhibitorRadius * 1.5, u_inhibitorRadius * 0.5, inhDist);
+      float pulse = 0.5 + 0.5 * sin(u_inhibitorTime * 3.0 + inhDist * 40.0);
+      col += inhColor * glitchFade * pulse * u_inhibitorIntensity * 0.3;
+    } else if (u_inhibitorForm == 2) {
+      // SWARM: roiling mass with dense core
+      float swarmCore = smoothstep(u_inhibitorRadius, u_inhibitorRadius * 0.3, inhDist);
+      float swarmEdge = smoothstep(u_inhibitorRadius * 2.0, u_inhibitorRadius, inhDist);
+      col = mix(col, inhColor, swarmCore * u_inhibitorIntensity * 0.7);
+      float edgePulse = 0.7 + 0.3 * sin(u_inhibitorTime * 2.0 + atan(inhDiff.y, inhDiff.x) * 4.0);
+      col += inhColor * swarmEdge * (1.0 - swarmCore) * edgePulse * u_inhibitorIntensity * 0.15;
+    } else if (u_inhibitorForm == 3) {
+      // VESSEL: hard geometric rectangle
+      float cosA = cos(u_inhibitorTime * 0.2);
+      float sinA = sin(u_inhibitorTime * 0.2);
+      vec2 rotDiff = vec2(inhDiff.x * cosA + inhDiff.y * sinA,
+                          -inhDiff.x * sinA + inhDiff.y * cosA) * u_worldScale;
+      float halfW = u_inhibitorRadius * 0.3;
+      float halfH = u_inhibitorRadius * 1.2;
+      float rectMask = step(abs(rotDiff.x), halfW) * step(abs(rotDiff.y), halfH);
+      vec2 gridUV = rotDiff * 80.0;
+      float grid = step(0.85, fract(gridUV.x)) + step(0.85, fract(gridUV.y));
+      grid = min(grid, 1.0);
+      vec3 vesselColor = inhColor * (0.6 + grid * 0.4);
+      col = mix(col, vesselColor, rectMask * u_inhibitorIntensity);
+      // Edge glow
+      float edgeDist = max(abs(rotDiff.x) - halfW, abs(rotDiff.y) - halfH);
+      float edgeGlow = smoothstep(0.02, 0.0, edgeDist) * (1.0 - rectMask);
+      col += inhColor * edgeGlow * 0.5;
+    }
   }
 
   // Subtle vignette at screen edges
@@ -774,7 +820,7 @@ export class FluidSim {
    * @param {number} totalTime - elapsed time in seconds
    * @param {Array} wellMasses - mass per well, matching wellPositionsUV order
    */
-  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, totalTime = 0, wellMasses = [], wellShapes = []) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -810,6 +856,17 @@ export class FluidSim {
       if (massLoc) gl.uniform1f(massLoc, wellMasses[i] ?? 1.0);
       const shapeLoc = u[`u_wellShape[${i}]`];
       if (shapeLoc) gl.uniform4fv(shapeLoc, wellShapes[i] ?? [0.01, 0.02, 0.03, 1.0]);
+    }
+
+    // Inhibitor uniforms
+    if (inhibitorData && inhibitorData.form > 0) {
+      gl.uniform1i(u['u_inhibitorForm'], inhibitorData.form);
+      gl.uniform2f(u['u_inhibitorPos'], inhibitorData.posU, inhibitorData.posV);
+      gl.uniform1f(u['u_inhibitorRadius'], inhibitorData.radius);
+      gl.uniform1f(u['u_inhibitorIntensity'], inhibitorData.intensity);
+      gl.uniform1f(u['u_inhibitorTime'], inhibitorData.localTime);
+    } else {
+      gl.uniform1i(u['u_inhibitorForm'], 0);
     }
 
     if (target) {

@@ -117,6 +117,7 @@ let shieldActive = false;   // shieldBurst consumable — survive one well conta
 let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow remaining
 let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
+let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
 let hullGraceTimer = 0;     // hull upgrade grace period (seconds remaining in kill zone before death)
@@ -682,6 +683,9 @@ function applyRemoteSnapshot(snapshot) {
   if (localPlayer.signal) {
     signalLevel = localPlayer.signal.level ?? 0;
     signalZone = localPlayer.signal.zone ?? 'ghost';
+  }
+  if (snapshot.inhibitor) {
+    inhibitorState = { ...snapshot.inhibitor };
   }
 
   if (inputManager?.facing != null) {
@@ -1927,7 +1931,19 @@ function gameLoop(now) {
   const sceneTarget = asciiRenderer.getSceneTarget();
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
-  fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE, totalTime, wellMasses, wellShapes);
+  // Inhibitor shader data
+  let inhData = null;
+  if (inhibitorState.form > 0) {
+    const [inhU, inhV] = worldToFluidUV(inhibitorState.wx, inhibitorState.wy);
+    inhData = {
+      form: inhibitorState.form,
+      posU: inhU, posV: inhV,
+      radius: inhibitorState.radius,
+      intensity: inhibitorState.intensity,
+      localTime: inhibitorState.localTime,
+    };
+  }
+  fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE, totalTime, wellMasses, wellShapes, inhData);
   asciiRenderer.render(totalTime, camFU, camFV, WORLD_SCALE, fluid.velocity.read.tex, getGlitchIntensity());
 
   // 8. Render overlay
