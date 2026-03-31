@@ -18,6 +18,7 @@ const suites = [
   { name: "Flow", file: "flow.js" },
   { name: "Inventory", file: "inventory.js" },
   { name: "Systems", file: "systems.js" },
+  { name: "SimScale", file: "sim-scale.js" },
   { name: "RemoteAuthority", file: "remote-authority.js" },
 ];
 

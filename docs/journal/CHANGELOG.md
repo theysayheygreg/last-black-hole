@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-03-30 (Week 2 Day 6: Map-Scale Authoritative Sim Profiles)
+
+### scripts/ — Modified
+- **sim-runtime.js** — The authoritative sim now applies explicit map-scale server profiles. `shallows`, `expanse`, and `deep-field` no longer share one clock budget; larger worlds now run with cheaper `tickHz`, `snapshotHz`, and slower background-world cadences for stars, wrecks, planetoids, portals, growth, scavengers, and wave maintenance.
+- **sim-runtime.js** — `/maps` now advertises those server-side scale clocks so the rest of the stack can inspect the real authoritative budget instead of guessing.
+
+### src/ — Modified
+- **sim/sim-client.js** — The browser client now adapts its polling interval to the authoritative session’s `snapshotHz` instead of hammering every map with the small-map snapshot cadence.
+
+### tests/ — Modified
+- **sim-scale.js** — Adds deterministic regression coverage for the authoritative scale profiles and proves that `expanse` and `deep-field` start with cheaper clocks than `shallows`.
+- **run-all.js** — Wires the new scale suite into `npm test`.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+The process boundary was real, but the server was still over-simulating large maps as if every world deserved the same small-map cadence. This slice is the first explicit cost-model correction: player/contact truth stays responsive, background world systems slow down with map size.
+
 ## 2026-03-30 (Week 2 Day 6: Explicit Remote Host/Join Control Plane)
 
 ### src/ — Modified

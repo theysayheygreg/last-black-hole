@@ -72,6 +72,39 @@ const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
 const DRIFTER_NAMES = ["Quiet Tide", "Still Wake", "Ash Petal", "Cold Harbor", "Pale Drift", "Dim Lantern"];
 const VULTURE_NAMES = ["Keen Edge", "Rust Claw", "Burnt Lance", "Bitter Claim", "Sharp Debt", "Iron Reap"];
 
+const MAP_SIM_SCALE_PROFILES = {
+  shallows: {
+    profileId: "small",
+    tickHz: 15,
+    snapshotHz: 10,
+    worldTickHz: 10,
+    portalTickHz: 10,
+    growthTickHz: 4,
+    scavengerTickHz: 12,
+    waveTickHz: 15,
+  },
+  expanse: {
+    profileId: "medium",
+    tickHz: 12,
+    snapshotHz: 8,
+    worldTickHz: 6,
+    portalTickHz: 6,
+    growthTickHz: 3,
+    scavengerTickHz: 8,
+    waveTickHz: 12,
+  },
+  "deep-field": {
+    profileId: "large",
+    tickHz: 10,
+    snapshotHz: 6,
+    worldTickHz: 4,
+    portalTickHz: 4,
+    growthTickHz: 2,
+    scavengerTickHz: 6,
+    waveTickHz: 10,
+  },
+};
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i++) {
@@ -375,6 +408,14 @@ function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+function getSimScaleProfile(mapId, worldScale) {
+  const profile = MAP_SIM_SCALE_PROFILES[mapId];
+  if (profile) return { ...profile };
+  if (worldScale >= 10) return { ...MAP_SIM_SCALE_PROFILES["deep-field"] };
+  if (worldScale >= 5) return { ...MAP_SIM_SCALE_PROFILES.expanse };
+  return { ...MAP_SIM_SCALE_PROFILES.shallows };
+}
+
 function generateScavengerIdentity(archetype) {
   const faction = pick(SCAVENGER_FACTIONS);
   const callsign = archetype === "vulture" ? pick(VULTURE_NAMES) : pick(DRIFTER_NAMES);
@@ -530,6 +571,13 @@ const runtime = {
   simTime: 0,
   recentEvents: [],
   nextEventSeq: 1,
+  systemAccumulators: {
+    world: 0,
+    portals: 0,
+    growth: 0,
+    scavengers: 0,
+    waves: 0,
+  },
   players: new Map(),
   waveRings: [],
   mapState: {
@@ -599,6 +647,7 @@ function startSession(config = {}) {
   const requestedMapId = String(config.mapId || "shallows");
   const requestedWorldScale = config.worldScale == null ? null : Number(config.worldScale);
   const mapState = cloneMapState(requestedMapId, requestedWorldScale);
+  const scaleProfile = getSimScaleProfile(mapState.id, mapState.worldScale);
   runtime.session = {
     id: crypto.randomUUID(),
     status: "running",
@@ -607,14 +656,27 @@ function startSession(config = {}) {
     hostClientId: config.requesterId ? String(config.requesterId) : null,
     hostName: config.requesterName ? String(config.requesterName) : null,
     worldScale: mapState.worldScale,
-    tickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : DEFAULT_TICK_HZ,
-    snapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : DEFAULT_SNAPSHOT_HZ,
+    tickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : scaleProfile.tickHz,
+    snapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : scaleProfile.snapshotHz,
+    worldTickHz: scaleProfile.worldTickHz,
+    portalTickHz: scaleProfile.portalTickHz,
+    growthTickHz: scaleProfile.growthTickHz,
+    scavengerTickHz: scaleProfile.scavengerTickHz,
+    waveTickHz: scaleProfile.waveTickHz,
+    simScaleProfile: scaleProfile.profileId,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
   runtime.mapState = mapState;
   runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState);
   runtime.tick = 0;
   runtime.simTime = 0;
+  runtime.systemAccumulators = {
+    world: 0,
+    portals: 0,
+    growth: 0,
+    scavengers: 0,
+    waves: 0,
+  };
   runtime.players.clear();
   runtime.recentEvents = [];
   runtime.nextEventSeq = 1;
@@ -1593,20 +1655,37 @@ function tickScavengers(dt) {
   runtime.mapState.scavengers = runtime.mapState.scavengers.filter((scav) => scav.alive !== false);
 }
 
+function runSystemAtRate(key, hz, baseDt, fn) {
+  if (!Number.isFinite(hz) || hz <= 0) return;
+  const step = 1 / hz;
+  runtime.systemAccumulators[key] = (runtime.systemAccumulators[key] || 0) + baseDt;
+  let iterations = 0;
+  while (runtime.systemAccumulators[key] >= step && iterations < 2) {
+    fn(step);
+    runtime.systemAccumulators[key] -= step;
+    iterations += 1;
+  }
+  if (runtime.systemAccumulators[key] > step * 2) {
+    runtime.systemAccumulators[key] = step;
+  }
+}
+
 function tickSim() {
   if (runtime.session.status !== "running") return;
   const dt = 1 / runtime.session.tickHz;
   runtime.tick += 1;
   runtime.simTime += dt;
 
-  tickWells(dt);
-  tickGrowth(dt);
-  tickStars(dt);
-  tickWrecks(dt);
-  tickPlanetoids(dt);
-  tickPortals(dt);
-  tickScavengers(dt);
-  tickWaveRings(dt);
+  runSystemAtRate("world", runtime.session.worldTickHz || runtime.session.tickHz, dt, (stepDt) => {
+    tickWells(stepDt);
+    tickStars(stepDt);
+    tickWrecks(stepDt);
+    tickPlanetoids(stepDt);
+  });
+  runSystemAtRate("growth", runtime.session.growthTickHz || runtime.session.tickHz, dt, tickGrowth);
+  runSystemAtRate("portals", runtime.session.portalTickHz || runtime.session.tickHz, dt, tickPortals);
+  runSystemAtRate("scavengers", runtime.session.scavengerTickHz || runtime.session.tickHz, dt, tickScavengers);
+  runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
   maybeCollapseRun();
 
   for (const player of runtime.players.values()) {
@@ -1716,16 +1795,27 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && req.url === "/maps") {
       sendJson(res, 200, {
         type: "maps",
-        maps: Object.values(PLAYABLE_MAPS).map((map) => ({
-          id: map.id,
-          name: map.name,
-          worldScale: map.worldScale,
-          fluidResolution: map.fluidResolution,
-          wellCount: map.wells.length,
-          starCount: map.stars.length,
-          wreckCount: map.wrecks.length,
-          planetoidCount: map.planetoids.length,
-        })),
+        maps: Object.values(PLAYABLE_MAPS).map((map) => {
+          const profile = getSimScaleProfile(map.id, map.worldScale);
+          return {
+            id: map.id,
+            name: map.name,
+            worldScale: map.worldScale,
+            fluidResolution: map.fluidResolution,
+            wellCount: map.wells.length,
+            starCount: map.stars.length,
+            wreckCount: map.wrecks.length,
+            planetoidCount: map.planetoids.length,
+            simScaleProfile: profile.profileId,
+            tickHz: profile.tickHz,
+            snapshotHz: profile.snapshotHz,
+            worldTickHz: profile.worldTickHz,
+            portalTickHz: profile.portalTickHz,
+            growthTickHz: profile.growthTickHz,
+            scavengerTickHz: profile.scavengerTickHz,
+            waveTickHz: profile.waveTickHz,
+          };
+        }),
       });
       return;
     }

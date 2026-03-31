@@ -13,6 +13,13 @@ export class SimClient {
     this.pollIntervalMs = 100;
   }
 
+  _applySessionClocks(session) {
+    const snapshotHz = Number(session?.snapshotHz);
+    if (Number.isFinite(snapshotHz) && snapshotHz > 0) {
+      this.pollIntervalMs = Math.max(40, Math.round(1000 / snapshotHz));
+    }
+  }
+
   get enabled() {
     return Boolean(this.baseUrl);
   }
@@ -31,7 +38,9 @@ export class SimClient {
   }
 
   async getHealth() {
-    return this._json('/health');
+    const body = await this._json('/health');
+    this._applySessionClocks(body?.session);
+    return body;
   }
 
   async getMaps() {
@@ -43,6 +52,7 @@ export class SimClient {
       method: 'POST',
       body: JSON.stringify({ mapId, worldScale, maxPlayers, requesterId, requesterName }),
     });
+    this._applySessionClocks(body?.session);
     this.latestSnapshot = null;
     this.lastPollAt = 0;
     return body.session;
@@ -62,6 +72,7 @@ export class SimClient {
       method: 'POST',
       body: JSON.stringify({ requesterId }),
     });
+    this._applySessionClocks(body?.session);
     this.latestSnapshot = null;
     this.lastPollAt = 0;
     return body.session;
@@ -95,6 +106,7 @@ export class SimClient {
     }
     this.lastPollAt = now;
     this.latestSnapshot = await this._json('/snapshot');
+    this._applySessionClocks(this.latestSnapshot?.session);
     return this.latestSnapshot;
   }
 

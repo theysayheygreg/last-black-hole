@@ -246,6 +246,13 @@ In the current eleventh slice, the browser client finally exposes that control p
 - `space/A` is now explicitly the join-or-host action, while `X/Y` is the host-only reset action for the selected map
 - remote-authority coverage now proves that a non-host browser can see it will join the live run rather than reset it, and that the original browser reports host reset authority
 
+In the current twelfth slice, the authoritative sim also starts scaling its clocks by map size:
+
+- `shallows`, `expanse`, and `deep-field` now advertise explicit server-side scale profiles through `/maps`
+- larger maps now run with cheaper authoritative `tickHz`, `snapshotHz`, and slower background-world cadences instead of pretending every world needs the small-map clock budget
+- the server now keeps player/contact truth at the main tick rate while throttling background systems like stars, wrecks, planetoids, portals, growth, and scavenger AI to map-sized cadences
+- the browser client now adapts its snapshot polling interval to the authoritative session’s advertised `snapshotHz` instead of polling small-map rates against every map
+
 ## Client ownership
 
 The client owns:
@@ -274,3 +281,4 @@ The next useful transfers are:
 - coarse authoritative flow sampling
 - broader combat consequences beyond pulse events and contact forces
 - real lobby/session selection semantics beyond the current "join live run / host reset selected map" control plane
+- more aggressive map-scale simulation changes for 4-8 player sessions beyond the first clock-profile cut
