@@ -115,6 +115,8 @@ const simState = createSimState();
 let inventoryOpen = false;  // Tab toggle state
 let shieldActive = false;   // shieldBurst consumable — survive one well contact
 let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow remaining
+let signalLevel = 0;        // 0-1 float, read from server snapshot
+let signalZone = 'ghost';   // current signal zone name
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
 let hullGraceTimer = 0;     // hull upgrade grace period (seconds remaining in kill zone before death)
@@ -677,6 +679,10 @@ function applyRemoteSnapshot(snapshot) {
   shieldActive = Boolean(localPlayer.effectState?.shieldCharges > 0);
   timeSlowRemaining = Math.max(0, localPlayer.effectState?.timeSlowRemaining ?? 0);
   combatSystem.playerCooldown = Math.max(0, localPlayer.effectState?.pulseCooldownRemaining ?? 0);
+  if (localPlayer.signal) {
+    signalLevel = localPlayer.signal.level ?? 0;
+    signalZone = localPlayer.signal.zone ?? 'ghost';
+  }
 
   if (inputManager?.facing != null) {
     ship.setFacingDirect(inputManager.facing);
@@ -2284,6 +2290,8 @@ function gameLoop(now) {
       signature: currentSignature,
       inventorySystem,
       inventoryOpen,
+      signalLevel,
+      signalZone,
       ship,
       camX, camY,
       canvasW: overlayCanvas.width,

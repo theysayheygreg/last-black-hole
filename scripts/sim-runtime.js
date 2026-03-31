@@ -66,6 +66,33 @@ const WAVE_SERVER = {
   waveShipPush: 0.8,
   growthWaveAmplitude: 1.0,
 };
+const SIGNAL_CONFIG = {
+  // Generation rates (per second for continuous, instant for spikes)
+  thrustBaseRate: 0.005,
+  thrustOppositionMult: 2.0,
+  lootSpikeT1: 0.06,
+  lootSpikeT2: 0.10,
+  lootSpikeT3: 0.18,
+  pulseSpike: 0.12,
+  collisionSpike: 0.08,
+  extractionRate: 0.003,
+  wellProximityRate: 0.002,
+  wellProximityDist: 0.30,
+  coastRate: 0.001,
+  // Decay rates (per second)
+  decayBase: 0.025,
+  decayWreckWake: 0.040,
+  decayAccretionShadow: 0.050,
+  // Thresholds
+  ghostMax: 0.15,
+  whisperMax: 0.35,
+  presenceMax: 0.55,
+  beaconMax: 0.75,
+  flareMax: 0.90,
+  // Zone names (ordered)
+  zones: ["ghost", "whisper", "presence", "beacon", "flare", "threshold"],
+};
+
 const FORCE_REF_DIST = 0.25;
 const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
@@ -686,6 +713,11 @@ function createPlayer(clientId, name) {
       timeSlowRemaining: 0,
       pulseCooldownRemaining: 0,
     },
+    signal: {
+      level: 0,
+      zone: "ghost",
+      prevZone: "ghost",
+    },
   };
 }
 
@@ -809,6 +841,7 @@ function snapshotBody() {
       consumables: player.consumables,
       activeEffects: player.activeEffects,
       effectState: player.effectState,
+      signal: player.signal,
     })),
     world: {
       wells: runtime.mapState.wells,
@@ -1203,6 +1236,12 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
     if (!wreck.loot || wreck.loot.length === 0) {
       wreck.looted = true;
     }
+    // Signal spike from looting (tier-based)
+    const wreckTier = wreck.tier || 1;
+    const lootSpike = wreckTier >= 3 ? SIGNAL_CONFIG.lootSpikeT3
+      : wreckTier >= 2 ? SIGNAL_CONFIG.lootSpikeT2
+      : SIGNAL_CONFIG.lootSpikeT1;
+    spikePlayerSignal(player, lootSpike);
     publishEvent("player.loot", {
       clientId: player.clientId,
       wreckId: wreck.id,
@@ -1347,6 +1386,7 @@ function applyPulse(player) {
     }
   }
 
+  spikePlayerSignal(player, SIGNAL_CONFIG.pulseSpike);
   publishEvent("player.pulse", {
     clientId: player.clientId,
     wx: player.wx,
@@ -1841,6 +1881,107 @@ function runSystemAtRate(key, hz, baseDt, fn) {
   }
 }
 
+// --- Signal System ---
+// Signal is a 0-1 float per player. Rises from activity, decays when quiet.
+// Zone crossings publish events for client audio/visual feedback.
+
+function signalZoneForLevel(level) {
+  const cfg = SIGNAL_CONFIG;
+  if (level <= cfg.ghostMax) return "ghost";
+  if (level <= cfg.whisperMax) return "whisper";
+  if (level <= cfg.presenceMax) return "presence";
+  if (level <= cfg.beaconMax) return "beacon";
+  if (level <= cfg.flareMax) return "flare";
+  return "threshold";
+}
+
+function tickPlayerSignal(player, dt) {
+  const cfg = SIGNAL_CONFIG;
+  const sig = player.signal;
+  const input = player.lastInput;
+  const speed = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
+  const isThrusting = input.thrust > 0.1;
+
+  // --- Generation ---
+  let generation = 0;
+
+  if (isThrusting) {
+    // Base thrust signal, scaled by intensity
+    generation += cfg.thrustBaseRate * input.thrust;
+    // TODO: opposition multiplier requires flow field sampling (analytical model)
+    // For now, scale by raw speed as a proxy — faster = louder
+    generation += cfg.thrustBaseRate * Math.min(speed * 5, cfg.thrustOppositionMult - 1.0) * input.thrust;
+  } else if (speed > 0.001) {
+    // Coasting — minimal signal
+    generation += cfg.coastRate;
+  }
+
+  // Well proximity — near wells is noisy
+  for (const well of runtime.mapState.wells) {
+    const dist = worldDistance(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
+    if (dist < cfg.wellProximityDist) {
+      generation += cfg.wellProximityRate;
+      break; // only count once
+    }
+  }
+
+  // --- Decay ---
+  let decay = 0;
+  if (!isThrusting) {
+    decay = cfg.decayBase;
+
+    // Enhanced decay in wreck wake zones
+    for (const wreck of runtime.mapState.wrecks) {
+      if (wreck.looted) continue;
+      const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
+      if (dist < 0.15) {
+        decay = cfg.decayWreckWake;
+        break;
+      }
+    }
+
+    // Enhanced decay in accretion shadows
+    for (const well of runtime.mapState.wells) {
+      const dist = worldDistance(player.wx, player.wy, well.wx, well.wy, runtime.session.worldScale);
+      if (dist < 0.25) {
+        decay = Math.max(decay, cfg.decayAccretionShadow);
+        break;
+      }
+    }
+  }
+
+  // --- Apply ---
+  sig.level = Math.max(0, Math.min(1, sig.level + (generation - decay) * dt));
+
+  // --- Zone crossing ---
+  const newZone = signalZoneForLevel(sig.level);
+  if (newZone !== sig.zone) {
+    sig.prevZone = sig.zone;
+    sig.zone = newZone;
+    publishEvent("signal.zoneCrossing", {
+      clientId: player.clientId,
+      from: sig.prevZone,
+      to: sig.zone,
+      level: sig.level,
+    });
+  }
+}
+
+function spikePlayerSignal(player, amount) {
+  player.signal.level = Math.min(1, player.signal.level + amount);
+  const newZone = signalZoneForLevel(player.signal.level);
+  if (newZone !== player.signal.zone) {
+    player.signal.prevZone = player.signal.zone;
+    player.signal.zone = newZone;
+    publishEvent("signal.zoneCrossing", {
+      clientId: player.clientId,
+      from: player.signal.prevZone,
+      to: player.signal.zone,
+      level: player.signal.level,
+    });
+  }
+}
+
 function tickSim() {
   if (runtime.session.status !== "running") return;
   const dt = 1 / runtime.session.tickHz;
@@ -1912,6 +2053,7 @@ function tickSim() {
     tickPlayerPickups(player, relevance.wrecks);
     tickExtraction(player);
     if (player.status !== "alive") continue;
+    tickPlayerSignal(player, playerDt);
   }
 }
 

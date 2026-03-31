@@ -73,6 +73,36 @@
       font-size: 10px;
       color: rgba(140, 160, 190, 0.65);
     }
+    #hud-signal {
+      top: 72px; left: 16px;
+      color: rgba(80, 200, 180, 0.85);
+      text-shadow: 0 0 6px rgba(80, 200, 180, 0.3);
+      line-height: 1.4;
+      border-color: rgba(80, 200, 180, 0.15);
+    }
+    #hud-signal .hud-label {
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      color: rgba(80, 180, 160, 0.65);
+      text-transform: uppercase;
+    }
+    #hud-signal-bar {
+      width: 120px; height: 4px;
+      background: rgba(40, 50, 60, 0.6);
+      border-radius: 2px;
+      margin: 3px 0 2px 0;
+      overflow: hidden;
+    }
+    #hud-signal-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      transition: width 0.15s, background-color 0.3s;
+    }
+    #hud-signal-zone {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
     #hud-portals {
       top: 12px; right: 16px;
       text-align: right;
@@ -247,6 +277,11 @@
       <div class="hud-label">universal collapse</div>
       <div class="hud-value" id="hud-collapse-timer">10:00</div>
       <div class="hud-sub" id="hud-collapse-event"></div>
+    </div>
+    <div id="hud-signal" class="hud-panel">
+      <div class="hud-label">signal</div>
+      <div id="hud-signal-bar"><div id="hud-signal-fill"></div></div>
+      <div id="hud-signal-zone">ghost</div>
     </div>
     <div id="hud-portals" class="hud-panel">
       <div class="hud-label">wormholes</div>

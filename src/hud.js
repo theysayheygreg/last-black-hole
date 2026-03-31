@@ -22,6 +22,7 @@ let _signatureEl;
 let _portalArrowEl;
 let _inventoryPanelEl;
 let _warningsEl;
+let _signalFillEl, _signalZoneEl;
 let _dropCallback = null;  // set by main.js for drop handling
 let _lastPortalCount = -1;
 let _lastCollapseStr = '';
@@ -45,6 +46,8 @@ export function initHUD() {
   _portalArrowEl = document.getElementById('hud-portal-arrow');
   _inventoryPanelEl = document.getElementById('hud-inventory-panel');
   _warningsEl = document.getElementById('hud-warnings');
+  _signalFillEl = document.getElementById('hud-signal-fill');
+  _signalZoneEl = document.getElementById('hud-signal-zone');
 }
 
 export function showHUD() {
@@ -221,6 +224,27 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
       _pulseEl.textContent = `pulse ${cd.toFixed(1)}s`;
       _pulseEl.className = 'hud-panel';
     }
+  }
+
+  // === SIGNAL ===
+  if (_signalFillEl && opts.signalLevel !== undefined) {
+    const level = opts.signalLevel;
+    const zone = opts.signalZone || 'ghost';
+    const pct = Math.round(level * 100);
+    _signalFillEl.style.width = `${pct}%`;
+
+    // Zone-based color
+    const zoneColors = {
+      ghost:     'rgba(80, 200, 180, 0.7)',   // teal
+      whisper:   'rgba(80, 140, 220, 0.8)',   // blue
+      presence:  'rgba(210, 180, 60, 0.85)',  // amber
+      beacon:    'rgba(230, 140, 40, 0.9)',   // orange
+      flare:     'rgba(220, 50, 40, 0.9)',    // red
+      threshold: 'rgba(255, 255, 255, 0.95)', // glitch white
+    };
+    _signalFillEl.style.backgroundColor = zoneColors[zone] || zoneColors.ghost;
+    _signalZoneEl.textContent = zone;
+    _signalZoneEl.style.color = zoneColors[zone] || zoneColors.ghost;
   }
 
   // === SIGNATURE ===

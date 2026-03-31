@@ -315,10 +315,10 @@ The scavenger V2 design (SCAVENGERS-V2.md) and fauna design (FAUNA.md) are super
 - Cargo raids, informants, pack hunting → natural behaviors of adversarial AI players
 - Scavenger drones → new active type (loot timer, not a player analog)
 
-## Open Questions for Greg
+## Decisions (2026-03-28)
 
-1. **AI player count** — 3 AI per run (4 total players) feels right for the map sizes we have. Scale with map size? Or always 4?
-2. **AI player visibility** — always visible? Or do Ghost personalities actually disappear from view when signal is low enough?
-3. **AI player extraction** — when an AI extracts, do you see their haul? ("Prospector extracted with 6 items" in the events log creates competitive tension.)
-4. **Active type naming** — "Gradient Sentries" and "Current Hunters" are mechanical names. Do these entities have lore-friendly names? Or are they just part of the universe's unnamed ecology?
-5. **Catalog expansion rate** — how many types do we need for the jam vs. post-jam? 2 ambient + 2 active + 3 AI personalities could be the jam target, with the full catalog as the post-jam roadmap.
+1. **Player count per run:** 4-8 total (human + AI filling remaining slots). Server architecture scoped for this range.
+2. **AI visibility / detection range:** Deferred. Interesting design space with lots of knobs but not load-bearing yet. Future feature.
+3. **Scope:** No jam constraints. Pushing toward real game. Full catalog is the target, items naturally sequence into the roadmap by dependency and complexity.
+4. **AI player extraction visibility:** Open — do you see their haul on extract?
+5. **Active type naming:** Open — mechanical names or lore-friendly?
