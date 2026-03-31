@@ -152,6 +152,20 @@ const FAUNA_CONFIG = {
   },
 };
 
+const SENTRY_CONFIG = {
+  perWell: [2, 3],             // min/max sentries per well
+  orbitRadiusMult: [1.2, 1.8], // multiplier on well ringOuter
+  patrolSpeed: [0.03, 0.05],   // wu/s tangential speed
+  lungeRange: 0.08,            // wu — triggers lunge
+  lungeSpeed: 0.10,            // wu/s toward player
+  lungeDuration: 0.5,          // seconds
+  lungeRecovery: 2.5,          // seconds before returning to patrol
+  bumpForce: 0.02,             // wu/s impulse TOWARD well
+  bumpSignal: 0.05,            // signal spike on lunge contact
+  segments: 4,                 // body segments for rendering
+  color: [0, 255, 136],        // #00FF88 bright mint
+};
+
 const FORCE_REF_DIST = 0.25;
 const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
@@ -837,6 +851,7 @@ function startSession(config = {}) {
   };
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
+  runtime.mapState.sentries = spawnSentries(mapState);
   runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState, runtime.session);
   runtime.tick = 0;
   runtime.simTime = 0;
@@ -939,6 +954,7 @@ function snapshotBody() {
       nextPortalWaveIndex: runtime.mapState.nextPortalWaveIndex,
       scavengers: runtime.mapState.scavengers,
       fauna: runtime.mapState.fauna,
+      sentries: runtime.mapState.sentries,
     },
     inhibitor: {
       form: runtime.inhibitor.form,
@@ -2080,6 +2096,120 @@ function spikePlayerSignal(player, amount) {
   }
 }
 
+// --- Gradient Sentries (Active Tier) ---
+// Patrol well orbits, lunge at intruders, push toward well.
+
+function spawnSentries(mapState) {
+  const cfg = SENTRY_CONFIG;
+  const sentries = [];
+  for (const well of mapState.wells) {
+    const count = cfg.perWell[0] + Math.floor(Math.random() * (cfg.perWell[1] - cfg.perWell[0] + 1));
+    const baseOrbit = (well.ringOuter || 0.1);
+    for (let i = 0; i < count; i++) {
+      const orbitRadius = baseOrbit * (cfg.orbitRadiusMult[0] + Math.random() * (cfg.orbitRadiusMult[1] - cfg.orbitRadiusMult[0]));
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+      const speed = cfg.patrolSpeed[0] + Math.random() * (cfg.patrolSpeed[1] - cfg.patrolSpeed[0]);
+      sentries.push({
+        id: `sentry-${well.id}-${i}`,
+        wellId: well.id,
+        wx: ((well.wx + Math.cos(angle) * orbitRadius) % mapState.worldScale + mapState.worldScale) % mapState.worldScale,
+        wy: ((well.wy + Math.sin(angle) * orbitRadius) % mapState.worldScale + mapState.worldScale) % mapState.worldScale,
+        orbitRadius,
+        orbitAngle: angle,
+        orbitSpeed: speed,
+        orbitDir: well.orbitalDir || 1,
+        state: "patrol", // patrol | lunge | recover
+        lungeTimer: 0,
+        recoverTimer: 0,
+        lungeTargetX: 0, lungeTargetY: 0,
+        alive: true,
+      });
+    }
+  }
+  return sentries;
+}
+
+function tickSentries(dt) {
+  const cfg = SENTRY_CONFIG;
+  const ws = runtime.session.worldScale;
+
+  for (const sentry of runtime.mapState.sentries) {
+    if (!sentry.alive) continue;
+    const well = runtime.mapState.wells.find(w => w.id === sentry.wellId);
+    if (!well) continue;
+
+    if (sentry.state === "patrol") {
+      // Orbit the well
+      sentry.orbitAngle += (sentry.orbitSpeed / Math.max(0.01, sentry.orbitRadius)) * sentry.orbitDir * dt;
+      sentry.wx = ((well.wx + Math.cos(sentry.orbitAngle) * sentry.orbitRadius) % ws + ws) % ws;
+      sentry.wy = ((well.wy + Math.sin(sentry.orbitAngle) * sentry.orbitRadius) % ws + ws) % ws;
+
+      // Check for nearby players — lunge if within range
+      for (const player of runtime.players.values()) {
+        if (player.status !== "alive") continue;
+        const pd = worldDistance(sentry.wx, sentry.wy, player.wx, player.wy, ws);
+        if (pd < cfg.lungeRange) {
+          sentry.state = "lunge";
+          sentry.lungeTimer = cfg.lungeDuration;
+          sentry.lungeTargetX = player.wx;
+          sentry.lungeTargetY = player.wy;
+          break;
+        }
+      }
+    } else if (sentry.state === "lunge") {
+      sentry.lungeTimer -= dt;
+      // Rush toward lunge target
+      const dx = worldDisplacement(sentry.wx, sentry.lungeTargetX, ws);
+      const dy = worldDisplacement(sentry.wy, sentry.lungeTargetY, ws);
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.005) {
+        sentry.wx = ((sentry.wx + (dx / dist) * cfg.lungeSpeed * dt) % ws + ws) % ws;
+        sentry.wy = ((sentry.wy + (dy / dist) * cfg.lungeSpeed * dt) % ws + ws) % ws;
+      }
+
+      // Check contact with players — push toward well
+      for (const player of runtime.players.values()) {
+        if (player.status !== "alive") continue;
+        const pd = worldDistance(sentry.wx, sentry.wy, player.wx, player.wy, ws);
+        if (pd < 0.04) {
+          // Push player toward the well
+          const toWellX = worldDisplacement(player.wx, well.wx, ws);
+          const toWellY = worldDisplacement(player.wy, well.wy, ws);
+          const toWellDist = Math.hypot(toWellX, toWellY);
+          if (toWellDist > 0.001) {
+            player.vx += (toWellX / toWellDist) * cfg.bumpForce;
+            player.vy += (toWellY / toWellDist) * cfg.bumpForce;
+          }
+          spikePlayerSignal(player, cfg.bumpSignal);
+          sentry.state = "recover";
+          sentry.recoverTimer = cfg.lungeRecovery;
+          break;
+        }
+      }
+
+      if (sentry.lungeTimer <= 0) {
+        sentry.state = "recover";
+        sentry.recoverTimer = cfg.lungeRecovery;
+      }
+    } else if (sentry.state === "recover") {
+      sentry.recoverTimer -= dt;
+      // Drift back toward orbit
+      const targetX = ((well.wx + Math.cos(sentry.orbitAngle) * sentry.orbitRadius) % ws + ws) % ws;
+      const targetY = ((well.wy + Math.sin(sentry.orbitAngle) * sentry.orbitRadius) % ws + ws) % ws;
+      const dx = worldDisplacement(sentry.wx, targetX, ws);
+      const dy = worldDisplacement(sentry.wy, targetY, ws);
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.005) {
+        sentry.wx = ((sentry.wx + (dx / dist) * cfg.patrolSpeed[0] * dt) % ws + ws) % ws;
+        sentry.wy = ((sentry.wy + (dy / dist) * cfg.patrolSpeed[0] * dt) % ws + ws) % ws;
+      }
+      if (sentry.recoverTimer <= 0) {
+        sentry.state = "patrol";
+      }
+    }
+  }
+}
+
 // --- Fauna System ---
 // Lightweight entities: position, velocity, age, type. No state machine.
 
@@ -2420,6 +2550,7 @@ function tickSim() {
     tickScavengers(stepDt, relevance.scavengers)
   );
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
+  tickSentries(dt);
   tickFauna(dt);
   tickInhibitor(dt);
   maybeCollapseRun();

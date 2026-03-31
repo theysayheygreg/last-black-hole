@@ -119,6 +119,7 @@ let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
 let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
 let remoteFauna = [];
+let remoteSentries = [];
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
 let hullGraceTimer = 0;     // hull upgrade grace period (seconds remaining in kill zone before death)
@@ -805,6 +806,41 @@ function renderFauna(ctx, camX, camY, canvasW, canvasH, time) {
   ctx.restore();
 }
 
+function renderSentries(ctx, camX, camY, canvasW, canvasH, time) {
+  if (remoteSentries.length === 0) return;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0, 255, 136, 0.8)';
+  ctx.fillStyle = 'rgba(0, 255, 136, 0.6)';
+  ctx.lineWidth = 2;
+  const segCount = 4;
+  const segSize = 3;
+  const segGap = 2;
+  for (const s of remoteSentries) {
+    const [sx, sy] = worldToScreen(s.wx, s.wy, camX, camY, canvasW, canvasH);
+    if (sx < -30 || sx > canvasW + 30 || sy < -30 || sy > canvasH + 30) continue;
+    // Undulation: sine wave offsets perpendicular to orbit direction
+    const baseAngle = s.orbitAngle || 0;
+    const brightness = s.state === 'lunge' ? 1.0 : s.state === 'recover' ? 0.5 : 0.8;
+    ctx.globalAlpha = brightness;
+    for (let i = 0; i < segCount; i++) {
+      const along = i * (segSize + segGap);
+      const wave = Math.sin(time * Math.PI * 2 + i * 1.2 + (s.orbitAngle || 0) * 3) * 3;
+      const ox = Math.cos(baseAngle) * along - Math.sin(baseAngle) * wave;
+      const oy = Math.sin(baseAngle) * along + Math.cos(baseAngle) * wave;
+      ctx.beginPath();
+      ctx.arc(sx + ox, sy + oy, segSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Faint green glow
+    ctx.globalAlpha = brightness * 0.15;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
 function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
   if (!remoteAuthorityActive || remotePlayers.length === 0) return;
   ctx.save();
@@ -1049,6 +1085,9 @@ function syncRemoteWorldState(world) {
 
   if (Array.isArray(world.fauna)) {
     remoteFauna = world.fauna.filter(f => f.alive !== false);
+  }
+  if (Array.isArray(world.sentries)) {
+    remoteSentries = world.sentries.filter(s => s.alive !== false);
   }
 }
 
@@ -1998,6 +2037,7 @@ function gameLoop(now) {
     planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     scavengerSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     renderFauna(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    renderSentries(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
