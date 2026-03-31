@@ -450,6 +450,8 @@ async function run() {
       const snapshot = await getSnapshot();
       assert(snapshot.players.length >= 2, `Expected at least 2 remote players, got ${snapshot.players.length}`);
       assert(snapshot.session.mapId === "shallows", `Expected shared session on shallows, got ${snapshot.session.mapId}`);
+
+      await waitFor(page, () => window.__TEST_API.getRemotePlayers().length >= 1, { timeout: 5000 });
     });
 
     await runner.run("Remote browser joins live authoritative run instead of resetting to its selected map", async () => {

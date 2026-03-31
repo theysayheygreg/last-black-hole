@@ -745,6 +745,7 @@ The remote path was still too empty to count as a real competitive run. Server-o
 - **sim-runtime.js** — Remote scavengers now die the same way the authoritative world says they die: they enter a death spiral, finish on the server, and scatter debris wrecks there instead of disappearing instantly. The sim now also exposes a debug scavenger-state hook for remote-authority validation.
 - **main.js** — Remote clients now consume explicit `scavenger.extracted` and `scavenger.consumed` events instead of inferring those outcomes only from portal counts or local-only death-drop queues.
 - **test-api.js / remote-authority.js** — Remote coverage now sees scavenger ids, can force authoritative scavenger hazard cases, and proves that remote scavenger deaths create debris wrecks on the client.
+- **main.js / test-api.js** — Remote snapshots now preserve a separate `remotePlayers` set, and the overlay renders other authoritative players instead of throwing them away. The test API exposes that set so remote-authority coverage can prove the first browser sees a second joined client.
 - **remote-authority.js** — Remote inventory coverage now proves that dropping cargo on the server produces a new wreck on the browser client instead of only mutating server-side state.
 - **sim/sim-client.js** — `join()` now actually sends equipped and consumable loadout state, and `sendInput()` can now carry `consumeSlot`.
 - **test-api.js** — Adds lightweight profile seeding and remote input hooks for honest protocol tests.

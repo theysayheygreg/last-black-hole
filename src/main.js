@@ -93,6 +93,7 @@ let currentMap = MAP_SHALLOWS;
 let remoteAuthorityActive = false;
 let remoteMapId = null;
 let remoteSnapshot = null;
+let remotePlayers = [];
 let remoteLastAckSeq = 0;
 let remoteLastEventSeq = 0;
 let remoteInputRequestInFlight = false;
@@ -328,6 +329,7 @@ function init() {
       get remoteAuthorityActive() { return remoteAuthorityActive; },
       get remoteMapId() { return remoteMapId; },
       get remoteSnapshot() { return remoteSnapshot; },
+      get remotePlayers() { return remotePlayers; },
       get playableMaps() { return PLAYABLE_MAPS; },
       transitionToGame,
       transitionToRemoteGame,
@@ -635,6 +637,11 @@ function applyRemoteSnapshot(snapshot) {
   remoteSnapshot = snapshot;
   simState.runElapsedTime = snapshot.simTime ?? simState.runElapsedTime;
   syncRemoteWorldState(snapshot.world);
+  remotePlayers = Array.isArray(snapshot.players)
+    ? snapshot.players
+        .filter((player) => player.clientId !== simClient?.clientId)
+        .map((player) => ({ ...player }))
+    : [];
 
   const localPlayer = snapshot.players?.find((player) => player.clientId === simClient?.clientId);
   if (!localPlayer) return;
@@ -681,6 +688,53 @@ function applyRemoteSnapshot(snapshot) {
     freezeRunEnd(simState);
     ship.setThrust(false);
   }
+}
+
+function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
+  if (!remoteAuthorityActive || remotePlayers.length === 0) return;
+  ctx.save();
+  for (let index = 0; index < remotePlayers.length; index++) {
+    const player = remotePlayers[index];
+    if (player.status && player.status !== 'alive') continue;
+    const [sx, sy] = worldToScreen(player.wx, player.wy, camX, camY, canvasW, canvasH);
+    const facing = Math.atan2(player.vy || 0, player.vx || 0);
+    const size = CONFIG.ship.size * 0.85;
+    const hullColor = index % 2 === 0 ? 'rgba(120, 220, 255, 0.9)' : 'rgba(255, 180, 90, 0.9)';
+    const trailColor = index % 2 === 0 ? 'rgba(100, 200, 255, 0.4)' : 'rgba(255, 150, 80, 0.4)';
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(facing || 0);
+    ctx.beginPath();
+    ctx.moveTo(size, 0);
+    ctx.lineTo(-size * 0.6, -size * 0.5);
+    ctx.lineTo(-size * 0.3, 0);
+    ctx.lineTo(-size * 0.6, size * 0.5);
+    ctx.closePath();
+    ctx.fillStyle = hullColor;
+    ctx.fill();
+
+    const speed = Math.hypot(player.vx || 0, player.vy || 0);
+    if (speed > 0.01) {
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.65, 0);
+      ctx.lineTo(-size * 1.25, 0);
+      ctx.strokeStyle = trailColor;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    if (player.name) {
+      ctx.save();
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(180, 210, 255, 0.7)';
+      ctx.fillText(player.name, sx, sy - 14);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
 }
 
 function applyRemoteEvents(events) {
@@ -895,6 +949,7 @@ async function startRemoteGame(mapEntry) {
   remoteAuthorityActive = true;
   remoteMapId = targetMapEntry.id;
   remoteSnapshot = null;
+  remotePlayers = [];
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
@@ -944,6 +999,7 @@ function transitionToRemoteGame(mapEntry) {
       remoteAuthorityActive = false;
       remoteMapId = null;
       remoteSnapshot = null;
+      remotePlayers = [];
       startGame(mapEntry.map);
     });
   });
@@ -960,6 +1016,7 @@ async function leaveRemoteSessionToHome() {
   remoteAuthorityActive = false;
   remoteMapId = null;
   remoteSnapshot = null;
+  remotePlayers = [];
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
@@ -980,6 +1037,7 @@ async function restartRemoteSession() {
   });
   const snapshot = await simClient.pollSnapshot(true);
   remoteAuthorityActive = true;
+  remotePlayers = [];
   remoteInputRequestInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
@@ -1782,6 +1840,7 @@ function gameLoop(now) {
     portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, simState.runElapsedTime);
     planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     scavengerSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
 

@@ -311,6 +311,12 @@ export function initTestAPI(getState) {
       };
     },
 
+    getRemotePlayers() {
+      const { remotePlayers } = getState();
+      if (!Array.isArray(remotePlayers)) return [];
+      return remotePlayers.map((player) => ({ ...player }));
+    },
+
     getSignature() {
       const { currentSignature } = getState();
       return currentSignature ? { name: currentSignature.name, mechanical: currentSignature.mechanical } : null;
