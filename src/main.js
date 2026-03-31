@@ -852,8 +852,17 @@ function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
     const [sx, sy] = worldToScreen(player.wx, player.wy, camX, camY, canvasW, canvasH);
     const facing = Math.atan2(player.vy || 0, player.vx || 0);
     const size = CONFIG.ship.size * 0.85;
-    const hullColor = index % 2 === 0 ? 'rgba(120, 220, 255, 0.9)' : 'rgba(255, 180, 90, 0.9)';
-    const trailColor = index % 2 === 0 ? 'rgba(100, 200, 255, 0.4)' : 'rgba(255, 150, 80, 0.4)';
+    // Hull-based ship colors
+    const HULL_COLORS = {
+      drifter:  { hull: 'rgba(100, 200, 240, 0.9)', trail: 'rgba(80, 180, 220, 0.4)' },
+      breacher: { hull: 'rgba(255, 140, 60, 0.9)',  trail: 'rgba(255, 100, 40, 0.5)' },
+      resonant: { hull: 'rgba(180, 120, 255, 0.9)', trail: 'rgba(160, 100, 240, 0.4)' },
+      shroud:   { hull: 'rgba(140, 160, 170, 0.7)', trail: 'rgba(120, 140, 150, 0.2)' },
+      hauler:   { hull: 'rgba(220, 200, 100, 0.9)', trail: 'rgba(200, 180, 80, 0.4)' },
+    };
+    const hc = HULL_COLORS[player.hullType] || HULL_COLORS.drifter;
+    const hullColor = hc.hull;
+    const trailColor = hc.trail;
 
     ctx.save();
     ctx.translate(sx, sy);

@@ -1250,6 +1250,17 @@ function snapshotBody() {
       name: player.name,
       isAI: Boolean(player.isAI),
       personality: player.personality || null,
+      hullType: player.hullType || 'drifter',
+      abilityState: player.abilityState ? {
+        hullType: player.abilityState.hullType,
+        flowLockActive: player.abilityState.flowLockActive,
+        burnActive: player.abilityState.burnActive,
+        burnFuel: player.abilityState.burnFuel,
+        ghostTrailActive: player.abilityState.ghostTrailActive,
+        decoys: player.abilityState.decoys,
+        eddies: player.abilityState.eddies,
+        tapAnchor: player.abilityState.tapAnchor,
+      } : null,
       status: player.status,
       wx: player.wx,
       wy: player.wy,
@@ -1658,6 +1669,28 @@ function applyWellGravity(player, dt) {
         });
         return;
       }
+      // Hauler Reinforced Hull: survive one well contact per run
+      if (player.abilityState && player.abilityState.hullType === 'hauler'
+          && player.abilityState.wellSurvivesRemaining > 0) {
+        player.abilityState.wellSurvivesRemaining--;
+        // Eject violently, scatter 1-2 cargo items
+        const ejectAngle = Math.atan2(dy, dx) + Math.PI;
+        player.vx = Math.cos(ejectAngle) * 0.3;
+        player.vy = Math.sin(ejectAngle) * 0.3;
+        player.wx = ((player.wx + Math.cos(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+        player.wy = ((player.wy + Math.sin(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+        // Scatter cargo
+        const filled = player.cargo.map((c, i) => c ? i : -1).filter(i => i >= 0);
+        const scatterCount = Math.min(filled.length, 1 + Math.floor(Math.random() * 2));
+        for (let s = 0; s < scatterCount; s++) {
+          const idx = filled[Math.floor(Math.random() * filled.length)];
+          player.cargo[idx] = null;
+        }
+        publishEvent("ability.activated", {
+          clientId: player.clientId, ability: "reinforcedHull", wellId: well.id,
+        });
+        return;
+      }
       player.status = "dead";
       player.vx = 0;
       player.vy = 0;
@@ -1673,9 +1706,10 @@ function applyWellGravity(player, dt) {
     }
     let pull = (0.025 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
     if (player.activeEffects.includes("reduceWellPull")) pull *= 0.8;
-    // Hull wellResistScale: lower = more pull, higher = less pull
+    // Hull wellResistScale: higher = less pull. Momentum Shield stacks.
     const wr = player.brain ? player.brain.wellResistScale : 1.0;
     if (wr !== 1.0) pull /= wr;
+    pull *= getMomentumShieldMult(player);
     ax += (dx / dist) * pull;
     ay += (dy / dist) * pull;
   }
@@ -2437,9 +2471,11 @@ function tickPlayerSignal(player, dt) {
     }
   }
 
-  // --- Apply (hull coefficients scale generation and decay) ---
+  // --- Apply (hull coefficients + ability modifiers scale generation and decay) ---
   const pb = player.brain || BRAIN_DEFAULTS;
-  sig.level = Math.max(0, Math.min(1, sig.level + (generation * pb.signalGenMult - decay * pb.signalDecayMult) * dt));
+  const flowLockMult = getFlowLockSignalMult(player);
+  const burnSignalMult = getBurnModifiers(player).signal;
+  sig.level = Math.max(0, Math.min(1, sig.level + (generation * pb.signalGenMult * flowLockMult * burnSignalMult - decay * pb.signalDecayMult) * dt));
 
   // --- Zone crossing ---
   const newZone = signalZoneForLevel(sig.level);
@@ -2478,11 +2514,11 @@ function spikePlayerSignal(player, amount) {
 // - Navigation (per-tick): thrust + steering from aiNavigateToward()
 // Personalities are weight tables, not different code paths. See AI-PLAYERS.md.
 
-function createAIPlayer(personalityKey, index) {
+function createAIPlayer(personalityKey, index, hullType = 'drifter') {
   const p = AI_PERSONALITIES[personalityKey];
   const name = p.names[index % p.names.length];
   const lootTarget = p.lootTarget[0] + Math.floor(Math.random() * (p.lootTarget[1] - p.lootTarget[0] + 1));
-  const player = createPlayer(`ai-${personalityKey}-${index}`, name);
+  const player = createPlayer(`ai-${personalityKey}-${index}`, name, hullType);
   player.isAI = true;
   player.personality = personalityKey;
   player.personalityWeights = p;
@@ -2502,21 +2538,43 @@ function createAIPlayer(personalityKey, index) {
 
 function spawnAIPlayers(mapState, session) {
   const personalityKeys = Object.keys(AI_PERSONALITIES);
-  // 3 AI players by default, at least 2 distinct personalities
   const count = 3;
-  const chosen = [];
+
+  // Find human hull (if any) to avoid duplicating
+  let humanHull = null;
+  for (const p of runtime.players.values()) {
+    if (!p.isAI) { humanHull = p.hullType; break; }
+  }
+
+  const chosenPersonalities = [];
+  const chosenHulls = [];
+
   for (let i = 0; i < count; i++) {
+    // Pick personality — at least 2 distinct
     let key;
     if (i < 2) {
-      // First two: distinct
       do { key = personalityKeys[Math.floor(Math.random() * personalityKeys.length)]; }
-      while (chosen.includes(key) && chosen.length < personalityKeys.length);
+      while (chosenPersonalities.includes(key) && chosenPersonalities.length < personalityKeys.length);
     } else {
       key = personalityKeys[Math.floor(Math.random() * personalityKeys.length)];
     }
-    chosen.push(key);
-    const aiPlayer = createAIPlayer(key, i);
-    // Spawn at random safe position
+    chosenPersonalities.push(key);
+
+    // Pick hull from personality's allowed list, avoiding human hull and duplicates
+    const allowedHulls = PERSONALITY_HULL_MAP[key] || ['drifter'];
+    let hull = allowedHulls[Math.floor(Math.random() * allowedHulls.length)];
+    // Avoid duplicating human hull
+    if (hull === humanHull && allowedHulls.length > 1) {
+      hull = allowedHulls.find(h => h !== humanHull) || hull;
+    }
+    // Avoid duplicating other AI hulls when possible
+    if (chosenHulls.includes(hull)) {
+      const alt = allowedHulls.find(h => !chosenHulls.includes(h) && h !== humanHull);
+      if (alt) hull = alt;
+    }
+    chosenHulls.push(hull);
+
+    const aiPlayer = createAIPlayer(key, i, hull);
     const pos = findSafeSpawn(mapState);
     aiPlayer.wx = pos.wx;
     aiPlayer.wy = pos.wy;
@@ -2864,6 +2922,250 @@ function tickAIPlayers(dt) {
 
     // Extraction: handled by tickExtraction in main loop
   }
+}
+
+// --- Hull Ability Tick ---
+// Per-hull abilities: passives check conditions, actives respond to input.
+// Runs once per player per tick, before physics.
+
+function tickHullAbilities(player, dt) {
+  if (player.status !== "alive" || !player.abilityState) return;
+  const as = player.abilityState;
+  const ws = runtime.session.worldScale;
+  const input = player.lastInput;
+
+  if (as.hullType === 'drifter') {
+    // Flow Lock: current-aligned for 3s → locked surfing state
+    const flow = estimateFlow(player.wx, player.wy);
+    const flowMag = Math.hypot(flow.x, flow.y);
+    const speed = Math.hypot(player.vx, player.vy);
+    let aligned = false;
+    if (flowMag > 0.005 && speed > 0.01) {
+      const alignment = (flow.x * player.vx + flow.y * player.vy) / (flowMag * speed);
+      aligned = alignment > 0.6;
+    }
+
+    if (as.flowLockCooldown > 0) as.flowLockCooldown -= dt;
+
+    if (aligned && !as.flowLockActive && as.flowLockCooldown <= 0) {
+      as.flowLockAlignTimer += dt;
+      if (as.flowLockAlignTimer >= HULL_DEFINITIONS.drifter.abilities.flowLock.alignTime) {
+        as.flowLockActive = true;
+        publishEvent("ability.activated", { clientId: player.clientId, ability: "flowLock" });
+      }
+    } else if (!aligned && as.flowLockActive) {
+      as.flowLockActive = false;
+      as.flowLockAlignTimer = 0;
+      as.flowLockCooldown = HULL_DEFINITIONS.drifter.abilities.flowLock.cooldown;
+      publishEvent("ability.deactivated", { clientId: player.clientId, ability: "flowLock" });
+    } else if (!aligned) {
+      as.flowLockAlignTimer = 0;
+    }
+
+    // Flow Lock effects: speed boost + signal suppression (applied in physics/signal ticks via brain override)
+    if (as.flowLockActive) {
+      const boost = HULL_DEFINITIONS.drifter.abilities.flowLock.speedBoost;
+      if (flowMag > 0.005) {
+        player.vx += (flow.x / flowMag) * boost * speed * dt;
+        player.vy += (flow.y / flowMag) * boost * speed * dt;
+      }
+    }
+
+    // Eddy Brake: active ability — input.ability1 triggers instant stop + turbulence
+    if (as.eddyBrakeCooldown > 0) as.eddyBrakeCooldown -= dt;
+    if (input.ability1 && as.eddyBrakeCooldown <= 0 && speed > 0.02) {
+      player.vx = 0;
+      player.vy = 0;
+      as.eddyBrakeCooldown = HULL_DEFINITIONS.drifter.abilities.eddyBrake.cooldown;
+      // Turbulence zone: push nearby entities away
+      for (const other of runtime.players.values()) {
+        if (other.clientId === player.clientId || other.status !== "alive") continue;
+        const pd = worldDistance(player.wx, player.wy, other.wx, other.wy, ws);
+        if (pd < 0.15) {
+          const dx = worldDisplacement(player.wx, other.wx, ws);
+          const dy = worldDisplacement(player.wy, other.wy, ws);
+          const d = Math.hypot(dx, dy);
+          if (d > 0.001) {
+            other.vx *= HULL_DEFINITIONS.drifter.abilities.eddyBrake.slowFactor;
+            other.vy *= HULL_DEFINITIONS.drifter.abilities.eddyBrake.slowFactor;
+          }
+        }
+      }
+      publishEvent("ability.activated", { clientId: player.clientId, ability: "eddyBrake" });
+    }
+
+  } else if (as.hullType === 'breacher') {
+    // Burn: toggle with ability1, drains fuel
+    if (input.ability1 && !as.burnActive && as.burnFuel > 1.0) {
+      as.burnActive = true;
+      publishEvent("ability.activated", { clientId: player.clientId, ability: "burn" });
+    } else if (input.ability1 && as.burnActive) {
+      as.burnActive = false;
+      publishEvent("ability.deactivated", { clientId: player.clientId, ability: "burn" });
+    }
+
+    if (as.burnActive) {
+      as.burnFuel = Math.max(0, as.burnFuel - dt);
+      if (as.burnFuel <= 0) {
+        as.burnActive = false;
+        publishEvent("ability.deactivated", { clientId: player.clientId, ability: "burn" });
+      }
+    } else {
+      // Recharge fuel when not burning
+      const cfg = HULL_DEFINITIONS.breacher.abilities.burn;
+      as.burnFuel = Math.min(cfg.fuelMax, as.burnFuel + cfg.fuelRechargeRate * dt);
+    }
+
+    // Momentum Shield: passive — check speed threshold
+    const speed = Math.hypot(player.vx, player.vy);
+    const maxSpeed = 2.5 * (player.brain ? player.brain.thrustScale : 1.0) * 0.3;
+    as.momentumShieldActive = speed > maxSpeed * HULL_DEFINITIONS.breacher.abilities.momentumShield.speedThreshold;
+
+  } else if (as.hullType === 'resonant') {
+    // Tick existing eddies
+    const eddyCfg = HULL_DEFINITIONS.resonant.abilities.harmonicPulse;
+    for (let i = as.eddies.length - 1; i >= 0; i--) {
+      as.eddies[i].age += dt;
+      if (as.eddies[i].age >= eddyCfg.eddyDuration) {
+        as.eddies.splice(i, 1);
+      }
+    }
+
+    // Resonance Tap: place anchor with ability1
+    if (as.tapCooldown > 0) as.tapCooldown -= dt;
+    if (input.ability1 && as.tapCooldown <= 0) {
+      as.tapAnchor = { wx: player.wx, wy: player.wy };
+      as.tapCooldown = HULL_DEFINITIONS.resonant.abilities.resonanceTap.cooldown;
+      publishEvent("ability.activated", { clientId: player.clientId, ability: "resonanceTap" });
+    }
+
+    // Frequency Shift: invert next pulse with ability2
+    if (as.frequencyShiftCooldown > 0) as.frequencyShiftCooldown -= dt;
+    if (input.ability2 && as.frequencyShiftCooldown <= 0 && !as.nextPulseInverted) {
+      as.nextPulseInverted = true;
+      as.frequencyShiftCooldown = HULL_DEFINITIONS.resonant.abilities.frequencyShift.cooldown;
+      publishEvent("ability.activated", { clientId: player.clientId, ability: "frequencyShift" });
+    }
+
+  } else if (as.hullType === 'shroud') {
+    // Wake Cloak: ability1 drops signal by 1 zone
+    if (as.wakeCloakCooldown > 0) as.wakeCloakCooldown -= dt;
+    if (input.ability1 && as.wakeCloakCooldown <= 0 && player.signal.zone !== 'threshold') {
+      // Drop signal to the top of the zone below current
+      const zones = ['ghost', 'whisper', 'presence', 'beacon', 'flare', 'threshold'];
+      const zoneThresholds = [0, 0.15, 0.35, 0.55, 0.75, 0.90];
+      const idx = zones.indexOf(player.signal.zone);
+      if (idx > 0) {
+        player.signal.level = Math.min(player.signal.level, zoneThresholds[idx] - 0.01);
+        player.signal.zone = zones[idx - 1];
+      }
+      as.wakeCloakCooldown = HULL_DEFINITIONS.shroud.abilities.wakeCloak.cooldown;
+      publishEvent("ability.activated", { clientId: player.clientId, ability: "wakeCloak" });
+    }
+
+    // Ghost Trail: passive — invisible below WHISPER
+    as.ghostTrailActive = player.signal.zone === 'ghost' || player.signal.zone === 'whisper';
+
+    // Decoy Flare: ability2 spawns decoy
+    if (as.decoyCooldown > 0) as.decoyCooldown -= dt;
+    if (input.ability2 && as.decoyCharges > 0 && as.decoyCooldown <= 0) {
+      as.decoyCharges--;
+      as.decoyCooldown = HULL_DEFINITIONS.shroud.abilities.decoyFlare.cooldown;
+      as.decoys.push({
+        wx: player.wx, wy: player.wy,
+        signal: player.signal.level, age: 0,
+      });
+      publishEvent("ability.activated", { clientId: player.clientId, ability: "decoyFlare" });
+    }
+
+    // Tick decoys
+    for (let i = as.decoys.length - 1; i >= 0; i--) {
+      as.decoys[i].age += dt;
+      as.decoys[i].signal *= (1 - HULL_DEFINITIONS.shroud.abilities.decoyFlare.decayRate * dt);
+      if (as.decoys[i].age >= HULL_DEFINITIONS.shroud.abilities.decoyFlare.duration) {
+        as.decoys.splice(i, 1);
+      }
+    }
+
+  } else if (as.hullType === 'hauler') {
+    // Salvage Lock: ability1 tags nearest wreck in sensor range
+    if (input.ability1 && as.salvageLockCharges > 0) {
+      let nearestWreck = null, nearestDist = Infinity;
+      const sensorRange = 0.5 * (player.brain ? player.brain.sensorRange : 1.0);
+      for (const wreck of runtime.mapState.wrecks) {
+        if (wreck.looted || wreck.alive === false) continue;
+        if (as.taggedWrecks.includes(wreck.id)) continue;
+        const d = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, ws);
+        if (d < sensorRange && d < nearestDist) {
+          nearestDist = d;
+          nearestWreck = wreck;
+        }
+      }
+      if (nearestWreck) {
+        as.taggedWrecks.push(nearestWreck.id);
+        as.salvageLockCharges--;
+        publishEvent("ability.activated", {
+          clientId: player.clientId, ability: "salvageLock", wreckId: nearestWreck.id,
+        });
+      }
+    }
+
+    // Tractor Field: ability2 channels pull on nearest entity
+    if (as.tractorCooldown > 0) as.tractorCooldown -= dt;
+    if (input.ability2 && as.tractorCooldown <= 0) {
+      const tractorCfg = HULL_DEFINITIONS.hauler.abilities.tractorField;
+      // Find nearest wreck/star in range
+      let target = null, targetDist = Infinity;
+      for (const wreck of runtime.mapState.wrecks) {
+        if (wreck.looted || wreck.alive === false) continue;
+        const d = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, ws);
+        if (d < tractorCfg.range && d < targetDist) {
+          targetDist = d;
+          target = wreck;
+        }
+      }
+      if (target) {
+        // Pull target toward player
+        const dx = worldDisplacement(target.wx, player.wx, ws);
+        const dy = worldDisplacement(target.wy, player.wy, ws);
+        const d = Math.hypot(dx, dy);
+        if (d > 0.01) {
+          target.wx = ((target.wx + (dx / d) * tractorCfg.pullSpeed * dt) % ws + ws) % ws;
+          target.wy = ((target.wy + (dy / d) * tractorCfg.pullSpeed * dt) % ws + ws) % ws;
+        }
+        as.tractorChannelTimer += dt;
+        if (as.tractorChannelTimer >= tractorCfg.channelTime) {
+          as.tractorCooldown = tractorCfg.cooldown;
+          as.tractorChannelTimer = 0;
+        }
+      }
+    } else {
+      as.tractorChannelTimer = 0;
+    }
+  }
+}
+
+// Breacher Burn modifies thrust and signal in the per-player physics loop.
+// This helper returns thrust and signal multipliers based on ability state.
+function getBurnModifiers(player) {
+  if (!player.abilityState || player.abilityState.hullType !== 'breacher') return { thrust: 1, signal: 1 };
+  if (!player.abilityState.burnActive) return { thrust: 1, signal: 1 };
+  const cfg = HULL_DEFINITIONS.breacher.abilities.burn;
+  return { thrust: cfg.thrustMult, signal: cfg.signalMult };
+}
+
+// Drifter Flow Lock suppresses signal generation
+function getFlowLockSignalMult(player) {
+  if (!player.abilityState || player.abilityState.hullType !== 'drifter') return 1;
+  if (!player.abilityState.flowLockActive) return 1;
+  return HULL_DEFINITIONS.drifter.abilities.flowLock.signalMult;
+}
+
+// Breacher Momentum Shield reduces well pull at high speed
+function getMomentumShieldMult(player) {
+  if (!player.abilityState || player.abilityState.hullType !== 'breacher') return 1;
+  if (!player.abilityState.momentumShieldActive) return 1;
+  return 1 - HULL_DEFINITIONS.breacher.abilities.momentumShield.wellPullReduction;
 }
 
 // --- Gradient Sentries (Active Tier) ---
@@ -3382,9 +3684,13 @@ function tickSim() {
       const debuffDecay = player.brain ? player.brain.controlDebuffResist : 1.0;
       player.controlDebuff = Math.max(0, player.controlDebuff - playerDt * debuffDecay);
     }
+    // Tick hull abilities before physics
+    tickHullAbilities(player, playerDt);
+
     const controlMult = player.controlDebuff > 0 ? INHIBITOR_CONFIG.swarmControlDebuffMult : 1.0;
     const b = player.brain || BRAIN_DEFAULTS;
-    const accel = 2.5 * b.thrustScale * input.thrust * controlMult;
+    const burnMod = getBurnModifiers(player);
+    const accel = 2.5 * b.thrustScale * burnMod.thrust * input.thrust * controlMult;
     player.vx += input.moveX * accel * playerDt;
     player.vy += input.moveY * accel * playerDt;
 
@@ -3586,7 +3892,8 @@ const server = http.createServer(async (req, res) => {
               fallbackName: body.name,
             })
           : null;
-        player = createPlayer(clientId, body.name);
+        const hullType = HULL_DEFINITIONS[body.hullType] ? body.hullType : 'drifter';
+        player = createPlayer(clientId, body.name, hullType);
         player.profileId = durableProfile?.id || profileId || null;
         player.name = durableProfile?.name || player.name;
         const durableLoadout = cloneProfileLoadout(durableProfile);
