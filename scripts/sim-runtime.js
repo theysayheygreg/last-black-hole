@@ -5,6 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { loadPlayableMaps } = require("./shared-map-loader.js");
+const { ControlPlaneStore } = require("./control-plane-store.js");
+const { SessionRegistry } = require("./session-registry.js");
 const {
   PROTOCOL_VERSION,
   DEFAULT_TICK_HZ,
@@ -765,6 +767,14 @@ const PORT = Number(args.port || 8787);
 const PID_FILE = args["pid-file"] ? path.resolve(args["pid-file"]) : null;
 const META_FILE = args["meta-file"] ? path.resolve(args["meta-file"]) : null;
 const LOG_LABEL = args.label || "lbh-sim";
+const CONTROL_PLANE_FILE = args["control-plane-file"]
+  ? path.resolve(args["control-plane-file"])
+  : path.resolve(__dirname, "..", "tmp", `control-plane-${PORT}.json`);
+const SESSION_REGISTRY_FILE = args["session-registry-file"]
+  ? path.resolve(args["session-registry-file"])
+  : path.resolve(__dirname, "..", "tmp", `session-registry-${PORT}.json`);
+const controlPlaneStore = new ControlPlaneStore(CONTROL_PLANE_FILE);
+const sessionRegistry = new SessionRegistry(SESSION_REGISTRY_FILE);
 
 const protocol = createProtocolDescription();
 const runtime = {
@@ -841,6 +851,7 @@ function publishEvent(type, payload = {}) {
 function createPlayer(clientId, name) {
   return {
     clientId,
+    profileId: null,
     name: name || clientId,
     wx: 0,
     wy: 0,
@@ -871,6 +882,7 @@ function createPlayer(clientId, name) {
       prevZone: "ghost",
     },
     controlDebuff: 0, // seconds remaining — Swarm contact applies 5s of sluggish controls
+    committedOutcome: null,
   };
 }
 
@@ -879,16 +891,28 @@ function getCargoCount(player) {
 }
 
 function startSession(config = {}) {
+  if (runtime.session.status === "running") {
+    for (const player of runtime.players.values()) {
+      if (!player.isAI) {
+        commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
+      }
+    }
+    controlPlaneStore.markSessionEnded(runtime.session, Array.from(runtime.players.values()), { status: "reset" });
+  }
   const requestedMapId = String(config.mapId || "shallows");
   const requestedWorldScale = config.worldScale == null ? null : Number(config.worldScale);
   const mapState = cloneMapState(requestedMapId, requestedWorldScale);
   const scaleProfile = getSimScaleProfile(mapState.id, mapState.worldScale);
   runtime.session = {
     id: crypto.randomUUID(),
+    runId: crypto.randomUUID(),
     status: "running",
     mapId: mapState.id,
     mapName: mapState.name,
     hostClientId: config.requesterId ? String(config.requesterId) : null,
+    hostProfileId: config.requesterProfileId
+      ? String(config.requesterProfileId)
+      : (config.hostProfileId ? String(config.hostProfileId) : null),
     hostName: config.requesterName ? String(config.requesterName) : null,
     worldScale: mapState.worldScale,
     tickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : scaleProfile.tickHz,
@@ -949,6 +973,7 @@ function startSession(config = {}) {
   runtime.waveRings = [];
   publishEvent("session.started", {
     sessionId: runtime.session.id,
+    runId: runtime.session.runId,
     mapId: runtime.session.mapId,
     mapName: runtime.session.mapName,
     hostClientId: runtime.session.hostClientId,
@@ -956,16 +981,19 @@ function startSession(config = {}) {
     worldScale: runtime.session.worldScale,
     maxPlayers: runtime.session.maxPlayers,
   });
+  persistSessionRegistry();
   restartTickLoop();
 }
 
 function assignHost(clientId, name) {
   runtime.session.hostClientId = clientId;
+  runtime.session.hostProfileId = runtime.players.get(clientId)?.profileId || null;
   runtime.session.hostName = name || clientId;
   publishEvent("session.hostAssigned", {
     clientId,
     name: runtime.session.hostName,
   });
+  persistSessionRegistry();
 }
 
 function ensureHostPermission(requesterId) {
@@ -998,6 +1026,7 @@ function snapshotBody() {
     simTime: runtime.simTime,
     players: Array.from(runtime.players.values()).map((player) => ({
       clientId: player.clientId,
+      profileId: player.profileId || null,
       name: player.name,
       isAI: Boolean(player.isAI),
       personality: player.personality || null,
@@ -1038,6 +1067,39 @@ function snapshotBody() {
     },
     recentEvents: runtime.recentEvents.slice(-32),
   };
+}
+
+function persistSessionRegistry() {
+  const snapshot = controlPlaneStore.upsertSession(runtime.session, Array.from(runtime.players.values()));
+  const registry = sessionRegistry.read();
+  registry.sessions[runtime.session.id] = snapshot;
+  sessionRegistry.write(registry);
+}
+
+function cloneProfileLoadout(profile) {
+  return {
+    equipped: cloneLoadoutItems(profile?.loadout?.equipped),
+    consumables: cloneLoadoutItems(profile?.loadout?.consumables),
+  };
+}
+
+function commitPlayerOutcome(player, outcome) {
+  if (!player || player.isAI || !player.profileId) return null;
+  if (player.committedOutcome) return null;
+  const committed = controlPlaneStore.applyOutcome({
+    profileId: player.profileId,
+    player,
+    outcome,
+    runDuration: runtime.simTime,
+    session: runtime.session,
+  });
+  player.committedOutcome = outcome;
+  publishEvent("profile.updated", {
+    clientId: player.clientId,
+    profileId: player.profileId,
+    outcome,
+  });
+  return committed;
 }
 
 function spawnWaveRing(wx, wy, amplitude) {
@@ -1380,6 +1442,7 @@ function applyWellGravity(player, dt) {
       player.vx = 0;
       player.vy = 0;
       player.cargo = new Array(PLAYER_CARGO_SLOTS).fill(null);
+      commitPlayerOutcome(player, "dead");
       publishEvent("player.died", {
         clientId: player.clientId,
         cause: "well",
@@ -1449,6 +1512,7 @@ function tickExtraction(player) {
       player.status = "escaped";
       player.vx = 0;
       player.vy = 0;
+      commitPlayerOutcome(player, "escaped");
       publishEvent("player.escaped", {
         clientId: player.clientId,
         portalId: portal.id,
@@ -3274,9 +3338,20 @@ const server = http.createServer(async (req, res) => {
           sendJson(res, 409, { ok: false, error: "Session full" });
           return;
         }
+        const profileId = body.profileId ? String(body.profileId).trim() : null;
+        const durableProfile = profileId
+          ? controlPlaneStore.bootstrapProfile({
+              profileId,
+              snapshot: body.profileSnapshot || null,
+              fallbackName: body.name,
+            })
+          : null;
         player = createPlayer(clientId, body.name);
-        player.equipped = cloneLoadoutItems(body.equipped);
-        player.consumables = cloneLoadoutItems(body.consumables);
+        player.profileId = durableProfile?.id || profileId || null;
+        player.name = durableProfile?.name || player.name;
+        const durableLoadout = cloneProfileLoadout(durableProfile);
+        player.equipped = durableProfile ? durableLoadout.equipped : cloneLoadoutItems(body.equipped);
+        player.consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
         refreshPlayerEffects(player);
         const spawn = findSafeSpawn(runtime.mapState);
         player.wx = spawn.wx;
@@ -3284,8 +3359,12 @@ const server = http.createServer(async (req, res) => {
         runtime.players.set(clientId, player);
         if (!runtime.session.hostClientId) assignHost(clientId, player.name);
         publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
+        persistSessionRegistry();
       } else if (body.name) {
         player.name = String(body.name);
+        if (body.profileId) {
+          player.profileId = String(body.profileId);
+        }
         if (Array.isArray(body.equipped)) {
           player.equipped = cloneLoadoutItems(body.equipped);
           refreshPlayerEffects(player);
@@ -3296,6 +3375,22 @@ const server = http.createServer(async (req, res) => {
       }
 
       sendJson(res, 200, { ok: true, player });
+      return;
+    }
+
+    if (req.method === "GET" && req.url.startsWith("/profile")) {
+      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+      const profileId = String(requestUrl.searchParams.get("profileId") || "").trim();
+      if (!profileId) {
+        sendJson(res, 400, { ok: false, error: "profileId is required" });
+        return;
+      }
+      const profile = controlPlaneStore.getProfile(profileId);
+      if (!profile) {
+        sendJson(res, 404, { ok: false, error: "Unknown profile" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, profile });
       return;
     }
 
@@ -3311,12 +3406,16 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, error: "Unknown client" });
         return;
       }
+      if (!player.isAI && !player.committedOutcome) {
+        commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
+      }
       runtime.players.delete(clientId);
       publishEvent("player.left", {
         clientId,
         name: player.name,
       });
       promoteHostIfNeeded();
+      persistSessionRegistry();
       sendJson(res, 200, { ok: true, session: runtime.session, playerCount: runtime.players.size });
       return;
     }

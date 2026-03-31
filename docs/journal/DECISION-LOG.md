@@ -1022,3 +1022,5 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 2. The durable architecture is now defined in `docs/project/PERSISTENCE-AND-CONTROL-PLANE-PLAN.md`.
 **Door status:** Open — implementation is deferred, but the server-side layering is now explicit enough to build toward cleanly.
+
+| Mar 31 | Implementation lands: the first persistent control-plane slice now exists. Browser profiles carry stable ids, the sim bootstraps durable profile state on join, the server writes back death/extraction/abandon outcomes outside the tick loop, and the client resyncs its local profile from authoritative server truth after remote runs. |

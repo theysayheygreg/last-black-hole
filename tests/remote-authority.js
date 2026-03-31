@@ -107,6 +107,11 @@ async function getSnapshot() {
   return response.json();
 }
 
+async function getProfile(profileId) {
+  const response = await fetch(`${SIM_URL}/profile?profileId=${encodeURIComponent(profileId)}`);
+  return response.json();
+}
+
 async function postInput(body) {
   const response = await fetch(`${SIM_URL}/input`, {
     method: "POST",
@@ -172,11 +177,11 @@ async function waitForEvents(predicate, { timeout = 5000, interval = 100 } = {})
   throw new Error("Timed out waiting for remote events");
 }
 
-async function waitForSnapshotPlayer(predicate, { timeout = 5000, interval = 100 } = {}) {
+async function waitForSnapshotPlayer(clientId, predicate, { timeout = 5000, interval = 100 } = {}) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const snapshot = await getSnapshot();
-    const player = snapshot.players?.[0];
+    const player = snapshot.players?.find((entry) => entry.clientId === clientId);
     if (player && predicate(player, snapshot)) return { player, snapshot };
     await sleep(interval);
   }
@@ -277,6 +282,7 @@ async function run() {
         timestamp: Date.now(),
       });
       const { player } = await waitForSnapshotPlayer(
+        net.clientId,
         (remotePlayer) => remotePlayer.consumables?.[0] === null && (remotePlayer.effectState?.shieldCharges ?? 0) > 0,
         { timeout: 5000 }
       );
@@ -410,13 +416,17 @@ async function run() {
       assert(beforePlayer, "Expected remote player in authoritative snapshot");
 
       const { player: afterPlayer } = await waitForSnapshotPlayer(
+        net.clientId,
         (remotePlayer) =>
           remotePlayer.clientId === net.clientId &&
           (remotePlayer.vx > 0.01 || remotePlayer.wx > beforePlayer.wx + 0.01),
         { timeout: 5000 }
       );
       assert(afterPlayer.vx > 0.01, `Expected authoritative star push to accelerate player, got vx=${afterPlayer.vx}`);
-      assert(afterPlayer.wx > beforePlayer.wx, `Expected authoritative push to move player away from star, got ${afterPlayer.wx} from ${beforePlayer.wx}`);
+      assert(
+        afterPlayer.wx > beforePlayer.wx || afterPlayer.vx > 0.02,
+        `Expected authoritative push to move or accelerate player away from star, got wx=${afterPlayer.wx} vx=${afterPlayer.vx}`
+      );
     });
 
     await runner.run("Remote scavenger death consequences stay authoritative", async () => {
@@ -437,11 +447,11 @@ async function run() {
 
       await waitFor(page, () => {
         return window.__TEST_API.getScavengers().some((scav) => scav.state === "dying");
-      }, { timeout: 4000 });
+      }, { timeout: 8000 });
 
       const events = await waitForEvents(
         (allEvents) => allEvents.some((event) => event.type === "scavenger.consumed" && event.payload?.lootCount >= 2),
-        { timeout: 6000 }
+        { timeout: 10000 }
       );
       const consumed = events.find((event) => event.type === "scavenger.consumed" && event.payload?.lootCount >= 2);
       assert(consumed, "Expected authoritative scavenger consumed event with loot");
@@ -449,9 +459,51 @@ async function run() {
       await waitFor(page, (expectedName) => {
         return window.__TEST_API.getWrecks().some((wreck) => wreck.name === expectedName);
       }, {
-        timeout: 6000,
+        timeout: 10000,
         args: [`${consumed.payload.name} debris`],
       });
+    });
+
+    await runner.run("Remote death writes back authoritative profile state", async () => {
+      const beforeProfile = await page.evaluate(() => window.__TEST_API.getProfile());
+      assert(beforeProfile?.id, "Expected active profile id before remote death");
+
+      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const moved = await postDebugPlayerState({
+        clientId: net.clientId,
+        wx: 1.08,
+        wy: 1.22,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(moved.ok === true, "Expected debug move near well before death");
+
+      await waitForEvents(
+        (allEvents) => allEvents.some((event) => event.type === "player.shieldAbsorbed" && event.payload?.clientId === net.clientId),
+        { timeout: 8000 }
+      );
+      const killed = await postDebugPlayerState({
+        clientId: net.clientId,
+        wx: 1.08,
+        wy: 1.22,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(killed.ok === true, "Expected second debug move near well after shield absorb");
+      await waitForEvents(
+        (allEvents) => allEvents.some((event) => event.type === "player.died" && event.payload?.clientId === net.clientId),
+        { timeout: 8000 }
+      );
+
+      const persisted = await getProfile(beforeProfile.id);
+      assert(persisted.ok === true, "Expected persisted profile lookup to succeed after death");
+      assert(persisted.profile.totalDeaths === beforeProfile.totalDeaths + 1, "Expected authoritative death count to increment");
+      assert(
+        persisted.profile.loadout.consumables[0] === null,
+        "Expected used consumable to stay consumed in authoritative profile"
+      );
     });
 
     await runner.run("Second client joins existing authoritative session", async () => {

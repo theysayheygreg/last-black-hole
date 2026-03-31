@@ -903,3 +903,27 @@ The client/server split is real enough now that the next problem is no longer pr
 
 ### Why
 The client/server split is now real enough that the next durable question is no longer just simulation. Player persistence and session orchestration need to live outside disposable run instances.
+
+## 2026-03-31 (Week 3 Day 2: First Persistent Control Plane Slice)
+
+### scripts/ — Added
+- **control-plane-store.js** — Adds the first durable JSON-backed persistence layer for profiles, run outcomes, and session metadata outside the disposable sim instance.
+- **session-registry.js** — Adds a lightweight on-disk session-registry wrapper so live authoritative session state can be mirrored outside the hot simulation loop.
+
+### scripts/ — Modified
+- **sim-runtime.js** — The sim server now bootstraps durable profiles on join, assigns profile ids to live players, writes back authoritative death/extraction/abandon outcomes, exposes `/profile`, and mirrors session state into the control-plane/session-registry layer.
+
+### src/ — Modified
+- **profile.js** — Profiles now carry a stable id and can export/replace the active durable profile, which allows the browser client to resync local save data from the authoritative server after a remote run.
+- **sim/sim-client.js** — Remote start/join now carry profile bootstrap data, and the client can fetch an authoritative profile snapshot by id.
+- **main.js** — Remote run startup now bootstraps the server with the active profile, and remote death/extraction flows now resync the local profile from authoritative persistence instead of mutating local save state independently.
+- **test-api.js** — Exposes profile ids so remote-authority coverage can verify durable server-side write-back honestly.
+
+### tests/ — Modified
+- **remote-authority.js** — Adds a real persistence check: remote death now proves the authoritative profile increments deaths and preserves consumed loadout state.
+
+### docs/project/ — Modified
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+The authoritative sim could already run a session, but it still had no durable memory outside the process. This slice makes the control-plane boundary real: players now join with stable profile ids, the server owns write-back on death/extraction/leave, and the browser syncs back from server truth instead of pretending local storage is still the source of record after a remote run.

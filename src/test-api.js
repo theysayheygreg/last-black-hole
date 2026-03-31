@@ -172,6 +172,7 @@ export function initTestAPI(getState) {
       const p = profileManager?.active;
       if (!p) return null;
       return {
+        id: p.id,
         name: p.name,
         exoticMatter: p.exoticMatter,
         vaultCount: p.vault.length,

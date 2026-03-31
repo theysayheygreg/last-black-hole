@@ -207,6 +207,9 @@ Current progress:
 - `/maps` and session state now also expose map-sized relevance radii so the larger-world cost model is not just a hidden server implementation detail
 - `/maps` and session state now also expose AI spawn budgets and per-player hazard caps so future 4–8 player sessions have a visible server budget instead of folklore
 - `/maps` and session state now also expose explicit per-player force budgets so authoritative motion cost stays inspectable instead of hiding inside implementation detail
+- remote join/start now bootstrap a stable player profile id and durable profile snapshot into the server instead of treating every remote run as stateless
+- the sim now mirrors live session metadata into a control-plane/session-registry layer outside the disposable run instance
+- the sim now also owns authoritative profile write-back for death, extraction, and leave/abandon, and the browser client resyncs its local profile from that server truth after a remote run
 - protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.

@@ -25,6 +25,10 @@ const PILOT_ADJ = ['Steady', 'Quiet', 'Bold', 'Swift', 'Pale', 'Bright', 'Cold',
 const PILOT_NOUN = ['Drift', 'Wake', 'Tide', 'Ember', 'Arc', 'Helm', 'Void', 'Star', 'Edge', 'Pulse'];
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function generateProfileId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `profile-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export function generatePilotName() {
   return `${pick(PILOT_ADJ)} ${pick(PILOT_NOUN)}`;
@@ -34,6 +38,7 @@ export function generatePilotName() {
 
 function createDefaultProfile(name) {
   return {
+    id: generateProfileId(),
     name: name || generatePilotName(),
     created: new Date().toISOString(),
     lastPlayed: new Date().toISOString(),
@@ -241,6 +246,21 @@ export class ProfileManager {
     this.save();
   }
 
+  exportActiveProfile() {
+    const p = this.active;
+    if (!p) return null;
+    return JSON.parse(JSON.stringify(p));
+  }
+
+  replaceActiveProfile(profileData) {
+    if (this.activeSlot < 0 || !profileData) return null;
+    const next = { ...createDefaultProfile(profileData.name), ...profileData };
+    this.slots[this.activeSlot] = next;
+    this._saveSlot(this.activeSlot);
+    this._saveIndex();
+    return next;
+  }
+
   /** Record run outcome. */
   recordExtraction(survivalTime) {
     const p = this.active;
@@ -343,6 +363,10 @@ export class ProfileManager {
       const data = JSON.parse(raw);
       // Ensure all fields exist (forward compat)
       this.slots[slotIndex] = { ...createDefaultProfile(data.name), ...data };
+      if (!this.slots[slotIndex].id) {
+        this.slots[slotIndex].id = generateProfileId();
+        this._saveSlot(slotIndex);
+      }
     } catch (e) {}
   }
 

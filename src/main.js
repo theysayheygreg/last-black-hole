@@ -1131,6 +1131,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   showHUD();
 
   const p = profileManager.active;
+  const profileSnapshot = profileManager.exportActiveProfile?.() || null;
   if (p) {
     inventorySystem.equipped = p.loadout.equipped.map(i => i ? { ...i } : null);
     inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
@@ -1142,6 +1143,8 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
       worldScale: mapEntry.map.worldScale,
       maxPlayers: 4,
       requesterName: profileManager.active?.name || 'Pilot',
+      requesterProfileId: profileManager.active?.id || null,
+      requesterProfile: profileSnapshot,
     });
     if (forceReset && runningSession) {
       showWarning(`host reset to ${mapEntry.name.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
@@ -1151,6 +1154,8 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   }
   await simClient.join({
     name: profileManager.active?.name || 'Pilot',
+    profileId: profileManager.active?.id || null,
+    profileSnapshot,
     equipped: inventorySystem.equipped,
     consumables: inventorySystem.consumables,
   });
@@ -1174,11 +1179,22 @@ function transitionToRemoteGame(mapEntry, options = {}) {
 }
 
 async function leaveRemoteSessionToHome() {
+  const activeProfileId = profileManager.active?.id || null;
   if (simClient?.enabled && remoteAuthorityActive) {
     try {
       await simClient.leave();
     } catch (err) {
       console.error('[LBH] remote leave failed:', err);
+    }
+  }
+  if (simClient?.enabled && activeProfileId) {
+    try {
+      const body = await simClient.getProfile(activeProfileId);
+      if (body?.profile) {
+        profileManager.replaceActiveProfile(body.profile);
+      }
+    } catch (err) {
+      console.error('[LBH] remote profile sync failed:', err);
     }
   }
   remoteAuthorityActive = false;
@@ -1611,11 +1627,13 @@ function gameLoop(now) {
     if (!transitionActive && confirmNow && !_prevConfirm) {
       if (gamePhase === 'dead' && deathTimer > 1.0) {
         if (remoteAuthorityActive) {
+          const previousEM = profileManager.active?.exoticMatter ?? 0;
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave failed:', err);
               showWarning(`remote exit failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
             }).finally(() => {
+              lastDeathTax = Math.max(0, previousEM - (profileManager.active?.exoticMatter ?? previousEM));
               loadTitleScene();
               gamePhase = 'home';
               homeTab = 0;
@@ -1654,14 +1672,6 @@ function gameLoop(now) {
       if (gamePhase === 'escaped' && escapeTimer > 1.0) {
         // Extract cargo → profile vault, then transition to home
         metaExtractedItems = inventorySystem.extractCargo();
-        profileManager.recordExtraction(simState.runEndTime);
-        const overflow = profileManager.storeItems(metaExtractedItems.map(i => ({ ...i })));
-        // Sell overflow items automatically (vault full)
-        for (const item of overflow) {
-          profileManager.addEM(item.value || 0);
-        }
-        // Save loadout
-        profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
         if (remoteAuthorityActive) {
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
@@ -1672,6 +1682,14 @@ function gameLoop(now) {
             });
           });
         } else {
+          profileManager.recordExtraction(simState.runEndTime);
+          const overflow = profileManager.storeItems(metaExtractedItems.map(i => ({ ...i })));
+          // Sell overflow items automatically (vault full)
+          for (const item of overflow) {
+            profileManager.addEM(item.value || 0);
+          }
+          // Save loadout
+          profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
           triggerTransition(() => {
             gamePhase = 'meta';
             metaPhaseTimer = 0;

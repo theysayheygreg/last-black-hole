@@ -47,10 +47,10 @@ export class SimClient {
     return this._json('/maps');
   }
 
-  async startSession({ mapId, worldScale, maxPlayers = 4, requesterId = this.clientId, requesterName = null }) {
+  async startSession({ mapId, worldScale, maxPlayers = 4, requesterId = this.clientId, requesterName = null, requesterProfileId = null, requesterProfile = null }) {
     const body = await this._json('/session/start', {
       method: 'POST',
-      body: JSON.stringify({ mapId, worldScale, maxPlayers, requesterId, requesterName }),
+      body: JSON.stringify({ mapId, worldScale, maxPlayers, requesterId, requesterName, requesterProfileId, requesterProfile }),
     });
     this._applySessionClocks(body?.session);
     this.latestSnapshot = null;
@@ -78,12 +78,14 @@ export class SimClient {
     return body.session;
   }
 
-  async join({ name, equipped = null, consumables = null }) {
+  async join({ name, profileId = null, profileSnapshot = null, equipped = null, consumables = null }) {
     return this._json('/join', {
       method: 'POST',
       body: JSON.stringify({
         clientId: this.clientId,
         name,
+        profileId,
+        profileSnapshot,
         equipped,
         consumables,
       }),
@@ -138,5 +140,10 @@ export class SimClient {
         consumableSlot,
       }),
     });
+  }
+
+  async getProfile(profileId) {
+    if (!profileId) throw new Error('profileId is required');
+    return this._json(`/profile?profileId=${encodeURIComponent(profileId)}`);
   }
 }
