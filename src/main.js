@@ -584,6 +584,8 @@ function startGame(map) {
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remoteFauna = [];
+  remoteSentries = [];
   rendererFixtureActive = false;
   loadScene(map);
 

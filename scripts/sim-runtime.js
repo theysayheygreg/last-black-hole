@@ -984,7 +984,8 @@ function promoteHostIfNeeded() {
     return;
   }
   if (runtime.session.hostClientId && runtime.players.has(runtime.session.hostClientId)) return;
-  const nextHost = runtime.players.values().next().value;
+  // Only promote human players to host — AI can't accept /start or /reset
+  const nextHost = Array.from(runtime.players.values()).find(p => !p.isAI);
   if (nextHost) assignHost(nextHost.clientId, nextHost.name);
 }
 
@@ -2896,6 +2897,8 @@ function tickInhibitor(dt) {
       if (inh.silenceTimer >= cfg.glitchDissipateTime) {
         inh.form = 0;
         inh.intensity = 0;
+        // Reset pressure below glitch threshold so it doesn't immediately reform
+        inh.pressure = inh.threshold * cfg.glitchFraction * 0.5;
         publishEvent("inhibitor.form", { form: 0, pressure: inh.pressure });
       }
     } else {
@@ -3266,7 +3269,8 @@ const server = http.createServer(async (req, res) => {
 
       let player = runtime.players.get(clientId);
       if (!player) {
-        if (runtime.players.size >= runtime.session.maxPlayers) {
+        const humanCount = Array.from(runtime.players.values()).filter(p => !p.isAI).length;
+        if (humanCount >= runtime.session.maxPlayers) {
           sendJson(res, 409, { ok: false, error: "Session full" });
           return;
         }
