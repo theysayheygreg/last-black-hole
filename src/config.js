@@ -146,8 +146,8 @@ export const CONFIG = {
     // Display shader colors. These are the base palette for the fluid visualization.
     voidColor: [0.0, 0.0, 0.13],      // Deep void — darkest areas, the emptiness of space.
     normalSpace: [0.0, 0.5, 0.5],     // Teal — baseline fluid presence, "the fabric."
-    nearWell: [0.9, 0.4, 0.1],        // Amber — fluid near wells, accretion zone.
-    hotWell: [0.9, 0.1, 0.05],        // Deep red — very close to well singularity.
+    nearWell: [1.0, 0.85, 0.4],        // Warm gold — accretion zone. (Was amber [0.9,0.4,0.1])
+    hotWell: [1.0, 0.95, 0.8],        // White-hot — inner ring. (Was deep red [0.9,0.1,0.05])
     densityScale: 0.04,               // Tone-mapping scale: 1-exp(-rawDensity × this). Boosted from
                                       // 0.015 so accretion rings are clearly bright (~40-50% at
                                       // steady state). This is the PRIMARY brightness signal.
