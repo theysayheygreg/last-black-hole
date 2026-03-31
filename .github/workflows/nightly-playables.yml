@@ -1,0 +1,181 @@
+name: Nightly Playables
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: lbh-nightly-playables
+  cancel-in-progress: false
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    outputs:
+      release_body: ${{ steps.meta.outputs.release_body }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build web
+        run: npm run build:web
+
+      - name: Package nightly assets
+        run: node scripts/ci/package-nightly-assets.js
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/nightly/web
+
+      - name: Zip web artifact
+        run: |
+          cd dist/nightly
+          zip -rq last-black-hole-web-nightly.zip web
+
+      - name: Build release metadata
+        id: meta
+        run: |
+          WEB_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          {
+            echo 'release_body<<EOF'
+            echo 'Nightly playable builds for Last Black Hole.'
+            echo ''
+            echo "- Web: ${WEB_URL}"
+            echo '- Windows: attached zip asset'
+            echo '- macOS: attached zip asset'
+            echo ''
+            echo 'These are automated nightly playtest artifacts.'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload web release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-black-hole-web-nightly
+          path: dist/nightly/last-black-hole-web-nightly.zip
+
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build Windows desktop
+        run: npm run build -- --targets=win --mode=release
+
+      - name: Package nightly assets
+        run: node scripts/ci/package-nightly-assets.js
+
+      - name: Zip Windows artifact
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/nightly/Last Black Hole-win32-x64" -DestinationPath "dist/nightly/last-black-hole-win-nightly.zip" -Force
+
+      - name: Upload Windows release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-black-hole-win-nightly
+          path: dist/nightly/last-black-hole-win-nightly.zip
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build macOS desktop
+        run: npm run build -- --targets=mac --mode=release
+
+      - name: Package nightly assets
+        run: node scripts/ci/package-nightly-assets.js
+
+      - name: Zip macOS app
+        run: |
+          cd dist/nightly
+          ditto -c -k --sequesterRsrc --keepParent "Last Black Hole.app" "last-black-hole-mac-nightly.zip"
+
+      - name: Upload macOS release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-black-hole-mac-nightly
+          path: dist/nightly/last-black-hole-mac-nightly.zip
+
+  deploy-pages:
+    needs: build-web
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  publish-release:
+    needs: [build-web, build-win, build-mac, deploy-pages]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download web asset
+        uses: actions/download-artifact@v4
+        with:
+          name: last-black-hole-web-nightly
+          path: release-assets
+
+      - name: Download win asset
+        uses: actions/download-artifact@v4
+        with:
+          name: last-black-hole-win-nightly
+          path: release-assets
+
+      - name: Download mac asset
+        uses: actions/download-artifact@v4
+        with:
+          name: last-black-hole-mac-nightly
+          path: release-assets
+
+      - name: Publish nightly release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly-latest
+          name: Nightly Playables
+          body: ${{ needs.build-web.outputs.release_body }}
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          prerelease: true
+          artifactErrorsFailBuild: true
+          artifacts: "release-assets/*.zip"

@@ -121,6 +121,16 @@ npm run build:desktop
 npm run build:release
 ```
 
+### nightly playables
+A GitHub Actions workflow now owns the nightly playable path:
+
+- deploys a web build to **GitHub Pages**
+- builds and uploads a **Windows playable zip**
+- builds and uploads a **macOS `.app` zip**
+- publishes them on the rolling prerelease tag **`nightly-latest`**
+
+That gives Orrery stable link targets for daily posts instead of vague "latest build" talk.
+
 desktop builds require `electron` and `@electron/packager` (included in devDependencies).
 
 ### tests
