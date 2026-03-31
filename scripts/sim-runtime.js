@@ -74,8 +74,11 @@ const SIGNAL_CONFIG = {
   lootSpikeT2: 0.10,
   lootSpikeT3: 0.18,
   pulseSpike: 0.12,
-  collisionSpike: 0.08,
-  extractionRate: 0.003,
+  // collisionSpike removed — no generic entity-entity collision exists; fauna/sentries
+  // have per-type bumpSignal values tuned to their gameplay role.
+  // extractionRate removed — extraction is instant (no charge time), so continuous
+  // signal generation during extraction never fires. If extraction gains a charge
+  // period, re-add at 0.003/s.
   wellProximityRate: 0.002,
   wellProximityDist: 0.30,
   coastRate: 0.001,
@@ -118,6 +121,8 @@ const INHIBITOR_CONFIG = {
   swarmTrackInterval: 3.0,     // seconds between target updates
   swarmContactDrain: 1.0,      // items/second on contact
   swarmContactSignalSpike: 0.25,
+  swarmControlDebuffDuration: 5.0, // seconds of sluggish controls after Swarm contact
+  swarmControlDebuffMult: 0.4,     // thrust multiplier during debuff
   swarmSearchTimeout: 5.0,     // seconds before search pattern
   // Form 3: Vessel
   vesselSpeed: 0.08,
@@ -865,6 +870,7 @@ function createPlayer(clientId, name) {
       zone: "ghost",
       prevZone: "ghost",
     },
+    controlDebuff: 0, // seconds remaining — Swarm contact applies 5s of sluggish controls
   };
 }
 
@@ -1007,6 +1013,7 @@ function snapshotBody() {
       activeEffects: player.activeEffects,
       effectState: player.effectState,
       signal: player.signal,
+      controlDebuff: player.controlDebuff || 0,
     })),
     world: {
       wells: runtime.mapState.wells,
@@ -2059,6 +2066,10 @@ function runSystemAtRate(key, hz, baseDt, fn) {
 }
 
 // --- Signal System ---
+// Signal is the core risk/reward meter. It rises from valuable actions (thrust,
+// loot, combat) and decays when quiet. Higher signal attracts fauna, escalates
+// scavenger behavior, and accumulates Inhibitor pressure.
+// Design: signal taxes ambition, never buys capability. See SIGNAL-DESIGN.md.
 // Signal is a 0-1 float per player. Rises from activity, decays when quiet.
 // Zone crossings publish events for client audio/visual feedback.
 
@@ -2083,11 +2094,19 @@ function tickPlayerSignal(player, dt) {
   let generation = 0;
 
   if (isThrusting) {
-    // Base thrust signal, scaled by intensity
-    generation += cfg.thrustBaseRate * input.thrust;
-    // TODO: opposition multiplier requires flow field sampling (analytical model)
-    // For now, scale by raw speed as a proxy — faster = louder
-    generation += cfg.thrustBaseRate * Math.min(speed * 5, cfg.thrustOppositionMult - 1.0) * input.thrust;
+    // Thrust signal: base rate scaled by flow opposition.
+    // Fighting the current is loud; surfing with it is quiet.
+    const flow = estimateFlow(player.wx, player.wy);
+    const flowMag = Math.hypot(flow.x, flow.y);
+    let oppositionMult = 1.0;
+    if (flowMag > 0.001 && speed > 0.001) {
+      const thrustDirX = input.moveX / speed;
+      const thrustDirY = input.moveY / speed;
+      const alignment = (flow.x * thrustDirX + flow.y * thrustDirY) / flowMag;
+      // alignment: -1 (fighting) to +1 (surfing). Scale opposition: 1.0 (surfing) to 3.0 (fighting)
+      oppositionMult = 1.0 + Math.max(0, -alignment) * (cfg.thrustOppositionMult - 1.0);
+    }
+    generation += cfg.thrustBaseRate * oppositionMult * input.thrust;
   } else if (speed > 0.001) {
     // Coasting — minimal signal
     generation += cfg.coastRate;
@@ -2161,7 +2180,11 @@ function spikePlayerSignal(player, amount) {
 
 // --- AI Players (Adversarial Tier) ---
 // Full player entities with decision system instead of network input.
-// Same physics, inventory, signal as human players.
+// Same physics, inventory, signal as human players. Three decision timescales:
+// - Tactical (0.8s): wreck/portal targeting, goal selection
+// - Strategic (3.0s): extraction evaluation
+// - Navigation (per-tick): thrust + steering from aiNavigateToward()
+// Personalities are weight tables, not different code paths. See AI-PLAYERS.md.
 
 function createAIPlayer(personalityKey, index) {
   const p = AI_PERSONALITIES[personalityKey];
@@ -2240,6 +2263,30 @@ function estimateFlow(wx, wy) {
   return { x: fx, y: fy };
 }
 
+// Sample flow along the path from (ax,ay) to (bx,by) at N points.
+// N is personality.flowSamples — Ghost samples 8 (careful), Raider samples 3 (reckless).
+// Returns average alignment of flow with travel direction. [-1, +1]
+function estimatePathAlignment(ax, ay, bx, by, samples) {
+  const ws = runtime.session.worldScale;
+  const dx = worldDisplacement(ax, bx, ws);
+  const dy = worldDisplacement(ay, by, ws);
+  const pathDist = Math.hypot(dx, dy);
+  if (pathDist < 0.01 || samples < 1) return 0;
+  const dirX = dx / pathDist, dirY = dy / pathDist;
+  let totalAlign = 0;
+  for (let i = 0; i < samples; i++) {
+    const t = (i + 0.5) / samples;
+    const sx = ((ax + dx * t) % ws + ws) % ws;
+    const sy = ((ay + dy * t) % ws + ws) % ws;
+    const flow = estimateFlow(sx, sy);
+    const flowMag = Math.hypot(flow.x, flow.y);
+    if (flowMag > 0.001) {
+      totalAlign += (flow.x * dirX + flow.y * dirY) / flowMag;
+    }
+  }
+  return totalAlign / samples;
+}
+
 function aiScoreWreck(ai, wreck) {
   const ws = runtime.session.worldScale;
   const w = ai.personalityWeights;
@@ -2265,15 +2312,36 @@ function aiScoreWreck(ai, wreck) {
   }
   score -= wellDanger * w.dangerPenalty;
 
-  // Current alignment bonus
-  const flow = estimateFlow(ai.wx, ai.wy);
-  const toWreckX = worldDisplacement(ai.wx, wreck.wx, ws);
-  const toWreckY = worldDisplacement(ai.wy, wreck.wy, ws);
-  const toDist = Math.hypot(toWreckX, toWreckY);
-  if (toDist > 0.01) {
-    const alignment = (flow.x * toWreckX + flow.y * toWreckY) / (Math.hypot(flow.x, flow.y) * toDist + 0.001);
-    score += alignment * w.currentBonus;
+  // Current alignment bonus — sample flow along path using personality.flowSamples
+  const samples = ai.personalityWeights.flowSamples || 4;
+  const alignment = estimatePathAlignment(ai.wx, ai.wy, wreck.wx, wreck.wy, samples);
+  score += alignment * w.currentBonus;
+
+  // Competition — nearest other player to this wreck
+  let nearestCompetitor = Infinity;
+  for (const other of runtime.players.values()) {
+    if (other.clientId === ai.clientId || other.status !== "alive") continue;
+    const cd = worldDistance(other.wx, other.wy, wreck.wx, wreck.wy, ws);
+    if (cd < nearestCompetitor) nearestCompetitor = cd;
   }
+  if (nearestCompetitor < AI_PLAYER_CONFIG.sensorRange) {
+    // Closer competitor = higher penalty. Vultures have negative penalty (bonus).
+    const competitionFactor = 1 - nearestCompetitor / AI_PLAYER_CONFIG.sensorRange;
+    score -= competitionFactor * w.competitionPenalty;
+  }
+
+  // Threat — sentries and inhibitor near wreck
+  let threat = 0;
+  for (const sentry of runtime.mapState.sentries) {
+    if (!sentry.alive) continue;
+    const sd = worldDistance(wreck.wx, wreck.wy, sentry.wx, sentry.wy, ws);
+    if (sd < 0.15) threat = Math.max(threat, 1 - sd / 0.15);
+  }
+  if (runtime.inhibitor.form >= 2) {
+    const inhD = worldDistance(wreck.wx, wreck.wy, runtime.inhibitor.wx, runtime.inhibitor.wy, ws);
+    if (inhD < 0.4) threat = Math.max(threat, 1 - inhD / 0.4);
+  }
+  score -= threat * w.dangerPenalty * 0.5;
 
   return score;
 }
@@ -2296,9 +2364,24 @@ function aiScorePortal(ai, portal) {
   if (portal.type === 'rift') score += 20;
   if (portal.type === 'unstable') score -= 15;
 
-  // Cargo value amplifies
+  // Cargo value amplifies extraction urgency
   const cargoValue = ai.cargo.reduce((s, item) => s + (item ? (item.value || 0) : 0), 0);
   score += cargoValue * w.extractionGreed;
+
+  // Competition — how many others are heading this way?
+  let competitorCount = 0;
+  for (const other of runtime.players.values()) {
+    if (other.clientId === ai.clientId || other.status !== "alive") continue;
+    const cd = worldDistance(other.wx, other.wy, portal.wx, portal.wy, ws);
+    if (cd < dist * 1.2) competitorCount++; // closer than us = competition
+  }
+  score -= competitorCount * w.competitionPenalty;
+
+  // Inhibitor blocking — Vessel near portal makes it unreachable
+  if (runtime.inhibitor.form >= 3) {
+    const inhD = worldDistance(portal.wx, portal.wy, runtime.inhibitor.wx, runtime.inhibitor.wy, ws);
+    if (inhD < INHIBITOR_CONFIG.vesselPortalBlockRange) return -Infinity;
+  }
 
   return score;
 }
@@ -2385,10 +2468,9 @@ function aiNavigateToward(ai, targetWX, targetWY, dt) {
   const dist = Math.hypot(dx, dy);
   if (dist < 0.005) { ai.aiState.thrustIntensity = 0; return; }
 
-  // Check flow alignment
-  const flow = estimateFlow(ai.wx, ai.wy);
-  const flowMag = Math.hypot(flow.x, flow.y);
-  const alignment = flowMag > 0.001 ? (flow.x * dx + flow.y * dy) / (flowMag * dist) : 0;
+  // Check flow alignment along path — personality.flowSamples controls quality
+  const samples = w.flowSamples || 4;
+  const alignment = estimatePathAlignment(ai.wx, ai.wy, targetWX, targetWY, samples);
 
   // Set thrust based on current alignment (signal management)
   if (alignment > 0.5) {
@@ -2498,7 +2580,10 @@ function tickAIPlayers(dt) {
 }
 
 // --- Gradient Sentries (Active Tier) ---
-// Patrol well orbits, lunge at intruders, push toward well.
+// Patrol well orbits at ringOuter × 1.2-1.8. Three states:
+// patrol (orbit) → lunge (rush toward player) → recover (drift back to orbit).
+// Contact pushes player TOWARD well + signal spike. Design: Rift Eels from
+// FAUNA.md, promoted to active tier as Gradient Sentries in ENTITY-CATALOG.md.
 
 function spawnSentries(mapState) {
   const cfg = SENTRY_CONFIG;
@@ -2611,8 +2696,11 @@ function tickSentries(dt) {
   }
 }
 
-// --- Fauna System ---
+// --- Fauna System (Ambient Tier) ---
 // Lightweight entities: position, velocity, age, type. No state machine.
+// Drift Jellies: ambient, always present, teal glow, +0.01 signal on bump.
+// Signal Blooms (née Signal Moths): spawn near signal sources, attracted to
+// highest-signal player. Spawn rate scales with signal zone. See FAUNA.md.
 
 function tickFauna(dt) {
   const cfg = FAUNA_CONFIG;
@@ -2724,7 +2812,12 @@ function tickFauna(dt) {
   }
 }
 
-// --- Inhibitor System ---
+// --- Inhibitor System (Existential Tier) ---
+// Three-form escalation driven by signal pressure + time + well growth.
+// Form 1 (Glitch): 70% of threshold — drifting corruption zone, magenta pulse.
+// Form 2 (Swarm): irreversible wake — hunting mass, cargo drain, control debuff.
+// Form 3 (Vessel): geometric anti-fluid — instant kill, portal blocking, gravity pull.
+// Final portal guaranteed 60s after Vessel. See INHIBITOR.md.
 // Pressure builds from player signal + time + well growth.
 // Forms: 0=inactive, 1=glitch, 2=swarm, 3=vessel.
 
@@ -2851,6 +2944,8 @@ function tickInhibitor(dt) {
       const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
       if (pd < inh.radius * 0.5) {
         spikePlayerSignal(player, cfg.swarmContactSignalSpike * dt);
+        // Sluggish controls — Swarm corrupts ship systems
+        player.controlDebuff = cfg.swarmControlDebuffDuration;
         // Drain cargo
         if (Math.random() < cfg.swarmContactDrain * dt) {
           for (let i = player.cargo.length - 1; i >= 0; i--) {
@@ -2990,7 +3085,10 @@ function tickSim() {
       player.effectState.timeSlowRemaining > 0
         ? dt * SERVER_COMBAT.timeSlowScale
         : dt;
-    const accel = 2.5 * input.thrust;
+    // Tick control debuff (Swarm contact → sluggish controls)
+    if (player.controlDebuff > 0) player.controlDebuff = Math.max(0, player.controlDebuff - playerDt);
+    const controlMult = player.controlDebuff > 0 ? INHIBITOR_CONFIG.swarmControlDebuffMult : 1.0;
+    const accel = 2.5 * input.thrust * controlMult;
     player.vx += input.moveX * accel * playerDt;
     player.vy += input.moveY * accel * playerDt;
     applyWellGravity(player, playerDt);
