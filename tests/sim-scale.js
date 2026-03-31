@@ -45,6 +45,15 @@ async function run() {
         shallows.scavengerRelevanceRadius > deepField.scavengerRelevanceRadius,
         "Expected shallows scavengerRelevanceRadius > deep-field"
       );
+      assert(shallows.maxScavengers < deepField.maxScavengers, "Expected deep-field to allow more scavengers than shallows");
+      assert(
+        shallows.maxRelevantStarsPerPlayer > deepField.maxRelevantStarsPerPlayer,
+        "Expected shallows star relevance budget > deep-field"
+      );
+      assert(
+        shallows.maxRelevantScavengersPerPlayer > deepField.maxRelevantScavengersPerPlayer,
+        "Expected shallows scavenger relevance budget > deep-field"
+      );
     });
 
     await runner.run("Starting deep-field session applies the large-map server profile", async () => {
@@ -72,6 +81,11 @@ async function run() {
         body.session.scavengerRelevanceRadius === 1.4,
         `Expected large-map scavengerRelevanceRadius 1.4, got ${body.session.scavengerRelevanceRadius}`
       );
+      assert(body.session.maxScavengers === 7, `Expected large-map maxScavengers 7, got ${body.session.maxScavengers}`);
+      assert(
+        body.session.maxRelevantStarsPerPlayer === 4,
+        `Expected large-map maxRelevantStarsPerPlayer 4, got ${body.session.maxRelevantStarsPerPlayer}`
+      );
     });
 
     await runner.run("Starting expanse session applies the medium-map server profile", async () => {
@@ -94,6 +108,31 @@ async function run() {
         body.session.entityRelevanceRadius === 1.2,
         `Expected medium-map entityRelevanceRadius 1.2, got ${body.session.entityRelevanceRadius}`
       );
+      assert(body.session.maxScavengers === 6, `Expected medium-map maxScavengers 6, got ${body.session.maxScavengers}`);
+      assert(
+        body.session.maxRelevantScavengersPerPlayer === 3,
+        `Expected medium-map maxRelevantScavengersPerPlayer 3, got ${body.session.maxRelevantScavengersPerPlayer}`
+      );
+    });
+
+    await runner.run("Starting high-player deep-field session applies explicit AI spawn budget", async () => {
+      const { status, body } = await getJson("/session/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mapId: "deep-field",
+          maxPlayers: 8,
+          requesterId: "sim-scale-test",
+          requesterName: "Scale Test",
+        }),
+      });
+      assert(status === 200, `Expected /session/start 200, got ${status}`);
+      assert(body.session.maxPlayers === 8, `Expected maxPlayers 8, got ${body.session.maxPlayers}`);
+      assert(body.session.maxScavengers === 7, `Expected maxScavengers 7, got ${body.session.maxScavengers}`);
+
+      const snapshot = await getJson("/snapshot");
+      const scavengers = snapshot.body.world?.scavengers || [];
+      assert(scavengers.length === 6, `Expected spawned scavengers to honor budget at 6, got ${scavengers.length}`);
     });
   } finally {
     await stopSimServer(SIM_PORT);

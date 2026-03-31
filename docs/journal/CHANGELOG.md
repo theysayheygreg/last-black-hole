@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-03-31 (Week 2 Day 7: Explicit AI and Per-Player Hazard Budgets)
+
+### scripts/ — Modified
+- **sim-runtime.js** — Map-scale authoritative profiles now carry explicit AI spawn budgets and per-player relevance caps for stars, planetoids, wrecks, and scavengers instead of only clock budgets.
+- **sim-runtime.js** — The server now spawns scavengers from those budgets and caps how many nearby hazards and AI entities each alive player can force into the expensive update path on larger maps.
+
+### tests/ — Modified
+- **sim-scale.js** — Extends deterministic scale coverage to assert the new AI and per-player hazard budget fields, plus a high-player `deep-field` spawn-budget case.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+Clock scaling and spatial relevance were necessary, but they still left larger sessions without an explicit per-player budget. This slice makes the authoritative cost model more honest for 4–8 player targets: the server now advertises how much ambient AI and nearby hazard work a larger session is actually allowed to create.
+
 ## 2026-03-31 (Week 2 Day 7: Spatial Relevance Gating for Authoritative Scale)
 
 ### scripts/ — Modified

@@ -260,6 +260,12 @@ In the current thirteenth slice, the authoritative sim also starts scaling its s
 - background-world systems now only fully update entities near alive players, while dying scavengers remain authoritative until their consequence chain resolves
 - player-contact systems reuse those same relevance-filtered sets, so large maps stop paying whole-world scan costs just to apply nearby star push, planetoid push, scavenger bump, and pickup truth
 
+In the current fourteenth slice, the authoritative sim also starts carrying explicit AI and per-player hazard budgets:
+
+- scale profiles now advertise AI spawn budgets (`spawnScavengersBase`, `spawnScavengersPerPlayer`, `maxScavengers`) instead of hardcoding one fixed ambient-AI count forever
+- scale profiles also advertise per-player relevance caps for stars, planetoids, wrecks, and scavengers, so larger multiplayer sessions have an explicit upper bound on how much nearby hazard and AI work each player can force
+- the server now spawns scavengers from those budgets and uses the same per-player caps to choose which nearby entities receive full background updates on larger worlds
+
 ## Client ownership
 
 The client owns:

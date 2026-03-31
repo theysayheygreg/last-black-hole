@@ -84,6 +84,13 @@ const MAP_SIM_SCALE_PROFILES = {
     waveTickHz: 15,
     entityRelevanceRadius: 1.4,
     scavengerRelevanceRadius: 1.8,
+    spawnScavengersBase: 1,
+    spawnScavengersPerPlayer: 0.5,
+    maxScavengers: 5,
+    maxRelevantStarsPerPlayer: 6,
+    maxRelevantPlanetoidsPerPlayer: 4,
+    maxRelevantWrecksPerPlayer: 5,
+    maxRelevantScavengersPerPlayer: 4,
   },
   expanse: {
     profileId: "medium",
@@ -96,6 +103,13 @@ const MAP_SIM_SCALE_PROFILES = {
     waveTickHz: 12,
     entityRelevanceRadius: 1.2,
     scavengerRelevanceRadius: 1.6,
+    spawnScavengersBase: 1,
+    spawnScavengersPerPlayer: 0.5,
+    maxScavengers: 6,
+    maxRelevantStarsPerPlayer: 5,
+    maxRelevantPlanetoidsPerPlayer: 4,
+    maxRelevantWrecksPerPlayer: 4,
+    maxRelevantScavengersPerPlayer: 3,
   },
   "deep-field": {
     profileId: "large",
@@ -108,6 +122,13 @@ const MAP_SIM_SCALE_PROFILES = {
     waveTickHz: 10,
     entityRelevanceRadius: 1.0,
     scavengerRelevanceRadius: 1.4,
+    spawnScavengersBase: 2,
+    spawnScavengersPerPlayer: 0.5,
+    maxScavengers: 7,
+    maxRelevantStarsPerPlayer: 4,
+    maxRelevantPlanetoidsPerPlayer: 3,
+    maxRelevantWrecksPerPlayer: 4,
+    maxRelevantScavengersPerPlayer: 3,
   },
 };
 
@@ -432,8 +453,19 @@ function generateScavengerIdentity(archetype) {
   };
 }
 
-function spawnServerScavengers(mapState) {
-  const count = mapState.worldScale >= 10 ? 5 : mapState.worldScale >= 5 ? 4 : 3;
+function clampBudgetCount(value, fallback = 1) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(1, Math.round(value));
+}
+
+function spawnServerScavengers(mapState, session) {
+  const base = Number(session.spawnScavengersBase || 1);
+  const perPlayer = Number(session.spawnScavengersPerPlayer || 0);
+  const maxScavengers = clampBudgetCount(session.maxScavengers || 1);
+  const count = Math.min(
+    maxScavengers,
+    clampBudgetCount(base + session.maxPlayers * perPlayer, maxScavengers)
+  );
   const vultureCount = Math.max(1, Math.round(count * 0.33));
   const scavengers = [];
   for (let i = 0; i < count; i++) {
@@ -671,11 +703,18 @@ function startSession(config = {}) {
     waveTickHz: scaleProfile.waveTickHz,
     entityRelevanceRadius: scaleProfile.entityRelevanceRadius,
     scavengerRelevanceRadius: scaleProfile.scavengerRelevanceRadius,
+    spawnScavengersBase: scaleProfile.spawnScavengersBase,
+    spawnScavengersPerPlayer: scaleProfile.spawnScavengersPerPlayer,
+    maxScavengers: scaleProfile.maxScavengers,
+    maxRelevantStarsPerPlayer: scaleProfile.maxRelevantStarsPerPlayer,
+    maxRelevantPlanetoidsPerPlayer: scaleProfile.maxRelevantPlanetoidsPerPlayer,
+    maxRelevantWrecksPerPlayer: scaleProfile.maxRelevantWrecksPerPlayer,
+    maxRelevantScavengersPerPlayer: scaleProfile.maxRelevantScavengersPerPlayer,
     simScaleProfile: scaleProfile.profileId,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
   runtime.mapState = mapState;
-  runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState);
+  runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState, runtime.session);
   runtime.tick = 0;
   runtime.simTime = 0;
   runtime.systemAccumulators = {
@@ -1456,16 +1495,6 @@ function getAlivePlayers() {
   return Array.from(runtime.players.values()).filter((player) => player.status === "alive");
 }
 
-function isNearAnyPlayer(wx, wy, radius, players) {
-  if (!players || players.length === 0) return false;
-  for (const player of players) {
-    if (worldDistance(wx, wy, player.wx, player.wy, runtime.session.worldScale) <= radius) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function buildRelevanceView() {
   const alivePlayers = getAlivePlayers();
   const entityRadius = runtime.session.entityRelevanceRadius || runtime.session.worldScale;
@@ -1481,22 +1510,56 @@ function buildRelevanceView() {
     };
   }
 
+  function collectRelevantEntities(entities, radius, perPlayerLimit) {
+    const limit = clampBudgetCount(perPlayerLimit, entities.length || 1);
+    const selectedIds = new Set();
+    const selected = [];
+
+    for (const player of alivePlayers) {
+      const candidates = [];
+      for (const entity of entities) {
+        if (!entity || entity.alive === false) continue;
+        const dist = worldDistance(entity.wx, entity.wy, player.wx, player.wy, runtime.session.worldScale);
+        if (dist > radius) continue;
+        candidates.push({ entity, dist });
+      }
+      candidates.sort((a, b) => a.dist - b.dist);
+      for (let i = 0; i < Math.min(limit, candidates.length); i++) {
+        const entity = candidates[i].entity;
+        if (selectedIds.has(entity.id)) continue;
+        selectedIds.add(entity.id);
+        selected.push(entity);
+      }
+    }
+
+    return selected;
+  }
+
   return {
     alivePlayers,
-    stars: runtime.mapState.stars.filter(
-      (star) => star.alive !== false && isNearAnyPlayer(star.wx, star.wy, entityRadius, alivePlayers)
+    stars: collectRelevantEntities(
+      runtime.mapState.stars,
+      entityRadius,
+      runtime.session.maxRelevantStarsPerPlayer || runtime.mapState.stars.length || 1
     ),
-    wrecks: runtime.mapState.wrecks.filter(
-      (wreck) => wreck.alive !== false && isNearAnyPlayer(wreck.wx, wreck.wy, entityRadius, alivePlayers)
+    wrecks: collectRelevantEntities(
+      runtime.mapState.wrecks,
+      entityRadius,
+      runtime.session.maxRelevantWrecksPerPlayer || runtime.mapState.wrecks.length || 1
     ),
-    planetoids: runtime.mapState.planetoids.filter(
-      (planetoid) => planetoid.alive !== false && isNearAnyPlayer(planetoid.wx, planetoid.wy, entityRadius, alivePlayers)
+    planetoids: collectRelevantEntities(
+      runtime.mapState.planetoids,
+      entityRadius,
+      runtime.session.maxRelevantPlanetoidsPerPlayer || runtime.mapState.planetoids.length || 1
     ),
-    scavengers: runtime.mapState.scavengers.filter(
-      (scav) =>
-        scav.alive !== false &&
-        (scav.state === "dying" || isNearAnyPlayer(scav.wx, scav.wy, scavengerRadius, alivePlayers))
-    ),
+    scavengers: [
+      ...runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state === "dying"),
+      ...collectRelevantEntities(
+        runtime.mapState.scavengers.filter((scav) => scav.state !== "dying"),
+        scavengerRadius,
+        runtime.session.maxRelevantScavengersPerPlayer || runtime.mapState.scavengers.length || 1
+      ),
+    ].filter((scav, index, list) => list.findIndex((entry) => entry.id === scav.id) === index),
   };
 }
 
@@ -1875,6 +1938,13 @@ const server = http.createServer(async (req, res) => {
             waveTickHz: profile.waveTickHz,
             entityRelevanceRadius: profile.entityRelevanceRadius,
             scavengerRelevanceRadius: profile.scavengerRelevanceRadius,
+            spawnScavengersBase: profile.spawnScavengersBase,
+            spawnScavengersPerPlayer: profile.spawnScavengersPerPlayer,
+            maxScavengers: profile.maxScavengers,
+            maxRelevantStarsPerPlayer: profile.maxRelevantStarsPerPlayer,
+            maxRelevantPlanetoidsPerPlayer: profile.maxRelevantPlanetoidsPerPlayer,
+            maxRelevantWrecksPerPlayer: profile.maxRelevantWrecksPerPlayer,
+            maxRelevantScavengersPerPlayer: profile.maxRelevantScavengersPerPlayer,
           };
         }),
       });

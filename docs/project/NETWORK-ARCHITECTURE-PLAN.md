@@ -163,6 +163,7 @@ Current progress:
 - the browser control plane now exposes live session truth instead of hiding it: clients can see the live map, host identity, player count, whether they are the host, and whether launch will join or host-reset
 - the authoritative sim now applies explicit map-size clock profiles so `5x5` and `10x10` runs stop paying the same server tick costs as `3x3`
 - the authoritative sim now also applies map-size relevance radii so larger maps stop fully updating off-player stars, wrecks, planetoids, and scavenger AI every background tick
+- the authoritative sim now also carries explicit AI spawn budgets and per-player hazard caps, so larger-player sessions do not scale linearly just because more remote clients exist
 - broader lobby/session UX still needs to move over
 
 ### Batch B — Local Protocol Freeze
@@ -193,6 +194,7 @@ Current progress:
 - protocol/browser integration now exposes that host contract explicitly in map select, and the remote smoke proves a non-host browser sees "join live run" rather than pretending it can reset
 - `/maps`, `/health`, and session state now expose map-sized sim clocks, and the browser client respects the authoritative `snapshotHz` instead of polling every map like a small-map session
 - `/maps` and session state now also expose map-sized relevance radii so the larger-world cost model is not just a hidden server implementation detail
+- `/maps` and session state now also expose AI spawn budgets and per-player hazard caps so future 4–8 player sessions have a visible server budget instead of folklore
 - protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.
