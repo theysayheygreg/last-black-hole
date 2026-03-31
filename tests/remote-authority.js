@@ -81,6 +81,21 @@ async function enterRemoteRun(page) {
   await waitForPhase(page, "playing", 12000);
 }
 
+async function enterRemoteMapSelect(page) {
+  await waitForPhase(page, "title");
+  await tap(page, "Space", " ");
+  await waitForPhase(page, "profileSelect");
+  await tap(page, "Enter", "Enter");
+  await sleep(120);
+  await tap(page, "Enter", "Enter");
+  await waitForPhase(page, "home");
+  await tap(page, "KeyE", "e");
+  await tap(page, "KeyE", "e");
+  await tap(page, "KeyE", "e");
+  await tap(page, "Enter", "Enter");
+  await waitForPhase(page, "mapSelect");
+}
+
 async function getEvents(since = 0) {
   const response = await fetch(`${SIM_URL}/events?since=${since}`);
   const body = await response.json();
@@ -195,6 +210,10 @@ async function run() {
       assert(net.simUrl === "http://127.0.0.1:8788", `Unexpected sim URL: ${net.simUrl}`);
       assert(typeof net.remoteMapId === "string" && net.remoteMapId.length > 0, "Expected remote map id");
       assert(typeof net.remoteTick === "number", "Expected authoritative remote tick");
+      assert(net.sessionStatus === "running", `Expected running session state, got ${net.sessionStatus}`);
+      assert(net.sessionIsHost === true, "Expected first remote browser to report host status");
+      assert(net.sessionCanHostReset === true, "Expected host browser to report reset authority");
+      assert(net.sessionMapId === "shallows", `Expected live session map id to be shallows, got ${net.sessionMapId}`);
 
       const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
       assert(health.session.hostClientId === net.clientId, "Expected first remote browser to become session host");
@@ -457,6 +476,21 @@ async function run() {
     await runner.run("Remote browser joins live authoritative run instead of resetting to its selected map", async () => {
       ({ browser: browser2, page: page2 } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
       await bootstrapCleanRemotePage(page2);
+
+      await enterRemoteMapSelect(page2);
+      await tap(page2, "ArrowDown", "ArrowDown");
+      await tap(page2, "ArrowDown", "ArrowDown");
+      await waitFor(page2, () => {
+        const net = window.__TEST_API.getNetworkState();
+        return (
+          net.sessionStatus === "running" &&
+          net.sessionMapId === "shallows" &&
+          net.sessionIsHost === false &&
+          net.sessionCanHostReset === false &&
+          net.sessionSelectedDiffersFromLive === true &&
+          net.sessionWillJoinLiveRun === true
+        );
+      }, { timeout: 12000 });
 
       const started = await page2.evaluate(() => window.__TEST_API.startRemoteGame(2));
       assert(started === true, "Expected second browser to start remote game through test API");

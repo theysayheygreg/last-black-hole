@@ -5,6 +5,23 @@
 
 ---
 
+## 2026-03-30 (Week 2 Day 6: Explicit Remote Host/Join Control Plane)
+
+### src/ — Modified
+- **main.js** — The remote browser now keeps a lightweight live-session health view and exposes real control-plane truth during map select: live map, host identity, player count, whether this browser is host, and whether the selected map differs from the live run.
+- **main.js** — Remote map select now distinguishes `space/A` as join-or-host and `X/Y` as the host-only reset action for the selected map instead of treating every remote launch as an implicit fresh host action.
+- **test-api.js** — Network inspection now exposes remote host/session state, and the test API can explicitly request a host reset path.
+
+### tests/ — Modified
+- **remote-authority.js** — The remote smoke now proves the first browser reports host authority, and a second browser sitting on map select can see that it will join the live shallows run rather than resetting it to its own different selected map.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+The server already had real host semantics, but the client was still lying by omission. This slice makes the control plane explicit so private multiplayer no longer feels like hidden server behavior.
+
 ## 2026-03-29 (Week 2 Day 5: Authoritative Remote Inventory Mutation)
 
 ### scripts/ — Modified

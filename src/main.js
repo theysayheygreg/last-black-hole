@@ -99,6 +99,9 @@ let remoteLastEventSeq = 0;
 let remoteInputRequestInFlight = false;
 let remoteSnapshotRequestInFlight = false;
 let remoteInventoryRequestInFlight = false;
+let remoteSessionHealth = null;
+let remoteSessionRequestInFlight = false;
+let remoteSessionLastFetchedAt = 0;
 let remotePendingPulse = false;
 let remotePendingConsumeSlot = null;
 let startingMasses = [];
@@ -329,6 +332,8 @@ function init() {
       get remoteAuthorityActive() { return remoteAuthorityActive; },
       get remoteMapId() { return remoteMapId; },
       get remoteSnapshot() { return remoteSnapshot; },
+      get remoteSessionHealth() { return remoteSessionHealth; },
+      get remoteControlState() { return currentRemoteControlState(); },
       get remotePlayers() { return remotePlayers; },
       get playableMaps() { return PLAYABLE_MAPS; },
       transitionToGame,
@@ -635,6 +640,13 @@ function transitionToGame(map) {
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
   remoteSnapshot = snapshot;
+  remoteSessionHealth = {
+    ok: true,
+    session: snapshot.session ?? null,
+    playerCount: Array.isArray(snapshot.players) ? snapshot.players.length : 0,
+    tick: snapshot.tick ?? null,
+    simTime: snapshot.simTime ?? null,
+  };
   simState.runElapsedTime = snapshot.simTime ?? simState.runElapsedTime;
   syncRemoteWorldState(snapshot.world);
   remotePlayers = Array.isArray(snapshot.players)
@@ -687,6 +699,64 @@ function applyRemoteSnapshot(snapshot) {
     escapeTimer = 0;
     freezeRunEnd(simState);
     ship.setThrust(false);
+  }
+}
+
+function currentRemoteControlState() {
+  const selectedEntry = PLAYABLE_MAPS[mapSelectIndex] || PLAYABLE_MAPS[0] || null;
+  const session = remoteSessionHealth?.session ?? null;
+  const hasLiveSession = session?.status === 'running';
+  const liveEntry = hasLiveSession ? (getPlayableMapEntryById(session.mapId) || null) : null;
+  const isHost = Boolean(hasLiveSession && simClient?.clientId && session?.hostClientId === simClient.clientId);
+  return {
+    enabled: Boolean(simClient?.enabled),
+    loading: remoteSessionRequestInFlight,
+    error: remoteSessionHealth?.ok === false ? remoteSessionHealth.error || 'remote health unavailable' : null,
+    hasLiveSession,
+    sessionStatus: session?.status ?? 'idle',
+    sessionMapId: liveEntry?.id ?? session?.mapId ?? null,
+    sessionMapName: liveEntry?.name ?? session?.mapId ?? null,
+    sessionPlayerCount: remoteSessionHealth?.playerCount ?? 0,
+    hostClientId: session?.hostClientId ?? null,
+    hostName: session?.hostName ?? null,
+    isHost,
+    canHostReset: Boolean(hasLiveSession && isHost),
+    selectedMapId: selectedEntry?.id ?? null,
+    selectedMapName: selectedEntry?.name ?? null,
+    willJoinLiveRun: Boolean(hasLiveSession),
+    selectedDiffersFromLive: Boolean(hasLiveSession && selectedEntry && liveEntry && selectedEntry.id !== liveEntry.id),
+  };
+}
+
+async function refreshRemoteSessionHealth(force = false) {
+  if (!simClient?.enabled) return null;
+  const now = Date.now();
+  if (remoteSessionRequestInFlight) return remoteSessionHealth;
+  if (!force && remoteSessionHealth && now - remoteSessionLastFetchedAt < 500) return remoteSessionHealth;
+  remoteSessionRequestInFlight = true;
+  remoteSessionLastFetchedAt = now;
+  try {
+    const health = await simClient.getHealth();
+    remoteSessionHealth = {
+      ok: true,
+      session: health?.session ?? null,
+      playerCount: health?.playerCount ?? 0,
+      tick: health?.tick ?? null,
+      simTime: health?.simTime ?? null,
+    };
+    return remoteSessionHealth;
+  } catch (err) {
+    remoteSessionHealth = {
+      ok: false,
+      error: err.message,
+      session: null,
+      playerCount: 0,
+      tick: null,
+      simTime: null,
+    };
+    return remoteSessionHealth;
+  } finally {
+    remoteSessionRequestInFlight = false;
   }
 }
 
@@ -933,16 +1003,20 @@ function syncRemoteWorldState(world) {
   }
 }
 
-async function startRemoteGame(mapEntry) {
+async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   if (!simClient?.enabled) {
     startGame(mapEntry.map);
     return;
   }
 
-  const health = await simClient.getHealth();
+  const health = await refreshRemoteSessionHealth(true);
   const runningSession = health?.session?.status === 'running' ? health.session : null;
+  const isHost = Boolean(runningSession?.hostClientId && runningSession.hostClientId === simClient.clientId);
+  if (forceReset && runningSession && !isHost) {
+    throw new Error('Only the host can reset the live run');
+  }
   const targetMapEntry = runningSession
-    ? (getPlayableMapEntryById(runningSession.mapId) || mapEntry)
+    ? (forceReset ? mapEntry : (getPlayableMapEntryById(runningSession.mapId) || mapEntry))
     : mapEntry;
 
   rendererFixtureActive = false;
@@ -972,13 +1046,16 @@ async function startRemoteGame(mapEntry) {
     inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
   }
 
-  if (!runningSession) {
+  if (!runningSession || forceReset) {
     await simClient.startSession({
-      mapId: targetMapEntry.id,
-      worldScale: targetMapEntry.map.worldScale,
+      mapId: mapEntry.id,
+      worldScale: mapEntry.map.worldScale,
       maxPlayers: 4,
       requesterName: profileManager.active?.name || 'Pilot',
     });
+    if (forceReset && runningSession) {
+      showWarning(`host reset to ${mapEntry.name.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
+    }
   } else if (runningSession.mapId !== mapEntry.id) {
     showWarning(`joining live run on ${targetMapEntry.name}`, 'rgba(140, 200, 255, 0.9)', 2400);
   }
@@ -991,15 +1068,16 @@ async function startRemoteGame(mapEntry) {
   applyRemoteSnapshot(snapshot);
 }
 
-function transitionToRemoteGame(mapEntry) {
+function transitionToRemoteGame(mapEntry, options = {}) {
   triggerTransition(() => {
-    void startRemoteGame(mapEntry).catch((err) => {
+    void startRemoteGame(mapEntry, options).catch((err) => {
       console.error('[LBH] remote start failed:', err);
       showWarning(`remote sim failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
       remoteAuthorityActive = false;
       remoteMapId = null;
       remoteSnapshot = null;
       remotePlayers = [];
+      remoteSessionHealth = null;
       startGame(mapEntry.map);
     });
   });
@@ -1017,6 +1095,7 @@ async function leaveRemoteSessionToHome() {
   remoteMapId = null;
   remoteSnapshot = null;
   remotePlayers = [];
+  remoteSessionHealth = null;
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
@@ -1398,6 +1477,7 @@ function gameLoop(now) {
     applySceneCamera(dt);
 
   } else if (gamePhase === 'mapSelect') {
+    if (simClient?.enabled) void refreshRemoteSessionHealth(false);
     if (upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
     if (downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
     if (!transitionActive && confirmNow && !_prevConfirm) {
@@ -1412,6 +1492,22 @@ function gameLoop(now) {
       const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];
       if (simClient?.enabled) transitionToRemoteGame(selectedEntry);
       else transitionToGame(selectedEntry.map);
+    }
+    if (!transitionActive && inputManager.deletePressed && !_prevDelete && simClient?.enabled) {
+      const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];
+      const remoteControl = currentRemoteControlState();
+      if (remoteControl.canHostReset) {
+        audioEngine.init();
+        audioEngine.playEvent('launch');
+        const p = profileManager.active;
+        if (p) {
+          inventorySystem.equipped = p.loadout.equipped.map(i => i ? { ...i } : null);
+          inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
+        }
+        transitionToRemoteGame(selectedEntry, { forceReset: true });
+      } else if (remoteControl.hasLiveSession) {
+        showWarning('only the host can reset the live run', 'rgba(255, 150, 120, 0.95)', 2400);
+      }
     }
     if (!transitionActive && backNow && !_prevBack) {
       gamePhase = 'home';
@@ -2717,6 +2813,7 @@ function gameLoop(now) {
 
   // === MAP SELECT SCREEN ===
   if (!rendererFixtureActive && gamePhase === 'mapSelect') {
+    const remoteControl = simClient?.enabled ? currentRemoteControlState() : null;
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
 
@@ -2762,10 +2859,61 @@ function gameLoop(now) {
       ctx.fillText(stats, cx, y + 26);
     }
 
-    const hintY = listTop + MAP_LIST.length * itemHeight + 25;
+    let hintY = listTop + MAP_LIST.length * itemHeight + 25;
+    if (remoteControl?.enabled) {
+      const infoY = hintY - 36;
+      ctx.font = '12px monospace';
+      if (remoteControl.error) {
+        ctx.fillStyle = 'rgba(255, 130, 110, 0.9)';
+        ctx.fillText(`remote sim unavailable: ${remoteControl.error}`, cx, infoY);
+      } else if (remoteControl.loading && !remoteControl.hasLiveSession) {
+        ctx.fillStyle = 'rgba(150, 170, 210, 0.75)';
+        ctx.fillText('checking live authority…', cx, infoY);
+      } else if (remoteControl.hasLiveSession) {
+        const hostLabel = remoteControl.hostName || 'unknown host';
+        ctx.fillStyle = 'rgba(140, 200, 255, 0.85)';
+        ctx.fillText(
+          `live run: ${remoteControl.sessionMapName}  |  host: ${hostLabel}  |  players: ${remoteControl.sessionPlayerCount}`,
+          cx,
+          infoY
+        );
+        ctx.font = '11px monospace';
+        ctx.fillStyle = remoteControl.selectedDiffersFromLive
+          ? 'rgba(255, 210, 140, 0.9)'
+          : 'rgba(160, 180, 210, 0.75)';
+        if (remoteControl.selectedDiffersFromLive) {
+          ctx.fillText(
+            remoteControl.canHostReset
+              ? `space/A joins ${remoteControl.sessionMapName}; X/Y resets host run to ${remoteControl.selectedMapName}`
+              : `space/A joins ${remoteControl.sessionMapName}; only host can reset to ${remoteControl.selectedMapName}`,
+            cx,
+            infoY + 20
+          );
+        } else {
+          ctx.fillText(
+            remoteControl.canHostReset
+              ? 'space/A: join live run    X/Y: host reset current run'
+              : 'space/A: join live run',
+            cx,
+            infoY + 20
+          );
+        }
+      } else {
+        ctx.fillStyle = 'rgba(120, 220, 170, 0.8)';
+        ctx.fillText('no live run detected — this client will host the selected map', cx, infoY);
+      }
+      hintY += 20;
+    }
+
     ctx.fillStyle = 'rgba(150, 160, 190, 0.6)';
     ctx.font = '11px monospace';
-    ctx.fillText('↑↓ select    space/A: launch    esc/B: back', cx, hintY);
+    ctx.fillText(
+      simClient?.enabled
+        ? '↑↓ select    space/A: join or host    X/Y: host reset    esc/B: back'
+        : '↑↓ select    space/A: launch    esc/B: back',
+      cx,
+      hintY
+    );
 
     ctx.restore();
   }

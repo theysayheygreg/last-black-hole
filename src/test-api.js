@@ -124,8 +124,16 @@ export function initTestAPI(getState) {
       return true;
     },
 
+    resetRemoteGame(mapIndex = 0) {
+      const { playableMaps, transitionToRemoteGame } = getState();
+      if (!playableMaps || !transitionToRemoteGame) return false;
+      const entry = playableMaps[mapIndex] || playableMaps[0];
+      transitionToRemoteGame(entry, { forceReset: true });
+      return true;
+    },
+
     getNetworkState() {
-      const { simClient, remoteAuthorityActive, remoteMapId, remoteSnapshot } = getState();
+      const { simClient, remoteAuthorityActive, remoteMapId, remoteSnapshot, remoteControlState } = getState();
       return {
         simEnabled: Boolean(simClient?.enabled),
         simUrl: simClient?.baseUrl || null,
@@ -134,6 +142,16 @@ export function initTestAPI(getState) {
         remoteMapId: remoteMapId || null,
         remoteTick: remoteSnapshot?.tick ?? null,
         remoteSimTime: remoteSnapshot?.simTime ?? null,
+        sessionStatus: remoteControlState?.sessionStatus ?? null,
+        sessionMapId: remoteControlState?.sessionMapId ?? null,
+        sessionMapName: remoteControlState?.sessionMapName ?? null,
+        sessionPlayerCount: remoteControlState?.sessionPlayerCount ?? 0,
+        sessionHostClientId: remoteControlState?.hostClientId ?? null,
+        sessionHostName: remoteControlState?.hostName ?? null,
+        sessionIsHost: Boolean(remoteControlState?.isHost),
+        sessionCanHostReset: Boolean(remoteControlState?.canHostReset),
+        sessionWillJoinLiveRun: Boolean(remoteControlState?.willJoinLiveRun),
+        sessionSelectedDiffersFromLive: Boolean(remoteControlState?.selectedDiffersFromLive),
       };
     },
 

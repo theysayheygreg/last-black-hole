@@ -160,7 +160,8 @@ Current progress:
 - a later remote browser now joins the live authoritative run by default instead of resetting it to its own selected map
 - remote clients can now leave a run without resetting the authoritative session for everyone else
 - the session now has real host ownership instead of everyone implicitly being able to behave like a reset authority
-- broader combat/gameplay authority still needs to move over
+- the browser control plane now exposes live session truth instead of hiding it: clients can see the live map, host identity, player count, whether they are the host, and whether launch will join or host-reset
+- broader lobby/session UX still needs to move over
 
 ### Batch B — Local Protocol Freeze
 
@@ -187,6 +188,7 @@ Current progress:
 - browser startup semantics now respect the existing authoritative run as the default truth instead of treating each client as a hidden host reset button
 - protocol now includes a leave path so a dead or finished client can exit without acting like a hidden host reset button
 - protocol now has real host semantics: first joiner becomes host, only the host can start/reset a live run, and host promotion happens when the host leaves
+- protocol/browser integration now exposes that host contract explicitly in map select, and the remote smoke proves a non-host browser sees "join live run" rather than pretending it can reset
 - protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.

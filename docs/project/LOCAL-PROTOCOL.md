@@ -239,6 +239,13 @@ In the current tenth slice, the control plane has a real host concept:
 - only the host may start/reset an already-running session
 - when the host leaves, the server promotes another remaining client instead of leaving reset authority ambiguous
 
+In the current eleventh slice, the browser client finally exposes that control plane honestly:
+
+- map select now polls and surfaces live session state instead of pretending every remote launch is a fresh host action
+- the client now knows whether a live run exists, which map it is on, who the host is, how many players are in it, and whether this browser is the host
+- `space/A` is now explicitly the join-or-host action, while `X/Y` is the host-only reset action for the selected map
+- remote-authority coverage now proves that a non-host browser can see it will join the live run rather than reset it, and that the original browser reports host reset authority
+
 ## Client ownership
 
 The client owns:
@@ -266,4 +273,4 @@ The next useful transfers are:
 
 - coarse authoritative flow sampling
 - broader combat consequences beyond pulse events and contact forces
-- real lobby/session selection semantics instead of only "join current same-map run or start one"
+- real lobby/session selection semantics beyond the current "join live run / host reset selected map" control plane
