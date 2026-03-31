@@ -858,3 +858,15 @@ The remote path was still too empty to count as a real competitive run. Server-o
 
 ### Why
 Remote authority was still only half-true. The server could own movement, loot, and scavengers, but the client was still pretending consumables and pulse timing were local. This slice moves those systems over so a remote run is closer to the real game instead of a movement demo wrapped around local gameplay shortcuts.
+
+## 2026-03-31 (Week 3 Day 2: Next Architecture Phase Defined)
+
+### docs/project/ — Added
+- **PLAYER-BRAIN-AND-OVERLOAD-PLAN.md** — Detailed design for the post-migration architecture phase: boxed server-side player truth, explicit overload states, coarse authoritative flow/hazard fields for larger maps, and session profiles for 1/4/8-player intents.
+
+### docs/project/ — Modified
+- **NETWORK-ARCHITECTURE-PLAN.md** — Adds the next architecture batch after the first migration: `PlayerBrain`, overload state machine, coarse field authority, and session profiles.
+- **BACKLOG.md** — Adds explicit backlog/design entries for `PlayerBrain`, overload states, coarse authoritative field work, and session-profile design.
+
+### Why
+The client/server split is real enough now that the next problem is no longer process separation. The next problem is keeping the authoritative server coherent and affordable as map size, player count, and sim fidelity increase.

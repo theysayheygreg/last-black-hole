@@ -192,6 +192,30 @@
 - **Value if revisited:** Turns later transport choices into implementation work instead of architectural churn.
 - **First revival step:** Write the smallest viable plain-data protocol and route one playable loop through it.
 
+### PlayerBrain / Derived-State Boxing
+- **What:** Formal server-side boxed player runtime state: identity, raw loadout inputs, resolved gameplay coefficients, and hot-path runtime caches.
+- **Why now:** The server already owns run truth. The next scale problem is scattered player-state recomputation in hot paths.
+- **Value if revisited:** Cheaper ticks, cleaner snapshots, easier AI parity, and a more stable long-term client/server contract.
+- **First revival step:** Introduce a `PlayerBrain` module and make equip/consume/death/status changes dirty and rebuild it.
+
+### Run Overload State Machine
+- **What:** Explicit authoritative run states like `NORMAL`, `THROTTLED`, `DEGRADED`, and `DILATED`, with concrete budget and cadence changes attached.
+- **Why now:** Current scale cuts exist, but they are still implicit. Larger maps and future 4–8 player runs need an honest shared degradation model.
+- **Value if revisited:** Inspectable performance behavior, better fairness under load, and a stable place to attach future scale policies.
+- **First revival step:** Promote current map-scale clocks and budgets into named run states and expose that state in snapshots.
+
+### Coarse Authoritative Flow / Hazard Field
+- **What:** A low-resolution server-owned gameplay field for motion and danger on larger maps, separate from the rich client-side visual fluid reconstruction.
+- **Why now:** Per-player force caps help, but they are still the tail end of a direct-source model. Larger worlds need a cheaper first-class authority model.
+- **Value if revisited:** Better large-map scaling, cleaner 4–8 player cost envelopes, and less pressure to keep server truth aligned with renderer fidelity.
+- **First revival step:** Prototype the field on `deep-field` first and use it for player motion/hazard sampling before expanding it.
+
+### Session Profiles
+- **What:** Explicit run profiles like `solo_ai_light`, `duel_competitive`, `four_player_pvp`, and `eight_player_stress` that define clocks, AI fill, field resolution, and overload budgets together.
+- **Why now:** Map-size profiles are not enough once player-count and mode start affecting cost as much as map size.
+- **Value if revisited:** Honest server intent, cleaner control-plane behavior, and better hosted-run readiness later.
+- **First revival step:** Lift current map-scale profiles into session profiles with player-count intent and expose the chosen profile through session state.
+
 ### Hosted Run Instances
 - **What:** Run-scoped authoritative sessions for 4-8 players, with solo fallback and AI fill where needed.
 - **Why deferred:** This is the likely multiplayer future, but not the next engineering milestone. Private remote play must work first.

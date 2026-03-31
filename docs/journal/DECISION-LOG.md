@@ -947,3 +947,22 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 | Mar 31 | Next scale correction after clock profiles: larger maps still cannot afford whole-world background scans. The authoritative sim now also gates stars, wrecks, planetoids, and scavenger AI by alive-player relevance, and it reuses those filtered sets for nearby player-contact systems instead of paying full-world costs every tick. |
 | Mar 31 | Next scale correction after relevance gating: larger-player sessions also need explicit AI and per-player hazard budgets, not just slower clocks and wider gates. The server now advertises and enforces those budgets so 4–8 player runs have a visible cost ceiling for ambient AI and nearby hazard work. |
 | Mar 31 | Next scale correction after AI budgets: authoritative player motion itself also needs a visible ceiling. The server now caps per-player well, wave, pickup, and portal checks so large sessions stop paying whole-world force-source scans on every player tick. |
+
+
+## Player Brain and Overload Architecture
+
+### Q: What is the next architecture phase after the first authoritative client/server migration?
+
+| Date | Event |
+|------|-------|
+| Mar 31 | After the first authoritative migration and the first round of scale budgets land, the remaining problem changes shape: the server is real, but it still derives too much hot-path truth procedurally from scattered player, item, and world state. |
+| Mar 31 | EVE research reinforces three useful lessons for LBH: boxed derived player state, explicit overload/degradation, and coarse authority boundaries under load. |
+| Mar 31 | Decision: the next architecture batch is no longer “move another system to the server.” It is `PlayerBrain`, overload state, coarse authoritative field authority, and explicit session profiles. |
+
+**Options:**
+1. **Keep iterating budgets and force caps only** — useful in the short term, but it keeps the server procedural and pushes the real scale problem forward.
+2. **Jump straight to hosted sessions or engine migration** — premature while the server's internal truth model is still too ad hoc.
+3. **Formalize boxed player truth, overload policy, coarse field authority, and session profiles** (chosen) — turns the current migration into a durable architecture instead of a long tail of tactical patches.
+
+**Where it landed:** Option 3. The next architecture phase is now explicitly defined in `docs/project/PLAYER-BRAIN-AND-OVERLOAD-PLAN.md`.
+**Door status:** Open — implementation is intentionally deferred until the design is reviewed, but the shape of the next work is now concrete.

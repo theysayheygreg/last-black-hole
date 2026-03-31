@@ -210,6 +210,21 @@ These two batches belong together. The private remote play path is the proof. Th
 - native rendering rewrite
 - streaming gameplay from the mini instead of local rendering
 
+## Next architecture batch
+
+The first migration is done enough that the next work should stop being generic boundary cleanup.
+
+The next architecture batch is:
+
+1. **PlayerBrain** — box and cache resolved player truth on the server
+2. **Overload state machine** — make server degradation explicit and inspectable
+3. **Coarse authoritative flow/hazard field** — stop scaling large maps only by force-source caps
+4. **Session profiles** — make 1-player, 4-player, and 8-player server intent explicit
+
+The detailed design for this phase lives in `docs/project/PLAYER-BRAIN-AND-OVERLOAD-PLAN.md`.
+
+This batch matters because the server is already authoritative enough to play. The next problem is no longer “can the client and server be split?” It is “can the authoritative server stay coherent and cheap as map size, player count, and sim fidelity rise?”
+
 ## Open questions
 
 - How much of the current fluid field should remain gameplay-authoritative versus becoming visual reconstruction only?
