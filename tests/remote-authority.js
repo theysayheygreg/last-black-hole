@@ -297,6 +297,15 @@ async function run() {
 
     await runner.run("Remote inventory actions mutate authoritative cargo and loadout", async () => {
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const resetPlayer = await postDebugPlayerState({
+        clientId: net.clientId,
+        wx: 1.5,
+        wy: 1.5,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(resetPlayer.ok === true, "Expected debug reset to safe alive state before inventory mutation");
 
       let result = await postInventoryAction({
         clientId: net.clientId,
@@ -305,11 +314,11 @@ async function run() {
       });
       assert(result.ok === true, "Expected unequip action to succeed");
 
-      let snapshotState = await waitForSnapshotPlayer(
-        (remotePlayer) => !remotePlayer.equipped?.[0] && remotePlayer.cargo?.some((item) => item?.name === "Pull Dampener"),
-        { timeout: 5000 }
-      );
-      assert(snapshotState.player.cargo.some((item) => item?.name === "Pull Dampener"), "Expected unequipped artifact in cargo");
+      let snapshotState = {
+        snapshot: result.snapshot,
+        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === net.clientId),
+      };
+      assert(snapshotState.player?.cargo?.some((item) => item?.name === "Pull Dampener"), "Expected unequipped artifact in cargo");
 
       const cargoSlot = snapshotState.player.cargo.findIndex((item) => item?.name === "Pull Dampener");
       result = await postInventoryAction({
@@ -320,11 +329,40 @@ async function run() {
       });
       assert(result.ok === true, "Expected equipCargo action to succeed");
 
-      snapshotState = await waitForSnapshotPlayer(
-        (remotePlayer) => remotePlayer.equipped?.[1]?.name === "Pull Dampener",
-        { timeout: 5000 }
-      );
-      assert(snapshotState.player.equipped[1]?.name === "Pull Dampener", "Expected authoritative re-equip into slot 1");
+      snapshotState = {
+        snapshot: result.snapshot,
+        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === net.clientId),
+      };
+      assert(snapshotState.player?.equipped?.[1]?.name === "Pull Dampener", "Expected authoritative re-equip into slot 1");
+
+      result = await postInventoryAction({
+        clientId: net.clientId,
+        action: "unequip",
+        equipSlot: 1,
+      });
+      assert(result.ok === true, "Expected second unequip action to succeed");
+
+      snapshotState = {
+        snapshot: result.snapshot,
+        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === net.clientId),
+      };
+      const dropSlot = snapshotState.player.cargo.findIndex(Boolean);
+      assert(dropSlot >= 0, "Expected an occupied cargo slot before remote drop");
+      result = await postInventoryAction({
+        clientId: net.clientId,
+        action: "dropCargo",
+        cargoSlot: dropSlot,
+      });
+      assert(result.ok === true, "Expected dropCargo action to succeed");
+      const authoritativeDropped = result.snapshot.world.wrecks.find((wreck) => typeof wreck.name === "string" && wreck.name.startsWith("dropped:"));
+      assert(authoritativeDropped, "Expected authoritative snapshot to contain dropped wreck");
+
+      await waitFor(page, (expectedName) => {
+        return window.__TEST_API.getWrecks().some((wreck) => wreck.name === expectedName);
+      }, {
+        timeout: 5000,
+        args: [authoritativeDropped.name],
+      });
     });
 
     await runner.run("Remote authoritative hazards push the player without local fallback", async () => {

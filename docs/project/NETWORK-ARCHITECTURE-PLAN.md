@@ -176,6 +176,7 @@ Current progress:
 - browser client now actively consumes that protocol in a playable remote-authority mode
 - protocol now carries cargo/loadout state closely enough for remote runs to extract and lose loot honestly
 - protocol now carries enough world state for remote clients to render rival scavengers from authoritative snapshots
+- remote snapshot sync now fully reconciles dynamic stars, wrecks, and planetoids instead of only patching shared index slots, so server-spawned world entities actually materialize on remote clients
 - protocol now carries enough player effect state for remote clients to reflect active shield/time-slow and remote pulse cooldown honestly
 - protocol now includes discrete authoritative inventory mutation requests instead of forcing loadout changes through local-only UI state
 - protocol and browser path now support a second client joining the same running authoritative session

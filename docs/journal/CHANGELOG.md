@@ -741,6 +741,8 @@ The remote path was still too empty to count as a real competitive run. Server-o
 
 ### src/ — Modified
 - **main.js** — Remote runs now sync active effect state and pulse cooldown from authoritative snapshots and play local audio/warning feedback from remote events instead of assuming local item truth.
+- **main.js** — Remote world sync now fully reconciles dynamic stars, wrecks, and planetoids instead of only patching shared index ranges. That makes authoritative dropped-item wrecks and other server-spawned entities actually appear on remote clients.
+- **remote-authority.js** — Remote inventory coverage now proves that dropping cargo on the server produces a new wreck on the browser client instead of only mutating server-side state.
 - **sim/sim-client.js** — `join()` now actually sends equipped and consumable loadout state, and `sendInput()` can now carry `consumeSlot`.
 - **test-api.js** — Adds lightweight profile seeding and remote input hooks for honest protocol tests.
 

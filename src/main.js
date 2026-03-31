@@ -800,40 +800,32 @@ function syncRemoteWorldState(world) {
   }
 
   if (Array.isArray(world.stars)) {
-    for (let i = 0; i < Math.min(world.stars.length, starSystem.stars.length); i++) {
-      const remote = world.stars[i];
-      const local = starSystem.stars[i];
-      local.wx = remote.wx;
-      local.wy = remote.wy;
-      local.mass = remote.mass ?? local.mass;
-      local.alive = remote.alive !== false;
-      if (remote.name) local.name = remote.name;
-    }
+    const previousStars = new Map(starSystem.stars.map((star) => [star.id, star]));
+    starSystem.stars = world.stars.map((remote, index) => {
+      const prev = previousStars.get(remote.id) || starSystem.stars[index] || {};
+      return {
+        ...prev,
+        ...remote,
+        alive: remote.alive !== false,
+      };
+    });
   }
 
   if (Array.isArray(world.wrecks)) {
-    for (let i = 0; i < Math.min(world.wrecks.length, wreckSystem.wrecks.length); i++) {
-      const remote = world.wrecks[i];
-      const local = wreckSystem.wrecks[i];
-      local.wx = remote.wx;
-      local.wy = remote.wy;
-      local.alive = remote.alive !== false;
-      local.looted = Boolean(remote.looted);
-      if (remote.name) local.name = remote.name;
-    }
+    wreckSystem.wrecks = world.wrecks.map((remote) => ({
+      ...remote,
+      alive: remote.alive !== false,
+      looted: Boolean(remote.looted),
+      pickupCooldown: remote.pickupCooldown ?? 0,
+      loot: Array.isArray(remote.loot) ? remote.loot.map((item) => item ? { ...item } : null) : [],
+    }));
   }
 
   if (Array.isArray(world.planetoids)) {
-    for (let i = 0; i < Math.min(world.planetoids.length, planetoidSystem.planetoids.length); i++) {
-      const remote = world.planetoids[i];
-      const local = planetoidSystem.planetoids[i];
-      local.wx = remote.wx;
-      local.wy = remote.wy;
-      local.vx = remote.vx ?? local.vx;
-      local.vy = remote.vy ?? local.vy;
-      local.alive = remote.alive !== false;
-      if (remote.name) local.name = remote.name;
-    }
+    planetoidSystem.planetoids = world.planetoids.map((remote) => ({
+      ...remote,
+      alive: remote.alive !== false,
+    }));
   }
 
   if (Array.isArray(world.portals)) {
