@@ -331,7 +331,7 @@ Total to max one track: 1,900 EM. Total to max all three: 5,700 EM. At ~300-500 
 │  everything equipped is LOST on death.                  │
 │  total value at risk: 580 EM                            │
 │                                                         │
-│  [INSURE] one item (150 EM) — returns to vault on death │
+│  loss is loss. everything equipped is destroyed on death. │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -468,21 +468,13 @@ These are stretch features, not core — but the data is there because we're tra
 
 ---
 
-## The Insurance Decision
+## Loss Is Loss
 
-Insurance deserves its own section because it's the most interesting decision in the loadout screen.
+No insurance. No safety nets. Everything you bring into a run is at risk. Everything you carry when you die is gone.
 
-**The problem it solves:** without insurance, rational players never bring T4 exotics. The risk/reward is wrong — one T4 exotic makes the run dramatically better, but losing it is catastrophic. The optimal strategy becomes "hoard T4s, run with T2s."
+The loadout decision IS the risk decision. Bringing a T4 exotic is a bet — you're wagering that item against the value of the run. If you can't stomach the loss, don't bring it. That tension is the game outside the game. It's the pressure that makes extraction feel like escape and death feel like consequence.
 
-**How insurance fixes it:** for a steep but payable cost, you can protect one item. This creates three loadout archetypes:
-
-1. **The Conservative:** bring T1-T2 gear, no insurance. Low risk, low power. The "practice run."
-2. **The Calculated:** bring one T3-T4 item with insurance, fill other slots with T1-T2. Medium risk, one strong tool. The "standard run."
-3. **The All-In:** bring T3-T4 in every slot, insure the best one. High risk, maximum power. The "I'm good at this game" run.
-
-Insurance cost scales so you can never protect everything. At T4 (500 EM), insuring one item costs more than many entire runs earn. The decision is real.
-
-**One item only.** This is critical. If you could insure everything, there's no risk. One item means you choose: which of my three equipped artifacts matters most? The other two are truly at risk.
+If "rational players never bring T4 exotics," that's a rarity/value tuning problem, not a missing mechanic. T4s should be powerful enough that the run-with-it upside is worth the risk. If they're not, tune the items, don't add a parachute.
 
 ---
 
@@ -501,12 +493,12 @@ Sell values have ranges because items within a tier aren't equal. A T2 that give
 
 ---
 
-## Open Questions
+## Decided (2026-03-31)
 
-1. **Multiple pilots per account?** The no-respec decision implies you might want multiple pilots with different hulls. Should the vault be per-pilot or per-account? Leaning per-account (items are items, hull affinity handles the specialization).
+1. **Multiple pilots per account, one per hull.** Up to 5 pilots (one per hull type). Vault is per-account — items flow between pilots. Hull affinity handles specialization.
 
-2. **Pilot deletion:** if no respec, deleting a pilot loses all rig progress. Should deletion refund any EM? Leaning no — deletion is the roguelike reset, not a respec workaround.
+2. **No EM refund on pilot deletion.** Deletion loses rig progress. EM was spent on the journey. Vault items survive (per-account). This is the roguelike reset, not a respec workaround.
 
-3. **Insurance availability:** should insurance be available from run 1, or unlocked via milestone? Leaning: available from run 1. New players need it most (they lose their first T3 and quit). Let them learn the value early.
+3. **No insurance.** Loss is loss. See "Loss Is Loss" section above.
 
-4. **Loadout presets:** save multiple loadout configurations? Probably yes (2-3 presets per hull), but not for first implementation.
+4. **No loadout presets for v1.** One active loadout per pilot. Presets (2-3 per hull) can come later.
