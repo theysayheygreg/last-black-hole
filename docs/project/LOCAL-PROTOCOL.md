@@ -253,6 +253,13 @@ In the current twelfth slice, the authoritative sim also starts scaling its cloc
 - the server now keeps player/contact truth at the main tick rate while throttling background systems like stars, wrecks, planetoids, portals, growth, and scavenger AI to map-sized cadences
 - the browser client now adapts its snapshot polling interval to the authoritative session’s advertised `snapshotHz` instead of polling small-map rates against every map
 
+In the current thirteenth slice, the authoritative sim also starts scaling its spatial work by player relevance:
+
+- map-scale profiles now advertise `entityRelevanceRadius` and `scavengerRelevanceRadius` alongside their clock budgets
+- larger maps no longer update every star, wreck, planetoid, and scavenger every background tick just because they exist somewhere in the world
+- background-world systems now only fully update entities near alive players, while dying scavengers remain authoritative until their consequence chain resolves
+- player-contact systems reuse those same relevance-filtered sets, so large maps stop paying whole-world scan costs just to apply nearby star push, planetoid push, scavenger bump, and pickup truth
+
 ## Client ownership
 
 The client owns:

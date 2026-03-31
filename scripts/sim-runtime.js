@@ -82,6 +82,8 @@ const MAP_SIM_SCALE_PROFILES = {
     growthTickHz: 4,
     scavengerTickHz: 12,
     waveTickHz: 15,
+    entityRelevanceRadius: 1.4,
+    scavengerRelevanceRadius: 1.8,
   },
   expanse: {
     profileId: "medium",
@@ -92,6 +94,8 @@ const MAP_SIM_SCALE_PROFILES = {
     growthTickHz: 3,
     scavengerTickHz: 8,
     waveTickHz: 12,
+    entityRelevanceRadius: 1.2,
+    scavengerRelevanceRadius: 1.6,
   },
   "deep-field": {
     profileId: "large",
@@ -102,6 +106,8 @@ const MAP_SIM_SCALE_PROFILES = {
     growthTickHz: 2,
     scavengerTickHz: 6,
     waveTickHz: 10,
+    entityRelevanceRadius: 1.0,
+    scavengerRelevanceRadius: 1.4,
   },
 };
 
@@ -663,6 +669,8 @@ function startSession(config = {}) {
     growthTickHz: scaleProfile.growthTickHz,
     scavengerTickHz: scaleProfile.scavengerTickHz,
     waveTickHz: scaleProfile.waveTickHz,
+    entityRelevanceRadius: scaleProfile.entityRelevanceRadius,
+    scavengerRelevanceRadius: scaleProfile.scavengerRelevanceRadius,
     simScaleProfile: scaleProfile.profileId,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
@@ -883,8 +891,8 @@ function maybeCollapseRun() {
   }
 }
 
-function tickStars(dt) {
-  for (const star of runtime.mapState.stars) {
+function tickStars(dt, stars = runtime.mapState.stars) {
+  for (const star of stars) {
     if (star.alive === false) continue;
     star.wx = wrapWorld(star.wx + (star.driftVX || 0) * dt, runtime.session.worldScale);
     star.wy = wrapWorld(star.wy + (star.driftVY || 0) * dt, runtime.session.worldScale);
@@ -931,8 +939,8 @@ function tickStars(dt) {
   }
 }
 
-function tickWrecks(dt) {
-  for (const wreck of runtime.mapState.wrecks) {
+function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
+  for (const wreck of wrecks) {
     if (wreck.alive === false) continue;
     if (wreck.pickupCooldown > 0) wreck.pickupCooldown = Math.max(0, wreck.pickupCooldown - dt);
 
@@ -984,8 +992,8 @@ function tickWrecks(dt) {
   }
 }
 
-function tickPlanetoids(dt) {
-  for (const planetoid of runtime.mapState.planetoids) {
+function tickPlanetoids(dt, planetoids = runtime.mapState.planetoids) {
+  for (const planetoid of planetoids) {
     if (planetoid.alive === false) continue;
     updatePlanetoidState(planetoid, runtime.mapState.wells, dt, runtime.session.worldScale);
     for (const well of runtime.mapState.wells) {
@@ -1007,8 +1015,8 @@ function tickPlanetoids(dt) {
   }
 }
 
-function applyStarPush(player, dt) {
-  for (const star of runtime.mapState.stars) {
+function applyStarPush(player, dt, stars = runtime.mapState.stars) {
+  for (const star of stars) {
     if (star.alive === false) continue;
     const { dist, nx, ny } = worldDirection(star.wx, star.wy, player.wx, player.wy, runtime.session.worldScale);
     const accel = inversePowerForce(
@@ -1025,8 +1033,8 @@ function applyStarPush(player, dt) {
   }
 }
 
-function applyPlanetoidPush(player, dt) {
-  for (const planetoid of runtime.mapState.planetoids) {
+function applyPlanetoidPush(player, dt, planetoids = runtime.mapState.planetoids) {
+  for (const planetoid of planetoids) {
     if (planetoid.alive === false) continue;
     const { dist, nx, ny } = worldDirection(planetoid.wx, planetoid.wy, player.wx, player.wy, runtime.session.worldScale);
     const accel = proximityForce(dist, PLANETOID_SERVER.shipPushStrength, PLANETOID_SERVER.shipPushRadius);
@@ -1037,8 +1045,8 @@ function applyPlanetoidPush(player, dt) {
   }
 }
 
-function applyScavengerBump(player) {
-  for (const scav of runtime.mapState.scavengers) {
+function applyScavengerBump(player, scavengers = runtime.mapState.scavengers) {
+  for (const scav of scavengers) {
     if (scav.alive === false || scav.state === "dying") continue;
     const { dist, nx, ny } = worldDirection(scav.wx, scav.wy, player.wx, player.wy, runtime.session.worldScale);
     if (dist < SCAVENGER_CONFIG.bumpRadius && dist > 0.0001) {
@@ -1105,11 +1113,11 @@ function applyWellGravity(player, dt) {
   player.vy += ay * dt;
 }
 
-function tickPlayerPickups(player) {
+function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
   if (player.status !== "alive") return;
   if (getCargoCount(player) >= PLAYER_CARGO_SLOTS) return;
 
-  for (const wreck of runtime.mapState.wrecks) {
+  for (const wreck of wrecks) {
     if (wreck.alive === false || wreck.looted || wreck.pickupCooldown > 0) continue;
     const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
     if (dist >= 0.08) continue;
@@ -1444,6 +1452,54 @@ function nearestPortal(entity) {
   return best;
 }
 
+function getAlivePlayers() {
+  return Array.from(runtime.players.values()).filter((player) => player.status === "alive");
+}
+
+function isNearAnyPlayer(wx, wy, radius, players) {
+  if (!players || players.length === 0) return false;
+  for (const player of players) {
+    if (worldDistance(wx, wy, player.wx, player.wy, runtime.session.worldScale) <= radius) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildRelevanceView() {
+  const alivePlayers = getAlivePlayers();
+  const entityRadius = runtime.session.entityRelevanceRadius || runtime.session.worldScale;
+  const scavengerRadius = runtime.session.scavengerRelevanceRadius || entityRadius;
+
+  if (alivePlayers.length === 0) {
+    return {
+      alivePlayers,
+      stars: [],
+      wrecks: [],
+      planetoids: [],
+      scavengers: runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state === "dying"),
+    };
+  }
+
+  return {
+    alivePlayers,
+    stars: runtime.mapState.stars.filter(
+      (star) => star.alive !== false && isNearAnyPlayer(star.wx, star.wy, entityRadius, alivePlayers)
+    ),
+    wrecks: runtime.mapState.wrecks.filter(
+      (wreck) => wreck.alive !== false && isNearAnyPlayer(wreck.wx, wreck.wy, entityRadius, alivePlayers)
+    ),
+    planetoids: runtime.mapState.planetoids.filter(
+      (planetoid) => planetoid.alive !== false && isNearAnyPlayer(planetoid.wx, planetoid.wy, entityRadius, alivePlayers)
+    ),
+    scavengers: runtime.mapState.scavengers.filter(
+      (scav) =>
+        scav.alive !== false &&
+        (scav.state === "dying" || isNearAnyPlayer(scav.wx, scav.wy, scavengerRadius, alivePlayers))
+    ),
+  };
+}
+
 function steerToward(entity, targetWX, targetWY, intensity = 1) {
   const dx = worldDisplacement(entity.wx, targetWX, runtime.session.worldScale);
   const dy = worldDisplacement(entity.wy, targetWY, runtime.session.worldScale);
@@ -1548,10 +1604,10 @@ function updateScavengerDeathSpiral(scav, dt) {
   return true;
 }
 
-function tickScavengers(dt) {
+function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
   const activePortalCount = runtime.mapState.portals.filter((portal) => portal.alive !== false).length;
 
-  for (const scav of runtime.mapState.scavengers) {
+  for (const scav of scavengers) {
     if (scav.alive === false) continue;
 
     if (scav.state === "dying") {
@@ -1675,16 +1731,19 @@ function tickSim() {
   const dt = 1 / runtime.session.tickHz;
   runtime.tick += 1;
   runtime.simTime += dt;
+  const relevance = buildRelevanceView();
 
   runSystemAtRate("world", runtime.session.worldTickHz || runtime.session.tickHz, dt, (stepDt) => {
     tickWells(stepDt);
-    tickStars(stepDt);
-    tickWrecks(stepDt);
-    tickPlanetoids(stepDt);
+    tickStars(stepDt, relevance.stars);
+    tickWrecks(stepDt, relevance.wrecks);
+    tickPlanetoids(stepDt, relevance.planetoids);
   });
   runSystemAtRate("growth", runtime.session.growthTickHz || runtime.session.tickHz, dt, tickGrowth);
   runSystemAtRate("portals", runtime.session.portalTickHz || runtime.session.tickHz, dt, tickPortals);
-  runSystemAtRate("scavengers", runtime.session.scavengerTickHz || runtime.session.tickHz, dt, tickScavengers);
+  runSystemAtRate("scavengers", runtime.session.scavengerTickHz || runtime.session.tickHz, dt, (stepDt) =>
+    tickScavengers(stepDt, relevance.scavengers)
+  );
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
   maybeCollapseRun();
 
@@ -1726,16 +1785,16 @@ function tickSim() {
     player.vy += input.moveY * accel * playerDt;
     applyWellGravity(player, playerDt);
     if (player.status !== "alive") continue;
-    applyStarPush(player, playerDt);
-    applyPlanetoidPush(player, playerDt);
+    applyStarPush(player, playerDt, relevance.stars);
+    applyPlanetoidPush(player, playerDt, relevance.planetoids);
     applyWaveRingPush(player, playerDt);
     player.vx *= Math.pow(0.92, playerDt * 15);
     player.vy *= Math.pow(0.92, playerDt * 15);
     player.wx = ((player.wx + player.vx * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     player.wy = ((player.wy + player.vy * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-    applyScavengerBump(player);
+    applyScavengerBump(player, relevance.scavengers);
 
-    tickPlayerPickups(player);
+    tickPlayerPickups(player, relevance.wrecks);
     tickExtraction(player);
     if (player.status !== "alive") continue;
   }
@@ -1814,6 +1873,8 @@ const server = http.createServer(async (req, res) => {
             growthTickHz: profile.growthTickHz,
             scavengerTickHz: profile.scavengerTickHz,
             waveTickHz: profile.waveTickHz,
+            entityRelevanceRadius: profile.entityRelevanceRadius,
+            scavengerRelevanceRadius: profile.scavengerRelevanceRadius,
           };
         }),
       });

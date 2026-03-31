@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-03-31 (Week 2 Day 7: Spatial Relevance Gating for Authoritative Scale)
+
+### scripts/ — Modified
+- **sim-runtime.js** — Large-map authoritative sessions now advertise per-profile relevance radii in addition to clock budgets. Stars, wrecks, planetoids, and scavenger AI no longer run full background updates everywhere in the world; they only fully tick when near alive players, while dying scavengers still finish their consequence chains authoritatively.
+- **sim-runtime.js** — Player-contact systems now reuse those relevance-filtered entity sets, so larger maps stop paying whole-world scan costs just to apply nearby star push, planetoid push, scavenger bump, and wreck pickup truth.
+
+### tests/ — Modified
+- **sim-scale.js** — Extends deterministic scale coverage to assert the new map-sized relevance radii in `/maps` and live session state.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+Clock scaling alone was not enough. `5x5` and `10x10` sessions still burned cost by scanning and updating off-player entities every background tick. This slice adds the first spatial relevance budget to the authoritative sim so larger worlds stop acting like every star, wreck, planetoid, and scavenger matters equally all the time.
+
 ## 2026-03-30 (Week 2 Day 6: Map-Scale Authoritative Sim Profiles)
 
 ### scripts/ — Modified

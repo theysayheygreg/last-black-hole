@@ -33,6 +33,18 @@ async function run() {
       assert(shallows.worldTickHz > expanse.worldTickHz, "Expected shallows worldTickHz > expanse");
       assert(expanse.worldTickHz > deepField.worldTickHz, "Expected expanse worldTickHz > deep-field");
       assert(shallows.snapshotHz > deepField.snapshotHz, "Expected shallows snapshotHz > deep-field");
+      assert(
+        shallows.entityRelevanceRadius > expanse.entityRelevanceRadius,
+        "Expected shallows entityRelevanceRadius > expanse"
+      );
+      assert(
+        expanse.entityRelevanceRadius > deepField.entityRelevanceRadius,
+        "Expected expanse entityRelevanceRadius > deep-field"
+      );
+      assert(
+        shallows.scavengerRelevanceRadius > deepField.scavengerRelevanceRadius,
+        "Expected shallows scavengerRelevanceRadius > deep-field"
+      );
     });
 
     await runner.run("Starting deep-field session applies the large-map server profile", async () => {
@@ -52,6 +64,14 @@ async function run() {
       assert(body.session.snapshotHz === 6, `Expected large-map snapshotHz 6, got ${body.session.snapshotHz}`);
       assert(body.session.worldTickHz === 4, `Expected large-map worldTickHz 4, got ${body.session.worldTickHz}`);
       assert(body.session.scavengerTickHz === 6, `Expected large-map scavengerTickHz 6, got ${body.session.scavengerTickHz}`);
+      assert(
+        body.session.entityRelevanceRadius === 1.0,
+        `Expected large-map entityRelevanceRadius 1.0, got ${body.session.entityRelevanceRadius}`
+      );
+      assert(
+        body.session.scavengerRelevanceRadius === 1.4,
+        `Expected large-map scavengerRelevanceRadius 1.4, got ${body.session.scavengerRelevanceRadius}`
+      );
     });
 
     await runner.run("Starting expanse session applies the medium-map server profile", async () => {
@@ -70,6 +90,10 @@ async function run() {
       assert(body.session.tickHz === 12, `Expected medium-map tickHz 12, got ${body.session.tickHz}`);
       assert(body.session.snapshotHz === 8, `Expected medium-map snapshotHz 8, got ${body.session.snapshotHz}`);
       assert(body.session.worldTickHz === 6, `Expected medium-map worldTickHz 6, got ${body.session.worldTickHz}`);
+      assert(
+        body.session.entityRelevanceRadius === 1.2,
+        `Expected medium-map entityRelevanceRadius 1.2, got ${body.session.entityRelevanceRadius}`
+      );
     });
   } finally {
     await stopSimServer(SIM_PORT);
