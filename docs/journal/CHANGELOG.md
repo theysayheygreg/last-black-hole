@@ -5,6 +5,20 @@
 
 ---
 
+## 2026-03-30 — Feature Build: Signal, Inhibitor, Fauna, Sentries, AI Players
+
+### New Systems (all server-authoritative + client rendering)
+- **Signal system** — per-player 0-1 float, rises from thrust/loot/pulse, decays when quiet. 6 zones (ghost→threshold). Zone crossing events published. HUD bar with zone-colored fill.
+- **Inhibitor** — pressure from signal + time + well growth. 3 forms: Glitch (pulsing magenta bleed), Swarm (hunting mass, cargo drain), Vessel (geometric, instant kill, portal blocking). Final portal guarantee. Renders in display shader via new uniform block.
+- **Fauna** — drift jellies (ambient, always present, teal glow) + signal blooms (spawn near signal sources, purple flicker). Server physics + collision + signal spikes. Canvas rendering.
+- **Gradient sentries** — 2-3 per well, orbit at ringOuter×1.2-1.8, lunge at intruders, push toward well. Green segmented body. First active tier catalog entry.
+- **AI players** — 5 personalities (Prospector/Raider/Vulture/Ghost/Desperado) running full game loop. Wreck/portal scoring, extraction decisions, current-aware navigation via analytical flow model. 3 AI per run, same physics/inventory/signal as humans. Render via existing remotePlayers pipeline.
+
+### Config Changes
+- **Well accretion colors** — shifted from amber/red to gold/white-hot. nearWell: [1.0, 0.85, 0.4], hotWell: [1.0, 0.95, 0.8]. 85° hue gap from inhibitor magenta.
+
+---
+
 ## 2026-03-31 (Week 2 Day 7: Explicit Per-Player Force Budgets)
 
 ### scripts/ — Modified
