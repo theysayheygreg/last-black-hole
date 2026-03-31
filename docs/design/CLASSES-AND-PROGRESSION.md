@@ -36,51 +36,91 @@ Class identity comes from relationship to the fluid. Same ocean, five different 
 
 *The current is the engine. You are the sail.*
 
-- **Core verb:** ride. Drifters generate almost no signal while current-aligned. They see further along flow lines. Their thrust is weak but their current coupling is extraordinary — where others fight the fluid, Drifters ARE the fluid.
+- **Core verb:** ride
 - **Fantasy:** the surfer. Patient, efficient, reads the water. Extracts with modest hauls but extracts *often*. Wins by reading the room, not dominating it.
-- **Class mechanic:** **Flow Lock** — when current-aligned for 3+ seconds, enter a locked-on surfing state with boosted speed and near-zero signal. Breaking flow lock has a cooldown.
 - **Weakness:** terrible against opposing currents. When the fluid isn't helping, Drifters are slow and loud.
 - **AI personality mapping:** Ghost, Prospector
+
+**Ability kit:**
+
+| Ability | Type | Description |
+|---------|------|-------------|
+| **Flow Lock** | passive trigger | When current-aligned for 3s, lock into a surfing state: +40% speed, signal generation drops to 10% of normal. Breaking alignment ends it. 5s cooldown before re-engaging. The Drifter's signature — this is what makes surfing feel like a class identity, not just a tactic. |
+| **Current Sight** | passive | Flow lines render as faint trails in the HUD within sensor range. Other hulls fly blind; Drifters can read the river. Higher rig levels extend range and show flow intensity (color-coded). |
+| **Eddy Brake** | active, 20s cooldown | Dump velocity into the fluid, creating a short-lived counter-eddy behind you. Instant stop + a 2s turbulence zone that slows pursuers. The Drifter's only combat verb — defensive, not offensive. |
+| **Slip Stream** | passive | When following another ship's wake (within 0.1 wu behind, same heading), gain +20% speed and -30% signal. The convoy bonus. Works with AI ships — a Drifter trailing a Breacher gets a free ride at the Breacher's signal cost. |
 
 ### Breacher
 
 *The current is in the way. You go through it.*
 
-- **Core verb:** thrust. Breachers have raw acceleration that no other hull matches. They fight currents that would trap a Drifter. Their signal is high but their speed means they can outrun consequences — for a while.
+- **Core verb:** thrust
 - **Fantasy:** the raider. Fast, aggressive, lives on the edge. Big hauls or spectacular deaths. Gets in, grabs the good stuff, gets out before the Inhibitor catches up.
-- **Class mechanic:** **Burn** — overdrive thrust mode that doubles acceleration but triples signal generation. Time-limited per run. The clock within the clock.
 - **Weakness:** signal management. Breachers are loud. They attract everything. If the run goes long, the Inhibitor is coming for them specifically.
 - **AI personality mapping:** Raider, Desperado
+
+**Ability kit:**
+
+| Ability | Type | Description |
+|---------|------|-------------|
+| **Burn** | active toggle, fuel-limited | Overdrive thrust: 2× acceleration, 3× signal generation. Fuel pool (30s total per run, recharges slowly when not burning). The Breacher's clock-within-the-clock — burn too early and you're walking home. |
+| **Shockwave** | enhanced pulse | Force pulse is 1.5× radius and applies a 2s stun to fauna/sentries (they stop patrolling). High signal cost (+0.15 spike). The Breacher doesn't sneak past threats — they blow them aside. |
+| **Momentum Shield** | passive | At high velocity (>80% max speed), incoming well pull is reduced by 25%. Breachers can skim well edges that would capture slower hulls. Encourages the "fly fast, clip the gravity well, don't stop" playstyle. |
+| **Smash Grab** | passive | Wreck pickup while moving at full speed (other hulls must slow to pickup radius). The flyover loot verb. Combined with Burn, this is the "hit the wreck at full burn and don't stop" move. |
 
 ### Resonant
 
 *The current is a weapon. You bend it.*
 
-- **Core verb:** pulse. Resonants have enhanced force pulse — wider radius, lower cooldown, lower signal cost. They reshape the local fluid field around them. Pushing wrecks toward themselves, deflecting sentries, creating temporary eddies.
+- **Core verb:** pulse
 - **Fantasy:** the controller. Doesn't just navigate the ocean — manipulates it. Creates favorable conditions rather than finding them. The "caster" archetype.
-- **Class mechanic:** **Harmonic Pulse** — force pulse creates a persistent eddy (5-8s) that flows toward the Resonant's position. Stacking eddies creates local current networks.
 - **Weakness:** stationary vulnerability. Eddies are position-dependent. A Resonant who has to abandon their eddies loses their advantage. The Inhibitor dissolves eddies on contact.
 - **AI personality mapping:** Vulture (uses pulse tactically)
+
+**Ability kit:**
+
+| Ability | Type | Description |
+|---------|------|-------------|
+| **Harmonic Pulse** | enhanced pulse | Force pulse creates a persistent eddy (5-8s) that spirals toward the Resonant's position. Stacking 2-3 eddies creates a local current network — wrecks drift to you, fauna get swept away. The Resonant's signature: building infrastructure in the fluid. |
+| **Resonance Tap** | active, 15s cooldown | Place a resonance anchor at current position. While within 0.3 wu of the anchor, pulse cooldown is halved and pulse radius +30%. Moving away from the anchor costs these bonuses. The "set up shop" ability — rewards territorial play. |
+| **Frequency Shift** | active, 45s cooldown | Invert the next pulse: instead of pushing, it *pulls*. Everything in radius moves toward the Resonant. Pulls wrecks, pulls fauna, pulls other ships. Extremely powerful for loot collection and extremely dangerous near wells (pulling yourself and everything else toward one). |
+| **Dampening Field** | passive | Resonant's eddies slow the Inhibitor's movement by 30% while it's inside them. The only hull that can directly impede the Inhibitor. Doesn't stop it — just buys time. Eddies dissolve on Vessel contact (form 3 ignores them). |
 
 ### Shroud
 
 *The current doesn't know you're there.*
 
-- **Core verb:** hide. Shrouds have the deepest signal masking in the game. Enhanced decay in wreck wakes and accretion shadows. Fauna ignore them below PRESENCE. Scavengers don't detect them until bumping range. They see the signal levels of all nearby entities.
+- **Core verb:** hide
 - **Fantasy:** the ghost. Moves through a world full of threats by being invisible to them. Wins by never being the loudest thing in the room. The extraction specialist — modest cargo, but almost always gets out.
-- **Class mechanic:** **Wake Cloak** — entering a wreck wake zone instantly drops signal by one zone (BEACON → PRESENCE). 30s cooldown. The "duck into the shadow" move.
 - **Weakness:** combat. Shrouds have the weakest pulse, the smallest cargo hold, the lowest thrust. When forced into a fight, they lose. Their game is avoidance, not confrontation.
 - **AI personality mapping:** Ghost
+
+**Ability kit:**
+
+| Ability | Type | Description |
+|---------|------|-------------|
+| **Wake Cloak** | active, 30s cooldown | Instantly drop signal by one full zone (BEACON → PRESENCE). Can be triggered while moving. The "duck into the shadow" emergency button. Doesn't work at THRESHOLD (too loud to hide). |
+| **Signal Sight** | passive | See the signal level of all entities within sensor range as color-coded auras (green=ghost, yellow=presence, red=flare). See where the Inhibitor is tracking. Other hulls fly blind to the signal landscape; Shrouds see the whole threat picture. |
+| **Ghost Trail** | passive | When below WHISPER signal, the Shroud's ship trail becomes invisible to other players and AI. Fauna ignore the Shroud entirely below PRESENCE. Scavengers don't detect until bumping range. The "I was never here" passive. |
+| **Decoy Flare** | active, 60s cooldown, 2 charges per run | Launch a signal decoy at your current position. The decoy emits signal equal to your current level, decaying over 8s. Fauna, scavengers, and Inhibitor (forms 1-2) track the decoy instead. The Shroud's only offensive option — misdirection, not force. |
 
 ### Hauler
 
 *The current is a cost of doing business.*
 
-- **Core verb:** carry. Haulers have expanded cargo (6 slots vs standard 4), enhanced pickup radius, and the unique ability to loot wrecks that other hulls can't access (heavy wrecks, locked containers). Their relationship to the fluid is pragmatic — not elegant, just effective.
+- **Core verb:** carry
 - **Fantasy:** the trucker. The deep-space longshoreman. Not glamorous, not fast, but when a Hauler extracts, the vault *fills*. Wins by volume, not speed or stealth.
-- **Class mechanic:** **Salvage Lock** — can mark a wreck for priority loot. Marked wrecks yield +1 bonus item. 2 marks per run. The "I'm here for THAT wreck specifically" play.
 - **Weakness:** speed. Haulers are the slowest hull. They can't outrun the Inhibitor, can't keep up with Breachers, can't surf with Drifters. They need to plan routes carefully because they can't improvise.
 - **AI personality mapping:** Prospector (patient, value-focused)
+
+**Ability kit:**
+
+| Ability | Type | Description |
+|---------|------|-------------|
+| **Salvage Lock** | active, 2 charges per run | Tag a wreck from sensor range. Tagged wrecks yield +1 bonus item and glow on HUD. The "I came for THAT specifically" ability. Tags persist until the wreck is looted (by anyone) or consumed by a well. Seeing your tagged wreck get looted by an AI player is the Hauler's worst nightmare. |
+| **Reinforced Hull** | passive | Survive one well contact that would kill other hulls (resets per run). The well ejects you violently instead of consuming you, scattering 1-2 cargo items. Not a free pass — you lose some loot and get thrown — but you live. The Hauler's "too stubborn to die" moment. |
+| **Tractor Field** | active, 25s cooldown | Short-range beam (0.15 wu) that slowly pulls one entity toward you — wrecks, stars, fauna. 3s channel, must maintain facing. Can pull a wreck away from a well before it's consumed. Can't pull players, portals, or the Inhibitor. The "save that loot from the gravity well" tool. |
+| **Deep Scanner** | passive | Haulers see wreck contents (item tiers) before looting. Other hulls see "wreck" — Haulers see "wreck: T2, T3, T1." Combined with Salvage Lock, this lets Haulers plan routes around the highest-value targets. The information advantage that makes slow speed worth it. |
 
 ---
 
@@ -173,13 +213,27 @@ Salvage is found during runs and stored in the vault between runs. You choose wh
 | **T3 Rare** | 1 per 3-4 runs | +30%+ or build-warping unique effect | High — losing this hurts |
 | **T4 Exotic** | ~1 per 10+ runs | Changes how a mechanic works entirely | Extreme — vault it or risk it? |
 
+### Loot Affinity System
+
+Three categories of artifacts:
+
+| Category | Who Can Equip | Effect | Design Intent |
+|----------|--------------|--------|---------------|
+| **Universal** | Any hull, full effect | General-purpose buffs, utility | Every drop is useful right now |
+| **Affinity** | Any hull, +50% on affinity hull | Strong effects, hull-tagged | "This would be amazing on my Drifter" |
+| **Exclusive** | One hull only, strongest effects | Build-warping, class-defining | "This IS a Resonant item" |
+
+Loot tables should be ~50% universal, ~35% affinity, ~15% exclusive. This means most drops are immediately useful, some are "save for my other pilot," and a few are powerful enough to be worth building a new pilot around.
+
 ### Build-Warping Examples (T3-T4)
 
-- **Gravity Lens** (T4): your pulse *attracts* instead of repelling. Completely inverts the verb. A Resonant with Gravity Lens plays a different game — pulling wrecks to you, pulling fauna into wells, creating inward eddies.
-- **Dead Man's Thruster** (T3): thrust generates zero signal, but you can't brake. Constant velocity once moving. Drifters love it. Breachers fear it.
-- **Echo Chamber** (T4): your signal decays into "ghost signals" — fake readings at your previous positions. Shrouds become impossible to track. Other hulls gain decoy capability they shouldn't have.
-- **Overcharged Core** (T3): +50% to all generation rates (thrust, signal, pulse) but -30% to all decay rates. Everything is louder and stays louder. The Breacher's drug.
-- **Void Anchor** (T4): you can place a recall beacon. Once per run, teleport back to it. The only position-resetting item in the game. Changes extraction routing completely.
+- **Gravity Lens** (T4, Resonant exclusive): your pulse *attracts* instead of repelling. Completely inverts the verb. Pulling wrecks to you, pulling fauna into wells, creating inward eddies.
+- **Dead Man's Thruster** (T3, Drifter affinity): thrust generates zero signal, but you can't brake. Constant velocity once moving. On a Drifter with Flow Lock, this is silent permanent surfing. On other hulls, it's a dangerous gamble.
+- **Echo Chamber** (T4, Shroud exclusive): your signal decays into "ghost signals" — fake readings at your previous positions. Stacks with Decoy Flare for total misdirection.
+- **Overcharged Core** (T3, Breacher affinity): +50% to all generation rates (thrust, signal, pulse) but -30% to all decay rates. Everything is louder and stays louder. On a Breacher with Burn, this is a supernova.
+- **Void Anchor** (T4, universal): place a recall beacon. Once per run, teleport back to it. The only position-resetting item in the game. Changes extraction routing for any hull.
+- **Cargo Brace** (T3, Hauler exclusive): cargo items can't be drained by the Inhibitor Swarm. The Hauler's insurance policy — you keep what you picked up.
+- **Tidal Resonator** (T3, universal): near wells, your pulse creates a standing wave that persists for 10s. Any hull can surf it. Creates temporary infrastructure in dangerous space.
 
 ### The Vault Decision
 
@@ -301,14 +355,14 @@ The sim never reads the profile directly. It reads PlayerBrain coefficients. Thi
 
 ---
 
-## Open Questions for Greg
+## Decided (2026-03-31)
 
-1. **Hull count:** five feels right for the archetypes, but is it too many for initial implementation? Could ship with Drifter + Breacher + one of {Resonant, Shroud, Hauler} and add the others later.
+1. **Hull count: all five.** We have the design horsepower. Archetypes are differentiated by abilities, not just signal coefficients.
 
-2. **Rig respec:** should upgrading be permanent, or should EM allow respec? Marathon's approach (permanent unlocks, no respec) creates commitment. D4's approach (free respec) creates experimentation. Leaning toward: respec costs EM but is possible.
+2. **No respec.** Rig upgrades are permanent. Deleting a pilot to start over is the old-school roguelike answer. Implications deferred.
 
-3. **Starting hull for solo:** if solo = 1 human + 3 AI, should the AI hulls be assigned randomly, or should they complement the human's hull? (Drifter human → Breacher + Resonant + Shroud AI team for coverage)
+3. **AI hulls: complementary, no duplicates.** Avoid duplicating the human's hull. Avoid all-same lobbies (Marathon's all-assassin problem — changes the pace of gameplay in ways we don't want). Personality constrains hull assignment.
 
-4. **The Rook question:** should LBH have a zero-risk entry mode? You bring nothing, you spawn with disadvantages, but you can't lose anything. Marathon's Rook is brilliant for onboarding. Counterargument: the dread of loss IS the game.
+4. **Rook: backlogged.** The zero-risk entry concept does a lot right in Marathon. Not for now, but worth revisiting. See BACKLOG.md.
 
-5. **Cross-hull artifacts:** should some T4 exotics be hull-locked (only Resonants can equip Gravity Lens) or universal? Hull-locking creates trading/gifting incentive in multiplayer. Universal means every find is relevant to you.
+5. **Loot: mixed universal + specialized.** Some artifacts are universal (any hull, full effect). Some have hull affinity (any hull can equip, +50% effect on affinity hull). Some are hull-exclusive (only that hull, strongest effects). This creates "relevant now" drops AND "save this for my other pilot" moments.

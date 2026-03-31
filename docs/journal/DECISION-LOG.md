@@ -59,6 +59,32 @@ Each decision has:
 
 ---
 
+## Ship Classes: Five Decisions (2026-03-31)
+
+**Question 1: Hull count**
+Options: A) Start with 3 (Drifter/Breacher/Shroud), add 2 later. B) All 5 from the start.
+**Where it landed:** B — all five. We have the design horsepower. Hulls need distinct ability kits, not just signal coefficient variations.
+
+**Question 2: Rig respec**
+Options: A) No respec (permanent). B) EM-cost respec with cooldown. C) Free respec (D4-style).
+**Where it landed:** A — no respec. Deleting a pilot to start over is the old-school roguelike answer. Greg: "we'll deal with the implications later."
+
+**Question 3: AI hull assignment in solo**
+Options: A) Random. B) Complementary (avoid duplicating human hull). C) Fixed composition per hull.
+**Where it landed:** B — complementary, no duplicates. Marathon's all-assassin lobbies prove that duplicate compositions change gameplay pace in undesirable ways. Personality constrains hull (Raider→Breacher, Ghost→Shroud, etc).
+
+**Question 4: Rook (zero-risk entry)**
+Options: A) Implement now. B) Backlog. C) Never.
+**Where it landed:** B — backlogged. Marathon's Rook does a lot right, but LBH's loss curve is softer (cargo/salvage, not hull/rig). The dread of loss IS the game. Revisit if onboarding proves too harsh.
+
+**Question 5: Artifact hull-locking**
+Options: A) All universal. B) All hull-locked. C) Mixed (universal + affinity + exclusive).
+**Where it landed:** C — three categories. Universal (~50% of drops), affinity (~35%, any hull equips, +50% on matching hull), exclusive (~15%, one hull only, strongest effects). Every drop is relevant; some create "save for my other pilot" moments.
+
+**Door status:** Hull count closed. Ability kits open to tuning. Loot affinity ratios open to playtesting. Respec may reopen if pilot deletion proves too punishing.
+
+---
+
 ## Dead Config Audit: extractionRate and collisionSpike (2026-03-30)
 
 **Question:** SIGNAL_CONFIG defined extractionRate (0.003/s) and collisionSpike (0.08) but neither was wired to any code path. Bug or intentional?

@@ -156,6 +156,13 @@
 - **Why backlogged:** Stretch goal. Needs signal system working first.
 - **Value if revisited:** Emergency escape, fauna clearing, custom wave creation. The "duck dive" verb.
 
+### Rook Mode (Zero-Risk Entry)
+- **What:** A zero-risk run mode inspired by Marathon's Rook shell. Bring nothing, risk nothing, spawn with disadvantages (late timing, worse starting position, no rig bonuses). Pure scavenging — anything you extract is profit.
+- **Why backlogged:** LBH's loss curve is softer than Marathon's (you lose cargo/salvage, not your hull/rig/profile). The current risk structure may not need a zero-risk escape valve. But Marathon's Rook does a lot of things right for onboarding and gear-poor players.
+- **Value if revisited:** onboarding path for new players, recovery option after catastrophic loss, creates a natural risk gradient (Rook → light loadout → full kit). Could pair with a "Rook hull" that has unique scavenging abilities but no rig progression.
+- **Design reference:** Marathon's Rook spawns late, brings nothing, can disguise as AI enemies. Pure profit on extraction. See CLASSES-AND-PROGRESSION.md research notes.
+- **Added:** 2026-03-31
+
 ---
 
 ## Multiplayer
