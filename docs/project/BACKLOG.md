@@ -216,6 +216,24 @@
 - **Value if revisited:** Honest server intent, cleaner control-plane behavior, and better hosted-run readiness later.
 - **First revival step:** Lift current map-scale profiles into session profiles with player-count intent and expose the chosen profile through session state.
 
+### Persistent Data Layer
+- **What:** Durable profile, vault, loadout, progression, and session-metadata storage that lives outside disposable sim instances.
+- **Why now:** The architecture is moving toward instanced authoritative runs. Durable player truth must stop living inside the run process.
+- **Value if revisited:** Clean run teardown, safer future hosting, cross-device play later, and a stable write-back boundary.
+- **First revival step:** Formalize a durable profile schema and wrap it in a persistence module before binding sim code to storage.
+
+### Control Plane / Session Registry
+- **What:** Session lifecycle and run registry outside the sim: host assignment, run creation, run ownership, player-to-run mapping, and later invites/matchmaking.
+- **Why now:** Host and join semantics are real now, but they should not stay buried inside simulation runtime code forever.
+- **Value if revisited:** Cleaner run orchestration, cleaner hosted future, and a stable place for multi-instance policy.
+- **First revival step:** Define the session record shape and move host/session metadata ownership into a distinct control-plane layer.
+
+### Run Result Package and Write-Back Boundary
+- **What:** Explicit result package written from a sim instance back to durable storage on extraction, death, or final teardown.
+- **Why now:** The server should not write arbitrary live state into persistence. Durable outcomes need one clean contract.
+- **Value if revisited:** Cleaner persistence, easier auditing, and safer future reconnect/hosting behavior.
+- **First revival step:** Define the result package schema: outcome, currency delta, vault changes, loadout changes, and stats delta.
+
 ### Hosted Run Instances
 - **What:** Run-scoped authoritative sessions for 4-8 players, with solo fallback and AI fill where needed.
 - **Why deferred:** This is the likely multiplayer future, but not the next engineering milestone. Private remote play must work first.

@@ -978,3 +978,21 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 3. The next architecture phase is now explicitly defined in `docs/project/PLAYER-BRAIN-AND-OVERLOAD-PLAN.md`.
 **Door status:** Open — implementation is intentionally deferred until the design is reviewed, but the shape of the next work is now concrete.
+
+
+## Persistence and Control Plane Architecture
+
+### Q: Where should durable player/session state live once LBH uses instanced authoritative sim processes?
+
+| Date | Event |
+|------|-------|
+| Mar 31 | Greg confirms the intended long-term shape: persistent data store, instanced sim processes, and connected rendering clients rather than a monolithic server or streamed game client. |
+| Mar 31 | Decision: durable profile and session truth should live outside disposable run instances, in a persistent data/control-plane layer that can hydrate sim instances and receive run results back from them. |
+
+**Options:**
+1. **Let each sim instance own persistence directly** — simplest short term, but it turns the database into part of the gameplay loop and makes run disposal messy.
+2. **Split durable persistence/control-plane from disposable sim instances** (chosen) — keeps run truth authoritative while preserving clean teardown, future hosting, and safer profile ownership.
+3. **Jump straight to a larger service mesh** — unnecessary at this stage; the contracts matter more than the deployment topology.
+
+**Where it landed:** Option 2. The durable architecture is now defined in `docs/project/PERSISTENCE-AND-CONTROL-PLANE-PLAN.md`.
+**Door status:** Open — implementation is deferred, but the server-side layering is now explicit enough to build toward cleanly.

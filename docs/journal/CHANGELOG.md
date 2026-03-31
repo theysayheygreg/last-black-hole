@@ -890,3 +890,16 @@ Remote authority was still only half-true. The server could own movement, loot, 
 
 ### Why
 The client/server split is real enough now that the next problem is no longer process separation. The next problem is keeping the authoritative server coherent and affordable as map size, player count, and sim fidelity increase.
+
+## 2026-03-31 (Week 3 Day 2: Persistence and Control Plane Defined)
+
+### docs/project/ — Added
+- **PERSISTENCE-AND-CONTROL-PLANE-PLAN.md** — Defines the durable architecture outside the sim instance: persistent profile store, control-plane/session registry, disposable run instances, result write-back boundaries, and the first sensible deployment shape.
+
+### docs/project/ — Modified
+- **NETWORK-ARCHITECTURE-PLAN.md** — Clarifies the long-term three-layer server shape: persistent data/control plane, authoritative sim instances, and connected rendering clients.
+- **PLAYER-BRAIN-AND-OVERLOAD-PLAN.md** — Links the next architecture phase to the durable persistence/control-plane layer instead of treating the sim instance as the whole backend.
+- **BACKLOG.md** — Adds explicit architecture backlog entries for persistent data, control-plane/session registry, and run result write-back boundaries.
+
+### Why
+The client/server split is now real enough that the next durable question is no longer just simulation. Player persistence and session orchestration need to live outside disposable run instances.

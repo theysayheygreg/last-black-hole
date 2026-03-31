@@ -68,6 +68,16 @@ It should **not** optimize for:
 - streamed video/gameplay from the mini to the MacBook
 - a persistent MMO-style shared universe
 
+## Server-side shape
+
+The long-term server-side model should be three layers, not one giant server process:
+
+- **Persistent data + control plane** — durable profiles, loadouts, vault state, session registry, host/session lifecycle
+- **Authoritative sim instance** — one disposable live run with full gameplay truth
+- **Client** — local rendering, input, interpolation, and UI
+
+The detailed design for that split lives in `docs/project/PERSISTENCE-AND-CONTROL-PLANE-PLAN.md`.
+
 ## Process model
 
 ### Authoritative Sim / Server

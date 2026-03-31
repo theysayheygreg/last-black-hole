@@ -2,6 +2,8 @@
 
 > Detailed next-step architecture for LBH after the first authoritative client/server migration. This is a design document, not an implementation task list.
 
+See also: `docs/project/PERSISTENCE-AND-CONTROL-PLANE-PLAN.md` for the durable profile/session layer that should sit outside disposable sim instances.
+
 ## Why this is the next step
 
 The first migration is real now.
