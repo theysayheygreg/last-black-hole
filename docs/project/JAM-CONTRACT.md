@@ -58,6 +58,51 @@ Forge should be used as an architecture review before work and a code review aft
 
 ---
 
+## Review Protocol: Audit → Codex
+
+After any feature build that touches >200 lines or adds a new system, run a two-pass review before reporting done. The passes catch different classes of bugs.
+
+### Pass 1: Design Audit (Orrery)
+
+Run research agents against the design docs to compare implementation against spec. This catches:
+- Dead or mismatched config values
+- Missing mechanics that the design requires
+- Wrong algorithms (e.g. speed proxy where flow alignment was specified)
+- Orphaned code paths from refactors
+
+The audit checks *intent* — does the code do what the design says it should? Fix everything found before proceeding to Pass 2.
+
+### Pass 2: Code Review (Codex)
+
+Run `codex review --base <pre-feature-commit>` against the full diff. This catches:
+- Interaction bugs between new and existing code
+- Runtime errors (undefined variables, unreachable code paths)
+- State leaks across system boundaries
+- Capacity/slot conflicts from adding entities to shared data structures
+
+Codex checks *correctness* — will the code crash, loop, or produce wrong behavior at runtime? Fix everything found, then run one more Codex pass to confirm.
+
+### Why Two Passes
+
+| | Orrery Audit | Codex Review |
+|---|---|---|
+| **Catches** | Design divergence, dead config, wrong algorithms | Runtime errors, interaction bugs, state leaks |
+| **Misses** | Code that's correct but crashes in context | Code that works but doesn't match design intent |
+| **Speed** | ~5 min (parallel research agents) | ~3 min (automated diff review) |
+| **When to skip** | Never on new systems. Skip on pure tuning. | Never after audit finds fixes. Skip on docs-only. |
+
+### Trigger Rules
+
+- **Always run both passes:** new system, new entity type, new server↔client wiring
+- **Run Codex only:** bug fix >50 lines, refactor touching shared state
+- **Skip both:** tuning constants, docs, comments-only changes
+
+### Hook Setup
+
+For automatic Codex review on every commit, add a PostToolUse hook on Bash in `~/.claude/settings.json` that fires `codex-post-commit-review.sh`. The hook script lives at `~/.claude/hooks/codex-post-commit-review.sh` and triggers `codex review --background --scope working-tree` after successful `git commit` commands.
+
+---
+
 ## Checkpoint Protocol
 
 ### Morning Review (~10am)
@@ -397,4 +442,5 @@ The journal must be updated at these moments. **Orb is responsible for ensuring 
 - **No silent failures** — if something doesn't work, commit it broken with a `WIP:` prefix and explain in the message
 - **Design decisions in commits** — if you chose approach A over B, say why in the commit message. Future agents (and future Greg) need this.
 - **Night report is mandatory** — even if "nothing went wrong, everything on the list is done," write the report. Greg's morning review depends on it.
-- **Forge review is a gate, not decoration** — use it before risky architecture work and after major implementation work.
+- **Review is a gate, not decoration** — design audit (Orrery) + code review (Codex) after major implementation work. See Review Protocol above.
+- **Codex catches what you can't** — interaction bugs, state leaks, runtime errors from new code meeting old. Always run it after fixing audit findings.
