@@ -130,6 +130,28 @@ const INHIBITOR_CONFIG = {
   finalPortalLifespan: 15,
 };
 
+const FAUNA_CONFIG = {
+  maxTotal: 60,
+  // Drift Jellies — ambient, always present
+  jellyCount: 6,
+  jellySpawnInterval: 8,
+  jellyLifespan: [40, 60],
+  jellyBumpForce: 0.005,
+  jellyBumpSignal: 0.01,
+  jellySize: 3,
+  // Signal Blooms — spawn near signal sources
+  bloomAttraction: 0.008,
+  bloomMaxSpeed: 0.025,
+  bloomSpawnRange: [0.3, 0.6],
+  bloomLifespan: [20, 40],
+  bloomBumpForce: 0.006,
+  bloomBumpSignal: 0.01,
+  bloomSize: 2,
+  bloomSpawnRate: {
+    ghost: 0, whisper: 0.15, presence: 0.25, beacon: 0.5, flare: 1.0, threshold: 1.5,
+  },
+};
+
 const FORCE_REF_DIST = 0.25;
 const FORCE_MIN_DIST = 0.15;
 const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
@@ -814,6 +836,7 @@ function startSession(config = {}) {
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
   runtime.mapState = mapState;
+  runtime.mapState.fauna = [];
   runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState, runtime.session);
   runtime.tick = 0;
   runtime.simTime = 0;
@@ -915,6 +938,7 @@ function snapshotBody() {
       portals: runtime.mapState.portals,
       nextPortalWaveIndex: runtime.mapState.nextPortalWaveIndex,
       scavengers: runtime.mapState.scavengers,
+      fauna: runtime.mapState.fauna,
     },
     inhibitor: {
       form: runtime.inhibitor.form,
@@ -2056,6 +2080,119 @@ function spikePlayerSignal(player, amount) {
   }
 }
 
+// --- Fauna System ---
+// Lightweight entities: position, velocity, age, type. No state machine.
+
+function tickFauna(dt) {
+  const cfg = FAUNA_CONFIG;
+  const ws = runtime.session.worldScale;
+  const fauna = runtime.mapState.fauna;
+
+  // Find peak player signal for bloom spawning
+  let peakSignal = 0;
+  let peakPlayer = null;
+  for (const player of runtime.players.values()) {
+    if (player.status !== "alive") continue;
+    if (player.signal.level > peakSignal) {
+      peakSignal = player.signal.level;
+      peakPlayer = player;
+    }
+  }
+  const peakZone = peakPlayer ? peakPlayer.signal.zone : "ghost";
+
+  // Spawn drift jellies to maintain count
+  const jellyCount = fauna.filter(f => f.type === "jelly" && f.alive).length;
+  if (jellyCount < cfg.jellyCount && fauna.length < cfg.maxTotal) {
+    runtime._jellySpawnTimer = (runtime._jellySpawnTimer || 0) + dt;
+    if (runtime._jellySpawnTimer >= cfg.jellySpawnInterval) {
+      runtime._jellySpawnTimer = 0;
+      fauna.push({
+        id: `fauna-${runtime.tick}-${Math.random().toString(36).slice(2,6)}`,
+        type: "jelly",
+        wx: Math.random() * ws, wy: Math.random() * ws,
+        vx: (Math.random() - 0.5) * 0.005, vy: (Math.random() - 0.5) * 0.005,
+        age: 0,
+        lifespan: cfg.jellyLifespan[0] + Math.random() * (cfg.jellyLifespan[1] - cfg.jellyLifespan[0]),
+        alive: true,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  // Spawn signal blooms based on signal zone
+  const bloomRate = cfg.bloomSpawnRate[peakZone] || 0;
+  if (bloomRate > 0 && peakPlayer && fauna.length < cfg.maxTotal) {
+    runtime._bloomSpawnAccum = (runtime._bloomSpawnAccum || 0) + bloomRate * dt;
+    while (runtime._bloomSpawnAccum >= 1) {
+      runtime._bloomSpawnAccum -= 1;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = cfg.bloomSpawnRange[0] + Math.random() * (cfg.bloomSpawnRange[1] - cfg.bloomSpawnRange[0]);
+      fauna.push({
+        id: `fauna-${runtime.tick}-${Math.random().toString(36).slice(2,6)}`,
+        type: "bloom",
+        wx: ((peakPlayer.wx + Math.cos(angle) * dist) % ws + ws) % ws,
+        wy: ((peakPlayer.wy + Math.sin(angle) * dist) % ws + ws) % ws,
+        vx: 0, vy: 0,
+        age: 0,
+        lifespan: cfg.bloomLifespan[0] + Math.random() * (cfg.bloomLifespan[1] - cfg.bloomLifespan[0]),
+        alive: true,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  // Update all fauna
+  for (let i = fauna.length - 1; i >= 0; i--) {
+    const f = fauna[i];
+    if (!f.alive) { fauna.splice(i, 1); continue; }
+    f.age += dt;
+    if (f.age >= f.lifespan) { f.alive = false; fauna.splice(i, 1); continue; }
+
+    if (f.type === "bloom" && peakPlayer) {
+      // Attract toward signal source
+      const dx = worldDisplacement(f.wx, peakPlayer.wx, ws);
+      const dy = worldDisplacement(f.wy, peakPlayer.wy, ws);
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.01) {
+        f.vx += (dx / dist) * cfg.bloomAttraction * dt;
+        f.vy += (dy / dist) * cfg.bloomAttraction * dt;
+      }
+      const speed = Math.hypot(f.vx, f.vy);
+      if (speed > cfg.bloomMaxSpeed) {
+        f.vx *= cfg.bloomMaxSpeed / speed;
+        f.vy *= cfg.bloomMaxSpeed / speed;
+      }
+    }
+
+    // Light drag
+    f.vx *= 0.99;
+    f.vy *= 0.99;
+    f.wx = ((f.wx + f.vx * dt) % ws + ws) % ws;
+    f.wy = ((f.wy + f.vy * dt) % ws + ws) % ws;
+
+    // Collision with players
+    for (const player of runtime.players.values()) {
+      if (player.status !== "alive") continue;
+      const pd = worldDistance(f.wx, f.wy, player.wx, player.wy, ws);
+      const bumpRadius = f.type === "jelly" ? 0.04 : 0.03;
+      if (pd < bumpRadius) {
+        const bumpForce = f.type === "jelly" ? cfg.jellyBumpForce : cfg.bloomBumpForce;
+        const bumpSignal = f.type === "jelly" ? cfg.jellyBumpSignal : cfg.bloomBumpSignal;
+        const bx = worldDisplacement(f.wx, player.wx, ws);
+        const by = worldDisplacement(f.wy, player.wy, ws);
+        const bd = Math.hypot(bx, by);
+        if (bd > 0.001) {
+          player.vx += (bx / bd) * bumpForce;
+          player.vy += (by / bd) * bumpForce;
+        }
+        spikePlayerSignal(player, bumpSignal);
+        f.alive = false; // consumed on contact
+        break;
+      }
+    }
+  }
+}
+
 // --- Inhibitor System ---
 // Pressure builds from player signal + time + well growth.
 // Forms: 0=inactive, 1=glitch, 2=swarm, 3=vessel.
@@ -2283,6 +2420,7 @@ function tickSim() {
     tickScavengers(stepDt, relevance.scavengers)
   );
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
+  tickFauna(dt);
   tickInhibitor(dt);
   maybeCollapseRun();
 

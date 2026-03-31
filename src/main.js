@@ -118,6 +118,7 @@ let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow rema
 let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
 let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
+let remoteFauna = [];
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
 let hullGraceTimer = 0;     // hull upgrade grace period (seconds remaining in kill zone before death)
@@ -770,6 +771,40 @@ async function refreshRemoteSessionHealth(force = false) {
   }
 }
 
+function renderFauna(ctx, camX, camY, canvasW, canvasH, time) {
+  if (remoteFauna.length === 0) return;
+  const ppw = canvasW / WORLD_SCALE;
+  ctx.save();
+  for (const f of remoteFauna) {
+    const [sx, sy] = worldToScreen(f.wx, f.wy, camX, camY, canvasW, canvasH);
+    if (sx < -20 || sx > canvasW + 20 || sy < -20 || sy > canvasH + 20) continue;
+    const ageFrac = f.age / f.lifespan;
+    const fadeIn = Math.min(1, f.age * 2);
+    const fadeOut = ageFrac > 0.85 ? 1 - (ageFrac - 0.85) / 0.15 : 1;
+    const alpha = fadeIn * fadeOut;
+
+    if (f.type === 'jelly') {
+      const pulse = 0.3 + 0.4 * (0.5 + 0.5 * Math.sin(time * Math.PI + f.phase));
+      ctx.fillStyle = `rgba(64, 224, 208, ${(pulse * alpha).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+      ctx.fill();
+      // Faint halo
+      ctx.fillStyle = `rgba(64, 224, 208, ${(pulse * alpha * 0.2).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (f.type === 'bloom') {
+      const flicker = Math.random() > 0.3 ? 1 : 0.4;
+      ctx.fillStyle = `rgba(123, 104, 238, ${(alpha * 0.7 * flicker).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
   if (!remoteAuthorityActive || remotePlayers.length === 0) return;
   ctx.save();
@@ -1010,6 +1045,10 @@ function syncRemoteWorldState(world) {
       ...remote,
       alive: remote.alive !== false,
     }));
+  }
+
+  if (Array.isArray(world.fauna)) {
+    remoteFauna = world.fauna.filter(f => f.alive !== false);
   }
 }
 
@@ -1958,6 +1997,7 @@ function gameLoop(now) {
     portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, simState.runElapsedTime);
     planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     scavengerSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    renderFauna(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
