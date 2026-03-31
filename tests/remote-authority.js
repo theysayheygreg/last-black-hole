@@ -469,10 +469,13 @@ async function run() {
       assert(beforeProfile?.id, "Expected active profile id before remote death");
 
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const authoritativeBefore = await getSnapshot();
+      const targetWell = authoritativeBefore.world?.wells?.[0];
+      assert(targetWell?.wx != null && targetWell?.wy != null, "Expected authoritative well for death test");
       const moved = await postDebugPlayerState({
         clientId: net.clientId,
-        wx: 1.08,
-        wy: 1.22,
+        wx: targetWell.wx,
+        wy: targetWell.wy,
         vx: 0,
         vy: 0,
         status: "alive",
@@ -485,15 +488,20 @@ async function run() {
       );
       const killed = await postDebugPlayerState({
         clientId: net.clientId,
-        wx: 1.08,
-        wy: 1.22,
+        wx: targetWell.wx,
+        wy: targetWell.wy,
         vx: 0,
         vy: 0,
         status: "alive",
       });
-      assert(killed.ok === true, "Expected second debug move near well after shield absorb");
+      assert(killed.ok === true, "Expected second debug move at well center after shield absorb");
+      await waitForSnapshotPlayer(
+        net.clientId,
+        (remotePlayer) => remotePlayer.status === "dead",
+        { timeout: 8000 }
+      );
       await waitForEvents(
-        (allEvents) => allEvents.some((event) => event.type === "player.died" && event.payload?.clientId === net.clientId),
+        (allEvents) => allEvents.some((event) => event.type === "profile.updated" && event.payload?.clientId === net.clientId),
         { timeout: 8000 }
       );
 

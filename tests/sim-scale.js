@@ -77,6 +77,8 @@ async function run() {
       assert(status === 200, `Expected /session/start 200, got ${status}`);
       assert(body.session.mapId === "deep-field", `Expected deep-field session, got ${body.session.mapId}`);
       assert(body.session.simScaleProfile === "large", `Expected large profile, got ${body.session.simScaleProfile}`);
+      assert(body.session.overloadState === "NORMAL", `Expected NORMAL overload state, got ${body.session.overloadState}`);
+      assert(body.session.timeScale === 1, `Expected timeScale 1, got ${body.session.timeScale}`);
       assert(body.session.tickHz === 10, `Expected large-map tickHz 10, got ${body.session.tickHz}`);
       assert(body.session.snapshotHz === 6, `Expected large-map snapshotHz 6, got ${body.session.snapshotHz}`);
       assert(body.session.worldTickHz === 4, `Expected large-map worldTickHz 4, got ${body.session.worldTickHz}`);
@@ -117,6 +119,8 @@ async function run() {
       assert(status === 200, `Expected /session/start 200, got ${status}`);
       assert(body.session.mapId === "expanse", `Expected expanse session, got ${body.session.mapId}`);
       assert(body.session.simScaleProfile === "medium", `Expected medium profile, got ${body.session.simScaleProfile}`);
+      assert(body.session.overloadState === "NORMAL", `Expected NORMAL overload state, got ${body.session.overloadState}`);
+      assert(body.session.timeScale === 1, `Expected timeScale 1, got ${body.session.timeScale}`);
       assert(body.session.tickHz === 12, `Expected medium-map tickHz 12, got ${body.session.tickHz}`);
       assert(body.session.snapshotHz === 8, `Expected medium-map snapshotHz 8, got ${body.session.snapshotHz}`);
       assert(body.session.worldTickHz === 6, `Expected medium-map worldTickHz 6, got ${body.session.worldTickHz}`);

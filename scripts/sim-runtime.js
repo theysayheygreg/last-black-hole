@@ -4,9 +4,15 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { performance } = require("perf_hooks");
 const { loadPlayableMaps } = require("./shared-map-loader.js");
 const { ControlPlaneStore } = require("./control-plane-store.js");
 const { SessionRegistry } = require("./session-registry.js");
+const {
+  createOverloadController,
+  projectOverloadBudget,
+  advanceOverload,
+} = require("./overload-state.js");
 const {
   PROTOCOL_VERSION,
   DEFAULT_TICK_HZ,
@@ -913,6 +919,11 @@ const runtime = {
     mapName: null,
     hostClientId: null,
     hostName: null,
+    overloadState: "NORMAL",
+    overloadPressure: 0,
+    timeScale: 1,
+    baseTickHz: DEFAULT_TICK_HZ,
+    baseSnapshotHz: DEFAULT_SNAPSHOT_HZ,
     worldScale: DEFAULT_WORLD_SCALE,
     tickHz: DEFAULT_TICK_HZ,
     snapshotHz: DEFAULT_SNAPSHOT_HZ,
@@ -957,6 +968,7 @@ const runtime = {
     planetoids: [],
     portals: [],
   },
+  overload: null,
 };
 
 let tickHandle = null;
@@ -973,6 +985,39 @@ function publishEvent(type, payload = {}) {
     runtime.recentEvents.shift();
   }
   return event;
+}
+
+function applyOverloadProfile({ forceRestart = false } = {}) {
+  if (!runtime.overload) return;
+  const projection = projectOverloadBudget(runtime.overload.base, runtime.overload.state);
+  const previousTickHz = runtime.session.tickHz;
+  runtime.session.overloadState = projection.overloadState;
+  runtime.session.overloadPressure = Number(runtime.overload.pressure || 0);
+  runtime.session.timeScale = projection.timeScale;
+  runtime.session.tickHz = projection.tickHz;
+  runtime.session.snapshotHz = projection.snapshotHz;
+  runtime.session.worldTickHz = projection.worldTickHz;
+  runtime.session.portalTickHz = projection.portalTickHz;
+  runtime.session.growthTickHz = projection.growthTickHz;
+  runtime.session.scavengerTickHz = projection.scavengerTickHz;
+  runtime.session.waveTickHz = projection.waveTickHz;
+  runtime.session.entityRelevanceRadius = projection.entityRelevanceRadius;
+  runtime.session.scavengerRelevanceRadius = projection.scavengerRelevanceRadius;
+  runtime.session.spawnScavengersBase = projection.spawnScavengersBase;
+  runtime.session.spawnScavengersPerPlayer = projection.spawnScavengersPerPlayer;
+  runtime.session.maxScavengers = projection.maxScavengers;
+  runtime.session.maxRelevantStarsPerPlayer = projection.maxRelevantStarsPerPlayer;
+  runtime.session.maxRelevantPlanetoidsPerPlayer = projection.maxRelevantPlanetoidsPerPlayer;
+  runtime.session.maxRelevantWrecksPerPlayer = projection.maxRelevantWrecksPerPlayer;
+  runtime.session.maxRelevantScavengersPerPlayer = projection.maxRelevantScavengersPerPlayer;
+  runtime.session.maxWellInfluencesPerPlayer = projection.maxWellInfluencesPerPlayer;
+  runtime.session.maxWaveInfluencesPerPlayer = projection.maxWaveInfluencesPerPlayer;
+  runtime.session.maxPickupChecksPerPlayer = projection.maxPickupChecksPerPlayer;
+  runtime.session.maxPortalChecksPerPlayer = projection.maxPortalChecksPerPlayer;
+
+  if (forceRestart || previousTickHz !== runtime.session.tickHz) {
+    restartTickLoop();
+  }
 }
 
 // --- PlayerBrain Coefficient Resolution ---
@@ -1134,26 +1179,49 @@ function startSession(config = {}) {
       ? String(config.requesterProfileId)
       : (config.hostProfileId ? String(config.hostProfileId) : null),
     hostName: config.requesterName ? String(config.requesterName) : null,
+    overloadState: "NORMAL",
+    overloadPressure: 0,
+    timeScale: 1,
     worldScale: mapState.worldScale,
+    baseTickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : scaleProfile.tickHz,
+    baseSnapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : scaleProfile.snapshotHz,
     tickHz: Number.isFinite(Number(config.tickHz)) ? Number(config.tickHz) : scaleProfile.tickHz,
     snapshotHz: Number.isFinite(Number(config.snapshotHz)) ? Number(config.snapshotHz) : scaleProfile.snapshotHz,
+    baseWorldTickHz: scaleProfile.worldTickHz,
     worldTickHz: scaleProfile.worldTickHz,
+    basePortalTickHz: scaleProfile.portalTickHz,
     portalTickHz: scaleProfile.portalTickHz,
+    baseGrowthTickHz: scaleProfile.growthTickHz,
     growthTickHz: scaleProfile.growthTickHz,
+    baseScavengerTickHz: scaleProfile.scavengerTickHz,
     scavengerTickHz: scaleProfile.scavengerTickHz,
+    baseWaveTickHz: scaleProfile.waveTickHz,
     waveTickHz: scaleProfile.waveTickHz,
+    baseEntityRelevanceRadius: scaleProfile.entityRelevanceRadius,
     entityRelevanceRadius: scaleProfile.entityRelevanceRadius,
+    baseScavengerRelevanceRadius: scaleProfile.scavengerRelevanceRadius,
     scavengerRelevanceRadius: scaleProfile.scavengerRelevanceRadius,
+    baseSpawnScavengersBase: scaleProfile.spawnScavengersBase,
     spawnScavengersBase: scaleProfile.spawnScavengersBase,
+    baseSpawnScavengersPerPlayer: scaleProfile.spawnScavengersPerPlayer,
     spawnScavengersPerPlayer: scaleProfile.spawnScavengersPerPlayer,
+    baseMaxScavengers: scaleProfile.maxScavengers,
     maxScavengers: scaleProfile.maxScavengers,
+    baseMaxRelevantStarsPerPlayer: scaleProfile.maxRelevantStarsPerPlayer,
     maxRelevantStarsPerPlayer: scaleProfile.maxRelevantStarsPerPlayer,
+    baseMaxRelevantPlanetoidsPerPlayer: scaleProfile.maxRelevantPlanetoidsPerPlayer,
     maxRelevantPlanetoidsPerPlayer: scaleProfile.maxRelevantPlanetoidsPerPlayer,
+    baseMaxRelevantWrecksPerPlayer: scaleProfile.maxRelevantWrecksPerPlayer,
     maxRelevantWrecksPerPlayer: scaleProfile.maxRelevantWrecksPerPlayer,
+    baseMaxRelevantScavengersPerPlayer: scaleProfile.maxRelevantScavengersPerPlayer,
     maxRelevantScavengersPerPlayer: scaleProfile.maxRelevantScavengersPerPlayer,
+    baseMaxWellInfluencesPerPlayer: scaleProfile.maxWellInfluencesPerPlayer,
     maxWellInfluencesPerPlayer: scaleProfile.maxWellInfluencesPerPlayer,
+    baseMaxWaveInfluencesPerPlayer: scaleProfile.maxWaveInfluencesPerPlayer,
     maxWaveInfluencesPerPlayer: scaleProfile.maxWaveInfluencesPerPlayer,
+    baseMaxPickupChecksPerPlayer: scaleProfile.maxPickupChecksPerPlayer,
     maxPickupChecksPerPlayer: scaleProfile.maxPickupChecksPerPlayer,
+    baseMaxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
     maxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
     simScaleProfile: scaleProfile.profileId,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
@@ -1186,6 +1254,30 @@ function startSession(config = {}) {
   runtime.players.clear();
   runtime.recentEvents = [];
   runtime.nextEventSeq = 1;
+  runtime.overload = createOverloadController({
+    tickHz: runtime.session.baseTickHz,
+    snapshotHz: runtime.session.baseSnapshotHz,
+    worldTickHz: runtime.session.baseWorldTickHz,
+    portalTickHz: runtime.session.basePortalTickHz,
+    growthTickHz: runtime.session.baseGrowthTickHz,
+    scavengerTickHz: runtime.session.baseScavengerTickHz,
+    waveTickHz: runtime.session.baseWaveTickHz,
+    entityRelevanceRadius: runtime.session.baseEntityRelevanceRadius,
+    scavengerRelevanceRadius: runtime.session.baseScavengerRelevanceRadius,
+    spawnScavengersBase: runtime.session.baseSpawnScavengersBase,
+    spawnScavengersPerPlayer: runtime.session.baseSpawnScavengersPerPlayer,
+    maxScavengers: runtime.session.baseMaxScavengers,
+    maxRelevantStarsPerPlayer: runtime.session.baseMaxRelevantStarsPerPlayer,
+    maxRelevantPlanetoidsPerPlayer: runtime.session.baseMaxRelevantPlanetoidsPerPlayer,
+    maxRelevantWrecksPerPlayer: runtime.session.baseMaxRelevantWrecksPerPlayer,
+    maxRelevantScavengersPerPlayer: runtime.session.baseMaxRelevantScavengersPerPlayer,
+    maxWellInfluencesPerPlayer: runtime.session.baseMaxWellInfluencesPerPlayer,
+    maxWaveInfluencesPerPlayer: runtime.session.baseMaxWaveInfluencesPerPlayer,
+    maxPickupChecksPerPlayer: runtime.session.baseMaxPickupChecksPerPlayer,
+    maxPortalChecksPerPlayer: runtime.session.baseMaxPortalChecksPerPlayer,
+    maxPlayers: runtime.session.maxPlayers,
+  });
+  applyOverloadProfile();
   // Spawn AI players
   spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
@@ -3623,7 +3715,8 @@ function tickInhibitor(dt) {
 
 function tickSim() {
   if (runtime.session.status !== "running") return;
-  const dt = 1 / runtime.session.tickHz;
+  const tickStart = performance.now();
+  const dt = runtime.session.timeScale / runtime.session.tickHz;
   runtime.tick += 1;
   runtime.simTime += dt;
   const relevance = buildRelevanceView();
@@ -3718,6 +3811,37 @@ function tickSim() {
     tickExtraction(player);
     if (player.status !== "alive") continue;
     tickPlayerSignal(player, playerDt);
+  }
+
+  const alivePlayerCount = relevance.alivePlayers.length;
+  const activeAiCount = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state !== "dying").length;
+  const activeWreckCount = relevance.wrecks.filter((wreck) => wreck.alive !== false && !wreck.looted).length;
+  const activePortalCount = runtime.mapState.portals.filter((portal) => portal.alive !== false).length;
+  const activeWaveCount = runtime.waveRings.length;
+  const forcePressure = Math.max(
+    runtime.mapState.wells.length / Math.max(1, alivePlayerCount * (runtime.session.maxWellInfluencesPerPlayer || 1)),
+    activeWaveCount / Math.max(1, alivePlayerCount * (runtime.session.maxWaveInfluencesPerPlayer || 1)),
+    activeWreckCount / Math.max(1, alivePlayerCount * (runtime.session.maxPickupChecksPerPlayer || 1)),
+    activePortalCount / Math.max(1, alivePlayerCount * (runtime.session.maxPortalChecksPerPlayer || 1))
+  );
+  const overload = advanceOverload(runtime.overload, {
+    tickCostMs: performance.now() - tickStart,
+    playerCount: alivePlayerCount,
+    aiCount: activeAiCount,
+    forcePressure,
+  });
+  runtime.session.overloadPressure = overload.pressure;
+  if (overload.changed) {
+    applyOverloadProfile({ forceRestart: true });
+    publishEvent("session.overloadChanged", {
+      previousState: overload.previousState,
+      state: overload.state,
+      pressure: overload.pressure,
+      tickHz: runtime.session.tickHz,
+      snapshotHz: runtime.session.snapshotHz,
+      timeScale: runtime.session.timeScale,
+    });
+    persistSessionRegistry();
   }
 }
 

@@ -175,6 +175,7 @@ Current progress:
 - the authoritative sim now also applies map-size relevance radii so larger maps stop fully updating off-player stars, wrecks, planetoids, and scavenger AI every background tick
 - the authoritative sim now also carries explicit AI spawn budgets and per-player hazard caps, so larger-player sessions do not scale linearly just because more remote clients exist
 - the authoritative sim now also caps the expensive per-player force/source scans for wells, wave rings, pickups, and extraction checks instead of letting large sessions sum against every candidate every tick
+- the authoritative sim now also has an explicit overload state machine, so run degradation is visible session truth instead of scattered implicit slowdown rules
 - broader lobby/session UX still needs to move over
 
 ### Batch B — Local Protocol Freeze
@@ -207,6 +208,7 @@ Current progress:
 - `/maps` and session state now also expose map-sized relevance radii so the larger-world cost model is not just a hidden server implementation detail
 - `/maps` and session state now also expose AI spawn budgets and per-player hazard caps so future 4–8 player sessions have a visible server budget instead of folklore
 - `/maps` and session state now also expose explicit per-player force budgets so authoritative motion cost stays inspectable instead of hiding inside implementation detail
+- session state now also exposes `overloadState`, `overloadPressure`, and `timeScale`, and the server projects effective clocks/budgets from that overload state instead of silently mutating subsystem rules
 - remote join/start now bootstrap a stable player profile id and durable profile snapshot into the server instead of treating every remote run as stateless
 - the sim now mirrors live session metadata into a control-plane/session-registry layer outside the disposable run instance
 - the sim now also owns authoritative profile write-back for death, extraction, and leave/abandon, and the browser client resyncs its local profile from that server truth after a remote run

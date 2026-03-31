@@ -121,6 +121,8 @@ Authoritative state read.
     "status": "running",
     "mapId": "rush",
     "worldScale": 5,
+    "overloadState": "NORMAL",
+    "timeScale": 1.0,
     "tickHz": 15,
     "snapshotHz": 10,
     "maxPlayers": 4
@@ -258,6 +260,13 @@ In the current thirteenth slice, the authoritative sim also starts scaling its s
 - map-scale profiles now advertise `entityRelevanceRadius` and `scavengerRelevanceRadius` alongside their clock budgets
 - larger maps no longer update every star, wreck, planetoid, and scavenger every background tick just because they exist somewhere in the world
 - background-world systems now only fully update entities near alive players, while dying scavengers remain authoritative until their consequence chain resolves
+
+In the current fourteenth slice, the authoritative sim now carries an explicit overload state machine:
+
+- the server tracks moving tick-cost pressure instead of only silently applying map-size budgets
+- the run now exposes `overloadState`, `overloadPressure`, and `timeScale` through session state
+- overload states project effective clocks and budgets from one base profile instead of each subsystem inventing its own slowdown rule
+- `DILATED` now deliberately slows the shared run clock instead of only trimming background work, and the browser can inspect that visible truth through `/snapshot` and `/health`
 - player-contact systems reuse those same relevance-filtered sets, so large maps stop paying whole-world scan costs just to apply nearby star push, planetoid push, scavenger bump, and pickup truth
 
 In the current fourteenth slice, the authoritative sim also starts carrying explicit AI and per-player hazard budgets:

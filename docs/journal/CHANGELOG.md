@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-03-31 — Explicit Overload State Machine
+
+### scripts/ — Added / Modified
+- **overload-state.js** — new pure server-side overload policy module. Defines `NORMAL`, `THROTTLED`, `DEGRADED`, and `DILATED` plus budget projection and moving-pressure transitions.
+- **sim-runtime.js** — sessions now carry explicit overload truth (`overloadState`, `overloadPressure`, `timeScale`) and project effective clocks/budgets from one base scale profile instead of silently degrading per subsystem.
+- **sim-runtime.js** — the authoritative tick now samples real tick cost, player pressure, AI pressure, and force-source pressure, and publishes `session.overloadChanged` when the run crosses states.
+
+### tests/ — Added / Modified
+- **overload-state.js** — deterministic coverage for overload transitions, dilation projection, and recovery.
+- **sim-scale.js** — now asserts new sessions start in `NORMAL` with `timeScale = 1`.
+- **remote-authority.js** — remote death/write-back smoke now targets an actual authoritative well center instead of a brittle hard-coded coordinate.
+- **run-all.js** — wires the overload suite into `npm test`.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+Map-scale profiles and per-player budgets were real, but overload behavior was still implicit. This slice makes degradation a visible run state and gives the server one coherent place to project slower clocks and tighter budgets when a session is under pressure.
+
 ## 2026-03-31 — Hull System: 5 Ship Classes with Abilities
 
 ### New Systems
