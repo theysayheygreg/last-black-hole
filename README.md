@@ -13,15 +13,33 @@ you pilot a small ship through a fluid-simulated universe rendered entirely in A
 **key features:**
 - GPU navier-stokes fluid simulation with toroidal wrapping
 - ASCII dithering post-process shader
+- server-authoritative simulation (local or remote)
+- 5 ship classes (Drifter, Breacher, Resonant, Shroud, Hauler) with distinct physics
+- signal system — 6 zones from ghost to threshold, taxes ambition
+- the inhibitor — 3-form escalation (glitch → swarm → vessel) driven by player signal
+- ambient fauna (drift jellies, signal blooms) and active threats (gradient sentries)
+- AI players with 5 personalities (Prospector, Raider, Vulture, Ghost, Desperado)
 - 4 star types (yellow dwarf, red giant, white dwarf, neutron star) with orbital systems
-- comets with teardrop bodies and trailing tails
 - AI scavenger ships competing for the same loot and portals
 - loot drift — everything falls toward the nearest well over time
-- 6-track upgrade system (thrust, hull, coupling, drag, sensor, vault)
 - 3 save slots with persistent profiles
 - SNES-flavored synthesized audio (no sample files, all Web Audio)
 - force pulse combat, shield burst, time dilation, breach flares
 - proximity-based flavor text on every entity in the universe
+
+## architecture
+
+```
+browser client (renderer)          sim server (authority)
+  ├── WebGL fluid sim                ├── world physics tick
+  ├── ASCII post-process             ├── wells, wrecks, portals
+  ├── canvas entity overlay          ├── AI players + scavengers
+  ├── HUD (signal bar, cargo)        ├── signal + inhibitor
+  └── input → POST /input           ├── fauna + sentries
+                                     └── snapshots → GET /snapshot
+```
+
+the sim server owns all game state. clients render snapshots and send inputs. runs on the same machine (localhost) or remotely via tailscale/LAN.
 
 ## controls
 
@@ -55,21 +73,33 @@ you pilot a small ship through a fluid-simulated universe rendered entirely in A
 ## setup
 
 ### prerequisites
-- node.js 18+ (for dev server + tests)
+- node.js 18+ (for dev server, sim server, and tests)
 - a browser with WebGL 2 support (chrome, firefox, edge, safari 15+)
 
-### install + run
+### install + run (local)
 ```bash
 git clone https://github.com/theysayheygreg/last-black-hole.git
 cd last-black-hole
 npm install
+
+# start both dev server (static files) and sim server (game authority)
 npm run dev
+npm run sim
 ```
 
-open `http://localhost:8080` in your browser.
+open `http://localhost:8080` in your browser. the client connects to the sim server at `http://localhost:3100` by default.
 
-### alternative: no node
-the game is vanilla JS with ES modules — no build step required. you can serve the project directory with any static file server:
+### sim server only
+```bash
+# start/stop/restart the authoritative sim server
+npm run sim
+npm run sim:stop
+npm run sim:status
+npm run sim:restart
+```
+
+### alternative: no node (client-only, local sim)
+the game can run without the sim server — it falls back to a local simulation in the browser. serve the project directory with any static file server:
 
 ```bash
 # python
@@ -104,8 +134,9 @@ runs 7 test suites (validation, smoke, physics, coordinates, flow, inventory, sy
 
 - **rendering:** WebGL 2 (navier-stokes fluid sim + ASCII post-process shader)
 - **game logic:** vanilla JS, ES modules, no framework
+- **sim server:** node.js HTTP server (authoritative game state)
 - **audio:** Web Audio API synthesis (oscillators, noise, filters — no sample files)
-- **persistence:** localStorage (3 save slots)
+- **persistence:** localStorage (3 save slots), server-side profiles planned
 - **testing:** puppeteer (headless chrome)
 - **desktop:** electron (optional)
 - **build:** custom node.js build script
@@ -129,21 +160,30 @@ src/
   combat.js        — force pulse system
   inventory.js     — cargo + loadout
   profile.js       — save slots + upgrades
+  hud.js           — signal bar, cargo display, zone indicators
   audio.js         — SNES-flavored synthesis engine
   items.js         — item catalog + loot generation
   config.js        — all tunable parameters
   coords.js        — coordinate system authority
   maps/            — map definitions (3x3, 5x5, 10x10)
-  sim/             — decoupled sim core
+
+scripts/
+  sim-runtime.js   — authoritative sim: physics, AI, signal, inhibitor, fauna
+  sim-server.js    — HTTP server wrapping the sim runtime
+  dev-server.js    — static file server for development
+  build.js         — web + desktop build script
 
 docs/
-  design/          — design documents (15+)
+  design/          — design documents (20+)
   journal/         — devlog, changelog, decision log
-  project/         — roadmap, backlog, status
+  project/         — roadmap, backlog, architecture plans
 
 tests/             — 7 puppeteer test suites
-scripts/           — dev server, build, static server
 ```
+
+## version
+
+current: **0.2.0** (post-jam, server-authoritative sim + entity ecology)
 
 ## license
 

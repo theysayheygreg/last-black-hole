@@ -436,6 +436,18 @@ The journal must be updated at these moments. **Orb is responsible for ensuring 
 
 ---
 
+## Remote Repo Hygiene
+
+The remote repo must stay current. This is a shared workspace — other agents, Codex, and Greg all read from the remote.
+
+- **Push after every milestone** — feature build, audit cycle, journal update. Not just at session end.
+- **If 5+ commits have accumulated without a push, push.**
+- **Keep README.md current** — update it when features, architecture, or setup instructions change. The README is the first thing anyone reads.
+- **Tag versions** — use semantic version tags (`v0.2.0`) at meaningful checkpoints. Update `package.json` version to match.
+- **Build instructions must be correct** — if you add a new server, script, or dependency, update the README setup section in the same commit or the next one.
+
+---
+
 ## Communication Norms
 
 - **Agents write commit messages for each other** — any agent picking up work should be able to read the git log and understand the state
