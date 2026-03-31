@@ -2099,9 +2099,10 @@ function tickPlayerSignal(player, dt) {
     const flow = estimateFlow(player.wx, player.wy);
     const flowMag = Math.hypot(flow.x, flow.y);
     let oppositionMult = 1.0;
-    if (flowMag > 0.001 && speed > 0.001) {
-      const thrustDirX = input.moveX / speed;
-      const thrustDirY = input.moveY / speed;
+    const inputMag = Math.hypot(input.moveX, input.moveY);
+    if (flowMag > 0.001 && inputMag > 0.001) {
+      const thrustDirX = input.moveX / inputMag;
+      const thrustDirY = input.moveY / inputMag;
       const alignment = (flow.x * thrustDirX + flow.y * thrustDirY) / flowMag;
       // alignment: -1 (fighting) to +1 (surfing). Scale opposition: 1.0 (surfing) to 3.0 (fighting)
       oppositionMult = 1.0 + Math.max(0, -alignment) * (cfg.thrustOppositionMult - 1.0);
@@ -2481,9 +2482,11 @@ function aiNavigateToward(ai, targetWX, targetWY, dt) {
     ai.aiState.thrustIntensity = w.maxThrust;
   }
 
-  // Steer: bias toward current if opposing
+  // Steer: bias toward current if opposing. Sample local flow for lateral check.
   let steerX = dx / dist, steerY = dy / dist;
-  if (alignment < -0.2 && flowMag > 0.005) {
+  const localFlow = estimateFlow(ai.wx, ai.wy);
+  const localFlowMag = Math.hypot(localFlow.x, localFlow.y);
+  if (alignment < -0.2 && localFlowMag > 0.005) {
     // Try lateral offset to find better current
     const perpX = -dy / dist, perpY = dx / dist;
     const leftFlow = estimateFlow(
@@ -2558,15 +2561,8 @@ function tickAIPlayers(dt) {
       ai.facingAngle += (Math.random() - 0.5) * 0.1 * dt;
     }
 
-    // Apply movement (same physics as human players)
-    const accel = AI_PLAYER_CONFIG.thrustAccel * ai.thrustIntensity;
-    player.vx += Math.cos(ai.facingAngle) * accel * dt;
-    player.vy += Math.sin(ai.facingAngle) * accel * dt;
-
-    // Gravity, star push, etc are applied in the main player loop
-    // (AI players are in runtime.players, so tickSim's per-player loop handles forces)
-
-    // Set lastInput so the main tick loop applies physics correctly
+    // Set lastInput — main tick loop handles all physics (thrust, gravity, drag).
+    // Do NOT apply velocity directly here or AI gets double-thrust.
     player.lastInput.moveX = Math.cos(ai.facingAngle) * ai.thrustIntensity;
     player.lastInput.moveY = Math.sin(ai.facingAngle) * ai.thrustIntensity;
     player.lastInput.thrust = ai.thrustIntensity;
@@ -2878,8 +2874,11 @@ function tickInhibitor(dt) {
     publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy });
   }
 
-  if (inh.form === 2) {
+  // vesselTimer ticks in form 2 AND 3 — final portal check needs it to keep advancing
+  if (inh.form >= 2) {
     inh.vesselTimer += dt;
+  }
+  if (inh.form === 2) {
     if (inh.vesselTimer >= cfg.vesselTimeToForm || peakSignal >= 1.0) {
       inh.form = 3;
       inh.intensity = 0;
