@@ -2,18 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-const DEFAULT_UPGRADES = {
-  thrust: 0,
-  hull: 0,
-  coupling: 0,
-  drag: 0,
-  sensor: 0,
-  vault: 0,
-};
+// Rig tracks: 3 per hull, levels 0-5. Stored as array [track0, track1, track2].
+const DEFAULT_RIG_LEVELS = [0, 0, 0];
 
 const DEFAULT_LOADOUT = {
-  equipped: [null, null],
-  consumables: [null, null],
+  equipped: [null, null, null], // 3 artifact slots
+  consumables: [null, null],    // 2 consumable slots
 };
 
 const DEFAULT_VAULT_CAPACITY = 25;
@@ -37,8 +31,8 @@ function createProfileSkeleton(profileId, name = "Pilot") {
     vault: [],
     vaultCapacity: DEFAULT_VAULT_CAPACITY,
     loadout: clone(DEFAULT_LOADOUT),
-    upgrades: { ...DEFAULT_UPGRADES },
-    shipType: "standard",
+    rigLevels: [...DEFAULT_RIG_LEVELS],
+    hullType: "drifter",
     totalExtractions: 0,
     totalDeaths: 0,
     totalItemsSold: 0,
@@ -49,7 +43,7 @@ function createProfileSkeleton(profileId, name = "Pilot") {
 
 function normalizeLoadout(loadout = {}) {
   return {
-    equipped: [0, 1].map((index) => loadout?.equipped?.[index] ? { ...loadout.equipped[index] } : null),
+    equipped: [0, 1, 2].map((index) => loadout?.equipped?.[index] ? { ...loadout.equipped[index] } : null),
     consumables: [0, 1].map((index) => loadout?.consumables?.[index] ? { ...loadout.consumables[index] } : null),
   };
 }
@@ -67,11 +61,10 @@ function normalizeProfileSnapshot(snapshot = {}, profileId = null, fallbackName 
     vault: Array.isArray(snapshot.vault) ? snapshot.vault.map((item) => item ? { ...item } : null).filter(Boolean) : base.vault,
     vaultCapacity: Number.isFinite(Number(snapshot.vaultCapacity)) ? Number(snapshot.vaultCapacity) : base.vaultCapacity,
     loadout: normalizeLoadout(snapshot.loadout),
-    upgrades: {
-      ...DEFAULT_UPGRADES,
-      ...(snapshot.upgrades || {}),
-    },
-    shipType: snapshot.shipType || base.shipType,
+    rigLevels: Array.isArray(snapshot.rigLevels)
+      ? snapshot.rigLevels.map(v => Math.max(0, Math.min(5, Math.round(Number(v) || 0)))).slice(0, 3)
+      : [...DEFAULT_RIG_LEVELS],
+    hullType: snapshot.hullType || base.hullType,
     totalExtractions: Number.isFinite(Number(snapshot.totalExtractions)) ? Number(snapshot.totalExtractions) : base.totalExtractions,
     totalDeaths: Number.isFinite(Number(snapshot.totalDeaths)) ? Number(snapshot.totalDeaths) : base.totalDeaths,
     totalItemsSold: Number.isFinite(Number(snapshot.totalItemsSold)) ? Number(snapshot.totalItemsSold) : base.totalItemsSold,

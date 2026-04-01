@@ -11,11 +11,12 @@ const {
   sampleCoarseFlowField,
 } = require("./coarse-flow-field.js");
 const {
-  DEFAULT_PROFILE_UPGRADES,
+  RIG_TRACKS,
+  defaultRigLevels,
+  normalizeRigLevels,
   HULL_DEFINITIONS,
   BRAIN_DEFAULTS,
   normalizeHullType,
-  normalizeProfileUpgrades,
   createPlayerBrain,
   createAbilityState,
 } = require("./player-brain.js");
@@ -956,17 +957,17 @@ function syncPlayerCargoCapacity(player) {
 
 function refreshPlayerBrain(player, durableProfile = null) {
   if (!player) return null;
-  const profileUpgrades = normalizeProfileUpgrades(
-    durableProfile?.upgrades || player.profileUpgrades || DEFAULT_PROFILE_UPGRADES
+  player.hullType = normalizeHullType(player.hullType, durableProfile?.shipType || player.profileShipType);
+  const rigLevels = normalizeRigLevels(
+    durableProfile?.rigLevels || player.rigLevels, player.hullType
   );
-  player.profileUpgrades = profileUpgrades;
+  player.rigLevels = rigLevels;
   if (durableProfile?.shipType) {
     player.profileShipType = durableProfile.shipType;
   }
-  player.hullType = normalizeHullType(player.hullType, player.profileShipType);
   player.brain = createPlayerBrain({
     hullType: player.hullType,
-    profileUpgrades,
+    rigLevels,
     equipped: player.equipped,
   });
   syncPlayerCargoCapacity(player);
@@ -975,16 +976,17 @@ function refreshPlayerBrain(player, durableProfile = null) {
 
 function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
   const normalizedHullType = normalizeHullType(hullType, options.profileShipType);
+  const rigLevels = normalizeRigLevels(options.rigLevels, normalizedHullType);
   const brain = createPlayerBrain({
     hullType: normalizedHullType,
-    profileUpgrades: options.profileUpgrades,
+    rigLevels,
     equipped: options.equipped,
   });
   return {
     clientId,
     profileId: null,
     profileShipType: options.profileShipType || null,
-    profileUpgrades: normalizeProfileUpgrades(options.profileUpgrades || DEFAULT_PROFILE_UPGRADES),
+    rigLevels,
     name: name || clientId,
     hullType: normalizedHullType,
     brain,
@@ -1231,6 +1233,7 @@ function snapshotBody() {
       isAI: Boolean(player.isAI),
       personality: player.personality || null,
       hullType: player.hullType || 'drifter',
+      rigLevels: player.rigLevels || [0, 0, 0],
       abilityState: player.abilityState ? {
         hullType: player.abilityState.hullType,
         flowLockActive: player.abilityState.flowLockActive,
@@ -3992,7 +3995,7 @@ const server = http.createServer(async (req, res) => {
         const consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
         player = createPlayer(clientId, body.name, explicitHullType, {
           profileShipType: durableProfile?.shipType || body.profileSnapshot?.shipType || null,
-          profileUpgrades: durableProfile?.upgrades || body.profileSnapshot?.upgrades || DEFAULT_PROFILE_UPGRADES,
+          rigLevels: durableProfile?.rigLevels || body.profileSnapshot?.rigLevels || null,
           equipped,
           consumables,
         });
@@ -4016,8 +4019,8 @@ const server = http.createServer(async (req, res) => {
         if (body.profileId) {
           player.profileId = String(body.profileId);
         }
-        if (body.profileSnapshot?.upgrades) {
-          player.profileUpgrades = normalizeProfileUpgrades(body.profileSnapshot.upgrades);
+        if (body.profileSnapshot?.rigLevels) {
+          player.rigLevels = normalizeRigLevels(body.profileSnapshot.rigLevels, player.hullType);
         }
         if (body.profileSnapshot?.shipType) {
           player.profileShipType = body.profileSnapshot.shipType;
