@@ -5,6 +5,28 @@
 
 ---
 
+## Week 2 Completion Status (2026-03-31)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Loot variety | SUPERSEDED | Replaced by hull-based item affinity system (CLASSES-AND-PROGRESSION.md) |
+| Inventory limits | DONE | 3-6 cargo slots (hull-dependent via PlayerBrain) |
+| Vault | DESIGNED | Per-account vault, 20-40 slots (META-LOOP.md) |
+| Meta screen | DESIGNED | Results/vault/rig/loadout/chronicle (META-LOOP.md) |
+| Upgrade tree | DESIGNED | 3 rig tracks × 5 levels per hull (META-LOOP.md) |
+| Missions | DEFERRED | Not in current design — runs are self-motivated, not quest-driven |
+| XP + Levels | REJECTED | Replaced by EM economy + milestone gates. No XP system. |
+| NPC factions | DEFERRED | AI players fill the adversarial niche. Factions are post-hull-system work. |
+| Session events | PARTIAL | Inhibitor forms, portal waves, wreck waves. No mid-run faction arrivals yet. |
+| Signal + Inhibitor | DONE | Full implementation (6 zones, 3 inhibitor forms) |
+| Server architecture | DONE | Authoritative sim, persistence, control plane, overload states |
+| Ship classes | DONE | 5 hulls with abilities, PlayerBrain, physics wiring |
+| Loot economy | DESIGNED | Tier gates, wreck aging, value scaling (LOOT-ECONOMY.md) |
+
+**Major pivot from original plan:** The hull/class system (CLASSES-AND-PROGRESSION.md) replaced the flat upgrade tree. Instead of "improve your one ship," progression is now "deepen your hull's identity through rig tracks." This is a better fit for the extraction loop — specialization creates replayability.
+
+---
+
 ## What Exists (from Week 1)
 
 **Core loop:** drop → fly → loot wrecks → extract via portal (or die)

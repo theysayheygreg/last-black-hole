@@ -1,7 +1,40 @@
 # Build Plan: Last Black Hole
 
-> Code starts 12:01a Monday March 16. Ship by Sunday March 22.
-> 2x Claude usage available — lean on overnight sessions hard.
+> Originally the jam build plan (March 16-22, 2026).
+> Updated to reflect post-jam development through March 31.
+
+---
+
+## Current Build Phase: L5 — The Depth (Post-Jam)
+
+All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work complete.
+
+### L5 Shipped
+- 5 hull classes with abilities (PlayerBrain coefficient resolution, physics wiring)
+- Signal system (6 zones, generation/decay, zone crossing events)
+- Inhibitor (3 forms with full behavior)
+- Fauna (drift jellies, signal blooms) + gradient sentries
+- AI players (5 personalities, full game loop, personality-aware navigation)
+- Server-authoritative sim (HTTP protocol, snapshots, events)
+- Persistence layer (durable profiles, session registry, control plane)
+- Overload state machine (NORMAL/THROTTLED/DEGRADED/DILATED)
+- Loot economy design (tier gates, wreck aging, value scaling)
+- Meta-loop design (results screen, vault/rig/loadout, chronicle)
+- Rig upgrade tracks (all 5 hulls, 3 tracks × 5 levels)
+
+### L5 Next (Implementation Queue)
+1. Item catalog — concrete T1-T4 artifacts with coefficients + affinities
+2. Loot economy — tier gates + wreck aging in sim-runtime
+3. Meta-loop UI — results screen, vault/rig/loadout panels, chronicle
+4. Run result write-back — connect RunResult to persistence layer
+5. Hull ability client-side — keybindings, HUD cooldowns, visual effects
+6. Map seed system — entity catalog selection per run
+
+### L6: The Ship (Not Yet Started)
+- Balance pass (hull coefficients, upgrade costs, loot rarity, signal tuning)
+- Deploy (GitHub Pages web build, nightly playables, itch.io)
+- Audio for new systems (hull abilities, fauna, sentries, inhibitor forms)
+- Polish pass (death screen, extraction screen with new data)
 
 ---
 

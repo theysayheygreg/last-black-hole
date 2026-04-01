@@ -44,14 +44,14 @@
 - **Added:** 2026-03-27
 
 ### Death Penalty Design
-- **What:** Currently death loses all cargo. Greg wants EM loss on death too, but with nuance. Design the full death penalty system: EM percentage loss, insurance mechanics, hardcore mode, etc.
-- **Why deferred:** Needs playtesting to understand how punishing cargo loss alone feels before layering more penalties.
-- **Added:** 2026-03-27
+- **What:** Death loses all cargo + equipped artifacts. Survival bonus reduced by 50%. No EM loss beyond lost items. No insurance (loss is loss).
+- **Status:** Designed in META-LOOP.md. Earnings calculation implemented in design, not yet in code.
+- **Open:** EM percentage loss on top of cargo loss? Hardcore mode (pilot deletion on death)? Deferred to playtesting.
+- **Added:** 2026-03-27, updated 2026-03-31
 
-### Upgrade Respec
-- **What:** Allow players to downgrade upgrades and recover components/EM. Currently no respec — upgrades are permanent.
-- **Why deferred:** Pinned for future discussion. May not be needed if upgrade costs feel right.
-- **Added:** 2026-03-27
+### ~~Upgrade Respec~~ — DECIDED: NO RESPEC
+- **Status:** No respec. Rig upgrades are permanent. Delete pilot to start over. Decided 2026-03-31.
+- **See:** CLASSES-AND-PROGRESSION.md, DECISION-LOG.md
 
 ### Server-Side Save
 - **What:** Persist player profiles to a server API instead of (or in addition to) localStorage. Enables cross-device play, backup, anti-cheat.
@@ -140,21 +140,29 @@
 
 ## Threats & Entities
 
-### Fauna: Signal Moths
-- **What:** Simple entities near wrecks, attracted by signal >15%, swarm behavior, contact adds +5% signal
-- **Why backlogged:** Forge: Inhibitor is the only required threat. Fauna is stretch.
-- **State:** Full spec in ROADMAP.md N19 stretch goals
-- **Value if revisited:** Amplifies signal risk, creates navigation obstacles, adds life to the world
+### ~~Fauna: Signal Moths~~ — SHIPPED
+- **Status:** Implemented as drift jellies + signal blooms in sim-runtime.js (2026-03-30)
+- **What shipped:** Ambient tier fauna with signal-zone-scaled spawning, bump signal, canvas rendering
 
-### Scavenger AI
-- **What:** AI ships that navigate fluid, loot wrecks, use portals (competing with player)
-- **Why backlogged:** Most complex AI in the design. Only if significantly ahead.
-- **Value if revisited:** Multiplayer-like pressure in solo, portal competition, emergent stories
+### ~~Scavenger AI~~ — SHIPPED
+- **Status:** Implemented in sim-runtime.js (jam week) + AI players added (2026-03-30)
+- **What shipped:** Drifter + Vulture scavengers, plus 5-personality AI player system (Prospector/Raider/Vulture/Ghost/Desperado) with full game loop, decision system, personality-aware flow sampling
 
-### Force Pulse (Non-Lethal Tool)
-- **What:** Area impulse from ship, pushes everything outward, +25% signal spike
-- **Why backlogged:** Stretch goal. Needs signal system working first.
-- **Value if revisited:** Emergency escape, fauna clearing, custom wave creation. The "duck dive" verb.
+### ~~Force Pulse~~ — SHIPPED
+- **Status:** Implemented in sim-runtime.js (jam week)
+- **What shipped:** Area impulse, hull-scaled radius/cooldown/signal cost, entity push, scavenger/planetoid interaction
+
+### Signal Flare (Decoy System)
+- **What:** Deploy a signal decoy at current position. +0.04 spike, half decay rate, 8-10s duration. AI tracks flare instead of player.
+- **Why backlogged:** Partially superseded by Shroud's Decoy Flare ability. Could still exist as a consumable item available to all hulls.
+- **Value if revisited:** Tactical misdirection for non-Shroud hulls. Consumable item, not a class ability.
+- **Added:** from SIGNAL-SYSTEM.md, deferred during implementation
+
+### Signal Equipment
+- **What:** Dampened Thrusters (slow signal ramp), Signal Sink (+30% decay), Resonant Hull (-40% loot spikes), Wake Cloak (doubled wreck masking radius), Harmonic Damper (shift zone thresholds +0.05)
+- **Why backlogged:** Now superseded by the hull coefficient system + artifact items. These effects should be individual T2-T3 artifacts in the item catalog, not a separate equipment system.
+- **Value if revisited:** Fold into item catalog as specific artifact designs.
+- **Added:** from SIGNAL-SYSTEM.md, superseded by hull/artifact system
 
 ### Rook Mode (Zero-Risk Entry)
 - **What:** A zero-risk run mode inspired by Marathon's Rook shell. Bring nothing, risk nothing, spawn with disadvantages (late timing, worse starting position, no rig bonuses). Pure scavenging — anything you extract is profit.
@@ -165,85 +173,55 @@
 
 ---
 
-## Multiplayer
+## Multiplayer & Architecture
 
-### 2-3 Player Shared Universe
-- **What:** WebSocket server, authoritative fluid sim, client prediction, shared portals
-- **Why backlogged:** Forge: "Architectural drag. Build clean data boundaries, not actual multiplayer."
-- **State:** Full architecture in SCALING.md. Clean data boundaries built into jam version.
-- **Value if revisited:** The signal mechanic becomes social. One noisy player endangers everyone.
-- **Prerequisite:** Solo game must be fun first. Network code only after core loop is locked.
+### ~~Dedicated Sim Process~~ — SHIPPED
+- **Status:** sim-runtime.js + sim-server.js run as separate node process (2026-03-25+)
+- **What shipped:** HTTP-based authoritative sim server, snapshot/event protocol, input handling
 
-### Dedicated Sim Process
-- **What:** Split the authoritative world update into its own long-lived process with a fixed tick, its own PID, and a stable local protocol for snapshots and inputs.
-- **Why backlogged:** The interface cut is in progress, but a full second process is not needed to finish the jam.
-- **State:** `docs/project/SIM-DECOUPLING-PLAN.md` defines the target shape; `FlowField`, `SimCore`, and `SimState` already exist in-process.
-- **Value if revisited:** Real multiplayer path, isolated sim perf budget, cleaner debugging, easier scale experiments on larger maps.
-- **First revival step:** Move remaining world systems fully behind `SimCore`, then run the sim in a Worker or child process before touching network code.
+### ~~Client / Server Protocol~~ — SHIPPED
+- **Status:** sim-protocol.js + sim-client.js define the contract (2026-03-25+)
+- **What shipped:** Input envelope (movement, pulse, abilities, consumables), snapshot schema, event stream, inventory actions
 
-### Client / Server Local Protocol
-- **What:** Define the minimal message contract between a render client and an authoritative sim: input commands, snapshots, events, and local flow queries.
-- **Why backlogged:** The codebase is only just getting a real sim boundary. Protocol design before that boundary settles would churn.
-- **Value if revisited:** Makes later WebSocket or local IPC transport mostly a mechanical change instead of a redesign.
-- **First revival step:** Freeze a plain-data `SimState` snapshot schema and a small input command envelope.
+### ~~PlayerBrain / Derived-State Boxing~~ — SHIPPED
+- **Status:** resolvePlayerBrain() in sim-runtime.js (2026-03-31)
+- **What shipped:** Hull × rig × salvage → flat coefficients with stacking rules and caps. createAbilityState() for per-hull state.
 
-### Next-Week Batch: Mini Server + MacBook Client
-- **What:** Run the authoritative sim on Greg's Mac mini and a playable local-rendering client on the MacBook over Tailscale or LAN.
-- **Why now:** This is the first honest proof that the client/server split works as a real game experience instead of an in-process abstraction.
-- **Value if revisited:** Proves remote play on Greg's actual machines, separates render performance from world-truth performance, and gives the future hosted path a concrete starting point.
-- **First revival step:** Launch one run with the mini as authority, the MacBook as client, and no public internet assumptions.
+### ~~Run Overload State Machine~~ — SHIPPED
+- **Status:** overload-state.js (2026-03-31)
+- **What shipped:** NORMAL/THROTTLED/DEGRADED/DILATED states with tick cost triggers
 
-### Next-Week Batch: Local Client / Server Protocol
-- **What:** Freeze the first message contract between authoritative sim and render client: inputs, snapshots, events, and any coarse flow/hazard query path.
-- **Why now:** The mini-to-MacBook milestone and the future hosted milestone both need the same protocol boundary.
-- **Value if revisited:** Turns later transport choices into implementation work instead of architectural churn.
-- **First revival step:** Write the smallest viable plain-data protocol and route one playable loop through it.
+### ~~Persistent Data Layer~~ — SHIPPED
+- **Status:** control-plane-store.js (2026-03-31)
+- **What shipped:** Durable profiles, vault, loadout, session metadata. File-backed JSON store.
 
-### PlayerBrain / Derived-State Boxing
-- **What:** Formal server-side boxed player runtime state: identity, raw loadout inputs, resolved gameplay coefficients, and hot-path runtime caches.
-- **Why now:** The server already owns run truth. The next scale problem is scattered player-state recomputation in hot paths.
-- **Value if revisited:** Cheaper ticks, cleaner snapshots, easier AI parity, and a more stable long-term client/server contract.
-- **First revival step:** Introduce a `PlayerBrain` module and make equip/consume/death/status changes dirty and rebuild it.
+### ~~Control Plane / Session Registry~~ — SHIPPED
+- **Status:** session-registry.js (2026-03-31)
+- **What shipped:** Session lifecycle, host assignment, run creation, player-to-run mapping
 
-### Run Overload State Machine
-- **What:** Explicit authoritative run states like `NORMAL`, `THROTTLED`, `DEGRADED`, and `DILATED`, with concrete budget and cadence changes attached.
-- **Why now:** Current scale cuts exist, but they are still implicit. Larger maps and future 4–8 player runs need an honest shared degradation model.
-- **Value if revisited:** Inspectable performance behavior, better fairness under load, and a stable place to attach future scale policies.
-- **First revival step:** Promote current map-scale clocks and budgets into named run states and expose that state in snapshots.
+### Mini Server + MacBook Client
+- **What:** Run sim on Mac mini, client on MacBook over Tailscale/LAN
+- **Status:** Architecture supports this now. Needs testing on actual hardware.
+- **First revival step:** Launch one run with mini as authority, MacBook as client.
+
+### Run Result Package and Write-Back
+- **What:** Explicit result package written from sim to persistence on extraction/death/teardown
+- **Status:** Schema designed in META-LOOP.md. Not yet implemented in persistence write-back.
+- **First revival step:** Implement RunResult construction in sim-runtime.js and wire to control-plane-store.
 
 ### Coarse Authoritative Flow / Hazard Field
-- **What:** A low-resolution server-owned gameplay field for motion and danger on larger maps, separate from the rich client-side visual fluid reconstruction.
-- **Why now:** Per-player force caps help, but they are still the tail end of a direct-source model. Larger worlds need a cheaper first-class authority model.
-- **Value if revisited:** Better large-map scaling, cleaner 4–8 player cost envelopes, and less pressure to keep server truth aligned with renderer fidelity.
-- **First revival step:** Prototype the field on `deep-field` first and use it for player motion/hazard sampling before expanding it.
+- **What:** Low-res server-owned gameplay field for motion/danger on larger maps
+- **Status:** estimateFlow() provides analytical approximation. Full field not yet needed.
+- **First revival step:** Profile analytical flow cost at 8 players before building the field.
 
 ### Session Profiles
-- **What:** Explicit run profiles like `solo_ai_light`, `duel_competitive`, `four_player_pvp`, and `eight_player_stress` that define clocks, AI fill, field resolution, and overload budgets together.
-- **Why now:** Map-size profiles are not enough once player-count and mode start affecting cost as much as map size.
-- **Value if revisited:** Honest server intent, cleaner control-plane behavior, and better hosted-run readiness later.
-- **First revival step:** Lift current map-scale profiles into session profiles with player-count intent and expose the chosen profile through session state.
-
-### Persistent Data Layer
-- **What:** Durable profile, vault, loadout, progression, and session-metadata storage that lives outside disposable sim instances.
-- **Why now:** The architecture is moving toward instanced authoritative runs. Durable player truth must stop living inside the run process.
-- **Value if revisited:** Clean run teardown, safer future hosting, cross-device play later, and a stable write-back boundary.
-- **First revival step:** Formalize a durable profile schema and wrap it in a persistence module before binding sim code to storage.
-
-### Control Plane / Session Registry
-- **What:** Session lifecycle and run registry outside the sim: host assignment, run creation, run ownership, player-to-run mapping, and later invites/matchmaking.
-- **Why now:** Host and join semantics are real now, but they should not stay buried inside simulation runtime code forever.
-- **Value if revisited:** Cleaner run orchestration, cleaner hosted future, and a stable place for multi-instance policy.
-- **First revival step:** Define the session record shape and move host/session metadata ownership into a distinct control-plane layer.
-
-### Run Result Package and Write-Back Boundary
-- **What:** Explicit result package written from a sim instance back to durable storage on extraction, death, or final teardown.
-- **Why now:** The server should not write arbitrary live state into persistence. Durable outcomes need one clean contract.
-- **Value if revisited:** Cleaner persistence, easier auditing, and safer future reconnect/hosting behavior.
-- **First revival step:** Define the result package schema: outcome, currency delta, vault changes, loadout changes, and stats delta.
+- **What:** Named profiles (solo_ai_light, duel_competitive, etc) defining clocks, AI fill, budgets
+- **Status:** Map-scale profiles exist. Player-count profiles not yet separated.
+- **First revival step:** Lift map-scale profiles into session profiles with player-count intent.
 
 ### Hosted Run Instances
-- **What:** Run-scoped authoritative sessions for 4-8 players, with solo fallback and AI fill where needed.
-- **Why deferred:** This is the likely multiplayer future, but not the next engineering milestone. Private remote play must work first.
+- **What:** Run-scoped authoritative sessions for 4-8 players, with solo fallback and AI fill
+- **Why deferred:** Private remote play must work first (mini + MacBook milestone).
 - **Value if revisited:** Matches the game's actual shape better than a persistent world or public free-for-all service.
 - **First revival step:** Reuse the local client/server protocol for one hosted run instance before any matchmaking work.
 

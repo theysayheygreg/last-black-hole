@@ -1,7 +1,67 @@
-# Roadmap: Last Black Hole — Hour-by-Hour Game Jam Plan
+# Roadmap: Last Black Hole
 
-> March 16-22, 2026. Code starts 12:01a Monday.
-> This is the execution document. Agents build from this. Greg playtests against this.
+> Originally the hour-by-hour game jam plan (March 16-22, 2026).
+> Now the project roadmap covering jam + post-jam development.
+> The jam plan below is historical — see **Current Status** for where we are.
+
+---
+
+## Current Status (2026-03-31)
+
+**Version:** 0.2.0 — post-jam, server-authoritative sim + entity ecology + ship classes
+
+### What's Built
+
+| Layer | Status | What Shipped |
+|-------|--------|-------------|
+| L0: The Feel | DONE | Fluid sim, ship controls, wells, stars, comets, ASCII shader, dev panel, 3 map sizes |
+| L1: The Stakes | DONE | Wrecks with drift, portals with evaporation, well growth, extraction loop, vault + profiles |
+| L2: The Threats | DONE | Signal system (6 zones), fauna (jellies + blooms), gradient sentries, AI players (5 personalities), scavenger AI, force pulse |
+| L3: The Dread | DONE | Inhibitor (3 forms: glitch → swarm → vessel), final portal guarantee, control debuff, HUD degradation |
+| L4: The Look | DONE | NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering |
+| L5: The Depth | IN PROGRESS | 5 hull classes with abilities, PlayerBrain coefficient resolution, rig upgrade tracks (designed), loot economy (designed), meta-loop (designed) |
+| L6: The Ship | PARTIAL | Title screen, map select, 3 save slots. Balance pass + deploy not yet done. |
+
+### What's Built (Post-Jam Architecture)
+
+| System | Status | What Shipped |
+|--------|--------|-------------|
+| Server-authoritative sim | DONE | sim-runtime.js owns all game state, HTTP protocol, snapshots + events |
+| Persistence layer | DONE | control-plane-store.js, durable profiles, session registry |
+| PlayerBrain | DONE | Hull coefficients, resolution pipeline, ability state, wired into physics |
+| 5 Hull classes | DONE (server) | Drifter/Breacher/Resonant/Shroud/Hauler with abilities |
+| AI hull assignment | DONE | Personality-constrained, complementary, no duplicates |
+| Overload state machine | DONE | NORMAL/THROTTLED/DEGRADED/DILATED states |
+| Run result package | DESIGNED | Schema in META-LOOP.md, not yet implemented in persistence write-back |
+
+### What's Designed (Not Yet Implemented)
+
+| Feature | Design Doc | Status |
+|---------|-----------|--------|
+| Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Full design, ready for implementation |
+| Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Full design with costs, ready for implementation |
+| Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Full design, ready for implementation |
+| Item catalog (artifacts with coefficients) | Partially in CLASSES-AND-PROGRESSION.md | Needs full catalog of T1-T4 items |
+| Stat tracking / chronicle | META-LOOP.md | Schema designed, needs persistence integration |
+| Milestone triggers | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Triggers defined, needs implementation |
+
+### Forward Development Priorities
+
+1. **Item catalog** — concrete T1-T4 items with coefficients, affinities, and sell values
+2. **Meta-loop implementation** — results screen, vault/rig/loadout UI, chronicle
+3. **Loot economy implementation** — tier gates, wreck aging, value scaling in sim-runtime
+4. **Run result write-back** — connect RunResult schema to persistence layer
+5. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
+6. **Map seed system** — how seeds pick entities from catalog, run variety
+7. **Balance pass** — hull coefficients, upgrade costs, loot rarity, signal tuning
+8. **Deploy** — GitHub Pages web build, nightly playables
+
+---
+
+## Jam Plan (Historical — March 16-22, 2026)
+
+> Below is the original hour-by-hour jam plan, preserved for reference.
+> All jam layers (L0-L4) shipped. L5-L6 are continuing post-jam.
 
 ---
 
