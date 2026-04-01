@@ -1489,25 +1489,92 @@ function cloneProfileLoadout(profile) {
   };
 }
 
+// --- Run Result Package ---
+// Built on extraction/death/disconnect. Matches META-LOOP.md schema.
+// Flows to control plane for persistence write-back.
+
+function buildRunResult(player, outcome) {
+  const cargoItems = player.cargo.filter(Boolean);
+  const cargoValue = cargoItems.reduce((s, item) => s + (item.value || 0), 0);
+  const survivalTime = runtime.simTime;
+  const survivalBonus = Math.floor(survivalTime * 0.5);
+  const isExtraction = outcome === 'escaped';
+
+  // Death cause taxonomy
+  let deathCause = null;
+  let deathEntityId = null;
+  if (outcome === 'dead') {
+    // Find the most recent death event for this player
+    const deathEvent = [...runtime.recentEvents].reverse().find(
+      e => e.type === 'player.died' && e.payload?.clientId === player.clientId
+    );
+    if (deathEvent) {
+      deathCause = deathEvent.payload.cause || 'unknown';
+      deathEntityId = deathEvent.payload.wellId || deathEvent.payload.entityId || null;
+    }
+  }
+
+  // AI outcomes
+  const aiOutcomes = [];
+  for (const p of runtime.players.values()) {
+    if (!p.isAI) continue;
+    aiOutcomes.push({
+      personality: p.personality,
+      hullType: p.hullType,
+      outcome: p.status === 'escaped' ? 'extracted' : p.status === 'dead' ? 'dead' : 'alive',
+      cargoCount: p.cargo.filter(Boolean).length,
+    });
+  }
+
+  // Earnings
+  const emEarned = isExtraction
+    ? cargoValue + survivalBonus
+    : Math.floor(survivalBonus * 0.5); // death gets 50% survival bonus only
+
+  return {
+    runId: runtime.session.runId,
+    pilotId: player.clientId,
+    profileId: player.profileId,
+    hullType: player.hullType,
+    rigLevels: player.rigLevels || [0, 0, 0],
+    outcome,
+    deathCause,
+    deathEntityId,
+    survivalTime,
+    cargoExtracted: isExtraction ? cargoItems.map(i => ({ ...i })) : [],
+    cargoLost: !isExtraction ? cargoItems.map(i => ({ ...i })) : [],
+    signalPeak: player._signalPeak || player.signal.level,
+    signalPeakZone: player._signalPeakZone || player.signal.zone,
+    inhibitorFormReached: runtime.inhibitor.form,
+    emEarned,
+    aiOutcomes,
+    mapId: runtime.mapState.id,
+    mapScale: runtime.session.worldScale,
+    wellCount: runtime.mapState.wells.length,
+  };
+}
+
 function commitPlayerOutcome(player, outcome) {
   if (!player || player.isAI || !player.profileId) return null;
   if (player.committedOutcome) return null;
-  // Outcome commit is one-way. Once a run result is written, later leave/reset
-  // paths must not mutate durable profile state a second time.
   player.committedOutcome = outcome;
+
+  const runResult = buildRunResult(player, outcome);
+
   trackControlPlaneWrite(controlPlane.applyOutcome({
     profileId: player.profileId,
     player,
     outcome,
     runDuration: runtime.simTime,
     session: runtime.session,
+    runResult, // full result package for persistence
   }));
-  publishEvent("profile.updated", {
+  publishEvent("run.result", {
     clientId: player.clientId,
     profileId: player.profileId,
-    outcome,
+    ...runResult,
   });
-  return null;
+  return runResult;
 }
 
 function spawnWaveRing(wx, wy, amplitude) {
@@ -2787,6 +2854,12 @@ function tickPlayerSignal(player, dt) {
   const flowLockMult = getFlowLockSignalMult(player);
   const burnSignalMult = getBurnModifiers(player).signal;
   sig.level = Math.max(0, Math.min(1, sig.level + (generation * pb.signalGenMult * flowLockMult * burnSignalMult - decay * pb.signalDecayMult) * dt));
+
+  // Track peak signal for run results
+  if (sig.level > (player._signalPeak || 0)) {
+    player._signalPeak = sig.level;
+    player._signalPeakZone = sig.zone;
+  }
 
   // --- Zone crossing ---
   const newZone = signalZoneForLevel(sig.level);
