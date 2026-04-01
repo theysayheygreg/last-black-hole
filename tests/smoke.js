@@ -1,6 +1,9 @@
 /**
  * Smoke tests — runs in <10 seconds.
- * Verifies the game loads, renders, and doesn't crash.
+ * Verifies the local client page loads, renders, and doesn't crash.
+ *
+ * This is the client-only canary. It does not prove control-plane/sim wiring.
+ * Use `infra-smoke.js` and `remote-authority.js` for the architecture-aware path.
  *
  * Usage: node tests/smoke.js [index-a.html|index-b.html|index.html]
  */

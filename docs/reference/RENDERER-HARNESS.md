@@ -52,3 +52,13 @@ Chrome DevTools MCP does not replace it. The useful split is:
 
 Use the harness when you need a repeatable before/after comparison.
 Use Chrome DevTools MCP when you need to inspect the live scene, chase a visual bug, or understand why a change feels wrong in motion.
+
+## Relationship to the broader test harness
+
+LBH now has three distinct test layers:
+
+- `tests/smoke.js` — client-only boot/render canary
+- `tests/infra-smoke.js` — control plane + sim + remote client boot canary
+- `tests/renderer.js` — deterministic visual fixtures
+
+Keep those roles separate. Renderer captures are not a substitute for infrastructure smoke, and infrastructure smoke is not a substitute for visual judgment.
