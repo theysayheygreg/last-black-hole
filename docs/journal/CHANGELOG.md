@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-04-01 — Server-side PlayerBrain hydration
+
+### scripts/ — Added / Modified
+- **player-brain.js** — new shared server-side `PlayerBrain` module. Owns hull definitions, durable upgrade normalization, hull/profile resolution, and resolved brain coefficients.
+- **sim-runtime.js** — brain resolution moved out of the runtime body and into a dedicated module.
+- **sim-runtime.js** — remote join now hydrates player brain from durable profile upgrades and loadout instead of only raw hull defaults.
+- **sim-runtime.js** — equip/unequip actions now refresh live brain coefficients immediately.
+- **sim-runtime.js** — server-side well contact now honors profile hull upgrades through `wellGraceDuration` and free survive charges.
+
+### tests/ — Added / Modified
+- **player-brain.js** — deterministic coverage for durable upgrade hydration and live brain refresh after remote loadout changes.
+- **run-all.js** — wires the PlayerBrain suite into `npm test`.
+
+### Why
+The authority split was real, but player truth was still half-inline: hull definitions lived in the sim runtime, durable upgrades were not boxed into the server brain, and existing-player join updates could ignore loadout/profile refreshes. This slice makes `PlayerBrain` a real server-side boundary instead of another pile of local math.
+
 ## 2026-03-31 — Coarse Authoritative Flow Field
 
 ### scripts/ — Added / Modified

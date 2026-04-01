@@ -18,6 +18,7 @@ const suites = [
   { name: "Flow", file: "flow.js" },
   { name: "Inventory", file: "inventory.js" },
   { name: "Systems", file: "systems.js" },
+  { name: "PlayerBrain", file: "player-brain.js" },
   { name: "OverloadState", file: "overload-state.js" },
   { name: "CoarseField", file: "coarse-field.js" },
   { name: "SimScale", file: "sim-scale.js" },

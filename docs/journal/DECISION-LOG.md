@@ -6,6 +6,21 @@
 
 ---
 
+## PlayerBrain: server-owned resolved player truth (2026-04-01)
+
+**Question:** After the first client/server migration, where should durable upgrades, hull coefficients, and loadout-derived gameplay modifiers actually resolve?
+
+**Options considered:**
+- Keep the existing inline brain math inside `scripts/sim-runtime.js`
+- Let the browser continue applying profile upgrades locally and treat the server as “good enough”
+- Move the whole thing into a real server-side module and hydrate it from durable profile data
+
+**Where it landed:** Real server-side module. `PlayerBrain` now lives in `scripts/player-brain.js`, resolves from hull + durable profile upgrades + equipped artifacts, and refreshes on live loadout mutation. The server, not the browser, now owns the resolved movement/pickup/signal/well-contact coefficients for remote-authority play.
+
+**Important consequence:** profile upgrades are no longer just a local `CONFIG` hack in the browser. Remote-authority runs now get real server-side hull grace and resolved coefficients at join time.
+
+**Door status:** Closed for the authority model. Open for richer hull-specific progression later.
+
 ## How to Read This
 
 Each decision has:

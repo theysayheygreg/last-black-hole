@@ -10,6 +10,15 @@ const {
   buildCoarseFlowField,
   sampleCoarseFlowField,
 } = require("./coarse-flow-field.js");
+const {
+  DEFAULT_PROFILE_UPGRADES,
+  HULL_DEFINITIONS,
+  BRAIN_DEFAULTS,
+  normalizeHullType,
+  normalizeProfileUpgrades,
+  createPlayerBrain,
+  createAbilityState,
+} = require("./player-brain.js");
 const { ControlPlaneStore } = require("./control-plane-store.js");
 const { SessionRegistry } = require("./session-registry.js");
 const {
@@ -44,124 +53,6 @@ const RUN_DURATION = 600;
 const WELL_GROWTH_VARIANCE = 0.01;
 const WELL_GROWTH_AMOUNT = 0.02;
 const WELL_KILL_RADIUS_GROWTH = 0.3;
-// --- Hull Definitions (Ship Classes) ---
-// Each hull is a weight table on shared physics + a unique ability kit.
-// Coefficients multiply the base physics values. 1.0 = default.
-const HULL_DEFINITIONS = {
-  drifter: {
-    name: 'Drifter',
-    // Physics coefficients
-    thrustScale: 0.7,
-    dragScale: 0.85,
-    currentCoupling: 1.6,
-    signalGenMult: 0.5,
-    signalDecayMult: 1.0,
-    pulseRadiusScale: 0.8,
-    pulseCooldownScale: 1.0,
-    pulseSignalScale: 1.0,
-    cargoSlots: 4,
-    pickupRadius: 1.0,
-    sensorRange: 1.0,
-    wellResistScale: 1.0,
-    controlDebuffResist: 1.0,
-    // Abilities
-    abilities: {
-      flowLock: { type: 'passive_trigger', alignTime: 3.0, speedBoost: 0.4, signalMult: 0.1, cooldown: 5.0 },
-      eddyBrake: { type: 'active', cooldown: 20.0, turbulenceDuration: 2.0, slowFactor: 0.5 },
-      slipStream: { type: 'passive', followDist: 0.1, speedBonus: 0.2, signalReduction: 0.3 },
-      // currentSight is client-only (HUD rendering)
-    },
-  },
-  breacher: {
-    name: 'Breacher',
-    thrustScale: 1.4,
-    dragScale: 1.0,
-    currentCoupling: 0.7,
-    signalGenMult: 1.5,
-    signalDecayMult: 0.8,
-    pulseRadiusScale: 1.0,
-    pulseCooldownScale: 1.0,
-    pulseSignalScale: 1.0,
-    cargoSlots: 4,
-    pickupRadius: 1.0,
-    sensorRange: 0.8,
-    wellResistScale: 1.2,
-    controlDebuffResist: 0.7,
-    abilities: {
-      burn: { type: 'active_toggle', fuelMax: 30.0, fuelRechargeRate: 0.5, thrustMult: 2.0, signalMult: 3.0 },
-      shockwave: { type: 'enhanced_pulse', radiusMult: 1.5, stunDuration: 2.0, signalSpike: 0.15 },
-      momentumShield: { type: 'passive', speedThreshold: 0.8, wellPullReduction: 0.25 },
-      smashGrab: { type: 'passive' }, // pickup at full speed, no slowdown required
-    },
-  },
-  resonant: {
-    name: 'Resonant',
-    thrustScale: 0.9,
-    dragScale: 0.95,
-    currentCoupling: 1.0,
-    signalGenMult: 0.8,
-    signalDecayMult: 1.0,
-    pulseRadiusScale: 1.5,
-    pulseCooldownScale: 0.6,
-    pulseSignalScale: 0.5,
-    cargoSlots: 4,
-    pickupRadius: 1.0,
-    sensorRange: 1.0,
-    wellResistScale: 1.0,
-    controlDebuffResist: 1.0,
-    abilities: {
-      harmonicPulse: { type: 'enhanced_pulse', eddyDuration: 6.0, eddyStrength: 0.03, maxEddies: 3 },
-      resonanceTap: { type: 'active', cooldown: 15.0, range: 0.3, cooldownReduction: 0.5, radiusBonus: 0.3 },
-      frequencyShift: { type: 'active', cooldown: 45.0 }, // inverts next pulse to pull
-      dampeningField: { type: 'passive', inhibitorSlowFactor: 0.3 }, // eddies slow inhibitor
-    },
-  },
-  shroud: {
-    name: 'Shroud',
-    thrustScale: 0.8,
-    dragScale: 0.90,
-    currentCoupling: 1.0,
-    signalGenMult: 0.4,
-    signalDecayMult: 1.5,
-    pulseRadiusScale: 0.6,
-    pulseCooldownScale: 1.3,
-    pulseSignalScale: 1.2,
-    cargoSlots: 3,
-    pickupRadius: 0.8,
-    sensorRange: 1.3,
-    wellResistScale: 0.9,
-    controlDebuffResist: 1.0,
-    abilities: {
-      wakeCloak: { type: 'active', cooldown: 30.0, zoneDrop: 1 }, // drop signal by 1 zone
-      ghostTrail: { type: 'passive', maxZone: 'whisper' }, // invisible below WHISPER
-      decoyFlare: { type: 'active', cooldown: 60.0, charges: 2, duration: 8.0, decayRate: 0.5 },
-      // signalSight is client-only (HUD rendering of entity signal levels)
-    },
-  },
-  hauler: {
-    name: 'Hauler',
-    thrustScale: 0.6,
-    dragScale: 1.1,
-    currentCoupling: 0.8,
-    signalGenMult: 1.0,
-    signalDecayMult: 0.9,
-    pulseRadiusScale: 0.9,
-    pulseCooldownScale: 1.0,
-    pulseSignalScale: 1.0,
-    cargoSlots: 6,
-    pickupRadius: 1.4,
-    sensorRange: 0.9,
-    wellResistScale: 0.8,
-    controlDebuffResist: 1.2,
-    abilities: {
-      salvageLock: { type: 'active', charges: 2, bonusItems: 1 },
-      reinforcedHull: { type: 'passive', wellSurvives: 1 }, // survive 1 well contact per run
-      tractorField: { type: 'active', cooldown: 25.0, range: 0.15, channelTime: 3.0, pullSpeed: 0.04 },
-      // deepScanner is client-only (wreck contents visible in HUD)
-    },
-  },
-};
-
 // Hull assignment rules for AI personalities
 const PERSONALITY_HULL_MAP = {
   prospector: ['drifter', 'hauler'],
@@ -1043,102 +934,55 @@ function applyOverloadProfile({ forceRestart = false } = {}) {
   rebuildAuthoritativeField();
 }
 
-// --- PlayerBrain Coefficient Resolution ---
-// Hull base × rig modifiers × salvage effects → flat coefficients the sim ticks against.
-
-const BRAIN_DEFAULTS = {
-  thrustScale: 1.0, dragScale: 1.0, currentCoupling: 1.0,
-  signalGenMult: 1.0, signalDecayMult: 1.0,
-  pulseRadiusScale: 1.0, pulseCooldownScale: 1.0, pulseSignalScale: 1.0,
-  cargoSlots: 4, pickupRadius: 1.0, sensorRange: 1.0,
-  wellResistScale: 1.0, controlDebuffResist: 1.0,
-};
-
-const BRAIN_CAPS = {
-  thrustScale: [0.3, 2.5], dragScale: [0.5, 1.5], currentCoupling: [0.3, 2.5],
-  signalGenMult: [0.2, 3.0], signalDecayMult: [0.3, 3.0],
-  pulseRadiusScale: [0.3, 2.5], pulseCooldownScale: [0.3, 2.0], pulseSignalScale: [0.2, 2.0],
-  pickupRadius: [0.5, 2.0], sensorRange: [0.5, 2.0],
-  wellResistScale: [0.5, 2.0], controlDebuffResist: [0.3, 2.0],
-};
-
-function resolvePlayerBrain(hullType, rigLevels = [0, 0, 0], equipped = []) {
-  const hull = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
-  const brain = {};
-
-  // Start with hull base multipliers
-  for (const key of Object.keys(BRAIN_DEFAULTS)) {
-    brain[key] = hull[key] !== undefined ? hull[key] : BRAIN_DEFAULTS[key];
+function syncPlayerCargoCapacity(player) {
+  const desired = Math.max(1, Math.round(player?.brain?.cargoSlots || PLAYER_CARGO_SLOTS));
+  if (!Array.isArray(player.cargo)) {
+    player.cargo = new Array(desired).fill(null);
+    return;
   }
-
-  // Rig modifiers: additive on hull base (reserved for upgrade tracks)
-  // TODO: when rig upgrade tracks are defined, apply per-track bonuses here
-
-  // Equipped artifact modifiers: multiplicative on top of hull+rig
-  for (const item of equipped) {
-    if (!item || !item.coefficients) continue;
-    for (const [key, mult] of Object.entries(item.coefficients)) {
-      if (brain[key] !== undefined && typeof brain[key] === 'number' && key !== 'cargoSlots') {
-        brain[key] *= mult;
-      }
-    }
-    if (item.coefficients.cargoSlots) brain.cargoSlots += item.coefficients.cargoSlots;
+  while (player.cargo.length < desired) {
+    player.cargo.push(null);
   }
-
-  // Hard caps
-  for (const [key, [min, max]] of Object.entries(BRAIN_CAPS)) {
-    if (brain[key] !== undefined) brain[key] = Math.max(min, Math.min(max, brain[key]));
+  while (player.cargo.length > desired && player.cargo[player.cargo.length - 1] == null) {
+    player.cargo.pop();
   }
-
-  return brain;
 }
 
-function createAbilityState(hullType) {
-  const hull = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
-  const state = { hullType };
-
-  if (hullType === 'drifter') {
-    state.flowLockActive = false;
-    state.flowLockAlignTimer = 0;
-    state.flowLockCooldown = 0;
-    state.eddyBrakeCooldown = 0;
-  } else if (hullType === 'breacher') {
-    state.burnActive = false;
-    state.burnFuel = hull.abilities.burn.fuelMax;
-    state.momentumShieldActive = false;
-  } else if (hullType === 'resonant') {
-    state.eddies = [];
-    state.tapAnchor = null;
-    state.tapCooldown = 0;
-    state.frequencyShiftCooldown = 0;
-    state.nextPulseInverted = false;
-  } else if (hullType === 'shroud') {
-    state.wakeCloakCooldown = 0;
-    state.ghostTrailActive = false;
-    state.decoyCharges = hull.abilities.decoyFlare.charges;
-    state.decoyCooldown = 0;
-    state.decoys = [];
-  } else if (hullType === 'hauler') {
-    state.salvageLockCharges = hull.abilities.salvageLock.charges;
-    state.taggedWrecks = [];
-    state.wellSurvivesRemaining = hull.abilities.reinforcedHull.wellSurvives;
-    state.tractorCooldown = 0;
-    state.tractorTarget = null;
-    state.tractorChannelTimer = 0;
+function refreshPlayerBrain(player, durableProfile = null) {
+  if (!player) return null;
+  const profileUpgrades = normalizeProfileUpgrades(
+    durableProfile?.upgrades || player.profileUpgrades || DEFAULT_PROFILE_UPGRADES
+  );
+  player.profileUpgrades = profileUpgrades;
+  if (durableProfile?.shipType) {
+    player.profileShipType = durableProfile.shipType;
   }
-
-  return state;
+  player.hullType = normalizeHullType(player.hullType, player.profileShipType);
+  player.brain = createPlayerBrain({
+    hullType: player.hullType,
+    profileUpgrades,
+    equipped: player.equipped,
+  });
+  syncPlayerCargoCapacity(player);
+  return player.brain;
 }
 
-function createPlayer(clientId, name, hullType = 'drifter') {
-  const brain = resolvePlayerBrain(hullType);
+function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
+  const normalizedHullType = normalizeHullType(hullType, options.profileShipType);
+  const brain = createPlayerBrain({
+    hullType: normalizedHullType,
+    profileUpgrades: options.profileUpgrades,
+    equipped: options.equipped,
+  });
   return {
     clientId,
     profileId: null,
+    profileShipType: options.profileShipType || null,
+    profileUpgrades: normalizeProfileUpgrades(options.profileUpgrades || DEFAULT_PROFILE_UPGRADES),
     name: name || clientId,
-    hullType,
+    hullType: normalizedHullType,
     brain,
-    abilityState: createAbilityState(hullType),
+    abilityState: createAbilityState(normalizedHullType, brain),
     wx: 0,
     wy: 0,
     vx: 0,
@@ -1156,13 +1000,14 @@ function createPlayer(clientId, name, hullType = 'drifter') {
     },
     status: "alive",
     cargo: new Array(brain.cargoSlots).fill(null),
-    equipped: [],
-    consumables: [],
+    equipped: Array.isArray(options.equipped) ? options.equipped.map((item) => item ? { ...item } : null) : [],
+    consumables: Array.isArray(options.consumables) ? options.consumables.map((item) => item ? { ...item } : null) : [],
     activeEffects: [],
     effectState: {
       shieldCharges: 0,
       timeSlowRemaining: 0,
       pulseCooldownRemaining: 0,
+      hullGraceRemaining: 0,
     },
     signal: {
       level: 0,
@@ -1802,6 +1647,21 @@ function applyWellGravity(player, dt) {
         });
         return;
       }
+      if ((player.effectState.hullGraceRemaining || 0) > 0) {
+        player.effectState.hullGraceRemaining = Math.max(0, player.effectState.hullGraceRemaining - dt);
+        if (player.effectState.hullGraceRemaining > 0) {
+          return;
+        }
+      } else if ((player.brain?.wellGraceDuration || 0) > 0) {
+        player.effectState.hullGraceRemaining = player.brain.wellGraceDuration;
+        publishEvent("player.hullGraceStarted", {
+          clientId: player.clientId,
+          wellId: well.id,
+          wellName: well.name || well.id,
+          duration: player.brain.wellGraceDuration,
+        });
+        return;
+      }
       // Hauler Reinforced Hull: survive one well contact per run
       if (player.abilityState && player.abilityState.hullType === 'hauler'
           && player.abilityState.wellSurvivesRemaining > 0) {
@@ -1827,7 +1687,7 @@ function applyWellGravity(player, dt) {
       player.status = "dead";
       player.vx = 0;
       player.vy = 0;
-      player.cargo = new Array(PLAYER_CARGO_SLOTS).fill(null);
+      player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
       commitPlayerOutcome(player, "dead");
       publishEvent("player.died", {
         clientId: player.clientId,
@@ -1837,6 +1697,9 @@ function applyWellGravity(player, dt) {
       });
       return;
     }
+  }
+  if ((player.effectState.hullGraceRemaining || 0) > 0) {
+    player.effectState.hullGraceRemaining = 0;
   }
   let pullX = 0;
   let pullY = 0;
@@ -2108,6 +1971,7 @@ function applyInventoryAction(player, actionMessage) {
       player.cargo[cargoSlot] = prev;
       itemName = item.name;
       refreshPlayerEffects(player);
+      refreshPlayerBrain(player);
       changed = true;
       break;
     }
@@ -2133,6 +1997,7 @@ function applyInventoryAction(player, actionMessage) {
       player.cargo[freeCargo] = item;
       itemName = item.name;
       refreshPlayerEffects(player);
+      refreshPlayerBrain(player);
       changed = true;
       break;
     }
@@ -4095,13 +3960,21 @@ const server = http.createServer(async (req, res) => {
               fallbackName: body.name,
             })
           : null;
-        const hullType = HULL_DEFINITIONS[body.hullType] ? body.hullType : 'drifter';
-        player = createPlayer(clientId, body.name, hullType);
+        const explicitHullType = normalizeHullType(body.hullType, durableProfile?.shipType || body.profileSnapshot?.shipType);
+        const durableLoadout = cloneProfileLoadout(durableProfile);
+        const equipped = durableProfile ? durableLoadout.equipped : cloneLoadoutItems(body.equipped);
+        const consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
+        player = createPlayer(clientId, body.name, explicitHullType, {
+          profileShipType: durableProfile?.shipType || body.profileSnapshot?.shipType || null,
+          profileUpgrades: durableProfile?.upgrades || body.profileSnapshot?.upgrades || DEFAULT_PROFILE_UPGRADES,
+          equipped,
+          consumables,
+        });
         player.profileId = durableProfile?.id || profileId || null;
         player.name = durableProfile?.name || player.name;
-        const durableLoadout = cloneProfileLoadout(durableProfile);
-        player.equipped = durableProfile ? durableLoadout.equipped : cloneLoadoutItems(body.equipped);
-        player.consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
+        player.equipped = equipped;
+        player.consumables = consumables;
+        refreshPlayerBrain(player, durableProfile);
         refreshPlayerEffects(player);
         const spawn = findSafeSpawn(runtime.mapState);
         player.wx = spawn.wx;
@@ -4110,18 +3983,28 @@ const server = http.createServer(async (req, res) => {
         if (!runtime.session.hostClientId) assignHost(clientId, player.name);
         publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
         persistSessionRegistry();
-      } else if (body.name) {
-        player.name = String(body.name);
+      } else {
+        if (body.name) {
+          player.name = String(body.name);
+        }
         if (body.profileId) {
           player.profileId = String(body.profileId);
         }
+        if (body.profileSnapshot?.upgrades) {
+          player.profileUpgrades = normalizeProfileUpgrades(body.profileSnapshot.upgrades);
+        }
+        if (body.profileSnapshot?.shipType) {
+          player.profileShipType = body.profileSnapshot.shipType;
+          player.hullType = normalizeHullType(player.hullType, player.profileShipType);
+        }
         if (Array.isArray(body.equipped)) {
           player.equipped = cloneLoadoutItems(body.equipped);
-          refreshPlayerEffects(player);
         }
         if (Array.isArray(body.consumables)) {
           player.consumables = cloneLoadoutItems(body.consumables);
         }
+        refreshPlayerBrain(player);
+        refreshPlayerEffects(player);
       }
 
       sendJson(res, 200, { ok: true, player });
