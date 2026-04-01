@@ -1569,6 +1569,12 @@ function commitPlayerOutcome(player, outcome) {
     session: runtime.session,
     runResult, // full result package for persistence
   }));
+  // Existing consumers depend on profile.updated to know the write finished
+  publishEvent("profile.updated", {
+    clientId: player.clientId,
+    profileId: player.profileId,
+    outcome,
+  });
   publishEvent("run.result", {
     clientId: player.clientId,
     profileId: player.profileId,
@@ -1773,11 +1779,12 @@ function maybeCollapseRun() {
     player.status = "dead";
     player.vx = 0;
     player.vy = 0;
-    player.cargo = new Array(PLAYER_CARGO_SLOTS).fill(null);
     publishEvent("player.died", {
       clientId: player.clientId,
       cause: "collapse",
     });
+    commitPlayerOutcome(player, "dead");
+    player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
   }
 }
 
@@ -2037,14 +2044,16 @@ function applyWellGravity(player, dt) {
       player.status = "dead";
       player.vx = 0;
       player.vy = 0;
-      player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
-      commitPlayerOutcome(player, "dead");
+      // Publish death event BEFORE commit so buildRunResult can find the cause
       publishEvent("player.died", {
         clientId: player.clientId,
         cause: "well",
         wellId: well.id,
         wellName: well.name || well.id,
       });
+      // Commit outcome BEFORE clearing cargo so cargoLost is captured
+      commitPlayerOutcome(player, "dead");
+      player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
       return;
     }
   }
@@ -2093,7 +2102,9 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
   for (const { entity: wreck, dist } of nearbyWrecks) {
     if (dist >= pickupDist) continue;
 
-    // Apply wreck age value multiplier at loot time
+    // Wreck age scales EM sell value only, not artifact coefficients.
+    // Coefficients are fixed by the catalog — aging makes loot worth more to sell,
+    // not mechanically stronger. This keeps balance tied to item design, not timing.
     const ageMult = wreck.spawnTime != null ? wreckAgeMultiplier(wreck.spawnTime, runtime.simTime) : 1.0;
     while (wreck.loot?.length > 0 && getCargoCount(player) < maxCargo) {
       const freeSlot = player.cargo.indexOf(null);
@@ -2101,16 +2112,6 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
       const item = wreck.loot.shift();
       if (item && ageMult > 1.0) {
         item.value = Math.round((item.value || 0) * ageMult);
-        // Scale coefficient magnitudes by age multiplier
-        if (item.coefficients) {
-          for (const [key, val] of Object.entries(item.coefficients)) {
-            if (typeof val === 'number' && key !== 'cargoSlots') {
-              // Scale the deviation from 1.0 by age multiplier
-              const deviation = val - 1.0;
-              item.coefficients[key] = 1.0 + deviation * ageMult;
-            }
-          }
-        }
       }
       player.cargo[freeSlot] = item;
     }
