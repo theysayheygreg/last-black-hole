@@ -957,13 +957,13 @@ function syncPlayerCargoCapacity(player) {
 
 function refreshPlayerBrain(player, durableProfile = null) {
   if (!player) return null;
-  player.hullType = normalizeHullType(player.hullType, durableProfile?.shipType || player.profileShipType);
+  player.hullType = normalizeHullType(player.hullType, durableProfile?.hullType || durableProfile?.shipType || player.profileShipType);
   const rigLevels = normalizeRigLevels(
     durableProfile?.rigLevels || player.rigLevels, player.hullType
   );
   player.rigLevels = rigLevels;
-  if (durableProfile?.shipType) {
-    player.profileShipType = durableProfile.shipType;
+  if (durableProfile?.hullType || durableProfile?.shipType) {
+    player.profileShipType = durableProfile.hullType || durableProfile.shipType;
   }
   player.brain = createPlayerBrain({
     hullType: player.hullType,
@@ -3989,12 +3989,12 @@ const server = http.createServer(async (req, res) => {
               fallbackName: body.name,
             })
           : null;
-        const explicitHullType = normalizeHullType(body.hullType, durableProfile?.shipType || body.profileSnapshot?.shipType);
+        const explicitHullType = normalizeHullType(body.hullType, durableProfile?.hullType || durableProfile?.shipType || body.profileSnapshot?.hullType || body.profileSnapshot?.shipType);
         const durableLoadout = cloneProfileLoadout(durableProfile);
         const equipped = durableProfile ? durableLoadout.equipped : cloneLoadoutItems(body.equipped);
         const consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
         player = createPlayer(clientId, body.name, explicitHullType, {
-          profileShipType: durableProfile?.shipType || body.profileSnapshot?.shipType || null,
+          profileShipType: durableProfile?.hullType || durableProfile?.shipType || body.profileSnapshot?.hullType || body.profileSnapshot?.shipType || null,
           rigLevels: durableProfile?.rigLevels || body.profileSnapshot?.rigLevels || null,
           equipped,
           consumables,

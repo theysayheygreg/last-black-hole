@@ -64,7 +64,8 @@ function normalizeProfileSnapshot(snapshot = {}, profileId = null, fallbackName 
     rigLevels: Array.isArray(snapshot.rigLevels)
       ? snapshot.rigLevels.map(v => Math.max(0, Math.min(5, Math.round(Number(v) || 0)))).slice(0, 3)
       : [...DEFAULT_RIG_LEVELS],
-    hullType: snapshot.hullType || base.hullType,
+    // Legacy migration: shipType → hullType
+    hullType: snapshot.hullType || snapshot.shipType || base.hullType,
     totalExtractions: Number.isFinite(Number(snapshot.totalExtractions)) ? Number(snapshot.totalExtractions) : base.totalExtractions,
     totalDeaths: Number.isFinite(Number(snapshot.totalDeaths)) ? Number(snapshot.totalDeaths) : base.totalDeaths,
     totalItemsSold: Number.isFinite(Number(snapshot.totalItemsSold)) ? Number(snapshot.totalItemsSold) : base.totalItemsSold,
