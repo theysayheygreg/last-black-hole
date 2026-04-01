@@ -109,6 +109,8 @@ async function run() {
       });
       assert(profileBody.profile.shipType === "hauler", `Expected hauler ship type, got ${profileBody.profile.shipType}`);
       assert(profileBody.profile.upgrades.hull === 2, "Expected stored hull upgrade");
+      assert(profileBody.profile.loadout.equipped.length === 2, "Expected 2 persisted equip slots");
+      assert(profileBody.profile.loadout.consumables.length === 2, "Expected 2 persisted consumable slots");
 
       const sessionBody = await waitFor(async () => {
         const body = await getJson(`${CONTROL_URL}/sessions`);

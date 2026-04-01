@@ -1,7 +1,7 @@
 # Build Plan: Last Black Hole
 
 > Originally the jam build plan (March 16-22, 2026).
-> Updated to reflect post-jam development through March 31.
+> Updated to reflect post-jam development through April 1.
 
 ---
 
@@ -18,6 +18,7 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - Server-authoritative sim (HTTP protocol, snapshots, events)
 - Persistence layer (durable profiles, session registry, control plane)
 - Overload state machine (NORMAL/THROTTLED/DEGRADED/DILATED)
+- Local remote-authority stack (client + sim + control plane, host/join/leave, architecture-aware smoke)
 - Loot economy design (tier gates, wreck aging, value scaling)
 - Meta-loop design (results screen, vault/rig/loadout, chronicle)
 - Rig upgrade tracks (all 5 hulls, 3 tracks × 5 levels)
@@ -27,8 +28,15 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 2. Loot economy — tier gates + wreck aging in sim-runtime
 3. Meta-loop UI — results screen, vault/rig/loadout panels, chronicle
 4. Run result write-back — connect RunResult to persistence layer
-5. Hull ability client-side — keybindings, HUD cooldowns, visual effects
-6. Map seed system — entity catalog selection per run
+5. Tailscale hardware validation — mini authority + MacBook client
+6. Hull ability client-side — keybindings, HUD cooldowns, visual effects
+7. Map seed system — entity catalog selection per run
+
+### Current constraints
+
+- The live client contract is still `8 cargo + 2 equipped + 2 consumable`.
+- The older `3 artifact slots` design is not live runtime truth yet.
+- Packaged desktop artifacts are rendering clients; remote play still depends on separate `control` and `sim` processes.
 
 ### L6: The Ship (Not Yet Started)
 - Balance pass (hull coefficients, upgrade costs, loot rarity, signal tuning)

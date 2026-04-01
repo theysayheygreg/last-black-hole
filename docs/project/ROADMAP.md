@@ -6,9 +6,9 @@
 
 ---
 
-## Current Status (2026-03-31)
+## Current Status (2026-04-01)
 
-**Version:** 0.2.0 — post-jam, server-authoritative sim + entity ecology + ship classes
+**Version:** 0.2.0 — post-jam, server-authoritative sim + control plane + entity ecology + ship classes
 
 ### What's Built
 
@@ -27,11 +27,13 @@
 | System | Status | What Shipped |
 |--------|--------|-------------|
 | Server-authoritative sim | DONE | sim-runtime.js owns all game state, HTTP protocol, snapshots + events |
-| Persistence layer | DONE | control-plane-store.js, durable profiles, session registry |
+| Persistence + control plane | DONE | control-plane-store.js, control-plane-runtime.js, session registry, sim registration |
 | PlayerBrain | DONE | Hull coefficients, resolution pipeline, ability state, wired into physics |
 | 5 Hull classes | DONE (server) | Drifter/Breacher/Resonant/Shroud/Hauler with abilities |
 | AI hull assignment | DONE | Personality-constrained, complementary, no duplicates |
 | Overload state machine | DONE | NORMAL/THROTTLED/DEGRADED/DILATED states |
+| Large-map scale model | DONE (first pass) | map-scale clocks, relevance gating, AI/hazard budgets, coarse authoritative field |
+| Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Run result package | DESIGNED | Schema in META-LOOP.md, not yet implemented in persistence write-back |
 
 ### What's Designed (Not Yet Implemented)
@@ -51,10 +53,17 @@
 2. **Meta-loop implementation** — results screen, vault/rig/loadout UI, chronicle
 3. **Loot economy implementation** — tier gates, wreck aging, value scaling in sim-runtime
 4. **Run result write-back** — connect RunResult schema to persistence layer
-5. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
-6. **Map seed system** — how seeds pick entities from catalog, run variety
-7. **Balance pass** — hull coefficients, upgrade costs, loot rarity, signal tuning
-8. **Deploy** — GitHub Pages web build, nightly playables
+5. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
+6. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
+7. **Map seed system** — how seeds pick entities from catalog, run variety
+8. **Balance pass** — hull coefficients, upgrade costs, loot rarity, signal tuning
+9. **Deploy** — GitHub Pages web build, nightly playables
+
+### Current contract notes
+
+- The shipped loadout contract is still `2 equipped + 2 consumable` slots.
+- The older `3 artifact slots` idea remains a design/backlog item, not live runtime truth.
+- Packaged desktop builds are rendering clients. Remote play still expects separate `control` and `sim` processes.
 
 ---
 

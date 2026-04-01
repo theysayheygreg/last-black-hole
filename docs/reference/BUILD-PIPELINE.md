@@ -103,6 +103,17 @@ The desktop path is intentionally thin.
 
 That means the `.app` and `.exe` are wrappers around the same web game, not separate runtime implementations.
 
+## Remote-authority note
+
+The packaged artifacts are clients, not full self-hosting stacks.
+
+- local/offline play works from the packaged client alone
+- remote-authority play still expects separate backend processes:
+  - `npm run control`
+  - `npm run sim`
+
+Today the build pipeline does **not** bundle the control plane or sim server into the desktop artifacts. If you want mini→MacBook play, run those services on the authority machine and point the client at them.
+
 ## What works today
 
 This machine can build:

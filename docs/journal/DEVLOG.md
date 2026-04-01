@@ -11,6 +11,32 @@ Each entry covers a day (or shift). Entries include what happened, why decisions
 
 ---
 
+## Week 3, Day 2: April 1, 2026 — The Architecture Stops Lying
+
+### The Story
+
+This was a review-and-truth pass, not a feature sprint. The whole codebase was already green, but one persistence seam had drifted out of alignment with the live game: the control-plane store had quietly widened the durable loadout to three equipped artifact slots while the actual client, HUD, tests, and local profile system still ship with two.
+
+That kind of mismatch is dangerous because it hides inside “working” infrastructure. A remote profile can look fine in storage while the browser is still rendering and mutating a different shape. So the fix was simple and surgical: bring persistence back to the real runtime contract, make the remote client mirror authoritative inventory slot shapes honestly, and reset local scenes back to the shipped local shape instead of inheriting remote state forever.
+
+### What Changed
+
+- Durable profile/loadout normalization now respects the live `2 equipped + 2 consumable` contract.
+- Remote snapshot application now mirrors authoritative slot counts instead of assuming local defaults.
+- Local scene loads now explicitly reset inventory arrays back to the client’s local `8 cargo + 2 equip + 2 consumable` shape.
+- The control-plane integration test now guards the persisted slot shape so this cannot drift silently again.
+- Architecture docs now say the blunt truth: packaged builds are clients; real remote play still needs separate control-plane and sim processes.
+
+### Why It Matters
+
+This is the kind of work that keeps an architecture from becoming decorative. The client/server split is real now, so the failure mode changes: not “can we separate processes?” but “are all the boundaries telling the same story?” Today’s pass tightened one of those stories.
+
+### Open Questions
+
+1. When do we actually want to migrate to 3 artifact slots, and what else needs to move in the same slice?
+2. When do we run the first real mini → MacBook Tailscale playtest instead of only local process-stack tests?
+3. Do we want the next architecture slice to stay server/control-plane focused, or hand the lane back to features for a bit?
+
 ## Week 3, Day 1: March 30, 2026 — The Ecology Arrives
 
 ### The Story

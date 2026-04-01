@@ -18,6 +18,8 @@ const INDEX_KEY = 'lbh_profiles_index';
 const LEGACY_VAULT_KEY = 'lbh_vault';
 const MAX_SLOTS = 3;
 const MAX_NAME_LENGTH = 16;
+const EQUIPPED_SLOT_COUNT = 2;
+const CONSUMABLE_SLOT_COUNT = 2;
 
 // ---- Random name generation ----
 
@@ -49,8 +51,8 @@ function createDefaultProfile(name) {
     vaultCapacity: 25,
 
     loadout: {
-      equipped: [null, null],
-      consumables: [null, null],
+      equipped: new Array(EQUIPPED_SLOT_COUNT).fill(null),
+      consumables: new Array(CONSUMABLE_SLOT_COUNT).fill(null),
     },
 
     upgrades: {
@@ -71,6 +73,23 @@ function createDefaultProfile(name) {
     bestSurvivalTime: 0,
     totalExoticMatterEarned: 0,
   };
+}
+
+function normalizeLoadoutShape(loadout = {}) {
+  return {
+    equipped: Array.from({ length: EQUIPPED_SLOT_COUNT }, (_, index) =>
+      loadout?.equipped?.[index] ? { ...loadout.equipped[index] } : null
+    ),
+    consumables: Array.from({ length: CONSUMABLE_SLOT_COUNT }, (_, index) =>
+      loadout?.consumables?.[index] ? { ...loadout.consumables[index] } : null
+    ),
+  };
+}
+
+function normalizeProfileShape(profile = {}) {
+  const next = { ...createDefaultProfile(profile.name), ...profile };
+  next.loadout = normalizeLoadoutShape(profile.loadout);
+  return next;
 }
 
 // ---- Vault capacity per upgrade rank ----
@@ -241,8 +260,7 @@ export class ProfileManager {
   setLoadout(equipped, consumables) {
     const p = this.active;
     if (!p) return;
-    p.loadout.equipped = equipped.map(i => i ? { ...i } : null);
-    p.loadout.consumables = consumables.map(i => i ? { ...i } : null);
+    p.loadout = normalizeLoadoutShape({ equipped, consumables });
     this.save();
   }
 
@@ -254,7 +272,7 @@ export class ProfileManager {
 
   replaceActiveProfile(profileData) {
     if (this.activeSlot < 0 || !profileData) return null;
-    const next = { ...createDefaultProfile(profileData.name), ...profileData };
+    const next = normalizeProfileShape(profileData);
     this.slots[this.activeSlot] = next;
     this._saveSlot(this.activeSlot);
     this._saveIndex();
@@ -362,7 +380,7 @@ export class ProfileManager {
       if (!raw) return;
       const data = JSON.parse(raw);
       // Ensure all fields exist (forward compat)
-      this.slots[slotIndex] = { ...createDefaultProfile(data.name), ...data };
+      this.slots[slotIndex] = normalizeProfileShape(data);
       if (!this.slots[slotIndex].id) {
         this.slots[slotIndex].id = generateProfileId();
         this._saveSlot(slotIndex);

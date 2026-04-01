@@ -21,6 +21,20 @@
 
 **Door status:** Closed for the authority model. Open for richer hull-specific progression later.
 
+## Canonical live loadout shape: keep `2 equip + 2 consumable` until the whole stack moves (2026-04-01)
+
+**Question:** Should the persistence/control-plane layer get ahead of the live client and start storing `3` equipped artifact slots because some design docs already assume that future shape?
+
+**Options considered:**
+- Let persistence drift ahead and accept temporary UI mismatch
+- Freeze the durable contract at the shipped runtime shape until one explicit cross-stack migration changes it everywhere
+
+**Where it landed:** Freeze it. The durable profile, local profile normalization, remote snapshot sync, and tests now all treat `2 equipped + 2 consumable` as canonical live truth.
+
+**Important consequence:** the `3 artifact slots` idea is still valid design work, but it is back in the backlog where it belongs. The runtime will not pretend it already shipped.
+
+**Door status:** Open for a future one-slice migration. Closed for silent drift.
+
 ## How to Read This
 
 Each decision has:

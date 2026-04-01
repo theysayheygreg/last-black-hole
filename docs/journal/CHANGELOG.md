@@ -5,6 +5,31 @@
 
 ---
 
+## 2026-04-01 — Review pass: loadout truth, remote slot honesty, architecture docs
+
+### scripts/ — Modified
+- **control-plane-store.js** — durable profile normalization now uses the same live loadout contract as the client: `2 equipped + 2 consumable` slots instead of silently drifting to 3 equipped slots.
+- **control-plane-client.js** — local embedded control-plane lifecycle methods now document that sim-instance registration is a deliberate no-op in single-process mode.
+- **sim-runtime.js** — comments now mark the asynchronous control-plane write path, session mirroring, and one-way outcome commit boundary more clearly.
+
+### src/ — Modified
+- **profile.js** — local profile loadout shape is now normalized on load, replace, and save so older or server-fed data cannot quietly widen the live UI contract.
+- **main.js** — remote snapshot application now mirrors authoritative inventory slot shapes directly, and local scene loads explicitly reset the browser client back to the canonical local `8 cargo + 2 equip + 2 consumable` shape.
+
+### tests/ — Modified
+- **control-plane.js** — now asserts persisted loadout slot counts so the durable control-plane shape cannot drift away from the shipped client contract unnoticed.
+
+### docs/ — Modified
+- **ROADMAP.md**
+- **BACKLOG.md**
+- **BUILD-PLAN.md**
+- **BUILD-PIPELINE.md**
+- **DECISION-LOG.md**
+- **DEVLOG.md**
+
+### Why
+The architecture was green, but one persistence seam was lying: the control-plane store had drifted to a 3-slot artifact shape while the actual client, HUD, and inventory system still ship 2 equip slots. This pass brings the durable profile contract back in line with the live game, makes remote inventory shape syncing more honest, and updates the docs to reflect that packaged builds are clients while remote play still depends on separate control-plane and sim processes.
+
 ## 2026-04-01 — External Control Plane Runtime
 
 ### scripts/ — Added / Modified

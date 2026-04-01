@@ -1299,6 +1299,9 @@ function snapshotBody() {
 }
 
 function trackControlPlaneWrite(promise) {
+  // Control-plane writes are intentionally fire-and-track rather than awaited
+  // in the tick loop. Run truth stays in the sim; persistence catches up
+  // asynchronously and the pending set is drained during shutdown.
   const tracked = Promise.resolve(promise)
     .catch((error) => {
       console.error(`[${LOG_LABEL}] control plane: ${error.message}`);
@@ -1313,6 +1316,8 @@ function trackControlPlaneWrite(promise) {
 
 function persistSessionRegistry() {
   if (!runtime.session?.id) return;
+  // Mirror live session truth out of the hot loop so the control plane can
+  // answer session/host questions without the client talking directly to sim memory.
   trackControlPlaneWrite(controlPlane.upsertSession(runtime.session, Array.from(runtime.players.values())));
 }
 
@@ -1331,6 +1336,8 @@ function cloneProfileLoadout(profile) {
 function commitPlayerOutcome(player, outcome) {
   if (!player || player.isAI || !player.profileId) return null;
   if (player.committedOutcome) return null;
+  // Outcome commit is one-way. Once a run result is written, later leave/reset
+  // paths must not mutate durable profile state a second time.
   player.committedOutcome = outcome;
   trackControlPlaneWrite(controlPlane.applyOutcome({
     profileId: player.profileId,

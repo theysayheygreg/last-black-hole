@@ -53,6 +53,8 @@ class LocalControlPlaneClient {
   }
 
   async registerSimInstance(instance) {
+    // Embedded/local mode keeps the persistent store and session registry in
+    // process. There is no separate sim-instance catalog to update here.
     return {
       ok: true,
       simInstance: {
@@ -65,6 +67,8 @@ class LocalControlPlaneClient {
   }
 
   async heartbeatSimInstance(instance) {
+    // Same as register: local mode acknowledges the lifecycle contract so the
+    // sim can use one codepath, but there is no out-of-process registry write.
     return {
       ok: true,
       simInstance: {
@@ -74,6 +78,7 @@ class LocalControlPlaneClient {
   }
 
   async unregisterSimInstance(instance) {
+    // Local mode has nothing durable to tear down for sim instances.
     return { ok: true, simInstanceId: instance.simInstanceId };
   }
 }

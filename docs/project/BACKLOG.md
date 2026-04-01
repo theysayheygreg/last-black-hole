@@ -201,7 +201,7 @@
 
 ### Mini Server + MacBook Client
 - **What:** Run sim on Mac mini, client on MacBook over Tailscale/LAN
-- **Status:** Architecture supports this now. Needs testing on actual hardware.
+- **Status:** Architecture and local control plane support this now. Needs testing on actual hardware.
 - **First revival step:** Launch one run with mini as authority, MacBook as client.
 
 ### Run Result Package and Write-Back
@@ -209,10 +209,15 @@
 - **Status:** Schema designed in META-LOOP.md. Not yet implemented in persistence write-back.
 - **First revival step:** Implement RunResult construction in sim-runtime.js and wire to control-plane-store.
 
+### Third Artifact Slot
+- **What:** Expand the live loadout contract from `2 equipped + 2 consumable` to `3 equipped + 2 consumable`.
+- **Why deferred:** Some design docs already assumed three artifact slots, but the shipped HUD, profile shape, inventory system, and control-plane persistence are all currently built around two. Advancing one layer without the others creates dishonest state and awkward UI.
+- **First revival step:** Migrate `profile.js`, `inventory.js`, HUD, control-plane store, and remote-authority tests together in one slice instead of letting one layer drift ahead.
+
 ### Coarse Authoritative Flow / Hazard Field
 - **What:** Low-res server-owned gameplay field for motion/danger on larger maps
-- **Status:** estimateFlow() provides analytical approximation. Full field not yet needed.
-- **First revival step:** Profile analytical flow cost at 8 players before building the field.
+- **Status:** First-pass coarse field shipped for medium and large maps.
+- **Next step:** Tune cell size, cadence, and force weighting against real `4-8` player sessions and Tailscale latency instead of only local harness runs.
 
 ### Session Profiles
 - **What:** Named profiles (solo_ai_light, duel_competitive, etc) defining clocks, AI fill, budgets

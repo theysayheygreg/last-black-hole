@@ -483,6 +483,7 @@ function loadScene(map) {
   simCore?.reset();
 
   // 4. Reset gameplay state
+  resetLocalInventoryShape();
   inventorySystem.clearCargo();
   inventoryOpen = false;
   shieldActive = false;
@@ -646,6 +647,28 @@ function transitionToGame(map) {
   triggerTransition(() => startGame(map));
 }
 
+function resetLocalInventoryShape() {
+  // Local scenes still use the shipped fixed client contract: 8 cargo,
+  // 2 equipped artifacts, and 2 consumables.
+  inventorySystem.cargo = new Array(8).fill(null);
+  inventorySystem.equipped = new Array(2).fill(null);
+  inventorySystem.consumables = new Array(2).fill(null);
+}
+
+function applyRemoteInventoryShape(localPlayer) {
+  // Remote authority is allowed to define the live slot shape. The browser UI
+  // mirrors what the server says exists instead of assuming the local defaults.
+  if (Array.isArray(localPlayer.cargo)) {
+    inventorySystem.cargo = localPlayer.cargo.map((item) => item ? { ...item } : null);
+  }
+  if (Array.isArray(localPlayer.equipped)) {
+    inventorySystem.equipped = localPlayer.equipped.map((item) => item ? { ...item } : null);
+  }
+  if (Array.isArray(localPlayer.consumables)) {
+    inventorySystem.consumables = localPlayer.consumables.map((item) => item ? { ...item } : null);
+  }
+}
+
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
   remoteSnapshot = snapshot;
@@ -671,18 +694,7 @@ function applyRemoteSnapshot(snapshot) {
   ship.vx = localPlayer.vx;
   ship.vy = localPlayer.vy;
 
-  if (Array.isArray(localPlayer.cargo)) {
-    inventorySystem.cargo = new Array(inventorySystem.cargo.length).fill(null);
-    for (let i = 0; i < Math.min(localPlayer.cargo.length, inventorySystem.cargo.length); i++) {
-      inventorySystem.cargo[i] = localPlayer.cargo[i] ? { ...localPlayer.cargo[i] } : null;
-    }
-  }
-  if (Array.isArray(localPlayer.equipped)) {
-    inventorySystem.equipped = localPlayer.equipped.map((item) => item ? { ...item } : null);
-  }
-  if (Array.isArray(localPlayer.consumables)) {
-    inventorySystem.consumables = localPlayer.consumables.map((item) => item ? { ...item } : null);
-  }
+  applyRemoteInventoryShape(localPlayer);
   shieldActive = Boolean(localPlayer.effectState?.shieldCharges > 0);
   timeSlowRemaining = Math.max(0, localPlayer.effectState?.timeSlowRemaining ?? 0);
   combatSystem.playerCooldown = Math.max(0, localPlayer.effectState?.pulseCooldownRemaining ?? 0);

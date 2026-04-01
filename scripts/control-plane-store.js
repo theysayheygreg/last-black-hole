@@ -5,9 +5,15 @@ const crypto = require("crypto");
 // Rig tracks: 3 per hull, levels 0-5. Stored as array [track0, track1, track2].
 const DEFAULT_RIG_LEVELS = [0, 0, 0];
 
+const EQUIPPED_SLOT_COUNT = 2;
+const CONSUMABLE_SLOT_COUNT = 2;
+
 const DEFAULT_LOADOUT = {
-  equipped: [null, null, null], // 3 artifact slots
-  consumables: [null, null],    // 2 consumable slots
+  // Keep the durable profile contract aligned with the live client UI.
+  // The 3-artifact-slot design still exists on paper, but the shipped game
+  // currently exposes 2 equipped slots and 2 consumable slots.
+  equipped: new Array(EQUIPPED_SLOT_COUNT).fill(null),
+  consumables: new Array(CONSUMABLE_SLOT_COUNT).fill(null),
 };
 
 const DEFAULT_UPGRADES = {
@@ -53,8 +59,12 @@ function createProfileSkeleton(profileId, name = "Pilot") {
 
 function normalizeLoadout(loadout = {}) {
   return {
-    equipped: [0, 1, 2].map((index) => loadout?.equipped?.[index] ? { ...loadout.equipped[index] } : null),
-    consumables: [0, 1].map((index) => loadout?.consumables?.[index] ? { ...loadout.consumables[index] } : null),
+    equipped: Array.from({ length: EQUIPPED_SLOT_COUNT }, (_, index) =>
+      loadout?.equipped?.[index] ? { ...loadout.equipped[index] } : null
+    ),
+    consumables: Array.from({ length: CONSUMABLE_SLOT_COUNT }, (_, index) =>
+      loadout?.consumables?.[index] ? { ...loadout.consumables[index] } : null
+    ),
   };
 }
 
