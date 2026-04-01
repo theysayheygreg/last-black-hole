@@ -37,7 +37,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForPhase(page, phase, timeout = 9000) {
+async function waitForPhase(page, phase, timeout = 12000) {
   await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, { timeout }, phase);
 }
 
@@ -61,6 +61,20 @@ async function getJson(url) {
   return body;
 }
 
+async function waitForJson(check, { timeout = 5000, interval = 100 } = {}) {
+  const deadline = Date.now() + timeout;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      return await check();
+    } catch (error) {
+      lastError = error;
+      await sleep(interval);
+    }
+  }
+  throw lastError || new Error("Timed out waiting for JSON state");
+}
+
 async function runRemoteEntryFlow(page) {
   await waitForPhase(page, "title");
   await tap(page, "Space", " ");
@@ -75,7 +89,7 @@ async function runRemoteEntryFlow(page) {
   await tap(page, "Enter", "Enter");
   await waitForPhase(page, "mapSelect");
   await tap(page, "Enter", "Enter");
-  await waitForPhase(page, "playing", 12000);
+  await waitForPhase(page, "playing", 15000);
 }
 
 async function run() {
@@ -96,15 +110,20 @@ async function run() {
 
   try {
     await runner.run("Control plane and sim boot with explicit process identity", async () => {
-      const controlHealth = await getJson(`${CONTROL_URL}/health`);
-      assert(Array.isArray(controlHealth.simInstances), "Expected control-plane sim registry");
+      const controlHealth = await waitForJson(async () => {
+        const body = await getJson(`${CONTROL_URL}/health`);
+        assert(Array.isArray(body.simInstances), "Expected control-plane sim registry");
+        assert(
+          body.simInstances.some((entry) => entry.simInstanceId === "sim-infra-smoke"),
+          "Expected sim instance registered in control plane"
+        );
+        return body;
+      }, { timeout: 6000, interval: 150 });
 
       const simHealth = await getJson(`${SIM_URL}/health`);
       assert(simHealth.simInstanceId === "sim-infra-smoke", `Unexpected sim instance id: ${simHealth.simInstanceId}`);
       assert(simHealth.controlPlaneUrl === CONTROL_URL, `Unexpected control plane url: ${simHealth.controlPlaneUrl}`);
-
-      const registered = controlHealth.simInstances.find((entry) => entry.simInstanceId === "sim-infra-smoke");
-      assert(registered, "Expected sim instance registered in control plane");
+      assert(controlHealth.simInstances.some((entry) => entry.simInstanceId === "sim-infra-smoke"), "Expected sim instance registered in control plane");
     });
 
     ({ browser, page } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));

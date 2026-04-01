@@ -217,8 +217,42 @@ const ARTIFACT_COEFFICIENTS = {
   signalDampen: { signalGenMult: 0.85 },
 };
 
+const PROFILE_UPGRADE_DEFAULTS = {
+  thrust: 0,
+  hull: 0,
+  coupling: 0,
+  drag: 0,
+  sensor: 0,
+  vault: 0,
+};
+
+const PROFILE_UPGRADE_CAPS = {
+  thrust: 3,
+  hull: 3,
+  coupling: 3,
+  drag: 3,
+  sensor: 3,
+  vault: 3,
+};
+
+const SENSOR_RANGE_MULTIPLIERS = [1.0, 1.2, 1.45, 1.7];
+const HULL_GRACE_DURATIONS = [0, 0.3, 0.4, 0.5];
+const HULL_FREE_WELL_SURVIVES = [0, 0, 1, 1];
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function normalizeProfileUpgrades(upgrades = {}) {
+  const normalized = {};
+  for (const [key, defaultValue] of Object.entries(PROFILE_UPGRADE_DEFAULTS)) {
+    const raw = Number(upgrades?.[key]);
+    const cap = PROFILE_UPGRADE_CAPS[key] ?? defaultValue;
+    normalized[key] = Number.isFinite(raw)
+      ? clamp(Math.round(raw), 0, cap)
+      : defaultValue;
+  }
+  return normalized;
 }
 
 function normalizeHullType(hullType = null, profileShipType = null) {
@@ -250,6 +284,33 @@ function applyItemBrainEffects(brain, item) {
   for (const [key, value] of Object.entries(effectCoefficients)) {
     applyNumericMultiplier(brain, key, value);
   }
+}
+
+function applyProfileUpgrades(brain, profileUpgrades = null) {
+  const upgrades = normalizeProfileUpgrades(profileUpgrades);
+  if (upgrades.thrust > 0) {
+    brain.thrustScale *= 1 + upgrades.thrust * 0.15;
+  }
+  if (upgrades.coupling > 0) {
+    brain.currentCoupling *= 1 + upgrades.coupling * 0.10;
+  }
+  if (upgrades.drag > 0) {
+    brain.dragScale *= Math.max(0.1, 1 - upgrades.drag * 0.12);
+  }
+  if (upgrades.sensor > 0) {
+    brain.sensorRange *= SENSOR_RANGE_MULTIPLIERS[upgrades.sensor] || SENSOR_RANGE_MULTIPLIERS[SENSOR_RANGE_MULTIPLIERS.length - 1];
+  }
+  if (upgrades.hull > 0) {
+    brain.wellGraceDuration = Math.max(
+      brain.wellGraceDuration,
+      HULL_GRACE_DURATIONS[upgrades.hull] || 0
+    );
+    brain.freeWellSurvives = Math.max(
+      brain.freeWellSurvives,
+      HULL_FREE_WELL_SURVIVES[upgrades.hull] || 0
+    );
+  }
+  return upgrades;
 }
 
 // --- Hull-Specific Rig Track Application ---
@@ -377,11 +438,14 @@ function createPlayerBrain({ hullType = "drifter", rigLevels = null, profileUpgr
     brain[key] = hull[key] !== undefined ? hull[key] : BRAIN_DEFAULTS[key];
   }
 
-  // Layer 2: rig track upgrades (additive on hull base)
+  // Layer 2: legacy profile upgrades (durable profile progression)
+  applyProfileUpgrades(brain, profileUpgrades);
+
+  // Layer 3: rig track upgrades (additive on top of base+profile)
   const levels = rigLevels || defaultRigLevels(normalizedHullType);
   applyRigUpgrades(brain, normalizedHullType, levels);
 
-  // Layer 3: equipped artifact effects (multiplicative on hull+rig)
+  // Layer 4: equipped artifact effects (multiplicative on resolved brain)
   for (const item of equipped || []) {
     applyItemBrainEffects(brain, item);
   }
@@ -446,6 +510,7 @@ module.exports = {
   HULL_DEFINITIONS,
   BRAIN_DEFAULTS,
   normalizeHullType,
+  normalizeProfileUpgrades,
   createPlayerBrain,
   createAbilityState,
 };

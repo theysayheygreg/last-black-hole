@@ -112,9 +112,11 @@ async function run() {
 
       const sessionBody = await waitFor(async () => {
         const body = await getJson(`${CONTROL_URL}/sessions`);
-        const live = body.sessions.find((entry) => entry.playerCount >= 1);
-        assert(live, "Expected mirrored live session");
-        return live;
+        const mirrored = body.sessions.find((entry) =>
+          Array.isArray(entry.players) && entry.players.some((player) => player.profileId === profileId)
+        );
+        assert(mirrored, "Expected mirrored live session");
+        return mirrored;
       });
       assert(sessionBody.players.some((entry) => entry.profileId === profileId), "Expected joined profile in mirrored session");
     });

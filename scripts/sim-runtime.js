@@ -17,6 +17,7 @@ const {
   HULL_DEFINITIONS,
   BRAIN_DEFAULTS,
   normalizeHullType,
+  normalizeProfileUpgrades,
   createPlayerBrain,
   createAbilityState,
 } = require("./player-brain.js");
@@ -965,13 +966,18 @@ function refreshPlayerBrain(player, durableProfile = null) {
   const rigLevels = normalizeRigLevels(
     durableProfile?.rigLevels || player.rigLevels, player.hullType
   );
+  const profileUpgrades = normalizeProfileUpgrades(
+    durableProfile?.upgrades || player.profileUpgrades
+  );
   player.rigLevels = rigLevels;
+  player.profileUpgrades = profileUpgrades;
   if (durableProfile?.hullType || durableProfile?.shipType) {
     player.profileShipType = durableProfile.hullType || durableProfile.shipType;
   }
   player.brain = createPlayerBrain({
     hullType: player.hullType,
     rigLevels,
+    profileUpgrades,
     equipped: player.equipped,
   });
   syncPlayerCargoCapacity(player);
@@ -981,15 +987,18 @@ function refreshPlayerBrain(player, durableProfile = null) {
 function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
   const normalizedHullType = normalizeHullType(hullType, options.profileShipType);
   const rigLevels = normalizeRigLevels(options.rigLevels, normalizedHullType);
+  const profileUpgrades = normalizeProfileUpgrades(options.profileUpgrades);
   const brain = createPlayerBrain({
     hullType: normalizedHullType,
     rigLevels,
+    profileUpgrades,
     equipped: options.equipped,
   });
   return {
     clientId,
     profileId: null,
     profileShipType: options.profileShipType || null,
+    profileUpgrades,
     rigLevels,
     name: name || clientId,
     hullType: normalizedHullType,
@@ -4003,6 +4012,7 @@ const server = http.createServer(async (req, res) => {
         const consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
         player = createPlayer(clientId, body.name, explicitHullType, {
           profileShipType: durableProfile?.hullType || durableProfile?.shipType || body.profileSnapshot?.hullType || body.profileSnapshot?.shipType || null,
+          profileUpgrades: durableProfile?.upgrades || body.profileSnapshot?.upgrades || null,
           rigLevels: durableProfile?.rigLevels || body.profileSnapshot?.rigLevels || null,
           equipped,
           consumables,
@@ -4029,6 +4039,9 @@ const server = http.createServer(async (req, res) => {
         }
         if (body.profileSnapshot?.rigLevels) {
           player.rigLevels = normalizeRigLevels(body.profileSnapshot.rigLevels, player.hullType);
+        }
+        if (body.profileSnapshot?.upgrades) {
+          player.profileUpgrades = normalizeProfileUpgrades(body.profileSnapshot.upgrades);
         }
         if (body.profileSnapshot?.shipType) {
           player.profileShipType = body.profileSnapshot.shipType;

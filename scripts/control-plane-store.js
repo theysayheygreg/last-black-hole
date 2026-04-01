@@ -10,6 +10,15 @@ const DEFAULT_LOADOUT = {
   consumables: [null, null],    // 2 consumable slots
 };
 
+const DEFAULT_UPGRADES = {
+  thrust: 0,
+  hull: 0,
+  coupling: 0,
+  drag: 0,
+  sensor: 0,
+  vault: 0,
+};
+
 const DEFAULT_VAULT_CAPACITY = 25;
 
 function nowIso() {
@@ -31,6 +40,7 @@ function createProfileSkeleton(profileId, name = "Pilot") {
     vault: [],
     vaultCapacity: DEFAULT_VAULT_CAPACITY,
     loadout: clone(DEFAULT_LOADOUT),
+    upgrades: { ...DEFAULT_UPGRADES },
     rigLevels: [...DEFAULT_RIG_LEVELS],
     hullType: "drifter",
     totalExtractions: 0,
@@ -50,6 +60,12 @@ function normalizeLoadout(loadout = {}) {
 
 function normalizeProfileSnapshot(snapshot = {}, profileId = null, fallbackName = "Pilot") {
   const base = createProfileSkeleton(profileId || snapshot.id, snapshot.name || fallbackName);
+  const rawUpgrades = snapshot.upgrades || {};
+  const upgrades = {};
+  for (const [key, defaultValue] of Object.entries(DEFAULT_UPGRADES)) {
+    const raw = Number(rawUpgrades[key]);
+    upgrades[key] = Number.isFinite(raw) ? Math.max(0, Math.min(3, Math.round(raw))) : defaultValue;
+  }
   return {
     ...base,
     ...clone(snapshot),
@@ -61,6 +77,7 @@ function normalizeProfileSnapshot(snapshot = {}, profileId = null, fallbackName 
     vault: Array.isArray(snapshot.vault) ? snapshot.vault.map((item) => item ? { ...item } : null).filter(Boolean) : base.vault,
     vaultCapacity: Number.isFinite(Number(snapshot.vaultCapacity)) ? Number(snapshot.vaultCapacity) : base.vaultCapacity,
     loadout: normalizeLoadout(snapshot.loadout),
+    upgrades,
     rigLevels: Array.isArray(snapshot.rigLevels)
       ? snapshot.rigLevels.map(v => Math.max(0, Math.min(5, Math.round(Number(v) || 0)))).slice(0, 3)
       : [...DEFAULT_RIG_LEVELS],

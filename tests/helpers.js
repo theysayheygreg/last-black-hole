@@ -114,10 +114,13 @@ async function launchGame(htmlFile = "index.html") {
 async function startSimServer(port = 8788, options = {}) {
   fs.mkdirSync(TMP, { recursive: true });
   const args = [SIM_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
+  const defaultEnv = {
+    LBH_SESSION_REGISTRY_FILE: path.join(TMP, `session-registry-${port}.json`),
+  };
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, args, {
       cwd: ROOT,
-      env: { ...process.env, ...(options.env || {}) },
+      env: { ...process.env, ...defaultEnv, ...(options.env || {}) },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -145,7 +148,12 @@ async function stopSimServer(port = 8788) {
     proc.stderr.on("data", (data) => { stderr += data.toString(); });
     proc.on("error", reject);
     proc.on("close", (code) => {
-      if (code === 0) resolve({ port, stdout, stderr });
+      if (code === 0) {
+        for (const file of [path.join(TMP, `session-registry-${port}.json`)]) {
+          try { fs.rmSync(file, { force: true }); } catch {}
+        }
+        resolve({ port, stdout, stderr });
+      }
       else reject(new Error(`Failed to stop sim server on ${port}: ${stderr || stdout || `exit ${code}`}`));
     });
   });
@@ -154,10 +162,14 @@ async function stopSimServer(port = 8788) {
 async function startControlPlane(port = 8791, options = {}) {
   fs.mkdirSync(TMP, { recursive: true });
   const args = [CONTROL_PLANE_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
+  const defaultEnv = {
+    LBH_CONTROL_PLANE_FILE: path.join(TMP, `control-plane-store-${port}.json`),
+    LBH_SESSION_REGISTRY_FILE: path.join(TMP, `session-registry-${port}.json`),
+  };
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, args, {
       cwd: ROOT,
-      env: { ...process.env, ...(options.env || {}) },
+      env: { ...process.env, ...defaultEnv, ...(options.env || {}) },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -185,7 +197,15 @@ async function stopControlPlane(port = 8791) {
     proc.stderr.on("data", (data) => { stderr += data.toString(); });
     proc.on("error", reject);
     proc.on("close", (code) => {
-      if (code === 0) resolve({ port, stdout, stderr });
+      if (code === 0) {
+        for (const file of [
+          path.join(TMP, `control-plane-store-${port}.json`),
+          path.join(TMP, `session-registry-${port}.json`),
+        ]) {
+          try { fs.rmSync(file, { force: true }); } catch {}
+        }
+        resolve({ port, stdout, stderr });
+      }
       else reject(new Error(`Failed to stop control plane on ${port}: ${stderr || stdout || `exit ${code}`}`));
     });
   });

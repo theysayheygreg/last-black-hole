@@ -29,9 +29,9 @@ function parseArgs(argv) {
 const cliArgs = parseArgs(process.argv.slice(3));
 const HOST = cliArgs.host || process.env.LBH_SIM_HOST || "127.0.0.1";
 const PORT = Number(cliArgs.port || process.env.LBH_SIM_PORT || DEFAULT_SIM_PORT);
-const PID_FILE = path.join(TMP, "sim-server.pid");
-const META_FILE = path.join(TMP, "sim-server.json");
-const LOG_FILE = path.join(TMP, "sim-server.log");
+const PID_FILE = path.join(TMP, `sim-server-${PORT}.pid`);
+const META_FILE = path.join(TMP, `sim-server-${PORT}.json`);
+const LOG_FILE = path.join(TMP, `sim-server-${PORT}.log`);
 const SERVER_SCRIPT = path.join(ROOT, "scripts", "sim-runtime.js");
 
 function sleep(ms) {
