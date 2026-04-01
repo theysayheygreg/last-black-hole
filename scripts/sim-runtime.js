@@ -19,8 +19,7 @@ const {
   createPlayerBrain,
   createAbilityState,
 } = require("./player-brain.js");
-const { ControlPlaneStore } = require("./control-plane-store.js");
-const { SessionRegistry } = require("./session-registry.js");
+const { createControlPlaneClient } = require("./control-plane-client.js");
 const {
   createOverloadController,
   projectOverloadBudget,
@@ -807,14 +806,21 @@ const PORT = Number(args.port || 8787);
 const PID_FILE = args["pid-file"] ? path.resolve(args["pid-file"]) : null;
 const META_FILE = args["meta-file"] ? path.resolve(args["meta-file"]) : null;
 const LOG_LABEL = args.label || "lbh-sim";
+const SIM_INSTANCE_ID = String(args["sim-instance-id"] || process.env.LBH_SIM_INSTANCE_ID || `sim-${PORT}`);
+const CONTROL_PLANE_URL = String(args["control-plane-url"] || process.env.LBH_CONTROL_PLANE_URL || "").trim();
 const CONTROL_PLANE_FILE = args["control-plane-file"]
   ? path.resolve(args["control-plane-file"])
   : path.resolve(__dirname, "..", "tmp", `control-plane-${PORT}.json`);
 const SESSION_REGISTRY_FILE = args["session-registry-file"]
   ? path.resolve(args["session-registry-file"])
   : path.resolve(__dirname, "..", "tmp", `session-registry-${PORT}.json`);
-const controlPlaneStore = new ControlPlaneStore(CONTROL_PLANE_FILE);
-const sessionRegistry = new SessionRegistry(SESSION_REGISTRY_FILE);
+const controlPlane = createControlPlaneClient({
+  baseUrl: CONTROL_PLANE_URL || null,
+  controlPlaneFile: CONTROL_PLANE_FILE,
+  sessionRegistryFile: SESSION_REGISTRY_FILE,
+});
+const pendingControlPlaneWrites = new Set();
+let controlPlaneHeartbeat = null;
 
 const protocol = createProtocolDescription();
 const runtime = {
@@ -1030,7 +1036,7 @@ function startSession(config = {}) {
         commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
       }
     }
-    controlPlaneStore.markSessionEnded(runtime.session, Array.from(runtime.players.values()), { status: "reset" });
+    persistEndedSession({ status: "reset" });
   }
   const requestedMapId = String(config.mapId || "shallows");
   const requestedWorldScale = config.worldScale == null ? null : Number(config.worldScale);
@@ -1274,11 +1280,27 @@ function snapshotBody() {
   };
 }
 
+function trackControlPlaneWrite(promise) {
+  const tracked = Promise.resolve(promise)
+    .catch((error) => {
+      console.error(`[${LOG_LABEL}] control plane: ${error.message}`);
+      return null;
+    })
+    .finally(() => {
+      pendingControlPlaneWrites.delete(tracked);
+    });
+  pendingControlPlaneWrites.add(tracked);
+  return tracked;
+}
+
 function persistSessionRegistry() {
-  const snapshot = controlPlaneStore.upsertSession(runtime.session, Array.from(runtime.players.values()));
-  const registry = sessionRegistry.read();
-  registry.sessions[runtime.session.id] = snapshot;
-  sessionRegistry.write(registry);
+  if (!runtime.session?.id) return;
+  trackControlPlaneWrite(controlPlane.upsertSession(runtime.session, Array.from(runtime.players.values())));
+}
+
+function persistEndedSession(extra = {}) {
+  if (!runtime.session?.id) return;
+  trackControlPlaneWrite(controlPlane.markSessionEnded(runtime.session, Array.from(runtime.players.values()), extra));
 }
 
 function cloneProfileLoadout(profile) {
@@ -1291,20 +1313,20 @@ function cloneProfileLoadout(profile) {
 function commitPlayerOutcome(player, outcome) {
   if (!player || player.isAI || !player.profileId) return null;
   if (player.committedOutcome) return null;
-  const committed = controlPlaneStore.applyOutcome({
+  player.committedOutcome = outcome;
+  trackControlPlaneWrite(controlPlane.applyOutcome({
     profileId: player.profileId,
     player,
     outcome,
     runDuration: runtime.simTime,
     session: runtime.session,
-  });
-  player.committedOutcome = outcome;
+  }));
   publishEvent("profile.updated", {
     clientId: player.clientId,
     profileId: player.profileId,
     outcome,
   });
-  return committed;
+  return null;
 }
 
 function spawnWaveRing(wx, wy, amplitude) {
@@ -3795,9 +3817,11 @@ function writeFiles() {
     pid: process.pid,
     host: HOST,
     port: PORT,
+    simInstanceId: SIM_INSTANCE_ID,
     label: LOG_LABEL,
     startedAt: runtime.startedAt,
     url: `http://${HOST}:${PORT}/`,
+    controlPlaneUrl: CONTROL_PLANE_URL || null,
     protocolVersion: PROTOCOL_VERSION,
     sessionStatus: runtime.session.status,
   };
@@ -3827,6 +3851,8 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, {
         ok: true,
         protocolVersion: PROTOCOL_VERSION,
+        simInstanceId: SIM_INSTANCE_ID,
+        controlPlaneUrl: CONTROL_PLANE_URL || null,
         session: runtime.session,
         tick: runtime.tick,
         simTime: runtime.simTime,
@@ -3954,7 +3980,7 @@ const server = http.createServer(async (req, res) => {
         }
         const profileId = body.profileId ? String(body.profileId).trim() : null;
         const durableProfile = profileId
-          ? controlPlaneStore.bootstrapProfile({
+          ? await controlPlane.bootstrapProfile({
               profileId,
               snapshot: body.profileSnapshot || null,
               fallbackName: body.name,
@@ -4018,7 +4044,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, error: "profileId is required" });
         return;
       }
-      const profile = controlPlaneStore.getProfile(profileId);
+      const profile = await controlPlane.getProfile(profileId);
       if (!profile) {
         sendJson(res, 404, { ok: false, error: "Unknown profile" });
         return;
@@ -4150,9 +4176,18 @@ server.on("error", (err) => {
 
 function shutdown() {
   if (tickHandle) clearInterval(tickHandle);
-  server.close(() => {
-    cleanupFiles(PID_FILE, META_FILE);
-    process.exit(0);
+  if (controlPlaneHeartbeat) clearInterval(controlPlaneHeartbeat);
+  Promise.race([
+    Promise.allSettled([
+      Promise.allSettled(Array.from(pendingControlPlaneWrites)),
+      controlPlane.unregisterSimInstance({ simInstanceId: SIM_INSTANCE_ID }).catch(() => null),
+    ]),
+    new Promise((resolve) => setTimeout(resolve, 1200)),
+  ]).finally(() => {
+    server.close(() => {
+      cleanupFiles(PID_FILE, META_FILE);
+      process.exit(0);
+    });
   });
 }
 
@@ -4164,4 +4199,15 @@ server.listen(PORT, HOST, () => {
   writeFiles();
   console.log(`[${LOG_LABEL}] listening on http://${HOST}:${PORT}/`);
   startSession();
+  trackControlPlaneWrite(controlPlane.registerSimInstance({
+    simInstanceId: SIM_INSTANCE_ID,
+    url: `http://${HOST}:${PORT}/`,
+    host: HOST,
+    port: PORT,
+  }));
+  controlPlaneHeartbeat = setInterval(() => {
+    trackControlPlaneWrite(controlPlane.heartbeatSimInstance({
+      simInstanceId: SIM_INSTANCE_ID,
+    }));
+  }, 5000);
 });

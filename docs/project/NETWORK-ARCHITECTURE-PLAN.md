@@ -78,6 +78,13 @@ The long-term server-side model should be three layers, not one giant server pro
 
 The detailed design for that split lives in `docs/project/PERSISTENCE-AND-CONTROL-PLANE-PLAN.md`.
 
+Current progress:
+
+- a separate control-plane runtime now exists as its own process
+- the sim now registers itself as a disposable instance against that control plane
+- profile bootstrap/read and session/outcome mirroring now cross a real process boundary
+- the harness now includes a dedicated control-plane integration suite, not just architectural notes
+
 ## Process model
 
 ### Authoritative Sim / Server
@@ -214,6 +221,7 @@ Current progress:
 - remote join/start now bootstrap a stable player profile id and durable profile snapshot into the server instead of treating every remote run as stateless
 - the sim now mirrors live session metadata into a control-plane/session-registry layer outside the disposable run instance
 - the sim now also owns authoritative profile write-back for death, extraction, and leave/abandon, and the browser client resyncs its local profile from that server truth after a remote run
+- the sim no longer has to own the durable store inline: a separate control-plane runtime now exposes profile/session endpoints, the sim registers itself there as a disposable instance, and the full harness proves registration, profile bootstrap, session mirroring, and outcome write-back through that boundary
 - protocol still needs to absorb more real gameplay systems before it is considered stable
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.

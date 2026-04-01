@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-04-01 — External Control Plane Runtime
+
+### scripts/ — Added / Modified
+- **control-plane-runtime.js** — new process-level control plane with HTTP endpoints for profile bootstrap/read/save, outcome write-back, session mirroring, and sim-instance registration/heartbeat.
+- **control-plane-server.js** — PID-managed start/stop/status/restart wrapper for the control-plane process.
+- **control-plane-client.js** — sim-side adapter that can either speak HTTP to the external control plane or fall back to the local JSON-backed implementation.
+- **sim-runtime.js** — the sim now hydrates profiles through the control-plane adapter, mirrors sessions asynchronously through that boundary, registers/unregisters itself as a disposable instance, and no longer has to own the durable store inline.
+
+### tests/ — Added / Modified
+- **control-plane.js** — dedicated integration suite covering external sim registration, profile hydration, session mirroring, and outcome write-back.
+- **helpers.js** — control-plane start/stop helpers and env passthrough for sim-server tests.
+- **run-all.js** — wires the control-plane suite into `npm test`.
+
+### package.json — Modified
+- Adds `npm run control`, `control:stop`, `control:status`, and `control:restart`.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+The durable architecture was still only half-real as long as the sim process owned the persistent store implementation directly. This slice makes the control plane an actual process boundary and proves that the sim can treat persistence/session orchestration as external infrastructure instead of inline runtime state.
+
 ## 2026-04-01 — Server-side PlayerBrain hydration
 
 ### scripts/ — Added / Modified

@@ -1013,6 +1013,7 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 | Mar 31 | Decision: the next architecture batch is no longer “move another system to the server.” It is `PlayerBrain`, overload state, coarse authoritative field authority, and explicit session profiles. |
 | Mar 31 | First overload implementation lands: the sim now tracks moving tick-cost pressure plus player/AI/force pressure, projects effective clocks and budgets from explicit overload states, and exposes that state through session snapshots instead of hiding degradation inside scattered subsystem tweaks. |
 | Mar 31 | First coarse-field implementation lands: medium and large authoritative sessions now rebuild a wrapped coarse field for orbital current, well pull, and wave push, while small maps stay on the direct-force model. |
+| Apr 1 | The control plane becomes a real process boundary: a dedicated runtime now owns profile/session endpoints and sim-instance registration, while the authoritative sim talks to it through a client adapter instead of directly owning the persistence implementation. |
 
 **Options:**
 1. **Keep iterating budgets and force caps only** — useful in the short term, but it keeps the server procedural and pushes the real scale problem forward.

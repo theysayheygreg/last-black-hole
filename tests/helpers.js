@@ -13,6 +13,7 @@ const PID_FILE = path.join(TMP, "harness-server.pid");
 const META_FILE = path.join(TMP, "harness-server.json");
 const SERVER_SCRIPT = path.join(ROOT, "scripts", "static-server.js");
 const SIM_SERVER_SCRIPT = path.join(ROOT, "scripts", "sim-server.js");
+const CONTROL_PLANE_SERVER_SCRIPT = path.join(ROOT, "scripts", "control-plane-server.js");
 
 let serverProcess = null;
 
@@ -110,12 +111,13 @@ async function launchGame(htmlFile = "index.html") {
   return { browser, page, errors };
 }
 
-async function startSimServer(port = 8788) {
+async function startSimServer(port = 8788, options = {}) {
   fs.mkdirSync(TMP, { recursive: true });
   const args = [SIM_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, args, {
       cwd: ROOT,
+      env: { ...process.env, ...(options.env || {}) },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -145,6 +147,46 @@ async function stopSimServer(port = 8788) {
     proc.on("close", (code) => {
       if (code === 0) resolve({ port, stdout, stderr });
       else reject(new Error(`Failed to stop sim server on ${port}: ${stderr || stdout || `exit ${code}`}`));
+    });
+  });
+}
+
+async function startControlPlane(port = 8791, options = {}) {
+  fs.mkdirSync(TMP, { recursive: true });
+  const args = [CONTROL_PLANE_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
+  return new Promise((resolve, reject) => {
+    const proc = spawn(process.execPath, args, {
+      cwd: ROOT,
+      env: { ...process.env, ...(options.env || {}) },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (data) => { stdout += data.toString(); });
+    proc.stderr.on("data", (data) => { stderr += data.toString(); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve({ port, stdout, stderr });
+      else reject(new Error(`Failed to start control plane on ${port}: ${stderr || stdout || `exit ${code}`}`));
+    });
+  });
+}
+
+async function stopControlPlane(port = 8791) {
+  const args = [CONTROL_PLANE_SERVER_SCRIPT, "stop", "--host", "127.0.0.1", "--port", String(port)];
+  return new Promise((resolve, reject) => {
+    const proc = spawn(process.execPath, args, {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (data) => { stdout += data.toString(); });
+    proc.stderr.on("data", (data) => { stderr += data.toString(); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve({ port, stdout, stderr });
+      else reject(new Error(`Failed to stop control plane on ${port}: ${stderr || stdout || `exit ${code}`}`));
     });
   });
 }
@@ -221,6 +263,8 @@ module.exports = {
   stopServer,
   startSimServer,
   stopSimServer,
+  startControlPlane,
+  stopControlPlane,
   launchGame,
   screenshot,
   TestRunner,

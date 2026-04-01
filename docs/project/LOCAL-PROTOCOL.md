@@ -17,9 +17,11 @@ For the first private milestone:
 
 - transport can be plain HTTP over Tailscale or LAN
 - server listens locally on one fixed port
+- control plane can listen on a separate fixed port
 - client polls snapshots and posts inputs
 - browser client can opt into remote authority with `?simServer=http://<host>:8787`
 - sim server can bind beyond localhost with `LBH_SIM_HOST=0.0.0.0 npm run sim`
+- control plane can run separately with `npm run control`
 
 This is not the final transport. It is the simplest useful transport for proving the boundary.
 
