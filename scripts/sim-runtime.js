@@ -6,6 +6,10 @@ const path = require("path");
 const crypto = require("crypto");
 const { performance } = require("perf_hooks");
 const { loadPlayableMaps } = require("./shared-map-loader.js");
+const {
+  buildCoarseFlowField,
+  sampleCoarseFlowField,
+} = require("./coarse-flow-field.js");
 const { ControlPlaneStore } = require("./control-plane-store.js");
 const { SessionRegistry } = require("./session-registry.js");
 const {
@@ -381,6 +385,10 @@ const MAP_SIM_SCALE_PROFILES = {
     growthTickHz: 4,
     scavengerTickHz: 12,
     waveTickHz: 15,
+    fieldTickHz: 10,
+    useCoarseField: false,
+    flowFieldCellSize: 0.25,
+    fieldFlowScale: 0.18,
     entityRelevanceRadius: 1.4,
     scavengerRelevanceRadius: 1.8,
     spawnScavengersBase: 1,
@@ -404,6 +412,10 @@ const MAP_SIM_SCALE_PROFILES = {
     growthTickHz: 3,
     scavengerTickHz: 8,
     waveTickHz: 12,
+    fieldTickHz: 6,
+    useCoarseField: true,
+    flowFieldCellSize: 0.32,
+    fieldFlowScale: 0.22,
     entityRelevanceRadius: 1.2,
     scavengerRelevanceRadius: 1.6,
     spawnScavengersBase: 1,
@@ -427,6 +439,10 @@ const MAP_SIM_SCALE_PROFILES = {
     growthTickHz: 2,
     scavengerTickHz: 6,
     waveTickHz: 10,
+    fieldTickHz: 4,
+    useCoarseField: true,
+    flowFieldCellSize: 0.45,
+    fieldFlowScale: 0.28,
     entityRelevanceRadius: 1.0,
     scavengerRelevanceRadius: 1.4,
     spawnScavengersBase: 2,
@@ -939,9 +955,11 @@ const runtime = {
     growth: 0,
     scavengers: 0,
     waves: 0,
+    field: 0,
   },
   players: new Map(),
   waveRings: [],
+  coarseField: null,
   inhibitor: {
     pressure: 0,
     threshold: 0.90,  // randomized per run
@@ -1001,8 +1019,12 @@ function applyOverloadProfile({ forceRestart = false } = {}) {
   runtime.session.growthTickHz = projection.growthTickHz;
   runtime.session.scavengerTickHz = projection.scavengerTickHz;
   runtime.session.waveTickHz = projection.waveTickHz;
+  runtime.session.fieldTickHz = projection.fieldTickHz;
   runtime.session.entityRelevanceRadius = projection.entityRelevanceRadius;
   runtime.session.scavengerRelevanceRadius = projection.scavengerRelevanceRadius;
+  runtime.session.useCoarseField = projection.useCoarseField;
+  runtime.session.flowFieldCellSize = projection.flowFieldCellSize;
+  runtime.session.fieldFlowScale = projection.fieldFlowScale;
   runtime.session.spawnScavengersBase = projection.spawnScavengersBase;
   runtime.session.spawnScavengersPerPlayer = projection.spawnScavengersPerPlayer;
   runtime.session.maxScavengers = projection.maxScavengers;
@@ -1018,6 +1040,7 @@ function applyOverloadProfile({ forceRestart = false } = {}) {
   if (forceRestart || previousTickHz !== runtime.session.tickHz) {
     restartTickLoop();
   }
+  rebuildAuthoritativeField();
 }
 
 // --- PlayerBrain Coefficient Resolution ---
@@ -1197,6 +1220,13 @@ function startSession(config = {}) {
     scavengerTickHz: scaleProfile.scavengerTickHz,
     baseWaveTickHz: scaleProfile.waveTickHz,
     waveTickHz: scaleProfile.waveTickHz,
+    baseFieldTickHz: scaleProfile.fieldTickHz,
+    fieldTickHz: scaleProfile.fieldTickHz,
+    useCoarseField: scaleProfile.useCoarseField,
+    baseFlowFieldCellSize: scaleProfile.flowFieldCellSize,
+    flowFieldCellSize: scaleProfile.flowFieldCellSize,
+    baseFieldFlowScale: scaleProfile.fieldFlowScale,
+    fieldFlowScale: scaleProfile.fieldFlowScale,
     baseEntityRelevanceRadius: scaleProfile.entityRelevanceRadius,
     entityRelevanceRadius: scaleProfile.entityRelevanceRadius,
     baseScavengerRelevanceRadius: scaleProfile.scavengerRelevanceRadius,
@@ -1238,6 +1268,7 @@ function startSession(config = {}) {
     growth: 0,
     scavengers: 0,
     waves: 0,
+    field: 0,
   };
   // Inhibitor: randomize threshold per run
   const inh = INHIBITOR_CONFIG;
@@ -1262,6 +1293,10 @@ function startSession(config = {}) {
     growthTickHz: runtime.session.baseGrowthTickHz,
     scavengerTickHz: runtime.session.baseScavengerTickHz,
     waveTickHz: runtime.session.baseWaveTickHz,
+    fieldTickHz: runtime.session.baseFieldTickHz,
+    useCoarseField: runtime.session.useCoarseField,
+    flowFieldCellSize: runtime.session.baseFlowFieldCellSize,
+    fieldFlowScale: runtime.session.baseFieldFlowScale,
     entityRelevanceRadius: runtime.session.baseEntityRelevanceRadius,
     scavengerRelevanceRadius: runtime.session.baseScavengerRelevanceRadius,
     spawnScavengersBase: runtime.session.baseSpawnScavengersBase,
@@ -1283,6 +1318,8 @@ function startSession(config = {}) {
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
   runtime.waveRings = [];
+  runtime.coarseField = null;
+  rebuildAuthoritativeField();
   publishEvent("session.started", {
     sessionId: runtime.session.id,
     runId: runtime.session.runId,
@@ -1718,6 +1755,12 @@ function applyScavengerBump(player, scavengers = runtime.mapState.scavengers) {
 }
 
 function applyWaveRingPush(player, dt) {
+  if (runtime.session.useCoarseField && runtime.coarseField) {
+    const field = sampleCoarseFlowField(runtime.coarseField, player.wx, player.wy);
+    player.vx += field.waveX * dt;
+    player.vy += field.waveY * dt;
+    return;
+  }
   const halfWidth = WAVE_SERVER.waveWidth * 0.5;
   const relevantRings = collectNearestByDistance(
     player.wx,
@@ -1737,8 +1780,6 @@ function applyWaveRingPush(player, dt) {
 }
 
 function applyWellGravity(player, dt) {
-  let ax = 0;
-  let ay = 0;
   const relevantWells = collectNearestByDistance(
     player.wx,
     player.wy,
@@ -1796,17 +1837,31 @@ function applyWellGravity(player, dt) {
       });
       return;
     }
-    let pull = (0.025 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
-    if (player.activeEffects.includes("reduceWellPull")) pull *= 0.8;
-    // Hull wellResistScale: higher = less pull. Momentum Shield stacks.
-    const wr = player.brain ? player.brain.wellResistScale : 1.0;
-    if (wr !== 1.0) pull /= wr;
-    pull *= getMomentumShieldMult(player);
-    ax += (dx / dist) * pull;
-    ay += (dy / dist) * pull;
   }
-  player.vx += ax * dt;
-  player.vy += ay * dt;
+  let pullX = 0;
+  let pullY = 0;
+  if (runtime.session.useCoarseField && runtime.coarseField) {
+    const field = sampleCoarseFlowField(runtime.coarseField, player.wx, player.wy);
+    pullX = field.gravityX;
+    pullY = field.gravityY;
+  } else {
+    for (const { entity: well } of relevantWells) {
+      const dx = worldDisplacement(player.wx, well.wx, runtime.session.worldScale);
+      const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
+      const dist = Math.hypot(dx, dy);
+      if (dist < 0.0001) continue;
+      const pull = (0.025 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
+      pullX += (dx / dist) * pull;
+      pullY += (dy / dist) * pull;
+    }
+  }
+  let pullScale = 1;
+  if (player.activeEffects.includes("reduceWellPull")) pullScale *= 0.8;
+  const wr = player.brain ? player.brain.wellResistScale : 1.0;
+  if (wr !== 1.0) pullScale /= wr;
+  pullScale *= getMomentumShieldMult(player);
+  player.vx += pullX * pullScale * dt;
+  player.vy += pullY * pullScale * dt;
 }
 
 function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
@@ -2690,6 +2745,10 @@ function findSafeSpawn(mapState) {
 
 // Analytical flow estimate from well positions (no GPU needed)
 function estimateFlow(wx, wy) {
+  if (runtime.session.useCoarseField && runtime.coarseField) {
+    const sample = sampleCoarseFlowField(runtime.coarseField, wx, wy);
+    return { x: sample.currentX, y: sample.currentY };
+  }
   const ws = runtime.session.worldScale;
   let fx = 0, fy = 0;
   for (const well of runtime.mapState.wells) {
@@ -2703,6 +2762,21 @@ function estimateFlow(wx, wy) {
     fy += (dx / dist) * dir * strength * 0.3;
   }
   return { x: fx, y: fy };
+}
+
+function rebuildAuthoritativeField() {
+  if (!runtime.session.useCoarseField) {
+    runtime.coarseField = null;
+    return;
+  }
+  runtime.coarseField = buildCoarseFlowField({
+    worldScale: runtime.session.worldScale,
+    cellSize: runtime.session.flowFieldCellSize,
+    wells: runtime.mapState.wells,
+    waveRings: runtime.waveRings,
+    waveShipPush: WAVE_SERVER.waveShipPush * runtime.session.fieldFlowScale,
+    waveWidth: WAVE_SERVER.waveWidth,
+  });
 }
 
 // Sample flow along the path from (ax,ay) to (bx,by) at N points.
@@ -3733,6 +3807,7 @@ function tickSim() {
     tickScavengers(stepDt, relevance.scavengers)
   );
   runSystemAtRate("waves", runtime.session.waveTickHz || runtime.session.tickHz, dt, tickWaveRings);
+  runSystemAtRate("field", runtime.session.fieldTickHz || runtime.session.worldTickHz || runtime.session.tickHz, dt, rebuildAuthoritativeField);
   tickAIPlayers(dt);
   tickSentries(dt);
   tickFauna(dt);
@@ -3918,6 +3993,10 @@ const server = http.createServer(async (req, res) => {
             growthTickHz: profile.growthTickHz,
             scavengerTickHz: profile.scavengerTickHz,
             waveTickHz: profile.waveTickHz,
+            fieldTickHz: profile.fieldTickHz,
+            useCoarseField: profile.useCoarseField,
+            flowFieldCellSize: profile.flowFieldCellSize,
+            fieldFlowScale: profile.fieldFlowScale,
             entityRelevanceRadius: profile.entityRelevanceRadius,
             scavengerRelevanceRadius: profile.scavengerRelevanceRadius,
             spawnScavengersBase: profile.spawnScavengersBase,

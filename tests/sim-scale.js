@@ -33,6 +33,11 @@ async function run() {
       assert(shallows.worldTickHz > expanse.worldTickHz, "Expected shallows worldTickHz > expanse");
       assert(expanse.worldTickHz > deepField.worldTickHz, "Expected expanse worldTickHz > deep-field");
       assert(shallows.snapshotHz > deepField.snapshotHz, "Expected shallows snapshotHz > deep-field");
+      assert(shallows.useCoarseField === false, "Expected shallows direct-force path");
+      assert(expanse.useCoarseField === true, "Expected expanse coarse-field path");
+      assert(deepField.useCoarseField === true, "Expected deep-field coarse-field path");
+      assert(expanse.fieldTickHz > deepField.fieldTickHz, "Expected expanse fieldTickHz > deep-field");
+      assert(expanse.flowFieldCellSize < deepField.flowFieldCellSize, "Expected deep-field field cells to be coarser than expanse");
       assert(
         shallows.entityRelevanceRadius > expanse.entityRelevanceRadius,
         "Expected shallows entityRelevanceRadius > expanse"
@@ -79,9 +84,12 @@ async function run() {
       assert(body.session.simScaleProfile === "large", `Expected large profile, got ${body.session.simScaleProfile}`);
       assert(body.session.overloadState === "NORMAL", `Expected NORMAL overload state, got ${body.session.overloadState}`);
       assert(body.session.timeScale === 1, `Expected timeScale 1, got ${body.session.timeScale}`);
+      assert(body.session.useCoarseField === true, "Expected deep-field coarse field on");
       assert(body.session.tickHz === 10, `Expected large-map tickHz 10, got ${body.session.tickHz}`);
       assert(body.session.snapshotHz === 6, `Expected large-map snapshotHz 6, got ${body.session.snapshotHz}`);
       assert(body.session.worldTickHz === 4, `Expected large-map worldTickHz 4, got ${body.session.worldTickHz}`);
+      assert(body.session.fieldTickHz === 4, `Expected large-map fieldTickHz 4, got ${body.session.fieldTickHz}`);
+      assert(body.session.flowFieldCellSize === 0.45, `Expected large-map flowFieldCellSize 0.45, got ${body.session.flowFieldCellSize}`);
       assert(body.session.scavengerTickHz === 6, `Expected large-map scavengerTickHz 6, got ${body.session.scavengerTickHz}`);
       assert(
         body.session.entityRelevanceRadius === 1.0,
@@ -121,9 +129,12 @@ async function run() {
       assert(body.session.simScaleProfile === "medium", `Expected medium profile, got ${body.session.simScaleProfile}`);
       assert(body.session.overloadState === "NORMAL", `Expected NORMAL overload state, got ${body.session.overloadState}`);
       assert(body.session.timeScale === 1, `Expected timeScale 1, got ${body.session.timeScale}`);
+      assert(body.session.useCoarseField === true, "Expected expanse coarse field on");
       assert(body.session.tickHz === 12, `Expected medium-map tickHz 12, got ${body.session.tickHz}`);
       assert(body.session.snapshotHz === 8, `Expected medium-map snapshotHz 8, got ${body.session.snapshotHz}`);
       assert(body.session.worldTickHz === 6, `Expected medium-map worldTickHz 6, got ${body.session.worldTickHz}`);
+      assert(body.session.fieldTickHz === 6, `Expected medium-map fieldTickHz 6, got ${body.session.fieldTickHz}`);
+      assert(body.session.flowFieldCellSize === 0.32, `Expected medium-map flowFieldCellSize 0.32, got ${body.session.flowFieldCellSize}`);
       assert(
         body.session.entityRelevanceRadius === 1.2,
         `Expected medium-map entityRelevanceRadius 1.2, got ${body.session.entityRelevanceRadius}`

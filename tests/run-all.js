@@ -19,6 +19,7 @@ const suites = [
   { name: "Inventory", file: "inventory.js" },
   { name: "Systems", file: "systems.js" },
   { name: "OverloadState", file: "overload-state.js" },
+  { name: "CoarseField", file: "coarse-field.js" },
   { name: "SimScale", file: "sim-scale.js" },
   { name: "RemoteAuthority", file: "remote-authority.js" },
 ];

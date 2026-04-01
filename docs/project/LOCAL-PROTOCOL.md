@@ -281,6 +281,15 @@ In the current fifteenth slice, the authoritative sim also starts carrying expli
 - larger maps no longer let every player sum against every well, wave ring, wreck, and portal on every tick
 - authoritative player motion and extraction still remain server-owned, but the expensive per-player scans now run against capped nearest-source sets instead of whole-world arrays
 
+In the current sixteenth slice, medium and large authoritative sessions also carry an explicit coarse field contract:
+
+- `fieldTickHz`
+- `useCoarseField`
+- `flowFieldCellSize`
+- `fieldFlowScale`
+
+That means larger runs no longer scale only by trimming per-player scans. They now rebuild and sample a coarser wrapped field for orbital current, well pull, and wave push on purpose.
+
 ## Client ownership
 
 The client owns:

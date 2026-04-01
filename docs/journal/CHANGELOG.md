@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-03-31 — Coarse Authoritative Flow Field
+
+### scripts/ — Added / Modified
+- **coarse-flow-field.js** — new pure server-side coarse field module. Builds and samples a wrapped grid of orbital current, well pull, wave push, and hazard intensity.
+- **sim-runtime.js** — medium and large sessions now advertise `fieldTickHz`, `useCoarseField`, `flowFieldCellSize`, and `fieldFlowScale`.
+- **sim-runtime.js** — expanse and deep-field now rebuild and sample a coarse authoritative field for large-map motion truth instead of scaling only by direct per-player force scans.
+- **overload-state.js** — overload projection now also owns field cadence and field-cell coarsening so degraded runs simplify motion intentionally.
+
+### tests/ — Added / Modified
+- **coarse-field.js** — deterministic coverage for orbital current, inward gravity, and outward wave-band force sampling.
+- **sim-scale.js** — now asserts coarse-field activation and resolution differences between small, medium, and large profiles.
+- **run-all.js** — wires the coarse-field suite into `npm test`.
+
+### docs/project/ — Modified
+- **LOCAL-PROTOCOL.md**
+- **NETWORK-ARCHITECTURE-PLAN.md**
+
+### Why
+Per-player force budgets were necessary, but they still left larger sessions as “the same force model with fewer samples.” This slice makes medium and large runs switch to an explicit coarse authoritative field so cost and fidelity degrade intentionally instead of accidentally.
+
 ## 2026-03-31 — Explicit Overload State Machine
 
 ### scripts/ — Added / Modified
