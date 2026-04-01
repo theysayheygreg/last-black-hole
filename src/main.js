@@ -329,6 +329,8 @@ function init() {
       get gamePhase() { return gamePhase; },
       set gamePhase(p) { gamePhase = p; },
       inventorySystem,
+      get inventoryOpen() { return inventoryOpen; },
+      inputManager,
       scavengerSystem,
       combatSystem,
       currentSignature,
@@ -1462,7 +1464,17 @@ function gameLoop(now) {
 
   } else if (gamePhase === 'profileSelect') {
     if (nameInputActive) {
-      // Text input handled by keydown listener (see below)
+      if (confirmNow && !_prevConfirm) {
+        profileManager.createProfile(profileCursor, nameInputBuffer);
+        nameInputActive = false;
+        gamePhase = 'home';
+        homeTab = 0;
+        homePhaseTimer = 0;
+        audioEngine.playEvent('menuConfirm');
+      }
+      if (backNow && !_prevBack) {
+        nameInputActive = false;
+      }
       applySceneCamera(dt);
     } else if (deleteConfirmSlot >= 0) {
       // Delete confirmation — Y/N
@@ -1718,7 +1730,12 @@ function gameLoop(now) {
     }
 
     if (remoteAuthorityActive) {
-      inputManager.applyToShip(ship);
+      if (!inventoryOpen) {
+        inputManager.applyToShip(ship);
+      } else {
+        ship.setThrustIntensity(0);
+        ship.setBrakeIntensity(0);
+      }
 
       if (gamePhase === 'playing') {
         if (inventoryNow && !_prevInventory) {
@@ -1748,7 +1765,8 @@ function gameLoop(now) {
 
         if (!remoteInputRequestInFlight) {
           const facing = inputManager.facing ?? ship.facing;
-          const thrust = inputManager.thrustIntensity;
+          const thrust = inventoryOpen ? 0 : inputManager.thrustIntensity;
+          const brake = inventoryOpen ? 0 : inputManager.brakeIntensity;
           const moveMag = thrust > 0 ? 1 : 0;
           const sentPulse = remotePendingPulse;
           const sentConsumeSlot = remotePendingConsumeSlot;
@@ -1757,6 +1775,7 @@ function gameLoop(now) {
             moveX: Math.cos(facing) * moveMag,
             moveY: Math.sin(facing) * moveMag,
             thrust,
+            brake,
             pulse: sentPulse,
             ability1: inputManager.ability1 || false,
             ability2: inputManager.ability2 || false,
@@ -1796,6 +1815,9 @@ function gameLoop(now) {
       // Suppress ship input while inventory is open (don't fly into a well while sorting loot)
       if (!inventoryOpen) {
         inputManager.applyToShip(ship);
+      } else {
+        ship.setThrustIntensity(0);
+        ship.setBrakeIntensity(0);
       }
 
       // 6. Ship update
@@ -3281,7 +3303,7 @@ function gameLoop(now) {
     // Controls reference (compact)
     ctx.font = '11px monospace';
     ctx.fillStyle = 'rgba(150, 155, 185, 0.55)';
-    ctx.fillText('steer: stick / arrows   thrust: R2 / space   brake: L2 / ctrl   pulse: □ / E', cx, cy + 110);
+    ctx.fillText('steer: stick / arrows   thrust: R2 / space   brake: L2 / ctrl   pulse: □ / E   abilities: L1/R1 / Q/R', cx, cy + 110);
 
     // Navigation hint
     ctx.fillStyle = 'rgba(130, 130, 170, 0.4)';

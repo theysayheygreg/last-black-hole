@@ -11,6 +11,7 @@ export class SimClient {
     this.latestSnapshot = null;
     this.lastPollAt = 0;
     this.pollIntervalMs = 100;
+    this.lastSentInput = null;
   }
 
   _applySessionClocks(session) {
@@ -112,20 +113,24 @@ export class SimClient {
     return this.latestSnapshot;
   }
 
-  async sendInput({ moveX = 0, moveY = 0, thrust = 0, pulse = false, ability1 = false, ability2 = false, consumeSlot = null }) {
+  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, pulse = false, ability1 = false, ability2 = false, consumeSlot = null }) {
     this.seq += 1;
+    this.lastSentInput = {
+      clientId: this.clientId,
+      seq: this.seq,
+      moveX,
+      moveY,
+      thrust,
+      brake,
+      pulse,
+      ability1,
+      ability2,
+      consumeSlot,
+    };
     return this._json('/input', {
       method: 'POST',
       body: JSON.stringify({
-        clientId: this.clientId,
-        seq: this.seq,
-        moveX,
-        moveY,
-        thrust,
-        pulse,
-        ability1,
-        ability2,
-        consumeSlot,
+        ...this.lastSentInput,
         timestamp: Date.now(),
       }),
     });

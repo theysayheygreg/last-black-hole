@@ -79,6 +79,10 @@ const SERVER_COMBAT = {
   timeSlowScale: 0.3,
   timeSlowDuration: 3.0,
 };
+const SERVER_INPUT = {
+  brakeStrength: 0.15,
+  baseDrag: 0.92,
+};
 const STAR_SERVER = {
   shipPushStrength: 0.45,
   shipPushFalloff: 1.8,
@@ -1000,6 +1004,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       moveX: 0,
       moveY: 0,
       thrust: 0,
+      brake: 0,
       pulse: false,
       ability1: false,
       ability2: false,
@@ -1250,6 +1255,7 @@ function snapshotBody() {
       vx: player.vx,
       vy: player.vy,
       lastInputSeq: player.lastInput.seq,
+      lastInputBrake: player.lastInput.brake || 0,
       cargo: player.cargo,
       cargoCount: getCargoCount(player),
       equipped: player.equipped,
@@ -3766,8 +3772,10 @@ function tickSim() {
     applyStarPush(player, playerDt, relevance.stars);
     applyPlanetoidPush(player, playerDt, relevance.planetoids);
     applyWaveRingPush(player, playerDt);
-    player.vx *= Math.pow(0.92 * b.dragScale, playerDt * 15);
-    player.vy *= Math.pow(0.92 * b.dragScale, playerDt * 15);
+    const brakeDrag = Math.max(0, Math.min(1, input.brake || 0)) * SERVER_INPUT.brakeStrength;
+    const dragBase = Math.max(0.01, SERVER_INPUT.baseDrag - brakeDrag);
+    player.vx *= Math.pow(dragBase * b.dragScale, playerDt * 15);
+    player.vy *= Math.pow(dragBase * b.dragScale, playerDt * 15);
     player.wx = ((player.wx + player.vx * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     player.wy = ((player.wy + player.vy * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     applyScavengerBump(player, relevance.scavengers);

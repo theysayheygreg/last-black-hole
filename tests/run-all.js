@@ -14,6 +14,7 @@ const suites = [
   { name: "Smoke", file: "smoke.js" },
   { name: "InfraSmoke", file: "infra-smoke.js" },
   { name: "MetaFlow", file: "meta-flow.js" },
+  { name: "Controller", file: "controller.js" },
   { name: "Physics", file: "physics.js" },
   { name: "Coordinates", file: "coordinates.js" },
   { name: "Flow", file: "flow.js" },

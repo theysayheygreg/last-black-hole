@@ -152,6 +152,7 @@ export function initTestAPI(getState) {
         sessionCanHostReset: Boolean(remoteControlState?.canHostReset),
         sessionWillJoinLiveRun: Boolean(remoteControlState?.willJoinLiveRun),
         sessionSelectedDiffersFromLive: Boolean(remoteControlState?.selectedDiffersFromLive),
+        lastRemoteInput: simClient?.lastSentInput ? { ...simClient.lastSentInput } : null,
       };
     },
 
@@ -187,6 +188,15 @@ export function initTestAPI(getState) {
       };
     },
 
+    setProfileShipType(hullType) {
+      const { profileManager } = getState();
+      const p = profileManager?.active;
+      if (!p || !hullType) return false;
+      p.shipType = String(hullType);
+      profileManager.save();
+      return true;
+    },
+
     seedProfileConsumable(slotIndex, item) {
       const { profileManager, inventorySystem } = getState();
       const p = profileManager?.active;
@@ -218,9 +228,10 @@ export function initTestAPI(getState) {
     // ---- Inventory API ----
 
     getInventory() {
-      const { inventorySystem } = getState();
+      const { inventorySystem, inventoryOpen } = getState();
       if (!inventorySystem) return null;
       return {
+        open: Boolean(inventoryOpen),
         cargo: inventorySystem.cargo.map(i => i ? { ...i } : null),
         cargoCount: inventorySystem.cargoCount,
         cargoMax: inventorySystem.cargoMax,
@@ -228,6 +239,19 @@ export function initTestAPI(getState) {
         equipped: inventorySystem.equipped.map(i => i ? { ...i } : null),
         consumables: inventorySystem.consumables.map(i => i ? { ...i } : null),
         cargoValue: inventorySystem.getCargoValue(),
+      };
+    },
+
+    getInputState() {
+      const { inputManager } = getState();
+      if (!inputManager) return null;
+      return {
+        facing: inputManager.facing,
+        thrustIntensity: inputManager.thrustIntensity,
+        brakeIntensity: inputManager.brakeIntensity,
+        lastInputSource: inputManager.lastInputSource,
+        ability1: Boolean(inputManager.ability1),
+        ability2: Boolean(inputManager.ability2),
       };
     },
 

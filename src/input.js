@@ -147,6 +147,22 @@ export class InputManager {
     return false;
   }
 
+  /** Hull ability 1. (Q key, or gamepad L1 — button 4) */
+  get ability1() {
+    if (this._keys['KeyQ']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 4 && gp.buttons[4].pressed) return true;
+    return false;
+  }
+
+  /** Hull ability 2. (R key, or gamepad R1 — button 5) */
+  get ability2() {
+    if (this._keys['KeyR']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 5 && gp.buttons[5].pressed) return true;
+    return false;
+  }
+
   /** Is pause pressed? (gamepad Options/Menu — button 9. Keyboard Escape in main.js) */
   get pausePressed() {
     const gp = this._getGamepad();
@@ -295,9 +311,9 @@ export class InputManager {
         r2 = gp.buttons[7].value;
         l2 = gp.buttons[6].value;
       }
-      if (r2 === 0 && gp.axes.length > 5) {
-        r2 = Math.max(0, (gp.axes[5] + 1) / 2);
-        l2 = Math.max(0, (gp.axes[4] + 1) / 2);
+      if (gp.axes.length > 5) {
+        r2 = Math.max(r2, Math.max(0, (gp.axes[5] + 1) / 2));
+        l2 = Math.max(l2, Math.max(0, (gp.axes[4] + 1) / 2));
       }
       gpThrust = r2 > cfg.triggerThreshold ? r2 : 0;
       gpBrake = l2 > cfg.triggerThreshold ? l2 : 0;
