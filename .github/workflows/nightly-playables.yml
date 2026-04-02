@@ -15,7 +15,56 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.changes.outputs.should_build }}
+      last_success_sha: ${{ steps.changes.outputs.last_success_sha }}
+    steps:
+      - name: Decide whether nightly should build
+        id: changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.eventName === 'workflow_dispatch') {
+              core.setOutput('should_build', 'true');
+              core.setOutput('last_success_sha', 'manual');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const workflowId = 'nightly-playables.yml';
+            const currentSha = context.sha;
+
+            const response = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: workflowId,
+              status: 'success',
+              per_page: 10,
+            });
+
+            const priorRun = response.data.workflow_runs.find((run) => run.id !== context.runId);
+            if (!priorRun) {
+              core.info('No prior successful nightly run found; building.');
+              core.setOutput('should_build', 'true');
+              core.setOutput('last_success_sha', 'none');
+              return;
+            }
+
+            core.setOutput('last_success_sha', priorRun.head_sha);
+            if (priorRun.head_sha === currentSha) {
+              core.info(`Current SHA ${currentSha} matches last successful nightly run; skipping build jobs.`);
+              core.setOutput('should_build', 'false');
+              return;
+            }
+
+            core.info(`Current SHA ${currentSha} differs from last successful nightly SHA ${priorRun.head_sha}; building.`);
+            core.setOutput('should_build', 'true');
+
   build-web:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.should_build == 'true'
     env:
       ENABLE_GITHUB_PAGES: ${{ vars.LBH_ENABLE_GITHUB_PAGES == 'true' }}
     runs-on: ubuntu-latest
@@ -77,6 +126,8 @@ jobs:
           path: dist/nightly/last-black-hole-web-nightly.zip
 
   build-win:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -109,6 +160,8 @@ jobs:
           path: dist/nightly/last-black-hole-win-nightly.zip
 
   build-mac:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -141,8 +194,8 @@ jobs:
           path: dist/nightly/last-black-hole-mac-nightly.zip
 
   deploy-pages:
-    if: vars.LBH_ENABLE_GITHUB_PAGES == 'true'
-    needs: build-web
+    if: needs.detect-changes.outputs.should_build == 'true' && vars.LBH_ENABLE_GITHUB_PAGES == 'true'
+    needs: [detect-changes, build-web]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -153,7 +206,8 @@ jobs:
         uses: actions/deploy-pages@v4
 
   publish-release:
-    needs: [build-web, build-win, build-mac]
+    if: needs.detect-changes.outputs.should_build == 'true'
+    needs: [detect-changes, build-web, build-win, build-mac]
     runs-on: ubuntu-latest
     steps:
       - name: Download web asset
