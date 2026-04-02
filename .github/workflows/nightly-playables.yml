@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   build-web:
+    env:
+      ENABLE_GITHUB_PAGES: ${{ vars.LBH_ENABLE_GITHUB_PAGES == 'true' }}
     runs-on: ubuntu-latest
     outputs:
       release_body: ${{ steps.meta.outputs.release_body }}
@@ -26,7 +28,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install deps
@@ -39,6 +41,7 @@ jobs:
         run: node scripts/ci/package-nightly-assets.js
 
       - name: Upload GitHub Pages artifact
+        if: env.ENABLE_GITHUB_PAGES == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist/nightly/web
@@ -51,12 +54,15 @@ jobs:
       - name: Build release metadata
         id: meta
         run: |
-          WEB_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
           {
             echo 'release_body<<EOF'
             echo 'Nightly playable builds for Last Black Hole.'
             echo ''
-            echo "- Web: ${WEB_URL}"
+            if [ "$ENABLE_GITHUB_PAGES" = "true" ]; then
+              WEB_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+              echo "- Web (GitHub Pages): ${WEB_URL}"
+            fi
+            echo '- Web zip: attached zip asset'
             echo '- Windows: attached zip asset'
             echo '- macOS: attached zip asset'
             echo ''
@@ -79,7 +85,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install deps
@@ -111,7 +117,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install deps
@@ -135,6 +141,7 @@ jobs:
           path: dist/nightly/last-black-hole-mac-nightly.zip
 
   deploy-pages:
+    if: vars.LBH_ENABLE_GITHUB_PAGES == 'true'
     needs: build-web
     runs-on: ubuntu-latest
     environment:
@@ -146,7 +153,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   publish-release:
-    needs: [build-web, build-win, build-mac, deploy-pages]
+    needs: [build-web, build-win, build-mac]
     runs-on: ubuntu-latest
     steps:
       - name: Download web asset

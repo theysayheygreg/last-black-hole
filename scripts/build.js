@@ -167,6 +167,26 @@ function zipDir(sourceDir, zipPath) {
     return;
   }
 
+  if (process.platform === 'win32') {
+    execFileSync(
+      'powershell.exe',
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Compress-Archive -Path $args[0] -DestinationPath $args[1] -Force',
+        path.basename(sourceDir),
+        zipPath,
+      ],
+      {
+        cwd: path.dirname(sourceDir),
+        stdio: 'inherit',
+      }
+    );
+    return;
+  }
+
   execFileSync('zip', ['-rq', zipPath, path.basename(sourceDir)], {
     cwd: path.dirname(sourceDir),
     stdio: 'inherit',
