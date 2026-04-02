@@ -1,0 +1,42 @@
+{
+  "ok": false,
+  "recordedAt": "2026-04-02T21:05:36.492Z",
+  "branch": "main",
+  "gitHead": "2e10fcf594f6067dca5ba79def4db2bb44337b89",
+  "checks": [
+    {
+      "name": "test",
+      "command": "npm test",
+      "exitCode": 1,
+      "ok": false,
+      "durationMs": 150783
+    },
+    {
+      "name": "renderer",
+      "command": "npm run test:renderer",
+      "exitCode": 0,
+      "ok": true,
+      "durationMs": 39424
+    }
+  ],
+  "dirtyPaths": [
+    "M docs/tools/AUDIO-ANALYSIS.md",
+    " M package.json",
+    " M tools/analyze-audio.py",
+    "?? .claude/",
+    "?? docs/project/2026-04-01-lbh-audio-rescore-plan.md",
+    "?? docs/project/2026-04-01-lbh-two-branch-sonic-exploration.md",
+    "?? docs/project/2026-04-01-title-screen-audio-tenet.md",
+    "?? docs/project/BUILD-HEALTH.json",
+    "?? docs/project/BUILD-HEALTH.md",
+    "?? docs/tools/AUDIO-WORKBENCH.md",
+    "?? handoffs/",
+    "?? scripts/build-health.js",
+    "?? tests/audio-toolkit.js",
+    "?? tools/__init__.py",
+    "?? tools/__pycache__/",
+    "?? tools/audio-requirements.txt",
+    "?? tools/audio_workbench.py",
+    "?? tools/audio_workbench/"
+  ]
+}
