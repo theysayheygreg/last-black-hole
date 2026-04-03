@@ -76,26 +76,23 @@ the sim server owns all game state. clients render snapshots and send inputs. ru
 - node.js 18+ (for dev server, sim server, and tests)
 - a browser with WebGL 2 support (chrome, firefox, edge, safari 15+)
 
-### install + run (local)
+### install + play
 ```bash
 git clone https://github.com/theysayheygreg/last-black-hole.git
 cd last-black-hole
 npm install
-
-# start both dev server (static files) and sim server (game authority)
-npm run dev
-npm run sim
+npm start
 ```
 
-open `http://localhost:8080` in your browser. the client connects to the sim server at `http://localhost:3100` by default.
+that's it. `npm start` launches everything and opens the game in your browser. `npm run stop` shuts it all down.
 
-### sim server only
+### what npm start does
+under the hood, three processes run: a control plane (persistence), a sim server (game authority), and a dev server (static files). you don't need to think about them — `npm start` handles it. if you care, the individual commands are:
+
 ```bash
-# start/stop/restart the authoritative sim server
-npm run sim
-npm run sim:stop
-npm run sim:status
-npm run sim:restart
+npm run control    # persistence layer (profiles, vault)
+npm run sim        # authoritative game sim
+npm run dev        # static file server for the browser client
 ```
 
 ### alternative: no node (client-only, local sim)

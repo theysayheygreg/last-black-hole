@@ -7,6 +7,8 @@
     "doc": "docs"
   },
   "scripts": {
+    "start": "node scripts/play.js",
+    "stop": "node scripts/stop.js",
     "dev": "node scripts/dev-server.js start",
     "dev:stop": "node scripts/dev-server.js stop",
     "dev:status": "node scripts/dev-server.js status",
@@ -21,6 +23,8 @@
     "control:restart": "node scripts/control-plane-server.js restart",
     "test": "node tests/run-all.js",
     "test:renderer": "node tests/renderer.js",
+    "test:audio": "node tests/audio-toolkit.js",
+    "audio:analyze": "sh -c 'PY=.venv/bin/python; [ -x \"$PY\" ] || PY=python3; exec \"$PY\" tools/audio_workbench.py \"$@\"' --",
     "build": "node scripts/build.js",
     "build:release": "node scripts/build.js --mode=release",
     "build:test": "node scripts/build.js --mode=test",
