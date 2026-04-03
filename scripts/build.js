@@ -412,8 +412,8 @@ function stageElectronShell(mode) {
       fs.copyFileSync(src, path.join(serverDir, script));
     }
   }
-  // Copy map files for server-side map loading
-  copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(serverDir, 'maps'));
+  // Copy map files where shared-map-loader.js expects them (../src/maps relative to server/)
+  copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(STAGING_ROOT, 'src', 'maps'));
 }
 
 async function buildElectronTarget(targetRoot, target, mode) {

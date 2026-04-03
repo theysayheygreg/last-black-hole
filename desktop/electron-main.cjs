@@ -30,7 +30,6 @@ function startEmbeddedServers() {
       ...process.env,
       PORT: String(SIM_PORT),
       LBH_CONTROL_PLANE_URL: `http://127.0.0.1:${CONTROL_PORT}`,
-      LBH_MAP_DIR: path.join(__dirname, 'renderer', 'src', 'maps'),
     },
     stdio: 'pipe',
   });
@@ -56,9 +55,11 @@ function createWindow() {
     },
   });
 
-  // Give servers a moment to bind, then load the game
+  // Give servers a moment to bind, then load the game pointed at the embedded sim
   setTimeout(() => {
-    win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+    win.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
+      query: { simServer: `http://127.0.0.1:${SIM_PORT}` },
+    });
   }, 800);
 }
 
