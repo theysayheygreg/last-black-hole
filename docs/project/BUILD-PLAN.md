@@ -1,7 +1,7 @@
 # Build Plan: Last Black Hole
 
 > Originally the jam build plan (March 16-22, 2026).
-> Updated to reflect post-jam development through April 1.
+> Updated to reflect post-jam development through April 2.
 
 ---
 
@@ -19,16 +19,17 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - Persistence layer (durable profiles, session registry, control plane)
 - Overload state machine (NORMAL/THROTTLED/DEGRADED/DILATED)
 - Local remote-authority stack (client + sim + control plane, host/join/leave, architecture-aware smoke)
+- Sim lifecycle hardening: idle-aware loop, auto-stop, keep-alive mode, stale detached test-process cleanup
 - Loot economy design (tier gates, wreck aging, value scaling)
 - Meta-loop design (results screen, vault/rig/loadout, chronicle)
 - Rig upgrade tracks (all 5 hulls, 3 tracks × 5 levels)
 
 ### L5 Next (Implementation Queue)
-1. Item catalog — concrete T1-T4 artifacts with coefficients + affinities
-2. Loot economy — tier gates + wreck aging in sim-runtime
-3. Meta-loop UI — results screen, vault/rig/loadout panels, chronicle
-4. Run result write-back — connect RunResult to persistence layer
-5. Tailscale hardware validation — mini authority + MacBook client
+1. Tailscale hardware validation — mini authority + MacBook client
+2. Item catalog — concrete T1-T4 artifacts with coefficients + affinities
+3. Loot economy — tier gates + wreck aging in sim-runtime
+4. Meta-loop UI — results screen, vault/rig/loadout panels, chronicle
+5. Run result write-back — connect RunResult to persistence layer
 6. Hull ability client-side — keybindings, HUD cooldowns, visual effects
 7. Map seed system — entity catalog selection per run
 
@@ -37,6 +38,8 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - The live client contract is still `8 cargo + 2 equipped + 2 consumable`.
 - The older `3 artifact slots` design is not live runtime truth yet.
 - Packaged desktop artifacts are rendering clients; remote play still depends on separate `control` and `sim` processes.
+- The control plane can stay lightweight and always-on for local work.
+- The sim is now demand-driven and auto-expiring by default; keep-alive is explicit, not accidental.
 
 ### L6: The Ship (Not Yet Started)
 - Balance pass (hull coefficients, upgrade costs, loot rarity, signal tuning)

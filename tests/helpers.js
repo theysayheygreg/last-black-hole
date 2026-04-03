@@ -135,6 +135,8 @@ async function startSimServer(port = 8788, options = {}) {
   try { await stopSimServer(port); } catch {}
   fs.mkdirSync(TMP, { recursive: true });
   const args = [SIM_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
+  if (options.keepAlive) args.push("--keep-alive", "true");
+  if (options.idleShutdownMs) args.push("--idle-shutdown-ms", String(options.idleShutdownMs));
   const defaultEnv = {
     LBH_SESSION_REGISTRY_FILE: path.join(TMP, `session-registry-${port}.json`),
   };
@@ -228,7 +230,7 @@ async function stopControlPlane(port = 8791) {
         ]) {
           try { fs.rmSync(file, { force: true }); } catch {}
         }
-        startedSimPorts.delete(port);
+        startedControlPorts.delete(port);
         resolve({ port, stdout, stderr });
       }
       else reject(new Error(`Failed to stop control plane on ${port}: ${stderr || stdout || `exit ${code}`}`));

@@ -564,3 +564,12 @@ Jam speed. No framework. Fork of PavelDoGreat's WebGL-Fluid-Simulation as the ph
 ### Screenshots / Recordings
 [Links or descriptions — capture these during the day!]
 ```
+## April 2, 2026 — The First Real Infrastructure Fault
+
+The architecture finally drew blood in a useful way.
+
+The fault was not some glamorous distributed-systems failure. It was more honest than that: we started the new LBH stack locally, the machine went hot, and it turned out stale detached test sims were still alive while the live sim had no explicit “nobody is here, go quiet” posture. That is exactly the sort of workshop bruise you want early, because it tells you whether the architecture can survive contact with ordinary use.
+
+The conclusion is now clear. The control plane can stay up locally. It is cheap, and that is the right place for profile/session truth to linger. The sim is different. LBH is still a run-based game, not a persistent shared world, so an empty sim staying alive by default is wasted heat. The current runtime now idles correctly with zero human players. The next cut is to make it auto-stop after a short grace period unless someone explicitly asked for a pinned host.
+
+That is a better rule than pretending we already want persistent-world semantics. Build the hosted muscle later. For now, the thing that holds is a cheap control plane, disposable sim instances, and clients that can come and go without heating the whole bench.

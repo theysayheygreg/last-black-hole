@@ -222,7 +222,27 @@ Current progress:
 - the sim now mirrors live session metadata into a control-plane/session-registry layer outside the disposable run instance
 - the sim now also owns authoritative profile write-back for death, extraction, and leave/abandon, and the browser client resyncs its local profile from that server truth after a remote run
 - the sim no longer has to own the durable store inline: a separate control-plane runtime now exposes profile/session endpoints, the sim registers itself there as a disposable instance, and the full harness proves registration, profile bootstrap, session mirroring, and outcome write-back through that boundary
+- the sim now drops to an idle loop when no human clients are connected, so an empty local run no longer burns full gameplay CPU just because the process is still alive
 - protocol still needs to absorb more real gameplay systems before it is considered stable
+
+## Current local process policy
+
+For the current stage of LBH, the local process model is intentionally asymmetric:
+
+- **control plane:** may stay hot locally, but should remain near-zero CPU at idle
+- **sim:** should be disposable and auto-expire by default when no human clients remain
+- **rendering client:** may come and go freely without requiring a persistent world
+
+The key rule is simple:
+
+**LBH is not a persistent world yet, so an empty sim is waste.**
+
+That means the current lifecycle policy is:
+
+1. idle correctly with zero humans — done
+2. auto-stop empty sims after a short grace window — done
+3. keep-alive / host-persistent mode is explicit — done
+4. status output explains why a sim is still alive — done
 
 These two batches belong together. The private remote play path is the proof. The protocol is the thing being proved.
 

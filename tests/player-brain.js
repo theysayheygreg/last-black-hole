@@ -4,7 +4,7 @@ const {
   normalizeProfileUpgrades,
 } = require("../scripts/player-brain.js");
 
-const SIM_PORT = 8791;
+const SIM_PORT = 8795;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 
 async function post(path, body) {

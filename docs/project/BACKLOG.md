@@ -23,6 +23,12 @@
 
 ## Physics & Simulation
 
+### Hosted Run Persistence / Keep-Alive Mode
+- **What:** Optional mode where a sim instance is intentionally pinned alive after the last renderer client disconnects.
+- **Why backlogged:** Correct for hosted or persistent-world phases, wrong default for the current local/private run model.
+- **Current position:** Local LBH should auto-expire empty sims. Keep-alive should exist only as an explicit host/debug flag.
+- **Added:** 2026-04-02
+
 ### Dual-Solver (Wave Equation + Navier-Stokes)
 - **From:** Monday night parallel experiment (N1b), if single-sim wins
 - **What:** Separate wave equation solver coupled to the fluid sim for physically accurate wave propagation

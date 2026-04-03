@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const net = require("net");
+const http = require("http");
 const { spawn, execFileSync } = require("child_process");
 const { DEFAULT_SIM_PORT } = require("./sim-protocol.js");
 
@@ -33,6 +34,30 @@ const PID_FILE = path.join(TMP, `sim-server-${PORT}.pid`);
 const META_FILE = path.join(TMP, `sim-server-${PORT}.json`);
 const LOG_FILE = path.join(TMP, `sim-server-${PORT}.log`);
 const SERVER_SCRIPT = path.join(ROOT, "scripts", "sim-runtime.js");
+
+function requestJson(route, timeoutMs = 1500) {
+  return new Promise((resolve, reject) => {
+    const req = http.get({
+      host: HOST,
+      port: PORT,
+      path: route,
+      timeout: timeoutMs,
+    }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => { body += chunk; });
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => req.destroy(new Error("request timed out")));
+  });
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -135,6 +160,8 @@ async function start() {
     "--pid-file", PID_FILE,
     "--meta-file", META_FILE,
     "--label", "lbh-sim",
+    ...(cliArgs["keep-alive"] ? ["--keep-alive", String(cliArgs["keep-alive"])] : []),
+    ...(cliArgs["idle-shutdown-ms"] ? ["--idle-shutdown-ms", String(cliArgs["idle-shutdown-ms"])] : []),
   ], {
     cwd: ROOT,
     detached: true,
@@ -185,7 +212,17 @@ function status() {
   if (pid && isAlive(pid)) {
     console.log(`LBH sim server is running at ${meta?.url || `http://${HOST}:${PORT}/`} (pid ${pid}).`);
     console.log(`Log: ${LOG_FILE}`);
-    return;
+    return requestJson("/health")
+      .then((health) => {
+        const idle = health?.idleState || {};
+        console.log(`Session: ${health?.session?.status || "unknown"} | map=${health?.mapId || "unknown"} | players=${idle.humanPlayerCount ?? health?.playerCount ?? "?"} human + ${idle.aiPlayerCount ?? "?"} AI`);
+        console.log(`Loop: ${idle.currentLoopTickHz ?? "?"}Hz${idle.idle ? " (idle)" : ""} | keepAlive=${idle.keepAlive ? "true" : "false"} | overload=${health?.session?.overloadState || "unknown"}`);
+        if (idle.idle) {
+          const shutdownIn = idle.shutdownInMs == null ? "pinned" : `${Math.round(idle.shutdownInMs)}ms`;
+          console.log(`Idle for: ${Math.round((idle.idleForMs || 0) / 1000)}s | auto-stop in: ${shutdownIn}`);
+        }
+      })
+      .catch(() => null);
   }
 
   if (listener) {

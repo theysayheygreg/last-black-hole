@@ -1044,3 +1044,10 @@ The client/server split is now real enough that the next durable question is no 
 
 ### Why
 The authoritative sim could already run a session, but it still had no durable memory outside the process. This slice makes the control-plane boundary real: players now join with stable profile ids, the server owns write-back on death/extraction/leave, and the browser syncs back from server truth instead of pretending local storage is still the source of record after a remote run.
+## 2026-04-02 — Sim lifecycle hardening, not just sim architecture
+
+The new control-plane + sim stack proved the right shape, but the first live fault was not theoretical. Starting the three LBH processes locally could still grind the machine because stale detached test sims survived failures, and the main sim process could remain alive doing unnecessary work even when no human clients were connected.
+
+This slice does two things. First, the sim now drops to an idle loop when there are zero human clients instead of continuing full run progression. Second, the test harness now cleans up per-port sim/control-plane processes much more aggressively so detached remote-authority runs stop lingering as hidden CPU burners.
+
+The next lifecycle step was explicit, and it is now landed: empty sims now auto-stop after a short grace window, `keep-alive` is opt-in instead of accidental, `sim:status` explains whether a process is idle and when it will stop, and the harness now carries a deterministic `SimLifecycle` suite so this does not quietly regress again.

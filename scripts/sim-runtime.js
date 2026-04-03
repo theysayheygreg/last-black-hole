@@ -84,6 +84,7 @@ const WRECK_WAVES = [
 const WRECK_WAVE_REPEAT_INTERVAL = 90; // after last wave, repeat every N seconds
 const WRECK_WAVE_REPEAT = { count: [1, 1], slots: [3, 5], dangerZone: 0.12 };
 const IDLE_SESSION_TICK_HZ = 1;
+const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
 
 // Compact item catalog — server only needs coefficients and metadata, not flavor text.
 // Full catalog with flavor in docs/design/ITEM-CATALOG.md.
@@ -971,6 +972,10 @@ const META_FILE = args["meta-file"] ? path.resolve(args["meta-file"]) : null;
 const LOG_LABEL = args.label || "lbh-sim";
 const SIM_INSTANCE_ID = String(args["sim-instance-id"] || process.env.LBH_SIM_INSTANCE_ID || `sim-${PORT}`);
 const CONTROL_PLANE_URL = String(args["control-plane-url"] || process.env.LBH_CONTROL_PLANE_URL || "").trim();
+const KEEP_ALIVE = String(args["keep-alive"] || process.env.LBH_SIM_KEEP_ALIVE || "").trim() === "true";
+const IDLE_SHUTDOWN_MS = KEEP_ALIVE
+  ? 0
+  : Math.max(1000, Number(args["idle-shutdown-ms"] || process.env.LBH_SIM_IDLE_SHUTDOWN_MS || DEFAULT_IDLE_SHUTDOWN_MS));
 const CONTROL_PLANE_FILE = args["control-plane-file"]
   ? path.resolve(args["control-plane-file"])
   : path.resolve(__dirname, "..", "tmp", `control-plane-${PORT}.json`);
@@ -1007,6 +1012,7 @@ const runtime = {
   },
   tick: 0,
   simTime: 0,
+  loopTickHz: DEFAULT_TICK_HZ,
   recentEvents: [],
   nextEventSeq: 1,
   systemAccumulators: {
@@ -1047,9 +1053,13 @@ const runtime = {
     portals: [],
   },
   overload: null,
+  keepAlive: KEEP_ALIVE,
+  idleShutdownMs: IDLE_SHUTDOWN_MS,
+  shutdownReason: null,
 };
 
 let tickHandle = null;
+let currentLoopTickHz = DEFAULT_TICK_HZ;
 
 function publishEvent(type, payload = {}) {
   const event = {
@@ -1459,6 +1469,42 @@ function snapshotBody() {
     },
     recentEvents: runtime.recentEvents.slice(-32),
   };
+}
+
+function getHumanPlayerCount() {
+  let count = 0;
+  for (const player of runtime.players.values()) {
+    if (!player.isAI) count += 1;
+  }
+  return count;
+}
+
+function getIdleState() {
+  const humanPlayerCount = getHumanPlayerCount();
+  const emptySince = humanPlayerCount === 0 ? runtime.emptySince : null;
+  const idleForMs = emptySince ? Math.max(0, Date.now() - emptySince) : 0;
+  return {
+    idle: humanPlayerCount === 0,
+    humanPlayerCount,
+    aiPlayerCount: Math.max(0, runtime.players.size - humanPlayerCount),
+    emptySince,
+    idleForMs,
+    keepAlive: runtime.keepAlive,
+    idleTickHz: IDLE_SESSION_TICK_HZ,
+    currentLoopTickHz: runtime.loopTickHz,
+    idleShutdownMs: runtime.keepAlive ? 0 : runtime.idleShutdownMs,
+    shutdownInMs:
+      humanPlayerCount > 0 || runtime.keepAlive || !runtime.idleShutdownMs
+        ? null
+        : Math.max(0, runtime.idleShutdownMs - idleForMs),
+  };
+}
+
+function shutdownForIdle() {
+  if (runtime.shutdownReason) return;
+  runtime.shutdownReason = "idle-timeout";
+  console.log(`[${LOG_LABEL}] idle shutdown after ${runtime.idleShutdownMs}ms with no human clients.`);
+  shutdown();
 }
 
 function trackControlPlaneWrite(promise) {
@@ -2417,6 +2463,12 @@ function applyDebugScavengerState(scavenger, body) {
   if (Number.isFinite(Number(body.vx))) scavenger.vx = Number(body.vx);
   if (Number.isFinite(Number(body.vy))) scavenger.vy = Number(body.vy);
   if (Number.isFinite(Number(body.lootCount))) scavenger.lootCount = Math.max(0, Number(body.lootCount));
+  if (Number.isFinite(Number(body.deathTimer))) scavenger.deathTimer = Math.max(0, Number(body.deathTimer));
+  if (typeof body.deathWellId === "string") scavenger.deathWellId = body.deathWellId;
+  if (Number.isFinite(Number(body.deathWellWX))) scavenger.deathWellWX = wrapWorld(Number(body.deathWellWX), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.deathWellWY))) scavenger.deathWellWY = wrapWorld(Number(body.deathWellWY), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.deathStartWX))) scavenger.deathStartWX = wrapWorld(Number(body.deathStartWX), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.deathStartWY))) scavenger.deathStartWY = wrapWorld(Number(body.deathStartWY), runtime.session.worldScale);
   if (typeof body.state === "string" && body.state) scavenger.state = body.state;
   if (typeof body.alive === "boolean") scavenger.alive = body.alive;
   return scavenger;
@@ -4037,6 +4089,9 @@ function tickSim() {
   const humanPlayers = Array.from(runtime.players.values()).filter((player) => !player.isAI);
   if (humanPlayers.length === 0) {
     runtime.emptySince = runtime.emptySince || Date.now();
+    if (!runtime.keepAlive && runtime.idleShutdownMs > 0 && Date.now() - runtime.emptySince >= runtime.idleShutdownMs) {
+      shutdownForIdle();
+    }
     return;
   }
   runtime.emptySince = null;
@@ -4185,6 +4240,7 @@ function restartTickLoop() {
   if (tickHandle && currentLoopTickHz === nextTickHz) return;
   if (tickHandle) clearInterval(tickHandle);
   currentLoopTickHz = nextTickHz;
+  runtime.loopTickHz = nextTickHz;
   tickHandle = setInterval(tickSim, Math.max(1, Math.round(1000 / nextTickHz)));
 }
 
@@ -4198,6 +4254,8 @@ function writeFiles() {
     startedAt: runtime.startedAt,
     url: `http://${HOST}:${PORT}/`,
     controlPlaneUrl: CONTROL_PLANE_URL || null,
+    keepAlive: runtime.keepAlive,
+    idleShutdownMs: runtime.idleShutdownMs,
     protocolVersion: PROTOCOL_VERSION,
     sessionStatus: runtime.session.status,
   };
@@ -4224,6 +4282,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === "GET" && req.url === "/health") {
+      const idleState = getIdleState();
       sendJson(res, 200, {
         ok: true,
         protocolVersion: PROTOCOL_VERSION,
@@ -4234,6 +4293,8 @@ const server = http.createServer(async (req, res) => {
         simTime: runtime.simTime,
         playerCount: runtime.players.size,
         mapId: runtime.mapState.id,
+        idleState,
+        shutdownReason: runtime.shutdownReason,
       });
       return;
     }

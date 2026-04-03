@@ -25,6 +25,12 @@ The important rule is simple:
 
 If a run ends or the process dies, durable player state should still exist outside it.
 
+For the current local/private stage, that also means:
+
+- the control plane may stay up as a lightweight helper
+- the sim should not remain alive by default once all human clients leave
+- persistent/hosted keep-alive behavior should be explicit, not accidental
+
 ## Why this is the right split
 
 The sim instance and the persistent store do different jobs.
@@ -206,6 +212,8 @@ A run should move through explicit stages.
 ### `DISPOSED`
 - sim instance exits
 - control plane keeps only durable result metadata
+
+For current local runs, an empty sim should also be allowed to enter `DISPOSED` after a short idle grace window even if the control plane stays alive.
 
 These stages matter because later hosted LBH will need them even if mini-hosted play feels simple now.
 

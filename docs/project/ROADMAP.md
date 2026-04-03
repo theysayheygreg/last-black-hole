@@ -6,7 +6,7 @@
 
 ---
 
-## Current Status (2026-04-01)
+## Current Status (2026-04-02)
 
 **Version:** 0.2.0 — post-jam, server-authoritative sim + control plane + entity ecology + ship classes
 
@@ -34,6 +34,7 @@
 | Overload state machine | DONE | NORMAL/THROTTLED/DEGRADED/DILATED states |
 | Large-map scale model | DONE (first pass) | map-scale clocks, relevance gating, AI/hazard budgets, coarse authoritative field |
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
+| Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | DESIGNED | Schema in META-LOOP.md, not yet implemented in persistence write-back |
 
 ### What's Designed (Not Yet Implemented)
@@ -49,11 +50,11 @@
 
 ### Forward Development Priorities
 
-1. **Item catalog** — concrete T1-T4 items with coefficients, affinities, and sell values
-2. **Meta-loop implementation** — results screen, vault/rig/loadout UI, chronicle
-3. **Loot economy implementation** — tier gates, wreck aging, value scaling in sim-runtime
-4. **Run result write-back** — connect RunResult schema to persistence layer
-5. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
+1. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
+2. **Item catalog** — concrete T1-T4 items with coefficients, affinities, and sell values
+3. **Meta-loop implementation** — results screen, vault/rig/loadout UI, chronicle
+4. **Loot economy implementation** — tier gates, wreck aging, value scaling in sim-runtime
+5. **Run result write-back** — connect RunResult schema to persistence layer
 6. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
 7. **Map seed system** — how seeds pick entities from catalog, run variety
 8. **Balance pass** — hull coefficients, upgrade costs, loot rarity, signal tuning
@@ -64,6 +65,8 @@
 - The shipped loadout contract is still `2 equipped + 2 consumable` slots.
 - The older `3 artifact slots` idea remains a design/backlog item, not live runtime truth.
 - Packaged desktop builds are rendering clients. Remote play still expects separate `control` and `sim` processes.
+- The control plane is allowed to stay hot locally.
+- The sim no longer stays hot by default with zero human clients: it idles cheaply, auto-stops after a grace window, and only stays alive intentionally when started with keep-alive.
 
 ---
 
