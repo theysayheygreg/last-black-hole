@@ -79,7 +79,9 @@ let fps = 60;
 let frameCount = 0;
 let fpsTimer = 0;
 let lastFrameTime = 0;
-let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused'
+let gamePhase = 'title'; // 'title' | 'profileSelect' | 'home' | 'mapSelect' | 'loading' | 'playing' | 'dead' | 'escaped' | 'meta' | 'paused'
+let loadingStartTime = 0;
+let loadingMapName = '';
 let deathTimer = 0;
 let escapeTimer = 0;
 let titleTimer = 0;
@@ -671,6 +673,12 @@ function applyRemoteInventoryShape(localPlayer) {
 
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
+  // First snapshot received — transition from loading to playing
+  if (gamePhase === 'loading') {
+    gamePhase = 'playing';
+    audioEngine.setContext('gameplay');
+    showHUD();
+  }
   remoteSnapshot = snapshot;
   remoteSessionHealth = {
     ok: true,
@@ -1149,9 +1157,11 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   currentSignature = rollSignature(targetMapEntry.map.worldScale);
   applySignatureConfig(currentSignature);
   audioEngine.reset();
-  audioEngine.setContext('gameplay');
-  gamePhase = 'playing';
-  showHUD();
+  // Enter loading phase — transition to 'playing' when first snapshot arrives
+  loadingMapName = targetMapEntry.name || targetMapEntry.id || '';
+  loadingStartTime = performance.now();
+  gamePhase = 'loading';
+  hideHUD();
 
   const p = profileManager.active;
   const profileSnapshot = profileManager.exportActiveProfile?.() || null;
@@ -1429,7 +1439,7 @@ function gameLoop(now) {
     }
   }
 
-  const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home' || gamePhase === 'mapSelect' || rendererFixtureActive;
+  const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home' || gamePhase === 'mapSelect' || gamePhase === 'loading' || rendererFixtureActive;
   const remoteVisualMode = remoteAuthorityActive && (gamePhase === 'playing' || gamePhase === 'dead');
 
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
@@ -2091,6 +2101,42 @@ function gameLoop(now) {
 
   // 8. Render overlay
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+  // Loading screen — shown between map select and first snapshot
+  if (gamePhase === 'loading') {
+    const elapsed = (performance.now() - loadingStartTime) / 1000;
+    const w = overlayCanvas.width;
+    const h = overlayCanvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    // Pulsing dot in center
+    const pulse = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(elapsed * Math.PI * 2));
+    ctx.fillStyle = `rgba(180, 200, 220, ${(pulse * 0.8).toFixed(2)})`;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3 + pulse * 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Expanding ring
+    const ringRadius = 10 + (elapsed % 2) * 40;
+    const ringAlpha = Math.max(0, 1 - (elapsed % 2) / 2);
+    ctx.strokeStyle = `rgba(140, 160, 180, ${(ringAlpha * 0.4).toFixed(2)})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Map name
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(140, 160, 180, 0.6)';
+    ctx.fillText(loadingMapName.toLowerCase(), cx, cy + 40);
+
+    // "dropping in" text with ellipsis animation
+    const dots = '.'.repeat(1 + Math.floor(elapsed * 2) % 3);
+    ctx.fillStyle = 'rgba(100, 120, 140, 0.5)';
+    ctx.fillText('dropping in' + dots, cx, cy + 55);
+  }
 
   if (!inMenu) {
     // Only render game entities when playing (not on title/mapSelect)
