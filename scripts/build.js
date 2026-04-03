@@ -388,6 +388,32 @@ function stageElectronShell(mode) {
   );
 
   copyWebRuntime(path.join(STAGING_ROOT, 'renderer'), mode);
+
+  // Bundle server scripts for embedded sim in desktop builds
+  const serverDir = path.join(STAGING_ROOT, 'server');
+  ensureDir(serverDir);
+  const serverScripts = [
+    'sim-runtime.js',
+    'sim-protocol.js',
+    'sim-server.js',
+    'shared-map-loader.js',
+    'control-plane-runtime.js',
+    'control-plane-store.js',
+    'control-plane-client.js',
+    'control-plane-server.js',
+    'session-registry.js',
+    'player-brain.js',
+    'coarse-flow-field.js',
+    'overload-state.js',
+  ];
+  for (const script of serverScripts) {
+    const src = path.join(ROOT, 'scripts', script);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, path.join(serverDir, script));
+    }
+  }
+  // Copy map files for server-side map loading
+  copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(serverDir, 'maps'));
 }
 
 async function buildElectronTarget(targetRoot, target, mode) {
