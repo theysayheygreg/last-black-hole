@@ -83,6 +83,7 @@ const WRECK_WAVES = [
 ];
 const WRECK_WAVE_REPEAT_INTERVAL = 90; // after last wave, repeat every N seconds
 const WRECK_WAVE_REPEAT = { count: [1, 1], slots: [3, 5], dangerZone: 0.12 };
+const IDLE_SESSION_TICK_HZ = 1;
 
 // Compact item catalog — server only needs coefficients and metadata, not flavor text.
 // Full catalog with flavor in docs/design/ITEM-CATALOG.md.
@@ -1308,6 +1309,7 @@ function startSession(config = {}) {
   runtime.players.clear();
   runtime.recentEvents = [];
   runtime.nextEventSeq = 1;
+  runtime.emptySince = null;
   runtime.overload = createOverloadController({
     tickHz: runtime.session.baseTickHz,
     snapshotHz: runtime.session.baseSnapshotHz,
@@ -1380,9 +1382,14 @@ function ensureHostPermission(requesterId) {
 function promoteHostIfNeeded() {
   if (runtime.players.size === 0) {
     runtime.session.hostClientId = null;
+    runtime.session.hostProfileId = null;
     runtime.session.hostName = null;
+    runtime.emptySince = runtime.emptySince || Date.now();
+    restartTickLoop();
     return;
   }
+  runtime.emptySince = null;
+  restartTickLoop();
   if (runtime.session.hostClientId && runtime.players.has(runtime.session.hostClientId)) return;
   // Only promote human players to host — AI can't accept /start or /reset
   const nextHost = Array.from(runtime.players.values()).find(p => !p.isAI);
@@ -4027,6 +4034,12 @@ function tickInhibitor(dt) {
 
 function tickSim() {
   if (runtime.session.status !== "running") return;
+  const humanPlayers = Array.from(runtime.players.values()).filter((player) => !player.isAI);
+  if (humanPlayers.length === 0) {
+    runtime.emptySince = runtime.emptySince || Date.now();
+    return;
+  }
+  runtime.emptySince = null;
   const tickStart = performance.now();
   const dt = runtime.session.timeScale / runtime.session.tickHz;
   runtime.tick += 1;
@@ -4161,9 +4174,18 @@ function tickSim() {
   }
 }
 
+function getLoopTickHz() {
+  const noHumanPlayers = Array.from(runtime.players.values()).every((player) => player.isAI);
+  if (runtime.session.status === "running" && noHumanPlayers) return IDLE_SESSION_TICK_HZ;
+  return runtime.session.tickHz;
+}
+
 function restartTickLoop() {
+  const nextTickHz = getLoopTickHz();
+  if (tickHandle && currentLoopTickHz === nextTickHz) return;
   if (tickHandle) clearInterval(tickHandle);
-  tickHandle = setInterval(tickSim, Math.max(1, Math.round(1000 / runtime.session.tickHz)));
+  currentLoopTickHz = nextTickHz;
+  tickHandle = setInterval(tickSim, Math.max(1, Math.round(1000 / nextTickHz)));
 }
 
 function writeFiles() {

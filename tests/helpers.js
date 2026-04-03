@@ -16,6 +16,25 @@ const SIM_SERVER_SCRIPT = path.join(ROOT, "scripts", "sim-server.js");
 const CONTROL_PLANE_SERVER_SCRIPT = path.join(ROOT, "scripts", "control-plane-server.js");
 
 let serverProcess = null;
+const startedSimPorts = new Set();
+const startedControlPorts = new Set();
+let cleanupRegistered = false;
+
+function registerProcessCleanup() {
+  if (cleanupRegistered) return;
+  cleanupRegistered = true;
+  const cleanup = () => {
+    for (const port of startedSimPorts) {
+      spawn(process.execPath, [SIM_SERVER_SCRIPT, "stop", "--host", "127.0.0.1", "--port", String(port)], { cwd: ROOT, stdio: "ignore" });
+    }
+    for (const port of startedControlPorts) {
+      spawn(process.execPath, [CONTROL_PLANE_SERVER_SCRIPT, "stop", "--host", "127.0.0.1", "--port", String(port)], { cwd: ROOT, stdio: "ignore" });
+    }
+  };
+  process.on("exit", cleanup);
+  process.on("SIGINT", () => { cleanup(); process.exit(130); });
+  process.on("SIGTERM", () => { cleanup(); process.exit(143); });
+}
 
 /**
  * Start a simple HTTP server in the project root.
@@ -112,6 +131,8 @@ async function launchGame(htmlFile = "index.html") {
 }
 
 async function startSimServer(port = 8788, options = {}) {
+  registerProcessCleanup();
+  try { await stopSimServer(port); } catch {}
   fs.mkdirSync(TMP, { recursive: true });
   const args = [SIM_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
   const defaultEnv = {
@@ -129,7 +150,7 @@ async function startSimServer(port = 8788, options = {}) {
     proc.stderr.on("data", (data) => { stderr += data.toString(); });
     proc.on("error", reject);
     proc.on("close", (code) => {
-      if (code === 0) resolve({ port, stdout, stderr });
+      if (code === 0) { startedSimPorts.add(port); resolve({ port, stdout, stderr }); }
       else reject(new Error(`Failed to start sim server on ${port}: ${stderr || stdout || `exit ${code}`}`));
     });
   });
@@ -152,6 +173,7 @@ async function stopSimServer(port = 8788) {
         for (const file of [path.join(TMP, `session-registry-${port}.json`)]) {
           try { fs.rmSync(file, { force: true }); } catch {}
         }
+        startedSimPorts.delete(port);
         resolve({ port, stdout, stderr });
       }
       else reject(new Error(`Failed to stop sim server on ${port}: ${stderr || stdout || `exit ${code}`}`));
@@ -160,6 +182,8 @@ async function stopSimServer(port = 8788) {
 }
 
 async function startControlPlane(port = 8791, options = {}) {
+  registerProcessCleanup();
+  try { await stopControlPlane(port); } catch {}
   fs.mkdirSync(TMP, { recursive: true });
   const args = [CONTROL_PLANE_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
   const defaultEnv = {
@@ -178,7 +202,7 @@ async function startControlPlane(port = 8791, options = {}) {
     proc.stderr.on("data", (data) => { stderr += data.toString(); });
     proc.on("error", reject);
     proc.on("close", (code) => {
-      if (code === 0) resolve({ port, stdout, stderr });
+      if (code === 0) { startedControlPorts.add(port); resolve({ port, stdout, stderr }); }
       else reject(new Error(`Failed to start control plane on ${port}: ${stderr || stdout || `exit ${code}`}`));
     });
   });
@@ -204,6 +228,7 @@ async function stopControlPlane(port = 8791) {
         ]) {
           try { fs.rmSync(file, { force: true }); } catch {}
         }
+        startedSimPorts.delete(port);
         resolve({ port, stdout, stderr });
       }
       else reject(new Error(`Failed to stop control plane on ${port}: ${stderr || stdout || `exit ${code}`}`));
