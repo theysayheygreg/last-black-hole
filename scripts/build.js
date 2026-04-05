@@ -168,6 +168,8 @@ function zipDir(sourceDir, zipPath) {
   }
 
   if (process.platform === 'win32') {
+    const sourceName = path.basename(sourceDir).replace(/'/g, "''");
+    const destPath = zipPath.replace(/'/g, "''");
     execFileSync(
       'powershell.exe',
       [
@@ -175,9 +177,7 @@ function zipDir(sourceDir, zipPath) {
         '-NoProfile',
         '-NonInteractive',
         '-Command',
-        'Compress-Archive -Path $args[0] -DestinationPath $args[1] -Force',
-        path.basename(sourceDir),
-        zipPath,
+        `Compress-Archive -Path '${sourceName}' -DestinationPath '${destPath}' -Force`,
       ],
       {
         cwd: path.dirname(sourceDir),
