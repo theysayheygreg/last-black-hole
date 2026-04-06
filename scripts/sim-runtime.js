@@ -219,6 +219,65 @@ function wreckAgeMultiplier(wreckSpawnTime, currentTime) {
   return Math.min(WRECK_AGE_VALUE_CAP, 1.0 + (age / WRECK_AGE_CAP_SECONDS) * (WRECK_AGE_VALUE_CAP - 1.0));
 }
 
+// --- Seeded RNG (mulberry32) ---
+// Deterministic PRNG. Same seed = same run structure.
+function createSeededRNG(seed) {
+  let state = seed | 0;
+  return function () {
+    state = (state + 0x6D2B79F5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Cosmic signatures — run-level CONFIG overrides that give each run a feel
+const COSMIC_SIGNATURES = [
+  { id: 'heavy_current',  name: 'heavy current',  mods: { currentCouplingMult: 1.3 } },
+  { id: 'dead_calm',      name: 'dead calm',       mods: { currentCouplingMult: 0.5, dragMult: 0.8 } },
+  { id: 'signal_storm',   name: 'signal storm',    mods: { signalGenMult: 1.5, signalDecayMult: 0.7 } },
+  { id: 'deep_gravity',   name: 'deep gravity',    mods: { wellGravityMult: 1.3, wellGrowthMult: 0.7 } },
+  { id: 'thin_space',     name: 'thin space',      mods: { wellGravityMult: 0.7, portalLifespanMult: 0.6 } },
+  { id: 'dark_run',       name: 'dark run',        mods: { sensorRangeMult: 0.6 } },
+];
+
+const WELL_NAMES = [
+  'Charybdis', 'Erebus', 'Tartarus', 'Lethe', 'Acheron',
+  'Styx', 'Cocytus', 'Phlegethon', 'Mnemosyne', 'Nyx',
+  'Abaddon', 'Sheol', 'Mictlan', 'Niflheim', 'Xibalba',
+  'Pandemonium', 'Gehenna', 'Dis', 'Elysium', 'Avalon',
+];
+
+function applyRunSeed(seed, mapState, session) {
+  const rng = createSeededRNG(seed);
+
+  // Well variance: mass ±15%, growth rate ±20%, orbital direction, names
+  for (let i = 0; i < mapState.wells.length; i++) {
+    const well = mapState.wells[i];
+    well.mass *= 0.85 + rng() * 0.30;
+    well.growthRate *= 0.80 + rng() * 0.40;
+    well.orbitalDir = rng() > 0.5 ? 1 : -1;
+    well.name = WELL_NAMES[Math.floor(rng() * WELL_NAMES.length)];
+    well.killRadius = wellKillRadiusForMass(well);
+  }
+
+  // Loot quality bias: 0.8-1.2 multiplier on tier weights
+  session.lootQualityBias = 0.8 + rng() * 0.4;
+
+  // Cosmic signature: one per run
+  const sigIdx = Math.floor(rng() * COSMIC_SIGNATURES.length);
+  session.cosmicSignature = COSMIC_SIGNATURES[sigIdx];
+
+  // AI seed (drives personality + hull picks in spawnAIPlayers)
+  session.aiSeed = Math.floor(rng() * 1e9);
+
+  // Named wreck: 10% chance
+  session.hasNamedWreck = rng() < 0.10;
+  if (session.hasNamedWreck) {
+    session.namedWreckWave = 3 + Math.floor(rng() * 3);
+  }
+}
+
 const SCAVENGER_CONFIG = {
   sensorRange: 1.5,
   decisionInterval: 0.8,
@@ -1290,6 +1349,11 @@ function startSession(config = {}) {
     simScaleProfile: scaleProfile.profileId,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
+  // Apply run seed — determines well variance, loot bias, entity selection
+  const seed = Number.isFinite(Number(config.seed)) ? Number(config.seed) : Math.floor(Math.random() * 1e9);
+  runtime.session.seed = seed;
+  applyRunSeed(seed, mapState, runtime.session);
+
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
   runtime.mapState.sentries = spawnSentries(mapState);
