@@ -162,6 +162,31 @@
       color: rgba(100, 220, 160, 0.8);
       text-shadow: 0 0 6px rgba(100, 220, 160, 0.3);
     }
+    #hud-abilities {
+      bottom: 80px; left: 16px;
+      font-size: 9px;
+      background: none;
+      border: none;
+      padding: 0;
+      line-height: 1.6;
+    }
+    .hud-ability {
+      color: rgba(160, 170, 180, 0.6);
+    }
+    .hud-ability-key {
+      color: rgba(120, 140, 160, 0.5);
+      font-weight: bold;
+    }
+    .hud-ability.active .hud-ability-name {
+      color: rgba(100, 255, 200, 0.9);
+      text-shadow: 0 0 6px rgba(100, 255, 200, 0.3);
+    }
+    .hud-ability.cooldown .hud-ability-status {
+      color: rgba(200, 160, 80, 0.6);
+    }
+    .hud-ability.ready .hud-ability-name {
+      color: rgba(180, 200, 220, 0.8);
+    }
     #hud-portal-arrow {
       position: absolute;
       bottom: 50%;
@@ -297,6 +322,10 @@
       <div class="hud-sub" id="hud-scavengers-sub"></div>
     </div>
     <div id="hud-pulse" class="hud-panel"></div>
+    <div id="hud-abilities" class="hud-panel">
+      <div id="hud-ability1" class="hud-ability"><span class="hud-ability-key">Q</span> <span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
+      <div id="hud-ability2" class="hud-ability"><span class="hud-ability-key">R</span> <span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
+    </div>
     <div id="hud-signature" class="hud-panel"></div>
     <div id="hud-portal-arrow"></div>
     <div id="hud-inventory-panel"></div>

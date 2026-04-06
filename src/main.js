@@ -120,6 +120,7 @@ let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow rema
 let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
 let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
+let localAbilityState = null;
 let remoteFauna = [];
 let remoteSentries = [];
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
@@ -709,6 +710,9 @@ function applyRemoteSnapshot(snapshot) {
   if (localPlayer.signal) {
     signalLevel = localPlayer.signal.level ?? 0;
     signalZone = localPlayer.signal.zone ?? 'ghost';
+  }
+  if (localPlayer.abilityState) {
+    localAbilityState = localPlayer.abilityState;
   }
   if (snapshot.inhibitor) {
     inhibitorState = { ...snapshot.inhibitor };
@@ -2153,6 +2157,79 @@ function gameLoop(now) {
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
 
+    // Hull ability visual effects
+    if (localAbilityState) {
+      const as = localAbilityState;
+      const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+
+      // Drifter: flow lock glow ring
+      if (as.hullType === 'drifter' && as.flowLockActive) {
+        const pulse = 0.5 + 0.5 * Math.sin(totalTime * Math.PI * 3);
+        ctx.strokeStyle = `rgba(100, 220, 240, ${(0.3 + pulse * 0.2).toFixed(2)})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 18 + pulse * 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Breacher: burn afterglow
+      if (as.hullType === 'breacher' && as.burnActive) {
+        const flicker = 0.6 + Math.random() * 0.4;
+        ctx.fillStyle = `rgba(255, 120, 40, ${(0.15 * flicker).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Resonant: render eddies as spinning circles
+      if (as.hullType === 'resonant' && as.eddies) {
+        for (const eddy of as.eddies) {
+          const [ex, ey] = worldToScreen(eddy.wx, eddy.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+          const ageFrac = eddy.age / 6.0;
+          const alpha = Math.max(0, 0.3 * (1 - ageFrac));
+          const spin = totalTime * 2 + eddy.age;
+          ctx.save();
+          ctx.translate(ex, ey);
+          ctx.rotate(spin);
+          ctx.strokeStyle = `rgba(180, 120, 255, ${alpha.toFixed(2)})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(0, 0, 12, 0, Math.PI * 1.5);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // Resonant: tap anchor marker
+      if (as.hullType === 'resonant' && as.tapAnchor) {
+        const [ax, ay] = worldToScreen(as.tapAnchor.wx, as.tapAnchor.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        ctx.strokeStyle = 'rgba(180, 120, 255, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(ax, ay, 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Shroud: render decoys as fading signal dots
+      if (as.hullType === 'shroud' && as.decoys) {
+        for (const decoy of as.decoys) {
+          const [dx, dy] = worldToScreen(decoy.wx, decoy.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+          const alpha = Math.max(0, (decoy.signal || 0) * 0.8);
+          ctx.fillStyle = `rgba(200, 100, 255, ${alpha.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(dx, dy, 4, 0, Math.PI * 2);
+          ctx.fill();
+          // Faint signal ring
+          ctx.strokeStyle = `rgba(200, 100, 255, ${(alpha * 0.3).toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(dx, dy, 10 + decoy.signal * 5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    }
+
     // Equippable effect: showKillRadii — draw kill zone circles during gameplay
     if (inventorySystem.hasEffect('showKillRadii')) {
       const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
@@ -2499,6 +2576,7 @@ function gameLoop(now) {
       inventoryOpen,
       signalLevel,
       signalZone,
+      abilityState: localAbilityState,
       ship,
       camX, camY,
       canvasW: overlayCanvas.width,

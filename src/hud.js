@@ -23,6 +23,7 @@ let _portalArrowEl;
 let _inventoryPanelEl;
 let _warningsEl;
 let _signalFillEl, _signalZoneEl;
+let _ability1El, _ability2El;
 let _dropCallback = null;  // set by main.js for drop handling
 let _lastPortalCount = -1;
 let _lastCollapseStr = '';
@@ -48,6 +49,8 @@ export function initHUD() {
   _warningsEl = document.getElementById('hud-warnings');
   _signalFillEl = document.getElementById('hud-signal-fill');
   _signalZoneEl = document.getElementById('hud-signal-zone');
+  _ability1El = document.getElementById('hud-ability1');
+  _ability2El = document.getElementById('hud-ability2');
 }
 
 export function showHUD() {
@@ -245,6 +248,65 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     _signalFillEl.style.backgroundColor = zoneColors[zone] || zoneColors.ghost;
     _signalZoneEl.textContent = zone;
     _signalZoneEl.style.color = zoneColors[zone] || zoneColors.ghost;
+  }
+
+  // === HULL ABILITIES ===
+  if (_ability1El && opts.abilityState) {
+    const as = opts.abilityState;
+    const hull = as.hullType || 'drifter';
+
+    // Ability names and state per hull
+    const abilityInfo = {
+      drifter:  { a1: 'eddy brake', a2: null,
+        a1State: as.eddyBrakeCooldown > 0 ? `${Math.ceil(as.eddyBrakeCooldown)}s` : 'ready',
+        a1Active: false, a1Ready: (as.eddyBrakeCooldown || 0) <= 0,
+        flowLock: as.flowLockActive },
+      breacher: { a1: 'burn', a2: null,
+        a1State: as.burnActive ? `${Math.ceil(as.burnFuel || 0)}s fuel` : `${Math.ceil(as.burnFuel || 0)}s`,
+        a1Active: as.burnActive, a1Ready: !as.burnActive && (as.burnFuel || 0) > 1 },
+      resonant: { a1: 'tap', a2: 'shift',
+        a1State: as.tapCooldown > 0 ? `${Math.ceil(as.tapCooldown)}s` : 'ready',
+        a1Active: !!as.tapAnchor, a1Ready: (as.tapCooldown || 0) <= 0,
+        a2State: as.frequencyShiftCooldown > 0 ? `${Math.ceil(as.frequencyShiftCooldown)}s` : (as.nextPulseInverted ? 'armed' : 'ready'),
+        a2Active: as.nextPulseInverted, a2Ready: (as.frequencyShiftCooldown || 0) <= 0 },
+      shroud:   { a1: 'cloak', a2: 'decoy',
+        a1State: as.wakeCloakCooldown > 0 ? `${Math.ceil(as.wakeCloakCooldown)}s` : 'ready',
+        a1Active: false, a1Ready: (as.wakeCloakCooldown || 0) <= 0,
+        a2State: `${as.decoyCharges || 0}×${as.decoyCooldown > 0 ? ' ' + Math.ceil(as.decoyCooldown) + 's' : ''}`,
+        a2Active: false, a2Ready: (as.decoyCharges || 0) > 0 && (as.decoyCooldown || 0) <= 0 },
+      hauler:   { a1: 'tag', a2: 'tractor',
+        a1State: `${as.salvageLockCharges || 0}×`,
+        a1Active: false, a1Ready: (as.salvageLockCharges || 0) > 0,
+        a2State: as.tractorCooldown > 0 ? `${Math.ceil(as.tractorCooldown)}s` : 'ready',
+        a2Active: (as.tractorChannelTimer || 0) > 0, a2Ready: (as.tractorCooldown || 0) <= 0 },
+    };
+    const info = abilityInfo[hull] || abilityInfo.drifter;
+
+    // Ability 1
+    const name1El = _ability1El.querySelector('.hud-ability-name');
+    const status1El = _ability1El.querySelector('.hud-ability-status');
+    if (name1El) name1El.textContent = info.a1;
+    if (status1El) status1El.textContent = info.a1State || '';
+    _ability1El.className = 'hud-ability' + (info.a1Active ? ' active' : info.a1Ready ? ' ready' : ' cooldown');
+
+    // Flow lock indicator for Drifter (passive, no key)
+    if (hull === 'drifter' && info.flowLock) {
+      if (name1El) name1El.textContent = 'flow lock';
+      _ability1El.className = 'hud-ability active';
+      if (status1El) status1El.textContent = '';
+    }
+
+    // Ability 2
+    if (info.a2) {
+      _ability2El.style.display = '';
+      const name2El = _ability2El.querySelector('.hud-ability-name');
+      const status2El = _ability2El.querySelector('.hud-ability-status');
+      if (name2El) name2El.textContent = info.a2;
+      if (status2El) status2El.textContent = info.a2State || '';
+      _ability2El.className = 'hud-ability' + (info.a2Active ? ' active' : info.a2Ready ? ' ready' : ' cooldown');
+    } else {
+      _ability2El.style.display = 'none';
+    }
   }
 
   // === SIGNATURE ===
