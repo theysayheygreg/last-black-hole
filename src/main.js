@@ -121,6 +121,7 @@ let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
 let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
 let localAbilityState = null;
+let lastRunResult = null; // populated from run.result event
 let remoteFauna = [];
 let remoteSentries = [];
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
@@ -968,6 +969,11 @@ function applyRemoteEvents(events) {
       case 'player.died':
         if (isLocal) {
           audioEngine.playEvent('death');
+        }
+        break;
+      case 'run.result':
+        if (isLocal) {
+          lastRunResult = payload;
         }
         break;
       case 'player.inventoryAction':
@@ -3270,34 +3276,86 @@ function gameLoop(now) {
         itemY += 18;
       }
     }
-    // Stats
+    // Stats + RunResult data
     const statsT = 1.0 + Math.min(endItems.length, 8) * 0.15 + 0.3;
     if (t > statsT) {
+      const rr = lastRunResult;
       ctx.fillStyle = `rgba(180, 180, 200, ${Math.min((t - statsT) * 2, 0.8)})`;
       ctx.font = '14px monospace';
-      const mins = Math.floor(simState.runEndTime / 60);
-      const secs = Math.floor(simState.runEndTime % 60);
-      const statY = cy + Math.min(endItems.length, 8) * 18 - 10;
+      const survTime = rr?.survivalTime ?? simState.runEndTime;
+      const mins = Math.floor(survTime / 60);
+      const secs = Math.floor(survTime % 60);
+      let statY = cy + Math.min(endItems.length, 8) * 18 - 10;
       ctx.fillText(`${endItems.length} items ${itemVerb}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
+
+      // Signal peak + inhibitor form (from RunResult)
+      if (rr && t > statsT + 0.2) {
+        statY += 20;
+        ctx.fillStyle = 'rgba(160, 160, 180, 0.6)';
+        ctx.font = '11px monospace';
+        const sigPeak = rr.signalPeakZone || 'ghost';
+        const inhForm = rr.inhibitorFormReached || 0;
+        const inhLabel = ['dormant', 'glitch', 'swarm', 'vessel'][inhForm] || 'dormant';
+        ctx.fillText(`signal peak: ${sigPeak}  |  inhibitor: ${inhLabel}`, cx, statY);
+      }
+
+      // AI outcomes (from RunResult)
+      if (rr?.aiOutcomes?.length > 0 && t > statsT + 0.4) {
+        statY += 18;
+        ctx.font = '10px monospace';
+        for (const ai of rr.aiOutcomes) {
+          const outcomeColor = ai.outcome === 'extracted' ? 'rgba(100, 255, 200, 0.6)' : ai.outcome === 'dead' ? 'rgba(255, 100, 80, 0.5)' : 'rgba(160, 160, 180, 0.4)';
+          ctx.fillStyle = outcomeColor;
+          ctx.fillText(`${ai.personality} (${ai.hullType}): ${ai.outcome}`, cx, statY);
+          statY += 14;
+        }
+      }
+
+      // Death cause (from RunResult)
+      if (!isEscape && rr?.deathCause && t > statsT + 0.3) {
+        const causeY = statY + 5;
+        ctx.fillStyle = 'rgba(255, 80, 60, 0.7)';
+        ctx.font = '12px monospace';
+        const causeText = rr.deathEntityId ? `${rr.deathCause}: ${rr.deathEntityId}` : rr.deathCause;
+        ctx.fillText(causeText, cx, causeY);
+        statY = causeY;
+      }
 
       // Death tax display
       if (!isEscape && lastDeathTax > 0 && t > statsT + 0.3) {
         ctx.fillStyle = 'rgba(255, 100, 80, 0.8)';
         ctx.font = '14px monospace';
-        ctx.fillText(`-${lastDeathTax} exotic matter`, cx, statY + 25);
+        ctx.fillText(`-${lastDeathTax} exotic matter`, cx, statY + 20);
+        statY += 20;
       }
 
-      // Score (extraction only)
-      if (isEscape && t > statsT + 0.3) {
+      // EM earnings (from RunResult)
+      if (rr?.emEarned != null && t > statsT + 0.5) {
+        statY += 8;
+        ctx.fillStyle = 'rgba(255, 255, 240, 0.9)';
+        ctx.font = 'bold 24px monospace';
+        const countT = Math.min((t - statsT - 0.5) / 0.5, 1);
+        ctx.fillText(`+${Math.floor(rr.emEarned * countT)} em`, cx, statY + 20);
+        statY += 25;
+      } else if (isEscape && t > statsT + 0.3) {
+        // Fallback: show cargo value if no RunResult
         const totalValue = endItems.reduce((sum, item) => sum + (item.value || 0), 0);
         ctx.fillStyle = 'rgba(255, 255, 240, 0.9)';
         ctx.font = 'bold 28px monospace';
         const countT = Math.min((t - statsT - 0.3) / 0.5, 1);
         ctx.fillText(`${Math.floor(totalValue * countT)}`, cx, statY + 35);
+        statY += 35;
+      }
+
+      // Seed display
+      if (rr && t > statsT + 0.8) {
+        ctx.fillStyle = 'rgba(100, 110, 130, 0.4)';
+        ctx.font = '9px monospace';
+        ctx.fillText(`seed: ${remoteSnapshot?.session?.seed || '---'}`, cx, statY + 25);
       }
     }
     // Prompt
-    const promptT = statsT + (isEscape ? 1.0 : 0.5);
+    const promptT = statsT + (isEscape ? 1.5 : 0.8);
     if (t > promptT) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
       ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
