@@ -2918,7 +2918,7 @@ function gameLoop(now) {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(200, 210, 230, 0.8)';
     ctx.font = '12px monospace';
-    ctx.fillText(`pilot: ${p?.name || '???'}`, cx, 35);
+    ctx.fillText(`pilot: ${p?.name || '???'}  |  hull: ${(p?.hullType || 'drifter')}`, cx, 35);
     ctx.fillStyle = 'rgba(255, 220, 100, 0.85)';
     ctx.font = 'bold 14px monospace';
     ctx.fillText(`${p?.exoticMatter || 0} EM`, cx, 55);
@@ -2947,9 +2947,15 @@ function gameLoop(now) {
 
     if (homeTab === 0 && p) {
       // === SHIP subscreen ===
-      ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
+      const hullName = (p.hullType || 'drifter').toUpperCase();
+      const HULL_LABEL_COLORS = {
+        DRIFTER: 'rgba(100, 200, 240, 0.9)', BREACHER: 'rgba(255, 140, 60, 0.9)',
+        RESONANT: 'rgba(180, 120, 255, 0.9)', SHROUD: 'rgba(140, 160, 170, 0.8)',
+        HAULER: 'rgba(220, 200, 100, 0.9)',
+      };
+      ctx.fillStyle = HULL_LABEL_COLORS[hullName] || 'rgba(180, 200, 220, 0.8)';
       ctx.font = 'bold 13px monospace';
-      ctx.fillText('ship stats', leftMargin, contentY);
+      ctx.fillText(`hull: ${hullName.toLowerCase()}`, leftMargin, contentY);
       ctx.font = '12px monospace';
       let sy = contentY + 25;
       const tracks = Object.keys(UPGRADE_TRACKS);
@@ -3013,10 +3019,12 @@ function gameLoop(now) {
         }
         const tierColor = TIER_COLORS[item.tier] || 'rgba(180, 180, 190, 0.8)';
         ctx.fillStyle = tierColor;
-        ctx.fillText(`${item.name}`, leftMargin, vy);
+        const tierLabel = typeof item.tier === 'number' ? `T${item.tier} ` : '';
+        const affinityTag = item.affinity ? ` [${item.affinity}]` : '';
+        ctx.fillText(`${tierLabel}${item.name}${affinityTag}`, leftMargin, vy);
         ctx.fillStyle = 'rgba(150, 150, 170, 0.5)';
         ctx.textAlign = 'right';
-        ctx.fillText(`${item.value} EM`, leftMargin + 360, vy);
+        ctx.fillText(`${item.value || '?'} EM`, leftMargin + 360, vy);
         ctx.textAlign = 'left';
         if (selected) {
           let action = 'sell';
