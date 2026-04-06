@@ -220,7 +220,11 @@ function wreckAgeMultiplier(wreckSpawnTime, currentTime) {
 }
 
 // --- Seeded RNG (mulberry32) ---
-// Deterministic PRNG. Same seed = same run structure.
+// Deterministic PRNG for seed-controlled variance (wells, loot bias, signatures).
+// NOTE: not fully deterministic yet — sentries, scavengers, inhibitor threshold,
+// and AI spawning still use Math.random(). Full determinism requires routing all
+// runtime randomness through this RNG. Seed is displayed for sharing but is not
+// yet replayable.
 function createSeededRNG(seed) {
   let state = seed | 0;
   return function () {
@@ -1487,13 +1491,30 @@ function snapshotBody() {
       rigLevels: player.rigLevels || [0, 0, 0],
       abilityState: player.abilityState ? {
         hullType: player.abilityState.hullType,
+        // Drifter
         flowLockActive: player.abilityState.flowLockActive,
+        flowLockCooldown: player.abilityState.flowLockCooldown,
+        eddyBrakeCooldown: player.abilityState.eddyBrakeCooldown,
+        // Breacher
         burnActive: player.abilityState.burnActive,
         burnFuel: player.abilityState.burnFuel,
-        ghostTrailActive: player.abilityState.ghostTrailActive,
-        decoys: player.abilityState.decoys,
+        momentumShieldActive: player.abilityState.momentumShieldActive,
+        // Resonant
         eddies: player.abilityState.eddies,
         tapAnchor: player.abilityState.tapAnchor,
+        tapCooldown: player.abilityState.tapCooldown,
+        frequencyShiftCooldown: player.abilityState.frequencyShiftCooldown,
+        nextPulseInverted: player.abilityState.nextPulseInverted,
+        // Shroud
+        ghostTrailActive: player.abilityState.ghostTrailActive,
+        wakeCloakCooldown: player.abilityState.wakeCloakCooldown,
+        decoyCharges: player.abilityState.decoyCharges,
+        decoyCooldown: player.abilityState.decoyCooldown,
+        decoys: player.abilityState.decoys,
+        // Hauler
+        salvageLockCharges: player.abilityState.salvageLockCharges,
+        tractorCooldown: player.abilityState.tractorCooldown,
+        tractorChannelTimer: player.abilityState.tractorChannelTimer,
       } : null,
       status: player.status,
       wx: player.wx,

@@ -121,7 +121,9 @@ let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
 let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
 let localAbilityState = null;
-let lastRunResult = null; // populated from run.result event
+let lastRunResult = null;  // populated from run.result event
+// localAbilityState: null in local-sim mode (hull abilities are server-only).
+// HUD and visual effects gracefully no-op when null.
 let remoteFauna = [];
 let remoteSentries = [];
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
