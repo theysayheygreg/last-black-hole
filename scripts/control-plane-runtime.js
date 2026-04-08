@@ -284,11 +284,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && req.url.startsWith("/echoes?")) {
       const url = new URL(req.url, `http://${HOST}:${PORT}`);
       const seed = url.searchParams.get("seed");
-      if (seed == null || seed === "") {
-        sendJson(res, 400, { ok: false, error: "seed is required" });
+      const mapId = url.searchParams.get("mapId");
+      if (seed == null || seed === "" || mapId == null || mapId === "") {
+        sendJson(res, 400, { ok: false, error: "seed and mapId are required" });
         return;
       }
-      const echoes = store.getEchoesForSeed(seed);
+      const echoes = store.getEchoesForSeed(seed, mapId);
       sendJson(res, 200, { ok: true, echoes });
       return;
     }
@@ -299,6 +300,10 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, error: "wreck is required" });
         return;
       }
+      if (!body.wreck.mapId || body.wreck.seed == null || !body.wreck.wreckId) {
+        sendJson(res, 400, { ok: false, error: "wreck.mapId, wreck.seed, and wreck.wreckId are required" });
+        return;
+      }
       const saved = store.saveEchoWreck(body.wreck);
       sendJson(res, 200, { ok: true, echo: saved });
       return;
@@ -307,11 +312,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "DELETE" && req.url.startsWith("/echoes?")) {
       const url = new URL(req.url, `http://${HOST}:${PORT}`);
       const seed = url.searchParams.get("seed");
-      if (seed == null || seed === "") {
-        sendJson(res, 400, { ok: false, error: "seed is required" });
+      const mapId = url.searchParams.get("mapId");
+      if (seed == null || seed === "" || mapId == null || mapId === "") {
+        sendJson(res, 400, { ok: false, error: "seed and mapId are required" });
         return;
       }
-      const cleared = store.clearEchoesForSeed(seed);
+      const cleared = store.clearEchoesForSeed(seed, mapId);
       sendJson(res, 200, { ok: true, cleared });
       return;
     }

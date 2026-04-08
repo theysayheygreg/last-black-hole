@@ -133,6 +133,41 @@ async function run() {
       });
       assert(health.runCount >= 1, "Expected at least one persisted run record");
     });
+
+    await runner.run("Echoes are scoped by map and seed", async () => {
+      const echoA = await postJson(`${CONTROL_URL}/echoes/save`, {
+        wreck: {
+          wreckId: `echo-a-${crypto.randomUUID()}`,
+          mapId: "shallows",
+          seed: 12345,
+          pilotName: "Pilot A",
+          wx: 1.0,
+          wy: 1.0,
+          loot: [],
+        },
+      });
+      const echoB = await postJson(`${CONTROL_URL}/echoes/save`, {
+        wreck: {
+          wreckId: `echo-b-${crypto.randomUUID()}`,
+          mapId: "expanse",
+          seed: 12345,
+          pilotName: "Pilot B",
+          wx: 2.0,
+          wy: 2.0,
+          loot: [],
+        },
+      });
+      assert(echoA.echo.mapId === "shallows", "Expected saved shallows echo");
+      assert(echoB.echo.mapId === "expanse", "Expected saved expanse echo");
+
+      const shallows = await getJson(`${CONTROL_URL}/echoes?mapId=shallows&seed=12345`);
+      const expanse = await getJson(`${CONTROL_URL}/echoes?mapId=expanse&seed=12345`);
+
+      assert(shallows.echoes.length === 1, `Expected 1 shallows echo, got ${shallows.echoes.length}`);
+      assert(expanse.echoes.length === 1, `Expected 1 expanse echo, got ${expanse.echoes.length}`);
+      assert(shallows.echoes[0].mapId === "shallows", "Expected shallows-scoped echo only");
+      assert(expanse.echoes[0].mapId === "expanse", "Expected expanse-scoped echo only");
+    });
   } finally {
     await stopSimServer(SIM_PORT).catch(() => null);
     await stopControlPlane(CONTROL_PORT).catch(() => null);

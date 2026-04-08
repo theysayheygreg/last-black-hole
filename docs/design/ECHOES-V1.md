@@ -30,11 +30,12 @@ Every visual token in this doc is pulled from `DESIGN-SYSTEM.md`. Where this doc
 
 ### ChronicleWreck (persisted)
 
-Stored in the control plane, keyed by `(seed, wreckId)`. Wreck id is a deterministic hash of `(seed, deathTick, pilotClientId)`.
+Stored in the control plane, keyed by `(mapId, seed, wreckId)`. Wreck id is a deterministic hash of `(seed, deathTick, pilotClientId, deathPosition)`.
 
 ```js
 {
   wreckId: "wreck-4821-0f3c1a",         // deterministic hash
+  mapId: "shallows",                     // map topology this wreck belongs to
   seed: 482190847,                       // the map seed this wreck belongs to
   createdAt: "2026-04-07T19:24:11Z",     // ISO timestamp for eviction
   pilotName: "lantern",                  // pilot callsign at time of death
@@ -61,9 +62,10 @@ New table (or JSON collection) `echoes`:
 
 ```
 echoes/
-  {seed}/
-    {wreckId}.json   ← individual wreck records
-    index.json       ← { wrecks: [wreckId, ...], evictedAt: timestamp }
+  {mapId}/
+    {seed}/
+      {wreckId}.json   ← individual wreck records
+      index.json       ← { wrecks: [wreckId, ...], evictedAt: timestamp }
 ```
 
 **Cap:** max 8 chronicle wrecks per seed. When a 9th would be created, evict the oldest by `createdAt`.
@@ -91,7 +93,8 @@ function maybePersistChronicleWreck(player, runtime, session) {
   const fragment = pickChronicleFragment(session.rng, player);
 
   const wreck = {
-    wreckId: hashWreckId(session.seed, runtime.tick, player.clientId),
+    wreckId: hashWreckId(session.seed, runtime.tick, player.clientId, player.wx, player.wy),
+    mapId: session.mapId,
     seed: session.seed,
     createdAt: new Date().toISOString(),
     pilotName: player.name || player.hullType,
@@ -115,11 +118,11 @@ function maybePersistChronicleWreck(player, runtime, session) {
 
 ### On Session Start (server-side, sim-runtime.js)
 
-In `startSession()`, *after* `applyRunSeed()` and the initial map state is built, fetch any existing chronicle wrecks for this seed and inject them into `runtime.mapState.wrecks`:
+In `startSession()`, *after* `applyRunSeed()` and the initial map state is built, fetch any existing chronicle wrecks for this `(mapId, seed)` pair and inject them into `runtime.mapState.wrecks`:
 
 ```js
 // After applyRunSeed()
-const existingEchoes = await controlPlaneClient.getEchoesForSeed(session.seed);
+const existingEchoes = await controlPlaneClient.getEchoesForSeed(session.seed, session.mapId);
 for (const echo of existingEchoes) {
   runtime.mapState.wrecks.push(hydrateEchoWreck(echo));
 }
@@ -361,7 +364,7 @@ Chronicle wrecks leak signal. This is the feature that makes them a tradeoff —
 - Add 8-per-seed cap with oldest-eviction
 
 ### scripts/control-plane-client.js
-- Add `saveEchoWreck(wreck)` and `getEchoesForSeed(seed)` methods
+- Add `saveEchoWreck(wreck)` and `getEchoesForSeed(seed, mapId)` methods
 
 ### src/main.js
 - Add chronicle wreck rendering in the wreck render pass (distinct visual)

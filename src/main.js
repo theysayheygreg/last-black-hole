@@ -1134,9 +1134,10 @@ function tickHaunt(simTime, canvasW, canvasH) {
   // Only eligible while the inhibitor is building toward form 1
   const inh = inhibitorState;
   if (!inh || inh.form > 0) return;
-  const threshold = inh.threshold || 1.0;
   const pressure = inh.pressure || 0;
-  const pressureFrac = pressure / Math.max(0.01, threshold);
+  const pressureFrac = Number.isFinite(inh.pressureFrac)
+    ? inh.pressureFrac
+    : pressure / Math.max(0.01, inh.threshold || 1.0);
   if (pressureFrac < 0.65) return;
 
   // Quantized roll — avoid frame-rate drift

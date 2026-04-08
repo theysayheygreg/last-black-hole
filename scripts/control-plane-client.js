@@ -87,12 +87,12 @@ class LocalControlPlaneClient {
     return this.store.saveEchoWreck(wreck);
   }
 
-  async getEchoesForSeed(seed) {
-    return this.store.getEchoesForSeed(seed);
+  async getEchoesForSeed(seed, mapId = null) {
+    return this.store.getEchoesForSeed(seed, mapId);
   }
 
-  async clearEchoesForSeed(seed) {
-    return this.store.clearEchoesForSeed(seed);
+  async clearEchoesForSeed(seed, mapId = null) {
+    return this.store.clearEchoesForSeed(seed, mapId);
   }
 }
 
@@ -153,13 +153,17 @@ class RemoteControlPlaneClient {
     return body.echo;
   }
 
-  async getEchoesForSeed(seed) {
-    const body = await requestJson("GET", this.baseUrl, `/echoes?seed=${encodeURIComponent(seed)}`);
+  async getEchoesForSeed(seed, mapId = null) {
+    const params = new URLSearchParams({ seed: String(seed) });
+    if (mapId != null) params.set("mapId", String(mapId));
+    const body = await requestJson("GET", this.baseUrl, `/echoes?${params.toString()}`);
     return body.echoes || [];
   }
 
-  async clearEchoesForSeed(seed) {
-    const body = await requestJson("DELETE", this.baseUrl, `/echoes?seed=${encodeURIComponent(seed)}`);
+  async clearEchoesForSeed(seed, mapId = null) {
+    const params = new URLSearchParams({ seed: String(seed) });
+    if (mapId != null) params.set("mapId", String(mapId));
+    const body = await requestJson("DELETE", this.baseUrl, `/echoes?${params.toString()}`);
     return body.cleared || 0;
   }
 }

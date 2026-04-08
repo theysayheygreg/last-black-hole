@@ -1246,7 +1246,7 @@ function startSession(config = {}) {
   // wreck. Marked with type: 'echo' and isChronicle: true so the client
   // can render them distinctly. See docs/design/ECHOES-V1.md §Spawn Rules.
   const startedSessionId = runtime.session.id;
-  Promise.resolve(controlPlane.getEchoesForSeed(seed))
+  Promise.resolve(controlPlane.getEchoesForSeed(seed, runtime.session.mapId))
     .then((echoes) => {
       // Guard against hydration arriving after the session was reset
       if (runtime.session.id !== startedSessionId) return;
@@ -1446,6 +1446,10 @@ function snapshotBody() {
       wy: runtime.inhibitor.wy,
       intensity: runtime.inhibitor.intensity,
       radius: runtime.inhibitor.radius,
+      threshold: runtime.inhibitor.threshold,
+      pressureFrac: runtime.inhibitor.threshold > 0
+        ? runtime.inhibitor.pressure / runtime.inhibitor.threshold
+        : 0,
       pressure: runtime.inhibitor.pressure,
       localTime: runtime.inhibitor.localTime,
     },
@@ -1630,6 +1634,8 @@ function selectEchoLoot(cargo, keepRatio = 0.6) {
 // every cycle is loud enough for the universe to remember.
 function buildEchoWreckRecord(player, runResult) {
   if (!runtime.session?.seed) return null;
+  const cargo = Array.isArray(player?.cargo) ? player.cargo.filter(Boolean) : [];
+  if (cargo.length === 0) return null;
   const peakCargoValue = Number.isFinite(player._peakCargoValue) ? player._peakCargoValue : 0;
   if (peakCargoValue < 200) return null;
 
@@ -1652,6 +1658,7 @@ function buildEchoWreckRecord(player, runResult) {
 
   return {
     wreckId,
+    mapId: runtime.session.mapId,
     seed,
     createdAt: new Date().toISOString(),
     pilotName: player.name || player.hullType || 'unknown',
@@ -1665,7 +1672,7 @@ function buildEchoWreckRecord(player, runResult) {
     signalPeakZone: player._signalPeakZone || 'ghost',
     peakCargoValue,
     tier: echoTierFromCargoValue(peakCargoValue),
-    loot: selectEchoLoot(player.cargo, 0.6),
+    loot: selectEchoLoot(cargo, 0.6),
     fragment,
   };
 }

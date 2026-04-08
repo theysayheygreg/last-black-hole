@@ -130,9 +130,10 @@ class ControlPlaneStore {
         profiles: parsed.profiles || {},
         sessions: parsed.sessions || {},
         runs: parsed.runs || {},
-        // Echoes: map of seed → array of chronicle wrecks (max 8 each).
+        // Echoes: map of mapId → seed → array of chronicle wrecks (max 8 each).
         // An echo is evidence of a past cycle that persists in the
-        // present one. See docs/design/ECHOES.md for the feature family.
+        // present one. Scoped by both map and seed so identical numeric
+        // signatures on different maps do not bleed into each other.
         echoes: parsed.echoes || {},
       };
     } catch {
@@ -292,17 +293,23 @@ class ControlPlaneStore {
   // --- Echoes ---
   // An echo is residue from a past cycle — a chronicle wreck left by
   // a pilot whose run did not finish the way this one will. Keyed by
-  // seed so players replaying the same seed see the same echo map.
+  // mapId + seed so identical numeric signatures on different maps do
+  // not bleed into each other.
   // Max ECHO_MAX_PER_SEED per seed; oldest by createdAt evicted first.
 
   saveEchoWreck(wreck) {
+    if (!wreck?.mapId) throw new Error("echo.mapId is required");
     if (!wreck?.seed) throw new Error("echo.seed is required");
     if (!wreck?.wreckId) throw new Error("echo.wreckId is required");
+    const mapKey = String(wreck.mapId);
     const seedKey = String(wreck.seed);
-    if (!this.state.echoes[seedKey]) {
-      this.state.echoes[seedKey] = [];
+    if (!this.state.echoes[mapKey]) {
+      this.state.echoes[mapKey] = {};
     }
-    const list = this.state.echoes[seedKey];
+    if (!this.state.echoes[mapKey][seedKey]) {
+      this.state.echoes[mapKey][seedKey] = [];
+    }
+    const list = this.state.echoes[mapKey][seedKey];
     // Replace if an echo with the same id already exists (idempotent)
     const existingIdx = list.findIndex((e) => e.wreckId === wreck.wreckId);
     const record = clone(wreck);
@@ -322,20 +329,34 @@ class ControlPlaneStore {
     return clone(record);
   }
 
-  getEchoesForSeed(seed) {
+  getEchoesForSeed(seed, mapId = null) {
     if (seed == null) return [];
-    const list = this.state.echoes[String(seed)];
+    if (mapId == null) {
+      // Legacy fallback for older callers. Intentionally returns no echoes
+      // rather than cross-map data; callers should provide mapId.
+      return [];
+    }
+    const mapKey = String(mapId);
+    const mapGroup = this.state.echoes[mapKey];
+    if (!mapGroup || Array.isArray(mapGroup)) return [];
+    const list = mapGroup[String(seed)];
     if (!Array.isArray(list)) return [];
     return list.map((e) => clone(e));
   }
 
-  clearEchoesForSeed(seed) {
-    if (seed == null) return 0;
+  clearEchoesForSeed(seed, mapId = null) {
+    if (seed == null || mapId == null) return 0;
+    const mapKey = String(mapId);
     const seedKey = String(seed);
-    const existing = this.state.echoes[seedKey];
+    const mapGroup = this.state.echoes[mapKey];
+    if (!mapGroup || Array.isArray(mapGroup)) return 0;
+    const existing = mapGroup[seedKey];
     if (!existing) return 0;
     const count = existing.length;
-    delete this.state.echoes[seedKey];
+    delete mapGroup[seedKey];
+    if (Object.keys(mapGroup).length === 0) {
+      delete this.state.echoes[mapKey];
+    }
     this._save();
     return count;
   }

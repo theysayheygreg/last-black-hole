@@ -226,6 +226,10 @@ async function run() {
       await waitFor(page, () => window.__TEST_API.getScavengers().length > 0, { timeout: 4000 });
       const scavengers = await page.evaluate(() => window.__TEST_API.getScavengers());
       assert(scavengers.length > 0, "Expected authoritative scavengers in remote snapshot");
+
+      const snapshot = await getSnapshot();
+      assert(typeof snapshot.inhibitor?.threshold === "number", "Expected inhibitor threshold in remote snapshot");
+      assert(typeof snapshot.inhibitor?.pressureFrac === "number", "Expected inhibitor pressureFrac in remote snapshot");
     });
 
     await runner.run("Remote snapshots advance and move the ship under authoritative input", async () => {
