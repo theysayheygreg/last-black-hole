@@ -74,14 +74,8 @@ const { LOOT_TIER_GATES, LOOT_TIER_WEIGHTS, ITEM_CATALOG, CONSUMABLE_CATALOG, CO
 const WRECK_AGE_VALUE_CAP = 1.5;
 const WRECK_AGE_CAP_SECONDS = 120;
 
-// Wreck spawn waves: later waves spawn fewer but richer wrecks in more dangerous positions
-const WRECK_WAVES = [
-  { time: 0,   count: [4, 6], slots: [1, 2], dangerZone: 0.5 },  // safe
-  { time: 45,  count: [3, 5], slots: [2, 3], dangerZone: 0.4 },
-  { time: 90,  count: [2, 4], slots: [2, 3], dangerZone: 0.3 },
-  { time: 150, count: [2, 3], slots: [2, 4], dangerZone: 0.2 },  // medium danger
-  { time: 240, count: [1, 2], slots: [3, 4], dangerZone: 0.15 }, // near wells, T4 possible
-];
+// Wreck wave schedule lives in seeded-generation.js so the client can mirror it.
+const { WRECK_WAVES } = SEEDED_GEN;
 const WRECK_WAVE_REPEAT_INTERVAL = 90; // after last wave, repeat every N seconds
 const WRECK_WAVE_REPEAT = { count: [1, 1], slots: [3, 5], dangerZone: 0.12 };
 const IDLE_SESSION_TICK_HZ = 1;

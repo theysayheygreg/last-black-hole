@@ -47,7 +47,7 @@ import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
-import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG } from './seeded-generation.js';
+import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
 
 const PLAYABLE_MAPS = [
   { id: 'shallows', map: MAP_SHALLOWS },
@@ -124,7 +124,8 @@ function computeSeedPreview(seed) {
 
   // Match the server's applyRunSeed consumption order so the preview
   // describes the exact run the server would start with this seed.
-  // Burn streams matching applyRunSeed's well iteration for accuracy.
+  // We don't know the actual well count until startSession runs against
+  // the chosen map; assume 8 wells for the preview as an upper bound.
   const wellNames = [];
   for (let i = 0; i < 8; i++) {
     rng.range('wellMass', 0.85, 1.15);
@@ -135,11 +136,28 @@ function computeSeedPreview(seed) {
   const lootQualityBias = rng.range('qualityBias', 0.8, 1.2);
   const signature = pickCosmicSignature(rng.rawStream('signature'));
 
-  // Sample wave 4 loot (4-minute wave, T3/T4 unlocked)
-  // Use a fresh independent stream so the sample doesn't disturb
-  // other preview rolls (mirrors 'wreckLoot' stream name on server).
-  const sampleLootStream = rng.rawStream('wreckLoot');
-  const sampleLoot = generateWreckLoot(sampleLootStream, 250, 4, lootQualityBias);
+  // Walk waves 0..3 against the wreckWave + wreckLoot streams in the same
+  // order as tickWreckWaves so the wave-4 sample reflects the server's
+  // actual stream state at t=240. The wreckLoot stream is shared across
+  // waves so we must consume it before previewing wave 4.
+  const waveStream = rng.rawStream('wreckWave');
+  const lootStream = rng.rawStream('wreckLoot');
+  for (let w = 0; w < 4; w++) {
+    const wave = WRECK_WAVES[w];
+    if (!wave) break;
+    const count = wave.count[0] + Math.floor(waveStream() * (wave.count[1] - wave.count[0] + 1));
+    for (let i = 0; i < count; i++) {
+      const slots = wave.slots[0] + Math.floor(waveStream() * (wave.slots[1] - wave.slots[0] + 1));
+      // Burn loot stream as the server would for this wreck (using its tier+slot count)
+      generateWreckLoot(lootStream, wave.time, slots, lootQualityBias);
+    }
+  }
+
+  // Now sample wave 4 — both streams are at the same state the server
+  // will be in when wave 4 fires (~t=240 to 250).
+  const wave4 = WRECK_WAVES[4];
+  const wave4SampleSlots = wave4 ? wave4.slots[0] + Math.floor(waveStream() * (wave4.slots[1] - wave4.slots[0] + 1)) : 4;
+  const sampleLoot = generateWreckLoot(lootStream, wave4 ? wave4.time + 10 : 250, wave4SampleSlots, lootQualityBias);
 
   previewCache = {
     seed,
@@ -629,7 +647,7 @@ function transitionToTitle() {
 /**
  * Start a game on a specific map. Called from map select.
  */
-function startGame(map) {
+function startGame(map, seed = null) {
   remoteAuthorityActive = false;
   remoteMapId = null;
   remoteSnapshot = null;
@@ -645,8 +663,16 @@ function startGame(map) {
   rendererFixtureActive = false;
   loadScene(map);
 
-  // Roll and apply cosmic signature
-  currentSignature = rollSignature(map.worldScale);
+  // Local-sim seed: use the previewed seed when one is supplied, otherwise
+  // pick a fresh one. Same RNG primitives as the server so the previewed
+  // signature/well names match what the local run actually uses.
+  const localSeed = (seed != null && Number.isFinite(Number(seed)))
+    ? Number(seed)
+    : Math.floor(Math.random() * 1e9);
+  const localRng = createRNGStreams(localSeed);
+
+  // Roll and apply cosmic signature (seeded)
+  currentSignature = rollSignature(map.worldScale, localRng.rawStream('legacySignature'));
   applySignatureConfig(currentSignature);
 
   // Reset audio for new run
@@ -658,18 +684,18 @@ function startGame(map) {
   camX = ship.wx;
   camY = ship.wy;
 
-  // Spawn scavengers at map edges
+  // Spawn scavengers at map edges (seeded)
+  const scavRng = localRng.rawStream('localScavSpawn');
   const scavCount = CONFIG.scavengers.count;
   const vultureCount = Math.round(scavCount * CONFIG.scavengers.vultureRatio);
   for (let i = 0; i < scavCount; i++) {
     const archetype = i < vultureCount ? 'vulture' : 'drifter';
-    // Spawn at random map edge positions
-    const edge = Math.floor(Math.random() * 4);
+    const edge = Math.floor(scavRng() * 4);
     let sx, sy;
-    if (edge === 0) { sx = Math.random() * WORLD_SCALE; sy = 0.1; }
-    else if (edge === 1) { sx = Math.random() * WORLD_SCALE; sy = WORLD_SCALE - 0.1; }
-    else if (edge === 2) { sx = 0.1; sy = Math.random() * WORLD_SCALE; }
-    else { sx = WORLD_SCALE - 0.1; sy = Math.random() * WORLD_SCALE; }
+    if (edge === 0) { sx = scavRng() * WORLD_SCALE; sy = 0.1; }
+    else if (edge === 1) { sx = scavRng() * WORLD_SCALE; sy = WORLD_SCALE - 0.1; }
+    else if (edge === 2) { sx = 0.1; sy = scavRng() * WORLD_SCALE; }
+    else { sx = WORLD_SCALE - 0.1; sy = scavRng() * WORLD_SCALE; }
     scavengerSystem.spawn(sx, sy, archetype);
   }
 
@@ -696,8 +722,8 @@ function startGame(map) {
 }
 
 /** Transition to gameplay with glitch effect. */
-function transitionToGame(map) {
-  triggerTransition(() => startGame(map));
+function transitionToGame(map, seed = null) {
+  triggerTransition(() => startGame(map, seed));
 }
 
 function resetLocalInventoryShape() {
@@ -1185,7 +1211,7 @@ function syncRemoteWorldState(world) {
 
 async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   if (!simClient?.enabled) {
-    startGame(mapEntry.map);
+    startGame(mapEntry.map, previewSeed);
     return;
   }
 
@@ -1268,7 +1294,7 @@ function transitionToRemoteGame(mapEntry, options = {}) {
       remoteSnapshot = null;
       remotePlayers = [];
       remoteSessionHealth = null;
-      startGame(mapEntry.map);
+      startGame(mapEntry.map, previewSeed);
     });
   });
 }
@@ -1709,7 +1735,7 @@ function gameLoop(now) {
       }
       const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];
       if (simClient?.enabled) transitionToRemoteGame(selectedEntry);
-      else transitionToGame(selectedEntry.map);
+      else transitionToGame(selectedEntry.map, previewSeed);
     }
     if (!transitionActive && inputManager.deletePressed && !_prevDelete && simClient?.enabled) {
       const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];

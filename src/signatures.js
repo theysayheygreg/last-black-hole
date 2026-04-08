@@ -141,7 +141,7 @@ let _lastSignature = null;
  * @param {number} mapScale — WORLD_SCALE of the map (3, 5, or 10)
  * @returns {{ name, flavor, mechanical, config, layout }}
  */
-export function rollSignature(mapScale) {
+export function rollSignature(mapScale, rng = Math.random) {
   // Filter to signatures that support this map scale, excluding the last pick
   const pool = Object.values(SIGNATURES).filter(
     s => s.mapSizes.includes(mapScale) && s.name !== _lastSignature
@@ -150,12 +150,12 @@ export function rollSignature(mapScale) {
   if (pool.length === 0) {
     // Fallback: allow repeat if streak filter emptied the pool
     const fallback = Object.values(SIGNATURES).filter(s => s.mapSizes.includes(mapScale));
-    const sig = fallback[Math.floor(Math.random() * fallback.length)];
+    const sig = fallback[Math.floor(rng() * fallback.length)];
     _lastSignature = sig.name;
     return sig;
   }
 
-  const sig = pool[Math.floor(Math.random() * pool.length)];
+  const sig = pool[Math.floor(rng() * pool.length)];
   _lastSignature = sig.name;
   return sig;
 }

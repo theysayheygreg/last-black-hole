@@ -97,6 +97,16 @@ const CONSUMABLE_CATALOG = [
 const LOOT_TIER_GATES = { 1: 0, 2: 30, 3: 120, 4: 240 };
 const LOOT_TIER_WEIGHTS = { 1: 60, 2: 30, 3: 8, 4: 2 };
 
+// Wreck wave schedule. Must match what the server consumes from the
+// wreckWave + wreckLoot streams so client previews are accurate.
+const WRECK_WAVES = [
+  { time: 0,   count: [4, 6], slots: [1, 2], dangerZone: 0.5 },
+  { time: 45,  count: [3, 5], slots: [2, 3], dangerZone: 0.4 },
+  { time: 90,  count: [2, 4], slots: [2, 3], dangerZone: 0.3 },
+  { time: 150, count: [2, 3], slots: [2, 4], dangerZone: 0.2 },
+  { time: 240, count: [1, 2], slots: [3, 4], dangerZone: 0.15 },
+];
+
 function availableTiers(sessionTime) {
   const tiers = [];
   for (const [tier, gateTime] of Object.entries(LOOT_TIER_GATES)) {
@@ -181,6 +191,7 @@ const exports_ = {
   CONSUMABLE_CATALOG,
   LOOT_TIER_GATES,
   LOOT_TIER_WEIGHTS,
+  WRECK_WAVES,
   availableTiers,
   rollTier,
   rollItem,
