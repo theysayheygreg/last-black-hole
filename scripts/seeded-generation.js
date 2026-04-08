@@ -25,6 +25,118 @@ const WELL_NAMES = [
   'Pandemonium', 'Gehenna', 'Dis', 'Elysium', 'Avalon',
 ];
 
+// --- Chronicle Fragments ---
+// Unreliable first-person voices from dead pilots. Selected seeded per
+// chronicle wreck. Lowercase, terse, contradictory across fragments by
+// design. Fragments occasionally address "you" — the reader.
+// See GHOSTS-V1.md and RETURNAL-REFERENCE.md.
+//
+// Authoring rules:
+// - first person. no proper ending punctuation unless it adds weight
+// - contradictions across fragments are a feature, not a bug
+// - no tutorial content, no spoilers, no info-dumping
+// - the voice should feel like something left behind in a hurry
+
+const CHRONICLE_FRAGMENTS = {
+  // Died to a gravity well. The mistake was the edge.
+  well: [
+    "the drifter told me the current was safe. it was not.",
+    "wasn't looking at it.",
+    "the pull was louder than i was.",
+    "i thought i could surf the edge of it.",
+    "never fight the river. i forgot i knew that.",
+    "it had a name. charybdis. that should have been enough.",
+    "the well was smaller a minute ago.",
+    "i hesitated.",
+    "three cycles ago i did this exact thing and lived. i remember.",
+    "it's not the pull. it's the patience.",
+    "the event horizon was not where the map said it was.",
+    "i kept watching the timer. i should have been watching the current.",
+  ],
+
+  // Died to the inhibitor in any of its forms.
+  vessel: [
+    "i heard it before i saw it.",
+    "the figures in the distance were not distant.",
+    "there is something in the void that does not want us here.",
+    "i did not hear the inhibitor. i felt it first.",
+    "it was not a shape. it was a decision.",
+    "the signal was me. i was loud.",
+    "i thought if i stayed quiet it would forget.",
+    "it was never going to forget.",
+    "the vessel had my callsign on it. i checked twice.",
+    "it does not chase. it arrives.",
+    "when the inhibitor looks at you it does not use eyes.",
+    "the dampening field worked until it didn't.",
+  ],
+
+  // Ran out of time — collapse took them.
+  collapse: [
+    "the universe ran out before i did.",
+    "i was still looking for another portal.",
+    "there is no such thing as a safe pace.",
+    "i was going to leave. i always was.",
+    "the clock was the universe all along. the universe was the clock.",
+    "i think the wells are breathing slower now.",
+    "last cycle i made it.",
+    "if you find this, you had more time than i did.",
+    "one more wreck. just one. that was the whole mistake.",
+    "the final portal was ten seconds away. ten.",
+    "collapse does not hurt. it just stops including you.",
+    "i measured everything except how much i would hesitate.",
+  ],
+
+  // Swarm form of the inhibitor — drained cargo, corrupted controls.
+  swarm: [
+    "they drained everything. even the name of the thing i was holding.",
+    "i dropped it so i could run. then i dropped the other one.",
+    "the hauler i saw at 03:11 — was that you?",
+    "every swarm is the same swarm.",
+    "i didn't hear them arrive.",
+    "there is no silence loud enough.",
+    "i thought i could outrun them. i could not outrun them.",
+    "the swarm is what the void remembers.",
+    "my controls went heavy. then i went heavy.",
+    "they do not take what you carry. they take what you were going to become.",
+    "the debuff purge worked. but it only works once.",
+    "i kept my cargo and lost the cycle. fair trade. not a good one.",
+  ],
+
+  // Killed by another scavenger / AI player / scavenger swarm
+  scavenger: [
+    "someone beat me to it.",
+    "i was not the only one watching the wreck.",
+    "the scavengers are us from another cycle. i think.",
+    "they don't talk to me anymore.",
+    "i recognized the callsign. i should not have.",
+    "the vulture had my old paint on it.",
+    "i got greedy.",
+    "i think they were warning me.",
+    "there is a moment when a wreck is anyone's. that moment was not mine.",
+    "the drifter had already been dead a long time when i met her.",
+    "raiders do not talk because the signal would give them away. this was smart.",
+    "the ai players are better than me. they know where i will be before i do.",
+  ],
+
+  // Generic fallback — catches any unknown death cause
+  unknown: [
+    "i do not remember how this ended.",
+    "there was a moment. then there was not.",
+    "this was the cycle where i almost understood.",
+    "if you are reading this you found me. congratulations. i think.",
+    "i was not paying attention.",
+    "the last thing i heard was not a sound.",
+    "nothing killed me. i just stopped.",
+    "the void is patient. i was not.",
+  ],
+};
+
+function pickChronicleFragment(rngStream, deathCause) {
+  const pool = CHRONICLE_FRAGMENTS[deathCause] || CHRONICLE_FRAGMENTS.unknown;
+  if (!pool || pool.length === 0) return "";
+  return pool[Math.floor(rngStream() * pool.length)];
+}
+
 // --- Item catalog (compact, server-canonical) ---
 // Lives here so client and server can roll the same items.
 
@@ -187,6 +299,7 @@ function applyWellVariance(rngStreams, wells, wellKillRadiusForMass) {
 const exports_ = {
   COSMIC_SIGNATURES,
   WELL_NAMES,
+  CHRONICLE_FRAGMENTS,
   ITEM_CATALOG,
   CONSUMABLE_CATALOG,
   LOOT_TIER_GATES,
@@ -198,6 +311,7 @@ const exports_ = {
   rollConsumable,
   generateWreckLoot,
   pickCosmicSignature,
+  pickChronicleFragment,
   applyWellVariance,
 };
 
