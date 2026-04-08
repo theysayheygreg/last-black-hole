@@ -1219,7 +1219,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   const runningSession = health?.session?.status === 'running' ? health.session : null;
   const isHost = Boolean(runningSession?.hostClientId && runningSession.hostClientId === simClient.clientId);
   if (forceReset && runningSession && !isHost) {
-    throw new Error('Only the host can reset the live run');
+    throw new Error('Only the host can reset the live cycle');
   }
   const targetMapEntry = runningSession
     ? (forceReset ? mapEntry : (getPlayableMapEntryById(runningSession.mapId) || mapEntry))
@@ -1271,7 +1271,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
       showWarning(`host reset to ${mapEntry.name.toLowerCase()}`, 'rgba(255, 210, 120, 0.95)', 2600);
     }
   } else if (runningSession.mapId !== mapEntry.id) {
-    showWarning(`joining live run on ${targetMapEntry.name}`, 'rgba(140, 200, 255, 0.9)', 2400);
+    showWarning(`joining live cycle on ${targetMapEntry.name}`, 'rgba(140, 200, 255, 0.9)', 2400);
   }
   await simClient.join({
     name: profileManager.active?.name || 'Pilot',
@@ -1750,7 +1750,7 @@ function gameLoop(now) {
         }
         transitionToRemoteGame(selectedEntry, { forceReset: true });
       } else if (remoteControl.hasLiveSession) {
-        showWarning('only the host can reset the live run', 'rgba(255, 150, 120, 0.95)', 2400);
+        showWarning('only the host can reset the live cycle', 'rgba(255, 150, 120, 0.95)', 2400);
       }
     }
     if (!transitionActive && backNow && !_prevBack) {
@@ -3265,7 +3265,7 @@ function gameLoop(now) {
         const hostLabel = remoteControl.hostName || 'unknown host';
         ctx.fillStyle = 'rgba(140, 200, 255, 0.85)';
         ctx.fillText(
-          `live run: ${remoteControl.sessionMapName}  |  host: ${hostLabel}  |  players: ${remoteControl.sessionPlayerCount}`,
+          `live cycle: ${remoteControl.sessionMapName}  |  host: ${hostLabel}  |  players: ${remoteControl.sessionPlayerCount}`,
           cx,
           infoY
         );
@@ -3276,7 +3276,7 @@ function gameLoop(now) {
         if (remoteControl.selectedDiffersFromLive) {
           ctx.fillText(
             remoteControl.canHostReset
-              ? `space/A joins ${remoteControl.sessionMapName}; X/Y resets host run to ${remoteControl.selectedMapName}`
+              ? `space/A joins ${remoteControl.sessionMapName}; X/Y resets host cycle to ${remoteControl.selectedMapName}`
               : `space/A joins ${remoteControl.sessionMapName}; only host can reset to ${remoteControl.selectedMapName}`,
             cx,
             infoY + 20
@@ -3284,15 +3284,15 @@ function gameLoop(now) {
         } else {
           ctx.fillText(
             remoteControl.canHostReset
-              ? 'space/A: join live run    X/Y: host reset current run'
-              : 'space/A: join live run',
+              ? 'space/A: join live cycle    X/Y: host reset current cycle'
+              : 'space/A: join live cycle',
             cx,
             infoY + 20
           );
         }
       } else {
         ctx.fillStyle = 'rgba(120, 220, 170, 0.8)';
-        ctx.fillText('no live run detected — this client will host the selected map', cx, infoY);
+        ctx.fillText('no live cycle detected — this client will host the selected map', cx, infoY);
       }
       hintY += 20;
     }
