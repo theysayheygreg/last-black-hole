@@ -46,6 +46,8 @@ import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld } from './coords.js';
+import { createRNGStreams } from './rng-stream.js';
+import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG } from './seeded-generation.js';
 
 const PLAYABLE_MAPS = [
   { id: 'shallows', map: MAP_SHALLOWS },
@@ -108,6 +110,51 @@ let remotePendingPulse = false;
 let remotePendingConsumeSlot = null;
 let startingMasses = [];
 let mapSelectIndex = 0;
+
+// --- Seed preview state (map select screen) ---
+// Client-side prediction: given a seed, compute the cosmic signature,
+// well names, and a sample of wreck loot — all without hitting the server.
+// Proof that the seeded generation layer is portable.
+let previewSeed = Math.floor(Math.random() * 1e9);
+let previewCache = null; // { seed, signature, wellNames[], sampleLoot[] }
+
+function computeSeedPreview(seed) {
+  if (previewCache && previewCache.seed === seed) return previewCache;
+  const rng = createRNGStreams(seed);
+
+  // Match the server's applyRunSeed consumption order so the preview
+  // describes the exact run the server would start with this seed.
+  // Burn streams matching applyRunSeed's well iteration for accuracy.
+  const wellNames = [];
+  for (let i = 0; i < 8; i++) {
+    rng.range('wellMass', 0.85, 1.15);
+    rng.range('wellGrowth', 0.80, 1.20);
+    rng.float('wellDir');
+    wellNames.push(rng.pick('wellNames', WELL_NAMES));
+  }
+  const lootQualityBias = rng.range('qualityBias', 0.8, 1.2);
+  const signature = pickCosmicSignature(rng.rawStream('signature'));
+
+  // Sample wave 4 loot (4-minute wave, T3/T4 unlocked)
+  // Use a fresh independent stream so the sample doesn't disturb
+  // other preview rolls (mirrors 'wreckLoot' stream name on server).
+  const sampleLootStream = rng.rawStream('wreckLoot');
+  const sampleLoot = generateWreckLoot(sampleLootStream, 250, 4, lootQualityBias);
+
+  previewCache = {
+    seed,
+    signature,
+    wellNames: wellNames.slice(0, 5),
+    sampleLoot,
+    lootQualityBias,
+  };
+  return previewCache;
+}
+
+function rerollPreviewSeed() {
+  previewSeed = Math.floor(Math.random() * 1e9);
+  previewCache = null;
+}
 let currentCameraMode = 'follow';
 let rendererFixtureActive = false;
 const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
@@ -1187,6 +1234,9 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
       mapId: mapEntry.id,
       worldScale: mapEntry.map.worldScale,
       maxPlayers: 4,
+      // Pass the previewed seed so the server's initial state matches
+      // what we just showed the player on map select.
+      seed: previewSeed,
       requesterName: profileManager.active?.name || 'Pilot',
       requesterProfileId: profileManager.active?.id || null,
       requesterProfile: profileSnapshot,
@@ -1335,6 +1385,7 @@ let _prevPulse = false;
 let _prevInventory = false;
 let _prevConsumable1 = false;
 let _prevConsumable2 = false;
+let _prevSeedReroll = false;
 let _prevPortalCount = -1;
 let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
 
@@ -1641,6 +1692,12 @@ function gameLoop(now) {
     if (simClient?.enabled) void refreshRemoteSessionHealth(false);
     if (upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
     if (downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
+    // S: reroll preview seed
+    if (inputManager._keys && inputManager._keys['KeyS'] && !_prevSeedReroll) {
+      rerollPreviewSeed();
+      audioEngine.playEvent('menuMove');
+    }
+    _prevSeedReroll = !!(inputManager._keys && inputManager._keys['KeyS']);
     if (!transitionActive && confirmNow && !_prevConfirm) {
       audioEngine.init();
       audioEngine.playEvent('launch');
@@ -3218,11 +3275,74 @@ function gameLoop(now) {
     ctx.font = '11px monospace';
     ctx.fillText(
       simClient?.enabled
-        ? '↑↓ select    space/A: join or host    X/Y: host reset    esc/B: back'
-        : '↑↓ select    space/A: launch    esc/B: back',
+        ? '↑↓ select    space/A: join or host    X/Y: host reset    S: reroll seed    esc/B: back'
+        : '↑↓ select    space/A: launch    S: reroll seed    esc/B: back',
       cx,
       hintY
     );
+
+    // --- SEED PREVIEW PANEL (client-side prediction) ---
+    // Same seed + same generation code = same prediction, no server needed.
+    const preview = computeSeedPreview(previewSeed);
+    const panelX = cx + 270;
+    const panelY = cy - 180;
+    const panelW = 240;
+    const panelH = 320;
+    drawTerminalFrame(ctx, panelX, panelY, panelW, panelH, null, 'rgba(120, 160, 220, 0.15)');
+    ctx.textAlign = 'left';
+    ctx.shadowBlur = 8;
+
+    ctx.fillStyle = 'rgba(140, 175, 255, 0.7)';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText('SEED PREVIEW', panelX + 12, panelY + 20);
+
+    ctx.fillStyle = 'rgba(200, 210, 230, 0.8)';
+    ctx.font = '12px monospace';
+    ctx.fillText(`seed: ${previewSeed}`, panelX + 12, panelY + 40);
+
+    // Signature
+    ctx.fillStyle = 'rgba(180, 120, 255, 0.8)';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(`[${preview.signature.name}]`, panelX + 12, panelY + 62);
+    ctx.fillStyle = 'rgba(140, 150, 170, 0.5)';
+    ctx.font = '10px monospace';
+    const modLines = Object.entries(preview.signature.mods).slice(0, 3);
+    for (let i = 0; i < modLines.length; i++) {
+      const [k, v] = modLines[i];
+      ctx.fillText(`  ${k}: ${v}×`, panelX + 12, panelY + 78 + i * 12);
+    }
+
+    // Well names
+    ctx.fillStyle = 'rgba(160, 170, 200, 0.7)';
+    ctx.font = '11px monospace';
+    ctx.fillText('wells:', panelX + 12, panelY + 130);
+    for (let i = 0; i < Math.min(5, preview.wellNames.length); i++) {
+      ctx.fillStyle = 'rgba(140, 160, 200, 0.6)';
+      ctx.font = '10px monospace';
+      ctx.fillText(`  ${preview.wellNames[i]}`, panelX + 12, panelY + 146 + i * 12);
+    }
+
+    // Sample loot from wave 4
+    ctx.fillStyle = 'rgba(160, 170, 200, 0.7)';
+    ctx.font = '11px monospace';
+    ctx.fillText('sample loot (wave 4):', panelX + 12, panelY + 222);
+    const TIER_COLOR = {
+      1: 'rgba(180, 190, 200, 0.6)',
+      2: 'rgba(140, 210, 180, 0.75)',
+      3: 'rgba(220, 180, 100, 0.85)',
+      4: 'rgba(255, 120, 200, 0.95)',
+    };
+    for (let i = 0; i < Math.min(4, preview.sampleLoot.length); i++) {
+      const item = preview.sampleLoot[i];
+      ctx.fillStyle = TIER_COLOR[item.tier] || 'rgba(160, 170, 190, 0.6)';
+      ctx.font = '10px monospace';
+      const tierLabel = typeof item.tier === 'number' ? `T${item.tier}` : '  ';
+      ctx.fillText(`  ${tierLabel} ${item.name.slice(0, 20)}`, panelX + 12, panelY + 238 + i * 12);
+    }
+
+    ctx.fillStyle = 'rgba(100, 120, 150, 0.5)';
+    ctx.font = '9px monospace';
+    ctx.fillText(`quality: ${preview.lootQualityBias.toFixed(2)}×`, panelX + 12, panelY + 298);
 
     ctx.restore();
   }

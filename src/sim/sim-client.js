@@ -48,10 +48,10 @@ export class SimClient {
     return this._json('/maps');
   }
 
-  async startSession({ mapId, worldScale, maxPlayers = 4, requesterId = this.clientId, requesterName = null, requesterProfileId = null, requesterProfile = null }) {
+  async startSession({ mapId, worldScale, maxPlayers = 4, seed = null, requesterId = this.clientId, requesterName = null, requesterProfileId = null, requesterProfile = null }) {
     const body = await this._json('/session/start', {
       method: 'POST',
-      body: JSON.stringify({ mapId, worldScale, maxPlayers, requesterId, requesterName, requesterProfileId, requesterProfile }),
+      body: JSON.stringify({ mapId, worldScale, maxPlayers, seed, requesterId, requesterName, requesterProfileId, requesterProfile }),
     });
     this._applySessionClocks(body?.session);
     this.latestSnapshot = null;
