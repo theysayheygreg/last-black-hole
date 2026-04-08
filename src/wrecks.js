@@ -258,6 +258,61 @@ export class WreckSystem {
         ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(255, 255, 220, ${pulse})`;
         ctx.fill();
+      } else if (wreck.type === 'echo' || wreck.isEcho) {
+        // Echo wreck: a chronicle wreck from a past cycle. Accretion gold
+        // per DESIGN-SYSTEM.md §2 (#FFD966). Slow 1.5s pulse (distinct
+        // from the vault's 2 Hz), softer character set, and a magenta
+        // signal-leak halo that pulses opposite-phase to the gold glow.
+        // See docs/design/ECHOES-V1.md §Visual Spec.
+        const slowPulse = 0.6 + 0.4 * Math.sin(totalTime * (Math.PI * 2 / 1.5) + wreck.wx * 3);
+        const oppPulse = 0.6 + 0.4 * Math.sin(totalTime * (Math.PI * 2 / 1.5) + wreck.wx * 3 + Math.PI);
+        const tier = wreck.tier || 1;
+        const tierScale = 1.0 + (tier - 1) * 0.15; // T4 is 1.45× the base size
+
+        // Outer magenta leak halo — "the dead leak signal"
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * 1.4 * tierScale, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(204, 26, 128, ${(oppPulse * 0.08).toFixed(3)})`;
+        ctx.fill();
+
+        // Inner gold glow — accretion gold
+        const goldAlpha = slowPulse * 0.85;
+        ctx.beginPath();
+        ctx.arc(sx, sy, r * 0.9 * tierScale, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 217, 102, ${(goldAlpha * 0.22).toFixed(3)})`;
+        ctx.fill();
+
+        // Heavy ship-cluster glyphs — different set from derelicts
+        ctx.save();
+        ctx.font = `${Math.round(10 * tierScale)}px "JetBrains Mono", "SF Mono", monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = `rgba(255, 217, 102, ${goldAlpha.toFixed(3)})`;
+        ctx.shadowColor = `rgba(255, 217, 102, ${(goldAlpha * 0.6).toFixed(3)})`;
+        ctx.shadowBlur = 6;
+        const cells = [
+          { ch: '#', dx:  0, dy:  0 },
+          { ch: '%', dx: -6, dy:  0 },
+          { ch: '%', dx:  6, dy:  0 },
+          { ch: '&', dx:  0, dy: -6 },
+          { ch: '&', dx:  0, dy:  6 },
+        ];
+        for (const c of cells) {
+          ctx.fillText(c.ch, sx + c.dx * tierScale, sy + c.dy * tierScale);
+        }
+        ctx.restore();
+
+        // Tier ring: concentric dots around the wreck, one per tier level
+        for (let i = 0; i < tier; i++) {
+          const ringR = r * (1.1 + i * 0.25) * tierScale;
+          ctx.strokeStyle = `rgba(255, 217, 102, ${(goldAlpha * (0.25 - i * 0.04)).toFixed(3)})`;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath();
+          ctx.arc(sx, sy, ringR, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
       } else if (wreck.type === 'debris') {
         // Debris: scattered dots (dull orange) — looks like loose floating junk
         const baseAlpha = 0.5 + 0.2 * Math.sin(totalTime * 1.5 + wreck.wx * 8);

@@ -1198,6 +1198,23 @@ function applyRemoteEvents(events) {
           lastRunResult = payload;
         }
         break;
+      case 'player.loot':
+        // Echo wreck pickup — show the chronicle fragment as a warning
+        // with accretion gold tint. The fragment is an unreliable voice
+        // from a pilot who died in a past cycle on this seed.
+        if (isLocal && payload.isEcho && payload.echoFragment) {
+          const hull = payload.echoHullType || 'unknown';
+          const name = payload.echoPilotName || 'unknown';
+          // Main fragment line
+          showWarning(`"${payload.echoFragment}"`, 'rgba(255, 217, 102, 0.95)', 4200);
+          // Attribution as a delayed second warning
+          setTimeout(() => {
+            if (gamePhase === 'playing') {
+              showWarning(`— ${name}, ${hull}, cycle ended`, 'rgba(180, 160, 120, 0.7)', 2600);
+            }
+          }, 900);
+        }
+        break;
       case 'player.inventoryAction':
         if (!isLocal || !payload.itemName) break;
         if (payload.action === 'dropCargo') {
