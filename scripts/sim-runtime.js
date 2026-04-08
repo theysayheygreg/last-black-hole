@@ -757,8 +757,10 @@ function getSimScaleProfile(mapId, worldScale) {
 }
 
 function generateScavengerIdentity(archetype) {
-  const faction = pick(SCAVENGER_FACTIONS);
-  const callsign = archetype === "vulture" ? pick(VULTURE_NAMES) : pick(DRIFTER_NAMES);
+  const rng = runtime.session?.rng?.rawStream('scavNames') || Math.random;
+  const pickSeeded = (list) => list[Math.floor(rng() * list.length)];
+  const faction = pickSeeded(SCAVENGER_FACTIONS);
+  const callsign = archetype === "vulture" ? pickSeeded(VULTURE_NAMES) : pickSeeded(DRIFTER_NAMES);
   return {
     faction,
     callsign,
@@ -837,10 +839,11 @@ function findPortalSpawnPosition(portalType) {
   const worldScale = runtime.session.worldScale;
   const minPortalSpacing = 0.3;
   const dangerBias = portalType === "rift" ? 0.2 : portalType === "unstable" ? 0.1 : 0.45;
+  const rng = runtime.session?.rng?.rawStream('portalPos') || Math.random;
 
   for (let attempt = 0; attempt < 40; attempt++) {
-    const wx = Math.random() * worldScale;
-    const wy = Math.random() * worldScale;
+    const wx = rng() * worldScale;
+    const wy = rng() * worldScale;
 
     let nearestPortal = Infinity;
     for (const portal of runtime.mapState.portals) {
@@ -869,8 +872,8 @@ function findPortalSpawnPosition(portalType) {
   }
 
   return {
-    wx: Math.random() * worldScale,
-    wy: Math.random() * worldScale,
+    wx: rng() * worldScale,
+    wy: rng() * worldScale,
   };
 }
 function findSafeSpawn(map) {
@@ -879,12 +882,13 @@ function findSafeSpawn(map) {
     ...map.stars.map((star) => ({ wx: star.wx, wy: star.wy })),
   ];
   const minDist = Math.max(0.25, map.worldScale * 0.08);
+  const rng = runtime.session?.rng?.rawStream('playerSpawn') || Math.random;
 
   let best = { wx: map.worldScale / 2, wy: map.worldScale / 2, dist: -Infinity };
 
   for (let attempt = 0; attempt < 80; attempt++) {
-    const wx = Math.random() * map.worldScale;
-    const wy = Math.random() * map.worldScale;
+    const wx = rng() * map.worldScale;
+    const wy = rng() * map.worldScale;
     let nearest = Infinity;
     for (const obj of allObjects) {
       nearest = Math.min(nearest, worldDistance(wx, wy, obj.wx, obj.wy, map.worldScale));
@@ -1622,16 +1626,17 @@ function tickWells(dt) {
 
 function tickPortals(dt) {
   const schedule = PORTAL_CONFIG.waves;
+  const rng = runtime.session?.rng?.rawStream('portals') || Math.random;
   while (runtime.mapState.nextPortalWaveIndex < schedule.length) {
     const wave = schedule[runtime.mapState.nextPortalWaveIndex];
     if (runtime.simTime < wave.time) break;
 
-    const spawnCount = wave.count[0] + Math.floor(Math.random() * (wave.count[1] - wave.count[0] + 1));
+    const spawnCount = wave.count[0] + Math.floor(rng() * (wave.count[1] - wave.count[0] + 1));
     for (let i = 0; i < spawnCount; i++) {
-      const type = wave.types[Math.floor(Math.random() * wave.types.length)];
+      const type = wave.types[Math.floor(rng() * wave.types.length)];
       const pos = findPortalSpawnPosition(type);
       const lifespan = type === "unstable"
-        ? wave.lifespan + (Math.random() - 0.5) * wave.lifespan * 0.4
+        ? wave.lifespan + (rng() - 0.5) * wave.lifespan * 0.4
         : wave.lifespan;
       const portal = {
         id: `portal-${runtime.mapState.nextPortalWaveIndex + 1}-${i + 1}-${runtime.tick}`,
@@ -1820,7 +1825,7 @@ function tickStars(dt, stars = runtime.mapState.stars) {
         star.alive = false;
         well.mass += (star.mass || 1) * 0.5;
         well.killRadius = wellKillRadiusForMass(well);
-        const angle = Math.random() * Math.PI * 2;
+        const angle = (runtime.session?.rng?.rawStream('starRemnant') || Math.random)() * Math.PI * 2;
         const ejectDist = 0.08;
         const ejectSpeed = 0.4;
         const remnant = {
@@ -2049,11 +2054,12 @@ function applyWellGravity(player, dt) {
         player.vy = Math.sin(ejectAngle) * 0.3;
         player.wx = ((player.wx + Math.cos(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
         player.wy = ((player.wy + Math.sin(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-        // Scatter cargo
+        // Scatter cargo (seeded — same hull save always scatters the same slots)
+        const scatterRng = runtime.session?.rng?.rawStream('hullSave') || Math.random;
         const filled = player.cargo.map((c, i) => c ? i : -1).filter(i => i >= 0);
-        const scatterCount = Math.min(filled.length, 1 + Math.floor(Math.random() * 2));
+        const scatterCount = Math.min(filled.length, 1 + Math.floor(scatterRng() * 2));
         for (let s = 0; s < scatterCount; s++) {
-          const idx = filled[Math.floor(Math.random() * filled.length)];
+          const idx = filled[Math.floor(scatterRng() * filled.length)];
           player.cargo[idx] = null;
         }
         publishEvent("ability.activated", {
@@ -2187,8 +2193,9 @@ function refreshPlayerEffects(player) {
 }
 
 function spawnTemporaryPortalNearPlayer(player) {
-  const angle = Math.random() * Math.PI * 2;
-  const dist = 0.15 + Math.random() * 0.1;
+  const rng = runtime.session?.rng?.rawStream('breachFlare') || Math.random;
+  const angle = rng() * Math.PI * 2;
+  const dist = 0.15 + rng() * 0.1;
   const portal = {
     id: `portal-breach-${player.clientId}-${runtime.tick}`,
     wx: wrapWorld(player.wx + Math.cos(angle) * dist, runtime.session.worldScale),
@@ -2303,11 +2310,12 @@ function applyPulse(player) {
 
 function addDroppedItemWreck(player, item) {
   if (!item) return;
+  const rng = runtime.session?.rng?.rawStream('cargoDrop') || Math.random;
   const inputAngle =
     Math.hypot(player.lastInput.moveX, player.lastInput.moveY) > 0.1
       ? Math.atan2(player.lastInput.moveY, player.lastInput.moveX)
-      : Math.random() * Math.PI * 2;
-  const rearAngle = inputAngle + Math.PI + (Math.random() - 0.5) * Math.PI;
+      : rng() * Math.PI * 2;
+  const rearAngle = inputAngle + Math.PI + (rng() - 0.5) * Math.PI;
   const ejectDist = 0.18;
   const ejectSpeed = 0.3;
   const wreck = {
@@ -2616,10 +2624,11 @@ function spawnScavengerDeathDrops(scav) {
   if ((scav.lootCount || 0) <= 0) return [];
   const tier = scav.archetype === "vulture" ? 2 : 1;
   const drops = [];
+  const rng = runtime.session?.rng?.rawStream('scavDeath') || Math.random;
   for (let i = 0; i < scav.lootCount; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const ejectDist = 0.05 + Math.random() * 0.05;
-    const ejectSpeed = 0.2 + Math.random() * 0.2;
+    const angle = rng() * Math.PI * 2;
+    const ejectDist = 0.05 + rng() * 0.05;
+    const ejectSpeed = 0.2 + rng() * 0.2;
     const wreck = {
       id: `wreck-scav-${scav.id}-${runtime.tick}-${i + 1}`,
       wx: wrapWorld(scav.wx + Math.cos(angle) * ejectDist, runtime.session.worldScale),
@@ -2704,7 +2713,7 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
           scav.targetPortalId = null;
         } else {
           scav.state = "drift";
-          scav.driftHeading = Math.random() * Math.PI * 2;
+          scav.driftHeading = (runtime.session?.rng?.rawStream('scavDrift') || Math.random)() * Math.PI * 2;
           scav.targetWreckId = null;
           scav.targetPortalId = null;
         }
@@ -3076,7 +3085,7 @@ function aiScoreWreck(ai, wreck) {
   const itemCount = wreck.loot ? wreck.loot.length : 1;
   const tierMult = (wreck.tier || 1);
   const rawValue = itemCount * tierMult * 50;
-  const noise = 1.0 + (Math.random() - 0.5) * AI_PLAYER_CONFIG.perceptionNoise * 2;
+  const noise = 1.0 + ((runtime.session?.rng?.rawStream('aiPerception') || Math.random)() - 0.5) * AI_PLAYER_CONFIG.perceptionNoise * 2;
   let score = rawValue * noise;
 
   // Distance penalty
@@ -3335,7 +3344,7 @@ function tickAIPlayers(dt) {
     } else {
       // Drift
       ai.thrustIntensity = 0.05;
-      ai.facingAngle += (Math.random() - 0.5) * 0.1 * dt;
+      ai.facingAngle += ((runtime.session?.rng?.rawStream('aiDrift') || Math.random)() - 0.5) * 0.1 * dt;
     }
 
     // Set lastInput — main tick loop handles all physics (thrust, gravity, drag).
@@ -3737,6 +3746,8 @@ function tickFauna(dt) {
   }
   const peakZone = peakPlayer ? peakPlayer.signal.zone : "ghost";
 
+  const faunaRng = runtime.session?.rng?.rawStream('fauna') || Math.random;
+
   // Spawn drift jellies to maintain count
   const jellyCount = fauna.filter(f => f.type === "jelly" && f.alive).length;
   if (jellyCount < cfg.jellyCount && fauna.length < cfg.maxTotal) {
@@ -3746,12 +3757,12 @@ function tickFauna(dt) {
       fauna.push({
         id: `fauna-${runtime.tick}-${Math.random().toString(36).slice(2,6)}`,
         type: "jelly",
-        wx: Math.random() * ws, wy: Math.random() * ws,
-        vx: (Math.random() - 0.5) * 0.005, vy: (Math.random() - 0.5) * 0.005,
+        wx: faunaRng() * ws, wy: faunaRng() * ws,
+        vx: (faunaRng() - 0.5) * 0.005, vy: (faunaRng() - 0.5) * 0.005,
         age: 0,
-        lifespan: cfg.jellyLifespan[0] + Math.random() * (cfg.jellyLifespan[1] - cfg.jellyLifespan[0]),
+        lifespan: cfg.jellyLifespan[0] + faunaRng() * (cfg.jellyLifespan[1] - cfg.jellyLifespan[0]),
         alive: true,
-        phase: Math.random() * Math.PI * 2,
+        phase: faunaRng() * Math.PI * 2,
       });
     }
   }
@@ -3762,8 +3773,8 @@ function tickFauna(dt) {
     runtime._bloomSpawnAccum = (runtime._bloomSpawnAccum || 0) + bloomRate * dt;
     while (runtime._bloomSpawnAccum >= 1) {
       runtime._bloomSpawnAccum -= 1;
-      const angle = Math.random() * Math.PI * 2;
-      const dist = cfg.bloomSpawnRange[0] + Math.random() * (cfg.bloomSpawnRange[1] - cfg.bloomSpawnRange[0]);
+      const angle = faunaRng() * Math.PI * 2;
+      const dist = cfg.bloomSpawnRange[0] + faunaRng() * (cfg.bloomSpawnRange[1] - cfg.bloomSpawnRange[0]);
       fauna.push({
         id: `fauna-${runtime.tick}-${Math.random().toString(36).slice(2,6)}`,
         type: "bloom",
@@ -3771,9 +3782,9 @@ function tickFauna(dt) {
         wy: ((peakPlayer.wy + Math.sin(angle) * dist) % ws + ws) % ws,
         vx: 0, vy: 0,
         age: 0,
-        lifespan: cfg.bloomLifespan[0] + Math.random() * (cfg.bloomLifespan[1] - cfg.bloomLifespan[0]),
+        lifespan: cfg.bloomLifespan[0] + faunaRng() * (cfg.bloomLifespan[1] - cfg.bloomLifespan[0]),
         alive: true,
-        phase: Math.random() * Math.PI * 2,
+        phase: faunaRng() * Math.PI * 2,
       });
     }
   }
@@ -3874,8 +3885,9 @@ function tickInhibitor(dt) {
       inh.wx = (loudestPlayer.wx + ws / 2) % ws;
       inh.wy = (loudestPlayer.wy + ws / 2) % ws;
     } else {
-      inh.wx = Math.random() * ws;
-      inh.wy = Math.random() * ws;
+      const rng = runtime.session?.rng?.rawStream('inhibitorSpawn') || Math.random;
+      inh.wx = rng() * ws;
+      inh.wy = rng() * ws;
     }
     inh.silenceTimer = 0;
     publishEvent("inhibitor.form", { form: 1, pressure: inh.pressure });
@@ -3970,7 +3982,7 @@ function tickInhibitor(dt) {
         // Sluggish controls — Swarm corrupts ship systems
         player.controlDebuff = cfg.swarmControlDebuffDuration;
         // Drain cargo
-        if (Math.random() < cfg.swarmContactDrain * dt) {
+        if ((runtime.session?.rng?.rawStream('swarmDrain') || Math.random)() < cfg.swarmContactDrain * dt) {
           for (let i = player.cargo.length - 1; i >= 0; i--) {
             if (player.cargo[i]) {
               player.cargo[i] = null;
@@ -4030,9 +4042,10 @@ function tickInhibitor(dt) {
     if (!inh.finalPortalSpawned && inh.vesselTimer >= cfg.vesselTimeToForm + cfg.finalPortalDelay) {
       // Spawn guaranteed portal farthest from Vessel
       let bestDist = 0, bestX = ws / 2, bestY = ws / 2;
+      const rng = runtime.session?.rng?.rawStream('finalPortal') || Math.random;
       for (let i = 0; i < 8; i++) {
-        const cx = Math.random() * ws;
-        const cy = Math.random() * ws;
+        const cx = rng() * ws;
+        const cy = rng() * ws;
         const d = worldDistance(inh.wx, inh.wy, cx, cy, ws);
         if (d > bestDist) { bestDist = d; bestX = cx; bestY = cy; }
       }
