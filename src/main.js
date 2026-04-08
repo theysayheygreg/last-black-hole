@@ -209,6 +209,14 @@ let lastRunResult = null;  // populated from run.result event
 let phantomState = null;          // { wx, wy, bornAt, lifespan, fading }
 let phantomNextEligibleAt = 0;    // simTime after which a new phantom may spawn
 let phantomRng = null;            // lazily created seeded stream
+let phantomLastRollTick = -1;     // last quantized sim tick we rolled on
+const PHANTOM_ROLL_QUANTUM = 0.25; // seconds per spawn roll (frame-rate independent)
+
+// Death linger duration — the world dims before the staged results reveal.
+// Shared between the render path and the continue-input gate so pressing
+// confirm during the linger does nothing; the player must see the linger
+// finish before they can exit.
+const DEATH_LINGER_DURATION = 1.2;
 let remoteFauna = [];
 let remoteSentries = [];
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
@@ -980,6 +988,7 @@ function resetPhantomForNewSession() {
   phantomState = null;
   phantomNextEligibleAt = 0;
   phantomRng = null;
+  phantomLastRollTick = -1;
 }
 
 function phantomEligibleZone(zone) {
@@ -988,7 +997,9 @@ function phantomEligibleZone(zone) {
 }
 
 function tickPhantom(simTime, shipWX, shipWY, shipVX, shipVY, worldScale) {
-  // If a phantom is already alive, age it and check proximity
+  // If a phantom is already alive, age it and check proximity. Both of
+  // these checks are time-based, not RNG-based, so they're safe to run
+  // every frame without breaking determinism.
   if (phantomState) {
     const age = simTime - phantomState.bornAt;
     if (age >= phantomState.lifespan) {
@@ -998,10 +1009,9 @@ function tickPhantom(simTime, shipWX, shipWY, shipVX, shipVY, worldScale) {
       phantomNextEligibleAt = simTime + 45 + rng() * 45;
       return;
     }
-    // Dissolve on player proximity
-    const dx = ((phantomState.wx - shipWX) + worldScale * 1.5) % worldScale - worldScale * 0.5;
-    const dy = ((phantomState.wy - shipWY) + worldScale * 1.5) % worldScale - worldScale * 0.5;
-    const dist = Math.hypot(dx, dy);
+    // Dissolve on player proximity (wrapped distance on the torus)
+    const [pdx, pdy] = worldDisplacement(phantomState.wx, phantomState.wy, shipWX, shipWY);
+    const dist = Math.hypot(pdx, pdy);
     if (dist < 0.14) {
       // The moment you look too closely, it isn't there.
       phantomState = null;
@@ -1012,16 +1022,22 @@ function tickPhantom(simTime, shipWX, shipWY, shipVX, shipVY, worldScale) {
     return;
   }
 
-  // No phantom alive — check if we can spawn one
+  // No phantom alive — only ROLL on a quantized sim-time tick, not per
+  // render frame. This keeps the phantom deterministic regardless of
+  // display refresh rate or tab throttling. Same seed + same simTime
+  // history = same phantom spawns.
+  const currentTick = Math.floor(simTime / PHANTOM_ROLL_QUANTUM);
+  if (currentTick === phantomLastRollTick) return;
+  phantomLastRollTick = currentTick;
+
   if (simTime < phantomNextEligibleAt) return;
   if (!phantomEligibleZone(signalZone)) return;
 
-  // Roll against the seeded stream. Low per-tick probability so the
-  // phantom stays rare even under long eligible windows. Rolls every
-  // tick, but only becomes likely once the signal is loud enough.
+  // Seeded roll — advanced once per quantum.
   const rng = getPhantomRng();
-  // Signal-weighted: more signal = more likely. Cap at ~0.0035/tick.
-  const weight = Math.min(0.0035, Math.max(0, (signalLevel - 0.3) * 0.008));
+  // Signal-weighted: more signal = more likely. Cap at ~0.015 per quantum.
+  // (Was ~0.0035 per frame × ~4 frames per quantum ≈ similar cadence.)
+  const weight = Math.min(0.015, Math.max(0, (signalLevel - 0.3) * 0.035));
   if (rng() > weight) return;
 
   // Spawn at the edge of sensor range, roughly opposite the player's motion
@@ -1895,7 +1911,11 @@ function gameLoop(now) {
     if (pauseNow && !_prevPause) togglePause();
 
     if (!transitionActive && confirmNow && !_prevConfirm) {
-      if (gamePhase === 'dead' && deathTimer > 1.0) {
+      // Unlock confirm only after the linger finishes plus a beat for
+      // the title to register. Matches the DEATH_LINGER_DURATION used
+      // in the end-screen render block.
+      const endScreenUnlock = DEATH_LINGER_DURATION + 1.0;
+      if (gamePhase === 'dead' && deathTimer > endScreenUnlock) {
         if (remoteAuthorityActive) {
           const previousEM = profileManager.active?.exoticMatter ?? 0;
           triggerTransition(() => {
@@ -1939,7 +1959,7 @@ function gameLoop(now) {
           audioEngine.setContext('menu');
         });
       }
-      if (gamePhase === 'escaped' && escapeTimer > 1.0) {
+      if (gamePhase === 'escaped' && escapeTimer > endScreenUnlock) {
         // Extract cargo → profile vault, then transition to home
         metaExtractedItems = inventorySystem.extractCargo();
         if (remoteAuthorityActive) {
@@ -2474,9 +2494,10 @@ function gameLoop(now) {
       const w = overlayCanvas.width;
       const h = overlayCanvas.height;
 
-      // Direction from player to inhibitor, in world coords
-      const dx = inhibitorState.wx - ship.wx;
-      const dy = inhibitorState.wy - ship.wy;
+      // Direction from player to inhibitor — toroidal displacement so the
+      // cue points at the actual nearest approach across the wrap seam,
+      // not across the entire world.
+      const [dx, dy] = worldDisplacement(ship.wx, ship.wy, inhibitorState.wx, inhibitorState.wy);
       const worldDist = Math.hypot(dx, dy);
 
       // Only dim if we're not right on top of the inhibitor (once it's
@@ -3587,8 +3608,9 @@ function gameLoop(now) {
     // LINGER — the cycle ends before the results screen tells you it has.
     // During the linger, the HUD fades and the simulation dims, but the
     // staged results reveal has not started yet. See RETURNAL-APPLICATION.md
-    // sprint 1 steal #2.
-    const LINGER_DURATION = 1.2;
+    // sprint 1 steal #2. Duration is a module-level constant because the
+    // continue-input gate below needs to agree with us.
+    const LINGER_DURATION = DEATH_LINGER_DURATION;
 
     const title = isEscape ? 'EXTRACTED' : collapsed ? 'COLLAPSED' : 'CONSUMED';
     const subtitle = isEscape ? 'out of a dying universe' : collapsed ? 'no way out' : 'the universe won';
