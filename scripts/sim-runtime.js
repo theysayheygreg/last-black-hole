@@ -1634,7 +1634,12 @@ function buildEchoWreckRecord(player, runResult) {
   if (peakCargoValue < 200) return null;
 
   const seed = runtime.session.seed;
-  const tickHash = `${seed}-${runtime.tick}-${player.clientId || 'anon'}`;
+  // Include position in the hash so two deaths at the same tick on the
+  // same seed by the same pilot do not collide (e.g. deterministic
+  // replay paths, quick repeated deaths). Per ECHOES-V1.md the echo is
+  // keyed by (seed, deathTimestamp, deathPosition).
+  const posKey = `${player.wx.toFixed(5)}:${player.wy.toFixed(5)}`;
+  const tickHash = `${seed}-${runtime.tick}-${player.clientId || 'anon'}-${posKey}`;
   const wreckId = `echo-${Math.abs(hashStringFNV(tickHash)).toString(16)}`;
 
   // Select a fragment from the seeded pool keyed on the death cause.
@@ -3039,16 +3044,19 @@ function tickPlayerSignal(player, dt) {
     }
   }
 
-  // Echo wreck proximity — the dead of past cycles leak signal.
-  // Each nearby echo adds to the player's generation. Multiple echoes
-  // stack. See docs/design/ECHOES-V1.md §Signal Integration.
-  const ECHO_SIGNAL_LEAK = 0.02;        // per second per nearby echo
-  const ECHO_SENSOR_RANGE = 0.20;       // world units
+  // Echo wreck proximity — the dead of past cycles leak signal within
+  // the player's sensor range. Scales with the pilot's sensor multiplier
+  // so Shroud hulls and sensor-upgraded pilots hear the dead from further
+  // away. Multiple echoes stack. See docs/design/ECHOES-V1.md §Signal.
+  const ECHO_SIGNAL_LEAK = 0.02;         // per second per nearby echo
+  const ECHO_SENSOR_RANGE_BASE = 0.30;   // baseline sensor reach in world units
+  const sensorMult = player.brain?.sensorRange || 1.0;
+  const echoRange = ECHO_SENSOR_RANGE_BASE * sensorMult;
   if (runtime.mapState.wrecks) {
     for (const wreck of runtime.mapState.wrecks) {
       if (!wreck.isEcho || wreck.looted) continue;
       const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
-      if (dist < ECHO_SENSOR_RANGE) {
+      if (dist < echoRange) {
         generation += ECHO_SIGNAL_LEAK;
       }
     }
