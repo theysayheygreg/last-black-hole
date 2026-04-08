@@ -81,6 +81,19 @@ class LocalControlPlaneClient {
     // Local mode has nothing durable to tear down for sim instances.
     return { ok: true, simInstanceId: instance.simInstanceId };
   }
+
+  // --- Echoes ---
+  async saveEchoWreck(wreck) {
+    return this.store.saveEchoWreck(wreck);
+  }
+
+  async getEchoesForSeed(seed) {
+    return this.store.getEchoesForSeed(seed);
+  }
+
+  async clearEchoesForSeed(seed) {
+    return this.store.clearEchoesForSeed(seed);
+  }
 }
 
 class RemoteControlPlaneClient {
@@ -132,6 +145,22 @@ class RemoteControlPlaneClient {
 
   async unregisterSimInstance(instance) {
     return requestJson("POST", this.baseUrl, "/sim/unregister", instance);
+  }
+
+  // --- Echoes ---
+  async saveEchoWreck(wreck) {
+    const body = await requestJson("POST", this.baseUrl, "/echoes/save", { wreck });
+    return body.echo;
+  }
+
+  async getEchoesForSeed(seed) {
+    const body = await requestJson("GET", this.baseUrl, `/echoes?seed=${encodeURIComponent(seed)}`);
+    return body.echoes || [];
+  }
+
+  async clearEchoesForSeed(seed) {
+    const body = await requestJson("DELETE", this.baseUrl, `/echoes?seed=${encodeURIComponent(seed)}`);
+    return body.cleared || 0;
   }
 }
 

@@ -280,6 +280,42 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // --- Echoes: past-cycle residue ---
+    if (req.method === "GET" && req.url.startsWith("/echoes?")) {
+      const url = new URL(req.url, `http://${HOST}:${PORT}`);
+      const seed = url.searchParams.get("seed");
+      if (seed == null || seed === "") {
+        sendJson(res, 400, { ok: false, error: "seed is required" });
+        return;
+      }
+      const echoes = store.getEchoesForSeed(seed);
+      sendJson(res, 200, { ok: true, echoes });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/echoes/save") {
+      const body = await readJson(req);
+      if (!body?.wreck) {
+        sendJson(res, 400, { ok: false, error: "wreck is required" });
+        return;
+      }
+      const saved = store.saveEchoWreck(body.wreck);
+      sendJson(res, 200, { ok: true, echo: saved });
+      return;
+    }
+
+    if (req.method === "DELETE" && req.url.startsWith("/echoes?")) {
+      const url = new URL(req.url, `http://${HOST}:${PORT}`);
+      const seed = url.searchParams.get("seed");
+      if (seed == null || seed === "") {
+        sendJson(res, 400, { ok: false, error: "seed is required" });
+        return;
+      }
+      const cleared = store.clearEchoesForSeed(seed);
+      sendJson(res, 200, { ok: true, cleared });
+      return;
+    }
+
     sendJson(res, 404, { ok: false, error: "Not found" });
   } catch (error) {
     sendJson(res, 500, { ok: false, error: error.message || "Control plane error" });

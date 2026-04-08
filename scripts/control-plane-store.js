@@ -130,6 +130,10 @@ class ControlPlaneStore {
         profiles: parsed.profiles || {},
         sessions: parsed.sessions || {},
         runs: parsed.runs || {},
+        // Echoes: map of seed → array of chronicle wrecks (max 8 each).
+        // An echo is evidence of a past cycle that persists in the
+        // present one. See docs/design/ECHOES.md for the feature family.
+        echoes: parsed.echoes || {},
       };
     } catch {
       return {
@@ -137,6 +141,7 @@ class ControlPlaneStore {
         profiles: {},
         sessions: {},
         runs: {},
+        echoes: {},
       };
     }
   }
@@ -282,6 +287,57 @@ class ControlPlaneStore {
       ...session,
       status: extra.status || "ended",
     }, players);
+  }
+
+  // --- Echoes ---
+  // An echo is residue from a past cycle — a chronicle wreck left by
+  // a pilot whose run did not finish the way this one will. Keyed by
+  // seed so players replaying the same seed see the same echo map.
+  // Max ECHO_MAX_PER_SEED per seed; oldest by createdAt evicted first.
+
+  saveEchoWreck(wreck) {
+    if (!wreck?.seed) throw new Error("echo.seed is required");
+    if (!wreck?.wreckId) throw new Error("echo.wreckId is required");
+    const seedKey = String(wreck.seed);
+    if (!this.state.echoes[seedKey]) {
+      this.state.echoes[seedKey] = [];
+    }
+    const list = this.state.echoes[seedKey];
+    // Replace if an echo with the same id already exists (idempotent)
+    const existingIdx = list.findIndex((e) => e.wreckId === wreck.wreckId);
+    const record = clone(wreck);
+    if (!record.createdAt) record.createdAt = nowIso();
+    if (existingIdx >= 0) {
+      list[existingIdx] = record;
+    } else {
+      list.push(record);
+    }
+    // Evict oldest if over cap
+    const ECHO_MAX_PER_SEED = 8;
+    if (list.length > ECHO_MAX_PER_SEED) {
+      list.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+      list.splice(0, list.length - ECHO_MAX_PER_SEED);
+    }
+    this._save();
+    return clone(record);
+  }
+
+  getEchoesForSeed(seed) {
+    if (seed == null) return [];
+    const list = this.state.echoes[String(seed)];
+    if (!Array.isArray(list)) return [];
+    return list.map((e) => clone(e));
+  }
+
+  clearEchoesForSeed(seed) {
+    if (seed == null) return 0;
+    const seedKey = String(seed);
+    const existing = this.state.echoes[seedKey];
+    if (!existing) return 0;
+    const count = existing.length;
+    delete this.state.echoes[seedKey];
+    this._save();
+    return count;
   }
 }
 
