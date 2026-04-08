@@ -6,6 +6,8 @@ const path = require("path");
 const crypto = require("crypto");
 const { performance } = require("perf_hooks");
 const { loadPlayableMaps } = require("./shared-map-loader.js");
+const { createRNGStreams } = require("./rng-stream.js");
+const SEEDED_GEN = require("./seeded-generation.js");
 const {
   buildCoarseFlowField,
   sampleCoarseFlowField,
@@ -64,14 +66,13 @@ const PERSONALITY_HULL_MAP = {
 };
 
 // --- Loot Economy ---
-// Tier gates: higher tiers unlock as session time advances.
-// Wreck aging: older wrecks have more valuable loot.
-// See LOOT-ECONOMY.md and ITEM-CATALOG.md for full design.
+// Item catalog, tier gates, signatures, and roll logic all live in
+// seeded-generation.js so the client can mirror them for prediction.
+// Wreck aging constants stay here since aging is server-runtime only.
 
-const LOOT_TIER_GATES = { 1: 0, 2: 30, 3: 120, 4: 240 }; // session seconds to unlock tier
-const LOOT_TIER_WEIGHTS = { 1: 60, 2: 30, 3: 8, 4: 2 };  // relative roll weights
-const WRECK_AGE_VALUE_CAP = 1.5;  // max value multiplier from aging
-const WRECK_AGE_CAP_SECONDS = 120; // seconds to reach max age multiplier
+const { LOOT_TIER_GATES, LOOT_TIER_WEIGHTS, ITEM_CATALOG, CONSUMABLE_CATALOG, COSMIC_SIGNATURES, WELL_NAMES } = SEEDED_GEN;
+const WRECK_AGE_VALUE_CAP = 1.5;
+const WRECK_AGE_CAP_SECONDS = 120;
 
 // Wreck spawn waves: later waves spawn fewer but richer wrecks in more dangerous positions
 const WRECK_WAVES = [
@@ -86,130 +87,34 @@ const WRECK_WAVE_REPEAT = { count: [1, 1], slots: [3, 5], dangerZone: 0.12 };
 const IDLE_SESSION_TICK_HZ = 1;
 const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
 
-// Compact item catalog — server only needs coefficients and metadata, not flavor text.
-// Full catalog with flavor in docs/design/ITEM-CATALOG.md.
-const ITEM_CATALOG = {
-  1: [ // T1
-    { id: 'patched-thruster',  name: 'Patched Thruster',  tier: 1, affinity: null,       coefficients: { thrustScale: 1.08 },                          value: [15, 25] },
-    { id: 'scrap-plating',     name: 'Scrap Plating',     tier: 1, affinity: null,       coefficients: { wellResistScale: 1.06 },                      value: [15, 20] },
-    { id: 'signal-baffle',     name: 'Signal Baffle',     tier: 1, affinity: null,       coefficients: { signalGenMult: 0.93 },                        value: [18, 28] },
-    { id: 'worn-coupling',     name: 'Worn Coupling',     tier: 1, affinity: null,       coefficients: { currentCoupling: 1.06 },                      value: [15, 22] },
-    { id: 'drag-foil',         name: 'Drag Foil',         tier: 1, affinity: null,       coefficients: { dragScale: 0.94 },                            value: [15, 20] },
-    { id: 'cargo-netting',     name: 'Cargo Netting',     tier: 1, affinity: null,       coefficients: { cargoSlots: 1 },                              value: [20, 30] },
-    { id: 'pulse-lens',        name: 'Pulse Lens',        tier: 1, affinity: null,       coefficients: { pulseRadiusScale: 1.10 },                     value: [18, 25] },
-    { id: 'sensor-dish',       name: 'Sensor Dish',       tier: 1, affinity: null,       coefficients: { sensorRange: 1.10 },                          value: [15, 22] },
-    { id: 'flow-vane',         name: 'Flow Vane',         tier: 1, affinity: 'drifter',  coefficients: { currentCoupling: 1.08 },                      value: [18, 25] },
-    { id: 'burn-canister',     name: 'Burn Canister',     tier: 1, affinity: 'breacher', coefficients: {},                                              value: [18, 25], special: 'burnFuel+3' },
-  ],
-  2: [ // T2
-    { id: 'tuned-thruster',      name: 'Tuned Thruster',      tier: 2, affinity: null,       coefficients: { thrustScale: 1.15 },                              value: [50, 80] },
-    { id: 'gravity-sheath',      name: 'Gravity Sheath',      tier: 2, affinity: null,       coefficients: { wellResistScale: 1.15 },                          value: [55, 85] },
-    { id: 'signal-dampener',     name: 'Signal Dampener',     tier: 2, affinity: null,       coefficients: { signalGenMult: 0.85 },                            value: [60, 90] },
-    { id: 'decay-accelerator',   name: 'Decay Accelerator',   tier: 2, affinity: null,       coefficients: { signalDecayMult: 1.20 },                          value: [55, 85] },
-    { id: 'current-amplifier',   name: 'Current Amplifier',   tier: 2, affinity: 'drifter',  coefficients: { currentCoupling: 1.18 },                          value: [60, 90] },
-    { id: 'afterburner-injector',name: 'Afterburner Injector', tier: 2, affinity: 'breacher', coefficients: { thrustScale: 1.12, signalGenMult: 1.10 },         value: [55, 80] },
-    { id: 'resonance-coil',     name: 'Resonance Coil',      tier: 2, affinity: 'resonant', coefficients: { pulseRadiusScale: 1.20, pulseCooldownScale: 0.90 },value: [65, 95] },
-    { id: 'ghost-weave',        name: 'Ghost Weave',         tier: 2, affinity: 'shroud',   coefficients: { signalGenMult: 0.82, sensorRange: 1.12 },          value: [70, 100] },
-    { id: 'cargo-brace',        name: 'Cargo Brace',         tier: 2, affinity: 'hauler',   coefficients: { cargoSlots: 1, pickupRadius: 1.10 },               value: [60, 90] },
-    { id: 'pulse-sharpener',    name: 'Pulse Sharpener',     tier: 2, affinity: null,       coefficients: { pulseSignalScale: 0.80, pulseRadiusScale: 0.90 },  value: [50, 75] },
-    { id: 'debuff-purge',       name: 'Debuff Purge',        tier: 2, affinity: null,       coefficients: { controlDebuffResist: 1.30 },                       value: [50, 75] },
-    { id: 'hull-reinforcement',  name: 'Hull Reinforcement',  tier: 2, affinity: null,       coefficients: { wellResistScale: 1.10, controlDebuffResist: 1.15 },value: [55, 85] },
-    { id: 'drag-coefficient',    name: 'Drag Coefficient',    tier: 2, affinity: null,       coefficients: { dragScale: 0.88 },                                value: [55, 80] },
-    { id: 'pickup-magnet',       name: 'Pickup Magnet',       tier: 2, affinity: null,       coefficients: { pickupRadius: 1.25 },                              value: [50, 75] },
-  ],
-  3: [ // T3
-    { id: 'dead-mans-thruster', name: "Dead Man's Thruster", tier: 3, affinity: 'drifter',  coefficients: { signalGenMult: 0.0, dragScale: 1.30 },  value: [200, 320], special: 'thrustSignalZero' },
-    { id: 'overcharged-core',   name: 'Overcharged Core',    tier: 3, affinity: 'breacher', coefficients: { thrustScale: 1.30, signalGenMult: 1.50, signalDecayMult: 0.70 }, value: [220, 350] },
-    { id: 'harmonic-anchor',    name: 'Harmonic Anchor',     tier: 3, affinity: 'resonant', coefficients: {},                                        value: [250, 380], special: 'eddyDuration+4,maxEddies+2' },
-    { id: 'phase-veil',         name: 'Phase Veil',          tier: 3, affinity: 'shroud',   coefficients: {},                                        value: [240, 360], special: 'ghostTrailBeacon,wakeCloakCooldown-15' },
-    { id: 'cargo-brace-mk2',    name: 'Cargo Brace Mk II',  tier: 3, affinity: 'hauler',   coefficients: {},                                        value: [230, 340], special: 'swarmDrainImmunity3' },
-    { id: 'tidal-resonator',    name: 'Tidal Resonator',     tier: 3, affinity: null,       coefficients: {},                                        value: [200, 300], special: 'pulseStandingWave' },
-    { id: 'well-skimmer',       name: 'Well Skimmer',        tier: 3, affinity: null,       coefficients: { wellResistScale: 1.35, thrustScale: 0.90 }, value: [210, 320] },
-    { id: 'signal-siphon',      name: 'Signal Siphon',       tier: 3, affinity: null,       coefficients: { signalDecayMult: 1.50, signalGenMult: 1.15 }, value: [200, 310] },
-    { id: 'precision-pulse',    name: 'Precision Pulse',     tier: 3, affinity: null,       coefficients: { pulseRadiusScale: 0.60, pulseSignalScale: 0.40, pulseCooldownScale: 0.50 }, value: [220, 340] },
-    { id: 'drift-engine',       name: 'Drift Engine',        tier: 3, affinity: 'drifter',  coefficients: { currentCoupling: 1.40, thrustScale: 0.75 }, value: [230, 350] },
-    { id: 'burn-extender',      name: 'Burn Extender',       tier: 3, affinity: 'breacher', coefficients: {},                                        value: [250, 370], special: 'burnFuel+15,burnRecharge×2' },
-    { id: 'sensor-array',       name: 'Sensor Array',        tier: 3, affinity: null,       coefficients: { sensorRange: 1.50, signalGenMult: 1.08 }, value: [200, 300] },
-  ],
-  4: [ // T4
-    { id: 'gravity-lens',           name: 'Gravity Lens',           tier: 4, affinity: 'resonant', coefficients: {}, value: [800, 1200],  special: 'pulseInvert' },
-    { id: 'echo-chamber',           name: 'Echo Chamber',           tier: 4, affinity: 'shroud',   coefficients: {}, value: [900, 1300],  special: 'autoDecoys' },
-    { id: 'void-anchor',            name: 'Void Anchor',            tier: 4, affinity: null,       coefficients: {}, value: [800, 1100],  special: 'recallBeacon' },
-    { id: 'singularity-drive',      name: 'Singularity Drive',      tier: 4, affinity: 'breacher', coefficients: {}, value: [1000, 1500], special: 'burnReverseWells' },
-    { id: 'laminar-flow-core',      name: 'Laminar Flow Core',      tier: 4, affinity: 'drifter',  coefficients: {}, value: [900, 1300],  special: 'instantFlowLock' },
-    { id: 'salvage-titan',          name: 'Salvage Titan',          tier: 4, affinity: 'hauler',   coefficients: { cargoSlots: 3 }, value: [800, 1200], special: 'ghostWreckLoot' },
-    { id: 'inhibitor-resonance',    name: 'Inhibitor Resonance',    tier: 4, affinity: null,       coefficients: {}, value: [850, 1200],  special: 'universalDampening' },
-    { id: 'temporal-displacement',  name: 'Temporal Displacement',  tier: 4, affinity: null,       coefficients: {}, value: [900, 1300],  special: 'deathTeleport' },
-  ],
-};
+// Wrappers around seeded-generation.js that route through runtime streams.
+// All init-time loot rolls flow through runtime.session.rng, which is
+// seeded from runtime.session.seed. Same seed → same initial loot.
 
-const CONSUMABLE_CATALOG = [
-  { id: 'shield-cell',      name: 'Shield Cell',      tier: 1, value: [20, 30],  effect: 'shieldBurst' },
-  { id: 'signal-purge',     name: 'Signal Purge',     tier: 1, value: [25, 35],  effect: 'signalPurge' },
-  { id: 'time-dilator',     name: 'Time Dilator',     tier: 2, value: [60, 90],  effect: 'timeSlowLocal' },
-  { id: 'breach-flare',     name: 'Breach Flare',     tier: 2, value: [80, 120], effect: 'breachFlare' },
-  { id: 'signal-flare',     name: 'Signal Flare',     tier: 1, value: [20, 35],  effect: 'signalFlare' },
-  { id: 'emergency-thrust', name: 'Emergency Thrust', tier: 2, value: [70, 100], effect: 'emergencyThrust' },
-  { id: 'cargo-jettison',   name: 'Cargo Jettison',   tier: 1, value: [15, 20],  effect: 'cargoJettison' },
-  { id: 'well-repulsor',    name: 'Well Repulsor',    tier: 3, value: [200, 280], effect: 'wellRepulsor' },
-];
-
-function availableTiers(sessionTime) {
-  const tiers = [];
-  for (const [tier, gateTime] of Object.entries(LOOT_TIER_GATES)) {
-    if (sessionTime >= gateTime) tiers.push(Number(tier));
-  }
-  return tiers;
+function currentRNG(streamName) {
+  return runtime.session?.rng?.rawStream(streamName) || Math.random;
 }
 
-function rollTier(sessionTime) {
-  const tiers = availableTiers(sessionTime);
-  let totalWeight = 0;
-  for (const t of tiers) totalWeight += LOOT_TIER_WEIGHTS[t] || 0;
-  let roll = Math.random() * totalWeight;
-  for (const t of tiers) {
-    roll -= LOOT_TIER_WEIGHTS[t] || 0;
-    if (roll <= 0) return t;
-  }
-  return tiers[0] || 1;
+function rollTier(sessionTime, streamName = 'loot') {
+  const bias = runtime.session?.lootQualityBias || 1.0;
+  return SEEDED_GEN.rollTier(currentRNG(streamName), sessionTime, bias);
 }
 
-function rollItem(tier) {
-  const pool = ITEM_CATALOG[tier];
-  if (!pool || pool.length === 0) return null;
-  const item = pool[Math.floor(Math.random() * pool.length)];
-  const baseValue = item.value[0] + Math.random() * (item.value[1] - item.value[0]);
-  return {
-    ...item,
-    value: Math.round(baseValue),
-    instanceId: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-  };
+function rollItem(tier, streamName = 'loot') {
+  const item = SEEDED_GEN.rollItem(currentRNG(streamName), tier);
+  if (!item) return null;
+  // instanceId uses Math.random — purely cosmetic, not seed-dependent
+  return { ...item, instanceId: `item-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` };
 }
 
-function rollConsumable(sessionTime) {
-  const maxTier = Math.max(...availableTiers(sessionTime));
-  const eligible = CONSUMABLE_CATALOG.filter(c => c.tier <= maxTier);
-  if (eligible.length === 0) return null;
-  const c = eligible[Math.floor(Math.random() * eligible.length)];
-  const baseValue = c.value[0] + Math.random() * (c.value[1] - c.value[0]);
-  return {
-    ...c,
-    value: Math.round(baseValue),
-    instanceId: `cons-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-  };
-}
-
-function generateWreckLoot(sessionTime, slotCount) {
-  const items = [];
-  for (let i = 0; i < slotCount; i++) {
-    const tier = rollTier(sessionTime);
-    const item = rollItem(tier);
-    if (item) items.push(item);
-  }
-  // 40% chance of a consumable
-  if (Math.random() < 0.4) {
-    const c = rollConsumable(sessionTime);
-    if (c) items.push(c);
+function generateWreckLoot(sessionTime, slotCount, streamName = 'loot') {
+  const rng = currentRNG(streamName);
+  const bias = runtime.session?.lootQualityBias || 1.0;
+  const items = SEEDED_GEN.generateWreckLoot(rng, sessionTime, slotCount, bias);
+  // Stamp cosmetic instance IDs after rolling so instance IDs don't affect RNG order
+  for (const item of items) {
+    const prefix = item.effect ? 'cons' : 'item';
+    item.instanceId = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   }
   return items;
 }
@@ -219,66 +124,23 @@ function wreckAgeMultiplier(wreckSpawnTime, currentTime) {
   return Math.min(WRECK_AGE_VALUE_CAP, 1.0 + (age / WRECK_AGE_CAP_SECONDS) * (WRECK_AGE_VALUE_CAP - 1.0));
 }
 
-// --- Seeded RNG (mulberry32) ---
-// Deterministic PRNG for seed-controlled variance (wells, loot bias, signatures).
-// NOTE: not fully deterministic yet — sentries, scavengers, inhibitor threshold,
-// and AI spawning still use Math.random(). Full determinism requires routing all
-// runtime randomness through this RNG. Seed is displayed for sharing but is not
-// yet replayable.
-function createSeededRNG(seed) {
-  let state = seed | 0;
-  return function () {
-    state = (state + 0x6D2B79F5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// Cosmic signatures — run-level CONFIG overrides that give each run a feel
-const COSMIC_SIGNATURES = [
-  { id: 'heavy_current',  name: 'heavy current',  mods: { currentCouplingMult: 1.3 } },
-  { id: 'dead_calm',      name: 'dead calm',       mods: { currentCouplingMult: 0.5, dragMult: 0.8 } },
-  { id: 'signal_storm',   name: 'signal storm',    mods: { signalGenMult: 1.5, signalDecayMult: 0.7 } },
-  { id: 'deep_gravity',   name: 'deep gravity',    mods: { wellGravityMult: 1.3, wellGrowthMult: 0.7 } },
-  { id: 'thin_space',     name: 'thin space',      mods: { wellGravityMult: 0.7, portalLifespanMult: 0.6 } },
-  { id: 'dark_run',       name: 'dark run',        mods: { sensorRangeMult: 0.6 } },
-];
-
-const WELL_NAMES = [
-  'Charybdis', 'Erebus', 'Tartarus', 'Lethe', 'Acheron',
-  'Styx', 'Cocytus', 'Phlegethon', 'Mnemosyne', 'Nyx',
-  'Abaddon', 'Sheol', 'Mictlan', 'Niflheim', 'Xibalba',
-  'Pandemonium', 'Gehenna', 'Dis', 'Elysium', 'Avalon',
-];
-
-function applyRunSeed(seed, mapState, session) {
-  const rng = createSeededRNG(seed);
-
+function applyRunSeed(rngStreams, mapState, session) {
   // Well variance: mass ±15%, growth rate ±20%, orbital direction, names
   for (let i = 0; i < mapState.wells.length; i++) {
     const well = mapState.wells[i];
-    well.mass *= 0.85 + rng() * 0.30;
-    well.growthRate *= 0.80 + rng() * 0.40;
-    well.orbitalDir = rng() > 0.5 ? 1 : -1;
-    well.name = WELL_NAMES[Math.floor(rng() * WELL_NAMES.length)];
+    well.mass *= rngStreams.range('wellMass', 0.85, 1.15);
+    well.growthRate *= rngStreams.range('wellGrowth', 0.80, 1.20);
+    well.orbitalDir = rngStreams.float('wellDir') > 0.5 ? 1 : -1;
+    well.name = rngStreams.pick('wellNames', WELL_NAMES);
     well.killRadius = wellKillRadiusForMass(well);
   }
 
-  // Loot quality bias: 0.8-1.2 multiplier on tier weights
-  session.lootQualityBias = 0.8 + rng() * 0.4;
-
-  // Cosmic signature: one per run
-  const sigIdx = Math.floor(rng() * COSMIC_SIGNATURES.length);
-  session.cosmicSignature = COSMIC_SIGNATURES[sigIdx];
-
-  // AI seed (drives personality + hull picks in spawnAIPlayers)
-  session.aiSeed = Math.floor(rng() * 1e9);
-
-  // Named wreck: 10% chance
-  session.hasNamedWreck = rng() < 0.10;
+  session.lootQualityBias = rngStreams.range('qualityBias', 0.8, 1.2);
+  session.cosmicSignature = SEEDED_GEN.pickCosmicSignature(rngStreams.rawStream('signature'));
+  session.aiSeed = Math.floor(rngStreams.float('aiSeed') * 1e9);
+  session.hasNamedWreck = rngStreams.chance('namedWreck', 0.10);
   if (session.hasNamedWreck) {
-    session.namedWreckWave = 3 + Math.floor(rng() * 3);
+    session.namedWreckWave = 3 + rngStreams.int('namedWreckWave', 0, 2);
   }
 }
 
@@ -813,15 +675,16 @@ function updatePlanetoidState(planetoid, wells, dt, worldScale) {
   }
 }
 
-function cloneMapState(mapId, worldScaleOverride = null) {
+function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
   const map = PLAYABLE_MAPS[mapId] || PLAYABLE_MAPS.shallows;
   const parsedWorldScale = worldScaleOverride == null ? NaN : Number(worldScaleOverride);
   const worldScale = Number.isFinite(parsedWorldScale) && parsedWorldScale > 0 ? parsedWorldScale : map.worldScale;
+  const growthRng = rngStreams ? rngStreams.rawStream('wellGrowthVar') : Math.random;
   const wells = map.wells.map((well) => ({
     ...well,
     baseKillRadius: well.killRadius,
     startMass: well.mass,
-    growthRate: (well.growthRate ?? WELL_GROWTH_AMOUNT) + (Math.random() * 2 - 1) * WELL_GROWTH_VARIANCE,
+    growthRate: (well.growthRate ?? WELL_GROWTH_AMOUNT) + (growthRng() * 2 - 1) * WELL_GROWTH_VARIANCE,
     killRadius: well.killRadius,
   }));
   const stars = map.stars.map((star) => ({
@@ -830,6 +693,7 @@ function cloneMapState(mapId, worldScaleOverride = null) {
     driftVX: 0,
     driftVY: 0,
   }));
+  const initialLootStream = rngStreams ? rngStreams.rawStream('initialWreckLoot') : Math.random;
   const wrecks = map.wrecks.map((wreck) => ({
     ...wreck,
     alive: true,
@@ -838,7 +702,12 @@ function cloneMapState(mapId, worldScaleOverride = null) {
     vx: 0,
     vy: 0,
     spawnTime: 0,
-    loot: generateWreckLoot(0, 1 + Math.floor(Math.random() * 2)), // T1 only at start
+    loot: SEEDED_GEN.generateWreckLoot(
+      initialLootStream,
+      0,
+      1 + Math.floor(initialLootStream() * 2),
+      1.0
+    ),
   }));
   const planetoids = map.planetoids.map((planetoid, index) =>
     initializePlanetoid(planetoid, wells, worldScale, index)
@@ -912,23 +781,24 @@ function spawnServerScavengers(mapState, session) {
   );
   const vultureCount = Math.max(1, Math.round(count * 0.33));
   const scavengers = [];
+  const rng = session?.rng?.rawStream('scavSpawn') || Math.random;
   for (let i = 0; i < count; i++) {
     const archetype = i < vultureCount ? "vulture" : "drifter";
     const edge = i % 4;
     let wx;
     let wy;
     if (edge === 0) {
-      wx = Math.random() * mapState.worldScale;
+      wx = rng() * mapState.worldScale;
       wy = 0.1;
     } else if (edge === 1) {
-      wx = Math.random() * mapState.worldScale;
+      wx = rng() * mapState.worldScale;
       wy = mapState.worldScale - 0.1;
     } else if (edge === 2) {
       wx = 0.1;
-      wy = Math.random() * mapState.worldScale;
+      wy = rng() * mapState.worldScale;
     } else {
       wx = mapState.worldScale - 0.1;
-      wy = Math.random() * mapState.worldScale;
+      wy = rng() * mapState.worldScale;
     }
     const identity = generateScavengerIdentity(archetype);
     scavengers.push({
@@ -941,7 +811,7 @@ function spawnServerScavengers(mapState, session) {
       wy,
       vx: 0,
       vy: 0,
-      facing: Math.random() * Math.PI * 2,
+      facing: rng() * Math.PI * 2,
       thrustIntensity: 0,
       alive: true,
       state: "drift",
@@ -954,8 +824,8 @@ function spawnServerScavengers(mapState, session) {
       deathAngle: 0,
       lootCount: 0,
       lootTarget: archetype === "vulture" ? 2 : 1,
-      decisionTimer: Math.random() * SCAVENGER_CONFIG.decisionInterval,
-      driftHeading: Math.random() * Math.PI * 2,
+      decisionTimer: rng() * SCAVENGER_CONFIG.decisionInterval,
+      driftHeading: rng() * Math.PI * 2,
       targetWreckId: null,
       targetPortalId: null,
     });
@@ -1286,7 +1156,11 @@ function startSession(config = {}) {
   }
   const requestedMapId = String(config.mapId || "shallows");
   const requestedWorldScale = config.worldScale == null ? null : Number(config.worldScale);
-  const mapState = cloneMapState(requestedMapId, requestedWorldScale);
+  // Build the RNG streams BEFORE cloning the map state so well growth
+  // variance and initial wreck loot roll through the seed.
+  const seed = Number.isFinite(Number(config.seed)) ? Number(config.seed) : Math.floor(Math.random() * 1e9);
+  const rngStreams = createRNGStreams(seed);
+  const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
   const scaleProfile = getSimScaleProfile(mapState.id, mapState.worldScale);
   runtime.session = {
     id: crypto.randomUUID(),
@@ -1353,10 +1227,16 @@ function startSession(config = {}) {
     simScaleProfile: scaleProfile.profileId,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
-  // Apply run seed — determines well variance, loot bias, entity selection
-  const seed = Number.isFinite(Number(config.seed)) ? Number(config.seed) : Math.floor(Math.random() * 1e9);
+  // Attach seed + rng to the live session. rng stored non-enumerably so
+  // it doesn't leak into JSON snapshots sent to clients.
   runtime.session.seed = seed;
-  applyRunSeed(seed, mapState, runtime.session);
+  Object.defineProperty(runtime.session, 'rng', {
+    value: rngStreams,
+    enumerable: false,
+    writable: true,
+    configurable: true,
+  });
+  applyRunSeed(runtime.session.rng, mapState, runtime.session);
 
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
@@ -1372,11 +1252,12 @@ function startSession(config = {}) {
     waves: 0,
     field: 0,
   };
-  // Inhibitor: randomize threshold per run
+  // Inhibitor: threshold per run, seeded for determinism
   const inh = INHIBITOR_CONFIG;
+  const inhRng = runtime.session.rng.rawStream('inhibitorInit');
   runtime.inhibitor = {
     pressure: 0,
-    threshold: inh.thresholdMin + Math.random() * (inh.thresholdMax - inh.thresholdMin),
+    threshold: inh.thresholdMin + inhRng() * (inh.thresholdMax - inh.thresholdMin),
     form: 0, wx: 0, wy: 0, vx: 0, vy: 0,
     intensity: 0, radius: inh.glitchRadius,
     localTime: 0, swarmTrackTimer: 0,
@@ -1799,26 +1680,27 @@ function tickWreckWaves(dt) {
   if (!runtime._wreckWaveIndex) runtime._wreckWaveIndex = 0;
   if (!runtime._wreckWaveRepeatTimer) runtime._wreckWaveRepeatTimer = 0;
   const ws = runtime.session.worldScale;
+  const waveRng = runtime.session?.rng?.rawStream('wreckWave') || Math.random;
 
   // Process scheduled waves
   while (runtime._wreckWaveIndex < WRECK_WAVES.length) {
     const wave = WRECK_WAVES[runtime._wreckWaveIndex];
     if (runtime.simTime < wave.time) break;
 
-    const count = wave.count[0] + Math.floor(Math.random() * (wave.count[1] - wave.count[0] + 1));
+    const count = wave.count[0] + Math.floor(waveRng() * (wave.count[1] - wave.count[0] + 1));
     for (let i = 0; i < count; i++) {
-      const slots = wave.slots[0] + Math.floor(Math.random() * (wave.slots[1] - wave.slots[0] + 1));
+      const slots = wave.slots[0] + Math.floor(waveRng() * (wave.slots[1] - wave.slots[0] + 1));
       const pos = findWreckSpawnPosition(wave.dangerZone);
       const wreck = {
         id: `wreck-wave-${runtime._wreckWaveIndex}-${i}-${runtime.tick}`,
         wx: pos.wx, wy: pos.wy,
         type: 'derelict',
-        tier: rollTier(runtime.simTime),
+        tier: rollTier(runtime.simTime, 'wreckTier'),
         size: slots > 2 ? 'large' : slots > 1 ? 'medium' : 'small',
         alive: true, looted: false, pickupCooldown: 0,
         vx: 0, vy: 0,
         spawnTime: runtime.simTime,
-        loot: generateWreckLoot(runtime.simTime, slots),
+        loot: generateWreckLoot(runtime.simTime, slots, 'wreckLoot'),
       };
       runtime.mapState.wrecks.push(wreck);
     }
@@ -1831,20 +1713,20 @@ function tickWreckWaves(dt) {
     if (runtime._wreckWaveRepeatTimer >= WRECK_WAVE_REPEAT_INTERVAL) {
       runtime._wreckWaveRepeatTimer -= WRECK_WAVE_REPEAT_INTERVAL;
       const wave = WRECK_WAVE_REPEAT;
-      const count = wave.count[0] + Math.floor(Math.random() * (wave.count[1] - wave.count[0] + 1));
+      const count = wave.count[0] + Math.floor(waveRng() * (wave.count[1] - wave.count[0] + 1));
       for (let i = 0; i < count; i++) {
-        const slots = wave.slots[0] + Math.floor(Math.random() * (wave.slots[1] - wave.slots[0] + 1));
+        const slots = wave.slots[0] + Math.floor(waveRng() * (wave.slots[1] - wave.slots[0] + 1));
         const pos = findWreckSpawnPosition(wave.dangerZone);
         const wreck = {
           id: `wreck-repeat-${runtime.tick}-${i}`,
           wx: pos.wx, wy: pos.wy,
           type: 'derelict',
-          tier: rollTier(runtime.simTime),
+          tier: rollTier(runtime.simTime, 'wreckTier'),
           size: slots > 2 ? 'large' : 'medium',
           alive: true, looted: false, pickupCooldown: 0,
           vx: 0, vy: 0,
           spawnTime: runtime.simTime,
-          loot: generateWreckLoot(runtime.simTime, slots),
+          loot: generateWreckLoot(runtime.simTime, slots, 'wreckLoot'),
         };
         runtime.mapState.wrecks.push(wreck);
       }
@@ -1855,20 +1737,20 @@ function tickWreckWaves(dt) {
 // Spawn position biased by danger zone: lower dangerZone = closer to wells
 function findWreckSpawnPosition(dangerZone) {
   const ws = runtime.session.worldScale;
+  const rng = runtime.session?.rng?.rawStream('wreckPos') || Math.random;
   for (let attempt = 0; attempt < 20; attempt++) {
-    const wx = Math.random() * ws;
-    const wy = Math.random() * ws;
+    const wx = rng() * ws;
+    const wy = rng() * ws;
     let minWellDist = Infinity;
     for (const well of runtime.mapState.wells) {
       const d = worldDistance(wx, wy, well.wx, well.wy, ws);
       if (d < minWellDist) minWellDist = d;
     }
-    // dangerZone is the minimum distance from any well — lower = more dangerous
     if (minWellDist >= dangerZone * 0.8 && minWellDist <= dangerZone * 2.0) {
       return { wx, wy };
     }
   }
-  return { wx: Math.random() * ws, wy: Math.random() * ws };
+  return { wx: rng() * ws, wy: rng() * ws };
 }
 
 function tickGrowth(dt) {
@@ -3046,20 +2928,21 @@ function spikePlayerSignal(player, amount) {
 function createAIPlayer(personalityKey, index, hullType = 'drifter') {
   const p = AI_PERSONALITIES[personalityKey];
   const name = p.names[index % p.names.length];
-  const lootTarget = p.lootTarget[0] + Math.floor(Math.random() * (p.lootTarget[1] - p.lootTarget[0] + 1));
+  const rng = runtime.session?.rng?.rawStream('aiInit') || Math.random;
+  const lootTarget = p.lootTarget[0] + Math.floor(rng() * (p.lootTarget[1] - p.lootTarget[0] + 1));
   const player = createPlayer(`ai-${personalityKey}-${index}`, name, hullType);
   player.isAI = true;
   player.personality = personalityKey;
   player.personalityWeights = p;
   player.aiState = {
-    goal: 'loot',           // loot | extract | evade | contest
+    goal: 'loot',
     targetWreckId: null,
     targetPortalId: null,
-    decisionTimer: Math.random() * AI_PLAYER_CONFIG.decisionInterval, // stagger
-    strategicTimer: Math.random() * AI_PLAYER_CONFIG.strategicInterval,
+    decisionTimer: rng() * AI_PLAYER_CONFIG.decisionInterval,
+    strategicTimer: rng() * AI_PLAYER_CONFIG.strategicInterval,
     lootTarget,
     lootCount: 0,
-    facingAngle: Math.random() * Math.PI * 2,
+    facingAngle: rng() * Math.PI * 2,
     thrustIntensity: 0,
   };
   return player;
@@ -3068,8 +2951,8 @@ function createAIPlayer(personalityKey, index, hullType = 'drifter') {
 function spawnAIPlayers(mapState, session) {
   const personalityKeys = Object.keys(AI_PERSONALITIES);
   const count = 3;
+  const rng = session?.rng?.rawStream('aiPick') || Math.random;
 
-  // Find human hull (if any) to avoid duplicating
   let humanHull = null;
   for (const p of runtime.players.values()) {
     if (!p.isAI) { humanHull = p.hullType; break; }
@@ -3079,24 +2962,20 @@ function spawnAIPlayers(mapState, session) {
   const chosenHulls = [];
 
   for (let i = 0; i < count; i++) {
-    // Pick personality — at least 2 distinct
     let key;
     if (i < 2) {
-      do { key = personalityKeys[Math.floor(Math.random() * personalityKeys.length)]; }
+      do { key = personalityKeys[Math.floor(rng() * personalityKeys.length)]; }
       while (chosenPersonalities.includes(key) && chosenPersonalities.length < personalityKeys.length);
     } else {
-      key = personalityKeys[Math.floor(Math.random() * personalityKeys.length)];
+      key = personalityKeys[Math.floor(rng() * personalityKeys.length)];
     }
     chosenPersonalities.push(key);
 
-    // Pick hull from personality's allowed list, avoiding human hull and duplicates
     const allowedHulls = PERSONALITY_HULL_MAP[key] || ['drifter'];
-    let hull = allowedHulls[Math.floor(Math.random() * allowedHulls.length)];
-    // Avoid duplicating human hull
+    let hull = allowedHulls[Math.floor(rng() * allowedHulls.length)];
     if (hull === humanHull && allowedHulls.length > 1) {
       hull = allowedHulls.find(h => h !== humanHull) || hull;
     }
-    // Avoid duplicating other AI hulls when possible
     if (chosenHulls.includes(hull)) {
       const alt = allowedHulls.find(h => !chosenHulls.includes(h) && h !== humanHull);
       if (alt) hull = alt;
@@ -3113,16 +2992,17 @@ function spawnAIPlayers(mapState, session) {
 
 function findSafeSpawn(mapState) {
   const ws = mapState.worldScale;
+  const rng = runtime.session?.rng?.rawStream('safeSpawn') || Math.random;
   for (let attempt = 0; attempt < 20; attempt++) {
-    const wx = Math.random() * ws;
-    const wy = Math.random() * ws;
+    const wx = rng() * ws;
+    const wy = rng() * ws;
     let safe = true;
     for (const well of mapState.wells) {
       if (worldDistance(wx, wy, well.wx, well.wy, ws) < 0.3) { safe = false; break; }
     }
     if (safe) return { wx, wy };
   }
-  return { wx: Math.random() * ws, wy: Math.random() * ws };
+  return { wx: rng() * ws, wy: rng() * ws };
 }
 
 // Analytical flow estimate from well positions (no GPU needed)
@@ -3725,13 +3605,14 @@ function getMomentumShieldMult(player) {
 function spawnSentries(mapState) {
   const cfg = SENTRY_CONFIG;
   const sentries = [];
+  const rng = runtime.session?.rng?.rawStream('sentrySpawn') || Math.random;
   for (const well of mapState.wells) {
-    const count = cfg.perWell[0] + Math.floor(Math.random() * (cfg.perWell[1] - cfg.perWell[0] + 1));
+    const count = cfg.perWell[0] + Math.floor(rng() * (cfg.perWell[1] - cfg.perWell[0] + 1));
     const baseOrbit = (well.ringOuter || 0.1);
     for (let i = 0; i < count; i++) {
-      const orbitRadius = baseOrbit * (cfg.orbitRadiusMult[0] + Math.random() * (cfg.orbitRadiusMult[1] - cfg.orbitRadiusMult[0]));
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
-      const speed = cfg.patrolSpeed[0] + Math.random() * (cfg.patrolSpeed[1] - cfg.patrolSpeed[0]);
+      const orbitRadius = baseOrbit * (cfg.orbitRadiusMult[0] + rng() * (cfg.orbitRadiusMult[1] - cfg.orbitRadiusMult[0]));
+      const angle = (i / count) * Math.PI * 2 + rng() * 0.3;
+      const speed = cfg.patrolSpeed[0] + rng() * (cfg.patrolSpeed[1] - cfg.patrolSpeed[0]);
       sentries.push({
         id: `sentry-${well.id}-${i}`,
         wellId: well.id,
