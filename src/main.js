@@ -189,6 +189,26 @@ let localAbilityState = null;
 let lastRunResult = null;  // populated from run.result event
 // localAbilityState: null in local-sim mode (hull abilities are server-only).
 // HUD and visual effects gracefully no-op when null.
+
+// --- THE PHANTOM ---
+// A purely client-side visual phenomenon. Sometimes, at high signal,
+// something appears at the edge of sensor range and then doesn't. There
+// is no server entity, no event, no snapshot field, no tooltip, no loot.
+// The game will never acknowledge it happened. Greg's note: "the orb in
+// Returnal is never explained. we have space for that in LBH."
+//
+// Behavior:
+// - Only rolls when signalZone is PRESENCE or higher
+// - Seeded-deterministic: same seed + same sim time produces same phantom
+// - Appears at sensor range edge, roughly opposite the player's motion
+// - Lifetime ~2.5s, then fades
+// - Dissolves instantly on player proximity
+// - Global cooldown 45-90s between appearances
+// - Rendered as a muted-red ship-like glyph cluster, deliberately almost
+//   invisible against the void
+let phantomState = null;          // { wx, wy, bornAt, lifespan, fading }
+let phantomNextEligibleAt = 0;    // simTime after which a new phantom may spawn
+let phantomRng = null;            // lazily created seeded stream
 let remoteFauna = [];
 let remoteSentries = [];
 let _starFlashTimer = 0;    // dramatic flash when star consumed by well
@@ -648,6 +668,7 @@ function transitionToTitle() {
  * Start a game on a specific map. Called from map select.
  */
 function startGame(map, seed = null) {
+  resetPhantomForNewSession();
   remoteAuthorityActive = false;
   remoteMapId = null;
   remoteSnapshot = null;
@@ -945,6 +966,116 @@ function renderSentries(ctx, camX, camY, canvasW, canvasH, time) {
   ctx.restore();
 }
 
+// --- THE PHANTOM (client-only) ---
+// See declaration near top of file for design notes.
+
+function getPhantomRng() {
+  if (phantomRng) return phantomRng;
+  const seed = remoteSnapshot?.session?.seed ?? previewSeed ?? 1;
+  phantomRng = createRNGStreams(seed).rawStream('phantom');
+  return phantomRng;
+}
+
+function resetPhantomForNewSession() {
+  phantomState = null;
+  phantomNextEligibleAt = 0;
+  phantomRng = null;
+}
+
+function phantomEligibleZone(zone) {
+  // Only appears when the universe is paying attention to you.
+  return zone === 'presence' || zone === 'beacon' || zone === 'flare' || zone === 'threshold';
+}
+
+function tickPhantom(simTime, shipWX, shipWY, shipVX, shipVY, worldScale) {
+  // If a phantom is already alive, age it and check proximity
+  if (phantomState) {
+    const age = simTime - phantomState.bornAt;
+    if (age >= phantomState.lifespan) {
+      phantomState = null;
+      // Schedule next eligibility window (45-90s, seeded)
+      const rng = getPhantomRng();
+      phantomNextEligibleAt = simTime + 45 + rng() * 45;
+      return;
+    }
+    // Dissolve on player proximity
+    const dx = ((phantomState.wx - shipWX) + worldScale * 1.5) % worldScale - worldScale * 0.5;
+    const dy = ((phantomState.wy - shipWY) + worldScale * 1.5) % worldScale - worldScale * 0.5;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 0.14) {
+      // The moment you look too closely, it isn't there.
+      phantomState = null;
+      const rng = getPhantomRng();
+      phantomNextEligibleAt = simTime + 60 + rng() * 30;
+      return;
+    }
+    return;
+  }
+
+  // No phantom alive — check if we can spawn one
+  if (simTime < phantomNextEligibleAt) return;
+  if (!phantomEligibleZone(signalZone)) return;
+
+  // Roll against the seeded stream. Low per-tick probability so the
+  // phantom stays rare even under long eligible windows. Rolls every
+  // tick, but only becomes likely once the signal is loud enough.
+  const rng = getPhantomRng();
+  // Signal-weighted: more signal = more likely. Cap at ~0.0035/tick.
+  const weight = Math.min(0.0035, Math.max(0, (signalLevel - 0.3) * 0.008));
+  if (rng() > weight) return;
+
+  // Spawn at the edge of sensor range, roughly opposite the player's motion
+  const sensorEdge = 0.9 * (ship.brain?.sensorRange || CONFIG.ship?.sensorRange || 0.9);
+  const motionAngle = Math.atan2(shipVY, shipVX);
+  const jitter = (rng() - 0.5) * 0.8; // ±0.4 rad
+  const angle = motionAngle + Math.PI + jitter;
+  const wx = (shipWX + Math.cos(angle) * sensorEdge + worldScale) % worldScale;
+  const wy = (shipWY + Math.sin(angle) * sensorEdge + worldScale) % worldScale;
+  const lifespan = 2.2 + rng() * 0.8; // 2.2-3.0s
+
+  phantomState = { wx, wy, bornAt: simTime, lifespan };
+}
+
+function renderPhantom(ctx, camX, camY, canvasW, canvasH, simTime) {
+  if (!phantomState) return;
+  const age = simTime - phantomState.bornAt;
+  const lifeFrac = age / phantomState.lifespan;
+  // Fade in 0-0.25, hold 0.25-0.7, fade out 0.7-1.0
+  let opacity;
+  if (lifeFrac < 0.25) opacity = lifeFrac / 0.25;
+  else if (lifeFrac < 0.7) opacity = 1.0;
+  else opacity = Math.max(0, 1 - (lifeFrac - 0.7) / 0.3);
+  if (opacity <= 0) return;
+
+  const [sx, sy] = worldToScreen(phantomState.wx, phantomState.wy, camX, camY, canvasW, canvasH);
+  if (sx < -40 || sx > canvasW + 40 || sy < -40 || sy > canvasH + 40) return;
+
+  // Deep muted red. Deliberately close to invisible against the void.
+  const base = opacity * 0.32;
+  ctx.save();
+  ctx.font = '11px "JetBrains Mono", "SF Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Ship-like glyph cluster — 5 chars in a cross-shaped arrangement,
+  // slightly drifting with a subtle bob to suggest ambient current.
+  const bob = Math.sin(simTime * 0.8 + phantomState.bornAt) * 0.6;
+  const cells = [
+    { ch: '<', dx:  0, dy:  0 + bob },
+    { ch: '=', dx: -7, dy:  0 + bob },
+    { ch: '=', dx:  7, dy:  0 + bob },
+    { ch: '·', dx: -4, dy: -6 + bob },
+    { ch: '·', dx:  4, dy: -6 + bob },
+  ];
+  for (const c of cells) {
+    ctx.fillStyle = `rgba(200, 60, 80, ${base.toFixed(3)})`;
+    ctx.shadowColor = `rgba(200, 60, 80, ${(base * 0.7).toFixed(3)})`;
+    ctx.shadowBlur = 4;
+    ctx.fillText(c.ch, sx + c.dx, sy + c.dy);
+  }
+  ctx.restore();
+}
+
 function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
   if (!remoteAuthorityActive || remotePlayers.length === 0) return;
   ctx.save();
@@ -1210,6 +1341,7 @@ function syncRemoteWorldState(world) {
 }
 
 async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
+  resetPhantomForNewSession();
   if (!simClient?.enabled) {
     startGame(mapEntry.map, previewSeed);
     return;
@@ -2247,6 +2379,17 @@ function gameLoop(now) {
     renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
+
+    // THE PHANTOM — tick + render. See declaration comments for design notes.
+    if (gamePhase === 'playing') {
+      tickPhantom(
+        simState.runElapsedTime,
+        ship.wx, ship.wy,
+        ship.vx || 0, ship.vy || 0,
+        WORLD_SCALE
+      );
+      renderPhantom(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime);
+    }
 
     // Hull ability visual effects
     if (localAbilityState) {
