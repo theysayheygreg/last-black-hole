@@ -1,8 +1,10 @@
-# Ghosts v1: Chronicle Wrecks
+# Echoes v1: Chronicle Wrecks
 
-> GHOSTS.md proposes three ghost classes (chronicle wrecks, doppler-ghosts, scout fragments). This doc is the v1 implementation spec for the first class only — chronicle wrecks.
+> ECHOES.md establishes the feature family ("echoes of past cycles") and lists four classes: chronicle wrecks, phantoms, scout drifts, and doppler-echoes. This doc is the v1 implementation spec for the first class only — **chronicle wrecks**, the persistent loot-bearing wrecks of pilots who died loudly enough for the universe to remember.
 >
-> Scout fragments and doppler-ghosts are v2 and v3 respectively. They share plumbing but add complexity that should wait until chronicle wrecks have been playtested.
+> Phantoms are already shipped as THE PHANTOM (client-only visual). Scout drifts are v2. Doppler-echoes are v3. They all share the same determinism layer but add complexity that should wait until chronicle wrecks have been playtested.
+>
+> **Lore framing:** every chronicle wreck is an echo of a cycle that ended. The wreck belongs to a pilot whose cycle collapsed, in the same seed, before the current cycle began. The wreck is not a memorial — it is a piece of the universe that did not fully clear when that cycle ended. Loot is still loot, but the item was carried by someone who is no longer here, in a cycle that did not finish the way this one will.
 
 ---
 
@@ -11,10 +13,10 @@
 **One sentence:** when a pilot dies on a seed, their death creates a persistent wreck on that seed that other pilots (and the same pilot in later cycles) can find, loot for partial inventory, and read a short unreliable chronicle fragment from.
 
 **Not in V1:**
-- Doppler-ghosts (AI that replays your last death). Deferred to v3.
+- Doppler-echoes (AI that replays your last death). Deferred to v3.
 - Scout fragments floating in currents. Deferred to v2.
 - Pilot-authored inscriptions (player types their own epitaph). Deferred until we know the writing pool holds up.
-- Cross-seed ghost propagation (your death on seed A shows up on seed B). Out of scope — breaks the determinism story.
+- Cross-seed echo propagation (your death on seed A shows up on seed B). Out of scope — breaks the determinism story.
 
 ---
 
@@ -55,10 +57,10 @@ Stored in the control plane, keyed by `(seed, wreckId)`. Wreck id is a determini
 
 ### Control Plane Schema Addition
 
-New table (or JSON collection) `ghostWrecks`:
+New table (or JSON collection) `echoes`:
 
 ```
-ghostWrecks/
+echoes/
   {seed}/
     {wreckId}.json   ← individual wreck records
     index.json       ← { wrecks: [wreckId, ...], evictedAt: timestamp }
@@ -107,7 +109,7 @@ function maybePersistChronicleWreck(player, runtime, session) {
     fragment,
   };
 
-  controlPlaneClient.saveChronicleWreck(wreck);
+  controlPlaneClient.saveEchoWreck(wreck);
 }
 ```
 
@@ -117,17 +119,17 @@ In `startSession()`, *after* `applyRunSeed()` and the initial map state is built
 
 ```js
 // After applyRunSeed()
-const existingGhostWrecks = await controlPlaneClient.getChronicleWrecks(session.seed);
-for (const ghost of existingGhostWrecks) {
-  runtime.mapState.wrecks.push(hydrateGhostWreck(ghost));
+const existingEchoes = await controlPlaneClient.getEchoesForSeed(session.seed);
+for (const echo of existingEchoes) {
+  runtime.mapState.wrecks.push(hydrateEchoWreck(echo));
 }
 ```
 
-`hydrateGhostWreck()` converts the persisted shape into a live wreck that `tickWrecks` and `tickPlayerPickups` understand, plus these extra fields:
+`hydrateEchoWreck()` converts the persisted shape into a live wreck that `tickWrecks` and `tickPlayerPickups` understand, plus these extra fields:
 
 ```js
 {
-  ...ghost,
+  ...echo,
   type: "chronicle",              // distinguishes from regular derelicts
   alive: true,
   looted: false,
@@ -342,7 +344,7 @@ Chronicle wrecks leak signal. This is the feature that makes them a tradeoff —
 - Add `player._peakCargoValue` tracking on cargo updates
 - Add `player.deathCause` and `player.deathEntityId` population in death event paths (well death, vessel death, collapse, swarm, scavenger)
 - Add `maybePersistChronicleWreck()` call in `commitPlayerOutcome`
-- Add ghost wreck hydration in `startSession` after `applyRunSeed`
+- Add echo wreck hydration in `startSession` after `applyRunSeed`
 - Add chronicle wreck signal leak in `tickPlayerSignal`
 - Add extra signal spike in chronicle wreck pickup path
 
@@ -354,12 +356,12 @@ Chronicle wrecks leak signal. This is the feature that makes them a tradeoff —
 - Mirror the pool and picker for client-side rendering
 
 ### scripts/control-plane-runtime.js + control-plane-store.js
-- Add `/ghost-wrecks/:seed` endpoints (GET list, POST create)
-- Add `ghostWrecks/` storage directory
+- Add `/echoes/:seed` endpoints (GET list, POST create)
+- Add `echoes/` storage directory
 - Add 8-per-seed cap with oldest-eviction
 
 ### scripts/control-plane-client.js
-- Add `saveChronicleWreck(wreck)` and `getChronicleWrecks(seed)` methods
+- Add `saveEchoWreck(wreck)` and `getEchoesForSeed(seed)` methods
 
 ### src/main.js
 - Add chronicle wreck rendering in the wreck render pass (distinct visual)
@@ -431,9 +433,9 @@ Codex-usable checklist for the implementation PR:
 - [ ] Mirror pool to src/seeded-generation.js
 - [ ] Add `pickChronicleFragment(rngStream, cause)` helper (both sides)
 - [ ] Add `maybePersistChronicleWreck()` in commitPlayerOutcome path
-- [ ] Add control plane schema for `ghostWrecks/{seed}/`
-- [ ] Add `/ghost-wrecks/:seed` GET/POST endpoints
-- [ ] Add client methods `saveChronicleWreck`, `getChronicleWrecks`
+- [ ] Add control plane schema for `echoes/{seed}/`
+- [ ] Add `/echoes/:seed` GET/POST endpoints
+- [ ] Add client methods `saveEchoWreck`, `getEchoesForSeed`
 - [ ] Add hydration in `startSession` after `applyRunSeed`
 - [ ] Add signal leak in `tickPlayerSignal` for chronicle wrecks within sensor range
 - [ ] Add extra loot spike for chronicle wreck pickups
@@ -450,7 +452,7 @@ Estimated implementation: **3-4 days of Codex work**. Writing the 40 fragments i
 
 ## See Also
 
-- `GHOSTS.md` — the full three-class proposal (this doc is v1 of class 1)
+- `ECHOES.md` — the full three-class proposal (this doc is v1 of class 1)
 - `RETURNAL-REFERENCE.md` — the "why" (scout corpses as prior art)
 - `RETURNAL-APPLICATION.md` — the parallel application plan
 - `DESIGN-SYSTEM-APPLICATION.md` — the compliance pass that precedes this work

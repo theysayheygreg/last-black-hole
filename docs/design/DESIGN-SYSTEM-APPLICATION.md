@@ -10,7 +10,7 @@
 
 DESIGN-SYSTEM.md answers "what are LBH's design tokens?" It does not answer "where does the existing code violate them, and what order do we fix things in?" This doc is that.
 
-It also has a second job: the Returnal application plan and the Ghosts v1 spec (shipping alongside this) both propose new UI — results screen enhancements, scout fragments, doppler-ghost outlines, chronicle wreck glyphs. Every one of those has to cite the design system rather than invent new tokens. This doc makes that citation easy.
+It also has a second job: the Returnal application plan and the Echoes v1 spec (shipping alongside this) both propose new UI — results screen enhancements, scout drifts, doppler-echo outlines, chronicle wreck glyphs. Every one of those has to cite the design system rather than invent new tokens. This doc makes that citation easy.
 
 ---
 
@@ -92,8 +92,8 @@ The single most useful rule in the design system is in §10: **"Gold means value
 
 This is a semantic color contract. Any new UI we write should cite it by reference. Some places it applies immediately:
 
-- **Chronicle wrecks** (GHOSTS-V1.md): wreck inscriptions and pilot names render in accretion gold `#FFD966` — they are value.
-- **Doppler-ghosts**: the cyan outline is borderline — it's inhibitor cyan `#1ACCB3` and carries the "threat-adjacent" reading. The ghost is not hostile, but it IS a shadow of threat. Cyan is the right token.
+- **Chronicle wrecks** (ECHOES-V1.md): wreck inscriptions and pilot names render in accretion gold `#FFD966` — they are value.
+- **Doppler-echoes**: the cyan outline is borderline — it's inhibitor cyan `#1ACCB3` and carries the "threat-adjacent" reading. The doppler is not hostile, but it IS a shadow of threat. Cyan is the right token.
 - **Scout fragments**: teal `#008080` — neutral narrative drip. They are not loot and not danger.
 - **The Inhibitor approach edge-dim**: inhibitor magenta `#CC1A80` radiating inward from the edge of the screen. Direct match.
 - **Results screen**: EXTRACTED = gold, CONSUMED = magenta, COLLAPSED = teal dim. (See fix 5 above.)
@@ -110,7 +110,7 @@ This rule is doing *semantic* work, not aesthetic work. When the player learns "
 
 When another agent (or a future me) writes a new HUD panel, they should be pasting that prompt. Same for results screens, warnings, signal meters. The prompt guide is a copy-paste contract — it eliminates the "I made up a color" failure mode.
 
-**Action item:** Any new UI component in the ghosts/Returnal work cites the exact prompt from §10. If the component doesn't fit an existing prompt, we extend §10 with a new one. No inventing.
+**Action item:** Any new UI component in the echoes/Returnal work cites the exact prompt from §10. If the component doesn't fit an existing prompt, we extend §10 with a new one. No inventing.
 
 ---
 
@@ -126,7 +126,7 @@ In order:
 6. **Audit dimensional tear transition timings** against §8 (30 min).
 7. **Add hologram inspection mode to META-LOOP backlog** (trivial — just a note). Actual implementation is a later sprint.
 
-The first four items are small fixes that bring compliance up significantly. They should ship as a single "design system compliance pass" commit group before any of the ghosts/Returnal work goes live.
+The first four items are small fixes that bring compliance up significantly. They should ship as a single "design system compliance pass" commit group before any of the echoes/Returnal work goes live.
 
 ---
 
@@ -135,7 +135,7 @@ The first four items are small fixes that bring compliance up significantly. The
 Three things get easier now that this doc exists:
 
 1. **Multi-agent UI work has a source of truth.** Another agent writing a new screen can read DESIGN-SYSTEM.md and produce on-brand work without needing Greg to review color choices.
-2. **Future design docs can reference instead of redefine.** The Ghosts v1 spec (GHOSTS-V1.md) and the Returnal application plan (RETURNAL-APPLICATION.md) both point at DESIGN-SYSTEM.md for colors rather than specifying their own.
+2. **Future design docs can reference instead of redefine.** The Echoes v1 spec (ECHOES-V1.md) and the Returnal application plan (RETURNAL-APPLICATION.md) both point at DESIGN-SYSTEM.md for colors rather than specifying their own.
 3. **Regressions become visible.** If someone adds a panel with `rgba(0, 0, 0, 0.8)`, it's now a *violation*, not an aesthetic choice. Reviews can catch it.
 
 The design system is one of those infrastructure docs that feels like overhead when you write it and saves weeks of drift once it exists. The work the other agent did was correct and should be the first thing any new UI PR cites.
@@ -149,4 +149,4 @@ The design system is one of those infrastructure docs that feels like overhead w
 3. **Should the home screen eventually become DOM overlays instead of canvas?** Bigger question. Canvas is pixel-precise but fragile; DOM inherits design system automatically. My vote: v2 migrates home to DOM, v1 stays canvas with the `drawHUDText()` helper.
 4. **Does the "alien glyph for affinity" idea need a full design pass before shipping, or is a unicode-symbol v1 fine?** Unicode would let us ship tomorrow. Custom glyph atlas is a week.
 
-See RETURNAL-APPLICATION.md and GHOSTS-V1.md for the specific features this design system work will be cited by.
+See RETURNAL-APPLICATION.md and ECHOES-V1.md for the specific features this design system work will be cited by.

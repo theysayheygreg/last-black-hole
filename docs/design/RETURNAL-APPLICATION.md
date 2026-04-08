@@ -70,7 +70,7 @@ At the bottom there's a sequenced roadmap that groups these by sprint.
 
 **Dependencies:** the overlay render layer has a free draw pass (it does).
 
-**Ship order:** sprint 1-2. Want this before the ghosts work ships so the ghost+Inhibitor interaction has the visual vocabulary ready.
+**Ship order:** sprint 1-2. Want this before the echoes work ships so the echo+Inhibitor interaction has the visual vocabulary ready.
 
 **Citation:** RETURNAL-REFERENCE.md §UI/UX > In-Game HUD, DESIGN-SYSTEM.md §2 Color Palette (inhibitor magenta).
 
@@ -90,7 +90,7 @@ At the bottom there's a sequenced roadmap that groups these by sprint.
 
 **Ship order:** sprint 2. Writing pool can start immediately in parallel.
 
-**Citation:** RETURNAL-REFERENCE.md §UI/UX > Scout Logs, GHOSTS.md §3 Scout Fragments.
+**Citation:** RETURNAL-REFERENCE.md §UI/UX > Scout Logs, ECHOES.md §3 Scout Fragments.
 
 ---
 
@@ -185,7 +185,7 @@ At the bottom there's a sequenced roadmap that groups these by sprint.
 
 **Dependencies:** needs design pre-vis before implementation. Greg should sketch what "LBH hologram" looks like vs "Returnal hologram" (we're ASCII over fluid, not polygonal).
 
-**Ship order:** sprint 4+ (after ghosts v1 ships). Pre-vis work can start now.
+**Ship order:** sprint 4+ (after echoes v1 ships). Pre-vis work can start now.
 
 **Citation:** RETURNAL-REFERENCE.md §UI/UX > Inspection Screens.
 
@@ -203,7 +203,7 @@ At the bottom there's a sequenced roadmap that groups these by sprint.
 
 **Dependencies:** a slightly enriched home screen layout. Right now the home screen is 100% functional — no space for atmosphere.
 
-**Ship order:** sprint 4+. Post-ghosts v1. Greg should author the first 5-10 "shift events" personally. Agents can't invent the right tone for this.
+**Ship order:** sprint 4+. Post-echoes v1. Greg should author the first 5-10 "shift events" personally. Agents can't invent the right tone for this.
 
 **Citation:** RETURNAL-REFERENCE.md §Narrative > The Home.
 
@@ -233,7 +233,7 @@ The chronicle fragment system + the signal voice system + the silhouette haunt. 
 | 6. Alien glyphs for affinity | small | medium |
 | 7. Silhouette haunts | medium | medium-high |
 
-**Also running in parallel:** ghost system v1 (GHOSTS-V1.md). The fragments from steal #4 are the writing pool that GHOSTS-V1 uses for chronicle wrecks.
+**Also running in parallel:** echoes v1 (ECHOES-V1.md). The fragments from steal #4 are the writing pool that ECHOES-V1 uses for chronicle wrecks.
 
 **Ship criterion:** players start finding fragments evocative enough to screenshot and share. Non-deterministic — we'll know if it worked.
 
@@ -269,7 +269,7 @@ Longer-horizon work that needs pre-vis before implementation.
 - The hospital/home flashbacks — too literal, LBH's metaphysics are different
 
 **Things from RETURNAL-REFERENCE.md that I merged into other steals:**
-- "Dead civilization as evidence, not enemy" is implicit in the Chronicle Wreck design in GHOSTS.md — not a separate steal.
+- "Dead civilization as evidence, not enemy" is implicit in the Chronicle Wreck design in ECHOES.md — not a separate steal.
 - "Parasites / adrenaline / malignancy" map onto our existing signal system — no separate work needed.
 - "Biomes as states of mind" maps onto our cosmic signature system, which already exists.
 
@@ -284,4 +284,4 @@ Longer-horizon work that needs pre-vis before implementation.
 5. **Who writes the chronicle fragment pool?** 40-60 one-liners. Greg should write the first 10 to set tone. Agents can extend afterward.
 6. **The rotating minimap — do we HAVE a minimap currently, or is this a two-step ("add minimap, then rotate it")?**
 
-See DESIGN-SYSTEM-APPLICATION.md for the design token compliance work that precedes all of this, and GHOSTS-V1.md for the feature this plan runs parallel to.
+See DESIGN-SYSTEM-APPLICATION.md for the design token compliance work that precedes all of this, and ECHOES-V1.md for the feature this plan runs parallel to.
