@@ -103,6 +103,38 @@
       font-size: 10px;
       letter-spacing: 0.1em;
     }
+    #hud-inhibitor {
+      top: 128px; left: 16px;
+      color: rgba(204, 26, 128, 0.9);
+      text-shadow: 0 0 8px rgba(204, 26, 128, 0.5);
+      line-height: 1.4;
+      border-color: rgba(204, 26, 128, 0.2);
+      animation: inhibitorPulse 2.4s ease-in-out infinite;
+    }
+    #hud-inhibitor .hud-label {
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      color: rgba(180, 60, 120, 0.7);
+      text-transform: uppercase;
+    }
+    #hud-inhibitor-form {
+      font-size: 13px;
+      text-transform: lowercase;
+      font-weight: 600;
+    }
+    #hud-inhibitor.form-vessel {
+      color: rgba(255, 60, 140, 1.0);
+      text-shadow: 0 0 12px rgba(255, 60, 140, 0.7);
+      animation: inhibitorPulseVessel 1.4s ease-in-out infinite;
+    }
+    @keyframes inhibitorPulse {
+      0%, 100% { opacity: 0.8; }
+      50% { opacity: 1.0; }
+    }
+    @keyframes inhibitorPulseVessel {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 1.0; }
+    }
     #hud-portals {
       top: 12px; right: 16px;
       text-align: right;
@@ -307,6 +339,10 @@
       <div class="hud-label">signal</div>
       <div id="hud-signal-bar"><div id="hud-signal-fill"></div></div>
       <div id="hud-signal-zone">ghost</div>
+    </div>
+    <div id="hud-inhibitor" class="hud-panel" style="display: none;">
+      <div class="hud-label">inhibitor</div>
+      <div id="hud-inhibitor-form">dormant</div>
     </div>
     <div id="hud-portals" class="hud-panel">
       <div class="hud-label">wormholes</div>

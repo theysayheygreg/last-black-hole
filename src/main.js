@@ -212,6 +212,24 @@ let phantomRng = null;            // lazily created seeded stream
 let phantomLastRollTick = -1;     // last quantized sim tick we rolled on
 const PHANTOM_ROLL_QUANTUM = 0.25; // seconds per spawn roll (frame-rate independent)
 
+// --- INHIBITOR HAUNTS ---
+// Pre-spawn hauntings. Different from phantoms: these are tied to the
+// inhibitor's rising pressure, not random signal. When inhibitor.pressure
+// climbs past 70% of the wake threshold but form is still 0, the player
+// gets brief silhouette glimpses of a vessel-like shape — warning them
+// the universe is about to respond.
+//
+// Unlike the phantom, these do not point opposite the player's motion —
+// they appear in the direction the future inhibitor spawn is likely to
+// come from, which the server keeps hidden until form 1. Since we don't
+// know the final spawn location on the client, we pick a random screen
+// edge per haunt and let the player feel "something nearby is about to
+// notice me" without knowing from where.
+let hauntState = null;            // { sx, sy, bornAt, lifespan }
+let hauntNextEligibleAt = 0;      // simTime after which a new haunt may spawn
+let hauntLastRollTick = -1;       // quantized tick gate
+const HAUNT_ROLL_QUANTUM = 0.5;   // haunts are rarer — 2s between rolls
+
 // Death linger duration — the world dims before the staged results reveal.
 // Shared between the render path and the continue-input gate so pressing
 // confirm during the linger does nothing; the player must see the linger
@@ -677,6 +695,7 @@ function transitionToTitle() {
  */
 function startGame(map, seed = null) {
   resetPhantomForNewSession();
+  resetHauntForNewSession();
   remoteAuthorityActive = false;
   remoteMapId = null;
   remoteSnapshot = null;
@@ -1092,6 +1111,89 @@ function renderPhantom(ctx, camX, camY, canvasW, canvasH, simTime) {
   ctx.restore();
 }
 
+// --- INHIBITOR HAUNTS ---
+// See declaration above. Client-only pre-spawn haunting tied to
+// inhibitor.pressure approaching the wake threshold.
+
+function resetHauntForNewSession() {
+  hauntState = null;
+  hauntNextEligibleAt = 0;
+  hauntLastRollTick = -1;
+}
+
+function tickHaunt(simTime, canvasW, canvasH) {
+  // Age and expire
+  if (hauntState) {
+    if (simTime - hauntState.bornAt >= hauntState.lifespan) {
+      hauntState = null;
+      hauntNextEligibleAt = simTime + 8 + (phantomRng?.() || Math.random()) * 10;
+    }
+    return;
+  }
+  if (simTime < hauntNextEligibleAt) return;
+  // Only eligible while the inhibitor is building toward form 1
+  const inh = inhibitorState;
+  if (!inh || inh.form > 0) return;
+  const threshold = inh.threshold || 1.0;
+  const pressure = inh.pressure || 0;
+  const pressureFrac = pressure / Math.max(0.01, threshold);
+  if (pressureFrac < 0.65) return;
+
+  // Quantized roll — avoid frame-rate drift
+  const currentTick = Math.floor(simTime / HAUNT_ROLL_QUANTUM);
+  if (currentTick === hauntLastRollTick) return;
+  hauntLastRollTick = currentTick;
+
+  // Roll weight ramps sharply as pressure approaches threshold
+  const rng = getPhantomRng();
+  const weight = Math.max(0, (pressureFrac - 0.65) * 0.12); // peaks ~0.042 at full pressure
+  if (rng() > weight) return;
+
+  // Pick a random screen-edge position (client-local, not world)
+  const edge = Math.floor(rng() * 4);
+  const margin = 48;
+  let sx, sy;
+  if (edge === 0) {      sx = margin + rng() * (canvasW - margin * 2); sy = margin; }
+  else if (edge === 1) { sx = canvasW - margin; sy = margin + rng() * (canvasH - margin * 2); }
+  else if (edge === 2) { sx = margin + rng() * (canvasW - margin * 2); sy = canvasH - margin; }
+  else {                 sx = margin; sy = margin + rng() * (canvasH - margin * 2); }
+
+  hauntState = { sx, sy, bornAt: simTime, lifespan: 1.6 + rng() * 0.8 };
+}
+
+function renderHaunt(ctx, simTime) {
+  if (!hauntState) return;
+  const age = simTime - hauntState.bornAt;
+  const lifeFrac = age / hauntState.lifespan;
+  // Fade 0-0.3, hold 0.3-0.7, fade 0.7-1.0
+  let op;
+  if (lifeFrac < 0.3) op = lifeFrac / 0.3;
+  else if (lifeFrac < 0.7) op = 1.0;
+  else op = Math.max(0, 1 - (lifeFrac - 0.7) / 0.3);
+
+  // Inhibitor magenta, very faint — the haunt is a hint, not a reveal.
+  const alpha = op * 0.35;
+  ctx.save();
+  ctx.font = '12px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = `rgba(204, 26, 128, ${alpha.toFixed(3)})`;
+  ctx.shadowColor = `rgba(204, 26, 128, ${(alpha * 0.8).toFixed(3)})`;
+  ctx.shadowBlur = 8;
+  // Tall narrow cluster — suggests the vessel form without being it
+  const cells = [
+    { ch: '|', dx: 0, dy: -6 },
+    { ch: '|', dx: 0, dy:  0 },
+    { ch: '|', dx: 0, dy:  6 },
+    { ch: '-', dx: -5, dy: -2 },
+    { ch: '-', dx:  5, dy: -2 },
+  ];
+  for (const c of cells) {
+    ctx.fillText(c.ch, hauntState.sx + c.dx, hauntState.sy + c.dy);
+  }
+  ctx.restore();
+}
+
 function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
   if (!remoteAuthorityActive || remotePlayers.length === 0) return;
   ctx.save();
@@ -1197,6 +1299,35 @@ function applyRemoteEvents(events) {
         if (isLocal) {
           lastRunResult = payload;
         }
+        break;
+      case 'inhibitor.wake':
+        // First moment the inhibitor actually crosses into form 1. The
+        // universe has noticed the player loudly enough that it has
+        // decided to respond. No location shown — direction comes via
+        // the edge-dim vignette, not a pointer.
+        showWarning('something is watching', 'rgba(204, 26, 128, 0.95)', 3500);
+        audioEngine.playEvent?.('inhibitorWake');
+        break;
+      case 'inhibitor.form':
+        if (payload.form === 1) {
+          showWarning('— glitch —', 'rgba(204, 26, 128, 0.88)', 2600);
+        } else if (payload.form === 2) {
+          showWarning('— swarm —', 'rgba(204, 26, 128, 0.95)', 3200);
+        } else if (payload.form === 3) {
+          // The vessel is the terminal form. Loud dread.
+          showWarning('THE VESSEL', 'rgba(255, 60, 140, 1.0)', 4000);
+        } else if (payload.form === 0) {
+          // Reset — should be rare but handle it (e.g. session reset)
+          showWarning('pressure relieved', 'rgba(120, 200, 180, 0.7)', 2000);
+        }
+        break;
+      case 'inhibitor.drainCargo':
+        if (isLocal) {
+          showWarning('cargo drained', 'rgba(204, 26, 128, 0.9)', 1800);
+        }
+        break;
+      case 'inhibitor.finalPortal':
+        showWarning('final portal opened', 'rgba(255, 217, 102, 0.95)', 4000);
         break;
       case 'player.loot':
         // Echo wreck pickup — show the chronicle fragment as a warning
@@ -1375,6 +1506,7 @@ function syncRemoteWorldState(world) {
 
 async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   resetPhantomForNewSession();
+  resetHauntForNewSession();
   if (!simClient?.enabled) {
     startGame(mapEntry.map, previewSeed);
     return;
@@ -2426,6 +2558,11 @@ function gameLoop(now) {
         WORLD_SCALE
       );
       renderPhantom(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime);
+
+      // INHIBITOR HAUNTS — pre-spawn silhouette glimpses while pressure
+      // climbs toward the wake threshold. See declaration comments.
+      tickHaunt(simState.runElapsedTime, overlayCanvas.width, overlayCanvas.height);
+      renderHaunt(ctx, simState.runElapsedTime);
     }
 
     // Hull ability visual effects
@@ -2909,6 +3046,7 @@ function gameLoop(now) {
       signalLevel,
       signalZone,
       abilityState: localAbilityState,
+      inhibitorState,
       ship,
       camX, camY,
       canvasW: overlayCanvas.width,

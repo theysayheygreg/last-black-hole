@@ -24,6 +24,7 @@ let _inventoryPanelEl;
 let _warningsEl;
 let _signalFillEl, _signalZoneEl;
 let _ability1El, _ability2El;
+let _inhibitorEl, _inhibitorFormEl;
 let _dropCallback = null;  // set by main.js for drop handling
 let _lastPortalCount = -1;
 let _lastCollapseStr = '';
@@ -51,6 +52,8 @@ export function initHUD() {
   _signalZoneEl = document.getElementById('hud-signal-zone');
   _ability1El = document.getElementById('hud-ability1');
   _ability2El = document.getElementById('hud-ability2');
+  _inhibitorEl = document.getElementById('hud-inhibitor');
+  _inhibitorFormEl = document.getElementById('hud-inhibitor-form');
 }
 
 export function showHUD() {
@@ -270,6 +273,27 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     _signalFillEl.style.backgroundColor = zoneColors[zone] || zoneColors.ghost;
     _signalZoneEl.textContent = zone;
     _signalZoneEl.style.color = zoneColors[zone] || zoneColors.ghost;
+  }
+
+  // === INHIBITOR FORM ===
+  if (_inhibitorEl && opts.inhibitorState) {
+    const form = opts.inhibitorState.form || 0;
+    if (form <= 0) {
+      _inhibitorEl.style.display = 'none';
+    } else {
+      _inhibitorEl.style.display = '';
+      const formName = form === 1 ? 'glitch'
+        : form === 2 ? 'swarm'
+        : form === 3 ? 'vessel'
+        : 'dormant';
+      if (_inhibitorFormEl) _inhibitorFormEl.textContent = formName;
+      // Swap the CSS class so the vessel form pulses harder
+      if (form === 3) {
+        _inhibitorEl.classList.add('form-vessel');
+      } else {
+        _inhibitorEl.classList.remove('form-vessel');
+      }
+    }
   }
 
   // === HULL ABILITIES ===
