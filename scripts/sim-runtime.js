@@ -1240,6 +1240,24 @@ function startSession(config = {}) {
   runtime.mapState.fauna = [];
   runtime.mapState.sentries = spawnSentries(mapState);
   runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState, runtime.session);
+
+  // Hydrate persisted echo wrecks for this seed. Injected as live wrecks
+  // so they participate in tickPlayerPickups/tickWrecks like any other
+  // wreck. Marked with type: 'echo' and isChronicle: true so the client
+  // can render them distinctly. See docs/design/ECHOES-V1.md §Spawn Rules.
+  const startedSessionId = runtime.session.id;
+  Promise.resolve(controlPlane.getEchoesForSeed(seed))
+    .then((echoes) => {
+      // Guard against hydration arriving after the session was reset
+      if (runtime.session.id !== startedSessionId) return;
+      if (!Array.isArray(echoes) || echoes.length === 0) return;
+      for (const echo of echoes) {
+        runtime.mapState.wrecks.push(hydrateEchoWreck(echo));
+      }
+    })
+    .catch((err) => {
+      console.error('[echoes] hydrate failed:', err?.message || err);
+    });
   runtime.tick = 0;
   runtime.simTime = 0;
   runtime.systemAccumulators = {
@@ -1571,6 +1589,149 @@ function buildRunResult(player, outcome) {
   };
 }
 
+// Track the peak cargo value a player has ever held this cycle. Used
+// for tier-rating their echo wreck if they die. See docs/design/ECHOES-V1.md.
+function updatePeakCargoValue(player) {
+  if (!player || !Array.isArray(player.cargo)) return;
+  let total = 0;
+  for (const item of player.cargo) {
+    if (item && Number.isFinite(item.value)) total += item.value;
+  }
+  if (!Number.isFinite(player._peakCargoValue) || total > player._peakCargoValue) {
+    player._peakCargoValue = total;
+  }
+}
+
+// Chronicle tier derived from peak cargo value. Wrecks carry the
+// "earned" tier of the cycle, not a random roll. See ECHOES-V1.md §Tier Table.
+function echoTierFromCargoValue(value) {
+  const v = Number.isFinite(value) ? value : 0;
+  if (v >= 2501) return 4;
+  if (v >= 801) return 3;
+  if (v >= 201) return 2;
+  return 1;
+}
+
+// Select the highest-value 60% of a pilot's final cargo for their
+// echo wreck. The remaining 40% is lost to the void. "Loss is loss"
+// pillar holds — the dead pilot does not get their stuff back, but
+// whoever finds the echo can loot from what they were carrying.
+function selectEchoLoot(cargo, keepRatio = 0.6) {
+  const filled = (cargo || []).filter(Boolean);
+  if (filled.length === 0) return [];
+  const keepCount = Math.max(1, Math.ceil(filled.length * keepRatio));
+  const sorted = [...filled].sort((a, b) => (b.value || 0) - (a.value || 0));
+  return sorted.slice(0, keepCount).map(item => ({ ...item }));
+}
+
+// Build an echo wreck record for a pilot that just died. Only produces
+// a record if the cycle was "loud enough" to be remembered — the pilot
+// needs a meaningful peak cargo value. Dying empty leaves no echo; not
+// every cycle is loud enough for the universe to remember.
+function buildEchoWreckRecord(player, runResult) {
+  if (!runtime.session?.seed) return null;
+  const peakCargoValue = Number.isFinite(player._peakCargoValue) ? player._peakCargoValue : 0;
+  if (peakCargoValue < 200) return null;
+
+  const seed = runtime.session.seed;
+  const tickHash = `${seed}-${runtime.tick}-${player.clientId || 'anon'}`;
+  const wreckId = `echo-${Math.abs(hashStringFNV(tickHash)).toString(16)}`;
+
+  // Select a fragment from the seeded pool keyed on the death cause.
+  // Use a per-wreck derived stream so multiple simultaneous deaths don't
+  // shift the main RNG streams.
+  const fragmentRng = runtime.session.rng.derive('echoFragment', wreckId);
+  const fragment = SEEDED_GEN.pickChronicleFragment
+    ? SEEDED_GEN.pickChronicleFragment(fragmentRng, runResult.deathCause || 'unknown')
+    : '';
+
+  return {
+    wreckId,
+    seed,
+    createdAt: new Date().toISOString(),
+    pilotName: player.name || player.hullType || 'unknown',
+    hullType: player.hullType || 'drifter',
+    deathCause: runResult.deathCause || 'unknown',
+    deathEntityId: runResult.deathEntityId || null,
+    wx: player.wx,
+    wy: player.wy,
+    survivalTime: runtime.simTime,
+    signalPeak: player._signalPeak || 0,
+    signalPeakZone: player._signalPeakZone || 'ghost',
+    peakCargoValue,
+    tier: echoTierFromCargoValue(peakCargoValue),
+    loot: selectEchoLoot(player.cargo, 0.6),
+    fragment,
+  };
+}
+
+// Convert a persisted echo record into a live wreck that tickWrecks
+// and tickPlayerPickups treat like any other derelict. The echo flag
+// is preserved so the client can render it distinctly and the signal
+// leak / pickup-spike systems can detect it.
+function hydrateEchoWreck(echo) {
+  const wreck = {
+    ...echo,
+    id: `echo-${echo.wreckId || Math.random().toString(36).slice(2, 8)}`,
+    type: 'echo',
+    isEcho: true,
+    alive: true,
+    looted: false,
+    pickupCooldown: 0,
+    vx: 0,
+    vy: 0,
+    spawnTime: 0, // echoes are ambient from tick 0
+    loot: Array.isArray(echo.loot) ? echo.loot.map(item => ({ ...item })) : [],
+    // Preserve the narrative payload so the pickup path can display it
+    echoFragment: echo.fragment || '',
+    echoPilotName: echo.pilotName || 'unknown',
+    echoHullType: echo.hullType || 'drifter',
+    echoDeathCause: echo.deathCause || 'unknown',
+    echoSurvivalTime: echo.survivalTime || 0,
+    tier: echo.tier || 1,
+  };
+  // Nudge position out of any well kill radius if the original death
+  // site is now occupied by a grown well (wells grow across cycles).
+  const ws = runtime.session?.worldScale;
+  if (ws && runtime.mapState?.wells) {
+    for (const well of runtime.mapState.wells) {
+      const [dx, dy] = worldDisplacementClamped(wreck.wx, wreck.wy, well.wx, well.wy, ws);
+      const dist = Math.hypot(dx, dy);
+      const minSafe = (well.killRadius || 0) * 1.3;
+      if (dist > 0 && dist < minSafe) {
+        const scale = minSafe / dist;
+        wreck.wx = ((well.wx - dx * scale) % ws + ws) % ws;
+        wreck.wy = ((well.wy - dy * scale) % ws + ws) % ws;
+      }
+    }
+  }
+  return wreck;
+}
+
+// Local wrapped-displacement helper for the nudge above. The existing
+// worldDistance/worldDisplacement helpers in this file are 2-arg style,
+// this one returns the 2D delta B→A wrapped by world scale.
+function worldDisplacementClamped(ax, ay, bx, by, ws) {
+  let dx = bx - ax;
+  let dy = by - ay;
+  const half = ws / 2;
+  if (dx > half) dx -= ws;
+  if (dx < -half) dx += ws;
+  if (dy > half) dy -= ws;
+  if (dy < -half) dy += ws;
+  return [dx, dy];
+}
+
+// Tiny FNV-1a hash for stable wreck ids. Same input → same output.
+function hashStringFNV(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h | 0;
+}
+
 function commitPlayerOutcome(player, outcome) {
   if (!player || player.isAI || !player.profileId) return null;
   if (player.committedOutcome) return null;
@@ -1586,6 +1747,20 @@ function commitPlayerOutcome(player, outcome) {
     session: runtime.session,
     runResult, // full result package for persistence
   }));
+
+  // Chronicle echo wreck: persist on death only. Extractions do not
+  // leave echoes (they reached the door — the universe does not need
+  // to remember them as a warning). See ECHOES-V1.md §Spawn Rules.
+  if (outcome === 'dead') {
+    const echoRecord = buildEchoWreckRecord(player, runResult);
+    if (echoRecord) {
+      trackControlPlaneWrite(
+        Promise.resolve(controlPlane.saveEchoWreck(echoRecord))
+          .catch((err) => console.error('[echoes] save failed:', err?.message || err))
+      );
+    }
+  }
+
   // Existing consumers depend on profile.updated to know the write finished
   publishEvent("profile.updated", {
     clientId: player.clientId,
@@ -2138,16 +2313,26 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
     if (!wreck.loot || wreck.loot.length === 0) {
       wreck.looted = true;
     }
+    // Track the peak cargo value this player ever held during the cycle.
+    // Used later to tier-rate their chronicle echo wreck if they die.
+    updatePeakCargoValue(player);
     // Signal spike from looting (tier-based)
     const wreckTier = wreck.tier || 1;
-    const lootSpike = wreckTier >= 3 ? SIGNAL_CONFIG.lootSpikeT3
+    let lootSpike = wreckTier >= 3 ? SIGNAL_CONFIG.lootSpikeT3
       : wreckTier >= 2 ? SIGNAL_CONFIG.lootSpikeT2
       : SIGNAL_CONFIG.lootSpikeT1;
+    // Echo wrecks are loud: taking something from the dead makes noise.
+    // Adds +0.10 on top of the tier-based spike. See ECHOES-V1.md.
+    if (wreck.isEcho) lootSpike += 0.10;
     spikePlayerSignal(player, lootSpike);
     publishEvent("player.loot", {
       clientId: player.clientId,
       wreckId: wreck.id,
       cargoCount: getCargoCount(player),
+      isEcho: Boolean(wreck.isEcho),
+      echoFragment: wreck.echoFragment || null,
+      echoPilotName: wreck.echoPilotName || null,
+      echoHullType: wreck.echoHullType || null,
     });
     if (getCargoCount(player) >= PLAYER_CARGO_SLOTS) break;
   }
@@ -2851,6 +3036,21 @@ function tickPlayerSignal(player, dt) {
     if (dist < cfg.wellProximityDist) {
       generation += cfg.wellProximityRate;
       break; // only count once
+    }
+  }
+
+  // Echo wreck proximity — the dead of past cycles leak signal.
+  // Each nearby echo adds to the player's generation. Multiple echoes
+  // stack. See docs/design/ECHOES-V1.md §Signal Integration.
+  const ECHO_SIGNAL_LEAK = 0.02;        // per second per nearby echo
+  const ECHO_SENSOR_RANGE = 0.20;       // world units
+  if (runtime.mapState.wrecks) {
+    for (const wreck of runtime.mapState.wrecks) {
+      if (!wreck.isEcho || wreck.looted) continue;
+      const dist = worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale);
+      if (dist < ECHO_SENSOR_RANGE) {
+        generation += ECHO_SIGNAL_LEAK;
+      }
     }
   }
 
