@@ -23,7 +23,7 @@ import { InputManager } from './input.js';
 import { ASCIIRenderer } from './ascii-renderer.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
-import { initHUD, showHUD, hideHUD, updateHUD, showWarning, setDropCallback,
+import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
@@ -3520,9 +3520,15 @@ function gameLoop(now) {
   if (!rendererFixtureActive && (gamePhase === 'dead' || gamePhase === 'escaped')) {
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
-    const t = gamePhase === 'dead' ? deathTimer : escapeTimer;
+    const rawT = gamePhase === 'dead' ? deathTimer : escapeTimer;
     const isEscape = gamePhase === 'escaped';
     const collapsed = !isEscape && portalSystem.activeCount === 0 && !portalSystem.hasMoreWaves;
+
+    // LINGER — the cycle ends before the results screen tells you it has.
+    // During the linger, the HUD fades and the simulation dims, but the
+    // staged results reveal has not started yet. See RETURNAL-APPLICATION.md
+    // sprint 1 steal #2.
+    const LINGER_DURATION = 1.2;
 
     const title = isEscape ? 'EXTRACTED' : collapsed ? 'COLLAPSED' : 'CONSUMED';
     const subtitle = isEscape ? 'out of a dying universe' : collapsed ? 'no way out' : 'the universe won';
@@ -3533,12 +3539,49 @@ function gameLoop(now) {
     const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.save();
 
-    // Dark overlay + scanlines + terminal frame
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.75)';
+    // Linger phase: dim the world gradually instead of snapping to the
+    // dark overlay. Compute linger fraction 0→1 across LINGER_DURATION,
+    // then hold at 1 for the staged reveal.
+    const lingerFrac = Math.min(1.0, rawT / LINGER_DURATION);
+    // Fade the HUD in lockstep with the linger
+    fadeHUD(1.0 - lingerFrac);
+    // Ease in with a small power curve — slow at first, then drops
+    const dimEase = lingerFrac * lingerFrac * (3 - 2 * lingerFrac);
+    // Final overlay alpha 0.75 at end of linger. During linger, it ramps
+    // from 0 (world fully visible) to 0.35 (world dimming, still visible)
+    // to 0.75 (world mostly gone, results start resolving).
+    const overlayAlpha = lingerFrac < 1.0
+      ? dimEase * 0.55  // 0 to 0.55 during linger — the fluid stays visible
+      : 0.55 + Math.min(0.20, (rawT - LINGER_DURATION) * 0.6); // ramp remainder quickly
+    ctx.fillStyle = `rgba(0, 2, 12, ${overlayAlpha.toFixed(3)})`;
     ctx.fillRect(0, 0, w, h);
-    drawScanlines(ctx, w, h, 0.025);
-    const frameColor = isEscape ? 'rgba(100, 255, 255, 0.2)' : 'rgba(255, 50, 30, 0.15)';
-    drawTerminalFrame(ctx, cx - 220, cy - 130, 440, 280, null, frameColor);
+
+    // Scanlines and frame only appear after the linger
+    if (rawT > LINGER_DURATION) {
+      drawScanlines(ctx, w, h, 0.025);
+      const frameColor = isEscape ? 'rgba(100, 255, 255, 0.2)' : 'rgba(255, 50, 30, 0.15)';
+      drawTerminalFrame(ctx, cx - 220, cy - 130, 440, 280, null, frameColor);
+    }
+
+    // Effective timer for the staged reveal — starts counting from the end
+    // of the linger. All existing reveal timing offsets (title at t>0.3,
+    // subtitle at t>0.6, items at t>1.0, stats, etc.) continue to work
+    // unchanged relative to the post-linger clock.
+    const t = Math.max(0, rawT - LINGER_DURATION);
+
+    // During the linger, draw a soft glow word at the center — a single
+    // beat before the real title appears. Matches the "the cycle ended
+    // before the screen told you" feeling.
+    if (rawT < LINGER_DURATION) {
+      const lingerAlpha = Math.min(0.35, lingerFrac * 0.4);
+      ctx.fillStyle = `${titleColor} ${lingerAlpha.toFixed(3)})`;
+      ctx.font = '12px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = `${titleColor} ${(lingerAlpha * 0.5).toFixed(3)})`;
+      ctx.shadowBlur = 10;
+      ctx.fillText('— cycle ended —', cx, cy);
+      ctx.shadowBlur = 0;
+    }
 
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 16;

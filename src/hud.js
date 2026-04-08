@@ -54,12 +54,34 @@ export function initHUD() {
 }
 
 export function showHUD() {
-  if (_hudEl) _hudEl.style.display = '';
+  if (_hudEl) {
+    _hudEl.style.display = '';
+    _hudEl.style.opacity = '';
+    _hudEl.style.transition = '';
+  }
 }
 
 export function hideHUD() {
-  if (_hudEl) _hudEl.style.display = 'none';
+  if (_hudEl) {
+    _hudEl.style.display = 'none';
+    _hudEl.style.opacity = '';
+    _hudEl.style.transition = '';
+  }
   if (_warningsEl) _warningsEl.innerHTML = '';
+}
+
+/**
+ * Fade the HUD during the death linger. Pass 0..1. The HUD stays
+ * mounted (display: '') but its opacity tracks the caller's linger
+ * fraction. Called every frame during the dead/escaped phases so the
+ * HUD dims in sync with the world overlay.
+ */
+export function fadeHUD(opacity) {
+  if (!_hudEl) return;
+  const clamped = Math.max(0, Math.min(1, opacity));
+  _hudEl.style.display = '';
+  _hudEl.style.opacity = clamped.toFixed(3);
+  _hudEl.style.transition = 'opacity 0.1s linear';
 }
 
 function fmtTime(seconds) {
