@@ -2464,6 +2464,66 @@ function gameLoop(now) {
       }
     }
 
+    // --- INHIBITOR EDGE DIM ---
+    // When the Inhibitor is active, darken the edge of the screen closest
+    // to its approach vector. No arrow, no tooltip — the universe just
+    // gets darker in the direction of the thing that's coming for you.
+    // Intensity scales with inhibitor form. Color is inhibitor magenta
+    // (DESIGN-SYSTEM.md §2). Reference: RETURNAL-APPLICATION.md steal #3.
+    if (inhibitorState && inhibitorState.form > 0) {
+      const w = overlayCanvas.width;
+      const h = overlayCanvas.height;
+
+      // Direction from player to inhibitor, in world coords
+      const dx = inhibitorState.wx - ship.wx;
+      const dy = inhibitorState.wy - ship.wy;
+      const worldDist = Math.hypot(dx, dy);
+
+      // Only dim if we're not right on top of the inhibitor (once it's
+      // that close, the dim is useless — the player is dying)
+      if (worldDist > 0.08) {
+        // Normalize to a screen-space angle. Screen Y is flipped from world Y.
+        const angle = Math.atan2(-dy, dx);
+
+        // Intensity: ramps with form (1→3) and inhibitor.intensity (0→1),
+        // plus distance attenuation so far-away inhibitors glow less.
+        const formWeight = Math.min(1, inhibitorState.form / 3);
+        const distFrac = Math.max(0, Math.min(1, 1 - worldDist / (WORLD_SCALE * 0.6)));
+        const coreIntensity = formWeight * (0.4 + 0.6 * distFrac);
+        const pulse = 0.8 + 0.2 * Math.sin(totalTime * 1.4);
+        const edgeAlpha = Math.min(0.6, coreIntensity * pulse);
+
+        if (edgeAlpha > 0.02) {
+          // Radial gradient from the edge point inward toward the player.
+          // The "edge point" is the intersection of the direction vector
+          // with the screen rectangle. Compute by projecting along the
+          // angle until we hit a screen edge.
+          const cxs = w / 2;
+          const cys = h / 2;
+          const screenReach = Math.max(w, h);
+          const edgeX = cxs + Math.cos(angle) * screenReach;
+          const edgeY = cys + Math.sin(angle) * screenReach;
+
+          // Gradient from the edge point inward, fading as it approaches
+          // the center of the screen. Outer: inhibitor magenta. Inner:
+          // fully transparent.
+          const grad = ctx.createRadialGradient(
+            edgeX, edgeY, 0,
+            edgeX, edgeY, screenReach * 0.95
+          );
+          grad.addColorStop(0, `rgba(204, 26, 128, ${edgeAlpha.toFixed(3)})`);
+          grad.addColorStop(0.35, `rgba(80, 10, 60, ${(edgeAlpha * 0.55).toFixed(3)})`);
+          grad.addColorStop(0.70, `rgba(20, 5, 30, ${(edgeAlpha * 0.2).toFixed(3)})`);
+          grad.addColorStop(1.0, 'rgba(0, 0, 20, 0)');
+
+          ctx.save();
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, w, h);
+          ctx.restore();
+        }
+      }
+    }
+
     // Equippable effect: showKillRadii — draw kill zone circles during gameplay
     if (inventorySystem.hasEffect('showKillRadii')) {
       const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
