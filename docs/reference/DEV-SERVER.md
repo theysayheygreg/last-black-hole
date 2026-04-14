@@ -1,5 +1,10 @@
 # LBH Dev Server and Process Model
 
+See also:
+
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/reference/RUNTIME-MODES.md`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/reference/TEST-HARNESS.md`
+
 ## Current Process Model
 
 LBH now has four distinct runtime roles:
@@ -26,11 +31,26 @@ These are intentionally separate so local playtesting, distributed-runtime work,
 - `npm run dev:status`
 - `npm run dev:stop`
 - `npm run dev:restart`
+- `npm run stack`
+- `npm run stack:browser`
+- `npm run stack:remote -- --sim=http://HOST:PORT`
+- `npm run stack:status`
+- `npm run stack:stop`
 
 The harness commands remain:
 
 - `npm test`
 - `npm run test:renderer`
+
+## Preferred launch contract
+
+LBH now emits lightweight structured JSON events into the existing dev/control/sim logs. The goal is diagnosis, not analytics: same processes, same log files, better event shape.
+
+The older per-process scripts still exist because they are useful for debugging. For ordinary development, the new stack commands are the cleaner product model.
+
+- `npm run stack:browser` → browser client only
+- `npm run stack` / `npm start` → local host stack
+- `npm run stack:remote -- --sim=http://HOST:PORT` → local browser client against remote authority
 
 The service-layer commands are now:
 
@@ -44,6 +64,23 @@ The service-layer commands are now:
 - `npm run sim:restart`
 
 Those start and stop their own transient server automatically.
+
+## Desktop Status Surface
+
+The packaged Electron build now exposes a first-pass stack-status window for the embedded authority stack.
+
+Open it from the app menu:
+
+- `Last Singularity -> Stack Status`
+
+That surface is intentionally modest. It shows:
+
+- embedded control-plane health
+- embedded sim health
+- session status, player counts, overload state, and idle shutdown timing
+- recent process log lines from the embedded children
+
+It is there to make the local packaged app legible, not to replace the terminal or the deterministic harness.
 
 ## Browser Tooling
 

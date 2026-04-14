@@ -25,21 +25,31 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - Rig upgrade tracks (all 5 hulls, 3 tracks × 5 levels)
 
 ### L5 Next (Implementation Queue)
+- Productize the local stack
+  - [x] canonical launcher / runtime modes
+  - [x] lightweight structured logs across dev/control/sim
+  - [x] desktop-visible stack status / logs
+  - [x] first content manifest extraction (server-side hull manifest)
 1. Tailscale hardware validation — mini authority + MacBook client
-2. Item catalog — concrete T1-T4 artifacts with coefficients + affinities
-3. Loot economy — tier gates + wreck aging in sim-runtime
-4. Meta-loop UI — results screen, vault/rig/loadout panels, chronicle
-5. Run result write-back — connect RunResult to persistence layer
-6. Hull ability client-side — keybindings, HUD cooldowns, visual effects
-7. Map seed system — entity catalog selection per run
+2. Runtime productization — explicit launch modes, stack status, embedded/local/remote docs
+3. UI primitive bridge — shared design tokens + HUD primitives instead of inline style drift
+4. Item catalog — concrete T1-T4 artifacts with coefficients + affinities
+5. Loot economy — tier gates + wreck aging in sim-runtime
+6. Meta-loop UI — results screen, vault/rig/loadout panels, chronicle
+7. Run result write-back — connect RunResult to persistence layer
+8. Hull ability client-side — keybindings, HUD cooldowns, visual effects
+9. Map seed system — entity catalog selection per run
+10. Continue content manifests — seeded-generation, item catalog, session profiles
 
 ### Current constraints
 
 - The live client contract is still `8 cargo + 2 equipped + 2 consumable`.
 - The older `3 artifact slots` design is not live runtime truth yet.
-- Packaged desktop artifacts are rendering clients; remote play still depends on separate `control` and `sim` processes.
+- Packaged desktop artifacts now embed local authority for ordinary local packaged play.
+- Browser-based remote play still depends on separate authority processes.
 - The control plane can stay lightweight and always-on for local work.
 - The sim is now demand-driven and auto-expiring by default; keep-alive is explicit, not accidental.
+- The design system exists in docs and has now started bridging into code, but most UI compliance still depends on human discipline.
 
 ### L6: The Ship (Not Yet Started)
 - Balance pass (hull coefficients, upgrade costs, loot rarity, signal tuning)

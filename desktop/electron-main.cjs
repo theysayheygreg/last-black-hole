@@ -1,6 +1,7 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
 const { fork } = require('child_process');
+const http = require('http');
 
 // Embedded servers — the desktop build is self-contained.
 // Control plane + sim server run as child processes inside the app.
@@ -8,22 +9,70 @@ const { fork } = require('child_process');
 
 const CONTROL_PORT = 8791;
 const SIM_PORT = 8787;
+const LOG_LIMIT = 40;
 
 let controlProcess = null;
 let simProcess = null;
+let mainWindow = null;
+let statusWindow = null;
+const runtimeLogs = {
+  control: [],
+  sim: [],
+};
+
+function fetchJson(url) {
+  return new Promise((resolve) => {
+    const request = http.get(url, { timeout: 1200 }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    request.on('error', () => resolve(null));
+    request.on('timeout', () => {
+      request.destroy();
+      resolve(null);
+    });
+  });
+}
+
+function pushLog(stream, chunk) {
+  const lines = String(chunk || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return;
+  runtimeLogs[stream].push(...lines.map((line) => ({ at: new Date().toISOString(), line })));
+  if (runtimeLogs[stream].length > LOG_LIMIT) {
+    runtimeLogs[stream] = runtimeLogs[stream].slice(-LOG_LIMIT);
+  }
+}
+
+function bindProcessLogs(stream, child) {
+  child.stdout?.on('data', (chunk) => pushLog(stream, chunk));
+  child.stderr?.on('data', (chunk) => pushLog(stream, chunk));
+  child.on('exit', (code, signal) => {
+    pushLog(stream, `[process-exit] code=${code} signal=${signal}`);
+  });
+}
 
 function startEmbeddedServers() {
   const scriptsDir = path.join(__dirname, 'server');
 
-  // Control plane
   const controlScript = path.join(scriptsDir, 'control-plane-runtime.js');
   controlProcess = fork(controlScript, [], {
     env: { ...process.env, PORT: String(CONTROL_PORT), LBH_DATA_DIR: app.getPath('userData') },
     stdio: 'pipe',
   });
-  controlProcess.on('error', (err) => console.error('[control-plane]', err.message));
+  bindProcessLogs('control', controlProcess);
+  controlProcess.on('error', (err) => pushLog('control', `[control-plane-error] ${err.message}`));
 
-  // Sim server
   const simScript = path.join(scriptsDir, 'sim-runtime.js');
   simProcess = fork(simScript, [], {
     env: {
@@ -33,7 +82,8 @@ function startEmbeddedServers() {
     },
     stdio: 'pipe',
   });
-  simProcess.on('error', (err) => console.error('[sim-server]', err.message));
+  bindProcessLogs('sim', simProcess);
+  simProcess.on('error', (err) => pushLog('sim', `[sim-server-error] ${err.message}`));
 }
 
 function stopEmbeddedServers() {
@@ -41,8 +91,39 @@ function stopEmbeddedServers() {
   if (simProcess) { simProcess.kill(); simProcess = null; }
 }
 
-function createWindow() {
-  const win = new BrowserWindow({
+async function getEmbeddedStackSnapshot() {
+  const [controlHealth, simHealth] = await Promise.all([
+    fetchJson(`http://127.0.0.1:${CONTROL_PORT}/health`),
+    fetchJson(`http://127.0.0.1:${SIM_PORT}/health`),
+  ]);
+  return {
+    checkedAt: new Date().toISOString(),
+    embeddedMode: 'embedded-desktop',
+    control: {
+      pid: controlProcess?.pid || null,
+      health: controlHealth,
+      recentLogs: runtimeLogs.control.slice(-12),
+    },
+    sim: {
+      pid: simProcess?.pid || null,
+      health: simHealth,
+      recentLogs: runtimeLogs.sim.slice(-12),
+    },
+  };
+}
+
+async function waitForEmbeddedStack(timeoutMs = 4000) {
+  const startedAt = Date.now();
+  while ((Date.now() - startedAt) < timeoutMs) {
+    const snapshot = await getEmbeddedStackSnapshot();
+    if (snapshot.control.health && snapshot.sim.health) return snapshot;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return null;
+}
+
+function createMainWindow() {
+  mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
     backgroundColor: '#000033',
@@ -55,20 +136,83 @@ function createWindow() {
     },
   });
 
-  // Give servers a moment to bind, then load the game pointed at the embedded sim
-  setTimeout(() => {
-    win.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
+  waitForEmbeddedStack().finally(() => {
+    if (!mainWindow) return;
+    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
       query: { simServer: `http://127.0.0.1:${SIM_PORT}` },
     });
-  }, 800);
+  });
 }
+
+function createStatusWindow() {
+  if (statusWindow && !statusWindow.isDestroyed()) {
+    statusWindow.show();
+    statusWindow.focus();
+    return statusWindow;
+  }
+  statusWindow = new BrowserWindow({
+    width: 980,
+    height: 680,
+    title: 'Last Singularity — Stack Status',
+    backgroundColor: '#050914',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'status-preload.cjs'),
+      contextIsolation: true,
+      sandbox: false,
+      nodeIntegration: false,
+    },
+  });
+  statusWindow.loadFile(path.join(__dirname, 'status.html'));
+  statusWindow.on('closed', () => {
+    statusWindow = null;
+  });
+  return statusWindow;
+}
+
+function buildMenu() {
+  const template = [
+    {
+      label: 'Last Singularity',
+      submenu: [
+        { label: 'Stack Status', accelerator: 'CmdOrCtrl+Shift+S', click: () => createStatusWindow() },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' },
+        { type: 'separator' },
+        { label: 'Show Stack Status', accelerator: 'CmdOrCtrl+Shift+S', click: () => createStatusWindow() },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+ipcMain.handle('lbh:stack-status', async () => getEmbeddedStackSnapshot());
+ipcMain.handle('lbh:focus-main-window', async () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  return { ok: true };
+});
 
 app.whenReady().then(() => {
   startEmbeddedServers();
-  createWindow();
+  buildMenu();
+  createMainWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
 });
 

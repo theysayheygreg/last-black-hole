@@ -39,6 +39,15 @@
 
 ### What's Designed (Not Yet Implemented)
 
+### Runtime Productization Progress
+
+- [x] Explicit runtime modes
+- [x] Canonical stack launcher
+- [x] Lightweight structured stack telemetry
+- [x] Desktop-visible stack status / logs
+- [x] First extracted content manifest (hulls + personality assignment)
+- [ ] Human playtest packs for host/join/extract/death loops
+
 | Feature | Design Doc | Status |
 |---------|-----------|--------|
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Full design, ready for implementation |
@@ -51,22 +60,26 @@
 ### Forward Development Priorities
 
 1. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
-2. **Item catalog** — concrete T1-T4 items with coefficients, affinities, and sell values
-3. **Meta-loop implementation** — results screen, vault/rig/loadout UI, chronicle
-4. **Loot economy implementation** — tier gates, wreck aging, value scaling in sim-runtime
-5. **Run result write-back** — connect RunResult schema to persistence layer
-6. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
-7. **Map seed system** — how seeds pick entities from catalog, run variety
-8. **Balance pass** — hull coefficients, upgrade costs, loot rarity, signal tuning
-9. **Deploy** — GitHub Pages web build, nightly playables
+2. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
+3. **UI primitive bridge** — design tokens + HUD primitives + reduced inline-style drift
+4. **Item catalog** — concrete T1-T4 items with coefficients, affinities, and sell values
+5. **Meta-loop implementation** — results screen, vault/rig/loadout UI, chronicle
+6. **Loot economy implementation** — tier gates, wreck aging, value scaling in sim-runtime
+7. **Run result write-back** — connect RunResult schema to persistence layer
+8. **Content manifests** — continue extracting seeded-generation, item, and session-profile truth from runtime sprawl
+9. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
+10. **Balance pass** — hull coefficients, upgrade costs, loot rarity, signal tuning
+11. **Deploy** — GitHub Pages web build, nightly playables
 
 ### Current contract notes
 
 - The shipped loadout contract is still `2 equipped + 2 consumable` slots.
 - The older `3 artifact slots` idea remains a design/backlog item, not live runtime truth.
-- Packaged desktop builds are rendering clients. Remote play still expects separate `control` and `sim` processes.
+- Packaged desktop builds are now self-contained local apps with embedded authority.
+- Browser remote play still expects separate authority processes.
 - The control plane is allowed to stay hot locally.
 - The sim no longer stays hot by default with zero human clients: it idles cheaply, auto-stops after a grace window, and only stays alive intentionally when started with keep-alive.
+- The next quality step is productization and shared UI primitives, not another wholesale architecture rewrite.
 
 ---
 

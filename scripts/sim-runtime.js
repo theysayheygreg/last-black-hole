@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { performance } = require("perf_hooks");
+const { createRuntimeLogger } = require("./runtime-telemetry.js");
 const { loadPlayableMaps } = require("./shared-map-loader.js");
 const { createRNGStreams } = require("./rng-stream.js");
 const SEEDED_GEN = require("./seeded-generation.js");
@@ -13,10 +14,13 @@ const {
   sampleCoarseFlowField,
 } = require("./coarse-flow-field.js");
 const {
+  PERSONALITY_HULL_MAP,
+  HULL_DEFINITIONS,
   RIG_TRACKS,
+} = require("./content/hulls.js");
+const {
   defaultRigLevels,
   normalizeRigLevels,
-  HULL_DEFINITIONS,
   BRAIN_DEFAULTS,
   normalizeHullType,
   normalizeProfileUpgrades,
@@ -56,15 +60,6 @@ const RUN_DURATION = 600;
 const WELL_GROWTH_VARIANCE = 0.01;
 const WELL_GROWTH_AMOUNT = 0.02;
 const WELL_KILL_RADIUS_GROWTH = 0.3;
-// Hull assignment rules for AI personalities
-const PERSONALITY_HULL_MAP = {
-  prospector: ['drifter', 'hauler'],
-  raider: ['breacher'],
-  vulture: ['resonant', 'breacher'],
-  ghost: ['shroud', 'drifter'],
-  desperado: ['breacher'],
-};
-
 // --- Loot Economy ---
 // Item catalog, tier gates, signatures, and roll logic all live in
 // seeded-generation.js so the client can mirror them for prediction.
@@ -901,6 +896,7 @@ const PORT = Number(args.port || 8787);
 const PID_FILE = args["pid-file"] ? path.resolve(args["pid-file"]) : null;
 const META_FILE = args["meta-file"] ? path.resolve(args["meta-file"]) : null;
 const LOG_LABEL = args.label || "lbh-sim";
+const telemetry = createRuntimeLogger("sim", { label: LOG_LABEL, host: HOST, port: PORT });
 const SIM_INSTANCE_ID = String(args["sim-instance-id"] || process.env.LBH_SIM_INSTANCE_ID || `sim-${PORT}`);
 const CONTROL_PLANE_URL = String(args["control-plane-url"] || process.env.LBH_CONTROL_PLANE_URL || "").trim();
 const KEEP_ALIVE = String(args["keep-alive"] || process.env.LBH_SIM_KEEP_ALIVE || "").trim() === "true";
@@ -1320,6 +1316,7 @@ function startSession(config = {}) {
   runtime.waveRings = [];
   runtime.coarseField = null;
   rebuildAuthoritativeField();
+  telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
   publishEvent("session.started", {
     sessionId: runtime.session.id,
     runId: runtime.session.runId,
@@ -1338,6 +1335,7 @@ function assignHost(clientId, name) {
   runtime.session.hostClientId = clientId;
   runtime.session.hostProfileId = runtime.players.get(clientId)?.profileId || null;
   runtime.session.hostName = name || clientId;
+  telemetry.info("session.hostAssigned", { sessionId: runtime.session.id, clientId, profileId: runtime.session.hostProfileId, name: runtime.session.hostName });
   publishEvent("session.hostAssigned", {
     clientId,
     name: runtime.session.hostName,
@@ -1489,6 +1487,7 @@ function getIdleState() {
 function shutdownForIdle() {
   if (runtime.shutdownReason) return;
   runtime.shutdownReason = "idle-timeout";
+  telemetry.info("runtime.idleShutdown", { idleShutdownMs: runtime.idleShutdownMs, sessionId: runtime.session?.id || null, mapId: runtime.session?.mapId || null });
   console.log(`[${LOG_LABEL}] idle shutdown after ${runtime.idleShutdownMs}ms with no human clients.`);
   shutdown();
 }
@@ -1774,6 +1773,7 @@ function commitPlayerOutcome(player, outcome) {
   }
 
   // Existing consumers depend on profile.updated to know the write finished
+  telemetry.info("player.outcomeCommitted", { sessionId: runtime.session?.id || null, clientId: player.clientId, profileId: player.profileId, outcome, hullType: player.hullType, cargoCount: getCargoCount(player) });
   publishEvent("profile.updated", {
     clientId: player.clientId,
     profileId: player.profileId,
@@ -4632,6 +4632,7 @@ const server = http.createServer(async (req, res) => {
         player.wx = spawn.wx;
         player.wy = spawn.wy;
         runtime.players.set(clientId, player);
+        telemetry.info("player.joined", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, hullType: player.hullType, mapId: runtime.session.mapId });
         if (!runtime.session.hostClientId) assignHost(clientId, player.name);
         publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
         persistSessionRegistry();
@@ -4698,6 +4699,7 @@ const server = http.createServer(async (req, res) => {
         commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
       }
       runtime.players.delete(clientId);
+      telemetry.info("player.left", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, status: player.status });
       publishEvent("player.left", {
         clientId,
         name: player.name,
@@ -4798,6 +4800,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.on("error", (err) => {
+  telemetry.error("runtime.error", { message: err.message });
   console.error(`[${LOG_LABEL}] ${err.message}`);
   cleanupFiles(PID_FILE, META_FILE);
   process.exit(1);
@@ -4826,6 +4829,7 @@ process.on("exit", () => cleanupFiles(PID_FILE, META_FILE));
 
 server.listen(PORT, HOST, () => {
   writeFiles();
+  telemetry.info("runtime.started", { url: `http://${HOST}:${PORT}/`, controlPlaneUrl: CONTROL_PLANE_URL, keepAlive: runtime.keepAlive, idleShutdownMs: runtime.idleShutdownMs });
   console.log(`[${LOG_LABEL}] listening on http://${HOST}:${PORT}/`);
   startSession();
   trackControlPlaneWrite(controlPlane.registerSimInstance({

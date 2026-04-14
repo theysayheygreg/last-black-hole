@@ -5,6 +5,48 @@
 
 ---
 
+## 2026-04-12 — Desktop stack status + first content manifest
+
+- Added a desktop-visible stack-status window for the embedded Electron build, including embedded control/sim health, session state, and recent child-process logs.
+- Added `scripts/runtime-status.js` so the CLI stack tooling and the desktop shell can reason about runtime health through the same snapshot shape.
+- Extracted the first runtime content manifest into `scripts/content/hulls.js`, moving hull identity and AI hull assignment out of the hot gameplay files.
+- Added `docs/project/CONTENT-MANIFESTS.md` and refreshed roadmap/build-plan/backlog notes to reflect that runtime productization now includes observability and content extraction, not just process splitting.
+
+## 2026-04-12 — Structured stack telemetry + sturdier physics harness
+
+- Added lightweight JSON telemetry events for the dev server, control plane, sim runtime, and stack launcher so multi-process failures are easier to diagnose from existing log files.
+- Hardened the gravity-well physics assertion to measure inward radial flow directly instead of relying on one short ship drift sample.
+- Kept the original LBH intent intact: no gameplay behavior changed, only observability and test honesty improved.
+
+## 2026-04-12 — Runtime productization + UI token bridge
+
+### scripts/ — Added / Modified
+- **stack.js** — Adds a canonical stack launcher/status surface with explicit runtime modes: `local-browser`, `local-host`, and `remote-client`.
+- **play.js** — Legacy entrypoint now delegates to the canonical stack launcher instead of carrying its own hidden runtime model.
+- **stop.js** — Legacy stop entrypoint now delegates to the canonical stack launcher.
+
+### src/ui/ — Added
+- **design-tokens.js** — First implementation-side bridge from `DESIGN-SYSTEM.md` into code.
+- **hud-primitives.js** — Shared HUD markup/style helpers for portal arrow markup, inventory row selection, warning color, and item color lookup.
+
+### src/ — Modified
+- **hud.js** — Now consumes shared UI tokens/primitives for portal arrow rendering, inventory row styling, warning coloring, and item color lookup instead of repeating inline style decisions.
+
+### root / docs/reference/ — Added / Modified
+- **index-a.html** — Adds CSS custom properties mirroring core design-system tokens and rewires HUD CSS to use them.
+- **DEV-SERVER.md** — Updates the operator docs around the new stack launcher and preferred runtime contract.
+- **BUILD-PIPELINE.md** — Fixes the desktop packaging story: packaged desktop builds are now explicitly embedded-authority local apps, not merely thin clients.
+- **RUNTIME-MODES.md** — New reference doc defining LBH runtime modes.
+
+### docs/project/ — Added / Modified
+- **2026-04-12-plugin-lens-review.md** — Review of LBH through the new macOS app and game-studio lenses.
+- **BUILD-PLAN.md**
+- **ROADMAP.md**
+- **BACKLOG.md**
+
+### Why
+The architecture is now solid enough that the next source of team drag is not "how do we split sim from client?" It is "how do we make the current product understandable, launchable, and visually consistent?" This slice starts that productization pass without changing the underlying authority model.
+
 ## 2026-04-01 — Review pass: loadout truth, remote slot honesty, architecture docs
 
 ### scripts/ — Modified

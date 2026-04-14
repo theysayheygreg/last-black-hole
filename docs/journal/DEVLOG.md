@@ -5,6 +5,51 @@
 
 ---
 
+## Week 4, Day 1¾: April 12, 2026 — The Desktop Build Learns to Explain Itself
+
+The next two productization tasks were the right pair to do together.
+
+First, the packaged Electron app stopped being a black box. It now has a real stack-status window for the embedded control plane and sim, so the local app can answer basic operator questions without punting straight to the terminal. That matters because the product has already outgrown the old “just double-click it and hope” posture.
+
+Second, the first actual content manifest came out of the runtime. Hull identity, rig tracks, and AI hull assignment now live in a dedicated hull manifest instead of being smeared across `player-brain.js`, `sim-runtime.js`, and the docs. It is a small extraction, but it is the right one: enough to reduce drift, not so much that it becomes architecture cosplay.
+
+The theme stayed the same as the earlier productization pass: keep the original intent intact, make the current stack easier to understand, and make future feature work less likely to cut across hidden truths.
+
+## Week 4, Day 1: April 12, 2026 — The Product Shape Becomes Visible
+
+## Week 4, Day 1½: April 12, 2026 — The Stack Starts Explaining Itself
+
+The next productization slice was observability. LBH now emits lightweight structured runtime events into the existing log files for the dev server, control plane, sim, and stack launcher. That is enough to make the local multi-process stack understandable without inventing a whole analytics backend. We also hardened the gravity-well physics test so it checks the ship-level outcome across multiple spawn angles, which matches the actual game better than one short drift sample.
+
+### The Story
+
+This was a long-form architectural review through a new lens: not just "does the code work?" but "does LBH look like a real mac app and a real game project yet?" The answer was encouraging. The hard work is already done. The sim is authoritative. The control plane is real. The client is a client. The test harness has grown teeth.
+
+The gaps were not foundational anymore. They were product gaps.
+
+The most important one: the code had already moved further than the docs. The packaged Electron app embeds the control plane and sim, but parts of the project still talked as if desktop builds were only thin rendering clients. That kind of mismatch is how teams lose time — the product becomes more real than the language around it.
+
+So the work today shifted from abstract architecture toward productization:
+
+- explicit runtime modes
+- one canonical stack launcher
+- better stack status
+- the first design-system bridge into implementation code
+
+### What Changed
+
+- Added explicit runtime modes (`local-browser`, `local-host`, `remote-client`, `embedded-desktop`, `test-harness`) and documented them.
+- Added `scripts/stack.js` as the canonical stack launcher/status surface.
+- Repointed `npm start` and the old play/stop muscle-memory scripts at the new stack contract.
+- Added a first implementation-side design token layer and HUD primitives so future UI work stops repeating colors, shadows, and selection styling ad hoc.
+- Started moving HUD implementation away from one-off inline style strings.
+
+### Why It Matters
+
+LBH no longer needs another large architecture rewrite. It needs to become easier to launch, easier to inspect, and harder to accidentally restyle or misdescribe.
+
+That is good news. It means the architecture work actually succeeded. We are not rebuilding the game. We are starting to turn the current stack into a better product surface for the next round of feature work.
+
 ## How to Read This
 
 Each entry covers a day (or shift). Entries include what happened, why decisions were made, what was cut, and what questions remain. This is the raw creative record — designed to be mined later for content (threads, posts, videos).

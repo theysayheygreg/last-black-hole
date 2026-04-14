@@ -105,14 +105,19 @@ That means the `.app` and `.exe` are wrappers around the same web game, not sepa
 
 ## Remote-authority note
 
-The packaged artifacts are clients, not full self-hosting stacks.
+The build story now splits cleanly by target.
 
-- local/offline play works from the packaged client alone
-- remote-authority play still expects separate backend processes:
-  - `npm run control`
-  - `npm run sim`
+- web builds are still plain rendering clients
+- packaged desktop builds now embed the control plane + sim for ordinary local packaged play
+- remote-authority play remains a separate mode and still expects a browser client to point at an external sim authority
+- packaged desktop builds also expose a small in-app stack-status window so embedded authority state is visible without a terminal
 
-Today the build pipeline does **not** bundle the control plane or sim server into the desktop artifacts. If you want mini→MacBook play, run those services on the authority machine and point the client at them.
+So the honest rule is:
+
+- **desktop package** = self-contained local playtest app
+- **browser remote mode** = local-rendering client against separate authority
+
+If you want mini→MacBook play, run the authority machine separately and start the MacBook browser client in `remote-client` mode.
 
 ## What works today
 

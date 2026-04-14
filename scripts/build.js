@@ -382,10 +382,17 @@ function stageElectronShell(mode) {
     JSON.stringify(shellPkg, null, 2) + '\n'
   );
 
-  fs.copyFileSync(
-    path.join(ROOT, 'desktop', 'electron-main.cjs'),
-    path.join(STAGING_ROOT, 'electron-main.cjs')
-  );
+  const desktopFiles = [
+    'electron-main.cjs',
+    'status-preload.cjs',
+    'status.html',
+  ];
+  for (const file of desktopFiles) {
+    fs.copyFileSync(
+      path.join(ROOT, 'desktop', file),
+      path.join(STAGING_ROOT, file)
+    );
+  }
 
   copyWebRuntime(path.join(STAGING_ROOT, 'renderer'), mode);
 
@@ -412,6 +419,7 @@ function stageElectronShell(mode) {
       fs.copyFileSync(src, path.join(serverDir, script));
     }
   }
+  copyIfExists(path.join(ROOT, 'scripts', 'content'), path.join(serverDir, 'content'));
   // Copy map files where shared-map-loader.js expects them (../src/maps relative to server/)
   copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(STAGING_ROOT, 'src', 'maps'));
 }

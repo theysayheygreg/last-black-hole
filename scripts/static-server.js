@@ -3,6 +3,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { createRuntimeLogger } = require("./runtime-telemetry.js");
 
 function parseArgs(argv) {
   const args = {};
@@ -28,6 +29,7 @@ const PORT = Number(args.port || 8080);
 const PID_FILE = args["pid-file"] ? path.resolve(args["pid-file"]) : null;
 const META_FILE = args["meta-file"] ? path.resolve(args["meta-file"]) : null;
 const LOG_LABEL = args.label || "lbh-server";
+const telemetry = createRuntimeLogger("dev-server", { label: LOG_LABEL, host: HOST, port: PORT });
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -139,12 +141,13 @@ const server = http.createServer((req, res) => {
 });
 
 server.on("error", (err) => {
-  console.error(`[${LOG_LABEL}] ${err.message}`);
+  telemetry.error("runtime.error", { message: err.message });
   cleanupFiles();
   process.exit(1);
 });
 
 function shutdown() {
+  telemetry.info("runtime.stopping", { reason: "signal" });
   server.close(() => {
     cleanupFiles();
     process.exit(0);
@@ -157,5 +160,6 @@ process.on("exit", cleanupFiles);
 
 server.listen(PORT, HOST, () => {
   writeFiles();
+  telemetry.info("runtime.started", { root: ROOT, url: `http://${HOST}:${PORT}/` });
   console.log(`[${LOG_LABEL}] serving ${ROOT} on http://${HOST}:${PORT}/`);
 });

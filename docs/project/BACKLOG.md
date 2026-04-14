@@ -23,6 +23,26 @@
 
 ## Physics & Simulation
 
+### Content Manifest Extraction
+- **What:** Move hull definitions, item catalog, AI personalities, signature definitions, and session/map profiles toward explicit manifests instead of burying them in runtime files and docs.
+- **Current state:** First pass shipped for hull identity + AI hull assignment in `scripts/content/hulls.js`. Remaining work is seeded-generation content, item catalog truth, and session/map profile manifests.
+- **Why backlogged:** The architecture is now stable enough that content sprawl is the next real maintainability risk, but only the first extraction has been done so far.
+- **Value if revisited:** Faster feature work, safer agent collaboration, easier balancing, less runtime drift from design docs.
+- **Added:** 2026-04-12
+
+### Desktop Stack Status Surface
+- **What:** Add a small in-app stack-status/log surface for the embedded desktop build so the local authority stack is visible without opening terminals.
+- **Current state:** First pass shipped. Electron desktop now has a stack-status window with embedded control/sim health, process ids, and recent logs.
+- **Why backlogged:** The core surface exists now. Remaining work is polish: log filters, copy/export, and deeper session controls.
+- **Value if revisited:** Faster debugging for packaged desktop playtests, clearer host/control/sim state, less terminal spelunking.
+- **Added:** 2026-04-12
+
+### Human Playtest Packs
+- **What:** Named manual playtest flows layered on top of the deterministic harness (first boot, host/join, controller-only traversal, extract/death/writeback, large-map perf drift).
+- **Why backlogged:** The current harness is strong for architecture truth, but product feel still needs human passes. These should come after the launch contract and stack status are clearer.
+- **Value if revisited:** Better playtest discipline without weakening the automated harness.
+- **Added:** 2026-04-12
+
 ### Hosted Run Persistence / Keep-Alive Mode
 - **What:** Optional mode where a sim instance is intentionally pinned alive after the last renderer client disconnects.
 - **Why backlogged:** Correct for hosted or persistent-world phases, wrong default for the current local/private run model.

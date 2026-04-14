@@ -1,6 +1,8 @@
 # Audio Analysis Pipeline
 
 > How to get reference audio into Claude's context for sound design iteration.
+>
+> **Current status:** the live implementation now lives in `docs/tools/AUDIO-WORKBENCH.md` and `tools/audio_workbench.py`. This document remains useful as design rationale and workflow background.
 
 ## The Problem
 

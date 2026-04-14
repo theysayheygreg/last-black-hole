@@ -11,6 +11,8 @@
 
 import { CONFIG } from './config.js';
 import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
+import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
 
 let _hudEl;
 let _collapseTimerEl, _collapseEventEl;
@@ -437,20 +439,10 @@ function _updatePortalArrow(ship, portalSystem, camX, camY, canvasW, canvasH) {
   // Render arrow as a rotated triangle via CSS border trick
   const deg = (angle * 180 / Math.PI) + 90;  // CSS rotation: 0 = up
   const distText = nearestDist.toFixed(1);
-  _portalArrowEl.innerHTML = `<div style="
-    transform: rotate(${deg}deg);
-    width: 0; height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-bottom: 12px solid rgba(180, 120, 255, 0.8);
-    filter: drop-shadow(0 0 6px rgba(180, 120, 255, 0.5));
-  "></div>
-  <div style="
-    font: 10px monospace;
-    color: rgba(180, 120, 255, 0.6);
-    text-align: center;
-    margin-top: 2px;
-  ">${distText}</div>`;
+  _portalArrowEl.innerHTML = portalArrowMarkup({
+    degrees: deg,
+    distanceText: distText,
+  });
 }
 
 /**
@@ -583,21 +575,7 @@ export function inventoryConfirm(inv) {
 function _renderInventoryPanel(inv) {
   if (!_inventoryPanelEl) return;
 
-  const catColors = {
-    salvage: 'rgba(180, 180, 190, 0.9)',
-    component: 'rgba(100, 200, 255, 0.9)',
-    dataCore: 'rgba(200, 160, 255, 0.9)',
-    artifact: 'rgba(255, 200, 60, 0.9)',
-  };
-  const tierColors = {
-    common: 'rgba(180, 180, 190, 0.8)',
-    uncommon: 'rgba(100, 255, 150, 0.9)',
-    rare: 'rgba(100, 180, 255, 0.9)',
-    unique: 'rgba(255, 215, 0, 0.95)',
-  };
-
   const sel = _invCursor;
-  const selStyle = 'border-left: 2px solid rgba(100, 150, 255, 0.8); padding-left: 6px; background: rgba(80, 120, 255, 0.12);';
 
   // ---- Cargo ----
   let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}  ↑↓ select  X/space confirm  Tab close</div>`;
@@ -605,9 +583,9 @@ function _renderInventoryPanel(inv) {
   for (let i = 0; i < inv.cargo.length; i++) {
     const isSel = (sel === i);
     const item = inv.cargo[i];
-    const rowStyle = isSel ? selStyle : '';
+    const rowStyle = inventorySelectionStyle(isSel);
     if (item) {
-      const color = tierColors[item.tier] || catColors[item.category] || '#ccc';
+      const color = inventoryItemColor(item);
       const catLabel = item.category === 'artifact' ? item.subcategory : (item.category || '');
       let actionLabel = 'drop';
       if (item.subcategory === 'equippable') actionLabel = 'equip';
@@ -629,10 +607,10 @@ function _renderInventoryPanel(inv) {
     const globalIdx = 8 + i;
     const isSel = (sel === globalIdx);
     const item = inv.equipped[i];
-    const rowStyle = isSel ? selStyle : '';
+    const rowStyle = inventorySelectionStyle(isSel);
     if (item) {
       const action = isSel ? '<span class="inv-drop">[unequip]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${tierColors[item.tier] || '#ccc'}">${item.name}</span><span class="inv-cat">${item.effectDesc || ''}</span>${action}</div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${inventoryItemColor(item)}">${item.name}</span><span class="inv-cat">${item.effectDesc || ''}</span>${action}</div>`;
     } else {
       html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">— empty slot —</span></div>`;
     }
@@ -645,10 +623,10 @@ function _renderInventoryPanel(inv) {
     const globalIdx = 10 + i;
     const isSel = (sel === globalIdx);
     const item = inv.consumables[i];
-    const rowStyle = isSel ? selStyle : '';
+    const rowStyle = inventorySelectionStyle(isSel);
     if (item) {
       const action = isSel ? '<span class="inv-drop">[remove]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${tierColors[item.tier] || '#ccc'}">[${i + 1}] ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${inventoryItemColor(item)}">[${i + 1}] ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
     } else {
       html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">[${i + 1}] — empty —</span></div>`;
     }
@@ -674,7 +652,7 @@ export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs
   const el = document.createElement('div');
   el.className = 'hud-warning';
   el.textContent = text;
-  el.style.color = color;
+  setWarningColor(el, color);
   _warningsEl.appendChild(el);
 
   setTimeout(() => {

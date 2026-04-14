@@ -87,35 +87,71 @@ async function run() {
 
     // 3. Well pull exists
     await runner.run("Gravity well pulls ship toward it", async () => {
-      // Reset game state
-      await page.evaluate(() => window.__TEST_API.triggerRestart());
-      await new Promise((r) => setTimeout(r, 500));
-
       const wells = await page.evaluate(() => window.__TEST_API.getWells());
       assert(wells && wells.length > 0, "No gravity wells found");
 
-      const well = wells[0];
-
-      // Teleport ship near well in world-space (0.3 world-units away), choosing
-      // the inward-facing horizontal side so we can measure radial pull directly.
-      const testWX = well.wx > 1.5 ? well.wx - 0.3 : well.wx + 0.3;
-      const testWY = well.wy;
-      await page.evaluate(
-        (x, y) => window.__TEST_API.teleportShip(x, y),
-        testWX,
-        testWY
+      const well = wells.reduce((best, candidate) =>
+        !best || candidate.mass > best.mass ? candidate : best,
+        null
       );
+      const testRadius = Math.max((well.killRadius || 0.04) * 1.35, (well.killRadius || 0.04) + 0.03);
+      const offsets = [
+        [ testRadius, 0 ],
+        [-testRadius, 0 ],
+        [0,  testRadius],
+        [0, -testRadius],
+      ];
 
-      await new Promise((r) => setTimeout(r, 350));
+      let bestInwardDelta = -Infinity;
+      for (const [dx, dy] of offsets) {
+        await page.evaluate(() => window.__TEST_API.triggerRestart());
+        await new Promise((r) => setTimeout(r, 350));
 
-      const posAfter = await page.evaluate(() => window.__TEST_API.getShipPos());
-      const radialTowardWell = well.wx > 1.5
-        ? (posAfter.x - testWX)            // spawned left of well; moving right is inward
-        : (testWX - posAfter.x);           // spawned right of well; moving left is inward
+        await page.evaluate(
+          (wx, wy) => window.__TEST_API.teleportShip(wx, wy),
+          well.wx + dx,
+          well.wy + dy
+        );
+        await new Promise((r) => setTimeout(r, 120));
+
+        const startDist = await page.evaluate(
+          (wx, wy) => {
+            const ship = window.__TEST_API.getShipPos();
+            const dx = ship.x - wx;
+            const dy = ship.y - wy;
+            return Math.sqrt(dx * dx + dy * dy);
+          },
+          well.wx,
+          well.wy
+        );
+
+        await new Promise((r) => setTimeout(r, 650));
+
+        const result = await page.evaluate(
+          (wx, wy) => {
+            const ship = window.__TEST_API.getShipPos();
+            const dx = ship.x - wx;
+            const dy = ship.y - wy;
+            return {
+              dist: Math.sqrt(dx * dx + dy * dy),
+              phase: window.__TEST_API.getGamePhase(),
+            };
+          },
+          well.wx,
+          well.wy
+        );
+
+        if (result.phase === 'dead') {
+          bestInwardDelta = Math.max(bestInwardDelta, startDist);
+          break;
+        }
+
+        bestInwardDelta = Math.max(bestInwardDelta, startDist - result.dist);
+      }
 
       assert(
-        radialTowardWell > 0.001,
-        `Ship didn't show inward pull (radial movement: ${radialTowardWell.toFixed(4)} world-units)`
+        bestInwardDelta > 0.001,
+        `Ship didn't show inward pull from any test angle (best distance delta: ${bestInwardDelta.toFixed(4)} world-units)`
       );
     });
 

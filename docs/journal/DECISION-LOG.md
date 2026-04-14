@@ -1,5 +1,17 @@
 # Decision Log
 
+## 2026-04-12 — Productization should expose the embedded stack, not hide it
+
+LBH's packaged desktop app is now self-contained enough that the next honest move is not more invisible process magic. It is a visible stack-status surface. The app should be able to tell us whether the embedded control plane and sim are healthy, what session is live, and whether the sim is idling toward shutdown. That keeps the original architecture intent intact — authoritative run truth, local rendering client — while making the product understandable to humans.
+
+## 2026-04-12 — Content manifests should begin with hull identity, not the noisiest file
+
+The first extracted content manifest should be the hull layer. Hull coefficients, rig tracks, and AI hull assignment are descriptive game truth used by multiple systems and design docs. They belong in content space sooner than seeded-generation or session profiles because they reduce drift immediately without forcing a broad runtime rewrite.
+
+## 2026-04-12 — Structured telemetry should stay lightweight and local
+
+LBH does not need a separate telemetry service yet. The right step is to emit structured JSON events into the existing process logs for the dev server, control plane, sim, and stack launcher. That gives us much better diagnosis of multi-process failures without changing the architecture or introducing another system to maintain. This keeps the three-process architecture legible while preserving the current jam-speed toolchain.
+
 > What we considered, what we tried, what we rejected, where it landed.
 > Each entry tracks the full decision tree — not just the outcome.
 > If we revisit a question, we add a new dated entry, not overwrite.
@@ -1029,6 +1041,7 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 | Mar 31 | First coarse-field implementation lands: medium and large authoritative sessions now rebuild a wrapped coarse field for orbital current, well pull, and wave push, while small maps stay on the direct-force model. |
 | Apr 1 | The control plane becomes a real process boundary: a dedicated runtime now owns profile/session endpoints and sim-instance registration, while the authoritative sim talks to it through a client adapter instead of directly owning the persistence implementation. |
 | Apr 2 | Local LBH is not a persistent world yet. Decision: the control plane may stay hot locally, but the sim should not remain alive by default once all human clients are gone. Empty sims should idle cheaply and auto-expire by default, while `keep-alive` remains an explicit host/debug choice. |
+| Apr 12 | Review through the macOS-app and game-studio lenses concludes that LBH does not need a stack rewrite. The next leverage is productization: explicit runtime modes, a canonical stack launcher/status surface, a code-side design token bridge, and later structured telemetry/content manifests. |
 
 **Options:**
 1. **Keep iterating budgets and force caps only** — useful in the short term, but it keeps the server procedural and pushes the real scale problem forward.
@@ -1037,6 +1050,8 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 3. The next architecture phase is now explicitly defined in `docs/project/PLAYER-BRAIN-AND-OVERLOAD-PLAN.md`.
 **Door status:** Open — implementation is intentionally deferred until the design is reviewed, but the shape of the next work is now concrete.
+
+| Apr 12 | First productization slice lands: runtime modes become first-class (`local-browser`, `local-host`, `remote-client`), `scripts/stack.js` becomes the canonical launch/status surface, and the first HUD token/primitives bridge moves pieces of `DESIGN-SYSTEM.md` into implementation code. |
 
 
 ## Persistence and Control Plane Architecture

@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { ControlPlaneStore } = require("./control-plane-store.js");
 const { SessionRegistry } = require("./session-registry.js");
+const { createRuntimeLogger } = require("./runtime-telemetry.js");
 
 function parseArgs(argv) {
   const args = {};
@@ -87,6 +88,7 @@ const SESSION_REGISTRY_FILE = path.resolve(
 const PID_FILE = args["pid-file"] ? path.resolve(args["pid-file"]) : null;
 const META_FILE = args["meta-file"] ? path.resolve(args["meta-file"]) : null;
 const LABEL = args.label || process.env.LBH_CONTROL_PLANE_LABEL || "lbh-control-plane";
+const telemetry = createRuntimeLogger("control-plane", { label: LABEL, host: HOST, port: PORT });
 
 const store = new ControlPlaneStore(CONTROL_PLANE_FILE);
 const registry = new SessionRegistry(SESSION_REGISTRY_FILE);
@@ -168,6 +170,7 @@ const server = http.createServer(async (req, res) => {
         heartbeatAt: new Date().toISOString(),
       };
       simInstances.set(simInstanceId, entry);
+      telemetry.info("sim.registered", { simInstanceId, simPort: entry.port, simUrl: entry.url });
       sendJson(res, 200, { ok: true, simInstance: entry });
       return;
     }
@@ -191,7 +194,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/sim/unregister") {
       const body = await readJson(req);
       const simInstanceId = String(body.simInstanceId || "").trim();
-      if (simInstanceId) simInstances.delete(simInstanceId);
+      if (simInstanceId) {
+        simInstances.delete(simInstanceId);
+        telemetry.info("sim.unregistered", { simInstanceId });
+      }
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -203,6 +209,7 @@ const server = http.createServer(async (req, res) => {
         snapshot: body.snapshot || null,
         fallbackName: body.fallbackName || "Pilot",
       });
+      telemetry.info("profile.bootstrapped", { profileId: profile.id, hasSnapshot: Boolean(body.snapshot) });
       sendJson(res, 200, { ok: true, profile });
       return;
     }
@@ -330,6 +337,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   writeProcessFiles(server);
+  telemetry.info("runtime.started", { url: `http://${HOST}:${PORT}/`, storeFile: CONTROL_PLANE_FILE, registryFile: SESSION_REGISTRY_FILE });
   console.error(`${LABEL} listening on http://${HOST}:${PORT}/`);
 });
 
