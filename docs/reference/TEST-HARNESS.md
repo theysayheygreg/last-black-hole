@@ -29,9 +29,10 @@ flowchart LR
     C --> C3["physics.js / flow.js / systems.js"]
 
     D --> D1["infra-smoke.js"]
-    D --> D2["sim-lifecycle.js"]
-    D --> D3["control-plane.js"]
-    D --> D4["remote-authority.js"]
+    D --> D2["telemetry-smoke.js"]
+    D --> D3["sim-lifecycle.js"]
+    D --> D4["control-plane.js"]
+    D --> D5["remote-authority.js"]
 
     E --> E1["player-brain.js"]
     E --> E2["overload-state.js"]
@@ -75,6 +76,7 @@ This layer is **not** enough to prove the distributed architecture.
 These tests answer: can the real client/control-plane/sim stack start and behave like a stack?
 
 - `tests/infra-smoke.js`
+- `tests/telemetry-smoke.js`
 - `tests/sim-lifecycle.js`
 - `tests/control-plane.js`
 
@@ -84,6 +86,7 @@ This layer is good for catching:
 - bad port/pid behavior
 - stale detached server leaks
 - control-plane or sim boot regressions
+- structured-telemetry regressions in the real stack logs
 - lifecycle regressions like empty sims failing to idle or stop
 
 ### 3. Authoritative gameplay truth
@@ -156,6 +159,10 @@ For normal verification:
 
 - `npm test`
 
+For targeted runtime-telemetry verification:
+
+- `npm run test:telemetry`
+
 For visual/renderer verification:
 
 - `npm run test:renderer`
@@ -185,6 +192,7 @@ Use the right test for the right question.
 
 - “Does the client boot?” → `tests/smoke.js`
 - “Does the distributed stack come up?” → `tests/infra-smoke.js`
+- “Are runtime telemetry events still emitted the way the operator tooling expects?” → `tests/telemetry-smoke.js`
 - “Does remote authority still work?” → `tests/remote-authority.js`
 - “Does the renderer still look right?” → `npm run test:renderer`
 - “Is this commit actually verified?” → `node scripts/build-health.js status`

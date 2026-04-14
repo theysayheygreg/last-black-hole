@@ -13,6 +13,7 @@ const suites = [
   { name: "Validation", file: "validation.js" },
   { name: "Smoke", file: "smoke.js" },
   { name: "InfraSmoke", file: "infra-smoke.js" },
+  { name: "TelemetrySmoke", file: "telemetry-smoke.js" },
   { name: "SimLifecycle", file: "sim-lifecycle.js" },
   { name: "MetaFlow", file: "meta-flow.js" },
   { name: "Controller", file: "controller.js" },

@@ -28,6 +28,7 @@
     "control:status": "node scripts/control-plane-server.js status",
     "control:restart": "node scripts/control-plane-server.js restart",
     "test": "node tests/run-all.js",
+    "test:telemetry": "node tests/telemetry-smoke.js",
     "test:renderer": "node tests/renderer.js",
     "test:audio": "node tests/audio-toolkit.js",
     "audio:analyze": "sh -c 'PY=.venv/bin/python; [ -x \"$PY\" ] || PY=python3; exec \"$PY\" tools/audio_workbench.py \"$@\"' --",

@@ -5,6 +5,16 @@
 
 ---
 
+## Week 4, Day 2: April 13, 2026 — The Harness Starts Trusting the Logs
+
+This was a good little truth pass.
+
+We had already added structured runtime telemetry for the dev server, control plane, sim, and stack launcher. That was useful, but it still lived in an awkward limbo: important enough for humans to rely on, not yet important enough for the harness to verify. That is exactly how operator tooling quietly rots.
+
+So the fix was to give telemetry its own smoke lane. Not a giant new integration suite, just one clear canary that boots the real distributed stack and asserts the events we actually care about: runtime start, profile bootstrap, session start, and player join. The helper layer now captures harness logs directly, so the test is checking the real structured output rather than pretending console text is “close enough.”
+
+That also cleaned up the docs. The harness now says out loud that telemetry is part of the architecture contract, and the build-health docs now explain that `npm test` covers that lane by default.
+
 ## Week 4, Day 1¾: April 12, 2026 — The Desktop Build Learns to Explain Itself
 
 The next two productization tasks were the right pair to do together.

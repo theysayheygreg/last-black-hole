@@ -13,6 +13,8 @@ Run the verifier first and either fix the failures or make an explicit decision 
   - `node scripts/build-health.js status`
 - Record fresh build health:
   - `node scripts/build-health.js verify`
+- Run only the structured telemetry canary:
+  - `npm run test:telemetry`
 
 ## What the verifier does
 
@@ -22,6 +24,8 @@ Right now it records:
 - `npm run test:renderer`
 
 That is intentionally narrow. It covers the real architecture stack and the renderer lane without trying to turn every commit into a release build.
+
+`npm test` now includes the telemetry smoke suite, so structured runtime logging regressions in the distributed stack are part of the normal green/red contract rather than a side check.
 
 ## Interpretation
 

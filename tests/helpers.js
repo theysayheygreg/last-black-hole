@@ -11,6 +11,7 @@ const ROOT = path.resolve(__dirname, "..");
 const TMP = path.join(ROOT, "tmp");
 const PID_FILE = path.join(TMP, "harness-server.pid");
 const META_FILE = path.join(TMP, "harness-server.json");
+const LOG_FILE = path.join(TMP, "harness-server.log");
 const SERVER_SCRIPT = path.join(ROOT, "scripts", "static-server.js");
 const SIM_SERVER_SCRIPT = path.join(ROOT, "scripts", "sim-server.js");
 const CONTROL_PLANE_SERVER_SCRIPT = path.join(ROOT, "scripts", "control-plane-server.js");
@@ -43,6 +44,8 @@ function registerProcessCleanup() {
 async function startServer() {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(TMP, { recursive: true });
+    fs.rmSync(LOG_FILE, { force: true });
+    fs.writeFileSync(LOG_FILE, "", "utf8");
 
     serverProcess = spawn(process.execPath, [
       SERVER_SCRIPT,
@@ -61,6 +64,7 @@ async function startServer() {
 
     serverProcess.stderr.on("data", (data) => {
       const msg = data.toString();
+      fs.appendFileSync(LOG_FILE, msg);
       if (!started && msg.includes("Serving HTTP")) {
         started = true;
         resolve();
@@ -70,6 +74,7 @@ async function startServer() {
     // Also resolve on stdout for some python versions
     serverProcess.stdout.on("data", (data) => {
       const msg = data.toString();
+      fs.appendFileSync(LOG_FILE, msg);
       if (!started && msg.includes("Serving HTTP")) {
         started = true;
         resolve();
@@ -93,7 +98,7 @@ function stopServer() {
     serverProcess.kill();
     serverProcess = null;
   }
-  for (const file of [PID_FILE, META_FILE]) {
+  for (const file of [PID_FILE, META_FILE, LOG_FILE]) {
     try {
       fs.rmSync(file, { force: true });
     } catch {}
@@ -305,6 +310,50 @@ function assert(condition, message) {
   if (!condition) throw new Error(message || "Assertion failed");
 }
 
+function harnessLogFile() {
+  return LOG_FILE;
+}
+
+function simLogFile(port = 8788) {
+  return path.join(TMP, `sim-server-${port}.log`);
+}
+
+function controlPlaneLogFile(port = 8791) {
+  return path.join(TMP, `control-plane-${port}.log`);
+}
+
+function readLogLines(filePath) {
+  if (!fs.existsSync(filePath)) return [];
+  return fs.readFileSync(filePath, "utf8").split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+function readJsonLogEvents(filePath) {
+  return readLogLines(filePath)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+async function waitForLogEvent(filePath, predicate, options = {}) {
+  const timeout = options.timeout ?? 5000;
+  const interval = options.interval ?? 100;
+  const deadline = Date.now() + timeout;
+  let lastEvents = [];
+  while (Date.now() < deadline) {
+    lastEvents = readJsonLogEvents(filePath);
+    const match = lastEvents.find(predicate);
+    if (match) return match;
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+  const seen = lastEvents.map((event) => event.event).filter(Boolean).join(", ");
+  throw new Error(`Timed out waiting for telemetry event in ${path.basename(filePath)}${seen ? ` (saw: ${seen})` : ""}`);
+}
+
 module.exports = {
   startServer,
   stopServer,
@@ -318,5 +367,10 @@ module.exports = {
   assert,
   dispatchKey,
   waitFor,
+  harnessLogFile,
+  simLogFile,
+  controlPlaneLogFile,
+  readJsonLogEvents,
+  waitForLogEvent,
   PORT,
 };

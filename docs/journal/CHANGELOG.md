@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-04-13 — Telemetry-aware smoke harness + build-health alignment
+
+- Added `tests/telemetry-smoke.js` as a dedicated structured-log canary for the real distributed stack.
+- Extended `tests/helpers.js` so the harness captures and reads dev/control/sim log files directly instead of treating telemetry as an untested side effect.
+- Updated the shareable harness/build docs so telemetry is now part of the stated operator contract, not just something the runtime happens to emit.
+- Kept `build-health` intentionally narrow, but clarified that `npm test` now covers the telemetry smoke path as part of the normal green/red contract.
+
 ## 2026-04-12 — Desktop stack status + first content manifest
 
 - Added a desktop-visible stack-status window for the embedded Electron build, including embedded control/sim health, session state, and recent child-process logs.

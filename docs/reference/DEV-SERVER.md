@@ -40,6 +40,7 @@ These are intentionally separate so local playtesting, distributed-runtime work,
 The harness commands remain:
 
 - `npm test`
+- `npm run test:telemetry`
 - `npm run test:renderer`
 
 ## Preferred launch contract
@@ -93,8 +94,10 @@ Use it as a live browser inspection tool, not as a replacement for the test suit
 The practical split is:
 
 - `npm test` / `npm run test:renderer` = deterministic truth
+- `npm run test:telemetry` = targeted structured-log canary for the real distributed stack
 - Chrome DevTools MCP = visual inspection, console inspection, perf traces, interactive debugging
 - `tests/infra-smoke.js` = lightweight process-stack canary for control plane + sim + remote client boot
+- `tests/telemetry-smoke.js` = validates runtime telemetry events emitted by the harness stack logs
 - `tests/remote-authority.js` = deeper authoritative gameplay protocol coverage
 
 When using Chrome DevTools MCP:
