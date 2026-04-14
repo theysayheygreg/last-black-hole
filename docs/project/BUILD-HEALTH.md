@@ -30,5 +30,6 @@ That is intentionally narrow. It covers the real architecture stack and the rend
 ## Interpretation
 
 - `ok: true` and matching `gitHead` means the recorded health is current for this exact commit.
+- `ok: true` can also remain valid for one follow-up commit if that commit only updates `docs/project/BUILD-HEALTH.json` after a successful verification run.
 - A different `gitHead` means the record is stale, even if the last run was green.
 - `ok: false` means the last recorded verification failed and should be fixed before more work piles on.

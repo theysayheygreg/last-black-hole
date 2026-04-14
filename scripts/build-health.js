@@ -32,14 +32,40 @@ function head() {
   return git('git rev-parse HEAD');
 }
 
+function parentHead() {
+  try {
+    return git('git rev-parse HEAD^');
+  } catch {
+    return null;
+  }
+}
+
 function branch() {
   return git('git rev-parse --abbrev-ref HEAD');
+}
+
+function changedPathsForHead(commit = 'HEAD') {
+  try {
+    const out = git(`git diff-tree --no-commit-id --name-only -r ${commit}`);
+    if (!out) return [];
+    return out.split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 function dirtyPaths() {
   const out = git('git status --short');
   if (!out) return [];
   return out.split('\n').filter(Boolean);
+}
+
+function isBuildHealthOnlyCommit(currentHead, recordedHead) {
+  if (!recordedHead || recordedHead === currentHead) return false;
+  const parent = parentHead();
+  if (!parent || parent !== recordedHead) return false;
+  const changed = changedPathsForHead(currentHead);
+  return changed.length === 1 && changed[0] === 'docs/project/BUILD-HEALTH.json';
 }
 
 function runCheck(check) {
@@ -68,6 +94,13 @@ function summarizeStatus(health) {
     return { ok: false, reason: 'missing', message: 'Build health record has not been initialized yet.' };
   }
   if (health.gitHead !== currentHead) {
+    if (health.ok && isBuildHealthOnlyCommit(currentHead, health.gitHead)) {
+      return {
+        ok: true,
+        reason: 'health-record-commit',
+        message: `Build health is current via health-record commit. Verified ${health.gitHead.slice(0, 7)}, current ${currentHead.slice(0, 7)} only updates BUILD-HEALTH.json.`,
+      };
+    }
     return {
       ok: false,
       reason: 'stale',

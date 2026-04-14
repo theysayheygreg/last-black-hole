@@ -15,6 +15,8 @@ So the fix was to give telemetry its own smoke lane. Not a giant new integration
 
 That also cleaned up the docs. The harness now says out loud that telemetry is part of the architecture contract, and the build-health docs now explain that `npm test` covers that lane by default.
 
+There was one last little lie hiding in the tooling, though: the tracked health file made itself stale the moment we committed it. That is now fixed. The health checker understands the one normal bookkeeping case — a follow-up commit that only updates `BUILD-HEALTH.json` — and still treats that as current.
+
 ## Week 4, Day 1¾: April 12, 2026 — The Desktop Build Learns to Explain Itself
 
 The next two productization tasks were the right pair to do together.

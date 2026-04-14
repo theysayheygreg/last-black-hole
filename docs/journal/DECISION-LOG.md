@@ -4,6 +4,10 @@
 
 The harness has grown into a real multi-process operator surface, so telemetry can no longer be treated as an incidental nicety. The right move is not to bloat the basic client smoke test, but to add a dedicated telemetry smoke that boots the real control-plane/sim/client path and asserts the structured events we actually depend on: runtime boot, profile bootstrap, session start, and player join. That keeps the original intent intact — small canaries for specific questions — while making the logging contract explicit and testable.
 
+## 2026-04-13 — Build health should tolerate its own bookkeeping commit
+
+The tracked health record exists to make the repo honest, not to instantly invalidate itself. After a successful `verify`, it is normal to land a follow-up commit that only updates `docs/project/BUILD-HEALTH.json`. The tool should treat that one case as still current instead of calling the tree stale immediately. Any broader code/doc drift still counts as stale.
+
 ## 2026-04-12 — Productization should expose the embedded stack, not hide it
 
 LBH's packaged desktop app is now self-contained enough that the next honest move is not more invisible process magic. It is a visible stack-status surface. The app should be able to tell us whether the embedded control plane and sim are healthy, what session is live, and whether the sim is idling toward shutdown. That keeps the original architecture intent intact — authoritative run truth, local rendering client — while making the product understandable to humans.

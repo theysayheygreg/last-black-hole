@@ -11,6 +11,7 @@
 - Extended `tests/helpers.js` so the harness captures and reads dev/control/sim log files directly instead of treating telemetry as an untested side effect.
 - Updated the shareable harness/build docs so telemetry is now part of the stated operator contract, not just something the runtime happens to emit.
 - Kept `build-health` intentionally narrow, but clarified that `npm test` now covers the telemetry smoke path as part of the normal green/red contract.
+- Fixed the `BUILD-HEALTH.json` self-staleness trap: one follow-up commit that only records the refreshed health file now still counts as current.
 
 ## 2026-04-12 — Desktop stack status + first content manifest
 
