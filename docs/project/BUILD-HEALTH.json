@@ -1,26 +1,25 @@
 {
   "ok": true,
-  "recordedAt": "2026-04-14T02:50:35.263Z",
+  "recordedAt": "2026-04-14T03:30:02.348Z",
   "branch": "main",
-  "gitHead": "5d6e5b3568a749f366de9ae68d7c8dabd08a82cc",
+  "gitHead": "614cdf6cb9dd76660fc49e12b38a5d4357d8a544",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 172501
+      "durationMs": 168747
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 39140
+      "durationMs": 38733
     }
   ],
   "dirtyPaths": [
-    "M docs/project/BUILD-HEALTH.json",
     "?? .claude/",
     "?? _artifacts/",
     "?? handoffs/",
