@@ -1,71 +1,30 @@
 {
   "ok": true,
-  "recordedAt": "2026-04-12T22:23:09.387Z",
+  "recordedAt": "2026-04-14T02:50:35.263Z",
   "branch": "main",
-  "gitHead": "f4749b0ed1422b5a46433ca002017726ec5f7d81",
+  "gitHead": "5d6e5b3568a749f366de9ae68d7c8dabd08a82cc",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 155945
+      "durationMs": 172501
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 38219
+      "durationMs": 39140
     }
   ],
   "dirtyPaths": [
-    "M desktop/electron-main.cjs",
-    " M docs/journal/CHANGELOG.md",
-    " M docs/journal/DECISION-LOG.md",
-    " M docs/journal/DEVLOG.md",
-    " M docs/project/BACKLOG.md",
-    " M docs/project/BUILD-HEALTH.json",
-    " M docs/project/BUILD-PLAN.md",
-    " M docs/project/ROADMAP.md",
-    " M docs/reference/BUILD-PIPELINE.md",
-    " M docs/reference/DEV-SERVER.md",
-    " M docs/tools/AUDIO-ANALYSIS.md",
-    " M index-a.html",
-    " M package.json",
-    " M scripts/build.js",
-    " M scripts/control-plane-runtime.js",
-    " M scripts/play.js",
-    " M scripts/player-brain.js",
-    " M scripts/sim-runtime.js",
-    " M scripts/static-server.js",
-    " M scripts/stop.js",
-    " M src/hud.js",
-    " M tests/physics.js",
-    " M tools/analyze-audio.py",
+    "M docs/project/BUILD-HEALTH.json",
     "?? .claude/",
     "?? _artifacts/",
-    "?? desktop/status-preload.cjs",
-    "?? desktop/status.html",
-    "?? docs/project/2026-04-01-lbh-audio-rescore-plan.md",
-    "?? docs/project/2026-04-01-lbh-two-branch-sonic-exploration.md",
-    "?? docs/project/2026-04-01-title-screen-audio-tenet.md",
-    "?? docs/project/2026-04-12-plugin-lens-review.md",
-    "?? docs/project/CONTENT-MANIFESTS.md",
-    "?? docs/reference/RUNTIME-MODES.md",
-    "?? docs/reference/TEST-HARNESS.md",
-    "?? docs/tools/AUDIO-WORKBENCH.md",
     "?? handoffs/",
-    "?? scripts/content/",
-    "?? scripts/runtime-status.js",
-    "?? scripts/runtime-telemetry.js",
-    "?? scripts/stack.js",
-    "?? src/ui/",
-    "?? tests/audio-toolkit.js",
-    "?? tools/__init__.py",
     "?? tools/__pycache__/",
-    "?? tools/audio-requirements.txt",
-    "?? tools/audio_workbench.py",
-    "?? tools/audio_workbench/"
+    "?? tools/audio_workbench/__pycache__/"
   ]
 }
