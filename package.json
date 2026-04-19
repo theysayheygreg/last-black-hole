@@ -44,7 +44,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "puppeteer": "^24.39.1"
+    "puppeteer": "^24.39.1",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@electron/packager": "^19.1.0",
