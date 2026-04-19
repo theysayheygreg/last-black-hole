@@ -184,13 +184,49 @@ Decisions made now that keep the native-port door open:
 
 ---
 
-## Blocker for Start
+## Taste Target (confirmed via gradient-bang.com reference)
 
-The only thing stopping Codex from starting: a taste-level answer from Greg on what the title screen FEELS like when it's done. Examples of the spectrum:
+Greg's direction: a mix of "swirling centerpiece" and "staged moments." Live observation of gradient-bang.com provides the template.
 
-- **Still image with subtle motion** — fluid drifts slowly, nebula breathes, title floats. The calm-before-the-cycle opening.
-- **Swirling galaxy centerpiece** — a visible accretion disk in the middle of the screen, fluid eddies around it, title resolves out of noise.
-- **"You are already inside a black hole"** — the fluid is dense, intense, the nebula is warped by unseen gravity, the title text is fighting through corruption.
-- **Staged moments** — initial logo reveal, then idle state, then hover-response when the cursor moves. Each with distinct visual character.
+### Gradient-bang's title pattern (for reference)
 
-Greg should answer this, and the answer becomes the tuning target for the iterations after the infrastructure lands.
+Captured 4 frames over ~15 seconds of idle:
+- Pure black void baseline (#000)
+- Procedural galactic accretion band drifts diagonally across the screen, continuously, slowly. Rotates subtly over time.
+- Bayer 4×4 dither post-pass quantizes the whole scene to pure binary white/black pixels (visible threshold matrix when zoomed).
+- Faint horizontal scanlines layered on top as a second post-effect.
+- Title text ("GRADIENT BANG") rendered AS PART OF THE SCENE — dither and scanlines pass through it. Not a DOM overlay.
+- Terminal-style blinking cursor "_" after the title.
+- Menu card uses terminal-frame styling (corner brackets, no rounded corners). Inverted primary CTA, outlined secondary.
+- No camera moves, no zooms, no cuts. Fixed frame, living content.
+
+**The lesson:** static cinematography + continuously-living motion. The idle state IS the motion. There is no cinematic intro that resolves to an idle.
+
+### LBH's title target (divergent where it should)
+
+Same template, different subject matter:
+- **Gradient-bang composition:** "you are looking across a galaxy" — band stretching edge-to-edge.
+- **LBH composition:** "you are looking at a dying star close enough to kiss it" — a single well at screen center, visible accretion disk, fluid sim doing its work around it.
+
+Specifically:
+- A well (gravity + accretion disk) anchored at screen center or slightly off-center
+- Fluid sim running around it — currents, swirls, velocity reading through the ASCII pass
+- Nebula layer *behind* everything at low intensity (depth without drawing attention)
+- Bayer dither optional for title screen — ASCII is already our primary quantizer, a layered Bayer post-pass might double-quantize badly. Test both; pick one.
+- Scanlines: subtle, per DESIGN-SYSTEM.md §8
+- Title text "LAST BLACK HOLE" rendered as DOM overlay BUT positioned so the fluid+ASCII shows through around the letters (not a solid backing — transparent letters with glow)
+- Terminal-style blinking cursor after the title (free win, do it)
+- Menu card styled per existing DESIGN-SYSTEM.md §4 (terminal-frame brackets, already in use)
+- Staged moments: initial entry (0-2s), settled idle (2s+), hover-response on menu items (ambient tint shift — see below)
+
+### Hover-response / ambient pulse (observed, needs confirmation)
+
+Between frames 3 and 4 of the gradient-bang capture, the "BE THE FIRST IN THE UNIVERSE" header shifted from white to warm-orange tint. Either a hover state or a slow ambient pulse. Worth copying either way — LBH's menu card could have a faint accretion-gold tint cycle in idle, brightening on hover.
+
+### Success-criteria update
+
+In addition to the 8 criteria from the earlier section, the title screen must:
+9. Feel alive — returning to the title after a cycle should not feel like looking at a freeze-frame. The fluid/nebula should be drifting.
+10. Read as "the game's subject matter in the title art" — a visible well/black hole as centerpiece, not a generic space background.
+11. Terminal-style cursor blink on the title text.
+12. Infrastructure permits layered post-passes so the Bayer vs ASCII question can be resolved experimentally.
