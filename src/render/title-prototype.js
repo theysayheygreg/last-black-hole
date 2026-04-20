@@ -29,6 +29,7 @@ import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
 import { Composer } from './composer.js';
 import { FluidDisplayPass } from './passes/fluid-display-pass.js';
+import { BloomPass } from './passes/bloom-pass.js';
 import { ASCIIPass } from './passes/ascii-pass.js';
 
 // --- DOM references ---
@@ -94,8 +95,16 @@ for (const pd of (MAP_TITLE.planetoids || [])) {
 // --- Composer + pass chain ---
 const composer = new Composer(gl);
 const fluidDisplayPass = new FluidDisplayPass(fluid);
+const bloomPass = new BloomPass(gl, {
+  threshold: 0.5,
+  knee: 0.15,
+  strength: 1.2,
+  blurRadius: 2.5,
+  scale: 0.5,
+});
 const asciiPass = new ASCIIPass(gl);
 composer.add(fluidDisplayPass);
+composer.add(bloomPass);
 composer.add(asciiPass);
 
 // Camera locks to world center for the title screen.
@@ -220,7 +229,7 @@ window.__TITLE_PROTOTYPE__ = {
   wellSystem,
   planetoidSystem,
   composer,
-  passes: { fluidDisplayPass, asciiPass },
+  passes: { fluidDisplayPass, bloomPass, asciiPass },
   get totalTime() { return totalTime; },
   camX, camY,
   map: MAP_TITLE,
