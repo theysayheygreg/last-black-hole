@@ -24,6 +24,11 @@ import { Composer } from './render/composer.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
 import { TonemapPass } from './render/passes/tonemap-pass.js';
 import { ASCIIPass } from './render/passes/ascii-pass.js';
+import { BloomPass } from './render/passes/bloom-pass.js';
+import { ColorGradePass } from './render/passes/color-grade-pass.js';
+import { VignettePass } from './render/passes/vignette-pass.js';
+import { ChromaticAberrationPass } from './render/passes/chromatic-aberration-pass.js';
+import { ScanlinesPass } from './render/passes/scanlines-pass.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, setDropCallback,
@@ -314,13 +319,58 @@ function init() {
   // shader's naturally out-of-range highlights, then tonemap compresses
   // to LDR before ASCII quantizes. Bloom is deferred to prototype/title
   // until a 5x5/10x10 perf pass — see docs/reference/RENDER-PIPELINE.md.
+  // Gameplay render chain. Default is the rich chain (Art-Is-Product
+  // identity: bloom highlights, color grade, vignette, CRT aberration
+  // + scanlines). Pass ?minimalrender=1 to fall back to the bare
+  // FluidDisplay → Tonemap → ASCII chain for perf comparison.
+  //
+  // Accretion + FluidGain are intentionally title-only — gameplay wells
+  // already render their own rings via FluidDisplay's fluid shader, and
+  // the title-specific composition radii don't apply to scattered
+  // multi-well maps.
+  const useMinimalChain = new URLSearchParams(location.search).has('minimalrender');
   composer = new Composer(gl);
   fluidDisplayPass = new FluidDisplayPass(fluid);
   tonemapPass = new TonemapPass({ exposure: 1.0 });
   asciiPass = new ASCIIPass(gl);
-  composer.add(fluidDisplayPass);
-  composer.add(tonemapPass);
-  composer.add(asciiPass);
+  if (useMinimalChain) {
+    composer.add(fluidDisplayPass);
+    composer.add(tonemapPass);
+    composer.add(asciiPass);
+  } else {
+    const bloomPass = new BloomPass(gl, {
+      threshold: 0.85,
+      knee: 0.3,
+      strength: 0.9,
+      blurRadius: 3.5,
+      scale: 0.5,
+    });
+    const colorGradePass = new ColorGradePass({
+      shadowTint: [0.95, 0.95, 1.05],
+      highlightTint: [1.05, 1.0, 0.95],
+      shadowStrength: 0.2,
+      highlightStrength: 0.25,
+    });
+    const vignettePass = new VignettePass({ strength: 0.8, radius: 0.4, softness: 0.6 });
+    // Dial aberration + scanlines lower than title — gameplay readability
+    // trumps CRT intensity. Still present, still contributes identity.
+    const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.003, falloff: 2.6 });
+    const scanlinesPass = new ScanlinesPass({ intensity: 0.14, frequency: 1.5 });
+    // ASCII is mid-chain; last pass must be terminal.
+    asciiPass.rendersToScreen = false;
+    const chain = [
+      fluidDisplayPass,
+      bloomPass,
+      tonemapPass,
+      colorGradePass,
+      vignettePass,
+      asciiPass,
+      chromaticAberrationPass,
+      scanlinesPass,
+    ];
+    chain[chain.length - 1].rendersToScreen = true;
+    for (const p of chain) composer.add(p);
+  }
 
   // Init entity systems (empty — loadScene populates them)
   wellSystem = new WellSystem();
