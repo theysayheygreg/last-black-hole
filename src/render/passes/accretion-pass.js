@@ -59,15 +59,16 @@ out vec4 fragColor;
 vec3 tempRamp(float t) {
   t = clamp(t, -1.0, 1.0);
   vec3 c = vec3(0.0);
-  c = mix(c, vec3(0.30, 0.10, 0.45), smoothstep(-1.0, -0.75, t));   // violet
-  c = mix(c, vec3(0.90, 0.22, 0.18), smoothstep(-0.75, -0.45, t));  // red
-  c = mix(c, vec3(1.10, 0.55, 0.10), smoothstep(-0.45, -0.22, t));  // orange
-  c = mix(c, vec3(1.25, 1.15, 0.55), smoothstep(-0.22, -0.05, t));  // yellow
-  c = mix(c, vec3(1.45, 1.45, 1.35), smoothstep(-0.05, 0.05, t));   // white-hot (HDR)
-  c = mix(c, vec3(0.55, 0.80, 1.10), smoothstep(0.05, 0.22, t));    // light blue
-  c = mix(c, vec3(0.15, 0.35, 0.95), smoothstep(0.22, 0.50, t));    // blue
-  c = mix(c, vec3(0.30, 0.10, 0.50), smoothstep(0.50, 0.80, t));    // outer purple
-  c = mix(c, vec3(0.0), smoothstep(0.80, 1.0, t));                   // far space
+  c = mix(c, vec3(0.22, 0.06, 0.32), smoothstep(-1.0, -0.85, t));   // inner purple (red-leaning)
+  c = mix(c, vec3(0.48, 0.12, 0.72), smoothstep(-0.85, -0.65, t));  // violet (blue-leaning)
+  c = mix(c, vec3(1.00, 0.24, 0.16), smoothstep(-0.65, -0.42, t));  // red (HDR)
+  c = mix(c, vec3(1.20, 0.58, 0.12), smoothstep(-0.42, -0.22, t));  // orange
+  c = mix(c, vec3(1.30, 1.20, 0.55), smoothstep(-0.22, -0.08, t));  // yellow
+  c = mix(c, vec3(2.20, 2.15, 1.90), smoothstep(-0.08, 0.10, t));   // white-hot (HDR peak punches bloom)
+  c = mix(c, vec3(0.60, 0.85, 1.18), smoothstep(0.10, 0.28, t));    // light blue
+  c = mix(c, vec3(0.15, 0.38, 1.00), smoothstep(0.28, 0.55, t));    // blue
+  c = mix(c, vec3(0.22, 0.08, 0.58), smoothstep(0.55, 0.82, t));    // outer purple (blue-leaning)
+  c = mix(c, vec3(0.0), smoothstep(0.88, 1.0, t));                   // far space (pushed out)
   return c;
 }
 

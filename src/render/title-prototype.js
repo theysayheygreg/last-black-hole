@@ -160,9 +160,9 @@ if (accretionStrengthOverride !== null) {
 // These are NOT keyed to killRadius — the visual composition is
 // independent of the well's gameplay hit radius.
 const TITLE_ACCRETION_RADII = wellSystem.wells.map((_w) => {
-  const core  = 0.08;
-  const peak  = 0.22;
-  const outer = 0.55;
+  const core  = 0.07;
+  const peak  = 0.30;
+  const outer = 0.52;
   return [core, peak, outer];
 });
 const bloomPass = new BloomPass(gl, {
