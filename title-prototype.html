@@ -24,25 +24,32 @@
       overflow: hidden;
     }
 
-    #render-canvas {
+    #render-canvas,
+    #overlay-canvas {
       display: block;
       width: 100vw;
       height: 100vh;
       position: absolute;
       inset: 0;
-      z-index: 0;
     }
+
+    #render-canvas { z-index: 0; }
+    #overlay-canvas { z-index: 1; pointer-events: none; }
 
     #title-overlay {
       position: absolute;
       inset: 0;
-      z-index: 1;
+      z-index: 2;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       pointer-events: none;
+      opacity: 0;
+      animation: fadeIn 1.8s ease-out 0.2s forwards;
     }
+
+    @keyframes fadeIn { to { opacity: 1; } }
 
     #title-line {
       font-size: 44px;
@@ -78,7 +85,7 @@
       position: absolute;
       top: 16px;
       left: 16px;
-      z-index: 2;
+      z-index: 3;
       background: var(--hud-panel-bg);
       border: 1px solid var(--hud-border);
       border-radius: 2px;
@@ -111,46 +118,21 @@
       border-top: 1px solid var(--hud-border);
       color: rgba(130, 140, 160, 0.55);
     }
-
-    #fps {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      z-index: 2;
-      background: var(--hud-panel-bg);
-      border: 1px solid var(--hud-border);
-      padding: 6px 10px;
-      font-size: 11px;
-      color: rgba(180, 220, 200, 0.75);
-      border-radius: 2px;
-    }
   </style>
 </head>
 <body>
   <canvas id="render-canvas"></canvas>
+  <canvas id="overlay-canvas"></canvas>
 
   <div id="title-overlay">
     <div id="title-line">LAST BLACK HOLE<span id="title-cursor">_</span></div>
-    <div id="subtitle">title prototype — render pipeline v1</div>
+    <div id="subtitle">title prototype — render pipeline v1 (parity)</div>
   </div>
 
   <div id="tuning-panel">
-    <div class="row"><span class="label">nebula intensity</span><span class="value" id="nebula-intensity">0.35</span></div>
-    <div class="row"><span class="label">domain scale</span><span class="value" id="nebula-domain">1.00</span></div>
-    <div class="row"><span class="label">exposure</span><span class="value" id="exposure-val">1.00</span></div>
-    <div class="row"><span class="label">tint strength</span><span class="value" id="tint-val">0.00</span></div>
     <div class="row"><span class="label">fps</span><span class="value" id="fps-text">—</span></div>
-    <div class="hint">[1/2] intensity • [3/4] domain • [5/6] exposure • [7/8] tint • [r] reset • [space] fade cycle</div>
+    <div class="hint">[r] reset sim • [space] fade title</div>
   </div>
-
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "/node_modules/three/build/three.module.js",
-      "three/addons/": "/node_modules/three/examples/jsm/"
-    }
-  }
-  </script>
 
   <script type="module" src="/src/render/title-prototype.js"></script>
 </body>

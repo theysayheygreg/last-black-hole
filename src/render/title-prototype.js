@@ -1,341 +1,227 @@
 // src/render/title-prototype.js
 //
-// Standalone title-screen prototype. Loaded by title-prototype.html, not by
-// the main game. The main game's render path is untouched — this is the
-// "throwaway prototype" described in docs/reference/GRADIENT-BANG-ANALYSIS.md
-// and confirmed in docs/project/2026-04-19-title-screen-render-pipeline-brief.md.
+// Standalone title-screen prototype. Loaded by title-prototype.html.
 //
-// Purpose: prove the hybrid render pipeline works in LBH's tree at 60fps
-// before integrating with the main render path. First pass deliberately
-// minimal — nebula background + exposure + tint post-passes + DOM title.
-// Does NOT include the fluid sim yet. That integration is the next step
-// once this proves out.
+// Drives the new LBH multi-pass Composer (src/render/composer.js) end to
+// end, using the existing FluidSim for physics and two Pass subclasses
+// (FluidDisplayPass + ASCIIPass) for the display chain. The main game
+// (src/main.js) still uses the legacy ASCIIRenderer; it will migrate here
+// once the pipeline proves out more effects.
 //
-// Key bindings (read tuning-panel.hint in the HTML for the live legend):
-//   [1/2] adjust nebula intensity
-//   [3/4] adjust domain scale
-//   [5/6] adjust exposure
-//   [7/8] adjust tint strength
-//   [r]   reset all
-//   [space] trigger exposure fade cycle (0 → 1 → 1)
+// Per frame:
+//   1. Step FluidSim physics (sim-core passes inside fluid.js)
+//   2. WellSystem applies well forces; PlanetoidSystem injects comet wakes
+//   3. Composer runs [FluidDisplayPass → ASCIIPass]:
+//        FluidDisplayPass  writes scene color to composer FBO A
+//        ASCIIPass         reads FBO A + velocity tex, writes to screen
+//   4. 2D overlay canvas draws planetoid sprites on top
+//
+// Adding a new effect later = new Pass file + one line in the composer.add()
+// chain. Nothing else changes.
 
-import * as THREE from 'three';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { CONFIG } from '../config.js';
+import { FluidSim } from '../fluid.js';
+import { WellSystem } from '../wells.js';
+import { PlanetoidSystem } from '../planetoids.js';
+import { applySceneOverrides } from '../scene-config.js';
+import { WORLD_SCALE, worldToFluidUV, setWorldScale } from '../coords.js';
+import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
-import {
-  nebulaVertexShader,
-  nebulaFragmentShader,
-  NEBULA_DEFAULTS,
-} from './shaders/nebula.glsl.js';
+import { Composer } from './composer.js';
+import { FluidDisplayPass } from './passes/fluid-display-pass.js';
+import { ASCIIPass } from './passes/ascii-pass.js';
 
 // --- DOM references ---
-const canvas = document.getElementById('render-canvas');
-const elIntensity = document.getElementById('nebula-intensity');
-const elDomain = document.getElementById('nebula-domain');
-const elExposure = document.getElementById('exposure-val');
-const elTint = document.getElementById('tint-val');
+const glCanvas = document.getElementById('render-canvas');
+const overlayCanvas = document.getElementById('overlay-canvas');
+const titleOverlay = document.getElementById('title-overlay');
 const elFps = document.getElementById('fps-text');
 
-// --- Renderer ---
-const renderer = new THREE.WebGLRenderer({
-  canvas,
-  antialias: false,
-  powerPreference: 'high-performance',
-});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x000000, 1);
-
-// --- Scene + camera ---
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(
-  70,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  2000
-);
-camera.position.set(0, 0, 0);
-camera.lookAt(0, 0, -1);
-
-// --- Nebula layer (inside-out sphere) ---
-// BackSide so the camera inside the sphere sees the inner surface. The
-// nebula shader uses vWorldPosition to derive a spherical direction,
-// which matches naturally. Radius is large relative to near-plane but
-// small enough to keep the fractal sampling stable.
-const nebulaUniforms = {
-  uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-  uIntensity: { value: NEBULA_DEFAULTS.uIntensity },
-  uTint: { value: new THREE.Vector3(...NEBULA_DEFAULTS.uTint) },
-  uNebulaColorPrimary: {
-    value: new THREE.Vector3(...NEBULA_DEFAULTS.uNebulaColorPrimary),
-  },
-  uNebulaColorSecondary: {
-    value: new THREE.Vector3(...NEBULA_DEFAULTS.uNebulaColorSecondary),
-  },
-  uIterPrimary: { value: NEBULA_DEFAULTS.uIterPrimary },
-  uIterSecondary: { value: NEBULA_DEFAULTS.uIterSecondary },
-  uDomainScale: { value: NEBULA_DEFAULTS.uDomainScale },
-  uWarpOffset: { value: new THREE.Vector3(...NEBULA_DEFAULTS.uWarpOffset) },
-  uWarpDecay: { value: NEBULA_DEFAULTS.uWarpDecay },
-};
-
-const nebulaMaterial = new THREE.ShaderMaterial({
-  vertexShader: nebulaVertexShader,
-  fragmentShader: nebulaFragmentShader,
-  uniforms: nebulaUniforms,
-  side: THREE.BackSide,
-  depthWrite: false,
-  transparent: false,
-});
-
-const nebulaMesh = new THREE.Mesh(
-  new THREE.SphereGeometry(500, 64, 32),
-  nebulaMaterial
-);
-scene.add(nebulaMesh);
-
-
-// --- Post-processing chain ---
-const composer = new EffectComposer(renderer);
-composer.setSize(window.innerWidth, window.innerHeight);
-
-// URL params for selectively disabling passes — diagnostic knobs
-const params = new URLSearchParams(window.location.search);
-const skipExposure = params.has('noExposure');
-const skipTint = params.has('noTint');
-
-composer.addPass(new RenderPass(scene, camera));
-
-// Exposure pass — global luminance multiply. Drives the title entry
-// fade-in, will drive the gameplay death-screen linger, etc.
-const exposureUniforms = {
-  tDiffuse: { value: null },
-  uExposure: { value: 0.0 }, // start at 0 and fade in on load
-};
-const exposurePass = new ShaderPass({
-  uniforms: exposureUniforms,
-  vertexShader: `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform sampler2D tDiffuse;
-    uniform float uExposure;
-    varying vec2 vUv;
-    void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
-      gl_FragColor = vec4(c.rgb * uExposure, c.a);
-    }
-  `,
-});
-if (!skipExposure) composer.addPass(exposurePass);
-
-// IMPORTANT: Three.js ShaderPass deep-clones the uniforms object passed to
-// its constructor. Mutating our local `exposureUniforms` (above) does NOT
-// update the shader — we must mutate `exposurePass.uniforms` directly.
-// Re-alias so the rest of the module is pointing at the live uniforms.
-const liveExposureUniforms = exposurePass.uniforms;
-
-// Tint pass — multiplicative color grade. Drives cosmic-signature
-// palettes, inhibitor approach magenta, extraction gold flash.
-const tintUniforms = {
-  tDiffuse: { value: null },
-  uTintColor: { value: new THREE.Vector3(1, 1, 1) },
-  uTintStrength: { value: 0.0 },
-};
-const tintPass = new ShaderPass({
-  uniforms: tintUniforms,
-  vertexShader: `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform sampler2D tDiffuse;
-    uniform vec3 uTintColor;
-    uniform float uTintStrength;
-    varying vec2 vUv;
-    void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
-      vec3 tinted = mix(c.rgb, c.rgb * uTintColor, uTintStrength);
-      gl_FragColor = vec4(tinted, c.a);
-    }
-  `,
-});
-if (!skipTint) composer.addPass(tintPass);
-
-// Same story as exposurePass — re-alias the cloned uniforms.
-const liveTintUniforms = tintPass.uniforms;
-
-// --- Resize ---
-function onResize() {
+// --- Canvas sizing ---
+function sizeCanvases() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  renderer.setSize(w, h);
-  composer.setSize(w, h);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  nebulaUniforms.uResolution.value.set(w, h);
+  glCanvas.width = w;
+  glCanvas.height = h;
+  overlayCanvas.width = w;
+  overlayCanvas.height = h;
 }
-window.addEventListener('resize', onResize);
+sizeCanvases();
 
-// --- Entry exposure fade-in ---
-// gradient-bang's title is continuously alive. But an entry fade gives
-// the player a beat of "reveal" on first load — matches the feeling of
-// the cycle beginning. Fade 0 → 1 over 1.8s, ease-out.
-let exposureTarget = 1.0;
-let exposureStart = performance.now();
-let exposureFromValue = 0.0;
-const EXPOSURE_FADE_MS = 1800;
-
-function triggerExposureFade(from, to, duration = EXPOSURE_FADE_MS) {
-  exposureFromValue = from;
-  exposureTarget = to;
-  exposureStart = performance.now();
-  return duration;
+// --- WebGL 2 context ---
+const gl = glCanvas.getContext('webgl2', {
+  alpha: false,
+  antialias: false,
+  preserveDrawingBuffer: false,
+});
+if (!gl) throw new Error('WebGL 2 unavailable');
+// Enable half-float rendering for the fluid FBOs (RGBA16F).
+if (!gl.getExtension('EXT_color_buffer_float')) {
+  console.warn('EXT_color_buffer_float missing — fluid FBOs may fail to render');
 }
+gl.clearColor(0, 0, 0, 1);
 
-function updateExposure(now) {
-  const elapsed = now - exposureStart;
-  const t = Math.min(1, elapsed / EXPOSURE_FADE_MS);
-  const eased = 1 - Math.pow(1 - t, 2.2); // ease-out
-  liveExposureUniforms.uExposure.value = exposureFromValue + (exposureTarget - exposureFromValue) * eased;
+// --- 2D overlay context for planetoids ---
+const ctx2d = overlayCanvas.getContext('2d');
+
+// --- Apply title-screen scene overrides ---
+applySceneOverrides(CONFIG, MAP_TITLE.configOverrides);
+setWorldScale(MAP_TITLE.worldScale);
+
+// --- Systems ---
+const fluid = new FluidSim(gl);
+const wellSystem = new WellSystem();
+const planetoidSystem = new PlanetoidSystem();
+
+for (const w of MAP_TITLE.wells) {
+  wellSystem.addWell(w.x, w.y, {
+    mass: w.mass,
+    orbitalDir: w.orbitalDir ?? 1,
+    killRadius: w.killRadius,
+    accretionSpinRate: w.spinRate,
+    accretionPoints: w.points,
+    accretionRadius: w.accretionRadius,
+    accretionRate: w.accretionRate,
+  });
 }
-
-triggerExposureFade(0, 1);
-
-// --- Slow camera drift so the nebula is continuously alive ---
-// Gradient-bang's title rotates slowly. Same idea — the idle state IS
-// the motion. Rotation rate chosen to produce a visible shift over 15s.
-const DRIFT_RATE_RAD_PER_SEC = 0.018;
-const DRIFT_AXIS = new THREE.Vector3(0.3, 1.0, 0.1).normalize();
-let lastDriftUpdate = performance.now();
-
-function updateDrift(now) {
-  const dt = (now - lastDriftUpdate) / 1000;
-  lastDriftUpdate = now;
-  nebulaMesh.rotateOnAxis(DRIFT_AXIS, DRIFT_RATE_RAD_PER_SEC * dt);
-}
-
-// --- Key handlers for live tuning ---
-function clamp(v, lo, hi) {
-  return Math.max(lo, Math.min(hi, v));
-}
-
-const STEPS = {
-  intensity: 0.05,
-  domain: 0.1,
-  exposure: 0.1,
-  tint: 0.05,
-};
-
-window.addEventListener('keydown', (ev) => {
-  if (ev.key === '1') nebulaUniforms.uIntensity.value = clamp(nebulaUniforms.uIntensity.value - STEPS.intensity, 0, 2);
-  if (ev.key === '2') nebulaUniforms.uIntensity.value = clamp(nebulaUniforms.uIntensity.value + STEPS.intensity, 0, 2);
-  if (ev.key === '3') nebulaUniforms.uDomainScale.value = clamp(nebulaUniforms.uDomainScale.value - STEPS.domain, 0.1, 4);
-  if (ev.key === '4') nebulaUniforms.uDomainScale.value = clamp(nebulaUniforms.uDomainScale.value + STEPS.domain, 0.1, 4);
-  if (ev.key === '5') exposureTarget = clamp(liveExposureUniforms.uExposure.value - STEPS.exposure, 0, 2);
-  if (ev.key === '6') exposureTarget = clamp(liveExposureUniforms.uExposure.value + STEPS.exposure, 0, 2);
-  if (ev.key === '7') liveTintUniforms.uTintStrength.value = clamp(liveTintUniforms.uTintStrength.value - STEPS.tint, 0, 1);
-  if (ev.key === '8') liveTintUniforms.uTintStrength.value = clamp(liveTintUniforms.uTintStrength.value + STEPS.tint, 0, 1);
-
-  if (ev.key === '5' || ev.key === '6') {
-    // Exposure edits trigger a short animated ramp toward target
-    triggerExposureFade(liveExposureUniforms.uExposure.value, exposureTarget, 250);
+for (const pd of (MAP_TITLE.planetoids || [])) {
+  if (pd.type === 'orbit') {
+    const well = wellSystem.wells[pd.wellIndex];
+    if (well) planetoidSystem.spawnOrbit(well);
   }
+}
 
-  if (ev.key === 'r' || ev.key === 'R') {
-    nebulaUniforms.uIntensity.value = NEBULA_DEFAULTS.uIntensity;
-    nebulaUniforms.uDomainScale.value = NEBULA_DEFAULTS.uDomainScale;
-    triggerExposureFade(liveExposureUniforms.uExposure.value, 1.0);
-    liveTintUniforms.uTintStrength.value = 0;
-    liveTintUniforms.uTintColor.value.set(1, 1, 1);
-  }
+// --- Composer + pass chain ---
+const composer = new Composer(gl);
+const fluidDisplayPass = new FluidDisplayPass(fluid);
+const asciiPass = new ASCIIPass(gl);
+composer.add(fluidDisplayPass);
+composer.add(asciiPass);
 
-  if (ev.key === ' ') {
-    // Cycle: fade to 0 then back to 1
-    triggerExposureFade(liveExposureUniforms.uExposure.value, 0, 600);
-    setTimeout(() => triggerExposureFade(0, 1, 900), 650);
-    ev.preventDefault();
-  }
+// Camera locks to world center for the title screen.
+const camX = WORLD_SCALE / 2;
+const camY = WORLD_SCALE / 2;
 
-  // Tint color cycle on T — tour a few signature palettes
-  if (ev.key === 't' || ev.key === 'T') {
-    const palettes = [
-      [1.0, 1.0, 1.0], // neutral
-      [0.0, 0.5, 0.5], // cosmic teal
-      [0.80, 0.10, 0.50], // inhibitor magenta
-      [1.0, 0.85, 0.4], // accretion gold
-      [0.45, 0.35, 0.75], // nebula violet
-    ];
-    const idx = Math.floor(Math.random() * palettes.length);
-    liveTintUniforms.uTintColor.value.set(...palettes[idx]);
-    liveTintUniforms.uTintStrength.value = 0.35;
+// --- Resize ---
+window.addEventListener('resize', () => {
+  sizeCanvases();
+  composer.resize(glCanvas.width, glCanvas.height);
+});
+
+// --- Input ---
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyR') {
+    fluid.clear();
+  } else if (e.code === 'Space') {
+    titleOverlay.style.transition = 'none';
+    titleOverlay.style.opacity = '0';
+    requestAnimationFrame(() => {
+      titleOverlay.style.transition = 'opacity 1.8s ease-out';
+      titleOverlay.style.opacity = '1';
+    });
+    e.preventDefault();
   }
 });
 
-// --- HUD tuning readout ---
-function updateTuningPanel() {
-  if (elIntensity) elIntensity.textContent = nebulaUniforms.uIntensity.value.toFixed(2);
-  if (elDomain) elDomain.textContent = nebulaUniforms.uDomainScale.value.toFixed(2);
-  if (elExposure) elExposure.textContent = liveExposureUniforms.uExposure.value.toFixed(2);
-  if (elTint) elTint.textContent = liveTintUniforms.uTintStrength.value.toFixed(2);
-}
+// --- Loop ---
+let lastTime = performance.now();
+let totalTime = 0;
+let frameCount = 0;
+let fpsTimer = 0;
 
-// --- FPS sampling ---
-let fpsAccum = 0;
-let fpsFrames = 0;
-let fpsLast = performance.now();
+const SIM_DT = 1 / CONFIG.sim.fixedHz;
+let simAccumulator = 0;
 
-function updateFps(now) {
-  fpsFrames += 1;
-  fpsAccum += now - fpsLast;
-  fpsLast = now;
-  if (fpsAccum >= 500) {
-    const fps = 1000 / (fpsAccum / fpsFrames);
-    if (elFps) elFps.textContent = fps.toFixed(0);
-    fpsAccum = 0;
-    fpsFrames = 0;
+function frame(now) {
+  const dtRaw = Math.min(0.1, (now - lastTime) / 1000);
+  lastTime = now;
+  totalTime += dtRaw;
+
+  // --- Fixed-step physics ---
+  simAccumulator += dtRaw;
+  let steps = 0;
+  while (simAccumulator >= SIM_DT && steps < CONFIG.sim.maxStepsPerFrame) {
+    const aT = CONFIG.fluid.ambientTurbulence;
+    const aD = CONFIG.fluid.ambientDensity;
+    if (aT > 0 || aD > 0) {
+      fluid.splat(
+        Math.random(), Math.random(),
+        (Math.random() - 0.5) * aT,
+        (Math.random() - 0.5) * aT,
+        0.04,
+        aD * 0.5, aD * 0.6, aD * 1.0,
+      );
+    }
+
+    fluid.fadeVisualDensity(CONFIG.fluid.visualDensityFade ?? 0.92);
+
+    wellSystem.update(fluid, SIM_DT, totalTime);
+    planetoidSystem.update(SIM_DT, fluid, totalTime, wellSystem, null);
+
+    fluid.setWellPositions(wellSystem.getUVPositions());
+    fluid.step(SIM_DT);
+
+    simAccumulator -= SIM_DT;
+    steps++;
   }
-}
 
-// --- Main loop ---
-// DEBUG: URL param ?bypass=1 skips the composer and renders the scene
-// directly to the canvas. Lets us isolate whether the issue is in the
-// scene or in the post-processing chain.
-const bypassComposer = new URLSearchParams(window.location.search).has('bypass');
-console.log('[title-prototype] bypassComposer =', bypassComposer);
+  // --- Build per-frame context for the pass chain ---
+  const wellUVs = wellSystem.getUVPositions();
+  const wellMasses = wellSystem.getUVMasses();
+  const wellShapes = wellSystem.getRenderShapes();
+  const [camFU, camFV] = worldToFluidUV(camX, camY);
+  const a = CONFIG.ascii;
 
-function animate() {
-  const now = performance.now();
-  updateFps(now);
-  updateExposure(now);
-  updateDrift(now);
-  updateTuningPanel();
-  if (bypassComposer) {
-    renderer.render(scene, camera);
-  } else {
-    composer.render();
+  const frameContext = {
+    fluidDisplay: {
+      wellUVs, wellMasses, wellShapes,
+      camFU, camFV,
+      worldScale: WORLD_SCALE,
+      totalTime,
+      inhibitorData: null,
+    },
+    ascii: {
+      velocityTex: fluid.velocity.read.tex,
+      cellSize: a.cellSize,
+      cellAspect: a.cellAspect,
+      contrast: a.contrast,
+      shimmer: a.shimmer,
+      dirThreshold: a.dirThreshold ?? 0.01,
+      glitchIntensity: 0,
+      camFU, camFV,
+      worldScale: WORLD_SCALE,
+      totalTime,
+    },
+  };
+
+  composer.render(frameContext);
+
+  // --- 2D overlay: planetoids ---
+  ctx2d.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  planetoidSystem.render(ctx2d, camX, camY, overlayCanvas.width, overlayCanvas.height);
+
+  // --- FPS ---
+  frameCount++;
+  fpsTimer += dtRaw;
+  if (fpsTimer >= 0.5) {
+    if (elFps) elFps.textContent = String(Math.round(frameCount / fpsTimer));
+    frameCount = 0;
+    fpsTimer = 0;
   }
-  requestAnimationFrame(animate);
+
+  requestAnimationFrame(frame);
 }
+requestAnimationFrame(frame);
 
-animate();
-
-// Expose for console debugging
+// Probe hook.
 window.__TITLE_PROTOTYPE__ = {
-  nebulaUniforms,
-  exposureUniforms: liveExposureUniforms,
-  tintUniforms: liveTintUniforms,
-  renderer,
-  scene,
-  camera,
+  gl,
+  fluid,
+  wellSystem,
+  planetoidSystem,
   composer,
+  passes: { fluidDisplayPass, asciiPass },
+  get totalTime() { return totalTime; },
+  camX, camY,
+  map: MAP_TITLE,
 };
