@@ -27,6 +27,16 @@
 import { Pass } from '../composer.js';
 import { FRAG_ASCII, CHARS_PER_RAMP, createFontAtlasTexture } from '../shaders/ascii.glsl.js';
 
+// Passthrough shader — used when viewMode === 'scene' to show raw fluid
+// output, bypassing the ASCII quantization. Exposed via setViewMode() so
+// the __TEST_API dev hook can toggle between 'ascii' and 'scene' views.
+const FRAG_SCENE_PASSTHROUGH = `#version 300 es
+precision highp float;
+uniform sampler2D u_scene;
+in vec2 v_uv;
+out vec4 fragColor;
+void main() { fragColor = texture(u_scene, v_uv); }`;
+
 export class ASCIIPass extends Pass {
   constructor(gl, { rendersToScreen = true } = {}) {
     super({ name: 'ascii', rendersToScreen });
@@ -35,21 +45,43 @@ export class ASCIIPass extends Pass {
     this.numChars = CHARS_PER_RAMP;
     this.program = null;
     this.uniforms = null;
+    this.sceneProgram = null;
+    this.sceneUniforms = null;
+    this.viewMode = 'ascii';
   }
+
+  setViewMode(mode = 'ascii') {
+    this.viewMode = mode === 'scene' ? 'scene' : 'ascii';
+  }
+
+  getViewMode() { return this.viewMode; }
 
   _ensureProgram(composer) {
     if (this.program) return;
-    const { program, uniforms } = composer.compileProgram(FRAG_ASCII, 'ascii-pass');
-    this.program = program;
-    this.uniforms = uniforms;
+    const ascii = composer.compileProgram(FRAG_ASCII, 'ascii-pass');
+    this.program = ascii.program;
+    this.uniforms = ascii.uniforms;
+    const scene = composer.compileProgram(FRAG_SCENE_PASSTHROUGH, 'ascii-pass-scene');
+    this.sceneProgram = scene.program;
+    this.sceneUniforms = scene.uniforms;
   }
 
   render({ gl, prevOutputTex, frameContext, composer }) {
     this._ensureProgram(composer);
 
+    if (!prevOutputTex) throw new Error('ASCIIPass: prevOutputTex missing (needs a scene input)');
+
+    if (this.viewMode === 'scene') {
+      gl.useProgram(this.sceneProgram);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, prevOutputTex);
+      gl.uniform1i(this.sceneUniforms.u_scene, 0);
+      composer.drawQuad();
+      return;
+    }
+
     const ctx = frameContext.ascii;
     if (!ctx) throw new Error('ASCIIPass: frameContext.ascii missing');
-    if (!prevOutputTex) throw new Error('ASCIIPass: prevOutputTex missing (needs a scene input)');
     if (!ctx.velocityTex) throw new Error('ASCIIPass: frameContext.ascii.velocityTex missing');
 
     gl.useProgram(this.program);

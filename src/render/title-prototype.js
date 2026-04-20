@@ -2,11 +2,11 @@
 //
 // Standalone title-screen prototype. Loaded by title-prototype.html.
 //
-// Drives the new LBH multi-pass Composer (src/render/composer.js) end to
-// end, using the existing FluidSim for physics and two Pass subclasses
-// (FluidDisplayPass + ASCIIPass) for the display chain. The main game
-// (src/main.js) still uses the legacy ASCIIRenderer; it will migrate here
-// once the pipeline proves out more effects.
+// Drives the LBH multi-pass Composer (src/render/composer.js) end to end,
+// using the existing FluidSim for physics and three Pass subclasses
+// (FluidDisplayPass + BloomPass + ASCIIPass) for the display chain. Same
+// Composer pattern the main game now uses — the prototype exists to let
+// us iterate on title-specific passes in isolation from gameplay state.
 //
 // Per frame:
 //   1. Step FluidSim physics (sim-core passes inside fluid.js)

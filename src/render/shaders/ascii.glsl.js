@@ -1,9 +1,7 @@
 // src/render/shaders/ascii.glsl.js
 //
 // Shared ASCII post-process shader source + font-atlas generator.
-// Consumed by the legacy ASCIIRenderer (src/ascii-renderer.js) and the new
-// ASCIIPass (src/render/passes/ascii-pass.js). One source of truth so the
-// two consumers can't drift.
+// Consumed by ASCIIPass (src/render/passes/ascii-pass.js).
 //
 // The shader divides the scene into character cells, looks up a glyph from
 // a pre-rendered font atlas based on cell luminance, and tints with scene

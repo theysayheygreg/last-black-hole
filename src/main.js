@@ -20,7 +20,9 @@ import { WreckSystem } from './wrecks.js';
 import { PortalSystem } from './portals.js';
 import { PlanetoidSystem } from './planetoids.js';
 import { InputManager } from './input.js';
-import { ASCIIRenderer } from './ascii-renderer.js';
+import { Composer } from './render/composer.js';
+import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
+import { ASCIIPass } from './render/passes/ascii-pass.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
 import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, setDropCallback,
@@ -73,7 +75,7 @@ let scavengerSystem, combatSystem, audioEngine, inventorySystem;
 let flowField, simCore;
 let simClient = null;
 let currentSignature = null;
-let inputManager, asciiRenderer;
+let inputManager, composer, fluidDisplayPass, asciiPass;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -307,7 +309,11 @@ function init() {
   // Init systems
   fluid = new FluidSim(gl);
   flowField = new FlowField(fluid);
-  asciiRenderer = new ASCIIRenderer(gl);
+  composer = new Composer(gl);
+  fluidDisplayPass = new FluidDisplayPass(fluid);
+  asciiPass = new ASCIIPass(gl);
+  composer.add(fluidDisplayPass);
+  composer.add(asciiPass);
 
   // Init entity systems (empty — loadScene populates them)
   wellSystem = new WellSystem();
@@ -408,7 +414,7 @@ function init() {
     overlayCanvas.height = window.innerHeight;
     ship.canvasWidth = glCanvas.width;
     ship.canvasHeight = glCanvas.height;
-    asciiRenderer.resize(glCanvas.width, glCanvas.height);
+    composer.resize(glCanvas.width, glCanvas.height);
   });
 
   if (RUNTIME_FLAGS.enableTestAPI) {
@@ -440,9 +446,9 @@ function init() {
         overlayCanvas.style.opacity = visible ? '1' : '0';
       },
       setRendererView: (mode) => {
-        asciiRenderer.setViewMode(mode);
+        asciiPass.setViewMode(mode);
       },
-      getRendererView: () => asciiRenderer.getViewMode(),
+      getRendererView: () => asciiPass.getViewMode(),
       get gamePhase() { return gamePhase; },
       set gamePhase(p) { gamePhase = p; },
       inventorySystem,
@@ -2478,7 +2484,6 @@ function gameLoop(now) {
   const wellUVs = wellSystem.getUVPositions();
   const wellMasses = wellSystem.getUVMasses();
   const wellShapes = wellSystem.getRenderShapes();
-  const sceneTarget = asciiRenderer.getSceneTarget();
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
   // Inhibitor shader data
@@ -2493,8 +2498,28 @@ function gameLoop(now) {
       localTime: inhibitorState.localTime,
     };
   }
-  fluid.render(sceneTarget, wellUVs, camFU, camFV, WORLD_SCALE, totalTime, wellMasses, wellShapes, inhData);
-  asciiRenderer.render(totalTime, camFU, camFV, WORLD_SCALE, fluid.velocity.read.tex, getGlitchIntensity());
+  const a = CONFIG.ascii;
+  composer.render({
+    fluidDisplay: {
+      wellUVs, wellMasses, wellShapes,
+      camFU, camFV,
+      worldScale: WORLD_SCALE,
+      totalTime,
+      inhibitorData: inhData,
+    },
+    ascii: {
+      velocityTex: fluid.velocity.read.tex,
+      cellSize: a.cellSize,
+      cellAspect: a.cellAspect,
+      contrast: a.contrast,
+      shimmer: a.shimmer,
+      dirThreshold: a.dirThreshold ?? 0.01,
+      glitchIntensity: getGlitchIntensity(),
+      camFU, camFV,
+      worldScale: WORLD_SCALE,
+      totalTime,
+    },
+  });
 
   // 8. Render overlay
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
