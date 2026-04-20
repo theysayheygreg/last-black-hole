@@ -12,11 +12,12 @@
 //   1. Step FluidSim physics (sim-core passes inside fluid.js)
 //   2. WellSystem applies well forces; PlanetoidSystem injects comet wakes
 //   3. Composer runs HDR chain:
-//        FluidDisplayPass  writes HDR scene color
-//        BloomPass         catches highlights > 1.0, blurs, composites back
-//        TonemapPass       ACES filmic — compresses HDR to LDR
-//        VignettePass      radial darkening closes the frame
-//        ASCIIPass         reads final LDR + velocity tex, writes to screen
+//        FluidDisplayPass            writes HDR scene color
+//        BloomPass                   catches highlights > 1.0, blurs, composites back
+//        TonemapPass                 ACES filmic — compresses HDR to LDR
+//        ChromaticAberrationPass     lens fringing, scales with radial distance
+//        VignettePass                radial darkening closes the frame
+//        ASCIIPass                   reads final LDR + velocity tex, writes to screen
 //   4. 2D overlay canvas draws planetoid sprites on top
 //
 // Adding a new effect later = new Pass file + one line in the composer.add()
@@ -34,6 +35,7 @@ import { Composer } from './composer.js';
 import { FluidDisplayPass } from './passes/fluid-display-pass.js';
 import { BloomPass } from './passes/bloom-pass.js';
 import { TonemapPass } from './passes/tonemap-pass.js';
+import { ChromaticAberrationPass } from './passes/chromatic-aberration-pass.js';
 import { VignettePass } from './passes/vignette-pass.js';
 import { ASCIIPass } from './passes/ascii-pass.js';
 
@@ -114,17 +116,27 @@ const bloomPass = new BloomPass(gl, {
   scale: 0.5,
 });
 const tonemapPass = new TonemapPass({ exposure: 1.0 });
+const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.005, falloff: 2.2 });
 const vignettePass = new VignettePass({ strength: 0.7, radius: 0.5, softness: 0.45 });
 const asciiPass = new ASCIIPass(gl);
 composer.add(fluidDisplayPass);
 composer.add(bloomPass);
 composer.add(tonemapPass);
+composer.add(chromaticAberrationPass);
 composer.add(vignettePass);
 composer.add(asciiPass);
 
-// Camera locks to world center for the title screen.
-const camX = WORLD_SCALE / 2;
-const camY = WORLD_SCALE / 2;
+// Camera slowly drifts around world center. Small amplitude + long period
+// so the title feels alive without distracting from it. Two different
+// frequencies on X vs Y trace a lissajous loop, keeping the motion from
+// feeling like a straight oscillation.
+const CAMERA_CENTER_X = WORLD_SCALE / 2;
+const CAMERA_CENTER_Y = WORLD_SCALE / 2;
+const CAMERA_DRIFT_AMPLITUDE = 0.03;
+const CAMERA_DRIFT_PERIOD_X = 22;
+const CAMERA_DRIFT_PERIOD_Y = 17;
+let camX = CAMERA_CENTER_X;
+let camY = CAMERA_CENTER_Y;
 
 // --- Resize ---
 window.addEventListener('resize', () => {
@@ -189,6 +201,10 @@ function frame(now) {
     steps++;
   }
 
+  // --- Camera drift ---
+  camX = CAMERA_CENTER_X + Math.sin((totalTime / CAMERA_DRIFT_PERIOD_X) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
+  camY = CAMERA_CENTER_Y + Math.cos((totalTime / CAMERA_DRIFT_PERIOD_Y) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
+
   // --- Build per-frame context for the pass chain ---
   const wellUVs = wellSystem.getUVPositions();
   const wellMasses = wellSystem.getUVMasses();
@@ -244,9 +260,10 @@ window.__TITLE_PROTOTYPE__ = {
   wellSystem,
   planetoidSystem,
   composer,
-  passes: { fluidDisplayPass, bloomPass, tonemapPass, vignettePass, asciiPass },
+  passes: { fluidDisplayPass, bloomPass, tonemapPass, chromaticAberrationPass, vignettePass, asciiPass },
+  get camX() { return camX; },
+  get camY() { return camY; },
   get totalTime() { return totalTime; },
   probeMode,
-  camX, camY,
   map: MAP_TITLE,
 };
