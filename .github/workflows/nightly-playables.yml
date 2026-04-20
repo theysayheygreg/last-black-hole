@@ -98,14 +98,14 @@ jobs:
       - name: Zip web artifact
         run: |
           cd dist/nightly
-          zip -rq last-black-hole-web-nightly.zip web
+          zip -rq last-singularity-web-nightly.zip web
 
       - name: Build release metadata
         id: meta
         run: |
           {
             echo 'release_body<<EOF'
-            echo 'Nightly playable builds for Last Black Hole.'
+            echo 'Nightly playable builds for Last Singularity.'
             echo ''
             if [ "$ENABLE_GITHUB_PAGES" = "true" ]; then
               WEB_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
@@ -122,8 +122,8 @@ jobs:
       - name: Upload web release asset
         uses: actions/upload-artifact@v4
         with:
-          name: last-black-hole-web-nightly
-          path: dist/nightly/last-black-hole-web-nightly.zip
+          name: last-singularity-web-nightly
+          path: dist/nightly/last-singularity-web-nightly.zip
 
   build-win:
     needs: detect-changes
@@ -151,13 +151,13 @@ jobs:
       - name: Zip Windows artifact
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist/nightly/Last Black Hole-win32-x64" -DestinationPath "dist/nightly/last-black-hole-win-nightly.zip" -Force
+          Compress-Archive -Path "dist/nightly/Last Singularity-win32-x64" -DestinationPath "dist/nightly/last-singularity-win-nightly.zip" -Force
 
       - name: Upload Windows release asset
         uses: actions/upload-artifact@v4
         with:
-          name: last-black-hole-win-nightly
-          path: dist/nightly/last-black-hole-win-nightly.zip
+          name: last-singularity-win-nightly
+          path: dist/nightly/last-singularity-win-nightly.zip
 
   build-mac:
     needs: detect-changes
@@ -185,13 +185,13 @@ jobs:
       - name: Zip macOS app
         run: |
           cd dist/nightly
-          ditto -c -k --sequesterRsrc --keepParent "Last Black Hole.app" "last-black-hole-mac-nightly.zip"
+          ditto -c -k --sequesterRsrc --keepParent "Last Singularity.app" "last-singularity-mac-nightly.zip"
 
       - name: Upload macOS release asset
         uses: actions/upload-artifact@v4
         with:
-          name: last-black-hole-mac-nightly
-          path: dist/nightly/last-black-hole-mac-nightly.zip
+          name: last-singularity-mac-nightly
+          path: dist/nightly/last-singularity-mac-nightly.zip
 
   deploy-pages:
     if: needs.detect-changes.outputs.should_build == 'true' && vars.LBH_ENABLE_GITHUB_PAGES == 'true'
@@ -213,19 +213,19 @@ jobs:
       - name: Download web asset
         uses: actions/download-artifact@v4
         with:
-          name: last-black-hole-web-nightly
+          name: last-singularity-web-nightly
           path: release-assets
 
       - name: Download win asset
         uses: actions/download-artifact@v4
         with:
-          name: last-black-hole-win-nightly
+          name: last-singularity-win-nightly
           path: release-assets
 
       - name: Download mac asset
         uses: actions/download-artifact@v4
         with:
-          name: last-black-hole-mac-nightly
+          name: last-singularity-mac-nightly
           path: release-assets
 
       - name: Publish nightly release

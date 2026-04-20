@@ -11,6 +11,9 @@ const ROOT = path.resolve(__dirname, '..');
 const PKG = require(path.join(ROOT, 'package.json'));
 const BUILD_ROOT = path.join(ROOT, 'builds');
 const STAGING_ROOT = path.join(ROOT, 'release-staging');
+const PRODUCT_NAME = 'Last Singularity';
+const PRODUCT_SLUG = 'last-singularity';
+const PRODUCT_SHORT = 'LS';
 
 const TARGET_ALIASES = {
   web: 'web',
@@ -110,7 +113,8 @@ function writeJson(filepath, value) {
 
 function makeBuildInfo(base) {
   return {
-    project: 'last-black-hole',
+    project: PRODUCT_SLUG,
+    productName: PRODUCT_NAME,
     version: PKG.version,
     builtAt: new Date().toISOString(),
     host: {
@@ -200,12 +204,12 @@ function signMacApp(appPath) {
 }
 
 function writeMacLauncher(targetRoot) {
-  const launcherPath = path.join(targetRoot, 'Run Last Black Hole.command');
+  const launcherPath = path.join(targetRoot, `Run ${PRODUCT_NAME}.command`);
   const script = [
     '#!/bin/bash',
     'set -euo pipefail',
     'DIR="$(cd "$(dirname "$0")" && pwd)"',
-    'open -n "$DIR/Last Black Hole.app"',
+    `open -n "$DIR/${PRODUCT_NAME}.app"`,
     '',
   ].join('\n');
   fs.writeFileSync(launcherPath, script);
@@ -219,17 +223,17 @@ function writeStartHere(targetRoot, results) {
     '',
     'If you are launching this build on the same Mac that created it, start here:',
     '',
-    '- Double-click `Run Last Black Hole.command`',
-    '- Or run `open -n \"Last Black Hole.app\"` from Terminal in this folder',
+    `- Double-click \`Run ${PRODUCT_NAME}.command\``,
+    `- Or run \`open -n "${PRODUCT_NAME}.app"\` from Terminal in this folder`,
     '- Finder may still complain if you double-click the `.app` directly because this build is not notarized',
     '',
     '## Which artifact should I use?',
     '',
-    '- **Mac:** `Last Black Hole.app`',
-    '- **Windows:** `Last Black Hole-win32-x64/Last Black Hole.exe`',
-    '- **Linux / Steam Deck:** `Last Black Hole-linux-x64/Last Black Hole`',
-    '- **Browser fallback:** `last-black-hole-web/index.html`',
-    '- **iPad local install:** read `last-black-hole-ipad-webapp/README-IPAD-INSTALL.md`',
+    `- **Mac:** \`${PRODUCT_NAME}.app\``,
+    `- **Windows:** \`${PRODUCT_NAME}-win32-x64/${PRODUCT_NAME}.exe\``,
+    `- **Linux / Steam Deck:** \`${PRODUCT_NAME}-linux-x64/${PRODUCT_NAME}\``,
+    `- **Browser fallback:** \`${PRODUCT_SLUG}-web/index.html\``,
+    `- **iPad local install:** read \`${PRODUCT_SLUG}-ipad-webapp/README-IPAD-INSTALL.md\``,
     '',
     '## What is in this folder?',
     '',
@@ -252,7 +256,7 @@ function writeStartHere(targetRoot, results) {
   lines.push('## Notes');
   lines.push('');
   if (built.has('mac')) {
-    lines.push('- The macOS app is ad-hoc signed, not notarized. Use `Run Last Black Hole.command` for the least fragile local launch path.');
+    lines.push(`- The macOS app is ad-hoc signed, not notarized. Use \`Run ${PRODUCT_NAME}.command\` for the least fragile local launch path.`);
   }
   if (built.has('win')) {
     lines.push('- The Windows target is a portable folder, not an installer.');
@@ -268,7 +272,7 @@ function writeStartHere(targetRoot, results) {
 }
 
 function buildWeb(targetRoot, mode) {
-  const webDir = path.join(targetRoot, 'last-black-hole-web');
+  const webDir = path.join(targetRoot, `${PRODUCT_SLUG}-web`);
   removeIfExists(webDir);
   ensureDir(webDir);
 
@@ -279,20 +283,20 @@ function buildWeb(targetRoot, mode) {
     mode,
     entrypointSource: 'index-a.html',
     entrypointArtifact: 'index.html',
-    artifact: 'last-black-hole-web/',
+    artifact: `${PRODUCT_SLUG}-web/`,
   });
   writeJson(path.join(targetRoot, 'BUILD-INFO-web.json'), info);
 
   return {
     target: 'web',
     outputDir: targetRoot,
-    artifact: 'last-black-hole-web',
+    artifact: `${PRODUCT_SLUG}-web`,
     status: 'built',
   };
 }
 
 function buildIpadWebApp(targetRoot, mode) {
-  const ipadDir = path.join(targetRoot, 'last-black-hole-ipad-webapp');
+  const ipadDir = path.join(targetRoot, `${PRODUCT_SLUG}-ipad-webapp`);
   removeIfExists(ipadDir);
   ensureDir(ipadDir);
 
@@ -306,7 +310,7 @@ function buildIpadWebApp(targetRoot, mode) {
       '  <meta name="apple-mobile-web-app-capable" content="yes">',
       '  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
       '  <meta name="mobile-web-app-capable" content="yes">',
-      '  <meta name="apple-mobile-web-app-title" content="Last Black Hole">',
+      `  <meta name="apple-mobile-web-app-title" content="${PRODUCT_NAME}">`,
       '  <link rel="manifest" href="manifest.webmanifest">',
       '</head>',
     ].join('\n')
@@ -314,8 +318,8 @@ function buildIpadWebApp(targetRoot, mode) {
   fs.writeFileSync(indexPath, injected);
 
   writeJson(path.join(ipadDir, 'manifest.webmanifest'), {
-    name: 'Last Black Hole',
-    short_name: 'LBH',
+    name: PRODUCT_NAME,
+    short_name: PRODUCT_SHORT,
     start_url: './index.html',
     display: 'standalone',
     orientation: 'landscape',
@@ -354,14 +358,14 @@ function buildIpadWebApp(targetRoot, mode) {
     target: 'ipad',
     mode,
     outputDir: targetRoot,
-    artifact: 'last-black-hole-ipad-webapp',
+    artifact: `${PRODUCT_SLUG}-ipad-webapp`,
     installMode: 'Safari Add to Home Screen',
   }));
 
   return {
     target: 'ipad',
     outputDir: targetRoot,
-    artifact: 'last-black-hole-ipad-webapp',
+    artifact: `${PRODUCT_SLUG}-ipad-webapp`,
     status: 'built',
   };
 }
@@ -371,8 +375,8 @@ function stageElectronShell(mode) {
   ensureDir(STAGING_ROOT);
 
   const shellPkg = {
-    name: 'last-black-hole-shell',
-    productName: 'Last Black Hole',
+    name: `${PRODUCT_SLUG}-shell`,
+    productName: PRODUCT_NAME,
     version: PKG.version,
     main: 'electron-main.cjs',
   };
@@ -438,10 +442,10 @@ async function buildElectronTarget(targetRoot, target, mode) {
   const outDir = path.join(
     targetRoot,
     target === 'mac'
-      ? 'last-black-hole-mac'
+      ? `${PRODUCT_SLUG}-mac`
       : target === 'win'
-        ? 'last-black-hole-win'
-        : 'last-black-hole-linux'
+        ? `${PRODUCT_SLUG}-win`
+        : `${PRODUCT_SLUG}-linux`
   );
   removeIfExists(outDir);
   ensureDir(outDir);
@@ -452,8 +456,8 @@ async function buildElectronTarget(targetRoot, target, mode) {
     overwrite: true,
     platform,
     arch,
-    executableName: 'Last Black Hole',
-    appCopyright: 'Last Black Hole playtest build',
+    executableName: PRODUCT_NAME,
+    appCopyright: `${PRODUCT_NAME} playtest build`,
     prune: false,
     quiet: true,
   });
@@ -471,10 +475,10 @@ async function buildElectronTarget(targetRoot, target, mode) {
   if (packagedRoot) {
     const finalName =
       target === 'mac'
-        ? 'Last Black Hole.app'
+        ? `${PRODUCT_NAME}.app`
         : target === 'win'
-          ? 'Last Black Hole-win32-x64'
-          : 'Last Black Hole-linux-x64';
+          ? `${PRODUCT_NAME}-win32-x64`
+          : `${PRODUCT_NAME}-linux-x64`;
     const finalPath = path.join(targetRoot, finalName);
     removeIfExists(finalPath);
     fs.renameSync(packagedRoot, finalPath);
@@ -542,7 +546,7 @@ async function main() {
 
   const playtestZip = path.join(
     BUILD_ROOT,
-    `last-black-hole-playtest-${buildId}.zip`
+    `${PRODUCT_SLUG}-playtest-${buildId}.zip`
   );
   removeIfExists(playtestZip);
   zipDir(targetRoot, playtestZip);

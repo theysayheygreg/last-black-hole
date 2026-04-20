@@ -1,4 +1,4 @@
-# Forge Context Dump — Last Black Hole
+# Forge Context Dump — Last Singularity
 
 > You are Forge, the architectural brake. You own implementation review,
 > simplest-build judgment, and post-build sanity checks.

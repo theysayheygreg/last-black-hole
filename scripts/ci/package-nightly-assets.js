@@ -6,6 +6,8 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..');
 const BUILDS_DIR = path.join(ROOT, 'builds');
 const DIST_DIR = path.join(ROOT, 'dist', 'nightly');
+const PRODUCT_NAME = 'Last Singularity';
+const PRODUCT_SLUG = 'last-singularity';
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -45,9 +47,9 @@ function main() {
   fs.copyFileSync(manifestPath, path.join(DIST_DIR, 'BUILD-MANIFEST.json'));
 
   const copied = {
-    web: copyIfExists(path.join(buildDir, 'last-black-hole-web'), path.join(DIST_DIR, 'web')),
-    mac: copyIfExists(path.join(buildDir, 'Last Black Hole.app'), path.join(DIST_DIR, 'Last Black Hole.app')),
-    win: copyIfExists(path.join(buildDir, 'Last Black Hole-win32-x64'), path.join(DIST_DIR, 'Last Black Hole-win32-x64')),
+    web: copyIfExists(path.join(buildDir, `${PRODUCT_SLUG}-web`), path.join(DIST_DIR, 'web')),
+    mac: copyIfExists(path.join(buildDir, `${PRODUCT_NAME}.app`), path.join(DIST_DIR, `${PRODUCT_NAME}.app`)),
+    win: copyIfExists(path.join(buildDir, `${PRODUCT_NAME}-win32-x64`), path.join(DIST_DIR, `${PRODUCT_NAME}-win32-x64`)),
     startHere: copyIfExists(path.join(buildDir, 'START-HERE.md'), path.join(DIST_DIR, 'START-HERE.md')),
   };
 

@@ -1,4 +1,4 @@
-# Last Black Hole — Development Journal
+# Last Singularity — Development Journal
 
 > A running log of the game jam, newest entries first.
 > Started pre-jam March 14, 2026. Code starts Monday March 16, 12:01a.
@@ -573,7 +573,7 @@ Jam speed. No framework. Fork of PavelDoGreat's WebGL-Fluid-Simulation as the ph
 
 - **The "universe as clock" idea.** No timer. The universe dies around you through four stacking mechanics: black hole growth, portal evaporation, Hawking radiation, spacetime viscosity. The controls themselves degrade — you feel the universe dying through the input. This arrived in the first brainstorm and never changed.
 - **The dark forest mechanic.** Signal management as survival. Every scan, every thruster burn, every loot pickup adds to your signal footprint. Cross the threshold and the Inhibitors wake. They don't chase you because they hate you — your existence is a statistical threat.
-- **Naming the game.** "Last Black Hole" — the last portal out, the last surfer, the last moment before collapse. The name worked immediately.
+- **Naming the game.** "Last Black Hole" was the working title — the last portal out, the last surfer, the last moment before collapse. It later evolved into the public name **Last Singularity**.
 
 ### Open Questions Going Into March 15
 
@@ -630,3 +630,13 @@ The fault was not some glamorous distributed-systems failure. It was more honest
 The conclusion is now clear. The control plane can stay up locally. It is cheap, and that is the right place for profile/session truth to linger. The sim is different. LBH is still a run-based game, not a persistent shared world, so an empty sim staying alive by default is wasted heat. The current runtime now idles correctly with zero human players. The next cut is to make it auto-stop after a short grace period unless someone explicitly asked for a pinned host.
 
 That is a better rule than pretending we already want persistent-world semantics. Build the hosted muscle later. For now, the thing that holds is a cheap control plane, disposable sim instances, and clients that can come and go without heating the whole bench.
+
+## April 20, 2026 — Naming, Harness, and Echo Hygiene
+
+This pass was less glamorous than a new feature and more useful than one: we tightened the surfaces that let the project keep moving without lying to the next agent.
+
+The public name is now **Last Singularity** across runtime-facing packaging, nightly artifacts, build output names, and current project docs. The repo can keep its `last-black-hole` path for now, but testers should not see one title in the app and another in the build instructions.
+
+The test harness also caught up with the renderer architecture. `build-health verify` now records the normal full harness, deterministic renderer fixtures, and the standalone title-prototype Composer probe. That means the richer title visual path has a real gate instead of living as a pretty side quest.
+
+Finally, chronicle echoes got a hard boundary. They are loot-bearing wrecks by design; empty ghosts are misleading world content. The sim already refuses to build an echo from empty death cargo, and the control plane now rejects or filters empty-loot echo records before they can hydrate into a run.

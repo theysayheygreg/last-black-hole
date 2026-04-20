@@ -1,4 +1,4 @@
-# Forge Review Brief: Last Black Hole
+# Forge Review Brief: Last Singularity
 
 > Forge — we need your eyes on this. Two passes: one creative, one technical.
 

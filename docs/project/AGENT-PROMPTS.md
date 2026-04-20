@@ -8,7 +8,7 @@
 ## Shared Context (include with BOTH prompts)
 
 ```
-You are building Layer 0 of Last Black Hole — a roguelike extraction game where
+You are building Layer 0 of Last Singularity — a roguelike extraction game where
 you surf spacetime in an ASCII-dithered fluid simulation.
 
 READ THESE FILES BEFORE WRITING ANY CODE:

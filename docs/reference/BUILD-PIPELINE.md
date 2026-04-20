@@ -1,6 +1,6 @@
 # Build Pipeline
 
-`Last Black Hole` now has a first-pass artifact pipeline.
+`Last Singularity` now has a first-pass artifact pipeline.
 
 The rule is simple:
 
@@ -75,11 +75,11 @@ That folder contains:
 - `BUILD-INFO-mac.json` if mac packaging succeeded
 - `BUILD-INFO-win.json` if Windows packaging succeeded
 - `BUILD-INFO-linux.json` if Linux packaging succeeded
-- `last-black-hole-web/`
-- `last-black-hole-ipad-webapp/` if the iPad web-app target succeeded
-- `Last Black Hole.app` if mac packaging succeeded
-- `Last Black Hole-win32-x64/` if Windows packaging succeeded
-- `Last Black Hole-linux-x64/` if Linux packaging succeeded
+- `last-singularity-web/`
+- `last-singularity-ipad-webapp/` if the iPad web-app target succeeded
+- `Last Singularity.app` if mac packaging succeeded
+- `Last Singularity-win32-x64/` if Windows packaging succeeded
+- `Last Singularity-linux-x64/` if Linux packaging succeeded
 
 `release` keeps the clean `v<version>` folder because that is the friend-facing artifact. `test` and `dev` get a mode suffix so they do not overwrite the release build.
 
@@ -96,9 +96,9 @@ Before cutting a serious playtest build, the lightweight verification lane shoul
 
 Alongside the version folder, the build also writes:
 
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-black-hole-playtest-v<version>.zip`
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-black-hole-playtest-v<version>-test.zip`
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-black-hole-playtest-v<version>-dev.zip`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-singularity-playtest-v<version>.zip`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-singularity-playtest-v<version>-test.zip`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-singularity-playtest-v<version>-dev.zip`
 
 Each zip contains the whole matching build folder. In practice, the friend-facing handoff should almost always be the plain `release` zip with no mode suffix.
 

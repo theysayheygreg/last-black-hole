@@ -1,4 +1,4 @@
-# Last Black Hole — Content Plan
+# Last Singularity — Content Plan
 
 > How to turn the game jam into content. Written pre-jam so we capture the right material during the build.
 
@@ -68,7 +68,7 @@ Technical deep dive for a game dev audience. The full pipeline from fluid simula
 ### "Designing the Dark Forest: Signal Mechanics in Extraction Games"
 Game design essay. How dark forest theory from Three-Body Problem becomes a mechanic. Signal as tax on ambition. The Inhibitor as mathematical inevitability. How EVE Online's wormhole space informed the design. Why we chose no weapons. What this says about threat design in extraction games more broadly. Aimed at game design audience.
 
-### "The 7-Day Build Log: Last Black Hole from Concept to Ship"
+### "The 7-Day Build Log: Last Singularity from Concept to Ship"
 The complete chronological story. Pull from the DEVLOG.md entries. The spark, the expansion, the contraction, the build, the pivots, the ship. Include commit graphs, screenshots at each stage, before/after comparisons. The definitive record. Could be submitted to game dev publications.
 
 ### "Procedural Audio as Game Design"

@@ -73,7 +73,8 @@ the sim server owns all game state. clients render snapshots and send inputs. ru
 ## setup
 
 ### prerequisites
-- node.js 18+ (for dev server, sim server, and tests)
+- node.js 22.12+ recommended (GitHub Actions uses Node 22; Electron packaging currently expects modern Node)
+- node.js 18+ is usually enough for browser-only local development
 - a browser with WebGL 2 support (chrome, firefox, edge, safari 15+)
 
 ### install + play
@@ -108,7 +109,7 @@ python3 -m http.server 8080
 
 ### build
 ```bash
-# web build (bundles into builds/web/)
+# web build (writes builds/v<version>/last-singularity-web/)
 npm run build:web
 
 # desktop builds (electron — mac/win/linux)
@@ -121,10 +122,12 @@ npm run build:release
 ### nightly playables
 A GitHub Actions workflow now owns the nightly playable path:
 
-- deploys a web build to **GitHub Pages**
+- builds and uploads a **web playable zip**
+- optionally deploys the web build to **GitHub Pages** when `LBH_ENABLE_GITHUB_PAGES=true`
 - builds and uploads a **Windows playable zip**
 - builds and uploads a **macOS `.app` zip**
 - publishes them on the rolling prerelease tag **`nightly-latest`**
+- skips the heavy build jobs on scheduled runs when the repo SHA has not changed since the last successful nightly
 
 That gives Orrery stable link targets for daily posts instead of vague "latest build" talk.
 
@@ -135,15 +138,24 @@ desktop builds require `electron` and `@electron/packager` (included in devDepen
 npm test
 ```
 
-runs 7 test suites (validation, smoke, physics, coordinates, flow, inventory, systems) via puppeteer. requires a chromium-compatible browser.
+runs the full harness via puppeteer: validation, smoke, infra, telemetry, sim lifecycle, meta flow, controller, physics, coordinates, flow, inventory, systems, PlayerBrain, control plane, overload, coarse field, sim scale, and remote authority. requires a chromium-compatible browser.
+
+focused harnesses:
+
+```bash
+npm run test:renderer   # deterministic visual fixtures + screenshots
+npm run test:title-prototype  # standalone Composer title-prototype probe
+npm run test:telemetry  # structured runtime log contract
+node scripts/build-health.js status
+```
 
 ## tech stack
 
-- **rendering:** WebGL 2 (navier-stokes fluid sim + ASCII post-process shader)
+- **rendering:** WebGL 2 (navier-stokes fluid sim + LBH-native Composer passes; gameplay uses fluid display → ASCII, title prototype adds Bloom as a visual canary)
 - **game logic:** vanilla JS, ES modules, no framework
 - **sim server:** node.js HTTP server (authoritative game state)
 - **audio:** Web Audio API synthesis (oscillators, noise, filters — no sample files)
-- **persistence:** localStorage (3 save slots), server-side profiles planned
+- **persistence:** browser profiles for local play plus external control-plane persistence for remote/server-authoritative play
 - **testing:** puppeteer (headless chrome)
 - **desktop:** electron (optional)
 - **build:** custom node.js build script
@@ -156,7 +168,7 @@ no typescript. no react. no webpack. the game loads directly from ES module sour
 src/
   main.js          — game loop, input, rendering, phase management
   fluid.js         — GPU navier-stokes solver (WebGL 2 shaders)
-  ascii-renderer.js — ASCII dithering post-process
+  render/          — Composer + display/bloom/ASCII render passes
   ship.js          — player ship physics
   wells.js         — gravity wells
   stars.js         — 4 star types with orbital systems
@@ -177,6 +189,8 @@ src/
 scripts/
   sim-runtime.js   — authoritative sim: physics, AI, signal, inhibitor, fauna
   sim-server.js    — HTTP server wrapping the sim runtime
+  control-plane-server.js — persistence/session orchestration process
+  stack.js         — canonical local stack launcher
   dev-server.js    — static file server for development
   build.js         — web + desktop build script
 
@@ -185,7 +199,7 @@ docs/
   journal/         — devlog, changelog, decision log
   project/         — roadmap, backlog, architecture plans
 
-tests/             — 7 puppeteer test suites
+tests/             — puppeteer + Node integration suites
 ```
 
 ## version

@@ -2,7 +2,7 @@
 
 > **For Hermes:** treat this as a top-to-bottom audio direction and prototype plan, not a narrow implementation ticket.
 
-**Goal:** Rescore Last Black Hole so its SFX, world audio, and music answer the game’s ASCII-first visual identity: sparse field, directional shimmer, scanline grit, gravitational dread, and hard moments of signal ignition.
+**Goal:** Rescore Last Singularity so its SFX, world audio, and music answer the game’s ASCII-first visual identity: sparse field, directional shimmer, scanline grit, gravitational dread, and hard moments of signal ignition.
 
 **Architecture:** Replace the current SNES-flavored default reading with a stricter sonic grammar built around three interacting layers: **field hum** (the dead universe), **readability signals** (movement, danger, reward, extraction), and **rupture states** (merge, inhibitor, collapse, death). The audio should read like ASCII physics made audible: directional, sparse, high-contrast, and legible at the edge of noise.
 

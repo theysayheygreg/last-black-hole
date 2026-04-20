@@ -1,6 +1,6 @@
 # Deploy to Steam Deck
 
-This is the simple private-testing path for `Last Black Hole`.
+This is the simple private-testing path for `Last Singularity`.
 
 You do **not** need the Steamworks SDK just to get the current build onto a Steam Deck.
 
@@ -8,13 +8,13 @@ You do **not** need the Steamworks SDK just to get the current build onto a Stea
 
 Use the Linux desktop target first:
 
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v0.0.1/Last Black Hole-linux-x64`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v0.2.0/Last Singularity-linux-x64`
 
 That is the cleanest Deck path because Steam Deck is really a Linux machine.
 
 The Windows build is still a valid fallback through Proton:
 
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v0.0.1/Last Black Hole-win32-x64`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v0.2.0/Last Singularity-win32-x64`
 
 ## Fastest install path
 
@@ -34,7 +34,7 @@ That is enough for private playtests.
 Best path if the Deck is on the same network:
 
 - use `scp`, `rsync`, or an SMB share
-- copy the whole `Last Black Hole-linux-x64` folder to the Deck
+- copy the whole `Last Singularity-linux-x64` folder to the Deck
 
 This is the best future target for automation.
 
@@ -50,7 +50,7 @@ If you do not want to set up network copy:
 
 If the Linux build misbehaves, copy:
 
-- `Last Black Hole-win32-x64`
+- `Last Singularity-win32-x64`
 
 and add the `.exe` as a non-Steam app so Steam can run it with Proton.
 

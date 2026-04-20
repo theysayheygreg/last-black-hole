@@ -301,6 +301,9 @@ class ControlPlaneStore {
     if (!wreck?.mapId) throw new Error("echo.mapId is required");
     if (!wreck?.seed) throw new Error("echo.seed is required");
     if (!wreck?.wreckId) throw new Error("echo.wreckId is required");
+    if (!Array.isArray(wreck.loot) || wreck.loot.filter(Boolean).length === 0) {
+      throw new Error("echo.loot is required");
+    }
     const mapKey = String(wreck.mapId);
     const seedKey = String(wreck.seed);
     if (!this.state.echoes[mapKey]) {
@@ -341,7 +344,9 @@ class ControlPlaneStore {
     if (!mapGroup || Array.isArray(mapGroup)) return [];
     const list = mapGroup[String(seed)];
     if (!Array.isArray(list)) return [];
-    return list.map((e) => clone(e));
+    return list
+      .filter((echo) => Array.isArray(echo?.loot) && echo.loot.filter(Boolean).length > 0)
+      .map((e) => clone(e));
   }
 
   clearEchoesForSeed(seed, mapId = null) {

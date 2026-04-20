@@ -26,7 +26,7 @@ A replacement for the current title screen (`loadScene(MAP_TITLE)` path in `src/
 3. Behind the world layer, a static nebula background ported from `gradient-bang/client/starfield/src/shaders/NebulaShader.ts` renders as a skybox.
 4. The existing ASCII shader becomes a `ShaderPass` in Three.js's `EffectComposer`, applied to the composited scene.
 5. A post-processing chain runs after ASCII: `ExposurePass` (uniform-driven global luminance) and `TintPass` (uniform-driven color grade).
-6. Title text ("LAST BLACK HOLE") is rendered as DOM overlay on top of the Three.js canvas, transitioning in via CSS. Existing menu UI (profile select, map select) remains DOM and continues to work.
+6. Title text ("LAST SINGULARITY") is rendered as DOM overlay on top of the Three.js canvas, transitioning in via CSS. Existing menu UI (profile select, map select) remains DOM and continues to work.
 
 What this does NOT include:
 - Gameplay scenes (map, playing, paused, dead, escaped) — all stay on the existing render path.
@@ -214,7 +214,7 @@ Specifically:
 - Nebula layer *behind* everything at low intensity (depth without drawing attention)
 - Bayer dither optional for title screen — ASCII is already our primary quantizer, a layered Bayer post-pass might double-quantize badly. Test both; pick one.
 - Scanlines: subtle, per DESIGN-SYSTEM.md §8
-- Title text "LAST BLACK HOLE" rendered as DOM overlay BUT positioned so the fluid+ASCII shows through around the letters (not a solid backing — transparent letters with glow)
+- Title text "LAST SINGULARITY" rendered as DOM overlay BUT positioned so the fluid+ASCII shows through around the letters (not a solid backing — transparent letters with glow)
 - Terminal-style blinking cursor after the title (free win, do it)
 - Menu card styled per existing DESIGN-SYSTEM.md §4 (terminal-frame brackets, already in use)
 - Staged moments: initial entry (0-2s), settled idle (2s+), hover-response on menu items (ambient tint shift — see below)

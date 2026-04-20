@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-04-20 — Review cleanup, product naming, and current harness gate
+
+- Chose **Last Singularity** as the public product name and swept runtime-adjacent packaging, nightly assets, build output names, and user-facing project docs to match it while leaving the repository path as `last-black-hole`.
+- Hardened chronicle echo persistence at the control-plane boundary: empty-loot echoes are rejected on save and filtered on read, so old or bad records cannot hydrate as misleading lootless wrecks.
+- Confirmed echo lookup is scoped by `(mapId, seed)` and that remote snapshots expose the authoritative inhibitor `threshold` and `pressureFrac` used by client haunt timing.
+- Updated the current roadmap/build-plan snapshot for April 20 and documented the intentional renderer split: gameplay runs `FluidDisplayPass -> ASCIIPass`, while the standalone title prototype owns the richer `FluidDisplayPass -> BloomPass -> ASCIIPass` canary.
+- Added `npm run test:title-prototype` to the official build-health verifier alongside `npm test` and renderer fixtures.
+
 ## 2026-04-13 — Telemetry-aware smoke harness + build-health alignment
 
 - Added `tests/telemetry-smoke.js` as a dedicated structured-log canary for the real distributed stack.
@@ -530,7 +538,7 @@ Renderer work had become entangled with feature work and too much meaning was be
 
 ### UI Flow (Title Screen + Map Select)
 - **Game phases expanded:** `title` → `mapSelect` → `playing` (+ existing `dead`/`escaped`/`paused`).
-- **Title screen:** Red "LAST BLACK HOLE" title with pulsing opacity, subtitle, blinking prompt. Fluid sim runs as ambient background with slow camera drift.
+- **Title screen:** Red title treatment with pulsing opacity, subtitle, blinking prompt. Fluid sim runs as ambient background with slow camera drift.
 - **Map select:** Lists all 3 maps with name, size, and entity counts. Up/Down to navigate, Space to launch, ESC to go back.
 - **Phase transitions:** Title→Space→MapSelect, MapSelect→Space→Playing, Dead/Escaped→Space→MapSelect, Paused→ESC→MapSelect.
 - **input.js** — Added `upPressed`/`downPressed` getters for d-pad, arrows, and stick menu navigation.

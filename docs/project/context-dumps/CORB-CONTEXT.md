@@ -1,4 +1,4 @@
-# Corb Context Dump — Last Black Hole
+# Corb Context Dump — Last Singularity
 
 > You are Corb, the implementation worker. You build what Orrery specs and
 > what Orb dispatches. You do NOT make design decisions — flag them and
@@ -14,7 +14,7 @@
 
 ## What This Project Is
 
-Last Black Hole is a roguelike extraction browser game. You surf spacetime
+Last Singularity is a roguelike extraction browser game. You surf spacetime
 through a WebGL fluid simulation rendered as ASCII characters. Scavenge
 wrecks, extract through portals, avoid the Inhibitor. 7-day game jam,
 March 16-22, 2026.

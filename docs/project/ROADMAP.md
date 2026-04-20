@@ -1,4 +1,4 @@
-# Roadmap: Last Black Hole
+# Roadmap: Last Singularity
 
 > Originally the hour-by-hour game jam plan (March 16-22, 2026).
 > Now the project roadmap covering jam + post-jam development.
@@ -6,9 +6,9 @@
 
 ---
 
-## Current Status (2026-04-02)
+## Current Status (2026-04-20)
 
-**Version:** 0.2.0 — post-jam, server-authoritative sim + control plane + entity ecology + ship classes
+**Version:** 0.2.0 — Last Singularity product-name sweep, server-authoritative sim, Composer renderer, control plane, entity ecology, and ship classes
 
 ### What's Built
 
@@ -18,7 +18,7 @@
 | L1: The Stakes | DONE | Wrecks with drift, portals with evaporation, well growth, extraction loop, vault + profiles |
 | L2: The Threats | DONE | Signal system (6 zones), fauna (jellies + blooms), gradient sentries, AI players (5 personalities), scavenger AI, force pulse |
 | L3: The Dread | DONE | Inhibitor (3 forms: glitch → swarm → vessel), final portal guarantee, control debuff, HUD degradation |
-| L4: The Look | DONE | NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering |
+| L4: The Look | DONE | Composer render pipeline, ASCII shader, title-prototype Bloom canary, NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering |
 | L5: The Depth | IN PROGRESS | 5 hull classes with abilities, PlayerBrain coefficient resolution, rig upgrade tracks (designed), loot economy (designed), meta-loop (designed) |
 | L6: The Ship | PARTIAL | Title screen, map select, 3 save slots. Balance pass + deploy not yet done. |
 
@@ -36,6 +36,8 @@
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | DESIGNED | Schema in META-LOOP.md, not yet implemented in persistence write-back |
+| Nightly playables | GREEN | Scheduled workflow builds web, Windows, and macOS release assets only when the repo SHA changed |
+| Build health gate | GREEN | `npm test`, renderer fixtures, and title-prototype Composer probe are tracked in `BUILD-HEALTH.json` |
 
 ### What's Designed (Not Yet Implemented)
 
@@ -75,6 +77,8 @@
 
 - The shipped loadout contract is still `2 equipped + 2 consumable` slots.
 - The older `3 artifact slots` idea remains a design/backlog item, not live runtime truth.
+- Public product name is **Last Singularity**. The repository path may remain `last-black-hole` until/unless the remote is renamed.
+- Production renderer chain is `FluidDisplayPass -> ASCIIPass` for perf. The standalone title prototype intentionally runs `FluidDisplayPass -> BloomPass -> ASCIIPass` as a richer visual canary.
 - Packaged desktop builds are now self-contained local apps with embedded authority.
 - Browser remote play still expects separate authority processes.
 - The control plane is allowed to stay hot locally.
@@ -917,7 +921,7 @@ Greg specs Thu→Fri work:
 - **Files:** `index.html` (screen states, transitions)
 - **Dependencies:** Core game loop, metagame screen (Task N12)
 - **Deliverables:**
-  - Title screen: black background, fluid sim running at low intensity in background (ASCII visible), title "LAST BLACK HOLE" in bold serif, "Click to drop" prompt. A gravity well pulses in the center.
+  - Title screen: black background, fluid sim running at low intensity in background (ASCII visible), title "LAST SINGULARITY" in bold serif, "Click to drop" prompt. A gravity well pulses in the center.
   - Game over (death): screen distorts — ASCII chars drain toward center, colors shift to red, then black. "UNIVERSE COLLAPSED" text. "Drop again" button returns to title (or metagame if upgrades exist).
   - Game over (Inhibitor death): distinct from collapse. Flash of magenta, all chars glitch, cut to black. "YOU WERE SEEN." Different feeling from collapse.
   - Extraction success: fluid calms, colors shift to cool blue, "EXTRACTION SUCCESSFUL" in green. Fade to metagame/loot summary.

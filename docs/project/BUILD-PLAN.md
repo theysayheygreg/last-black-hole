@@ -1,11 +1,11 @@
-# Build Plan: Last Black Hole
+# Build Plan: Last Singularity
 
 > Originally the jam build plan (March 16-22, 2026).
-> Updated to reflect post-jam development through April 2.
+> Updated to reflect post-jam development through April 20.
 
 ---
 
-## Current Build Phase: L5 — The Depth (Post-Jam)
+## Current Build Phase: L5/L6 Bridge — Productized Authority + Renderer Hardening
 
 All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work complete.
 
@@ -20,6 +20,10 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - Overload state machine (NORMAL/THROTTLED/DEGRADED/DILATED)
 - Local remote-authority stack (client + sim + control plane, host/join/leave, architecture-aware smoke)
 - Sim lifecycle hardening: idle-aware loop, auto-stop, keep-alive mode, stale detached test-process cleanup
+- Composer renderer migration with deterministic renderer fixtures
+- Standalone title-prototype Composer probe (`FluidDisplayPass -> BloomPass -> ASCIIPass`)
+- Nightly Playables workflow with change detection and green web/Windows/macOS artifacts
+- Product naming sweep to **Last Singularity** for runtime, packaging, release assets, and user-facing docs
 - Loot economy design (tier gates, wreck aging, value scaling)
 - Meta-loop design (results screen, vault/rig/loadout, chronicle)
 - Rig upgrade tracks (all 5 hulls, 3 tracks × 5 levels)
@@ -40,6 +44,7 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 8. Hull ability client-side — keybindings, HUD cooldowns, visual effects
 9. Map seed system — entity catalog selection per run
 10. Continue content manifests — seeded-generation, item catalog, session profiles
+11. Decide whether Bloom remains title-prototype-only or becomes a perf-gated production pass after 5x5/10x10 frame budget work
 
 ### Current constraints
 
@@ -50,6 +55,7 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - The control plane can stay lightweight and always-on for local work.
 - The sim is now demand-driven and auto-expiring by default; keep-alive is explicit, not accidental.
 - The design system exists in docs and has now started bridging into code, but most UI compliance still depends on human discipline.
+- Production rendering is intentionally cheaper than the title prototype today: gameplay uses `FluidDisplayPass -> ASCIIPass`, while the title prototype owns the Bloom canary.
 
 ### L6: The Ship (Not Yet Started)
 - Balance pass (hull coefficients, upgrade costs, loot rarity, signal tuning)

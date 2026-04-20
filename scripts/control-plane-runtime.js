@@ -311,6 +311,10 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 400, { ok: false, error: "wreck.mapId, wreck.seed, and wreck.wreckId are required" });
         return;
       }
+      if (!Array.isArray(body.wreck.loot) || body.wreck.loot.filter(Boolean).length === 0) {
+        sendJson(res, 400, { ok: false, error: "wreck.loot is required for chronicle echoes" });
+        return;
+      }
       const saved = store.saveEchoWreck(body.wreck);
       sendJson(res, 200, { ok: true, echo: saved });
       return;

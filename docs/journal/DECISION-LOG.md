@@ -1060,6 +1060,9 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 **Door status:** Open — implementation is intentionally deferred until the design is reviewed, but the shape of the next work is now concrete.
 
 | Apr 12 | First productization slice lands: runtime modes become first-class (`local-browser`, `local-host`, `remote-client`), `scripts/stack.js` becomes the canonical launch/status surface, and the first HUD token/primitives bridge moves pieces of `DESIGN-SYSTEM.md` into implementation code. |
+| Apr 20 | Public product identity is now **Last Singularity**. The repo path may stay `last-black-hole` as a location detail, but app chrome, package metadata, build artifacts, nightly assets, and current project docs should use Last Singularity. |
+| Apr 20 | Renderer contract is explicit: production gameplay keeps the cheaper `FluidDisplayPass -> ASCIIPass` chain for current 5x5/10x10 perf work, while `title-prototype.html` owns the richer `FluidDisplayPass -> BloomPass -> ASCIIPass` visual canary. Bloom can move into production later only with a config/perf budget. |
+| Apr 20 | Chronicle echoes are loot-bearing by contract. The sim only builds echoes from non-empty death cargo, and the control plane now rejects/filter empty-loot echo records so stale or malformed data cannot create misleading empty wrecks. |
 
 
 ## Persistence and Control Plane Architecture

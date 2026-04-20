@@ -1,6 +1,6 @@
 # LBH Plugin-Lens Review — 2026-04-12
 
-This review looks at `Last Black Hole` through two new lenses:
+This review looks at `Last Singularity` through two new lenses:
 
 - macOS app discipline
 - game-studio/browser-game discipline

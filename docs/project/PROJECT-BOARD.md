@@ -1,4 +1,4 @@
-# Last Black Hole Project Board
+# Last Singularity Project Board
 
 **Date:** 2026-03-16
 **Status owner:** Orb

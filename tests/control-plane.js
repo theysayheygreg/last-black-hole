@@ -143,7 +143,7 @@ async function run() {
           pilotName: "Pilot A",
           wx: 1.0,
           wy: 1.0,
-          loot: [],
+          loot: [{ id: "echo-loot-a", name: "Echo Loot A", value: 240 }],
         },
       });
       const echoB = await postJson(`${CONTROL_URL}/echoes/save`, {
@@ -154,7 +154,7 @@ async function run() {
           pilotName: "Pilot B",
           wx: 2.0,
           wy: 2.0,
-          loot: [],
+          loot: [{ id: "echo-loot-b", name: "Echo Loot B", value: 260 }],
         },
       });
       assert(echoA.echo.mapId === "shallows", "Expected saved shallows echo");
@@ -167,6 +167,26 @@ async function run() {
       assert(expanse.echoes.length === 1, `Expected 1 expanse echo, got ${expanse.echoes.length}`);
       assert(shallows.echoes[0].mapId === "shallows", "Expected shallows-scoped echo only");
       assert(expanse.echoes[0].mapId === "expanse", "Expected expanse-scoped echo only");
+    });
+
+    await runner.run("Echoes reject empty loot", async () => {
+      let rejected = false;
+      try {
+        await postJson(`${CONTROL_URL}/echoes/save`, {
+          wreck: {
+            wreckId: `empty-echo-${crypto.randomUUID()}`,
+            mapId: "shallows",
+            seed: 12345,
+            pilotName: "Empty Pilot",
+            wx: 1.5,
+            wy: 1.5,
+            loot: [],
+          },
+        });
+      } catch (error) {
+        rejected = /wreck\.loot/.test(error.message);
+      }
+      assert(rejected, "Expected control plane to reject empty chronicle echoes");
     });
   } finally {
     await stopSimServer(SIM_PORT).catch(() => null);

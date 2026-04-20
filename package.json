@@ -1,5 +1,5 @@
 {
-  "name": "last-black-hole",
+  "name": "last-singularity",
   "version": "0.2.0",
   "description": "",
   "main": "index.js",
@@ -30,6 +30,7 @@
     "test": "node tests/run-all.js",
     "test:telemetry": "node tests/telemetry-smoke.js",
     "test:renderer": "node tests/renderer.js",
+    "test:title-prototype": "node tests/probe-title-prototype.js",
     "test:audio": "node tests/audio-toolkit.js",
     "audio:analyze": "sh -c 'PY=.venv/bin/python; [ -x \"$PY\" ] || PY=python3; exec \"$PY\" tools/audio_workbench.py \"$@\"' --",
     "build": "node scripts/build.js",

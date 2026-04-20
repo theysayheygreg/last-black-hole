@@ -9,6 +9,7 @@ const HEALTH_PATH = path.join(ROOT, 'docs', 'project', 'BUILD-HEALTH.json');
 const CHECKS = [
   { name: 'test', cmd: 'npm', args: ['test'] },
   { name: 'renderer', cmd: 'npm', args: ['run', 'test:renderer'] },
+  { name: 'title-prototype', cmd: 'npm', args: ['run', 'test:title-prototype'] },
 ];
 
 function git(command) {
