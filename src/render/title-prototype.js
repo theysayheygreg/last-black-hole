@@ -11,10 +11,12 @@
 // Per frame:
 //   1. Step FluidSim physics (sim-core passes inside fluid.js)
 //   2. WellSystem applies well forces; PlanetoidSystem injects comet wakes
-//   3. Composer runs [FluidDisplayPass → BloomPass → ASCIIPass]:
-//        FluidDisplayPass  writes scene color to composer FBO A
-//        BloomPass         extracts/blur/composites bright regions to FBO B
-//        ASCIIPass         reads FBO B + velocity tex, writes to screen
+//   3. Composer runs HDR chain:
+//        FluidDisplayPass  writes HDR scene color
+//        BloomPass         catches highlights > 1.0, blurs, composites back
+//        TonemapPass       ACES filmic — compresses HDR to LDR
+//        VignettePass      radial darkening closes the frame
+//        ASCIIPass         reads final LDR + velocity tex, writes to screen
 //   4. 2D overlay canvas draws planetoid sprites on top
 //
 // Adding a new effect later = new Pass file + one line in the composer.add()
@@ -31,6 +33,8 @@ import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 import { Composer } from './composer.js';
 import { FluidDisplayPass } from './passes/fluid-display-pass.js';
 import { BloomPass } from './passes/bloom-pass.js';
+import { TonemapPass } from './passes/tonemap-pass.js';
+import { VignettePass } from './passes/vignette-pass.js';
 import { ASCIIPass } from './passes/ascii-pass.js';
 
 // --- DOM references ---
@@ -97,18 +101,25 @@ for (const pd of (MAP_TITLE.planetoids || [])) {
 }
 
 // --- Composer + pass chain ---
+// HDR-aware chain: fluid display emits values > 1.0 on hot regions
+// (accretion rim, event horizon glow). Bloom catches those, tonemap
+// compresses back to LDR, vignette closes the frame, ASCII quantizes.
 const composer = new Composer(gl);
 const fluidDisplayPass = new FluidDisplayPass(fluid);
 const bloomPass = new BloomPass(gl, {
-  threshold: 0.5,
-  knee: 0.15,
-  strength: 1.2,
+  threshold: 0.9,     // HDR: catch only real highlights, not fabric noise
+  knee: 0.2,
+  strength: 0.8,
   blurRadius: 2.5,
   scale: 0.5,
 });
+const tonemapPass = new TonemapPass({ exposure: 1.0 });
+const vignettePass = new VignettePass({ strength: 0.7, radius: 0.5, softness: 0.45 });
 const asciiPass = new ASCIIPass(gl);
 composer.add(fluidDisplayPass);
 composer.add(bloomPass);
+composer.add(tonemapPass);
+composer.add(vignettePass);
 composer.add(asciiPass);
 
 // Camera locks to world center for the title screen.
@@ -233,7 +244,7 @@ window.__TITLE_PROTOTYPE__ = {
   wellSystem,
   planetoidSystem,
   composer,
-  passes: { fluidDisplayPass, bloomPass, asciiPass },
+  passes: { fluidDisplayPass, bloomPass, tonemapPass, vignettePass, asciiPass },
   get totalTime() { return totalTime; },
   probeMode,
   camX, camY,

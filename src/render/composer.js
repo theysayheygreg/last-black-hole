@@ -143,11 +143,17 @@ export class Composer {
     gl.bindVertexArray(null);
   }
 
+  // Ping-pong FBOs are RGBA16F so the fluid display shader's naturally
+  // out-of-range highlights (accretion ring, event horizon glow, halo
+  // accumulation) survive the round-trip as HDR instead of clamping at
+  // 1.0. BloomPass's bright-pass threshold then catches real highlights.
+  // TonemapPass compresses back to LDR before ASCII quantization.
+  // Requires EXT_color_buffer_float (already loaded by FluidSim at init).
   _createFBO(w, h) {
     const gl = this.gl;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -162,7 +168,7 @@ export class Composer {
   _resizeFBO(target, w, h) {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, target.tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
     target.w = w;
     target.h = h;
   }

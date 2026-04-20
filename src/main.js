@@ -22,6 +22,7 @@ import { PlanetoidSystem } from './planetoids.js';
 import { InputManager } from './input.js';
 import { Composer } from './render/composer.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
+import { TonemapPass } from './render/passes/tonemap-pass.js';
 import { ASCIIPass } from './render/passes/ascii-pass.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
@@ -75,7 +76,7 @@ let scavengerSystem, combatSystem, audioEngine, inventorySystem;
 let flowField, simCore;
 let simClient = null;
 let currentSignature = null;
-let inputManager, composer, fluidDisplayPass, asciiPass;
+let inputManager, composer, fluidDisplayPass, tonemapPass, asciiPass;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -309,10 +310,16 @@ function init() {
   // Init systems
   fluid = new FluidSim(gl);
   flowField = new FlowField(fluid);
+  // Production chain: HDR ping-pong FBOs preserve the fluid display
+  // shader's naturally out-of-range highlights, then tonemap compresses
+  // to LDR before ASCII quantizes. Bloom is deferred to prototype/title
+  // until a 5x5/10x10 perf pass — see docs/reference/RENDER-PIPELINE.md.
   composer = new Composer(gl);
   fluidDisplayPass = new FluidDisplayPass(fluid);
+  tonemapPass = new TonemapPass({ exposure: 1.0 });
   asciiPass = new ASCIIPass(gl);
   composer.add(fluidDisplayPass);
+  composer.add(tonemapPass);
   composer.add(asciiPass);
 
   // Init entity systems (empty — loadScene populates them)

@@ -121,11 +121,14 @@ export class BloomPass extends Pass {
     this.scratchB = this._createFBO(sw, sh);
   }
 
+  // RGBA16F so bloom operates in HDR — matches the composer's ping-pong
+  // format. Bright-pass and blur both preserve values > 1.0 until the
+  // final composite writes back into the HDR ping-pong.
   _createFBO(w, h) {
     const gl = this.gl;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
