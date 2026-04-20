@@ -3,27 +3,38 @@
 // AccretionPass — per-well radial blackbody temperature ramp.
 //
 // This pass is intentionally decoupled from fluid state. Its job is
-// exactly one thing: given the set of well positions and their radii,
-// output a pure radial color field where the color is a function of
-// (distance-to-nearest-well, well-radii) only — no density input, no
-// velocity input, no fluid signal. Additive over whatever came before.
+// exactly one thing: given well positions and per-well accretion radii,
+// output a pure radial color field. Additive over prev scene.
 //
-// The color ramp follows real black-hole imagery:
+// Color ramp (Greg's spec):
 //   core (t=-1) black > violet > red > orange > yellow > white (t=0)
 //   outer (t=0) white > light blue > blue > purple > black (t=+1)
 //
-// t parameterization:
-//   t = -1 at well's event-horizon core
-//   t = 0 at the ring peak (hottest)
-//   t = +1 at far outer (cold space)
+// IMPORTANT — composition radii vs gameplay radii:
+//
+// The *fluid* pass uses wellSystem.getRenderShapes() which returns radii
+// tuned for gameplay signal (wells-among-many, ring size scales with
+// mass, tuned to read on a 3x3 or 10x10 map). On the title screen where
+// a single well dominates the frame, those radii put the "hot" peak
+// (t=0) OFF-screen — only the inner violet/red segment is visible.
+//
+// So AccretionPass takes its OWN accretion radii (core/peak/outer)
+// keyed to *visible composition*, not gameplay. Caller computes them.
+// Title typical: { coreR: 0.30, peakR: 0.40, outerR: 0.60 } for a
+// CAMERA_VIEW of 1.0 world-unit.
+//
+// t parameterization (now uses pass-local radii):
+//   dist <= coreR             → t = -1       (event horizon black)
+//   coreR < dist < peakR       → t in [-1, 0] (inner hot band)
+//   peakR < dist < outerR      → t in [0, +1] (outer cool band)
+//   dist >= outerR             → t = +1       (deep space)
 //
 // Frame context (frameContext.accretion):
-//   - wellUVs:     Array<[u,v]> well positions in fluid UV
-//   - wellShapes:  Array<[coreR, ringInner, ringOuter, orbitalDir]> (world-space radii)
-//   - camFU, camFV, worldScale, outerFalloff
+//   - wellUVs:    Array<[u,v]> well positions in fluid UV
+//   - wellRadii:  Array<[coreR, peakR, outerR]> in world-space
+//   - camFU, camFV, worldScale
 //
-// The pass writes HDR — the white-hot band exceeds 1.0 so BloomPass
-// downstream catches it as a real highlight.
+// Output is HDR — white-hot band exceeds 1.0 so BloomPass catches it.
 
 import { Pass } from '../composer.js';
 
@@ -34,11 +45,10 @@ precision highp float;
 
 uniform sampler2D u_input;            // prev scene (additive over this)
 uniform vec2 u_wellUV[${MAX_WELLS}];    // wells in fluid UV
-uniform vec4 u_wellShape[${MAX_WELLS}]; // (coreR, ringInner, ringOuter, _)
+uniform vec3 u_wellRadii[${MAX_WELLS}]; // (coreR, peakR, outerR) world-space
 uniform int u_wellCount;
 uniform vec2 u_camOffset;             // camera center in fluid UV
 uniform float u_worldScale;           // WORLD_SCALE
-uniform float u_outerFalloff;          // how far past ringOuter the color reaches
 uniform float u_strength;             // master blend for the radial color
 
 in vec2 v_uv;
@@ -77,22 +87,19 @@ void main() {
     diff = diff - round(diff);           // toroidal wrap
     float dist = length(diff) * u_worldScale;  // world-space distance
 
-    vec4 shape = u_wellShape[i];
-    float coreR   = shape.x;
-    float ringIn  = shape.y;
-    float ringOut = shape.z;
-    float ringMid = 0.5 * (ringIn + ringOut);
-    float outerReach = ringOut * u_outerFalloff;
+    vec3 radii = u_wellRadii[i];
+    float coreR  = radii.x;
+    float peakR  = radii.y;
+    float outerR = radii.z;
 
-    // Parameterize to t in [-1, 1] with t=0 at the ring peak.
+    // Parameterize to t in [-1, +1] with t=0 at peakR (hottest band).
     float t;
-    if (dist < ringMid) {
-      t = -1.0 + (dist - coreR) / max(ringMid - coreR, 1e-4);
+    if (dist < peakR) {
+      t = -1.0 + (dist - coreR) / max(peakR - coreR, 1e-4);
     } else {
-      t = (dist - ringMid) / max(outerReach - ringMid, 1e-4);
+      t = (dist - peakR) / max(outerR - peakR, 1e-4);
     }
 
-    // Accumulate pure radial color for this well.
     accretion += tempRamp(t);
   }
 
@@ -100,10 +107,9 @@ void main() {
 }`;
 
 export class AccretionPass extends Pass {
-  constructor({ strength = 1.0, outerFalloff = 3.2 } = {}) {
+  constructor({ strength = 1.0 } = {}) {
     super({ name: 'accretion', rendersToScreen: false });
     this.strength = strength;
-    this.outerFalloff = outerFalloff;
     this.prog = null;
   }
 
@@ -113,6 +119,7 @@ export class AccretionPass extends Pass {
 
     const ctx = frameContext.accretion;
     if (!ctx) throw new Error('AccretionPass: frameContext.accretion missing');
+    if (!ctx.wellRadii) throw new Error('AccretionPass: frameContext.accretion.wellRadii missing');
 
     gl.useProgram(this.prog.program);
     gl.activeTexture(gl.TEXTURE0);
@@ -124,13 +131,12 @@ export class AccretionPass extends Pass {
     for (let i = 0; i < count; i++) {
       const uvLoc = this.prog.uniforms[`u_wellUV[${i}]`];
       if (uvLoc) gl.uniform2fv(uvLoc, ctx.wellUVs[i]);
-      const shapeLoc = this.prog.uniforms[`u_wellShape[${i}]`];
-      if (shapeLoc) gl.uniform4fv(shapeLoc, ctx.wellShapes[i] ?? [0.01, 0.02, 0.03, 1.0]);
+      const radiiLoc = this.prog.uniforms[`u_wellRadii[${i}]`];
+      if (radiiLoc) gl.uniform3fv(radiiLoc, ctx.wellRadii[i] ?? [0.1, 0.15, 0.4]);
     }
 
     gl.uniform2f(this.prog.uniforms.u_camOffset, ctx.camFU, ctx.camFV);
     gl.uniform1f(this.prog.uniforms.u_worldScale, ctx.worldScale);
-    gl.uniform1f(this.prog.uniforms.u_outerFalloff, this.outerFalloff);
     gl.uniform1f(this.prog.uniforms.u_strength, this.strength);
 
     composer.drawQuad();

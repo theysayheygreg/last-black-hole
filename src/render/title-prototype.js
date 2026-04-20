@@ -117,7 +117,23 @@ const fluidDisplayPass = new FluidDisplayPass(fluid);
 // Pure radial temperature ramp, fully decoupled from fluid density.
 // Sits directly after FluidDisplay so the rest of the chain sees the
 // combined fluid + accretion color as its input.
-const accretionPass = new AccretionPass({ strength: 1.0, outerFalloff: 3.2 });
+const accretionPass = new AccretionPass({ strength: 1.0 });
+
+// Per-well accretion radii sized for the TITLE composition, not gameplay.
+// The fluid pass uses wellSystem.getRenderShapes() which scales ring size
+// with mass for gameplay feedback. Those radii put the hot ring peak
+// off-screen on the title (visible radius is only 0.5 world-units).
+// Here we size the ramp so the full temperature progression is visible:
+//   coreR    — visible "black hole" radius
+//   peakR    — the hot accretion band (t=0, white-hot HDR)
+//   outerR   — where the outer purple fades to black (t=+1)
+// CAMERA_VIEW is 1.0 world-unit, visible half-width = 0.5.
+const TITLE_ACCRETION_RADII = wellSystem.wells.map((w) => {
+  const core  = w.killRadius * 2.5;  // 0.30 for killRadius 0.12
+  const peak  = w.killRadius * 3.5;  // 0.42 — thin hot ring just outside core
+  const outer = 0.62;                 // past screen edge so outer band fully visible
+  return [core, peak, outer];
+});
 const bloomPass = new BloomPass(gl, {
   threshold: 0.8,     // HDR: only real highlights
   knee: 0.25,
@@ -254,7 +270,8 @@ function frame(now) {
       inhibitorData: null,
     },
     accretion: {
-      wellUVs, wellShapes,
+      wellUVs,
+      wellRadii: TITLE_ACCRETION_RADII,
       camFU, camFV,
       worldScale: WORLD_SCALE,
     },
