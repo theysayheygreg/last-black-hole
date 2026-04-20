@@ -1,11 +1,14 @@
 /**
  * Probe the title-prototype page headlessly.
- * Collects console output, errors, WebGL info, renderer stats, and a
- * center-pixel sample so we can tell whether the nebula is actually
- * rendering.
+ * Collects console output, errors, WebGL info, Composer/pass stats, and
+ * canvas samples so we can tell whether the LBH-native render pipeline is
+ * actually producing visible pixels.
  *
- * Run: node tests/probe-title-prototype.js [--bypass]
- *   --bypass  appends ?bypass=1 to the URL to skip the composer chain
+ * Run: node tests/probe-title-prototype.js [--query foo=1&bar=2]
+ *
+ * The probe always appends ?probe=1 unless the caller explicitly provides
+ * probe/readback. That makes title-prototype preserve the drawing buffer for
+ * deterministic readPixels checks without changing normal runtime perf.
  */
 const puppeteer = require("puppeteer");
 const path = require("path");
@@ -20,15 +23,22 @@ if (!fs.existsSync(SCREENSHOT_DIR)) {
 async function run() {
   console.log("\n=== TITLE PROTOTYPE PROBE ===\n");
 
-  // --query foo=1&bar=2  → appends ?foo=1&bar=2 to the URL
-  let extraQuery = "";
+  // --query foo=1&bar=2  → appends ?foo=1&bar=2 to the URL.
+  // Keep --bypass accepted as a harmless legacy passthrough for old notes.
+  const queryParams = new URLSearchParams();
   const qIdx = process.argv.indexOf("--query");
   if (qIdx !== -1 && process.argv[qIdx + 1]) {
-    extraQuery = "?" + process.argv[qIdx + 1];
-  } else if (process.argv.includes("--bypass")) {
-    extraQuery = "?bypass=1";
+    const provided = new URLSearchParams(process.argv[qIdx + 1]);
+    for (const [key, value] of provided.entries()) queryParams.set(key, value);
   }
-  const urlPath = "title-prototype.html" + extraQuery;
+  if (process.argv.includes("--bypass")) {
+    queryParams.set("bypass", "1");
+  }
+  if (!queryParams.has("probe") && !queryParams.has("readback")) {
+    queryParams.set("probe", "1");
+  }
+  const queryString = queryParams.toString();
+  const urlPath = "title-prototype.html" + (queryString ? `?${queryString}` : "");
   console.log(`url path: ${urlPath}`);
 
   await startServer();
@@ -69,14 +79,13 @@ async function run() {
         title: document.title,
         canvas: null,
         gl: null,
-        threeExposed: !!window.__TITLE_PROTOTYPE__,
-        uniforms: null,
+        prototypeExposed: !!window.__TITLE_PROTOTYPE__,
+        prototype: null,
+        systems: null,
+        passTunables: null,
         pixelSamples: [],
-        sceneChildren: null,
-        rendererInfo: null,
-        cameraPosition: null,
+        composer: null,
         composerPassNames: null,
-        rendererSize: null,
       };
 
       const canvas = document.getElementById("render-canvas");
@@ -105,40 +114,54 @@ async function run() {
       if (window.__TITLE_PROTOTYPE__) {
         const p = window.__TITLE_PROTOTYPE__;
         try {
-          out.uniforms = {
-            intensity: p.nebulaUniforms.uIntensity.value,
-            domainScale: p.nebulaUniforms.uDomainScale.value,
-            exposure: p.exposureUniforms.uExposure.value,
-            tintStrength: p.tintUniforms.uTintStrength.value,
+          const passList = p.composer?.passes ?? [];
+          out.prototype = {
+            totalTime: p.totalTime,
+            probeMode: !!p.probeMode,
+            camX: p.camX,
+            camY: p.camY,
+            mapId: p.map?.id ?? p.map?.name ?? "title",
           };
-          out.sceneChildren = p.scene.children.length;
-          out.sceneChildTypes = p.scene.children.map((c) => ({
-            type: c.type,
-            name: c.name,
-            visible: c.visible,
-            frustumCulled: c.frustumCulled,
-            material: c.material?.type,
-          }));
-          out.rendererInfo = JSON.parse(JSON.stringify(p.renderer.info));
-          out.cameraPosition = p.camera.position.toArray();
-          out.composerPassNames = p.composer.passes.map((pass) => pass.constructor.name);
-          out.rendererSize = {
-            width: p.renderer.domElement.width,
-            height: p.renderer.domElement.height,
+          out.systems = {
+            wells: p.wellSystem?.wells?.length ?? null,
+            planetoids: p.planetoidSystem?.planetoids?.length ?? null,
+          };
+          out.composer = p.composer ? {
+            width: p.composer.width,
+            height: p.composer.height,
+            passCount: passList.length,
+          } : null;
+          out.composerPassNames = passList.map((pass) => pass.name || pass.constructor.name);
+          out.passTunables = {
+            bloom: p.passes?.bloomPass ? {
+              threshold: p.passes.bloomPass.threshold,
+              knee: p.passes.bloomPass.knee,
+              strength: p.passes.bloomPass.strength,
+              blurRadius: p.passes.bloomPass.blurRadius,
+              scale: p.passes.bloomPass.scale,
+              scratchA: p.passes.bloomPass.scratchA ? {
+                w: p.passes.bloomPass.scratchA.w,
+                h: p.passes.bloomPass.scratchA.h,
+              } : null,
+            } : null,
+            ascii: p.passes?.asciiPass ? {
+              viewMode: p.passes.asciiPass.getViewMode(),
+            } : null,
           };
         } catch (e) {
-          out.uniforms = { error: e.message };
+          out.prototype = { error: e.message };
         }
       }
 
-      // Sample the canvas via readPixels; note that with
-      // preserveDrawingBuffer: false this may return zeros even if render
-      // happened. Keep as a signal, not a proof.
+      // Sample the canvas via readPixels. The probe URL enables
+      // preserveDrawingBuffer so this is a deterministic render signal.
       const canvas2 = document.getElementById("render-canvas");
       if (canvas2) {
         const gl =
           canvas2.getContext("webgl2") || canvas2.getContext("webgl") || null;
         if (gl) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.finish();
           const w = canvas2.width;
           const h = canvas2.height;
           const samples = [
@@ -197,9 +220,9 @@ async function run() {
     const centerSample = await page.evaluate(() => {
       return new Promise((resolve) => {
         const c = document.getElementById("render-canvas");
-        // Force a readback via toDataURL — only works if preserveDrawingBuffer
-        // is true OR if called in the same JS task as a render. Since our
-        // render loop uses rAF, we wait a frame then capture.
+        // Force a readback via toDataURL. The probe enables
+        // preserveDrawingBuffer, and the two rAFs give the pipeline a fresh
+        // frame before capture.
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             const dataUrl = c.toDataURL();
@@ -219,10 +242,23 @@ async function run() {
     console.log(JSON.stringify(centerSample, null, 2));
 
     const anyNonBlack = report.pixelSamples.some((s) => s.r > 2 || s.g > 2 || s.b > 2);
+    const composerOk =
+      report.prototypeExposed &&
+      report.prototype &&
+      !report.prototype.error &&
+      Array.isArray(report.composerPassNames) &&
+      report.composerPassNames.join(">") === "fluid-display>bloom>ascii";
+    const dataUrlLooksRendered = centerSample.dataUrlLength > 10000;
     console.log(
       `\nverdict: readPixels non-black = ${anyNonBlack ? "YES" : "NO (all near-black)"}`
     );
-    if (!anyNonBlack) exitCode = 1;
+    console.log(
+      `verdict: composer chain = ${composerOk ? "YES" : "NO"}`
+    );
+    console.log(
+      `verdict: canvas export = ${dataUrlLooksRendered ? "YES" : "NO"}`
+    );
+    if (errors.length > 0 || !anyNonBlack || !composerOk || !dataUrlLooksRendered) exitCode = 1;
   } catch (e) {
     console.error("probe error:", e);
     exitCode = 2;

@@ -11,9 +11,10 @@
 // Per frame:
 //   1. Step FluidSim physics (sim-core passes inside fluid.js)
 //   2. WellSystem applies well forces; PlanetoidSystem injects comet wakes
-//   3. Composer runs [FluidDisplayPass → ASCIIPass]:
+//   3. Composer runs [FluidDisplayPass → BloomPass → ASCIIPass]:
 //        FluidDisplayPass  writes scene color to composer FBO A
-//        ASCIIPass         reads FBO A + velocity tex, writes to screen
+//        BloomPass         extracts/blur/composites bright regions to FBO B
+//        ASCIIPass         reads FBO B + velocity tex, writes to screen
 //   4. 2D overlay canvas draws planetoid sprites on top
 //
 // Adding a new effect later = new Pass file + one line in the composer.add()
@@ -49,11 +50,14 @@ function sizeCanvases() {
 }
 sizeCanvases();
 
+const query = new URLSearchParams(window.location.search);
+const probeMode = query.has('probe') || query.has('readback');
+
 // --- WebGL 2 context ---
 const gl = glCanvas.getContext('webgl2', {
   alpha: false,
   antialias: false,
-  preserveDrawingBuffer: false,
+  preserveDrawingBuffer: probeMode,
 });
 if (!gl) throw new Error('WebGL 2 unavailable');
 // Enable half-float rendering for the fluid FBOs (RGBA16F).
@@ -231,6 +235,7 @@ window.__TITLE_PROTOTYPE__ = {
   composer,
   passes: { fluidDisplayPass, bloomPass, asciiPass },
   get totalTime() { return totalTime; },
+  probeMode,
   camX, camY,
   map: MAP_TITLE,
 };
