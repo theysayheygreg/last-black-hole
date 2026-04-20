@@ -242,12 +242,18 @@ async function run() {
     console.log(JSON.stringify(centerSample, null, 2));
 
     const anyNonBlack = report.pixelSamples.some((s) => s.r > 2 || s.g > 2 || s.b > 2);
+    // In default mode (no ?only=, no ?bypass=) the chain should match
+    // the full title pipeline. When debugging with isolated passes,
+    // skip the strict assertion.
+    const isDebugChain = /(\?|&)(only|bypass)=/.test(urlPath);
     const composerOk =
       report.prototypeExposed &&
       report.prototype &&
       !report.prototype.error &&
       Array.isArray(report.composerPassNames) &&
-      report.composerPassNames.join(">") === "fluid-display>accretion>bloom>tonemap>color-grade>vignette>ascii>chromatic-aberration>scanlines";
+      (isDebugChain
+        ? report.composerPassNames.length > 0
+        : report.composerPassNames.join(">") === "fluid-display>fluid-gain>accretion>bloom>tonemap>color-grade>vignette>ascii>chromatic-aberration>scanlines");
     const dataUrlLooksRendered = centerSample.dataUrlLength > 10000;
     console.log(
       `\nverdict: readPixels non-black = ${anyNonBlack ? "YES" : "NO (all near-black)"}`

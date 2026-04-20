@@ -36,6 +36,7 @@ import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
 import { Composer } from './composer.js';
 import { FluidDisplayPass } from './passes/fluid-display-pass.js';
+import { GainPass } from './passes/gain-pass.js';
 import { AccretionPass } from './passes/accretion-pass.js';
 import { BloomPass } from './passes/bloom-pass.js';
 import { TonemapPass } from './passes/tonemap-pass.js';
@@ -64,6 +65,18 @@ sizeCanvases();
 
 const query = new URLSearchParams(window.location.search);
 const probeMode = query.has('probe') || query.has('readback');
+
+// Debug: ?only=pass1,pass2,... keeps ONLY the named passes in the chain,
+// disabling all others. Useful for isolating which pass is crushing a
+// signal. Names match pass.name (e.g. fluid-display, accretion, bloom,
+// tonemap, color-grade, vignette, ascii, chromatic-aberration, scanlines).
+const onlyPasses = query.get('only')
+  ? new Set(query.get('only').split(',').map((s) => s.trim()))
+  : null;
+// Debug: ?bypass=pass1,pass2,... disables the named passes.
+const bypassPasses = query.get('bypass')
+  ? new Set(query.get('bypass').split(',').map((s) => s.trim()))
+  : null;
 
 // --- WebGL 2 context ---
 const gl = glCanvas.getContext('webgl2', {
@@ -114,10 +127,19 @@ for (const pd of (MAP_TITLE.planetoids || [])) {
 // compresses back to LDR, vignette closes the frame, ASCII quantizes.
 const composer = new Composer(gl);
 const fluidDisplayPass = new FluidDisplayPass(fluid);
+// The fluid display shader outputs values up to ~0.7 on the title (bright
+// baseMix + flowLight + ringColor). When accretion adds its HDR ramp on
+// top, the fluid base drowns out the ramp's hue — everything saturates
+// to near-white in LDR. GainPass attenuates fluid to ~15% so the ramp
+// dominates the final color identity. Gameplay keeps fluid at full gain.
+const fluidGainPass = new GainPass({ gain: 0.15, name: 'fluid-gain' });
 // Pure radial temperature ramp, fully decoupled from fluid density.
-// Sits directly after FluidDisplay so the rest of the chain sees the
-// combined fluid + accretion color as its input.
 const accretionPass = new AccretionPass({ strength: 1.0 });
+// Debug: ?accretionStrength=N overrides the accretion blend for diagnostics.
+const accretionStrengthOverride = query.get('accretionStrength');
+if (accretionStrengthOverride !== null) {
+  accretionPass.strength = parseFloat(accretionStrengthOverride);
+}
 
 // Per-well accretion radii sized for the TITLE composition, not gameplay.
 // The fluid pass uses wellSystem.getRenderShapes() which scales ring size
@@ -128,10 +150,19 @@ const accretionPass = new AccretionPass({ strength: 1.0 });
 //   peakR    — the hot accretion band (t=0, white-hot HDR)
 //   outerR   — where the outer purple fades to black (t=+1)
 // CAMERA_VIEW is 1.0 world-unit, visible half-width = 0.5.
-const TITLE_ACCRETION_RADII = wellSystem.wells.map((w) => {
-  const core  = w.killRadius * 2.5;  // 0.30 for killRadius 0.12
-  const peak  = w.killRadius * 3.5;  // 0.42 — thin hot ring just outside core
-  const outer = 0.62;                 // past screen edge so outer band fully visible
+// Radii keyed to the visible frame (visible half-width = 0.5 world).
+// With the camera centered on the well:
+//   - core (t=-1, black) fills ~16% of radius
+//   - hot band peak (t=0, white-hot HDR) lands at ~45% of radius
+//   - outer (t=+1, black) reaches just past the frame edge so the full
+//     violet>red>orange>yellow>white>blue>purple>black progression
+//     is visible without cropping the cool side
+// These are NOT keyed to killRadius — the visual composition is
+// independent of the well's gameplay hit radius.
+const TITLE_ACCRETION_RADII = wellSystem.wells.map((_w) => {
+  const core  = 0.08;
+  const peak  = 0.22;
+  const outer = 0.55;
   return [core, peak, outer];
 });
 const bloomPass = new BloomPass(gl, {
@@ -165,15 +196,32 @@ const asciiPass = new ASCIIPass(gl, { rendersToScreen: false });
 const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.005, falloff: 2.4 });
 // Scanlines is the new terminal — CRT texture applied to the final frame.
 const scanlinesPass = new ScanlinesPass({ intensity: 0.22, frequency: 1.5 });
-composer.add(fluidDisplayPass);
-composer.add(accretionPass);
-composer.add(bloomPass);
-composer.add(tonemapPass);
-composer.add(colorGradePass);
-composer.add(vignettePass);
-composer.add(asciiPass);
-composer.add(chromaticAberrationPass);
-composer.add(scanlinesPass);
+// Apply ?only= / ?bypass= filters. If passes are filtered out, the chain
+// still needs a terminal pass — force the last remaining pass to render
+// to screen regardless of its default.
+const ALL_PASSES = [
+  fluidDisplayPass,
+  fluidGainPass,
+  accretionPass,
+  bloomPass,
+  tonemapPass,
+  colorGradePass,
+  vignettePass,
+  asciiPass,
+  chromaticAberrationPass,
+  scanlinesPass,
+];
+const activePasses = ALL_PASSES.filter((p) => {
+  if (onlyPasses && !onlyPasses.has(p.name)) return false;
+  if (bypassPasses && bypassPasses.has(p.name)) return false;
+  return true;
+});
+// Force the last active pass to be terminal so something lands on screen.
+for (let i = 0; i < activePasses.length; i++) {
+  activePasses[i].rendersToScreen = i === activePasses.length - 1;
+  composer.add(activePasses[i]);
+}
+console.log('[title-prototype] active pass chain:', activePasses.map((p) => p.name));
 
 // Camera slowly drifts around world center. Small amplitude + long period
 // so the title feels alive without distracting from it. Two different
@@ -315,7 +363,7 @@ window.__TITLE_PROTOTYPE__ = {
   wellSystem,
   planetoidSystem,
   composer,
-  passes: { fluidDisplayPass, accretionPass, bloomPass, tonemapPass, colorGradePass, vignettePass, asciiPass, chromaticAberrationPass, scanlinesPass },
+  passes: { fluidDisplayPass, fluidGainPass, accretionPass, bloomPass, tonemapPass, colorGradePass, vignettePass, asciiPass, chromaticAberrationPass, scanlinesPass },
   get camX() { return camX; },
   get camY() { return camY; },
   get totalTime() { return totalTime; },
