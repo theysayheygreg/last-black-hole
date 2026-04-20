@@ -247,7 +247,7 @@ async function run() {
       report.prototype &&
       !report.prototype.error &&
       Array.isArray(report.composerPassNames) &&
-      report.composerPassNames.join(">") === "fluid-display>bloom>tonemap>vignette>ascii>chromatic-aberration";
+      report.composerPassNames.join(">") === "fluid-display>bloom>tonemap>color-grade>vignette>ascii>chromatic-aberration>scanlines";
     const dataUrlLooksRendered = centerSample.dataUrlLength > 10000;
     console.log(
       `\nverdict: readPixels non-black = ${anyNonBlack ? "YES" : "NO (all near-black)"}`
