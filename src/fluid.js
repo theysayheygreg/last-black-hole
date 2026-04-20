@@ -254,6 +254,32 @@ uniform float u_inhibitorTime;         // local animation time
 in vec2 v_uv;
 out vec4 fragColor;
 
+// Blackbody-inspired temperature ramp for accretion-disc coloring.
+// t is the normalized radial coordinate relative to a well:
+//   t = -1  at event horizon (dark core)
+//   t =  0  at hottest point (ring peak)
+//   t = +1  at far outer (cold space)
+// Output follows Greg's spec:
+//   black > purple > violet > red > orange > yellow > white
+//        > light blue > blue > purple > black
+// Sequential smoothstep-mix produces smooth band transitions and is
+// cheap per-pixel. Saturation intentionally exceeds 1.0 on the inner
+// hot side (white > 1.0) so the bloom pass catches real highlights.
+vec3 tempRamp(float t) {
+  t = clamp(t, -1.0, 1.0);
+  vec3 c = vec3(0.0);
+  c = mix(c, vec3(0.30, 0.10, 0.45), smoothstep(-1.0, -0.75, t));   // violet
+  c = mix(c, vec3(0.90, 0.22, 0.18), smoothstep(-0.75, -0.45, t));  // red
+  c = mix(c, vec3(1.10, 0.55, 0.10), smoothstep(-0.45, -0.22, t));  // orange
+  c = mix(c, vec3(1.25, 1.15, 0.55), smoothstep(-0.22, -0.05, t));  // yellow
+  c = mix(c, vec3(1.40, 1.40, 1.30), smoothstep(-0.05, 0.05, t));   // white-hot (HDR)
+  c = mix(c, vec3(0.55, 0.80, 1.10), smoothstep(0.05, 0.22, t));    // light blue
+  c = mix(c, vec3(0.15, 0.35, 0.95), smoothstep(0.22, 0.50, t));    // blue
+  c = mix(c, vec3(0.30, 0.10, 0.50), smoothstep(0.50, 0.80, t));    // outer purple
+  c = mix(c, vec3(0.0), smoothstep(0.80, 1.0, t));                   // black (deep space)
+  return c;
+}
+
 void main() {
   // Map screen UV to fluid UV via camera offset
   vec2 fluidUV = u_camOffset + (v_uv - 0.5) / u_worldScale;
@@ -319,29 +345,38 @@ void main() {
     float analyticRing = clamp(0.5 + u_wellMasses[i] * 0.36, 0.5, 1.2);
     float ringEnergy = max(ringSignal, analyticRing);
     float localRing = ringMask * mix(0.62, 1.18, ringEnergy);
-    vec3 ringColor = mix(u_nearWellColor, u_hotWellColor, clamp(0.12 + ringEnergy * 0.88, 0.0, 1.0));
+
+    // Normalized radial coordinate for the temperature ramp.
+    // t = -1 at core, t = 0 at ring peak (where localRing is max), t = +1 far.
+    float ringMid = 0.5 * (ringInner + ringOuter);
+    float outerReach = ringOuter * 3.2;  // where "far space" begins
+    float tRing = dist < ringMid
+      ? -1.0 + (dist - coreRadius) / max(ringMid - coreRadius, 1e-4)
+      :  0.0 + (dist - ringMid)    / max(outerReach - ringMid, 1e-4);
+    vec3 ringColor = tempRamp(tRing);
+
     vec2 radial = dist > 0.0001 ? diff / length(diff) : vec2(1.0, 0.0);
     vec2 tangent = vec2(-radial.y, radial.x) * orbitalDir;
     float tangentialAlignment = speed > 0.001 ? dot(normalize(vel), tangent) * 0.5 + 0.5 : 0.5;
     float ringBias = mix(0.96, 1.34, tangentialAlignment);
 
-    // Gentle halo outside the ring so the fabric feels disturbed, not flooded.
+    // Halo picks up the cool outer colors from the ramp (blue/purple band).
     col += ringColor * haloMask * (0.26 + 0.12 * ringEnergy) * localLive;
 
-    // Thin event-horizon rim so the lethal edge is legible even on smaller wells.
-    col += mix(u_nearWellColor, u_hotWellColor, 0.7) * horizonMask * (0.35 + 0.18 * ringEnergy) * localLive;
+    // Event-horizon rim uses the hot inner color (white-yellow) directly.
+    vec3 horizonColor = tempRamp(-0.25);  // orange-yellow inner edge
+    col += horizonColor * horizonMask * (0.35 + 0.18 * ringEnergy) * localLive;
 
     // Main accretion band. This is the bright read, not the whole well.
     col += ringColor * localRing * 1.16 * ringBias * localLive;
 
-    // Surf hint just outside the ring: cool directional band where tangential
-    // motion is strongest. Visible between outer*1.04 and outer*2.7.
-    // Inner edge: fades IN from 0 at outer*1.04 to 1 at outer*1.5
-    // Outer edge: fades OUT from 1 at outer*1.5 to 0 at outer*2.7
+    // Surf hint just outside the ring: directional band where tangential
+    // motion is strongest. Picks up the blue-shifted Doppler band color.
     float surfBand = smoothstep(ringOuter * 1.04, ringOuter * 1.5, dist)
                    * (1.0 - smoothstep(ringOuter * 1.5, ringOuter * 2.7, dist));
     float surfHint = surfBand * smoothstep(0.012, 0.055, speed) * mix(0.45, 1.0, tangentialAlignment);
-    col += vec3(0.05, 0.22, 0.3) * surfHint * 1.45 * localLive;
+    vec3 surfColor = tempRamp(0.18);  // light blue, Doppler-approach side
+    col += surfColor * surfHint * 0.9 * localLive;
 
     // Final dark core. This must win.
     col = mix(col, vec3(0.0), coreMask * 0.985);

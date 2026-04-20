@@ -121,16 +121,16 @@ const bloomPass = new BloomPass(gl, {
   scale: 0.5,
 });
 const tonemapPass = new TonemapPass({ exposure: 1.0 });
-// Gargantua-style palette: deep violet-navy backdrop, fire-orange
-// accretion. Shadows pulled to a slight cool-violet (retains the cosmic
-// dark without going blue-green), highlights pushed hard toward
-// accretion orange so the hot rim reads as real-world black hole
-// imagery, not as grayscale CRT.
+// Color grade now runs near-neutral because the temperature ramp is
+// baked into FRAG_DISPLAY (fluid.js) — radial distance from each well
+// drives the blackbody progression: violet → red → orange → white
+// (hottest ring) → light blue → blue → purple → black. The grade is
+// kept as a light saturation/contrast touch, not the identity driver.
 const colorGradePass = new ColorGradePass({
-  shadowTint: [1.0, 0.88, 1.05],          // near-neutral, trace cool-violet
-  highlightTint: [1.55, 0.85, 0.40],       // fire-orange accretion
-  shadowStrength: 0.35,
-  highlightStrength: 0.9,
+  shadowTint: [0.95, 0.92, 1.0],
+  highlightTint: [1.08, 1.0, 0.95],
+  shadowStrength: 0.25,
+  highlightStrength: 0.35,
 });
 const vignettePass = new VignettePass({ strength: 1.05, radius: 0.35, softness: 0.55 });
 // ASCII writes to FBO (not screen) so post-ASCII effects can run.
