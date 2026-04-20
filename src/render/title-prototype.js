@@ -121,11 +121,16 @@ const bloomPass = new BloomPass(gl, {
   scale: 0.5,
 });
 const tonemapPass = new TonemapPass({ exposure: 1.0 });
+// Gargantua-style palette: deep violet-navy backdrop, fire-orange
+// accretion. Shadows pulled to a slight cool-violet (retains the cosmic
+// dark without going blue-green), highlights pushed hard toward
+// accretion orange so the hot rim reads as real-world black hole
+// imagery, not as grayscale CRT.
 const colorGradePass = new ColorGradePass({
-  shadowTint: [0.72, 0.86, 1.18],        // push shadows cool/blue
-  highlightTint: [1.24, 1.10, 0.76],     // highlights warm toward accretion gold
-  shadowStrength: 0.65,
-  highlightStrength: 0.5,
+  shadowTint: [1.0, 0.88, 1.05],          // near-neutral, trace cool-violet
+  highlightTint: [1.55, 0.85, 0.40],       // fire-orange accretion
+  shadowStrength: 0.35,
+  highlightStrength: 0.9,
 });
 const vignettePass = new VignettePass({ strength: 1.05, radius: 0.35, softness: 0.55 });
 // ASCII writes to FBO (not screen) so post-ASCII effects can run.
@@ -133,7 +138,10 @@ const asciiPass = new ASCIIPass(gl, { rendersToScreen: false });
 // Chromatic aberration runs AFTER ASCII because its RGB channel shift
 // gets averaged away if ASCII's per-cell luminance sample runs afterward.
 // Post-ASCII keeps the fringing visible on the glyphs themselves.
-const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.014, falloff: 2.0 });
+// Aberration dialed way down — was reading as an RGB pixel grid overlay,
+// competing with the ASCII quantization. At 0.005 it reads as a subtle
+// CRT lens artifact at the corners only, not a whole-frame effect.
+const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.005, falloff: 2.4 });
 // Scanlines is the new terminal — CRT texture applied to the final frame.
 const scanlinesPass = new ScanlinesPass({ intensity: 0.22, frequency: 1.5 });
 composer.add(fluidDisplayPass);
