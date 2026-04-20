@@ -1,22 +1,29 @@
 {
   "ok": true,
-  "recordedAt": "2026-04-20T20:21:18.510Z",
+  "recordedAt": "2026-04-20T21:09:46.932Z",
   "branch": "main",
-  "gitHead": "e20ffc7bbc34c8edadcce19b77fdfad30bd736ad",
+  "gitHead": "d5b426ca684a311daee82a6411add1a363cca087",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 177588
+      "durationMs": 164912
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 38221
+      "durationMs": 37825
+    },
+    {
+      "name": "title-prototype",
+      "command": "npm run test:title-prototype",
+      "exitCode": 0,
+      "ok": true,
+      "durationMs": 5171
     }
   ],
   "dirtyPaths": [
