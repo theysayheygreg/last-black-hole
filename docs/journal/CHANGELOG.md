@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-04-20 — Title render pipeline: LBH-native composer + accretion ramp
+
+- Built an LBH-native multi-pass render pipeline (composer + Pass abstraction, ping-pong FBOs, RGBA16F HDR) to replace shader-stuffing. Title prototype runs the full 10-pass chain: `FluidDisplay → FluidGain(0.15) → Accretion → Bloom → Tonemap → ColorGrade → Vignette → ASCII → ChromaticAberration → Scanlines`.
+- Added `AccretionPass` — a pure radial temperature ramp keyed to per-well composition radii (not gameplay radii), fully decoupled from fluid density. Fixes the prior tangling where color stops were baked into the fluid display shader.
+- Added `GainPass` so fluid can be attenuated before accretion layers on top, letting the blackbody ramp own color identity on the title.
+- Tuned the ramp: rebalanced warm/cool annulus area (peakR 0.22 → 0.30), rewrote stops for proper inner-purple vs violet and inner-vs-outer-purple differentiation, widened white-hot peak (Δt 0.10 → 0.18), bumped HDR peak 1.50 → 2.20 so bloom actually catches it.
+- Added `tests/probe-title-prototype.js` — headless Puppeteer probe with pixel sampling, pass-isolation flags (`?only=`, `?bypass=`, `?accretionStrength=`), and deterministic `preserveDrawingBuffer` via `?probe=1`. Used throughout tuning to verify predicted pixel values against observed ones.
+- Further ramp tuning (curves, interpolation, ASCII/tonemap crush compensation) backlogged as "Accretion Ramp Value/Curve Tuning."
+
 ## 2026-04-20 — Review cleanup, product naming, and current harness gate
 
 - Chose **Last Singularity** as the public product name and swept runtime-adjacent packaging, nightly assets, build output names, and user-facing project docs to match it while leaving the repository path as `last-black-hole`.
