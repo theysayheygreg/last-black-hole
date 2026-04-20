@@ -15,9 +15,12 @@
 //        FluidDisplayPass            writes HDR scene color
 //        BloomPass                   catches highlights > 1.0, blurs, composites back
 //        TonemapPass                 ACES filmic — compresses HDR to LDR
-//        ChromaticAberrationPass     lens fringing, scales with radial distance
-//        VignettePass                radial darkening closes the frame
-//        ASCIIPass                   reads final LDR + velocity tex, writes to screen
+//        VignettePass                radial darkening (pre-ASCII so glyph
+//                                      density thins at corners)
+//        ASCIIPass                   reads LDR + velocity tex, writes to FBO
+//        ChromaticAberrationPass     terminal — applies AFTER ASCII so the
+//                                      RGB channel shift survives glyph
+//                                      quantization and reads on screen
 //   4. 2D overlay canvas draws planetoid sprites on top
 //
 // Adding a new effect later = new Pass file + one line in the composer.add()
@@ -109,22 +112,28 @@ for (const pd of (MAP_TITLE.planetoids || [])) {
 const composer = new Composer(gl);
 const fluidDisplayPass = new FluidDisplayPass(fluid);
 const bloomPass = new BloomPass(gl, {
-  threshold: 0.9,     // HDR: catch only real highlights, not fabric noise
-  knee: 0.2,
-  strength: 0.8,
-  blurRadius: 2.5,
+  threshold: 0.8,     // HDR: only real highlights
+  knee: 0.25,
+  strength: 1.1,
+  blurRadius: 4.5,    // wide enough that the halo spreads visibly
   scale: 0.5,
 });
 const tonemapPass = new TonemapPass({ exposure: 1.0 });
-const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.005, falloff: 2.2 });
-const vignettePass = new VignettePass({ strength: 0.7, radius: 0.5, softness: 0.45 });
-const asciiPass = new ASCIIPass(gl);
+const vignettePass = new VignettePass({ strength: 1.05, radius: 0.35, softness: 0.55 });
+// ASCII writes to FBO (not screen) so the post-ASCII terminal can run.
+const asciiPass = new ASCIIPass(gl, { rendersToScreen: false });
+// Chromatic aberration is terminal — it needs to run AFTER ASCII because
+// the RGB channel shift gets averaged away if ASCII's per-cell luminance
+// sample runs afterward. Post-ASCII keeps the fringing visible as a true
+// screen-space artifact on the glyphs themselves.
+const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.014, falloff: 2.0 });
+chromaticAberrationPass.rendersToScreen = true;
 composer.add(fluidDisplayPass);
 composer.add(bloomPass);
 composer.add(tonemapPass);
-composer.add(chromaticAberrationPass);
 composer.add(vignettePass);
 composer.add(asciiPass);
+composer.add(chromaticAberrationPass);
 
 // Camera slowly drifts around world center. Small amplitude + long period
 // so the title feels alive without distracting from it. Two different
@@ -260,7 +269,7 @@ window.__TITLE_PROTOTYPE__ = {
   wellSystem,
   planetoidSystem,
   composer,
-  passes: { fluidDisplayPass, bloomPass, tonemapPass, chromaticAberrationPass, vignettePass, asciiPass },
+  passes: { fluidDisplayPass, bloomPass, tonemapPass, vignettePass, asciiPass, chromaticAberrationPass },
   get camX() { return camX; },
   get camY() { return camY; },
   get totalTime() { return totalTime; },
