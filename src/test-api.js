@@ -354,6 +354,21 @@ export function initTestAPI(getState) {
       };
     },
 
+    firePlayerPulseForTest() {
+      const {
+        combatSystem, ship, fluid, waveRings, wellSystem, scavengerSystem, planetoidSystem,
+      } = getState();
+      if (!combatSystem || !ship || !fluid || !waveRings || !wellSystem) return false;
+      return combatSystem.playerPulse(
+        ship,
+        fluid,
+        waveRings,
+        wellSystem,
+        scavengerSystem,
+        planetoidSystem
+      );
+    },
+
     getRemotePlayers() {
       const { remotePlayers } = getState();
       if (!Array.isArray(remotePlayers)) return [];
