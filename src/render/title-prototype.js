@@ -36,6 +36,7 @@ import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
 import { Composer } from './composer.js';
 import { FluidDisplayPass } from './passes/fluid-display-pass.js';
+import { AccretionPass } from './passes/accretion-pass.js';
 import { BloomPass } from './passes/bloom-pass.js';
 import { TonemapPass } from './passes/tonemap-pass.js';
 import { ColorGradePass } from './passes/color-grade-pass.js';
@@ -113,6 +114,10 @@ for (const pd of (MAP_TITLE.planetoids || [])) {
 // compresses back to LDR, vignette closes the frame, ASCII quantizes.
 const composer = new Composer(gl);
 const fluidDisplayPass = new FluidDisplayPass(fluid);
+// Pure radial temperature ramp, fully decoupled from fluid density.
+// Sits directly after FluidDisplay so the rest of the chain sees the
+// combined fluid + accretion color as its input.
+const accretionPass = new AccretionPass({ strength: 1.0, outerFalloff: 3.2 });
 const bloomPass = new BloomPass(gl, {
   threshold: 0.8,     // HDR: only real highlights
   knee: 0.25,
@@ -145,6 +150,7 @@ const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.005, f
 // Scanlines is the new terminal — CRT texture applied to the final frame.
 const scanlinesPass = new ScanlinesPass({ intensity: 0.22, frequency: 1.5 });
 composer.add(fluidDisplayPass);
+composer.add(accretionPass);
 composer.add(bloomPass);
 composer.add(tonemapPass);
 composer.add(colorGradePass);
@@ -247,6 +253,11 @@ function frame(now) {
       totalTime,
       inhibitorData: null,
     },
+    accretion: {
+      wellUVs, wellShapes,
+      camFU, camFV,
+      worldScale: WORLD_SCALE,
+    },
     ascii: {
       velocityTex: fluid.velocity.read.tex,
       cellSize: a.cellSize,
@@ -287,7 +298,7 @@ window.__TITLE_PROTOTYPE__ = {
   wellSystem,
   planetoidSystem,
   composer,
-  passes: { fluidDisplayPass, bloomPass, tonemapPass, colorGradePass, vignettePass, asciiPass, chromaticAberrationPass, scanlinesPass },
+  passes: { fluidDisplayPass, accretionPass, bloomPass, tonemapPass, colorGradePass, vignettePass, asciiPass, chromaticAberrationPass, scanlinesPass },
   get camX() { return camX; },
   get camY() { return camY; },
   get totalTime() { return totalTime; },
