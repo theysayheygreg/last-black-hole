@@ -272,6 +272,25 @@
 
 ## Visual & Audio
 
+### Accretion Ramp Value/Curve Tuning
+- **What:** Tune the tempRamp color stops, smoothstep thresholds, falloff, and radii in `src/render/passes/accretion-pass.js` + the `FluidGain` attenuation in `src/render/title-prototype.js`. Current pipeline makes the radial bands visible — now they need to sing.
+- **Current state:**
+  - Radii: `core=0.08, peak=0.22, outer=0.55` (world-space, visible half-width ≈ 0.5)
+  - FluidGain: 0.15 (fluid attenuated so accretion ramp dominates color identity)
+  - tempRamp stops: violet → red → orange → yellow → white-hot (HDR 1.45) → light blue → blue → outer purple → black
+  - Smoothstep thresholds and color values are first-pass, not tuned
+- **What still reads off (per Greg, 2026-04-20):** Interpolation curves between stops, value ranges, and falloff feel untuned. Reference: see screenshot `docs/project/context-dumps/` or recent title-prototype-probe-*.png. Rings are legible but the color transitions don't yet have the smooth hot-to-cold blackbody quality of real accretion-disk reference imagery (Interstellar Gargantua).
+- **Things to try:**
+  - Shift the white-hot band wider/narrower (currently 0.1 wide, `smoothstep(-0.05, 0.05, t)`) to change how much of the ring reads as "peak temperature"
+  - Non-linear t parameterization (e.g. squash inner band, stretch outer) for asymmetric hot-to-cold falloff
+  - Tune FluidGain between 0.10 and 0.25 to balance fluid texture visibility against ramp dominance
+  - Revisit the outer purple → black smoothstep (0.80 → 1.0); right now it may eat too much of the outer blue band
+  - Downstream crushing: tonemap compresses HDR near-white, ASCII's 0.08 background multiplier dims between-glyph areas — tune ramp to compensate
+- **Verification rule:** Per `feedback_verify_effect_after_change.md` — after any tuning change, run `node tests/probe-title-prototype.js` and inspect screenshot + pixel samples. Use `?only=`/`?bypass=` to isolate passes. Predict pixel RGB from the math, compare to observation.
+- **Why backlogged:** Shape of the pipeline is correct and Greg signed off ("way closer, way cooler"). Remaining work is aesthetic tuning, not architecture. Worth a dedicated pass rather than bolting onto render-pipeline work.
+- **Value if revisited:** Title screen reads as a proper blackbody accretion disk rather than a vague purple/blue glow. Art-Is-Product payoff.
+- **Added:** 2026-04-20
+
 ### Feedback Buffer (Motion Trails)
 - **What:** Blend previous frame's ASCII output with current at 85-95% decay
 - **Why backlogged:** Visual polish, not identity. ASCII shader is identity.
