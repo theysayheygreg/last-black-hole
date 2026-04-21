@@ -47,19 +47,23 @@ import { ASCIIPass } from './passes/ascii-pass.js';
 import { ScanlinesPass } from './passes/scanlines-pass.js';
 
 // --- DOM references ---
+import { fitViewport } from './viewport.js';
+
 const glCanvas = document.getElementById('render-canvas');
 const overlayCanvas = document.getElementById('overlay-canvas');
 const titleOverlay = document.getElementById('title-overlay');
+const minWindowOverlay = document.getElementById('min-window-overlay');
 const elFps = document.getElementById('fps-text');
 
 // --- Canvas sizing ---
+// Fixed internal render resolution with aspect-preserving letterbox.
+// Title composition is authored for a 16:9 frame; window size only
+// scales the overall letterbox, never the black hole's shape.
 function sizeCanvases() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  glCanvas.width = w;
-  glCanvas.height = h;
-  overlayCanvas.width = w;
-  overlayCanvas.height = h;
+  const { ok } = fitViewport(glCanvas, overlayCanvas);
+  if (minWindowOverlay) {
+    minWindowOverlay.style.display = ok ? 'none' : 'flex';
+  }
 }
 sizeCanvases();
 

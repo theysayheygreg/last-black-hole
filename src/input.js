@@ -1,9 +1,9 @@
 /**
- * input.js — InputManager: keyboard + gamepad, both active simultaneously.
+ * input.js — InputManager: keyboard + mouse + gamepad, all active simultaneously.
  *
  * No auto-detection or switching. Both input sources are polled every frame
- * and merged — the strongest signal wins. You can steer with the stick and
- * thrust with spacebar in the same frame.
+ * and merged — the strongest signal wins. You can aim with the mouse, thrust
+ * with W, and still let a connected gamepad take over without a mode switch.
  *
  * Gamepad stick pipeline:
  *   1. Scaled radial deadzone (no cardinal snapping)
@@ -13,6 +13,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { pxPerWorld, screenToWorld, worldDirectionTo } from './coords.js';
 
 // ---- Stick processing helpers ----
 
@@ -61,10 +62,23 @@ export class InputManager {
     this.brakeIntensity = 0;      // 0-1
 
     // For HUD display — which input contributed this frame
-    this.lastInputSource = 'keyboard'; // 'keyboard' or 'gamepad'
+    this.lastInputSource = 'keyboard'; // 'keyboard', 'mouse', or 'gamepad'
 
     // Keyboard state
     this._keys = {};
+
+    // Mouse state. Screen coordinates are converted to world-space by poll()
+    // once main.js supplies the current camera + ship context.
+    this._mouse = {
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+      active: false,
+      left: false,
+      right: false,
+      distancePx: 0,
+      lastMoveAt: 0,
+      lastButtonAt: 0,
+    };
 
     // Gamepad stick state
     this._isAiming = false;
@@ -95,7 +109,47 @@ export class InputManager {
     });
     window.addEventListener('blur', () => {
       this._keys = {};
+      this._mouse.left = false;
+      this._mouse.right = false;
     });
+
+    // --- Mouse listeners ---
+    // Convert window clientX/Y to render-space coords via the canvas's
+    // bounding rect. This is the canonical mouse position used by
+    // screenToWorld below; it matches the letterboxed render box, not
+    // the full browser window.
+    const renderCanvas = document.getElementById('fluid-canvas');
+    const updateMousePosition = (e) => {
+      if (renderCanvas) {
+        const rect = renderCanvas.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          const nx = (e.clientX - rect.left) / rect.width;
+          const ny = (e.clientY - rect.top) / rect.height;
+          this._mouse.x = nx * renderCanvas.width;
+          this._mouse.y = ny * renderCanvas.height;
+        } else {
+          this._mouse.x = e.clientX;
+          this._mouse.y = e.clientY;
+        }
+      } else {
+        this._mouse.x = e.clientX;
+        this._mouse.y = e.clientY;
+      }
+      this._mouse.active = true;
+      this._mouse.lastMoveAt = performance.now();
+    };
+    const updateMouseButton = (e, pressed) => {
+      updateMousePosition(e);
+      if (e.button === 0) this._mouse.left = pressed;
+      if (e.button === 2) this._mouse.right = pressed;
+      this._mouse.lastButtonAt = performance.now();
+      if (e.button === 0 || e.button === 2) e.preventDefault();
+    };
+
+    window.addEventListener('mousemove', updateMousePosition);
+    window.addEventListener('mousedown', (e) => updateMouseButton(e, true));
+    window.addEventListener('mouseup', (e) => updateMouseButton(e, false));
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   /** Is confirm pressed? (Space, Enter, or gamepad Cross/X — button 0) */
@@ -242,11 +296,48 @@ export class InputManager {
     return null;
   }
 
+  _mouseThrustFromDistance(distancePx) {
+    const cfg = CONFIG.input;
+    const deadzone = cfg.mouseDeadzonePx ?? 28;
+    const ramp = Math.max(1, cfg.mouseRampPx ?? 180);
+    const power = cfg.mouseThrustCurve ?? 0.7;
+    const t = Math.max(0, Math.min(1, (distancePx - deadzone) / ramp));
+    return Math.pow(t, power);
+  }
+
+  _readMouse(view) {
+    if (!view?.active || !view.ship || !Number.isFinite(view.camX) || !Number.isFinite(view.camY)) {
+      this._mouse.distancePx = 0;
+      return { facing: null, thrust: 0, brake: 0 };
+    }
+
+    const canvasW = view.canvasW || window.innerWidth;
+    const canvasH = view.canvasH || window.innerHeight;
+    const [targetWX, targetWY] = screenToWorld(
+      this._mouse.x,
+      this._mouse.y,
+      view.camX,
+      view.camY,
+      canvasW,
+      canvasH
+    );
+    const direction = worldDirectionTo(view.ship.wx, view.ship.wy, targetWX, targetWY);
+    const distancePx = direction.dist * pxPerWorld(canvasW);
+    this._mouse.distancePx = distancePx;
+
+    const facing = this._mouse.active ? Math.atan2(direction.ny, direction.nx) : null;
+    return {
+      facing,
+      thrust: this._mouse.left ? this._mouseThrustFromDistance(distancePx) : 0,
+      brake: this._mouse.right ? 1.0 : 0,
+    };
+  }
+
   /**
    * Poll all input sources simultaneously. Both keyboard and gamepad are
    * always read — the strongest signal wins for each axis.
    */
-  poll() {
+  poll(view = null) {
     const cfg = CONFIG.input;
     const now = performance.now();
     const dt = Math.min((now - this._lastPollTime) / 1000, 1 / 30);
@@ -260,11 +351,17 @@ export class InputManager {
     let dx = 0, dy = 0;
     if (this._keys['ArrowLeft'] || this._keys['KeyA']) dx -= 1;
     if (this._keys['ArrowRight'] || this._keys['KeyD']) dx += 1;
-    if (this._keys['ArrowUp'] || this._keys['KeyW']) dy -= 1;
-    if (this._keys['ArrowDown'] || this._keys['KeyS']) dy += 1;
+    if (this._keys['ArrowUp']) dy -= 1;
+    if (this._keys['ArrowDown']) dy += 1;
     if (dx !== 0 || dy !== 0) kbFacing = Math.atan2(dy, dx);
-    if (this._keys['Space']) kbThrust = 1.0;
-    if (this._keys['ControlLeft'] || this._keys['ControlRight']) kbBrake = 1.0;
+    if (this._keys['Space'] || this._keys['KeyW']) kbThrust = 1.0;
+    if (this._keys['ControlLeft'] || this._keys['ControlRight'] || this._keys['KeyS']) kbBrake = 1.0;
+
+    // --- Read mouse ---
+    const mouse = this._readMouse(view);
+    const mouseFacing = mouse.facing;
+    const mouseThrust = mouse.thrust;
+    const mouseBrake = mouse.brake;
 
     // --- Read gamepad ---
     let gpFacing = null;
@@ -320,20 +417,28 @@ export class InputManager {
     }
 
     // --- Merge: strongest signal wins ---
-    // Facing: gamepad stick takes priority if actively aiming, else keyboard
+    // Facing: gamepad stick takes priority, keyboard arrows/A-D override mouse,
+    // otherwise the mouse cursor is the default no-controller aim model.
     if (gpFacing !== null) {
       this.facing = gpFacing;
       this.lastInputSource = 'gamepad';
     } else if (kbFacing !== null) {
       this.facing = kbFacing;
       this.lastInputSource = 'keyboard';
+    } else if (mouseFacing !== null) {
+      this.facing = mouseFacing;
+      this.lastInputSource = 'mouse';
     } else {
       this.facing = null; // no directional input — hold current facing
     }
 
     // Thrust/brake: take the higher value from either source
-    this.thrustIntensity = Math.max(kbThrust, gpThrust);
-    this.brakeIntensity = Math.max(kbBrake, gpBrake);
+    this.thrustIntensity = Math.max(kbThrust, mouseThrust, gpThrust);
+    this.brakeIntensity = Math.max(kbBrake, mouseBrake, gpBrake);
+
+    if (gpThrust > 0 || gpBrake > 0) this.lastInputSource = 'gamepad';
+    else if (kbThrust > 0 || kbBrake > 0) this.lastInputSource = 'keyboard';
+    else if (mouseThrust > 0 || mouseBrake > 0) this.lastInputSource = 'mouse';
 
     return this;
   }

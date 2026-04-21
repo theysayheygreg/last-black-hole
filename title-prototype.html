@@ -24,17 +24,44 @@
       overflow: hidden;
     }
 
+    /* Sized by viewport.js — fixed 1280x720 backing, letterboxed CSS.
+       Explicit left/top/width/height are written by JS. */
     #render-canvas,
     #overlay-canvas {
       display: block;
-      width: 100vw;
-      height: 100vh;
       position: absolute;
-      inset: 0;
+      image-rendering: pixelated;
     }
 
     #render-canvas { z-index: 0; }
     #overlay-canvas { z-index: 1; pointer-events: none; }
+
+    #min-window-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      background: #000;
+      color: rgba(200, 210, 225, 0.9);
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      text-align: center;
+      padding: 24px;
+    }
+    #min-window-overlay .min-window-title {
+      font-size: 18px;
+      letter-spacing: 0.15em;
+      color: rgba(220, 230, 245, 1.0);
+    }
+    #min-window-overlay .min-window-hint {
+      font-size: 11px;
+      color: rgba(140, 160, 185, 0.7);
+    }
 
     #title-overlay {
       position: absolute;
@@ -123,6 +150,11 @@
 <body>
   <canvas id="render-canvas"></canvas>
   <canvas id="overlay-canvas"></canvas>
+  <div id="min-window-overlay">
+    <div class="min-window-title">resize to play</div>
+    <div>window is smaller than the minimum render area.</div>
+    <div class="min-window-hint">need at least 800 x 450. fullscreen works on any monitor.</div>
+  </div>
 
   <div id="title-overlay">
     <div id="title-line">LAST BLACK HOLE<span id="title-cursor">_</span></div>

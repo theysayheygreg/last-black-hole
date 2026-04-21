@@ -21,6 +21,7 @@ import { PortalSystem } from './portals.js';
 import { PlanetoidSystem } from './planetoids.js';
 import { InputManager } from './input.js';
 import { Composer } from './render/composer.js';
+import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
 import { TonemapPass } from './render/passes/tonemap-pass.js';
 import { ASCIIPass } from './render/passes/ascii-pass.js';
@@ -290,8 +291,11 @@ function getConfiguredSimServerUrl() {
 function init() {
   // WebGL canvas
   glCanvas = document.getElementById('fluid-canvas');
-  glCanvas.width = window.innerWidth;
-  glCanvas.height = window.innerHeight;
+  overlayCanvas = document.getElementById('overlay-canvas');
+  // Fixed internal render resolution with aspect-preserving letterbox.
+  // Black hole (and every framed visual) has a single authored shape —
+  // window size only scales the whole frame, it doesn't reshape anything.
+  fitViewport(glCanvas, overlayCanvas);
   gl = glCanvas.getContext('webgl2', {
     alpha: false,
     antialias: false,
@@ -306,10 +310,7 @@ function init() {
   if (!ext1) console.warn('EXT_color_buffer_float not available');
   gl.getExtension('OES_texture_float_linear');
 
-  // 2D overlay canvas
-  overlayCanvas = document.getElementById('overlay-canvas');
-  overlayCanvas.width = window.innerWidth;
-  overlayCanvas.height = window.innerHeight;
+  // 2D overlay canvas (already sized by fitViewport above).
   ctx = overlayCanvas.getContext('2d');
 
   // Init systems
@@ -433,7 +434,7 @@ function init() {
   // Load title scene (clears everything, loads default map, seeds fluid)
   loadTitleScene();
 
-  // Input: mouse is UI-only (menu clicks). Movement from keyboard/gamepad via InputManager.
+  // Input: mouse, keyboard, and gamepad all flow through InputManager.
   overlayCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // Escape key — context-sensitive (pause during play, back in menus)
@@ -480,16 +481,25 @@ function init() {
     }
   });
 
-  // Handle resize
+  // Handle resize — backing store stays fixed at RENDER_W x RENDER_H,
+  // only the CSS letterbox rect changes. Ship and composer read the
+  // backing-store dims, so they see no change; only the min-window
+  // overlay toggles visibility.
+  const minWindowOverlay = document.getElementById('min-window-overlay');
   window.addEventListener('resize', () => {
-    glCanvas.width = window.innerWidth;
-    glCanvas.height = window.innerHeight;
-    overlayCanvas.width = window.innerWidth;
-    overlayCanvas.height = window.innerHeight;
+    const { ok } = fitViewport(glCanvas, overlayCanvas);
     ship.canvasWidth = glCanvas.width;
     ship.canvasHeight = glCanvas.height;
     composer.resize(glCanvas.width, glCanvas.height);
+    if (minWindowOverlay) {
+      minWindowOverlay.style.display = ok ? 'none' : 'flex';
+    }
   });
+  // First-load state for the overlay.
+  if (minWindowOverlay) {
+    const { ok } = fitViewport(glCanvas, overlayCanvas);
+    minWindowOverlay.style.display = ok ? 'none' : 'flex';
+  }
 
   if (RUNTIME_FLAGS.enableTestAPI) {
     initTestAPI(() => ({
@@ -1927,7 +1937,14 @@ function gameLoop(now) {
   } // end paused check
 
   // === INPUT (always polled — even during menus, for navigation) ===
-  inputManager.poll();
+  inputManager.poll({
+    active: gamePhase === 'playing',
+    ship,
+    camX,
+    camY,
+    canvasW: overlayCanvas.width,
+    canvasH: overlayCanvas.height,
+  });
 
   const confirmNow = inputManager.confirmPressed;
   const pauseNow = inputManager.pausePressed;

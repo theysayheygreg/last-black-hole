@@ -34,22 +34,45 @@
       background: var(--lbh-void);
       cursor: crosshair;
     }
+    /* Canvases are sized by viewport.js (fixed 1280x720 backing,
+       letterboxed CSS rect). Explicit left/top are written by JS. */
     #fluid-canvas {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
       z-index: 0;
+      image-rendering: pixelated;
     }
     #overlay-canvas {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
       z-index: 1;
       pointer-events: auto;
+      image-rendering: pixelated;
+    }
+    #min-window-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      background: #000;
+      color: rgba(200, 210, 225, 0.9);
+      font-family: var(--lbh-font-mono);
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: lowercase;
+      text-align: center;
+      padding: 24px;
+    }
+    #min-window-overlay .min-window-title {
+      font-size: 18px;
+      letter-spacing: 0.15em;
+      color: rgba(220, 230, 245, 1.0);
+    }
+    #min-window-overlay .min-window-hint {
+      font-size: 11px;
+      color: rgba(140, 160, 185, 0.7);
     }
     /* HUD — terminal aesthetic */
     #hud {
@@ -346,6 +369,11 @@
 <body>
   <canvas id="fluid-canvas"></canvas>
   <canvas id="overlay-canvas"></canvas>
+  <div id="min-window-overlay">
+    <div class="min-window-title">resize to play</div>
+    <div>window is smaller than the minimum render area.</div>
+    <div class="min-window-hint">need at least 800 x 450. fullscreen works on any monitor.</div>
+  </div>
   <div id="hud" style="display:none;">
     <div id="hud-collapse" class="hud-panel">
       <div class="hud-label">universal collapse</div>
