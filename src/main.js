@@ -328,7 +328,17 @@ function init() {
   // already render their own rings via FluidDisplay's fluid shader, and
   // the title-specific composition radii don't apply to scattered
   // multi-well maps.
-  const useMinimalChain = new URLSearchParams(location.search).has('minimalrender');
+  // URL flags for render tuning:
+  //   ?minimalrender=1       — bare FluidDisplay > Tonemap > ASCII (perf baseline)
+  //   ?disable=name1,name2   — drop individual post-processing passes.
+  //                            Valid names: bloom, color-grade, vignette,
+  //                            chromatic-aberration, scanlines.
+  //                            FluidDisplay, Tonemap, ASCII are always kept.
+  const renderParams = new URLSearchParams(location.search);
+  const useMinimalChain = renderParams.has('minimalrender');
+  const disabledPasses = new Set(
+    (renderParams.get('disable') || '').split(',').map((s) => s.trim()).filter(Boolean),
+  );
   composer = new Composer(gl);
   fluidDisplayPass = new FluidDisplayPass(fluid);
   tonemapPass = new TonemapPass({ exposure: 1.0 });
@@ -338,11 +348,13 @@ function init() {
     composer.add(tonemapPass);
     composer.add(asciiPass);
   } else {
+    // Gameplay post-processing. Values dialed below title intensity so
+    // CRT identity reads without obscuring ASCII gameplay signal.
     const bloomPass = new BloomPass(gl, {
-      threshold: 0.85,
+      threshold: 0.90,    // only true highlights (HDR rings near peak)
       knee: 0.3,
-      strength: 0.9,
-      blurRadius: 3.5,
+      strength: 0.75,
+      blurRadius: 3.0,
       scale: 0.5,
     });
     const colorGradePass = new ColorGradePass({
@@ -351,25 +363,30 @@ function init() {
       shadowStrength: 0.2,
       highlightStrength: 0.25,
     });
-    const vignettePass = new VignettePass({ strength: 0.8, radius: 0.4, softness: 0.6 });
-    // Dial aberration + scanlines lower than title — gameplay readability
-    // trumps CRT intensity. Still present, still contributes identity.
-    const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.003, falloff: 2.6 });
-    const scanlinesPass = new ScanlinesPass({ intensity: 0.14, frequency: 1.5 });
-    // ASCII is mid-chain; last pass must be terminal.
+    // Vignette softened — gameplay needs peripheral visibility for threats.
+    const vignettePass = new VignettePass({ strength: 0.6, radius: 0.45, softness: 0.65 });
+    // Aberration near-subliminal — CRT lens hint at corners only.
+    const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.002, falloff: 2.8 });
+    // Scanlines subtle — not over the glyphs.
+    const scanlinesPass = new ScanlinesPass({ intensity: 0.09, frequency: 1.5 });
+    // ASCII is mid-chain; last kept pass must be terminal.
     asciiPass.rendersToScreen = false;
-    const chain = [
-      fluidDisplayPass,
-      bloomPass,
-      tonemapPass,
-      colorGradePass,
-      vignettePass,
-      asciiPass,
-      chromaticAberrationPass,
-      scanlinesPass,
+    const fullChain = [
+      { pass: fluidDisplayPass, kind: 'core' },
+      { pass: bloomPass, kind: 'post' },
+      { pass: tonemapPass, kind: 'core' },
+      { pass: colorGradePass, kind: 'post' },
+      { pass: vignettePass, kind: 'post' },
+      { pass: asciiPass, kind: 'core' },
+      { pass: chromaticAberrationPass, kind: 'post' },
+      { pass: scanlinesPass, kind: 'post' },
     ];
-    chain[chain.length - 1].rendersToScreen = true;
-    for (const p of chain) composer.add(p);
+    const activeChain = fullChain
+      .filter(({ pass, kind }) => kind === 'core' || !disabledPasses.has(pass.name))
+      .map((entry) => entry.pass);
+    activeChain[activeChain.length - 1].rendersToScreen = true;
+    for (const p of activeChain) composer.add(p);
+    console.log('[render] gameplay chain:', activeChain.map((p) => p.name));
   }
 
   // Init entity systems (empty — loadScene populates them)
