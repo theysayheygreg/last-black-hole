@@ -123,9 +123,16 @@ async function waitForEmbeddedStack(timeoutMs = 4000) {
 }
 
 function createMainWindow() {
+  // Content-area minimum — matches the game's internal render minimum
+  // from src/render/viewport.js (800x450 @ 16:9). The window cannot be
+  // dragged or resized below this; the "resize to play" overlay in the
+  // browser is a safety net for dev, not a normal path here.
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
+    minWidth: 960,
+    minHeight: 540,
+    useContentSize: true,
     backgroundColor: '#000033',
     autoHideMenuBar: true,
     title: 'Last Singularity',
@@ -139,6 +146,18 @@ function createMainWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Dev-mode: if LBH_DEV_URL is set, load from the running dev server
+  // (stack.js manages control/sim/dev). Skips the packaged renderer
+  // and the embedded control/sim — those come from the dev stack.
+  // Packaged mode falls through to the bundled desktop/renderer/.
+  const devUrl = process.env.LBH_DEV_URL;
+  if (devUrl) {
+    mainWindow.loadURL(devUrl).catch((err) => {
+      console.error('[electron] dev loadURL failed:', err.message);
+    });
+    return;
+  }
 
   waitForEmbeddedStack().finally(() => {
     if (!mainWindow) return;
@@ -207,7 +226,9 @@ ipcMain.handle('lbh:focus-main-window', async () => {
 });
 
 app.whenReady().then(() => {
-  startEmbeddedServers();
+  // Dev-mode: servers are already running (stack.js started dev/control/sim
+  // externally). Skip embedded server fork.
+  if (!process.env.LBH_DEV_URL) startEmbeddedServers();
   buildMenu();
   createMainWindow();
 
@@ -217,10 +238,10 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  stopEmbeddedServers();
+  if (!process.env.LBH_DEV_URL) stopEmbeddedServers();
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('before-quit', () => {
-  stopEmbeddedServers();
+  if (!process.env.LBH_DEV_URL) stopEmbeddedServers();
 });

@@ -148,6 +148,7 @@ async function main() {
 
 module.exports = {
   MODES,
+  DEV_URL,
   start,
   stop,
   printStackStatus,
