@@ -83,13 +83,13 @@ the sim server owns all game state. clients render snapshots and send inputs. ru
 git clone https://github.com/theysayheygreg/last-black-hole.git
 cd last-black-hole
 npm install
-npm start
+npm run play
 ```
 
-that's it. `npm start` launches everything and opens the game in your browser. `npm run stop` shuts it all down.
+that's it. `npm run play` is the canonical launch — it brings up the local stack (control plane, sim server, dev server) and opens the game in a dedicated **Electron window**. the window enforces a minimum content size (960×540) so the game always loads at a playable resolution and cannot be dragged below the render minimum. `npm run stop` shuts the stack down when you're done.
 
-### what npm start does
-under the hood, three processes run: a control plane (persistence), a sim server (game authority), and a dev server (static files). you don't need to think about them — `npm start` handles it. if you care, the individual commands are:
+### what npm run play does
+under the hood, three processes run: a control plane (persistence), a sim server (game authority), and a dev server (static files). `npm run play` handles them and then launches an Electron window pointed at the dev server. the individual commands, if you want to run them by hand:
 
 ```bash
 npm run control    # persistence layer (profiles, vault)
@@ -97,16 +97,11 @@ npm run sim        # authoritative game sim
 npm run dev        # static file server for the browser client
 ```
 
-### alternative: no node (client-only, local sim)
-the game can run without the sim server — it falls back to a local simulation in the browser. serve the project directory with any static file server:
-
+### developer-only: browser-tab launch
 ```bash
-# python
-python3 -m http.server 8080
-
-# or just open index-a.html in a browser
-# (some browsers block ES module imports from file://, so a server is recommended)
+npm start
 ```
+`npm start` is a **developer convenience**. it brings the stack up and opens the game in your default browser as a tab. browser tabs can be resized infinitely, so you may land in the "resize to play" overlay on small windows — use `npm run play` for the player-facing surface, and reserve `npm start` for quick dev iteration where you're staying in a browser DevTools workflow.
 
 ### build
 ```bash
