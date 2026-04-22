@@ -123,16 +123,18 @@ async function waitForEmbeddedStack(timeoutMs = 4000) {
 }
 
 function createMainWindow() {
-  // Content-area minimum — matches the game's internal render minimum
-  // from src/render/viewport.js (800x450 @ 16:9). The window cannot be
-  // dragged or resized below this; the "resize to play" overlay in the
-  // browser is a safety net for dev, not a normal path here.
+  // Authored 16:9 window at 1440x810 content size. Non-resizable by
+  // design — this is a game, not a webview. Fullscreen is still
+  // allowed via the OS shortcut (macOS Cmd+Ctrl+F / green button) so
+  // players on any monitor aspect can go immersive; the internal
+  // render letterboxes cleanly inside whatever fullscreen hands us.
   mainWindow = new BrowserWindow({
     width: 1440,
-    height: 900,
-    minWidth: 960,
-    minHeight: 540,
+    height: 810,
     useContentSize: true,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: true,
     backgroundColor: '#000033',
     autoHideMenuBar: true,
     title: 'Last Singularity',
