@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-04-20 — Keyboard + mouse controls are real runtime input
+
+- Repaired the browser-install control path: mouse aim now flows through `InputManager`, left click applies distance-scaled thrust, right click brakes, and W/S/Space/Ctrl provide keyboard equivalents for players without a Bluetooth controller.
+- Added CONFIG-backed mouse tuning (`mouseDeadzonePx`, `mouseRampPx`, `mouseThrustCurve`) so the laptop/mouse feel can be adjusted without reopening the input architecture.
+- Added `tests/keyboard-mouse.js` and wired it into `npm test`, covering both local play and remote-authority input forwarding.
+- Updated README/build artifact instructions and `CONTROLS.md` so packaged testers know the no-controller path before launching.
+
 ## 2026-04-20 — Title render pipeline: LBH-native composer + accretion ramp
 
 - Built an LBH-native multi-pass render pipeline (composer + Pass abstraction, ping-pong FBOs, RGBA16F HDR) to replace shader-stuffing. Title prototype runs the full 10-pass chain: `FluidDisplay → FluidGain(0.15) → Accretion → Bloom → Tonemap → ColorGrade → Vignette → ASCII → ChromaticAberration → Scanlines`.

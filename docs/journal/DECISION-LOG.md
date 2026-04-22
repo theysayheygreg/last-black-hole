@@ -647,6 +647,8 @@ All tests use `triggerRestart()` which bypasses the title→mapSelect→startGam
 **Where it landed:** Model 1 recommended start, Model 2 as fallback if Model 1 feels bad. Model 3 worth 20 minutes of testing to confirm it's wrong. Dev panel should include a dropdown to swap models live.
 **Door status:** Playtesting. Monday morning will decide.
 
+**2026-04-20 update:** Model 1 is now implemented for the browser-install path. Mouse cursor sets facing, left click applies distance-scaled thrust using the CONFIG mouse curve, right click brakes, and W/S/Space/Ctrl provide laptop-friendly keyboard equivalents. `tests/keyboard-mouse.js` covers local and remote-authority input so this does not regress back into a docs-only promise.
+
 ---
 
 ### Q: When does DualSense controller support get added?

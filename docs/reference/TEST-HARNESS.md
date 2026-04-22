@@ -26,7 +26,8 @@ flowchart LR
 
     C --> C1["smoke.js"]
     C --> C2["controller.js"]
-    C --> C3["physics.js / flow.js / systems.js"]
+    C --> C3["keyboard-mouse.js"]
+    C --> C4["physics.js / flow.js / systems.js"]
 
     D --> D1["infra-smoke.js"]
     D --> D2["telemetry-smoke.js"]
@@ -56,6 +57,7 @@ These tests answer: can the game page boot and run at all?
 
 - `tests/smoke.js`
 - `tests/controller.js`
+- `tests/keyboard-mouse.js`
 - `tests/physics.js`
 - `tests/coordinates.js`
 - `tests/flow.js`

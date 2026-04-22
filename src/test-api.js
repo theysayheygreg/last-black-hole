@@ -5,13 +5,25 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE } from './coords.js';
+import { WORLD_SCALE, worldToScreen } from './coords.js';
 
 export function initTestAPI(getState) {
   window.__TEST_API = {
     getShipPos() {
       const { ship } = getState();
       return { x: ship.wx, y: ship.wy };
+    },
+
+    /**
+     * Ship position in render-space screen pixels. Uses the current
+     * camera and canvas dimensions. Used by tests that need to place
+     * a cursor on the ship (e.g. mouse deadzone verification).
+     */
+    getShipScreenPos() {
+      const { ship, camX, camY, canvasWidth, canvasHeight } = getState();
+      if (!ship || !Number.isFinite(camX) || !Number.isFinite(camY)) return null;
+      const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasWidth, canvasHeight);
+      return { x: sx, y: sy };
     },
 
     getShipVel() {
@@ -250,6 +262,8 @@ export function initTestAPI(getState) {
         thrustIntensity: inputManager.thrustIntensity,
         brakeIntensity: inputManager.brakeIntensity,
         lastInputSource: inputManager.lastInputSource,
+        mouseAimActive: Boolean(inputManager._mouse?.active),
+        mouseDistancePx: inputManager._mouse?.distancePx ?? 0,
         ability1: Boolean(inputManager.ability1),
         ability2: Boolean(inputManager.ability2),
       };

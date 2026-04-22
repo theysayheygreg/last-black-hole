@@ -17,6 +17,7 @@ const suites = [
   { name: "SimLifecycle", file: "sim-lifecycle.js" },
   { name: "MetaFlow", file: "meta-flow.js" },
   { name: "Controller", file: "controller.js" },
+  { name: "KeyboardMouse", file: "keyboard-mouse.js" },
   { name: "Physics", file: "physics.js" },
   { name: "Coordinates", file: "coordinates.js" },
   { name: "Flow", file: "flow.js" },

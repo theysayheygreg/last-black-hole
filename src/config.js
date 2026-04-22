@@ -268,6 +268,11 @@ export const CONFIG = {
     gamepadTurnRate: 360,     // Stick turn rate in deg/s (not currently used — facing is direct from stick).
     triggerThreshold: 0.05,   // Trigger activation threshold (0-1). Prevents ghost input.
     brakeStrength: 0.15,      // Extra drag per frame from L2 brake at full pull. Stacks with base drag.
+
+    // --- Mouse thrust curve (keyboard + mouse install path) ---
+    mouseDeadzonePx: 28,      // Cursor distance from ship below this = drift/no thrust.
+    mouseRampPx: 180,         // Additional pixels to ramp left-click thrust from 0 → 1.
+    mouseThrustCurve: 0.7,    // Sub-linear curve makes light thrust easier to feather.
   },
 
   wrecks: {

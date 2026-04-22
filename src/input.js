@@ -111,6 +111,9 @@ export class InputManager {
       this._keys = {};
       this._mouse.left = false;
       this._mouse.right = false;
+      // Deactivate mouse so the ship doesn't keep aiming toward a
+      // stale cursor position after tab-switch / alt-tab.
+      this._mouse.active = false;
     });
 
     // --- Mouse listeners ---
@@ -120,24 +123,30 @@ export class InputManager {
     // the full browser window.
     const renderCanvas = document.getElementById('fluid-canvas');
     const updateMousePosition = (e) => {
+      let mx = e.clientX;
+      let my = e.clientY;
       if (renderCanvas) {
         const rect = renderCanvas.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
           const nx = (e.clientX - rect.left) / rect.width;
           const ny = (e.clientY - rect.top) / rect.height;
-          this._mouse.x = nx * renderCanvas.width;
-          this._mouse.y = ny * renderCanvas.height;
-        } else {
-          this._mouse.x = e.clientX;
-          this._mouse.y = e.clientY;
+          mx = nx * renderCanvas.width;
+          my = ny * renderCanvas.height;
         }
-      } else {
-        this._mouse.x = e.clientX;
-        this._mouse.y = e.clientY;
       }
+      // Defensive clamp to the render rect. Protects downstream
+      // screenToWorld from NaN if the event gives unexpected coords.
+      if (!Number.isFinite(mx) || !Number.isFinite(my)) return;
+      this._mouse.x = mx;
+      this._mouse.y = my;
       this._mouse.active = true;
       this._mouse.lastMoveAt = performance.now();
     };
+    // If the cursor leaves the document entirely, mouse is no longer a
+    // valid aim signal — subsequent polls should fall back to keyboard.
+    document.addEventListener('mouseleave', () => {
+      this._mouse.active = false;
+    });
     const updateMouseButton = (e, pressed) => {
       updateMousePosition(e);
       if (e.button === 0) this._mouse.left = pressed;
@@ -311,6 +320,17 @@ export class InputManager {
       return { facing: null, thrust: 0, brake: 0 };
     }
 
+    // Activity expiry: if the cursor hasn't moved AND no button is
+    // held, stop contributing facing so the ship doesn't keep aiming
+    // at a stale cursor position after the player switches to keyboard.
+    // Buttons down keeps the mouse considered "active" regardless.
+    const now = performance.now();
+    const IDLE_MS = 1500;
+    const buttonDown = this._mouse.left || this._mouse.right;
+    if (this._mouse.active && !buttonDown && (now - this._mouse.lastMoveAt) > IDLE_MS) {
+      this._mouse.active = false;
+    }
+
     const canvasW = view.canvasW || window.innerWidth;
     const canvasH = view.canvasH || window.innerHeight;
     const [targetWX, targetWY] = screenToWorld(
@@ -323,12 +343,14 @@ export class InputManager {
     );
     const direction = worldDirectionTo(view.ship.wx, view.ship.wy, targetWX, targetWY);
     const distancePx = direction.dist * pxPerWorld(canvasW);
-    this._mouse.distancePx = distancePx;
+    this._mouse.distancePx = Number.isFinite(distancePx) ? distancePx : 0;
 
-    const facing = this._mouse.active ? Math.atan2(direction.ny, direction.nx) : null;
+    const facing = this._mouse.active && Number.isFinite(direction.nx) && Number.isFinite(direction.ny)
+      ? Math.atan2(direction.ny, direction.nx)
+      : null;
     return {
       facing,
-      thrust: this._mouse.left ? this._mouseThrustFromDistance(distancePx) : 0,
+      thrust: this._mouse.left ? this._mouseThrustFromDistance(this._mouse.distancePx) : 0,
       brake: this._mouse.right ? 1.0 : 0,
     };
   }

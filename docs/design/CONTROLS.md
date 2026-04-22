@@ -59,9 +59,9 @@ The ship isn't just a point that reads fluid velocity. It's a physical object wi
 
 The input device fundamentally changes what's possible. Mouse gives precision aiming. Controller gives analog thrust and haptic feedback. Both are valid — but they produce different games. **This may warrant a parallel experiment alongside the physics experiment** (Pillar 6).
 
-### Mouse + Keyboard (Primary, Jam Default)
+### Mouse + Keyboard (Primary Browser-Install Default)
 
-The mouse is precise but binary — clicks are on or off. The design challenge is creating analog-feeling control from digital inputs.
+The mouse is precise but binary — clicks are on or off. The browser install path must still be fully playable without a paired Bluetooth controller, so mouse + keyboard is now a first-class runtime path, not just a fallback.
 
 #### What the mouse does
 
@@ -92,10 +92,12 @@ Three models to explore, in order of preference:
 | Key | Action | Notes |
 |-----|--------|-------|
 | Mouse move | Aim / set thrust direction | Always active |
-| Left click | Thrust (or toggle, test both) | Hold to thrust, release to drift |
-| Right click | Burst/dodge (stretch goal) | The "duck dive" — high impulse, cooldown, extra signal |
+| Left click | Distance-scaled thrust | Hold to thrust, release to drift |
+| W / Space | Full thrust | Keyboard equivalent for laptop play |
+| Right click | Brake / active deceleration | Hold to dump velocity |
+| S / Ctrl | Brake / active deceleration | Keyboard equivalent for laptop play |
+| Arrow keys / A-D | Keyboard aim fallback | Useful when mouse aim is unavailable; mouse remains the primary aim path |
 | Scroll wheel | Zoom (if we have zoom) | Or camera distance |
-| Space | Brake / active deceleration | Alternative to 180° turn. More forgiving. Test whether this is needed. |
 | Shift | Signal flare (L2+) | Non-lethal tool, stretch goal |
 | Tab | Inventory / scanner (L1+) | Pause-less overlay |
 

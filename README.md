@@ -44,11 +44,12 @@ the sim server owns all game state. clients render snapshots and send inputs. ru
 ## controls
 
 ### keyboard + mouse
-| action | key |
-|--------|-----|
+| action | input |
+|--------|-------|
 | aim | mouse cursor |
-| thrust | left click / W |
-| brake | right click / S |
+| thrust | left click / W / Space |
+| brake | right click / S / Ctrl |
+| keyboard aim fallback | arrow keys / A-D |
 | force pulse | E |
 | inventory | Tab / I |
 | consumable 1 | 1 |
@@ -138,7 +139,7 @@ desktop builds require `electron` and `@electron/packager` (included in devDepen
 npm test
 ```
 
-runs the full harness via puppeteer: validation, smoke, infra, telemetry, sim lifecycle, meta flow, controller, physics, coordinates, flow, inventory, systems, PlayerBrain, control plane, overload, coarse field, sim scale, and remote authority. requires a chromium-compatible browser.
+runs the full harness via puppeteer: validation, smoke, infra, telemetry, sim lifecycle, meta flow, controller, keyboard+mouse, physics, coordinates, flow, inventory, systems, PlayerBrain, control plane, overload, coarse field, sim scale, and remote authority. requires a chromium-compatible browser.
 
 focused harnesses:
 

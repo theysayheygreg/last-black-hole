@@ -253,6 +253,12 @@ function writeStartHere(targetRoot, results) {
   }
 
   lines.push('');
+  lines.push('## Controls');
+  lines.push('');
+  lines.push('- Keyboard + mouse: aim with the mouse, hold left click / W / Space to thrust, hold right click / S / Ctrl to brake.');
+  lines.push('- Keyboard fallback: arrows / A-D can steer if you do not have a controller or mouse aim available.');
+  lines.push('- Gamepad: left stick aims, R2 thrusts, L2 brakes, face buttons handle confirm/back/pulse.');
+  lines.push('');
   lines.push('## Notes');
   lines.push('');
   if (built.has('mac')) {
