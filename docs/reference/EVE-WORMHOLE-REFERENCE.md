@@ -1,4 +1,4 @@
-# EVE Wormhole Mechanics — Design Reference for Last Black Hole
+# EVE Wormhole Mechanics — Design Reference for Last Singularity
 
 > What to steal, what to adapt, what to admire from a distance.
 
@@ -10,7 +10,7 @@
 
 EVE wormholes have two independent drain axes: **time** (they close after ~24h) and **mass** (every ship that transits subtracts from a mass budget). Crucially, both are **imprecise** — the time display shows "less than 4h" not "3h47m", and the mass budget has ±10% randomization. You can never be exactly sure when it will collapse.
 
-**For Last Black Hole:** Our portals (breaches?) already evaporate over time. We should add a **usage drain** — each extraction through a portal weakens it. In multiplayer, this means every player who extracts makes the remaining portals less stable for everyone. And the timing should be imprecise — the HUD shows "UNSTABLE" not "closing in 47 seconds."
+**For Last Singularity:** Our portals (breaches?) already evaporate over time. We should add a **usage drain** — each extraction through a portal weakens it. In multiplayer, this means every player who extracts makes the remaining portals less stable for everyone. And the timing should be imprecise — the HUD shows "UNSTABLE" not "closing in 47 seconds."
 
 **This is the dual-depletion model:** portals drain from time AND from use. Creates pressure from two independent vectors.
 
@@ -18,7 +18,7 @@ EVE wormholes have two independent drain axes: **time** (they close after ~24h) 
 
 In EVE wormhole space, there's no local chat — you have ZERO passive intel about who else is in the system. Everything you know, you had to actively discover. And every act of discovery (launching probes, jumping through a hole) risks revealing YOUR presence.
 
-**For Last Black Hole:** Signal IS this mechanic. Every action that gathers information (moving to see what's there, looting to learn what a wreck contains) also broadcasts information about you. The parallel is exact:
+**For Last Singularity:** Signal IS this mechanic. Every action that gathers information (moving to see what's there, looting to learn what a wreck contains) also broadcasts information about you. The parallel is exact:
 
 | EVE Concept | LBH Equivalent |
 |-------------|----------------|
@@ -32,7 +32,7 @@ In EVE wormhole space, there's no local chat — you have ZERO passive intel abo
 
 EVE's wormhole system effects (Wolf Rayet, Pulsar, Black Hole, etc.) completely change viable strategies. A Wolf Rayet C6 gives +200% small weapon damage — frigates become glass cannons, normal fleet doctrine inverts.
 
-**For Last Black Hole:** This maps to the "one strong cosmic signature per run" idea from Forge's review. Each universe should have a dominant environmental modifier:
+**For Last Singularity:** This maps to the "one strong cosmic signature per run" idea from Forge's review. Each universe should have a dominant environmental modifier:
 
 | Universe Type | Effect | How It Changes Play |
 |---------------|--------|-------------------|
@@ -47,19 +47,19 @@ EVE's wormhole system effects (Wolf Rayet, Pulsar, Black Hole, etc.) completely 
 
 EVE wormholes limit what can pass through by per-transit mass AND total mass. This prevents blob warfare — you can't bring unlimited ships.
 
-**For Last Black Hole (multiplayer):** Portal capacity. Each breach can only handle N extractions before collapsing. In a 3-player game with 4 breaches, that's tight. One breach per player plus one spare. If someone double-dips (extracts, re-enters on a new breach, extracts again), they consume exit capacity for everyone.
+**For Last Singularity (multiplayer):** Portal capacity. Each breach can only handle N extractions before collapsing. In a 3-player game with 4 breaches, that's tight. One breach per player plus one spare. If someone double-dips (extracts, re-enters on a new breach, extracts again), they consume exit capacity for everyone.
 
 ### 5. The K162 Rule (Commitment Creates Information)
 
 In EVE, when you warp to a wormhole entrance, the other side doesn't see anything. But the moment you JUMP THROUGH, a signature appears in the destination system. Scouting is free. Committing is visible.
 
-**For Last Black Hole:** Approaching a breach should be quiet. But entering the extraction sequence should create a signal spike. Everyone nearby knows someone is leaving. This creates the "do I follow them to this breach or find my own?" decision.
+**For Last Singularity:** Approaching a breach should be quiet. But entering the extraction sequence should create a signal spike. Everyone nearby knows someone is leaving. This creates the "do I follow them to this breach or find my own?" decision.
 
 ### 6. Rolling as Strategic Resource Management
 
 EVE players deliberately collapse their own wormholes to control access — collapsing a dangerous connection at the cost of losing it yourself.
 
-**For Last Black Hole:** Could a player deliberately destabilize a breach to deny it to competitors? Force pulse into a breach could accelerate its evaporation. Costs: you lose that exit too. Benefits: one fewer exit for the player who was heading for it. This is dark forest logic applied to exits.
+**For Last Singularity:** Could a player deliberately destabilize a breach to deny it to competitors? Force pulse into a breach could accelerate its evaporation. Costs: you lose that exit too. Benefits: one fewer exit for the player who was heading for it. This is dark forest logic applied to exits.
 
 ---
 
@@ -98,4 +98,4 @@ EVE's wormhole vocabulary is strong:
 
 EVE wormhole space works because **every action that helps you also exposes you.** Scanning finds targets but reveals your probes. Jumping gives you access but alerts the other side. Rolling secures your borders but risks trapping you.
 
-That's exactly what signal should be in Last Black Hole. The game is about the tension between doing things and being seen doing them. EVE built an entire ecosystem around this. We need to nail it in one fluid sim.
+That's exactly what signal should be in Last Singularity. The game is about the tension between doing things and being seen doing them. EVE built an entire ecosystem around this. We need to nail it in one fluid sim.

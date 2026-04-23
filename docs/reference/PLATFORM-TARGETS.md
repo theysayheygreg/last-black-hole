@@ -1,6 +1,6 @@
 # Platform Targets
 
-This is the blunt assessment for `Last Black Hole` after the web jam build.
+This is the blunt assessment for `Last Singularity` after the web jam build.
 
 The game should stay web-first during the jam. After that, the first serious platform question is not "where can it run?" It is "which target gives us the most leverage without forcing a rewrite too early?"
 
@@ -50,7 +50,7 @@ That makes itch a good target for a tight browser game and a bad target for a bl
 
 ### Private friend sharing
 
-This is the useful part for `Last Black Hole`.
+This is the useful part for `Last Singularity`.
 
 Itch gives you two clean ways to keep the page semi-private:
 
@@ -80,7 +80,7 @@ Apple's official stack lines up with the game's needs:
 - Metal for rendering and compute-heavy work: [Metal](https://developer.apple.com/documentation/metal)
 - Game Controller for pads, haptics, and controller discovery: [Supporting Game Controllers](https://developer.apple.com/documentation/gamecontroller/supporting-game-controllers)
 
-That makes a native macOS build plausible for `Last Black Hole`, especially because the game wants:
+That makes a native macOS build plausible for `Last Singularity`, especially because the game wants:
 
 - GPU-driven fluid and post-process work
 - strong fullscreen presentation
@@ -275,7 +275,7 @@ Do not overbuild deployment machinery before you know the game survives controll
 
 Steam Deck is unforgiving about bad controller assumptions.
 
-`Last Black Hole` needs:
+`Last Singularity` needs:
 
 - full controller navigation from launch to quit
 - readable HUD and text at handheld distance

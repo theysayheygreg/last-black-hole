@@ -1,6 +1,6 @@
 # Scaling: From Solo to Multiplayer, From Small to Vast
 
-> How Last Black Hole grows from a single-player jam game to a shared universe.
+> How Last Singularity grows from a single-player jam game to a shared universe.
 
 ---
 

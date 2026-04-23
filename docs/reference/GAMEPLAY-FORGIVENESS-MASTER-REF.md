@@ -101,7 +101,7 @@ Translating binary stick inputs into nuanced physics.
 
 ---
 
-## Final Takeaway for Last Black Hole
+## Final Takeaway for Last Singularity
 When implementing the **"Surfing" physics (Layer 0)**, don't rely on raw fluid dynamics.
 1.  **Affordance:** Use **Color Temperature** (e.g., teal current = fast, deep blue = sluggish) and **ASCII Weight** (dense `@` = high force) to guide the player's path.
 2.  **Magnetism:** If the player's ship is within a "Magnetic Radius" of a wave's center, subtly pull their trajectory into the "tube."

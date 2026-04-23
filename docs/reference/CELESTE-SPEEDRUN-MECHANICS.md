@@ -18,7 +18,7 @@ Celeste is built on a foundation of tight, responsive controls that prioritize "
     *   **Coyote Time:** A 5-frame window to jump after leaving a ledge.
     *   **Jump Buffering:** Allowing a jump input up to 4 frames before touching the ground.
 
-### Translation to Last Black Hole
+### Translation to Last Singularity
 - **Surfing "Extensions":** Just as Celeste has extended hypers, our "surfing" should have a mechanic for "perfect timing" when leaving a gravity wave to maintain velocity without burning fuel (or signal).
 - **Forgiveness:** In a fluid sim, precision can be hard. Implementing "velocity buffering" (aligning ship orientation just before hitting a wave) could make the controls feel "smarter" than raw physics.
 
@@ -32,7 +32,7 @@ Speedrunners use frame-perfect tricks to multiply their speed far beyond what th
 *   **Corner Boosting:** Jumping off the very top edge of a wall to maintain horizontal speed while gaining height. Literally "kicking" off the geometry.
 *   **Demo Dash (Crouch Dash):** Dashing with a smaller hitbox to pass through obstacles (spikes/dust bunnies) that would normally kill the player.
 
-### Translation to Last Black Hole
+### Translation to Last Singularity
 - **The "Slingshot" (Ultra Equivalent):** Catching a second gravity well while already moving at high velocity from a previous one should provide a multiplicative speed boost, not just additive.
 - **Wreck "Kicking":** Allowing the ship to "bounce" or "kick" off civilization wrecks to change direction without losing momentum. This turns obstacles into movement tools.
 
@@ -45,7 +45,7 @@ The video emphasizes that top-level speedrunning is about **routing** and **rhyt
 *   **Rhythm-Based Movement:** Speedrunners don't react; they perform a rehearsed sequence of frame-perfect inputs. The movement becomes a "dance."
 *   **Visual/Audio Cues:** Madeline's hair color changes to indicate dash availability. The sound of a successful wave dash provides immediate feedback.
 
-### Translation to Last Black Hole
+### Translation to Last Singularity
 - **Visual Feedback for Flow:** As the player maintains "surfing flow," the ASCII rendering could become "sharper" or shift color (e.g., from teal to bright cyan) to indicate they are in a high-efficiency movement state.
 - **Audio Feedback:** The ambient drone should hum in a specific harmonic when the player is perfectly aligned with a gravity wave.
 
@@ -58,7 +58,7 @@ Celeste's levels are designed to be "solved" with these mechanics.
 *   **The World as a Tool:** Every wall, bubble, and moving block is a potential momentum source.
 *   **Risk/Reward:** High-speed routes are more dangerous but faster.
 
-### Translation to Last Black Hole
+### Translation to Last Singularity
 - **The Universe as a Clock:** The "dying universe" (black hole growth, portal evaporation) is the ultimate pressure. High-skill movement isn't just for style; it's necessary to reach the last loot and get to the final portal before collapse.
 - **Scavenger AI:** Scavengers should use basic versions of these "surfing" tricks, but a high-skill player should be able to "out-surf" them to reach wrecks first.
 

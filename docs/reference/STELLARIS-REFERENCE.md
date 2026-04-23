@@ -1,4 +1,4 @@
-# Stellaris Design Reference for Last Black Hole
+# Stellaris Design Reference for Last Singularity
 
 > Comprehensive analysis of mechanics, design patterns, naming, and aesthetics.
 > What to steal, what to adapt, what to study.

@@ -8,7 +8,7 @@
 
 In Tarkov, noise doesn't have an upside. Shooting a gun is loud — that's bad. But the ACTION of shooting has upside: you kill the enemy, you get their loot, you secure the area. The noise is a tax on doing valuable things, not a currency that buys capability.
 
-This is how signal should work in Last Black Hole:
+This is how signal should work in Last Singularity:
 
 **Signal is the tax on ambition.**
 

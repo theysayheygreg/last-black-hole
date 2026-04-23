@@ -1,4 +1,4 @@
-# Last Black Hole
+# Last Singularity
 
 > Surfing spacetime on gravity waves out of a dying universe.
 
