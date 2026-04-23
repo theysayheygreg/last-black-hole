@@ -318,8 +318,9 @@ function init() {
   flowField = new FlowField(fluid);
   // Production chain: HDR ping-pong FBOs preserve the fluid display
   // shader's naturally out-of-range highlights, then tonemap compresses
-  // to LDR before ASCII quantizes. Bloom is deferred to prototype/title
-  // until a 5x5/10x10 perf pass — see docs/reference/RENDER-PIPELINE.md.
+  // to LDR before ASCII quantizes. The rich default is documented in
+  // docs/reference/RENDER-PIPELINE.md; ?minimalrender=1 keeps a cheap
+  // baseline for 5x5/10x10 perf comparisons.
   // Gameplay render chain. Default is the rich chain (Art-Is-Product
   // identity: bloom highlights, color grade, vignette, CRT aberration
   // + scanlines). Pass ?minimalrender=1 to fall back to the bare

@@ -31,9 +31,9 @@ Decision: the public product name is `Last Singularity`. The repository path can
 
 `docs/project/ROADMAP.md` and `docs/project/BUILD-PLAN.md` now present April 20 as the live current-status snapshot while preserving the historical jam plan below it.
 
-### Documented — Production renderer and prototype renderer differ by design
+### Superseded — Production renderer and prototype renderer differ by design
 
-The standalone title prototype runs `FluidDisplayPass → BloomPass → ASCIIPass`. The production game currently runs `FluidDisplayPass → ASCIIPass`. That is a valid performance choice, but docs and future agents should treat Bloom as prototype/title-specific unless we explicitly wire it into production with a config/perf budget.
+This April 20 note is superseded by the April 23 production chain. The game now defaults to the rich Composer chain and keeps `?minimalrender=1` as the cheap perf baseline. The standalone title prototype remains a focused visual probe, not the only Bloom path.
 
 Recommended next step: after 5x5/10x10 perf work, decide whether Bloom belongs in production behind a config flag.
 

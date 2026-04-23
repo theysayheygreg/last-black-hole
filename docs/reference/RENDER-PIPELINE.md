@@ -27,15 +27,18 @@ src/render/
 
 ## Current chains
 
-Both chains use the same Composer. They differ by one pass.
+All current visual lanes use the same Composer contract. Production now defaults
+to the rich chain; the minimal chain is an explicit perf baseline.
 
 | Surface                   | Chain                                                  |
 |---------------------------|--------------------------------------------------------|
-| Main game (`src/main.js`) | `FluidDisplayPass → ASCIIPass`                         |
-| Title prototype           | `FluidDisplayPass → BloomPass → ASCIIPass`             |
+| Main game default (`src/main.js`) | `FluidDisplayPass → BloomPass → TonemapPass → ColorGradePass → VignettePass → ASCIIPass → ChromaticAberrationPass → ScanlinesPass` |
+| Main game `?minimalrender=1`      | `FluidDisplayPass → TonemapPass → ASCIIPass` |
+| Title prototype                   | focused Composer/Bloom visual probe |
 
-Bloom is prototype/title-only by design for now. Production inclusion is
-gated on 5×5 / 10×10 perf work — see "Open questions" below.
+Production Bloom is now live but intentionally lower intensity than the title
+prototype. Use `?minimalrender=1` and `?disable=bloom,color-grade,vignette,chromatic-aberration,scanlines`
+when isolating perf or readability regressions.
 
 ## The Composer contract
 

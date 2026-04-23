@@ -1,7 +1,7 @@
 # Build Plan: Last Singularity
 
 > Originally the jam build plan (March 16-22, 2026).
-> Updated to reflect post-jam development through April 20.
+> Updated to reflect post-jam development through April 23.
 
 ---
 
@@ -44,7 +44,7 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 8. Hull ability client-side — keybindings, HUD cooldowns, visual effects
 9. Map seed system — entity catalog selection per run
 10. Continue content manifests — seeded-generation, item catalog, session profiles
-11. Decide whether Bloom remains title-prototype-only or becomes a perf-gated production pass after 5x5/10x10 frame budget work
+11. Tune the rich production Composer chain against 5x5/10x10 frame budgets and keep `?minimalrender=1` as the perf baseline
 
 ### Current constraints
 
@@ -55,7 +55,7 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - The control plane can stay lightweight and always-on for local work.
 - The sim is now demand-driven and auto-expiring by default; keep-alive is explicit, not accidental.
 - The design system exists in docs and has now started bridging into code, but most UI compliance still depends on human discipline.
-- Production rendering is intentionally cheaper than the title prototype today: gameplay uses `FluidDisplayPass -> ASCIIPass`, while the title prototype owns the Bloom canary.
+- Production rendering now defaults to the rich Composer chain; `?minimalrender=1` is the cheap comparison path for perf triage.
 
 ### L6: The Ship (Not Yet Started)
 - Balance pass (hull coefficients, upgrade costs, loot rarity, signal tuning)

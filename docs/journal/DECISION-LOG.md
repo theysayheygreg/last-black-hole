@@ -1063,8 +1063,10 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 | Apr 12 | First productization slice lands: runtime modes become first-class (`local-browser`, `local-host`, `remote-client`), `scripts/stack.js` becomes the canonical launch/status surface, and the first HUD token/primitives bridge moves pieces of `DESIGN-SYSTEM.md` into implementation code. |
 | Apr 20 | Public product identity is now **Last Singularity**. The repo path may stay `last-black-hole` as a location detail, but app chrome, package metadata, build artifacts, nightly assets, and current project docs should use Last Singularity. |
-| Apr 20 | Renderer contract is explicit: production gameplay keeps the cheaper `FluidDisplayPass -> ASCIIPass` chain for current 5x5/10x10 perf work, while `title-prototype.html` owns the richer `FluidDisplayPass -> BloomPass -> ASCIIPass` visual canary. Bloom can move into production later only with a config/perf budget. |
+| Apr 20 | Renderer contract snapshot: production gameplay kept a cheaper `FluidDisplayPass -> ASCIIPass` chain while `title-prototype.html` owned the richer Bloom visual canary. Superseded by Apr 23. |
 | Apr 20 | Chronicle echoes are loot-bearing by contract. The sim only builds echoes from non-empty death cargo, and the control plane now rejects/filter empty-loot echo records so stale or malformed data cannot create misleading empty wrecks. |
+| Apr 23 | Renderer contract update: production gameplay now defaults to the rich Composer chain (`FluidDisplayPass -> BloomPass -> TonemapPass -> ColorGradePass -> VignettePass -> ASCIIPass -> ChromaticAberrationPass -> ScanlinesPass`) and keeps `?minimalrender=1` as the explicit cheap perf baseline. |
+| Apr 23 | Packaged desktop authority should be app-owned and session-local: Electron embedded control/sim processes use dynamic loopback ports with identity checks, not fixed dev/test ports, and macOS dock reopen restarts authority before loading the renderer. |
 
 
 ## Persistence and Control Plane Architecture

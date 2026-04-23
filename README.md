@@ -86,7 +86,7 @@ npm install
 npm run play
 ```
 
-that's it. `npm run play` is the canonical launch — it brings up the local stack (control plane, sim server, dev server) and opens the game in a dedicated **Electron window**. the window enforces a minimum content size (960×540) so the game always loads at a playable resolution and cannot be dragged below the render minimum. `npm run stop` shuts the stack down when you're done.
+that's it. `npm run play` is the canonical launch — it brings up the local stack (control plane, sim server, dev server) and opens the game in a dedicated **Electron window**. the window is a fixed 16:9 1440×810 and is not resizable — the game is an authored experience, not a webview. fullscreen is still available via the OS shortcut (macOS Cmd+Ctrl+F). `npm run stop` shuts the stack down when you're done.
 
 ### what npm run play does
 under the hood, three processes run: a control plane (persistence), a sim server (game authority), and a dev server (static files). `npm run play` handles them and then launches an Electron window pointed at the dev server. the individual commands, if you want to run them by hand:
@@ -147,7 +147,7 @@ node scripts/build-health.js status
 
 ## tech stack
 
-- **rendering:** WebGL 2 (navier-stokes fluid sim + LBH-native Composer passes; gameplay uses fluid display → ASCII, title prototype adds Bloom as a visual canary)
+- **rendering:** WebGL 2 (navier-stokes fluid sim + LBH-native Composer passes; gameplay defaults to the rich Composer chain with a `?minimalrender=1` perf baseline)
 - **game logic:** vanilla JS, ES modules, no framework
 - **sim server:** node.js HTTP server (authoritative game state)
 - **audio:** Web Audio API synthesis (oscillators, noise, filters — no sample files)

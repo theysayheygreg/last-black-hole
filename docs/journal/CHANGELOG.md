@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-04-23 — Harness and embedded desktop lifecycle hardening
+
+- Fixed the Puppeteer harness server teardown race by waiting for the transient static server process to exit before the next suite reuses port `8719`.
+- Hardened packaged Electron play: embedded control/sim processes now use app-owned dynamic loopback ports with identity checks instead of colliding with local dev/test stacks on fixed ports.
+- Repaired macOS dock-reopen behavior so closing and reopening the packaged app restarts embedded authority before loading the renderer.
+- Updated renderer docs for the current rich production Composer chain and kept `?minimalrender=1` documented as the perf baseline.
+- Refreshed `BUILD-HEALTH.json`; `npm test`, renderer fixtures, and the title-prototype probe are green on current `main`.
+
 ## 2026-04-20 — Keyboard + mouse controls are real runtime input
 
 - Repaired the browser-install control path: mouse aim now flows through `InputManager`, left click applies distance-scaled thrust, right click brakes, and W/S/Space/Ctrl provide keyboard equivalents for players without a Bluetooth controller.
@@ -26,7 +34,7 @@
 - Chose **Last Singularity** as the public product name and swept runtime-adjacent packaging, nightly assets, build output names, and user-facing project docs to match it while leaving the repository path as `last-black-hole`.
 - Hardened chronicle echo persistence at the control-plane boundary: empty-loot echoes are rejected on save and filtered on read, so old or bad records cannot hydrate as misleading lootless wrecks.
 - Confirmed echo lookup is scoped by `(mapId, seed)` and that remote snapshots expose the authoritative inhibitor `threshold` and `pressureFrac` used by client haunt timing.
-- Updated the current roadmap/build-plan snapshot for April 20 and documented the intentional renderer split: gameplay runs `FluidDisplayPass -> ASCIIPass`, while the standalone title prototype owns the richer `FluidDisplayPass -> BloomPass -> ASCIIPass` canary.
+- Updated the current roadmap/build-plan snapshot for April 20 and documented the then-current renderer split. Superseded on April 23 by the rich production Composer chain plus `?minimalrender=1` baseline.
 - Added `npm run test:title-prototype` to the official build-health verifier alongside `npm test` and renderer fixtures.
 
 ## 2026-04-13 — Telemetry-aware smoke harness + build-health alignment

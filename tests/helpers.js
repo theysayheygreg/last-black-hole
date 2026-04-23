@@ -1,5 +1,5 @@
 const puppeteer = require("puppeteer");
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
@@ -20,6 +20,26 @@ let serverProcess = null;
 const startedSimPorts = new Set();
 const startedControlPorts = new Set();
 let cleanupRegistered = false;
+
+function waitForPidExitSync(pid, timeoutMs = 2500) {
+  if (!pid) return;
+  const script = `
+    const pid = Number(process.argv[1]);
+    const deadline = Date.now() + Number(process.argv[2]);
+    function alive() {
+      try { process.kill(pid, 0); return true; }
+      catch { return false; }
+    }
+    while (alive() && Date.now() < deadline) {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+    process.exit(alive() ? 1 : 0);
+  `;
+  spawnSync(process.execPath, ["-e", script, String(pid), String(timeoutMs)], {
+    stdio: "ignore",
+    timeout: timeoutMs + 500,
+  });
+}
 
 function registerProcessCleanup() {
   if (cleanupRegistered) return;
@@ -43,6 +63,7 @@ function registerProcessCleanup() {
  */
 async function startServer() {
   return new Promise((resolve, reject) => {
+    stopServer();
     fs.mkdirSync(TMP, { recursive: true });
     fs.rmSync(LOG_FILE, { force: true });
     fs.writeFileSync(LOG_FILE, "", "utf8");
@@ -61,6 +82,7 @@ async function startServer() {
     });
 
     let started = false;
+    let exited = false;
 
     serverProcess.stderr.on("data", (data) => {
       const msg = data.toString();
@@ -82,10 +104,16 @@ async function startServer() {
     });
 
     serverProcess.on("error", reject);
+    serverProcess.on("close", (code, signal) => {
+      exited = true;
+      if (!started) {
+        reject(new Error(`Harness server exited before ready (code=${code}, signal=${signal}). See ${LOG_FILE}.`));
+      }
+    });
 
     // Fallback: assume ready after 1.5s if no log detected
     setTimeout(() => {
-      if (!started) {
+      if (!started && !exited) {
         started = true;
         resolve();
       }
@@ -95,7 +123,9 @@ async function startServer() {
 
 function stopServer() {
   if (serverProcess) {
+    const pid = serverProcess.pid;
     serverProcess.kill();
+    waitForPidExitSync(pid);
     serverProcess = null;
   }
   for (const file of [PID_FILE, META_FILE, LOG_FILE]) {

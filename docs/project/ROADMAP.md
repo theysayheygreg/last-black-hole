@@ -6,9 +6,9 @@
 
 ---
 
-## Current Status (2026-04-20)
+## Current Status (2026-04-23)
 
-**Version:** 0.2.0 — Last Singularity product-name sweep, server-authoritative sim, Composer renderer, control plane, entity ecology, and ship classes
+**Version:** 0.2.0 — Last Singularity product-name sweep, server-authoritative sim, Composer renderer, control plane, entity ecology, ship classes, packaged desktop play, and keyboard/mouse parity
 
 ### What's Built
 
@@ -36,8 +36,8 @@
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | DESIGNED | Schema in META-LOOP.md, not yet implemented in persistence write-back |
-| Nightly playables | GREEN | Scheduled workflow builds web, Windows, and macOS release assets only when the repo SHA changed |
-| Build health gate | GREEN | `npm test`, renderer fixtures, and title-prototype Composer probe are tracked in `BUILD-HEALTH.json` |
+| Nightly playables | GREEN | Latest scheduled workflow is green on `7e138cd`; web, Windows, and macOS release assets build only when the repo SHA changed |
+| Build health gate | GREEN | `npm test`, renderer fixtures, and title-prototype Composer probe were refreshed on `7e138cd` |
 
 ### What's Designed (Not Yet Implemented)
 
@@ -78,8 +78,8 @@
 - The shipped loadout contract is still `2 equipped + 2 consumable` slots.
 - The older `3 artifact slots` idea remains a design/backlog item, not live runtime truth.
 - Public product name is **Last Singularity**. The repository path may remain `last-black-hole` until/unless the remote is renamed.
-- Production renderer chain is `FluidDisplayPass -> ASCIIPass` for perf. The standalone title prototype intentionally runs `FluidDisplayPass -> BloomPass -> ASCIIPass` as a richer visual canary.
-- Packaged desktop builds are now self-contained local apps with embedded authority.
+- Production renderer defaults to `FluidDisplayPass -> BloomPass -> TonemapPass -> ColorGradePass -> VignettePass -> ASCIIPass -> ChromaticAberrationPass -> ScanlinesPass`; `?minimalrender=1` gives the cheaper `FluidDisplayPass -> TonemapPass -> ASCIIPass` baseline.
+- Packaged desktop builds are now self-contained local apps with embedded authority on app-owned dynamic loopback ports.
 - Browser remote play still expects separate authority processes.
 - The control plane is allowed to stay hot locally.
 - The sim no longer stays hot by default with zero human clients: it idles cheaply, auto-stops after a grace window, and only stays alive intentionally when started with keep-alive.

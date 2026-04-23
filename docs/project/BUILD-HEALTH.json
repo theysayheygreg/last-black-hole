@@ -1,33 +1,44 @@
 {
   "ok": true,
-  "recordedAt": "2026-04-20T21:09:46.932Z",
+  "recordedAt": "2026-04-23T19:52:45.649Z",
   "branch": "main",
-  "gitHead": "d5b426ca684a311daee82a6411add1a363cca087",
+  "gitHead": "7e138cd9f85766760945696d92992419453ae780",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 164912
+      "durationMs": 215452
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 37825
+      "durationMs": 43675
     },
     {
       "name": "title-prototype",
       "command": "npm run test:title-prototype",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 5171
+      "durationMs": 8060
     }
   ],
   "dirtyPaths": [
-    "M docs/project/BUILD-HEALTH.json",
+    "M README.md",
+    " M desktop/electron-main.cjs",
+    " M docs/design/DESIGN.md",
+    " M docs/design/SCALING.md",
+    " M docs/design/SIGNAL-DESIGN.md",
+    " M docs/project/2026-04-20-project-review.md",
+    " M docs/project/BUILD-PLAN.md",
+    " M docs/project/ROADMAP.md",
+    " M docs/reference/PLATFORM-TARGETS.md",
+    " M docs/reference/RENDER-PIPELINE.md",
+    " M src/main.js",
+    " M tests/helpers.js",
     "?? .claude/",
     "?? _artifacts/",
     "?? handoffs/",
