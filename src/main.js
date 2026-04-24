@@ -23,6 +23,8 @@ import { InputManager } from './input.js';
 import { Composer } from './render/composer.js';
 import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
+import { GainPass } from './render/passes/gain-pass.js';
+import { AccretionPass } from './render/passes/accretion-pass.js';
 import { TonemapPass } from './render/passes/tonemap-pass.js';
 import { ASCIIPass } from './render/passes/ascii-pass.js';
 import { BloomPass } from './render/passes/bloom-pass.js';
@@ -83,6 +85,40 @@ let flowField, simCore;
 let simClient = null;
 let currentSignature = null;
 let inputManager, composer, fluidDisplayPass, tonemapPass, asciiPass;
+let fluidGainPass = null;
+let accretionPass = null;
+let bloomPass = null;
+let vignettePass = null;
+let chromaticAberrationPass = null;
+let scanlinesPass = null;
+// Per-well [coreR, peakR, outerR] in world-space for AccretionPass.
+// Recomputed whenever the scene loads. Title composition uses authored
+// radii so the full temperature ramp fits the frame; gameplay uses
+// zero-strength accretion so these radii never actually paint.
+let sceneAccretionRadii = [];
+// Title-only render tuning — matches the title-prototype. Applied every
+// frame when gamePhase === 'title' and reverted to gameplay dials otherwise.
+const TITLE_RENDER_TUNING = {
+  fluidGain: 0.15,
+  accretionStrength: 1.0,
+  bloom: { threshold: 0.8, knee: 0.25, strength: 1.1, blurRadius: 4.5 },
+  vignette: { strength: 1.05, radius: 0.35, softness: 0.55 },
+  chromaticAberration: { strength: 0.005, falloff: 2.4 },
+  scanlines: { intensity: 0.22, frequency: 1.5 },
+};
+const GAMEPLAY_RENDER_TUNING = {
+  fluidGain: 1.0,
+  accretionStrength: 0.0,
+  bloom: { threshold: 0.90, knee: 0.3, strength: 0.75, blurRadius: 3.0 },
+  vignette: { strength: 0.6, radius: 0.45, softness: 0.65 },
+  chromaticAberration: { strength: 0.002, falloff: 2.8 },
+  scanlines: { intensity: 0.09, frequency: 1.5 },
+};
+// Title camera drift (lissajous). Small amplitude, long periods —
+// subtle motion to keep the frame alive without distracting.
+const TITLE_CAMERA_DRIFT_AMPLITUDE = 0.03;
+const TITLE_CAMERA_DRIFT_PERIOD_X = 22;
+const TITLE_CAMERA_DRIFT_PERIOD_Y = 17;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -350,13 +386,19 @@ function init() {
     composer.add(tonemapPass);
     composer.add(asciiPass);
   } else {
-    // Gameplay post-processing. Values dialed below title intensity so
-    // CRT identity reads without obscuring ASCII gameplay signal.
-    const bloomPass = new BloomPass(gl, {
-      threshold: 0.90,    // only true highlights (HDR rings near peak)
-      knee: 0.3,
-      strength: 0.75,
-      blurRadius: 3.0,
+    // Gameplay post-processing. Defaults match GAMEPLAY_RENDER_TUNING;
+    // title phase mutates the same passes to TITLE_RENDER_TUNING each
+    // frame (see applyRenderTuningForPhase). FluidGain + Accretion live
+    // in the chain unconditionally — gain=1 / strength=0 during gameplay
+    // makes them cheap no-ops, and flipping to title values needs no
+    // chain rebuild.
+    fluidGainPass = new GainPass({ gain: GAMEPLAY_RENDER_TUNING.fluidGain, name: 'fluid-gain' });
+    accretionPass = new AccretionPass({ strength: GAMEPLAY_RENDER_TUNING.accretionStrength });
+    bloomPass = new BloomPass(gl, {
+      threshold: GAMEPLAY_RENDER_TUNING.bloom.threshold,
+      knee: GAMEPLAY_RENDER_TUNING.bloom.knee,
+      strength: GAMEPLAY_RENDER_TUNING.bloom.strength,
+      blurRadius: GAMEPLAY_RENDER_TUNING.bloom.blurRadius,
       scale: 0.5,
     });
     const colorGradePass = new ColorGradePass({
@@ -366,15 +408,27 @@ function init() {
       highlightStrength: 0.25,
     });
     // Vignette softened — gameplay needs peripheral visibility for threats.
-    const vignettePass = new VignettePass({ strength: 0.6, radius: 0.45, softness: 0.65 });
+    vignettePass = new VignettePass({
+      strength: GAMEPLAY_RENDER_TUNING.vignette.strength,
+      radius: GAMEPLAY_RENDER_TUNING.vignette.radius,
+      softness: GAMEPLAY_RENDER_TUNING.vignette.softness,
+    });
     // Aberration near-subliminal — CRT lens hint at corners only.
-    const chromaticAberrationPass = new ChromaticAberrationPass({ strength: 0.002, falloff: 2.8 });
+    chromaticAberrationPass = new ChromaticAberrationPass({
+      strength: GAMEPLAY_RENDER_TUNING.chromaticAberration.strength,
+      falloff: GAMEPLAY_RENDER_TUNING.chromaticAberration.falloff,
+    });
     // Scanlines subtle — not over the glyphs.
-    const scanlinesPass = new ScanlinesPass({ intensity: 0.09, frequency: 1.5 });
+    scanlinesPass = new ScanlinesPass({
+      intensity: GAMEPLAY_RENDER_TUNING.scanlines.intensity,
+      frequency: GAMEPLAY_RENDER_TUNING.scanlines.frequency,
+    });
     // ASCII is mid-chain; last kept pass must be terminal.
     asciiPass.rendersToScreen = false;
     const fullChain = [
       { pass: fluidDisplayPass, kind: 'core' },
+      { pass: fluidGainPass, kind: 'core' },
+      { pass: accretionPass, kind: 'core' },
       { pass: bloomPass, kind: 'post' },
       { pass: tonemapPass, kind: 'core' },
       { pass: colorGradePass, kind: 'post' },
@@ -723,6 +777,31 @@ function loadScene(map) {
 
   // 8. Seed fresh fluid
   seedInitialFluid();
+
+  // 9. Compute per-well accretion radii used by AccretionPass on the
+  //    title screen. Radii key the visible temperature ramp to the
+  //    frame — not to gameplay hit radii. Gameplay runs with
+  //    strength=0 so these never paint, but we populate them anyway
+  //    so context is always valid.
+  sceneAccretionRadii = wellSystem.wells.map(() => [0.07, 0.30, 0.52]);
+}
+
+function applyRenderTuningForPhase(isTitle) {
+  if (!fluidGainPass) return;  // minimal chain — nothing to tune
+  const t = isTitle ? TITLE_RENDER_TUNING : GAMEPLAY_RENDER_TUNING;
+  fluidGainPass.gain = t.fluidGain;
+  accretionPass.strength = t.accretionStrength;
+  bloomPass.threshold = t.bloom.threshold;
+  bloomPass.knee = t.bloom.knee;
+  bloomPass.strength = t.bloom.strength;
+  bloomPass.blurRadius = t.bloom.blurRadius;
+  vignettePass.strength = t.vignette.strength;
+  vignettePass.radius = t.vignette.radius;
+  vignettePass.softness = t.vignette.softness;
+  chromaticAberrationPass.strength = t.chromaticAberration.strength;
+  chromaticAberrationPass.falloff = t.chromaticAberration.falloff;
+  scanlinesPass.intensity = t.scanlines.intensity;
+  scanlinesPass.frequency = t.scanlines.frequency;
 }
 
 /**
@@ -1756,8 +1835,20 @@ function restart() {
 
 function applySceneCamera(dt) {
   if (currentCameraMode === 'locked') {
-    camX = currentMap.worldScale / 2;
-    camY = currentMap.worldScale / 2;
+    const cx = currentMap.worldScale / 2;
+    const cy = currentMap.worldScale / 2;
+    // Title phase gets a subtle lissajous drift on top of the locked
+    // center — traces a closed loop thanks to the two different
+    // periods, keeps the frame alive without distracting from the
+    // composition. Two separate sources (title vs. renderer fixture)
+    // both sit on 'locked' maps, only the title actually drifts.
+    if (gamePhase === 'title' && !rendererFixtureActive) {
+      camX = cx + Math.sin((totalTime / TITLE_CAMERA_DRIFT_PERIOD_X) * Math.PI * 2) * TITLE_CAMERA_DRIFT_AMPLITUDE;
+      camY = cy + Math.cos((totalTime / TITLE_CAMERA_DRIFT_PERIOD_Y) * Math.PI * 2) * TITLE_CAMERA_DRIFT_AMPLITUDE;
+    } else {
+      camX = cx;
+      camY = cy;
+    }
     return;
   }
   updateCamera(dt);
@@ -2591,6 +2682,7 @@ function gameLoop(now) {
     };
   }
   const a = CONFIG.ascii;
+  applyRenderTuningForPhase(gamePhase === 'title');
   composer.render({
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
@@ -2598,6 +2690,12 @@ function gameLoop(now) {
       worldScale: WORLD_SCALE,
       totalTime,
       inhibitorData: inhData,
+    },
+    accretion: {
+      wellUVs,
+      wellRadii: sceneAccretionRadii,
+      camFU, camFV,
+      worldScale: WORLD_SCALE,
     },
     ascii: {
       velocityTex: fluid.velocity.read.tex,
