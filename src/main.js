@@ -114,6 +114,75 @@ const GAMEPLAY_RENDER_TUNING = {
   chromaticAberration: { strength: 0.002, falloff: 2.8 },
   scanlines: { intensity: 0.09, frequency: 1.5 },
 };
+const PERF_SMOOTHING = 0.12;
+const perfStats = {
+  frameMs: 0,
+  simMs: 0,
+  composerMs: 0,
+  overlayMs: 0,
+  visibleWellCount: 0,
+  totalWellCount: 0,
+  fluidResolution: 0,
+  composerPasses: [],
+};
+
+function recordPerfStat(key, ms) {
+  const prev = perfStats[key] || 0;
+  perfStats[key] = prev === 0 ? ms : prev + (ms - prev) * PERF_SMOOTHING;
+}
+
+function getVisibleWellRenderInputs(cameraX, cameraY) {
+  const allUVs = wellSystem.getUVPositions();
+  const allMasses = wellSystem.getUVMasses();
+  const allShapes = wellSystem.getRenderShapes();
+  if (gamePhase === 'title' || rendererFixtureActive || allUVs.length <= 8) {
+    return { wellUVs: allUVs, wellMasses: allMasses, wellShapes: allShapes };
+  }
+
+  const visibleUVs = [];
+  const visibleMasses = [];
+  const visibleShapes = [];
+  const included = new Set();
+  const nearest = [];
+  const halfView = 0.5;
+
+  for (let i = 0; i < wellSystem.wells.length; i++) {
+    const well = wellSystem.wells[i];
+    const shape = allShapes[i] || [0.01, 0.02, 0.03, 1.0];
+    const [dx, dy] = worldDisplacement(cameraX, cameraY, well.wx, well.wy);
+    const dist = Math.hypot(dx, dy);
+    nearest.push({ index: i, dist });
+    const margin = Math.max(0.35, shape[2] * 1.4);
+    if (Math.abs(dx) <= halfView + margin && Math.abs(dy) <= halfView + margin) {
+      visibleUVs.push(allUVs[i]);
+      visibleMasses.push(allMasses[i]);
+      visibleShapes.push(shape);
+      included.add(i);
+    }
+  }
+
+  nearest.sort((a, b) => a.dist - b.dist);
+  for (const candidate of nearest) {
+    if (visibleUVs.length >= 2) break;
+    if (included.has(candidate.index)) continue;
+    visibleUVs.push(allUVs[candidate.index]);
+    visibleMasses.push(allMasses[candidate.index]);
+    visibleShapes.push(allShapes[candidate.index] || [0.01, 0.02, 0.03, 1.0]);
+    included.add(candidate.index);
+  }
+
+  if (visibleUVs.length === 0 && allUVs.length > 0) {
+    for (let i = 0; i < Math.min(2, allUVs.length); i++) {
+      visibleUVs.push(allUVs[i]);
+      visibleMasses.push(allMasses[i]);
+      visibleShapes.push(allShapes[i] || [0.01, 0.02, 0.03, 1.0]);
+    }
+  }
+
+  perfStats.visibleWellCount = visibleUVs.length;
+  perfStats.totalWellCount = allUVs.length;
+  return { wellUVs: visibleUVs, wellMasses: visibleMasses, wellShapes: visibleShapes };
+}
 // Title camera drift (lissajous). Small amplitude, long periods —
 // subtle motion to keep the frame alive without distracting.
 const TITLE_CAMERA_DRIFT_AMPLITUDE = 0.03;
@@ -153,6 +222,7 @@ let remoteSessionRequestInFlight = false;
 let remoteSessionLastFetchedAt = 0;
 let remotePendingPulse = false;
 let remotePendingConsumeSlot = null;
+let remoteShipPresentation = null;
 let startingMasses = [];
 let mapSelectIndex = 0;
 
@@ -573,6 +643,7 @@ function init() {
       canvasHeight: glCanvas.height,
       camX, camY,
       fps,
+      perfStats,
       setTimeScale: (s) => { timeScale = s; },
       loadTitleScene,
       loadRendererFixture,
@@ -876,6 +947,7 @@ function startGame(map, seed = null) {
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remoteShipPresentation = null;
   remoteFauna = [];
   remoteSentries = [];
   rendererFixtureActive = false;
@@ -968,6 +1040,9 @@ function applyRemoteInventoryShape(localPlayer) {
 
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
+  const duplicateSnapshot = remoteSnapshot &&
+    snapshot.tick === remoteSnapshot.tick &&
+    snapshot.simTime === remoteSnapshot.simTime;
   // First snapshot received — transition from loading to playing
   if (gamePhase === 'loading') {
     gamePhase = 'playing';
@@ -993,9 +1068,9 @@ function applyRemoteSnapshot(snapshot) {
   const localPlayer = snapshot.players?.find((player) => player.clientId === simClient?.clientId);
   if (!localPlayer) return;
 
-  ship.teleport(localPlayer.wx, localPlayer.wy);
-  ship.vx = localPlayer.vx;
-  ship.vy = localPlayer.vy;
+  if (!duplicateSnapshot) {
+    updateRemoteShipTarget(localPlayer, snapshot);
+  }
 
   applyRemoteInventoryShape(localPlayer);
   shieldActive = Boolean(localPlayer.effectState?.shieldCharges > 0);
@@ -1034,6 +1109,45 @@ function applyRemoteSnapshot(snapshot) {
     freezeRunEnd(simState);
     ship.setThrust(false);
   }
+}
+
+function updateRemoteShipTarget(localPlayer, snapshot) {
+  const target = {
+    wx: localPlayer.wx,
+    wy: localPlayer.wy,
+    vx: localPlayer.vx || 0,
+    vy: localPlayer.vy || 0,
+    receivedAt: performance.now(),
+    simTime: snapshot.simTime ?? 0,
+  };
+  const needsSnap = !remoteShipPresentation ||
+    gamePhase === 'loading' ||
+    worldDistance(ship.wx, ship.wy, target.wx, target.wy) > 0.75;
+
+  remoteShipPresentation = target;
+  ship.vx = target.vx;
+  ship.vy = target.vy;
+  if (needsSnap) {
+    ship.teleport(target.wx, target.wy);
+  }
+}
+
+function updateRemoteShipPresentation(dt) {
+  if (!remoteAuthorityActive || !remoteShipPresentation) return;
+  const elapsed = Math.min(0.25, Math.max(0, (performance.now() - remoteShipPresentation.receivedAt) / 1000));
+  const targetX = wrapWorld(remoteShipPresentation.wx + remoteShipPresentation.vx * elapsed);
+  const targetY = wrapWorld(remoteShipPresentation.wy + remoteShipPresentation.vy * elapsed);
+  const [dx, dy] = worldDisplacement(ship.wx, ship.wy, targetX, targetY);
+  const distance = Math.hypot(dx, dy);
+  if (distance > 0.75) {
+    ship.teleport(targetX, targetY);
+  } else {
+    const blend = 1 - Math.exp(-18 * dt);
+    ship.wx = wrapWorld(ship.wx + dx * blend);
+    ship.wy = wrapWorld(ship.wy + dy * blend);
+  }
+  ship.vx = remoteShipPresentation.vx;
+  ship.vy = remoteShipPresentation.vy;
 }
 
 function currentRemoteControlState() {
@@ -1705,6 +1819,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remoteShipPresentation = null;
 
   loadScene(targetMapEntry.map);
   currentSignature = rollSignature(targetMapEntry.map.worldScale);
@@ -1762,6 +1877,7 @@ function transitionToRemoteGame(mapEntry, options = {}) {
       remoteSnapshot = null;
       remotePlayers = [];
       remoteSessionHealth = null;
+      remoteShipPresentation = null;
       startGame(mapEntry.map, previewSeed);
     });
   });
@@ -1798,6 +1914,7 @@ async function leaveRemoteSessionToHome() {
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remoteShipPresentation = null;
 }
 
 async function restartRemoteSession() {
@@ -1818,6 +1935,7 @@ async function restartRemoteSession() {
   remoteLastEventSeq = 0;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remoteShipPresentation = null;
   applyRemoteSnapshot(snapshot);
   gamePhase = 'playing';
   deathTimer = 0;
@@ -1976,6 +2094,7 @@ function applyConsumableEffect(effectId) {
 
 function gameLoop(now) {
   if (!running) return;
+  const frameStart = performance.now();
 
   const rawDt = (now - lastFrameTime) / 1000;
   lastFrameTime = now;
@@ -2013,11 +2132,14 @@ function gameLoop(now) {
 
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
+    const simStart = performance.now();
     simCore.update(simState, {
       frameDt: dt,
       totalTime,
       inMenu: inMenu || remoteVisualMode,
       visualOnly: remoteVisualMode,
+      camX,
+      camY,
     });
     if (remoteVisualMode) {
       combatSystem.update(dt);
@@ -2025,6 +2147,7 @@ function gameLoop(now) {
       waveRings.update(dt);
       waveRings.injectIntoFluid(fluid);
     }
+    recordPerfStat('simMs', performance.now() - simStart);
 
   } // end paused check
 
@@ -2620,7 +2743,11 @@ function gameLoop(now) {
     }
     }
 
-    // Update camera (after ship update)
+    // Remote snapshots arrive at server cadence; presentation runs every
+    // render frame so authoritative movement does not appear quantized.
+    updateRemoteShipPresentation(dt);
+
+    // Update camera (after ship update / remote presentation)
     applySceneCamera(dt);
 
   } else {
@@ -2664,9 +2791,11 @@ function gameLoop(now) {
   }
 
   // 7. Render fluid -> ASCII (camera-aware)
-  const wellUVs = wellSystem.getUVPositions();
-  const wellMasses = wellSystem.getUVMasses();
-  const wellShapes = wellSystem.getRenderShapes();
+  const { wellUVs, wellMasses, wellShapes } = getVisibleWellRenderInputs(camX, camY);
+  perfStats.visibleWellCount = wellUVs.length;
+  perfStats.totalWellCount = wellSystem.wells.length;
+  perfStats.fluidResolution = fluid?.res || 0;
+  perfStats.composerPasses = composer?.passes?.map((p) => p.name) || [];
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
   // Inhibitor shader data
@@ -2683,6 +2812,7 @@ function gameLoop(now) {
   }
   const a = CONFIG.ascii;
   applyRenderTuningForPhase(gamePhase === 'title');
+  const composerStart = performance.now();
   composer.render({
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
@@ -2710,8 +2840,10 @@ function gameLoop(now) {
       totalTime,
     },
   });
+  recordPerfStat('composerMs', performance.now() - composerStart);
 
   // 8. Render overlay
+  const overlayStart = performance.now();
   ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
 
   // Loading screen — shown between map select and first snapshot
@@ -4302,6 +4434,8 @@ function gameLoop(now) {
     ctx.restore();
   }
 
+  recordPerfStat('overlayMs', performance.now() - overlayStart);
+  recordPerfStat('frameMs', performance.now() - frameStart);
   requestAnimationFrame(gameLoop);
 }
 

@@ -5,6 +5,16 @@
 export const MAP = {
   name: 'The Expanse',
   worldScale: 5.0,
+  fluidResolution: 256,
+  configOverrides: {
+    sim: {
+      fixedHz: 30,
+      maxStepsPerFrame: 3,
+    },
+    fluid: {
+      pressureIterations: 24,
+    },
+  },
   wells: [
     // Central cluster — the main arena
     { x: 2.5, y: 2.5, mass: 2.0, orbitalDir: 1, killRadius: 0.07, spinRate: 0.5, points: 10 },

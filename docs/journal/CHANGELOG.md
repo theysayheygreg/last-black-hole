@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-04-24 — Large-map client performance pass
+
+- Added `tests/perf-probe.js` and `npm run test:perf` as a diagnostic, non-CI harness for 3x3/5x5/10x10 FPS, smoothed frame timings, render-chain shape, visible well count, and authoritative snapshot payload size.
+- Added `window.__TEST_API.getPerfStats()` so playtest and browser tooling can separate local sim time, composer time, overlay time, fluid resolution, and render-well culling state.
+- Moved 5x5 and 10x10 onto explicit client-side sim profiles: 5x5 now runs local visual/gameplay sim at 30 Hz with a cheaper pressure solve, and 10x10 runs at 15 Hz with a 256² fluid field and lighter pressure solve.
+- Added render-only well culling for the fluid display shader. Large maps now send only view-intersecting wells plus the nearest two wells to the shader, while physics/death checks still see all wells.
+- Fixed the missing camera handoff from `SimCore` into object fluid injection. Existing wreck/portal culling now actually runs, and comet wake/trail splats are skipped offscreen.
+- Added remote ship presentation smoothing so low-cadence authoritative snapshots no longer pin the local ship to stutter steps between server packets.
+- Updated `docs/reference/PERF-ANALYSIS.md` with current numbers: 5x5 and 10x10 are both back near 60 FPS in the probe without raising large-map sim ticks back to 60 Hz.
+- Confirmed authoritative snapshots are still whole-world payloads: roughly 22 KB for 3x3, 41 KB for 5x5, and 82 KB for 10x10 at current server snapshot rates.
+
 ## 2026-04-23 — Harness and embedded desktop lifecycle hardening
 
 - Fixed the Puppeteer harness server teardown race by waiting for the transient static server process to exit before the next suite reuses port `8719`.

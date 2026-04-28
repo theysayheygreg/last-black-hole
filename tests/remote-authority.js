@@ -272,6 +272,47 @@ async function run() {
       assert(moved > 0.0001, `Expected ship movement under remote authority, got ${moved}`);
     });
 
+    await runner.run("Remote ship presentation moves between authoritative snapshots", async () => {
+      await page.evaluate(() => {
+        window.dispatchEvent(new KeyboardEvent("keydown", {
+          code: "Space",
+          key: " ",
+          bubbles: true,
+        }));
+      });
+      await sleep(500);
+
+      const samples = await page.evaluate(async () => {
+        const out = [];
+        const until = performance.now() + 420;
+        while (performance.now() < until) {
+          out.push({
+            tick: window.__TEST_API.getNetworkState().remoteTick,
+            pos: window.__TEST_API.getShipPos(),
+          });
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+        return out;
+      });
+
+      await page.evaluate(() => {
+        window.dispatchEvent(new KeyboardEvent("keyup", {
+          code: "Space",
+          key: " ",
+          bubbles: true,
+        }));
+      });
+
+      const movingFrames = samples.slice(1).filter((sample, index) => {
+        const prev = samples[index];
+        return Math.hypot(sample.pos.x - prev.pos.x, sample.pos.y - prev.pos.y) > 0.00001;
+      }).length;
+      const tickChanges = samples.slice(1).filter((sample, index) => sample.tick !== samples[index].tick).length;
+
+      assert(samples.length >= 10, `Expected presentation frame samples, got ${samples.length}`);
+      assert(movingFrames > tickChanges + 3, `Expected smooth presentation movement between server ticks, got movingFrames=${movingFrames}, tickChanges=${tickChanges}`);
+    });
+
     await runner.run("Remote consumables are consumed by the authoritative sim protocol", async () => {
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
       const seq = Date.now();

@@ -40,7 +40,7 @@ export class SimCore {
     ];
   }
 
-  update(simState, { frameDt, totalTime, inMenu, visualOnly = false }) {
+  update(simState, { frameDt, totalTime, inMenu, visualOnly = false, camX = null, camY = null }) {
     const fixedStep = 1 / CONFIG.sim.fixedHz;
     const maxSteps = CONFIG.sim.maxStepsPerFrame;
 
@@ -48,7 +48,7 @@ export class SimCore {
 
     let steps = 0;
     while (this.accumulator >= fixedStep && steps < maxSteps) {
-      this.step(simState, { stepDt: fixedStep, totalTime, inMenu, visualOnly });
+      this.step(simState, { stepDt: fixedStep, totalTime, inMenu, visualOnly, camX, camY });
       this.accumulator -= fixedStep;
       steps++;
     }
@@ -58,7 +58,7 @@ export class SimCore {
     }
   }
 
-  step(simState, { stepDt, totalTime, inMenu, visualOnly = false }) {
+  step(simState, { stepDt, totalTime, inMenu, visualOnly = false, camX = null, camY = null }) {
     this.fluid.setWellPositions(this.getDissipationAnchors());
     this.fluid.step(stepDt);
     this.fluid.fadeVisualDensity(0.99);
@@ -88,9 +88,9 @@ export class SimCore {
     }
 
     if (!visualOnly) {
-      this.wreckSystem.update(this.fluid, stepDt, totalTime, undefined, undefined, this.wellSystem);
-      this.portalSystem.update(this.fluid, stepDt, totalTime, undefined, undefined, simState.runElapsedTime);
-      this.planetoidSystem.update(stepDt, this.fluid, totalTime, this.wellSystem, this.waveRings);
+      this.wreckSystem.update(this.fluid, stepDt, totalTime, camX, camY, this.wellSystem);
+      this.portalSystem.update(this.fluid, stepDt, totalTime, camX, camY, simState.runElapsedTime);
+      this.planetoidSystem.update(stepDt, this.fluid, totalTime, this.wellSystem, this.waveRings, camX, camY);
     }
 
     if (!inMenu && !visualOnly) {

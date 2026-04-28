@@ -5,6 +5,53 @@
 
 ---
 
+## Week 5, Day 5: April 24, 2026 — Deep Field Stops Melting the Browser
+
+The new renderer looked guilty because it arrived at the same time the 10x10 map
+was still limping under 30 FPS. The probe said otherwise.
+
+The post chain was not the monster. The monster was older and simpler: the
+browser client was still running Deep Field like a tiny 3x3 arena, with a high
+resolution fluid texture and a 60 Hz fixed-step local sim trying to catch up
+after every slow frame. That is how you get a spiral: one bad frame asks for more
+sim work, the extra sim work makes the next frame bad, and the void eats the
+machine.
+
+So this pass made the scaling contract explicit. The client can render as fast
+as it can, but larger maps do not need 1/60th-second sim fidelity. 5x5 now has a
+medium local profile. 10x10 now has a large local profile. The authoritative
+server already had that idea; the browser finally caught up.
+
+The other small-but-important cut was shader-side well visibility. Physics still
+knows every well. Death checks still know every well. But the display shader no
+longer loops every Deep Field well for every screen pixel when the camera can
+only see a small slice of the torus. It keeps the wells intersecting the current
+view and the nearest two as a visual floor, so we do not create invisible danger
+just to save a few milliseconds.
+
+The new `npm run test:perf` probe is not a CI gate. It is a bench tool. It
+measures the thing we actually care about when tuning: map FPS, local sim time,
+render-chain shape, visible well count, and snapshot payload size.
+
+The second pass found the real loose wire. Wrecks and portals already had camera
+culling, but the sim core was calling their update methods without the camera.
+So the culling existed like a beautiful dead switch on the wall. Once `camX/camY`
+flowed through `SimCore`, offscreen wrecks, portals, and comet wakes stopped
+painting the whole fluid texture. The latest run has 5x5 near 60 FPS and 10x10
+near 60 FPS in headless Chrome. Good enough to hand feature development back to
+Claude without making 10x10 a furnace.
+
+The remaining warning is network shape. Snapshots are still whole-world payloads:
+fine for local testing, not fine forever. Interest filtering and deltas are now
+the next scale seam once multiplayer moves beyond local LAN/Tailscale play.
+
+One important correction came out of playtesting: lowering cadence is only safe
+if the client presents motion smoothly. A 10x10 map can run cheap authority and
+still feel bad if the renderer teleports the ship from snapshot to snapshot. The
+client now keeps a presentation target for the local remote ship and blends
+between authoritative packets every render frame. That keeps the performance win
+without making movement feel like a flipbook.
+
 ## Week 4, Day 2: April 13, 2026 — The Harness Starts Trusting the Logs
 
 This was a good little truth pass.

@@ -42,6 +42,11 @@ export function initTestAPI(getState) {
       return fps;
     },
 
+    getPerfStats() {
+      const { perfStats } = getState();
+      return perfStats ? JSON.parse(JSON.stringify(perfStats)) : null;
+    },
+
     getGamePhase() {
       const { gamePhase } = getState();
       return gamePhase;
@@ -113,6 +118,19 @@ export function initTestAPI(getState) {
     getRendererView() {
       const { getRendererView } = getState();
       return getRendererView ? getRendererView() : 'ascii';
+    },
+
+    // Diagnostic-only: start a game on a specific map index (0=shallows,
+    // 1=expanse, 2=deep-field). Used by ship-speed probes to compare
+    // physics across map scales. Safe to keep — thin wrapper over startGame.
+    startGameOnMap(index) {
+      const { startGame, mapList, profileManager } = getState();
+      if (profileManager && !profileManager.active) profileManager.createProfile(0, 'Test Pilot');
+      if (!startGame || !mapList) return false;
+      const map = mapList[index];
+      if (!map) return false;
+      startGame(map);
+      return true;
     },
 
     triggerRestart() {

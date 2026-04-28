@@ -1,12 +1,21 @@
 /**
  * deep-field-10x10.js — Large map. 20 wells, 6 stars, 12 loot, 5 portals.
- * World scale 10.0, fluid resolution 512 for equivalent texel density.
+ * World scale 10.0, fluid resolution 256 for playable client perf.
  * Force culling is critical — 20 wells = 20 GPU passes without it.
  */
 export const MAP = {
   name: 'Deep Field',
   worldScale: 10.0,
-  fluidResolution: 512,
+  fluidResolution: 256,
+  configOverrides: {
+    sim: {
+      fixedHz: 15,
+      maxStepsPerFrame: 2,
+    },
+    fluid: {
+      pressureIterations: 12,
+    },
+  },
   wells: [
     // Central mega-well
     { x: 5.0, y: 5.0, mass: 2.5, orbitalDir: 1, killRadius: 0.08, spinRate: 0.4, points: 12 },

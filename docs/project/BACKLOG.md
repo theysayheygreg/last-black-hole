@@ -99,9 +99,19 @@
 
 ### Adaptive Sim Budgets by Map Scale
 - **What:** Per-map or per-mode fluid resolution, pressure iterations, and fixed sim tick profiles.
-- **Why backlogged:** Jam week needed a stable default first. The current perf cuts remove the worst pass explosion, but large-map tuning still needs a deliberate profile pass.
+- **Current state:** First production pass shipped 2026-04-24 and was corrected 2026-04-28. `5x5` now uses a medium client profile, `10x10` uses a large client profile, camera culling reaches object fluid injection, and remote ship presentation is smoothed between authoritative snapshots; `npm run test:perf` reports both large maps near 60 FPS in headless Chrome.
+- **Why still backlogged:** The profile mechanism exists, but this still needs subjective feel tuning and hardware spread checks before the numbers become final.
 - **Value if revisited:** Lets `3x3`, `5x5`, and `10x10+` maps keep different cost envelopes without pretending one solver budget fits all scales.
-- **First revival step:** Promote `fluidResolution`, `fixedHz`, and pressure-iteration overrides into explicit map/runtime profiles once gameplay feel is stable.
+- **Next revival step:** Run the same profile on a MacBook/browser install and tune presentation/interest filtering before raising large-map sim tick rates.
+- **Updated:** 2026-04-28
+
+### Snapshot Interest Filtering and Delta Payloads
+- **What:** Stop sending whole-world authoritative snapshots to every client on every poll. Add viewport/player-interest filters first, then delta snapshots once the protocol shape stabilizes.
+- **Current state:** `tests/perf-probe.js` confirms current snapshots are whole-world payloads: roughly `22 KB` for 3x3, `41 KB` for 5x5, and `82 KB` for 10x10 at current server snapshot rates.
+- **Why backlogged:** Local loopback and Tailscale play are not network-bound yet. The render/sim CPU/GPU pass was the immediate blocker.
+- **Value if revisited:** Required for internet-hosted multiplayer, larger worlds, and more NPC/object density without turning every client into a full-world subscriber.
+- **First revival step:** Add `/snapshot?clientId=...&view=...` interest filtering for dynamic entities while keeping static map metadata cached on the client.
+- **Added:** 2026-04-24
 
 ### Advanced Fabric Anomalies
 - **What:** Rift currents, density pockets, resonance fields, null zones, feedback loops

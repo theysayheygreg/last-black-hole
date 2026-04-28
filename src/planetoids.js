@@ -13,7 +13,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, worldDirectionTo, wrapWorld, uvScale } from './coords.js';
+import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, worldDisplacement, worldDirectionTo, shouldCull, wrapWorld, uvScale } from './coords.js';
 import { proximityForce, applyForceToShip } from './physics.js';
 
 // ---- Comet name generation ----
@@ -137,7 +137,7 @@ export class PlanetoidSystem {
   /**
    * Update all planetoid positions, inject fluid, check well consumption.
    */
-  update(dt, fluid, totalTime, wellSystem, waveRings) {
+  update(dt, fluid, totalTime, wellSystem, waveRings, camX = null, camY = null) {
     const cfg = CONFIG.planetoids;
 
     // Spawn transit planetoids on timer (interval scales down over run)
@@ -184,68 +184,68 @@ export class PlanetoidSystem {
       }
 
       const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-      if (speed < 0.001) continue;
+      const injectFluid = speed >= 0.001 && !shouldCull(p.wx, p.wy, camX, camY, 0.45);
+      if (injectFluid) {
+        const dirX = p.vx / speed;
+        const dirY = p.vy / speed;
 
-      const dirX = p.vx / speed;
-      const dirY = p.vy / speed;
+        // --- Fluid injection: comet creates a surfable wake in the fluid ---
+        // Three effects simulate a body moving through the medium:
+        // 1. Bow shock: pressure wave AHEAD of the comet (pushes fluid aside)
+        // 2. Wake vortex: twin counter-rotating eddies BEHIND (creates turbulence)
+        // 3. Density trail: visible glow behind the comet (cosmetic only)
+        // Together these create currents the player can surf — the design intent
+        // is that comets are moving "wave machines" that make the fluid interesting.
+        const [fu, fv] = worldToFluidUV(p.wx, p.wy);
+        const s = uvScale();
+        const s2 = s * s;
 
-      // --- Fluid injection: comet creates a surfable wake in the fluid ---
-      // Three effects simulate a body moving through the medium:
-      // 1. Bow shock: pressure wave AHEAD of the comet (pushes fluid aside)
-      // 2. Wake vortex: twin counter-rotating eddies BEHIND (creates turbulence)
-      // 3. Density trail: visible glow behind the comet (cosmetic only)
-      // Together these create currents the player can surf — the design intent
-      // is that comets are moving "wave machines" that make the fluid interesting.
-      const [fu, fv] = worldToFluidUV(p.wx, p.wy);
-      const s = uvScale();
-      const s2 = s * s;
-
-      // Bow shock: velocity splat offset ahead of the comet along its motion
-      const bowDist = 0.008 * s;
-      const bowFU = fu + dirX * bowDist;
-      const bowFV = fv - dirY * bowDist;
-      fluid.splat(
-        bowFU, bowFV,
-        dirX * cfg.bowShockForce * s, -dirY * cfg.bowShockForce * s,
-        cfg.bowShockRadius * s2,
-        cfg.density * 0.5,
-        cfg.density * 0.7,
-        cfg.density * 1.0
-      );
-
-      // Wake vortex: two opposing splats perpendicular to motion, behind the comet.
-      // Creates counter-rotating eddies that pull fluid inward — surfable current.
-      const behindFU = fu - dirX * 0.005 * s;
-      const behindFV = fv + dirY * 0.005 * s;
-      const perpX = -dirY;
-      const perpY = dirX;
-      const eddyOff = 0.004 * s;
-      fluid.splat(
-        behindFU + perpX * eddyOff, behindFV - perpY * eddyOff,
-        perpX * cfg.wakeForce * s, -perpY * cfg.wakeForce * s,
-        cfg.wakeRadius * s2,
-        cfg.density * 0.3, cfg.density * 0.4, cfg.density * 0.6
-      );
-      fluid.splat(
-        behindFU - perpX * eddyOff, behindFV + perpY * eddyOff,
-        -perpX * cfg.wakeForce * s, perpY * cfg.wakeForce * s,
-        cfg.wakeRadius * s2,
-        cfg.density * 0.3, cfg.density * 0.4, cfg.density * 0.6
-      );
-
-      // Density trail
-      // Density trail — visual buffer (cosmetic, not advected)
-      for (let i = 1; i <= cfg.trailLength; i++) {
-        const trailFU = fu - dirX * cfg.trailSpacing * s * i;
-        const trailFV = fv + dirY * cfg.trailSpacing * s * i;
-        const fade = 1 - (i / cfg.trailLength) * 0.6;
-        fluid.visualSplat(
-          trailFU, trailFV,
-          0.002 * s2,
-          cfg.density * fade * 0.6,
-          cfg.density * fade * 0.8,
-          cfg.density * fade * 1.0
+        // Bow shock: velocity splat offset ahead of the comet along its motion
+        const bowDist = 0.008 * s;
+        const bowFU = fu + dirX * bowDist;
+        const bowFV = fv - dirY * bowDist;
+        fluid.splat(
+          bowFU, bowFV,
+          dirX * cfg.bowShockForce * s, -dirY * cfg.bowShockForce * s,
+          cfg.bowShockRadius * s2,
+          cfg.density * 0.5,
+          cfg.density * 0.7,
+          cfg.density * 1.0
         );
+
+        // Wake vortex: two opposing splats perpendicular to motion, behind the comet.
+        // Creates counter-rotating eddies that pull fluid inward — surfable current.
+        const behindFU = fu - dirX * 0.005 * s;
+        const behindFV = fv + dirY * 0.005 * s;
+        const perpX = -dirY;
+        const perpY = dirX;
+        const eddyOff = 0.004 * s;
+        fluid.splat(
+          behindFU + perpX * eddyOff, behindFV - perpY * eddyOff,
+          perpX * cfg.wakeForce * s, -perpY * cfg.wakeForce * s,
+          cfg.wakeRadius * s2,
+          cfg.density * 0.3, cfg.density * 0.4, cfg.density * 0.6
+        );
+        fluid.splat(
+          behindFU - perpX * eddyOff, behindFV + perpY * eddyOff,
+          -perpX * cfg.wakeForce * s, perpY * cfg.wakeForce * s,
+          cfg.wakeRadius * s2,
+          cfg.density * 0.3, cfg.density * 0.4, cfg.density * 0.6
+        );
+
+        // Density trail — visual buffer (cosmetic, not advected)
+        for (let i = 1; i <= cfg.trailLength; i++) {
+          const trailFU = fu - dirX * cfg.trailSpacing * s * i;
+          const trailFV = fv + dirY * cfg.trailSpacing * s * i;
+          const fade = 1 - (i / cfg.trailLength) * 0.6;
+          fluid.visualSplat(
+            trailFU, trailFV,
+            0.002 * s2,
+            cfg.density * fade * 0.6,
+            cfg.density * fade * 0.8,
+            cfg.density * fade * 1.0
+          );
+        }
       }
 
       // --- Well consumption check ---

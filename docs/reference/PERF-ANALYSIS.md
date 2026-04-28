@@ -1,15 +1,83 @@
 # Client Performance Analysis
 
-## Current Read
+## Current Read — 2026-04-28
 
-The client slowdown on larger maps is not primarily a camera or frustum problem.
+The client slowdown on larger maps is still primarily the local browser fluid sim,
+not the richer Composer post chain.
 
-The viewport still shows roughly one world-unit across. The big cost increase comes from two structural issues:
+The `tests/perf-probe.js` harness now measures map FPS, smoothed client timing,
+fluid resolution, visible well count, active composer passes, and authoritative
+snapshot payload sizes. Run it with:
+
+```bash
+npm run test:perf
+```
+
+Latest probe after the large-map tuning and presentation-smoothing pass:
+
+| Map | FPS | Local sim ms | Fluid res | Render wells | Snapshot payload |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 3x3 | ~60 | ~9.7ms | 256 | 4 / 4 | ~22 KB @ 10 Hz |
+| 5x5 | ~60 | ~7.2ms | 256 | 8 / 8 | ~39 KB @ 8 Hz |
+| 10x10 | ~60 | ~2.9ms | 256 | 2 / 20 | ~79 KB @ 6 Hz |
+
+The viewport still shows roughly one world-unit across. The big cost increase came from two structural issues:
 
 1. the fluid sim is still a full-screen GPU solver that runs every fixed sim step
 2. many world entities were injecting expensive full-screen splat passes every sim tick
 
-That means map size hurts performance indirectly by increasing entity count and by pushing the large map onto a higher fluid resolution.
+That means map size hurts performance indirectly by increasing entity count, increasing
+well loops, and previously pushing the large map onto a higher fluid resolution.
+
+## 2026-04-24 Cuts Landed
+
+### 1. Map-specific client sim profiles
+
+The in-process browser background/visual sim no longer treats every map like a 60 Hz 3x3 run:
+
+- `3x3`: base profile remains `60 Hz`
+- `5x5`: `30 Hz`, `maxStepsPerFrame = 3`, `pressureIterations = 24`
+- `10x10`: `15 Hz`, `maxStepsPerFrame = 2`, `pressureIterations = 12`
+
+This reflects the architecture direction: the visible client targets smooth play,
+but larger-map fluid/object fidelity does not need to advance at 1/60th second.
+Player presentation must stay frame-smoothed over the cheaper authority cadence;
+otherwise the lower tick rate becomes visible as stutter.
+
+### 2. Deep Field fluid resolution reduced
+
+`Deep Field` now uses `fluidResolution = 256` instead of `512`.
+
+The old value made every full-screen fluid pass roughly `4x` more expensive.
+At 10x10 density, the extra texels were not buying enough gameplay value to justify
+falling under 30 FPS.
+
+### 3. Renderer well frustum for the display shader
+
+The production display shader no longer loops all 20 Deep Field wells for every
+screen pixel. It sends wells whose accretion shapes intersect the current camera
+view, while always preserving the two nearest wells as a visibility floor.
+
+Physics and death checks still see all wells. This is render-only culling.
+
+### 4. Perf probe harness
+
+`tests/perf-probe.js` is intentionally diagnostic, not part of `npm test`.
+It starts a local browser harness, opens each playable map, teleports the ship to
+a safe sample point, reports client timing, then starts a keep-alive transient sim
+to report snapshot payload sizes.
+
+### 5. Camera culling now reaches the sim systems
+
+The first tuning pass exposed an important seam: several systems already had
+camera culling for fluid injection, but `SimCore` was calling them without
+camera coordinates. That made the culling inert.
+
+`SimCore` now forwards `camX/camY` into wreck, portal, and comet updates. Wrecks
+and portals reuse their existing cull checks, and comets now skip their bow shock,
+eddy, and trail splats when outside the active camera neighborhood. Entity motion,
+pickup checks, death checks, and server authority are unchanged; only offscreen
+client-side fluid painting is skipped.
 
 ## Why 3x3 Holds While 5x5 and 10x10 Collapse
 
@@ -105,14 +173,14 @@ The remaining expensive levers are, in order:
 1. **full-screen solver cost**
    - especially `pressureIterations`
 2. **large sim resolution**
-   - `Deep Field` currently forces `512`
+   - `Deep Field` was `512`; it is now `256`
 3. **remaining splat-heavy systems**
    - wave rings
    - combat pulses
    - ship wake
    - planetoid wakes
 4. **lockstep fixed sim cadence**
-   - current in-process sim still targets `60 Hz`
+   - large maps now have cheaper local profiles, but this remains a tuning axis
 
 ## Recommended Next Gains
 
@@ -128,21 +196,42 @@ That is the cleanest long-term rule:
 
 Reduce large-map sim resolution.
 
-Recommended experiments:
+Recommended baseline:
 
 - `3x3`: keep `256`
 - `5x5`: keep `256`
-- `10x10`: try `384`, then `256`
+- `10x10`: keep `256` unless a visual regression proves it needs more
 
-The current `512` target is expensive enough that it should be justified by obvious gameplay value, not just visual caution.
+`512` should only return behind an explicit high-end / capture-mode flag.
 
-### Then reduce authoritative tick rate for big worlds
+### Keep authority cheap, but smooth presentation
 
-Reasonable current target:
+Current visual/background target:
 
 - `3x3`: `60 Hz`
 - `5x5`: `30 Hz`
-- `10x10`: `20–30 Hz`
+- `10x10`: `15 Hz`
+
+Remote snapshots are lower cadence (`10/8/6 Hz` by map scale), so the browser
+keeps a small presentation target and interpolates/extrapolates the local ship
+between fresh authoritative snapshots. Do not fix stutter by raising large-map
+fluid ticks back to `60 Hz`; that reintroduces the original 5x5/10x10 CPU/GPU
+cost cliff.
+
+### Snapshot traffic
+
+The authoritative sim still sends whole-world snapshots:
+
+- all players
+- all wells
+- all stars
+- all wrecks
+- all planetoids/comets
+- all scavengers/fauna/sentries
+
+Large maps are not network-bound locally yet, but the 10x10 payload is already
+~82 KB at 6 Hz. Before internet-facing multiplayer, snapshot payloads need either
+interest filtering, delta snapshots, or both.
 
 This is compatible with the longer-term client/server direction:
 
@@ -170,4 +259,4 @@ The first fix was to stop using the sim as a paintbrush.
 If large maps are still slow after these cuts, the next two levers to pull are:
 
 1. lower `Deep Field` resolution
-2. lower sim tick rate on larger maps
+2. keep lower large-map sim tick rates, with explicit frame-rate presentation smoothing
