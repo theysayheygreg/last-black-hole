@@ -268,8 +268,9 @@ export class ScavengerSystem {
       }
     }
 
-    // 4. Drag
-    const dragMult = 1 - cfg.drag;
+    // 4. Drag — same 60fps-calibrated damping model as the player ship.
+    const dragBase = Math.max(0.001, 1 - Math.min(cfg.drag, 0.999));
+    const dragMult = Math.pow(dragBase, dt * 60);
     scav.vx *= dragMult;
     scav.vy *= dragMult;
 

@@ -13,6 +13,7 @@
 - Added render-only well culling for the fluid display shader. Large maps now send only view-intersecting wells plus the nearest two wells to the shader, while physics/death checks still see all wells.
 - Fixed the missing camera handoff from `SimCore` into object fluid injection. Existing wreck/portal culling now actually runs, and comet wake/trail splats are skipped offscreen.
 - Added remote ship presentation smoothing so low-cadence authoritative snapshots no longer pin the local ship to stutter steps between server packets.
+- Converted local ship and scavenger drag from literal per-frame damping to time-based exponential damping calibrated to the old 60 Hz feel, so perf spikes and large-map cadence changes no longer alter stopping distance.
 - Updated `docs/reference/PERF-ANALYSIS.md` with current numbers: 5x5 and 10x10 are both back near 60 FPS in the probe without raising large-map sim ticks back to 60 Hz.
 - Confirmed authoritative snapshots are still whole-world payloads: roughly 22 KB for 3x3, 41 KB for 5x5, and 82 KB for 10x10 at current server snapshot rates.
 

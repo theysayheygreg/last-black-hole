@@ -21,7 +21,7 @@ const RANGE_HINTS = {
   'ship.thrustAccel':       { min: 0.5, max: 5, step: 0.1, tip: 'World-units/s² when thrusting. 1.7 = default. Higher = zippier.' },
   'ship.fluidCoupling':     { min: 0, max: 1, step: 0.01, tip: '0 = ship ignores fluid. 1 = pure fluid rider. How much currents carry you.' },
   'ship.turnRate':          { min: 60, max: 720, step: 5, tip: 'Degrees/sec rotation toward cursor. 360 = instant feel.' },
-  'ship.drag':              { min: 0, max: 0.2, step: 0.005, tip: 'Velocity damping per frame. Low = ice-skating. High = responsive stops.' },
+  'ship.drag':              { min: 0, max: 0.2, step: 0.005, tip: 'Velocity damping per 60 Hz reference frame. Low = ice-skating. High = responsive stops.' },
   'ship.size':              { min: 4, max: 30, step: 1, tip: 'Ship triangle radius in pixels' },
 
   'fluid.viscosity':        { min: 0, max: 0.01, step: 0.00005, tip: 'Fluid thickness. 0 = water. Higher = syrup. Damps small-scale motion' },
@@ -139,7 +139,7 @@ const RANGE_HINTS = {
   'input.gamepadBigAngle':      { min: 5, max: 45, step: 1, tip: 'Degrees — zero smoothing above this. Instant response to flicks.' },
   // Input — triggers
   'input.triggerThreshold': { min: 0.01, max: 0.2, step: 0.01, tip: 'Trigger activation threshold' },
-  'input.brakeStrength':    { min: 0, max: 0.3, step: 0.01, tip: 'Extra drag from L2 brake' },
+  'input.brakeStrength':    { min: 0, max: 0.3, step: 0.01, tip: 'Extra 60 Hz reference drag from L2 brake' },
 };
 
 /**

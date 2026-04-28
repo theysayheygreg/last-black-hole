@@ -52,6 +52,12 @@ client now keeps a presentation target for the local remote ship and blends
 between authoritative packets every render frame. That keeps the performance win
 without making movement feel like a flipbook.
 
+The follow-up was less visible but just as important: drag could not stay
+literal per-frame math in a world where the frame rate is no longer the sim
+contract. Player and scavenger damping now use exponential decay calibrated to
+the old 60 Hz feel. Sixty still feels like sixty, but a slow frame no longer
+secretly changes the ship's stopping distance or the scavenger pressure model.
+
 ## Week 4, Day 2: April 13, 2026 — The Harness Starts Trusting the Logs
 
 This was a good little truth pass.

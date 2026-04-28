@@ -110,11 +110,12 @@ export class Ship {
       }
     }
 
-    // 6. Drag — applied per-frame (not per-second). totalDrag is the fraction of
-    //    velocity removed each frame. Base drag + optional L2 brake from gamepad.
-    //    Terminal velocity = (thrust in world/s²) / drag. E.g. 0.67 / 0.06 = 11 world/s.
+    // 6. Drag — time-based damping calibrated to the old 60fps feel.
+    //    CONFIG values remain "fraction removed per 60 Hz frame"; exponentiating
+    //    by dt keeps stopping distance stable when render/sim cadence changes.
     const totalDrag = cfg.drag + this.brakeIntensity * CONFIG.input.brakeStrength;
-    const dragMult = 1 - totalDrag;
+    const dragBase = Math.max(0.001, 1 - Math.min(totalDrag, 0.999));
+    const dragMult = Math.pow(dragBase, dt * 60);
     this.vx *= dragMult;
     this.vy *= dragMult;
 

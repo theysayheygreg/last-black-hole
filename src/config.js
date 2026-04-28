@@ -39,9 +39,9 @@ export const CONFIG = {
                              // currents entirely. 1+ = fluid rider — currents carry you.
                              // Clamped to max 0.5 per frame to prevent velocity teleport.
     turnRate: 360,            // deg/s rotation toward mouse/stick. 360 = snappy, 120 = sluggish.
-    drag: 0.06,              // Fraction of velocity removed per frame (not per second).
-                             // Terminal velocity ≈ thrustAccel / (drag × pxPerWorld).
-                             // 0.06 at 800 thrust → ~33 world-units/s terminal.
+    drag: 0.06,              // Fraction of velocity removed per 60 Hz reference frame.
+                             // Applied as exponential damping so lower render/sim
+                             // cadences keep the same stopping feel.
     size: 12,                 // Ship triangle radius in pixels (overlay rendering only).
     wake: {
       splatCount: 5,          // Number of splats in the trail behind the ship.
@@ -267,7 +267,7 @@ export const CONFIG = {
 
     gamepadTurnRate: 360,     // Stick turn rate in deg/s (not currently used — facing is direct from stick).
     triggerThreshold: 0.05,   // Trigger activation threshold (0-1). Prevents ghost input.
-    brakeStrength: 0.15,      // Extra drag per frame from L2 brake at full pull. Stacks with base drag.
+    brakeStrength: 0.15,      // Extra 60 Hz reference drag from L2 brake at full pull. Stacks with base drag.
 
     // --- Mouse thrust curve (keyboard + mouse install path) ---
     mouseDeadzonePx: 28,      // Cursor distance from ship below this = drift/no thrust.
@@ -300,7 +300,7 @@ export const CONFIG = {
     vultureRatio: 0.3,           // fraction that spawn as vultures
     size: 8,                     // overlay triangle radius in px (70% of player ship.size)
     thrustAccel: 0.5,            // world-units/s², slightly slower than player (1.7)
-    drag: 0.06,                  // same as player — same terminal velocity per unit thrust
+    drag: 0.06,                  // same 60 Hz reference damping model as player
     fluidCoupling: 1.2,          // same as player — scavengers surf the same currents
     decisionInterval: 0.8,       // seconds between AI decision updates (not per-frame)
     sensorRange: 1.5,            // world-units — how far scavengers "see" wrecks/portals
