@@ -72,23 +72,66 @@ export function pxPerWorld(screenDim) {
   return screenDim / CAMERA_VIEW;
 }
 
+// ---- Fluid camera state ----
+//
+// The fluid grid is camera-anchored: UV (0,0)..(1,1) represents a window
+// of GRID_WINDOW world-units centered on the camera, NOT the whole world.
+// All fluid-injection callers go through worldToFluidUV(), which translates
+// world coords to camera-relative UVs using this state. Set once per
+// gameLoop frame from main.js (and any standalone harness that drives a
+// fluid sim, e.g. the title prototype).
+//
+// The grid contents are world-stable: a per-frame translate pass in
+// fluid.js shifts texture data by the camera delta so currents don't slide
+// with the camera. Off-window contributions come from the coarse field
+// (Stage C+).
+let _fluidCameraX = 0.0;
+let _fluidCameraY = 0.0;
+
+export function setFluidCamera(camX, camY) {
+  _fluidCameraX = camX;
+  _fluidCameraY = camY;
+}
+
+export function getFluidCamera() {
+  return [_fluidCameraX, _fluidCameraY];
+}
+
 // ---- World <-> Fluid UV ----
 
 /**
- * Convert world-space (Y-down, 0–WORLD_SCALE) to fluid UV (Y-up, 0–1).
- * Divides by WORLD_SCALE to normalize, flips Y because UV is Y-up.
- * Used for: placing splats, reading fluid velocity at entity positions.
+ * Convert world-space (Y-down) to fluid UV (Y-up, 0–1) **camera-relative**.
+ * UV (0.5, 0.5) is the camera; UV span = GRID_WINDOW world-units.
+ * Toroidal world wrap is applied via shortest-displacement so wells near a
+ * world edge stay close to camera when the camera is on the opposite edge.
+ *
+ * Stage A/B keeps GRID_WINDOW == WORLD_SCALE, so for any (wx, wy) inside
+ * the world this returns the same UV the old WORLD_SCALE-only formula did
+ * (provided u_camOffset is now read as (0.5, 0.5) by callers — the
+ * camera-relative shift moved from the shader uniform into this function).
  */
 export function worldToFluidUV(wx, wy) {
-  return [wx / WORLD_SCALE, 1.0 - wy / WORLD_SCALE];
+  let dx = wx - _fluidCameraX;
+  let dy = wy - _fluidCameraY;
+  const half = WORLD_SCALE / 2;
+  if (dx > half) dx -= WORLD_SCALE;
+  if (dx < -half) dx += WORLD_SCALE;
+  if (dy > half) dy -= WORLD_SCALE;
+  if (dy < -half) dy += WORLD_SCALE;
+  // X+ in world → U+; Y+ in world (down) → V- (UV is Y-up).
+  return [dx / GRID_WINDOW + 0.5, 0.5 - dy / GRID_WINDOW];
 }
 
 /**
- * Convert fluid UV (Y-up, 0–1) to world-space (Y-down, 0–WORLD_SCALE).
- * Inverse of worldToFluidUV.
+ * Convert fluid UV (Y-up, 0–1) back to world-space (Y-down). Inverse of
+ * worldToFluidUV. Result is wrapped into [0, WORLD_SCALE).
  */
 export function fluidUVToWorld(fu, fv) {
-  return [fu * WORLD_SCALE, (1.0 - fv) * WORLD_SCALE];
+  let wx = _fluidCameraX + (fu - 0.5) * GRID_WINDOW;
+  let wy = _fluidCameraY - (fv - 0.5) * GRID_WINDOW;
+  wx = ((wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+  wy = ((wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
+  return [wx, wy];
 }
 
 // ---- World <-> Screen ----

@@ -56,7 +56,8 @@ import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
 import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
 import { WORLD_SCALE, GRID_WINDOW, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
-         worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld } from './coords.js';
+         worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld,
+         setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
 
@@ -845,6 +846,11 @@ function loadScene(map) {
   // 7. Reset camera — 'locked' = world center, 'follow' = ship sets it later
   camX = map.worldScale / 2;
   camY = map.worldScale / 2;
+  // Anchor the fluid grid to the new camera position. After this point all
+  // worldToFluidUV() calls (entity injection, ship sampling, shader uniforms)
+  // produce camera-relative UVs. The fluid texture was just cleared by
+  // fluid.clear() above so there's no stale data to reconcile.
+  setFluidCamera(camX, camY);
 
   // 8. Seed fresh fluid
   seedInitialFluid();
@@ -2783,6 +2789,30 @@ function gameLoop(now) {
   _prevInventory = inventoryNow;
   _prevConsumable1 = consumable1Now;
   _prevConsumable2 = consumable2Now;
+
+  // 6a. Sync fluid camera to current camera. The fluid grid is camera-
+  //     anchored (Stage B) — when the camera moves we translate the texture
+  //     contents so currents stay world-stable, then advance the fluid
+  //     camera state so the next frame's worldToFluidUV() calls produce the
+  //     correct mapping. Toroidal wrap on world axes keeps deltas small at
+  //     the world edges. While GRID_WINDOW == WORLD_SCALE (Stage A/B1) the
+  //     wrap edge of the texture is meaningful (it's the world's other
+  //     side); Stage D will replace that with a coarse-field read.
+  if (fluid) {
+    const [prevFcamX, prevFcamY] = getFluidCamera();
+    let dCamX = camX - prevFcamX;
+    let dCamY = camY - prevFcamY;
+    const half = WORLD_SCALE / 2;
+    if (dCamX > half) dCamX -= WORLD_SCALE;
+    if (dCamX < -half) dCamX += WORLD_SCALE;
+    if (dCamY > half) dCamY -= WORLD_SCALE;
+    if (dCamY < -half) dCamY += WORLD_SCALE;
+    if (dCamX !== 0 || dCamY !== 0) {
+      // Texture is Y-up (UV v increases as world y decreases).
+      fluid.translate(dCamX / GRID_WINDOW, -dCamY / GRID_WINDOW);
+      setFluidCamera(camX, camY);
+    }
+  }
 
   // 6b. Audio update — spatial mixing based on game state
   if (!inMenu) {

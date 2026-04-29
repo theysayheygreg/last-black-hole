@@ -31,7 +31,8 @@ import { FluidSim } from '../fluid.js';
 import { WellSystem } from '../wells.js';
 import { PlanetoidSystem } from '../planetoids.js';
 import { applySceneOverrides } from '../scene-config.js';
-import { WORLD_SCALE, GRID_WINDOW, worldToFluidUV, setWorldScale } from '../coords.js';
+import { WORLD_SCALE, GRID_WINDOW, worldToFluidUV, setWorldScale,
+         setFluidCamera, getFluidCamera } from '../coords.js';
 import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
 import { Composer } from './composer.js';
@@ -238,6 +239,10 @@ const CAMERA_DRIFT_PERIOD_X = 22;
 const CAMERA_DRIFT_PERIOD_Y = 17;
 let camX = CAMERA_CENTER_X;
 let camY = CAMERA_CENTER_Y;
+// Anchor the fluid grid to the title scene's initial camera. Per-frame
+// drift updates trigger a fluid.translate() in the loop below to keep
+// currents world-stable as the lissajous nudges the camera.
+setFluidCamera(camX, camY);
 
 // --- Resize ---
 window.addEventListener('resize', () => {
@@ -305,6 +310,18 @@ function frame(now) {
   // --- Camera drift ---
   camX = CAMERA_CENTER_X + Math.sin((totalTime / CAMERA_DRIFT_PERIOD_X) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
   camY = CAMERA_CENTER_Y + Math.cos((totalTime / CAMERA_DRIFT_PERIOD_Y) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
+
+  // --- Sync fluid camera (Stage B). Translate by the camera delta so
+  // currents stay world-stable through the lissajous drift. ---
+  {
+    const [prevFcamX, prevFcamY] = getFluidCamera();
+    const dCamX = camX - prevFcamX;
+    const dCamY = camY - prevFcamY;
+    if (dCamX !== 0 || dCamY !== 0) {
+      fluid.translate(dCamX / GRID_WINDOW, -dCamY / GRID_WINDOW);
+      setFluidCamera(camX, camY);
+    }
+  }
 
   // --- Build per-frame context for the pass chain ---
   const wellUVs = wellSystem.getUVPositions();

@@ -440,6 +440,29 @@ void main() {
   fragColor = u_clearValue;
 }`;
 
+// Translate the source texture by u_delta (in UV) and write to the
+// target. With wrap-sampling this is a toroidal shift; values that
+// would scroll off one edge re-enter on the opposite edge. Used per
+// frame to keep fluid currents world-stable when the camera moves —
+// camera-relative grid means writing a well at world position W
+// requires the current contents to be at the same world position too,
+// even after the camera moved.
+//
+// Stage B handoff caveat: when the eventual GRID_WINDOW < WORLD_SCALE,
+// the wrap edge no longer represents the world's other side — it
+// represents area we have no data for. Stage D will replace the wrap
+// sample with a coarse-field read for off-grid inflow.
+const FRAG_TRANSLATE = `#version 300 es
+precision highp float;
+uniform sampler2D u_source;
+uniform vec2 u_delta;
+in vec2 v_uv;
+out vec4 fragColor;
+void main() {
+  vec2 src = fract(v_uv - u_delta);
+  fragColor = texture(u_source, src);
+}`;
+
 
 export class FluidSim {
   constructor(gl) {
@@ -467,6 +490,7 @@ export class FluidSim {
       display: this._createProgram(VERT_QUAD, FRAG_DISPLAY),
       dissipation: this._createProgram(VERT_QUAD, FRAG_DISSIPATION),
       clear: this._createProgram(VERT_QUAD, FRAG_CLEAR),
+      translate: this._createProgram(VERT_QUAD, FRAG_TRANSLATE),
     };
 
     // Fullscreen quad
@@ -977,6 +1001,33 @@ export class FluidSim {
     this.res = newRes;
     this.texelSize = [1.0 / this.res, 1.0 / this.res];
     this._createFramebuffers();
+  }
+
+  /**
+   * Translate fluid contents by (uvDx, uvDy) — used to keep world-stationary
+   * currents stable when the camera-anchored grid scrolls. Run once per
+   * frame, BEFORE step(), with the camera's UV delta. Wraps toroidally for
+   * now; Stage D will replace the wrap with a coarse-field read at the edge.
+   *
+   * Shifts velocity, density, and visualDensity. Pressure is recomputed each
+   * step from divergence and doesn't carry meaningful state.
+   */
+  _translateBuffer(buffer, uvDx, uvDy) {
+    const gl = this.gl;
+    const u = this._useProgram(this.programs.translate);
+    gl.uniform1i(u['u_source'], 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, buffer.read.tex);
+    gl.uniform2f(u['u_delta'], uvDx, uvDy);
+    this._blit(buffer.write);
+    buffer.swap();
+  }
+
+  translate(uvDx, uvDy) {
+    if (uvDx === 0 && uvDy === 0) return;
+    this._translateBuffer(this.velocity, uvDx, uvDy);
+    this._translateBuffer(this.density, uvDx, uvDy);
+    this._translateBuffer(this.visualDensity, uvDx, uvDy);
   }
 
   /**
