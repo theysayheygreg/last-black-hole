@@ -26,8 +26,27 @@
 /** Total world size. The old 0-1 space scaled up 3×. All entity positions live in 0–WORLD_SCALE. */
 export let WORLD_SCALE = 3.0;
 
+/**
+ * GRID_WINDOW — world-units spanned by the fluid GPU grid texture.
+ *
+ * Today this tracks WORLD_SCALE 1:1: the grid texture represents the entire
+ * world (toroidal wrap at edges). That made the GPU fluid pay full-resolution
+ * cost for ~10% of the grid that's ever visible on a 10x10 map.
+ *
+ * The architectural target is to decouple this from WORLD_SCALE — make the
+ * grid a fixed window around the camera, with a coarse field carrying world-
+ * scale current truth and seeding inflow at the boundary. Stage A only
+ * separates the concept; behavior is unchanged because GRID_WINDOW still
+ * tracks WORLD_SCALE. See docs/project/FLUID-GRID-DECOUPLING.md.
+ */
+export let GRID_WINDOW = 3.0;
+
 /** Update the world scale. ES module live binding — all importers see the new value immediately. */
-export function setWorldScale(s) { WORLD_SCALE = s; _accretionScaleCache = Math.sqrt(s * FLUID_REF_SCALE); }
+export function setWorldScale(s) {
+  WORLD_SCALE = s;
+  GRID_WINDOW = s;  // Stage A: still tracks WORLD_SCALE. Stage B will fix this.
+  _accretionScaleCache = Math.sqrt(s * FLUID_REF_SCALE);
+}
 
 /**
  * How many world-units the camera shows per screen axis.
@@ -37,7 +56,7 @@ export function setWorldScale(s) { WORLD_SCALE = s; _accretionScaleCache = Math.
  *
  * Changing this zooms the camera. 0.5 = zoomed in (half a world-unit fills screen).
  * 2.0 = zoomed out (two world-units visible). Must also update the display shader's
- * u_worldScale uniform to match.
+ * u_gridWindow uniform to match.
  */
 export const CAMERA_VIEW = 1.0;
 

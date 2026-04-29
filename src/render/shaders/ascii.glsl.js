@@ -23,7 +23,7 @@ uniform float u_cellAspect;    // cell height / cell width (e.g. 1.5 for 8x12)
 uniform float u_time;          // elapsed seconds — drives shimmer
 uniform float u_shimmer;       // quantum fluctuation probability (0 = off)
 uniform vec2 u_camOffset;     // camera center in fluid UV (for world-anchored noise)
-uniform float u_worldScale;   // world scale (for world-anchored noise)
+uniform float u_gridWindow;   // world-units spanned by the fluid grid (for world-anchored noise)
 uniform float u_dirThreshold; // speed threshold for directional character selection
 uniform float u_glitchIntensity; // 0.0 = normal, 1.0 = full corruption (scene transitions)
 
@@ -48,10 +48,10 @@ void main() {
   float charIdx = lum * (rampSize - 1.0);
 
   // World-anchored shimmer so quantum fluctuations don't slide with camera.
-  vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_worldScale;
+  vec2 fluidUV = u_camOffset + (cellCenter - 0.5) / u_gridWindow;
   vec2 wrappedFluidUV = fract(fluidUV);
   vec2 cellsPerScreen = u_resolution / vec2(cellW, cellH);
-  vec2 worldCell = floor(wrappedFluidUV * cellsPerScreen * u_worldScale);
+  vec2 worldCell = floor(wrappedFluidUV * cellsPerScreen * u_gridWindow);
   vec2 anchoredCell = worldCell;
   float noise = fract(sin(dot(anchoredCell + floor(u_time * 3.0) * 0.17, vec2(12.9898, 78.233))) * 43758.5453);
   float noise2 = fract(sin(dot(anchoredCell * 0.5 + floor(u_time * 1.1) * 0.31, vec2(269.5, 183.3))) * 43758.5453);
@@ -72,7 +72,7 @@ void main() {
   charIdx = clamp(floor(charIdx), 0.0, rampSize - 1.0);
 
   vec2 vel = texture(u_velocity, wrappedFluidUV).xy;
-  float speed = length(vel) * u_worldScale / 3.0;
+  float speed = length(vel) * u_gridWindow / 3.0;
 
   float rampRow = 0.0;
   if (speed > u_dirThreshold) {

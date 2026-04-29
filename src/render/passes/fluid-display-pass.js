@@ -16,7 +16,8 @@
 //   - wellMasses: Array<number>
 //   - wellShapes: Array<[coreR, ringInnerR, ringOuterR, orbitalDir]>
 //   - camFU, camFV:    camera center in fluid UV
-//   - worldScale:      WORLD_SCALE (typically 3.0)
+//   - gridWindow:      world-units spanned by the fluid grid (== WORLD_SCALE today;
+//                      will become a fixed window once the grid is decoupled)
 //   - totalTime:       elapsed seconds (drives fabric noise)
 //   - inhibitorData:   null on title; object when gameplay has an inhibitor
 
@@ -37,7 +38,7 @@ export class FluidDisplayPass extends Pass {
       targetFBO,
       ctx.wellUVs,
       ctx.camFU, ctx.camFV,
-      ctx.worldScale,
+      ctx.gridWindow,
       ctx.totalTime,
       ctx.wellMasses,
       ctx.wellShapes,

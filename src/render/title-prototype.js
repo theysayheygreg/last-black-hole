@@ -31,7 +31,7 @@ import { FluidSim } from '../fluid.js';
 import { WellSystem } from '../wells.js';
 import { PlanetoidSystem } from '../planetoids.js';
 import { applySceneOverrides } from '../scene-config.js';
-import { WORLD_SCALE, worldToFluidUV, setWorldScale } from '../coords.js';
+import { WORLD_SCALE, GRID_WINDOW, worldToFluidUV, setWorldScale } from '../coords.js';
 import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
 import { Composer } from './composer.js';
@@ -317,7 +317,7 @@ function frame(now) {
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,
-      worldScale: WORLD_SCALE,
+      gridWindow: GRID_WINDOW,
       totalTime,
       inhibitorData: null,
     },
@@ -325,7 +325,7 @@ function frame(now) {
       wellUVs,
       wellRadii: TITLE_ACCRETION_RADII,
       camFU, camFV,
-      worldScale: WORLD_SCALE,
+      gridWindow: GRID_WINDOW,
     },
     ascii: {
       velocityTex: fluid.velocity.read.tex,
@@ -336,7 +336,7 @@ function frame(now) {
       dirThreshold: a.dirThreshold ?? 0.01,
       glitchIntensity: 0,
       camFU, camFV,
-      worldScale: WORLD_SCALE,
+      gridWindow: GRID_WINDOW,
       totalTime,
     },
   };

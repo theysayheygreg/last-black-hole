@@ -55,7 +55,7 @@ import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
 import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
 import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
-import { WORLD_SCALE, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
+import { WORLD_SCALE, GRID_WINDOW, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
@@ -2817,7 +2817,7 @@ function gameLoop(now) {
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,
-      worldScale: WORLD_SCALE,
+      gridWindow: GRID_WINDOW,
       totalTime,
       inhibitorData: inhData,
     },
@@ -2825,7 +2825,7 @@ function gameLoop(now) {
       wellUVs,
       wellRadii: sceneAccretionRadii,
       camFU, camFV,
-      worldScale: WORLD_SCALE,
+      gridWindow: GRID_WINDOW,
     },
     ascii: {
       velocityTex: fluid.velocity.read.tex,
@@ -2836,7 +2836,7 @@ function gameLoop(now) {
       dirThreshold: a.dirThreshold ?? 0.01,
       glitchIntensity: getGlitchIntensity(),
       camFU, camFV,
-      worldScale: WORLD_SCALE,
+      gridWindow: GRID_WINDOW,
       totalTime,
     },
   });

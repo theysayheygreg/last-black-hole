@@ -239,9 +239,10 @@ uniform vec4 u_wellShape[256]; // x=core radius, y=ring inner, z=ring outer, w=o
 uniform int u_wellCount;
 uniform float u_densityScale;
 uniform float u_gravityScale;
-// Camera offset in fluid UV space and world scale
+// Camera offset in fluid UV space and grid window
 uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
-uniform float u_worldScale;    // WORLD_SCALE from coords.js — how many world-units map to the full texture
+uniform float u_gridWindow;    // how many world-units span the full fluid texture (== WORLD_SCALE
+                               // today; will become a fixed window once decoupled — see coords.js)
 uniform float u_refScale;      // FLUID_REF_SCALE from coords.js — the scale all UV params were tuned at (3.0)
 uniform float u_time;          // elapsed time in seconds (for shimmer noise)
 // Inhibitor state from server
@@ -256,7 +257,7 @@ out vec4 fragColor;
 
 void main() {
   // Map screen UV to fluid UV via camera offset
-  vec2 fluidUV = u_camOffset + (v_uv - 0.5) / u_worldScale;
+  vec2 fluidUV = u_camOffset + (v_uv - 0.5) / u_gridWindow;
   vec2 wrappedFluidUV = fract(fluidUV);
 
   vec2 vel = texture(u_velocity, wrappedFluidUV).xy;
@@ -265,7 +266,7 @@ void main() {
   // Visual density is purely additive (no negative injectors exist).
   // See docs/design/VISUAL-DENSITY.md for why negative splats were removed.
   // Normalize UV velocity to world-equivalent speed (calibrated at WORLD_SCALE=3)
-  float speed = length(vel) * u_worldScale / u_refScale;
+  float speed = length(vel) * u_gridWindow / u_refScale;
 
   // === PRIMARY SCENE SIGNALS ===
   // Physical density = background fabric excitation.
@@ -297,7 +298,7 @@ void main() {
     diff = diff - round(diff);  // TOROIDAL WRAPPING RULE
     // SHADER DISTANCE RULE: shape values from getRenderShapes() are in world-space.
     // UV diff × worldScale = world-space distance, matching shape units.
-    float dist = length(diff) * u_worldScale;
+    float dist = length(diff) * u_gridWindow;
 
     vec4 shape = u_wellShape[i];
     float coreRadius = shape.x;
@@ -351,7 +352,7 @@ void main() {
   if (u_inhibitorForm > 0) {
     vec2 inhDiff = wrappedFluidUV - u_inhibitorPos;
     inhDiff = inhDiff - round(inhDiff);  // TOROIDAL WRAPPING RULE
-    float inhDist = length(inhDiff) * u_worldScale;
+    float inhDist = length(inhDiff) * u_gridWindow;
     vec3 inhColor = vec3(1.0, 0.18, 0.48); // magenta #FF2D7B
 
     if (u_inhibitorForm == 1) {
@@ -371,7 +372,7 @@ void main() {
       float cosA = cos(u_inhibitorTime * 0.2);
       float sinA = sin(u_inhibitorTime * 0.2);
       vec2 rotDiff = vec2(inhDiff.x * cosA + inhDiff.y * sinA,
-                          -inhDiff.x * sinA + inhDiff.y * cosA) * u_worldScale;
+                          -inhDiff.x * sinA + inhDiff.y * cosA) * u_gridWindow;
       float halfW = u_inhibitorRadius * 0.3;
       float halfH = u_inhibitorRadius * 1.2;
       float rectMask = step(abs(rotDiff.x), halfW) * step(abs(rotDiff.y), halfH);
@@ -816,11 +817,12 @@ export class FluidSim {
    * @param {Array} wellPositionsUV - well positions in fluid UV space
    * @param {number} camOffsetU - camera center X in fluid UV (0-1)
    * @param {number} camOffsetV - camera center Y in fluid UV (0-1)
-   * @param {number} worldScale - how many world-units map to the full texture (default 1 for legacy)
+   * @param {number} gridWindow - world-units spanned by the full fluid texture
+   *                              (== WORLD_SCALE today; decoupling pending)
    * @param {number} totalTime - elapsed time in seconds
    * @param {Array} wellMasses - mass per well, matching wellPositionsUV order
    */
-  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, worldScale = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -842,7 +844,7 @@ export class FluidSim {
 
     // Camera + time uniforms
     gl.uniform2f(u['u_camOffset'], camOffsetU, camOffsetV);
-    gl.uniform1f(u['u_worldScale'], worldScale);
+    gl.uniform1f(u['u_gridWindow'], gridWindow);
     gl.uniform1f(u['u_refScale'], FLUID_REF_SCALE);
     gl.uniform1f(u['u_time'], totalTime);
 

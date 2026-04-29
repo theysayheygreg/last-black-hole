@@ -21,7 +21,7 @@
 //   - dirThreshold:  speed above which directional ramps kick in
 //   - glitchIntensity: 0-1, for scene transitions (0 on title)
 //   - camFU, camFV:  camera center in fluid UV (world-anchored shimmer)
-//   - worldScale:    WORLD_SCALE
+//   - gridWindow:    world-units spanned by the fluid grid (== WORLD_SCALE today)
 //   - totalTime:     elapsed seconds
 
 import { Pass } from '../composer.js';
@@ -106,7 +106,7 @@ export class ASCIIPass extends Pass {
     gl.uniform1f(this.uniforms.u_time, ctx.totalTime);
     gl.uniform1f(this.uniforms.u_shimmer, ctx.shimmer);
     gl.uniform2f(this.uniforms.u_camOffset, ctx.camFU, ctx.camFV);
-    gl.uniform1f(this.uniforms.u_worldScale, ctx.worldScale);
+    gl.uniform1f(this.uniforms.u_gridWindow, ctx.gridWindow);
     gl.uniform1f(this.uniforms.u_dirThreshold, ctx.dirThreshold ?? 0.01);
     gl.uniform1f(this.uniforms.u_glitchIntensity, ctx.glitchIntensity ?? 0);
 
