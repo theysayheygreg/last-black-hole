@@ -441,17 +441,12 @@ void main() {
 }`;
 
 // Translate the source texture by u_delta (in UV) and write to the
-// target. With wrap-sampling this is a toroidal shift; values that
-// would scroll off one edge re-enter on the opposite edge. Used per
-// frame to keep fluid currents world-stable when the camera moves —
-// camera-relative grid means writing a well at world position W
-// requires the current contents to be at the same world position too,
-// even after the camera moved.
-//
-// Stage B handoff caveat: when the eventual GRID_WINDOW < WORLD_SCALE,
-// the wrap edge no longer represents the world's other side — it
-// represents area we have no data for. Stage D will replace the wrap
-// sample with a coarse-field read for off-grid inflow.
+// target. The grid is camera-anchored; when the camera moves we shift
+// existing fluid contents by the camera's UV delta so currents stay
+// world-stationary. Texels that scroll in from outside the source
+// range have no data — they default to zero. Stage D will replace
+// that zero with a coarse-field read so off-window world-scale current
+// truth flows in at the leading edge instead of empty fluid.
 const FRAG_TRANSLATE = `#version 300 es
 precision highp float;
 uniform sampler2D u_source;
@@ -459,8 +454,12 @@ uniform vec2 u_delta;
 in vec2 v_uv;
 out vec4 fragColor;
 void main() {
-  vec2 src = fract(v_uv - u_delta);
-  fragColor = texture(u_source, src);
+  vec2 src = v_uv - u_delta;
+  if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+    fragColor = vec4(0.0);
+  } else {
+    fragColor = texture(u_source, src);
+  }
 }`;
 
 
@@ -627,9 +626,15 @@ export class FluidSim {
 
   /**
    * Apply gravity well forces to the velocity field.
-   * Called once per well per step.
+   * Called once per well per step. Wells outside the camera-anchored grid
+   * window are skipped — Stage B2 onward, the grid is a fixed window
+   * around camera, and the toroidal wrap in FRAG_WELL_FORCE would
+   * otherwise pull the wrong side of the texture toward an off-window
+   * well. Stage D will replace this skip with a coarse-field path so
+   * distant wells still influence world-scale current truth.
    */
   applyWellForce(wellUV, gravity, falloff, clampRadius, orbitalStrength, dt, terminalSpeed) {
+    if (wellUV[0] < -0.05 || wellUV[0] > 1.05 || wellUV[1] < -0.05 || wellUV[1] > 1.05) return;
     const gl = this.gl;
     const u = this._useProgram(this.programs.wellForce);
     gl.uniform1i(u['u_velocity'], 0);
@@ -649,9 +654,12 @@ export class FluidSim {
   }
 
   /**
-   * Inject a force/density splat (e.g., ship thrust wake).
+   * Inject a force/density splat (e.g., ship thrust wake). Splats whose
+   * UV center falls outside the grid window are skipped — see comment on
+   * applyWellForce for why.
    */
   splat(x, y, dx, dy, radius, r, g, b) {
+    if (x < -0.05 || x > 1.05 || y < -0.05 || y > 1.05) return;
     const gl = this.gl;
     // Velocity splat
     const u = this._useProgram(this.programs.splat);
@@ -683,6 +691,7 @@ export class FluidSim {
    * but does NOT affect the physics simulation (no velocity, no dissipation).
    */
   visualSplat(x, y, radius, r, g, b) {
+    if (x < -0.05 || x > 1.05 || y < -0.05 || y > 1.05) return;
     const gl = this.gl;
     const u = this._useProgram(this.programs.splat);
     gl.uniform1i(u['u_target'], 0);

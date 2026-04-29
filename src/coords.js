@@ -29,22 +29,22 @@ export let WORLD_SCALE = 3.0;
 /**
  * GRID_WINDOW — world-units spanned by the fluid GPU grid texture.
  *
- * Today this tracks WORLD_SCALE 1:1: the grid texture represents the entire
- * world (toroidal wrap at edges). That made the GPU fluid pay full-resolution
- * cost for ~10% of the grid that's ever visible on a 10x10 map.
+ * Stage B2: fixed at FLUID_REF_SCALE regardless of WORLD_SCALE. The fluid
+ * grid is a camera-anchored window whose size never changes — bigger maps
+ * stop paying full-resolution GPU cost for area that's never visible. The
+ * fluid sim runs at the same fidelity on 3x3, 5x5, and 10x10. Cost is
+ * O(visible window), not O(world area), so 50x50 will be the same cost.
  *
- * The architectural target is to decouple this from WORLD_SCALE — make the
- * grid a fixed window around the camera, with a coarse field carrying world-
- * scale current truth and seeding inflow at the boundary. Stage A only
- * separates the concept; behavior is unchanged because GRID_WINDOW still
- * tracks WORLD_SCALE. See docs/project/FLUID-GRID-DECOUPLING.md.
+ * Off-window contributions (wells beyond ±GRID_WINDOW/2 from the camera)
+ * are skipped at injection time. Stage D will add a coarse-field client
+ * mirror that re-emits world-scale truth at the grid boundary so flying
+ * toward a distant well doesn't reveal a dead-zone.
  */
 export let GRID_WINDOW = 3.0;
 
-/** Update the world scale. ES module live binding — all importers see the new value immediately. */
+/** Update the world scale. GRID_WINDOW is intentionally NOT updated — fluid grid stays fixed. */
 export function setWorldScale(s) {
   WORLD_SCALE = s;
-  GRID_WINDOW = s;  // Stage A: still tracks WORLD_SCALE. Stage B will fix this.
   _accretionScaleCache = Math.sqrt(s * FLUID_REF_SCALE);
 }
 
@@ -240,14 +240,16 @@ export function wrapWorld(v) {
 export const FLUID_REF_SCALE = 3.0;
 
 /**
- * UV-to-world scaling factor. Multiply UV-space distances/offsets by this
+ * UV-to-grid scaling factor. Multiply UV-space distances/offsets by this
  * to normalize them to the reference scale's behavior.
  *
- * At WORLD_SCALE=3: returns 1.0 (no change).
- * At WORLD_SCALE=10: returns 0.3 (UV offsets 3.3x smaller to match world-space).
+ * Stage B2: keyed to GRID_WINDOW, not WORLD_SCALE. With GRID_WINDOW fixed
+ * at FLUID_REF_SCALE, this returns 1.0 on every map — splats and forces
+ * are tuned at the reference scale and don't need per-map adjustment now
+ * that the fluid grid window is also fixed.
  */
 export function uvScale() {
-  return FLUID_REF_SCALE / WORLD_SCALE;
+  return FLUID_REF_SCALE / GRID_WINDOW;
 }
 
 /**
@@ -264,7 +266,7 @@ export function uvScale() {
  *   fluid.splat(u, v, forceX * s, forceY * s, radius * s2, r, g, b);
  */
 export function splatScale() {
-  const s = FLUID_REF_SCALE / WORLD_SCALE;
+  const s = FLUID_REF_SCALE / GRID_WINDOW;
   return { s, s2: s * s };
 }
 
