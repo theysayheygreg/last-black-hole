@@ -2790,16 +2790,25 @@ function gameLoop(now) {
   _prevConsumable1 = consumable1Now;
   _prevConsumable2 = consumable2Now;
 
-  // 6a. Sync fluid camera to current camera. The fluid grid is camera-
-  //     anchored (Stage B) — when the camera moves we translate the texture
-  //     contents so currents stay world-stable, then advance the fluid
-  //     camera state so the next frame's worldToFluidUV() calls produce the
-  //     correct mapping. Toroidal wrap on world axes keeps deltas small at
-  //     the world edges. While GRID_WINDOW == WORLD_SCALE (Stage A/B1) the
-  //     wrap edge of the texture is meaningful (it's the world's other
-  //     side); Stage D will replace that with a coarse-field read.
+  // 6a. Sync fluid camera + coarse field. The fluid grid is a camera-
+  //     anchored window (Stage B); the coarse field is a world-anchored
+  //     low-res velocity grid that backs its inflow boundary (Stage C/D).
+  //
+  //     Order each frame:
+  //       1. Refresh the coarse field from the live fluid + a well-driven
+  //          baseline. In-window cells capture transient features; out-
+  //          of-window cells fall back to baseline. This is implicit
+  //          Stage E — features are integrated into world-anchored
+  //          coarse cells continuously while in-window.
+  //       2. If the camera moved, translate the fluid by the camera UV
+  //          delta. Texels scrolling in from outside read from the coarse
+  //          field at the corresponding world position.
+  //       3. Advance the fluid camera state so the next frame's
+  //          worldToFluidUV() calls produce the correct mapping.
   if (fluid) {
     const [prevFcamX, prevFcamY] = getFluidCamera();
+    fluid.updateCoarseField([prevFcamX, prevFcamY], GRID_WINDOW, WORLD_SCALE, wellSystem.wells);
+
     let dCamX = camX - prevFcamX;
     let dCamY = camY - prevFcamY;
     const half = WORLD_SCALE / 2;
@@ -2808,8 +2817,10 @@ function gameLoop(now) {
     if (dCamY > half) dCamY -= WORLD_SCALE;
     if (dCamY < -half) dCamY += WORLD_SCALE;
     if (dCamX !== 0 || dCamY !== 0) {
-      // Texture is Y-up (UV v increases as world y decreases).
-      fluid.translate(dCamX / GRID_WINDOW, -dCamY / GRID_WINDOW);
+      fluid.translate(
+        dCamX / GRID_WINDOW, -dCamY / GRID_WINDOW,
+        [camX, camY], GRID_WINDOW, WORLD_SCALE,
+      );
       setFluidCamera(camX, camY);
     }
   }

@@ -311,14 +311,19 @@ function frame(now) {
   camX = CAMERA_CENTER_X + Math.sin((totalTime / CAMERA_DRIFT_PERIOD_X) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
   camY = CAMERA_CENTER_Y + Math.cos((totalTime / CAMERA_DRIFT_PERIOD_Y) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
 
-  // --- Sync fluid camera (Stage B). Translate by the camera delta so
-  // currents stay world-stable through the lissajous drift. ---
+  // --- Sync fluid camera (Stage B/C/D). Refresh the coarse field, then
+  // translate the fluid by the camera delta (with coarse-field inflow at
+  // the leading edge). ---
   {
     const [prevFcamX, prevFcamY] = getFluidCamera();
+    fluid.updateCoarseField([prevFcamX, prevFcamY], GRID_WINDOW, WORLD_SCALE, wellSystem.wells);
     const dCamX = camX - prevFcamX;
     const dCamY = camY - prevFcamY;
     if (dCamX !== 0 || dCamY !== 0) {
-      fluid.translate(dCamX / GRID_WINDOW, -dCamY / GRID_WINDOW);
+      fluid.translate(
+        dCamX / GRID_WINDOW, -dCamY / GRID_WINDOW,
+        [camX, camY], GRID_WINDOW, WORLD_SCALE,
+      );
       setFluidCamera(camX, camY);
     }
   }

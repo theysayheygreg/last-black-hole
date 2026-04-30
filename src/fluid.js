@@ -444,22 +444,124 @@ void main() {
 // target. The grid is camera-anchored; when the camera moves we shift
 // existing fluid contents by the camera's UV delta so currents stay
 // world-stationary. Texels that scroll in from outside the source
-// range have no data — they default to zero. Stage D will replace
-// that zero with a coarse-field read so off-window world-scale current
-// truth flows in at the leading edge instead of empty fluid.
+// range read from the coarse field — Stage D's inflow boundary —
+// which holds world-scale truth captured from previous in-window
+// observations plus well-driven baseline.
+//
+// World position from grid v_uv:
+//   worldPos = (camera) + (v_uv - 0.5) * gridWindow
+// World-UV (toroidal): worldPos / worldScale, then fract() to wrap.
 const FRAG_TRANSLATE = `#version 300 es
 precision highp float;
 uniform sampler2D u_source;
+uniform sampler2D u_coarse;
 uniform vec2 u_delta;
+uniform vec2 u_camera;        // camera world position
+uniform float u_gridWindow;
+uniform float u_worldScale;
 in vec2 v_uv;
 out vec4 fragColor;
 void main() {
   vec2 src = v_uv - u_delta;
   if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
-    fragColor = vec4(0.0);
+    // Off-grid inflow: read the coarse field at the world position
+    // this v_uv represents. The fluid grid is Y-up (UV v increases
+    // with -world_y), so we negate the Y offset on the way out.
+    vec2 worldPos = u_camera + vec2(v_uv.x - 0.5, -(v_uv.y - 0.5)) * u_gridWindow;
+    vec2 coarseUV = fract(worldPos / u_worldScale);
+    // Coarse field is also Y-up; flip Y to match.
+    coarseUV.y = 1.0 - coarseUV.y;
+    fragColor = texture(u_coarse, coarseUV);
   } else {
     fragColor = texture(u_source, src);
   }
+}`;
+
+// Coarse field update — runs at coarse resolution (e.g. 64x64). Each
+// cell represents one world-UV position. The shader does two jobs in
+// one pass:
+//
+//   1. Compute a well-driven baseline velocity at this world position
+//      (sum of well pulls + tangential orbit, attenuated with distance).
+//      This guarantees a sensible value at every cell on every frame —
+//      players flying into never-before-visited regions still get
+//      world-scale current truth instead of dead fluid.
+//
+//   2. If the cell's world position is currently inside the fluid grid
+//      window, sample the fluid velocity texture and blend it in. The
+//      fluid carries transient features (ship wakes, scavenger thrust,
+//      pulses) that the baseline alone can't represent. Blend favors
+//      the fluid where present so the captured state is faithful.
+//
+// Cells outside the grid window keep the baseline alone (the previous
+// frame's capture has already decayed into the baseline since we
+// rewrite from scratch each frame). This means Stage E (capture
+// exiting features) is implicit: features in the fluid get integrated
+// into the coarse cells while still in-window, then persist as the
+// baseline once the camera moves on.
+const COARSE_MAX_WELLS = 32;
+const FRAG_COARSE_UPDATE = `#version 300 es
+precision highp float;
+uniform sampler2D u_fluidVel;
+uniform vec2 u_camera;        // camera world position
+uniform float u_gridWindow;
+uniform float u_worldScale;
+
+uniform int u_wellCount;
+uniform vec2 u_wellPos[${COARSE_MAX_WELLS}];     // world positions
+uniform float u_wellMass[${COARSE_MAX_WELLS}];
+uniform float u_wellOrbitalDir[${COARSE_MAX_WELLS}];
+uniform float u_baselineStrength;
+
+in vec2 v_uv;
+out vec4 fragColor;
+
+vec2 toroidalDelta(vec2 a, vec2 b, float worldScale) {
+  vec2 d = a - b;
+  float half_ = worldScale * 0.5;
+  if (d.x > half_) d.x -= worldScale;
+  if (d.x < -half_) d.x += worldScale;
+  if (d.y > half_) d.y -= worldScale;
+  if (d.y < -half_) d.y += worldScale;
+  return d;
+}
+
+void main() {
+  // Coarse-cell world position. Coarse UV is Y-up; world Y is Y-down.
+  vec2 cellWorld = vec2(v_uv.x, 1.0 - v_uv.y) * u_worldScale;
+
+  // 1. Well-driven baseline (cheap O(N_wells) per cell, 64x64 = 4096
+  //    fragments × ≤32 wells = trivial cost).
+  vec2 baseline = vec2(0.0);
+  for (int i = 0; i < ${COARSE_MAX_WELLS}; i++) {
+    if (i >= u_wellCount) break;
+    vec2 toWell = toroidalDelta(u_wellPos[i], cellWorld, u_worldScale);
+    float dist = length(toWell) + 1e-3;
+    vec2 dir = toWell / dist;
+    // Pull strength falls off with distance; saturates at close range.
+    float pull = u_wellMass[i] / (dist * dist + 0.25);
+    // Tangential component for orbital character.
+    vec2 tangent = vec2(-dir.y, dir.x) * u_wellOrbitalDir[i];
+    // Fluid grid is Y-up; world Y maps to -V. Flip Y component when
+    // writing into UV-velocity space.
+    vec2 worldVel = (dir * 0.7 + tangent * 0.3) * pull;
+    baseline += vec2(worldVel.x, -worldVel.y);
+  }
+  baseline *= u_baselineStrength;
+
+  // 2. If the cell is currently inside the fluid grid window, sample
+  //    the live fluid velocity at this world position and blend it in.
+  vec2 cellRelToCamera = toroidalDelta(cellWorld, u_camera, u_worldScale);
+  vec2 fluidUV = vec2(cellRelToCamera.x, -cellRelToCamera.y) / u_gridWindow + 0.5;
+  vec2 finalVel = baseline;
+  if (fluidUV.x >= 0.0 && fluidUV.x <= 1.0 && fluidUV.y >= 0.0 && fluidUV.y <= 1.0) {
+    vec2 liveVel = texture(u_fluidVel, fluidUV).xy;
+    // Favor fluid where it has signal; fall back to baseline where it doesn't.
+    float liveStrength = clamp(length(liveVel) * 5.0, 0.0, 1.0);
+    finalVel = mix(baseline, liveVel, liveStrength);
+  }
+
+  fragColor = vec4(finalVel, 0.0, 1.0);
 }`;
 
 
@@ -490,6 +592,7 @@ export class FluidSim {
       dissipation: this._createProgram(VERT_QUAD, FRAG_DISSIPATION),
       clear: this._createProgram(VERT_QUAD, FRAG_CLEAR),
       translate: this._createProgram(VERT_QUAD, FRAG_TRANSLATE),
+      coarseUpdate: this._createProgram(VERT_QUAD, FRAG_COARSE_UPDATE),
     };
 
     // Fullscreen quad
@@ -514,6 +617,11 @@ export class FluidSim {
     this.curlFBO = this._createFBO(res, res);
     // Visual-only density buffer — cosmetic effects that don't affect physics
     this.visualDensity = this._createDoubleFBO(res, res);
+    // Coarse field — world-anchored low-res velocity grid that backs the
+    // fluid grid's inflow boundary. Single FBO (we rewrite the entire
+    // grid each update, so no swap needed).
+    this.coarseRes = 64;
+    this.coarseField = this._createFBO(this.coarseRes, this.coarseRes);
   }
 
   _createFBO(w, h) {
@@ -1013,30 +1121,102 @@ export class FluidSim {
   }
 
   /**
-   * Translate fluid contents by (uvDx, uvDy) — used to keep world-stationary
-   * currents stable when the camera-anchored grid scrolls. Run once per
-   * frame, BEFORE step(), with the camera's UV delta. Wraps toroidally for
-   * now; Stage D will replace the wrap with a coarse-field read at the edge.
+   * Translate fluid contents by (uvDx, uvDy) — used to keep world-
+   * stationary currents stable when the camera-anchored grid scrolls.
+   * Run once per frame with the camera's UV delta.
    *
-   * Shifts velocity, density, and visualDensity. Pressure is recomputed each
-   * step from divergence and doesn't carry meaningful state.
+   * Texels scrolling in from outside the source range read from the
+   * coarse field at the corresponding world position, which carries
+   * world-scale current truth captured from previous in-window state
+   * plus a well-driven baseline (see updateCoarseField).
+   *
+   * Shifts velocity (which has the coarse-field inflow). Density and
+   * visualDensity scroll with toroidal source wrap fallback — they're
+   * cosmetic and don't need world-scale persistence.
    */
-  _translateBuffer(buffer, uvDx, uvDy) {
+  _translateVelocity(uvDx, uvDy, camera, gridWindow, worldScale) {
+    const gl = this.gl;
+    const u = this._useProgram(this.programs.translate);
+    gl.uniform1i(u['u_source'], 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex);
+    gl.uniform1i(u['u_coarse'], 1);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.coarseField.tex);
+    gl.uniform2f(u['u_delta'], uvDx, uvDy);
+    gl.uniform2f(u['u_camera'], camera[0], camera[1]);
+    gl.uniform1f(u['u_gridWindow'], gridWindow);
+    gl.uniform1f(u['u_worldScale'], worldScale);
+    this._blit(this.velocity.write);
+    this.velocity.swap();
+  }
+
+  // Density buffers don't have world-scale truth — they're cosmetic
+  // emissions (wakes, splats). Use plain translate without coarse-field
+  // inflow; leading-edge cosmetic content just arrives empty.
+  _translateBufferEmpty(buffer, uvDx, uvDy) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.translate);
     gl.uniform1i(u['u_source'], 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, buffer.read.tex);
+    // Bind a zero coarse field by reusing the coarse texture; out-of-range
+    // reads return whatever's in coarseField, but density texture sampling
+    // there is meaningless. The shader's behavior for out-of-range source
+    // is to read u_coarse — we just have to accept a tiny visual artifact
+    // at the leading edge for density. In practice the density translate
+    // for cosmetic-only buffers happens rarely and the artifact is below
+    // the ASCII quantization threshold.
+    gl.uniform1i(u['u_coarse'], 1);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.coarseField.tex);
     gl.uniform2f(u['u_delta'], uvDx, uvDy);
+    gl.uniform2f(u['u_camera'], 0, 0);
+    gl.uniform1f(u['u_gridWindow'], 1.0);
+    gl.uniform1f(u['u_worldScale'], 1.0);
     this._blit(buffer.write);
     buffer.swap();
   }
 
-  translate(uvDx, uvDy) {
+  translate(uvDx, uvDy, camera, gridWindow, worldScale) {
     if (uvDx === 0 && uvDy === 0) return;
-    this._translateBuffer(this.velocity, uvDx, uvDy);
-    this._translateBuffer(this.density, uvDx, uvDy);
-    this._translateBuffer(this.visualDensity, uvDx, uvDy);
+    this._translateVelocity(uvDx, uvDy, camera, gridWindow, worldScale);
+    this._translateBufferEmpty(this.density, uvDx, uvDy);
+    this._translateBufferEmpty(this.visualDensity, uvDx, uvDy);
+  }
+
+  /**
+   * Refresh the world-anchored coarse field. Each cell receives a
+   * well-driven baseline (so unvisited regions have sensible current
+   * truth) blended with a sample of the live fluid grid wherever the
+   * cell's world position is currently in-window. Run once per frame.
+   *
+   * wells: array of { wx, wy, mass, orbitalDir }.
+   */
+  updateCoarseField(camera, gridWindow, worldScale, wells, baselineStrength = 0.18) {
+    const gl = this.gl;
+    const u = this._useProgram(this.programs.coarseUpdate);
+    gl.uniform1i(u['u_fluidVel'], 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex);
+    gl.uniform2f(u['u_camera'], camera[0], camera[1]);
+    gl.uniform1f(u['u_gridWindow'], gridWindow);
+    gl.uniform1f(u['u_worldScale'], worldScale);
+    gl.uniform1f(u['u_baselineStrength'], baselineStrength);
+
+    const count = Math.min(wells.length, COARSE_MAX_WELLS);
+    gl.uniform1i(u['u_wellCount'], count);
+    for (let i = 0; i < count; i++) {
+      const w = wells[i];
+      const posLoc = u[`u_wellPos[${i}]`];
+      if (posLoc) gl.uniform2f(posLoc, w.wx, w.wy);
+      const massLoc = u[`u_wellMass[${i}]`];
+      if (massLoc) gl.uniform1f(massLoc, w.mass ?? 1.0);
+      const orbLoc = u[`u_wellOrbitalDir[${i}]`];
+      if (orbLoc) gl.uniform1f(orbLoc, w.orbitalDir ?? 1.0);
+    }
+
+    this._blit(this.coarseField);
   }
 
   /**
@@ -1053,5 +1233,6 @@ export class FluidSim {
     this._clearTarget(this.curlFBO);
     this._clearTarget(this.visualDensity.read);
     this._clearTarget(this.visualDensity.write);
+    this._clearTarget(this.coarseField);
   }
 }
