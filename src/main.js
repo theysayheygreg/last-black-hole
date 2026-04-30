@@ -136,53 +136,35 @@ function getVisibleWellRenderInputs(cameraX, cameraY) {
   const allUVs = wellSystem.getUVPositions();
   const allMasses = wellSystem.getUVMasses();
   const allShapes = wellSystem.getRenderShapes();
-  if (gamePhase === 'title' || rendererFixtureActive || allUVs.length <= 8) {
-    return { wellUVs: allUVs, wellMasses: allMasses, wellShapes: allShapes };
-  }
 
+  // Filter to wells whose camera-relative position lands within the
+  // fluid grid window (plus a ring-extent margin). Off-window wells
+  // would have UVs outside [0, 1] which the display shader's toroidal
+  // wrap would re-project into the visible region — wrong, since the
+  // grid window doesn't span the full world. Their contribution comes
+  // through the coarse field instead.
   const visibleUVs = [];
   const visibleMasses = [];
   const visibleShapes = [];
-  const included = new Set();
-  const nearest = [];
-  const halfView = 0.5;
+  const visibleIndices = [];
+  const halfWindow = GRID_WINDOW / 2;
 
   for (let i = 0; i < wellSystem.wells.length; i++) {
     const well = wellSystem.wells[i];
     const shape = allShapes[i] || [0.01, 0.02, 0.03, 1.0];
     const [dx, dy] = worldDisplacement(cameraX, cameraY, well.wx, well.wy);
-    const dist = Math.hypot(dx, dy);
-    nearest.push({ index: i, dist });
-    const margin = Math.max(0.35, shape[2] * 1.4);
-    if (Math.abs(dx) <= halfView + margin && Math.abs(dy) <= halfView + margin) {
+    const ringExtent = Math.max(0.05, shape[2] * 1.4);
+    if (Math.abs(dx) <= halfWindow + ringExtent && Math.abs(dy) <= halfWindow + ringExtent) {
       visibleUVs.push(allUVs[i]);
       visibleMasses.push(allMasses[i]);
       visibleShapes.push(shape);
-      included.add(i);
-    }
-  }
-
-  nearest.sort((a, b) => a.dist - b.dist);
-  for (const candidate of nearest) {
-    if (visibleUVs.length >= 2) break;
-    if (included.has(candidate.index)) continue;
-    visibleUVs.push(allUVs[candidate.index]);
-    visibleMasses.push(allMasses[candidate.index]);
-    visibleShapes.push(allShapes[candidate.index] || [0.01, 0.02, 0.03, 1.0]);
-    included.add(candidate.index);
-  }
-
-  if (visibleUVs.length === 0 && allUVs.length > 0) {
-    for (let i = 0; i < Math.min(2, allUVs.length); i++) {
-      visibleUVs.push(allUVs[i]);
-      visibleMasses.push(allMasses[i]);
-      visibleShapes.push(allShapes[i] || [0.01, 0.02, 0.03, 1.0]);
+      visibleIndices.push(i);
     }
   }
 
   perfStats.visibleWellCount = visibleUVs.length;
   perfStats.totalWellCount = allUVs.length;
-  return { wellUVs: visibleUVs, wellMasses: visibleMasses, wellShapes: visibleShapes };
+  return { wellUVs: visibleUVs, wellMasses: visibleMasses, wellShapes: visibleShapes, visibleIndices };
 }
 // Title camera drift (lissajous). Small amplitude, long periods —
 // subtle motion to keep the frame alive without distracting.
@@ -2832,7 +2814,8 @@ function gameLoop(now) {
   }
 
   // 7. Render fluid -> ASCII (camera-aware)
-  const { wellUVs, wellMasses, wellShapes } = getVisibleWellRenderInputs(camX, camY);
+  const { wellUVs, wellMasses, wellShapes, visibleIndices } = getVisibleWellRenderInputs(camX, camY);
+  const visibleAccretionRadii = visibleIndices.map((i) => sceneAccretionRadii[i] ?? [0.07, 0.30, 0.52]);
   perfStats.visibleWellCount = wellUVs.length;
   perfStats.totalWellCount = wellSystem.wells.length;
   perfStats.fluidResolution = fluid?.res || 0;
@@ -2864,7 +2847,7 @@ function gameLoop(now) {
     },
     accretion: {
       wellUVs,
-      wellRadii: sceneAccretionRadii,
+      wellRadii: visibleAccretionRadii,
       camFU, camFV,
       gridWindow: GRID_WINDOW,
     },

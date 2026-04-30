@@ -1,21 +1,12 @@
 /**
  * deep-field-10x10.js — Large map. 20 wells, 6 stars, 12 loot, 5 portals.
- * World scale 10.0, fluid resolution 256 for playable client perf.
- * Force culling is critical — 20 wells = 20 GPU passes without it.
+ * World scale 10.0. Fluid grid is camera-anchored at GRID_WINDOW = 3 world
+ * units, so this map runs at the same fluid cost as 3x3 — no per-map sim
+ * Hz / fluid res / pressure overrides needed.
  */
 export const MAP = {
   name: 'Deep Field',
   worldScale: 10.0,
-  fluidResolution: 256,
-  configOverrides: {
-    sim: {
-      fixedHz: 15,
-      maxStepsPerFrame: 2,
-    },
-    fluid: {
-      pressureIterations: 12,
-    },
-  },
   wells: [
     // Central mega-well
     { x: 5.0, y: 5.0, mass: 2.5, orbitalDir: 1, killRadius: 0.08, spinRate: 0.4, points: 12 },
