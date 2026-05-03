@@ -455,6 +455,7 @@ const FRAG_TRANSLATE = `#version 300 es
 precision highp float;
 uniform sampler2D u_source;
 uniform sampler2D u_coarse;
+uniform int u_useCoarse;
 uniform vec2 u_delta;
 uniform vec2 u_camera;        // camera world position
 uniform float u_gridWindow;
@@ -464,6 +465,10 @@ out vec4 fragColor;
 void main() {
   vec2 src = v_uv - u_delta;
   if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
+    if (u_useCoarse == 0) {
+      fragColor = vec4(0.0);
+      return;
+    }
     // Off-grid inflow: read the coarse field at the world position
     // this v_uv represents. The fluid grid is Y-up (UV v increases
     // with -world_y), so we negate the Y offset on the way out.
@@ -493,16 +498,15 @@ void main() {
 //      pulses) that the baseline alone can't represent. Blend favors
 //      the fluid where present so the captured state is faithful.
 //
-// Cells outside the grid window keep the baseline alone (the previous
-// frame's capture has already decayed into the baseline since we
-// rewrite from scratch each frame). This means Stage E (capture
-// exiting features) is implicit: features in the fluid get integrated
-// into the coarse cells while still in-window, then persist as the
-// baseline once the camera moves on.
+// Cells outside the grid window keep the previous coarse velocity and
+// decay it toward the baseline. This makes Stage E explicit: features
+// are captured while in-window, remain available to re-enter at the
+// fluid boundary, and then slowly relax back into well-driven flow.
 const COARSE_MAX_WELLS = 32;
 const FRAG_COARSE_UPDATE = `#version 300 es
 precision highp float;
 uniform sampler2D u_fluidVel;
+uniform sampler2D u_previousCoarse;
 uniform vec2 u_camera;        // camera world position
 uniform float u_gridWindow;
 uniform float u_worldScale;
@@ -512,6 +516,7 @@ uniform vec2 u_wellPos[${COARSE_MAX_WELLS}];     // world positions
 uniform float u_wellMass[${COARSE_MAX_WELLS}];
 uniform float u_wellOrbitalDir[${COARSE_MAX_WELLS}];
 uniform float u_baselineStrength;
+uniform float u_persistenceDecay;
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -553,12 +558,16 @@ void main() {
   //    the live fluid velocity at this world position and blend it in.
   vec2 cellRelToCamera = toroidalDelta(cellWorld, u_camera, u_worldScale);
   vec2 fluidUV = vec2(cellRelToCamera.x, -cellRelToCamera.y) / u_gridWindow + 0.5;
-  vec2 finalVel = baseline;
+  vec4 previous = texture(u_previousCoarse, v_uv);
+  vec2 persisted = previous.a > 0.5
+    ? baseline + (previous.xy - baseline) * u_persistenceDecay
+    : baseline;
+  vec2 finalVel = persisted;
   if (fluidUV.x >= 0.0 && fluidUV.x <= 1.0 && fluidUV.y >= 0.0 && fluidUV.y <= 1.0) {
     vec2 liveVel = texture(u_fluidVel, fluidUV).xy;
-    // Favor fluid where it has signal; fall back to baseline where it doesn't.
+    // Favor fluid where it has signal; preserve coarse memory where it doesn't.
     float liveStrength = clamp(length(liveVel) * 5.0, 0.0, 1.0);
-    finalVel = mix(baseline, liveVel, liveStrength);
+    finalVel = mix(persisted, liveVel, liveStrength);
   }
 
   fragColor = vec4(finalVel, 0.0, 1.0);
@@ -618,10 +627,13 @@ export class FluidSim {
     // Visual-only density buffer — cosmetic effects that don't affect physics
     this.visualDensity = this._createDoubleFBO(res, res);
     // Coarse field — world-anchored low-res velocity grid that backs the
-    // fluid grid's inflow boundary. Single FBO (we rewrite the entire
-    // grid each update, so no swap needed).
+    // fluid grid's inflow boundary. Ping-pong so captured transient flow
+    // can decay toward the well baseline instead of disappearing as soon
+    // as a cell leaves the live fluid window.
     this.coarseRes = 64;
-    this.coarseField = this._createFBO(this.coarseRes, this.coarseRes);
+    this.coarseField = this._createDoubleFBO(this.coarseRes, this.coarseRes);
+    this._clearTarget(this.coarseField.read, 0, 0, 0, 0);
+    this._clearTarget(this.coarseField.write, 0, 0, 0, 0);
   }
 
   _createFBO(w, h) {
@@ -1111,6 +1123,7 @@ export class FluidSim {
     destroyDoubleFBO(this.density);
     destroyDoubleFBO(this.pressure);
     destroyDoubleFBO(this.visualDensity);
+    destroyDoubleFBO(this.coarseField);
     destroyFBO(this.divergenceFBO);
     destroyFBO(this.curlFBO);
 
@@ -1142,7 +1155,8 @@ export class FluidSim {
     gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex);
     gl.uniform1i(u['u_coarse'], 1);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.coarseField.tex);
+    gl.bindTexture(gl.TEXTURE_2D, this.coarseField.read.tex);
+    gl.uniform1i(u['u_useCoarse'], 1);
     gl.uniform2f(u['u_delta'], uvDx, uvDy);
     gl.uniform2f(u['u_camera'], camera[0], camera[1]);
     gl.uniform1f(u['u_gridWindow'], gridWindow);
@@ -1160,16 +1174,10 @@ export class FluidSim {
     gl.uniform1i(u['u_source'], 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, buffer.read.tex);
-    // Bind a zero coarse field by reusing the coarse texture; out-of-range
-    // reads return whatever's in coarseField, but density texture sampling
-    // there is meaningless. The shader's behavior for out-of-range source
-    // is to read u_coarse — we just have to accept a tiny visual artifact
-    // at the leading edge for density. In practice the density translate
-    // for cosmetic-only buffers happens rarely and the artifact is below
-    // the ASCII quantization threshold.
     gl.uniform1i(u['u_coarse'], 1);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.coarseField.tex);
+    gl.bindTexture(gl.TEXTURE_2D, buffer.read.tex);
+    gl.uniform1i(u['u_useCoarse'], 0);
     gl.uniform2f(u['u_delta'], uvDx, uvDy);
     gl.uniform2f(u['u_camera'], 0, 0);
     gl.uniform1f(u['u_gridWindow'], 1.0);
@@ -1193,16 +1201,20 @@ export class FluidSim {
    *
    * wells: array of { wx, wy, mass, orbitalDir }.
    */
-  updateCoarseField(camera, gridWindow, worldScale, wells, baselineStrength = 0.18) {
+  updateCoarseField(camera, gridWindow, worldScale, wells, baselineStrength = 0.18, persistenceDecay = 0.94) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.coarseUpdate);
     gl.uniform1i(u['u_fluidVel'], 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.velocity.read.tex);
+    gl.uniform1i(u['u_previousCoarse'], 1);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.coarseField.read.tex);
     gl.uniform2f(u['u_camera'], camera[0], camera[1]);
     gl.uniform1f(u['u_gridWindow'], gridWindow);
     gl.uniform1f(u['u_worldScale'], worldScale);
     gl.uniform1f(u['u_baselineStrength'], baselineStrength);
+    gl.uniform1f(u['u_persistenceDecay'], persistenceDecay);
 
     const count = Math.min(wells.length, COARSE_MAX_WELLS);
     gl.uniform1i(u['u_wellCount'], count);
@@ -1216,7 +1228,8 @@ export class FluidSim {
       if (orbLoc) gl.uniform1f(orbLoc, w.orbitalDir ?? 1.0);
     }
 
-    this._blit(this.coarseField);
+    this._blit(this.coarseField.write);
+    this.coarseField.swap();
   }
 
   /**
@@ -1233,6 +1246,7 @@ export class FluidSim {
     this._clearTarget(this.curlFBO);
     this._clearTarget(this.visualDensity.read);
     this._clearTarget(this.visualDensity.write);
-    this._clearTarget(this.coarseField);
+    this._clearTarget(this.coarseField.read, 0, 0, 0, 0);
+    this._clearTarget(this.coarseField.write, 0, 0, 0, 0);
   }
 }

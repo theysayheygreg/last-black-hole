@@ -1122,7 +1122,9 @@ function updateRemoteShipTarget(localPlayer, snapshot) {
 
 function updateRemoteShipPresentation(dt) {
   if (!remoteAuthorityActive || !remoteShipPresentation) return;
-  const elapsed = Math.min(0.25, Math.max(0, (performance.now() - remoteShipPresentation.receivedAt) / 1000));
+  // Keep extrapolating through normal remote polling jitter so motion does
+  // not visibly quantize between authoritative snapshots.
+  const elapsed = Math.min(0.75, Math.max(0, (performance.now() - remoteShipPresentation.receivedAt) / 1000));
   const targetX = wrapWorld(remoteShipPresentation.wx + remoteShipPresentation.vx * elapsed);
   const targetY = wrapWorld(remoteShipPresentation.wy + remoteShipPresentation.vy * elapsed);
   const [dx, dy] = worldDisplacement(ship.wx, ship.wy, targetX, targetY);
