@@ -1,33 +1,35 @@
 {
   "ok": true,
-  "recordedAt": "2026-04-28T21:16:17.244Z",
+  "recordedAt": "2026-05-03T22:26:32.197Z",
   "branch": "main",
-  "gitHead": "a7d715e3f96519985d1551b6e499f7a2fc5f0fd7",
+  "gitHead": "11a0f9fbfc3d27f068a516f4715c8a5b03580059",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 215470
+      "durationMs": 215863
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 42801
+      "durationMs": 42054
     },
     {
       "name": "title-prototype",
       "command": "npm run test:title-prototype",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 8749
+      "durationMs": 7881
     }
   ],
   "dirtyPaths": [
     "?? .claude/",
+    "?? .codex/",
+    "?? AGENTS.md",
     "?? _artifacts/",
     "?? handoffs/",
     "?? tests/probe-ship-speed.js",
