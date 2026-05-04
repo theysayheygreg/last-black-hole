@@ -115,6 +115,115 @@ function sortVault(vault) {
   });
 }
 
+function toFiniteNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeRunOutcome(outcome) {
+  if (outcome === "escaped" || outcome === "extracted") return "extracted";
+  if (outcome === "dead") return "dead";
+  if (outcome === "disconnected") return "disconnected";
+  if (outcome === "abandoned") return "abandoned";
+  return outcome || "abandoned";
+}
+
+function cloneItems(items) {
+  return Array.isArray(items) ? items.filter(Boolean).map((item) => ({ ...item })) : [];
+}
+
+function snapshotLoadout(player, runResult = {}) {
+  runResult = runResult || {};
+  const loadout = runResult.loadoutSnapshot || {};
+  return normalizeLoadout({
+    equipped: loadout.equipped || player?.equipped || [],
+    consumables: loadout.consumables || player?.consumables || [],
+  });
+}
+
+function compactStatsDelta(runResult = {}, normalizedOutcome, survivalTime, emEarned) {
+  const provided = runResult.statsDelta && typeof runResult.statsDelta === "object"
+    ? { ...runResult.statsDelta }
+    : {};
+  return {
+    runsAttempted: toFiniteNumber(provided.runsAttempted, 1),
+    runsCompleted: toFiniteNumber(
+      provided.runsCompleted,
+      normalizedOutcome === "extracted" ? 1 : 0
+    ),
+    totalSurvivalTime: toFiniteNumber(provided.totalSurvivalTime, survivalTime),
+    totalEmEarned: toFiniteNumber(provided.totalEmEarned, emEarned),
+    cargoExtracted: toFiniteNumber(provided.cargoExtracted, cloneItems(runResult.cargoExtracted).length),
+    cargoLost: toFiniteNumber(provided.cargoLost, cloneItems(runResult.cargoLost).length),
+  };
+}
+
+function buildRunEntry({ profile, player, outcome, runDuration, session, runResult, result }) {
+  const normalizedOutcome = normalizeRunOutcome(runResult?.outcome || outcome);
+  const survivalTime = toFiniteNumber(runResult?.survivalTime, runDuration);
+  const survivalBonus = Number.isFinite(Number(runResult?.survivalBonus))
+    ? Number(runResult.survivalBonus)
+    : Math.floor(survivalTime * 0.5 * (normalizedOutcome === "dead" ? 0.5 : 1));
+  const cargoExtracted = cloneItems(runResult?.cargoExtracted || (normalizedOutcome === "extracted" ? player?.cargo : []));
+  const cargoLost = cloneItems(runResult?.cargoLost || (normalizedOutcome !== "extracted" ? player?.cargo : []));
+  const emEarned = Number.isFinite(Number(runResult?.emEarned))
+    ? Number(runResult.emEarned)
+    : cargoExtracted.reduce((sum, item) => sum + toFiniteNumber(item.value, 0), 0) + survivalBonus;
+  const runId = runResult?.runId || session?.runId || session?.id || crypto.randomUUID();
+  const loadoutSnapshot = snapshotLoadout(player, runResult);
+  const mapContext = {
+    mapId: runResult?.mapId || session?.mapId || null,
+    mapScale: runResult?.mapScale ?? session?.worldScale ?? null,
+    wellCount: runResult?.wellCount ?? null,
+    seed: runResult?.seed ?? session?.seed ?? null,
+  };
+
+  const entry = {
+    runId,
+    sessionId: session?.id || null,
+    profileId: profile.id,
+    pilotId: runResult?.pilotId || player?.clientId || null,
+    hullType: runResult?.hullType || player?.hullType || profile.hullType || null,
+    rigLevels: Array.isArray(runResult?.rigLevels) ? runResult.rigLevels.slice(0, 3) : [...(profile.rigLevels || DEFAULT_RIG_LEVELS)],
+    outcome: normalizedOutcome,
+    runDuration: survivalTime,
+    survivalTime,
+    survivalBonus,
+    deathCause: runResult?.deathCause || null,
+    deathEntityId: runResult?.deathEntityId || null,
+    cargoExtracted,
+    cargoLost,
+    salvageBrought: cloneItems(runResult?.salvageBrought || [
+      ...loadoutSnapshot.equipped,
+      ...loadoutSnapshot.consumables,
+    ]),
+    signalPeak: runResult?.signalPeak ?? player?.signal?.level ?? null,
+    signalPeakZone: runResult?.signalPeakZone || player?.signal?.zone || null,
+    timePerZone: runResult?.timePerZone && typeof runResult.timePerZone === "object" ? { ...runResult.timePerZone } : {},
+    inhibitorFormReached: runResult?.inhibitorFormReached ?? null,
+    inhibitorFormTimes: Array.isArray(runResult?.inhibitorFormTimes) ? [...runResult.inhibitorFormTimes] : [],
+    emEarned,
+    tax: result.tax || 0,
+    overflowValue: result.overflowValue || 0,
+    extractedCount: result.extractedCount || cargoExtracted.length,
+    aiOutcomes: Array.isArray(runResult?.aiOutcomes) ? runResult.aiOutcomes.map((ai) => ({ ...ai })) : [],
+    notables: Array.isArray(runResult?.notables) ? runResult.notables.map((notable) => ({ ...notable })) : [],
+    milestonesUnlocked: Array.isArray(runResult?.milestonesUnlocked) ? runResult.milestonesUnlocked.map((milestone) => ({ ...milestone })) : [],
+    statsDelta: compactStatsDelta(runResult || { cargoExtracted, cargoLost }, normalizedOutcome, survivalTime, emEarned),
+    mapId: mapContext.mapId,
+    mapScale: mapContext.mapScale,
+    wellCount: mapContext.wellCount,
+    seed: mapContext.seed,
+    mapContext,
+    loadoutSnapshot,
+    updatedAt: nowIso(),
+  };
+  if (entry.outcome !== outcome) {
+    entry.legacyOutcome = outcome;
+  }
+  return entry;
+}
+
 class ControlPlaneStore {
   constructor(filepath) {
     this.filepath = path.resolve(filepath);
@@ -185,7 +294,7 @@ class ControlPlaneStore {
     return clone(normalized);
   }
 
-  applyOutcome({ profileId, player, outcome, runDuration = 0, session = null }) {
+  applyOutcome({ profileId, player, outcome, runDuration = 0, session = null, runResult = null }) {
     const profile = this.getProfile(profileId) || createProfileSkeleton(profileId, player?.name || "Pilot");
     const result = {
       outcome,
@@ -200,13 +309,15 @@ class ControlPlaneStore {
       consumables: player?.consumables || [],
     });
 
-    if (outcome === "dead") {
+    const normalizedOutcome = normalizeRunOutcome(outcome);
+
+    if (normalizedOutcome === "dead") {
       profile.totalDeaths += 1;
       result.tax = Math.floor((profile.exoticMatter || 0) * 0.1);
       profile.exoticMatter = Math.max(0, (profile.exoticMatter || 0) - result.tax);
     }
 
-    if (outcome === "escaped") {
+    if (normalizedOutcome === "extracted") {
       profile.totalExtractions += 1;
       if (runDuration > profile.bestSurvivalTime) {
         profile.bestSurvivalTime = runDuration;
@@ -230,19 +341,16 @@ class ControlPlaneStore {
 
     const saved = this.saveProfile(profile);
     if (session?.id) {
-      const runId = session.runId || session.id;
-      this.state.runs[runId] = {
-        runId,
-        sessionId: session.id,
-        profileId: saved.id,
+      const entry = buildRunEntry({
+        profile: saved,
+        player,
         outcome,
         runDuration,
-        updatedAt: nowIso(),
-        tax: result.tax,
-        overflowValue: result.overflowValue,
-        extractedCount: result.extractedCount,
-        mapId: session.mapId || null,
-      };
+        session,
+        runResult,
+        result,
+      });
+      this.state.runs[entry.runId] = entry;
       this._save();
     }
     return { profile: saved, result };

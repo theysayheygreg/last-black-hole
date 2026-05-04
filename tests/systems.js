@@ -160,6 +160,35 @@ async function run() {
       assert(profile.loadout.consumables.length === 2, `Expected 2 consumable slots`);
     });
 
+    await runner.run('Profile exposes hull and rig progression', async () => {
+      const progression = await page.evaluate(() => window.__TEST_API.getProgression());
+      assert(progression !== null, 'No progression payload');
+      assert(progression.hullType === 'drifter', `Expected default drifter hull, got ${progression.hullType}`);
+      assert(Array.isArray(progression.rig.levels), 'Rig levels missing');
+      assert(progression.rig.levels.length === 3, `Expected 3 rig tracks, got ${progression.rig.levels.length}`);
+      assert(progression.rig.tracks.length === 3, `Expected 3 rig track descriptors, got ${progression.rig.tracks.length}`);
+      assert(progression.rig.tracks[0].key === 'laminar', `Expected drifter laminar track, got ${progression.rig.tracks[0].key}`);
+    });
+
+    await runner.run('Rig upgrade query and purchase helpers mutate one track only', async () => {
+      const result = await page.evaluate(() => {
+        const api = window.__TEST_API;
+        api.seedProfileExoticMatter(1000);
+        const before = api.getProgression();
+        const query = api.queryRigUpgrade(0);
+        const purchased = api.purchaseRigUpgrade(0);
+        const after = api.getProgression();
+        return { before, query, purchased, after };
+      });
+      assert(result.query.cost.em === 300, `Expected first rig cost 300 EM, got ${result.query.cost.em}`);
+      assert(result.query.canAfford === true, 'Expected seeded EM to afford first rig upgrade');
+      assert(result.purchased === true, 'Expected rig purchase to succeed');
+      assert(result.before.rig.levels[0] === 0, 'Expected rig track 0 to start at 0');
+      assert(result.after.rig.levels[0] === 1, `Expected rig track 0 level 1, got ${result.after.rig.levels[0]}`);
+      assert(result.after.rig.levels[1] === 0 && result.after.rig.levels[2] === 0, 'Expected only selected rig track to change');
+      assert(result.after.exoticMatter === 700, `Expected 700 EM after purchase, got ${result.after.exoticMatter}`);
+    });
+
     // ---- WELLS HAVE NAMES ----
 
     await runner.run('Wells have foreboding names', async () => {

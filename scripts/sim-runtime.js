@@ -65,7 +65,7 @@ const WELL_KILL_RADIUS_GROWTH = 0.3;
 // seeded-generation.js so the client can mirror them for prediction.
 // Wreck aging constants stay here since aging is server-runtime only.
 
-const { LOOT_TIER_GATES, LOOT_TIER_WEIGHTS, ITEM_CATALOG, CONSUMABLE_CATALOG, COSMIC_SIGNATURES, WELL_NAMES } = SEEDED_GEN;
+const { WELL_NAMES } = SEEDED_GEN;
 const WRECK_AGE_VALUE_CAP = 1.5;
 const WRECK_AGE_CAP_SECONDS = 120;
 
@@ -1537,6 +1537,15 @@ function buildRunResult(player, outcome) {
   const survivalTime = runtime.simTime;
   const survivalBonus = Math.floor(survivalTime * 0.5);
   const isExtraction = outcome === 'escaped';
+  const resultOutcome = isExtraction ? 'extracted' : outcome;
+  const loadoutSnapshot = {
+    equipped: cloneLoadoutItems(player.equipped),
+    consumables: cloneLoadoutItems(player.consumables),
+  };
+  const salvageBrought = [
+    ...loadoutSnapshot.equipped,
+    ...loadoutSnapshot.consumables,
+  ].filter(Boolean);
 
   // Death cause taxonomy
   let deathCause = null;
@@ -1568,6 +1577,18 @@ function buildRunResult(player, outcome) {
   const emEarned = isExtraction
     ? cargoValue + survivalBonus
     : Math.floor(survivalBonus * 0.5); // death gets 50% survival bonus only
+  const cargoExtracted = isExtraction ? cargoItems.map(i => ({ ...i })) : [];
+  const cargoLost = !isExtraction ? cargoItems.map(i => ({ ...i })) : [];
+  const notables = [];
+  if (cargoExtracted.length > 0) {
+    notables.push({ type: "cargo_extracted", description: `${cargoExtracted.length} cargo recovered`, value: cargoExtracted.length });
+  }
+  if (cargoLost.length > 0) {
+    notables.push({ type: "cargo_lost", description: `${cargoLost.length} cargo lost`, value: cargoLost.length });
+  }
+  if (deathCause) {
+    notables.push({ type: "death_cause", description: deathEntityId ? `${deathCause}: ${deathEntityId}` : deathCause, value: deathCause });
+  }
 
   return {
     runId: runtime.session.runId,
@@ -1575,20 +1596,36 @@ function buildRunResult(player, outcome) {
     profileId: player.profileId,
     hullType: player.hullType,
     rigLevels: player.rigLevels || [0, 0, 0],
-    outcome,
+    outcome: resultOutcome,
     deathCause,
     deathEntityId,
     survivalTime,
-    cargoExtracted: isExtraction ? cargoItems.map(i => ({ ...i })) : [],
-    cargoLost: !isExtraction ? cargoItems.map(i => ({ ...i })) : [],
+    cargoExtracted,
+    cargoLost,
+    salvageBrought,
+    loadoutSnapshot,
     signalPeak: player._signalPeak || player.signal.level,
     signalPeakZone: player._signalPeakZone || player.signal.zone,
+    timePerZone: player._signalTimePerZone || {},
     inhibitorFormReached: runtime.inhibitor.form,
+    inhibitorFormTimes: runtime.inhibitor.formTimes || [],
+    survivalBonus,
     emEarned,
     aiOutcomes,
+    notables: notables.slice(0, 4),
+    milestonesUnlocked: [],
+    statsDelta: {
+      runsAttempted: 1,
+      runsCompleted: isExtraction ? 1 : 0,
+      totalSurvivalTime: survivalTime,
+      totalEmEarned: emEarned,
+      cargoExtracted: cargoExtracted.length,
+      cargoLost: cargoLost.length,
+    },
     mapId: runtime.mapState.id,
     mapScale: runtime.session.worldScale,
     wellCount: runtime.mapState.wells.length,
+    seed: runtime.session.seed,
   };
 }
 

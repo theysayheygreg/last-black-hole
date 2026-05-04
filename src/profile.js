@@ -20,6 +20,10 @@ const MAX_SLOTS = 3;
 const MAX_NAME_LENGTH = 16;
 const EQUIPPED_SLOT_COUNT = 2;
 const CONSUMABLE_SLOT_COUNT = 2;
+const HULL_TYPES = ['drifter', 'breacher', 'resonant', 'shroud', 'hauler'];
+const DEFAULT_HULL_TYPE = 'drifter';
+const RIG_SLOT_COUNT = 3;
+export const MAX_RIG_LEVEL = 5;
 
 // ---- Random name generation ----
 
@@ -64,7 +68,10 @@ function createDefaultProfile(name) {
       vault: 0,
     },
 
-    shipType: 'standard',
+    hullType: DEFAULT_HULL_TYPE,
+    // Legacy alias kept for older local/remote callers. New code should read hullType.
+    shipType: DEFAULT_HULL_TYPE,
+    rigLevels: new Array(RIG_SLOT_COUNT).fill(0),
 
     // Stats
     totalExtractions: 0,
@@ -86,8 +93,24 @@ function normalizeLoadoutShape(loadout = {}) {
   };
 }
 
+function normalizeHullType(hullType, legacyShipType) {
+  const raw = String(hullType || legacyShipType || DEFAULT_HULL_TYPE).toLowerCase();
+  return HULL_TYPES.includes(raw) ? raw : DEFAULT_HULL_TYPE;
+}
+
+function normalizeRigLevels(rigLevels = []) {
+  return Array.from({ length: RIG_SLOT_COUNT }, (_, index) => {
+    const value = Number(rigLevels?.[index]);
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(MAX_RIG_LEVEL, Math.round(value)));
+  });
+}
+
 function normalizeProfileShape(profile = {}) {
   const next = { ...createDefaultProfile(profile.name), ...profile };
+  next.hullType = normalizeHullType(profile.hullType, profile.shipType);
+  next.shipType = next.hullType;
+  next.rigLevels = normalizeRigLevels(profile.rigLevels);
   next.loadout = normalizeLoadoutShape(profile.loadout);
   return next;
 }
@@ -124,6 +147,36 @@ const VAULT_RANK_COSTS = [
 ];
 
 export const MAX_RANK = 3;
+
+export const RIG_TRACKS = {
+  drifter: [
+    { key: 'laminar', label: 'laminar', focus: 'current mastery' },
+    { key: 'edgerunner', label: 'edgerunner', focus: 'well navigation' },
+    { key: 'gleanings', label: 'gleanings', focus: 'extraction value' },
+  ],
+  breacher: [
+    { key: 'afterburner', label: 'afterburner', focus: 'raw speed' },
+    { key: 'ironclad', label: 'ironclad', focus: 'survivability' },
+    { key: 'smashgrab', label: 'smash & grab', focus: 'speed-looting' },
+  ],
+  resonant: [
+    { key: 'harmonics', label: 'harmonics', focus: 'eddy mastery' },
+    { key: 'anchor', label: 'anchor', focus: 'territorial control' },
+    { key: 'dampening', label: 'dampening', focus: 'anti-inhibitor' },
+  ],
+  shroud: [
+    { key: 'phantom', label: 'phantom', focus: 'stealth depth' },
+    { key: 'sensor', label: 'sensor', focus: 'information' },
+    { key: 'decoy', label: 'decoy', focus: 'misdirection' },
+  ],
+  hauler: [
+    { key: 'cargo', label: 'cargo', focus: 'carrying capacity' },
+    { key: 'salvage', label: 'salvage', focus: 'loot quality' },
+    { key: 'endurance', label: 'endurance', focus: 'survivability' },
+  ],
+};
+
+const RIG_LEVEL_COSTS = [300, 750, 1500, 3000, 5000];
 
 // ---- Profile Manager ----
 
@@ -262,6 +315,67 @@ export class ProfileManager {
     if (!p) return;
     p.loadout = normalizeLoadoutShape({ equipped, consumables });
     this.save();
+  }
+
+  setHullType(hullType) {
+    const p = this.active;
+    if (!p) return false;
+    const nextHull = normalizeHullType(hullType);
+    p.hullType = nextHull;
+    p.shipType = nextHull;
+    p.rigLevels = normalizeRigLevels(p.rigLevels);
+    this.save();
+    return true;
+  }
+
+  getRigProgression() {
+    const p = this.active;
+    if (!p) return null;
+    const hullType = normalizeHullType(p.hullType, p.shipType);
+    const levels = normalizeRigLevels(p.rigLevels);
+    const tracks = RIG_TRACKS[hullType] || RIG_TRACKS[DEFAULT_HULL_TYPE];
+    return {
+      hullType,
+      maxLevel: MAX_RIG_LEVEL,
+      levels,
+      tracks: tracks.map((track, index) => ({
+        ...track,
+        index,
+        level: levels[index] ?? 0,
+      })),
+    };
+  }
+
+  getRigUpgradeCost(trackIndex) {
+    const p = this.active;
+    if (!p) return null;
+    const index = Number(trackIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= RIG_SLOT_COUNT) return null;
+    const levels = normalizeRigLevels(p.rigLevels);
+    const currentLevel = levels[index] ?? 0;
+    if (currentLevel >= MAX_RIG_LEVEL) return null;
+    return {
+      em: RIG_LEVEL_COSTS[currentLevel],
+      trackIndex: index,
+      nextLevel: currentLevel + 1,
+    };
+  }
+
+  canAffordRigUpgrade(trackIndex) {
+    const p = this.active;
+    const cost = this.getRigUpgradeCost(trackIndex);
+    return Boolean(p && cost && p.exoticMatter >= cost.em);
+  }
+
+  performRigUpgrade(trackIndex) {
+    const p = this.active;
+    if (!p || !this.canAffordRigUpgrade(trackIndex)) return false;
+    const cost = this.getRigUpgradeCost(trackIndex);
+    p.exoticMatter -= cost.em;
+    p.rigLevels = normalizeRigLevels(p.rigLevels);
+    p.rigLevels[cost.trackIndex] = cost.nextLevel;
+    this.save();
+    return true;
   }
 
   exportActiveProfile() {

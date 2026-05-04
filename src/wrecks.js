@@ -8,7 +8,7 @@
 
 import { CONFIG } from './config.js';
 import { worldToFluidUV, worldToScreen, worldDistance, worldDirectionTo, shouldCull, uvScale, wrapWorld } from './coords.js';
-import { generateLoot } from './items.js';
+import { applyWreckAgeValue, generateLoot, wreckAgeValueMultiplier } from './items.js';
 
 // ---- Name generation ----
 
@@ -38,13 +38,16 @@ class Wreck {
     this.looted = false;
     this.name = generateWreckName();
     this.pickupCooldown = opts.pickupCooldown ?? 0;  // seconds before this wreck can be looted
+    this.spawnTime = opts.spawnTime ?? opts.sessionTime ?? 0;
 
     // Drift velocity — used for ejected/dropped wrecks. Decays to zero.
     this.vx = opts.vx ?? 0;
     this.vy = opts.vy ?? 0;
 
-    // Generate categorized loot via items.js (80/20 primary/secondary table)
-    this.loot = generateLoot(this.type, this.tier, this.name);
+    this.loot = generateLoot(this.type, this.tier, {
+      sourceName: this.name,
+      sessionTime: opts.sessionTime ?? this.spawnTime,
+    });
   }
 }
 
@@ -77,7 +80,13 @@ export class WreckSystem {
         const piece = new Wreck(wx + Math.cos(angle) * dist, wy + Math.sin(angle) * dist, {
           type: 'debris', tier: wreck.tier, size: 'scattered',
         });
-        piece.loot = generateLoot('debris', wreck.tier, wreck.name, 1);
+        piece.spawnTime = wreck.spawnTime;
+        piece.loot = generateLoot('debris', wreck.tier, {
+          sourceName: wreck.name,
+          sessionTime: wreck.spawnTime,
+          count: 1,
+          consumableChance: 0,
+        });
         piece.name = wreck.name;
         this.wrecks.push(piece);
       }
@@ -163,7 +172,7 @@ export class WreckSystem {
    * Check if ship is within pickup radius of any un-looted wreck.
    * Returns array of newly looted items (empty if none).
    */
-  checkPickup(shipWX, shipWY, cargoSlotsAvailable = Infinity) {
+  checkPickup(shipWX, shipWY, cargoSlotsAvailable = Infinity, currentTime = 0) {
     const cfg = CONFIG.wrecks;
     const items = [];
 
@@ -174,8 +183,9 @@ export class WreckSystem {
       const dist = worldDistance(shipWX, shipWY, wreck.wx, wreck.wy);
       if (dist < cfg.pickupRadius) {
         // Take items one at a time — only mark looted when ALL items taken
+        const ageMult = wreckAgeValueMultiplier(wreck.spawnTime, currentTime);
         while (wreck.loot.length > 0 && items.length < cargoSlotsAvailable) {
-          items.push(wreck.loot.shift());
+          items.push(applyWreckAgeValue(wreck.loot.shift(), ageMult));
         }
         if (wreck.loot.length === 0) {
           wreck.looted = true;

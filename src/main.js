@@ -654,6 +654,7 @@ function init() {
       get remoteSessionHealth() { return remoteSessionHealth; },
       get remoteControlState() { return currentRemoteControlState(); },
       get remotePlayers() { return remotePlayers; },
+      get localAbilityState() { return localAbilityState; },
       get playableMaps() { return PLAYABLE_MAPS; },
       transitionToGame,
       transitionToRemoteGame,
@@ -688,6 +689,8 @@ function init() {
         type: 'derelict',
         tier: 1,
         size: 'scattered',
+        sessionTime: simState.runElapsedTime,
+        spawnTime: simState.runElapsedTime,
         pickupCooldown: 1.5,
         vx: ejectVX,
         vy: ejectVY,
@@ -2581,6 +2584,8 @@ function gameLoop(now) {
         const rwy = wrapWorld(evt.wy + Math.sin(angle) * ejectDist);
         const remnant = wreckSystem.addWreck(rwx, rwy, {
           type: 'vault', tier: 3, size: 'large',
+          sessionTime: simState.runElapsedTime,
+          spawnTime: simState.runElapsedTime,
           vx: Math.cos(angle) * ejectSpeed,
           vy: Math.sin(angle) * ejectSpeed,
           pickupCooldown: 1.0,
@@ -2626,7 +2631,7 @@ function gameLoop(now) {
       // Wreck pickup (pass available slots so partial loot works correctly)
       if (!inventorySystem.cargoFull) {
         const slotsAvailable = inventorySystem.cargoMax - inventorySystem.cargoCount;
-        const newItems = wreckSystem.checkPickup(ship.wx, ship.wy, slotsAvailable);
+        const newItems = wreckSystem.checkPickup(ship.wx, ship.wy, slotsAvailable, simState.runElapsedTime);
         if (newItems.length > 0) {
           const overflow = inventorySystem.addMultipleToCargo(newItems);
           const added = newItems.length - overflow.length;
@@ -3395,6 +3400,8 @@ function gameLoop(now) {
           const wy = wrapWorld(drop.wy + Math.sin(angle) * ejectDist);
           wreckSystem.addWreck(wx, wy, {
             type: 'derelict', tier: drop.tier, size: 'scattered',
+            sessionTime: simState.runElapsedTime,
+            spawnTime: simState.runElapsedTime,
             vx: Math.cos(angle) * ejectSpeed,
             vy: Math.sin(angle) * ejectSpeed,
             pickupCooldown: 0.5,

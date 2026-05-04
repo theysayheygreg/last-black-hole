@@ -245,6 +245,7 @@ const server = http.createServer(async (req, res) => {
         outcome: body.outcome,
         runDuration: Number(body.runDuration || 0),
         session: body.session || null,
+        runResult: body.runResult || null,
       });
       sendJson(res, 200, { ok: true, committed });
       return;

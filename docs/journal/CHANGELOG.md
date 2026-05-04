@@ -5,12 +5,32 @@
 
 ---
 
+## 2026-05-04 — Hull rig progression client surface
+
+- Added canonical client profile fields for `hullType` and three-slot `rigLevels`, while preserving the existing `2 equipped + 2 consumable` loadout contract.
+- Exposed rig progression query/purchase helpers through the profile manager and test API.
+- Added a normalized ability-state test API surface for `ability1`/`ability2` cooldown, readiness, active state, charges, and fuel where applicable.
+- Extended browser/system coverage for hull/rig profile exposure and rig purchases, and added remote-authority coverage for client-visible ability state.
+
 ## 2026-05-04 — Fluid-grid harness cleanup
 
 - Added `tests/fluid-window.js` to cover the client-side fixed fluid grid across the playable 3x3, 5x5, and 10x10 maps.
 - Exposed `window.__TEST_API.getFluidGridState()` so browser tests can assert the active world scale, fixed grid window, fluid camera, and render culling stats without reaching into module internals.
 - Tightened validation so obsolete map-level portal/perf data fails instead of quietly logging a note.
 - Promoted `tests/perf-probe.js` from a print-only diagnostic into a pass/fail perf and payload harness, and added it to build-health verification.
+
+## 2026-05-04 — Local loot catalog follows tier gates
+
+- Reworked `src/items.js` around the T1-T4 item catalog, session-time tier gates, weighted tier rolls, and implemented consumable filtering.
+- Preserved `generateLoot(wreckType, wreckTier)` compatibility while adding option-object generation for session time, source names, explicit counts, and consumable chance.
+- Added local wreck spawn-time tracking and loot-time age value scaling, capped at 1.5x after 120 seconds.
+- Added focused item catalog/generation tests and included them in `tests/run-all.js`.
+
+## 2026-05-04 — RunResult persistence package
+
+- Added first real control-plane RunResult persistence for extracted, dead, and abandoned-like outcomes while preserving legacy `applyOutcome` callers that still send `escaped`.
+- Persisted cargo extracted/lost, EM/tax/overflow context, survival bonus, death cause, signal peak, map context, loadout snapshot, compact notables, and stats deltas into run records.
+- Extended control-plane coverage with representative extraction, death, and abandoned outcome assertions.
 
 ## 2026-04-24 — Large-map client performance pass
 

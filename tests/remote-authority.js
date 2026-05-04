@@ -227,6 +227,12 @@ async function run() {
       const scavengers = await page.evaluate(() => window.__TEST_API.getScavengers());
       assert(scavengers.length > 0, "Expected authoritative scavengers in remote snapshot");
 
+      const ability = await page.evaluate(() => window.__TEST_API.getAbilityState());
+      assert(ability?.hullType === "drifter", `Expected drifter ability state, got ${ability?.hullType}`);
+      assert(ability.ability1?.name === "eddy brake", `Expected ability1 eddy brake, got ${ability.ability1?.name}`);
+      assert(typeof ability.ability1.cooldown === "number", "Expected ability1 cooldown number");
+      assert(ability.ability2 === null, "Expected drifter ability2 slot to be explicitly empty");
+
       const snapshot = await getSnapshot();
       assert(typeof snapshot.inhibitor?.threshold === "number", "Expected inhibitor threshold in remote snapshot");
       assert(typeof snapshot.inhibitor?.pressureFrac === "number", "Expected inhibitor pressureFrac in remote snapshot");

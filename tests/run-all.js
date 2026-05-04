@@ -22,6 +22,7 @@ const suites = [
   { name: "Coordinates", file: "coordinates.js" },
   { name: "Flow", file: "flow.js" },
   { name: "FluidWindow", file: "fluid-window.js" },
+  { name: "Items", file: "items.js" },
   { name: "Inventory", file: "inventory.js" },
   { name: "Systems", file: "systems.js" },
   { name: "PlayerBrain", file: "player-brain.js" },

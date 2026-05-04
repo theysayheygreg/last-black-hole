@@ -7,6 +7,94 @@
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, GRID_WINDOW, getFluidCamera, worldToScreen } from './coords.js';
 
+function clone(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function abilitySlotState(abilityState, slot) {
+  const as = abilityState || {};
+  const hull = as.hullType || 'drifter';
+  if (slot === 1) {
+    if (hull === 'drifter') {
+      return {
+        key: 'ability1',
+        name: as.flowLockActive ? 'flow lock' : 'eddy brake',
+        ready: (as.eddyBrakeCooldown || 0) <= 0,
+        active: Boolean(as.flowLockActive),
+        cooldown: as.eddyBrakeCooldown || 0,
+      };
+    }
+    if (hull === 'breacher') {
+      return {
+        key: 'ability1',
+        name: 'burn',
+        ready: !as.burnActive && (as.burnFuel || 0) > 1,
+        active: Boolean(as.burnActive),
+        cooldown: 0,
+        fuel: as.burnFuel || 0,
+      };
+    }
+    if (hull === 'resonant') {
+      return {
+        key: 'ability1',
+        name: 'tap',
+        ready: (as.tapCooldown || 0) <= 0,
+        active: Boolean(as.tapAnchor),
+        cooldown: as.tapCooldown || 0,
+      };
+    }
+    if (hull === 'shroud') {
+      return {
+        key: 'ability1',
+        name: 'cloak',
+        ready: (as.wakeCloakCooldown || 0) <= 0,
+        active: false,
+        cooldown: as.wakeCloakCooldown || 0,
+      };
+    }
+    if (hull === 'hauler') {
+      return {
+        key: 'ability1',
+        name: 'tag',
+        ready: (as.salvageLockCharges || 0) > 0,
+        active: false,
+        cooldown: 0,
+        charges: as.salvageLockCharges || 0,
+      };
+    }
+  }
+
+  if (hull === 'resonant') {
+    return {
+      key: 'ability2',
+      name: 'shift',
+      ready: (as.frequencyShiftCooldown || 0) <= 0,
+      active: Boolean(as.nextPulseInverted),
+      cooldown: as.frequencyShiftCooldown || 0,
+    };
+  }
+  if (hull === 'shroud') {
+    return {
+      key: 'ability2',
+      name: 'decoy',
+      ready: (as.decoyCharges || 0) > 0 && (as.decoyCooldown || 0) <= 0,
+      active: false,
+      cooldown: as.decoyCooldown || 0,
+      charges: as.decoyCharges || 0,
+    };
+  }
+  if (hull === 'hauler') {
+    return {
+      key: 'ability2',
+      name: 'tractor',
+      ready: (as.tractorCooldown || 0) <= 0,
+      active: (as.tractorChannelTimer || 0) > 0,
+      cooldown: as.tractorCooldown || 0,
+    };
+  }
+  return null;
+}
+
 export function initTestAPI(getState) {
   window.__TEST_API = {
     getShipPos() {
@@ -216,6 +304,9 @@ export function initTestAPI(getState) {
       return {
         id: p.id,
         name: p.name,
+        hullType: p.hullType || p.shipType || 'drifter',
+        shipType: p.shipType || p.hullType || 'drifter',
+        rigLevels: Array.isArray(p.rigLevels) ? [...p.rigLevels] : [0, 0, 0],
         exoticMatter: p.exoticMatter,
         vaultCount: p.vault.length,
         vaultCapacity: p.vaultCapacity,
@@ -231,11 +322,66 @@ export function initTestAPI(getState) {
 
     setProfileShipType(hullType) {
       const { profileManager } = getState();
+      return Boolean(profileManager?.setHullType?.(hullType));
+    },
+
+    getProgression() {
+      const { profileManager } = getState();
       const p = profileManager?.active;
-      if (!p || !hullType) return false;
-      p.shipType = String(hullType);
+      if (!p) return null;
+      return {
+        hullType: p.hullType || p.shipType || 'drifter',
+        rig: profileManager.getRigProgression?.() || null,
+        upgrades: { ...p.upgrades },
+        exoticMatter: p.exoticMatter,
+      };
+    },
+
+    queryRigUpgrade(trackIndex) {
+      const { profileManager } = getState();
+      if (!profileManager?.active) return null;
+      const cost = profileManager.getRigUpgradeCost?.(trackIndex) || null;
+      return {
+        cost,
+        canAfford: Boolean(profileManager.canAffordRigUpgrade?.(trackIndex)),
+      };
+    },
+
+    purchaseRigUpgrade(trackIndex) {
+      const { profileManager } = getState();
+      return Boolean(profileManager?.performRigUpgrade?.(trackIndex));
+    },
+
+    seedProfileRigLevels(levels) {
+      const { profileManager } = getState();
+      const p = profileManager?.active;
+      if (!p || !Array.isArray(levels)) return false;
+      p.rigLevels = levels.slice(0, 3).map((value) => Math.max(0, Math.min(5, Math.round(Number(value) || 0))));
+      while (p.rigLevels.length < 3) p.rigLevels.push(0);
       profileManager.save();
       return true;
+    },
+
+    seedProfileExoticMatter(amount) {
+      const { profileManager } = getState();
+      const p = profileManager?.active;
+      if (!p) return false;
+      p.exoticMatter = Math.max(0, Math.round(Number(amount) || 0));
+      profileManager.save();
+      return true;
+    },
+
+    getAbilityState() {
+      const { localAbilityState, remoteSnapshot, simClient } = getState();
+      const remotePlayer = remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId);
+      const raw = localAbilityState || remotePlayer?.abilityState || null;
+      if (!raw) return null;
+      return {
+        hullType: raw.hullType || 'drifter',
+        raw: clone(raw),
+        ability1: abilitySlotState(raw, 1),
+        ability2: abilitySlotState(raw, 2),
+      };
     },
 
     seedProfileConsumable(slotIndex, item) {
@@ -340,7 +486,9 @@ export function initTestAPI(getState) {
         alive: wreck.alive,
         looted: wreck.looted,
         type: wreck.type,
+        tier: wreck.tier,
         name: wreck.name,
+        spawnTime: wreck.spawnTime,
         pickupCooldown: wreck.pickupCooldown,
         loot: wreck.loot?.map(item => item ? { ...item } : null) || [],
       }));
@@ -353,6 +501,8 @@ export function initTestAPI(getState) {
         type: opts.type ?? 'derelict',
         tier: opts.tier ?? 1,
         size: opts.size ?? 'small',
+        sessionTime: opts.sessionTime ?? 0,
+        spawnTime: opts.spawnTime ?? opts.sessionTime ?? 0,
         pickupCooldown: opts.pickupCooldown ?? 0,
         vx: opts.vx ?? 0,
         vy: opts.vy ?? 0,
@@ -364,11 +514,12 @@ export function initTestAPI(getState) {
       return true;
     },
 
-    pickupAtShip() {
+    pickupAtShip(opts = {}) {
       const { wreckSystem, inventorySystem, ship } = getState();
       if (!wreckSystem || !inventorySystem || !ship) return { pickedUp: 0, overflow: 0 };
       const slotsAvailable = inventorySystem.cargoMax - inventorySystem.cargoCount;
-      const newItems = wreckSystem.checkPickup(ship.wx, ship.wy, slotsAvailable);
+      const now = typeof opts.currentTime === 'number' ? opts.currentTime : 0;
+      const newItems = wreckSystem.checkPickup(ship.wx, ship.wy, slotsAvailable, now);
       const overflow = inventorySystem.addMultipleToCargo(newItems);
       return {
         pickedUp: newItems.length - overflow.length,
