@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-05-04 — Fluid-grid harness cleanup
+
+- Added `tests/fluid-window.js` to cover the client-side fixed fluid grid across the playable 3x3, 5x5, and 10x10 maps.
+- Exposed `window.__TEST_API.getFluidGridState()` so browser tests can assert the active world scale, fixed grid window, fluid camera, and render culling stats without reaching into module internals.
+- Tightened validation so obsolete map-level portal/perf data fails instead of quietly logging a note.
+- Promoted `tests/perf-probe.js` from a print-only diagnostic into a pass/fail perf and payload harness, and added it to build-health verification.
+
 ## 2026-04-24 — Large-map client performance pass
 
 - Added `tests/perf-probe.js` and `npm run test:perf` as a diagnostic, non-CI harness for 3x3/5x5/10x10 FPS, smoothed frame timings, render-chain shape, visible well count, and authoritative snapshot payload size.

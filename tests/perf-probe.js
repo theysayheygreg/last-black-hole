@@ -20,6 +20,14 @@ const MAPS = [
   { index: 1, id: "expanse", label: "5x5", scale: 5 },
   { index: 2, id: "deep-field", label: "10x10", scale: 10 },
 ];
+// Headless Chrome timing on shared developer machines is noisy. This gate is
+// for catastrophic render regressions; the JSON output remains the real tuning
+// evidence when judging whether the game is back near 60fps interactively.
+const MIN_FPS = {
+  "3x3": 20,
+  "5x5": 20,
+  "10x10": 20,
+};
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,6 +118,34 @@ async function run() {
     const payloads = [];
     for (const map of MAPS) {
       payloads.push(await measureSnapshotPayload(map));
+    }
+
+    for (const scenario of scenarios) {
+      if (scenario.errors.length > 0) {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} browser errors: ${scenario.errors.join("; ")}`);
+      }
+      if (scenario.phase !== "playing") {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} expected playing phase, got ${scenario.phase}`);
+      }
+      if (scenario.perf.fluidResolution !== 256) {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} expected fixed 256 fluid grid, got ${scenario.perf.fluidResolution}`);
+      }
+      if (scenario.perf.visibleWellCount > scenario.perf.totalWellCount) {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} visible wells exceed total wells`);
+      }
+      if (scenario.map === "10x10" && scenario.perf.visibleWellCount >= scenario.perf.totalWellCount) {
+        throw new Error(`10x10 ${scenario.htmlFile} rendered all wells directly; expected off-window coarse-field path`);
+      }
+      const floor = scenario.htmlFile.includes("?") ? 30 : MIN_FPS[scenario.map];
+      if (scenario.fps < floor) {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} FPS ${scenario.fps.toFixed(1)} below floor ${floor}`);
+      }
+    }
+
+    for (const payload of payloads) {
+      if (payload.bytes <= 0) throw new Error(`${payload.map} snapshot payload was empty`);
+      if (payload.players < 1) throw new Error(`${payload.map} snapshot missing player`);
+      if (payload.wells <= 0) throw new Error(`${payload.map} snapshot missing wells`);
     }
 
     console.log(JSON.stringify({ scenarios, payloads }, null, 2));

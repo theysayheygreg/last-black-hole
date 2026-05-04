@@ -5,7 +5,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, worldToScreen } from './coords.js';
+import { WORLD_SCALE, GRID_WINDOW, getFluidCamera, worldToScreen } from './coords.js';
 
 export function initTestAPI(getState) {
   window.__TEST_API = {
@@ -45,6 +45,17 @@ export function initTestAPI(getState) {
     getPerfStats() {
       const { perfStats } = getState();
       return perfStats ? JSON.parse(JSON.stringify(perfStats)) : null;
+    },
+
+    getFluidGridState() {
+      const { perfStats } = getState();
+      const [camX, camY] = getFluidCamera();
+      return {
+        worldScale: WORLD_SCALE,
+        gridWindow: GRID_WINDOW,
+        fluidCamera: { x: camX, y: camY },
+        perfStats: perfStats ? JSON.parse(JSON.stringify(perfStats)) : null,
+      };
     },
 
     getGamePhase() {

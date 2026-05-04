@@ -73,6 +73,8 @@ const maps = mapFiles.map(f => ({
   name: f,
   data: parseMapFile(path.join(MAPS_DIR, f)),
 }));
+const playableMapNames = new Set(['shallows-3x3.js', 'expanse-5x5.js', 'deep-field-10x10.js']);
+const playableMaps = maps.filter(map => playableMapNames.has(map.name));
 
 // ---- Extract config values ----
 // CONFIG is a plain object literal, extract via eval
@@ -278,20 +280,39 @@ runner.run('Well growth variance cannot produce negative growth rate', () => {
     `Must be >= 0 or wells can shrink to negative mass`);
 });
 
-// ---- 9. Dead map data: portals field should not exist (wave system replaced it) ----
+// ---- 9. Dead map data and stale perf overrides ----
 
 runner.run('Map files do not define unused portals field', () => {
-  const warnings = [];
   for (const map of maps) {
     if (map.data.portals && map.data.portals.length > 0) {
-      warnings.push(`${map.name} defines ${map.data.portals.length} portals (ignored — wave system spawns portals)`);
+      throw new Error(`${map.name} defines ${map.data.portals.length} portals (ignored — wave system spawns portals)`);
     }
   }
-  // This is a warning, not a failure — but flag it
-  if (warnings.length > 0) {
-    console.log(`        NOTE: ${warnings.join('; ')}`);
+});
+
+runner.run('Playable maps do not carry client perf overrides', () => {
+  for (const map of playableMaps) {
+    assert(map.data.fluidResolution == null,
+      `${map.name}: fluidResolution is stale; client grid size comes from CONFIG.fluid.resolution`);
+    assert(map.data.configOverrides == null,
+      `${map.name}: configOverrides are stale for gameplay maps; fixed-grid/coarse-field scaling is runtime-owned`);
   }
-  // Don't fail — just inform
+});
+
+runner.run('Playable map scales match the fixed-grid test contract', () => {
+  const expected = new Map([
+    ['shallows-3x3.js', { scale: 3, wells: 4 }],
+    ['expanse-5x5.js', { scale: 5, wells: 8 }],
+    ['deep-field-10x10.js', { scale: 10, wells: 20 }],
+  ]);
+  for (const map of playableMaps) {
+    const contract = expected.get(map.name);
+    assert(contract, `${map.name}: missing expected scale contract`);
+    assert(map.data.worldScale === contract.scale,
+      `${map.name}: expected worldScale ${contract.scale}, got ${map.data.worldScale}`);
+    assert(map.data.wells.length === contract.wells,
+      `${map.name}: expected ${contract.wells} wells, got ${map.data.wells.length}`);
+  }
 });
 
 // ---- 10. GLSL array sizes are consistent ----
@@ -343,6 +364,5 @@ runner.run('World-space CONFIG values are plausible (> 0.01)', () => {
 
 // ---- Done ----
 
-const screenshotPath = null; // no browser needed for this suite
 const allPassed = runner.summary();
 process.exit(allPassed ? 0 : 1);
