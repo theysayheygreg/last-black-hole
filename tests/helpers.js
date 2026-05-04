@@ -41,6 +41,43 @@ function waitForPidExitSync(pid, timeoutMs = 2500) {
   });
 }
 
+function commandForPid(pid) {
+  const result = spawnSync("ps", ["-p", String(pid), "-o", "command="], {
+    encoding: "utf8",
+    timeout: 1000,
+  });
+  return result.status === 0 ? result.stdout.trim() : "";
+}
+
+function killHarnessPidSync(pid) {
+  if (!pid || pid === process.pid) return;
+  const command = commandForPid(pid);
+  if (!command.includes(SERVER_SCRIPT) || !command.includes("lbh-harness")) return;
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return;
+  }
+  waitForPidExitSync(pid);
+}
+
+function killStaleHarnessServerSync() {
+  try {
+    const pid = Number(fs.readFileSync(PID_FILE, "utf8").trim());
+    if (Number.isFinite(pid)) killHarnessPidSync(pid);
+  } catch {}
+
+  const listeners = spawnSync("lsof", [`-tiTCP:${PORT}`, "-sTCP:LISTEN"], {
+    encoding: "utf8",
+    timeout: 1000,
+  });
+  if (listeners.status !== 0 && !listeners.stdout) return;
+  for (const line of listeners.stdout.split("\n")) {
+    const pid = Number(line.trim());
+    if (Number.isFinite(pid)) killHarnessPidSync(pid);
+  }
+}
+
 function registerProcessCleanup() {
   if (cleanupRegistered) return;
   cleanupRegistered = true;
@@ -128,6 +165,10 @@ function stopServer() {
     waitForPidExitSync(pid);
     serverProcess = null;
   }
+  // Browser suites are often run one-per-process. If a previous suite
+  // crashed after spawning the transient server, the child handle is gone
+  // but the pid file or listener can remain and poison the next suite.
+  killStaleHarnessServerSync();
   for (const file of [PID_FILE, META_FILE, LOG_FILE]) {
     try {
       fs.rmSync(file, { force: true });

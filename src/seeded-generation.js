@@ -6,14 +6,10 @@
 // This lets the client predict loot, signatures, and wreck composition
 // from just a seed — no server round-trip needed.
 
-export const COSMIC_SIGNATURES = [
-  { id: 'heavy_current',  name: 'heavy current',  mods: { currentCouplingMult: 1.3 } },
-  { id: 'dead_calm',      name: 'dead calm',       mods: { currentCouplingMult: 0.5, dragMult: 0.8 } },
-  { id: 'signal_storm',   name: 'signal storm',    mods: { signalGenMult: 1.5, signalDecayMult: 0.7 } },
-  { id: 'deep_gravity',   name: 'deep gravity',    mods: { wellGravityMult: 1.3, wellGrowthMult: 0.7 } },
-  { id: 'thin_space',     name: 'thin space',      mods: { wellGravityMult: 0.7, portalLifespanMult: 0.6 } },
-  { id: 'dark_run',       name: 'dark run',        mods: { sensorRangeMult: 0.6 } },
-];
+import { BALANCE } from './content/balance.js';
+import { SEEDED_SIGNATURES } from './content/signatures.js';
+
+export const COSMIC_SIGNATURES = SEEDED_SIGNATURES;
 
 export const WELL_NAMES = [
   'Charybdis', 'Erebus', 'Tartarus', 'Lethe', 'Acheron',
@@ -181,8 +177,8 @@ export const CONSUMABLE_CATALOG = [
   { id: 'well-repulsor', name: 'Well Repulsor', tier: 3, value: [200, 280], effect: 'wellRepulsor' },
 ];
 
-export const LOOT_TIER_GATES = { 1: 0, 2: 30, 3: 120, 4: 240 };
-export const LOOT_TIER_WEIGHTS = { 1: 60, 2: 30, 3: 8, 4: 2 };
+export const LOOT_TIER_GATES = BALANCE.loot.tierGates;
+export const LOOT_TIER_WEIGHTS = BALANCE.loot.tierWeights;
 
 // Wreck wave schedule. Must match what the server consumes from the
 // wreckWave + wreckLoot streams so client previews are accurate.

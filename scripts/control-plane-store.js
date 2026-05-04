@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { deathTaxEm } = require("./content/balance.js");
 
 // Rig tracks: 3 per hull, levels 0-5. Stored as array [track0, track1, track2].
 const DEFAULT_RIG_LEVELS = [0, 0, 0];
@@ -313,7 +314,7 @@ class ControlPlaneStore {
 
     if (normalizedOutcome === "dead") {
       profile.totalDeaths += 1;
-      result.tax = Math.floor((profile.exoticMatter || 0) * 0.1);
+      result.tax = deathTaxEm(profile.exoticMatter || 0);
       profile.exoticMatter = Math.max(0, (profile.exoticMatter || 0) - result.tax);
     }
 

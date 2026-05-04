@@ -151,6 +151,24 @@ export function initTestAPI(getState) {
       return gamePhase;
     },
 
+    getRunResultsView() {
+      const { getRunResultsViewModel } = getState();
+      return getRunResultsViewModel ? getRunResultsViewModel() : null;
+    },
+
+    showRunResultsFixture(runResult, phase = null) {
+      const state = getState();
+      if (!state.setLastRunResult || !state.setEndScreenTimers) return false;
+      if (state.profileManager && !state.profileManager.active) {
+        state.profileManager.createProfile(0, 'Results Pilot');
+      }
+      state.setLastRunResult(runResult || null);
+      const outcome = runResult?.outcome === 'extracted' ? 'escaped' : runResult?.outcome === 'escaped' ? 'escaped' : 'dead';
+      state.gamePhase = phase || outcome;
+      state.setEndScreenTimers({ death: 3.8, escape: 3.8 });
+      return true;
+    },
+
     getWells() {
       const { wellSystem, camX, camY, canvasWidth, canvasHeight } = getState();
       if (!wellSystem) return [];
@@ -337,11 +355,36 @@ export function initTestAPI(getState) {
       };
     },
 
+    getHomeState() {
+      const { gamePhase, homeTab, homeRigCursor, profileManager } = getState();
+      const p = profileManager?.active;
+      const rig = profileManager?.getRigProgression?.() || null;
+      return {
+        phase: gamePhase,
+        tabIndex: homeTab ?? null,
+        tabName: ['SHIP', 'VAULT', 'RIG', 'LAUNCH'][homeTab] || null,
+        rigCursor: homeRigCursor ?? null,
+        hullType: p?.hullType || p?.shipType || null,
+        exoticMatter: p?.exoticMatter ?? null,
+        rig,
+        selectedRig: rig?.tracks?.[homeRigCursor] || null,
+        selectedRigCost: profileManager?.getRigUpgradeCost?.(homeRigCursor) || null,
+        selectedRigAffordable: Boolean(profileManager?.canAffordRigUpgrade?.(homeRigCursor)),
+        loadoutSlots: p ? {
+          equipped: p.loadout.equipped.length,
+          consumables: p.loadout.consumables.length,
+        } : null,
+      };
+    },
+
     queryRigUpgrade(trackIndex) {
       const { profileManager } = getState();
       if (!profileManager?.active) return null;
+      const progression = profileManager.getRigProgression?.();
+      const track = progression?.tracks?.[trackIndex] || null;
       const cost = profileManager.getRigUpgradeCost?.(trackIndex) || null;
       return {
+        track,
         cost,
         canAfford: Boolean(profileManager.canAffordRigUpgrade?.(trackIndex)),
       };

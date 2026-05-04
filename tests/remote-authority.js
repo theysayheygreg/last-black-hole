@@ -20,7 +20,7 @@ const {
 } = require("./helpers");
 
 const htmlFile = process.argv[2] || "index-a.html";
-const SIM_PORT = 8788;
+const SIM_PORT = Number(process.env.LBH_REMOTE_AUTHORITY_SIM_PORT || 8798);
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -212,7 +212,7 @@ async function run() {
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
       assert(net.simEnabled === true, "Expected sim client enabled");
       assert(net.remoteAuthorityActive === true, "Expected remote authority active");
-      assert(net.simUrl === "http://127.0.0.1:8788", `Unexpected sim URL: ${net.simUrl}`);
+      assert(net.simUrl === SIM_URL, `Unexpected sim URL: ${net.simUrl}`);
       assert(typeof net.remoteMapId === "string" && net.remoteMapId.length > 0, "Expected remote map id");
       assert(typeof net.remoteTick === "number", "Expected authoritative remote tick");
       assert(net.sessionStatus === "running", `Expected running session state, got ${net.sessionStatus}`);

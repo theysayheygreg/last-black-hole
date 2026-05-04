@@ -9,6 +9,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const ROOT = path.resolve(__dirname, '..');
 
 // ---- Helpers ----
 
@@ -86,6 +87,40 @@ function parseConfig() {
 }
 
 const CONFIG = parseConfig();
+
+// ---- Load signature manifests ----
+
+const SIGNATURE_CONSTANTS = [
+  'SIGNATURE_DEFINITIONS',
+  'SIGNATURE_POOLS_BY_MAP_SIZE',
+  'LAYOUT_MULTIPLIERS',
+  'SEEDED_SIGNATURES',
+];
+
+function parseEsmConstants(filepath, names) {
+  const src = fs.readFileSync(filepath, 'utf8').replace(/export const /g, 'const ');
+  const fn = new Function(`${src}\nreturn { ${names.join(', ')} };`);
+  return fn();
+}
+
+const serverSignatures = require(path.join(ROOT, 'scripts', 'content', 'signatures.js'));
+const clientSignatures = parseEsmConstants(
+  path.join(SRC, 'content', 'signatures.js'),
+  SIGNATURE_CONSTANTS
+);
+
+function deepEqual(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function assertObject(value, label) {
+  assert(value && typeof value === 'object' && !Array.isArray(value), `${label} must be an object`);
+}
+
+const DORMANT_SIGNATURE_CONFIG_OVERRIDES = new Set([
+  'portals.evaporationInterval',
+  'universe.viscosityGrowth',
+]);
 
 // ---- GLSL limits ----
 
@@ -359,6 +394,110 @@ runner.run('World-space CONFIG values are plausible (> 0.01)', () => {
   for (const [name, value] of worldValues) {
     assert(value > 0.01,
       `${name}=${value} looks too small for world-space (expected > 0.01). Is this UV-space?`);
+  }
+});
+
+// ---- 12. Signature content manifest validation ----
+
+runner.run('Signature server/client manifests stay in sync', () => {
+  for (const name of SIGNATURE_CONSTANTS) {
+    assert(deepEqual(serverSignatures[name], clientSignatures[name]),
+      `scripts/content/signatures.js ${name} does not match src/content/signatures.js`);
+  }
+});
+
+runner.run('Playable signature manifest has unique ids and names', () => {
+  const ids = new Set();
+  const names = new Set();
+  for (const [key, sig] of Object.entries(serverSignatures.SIGNATURE_DEFINITIONS)) {
+    assertObject(sig, `signature ${key}`);
+    assert(sig.id === key, `signature ${key}: id must match object key`);
+    assert(!ids.has(sig.id), `Duplicate signature id: ${sig.id}`);
+    assert(!names.has(sig.name), `Duplicate signature name: ${sig.name}`);
+    ids.add(sig.id);
+    names.add(sig.name);
+  }
+});
+
+runner.run('Playable signature pools match supported map sizes', () => {
+  const allowedMapSizes = new Set(playableMaps.map(map => map.data.worldScale));
+  const pooledIds = new Set();
+  for (const [sizeText, pool] of Object.entries(serverSignatures.SIGNATURE_POOLS_BY_MAP_SIZE)) {
+    const mapSize = Number(sizeText);
+    assert(allowedMapSizes.has(mapSize), `Signature pool exists for unknown map size ${sizeText}`);
+    assert(Array.isArray(pool) && pool.length > 0, `Signature pool ${sizeText} must be a non-empty array`);
+    for (const id of pool) {
+      const sig = serverSignatures.SIGNATURE_DEFINITIONS[id];
+      assert(sig, `Signature pool ${sizeText} references unknown id ${id}`);
+      assert(sig.mapSizes.includes(mapSize),
+        `Signature ${id} is in ${sizeText} pool but mapSizes=${sig.mapSizes.join(',')}`);
+      pooledIds.add(id);
+    }
+  }
+  for (const sig of Object.values(serverSignatures.SIGNATURE_DEFINITIONS)) {
+    assert(pooledIds.has(sig.id), `Signature ${sig.id} is not present in any map-size pool`);
+    for (const size of sig.mapSizes) {
+      const pool = serverSignatures.SIGNATURE_POOLS_BY_MAP_SIZE[size] || [];
+      assert(pool.includes(sig.id), `Signature ${sig.id} supports ${size} but is missing from that pool`);
+    }
+  }
+});
+
+runner.run('Playable signature config overrides match CONFIG shape', () => {
+  for (const sig of Object.values(serverSignatures.SIGNATURE_DEFINITIONS)) {
+    assert(typeof sig.name === 'string' && sig.name.length > 0, `${sig.id}: missing name`);
+    assert(typeof sig.flavor === 'string' && sig.flavor.length > 0, `${sig.id}: missing flavor`);
+    assert(typeof sig.mechanical === 'string' && sig.mechanical.length > 0, `${sig.id}: missing mechanical text`);
+    assert(Array.isArray(sig.mapSizes) && sig.mapSizes.length > 0, `${sig.id}: missing mapSizes`);
+    assertObject(sig.config, `${sig.id}.config`);
+    for (const [section, overrides] of Object.entries(sig.config)) {
+      assertObject(CONFIG[section], `${sig.id}.config.${section} target`);
+      assertObject(overrides, `${sig.id}.config.${section}`);
+      for (const [key, value] of Object.entries(overrides)) {
+        const path = `${section}.${key}`;
+        assert(key in CONFIG[section] || DORMANT_SIGNATURE_CONFIG_OVERRIDES.has(path),
+          `${sig.id}.config.${path} does not exist in CONFIG`);
+        assert(Number.isFinite(value), `${sig.id}.config.${section}.${key} must be a finite number`);
+      }
+    }
+  }
+});
+
+runner.run('Playable signature layout hints are known', () => {
+  const allowedWellSpread = new Set(['tight', 'normal', 'wide', 'extreme']);
+  for (const sig of Object.values(serverSignatures.SIGNATURE_DEFINITIONS)) {
+    assertObject(sig.layout, `${sig.id}.layout`);
+    assert(allowedWellSpread.has(sig.layout.wellSpread),
+      `${sig.id}.layout.wellSpread has unknown value ${sig.layout.wellSpread}`);
+    for (const [key, value] of Object.entries(sig.layout)) {
+      if (key === 'wellSpread') continue;
+      if (key === 'wreckTierBoost') {
+        assert(Number.isInteger(value) && value >= 0, `${sig.id}.layout.wreckTierBoost must be a non-negative integer`);
+        continue;
+      }
+      const table = serverSignatures.LAYOUT_MULTIPLIERS[key];
+      assert(table, `${sig.id}.layout.${key} has no multiplier table`);
+      assert(value in table, `${sig.id}.layout.${key} has unknown value ${value}`);
+    }
+  }
+});
+
+runner.run('Seeded signature manifest preserves seeded-generation contract', () => {
+  const ids = new Set();
+  const names = new Set();
+  assert(Array.isArray(serverSignatures.SEEDED_SIGNATURES) && serverSignatures.SEEDED_SIGNATURES.length > 0,
+    'SEEDED_SIGNATURES must be a non-empty array');
+  for (const sig of serverSignatures.SEEDED_SIGNATURES) {
+    assert(typeof sig.id === 'string' && sig.id.length > 0, 'Seeded signature missing id');
+    assert(typeof sig.name === 'string' && sig.name.length > 0, `${sig.id}: missing name`);
+    assertObject(sig.mods, `${sig.id}.mods`);
+    assert(!ids.has(sig.id), `Duplicate seeded signature id: ${sig.id}`);
+    assert(!names.has(sig.name), `Duplicate seeded signature name: ${sig.name}`);
+    ids.add(sig.id);
+    names.add(sig.name);
+    for (const [key, value] of Object.entries(sig.mods)) {
+      assert(Number.isFinite(value), `${sig.id}.mods.${key} must be finite`);
+    }
   }
 });
 

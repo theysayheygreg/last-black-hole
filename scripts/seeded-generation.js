@@ -9,14 +9,10 @@
 // Used for: well variance, sentry counts, scavenger spawns, wreck
 // loot, AI hull picks, cosmic signatures, named wrecks.
 
-const COSMIC_SIGNATURES = [
-  { id: 'heavy_current',  name: 'heavy current',  mods: { currentCouplingMult: 1.3 } },
-  { id: 'dead_calm',      name: 'dead calm',       mods: { currentCouplingMult: 0.5, dragMult: 0.8 } },
-  { id: 'signal_storm',   name: 'signal storm',    mods: { signalGenMult: 1.5, signalDecayMult: 0.7 } },
-  { id: 'deep_gravity',   name: 'deep gravity',    mods: { wellGravityMult: 1.3, wellGrowthMult: 0.7 } },
-  { id: 'thin_space',     name: 'thin space',      mods: { wellGravityMult: 0.7, portalLifespanMult: 0.6 } },
-  { id: 'dark_run',       name: 'dark run',        mods: { sensorRangeMult: 0.6 } },
-];
+const { BALANCE } = require("./content/balance.js");
+const { SEEDED_SIGNATURES } = require("./content/signatures.js");
+
+const COSMIC_SIGNATURES = SEEDED_SIGNATURES;
 
 const WELL_NAMES = [
   'Charybdis', 'Erebus', 'Tartarus', 'Lethe', 'Acheron',
@@ -206,8 +202,8 @@ const CONSUMABLE_CATALOG = [
   { id: 'well-repulsor', name: 'Well Repulsor', tier: 3, value: [200, 280], effect: 'wellRepulsor' },
 ];
 
-const LOOT_TIER_GATES = { 1: 0, 2: 30, 3: 120, 4: 240 };
-const LOOT_TIER_WEIGHTS = { 1: 60, 2: 30, 3: 8, 4: 2 };
+const LOOT_TIER_GATES = BALANCE.loot.tierGates;
+const LOOT_TIER_WEIGHTS = BALANCE.loot.tierWeights;
 
 // Wreck wave schedule. Must match what the server consumes from the
 // wreckWave + wreckLoot streams so client previews are accurate.

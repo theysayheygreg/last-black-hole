@@ -5,12 +5,31 @@
 
 ---
 
+## 2026-05-04 — Signature content manifest
+
+- Extracted playable cosmic signature templates, map-size pools, layout multipliers, and seeded preview signatures into mirrored server/client content manifests.
+- Rewired `src/signatures.js` and both seeded-generation mirrors to read from the manifest while preserving existing HUD, preview, and layout multiplier behavior.
+- Added manifest validation plus focused signature runtime tests for mirror sync, unique ids/names, map-size pool shape, CONFIG override compatibility, known layout hints, and streak-protected rolling.
+
+## 2026-05-04 — Run results player overlay
+
+- Added a focused run-results renderer/view-model module for the post-run extraction/death overlay.
+- Replaced the compact legacy end-screen stats with RunResult-shaped survival, signal peak, inhibitor form, cargo extracted/lost, EM earnings, death cause, AI outcomes, and notables.
+- Added browser coverage for extraction/death result formatting plus the continue path back into meta/home flow.
+
+## 2026-05-04 — First balance manifest
+
+- Added a canonical first-pass balance surface for loot tier gates, tier weights, wreck-age value scaling, EM survival/death payout, death tax, rig costs, and profile/vault upgrade costs.
+- Wired local loot, seeded generation, run-result EM earnings, death tax, and rig/profile costs to the balance surface without changing UI rendering paths.
+- Added balance relationship tests for extraction vs death earnings, rising rig costs, bounded wreck age value, rare T4 weighting, and distinct hull identities.
+
 ## 2026-05-04 — Hull rig progression client surface
 
 - Added canonical client profile fields for `hullType` and three-slot `rigLevels`, while preserving the existing `2 equipped + 2 consumable` loadout contract.
 - Exposed rig progression query/purchase helpers through the profile manager and test API.
+- Replaced the home-screen upgrade tab with a compact hull rig tab that shows hull, EM, track levels, next effects, costs, affordability, and supports buying the selected rig upgrade from the menu.
 - Added a normalized ability-state test API surface for `ability1`/`ability2` cooldown, readiness, active state, charges, and fuel where applicable.
-- Extended browser/system coverage for hull/rig profile exposure and rig purchases, and added remote-authority coverage for client-visible ability state.
+- Extended browser/system coverage for hull/rig profile exposure and rig purchases, added real home-menu rig purchase coverage, and added remote-authority coverage for client-visible ability state.
 
 ## 2026-05-04 — Fluid-grid harness cleanup
 

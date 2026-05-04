@@ -13,6 +13,8 @@
  * Everything persists here — vault.js is replaced by this.
  */
 
+import { BALANCE, deathTaxEm } from './content/balance.js';
+
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
 const LEGACY_VAULT_KEY = 'lbh_vault';
@@ -23,7 +25,7 @@ const CONSUMABLE_SLOT_COUNT = 2;
 const HULL_TYPES = ['drifter', 'breacher', 'resonant', 'shroud', 'hauler'];
 const DEFAULT_HULL_TYPE = 'drifter';
 const RIG_SLOT_COUNT = 3;
-export const MAX_RIG_LEVEL = 5;
+export const MAX_RIG_LEVEL = BALANCE.progression.maxRigLevel;
 
 // ---- Random name generation ----
 
@@ -133,20 +135,12 @@ export const UPGRADE_TRACKS = {
 // EM costs per rank (all tracks except vault).
 // Balance target: rank 1 after 1-2 extractions, rank 3 after 5-8 per track,
 // full max (all tracks) after 25-30 extractions.
-const RANK_COSTS = [
-  { em: 250,  component: null },        // rank 1: EM only — achievable quickly
-  { em: 800,  component: 'uncommon' },  // rank 2: meaningful investment
-  { em: 2000, component: 'rare' },      // rank 3: serious commitment + rare drop
-];
+const RANK_COSTS = BALANCE.progression.profileUpgradeCosts;
 
 // Vault track has its own cost schedule (EM only, steep — this is the EM sink)
-const VAULT_RANK_COSTS = [
-  { em: 800 },
-  { em: 2500 },
-  { em: 6000 },
-];
+const VAULT_RANK_COSTS = BALANCE.progression.vaultUpgradeCosts;
 
-export const MAX_RANK = 3;
+export const MAX_RANK = BALANCE.progression.maxProfileRank;
 
 export const RIG_TRACKS = {
   drifter: [
@@ -176,7 +170,35 @@ export const RIG_TRACKS = {
   ],
 };
 
-const RIG_LEVEL_COSTS = [300, 750, 1500, 3000, 5000];
+const RIG_LEVEL_COSTS = BALANCE.progression.rigLevelCosts;
+
+export const RIG_LEVEL_EFFECTS = {
+  drifter: [
+    ['+0.1 currentCoupling', 'flow lock align time -0.5s', '+0.1 currentCoupling', 'flow lock align time -0.5s', 'flow lock signal mult -> 0.05'],
+    ['+0.1 wellResistScale', 'accretion shadow signal masking', '+0.1 wellResistScale', 'show well kill radius', 'eddy brake cooldown -5s'],
+    ['+0.1 pickupRadius', 'wreck tier estimate in HUD', '+0.1 pickupRadius', '+1 extraction item chance', 'slip stream signal reduction -> 0.5'],
+  ],
+  breacher: [
+    ['+5s burn fuel', '+0.1 thrustScale', '+5s burn fuel', 'burn recharge rate +50%', 'burn thrust mult -> 2.5'],
+    ['+0.1 wellResistScale', '+0.15 controlDebuffResist', 'momentum shield threshold -10%', 'shield charge on first burn', 'shockwave stun +1s'],
+    ['pickup at 90% speed', '+0.1 pickupRadius', 'pickup at 70% speed', 'death cargo scatters further', 'loot signal spikes -30%'],
+  ],
+  resonant: [
+    ['+1 max eddy', 'eddy duration +2s', 'eddies pull wrecks', '+1 max eddy', 'team-visible eddies'],
+    ['tap range +0.1 wu', 'tap cooldown -5s', 'pulse cooldown -20% near anchor', 'anchor persists through death', 'frequency shift cooldown -15s'],
+    ['dampening slow +10%', 'eddies reduce signal inside', 'dampening slow +10%', 'eddies block inhibitor form 1', 'form 3 vessel slow'],
+  ],
+  shroud: [
+    ['ghost trail threshold -> PRESENCE', '+0.1 signalDecayMult', 'wake cloak cooldown -10s', 'scavengers never detect ghost trail', 'wake cloak works at THRESHOLD'],
+    ['+0.1 sensorRange', 'see inhibitor tracking target', '+0.1 sensorRange', 'see wreck contents', 'see player equipped items'],
+    ['+1 decoy charge', 'decoy duration +4s', 'decoy cooldown -20s', 'decoys attract fauna', 'remote decoy placement'],
+  ],
+  hauler: [
+    ['+1 cargo slot', 'tagged wrecks glow further', '+1 cargo slot', 'block first swarm drain', 'salvage lock +1 charge'],
+    ['deep scanner names items', 'tagged wreck bonus +1 item', 'tractor range +0.05 wu', 'tagged wreck lockout 10s', 'tractor can pull portals'],
+    ['reinforced hull scatters 0 cargo', '+0.1 wellResistScale', 'tractor cooldown -10s', 'reinforced hull +1 charge', 'full-cargo speed +10%'],
+  ],
+};
 
 // ---- Profile Manager ----
 
@@ -342,6 +364,7 @@ export class ProfileManager {
         ...track,
         index,
         level: levels[index] ?? 0,
+        nextEffect: RIG_LEVEL_EFFECTS[hullType]?.[index]?.[levels[index] ?? 0] || null,
       })),
     };
   }
@@ -358,6 +381,7 @@ export class ProfileManager {
       em: RIG_LEVEL_COSTS[currentLevel],
       trackIndex: index,
       nextLevel: currentLevel + 1,
+      nextEffect: RIG_LEVEL_EFFECTS[normalizeHullType(p.hullType, p.shipType)]?.[index]?.[currentLevel] || null,
     };
   }
 
@@ -407,8 +431,7 @@ export class ProfileManager {
     const p = this.active;
     if (!p) return;
     p.totalDeaths++;
-    // Death tax: lose 10% of EM (minimum 0)
-    const tax = Math.floor(p.exoticMatter * 0.1);
+    const tax = deathTaxEm(p.exoticMatter);
     p.exoticMatter -= tax;
     p.lastPlayed = new Date().toISOString();
     this.save();

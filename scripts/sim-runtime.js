@@ -19,6 +19,11 @@ const {
   RIG_TRACKS,
 } = require("./content/hulls.js");
 const {
+  wreckAgeValueMultiplier,
+  survivalBonusEm,
+  runEmEarned,
+} = require("./content/balance.js");
+const {
   defaultRigLevels,
   normalizeRigLevels,
   BRAIN_DEFAULTS,
@@ -66,8 +71,6 @@ const WELL_KILL_RADIUS_GROWTH = 0.3;
 // Wreck aging constants stay here since aging is server-runtime only.
 
 const { WELL_NAMES } = SEEDED_GEN;
-const WRECK_AGE_VALUE_CAP = 1.5;
-const WRECK_AGE_CAP_SECONDS = 120;
 
 // Wreck wave schedule lives in seeded-generation.js so the client can mirror it.
 const { WRECK_WAVES } = SEEDED_GEN;
@@ -109,8 +112,7 @@ function generateWreckLoot(sessionTime, slotCount, streamName = 'loot') {
 }
 
 function wreckAgeMultiplier(wreckSpawnTime, currentTime) {
-  const age = currentTime - wreckSpawnTime;
-  return Math.min(WRECK_AGE_VALUE_CAP, 1.0 + (age / WRECK_AGE_CAP_SECONDS) * (WRECK_AGE_VALUE_CAP - 1.0));
+  return wreckAgeValueMultiplier(wreckSpawnTime, currentTime);
 }
 
 function applyRunSeed(rngStreams, mapState, session) {
@@ -1535,7 +1537,7 @@ function buildRunResult(player, outcome) {
   const cargoItems = player.cargo.filter(Boolean);
   const cargoValue = cargoItems.reduce((s, item) => s + (item.value || 0), 0);
   const survivalTime = runtime.simTime;
-  const survivalBonus = Math.floor(survivalTime * 0.5);
+  const survivalBonus = survivalBonusEm(survivalTime);
   const isExtraction = outcome === 'escaped';
   const resultOutcome = isExtraction ? 'extracted' : outcome;
   const loadoutSnapshot = {
@@ -1574,9 +1576,7 @@ function buildRunResult(player, outcome) {
   }
 
   // Earnings
-  const emEarned = isExtraction
-    ? cargoValue + survivalBonus
-    : Math.floor(survivalBonus * 0.5); // death gets 50% survival bonus only
+  const emEarned = runEmEarned({ outcome, cargoValue, survivalTime });
   const cargoExtracted = isExtraction ? cargoItems.map(i => ({ ...i })) : [];
   const cargoLost = !isExtraction ? cargoItems.map(i => ({ ...i })) : [];
   const notables = [];

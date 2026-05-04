@@ -136,7 +136,7 @@ async function run() {
       if (scenario.map === "10x10" && scenario.perf.visibleWellCount >= scenario.perf.totalWellCount) {
         throw new Error(`10x10 ${scenario.htmlFile} rendered all wells directly; expected off-window coarse-field path`);
       }
-      const floor = scenario.htmlFile.includes("?") ? 30 : MIN_FPS[scenario.map];
+      const floor = MIN_FPS[scenario.map];
       if (scenario.fps < floor) {
         throw new Error(`${scenario.map} ${scenario.htmlFile} FPS ${scenario.fps.toFixed(1)} below floor ${floor}`);
       }

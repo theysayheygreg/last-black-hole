@@ -12,6 +12,13 @@ async function loadItemsModule() {
     .readFileSync(path.join(ROOT, "src", "items.js"), "utf8")
     .replace("./seeded-generation.js", "./seeded-generation.mjs");
 
+  fs.mkdirSync(path.join(tmp, "content"), { recursive: true });
+  for (const file of fs.readdirSync(path.join(ROOT, "src", "content"))) {
+    if (file.endsWith(".js")) {
+      fs.copyFileSync(path.join(ROOT, "src", "content", file), path.join(tmp, "content", file));
+    }
+  }
+  fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ type: "module" }));
   fs.writeFileSync(path.join(tmp, "seeded-generation.mjs"), seededSrc);
   fs.writeFileSync(path.join(tmp, "items.mjs"), itemsSrc);
   return import(`file://${path.join(tmp, "items.mjs")}`);

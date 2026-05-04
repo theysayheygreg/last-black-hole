@@ -113,6 +113,37 @@ async function run() {
       assert(typeof pos.x === "number" && typeof pos.y === "number", "Ship position unavailable after real launch flow");
     });
 
+    await runner.run("Home rig tab exposes tracks and buys an upgrade through menu input", async () => {
+      await bootstrapCleanPage(page);
+      await waitForPhase(page, "title");
+      await tapConfirm(page);
+      await waitForPhase(page, "profileSelect");
+      await tapEnter(page);
+      await sleep(120);
+      await tapEnter(page);
+      await waitForPhase(page, "home");
+
+      await page.evaluate(() => window.__TEST_API.seedProfileExoticMatter(300));
+      await tapTabRight(page);
+      await tapTabRight(page);
+      await waitFor(page, () => window.__TEST_API.getHomeState().tabName === "RIG", { timeout: 3000 });
+
+      const before = await page.evaluate(() => window.__TEST_API.getHomeState());
+      assert(before.hullType === "drifter", `Expected drifter hull, got ${before.hullType}`);
+      assert(before.rig.tracks.length === 3, `Expected 3 rig tracks, got ${before.rig.tracks.length}`);
+      assert(before.selectedRig.key === "laminar", `Expected laminar selected, got ${before.selectedRig.key}`);
+      assert(before.selectedRigCost.em === 300, `Expected first rig cost 300 EM, got ${before.selectedRigCost.em}`);
+      assert(before.selectedRigAffordable === true, "Expected seeded profile to afford first rig upgrade");
+      assert(before.loadoutSlots.equipped === 2, "Expected 2 equipped slots to remain canonical");
+      assert(before.loadoutSlots.consumables === 2, "Expected 2 consumable slots to remain canonical");
+
+      await tapConfirm(page);
+      const after = await page.evaluate(() => window.__TEST_API.getHomeState());
+      assert(after.rig.levels[0] === 1, `Expected laminar level 1 after purchase, got ${after.rig.levels[0]}`);
+      assert(after.rig.levels[1] === 0 && after.rig.levels[2] === 0, "Expected only selected rig track to change");
+      assert(after.exoticMatter === 0, `Expected EM spent down to 0, got ${after.exoticMatter}`);
+    });
+
     const filepath = await screenshot(page, "meta-flow");
     console.log(`\n  Screenshot: ${filepath}`);
   } finally {

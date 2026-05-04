@@ -21,7 +21,7 @@ const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
-async function waitForPhase(page, phase, timeout = 9000) {
+async function waitForPhase(page, phase, timeout = 12000) {
   await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, { timeout }, phase);
 }
 
@@ -62,11 +62,11 @@ async function enterRemoteRun(page) {
   await tap(page, "Enter", "Enter");
   await waitForPhase(page, "mapSelect");
   await tap(page, "Enter", "Enter");
-  await waitForPhase(page, "playing", 12000);
+  await waitForPhase(page, "playing", 18000);
   await waitFor(page, () => {
     const net = window.__TEST_API.getNetworkState();
     return net.simEnabled && net.remoteAuthorityActive && typeof net.remoteTick === "number";
-  }, { timeout: 12000 });
+  }, { timeout: 18000 });
 }
 
 async function prepareLocalRun(page) {

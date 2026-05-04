@@ -13,6 +13,7 @@ const {
   screenshot,
   TestRunner,
   assert,
+  waitFor,
 } = require('./helpers');
 
 const htmlFile = process.argv[2] || 'index-a.html';
@@ -179,9 +180,8 @@ async function run() {
     // ---- RESTART PRESERVES STRUCTURE ----
 
     await runner.run('Restart clears inventory and assigns new signature', async () => {
-      const sigBefore = await page.evaluate(() => window.__TEST_API.getSignature());
       await page.evaluate(() => window.__TEST_API.triggerRestart());
-      await sleep(1500);
+      await waitFor(page, () => window.__TEST_API.getInventory()?.cargoCount === 0, { timeout: 4000 });
 
       const inv = await page.evaluate(() => window.__TEST_API.getInventory());
       assert(inv.cargoCount === 0, `Cargo should be empty after restart, got ${inv.cargoCount}`);

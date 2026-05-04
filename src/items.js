@@ -14,6 +14,7 @@ import {
   LOOT_TIER_WEIGHTS,
   availableTiers as catalogAvailableTiers,
 } from './seeded-generation.js';
+import { BALANCE, wreckAgeValueMultiplier as balanceWreckAgeValueMultiplier } from './content/balance.js';
 
 // ---- Unique ID generator ----
 
@@ -24,8 +25,8 @@ function nextItemId(prefix = 'item') {
 
 // ---- Catalog constants ----
 
-const WRECK_AGE_VALUE_CAP = 1.5;
-const WRECK_AGE_CAP_SECONDS = 120;
+const WRECK_AGE_VALUE_CAP = BALANCE.loot.wreckAgeValueCap;
+const WRECK_AGE_CAP_SECONDS = BALANCE.loot.wreckAgeCapSeconds;
 const LEGACY_WRECK_TIER_SESSION_TIME = {
   1: LOOT_TIER_GATES[1],
   2: LOOT_TIER_GATES[2],
@@ -106,8 +107,7 @@ export function availableLootTiers(sessionTime = 0) {
 }
 
 export function wreckAgeValueMultiplier(spawnTime = 0, currentTime = spawnTime) {
-  const age = Math.max(0, (Number(currentTime) || 0) - (Number(spawnTime) || 0));
-  return Math.min(WRECK_AGE_VALUE_CAP, 1.0 + (age / WRECK_AGE_CAP_SECONDS) * (WRECK_AGE_VALUE_CAP - 1.0));
+  return balanceWreckAgeValueMultiplier(spawnTime, currentTime);
 }
 
 export function applyWreckAgeValue(item, multiplier = 1.0) {

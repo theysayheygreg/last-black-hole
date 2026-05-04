@@ -42,8 +42,9 @@ import { CombatSystem } from './combat.js';
 import { AudioEngine } from './audio.js';
 import { rollSignature, applySignatureConfig } from './signatures.js';
 import { InventorySystem } from './inventory.js';
-import { ProfileManager, UPGRADE_TRACKS, MAX_RANK, generatePilotName } from './profile.js';
+import { ProfileManager, UPGRADE_TRACKS, MAX_RANK, MAX_RIG_LEVEL, generatePilotName } from './profile.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
+import { buildRunResultsViewModel, drawRunResultsOverlay } from './run-results.js';
 import { FlowField } from './sim/flow-field.js';
 import { SimCore } from './sim/sim-core.js';
 import { SimClient } from './sim/sim-client.js';
@@ -345,11 +346,23 @@ let profileCursor = 0;       // profile select cursor (0-2)
 let homeTab = 0;             // home screen tab (0=ship, 1=vault, 2=upgrades, 3=launch)
 let homeShipCursor = 0;      // ship subscreen cursor (0-1 equip, 2-3 consumable)
 let homeVaultCursor = 0;     // vault subscreen scroll position
-let homeUpgradeCursor = 0;   // upgrade subscreen cursor
+let homeRigCursor = 0;       // rig subscreen cursor
 let homePhaseTimer = 0;      // animation timer for home screen
 let nameInputActive = false; // text input mode for new profile
 let nameInputBuffer = '';    // current typed name
 let deleteConfirmSlot = -1;  // which slot is pending delete confirmation (-1 = none)
+
+function currentRunResultsViewModel() {
+  const fallbackCargo = inventorySystem?.getCargoItems?.() || [];
+  return buildRunResultsViewModel({
+    runResult: lastRunResult,
+    phase: gamePhase,
+    fallbackCargo,
+    fallbackSurvivalTime: simState.runEndTime,
+    fallbackCargoValue: fallbackCargo.reduce((sum, item) => sum + (item?.value || 0), 0),
+    deathTax: lastDeathTax,
+  });
+}
 
 // Scene transition state
 let transitionActive = false;
@@ -641,6 +654,13 @@ function init() {
       get gamePhase() { return gamePhase; },
       set gamePhase(p) { gamePhase = p; },
       inventorySystem,
+      get lastRunResult() { return lastRunResult; },
+      setLastRunResult: (result) => { lastRunResult = result ? JSON.parse(JSON.stringify(result)) : null; },
+      getRunResultsViewModel: currentRunResultsViewModel,
+      setEndScreenTimers: ({ death = deathTimer, escape = escapeTimer } = {}) => {
+        deathTimer = death;
+        escapeTimer = escape;
+      },
       get inventoryOpen() { return inventoryOpen; },
       inputManager,
       scavengerSystem,
@@ -656,6 +676,8 @@ function init() {
       get remotePlayers() { return remotePlayers; },
       get localAbilityState() { return localAbilityState; },
       get playableMaps() { return PLAYABLE_MAPS; },
+      get homeTab() { return homeTab; },
+      get homeRigCursor() { return homeRigCursor; },
       transitionToGame,
       transitionToRemoteGame,
     }));
@@ -2230,7 +2252,7 @@ function gameLoop(now) {
 
   } else if (gamePhase === 'home') {
     homePhaseTimer += dt;
-    const tabCount = 4; // SHIP, VAULT, UPGRADES, LAUNCH
+    const tabCount = 4; // SHIP, VAULT, RIG, LAUNCH
     // Tab navigation: L1/R1 (or Q/E on keyboard) — dpad/stick reserved for in-tab scrolling
     if (inputManager.tabLeftPressed && !_prevTabLeft) { homeTab = (homeTab - 1 + tabCount) % tabCount; audioEngine.playEvent('tabSwitch'); }
     if (inputManager.tabRightPressed && !_prevTabRight) { homeTab = (homeTab + 1) % tabCount; audioEngine.playEvent('tabSwitch'); }
@@ -2291,14 +2313,14 @@ function gameLoop(now) {
         }
         if (homeVaultCursor >= p.vault.length) homeVaultCursor = Math.max(0, p.vault.length - 1);
       }
-    } else if (homeTab === 2) { // UPGRADES
-      const tracks = Object.keys(UPGRADE_TRACKS);
-      if (upNow && !_prevUp && homeUpgradeCursor > 0) homeUpgradeCursor--;
-      if (downNow && !_prevDown && homeUpgradeCursor < tracks.length - 1) homeUpgradeCursor++;
+    } else if (homeTab === 2) { // RIG
+      const rig = profileManager.getRigProgression();
+      const tracks = rig?.tracks || [];
+      if (upNow && !_prevUp && homeRigCursor > 0) homeRigCursor--;
+      if (downNow && !_prevDown && homeRigCursor < tracks.length - 1) homeRigCursor++;
       if (confirmNow && !_prevConfirm) {
-        const track = tracks[homeUpgradeCursor];
-        if (profileManager.canAffordUpgrade(track)) {
-          profileManager.performUpgrade(track);
+        if (profileManager.canAffordRigUpgrade(homeRigCursor)) {
+          profileManager.performRigUpgrade(homeRigCursor);
           audioEngine.playEvent('upgrade');
         } else {
           audioEngine.playEvent('cantAfford');
@@ -3766,7 +3788,7 @@ function gameLoop(now) {
     ctx.fillText(`${p?.exoticMatter || 0} EM`, cx, 55);
 
     // Tab bar
-    const tabNames = ['SHIP', 'VAULT', 'UPGRADES', 'LAUNCH'];
+    const tabNames = ['SHIP', 'VAULT', 'RIG', 'LAUNCH'];
     const tabWidth = 120;
     const tabStartX = cx - (tabNames.length * tabWidth) / 2;
     for (let i = 0; i < tabNames.length; i++) {
@@ -3894,50 +3916,46 @@ function gameLoop(now) {
       }
 
     } else if (homeTab === 2 && p) {
-      // === UPGRADES subscreen ===
+      // === RIG subscreen ===
+      const rig = profileManager.getRigProgression();
+      const tracks = rig?.tracks || [];
       ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
       ctx.font = 'bold 13px monospace';
-      ctx.fillText('upgrades', leftMargin, contentY);
+      ctx.fillText(`rig: ${rig?.hullType || p.hullType || 'drifter'}`, leftMargin, contentY);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(255, 220, 100, 0.82)';
+      ctx.fillText(`${p.exoticMatter} EM`, leftMargin + 360, contentY);
+      ctx.textAlign = 'left';
       ctx.font = '12px monospace';
       let uy = contentY + 25;
-      const tracks = Object.keys(UPGRADE_TRACKS);
       for (let ti = 0; ti < tracks.length; ti++) {
         const track = tracks[ti];
-        const td = UPGRADE_TRACKS[track];
-        const rank = p.upgrades[track] || 0;
-        const selected = (ti === homeUpgradeCursor);
-        const cost = profileManager.getUpgradeCost(track);
-        const canAfford = profileManager.canAffordUpgrade(track);
+        const rank = track.level || 0;
+        const selected = (ti === homeRigCursor);
+        const cost = profileManager.getRigUpgradeCost(ti);
+        const canAfford = profileManager.canAffordRigUpgrade(ti);
 
         if (selected) {
           ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
-          ctx.fillRect(leftMargin - 4, uy - 12, 370, 32);
+          ctx.fillRect(leftMargin - 4, uy - 13, 370, 48);
         }
 
-        const bars = '█'.repeat(rank) + '░'.repeat(MAX_RANK - rank);
+        const bars = '#'.repeat(rank) + '-'.repeat(MAX_RIG_LEVEL - rank);
         ctx.fillStyle = selected ? 'rgba(220, 230, 255, 0.9)' : 'rgba(150, 160, 180, 0.6)';
-        ctx.fillText(`${td.label.padEnd(10)} ${bars}  ${td.desc}`, leftMargin, uy);
+        ctx.fillText(`${track.label.padEnd(12)} ${bars}  ${rank}/${MAX_RIG_LEVEL}`, leftMargin, uy);
+        ctx.fillStyle = 'rgba(135, 155, 180, 0.72)';
+        ctx.fillText(track.focus, leftMargin + 20, uy + 15);
 
         if (cost) {
-          const costText = cost.componentTarget
-            ? `${cost.em} EM + ${cost.componentTarget}`
-            : `${cost.em} EM`;
           ctx.fillStyle = canAfford ? 'rgba(100, 255, 150, 0.7)' : 'rgba(255, 100, 100, 0.5)';
-          let preview = '';
-          if (selected && td.statKey) {
-            const keys = td.statKey.split('.');
-            const current = CONFIG[keys[0]][keys[1]];
-            const mult = 1 + (rank + 1) * td.multPerRank;
-            const next = (current / (1 + rank * td.multPerRank)) * mult;
-            preview = `  (${current.toFixed(2)} → ${next.toFixed(2)})`;
-          }
-          ctx.fillText(`  → ${costText}${preview}${selected ? '  [space: upgrade]' : ''}`, leftMargin + 20, uy + 15);
+          const action = selected ? '  [space: buy]' : '';
+          ctx.fillText(`next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM${action}`, leftMargin + 20, uy + 30);
         } else {
           ctx.fillStyle = 'rgba(255, 220, 100, 0.6)';
-          ctx.fillText('  MAX', leftMargin + 20, uy + 15);
+          ctx.fillText('MAX', leftMargin + 20, uy + 30);
         }
 
-        uy += 38;
+        uy += 55;
       }
 
     } else if (homeTab === 3) {
@@ -4130,196 +4148,17 @@ function gameLoop(now) {
     ctx.restore();
   }
 
-  // === END SCREEN (shared for death, collapse, and extraction) ===
+  // === RUN RESULTS (shared for death, collapse, and extraction) ===
   if (!rendererFixtureActive && (gamePhase === 'dead' || gamePhase === 'escaped')) {
-    const cx = overlayCanvas.width / 2;
-    const cy = overlayCanvas.height / 2;
     const rawT = gamePhase === 'dead' ? deathTimer : escapeTimer;
-    const isEscape = gamePhase === 'escaped';
-    const collapsed = !isEscape && portalSystem.activeCount === 0 && !portalSystem.hasMoreWaves;
-
-    // LINGER — the cycle ends before the results screen tells you it has.
-    // During the linger, the HUD fades and the simulation dims, but the
-    // staged results reveal has not started yet. See RETURNAL-APPLICATION.md
-    // sprint 1 steal #2. Duration is a module-level constant because the
-    // continue-input gate below needs to agree with us.
-    const LINGER_DURATION = DEATH_LINGER_DURATION;
-
-    const title = isEscape ? 'EXTRACTED' : collapsed ? 'COLLAPSED' : 'CONSUMED';
-    const subtitle = isEscape ? 'out of a dying universe' : collapsed ? 'no way out' : 'the universe won';
-    const titleColor = isEscape ? 'rgba(100, 255, 255,' : collapsed ? 'rgba(180, 80, 255,' : 'rgba(255, 30, 30,';
-    const itemVerb = isEscape ? 'salvaged' : 'lost';
-    const endItems = inventorySystem.getCargoItems();
-
-    const w = overlayCanvas.width, h = overlayCanvas.height;
-    ctx.save();
-
-    // Linger phase: dim the world gradually instead of snapping to the
-    // dark overlay. Compute linger fraction 0→1 across LINGER_DURATION,
-    // then hold at 1 for the staged reveal.
-    const lingerFrac = Math.min(1.0, rawT / LINGER_DURATION);
-    // Fade the HUD in lockstep with the linger
+    const lingerFrac = Math.min(1.0, rawT / DEATH_LINGER_DURATION);
     fadeHUD(1.0 - lingerFrac);
-    // Ease in with a small power curve — slow at first, then drops
-    const dimEase = lingerFrac * lingerFrac * (3 - 2 * lingerFrac);
-    // Final overlay alpha 0.75 at end of linger. During linger, it ramps
-    // from 0 (world fully visible) to 0.35 (world dimming, still visible)
-    // to 0.75 (world mostly gone, results start resolving).
-    const overlayAlpha = lingerFrac < 1.0
-      ? dimEase * 0.55  // 0 to 0.55 during linger — the fluid stays visible
-      : 0.55 + Math.min(0.20, (rawT - LINGER_DURATION) * 0.6); // ramp remainder quickly
-    ctx.fillStyle = `rgba(0, 2, 12, ${overlayAlpha.toFixed(3)})`;
-    ctx.fillRect(0, 0, w, h);
-
-    // Scanlines and frame only appear after the linger
-    if (rawT > LINGER_DURATION) {
-      drawScanlines(ctx, w, h, 0.025);
-      const frameColor = isEscape ? 'rgba(100, 255, 255, 0.2)' : 'rgba(255, 50, 30, 0.15)';
-      drawTerminalFrame(ctx, cx - 220, cy - 130, 440, 280, null, frameColor);
-    }
-
-    // Effective timer for the staged reveal — starts counting from the end
-    // of the linger. All existing reveal timing offsets (title at t>0.3,
-    // subtitle at t>0.6, items at t>1.0, stats, etc.) continue to work
-    // unchanged relative to the post-linger clock.
-    const t = Math.max(0, rawT - LINGER_DURATION);
-
-    // During the linger, draw a soft glow word at the center — a single
-    // beat before the real title appears. Matches the "the cycle ended
-    // before the screen told you" feeling.
-    if (rawT < LINGER_DURATION) {
-      const lingerAlpha = Math.min(0.35, lingerFrac * 0.4);
-      ctx.fillStyle = `${titleColor} ${lingerAlpha.toFixed(3)})`;
-      ctx.font = '12px "JetBrains Mono", monospace';
-      ctx.textAlign = 'center';
-      ctx.shadowColor = `${titleColor} ${(lingerAlpha * 0.5).toFixed(3)})`;
-      ctx.shadowBlur = 10;
-      ctx.fillText('— cycle ended —', cx, cy);
-      ctx.shadowBlur = 0;
-    }
-
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 16;
-    ctx.textAlign = 'center';
-
-    // Title
-    if (t > 0.3) {
-      ctx.fillStyle = `${titleColor} ${Math.min((t - 0.3) * 2, 1)})`;
-      ctx.font = 'bold 42px monospace';
-      ctx.fillText(title, cx, cy - 90);
-    }
-    // Subtitle
-    if (t > 0.6) {
-      ctx.fillStyle = `rgba(150, 150, 170, ${Math.min((t - 0.6) * 2, 0.7)})`;
-      ctx.font = '16px monospace';
-      ctx.fillText(subtitle, cx, cy - 65);
-    }
-    // Salvage list (items fade in one by one)
-    if (t > 1.0 && endItems.length > 0) {
-      ctx.font = '13px monospace';
-      const maxShow = Math.min(endItems.length, 8, Math.floor((t - 1.0) / 0.15));
-      let itemY = cy - 30;
-      for (let i = 0; i < maxShow; i++) {
-        const item = endItems[i];
-        const tierColor = TIER_COLORS[item.tier] || 'rgba(200, 200, 210, 0.8)';
-        const catColor = CATEGORY_COLORS[item.category] || tierColor;
-        ctx.fillStyle = isEscape ? tierColor : `rgba(120, 120, 130, 0.6)`;
-        ctx.fillText(`${item.name} [${item.category}]`, cx, itemY);
-        itemY += 18;
-      }
-      if (endItems.length > 8) {
-        ctx.fillStyle = 'rgba(150, 150, 170, 0.5)';
-        ctx.fillText(`...and ${endItems.length - 8} more`, cx, itemY);
-        itemY += 18;
-      }
-    }
-    // Stats + RunResult data
-    const statsT = 1.0 + Math.min(endItems.length, 8) * 0.15 + 0.3;
-    if (t > statsT) {
-      const rr = lastRunResult;
-      ctx.fillStyle = `rgba(180, 180, 200, ${Math.min((t - statsT) * 2, 0.8)})`;
-      ctx.font = '14px monospace';
-      const survTime = rr?.survivalTime ?? simState.runEndTime;
-      const mins = Math.floor(survTime / 60);
-      const secs = Math.floor(survTime % 60);
-      let statY = cy + Math.min(endItems.length, 8) * 18 - 10;
-      ctx.fillText(`${endItems.length} items ${itemVerb}  |  survived ${mins}:${String(secs).padStart(2, '0')}`, cx, statY);
-
-      // Signal peak + inhibitor form (from RunResult)
-      if (rr && t > statsT + 0.2) {
-        statY += 20;
-        ctx.fillStyle = 'rgba(160, 160, 180, 0.6)';
-        ctx.font = '11px monospace';
-        const sigPeak = rr.signalPeakZone || 'ghost';
-        const inhForm = rr.inhibitorFormReached || 0;
-        const inhLabel = ['dormant', 'glitch', 'swarm', 'vessel'][inhForm] || 'dormant';
-        ctx.fillText(`signal peak: ${sigPeak}  |  inhibitor: ${inhLabel}`, cx, statY);
-      }
-
-      // AI outcomes (from RunResult)
-      if (rr?.aiOutcomes?.length > 0 && t > statsT + 0.4) {
-        statY += 18;
-        ctx.font = '10px monospace';
-        for (const ai of rr.aiOutcomes) {
-          const outcomeColor = ai.outcome === 'extracted' ? 'rgba(100, 255, 200, 0.6)' : ai.outcome === 'dead' ? 'rgba(255, 100, 80, 0.5)' : 'rgba(160, 160, 180, 0.4)';
-          ctx.fillStyle = outcomeColor;
-          ctx.fillText(`${ai.personality} (${ai.hullType}): ${ai.outcome}`, cx, statY);
-          statY += 14;
-        }
-      }
-
-      // Death cause (from RunResult)
-      if (!isEscape && rr?.deathCause && t > statsT + 0.3) {
-        const causeY = statY + 5;
-        ctx.fillStyle = 'rgba(255, 80, 60, 0.7)';
-        ctx.font = '12px monospace';
-        const causeText = rr.deathEntityId ? `${rr.deathCause}: ${rr.deathEntityId}` : rr.deathCause;
-        ctx.fillText(causeText, cx, causeY);
-        statY = causeY;
-      }
-
-      // Death tax display
-      if (!isEscape && lastDeathTax > 0 && t > statsT + 0.3) {
-        ctx.fillStyle = 'rgba(255, 100, 80, 0.8)';
-        ctx.font = '14px monospace';
-        ctx.fillText(`-${lastDeathTax} exotic matter`, cx, statY + 20);
-        statY += 20;
-      }
-
-      // EM earnings (from RunResult)
-      if (rr?.emEarned != null && t > statsT + 0.5) {
-        statY += 8;
-        ctx.fillStyle = 'rgba(255, 255, 240, 0.9)';
-        ctx.font = 'bold 24px monospace';
-        const countT = Math.min((t - statsT - 0.5) / 0.5, 1);
-        ctx.fillText(`+${Math.floor(rr.emEarned * countT)} em`, cx, statY + 20);
-        statY += 25;
-      } else if (isEscape && t > statsT + 0.3) {
-        // Fallback: show cargo value if no RunResult
-        const totalValue = endItems.reduce((sum, item) => sum + (item.value || 0), 0);
-        ctx.fillStyle = 'rgba(255, 255, 240, 0.9)';
-        ctx.font = 'bold 28px monospace';
-        const countT = Math.min((t - statsT - 0.3) / 0.5, 1);
-        ctx.fillText(`${Math.floor(totalValue * countT)}`, cx, statY + 35);
-        statY += 35;
-      }
-
-      // Seed display
-      if (rr && t > statsT + 0.8) {
-        ctx.fillStyle = 'rgba(100, 110, 130, 0.4)';
-        ctx.font = '9px monospace';
-        ctx.fillText(`seed: ${remoteSnapshot?.session?.seed || '---'}`, cx, statY + 25);
-      }
-    }
-    // Prompt
-    const promptT = statsT + (isEscape ? 1.5 : 0.8);
-    if (t > promptT) {
-      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
-      ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
-      ctx.font = '18px monospace';
-      ctx.fillText('press space to continue', cx, cy + Math.min(endItems.length, 8) * 18 + 70);
-    }
-    ctx.restore();
+    drawRunResultsOverlay(ctx, overlayCanvas, {
+      view: currentRunResultsViewModel(),
+      rawTime: rawT,
+      totalTime,
+      lingerDuration: DEATH_LINGER_DURATION,
+    });
   }
 
   // === META SCREEN (between runs) ===

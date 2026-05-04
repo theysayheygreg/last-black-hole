@@ -19,116 +19,13 @@
  */
 
 import { CONFIG } from './config.js';
+import {
+  SIGNATURE_DEFINITIONS,
+  SIGNATURE_POOLS_BY_MAP_SIZE,
+  LAYOUT_MULTIPLIERS,
+} from './content/signatures.js';
 
-// ---- Signature definitions ----
-
-const SIGNATURES = {
-  'the slow tide': {
-    name: 'the slow tide',
-    flavor: 'currents run long here. take your time — spacetime will not.',
-    mechanical: 'low gravity / high drift / extended collapse',
-    mapSizes: [3, 5],
-    config: {
-      fluid: { viscosity: 0.00008 },
-      wells: { gravity: 0.0012 },
-      universe: { runDuration: 540 },
-      events: { growthInterval: 55 },
-    },
-    layout: {
-      wellSpread: 'wide',
-      wreckDensity: 'normal',
-      portalCount: 'normal',
-      scavengerCount: 'normal',
-    },
-  },
-
-  'the shattered merge': {
-    name: 'the shattered merge',
-    flavor: 'the mergers have already begun. find your exit.',
-    mechanical: 'fast well growth / frequent wave events / short collapse',
-    mapSizes: [3, 5, 10],
-    config: {
-      events: { growthInterval: 25, growthAmount: 0.04 },
-      universe: { runDuration: 360 },
-    },
-    layout: {
-      wellSpread: 'tight',
-      wreckDensity: 'normal',
-      portalCount: 'normal',
-      scavengerCount: 'high',
-    },
-  },
-
-  'the thick dark': {
-    name: 'the thick dark',
-    flavor: 'spacetime is already thickening. every move costs more than it should.',
-    mechanical: 'high viscosity / heavy drift / extra exits',
-    mapSizes: [3, 5],
-    config: {
-      fluid: { viscosity: 0.0003 },
-      universe: { viscosityGrowth: 0.015 },
-    },
-    layout: {
-      wellSpread: 'normal',
-      wreckDensity: 'sparse',
-      portalCount: 'high',
-      scavengerCount: 'low',
-    },
-  },
-
-  'the graveyard': {
-    name: 'the graveyard',
-    flavor: 'civilizations fell like rain here. their wealth remains. their exits do not.',
-    mechanical: 'many wrecks / few exits / slow collapse',
-    mapSizes: [3, 5, 10],
-    config: {
-      universe: { runDuration: 480 },
-      events: { growthInterval: 50 },
-    },
-    layout: {
-      wellSpread: 'normal',
-      wreckDensity: 'dense',
-      portalCount: 'low',
-      scavengerCount: 'low',
-    },
-  },
-
-  'the rush': {
-    name: 'the rush',
-    flavor: 'the exits are already closing. move.',
-    mechanical: 'fast portal decay / many scavengers / short window',
-    mapSizes: [3, 5],
-    config: {
-      universe: { runDuration: 300 },
-      portals: { evaporationInterval: 45 },
-    },
-    layout: {
-      wellSpread: 'normal',
-      wreckDensity: 'normal',
-      portalCount: 'normal',
-      scavengerCount: 'high',
-      wreckTierBoost: 1,
-    },
-  },
-
-  'the deep': {
-    name: 'the deep',
-    flavor: 'the distances here are immense. plan your route or drift forever.',
-    mechanical: 'strong gravity / high inertia / long run',
-    mapSizes: [5, 10],
-    config: {
-      wells: { gravity: 0.002 },
-      universe: { runDuration: 600 },
-    },
-    layout: {
-      wellSpread: 'extreme',
-      wreckDensity: 'sparse',
-      portalCount: 'low',
-      scavengerCount: 'normal',
-      wreckTierBoost: 1,
-    },
-  },
-};
+export { SIGNATURE_DEFINITIONS, SIGNATURE_POOLS_BY_MAP_SIZE, LAYOUT_MULTIPLIERS };
 
 // ---- Selection ----
 
@@ -142,21 +39,20 @@ let _lastSignature = null;
  * @returns {{ name, flavor, mechanical, config, layout }}
  */
 export function rollSignature(mapScale, rng = Math.random) {
-  // Filter to signatures that support this map scale, excluding the last pick
-  const pool = Object.values(SIGNATURES).filter(
-    s => s.mapSizes.includes(mapScale) && s.name !== _lastSignature
-  );
+  const ids = SIGNATURE_POOLS_BY_MAP_SIZE[mapScale] || [];
+  const signatures = ids.map(id => SIGNATURE_DEFINITIONS[id]).filter(Boolean);
+  const pool = signatures.filter(s => s.id !== _lastSignature);
 
   if (pool.length === 0) {
     // Fallback: allow repeat if streak filter emptied the pool
-    const fallback = Object.values(SIGNATURES).filter(s => s.mapSizes.includes(mapScale));
+    const fallback = signatures;
     const sig = fallback[Math.floor(rng() * fallback.length)];
-    _lastSignature = sig.name;
+    _lastSignature = sig.id;
     return sig;
   }
 
   const sig = pool[Math.floor(rng() * pool.length)];
-  _lastSignature = sig.name;
+  _lastSignature = sig.id;
   return sig;
 }
 
@@ -176,19 +72,6 @@ export function applySignatureConfig(signature) {
     }
   }
 }
-
-// ---- Layout multipliers ----
-
-/**
- * Lookup tables for converting qualitative layout hints to numeric values.
- * wreckDensity is multiplicative (applied to base wreck count).
- * portalCount / scavengerCount are additive offsets to base counts.
- */
-export const LAYOUT_MULTIPLIERS = {
-  wreckDensity:   { sparse: 0.6, normal: 1.0, dense: 1.6 },
-  portalCount:    { low: -1, normal: 0, high: 1 },      // additive offset
-  scavengerCount: { low: -1, normal: 0, high: 2 },      // additive offset
-};
 
 /**
  * Get the numeric multiplier/offset for a layout key.
