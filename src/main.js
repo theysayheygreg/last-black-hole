@@ -72,10 +72,6 @@ function getPlayableMapEntryById(id) {
   return PLAYABLE_MAPS.find((entry) => entry.id === id) || PLAYABLE_MAPS[0];
 }
 
-function getPlayableMapEntryByMap(map) {
-  return PLAYABLE_MAPS.find((entry) => entry.map === map) || PLAYABLE_MAPS[0];
-}
-
 // ---- State ----
 let glCanvas, gl;
 let overlayCanvas, ctx;
@@ -116,6 +112,8 @@ const GAMEPLAY_RENDER_TUNING = {
   scanlines: { intensity: 0.09, frequency: 1.5 },
 };
 const PERF_SMOOTHING = 0.12;
+// Long enough to bridge polling jitter, short enough to stop if snapshots stall.
+const REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT = 0.75;
 const perfStats = {
   frameMs: 0,
   simMs: 0,
@@ -162,8 +160,6 @@ function getVisibleWellRenderInputs(cameraX, cameraY) {
     }
   }
 
-  perfStats.visibleWellCount = visibleUVs.length;
-  perfStats.totalWellCount = allUVs.length;
   return { wellUVs: visibleUVs, wellMasses: visibleMasses, wellShapes: visibleShapes, visibleIndices };
 }
 // Title camera drift (lissajous). Small amplitude, long periods —
@@ -1122,9 +1118,12 @@ function updateRemoteShipTarget(localPlayer, snapshot) {
 
 function updateRemoteShipPresentation(dt) {
   if (!remoteAuthorityActive || !remoteShipPresentation) return;
-  // Keep extrapolating through normal remote polling jitter so motion does
-  // not visibly quantize between authoritative snapshots.
-  const elapsed = Math.min(0.75, Math.max(0, (performance.now() - remoteShipPresentation.receivedAt) / 1000));
+  // Keep moving through normal polling jitter so remote play does not
+  // visibly pause between authoritative snapshots.
+  const elapsed = Math.min(
+    REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
+    Math.max(0, (performance.now() - remoteShipPresentation.receivedAt) / 1000),
+  );
   const targetX = wrapWorld(remoteShipPresentation.wx + remoteShipPresentation.vx * elapsed);
   const targetY = wrapWorld(remoteShipPresentation.wy + remoteShipPresentation.vy * elapsed);
   const [dx, dy] = worldDisplacement(ship.wx, ship.wy, targetX, targetY);
@@ -2774,16 +2773,14 @@ function gameLoop(now) {
   _prevConsumable1 = consumable1Now;
   _prevConsumable2 = consumable2Now;
 
-  // 6a. Sync fluid camera + coarse field. The fluid grid is a camera-
-  //     anchored window (Stage B); the coarse field is a world-anchored
-  //     low-res velocity grid that backs its inflow boundary (Stage C/D).
+  // 6a. Sync fluid camera + coarse field. The fluid grid is a
+  //     camera-anchored window; the coarse field is a world-anchored,
+  //     low-res velocity memory that feeds the window boundary.
   //
   //     Order each frame:
   //       1. Refresh the coarse field from the live fluid + a well-driven
-  //          baseline. In-window cells capture transient features; out-
-  //          of-window cells fall back to baseline. This is implicit
-  //          Stage E — features are integrated into world-anchored
-  //          coarse cells continuously while in-window.
+  //          baseline. In-window cells capture transient features; cells
+  //          outside the window retain prior coarse velocity with decay.
   //       2. If the camera moved, translate the fluid by the camera UV
   //          delta. Texels scrolling in from outside read from the coarse
   //          field at the corresponding world position.

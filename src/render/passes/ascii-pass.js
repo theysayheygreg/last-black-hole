@@ -21,7 +21,7 @@
 //   - dirThreshold:  speed above which directional ramps kick in
 //   - glitchIntensity: 0-1, for scene transitions (0 on title)
 //   - camFU, camFV:  camera center in fluid UV (world-anchored shimmer)
-//   - gridWindow:    world-units spanned by the fluid grid (== WORLD_SCALE today)
+//   - gridWindow:    world-units spanned by the camera-anchored fluid grid
 //   - totalTime:     elapsed seconds
 
 import { Pass } from '../composer.js';

@@ -29,16 +29,9 @@ export let WORLD_SCALE = 3.0;
 /**
  * GRID_WINDOW — world-units spanned by the fluid GPU grid texture.
  *
- * Stage B2: fixed at FLUID_REF_SCALE regardless of WORLD_SCALE. The fluid
- * grid is a camera-anchored window whose size never changes — bigger maps
- * stop paying full-resolution GPU cost for area that's never visible. The
- * fluid sim runs at the same fidelity on 3x3, 5x5, and 10x10. Cost is
- * O(visible window), not O(world area), so 50x50 will be the same cost.
- *
- * Off-window contributions (wells beyond ±GRID_WINDOW/2 from the camera)
- * are skipped at injection time. Stage D will add a coarse-field client
- * mirror that re-emits world-scale truth at the grid boundary so flying
- * toward a distant well doesn't reveal a dead-zone.
+ * The fluid grid is a camera-anchored window whose size stays fixed even
+ * when WORLD_SCALE grows. Large maps pay for visible fabric, not total
+ * world area; off-window flow returns through the coarse field.
  */
 export let GRID_WINDOW = 3.0;
 
@@ -83,8 +76,7 @@ export function pxPerWorld(screenDim) {
 //
 // The grid contents are world-stable: a per-frame translate pass in
 // fluid.js shifts texture data by the camera delta so currents don't slide
-// with the camera. Off-window contributions come from the coarse field
-// (Stage C+).
+// with the camera. Off-window contributions come from the coarse field.
 let _fluidCameraX = 0.0;
 let _fluidCameraY = 0.0;
 
@@ -105,10 +97,8 @@ export function getFluidCamera() {
  * Toroidal world wrap is applied via shortest-displacement so wells near a
  * world edge stay close to camera when the camera is on the opposite edge.
  *
- * Stage A/B keeps GRID_WINDOW == WORLD_SCALE, so for any (wx, wy) inside
- * the world this returns the same UV the old WORLD_SCALE-only formula did
- * (provided u_camOffset is now read as (0.5, 0.5) by callers — the
- * camera-relative shift moved from the shader uniform into this function).
+ * Values outside [0, 1] are valid: they mean the world point is outside
+ * the current fluid window and should be culled or handled by coarse flow.
  */
 export function worldToFluidUV(wx, wy) {
   let dx = wx - _fluidCameraX;
@@ -243,10 +233,8 @@ export const FLUID_REF_SCALE = 3.0;
  * UV-to-grid scaling factor. Multiply UV-space distances/offsets by this
  * to normalize them to the reference scale's behavior.
  *
- * Stage B2: keyed to GRID_WINDOW, not WORLD_SCALE. With GRID_WINDOW fixed
- * at FLUID_REF_SCALE, this returns 1.0 on every map — splats and forces
- * are tuned at the reference scale and don't need per-map adjustment now
- * that the fluid grid window is also fixed.
+ * Keyed to GRID_WINDOW, not WORLD_SCALE. With GRID_WINDOW fixed at the
+ * reference scale, splats and forces stay tuned the same on every map.
  */
 export function uvScale() {
   return FLUID_REF_SCALE / GRID_WINDOW;

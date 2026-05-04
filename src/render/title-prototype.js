@@ -311,9 +311,8 @@ function frame(now) {
   camX = CAMERA_CENTER_X + Math.sin((totalTime / CAMERA_DRIFT_PERIOD_X) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
   camY = CAMERA_CENTER_Y + Math.cos((totalTime / CAMERA_DRIFT_PERIOD_Y) * Math.PI * 2) * CAMERA_DRIFT_AMPLITUDE;
 
-  // --- Sync fluid camera (Stage B/C/D). Refresh the coarse field, then
-  // translate the fluid by the camera delta (with coarse-field inflow at
-  // the leading edge). ---
+  // --- Sync fluid camera. Refresh coarse flow before translating so the
+  // leading edge can pull in remembered world currents. ---
   {
     const [prevFcamX, prevFcamY] = getFluidCamera();
     fluid.updateCoarseField([prevFcamX, prevFcamY], GRID_WINDOW, WORLD_SCALE, wellSystem.wells);

@@ -241,8 +241,7 @@ uniform float u_densityScale;
 uniform float u_gravityScale;
 // Camera offset in fluid UV space and grid window
 uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
-uniform float u_gridWindow;    // how many world-units span the full fluid texture (== WORLD_SCALE
-                               // today; will become a fixed window once decoupled — see coords.js)
+uniform float u_gridWindow;    // world-units spanned by the camera-anchored fluid texture
 uniform float u_refScale;      // FLUID_REF_SCALE from coords.js — the scale all UV params were tuned at (3.0)
 uniform float u_time;          // elapsed time in seconds (for shimmer noise)
 // Inhibitor state from server
@@ -444,9 +443,8 @@ void main() {
 // target. The grid is camera-anchored; when the camera moves we shift
 // existing fluid contents by the camera's UV delta so currents stay
 // world-stationary. Texels that scroll in from outside the source
-// range read from the coarse field — Stage D's inflow boundary —
-// which holds world-scale truth captured from previous in-window
-// observations plus well-driven baseline.
+// range read from the coarse field, which carries remembered world flow
+// plus a well-driven baseline.
 //
 // World position from grid v_uv:
 //   worldPos = (camera) + (v_uv - 0.5) * gridWindow
@@ -499,9 +497,9 @@ void main() {
 //      the fluid where present so the captured state is faithful.
 //
 // Cells outside the grid window keep the previous coarse velocity and
-// decay it toward the baseline. This makes Stage E explicit: features
-// are captured while in-window, remain available to re-enter at the
-// fluid boundary, and then slowly relax back into well-driven flow.
+// decay it toward the baseline. Features are captured while in-window,
+// remain available to re-enter at the fluid boundary, then slowly relax
+// back into well-driven flow.
 const COARSE_MAX_WELLS = 32;
 const FRAG_COARSE_UPDATE = `#version 300 es
 precision highp float;
@@ -747,11 +745,9 @@ export class FluidSim {
   /**
    * Apply gravity well forces to the velocity field.
    * Called once per well per step. Wells outside the camera-anchored grid
-   * window are skipped — Stage B2 onward, the grid is a fixed window
-   * around camera, and the toroidal wrap in FRAG_WELL_FORCE would
-   * otherwise pull the wrong side of the texture toward an off-window
-   * well. Stage D will replace this skip with a coarse-field path so
-   * distant wells still influence world-scale current truth.
+   * window are skipped. FRAG_WELL_FORCE is toroidal, so applying an
+   * off-window well directly would pull the wrong edge of the texture.
+   * Distant wells still influence the boundary through the coarse field.
    */
   applyWellForce(wellUV, gravity, falloff, clampRadius, orbitalStrength, dt, terminalSpeed) {
     if (wellUV[0] < -0.05 || wellUV[0] > 1.05 || wellUV[1] < -0.05 || wellUV[1] > 1.05) return;
@@ -970,8 +966,7 @@ export class FluidSim {
    * @param {Array} wellPositionsUV - well positions in fluid UV space
    * @param {number} camOffsetU - camera center X in fluid UV (0-1)
    * @param {number} camOffsetV - camera center Y in fluid UV (0-1)
-   * @param {number} gridWindow - world-units spanned by the full fluid texture
-   *                              (== WORLD_SCALE today; decoupling pending)
+   * @param {number} gridWindow - world-units spanned by the camera-anchored fluid texture
    * @param {number} totalTime - elapsed time in seconds
    * @param {Array} wellMasses - mass per well, matching wellPositionsUV order
    */
@@ -1144,8 +1139,8 @@ export class FluidSim {
    * plus a well-driven baseline (see updateCoarseField).
    *
    * Shifts velocity (which has the coarse-field inflow). Density and
-   * visualDensity scroll with toroidal source wrap fallback — they're
-   * cosmetic and don't need world-scale persistence.
+   * visualDensity scroll with empty inflow. They're cosmetic and don't
+   * carry world-scale velocity memory.
    */
   _translateVelocity(uvDx, uvDy, camera, gridWindow, worldScale) {
     const gl = this.gl;

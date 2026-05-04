@@ -16,8 +16,7 @@
 //   - wellMasses: Array<number>
 //   - wellShapes: Array<[coreR, ringInnerR, ringOuterR, orbitalDir]>
 //   - camFU, camFV:    camera center in fluid UV
-//   - gridWindow:      world-units spanned by the fluid grid (== WORLD_SCALE today;
-//                      will become a fixed window once the grid is decoupled)
+//   - gridWindow:      world-units spanned by the camera-anchored fluid grid
 //   - totalTime:       elapsed seconds (drives fabric noise)
 //   - inhibitorData:   null on title; object when gameplay has an inhibitor
 
