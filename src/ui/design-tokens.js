@@ -22,6 +22,12 @@ export const UI_COLORS = {
   warningText: 'rgba(200, 200, 220, 0.9)',
   selectionBorder: 'rgba(100, 150, 255, 0.8)',
   selectionBackground: 'rgba(80, 120, 255, 0.12)',
+  terminalRowBackground: 'rgba(0, 12, 24, 0.24)',
+  terminalRowBorder: 'rgba(100, 150, 255, 0.12)',
+  terminalRowMuted: 'rgba(150, 170, 200, 0.52)',
+  terminalPillBackground: 'rgba(80, 120, 255, 0.14)',
+  terminalPillBorder: 'rgba(100, 150, 255, 0.28)',
+  terminalPillText: 'rgba(190, 210, 255, 0.82)',
   inhibitor: 'rgba(204, 26, 128, 0.9)',
   inhibitorVessel: 'rgba(255, 60, 140, 1)',
 };
@@ -38,6 +44,19 @@ export const UI_SPACING = {
   panelPaddingX: 12,
   panelPaddingY: 8,
   panelRadius: 2,
+  terminalRowGap: 6,
+  terminalRowPaddingY: 3,
+  terminalRowPaddingX: 6,
+  terminalPillPaddingY: 1,
+  terminalPillPaddingX: 5,
+};
+
+export const UI_TYPOGRAPHY = {
+  micro: 9,
+  small: 10,
+  body: 12,
+  labelTransform: 'uppercase',
+  labelLetterSpacing: '0',
 };
 
 export const UI_TIERS = {

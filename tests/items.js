@@ -48,6 +48,23 @@ async function run() {
     }
   });
 
+  await runner.run("Catalog includes distinctive hull-affinity specials", async () => {
+    const allArtifacts = Object.values(items.ITEM_CATALOG_BY_TIER).flat();
+    const expected = [
+      "event-horizon-keel",
+      "negative-space-spool",
+      "braided-eddy-core",
+      "cinder-geometry",
+      "last-wake-codex",
+    ];
+    for (const id of expected) {
+      const item = allArtifacts.find(entry => entry.id === id);
+      assert(item, `Missing catalog item ${id}`);
+      assert(item.special || Object.keys(item.coefficients || {}).length > 0,
+        `${id} should carry coefficients or a special marker`);
+    }
+  });
+
   await runner.run("Session tier gates prevent early high-tier drops", async () => {
     const early = items.generateLoot("vault", 4, { sessionTime: 0, count: 200, consumableChance: 0 });
     assert(early.every(item => item.tier === 1), "Session time 0 should only produce T1 loot");

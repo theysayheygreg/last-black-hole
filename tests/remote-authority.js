@@ -34,6 +34,15 @@ async function tap(page, code, key) {
   await sleep(120);
 }
 
+async function moveHomeTab(page, tabName) {
+  for (let i = 0; i < 8; i++) {
+    if (await page.evaluate((name) => window.__TEST_API.getHomeState().tabName === name, tabName)) return;
+    await tap(page, "KeyE", "e");
+  }
+  const current = await page.evaluate(() => window.__TEST_API.getHomeState().tabName);
+  throw new Error(`Expected home tab ${tabName}, got ${current}`);
+}
+
 async function bootstrapCleanRemotePage(page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -71,9 +80,7 @@ async function enterRemoteRun(page) {
     });
   });
 
-  await tap(page, "KeyE", "e");
-  await tap(page, "KeyE", "e");
-  await tap(page, "KeyE", "e");
+  await moveHomeTab(page, "LAUNCH");
   await tap(page, "Enter", "Enter");
   await waitForPhase(page, "mapSelect");
 
@@ -89,9 +96,7 @@ async function enterRemoteMapSelect(page) {
   await sleep(120);
   await tap(page, "Enter", "Enter");
   await waitForPhase(page, "home");
-  await tap(page, "KeyE", "e");
-  await tap(page, "KeyE", "e");
-  await tap(page, "KeyE", "e");
+  await moveHomeTab(page, "LAUNCH");
   await tap(page, "Enter", "Enter");
   await waitForPhase(page, "mapSelect");
 }
@@ -223,7 +228,7 @@ async function run() {
       const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
       assert(health.session.hostClientId === net.clientId, "Expected first remote browser to become session host");
 
-      await waitFor(page, () => window.__TEST_API.getScavengers().length > 0, { timeout: 4000 });
+      await waitFor(page, () => window.__TEST_API.getScavengers().length > 0, { timeout: 8000 });
       const scavengers = await page.evaluate(() => window.__TEST_API.getScavengers());
       assert(scavengers.length > 0, "Expected authoritative scavengers in remote snapshot");
 

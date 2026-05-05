@@ -42,12 +42,24 @@ export function generatePilotName() {
   return `${pick(PILOT_ADJ)} ${pick(PILOT_NOUN)}`;
 }
 
+export function sanitizePilotName(name, fallback = generatePilotName()) {
+  const clean = String(name || '')
+    .normalize('NFKC')
+    .replace(/[<>{}[\]\\/^`|~]/g, '')
+    .replace(/[^\p{L}\p{N} ._'-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_NAME_LENGTH)
+    .trim();
+  return clean || fallback;
+}
+
 // ---- Default profile shape ----
 
 function createDefaultProfile(name) {
   return {
     id: generateProfileId(),
-    name: name || generatePilotName(),
+    name: sanitizePilotName(name),
     created: new Date().toISOString(),
     lastPlayed: new Date().toISOString(),
 
@@ -223,7 +235,7 @@ export class ProfileManager {
   /** Create a new profile in a slot. */
   createProfile(slotIndex, name) {
     if (slotIndex < 0 || slotIndex >= MAX_SLOTS) return null;
-    const cleanName = (name || '').trim().slice(0, MAX_NAME_LENGTH) || generatePilotName();
+    const cleanName = sanitizePilotName(name);
     const profile = createDefaultProfile(cleanName);
     this.slots[slotIndex] = profile;
     this.activeSlot = slotIndex;

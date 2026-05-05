@@ -100,6 +100,15 @@ async function tapGamepadButton(page, buttonIndex, { holdMs = 90, value = null }
   await sleep(140);
 }
 
+async function moveHomeTabWithGamepad(page, tabName) {
+  for (let i = 0; i < 8; i++) {
+    if (await page.evaluate((name) => window.__TEST_API.getHomeState().tabName === name, tabName)) return;
+    await tapGamepadButton(page, 5);
+  }
+  const current = await page.evaluate(() => window.__TEST_API.getHomeState().tabName);
+  throw new Error(`Expected home tab ${tabName}, got ${current}`);
+}
+
 async function holdGamepad(page, { axes = null, buttons = [] } = {}, holdMs = 500) {
   if (axes) await setGamepadAxes(page, axes);
   for (const button of buttons) {
@@ -120,9 +129,7 @@ async function enterLocalRunWithGamepad(page) {
   await tapGamepadButton(page, 0); // create/select
   await tapGamepadButton(page, 0); // confirm generated name if needed
   await waitForPhase(page, 'home');
-  await tapGamepadButton(page, 5); // tab right
-  await tapGamepadButton(page, 5); // tab right
-  await tapGamepadButton(page, 5); // tab right -> launch
+  await moveHomeTabWithGamepad(page, 'LAUNCH');
   await tapGamepadButton(page, 0); // open map select
   await waitForPhase(page, 'mapSelect');
   await tapGamepadButton(page, 0); // launch first map
@@ -149,9 +156,7 @@ async function enterRemoteRunWithGamepad(page, { hullType = 'breacher' } = {}) {
       charges: 1,
     });
   }, hullType);
-  await tapGamepadButton(page, 5);
-  await tapGamepadButton(page, 5);
-  await tapGamepadButton(page, 5);
+  await moveHomeTabWithGamepad(page, 'LAUNCH');
   await tapGamepadButton(page, 0);
   await waitForPhase(page, 'mapSelect');
   await tapGamepadButton(page, 0);

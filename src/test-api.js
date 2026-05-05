@@ -6,6 +6,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, GRID_WINDOW, getFluidCamera, worldToScreen } from './coords.js';
+import { getAbilityPresentationState } from './hud.js';
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -154,6 +155,11 @@ export function initTestAPI(getState) {
     getRunResultsView() {
       const { getRunResultsViewModel } = getState();
       return getRunResultsViewModel ? getRunResultsViewModel() : null;
+    },
+
+    getChronicleView() {
+      const { getChronicleViewModel } = getState();
+      return getChronicleViewModel ? getChronicleViewModel() : null;
     },
 
     showRunResultsFixture(runResult, phase = null) {
@@ -359,10 +365,11 @@ export function initTestAPI(getState) {
       const { gamePhase, homeTab, homeRigCursor, profileManager } = getState();
       const p = profileManager?.active;
       const rig = profileManager?.getRigProgression?.() || null;
+      const tabNames = ['SHIP', 'VAULT', 'RIG', 'CHRONICLE', 'LAUNCH'];
       return {
         phase: gamePhase,
         tabIndex: homeTab ?? null,
-        tabName: ['SHIP', 'VAULT', 'RIG', 'LAUNCH'][homeTab] || null,
+        tabName: tabNames[homeTab] || null,
         rigCursor: homeRigCursor ?? null,
         hullType: p?.hullType || p?.shipType || null,
         exoticMatter: p?.exoticMatter ?? null,
@@ -375,6 +382,22 @@ export function initTestAPI(getState) {
           consumables: p.loadout.consumables.length,
         } : null,
       };
+    },
+
+    seedProfileRunRecords(records) {
+      const { profileManager } = getState();
+      const p = profileManager?.active;
+      if (!p || !Array.isArray(records)) return false;
+      p.runRecords = records.map((record) => ({ ...record }));
+      profileManager.save();
+      return true;
+    },
+
+    seedRecentEchoes(echoes) {
+      const state = getState();
+      if (!state.setRecentEchoes) return false;
+      state.setRecentEchoes(echoes);
+      return true;
     },
 
     queryRigUpgrade(trackIndex) {
@@ -424,7 +447,12 @@ export function initTestAPI(getState) {
         raw: clone(raw),
         ability1: abilitySlotState(raw, 1),
         ability2: abilitySlotState(raw, 2),
+        presentation: getAbilityPresentationState(raw),
       };
+    },
+
+    getAbilityPresentationFixture(raw = {}) {
+      return getAbilityPresentationState(raw);
     },
 
     seedProfileConsumable(slotIndex, item) {

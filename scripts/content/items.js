@@ -3,6 +3,41 @@
 // Seeded generation imports this data so loot preview, sim runtime, and
 // validation all read the same artifact and consumable catalog.
 
+const ARTIFACT_SPECIAL_IDS = [
+  'autoDecoys',
+  'burnFuel',
+  'burnRecharge',
+  'burnReverseWells',
+  'deathTeleport',
+  'eddyDuration',
+  'emergencyMassLock',
+  'ghostTrailBeacon',
+  'ghostWreckLoot',
+  'inhibitorBlindPing',
+  'instantFlowLock',
+  'maxEddies',
+  'overloadBleed',
+  'pulseInvert',
+  'pulseStandingWave',
+  'recallBeacon',
+  'signalAfterimage',
+  'swarmDrainImmunity',
+  'thrustSignalZero',
+  'universalDampening',
+  'wakeCloakCooldown',
+];
+
+const CONSUMABLE_EFFECT_IDS = [
+  'breachFlare',
+  'cargoJettison',
+  'emergencyThrust',
+  'shieldBurst',
+  'signalFlare',
+  'signalPurge',
+  'timeSlowLocal',
+  'wellRepulsor',
+];
+
 const ITEM_CATALOG = {
   1: [
     { id: 'patched-thruster', name: 'Patched Thruster', tier: 1, affinity: null, coefficients: { thrustScale: 1.08 }, value: [15, 25] },
@@ -15,6 +50,8 @@ const ITEM_CATALOG = {
     { id: 'sensor-dish', name: 'Sensor Dish', tier: 1, affinity: null, coefficients: { sensorRange: 1.10 }, value: [15, 22] },
     { id: 'flow-vane', name: 'Flow Vane', tier: 1, affinity: 'drifter', coefficients: { currentCoupling: 1.08 }, value: [18, 25] },
     { id: 'burn-canister', name: 'Burn Canister', tier: 1, affinity: 'breacher', coefficients: {}, value: [18, 25], special: 'burnFuel+3' },
+    { id: 'quiet-suture', name: 'Quiet Suture', tier: 1, affinity: 'shroud', coefficients: { signalGenMult: 0.96, controlDebuffResist: 1.04 }, value: [20, 30] },
+    { id: 'freight-hook', name: 'Freight Hook', tier: 1, affinity: 'hauler', coefficients: { pickupRadius: 1.08 }, value: [18, 28] },
   ],
   2: [
     { id: 'tuned-thruster', name: 'Tuned Thruster', tier: 2, affinity: null, coefficients: { thrustScale: 1.15 }, value: [50, 80] },
@@ -31,6 +68,9 @@ const ITEM_CATALOG = {
     { id: 'hull-reinforcement', name: 'Hull Reinforcement', tier: 2, affinity: null, coefficients: { wellResistScale: 1.10, controlDebuffResist: 1.15 }, value: [55, 85] },
     { id: 'drag-coefficient', name: 'Drag Coefficient', tier: 2, affinity: null, coefficients: { dragScale: 0.88 }, value: [55, 80] },
     { id: 'pickup-magnet', name: 'Pickup Magnet', tier: 2, affinity: null, coefficients: { pickupRadius: 1.25 }, value: [50, 75] },
+    { id: 'mass-stitcher', name: 'Mass Stitcher', tier: 2, affinity: 'hauler', coefficients: { cargoSlots: 1, wellResistScale: 1.08 }, value: [65, 95] },
+    { id: 'echo-sink', name: 'Echo Sink', tier: 2, affinity: 'shroud', coefficients: { signalDecayMult: 1.18, sensorRange: 0.92 }, value: [60, 90] },
+    { id: 'wake-needle', name: 'Wake Needle', tier: 2, affinity: 'resonant', coefficients: { pulseCooldownScale: 0.88, pulseSignalScale: 1.10 }, value: [65, 95] },
   ],
   3: [
     { id: 'dead-mans-thruster', name: "Dead Man's Thruster", tier: 3, affinity: 'drifter', coefficients: { signalGenMult: 0.0, dragScale: 1.30 }, value: [200, 320], special: 'thrustSignalZero' },
@@ -45,6 +85,9 @@ const ITEM_CATALOG = {
     { id: 'drift-engine', name: 'Drift Engine', tier: 3, affinity: 'drifter', coefficients: { currentCoupling: 1.40, thrustScale: 0.75 }, value: [230, 350] },
     { id: 'burn-extender', name: 'Burn Extender', tier: 3, affinity: 'breacher', coefficients: {}, value: [250, 370], special: 'burnFuel+15,burnRecharge×2' },
     { id: 'sensor-array', name: 'Sensor Array', tier: 3, affinity: null, coefficients: { sensorRange: 1.50, signalGenMult: 1.08 }, value: [200, 300] },
+    { id: 'event-horizon-keel', name: 'Event Horizon Keel', tier: 3, affinity: 'breacher', coefficients: { thrustScale: 1.18, wellResistScale: 1.20, dragScale: 1.12 }, value: [240, 360], special: 'emergencyMassLock' },
+    { id: 'negative-space-spool', name: 'Negative Space Spool', tier: 3, affinity: 'shroud', coefficients: { signalGenMult: 0.76, pickupRadius: 0.85 }, value: [240, 360], special: 'signalAfterimage' },
+    { id: 'braided-eddy-core', name: 'Braided Eddy Core', tier: 3, affinity: 'resonant', coefficients: { currentCoupling: 1.18, pulseRadiusScale: 1.12 }, value: [240, 360], special: 'eddyDuration+2,maxEddies+1' },
   ],
   4: [
     { id: 'gravity-lens', name: 'Gravity Lens', tier: 4, affinity: 'resonant', coefficients: {}, value: [800, 1200], special: 'pulseInvert' },
@@ -55,6 +98,8 @@ const ITEM_CATALOG = {
     { id: 'salvage-titan', name: 'Salvage Titan', tier: 4, affinity: 'hauler', coefficients: { cargoSlots: 3 }, value: [800, 1200], special: 'ghostWreckLoot' },
     { id: 'inhibitor-resonance', name: 'Inhibitor Resonance', tier: 4, affinity: null, coefficients: {}, value: [850, 1200], special: 'universalDampening' },
     { id: 'temporal-displacement', name: 'Temporal Displacement', tier: 4, affinity: null, coefficients: {}, value: [900, 1300], special: 'deathTeleport' },
+    { id: 'cinder-geometry', name: 'Cinder Geometry', tier: 4, affinity: 'breacher', coefficients: { thrustScale: 1.25, signalGenMult: 1.25 }, value: [850, 1250], special: 'overloadBleed' },
+    { id: 'last-wake-codex', name: 'Last Wake Codex', tier: 4, affinity: null, coefficients: { sensorRange: 1.35, signalDecayMult: 1.20 }, value: [900, 1300], special: 'inhibitorBlindPing' },
   ],
 };
 
@@ -67,9 +112,14 @@ const CONSUMABLE_CATALOG = [
   { id: 'emergency-thrust', name: 'Emergency Thrust', tier: 2, value: [70, 100], effect: 'emergencyThrust' },
   { id: 'cargo-jettison', name: 'Cargo Jettison', tier: 1, value: [15, 20], effect: 'cargoJettison' },
   { id: 'well-repulsor', name: 'Well Repulsor', tier: 3, value: [200, 280], effect: 'wellRepulsor' },
+  { id: 'foam-anchor', name: 'Foam Anchor', tier: 2, value: [70, 105], effect: 'shieldBurst' },
+  { id: 'dead-air-ampoule', name: 'Dead-Air Ampoule', tier: 2, value: [85, 125], effect: 'timeSlowLocal' },
+  { id: 'crown-breach-match', name: 'Crown Breach Match', tier: 3, value: [220, 320], effect: 'breachFlare' },
 ];
 
 module.exports = {
+  ARTIFACT_SPECIAL_IDS,
+  CONSUMABLE_EFFECT_IDS,
   ITEM_CATALOG,
   CONSUMABLE_CATALOG,
 };

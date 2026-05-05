@@ -1,12 +1,48 @@
-import { UI_COLORS, UI_FONT_STACK, UI_TIERS, UI_CATEGORIES, UI_SHADOWS } from './design-tokens.js';
+import { UI_COLORS, UI_FONT_STACK, UI_TIERS, UI_CATEGORIES, UI_SHADOWS, UI_SPACING, UI_TYPOGRAPHY } from './design-tokens.js';
 
 export function inventorySelectionStyle(selected) {
   if (!selected) return '';
-  return `border-left: 2px solid ${UI_COLORS.selectionBorder}; padding-left: 6px; background: ${UI_COLORS.selectionBackground};`;
+  return `border-left: 2px solid ${UI_COLORS.selectionBorder}; padding-left: ${UI_SPACING.terminalRowPaddingX}px; background: ${UI_COLORS.selectionBackground};`;
 }
 
 export function inventoryItemColor(item) {
   return UI_TIERS[item?.tier] || UI_CATEGORIES[item?.category] || '#ccc';
+}
+
+export function terminalRowStyle({ selected = false, tone = 'default' } = {}) {
+  const background = selected
+    ? UI_COLORS.selectionBackground
+    : (tone === 'quiet' ? 'transparent' : UI_COLORS.terminalRowBackground);
+  const border = selected ? UI_COLORS.selectionBorder : UI_COLORS.terminalRowBorder;
+  return [
+    'display: flex',
+    'align-items: center',
+    `gap: ${UI_SPACING.terminalRowGap}px`,
+    `padding: ${UI_SPACING.terminalRowPaddingY}px ${UI_SPACING.terminalRowPaddingX}px`,
+    `background: ${background}`,
+    `border-left: 2px solid ${border}`,
+    `font: ${UI_TYPOGRAPHY.small}px ${UI_FONT_STACK}`,
+  ].join('; ') + ';';
+}
+
+export function terminalPillMarkup(label, { color = UI_COLORS.terminalPillText } = {}) {
+  return `<span class="hud-terminal-pill" style="
+    display: inline-flex;
+    align-items: center;
+    min-height: 13px;
+    padding: ${UI_SPACING.terminalPillPaddingY}px ${UI_SPACING.terminalPillPaddingX}px;
+    border: 1px solid ${UI_COLORS.terminalPillBorder};
+    background: ${UI_COLORS.terminalPillBackground};
+    color: ${color};
+    font: ${UI_TYPOGRAPHY.micro}px ${UI_FONT_STACK};
+    letter-spacing: ${UI_TYPOGRAPHY.labelLetterSpacing};
+    text-transform: ${UI_TYPOGRAPHY.labelTransform};
+    white-space: nowrap;
+  ">${label}</span>`;
+}
+
+export function terminalMutedStyle() {
+  return `color: ${UI_COLORS.terminalRowMuted};`;
 }
 
 export function portalArrowMarkup({ degrees, distanceText }) {
@@ -19,7 +55,7 @@ export function portalArrowMarkup({ degrees, distanceText }) {
     filter: drop-shadow(${UI_SHADOWS.portalGlow});
   "></div>
   <div class="hud-portal-arrow-distance" style="
-    font: 10px ${UI_FONT_STACK};
+    font: ${UI_TYPOGRAPHY.small}px ${UI_FONT_STACK};
     color: ${UI_COLORS.portalDim};
     text-align: center;
     margin-top: 2px;

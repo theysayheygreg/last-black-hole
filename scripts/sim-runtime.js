@@ -23,6 +23,7 @@ const {
   survivalBonusEm,
   runEmEarned,
 } = require("./content/balance.js");
+const { getSessionProfile } = require("./content/session-profiles.js");
 const {
   defaultRigLevels,
   normalizeRigLevels,
@@ -343,90 +344,6 @@ const SCAVENGER_FACTIONS = ["Collector", "Reaper", "Warden"];
 const DRIFTER_NAMES = ["Quiet Tide", "Still Wake", "Ash Petal", "Cold Harbor", "Pale Drift", "Dim Lantern"];
 const VULTURE_NAMES = ["Keen Edge", "Rust Claw", "Burnt Lance", "Bitter Claim", "Sharp Debt", "Iron Reap"];
 
-const MAP_SIM_SCALE_PROFILES = {
-  shallows: {
-    profileId: "small",
-    tickHz: 15,
-    snapshotHz: 10,
-    worldTickHz: 10,
-    portalTickHz: 10,
-    growthTickHz: 4,
-    scavengerTickHz: 12,
-    waveTickHz: 15,
-    fieldTickHz: 10,
-    useCoarseField: false,
-    flowFieldCellSize: 0.25,
-    fieldFlowScale: 0.18,
-    entityRelevanceRadius: 1.4,
-    scavengerRelevanceRadius: 1.8,
-    spawnScavengersBase: 1,
-    spawnScavengersPerPlayer: 0.5,
-    maxScavengers: 5,
-    maxRelevantStarsPerPlayer: 6,
-    maxRelevantPlanetoidsPerPlayer: 4,
-    maxRelevantWrecksPerPlayer: 5,
-    maxRelevantScavengersPerPlayer: 4,
-    maxWellInfluencesPerPlayer: 6,
-    maxWaveInfluencesPerPlayer: 6,
-    maxPickupChecksPerPlayer: 4,
-    maxPortalChecksPerPlayer: 4,
-  },
-  expanse: {
-    profileId: "medium",
-    tickHz: 12,
-    snapshotHz: 8,
-    worldTickHz: 6,
-    portalTickHz: 6,
-    growthTickHz: 3,
-    scavengerTickHz: 8,
-    waveTickHz: 12,
-    fieldTickHz: 6,
-    useCoarseField: true,
-    flowFieldCellSize: 0.32,
-    fieldFlowScale: 0.22,
-    entityRelevanceRadius: 1.2,
-    scavengerRelevanceRadius: 1.6,
-    spawnScavengersBase: 1,
-    spawnScavengersPerPlayer: 0.5,
-    maxScavengers: 6,
-    maxRelevantStarsPerPlayer: 5,
-    maxRelevantPlanetoidsPerPlayer: 4,
-    maxRelevantWrecksPerPlayer: 4,
-    maxRelevantScavengersPerPlayer: 3,
-    maxWellInfluencesPerPlayer: 5,
-    maxWaveInfluencesPerPlayer: 5,
-    maxPickupChecksPerPlayer: 3,
-    maxPortalChecksPerPlayer: 3,
-  },
-  "deep-field": {
-    profileId: "large",
-    tickHz: 10,
-    snapshotHz: 6,
-    worldTickHz: 4,
-    portalTickHz: 4,
-    growthTickHz: 2,
-    scavengerTickHz: 6,
-    waveTickHz: 10,
-    fieldTickHz: 4,
-    useCoarseField: true,
-    flowFieldCellSize: 0.45,
-    fieldFlowScale: 0.28,
-    entityRelevanceRadius: 1.0,
-    scavengerRelevanceRadius: 1.4,
-    spawnScavengersBase: 2,
-    spawnScavengersPerPlayer: 0.5,
-    maxScavengers: 7,
-    maxRelevantStarsPerPlayer: 4,
-    maxRelevantPlanetoidsPerPlayer: 3,
-    maxRelevantWrecksPerPlayer: 4,
-    maxRelevantScavengersPerPlayer: 3,
-    maxWellInfluencesPerPlayer: 4,
-    maxWaveInfluencesPerPlayer: 4,
-    maxPickupChecksPerPlayer: 2,
-    maxPortalChecksPerPlayer: 2,
-  },
-};
-
 function parseArgs(argv) {
   const args = {};
   for (let i = 0; i < argv.length; i++) {
@@ -737,14 +654,6 @@ function randomBetween(min, max) {
 
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
-}
-
-function getSimScaleProfile(mapId, worldScale) {
-  const profile = MAP_SIM_SCALE_PROFILES[mapId];
-  if (profile) return { ...profile };
-  if (worldScale >= 10) return { ...MAP_SIM_SCALE_PROFILES["deep-field"] };
-  if (worldScale >= 5) return { ...MAP_SIM_SCALE_PROFILES.expanse };
-  return { ...MAP_SIM_SCALE_PROFILES.shallows };
 }
 
 function generateScavengerIdentity(archetype) {
@@ -1157,7 +1066,7 @@ function startSession(config = {}) {
   const seed = Number.isFinite(Number(config.seed)) ? Number(config.seed) : Math.floor(Math.random() * 1e9);
   const rngStreams = createRNGStreams(seed);
   const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
-  const scaleProfile = getSimScaleProfile(mapState.id, mapState.worldScale);
+  const scaleProfile = getSessionProfile(mapState.id, mapState.worldScale);
   runtime.session = {
     id: crypto.randomUUID(),
     runId: crypto.randomUUID(),
@@ -1221,6 +1130,7 @@ function startSession(config = {}) {
     baseMaxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
     maxPortalChecksPerPlayer: scaleProfile.maxPortalChecksPerPlayer,
     simScaleProfile: scaleProfile.profileId,
+    clientPerfProfile: scaleProfile.clientPerfProfile,
     maxPlayers: Number.isFinite(Number(config.maxPlayers)) ? Number(config.maxPlayers) : DEFAULT_MAX_PLAYERS,
   };
   // Attach seed + rng to the live session. rng stored non-enumerably so
@@ -4528,7 +4438,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, {
         type: "maps",
         maps: Object.values(PLAYABLE_MAPS).map((map) => {
-          const profile = getSimScaleProfile(map.id, map.worldScale);
+          const profile = getSessionProfile(map.id, map.worldScale);
           return {
             id: map.id,
             name: map.name,
@@ -4539,6 +4449,7 @@ const server = http.createServer(async (req, res) => {
             wreckCount: map.wrecks.length,
             planetoidCount: map.planetoids.length,
             simScaleProfile: profile.profileId,
+            clientPerfProfile: profile.clientPerfProfile,
             tickHz: profile.tickHz,
             snapshotHz: profile.snapshotHz,
             worldTickHz: profile.worldTickHz,

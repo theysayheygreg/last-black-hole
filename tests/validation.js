@@ -99,8 +99,17 @@ const SIGNATURE_CONSTANTS = [
 ];
 
 const ITEM_CONSTANTS = [
+  'ARTIFACT_SPECIAL_IDS',
+  'CONSUMABLE_EFFECT_IDS',
   'ITEM_CATALOG',
   'CONSUMABLE_CATALOG',
+];
+
+const SESSION_PROFILE_CONSTANTS = [
+  'SESSION_PROFILE_FIELDS',
+  'CLIENT_PERF_PROFILES',
+  'SESSION_PROFILES',
+  'MAP_SESSION_PROFILES',
 ];
 
 function parseEsmConstants(filepath, names) {
@@ -119,6 +128,11 @@ const clientItems = parseEsmConstants(
   path.join(SRC, 'content', 'items.js'),
   ITEM_CONSTANTS
 );
+const serverSessionProfiles = require(path.join(ROOT, 'scripts', 'content', 'session-profiles.js'));
+const clientSessionProfiles = parseEsmConstants(
+  path.join(SRC, 'content', 'session-profiles.js'),
+  SESSION_PROFILE_CONSTANTS
+);
 
 function deepEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -132,6 +146,14 @@ function assertValueRange(value, label) {
   assert(Array.isArray(value) && value.length === 2, `${label} must be [min, max]`);
   assert(Number.isFinite(value[0]) && Number.isFinite(value[1]), `${label} values must be finite`);
   assert(value[0] >= 0 && value[1] >= value[0], `${label} must be non-negative and ordered`);
+}
+
+function specialAtoms(special) {
+  if (typeof special !== 'string' || special.length === 0) return [];
+  return special
+    .split(',')
+    .map(token => token.trim().replace(/[+\-×x]\d+(?:\.\d+)?$/, '').replace(/\d+$/, ''))
+    .filter(Boolean);
 }
 
 function parseAsciiRamps() {
@@ -540,6 +562,21 @@ runner.run('Item server/client manifests stay in sync', () => {
   }
 });
 
+runner.run('Item special and consumable effect id registries are valid', () => {
+  for (const [name, list] of Object.entries({
+    ARTIFACT_SPECIAL_IDS: serverItems.ARTIFACT_SPECIAL_IDS,
+    CONSUMABLE_EFFECT_IDS: serverItems.CONSUMABLE_EFFECT_IDS,
+  })) {
+    assert(Array.isArray(list) && list.length > 0, `${name} must be a non-empty array`);
+    const ids = new Set();
+    for (const id of list) {
+      assert(typeof id === 'string' && /^[a-z][A-Za-z0-9]*$/.test(id), `${name} contains invalid id ${id}`);
+      assert(!ids.has(id), `${name} contains duplicate id ${id}`);
+      ids.add(id);
+    }
+  }
+});
+
 runner.run('Item catalog tiers and artifact shapes are valid', () => {
   const expectedTiers = [1, 2, 3, 4];
   const tiers = Object.keys(serverItems.ITEM_CATALOG).map(Number).sort((a, b) => a - b);
@@ -547,6 +584,7 @@ runner.run('Item catalog tiers and artifact shapes are valid', () => {
 
   const ids = new Set();
   const names = new Set();
+  const specialIds = new Set(serverItems.ARTIFACT_SPECIAL_IDS);
   for (const tier of expectedTiers) {
     const items = serverItems.ITEM_CATALOG[tier];
     assert(Array.isArray(items) && items.length > 0, `Tier ${tier} must contain at least one item`);
@@ -565,12 +603,16 @@ runner.run('Item catalog tiers and artifact shapes are valid', () => {
       for (const [key, value] of Object.entries(item.coefficients)) {
         assert(Number.isFinite(value), `${item.id}.coefficients.${key} must be finite`);
       }
+      for (const id of specialAtoms(item.special)) {
+        assert(specialIds.has(id), `${item.id}: special references unknown id ${id}`);
+      }
     }
   }
 });
 
 runner.run('Consumable catalog has stable ids, tiers, effects, and values', () => {
   const ids = new Set();
+  const effectIds = new Set(serverItems.CONSUMABLE_EFFECT_IDS);
   assert(Array.isArray(serverItems.CONSUMABLE_CATALOG) && serverItems.CONSUMABLE_CATALOG.length > 0,
     'CONSUMABLE_CATALOG must be a non-empty array');
   for (const item of serverItems.CONSUMABLE_CATALOG) {
@@ -578,13 +620,94 @@ runner.run('Consumable catalog has stable ids, tiers, effects, and values', () =
     assert(typeof item.name === 'string' && item.name.length > 0, `${item.id}: missing name`);
     assert(Number.isInteger(item.tier) && item.tier >= 1 && item.tier <= 4, `${item.id}: invalid tier ${item.tier}`);
     assert(typeof item.effect === 'string' && item.effect.length > 0, `${item.id}: missing effect`);
+    assert(effectIds.has(item.effect), `${item.id}: effect references unknown id ${item.effect}`);
     assertValueRange(item.value, `${item.id}.value`);
     assert(!ids.has(item.id), `Duplicate consumable id: ${item.id}`);
     ids.add(item.id);
   }
 });
 
-// ---- 14. Directional ASCII shader validation ----
+// ---- 14. Session profile manifest validation ----
+
+runner.run('Session profile server/client manifests stay in sync', () => {
+  for (const name of SESSION_PROFILE_CONSTANTS) {
+    assert(deepEqual(serverSessionProfiles[name], clientSessionProfiles[name]),
+      `scripts/content/session-profiles.js ${name} does not match src/content/session-profiles.js`);
+  }
+});
+
+runner.run('Session profiles expose complete server/client scale truth', () => {
+  const fields = serverSessionProfiles.SESSION_PROFILE_FIELDS;
+  assert(Array.isArray(fields) && fields.length > 0, 'SESSION_PROFILE_FIELDS must be non-empty');
+  for (const [id, profile] of Object.entries(serverSessionProfiles.SESSION_PROFILES)) {
+    assert(profile.profileId === id, `Session profile ${id}: profileId must match object key`);
+    for (const field of fields) {
+      assert(field in profile, `Session profile ${id}: missing ${field}`);
+    }
+    assert(profile.tickHz >= profile.snapshotHz, `${id}: tickHz should be >= snapshotHz`);
+    assert(profile.tickHz >= profile.worldTickHz, `${id}: tickHz should be >= worldTickHz`);
+    assert(profile.tickHz >= profile.scavengerTickHz, `${id}: tickHz should be >= scavengerTickHz`);
+    assert(profile.tickHz >= profile.waveTickHz, `${id}: tickHz should be >= waveTickHz`);
+    assert(profile.flowFieldCellSize > 0, `${id}: flowFieldCellSize must be positive`);
+    assert(profile.maxScavengers >= 1, `${id}: maxScavengers must be positive`);
+    assert(serverSessionProfiles.CLIENT_PERF_PROFILES[profile.clientPerfProfile],
+      `${id}: unknown clientPerfProfile ${profile.clientPerfProfile}`);
+  }
+});
+
+runner.run('Playable maps bind to known session profiles', () => {
+  const idsByFile = new Map([
+    ['shallows-3x3.js', 'shallows'],
+    ['expanse-5x5.js', 'expanse'],
+    ['deep-field-10x10.js', 'deep-field'],
+  ]);
+  for (const map of playableMaps) {
+    const mapId = idsByFile.get(map.name);
+    assert(mapId, `${map.name}: missing validation map id binding`);
+    const profileId = serverSessionProfiles.MAP_SESSION_PROFILES[mapId];
+    assert(profileId, `${map.name}: missing MAP_SESSION_PROFILES entry for ${mapId}`);
+    assert(serverSessionProfiles.SESSION_PROFILES[profileId],
+      `${map.name}: unknown session profile ${profileId}`);
+    const resolved = serverSessionProfiles.getSessionProfile(mapId, map.data.worldScale);
+    assert(resolved.profileId === profileId,
+      `${map.name}: resolver returned ${resolved.profileId}, expected ${profileId}`);
+  }
+});
+
+runner.run('Session scale profiles get cheaper with larger playable maps', () => {
+  const small = serverSessionProfiles.SESSION_PROFILES.small;
+  const medium = serverSessionProfiles.SESSION_PROFILES.medium;
+  const large = serverSessionProfiles.SESSION_PROFILES.large;
+  assert(small.tickHz > medium.tickHz && medium.tickHz > large.tickHz,
+    'Expected tickHz to step down small > medium > large');
+  assert(small.worldTickHz > medium.worldTickHz && medium.worldTickHz > large.worldTickHz,
+    'Expected worldTickHz to step down small > medium > large');
+  assert(small.snapshotHz > large.snapshotHz,
+    'Expected large profile to use cheaper snapshots than small');
+  assert(small.useCoarseField === false, 'Expected small profile direct-force path');
+  assert(medium.useCoarseField === true && large.useCoarseField === true,
+    'Expected medium/large profiles to use coarse field');
+  assert(medium.flowFieldCellSize < large.flowFieldCellSize,
+    'Expected large profile field cells to be coarser than medium');
+  assert(small.entityRelevanceRadius > medium.entityRelevanceRadius
+    && medium.entityRelevanceRadius > large.entityRelevanceRadius,
+    'Expected entity relevance radius to shrink as maps grow');
+  assert(small.maxScavengers < large.maxScavengers,
+    'Expected larger maps to allow more total scavengers');
+});
+
+runner.run('Client perf profiles match shipped fixed-grid contract', () => {
+  const fixedGrid = serverSessionProfiles.CLIENT_PERF_PROFILES.fixedGrid;
+  assertObject(fixedGrid, 'CLIENT_PERF_PROFILES.fixedGrid');
+  assert(fixedGrid.fluidResolution === CONFIG.fluid.resolution,
+    `fixedGrid.fluidResolution ${fixedGrid.fluidResolution} must match CONFIG.fluid.resolution ${CONFIG.fluid.resolution}`);
+  assert(fixedGrid.remotePresentationExtrapolateLimit === 0.75,
+    'fixedGrid remotePresentationExtrapolateLimit must preserve current client presentation behavior');
+  assert(fixedGrid.perfSmoothing === 0.12,
+    'fixedGrid perfSmoothing must preserve current perf HUD smoothing');
+});
+
+// ---- 15. Directional ASCII shader validation ----
 
 runner.run('ASCII directional shader keeps four 16-cell ramps', () => {
   const ramps = parseAsciiRamps();

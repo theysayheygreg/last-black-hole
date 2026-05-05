@@ -249,6 +249,65 @@ async function run() {
       }
     });
 
+    await runner.run('Hull ability presentation exposes active, cooldown, charge, fuel, anchor, decoy, and tractor states', async () => {
+      const presentations = await page.evaluate(() => {
+        const fixture = window.__TEST_API.getAbilityPresentationFixture;
+        return {
+          drifter: fixture({
+            hullType: 'drifter',
+            flowLockActive: true,
+            eddyBrakeCooldown: 0,
+          }),
+          breacher: fixture({
+            hullType: 'breacher',
+            burnActive: true,
+            burnFuel: 12,
+          }),
+          resonant: fixture({
+            hullType: 'resonant',
+            tapAnchor: { wx: 1.1, wy: 1.2 },
+            tapCooldown: 9,
+            frequencyShiftCooldown: 20,
+            nextPulseInverted: false,
+          }),
+          shroud: fixture({
+            hullType: 'shroud',
+            ghostTrailActive: true,
+            wakeCloakCooldown: 0,
+            decoyCharges: 1,
+            decoyCooldown: 14,
+            decoys: [{ wx: 1.2, wy: 1.3, signal: 0.5 }],
+          }),
+          hauler: fixture({
+            hullType: 'hauler',
+            salvageLockCharges: 2,
+            tractorCooldown: 0,
+            tractorChannelTimer: 1.5,
+          }),
+        };
+      });
+
+      const drifter = presentations.drifter.slots[0];
+      assert(drifter.name === 'flow lock', `Expected flow lock label, got ${drifter.name}`);
+      assert(drifter.active === true && drifter.status.includes('surf'), `Expected active flow lock status, got ${drifter.status}`);
+
+      const breacher = presentations.breacher.slots[0];
+      assert(breacher.resourceLabel === 'fuel', 'Expected Breacher fuel resource label');
+      assert(breacher.meter > 0.35 && breacher.meter < 0.45, `Expected Breacher fuel meter near 0.4, got ${breacher.meter}`);
+
+      const resonant = presentations.resonant.slots;
+      assert(resonant[0].active === true && resonant[0].status.includes('anchor'), `Expected Resonant anchor status, got ${resonant[0].status}`);
+      assert(resonant[1].cooldown === 20 && resonant[1].tone === 'cooldown', `Expected Resonant shift cooldown, got ${JSON.stringify(resonant[1])}`);
+
+      const shroud = presentations.shroud.slots;
+      assert(shroud[0].active === true && shroud[0].status === 'ghost wake', `Expected Shroud ghost wake, got ${shroud[0].status}`);
+      assert(shroud[1].charges === 1 && shroud[1].status.includes('14s'), `Expected Shroud decoy charge + cooldown, got ${shroud[1].status}`);
+
+      const hauler = presentations.hauler.slots;
+      assert(hauler[0].charges === 2 && hauler[0].ready === true, `Expected Hauler tag charges ready, got ${JSON.stringify(hauler[0])}`);
+      assert(hauler[1].active === true && hauler[1].status.includes('channel'), `Expected active tractor channel, got ${hauler[1].status}`);
+    });
+
     await runner.run('Audio engine initializes without error', async () => {
       const result = await page.evaluate(() => {
         // Audio should have been initialized on first game start

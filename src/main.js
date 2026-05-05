@@ -42,7 +42,7 @@ import { CombatSystem } from './combat.js';
 import { AudioEngine } from './audio.js';
 import { rollSignature, applySignatureConfig } from './signatures.js';
 import { InventorySystem } from './inventory.js';
-import { ProfileManager, UPGRADE_TRACKS, MAX_RANK, MAX_RIG_LEVEL, generatePilotName } from './profile.js';
+import { ProfileManager, UPGRADE_TRACKS, MAX_RANK, MAX_RIG_LEVEL, generatePilotName, sanitizePilotName } from './profile.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
 import { buildRunResultsViewModel, drawRunResultsOverlay } from './run-results.js';
 import { FlowField } from './sim/flow-field.js';
@@ -61,6 +61,7 @@ import { WORLD_SCALE, GRID_WINDOW, pxPerWorld, worldToFluidUV, worldToScreen, sc
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
+import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 
 const PLAYABLE_MAPS = [
   { id: 'shallows', map: MAP_SHALLOWS },
@@ -112,9 +113,10 @@ const GAMEPLAY_RENDER_TUNING = {
   chromaticAberration: { strength: 0.002, falloff: 2.8 },
   scanlines: { intensity: 0.09, frequency: 1.5 },
 };
-const PERF_SMOOTHING = 0.12;
+const CLIENT_PERF_PROFILE = CLIENT_PERF_PROFILES.fixedGrid;
+const PERF_SMOOTHING = CLIENT_PERF_PROFILE.perfSmoothing;
 // Long enough to bridge polling jitter, short enough to stop if snapshots stall.
-const REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT = 0.75;
+const REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT = CLIENT_PERF_PROFILE.remotePresentationExtrapolateLimit;
 const perfStats = {
   frameMs: 0,
   simMs: 0,
@@ -343,7 +345,7 @@ const profileManager = new ProfileManager();
 let metaExtractedItems = []; // items from the extraction, shown on meta screen
 let metaPhaseTimer = 0;      // animation timer for meta screen
 let profileCursor = 0;       // profile select cursor (0-2)
-let homeTab = 0;             // home screen tab (0=ship, 1=vault, 2=upgrades, 3=launch)
+let homeTab = 0;             // home screen tab (see HOME_TABS)
 let homeShipCursor = 0;      // ship subscreen cursor (0-1 equip, 2-3 consumable)
 let homeVaultCursor = 0;     // vault subscreen scroll position
 let homeRigCursor = 0;       // rig subscreen cursor
@@ -351,6 +353,123 @@ let homePhaseTimer = 0;      // animation timer for home screen
 let nameInputActive = false; // text input mode for new profile
 let nameInputBuffer = '';    // current typed name
 let deleteConfirmSlot = -1;  // which slot is pending delete confirmation (-1 = none)
+let recentEchoes = [];
+
+const HOME_TABS = ['SHIP', 'VAULT', 'RIG', 'CHRONICLE', 'LAUNCH'];
+
+function formatClock(seconds = 0) {
+  const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+function profileRunRecords(profile) {
+  const records = Array.isArray(profile?.runRecords) ? profile.runRecords
+    : Array.isArray(profile?.runs) ? profile.runs
+      : Array.isArray(profile?.recentRuns) ? profile.recentRuns
+        : [];
+  return records.filter(Boolean);
+}
+
+function runResultToChronicleRecord(runResult, fallback = {}) {
+  if (!runResult && !fallback.outcome) return null;
+  const outcome = runResult?.outcome === 'escaped' ? 'extracted'
+    : runResult?.outcome || fallback.outcome || 'unknown';
+  const cargo = outcome === 'extracted'
+    ? (Array.isArray(runResult?.cargoExtracted) ? runResult.cargoExtracted : fallback.cargo || [])
+    : (Array.isArray(runResult?.cargoLost) ? runResult.cargoLost : fallback.cargo || []);
+  const emEarned = Number.isFinite(Number(runResult?.emEarned))
+    ? Math.max(0, Math.round(Number(runResult.emEarned)))
+    : Math.max(0, Math.round(Number(fallback.emEarned) || 0));
+  const survivalTime = Number.isFinite(Number(runResult?.survivalTime))
+    ? Number(runResult.survivalTime)
+    : Number(fallback.survivalTime) || 0;
+  return {
+    runId: runResult?.runId || fallback.runId || `local-${Date.now()}`,
+    createdAt: runResult?.createdAt || fallback.createdAt || new Date().toISOString(),
+    outcome,
+    survivalTime,
+    hullType: runResult?.hullType || fallback.hullType || profileManager.active?.hullType || 'drifter',
+    mapId: runResult?.mapId || runResult?.mapContext?.mapId || fallback.mapId || currentMap?.id || currentMap?.name || 'local',
+    seed: runResult?.seed ?? runResult?.mapContext?.seed ?? fallback.seed ?? previewSeed,
+    emEarned,
+    cargoCount: cargo.filter(Boolean).length,
+    cargoValue: cargo.reduce((sum, item) => sum + (Number(item?.value) || 0), 0),
+    signalPeakZone: runResult?.signalPeakZone || fallback.signalPeakZone || null,
+    deathCause: runResult?.deathCause || fallback.deathCause || null,
+    deathEntityId: runResult?.deathEntityId || fallback.deathEntityId || null,
+    notable: runResult?.notables?.[0]?.description || fallback.notable || null,
+  };
+}
+
+function appendProfileRunRecord(record) {
+  const p = profileManager.active;
+  if (!p || !record) return;
+  const existing = profileRunRecords(p);
+  const runId = record.runId || `local-${Date.now()}`;
+  const next = [{ ...record, runId }, ...existing.filter((entry) => entry?.runId !== runId)].slice(0, 50);
+  p.runRecords = next;
+  profileManager.save();
+}
+
+function recordChronicleRun(runResult, fallback = {}) {
+  appendProfileRunRecord(runResultToChronicleRecord(runResult, fallback));
+}
+
+function buildChronicleViewModel() {
+  const p = profileManager.active;
+  if (!p) return null;
+  const existingRecords = profileRunRecords(p);
+  const latestResultRecord = runResultToChronicleRecord(lastRunResult);
+  const records = [
+    ...(latestResultRecord ? [latestResultRecord] : []),
+    ...existingRecords,
+  ]
+    .filter((record, index, all) => record && all.findIndex((entry) => entry.runId === record.runId) === index)
+    .slice(0, 8);
+  const bestSecs = Math.max(0, Number(p.bestSurvivalTime) || 0);
+  const totalRuns = (Number(p.totalExtractions) || 0) + (Number(p.totalDeaths) || 0);
+  return {
+    name: p.name || 'Pilot',
+    hullType: p.hullType || p.shipType || 'drifter',
+    stats: {
+      exoticMatter: Number(p.exoticMatter) || 0,
+      totalExtractions: Number(p.totalExtractions) || 0,
+      totalDeaths: Number(p.totalDeaths) || 0,
+      totalRuns,
+      bestSurvivalTime: bestSecs,
+      bestSurvivalLabel: formatClock(bestSecs),
+      totalExoticMatterEarned: Number(p.totalExoticMatterEarned) || 0,
+      vaultCount: Array.isArray(p.vault) ? p.vault.length : 0,
+      vaultCapacity: Number(p.vaultCapacity) || 0,
+    },
+    records: records.map((record, index) => ({
+      index: existingRecords.length - index,
+      runId: record.runId || null,
+      outcome: record.outcome || 'unknown',
+      survivalLabel: formatClock(record.survivalTime),
+      survivalTime: Number(record.survivalTime) || 0,
+      hullType: record.hullType || p.hullType || 'drifter',
+      mapId: record.mapId || 'local',
+      emEarned: Number(record.emEarned) || 0,
+      cargoCount: Number(record.cargoCount) || 0,
+      cargoValue: Number(record.cargoValue) || 0,
+      signalPeakZone: record.signalPeakZone || null,
+      deathCause: record.deathEntityId ? `${record.deathCause}: ${record.deathEntityId}` : record.deathCause || null,
+      notable: record.notable || null,
+    })),
+    echoes: recentEchoes.slice(0, 4),
+  };
+}
+
+function setNameInputBuffer(value) {
+  nameInputBuffer = sanitizePilotName(value, '').slice(0, 16);
+}
+
+function appendNameInput(text) {
+  setNameInputBuffer(`${nameInputBuffer}${text || ''}`);
+}
 
 function currentRunResultsViewModel() {
   const fallbackCargo = inventorySystem?.getCargoItems?.() || [];
@@ -593,9 +712,15 @@ function init() {
       } else if (e.key === 'Backspace') {
         nameInputBuffer = nameInputBuffer.slice(0, -1);
       } else if (e.key.length === 1 && nameInputBuffer.length < 16) {
-        nameInputBuffer += e.key;
+        appendNameInput(e.key);
       }
     }
+  });
+
+  window.addEventListener('paste', (e) => {
+    if (!nameInputActive) return;
+    e.preventDefault();
+    appendNameInput(e.clipboardData?.getData('text') || '');
   });
 
   // Handle resize — backing store stays fixed at RENDER_W x RENDER_H,
@@ -657,6 +782,10 @@ function init() {
       get lastRunResult() { return lastRunResult; },
       setLastRunResult: (result) => { lastRunResult = result ? JSON.parse(JSON.stringify(result)) : null; },
       getRunResultsViewModel: currentRunResultsViewModel,
+      getChronicleViewModel: buildChronicleViewModel,
+      setRecentEchoes: (echoes) => {
+        recentEchoes = Array.isArray(echoes) ? echoes.map((echo) => ({ ...echo })).slice(0, 8) : [];
+      },
       setEndScreenTimers: ({ death = deathTimer, escape = escapeTimer } = {}) => {
         deathTimer = death;
         escapeTimer = escape;
@@ -1635,6 +1764,13 @@ function applyRemoteEvents(events) {
         if (isLocal && payload.isEcho && payload.echoFragment) {
           const hull = payload.echoHullType || 'unknown';
           const name = payload.echoPilotName || 'unknown';
+          recentEchoes = [{
+            fragment: payload.echoFragment,
+            pilotName: name,
+            hullType: hull,
+            deathCause: payload.echoDeathCause || null,
+            survivalTime: payload.echoSurvivalTime || 0,
+          }, ...recentEchoes].slice(0, 8);
           // Main fragment line
           showWarning(`"${payload.echoFragment}"`, 'rgba(255, 217, 102, 0.95)', 4200);
           // Attribution as a delayed second warning
@@ -2235,7 +2371,7 @@ function gameLoop(now) {
           audioEngine.setContext('menu');
         } else {
           nameInputActive = true;
-          nameInputBuffer = generatePilotName();
+          setNameInputBuffer(generatePilotName());
           audioEngine.playEvent('menuConfirm');
         }
       }
@@ -2252,7 +2388,7 @@ function gameLoop(now) {
 
   } else if (gamePhase === 'home') {
     homePhaseTimer += dt;
-    const tabCount = 4; // SHIP, VAULT, RIG, LAUNCH
+    const tabCount = HOME_TABS.length;
     // Tab navigation: L1/R1 (or Q/E on keyboard) — dpad/stick reserved for in-tab scrolling
     if (inputManager.tabLeftPressed && !_prevTabLeft) { homeTab = (homeTab - 1 + tabCount) % tabCount; audioEngine.playEvent('tabSwitch'); }
     if (inputManager.tabRightPressed && !_prevTabRight) { homeTab = (homeTab + 1) % tabCount; audioEngine.playEvent('tabSwitch'); }
@@ -2326,7 +2462,7 @@ function gameLoop(now) {
           audioEngine.playEvent('cantAfford');
         }
       }
-    } else if (homeTab === 3) { // LAUNCH
+    } else if (homeTab === 4) { // LAUNCH
       if (confirmNow && !_prevConfirm) {
         // Apply upgrades and go to map select
         gamePhase = 'mapSelect';
@@ -2427,6 +2563,12 @@ function gameLoop(now) {
         // Save loadout on death — consumed items stay consumed, equipment changes persist
         profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
         lastDeathTax = profileManager.recordDeath();
+        recordChronicleRun(lastRunResult, {
+          outcome: 'dead',
+          survivalTime: simState.runEndTime,
+          emEarned: 0,
+          cargo: inventorySystem.getCargoItems?.() || [],
+        });
         triggerTransition(() => {
           loadTitleScene();
           gamePhase = 'home';
@@ -2456,6 +2598,12 @@ function gameLoop(now) {
           }
           // Save loadout
           profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
+          recordChronicleRun(lastRunResult, {
+            outcome: 'extracted',
+            survivalTime: simState.runEndTime,
+            emEarned: metaExtractedItems.reduce((sum, item) => sum + (Number(item?.value) || 0), 0),
+            cargo: metaExtractedItems,
+          });
           triggerTransition(() => {
             gamePhase = 'meta';
             metaPhaseTimer = 0;
@@ -2981,11 +3129,17 @@ function gameLoop(now) {
 
       // Breacher: burn afterglow
       if (as.hullType === 'breacher' && as.burnActive) {
-        const flicker = 0.6 + Math.random() * 0.4;
+        const flicker = 0.7 + 0.3 * Math.sin(totalTime * 31);
         ctx.fillStyle = `rgba(255, 120, 40, ${(0.15 * flicker).toFixed(2)})`;
         ctx.beginPath();
         ctx.arc(sx, sy, 25, 0, Math.PI * 2);
         ctx.fill();
+        const fuelFrac = Math.max(0, Math.min(1, (as.burnFuel || 0) / 30));
+        ctx.strokeStyle = 'rgba(255, 190, 80, 0.75)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 29, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fuelFrac);
+        ctx.stroke();
       }
 
       // Resonant: render eddies as spinning circles
@@ -3010,13 +3164,19 @@ function gameLoop(now) {
       // Resonant: tap anchor marker
       if (as.hullType === 'resonant' && as.tapAnchor) {
         const [ax, ay] = worldToScreen(as.tapAnchor.wx, as.tapAnchor.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        ctx.strokeStyle = 'rgba(180, 120, 255, 0.4)';
+        const pulse = 0.5 + 0.5 * Math.sin(totalTime * Math.PI * 2.5);
+        ctx.strokeStyle = `rgba(180, 120, 255, ${(0.35 + pulse * 0.25).toFixed(2)})`;
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
         ctx.beginPath();
-        ctx.arc(ax, ay, 8, 0, Math.PI * 2);
+        ctx.arc(ax, ay, 8 + pulse * 3, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
+        ctx.strokeStyle = `rgba(180, 120, 255, ${(0.18 + pulse * 0.16).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ax, ay);
+        ctx.stroke();
       }
 
       // Shroud: render decoys as fading signal dots
@@ -3033,6 +3193,44 @@ function gameLoop(now) {
           ctx.beginPath();
           ctx.arc(dx, dy, 10 + decoy.signal * 5, 0, Math.PI * 2);
           ctx.stroke();
+        }
+      }
+
+      if (as.hullType === 'shroud' && as.ghostTrailActive) {
+        const pulse = 0.5 + 0.5 * Math.sin(totalTime * Math.PI * 2);
+        ctx.strokeStyle = `rgba(150, 170, 185, ${(0.12 + pulse * 0.12).toFixed(2)})`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 5]);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 20 + pulse * 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      if (as.hullType === 'hauler') {
+        if ((as.salvageLockCharges || 0) > 0) {
+          ctx.strokeStyle = 'rgba(220, 200, 100, 0.32)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          ctx.arc(sx, sy, 34, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        if ((as.tractorChannelTimer || 0) > 0) {
+          const channelFrac = Math.max(0, Math.min(1, (as.tractorChannelTimer || 0) / 3));
+          const pulse = 0.5 + 0.5 * Math.sin(totalTime * Math.PI * 4);
+          ctx.strokeStyle = `rgba(230, 220, 130, ${(0.35 + pulse * 0.25).toFixed(2)})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 28 + channelFrac * 14, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * channelFrac);
+          ctx.stroke();
+          ctx.strokeStyle = `rgba(230, 220, 130, ${(0.12 + pulse * 0.12).toFixed(2)})`;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.arc(sx, sy, 42 + pulse * 4, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
         }
       }
     }
@@ -3789,7 +3987,7 @@ function gameLoop(now) {
     ctx.fillText(`${p?.exoticMatter || 0} EM`, cx, 55);
     if (p) {
       const bestSecs = Math.max(0, Math.floor(p.bestSurvivalTime || 0));
-      const bestLabel = `${Math.floor(bestSecs / 60)}:${String(bestSecs % 60).padStart(2, '0')}`;
+      const bestLabel = formatClock(bestSecs);
       ctx.fillStyle = 'rgba(110, 130, 160, 0.34)';
       ctx.fillRect(cx - 238, 64, 476, 18);
       ctx.strokeStyle = 'rgba(110, 150, 210, 0.18)';
@@ -3800,8 +3998,8 @@ function gameLoop(now) {
     }
 
     // Tab bar
-    const tabNames = ['SHIP', 'VAULT', 'RIG', 'LAUNCH'];
-    const tabWidth = 120;
+    const tabNames = HOME_TABS;
+    const tabWidth = 104;
     const tabStartX = cx - (tabNames.length * tabWidth) / 2;
     for (let i = 0; i < tabNames.length; i++) {
       const tx = tabStartX + i * tabWidth + tabWidth / 2;
@@ -3975,7 +4173,82 @@ function gameLoop(now) {
         uy += 55;
       }
 
-    } else if (homeTab === 3) {
+    } else if (homeTab === 3 && p) {
+      // === CHRONICLE subscreen ===
+      const chronicle = buildChronicleViewModel();
+      ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText('chronicle', leftMargin, contentY);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(145, 165, 190, 0.72)';
+      ctx.font = '11px monospace';
+      ctx.fillText(`${chronicle.stats.totalRuns} cycles  ${chronicle.stats.totalExoticMatterEarned} EM earned`, leftMargin + 440, contentY);
+      ctx.textAlign = 'left';
+
+      const statY = contentY + 24;
+      ctx.fillStyle = 'rgba(110, 130, 160, 0.28)';
+      ctx.fillRect(leftMargin - 4, statY - 13, 450, 42);
+      ctx.strokeStyle = 'rgba(110, 150, 210, 0.16)';
+      ctx.strokeRect(leftMargin - 4, statY - 13, 450, 42);
+      ctx.fillStyle = 'rgba(170, 190, 220, 0.78)';
+      ctx.font = '12px monospace';
+      ctx.fillText(`best survival ${chronicle.stats.bestSurvivalLabel}`, leftMargin + 8, statY);
+      ctx.fillText(`extract/death ${chronicle.stats.totalExtractions}/${chronicle.stats.totalDeaths}`, leftMargin + 228, statY);
+      ctx.fillStyle = 'rgba(255, 220, 100, 0.75)';
+      ctx.fillText(`${chronicle.stats.exoticMatter} EM now`, leftMargin + 8, statY + 18);
+      ctx.fillStyle = 'rgba(145, 165, 190, 0.70)';
+      ctx.fillText(`vault ${chronicle.stats.vaultCount}/${chronicle.stats.vaultCapacity}`, leftMargin + 228, statY + 18);
+
+      let cyLine = contentY + 86;
+      ctx.fillStyle = 'rgba(130, 175, 255, 0.82)';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText('-- recent cycles --', leftMargin, cyLine);
+      cyLine += 20;
+      ctx.font = '11px monospace';
+      if (chronicle.records.length === 0) {
+        ctx.fillStyle = 'rgba(100, 100, 120, 0.45)';
+        ctx.fillText('— no recorded cycles yet —', leftMargin, cyLine);
+        cyLine += 18;
+      } else {
+        for (const record of chronicle.records.slice(0, 5)) {
+          const extracted = record.outcome === 'extracted';
+          ctx.fillStyle = extracted ? 'rgba(98, 242, 165, 0.82)' : 'rgba(232, 90, 70, 0.78)';
+          const outcome = extracted ? 'extracted' : record.outcome;
+          const cue = record.notable || record.deathCause || record.signalPeakZone || '';
+          const line = `${outcome.padEnd(9)} ${record.survivalLabel}  ${record.hullType}  ${record.mapId}  +${record.emEarned} EM  cargo ${record.cargoCount}`;
+          ctx.fillText(line, leftMargin, cyLine);
+          if (cue) {
+            ctx.fillStyle = 'rgba(145, 165, 190, 0.58)';
+            ctx.fillText(String(cue).slice(0, 46), leftMargin + 18, cyLine + 13);
+            cyLine += 31;
+          } else {
+            cyLine += 18;
+          }
+        }
+      }
+
+      cyLine += 8;
+      ctx.fillStyle = 'rgba(255, 217, 102, 0.78)';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText('-- echoes recovered --', leftMargin, cyLine);
+      cyLine += 20;
+      ctx.font = '11px monospace';
+      if (chronicle.echoes.length === 0) {
+        ctx.fillStyle = 'rgba(100, 100, 120, 0.45)';
+        ctx.fillText('— no echo fragments in this session —', leftMargin, cyLine);
+      } else {
+        for (const echo of chronicle.echoes.slice(0, 3)) {
+          const name = echo.pilotName || 'unknown';
+          const hull = echo.hullType || 'unknown';
+          ctx.fillStyle = 'rgba(255, 217, 102, 0.74)';
+          ctx.fillText(`"${String(echo.fragment || '').slice(0, 52)}"`, leftMargin, cyLine);
+          ctx.fillStyle = 'rgba(160, 145, 110, 0.62)';
+          ctx.fillText(`— ${name}, ${hull}`, leftMargin + 18, cyLine + 13);
+          cyLine += 31;
+        }
+      }
+
+    } else if (homeTab === 4) {
       // === LAUNCH subscreen ===
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(100, 255, 200, 0.8)';

@@ -5,12 +5,26 @@
 
 ---
 
+## 2026-05-05 — Unfinished systems fill-in pass
+
+- Added the Chronicle home surface, local run-record continuity, echo-fragment display, and profile-name sanitization.
+- Extracted session/map scale profiles into mirrored manifests and wired sim/client perf profile consumers to that shared truth.
+- Improved hull ability presentation with per-hull labels, meters, fuel/charge/cooldown states, and canvas-side ability cues.
+- Deepened the item catalog with explicit special/effect registries, distinctive hull-affinity entries, and stronger validation.
+- Polished the desktop stack-status surface with clearer mode labels, log filtering, and copy/export controls.
+
 ## 2026-05-04 — Directional ASCII and meta-surface polish
 
 - Added a tunable directional ASCII blend window so flow glyphs emerge from shimmer instead of hard-switching at one speed threshold.
 - Extracted the item and consumable catalog into mirrored server/client content manifests and rewired seeded generation to use them.
 - Polished the home and run-results overlays with denser profile/loadout/run context, cargo value summaries, and clearer affordability/status cues.
 - Extended validation to catch item-manifest drift and ASCII ramp/velocity-blend regressions before they reach the renderer.
+
+## 2026-05-04 — Chronicle home surface
+
+- Added a Chronicle tab to the home screen with career stats, recent run records, and recovered echo fragments.
+- Recorded compact local run lines from extraction/death results so the next home visit shows survival, cargo, EM, map, signal, and death-cause cues.
+- Exposed Chronicle state through `__TEST_API` and added home-flow coverage for profile records plus echo fragments.
 
 ## 2026-05-04 — Signature content manifest
 

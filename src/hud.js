@@ -95,6 +95,184 @@ function fmtTime(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+function fmtSeconds(seconds) {
+  return `${Math.ceil(Math.max(0, seconds || 0))}s`;
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+}
+
+function abilityTone(slot) {
+  if (slot?.active) return 'active';
+  if (slot?.ready) return 'ready';
+  return 'cooldown';
+}
+
+function cooldownMeter(cooldown, max) {
+  if (!cooldown || cooldown <= 0) return 0;
+  return clamp01(1 - cooldown / Math.max(1, max || cooldown));
+}
+
+function abilitySlot(key, name, state) {
+  const slot = {
+    key,
+    name,
+    status: state.status || '',
+    ready: Boolean(state.ready),
+    active: Boolean(state.active),
+    cooldown: Math.max(0, state.cooldown || 0),
+    detail: state.detail || '',
+    resourceLabel: state.resourceLabel || '',
+    resource: state.resource ?? null,
+    charges: state.charges ?? null,
+    meter: clamp01(state.meter ?? (state.ready || state.active ? 1 : 0)),
+  };
+  slot.tone = abilityTone(slot);
+  return slot;
+}
+
+export function getAbilityPresentationState(abilityState = {}) {
+  const as = abilityState || {};
+  const hull = as.hullType || 'drifter';
+  const slots = [];
+
+  if (hull === 'drifter') {
+    const flowActive = Boolean(as.flowLockActive);
+    const cooldown = Math.max(0, as.eddyBrakeCooldown || 0);
+    slots.push(abilitySlot('Q', flowActive ? 'flow lock' : 'eddy brake', {
+      status: flowActive ? 'surf locked' : cooldown > 0 ? `brake ${fmtSeconds(cooldown)}` : 'brake ready',
+      active: flowActive,
+      ready: cooldown <= 0,
+      cooldown,
+      detail: flowActive ? 'current alignment holding' : 'instant stop + wake turbulence',
+      meter: cooldown > 0 ? cooldownMeter(cooldown, 20) : 1,
+    }));
+  } else if (hull === 'breacher') {
+    const fuelMax = 30;
+    const fuel = Math.max(0, as.burnFuel || 0);
+    const active = Boolean(as.burnActive);
+    slots.push(abilitySlot('Q', 'burn', {
+      status: active ? `burning ${fmtSeconds(fuel)}` : fuel > 1 ? `fuel ${Math.ceil(fuel)}/${fuelMax}` : 'fuel dry',
+      active,
+      ready: !active && fuel > 1,
+      cooldown: 0,
+      detail: active ? 'thrust spike, loud signal' : 'hold fuel for a line break',
+      resourceLabel: 'fuel',
+      resource: fuel,
+      meter: clamp01(fuel / fuelMax),
+    }));
+  } else if (hull === 'resonant') {
+    const tapCooldown = Math.max(0, as.tapCooldown || 0);
+    const shiftCooldown = Math.max(0, as.frequencyShiftCooldown || 0);
+    slots.push(abilitySlot('Q', 'tap', {
+      status: as.tapAnchor ? 'anchor set' : tapCooldown > 0 ? `anchor ${fmtSeconds(tapCooldown)}` : 'anchor ready',
+      active: Boolean(as.tapAnchor),
+      ready: tapCooldown <= 0,
+      cooldown: tapCooldown,
+      detail: as.tapAnchor ? 'pulse space keyed to anchor' : 'place a resonance anchor',
+      meter: tapCooldown > 0 ? cooldownMeter(tapCooldown, 15) : 1,
+    }));
+    slots.push(abilitySlot('R', 'shift', {
+      status: as.nextPulseInverted ? 'pulse inverted' : shiftCooldown > 0 ? `shift ${fmtSeconds(shiftCooldown)}` : 'shift ready',
+      active: Boolean(as.nextPulseInverted),
+      ready: shiftCooldown <= 0,
+      cooldown: shiftCooldown,
+      detail: 'invert next harmonic pulse',
+      meter: shiftCooldown > 0 ? cooldownMeter(shiftCooldown, 45) : 1,
+    }));
+  } else if (hull === 'shroud') {
+    const cloakCooldown = Math.max(0, as.wakeCloakCooldown || 0);
+    const decoyCooldown = Math.max(0, as.decoyCooldown || 0);
+    const decoyCharges = Math.max(0, as.decoyCharges || 0);
+    slots.push(abilitySlot('Q', 'cloak', {
+      status: as.ghostTrailActive ? 'ghost wake' : cloakCooldown > 0 ? `cloak ${fmtSeconds(cloakCooldown)}` : 'cloak ready',
+      active: Boolean(as.ghostTrailActive),
+      ready: cloakCooldown <= 0,
+      cooldown: cloakCooldown,
+      detail: 'drop a signal zone when exposed',
+      meter: cloakCooldown > 0 ? cooldownMeter(cloakCooldown, 30) : 1,
+    }));
+    slots.push(abilitySlot('R', 'decoy', {
+      status: decoyCooldown > 0 ? `${decoyCharges} charge ${fmtSeconds(decoyCooldown)}` : `${decoyCharges} charge${decoyCharges === 1 ? '' : 's'}`,
+      active: Array.isArray(as.decoys) && as.decoys.length > 0,
+      ready: decoyCharges > 0 && decoyCooldown <= 0,
+      cooldown: decoyCooldown,
+      charges: decoyCharges,
+      detail: 'throw a false signal body',
+      meter: decoyCooldown > 0 ? cooldownMeter(decoyCooldown, 60) : (decoyCharges > 0 ? 1 : 0),
+    }));
+  } else if (hull === 'hauler') {
+    const tagCharges = Math.max(0, as.salvageLockCharges || 0);
+    const tractorCooldown = Math.max(0, as.tractorCooldown || 0);
+    const tractorActive = (as.tractorChannelTimer || 0) > 0;
+    slots.push(abilitySlot('Q', 'tag', {
+      status: `${tagCharges} lock${tagCharges === 1 ? '' : 's'}`,
+      active: false,
+      ready: tagCharges > 0,
+      cooldown: 0,
+      charges: tagCharges,
+      detail: 'mark nearest salvage for bonus yield',
+      meter: tagCharges > 0 ? 1 : 0,
+    }));
+    slots.push(abilitySlot('R', 'tractor', {
+      status: tractorActive ? `channel ${fmtSeconds(as.tractorChannelTimer || 0)}` : tractorCooldown > 0 ? `tractor ${fmtSeconds(tractorCooldown)}` : 'tractor ready',
+      active: tractorActive,
+      ready: tractorCooldown <= 0,
+      cooldown: tractorCooldown,
+      detail: tractorActive ? 'pull field engaged' : 'pull nearest salvage body',
+      meter: tractorActive ? clamp01((as.tractorChannelTimer || 0) / 3) : tractorCooldown > 0 ? cooldownMeter(tractorCooldown, 25) : 1,
+    }));
+  } else {
+    slots.push(abilitySlot('Q', 'ability', { status: 'unknown hull', ready: false }));
+  }
+
+  return { hull, slots };
+}
+
+function abilityResourceMarkup(slot) {
+  if (slot.charges != null) {
+    const charges = Math.max(0, Math.min(4, slot.charges));
+    const pips = [];
+    for (let i = 0; i < Math.max(1, charges || 1); i++) {
+      const lit = i < charges;
+      pips.push(`<span style="display:inline-block;width:4px;height:4px;margin-right:2px;border:1px solid ${lit ? 'rgba(120, 230, 180, 0.75)' : 'rgba(120, 140, 160, 0.3)'};background:${lit ? 'rgba(120, 230, 180, 0.45)' : 'transparent'};"></span>`);
+    }
+    return `<span class="hud-ability-pips" aria-hidden="true">${pips.join('')}</span>`;
+  }
+  if (slot.resourceLabel) {
+    return `<span class="hud-ability-meter-label">${slot.resourceLabel}</span>`;
+  }
+  return '';
+}
+
+function renderAbilitySlot(el, slot) {
+  if (!el || !slot) return;
+  const fillColor = slot.active ? 'rgba(100, 255, 200, 0.72)'
+    : slot.ready ? 'rgba(180, 200, 220, 0.52)'
+    : 'rgba(200, 160, 80, 0.48)';
+  const className = `hud-ability ${slot.tone}`;
+  const html = `
+    <div class="hud-ability-line">
+      <span class="hud-ability-key">${slot.key}</span>
+      <span class="hud-ability-name">${slot.name}</span>
+      <span class="hud-ability-status">${slot.status}</span>
+    </div>
+    <div class="hud-ability-detail">${slot.detail}</div>
+    <div class="hud-ability-meter" style="height:2px;width:92px;background:rgba(90,110,130,0.22);margin:2px 0 1px 15px;">
+      <div style="height:2px;width:${Math.round(slot.meter * 100)}%;background:${fillColor};box-shadow:0 0 5px ${fillColor};"></div>
+    </div>
+    ${abilityResourceMarkup(slot)}
+  `;
+
+  if (el.style.display === 'none') el.style.display = '';
+  if (el.className !== className) el.className = className;
+  if (el.dataset.renderKey !== html) {
+    el.innerHTML = html;
+    el.dataset.renderKey = html;
+  }
+}
+
 /**
  * Update HUD panels. Call once per frame during 'playing' phase.
  *
@@ -300,58 +478,10 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
 
   // === HULL ABILITIES ===
   if (_ability1El && opts.abilityState) {
-    const as = opts.abilityState;
-    const hull = as.hullType || 'drifter';
-
-    // Ability names and state per hull
-    const abilityInfo = {
-      drifter:  { a1: 'eddy brake', a2: null,
-        a1State: as.eddyBrakeCooldown > 0 ? `${Math.ceil(as.eddyBrakeCooldown)}s` : 'ready',
-        a1Active: false, a1Ready: (as.eddyBrakeCooldown || 0) <= 0,
-        flowLock: as.flowLockActive },
-      breacher: { a1: 'burn', a2: null,
-        a1State: as.burnActive ? `${Math.ceil(as.burnFuel || 0)}s fuel` : `${Math.ceil(as.burnFuel || 0)}s`,
-        a1Active: as.burnActive, a1Ready: !as.burnActive && (as.burnFuel || 0) > 1 },
-      resonant: { a1: 'tap', a2: 'shift',
-        a1State: as.tapCooldown > 0 ? `${Math.ceil(as.tapCooldown)}s` : 'ready',
-        a1Active: !!as.tapAnchor, a1Ready: (as.tapCooldown || 0) <= 0,
-        a2State: as.frequencyShiftCooldown > 0 ? `${Math.ceil(as.frequencyShiftCooldown)}s` : (as.nextPulseInverted ? 'armed' : 'ready'),
-        a2Active: as.nextPulseInverted, a2Ready: (as.frequencyShiftCooldown || 0) <= 0 },
-      shroud:   { a1: 'cloak', a2: 'decoy',
-        a1State: as.wakeCloakCooldown > 0 ? `${Math.ceil(as.wakeCloakCooldown)}s` : 'ready',
-        a1Active: false, a1Ready: (as.wakeCloakCooldown || 0) <= 0,
-        a2State: `${as.decoyCharges || 0}×${as.decoyCooldown > 0 ? ' ' + Math.ceil(as.decoyCooldown) + 's' : ''}`,
-        a2Active: false, a2Ready: (as.decoyCharges || 0) > 0 && (as.decoyCooldown || 0) <= 0 },
-      hauler:   { a1: 'tag', a2: 'tractor',
-        a1State: `${as.salvageLockCharges || 0}×`,
-        a1Active: false, a1Ready: (as.salvageLockCharges || 0) > 0,
-        a2State: as.tractorCooldown > 0 ? `${Math.ceil(as.tractorCooldown)}s` : 'ready',
-        a2Active: (as.tractorChannelTimer || 0) > 0, a2Ready: (as.tractorCooldown || 0) <= 0 },
-    };
-    const info = abilityInfo[hull] || abilityInfo.drifter;
-
-    // Ability 1
-    const name1El = _ability1El.querySelector('.hud-ability-name');
-    const status1El = _ability1El.querySelector('.hud-ability-status');
-    if (name1El) name1El.textContent = info.a1;
-    if (status1El) status1El.textContent = info.a1State || '';
-    _ability1El.className = 'hud-ability' + (info.a1Active ? ' active' : info.a1Ready ? ' ready' : ' cooldown');
-
-    // Flow lock indicator for Drifter (passive, no key)
-    if (hull === 'drifter' && info.flowLock) {
-      if (name1El) name1El.textContent = 'flow lock';
-      _ability1El.className = 'hud-ability active';
-      if (status1El) status1El.textContent = '';
-    }
-
-    // Ability 2
-    if (info.a2) {
-      _ability2El.style.display = '';
-      const name2El = _ability2El.querySelector('.hud-ability-name');
-      const status2El = _ability2El.querySelector('.hud-ability-status');
-      if (name2El) name2El.textContent = info.a2;
-      if (status2El) status2El.textContent = info.a2State || '';
-      _ability2El.className = 'hud-ability' + (info.a2Active ? ' active' : info.a2Ready ? ' ready' : ' cooldown');
+    const presentation = getAbilityPresentationState(opts.abilityState);
+    renderAbilitySlot(_ability1El, presentation.slots[0]);
+    if (presentation.slots[1]) {
+      renderAbilitySlot(_ability2El, presentation.slots[1]);
     } else {
       _ability2El.style.display = 'none';
     }

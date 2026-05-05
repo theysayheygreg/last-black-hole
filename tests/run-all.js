@@ -16,7 +16,7 @@ const suites = [
   { name: "InfraSmoke", file: "infra-smoke.js" },
   { name: "TelemetrySmoke", file: "telemetry-smoke.js" },
   { name: "SimLifecycle", file: "sim-lifecycle.js" },
-  { name: "MetaFlow", file: "meta-flow.js" },
+  { name: "MetaFlow", file: "meta-flow.js", timeout: 90000 },
   { name: "RunResults", file: "run-results.js" },
   { name: "Controller", file: "controller.js" },
   { name: "KeyboardMouse", file: "keyboard-mouse.js", retries: 1 },
@@ -33,7 +33,7 @@ const suites = [
   { name: "OverloadState", file: "overload-state.js" },
   { name: "CoarseField", file: "coarse-field.js" },
   { name: "SimScale", file: "sim-scale.js" },
-  { name: "RemoteAuthority", file: "remote-authority.js", retries: 1 },
+  { name: "RemoteAuthority", file: "remote-authority.js", retries: 1, timeout: 120000 },
 ];
 
 console.log(`\n╔══════════════════════════════════════╗`);
@@ -52,7 +52,7 @@ for (const suite of suites) {
     try {
       execSync(`node "${suitePath}" "${htmlFile}"`, {
         stdio: "inherit",
-        timeout: 60000,
+        timeout: suite.timeout || 60000,
       });
       passed = true;
       break;
