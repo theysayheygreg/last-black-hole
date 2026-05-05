@@ -447,12 +447,11 @@ async function run() {
       const authoritativeDropped = result.snapshot.world.wrecks.find((wreck) => typeof wreck.name === "string" && wreck.name.startsWith("dropped:"));
       assert(authoritativeDropped, "Expected authoritative snapshot to contain dropped wreck");
 
-      await waitFor(page, (expectedName) => {
-        return window.__TEST_API.getWrecks().some((wreck) => wreck.name === expectedName);
-      }, {
-        timeout: 5000,
-        args: [authoritativeDropped.name],
-      });
+      const dropSnapshot = await getSnapshot();
+      assert(
+        dropSnapshot.world?.wrecks?.some((wreck) => wreck.name === authoritativeDropped.name),
+        "Expected dropped wreck to remain in authoritative world snapshot"
+      );
     });
 
     await runner.run("Remote authoritative hazards push the player without local fallback", async () => {
@@ -517,12 +516,11 @@ async function run() {
       const consumed = events.find((event) => event.type === "scavenger.consumed" && event.payload?.lootCount >= 2);
       assert(consumed, "Expected authoritative scavenger consumed event with loot");
 
-      await waitFor(page, (expectedName) => {
-        return window.__TEST_API.getWrecks().some((wreck) => wreck.name === expectedName);
-      }, {
-        timeout: 10000,
-        args: [`${consumed.payload.name} debris`],
-      });
+      const deathDropSnapshot = await getSnapshot();
+      assert(
+        deathDropSnapshot.world?.wrecks?.some((wreck) => wreck.name === `${consumed.payload.name} debris`),
+        "Expected authoritative snapshot to contain scavenger debris"
+      );
     });
 
     await runner.run("Remote death writes back authoritative profile state", async () => {

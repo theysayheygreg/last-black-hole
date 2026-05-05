@@ -14,6 +14,7 @@
 const path = require('path');
 const { spawn } = require('child_process');
 const { start, DEV_URL } = require('./stack.js');
+const { startService, stopService } = require('./runtime-status.js');
 
 const HTML_FILE = 'index-a.html';
 
@@ -21,6 +22,16 @@ async function run() {
   // Bring up dev + control-plane + sim, but don't open a browser tab —
   // Electron is the client surface here.
   await start({ mode: 'local-host', openBrowser: false });
+
+  // A play launch should mean a fresh local run. The dev stack can remain
+  // hot between agent/test sessions, so restart only the sim authority before
+  // opening the player window; otherwise an old idle cycle can immediately
+  // collapse when the window joins it.
+  console.log('\nResetting local sim for a fresh play session...');
+  const stopped = stopService('sim');
+  if (stopped) console.log(stopped);
+  const started = startService('sim');
+  if (started) console.log(started);
 
   // Match stack.js local-host URL shape — sim server runs on 8787.
   const url = new URL(

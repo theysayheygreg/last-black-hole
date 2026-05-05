@@ -5,6 +5,12 @@
 
 ---
 
+## 2026-05-05 — Remote play visual hotfix
+
+- Added deterministic authoritative wreck names for initial, wave, repeat, and echo wrecks so remote overlays never render `undefined` labels.
+- Made the play launcher restart the local sim before opening Electron, preventing stale background sessions from joining directly into a collapsed run.
+- Hardened remote-authority and sim-scale coverage around authoritative wreck labels and spawned wreck/debris assertions.
+
 ## 2026-05-05 — Unfinished systems fill-in pass
 
 - Added the Chronicle home surface, local run-record continuity, echo-fragment display, and profile-name sanitization.

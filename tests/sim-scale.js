@@ -161,6 +161,29 @@ async function run() {
       );
     });
 
+    await runner.run("Authoritative snapshots carry printable wreck labels", async () => {
+      const { status } = await getJson("/session/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mapId: "shallows",
+          requesterId: "sim-scale-test",
+          requesterName: "Scale Test",
+          seed: 424242,
+        }),
+      });
+      assert(status === 200, `Expected /session/start 200, got ${status}`);
+
+      const snapshot = await getJson("/snapshot");
+      const wrecks = snapshot.body.world?.wrecks || [];
+      assert(wrecks.length > 0, "Expected snapshot wrecks");
+      for (const wreck of wrecks) {
+        assert(typeof wreck.name === "string" && wreck.name.length > 0, `Expected printable wreck name for ${wreck.id || wreck.type}`);
+        assert(!wreck.name.includes("undefined"), `Wreck label leaked undefined: ${wreck.name}`);
+        assert(Array.isArray(wreck.loot), `Expected wreck loot array for ${wreck.name}`);
+      }
+    });
+
     await runner.run("Starting high-player deep-field session applies explicit AI spawn budget", async () => {
       const { status, body } = await getJson("/session/start", {
         method: "POST",

@@ -80,6 +80,23 @@ const WRECK_WAVE_REPEAT = { count: [1, 1], slots: [3, 5], dangerZone: 0.12 };
 const IDLE_SESSION_TICK_HZ = 1;
 const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
 
+const WRECK_ADJECTIVES = [
+  "Ascending", "Crystalline", "Shattered", "Infinite", "Dreaming",
+  "Ossified", "Luminous", "Drifting", "Harmonic", "Forgotten",
+  "Silent", "Fractured", "Prismatic", "Hollow", "Resonant",
+];
+const WRECK_NOUNS = [
+  "Chorus", "Lattice", "Meridian", "Archive", "Theorem",
+  "Garden", "Beacon", "Chrysalis", "Mandate", "Confluence",
+  "Helix", "Axiom", "Tempest", "Orbit", "Zenith",
+];
+const WRECK_PREFIXES = ["Wreck", "Remains", "Hulk"];
+
+function generateWreckName(rng = Math.random) {
+  const pick = (list) => list[Math.floor(rng() * list.length)] || list[0];
+  return `${pick(WRECK_PREFIXES)} of the ${pick(WRECK_ADJECTIVES)} ${pick(WRECK_NOUNS)}`;
+}
+
 // Wrappers around seeded-generation.js that route through runtime streams.
 // All init-time loot rolls flow through runtime.session.rng, which is
 // seeded from runtime.session.seed. Same seed → same initial loot.
@@ -602,8 +619,10 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
     driftVY: 0,
   }));
   const initialLootStream = rngStreams ? rngStreams.rawStream('initialWreckLoot') : Math.random;
+  const initialNameStream = rngStreams ? rngStreams.rawStream('initialWreckNames') : Math.random;
   const wrecks = map.wrecks.map((wreck) => ({
     ...wreck,
+    name: wreck.name || generateWreckName(initialNameStream),
     alive: true,
     looted: false,
     pickupCooldown: 0,
@@ -1646,6 +1665,7 @@ function hydrateEchoWreck(echo) {
     echoHullType: echo.hullType || 'drifter',
     echoDeathCause: echo.deathCause || 'unknown',
     echoSurvivalTime: echo.survivalTime || 0,
+    name: echo.name || `Echo of ${echo.pilotName || 'unknown pilot'}`,
     tier: echo.tier || 1,
   };
   // Nudge position out of any well kill radius if the original death
@@ -1814,6 +1834,7 @@ function tickWreckWaves(dt) {
   if (!runtime._wreckWaveRepeatTimer) runtime._wreckWaveRepeatTimer = 0;
   const ws = runtime.session.worldScale;
   const waveRng = runtime.session?.rng?.rawStream('wreckWave') || Math.random;
+  const nameRng = runtime.session?.rng?.rawStream('wreckNames') || Math.random;
 
   // Process scheduled waves
   while (runtime._wreckWaveIndex < WRECK_WAVES.length) {
@@ -1828,6 +1849,7 @@ function tickWreckWaves(dt) {
         id: `wreck-wave-${runtime._wreckWaveIndex}-${i}-${runtime.tick}`,
         wx: pos.wx, wy: pos.wy,
         type: 'derelict',
+        name: generateWreckName(nameRng),
         tier: rollTier(runtime.simTime, 'wreckTier'),
         size: slots > 2 ? 'large' : slots > 1 ? 'medium' : 'small',
         alive: true, looted: false, pickupCooldown: 0,
@@ -1854,6 +1876,7 @@ function tickWreckWaves(dt) {
           id: `wreck-repeat-${runtime.tick}-${i}`,
           wx: pos.wx, wy: pos.wy,
           type: 'derelict',
+          name: generateWreckName(nameRng),
           tier: rollTier(runtime.simTime, 'wreckTier'),
           size: slots > 2 ? 'large' : 'medium',
           alive: true, looted: false, pickupCooldown: 0,

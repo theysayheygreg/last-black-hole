@@ -3478,8 +3478,9 @@ function gameLoop(now) {
         else color = `rgba(160, 180, 200, ${a * 0.6})`;
         ctx.font = '10px monospace';
         ctx.fillStyle = color;
+        const label = wreck.name || (wreck.isEcho ? 'echo wreck' : `${wreck.type || 'wreck'} contact`);
         const itemText = wreck.looted ? '' : ` (${wreck.loot.length})`;
-        ctx.fillText(wreck.name + itemText, sx, sy + 18);
+        ctx.fillText(label + itemText, sx, sy + 18);
       }
 
       // Scavengers — faction + callsign, archetype-colored
