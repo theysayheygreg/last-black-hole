@@ -7,6 +7,21 @@ const DEV_URL = 'http://127.0.0.1:8080/';
 const LOCAL_SIM_URL = 'http://127.0.0.1:8787';
 const LOCAL_CONTROL_URL = 'http://127.0.0.1:8791';
 
+const STACK_LABELS = {
+  embedded: {
+    name: 'Embedded desktop',
+    detail: 'Packaged app-owned control plane and sim on dynamic loopback ports.',
+  },
+  local: {
+    name: 'Local host',
+    detail: 'Dev server, local control plane, and local sim on fixed loopback ports.',
+  },
+  remote: {
+    name: 'Remote client',
+    detail: 'Local renderer pointed at a remote authoritative sim.',
+  },
+};
+
 function runNode(script, commandName, extraArgs = []) {
   return execFileSync(process.execPath, [path.join(ROOT, 'scripts', script), commandName, ...extraArgs], {
     cwd: ROOT,
@@ -75,6 +90,8 @@ async function getStackSnapshot() {
   ]);
   return {
     checkedAt: new Date().toISOString(),
+    stackMode: 'local',
+    stackLabel: STACK_LABELS.local,
     urls: {
       dev: DEV_URL,
       control: LOCAL_CONTROL_URL,
@@ -90,6 +107,10 @@ async function getStackSnapshot() {
 
 function formatStackSummary(snapshot) {
   const lines = [];
+  const label = snapshot.stackLabel || STACK_LABELS.local;
+  lines.push(`Mode: ${label.name}`);
+  lines.push(label.detail);
+  lines.push('');
   lines.push(snapshot.services.dev.statusText || 'LBH dev server is not running.');
   lines.push('');
   lines.push(snapshot.services.control.statusText || 'LBH control plane is not running.');
@@ -114,6 +135,7 @@ module.exports = {
   DEV_URL,
   LOCAL_SIM_URL,
   LOCAL_CONTROL_URL,
+  STACK_LABELS,
   fetchJson,
   getStackSnapshot,
   formatStackSummary,

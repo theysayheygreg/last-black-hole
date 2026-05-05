@@ -1,5 +1,6 @@
-const { app, BrowserWindow, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, clipboard, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { fork } = require('child_process');
 const http = require('http');
 const net = require('net');
@@ -144,7 +145,27 @@ async function getEmbeddedStackSnapshot() {
   ]);
   return {
     checkedAt: new Date().toISOString(),
-    embeddedMode: 'embedded-desktop',
+    stackMode: 'embedded',
+    stackLabel: {
+      name: 'Embedded desktop',
+      detail: 'Packaged app-owned control plane and sim on dynamic loopback ports.',
+    },
+    urls: {
+      control: controlPort ? `http://127.0.0.1:${controlPort}` : null,
+      sim: simPort ? `http://127.0.0.1:${simPort}` : null,
+    },
+    services: {
+      control: {
+        pid: controlProcess?.pid || null,
+        health: controlHealth,
+        recentLogs: runtimeLogs.control.slice(-12),
+      },
+      sim: {
+        pid: simProcess?.pid || null,
+        health: simHealth,
+        recentLogs: runtimeLogs.sim.slice(-12),
+      },
+    },
     control: {
       pid: controlProcess?.pid || null,
       health: controlHealth,
@@ -297,6 +318,20 @@ ipcMain.handle('lbh:focus-main-window', async () => {
     mainWindow.focus();
   }
   return { ok: true };
+});
+ipcMain.handle('lbh:copy-text', async (_event, text) => {
+  clipboard.writeText(String(text || ''));
+  return { ok: true };
+});
+ipcMain.handle('lbh:export-text', async (_event, payload = {}) => {
+  const result = await dialog.showSaveDialog(statusWindow || mainWindow, {
+    title: 'Export Stack Status',
+    defaultPath: payload.defaultPath || 'last-singularity-status.txt',
+    filters: [{ name: 'Text', extensions: ['txt', 'json', 'log'] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+  fs.writeFileSync(result.filePath, String(payload.text || ''), 'utf8');
+  return { ok: true, filePath: result.filePath };
 });
 
 app.whenReady().then(async () => {
