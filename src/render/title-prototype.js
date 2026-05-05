@@ -355,6 +355,7 @@ function frame(now) {
       contrast: a.contrast,
       shimmer: a.shimmer,
       dirThreshold: a.dirThreshold ?? 0.01,
+      dirBlendRange: a.dirBlendRange ?? 0.03,
       glitchIntensity: 0,
       camFU, camFV,
       gridWindow: GRID_WINDOW,

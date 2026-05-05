@@ -25,6 +25,7 @@ uniform float u_shimmer;       // quantum fluctuation probability (0 = off)
 uniform vec2 u_camOffset;     // camera center in fluid UV (for world-anchored noise)
 uniform float u_gridWindow;   // world-units spanned by the fluid grid (for world-anchored noise)
 uniform float u_dirThreshold; // speed threshold for directional character selection
+uniform float u_dirBlendRange; // speed window where direction emerges through shimmer
 uniform float u_glitchIntensity; // 0.0 = normal, 1.0 = full corruption (scene transitions)
 
 in vec2 v_uv;
@@ -84,7 +85,7 @@ void main() {
     else
       rampRow = 3.0;
 
-    float dirStrength = smoothstep(u_dirThreshold, u_dirThreshold * 4.0, speed);
+    float dirStrength = smoothstep(u_dirThreshold, u_dirThreshold + u_dirBlendRange, speed);
     if (noise < (1.0 - dirStrength)) rampRow = 0.0;
   }
 
@@ -122,10 +123,10 @@ void main() {
 
 // Row 0 = isotropic, 1 = horizontal emphasis, 2 = vertical, 3 = diagonal.
 export const RAMPS = [
-  ' .`\'-,_:;"~^*+=#%@',
-  ' .-~-=~-=-==#%@@',
+  ' .`\'-,_:;~*+=#%@',
+  ' .-~-=~=--==#%@@',
   ' .:|!:|!|:|!#%@@',
-  ' ./\\/\\x/\\/\\x#%@@',
+  ' ./\\//\\//++##%@@',
 ];
 export const CHARS_PER_RAMP = 16;
 

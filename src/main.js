@@ -2884,6 +2884,7 @@ function gameLoop(now) {
       contrast: a.contrast,
       shimmer: a.shimmer,
       dirThreshold: a.dirThreshold ?? 0.01,
+      dirBlendRange: a.dirBlendRange ?? 0.03,
       glitchIntensity: getGlitchIntensity(),
       camFU, camFV,
       gridWindow: GRID_WINDOW,
@@ -3776,7 +3777,7 @@ function gameLoop(now) {
     ctx.shadowBlur = 8;
 
     // Terminal frame — no title label (header text inside is enough)
-    drawTerminalFrame(ctx, cx - 230, 15, 460, h - 50, null, 'rgba(80, 100, 140, 0.2)');
+    drawTerminalFrame(ctx, cx - 280, 15, 560, h - 50, null, 'rgba(80, 100, 140, 0.2)');
 
     // Header: pilot name + EM
     ctx.textAlign = 'center';
@@ -3786,6 +3787,17 @@ function gameLoop(now) {
     ctx.fillStyle = 'rgba(255, 220, 100, 0.85)';
     ctx.font = 'bold 14px monospace';
     ctx.fillText(`${p?.exoticMatter || 0} EM`, cx, 55);
+    if (p) {
+      const bestSecs = Math.max(0, Math.floor(p.bestSurvivalTime || 0));
+      const bestLabel = `${Math.floor(bestSecs / 60)}:${String(bestSecs % 60).padStart(2, '0')}`;
+      ctx.fillStyle = 'rgba(110, 130, 160, 0.34)';
+      ctx.fillRect(cx - 238, 64, 476, 18);
+      ctx.strokeStyle = 'rgba(110, 150, 210, 0.18)';
+      ctx.strokeRect(cx - 238, 64, 476, 18);
+      ctx.fillStyle = 'rgba(155, 175, 205, 0.72)';
+      ctx.font = '10px monospace';
+      ctx.fillText(`extractions ${p.totalExtractions || 0}  |  best ${bestLabel}  |  vault ${p.vault.length}/${p.vaultCapacity}`, cx, 77);
+    }
 
     // Tab bar
     const tabNames = ['SHIP', 'VAULT', 'RIG', 'LAUNCH'];
@@ -3796,18 +3808,18 @@ function gameLoop(now) {
       const active = (homeTab === i);
       ctx.fillStyle = active ? 'rgba(130, 175, 255, 1)' : 'rgba(140, 150, 170, 0.65)';
       ctx.font = active ? 'bold 13px monospace' : '12px monospace';
-      ctx.fillText(tabNames[i], tx, 80);
+      ctx.fillText(tabNames[i], tx, 96);
       if (active) {
         ctx.fillStyle = 'rgba(100, 150, 255, 0.6)';
-        ctx.fillRect(tx - tabWidth / 2 + 10, 85, tabWidth - 20, 2);
+        ctx.fillRect(tx - tabWidth / 2 + 10, 101, tabWidth - 20, 2);
       }
     }
 
     // Subscreen content area
-    const contentY = 110;
-    const contentH = overlayCanvas.height - 160;
+    const contentY = 126;
+    const contentH = overlayCanvas.height - 176;
     ctx.textAlign = 'left';
-    const leftMargin = cx - 180;
+    const leftMargin = cx - 220;
 
     if (homeTab === 0 && p) {
       // === SHIP subscreen ===
@@ -3820,6 +3832,11 @@ function gameLoop(now) {
       ctx.fillStyle = HULL_LABEL_COLORS[hullName] || 'rgba(180, 200, 220, 0.8)';
       ctx.font = 'bold 13px monospace';
       ctx.fillText(`hull: ${hullName.toLowerCase()}`, leftMargin, contentY);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(145, 165, 190, 0.68)';
+      ctx.font = '11px monospace';
+      ctx.fillText(`${p.loadout.equipped.filter(Boolean).length}/2 artifacts  ${p.loadout.consumables.filter(Boolean).length}/2 hotbar`, leftMargin + 440, contentY);
+      ctx.textAlign = 'left';
       ctx.font = '12px monospace';
       let sy = contentY + 25;
       const tracks = Object.keys(UPGRADE_TRACKS);
@@ -3845,7 +3862,7 @@ function gameLoop(now) {
         const sel = (homeShipCursor === i);
         if (sel) {
           ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
-          ctx.fillRect(leftMargin - 4, sy - 12, 370, 18);
+          ctx.fillRect(leftMargin - 4, sy - 12, 450, 18);
         }
         ctx.fillStyle = eq ? 'rgba(255, 200, 60, 0.8)' : 'rgba(100, 100, 120, 0.4)';
         const action = (sel && eq) ? '  [space: unequip]' : '';
@@ -3857,7 +3874,7 @@ function gameLoop(now) {
         const sel = (homeShipCursor === i + 2);
         if (sel) {
           ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
-          ctx.fillRect(leftMargin - 4, sy - 12, 370, 18);
+          ctx.fillRect(leftMargin - 4, sy - 12, 450, 18);
         }
         ctx.fillStyle = con ? 'rgba(200, 160, 255, 0.8)' : 'rgba(100, 100, 120, 0.4)';
         const action = (sel && con) ? '  [space: remove]' : '';
@@ -3879,7 +3896,7 @@ function gameLoop(now) {
         const selected = (i === homeVaultCursor);
         if (selected) {
           ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
-          ctx.fillRect(leftMargin - 4, vy - 12, 370, 18);
+          ctx.fillRect(leftMargin - 4, vy - 12, 450, 18);
         }
         const tierColor = TIER_COLORS[item.tier] || 'rgba(180, 180, 190, 0.8)';
         ctx.fillStyle = tierColor;
@@ -3888,14 +3905,14 @@ function gameLoop(now) {
         ctx.fillText(`${tierLabel}${item.name}${affinityTag}`, leftMargin, vy);
         ctx.fillStyle = 'rgba(150, 150, 170, 0.5)';
         ctx.textAlign = 'right';
-        ctx.fillText(`${item.value || '?'} EM`, leftMargin + 360, vy);
+        ctx.fillText(`${item.value || '?'} EM`, leftMargin + 440, vy);
         ctx.textAlign = 'left';
         if (selected) {
           let action = 'sell';
           if (item.subcategory === 'equippable') action = 'equip';
           else if (item.subcategory === 'consumable') action = 'load';
           ctx.fillStyle = 'rgba(255, 220, 100, 0.7)';
-          ctx.fillText(`[space: ${action}]`, leftMargin + 240, vy);
+          ctx.fillText(`[space: ${action}]`, leftMargin + 310, vy);
         }
         vy += 18;
       }
@@ -3924,7 +3941,7 @@ function gameLoop(now) {
       ctx.fillText(`rig: ${rig?.hullType || p.hullType || 'drifter'}`, leftMargin, contentY);
       ctx.textAlign = 'right';
       ctx.fillStyle = 'rgba(255, 220, 100, 0.82)';
-      ctx.fillText(`${p.exoticMatter} EM`, leftMargin + 360, contentY);
+      ctx.fillText(`${p.exoticMatter} EM`, leftMargin + 440, contentY);
       ctx.textAlign = 'left';
       ctx.font = '12px monospace';
       let uy = contentY + 25;
@@ -3937,7 +3954,7 @@ function gameLoop(now) {
 
         if (selected) {
           ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
-          ctx.fillRect(leftMargin - 4, uy - 13, 370, 48);
+          ctx.fillRect(leftMargin - 4, uy - 13, 450, 48);
         }
 
         const bars = '#'.repeat(rank) + '-'.repeat(MAX_RIG_LEVEL - rank);
@@ -3948,7 +3965,7 @@ function gameLoop(now) {
 
         if (cost) {
           ctx.fillStyle = canAfford ? 'rgba(100, 255, 150, 0.7)' : 'rgba(255, 100, 100, 0.5)';
-          const action = selected ? '  [space: buy]' : '';
+          const action = selected ? (canAfford ? '  [space: buy]' : '  [need EM]') : '';
           ctx.fillText(`next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM${action}`, leftMargin + 20, uy + 30);
         } else {
           ctx.fillStyle = 'rgba(255, 220, 100, 0.6)';

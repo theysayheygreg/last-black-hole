@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-05-04 — Directional ASCII and meta-surface polish
+
+- Added a tunable directional ASCII blend window so flow glyphs emerge from shimmer instead of hard-switching at one speed threshold.
+- Extracted the item and consumable catalog into mirrored server/client content manifests and rewired seeded generation to use them.
+- Polished the home and run-results overlays with denser profile/loadout/run context, cargo value summaries, and clearer affordability/status cues.
+- Extended validation to catch item-manifest drift and ASCII ramp/velocity-blend regressions before they reach the renderer.
+
 ## 2026-05-04 — Signature content manifest
 
 - Extracted playable cosmic signature templates, map-size pools, layout multipliers, and seeded preview signatures into mirrored server/client content manifests.

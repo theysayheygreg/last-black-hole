@@ -68,10 +68,12 @@ async function runRealEntryFlow(page) {
   await tapTabRight(page);
   await tapTabRight(page);
   await tapTabRight(page);
+  await waitFor(page, () => window.__TEST_API.getHomeState().tabName === "LAUNCH", { timeout: 3000 });
   await tapEnter(page);
   await waitForPhase(page, "mapSelect");
 
   // Start the first map through the real map select UI.
+  await sleep(300);
   await tapEnter(page);
   await waitForPhase(page, "playing", 9000);
 }

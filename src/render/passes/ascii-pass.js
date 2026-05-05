@@ -19,6 +19,7 @@
 //   - contrast:      luminance-to-glyph curve power
 //   - shimmer:       quantum-fluctuation probability scalar (0 = off)
 //   - dirThreshold:  speed above which directional ramps kick in
+//   - dirBlendRange: speed window where shimmer blends direction into density
 //   - glitchIntensity: 0-1, for scene transitions (0 on title)
 //   - camFU, camFV:  camera center in fluid UV (world-anchored shimmer)
 //   - gridWindow:    world-units spanned by the camera-anchored fluid grid
@@ -108,6 +109,7 @@ export class ASCIIPass extends Pass {
     gl.uniform2f(this.uniforms.u_camOffset, ctx.camFU, ctx.camFV);
     gl.uniform1f(this.uniforms.u_gridWindow, ctx.gridWindow);
     gl.uniform1f(this.uniforms.u_dirThreshold, ctx.dirThreshold ?? 0.01);
+    gl.uniform1f(this.uniforms.u_dirBlendRange, ctx.dirBlendRange ?? 0.03);
     gl.uniform1f(this.uniforms.u_glitchIntensity, ctx.glitchIntensity ?? 0);
 
     composer.drawQuad();

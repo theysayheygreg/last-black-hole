@@ -24,6 +24,10 @@ function itemLabel(item) {
   return `[${tier}] ${name}${value}`;
 }
 
+function totalCargoValue(cargo) {
+  return cargo.reduce((sum, item) => sum + (Number(item?.value) || 0), 0);
+}
+
 function normalizeOutcome(rawOutcome, phase) {
   const outcome = rawOutcome || (phase === 'escaped' ? 'extracted' : phase === 'dead' ? 'dead' : 'abandoned');
   if (outcome === 'escaped') return 'extracted';
@@ -87,6 +91,7 @@ export function buildRunResultsViewModel({
     cargo,
     cargoTitle: extracted ? 'CARGO EXTRACTED' : 'CARGO LOST',
     cargoCount: cargo.length,
+    cargoValue: totalCargoValue(cargo),
     cargoLabels: cargo.map(itemLabel),
     emEarned,
     deathCause: !extracted && runResult?.deathCause
@@ -148,6 +153,20 @@ function drawKeyValue(ctx, key, value, x, y, alpha = 1) {
   ctx.restore();
 }
 
+function drawStatusPill(ctx, text, x, y, color, alpha = 1) {
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 10px monospace';
+  const width = Math.max(68, text.length * 7 + 16);
+  ctx.fillStyle = withAlpha(color, 0.13 * alpha);
+  ctx.fillRect(x - width / 2, y - 11, width, 18);
+  ctx.strokeStyle = withAlpha(color, 0.32 * alpha);
+  ctx.strokeRect(x - width / 2, y - 11, width, 18);
+  ctx.fillStyle = withAlpha(color, 0.82 * alpha);
+  ctx.fillText(text, x, y + 2);
+  ctx.restore();
+}
+
 export function drawRunResultsOverlay(ctx, canvas, {
   view,
   rawTime = 0,
@@ -184,7 +203,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   }
 
   drawScanlines(ctx, w, h, 0.026);
-  const panelW = Math.min(620, w - 72);
+  const panelW = Math.min(680, w - 72);
   const panelH = Math.min(460, h - 70);
   const panelX = cx - panelW / 2;
   const panelY = cy - panelH / 2;
@@ -206,7 +225,12 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const contentAlpha = clamp01((reveal - 0.65) * 2);
   const leftX = panelX + 34;
   const rightX = panelX + panelW / 2 + 26;
-  let y = panelY + 112;
+  const mapLabel = view.mapContext.mapId ? String(view.mapContext.mapId).toUpperCase() : 'UNKNOWN MAP';
+  drawStatusPill(ctx, mapLabel, cx - 95, panelY + 92, accent, contentAlpha);
+  drawStatusPill(ctx, `${view.cargoCount} CARGO`, cx, panelY + 92, accent, contentAlpha);
+  drawStatusPill(ctx, `${view.emEarned} EM`, cx + 95, panelY + 92, accent, contentAlpha);
+
+  let y = panelY + 126;
 
   drawSectionLabel(ctx, 'RUN SUMMARY', leftX, y, withAlpha(accent, 0.72 * contentAlpha));
   y += 25;
@@ -235,9 +259,11 @@ export function drawRunResultsOverlay(ctx, canvas, {
     drawKeyValue(ctx, 'tax', `-${view.deathTax} EM`, leftX, y, contentAlpha);
   }
 
-  let ry = panelY + 112;
+  let ry = panelY + 126;
   drawSectionLabel(ctx, view.cargoTitle, rightX, ry, withAlpha(accent, 0.72 * contentAlpha));
   ry += 24;
+  drawKeyValue(ctx, 'manifest', `${view.cargoCount} items / ${view.cargoValue} EM`, rightX, ry, contentAlpha);
+  ry += 22;
   ctx.textAlign = 'left';
   ctx.font = '12px monospace';
   const cargoLines = view.cargoLabels.length > 0 ? view.cargoLabels.slice(0, 6) : ['[ empty ]'];

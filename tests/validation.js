@@ -46,6 +46,7 @@ function assert(condition, message) {
 const SRC = path.resolve(__dirname, '..', 'src');
 const fluidSrc = fs.readFileSync(path.join(SRC, 'fluid.js'), 'utf8');
 const configSrc = fs.readFileSync(path.join(SRC, 'config.js'), 'utf8');
+const asciiShaderSrc = fs.readFileSync(path.join(SRC, 'render', 'shaders', 'ascii.glsl.js'), 'utf8');
 
 // Extract GLSL array sizes from shader source
 function findGLSLArraySize(src, name) {
@@ -97,6 +98,11 @@ const SIGNATURE_CONSTANTS = [
   'SEEDED_SIGNATURES',
 ];
 
+const ITEM_CONSTANTS = [
+  'ITEM_CATALOG',
+  'CONSUMABLE_CATALOG',
+];
+
 function parseEsmConstants(filepath, names) {
   const src = fs.readFileSync(filepath, 'utf8').replace(/export const /g, 'const ');
   const fn = new Function(`${src}\nreturn { ${names.join(', ')} };`);
@@ -108,6 +114,11 @@ const clientSignatures = parseEsmConstants(
   path.join(SRC, 'content', 'signatures.js'),
   SIGNATURE_CONSTANTS
 );
+const serverItems = require(path.join(ROOT, 'scripts', 'content', 'items.js'));
+const clientItems = parseEsmConstants(
+  path.join(SRC, 'content', 'items.js'),
+  ITEM_CONSTANTS
+);
 
 function deepEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -115,6 +126,25 @@ function deepEqual(a, b) {
 
 function assertObject(value, label) {
   assert(value && typeof value === 'object' && !Array.isArray(value), `${label} must be an object`);
+}
+
+function assertValueRange(value, label) {
+  assert(Array.isArray(value) && value.length === 2, `${label} must be [min, max]`);
+  assert(Number.isFinite(value[0]) && Number.isFinite(value[1]), `${label} values must be finite`);
+  assert(value[0] >= 0 && value[1] >= value[0], `${label} must be non-negative and ordered`);
+}
+
+function parseAsciiRamps() {
+  const match = asciiShaderSrc.match(/export const RAMPS = \[([\s\S]*?)\];/);
+  assert(match, 'Could not find ASCII RAMPS export');
+  const body = match[1];
+  const ramps = [];
+  const re = /'((?:\\.|[^'\\])*)'/g;
+  let rampMatch;
+  while ((rampMatch = re.exec(body)) !== null) {
+    ramps.push(new Function(`return '${rampMatch[1]}';`)());
+  }
+  return ramps;
 }
 
 const DORMANT_SIGNATURE_CONFIG_OVERRIDES = new Set([
@@ -499,6 +529,80 @@ runner.run('Seeded signature manifest preserves seeded-generation contract', () 
       assert(Number.isFinite(value), `${sig.id}.mods.${key} must be finite`);
     }
   }
+});
+
+// ---- 13. Item content manifest validation ----
+
+runner.run('Item server/client manifests stay in sync', () => {
+  for (const name of ITEM_CONSTANTS) {
+    assert(deepEqual(serverItems[name], clientItems[name]),
+      `scripts/content/items.js ${name} does not match src/content/items.js`);
+  }
+});
+
+runner.run('Item catalog tiers and artifact shapes are valid', () => {
+  const expectedTiers = [1, 2, 3, 4];
+  const tiers = Object.keys(serverItems.ITEM_CATALOG).map(Number).sort((a, b) => a - b);
+  assert(deepEqual(tiers, expectedTiers), `Expected item tiers ${expectedTiers.join(',')}, got ${tiers.join(',')}`);
+
+  const ids = new Set();
+  const names = new Set();
+  for (const tier of expectedTiers) {
+    const items = serverItems.ITEM_CATALOG[tier];
+    assert(Array.isArray(items) && items.length > 0, `Tier ${tier} must contain at least one item`);
+    for (const item of items) {
+      assertObject(item, `item ${item && item.id}`);
+      assert(typeof item.id === 'string' && item.id.length > 0, `Tier ${tier} item missing id`);
+      assert(typeof item.name === 'string' && item.name.length > 0, `${item.id}: missing name`);
+      assert(item.tier === tier, `${item.id}: tier ${item.tier} does not match catalog tier ${tier}`);
+      assert(item.affinity == null || typeof item.affinity === 'string', `${item.id}: affinity must be string or null`);
+      assertObject(item.coefficients, `${item.id}.coefficients`);
+      assertValueRange(item.value, `${item.id}.value`);
+      assert(!ids.has(item.id), `Duplicate item id: ${item.id}`);
+      assert(!names.has(item.name), `Duplicate item name: ${item.name}`);
+      ids.add(item.id);
+      names.add(item.name);
+      for (const [key, value] of Object.entries(item.coefficients)) {
+        assert(Number.isFinite(value), `${item.id}.coefficients.${key} must be finite`);
+      }
+    }
+  }
+});
+
+runner.run('Consumable catalog has stable ids, tiers, effects, and values', () => {
+  const ids = new Set();
+  assert(Array.isArray(serverItems.CONSUMABLE_CATALOG) && serverItems.CONSUMABLE_CATALOG.length > 0,
+    'CONSUMABLE_CATALOG must be a non-empty array');
+  for (const item of serverItems.CONSUMABLE_CATALOG) {
+    assert(typeof item.id === 'string' && item.id.length > 0, 'Consumable missing id');
+    assert(typeof item.name === 'string' && item.name.length > 0, `${item.id}: missing name`);
+    assert(Number.isInteger(item.tier) && item.tier >= 1 && item.tier <= 4, `${item.id}: invalid tier ${item.tier}`);
+    assert(typeof item.effect === 'string' && item.effect.length > 0, `${item.id}: missing effect`);
+    assertValueRange(item.value, `${item.id}.value`);
+    assert(!ids.has(item.id), `Duplicate consumable id: ${item.id}`);
+    ids.add(item.id);
+  }
+});
+
+// ---- 14. Directional ASCII shader validation ----
+
+runner.run('ASCII directional shader keeps four 16-cell ramps', () => {
+  const ramps = parseAsciiRamps();
+  assert(ramps.length === 4, `Expected 4 ASCII ramps, got ${ramps.length}`);
+  for (let i = 0; i < ramps.length; i++) {
+    assert(ramps[i].length === 16, `ASCII ramp ${i} has ${ramps[i].length} chars; expected 16`);
+  }
+  assert(asciiShaderSrc.includes('export const CHARS_PER_RAMP = 16'), 'CHARS_PER_RAMP must remain 16');
+});
+
+runner.run('ASCII directional shader samples velocity with tunable blend', () => {
+  assert(asciiShaderSrc.includes('uniform sampler2D u_velocity'), 'ASCII shader must sample the velocity texture');
+  assert(asciiShaderSrc.includes('uniform float u_dirThreshold'), 'ASCII shader must expose u_dirThreshold');
+  assert(asciiShaderSrc.includes('uniform float u_dirBlendRange'), 'ASCII shader must expose u_dirBlendRange');
+  assert(asciiShaderSrc.includes('smoothstep(u_dirThreshold, u_dirThreshold + u_dirBlendRange, speed)'),
+    'Directional blend must use the tunable blend range');
+  assert(configSrc.includes('dirThreshold') && configSrc.includes('dirBlendRange'),
+    'CONFIG.ascii must expose directional threshold and blend controls');
 });
 
 // ---- Done ----
