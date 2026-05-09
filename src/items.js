@@ -41,6 +41,7 @@ const IMPLEMENTED_CONSUMABLE_EFFECTS = new Set([
   'shieldBurst',
   'timeSlowLocal',
   'breachFlare',
+  'fuelRefill',
 ]);
 
 const WRECK_SLOT_COUNTS = {
