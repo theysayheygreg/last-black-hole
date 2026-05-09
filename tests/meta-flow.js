@@ -62,7 +62,8 @@ async function bootstrapCleanPage(page) {
     await page.evaluate(() => localStorage.clear());
   }
   await page.reload({ waitUntil: "domcontentloaded" });
-  await sleep(2000);
+  // Reload + first-frame settle. Was 2000ms; trimmed empirically.
+  await sleep(1000);
 }
 
 async function runRealEntryFlow(page) {

@@ -29,6 +29,7 @@
     "control:status": "node scripts/control-plane-server.js status",
     "control:restart": "node scripts/control-plane-server.js restart",
     "test": "node tests/run-all.js",
+    "test:fast": "node tests/run-all.js --fast",
     "test:telemetry": "node tests/telemetry-smoke.js",
     "test:renderer": "node tests/renderer.js",
     "test:perf": "node tests/perf-probe.js",
