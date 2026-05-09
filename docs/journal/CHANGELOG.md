@@ -5,6 +5,12 @@
 
 ---
 
+## 2026-05-09 — Delta-v + slingshot network design
+
+- Shipped the delta-v thrust fuel system: ship-side state, color-coded HUD gauge, hull-differentiated tank/regen/burn-efficiency stats, fuel-cell consumables in the salvage catalog, and equippable artifacts with deltaV-related coefficients (capacity / regen / burn).
+- Cleared five vapor consumables (cargoJettison, emergencyThrust, signalFlare, signalPurge, wellRepulsor) and dropped the now-unused IMPLEMENTED_CONSUMABLE_EFFECTS allowlist along with their dead handler stubs.
+- Added `docs/design/SLINGSHOT-NETWORK.md` — extends slingshot from a well-only mechanic to a multi-anchor terrain system (wells / stars / planetoids), specifies the skitching/rail-grinding engagement model (button-press snap-to with manual release), and names the route-planning gameplay loop. Numbers and map-redesign deferred to follow-ups.
+
 ## 2026-05-05 — Remote play visual hotfix
 
 - Added deterministic authoritative wreck names for initial, wave, repeat, and echo wrecks so remote overlays never render `undefined` labels.
