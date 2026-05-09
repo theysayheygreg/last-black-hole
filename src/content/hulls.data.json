@@ -95,6 +95,10 @@
       "sensorRange": 1,
       "wellResistScale": 1,
       "controlDebuffResist": 1,
+      "deltaVMax": 60,
+      "deltaVBurnEff": 0.55,
+      "deltaVRegen": 1.5,
+      "deltaVRegenBoost": 6,
       "abilities": {
         "flowLock": {
           "type": "passive_trigger",
@@ -132,6 +136,10 @@
       "sensorRange": 0.8,
       "wellResistScale": 1.2,
       "controlDebuffResist": 0.7,
+      "deltaVMax": 200,
+      "deltaVBurnEff": 1.6,
+      "deltaVRegen": 1,
+      "deltaVRegenBoost": 4,
       "abilities": {
         "burn": {
           "type": "active_toggle",
@@ -171,6 +179,10 @@
       "sensorRange": 1,
       "wellResistScale": 1,
       "controlDebuffResist": 1,
+      "deltaVMax": 100,
+      "deltaVBurnEff": 1,
+      "deltaVRegen": 1.5,
+      "deltaVRegenBoost": 6,
       "abilities": {
         "harmonicPulse": {
           "type": "enhanced_pulse",
@@ -210,6 +222,10 @@
       "sensorRange": 1.3,
       "wellResistScale": 0.9,
       "controlDebuffResist": 1,
+      "deltaVMax": 80,
+      "deltaVBurnEff": 0.85,
+      "deltaVRegen": 2,
+      "deltaVRegenBoost": 7,
       "abilities": {
         "wakeCloak": {
           "type": "active",
@@ -244,6 +260,10 @@
       "sensorRange": 0.9,
       "wellResistScale": 0.8,
       "controlDebuffResist": 1.2,
+      "deltaVMax": 130,
+      "deltaVBurnEff": 1.1,
+      "deltaVRegen": 1.2,
+      "deltaVRegenBoost": 5,
       "abilities": {
         "salvageLock": {
           "type": "active",

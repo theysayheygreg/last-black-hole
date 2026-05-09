@@ -141,6 +141,31 @@ export class InventorySystem {
       .map(item => item.effect);
   }
 
+  /**
+   * Aggregate equipped-item delta-v coefficients into multipliers the
+   * Ship can fold onto its hull baseline. Multiplicative composition:
+   * two items with capacityMult 1.10 each → 1.21. Missing keys default
+   * to 1.0 so unequipped slots are no-ops.
+   */
+  getDeltaVStats() {
+    let capacity = 1;
+    let regen = 1;
+    let burn = 1;
+    for (const item of this.equipped) {
+      if (!item || !item.coefficients) continue;
+      if (Number.isFinite(item.coefficients.deltaVCapacityMult)) {
+        capacity *= item.coefficients.deltaVCapacityMult;
+      }
+      if (Number.isFinite(item.coefficients.deltaVRegenMult)) {
+        regen *= item.coefficients.deltaVRegenMult;
+      }
+      if (Number.isFinite(item.coefficients.deltaVBurnMult)) {
+        burn *= item.coefficients.deltaVBurnMult;
+      }
+    }
+    return { deltaVCapacityMult: capacity, deltaVRegenMult: regen, deltaVBurnMult: burn };
+  }
+
   // ---- Consumables ----
 
   /**

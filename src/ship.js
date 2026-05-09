@@ -33,6 +33,69 @@ export class Ship {
     // Fluid readback for HUD
     this.lastFluidVel = { x: 0, y: 0 };
     this.lastFluidSpeed = 0;
+
+    // --- Delta-v / thrust fuel ---
+    // deltaV gates thrust. Hull-defaults from hulls.data.json override
+    // these via setHullStats(); applyDeltaVItemBonus folds in equipped-
+    // item coefficients. Pillar 2 enforcement: fluid currents become an
+    // economic decision when thrust is no longer free.
+    this.deltaV = CONFIG.ship.deltaVMax;
+    this.deltaVMax = CONFIG.ship.deltaVMax;
+    this.deltaVRegen = CONFIG.ship.deltaVRegen;
+    this.deltaVRegenBoost = CONFIG.ship.deltaVRegenBoost;
+    this.deltaVRegenDelay = CONFIG.ship.deltaVRegenDelay;
+    this.deltaVBurnRate = CONFIG.ship.deltaVBurnRate;
+    // Hull-supplied efficiency multiplier on burn cost. <1 = cheaper
+    // burn (e.g. Drifter), >1 = expensive (e.g. Breacher).
+    this.deltaVBurnEff = 1.0;
+    this._timeSinceThrust = 999;
+  }
+
+  /**
+   * Apply hull stats to the ship. Called on hull selection / scene load.
+   * Resets deltaV to the new max so a fresh hull starts fueled. Items
+   * on top get folded in by applyDeltaVItemBonus().
+   */
+  setHullStats({
+    deltaVMax = CONFIG.ship.deltaVMax,
+    deltaVRegen = CONFIG.ship.deltaVRegen,
+    deltaVRegenBoost = CONFIG.ship.deltaVRegenBoost,
+    deltaVBurnEff = 1.0,
+  } = {}) {
+    this.deltaVMax = deltaVMax;
+    this.deltaVRegen = deltaVRegen;
+    this.deltaVRegenBoost = deltaVRegenBoost;
+    this.deltaVBurnEff = deltaVBurnEff;
+    this.deltaV = deltaVMax;
+  }
+
+  /**
+   * Layer equipped-item coefficients on top of the hull baseline. Multipliers
+   * compose: capacity 1.2 + capacity 1.1 → 1.32. Caller passes the aggregate.
+   * (See InventorySystem.getDeltaVStats.)
+   */
+  applyDeltaVItemBonus({
+    deltaVCapacityMult = 1,
+    deltaVRegenMult = 1,
+    deltaVBurnMult = 1,
+  } = {}) {
+    const prevRatio = this.deltaV / Math.max(this.deltaVMax, 1e-6);
+    this.deltaVMax *= deltaVCapacityMult;
+    this.deltaVRegen *= deltaVRegenMult;
+    this.deltaVRegenBoost *= deltaVRegenMult;
+    this.deltaVBurnEff *= deltaVBurnMult;
+    // Keep the same %-fueled feel through equipment swaps mid-run.
+    this.deltaV = prevRatio * this.deltaVMax;
+  }
+
+  /** Refill fuel by an absolute amount (used by fuelCell consumable). */
+  refillDeltaV(amount) {
+    this.deltaV = Math.min(this.deltaVMax, this.deltaV + amount);
+  }
+
+  /** Fraction 0..1 for HUD gauge consumers. */
+  getDeltaVRatio() {
+    return this.deltaVMax > 0 ? Math.max(0, Math.min(1, this.deltaV / this.deltaVMax)) : 0;
   }
 
   setThrust(active) {
@@ -76,10 +139,33 @@ export class Ship {
     // 1. Facing is set directly by InputManager (keyboard arrows or gamepad stick).
 
     // 2. Thrust — CONFIG value is in world-units/s² directly (no px conversion).
-    if (this.thrustIntensity > 0) {
-      const accelWorld = cfg.thrustAccel * this.thrustIntensity;
+    //    Thrust is now gated on deltaV: empty tank ⇒ no thrust, intensity
+    //    is clamped by available fuel (so a half-pull on an empty tank
+    //    can't drain into negative). Burn cost is linear in intensity so
+    //    analog-trigger pull translates 1:1 to fuel rate.
+    let effectiveIntensity = 0;
+    if (this.thrustIntensity > 0 && this.deltaV > 0) {
+      const burnCost = this.deltaVBurnRate * this.deltaVBurnEff * this.thrustIntensity * dt;
+      const allowedRatio = burnCost > 0 ? Math.min(1, this.deltaV / burnCost) : 1;
+      effectiveIntensity = this.thrustIntensity * allowedRatio;
+      this.deltaV = Math.max(0, this.deltaV - burnCost * allowedRatio);
+      const accelWorld = cfg.thrustAccel * effectiveIntensity;
       this.vx += Math.cos(this.facing) * accelWorld * dt;
       this.vy += Math.sin(this.facing) * accelWorld * dt;
+    }
+    // Track time since last meaningful burn for regen-delay logic.
+    if (effectiveIntensity > 0.01) {
+      this._timeSinceThrust = 0;
+    } else {
+      this._timeSinceThrust += dt;
+    }
+    // 2b. Regen — small ambient rate always (so a stranded player isn't
+    //     fully bricked), plus a regenBoost rate after a brief delay
+    //     since releasing thrust. Caps at deltaVMax.
+    const regenBoostActive = this._timeSinceThrust >= this.deltaVRegenDelay;
+    const regenRate = this.deltaVRegen + (regenBoostActive ? this.deltaVRegenBoost : 0);
+    if (this.deltaV < this.deltaVMax) {
+      this.deltaV = Math.min(this.deltaVMax, this.deltaV + regenRate * dt);
     }
 
     // 3. Sample fluid velocity at ship position

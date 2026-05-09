@@ -62,6 +62,7 @@ import { WORLD_SCALE, GRID_WINDOW, pxPerWorld, worldToFluidUV, worldToScreen, sc
 import { createRNGStreams } from './rng-stream.js';
 import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
+import { HULL_DEFINITIONS } from './content/hulls.js';
 
 const PLAYABLE_MAPS = [
   { id: 'shallows', map: MAP_SHALLOWS },
@@ -1111,6 +1112,11 @@ function startGame(map, seed = null) {
   ship.teleport(spawnX, spawnY);
   camX = ship.wx;
   camY = ship.wy;
+
+  // Apply hull stats (delta-v and friends) + equipped-item bonuses on
+  // top. Done here once per run so the ship starts with full fuel and
+  // the right tank size for the chosen hull.
+  applyHullToShip();
 
   // Spawn scavengers at map edges (seeded)
   const scavRng = localRng.rawStream('localScavSpawn');
@@ -2210,13 +2216,44 @@ function drawTerminalFrame(ctx, x, y, w, h, title, color = 'rgba(80, 100, 140, 0
   }
 }
 
-function applyConsumableEffect(effectId) {
+/**
+ * Apply the active profile's hull stats and equipped-item bonuses to the
+ * ship. Resets deltaV to full as a side effect — this is the right shape
+ * for run start (every fresh run gets a full tank). Mid-run inventory
+ * swaps preserve the %-fueled ratio (see Ship.applyDeltaVItemBonus).
+ */
+function applyHullToShip() {
+  const hullType = profileManager.active?.hullType
+    || profileManager.active?.shipType
+    || 'drifter';
+  const hullDef = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
+  ship.setHullStats({
+    deltaVMax: hullDef.deltaVMax ?? CONFIG.ship.deltaVMax,
+    deltaVRegen: hullDef.deltaVRegen ?? CONFIG.ship.deltaVRegen,
+    deltaVRegenBoost: hullDef.deltaVRegenBoost ?? CONFIG.ship.deltaVRegenBoost,
+    deltaVBurnEff: hullDef.deltaVBurnEff ?? 1.0,
+  });
+  if (inventorySystem) {
+    ship.applyDeltaVItemBonus(inventorySystem.getDeltaVStats());
+  }
+}
+
+function applyConsumableEffect(effectId, item = null) {
   switch (effectId) {
     case 'shieldBurst':
       shieldActive = true;
       showWarning('shield active — survive one well contact', 'rgba(100, 200, 255, 0.95)', 3000);
       audioEngine.playEvent('shieldActivate');
       break;
+    case 'fuelRefill': {
+      // Fuel cells refill the ship's deltaV by the catalog-specified
+      // amount. Tier scales the amount: T1 small, T2 medium, T3 large.
+      const refillAmount = Number.isFinite(item?.amount) ? item.amount
+        : (item?.tier === 3 ? 200 : item?.tier === 2 ? 80 : 35);
+      ship.refillDeltaV(refillAmount);
+      showWarning(`fuel +${refillAmount}`, 'rgba(120, 220, 140, 0.95)', 1800);
+      break;
+    }
     case 'timeSlowLocal':
       timeSlowRemaining = 3.0;
       showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
@@ -2790,12 +2827,14 @@ function gameLoop(now) {
 
       // Consumable hotkeys (d-pad left/right or 1/2) — only when inventory closed
       if (!inventoryOpen && consumable1Now && !_prevConsumable1) {
+        const slot = inventorySystem.consumables[0] ? { ...inventorySystem.consumables[0] } : null;
         const effect = inventorySystem.useConsumable(0);
-        if (effect) applyConsumableEffect(effect);
+        if (effect) applyConsumableEffect(effect, slot);
       }
       if (!inventoryOpen && consumable2Now && !_prevConsumable2) {
+        const slot = inventorySystem.consumables[1] ? { ...inventorySystem.consumables[1] } : null;
         const effect = inventorySystem.useConsumable(1);
-        if (effect) applyConsumableEffect(effect);
+        if (effect) applyConsumableEffect(effect, slot);
       }
 
       // Wreck pickup (pass available slots so partial loot works correctly)
@@ -3648,6 +3687,7 @@ function gameLoop(now) {
       abilityState: localAbilityState,
       inhibitorState,
       ship,
+      fuelRatio: ship.getDeltaVRatio(),
       camX, camY,
       canvasW: overlayCanvas.width,
       canvasH: overlayCanvas.height,

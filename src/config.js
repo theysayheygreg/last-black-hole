@@ -42,6 +42,21 @@ export const CONFIG = {
     drag: 0.06,              // Fraction of velocity removed per 60 Hz reference frame.
                              // Applied as exponential damping so lower render/sim
                              // cadences keep the same stopping feel.
+    // --- Delta-v / thrust fuel ---
+    // Thrust now costs a finite fuel resource (deltaV). Burning at full
+    // intensity drains deltaV at deltaVBurnRate per second; the gauge
+    // refills slowly when not thrusting (small ambient regen) and after
+    // a short pause when releasing thrust (deltaVRegenDelay). These are
+    // the BASELINE — hulls override via deltaV{Max,Regen,BurnEff}.
+    deltaVMax: 100,           // Default tank size (Drifter is small/efficient,
+                              // Breacher is large/expensive — see hulls.data.json).
+    deltaVRegen: 1.5,         // deltaV/sec ambient regen (always-on, even mid-burn).
+    deltaVRegenBoost: 6.0,    // Bonus regen rate added when not thrusting.
+    deltaVRegenDelay: 0.5,    // Seconds of "no regen boost" after thrust ends —
+                              // keeps the thrust→regen race from feeling fluttery.
+    deltaVBurnRate: 12,       // deltaV/sec consumed at thrustIntensity = 1.0.
+                              // Burns linearly with intensity (analog trigger ⇒
+                              // half pull = half cost).
     size: 12,                 // Ship triangle radius in pixels (overlay rendering only).
     wake: {
       splatCount: 5,          // Number of splats in the trail behind the ship.

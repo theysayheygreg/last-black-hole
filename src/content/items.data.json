@@ -26,6 +26,7 @@
     "breachFlare",
     "cargoJettison",
     "emergencyThrust",
+    "fuelRefill",
     "shieldBurst",
     "signalFlare",
     "signalPurge",
@@ -189,6 +190,19 @@
           18,
           28
         ]
+      },
+      {
+        "id": "worn-tank",
+        "name": "Worn Tank",
+        "tier": 1,
+        "affinity": null,
+        "coefficients": {
+          "deltaVCapacityMult": 1.12
+        },
+        "value": [
+          18,
+          28
+        ]
       }
     ],
     "2": [
@@ -198,11 +212,25 @@
         "tier": 2,
         "affinity": null,
         "coefficients": {
-          "thrustScale": 1.15
+          "thrustScale": 1.15,
+          "deltaVBurnMult": 1.08
         },
         "value": [
           50,
           80
+        ]
+      },
+      {
+        "id": "recirculator",
+        "name": "Recirculator",
+        "tier": 2,
+        "affinity": null,
+        "coefficients": {
+          "deltaVRegenMult": 1.25
+        },
+        "value": [
+          55,
+          85
         ]
       },
       {
@@ -452,6 +480,34 @@
         "value": [
           220,
           350
+        ]
+      },
+      {
+        "id": "helium-3-reservoir",
+        "name": "Helium-3 Reservoir",
+        "tier": 3,
+        "affinity": "breacher",
+        "coefficients": {
+          "deltaVCapacityMult": 1.35,
+          "deltaVBurnMult": 0.92
+        },
+        "value": [
+          230,
+          340
+        ]
+      },
+      {
+        "id": "solar-spinneret",
+        "name": "Solar Spinneret",
+        "tier": 3,
+        "affinity": "drifter",
+        "coefficients": {
+          "deltaVRegenMult": 1.5,
+          "deltaVCapacityMult": 0.85
+        },
+        "value": [
+          220,
+          330
         ]
       },
       {
@@ -873,6 +929,39 @@
         320
       ],
       "effect": "breachFlare"
+    },
+    {
+      "id": "fuel-cell",
+      "name": "Fuel Cell",
+      "tier": 1,
+      "value": [
+        30,
+        45
+      ],
+      "effect": "fuelRefill",
+      "amount": 35
+    },
+    {
+      "id": "plasma-cell",
+      "name": "Plasma Cell",
+      "tier": 2,
+      "value": [
+        80,
+        120
+      ],
+      "effect": "fuelRefill",
+      "amount": 80
+    },
+    {
+      "id": "antimatter-cell",
+      "name": "Antimatter Cell",
+      "tier": 3,
+      "value": [
+        220,
+        320
+      ],
+      "effect": "fuelRefill",
+      "amount": 200
     }
   ]
 }

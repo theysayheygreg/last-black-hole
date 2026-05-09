@@ -25,6 +25,7 @@ let _portalArrowEl;
 let _inventoryPanelEl;
 let _warningsEl;
 let _signalFillEl, _signalZoneEl;
+let _fuelFillEl, _fuelReadoutEl;
 let _ability1El, _ability2El;
 let _inhibitorEl, _inhibitorFormEl;
 let _dropCallback = null;  // set by main.js for drop handling
@@ -52,6 +53,8 @@ export function initHUD() {
   _warningsEl = document.getElementById('hud-warnings');
   _signalFillEl = document.getElementById('hud-signal-fill');
   _signalZoneEl = document.getElementById('hud-signal-zone');
+  _fuelFillEl = document.getElementById('hud-fuel-fill');
+  _fuelReadoutEl = document.getElementById('hud-fuel-readout');
   _ability1El = document.getElementById('hud-ability1');
   _ability2El = document.getElementById('hud-ability2');
   _inhibitorEl = document.getElementById('hud-inhibitor');
@@ -453,6 +456,25 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     _signalFillEl.style.backgroundColor = zoneColors[zone] || zoneColors.ghost;
     _signalZoneEl.textContent = zone;
     _signalZoneEl.style.color = zoneColors[zone] || zoneColors.ghost;
+  }
+
+  // === FUEL (delta-v) ===
+  if (_fuelFillEl && opts.fuelRatio !== undefined) {
+    const ratio = Math.max(0, Math.min(1, opts.fuelRatio));
+    const pct = Math.round(ratio * 100);
+    _fuelFillEl.style.width = `${pct}%`;
+    // Threshold-based color: green → yellow → orange → red as the gauge
+    // empties. Players see the cost climbing before they hit the wall.
+    let color;
+    if (ratio > 0.6)      color = 'rgba(120, 220, 140, 0.9)';   // green
+    else if (ratio > 0.3) color = 'rgba(220, 200, 80, 0.9)';    // yellow
+    else if (ratio > 0.1) color = 'rgba(230, 140, 40, 0.95)';   // orange
+    else                  color = 'rgba(220, 60, 40, 0.95)';    // red
+    _fuelFillEl.style.backgroundColor = color;
+    if (_fuelReadoutEl) {
+      _fuelReadoutEl.textContent = `${pct}%`;
+      _fuelReadoutEl.style.color = color;
+    }
   }
 
   // === INHIBITOR FORM ===

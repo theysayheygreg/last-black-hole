@@ -143,6 +143,37 @@
       font-size: 10px;
       letter-spacing: 0.1em;
     }
+    #hud-fuel {
+      top: 72px; right: var(--lbh-edge-margin);
+      color: rgba(180, 220, 200, 0.85);
+      text-shadow: 0 0 6px rgba(80, 200, 140, 0.25);
+      line-height: 1.4;
+      border-color: rgba(80, 200, 140, 0.18);
+      text-align: right;
+    }
+    #hud-fuel .hud-label {
+      font-size: 9px;
+      letter-spacing: 0.15em;
+      color: rgba(140, 200, 170, 0.7);
+      text-transform: uppercase;
+    }
+    #hud-fuel-bar {
+      width: 120px; height: 4px;
+      background: rgba(40, 50, 60, 0.6);
+      border-radius: 2px;
+      margin: 3px 0 2px 0;
+      overflow: hidden;
+    }
+    #hud-fuel-fill {
+      height: 100%;
+      width: 100%;
+      border-radius: 2px;
+      transition: width 0.15s, background-color 0.3s;
+    }
+    #hud-fuel-readout {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
     #hud-inhibitor {
       top: 128px; left: var(--lbh-edge-margin);
       color: var(--lbh-inhibitor);
@@ -384,6 +415,11 @@
       <div class="hud-label">signal</div>
       <div id="hud-signal-bar"><div id="hud-signal-fill"></div></div>
       <div id="hud-signal-zone">ghost</div>
+    </div>
+    <div id="hud-fuel" class="hud-panel">
+      <div class="hud-label">fuel</div>
+      <div id="hud-fuel-bar"><div id="hud-fuel-fill"></div></div>
+      <div id="hud-fuel-readout">100%</div>
     </div>
     <div id="hud-inhibitor" class="hud-panel" style="display: none;">
       <div class="hud-label">inhibitor</div>
