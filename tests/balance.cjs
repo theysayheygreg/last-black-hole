@@ -13,21 +13,18 @@ const { HULL_DEFINITIONS } = require("../scripts/content/hulls.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
-async function loadClientBalance() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-balance-"));
-  const src = fs.readFileSync(path.join(ROOT, "src", "content", "balance.js"), "utf8");
-  fs.writeFileSync(path.join(tmp, "balance.mjs"), src);
-  return import(`file://${path.join(tmp, "balance.mjs")}`);
-}
-
 async function run() {
   const runner = new TestRunner("Balance");
 
-  await runner.run("Client and server balance surfaces stay in sync", async () => {
-    const client = await loadClientBalance();
+  await runner.run("Client and server BALANCE pull from the same JSON source", async () => {
+    // Both src/content/balance.js (ESM) and scripts/content/balance.cjs (CJS)
+    // import the same balance.data.json — drift is impossible at the data
+    // layer. Sanity-check that BALANCE matches the JSON file we expect.
+    const jsonPath = path.join(ROOT, "src", "content", "balance.data.json");
+    const fromJson = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
     assert(
-      JSON.stringify(client.BALANCE) === JSON.stringify(BALANCE),
-      "Client balance mirror drifted from server balance manifest"
+      JSON.stringify(fromJson) === JSON.stringify(BALANCE),
+      "BALANCE drifted from balance.data.json — wrapper changed shape"
     );
   });
 

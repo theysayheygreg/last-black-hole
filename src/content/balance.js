@@ -1,34 +1,10 @@
-// Client mirror of scripts/content/balance.js.
-// Keep this tiny data surface in sync with the server manifest.
+// Single canonical economy/progression data lives in balance.data.json.
+// This module wraps the JSON with helper functions for the ESM (browser)
+// side; scripts/content/balance.cjs is the matching CJS wrapper for the
+// Node sim. Both files load the same JSON so data cannot drift.
+import balanceData from './balance.data.json' with { type: 'json' };
 
-export const BALANCE = {
-  loot: {
-    tierGates: { 1: 0, 2: 30, 3: 120, 4: 240 },
-    tierWeights: { 1: 60, 2: 30, 3: 8, 4: 2 },
-    wreckAgeCapSeconds: 120,
-    wreckAgeValueCap: 1.5,
-  },
-  economy: {
-    survivalEmPerSecond: 0.5,
-    deathSurvivalPayoutMult: 0.5,
-    deathTaxRate: 0.1,
-  },
-  progression: {
-    profileUpgradeCosts: [
-      { em: 250, component: null },
-      { em: 800, component: "uncommon" },
-      { em: 2000, component: "rare" },
-    ],
-    vaultUpgradeCosts: [
-      { em: 800 },
-      { em: 2500 },
-      { em: 6000 },
-    ],
-    rigLevelCosts: [300, 750, 1500, 3000, 5000],
-    maxProfileRank: 3,
-    maxRigLevel: 5,
-  },
-};
+export const BALANCE = balanceData;
 
 export function wreckAgeValueMultiplier(spawnTime = 0, currentTime = spawnTime) {
   const age = Math.max(0, (Number(currentTime) || 0) - (Number(spawnTime) || 0));

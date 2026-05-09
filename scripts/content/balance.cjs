@@ -1,34 +1,8 @@
-// Canonical first-pass economy and progression tuning.
-// These are representative launch values, not final feel locks.
-
-const BALANCE = {
-  loot: {
-    tierGates: { 1: 0, 2: 30, 3: 120, 4: 240 },
-    tierWeights: { 1: 60, 2: 30, 3: 8, 4: 2 },
-    wreckAgeCapSeconds: 120,
-    wreckAgeValueCap: 1.5,
-  },
-  economy: {
-    survivalEmPerSecond: 0.5,
-    deathSurvivalPayoutMult: 0.5,
-    deathTaxRate: 0.1,
-  },
-  progression: {
-    profileUpgradeCosts: [
-      { em: 250, component: null },
-      { em: 800, component: "uncommon" },
-      { em: 2000, component: "rare" },
-    ],
-    vaultUpgradeCosts: [
-      { em: 800 },
-      { em: 2500 },
-      { em: 6000 },
-    ],
-    rigLevelCosts: [300, 750, 1500, 3000, 5000],
-    maxProfileRank: 3,
-    maxRigLevel: 5,
-  },
-};
+// CJS wrapper around the canonical JSON balance manifest. The matching
+// ESM consumer is src/content/balance.js. Both load the same JSON file
+// so data cannot drift — only the helper functions below are duplicated,
+// and validation tests catch any drift between them.
+const BALANCE = require("../../src/content/balance.data.json");
 
 function wreckAgeValueMultiplier(spawnTime = 0, currentTime = spawnTime) {
   const age = Math.max(0, (Number(currentTime) || 0) - (Number(spawnTime) || 0));

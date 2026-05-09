@@ -112,27 +112,22 @@ const SESSION_PROFILE_CONSTANTS = [
   'MAP_SESSION_PROFILES',
 ];
 
-function parseEsmConstants(filepath, names) {
-  const src = fs.readFileSync(filepath, 'utf8').replace(/export const /g, 'const ');
-  const fn = new Function(`${src}\nreturn { ${names.join(', ')} };`);
-  return fn();
+// Both client (ESM) and server (CJS) sides load the same canonical JSON
+// for content data — see src/content/*.data.json. We can therefore read
+// the JSON directly here and use it as the single source of truth for
+// validation. The previous eval-based parser is gone because ESM source
+// now uses `import data from './X.data.json'` which can't be evaluated
+// inside a regular Function.
+function loadContentJson(name) {
+  return JSON.parse(fs.readFileSync(path.join(SRC, 'content', `${name}.data.json`), 'utf8'));
 }
 
 const serverSignatures = require(path.join(ROOT, 'scripts', 'content', 'signatures.cjs'));
-const clientSignatures = parseEsmConstants(
-  path.join(SRC, 'content', 'signatures.js'),
-  SIGNATURE_CONSTANTS
-);
+const clientSignatures = loadContentJson('signatures');
 const serverItems = require(path.join(ROOT, 'scripts', 'content', 'items.cjs'));
-const clientItems = parseEsmConstants(
-  path.join(SRC, 'content', 'items.js'),
-  ITEM_CONSTANTS
-);
+const clientItems = loadContentJson('items');
 const serverSessionProfiles = require(path.join(ROOT, 'scripts', 'content', 'session-profiles.cjs'));
-const clientSessionProfiles = parseEsmConstants(
-  path.join(SRC, 'content', 'session-profiles.js'),
-  SESSION_PROFILE_CONSTANTS
-);
+const clientSessionProfiles = loadContentJson('session-profiles');
 
 function deepEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);

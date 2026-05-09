@@ -62,8 +62,19 @@ async function bootstrapCleanPage(page) {
     await page.evaluate(() => localStorage.clear());
   }
   await page.reload({ waitUntil: "domcontentloaded" });
-  // Reload + first-frame settle. Was 2000ms; trimmed empirically.
-  await sleep(1000);
+  // Wait for init() to mount __TEST_API. Then wait for the title-screen
+  // gate to clear: main.js requires titleTimer > 0.5 seconds before the
+  // first Space press will transition title → profileSelect (an
+  // intentional "don't skip the title" guard). Without that game-time
+  // wait the first tapConfirm drops silently. 600ms covers the 500ms
+  // gate plus slack — total bootstrap lands around 700ms, down from a
+  // pessimistic 2000ms.
+  await waitFor(
+    page,
+    () => Boolean(window.__TEST_API?.triggerRestart) && window.__TEST_API.getGamePhase?.() === "title",
+    { timeout: 5000 },
+  );
+  await sleep(600);
 }
 
 async function runRealEntryFlow(page) {

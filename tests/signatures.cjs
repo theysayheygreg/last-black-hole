@@ -11,9 +11,15 @@ async function loadSignatureModule() {
   fs.mkdirSync(path.join(tmp, "content"), { recursive: true });
   fs.writeFileSync(path.join(tmp, "signatures.mjs"), fs.readFileSync(path.join(ROOT, "src", "signatures.js"), "utf8"));
   fs.writeFileSync(path.join(tmp, "config.mjs"), fs.readFileSync(path.join(ROOT, "src", "config.js"), "utf8"));
+  // Copy the canonical signatures module + its data JSON so the temp tree
+  // is self-contained.
   fs.writeFileSync(
     path.join(tmp, "content", "signatures.mjs"),
     fs.readFileSync(path.join(ROOT, "src", "content", "signatures.js"), "utf8")
+  );
+  fs.copyFileSync(
+    path.join(ROOT, "src", "content", "signatures.data.json"),
+    path.join(tmp, "content", "signatures.data.json")
   );
 
   let signaturesSrc = fs.readFileSync(path.join(tmp, "signatures.mjs"), "utf8");

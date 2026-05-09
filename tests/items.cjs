@@ -14,7 +14,7 @@ async function loadItemsModule() {
 
   fs.mkdirSync(path.join(tmp, "content"), { recursive: true });
   for (const file of fs.readdirSync(path.join(ROOT, "src", "content"))) {
-    if (file.endsWith(".js")) {
+    if (file.endsWith(".js") || file.endsWith(".json")) {
       fs.copyFileSync(path.join(ROOT, "src", "content", file), path.join(tmp, "content", file));
     }
   }
