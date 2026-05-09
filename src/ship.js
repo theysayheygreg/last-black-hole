@@ -49,6 +49,16 @@ export class Ship {
     // burn (e.g. Drifter), >1 = expensive (e.g. Breacher).
     this.deltaVBurnEff = 1.0;
     this._timeSinceThrust = 999;
+
+    // --- Slingshot engagement state ---
+    // Owned by SlingshotSystem; read by Ship.update for orbital lock
+    // physics. See src/slingshot.js for the design.
+    this.slingshotEngaged = false;
+    this.slingshotAnchor = null;
+    this.slingshotEnergy = 0;
+    this.slingshotChainCount = 0;
+    this.slingshotEngageRadius = 0;
+    this.slingshotOrbitDir = 0;
   }
 
   /**

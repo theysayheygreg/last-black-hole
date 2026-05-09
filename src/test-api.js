@@ -120,6 +120,20 @@ export function initTestAPI(getState) {
       return { x: ship.vx, y: ship.vy };
     },
 
+    getSlingshotState() {
+      const { ship } = getState();
+      if (!ship) return null;
+      return {
+        engaged: Boolean(ship.slingshotEngaged),
+        anchorType: ship.slingshotAnchor?.type ?? null,
+        anchorWX: ship.slingshotAnchor?.wx ?? null,
+        anchorWY: ship.slingshotAnchor?.wy ?? null,
+        energy: ship.slingshotEnergy || 0,
+        chainCount: ship.slingshotChainCount || 0,
+        engageRadius: ship.slingshotEngageRadius || 0,
+      };
+    },
+
     getFluidVelAt(worldX, worldY) {
       const { flowField } = getState();
       if (!flowField) return { x: 0, y: 0 };

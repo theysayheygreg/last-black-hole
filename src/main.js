@@ -39,6 +39,7 @@ import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, setDropCall
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
+import { SlingshotSystem } from './slingshot.js';
 import { AudioEngine } from './audio.js';
 import { rollSignature, applySignatureConfig } from './signatures.js';
 import { InventorySystem } from './inventory.js';
@@ -81,6 +82,7 @@ let overlayCanvas, ctx;
 let fluid, ship, wellSystem, starSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
 let scavengerSystem, combatSystem, audioEngine, inventorySystem;
+let slingshotSystem;
 let flowField, simCore;
 let simClient = null;
 let currentSignature = null;
@@ -637,6 +639,7 @@ function init() {
   combatSystem = new CombatSystem();
   audioEngine = new AudioEngine();
   inventorySystem = new InventorySystem();
+  slingshotSystem = new SlingshotSystem();
 
   // Init input manager
   inputManager = new InputManager();
@@ -1117,6 +1120,8 @@ function startGame(map, seed = null) {
   // top. Done here once per run so the ship starts with full fuel and
   // the right tank size for the chosen hull.
   applyHullToShip();
+  // Drop any leftover slingshot state from a previous run.
+  if (slingshotSystem) slingshotSystem.cancel(ship);
 
   // Spawn scavengers at map edges (seeded)
   const scavRng = localRng.rawStream('localScavSpawn');
@@ -2163,6 +2168,7 @@ let _prevPulse = false;
 let _prevInventory = false;
 let _prevConsumable1 = false;
 let _prevConsumable2 = false;
+let _prevSlingshot = false;
 let _prevSeedReroll = false;
 let _prevPortalCount = -1;
 let pauseMenuSelection = 0;  // 0 = return to game, 1 = exit to title
@@ -2212,6 +2218,112 @@ function drawTerminalFrame(ctx, x, y, w, h, title, color = 'rgba(80, 100, 140, 0
     ctx.textAlign = 'left';
     ctx.fillText(title.toUpperCase(), x + 20, y + 3);
   }
+}
+
+/**
+ * Slingshot color palette by anchor type. Each tier reads visually
+ * distinct so a player learns the vocabulary: wells = blue (cold,
+ * dangerous), stars = gold (warm, plentiful), planetoids = teal (cool,
+ * incidental). The brightness matches each tier's reward magnitude.
+ */
+const SLINGSHOT_COLORS = {
+  well:      { ring: 'rgba(120, 180, 255, 0.45)', engaged: 'rgba(160, 220, 255, 0.85)' },
+  star:      { ring: 'rgba(240, 200, 110, 0.55)', engaged: 'rgba(255, 220, 140, 0.9)' },
+  planetoid: { ring: 'rgba(160, 220, 200, 0.55)', engaged: 'rgba(200, 240, 220, 0.9)' },
+};
+
+/**
+ * Draw the slingshot overlay: affordance ring on whatever's in snap-to
+ * range, full engaged ring + ship lock-line when active. Drawn after
+ * ship.render so it sits on top of the basic ship sprite.
+ */
+function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
+  if (!slingshotSystem) return;
+  const anchors = slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem);
+  // Affordance: faint pulsing ring on the nearest in-range anchor.
+  const aff = !ship.slingshotEngaged ? slingshotSystem.findAffordance(ship, anchors) : null;
+  if (aff) {
+    const a = aff.anchor;
+    const [sx, sy] = worldToScreen(a.wx, a.wy, camX, camY, canvasW, canvasH);
+    const radiusPx = worldToPx(a.range, canvasW);
+    const palette = SLINGSHOT_COLORS[a.type] || SLINGSHOT_COLORS.well;
+    const pulse = 0.85 + 0.15 * Math.sin(time * 4);
+    ctx.save();
+    ctx.strokeStyle = palette.ring;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 6]);
+    ctx.lineDashOffset = -time * 30;
+    ctx.globalAlpha = pulse;
+    ctx.beginPath();
+    ctx.arc(sx, sy, radiusPx, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Engaged: solid ring on the locked anchor + a tether line to the
+  // ship that visualizes the orbital lock. Energy bar segment shows
+  // accumulated banked velocity.
+  if (ship.slingshotEngaged && ship.slingshotAnchor) {
+    const a = ship.slingshotAnchor;
+    const [ax, ay] = worldToScreen(a.wx, a.wy, camX, camY, canvasW, canvasH);
+    const [shipX, shipY] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
+    const radiusPx = worldToPx(a.range, canvasW);
+    const palette = SLINGSHOT_COLORS[a.type] || SLINGSHOT_COLORS.well;
+    ctx.save();
+    // Solid engaged ring.
+    ctx.strokeStyle = palette.engaged;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ax, ay, radiusPx, 0, Math.PI * 2);
+    ctx.stroke();
+    // Tether line ship → anchor.
+    ctx.strokeStyle = palette.engaged;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.lineDashOffset = -time * 60;
+    ctx.beginPath();
+    ctx.moveTo(shipX, shipY);
+    ctx.lineTo(ax, ay);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Energy banked indicator — small arc of the ring filled, brighter
+    // as energy grows. Scales loosely so a player can see "I've been
+    // banking a lot" without needing exact numbers.
+    const energyFraction = Math.min(1, ship.slingshotEnergy / 4.0);
+    if (energyFraction > 0.05) {
+      ctx.strokeStyle = palette.engaged.replace(/[\d.]+\)$/, '1)');
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(ax, ay, radiusPx + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * energyFraction);
+      ctx.stroke();
+    }
+    // Chain count badge if chained.
+    if (ship.slingshotChainCount > 1) {
+      ctx.fillStyle = palette.engaged;
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`x${ship.slingshotChainCount} chain`, ax, ay - radiusPx - 8);
+    }
+    ctx.restore();
+  }
+}
+
+/**
+ * Slingshot per-hull modifiers. Read at engage / release / per-frame
+ * by SlingshotSystem so each hull has its own route-style identity
+ * (see docs/design/SLINGSHOT-NETWORK.md "Hull Integration"). Defaults
+ * are identity multipliers; hull-specific values come from the JSON.
+ */
+function getHullSlingshotMods() {
+  const hullType = profileManager.active?.hullType
+    || profileManager.active?.shipType
+    || 'drifter';
+  const hullDef = HULL_DEFINITIONS[hullType] || HULL_DEFINITIONS.drifter;
+  return {
+    energyMult: hullDef.slingshotEnergyMult ?? 1.0,
+    chainWindowMult: hullDef.slingshotChainWindowMult ?? 1.0,
+    signalReduction: hullDef.slingshotSignalReduction ?? 0,
+  };
 }
 
 /**
@@ -2348,6 +2460,7 @@ function gameLoop(now) {
   const upNow = inputManager.upPressed;
   const downNow = inputManager.downPressed;
   const pulseNow = inputManager.pulsePressed;
+  const slingshotNow = inputManager.slingshotPressed;
   const inventoryNow = inputManager.inventoryPressed;
   const consumable1Now = inputManager.consumable1Pressed;
   const consumable2Now = inputManager.consumable2Pressed;
@@ -2766,6 +2879,38 @@ function gameLoop(now) {
         CONFIG.wells.shipPullStrength = _savedPull;
       }
 
+      // --- Slingshot: drop engagement on death/scene-changes safely ---
+      if (ship.slingshotEngaged && gamePhase !== 'playing') {
+        slingshotSystem.cancel(ship);
+      }
+
+      // --- Slingshot input + engaged-state physics ---
+      // Single button toggles engagement. When pressed: if not engaged
+      // and there's an in-range anchor with non-zero tangential speed,
+      // engage. If already engaged: release, applying the velocity
+      // boost. Per-frame engaged forces (gravity-cancel + tangential
+      // amplifier) run after ship.update so they can correct the well-
+      // pull that ship.update already applied.
+      const slingshotAnchors = slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem);
+      const slingshotAffordance = !ship.slingshotEngaged
+        ? slingshotSystem.findAffordance(ship, slingshotAnchors)
+        : null;
+      const hullSlingMods = getHullSlingshotMods();
+      if (slingshotNow && !_prevSlingshot) {
+        if (ship.slingshotEngaged) {
+          slingshotSystem.release(ship, hullSlingMods, totalTime);
+        } else if (slingshotAffordance) {
+          slingshotSystem.engage(ship, slingshotAffordance.anchor, hullSlingMods, totalTime);
+        }
+      }
+      if (ship.slingshotEngaged) {
+        const dv = slingshotSystem.applyEngagedForces(ship, shipDt, hullSlingMods);
+        if (dv) {
+          ship.vx += dv.vx;
+          ship.vy += dv.vy;
+        }
+      }
+
       starSystem.applyToShip(ship);
       planetoidSystem.applyToShip(ship);
 
@@ -2977,6 +3122,7 @@ function gameLoop(now) {
   _prevTabRight = inputManager.tabRightPressed;
   _prevDelete = inputManager.deletePressed;
   _prevPulse = pulseNow;
+  _prevSlingshot = slingshotNow;
   _prevInventory = inventoryNow;
   _prevConsumable1 = consumable1Now;
   _prevConsumable2 = consumable2Now;
@@ -3128,6 +3274,7 @@ function gameLoop(now) {
     renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
+    renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
 
     // THE PHANTOM — tick + render. See declaration comments for design notes.
     if (gamePhase === 'playing') {

@@ -184,6 +184,18 @@ export class InputManager {
     return false;
   }
 
+  /**
+   * Slingshot engage / release. Single button toggles engagement when in
+   * range of a valid anchor. F key, or gamepad Triangle (button 3 on
+   * DualSense / Y on Xbox).
+   */
+  get slingshotPressed() {
+    if (this._keys['KeyF']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 3 && gp.buttons[3].pressed) return true;
+    return false;
+  }
+
   /** Inventory toggle. (Tab or I key, or gamepad Touchpad — button 17 on DualSense) */
   get inventoryPressed() {
     if (this._keys['Tab'] || this._keys['KeyI']) return true;

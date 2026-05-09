@@ -99,6 +99,9 @@
       "deltaVBurnEff": 0.55,
       "deltaVRegen": 1.5,
       "deltaVRegenBoost": 6,
+      "slingshotEnergyMult": 1.4,
+      "slingshotChainWindowMult": 1.15,
+      "slingshotSignalReduction": 0,
       "abilities": {
         "flowLock": {
           "type": "passive_trigger",
@@ -140,6 +143,9 @@
       "deltaVBurnEff": 1.6,
       "deltaVRegen": 1,
       "deltaVRegenBoost": 4,
+      "slingshotEnergyMult": 0.85,
+      "slingshotChainWindowMult": 0.9,
+      "slingshotSignalReduction": 0,
       "abilities": {
         "burn": {
           "type": "active_toggle",
@@ -183,6 +189,9 @@
       "deltaVBurnEff": 1,
       "deltaVRegen": 1.5,
       "deltaVRegenBoost": 6,
+      "slingshotEnergyMult": 0.95,
+      "slingshotChainWindowMult": 1.4,
+      "slingshotSignalReduction": 0,
       "abilities": {
         "harmonicPulse": {
           "type": "enhanced_pulse",
@@ -226,6 +235,9 @@
       "deltaVBurnEff": 0.85,
       "deltaVRegen": 2,
       "deltaVRegenBoost": 7,
+      "slingshotEnergyMult": 1.05,
+      "slingshotChainWindowMult": 1.0,
+      "slingshotSignalReduction": 0.6,
       "abilities": {
         "wakeCloak": {
           "type": "active",
@@ -264,6 +276,9 @@
       "deltaVBurnEff": 1.1,
       "deltaVRegen": 1.2,
       "deltaVRegenBoost": 5,
+      "slingshotEnergyMult": 0.8,
+      "slingshotChainWindowMult": 0.95,
+      "slingshotSignalReduction": 0,
       "abilities": {
         "salvageLock": {
           "type": "active",
