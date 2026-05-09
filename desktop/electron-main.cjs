@@ -94,7 +94,7 @@ async function startEmbeddedServers() {
   embeddedControlLabel = `lbh-embedded-control-${owner}`;
   embeddedSimInstanceId = `lbh-embedded-sim-${owner}`;
 
-  const controlScript = path.join(scriptsDir, 'control-plane-runtime.js');
+  const controlScript = path.join(scriptsDir, 'control-plane-runtime.cjs');
   controlProcess = fork(controlScript, ['--host', '127.0.0.1', '--port', String(controlPort), '--label', embeddedControlLabel], {
     env: {
       ...process.env,
@@ -110,7 +110,7 @@ async function startEmbeddedServers() {
     controlProcess = null;
   });
 
-  const simScript = path.join(scriptsDir, 'sim-runtime.js');
+  const simScript = path.join(scriptsDir, 'sim-runtime.cjs');
   simProcess = fork(simScript, ['--host', '127.0.0.1', '--port', String(simPort), '--sim-instance-id', embeddedSimInstanceId], {
     env: {
       ...process.env,
