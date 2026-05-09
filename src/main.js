@@ -1706,8 +1706,6 @@ function applyRemoteEvents(events) {
         } else if (payload.effectId === 'timeSlowLocal') {
           showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
           audioEngine.playEvent('timeSlow');
-        } else if (payload.effectId === 'signalPurge') {
-          showWarning('signal purged', 'rgba(100, 255, 180, 0.95)', 2000);
         } else if (payload.effectId === 'breachFlare') {
           showWarning('breach flare — portal for 15s', 'rgba(255, 200, 100, 0.95)', 3000);
           audioEngine.playEvent('breachFlare');
@@ -2258,10 +2256,6 @@ function applyConsumableEffect(effectId, item = null) {
       timeSlowRemaining = 3.0;
       showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
       audioEngine.playEvent('timeSlow');
-      break;
-    case 'signalPurge':
-      // Signal system not yet built — consume item, show feedback
-      showWarning('signal purged', 'rgba(100, 255, 180, 0.95)', 2000);
       break;
     case 'breachFlare': {
       // Spawn a temporary portal near the ship

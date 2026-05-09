@@ -2401,8 +2401,6 @@ function applyConsumable(player, slotIndex) {
     case "breachFlare":
       spawnTemporaryPortalNearPlayer(player);
       break;
-    case "signalPurge":
-      break;
     default:
       break;
   }

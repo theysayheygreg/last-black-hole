@@ -34,16 +34,6 @@ const LEGACY_WRECK_TIER_SESSION_TIME = {
   4: LOOT_TIER_GATES[4],
 };
 
-// Keep consumables to effects currently handled by local/remote runtime code.
-// Signal coefficient artifacts stay enabled because PlayerBrain resolves them,
-// but signal consumables remain out until their effects do real work.
-const IMPLEMENTED_CONSUMABLE_EFFECTS = new Set([
-  'shieldBurst',
-  'timeSlowLocal',
-  'breachFlare',
-  'fuelRefill',
-]);
-
 const WRECK_SLOT_COUNTS = {
   derelict: [1, 3],
   debris: [1, 2],
@@ -181,8 +171,7 @@ function rollArtifact(sessionTime, wreckTier, sourceName) {
 
 function rollConsumable(sessionTime, sourceName) {
   const maxTier = Math.max(...availableLootTiers(sessionTime));
-  const pool = CONSUMABLE_CATALOG
-    .filter(item => item.tier <= maxTier && IMPLEMENTED_CONSUMABLE_EFFECTS.has(item.effect));
+  const pool = CONSUMABLE_CATALOG.filter(item => item.tier <= maxTier);
   if (pool.length === 0) return null;
   return instantiateConsumable(pick(pool), sourceName);
 }
