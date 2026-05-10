@@ -139,7 +139,8 @@ const RANGE_HINTS = {
   'input.gamepadBigAngle':      { min: 5, max: 45, step: 1, tip: 'Degrees — zero smoothing above this. Instant response to flicks.' },
   // Input — triggers
   'input.triggerThreshold': { min: 0.01, max: 0.2, step: 0.01, tip: 'Trigger activation threshold' },
-  'input.brakeStrength':    { min: 0, max: 0.3, step: 0.01, tip: 'Extra 60 Hz reference drag from L2 brake' },
+  'input.brakeThrustScale': { min: 0, max: 1, step: 0.05, tip: 'Reverse thrust strength as fraction of forward thrust' },
+  'input.brakeFuelScale':   { min: 0, max: 1.5, step: 0.05, tip: 'Reverse thrust fuel cost as fraction of forward burn rate' },
 };
 
 /**

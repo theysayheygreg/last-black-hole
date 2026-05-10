@@ -2941,11 +2941,6 @@ function gameLoop(now) {
         CONFIG.wells.shipPullStrength = _savedPull;
       }
 
-      // --- Slingshot: drop engagement on death/scene-changes safely ---
-      if (ship.slingshotEngaged && gamePhase !== 'playing') {
-        slingshotSystem.cancel(ship);
-      }
-
       // --- Slingshot input + engaged-state physics ---
       // Single button toggles engagement. When pressed: if not engaged
       // and there's an in-range anchor with non-zero tangential speed,
@@ -2953,23 +2948,30 @@ function gameLoop(now) {
       // boost. Per-frame engaged forces (gravity-cancel + tangential
       // amplifier) run after ship.update so they can correct the well-
       // pull that ship.update already applied.
-      const slingshotAnchors = slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem);
-      const slingshotAffordance = !ship.slingshotEngaged
-        ? slingshotSystem.findAffordance(ship, slingshotAnchors)
-        : null;
-      const hullSlingMods = getHullSlingshotMods();
-      if (slingshotNow && !_prevSlingshot) {
-        if (ship.slingshotEngaged) {
-          slingshotSystem.release(ship, hullSlingMods, totalTime);
-        } else if (slingshotAffordance) {
-          slingshotSystem.engage(ship, slingshotAffordance.anchor, hullSlingMods, totalTime);
+      //
+      // Skipped in remote-authority mode: ship state comes from server
+      // snapshots there, so any local engagement would just get
+      // overwritten on the next snapshot. Server-side slingshot
+      // resolution is deferred (see SLINGSHOT-NETWORK.md "Open Decisions").
+      if (!remoteAuthorityActive) {
+        const slingshotAnchors = slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem);
+        const slingshotAffordance = !ship.slingshotEngaged
+          ? slingshotSystem.findAffordance(ship, slingshotAnchors)
+          : null;
+        const hullSlingMods = getHullSlingshotMods();
+        if (slingshotNow && !_prevSlingshot) {
+          if (ship.slingshotEngaged) {
+            slingshotSystem.release(ship, hullSlingMods, totalTime);
+          } else if (slingshotAffordance) {
+            slingshotSystem.engage(ship, slingshotAffordance.anchor, hullSlingMods, totalTime);
+          }
         }
-      }
-      if (ship.slingshotEngaged) {
-        const dv = slingshotSystem.applyEngagedForces(ship, shipDt, hullSlingMods);
-        if (dv) {
-          ship.vx += dv.vx;
-          ship.vy += dv.vy;
+        if (ship.slingshotEngaged) {
+          const dv = slingshotSystem.applyEngagedForces(ship, shipDt, hullSlingMods);
+          if (dv) {
+            ship.vx += dv.vx;
+            ship.vy += dv.vy;
+          }
         }
       }
 
@@ -3023,7 +3025,19 @@ function gameLoop(now) {
       if (inventoryOpen) {
         if (upNow && !_prevUp) inventoryCursorUp();
         if (downNow && !_prevDown) inventoryCursorDown();
-        if (confirmNow && !_prevConfirm) inventoryConfirm(inventorySystem);
+        if (confirmNow && !_prevConfirm) {
+          const beforeEquipSig = inventorySystem.equipped.map((it) => it?.id ?? null).join('|');
+          inventoryConfirm(inventorySystem);
+          const afterEquipSig = inventorySystem.equipped.map((it) => it?.id ?? null).join('|');
+          // If equipped slots changed (equip / unequip / swap), refresh
+          // the ship's hull-derived stats so deltaV-related coefficients
+          // from the new artifacts apply mid-run instead of waiting for
+          // the next scene load. applyDeltaVItemBonus preserves the
+          // current %-fueled ratio so a partial tank stays partial.
+          if (beforeEquipSig !== afterEquipSig) {
+            applyHullToShip();
+          }
+        }
       }
 
       // Consumable hotkeys (d-pad left/right or 1/2) — only when inventory closed
@@ -3228,6 +3242,13 @@ function gameLoop(now) {
       overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime, CONFIG.universe.runDuration);
   }
 
+  // Drop slingshot engagement if we left the playing phase via any
+  // path (death from gameplay, remote snapshot transition, pause, scene
+  // change, etc.). Sits outside the playing branch so it always runs.
+  if (slingshotSystem && ship?.slingshotEngaged && gamePhase !== 'playing') {
+    slingshotSystem.cancel(ship);
+  }
+
   // 7. Render fluid -> ASCII (camera-aware)
   const { wellUVs, wellMasses, wellShapes, visibleIndices } = getVisibleWellRenderInputs(camX, camY);
   const visibleAccretionRadii = visibleIndices.map((i) => sceneAccretionRadii[i] ?? [0.07, 0.30, 0.52]);
@@ -3336,8 +3357,13 @@ function gameLoop(now) {
     renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
-    renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    renderShipVelocityReadout(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
+    // Slingshot UI + velocity readout only during live gameplay — they
+    // attach to the active ship state and would be visually noisy on
+    // the death/escape end-screen overlays.
+    if (gamePhase === 'playing') {
+      renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+      renderShipVelocityReadout(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
+    }
 
     // THE PHANTOM — tick + render. See declaration comments for design notes.
     if (gamePhase === 'playing') {

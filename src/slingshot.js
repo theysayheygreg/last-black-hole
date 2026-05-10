@@ -261,12 +261,13 @@ export class SlingshotSystem {
     // Energy accrual. Proximity factor is normalized so engaging at the
     // edge of range pays less than mid-range. (Closer = more, but
     // anchor.killRadius makes the deepest part the riskiest.)
+    // Hull energyMult is applied at RELEASE, not here — applying both
+    // at accrual and release double-counts the modifier.
     const proximity = 1 - (dist / anchor.range);
     const accrualPerSecond = SLINGSHOT_CONFIG.energyAccrualRate
       * Math.max(0, tanSpeed)
       * anchor.massWeight
-      * proximity
-      * (hullModifiers.energyMult ?? 1);
+      * proximity;
     ship.slingshotEnergy += accrualPerSecond * dt;
 
     // Velocity adjustment this frame:

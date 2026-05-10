@@ -305,8 +305,6 @@ export const CONFIG = {
     // the gas pedal by design.
     brakeThrustScale: 0.4,    // Reverse thrust = forward thrust × this.
     brakeFuelScale: 0.6,      // Reverse fuel cost = forward × this.
-    brakeStrength: 0,         // Legacy field — was the drag-based brake.
-                              // Kept at 0 so any stale reference is a no-op.
 
     // --- Mouse thrust curve (keyboard + mouse install path) ---
     mouseDeadzonePx: 28,      // Cursor distance from ship below this = drift/no thrust.

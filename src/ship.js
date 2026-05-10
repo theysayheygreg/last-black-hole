@@ -251,8 +251,9 @@ export class Ship {
     //    CONFIG values remain "fraction removed per 60 Hz frame"; exponentiating
     //    by dt keeps stopping distance stable when render/sim cadence changes.
     //    Hull dragScale multiplies drag (Drifter 0.85× = preserves momentum,
-    //    Hauler 1.1× = bleeds faster).
-    const totalDrag = (cfg.drag * this.dragScale) + this.brakeIntensity * CONFIG.input.brakeStrength;
+    //    Hauler 1.1× = bleeds faster). Brake no longer adds to drag — it's
+    //    handled above as reverse thrust with a fuel cost.
+    const totalDrag = cfg.drag * this.dragScale;
     const dragBase = Math.max(0.001, 1 - Math.min(totalDrag, 0.999));
     const dragMult = Math.pow(dragBase, dt * 60);
     this.vx *= dragMult;
