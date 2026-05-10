@@ -2221,6 +2221,64 @@ function drawTerminalFrame(ctx, x, y, w, h, title, color = 'rgba(80, 100, 140, 0
 }
 
 /**
+ * Velocity readout drawn directly under the ship sprite. Shows current
+ * speed magnitude + a tiny direction arrow. Color tier names the speed
+ * class so the player has a vocabulary for "I'm cruising" vs "I'm in
+ * surge territory" without needing to read exact numbers. Sits inside
+ * the camera so it always tracks the ship — the ship is the reference
+ * frame, the speed is its property, the readout sits with it.
+ */
+function renderShipVelocityReadout(ctx, ship, camX, camY, canvasW, canvasH) {
+  const [sx, sy] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
+  const speed = Math.hypot(ship.vx, ship.vy);
+  let tierLabel;
+  let color;
+  if (speed < 0.2)       { tierLabel = 'drift';    color = 'rgba(120, 180, 200, 0.75)'; }
+  else if (speed < 0.6)  { tierLabel = 'cruise';   color = 'rgba(220, 230, 240, 0.85)'; }
+  else if (speed < 1.5)  { tierLabel = 'surge';    color = 'rgba(240, 200, 110, 0.95)'; }
+  else                   { tierLabel = 'perilous'; color = 'rgba(240, 80, 80, 0.95)'; }
+
+  ctx.save();
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = color;
+  // Speed line directly below ship — far enough not to overlap the
+  // ship sprite at typical sizes.
+  const speedTxt = `${speed.toFixed(2)} · ${tierLabel}`;
+  ctx.fillText(speedTxt, sx, sy + 28);
+
+  // Tiny direction arrow above the readout. Useful at high speed when
+  // the ship icon's facing might not match velocity direction (drift,
+  // post-slingshot, current pushing sideways).
+  if (speed > 0.05) {
+    const ang = Math.atan2(ship.vy, ship.vx);
+    const arrowLen = 10;
+    const aX = sx;
+    const aY = sy + 18;
+    const tipX = aX + Math.cos(ang) * arrowLen;
+    const tipY = aY + Math.sin(ang) * arrowLen;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(aX, aY);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+    // Small arrowhead.
+    const headSize = 3;
+    const left = ang + Math.PI - 0.4;
+    const right = ang + Math.PI + 0.4;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(tipX + Math.cos(left) * headSize, tipY + Math.sin(left) * headSize);
+    ctx.lineTo(tipX + Math.cos(right) * headSize, tipY + Math.sin(right) * headSize);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
  * Slingshot color palette by anchor type. Each tier reads visually
  * distinct so a player learns the vocabulary: wells = blue (cold,
  * dangerous), stars = gold (warm, plentiful), planetoids = teal (cool,
@@ -2342,6 +2400,10 @@ function applyHullToShip() {
     deltaVRegen: hullDef.deltaVRegen ?? CONFIG.ship.deltaVRegen,
     deltaVRegenBoost: hullDef.deltaVRegenBoost ?? CONFIG.ship.deltaVRegenBoost,
     deltaVBurnEff: hullDef.deltaVBurnEff ?? 1.0,
+    thrustScale: hullDef.thrustScale ?? 1.0,
+    dragScale: hullDef.dragScale ?? 1.0,
+    currentCoupling: hullDef.currentCoupling ?? 1.0,
+    wellResistScale: hullDef.wellResistScale ?? 1.0,
   });
   if (inventorySystem) {
     ship.applyDeltaVItemBonus(inventorySystem.getDeltaVStats());
@@ -3275,6 +3337,7 @@ function gameLoop(now) {
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
     renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    renderShipVelocityReadout(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
 
     // THE PHANTOM — tick + render. See declaration comments for design notes.
     if (gamePhase === 'playing') {

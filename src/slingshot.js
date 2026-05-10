@@ -55,21 +55,22 @@ const SLINGSHOT_CONFIG = {
   },
   // Energy accumulation rate per second per unit of (mass × tangential
   // alignment × proximity). Tuning dial — bigger = each sling pays more.
-  energyAccrualRate: 4.0,
+  energyAccrualRate: 3.5,
   // Release multiplier on banked energy. Lets us tune the *feeling* of
   // a sling separately from the per-second accrual, so a 1-second hold
   // already pays off and a 3-second one pays off more.
-  releaseMultiplier: 6.0,
+  releaseMultiplier: 4.5,
   // While engaged, gravity pull from the anchor itself is cancelled by
   // this fraction (1.0 = full cancel, 0.0 = none). Less than 1 means
   // the ship still drifts toward the anchor — which gives stakes.
   gravityCancelFraction: 0.95,
   // Tangential force amplifier while engaged: pushes ship around the
-  // anchor in the orbital direction it was moving on entry. Without
-  // this the orbital speed bleeds (drag is real) and a bad-angle entry
-  // can't recover. Worth being aggressive — engagement should preserve
-  // momentum.
-  tangentialForce: 3.5,
+  // anchor in the orbital direction it was moving on entry. Tuned for
+  // the post-drag-reduction baseline (drag = 0.015) where bleed is
+  // small and we don't need to muscle through it. Lower here means
+  // entry speed matters more — you can't compensate for a slow,
+  // mistimed approach by just holding the engage button.
+  tangentialForce: 1.5,
   // Time after release within which engaging a new anchor counts as a
   // chain. Drifter / Resonant get longer windows via hull stats.
   chainWindowSeconds: 1.2,

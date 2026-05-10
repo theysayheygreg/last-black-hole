@@ -50,6 +50,17 @@ export class Ship {
     this.deltaVBurnEff = 1.0;
     this._timeSinceThrust = 999;
 
+    // --- Hull-supplied movement modifiers ---
+    // Were defined in hulls.data.json but the legacy ship.update read
+    // CONFIG.ship.* directly without consulting them — every hull flew
+    // identically locally. setHullStats() now layers these on so each
+    // hull actually feels different. Multiplicative against the CONFIG
+    // baseline; 1.0 = no change.
+    this.thrustScale = 1.0;
+    this.dragScale = 1.0;
+    this.currentCoupling = 1.0;
+    this.wellResistScale = 1.0;
+
     // --- Slingshot engagement state ---
     // Owned by SlingshotSystem; read by Ship.update for orbital lock
     // physics. See src/slingshot.js for the design.
@@ -71,12 +82,20 @@ export class Ship {
     deltaVRegen = CONFIG.ship.deltaVRegen,
     deltaVRegenBoost = CONFIG.ship.deltaVRegenBoost,
     deltaVBurnEff = 1.0,
+    thrustScale = 1.0,
+    dragScale = 1.0,
+    currentCoupling = 1.0,
+    wellResistScale = 1.0,
   } = {}) {
     this.deltaVMax = deltaVMax;
     this.deltaVRegen = deltaVRegen;
     this.deltaVRegenBoost = deltaVRegenBoost;
     this.deltaVBurnEff = deltaVBurnEff;
     this.deltaV = deltaVMax;
+    this.thrustScale = thrustScale;
+    this.dragScale = dragScale;
+    this.currentCoupling = currentCoupling;
+    this.wellResistScale = wellResistScale;
   }
 
   /**
@@ -152,19 +171,37 @@ export class Ship {
     //    Thrust is now gated on deltaV: empty tank ⇒ no thrust, intensity
     //    is clamped by available fuel (so a half-pull on an empty tank
     //    can't drain into negative). Burn cost is linear in intensity so
-    //    analog-trigger pull translates 1:1 to fuel rate.
+    //    analog-trigger pull translates 1:1 to fuel rate. Hull thrustScale
+    //    multiplies acceleration (Drifter 0.7×, Breacher 1.4× etc.).
     let effectiveIntensity = 0;
     if (this.thrustIntensity > 0 && this.deltaV > 0) {
       const burnCost = this.deltaVBurnRate * this.deltaVBurnEff * this.thrustIntensity * dt;
       const allowedRatio = burnCost > 0 ? Math.min(1, this.deltaV / burnCost) : 1;
       effectiveIntensity = this.thrustIntensity * allowedRatio;
       this.deltaV = Math.max(0, this.deltaV - burnCost * allowedRatio);
-      const accelWorld = cfg.thrustAccel * effectiveIntensity;
+      const accelWorld = cfg.thrustAccel * this.thrustScale * effectiveIntensity;
       this.vx += Math.cos(this.facing) * accelWorld * dt;
       this.vy += Math.sin(this.facing) * accelWorld * dt;
     }
-    // Track time since last meaningful burn for regen-delay logic.
-    if (effectiveIntensity > 0.01) {
+    // 2b. Brake = reverse thrust. Same fuel/intensity model as forward
+    //     thrust but pushed in -facing direction at brakeThrustScale of
+    //     the forward strength. Costs fuel at brakeFuelScale. Means
+    //     "stop / back up" is now an actual maneuver verb that lives
+    //     in the same delta-v economy as forward thrust.
+    let effectiveBrakeIntensity = 0;
+    if (this.brakeIntensity > 0 && this.deltaV > 0) {
+      const burnRate = this.deltaVBurnRate * this.deltaVBurnEff * (CONFIG.input.brakeFuelScale ?? 0.6);
+      const burnCost = burnRate * this.brakeIntensity * dt;
+      const allowedRatio = burnCost > 0 ? Math.min(1, this.deltaV / burnCost) : 1;
+      effectiveBrakeIntensity = this.brakeIntensity * allowedRatio;
+      this.deltaV = Math.max(0, this.deltaV - burnCost * allowedRatio);
+      const reverseAccel = cfg.thrustAccel * this.thrustScale * (CONFIG.input.brakeThrustScale ?? 0.4) * effectiveBrakeIntensity;
+      this.vx -= Math.cos(this.facing) * reverseAccel * dt;
+      this.vy -= Math.sin(this.facing) * reverseAccel * dt;
+    }
+    // Track time since last meaningful burn (forward OR reverse) for
+    // regen-delay logic.
+    if (effectiveIntensity > 0.01 || effectiveBrakeIntensity > 0.01) {
       this._timeSinceThrust = 0;
     } else {
       this._timeSinceThrust += dt;
@@ -189,17 +226,21 @@ export class Ship {
 
     // 4. Fluid coupling — lerp ship velocity toward fluid velocity.
     //    coupling = fluidCoupling × dt, clamped to 0.5 to prevent velocity teleport.
-    //    At 60fps with coupling=1.2: 1.2 × 0.017 = 0.02 (2% per frame toward fluid vel).
-    const coupling = Math.min(cfg.fluidCoupling * dt, 0.5);
+    //    Hull currentCoupling multiplies the rate — Drifter 1.6× (currents
+    //    carry you), Breacher 0.7× (ignore the field).
+    const coupling = Math.min(cfg.fluidCoupling * this.currentCoupling * dt, 0.5);
     this.vx = this.vx * (1 - coupling) + fluidVelWorld.x * coupling;
     this.vy = this.vy * (1 - coupling) + fluidVelWorld.y * coupling;
 
     // 5. Direct gravitational pull from wells (world-space)
+    //    Hull wellResistScale dampens pull — Breacher 1.2× resist, Hauler
+    //    0.8× resist (so wells yank haulers harder).
     if (wellSystem) {
       const maxRange = wellCfg.maxRange ?? 0.8;
+      const pullScale = 1 / Math.max(0.1, this.wellResistScale);
       for (const well of wellSystem.wells) {
         const { dist, nx, ny } = worldDirectionTo(this.wx, this.wy, well.wx, well.wy);
-        const accel = inversePowerForce(dist, wellCfg.shipPullStrength, well.mass, wellCfg.shipPullFalloff, maxRange);
+        const accel = inversePowerForce(dist, wellCfg.shipPullStrength * pullScale, well.mass, wellCfg.shipPullFalloff, maxRange);
         if (accel > 0) {
           applyForceToShip(this, nx, ny, accel, dt);
         }
@@ -209,11 +250,26 @@ export class Ship {
     // 6. Drag — time-based damping calibrated to the old 60fps feel.
     //    CONFIG values remain "fraction removed per 60 Hz frame"; exponentiating
     //    by dt keeps stopping distance stable when render/sim cadence changes.
-    const totalDrag = cfg.drag + this.brakeIntensity * CONFIG.input.brakeStrength;
+    //    Hull dragScale multiplies drag (Drifter 0.85× = preserves momentum,
+    //    Hauler 1.1× = bleeds faster).
+    const totalDrag = (cfg.drag * this.dragScale) + this.brakeIntensity * CONFIG.input.brakeStrength;
     const dragBase = Math.max(0.001, 1 - Math.min(totalDrag, 0.999));
     const dragMult = Math.pow(dragBase, dt * 60);
     this.vx *= dragMult;
     this.vy *= dragMult;
+
+    // 6b. Speed cap. Defensive — slingshot chains + favorable currents
+    //     could otherwise stack into camera-breaking velocities. Set
+    //     obscenely high in CONFIG; intentional creative tuning lever
+    //     for later. Cap at constant maxSpeedWorld.
+    const speedSq = this.vx * this.vx + this.vy * this.vy;
+    const maxSp = cfg.maxSpeedWorld ?? Infinity;
+    if (speedSq > maxSp * maxSp) {
+      const speed = Math.sqrt(speedSq);
+      const scale = maxSp / speed;
+      this.vx *= scale;
+      this.vy *= scale;
+    }
 
     // 7. Integrate position
     this.wx += this.vx * dt;

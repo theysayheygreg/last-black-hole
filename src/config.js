@@ -39,9 +39,23 @@ export const CONFIG = {
                              // currents entirely. 1+ = fluid rider — currents carry you.
                              // Clamped to max 0.5 per frame to prevent velocity teleport.
     turnRate: 360,            // deg/s rotation toward mouse/stick. 360 = snappy, 120 = sluggish.
-    drag: 0.06,              // Fraction of velocity removed per 60 Hz reference frame.
+    drag: 0.015,             // Fraction of velocity removed per 60 Hz reference frame.
                              // Applied as exponential damping so lower render/sim
                              // cadences keep the same stopping feel.
+                             // Reduced from 0.06 — space drag should be near-zero
+                             // (no atmosphere, no gas, no friction). The remaining
+                             // 0.015 is a soft tax that keeps a player from
+                             // accelerating to infinity from currents/slingshots
+                             // alone, but coasting actually preserves momentum
+                             // long enough for conservation-of-speed to be
+                             // playable.
+    maxSpeedWorld: 8.0,      // Hard cap on ship speed in world-units/sec.
+                             // Defensive — slingshot chains + favorable currents
+                             // can otherwise compound into camera-breaking
+                             // velocities. Set obscenely high (~17× the old
+                             // thrust-only terminal of 0.47); the cap exists as
+                             // a creative tuning lever for later, not a current
+                             // gameplay constraint.
     // --- Delta-v / thrust fuel ---
     // Thrust now costs a finite fuel resource (deltaV). Burning at full
     // intensity drains deltaV at deltaVBurnRate per second; the gauge
@@ -283,7 +297,16 @@ export const CONFIG = {
 
     gamepadTurnRate: 360,     // Stick turn rate in deg/s (not currently used — facing is direct from stick).
     triggerThreshold: 0.05,   // Trigger activation threshold (0-1). Prevents ghost input.
-    brakeStrength: 0.15,      // Extra 60 Hz reference drag from L2 brake at full pull. Stacks with base drag.
+    // Brake is now a reverse-thrust: instead of adding drag, it applies
+    // thrust in the opposite-of-facing direction at brakeThrustScale of
+    // the forward thrustAccel, costing fuel at brakeFuelScale of the
+    // forward burn rate. Player can reverse, anti-slingshot, or just
+    // course-correct without paying full delta-v. Less powerful than
+    // the gas pedal by design.
+    brakeThrustScale: 0.4,    // Reverse thrust = forward thrust × this.
+    brakeFuelScale: 0.6,      // Reverse fuel cost = forward × this.
+    brakeStrength: 0,         // Legacy field — was the drag-based brake.
+                              // Kept at 0 so any stale reference is a no-op.
 
     // --- Mouse thrust curve (keyboard + mouse install path) ---
     mouseDeadzonePx: 28,      // Cursor distance from ship below this = drift/no thrust.
