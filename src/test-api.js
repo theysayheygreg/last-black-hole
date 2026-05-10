@@ -120,6 +120,38 @@ export function initTestAPI(getState) {
       return { x: ship.vx, y: ship.vy };
     },
 
+    getShipFuelState() {
+      const { ship } = getState();
+      return {
+        deltaV: ship.deltaV,
+        deltaVMax: ship.deltaVMax,
+        ratio: ship.getDeltaVRatio(),
+      };
+    },
+
+    getShipTuningState() {
+      const { ship } = getState();
+      return {
+        thrustScale: ship.thrustScale,
+        dragScale: ship.dragScale,
+        currentCoupling: ship.currentCoupling,
+        wellResistScale: ship.wellResistScale,
+      };
+    },
+
+    setShipFuel(deltaV) {
+      const { ship } = getState();
+      ship.deltaV = Math.max(0, Math.min(ship.deltaVMax, Number(deltaV) || 0));
+      return this.getShipFuelState();
+    },
+
+    refreshShipHullStats(refill = false) {
+      const { applyHullToShip } = getState();
+      if (!applyHullToShip) return null;
+      applyHullToShip({ refill: Boolean(refill) });
+      return this.getShipFuelState();
+    },
+
     getSlingshotState() {
       const { ship } = getState();
       if (!ship) return null;
@@ -288,6 +320,14 @@ export function initTestAPI(getState) {
       if (!playableMaps || !transitionToRemoteGame) return false;
       const entry = playableMaps[mapIndex] || playableMaps[0];
       transitionToRemoteGame(entry);
+      return true;
+    },
+
+    async startRemoteGameNow(mapIndex = 0) {
+      const { playableMaps, startRemoteGame } = getState();
+      if (!playableMaps || !startRemoteGame) return false;
+      const entry = playableMaps[mapIndex] || playableMaps[0];
+      await startRemoteGame(entry);
       return true;
     },
 
@@ -514,6 +554,13 @@ export function initTestAPI(getState) {
       };
     },
 
+    setInventoryOpenForTest(open) {
+      const { setInventoryOpenForTest } = getState();
+      if (!setInventoryOpenForTest) return false;
+      setInventoryOpenForTest(open);
+      return true;
+    },
+
     getInputState() {
       const { inputManager } = getState();
       if (!inputManager) return null;
@@ -646,6 +693,16 @@ export function initTestAPI(getState) {
         scavengerSystem,
         planetoidSystem
       );
+    },
+
+    tickCombatForTest(dt = 0) {
+      const { combatSystem } = getState();
+      if (!combatSystem) return null;
+      combatSystem.update(Math.max(0, Number(dt) || 0));
+      return {
+        playerCooldown: combatSystem.playerCooldown,
+        playerReady: combatSystem.playerReady,
+      };
     },
 
     getRemotePlayers() {

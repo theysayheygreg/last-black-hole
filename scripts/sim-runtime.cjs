@@ -171,8 +171,11 @@ const SERVER_COMBAT = {
   timeSlowDuration: 3.0,
 };
 const SERVER_INPUT = {
-  brakeStrength: 0.15,
-  baseDrag: 0.92,
+  baseDragPer60HzFrame: 0.015,
+  brakeThrustScale: 0.4,
+  brakeFuelScale: 0.6,
+  maxSpeedWorld: 8.0,
+  deltaVRegenDelay: 0.5,
 };
 const STAR_SERVER = {
   shipPushStrength: 0.45,
@@ -986,6 +989,7 @@ function syncPlayerCargoCapacity(player) {
 
 function refreshPlayerBrain(player, durableProfile = null) {
   if (!player) return null;
+  const prevFuelRatio = player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 1;
   player.hullType = normalizeHullType(player.hullType, durableProfile?.hullType || durableProfile?.shipType || player.profileShipType);
   const rigLevels = normalizeRigLevels(
     durableProfile?.rigLevels || player.rigLevels, player.hullType
@@ -1005,7 +1009,22 @@ function refreshPlayerBrain(player, durableProfile = null) {
     equipped: player.equipped,
   });
   syncPlayerCargoCapacity(player);
+  applyPlayerDeltaVBrain(player, { previousRatio: prevFuelRatio });
   return player.brain;
+}
+
+function applyPlayerDeltaVBrain(player, { previousRatio = null } = {}) {
+  const brain = player.brain || BRAIN_DEFAULTS;
+  const ratio = Number.isFinite(previousRatio)
+    ? previousRatio
+    : player.deltaVMax > 0 ? (Number(player.deltaV) || 0) / player.deltaVMax : 1;
+  player.deltaVMax = Math.max(1, Number(brain.deltaVMax) || BRAIN_DEFAULTS.deltaVMax);
+  player.deltaVRegen = Math.max(0, Number(brain.deltaVRegen) || 0);
+  player.deltaVRegenBoost = Math.max(0, Number(brain.deltaVRegenBoost) || 0);
+  player.deltaVBurnEff = Math.max(0.1, Number(brain.deltaVBurnEff) || 1);
+  player.deltaVBurnRate = Math.max(1, Number(brain.deltaVBurnRate) || BRAIN_DEFAULTS.deltaVBurnRate);
+  player.deltaV = Math.max(0, Math.min(player.deltaVMax, ratio * player.deltaVMax));
+  if (!Number.isFinite(player.timeSinceThrust)) player.timeSinceThrust = 999;
 }
 
 function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
@@ -1062,6 +1081,13 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     },
     controlDebuff: 0,
     committedOutcome: null,
+    deltaV: brain.deltaVMax || BRAIN_DEFAULTS.deltaVMax,
+    deltaVMax: brain.deltaVMax || BRAIN_DEFAULTS.deltaVMax,
+    deltaVRegen: brain.deltaVRegen || BRAIN_DEFAULTS.deltaVRegen,
+    deltaVRegenBoost: brain.deltaVRegenBoost || BRAIN_DEFAULTS.deltaVRegenBoost,
+    deltaVBurnEff: brain.deltaVBurnEff || BRAIN_DEFAULTS.deltaVBurnEff,
+    deltaVBurnRate: brain.deltaVBurnRate || BRAIN_DEFAULTS.deltaVBurnRate,
+    timeSinceThrust: 999,
   };
 }
 
@@ -1347,6 +1373,9 @@ function snapshotBody() {
       wy: player.wy,
       vx: player.vx,
       vy: player.vy,
+      deltaV: player.deltaV,
+      deltaVMax: player.deltaVMax,
+      deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
       lastInputSeq: player.lastInput.seq,
       lastInputBrake: player.lastInput.brake || 0,
       cargo: player.cargo,
@@ -2316,7 +2345,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
       echoPilotName: wreck.echoPilotName || null,
       echoHullType: wreck.echoHullType || null,
     });
-    if (getCargoCount(player) >= PLAYER_CARGO_SLOTS) break;
+      if (getCargoCount(player) >= maxCargo) break;
   }
 }
 
@@ -2385,7 +2414,7 @@ function applyConsumable(player, slotIndex) {
   const item = player.consumables[slotIndex];
   if (!item || (item.charges || 0) <= 0) return;
 
-  const effectId = item.useEffect;
+  const effectId = item.useEffect || item.effect;
   item.charges = Math.max(0, (item.charges || 0) - 1);
   if (item.charges <= 0) {
     player.consumables[slotIndex] = null;
@@ -2401,6 +2430,11 @@ function applyConsumable(player, slotIndex) {
     case "breachFlare":
       spawnTemporaryPortalNearPlayer(player);
       break;
+    case "fuelRefill": {
+      const refillAmount = Number(item.refillAmount || item.amount || item.deltaV || 35);
+      player.deltaV = Math.min(player.deltaVMax || refillAmount, (player.deltaV || 0) + refillAmount);
+      break;
+    }
     default:
       break;
   }
@@ -2587,7 +2621,21 @@ function applyDebugPlayerState(player, body) {
   if (Number.isFinite(Number(body.wy))) player.wy = wrapWorld(Number(body.wy), runtime.session.worldScale);
   if (Number.isFinite(Number(body.vx))) player.vx = Number(body.vx);
   if (Number.isFinite(Number(body.vy))) player.vy = Number(body.vy);
-  if (typeof body.status === "string" && body.status) player.status = body.status;
+  if (Number.isFinite(Number(body.deltaV))) player.deltaV = Math.max(0, Math.min(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, Number(body.deltaV)));
+  if (Number.isFinite(Number(body.timeSinceThrust))) player.timeSinceThrust = Math.max(0, Number(body.timeSinceThrust));
+  if (typeof body.status === "string" && body.status) {
+    player.status = body.status;
+    // Debug death should exercise the same profile write-back path as a real
+    // hazard kill; otherwise the harness can set a dead player that never
+    // commits an outcome.
+    if (player.status === "dead" && !player.committedOutcome) {
+      publishEvent("player.died", {
+        clientId: player.clientId,
+        cause: body.cause || "debug",
+      });
+      commitPlayerOutcome(player, "dead");
+    }
+  }
   return player;
 }
 
@@ -3782,6 +3830,41 @@ function getMomentumShieldMult(player) {
   return 1 - HULL_DEFINITIONS.breacher.abilities.momentumShield.wellPullReduction;
 }
 
+function consumePlayerDeltaV(player, intensity, dt, costScale = 1) {
+  const requested = Math.max(0, Math.min(1, Number(intensity) || 0));
+  if (requested <= 0 || player.deltaV <= 0) return 0;
+  const burnRate = (player.deltaVBurnRate || BRAIN_DEFAULTS.deltaVBurnRate)
+    * (player.deltaVBurnEff || 1)
+    * costScale;
+  const burnCost = burnRate * requested * dt;
+  const allowedRatio = burnCost > 0 ? Math.min(1, player.deltaV / burnCost) : 1;
+  player.deltaV = Math.max(0, player.deltaV - burnCost * allowedRatio);
+  return requested * allowedRatio;
+}
+
+function applyPlayerDeltaVRegen(player, dt, burned) {
+  if (burned) {
+    player.timeSinceThrust = 0;
+    return;
+  }
+  player.timeSinceThrust = (player.timeSinceThrust || 0) + dt;
+  const boost = player.timeSinceThrust >= SERVER_INPUT.deltaVRegenDelay
+    ? (player.deltaVRegenBoost || 0)
+    : 0;
+  const regenRate = (player.deltaVRegen || 0) + boost;
+  player.deltaV = Math.min(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, (player.deltaV || 0) + regenRate * dt);
+}
+
+function clampPlayerSpeed(player) {
+  const speed = Math.hypot(player.vx, player.vy);
+  const maxSpeed = SERVER_INPUT.maxSpeedWorld;
+  if (Number.isFinite(maxSpeed) && speed > maxSpeed) {
+    const scale = maxSpeed / speed;
+    player.vx *= scale;
+    player.vy *= scale;
+  }
+}
+
 // --- Gradient Sentries (Active Tier) ---
 // Patrol well orbits at ringOuter × 1.2-1.8. Three states:
 // patrol (orbit) → lunge (rush toward player) → recover (drift back to orbit).
@@ -4321,7 +4404,8 @@ function tickSim() {
     const controlMult = player.controlDebuff > 0 ? INHIBITOR_CONFIG.swarmControlDebuffMult : 1.0;
     const b = player.brain || BRAIN_DEFAULTS;
     const burnMod = getBurnModifiers(player);
-    const accel = 2.5 * b.thrustScale * burnMod.thrust * input.thrust * controlMult;
+    const thrustIntensity = consumePlayerDeltaV(player, input.thrust, playerDt, 1);
+    const accel = 2.5 * b.thrustScale * burnMod.thrust * thrustIntensity * controlMult;
     player.vx += input.moveX * accel * playerDt;
     player.vy += input.moveY * accel * playerDt;
 
@@ -4339,10 +4423,18 @@ function tickSim() {
     applyStarPush(player, playerDt, relevance.stars);
     applyPlanetoidPush(player, playerDt, relevance.planetoids);
     applyWaveRingPush(player, playerDt);
-    const brakeDrag = Math.max(0, Math.min(1, input.brake || 0)) * SERVER_INPUT.brakeStrength;
-    const dragBase = Math.max(0.01, SERVER_INPUT.baseDrag - brakeDrag);
-    player.vx *= Math.pow(dragBase * b.dragScale, playerDt * 15);
-    player.vy *= Math.pow(dragBase * b.dragScale, playerDt * 15);
+    const brakeIntensity = consumePlayerDeltaV(player, input.brake, playerDt, SERVER_INPUT.brakeFuelScale);
+    if (brakeIntensity > 0) {
+      const brakeAccel = 2.5 * b.thrustScale * SERVER_INPUT.brakeThrustScale * brakeIntensity * controlMult;
+      player.vx -= input.moveX * brakeAccel * playerDt;
+      player.vy -= input.moveY * brakeAccel * playerDt;
+    }
+    applyPlayerDeltaVRegen(player, playerDt, thrustIntensity > 0.01 || brakeIntensity > 0.01);
+    const dragPerFrame = Math.max(0, Math.min(0.95, SERVER_INPUT.baseDragPer60HzFrame * b.dragScale));
+    const dragFactor = Math.pow(1 - dragPerFrame, playerDt * 60);
+    player.vx *= dragFactor;
+    player.vy *= dragFactor;
+    clampPlayerSpeed(player);
     player.wx = ((player.wx + player.vx * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     player.wy = ((player.wy + player.vy * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
     applyScavengerBump(player, relevance.scavengers);

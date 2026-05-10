@@ -1,7 +1,7 @@
 /**
  * Run all test suites.
  * Usage:
- *   node tests/run-all.js [index-a.html] [--fast]
+ *   node tests/run-all.cjs [index-a.html] [--fast]
  *
  * --fast skips suites tagged `slow:true` so dev iteration drops from
  * ~4.5min to ~2min. CI / pre-push should run the full set.

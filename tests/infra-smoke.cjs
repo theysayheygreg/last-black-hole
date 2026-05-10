@@ -1,5 +1,5 @@
 /**
- * infra-smoke.js — lightweight architecture smoke.
+ * infra-smoke.cjs — lightweight architecture smoke.
  *
  * Verifies the real LBH runtime split boots coherently:
  * - control plane
@@ -7,10 +7,10 @@
  * - static client
  * - browser client in remote-authority mode
  *
- * This is intentionally smaller than remote-authority.js. It is a boot and
+ * This is intentionally smaller than remote-authority.cjs. It is a boot and
  * wiring canary for the distributed stack, not the full gameplay protocol suite.
  *
- * Usage: node tests/infra-smoke.js [index-a.html]
+ * Usage: node tests/infra-smoke.cjs [index-a.html]
  */
 const {
   startServer,
@@ -20,10 +20,8 @@ const {
   startSimServer,
   stopSimServer,
   launchGame,
-  screenshot,
   TestRunner,
   assert,
-  dispatchKey,
   waitFor,
 } = require("./helpers.cjs");
 
@@ -39,20 +37,6 @@ function sleep(ms) {
 
 async function waitForPhase(page, phase, timeout = 12000) {
   await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, { timeout }, phase);
-}
-
-async function tap(page, code, key) {
-  await dispatchKey(page, code, key);
-  await sleep(120);
-}
-
-async function moveHomeTab(page, tabName) {
-  for (let i = 0; i < 8; i++) {
-    if (await page.evaluate((name) => window.__TEST_API.getHomeState().tabName === name, tabName)) return;
-    await tap(page, "KeyE", "e");
-  }
-  const current = await page.evaluate(() => window.__TEST_API.getHomeState().tabName);
-  throw new Error(`Expected home tab ${tabName}, got ${current}`);
 }
 
 async function bootstrapCleanPage(page) {
@@ -85,17 +69,9 @@ async function waitForJson(check, { timeout = 5000, interval = 100 } = {}) {
 }
 
 async function runRemoteEntryFlow(page) {
-  await waitForPhase(page, "title");
-  await tap(page, "Space", " ");
-  await waitForPhase(page, "profileSelect");
-  await tap(page, "Enter", "Enter");
-  await sleep(120);
-  await tap(page, "Enter", "Enter");
-  await waitForPhase(page, "home");
-  await moveHomeTab(page, "LAUNCH");
-  await tap(page, "Enter", "Enter");
-  await waitForPhase(page, "mapSelect");
-  await tap(page, "Enter", "Enter");
+  await page.evaluate(() => window.__TEST_API.createTestProfile("Infra Pilot"));
+  const started = await page.evaluate(() => window.__TEST_API.startRemoteGameNow(0));
+  assert(started === true, "Expected remote game to start through test API");
   await waitForPhase(page, "playing", 15000);
 }
 
@@ -157,8 +133,6 @@ async function run() {
       assert(net.sessionMapId === "shallows", `Expected shallows session, got ${net.sessionMapId}`);
     });
 
-    const filepath = await screenshot(page, "infra-smoke");
-    console.log(`\n  Screenshot: ${filepath}`);
   } finally {
     if (browser) await browser.close();
     await stopSimServer(SIM_PORT).catch(() => null);

@@ -166,6 +166,29 @@ export class InventorySystem {
     return { deltaVCapacityMult: capacity, deltaVRegenMult: regen, deltaVBurnMult: burn };
   }
 
+  /**
+   * Aggregate equipped movement coefficients that the browser-local Ship
+   * owns directly. Server authority resolves the same catalog through
+   * PlayerBrain; this keeps standalone play from ignoring those items.
+   */
+  getMovementStats() {
+    const out = {
+      thrustScale: 1,
+      dragScale: 1,
+      currentCoupling: 1,
+      wellResistScale: 1,
+    };
+    for (const item of this.equipped) {
+      if (!item || !item.coefficients) continue;
+      for (const key of Object.keys(out)) {
+        if (Number.isFinite(item.coefficients[key])) {
+          out[key] *= item.coefficients[key];
+        }
+      }
+    }
+    return out;
+  }
+
   // ---- Consumables ----
 
   /**

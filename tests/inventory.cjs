@@ -4,13 +4,12 @@
  * Tests the new item categories, inventory limits, pickup blocking,
  * drop mechanics, scavenger presence, combat system, and signatures.
  *
- * Usage: node tests/inventory.js [index-a.html]
+ * Usage: node tests/inventory.cjs [index-a.html]
  */
 const {
   startServer,
   stopServer,
   launchGame,
-  screenshot,
   TestRunner,
   assert,
   waitFor,
@@ -162,8 +161,7 @@ async function run() {
 
     await runner.run('Pulse cooldown decreases over time', async () => {
       const before = await page.evaluate(() => window.__TEST_API.getCombatState());
-      await sleep(1500);
-      const after = await page.evaluate(() => window.__TEST_API.getCombatState());
+      const after = await page.evaluate(() => window.__TEST_API.tickCombatForTest(1.5));
       assert(after.playerCooldown < before.playerCooldown,
         `Cooldown didn't decrease: ${before.playerCooldown} -> ${after.playerCooldown}`);
     });
@@ -195,6 +193,7 @@ async function run() {
     // ---- INVENTORY HUD ELEMENTS ----
 
     await runner.run('HUD inventory elements exist in DOM', async () => {
+      await startGame(page);
       const elements = await page.evaluate(() => ({
         salvageCount: !!document.getElementById('hud-salvage-count'),
         salvageValue: !!document.getElementById('hud-salvage-value'),
@@ -211,42 +210,20 @@ async function run() {
       assert(elements.panel, 'Missing hud-inventory-panel');
     });
 
-    await runner.run('Inventory panel toggles with Tab', async () => {
+    await runner.run('Inventory open state can be controlled deterministically', async () => {
       // Panel should start closed
-      const closedState = await page.evaluate(() =>
-        document.getElementById('hud-inventory-panel').classList.contains('open')
-      );
+      const closedState = await page.evaluate(() => window.__TEST_API.getInventory()?.open);
       assert(!closedState, 'Panel should start closed');
 
-      // Simulate Tab via direct key event dispatch (Puppeteer Tab can be intercepted by browser)
-      await page.evaluate(() => {
-        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Tab', key: 'Tab', bubbles: true }));
-      });
-      await sleep(500);
-      await page.evaluate(() => {
-        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Tab', key: 'Tab', bubbles: true }));
-      });
-      await sleep(300);
+      await page.evaluate(() => window.__TEST_API.setInventoryOpenForTest(true));
+      await waitFor(page, () => window.__TEST_API.getInventory()?.open === true, { timeout: 2000 });
+      const openState = await page.evaluate(() => window.__TEST_API.getInventory()?.open);
+      assert(openState, 'Inventory state should be open');
 
-      const openState = await page.evaluate(() =>
-        document.getElementById('hud-inventory-panel').classList.contains('open')
-      );
-      assert(openState, 'Panel should be open after Tab');
-
-      // Tab again to close
-      await page.evaluate(() => {
-        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Tab', key: 'Tab', bubbles: true }));
-      });
-      await sleep(500);
-      await page.evaluate(() => {
-        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Tab', key: 'Tab', bubbles: true }));
-      });
-      await sleep(300);
-
-      const closedAgain = await page.evaluate(() =>
-        document.getElementById('hud-inventory-panel').classList.contains('open')
-      );
-      assert(!closedAgain, 'Panel should be closed after second Tab');
+      await page.evaluate(() => window.__TEST_API.setInventoryOpenForTest(false));
+      await waitFor(page, () => window.__TEST_API.getInventory()?.open === false, { timeout: 2000 });
+      const closedAgain = await page.evaluate(() => window.__TEST_API.getInventory()?.open);
+      assert(!closedAgain, 'Inventory state should be closed');
     });
 
     // ---- EQUIP FROM CARGO ----
@@ -274,6 +251,44 @@ async function run() {
       assert(result.after.equipped[0] !== null, 'Equip slot should have item after equip');
       assert(result.after.equipped[0].name === 'Test Lens', 'Wrong item equipped');
       assert(!result.after.cargo.some(i => i && i.name === 'Test Lens'), 'Item should be removed from cargo');
+    });
+
+    await runner.run('Equipping delta-v artifact preserves current fuel ratio', async () => {
+      await startGame(page);
+      const result = await page.evaluate(() => {
+        const api = window.__TEST_API;
+        const ship = api.getShipPos();
+        const startFuel = api.getShipFuelState();
+        api.setShipFuel(startFuel.deltaVMax * 0.35);
+        api.spawnTestWreck(ship.x, ship.y, {
+          loot: [{
+            name: 'Ratio Tank',
+            category: 'artifact',
+            subcategory: 'equippable',
+            tier: 'rare',
+            value: 200,
+            coefficients: { deltaVCapacityMult: 1.5, thrustScale: 1.2 },
+            effectDesc: 'test',
+          }],
+        });
+        api.pickupAtShip();
+        const beforeEquipFuel = api.getShipFuelState();
+        const beforeTuning = api.getShipTuningState();
+        const before = api.getInventory();
+        const cargoSlot = before.cargo.findIndex(i => i && i.name === 'Ratio Tank');
+        api.equipFromCargo(cargoSlot, 0);
+        api.refreshShipHullStats(false);
+        const afterEquipFuel = api.getShipFuelState();
+        const afterTuning = api.getShipTuningState();
+        return { beforeEquipFuel, afterEquipFuel, beforeTuning, afterTuning };
+      });
+      assert(result.afterEquipFuel.deltaVMax > result.beforeEquipFuel.deltaVMax,
+        'Expected delta-v capacity to increase after equipping tank');
+      assert(Math.abs(result.afterEquipFuel.ratio - result.beforeEquipFuel.ratio) < 0.02,
+        `Expected fuel ratio to be preserved, got before=${result.beforeEquipFuel.ratio}, after=${result.afterEquipFuel.ratio}`);
+      assert(result.afterEquipFuel.ratio < 0.5, 'Equip should not refill a partial tank');
+      assert(result.afterTuning.thrustScale > result.beforeTuning.thrustScale,
+        'Expected local movement coefficient to apply to ship thrustScale');
     });
 
     // ---- LOAD CONSUMABLE FROM CARGO ----
@@ -384,10 +399,6 @@ async function run() {
       assert(profile.upgrades.sensor === 0, `Sensor should start at 0, got ${profile.upgrades.sensor}`);
       assert(profile.upgrades.vault === 0, `Vault should start at 0, got ${profile.upgrades.vault}`);
     });
-
-    // Screenshot
-    const filepath = await screenshot(page, 'inventory');
-    console.log(`\n  Screenshot: ${filepath}`);
 
   } finally {
     if (browser) await browser.close();

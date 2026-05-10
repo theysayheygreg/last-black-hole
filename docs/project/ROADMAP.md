@@ -36,8 +36,8 @@
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | DESIGNED | Schema in META-LOOP.md, not yet implemented in persistence write-back |
-| Nightly playables | GREEN | Latest scheduled workflow is green on `7e138cd`; web, Windows, and macOS release assets build only when the repo SHA changed |
-| Build health gate | GREEN | `npm test`, renderer fixtures, and title-prototype Composer probe were refreshed on `7e138cd` |
+| Nightly playables | STALE | Last scheduled green remains `7e138cd`; today’s local feature stack is ahead of that workflow |
+| Build health gate | STALE | Last recorded health predates the 2026-05-09 feature stack; refresh after the current review/test pass |
 
 ### What's Designed (Not Yet Implemented)
 
@@ -62,16 +62,17 @@
 ### Forward Development Priorities
 
 1. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
-2. **Server-side slingshot + brake/maxSpeed parity** — slingshot is client-only; server brake is still drag-based; server speed cap is an order of magnitude lower than client. Three architectural divergences listed in `BACKLOG.md` under "Server vs client physics divergence" + "Server-side slingshot resolution."
-3. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
-4. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
-5. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
-6. **UI primitive bridge** — design tokens + HUD primitives + reduced inline-style drift
-7. **Meta-loop implementation polish** — results screen, vault/rig/loadout UI, chronicle (foundation shipped 2026-05-04 series)
-8. **Run result write-back** — connect RunResult schema to persistence layer (first slice shipped, full coverage pending)
-9. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
-10. **Balance pass** — hull coefficients (now actually applied!), upgrade costs, loot rarity, signal tuning, delta-v / slingshot numbers
-11. **Deploy** — GitHub Pages web build, nightly playables
+2. **Server-side slingshot authority** — slingshot is client-only and explicitly disabled in remote-authority mode until the sim owns anchor catalog, engagement state, and release resolution.
+3. **Remote/local physics regression watch** — brake, max-speed, delta-v, fuel cells, and movement coefficients now have server parity; keep tests representative as tuning evolves.
+4. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
+5. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
+6. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
+7. **UI primitive bridge** — design tokens + HUD primitives + reduced inline-style drift
+8. **Meta-loop implementation polish** — results screen, vault/rig/loadout UI, chronicle (foundation shipped 2026-05-04 series)
+9. **Run result write-back** — connect RunResult schema to persistence layer (first slice shipped, full coverage pending)
+10. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
+11. **Balance pass** — hull coefficients (now actually applied!), upgrade costs, loot rarity, signal tuning, delta-v / slingshot numbers
+12. **Deploy** — GitHub Pages web build, nightly playables
 
 ### Current contract notes
 

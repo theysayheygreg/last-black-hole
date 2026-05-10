@@ -90,7 +90,7 @@ Before cutting a serious playtest build, the lightweight verification lane shoul
 - `npm test`
 - `npm run test:telemetry`
 - `npm run test:renderer`
-- `node scripts/build-health.js status`
+- `node scripts/build-health.cjs status`
 
 `npm test` already includes the telemetry smoke suite, but keeping the focused telemetry command around is useful when diagnosing stack-status and embedded-runtime regressions without rerunning the whole harness.
 

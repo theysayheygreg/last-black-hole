@@ -185,7 +185,7 @@ function stopServer() {
 async function launchGame(htmlFile = "index.html") {
   let target = htmlFile;
   if (!String(target).startsWith("http://") && !String(target).startsWith("https://")) {
-    target = `http://localhost:${PORT}/${String(target).replace(/^\//, "")}`;
+    target = `http://127.0.0.1:${PORT}/${String(target).replace(/^\//, "")}`;
   }
   const browser = await puppeteer.launch({
     headless: "new",

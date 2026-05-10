@@ -137,7 +137,7 @@ Each hull gets a **route-style identity** in addition to its existing stat sheet
 | **Drifter** | Best slingshot energy capture. Tightest chain windows. The slingshot specialist — currents *and* anchors are your fuel. |
 | **Breacher** | Huge delta-v tank, modest slingshot bonus. Can ignore the system and brute-force routes. The "I don't need this game" hull. |
 | **Resonant** | Wider chain timing window (forgiving chains) at the cost of per-anchor reward. Trades depth for breadth. |
-| **Shroud** | Silent slings — slingshots generate less signal than for other hulls. Stealth-routing identity. |
+| **Shroud** | Silent-sling stat reserved for server-authoritative signal math. Today it is content truth, not a live signal reduction. |
 | **Hauler** | Mass penalty on energy gained. Laden ships swing less efficiently. Trades "max distance per sling" for "more cargo at destination." |
 
 This is more legible than `thrustScale: 1.4 vs 0.7`. Each hull names a *style of moving through space*, not just a stat profile.
@@ -161,9 +161,9 @@ Without this, the system is invisible and the player can't develop mastery. **Th
 Captured here so they're explicit:
 
 1. **Engage button mapping.** Probably the existing pulse button (E / Square)? Or a new bind? Pulse is already a combat verb — overlap could be confusing. Likely a new bind.
-2. **Slingshot range per anchor type.** Wells biggest, planetoids smallest. Should overlap *between* anchors but not *within* a tier (you shouldn't be able to engage two stars at once unless they're a deliberate cluster).
-3. **Energy formula.** `tangentialAlignment × duration × anchorMass × hullModifier` is the rough shape. Tuning to follow.
-4. **Chain window timing.** How long after release can you engage another anchor and still count as a chain? Some hull dependence (Resonant gets longer).
+2. **Slingshot range per anchor type.** First-pass values live in `src/slingshot.js`; playtest should decide whether wells/stars/planetoids overlap too much or too little.
+3. **Energy formula.** First-pass formula is implemented as tangential alignment, orbit time, anchor mass, chain bonus, and hull modifier. Tuning remains open.
+4. **Chain window timing.** First-pass timing is implemented with hull modifiers. Playtest needs to decide whether the window reads as skillful or arbitrary.
 5. **Failure modes.** What happens if you engage too close to a well's kill radius? Does the slingshot save you (graze the lion) or condemn you (committed to a bad orbit)? My instinct: it commits you. The risk is what makes the reward real.
 6. **Cooldown / cost.** Probably no per-slingshot cooldown — the cost is the geometry of the next engagement opportunity. But a hull-level "max chain length" might matter for balance. TBD.
 7. **Server authority.** Slingshot state needs to be authoritative for multiplayer. Engagement decision is client-initiated, energy resolution is server-resolved. The same shape as pulse.
@@ -172,7 +172,7 @@ Captured here so they're explicit:
 
 ## What This Doc Is NOT
 
-- **Not a numbers spec.** Specific ranges, multipliers, durations come in a follow-up after we agree on shape.
+- **Not the final numbers spec.** Specific ranges, multipliers, and durations now have first-pass code values, but this doc still tracks design intent rather than balance truth.
 - **Not a map redesign.** Map updates happen after the system ships and we can playtest route-readability.
 - **Not a replacement for `SLINGSHOT-V2.md`.** That doc explored mechanical alternatives; this one extends the chosen direction to the multi-anchor case.
 
@@ -180,7 +180,7 @@ Captured here so they're explicit:
 
 ## Status
 
-**Design proposal — awaiting review.** Decisions made:
+**Client implementation shipped; multiplayer authority deferred.** Decisions made:
 - Skitching / rail-grinding engagement model (button-press, snap-to, manual release).
 - Three-tier anchor catalog (wells / stars / planetoids).
 - Per-anchor keyed ranges, level design handles clustering.
@@ -188,7 +188,7 @@ Captured here so they're explicit:
 - Hull integration via route-style identity.
 
 Decisions deferred:
-- All numbers.
-- Specific UI/HUD shape for the velocity readout + slingshot affordance.
+- Playtest-tuned numbers.
+- Audio feedback for engage/release.
 - Map-design pass to make existing maps route-readable.
 - Server-authority specifics.

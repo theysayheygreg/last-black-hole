@@ -795,6 +795,10 @@ function init() {
         escapeTimer = escape;
       },
       get inventoryOpen() { return inventoryOpen; },
+      setInventoryOpenForTest: (open) => {
+        inventoryOpen = Boolean(open);
+        if (inventoryOpen) resetInventoryCursor();
+      },
       inputManager,
       scavengerSystem,
       combatSystem,
@@ -813,6 +817,8 @@ function init() {
       get homeRigCursor() { return homeRigCursor; },
       transitionToGame,
       transitionToRemoteGame,
+      startRemoteGame,
+      applyHullToShip,
     }));
   }
 
@@ -1225,6 +1231,10 @@ function applyRemoteSnapshot(snapshot) {
   shieldActive = Boolean(localPlayer.effectState?.shieldCharges > 0);
   timeSlowRemaining = Math.max(0, localPlayer.effectState?.timeSlowRemaining ?? 0);
   combatSystem.playerCooldown = Math.max(0, localPlayer.effectState?.pulseCooldownRemaining ?? 0);
+  if (Number.isFinite(localPlayer.deltaVMax) && Number.isFinite(localPlayer.deltaV)) {
+    ship.deltaVMax = localPlayer.deltaVMax;
+    ship.deltaV = Math.max(0, Math.min(localPlayer.deltaVMax, localPlayer.deltaV));
+  }
   if (localPlayer.signal) {
     signalLevel = localPlayer.signal.level ?? 0;
     signalZone = localPlayer.signal.zone ?? 'ghost';
@@ -2380,17 +2390,15 @@ function getHullSlingshotMods() {
   return {
     energyMult: hullDef.slingshotEnergyMult ?? 1.0,
     chainWindowMult: hullDef.slingshotChainWindowMult ?? 1.0,
-    signalReduction: hullDef.slingshotSignalReduction ?? 0,
   };
 }
 
 /**
  * Apply the active profile's hull stats and equipped-item bonuses to the
- * ship. Resets deltaV to full as a side effect — this is the right shape
- * for run start (every fresh run gets a full tank). Mid-run inventory
- * swaps preserve the %-fueled ratio (see Ship.applyDeltaVItemBonus).
+ * ship. Fresh runs refill the tank; mid-run inventory swaps preserve the
+ * current fuel ratio through the whole hull+item recompute.
  */
-function applyHullToShip() {
+function applyHullToShip({ refill = true } = {}) {
   const hullType = profileManager.active?.hullType
     || profileManager.active?.shipType
     || 'drifter';
@@ -2404,8 +2412,10 @@ function applyHullToShip() {
     dragScale: hullDef.dragScale ?? 1.0,
     currentCoupling: hullDef.currentCoupling ?? 1.0,
     wellResistScale: hullDef.wellResistScale ?? 1.0,
+    refill,
   });
   if (inventorySystem) {
+    ship.applyMovementItemBonus(inventorySystem.getMovementStats());
     ship.applyDeltaVItemBonus(inventorySystem.getDeltaVStats());
   }
 }
@@ -3035,7 +3045,7 @@ function gameLoop(now) {
           // the next scene load. applyDeltaVItemBonus preserves the
           // current %-fueled ratio so a partial tank stays partial.
           if (beforeEquipSig !== afterEquipSig) {
-            applyHullToShip();
+            applyHullToShip({ refill: false });
           }
         }
       }
@@ -3360,7 +3370,7 @@ function gameLoop(now) {
     // Slingshot UI + velocity readout only during live gameplay — they
     // attach to the active ship state and would be visually noisy on
     // the death/escape end-screen overlays.
-    if (gamePhase === 'playing') {
+    if (gamePhase === 'playing' && !remoteAuthorityActive) {
       renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
       renderShipVelocityReadout(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
     }

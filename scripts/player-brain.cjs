@@ -44,6 +44,11 @@ const BRAIN_DEFAULTS = {
   controlDebuffResist: 1.0,
   wellGraceDuration: 0,
   freeWellSurvives: 0,
+  deltaVMax: 100,
+  deltaVRegen: 1.5,
+  deltaVRegenBoost: 6.0,
+  deltaVBurnEff: 1.0,
+  deltaVBurnRate: 12,
 };
 
 const BRAIN_CAPS = {
@@ -61,6 +66,17 @@ const BRAIN_CAPS = {
   controlDebuffResist: [0.3, 2.0],
   wellGraceDuration: [0, 1.0],
   freeWellSurvives: [0, 3],
+  deltaVMax: [1, 500],
+  deltaVRegen: [0, 20],
+  deltaVRegenBoost: [0, 40],
+  deltaVBurnEff: [0.1, 5],
+  deltaVBurnRate: [1, 60],
+};
+
+const ITEM_COEFFICIENT_ALIASES = {
+  deltaVCapacityMult: "deltaVMax",
+  deltaVRegenMult: ["deltaVRegen", "deltaVRegenBoost"],
+  deltaVBurnMult: "deltaVBurnEff",
 };
 
 const ARTIFACT_COEFFICIENTS = {
@@ -123,6 +139,13 @@ function applyItemBrainEffects(brain, item) {
   if (!item) return;
   if (item.coefficients) {
     for (const [key, value] of Object.entries(item.coefficients)) {
+      const alias = ITEM_COEFFICIENT_ALIASES[key];
+      if (alias) {
+        for (const target of Array.isArray(alias) ? alias : [alias]) {
+          applyNumericMultiplier(brain, target, value);
+        }
+        continue;
+      }
       if (key === "cargoSlots") {
         if (Number.isFinite(value)) brain.cargoSlots += value;
         continue;

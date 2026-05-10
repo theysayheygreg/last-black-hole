@@ -63,11 +63,11 @@ snapshot would just overwrite local state. A cancel-on-phase-change
 guard I'd added was inside the playing branch where it never fired.
 All four fixed.
 
-**Three architectural divergences flagged for future.** Server-side still
-uses old brake-as-drag, server has its own (lower) speed cap, and
-slingshot is client-only. All three are the same shape — the server has
-its own physics path that pre-dates today's client work. Mirroring is
-substantial. Documented in `BACKLOG.md` so we don't lose track.
+**Follow-up architectural divergence flagged for future.** Slingshot is
+client-only until the sim owns anchor catalogs, engagement state, and
+release resolution. A review pass then mirrored the brake, speed-cap, and
+delta-v economy into the server path, so the remaining movement split is
+narrower and better named.
 
 The shape of movement now: thrust costs fuel, slingshots are how you
 travel at speed, currents are the river you read, drag is gentle, brakes
@@ -75,7 +75,8 @@ cost fuel too, hulls actually have personalities. Conservation of momentum
 has playable validity windows. Space is a network of anchors. Map design
 becomes route design.
 
-Six commits, all green. Ready for playtest.
+Six feature commits landed. The later review pass marks build health stale
+until the refreshed harness completes on the full post-review stack.
 
 ---
 

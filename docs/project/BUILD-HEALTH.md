@@ -10,9 +10,9 @@ Run the verifier first and either fix the failures or make an explicit decision 
 ## Commands
 
 - Check current status:
-  - `node scripts/build-health.js status`
+  - `node scripts/build-health.cjs status`
 - Record fresh build health:
-  - `node scripts/build-health.js verify`
+  - `node scripts/build-health.cjs verify`
 - Run only the renderer fixture suite:
   - `npm run test:renderer`
 - Run only the standalone title prototype probe:

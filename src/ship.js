@@ -86,12 +86,14 @@ export class Ship {
     dragScale = 1.0,
     currentCoupling = 1.0,
     wellResistScale = 1.0,
+    refill = true,
   } = {}) {
+    const prevRatio = this.deltaV / Math.max(this.deltaVMax, 1e-6);
     this.deltaVMax = deltaVMax;
     this.deltaVRegen = deltaVRegen;
     this.deltaVRegenBoost = deltaVRegenBoost;
     this.deltaVBurnEff = deltaVBurnEff;
-    this.deltaV = deltaVMax;
+    this.deltaV = refill ? deltaVMax : prevRatio * deltaVMax;
     this.thrustScale = thrustScale;
     this.dragScale = dragScale;
     this.currentCoupling = currentCoupling;
@@ -115,6 +117,19 @@ export class Ship {
     this.deltaVBurnEff *= deltaVBurnMult;
     // Keep the same %-fueled feel through equipment swaps mid-run.
     this.deltaV = prevRatio * this.deltaVMax;
+  }
+
+  /** Layer equipped movement coefficients onto the hull baseline. */
+  applyMovementItemBonus({
+    thrustScale = 1,
+    dragScale = 1,
+    currentCoupling = 1,
+    wellResistScale = 1,
+  } = {}) {
+    this.thrustScale *= thrustScale;
+    this.dragScale *= dragScale;
+    this.currentCoupling *= currentCoupling;
+    this.wellResistScale *= wellResistScale;
   }
 
   /** Refill fuel by an absolute amount (used by fuelCell consumable). */

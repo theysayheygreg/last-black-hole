@@ -17,15 +17,15 @@
  * boost in the ship's facing direction.
  *
  * Chains: if the player engages a NEW anchor within `chainWindow`
- * seconds of releasing the previous one, the new anchor's energy
- * accrual gets a multiplicative chain bonus that scales with the
- * chain count. Reading the geometry of the map and stitching anchors
+ * seconds of releasing the previous one, release energy gets a
+ * multiplicative chain bonus that scales with the chain count. Reading
+ * the geometry of the map and stitching anchors
  * together is the core skill expression.
  *
  * Hull integration is layered via per-hull stats from hulls.data.json:
  *   slingshotEnergyMult (Drifter best, Hauler worst)
  *   slingshotChainWindow (Resonant most forgiving)
- *   slingshotSignalReduction (Shroud silent slings)
+ *   slingshotSignalReduction (reserved for server-authoritative signal)
  */
 
 import { CONFIG } from './config.js';
@@ -94,10 +94,6 @@ export class SlingshotSystem {
     this._lastReleasedAnchorRef = null;
     // Current chain count: 1 for first sling, 2 after a clean chain etc.
     this._chainCount = 0;
-    // Tracks which anchor was in-range last frame so we can detect
-    // entry/exit events for audio/visual cues. Optional — main.js
-    // queries currentAffordance() each frame regardless.
-    this._lastAffordanceRef = null;
   }
 
   /**
@@ -160,7 +156,6 @@ export class SlingshotSystem {
         bestDist = d;
       }
     }
-    this._lastAffordanceRef = best?.anchor?.ref ?? null;
     return best;
   }
 
@@ -300,8 +295,8 @@ export class SlingshotSystem {
     const chainMult = Math.pow(SLINGSHOT_CONFIG.chainMultiplier, Math.max(0, this._chainCount - 1));
     const totalEnergy = baseEnergy * chainMult * SLINGSHOT_CONFIG.releaseMultiplier * (hullModifiers.energyMult ?? 1);
 
-    // Boost in ship's facing direction. Caller (Ship.update / main)
-    // applies this to ship.vx/vy.
+    // Boost in ship's facing direction. release() mutates the ship
+    // directly so callers cannot forget to apply the payoff.
     const boostVX = Math.cos(ship.facing) * totalEnergy;
     const boostVY = Math.sin(ship.facing) * totalEnergy;
 
@@ -330,13 +325,14 @@ export class SlingshotSystem {
 
   /** Cancel any active engagement without applying a boost (death, scene reset). */
   cancel(ship) {
-    if (!ship.slingshotEngaged) return;
-    ship.slingshotEngaged = false;
-    ship.slingshotAnchor = null;
-    ship.slingshotEnergy = 0;
-    ship.slingshotChainCount = 0;
-    ship.slingshotEngageRadius = 0;
-    ship.slingshotOrbitDir = 0;
+    if (ship) {
+      ship.slingshotEngaged = false;
+      ship.slingshotAnchor = null;
+      ship.slingshotEnergy = 0;
+      ship.slingshotChainCount = 0;
+      ship.slingshotEngageRadius = 0;
+      ship.slingshotOrbitDir = 0;
+    }
     this._lastReleaseTime = -Infinity;
     this._lastReleasedAnchorRef = null;
     this._chainCount = 0;

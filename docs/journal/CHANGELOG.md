@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-05-10 — Review hardening pass
+
+Codex review pass after the delta-v / slingshot / movement stack. The goal was not new spectacle; it was making the new surface honest across local play, remote authority, tests, and packaged builds.
+
+- Mirrored delta-v economy into the authoritative sim: remote players now have tank size, regen, burn efficiency, fuel-cell refills, and snapshot fuel state.
+- Brought server movement closer to the client model: brake is reverse thrust with delta-v cost, movement item coefficients apply through PlayerBrain aliases, and the server enforces the same top-level speed cap.
+- Preserved fuel ratio on mid-run local equipment swaps so capacity artifacts no longer secretly refill the tank.
+- Hid local slingshot affordance/rendering in remote-authority mode until the server owns the mechanic.
+- Copied `src/content` into desktop staging so packaged authority can load the shared JSON manifests.
+- Added validation for hull manifests and representative inventory/remote tests for fuel ratio, fuel cells, brake cost, and speed cap.
+- Updated docs where yesterday's feature notes had drifted: build health is marked stale, server/client parity is no longer listed as a known brake/speed bug, and slingshot status now distinguishes shipped client work from deferred server authority.
+
 ## 2026-05-09 — Delta-v, slingshot network, speed/movement overhaul
 
 A long session that turned thrust from a free verb into a real economy and

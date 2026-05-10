@@ -24,11 +24,11 @@
 ## Physics & Simulation
 
 ### Content Manifest Extraction
-- **What:** Move hull definitions, item catalog, AI personalities, signature definitions, and session/map profiles toward explicit manifests instead of burying them in runtime files and docs.
-- **Current state:** First pass shipped for hull identity + AI hull assignment in `scripts/content/hulls.js`. Remaining work is seeded-generation content, item catalog truth, and session/map profile manifests.
-- **Why backlogged:** The architecture is now stable enough that content sprawl is the next real maintainability risk, but only the first extraction has been done so far.
+- **What:** Move runtime content into explicit JSON manifests instead of burying it in gameplay files and docs.
+- **Current state:** Balance, items, signatures, session profiles, and hulls now share canonical `src/content/*.data.json` files with ESM/CJS wrappers for client and server use.
+- **Why still backlogged:** The drift-prone dual-source problem is fixed. Remaining work is content tooling: schema summaries, editor-friendly validation errors, and adding future catalogs to the same shape before they sprawl.
 - **Value if revisited:** Faster feature work, safer agent collaboration, easier balancing, less runtime drift from design docs.
-- **Added:** 2026-04-12
+- **Updated:** 2026-05-10
 
 ### Desktop Stack Status Surface
 - **What:** Add a small in-app stack-status/log surface for the embedded desktop build so the local authority stack is visible without opening terminals.
@@ -125,14 +125,12 @@
 - **Value if revisited:** Slingshot becomes available across all session modes. Other players see your engagement state and orbital lock. Required before slingshot can be a real multiplayer mechanic.
 - **State:** `src/slingshot.js` is client-side. `scripts/sim-runtime.cjs` has no slingshot concept yet. Wire format (engage anchor id + button edge) needs design.
 
-### Server vs client physics divergence
-- **What:** Three physics behaviors diverge between local-mode (client-authoritative) and remote-mode (server-authoritative):
-  1. **Brake.** Client uses reverse-thrust + fuel cost; server still uses old brake-as-drag (`SERVER_INPUT.brakeStrength: 0.15` in `scripts/sim-runtime.cjs`).
-  2. **Speed cap.** Client has `CONFIG.ship.maxSpeedWorld: 8.0`; server has its own implicit cap at `2.5 × thrustScale × 0.3 ≈ 0.5–1.0 world/s` (`scripts/sim-runtime.cjs:3635`). In remote mode the server cap dominates.
-  3. **Hull stat application.** Client now applies `thrustScale / dragScale / currentCoupling / wellResistScale` from the hull def (was a real bug — every hull flew identically locally before today). Server has its own resolution via `player-brain.cjs`. Numbers may not match exactly.
-- **Why backlogged:** Each is the same architectural pattern — server has its own physics path that pre-dates today's client work. Mirroring would be substantial.
-- **Value if revisited:** Identical feel between local-host and remote-client modes. Today, a player jumping into a remote session would notice subtle differences in how their ship handles.
-- **State:** Local play is correct. Remote-authority continues using its own resolution. Worth a focused pass once slingshot server-authority lands (above) since both touch the same surface.
+### Server vs client physics parity
+- **What:** Keep local-mode and remote-authority movement semantics aligned as movement becomes a real economy.
+- **Current state:** The 2026-05-10 review pass mirrored the big client changes into the sim: delta-v tanks and regen, fuel-cell refills, reverse-thrust braking, movement item coefficients, larger cargo capacity, and the same top-level speed cap. Remote snapshots now expose fuel state for the HUD.
+- **Why still backlogged:** This is now a regression-watch item rather than a known broken feature. Slingshot authority remains separate above, and deeper numeric tuning still needs playtest evidence.
+- **Value if revisited:** Identical feel between local-host and remote-client modes.
+- **Updated:** 2026-05-10
 
 ### Slingshot numbers tuning + map redesign for routes
 - **What:** Per `SLINGSHOT-NETWORK.md` "Open Decisions": the slingshot ships with first-pass numbers that need a real playtest pass. Specifically `energyAccrualRate`, `releaseMultiplier`, `tangentialForce`, per-anchor-type `range`, `chainWindowSeconds`, `chainMultiplier`. Separately, existing maps (Shallows / Expanse / Deep Field) were laid out for "wells everywhere" gameplay — they want a route-design pass with linkage in mind: 2-hop opportunities, 3-chain runs, signature lines per map.
@@ -171,7 +169,7 @@
 ### ~~Reverse Thrust / Active Brake~~ — SHIPPED 2026-05-09
 - **What it became:** Brake (S/Right-click on keyboard, L2 on controller) is now a real reverse thrust that costs delta-v fuel, not a free drag-add. Strength is `brakeThrustScale: 0.4` of forward thrust; fuel cost is `brakeFuelScale: 0.6` of forward burn. Sits inside the delta-v economy with everything else.
 - **Where:** `src/ship.js` step 2b in update(); CONFIG knobs in `src/config.js` under `input`.
-- **Server divergence:** Server-authoritative sim still uses old brake-as-drag (`SERVER_INPUT.brakeStrength: 0.15`). See "Server vs client physics divergence" entry below.
+- **Server parity:** Server-authoritative sim now mirrors this as reverse thrust with delta-v cost. Keep it covered by the remote-authority harness as tuning changes.
 
 ---
 

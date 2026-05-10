@@ -432,6 +432,8 @@ function stageElectronShell(mode) {
   copyIfExists(path.join(ROOT, 'scripts', 'content'), path.join(serverDir, 'content'));
   // Copy map files where shared-map-loader.js expects them (../src/maps relative to server/)
   copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(STAGING_ROOT, 'src', 'maps'));
+  // CJS server content wrappers require ../../src/content/*.data.json.
+  copyIfExists(path.join(ROOT, 'src', 'content'), path.join(STAGING_ROOT, 'src', 'content'));
 }
 
 async function buildElectronTarget(targetRoot, target, mode) {

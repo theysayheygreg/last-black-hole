@@ -42,7 +42,7 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
   - [x] full content-manifest JSON consolidation (no more dual ESM/CJS sources)
 1. Slingshot + speed playtest tuning — first-pass numbers ship; feel needs a real session.
 2. Server-side slingshot resolution — client-only today; multiplayer needs anchor catalog + engagement state on the server.
-3. Server vs client physics parity — three divergences (brake model, speed cap, hull stat application). See BACKLOG.md "Server vs client physics divergence."
+3. Remote/local movement parity regression watch — brake, speed cap, delta-v, fuel cells, and movement coefficients have server parity as of 2026-05-10; keep the harness honest while tuning.
 4. Map redesign for slingshot routes — existing maps are "wells everywhere" layouts, not route puzzles. Want 2-hop opportunities, 3-chain runs, signature lines per map.
 5. Tailscale hardware validation — mini authority + MacBook client
 6. UI primitive bridge — shared design tokens + HUD primitives instead of inline style drift

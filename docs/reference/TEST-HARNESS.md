@@ -19,31 +19,31 @@ That keeps `test-harness` mode separate from the normal human launch paths.
 
 ```mermaid
 flowchart LR
-    A["npm test"] --> B["tests/run-all.js"]
+    A["npm test"] --> B["tests/run-all.cjs"]
     B --> C["Client suites"]
     B --> D["Architecture suites"]
     B --> E["Scale + authority suites"]
 
-    C --> C1["smoke.js"]
-    C --> C2["controller.js"]
-    C --> C3["keyboard-mouse.js"]
-    C --> C4["physics.js / flow.js / systems.js"]
+    C --> C1["smoke.cjs"]
+    C --> C2["controller.cjs"]
+    C --> C3["keyboard-mouse.cjs"]
+    C --> C4["physics.cjs / flow.cjs / systems.cjs"]
 
-    D --> D1["infra-smoke.js"]
-    D --> D2["telemetry-smoke.js"]
-    D --> D3["sim-lifecycle.js"]
-    D --> D4["control-plane.js"]
-    D --> D5["remote-authority.js"]
+    D --> D1["infra-smoke.cjs"]
+    D --> D2["telemetry-smoke.cjs"]
+    D --> D3["sim-lifecycle.cjs"]
+    D --> D4["control-plane.cjs"]
+    D --> D5["remote-authority.cjs"]
 
-    E --> E1["player-brain.js"]
-    E --> E2["overload-state.js"]
-    E --> E3["coarse-field.js"]
-    E --> E4["sim-scale.js"]
+    E --> E1["player-brain.cjs"]
+    E --> E2["overload-state.cjs"]
+    E --> E3["coarse-field.cjs"]
+    E --> E4["sim-scale.cjs"]
 
-    F["npm run test:renderer"] --> G["renderer.js"]
+    F["npm run test:renderer"] --> G["renderer.cjs"]
     G --> H["Deterministic visual fixtures"]
 
-    I["tests/helpers.js"] --> J["Harness static server :8719"]
+    I["tests/helpers.cjs"] --> J["Harness static server :8719"]
     I --> K["Transient control plane"]
     I --> L["Transient sim server"]
     I --> M["Puppeteer browser"]
@@ -55,14 +55,14 @@ flowchart LR
 
 These tests answer: can the game page boot and run at all?
 
-- `tests/smoke.js`
-- `tests/controller.js`
-- `tests/keyboard-mouse.js`
-- `tests/physics.js`
-- `tests/coordinates.js`
-- `tests/flow.js`
-- `tests/inventory.js`
-- `tests/systems.js`
+- `tests/smoke.cjs`
+- `tests/controller.cjs`
+- `tests/keyboard-mouse.cjs`
+- `tests/physics.cjs`
+- `tests/coordinates.cjs`
+- `tests/flow.cjs`
+- `tests/inventory.cjs`
+- `tests/systems.cjs`
 
 This layer is good for catching:
 
@@ -77,10 +77,10 @@ This layer is **not** enough to prove the distributed architecture.
 
 These tests answer: can the real client/control-plane/sim stack start and behave like a stack?
 
-- `tests/infra-smoke.js`
-- `tests/telemetry-smoke.js`
-- `tests/sim-lifecycle.js`
-- `tests/control-plane.js`
+- `tests/infra-smoke.cjs`
+- `tests/telemetry-smoke.cjs`
+- `tests/sim-lifecycle.cjs`
+- `tests/control-plane.cjs`
 
 This layer is good for catching:
 
@@ -95,11 +95,11 @@ This layer is good for catching:
 
 These tests answer: does the remote-authority version of LBH behave honestly?
 
-- `tests/remote-authority.js`
-- `tests/player-brain.js`
-- `tests/overload-state.js`
-- `tests/coarse-field.js`
-- `tests/sim-scale.js`
+- `tests/remote-authority.cjs`
+- `tests/player-brain.cjs`
+- `tests/overload-state.cjs`
+- `tests/coarse-field.cjs`
+- `tests/sim-scale.cjs`
 
 This layer is good for catching:
 
@@ -119,7 +119,7 @@ This is a separate command:
 
 It runs:
 
-- `tests/renderer.js`
+- `tests/renderer.cjs`
 
 This layer is for visual judgment, not gameplay truth. It captures fixed fixtures over time so renderer work can be compared honestly.
 
@@ -145,7 +145,7 @@ The harness does **not** depend on the human dev server. It spins up its own tem
 
 The backbone is:
 
-- `tests/helpers.js`
+- `tests/helpers.cjs`
 
 That file is responsible for:
 
@@ -171,7 +171,7 @@ For visual/renderer verification:
 
 For build-health verification:
 
-- `node scripts/build-health.js verify`
+- `node scripts/build-health.cjs verify`
 
 That writes the tracked result to:
 
@@ -192,11 +192,11 @@ That keeps CI and nightly validation honest while still giving agents good brows
 
 Use the right test for the right question.
 
-- “Does the client boot?” → `tests/smoke.js`
-- “Does the distributed stack come up?” → `tests/infra-smoke.js`
-- “Are runtime telemetry events still emitted the way the operator tooling expects?” → `tests/telemetry-smoke.js`
-- “Does remote authority still work?” → `tests/remote-authority.js`
+- “Does the client boot?” → `tests/smoke.cjs`
+- “Does the distributed stack come up?” → `tests/infra-smoke.cjs`
+- “Are runtime telemetry events still emitted the way the operator tooling expects?” → `tests/telemetry-smoke.cjs`
+- “Does remote authority still work?” → `tests/remote-authority.cjs`
 - “Does the renderer still look right?” → `npm run test:renderer`
-- “Is this commit actually verified?” → `node scripts/build-health.js status`
+- “Is this commit actually verified?” → `node scripts/build-health.cjs status`
 
 That is the current shape of LBH test automation.

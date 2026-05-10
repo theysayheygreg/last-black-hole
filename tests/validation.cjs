@@ -112,6 +112,13 @@ const SESSION_PROFILE_CONSTANTS = [
   'MAP_SESSION_PROFILES',
 ];
 
+const HULL_CONSTANTS = [
+  'RIG_TRACKS',
+  'PROFILE_SHIP_TO_HULL',
+  'HULL_DEFINITIONS',
+  'PERSONALITY_HULL_MAP',
+];
+
 // Both client (ESM) and server (CJS) sides load the same canonical JSON
 // for content data — see src/content/*.data.json. We can therefore read
 // the JSON directly here and use it as the single source of truth for
@@ -128,6 +135,8 @@ const serverItems = require(path.join(ROOT, 'scripts', 'content', 'items.cjs'));
 const clientItems = loadContentJson('items');
 const serverSessionProfiles = require(path.join(ROOT, 'scripts', 'content', 'session-profiles.cjs'));
 const clientSessionProfiles = loadContentJson('session-profiles');
+const serverHulls = require(path.join(ROOT, 'scripts', 'content', 'hulls.cjs'));
+const clientHulls = loadContentJson('hulls');
 
 function deepEqual(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -702,7 +711,47 @@ runner.run('Client perf profiles match shipped fixed-grid contract', () => {
     'fixedGrid perfSmoothing must preserve current perf HUD smoothing');
 });
 
-// ---- 15. Directional ASCII shader validation ----
+// ---- 15. Hull content manifest validation ----
+
+runner.run('Hull server/client manifests stay in sync', () => {
+  for (const name of HULL_CONSTANTS) {
+    assert(deepEqual(serverHulls[name], clientHulls[name]),
+      `scripts/content/hulls.cjs ${name} does not match src/content/hulls.data.json`);
+  }
+});
+
+runner.run('Hull definitions expose movement, delta-v, and slingshot truth', () => {
+  const requiredNumeric = [
+    'thrustScale', 'dragScale', 'currentCoupling',
+    'signalGenMult', 'signalDecayMult',
+    'pulseRadiusScale', 'pulseCooldownScale', 'pulseSignalScale',
+    'cargoSlots', 'pickupRadius', 'sensorRange',
+    'wellResistScale', 'controlDebuffResist',
+    'deltaVMax', 'deltaVBurnEff', 'deltaVRegen', 'deltaVRegenBoost',
+    'slingshotEnergyMult', 'slingshotChainWindowMult', 'slingshotSignalReduction',
+  ];
+  const hullIds = new Set(Object.keys(serverHulls.HULL_DEFINITIONS));
+  assert(hullIds.size >= 5, `Expected at least 5 hulls, got ${hullIds.size}`);
+  for (const [id, hull] of Object.entries(serverHulls.HULL_DEFINITIONS)) {
+    assert(typeof hull.name === 'string' && hull.name.length > 0, `${id}: missing name`);
+    for (const key of requiredNumeric) {
+      assert(Number.isFinite(hull[key]), `${id}.${key} must be finite`);
+    }
+    assert(Number.isInteger(hull.cargoSlots) && hull.cargoSlots > 0, `${id}.cargoSlots must be positive integer`);
+    assertObject(hull.abilities, `${id}.abilities`);
+  }
+  for (const [shipType, hullId] of Object.entries(serverHulls.PROFILE_SHIP_TO_HULL)) {
+    assert(hullIds.has(hullId), `PROFILE_SHIP_TO_HULL.${shipType} references unknown hull ${hullId}`);
+  }
+  for (const [personality, choices] of Object.entries(serverHulls.PERSONALITY_HULL_MAP)) {
+    assert(Array.isArray(choices) && choices.length > 0, `${personality}: personality hull list must be non-empty`);
+    for (const hullId of choices) {
+      assert(hullIds.has(hullId), `${personality}: unknown hull ${hullId}`);
+    }
+  }
+});
+
+// ---- 16. Directional ASCII shader validation ----
 
 runner.run('ASCII directional shader keeps four 16-cell ramps', () => {
   const ramps = parseAsciiRamps();

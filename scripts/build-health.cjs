@@ -160,7 +160,7 @@ function main() {
     status();
     return;
   }
-  console.error('Usage: node scripts/build-health.js [status|verify]');
+  console.error('Usage: node scripts/build-health.cjs [status|verify]');
   process.exit(1);
 }
 

@@ -142,7 +142,7 @@ focused harnesses:
 npm run test:renderer   # deterministic visual fixtures + screenshots
 npm run test:title-prototype  # standalone Composer title-prototype probe
 npm run test:telemetry  # structured runtime log contract
-node scripts/build-health.js status
+node scripts/build-health.cjs status
 ```
 
 ## tech stack
