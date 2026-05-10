@@ -1,5 +1,35 @@
 # Decision Log
 
+## 2026-05-09 — Movement is an economy, not a free verb
+
+**Decision:** Thrust is no longer free. The ship has a finite delta-v fuel resource that thrust drains and time refills. Brake converts from drag-add to a real reverse-thrust that costs delta-v at a smaller rate than forward (`brakeThrustScale: 0.4`, `brakeFuelScale: 0.6`). Drag drops 4× (0.06 → 0.015) so coasting actually preserves momentum.
+
+**Why:** Pillar 2 ("Movement Is the Game") was quietly broken when there was no reason to ever release the gas. Currents and slingshots become flavor instead of strategy if thrust is free. Making thrust an economy gives every choice an economic dimension: fight current = pay, surf current = save, slingshot = gain.
+
+**Where it landed:** `src/ship.js` step 2 / 2b, `src/config.js` ship section, `src/content/hulls.data.json` per-hull deltaV stats. Color-coded HUD gauge top-right. Velocity readout under the ship sprite as the sibling legibility fix.
+
+**Door status:** Open for tuning — the numbers are first-pass, will need playtest iteration. Server-side resolution still uses old brake-as-drag model; that's a known divergence flagged in `BACKLOG.md`.
+
+## 2026-05-09 — Slingshot is a designed feature, not emergent physics
+
+**Decision:** Slingshotting off massive objects becomes an explicit verb with a button-press engagement model (skitching / Tony-Hawk grinding / Sonic-rails reference). Three-tier anchor catalog: wells (high reward, high risk), stars (medium / medium, time-limited by consumption), planetoids (low / low, moving). Per-anchor keyed snap-to ranges; chains are first-class (multiplicative bonus when re-engaging within `chainWindow` of a release).
+
+**Why:** The previous behavior — gravitation curving your trajectory if you happened to fly past a well — was a *transitive consequence of forces*, not a feature. Players didn't know they had pulled one off and didn't get rewarded for doing it deliberately. Naming it as a verb and rewarding the maneuver lets map geometry become *route puzzle space*.
+
+**Where it landed:** `docs/design/SLINGSHOT-NETWORK.md` is the design doc. `src/slingshot.js` is the implementation. Hull modifiers in `hulls.data.json` give each hull a route-style identity (Drifter specialist, Breacher brute-force, Resonant forgiving chains, Shroud silent slings, Hauler mass-penalized).
+
+**Door status:** Open — server authority is deferred (client-only mechanic today), numbers need playtest tuning, and existing maps want a route-design pass with linkage in mind. All flagged in `BACKLOG.md`.
+
+## 2026-05-09 — Single-source content via JSON instead of mirrored modules
+
+**Decision:** The five content manifests (balance, items, signatures, session-profiles, hulls) move their data into `*.data.json` files in `src/content/`. Both the ESM browser side and the CJS Node sim import the same JSON. Drift on data is now structurally impossible.
+
+**Why:** The mirrored ESM/CJS module pair was clean architecturally but tedious to maintain. Validation tests caught divergence at PR time, but PRs that touched one file and forgot the other failed unnecessarily. JSON-as-canonical removes the diff burden for ~90% of each file (the data) at the cost of duplicated 5-line helper functions (which validation still covers).
+
+**Where it landed:** `src/content/*.data.json`, `src/content/*.js` (ESM wrappers), `scripts/content/*.cjs` (CJS wrappers). Project-wide `package.json` flipped to `"type": "module"`; Node-side files renamed `.js` → `.cjs`.
+
+**Door status:** Closed for now. A future cleaner version would convert all of `scripts/` to ESM and remove the wrappers entirely, but the cost-benefit didn't justify it this session.
+
 ## 2026-04-13 — Runtime telemetry needs its own smoke canary
 
 The harness has grown into a real multi-process operator surface, so telemetry can no longer be treated as an incidental nicety. The right move is not to bloat the basic client smoke test, but to add a dedicated telemetry smoke that boots the real control-plane/sim/client path and asserts the structured events we actually depend on: runtime boot, profile bootstrap, session start, and player join. That keeps the original intent intact — small canaries for specific questions — while making the logging contract explicit and testable.

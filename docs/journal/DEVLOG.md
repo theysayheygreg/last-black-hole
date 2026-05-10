@@ -5,6 +5,80 @@
 
 ---
 
+## Week 7, Day 5: May 9, 2026 — Thrust Becomes an Economy, Space Becomes a Network
+
+The day started with a problem that wasn't obvious until you said it out loud:
+flying around the universe didn't feel meaningful because you had infinite
+thrust. There was no reason to let off the gas pedal. And without a reason to
+let off the gas, the fluid currents we'd been so proud of were just flavor —
+not strategy. Pillar 2 ("Movement Is the Game") had no teeth.
+
+So the day's work was about putting teeth in.
+
+**Delta-v fuel.** Thrust drains a finite resource that refills slowly when
+you're not burning. Hulls have differentiated tank sizes and burn efficiency.
+Drifter has a small tank but burns it at 55% the rate, because currents are
+its real fuel. Breacher has a huge tank but expensive thrust, built for
+short decisive bursts. Color-coded HUD gauge top-right; salvage-tier fuel
+cells in the catalog; equippable artifacts that boost capacity, regen, or
+efficiency.
+
+**Slingshot as a feature, not a side effect.** The old behavior was that
+flying past a well curved your trajectory because gravity exists. Players
+didn't know they'd done a slingshot and didn't get rewarded. That's not a
+feature, that's physics happening. The new system: any heavy enough object
+(well, star, planetoid) is a *snap-to anchor*. Press F to engage, the ship
+locks into orbit, accumulated tangential energy banks into a counter, press
+F again to release with a velocity boost in your facing direction. Chains
+multiply the bonus when you go anchor-to-anchor without losing alignment.
+Every hull has a different route-style: Drifter is the specialist, Breacher
+is the brute-force "I don't need this game" hull, Resonant gets forgiving
+chain windows, Shroud's slings are signal-quiet, Hauler's mass penalty
+makes laden ships swing less efficiently.
+
+The reference for the engagement model is Tony Hawk skitching off a car or
+the Sonic 3D rail-grinding moments. Snap-to range gives a visual affordance,
+button-press commits, manual release returns the energy. No accidents. No
+"did I just sling or did I just curve?"
+
+**Speed/movement audit.** The whole movement system got a deep look. The
+most embarrassing finding: hull stats — `thrustScale`, `dragScale`,
+`currentCoupling`, `wellResistScale` — were defined in `hulls.data.json`
+but never actually read by `ship.update()`. Every hull flew identically
+locally. Today's the day Drifter and Breacher actually feel different in
+the cockpit. Drag dropped 4× because space drag should be near-zero —
+"in real space drag is nothing unless you hit something" — so coasting
+preserves momentum long enough for conservation-of-speed to be playable.
+Brake converted from a free drag-add to a real reverse thrust that costs
+delta-v fuel. Slowing down and speeding up now live in the same economy.
+Velocity readout under the ship — magnitude + tier label (drift / cruise /
+surge / perilous) + direction arrow. Without that, the rest of the system
+is invisible.
+
+**Audit pass found the bugs you'd expect.** Hull `energyMult` was being
+double-applied on slingshot energy (Drifter was getting 1.96× instead of
+1.4×). Mid-run inventory equip wasn't refreshing the ship's deltaV stats.
+Slingshot input was running in remote-authority mode where the next
+snapshot would just overwrite local state. A cancel-on-phase-change
+guard I'd added was inside the playing branch where it never fired.
+All four fixed.
+
+**Three architectural divergences flagged for future.** Server-side still
+uses old brake-as-drag, server has its own (lower) speed cap, and
+slingshot is client-only. All three are the same shape — the server has
+its own physics path that pre-dates today's client work. Mirroring is
+substantial. Documented in `BACKLOG.md` so we don't lose track.
+
+The shape of movement now: thrust costs fuel, slingshots are how you
+travel at speed, currents are the river you read, drag is gentle, brakes
+cost fuel too, hulls actually have personalities. Conservation of momentum
+has playable validity windows. Space is a network of anchors. Map design
+becomes route design.
+
+Six commits, all green. Ready for playtest.
+
+---
+
 ## Week 5, Day 5: April 24, 2026 — Deep Field Stops Melting the Browser
 
 The new renderer looked guilty because it arrived at the same time the 10x10 map

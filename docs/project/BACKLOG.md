@@ -119,6 +119,33 @@
 - **Why backlogged:** Each is a new movement verb. Too many verbs for week one.
 - **Value if revisited:** Dramatically expands navigation vocabulary. Each could be a run modifier.
 
+### Server-side slingshot resolution (Slingshot Network — phase 2)
+- **What:** The slingshot network (`docs/design/SLINGSHOT-NETWORK.md`) ships client-only today. Engagement state lives on the local ship; remote-authority mode disables the input entirely so server snapshots don't fight local state. To make it work in multiplayer, the server needs its own anchor catalog, engagement tracking per player, and authoritative energy/release resolution that mirrors the client model.
+- **Why backlogged:** Per the design doc, server authority specifics were explicitly deferred. Single-player play works today with the full system; multiplayer just doesn't have it yet.
+- **Value if revisited:** Slingshot becomes available across all session modes. Other players see your engagement state and orbital lock. Required before slingshot can be a real multiplayer mechanic.
+- **State:** `src/slingshot.js` is client-side. `scripts/sim-runtime.cjs` has no slingshot concept yet. Wire format (engage anchor id + button edge) needs design.
+
+### Server vs client physics divergence
+- **What:** Three physics behaviors diverge between local-mode (client-authoritative) and remote-mode (server-authoritative):
+  1. **Brake.** Client uses reverse-thrust + fuel cost; server still uses old brake-as-drag (`SERVER_INPUT.brakeStrength: 0.15` in `scripts/sim-runtime.cjs`).
+  2. **Speed cap.** Client has `CONFIG.ship.maxSpeedWorld: 8.0`; server has its own implicit cap at `2.5 × thrustScale × 0.3 ≈ 0.5–1.0 world/s` (`scripts/sim-runtime.cjs:3635`). In remote mode the server cap dominates.
+  3. **Hull stat application.** Client now applies `thrustScale / dragScale / currentCoupling / wellResistScale` from the hull def (was a real bug — every hull flew identically locally before today). Server has its own resolution via `player-brain.cjs`. Numbers may not match exactly.
+- **Why backlogged:** Each is the same architectural pattern — server has its own physics path that pre-dates today's client work. Mirroring would be substantial.
+- **Value if revisited:** Identical feel between local-host and remote-client modes. Today, a player jumping into a remote session would notice subtle differences in how their ship handles.
+- **State:** Local play is correct. Remote-authority continues using its own resolution. Worth a focused pass once slingshot server-authority lands (above) since both touch the same surface.
+
+### Slingshot numbers tuning + map redesign for routes
+- **What:** Per `SLINGSHOT-NETWORK.md` "Open Decisions": the slingshot ships with first-pass numbers that need a real playtest pass. Specifically `energyAccrualRate`, `releaseMultiplier`, `tangentialForce`, per-anchor-type `range`, `chainWindowSeconds`, `chainMultiplier`. Separately, existing maps (Shallows / Expanse / Deep Field) were laid out for "wells everywhere" gameplay — they want a route-design pass with linkage in mind: 2-hop opportunities, 3-chain runs, signature lines per map.
+- **Why backlogged:** System works end-to-end; tuning + map redesign are post-feel work.
+- **Value if revisited:** Slingshot goes from "working mechanic" to "feel-tuned skill expression." Maps stop being only "where the threats live" and start being "what routes does this universe offer."
+- **State:** First-pass numbers in `src/slingshot.js` SLINGSHOT_CONFIG; per-hull modifiers in `hulls.data.json`. Maps unchanged.
+
+### Dead `inventorySystem.hasEffect()` checks for client-only effect IDs
+- **What:** Three `hasEffect()` calls in `src/main.js` look up effect IDs that no item in the current catalog uses: `reduceWellPull` (line ~2933), `showKillRadii` (line ~3555), `showFlowArrows` (line ~3573). They check `item.effect === 'reduceWellPull'` etc., but those values only appear in the *server-side* coefficient resolution path (`scripts/player-brain.cjs`). Client artifacts use coefficient objects, not consumable-style `effect` strings. So the checks always return false locally.
+- **Why backlogged:** Pre-existing dead code, not introduced today. Doesn't break anything — the effects just don't fire in client-only play. Mode-specific rendering features (kill-radii visualization, flow arrows) are gone visually.
+- **Value if revisited:** Either wire those visualizations back to a real effect mechanism (probably an inventory-item special / coefficient), or delete the dead branches outright.
+- **State:** `src/main.js` lines ~2933, 3555, 3573. Server side still has working `reduceWellPull` resolution.
+
 ### Tidal Effects on Ship
 - **What:** Differential gravity — closer side of ship pulled harder, creating rotational torque near wells
 - **Why backlogged:** Complex physics, subtle effect, may confuse more than it adds
@@ -141,10 +168,10 @@
 - **Why potentially backlogged:** Forge: "If not obvious in 5 minutes, fall back to Model 2." May not survive Monday playtesting.
 - **State if backlogged:** Full design in CONTROLS.md with distance curve formula, dead zone, ramp range
 
-### Reverse Thrust / Active Brake
-- **What:** Dedicated brake input (Space on keyboard, L2 on controller) for active deceleration
-- **Why backlogged:** Need to determine if 180° turn-and-thrust is sufficient. Brake may be unnecessary forgiveness.
-- **Value if revisited:** More accessible for beginners, cleaner escape maneuvers
+### ~~Reverse Thrust / Active Brake~~ — SHIPPED 2026-05-09
+- **What it became:** Brake (S/Right-click on keyboard, L2 on controller) is now a real reverse thrust that costs delta-v fuel, not a free drag-add. Strength is `brakeThrustScale: 0.4` of forward thrust; fuel cost is `brakeFuelScale: 0.6` of forward burn. Sits inside the delta-v economy with everything else.
+- **Where:** `src/ship.js` step 2b in update(); CONFIG knobs in `src/config.js` under `input`.
+- **Server divergence:** Server-authoritative sim still uses old brake-as-drag (`SERVER_INPUT.brakeStrength: 0.15`). See "Server vs client physics divergence" entry below.
 
 ---
 

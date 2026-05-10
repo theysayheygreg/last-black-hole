@@ -5,11 +5,63 @@
 
 ---
 
-## 2026-05-09 — Delta-v + slingshot network design
+## 2026-05-09 — Delta-v, slingshot network, speed/movement overhaul
 
-- Shipped the delta-v thrust fuel system: ship-side state, color-coded HUD gauge, hull-differentiated tank/regen/burn-efficiency stats, fuel-cell consumables in the salvage catalog, and equippable artifacts with deltaV-related coefficients (capacity / regen / burn).
-- Cleared five vapor consumables (cargoJettison, emergencyThrust, signalFlare, signalPurge, wellRepulsor) and dropped the now-unused IMPLEMENTED_CONSUMABLE_EFFECTS allowlist along with their dead handler stubs.
-- Added `docs/design/SLINGSHOT-NETWORK.md` — extends slingshot from a well-only mechanic to a multi-anchor terrain system (wells / stars / planetoids), specifies the skitching/rail-grinding engagement model (button-press snap-to with manual release), and names the route-planning gameplay loop. Numbers and map-redesign deferred to follow-ups.
+A long session that turned thrust from a free verb into a real economy and
+made the universe a network of anchors you can swing through. Six commits.
+
+- **Delta-v thrust fuel system.** Ship has a finite `deltaV` resource that
+  thrust drains and time refills. Top-right HUD gauge with green / yellow /
+  orange / red thresholds. Hulls have differentiated tank / regen / burn-
+  efficiency stats. Three fuel-cell consumables (`fuel-cell`, `plasma-cell`,
+  `antimatter-cell`) refill it; equippable artifacts (`worn-tank`,
+  `recirculator`, `helium-3-reservoir`, `solar-spinneret`, plus a small
+  efficiency cost on `tuned-thruster`) layer in coefficient bonuses.
+  InventorySystem.getDeltaVStats aggregates equipped-item modifiers; mid-
+  run equip/unequip refreshes the ship's hull-derived stats so coefficients
+  apply immediately instead of waiting for the next respawn.
+- **Vapor consumable cleanup.** Five effect IDs that had catalog entries
+  but no working handler (`cargoJettison`, `emergencyThrust`, `signalFlare`,
+  `signalPurge`, `wellRepulsor`) were removed entirely. The defensive
+  `IMPLEMENTED_CONSUMABLE_EFFECTS` allowlist + a dead `signalPurge` stub in
+  the runtime were dropped along with them. Catalog goes from 14 → 9
+  honest consumables.
+- **`SLINGSHOT-NETWORK.md` design doc.** Extends slingshot from well-only
+  to a three-tier anchor catalog (wells / stars / planetoids). Locks the
+  skitching / rail-grinding engagement model — button-press snap-to with
+  manual release. Names the route-planning gameplay loop and the per-hull
+  route-style identity. Numbers and map-redesign explicitly deferred.
+- **Slingshot network implementation.** F key (or gamepad Triangle) toggles
+  engagement when an anchor is in snap-to range and the ship has tangential
+  speed. Engaged state cancels most well-pull, applies a tangential force
+  amplifier, and accumulates banked energy. Release applies the energy as a
+  velocity boost in the ship's facing direction; chain detection awards a
+  multiplicative bonus when a new engage starts within `chainWindow` of the
+  prior release. Hull modifiers (`slingshotEnergyMult`,
+  `slingshotChainWindowMult`, `slingshotSignalReduction`) give each hull a
+  distinct route style. Visual layer: pulsing affordance ring on in-range
+  anchors, solid ring + tether + energy arc + chain badge while engaged.
+- **Speed/movement overhaul.** Hull stats (`thrustScale`, `dragScale`,
+  `currentCoupling`, `wellResistScale`) now actually apply in client
+  `ship.update` — they were defined in the JSON but never read locally,
+  meaning every hull flew identically. Drag dropped from 0.06 → 0.015 so
+  conservation-of-momentum has playable validity windows; this is space,
+  not water. Brake converted from drag-add to **reverse thrust + fuel
+  cost** (`brakeThrustScale: 0.4`, `brakeFuelScale: 0.6`) so slowing down
+  lives in the same delta-v economy as accelerating. Defensive
+  `maxSpeedWorld: 8.0` cap added. Velocity readout renders directly under
+  the ship sprite — magnitude + tier label (drift / cruise / surge /
+  perilous) + tiny direction arrow.
+- **Audit pass found four real bugs.** Hull `energyMult` was double-applied
+  on slingshot energy (Drifter was getting 1.96× instead of 1.4×); fixed
+  to apply once at release. Mid-run inventory equip wasn't refreshing
+  ship deltaV stats. Slingshot input was running in remote-authority
+  mode where the next snapshot would overwrite local engagement; gated
+  on `!remoteAuthorityActive`. Slingshot cancel-on-phase-change was dead
+  code inside the playing branch; moved outside so it fires on remote-
+  driven phase transitions. Plus housekeeping: removed
+  `CONFIG.input.brakeStrength`, cleaned the totalDrag formula, updated
+  dev-panel sliders.
 
 ## 2026-05-05 — Remote play visual hotfix
 

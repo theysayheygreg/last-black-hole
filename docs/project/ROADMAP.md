@@ -6,9 +6,9 @@
 
 ---
 
-## Current Status (2026-04-23)
+## Current Status (2026-05-09)
 
-**Version:** 0.2.0 — Last Singularity product-name sweep, server-authoritative sim, Composer renderer, control plane, entity ecology, ship classes, packaged desktop play, and keyboard/mouse parity
+**Version:** 0.2.0 — Last Singularity product-name sweep, server-authoritative sim, Composer renderer, control plane, entity ecology, ship classes, packaged desktop play, keyboard/mouse parity, **delta-v thrust fuel, slingshot anchor network, and a movement system overhaul that makes hull identity actually felt**.
 
 ### What's Built
 
@@ -19,7 +19,7 @@
 | L2: The Threats | DONE | Signal system (6 zones), fauna (jellies + blooms), gradient sentries, AI players (5 personalities), scavenger AI, force pulse |
 | L3: The Dread | DONE | Inhibitor (3 forms: glitch → swarm → vessel), final portal guarantee, control debuff, HUD degradation |
 | L4: The Look | DONE | Composer render pipeline, ASCII shader, title-prototype Bloom canary, NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering |
-| L5: The Depth | IN PROGRESS | 5 hull classes with abilities, PlayerBrain coefficient resolution, rig upgrade tracks (designed), loot economy (designed), meta-loop (designed) |
+| L5: The Depth | IN PROGRESS | 5 hull classes with abilities, PlayerBrain coefficient resolution, rig upgrade tracks, loot economy + balance manifest, meta-loop with run results + chronicle, **delta-v fuel system, slingshot anchor network, route-style hull identity** |
 | L6: The Ship | PARTIAL | Title screen, map select, 3 save slots. Balance pass + deploy not yet done. |
 
 ### What's Built (Post-Jam Architecture)
@@ -61,16 +61,16 @@
 
 ### Forward Development Priorities
 
-1. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
-2. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
-3. **UI primitive bridge** — design tokens + HUD primitives + reduced inline-style drift
-4. **Item catalog** — concrete T1-T4 items with coefficients, affinities, and sell values
-5. **Meta-loop implementation** — results screen, vault/rig/loadout UI, chronicle
-6. **Loot economy implementation** — tier gates, wreck aging, value scaling in sim-runtime
-7. **Run result write-back** — connect RunResult schema to persistence layer
-8. **Content manifests** — continue extracting seeded-generation, item, and session-profile truth from runtime sprawl
+1. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
+2. **Server-side slingshot + brake/maxSpeed parity** — slingshot is client-only; server brake is still drag-based; server speed cap is an order of magnitude lower than client. Three architectural divergences listed in `BACKLOG.md` under "Server vs client physics divergence" + "Server-side slingshot resolution."
+3. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
+4. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
+5. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
+6. **UI primitive bridge** — design tokens + HUD primitives + reduced inline-style drift
+7. **Meta-loop implementation polish** — results screen, vault/rig/loadout UI, chronicle (foundation shipped 2026-05-04 series)
+8. **Run result write-back** — connect RunResult schema to persistence layer (first slice shipped, full coverage pending)
 9. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
-10. **Balance pass** — hull coefficients, upgrade costs, loot rarity, signal tuning
+10. **Balance pass** — hull coefficients (now actually applied!), upgrade costs, loot rarity, signal tuning, delta-v / slingshot numbers
 11. **Deploy** — GitHub Pages web build, nightly playables
 
 ### Current contract notes
