@@ -3367,11 +3367,16 @@ function gameLoop(now) {
     renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
     ship.render(ctx, camX, camY);
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
-    // Slingshot UI + velocity readout only during live gameplay — they
-    // attach to the active ship state and would be visually noisy on
-    // the death/escape end-screen overlays.
+    // Slingshot affordance + engaged state are local-authoritative only:
+    // remote-authority mode would render UI that the player can't act on
+    // (input is gated), and the next snapshot would overwrite any local
+    // engagement state anyway. Velocity readout DOES work in remote mode
+    // because the server sends vx/vy in snapshots, so it gets its own
+    // gate that only filters on phase.
     if (gamePhase === 'playing' && !remoteAuthorityActive) {
       renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+    }
+    if (gamePhase === 'playing') {
       renderShipVelocityReadout(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
     }
 
