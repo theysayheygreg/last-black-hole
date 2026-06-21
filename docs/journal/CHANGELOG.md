@@ -5,6 +5,11 @@
 
 ---
 
+## 2026-06-21 — Public overview seed
+
+- Added `docs/project/PUBLIC-OVERVIEW.md` as a public-facing pitch and copy source for the website, store page, social account, devlog posts, feature bullets, and trailer beats.
+- Grounded the overview in the current product shape: Last Singularity as the public title, ASCII fluid identity, delta-v movement economy, slingshot routing, extraction pressure, hull fantasies, cosmic signatures, and honest in-development boundaries.
+
 ## 2026-05-10 — Review hardening pass
 
 Codex review pass after the delta-v / slingshot / movement stack. The goal was not new spectacle; it was making the new surface honest across local play, remote authority, tests, and packaged builds.
