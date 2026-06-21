@@ -5,6 +5,11 @@
 
 ---
 
+## 2026-06-21 — Three.js migration plan
+
+- Added `docs/project/THREEJS-MIGRATION-PLAN.md`, a staged migration plan for moving the LBH client renderer to Three.js while keeping the authoritative sim and renderer in separate processes.
+- Covered renderer bridge extraction, Three multi-pass render graph, fluid-field porting, entity overlays, controls, HUD, build/packaging, test harness updates, performance budget, risks, benefits, and aesthetic upgrade opportunities.
+
 ## 2026-06-21 — Public overview seed
 
 - Added `docs/project/PUBLIC-OVERVIEW.md` as a public-facing pitch and copy source for the website, store page, social account, devlog posts, feature bullets, and trailer beats.
