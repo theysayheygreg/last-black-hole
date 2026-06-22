@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-06-22 — Steam Deck embedded stack fix
+
+- Fixed the Linux desktop package so embedded control-plane and sim runtimes include their new telemetry, RNG, seeded-generation, and flow-sample dependencies.
+- Added a single-instance guard to the Electron shell so Deck/Desktop double-launches focus the running game instead of starting two embedded authority stacks in one profile.
+- Added Deck-specific Chromium GPU profile flags, XWayland selection, and rolling launcher logs after SteamOS crashed Electron with `GPU process isn't usable` during WebGL startup.
+- Added a static `DesktopPackage` test that walks the packaged server require graph and fails when a desktop runtime dependency is missing from the build bundle.
+- Documented the current Gaming Mode gap, Deck acceptance checklist, and future non-Chromium SteamOS runtime path.
+
 ## 2026-06-22 — v0.2 documentation baseline
 
 - Added `docs/v0.2/` as the current canonical versioned doc set, treating all prior work as the v0.1 playable-prototype era and v0.2 as the authority + Three product foundation.

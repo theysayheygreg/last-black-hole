@@ -19,10 +19,40 @@ let embeddedControlLabel = null;
 let embeddedSimInstanceId = null;
 let mainWindow = null;
 let statusWindow = null;
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
 const runtimeLogs = {
   control: [],
   sim: [],
 };
+
+function applyDeckChromiumProfile() {
+  if (!isDeckRuntime()) return;
+  // SteamOS can launch Electron inside gamescope/XWayland with a GPU sandbox
+  // context Chromium dislikes. Keep hardware WebGL on, but relax the Chromium
+  // GPU sandbox/blocklist so the renderer survives Deck launch.
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('ozone-platform', 'x11');
+}
+
+function focusExistingWindows() {
+  const target = mainWindow && !mainWindow.isDestroyed() ? mainWindow : statusWindow;
+  if (!target || target.isDestroyed()) return;
+  if (target.isMinimized()) target.restore();
+  target.show();
+  target.focus();
+}
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  applyDeckChromiumProfile();
+  app.on('second-instance', () => {
+    // Deck/Desktop launchers are easy to double-click; keep one authority stack
+    // per profile so Electron cache files and embedded ports stay coherent.
+    focusExistingWindows();
+  });
+}
 
 function fetchJson(url) {
   return new Promise((resolve) => {
@@ -53,6 +83,9 @@ function pushLog(stream, chunk) {
     .filter(Boolean);
   if (!lines.length) return;
   runtimeLogs[stream].push(...lines.map((line) => ({ at: new Date().toISOString(), line })));
+  for (const line of lines) {
+    console.log(`[embedded:${stream}] ${line}`);
+  }
   if (runtimeLogs[stream].length > LOG_LIMIT) {
     runtimeLogs[stream] = runtimeLogs[stream].slice(-LOG_LIMIT);
   }
@@ -346,20 +379,22 @@ ipcMain.handle('lbh:export-text', async (_event, payload = {}) => {
   return { ok: true, filePath: result.filePath };
 });
 
-app.whenReady().then(async () => {
-  // Dev-mode: servers are already running (stack.js started dev/control/sim
-  // externally). Skip embedded server fork.
-  if (!process.env.LBH_DEV_URL) await startEmbeddedServers();
-  buildMenu();
-  createMainWindow();
+if (hasSingleInstanceLock) {
+  app.whenReady().then(async () => {
+    // Dev-mode: servers are already running (stack.js started dev/control/sim
+    // externally). Skip embedded server fork.
+    if (!process.env.LBH_DEV_URL) await startEmbeddedServers();
+    buildMenu();
+    createMainWindow();
 
-  app.on('activate', async () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      if (!process.env.LBH_DEV_URL) await startEmbeddedServers();
-      createMainWindow();
-    }
+    app.on('activate', async () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        if (!process.env.LBH_DEV_URL) await startEmbeddedServers();
+        createMainWindow();
+      }
+    });
   });
-});
+}
 
 app.on('window-all-closed', () => {
   if (!process.env.LBH_DEV_URL) stopEmbeddedServers();

@@ -36,6 +36,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "DesktopPackage",
+    file: "desktop-package.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "CoarseField",
     file: "coarse-field.cjs",
     lanes: ["core", "static", "full"],

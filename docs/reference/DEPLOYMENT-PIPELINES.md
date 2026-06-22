@@ -51,7 +51,37 @@ Tailscale-visible Deck, writes `run-last-singularity.sh`, and leaves Steam
 library registration as the manual Deck-side step.
 The Deck launcher sets `LBH_DECK=1`, which switches the packaged shell to a
 1280x800 fullscreen window for handheld play while preserving the 16:9
-playfield. It also installs `.desktop` launchers so Desktop Mode can launch the
+playfield. It also applies the current SteamOS Electron profile:
+
+- `--disable-gpu-sandbox`
+- `--ignore-gpu-blocklist`
+- `--ozone-platform=x11`
+- `--enable-logging=stderr`
+
+The GPU flags keep Chromium's hardware WebGL path alive on the Deck while
+avoiding the `GPU process isn't usable` trap observed during the first launch
+attempt. `--ozone-platform=x11` forces XWayland, which avoids the current
+Wayland/Vulkan warning in SteamOS Desktop Mode and is closer to the XWayland
+path most native Linux games use under gamescope.
+
+The launcher writes rolling logs on the Deck:
+
+```text
+/home/deck/.local/state/last-singularity/deck-launch.log
+/home/deck/.local/state/last-singularity/deck-launch.previous.log
+/home/deck/.local/state/last-singularity/electron.log
+/home/deck/.local/state/last-singularity/electron.previous.log
+```
+
+For emergency diagnosis, set this before launching:
+
+```sh
+LBH_DECK_DISABLE_GPU=1 /home/deck/Games/last-singularity/run-last-singularity.sh
+```
+
+That adds `--disable-gpu`. It is a rescue path, not the default target.
+
+The deploy also installs `.desktop` launchers so Desktop Mode can launch the
 same deployed folder.
 
 Run `npm run deck:preflight` before the first push. The current GregBot setup
@@ -69,6 +99,53 @@ Tailscale expectation:
 
 This is intentionally local-test only. GitHub-hosted runners cannot reach
 Greg's personal Steam Deck tailnet.
+
+### Gaming Mode Status
+
+The private deploy folder is now the right shape for SteamOS, but Gaming Mode
+does not see it until Steam has a library entry. The current safe path is
+manual and one-time:
+
+1. Boot the Deck into Desktop Mode.
+2. Open Steam.
+3. Use **Games -> Add a Non-Steam Game to My Library**.
+4. Add this wrapper, not the raw Electron binary:
+
+```text
+/home/deck/Games/last-singularity/run-last-singularity.sh
+```
+
+5. Return to Gaming Mode and launch **Last Singularity** from the normal Deck
+   library.
+
+Future Codex deploys overwrite files in place, so the Steam library entry should
+continue pointing at the latest build.
+
+Do not edit `shortcuts.vdf` while Steam is running. If we automate the shortcut
+later, make it a separate command that backs up `shortcuts.vdf`, verifies Steam
+is closed, writes one idempotent entry, and can restore the backup.
+
+Valve's official Devkit Client is the more formal future path. It pairs a dev PC
+with the Deck, uploads a local build with rsync-over-SSH, and creates a
+`Devkit Game: ...` library entry with a configured start command:
+
+- [How to load and run games on Steam Deck and Steam Machine](https://partner.steamgames.com/doc/steamhardware/loadgames)
+
+### Current Acceptance Bar
+
+Before calling a Deck build playable, confirm:
+
+- it launches from Gaming Mode through Steam, not only Desktop Mode;
+- the wrapper starts one Electron instance, one embedded control plane, and one
+  embedded sim;
+- `~/.local/state/last-singularity/deck-launch.log` shows embedded
+  `runtime.started` lines;
+- `/health` for both embedded services returns `ok: true`;
+- no new `Last Singularity` coredump appears after launch;
+- controller can reach every menu and gameplay command;
+- text entry works without a physical keyboard;
+- HUD text remains legible at 1280x800;
+- suspend/resume does not corrupt the local session or save files.
 
 ## itch.io
 

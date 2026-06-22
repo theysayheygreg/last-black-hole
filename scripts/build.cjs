@@ -14,6 +14,24 @@ const STAGING_ROOT = path.join(ROOT, 'release-staging');
 const PRODUCT_NAME = 'Last Singularity';
 const PRODUCT_SLUG = 'last-singularity';
 const PRODUCT_SHORT = 'LS';
+const DESKTOP_SERVER_SCRIPTS = [
+  'sim-runtime.cjs',
+  'sim-protocol.cjs',
+  'sim-server.cjs',
+  'shared-map-loader.cjs',
+  'control-plane-runtime.cjs',
+  'control-plane-store.cjs',
+  'control-plane-client.cjs',
+  'control-plane-server.cjs',
+  'session-registry.cjs',
+  'player-brain.cjs',
+  'coarse-flow-field.cjs',
+  'flow-sample.cjs',
+  'overload-state.cjs',
+  'rng-stream.cjs',
+  'runtime-telemetry.cjs',
+  'seeded-generation.cjs',
+];
 
 const TARGET_ALIASES = {
   web: 'web',
@@ -420,21 +438,7 @@ function stageElectronShell(mode) {
   // Bundle server scripts for embedded sim in desktop builds
   const serverDir = path.join(STAGING_ROOT, 'server');
   ensureDir(serverDir);
-  const serverScripts = [
-    'sim-runtime.cjs',
-    'sim-protocol.cjs',
-    'sim-server.cjs',
-    'shared-map-loader.cjs',
-    'control-plane-runtime.cjs',
-    'control-plane-store.cjs',
-    'control-plane-client.cjs',
-    'control-plane-server.cjs',
-    'session-registry.cjs',
-    'player-brain.cjs',
-    'coarse-flow-field.cjs',
-    'overload-state.cjs',
-  ];
-  for (const script of serverScripts) {
+  for (const script of DESKTOP_SERVER_SCRIPTS) {
     const src = path.join(ROOT, 'scripts', script);
     if (fs.existsSync(src)) {
       fs.copyFileSync(src, path.join(serverDir, script));
@@ -586,7 +590,13 @@ async function main() {
   if (failed.length > 0) process.exit(1);
 }
 
-main().catch((error) => {
-  console.error(error.stack || error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.stack || error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  DESKTOP_SERVER_SCRIPTS,
+};

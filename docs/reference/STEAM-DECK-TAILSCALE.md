@@ -125,6 +125,29 @@ over SSH to mirror the Linux package onto the Deck. The installed launcher sets
 `LBH_DECK=1`, so the packaged shell opens as a 1280x800 fullscreen Deck build
 while the game keeps its 16:9 internal playfield.
 
+The Deck launcher also applies the current SteamOS Electron profile:
+
+```text
+--disable-gpu-sandbox
+--ignore-gpu-blocklist
+--ozone-platform=x11
+--enable-logging=stderr
+```
+
+Logs are written on the Deck here:
+
+```text
+/home/deck/.local/state/last-singularity/deck-launch.log
+/home/deck/.local/state/last-singularity/electron.log
+```
+
+Previous runs are kept as:
+
+```text
+/home/deck/.local/state/last-singularity/deck-launch.previous.log
+/home/deck/.local/state/last-singularity/electron.previous.log
+```
+
 ## Add To Steam Once
 
 After the first successful copy, do this on the Deck in Desktop Mode:
@@ -143,6 +166,24 @@ After the first successful copy, do this on the Deck in Desktop Mode:
 
 Future Codex deploys should overwrite the files in place, so the Steam library
 entry should keep working.
+
+Do not add the raw `Last Singularity` executable. Add the wrapper script so the
+Deck profile, embedded-stack logging, and future launch fixes all stay under
+our control.
+
+If the app crashes or opens Stack Status, pull the latest log over Tailscale:
+
+```sh
+ssh deck@steamdeck.tail1ac9cf.ts.net 'tail -200 ~/.local/state/last-singularity/deck-launch.log'
+```
+
+The healthy startup pattern includes lines like:
+
+```text
+[embedded:control] ... "event":"runtime.started"
+[embedded:sim] ... "event":"runtime.started"
+[embedded:control] ... "event":"sim.registered"
+```
 
 ## If SSH Fails
 
