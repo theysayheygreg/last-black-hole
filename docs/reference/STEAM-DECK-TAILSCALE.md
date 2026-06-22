@@ -10,7 +10,7 @@ The intended destination is:
 ```
 
 The deploy command copies the built `Last Singularity-linux-x64` folder there
-and writes a `run-last-singularity.sh` launcher.
+and writes a `run-last-singularity.sh` launcher plus desktop entries.
 
 ## Current Mac State
 
@@ -36,9 +36,12 @@ gregbot.tail1ac9cf.ts.net
 100.121.150.32
 ```
 
-At the time this note was written, the Steam Deck was not visible in
-`tailscale status`. Visible peers were GregBot, Gregory's MacBook Air, and
-iPhone 15 Pro Max.
+Current observed Steam Deck target:
+
+```text
+steamdeck.tail1ac9cf.ts.net
+100.77.19.24
+```
 
 ## One-Time Deck Setup
 
@@ -118,7 +121,9 @@ npm run deploy:deck -- --host=steamdeck.tail1ac9cf.ts.net --dir=/home/deck/Games
 ```
 
 `deploy:deck` now checks SSH reachability before building, then uses `rsync`
-over SSH to mirror the Linux package onto the Deck.
+over SSH to mirror the Linux package onto the Deck. The installed launcher sets
+`LBH_DECK=1`, so the packaged shell opens as a 1280x800 fullscreen Deck build
+while the game keeps its 16:9 internal playfield.
 
 ## Add To Steam Once
 
@@ -126,10 +131,11 @@ After the first successful copy, do this on the Deck in Desktop Mode:
 
 1. Open Steam.
 2. Use **Games -> Add a Non-Steam Game to My Library**.
-3. Browse to:
+3. Browse to either:
 
 ```text
 /home/deck/Games/last-singularity/run-last-singularity.sh
+/home/deck/Games/last-singularity/last-singularity.desktop
 ```
 
 4. Add it.

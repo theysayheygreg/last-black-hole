@@ -25,6 +25,12 @@
 - Hardened `deploy:deck` so it checks SSH reachability before building and uses the same SSH options for mkdir, rsync, and launcher install.
 - Documented the one-time Deck enrollment path and current GregBot tailnet state in `docs/reference/STEAM-DECK-TAILSCALE.md`.
 
+## 2026-06-22 — First Steam Deck playable package
+
+- Added a Deck runtime profile for the packaged Electron shell: `LBH_DECK=1` uses a 1280x800 fullscreen window while the game keeps its 16:9 internal playfield.
+- Updated `deploy:deck` to install Deck-aware shell and `.desktop` launchers alongside the copied Linux package.
+- Built and deployed the first Linux release package to `steamdeck:/home/deck/Games/last-singularity`.
+
 ## 2026-06-22 — Shared-context Three cleanup
 
 - Collapsed the Three renderer onto the Composer's `fluid-canvas` WebGL2 context, removing the CPU bridge canvas and per-frame `CanvasTexture` upload path.

@@ -111,7 +111,15 @@ LBH_DECK_HOST=steamdeck npm run deploy:deck
 
 That command builds the Linux package, copies `Last Singularity-linux-x64` over
 SSH to the Deck, writes a `run-last-singularity.sh` launcher, and leaves the
-final "add as non-Steam app" step on the Deck.
+final "add as non-Steam app" step on the Deck. The launcher sets `LBH_DECK=1`,
+which makes the packaged Electron shell use the Deck profile: 1280x800
+fullscreen with the normal 16:9 playfield letterboxed inside it.
+
+The deploy also writes launcher shortcuts to:
+
+- `/home/deck/Games/last-singularity/last-singularity.desktop`
+- `/home/deck/.local/share/applications/last-singularity.desktop`
+- `/home/deck/Desktop/Last Singularity.desktop`
 
 Use a Tailscale MagicDNS name or Tailscale IP:
 

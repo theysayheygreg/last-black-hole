@@ -7,6 +7,7 @@ const { execFileSync } = require('child_process');
 const ROOT = path.resolve(__dirname, '..', '..');
 const PKG = require(path.join(ROOT, 'package.json'));
 const PRODUCT_NAME = 'Last Singularity';
+const DESKTOP_ENTRY_NAME = 'last-singularity.desktop';
 
 function argValue(name, fallback) {
   const prefix = `${name}=`;
@@ -44,6 +45,18 @@ function sshOptions() {
     '-o', 'ConnectTimeout=8',
     '-o', 'StrictHostKeyChecking=accept-new',
   ];
+}
+
+function writeRemoteFile(ssh, target, remotePath, body) {
+  execFileSync(
+    ssh,
+    [...sshOptions(), target, `cat > ${shellQuote(remotePath)}`],
+    {
+      cwd: ROOT,
+      input: body,
+      stdio: ['pipe', 'inherit', 'inherit'],
+    }
+  );
 }
 
 function buildRoot(mode) {
@@ -95,11 +108,27 @@ function main() {
 
   const executable = path.join(remoteDir, PRODUCT_NAME);
   const launcher = path.join(remoteDir, 'run-last-singularity.sh');
+  const desktopEntry = path.join(remoteDir, DESKTOP_ENTRY_NAME);
+  const localDesktopEntry = `/home/${user}/.local/share/applications/${DESKTOP_ENTRY_NAME}`;
+  const desktopShortcut = `/home/${user}/Desktop/Last Singularity.desktop`;
   const launcherBody = [
     '#!/usr/bin/env bash',
     'set -euo pipefail',
     'cd "$(dirname "$0")"',
-    `exec "./${PRODUCT_NAME}" "$@"`,
+    'export LBH_DECK=1',
+    `exec "./${PRODUCT_NAME}" --no-sandbox "$@"`,
+    '',
+  ].join('\n');
+  const desktopBody = [
+    '[Desktop Entry]',
+    'Type=Application',
+    `Name=${PRODUCT_NAME}`,
+    `Comment=${PRODUCT_NAME} local playtest build`,
+    `Exec=${launcher}`,
+    `Path=${remoteDir}`,
+    'Terminal=false',
+    'Categories=Game;',
+    'StartupNotify=false',
     '',
   ].join('\n');
 
@@ -112,21 +141,24 @@ function main() {
   run(process.env.LBH_RSYNC || 'rsync', rsyncArgs);
 
   if (!dryRun) {
+    writeRemoteFile(ssh, target, launcher, launcherBody);
+    writeRemoteFile(ssh, target, desktopEntry, desktopBody);
     execFileSync(
       ssh,
       [
         ...sshOptions(),
         target,
         [
-          `cat > ${shellQuote(launcher)}`,
-          `chmod +x ${shellQuote(launcher)} ${shellQuote(executable)}`,
+          `mkdir -p ${shellQuote(path.posix.dirname(localDesktopEntry))} ${shellQuote(path.posix.dirname(desktopShortcut))}`,
+          `cp ${shellQuote(desktopEntry)} ${shellQuote(localDesktopEntry)}`,
+          `cp ${shellQuote(desktopEntry)} ${shellQuote(desktopShortcut)}`,
+          `chmod +x ${shellQuote(launcher)} ${shellQuote(executable)} ${shellQuote(desktopEntry)} ${shellQuote(localDesktopEntry)} ${shellQuote(desktopShortcut)}`,
           `test -x ${shellQuote(executable)}`,
         ].join(' && '),
       ],
       {
         cwd: ROOT,
-        input: launcherBody,
-        stdio: ['pipe', 'inherit', 'inherit'],
+        stdio: 'inherit',
       }
     );
   }
@@ -136,8 +168,9 @@ function main() {
   console.log(`- source: ${artifact}`);
   console.log(`- target: ${target}:${remoteDir}`);
   console.log(`- launcher: ${launcher}`);
+  console.log(`- desktop entry: ${desktopEntry}`);
   console.log('');
-  console.log('On the Deck, add run-last-singularity.sh as a non-Steam game from Desktop Mode.');
+  console.log('On the Deck, add run-last-singularity.sh or the Last Singularity desktop shortcut as a non-Steam game from Desktop Mode.');
 }
 
 main();

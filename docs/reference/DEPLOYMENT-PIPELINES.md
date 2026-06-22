@@ -49,6 +49,10 @@ What the Deck target needs that the web build does not:
 The current pipeline builds `Last Singularity-linux-x64`, copies it over SSH to a
 Tailscale-visible Deck, writes `run-last-singularity.sh`, and leaves Steam
 library registration as the manual Deck-side step.
+The Deck launcher sets `LBH_DECK=1`, which switches the packaged shell to a
+1280x800 fullscreen window for handheld play while preserving the 16:9
+playfield. It also installs `.desktop` launchers so Desktop Mode can launch the
+same deployed folder.
 
 Run `npm run deck:preflight` before the first push. The current GregBot setup
 uses the Tailscale macOS app CLI at

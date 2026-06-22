@@ -209,18 +209,30 @@ function loadEmbeddedFailurePage(message) {
   createStatusWindow();
 }
 
+function isDeckRuntime() {
+  return process.env.LBH_DECK === '1';
+}
+
 function createMainWindow() {
+  const deckRuntime = isDeckRuntime();
+  const windowSize = deckRuntime
+    ? { width: 1280, height: 800 }
+    : { width: 1440, height: 810 };
+
   // Authored 16:9 window at 1440x810 content size. Non-resizable by
   // design — this is a game, not a webview. Fullscreen is still
   // allowed via the OS shortcut (macOS Cmd+Ctrl+F / green button) so
   // players on any monitor aspect can go immersive; the internal
   // render letterboxes cleanly inside whatever fullscreen hands us.
+  // The Deck launcher sets LBH_DECK=1 so Gaming Mode gets a native
+  // 1280x800 fullscreen shell while the game keeps its 16:9 playfield.
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 810,
+    width: windowSize.width,
+    height: windowSize.height,
     useContentSize: true,
     resizable: false,
-    maximizable: false,
+    maximizable: deckRuntime,
+    fullscreen: deckRuntime,
     fullscreenable: true,
     backgroundColor: '#000033',
     autoHideMenuBar: true,
