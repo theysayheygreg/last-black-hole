@@ -144,23 +144,24 @@ async function startServer() {
     let started = false;
     let exited = false;
 
+    const markReadyFromLog = (msg) => {
+      if (!started && /serving\s+/i.test(msg)) {
+        started = true;
+        resolve();
+      }
+    };
+
     serverProcess.stderr.on("data", (data) => {
       const msg = data.toString();
       fs.appendFileSync(LOG_FILE, msg);
-      if (!started && msg.includes("Serving HTTP")) {
-        started = true;
-        resolve();
-      }
+      markReadyFromLog(msg);
     });
 
-    // Also resolve on stdout for some python versions
+    // The local static server logs to stdout; older harnesses used stderr.
     serverProcess.stdout.on("data", (data) => {
       const msg = data.toString();
       fs.appendFileSync(LOG_FILE, msg);
-      if (!started && msg.includes("Serving HTTP")) {
-        started = true;
-        resolve();
-      }
+      markReadyFromLog(msg);
     });
 
     serverProcess.on("error", reject);

@@ -97,13 +97,14 @@ function copyIfExists(from, to) {
 }
 
 function copyThreeRuntime(rendererDir) {
-  const threeModule = path.join(ROOT, 'node_modules', 'three', 'build', 'three.module.js');
+  const threeBuild = path.join(ROOT, 'node_modules', 'three', 'build');
+  const threeModule = path.join(threeBuild, 'three.module.js');
   if (!fs.existsSync(threeModule)) {
-    throw new Error('Missing three.module.js. Run npm install before building renderer artifacts.');
+    throw new Error('Missing three/build runtime. Run npm install before building renderer artifacts.');
   }
   const target = path.join(rendererDir, 'node_modules', 'three', 'build');
   ensureDir(target);
-  fs.copyFileSync(threeModule, path.join(target, 'three.module.js'));
+  fs.cpSync(threeBuild, target, { recursive: true });
 }
 
 function resolvePackagedArtifact(packagedRoot, target) {

@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-06-22 — Steam Deck packaged renderer boot fix
+
+- Fixed the Steam Deck packaged app's black screen by loading local renderer assets through an app-owned `lbh://` protocol with explicit JS/JSON MIME types instead of raw `file://...app.asar` paths.
+- Added visible boot failure reporting and Electron main-process renderer diagnostics so packaged launch failures show on-screen and in `deck-launch.log`.
+- Copied the complete Three build runtime into web, desktop, and iPad wrapper artifacts so split Three modules such as `three.core.js` ship with `three.module.js`.
+- Tightened the renderer harness server readiness check so it recognizes the current static-server log line instead of waiting for its fallback timer.
+- Verified the deployed Deck build boots the local packaged Three renderer while embedded control plane and sim both run on Deck loopback ports.
+
+---
+
 ## 2026-06-22 — Current-truth agent onboarding cleanup
 
 - Rewrote `CLAUDE.md` onboarding so new agents start from the v0.2 design/code delta, current platform reality, and sim/renderer authority boundaries instead of jam-era constraints.

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, clipboard, dialog } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, clipboard, dialog, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { fork } = require('child_process');
@@ -10,6 +10,8 @@ const net = require('net');
 // Player never sees a terminal. Double-click → play.
 
 const LOG_LIMIT = 40;
+const RENDERER_LOAD_TIMEOUT_MS = Number(process.env.LBH_RENDERER_LOAD_TIMEOUT_MS) || 10000;
+const RENDERER_SCHEME = 'lbh';
 
 let controlProcess = null;
 let simProcess = null;
@@ -25,14 +27,50 @@ const runtimeLogs = {
   sim: [],
 };
 
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: RENDERER_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+    },
+  },
+]);
+
+function logMain(event, details = {}) {
+  const suffix = details && Object.keys(details).length
+    ? ` ${JSON.stringify(details)}`
+    : '';
+  console.log(`[electron-main] ${event}${suffix}`);
+}
+
 function applyDeckChromiumProfile() {
   if (!isDeckRuntime()) return;
   // SteamOS can launch Electron inside gamescope/XWayland with a GPU sandbox
   // context Chromium dislikes. Keep hardware WebGL on, but relax the Chromium
   // GPU sandbox/blocklist so the renderer survives Deck launch.
+  const glBackend = process.env.LBH_DECK_USE_GL || 'auto';
   app.commandLine.appendSwitch('disable-gpu-sandbox');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
   app.commandLine.appendSwitch('ignore-gpu-blocklist');
   app.commandLine.appendSwitch('ozone-platform', 'x11');
+  if (glBackend !== 'auto') {
+    app.commandLine.appendSwitch('use-gl', glBackend);
+  }
+  if (process.env.LBH_DECK_DISABLE_GPU_COMPOSITING === '1') {
+    app.commandLine.appendSwitch('disable-gpu-compositing');
+  }
+  if (process.env.LBH_DECK_IN_PROCESS_GPU === '1') {
+    app.commandLine.appendSwitch('in-process-gpu');
+  }
+  logMain('deck.chromium-profile', {
+    ozonePlatform: 'x11',
+    glBackend: glBackend === 'auto' ? null : glBackend,
+    disableGpuCompositing: process.env.LBH_DECK_DISABLE_GPU_COMPOSITING === '1',
+    inProcessGpu: process.env.LBH_DECK_IN_PROCESS_GPU === '1',
+  });
 }
 
 function focusExistingWindows() {
@@ -97,6 +135,68 @@ function bindProcessLogs(stream, child) {
   child.on('exit', (code, signal) => {
     pushLog(stream, `[process-exit] code=${code} signal=${signal}`);
   });
+}
+
+function mimeTypeFor(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.wav': 'audio/wav',
+    '.mp3': 'audio/mpeg',
+    '.ogg': 'audio/ogg',
+    '.wasm': 'application/wasm',
+  }[ext] || 'application/octet-stream';
+}
+
+function responseForText(message, status = 404) {
+  return new Response(message, {
+    status,
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+}
+
+function rendererFilePathFromUrl(requestUrl) {
+  const url = new URL(requestUrl);
+  if (url.hostname !== 'renderer') return null;
+  const rendererRoot = path.join(__dirname, 'renderer');
+  const rawPath = decodeURIComponent(url.pathname || '/index.html');
+  const relativePath = rawPath.replace(/^\/+/, '') || 'index.html';
+  const filePath = path.normalize(path.join(rendererRoot, relativePath));
+  if (filePath !== rendererRoot && !filePath.startsWith(`${rendererRoot}${path.sep}`)) {
+    return null;
+  }
+  return filePath;
+}
+
+function registerRendererProtocol() {
+  protocol.handle(RENDERER_SCHEME, async (request) => {
+    const filePath = rendererFilePathFromUrl(request.url);
+    if (!filePath) return responseForText('Invalid renderer asset path.', 400);
+    try {
+      const data = fs.readFileSync(filePath);
+      return new Response(data, {
+        status: 200,
+        headers: {
+          'content-type': mimeTypeFor(filePath),
+          'cache-control': 'no-store',
+        },
+      });
+    } catch (err) {
+      logMain('renderer.protocol.miss', { url: request.url, filePath, message: err.message });
+      return responseForText('Renderer asset not found.', 404);
+    }
+  });
+  logMain('renderer.protocol.registered', { scheme: RENDERER_SCHEME });
 }
 
 function getOpenPort() {
@@ -218,9 +318,25 @@ async function waitForEmbeddedStack(timeoutMs = 4000) {
     const snapshot = await getEmbeddedStackSnapshot();
     const controlMatches = snapshot.control.health?.label === embeddedControlLabel;
     const simMatches = snapshot.sim.health?.simInstanceId === embeddedSimInstanceId;
-    if (controlMatches && simMatches) return snapshot;
+    if (controlMatches && simMatches) {
+      logMain('embedded.ready', {
+        waitedMs: Date.now() - startedAt,
+        controlPort,
+        simPort,
+        controlPid: snapshot.control.pid,
+        simPid: snapshot.sim.pid,
+      });
+      return snapshot;
+    }
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
+  logMain('embedded.timeout', {
+    timeoutMs,
+    controlPort,
+    simPort,
+    embeddedControlLabel,
+    embeddedSimInstanceId,
+  });
   return null;
 }
 
@@ -244,6 +360,134 @@ function loadEmbeddedFailurePage(message) {
 
 function isDeckRuntime() {
   return process.env.LBH_DECK === '1';
+}
+
+function inspectRendererState(label) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const script = `(() => {
+    const canvasState = Array.from(document.querySelectorAll('canvas')).map((canvas) => {
+      const rect = canvas.getBoundingClientRect();
+      const style = window.getComputedStyle(canvas);
+      return {
+        id: canvas.id,
+        width: canvas.width,
+        height: canvas.height,
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        display: style.display,
+        opacity: style.opacity,
+      };
+    });
+    return {
+      href: window.location.href,
+      readyState: document.readyState,
+      title: document.title,
+      bodyText: (document.body && document.body.innerText || '').slice(0, 240),
+      bootState: window.__LBH_BOOT_STATE__ || null,
+      runtimeFlags: window.__LBH_BUILD_FLAGS__ || null,
+      canvasState,
+    };
+  })()`;
+  mainWindow.webContents.executeJavaScript(script, true)
+    .then((state) => logMain(`renderer.inspect.${label}`, state))
+    .catch((err) => logMain(`renderer.inspect.${label}.failed`, { message: err.message }));
+}
+
+function installMainWindowDiagnostics(win) {
+  win.on('ready-to-show', () => logMain('window.ready-to-show'));
+  win.on('show', () => logMain('window.show'));
+  win.on('unresponsive', () => logMain('window.unresponsive'));
+  win.on('responsive', () => logMain('window.responsive'));
+
+  const wc = win.webContents;
+  wc.on('did-start-loading', () => logMain('renderer.did-start-loading', { url: wc.getURL() }));
+  wc.on('dom-ready', () => {
+    logMain('renderer.dom-ready', { url: wc.getURL() });
+    inspectRendererState('dom-ready');
+  });
+  wc.on('did-finish-load', () => {
+    logMain('renderer.did-finish-load', { url: wc.getURL() });
+    inspectRendererState('finish');
+    setTimeout(() => inspectRendererState('finish-plus-2s'), 2000);
+  });
+  wc.on('did-stop-loading', () => logMain('renderer.did-stop-loading', { url: wc.getURL() }));
+  wc.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    logMain('renderer.did-fail-load', { errorCode, errorDescription, validatedURL, isMainFrame });
+  });
+  wc.on('render-process-gone', (_event, details) => logMain('renderer.process-gone', details));
+  wc.on('console-message', (_event, ...args) => {
+    const payload = args.length === 1 && typeof args[0] === 'object'
+      ? args[0]
+      : { level: args[0], message: args[1], line: args[2], sourceId: args[3] };
+    logMain('renderer.console', payload);
+  });
+}
+
+function loadDeckDiagnosticPage(reason) {
+  if (!mainWindow) return;
+  const html = `
+    <!doctype html>
+    <meta charset="utf-8">
+    <title>Last Singularity — Deck Diagnostic</title>
+    <body style="margin:0;background:#08111f;color:#e9f7ff;font:20px monospace;display:grid;place-items:center;height:100vh;">
+      <main style="max-width:820px;padding:32px;border:1px solid #3c789b;background:#0d1c2f;">
+        <h1 style="margin-top:0;color:#7ee0ff;">Deck window diagnostic</h1>
+        <p>If you can read this, Electron can create and paint the fullscreen Deck window.</p>
+        <p>Reason: ${reason}</p>
+      </main>
+    </body>
+  `;
+  logMain('renderer.diagnostic-page', { reason });
+  mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+}
+
+function loadGameRenderer() {
+  if (!mainWindow || !simPort) return;
+  const rendererPath = path.join(__dirname, 'renderer', 'index.html');
+  const simServer = `http://127.0.0.1:${simPort}`;
+  const rendererUrl = `${RENDERER_SCHEME}://renderer/index.html?${new URLSearchParams({ simServer }).toString()}`;
+  let settled = false;
+  let timeout = null;
+
+  const clearLoadTimeout = () => {
+    settled = true;
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+  };
+
+  mainWindow.webContents.once('did-finish-load', clearLoadTimeout);
+  mainWindow.webContents.once('did-fail-load', (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+    if (isMainFrame) clearLoadTimeout();
+  });
+
+  timeout = setTimeout(() => {
+    if (settled || !mainWindow || mainWindow.isDestroyed()) return;
+    logMain('renderer.load.timeout', {
+      timeoutMs: RENDERER_LOAD_TIMEOUT_MS,
+      rendererPath,
+      rendererExists: fs.existsSync(rendererPath),
+      rendererUrl,
+      currentUrl: mainWindow.webContents.getURL(),
+    });
+    inspectRendererState('load-timeout');
+    loadEmbeddedFailurePage('The game renderer did not finish loading. Check the Deck launch log for renderer diagnostics.');
+  }, RENDERER_LOAD_TIMEOUT_MS);
+
+  logMain('renderer.load.request', {
+    rendererPath,
+    rendererExists: fs.existsSync(rendererPath),
+    rendererUrl,
+    simServer,
+  });
+  mainWindow.loadURL(rendererUrl).then(() => {
+    logMain('renderer.load.resolved', { url: mainWindow?.webContents?.getURL?.() || null });
+  }).catch((err) => {
+    clearLoadTimeout();
+    logMain('renderer.load.rejected', { message: err.message, rendererPath });
+    loadEmbeddedFailurePage(`The game renderer failed to load: ${err.message}`);
+  });
 }
 
 function createMainWindow() {
@@ -276,8 +520,11 @@ function createMainWindow() {
       nodeIntegration: false,
     },
   });
+  logMain('window.created', { deckRuntime, windowSize });
+  installMainWindowDiagnostics(mainWindow);
 
   mainWindow.on('closed', () => {
+    logMain('window.closed');
     mainWindow = null;
   });
 
@@ -287,9 +534,15 @@ function createMainWindow() {
   // Packaged mode falls through to the bundled desktop/renderer/.
   const devUrl = process.env.LBH_DEV_URL;
   if (devUrl) {
+    logMain('renderer.dev-load.request', { devUrl });
     mainWindow.loadURL(devUrl).catch((err) => {
       console.error('[electron] dev loadURL failed:', err.message);
     });
+    return;
+  }
+
+  if (process.env.LBH_DECK_DIAGNOSTIC === '1') {
+    loadDeckDiagnosticPage('LBH_DECK_DIAGNOSTIC=1');
     return;
   }
 
@@ -299,10 +552,9 @@ function createMainWindow() {
       loadEmbeddedFailurePage('The local control plane and sim did not report the expected embedded identity.');
       return;
     }
-    mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'), {
-      query: { simServer: `http://127.0.0.1:${simPort}` },
-    });
+    loadGameRenderer();
   }).catch((err) => {
+    logMain('embedded.wait.failed', { message: err.message });
     loadEmbeddedFailurePage(err.message);
   });
 }
@@ -381,6 +633,7 @@ ipcMain.handle('lbh:export-text', async (_event, payload = {}) => {
 
 if (hasSingleInstanceLock) {
   app.whenReady().then(async () => {
+    registerRendererProtocol();
     // Dev-mode: servers are already running (stack.js started dev/control/sim
     // externally). Skip embedded server fork.
     if (!process.env.LBH_DEV_URL) await startEmbeddedServers();

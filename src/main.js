@@ -66,6 +66,17 @@ import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { HULL_DEFINITIONS } from './content/hulls.js';
 
+window.__LBH_BOOT_MARK__?.('main.module.evaluated', {
+  href: window.location.href,
+  userAgent: navigator.userAgent,
+});
+
+function reportBootFailure(message, detail) {
+  const formattedDetail = detail?.stack || detail?.message || detail || '';
+  window.__LBH_SHOW_BOOT_ERROR__?.(message, formattedDetail);
+  console.error(`[LBH boot] ${message}`, formattedDetail);
+}
+
 const PLAYABLE_MAPS = [
   { id: 'shallows', map: MAP_SHALLOWS },
   { id: 'expanse', map: MAP_EXPANSE },
@@ -518,10 +529,19 @@ function getConfiguredSimServerUrl() {
 // ---- Init ----
 
 function init() {
+  window.__LBH_BOOT_MARK__?.('init.start');
   // WebGL canvas
   glCanvas = document.getElementById('fluid-canvas');
   threeCanvas = document.getElementById('three-canvas');
   overlayCanvas = document.getElementById('overlay-canvas');
+  if (!glCanvas || !threeCanvas || !overlayCanvas) {
+    reportBootFailure('Missing one or more render canvases.', {
+      fluidCanvas: Boolean(glCanvas),
+      threeCanvas: Boolean(threeCanvas),
+      overlayCanvas: Boolean(overlayCanvas),
+    });
+    return false;
+  }
   // Fixed internal render resolution with aspect-preserving letterbox.
   // Black hole (and every framed visual) has a single authored shape —
   // window size only scales the whole frame, it doesn't reshape anything.
@@ -536,9 +556,24 @@ function init() {
     preserveDrawingBuffer,
   });
   if (!gl) {
-    console.error('WebGL 2 not supported');
-    return;
+    window.__LBH_BOOT_MARK__?.('webgl2.unavailable');
+    reportBootFailure(
+      'WebGL 2 is not available, so the game renderer cannot start.',
+      [
+        `url: ${window.location.href}`,
+        `userAgent: ${navigator.userAgent}`,
+        `buildFlags: ${JSON.stringify(window.__LBH_BUILD_FLAGS__ || null)}`,
+      ].join('\n')
+    );
+    return false;
   }
+  const debugRendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
+  window.__LBH_BOOT_MARK__?.('webgl2.ready', {
+    vendor: gl.getParameter(gl.VENDOR),
+    renderer: gl.getParameter(gl.RENDERER),
+    unmaskedVendor: debugRendererInfo ? gl.getParameter(debugRendererInfo.UNMASKED_VENDOR_WEBGL) : null,
+    unmaskedRenderer: debugRendererInfo ? gl.getParameter(debugRendererInfo.UNMASKED_RENDERER_WEBGL) : null,
+  });
 
   const ext1 = gl.getExtension('EXT_color_buffer_float');
   if (!ext1) console.warn('EXT_color_buffer_float not available');
@@ -916,6 +951,12 @@ function init() {
   // Start loop
   lastFrameTime = performance.now();
   requestAnimationFrame(gameLoop);
+  window.__LBH_BOOT_MARK__?.('game-loop.scheduled', {
+    rendererBackend: rendererBackend?.name || null,
+    renderQuality: rendererBackend?.renderQuality || null,
+    simServerUrl: simClient?.baseUrl || null,
+  });
+  return true;
 }
 
 function seedInitialFluid() {
@@ -5042,8 +5083,23 @@ window.addEventListener('error', (e) => {
 });
 
 // ---- Start ----
+function boot() {
+  try {
+    const ok = init();
+    if (ok !== false) {
+      window.__LBH_BOOT_MARK__?.('init.completed', {
+        phase: gamePhase,
+        rendererBackend: rendererBackend?.name || null,
+      });
+    }
+  } catch (err) {
+    reportBootFailure('Game initialization crashed.', err);
+    throw err;
+  }
+}
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', boot);
 } else {
-  init();
+  boot();
 }
