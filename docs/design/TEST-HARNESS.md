@@ -84,6 +84,15 @@ asserts gameplay state should pass on both renderers; a renderer fixture should
 record backend diagnostics so failures say whether the visual graph or the
 gameplay state moved.
 
+The Three renderer is no longer allowed to be a copy-only fullscreen bridge.
+Renderer fixtures assert the first-class scene contract:
+
+- `sceneKind: "top-down-3d"`
+- `camera.kind: "orthographic-top-down"`
+- `background-parallax-field`, `fabric-source-layer`, and
+  `foreground-screen-space-layer` are present
+- `three-screen-space-post` appears in the pass graph
+
 ## Codex App Browser Lane
 
 Use the in-app browser for the work headless automation is bad at: visual identity, HUD

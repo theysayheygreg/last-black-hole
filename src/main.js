@@ -3334,6 +3334,20 @@ function gameLoop(now) {
   applyRenderTuningForPhase(gamePhase === 'title' || rendererFixtureActive);
   const composerStart = performance.now();
   rendererBackend.render({
+    three: {
+      camX,
+      camY,
+      gridWindow: GRID_WINDOW,
+      worldScale: WORLD_SCALE,
+      totalTime,
+      ship: ship ? {
+        wx: ship.wx,
+        wy: ship.wy,
+        vx: ship.vx,
+        vy: ship.vy,
+      } : null,
+      phase: gamePhase,
+    },
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,

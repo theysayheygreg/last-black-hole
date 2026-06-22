@@ -10,9 +10,10 @@ The migration should preserve the current identity first: ASCII fluid, dark cock
 
 Recommended migration style: **strangler bridge**. Keep the legacy renderer working behind `?renderer=legacy`, make `?renderer=three` the default product-facing path as parity evidence lands, and continue removing legacy ownership in stages.
 
-## Current Implementation Status (2026-06-21)
+## Current Implementation Status (2026-06-22)
 
-- **Shipped:** `?renderer=three` boot path, hidden legacy source canvas, visible Three-owned canvas, Three render target + copy pass, backend diagnostics, fixture coverage, static build packaging for `three.module.js`, and Three as the default automated renderer target.
+- **Shipped:** `?renderer=three` boot path, hidden legacy source canvas, visible Three-owned canvas, Three as the default automated renderer target, static build packaging for `three.module.js`, backend diagnostics, fixture coverage, and a first-class top-down Three scene.
+- **Three scene contract:** the visible renderer now uses an orthographic top-down camera, z-separated `background-parallax-field`, `fabric-source-layer`, and `foreground-screen-space-layer`, a depth-backed render target, motion-driven parallax, and a screen-space present pass. The viewpoint remains visually flat; the renderer substrate is now 3D.
 - **Still legacy-owned:** fluid simulation, Composer shader chain, ASCII pass internals, and most overlay/HUD drawing.
 - **Legacy status:** `?renderer=legacy` remains available as an explicit compatibility/fallback lane, but it is no longer the default harness target.
 - **Harness:** use `npm test` for the Three core gate, `npm run test:three` for smoke + infra + renderer canary, and `npm run test:legacy` only when touching the bridge/fallback.
@@ -189,19 +190,22 @@ Performance implications:
 
 Goal: boot a Three renderer in the client process without rewriting every shader at once.
 
+Status: shipped as the current `ThreeRendererBackend`. The implementation uses a hidden legacy source canvas as a temporary compatibility bridge, then presents that frame inside a real Three scene rather than a fullscreen copy-only pass.
+
 Deliverables:
 
 - Create `ThreeRendererBridge`.
 - Construct `THREE.WebGLRenderer` on the existing visible canvas.
 - Preserve fixed 1280x720 backing render resolution and letterboxed CSS sizing from `src/render/viewport.js`.
 - Implement context-loss and context-restore handling.
-- Render a Three fullscreen background quad and a minimal orthographic scene.
+- Render a top-down 3D scene with an orthographic camera, z-layered backdrop/fabric/foreground groups, and a screen-space present pass.
 - Add SpectorJS-friendly capture hooks and `getPerfStats()` fields:
   - draw calls
   - geometries
   - textures
   - render targets
   - pass count
+  - scene kind, camera kind, world layer names, and parallax state
   - GPU/CPU frame timings where available
 - Keep legacy raw WebGL fluid/composer available as a fallback.
 

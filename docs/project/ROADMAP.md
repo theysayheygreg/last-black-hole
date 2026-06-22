@@ -79,6 +79,7 @@
 - The shipped loadout contract is still `2 equipped + 2 consumable` slots.
 - The older `3 artifact slots` idea remains a design/backlog item, not live runtime truth.
 - Public product name is **Last Singularity**. The repository path may remain `last-black-hole` until/unless the remote is renamed.
+- The default Three renderer is now a first-class top-down 3D scene: orthographic camera, z-layered backdrop/fabric/foreground groups, motion parallax, and screen-space presentation. Future visual work should target that scene graph before adding more canvas-only overlays.
 - Production renderer defaults to `FluidDisplayPass -> BloomPass -> TonemapPass -> ColorGradePass -> VignettePass -> ASCIIPass -> ChromaticAberrationPass -> ScanlinesPass`; `?minimalrender=1` gives the cheaper `FluidDisplayPass -> TonemapPass -> ASCIIPass` baseline.
 - Packaged desktop builds are now self-contained local apps with embedded authority on app-owned dynamic loopback ports.
 - Browser remote play still expects separate authority processes.

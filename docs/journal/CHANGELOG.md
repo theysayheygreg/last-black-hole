@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-06-22 — First-class top-down Three scene
+
+- Promoted the Three renderer from a fullscreen copy bridge into a real top-down 3D scene graph: orthographic camera, depth-sorted background/fabric/foreground layers, a depth-backed render target, and a screen-space present pass.
+- Added subtle motion-driven parallax and screen-space warp on the Three path while keeping the readable flat top-down viewpoint and legacy ASCII/fabric source frame intact.
+- Passed camera, ship velocity, world scale, grid window, and phase through the render frame context so Three effects are driven by game motion instead of standalone decoration.
+- Extended renderer fixture assertions to require the `top-down-3d` scene contract, the orthographic top-down camera, world layers, and the Three screen-space pass.
+
 ## 2026-06-22 — Parallel Three renderer and harness rebuild
 
 - Added a parallel Three.js renderer backend behind `?renderer=three` and made Three the default automated renderer target. The legacy Composer path remains available through explicit `legacy` scripts as a compatibility/fallback lane.

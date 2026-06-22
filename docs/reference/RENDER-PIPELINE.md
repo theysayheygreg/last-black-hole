@@ -1,8 +1,10 @@
 # Render Pipeline
 
-`Last Singularity` runs a lightweight multi-pass render pipeline on vanilla
-WebGL 2 — no Three.js, no framework, no build step. This doc is the contract
-for adding and sequencing render passes without reading the whole codebase.
+`Last Singularity` now has two renderer layers. The legacy vanilla WebGL 2
+Composer still produces the ASCII/fabric source frame. The default Three.js
+backend presents that source frame inside a first-class top-down 3D scene with
+depth layers, parallax, and a screen-space present pass. This doc describes the
+Composer contract and how it feeds the Three backend.
 
 The rule is simple:
 
@@ -11,6 +13,8 @@ The rule is simple:
 - new effects slot into the chain with one `composer.add()` line
 - the fluid sim's internal physics passes are out of scope — this is only
   the display chain that runs after `fluid.step()`
+- on `?renderer=three`, the Composer output is a source texture for
+  `src/render-three/three-renderer.js`, not the visible final canvas
 
 ## Files
 
@@ -27,18 +31,44 @@ src/render/
 
 ## Current chains
 
-All current visual lanes use the same Composer contract. Production now defaults
-to the rich chain; the minimal chain is an explicit perf baseline.
+All current visual lanes still use the same Composer contract for the fabric
+source. Production now defaults to the rich chain; the minimal chain is an
+explicit perf baseline.
 
 | Surface                   | Chain                                                  |
 |---------------------------|--------------------------------------------------------|
-| Main game default (`src/main.js`) | `FluidDisplayPass → BloomPass → TonemapPass → ColorGradePass → VignettePass → ASCIIPass → ChromaticAberrationPass → ScanlinesPass` |
+| Main game default (`src/main.js`) | `FluidDisplayPass → GainPass → AccretionPass → BloomPass → TonemapPass → ColorGradePass → VignettePass → ASCIIPass → ChromaticAberrationPass → ScanlinesPass` |
 | Main game `?minimalrender=1`      | `FluidDisplayPass → TonemapPass → ASCIIPass` |
 | Title prototype                   | focused Composer/Bloom visual probe |
 
 Production Bloom is now live but intentionally lower intensity than the title
 prototype. Use `?minimalrender=1` and `?disable=bloom,color-grade,vignette,chromatic-aberration,scanlines`
 when isolating perf or readability regressions.
+
+## Three Presentation Layer
+
+`src/render-three/three-renderer.js` is the default visible renderer when
+`?renderer=three` is active. It does not own gameplay truth. `src/main.js`
+passes a `frameContext.three` packet with camera center, grid window, world
+scale, phase, total time, and ship motion. Three adapts that packet into view
+state only.
+
+Current Three pass graph:
+
+1. `legacy-source-frame` — Composer renders the ASCII/fabric source into the
+   hidden legacy canvas.
+2. `three-background-depth` — subtle grid/star depth layers behind the fabric.
+3. `three-fabric-plane` — the source frame is sampled on a z-layered plane.
+4. `three-world-scene` — orthographic top-down camera renders the depth scene
+   into a Three render target.
+5. `three-screen-space-post` — final screen-space present pass applies the
+   restrained motion/lens treatment.
+
+Renderer diagnostics report `sceneKind: "top-down-3d"`,
+`camera.kind: "orthographic-top-down"`, `worldLayers`, `passNames`, and
+parallax state through `__TEST_API.getRendererBackendStats()`. Renderer
+fixtures assert that contract so the Three path cannot silently regress into a
+copy-only bridge.
 
 ## The Composer contract
 

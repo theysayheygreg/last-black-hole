@@ -158,9 +158,17 @@ async function captureFixture(page, outputDir, fixture) {
   const backendStats = await page.evaluate(() => window.__TEST_API.getRendererBackendStats?.() || null);
   if (backend === 'three') {
     assert(backendStats?.backend === 'three', `Fixture '${fixture.name}' backend stats did not report three`);
-    assert(backendStats?.passCount >= 3, `Fixture '${fixture.name}' Three render graph is missing passes`);
-    assert(Array.isArray(backendStats?.three?.passNames) && backendStats.three.passNames.includes('three-copy-pass'),
-      `Fixture '${fixture.name}' Three pass list missing`);
+    assert(backendStats?.passCount >= 5, `Fixture '${fixture.name}' Three render graph is missing passes`);
+    assert(backendStats?.three?.sceneKind === 'top-down-3d',
+      `Fixture '${fixture.name}' Three scene is not first-class 3D`);
+    assert(backendStats?.three?.camera?.kind === 'orthographic-top-down',
+      `Fixture '${fixture.name}' Three camera is not the top-down orthographic camera`);
+    assert(Array.isArray(backendStats?.three?.worldLayers)
+      && backendStats.three.worldLayers.some((layer) => layer.name === 'fabric-source-layer')
+      && backendStats.three.worldLayers.some((layer) => layer.name === 'background-parallax-field'),
+    `Fixture '${fixture.name}' Three world layers missing`);
+    assert(Array.isArray(backendStats?.three?.passNames) && backendStats.three.passNames.includes('three-screen-space-post'),
+      `Fixture '${fixture.name}' Three pass list missing screen-space post`);
   }
 
   return {

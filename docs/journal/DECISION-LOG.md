@@ -1,5 +1,15 @@
 # Decision Log
 
+## 2026-06-22 — Three renderer is flat-view 3D, not a 2D copy target
+
+**Decision:** The Three path should be a first-class 3D scene even when the game keeps its top-down, flat visual language. The current implementation uses an orthographic top-down camera, z-separated backdrop/fabric/foreground layers, motion-driven parallax, and a screen-space present pass. The legacy Composer frame remains the ASCII/fabric source for now, but it is presented as a plane inside the Three world instead of being treated as the whole renderer.
+
+**Why:** LBH needs depth infrastructure for parallax, player-motion cues, screen-space effects, entity projection, and eventual Three-owned fluid/entity passes. Keeping the viewpoint flat protects readability and aesthetic continuity; making the scene graph real prevents every future visual upgrade from becoming another fullscreen shader special case.
+
+**Where it landed:** `src/render-three/three-renderer.js`, `src/main.js` frame context, and `tests/renderer.cjs` scene-contract assertions.
+
+**Door status:** Closed for renderer direction. Open for tuning the amount of parallax, backdrop reveal, and which overlay/entity layers migrate from canvas to Three first.
+
 ## 2026-05-09 — Movement is an economy, not a free verb
 
 **Decision:** Thrust is no longer free. The ship has a finite delta-v fuel resource that thrust drains and time refills. Brake converts from drag-add to a real reverse-thrust that costs delta-v at a smaller rate than forward (`brakeThrustScale: 0.4`, `brakeFuelScale: 0.6`). Drag drops 4× (0.06 → 0.015) so coasting actually preserves momentum.
