@@ -300,6 +300,25 @@ Steam Deck is unforgiving about bad controller assumptions.
 
 The most important early outcome is not "special Deck code." It is "the game is honestly controller-first."
 
+## Switch 1
+
+Switch 1 is not a direct extension of the current desktop package.
+
+The current Electron/Three/Node runtime should be treated as a PC/web/Steam Deck
+shape. A Switch 1 build would be a port or renderer probe, not another wrapper
+target.
+
+The practical research path is:
+
+- keep Atmosphere/homebrew work private and experimental;
+- use it only on prepared lab hardware, never as a public distribution plan;
+- build an engine-neutral snapshot/input/content contract first;
+- test a tiny renderer shell before porting any gameplay logic;
+- keep the official Nintendo developer route as the only commercial answer.
+
+See [Switch 1 / Atmosphere Feasibility](../project/SWITCH1-ATMOSPHERE-FEASIBILITY.md)
+for the current recommendation.
+
 ## What I would do
 
 After the jam:

@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-06-22 — Switch 1 feasibility spike
+
+- Added `docs/project/SWITCH1-ATMOSPHERE-FEASIBILITY.md`, a research memo for a future Switch 1 / Atmosphere lab probe.
+- Documented the decision that Switch 1 is a port/renderer-probe target, not a direct Electron/Three/Node desktop wrapper target.
+- Added a backlog entry for a recorded-snapshot Switch 1 renderer probe and cross-linked it from platform and Godot console docs.
+- Kept Atmosphere scoped to private technical research while preserving the official Nintendo developer route as the only commercial/public path.
+
+---
+
 ## 2026-06-22 — Play instructions refresh
 
 - Reworked the README into usable play paths for source launches, Steam Deck weekly installs, packaged desktop builds, and browser sandbox debugging.

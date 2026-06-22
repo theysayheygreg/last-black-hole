@@ -72,6 +72,11 @@ Other console exports require platform-holder approval and SDK-backed private
 export templates or licensed middleware. That makes Godot viable later, but it
 does not remove the need for a portable sim/content contract.
 
+Switch 1 has its own research memo now: see
+`docs/project/SWITCH1-ATMOSPHERE-FEASIBILITY.md`. The same core warning applies
+there. A console-shaped renderer probe is useful only after LBH has versioned
+snapshot, input, content, save, and golden-sim contracts.
+
 References:
 
 - [Godot console support](https://docs.godotengine.org/en/stable/tutorials/platform/consoles.html)

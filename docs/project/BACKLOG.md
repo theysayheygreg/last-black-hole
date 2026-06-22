@@ -292,6 +292,13 @@
 - **First revival step:** Build the platform contract and run a thin Godot snapshot-rendering probe. Do not port physics, AI, signal, inventory, or progression into Godot first.
 - **Design note:** See `docs/project/GODOT-CONSOLE-FUTURE-INVESTIGATION.md`.
 
+### Switch 1 Renderer Probe
+- **What:** Test whether a Switch 1-class handheld can render LBH's top-down ASCII field from recorded authoritative snapshots.
+- **Why deferred:** The current Electron/Three/Node stack is not a Switch build target. A native or homebrew probe needs portable snapshot/input/content contracts first.
+- **Value if revisited:** Real console-shaped constraints: 720p handheld readability, controller latency, Tegra-class GPU budgets, no DOM HUD, and single-process runtime pressure.
+- **First revival step:** Build recorded snapshot fixtures, then compare a tiny nx.js/WebGL-like probe against a native C/C++ libnx graphics probe.
+- **Design note:** See `docs/project/SWITCH1-ATMOSPHERE-FEASIBILITY.md`.
+
 ### Headless Sim Harness
 - **What:** Run gameplay tests against a dedicated sim process instead of an in-page browser loop.
 - **Why backlogged:** The renderer harness and main flow harness are enough for the jam.
