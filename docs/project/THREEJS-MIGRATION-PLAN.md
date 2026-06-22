@@ -8,7 +8,14 @@ Migrate LBH to Three.js as a **client renderer runtime**, not as a new game engi
 
 The migration should preserve the current identity first: ASCII fluid, dark cockpit HUD, route-reading movement, delta-v economy, slingshot affordances, and terminal dread. Three.js is valuable because it gives the renderer a better graph, cleaner resource ownership, stronger 2.5D/3D layering, easier shader pass composition, instancing, asset loading, and better diagnostics. It is not valuable if it turns the game into generic 3D space with the ASCII shader tacked on afterward.
 
-Recommended migration style: **strangler bridge**. Keep the legacy renderer working behind `?renderer=legacy`, introduce `?renderer=three`, and require feature parity gates before Three becomes the default.
+Recommended migration style: **strangler bridge**. Keep the legacy renderer working behind `?renderer=legacy`, make `?renderer=three` the default product-facing path as parity evidence lands, and continue removing legacy ownership in stages.
+
+## Current Implementation Status (2026-06-21)
+
+- **Shipped:** `?renderer=three` boot path, hidden legacy source canvas, visible Three-owned canvas, Three render target + copy pass, backend diagnostics, fixture coverage, static build packaging for `three.module.js`, and Three as the default automated renderer target.
+- **Still legacy-owned:** fluid simulation, Composer shader chain, ASCII pass internals, and most overlay/HUD drawing.
+- **Legacy status:** `?renderer=legacy` remains available as an explicit compatibility/fallback lane, but it is no longer the default harness target.
+- **Harness:** use `npm test` for the Three core gate, `npm run test:three` for smoke + infra + renderer canary, and `npm run test:legacy` only when touching the bridge/fallback.
 
 ## Non-Negotiables
 

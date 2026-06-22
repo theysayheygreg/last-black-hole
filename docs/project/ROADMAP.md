@@ -174,7 +174,7 @@ Orb should pull these in priority order. N1a starts immediately. N2 and N3 can s
   - [ ] `CONFIG` object exists, all tunables are in it, systems read from it every frame
   - [ ] `window.__TEST_API` is accessible and returns valid data
   - [ ] Committed per CLAUDE.md rules (atomic commits per system)
-- **Self-test before handoff:** Run `node tests/run-all.js index-a.html` (harness is pre-built, puppeteer already installed). Commit test pass/fail evidence before claiming the task is done.
+- **Self-test before handoff:** Run `node tests/run-all.cjs index-a.html` (harness is pre-built and uses the shared CDP browser driver). Commit test pass/fail evidence before claiming the task is done.
 - **Scope:** Large
 
 #### Task N1b: Approach B — Dual Solver (Large, 3-5hr)
@@ -268,11 +268,11 @@ Orb should pull these in priority order. N1a starts immediately. N2 and N3 can s
 The test harness is already in the repo. Corb just runs it after building.
 
 ```
-npm install                              # first time only (installs puppeteer)
-node tests/run-all.js index-a.html       # run all tests against Approach A
-node tests/run-all.js index-b.html       # or against Approach B
-node tests/smoke.js index-a.html         # smoke only
-node tests/physics.js index-a.html       # physics only
+npm install                              # first time only
+node tests/run-all.cjs index-a.html      # run all tests against Approach A
+node tests/run-all.cjs index-b.html      # or against Approach B
+node tests/smoke.cjs index-a.html        # smoke only
+node tests/physics.cjs index-a.html      # physics only
 ```
 
 **Smoke tests** (~10s): page loads, canvas exists, WebGL context, no JS errors, CONFIG exists, FPS above 30.

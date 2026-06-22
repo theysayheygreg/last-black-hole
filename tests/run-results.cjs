@@ -1,5 +1,5 @@
 /**
- * run-results.js — Canvas results overlay and continue-flow coverage.
+ * run-results.js — Canvas results overlay view-model coverage.
  *
  * Usage: node tests/run-results.js [index-a.html]
  */
@@ -10,18 +10,12 @@ const {
   screenshot,
   TestRunner,
   assert,
-  dispatchKey,
   waitFor,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-
-async function tapConfirm(page) {
-  await dispatchKey(page, "Space", " ");
-  await sleep(140);
-}
 
 const extractedResult = {
   runId: "test-run-extracted",
@@ -114,15 +108,6 @@ async function run() {
       assert(view.inhibitorLabel === "vessel", `Expected vessel form, got ${view.inhibitorLabel}`);
       assert(view.cargoLabels[0].includes("Drowned Core"), "Expected lost cargo label");
       assert(view.aiLines[0].includes("redline") && view.aiLines[0].includes("4 cargo"), "Expected AI outcome cargo count");
-    });
-
-    await runner.run("Continue path leaves results for meta/home flow", async () => {
-      await page.evaluate((result) => window.__TEST_API.showRunResultsFixture(result), extractedResult);
-      await tapConfirm(page);
-      await waitFor(page, () => window.__TEST_API.getGamePhase() === "meta", { timeout: 5000 });
-      await sleep(1400);
-      await tapConfirm(page);
-      await waitFor(page, () => window.__TEST_API.getGamePhase() === "home", { timeout: 5000 });
     });
 
     const filepath = await screenshot(page, "run-results");

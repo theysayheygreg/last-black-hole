@@ -9,8 +9,7 @@
 //
 // Read-only — does not write back or commit anything.
 
-const puppeteer = require('puppeteer');
-const { startServer, stopServer, PORT } = require('./helpers.cjs');
+const { startServer, stopServer, launchGame, stepGameFrames } = require('./helpers.cjs');
 
 const TRIALS_PER_MAP = 3;
 const THRUST_WARMUP_MS = 500;
@@ -19,7 +18,7 @@ const THRUST_STEADY_MS = 5500;
 async function probeOne(page, mapIdx) {
   const loaded = await page.evaluate((i) => window.__TEST_API.startGameOnMap(i), mapIdx);
   if (!loaded) return null;
-  await new Promise(r => setTimeout(r, 400));
+  await stepGameFrames(page, 24);
 
   const spawn = await page.evaluate(() => {
     const api = window.__TEST_API;
@@ -46,12 +45,12 @@ async function probeOne(page, mapIdx) {
   });
 
   await page.keyboard.down('KeyW');
-  await new Promise(r => setTimeout(r, THRUST_WARMUP_MS));
+  await stepGameFrames(page, Math.ceil(THRUST_WARMUP_MS / (1000 / 60)));
   const transient = await page.evaluate(() => {
     const v = window.__TEST_API.getShipVel();
     return { speed: Math.sqrt(v.x*v.x + v.y*v.y) };
   });
-  await new Promise(r => setTimeout(r, THRUST_STEADY_MS));
+  await stepGameFrames(page, Math.ceil(THRUST_STEADY_MS / (1000 / 60)));
   const steady = await page.evaluate(() => {
     const v = window.__TEST_API.getShipVel();
     const p = window.__TEST_API.getShipPos();
@@ -81,13 +80,10 @@ async function probeOne(page, mapIdx) {
 
 (async () => {
   await startServer();
-  const browser = await puppeteer.launch({ headless: 'new' });
-  const page = await browser.newPage();
+  const { browser, page } = await launchGame('index-a.html');
   page.on('console', m => {
     if (m.type() === 'error') console.log('[page error]', m.text());
   });
-  await page.setViewport({ width: 1440, height: 810 });
-  await page.goto(`http://127.0.0.1:${PORT}/index-a.html`, { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => window.__TEST_API && window.__TEST_API.startGameOnMap);
 
   const all = { shallows: [], expanse: [], deep: [] };

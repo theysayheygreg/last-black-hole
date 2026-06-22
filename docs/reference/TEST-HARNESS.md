@@ -46,7 +46,7 @@ flowchart LR
     I["tests/helpers.cjs"] --> J["Harness static server :8719"]
     I --> K["Transient control plane"]
     I --> L["Transient sim server"]
-    I --> M["Puppeteer browser"]
+    I --> M["CDP browser driver"]
 ```
 
 ## The Layers
@@ -151,7 +151,7 @@ That file is responsible for:
 
 - starting the temporary static server
 - starting transient control-plane and sim processes
-- launching Puppeteer
+- launching system Chrome through the CDP browser driver
 - cleaning up detached children
 - isolating ports and pid files so test runs do not stomp on each other
 
@@ -183,8 +183,8 @@ Chrome DevTools MCP is useful, but it does not replace this harness.
 
 Use the split this way:
 
-- Puppeteer harness = deterministic pass/fail truth
-- Chrome DevTools MCP = live inspection, console, screenshots, perf traces
+- CDP harness = deterministic pass/fail truth
+- Codex/Chrome browser tools = live inspection, console, screenshots, perf traces
 
 That keeps CI and nightly validation honest while still giving agents good browser eyes.
 

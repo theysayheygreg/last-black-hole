@@ -1,7 +1,7 @@
-const puppeteer = require("puppeteer");
 const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const { launchBrowser } = require("./browser-driver.cjs");
 
 const SCREENSHOT_DIR = path.join(__dirname, "screenshots");
 if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -20,6 +20,29 @@ let serverProcess = null;
 const startedSimPorts = new Set();
 const startedControlPorts = new Set();
 let cleanupRegistered = false;
+
+function hasProtocol(target) {
+  return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(String(target));
+}
+
+function withQuery(target, params = {}) {
+  const input = String(target || "index-a.html");
+  const absolute = hasProtocol(input);
+  const url = new URL(input, absolute ? undefined : "http://lbh.local/");
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === false) continue;
+    url.searchParams.set(key, String(value));
+  }
+  return absolute
+    ? url.toString()
+    : `${url.pathname.replace(/^\//, "")}${url.search}${url.hash}`;
+}
+
+function toHarnessUrl(target) {
+  const input = String(target || "index-a.html");
+  if (hasProtocol(input)) return input;
+  return `http://127.0.0.1:${PORT}/${input.replace(/^\//, "")}`;
+}
 
 function waitForPidExitSync(pid, timeoutMs = 2500) {
   if (!pid) return;
@@ -183,16 +206,9 @@ function stopServer() {
  * @param {string} htmlFile - filename relative to project root (e.g. "index.html" or "index-a.html")
  */
 async function launchGame(htmlFile = "index.html") {
-  let target = htmlFile;
-  if (!String(target).startsWith("http://") && !String(target).startsWith("https://")) {
-    target = `http://127.0.0.1:${PORT}/${String(target).replace(/^\//, "")}`;
-  }
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const target = toHarnessUrl(htmlFile);
+  const browser = await launchBrowser();
   const page = await browser.newPage();
-  await page.setViewport({ width: 1280, height: 720 });
 
   // Collect console errors
   const errors = [];
@@ -204,6 +220,17 @@ async function launchGame(htmlFile = "index.html") {
   await new Promise((r) => setTimeout(r, 2000));
 
   return { browser, page, errors };
+}
+
+async function stepGameFrames(page, frames = 1, dt = 1 / 60) {
+  return page.evaluate((count, stepDt) => {
+    if (!window.__TEST_API?.stepFrameForTest) return null;
+    let last = null;
+    for (let i = 0; i < count; i++) {
+      last = window.__TEST_API.stepFrameForTest(stepDt);
+    }
+    return last;
+  }, Math.max(1, Number(frames) || 1), dt);
 }
 
 async function startSimServer(port = 8788, options = {}) {
@@ -344,7 +371,32 @@ async function waitFor(page, predicate, options = {}, ...args) {
 async function screenshot(page, label) {
   const ts = new Date().toISOString().replace(/[:.]/g, "");
   const filepath = path.join(SCREENSHOT_DIR, `${label}-${ts}.png`);
-  await page.screenshot({ path: filepath });
+  const dataUrl = await page.evaluate(() => {
+    const apiBackend = window.__TEST_API?.getRendererBackend?.();
+    const threeCanvas = document.getElementById("three-canvas");
+    const fluidCanvas = document.getElementById("fluid-canvas");
+    const overlay = document.getElementById("overlay-canvas");
+    const threeVisible = threeCanvas && getComputedStyle(threeCanvas).display !== "none";
+    const source = apiBackend === "three" || (!apiBackend && threeVisible) ? threeCanvas : fluidCanvas;
+    if (!source || !source.width || !source.height) return null;
+
+    const out = document.createElement("canvas");
+    out.width = source.width;
+    out.height = source.height;
+    const ctx = out.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(source, 0, 0);
+    if (overlay && getComputedStyle(overlay).opacity !== "0") {
+      ctx.drawImage(overlay, 0, 0);
+    }
+    return out.toDataURL("image/png");
+  }).catch(() => null);
+  if (dataUrl) {
+    fs.writeFileSync(filepath, Buffer.from(dataUrl.split(",")[1], "base64"));
+  } else {
+    await page.screenshot({ path: filepath });
+  }
   return filepath;
 }
 
@@ -443,5 +495,8 @@ module.exports = {
   controlPlaneLogFile,
   readJsonLogEvents,
   waitForLogEvent,
+  withQuery,
+  toHarnessUrl,
+  stepGameFrames,
   PORT,
 };

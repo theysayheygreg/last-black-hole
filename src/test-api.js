@@ -183,13 +183,20 @@ export function initTestAPI(getState) {
     },
 
     getFluidGridState() {
-      const { perfStats } = getState();
+      const { getFluidGridStateForTest, perfStats } = getState();
+      const direct = getFluidGridStateForTest ? getFluidGridStateForTest() : null;
       const [camX, camY] = getFluidCamera();
+      const mergedPerf = perfStats ? JSON.parse(JSON.stringify(perfStats)) : {};
+      if (direct) {
+        mergedPerf.fluidResolution = direct.fluidResolution;
+        mergedPerf.visibleWellCount = direct.visibleWellCount;
+        mergedPerf.totalWellCount = direct.totalWellCount;
+      }
       return {
-        worldScale: WORLD_SCALE,
-        gridWindow: GRID_WINDOW,
-        fluidCamera: { x: camX, y: camY },
-        perfStats: perfStats ? JSON.parse(JSON.stringify(perfStats)) : null,
+        worldScale: direct?.worldScale ?? WORLD_SCALE,
+        gridWindow: direct?.gridWindow ?? GRID_WINDOW,
+        fluidCamera: direct?.fluidCamera ?? { x: camX, y: camY },
+        perfStats: mergedPerf,
       };
     },
 
@@ -289,6 +296,23 @@ export function initTestAPI(getState) {
       return getRendererView ? getRendererView() : 'ascii';
     },
 
+    getRendererBackend() {
+      const { getRendererBackend } = getState();
+      return getRendererBackend ? getRendererBackend() : 'legacy';
+    },
+
+    getRendererBackendStats() {
+      const { getRendererBackendStats } = getState();
+      const stats = getRendererBackendStats ? getRendererBackendStats() : null;
+      return stats ? JSON.parse(JSON.stringify(stats)) : null;
+    },
+
+    stepFrameForTest(dt = 1 / 60) {
+      const { stepFrameForTest } = getState();
+      const result = stepFrameForTest ? stepFrameForTest(dt) : null;
+      return result ? JSON.parse(JSON.stringify(result)) : null;
+    },
+
     // Diagnostic-only: start a game on a specific map index (0=shallows,
     // 1=expanse, 2=deep-field). Used by ship-speed probes to compare
     // physics across map scales. Safe to keep — thin wrapper over startGame.
@@ -307,7 +331,7 @@ export function initTestAPI(getState) {
       // NOTE: This bypasses the real profile→home→mapSelect UI flow for test speed.
       // The real flow (title→profileSelect→home→launch→mapSelect→play) is validated
       // by manual playtesting. Automating it is fragile due to multi-phase keyboard
-      // simulation in Puppeteer. See Codex review 2026-03-27.
+      // simulation in browser automation. See Codex review 2026-03-27.
       if (profileManager && !profileManager.active) {
         profileManager.createProfile(0, 'Test Pilot');
       }
@@ -573,6 +597,52 @@ export function initTestAPI(getState) {
         mouseDistancePx: inputManager._mouse?.distancePx ?? 0,
         ability1: Boolean(inputManager.ability1),
         ability2: Boolean(inputManager.ability2),
+      };
+    },
+
+    setInputKeyForTest(code, pressed) {
+      const { inputManager } = getState();
+      if (!inputManager || !inputManager._keys || typeof code !== 'string') return false;
+      inputManager._keys[code] = Boolean(pressed);
+      return true;
+    },
+
+    clearInputForTest() {
+      const { inputManager } = getState();
+      if (!inputManager) return false;
+      inputManager._keys = {};
+      if (inputManager._mouse) {
+        inputManager._mouse.left = false;
+        inputManager._mouse.right = false;
+        inputManager._mouse.active = false;
+      }
+      return true;
+    },
+
+    tickShipPhysicsForTest(dt = 1 / 60, controls = {}) {
+      const { ship, flowField, wellSystem, fluid } = getState();
+      if (!ship) return null;
+      const safeDt = Math.max(0, Math.min(1, Number(dt) || 0));
+      const savedPull = CONFIG.wells.shipPullStrength;
+      if (Number.isFinite(Number(controls.wellPullStrength))) {
+        CONFIG.wells.shipPullStrength = Number(controls.wellPullStrength);
+      }
+      if (Number.isFinite(Number(controls.facing))) {
+        ship.setFacingDirect(Number(controls.facing));
+      }
+      if (Number.isFinite(Number(controls.thrustIntensity))) {
+        ship.setThrustIntensity(Math.max(0, Math.min(1, Number(controls.thrustIntensity))));
+      }
+      if (Number.isFinite(Number(controls.brakeIntensity))) {
+        ship.setBrakeIntensity(Math.max(0, Math.min(1, Number(controls.brakeIntensity))));
+      }
+      ship.update(safeDt, flowField, wellSystem, fluid);
+      CONFIG.wells.shipPullStrength = savedPull;
+      return {
+        pos: { x: ship.wx, y: ship.wy },
+        vel: { x: ship.vx, y: ship.vy },
+        deltaV: ship.deltaV,
+        lastFluidSpeed: ship.lastFluidSpeed,
       };
     },
 

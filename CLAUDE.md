@@ -155,7 +155,7 @@ See `docs/project/JAM-CONTRACT.md` for full "When Done" checklist, journal trigg
 
 ## Testing
 
-- **Automated:** `node tests/run-all.js` — Puppeteer-based smoke + physics + gameloop tests. Run after every commit. See `docs/design/AGENT-TESTING.md`.
+- **Automated:** `node tests/run-all.cjs` — manifest-driven Node/CDP smoke, physics, renderer, and gameplay tests. Run after every commit. See `docs/design/TEST-HARNESS.md`.
 - **Manual:** playtesting for feel, art direction, balance. No unit test framework.
 - `console.log` is fine. Remove before ship day (Sunday).
 - Performance matters: 60fps on a mid-range laptop. Profile if you're unsure.

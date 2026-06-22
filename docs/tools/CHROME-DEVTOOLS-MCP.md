@@ -1,13 +1,15 @@
 # Chrome DevTools MCP: Research & Evaluation
 
-> Should we switch from Puppeteer to Chrome DevTools MCP for testing?
-> Short answer: no for tests, yes as a development tool.
+> Historical note. LBH no longer depends on Puppeteer for the automated test
+> suite. Current deterministic browser tests use `tests/browser-driver.cjs`, a
+> small Chrome DevTools Protocol wrapper around system Chrome.
 
 ## What It Is
 
 [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) is an official Google MCP server that gives AI coding agents access to a live Chrome browser through the Chrome DevTools Protocol. Built by the Chrome team (September 2025).
 
-Key fact: **it wraps Puppeteer internally.** It's not a replacement — it's an AI-friendly interface on top of the same engine.
+Key fact at the time of evaluation: the MCP wrapped Puppeteer internally. LBH's
+current local harness talks CDP directly instead of depending on that package.
 
 29 tools across 6 categories:
 
@@ -20,9 +22,9 @@ Key fact: **it wraps Puppeteer internally.** It's not a replacement — it's an 
 | Network (2) | request inspection with source maps | Debug API calls |
 | Debugging (6) | evaluate_script, take_screenshot, lighthouse_audit... | The useful stuff |
 
-## Comparison: Puppeteer vs Chrome DevTools MCP
+## Comparison: Local CDP Harness vs Chrome DevTools MCP
 
-| | Puppeteer (current) | Chrome DevTools MCP |
+| | Local CDP harness | Chrome DevTools MCP |
 |---|---|---|
 | **Control model** | Programmatic (JS scripts) | Conversational (AI tool calls) |
 | **Determinism** | Exact same every run | AI interprets results (non-deterministic) |
@@ -32,26 +34,28 @@ Key fact: **it wraps Puppeteer internally.** It's not a replacement — it's an 
 | **Visual debugging** | Screenshots saved to disk | Screenshots in conversation context |
 | **Performance profiling** | Manual | Built-in (traces, Lighthouse, memory) |
 | **Console inspection** | Limited | Source-mapped, queryable |
-| **WebGL interaction** | Works via `page.evaluate()` | [Known weakness (#403)](https://github.com/ChromeDevTools/chrome-devtools-mcp/issues/403) |
+| **WebGL interaction** | Works via `page.evaluate()`-style helpers | [Known weakness (#403)](https://github.com/ChromeDevTools/chrome-devtools-mcp/issues/403) |
 | **Agent self-verification** | Yes (agents run `npm test` after commits) | Possible but fragile and expensive |
 
 ## The Verdict: Use Both
 
-**Don't migrate the test suite.** Puppeteer tests are exactly right: deterministic, scriptable, cheap, `exit code 0/1`, agents self-verify after every commit.
+**Don't make MCP the test suite.** The local CDP harness is deterministic,
+scriptable, cheap, `exit code 0/1`, and agents self-verify after every commit.
 
-**Do add Chrome DevTools MCP as a development tool.** It's valuable for things Puppeteer can't do conversationally:
+**Do use Chrome DevTools MCP as a development tool when available.** It's
+valuable for things deterministic scripts should not pretend to judge:
 
 | Use case | Tool |
 |----------|------|
-| CI / deterministic testing | Puppeteer (keep) |
-| Agent self-verification | Puppeteer (keep) |
+| CI / deterministic testing | Local CDP harness |
+| Agent self-verification | Local CDP harness |
 | "Does this look right?" visual checks | Chrome DevTools MCP |
 | Performance profiling (traces, Lighthouse) | Chrome DevTools MCP |
 | Console error debugging | Chrome DevTools MCP |
 | Network request inspection | Chrome DevTools MCP |
 | Mobile viewport testing | Chrome DevTools MCP |
 
-Think of it this way: **Puppeteer is test infrastructure. Chrome DevTools MCP is an agent's eyeballs.**
+Think of it this way: **the CDP harness is test infrastructure. Browser tools are an agent's eyes.**
 
 ## Setup
 
@@ -99,7 +103,7 @@ Once configured, Claude Code gets 29 new tools. Example workflows:
 
 ## WebGL Caveat
 
-There's an [open issue (#403)](https://github.com/ChromeDevTools/chrome-devtools-mcp/issues/403) about canvas/WebGL interaction. The MCP can see the canvas DOM element but can't interact with rendered WebGL content via coordinate clicks. Our workaround (exposing `__TEST_API` and using `evaluate_script`) works the same way we already use Puppeteer's `page.evaluate()`. No regression, but no improvement either for game-specific testing.
+There's an [open issue (#403)](https://github.com/ChromeDevTools/chrome-devtools-mcp/issues/403) about canvas/WebGL interaction. The MCP can see the canvas DOM element but can't interact with rendered WebGL content via coordinate clicks. Our workaround is still `__TEST_API` plus script evaluation; the local harness now does that through CDP directly.
 
 ## Codex Compatibility
 
@@ -107,7 +111,7 @@ Yes — OpenAI Codex supports MCP servers including Chrome DevTools MCP. There a
 
 ## Recommendation
 
-1. **Keep Puppeteer for `npm test`** — don't touch the test suite
+1. **Keep the local CDP harness for `npm test`** — deterministic scripts own pass/fail
 2. **Add Chrome DevTools MCP to both Claude Code and Codex MCP configs** — free visual/perf tools
 3. **Use it for exploratory testing** — "does this look right?" is a conversation now, not a screenshot + alt-tab
 4. **Use it for performance profiling** — traces and Lighthouse without leaving the coding session

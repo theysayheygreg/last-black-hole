@@ -23,6 +23,7 @@ const {
   TestRunner,
   assert,
   waitFor,
+  withQuery,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
@@ -109,7 +110,7 @@ async function run() {
       assert(controlHealth.simInstances.some((entry) => entry.simInstanceId === "sim-infra-smoke"), "Expected sim instance registered in control plane");
     });
 
-    ({ browser, page } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
+    ({ browser, page } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
     await bootstrapCleanPage(page);
 
     await runner.run("Remote-capable client boots cleanly against sim stack", async () => {

@@ -1,5 +1,9 @@
 # Agent Self-Testing: What Machines Verify So Humans Don't Have To
 
+> Historical jam-era plan. For the current manifest-driven harness, renderer
+> lanes, Codex app browser workflow, and Computer Use boundary, start with
+> `docs/design/TEST-HARNESS.md`.
+
 > Agents can open browsers, take screenshots, read console output, measure
 > performance, and simulate inputs. Every minute Greg spends confirming
 > "does it load?" is a minute not spent on "does it feel right?"
@@ -31,12 +35,13 @@
 
 ## Test Tooling
 
-### Browser Automation: Puppeteer (headless Chrome)
+### Browser Automation: CDP Driver (headless Chrome)
 
-Already available via npm. No framework needed — raw Puppeteer scripts.
+The live harness uses `tests/browser-driver.cjs`, a small Chrome DevTools
+Protocol wrapper around system Chrome. No external browser automation package is required.
 
 ```
-npm install puppeteer
+npm install
 ```
 
 A test script:
@@ -48,7 +53,7 @@ A test script:
 6. Takes screenshots
 7. Reports pass/fail
 
-### What Puppeteer Can Do
+### What The Browser Driver Can Do
 
 - **`page.evaluate()`** — read any JS variable from the game (CONFIG, game state, entity positions, signal level, fps)
 - **`page.mouse.move(x, y)`** / **`page.mouse.down()`** — simulate mouse input (thrust toward a point)
@@ -58,7 +63,7 @@ A test script:
 - **`page.on('console')`** — capture all console.log output
 - **`page.on('pageerror')`** — capture JS errors
 
-### What Puppeteer Can't Do (well)
+### What The Browser Driver Can't Do (well)
 
 - Subjective feel ("is this fun?")
 - Audio quality (can verify audio context exists, not whether it sounds good)
@@ -157,7 +162,7 @@ tests/integration.js
 | **Full run times out** | Ignoring portals leads to death | Bot plays: drift doing nothing. Must die within 12 minutes (fast-forward). |
 | **All screen transitions** | Title → run → success → title → run → death → title | Automate the full loop. No errors. |
 | **Config hot-reload** | Changing CONFIG mid-run takes effect | Change CONFIG.ship.thrustForce via evaluate, verify ship acceleration changed. |
-| **Browser compat** | Works in Firefox | Run smoke tests in Firefox (Puppeteer with Firefox support, or Playwright). |
+| **Browser compat** | Works in Firefox | Run a dedicated Firefox smoke lane if/when cross-browser support matters. |
 | **Resize** | Window resize doesn't break rendering | Resize viewport mid-run, take screenshot, verify no errors. |
 
 ### Layer 5: Visual Regression (Thursday+ — optional but powerful)
@@ -177,7 +182,7 @@ Baseline screenshots committed to `tests/baselines/`. Updated when visual change
 
 ## The Test API: What the Game Exposes
 
-The game needs a thin test API that Puppeteer can call. This is NOT game logic — it's a window into game state for automated verification.
+The game needs a thin test API that browser automation can call. This is NOT game logic — it's a window into game state for automated verification.
 
 ```js
 // Exposed on window for test access. No-op in production.
@@ -257,7 +262,7 @@ Monday only needs: page loads, no JS errors, FPS above floor, ship moves on thru
 | `tests/run-all.js` | ~30 | Monday night | Either agent |
 | **Total** | **~690** | **Progressive** | **Agent-owned** |
 
-Puppeteer dependency: `npm init -y && npm install puppeteer` in the game repo. One-time setup.
+Browser dependency: install Chrome locally or set `LBH_CHROME_PATH` to a Chrome/Chromium executable.
 
 ---
 
@@ -323,12 +328,12 @@ tests/screenshots/near-well-2026-03-17T034530Z.png
 tests/screenshots/inhibitor-spawn-2026-03-17T034545Z.png
 ```
 
-### Puppeteer Screenshot Pattern
+### Browser Driver Screenshot Pattern
 
 ```js
-const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
+const { launchGame, stepGameFrames } = require('./helpers.cjs');
 
 const SCREENSHOT_DIR = path.join(__dirname, 'screenshots');
 if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
@@ -519,9 +524,10 @@ Numbered checklist the night shift agent follows. Every night shift, every time.
 The test harness is CI-agnostic. Any agent that can run shell commands can verify the build.
 
 **Requirements to run the tests:**
-- Node.js (for Puppeteer and test scripts)
+- Node.js (for test scripts and the CDP browser driver)
 - A shell (`bash`, `zsh`, whatever)
-- `npm install` (installs Puppeteer, which bundles Chromium)
+- `npm install`
+- Local Chrome, or `LBH_CHROME_PATH` pointing at Chrome/Chromium
 
 **No Claude-specific dependencies.** The tests do not use Claude APIs, MCP tools, or any agent-specific infrastructure. They are plain Node.js scripts that launch a headless browser and check game state.
 

@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-06-22 — Parallel Three renderer and harness rebuild
+
+- Added a parallel Three.js renderer backend behind `?renderer=three` and made Three the default automated renderer target. The legacy Composer path remains available through explicit `legacy` scripts as a compatibility/fallback lane.
+- Added renderer backend diagnostics through `__TEST_API`, a Three renderer fixture command, and packaging support for the static Three module.
+- Rebuilt the test runner around manifest lanes (`fast`, `core`, `browser`, `authority`, `visual`, `playtest`, `three`, `full`) plus renderer expansion (`legacy`, `three`, `both`, `target`).
+- Removed Puppeteer from the live dependency graph. Browser suites now use `tests/browser-driver.cjs`, a small Chrome DevTools Protocol wrapper around system Chrome, with deterministic `stepFrameForTest()` advancement instead of trusting ambient headless `requestAnimationFrame`.
+- Hardened browser helpers for the Three path: query-safe target building, canvas-composited screenshots, remote `simServer` URL merging that preserves existing renderer query params, and renderer fixture assertions that fail on blank RGB captures.
+- Fixed the Three bridge copy shader so it renders under Three's GLSL3 preamble, and moved the bridge through a 2D staging canvas plus byte-backed render target for reliable headless readback.
+- Added `docs/design/TEST-HARNESS.md` as the live guide for CLI gates, Three applicability, Codex app browser visual/playtest workflow, and the narrow Computer Use boundary.
+
 ## 2026-06-21 — Three.js migration plan
 
 - Added `docs/project/THREEJS-MIGRATION-PLAN.md`, a staged migration plan for moving the LBH client renderer to Three.js while keeping the authoritative sim and renderer in separate processes.

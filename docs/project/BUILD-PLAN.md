@@ -92,7 +92,7 @@ This is the whole bet. If the fluid sim + thrust control isn't fun to navigate, 
 - [x] Dev panel with live tuning sliders (toggle with backtick)
 - [x] CONFIG object, every system reads every frame
 - [x] `window.__TEST_API` exposing game state
-- [x] Smoke + physics + coordinate tests via Puppeteer
+- [x] Smoke + physics + coordinate tests via the project CDP browser driver
 - [x] ASCII dithering post-process shader — the visual identity
 - [x] Distance-based dissipation (accretion zones persist, empty space fades)
 - [x] Exponential tone mapping in display shader

@@ -22,6 +22,7 @@ const {
   simLogFile,
   controlPlaneLogFile,
   waitForLogEvent,
+  withQuery,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
@@ -106,7 +107,7 @@ async function run() {
       assert(simStarted.url === SIM_URL + "/", `Unexpected sim url: ${simStarted.url}`);
     });
 
-    ({ browser, page } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
+    ({ browser, page } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
     await bootstrapCleanPage(page);
 
     await runner.run("Remote entry flow emits profile and session telemetry", async () => {

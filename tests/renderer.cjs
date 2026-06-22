@@ -14,23 +14,69 @@ const {
   launchGame,
   TestRunner,
   assert,
+  withQuery,
+  stepGameFrames,
 } = require('./helpers.cjs');
 
 const htmlFile = process.argv[2] || 'index-a.html';
-const FIXTURES = [
+const ALL_FIXTURES = [
   { name: 'title', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000] },
   { name: 'singleWell', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000] },
   { name: 'interference', expectedWells: 2, minFps: 10, timesMs: [500, 2000, 5000] },
   { name: 'singleWell5x5', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
   { name: 'interference10x10', expectedWells: 2, minFps: 5, timesMs: [500, 2000, 5000] },
 ];
+const DEFAULT_FIXTURES = new Set(['title', 'interference', 'interference10x10']);
+const DEEP_RENDERER_SWEEP = process.env.LBH_RENDERER_DEEP === '1';
+const FIXTURES = DEEP_RENDERER_SWEEP
+  ? ALL_FIXTURES
+  : ALL_FIXTURES
+    .filter((fixture) => DEFAULT_FIXTURES.has(fixture.name))
+    .map((fixture) => ({ ...fixture, timesMs: [900] }));
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+async function stepForMs(page, ms, dt = 1 / 60) {
+  const frames = Math.max(1, Math.ceil(ms / (dt * 1000)));
+  return stepGameFrames(page, frames, dt);
 }
 
-async function takeShot(page, filepath) {
+async function takeShot(page, filepath, backend = 'legacy') {
+  const stats = await page.evaluate((backendName) => {
+    const source = document.getElementById(backendName === 'three' ? 'three-canvas' : 'fluid-canvas');
+    const overlay = document.getElementById('overlay-canvas');
+    if (!source) throw new Error(`${backendName} source canvas missing`);
+    const out = document.createElement('canvas');
+    out.width = source.width;
+    out.height = source.height;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(source, 0, 0);
+    if (overlay && getComputedStyle(overlay).opacity !== '0') {
+      ctx.drawImage(overlay, 0, 0);
+    }
+    const pixels = ctx.getImageData(0, 0, out.width, out.height).data;
+    let rgbMax = 0;
+    let rgbSum = 0;
+    let litPixels = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const rgb = pixels[i] + pixels[i + 1] + pixels[i + 2];
+      rgbMax = Math.max(rgbMax, rgb);
+      rgbSum += rgb;
+      if (rgb > 8) litPixels++;
+    }
+    return {
+      width: out.width,
+      height: out.height,
+      rgbMax,
+      rgbAvg: rgbSum / (pixels.length / 4),
+      litPixels,
+    };
+  }, backend);
   await page.screenshot({ path: filepath });
+  return stats;
+}
+
+function assertCaptureHasSignal(stats, label) {
+  assert(stats.rgbMax > 8, `${label} capture is blank; max RGB ${stats.rgbMax}`);
+  assert(stats.litPixels > 64, `${label} capture has too few lit pixels: ${stats.litPixels}`);
 }
 
 async function setRenderDebug(page, { overlayVisible = false, showWellRadii = false, rendererView = 'ascii' } = {}) {
@@ -45,15 +91,25 @@ async function setRenderDebug(page, { overlayVisible = false, showWellRadii = fa
   }, { overlayVisible, showWellRadii, rendererView });
 }
 
+function expectedBackendFor(htmlFile) {
+  const queryIndex = String(htmlFile).indexOf('?');
+  if (queryIndex < 0) return 'legacy';
+  const params = new URLSearchParams(String(htmlFile).slice(queryIndex + 1));
+  return params.get('renderer') === 'three' ? 'three' : 'legacy';
+}
+
 async function captureFixture(page, outputDir, fixture) {
   const fixtureDir = path.join(outputDir, fixture.name);
   fs.mkdirSync(fixtureDir, { recursive: true });
 
   const loaded = await page.evaluate((name) => window.__TEST_API.loadRendererFixture(name), fixture.name);
   assert(loaded, `Failed to load renderer fixture '${fixture.name}'`);
+  const backend = await page.evaluate(() => window.__TEST_API.getRendererBackend?.() || 'legacy');
+  assert(backend === expectedBackendFor(htmlFile),
+    `Fixture '${fixture.name}' expected ${expectedBackendFor(htmlFile)} renderer, got ${backend}`);
 
   await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
-  await sleep(250);
+  await stepForMs(page, 250);
 
   const wellData = await page.evaluate(() => window.__TEST_API.getWells());
   const fpsAtStart = await page.evaluate(() => window.__TEST_API.getFPS());
@@ -64,19 +120,21 @@ async function captureFixture(page, outputDir, fixture) {
   const captures = [];
   let elapsed = 0;
   for (const t of fixture.timesMs) {
-    await sleep(t - elapsed);
+    await stepForMs(page, t - elapsed);
     elapsed = t;
 
     const scenePath = path.join(fixtureDir, `scene-${String(t).padStart(4, '0')}ms.png`);
     const asciiPath = path.join(fixtureDir, `ascii-${String(t).padStart(4, '0')}ms.png`);
 
     await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'scene' });
-    await sleep(50);
-    await takeShot(page, scenePath);
+    await stepGameFrames(page, 2);
+    const sceneStats = await takeShot(page, scenePath, backend);
+    assertCaptureHasSignal(sceneStats, `${fixture.name} scene ${t}ms`);
 
     await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
-    await sleep(50);
-    await takeShot(page, asciiPath);
+    await stepGameFrames(page, 2);
+    const asciiStats = await takeShot(page, asciiPath, backend);
+    assertCaptureHasSignal(asciiStats, `${fixture.name} ascii ${t}ms`);
 
     const fps = await page.evaluate(() => window.__TEST_API.getFPS());
     captures.push({
@@ -84,23 +142,38 @@ async function captureFixture(page, outputDir, fixture) {
       fps,
       scenePath,
       asciiPath,
+      sceneStats,
+      asciiStats,
     });
   }
 
   const debugPath = path.join(fixtureDir, 'ascii-debug.png');
   await setRenderDebug(page, { overlayVisible: true, showWellRadii: true, rendererView: 'ascii' });
-  await sleep(100);
-  await takeShot(page, debugPath);
+  await stepGameFrames(page, 4);
+  const debugStats = await takeShot(page, debugPath, backend);
+  assertCaptureHasSignal(debugStats, `${fixture.name} debug`);
 
   await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
+  const perf = await page.evaluate(() => window.__TEST_API.getPerfStats?.() || null);
+  const backendStats = await page.evaluate(() => window.__TEST_API.getRendererBackendStats?.() || null);
+  if (backend === 'three') {
+    assert(backendStats?.backend === 'three', `Fixture '${fixture.name}' backend stats did not report three`);
+    assert(backendStats?.passCount >= 3, `Fixture '${fixture.name}' Three render graph is missing passes`);
+    assert(Array.isArray(backendStats?.three?.passNames) && backendStats.three.passNames.includes('three-copy-pass'),
+      `Fixture '${fixture.name}' Three pass list missing`);
+  }
 
   return {
     name: fixture.name,
+    rendererBackend: backend,
     expectedWells: fixture.expectedWells,
     minFps: fixture.minFps,
     wells: wellData,
+    perf,
+    backendStats,
     captures,
     debugPath,
+    debugStats,
   };
 }
 
@@ -116,14 +189,17 @@ async function run() {
   const outputDir = path.join(__dirname, 'screenshots', `renderer-${runStamp}`);
   fs.mkdirSync(outputDir, { recursive: true });
 
+  const captureTarget = withQuery(htmlFile, { capture: 1 });
+
   try {
-    ({ browser, page } = await launchGame(htmlFile));
+    ({ browser, page } = await launchGame(captureTarget));
     const hasAPI = await page.evaluate(() => typeof window.__TEST_API !== 'undefined');
     assert(hasAPI, 'window.__TEST_API not found');
 
     const manifest = {
       generatedAt: new Date().toISOString(),
       htmlFile,
+      captureTarget,
       outputDir,
       fixtures: [],
     };

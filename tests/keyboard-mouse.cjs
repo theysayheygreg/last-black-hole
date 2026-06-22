@@ -13,6 +13,7 @@ const {
   TestRunner,
   assert,
   waitFor,
+  withQuery,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
@@ -198,7 +199,7 @@ async function run() {
       );
     });
 
-    ({ browser: browserRemote, page: pageRemote } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
+    ({ browser: browserRemote, page: pageRemote } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
     await bootstrapCleanPage(pageRemote);
 
     await runner.run("Keyboard + mouse drives remote-authority input", async () => {

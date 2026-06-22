@@ -241,7 +241,7 @@ HDR would actually pay off. Single pass of bloom on RGBA8 is fine.
 ## Test harness
 
 ```
-npm run test:title-prototype   # headless puppeteer probe of the title chain
+npm run test:title-prototype   # headless CDP probe of the title chain
 ```
 
 The probe hits `title-prototype.html?probe=1`, which flips

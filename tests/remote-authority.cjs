@@ -16,6 +16,7 @@ const {
   assert,
   dispatchKey,
   waitFor,
+  withQuery,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
@@ -203,7 +204,7 @@ async function run() {
   let browser, page;
   let browser2, page2;
   try {
-    ({ browser, page } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
+    ({ browser, page } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
     await bootstrapCleanRemotePage(page);
 
     await runner.run("Remote test API path reaches authoritative gameplay", async () => {
@@ -595,7 +596,7 @@ async function run() {
     });
 
     await runner.run("Remote browser joins live authoritative run instead of resetting to its selected map", async () => {
-      ({ browser: browser2, page: page2 } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
+      ({ browser: browser2, page: page2 } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
       await bootstrapCleanRemotePage(page2);
 
       await page2.evaluate(() => window.__TEST_API.createTestProfile("Second Browser"));

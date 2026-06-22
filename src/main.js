@@ -22,6 +22,7 @@ import { PlanetoidSystem } from './planetoids.js';
 import { InputManager } from './input.js';
 import { Composer } from './render/composer.js';
 import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
+import { createRendererBackend, requestedRendererBackend, requestedRenderQuality } from './render/renderer-backend.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
 import { GainPass } from './render/passes/gain-pass.js';
 import { AccretionPass } from './render/passes/accretion-pass.js';
@@ -77,7 +78,7 @@ function getPlayableMapEntryById(id) {
 }
 
 // ---- State ----
-let glCanvas, gl;
+let glCanvas, threeCanvas, gl;
 let overlayCanvas, ctx;
 let fluid, ship, wellSystem, starSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
@@ -87,6 +88,7 @@ let flowField, simCore;
 let simClient = null;
 let currentSignature = null;
 let inputManager, composer, fluidDisplayPass, tonemapPass, asciiPass;
+let rendererBackend = null;
 let fluidGainPass = null;
 let accretionPass = null;
 let bloomPass = null;
@@ -125,10 +127,13 @@ const perfStats = {
   simMs: 0,
   composerMs: 0,
   overlayMs: 0,
+  rendererBackend: 'legacy',
+  renderQuality: 'rich',
   visibleWellCount: 0,
   totalWellCount: 0,
   fluidResolution: 0,
   composerPasses: [],
+  three: null,
 };
 
 function recordPerfStat(key, ms) {
@@ -511,15 +516,20 @@ function getConfiguredSimServerUrl() {
 function init() {
   // WebGL canvas
   glCanvas = document.getElementById('fluid-canvas');
+  threeCanvas = document.getElementById('three-canvas');
   overlayCanvas = document.getElementById('overlay-canvas');
   // Fixed internal render resolution with aspect-preserving letterbox.
   // Black hole (and every framed visual) has a single authored shape —
   // window size only scales the whole frame, it doesn't reshape anything.
-  fitViewport(glCanvas, overlayCanvas);
+  fitViewport(glCanvas, threeCanvas, overlayCanvas);
+  const renderParams = new URLSearchParams(location.search);
+  const preserveDrawingBuffer = renderParams.has('capture') || renderParams.has('preserveDrawingBuffer');
   gl = glCanvas.getContext('webgl2', {
     alpha: false,
     antialias: false,
-    preserveDrawingBuffer: false,
+    // Capture mode is for renderer fixtures and agent screenshots. Normal
+    // play keeps the faster transient drawing buffer.
+    preserveDrawingBuffer,
   });
   if (!gl) {
     console.error('WebGL 2 not supported');
@@ -556,8 +566,9 @@ function init() {
   //                            Valid names: bloom, color-grade, vignette,
   //                            chromatic-aberration, scanlines.
   //                            FluidDisplay, Tonemap, ASCII are always kept.
-  const renderParams = new URLSearchParams(location.search);
-  const useMinimalChain = renderParams.has('minimalrender');
+  const renderQuality = requestedRenderQuality();
+  const useMinimalChain = renderQuality === 'minimal';
+  const rendererBackendName = requestedRendererBackend();
   const disabledPasses = new Set(
     (renderParams.get('disable') || '').split(',').map((s) => s.trim()).filter(Boolean),
   );
@@ -628,6 +639,17 @@ function init() {
     for (const p of activeChain) composer.add(p);
     console.log('[render] gameplay chain:', activeChain.map((p) => p.name));
   }
+  rendererBackend = createRendererBackend({
+    backend: rendererBackendName,
+    composer,
+    asciiPass,
+    sourceCanvas: glCanvas,
+    targetCanvas: threeCanvas,
+    renderQuality,
+  });
+  perfStats.rendererBackend = rendererBackend.name;
+  perfStats.renderQuality = rendererBackend.renderQuality;
+  console.log(`[render] backend: ${rendererBackend.name} (${rendererBackend.renderQuality})`);
 
   // Init entity systems (empty — loadScene populates them)
   wellSystem = new WellSystem();
@@ -733,17 +755,17 @@ function init() {
   // overlay toggles visibility.
   const minWindowOverlay = document.getElementById('min-window-overlay');
   window.addEventListener('resize', () => {
-    const { ok } = fitViewport(glCanvas, overlayCanvas);
+    const { ok } = fitViewport(glCanvas, threeCanvas, overlayCanvas);
     ship.canvasWidth = glCanvas.width;
     ship.canvasHeight = glCanvas.height;
-    composer.resize(glCanvas.width, glCanvas.height);
+    rendererBackend?.resize(glCanvas.width, glCanvas.height);
     if (minWindowOverlay) {
       minWindowOverlay.style.display = ok ? 'none' : 'flex';
     }
   });
   // First-load state for the overlay.
   if (minWindowOverlay) {
-    const { ok } = fitViewport(glCanvas, overlayCanvas);
+    const { ok } = fitViewport(glCanvas, threeCanvas, overlayCanvas);
     minWindowOverlay.style.display = ok ? 'none' : 'flex';
   }
 
@@ -765,6 +787,17 @@ function init() {
       camX, camY,
       fps,
       perfStats,
+      getFluidGridStateForTest: () => {
+        const renderInputs = getVisibleWellRenderInputs(camX, camY);
+        return {
+          worldScale: WORLD_SCALE,
+          gridWindow: GRID_WINDOW,
+          fluidCamera: { x: getFluidCamera()[0], y: getFluidCamera()[1] },
+          fluidResolution: fluid?.res || 0,
+          visibleWellCount: renderInputs.visibleIndices.length,
+          totalWellCount: wellSystem?.wells?.length || 0,
+        };
+      },
       setTimeScale: (s) => { timeScale = s; },
       loadTitleScene,
       loadRendererFixture,
@@ -777,9 +810,20 @@ function init() {
         overlayCanvas.style.opacity = visible ? '1' : '0';
       },
       setRendererView: (mode) => {
-        asciiPass.setViewMode(mode);
+        rendererBackend?.setViewMode(mode);
       },
-      getRendererView: () => asciiPass.getViewMode(),
+      getRendererView: () => rendererBackend?.getViewMode?.() || 'ascii',
+      getRendererBackend: () => rendererBackend?.name || 'legacy',
+      getRendererBackendStats: () => rendererBackend?.getPerfStats?.() || null,
+      stepFrameForTest: (dt = 1 / 60) => {
+        const stepMs = Math.max(1, Math.min(100, Number(dt) * 1000 || (1000 / 60)));
+        gameLoop(lastFrameTime + stepMs);
+        return {
+          fps,
+          perfStats,
+          rendererBackend: rendererBackend?.name || 'legacy',
+        };
+      },
       get gamePhase() { return gamePhase; },
       set gamePhase(p) { gamePhase = p; },
       inventorySystem,
@@ -3265,7 +3309,11 @@ function gameLoop(now) {
   perfStats.visibleWellCount = wellUVs.length;
   perfStats.totalWellCount = wellSystem.wells.length;
   perfStats.fluidResolution = fluid?.res || 0;
-  perfStats.composerPasses = composer?.passes?.map((p) => p.name) || [];
+  const backendStats = rendererBackend?.getPerfStats?.() || null;
+  perfStats.rendererBackend = backendStats?.backend || rendererBackend?.name || 'legacy';
+  perfStats.renderQuality = backendStats?.renderQuality || 'rich';
+  perfStats.composerPasses = backendStats?.composerPasses || composer?.passes?.map((p) => p.name) || [];
+  perfStats.three = backendStats?.three || null;
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
   // Inhibitor shader data
@@ -3281,9 +3329,11 @@ function gameLoop(now) {
     };
   }
   const a = CONFIG.ascii;
-  applyRenderTuningForPhase(gamePhase === 'title');
+  // Renderer fixtures are render-only composition targets. They suppress menu
+  // overlays, but should use the same visible well/accretion tuning as title.
+  applyRenderTuningForPhase(gamePhase === 'title' || rendererFixtureActive);
   const composerStart = performance.now();
-  composer.render({
+  rendererBackend.render({
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,
@@ -3311,6 +3361,13 @@ function gameLoop(now) {
       totalTime,
     },
   });
+  const postRenderBackendStats = rendererBackend?.getPerfStats?.() || null;
+  if (postRenderBackendStats) {
+    perfStats.rendererBackend = postRenderBackendStats.backend || perfStats.rendererBackend;
+    perfStats.renderQuality = postRenderBackendStats.renderQuality || perfStats.renderQuality;
+    perfStats.composerPasses = postRenderBackendStats.composerPasses || perfStats.composerPasses;
+    perfStats.three = postRenderBackendStats.three || null;
+  }
   recordPerfStat('composerMs', performance.now() - composerStart);
 
   // 8. Render overlay

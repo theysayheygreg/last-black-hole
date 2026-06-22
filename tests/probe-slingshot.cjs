@@ -3,25 +3,21 @@
 // holds, presses F again to release. Logs the velocity profile so we
 // can confirm engage/release/boost actually fire end-to-end.
 
-const puppeteer = require('puppeteer');
 const path = require('path');
-const { startServer, stopServer, PORT } = require('./helpers.cjs');
+const { startServer, stopServer, launchGame, stepGameFrames } = require('./helpers.cjs');
 
 (async () => {
   await startServer();
-  const browser = await puppeteer.launch({ headless: 'new' });
-  const page = await browser.newPage();
+  const { browser, page } = await launchGame('index-a.html');
   page.on('pageerror', (err) => console.log('[page error]', err.message));
-  await page.setViewport({ width: 1440, height: 810 });
-  await page.goto(`http://127.0.0.1:${PORT}/index-a.html`, { waitUntil: 'networkidle0' });
   await page.waitForFunction(
     () => Boolean(window.__TEST_API?.triggerRestart) && window.__TEST_API.getGamePhase?.() === 'title',
     { timeout: 5000 },
   );
-  await new Promise(r => setTimeout(r, 600));
+  await stepGameFrames(page, 36);
   await page.evaluate(() => window.__TEST_API.createTestProfile('SlingTest'));
   await page.evaluate(() => window.__TEST_API.triggerRestart());
-  await new Promise(r => setTimeout(r, 1500));
+  await stepGameFrames(page, 90);
 
   const wells = await page.evaluate(() => window.__TEST_API.getWells());
   if (!wells.length) { console.log('no wells in this map'); await browser.close(); stopServer(); return; }
@@ -32,15 +28,15 @@ const { startServer, stopServer, PORT } = require('./helpers.cjs');
   // residual velocity from spawn; we'll thrust in a moment to build a
   // tangential vector.
   await page.evaluate(({ wx, wy }) => window.__TEST_API.teleportShip(wx + 0.4, wy), { wx: w.wx, wy: w.wy });
-  await new Promise(r => setTimeout(r, 300));
+  await stepGameFrames(page, 18);
 
   // Hold thrust for ~1s to build speed (ship default-faces +x; will
   // pick up tangential component as it accelerates and gets pulled
   // by the well).
   await page.keyboard.down('KeyW');
-  await new Promise(r => setTimeout(r, 1000));
+  await stepGameFrames(page, 60);
   await page.keyboard.up('KeyW');
-  await new Promise(r => setTimeout(r, 100));
+  await stepGameFrames(page, 6);
 
   const before = await page.evaluate(() => {
     const v = window.__TEST_API.getShipVel();
@@ -51,12 +47,12 @@ const { startServer, stopServer, PORT } = require('./helpers.cjs');
 
   // Engage F
   await page.keyboard.down('KeyF');
-  await new Promise(r => setTimeout(r, 80));
+  await stepGameFrames(page, 5);
   await page.keyboard.up('KeyF');
-  await new Promise(r => setTimeout(r, 80));
+  await stepGameFrames(page, 5);
 
   // Hold for ~1.5s of orbit to bank energy
-  await new Promise(r => setTimeout(r, 1500));
+  await stepGameFrames(page, 90);
 
   const orbiting = await page.evaluate(() => {
     const v = window.__TEST_API.getShipVel();
@@ -67,9 +63,9 @@ const { startServer, stopServer, PORT } = require('./helpers.cjs');
 
   // Release F
   await page.keyboard.down('KeyF');
-  await new Promise(r => setTimeout(r, 80));
+  await stepGameFrames(page, 5);
   await page.keyboard.up('KeyF');
-  await new Promise(r => setTimeout(r, 100));
+  await stepGameFrames(page, 6);
 
   const released = await page.evaluate(() => {
     const v = window.__TEST_API.getShipVel();

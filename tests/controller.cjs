@@ -13,6 +13,7 @@ const {
   TestRunner,
   assert,
   waitFor,
+  withQuery,
 } = require('./helpers.cjs');
 
 const htmlFile = process.argv[2] || 'index-a.html';
@@ -208,7 +209,7 @@ async function run() {
       await waitFor(page, () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
     });
 
-    ({ browser: browserRemote, page: pageRemote } = await launchGame(`${htmlFile}?simServer=${encodeURIComponent(SIM_URL)}`));
+    ({ browser: browserRemote, page: pageRemote } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
     await bootstrapCleanPage(pageRemote);
     await installVirtualGamepad(pageRemote);
 

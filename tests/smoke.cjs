@@ -13,6 +13,7 @@ const {
   launchGame,
   TestRunner,
   assert,
+  stepGameFrames,
 } = require("./helpers.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
@@ -63,28 +64,13 @@ async function run() {
       assert(hasConfig, "CONFIG object not found on window");
     });
 
-    // 6. FPS above floor (check after 2s of running)
-    await runner.run("FPS above floor", async () => {
-      // Wait an additional 2s for the sim to stabilize
-      await new Promise((r) => setTimeout(r, 2000));
-
-      const { fps, isHeadless } = await page.evaluate(() => ({
-        fps:
-          typeof window.__TEST_API !== "undefined" && window.__TEST_API.getFPS
-            ? window.__TEST_API.getFPS()
-            : null,
-        isHeadless: navigator.userAgent.includes("HeadlessChrome"),
-      }));
-
-      if (fps !== null) {
-        const floor = isHeadless ? 10 : 30;
-        assert(fps > floor, `FPS is ${fps}, expected >${floor}`);
-      } else {
-        // If no __TEST_API.getFPS, just verify the page is still responsive
-        const responsive = await page.evaluate(() => true);
-        assert(responsive, "Page unresponsive");
-        console.log("        (FPS check skipped — __TEST_API.getFPS not available)");
-      }
+    // 6. Render loop advances
+    await runner.run("Render loop advances", async () => {
+      const stepped = await stepGameFrames(page, 90);
+      assert(stepped, "Frame step hook unavailable");
+      assert(stepped.perfStats?.frameMs > 0, "Frame timing did not update");
+      assert(stepped.perfStats?.fluidResolution > 0, "Fluid renderer did not report a resolution");
+      assert(stepped.fps > 10, `FPS is ${stepped.fps}, expected >10 after stepped frames`);
     });
 
   } finally {

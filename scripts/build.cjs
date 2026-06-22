@@ -78,6 +78,16 @@ function copyIfExists(from, to) {
   if (fs.existsSync(from)) fs.cpSync(from, to, { recursive: true });
 }
 
+function copyThreeRuntime(rendererDir) {
+  const threeModule = path.join(ROOT, 'node_modules', 'three', 'build', 'three.module.js');
+  if (!fs.existsSync(threeModule)) {
+    throw new Error('Missing three.module.js. Run npm install before building renderer artifacts.');
+  }
+  const target = path.join(rendererDir, 'node_modules', 'three', 'build');
+  ensureDir(target);
+  fs.copyFileSync(threeModule, path.join(target, 'three.module.js'));
+}
+
 function resolvePackagedArtifact(packagedRoot, target) {
   if (!packagedRoot) return null;
 
@@ -156,6 +166,7 @@ function copyWebRuntime(rendererDir, mode) {
   fs.copyFileSync(path.join(ROOT, 'index-a.html'), path.join(rendererDir, 'index-a.html'));
   copyIfExists(path.join(ROOT, 'src'), path.join(rendererDir, 'src'));
   copyIfExists(path.join(ROOT, 'assets'), path.join(rendererDir, 'assets'));
+  copyThreeRuntime(rendererDir);
   fs.writeFileSync(
     path.join(rendererDir, 'src', 'build-flags.js'),
     `window.__LBH_BUILD_FLAGS__ = ${JSON.stringify(buildFlagsForMode(mode), null, 2)};\n`

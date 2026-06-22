@@ -12,7 +12,7 @@
     "owner": "orb",
     "reviewer": "greg",
     "implementers": ["corb"],
-    "test_owner": "corb (runs project-local Puppeteer tests after build)",
+    "test_owner": "corb (runs project-local Node/CDP tests after build)",
     "depends_on": [],
     "acceptance_criteria": [
       "At least one prototype (N1a) running with fluid sim, ship, wells, waves at 60fps",

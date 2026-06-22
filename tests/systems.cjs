@@ -1,8 +1,9 @@
 /**
  * systems.js — Tests for star types, comets, wreck differentiation,
- * drift, scavenger identity, proximity labels, and meta flow.
+ * scavenger identity, proximity labels, and meta flow.
  *
- * Covers the flavor pass, drift system, and profile/upgrade loop.
+ * Covers the flavor pass and profile/upgrade loop. Authoritative wreck drift
+ * lives in sim-scale.cjs; the browser is presentation-only for that contract.
  *
  * Usage: node tests/systems.js [index-a.html]
  */
@@ -84,33 +85,6 @@ async function run() {
       const hasVault = wrecks.some(w => w.type === 'vault');
       assert(hasDerelict || hasDebris || hasVault,
         `Expected at least one wreck type, got types: ${[...new Set(wrecks.map(w => w.type))]}`);
-    });
-
-    // ---- WRECK DRIFT ----
-
-    await runner.run('Wrecks drift toward wells over time', async () => {
-      // Get wreck positions at two points in time
-      const before = await page.evaluate(() => {
-        const wrecks = window.__TEST_API.getWrecks();
-        return wrecks.filter(w => w.alive).map(w => ({ wx: w.wx, wy: w.wy, index: w.index }));
-      });
-      await sleep(3000); // let drift happen
-      const after = await page.evaluate(() => {
-        const wrecks = window.__TEST_API.getWrecks();
-        return wrecks.filter(w => w.alive).map(w => ({ wx: w.wx, wy: w.wy, index: w.index }));
-      });
-
-      // At least some wrecks should have moved (those near wells)
-      let movedCount = 0;
-      for (const b of before) {
-        const a = after.find(w => w.index === b.index);
-        if (!a) continue;
-        const dx = Math.abs(a.wx - b.wx);
-        const dy = Math.abs(a.wy - b.wy);
-        if (dx > 0.001 || dy > 0.001) movedCount++;
-      }
-      assert(movedCount > 0,
-        `Expected some wrecks to drift, but none moved in 3 seconds (${before.length} wrecks tracked)`);
     });
 
     // ---- SCAVENGER IDENTITY ----

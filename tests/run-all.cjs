@@ -1,102 +1,164 @@
 /**
- * Run all test suites.
+ * Manifest-driven LBH test harness.
+ *
  * Usage:
- *   node tests/run-all.cjs [index-a.html] [--fast]
+ *   node tests/run-all.cjs [index-a.html] [--lane=core] [--renderer=legacy]
+ *   node tests/run-all.cjs --lane=three --renderer=three
+ *   node tests/run-all.cjs --lane=visual --renderer=both
  *
- * --fast skips suites tagged `slow:true` so dev iteration drops from
- * ~4.5min to ~2min. CI / pre-push should run the full set.
- *
- * Exits with code 0 if all pass, 1 if any fail.
+ * Lanes keep different questions separate:
+ * - fast: cheap commit canary
+ * - core: stable local regression gate
+ * - authority: control-plane/sim/remote stack
+ * - visual: screenshot renderer fixtures
+ * - playtest: real menu/input flows best reviewed in Codex Browser
+ * - full: all committed automated suites
  */
-const { execSync } = require("child_process");
 const path = require("path");
+const { spawnSync } = require("child_process");
+const { SUITES, LANES } = require("./suite-manifest.cjs");
+const { withQuery } = require("./helpers.cjs");
 
-const args = process.argv.slice(2).filter((a) => a !== "--fast");
-const fastMode = process.argv.includes("--fast");
-const htmlFile = args[0] || "index-a.html";
+const rawArgs = process.argv.slice(2);
+const options = {
+  lane: null,
+  renderer: "legacy",
+  suiteFilter: null,
+  list: false,
+  noRetries: false,
+};
+let target = null;
 
-// `slow: true` means the suite individually takes >20s. Together the slow
-// tier is ~140s out of ~280s total — skipping in fast mode roughly halves
-// dev-iteration runtime. Full suite still runs without --fast.
-const suites = [
-  { name: "Validation", file: "validation.cjs" },
-  { name: "Signatures", file: "signatures.cjs" },
-  { name: "Smoke", file: "smoke.cjs" },
-  { name: "InfraSmoke", file: "infra-smoke.cjs" },
-  { name: "TelemetrySmoke", file: "telemetry-smoke.cjs" },
-  { name: "SimLifecycle", file: "sim-lifecycle.cjs" },
-  { name: "MetaFlow", file: "meta-flow.cjs", timeout: 90000, slow: true },
-  { name: "RunResults", file: "run-results.cjs" },
-  { name: "Controller", file: "controller.cjs", slow: true },
-  { name: "KeyboardMouse", file: "keyboard-mouse.cjs", retries: 1 },
-  { name: "Physics", file: "physics.cjs" },
-  { name: "Coordinates", file: "coordinates.cjs" },
-  { name: "Flow", file: "flow.cjs", slow: true },
-  { name: "FluidWindow", file: "fluid-window.cjs" },
-  { name: "Balance", file: "balance.cjs" },
-  { name: "Items", file: "items.cjs" },
-  { name: "Inventory", file: "inventory.cjs" },
-  { name: "Systems", file: "systems.cjs" },
-  { name: "PlayerBrain", file: "player-brain.cjs" },
-  { name: "ControlPlane", file: "control-plane.cjs" },
-  { name: "OverloadState", file: "overload-state.cjs" },
-  { name: "CoarseField", file: "coarse-field.cjs" },
-  { name: "SimScale", file: "sim-scale.cjs" },
-  { name: "RemoteAuthority", file: "remote-authority.cjs", retries: 1, timeout: 120000, slow: true },
-];
-
-const activeSuites = fastMode ? suites.filter((s) => !s.slow) : suites;
-const skippedCount = suites.length - activeSuites.length;
-
-console.log(`\n╔══════════════════════════════════════╗`);
-console.log(`║  LAST SINGULARITY — TEST HARNESS     ║`);
-console.log(`║  Target: ${htmlFile.padEnd(28)}║`);
-if (fastMode) {
-  console.log(`║  Mode:   fast (${skippedCount} slow suites skipped) ║`);
+for (const arg of rawArgs) {
+  if (arg === "--fast") {
+    options.lane = options.lane || "fast";
+  } else if (arg === "--list") {
+    options.list = true;
+  } else if (arg === "--no-retries") {
+    options.noRetries = true;
+  } else if (arg.startsWith("--lane=")) {
+    options.lane = arg.slice("--lane=".length);
+  } else if (arg.startsWith("--renderer=")) {
+    options.renderer = arg.slice("--renderer=".length);
+  } else if (arg.startsWith("--suite=")) {
+    options.suiteFilter = new Set(
+      arg.slice("--suite=".length).split(",").map((name) => name.trim()).filter(Boolean),
+    );
+  } else if (!target) {
+    target = arg;
+  } else {
+    throw new Error(`Unknown argument: ${arg}`);
+  }
 }
-console.log(`╚══════════════════════════════════════╝\n`);
+
+target = target || "index-a.html";
+options.lane = options.lane || "core";
+
+if (!LANES.includes(options.lane)) {
+  throw new Error(`Unknown lane '${options.lane}'. Known lanes: ${LANES.join(", ")}`);
+}
+if (!["legacy", "three", "both", "target"].includes(options.renderer)) {
+  throw new Error("Renderer must be one of: legacy, three, both, target");
+}
+
+function variantsForSuite(suite) {
+  if (!suite.browser || options.renderer === "target") return [{ label: "target", target }];
+  const renderers = options.renderer === "both" ? ["legacy", "three"] : [options.renderer];
+  return renderers.map((renderer) => ({
+    label: renderer,
+    target: withQuery(target, { renderer }),
+  }));
+}
+
+function selectedSuites() {
+  return SUITES.filter((suite) => {
+    if (!suite.lanes.includes(options.lane)) return false;
+    if (options.suiteFilter && !options.suiteFilter.has(suite.name)) return false;
+    return true;
+  });
+}
+
+function commandFor(suite, variant) {
+  const suitePath = path.join(__dirname, suite.file);
+  return {
+    cmd: process.execPath,
+    args: suite.browser ? [suitePath, variant.target] : [suitePath],
+  };
+}
+
+function printPlan(entries) {
+  console.log("\nLAST SINGULARITY TEST HARNESS");
+  console.log(`Lane:     ${options.lane}`);
+  console.log(`Target:   ${target}`);
+  console.log(`Renderer: ${options.renderer}`);
+  console.log("");
+  for (const entry of entries) {
+    const suffix = entry.suite.browser ? ` [${entry.variant.label}: ${entry.variant.target}]` : "";
+    const slow = entry.suite.slow ? " slow" : "";
+    const visual = entry.suite.visual ? " visual" : "";
+    console.log(`- ${entry.suite.name}${suffix}${slow}${visual}`);
+  }
+  console.log("");
+}
+
+const suites = selectedSuites();
+const entries = suites.flatMap((suite) => variantsForSuite(suite).map((variant) => ({ suite, variant })));
+
+if (options.list) {
+  printPlan(entries);
+  process.exit(0);
+}
+
+if (entries.length === 0) {
+  console.log("No suites selected.");
+  process.exit(0);
+}
+
+printPlan(entries);
 
 let allPassed = true;
 const results = [];
 
-for (const suite of activeSuites) {
-  const suitePath = path.join(__dirname, suite.file);
-  const maxAttempts = 1 + (suite.retries || 0);
+for (const entry of entries) {
+  const { suite, variant } = entry;
+  const maxAttempts = options.noRetries ? 1 : 1 + (suite.retries || 0);
   let passed = false;
+  let status = 0;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      execSync(`node "${suitePath}" "${htmlFile}"`, {
-        stdio: "inherit",
-        timeout: suite.timeout || 60000,
-      });
+    const label = suite.browser ? `${suite.name} (${variant.label})` : suite.name;
+    if (attempt > 1) console.log(`\n${label} failed; retrying to isolate harness timing.\n`);
+    const { cmd, args } = commandFor(suite, variant);
+    const result = spawnSync(cmd, args, {
+      cwd: path.resolve(__dirname, ".."),
+      stdio: "inherit",
+      timeout: suite.timeout || 60000,
+    });
+    status = result.status ?? 1;
+    if (status === 0) {
       passed = true;
       break;
-    } catch (err) {
-      if (attempt < maxAttempts) {
-        console.log(`\n${suite.name} failed; retrying once to isolate harness timing flake.\n`);
-      }
     }
   }
-  results.push({ name: suite.name, passed });
-  if (!passed) {
-    allPassed = false;
-  }
+
+  results.push({
+    name: suite.name,
+    renderer: suite.browser ? variant.label : "node",
+    passed,
+    status,
+  });
+  if (!passed) allPassed = false;
 }
 
-console.log(`\n╔══════════════════════════════════════╗`);
-console.log(`║  SUMMARY                             ║`);
-console.log(`╠══════════════════════════════════════╣`);
-for (const r of results) {
-  const status = r.passed ? "PASS" : "FAIL";
-  const icon = r.passed ? "✓" : "✗";
-  console.log(`║  ${icon} ${r.name.padEnd(20)} ${status.padEnd(14)}║`);
+console.log("\nSUMMARY");
+for (const result of results) {
+  const renderer = result.renderer === "node" ? "" : ` [${result.renderer}]`;
+  console.log(`${result.passed ? "PASS" : "FAIL"} ${result.name}${renderer}`);
 }
-console.log(`╚══════════════════════════════════════╝`);
 
 if (allPassed) {
-  console.log("\nAll suites passed.\n");
+  console.log("\nAll selected suites passed.\n");
 } else {
-  console.log("\nSome suites failed. See above for details.\n");
+  console.log("\nSome selected suites failed. Use --lane, --suite, and --renderer to isolate.\n");
 }
 
 process.exit(allPassed ? 0 : 1);

@@ -36,10 +36,15 @@
     }
     /* Canvases are sized by viewport.js (fixed 1280x720 backing,
        letterboxed CSS rect). Explicit left/top are written by JS. */
-    #fluid-canvas {
+    #fluid-canvas,
+    #three-canvas {
       position: fixed;
       z-index: 0;
       image-rendering: pixelated;
+    }
+    #three-canvas {
+      display: none;
+      pointer-events: none;
     }
     #overlay-canvas {
       position: fixed;
@@ -399,6 +404,7 @@
 </head>
 <body>
   <canvas id="fluid-canvas"></canvas>
+  <canvas id="three-canvas"></canvas>
   <canvas id="overlay-canvas"></canvas>
   <div id="min-window-overlay">
     <div class="min-window-title">resize to play</div>

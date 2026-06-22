@@ -134,7 +134,7 @@ desktop builds require `electron` and `@electron/packager` (included in devDepen
 npm test
 ```
 
-runs the full harness via puppeteer: validation, smoke, infra, telemetry, sim lifecycle, meta flow, controller, keyboard+mouse, physics, coordinates, flow, inventory, systems, PlayerBrain, control plane, overload, coarse field, sim scale, and remote authority. requires a chromium-compatible browser.
+runs the manifest-driven harness: validation, smoke, infra, telemetry, sim lifecycle, meta flow, controller, keyboard+mouse, physics, coordinates, flow, inventory, systems, PlayerBrain, control plane, overload, coarse field, sim scale, and remote authority. Browser suites use the project CDP driver and require local Chrome or `LBH_CHROME_PATH`.
 
 focused harnesses:
 
@@ -152,7 +152,7 @@ node scripts/build-health.cjs status
 - **sim server:** node.js HTTP server (authoritative game state)
 - **audio:** Web Audio API synthesis (oscillators, noise, filters — no sample files)
 - **persistence:** browser profiles for local play plus external control-plane persistence for remote/server-authoritative play
-- **testing:** puppeteer (headless chrome)
+- **testing:** Node plus the project CDP browser driver (headless Chrome)
 - **desktop:** electron (optional)
 - **build:** custom node.js build script
 
@@ -195,7 +195,7 @@ docs/
   journal/         — devlog, changelog, decision log
   project/         — roadmap, backlog, architecture plans
 
-tests/             — puppeteer + Node integration suites
+tests/             — Node + CDP integration suites
 ```
 
 ## version

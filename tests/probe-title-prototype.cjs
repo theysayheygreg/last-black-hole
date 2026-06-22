@@ -10,10 +10,9 @@
  * probe/readback. That makes title-prototype preserve the drawing buffer for
  * deterministic readPixels checks without changing normal runtime perf.
  */
-const puppeteer = require("puppeteer");
 const path = require("path");
 const fs = require("fs");
-const { startServer, stopServer } = require("./helpers.cjs");
+const { startServer, stopServer, launchGame } = require("./helpers.cjs");
 
 const SCREENSHOT_DIR = path.join(__dirname, "screenshots");
 if (!fs.existsSync(SCREENSHOT_DIR)) {
@@ -49,21 +48,14 @@ async function run() {
   const errors = [];
 
   try {
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-    page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720 });
+    const launched = await launchGame(urlPath);
+    browser = launched.browser;
+    page = launched.page;
 
-    // Attach listeners BEFORE navigation so we catch all console output
     page.on("console", (msg) => {
       consoleLines.push(`[${msg.type()}] ${msg.text()}`);
     });
     page.on("pageerror", (err) => errors.push(err.message));
-
-    const target = `http://localhost:8719/${urlPath}`;
-    await page.goto(target, { waitUntil: "domcontentloaded", timeout: 10000 });
 
     // Wait for exposure fade + several render frames
     await new Promise((r) => setTimeout(r, 2500));
@@ -215,27 +207,13 @@ async function run() {
       console.log("  (none)");
     }
 
-    // Sample puppeteer-screenshot pixel at center via Puppeteer's own
-    // canvas extraction (reliable — bypasses readPixels preserveDrawingBuffer)
     const centerSample = await page.evaluate(() => {
-      return new Promise((resolve) => {
-        const c = document.getElementById("render-canvas");
-        // Force a readback via toDataURL. The probe enables
-        // preserveDrawingBuffer, and the two rAFs give the pipeline a fresh
-        // frame before capture.
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            const dataUrl = c.toDataURL();
-            // Decode dataUrl, check center pixel (tricky). Just return the
-            // dataUrl length as a signal — if render is happening it'll be
-            // substantial.
-            resolve({
-              dataUrlLength: dataUrl.length,
-              prefix: dataUrl.substring(0, 80),
-            });
-          });
-        });
-      });
+      const c = document.getElementById("render-canvas");
+      const dataUrl = c ? c.toDataURL() : "";
+      return {
+        dataUrlLength: dataUrl.length,
+        prefix: dataUrl.substring(0, 80),
+      };
     });
 
     console.log("\n--- CANVAS toDataURL SIGNAL ---");
