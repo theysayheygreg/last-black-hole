@@ -250,11 +250,12 @@ function writeStartHere(targetRoot, results) {
   const lines = [
     '# START HERE',
     '',
-    'If you are launching this build on the same Mac that created it, start here:',
+    'Choose the launcher for your platform:',
     '',
-    `- Double-click \`Run ${PRODUCT_NAME}.command\``,
-    `- Or run \`open -n "${PRODUCT_NAME}.app"\` from Terminal in this folder`,
-    '- Finder may still complain if you double-click the `.app` directly because this build is not notarized',
+    `- **macOS:** double-click \`Run ${PRODUCT_NAME}.command\`, or run \`open -n "${PRODUCT_NAME}.app"\` from Terminal in this folder`,
+    `- **Windows:** run \`${PRODUCT_NAME}-win32-x64/${PRODUCT_NAME}.exe\``,
+    `- **Linux:** run \`${PRODUCT_NAME}-linux-x64/${PRODUCT_NAME}\``,
+    '- **Steam Deck:** prefer the public installer from the README so the Deck wrapper and Gaming Mode shortcut are installed correctly',
     '',
     '## Which artifact should I use?',
     '',
@@ -263,6 +264,15 @@ function writeStartHere(targetRoot, results) {
     `- **Linux / Steam Deck:** \`${PRODUCT_NAME}-linux-x64/${PRODUCT_NAME}\``,
     `- **Browser fallback:** \`${PRODUCT_SLUG}-web/index.html\``,
     `- **iPad local install:** read \`${PRODUCT_SLUG}-ipad-webapp/README-IPAD-INSTALL.md\``,
+    '',
+    '## First launch flow',
+    '',
+    '- Press Space / Enter / gamepad A on the title screen.',
+    '- Choose a pilot slot. Empty slots ask for a pilot name; type one and press Enter.',
+    '- On the home screen, use Q/E or L1/R1 to move between tabs.',
+    '- Go to LAUNCH, confirm, choose a destination, then confirm again to drop in.',
+    '- During a run, loot wrecks, conserve delta-v, follow wormhole arrows, and extract before portals expire or the universe collapses.',
+    '- After extraction or death, press Space / A to return to the pilot flow.',
     '',
     '## What is in this folder?',
     '',
@@ -284,6 +294,7 @@ function writeStartHere(targetRoot, results) {
   lines.push('');
   lines.push('## Controls');
   lines.push('');
+  lines.push('- Menus: arrows / WASD or D-pad/stick move selection, Space / Enter / A confirms, Escape / B backs out.');
   lines.push('- Keyboard + mouse: aim with the mouse, hold left click / W / Space to thrust, hold right click / S / Ctrl to brake.');
   lines.push('- Keyboard fallback: arrows / A-D can steer if you do not have a controller or mouse aim available.');
   lines.push('- Gamepad: left stick aims, R2 thrusts, L2 brakes, face buttons handle confirm/back/pulse.');

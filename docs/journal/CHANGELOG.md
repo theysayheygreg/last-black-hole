@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-06-22 — Play instructions refresh
+
+- Reworked the README into usable play paths for source launches, Steam Deck weekly installs, packaged desktop builds, and browser sandbox debugging.
+- Added first-launch flow and objective guidance so new testers know how to get from title screen to pilot, launch, run, extraction/death, and results.
+- Updated packaged build `START-HERE.md` generation with cross-platform launchers and the same first-run flow.
+- Updated weekly release zips so each platform artifact carries `START-HERE.md`, build metadata, and asset metadata instead of shipping app folders without instructions.
+- Fixed `npm run play`'s shutdown message to point at `npm run stop`, which stops the whole local authority stack.
+- Added a `PlayInstructions` harness guard so README, Deck runbook, generated package instructions, and the local play script keep agreeing.
+
+---
+
 ## 2026-06-22 — Weekly playable build cadence
 
 - Changed the regular GitHub playable build workflow from daily to weekly while keeping the existing scheduled-run SHA gate, so it only rebuilds when new commits exist.

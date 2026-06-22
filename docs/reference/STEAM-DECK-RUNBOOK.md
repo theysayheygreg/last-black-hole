@@ -53,6 +53,21 @@ Singularity** as a non-Steam shortcut so it appears in Gaming Mode.
 After the installer finishes, restart Steam or return to Gaming Mode and launch
 **Last Singularity** from **Library -> Non-Steam**.
 
+First launch flow on Deck:
+
+1. Launch **Last Singularity** from Gaming Mode when possible. Desktop Mode is
+   for install and triage.
+2. Press `A` on the title screen.
+3. Choose a pilot slot. Empty slots ask for a pilot name; use the on-screen
+   keyboard or a paired keyboard, then press `Enter`.
+4. Use `L1/R1` to switch home tabs, choose `LAUNCH`, and press `A`.
+5. Choose a destination and press `A` again to start the run.
+6. Use the left stick to aim, `R2` to thrust, `L2` to brake, `Y` to
+   engage/release slingshot anchors, `X` for pulse, and D-pad left/right for
+   consumables.
+7. Loot wrecks, preserve delta-v, follow wormhole arrows, and extract before
+   portals expire or the universe collapses.
+
 ### Public Installer Overrides
 
 Use a specific release/tag:

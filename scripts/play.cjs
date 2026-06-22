@@ -48,7 +48,7 @@ async function run() {
   });
 
   child.on('exit', (code) => {
-    console.log(`\nElectron exited with code ${code ?? 0}. Dev stack still running; run 'npm run dev:stop' if you want to shut it down.`);
+    console.log(`\nElectron exited with code ${code ?? 0}. Local authority stack still running; run 'npm run stop' if you want to shut it down.`);
     process.exit(code ?? 0);
   });
 }

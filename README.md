@@ -58,11 +58,45 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 
 | Target | Status | How to play |
 |--------|--------|-------------|
-| Local desktop | Primary development target | `npm run play` |
-| Browser sandbox | Debug/demo fallback | `npm run stack:sandbox` |
-| Steam Deck | Private/weekly playtest target | Install the Linux weekly build with the Deck installer below |
+| Local desktop from source | Primary development target | Clone the repo, install deps, run `npm run play` |
+| Steam Deck | Weekly handheld playtest target | Install the Linux weekly build with the Deck installer below |
+| Packaged desktop | Friend/tester handoff target | Open the platform artifact and read `START-HERE.md` |
+| Browser sandbox | Debug/demo fallback | `npm run stack:sandbox`; not product play |
 | itch.io HTML5 | Planned public demo lane | Uses a sandboxed web artifact, not the full authority stack |
 | Steam Early Access | Planned storefront lane | Uses desktop depots; not public yet |
+
+## How To Play
+
+### Local Desktop From Source
+
+Use this path when you are developing the game or playtesting from the repo:
+
+```sh
+git clone https://github.com/theysayheygreg/last-black-hole.git
+cd last-black-hole
+npm install
+npm run play
+```
+
+`npm run play` starts the local authority stack, resets the local sim for a
+fresh run, and opens an Electron game window. When you close the window, the
+stack stays available for debugging; shut it down with:
+
+```sh
+npm run stop
+```
+
+First launch flow:
+
+1. Press `Space` / `Enter` / gamepad `A` on the title screen.
+2. Choose an existing pilot or select an empty slot, type a pilot name, and
+   press `Enter`.
+3. On the home screen, use `Q/E` or `L1/R1` to switch tabs.
+4. Go to `LAUNCH`, press `Space` / `A`, choose a destination, then press
+   `Space` / `A` again to drop in.
+5. In a run, loot wrecks, manage signal and delta-v, follow wormhole arrows, and
+   extract before portals expire or the universe collapses.
+6. After extraction or death, press `Space` / `A` to return to the pilot flow.
 
 ### Steam Deck Weekly Build
 
@@ -80,24 +114,27 @@ library.
 
 Steam Deck operational notes live in the [Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
 
-## Install And Play
+### Packaged Desktop Builds
 
-### Requirements
+Open `START-HERE.md` in the build zip. The short version:
 
-- Node.js 22.12+ recommended.
-- Node.js 18+ is usually enough for browser-only local development.
-- Chrome or another WebGL2-capable browser for local web play.
+- macOS: run `Run Last Singularity.command`, or open `Last Singularity.app`.
+- Windows: run `Last Singularity-win32-x64/Last Singularity.exe`.
+- Linux: run `Last Singularity-linux-x64/Last Singularity`.
+- Steam Deck: prefer the installer above so the wrapper and Gaming Mode shortcut
+  are registered correctly.
 
-### Player-Facing Local Launch
+### Browser Sandbox
 
-```sh
-git clone https://github.com/theysayheygreg/last-black-hole.git
-cd last-black-hole
-npm install
-npm run play
-```
+`npm run stack:sandbox` opens the old client-only browser sandbox. Use it for
+renderer or HUD debugging only. Normal play should use `npm run play`, the Deck
+installer, or a packaged desktop build so the authoritative sim owns the run.
 
-`npm run play` starts the local authority stack and opens the game in an Electron window. Use `npm run stop` when you are done.
+## Requirements
+
+- Node.js 22.12+ recommended for source builds and Electron packaging.
+- Chrome or another WebGL2-capable browser for browser-only local debugging.
+- A keyboard/mouse or gamepad. Steam Deck controls use the built-in controller.
 
 ### Developer Launches
 
@@ -105,7 +142,7 @@ npm run play
 npm run stack          # local authority stack: control plane + sim + dev server
 npm start              # same local authority stack, browser-oriented convenience
 npm run stack:sandbox  # debug-only client sandbox, not the product mode
-npm run stack:remote   # remote-client mode when an authority stack already exists
+npm run stack:remote -- --sim=http://HOST:PORT
 npm run stack:status
 npm run stack:stop
 ```
@@ -118,6 +155,9 @@ The product path is authority-first. `stack:sandbox` exists for renderer and deb
 
 | Action | Input |
 |--------|-------|
+| Menu navigate | Arrow keys / WASD |
+| Menu confirm | Space / Enter |
+| Menu back | Escape |
 | Aim | Mouse cursor |
 | Thrust | Left click / W / Space |
 | Brake | Right click / S / Ctrl |

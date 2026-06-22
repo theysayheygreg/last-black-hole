@@ -33,6 +33,8 @@ function run() {
   includes(workflow, "priorRun.head_sha === currentSha", "Scheduled playable workflow must skip unchanged commits");
   includes(workflow, "build-linux:", "Weekly workflow must build a Linux artifact for Deck installs");
   includes(workflow, "last-singularity-linux-nightly.zip", "Weekly workflow must publish the Linux Deck zip");
+  includes(workflow, "START-HERE.md", "Weekly release zips must include playable instructions");
+  includes(workflow, "BUILD-MANIFEST.json", "Weekly release zips must include build metadata");
   includes(workflow, "scripts/ci/package-nightly-assets.cjs", "Weekly workflow must use the checked-in CJS packager");
 
   const readme = fs.readFileSync(readmePath, "utf8");

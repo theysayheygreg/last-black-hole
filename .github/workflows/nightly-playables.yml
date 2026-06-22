@@ -98,7 +98,7 @@ jobs:
       - name: Zip web artifact
         run: |
           cd dist/nightly
-          zip -rq last-singularity-web-nightly.zip web
+          zip -rq last-singularity-web-nightly.zip web START-HERE.md BUILD-MANIFEST.json nightly-assets.json
 
       - name: Build release metadata
         id: meta
@@ -159,7 +159,7 @@ jobs:
       - name: Zip Windows artifact
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist/nightly/Last Singularity-win32-x64" -DestinationPath "dist/nightly/last-singularity-win-nightly.zip" -Force
+          Compress-Archive -Path "dist/nightly/Last Singularity-win32-x64","dist/nightly/START-HERE.md","dist/nightly/BUILD-MANIFEST.json","dist/nightly/nightly-assets.json" -DestinationPath "dist/nightly/last-singularity-win-nightly.zip" -Force
 
       - name: Upload Windows release asset
         uses: actions/upload-artifact@v4
@@ -193,7 +193,7 @@ jobs:
       - name: Zip Linux artifact
         run: |
           cd dist/nightly
-          zip -rq last-singularity-linux-nightly.zip "Last Singularity-linux-x64"
+          zip -rq last-singularity-linux-nightly.zip "Last Singularity-linux-x64" START-HERE.md BUILD-MANIFEST.json nightly-assets.json
 
       - name: Upload Linux release asset
         uses: actions/upload-artifact@v4
@@ -228,6 +228,7 @@ jobs:
         run: |
           cd dist/nightly
           ditto -c -k --sequesterRsrc --keepParent "Last Singularity.app" "last-singularity-mac-nightly.zip"
+          zip -q last-singularity-mac-nightly.zip START-HERE.md BUILD-MANIFEST.json nightly-assets.json
 
       - name: Upload macOS release asset
         uses: actions/upload-artifact@v4
