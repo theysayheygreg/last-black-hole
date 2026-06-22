@@ -19,6 +19,12 @@
 - Added manual GitHub workflows for itch deployment and SteamPipe package preparation.
 - Documented the build-target deltas: Deck uses desktop Linux, itch HTML5 uses sandbox or downloadable desktop channels, and Steam should ship desktop depots rather than the raw web artifact.
 
+## 2026-06-22 — Steam Deck Tailscale preflight
+
+- Added `npm run deck:preflight` to discover the Tailscale CLI, list visible tailnet peers, probe Deck-like hostnames, check MagicDNS/IP resolution, run `tailscale ping`, and verify SSH as `deck` before any build copy.
+- Hardened `deploy:deck` so it checks SSH reachability before building and uses the same SSH options for mkdir, rsync, and launcher install.
+- Documented the one-time Deck enrollment path and current GregBot tailnet state in `docs/reference/STEAM-DECK-TAILSCALE.md`.
+
 ## 2026-06-22 — Shared-context Three cleanup
 
 - Collapsed the Three renderer onto the Composer's `fluid-canvas` WebGL2 context, removing the CPU bridge canvas and per-frame `CanvasTexture` upload path.

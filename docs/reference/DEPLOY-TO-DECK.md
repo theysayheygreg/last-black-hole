@@ -94,6 +94,15 @@ For this project, the safe assumption is:
 
 ## Automated local deploy
 
+First check whether the Deck is visible and SSH-ready:
+
+```sh
+npm run deck:preflight
+```
+
+See [Steam Deck Tailscale Deploy Setup](STEAM-DECK-TAILSCALE.md) for the
+one-time Deck enrollment and SSH setup.
+
 The current local pipeline is:
 
 ```sh

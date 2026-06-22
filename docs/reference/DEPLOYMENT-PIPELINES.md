@@ -50,6 +50,12 @@ The current pipeline builds `Last Singularity-linux-x64`, copies it over SSH to 
 Tailscale-visible Deck, writes `run-last-singularity.sh`, and leaves Steam
 library registration as the manual Deck-side step.
 
+Run `npm run deck:preflight` before the first push. The current GregBot setup
+uses the Tailscale macOS app CLI at
+`/Applications/Tailscale.app/Contents/MacOS/Tailscale`; the Steam Deck itself
+must still be enrolled in the tailnet before Codex can push builds to it. See
+[Steam Deck Tailscale Deploy Setup](STEAM-DECK-TAILSCALE.md).
+
 Tailscale expectation:
 
 - the Deck is on the tailnet;
@@ -227,4 +233,3 @@ The next build-system work here is not code signing yet. It is productization:
 - crash/log collection;
 - screenshots/trailer capture pipeline;
 - store copy that matches the v0.2 public README and does not overpromise.
-

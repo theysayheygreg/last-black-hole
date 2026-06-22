@@ -39,6 +39,13 @@ function sshTarget(user, host) {
   return host.includes('@') ? host : `${user}@${host}`;
 }
 
+function sshOptions() {
+  return [
+    '-o', 'ConnectTimeout=8',
+    '-o', 'StrictHostKeyChecking=accept-new',
+  ];
+}
+
 function buildRoot(mode) {
   const suffix = mode === 'release' ? '' : `-${mode}`;
   return path.join(ROOT, 'builds', `v${PKG.version}${suffix}`);
@@ -63,12 +70,19 @@ function main() {
   );
   const noBuild = hasFlag('--no-build');
   const dryRun = hasFlag('--dry-run');
+  const skipPreflight = hasFlag('--skip-preflight');
+  const ssh = process.env.LBH_SSH || 'ssh';
 
   if (!['dev', 'test', 'release'].includes(mode)) {
     throw new Error(`Invalid mode "${mode}". Use dev, test, or release.`);
   }
 
   requireDeckHost(host);
+  const target = sshTarget(user, host);
+
+  if (!skipPreflight) {
+    run(ssh, [...sshOptions(), target, 'true'], { skipOnDryRun: true });
+  }
 
   if (!noBuild) {
     run('node', ['scripts/build.cjs', '--targets=linux', `--mode=${mode}`]);
@@ -79,7 +93,6 @@ function main() {
     throw new Error(`Missing Linux Deck artifact: ${artifact}`);
   }
 
-  const target = sshTarget(user, host);
   const executable = path.join(remoteDir, PRODUCT_NAME);
   const launcher = path.join(remoteDir, 'run-last-singularity.sh');
   const launcherBody = [
@@ -90,17 +103,19 @@ function main() {
     '',
   ].join('\n');
 
-  run('ssh', [target, `mkdir -p ${shellQuote(remoteDir)}`], { skipOnDryRun: true });
+  run(ssh, [...sshOptions(), target, `mkdir -p ${shellQuote(remoteDir)}`], { skipOnDryRun: true });
 
   const rsyncArgs = ['-az', '--delete'];
+  rsyncArgs.push('-e', [ssh, ...sshOptions()].join(' '));
   if (dryRun) rsyncArgs.push('--dry-run');
   rsyncArgs.push(`${artifact}/`, `${target}:${remoteDir}/`);
   run(process.env.LBH_RSYNC || 'rsync', rsyncArgs);
 
   if (!dryRun) {
     execFileSync(
-      process.env.LBH_SSH || 'ssh',
+      ssh,
       [
+        ...sshOptions(),
         target,
         [
           `cat > ${shellQuote(launcher)}`,

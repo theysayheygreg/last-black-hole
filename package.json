@@ -52,6 +52,7 @@
     "build:web": "node scripts/build.cjs --targets=web",
     "build:desktop": "node scripts/build.cjs --targets=web,mac,win,linux,ipad",
     "deploy:deck": "node scripts/deploy/steam-deck.cjs",
+    "deck:preflight": "node scripts/deploy/deck-preflight.cjs",
     "deploy:itch": "node scripts/deploy/itch.cjs",
     "deploy:itch:preview": "node scripts/deploy/itch.cjs --preview",
     "deploy:steam": "node scripts/deploy/steam.cjs",
