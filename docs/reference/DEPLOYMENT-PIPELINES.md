@@ -22,6 +22,37 @@ only one ingredient.
 
 ## Steam Deck Local Test
 
+### Public Nightly Installer
+
+For outside testers, the simplest Deck path is the one-command installer from
+Desktop Mode / Konsole:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+```
+
+That script downloads the Linux nightly asset from the `nightly-latest` GitHub
+release:
+
+```text
+last-singularity-linux-nightly.zip
+```
+
+It installs the app to `~/Games/last-singularity`, writes the Deck launcher and
+Desktop Mode `.desktop` entries, backs up `shortcuts.vdf`, and adds a Steam
+non-Steam shortcut for Gaming Mode. See the
+[Steam Deck runbook](STEAM-DECK-RUNBOOK.md) for the full install, triage, and
+acceptance checklist.
+
+The install script supports overrides for private builds:
+
+```sh
+LBH_DECK_BUILD_URL=https://example.com/last-singularity-linux.zip bash scripts/install-steam-deck.sh
+LBH_SKIP_STEAM_SHORTCUT=1 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+```
+
+### Greg/Codex Tailscale Deploy
+
 Command:
 
 ```sh
@@ -111,8 +142,9 @@ Tailscale expectation:
   bound to the Tailscale address;
 - `LBH_DECK_HOST` is a MagicDNS name or Tailscale IP.
 
-This is intentionally local-test only. GitHub-hosted runners cannot reach
-Greg's personal Steam Deck tailnet.
+The Tailscale deploy path is intentionally local-test only. GitHub-hosted
+runners cannot reach Greg's personal Steam Deck tailnet. Public testers should
+use the release-backed installer above.
 
 ### Gaming Mode Status
 

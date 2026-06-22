@@ -54,6 +54,32 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 - Keyboard/mouse and gamepad support.
 - Web and Electron local-play surfaces.
 
+## Playable Targets
+
+| Target | Status | How to play |
+|--------|--------|-------------|
+| Local desktop | Primary development target | `npm run play` |
+| Browser sandbox | Debug/demo fallback | `npm run stack:sandbox` |
+| Steam Deck | Private/nightly playtest target | Install the Linux nightly with the Deck installer below |
+| itch.io HTML5 | Planned public demo lane | Uses a sandboxed web artifact, not the full authority stack |
+| Steam Early Access | Planned storefront lane | Uses desktop depots; not public yet |
+
+### Steam Deck Nightly
+
+On a Steam Deck in Desktop Mode, open Konsole and run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+```
+
+The installer downloads the latest Linux nightly release, installs it to
+`~/Games/last-singularity`, creates Desktop Mode launchers, and registers the
+wrapper as a Steam non-Steam game for Gaming Mode. After it finishes, restart
+Steam or return to Gaming Mode and launch **Last Singularity** from the normal
+library.
+
+Steam Deck operational notes live in the [Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
+
 ## Install And Play
 
 ### Requirements

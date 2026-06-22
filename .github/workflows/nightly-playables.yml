@@ -87,7 +87,7 @@ jobs:
         run: npm run build:web
 
       - name: Package nightly assets
-        run: node scripts/ci/package-nightly-assets.js
+        run: node scripts/ci/package-nightly-assets.cjs
 
       - name: Upload GitHub Pages artifact
         if: env.ENABLE_GITHUB_PAGES == 'true'
@@ -112,8 +112,15 @@ jobs:
               echo "- Web (GitHub Pages): ${WEB_URL}"
             fi
             echo '- Web zip: attached zip asset'
+            echo '- Linux / Steam Deck: attached zip asset'
             echo '- Windows: attached zip asset'
             echo '- macOS: attached zip asset'
+            echo ''
+            echo 'Steam Deck one-command install from Desktop Mode / Konsole:'
+            echo ''
+            echo '```sh'
+            echo 'curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install-steam-deck.sh | bash'
+            echo '```'
             echo ''
             echo 'These are automated nightly playtest artifacts.'
             echo 'EOF'
@@ -146,7 +153,7 @@ jobs:
         run: npm run build -- --targets=win --mode=release
 
       - name: Package nightly assets
-        run: node scripts/ci/package-nightly-assets.js
+        run: node scripts/ci/package-nightly-assets.cjs
 
       - name: Zip Windows artifact
         shell: pwsh
@@ -158,6 +165,40 @@ jobs:
         with:
           name: last-singularity-win-nightly
           path: dist/nightly/last-singularity-win-nightly.zip
+
+  build-linux:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build Linux desktop
+        run: npm run build -- --targets=linux --mode=release
+
+      - name: Package nightly assets
+        run: node scripts/ci/package-nightly-assets.cjs
+
+      - name: Zip Linux artifact
+        run: |
+          cd dist/nightly
+          zip -rq last-singularity-linux-nightly.zip "Last Singularity-linux-x64"
+
+      - name: Upload Linux release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-singularity-linux-nightly
+          path: dist/nightly/last-singularity-linux-nightly.zip
 
   build-mac:
     needs: detect-changes
@@ -180,7 +221,7 @@ jobs:
         run: npm run build -- --targets=mac --mode=release
 
       - name: Package nightly assets
-        run: node scripts/ci/package-nightly-assets.js
+        run: node scripts/ci/package-nightly-assets.cjs
 
       - name: Zip macOS app
         run: |
@@ -207,7 +248,7 @@ jobs:
 
   publish-release:
     if: needs.detect-changes.outputs.should_build == 'true'
-    needs: [detect-changes, build-web, build-win, build-mac]
+    needs: [detect-changes, build-web, build-win, build-linux, build-mac]
     runs-on: ubuntu-latest
     steps:
       - name: Download web asset
@@ -220,6 +261,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: last-singularity-win-nightly
+          path: release-assets
+
+      - name: Download linux asset
+        uses: actions/download-artifact@v4
+        with:
+          name: last-singularity-linux-nightly
           path: release-assets
 
       - name: Download mac asset

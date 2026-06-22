@@ -50,6 +50,7 @@ function main() {
     web: copyIfExists(path.join(buildDir, `${PRODUCT_SLUG}-web`), path.join(DIST_DIR, 'web')),
     mac: copyIfExists(path.join(buildDir, `${PRODUCT_NAME}.app`), path.join(DIST_DIR, `${PRODUCT_NAME}.app`)),
     win: copyIfExists(path.join(buildDir, `${PRODUCT_NAME}-win32-x64`), path.join(DIST_DIR, `${PRODUCT_NAME}-win32-x64`)),
+    linux: copyIfExists(path.join(buildDir, `${PRODUCT_NAME}-linux-x64`), path.join(DIST_DIR, `${PRODUCT_NAME}-linux-x64`)),
     startHere: copyIfExists(path.join(buildDir, 'START-HERE.md'), path.join(DIST_DIR, 'START-HERE.md')),
   };
 

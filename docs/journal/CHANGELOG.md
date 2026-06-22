@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-06-22 — Public Steam Deck installer and runbook
+
+- Added `scripts/install-steam-deck.sh`, a Steam Deck installer that downloads the Linux nightly release asset, installs the game under `~/Games/last-singularity`, writes Deck launchers, and registers a Gaming Mode Steam shortcut with a `shortcuts.vdf` backup.
+- Added `docs/reference/STEAM-DECK-RUNBOOK.md` with public tester install, private Tailscale deploy, launcher flags, logs, acceptance checks, and triage for the Deck failures seen today.
+- Added Steam Deck to the README playable targets with the one-command install path.
+- Updated the nightly release workflow to build and attach `last-singularity-linux-nightly.zip` and fixed the workflow to call `scripts/ci/package-nightly-assets.cjs`.
+- Added a `DeckInstaller` harness guard for the public installer, release artifact, workflow, and README contract.
+
+---
+
 ## 2026-06-22 — Steam Deck Gaming Mode wiring
 
 - Added `npm run deck:gaming-mode` to register the deployed Deck wrapper as a Steam non-Steam shortcut over Tailscale.

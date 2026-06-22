@@ -48,6 +48,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "DeckInstaller",
+    file: "deck-installer.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "CoarseField",
     file: "coarse-field.cjs",
     lanes: ["core", "static", "full"],

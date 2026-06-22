@@ -22,6 +22,7 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 - `npm run build:web` — build only the web playtest artifact
 - `npm run build:desktop` — build web + desktop/mobile wrapper targets
 - `npm run deploy:deck` — build/copy the Linux package to a Tailscale-visible Steam Deck
+- `scripts/install-steam-deck.sh` — public Deck installer that downloads the Linux nightly release asset
 - `npm run deploy:itch` — stage an itch HTML5 artifact and push it with butler
 - `npm run deploy:steam` — prepare SteamPipe content and VDF scripts
 
@@ -143,6 +144,28 @@ This machine can build:
 - one combined playtest zip containing all of the above
 
 This is enough for playtest packaging. The Windows output is already useful as a portable playtest build even though it is not an installer yet.
+
+## Steam Deck nightly install contract
+
+The public Deck installer expects the `nightly-latest` GitHub release to attach:
+
+```text
+last-singularity-linux-nightly.zip
+```
+
+That zip contains the Linux desktop package:
+
+```text
+Last Singularity-linux-x64/
+```
+
+The installer script at `scripts/install-steam-deck.sh` downloads that zip,
+installs it under `~/Games/last-singularity`, writes the Deck launcher profile,
+creates Desktop Mode launchers, and registers the wrapper as a Steam non-Steam
+shortcut for Gaming Mode.
+
+If the Linux artifact name or folder shape changes, update the installer,
+nightly workflow, README, and Steam Deck runbook in one change.
 
 ## What this does not solve yet
 
