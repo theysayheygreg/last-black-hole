@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-06-22 — Feature Fridays release program
+
+- Added `docs/project/FEATURE-FRIDAYS-RELEASE-PROGRAM.md`, a weekly release program for turning the v0.2 roadmap into Feature Friday implementation, QA, build, store, and social beats.
+- Grounded the cadence in the current roadmap, backlog, test harness, build pipeline, deployment split, public overview, and Steam Deck runbook.
+- Included release tiers, feature selection criteria, per-release checklists, QA gates, build target expectations, itch/Steam/Twitter/X/Instagram update formats, asset capture needs, and an eight-week sample schedule.
+
+---
+
 ## 2026-06-22 — Switch 1 feasibility spike
 
 - Added `docs/project/SWITCH1-ATMOSPHERE-FEASIBILITY.md`, a research memo for a future Switch 1 / Atmosphere lab probe.
