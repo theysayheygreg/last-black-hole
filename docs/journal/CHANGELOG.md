@@ -5,6 +5,20 @@
 
 ---
 
+## 2026-06-22 — v0.2 documentation baseline
+
+- Added `docs/v0.2/` as the current canonical versioned doc set, treating all prior work as the v0.1 playable-prototype era and v0.2 as the authority + Three product foundation.
+- Wrote historical v0.1 patch notes, v0.2 release notes, a design/code delta ledger, a v0.2 design bible, and a v0.2 roadmap by major area.
+- Cross-linked older design/roadmap entry points so future work starts from the v0.2 snapshot instead of stale jam-era assumptions.
+
+## 2026-06-22 — Shared-context Three cleanup
+
+- Collapsed the Three renderer onto the Composer's `fluid-canvas` WebGL2 context, removing the CPU bridge canvas and per-frame `CanvasTexture` upload path.
+- Switched dynamic Three world entities and slingshot tether lines to pooled objects instead of clearing/rebuilding meshes every frame.
+- Exposed the active render canvas through `__TEST_API.getRenderCanvasId()` and updated renderer screenshots/helpers to follow that contract.
+- Removed inert client `inventorySystem.hasEffect()` branches and kept artifact behavior on the coefficient/stat path.
+- Moved `stack:browser` to the local authority stack, renamed the client-only launcher to `stack:sandbox`, and refreshed renderer/slingshot/runtime docs.
+
 ## 2026-06-22 — Mechanics audit implementation
 
 - Added a shared FlowSample contract for current, gravity, wave, hazard, surf, signal-shadow, source ids, and confidence. Browser fluid sampling keeps x/y aliases for older consumers while the server coarse field now returns semantic channels.

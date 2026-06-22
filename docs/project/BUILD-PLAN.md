@@ -1,7 +1,8 @@
 # Build Plan: Last Singularity
 
 > Originally the jam build plan (March 16-22, 2026).
-> Updated to reflect post-jam development through April 23.
+> Updated to reflect post-jam development. For the current versioned product
+> snapshot, read `docs/v0.2/README.md` first.
 
 ---
 
@@ -30,7 +31,7 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - Single-source content manifests via JSON (balance / items / signatures / session-profiles / hulls) — **shipped 2026-05-09**
 - Project-wide ESM (Node-side `.cjs` rename + `type: module` flip) — **shipped 2026-05-09**
 - Delta-v thrust fuel system: per-hull tank/regen/burn-eff stats, color-coded gauge, fuel-cell salvage, equippable item coefficients — **shipped 2026-05-09**
-- Slingshot anchor network (wells / stars / planetoids), skitching engagement model, chain detection, route-style hull identity — **shipped 2026-05-09** (client-only; server authority deferred)
+- Slingshot anchor network (wells / stars / planetoids), skitching engagement model, chain detection, route-style hull identity — **shipped 2026-05-09**; server authority shipped 2026-06-22
 - Speed/movement overhaul: hull stats actually applied to `ship.update`, drag rebalanced (0.06→0.015), brake converted to reverse-thrust + fuel cost, max-speed cap, velocity readout under ship — **shipped 2026-05-09**
 
 ### L5 Next (Implementation Queue)
@@ -41,15 +42,14 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
   - [x] first content manifest extraction (server-side hull manifest)
   - [x] full content-manifest JSON consolidation (no more dual ESM/CJS sources)
 1. Slingshot + speed playtest tuning — first-pass numbers ship; feel needs a real session.
-2. Server-side slingshot resolution — client-only today; multiplayer needs anchor catalog + engagement state on the server.
+2. Slingshot authority regression watch — server snapshots now own remote-authority engagement/release truth; keep the client presentation honest while tuning.
 3. Remote/local movement parity regression watch — brake, speed cap, delta-v, fuel cells, and movement coefficients have server parity as of 2026-05-10; keep the harness honest while tuning.
 4. Map redesign for slingshot routes — existing maps are "wells everywhere" layouts, not route puzzles. Want 2-hop opportunities, 3-chain runs, signature lines per map.
 5. Tailscale hardware validation — mini authority + MacBook client
 6. UI primitive bridge — shared design tokens + HUD primitives instead of inline style drift
 7. Hull ability client-side — keybindings, HUD cooldowns, visual effects
 8. Map seed system — entity catalog selection per run
-9. Tune the rich production Composer chain against 5x5/10x10 frame budgets and keep `?minimalrender=1` as the perf baseline
-10. Dead `hasEffect()` cleanup — three checks in main.js (`reduceWellPull`, `showKillRadii`, `showFlowArrows`) target effect IDs no client item uses.
+9. Tune the Three/Composer shared-context chain against 5x5/10x10 frame budgets and keep `?minimalrender=1` as the perf baseline
 
 ### Current constraints
 
@@ -60,14 +60,16 @@ All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work 
 - The control plane can stay lightweight and always-on for local work.
 - The sim is now demand-driven and auto-expiring by default; keep-alive is explicit, not accidental.
 - The design system exists in docs and has now started bridging into code, but most UI compliance still depends on human discipline.
-- Production rendering now defaults to the rich Composer chain; `?minimalrender=1` is the cheap comparison path for perf triage.
+- Production rendering now defaults to the Three renderer layered over the Composer/ASCII chain; `?minimalrender=1` is the cheap comparison path for perf triage.
 - Movement is now an *economy*: thrust costs delta-v, brake costs delta-v (less), drag is gentle, currents and slingshots are how you move at speed. Conservation of momentum is a real mechanic with playable validity windows. The full taxonomy lives in `SLINGSHOT-NETWORK.md` + the in-source comments at `src/ship.js` step 2 / `src/slingshot.js` `SLINGSHOT_CONFIG`.
 
-### L6: The Ship (Not Yet Started)
+### L6: The Ship (Partial)
 - Balance pass (hull coefficients, upgrade costs, loot rarity, signal tuning)
 - Deploy (GitHub Pages web build, nightly playables, itch.io)
 - Audio for new systems (hull abilities, fauna, sentries, inhibitor forms)
 - Polish pass (death screen, extraction screen with new data)
+- Current v0.2 position: title/home/map/save foundations exist, but balance,
+  deploy, audio identity, and release polish are still the real L6 work.
 
 ---
 

@@ -3,12 +3,13 @@
 > Originally the hour-by-hour game jam plan (March 16-22, 2026).
 > Now the project roadmap covering jam + post-jam development.
 > The jam plan below is historical — see **Current Status** for where we are.
+> Current versioned docs live in `docs/v0.2/`.
 
 ---
 
-## Current Status (2026-05-09)
+## Current Status (2026-06-22)
 
-**Version:** 0.2.0 — Last Singularity product-name sweep, server-authoritative sim, Composer renderer, control plane, entity ecology, ship classes, packaged desktop play, keyboard/mouse parity, **delta-v thrust fuel, slingshot anchor network, and a movement system overhaul that makes hull identity actually felt**.
+**Version:** v0.2 — Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set.
 
 ### What's Built
 
@@ -26,7 +27,7 @@
 
 | System | Status | What Shipped |
 |--------|--------|-------------|
-| Server-authoritative sim | DONE | sim-runtime.js owns all game state, HTTP protocol, snapshots + events |
+| Server-authoritative sim | DONE | sim-runtime.cjs owns run truth, HTTP protocol, snapshots + events |
 | Persistence + control plane | DONE | control-plane-store.js, control-plane-runtime.js, session registry, sim registration |
 | PlayerBrain | DONE | Hull coefficients, resolution pipeline, ability state, wired into physics |
 | 5 Hull classes | DONE (server) | Drifter/Breacher/Resonant/Shroud/Hauler with abilities |
@@ -35,11 +36,11 @@
 | Large-map scale model | DONE (first pass) | map-scale clocks, relevance gating, AI/hazard budgets, coarse authoritative field |
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
-| Run result package | DESIGNED | Schema in META-LOOP.md, not yet implemented in persistence write-back |
+| Run result package | PARTIAL | Results view and control-plane persistence slices exist; full meta-loop write-back polish remains |
 | Nightly playables | STALE | Last scheduled green remains `7e138cd`; today’s local feature stack is ahead of that workflow |
 | Build health gate | STALE | Last recorded health predates the 2026-05-09 feature stack; refresh after the current review/test pass |
 
-### What's Designed (Not Yet Implemented)
+### What's Designed Or Partially Implemented
 
 ### Runtime Productization Progress
 
@@ -52,17 +53,17 @@
 
 | Feature | Design Doc | Status |
 |---------|-----------|--------|
-| Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Full design, ready for implementation |
-| Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Full design with costs, ready for implementation |
-| Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Full design, ready for implementation |
-| Item catalog (artifacts with coefficients) | Partially in CLASSES-AND-PROGRESSION.md | Needs full catalog of T1-T4 items |
-| Stat tracking / chronicle | META-LOOP.md | Schema designed, needs persistence integration |
-| Milestone triggers | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Triggers defined, needs implementation |
+| Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
+| Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
+| Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
+| Item catalog (artifacts with coefficients) | Partially in CLASSES-AND-PROGRESSION.md | T1-T4 catalog exists as content data; needs curation and more authored build identity |
+| Stat tracking / chronicle | META-LOOP.md | Run records and echo foundations are partial; player-readable chronicle remains |
+| Milestone triggers | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Triggers defined; unlock pacing and UI surfacing still need implementation |
 
 ### Forward Development Priorities
 
 1. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
-2. **Server-side slingshot authority** — slingshot is client-only and explicitly disabled in remote-authority mode until the sim owns anchor catalog, engagement state, and release resolution.
+2. **Slingshot authority regression watch** — remote-authority mode now renders slingshot from sim-owned engagement/release state; keep tests representative as numbers and maps change.
 3. **Remote/local physics regression watch** — brake, max-speed, delta-v, fuel cells, and movement coefficients now have server parity; keep tests representative as tuning evolves.
 4. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
 5. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
@@ -85,7 +86,7 @@
 - Browser remote play still expects separate authority processes.
 - The control plane is allowed to stay hot locally.
 - The sim no longer stays hot by default with zero human clients: it idles cheaply, auto-stops after a grace window, and only stays alive intentionally when started with keep-alive.
-- The next quality step is productization and shared UI primitives, not another wholesale architecture rewrite.
+- The next quality step is feel/playtest polish, route-aware maps, meta-loop clarity, and shared UI primitives, not another wholesale architecture rewrite.
 
 ---
 

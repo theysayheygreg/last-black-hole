@@ -11,17 +11,18 @@ These modes preserve the original architecture intent:
 
 ## Modes
 
-### `local-browser`
+### `local-sandbox`
 
-Client-only browser play against no authority stack.
+Deprecated client-only browser play against no authority stack.
 
 - starts: dev server
 - does not start: control plane, sim
-- use when: renderer, HUD, and local-only client work
+- opens with `?localSandbox=1`, which clears any stored `simServer` URL
+- use when: renderer/HUD debugging that intentionally does not need authority
 
 Command:
 
-- `npm run stack:browser`
+- `npm run stack:sandbox`
 
 ### `local-host`
 
@@ -35,6 +36,7 @@ Commands:
 
 - `npm run stack`
 - `npm start`
+- `npm run stack:browser`
 
 ### `remote-client`
 

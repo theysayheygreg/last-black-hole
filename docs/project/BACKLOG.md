@@ -119,11 +119,11 @@
 - **Why backlogged:** Each is a new movement verb. Too many verbs for week one.
 - **Value if revisited:** Dramatically expands navigation vocabulary. Each could be a run modifier.
 
-### Server-side slingshot resolution (Slingshot Network — phase 2)
-- **What:** The slingshot network (`docs/design/SLINGSHOT-NETWORK.md`) ships client-only today. Engagement state lives on the local ship; remote-authority mode disables the input entirely so server snapshots don't fight local state. To make it work in multiplayer, the server needs its own anchor catalog, engagement tracking per player, and authoritative energy/release resolution that mirrors the client model.
-- **Why backlogged:** Per the design doc, server authority specifics were explicitly deferred. Single-player play works today with the full system; multiplayer just doesn't have it yet.
-- **Value if revisited:** Slingshot becomes available across all session modes. Other players see your engagement state and orbital lock. Required before slingshot can be a real multiplayer mechanic.
-- **State:** `src/slingshot.js` is client-side. `scripts/sim-runtime.cjs` has no slingshot concept yet. Wire format (engage anchor id + button edge) needs design.
+### Slingshot authority regression watch
+- **What:** The slingshot network (`docs/design/SLINGSHOT-NETWORK.md`) now has sim-owned remote-authority engagement/release state. The remaining work is parity watch while numbers, hull coefficients, and maps are tuned.
+- **Why backlogged:** Server authority shipped; this is now a regression guard rather than a missing feature.
+- **Value if revisited:** Prevents local-only renderer/prediction code from drifting away from authoritative slingshot truth.
+- **State:** Shipped 2026-06-22. Keep remote-authority tests representative when changing anchor catalogs, release math, or slingshot HUD presentation.
 
 ### Server vs client physics parity
 - **What:** Keep local-mode and remote-authority movement semantics aligned as movement becomes a real economy.
@@ -137,12 +137,6 @@
 - **Why backlogged:** System works end-to-end; tuning + map redesign are post-feel work.
 - **Value if revisited:** Slingshot goes from "working mechanic" to "feel-tuned skill expression." Maps stop being only "where the threats live" and start being "what routes does this universe offer."
 - **State:** First-pass numbers in `src/slingshot.js` SLINGSHOT_CONFIG; per-hull modifiers in `hulls.data.json`. Maps unchanged.
-
-### Dead `inventorySystem.hasEffect()` checks for client-only effect IDs
-- **What:** Three `hasEffect()` calls in `src/main.js` look up effect IDs that no item in the current catalog uses: `reduceWellPull` (line ~2933), `showKillRadii` (line ~3555), `showFlowArrows` (line ~3573). They check `item.effect === 'reduceWellPull'` etc., but those values only appear in the *server-side* coefficient resolution path (`scripts/player-brain.cjs`). Client artifacts use coefficient objects, not consumable-style `effect` strings. So the checks always return false locally.
-- **Why backlogged:** Pre-existing dead code, not introduced today. Doesn't break anything — the effects just don't fire in client-only play. Mode-specific rendering features (kill-radii visualization, flow arrows) are gone visually.
-- **Value if revisited:** Either wire those visualizations back to a real effect mechanism (probably an inventory-item special / coefficient), or delete the dead branches outright.
-- **State:** `src/main.js` lines ~2933, 3555, 3573. Server side still has working `reduceWellPull` resolution.
 
 ### Tidal Effects on Ship
 - **What:** Differential gravity — closer side of ship pulled harder, creating rotational torque near wells

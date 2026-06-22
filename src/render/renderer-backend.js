@@ -56,6 +56,10 @@ export class LegacyRendererBackend {
     return this.asciiPass.getViewMode();
   }
 
+  getCanvasId() {
+    return this.sourceCanvas?.id || 'fluid-canvas';
+  }
+
   getPerfStats() {
     return {
       backend: this.name,
@@ -71,6 +75,7 @@ export function createRendererBackend({
   backend,
   composer,
   asciiPass,
+  gl,
   sourceCanvas,
   targetCanvas,
   renderQuality,
@@ -80,6 +85,7 @@ export function createRendererBackend({
       return new ThreeRendererBackend({
         composer,
         asciiPass,
+        gl,
         sourceCanvas,
         targetCanvas,
         renderQuality,

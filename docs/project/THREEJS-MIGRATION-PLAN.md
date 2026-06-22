@@ -12,9 +12,9 @@ Recommended migration style: **strangler bridge**. Keep the legacy renderer work
 
 ## Current Implementation Status (2026-06-22)
 
-- **Shipped:** `?renderer=three` boot path, hidden legacy source canvas, visible Three-owned canvas, Three as the default automated renderer target, static build packaging for `three.module.js`, backend diagnostics, fixture coverage, and a first-class top-down Three scene.
+- **Shipped:** `?renderer=three` boot path, shared Composer/Three WebGL2 context on `fluid-canvas`, Three as the default automated renderer target, static build packaging for `three.module.js`, backend diagnostics, fixture coverage, and a first-class top-down Three scene.
 - **Three scene contract:** the visible renderer now uses an orthographic top-down camera, z-separated `background-parallax-field`, `fabric-source-layer`, and `foreground-screen-space-layer`, a depth-backed render target, motion-driven parallax, and a screen-space present pass. The viewpoint remains visually flat; the renderer substrate is now 3D.
-- **Still legacy-owned:** fluid simulation, Composer shader chain, ASCII pass internals, and most overlay/HUD drawing.
+- **Still legacy-owned:** fluid simulation, Composer shader chain, ASCII pass internals, and most overlay/HUD drawing. The bridge no longer performs CPU canvas copies or per-frame `CanvasTexture` uploads.
 - **Legacy status:** `?renderer=legacy` remains available as an explicit compatibility/fallback lane, but it is no longer the default harness target.
 - **Harness:** use `npm test` for the Three core gate, `npm run test:three` for smoke + infra + renderer canary, and `npm run test:legacy` only when touching the bridge/fallback.
 
@@ -59,7 +59,7 @@ Client renderer process
   input collection, audio, interpolation, prediction, diagnostics
 ```
 
-Local standalone play may still run a client-only visual/gameplay mode for development, but the strategic architecture should treat remote-authority as the primary truth model.
+Local standalone play may still run a deliberately named sandbox mode for renderer/debug work, but product launch commands should start a separate local authority process and treat remote-authority as the primary truth model.
 
 ## Current Architecture Inventory
 
@@ -190,7 +190,7 @@ Performance implications:
 
 Goal: boot a Three renderer in the client process without rewriting every shader at once.
 
-Status: shipped as the current `ThreeRendererBackend`. The implementation uses a hidden legacy source canvas as a temporary compatibility bridge, then presents that frame inside a real Three scene rather than a fullscreen copy-only pass.
+Status: shipped as the current `ThreeRendererBackend`. The implementation shares the Composer WebGL2 context on `fluid-canvas`, lets Composer draw the ASCII frame to the default framebuffer, then uses Three to submit pooled transparent 3D world layers on top. It no longer uses a hidden source canvas, CPU readback, or per-frame texture uploads.
 
 Deliverables:
 
@@ -398,9 +398,7 @@ Deliverables:
   - recent events for one-shot VFX/audio
   - sim clocks and map profile
 - Add renderer-facing selectors/adapters so Three does not reach into raw snapshot shapes everywhere.
-- Keep slingshot remote behavior honest:
-  - until server-side slingshot ships, Three renderer must hide remote-authority affordances exactly like the legacy renderer
-  - once server slingshot ships, render from authoritative engagement state
+- Keep slingshot remote behavior honest: render remote-authority slingshot affordances only from authoritative snapshot state, not from local-only prediction.
 - Preserve local visual fluid reconstruction in remote-authority mode. The visual fluid can be client-side, but gameplay consequences are server-owned.
 
 Risks:

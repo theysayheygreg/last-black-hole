@@ -18,7 +18,6 @@ void main() {
 
 const COPY_FRAG = `precision highp float;
 uniform sampler2D u_input;
-uniform vec2 u_resolution;
 uniform vec2 u_motion;
 uniform float u_scanlineIntensity;
 uniform float u_vignette;
@@ -32,9 +31,13 @@ void main() {
   float edge = smoothstep(0.08, 0.82, dot(p, p) * 2.4);
   vec2 warpedUv = clamp(v_uv + u_motion * u_motionWarp * edge, vec2(0.001), vec2(0.999));
   vec2 chroma = u_motion * u_chromaticMotion * edge;
+  vec4 mid = texture(u_input, warpedUv);
+  float alpha = mid.a;
+  if (alpha <= 0.001) discard;
+
   vec3 c;
   c.r = texture(u_input, clamp(warpedUv + chroma, vec2(0.001), vec2(0.999))).r;
-  c.g = texture(u_input, warpedUv).g;
+  c.g = mid.g;
   c.b = texture(u_input, clamp(warpedUv - chroma, vec2(0.001), vec2(0.999))).b;
 
   // Kept near-zero by default. The pass exists so Three owns a real
@@ -45,38 +48,7 @@ void main() {
   float vignette = smoothstep(0.85, 0.15, dot(p, p));
   c *= mix(1.0, vignette, u_vignette);
 
-  fragColor = vec4(c, 1.0);
-}`;
-
-const FABRIC_VERT = `varying vec2 v_uv;
-uniform vec2 u_layerOffset;
-void main() {
-  v_uv = uv;
-  vec3 p = position;
-  p.xy += u_layerOffset;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-}`;
-
-const FABRIC_FRAG = `precision highp float;
-uniform sampler2D u_input;
-uniform vec2 u_motion;
-uniform float u_backdropReveal;
-uniform float u_time;
-varying vec2 v_uv;
-
-void main() {
-  vec2 p = v_uv - 0.5;
-  float edge = smoothstep(0.05, 0.72, dot(p, p) * 2.2);
-  float shimmer = sin((p.x * 37.0 + p.y * 19.0) + u_time * 0.7) * 0.0007;
-  vec2 uv = clamp(v_uv + u_motion * (0.004 + edge * 0.006) + shimmer, vec2(0.001), vec2(0.999));
-  vec3 c = texture2D(u_input, uv).rgb;
-  float luma = max(max(c.r, c.g), c.b);
-
-  // Dark ASCII cells reveal a little of the 3D backdrop. Bright cells stay
-  // opaque so the renderer upgrade does not blur gameplay-critical glyphs.
-  float bright = smoothstep(0.02, 0.20, luma);
-  float alpha = mix(1.0 - u_backdropReveal, 1.0, bright);
-  gl_FragColor = vec4(c, alpha);
+  fragColor = vec4(c, alpha);
 }`;
 
 function qualitySettings(renderQuality) {
@@ -143,35 +115,34 @@ function setCanvasVisible(canvas, visible) {
 }
 
 export class ThreeRendererBackend {
-  constructor({ composer, asciiPass, sourceCanvas, targetCanvas, renderQuality = 'rich' }) {
+  constructor({ composer, asciiPass, gl, sourceCanvas, targetCanvas, renderQuality = 'rich' }) {
     this.name = 'three';
     this.renderQuality = renderQuality;
     this.settings = qualitySettings(renderQuality);
     this.composer = composer;
     this.asciiPass = asciiPass;
+    this.gl = gl;
     this.sourceCanvas = sourceCanvas;
-    this.targetCanvas = targetCanvas;
+    this.targetCanvas = sourceCanvas;
+    this.legacyCanvas = targetCanvas;
     this.passNames = [
-      'legacy-source-frame',
+      'composer-ascii-default-frame',
       'three-background-depth',
-      'three-fabric-plane',
+      'three-pooled-world-scene',
       'three-world-scene',
       'three-screen-space-post',
     ];
 
     this.renderer = new THREE.WebGLRenderer({
-      canvas: targetCanvas,
+      canvas: sourceCanvas,
+      context: gl,
       antialias: false,
       alpha: false,
       powerPreference: 'high-performance',
-      // The parallel renderer is still fixture-driven. Preserving the
-      // buffer makes automated screenshots and canvas export deterministic;
-      // revisit once Three becomes the default and visual baselines settle.
-      preserveDrawingBuffer: true,
     });
-    this.renderer.autoClear = true;
+    this.renderer.autoClear = false;
     this.renderer.info.autoReset = false;
-    this.renderer.setClearColor(0x000008, 1);
+    this.renderer.setClearColor(0x000000, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(sourceCanvas.width, sourceCanvas.height, false);
@@ -185,25 +156,8 @@ export class ThreeRendererBackend {
     this.screenCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     this.postScene = new THREE.Scene();
 
-    this.bridgeCanvas = document.createElement('canvas');
-    this.bridgeCanvas.width = sourceCanvas.width;
-    this.bridgeCanvas.height = sourceCanvas.height;
-    this.bridgeCtx = this.bridgeCanvas.getContext('2d', { alpha: false });
-    if (!this.bridgeCtx) {
-      throw new Error('ThreeRendererBackend: 2D bridge canvas unavailable');
-    }
-
-    this.sourceTexture = new THREE.CanvasTexture(this.bridgeCanvas);
-    this.sourceTexture.colorSpace = THREE.SRGBColorSpace;
-    this.sourceTexture.generateMipmaps = false;
-    this.sourceTexture.minFilter = THREE.LinearFilter;
-    this.sourceTexture.magFilter = THREE.LinearFilter;
-    this.sourceTexture.wrapS = THREE.ClampToEdgeWrapping;
-    this.sourceTexture.wrapT = THREE.ClampToEdgeWrapping;
-
     this.motion = new THREE.Vector2(0, 0);
     this.targetMotion = new THREE.Vector2(0, 0);
-    this.layerOffset = new THREE.Vector2(0, 0);
     this.prevCamera = null;
     this.lastSceneState = {
       cameraX: 0,
@@ -235,28 +189,14 @@ export class ThreeRendererBackend {
     this.foregroundGroup.position.z = 0.35;
     this.layerRoot.add(this.backgroundGroup, this.fabricGroup, this.semanticGroup, this.entityGroup, this.foregroundGroup);
     this._buildWorldEntityResources();
+    this.entityMeshPool = [];
+    this.semanticMeshPool = [];
+    this.linePool = [];
+    this.entityMeshCursor = 0;
+    this.semanticMeshCursor = 0;
+    this.lineCursor = 0;
 
     this._buildBackdropLayers();
-
-    this.sourceMaterial = new THREE.ShaderMaterial({
-      vertexShader: FABRIC_VERT,
-      fragmentShader: FABRIC_FRAG,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      uniforms: {
-        u_input: { value: this.sourceTexture },
-        u_motion: { value: this.motion },
-        u_layerOffset: { value: this.layerOffset },
-        u_backdropReveal: { value: this.settings.backdropReveal },
-        u_time: { value: 0 },
-      },
-    });
-    this.fabricPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.04, 2.04), this.sourceMaterial);
-    this.fabricPlane.name = 'legacy-ascii-source-plane';
-    this.fabricPlane.renderOrder = 10;
-    this.fabricGroup.add(this.fabricPlane);
-
     this._buildForegroundLayers();
 
     this.copyMaterial = new THREE.RawShaderMaterial({
@@ -265,9 +205,10 @@ export class ThreeRendererBackend {
       fragmentShader: COPY_FRAG,
       depthTest: false,
       depthWrite: false,
+      transparent: true,
+      blending: THREE.NormalBlending,
       uniforms: {
         u_input: { value: null },
-        u_resolution: { value: new THREE.Vector2(sourceCanvas.width, sourceCanvas.height) },
         u_motion: { value: this.motion },
         u_scanlineIntensity: { value: this.settings.scanlineIntensity },
         u_vignette: { value: this.settings.vignette },
@@ -295,6 +236,10 @@ export class ThreeRendererBackend {
       parallax: null,
       entityCount: 0,
       semanticCount: 0,
+      sharedContext: true,
+      canvasUploads: 0,
+      pooledMeshes: 0,
+      pooledLines: 0,
     };
     this._applyCanvasMode();
     this._installContextHandlers();
@@ -430,8 +375,8 @@ export class ThreeRendererBackend {
       depthBuffer: true,
       stencilBuffer: false,
       format: THREE.RGBAFormat,
-      // The bridge copies an already tonemapped LDR source frame. Keeping this
-      // byte-backed avoids half-float render-target gaps in headless GL.
+      // Byte-backed targets keep Chrome/headless coverage predictable. The
+      // target only holds transparent Three overlays before compositing.
       type: THREE.UnsignedByteType,
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
@@ -445,37 +390,35 @@ export class ThreeRendererBackend {
   }
 
   _applyCanvasMode() {
-    // The legacy canvas remains live as the source frame. It is visually
-    // hidden, not display:none, so its WebGL backing store keeps updating.
+    // Three now shares the Composer's WebGL2 context, so the authored render
+    // target is the visible canvas. The old parallel canvas stays in the DOM
+    // only so older probes fail softly while the migration finishes.
     if (this.sourceCanvas) {
       this.sourceCanvas.style.display = 'block';
-      this.sourceCanvas.style.opacity = '0';
+      this.sourceCanvas.style.opacity = '1';
       this.sourceCanvas.style.pointerEvents = 'none';
     }
-    setCanvasVisible(this.targetCanvas, true);
+    setCanvasVisible(this.legacyCanvas, false);
     if (this.targetCanvas) {
       this.targetCanvas.style.pointerEvents = 'none';
     }
   }
 
   _installContextHandlers() {
-    this.targetCanvas.addEventListener('webglcontextlost', (event) => {
+    this.sourceCanvas.addEventListener('webglcontextlost', (event) => {
       event.preventDefault();
       console.warn('[render-three] WebGL context lost');
     });
-    this.targetCanvas.addEventListener('webglcontextrestored', () => {
+    this.sourceCanvas.addEventListener('webglcontextrestored', () => {
       console.warn('[render-three] WebGL context restored');
-      this.renderer.setSize(this.targetCanvas.width, this.targetCanvas.height, false);
+      this.renderer.setSize(this.sourceCanvas.width, this.sourceCanvas.height, false);
     });
   }
 
   resize(width, height) {
     this.composer.resize(width, height);
-    this.bridgeCanvas.width = width;
-    this.bridgeCanvas.height = height;
     this.renderer.setSize(width, height, false);
     this.sceneTarget.setSize(width, height);
-    this.copyMaterial.uniforms.u_resolution.value.set(width, height);
     this.worldCamera.updateProjectionMatrix();
   }
 
@@ -508,12 +451,10 @@ export class ThreeRendererBackend {
     this.farStars.position.y = phaseY * 0.08 * parallaxStrength;
     this.nearStars.position.x = -phaseX * 0.15 * parallaxStrength - this.motion.x * 0.8;
     this.nearStars.position.y = phaseY * 0.15 * parallaxStrength - this.motion.y * 0.8;
-    this.layerOffset.set(this.motion.x * 0.08, this.motion.y * 0.08);
     this.lensRing.rotation.z = totalTime * 0.015 + (this.motion.x - this.motion.y) * 1.4;
     const motionLen = this.motion.length();
     this.lensRing.material.opacity = (0.035 + clamp(motionLen * 1.1, 0, 0.055)) * (renderQualityOpacityScale(this.renderQuality));
 
-    this.sourceMaterial.uniforms.u_time.value = totalTime;
     this._syncWorldScene(state.scene || {});
     const motionX = Math.abs(this.motion.x) < 1e-7 ? 0 : this.motion.x;
     const motionY = Math.abs(this.motion.y) < 1e-7 ? 0 : this.motion.y;
@@ -528,14 +469,6 @@ export class ThreeRendererBackend {
       sceneEntityCount: this.lastEntityCount,
       semanticCount: this.lastSemanticCount,
     };
-  }
-
-  _clearDynamicGroup(group) {
-    while (group.children.length > 0) {
-      const child = group.children.pop();
-      if (child.userData?.transientGeometry && child.geometry) child.geometry.dispose();
-      group.remove(child);
-    }
   }
 
   _scenePoint(wx, wy, state = this.lastSceneState) {
@@ -554,35 +487,70 @@ export class ThreeRendererBackend {
     return Math.abs(point.x) <= 1.25 + radius && Math.abs(point.y) <= 1.25 + radius;
   }
 
+  _beginDynamicScene() {
+    this.entityMeshCursor = 0;
+    this.semanticMeshCursor = 0;
+    this.lineCursor = 0;
+    for (const mesh of this.entityMeshPool) mesh.visible = false;
+    for (const mesh of this.semanticMeshPool) mesh.visible = false;
+    for (const line of this.linePool) line.visible = false;
+  }
+
+  _meshPoolFor(group) {
+    return group === this.semanticGroup
+      ? { pool: this.semanticMeshPool, cursorKey: 'semanticMeshCursor' }
+      : { pool: this.entityMeshPool, cursorKey: 'entityMeshCursor' };
+  }
+
   _addMesh(group, geometry, material, wx, wy, radius, rotation = 0, z = 0, state = this.lastSceneState) {
     if (!Number.isFinite(wx) || !Number.isFinite(wy)) return null;
     const point = this._scenePoint(wx, wy, state);
     const sceneRadius = Math.max(0.002, radius * point.scale);
     if (!this._isSceneVisible(point, sceneRadius)) return null;
-    const mesh = new THREE.Mesh(geometry, material);
+    const { pool, cursorKey } = this._meshPoolFor(group);
+    let mesh = pool[this[cursorKey]];
+    if (!mesh) {
+      mesh = new THREE.Mesh(geometry, material);
+      mesh.frustumCulled = false;
+      pool.push(mesh);
+      group.add(mesh);
+    }
+    this[cursorKey] += 1;
+    mesh.geometry = geometry;
+    mesh.material = material;
     mesh.position.set(point.x, point.y, z);
     mesh.scale.set(sceneRadius, sceneRadius, 1);
     mesh.rotation.z = rotation;
     mesh.renderOrder = 14 + Math.round(z * 100);
-    group.add(mesh);
+    mesh.visible = true;
     return mesh;
   }
 
   _addLine(group, ax, ay, bx, by, material, state = this.lastSceneState) {
     const a = this._scenePoint(ax, ay, state);
     const b = this._scenePoint(bx, by, state);
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute('position', new THREE.Float32BufferAttribute([a.x, a.y, 0, b.x, b.y, 0], 3));
-    const line = new THREE.Line(geom, material);
-    line.userData.transientGeometry = true;
+    if (!this._isSceneVisible(a, 0.02) && !this._isSceneVisible(b, 0.02)) return null;
+    let line = this.linePool[this.lineCursor];
+    if (!line) {
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      line = new THREE.Line(geom, material);
+      line.frustumCulled = false;
+      this.linePool.push(line);
+      group.add(line);
+    }
+    this.lineCursor += 1;
+    const attr = line.geometry.getAttribute('position');
+    attr.array.set([a.x, a.y, 0, b.x, b.y, 0]);
+    attr.needsUpdate = true;
+    line.material = material;
     line.renderOrder = 28;
-    group.add(line);
+    line.visible = true;
     return line;
   }
 
   _syncWorldScene(sceneState) {
-    this._clearDynamicGroup(this.entityGroup);
-    this._clearDynamicGroup(this.semanticGroup);
+    this._beginDynamicScene();
     const renderState = {
       camX: this.lastSceneState.cameraX,
       camY: this.lastSceneState.cameraY,
@@ -652,8 +620,9 @@ export class ThreeRendererBackend {
     if (slingAnchor) {
       addSemantic(this.entityGeometries.ring, this.entityMaterials.surfRing, slingAnchor.wx, slingAnchor.wy, slingAnchor.range || 0.1, 0, 0.13);
       if (sling.engaged && ship) {
-        this._addLine(this.entityGroup, ship.wx, ship.wy, slingAnchor.wx, slingAnchor.wy, this.entityMaterials.tether, renderState);
-        entityCount++;
+        if (this._addLine(this.entityGroup, ship.wx, ship.wy, slingAnchor.wx, slingAnchor.wy, this.entityMaterials.tether, renderState)) {
+          entityCount++;
+        }
       }
     }
 
@@ -662,25 +631,24 @@ export class ThreeRendererBackend {
   }
 
   render(frameContext) {
-    // First render the complete legacy source frame into the hidden canvas.
+    // Composer owns the ASCII/fabric source frame on the shared canvas. Three
+    // then adds transparent world-scene layers without CPU readback/upload.
     this.composer.render(frameContext);
+    this.renderer.resetState();
 
-    // Then present that source frame inside the top-down Three scene.
     this._updateSceneState(frameContext);
-    this.bridgeCtx.drawImage(this.sourceCanvas, 0, 0, this.bridgeCanvas.width, this.bridgeCanvas.height);
     this.renderer.info.reset();
-    this.sourceTexture.needsUpdate = true;
     this.renderer.setRenderTarget(this.sceneTarget);
+    this.renderer.setClearColor(0x000000, 0);
     this.renderer.clear(true, true, false);
     this.renderer.render(this.worldScene, this.worldCamera);
 
     this.copyMaterial.uniforms.u_input.value = this.sceneTarget.texture;
     this.renderer.setRenderTarget(null);
-    this.renderer.clear(true, true, false);
     this.renderer.render(this.postScene, this.screenCamera);
     this.lastThreeStats = {
-      // Headless Chrome can under-report renderer.info for canvas-texture
-      // scenes. The pass graph still submits a depth scene and a present pass.
+      // Headless Chrome can under-report renderer.info for shared-context
+      // scenes. The pass graph still submits a depth scene and present pass.
       calls: Math.max(this.renderer.info.render.calls, this.passNames.length),
       triangles: Math.max(this.renderer.info.render.triangles, 4),
       points: this.renderer.info.render.points,
@@ -700,13 +668,17 @@ export class ThreeRendererBackend {
       parallax: { ...this.lastSceneState },
       entityCount: this.lastEntityCount,
       semanticCount: this.lastSemanticCount,
+      sharedContext: true,
+      canvasUploads: 0,
+      pooledMeshes: this.entityMeshPool.length + this.semanticMeshPool.length,
+      pooledLines: this.linePool.length,
     };
   }
 
   _describeWorldLayers() {
     return [
       { name: this.backgroundGroup.name, z: this.backgroundGroup.position.z, role: 'parallax backdrop' },
-      { name: this.fabricGroup.name, z: this.fabricGroup.position.z, role: 'ASCII source frame' },
+      { name: this.fabricGroup.name, z: this.fabricGroup.position.z, role: 'Composer-owned ASCII frame' },
       { name: this.semanticGroup.name, z: this.semanticGroup.position.z, role: 'semantic flow/hazard channels' },
       { name: this.entityGroup.name, z: this.entityGroup.position.z, role: '3D world entities' },
       { name: this.foregroundGroup.name, z: this.foregroundGroup.position.z, role: 'screen-space depth cues' },
@@ -719,6 +691,10 @@ export class ThreeRendererBackend {
 
   getViewMode() {
     return this.asciiPass.getViewMode();
+  }
+
+  getCanvasId() {
+    return this.sourceCanvas?.id || 'fluid-canvas';
   }
 
   getPerfStats() {
@@ -737,7 +713,6 @@ export class ThreeRendererBackend {
 
   dispose() {
     this.sceneTarget.dispose();
-    this.sourceTexture.dispose();
     this.copyMaterial.dispose();
     this._disposeObject(this.worldScene);
     this._disposeObject(this.postScene);
@@ -745,13 +720,17 @@ export class ThreeRendererBackend {
   }
 
   _disposeObject(obj) {
+    const geometries = new Set();
+    const materials = new Set();
     obj.traverse?.((child) => {
-      if (child.geometry) child.geometry.dispose();
+      if (child.geometry) geometries.add(child.geometry);
       const mats = Array.isArray(child.material) ? child.material : [child.material];
       for (const mat of mats) {
-        if (mat) mat.dispose();
+        if (mat) materials.add(mat);
       }
     });
+    for (const geom of geometries) geom.dispose();
+    for (const mat of materials) mat.dispose();
   }
 }
 

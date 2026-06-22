@@ -94,6 +94,8 @@ Renderer fixtures assert the first-class scene contract:
   `semantic-flow-field-layer`, `world-entity-layer`, and
   `foreground-screen-space-layer` are present
 - `three-screen-space-post` appears in the pass graph
+- `sharedContext: true` and `canvasUploads: 0` prove the Three path is not
+  falling back to CPU canvas copies
 
 ## Codex App Browser Lane
 
@@ -130,14 +132,15 @@ local URLs and the shared CDP browser driver for deterministic CLI checks.
 
 ## Screenshot Policy
 
-For LBH pages, screenshots should composite the active render canvas
-(`fluid-canvas` or `three-canvas`) with `overlay-canvas`. Full page screenshots
-can hang or capture the hidden source canvas in the parallel renderer bridge.
-The shared `tests/helpers.cjs` screenshot helper uses the canvas-composited path
-first and falls back to a browser screenshot only when no game canvas exists.
-Renderer fixture runs append `?capture=1`, which preserves the legacy WebGL
-drawing buffer for readback. Do not use that flag for normal performance
-claims.
+For LBH pages, screenshots should ask `__TEST_API.getRenderCanvasId()` for the
+active render canvas, then composite that canvas with `overlay-canvas`. In the
+current Three path this returns `fluid-canvas`, because Composer and Three share
+one WebGL2 context. The old `three-canvas` remains a DOM placeholder only during
+the migration. Full page screenshots can still miss game pixels, so the shared
+`tests/helpers.cjs` screenshot helper uses the canvas-composited path first and
+falls back to a browser screenshot only when no game canvas exists. Renderer
+fixture runs append `?capture=1` for deterministic readback; do not use that
+flag for normal performance claims.
 
 ## When To Escalate
 

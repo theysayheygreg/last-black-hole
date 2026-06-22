@@ -6,3 +6,11 @@ release-staging/
 *.log
 tests/screenshots/
 tmp/
+.claude/
+.codex/
+AGENTS.md
+_artifacts/
+handoffs/
+tests/*-probe.png
+__pycache__/
+tools/**/__pycache__/

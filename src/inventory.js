@@ -126,22 +126,6 @@ export class InventorySystem {
   }
 
   /**
-   * Check if a specific effect is equipped.
-   */
-  hasEffect(effectId) {
-    return this.equipped.some(item => item?.effect === effectId);
-  }
-
-  /**
-   * Get all active equip effects as an array of effect IDs.
-   */
-  getActiveEffects() {
-    return this.equipped
-      .filter(item => item !== null)
-      .map(item => item.effect);
-  }
-
-  /**
    * Aggregate equipped-item delta-v coefficients into multipliers the
    * Ship can fold onto its hull baseline. Multiplicative composition:
    * two items with capacityMult 1.10 each → 1.21. Missing keys default

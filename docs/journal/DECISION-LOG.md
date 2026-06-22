@@ -2,13 +2,33 @@
 
 ## 2026-06-22 — Three renderer is flat-view 3D, not a 2D copy target
 
-**Decision:** The Three path should be a first-class 3D scene even when the game keeps its top-down, flat visual language. The current implementation uses an orthographic top-down camera, z-separated backdrop/fabric/foreground layers, motion-driven parallax, and a screen-space present pass. The legacy Composer frame remains the ASCII/fabric source for now, but it is presented as a plane inside the Three world instead of being treated as the whole renderer.
+**Decision:** The Three path should be a first-class 3D scene even when the game keeps its top-down, flat visual language. The current implementation uses an orthographic top-down camera, z-separated backdrop/fabric/foreground layers, pooled dynamic world meshes, motion-driven parallax, and a screen-space present pass. The Composer frame remains the ASCII/fabric source for now, but Composer and Three share `fluid-canvas` and a WebGL2 context; Three layers transparent scene output over the Composer frame without CPU canvas copies.
 
 **Why:** LBH needs depth infrastructure for parallax, player-motion cues, screen-space effects, entity projection, and eventual Three-owned fluid/entity passes. Keeping the viewpoint flat protects readability and aesthetic continuity; making the scene graph real prevents every future visual upgrade from becoming another fullscreen shader special case.
 
-**Where it landed:** `src/render-three/three-renderer.js`, `src/main.js` frame context, and `tests/renderer.cjs` scene-contract assertions.
+**Where it landed:** `src/render-three/three-renderer.js`, `src/main.js` frame context, and `tests/renderer.cjs` scene-contract assertions for `sharedContext: true`, `canvasUploads: 0`, and pooled world meshes.
 
 **Door status:** Closed for renderer direction. Open for tuning the amount of parallax, backdrop reveal, and which overlay/entity layers migrate from canvas to Three first.
+
+## 2026-06-22 — Product launches use authority, sandbox launches say sandbox
+
+**Decision:** `npm run stack:browser` now starts the local host stack rather than a browser-only client. Client-only play is still available as `npm run stack:sandbox`, but it is explicitly deprecated for renderer/debug use rather than treated as a product mode.
+
+**Why:** The project direction is separate sim and client renderer processes. A convenient command named "browser" should not silently bypass authority and make client-only behavior look normal.
+
+**Where it landed:** `package.json`, `scripts/stack.cjs`, `docs/reference/RUNTIME-MODES.md`, and `docs/reference/DEV-SERVER.md`.
+
+**Door status:** Closed for public launcher naming. Open for removing the local `SimCore` fallback when the last harness/dev-only dependency is gone.
+
+## 2026-06-22 — Slingshot authority is shipped, not deferred
+
+**Decision:** Server-side slingshot resolution is no longer a deferred feature. Remote-authority presentation should render slingshot affordance/engagement/release from sim-owned snapshot state, while local prediction remains a sandbox/dev path.
+
+**Why:** Slingshot is now part of movement identity. Leaving it client-only would make the primary runtime mode less expressive than local play and would hide multiplayer divergence under renderer polish.
+
+**Where it landed:** Server/client authority tests and roadmap/backlog docs now treat slingshot as regression-watch and tuning work rather than missing architecture.
+
+**Door status:** Closed for authority ownership. Open for playtest tuning and map redesign around routes.
 
 ## 2026-05-09 — Movement is an economy, not a free verb
 
@@ -18,7 +38,7 @@
 
 **Where it landed:** `src/ship.js` step 2 / 2b, `src/config.js` ship section, `src/content/hulls.data.json` per-hull deltaV stats. Color-coded HUD gauge top-right. Velocity readout under the ship sprite as the sibling legibility fix.
 
-**Door status:** Open for tuning — the numbers are first-pass, will need playtest iteration. Server-side resolution still uses old brake-as-drag model; that's a known divergence flagged in `BACKLOG.md`.
+**Door status:** Open for tuning — the numbers are first-pass and will need playtest iteration. Server-side movement parity is now regression-watch instead of a known architecture gap.
 
 ## 2026-05-09 — Slingshot is a designed feature, not emergent physics
 
@@ -28,7 +48,7 @@
 
 **Where it landed:** `docs/design/SLINGSHOT-NETWORK.md` is the design doc. `src/slingshot.js` is the implementation. Hull modifiers in `hulls.data.json` give each hull a route-style identity (Drifter specialist, Breacher brute-force, Resonant forgiving chains, Shroud silent slings, Hauler mass-penalized).
 
-**Door status:** Open — server authority is deferred (client-only mechanic today), numbers need playtest tuning, and existing maps want a route-design pass with linkage in mind. All flagged in `BACKLOG.md`.
+**Door status:** Open for tuning and map redesign. Server authority shipped on 2026-06-22, so future slingshot work should preserve sim-owned truth.
 
 ## 2026-05-09 — Single-source content via JSON instead of mirrored modules
 

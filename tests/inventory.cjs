@@ -237,7 +237,7 @@ async function run() {
         api.spawnTestWreck(ship.x, ship.y, {
           loot: [{
             name: 'Test Lens', category: 'artifact', subcategory: 'equippable',
-            tier: 'rare', value: 200, effect: 'showKillRadii', effectDesc: 'test',
+            tier: 'rare', value: 200, coefficients: { wellResistScale: 1.12 },
           }],
         });
         api.pickupAtShip();

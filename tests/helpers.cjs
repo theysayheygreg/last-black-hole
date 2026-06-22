@@ -372,12 +372,10 @@ async function screenshot(page, label) {
   const ts = new Date().toISOString().replace(/[:.]/g, "");
   const filepath = path.join(SCREENSHOT_DIR, `${label}-${ts}.png`);
   const dataUrl = await page.evaluate(() => {
-    const apiBackend = window.__TEST_API?.getRendererBackend?.();
-    const threeCanvas = document.getElementById("three-canvas");
+    const canvasId = window.__TEST_API?.getRenderCanvasId?.();
     const fluidCanvas = document.getElementById("fluid-canvas");
     const overlay = document.getElementById("overlay-canvas");
-    const threeVisible = threeCanvas && getComputedStyle(threeCanvas).display !== "none";
-    const source = apiBackend === "three" || (!apiBackend && threeVisible) ? threeCanvas : fluidCanvas;
+    const source = document.getElementById(canvasId || "fluid-canvas") || fluidCanvas;
     if (!source || !source.width || !source.height) return null;
 
     const out = document.createElement("canvas");

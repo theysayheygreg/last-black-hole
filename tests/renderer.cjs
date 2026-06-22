@@ -41,7 +41,8 @@ async function stepForMs(page, ms, dt = 1 / 60) {
 
 async function takeShot(page, filepath, backend = 'legacy') {
   const stats = await page.evaluate((backendName) => {
-    const source = document.getElementById(backendName === 'three' ? 'three-canvas' : 'fluid-canvas');
+    const canvasId = window.__TEST_API?.getRenderCanvasId?.();
+    const source = document.getElementById(canvasId || 'fluid-canvas');
     const overlay = document.getElementById('overlay-canvas');
     if (!source) throw new Error(`${backendName} source canvas missing`);
     const out = document.createElement('canvas');
@@ -105,8 +106,13 @@ async function captureFixture(page, outputDir, fixture) {
   const loaded = await page.evaluate((name) => window.__TEST_API.loadRendererFixture(name), fixture.name);
   assert(loaded, `Failed to load renderer fixture '${fixture.name}'`);
   const backend = await page.evaluate(() => window.__TEST_API.getRendererBackend?.() || 'legacy');
+  const renderCanvasId = await page.evaluate(() => window.__TEST_API.getRenderCanvasId?.() || 'fluid-canvas');
   assert(backend === expectedBackendFor(htmlFile),
     `Fixture '${fixture.name}' expected ${expectedBackendFor(htmlFile)} renderer, got ${backend}`);
+  if (backend === 'three') {
+    assert(renderCanvasId === 'fluid-canvas',
+      `Fixture '${fixture.name}' expected Three to share fluid-canvas, got ${renderCanvasId}`);
+  }
 
   await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
   await stepForMs(page, 250);
@@ -175,11 +181,18 @@ async function captureFixture(page, outputDir, fixture) {
       `Fixture '${fixture.name}' Three scene did not submit semantic flow cues`);
     assert(Array.isArray(backendStats?.three?.passNames) && backendStats.three.passNames.includes('three-screen-space-post'),
       `Fixture '${fixture.name}' Three pass list missing screen-space post`);
+    assert(backendStats.three.sharedContext === true,
+      `Fixture '${fixture.name}' Three renderer is not sharing the Composer context`);
+    assert(backendStats.three.canvasUploads === 0,
+      `Fixture '${fixture.name}' Three renderer is still reporting canvas uploads`);
+    assert((backendStats.three.pooledMeshes || 0) > 0,
+      `Fixture '${fixture.name}' Three scene did not allocate pooled meshes`);
   }
 
   return {
     name: fixture.name,
     rendererBackend: backend,
+    renderCanvasId,
     expectedWells: fixture.expectedWells,
     minFps: fixture.minFps,
     wells: wellData,

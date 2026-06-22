@@ -1,6 +1,11 @@
 # Last Singularity
 
 > Surfing spacetime on gravity waves out of a dying universe.
+>
+> **Historical note:** this is the original v0.1 design bible. For the current
+> v0.2 product/design snapshot, start with `docs/v0.2/README.md` and
+> `docs/v0.2/DESIGN.md`. This page remains useful for core fantasy and early
+> intent, but several implementation details below are intentionally superseded.
 
 **Format:** Web game (browser, canvas/WebGL)
 **Jam:** March 16–22, 2026 (code starts 12:01a Monday)

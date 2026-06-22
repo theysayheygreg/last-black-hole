@@ -55,20 +55,22 @@ state only.
 
 Current Three pass graph:
 
-1. `legacy-source-frame` — Composer renders the ASCII/fabric source into the
-   hidden legacy canvas.
+1. `composer-ascii-default-frame` — Composer renders the ASCII/fabric source
+   directly into the shared `fluid-canvas` WebGL2 default framebuffer.
 2. `three-background-depth` — subtle grid/star depth layers behind the fabric.
-3. `three-fabric-plane` — the source frame is sampled on a z-layered plane.
-4. `three-world-scene` — orthographic top-down camera renders the depth scene
+3. `three-pooled-world-scene` — dynamic world meshes/lines are reused instead
+   of rebuilt per frame.
+4. `three-world-scene` — orthographic top-down camera renders transparent depth layers
    into a Three render target.
 5. `three-screen-space-post` — final screen-space present pass applies the
-   restrained motion/lens treatment.
+   restrained motion/lens treatment over the Composer frame.
 
 Renderer diagnostics report `sceneKind: "top-down-3d"`,
 `camera.kind: "orthographic-top-down"`, `worldLayers`, `passNames`, and
 parallax state through `__TEST_API.getRendererBackendStats()`. Renderer
 fixtures assert that contract so the Three path cannot silently regress into a
-copy-only bridge.
+copy-only bridge. The diagnostics also report `sharedContext: true` and
+`canvasUploads: 0`; any non-zero canvas upload count is a migration regression.
 
 ## The Composer contract
 

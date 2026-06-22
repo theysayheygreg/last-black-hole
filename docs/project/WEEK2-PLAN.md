@@ -2,6 +2,8 @@
 
 > March 25-31, 2026. Transform the jam prototype into a replayable game.
 > Week 1 built the feel. Week 2 builds the reason to come back.
+> This page is a historical plan. For current v0.2 truth, start with
+> `docs/v0.2/README.md`, especially the design/code delta and roadmap.
 
 ---
 
@@ -11,9 +13,9 @@
 |------|--------|-------|
 | Loot variety | SUPERSEDED | Replaced by hull-based item affinity system (CLASSES-AND-PROGRESSION.md) |
 | Inventory limits | DONE | 3-6 cargo slots (hull-dependent via PlayerBrain) |
-| Vault | DESIGNED | Per-account vault, 20-40 slots (META-LOOP.md) |
-| Meta screen | DESIGNED | Results/vault/rig/loadout/chronicle (META-LOOP.md) |
-| Upgrade tree | DESIGNED | 3 rig tracks × 5 levels per hull (META-LOOP.md) |
+| Vault | PARTIAL | Profile/vault foundations exist; UI/write-back polish remains (META-LOOP.md) |
+| Meta screen | PARTIAL | Results/home/loadout foundations exist; chronicle and clarity pass remain (META-LOOP.md) |
+| Upgrade tree | PARTIAL | 3 rig tracks × 5 levels per hull are manifest-backed; purchase/write-back/balance remain (META-LOOP.md) |
 | Missions | DEFERRED | Not in current design — runs are self-motivated, not quest-driven |
 | XP + Levels | REJECTED | Replaced by EM economy + milestone gates. No XP system. |
 | NPC factions | DEFERRED | AI players fill the adversarial niche. Factions are post-hull-system work. |
@@ -21,7 +23,7 @@
 | Signal + Inhibitor | DONE | Full implementation (6 zones, 3 inhibitor forms) |
 | Server architecture | DONE | Authoritative sim, persistence, control plane, overload states |
 | Ship classes | DONE | 5 hulls with abilities, PlayerBrain, physics wiring |
-| Loot economy | DESIGNED | Tier gates, wreck aging, value scaling (LOOT-ECONOMY.md) |
+| Loot economy | PARTIAL | Tier gates, item manifests, wreck values, and run earnings exist; balance/playtest remains (LOOT-ECONOMY.md) |
 
 **Major pivot from original plan:** The hull/class system (CLASSES-AND-PROGRESSION.md) replaced the flat upgrade tree. Instead of "improve your one ship," progression is now "deepen your hull's identity through rig tracks." This is a better fit for the extraction loop — specialization creates replayability.
 
@@ -36,12 +38,12 @@
 **Presentation:** ASCII shader, cosmic signatures (6), HUD (collapse/portals/salvage/scavengers/pulse/portal arrow)
 **Architecture:** SimCore + FlowField + SimState decoupled from renderer
 
-**Not yet built (from Week 1 backlog):**
-- Signal system + Inhibitor
-- Tether + slingshot
-- Audio tuning
-- Between-run progression
-- Balance pass
+**Still open or partial (from the Week 1/2 backlog):**
+- Tether is still deferred; slingshot is shipped and needs route/tuning work.
+- Audio identity and mix tuning remain open.
+- Between-run progression exists as foundations, but still needs upgrade write-back,
+  chronicle clarity, and balance.
+- Balance pass remains open across movement, signal, loot, and upgrades.
 
 ---
 

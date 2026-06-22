@@ -33,6 +33,7 @@ These are intentionally separate so local playtesting, distributed-runtime work,
 - `npm run dev:restart`
 - `npm run stack`
 - `npm run stack:browser`
+- `npm run stack:sandbox`
 - `npm run stack:remote -- --sim=http://HOST:PORT`
 - `npm run stack:status`
 - `npm run stack:stop`
@@ -49,8 +50,8 @@ LBH now emits lightweight structured JSON events into the existing dev/control/s
 
 The older per-process scripts still exist because they are useful for debugging. For ordinary development, the new stack commands are the cleaner product model.
 
-- `npm run stack:browser` → browser client only
-- `npm run stack` / `npm start` → local host stack
+- `npm run stack:browser` / `npm run stack` / `npm start` → local host stack
+- `npm run stack:sandbox` → deprecated browser client only
 - `npm run stack:remote -- --sim=http://HOST:PORT` → local browser client against remote authority
 
 The service-layer commands are now:

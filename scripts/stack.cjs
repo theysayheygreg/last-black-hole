@@ -37,11 +37,11 @@ function parseArgs(argv) {
 }
 
 const MODES = {
-  "local-browser": {
-    name: "local-browser",
-    description: "Client-only browser play against no authority stack.",
+  "local-sandbox": {
+    name: "local-sandbox",
+    description: "Deprecated client-only sandbox for renderer and harness debugging.",
     services: ["dev"],
-    query: {},
+    query: { localSandbox: "1" },
   },
   "local-host": {
     name: "local-host",

@@ -110,7 +110,7 @@ Use these guardrails until the build catches up to the whole long-term vision:
 
 - Say **in development**.
 - Sell solo extraction, AI rivals, movement mastery, and the ASCII fluid look first.
-- Do not promise internet multiplayer yet. The architecture is moving that way, but slingshot authority and snapshot filtering are still future work.
+- Do not promise internet multiplayer yet. Local/private authority is real and slingshot authority is shipped, but public hosted sessions, matchmaking, and internet operations are still future work.
 - Do not sell final balance, final maps, or a release date until the playtest pass says the movement economy is tuned.
 - Prefer "browser/WebGL" over platform promises until the public website/download plan is chosen.
 

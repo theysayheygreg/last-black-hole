@@ -503,6 +503,10 @@ const TRANSITION_TOTAL = TRANSITION_RAMP_UP + TRANSITION_HOLD + TRANSITION_RAMP_
 
 function getConfiguredSimServerUrl() {
   const url = new URL(window.location.href);
+  if (url.searchParams.has('localSandbox') || url.searchParams.has('noSimServer')) {
+    localStorage.removeItem('lbh.simServerUrl');
+    return '';
+  }
   const fromQuery = url.searchParams.get('simServer');
   if (fromQuery) {
     localStorage.setItem('lbh.simServerUrl', fromQuery);
@@ -643,6 +647,7 @@ function init() {
     backend: rendererBackendName,
     composer,
     asciiPass,
+    gl,
     sourceCanvas: glCanvas,
     targetCanvas: threeCanvas,
     renderQuality,
@@ -815,6 +820,7 @@ function init() {
       getRendererView: () => rendererBackend?.getViewMode?.() || 'ascii',
       getRendererBackend: () => rendererBackend?.name || 'legacy',
       getRendererBackendStats: () => rendererBackend?.getPerfStats?.() || null,
+      getRenderCanvasId: () => rendererBackend?.getCanvasId?.() || glCanvas?.id || 'fluid-canvas',
       stepFrameForTest: (dt = 1 / 60) => {
         const stepMs = Math.max(1, Math.min(100, Number(dt) * 1000 || (1000 / 60)));
         gameLoop(lastFrameTime + stepMs);
@@ -3126,17 +3132,7 @@ function gameLoop(now) {
         if (wasSlowed && timeSlowRemaining <= 0) audioEngine.playEvent('timeSlowEnd');
         shipDt = dt * 0.3;
       }
-      // Equippable effect: reduceWellPull — 20% less well gravity on ship
-      const hasReduceWellPull = inventorySystem.hasEffect('reduceWellPull');
-      let _savedPull;
-      if (hasReduceWellPull) {
-        _savedPull = CONFIG.wells.shipPullStrength;
-        CONFIG.wells.shipPullStrength *= 0.8;
-      }
       ship.update(shipDt, flowField, wellSystem, fluid);
-      if (hasReduceWellPull) {
-        CONFIG.wells.shipPullStrength = _savedPull;
-      }
 
       // Local-only slingshot resolution. In remote-authority mode the same
       // input is sent to the sim server, and snapshots drive presentation.
@@ -3779,54 +3775,6 @@ function gameLoop(now) {
           ctx.restore();
         }
       }
-    }
-
-    // Equippable effect: showKillRadii — draw kill zone circles during gameplay
-    if (inventorySystem.hasEffect('showKillRadii')) {
-      const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const ppw = overlayCanvas.width / WORLD_SCALE;
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      for (let i = 0; i < wellData.length; i++) {
-        const kr = wellSystem.wells[i].killRadius * ppw;
-        ctx.strokeStyle = 'rgba(255, 60, 60, 0.5)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(wellData[i].x, wellData[i].y, kr, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
-      ctx.restore();
-    }
-
-    // Equippable effect: showFlowArrows — draw fluid velocity indicators near ship
-    if (inventorySystem.hasEffect('showFlowArrows')) {
-      const ppw = pxPerWorld(overlayCanvas.width);
-      const shipScreen = worldToScreen(ship.wx, ship.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      ctx.save();
-      ctx.strokeStyle = 'rgba(100, 200, 255, 0.3)';
-      ctx.lineWidth = 1;
-      // Sample a grid of points around the ship
-      const gridSize = 5;
-      const spacing = 0.06;
-      for (let gx = -gridSize; gx <= gridSize; gx++) {
-        for (let gy = -gridSize; gy <= gridSize; gy++) {
-          const wx = ship.wx + gx * spacing;
-          const wy = ship.wy + gy * spacing;
-          const vel = flowField.sample(wx, wy);
-          const speed = Math.sqrt(vel[0] * vel[0] + vel[1] * vel[1]);
-          if (speed < 0.005) continue;
-          const [px, py] = worldToScreen(wx, wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-          const len = Math.min(speed * ppw * 0.3, 20);
-          const dx = (vel[0] / speed) * len;
-          const dy = (vel[1] / speed) * len;
-          ctx.beginPath();
-          ctx.moveTo(px, py);
-          ctx.lineTo(px + dx, py + dy);
-          ctx.stroke();
-        }
-      }
-      ctx.restore();
     }
 
     // Equippable effect: signalDampen — signal system not yet built, effect is passive

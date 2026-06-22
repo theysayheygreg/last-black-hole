@@ -99,14 +99,14 @@ Recommendation: send facing direction independently of thrust intensity, or
 define `intentX/intentY` as "current facing vector" and keep thrust/brake as
 separate scalar economy verbs.
 
-### Slingshot Is Still Client-Only
+### Slingshot Authority Is Regression-Watch
 
-The client slingshot implementation is clear and readable, but remote-authority
-mode disables it because the server does not own anchor engagement, orbital
-lock, banked energy, release, or chain state.
+Server-side slingshot authority has shipped. Remote-authority mode should render
+affordance, engagement, orbital lock, banked energy, release, and chain state
+from sim-owned snapshot state rather than local-only prediction.
 
-Recommendation: server-side slingshot should be the next mechanics parity item.
-The server should own:
+Recommendation: treat future slingshot work as parity-sensitive tuning. The
+server remains the owner of:
 
 - anchor catalog and eligibility
 - engage/release edge detection
