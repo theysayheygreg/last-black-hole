@@ -193,7 +193,7 @@ wants SteamPipe depot content.
 
 ## iPad note
 
-There are now two iPad paths:
+There are now two iPad paths, with a native Metal bench rung planned:
 
 - `npm run build:ipad` creates a local-install web app bundle meant for:
   - serving over HTTP
@@ -203,9 +203,13 @@ There are now two iPad paths:
 - `npm run ios:build:sim` builds a native `WKWebView` wrapper around the same
   synced web runtime for simulator testing.
 
-The native wrapper is not a gameplay rewrite and does not embed the Node
-authority stack. It runs self-contained only in sandbox mode, or it can point at
-an external sim server with `--sim-server=http://HOST:8787`.
+The iPad lane is a native Apple-platform bench, not only an install convenience
+target. The current native wrapper is not a gameplay rewrite and does not embed
+the Node authority stack. It runs self-contained only in sandbox mode, or it can
+point at an external sim server with `--sim-server=http://HOST:8787`. Its job is
+to get SwiftUI lifecycle, signing, orientation, controller, audio/WebKit, and
+hardware launch behavior under test before a future Metal snapshot renderer
+probe.
 
 Physical iPad deployment still needs Xcode signing, an Apple Developer Team, and
 a provisioning profile. See [iPad / iOS Build Path](IPAD-IOS-BUILD.md).

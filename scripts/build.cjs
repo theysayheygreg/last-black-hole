@@ -378,9 +378,11 @@ function buildIpadWebApp(targetRoot, mode) {
     [
       '# iPad Local Install',
       '',
-      'This is the first useful iPad target for LBH.',
+      'This is the fastest iPad target for LBH.',
       '',
       'It is a controller-first web app bundle prepared for Safari "Add to Home Screen", not a signed IPA.',
+      '',
+      'The iPad lane is also a native Apple-platform bench. The repo includes a SwiftUI/WKWebView wrapper now; future native bench work should move toward Metal snapshot-rendering probes without duplicating gameplay truth.',
       '',
       '## Install',
       '',

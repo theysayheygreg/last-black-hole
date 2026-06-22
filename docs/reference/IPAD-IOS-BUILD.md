@@ -1,20 +1,43 @@
 # iPad / iOS Build Path
 
-Last Singularity stays web-runtime-first on iPad. The iOS path is a wrapper around
-the same `index-a.html` + `src/` runtime used by browser and desktop builds. It
-does not port gameplay, the sim, or the renderer to native code.
+The iPad target is a native Apple-platform test bench, not just a convenience
+wrapper. Its purpose is to get competent with SwiftUI, Metal, iOS lifecycle,
+signing, controller behavior, WebKit/audio limits, and real handheld feel while
+keeping LBH's gameplay truth from drifting.
+
+The current checked-in iOS path is a wrapper around the same `index-a.html` +
+`src/` runtime used by browser and desktop builds. It does not port gameplay,
+the sim, or the renderer to native code yet. That is intentional: first make a
+real app shell we can build, install, and profile; then add native probes.
 
 ## Current Recommendation
 
-Use two iPad surfaces, in this order:
+Use three iPad surfaces, in this order:
 
 1. Safari Add to Home Screen for the lowest-friction controller playtest.
 2. The native `WKWebView` wrapper when you need an installed app shell,
    simulator/device builds, or iOS lifecycle testing.
+3. A future SwiftUI + Metal renderer probe that consumes recorded or live LBH
+   snapshots without reimplementing gameplay truth.
 
 The native wrapper can be self-contained only in sandbox mode. Product-faithful
 authority play still needs a separate Mac/mini sim server reachable over LAN or
 Tailscale, because iOS does not run the current Node authority stack in-app.
+
+## What This Lane Should Teach Us
+
+- SwiftUI app entry, scene lifecycle, orientation, safe areas, and fullscreen
+  behavior.
+- iOS signing, provisioning, simulator/device workflows, and TestFlight-shaped
+  constraints.
+- Game controller behavior through iPadOS, including latency, prompts, pairing,
+  and wake/suspend edges.
+- WebKit limits for the current bridge: WebGL2, audio unlock, file/resource
+  loading, memory pressure, and backgrounding.
+- Metal renderer shape for LBH's top-down field, ASCII identity, parallax, HUD
+  scale, and snapshot consumption.
+- Which parts of the sim/client split survive a mobile-console-shaped runtime
+  and which parts need an engine-neutral contract first.
 
 ## What Exists
 
@@ -29,6 +52,21 @@ Tailscale, because iOS does not run the current Node authority stack in-app.
 
 The generated web payload lives at `ios/LastSingularity/WebApp/` and is ignored
 by git. Regenerate it instead of editing it.
+
+## Next Native Bench Steps
+
+Do not jump straight to a full SwiftUI/Metal rewrite. The useful sequence is:
+
+1. Get the current `WKWebView` shell building and launching on simulator and
+   physical iPad.
+2. Verify controller input, WebGL2, audio, suspend/resume, orientation, and
+   remote-authority URLs on hardware.
+3. Add a tiny `MetalKit` view in a separate native bench mode: clear color,
+   frame timing, controller telemetry, and one moving marker.
+4. Feed that Metal view recorded LBH snapshots: ship, wells, wrecks, portal,
+   coarse flow, and HUD-critical values.
+5. Compare the Metal bench against the Three/WebKit wrapper before deciding
+   whether any production renderer work should move native.
 
 ## Commands
 
@@ -128,6 +166,8 @@ and show signing errors directly.
   wrapper. That still needs real iPad hardware testing.
 - WebGL2 and audio need a real device smoke pass before this becomes a trusted
   playtest lane.
+- Metal is not implemented yet. The native app shell is the first bench rung;
+  a snapshot-driven `MetalKit` probe is the next native learning step.
 - TestFlight/App Store output is intentionally not implemented yet.
 
 ## Troubleshooting
@@ -143,6 +183,8 @@ npm run ios:build:sim -- --mode=release
 
 ## Why This Shape
 
-This keeps one gameplay runtime, one renderer, and one authority protocol. A
-native Swift/Metal port remains a future product decision, not the first iPad
-build step.
+This keeps one gameplay runtime and one authority protocol while the iPad lane
+starts learning native Apple constraints. The current wrapper is not the final
+answer; it is the cheapest honest way to get SwiftUI lifecycle, signing,
+hardware launch, and controller behavior under our hands before a Metal
+renderer probe tries to carry LBH's visual identity.

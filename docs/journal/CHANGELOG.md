@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-06-22 — iPad native bench framing
+
+- Reframed iPad as a native Apple-platform competence bench, not just a Safari/WKWebView wrapper convenience target.
+- Updated iPad docs around the intended learning surface: SwiftUI lifecycle, signing, controller behavior, audio/WebKit limits, Metal renderer probes, and handheld Apple GPU constraints.
+- Added an iPad SwiftUI / Metal Bench Probe backlog item so future native work consumes recorded authoritative snapshots instead of becoming a second game.
+
+---
+
 ## 2026-06-22 — Feature Fridays release program
 
 - Added `docs/project/FEATURE-FRIDAYS-RELEASE-PROGRAM.md`, a weekly release program for turning the v0.2 roadmap into Feature Friday implementation, QA, build, store, and social beats.

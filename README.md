@@ -61,7 +61,7 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 | Local desktop from source | Primary development target | Clone the repo, install deps, run `npm run play` |
 | Steam Deck | Weekly handheld playtest target | Install the Linux weekly build with the Deck installer below |
 | Packaged desktop | Friend/tester handoff target | Open the platform artifact and read `START-HERE.md` |
-| iPad / iOS | Early controller wrapper target | `npm run build:ipad` for Safari install, `npm run ios:build:sim` for native simulator |
+| iPad / iOS | Native Apple-platform bench + controller wrapper target | `npm run build:ipad` for Safari install, `npm run ios:build:sim` for native simulator |
 | Browser sandbox | Debug/demo fallback | `npm run stack:sandbox`; not product play |
 | itch.io HTML5 | Planned public demo lane | Uses a sandboxed web artifact, not the full authority stack |
 | Steam Early Access | Planned storefront lane | Uses desktop depots; not public yet |
@@ -133,6 +133,12 @@ installer, or a packaged desktop build so the authoritative sim owns the run.
 
 ### iPad / iOS
 
+The iPad target has the same strategic purpose as the Switch target: it is a
+hardware and platform-competence bench. The current wrapper keeps the game
+playable while we learn the Apple-specific surface area: SwiftUI app structure,
+iOS lifecycle, signing/provisioning, controller behavior, WebKit limits, audio,
+and eventually Metal renderer probes.
+
 For the lowest-friction iPad check, build the Safari local-install artifact:
 
 ```sh
@@ -148,8 +154,9 @@ npm run ios:build:sim -- --mode=release
 
 The native iOS app is a thin `WKWebView` shell around the same web runtime. It
 does not embed the Node sim/control-plane stack; use sandbox mode by default or
-build with `--sim-server=http://HOST:8787` to point at remote authority. Device
-deployment requires Apple signing. See [iPad / iOS Build Path](docs/reference/IPAD-IOS-BUILD.md).
+build with `--sim-server=http://HOST:8787` to point at remote authority. It is
+the first native bench rung, not the final Apple runtime. Device deployment
+requires Apple signing. See [iPad / iOS Build Path](docs/reference/IPAD-IOS-BUILD.md).
 
 ## Requirements
 

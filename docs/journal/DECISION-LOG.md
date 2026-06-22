@@ -1,5 +1,27 @@
 # Decision Log
 
+## 2026-06-22 — iPad is a native Apple-platform bench, not just a wrapper
+
+**Decision:** Treat iPad like Switch: a hardware and platform-competence bench.
+The current Safari and `WKWebView` surfaces are useful first rungs, but the
+purpose of the target is to get competent with SwiftUI, Metal, iOS lifecycle,
+signing/provisioning, controller behavior, audio/WebKit limits, and handheld
+Apple GPU performance.
+
+**Why:** A wrapper-only iPad target would teach too little. LBH may never need a
+full native production renderer, but we should learn the native shape before
+making that call. As with Switch, the bench must consume shared LBH truth and
+recorded snapshots before any gameplay logic is ported, or it risks becoming a
+second game.
+
+**Where it landed:** `docs/reference/IPAD-IOS-BUILD.md`,
+`docs/reference/PLATFORM-TARGETS.md`, `docs/reference/BUILD-PIPELINE.md`,
+`docs/reference/DEPLOYMENT-PIPELINES.md`, `README.md`, and the backlog's iPad
+SwiftUI / Metal Bench Probe entry.
+
+**Door status:** Open as a local native bench target. Closed as a wrapper-only
+target.
+
 ## 2026-06-22 — Switch 1 is a port probe, not a desktop wrapper target
 
 **Decision:** Do not try to carry the current Electron/Three/Node desktop

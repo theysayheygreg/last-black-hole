@@ -299,6 +299,13 @@
 - **First revival step:** Build recorded snapshot fixtures, then compare a tiny nx.js/WebGL-like probe against a native C/C++ libnx graphics probe.
 - **Design note:** See `docs/project/SWITCH1-ATMOSPHERE-FEASIBILITY.md`.
 
+### iPad SwiftUI / Metal Bench Probe
+- **What:** Use iPad as a native Apple-platform competence bench for SwiftUI lifecycle, signing, controller/audio behavior, and a future Metal snapshot renderer.
+- **Why deferred:** The current iOS wrapper proves app-shell and WebKit integration first. A Metal renderer probe needs recorded snapshots and engine-neutral render channels before it can teach us the right lessons.
+- **Value if revisited:** Real iPad constraints: safe areas, orientation, suspend/resume, controller pairing, WebKit vs Metal performance, Apple GPU behavior, TestFlight-shaped packaging, and handheld readability.
+- **First revival step:** Add a separate `MetalKit` bench mode that draws frame timing, controller telemetry, and one moving marker, then feed it recorded authoritative snapshots.
+- **Design note:** See `docs/reference/IPAD-IOS-BUILD.md`.
+
 ### Headless Sim Harness
 - **What:** Run gameplay tests against a dedicated sim process instead of an in-page browser loop.
 - **Why backlogged:** The renderer harness and main flow harness are enough for the jam.

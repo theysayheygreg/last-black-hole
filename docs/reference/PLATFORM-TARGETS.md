@@ -6,7 +6,7 @@ The game should stay web-first during the jam. After that, the first serious pla
 
 ## Recommendation
 
-Do not treat a native SwiftUI + Metal port as the first post-jam move.
+Do not treat a native SwiftUI + Metal port as the first post-jam product move.
 
 That path is real, and it fits the game well long-term, but it is a rewrite, not a port. The shortest useful path is:
 
@@ -15,8 +15,9 @@ That path is real, and it fits the game well long-term, but it is a rewrite, not
 3. ship the browser build to itch.io for fast private sharing
 4. package it for desktop so it can be tested as a macOS `.app`, Windows `.exe`, and Linux desktop build
 5. use that Linux/Windows desktop shape for Steam Deck testing
-6. make a controller-first iPad local-install build if handheld couch play matters
-7. only then decide whether the game has earned a full native renderer
+6. make iPad a native Apple-platform bench: SwiftUI shell first, Metal probe
+   after the snapshot/input contract is ready
+7. only then decide whether the game has earned a full native production renderer
 
 ## itch.io
 
@@ -206,27 +207,38 @@ This is the right Deck-adjacent target to have before you start caring about Ste
 
 ### What the first iPad target should be
 
-Do not start with a signed IPA pipeline.
+Do not mistake the iPad path for a web-install convenience target.
 
-The first useful iPad target is a controller-first local web app build:
+The iPad target has the same strategic purpose as the Switch target: it is a
+hardware and platform-competence bench. It should teach us SwiftUI, Metal,
+iOS-specific controller behavior, audio, lifecycle, signing, performance, and
+handheld readability.
+
+The first useful iPad rung is still a controller-first local web app build:
 
 - serve the build over HTTP
 - open it in Safari on iPad
 - use "Add to Home Screen"
 - play with a controller, not touch-first UI
 
-That gets you a real iPad playtest surface without committing to Apple signing, TestFlight, or a native shell.
+That gets a real iPad playtest surface quickly, but it is not the destination.
 
-### When a real iPad app makes sense
+### Native iPad bench direction
 
-Only build a true iPad app shell if one of these becomes true:
+The native lane should advance in deliberate rungs:
 
-- Safari/Home Screen install proves too fragile
-- controller support needs native APIs beyond the web path
-- you want App Store or TestFlight distribution
-- you need native lifecycle, storage, or performance control
+- `WKWebView` shell for SwiftUI lifecycle, signing, orientation, safe areas,
+  controller behavior, WebKit limits, and remote-authority launch URLs.
+- `MetalKit` bench view for clear/frame timing, controller telemetry, and a
+  single moving marker.
+- recorded-snapshot Metal renderer for ship, wells, wrecks, portal, coarse
+  flow, and HUD-critical values.
+- production native renderer only if the bench proves it should replace or
+  supplement the Three/WebKit path.
 
-Until then, the web-app install path is the simplest honest answer.
+Like Switch, iPad should not become a second game. Native renderer probes should
+consume recorded or live authoritative snapshots before any gameplay logic is
+ported.
 
 ### Current iPad implementation
 
@@ -237,10 +249,10 @@ The repo now has both early iPad lanes:
 - `npm run ios:build:sim` builds a thin native `WKWebView` shell around the same
   synced web runtime.
 
-The native shell is still a wrapper, not a SwiftUI/Metal port. It can run the
-client-only sandbox by itself, or it can point at a Mac/mini sim server with a
-`simServer` URL. Physical iPad installs remain blocked on Apple signing and real
-device verification. See [iPad / iOS Build Path](IPAD-IOS-BUILD.md).
+The native shell is the first bench rung, not the final SwiftUI/Metal port. It
+can run the client-only sandbox by itself, or it can point at a Mac/mini sim
+server with a `simServer` URL. Physical iPad installs remain blocked on Apple
+signing and real device verification. See [iPad / iOS Build Path](IPAD-IOS-BUILD.md).
 
 ## Steam Deck
 
@@ -345,7 +357,8 @@ Third, make desktop packages and test them as a macOS `.app`, Windows `.exe`, an
 
 Fourth, use the Linux and Windows builds for Steam Deck testing.
 
-Fifth, if useful, try the iPad local-install build with controller support.
+Fifth, use iPad as an Apple-platform bench: local install first, native shell
+next, Metal snapshot probe after the shared contracts are ready.
 
 Sixth, decide whether the game has earned a native renderer.
 
@@ -353,6 +366,6 @@ If it has, start with macOS native only if you want the game to become a long-te
 
 ## Strong opinion
 
-The first post-jam target should be an itch-ready web build with strong controller support, followed by thin wrappers for macOS, Windows, Linux, and an iPad local-install path, not a SwiftUI + Metal rewrite.
+The first post-jam product target should be an itch-ready web build with strong controller support, followed by thin wrappers for macOS, Windows, Linux, and iPad bench work, not a full SwiftUI + Metal production rewrite.
 
 That path teaches you more, faster, and it does not force you to reinvent the game before you know the game is worth carrying forward.
