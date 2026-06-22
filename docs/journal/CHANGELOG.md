@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-06-22 — Mechanics audit implementation
+
+- Added a shared FlowSample contract for current, gravity, wave, hazard, surf, signal-shadow, source ids, and confidence. Browser fluid sampling keeps x/y aliases for older consumers while the server coarse field now returns semantic channels.
+- Aligned authoritative server movement with the client baseline: current coupling now lerps every hull toward sampled flow, server well gravity uses the same inverse-power profile as client ship gravity, and remote brake-only packets carry a real facing vector.
+- Moved slingshot into the authoritative sim protocol. Remote input now sends `slingshot`, server snapshots expose slingshot engagement/energy/anchor state, and the server owns engage, hold, release, chain windows, and release boosts.
+- Made Three the default renderer path and gave it real world-space entity and semantic layers for ships, wells, waves, stars, wrecks, portals, planetoids, scavengers, remote players, fauna, sentries, and slingshot tethers.
+- Updated harness coverage for FlowSample shape, brake intent vectors, authoritative slingshot resolution, Three world entity layers, and semantic renderer cues.
+
 ## 2026-06-22 — Mechanics and sim-render audit
 
 - Added `docs/project/MECHANICS-SIM-RENDER-AUDIT.md`, a deep review of movement mechanics, field math, local/server sim parity, and the current Three renderer bridge.

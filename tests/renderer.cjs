@@ -93,9 +93,9 @@ async function setRenderDebug(page, { overlayVisible = false, showWellRadii = fa
 
 function expectedBackendFor(htmlFile) {
   const queryIndex = String(htmlFile).indexOf('?');
-  if (queryIndex < 0) return 'legacy';
+  if (queryIndex < 0) return 'three';
   const params = new URLSearchParams(String(htmlFile).slice(queryIndex + 1));
-  return params.get('renderer') === 'three' ? 'three' : 'legacy';
+  return params.get('renderer') === 'legacy' ? 'legacy' : 'three';
 }
 
 async function captureFixture(page, outputDir, fixture) {
@@ -165,8 +165,14 @@ async function captureFixture(page, outputDir, fixture) {
       `Fixture '${fixture.name}' Three camera is not the top-down orthographic camera`);
     assert(Array.isArray(backendStats?.three?.worldLayers)
       && backendStats.three.worldLayers.some((layer) => layer.name === 'fabric-source-layer')
-      && backendStats.three.worldLayers.some((layer) => layer.name === 'background-parallax-field'),
+      && backendStats.three.worldLayers.some((layer) => layer.name === 'background-parallax-field')
+      && backendStats.three.worldLayers.some((layer) => layer.name === 'semantic-flow-field-layer')
+      && backendStats.three.worldLayers.some((layer) => layer.name === 'world-entity-layer'),
     `Fixture '${fixture.name}' Three world layers missing`);
+    assert((backendStats.three.entityCount || 0) > 0,
+      `Fixture '${fixture.name}' Three scene did not submit world entities`);
+    assert((backendStats.three.semanticCount || 0) > 0,
+      `Fixture '${fixture.name}' Three scene did not submit semantic flow cues`);
     assert(Array.isArray(backendStats?.three?.passNames) && backendStats.three.passNames.includes('three-screen-space-post'),
       `Fixture '${fixture.name}' Three pass list missing screen-space post`);
   }

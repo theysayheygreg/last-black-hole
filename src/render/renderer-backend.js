@@ -1,9 +1,7 @@
 // src/render/renderer-backend.js
 //
-// Renderer backend bridge. The legacy path keeps the existing raw WebGL
-// Composer as-is. The Three path runs the same gameplay/render source frame
-// through a visible Three.js canvas so the new renderer can be developed in
-// parallel without letting Three own sim truth.
+// Renderer backend bridge. Three is now the primary runtime path: it owns the
+// visible world scene while the Composer remains the fabric/ASCII source pass.
 
 import { ThreeRendererBackend } from '../render-three/three-renderer.js';
 
@@ -13,7 +11,7 @@ function currentSearch() {
 
 export function requestedRendererBackend(search = currentSearch()) {
   const params = new URLSearchParams(search);
-  const backend = (params.get('renderer') || 'legacy').toLowerCase();
+  const backend = (params.get('renderer') || 'three').toLowerCase();
   return backend === 'three' ? 'three' : 'legacy';
 }
 

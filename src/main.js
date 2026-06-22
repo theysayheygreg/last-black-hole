@@ -1279,6 +1279,7 @@ function applyRemoteSnapshot(snapshot) {
     ship.deltaVMax = localPlayer.deltaVMax;
     ship.deltaV = Math.max(0, Math.min(localPlayer.deltaVMax, localPlayer.deltaV));
   }
+  applyRemoteSlingshotState(localPlayer.slingshot);
   if (localPlayer.signal) {
     signalLevel = localPlayer.signal.level ?? 0;
     signalZone = localPlayer.signal.zone ?? 'ghost';
@@ -1312,6 +1313,22 @@ function applyRemoteSnapshot(snapshot) {
     freezeRunEnd(simState);
     ship.setThrust(false);
   }
+}
+
+function applyRemoteSlingshotState(state) {
+  if (!remoteAuthorityActive || !state) return;
+  ship.slingshotEngaged = Boolean(state.engaged);
+  ship.slingshotEnergy = state.energy || 0;
+  ship.slingshotChainCount = state.chainCount || 0;
+  ship.slingshotEngageRadius = state.engageRadius || 0;
+  ship.slingshotOrbitDir = state.orbitDir || 0;
+  ship.slingshotAnchor = state.engaged ? {
+    type: state.anchorType || 'well',
+    wx: state.anchorWX,
+    wy: state.anchorWY,
+    range: state.anchorRange || 0,
+    massWeight: 1,
+  } : null;
 }
 
 function updateRemoteShipTarget(localPlayer, snapshot) {
@@ -2437,6 +2454,128 @@ function getHullSlingshotMods() {
   };
 }
 
+function collectThreeSceneState() {
+  const slingshotAffordance = gamePhase === 'playing' && !remoteAuthorityActive && slingshotSystem && !ship.slingshotEngaged
+    ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
+    : null;
+  const fieldSample = flowField?.sample?.(ship.wx, ship.wy) || null;
+
+  return {
+    ship: ship ? {
+      wx: ship.wx,
+      wy: ship.wy,
+      vx: ship.vx,
+      vy: ship.vy,
+      facing: ship.facing,
+      deltaVRatio: ship.getDeltaVRatio?.() ?? 1,
+      slingshotEngaged: Boolean(ship.slingshotEngaged),
+    } : null,
+    wells: (wellSystem?.wells || []).map((well, index) => ({
+      id: well.id || well.name || `well-${index}`,
+      wx: well.wx,
+      wy: well.wy,
+      mass: well.mass || 1,
+      killRadius: well.killRadius || CONFIG.wells.killRadius,
+      ringOuter: (well.killRadius || CONFIG.wells.killRadius) * 2.5,
+    })),
+    stars: (starSystem?.stars || []).filter((star) => star.alive !== false).map((star, index) => ({
+      id: star.id || `star-${index}`,
+      wx: star.wx,
+      wy: star.wy,
+      mass: star.mass || 1,
+      type: star.type || 'mainSequence',
+    })),
+    wrecks: (wreckSystem?.wrecks || []).filter((wreck) => wreck.alive !== false).map((wreck, index) => ({
+      id: wreck.id || wreck.name || `wreck-${index}`,
+      wx: wreck.wx,
+      wy: wreck.wy,
+      size: wreck.size || 'medium',
+      tier: wreck.tier || 1,
+      type: wreck.type || 'derelict',
+      looted: Boolean(wreck.looted),
+    })),
+    portals: (portalSystem?.portals || []).filter((portal) => portal.alive !== false).map((portal, index) => ({
+      id: portal.id || `portal-${index}`,
+      wx: portal.wx,
+      wy: portal.wy,
+      type: portal.type || 'standard',
+      opacity: portal.opacity ?? 1,
+      radius: portal.getCaptureRadius?.() || CONFIG.portals.captureRadius,
+    })),
+    planetoids: (planetoidSystem?.planetoids || []).filter((p) => p.alive !== false).map((p, index) => ({
+      id: p.id || `planetoid-${index}`,
+      wx: p.wx,
+      wy: p.wy,
+      vx: p.vx || 0,
+      vy: p.vy || 0,
+    })),
+    waveRings: (waveRings?.rings || []).map((ring, index) => ({
+      id: ring.id || `wave-${index}`,
+      sourceWX: ring.sourceWX,
+      sourceWY: ring.sourceWY,
+      radius: ring.radius,
+      amplitude: ring.amplitude,
+      initialAmplitude: ring.initialAmplitude || Math.max(1e-4, ring.amplitude || 1),
+    })),
+    scavengers: (scavengerSystem?.scavengers || []).filter((scav) => scav.alive !== false).map((scav, index) => ({
+      id: scav.id || `scav-${index}`,
+      wx: scav.wx,
+      wy: scav.wy,
+      vx: scav.vx || 0,
+      vy: scav.vy || 0,
+      facing: scav.facing || 0,
+      archetype: scav.archetype || scav.personality || 'scavenger',
+      state: scav.state || 'patrol',
+    })),
+    remotePlayers: (remotePlayers || []).map((player) => ({
+      id: player.clientId,
+      wx: player.wx,
+      wy: player.wy,
+      vx: player.vx || 0,
+      vy: player.vy || 0,
+      status: player.status || 'alive',
+      hullType: player.hullType || 'drifter',
+    })),
+    fauna: (remoteFauna || []).map((f, index) => ({
+      id: f.id || `fauna-${index}`,
+      wx: f.wx,
+      wy: f.wy,
+      size: f.size || 2,
+      kind: f.kind || 'fauna',
+    })),
+    sentries: (remoteSentries || []).map((s, index) => ({
+      id: s.id || `sentry-${index}`,
+      wx: s.wx,
+      wy: s.wy,
+      state: s.state || 'patrol',
+    })),
+    slingshot: {
+      affordance: slingshotAffordance ? {
+        wx: slingshotAffordance.anchor.wx,
+        wy: slingshotAffordance.anchor.wy,
+        range: slingshotAffordance.anchor.range,
+        type: slingshotAffordance.anchor.type,
+      } : null,
+      engaged: ship.slingshotEngaged && ship.slingshotAnchor ? {
+        wx: ship.slingshotAnchor.wx,
+        wy: ship.slingshotAnchor.wy,
+        range: ship.slingshotAnchor.range,
+        type: ship.slingshotAnchor.type,
+        energy: ship.slingshotEnergy || 0,
+        chainCount: ship.slingshotChainCount || 0,
+      } : null,
+    },
+    semanticField: {
+      shipSample: fieldSample ? {
+        hazard: fieldSample.hazard || 0,
+        surf: fieldSample.surf || 0,
+        signalShadow: fieldSample.signalShadow || 0,
+        current: fieldSample.current || { x: fieldSample.x || 0, y: fieldSample.y || 0 },
+      } : null,
+    },
+  };
+}
+
 /**
  * Apply the active profile's hull stats and equipped-item bonuses to the
  * ship. Fresh runs refill the tank; mid-run inventory swaps preserve the
@@ -2920,15 +3059,19 @@ function gameLoop(now) {
           const facing = inputManager.facing ?? ship.facing;
           const thrust = inventoryOpen ? 0 : inputManager.thrustIntensity;
           const brake = inventoryOpen ? 0 : inputManager.brakeIntensity;
-          const moveMag = thrust > 0 ? 1 : 0;
+          const intentX = Number.isFinite(facing) ? Math.cos(facing) : 1;
+          const intentY = Number.isFinite(facing) ? Math.sin(facing) : 0;
           const sentPulse = remotePendingPulse;
           const sentConsumeSlot = remotePendingConsumeSlot;
           remoteInputRequestInFlight = true;
           void simClient.sendInput({
-            moveX: Math.cos(facing) * moveMag,
-            moveY: Math.sin(facing) * moveMag,
+            // The scalar action fields decide whether thrust/brake happens;
+            // the vector is pure intent, so brake-only packets still steer.
+            moveX: intentX,
+            moveY: intentY,
             thrust,
             brake,
+            slingshot: !inventoryOpen && slingshotNow,
             pulse: sentPulse,
             ability1: inputManager.ability1 || false,
             ability2: inputManager.ability2 || false,
@@ -2995,18 +3138,8 @@ function gameLoop(now) {
         CONFIG.wells.shipPullStrength = _savedPull;
       }
 
-      // --- Slingshot input + engaged-state physics ---
-      // Single button toggles engagement. When pressed: if not engaged
-      // and there's an in-range anchor with non-zero tangential speed,
-      // engage. If already engaged: release, applying the velocity
-      // boost. Per-frame engaged forces (gravity-cancel + tangential
-      // amplifier) run after ship.update so they can correct the well-
-      // pull that ship.update already applied.
-      //
-      // Skipped in remote-authority mode: ship state comes from server
-      // snapshots there, so any local engagement would just get
-      // overwritten on the next snapshot. Server-side slingshot
-      // resolution is deferred (see SLINGSHOT-NETWORK.md "Open Decisions").
+      // Local-only slingshot resolution. In remote-authority mode the same
+      // input is sent to the sim server, and snapshots drive presentation.
       if (!remoteAuthorityActive) {
         const slingshotAnchors = slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem);
         const slingshotAffordance = !ship.slingshotEngaged
@@ -3347,6 +3480,7 @@ function gameLoop(now) {
         vy: ship.vy,
       } : null,
       phase: gamePhase,
+      scene: collectThreeSceneState(),
     },
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
@@ -3425,26 +3559,22 @@ function gameLoop(now) {
   }
 
   if (!inMenu) {
-    // Only render game entities when playing (not on title/mapSelect)
-    waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
-    starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    // lootSystem removed — loot anchors replaced with stars
-    wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, simState.runElapsedTime);
-    planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
-    scavengerSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    renderFauna(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    renderSentries(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
-    renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
-    ship.render(ctx, camX, camY);
+    const threeOwnsWorld = rendererBackend?.name === 'three';
+    if (!threeOwnsWorld) {
+      waveRings.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      starSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+      // lootSystem removed — loot anchors replaced with stars
+      wreckSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+      portalSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime, simState.runElapsedTime);
+      planetoidSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      scavengerSystem.render(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+      renderFauna(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+      renderSentries(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
+      renderRemotePlayers(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height);
+      ship.render(ctx, camX, camY);
+    }
     combatSystem.renderCooldown(ctx, ship, camX, camY, overlayCanvas.width, overlayCanvas.height);
-    // Slingshot affordance + engaged state are local-authoritative only:
-    // remote-authority mode would render UI that the player can't act on
-    // (input is gated), and the next snapshot would overwrite any local
-    // engagement state anyway. Velocity readout DOES work in remote mode
-    // because the server sends vx/vy in snapshots, so it gets its own
-    // gate that only filters on phase.
-    if (gamePhase === 'playing' && !remoteAuthorityActive) {
+    if (gamePhase === 'playing' && !threeOwnsWorld) {
       renderSlingshotOverlay(ctx, camX, camY, overlayCanvas.width, overlayCanvas.height, totalTime);
     }
     if (gamePhase === 'playing') {

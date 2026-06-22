@@ -217,7 +217,8 @@ async function run() {
       await pageRemote.mouse.down({ button: "right" });
       await waitFor(pageRemote, () => {
         const net = window.__TEST_API.getNetworkState();
-        return net.lastRemoteInput && net.lastRemoteInput.brake > 0.9;
+        const input = net.lastRemoteInput;
+        return input && input.brake > 0.9 && Math.hypot(input.moveX, input.moveY) > 0.9;
       }, { timeout: 4000 });
       await pageRemote.mouse.up({ button: "right" });
     });

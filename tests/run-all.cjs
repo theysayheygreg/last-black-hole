@@ -2,7 +2,7 @@
  * Manifest-driven LBH test harness.
  *
  * Usage:
- *   node tests/run-all.cjs [index-a.html] [--lane=core] [--renderer=legacy]
+ *   node tests/run-all.cjs [index-a.html] [--lane=core] [--renderer=three]
  *   node tests/run-all.cjs --lane=three --renderer=three
  *   node tests/run-all.cjs --lane=visual --renderer=both
  *
@@ -22,7 +22,7 @@ const { withQuery } = require("./helpers.cjs");
 const rawArgs = process.argv.slice(2);
 const options = {
   lane: null,
-  renderer: "legacy",
+  renderer: "three",
   suiteFilter: null,
   list: false,
   noRetries: false,

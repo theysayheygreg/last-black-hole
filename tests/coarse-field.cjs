@@ -16,9 +16,12 @@ async function run() {
     });
     const sample = sampleCoarseFlowField(field, 1.9, 1.5);
     const hazardSample = sampleCoarseFlowField(field, 1.72, 1.5);
+    assert(sample.current && sample.gravity && sample.wave, "Expected nested FlowSample vectors");
+    assert(sample.x === sample.current.x && sample.y === sample.current.y, "Expected x/y aliases to mirror current");
     assert(Math.abs(sample.currentY) > 0.01, `Expected orbital current near well, got ${sample.currentY}`);
     assert(sample.gravityX < -0.01, `Expected inward gravity toward well, got ${sample.gravityX}`);
     assert(hazardSample.hazard > 0, `Expected non-zero hazard in well band, got ${hazardSample.hazard}`);
+    assert(hazardSample.signalShadow > 0, `Expected signal shadow in well band, got ${hazardSample.signalShadow}`);
   });
 
   await runner.run("Wave rings project outward band force", async () => {
@@ -30,6 +33,8 @@ async function run() {
     });
     const sample = sampleCoarseFlowField(field, 1.9, 1.5);
     assert(sample.waveX > 0.01, `Expected outward wave force on +X side, got ${sample.waveX}`);
+    assert(sample.wave.x === sample.waveX, "Expected nested wave vector to mirror legacy flat fields");
+    assert(sample.surf > 0, `Expected surf semantic channel on wavefront, got ${sample.surf}`);
   });
 
   const allPassed = runner.summary();

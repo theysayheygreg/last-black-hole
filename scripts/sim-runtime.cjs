@@ -13,6 +13,7 @@ const {
   buildCoarseFlowField,
   sampleCoarseFlowField,
 } = require("./coarse-flow-field.cjs");
+const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
   PERSONALITY_HULL_MAP,
   HULL_DEFINITIONS,
@@ -172,10 +173,16 @@ const SERVER_COMBAT = {
 };
 const SERVER_INPUT = {
   baseDragPer60HzFrame: 0.015,
+  fluidCoupling: 1.2,
   brakeThrustScale: 0.4,
   brakeFuelScale: 0.6,
   maxSpeedWorld: 8.0,
   deltaVRegenDelay: 0.5,
+};
+const SERVER_WELLS = {
+  shipPullStrength: 0.6,
+  shipPullFalloff: 1.5,
+  maxRange: 1.2,
 };
 const STAR_SERVER = {
   shipPushStrength: 0.45,
@@ -193,6 +200,18 @@ const WAVE_SERVER = {
   waveMaxRadius: 2.0,
   waveShipPush: 0.8,
   growthWaveAmplitude: 1.0,
+};
+const SLINGSHOT_SERVER = {
+  range: { well: 0.45, star: 0.30, planetoid: 0.18 },
+  massWeight: { well: 1.0, star: 0.6, planetoid: 0.3 },
+  energyAccrualRate: 3.5,
+  releaseMultiplier: 4.5,
+  gravityCancelFraction: 0.95,
+  tangentialForce: 1.5,
+  chainWindowSeconds: 1.2,
+  chainMultiplier: 1.4,
+  minTangentialSpeed: 0.05,
+  maxChainCount: 6,
 };
 const SIGNAL_CONFIG = {
   // Generation rates (per second for continuous, instant for spikes)
@@ -1057,6 +1076,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       moveY: 0,
       thrust: 0,
       brake: 0,
+      slingshot: false,
       pulse: false,
       ability1: false,
       ability2: false,
@@ -1080,6 +1100,21 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       prevZone: "ghost",
     },
     controlDebuff: 0,
+    slingshot: {
+      engaged: false,
+      anchorId: null,
+      anchorType: null,
+      anchorWX: null,
+      anchorWY: null,
+      anchorRange: 0,
+      energy: 0,
+      chainCount: 0,
+      engageRadius: 0,
+      orbitDir: 0,
+      inputWasDown: false,
+      lastReleaseTime: -Infinity,
+      lastReleasedAnchorKey: null,
+    },
     committedOutcome: null,
     deltaV: brain.deltaVMax || BRAIN_DEFAULTS.deltaVMax,
     deltaVMax: brain.deltaVMax || BRAIN_DEFAULTS.deltaVMax,
@@ -1373,6 +1408,18 @@ function snapshotBody() {
       wy: player.wy,
       vx: player.vx,
       vy: player.vy,
+      slingshot: player.slingshot ? {
+        engaged: Boolean(player.slingshot.engaged),
+        anchorId: player.slingshot.anchorId ?? null,
+        anchorType: player.slingshot.anchorType ?? null,
+        anchorWX: player.slingshot.anchorWX ?? null,
+        anchorWY: player.slingshot.anchorWY ?? null,
+        anchorRange: player.slingshot.anchorRange ?? 0,
+        energy: player.slingshot.energy || 0,
+        chainCount: player.slingshot.chainCount || 0,
+        engageRadius: player.slingshot.engageRadius || 0,
+        orbitDir: player.slingshot.orbitDir || 0,
+      } : null,
       deltaV: player.deltaV,
       deltaVMax: player.deltaVMax,
       deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
@@ -2164,8 +2211,8 @@ function applyScavengerBump(player, scavengers = runtime.mapState.scavengers) {
 function applyWaveRingPush(player, dt) {
   if (runtime.session.useCoarseField && runtime.coarseField) {
     const field = sampleCoarseFlowField(runtime.coarseField, player.wx, player.wy);
-    player.vx += field.waveX * dt;
-    player.vy += field.waveY * dt;
+    player.vx += (field.wave?.x ?? field.waveX) * dt;
+    player.vy += (field.wave?.y ?? field.waveY) * dt;
     return;
   }
   const halfWidth = WAVE_SERVER.waveWidth * 0.5;
@@ -2270,15 +2317,21 @@ function applyWellGravity(player, dt) {
   let pullY = 0;
   if (runtime.session.useCoarseField && runtime.coarseField) {
     const field = sampleCoarseFlowField(runtime.coarseField, player.wx, player.wy);
-    pullX = field.gravityX;
-    pullY = field.gravityY;
+    pullX = field.gravity?.x ?? field.gravityX;
+    pullY = field.gravity?.y ?? field.gravityY;
   } else {
     for (const { entity: well } of relevantWells) {
       const dx = worldDisplacement(player.wx, well.wx, runtime.session.worldScale);
       const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
       const dist = Math.hypot(dx, dy);
       if (dist < 0.0001) continue;
-      const pull = (0.025 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.8);
+      const pull = inversePowerForce(
+        dist,
+        SERVER_WELLS.shipPullStrength,
+        well.mass,
+        SERVER_WELLS.shipPullFalloff,
+        SERVER_WELLS.maxRange
+      );
       pullX += (dx / dist) * pull;
       pullY += (dy / dist) * pull;
     }
@@ -2623,6 +2676,22 @@ function applyDebugPlayerState(player, body) {
   if (Number.isFinite(Number(body.vy))) player.vy = Number(body.vy);
   if (Number.isFinite(Number(body.deltaV))) player.deltaV = Math.max(0, Math.min(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, Number(body.deltaV)));
   if (Number.isFinite(Number(body.timeSinceThrust))) player.timeSinceThrust = Math.max(0, Number(body.timeSinceThrust));
+  if (body.resetSlingshot === true) {
+    const state = ensurePlayerSlingshot(player);
+    state.engaged = false;
+    state.anchorId = null;
+    state.anchorType = null;
+    state.anchorWX = null;
+    state.anchorWY = null;
+    state.anchorRange = 0;
+    state.energy = 0;
+    state.chainCount = 0;
+    state.engageRadius = 0;
+    state.orbitDir = 0;
+    state.inputWasDown = false;
+    state.lastReleaseTime = -Infinity;
+    state.lastReleasedAnchorKey = null;
+  }
   if (typeof body.status === "string" && body.status) {
     player.status = body.status;
     // Debug death should exercise the same profile write-back path as a real
@@ -3239,14 +3308,17 @@ function findSafeSpawn(mapState) {
   return { wx: rng() * ws, wy: rng() * ws };
 }
 
-// Analytical flow estimate from well positions (no GPU needed)
-function estimateFlow(wx, wy) {
+// Analytical FlowSample estimate from well positions (no GPU needed).
+function estimateFlowSample(wx, wy) {
   if (runtime.session.useCoarseField && runtime.coarseField) {
     const sample = sampleCoarseFlowField(runtime.coarseField, wx, wy);
-    return { x: sample.currentX, y: sample.currentY };
+    return normalizeFlowSample(sample);
   }
   const ws = runtime.session.worldScale;
   let fx = 0, fy = 0;
+  let surf = 0;
+  let sourceWellId = null;
+  let bestCurrent = 0;
   for (const well of runtime.mapState.wells) {
     const dx = worldDisplacement(wx, well.wx, ws);
     const dy = worldDisplacement(wy, well.wy, ws);
@@ -3254,10 +3326,305 @@ function estimateFlow(wx, wy) {
     if (dist < 0.01) continue;
     const strength = (well.mass || 1) / Math.pow(dist, 1.5);
     const dir = well.orbitalDir || 1;
-    fx += (-dy / dist) * dir * strength * 0.3;
-    fy += (dx / dist) * dir * strength * 0.3;
+    const currentAccel = strength * 0.3;
+    fx += (-dy / dist) * dir * currentAccel;
+    fy += (dx / dist) * dir * currentAccel;
+    surf = Math.max(surf, Math.max(0, Math.min(1, currentAccel / 2.5)));
+    if (Math.abs(currentAccel) > bestCurrent) {
+      bestCurrent = Math.abs(currentAccel);
+      sourceWellId = well.id ?? well.name ?? null;
+    }
   }
-  return { x: fx, y: fy };
+  return normalizeFlowSample({
+    current: { x: fx, y: fy },
+    surf,
+    sources: { wellId: sourceWellId, ringId: null, anchorId: null },
+    confidence: 1,
+  });
+}
+
+function estimateFlow(wx, wy) {
+  const sample = estimateFlowSample(wx, wy);
+  return { x: sample.current.x, y: sample.current.y };
+}
+
+function ensurePlayerSlingshot(player) {
+  if (player.slingshot) return player.slingshot;
+  player.slingshot = {
+    engaged: false,
+    anchorId: null,
+    anchorType: null,
+    anchorWX: null,
+    anchorWY: null,
+    anchorRange: 0,
+    energy: 0,
+    chainCount: 0,
+    engageRadius: 0,
+    orbitDir: 0,
+    inputWasDown: false,
+    lastReleaseTime: -Infinity,
+    lastReleasedAnchorKey: null,
+  };
+  return player.slingshot;
+}
+
+function slingshotAnchorKey(anchor) {
+  return anchor ? `${anchor.type}:${anchor.id ?? anchor.index ?? "unknown"}` : null;
+}
+
+function collectSlingshotAnchors() {
+  const anchors = [];
+  runtime.mapState.wells.forEach((well, index) => {
+    anchors.push({
+      type: "well",
+      id: well.id ?? well.name ?? `well-${index}`,
+      index,
+      wx: well.wx,
+      wy: well.wy,
+      massWeight: SLINGSHOT_SERVER.massWeight.well * (well.mass || 1),
+      pullMass: well.mass || 1,
+      pullStrength: SERVER_WELLS.shipPullStrength,
+      pullFalloff: SERVER_WELLS.shipPullFalloff,
+      pullRange: SERVER_WELLS.maxRange,
+      range: SLINGSHOT_SERVER.range.well,
+    });
+  });
+  runtime.mapState.stars.forEach((star, index) => {
+    if (star.alive === false) return;
+    anchors.push({
+      type: "star",
+      id: star.id ?? `star-${index}`,
+      index,
+      wx: star.wx,
+      wy: star.wy,
+      massWeight: SLINGSHOT_SERVER.massWeight.star * (star.mass || 1),
+      pullMass: star.mass || 1,
+      pullStrength: STAR_SERVER.shipPushStrength,
+      pullFalloff: STAR_SERVER.shipPushFalloff,
+      pullRange: STAR_SERVER.maxRange,
+      range: SLINGSHOT_SERVER.range.star,
+    });
+  });
+  runtime.mapState.planetoids.forEach((planetoid, index) => {
+    if (planetoid.alive === false) return;
+    anchors.push({
+      type: "planetoid",
+      id: planetoid.id ?? `planetoid-${index}`,
+      index,
+      wx: planetoid.wx,
+      wy: planetoid.wy,
+      massWeight: SLINGSHOT_SERVER.massWeight.planetoid,
+      pullMass: 1,
+      pullStrength: PLANETOID_SERVER.shipPushStrength,
+      pullFalloff: 1,
+      pullRange: PLANETOID_SERVER.shipPushRadius,
+      range: SLINGSHOT_SERVER.range.planetoid,
+    });
+  });
+  return anchors;
+}
+
+function findSlingshotAnchorByState(state) {
+  const key = state?.anchorId && state?.anchorType
+    ? `${state.anchorType}:${state.anchorId}`
+    : null;
+  if (!key) return null;
+  return collectSlingshotAnchors().find((anchor) => slingshotAnchorKey(anchor) === key) || null;
+}
+
+function slingshotTangentialSpeed(player, anchor) {
+  const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
+  const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
+  const dist = Math.hypot(dx, dy) || 1e-4;
+  const tx = -(dy / dist);
+  const ty = dx / dist;
+  return Math.abs(player.vx * tx + player.vy * ty);
+}
+
+function slingshotOrbitDirection(player, anchor) {
+  const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
+  const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
+  const dist = Math.hypot(dx, dy) || 1e-4;
+  const tx = -(dy / dist);
+  const ty = dx / dist;
+  return (player.vx * tx + player.vy * ty) >= 0 ? 1 : -1;
+}
+
+function findSlingshotAffordance(player) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const anchor of collectSlingshotAnchors()) {
+    const dist = worldDistance(player.wx, player.wy, anchor.wx, anchor.wy, runtime.session.worldScale);
+    if (dist <= anchor.range && slingshotTangentialSpeed(player, anchor) < SLINGSHOT_SERVER.minTangentialSpeed) {
+      continue;
+    }
+    if (dist <= anchor.range && dist < bestDist) {
+      best = { anchor, distance: dist };
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function slingshotHullMods(player) {
+  const hull = HULL_DEFINITIONS[player.hullType] || HULL_DEFINITIONS.drifter || {};
+  return {
+    energyMult: hull.slingshotEnergyMult ?? 1,
+    chainWindowMult: hull.slingshotChainWindowMult ?? 1,
+  };
+}
+
+function engagePlayerSlingshot(player, currentTime) {
+  const state = ensurePlayerSlingshot(player);
+  if (state.engaged) return false;
+  const affordance = findSlingshotAffordance(player);
+  const anchor = affordance?.anchor;
+  if (!anchor) return false;
+  const tanSpeed = slingshotTangentialSpeed(player, anchor);
+  if (tanSpeed < SLINGSHOT_SERVER.minTangentialSpeed) return false;
+
+  const mods = slingshotHullMods(player);
+  const sinceRelease = currentTime - (state.lastReleaseTime ?? -Infinity);
+  const chainWindow = SLINGSHOT_SERVER.chainWindowSeconds * mods.chainWindowMult;
+  const anchorKey = slingshotAnchorKey(anchor);
+  const chained = sinceRelease <= chainWindow && state.lastReleasedAnchorKey && state.lastReleasedAnchorKey !== anchorKey;
+  const chainCount = chained
+    ? Math.min((state.chainCount || 1) + 1, SLINGSHOT_SERVER.maxChainCount)
+    : 1;
+
+  const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
+  const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
+  const dist = Math.hypot(dx, dy) || 1e-4;
+  const radialNX = dx / dist;
+  const radialNY = dy / dist;
+  const orbitDir = slingshotOrbitDirection(player, anchor);
+  const tangentNX = -radialNY * orbitDir;
+  const tangentNY = radialNX * orbitDir;
+  const speed = Math.hypot(player.vx, player.vy);
+
+  state.engaged = true;
+  state.anchorId = anchor.id;
+  state.anchorType = anchor.type;
+  state.anchorWX = anchor.wx;
+  state.anchorWY = anchor.wy;
+  state.anchorRange = anchor.range;
+  state.energy = 0;
+  state.chainCount = chainCount;
+  state.engageRadius = affordance.distance;
+  state.orbitDir = orbitDir;
+  player.vx = tangentNX * speed;
+  player.vy = tangentNY * speed;
+
+  publishEvent("player.slingshotEngaged", {
+    clientId: player.clientId,
+    anchorId: anchor.id,
+    anchorType: anchor.type,
+    chainCount,
+  });
+  return true;
+}
+
+function slingshotReleaseDirection(player, input = player.lastInput) {
+  const mag = Math.hypot(input?.moveX || 0, input?.moveY || 0);
+  if (mag > 0.01) return { x: input.moveX / mag, y: input.moveY / mag };
+  const speed = Math.hypot(player.vx, player.vy);
+  if (speed > 0.01) return { x: player.vx / speed, y: player.vy / speed };
+  return { x: 1, y: 0 };
+}
+
+function releasePlayerSlingshot(player, currentTime, input = player.lastInput, { applyBoost = true, reason = "release" } = {}) {
+  const state = ensurePlayerSlingshot(player);
+  if (!state.engaged) return null;
+  const mods = slingshotHullMods(player);
+  const baseEnergy = state.energy || 0;
+  const chainMult = Math.pow(SLINGSHOT_SERVER.chainMultiplier, Math.max(0, (state.chainCount || 1) - 1));
+  const totalEnergy = baseEnergy * chainMult * SLINGSHOT_SERVER.releaseMultiplier * mods.energyMult;
+  const dir = slingshotReleaseDirection(player, input);
+  if (applyBoost) {
+    player.vx += dir.x * totalEnergy;
+    player.vy += dir.y * totalEnergy;
+  }
+  const previousAnchorId = state.anchorId;
+  const previousAnchorType = state.anchorType;
+  state.lastReleaseTime = currentTime;
+  state.lastReleasedAnchorKey = `${previousAnchorType}:${previousAnchorId}`;
+  state.engaged = false;
+  state.anchorId = null;
+  state.anchorType = null;
+  state.anchorWX = null;
+  state.anchorWY = null;
+  state.anchorRange = 0;
+  state.energy = 0;
+  state.engageRadius = 0;
+  state.orbitDir = 0;
+
+  publishEvent("player.slingshotReleased", {
+    clientId: player.clientId,
+    anchorId: previousAnchorId,
+    anchorType: previousAnchorType,
+    reason,
+    energyBanked: baseEnergy,
+    totalEnergyAwarded: applyBoost ? totalEnergy : 0,
+    chainCount: state.chainCount || 1,
+  });
+  return { totalEnergy, baseEnergy, chainCount: state.chainCount || 1 };
+}
+
+function applyPlayerSlingshotForces(player, dt, input) {
+  const state = ensurePlayerSlingshot(player);
+  const anchor = findSlingshotAnchorByState(state);
+  if (!anchor) {
+    releasePlayerSlingshot(player, runtime.simTime, input, { applyBoost: false, reason: "anchor-lost" });
+    return;
+  }
+
+  state.anchorWX = anchor.wx;
+  state.anchorWY = anchor.wy;
+  state.anchorRange = anchor.range;
+  const dx = worldDisplacement(player.wx, anchor.wx, runtime.session.worldScale);
+  const dy = worldDisplacement(player.wy, anchor.wy, runtime.session.worldScale);
+  const dist = Math.hypot(dx, dy) || 1e-4;
+  if (dist > anchor.range * 1.1) {
+    releasePlayerSlingshot(player, runtime.simTime, input, { reason: "range-break" });
+    return;
+  }
+
+  const radialNX = dx / dist;
+  const radialNY = dy / dist;
+  const orbitDir = state.orbitDir || 1;
+  const tangentNX = -radialNY * orbitDir;
+  const tangentNY = radialNX * orbitDir;
+  const tanSpeed = player.vx * tangentNX + player.vy * tangentNY;
+  const proximity = Math.max(0, 1 - dist / Math.max(anchor.range, 1e-4));
+  state.energy += SLINGSHOT_SERVER.energyAccrualRate
+    * Math.max(0, tanSpeed)
+    * anchor.massWeight
+    * proximity
+    * dt;
+
+  // This uses the same inverse-power profile as normal ship gravity, so
+  // slingshot hold no longer cancels an imaginary stronger/weaker pull.
+  const radialPull = inversePowerForce(
+    dist,
+    anchor.pullStrength,
+    anchor.pullMass,
+    anchor.pullFalloff,
+    anchor.pullRange
+  );
+  const cancelMag = radialPull * SLINGSHOT_SERVER.gravityCancelFraction;
+  player.vx += (-radialNX * cancelMag + tangentNX * SLINGSHOT_SERVER.tangentialForce) * dt;
+  player.vy += (-radialNY * cancelMag + tangentNY * SLINGSHOT_SERVER.tangentialForce) * dt;
+}
+
+function tickPlayerSlingshot(player, dt, input) {
+  const state = ensurePlayerSlingshot(player);
+  const down = Boolean(input?.slingshot);
+  if (down && !state.inputWasDown) {
+    if (state.engaged) releasePlayerSlingshot(player, runtime.simTime, input);
+    else engagePlayerSlingshot(player, runtime.simTime);
+  }
+  state.inputWasDown = down;
+  if (state.engaged) applyPlayerSlingshotForces(player, dt, input);
 }
 
 function rebuildAuthoritativeField() {
@@ -3270,6 +3637,9 @@ function rebuildAuthoritativeField() {
     cellSize: runtime.session.flowFieldCellSize,
     wells: runtime.mapState.wells,
     waveRings: runtime.waveRings,
+    wellGravityScale: SERVER_WELLS.shipPullStrength,
+    wellGravityFalloff: SERVER_WELLS.shipPullFalloff,
+    wellGravityMaxRange: SERVER_WELLS.maxRange,
     waveShipPush: WAVE_SERVER.waveShipPush * runtime.session.fieldFlowScale,
     waveWidth: WAVE_SERVER.waveWidth,
   });
@@ -4409,17 +4779,17 @@ function tickSim() {
     player.vx += input.moveX * accel * playerDt;
     player.vy += input.moveY * accel * playerDt;
 
-    // Current coupling: fluid flow affects this ship more/less than default
-    // (applied as velocity bias toward flow direction — higher coupling = more flow influence)
-    if (b.currentCoupling !== 1.0) {
-      const flow = estimateFlow(player.wx, player.wy);
-      const couplingDelta = (b.currentCoupling - 1.0) * 0.5; // scale for feel
-      player.vx += flow.x * couplingDelta * playerDt;
-      player.vy += flow.y * couplingDelta * playerDt;
-    }
+    // Match the client: every hull lerps toward the sampled current, and
+    // currentCoupling scales that baseline instead of being a delta from 1.
+    const flowSample = estimateFlowSample(player.wx, player.wy);
+    const currentCoupling = Math.max(0, Number(b.currentCoupling) || 0);
+    const coupling = Math.min(SERVER_INPUT.fluidCoupling * currentCoupling * playerDt, 0.5);
+    player.vx = player.vx * (1 - coupling) + flowSample.current.x * coupling;
+    player.vy = player.vy * (1 - coupling) + flowSample.current.y * coupling;
 
     applyWellGravity(player, playerDt);
     if (player.status !== "alive") continue;
+    tickPlayerSlingshot(player, playerDt, input);
     applyStarPush(player, playerDt, relevance.stars);
     applyPlanetoidPush(player, playerDt, relevance.planetoids);
     applyWaveRingPush(player, playerDt);

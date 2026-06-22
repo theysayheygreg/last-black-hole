@@ -30,6 +30,7 @@
 
 import { CONFIG } from './config.js';
 import { worldDistance, worldDisplacement } from './coords.js';
+import { inversePowerForce } from './physics.js';
 
 // Static config for the system. Numbers chosen as a sensible first pass
 // — see docs/design/SLINGSHOT-NETWORK.md for the design rationale and the
@@ -271,7 +272,13 @@ export class SlingshotSystem {
     //      force; we add an opposite-direction radial impulse here.
     //   2. Add a tangential force in the orbit direction so the ship
     //      doesn't bleed angular velocity.
-    const radialPull = (CONFIG.wells?.shipPullStrength ?? 0.6) * (anchor.ref?.mass ?? 1) / Math.max(0.1, dist * dist);
+    const radialPull = inversePowerForce(
+      dist,
+      CONFIG.wells?.shipPullStrength ?? 0.6,
+      anchor.ref?.mass ?? anchor.massWeight ?? 1,
+      CONFIG.wells?.shipPullFalloff ?? 1.5,
+      CONFIG.wells?.maxRange ?? anchor.range
+    );
     const cancelMag = radialPull * SLINGSHOT_CONFIG.gravityCancelFraction;
 
     return {

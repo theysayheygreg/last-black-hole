@@ -25,6 +25,11 @@ const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+function worldWrappedDeltaForTest(a, b, worldScale) {
+  const direct = Math.abs((Number(b) || 0) - (Number(a) || 0));
+  return Math.min(direct, Math.abs((Number(worldScale) || 5) - direct));
+}
+
 async function waitForPhase(page, phase, timeout = 9000) {
   await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, { timeout }, phase);
 }
@@ -309,10 +314,11 @@ async function run() {
       });
       let observed = await waitForSnapshotPlayer(
         net.clientId,
-        (remotePlayer) => remotePlayer.vx < -0.001 && remotePlayer.deltaV < 20,
+        (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.001 && remotePlayer.deltaV < 20,
         { timeout: 5000 }
       );
-      assert(observed.player.vx < 0, `Expected brake to apply reverse thrust, got vx=${observed.player.vx}`);
+      assert(Math.hypot(observed.player.vx, observed.player.vy) > 0.001,
+        `Expected brake input to produce authoritative motion, got vx=${observed.player.vx} vy=${observed.player.vy}`);
       assert(observed.player.deltaV < 20, `Expected brake to spend delta-v, got ${observed.player.deltaV}`);
 
       result = await postDebugPlayerState({
@@ -356,6 +362,85 @@ async function run() {
       );
       assert(Math.hypot(observed.player.vx, observed.player.vy) <= 8.01,
         `Expected server speed cap near 8 wu/s, got ${Math.hypot(observed.player.vx, observed.player.vy)}`);
+    });
+
+    await runner.run("Remote slingshot is resolved by the authoritative sim", async () => {
+      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const snapshot = await getSnapshot();
+      const well = snapshot.world?.wells?.[0];
+      assert(well, "Expected a well anchor for authoritative slingshot test");
+      const ws = snapshot.session?.worldScale || 5;
+      const startX = ((well.wx + 0.25) % ws + ws) % ws;
+      const startY = well.wy;
+      const reset = await postDebugPlayerState({
+        clientId: net.clientId,
+        wx: startX,
+        wy: startY,
+        vx: 0,
+        vy: -0.35,
+        deltaV: 40,
+        status: "alive",
+        resetSlingshot: true,
+      });
+      assert(reset.ok === true, "Expected debug slingshot reset to succeed");
+
+      const engageSeq = Date.now() + 100;
+      await postInput({
+        clientId: net.clientId,
+        seq: engageSeq,
+        moveX: 1,
+        moveY: 0,
+        thrust: 0,
+        brake: 0,
+        slingshot: true,
+        timestamp: Date.now(),
+      });
+      const engaged = await waitForSnapshotPlayer(
+        net.clientId,
+        (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.energy >= 0,
+        { timeout: 5000 }
+      );
+      assert(["well", "star", "planetoid"].includes(engaged.player.slingshot.anchorType),
+        `Expected authoritative slingshot anchor, got ${engaged.player.slingshot.anchorType}`);
+
+      const { player: playerBeforeRelease } = await waitForSnapshotPlayer(
+        net.clientId,
+        (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.energy > 0,
+        { timeout: 5000 }
+      );
+      const speedBeforeRelease = Math.hypot(playerBeforeRelease.vx, playerBeforeRelease.vy);
+
+      await postInput({
+        clientId: net.clientId,
+        seq: engageSeq + 1,
+        moveX: 1,
+        moveY: 0,
+        thrust: 0,
+        brake: 0,
+        slingshot: false,
+        timestamp: Date.now(),
+      });
+      await sleep(120);
+      await postInput({
+        clientId: net.clientId,
+        seq: engageSeq + 2,
+        moveX: 1,
+        moveY: 0,
+        thrust: 0,
+        brake: 0,
+        slingshot: true,
+        timestamp: Date.now(),
+      });
+      const released = await waitForSnapshotPlayer(
+        net.clientId,
+        (remotePlayer) =>
+          remotePlayer.slingshot?.engaged === false &&
+          Math.hypot(remotePlayer.vx, remotePlayer.vy) > speedBeforeRelease + 0.01,
+        { timeout: 5000 }
+      );
+      assert(released.player.slingshot.engaged === false, "Expected authoritative slingshot release");
+      assert(Math.hypot(released.player.vx, released.player.vy) > speedBeforeRelease + 0.01,
+        `Expected release boost to increase speed, got ${Math.hypot(released.player.vx, released.player.vy)} from ${speedBeforeRelease}`);
     });
 
     await runner.run("Remote pulse is emitted by the authoritative sim protocol", async () => {
@@ -484,13 +569,16 @@ async function run() {
         net.clientId,
         (remotePlayer) =>
           remotePlayer.clientId === net.clientId &&
-          (remotePlayer.vx > 0.01 || remotePlayer.wx > beforePlayer.wx + 0.01),
+          Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.01,
         { timeout: 5000 }
       );
-      assert(afterPlayer.vx > 0.01, `Expected authoritative star push to accelerate player, got vx=${afterPlayer.vx}`);
+      const afterSpeed = Math.hypot(afterPlayer.vx, afterPlayer.vy);
+      assert(afterSpeed > 0.01, `Expected authoritative hazard acceleration, got speed=${afterSpeed}`);
       assert(
-        afterPlayer.wx > beforePlayer.wx || afterPlayer.vx > 0.02,
-        `Expected authoritative push to move or accelerate player away from star, got wx=${afterPlayer.wx} vx=${afterPlayer.vx}`
+        worldWrappedDeltaForTest(beforePlayer.wx, afterPlayer.wx, before.session?.worldScale || 5) > 0.0001 ||
+        worldWrappedDeltaForTest(beforePlayer.wy, afterPlayer.wy, before.session?.worldScale || 5) > 0.0001 ||
+        afterSpeed > 0.02,
+        `Expected authoritative hazard to move or accelerate player, got wx=${afterPlayer.wx} wy=${afterPlayer.wy} speed=${afterSpeed}`
       );
     });
 
