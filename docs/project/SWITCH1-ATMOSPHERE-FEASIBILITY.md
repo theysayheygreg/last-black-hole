@@ -1,11 +1,12 @@
 # Switch 1 / Atmosphere Feasibility
 
-Status: research spike. This is not a current shipping target.
+Status: local hardware test-bench lane. This is not a current shipping target.
 
 ## Plain Answer
 
-Switch 1 is feasible as a future port target, not as a direct build target for
-the current LBH app.
+Switch 1 is feasible as a local hardware test bench now that Greg has an
+Atmosphere-prepared device. It is not a direct build target for the current LBH
+app.
 
 The current runtime assumes:
 
@@ -22,8 +23,8 @@ SDK environment.
 
 Do not try to make the current Electron package run on Switch 1.
 
-Use Switch 1 as a later "Run It Twice" probe after the platform contract is
-portable:
+Use the Atmosphere-prepared Switch as a "Run It Twice" hardware probe after the
+platform contract is portable:
 
 1. Freeze an engine-neutral snapshot, input, content, save, and golden-sim
    contract.
@@ -32,9 +33,9 @@ portable:
 4. Move any serious commercial work through the official Nintendo developer
    route.
 
-Atmosphere can be useful for private R&D on owned lab hardware. It should not
-be treated as a public release path, a store path, or a substitute for Nintendo
-developer access.
+Atmosphere is viable for private test-bench builds on Greg's owned hardware. It
+should not be treated as a public release path, a store path, or a substitute
+for Nintendo developer access.
 
 ## What The Homebrew Lane Can Teach Us
 
@@ -58,6 +59,10 @@ Good research lanes:
 - **nx.js:** worth one spike because it advertises JavaScript, WebGL2, WASM,
   audio, and input surfaces on Switch homebrew. It is still not Electron, Node,
   or a browser DOM.
+
+The first useful output is not a full game. It is a bench `.nro` or equivalent
+homebrew payload that proves display, controller input, frame pacing, asset
+loading, and LBH snapshot rendering on real Switch 1 hardware.
 
 Bad first lanes:
 

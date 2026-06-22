@@ -3,11 +3,11 @@
 ## 2026-06-22 — Switch 1 is a port probe, not a desktop wrapper target
 
 **Decision:** Do not try to carry the current Electron/Three/Node desktop
-package directly onto Switch 1. Treat Switch 1 as a later renderer/port probe
-after LBH has engine-neutral snapshot, input, content, save, and golden-sim
-contracts. Atmosphere/homebrew can be a private research lane on owned lab
-hardware, but the commercial/public path is the official Nintendo developer
-route.
+package directly onto Switch 1. Greg's Atmosphere-prepared Switch is a viable
+private hardware test bench for renderer/input/performance probes, but the
+probe should wait for engine-neutral snapshot, input, content, save, and
+golden-sim contracts. The commercial/public path is still the official Nintendo
+developer route.
 
 **Why:** The expensive mismatch is runtime shape. The current app depends on
 Chromium/Electron, Node authority processes, browser WebGL/DOM affordances, and
@@ -19,8 +19,8 @@ handheld performance budget.
 `docs/reference/PLATFORM-TARGETS.md`, and the backlog's Switch 1 Renderer Probe
 entry.
 
-**Door status:** Open as a future Run It Twice renderer probe. Closed as a
-near-term packaging target.
+**Door status:** Open as a local test-bench build target. Closed as a near-term
+product packaging target.
 
 ## 2026-06-22 — Godot is a future console probe, not the default split
 

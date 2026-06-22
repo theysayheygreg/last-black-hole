@@ -26,6 +26,7 @@
 
 - Added `docs/project/SWITCH1-ATMOSPHERE-FEASIBILITY.md`, a research memo for a future Switch 1 / Atmosphere lab probe.
 - Documented the decision that Switch 1 is a port/renderer-probe target, not a direct Electron/Three/Node desktop wrapper target.
+- Clarified that Greg's Atmosphere-prepared Switch is a viable private hardware test bench for bench builds and renderer/input/performance probes.
 - Added a backlog entry for a recorded-snapshot Switch 1 renderer probe and cross-linked it from platform and Godot console docs.
 - Kept Atmosphere scoped to private technical research while preserving the official Nintendo developer route as the only commercial/public path.
 
