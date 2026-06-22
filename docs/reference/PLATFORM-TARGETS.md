@@ -259,6 +259,20 @@ It is:
 
 That is the right order because it proves the feel before you commit to platform-specific engineering.
 
+## Current pipeline update
+
+The first deployment scripts now exist:
+
+- `npm run deploy:deck` copies the Linux package to a Tailscale-visible Steam Deck.
+- `npm run deploy:itch` stages an itch-specific HTML5 artifact and pushes it with butler.
+- `npm run deploy:steam` prepares SteamPipe depot content and VDF scripts.
+
+The important build-target delta is documented in [Deployment Pipelines](DEPLOYMENT-PIPELINES.md):
+
+- Deck should not use the raw web folder; it wants the Linux Electron package and handheld/controller checks.
+- itch HTML5 should not depend on the Node authority stack; it uses a staged sandbox build unless we choose downloadable desktop channels.
+- Steam should not ship the HTML5 artifact; it wants desktop depots with Steamworks launch/configuration work.
+
 ### Custom app loading and testing
 
 For internal testing, the practical path is straightforward:

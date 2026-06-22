@@ -1,0 +1,85 @@
+name: SteamPipe Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner label. Use macos-latest for package prep; use a trusted self-hosted runner for real Steam upload."
+        required: true
+        default: "macos-latest"
+        type: string
+      targets:
+        description: "Comma-separated Steam depot platforms"
+        required: true
+        default: "linux,win,mac"
+        type: string
+      upload:
+        description: "Run SteamCMD upload. Requires Steamworks SDK/SteamCMD on the runner."
+        required: true
+        default: false
+        type: boolean
+      preview:
+        description: "Create a SteamPipe preview build instead of uploading depot content"
+        required: true
+        default: true
+        type: boolean
+      set_live:
+        description: "Optional beta branch to set live after upload. Leave empty for package prep."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lbh-steampipe
+  cancel-in-progress: false
+
+jobs:
+  steampipe:
+    runs-on: ${{ inputs.runner }}
+    env:
+      STEAM_APP_ID: ${{ vars.STEAM_APP_ID }}
+      STEAM_DEPOT_ID_LINUX: ${{ vars.STEAM_DEPOT_ID_LINUX }}
+      STEAM_DEPOT_ID_WINDOWS: ${{ vars.STEAM_DEPOT_ID_WINDOWS }}
+      STEAM_DEPOT_ID_MAC: ${{ vars.STEAM_DEPOT_ID_MAC }}
+      STEAM_SET_LIVE: ${{ inputs.set_live }}
+      STEAMCMD_PATH: ${{ vars.STEAMCMD_PATH }}
+      STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+      STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
+      STEAM_GUARD_CODE: ${{ secrets.STEAM_GUARD_CODE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run fast gate
+        run: npm run test:fast
+
+      - name: Prepare SteamPipe package
+        shell: bash
+        run: |
+          args=(--targets "${{ inputs.targets }}")
+          if [ "${{ inputs.upload }}" = "true" ]; then
+            args+=(--upload)
+          fi
+          if [ "${{ inputs.preview }}" = "true" ]; then
+            args+=(--preview)
+          fi
+
+          npm run deploy:steam -- "${args[@]}"
+
+      - name: Upload SteamPipe package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-singularity-steampipe
+          path: dist/deploy/steam
+

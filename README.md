@@ -159,6 +159,17 @@ npm run build:release
 
 Desktop builds use Electron and package the local-play surface. Web builds write versioned artifacts under `builds/`.
 
+## Deployment Pipelines
+
+```sh
+npm run deploy:deck           # local Steam Deck copy over Tailscale/SSH
+npm run deploy:itch           # itch.io HTML5 staging + butler push
+npm run deploy:steam          # SteamPipe content/VDF package prep
+npm run deploy:steam:upload   # SteamCMD upload when Steamworks config is ready
+```
+
+See [Deployment Pipelines](docs/reference/DEPLOYMENT-PIPELINES.md) for the important target split: Deck wants a Linux desktop package, itch HTML5 wants a self-contained sandbox artifact, and Steam wants desktop depots rather than the raw web folder.
+
 ## Project Structure
 
 ```text

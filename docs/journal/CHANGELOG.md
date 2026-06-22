@@ -11,6 +11,14 @@
 - Wrote historical v0.1 patch notes, v0.2 release notes, a design/code delta ledger, a v0.2 design bible, and a v0.2 roadmap by major area.
 - Cross-linked older design/roadmap entry points so future work starts from the v0.2 snapshot instead of stale jam-era assumptions.
 
+## 2026-06-22 — Platform deployment pipeline setup
+
+- Added local Steam Deck deployment over Tailscale/SSH for the Linux desktop package.
+- Added an itch.io HTML5 staging lane that injects sandbox mode before upload so the browser page does not depend on the Node authority stack.
+- Added SteamPipe package/VDF generation for Linux, Windows, and macOS depots, with optional SteamCMD upload when real Steamworks IDs and credentials are configured.
+- Added manual GitHub workflows for itch deployment and SteamPipe package preparation.
+- Documented the build-target deltas: Deck uses desktop Linux, itch HTML5 uses sandbox or downloadable desktop channels, and Steam should ship desktop depots rather than the raw web artifact.
+
 ## 2026-06-22 — Shared-context Three cleanup
 
 - Collapsed the Three renderer onto the Composer's `fluid-canvas` WebGL2 context, removing the CPU bridge canvas and per-frame `CanvasTexture` upload path.

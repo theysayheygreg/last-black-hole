@@ -92,8 +92,24 @@ For this project, the safe assumption is:
 - network copy or removable storage is the real path
 - later, if you enable SSH on the Deck, scripted deploy becomes straightforward
 
-## Best next step
+## Automated local deploy
 
-The next useful upgrade is not Steamworks.
+The current local pipeline is:
 
-It is a tiny deploy script that can push the Linux build to a known Deck hostname over SSH once the Deck is configured for it.
+```sh
+LBH_DECK_HOST=steamdeck npm run deploy:deck
+```
+
+That command builds the Linux package, copies `Last Singularity-linux-x64` over
+SSH to the Deck, writes a `run-last-singularity.sh` launcher, and leaves the
+final "add as non-Steam app" step on the Deck.
+
+Use a Tailscale MagicDNS name or Tailscale IP:
+
+```sh
+npm run deploy:deck -- --host=100.x.y.z --user=deck --dir=/home/deck/Games/last-singularity
+```
+
+This is still a local-test pipeline, not a Steamworks deployment path. See
+[Deployment Pipelines](DEPLOYMENT-PIPELINES.md) for the larger Deck/itch/Steam
+split and the build-target deltas from the web runtime.

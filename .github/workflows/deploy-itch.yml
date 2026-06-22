@@ -1,0 +1,81 @@
+name: Deploy itch.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "itch target, for example theysayheygreg/last-singularity. Falls back to repo variable LBH_ITCH_TARGET."
+        required: false
+        type: string
+      channel:
+        description: "itch channel"
+        required: true
+        default: "html5-private"
+        type: string
+      dry_run:
+        description: "Run butler push --dry-run instead of uploading"
+        required: true
+        default: true
+        type: boolean
+      preview:
+        description: "Run butler push-preview instead of uploading"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lbh-deploy-itch
+  cancel-in-progress: false
+
+jobs:
+  deploy-itch:
+    runs-on: ubuntu-latest
+    env:
+      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      LBH_ITCH_TARGET: ${{ inputs.target || vars.LBH_ITCH_TARGET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run fast gate
+        run: npm run test:fast
+
+      - name: Install butler
+        run: |
+          mkdir -p "$HOME/bin/butler"
+          curl -L -o /tmp/butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q /tmp/butler.zip -d "$HOME/bin/butler"
+          chmod +x "$HOME/bin/butler/butler"
+          echo "$HOME/bin/butler" >> "$GITHUB_PATH"
+          "$HOME/bin/butler/butler" version
+
+      - name: Deploy itch channel
+        shell: bash
+        run: |
+          if [ -z "${LBH_ITCH_TARGET:-}" ]; then
+            echo "Missing itch target. Provide workflow input target or repo variable LBH_ITCH_TARGET." >&2
+            exit 1
+          fi
+
+          args=(--target "$LBH_ITCH_TARGET" --channel "${{ inputs.channel }}")
+          if [ "${{ inputs.preview }}" = "true" ]; then
+            args+=(--preview)
+          fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+
+          npm run deploy:itch -- "${args[@]}"
+

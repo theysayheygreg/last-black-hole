@@ -21,6 +21,9 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 - `npm run build:dev` — build with dev panel + test API + debug overlays enabled
 - `npm run build:web` — build only the web playtest artifact
 - `npm run build:desktop` — build web + desktop/mobile wrapper targets
+- `npm run deploy:deck` — build/copy the Linux package to a Tailscale-visible Steam Deck
+- `npm run deploy:itch` — stage an itch HTML5 artifact and push it with butler
+- `npm run deploy:steam` — prepare SteamPipe content and VDF scripts
 
 `npm run build` currently defaults to `release` mode.
 
@@ -150,6 +153,11 @@ This is enough for playtest packaging. The Windows output is already useful as a
 - auto-update
 
 Those are later concerns. This pipeline is for making dated, traceable playtest builds now.
+
+The first deploy layer now exists in [Deployment Pipelines](DEPLOYMENT-PIPELINES.md).
+It deliberately separates the web runtime from platform artifacts: Deck wants a
+Linux desktop package, itch HTML5 wants a self-contained sandbox page, and Steam
+wants SteamPipe depot content.
 
 ## iPad note
 
