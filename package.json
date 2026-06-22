@@ -33,7 +33,7 @@
     "test:legacy": "node tests/run-all.cjs --lane=core --renderer=legacy",
     "test:full": "node tests/run-all.cjs --lane=full --renderer=three",
     "test:three": "node tests/run-all.cjs --lane=three --renderer=three",
-    "test:visual": "node tests/run-all.cjs --lane=visual --renderer=both",
+    "test:visual": "node tests/run-all.cjs --lane=visual --renderer=three",
     "test:authority": "node tests/run-all.cjs --lane=authority --renderer=three",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
     "test:telemetry": "node tests/telemetry-smoke.cjs",

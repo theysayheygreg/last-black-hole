@@ -12,6 +12,7 @@
 - Moved slingshot into the authoritative sim protocol. Remote input now sends `slingshot`, server snapshots expose slingshot engagement/energy/anchor state, and the server owns engage, hold, release, chain windows, and release boosts.
 - Made Three the default renderer path and gave it real world-space entity and semantic layers for ships, wells, waves, stars, wrecks, portals, planetoids, scavengers, remote players, fauna, sentries, and slingshot tethers.
 - Updated harness coverage for FlowSample shape, brake intent vectors, authoritative slingshot resolution, Three world entity layers, and semantic renderer cues.
+- Updated the live test-harness guide and visual script so Three is the normal renderer target; legacy is now an explicit deprecated fallback lane.
 
 ## 2026-06-22 — Mechanics and sim-render audit
 

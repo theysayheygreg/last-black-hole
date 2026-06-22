@@ -28,9 +28,9 @@ reading FPS, perf stats, or pixels.
 |---------|---------|
 | `npm test` | Stable core gate for local code changes. Three renderer target. |
 | `npm run test:fast` | Cheap static + Three smoke canary for quick iteration. |
-| `npm run test:legacy` | Compatibility check for the old renderer target. Use only when touching the bridge/fallback. |
+| `npm run test:legacy` | Deprecated compatibility check for the old renderer target. Use only for deliberate fallback archaeology. |
 | `npm run test:three` | Three renderer canary: smoke, infra boot, and renderer fixtures with `?renderer=three`. |
-| `npm run test:visual` | Renderer fixture pass for legacy and Three. Generates screenshots and manifests. |
+| `npm run test:visual` | Three renderer fixture pass. Generates screenshots and manifests. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
@@ -39,7 +39,7 @@ The underlying runner is manifest-driven:
 
 ```sh
 node tests/run-all.cjs --lane=core --renderer=three
-node tests/run-all.cjs --lane=visual --renderer=both
+node tests/run-all.cjs --lane=visual --renderer=three
 node tests/run-all.cjs --lane=browser --renderer=three
 node tests/run-all.cjs --suite=Smoke,Renderer --renderer=both
 node tests/run-all.cjs --list --lane=full
@@ -47,7 +47,7 @@ node tests/run-all.cjs --list --lane=full
 
 Renderer values:
 
-- `legacy` sets `?renderer=legacy`.
+- `legacy` sets `?renderer=legacy` for the deprecated fallback.
 - `three` sets `?renderer=three`.
 - `both` repeats every browser suite once per renderer.
 - `target` preserves the target URL exactly.
@@ -71,18 +71,19 @@ for a deliberate visual audit.
 
 ## Three.js Applicability
 
-Every browser suite can now be pointed at `?renderer=three`, and remote-capable
-suites merge `simServer` with existing query params instead of building broken
-URLs. The Three migration gate is:
+Three is the primary renderer target. Remote-capable suites merge `simServer`
+with existing query params instead of building broken URLs. The Three migration
+gate is:
 
 1. `npm run test:three`
 2. `npm run test:visual`
 3. A Codex app browser pass on `index-a.html?renderer=three`
 
-The Three renderer is still parallel to the legacy renderer. A browser test that
-asserts gameplay state should pass on both renderers; a renderer fixture should
-record backend diagnostics so failures say whether the visual graph or the
-gameplay state moved.
+The legacy renderer remains as an explicit fallback lane, but it is no longer a
+default migration target. A browser test that asserts gameplay state should use
+Three unless the task is specifically about fallback behavior; renderer fixtures
+record backend diagnostics so failures say whether the visual graph or gameplay
+state moved.
 
 The Three renderer is no longer allowed to be a copy-only fullscreen bridge.
 Renderer fixtures assert the first-class scene contract:
@@ -90,6 +91,7 @@ Renderer fixtures assert the first-class scene contract:
 - `sceneKind: "top-down-3d"`
 - `camera.kind: "orthographic-top-down"`
 - `background-parallax-field`, `fabric-source-layer`, and
+  `semantic-flow-field-layer`, `world-entity-layer`, and
   `foreground-screen-space-layer` are present
 - `three-screen-space-post` appears in the pass graph
 
