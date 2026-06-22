@@ -5,6 +5,11 @@
 
 ---
 
+## 2026-06-22 — Mechanics and sim-render audit
+
+- Added `docs/project/MECHANICS-SIM-RENDER-AUDIT.md`, a deep review of movement mechanics, field math, local/server sim parity, and the current Three renderer bridge.
+- Identified the next highest-leverage architecture step as a shared field sample contract before deeper Three migration, plus called out remote brake intent, baseline current coupling, server-side slingshot authority, semantic render channels, and representative harness coverage.
+
 ## 2026-06-22 — First-class top-down Three scene
 
 - Promoted the Three renderer from a fullscreen copy bridge into a real top-down 3D scene graph: orthographic camera, depth-sorted background/fabric/foreground layers, a depth-backed render target, and a screen-space present pass.
