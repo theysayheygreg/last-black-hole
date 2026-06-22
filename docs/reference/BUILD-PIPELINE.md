@@ -120,6 +120,13 @@ The desktop path is intentionally thin.
 
 That means the `.app` and `.exe` are wrappers around the same web game, not separate runtime implementations.
 
+Packaged desktop and Deck builds do not load renderer modules directly from raw
+`file://...app.asar` paths anymore. Electron serves the bundled renderer through
+the app-owned `lbh://` protocol so ES modules, JSON manifests, and static assets
+arrive with browser-correct MIME types. The build must also copy the complete
+`node_modules/three/build/` directory because current Three.js split modules load
+files such as `three.core.js` beside `three.module.js`.
+
 ## Remote-authority note
 
 The build story now splits cleanly by target.
@@ -128,10 +135,14 @@ The build story now splits cleanly by target.
 - packaged desktop builds now embed the control plane + sim for ordinary local packaged play
 - remote-authority play remains a separate mode and still expects a browser client to point at an external sim authority
 - packaged desktop builds also expose a small in-app stack-status window so embedded authority state is visible without a terminal
+- Steam Deck uses the same self-contained desktop package shape: renderer,
+  control plane, and sim all run on the Deck, with the renderer talking to the
+  embedded sim over `127.0.0.1`
 
 So the honest rule is:
 
 - **desktop package** = self-contained local playtest app
+- **Steam Deck package** = self-contained Linux desktop package plus Deck launcher/Gaming Mode wrapper
 - **browser remote mode** = local-rendering client against separate authority
 
 If you want mini→MacBook play, run the authority machine separately and start the MacBook browser client in `remote-client` mode.

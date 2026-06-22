@@ -285,6 +285,11 @@ It is:
 
 That is the right order because it proves the feel before you commit to platform-specific engineering.
 
+The current Deck package keeps the split sim/renderer architecture without
+turning the Deck into a network client. Electron, the renderer, the control
+plane, and the authoritative sim all run on the Deck. The renderer loads local
+assets through `lbh://` and talks to the embedded sim on `127.0.0.1`.
+
 ## Current pipeline update
 
 The first deployment scripts now exist:

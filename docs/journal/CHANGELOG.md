@@ -12,6 +12,7 @@
 - Copied the complete Three build runtime into web, desktop, and iPad wrapper artifacts so split Three modules such as `three.core.js` ship with `three.module.js`.
 - Tightened the renderer harness server readiness check so it recognizes the current static-server log line instead of waiting for its fallback timer.
 - Verified the deployed Deck build boots the local packaged Three renderer while embedded control plane and sim both run on Deck loopback ports.
+- Updated README, Deck runbooks, deployment notes, platform targets, and build pipeline docs to state that Deck runtime is self-contained and Tailscale is deploy transport only.
 
 ---
 

@@ -1190,6 +1190,7 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 | Apr 20 | Chronicle echoes are loot-bearing by contract. The sim only builds echoes from non-empty death cargo, and the control plane now rejects/filter empty-loot echo records so stale or malformed data cannot create misleading empty wrecks. |
 | Apr 23 | Renderer contract update: production gameplay now defaults to the rich Composer chain (`FluidDisplayPass -> BloomPass -> TonemapPass -> ColorGradePass -> VignettePass -> ASCIIPass -> ChromaticAberrationPass -> ScanlinesPass`) and keeps `?minimalrender=1` as the explicit cheap perf baseline. |
 | Apr 23 | Packaged desktop authority should be app-owned and session-local: Electron embedded control/sim processes use dynamic loopback ports with identity checks, not fixed dev/test ports, and macOS dock reopen restarts authority before loading the renderer. |
+| Jun 22 | Steam Deck packaged play keeps that same self-contained contract: the renderer is loaded from local app-owned `lbh://` assets, Electron starts embedded control/sim child processes on Deck loopback, and Tailscale/SSH is deployment transport only. |
 
 
 ## Persistence and Control Plane Architecture

@@ -138,6 +138,12 @@ SSH to the Deck, and writes a `run-last-singularity.sh` launcher. The launcher
 sets `LBH_DECK=1`, which makes the packaged Electron shell use the Deck profile:
 1280x800 fullscreen with the normal 16:9 playfield letterboxed inside it.
 
+The deployed app runs locally on the Deck. The renderer is packaged in Electron
+and served through the app-owned `lbh://` protocol; the embedded control plane
+and sim are launched as Deck child processes on dynamic `127.0.0.1` ports. The
+`simServer` URL in launch logs should point at loopback. Tailscale is only the
+deployment transport from Codex/Mac to Deck, not a gameplay-rendering path.
+
 After deploy, register the wrapper with Steam for Gaming Mode:
 
 ```sh

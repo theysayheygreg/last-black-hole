@@ -97,6 +97,14 @@ What the Deck target needs that the web build does not:
 The current pipeline builds `Last Singularity-linux-x64`, copies it over SSH to a
 Tailscale-visible Deck, writes `run-last-singularity.sh`, and can register that
 wrapper as a Steam non-Steam shortcut for Gaming Mode.
+
+The running Deck app stays local to the Deck. Electron serves packaged renderer
+assets through the app-owned `lbh://` protocol so modules, JSON manifests, and
+the split Three.js runtime load with correct browser MIME types. It then starts
+the embedded control plane and sim on dynamic `127.0.0.1` loopback ports and
+passes that loopback `simServer` URL to the renderer. Tailscale/SSH is only how
+Greg/Codex pushes a new build onto the device.
+
 The Deck launcher sets `LBH_DECK=1`, which switches the packaged shell to a
 1280x800 fullscreen window for handheld play while preserving the 16:9
 playfield. It also applies the current SteamOS Electron profile:
@@ -111,6 +119,11 @@ avoiding the `GPU process isn't usable` trap observed during the first launch
 attempt. `--ozone-platform=x11` forces XWayland, which avoids the current
 Wayland/Vulkan warning in SteamOS Desktop Mode and is closer to the XWayland
 path most native Linux games use under gamescope.
+
+If a black window appears, first inspect `deck-launch.log` for renderer protocol
+or missing packaged-module errors before treating it as a SteamOS compositor
+problem. The known fixed failure was `file://...app.asar` module loading plus an
+incomplete copied Three runtime.
 
 The launcher writes rolling logs on the Deck:
 
@@ -204,6 +217,8 @@ Before calling a Deck build playable, confirm:
   embedded sim;
 - `~/.local/state/last-singularity/deck-launch.log` shows embedded
   `runtime.started` lines;
+- the renderer URL is `lbh://renderer/index.html?...` and the `simServer`
+  parameter points at `http://127.0.0.1:<port>`;
 - `/health` for both embedded services returns `ok: true`;
 - no new `Last Singularity` coredump appears after launch;
 - controller can reach every menu and gameplay command;

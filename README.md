@@ -33,6 +33,7 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 - **Three.js is now the product renderer direction.** The default target is `?renderer=three`: an orthographic top-down 3D scene layered over the ASCII fluid fabric.
 - **The renderer no longer copies the game canvas through the CPU.** Three and the Composer/ASCII chain share the `fluid-canvas` WebGL2 context.
 - **The sim/client split is real.** Normal local play starts the authority stack; the browser/Electron client renders snapshots and sends inputs.
+- **Steam Deck local play is self-contained.** The Deck package starts its own embedded control plane and sim on dynamic `127.0.0.1` ports; Tailscale/SSH is only for deploying builds to the device.
 - **Movement is an economy.** Thrust costs delta-v, braking is reverse-thrust, currents are free motion, and slingshot anchors turn map geometry into route puzzles.
 - **Slingshot authority is shipped.** Remote-authority runs expose sim-owned engagement, energy, release, and chain state.
 - **Five hulls have mechanical identities.** Drifter, Breacher, Resonant, Shroud, and Hauler resolve through PlayerBrain and shared content manifests.
@@ -53,6 +54,7 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 - SNES-flavored synthesized Web Audio.
 - Keyboard/mouse and gamepad support.
 - Web and Electron local-play surfaces.
+- Steam Deck package path verified through the Linux Electron artifact, Deck launcher wrapper, and Gaming Mode shortcut.
 
 ## Playable Targets
 
@@ -114,6 +116,12 @@ Steam or return to Gaming Mode and launch **Last Singularity** from the normal
 library.
 
 Steam Deck operational notes live in the [Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
+
+The Deck build is not a networked renderer. It packages the renderer inside the
+Electron app, serves those local assets through the app-owned `lbh://` protocol,
+and launches the control plane and sim as Deck-local child processes on loopback
+ports. The only network dependency in Greg's current workflow is the Tailscale
+copy step used to install a fresh build onto the Deck.
 
 ### Packaged Desktop Builds
 
@@ -228,7 +236,12 @@ stack lifecycle               slingshot authority          Three + Composer + AS
 structured telemetry          snapshots/events             HUD, audio, interpolation
 ```
 
-The sim owns gameplay truth. The client owns presentation. Local play can run every process on one machine, but the architecture is built around separate sim and renderer responsibilities.
+The sim owns gameplay truth. The client owns presentation. Local play can run
+every process on one machine, but the architecture is built around separate sim
+and renderer responsibilities. Packaged desktop and Steam Deck builds keep that
+split inside one local app: Electron starts the renderer, embedded control
+plane, and embedded sim locally, then connects the renderer to the sim over
+`127.0.0.1`.
 
 ## Tests
 
