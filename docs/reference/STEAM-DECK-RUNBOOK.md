@@ -11,7 +11,7 @@ Gaming Mode through Steam is the real playtest target.
 ## Public Tester Install
 
 Use this when someone has a Steam Deck and should install the latest public
-nightly build without cloning the repo.
+weekly build without cloning the repo.
 
 On the Deck in Desktop Mode:
 
@@ -28,6 +28,9 @@ The installer downloads:
 ```text
 https://github.com/theysayheygreg/last-black-hole/releases/download/nightly-latest/last-singularity-linux-nightly.zip
 ```
+
+The release tag and zip filename still say `nightly` for stable public URLs.
+Treat them as compatibility names for the current weekly playtest build.
 
 It installs the game to:
 
@@ -266,9 +269,10 @@ That zip must contain:
 Last Singularity-linux-x64/Last Singularity
 ```
 
-The nightly workflow builds the Linux Electron artifact, packages it with
+The weekly workflow builds the Linux Electron artifact, packages it with
 `scripts/ci/package-nightly-assets.cjs`, and uploads it beside the web, Windows,
-and macOS nightly zips.
+and macOS release zips. The workflow now runs weekly and skips scheduled builds
+when the repository SHA has not changed since the last successful run.
 
 If this contract changes, update all of these together:
 

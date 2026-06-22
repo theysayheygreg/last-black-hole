@@ -267,6 +267,7 @@ The first deployment scripts now exist:
 - `npm run deck:gaming-mode` registers the deployed wrapper as a Steam non-Steam shortcut for Gaming Mode.
 - `npm run deploy:itch` stages an itch-specific HTML5 artifact and pushes it with butler.
 - `npm run deploy:steam` prepares SteamPipe depot content and VDF scripts.
+- `.github/workflows/nightly-playables.yml` refreshes public playtest artifacts weekly when new commits exist.
 
 The important build-target delta is documented in [Deployment Pipelines](DEPLOYMENT-PIPELINES.md):
 

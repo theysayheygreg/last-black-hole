@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-06-22 — Weekly playable build cadence
+
+- Changed the regular GitHub playable build workflow from daily to weekly while keeping the existing scheduled-run SHA gate, so it only rebuilds when new commits exist.
+- Updated build target instructions for Steam Deck, deployment pipelines, platform targets, and the v0.2 roadmap to describe weekly playtest artifacts instead of nightly ones.
+- Preserved the `nightly-latest` release tag and `*-nightly.zip` asset names as compatibility URLs for the public Deck installer.
+- Extended the Deck installer harness guard so the weekly cadence and unchanged-commit skip behavior are tested.
+
+---
+
 ## 2026-06-22 — Public Steam Deck installer and runbook
 
 - Added `scripts/install-steam-deck.sh`, a Steam Deck installer that downloads the Linux nightly release asset, installs the game under `~/Games/last-singularity`, writes Deck launchers, and registers a Gaming Mode Steam shortcut with a `shortcuts.vdf` backup.

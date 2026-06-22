@@ -16,7 +16,7 @@ function run() {
   execFileSync("bash", ["-n", installerPath], { cwd: ROOT, stdio: "inherit" });
 
   const installer = fs.readFileSync(installerPath, "utf8");
-  includes(installer, "last-singularity-linux-nightly.zip", "Installer must default to the public Linux nightly asset");
+  includes(installer, "last-singularity-linux-nightly.zip", "Installer must default to the stable public Linux release asset");
   includes(installer, "releases/download", "Installer must download from GitHub releases by default");
   includes(installer, "--disable-gpu-sandbox", "Installer launcher must preserve Deck GPU sandbox workaround");
   includes(installer, "--ignore-gpu-blocklist", "Installer launcher must preserve Deck GPU blocklist workaround");
@@ -28,9 +28,12 @@ function run() {
   includes(installer, "LBH_DECK_BUILD_URL", "Installer must allow explicit build URL override");
 
   const workflow = fs.readFileSync(workflowPath, "utf8");
-  includes(workflow, "build-linux:", "Nightly workflow must build a Linux artifact for Deck installs");
-  includes(workflow, "last-singularity-linux-nightly.zip", "Nightly workflow must publish the Linux Deck zip");
-  includes(workflow, "scripts/ci/package-nightly-assets.cjs", "Nightly workflow must use the checked-in CJS packager");
+  includes(workflow, "name: Weekly Playables", "Regular playable workflow must be labeled weekly");
+  includes(workflow, "cron: '17 9 * * 1'", "Regular playable workflow must run weekly");
+  includes(workflow, "priorRun.head_sha === currentSha", "Scheduled playable workflow must skip unchanged commits");
+  includes(workflow, "build-linux:", "Weekly workflow must build a Linux artifact for Deck installs");
+  includes(workflow, "last-singularity-linux-nightly.zip", "Weekly workflow must publish the Linux Deck zip");
+  includes(workflow, "scripts/ci/package-nightly-assets.cjs", "Weekly workflow must use the checked-in CJS packager");
 
   const readme = fs.readFileSync(readmePath, "utf8");
   includes(readme, "## Playable Targets", "README must expose playable targets");

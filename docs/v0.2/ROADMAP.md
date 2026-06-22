@@ -74,7 +74,7 @@ Definition of done:
 
 Goal: create a shareable build for trusted testers.
 
-- Refresh build health and nightly/playable artifacts.
+- Refresh build health and weekly playable artifacts.
 - Produce web and desktop builds with clear start instructions.
 - Write a short controls and objective primer.
 - Capture screenshots and a short gameplay clip.

@@ -18,13 +18,13 @@ The Windows build is still a valid fallback through Proton:
 
 ## Fastest install path
 
-For public/nightly testers, the easiest path is the installer:
+For public weekly testers, the easiest path is the installer:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
 ```
 
-It downloads the latest Linux nightly, installs it under
+It downloads the latest Linux weekly release, installs it under
 `~/Games/last-singularity`, creates Desktop Mode launchers, and adds a Steam
 non-Steam shortcut for Gaming Mode.
 
@@ -113,7 +113,7 @@ For this project, the safe assumption is:
 
 ## Automated local deploy
 
-For public/nightly installs, use `scripts/install-steam-deck.sh` as described in
+For public weekly installs, use `scripts/install-steam-deck.sh` as described in
 the [Steam Deck runbook](STEAM-DECK-RUNBOOK.md).
 
 For Codex pushing a local build to Greg's Deck over Tailscale:

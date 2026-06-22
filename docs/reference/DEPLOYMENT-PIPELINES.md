@@ -22,7 +22,7 @@ only one ingredient.
 
 ## Steam Deck Local Test
 
-### Public Nightly Installer
+### Public Weekly Installer
 
 For outside testers, the simplest Deck path is the one-command installer from
 Desktop Mode / Konsole:
@@ -31,12 +31,15 @@ Desktop Mode / Konsole:
 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
 ```
 
-That script downloads the Linux nightly asset from the `nightly-latest` GitHub
+That script downloads the Linux weekly asset from the `nightly-latest` GitHub
 release:
 
 ```text
 last-singularity-linux-nightly.zip
 ```
+
+The tag and filename remain `nightly` for stable installer URLs; the GitHub
+workflow that refreshes them is weekly and skips if no commits changed.
 
 It installs the app to `~/Games/last-singularity`, writes the Deck launcher and
 Desktop Mode `.desktop` entries, backs up `shortcuts.vdf`, and adds a Steam

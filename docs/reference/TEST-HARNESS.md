@@ -186,7 +186,7 @@ Use the split this way:
 - CDP harness = deterministic pass/fail truth
 - Codex/Chrome browser tools = live inspection, console, screenshots, perf traces
 
-That keeps CI and nightly validation honest while still giving agents good browser eyes.
+That keeps CI and weekly release validation honest while still giving agents good browser eyes.
 
 ## Practical Rule
 
