@@ -20,7 +20,11 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 - `npm run build:test` — build with test API enabled but dev UX stripped
 - `npm run build:dev` — build with dev panel + test API + debug overlays enabled
 - `npm run build:web` — build only the web playtest artifact
+- `npm run build:ipad` — build only the Safari/Add-to-Home-Screen iPad web-app artifact
 - `npm run build:desktop` — build web + desktop/mobile wrapper targets
+- `npm run ios:sync` — sync the current web runtime into the native iOS wrapper
+- `npm run ios:build:sim` — sync and build the native iOS wrapper for iPad Simulator
+- `npm run ios:build:device` — sync and build the native iOS wrapper for signed devices
 - `npm run deploy:deck` — build/copy the Linux package to a Tailscale-visible Steam Deck
 - `scripts/install-steam-deck.sh` — public Deck installer that downloads the Linux weekly release asset
 - `npm run deploy:itch` — stage an itch HTML5 artifact and push it with butler
@@ -189,16 +193,22 @@ wants SteamPipe depot content.
 
 ## iPad note
 
-The iPad target is intentionally not a signed IPA yet.
+There are now two iPad paths:
 
-It is a local-install web app bundle meant for:
+- `npm run build:ipad` creates a local-install web app bundle meant for:
+  - serving over HTTP
+  - opening in Safari on iPad
+  - using "Add to Home Screen"
+  - playing with a controller and no touch-first UI assumptions
+- `npm run ios:build:sim` builds a native `WKWebView` wrapper around the same
+  synced web runtime for simulator testing.
 
-- serving over HTTP
-- opening in Safari on iPad
-- using "Add to Home Screen"
-- playing with a controller and no touch-first UI assumptions
+The native wrapper is not a gameplay rewrite and does not embed the Node
+authority stack. It runs self-contained only in sandbox mode, or it can point at
+an external sim server with `--sim-server=http://HOST:8787`.
 
-A real iPad app build would need Xcode, Apple signing, and a thin native shell. That is a later layer.
+Physical iPad deployment still needs Xcode signing, an Apple Developer Team, and
+a provisioning profile. See [iPad / iOS Build Path](IPAD-IOS-BUILD.md).
 
 ## Practical next step for Windows
 

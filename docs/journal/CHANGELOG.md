@@ -13,6 +13,15 @@
 
 ---
 
+## 2026-06-22 — iPad native wrapper scaffold
+
+- Added a thin SwiftUI/WKWebView iOS wrapper that serves the synced web runtime through a local `lbh://` scheme instead of rewriting gameplay or renderer code.
+- Added `scripts/ios-wrapper.cjs` plus `npm run ios:sync`, `ios:build:sim`, `ios:build:device`, and `ios:open` for repeatable iPad wrapper setup.
+- Documented the split between Safari Add-to-Home-Screen, native simulator wrapper, sandbox mode, and remote-authority mode.
+- Kept physical iPad deployment explicitly blocked on Apple signing, provisioning, and real hardware controller/WebGL/audio verification.
+
+---
+
 ## 2026-06-22 — Switch 1 feasibility spike
 
 - Added `docs/project/SWITCH1-ATMOSPHERE-FEASIBILITY.md`, a research memo for a future Switch 1 / Atmosphere lab probe.

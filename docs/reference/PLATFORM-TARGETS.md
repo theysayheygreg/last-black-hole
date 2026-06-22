@@ -228,6 +228,20 @@ Only build a true iPad app shell if one of these becomes true:
 
 Until then, the web-app install path is the simplest honest answer.
 
+### Current iPad implementation
+
+The repo now has both early iPad lanes:
+
+- `npm run build:ipad` stages the controller-first Safari/Add-to-Home-Screen web
+  app.
+- `npm run ios:build:sim` builds a thin native `WKWebView` shell around the same
+  synced web runtime.
+
+The native shell is still a wrapper, not a SwiftUI/Metal port. It can run the
+client-only sandbox by itself, or it can point at a Mac/mini sim server with a
+`simServer` URL. Physical iPad installs remain blocked on Apple signing and real
+device verification. See [iPad / iOS Build Path](IPAD-IOS-BUILD.md).
+
 ## Steam Deck
 
 ### What Valve cares about

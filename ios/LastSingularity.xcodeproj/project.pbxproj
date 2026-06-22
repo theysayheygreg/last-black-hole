@@ -1,0 +1,272 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		010000000000000000000101 /* LastSingularityApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000201 /* LastSingularityApp.swift */; };
+		010000000000000000000102 /* WebGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000202 /* WebGameView.swift */; };
+		010000000000000000000103 /* WebAppSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000203 /* WebAppSchemeHandler.swift */; };
+		010000000000000000000104 /* WebApp in Resources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000204 /* WebApp */; };
+		010000000000000000000105 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 010000000000000000000205 /* LaunchScreen.storyboard */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		010000000000000000000201 /* LastSingularityApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastSingularityApp.swift; sourceTree = "<group>"; };
+		010000000000000000000202 /* WebGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebGameView.swift; sourceTree = "<group>"; };
+		010000000000000000000203 /* WebAppSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebAppSchemeHandler.swift; sourceTree = "<group>"; };
+		010000000000000000000204 /* WebApp */ = {isa = PBXFileReference; lastKnownFileType = folder; path = WebApp; sourceTree = "<group>"; };
+		010000000000000000000205 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		010000000000000000000206 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		010000000000000000000207 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		010000000000000000000208 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		010000000000000000000209 /* Local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.example.xcconfig; sourceTree = "<group>"; };
+		010000000000000000000301 /* LastSingularity.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LastSingularity.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		010000000000000000000401 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		010000000000000000000501 = {
+			isa = PBXGroup;
+			children = (
+				010000000000000000000502 /* LastSingularity */,
+				010000000000000000000503 /* Config */,
+				010000000000000000000504 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		010000000000000000000502 /* LastSingularity */ = {
+			isa = PBXGroup;
+			children = (
+				010000000000000000000201 /* LastSingularityApp.swift */,
+				010000000000000000000202 /* WebGameView.swift */,
+				010000000000000000000203 /* WebAppSchemeHandler.swift */,
+				010000000000000000000205 /* LaunchScreen.storyboard */,
+				010000000000000000000206 /* Info.plist */,
+				010000000000000000000204 /* WebApp */,
+			);
+			path = LastSingularity;
+			sourceTree = "<group>";
+		};
+		010000000000000000000503 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				010000000000000000000207 /* Debug.xcconfig */,
+				010000000000000000000208 /* Release.xcconfig */,
+				010000000000000000000209 /* Local.example.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		010000000000000000000504 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				010000000000000000000301 /* LastSingularity.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		010000000000000000000601 /* LastSingularity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 010000000000000000000901 /* Build configuration list for PBXNativeTarget "LastSingularity" */;
+			buildPhases = (
+				010000000000000000000701 /* Sources */,
+				010000000000000000000401 /* Frameworks */,
+				010000000000000000000702 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LastSingularity;
+			productName = LastSingularity;
+			productReference = 010000000000000000000301 /* LastSingularity.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		010000000000000000000801 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					010000000000000000000601 = {
+						CreatedOnToolsVersion = 16.0;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 010000000000000000000902 /* Build configuration list for PBXProject "LastSingularity" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 010000000000000000000501;
+			productRefGroup = 010000000000000000000504 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				010000000000000000000601 /* LastSingularity */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		010000000000000000000702 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				010000000000000000000105 /* LaunchScreen.storyboard in Resources */,
+				010000000000000000000104 /* WebApp in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		010000000000000000000701 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				010000000000000000000101 /* LastSingularityApp.swift in Sources */,
+				010000000000000000000102 /* WebGameView.swift in Sources */,
+				010000000000000000000103 /* WebAppSchemeHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		010000000000000000000A01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 010000000000000000000207 /* Debug.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			};
+			name = Debug;
+		};
+		010000000000000000000A02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 010000000000000000000208 /* Release.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		010000000000000000000A03 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 010000000000000000000207 /* Debug.xcconfig */;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_LANGUAGE = en;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LastSingularity/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_NAME = LastSingularity;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		010000000000000000000A04 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 010000000000000000000208 /* Release.xcconfig */;
+			buildSettings = {
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_LANGUAGE = en;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = LastSingularity/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.2.0;
+				PRODUCT_NAME = LastSingularity;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		010000000000000000000901 /* Build configuration list for PBXNativeTarget "LastSingularity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				010000000000000000000A03 /* Debug */,
+				010000000000000000000A04 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		010000000000000000000902 /* Build configuration list for PBXProject "LastSingularity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				010000000000000000000A01 /* Debug */,
+				010000000000000000000A02 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 010000000000000000000801 /* Project object */;
+}

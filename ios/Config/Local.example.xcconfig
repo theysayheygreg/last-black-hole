@@ -1,0 +1,6 @@
+// Copy this file to Local.xcconfig for machine-local signing or remote sim defaults.
+// Local.xcconfig is ignored by git.
+
+// LBH_DEVELOPMENT_TEAM = ABCDE12345
+// LBH_BUNDLE_IDENTIFIER = com.yourdomain.lastsingularity
+// LBH_SIM_SERVER_URL = http://100.x.y.z:8787

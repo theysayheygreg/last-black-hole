@@ -14,3 +14,6 @@ handoffs/
 tests/*-probe.png
 __pycache__/
 tools/**/__pycache__/
+ios/LastSingularity/WebApp/*
+!ios/LastSingularity/WebApp/.gitkeep
+ios/Config/Local.xcconfig

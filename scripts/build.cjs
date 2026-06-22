@@ -395,7 +395,14 @@ function buildIpadWebApp(targetRoot, mode) {
       '- no Xcode or signing ceremony yet',
       '- good enough for local controller-based playtests',
       '',
-      'A real IPA pipeline can come later if the game earns it.',
+      'The repo also has a thin native iOS wrapper for simulator/device work:',
+      '',
+      '```sh',
+      'npm run ios:sync -- --mode=release',
+      'npm run ios:build:sim -- --mode=release',
+      '```',
+      '',
+      'Device builds still require Xcode signing. See `docs/reference/IPAD-IOS-BUILD.md` in the repo.',
       '',
     ].join('\n')
   );

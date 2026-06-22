@@ -61,6 +61,7 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 | Local desktop from source | Primary development target | Clone the repo, install deps, run `npm run play` |
 | Steam Deck | Weekly handheld playtest target | Install the Linux weekly build with the Deck installer below |
 | Packaged desktop | Friend/tester handoff target | Open the platform artifact and read `START-HERE.md` |
+| iPad / iOS | Early controller wrapper target | `npm run build:ipad` for Safari install, `npm run ios:build:sim` for native simulator |
 | Browser sandbox | Debug/demo fallback | `npm run stack:sandbox`; not product play |
 | itch.io HTML5 | Planned public demo lane | Uses a sandboxed web artifact, not the full authority stack |
 | Steam Early Access | Planned storefront lane | Uses desktop depots; not public yet |
@@ -129,6 +130,26 @@ Open `START-HERE.md` in the build zip. The short version:
 `npm run stack:sandbox` opens the old client-only browser sandbox. Use it for
 renderer or HUD debugging only. Normal play should use `npm run play`, the Deck
 installer, or a packaged desktop build so the authoritative sim owns the run.
+
+### iPad / iOS
+
+For the lowest-friction iPad check, build the Safari local-install artifact:
+
+```sh
+npm run build:ipad
+```
+
+For the native wrapper simulator path:
+
+```sh
+npm run ios:sync -- --mode=release
+npm run ios:build:sim -- --mode=release
+```
+
+The native iOS app is a thin `WKWebView` shell around the same web runtime. It
+does not embed the Node sim/control-plane stack; use sandbox mode by default or
+build with `--sim-server=http://HOST:8787` to point at remote authority. Device
+deployment requires Apple signing. See [iPad / iOS Build Path](docs/reference/IPAD-IOS-BUILD.md).
 
 ## Requirements
 
