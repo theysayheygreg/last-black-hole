@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-06-22 — Current-truth agent onboarding cleanup
+
+- Rewrote `CLAUDE.md` onboarding so new agents start from the v0.2 design/code delta, current platform reality, and sim/renderer authority boundaries instead of jam-era constraints.
+- Added v0.2 superseded banners to legacy rendering and slingshot design docs that still read as canonical.
+- Updated `SLINGSHOT-NETWORK.md` to reflect that server-authoritative slingshot state has shipped and that route readability/tuning are now the open questions.
+
+---
+
 ## 2026-06-22 — iPad native bench framing
 
 - Reframed iPad as a native Apple-platform competence bench, not just a Safari/WKWebView wrapper convenience target.

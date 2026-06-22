@@ -2,6 +2,9 @@
 
 > Turn the most dangerous thing in the universe into a highway.
 
+> **v0.2 status:** Historical design exploration. The active slingshot design
+> and shipped authority status live in `SLINGSHOT-NETWORK.md`.
+
 ---
 
 ## Fantasy

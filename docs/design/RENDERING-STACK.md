@@ -2,6 +2,11 @@
 
 > five layers. physics at the bottom, cockpit at the top. everything in between is the art.
 
+> **v0.2 status:** This is a historical v0.1 rendering design. The current
+> renderer direction is Three.js as the default presentation substrate while
+> preserving the ASCII-fluid identity. Start from
+> `docs/v0.2/DESIGN.md` and `docs/project/THREEJS-MIGRATION-PLAN.md`.
+
 ---
 
 ## Design Intent

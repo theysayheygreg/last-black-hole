@@ -2,23 +2,40 @@
 
 ## Project
 
-Roguelike extraction game. Browser/WebGL. ASCII-dithered fluid sim. Game jam: March 16-22, 2026.
-Vanilla JS, ES modules, no frameworks, no TypeScript, no build step. Code starts Monday 12:01a.
+Last Singularity is a controller-first ASCII extraction roguelike built around
+fluid-surfing movement, server-authoritative runs, and a Three.js presentation
+substrate that must preserve the terminal-fluid identity.
+
+The repo path still says `last-black-hole`; treat that as implementation
+history. The current product name and player-facing docs use Last Singularity.
+
+Current platform reality:
+- Electron desktop is the primary packaged runtime.
+- Steam Deck is the main handheld playtest/deploy target.
+- Browser/WebGL remains useful for sandbox debugging and web demos.
+- iPad/WKWebView and Switch 1 are bench/probe targets, not alternate gameplay
+  forks.
 
 ## Read These First
 
 Before starting ANY task, load these into context:
-1. `docs/design/PILLARS.md` — 6 design lenses, ordered by priority
-2. `docs/design/DESIGN.md` — the game bible
-3. `docs/project/ROADMAP.md` — hour-by-hour jam plan with task IDs
-4. `docs/journal/DECISION-LOG.md` — what's decided, what's open, what was rejected
-5. `docs/design/MOVEMENT.md` — control affordances and tuning variables
+1. `docs/v0.2/README.md` — read order and source-of-truth rules for the current line
+2. `docs/v0.2/DESIGN-CODE-DELTA.md` — older ideas versus shipped code truth
+3. `docs/v0.2/DESIGN.md` — current v0.2 game bible
+4. `docs/v0.2/ROADMAP.md` — current phase plan
+5. `docs/design/PILLARS.md` — decision lenses, with v0.2 status notes
+6. `docs/design/MOVEMENT.md` — control affordances and tuning variables
+7. `docs/journal/DECISION-LOG.md` — what's decided, what's open, what was rejected
 
 For your specific layer, also read:
 - L0: `docs/design/DESIGN-DEEP-DIVE.md` (physics architecture), `docs/design/CONTROLS.md` (ship physics, input schemes, tuning variables), `docs/design/TUNING.md` (dev panel, CONFIG object, tuning workflow), `docs/design/AGENT-TESTING.md` (test harness, `__TEST_API`), `docs/project/PRE-MONDAY-RESEARCH.md`
 - L1-L2: `docs/design/SIGNAL-DESIGN.md`, `docs/design/COMBAT.md`, `docs/design/SCAVENGERS.md` (AI ships), `docs/design/SLINGSHOT.md` (gravity slingshot)
 - L3-L4: `docs/design/DESIGN-DEEP-DIVE.md` (ASCII renderer section), `docs/design/AUDIO.md`, `docs/project/RENDERER-RECOVERY-PLAN.md`, HUD section
 - L5: `docs/design/SCALING.md`, `docs/design/SIGNATURES.md` (cosmic signatures)
+
+Older jam-era docs in `docs/design/` and `docs/project/` are still valuable idea
+mines, but when they conflict with `docs/v0.2/`, prefer the v0.2 docs unless a
+newer decision-log entry says otherwise.
 
 ## Design Pillars (decision lenses, in priority order)
 
@@ -33,13 +50,13 @@ See `docs/design/PILLARS.md` for full descriptions and tests.
 
 ## Important Constraints
 
-- **No code before 12:01a Monday March 16**
-- **Art Is Product is non-negotiable** — ASCII shader goes in Monday, not Friday
+- **Art Is Product is non-negotiable** — Three.js deepens the ASCII-fluid identity; it does not replace it with generic 3D space
 - **Forge is the architectural brake** — flag concerns in night reports, don't just ship
 - **Signal does NOT buy capability** — see SIGNAL-DESIGN.md
-- **Layer boundaries need Greg's sign-off** — don't advance to L1 until L0 passes "is it fun to fly around?"
+- **Layer boundaries need Greg's sign-off** — especially when changing movement, sim authority, progression, or platform contracts
 - **Target 60fps** — performance is a hard constraint, not a nice-to-have
-- **Multiplayer is a stretch goal** — no networking code unless ahead by Thursday
+- **Sim authority stays explicit** — local/remote clients consume authoritative state; do not move simulation truth into renderer objects
+- **Platform probes stay thin** — iPad/Switch work should consume the existing web/runtime contracts before proposing native gameplay rewrites
 
 ## Git Rules
 

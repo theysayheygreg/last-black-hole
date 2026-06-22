@@ -3,6 +3,10 @@
 > The most dangerous thing in the universe should be the fastest highway.
 > This doc explores how to get there.
 
+> **v0.2 status:** Historical design exploration. The chosen multi-anchor
+> slingshot design and shipped authority status live in
+> `SLINGSHOT-NETWORK.md`.
+
 ---
 
 ## What This Doc Is

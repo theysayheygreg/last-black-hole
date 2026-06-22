@@ -2,6 +2,12 @@
 
 > Companion to DESIGN.md. Detailed technical design for each system, informed by research into fluid sims, rendering, AI, and UI. No code — implementation starts Monday.
 
+> **v0.2 status:** This is historical v0.1 deep-dive material. The physics
+> notes remain useful, but the renderer section predates the Three.js default
+> path. Start current renderer work from `docs/v0.2/DESIGN.md`,
+> `docs/v0.2/DESIGN-CODE-DELTA.md`, and
+> `docs/project/THREEJS-MIGRATION-PLAN.md`.
+
 ---
 
 ## 1. Fluid Simulation Architecture

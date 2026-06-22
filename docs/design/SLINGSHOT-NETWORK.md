@@ -11,7 +11,7 @@
 
 This doc extends both: slingshot becomes a **terrain mechanic available off any heavy enough object**, and that turns "swing past a well" into a **route-planning gameplay loop** that runs over the whole map. Map geography becomes the puzzle.
 
-This doc names the system, the anchor catalog, the loop, and the design decisions already made. Numbers come later.
+This doc names the system, the anchor catalog, the loop, and the design decisions already made. The v0.2 runtime has shipped server-authoritative slingshot engagement, energy, release, and chain state; numbers and route readability remain the live tuning work.
 
 ---
 
@@ -156,7 +156,7 @@ Without this, the system is invisible and the player can't develop mastery. **Th
 
 ---
 
-## Open Decisions Deferred to Numbers Pass
+## Open Decisions Deferred to Numbers And Route Pass
 
 Captured here so they're explicit:
 
@@ -166,7 +166,7 @@ Captured here so they're explicit:
 4. **Chain window timing.** First-pass timing is implemented with hull modifiers. Playtest needs to decide whether the window reads as skillful or arbitrary.
 5. **Failure modes.** What happens if you engage too close to a well's kill radius? Does the slingshot save you (graze the lion) or condemn you (committed to a bad orbit)? My instinct: it commits you. The risk is what makes the reward real.
 6. **Cooldown / cost.** Probably no per-slingshot cooldown — the cost is the geometry of the next engagement opportunity. But a hull-level "max chain length" might matter for balance. TBD.
-7. **Server authority.** Slingshot state needs to be authoritative for multiplayer. Engagement decision is client-initiated, energy resolution is server-resolved. The same shape as pulse.
+7. **Route-readable map pass.** Server authority has shipped; the next design question is whether Shallows, Expanse, and Deep Field expose intentional anchor chains that a player can read without debug overlays.
 
 ---
 
