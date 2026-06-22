@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-06-22 — Godot is a future console probe, not the default split
+
+**Decision:** Do not make "Three.js for PC/web and Godot for console" the
+default LBH platform plan. Steam Deck stays on the Three/Electron Linux package
+for current playtesting. Godot is parked as a later feasibility probe once the
+snapshot, input, content, save, and golden-sim contracts are portable enough
+that Godot can act as a renderer shell instead of a second game.
+
+**Why:** The expensive risk is not drawing LBH in Godot; it is preserving sim
+truth. Porting movement, slingshot, signal, AI, inventory, run results, and
+progression into Godot before the contract is engine-neutral would duplicate
+the product and create drift.
+
+**Where it landed:** `docs/project/GODOT-CONSOLE-FUTURE-INVESTIGATION.md` and
+the backlog's Godot / Native Client Port Probe entry.
+
+**Door status:** Open as a future Run It Twice probe. Closed as a default
+platform split for v0.2 Deck work.
+
 ## 2026-06-22 — Three renderer is flat-view 3D, not a 2D copy target
 
 **Decision:** The Three path should be a first-class 3D scene even when the game keeps its top-down, flat visual language. The current implementation uses an orthographic top-down camera, z-separated backdrop/fabric/foreground layers, pooled dynamic world meshes, motion-driven parallax, and a screen-space present pass. The Composer frame remains the ASCII/fabric source for now, but Composer and Three share `fluid-canvas` and a WebGL2 context; Three layers transparent scene output over the Composer frame without CPU canvas copies.

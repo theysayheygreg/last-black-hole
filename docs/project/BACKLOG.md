@@ -285,11 +285,12 @@
 - **Value if revisited:** Matches the game's actual shape better than a persistent world or public free-for-all service.
 - **First revival step:** Reuse the local client/server protocol for one hosted run instance before any matchmaking work.
 
-### Godot / Native Client Port
-- **What:** Move the client/runtime to a more mature native or engine-backed stack once the gameplay and protocol contracts are stable.
-- **Why deferred:** The current browser/Electron stack is good enough to prove the game. A port now would mix architecture cleanup with runtime migration.
-- **Value if revisited:** Better packaging, better platform reach, cleaner renderer/runtime tooling.
-- **First revival step:** Keep the port target behind the protocol boundary. Port the game contract, not today's in-browser code structure.
+### Godot / Native Client Port Probe
+- **What:** Test whether Godot can serve as a future console-facing renderer shell around shared LBH sim/content truth.
+- **Why deferred:** Three/Electron is the current PC/web/Steam Deck path. Godot as a default console target would become a second game unless snapshot, input, content, save, and golden-sim contracts are engine-neutral first.
+- **Value if revisited:** Better console-adjacent tooling, mature input/UI/editor surfaces, and a possible path through licensed console porting partners.
+- **First revival step:** Build the platform contract and run a thin Godot snapshot-rendering probe. Do not port physics, AI, signal, inventory, or progression into Godot first.
+- **Design note:** See `docs/project/GODOT-CONSOLE-FUTURE-INVESTIGATION.md`.
 
 ### Headless Sim Harness
 - **What:** Run gameplay tests against a dedicated sim process instead of an in-page browser loop.

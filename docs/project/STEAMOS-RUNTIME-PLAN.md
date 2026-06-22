@@ -12,7 +12,8 @@ The immediate Deck build remains the Linux Electron package:
 - sim: embedded Node child process;
 - control plane: embedded Node child process;
 - deploy: Tailscale SSH + rsync to `/home/deck/Games/last-singularity`;
-- launch: `run-last-singularity.sh`, then Steam non-Steam library entry.
+- launch: `run-last-singularity.sh`, then a scripted Steam non-Steam library
+  entry for Gaming Mode.
 
 This is the shortest path to playable Deck iteration because it preserves the
 current game code, controller code, HUD, and authoritative local sim.
@@ -146,7 +147,7 @@ Done when:
 
 Add Steam-facing platform work without changing runtime:
 
-- Steam non-Steam shortcut instructions now;
+- scripted Steam non-Steam shortcut install now;
 - SteamOS Devkit Client upload later;
 - Steam Input action set draft;
 - controller glyph strategy;

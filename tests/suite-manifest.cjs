@@ -42,6 +42,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "DeckGamingMode",
+    file: "deck-gaming-mode.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "CoarseField",
     file: "coarse-field.cjs",
     lanes: ["core", "static", "full"],

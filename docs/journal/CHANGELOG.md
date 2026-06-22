@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-06-22 — Steam Deck Gaming Mode wiring
+
+- Added `npm run deck:gaming-mode` to register the deployed Deck wrapper as a Steam non-Steam shortcut over Tailscale.
+- The shortcut installer backs up `shortcuts.vdf`, refuses to write while Steam is running unless `--shutdown-steam` is passed, and points Steam at `run-last-singularity.sh` instead of the raw Electron binary.
+- Added a static Deck Gaming Mode test that round-trips the binary Steam shortcut format and proves Last Singularity registration is idempotent.
+- Updated Deck deployment docs so Gaming Mode through Steam is the expected test surface, with Desktop Mode kept for setup and crash triage.
+- Parked the Godot console question in a future investigation doc: Godot is a later renderer-shell probe after the sim/content contract is portable, not the default console plan.
+
+---
+
 ## 2026-06-22 — Steam Deck embedded stack fix
 
 - Fixed the Linux desktop package so embedded control-plane and sim runtimes include their new telemetry, RNG, seeded-generation, and flow-sample dependencies.

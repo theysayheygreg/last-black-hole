@@ -150,7 +150,27 @@ Previous runs are kept as:
 
 ## Add To Steam Once
 
-After the first successful copy, do this on the Deck in Desktop Mode:
+After the first successful copy, Codex can register the deployed wrapper as a
+Steam non-Steam game:
+
+```sh
+LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deck:gaming-mode -- --shutdown-steam
+```
+
+Dry-run first if you only want to inspect the target account/path:
+
+```sh
+npm run deck:gaming-mode -- --host=steamdeck.tail1ac9cf.ts.net --dry-run
+```
+
+The command writes one idempotent **Last Singularity** shortcut into the active
+Steam user's `shortcuts.vdf`, after backing up the existing file. It refuses to
+write while Steam is running unless `--shutdown-steam` is passed.
+
+After it runs, restart Steam or return to Gaming Mode so Steam reloads the
+library entry. Launch **Last Singularity** from the normal Deck surface.
+
+Manual fallback on the Deck in Desktop Mode:
 
 1. Open Steam.
 2. Use **Games -> Add a Non-Steam Game to My Library**.

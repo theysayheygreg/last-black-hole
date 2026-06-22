@@ -254,7 +254,7 @@ It is:
 
 - package the game as a desktop app
 - make the game fully playable on controller
-- test it on Steam Deck in Desktop Mode and as a non-Steam app
+- test it on Steam Deck through the wrapper from Gaming Mode as a non-Steam app
 - if it earns a Steam release, align with Steam Input and Deck compatibility expectations
 
 That is the right order because it proves the feel before you commit to platform-specific engineering.
@@ -264,6 +264,7 @@ That is the right order because it proves the feel before you commit to platform
 The first deployment scripts now exist:
 
 - `npm run deploy:deck` copies the Linux package to a Tailscale-visible Steam Deck.
+- `npm run deck:gaming-mode` registers the deployed wrapper as a Steam non-Steam shortcut for Gaming Mode.
 - `npm run deploy:itch` stages an itch-specific HTML5 artifact and pushes it with butler.
 - `npm run deploy:steam` prepares SteamPipe depot content and VDF scripts.
 
@@ -277,8 +278,8 @@ The important build-target delta is documented in [Deployment Pipelines](DEPLOYM
 
 For internal testing, the practical path is straightforward:
 
-- run the build in Desktop Mode
-- add it as a non-Steam game if needed
+- run the build from Desktop Mode only for crash triage
+- add the wrapper as a non-Steam game with `deck:gaming-mode`
 - test controller behavior, UI scale, and performance on actual Deck hardware
 
 That is enough to answer the early questions.

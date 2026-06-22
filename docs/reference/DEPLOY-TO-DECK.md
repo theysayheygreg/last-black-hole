@@ -22,7 +22,7 @@ The easiest real-world deployment path is:
 
 1. Boot the Deck into Desktop Mode.
 2. Copy the Linux build folder onto the Deck.
-3. Add the executable as a non-Steam app.
+3. Add the launcher wrapper as a non-Steam app.
 4. Launch it from Steam and test controller behavior.
 
 That is enough for private playtests.
@@ -60,9 +60,18 @@ On the Deck in Desktop Mode:
 
 1. Open Steam.
 2. Use **Games → Add a Non-Steam Game to My Library**.
-3. Browse to the executable inside the copied folder.
+3. Browse to the launcher wrapper inside the copied folder.
 4. Add it.
 5. Return to Gaming Mode if you want to test the normal Deck surface.
+
+For the current automated deploy, the wrapper is:
+
+```text
+/home/deck/Games/last-singularity/run-last-singularity.sh
+```
+
+Do not add the raw `Last Singularity` executable. The wrapper owns the Deck
+runtime flags and launch logs.
 
 Valve's docs confirm that Deck supports installing external apps and adding them from Desktop Mode:
 
@@ -110,10 +119,19 @@ LBH_DECK_HOST=steamdeck npm run deploy:deck
 ```
 
 That command builds the Linux package, copies `Last Singularity-linux-x64` over
-SSH to the Deck, writes a `run-last-singularity.sh` launcher, and leaves the
-final "add as non-Steam app" step on the Deck. The launcher sets `LBH_DECK=1`,
-which makes the packaged Electron shell use the Deck profile: 1280x800
-fullscreen with the normal 16:9 playfield letterboxed inside it.
+SSH to the Deck, and writes a `run-last-singularity.sh` launcher. The launcher
+sets `LBH_DECK=1`, which makes the packaged Electron shell use the Deck profile:
+1280x800 fullscreen with the normal 16:9 playfield letterboxed inside it.
+
+After deploy, register the wrapper with Steam for Gaming Mode:
+
+```sh
+LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam
+```
+
+The Gaming Mode command backs up Steam's `shortcuts.vdf`, inserts or updates one
+**Last Singularity** non-Steam entry, and points it at the wrapper. It refuses
+to write while Steam is running unless `--shutdown-steam` is passed.
 
 The deploy also writes launcher shortcuts to:
 

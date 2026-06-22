@@ -36,6 +36,20 @@ npm run deploy:deck -- --no-build
 npm run deploy:deck -- --dry-run
 ```
 
+Gaming Mode library registration:
+
+```sh
+LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam
+```
+
+Useful options:
+
+```sh
+npm run deck:gaming-mode -- --host=100.x.y.z --user=deck
+npm run deck:gaming-mode -- --host=steamdeck --dry-run
+npm run deck:gaming-mode -- --host=steamdeck --steam-user-id=<id>
+```
+
 What the Deck target needs that the web build does not:
 
 - a native-ish Linux desktop package, not just `index.html`;
@@ -47,8 +61,8 @@ What the Deck target needs that the web build does not:
 - suspend/resume testing from Gaming Mode.
 
 The current pipeline builds `Last Singularity-linux-x64`, copies it over SSH to a
-Tailscale-visible Deck, writes `run-last-singularity.sh`, and leaves Steam
-library registration as the manual Deck-side step.
+Tailscale-visible Deck, writes `run-last-singularity.sh`, and can register that
+wrapper as a Steam non-Steam shortcut for Gaming Mode.
 The Deck launcher sets `LBH_DECK=1`, which switches the packaged shell to a
 1280x800 fullscreen window for handheld play while preserving the 16:9
 playfield. It also applies the current SteamOS Electron profile:
@@ -102,9 +116,25 @@ Greg's personal Steam Deck tailnet.
 
 ### Gaming Mode Status
 
-The private deploy folder is now the right shape for SteamOS, but Gaming Mode
-does not see it until Steam has a library entry. The current safe path is
-manual and one-time:
+The private deploy folder is now the right shape for SteamOS, and Codex can add
+the Steam library entry directly over Tailscale:
+
+```sh
+LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam
+```
+
+The script:
+
+- verifies the wrapper exists at `/home/deck/Games/last-singularity/run-last-singularity.sh`;
+- refuses to write while Steam is running unless `--shutdown-steam` is passed;
+- backs up `shortcuts.vdf` with a timestamped `.lbh-backup-*` suffix;
+- inserts or updates exactly one **Last Singularity** non-Steam shortcut;
+- points Steam at the wrapper, not the raw Electron binary.
+
+After the script runs, restart Steam or return to Gaming Mode so Steam reloads
+the library entry.
+
+Manual fallback:
 
 1. Boot the Deck into Desktop Mode.
 2. Open Steam.
@@ -121,9 +151,8 @@ manual and one-time:
 Future Codex deploys overwrite files in place, so the Steam library entry should
 continue pointing at the latest build.
 
-Do not edit `shortcuts.vdf` while Steam is running. If we automate the shortcut
-later, make it a separate command that backs up `shortcuts.vdf`, verifies Steam
-is closed, writes one idempotent entry, and can restore the backup.
+Do not edit `shortcuts.vdf` while Steam is running. Use `deck:gaming-mode` so
+the backup, Steam-closed check, and idempotent entry update happen together.
 
 Valve's official Devkit Client is the more formal future path. It pairs a dev PC
 with the Deck, uploads a local build with rsync-over-SSH, and creates a
