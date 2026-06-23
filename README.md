@@ -123,6 +123,11 @@ and launches the control plane and sim as Deck-local child processes on loopback
 ports. The only network dependency in Greg's current workflow is the Tailscale
 copy step used to install a fresh build onto the Deck.
 
+Use Desktop Mode to install or triage boot logs, but use Gaming Mode for real
+controller play. Steam Input may leave non-Steam apps on the Desktop control
+layout in Desktop Mode, so `L1`/`R1` tab navigation is only a reliable acceptance
+check once **Last Singularity** appears under **Library -> Non-Steam**.
+
 ### Packaged Desktop Builds
 
 Open `START-HERE.md` in the build zip. The short version:

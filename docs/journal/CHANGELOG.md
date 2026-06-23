@@ -13,6 +13,8 @@
 - Tightened the renderer harness server readiness check so it recognizes the current static-server log line instead of waiting for its fallback timer.
 - Verified the deployed Deck build boots the local packaged Three renderer while embedded control plane and sim both run on Deck loopback ports.
 - Updated README, Deck runbooks, deployment notes, platform targets, and build pipeline docs to state that Deck runtime is self-contained and Tailscale is deploy transport only.
+- Hardened Gaming Mode shortcut registration so the Codex/installer paths can write **Last Singularity** into every Steam userdata `shortcuts.vdf` when the active Deck account is ambiguous.
+- Documented Desktop Mode as install/triage only for controller acceptance because Steam Input can keep non-Steam apps on the Desktop control layout there.
 
 ---
 

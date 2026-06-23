@@ -54,12 +54,21 @@ for name in deck-launch electron; do
 done
 export ELECTRON_LOG_FILE="$LOG_DIR/electron.log"
 export LBH_DECK_LOG_DIR="$LOG_DIR"
+EXTRA_FLAGS=()
 if [ "${LBH_DECK_DISABLE_GPU:-0}" = "1" ]; then
-  EXTRA_GPU_FLAGS="--disable-gpu"
-else
-  EXTRA_GPU_FLAGS=""
+  EXTRA_FLAGS+=("--disable-gpu")
 fi
-exec "./Last Singularity" --no-sandbox --disable-gpu-sandbox --ignore-gpu-blocklist --ozone-platform=x11 --enable-logging=stderr $EXTRA_GPU_FLAGS "$@" >> "$LOG_DIR/deck-launch.log" 2>&1
+if [ "${LBH_DECK_DISABLE_GPU_COMPOSITING:-0}" = "1" ]; then
+  EXTRA_FLAGS+=("--disable-gpu-compositing")
+fi
+if [ "${LBH_DECK_IN_PROCESS_GPU:-0}" = "1" ]; then
+  EXTRA_FLAGS+=("--in-process-gpu")
+fi
+if [ -n "${LBH_DECK_EXTRA_FLAGS:-}" ]; then
+  read -r -a USER_EXTRA_FLAGS <<< "$LBH_DECK_EXTRA_FLAGS"
+  EXTRA_FLAGS+=("${USER_EXTRA_FLAGS[@]}")
+fi
+exec "./Last Singularity" --no-sandbox --disable-gpu-sandbox --ignore-gpu-blocklist --ozone-platform=x11 --enable-logging=stderr "${EXTRA_FLAGS[@]}" "$@" >> "$LOG_DIR/deck-launch.log" 2>&1
 EOF
   chmod +x "$launcher"
 }
@@ -268,21 +277,24 @@ def shortcut_appid(exe, name):
     return (binascii.crc32((exe + name).encode("utf-8")) | 0x80000000) & 0xFFFFFFFF
 
 
-def select_shortcuts_path():
+def select_shortcuts_paths():
     explicit = os.environ.get("LBH_STEAM_USER_ID", "").strip()
-    if explicit:
-        return userdata_root / explicit / "config" / "shortcuts.vdf"
+    all_users = os.environ.get("LBH_ALL_STEAM_USERS", "1").strip().lower() not in ("0", "false", "no")
+    if explicit and explicit.lower() != "all":
+        return [userdata_root / explicit / "config" / "shortcuts.vdf"]
 
     dirs = sorted([path for path in userdata_root.iterdir() if path.is_dir() and path.name.isdigit()])
     if not dirs:
         raise RuntimeError(f"no Steam userdata directories under {userdata_root}")
+    if explicit.lower() == "all" or all_users or len(dirs) > 1:
+        return [path / "config" / "shortcuts.vdf" for path in dirs]
     with_shortcuts = [path for path in dirs if (path / "config" / "shortcuts.vdf").exists()]
     if len(with_shortcuts) == 1:
-        return with_shortcuts[0] / "config" / "shortcuts.vdf"
+        return [with_shortcuts[0] / "config" / "shortcuts.vdf"]
     if len(dirs) == 1:
-        return dirs[0] / "config" / "shortcuts.vdf"
+        return [dirs[0] / "config" / "shortcuts.vdf"]
     candidates = sorted(dirs, key=lambda path: (path / "config").stat().st_mtime if (path / "config").exists() else path.stat().st_mtime, reverse=True)
-    return candidates[0] / "config" / "shortcuts.vdf"
+    return [candidates[0] / "config" / "shortcuts.vdf"]
 
 
 def upsert(root):
@@ -325,22 +337,22 @@ def upsert(root):
     return key, entry["appid"]
 
 
-shortcuts_path = select_shortcuts_path()
-shortcuts_path.parent.mkdir(parents=True, exist_ok=True)
-data = shortcuts_path.read_bytes() if shortcuts_path.exists() else b""
-root = parse_shortcuts(data)
-key, appid = upsert(root)
-backup = None
-if data:
-    backup = shortcuts_path.with_name(shortcuts_path.name + ".lbh-backup-" + __import__("datetime").datetime.now().strftime("%Y%m%d%H%M%S"))
-    backup.write_bytes(data)
-tmp = shortcuts_path.with_name(shortcuts_path.name + ".lbh-tmp")
-tmp.write_bytes(write_shortcuts(root))
-tmp.replace(shortcuts_path)
-shortcuts_path.chmod(0o600)
-print(f"Steam shortcut installed: {shortcuts_path} key={key} appid={appid}")
-if backup:
-    print(f"Backup: {backup}")
+for shortcuts_path in select_shortcuts_paths():
+    shortcuts_path.parent.mkdir(parents=True, exist_ok=True)
+    data = shortcuts_path.read_bytes() if shortcuts_path.exists() else b""
+    root = parse_shortcuts(data)
+    key, appid = upsert(root)
+    backup = None
+    if data:
+        backup = shortcuts_path.with_name(shortcuts_path.name + ".lbh-backup-" + __import__("datetime").datetime.now().strftime("%Y%m%d%H%M%S"))
+        backup.write_bytes(data)
+    tmp = shortcuts_path.with_name(shortcuts_path.name + ".lbh-tmp")
+    tmp.write_bytes(write_shortcuts(root))
+    tmp.replace(shortcuts_path)
+    shortcuts_path.chmod(0o600)
+    print(f"Steam shortcut installed: {shortcuts_path} key={key} appid={appid}")
+    if backup:
+        print(f"Backup: {backup}")
 PY
 }
 

@@ -147,12 +147,15 @@ deployment transport from Codex/Mac to Deck, not a gameplay-rendering path.
 After deploy, register the wrapper with Steam for Gaming Mode:
 
 ```sh
-LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam
+LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam --all-users
 ```
 
 The Gaming Mode command backs up Steam's `shortcuts.vdf`, inserts or updates one
-**Last Singularity** non-Steam entry, and points it at the wrapper. It refuses
-to write while Steam is running unless `--shutdown-steam` is passed.
+**Last Singularity** non-Steam entry, and points it at the wrapper. With
+`--all-users`, it writes that entry to every Steam userdata directory on the
+Deck so the shortcut appears even when the active Gaming Mode account is not the
+first directory the script finds. It refuses to write while Steam is running
+unless `--shutdown-steam` is passed.
 
 The deploy also writes launcher shortcuts to:
 
@@ -169,3 +172,7 @@ npm run deploy:deck -- --host=100.x.y.z --user=deck --dir=/home/deck/Games/last-
 This is still a local-test pipeline, not a Steamworks deployment path. See
 [Deployment Pipelines](DEPLOYMENT-PIPELINES.md) for the larger Deck/itch/Steam
 split and the build-target deltas from the web runtime.
+
+Desktop Mode remains an install and triage surface. Steam Input may keep the
+built-in controls on the Desktop layout there, so LBH controller acceptance
+should happen from **Library -> Non-Steam** in Gaming Mode.

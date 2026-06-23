@@ -291,74 +291,34 @@ function remotePathExists(ssh, target, remotePath) {
   }
 }
 
-function selectShortcutsPath(ssh, target, steamUserId) {
+function shortcutsTargetForUserDir(userDir) {
+  return {
+    userDir,
+    shortcutsPath: `${userDir}/config/shortcuts.vdf`,
+  };
+}
+
+function selectShortcutsTargets(ssh, target, { steamUserId = "", allUsers = false } = {}) {
   if (steamUserId) {
     const base = sshOutput(ssh, target, "printf '%s' \"$HOME/.steam/steam/userdata\"").trim();
     const remoteDir = `${base}/${steamUserId}`;
-    return {
-      userDir: remoteDir,
-      shortcutsPath: `${remoteDir}/config/shortcuts.vdf`,
-    };
+    return [shortcutsTargetForUserDir(remoteDir)];
   }
 
   const dirs = findSteamUserDirs(ssh, target);
   if (dirs.length === 0) throw new Error("No Steam userdata directories found on the Deck.");
-  if (dirs.length === 1) {
-    return {
-      userDir: dirs[0],
-      shortcutsPath: `${dirs[0]}/config/shortcuts.vdf`,
-    };
-  }
-
-  const withShortcuts = dirs.filter((dir) => remotePathExists(ssh, target, `${dir}/config/shortcuts.vdf`));
-  if (withShortcuts.length === 1) {
-    return {
-      userDir: withShortcuts[0],
-      shortcutsPath: `${withShortcuts[0]}/config/shortcuts.vdf`,
-    };
-  }
-
-  throw new Error([
-    "Multiple Steam userdata directories found.",
-    "Pass --steam-user-id=<id> so Codex writes the shortcut to the active Deck account.",
-    `Candidates: ${dirs.join(", ")}`,
-  ].join(" "));
+  if (allUsers || dirs.length > 1) return dirs.map(shortcutsTargetForUserDir);
+  return [shortcutsTargetForUserDir(dirs[0])];
 }
 
-function readRemoteFileOrEmpty(ssh, target, remotePath) {
-  if (!remotePathExists(ssh, target, remotePath)) return Buffer.alloc(0);
-  return sshOutput(ssh, target, `cat ${shellQuote(remotePath)}`, { encoding: "buffer" });
-}
-
-function timestamp() {
-  return new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14);
-}
-
-function installShortcut(options) {
+function installShortcutIntoSelection(options, selection) {
   const {
     ssh,
     target,
     remoteDir,
-    steamUserId,
     dryRun,
-    shutdown,
   } = options;
-  const launcher = `${remoteDir.replace(/\/$/, "")}/run-last-singularity.sh`;
 
-  sshOutput(ssh, target, `test -x ${shellQuote(launcher)}`);
-
-  const running = remoteSteamProcesses(ssh, target);
-  if (running && !shutdown && !dryRun) {
-    throw new Error([
-      "Steam is running on the Deck, so shortcuts.vdf is not safe to edit.",
-      "Run again with --shutdown-steam from Desktop Mode, or close Steam manually first.",
-      "",
-      running,
-    ].join("\n"));
-  }
-  if (running && shutdown && !dryRun) shutdownSteam(ssh, target);
-
-  const selection = selectShortcutsPath(ssh, target, steamUserId);
   const existing = readRemoteFileOrEmpty(ssh, target, selection.shortcutsPath);
   const root = parseShortcutsVdf(existing);
   const key = upsertShortcut(root, shortcutEntry({ remoteDir }));
@@ -382,8 +342,51 @@ function installShortcut(options) {
   return {
     key,
     appid: root.shortcuts[key].appid >>> 0,
+    userDir: selection.userDir,
     shortcutsPath: selection.shortcutsPath,
     backupPath: existing.length ? backupPath : "",
+  };
+}
+
+function readRemoteFileOrEmpty(ssh, target, remotePath) {
+  if (!remotePathExists(ssh, target, remotePath)) return Buffer.alloc(0);
+  return sshOutput(ssh, target, `cat ${shellQuote(remotePath)}`, { encoding: "buffer" });
+}
+
+function timestamp() {
+  return new Date().toISOString().replace(/[^\d]/g, "").slice(0, 14);
+}
+
+function installShortcut(options) {
+  const {
+    ssh,
+    target,
+    remoteDir,
+    steamUserId,
+    allUsers,
+    dryRun,
+    shutdown,
+  } = options;
+  const launcher = `${remoteDir.replace(/\/$/, "")}/run-last-singularity.sh`;
+
+  sshOutput(ssh, target, `test -x ${shellQuote(launcher)}`);
+
+  const running = remoteSteamProcesses(ssh, target);
+  if (running && !shutdown && !dryRun) {
+    throw new Error([
+      "Steam is running on the Deck, so shortcuts.vdf is not safe to edit.",
+      "Run again with --shutdown-steam from Desktop Mode, or close Steam manually first.",
+      "",
+      running,
+    ].join("\n"));
+  }
+  if (running && shutdown && !dryRun) shutdownSteam(ssh, target);
+
+  const selections = selectShortcutsTargets(ssh, target, { steamUserId, allUsers });
+  const entries = selections.map((selection) => installShortcutIntoSelection(options, selection));
+
+  return {
+    entries,
     launcher,
   };
 }
@@ -396,6 +399,10 @@ function main() {
   const ssh = process.env.LBH_SSH || "ssh";
   const dryRun = hasFlag("--dry-run");
   const shutdown = hasFlag("--shutdown-steam");
+  const allUsers = hasFlag("--all-users")
+    || process.env.LBH_DECK_ALL_STEAM_USERS === "1"
+    || steamUserId === "all";
+  const selectedSteamUserId = steamUserId === "all" ? "" : steamUserId;
 
   requireDeckHost(host);
   const target = sshTarget(user, host);
@@ -405,7 +412,8 @@ function main() {
     ssh,
     target,
     remoteDir,
-    steamUserId,
+    steamUserId: selectedSteamUserId,
+    allUsers,
     dryRun,
     shutdown,
   });
@@ -413,9 +421,11 @@ function main() {
   console.log("");
   console.log(dryRun ? "Steam Deck Gaming Mode shortcut dry-run complete." : "Steam Deck Gaming Mode shortcut installed.");
   console.log(`- target: ${target}`);
-  console.log(`- shortcuts: ${result.shortcutsPath}`);
-  if (result.backupPath) console.log(`- ${dryRun ? "backup would be" : "backup"}: ${result.backupPath}`);
-  console.log(`- entry: ${PRODUCT_NAME} (key ${result.key}, appid ${result.appid})`);
+  for (const entry of result.entries) {
+    console.log(`- shortcuts: ${entry.shortcutsPath}`);
+    if (entry.backupPath) console.log(`  ${dryRun ? "backup would be" : "backup"}: ${entry.backupPath}`);
+    console.log(`  entry: ${PRODUCT_NAME} (key ${entry.key}, appid ${entry.appid})`);
+  }
   console.log(`- launcher: ${result.launcher}`);
   console.log("");
   console.log("Restart Steam or return to Gaming Mode so Steam reloads the non-Steam library entry.");

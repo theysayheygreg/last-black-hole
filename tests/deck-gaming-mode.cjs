@@ -1,4 +1,6 @@
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 const {
   parseShortcutsVdf,
   writeShortcutsVdf,
@@ -12,6 +14,11 @@ function shortcutCount(root) {
 }
 
 function run() {
+  const scriptSource = fs.readFileSync(path.join(__dirname, "..", "scripts", "deploy", "deck-gaming-mode.cjs"), "utf8");
+  assert(scriptSource.includes("--all-users"), "Deck Gaming Mode installer must expose an all-users shortcut write");
+  assert(scriptSource.includes("LBH_DECK_ALL_STEAM_USERS"), "Deck Gaming Mode installer must support all-users via env var");
+  assert(scriptSource.includes("dirs.length > 1"), "Deck Gaming Mode installer must avoid picking an arbitrary Steam user when multiple users exist");
+
   const remoteDir = "/home/deck/Games/last-singularity";
   const entry = shortcutEntry({ remoteDir });
 

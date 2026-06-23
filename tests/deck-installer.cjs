@@ -26,6 +26,9 @@ function run() {
   includes(installer, ".lbh-backup-", "Installer must back up Steam shortcuts before writing");
   includes(installer, "LBH_SKIP_STEAM_SHORTCUT", "Installer must expose a Desktop Mode-only escape hatch");
   includes(installer, "LBH_DECK_BUILD_URL", "Installer must allow explicit build URL override");
+  includes(installer, "LBH_ALL_STEAM_USERS", "Installer must be able to write the non-Steam shortcut for every Deck Steam user");
+  includes(installer, 'EXTRA_FLAGS=()', "Installer launcher must support multiple Deck Electron diagnostic flags");
+  includes(installer, "LBH_DECK_EXTRA_FLAGS", "Installer launcher must allow ad hoc Deck Electron flags");
 
   const workflow = fs.readFileSync(workflowPath, "utf8");
   includes(workflow, "name: Weekly Playables", "Regular playable workflow must be labeled weekly");

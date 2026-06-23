@@ -8,6 +8,12 @@ Current position: the Deck build is the Linux Electron desktop package with the
 embedded control plane and sim. Desktop Mode is useful for install and triage.
 Gaming Mode through Steam is the real playtest target.
 
+Do not treat Desktop Mode as the controller acceptance surface. Steam Input can
+keep the built-in controls on the Desktop layout for non-Steam apps there, which
+means buttons such as `L1`/`R1` may trigger desktop/browser actions instead of
+LBH tab navigation. If the title screen paints in Desktop Mode, that proves the
+package boots; controller playability must be checked from Gaming Mode.
+
 The Deck build is intentionally self-contained. The renderer is packaged inside
 the Electron app and loaded through the app-owned `lbh://` protocol so local JS,
 JSON, Three.js, and asset files get browser-correct MIME types. Electron then
@@ -131,6 +137,19 @@ Dry-run the Steam shortcut registration:
 ```sh
 npm run deck:gaming-mode -- --host=steamdeck --dry-run
 ```
+
+When the active Steam account is ambiguous, write the shortcut to every Steam
+userdata directory on the Deck:
+
+```sh
+LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam --all-users
+```
+
+This directly updates each `userdata/<id>/config/shortcuts.vdf` with a **Last
+Singularity** non-Steam entry pointed at
+`~/Games/last-singularity/run-last-singularity.sh`. Steam must be closed while
+the file is written, then restarted or returned to Gaming Mode so the library
+reloads.
 
 ## What The Deck Launcher Does
 
@@ -280,7 +299,7 @@ LBH_DECK_DISABLE_GPU=1 ~/Games/last-singularity/run-last-singularity.sh
 ### Gaming Mode Entry Is Missing
 
 Restart Steam or return to Gaming Mode. Steam only reloads `shortcuts.vdf` on
-startup.
+startup, and the entry appears under **Library -> Non-Steam**.
 
 If it is still missing, rerun:
 
@@ -291,8 +310,11 @@ curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main
 or, for Greg's private Deck:
 
 ```sh
-LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam
+LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam --all-users
 ```
+
+If the Deck is offline or asleep, both SSH and Tailscale ping will time out and
+Codex cannot inspect or rewrite the shortcut until the device wakes.
 
 ### Restore A Steam Shortcut Backup
 

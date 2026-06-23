@@ -73,7 +73,7 @@ npm run deploy:deck -- --dry-run
 Gaming Mode library registration:
 
 ```sh
-LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam
+LBH_DECK_HOST=steamdeck npm run deck:gaming-mode -- --shutdown-steam --all-users
 ```
 
 Useful options:
@@ -82,6 +82,7 @@ Useful options:
 npm run deck:gaming-mode -- --host=100.x.y.z --user=deck
 npm run deck:gaming-mode -- --host=steamdeck --dry-run
 npm run deck:gaming-mode -- --host=steamdeck --steam-user-id=<id>
+npm run deck:gaming-mode -- --host=steamdeck --shutdown-steam --all-users
 ```
 
 What the Deck target needs that the web build does not:
@@ -180,7 +181,9 @@ The script:
 - points Steam at the wrapper, not the raw Electron binary.
 
 After the script runs, restart Steam or return to Gaming Mode so Steam reloads
-the library entry.
+the library entry. If the shortcut does not appear, write with `--all-users` so
+every `userdata/<id>/config/shortcuts.vdf` gets the same entry; the active
+Gaming Mode account is sometimes not obvious from SSH.
 
 Manual fallback:
 
@@ -201,6 +204,10 @@ continue pointing at the latest build.
 
 Do not edit `shortcuts.vdf` while Steam is running. Use `deck:gaming-mode` so
 the backup, Steam-closed check, and idempotent entry update happen together.
+
+Desktop Mode is not the input acceptance surface. Steam Input can keep the
+Deck's built-in controls on the Desktop layout there, so `L1`/`R1` may not
+behave like LBH tab buttons until the game launches from Gaming Mode.
 
 Valve's official Devkit Client is the more formal future path. It pairs a dev PC
 with the Deck, uploads a local build with rsync-over-SSH, and creates a
