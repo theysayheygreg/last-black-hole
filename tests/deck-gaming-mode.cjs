@@ -39,6 +39,11 @@ function run() {
   assert.strictEqual(shortcutCount(root), 1);
 
   const encoded = writeShortcutsVdf(root);
+  assert.deepStrictEqual(
+    Array.from(encoded.slice(-4)),
+    [0x08, 0x08, 0x08, 0x08],
+    "Steam shortcuts.vdf must include the shortcut, shortcuts object, and root terminators"
+  );
   const decoded = parseShortcutsVdf(encoded);
 
   assert.strictEqual(shortcutCount(decoded), 1);

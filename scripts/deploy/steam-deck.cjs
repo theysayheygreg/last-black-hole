@@ -47,10 +47,14 @@ function sshOptions() {
   ];
 }
 
+function remoteCommand(command) {
+  return `export PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH\n${command}`;
+}
+
 function writeRemoteFile(ssh, target, remotePath, body) {
   execFileSync(
     ssh,
-    [...sshOptions(), target, `cat > ${shellQuote(remotePath)}`],
+    [...sshOptions(), target, remoteCommand(`cat > ${shellQuote(remotePath)}`)],
     {
       cwd: ROOT,
       input: body,
@@ -94,7 +98,7 @@ function main() {
   const target = sshTarget(user, host);
 
   if (!skipPreflight) {
-    run(ssh, [...sshOptions(), target, 'true'], { skipOnDryRun: true });
+    run(ssh, [...sshOptions(), target, remoteCommand('true')], { skipOnDryRun: true });
   }
 
   if (!noBuild) {
@@ -167,9 +171,10 @@ function main() {
     '',
   ].join('\n');
 
-  run(ssh, [...sshOptions(), target, `mkdir -p ${shellQuote(remoteDir)}`], { skipOnDryRun: true });
+  run(ssh, [...sshOptions(), target, remoteCommand(`mkdir -p ${shellQuote(remoteDir)}`)], { skipOnDryRun: true });
 
   const rsyncArgs = ['-az', '--delete'];
+  rsyncArgs.push('--rsync-path=/usr/bin/rsync');
   rsyncArgs.push('-e', [ssh, ...sshOptions()].join(' '));
   if (dryRun) rsyncArgs.push('--dry-run');
   rsyncArgs.push(`${artifact}/`, `${target}:${remoteDir}/`);
@@ -183,13 +188,13 @@ function main() {
       [
         ...sshOptions(),
         target,
-        [
+        remoteCommand([
           `mkdir -p ${shellQuote(path.posix.dirname(localDesktopEntry))} ${shellQuote(path.posix.dirname(desktopShortcut))}`,
           `cp ${shellQuote(desktopEntry)} ${shellQuote(localDesktopEntry)}`,
           `cp ${shellQuote(desktopEntry)} ${shellQuote(desktopShortcut)}`,
           `chmod +x ${shellQuote(launcher)} ${shellQuote(executable)} ${shellQuote(desktopEntry)} ${shellQuote(localDesktopEntry)} ${shellQuote(desktopShortcut)}`,
           `test -x ${shellQuote(executable)}`,
-        ].join(' && '),
+        ].join(' && ')),
       ],
       {
         cwd: ROOT,

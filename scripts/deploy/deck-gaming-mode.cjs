@@ -36,8 +36,12 @@ function sshOptions() {
   ];
 }
 
+function remoteCommand(command) {
+  return `export PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH\n${command}`;
+}
+
 function sshOutput(ssh, target, command, options = {}) {
-  return execFileSync(ssh, [...sshOptions(), target, command], {
+  return execFileSync(ssh, [...sshOptions(), target, remoteCommand(command)], {
     cwd: ROOT,
     encoding: options.encoding ?? "utf8",
     maxBuffer: options.maxBuffer ?? 8 * 1024 * 1024,
@@ -46,7 +50,7 @@ function sshOutput(ssh, target, command, options = {}) {
 }
 
 function sshInput(ssh, target, command, input) {
-  execFileSync(ssh, [...sshOptions(), target, command], {
+  execFileSync(ssh, [...sshOptions(), target, remoteCommand(command)], {
     cwd: ROOT,
     input,
     stdio: ["pipe", "inherit", "inherit"],
@@ -162,6 +166,7 @@ function writeShortcutsVdf(root) {
     Buffer.from([0x00]),
     encodeCString("shortcuts"),
     encodeObject(root.shortcuts || {}),
+    Buffer.from([0x08]),
   ]);
 }
 

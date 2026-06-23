@@ -29,6 +29,7 @@ function run() {
   includes(installer, "LBH_ALL_STEAM_USERS", "Installer must be able to write the non-Steam shortcut for every Deck Steam user");
   includes(installer, 'EXTRA_FLAGS=()', "Installer launcher must support multiple Deck Electron diagnostic flags");
   includes(installer, "LBH_DECK_EXTRA_FLAGS", "Installer launcher must allow ad hoc Deck Electron flags");
+  includes(installer, "+ bytes([TYPE_END])", "Installer VDF writer must include Steam's final root terminator");
 
   const workflow = fs.readFileSync(workflowPath, "utf8");
   includes(workflow, "name: Weekly Playables", "Regular playable workflow must be labeled weekly");

@@ -82,6 +82,8 @@ function run() {
   assert(deckDeploy.includes("LBH_DECK_DISABLE_GPU"), "Deck launcher must expose a software-render rescue switch");
   assert(deckDeploy.includes("StartupWMClass"), "Deck desktop entry must expose a stable window class for Steam/Desktop");
   assert(deckDeploy.includes("deck-launch.log"), "Deck launcher must persist stderr/stdout for remote triage");
+  assert(deckDeploy.includes("remoteCommand(command)"), "Deck deploy SSH commands must seed a stable remote PATH");
+  assert(deckDeploy.includes("--rsync-path=/usr/bin/rsync"), "Deck deploy rsync must not depend on remote shell PATH");
 
   console.log("Desktop package server bundle closure is complete.");
 }

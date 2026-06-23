@@ -270,7 +270,7 @@ def encode_object(obj):
 
 
 def write_shortcuts(root):
-    return bytes([TYPE_OBJECT]) + cstring("shortcuts") + encode_object(root.get("shortcuts", {}))
+    return bytes([TYPE_OBJECT]) + cstring("shortcuts") + encode_object(root.get("shortcuts", {})) + bytes([TYPE_END])
 
 
 def shortcut_appid(exe, name):
