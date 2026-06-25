@@ -5094,6 +5094,13 @@ const server = http.createServer(async (req, res) => {
         refreshPlayerEffects(player);
       }
 
+      if (!player.isAI) {
+        // A session starts idle because AI pilots are spawned before humans
+        // arrive. Promote the loop as soon as a real player joins or rejoins.
+        runtime.emptySince = null;
+        restartTickLoop();
+      }
+
       sendJson(res, 200, { ok: true, player });
       return;
     }

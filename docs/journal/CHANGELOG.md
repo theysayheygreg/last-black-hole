@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-06-25 — Local authority movement and Three projection fix
+
+- Fixed a local-authority join regression where a running session stayed on the empty-session idle loop after a human joined, making remote movement visibly snap between sparse 1 Hz authoritative updates.
+- Corrected the Three top-down orthographic camera to match the canvas aspect ratio, so world-scene rings and markers render with equal pixel scale instead of stretching on widescreen views.
+- Added regression coverage for human joins promoting the sim loop out of idle and for the Three camera matching the capture aspect in renderer fixtures.
+
+---
+
 ## 2026-06-22 — Steam Deck packaged renderer boot fix
 
 - Fixed the Steam Deck packaged app's black screen by loading local renderer assets through an app-owned `lbh://` protocol with explicit JS/JSON MIME types instead of raw `file://...app.asar` paths.

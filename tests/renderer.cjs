@@ -169,6 +169,12 @@ async function captureFixture(page, outputDir, fixture) {
       `Fixture '${fixture.name}' Three scene is not first-class 3D`);
     assert(backendStats?.three?.camera?.kind === 'orthographic-top-down',
       `Fixture '${fixture.name}' Three camera is not the top-down orthographic camera`);
+    const camera = backendStats.three.camera;
+    const captureAspect = captures[0]?.asciiStats?.width / captures[0]?.asciiStats?.height;
+    assert(Math.abs(camera.aspect - captureAspect) < 0.02,
+      `Fixture '${fixture.name}' Three camera aspect ${camera.aspect} does not match capture ${captureAspect}`);
+    assert(Math.abs(camera.right + camera.left) < 1e-6 && Math.abs(camera.top + camera.bottom) < 1e-6,
+      `Fixture '${fixture.name}' Three camera is not centered on the top-down view`);
     assert(Array.isArray(backendStats?.three?.worldLayers)
       && backendStats.three.worldLayers.some((layer) => layer.name === 'fabric-source-layer')
       && backendStats.three.worldLayers.some((layer) => layer.name === 'background-parallax-field')

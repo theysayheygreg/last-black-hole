@@ -151,6 +151,8 @@ export class ThreeRendererBackend {
     this.worldCamera.name = 'top-down-orthographic-camera';
     this.worldCamera.position.set(0, 0, 4);
     this.worldCamera.lookAt(0, 0, 0);
+    this.worldCameraAspect = 1;
+    this._setWorldCameraAspect(sourceCanvas.width, sourceCanvas.height);
     this.worldScene = new THREE.Scene();
     this.worldScene.name = 'lbh-top-down-3d-scene';
     this.screenCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -412,6 +414,7 @@ export class ThreeRendererBackend {
     this.sourceCanvas.addEventListener('webglcontextrestored', () => {
       console.warn('[render-three] WebGL context restored');
       this.renderer.setSize(this.sourceCanvas.width, this.sourceCanvas.height, false);
+      this._setWorldCameraAspect(this.sourceCanvas.width, this.sourceCanvas.height);
     });
   }
 
@@ -419,6 +422,20 @@ export class ThreeRendererBackend {
     this.composer.resize(width, height);
     this.renderer.setSize(width, height, false);
     this.sceneTarget.setSize(width, height);
+    this._setWorldCameraAspect(width, height);
+  }
+
+  _setWorldCameraAspect(width, height) {
+    const safeWidth = Math.max(1, Number(width) || 1);
+    const safeHeight = Math.max(1, Number(height) || 1);
+    const aspect = safeWidth / safeHeight;
+    this.worldCameraAspect = aspect;
+    // The camera volume matches the canvas aspect, so world-scene meshes keep
+    // equal pixel scale on both axes instead of stretching on widescreen views.
+    this.worldCamera.left = -aspect;
+    this.worldCamera.right = aspect;
+    this.worldCamera.top = 1;
+    this.worldCamera.bottom = -1;
     this.worldCamera.updateProjectionMatrix();
   }
 
@@ -476,15 +493,17 @@ export class ThreeRendererBackend {
     const gridWindow = Math.max(0.001, Number.isFinite(state.gridWindow) ? state.gridWindow : this.lastSceneState.gridWindow);
     const dx = wrappedDelta(wx, state.camX ?? this.lastSceneState.cameraX, worldScale);
     const dy = wrappedDelta(wy, state.camY ?? this.lastSceneState.cameraY, worldScale);
+    const aspect = Math.max(0.001, this.worldCameraAspect || 1);
     return {
-      x: (dx / gridWindow) * 2,
+      x: (dx / gridWindow) * 2 * aspect,
       y: (-dy / gridWindow) * 2,
       scale: 2 / gridWindow,
     };
   }
 
   _isSceneVisible(point, radius = 0.04) {
-    return Math.abs(point.x) <= 1.25 + radius && Math.abs(point.y) <= 1.25 + radius;
+    const xLimit = Math.max(1, this.worldCameraAspect || 1) + 0.25 + radius;
+    return Math.abs(point.x) <= xLimit && Math.abs(point.y) <= 1.25 + radius;
   }
 
   _beginDynamicScene() {
@@ -663,6 +682,11 @@ export class ThreeRendererBackend {
         position: { x: 0, y: 0, z: 4 },
         near: this.worldCamera.near,
         far: this.worldCamera.far,
+        aspect: this.worldCameraAspect,
+        left: this.worldCamera.left,
+        right: this.worldCamera.right,
+        top: this.worldCamera.top,
+        bottom: this.worldCamera.bottom,
       },
       worldLayers: this._describeWorldLayers(),
       parallax: { ...this.lastSceneState },
