@@ -273,7 +273,7 @@ export class PlanetoidSystem {
   /**
    * Apply push force to ship if within range.
    */
-  applyToShip(ship) {
+  applyToShip(ship, dt = 1 / 60) {
     const cfg = CONFIG.planetoids;
 
     for (const p of this.planetoids) {
@@ -281,7 +281,7 @@ export class PlanetoidSystem {
       const { dist, nx, ny } = worldDirectionTo(p.wx, p.wy, ship.wx, ship.wy);
       const accel = proximityForce(dist, cfg.shipPushStrength, cfg.shipPushRadius);
       if (accel > 0) {
-        applyForceToShip(ship, nx, ny, accel);
+        applyForceToShip(ship, nx, ny, accel, dt);
       }
     }
   }

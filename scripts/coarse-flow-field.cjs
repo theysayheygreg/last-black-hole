@@ -29,12 +29,21 @@ function inversePowerForce(dist, strength, mass, falloff, maxRange) {
   return baseAccel * (1 - dist / maxRange);
 }
 
+function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
+  if (dist < 0.001 || dist > maxRange) return 0;
+  const safeDist = Math.max(dist, FORCE_MIN_DIST);
+  const baseSpeed = strength * mass / Math.pow(safeDist, falloff);
+  return baseSpeed * (1 - dist / maxRange);
+}
+
 function buildCoarseFlowField({
   worldScale,
   cellSize,
   wells = [],
   waveRings = [],
   wellCurrentScale = 0.3,
+  wellCurrentFalloff = 1.5,
+  wellCurrentMaxRange = 1.35,
   wellGravityScale = 0.6,
   wellGravityFalloff = 1.5,
   wellGravityMaxRange = 1.2,
@@ -74,13 +83,20 @@ function buildCoarseFlowField({
         }
 
         const dir = well.orbitalDir || 1;
-        const currentStrength = (well.mass || 1) / Math.pow(Math.max(dist, FORCE_MIN_DIST), 1.5);
-        const currentAccel = currentStrength * wellCurrentScale;
-        currentX += (-dy / dist) * dir * currentAccel;
-        currentY += (dx / dist) * dir * currentAccel;
-        if (Math.abs(currentAccel) > bestCurrent) {
-          bestCurrent = Math.abs(currentAccel);
-          sourceWellId = well.id ?? well.name ?? null;
+        const currentAccel = orbitalCurrentSpeed(
+          dist,
+          wellCurrentScale,
+          well.mass || 1,
+          wellCurrentFalloff,
+          wellCurrentMaxRange
+        );
+        if (currentAccel > 0) {
+          currentX += (-dy / dist) * dir * currentAccel;
+          currentY += (dx / dist) * dir * currentAccel;
+          if (Math.abs(currentAccel) > bestCurrent) {
+            bestCurrent = Math.abs(currentAccel);
+            sourceWellId = well.id ?? well.name ?? null;
+          }
         }
 
         const gravityStrength = inversePowerForce(
@@ -92,7 +108,7 @@ function buildCoarseFlowField({
         );
         gravityX += (dx / dist) * gravityStrength;
         gravityY += (dy / dist) * gravityStrength;
-        surf = Math.max(surf, clamp01(currentAccel / 2.5));
+        if (currentAccel > 0) surf = Math.max(surf, clamp01(currentAccel / 2.5));
 
         const killRadius = well.killRadius || 0.04;
         const ringOuter = well.ringOuter || killRadius * 2.5;

@@ -123,6 +123,11 @@ export const CONFIG = {
     maxRange: 1.2,            // World-units — ship gravity fades to zero here via linear curve.
                              // Beyond this distance, the well exerts zero force on the ship.
                              // Creates genuine flat empty space between distant wells.
+    currentStrength: 0.3,     // Tangential current speed near wells. This feeds fluid coupling,
+                             // so it should invite surfing without steering the ship from void space.
+    currentFalloff: 1.5,      // Distance exponent for surf current. Defaults to the gravity falloff.
+    currentRange: 1.35,       // World-units — orbital current fades to zero just outside gravity range.
+                             // Keeps empty space controllable while preserving near-well flow lanes.
 
     // --- Death ---
     killRadius: 0.04,         // World-units — ship dies inside this radius. ~16px at 1200px screen.

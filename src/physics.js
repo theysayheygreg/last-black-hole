@@ -15,7 +15,11 @@
  *   inversePowerForce:  strength × mass / dist^falloff, fading to 0 at maxRange
  *   ├── Used by: wells (pull), stars (push)
  *   ├── The "strength" value means "acceleration at FORCE_REF_DIST"
- *   └── Quadratic range fade: (1 - dist/maxRange)² — smooth, no hard cutoff
+ *   └── Linear range fade: (1 - dist/maxRange) — smooth, no hard cutoff
+ *
+ *   orbitalCurrentSpeed: strength × mass / dist^falloff, fading to 0 at maxRange
+ *   ├── Used by: well surf-current samples
+ *   └── Returns a target velocity, not an acceleration
  *
  *   proximityForce:  strength × (1 - dist/radius), linear fade
  *   ├── Used by: planetoids (push)
@@ -50,7 +54,7 @@ export const FORCE_MIN_DIST = 0.15;
 /**
  * Inverse-power force with finite range.
  *
- * Formula: (strength × mass / (dist/REF)^falloff) × (1 - dist/maxRange)²
+ * Formula: (strength × mass / (dist/REF)^falloff) × (1 - dist/maxRange)
  *
  * The first term is classic gravity (stronger at close range).
  * The second term fades force to exactly zero at maxRange — creating
@@ -73,6 +77,28 @@ export function inversePowerForce(dist, strength, mass, falloff, maxRange) {
   const t = dist / maxRange;
   const rangeFade = 1 - t;
   return baseAccel * rangeFade;
+}
+
+/**
+ * Orbital current target speed with finite range.
+ *
+ * The flow sampler returns this as a velocity target for fluid coupling,
+ * not as an acceleration. It intentionally keeps the older world-distance
+ * falloff curve so near-well surf lanes retain their punch, but it now
+ * fades to zero at maxRange so distant wells cannot tow the ship invisibly.
+ *
+ * @param {number} dist - actual distance in world-units
+ * @param {number} strength - current speed scale
+ * @param {number} mass - source mass multiplier
+ * @param {number} falloff - distance exponent
+ * @param {number} maxRange - current is zero beyond this distance
+ * @returns {number} target current speed in world-units/sec
+ */
+export function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
+  if (dist < 0.001 || dist > maxRange) return 0;
+  const safeDist = Math.max(dist, FORCE_MIN_DIST);
+  const baseSpeed = strength * mass / Math.pow(safeDist, falloff);
+  return baseSpeed * (1 - dist / maxRange);
 }
 
 /**

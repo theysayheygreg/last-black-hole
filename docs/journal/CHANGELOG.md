@@ -10,6 +10,8 @@
 - Centralized world radius projection in `coords.js` so canvas overlays and the Three scene use the same axis-aware world radii, while small glyphs can still opt into screen-round sizing.
 - Moved wave-ring injection and distance-based fluid dissipation to the fixed `GRID_WINDOW` scale instead of total map `WORLD_SCALE`, keeping visible fluid behavior stable on 3x3, 5x5, and 10x10 maps.
 - Reconciled local, coarse, and server fallback flow sampling: orbital current, direct gravity, wave impulses, and star hazards now stay in their intended channels instead of quietly double-counting movement force.
+- Added a finite range/fade for orbital surf current so distant wells no longer tow the ship through open space, and made wave/star/planetoid ship pushes use the actual frame timestep.
+- Updated controller coverage for the remote input contract: inventory suppresses thrust/brake scalars while preserving facing intent for subsequent actions.
 - Made star drift map/snapshot-owned and prevented visual-only star updates from mutating authoritative consumption state.
 - Added FlowField regression coverage, expanded coordinate tests for radius projection, updated the physics harness to isolate gravity from orbital current, and restored the Three perf probe to 60 FPS with a 16-pass local pressure solve.
 

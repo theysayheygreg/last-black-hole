@@ -224,7 +224,9 @@ async function run() {
       }, 350);
       await waitFor(pageRemote, () => {
         const net = window.__TEST_API.getNetworkState();
-        return net.lastRemoteInput && net.lastRemoteInput.thrust === 0 && net.lastRemoteInput.moveX === 0;
+        // Inventory suppresses action scalars but still preserves facing intent
+        // so brake-only and ability packets can steer once the menu closes.
+        return net.lastRemoteInput && net.lastRemoteInput.thrust === 0 && net.lastRemoteInput.brake === 0;
       }, { timeout: 3000 });
 
       await tapGamepadButton(pageRemote, 1); // close inventory

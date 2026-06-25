@@ -49,7 +49,7 @@ export class WaveRingSystem {
   /**
    * Apply wave ring forces to the ship (world-space).
    */
-  applyToShip(ship) {
+  applyToShip(ship, dt = 1 / 60) {
     const cfg = CONFIG.events;
     const halfWidth = cfg.waveWidth * 0.5;
 
@@ -57,7 +57,7 @@ export class WaveRingSystem {
       const { dist, nx, ny } = worldDirectionTo(ring.sourceWX, ring.sourceWY, ship.wx, ship.wy);
       const accel = waveBandForce(dist, ring.radius, halfWidth, cfg.waveShipPush, ring.amplitude);
       if (accel > 0) {
-        applyForceToShip(ship, nx, ny, accel);
+        applyForceToShip(ship, nx, ny, accel, dt);
       }
     }
   }

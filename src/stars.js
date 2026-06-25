@@ -213,7 +213,7 @@ export class StarSystem {
     this.injectIntoFluid(fluid, dt);
   }
 
-  applyToShip(ship) {
+  applyToShip(ship, dt = 1 / 60) {
     const cfg = CONFIG.stars;
     const maxRange = cfg.maxRange ?? 0.6;
 
@@ -223,7 +223,7 @@ export class StarSystem {
       const { dist, nx, ny } = worldDirectionTo(star.wx, star.wy, ship.wx, ship.wy);
       const accel = inversePowerForce(dist, cfg.shipPushStrength * td.pushMult, star.mass, cfg.shipPushFalloff, maxRange);
       if (accel > 0) {
-        applyForceToShip(ship, nx, ny, accel);
+        applyForceToShip(ship, nx, ny, accel, dt);
       }
     }
   }

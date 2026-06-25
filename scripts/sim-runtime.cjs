@@ -183,6 +183,9 @@ const SERVER_WELLS = {
   shipPullStrength: 0.6,
   shipPullFalloff: 1.5,
   maxRange: 1.2,
+  currentStrength: 0.3,
+  currentFalloff: 1.5,
+  currentRange: 1.35,
 };
 const STAR_SERVER = {
   shipPushStrength: 0.45,
@@ -485,6 +488,13 @@ function inversePowerForce(dist, strength, mass, falloff, maxRange) {
   const t = dist / maxRange;
   const rangeFade = 1 - t;
   return baseAccel * rangeFade;
+}
+
+function orbitalCurrentSpeed(dist, strength, mass, falloff, maxRange) {
+  if (dist < 0.001 || dist > maxRange) return 0;
+  const safeDist = Math.max(dist, FORCE_MIN_DIST);
+  const baseSpeed = strength * mass / Math.pow(safeDist, falloff);
+  return baseSpeed * (1 - dist / maxRange);
 }
 
 function proximityForce(dist, strength, radius) {
@@ -3360,15 +3370,22 @@ function estimateFlowSample(wx, wy) {
     const dy = worldDisplacement(wy, well.wy, ws);
     const dist = Math.hypot(dx, dy);
     if (dist < 0.01) continue;
-    const strength = (well.mass || 1) / Math.pow(Math.max(dist, FORCE_MIN_DIST), 1.5);
     const dir = well.orbitalDir || 1;
-    const currentAccel = strength * 0.3;
-    fx += (-dy / dist) * dir * currentAccel;
-    fy += (dx / dist) * dir * currentAccel;
-    surf = Math.max(surf, Math.max(0, Math.min(1, currentAccel / 2.5)));
-    if (Math.abs(currentAccel) > bestCurrent) {
-      bestCurrent = Math.abs(currentAccel);
-      sourceWellId = well.id ?? well.name ?? null;
+    const currentAccel = orbitalCurrentSpeed(
+      dist,
+      SERVER_WELLS.currentStrength,
+      well.mass || 1,
+      SERVER_WELLS.currentFalloff,
+      SERVER_WELLS.currentRange
+    );
+    if (currentAccel > 0) {
+      fx += (-dy / dist) * dir * currentAccel;
+      fy += (dx / dist) * dir * currentAccel;
+      surf = Math.max(surf, Math.max(0, Math.min(1, currentAccel / 2.5)));
+      if (Math.abs(currentAccel) > bestCurrent) {
+        bestCurrent = Math.abs(currentAccel);
+        sourceWellId = well.id ?? well.name ?? null;
+      }
     }
   }
   return normalizeFlowSample({
@@ -3676,6 +3693,9 @@ function rebuildAuthoritativeField() {
     wellGravityScale: SERVER_WELLS.shipPullStrength,
     wellGravityFalloff: SERVER_WELLS.shipPullFalloff,
     wellGravityMaxRange: SERVER_WELLS.maxRange,
+    wellCurrentScale: SERVER_WELLS.currentStrength,
+    wellCurrentFalloff: SERVER_WELLS.currentFalloff,
+    wellCurrentMaxRange: SERVER_WELLS.currentRange,
     waveShipPush: WAVE_SERVER.waveShipPush * runtime.session.fieldFlowScale,
     waveWidth: WAVE_SERVER.waveWidth,
   });

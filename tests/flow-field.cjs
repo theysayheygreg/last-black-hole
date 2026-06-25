@@ -20,6 +20,22 @@ async function run() {
     assert(Math.abs(sample.gravity.y) < 1e-6, `Gravity Y should be near zero on the east axis, got ${sample.gravity.y}`);
   });
 
+  await runner.run("Distant wells do not tow the ship through hidden current", async () => {
+    const field = new FlowField(null, {
+      wellSystem: {
+        wells: [{ wx: 1.5, wy: 1.5, mass: 1.2, orbitalDir: 1, killRadius: 0.08 }],
+      },
+      starSystem: { stars: [] },
+      waveRings: { rings: [] },
+    });
+
+    const sample = field.sample(2.95, 1.5);
+    assert(Math.abs(sample.current.x) < 1e-9 && Math.abs(sample.current.y) < 1e-9,
+      `Expected calm void current outside well range, got (${sample.current.x}, ${sample.current.y})`);
+    assert(Math.abs(sample.gravity.x) < 1e-9 && Math.abs(sample.gravity.y) < 1e-9,
+      `Expected calm void gravity outside well range, got (${sample.gravity.x}, ${sample.gravity.y})`);
+  });
+
   await runner.run("Local wave sample keeps push out of current", async () => {
     const field = new FlowField(null, {
       wellSystem: { wells: [] },

@@ -3182,7 +3182,7 @@ function gameLoop(now) {
       }
     } else {
       // 5. Wave ring forces on ship
-      waveRings.applyToShip(ship);
+      waveRings.applyToShip(ship, dt);
 
       // Suppress ship input while inventory is open (don't fly into a well while sorting loot)
       if (!inventoryOpen) {
@@ -3228,8 +3228,8 @@ function gameLoop(now) {
         }
       }
 
-      starSystem.applyToShip(ship);
-      planetoidSystem.applyToShip(ship);
+      starSystem.applyToShip(ship, shipDt);
+      planetoidSystem.applyToShip(ship, shipDt);
 
       // Star consumption events — dramatic flash + stellar remnant wreck
       for (const evt of starSystem.consumptionEvents) {
