@@ -8,7 +8,7 @@ You do not fly through empty space. You fly through spacetime as a hostile ocean
 
 ## Status
 
-Current version: **v0.2.0 — Authority and Three Foundation**
+Current version: **v0.2.1 — Authority and Three Foundation**
 
 The project is in active pre-public-playtest development. It has a playable local stack, server-authoritative run simulation, persistent profiles, ship classes, AI rivals, extraction/death flows, a Three.js renderer direction, and a large test harness. It does **not** yet ship public hosted multiplayer, matchmaking, final balance, or a public demo page.
 
@@ -272,9 +272,21 @@ The browser suites use `tests/browser-driver.cjs`, a small Chrome DevTools Proto
 npm run build:web
 npm run build:desktop
 npm run build:release
+npm run release:patch
+npm run release:check
 ```
 
 Desktop builds use Electron and package the local-play surface. Web builds write versioned artifacts under `builds/`.
+
+Use `npm run release:patch` before remote pushes meant to publish or hand off a
+real build. It increments the `0.2.x` patch revision, runs the fast gate, builds
+web, iPad web-app, macOS, Windows, and Linux release artifacts, stages weekly
+assets, and verifies the output shape. The tracked pre-push hook runs the same
+release check for `origin`; install it once with:
+
+```sh
+git config core.hooksPath .githooks
+```
 
 ## Deployment Pipelines
 

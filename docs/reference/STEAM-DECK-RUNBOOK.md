@@ -86,7 +86,7 @@ First launch flow on Deck:
 Use a specific release/tag:
 
 ```sh
-LBH_RELEASE_TAG=v0.2.0 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
+LBH_RELEASE_TAG=v0.2.1 curl -fsSL https://raw.githubusercontent.com/theysayheygreg/last-black-hole/main/scripts/install-steam-deck.sh | bash
 ```
 
 Use a specific zip URL:

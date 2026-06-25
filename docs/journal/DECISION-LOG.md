@@ -1,5 +1,29 @@
 # Decision Log
 
+## 2026-06-25 — Remote handoff pushes require a v0.2 patch build
+
+**Decision:** Treat `0.2.x` as the v0.2 release/handoff train. Before pushing a
+real build or milestone handoff to `origin`, run `npm run release:patch`. The
+helper increments `package.json` and `package-lock.json`, runs the fast gate,
+builds every release target (`web,ipad,mac,win,linux`), stages weekly assets,
+and verifies the output shape. The tracked pre-push hook runs a non-mutating
+guard so pushes fail if the patch version is not ahead of upstream or the
+matching all-target build is missing.
+
+**Why:** The repo had enough build/deploy surfaces that "build it" was becoming
+ambiguous. A remote push should carry a visible patch number and a real artifact
+set, not just source changes plus hope. The hook refuses to mutate during push
+because changing package files mid-push would make the commit being sent
+different from the working tree.
+
+**Where it landed:** `scripts/release.cjs`, `.githooks/pre-push`,
+`package.json`, `package-lock.json`, README build instructions,
+`docs/reference/BUILD-PIPELINE.md`, `docs/reference/DEPLOYMENT-PIPELINES.md`,
+and `docs/project/JAM-CONTRACT.md`.
+
+**Door status:** Closed for v0.2 handoff policy. Open for replacing the local
+hook with a CI-required check once public release cadence hardens.
+
 ## 2026-06-25 — Local build status is separate from build health
 
 **Decision:** Add `docs/project/BUILD-STATUS.md` as the canonical local

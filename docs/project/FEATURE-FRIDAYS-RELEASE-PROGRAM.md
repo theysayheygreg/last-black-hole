@@ -99,7 +99,7 @@ Add the relevant gates:
 | Renderer, VFX, screenshot-worthy art | `npm run test:three`, `npm run test:visual`, Codex app browser screenshot pass |
 | Authority, sim, remote play, inventory, results | `npm run test:authority` |
 | Menu, launch, extraction/death flow | `npm run test:playtest` plus one human browser/Electron pass |
-| Build or packaging | `npm run build:release`, inspect `BUILD-MANIFEST.json`, launch target artifact |
+| Build or packaging | `npm run release:patch` for release/handoff pushes, inspect `BUILD-MANIFEST.json`, launch target artifact |
 | itch release | `LBH_ITCH_TARGET=... npm run deploy:itch -- --dry-run` or preview |
 | Steam prep | `npm run deploy:steam`, inspect staged depots and `STEAMPIPE-MANIFEST.json` |
 | Steam Deck claim | Deck runbook acceptance: Gaming Mode launch, embedded authority online, controller path, 1280x800 legibility, suspend/resume |
@@ -129,7 +129,7 @@ For docs-only or marketing-only Fridays, replace gameplay gates with `git diff -
 | Browser sandbox | `npm run stack:sandbox` is a debug/demo fallback, not the product promise. |
 | itch HTML5 | Use the staged sandbox artifact. It must not depend on Node authority. Position it as demo/playtest if the full embedded-authority loop is unavailable. |
 | itch desktop channels | Use Linux/Windows/macOS downloadable artifacts when the Feature Friday needs embedded authority and full local play. |
-| Packaged desktop | Use `npm run build:release`; the desktop package should be self-contained with embedded control plane and sim. |
+| Packaged desktop | Use `npm run release:patch` for a versioned all-target handoff, or `npm run release:build` when the patch version is already correct; the desktop package should be self-contained with embedded control plane and sim. |
 | Steam Deck | Use the Linux Electron package and the public weekly installer contract. Gaming Mode is the real acceptance surface. |
 | Steam | Use desktop depots, not raw HTML5. Internal beta branches are fine for weekly testing; public Steam updates should be reserved for page-worthy beats. |
 

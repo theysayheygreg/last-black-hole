@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+remote="${1:-}"
+
+if [[ "${LBH_SKIP_RELEASE_PREP:-}" == "1" || "${LBH_SKIP_RELEASE_PREP:-}" == "true" ]]; then
+  echo "LBH release pre-push check skipped by LBH_SKIP_RELEASE_PREP."
+  exit 0
+fi
+
+if [[ -n "$remote" && "$remote" != "origin" ]]; then
+  exit 0
+fi
+
+node scripts/release.cjs prepush

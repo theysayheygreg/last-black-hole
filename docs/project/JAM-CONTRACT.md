@@ -544,8 +544,17 @@ The remote repo must stay current. This is a shared workspace — other agents, 
 
 - **Push after every milestone** — feature build, audit cycle, journal update. Not just at session end.
 - **If 5+ commits have accumulated without a push, push.**
+- **Release/handoff pushes bump the v0.2 patch.** Before pushing a real build or
+  handoff milestone to `origin`, run `npm run release:patch`. That increments
+  `package.json` / `package-lock.json` from `0.2.x` to the next patch, runs the
+  fast gate, builds every release target (`web,ipad,mac,win,linux`), stages
+  weekly assets, and verifies the artifact shape.
+- **Use the pre-push guard.** Install the tracked hook once with
+  `git config core.hooksPath .githooks`. It blocks `origin` pushes when the
+  current `0.2.x` version is not ahead of upstream or the matching all-target
+  release build is missing.
 - **Keep README.md current** — update it when features, architecture, or setup instructions change. The README is the first thing anyone reads.
-- **Tag versions** — use semantic version tags (`v0.2.0`) at meaningful checkpoints. Update `package.json` version to match.
+- **Tag versions** — use semantic version tags (`v0.2.x`) at meaningful checkpoints. Update `package.json` version to match.
 - **Build instructions must be correct** — if you add a new server, script, or dependency, update the README setup section in the same commit or the next one.
 
 ---

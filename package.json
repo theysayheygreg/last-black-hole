@@ -1,6 +1,6 @@
 {
   "name": "last-singularity",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "",
   "main": "index.js",
   "directories": {
@@ -52,6 +52,11 @@
     "build:web": "node scripts/build.cjs --targets=web",
     "build:ipad": "node scripts/build.cjs --targets=ipad",
     "build:desktop": "node scripts/build.cjs --targets=web,mac,win,linux,ipad",
+    "release:bump": "node scripts/release.cjs bump-patch",
+    "release:build": "node scripts/release.cjs build",
+    "release:check": "node scripts/release.cjs check",
+    "release:patch": "node scripts/release.cjs patch",
+    "release:prepush": "node scripts/release.cjs prepush",
     "ios:sync": "node scripts/ios-wrapper.cjs sync",
     "ios:build:sim": "node scripts/ios-wrapper.cjs build-sim",
     "ios:build:device": "node scripts/ios-wrapper.cjs build-device",

@@ -6,6 +6,7 @@ The rule is simple:
 
 - one gameplay source of truth: the web runtime
 - one build command: `npm run build`
+- one release-push command: `npm run release:patch`
 - one runtime mode per build: `dev`, `test`, or `release`
 - versioned outputs under `builds/`
 - a manifest and per-target `BUILD-INFO-*.json` files for traceability
@@ -29,6 +30,15 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 - `scripts/install-steam-deck.sh` — public Deck installer that downloads the Linux weekly release asset
 - `npm run deploy:itch` — stage an itch HTML5 artifact and push it with butler
 - `npm run deploy:steam` — prepare SteamPipe content and VDF scripts
+- `npm run release:bump` — increment `package.json` and `package-lock.json`
+  from `0.2.x` to the next patch
+- `npm run release:build` — run the fast gate, build every release target
+  (`web,ipad,mac,win,linux`), package weekly assets, and verify outputs
+- `npm run release:patch` — `release:bump` + `release:build`
+- `npm run release:check` — verify the current `0.2.x` version has a complete
+  all-target release build
+- `npm run release:prepush` — same shape as the tracked pre-push hook: version
+  must be ahead of upstream and the all-target build must exist
 
 `npm run build` currently defaults to `release` mode.
 
@@ -93,12 +103,30 @@ That folder contains:
 
 The build date now lives inside the manifest and build info files instead of the folder name. The selected runtime mode is recorded in the manifest and per-target build info files.
 
-Before cutting a serious playtest build, the lightweight verification lane should be green:
+Before cutting a serious playtest build, use:
+
+```sh
+npm run release:patch
+```
+
+That bumps the patch version inside the v0.2 line and performs the current
+all-target release build. If the version is already correct and you only need to
+rebuild artifacts for the same commit, use:
+
+```sh
+npm run release:build
+```
+
+The underlying lightweight verification lane should be green:
 
 - `npm test`
 - `npm run test:telemetry`
 - `npm run test:renderer`
 - `node scripts/build-health.cjs status`
+
+The release helper currently runs `npm run test:fast` before packaging because
+it is meant to be usable during active development. A public milestone should
+still refresh full build health before it is announced.
 
 `npm test` already includes the telemetry smoke suite, but keeping the focused telemetry command around is useful when diagnosing stack-status and embedded-runtime regressions without rerunning the whole harness.
 

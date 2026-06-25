@@ -8,13 +8,13 @@ You do **not** need the Steamworks SDK just to get the current build onto a Stea
 
 Use the Linux desktop target first:
 
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v0.2.0/Last Singularity-linux-x64`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v<version>/Last Singularity-linux-x64`
 
 That is the cleanest Deck path because Steam Deck is really a Linux machine.
 
 The Windows build is still a valid fallback through Proton:
 
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v0.2.0/Last Singularity-win32-x64`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/v<version>/Last Singularity-win32-x64`
 
 ## Fastest install path
 

@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-06-25 — v0.2.1 release-build gate
+
+- Bumped Last Singularity to `v0.2.1` for the next remote handoff train.
+- Added `scripts/release.cjs` plus `release:bump`, `release:build`, `release:check`, `release:patch`, and `release:prepush` npm scripts.
+- Added a tracked `.githooks/pre-push` guard so `origin` pushes can require a patch version ahead of upstream and a complete all-target release build.
+- Updated README, build pipeline, deployment, Feature Fridays, Steam Deck, and project-contract docs so release/handoff pushes use `npm run release:patch`.
+
 ## 2026-06-25 — Local build status process repair
 
 - Added `docs/project/BUILD-STATUS.md` as the canonical local playability snapshot, separating "what can I launch right now?" from formal build-health verification, live process health, and git history.
