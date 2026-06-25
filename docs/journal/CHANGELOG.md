@@ -12,6 +12,7 @@
 - Added a tracked `.githooks/pre-push` guard so `origin` pushes can require a patch version ahead of upstream and a complete all-target release build.
 - Updated README, build pipeline, deployment, Feature Fridays, Steam Deck, and project-contract docs so release/handoff pushes use `npm run release:patch`.
 - Produced the v0.2.1 all-target release artifact set locally: web, iPad web-app, macOS, Windows, Linux, combined playtest zip, and weekly staging assets.
+- Refreshed the formal build-health verifier after the release build: core, renderer, perf, and title-prototype checks all passed.
 
 ## 2026-06-25 — Local build status process repair
 

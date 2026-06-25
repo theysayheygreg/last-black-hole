@@ -43,7 +43,7 @@ reading stale health records or reconstructing status from `git log`.
 | Run result package | PARTIAL | Results view and control-plane persistence slices exist; full meta-loop write-back polish remains |
 | Local build status | v0.2.1 BUILT / PLAYTEST NEEDED | `npm run release:build` produced web, iPad web-app, macOS, Windows, and Linux release artifacts; fresh app-browser or human playtest still needs to record the next playable assessment in `BUILD-STATUS.md` |
 | Weekly playables | STALE | Last scheduled green predates the current local feature/fix stack; refresh only after the local build is playtest-stable |
-| Build health gate | STALE | Last recorded health is `e48b033` from 2026-05-05; use `node scripts/build-health.cjs status` for the formal stale/current answer |
+| Build health gate | GREEN | Refreshed on 2026-06-25 for the v0.2.1 release-build train; use `node scripts/build-health.cjs status` for the exact current-commit answer |
 
 ### What's Designed Or Partially Implemented
 

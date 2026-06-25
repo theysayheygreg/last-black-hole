@@ -61,16 +61,17 @@ Artifacts:
 
 ## Known Caveats
 
-- `docs/project/BUILD-HEALTH.json` is stale. At snapshot time,
-  `node scripts/build-health.cjs status` reported recorded `e48b033` versus the
-  post-fix local branch; rerun it for the exact current `HEAD`.
+- `docs/project/BUILD-HEALTH.json` was refreshed on 2026-06-25 for the v0.2.1
+  release-build train. Use `node scripts/build-health.cjs status` for the exact
+  current commit relationship.
 - Steam Deck deployment and Gaming Mode wiring exist, but the Deck path should
   follow local playtest health. A broken local game does not become useful
   because it launches on Deck.
 - If movement feels bad after a long-open browser or sim process, reset the
   whole stack before judging the build. Page reload alone is not a clean reset.
-- Formal current-health verification still needs a fresh build-health run after
-  the next stable local playtest.
+- The build is still waiting on a fresh human/Codex app-browser playtest for
+  control feel. Automated health is green, but playfeel is not something the
+  harness can fully certify.
 
 ## What Each Status Source Means
 
