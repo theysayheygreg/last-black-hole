@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-06-25 — Local build status process repair
+
+- Added `docs/project/BUILD-STATUS.md` as the canonical local playability snapshot, separating "what can I launch right now?" from formal build-health verification, live process health, and git history.
+- Updated `BUILD-HEALTH.md`, `TEST-HARNESS.md`, `DEV-SERVER.md`, and `JAM-CONTRACT.md` so agents check build status first, then use build-health, stack status, and git log as supporting evidence.
+- Refreshed `ROADMAP.md`, `docs/v0.2/README.md`, `PROJECT-STATE.json`, and `PROJECT-BOARD.md` so the current v0.2 status no longer points agents at the old March L0 queue as live truth.
+- Added a devlog entry for the June 25 Three/local-authority repair run and a decision-log entry that codifies build status as distinct from build health.
+
 ## 2026-06-25 — LBH Forge Pass skill and harness boundary
 
 - Added a reusable personal Codex skill, `$lbh-forge-pass`, for periodic LBH architecture hygiene passes across code review, comments, centralization, docs, process, and test harness relevance.

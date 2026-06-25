@@ -7,9 +7,13 @@
 
 ---
 
-## Current Status (2026-06-22)
+## Current Status (2026-06-25)
 
 **Version:** v0.2 — Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set.
+
+**Local build status:** `docs/project/BUILD-STATUS.md` is now the canonical
+playability snapshot. Use it to answer "what can I launch right now?" before
+reading stale health records or reconstructing status from `git log`.
 
 ### What's Built
 
@@ -37,8 +41,9 @@
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | PARTIAL | Results view and control-plane persistence slices exist; full meta-loop write-back polish remains |
-| Nightly playables | STALE | Last scheduled green remains `7e138cd`; today’s local feature stack is ahead of that workflow |
-| Build health gate | STALE | Last recorded health predates the 2026-05-09 feature stack; refresh after the current review/test pass |
+| Local build status | RECOVERY / PLAYTEST NEEDED | Recent Three, coordinate, flow, freshness, and lifecycle fixes landed; fresh app-browser playtest still needs to record the next playable assessment in `BUILD-STATUS.md` |
+| Weekly playables | STALE | Last scheduled green predates the current local feature/fix stack; refresh only after the local build is playtest-stable |
+| Build health gate | STALE | Last recorded health is `e48b033` from 2026-05-05; use `node scripts/build-health.cjs status` for the formal stale/current answer |
 
 ### What's Designed Or Partially Implemented
 
@@ -86,7 +91,9 @@
 - Browser remote play still expects separate authority processes.
 - The control plane is allowed to stay hot locally.
 - The sim no longer stays hot by default with zero human clients: it idles cheaply, auto-stops after a grace window, and only stays alive intentionally when started with keep-alive.
-- The next quality step is feel/playtest polish, route-aware maps, meta-loop clarity, and shared UI primitives, not another wholesale architecture rewrite.
+- The next quality step is a fresh local playtest/status refresh, then
+  feel/playtest polish, route-aware maps, meta-loop clarity, and shared UI
+  primitives, not another wholesale architecture rewrite.
 
 ---
 

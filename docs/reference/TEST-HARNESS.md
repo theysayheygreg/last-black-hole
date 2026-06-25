@@ -220,5 +220,8 @@ Use the right test for the right question.
 - “Did coordinate/camera/sim assumptions drift?” → inspect `src/coords.js`,
   then run core + playtest + authority + visual lanes
 - “Is this commit actually verified?” → `node scripts/build-health.cjs status`
+- “Where does the local build stand for play?” →
+  `docs/project/BUILD-STATUS.md`, then build-health and live stack status as
+  supporting evidence
 
 That is the current shape of LBH test automation.

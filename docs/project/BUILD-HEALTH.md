@@ -1,11 +1,20 @@
 # Build Health
 
-This file exists so humans and agents have one tracked place to check before committing work.
+> Status: v0.2 verification record. This doc explains the formal automated
+> health gate. For the human/playable answer to "where does the local build
+> stand?", start with `docs/project/BUILD-STATUS.md`.
+
+This file exists so humans and agents have one tracked place to check automated
+verification before committing work.
 
 ## Rule
 
 If `BUILD-HEALTH.json` is missing, stale, or red for the current `HEAD`, do not assume the tree is healthy.
 Run the verifier first and either fix the failures or make an explicit decision to defer them.
+
+Do not use stale build health as proof that recent work did not happen. The git
+log and `BUILD-STATUS.md` capture targeted fixes and playable-state caveats
+between full verifier refreshes.
 
 ## Commands
 
@@ -40,3 +49,16 @@ That is intentionally narrow. It covers the real architecture stack, determinist
 - `ok: true` can also remain valid for one follow-up commit if that commit only updates `docs/project/BUILD-HEALTH.json` after a successful verification run.
 - A different `gitHead` means the record is stale, even if the last run was green.
 - `ok: false` means the last recorded verification failed and should be fixed before more work piles on.
+
+## Relationship To Build Status
+
+Use `BUILD-HEALTH.json` for the narrow question: "did the formal automated
+verifier pass for this commit?"
+
+Use `BUILD-STATUS.md` for the broader operator question: "what is the local
+build believed to do right now, what should I launch, what was recently fixed,
+and what caveats remain?"
+
+Use `npm run stack:status` only for live process health. A running stack can be
+healthy while the repo's build health is stale, and a green build-health record
+can be stale while the live stack is down.

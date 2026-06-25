@@ -5,6 +5,47 @@
 
 ---
 
+## Week 14, Day 4: June 25, 2026 — The Local Build Gets a Truth Ledger
+
+The Three migration had a messy but useful day: the game exposed every place
+where an old 2D or single-process assumption was still hiding under the new
+renderer and authority stack.
+
+The bug reports all sounded different at first — jerky controls, invisible well
+deaths, low frame rate after map load, currents pulling the ship around, stale
+tests that behaved differently after a long run — but the common shape was
+clear. Movement bugs were math and lifecycle bugs before they were tuning bugs.
+Camera projection, world radius projection, fluid-window scale, flow sampling,
+and authoritative sim freshness all had to agree before "make it feel better"
+would mean anything.
+
+So the repair pass tightened those contracts. The Three camera and canvas
+projection were brought back into agreement. Coordinate and radius conversion
+moved back toward `coords.js`. Flow sampling stopped quietly mixing decorative
+fluid, orbital current, gravity, waves, and hazards into one unexplained force.
+Distant surf currents stopped towing the ship from across the map. Browser and
+sim tests now prefer fresh processes for movement, spawning, camera, death, and
+lifecycle checks. Authority sessions stop simulating after terminal runs instead
+of growing forever on death/title/result screens. Shader-side Y flips now have a
+named GLSL helper instead of ad hoc `1.0 - y` fragments.
+
+The game is not declared green just because those fixes landed. That was the
+second lesson. `BUILD-HEALTH.json` was still a May record, the project board
+still described March L0 as queued, and a person asking "where does the local
+build stand?" had to read a pile of commits to infer the answer. That is not a
+handoff; that is archaeology.
+
+The new rule is simple: `BUILD-STATUS.md` owns the current playable answer.
+Build health owns formal automated verification. The git log owns history.
+`stack:status` owns live processes. Memory is helpful, but repo docs are the
+durable truth.
+
+Current state after the repair pass: local Three + authoritative sim is the
+primary target, recent movement/camera/lifecycle fixes are real, but the build
+is still in recovery until one fresh local-host playtest records the next
+playability assessment. Deck comes after that. A broken local game does not
+become useful because it launches on hardware.
+
 ## Week 7, Day 5: May 9, 2026 — Thrust Becomes an Economy, Space Becomes a Network
 
 The day started with a problem that wasn't obvious until you said it out loud:

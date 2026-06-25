@@ -165,16 +165,43 @@ For automatic Codex review on every commit, add a PostToolUse hook on Bash in `~
 
 ## Checkpoint Protocol
 
+### Build Status Protocol
+
+Before answering "where does the local build stand?", check these in order:
+
+1. `docs/project/BUILD-STATUS.md` — the human/playable snapshot: launch target,
+   current assessment, caveats, and next evidence needed.
+2. `node scripts/build-health.cjs status` — the formal automated verifier for a
+   specific commit.
+3. `git log --oneline -20` — the recent change history if the status snapshot
+   is stale.
+4. `npm run stack:status` or sim `/health` — only when a live process may
+   explain current behavior.
+
+These are intentionally different records. `BUILD-HEALTH.json` can be stale
+while targeted fixes and tests have landed. The git log can show lots of work
+without proving the build is playable. `stack:status` can show healthy live
+processes without proving the repo is correct after a restart. `BUILD-STATUS.md`
+is the place where agents reconcile those signals into a short current-truth
+answer.
+
+Update `BUILD-STATUS.md` whenever a movement, camera, sim, renderer, lifecycle,
+controls, or platform change affects playability, and whenever a fresh playtest
+changes the assessment. If memory or chat lacks local-build context, do not
+infer that the work was not recorded; read the repo status docs first.
+
 ### Morning Review (~10am)
 Greg wakes up. First thing:
 
 1. `git log --oneline --since="midnight"` — see what the night shift produced
-2. Start a fresh play stack (`npm run stack:stop` then `npm run play`, or
+2. Read `docs/project/BUILD-STATUS.md` — know the latest local-build caveats
+   before playtesting
+3. Start a fresh play stack (`npm run stack:stop` then `npm run play`, or
    `npm run stack -- --no-open` and open the printed URL) — does it work? What
    changed?
-3. Read the **NIGHT-REPORT.md** the agent leaves behind (see below)
-4. Play for 10-15 minutes. Write gut reactions.
-5. Decide: **continue this direction** or **course correct**
+4. Read the **NIGHT-REPORT.md** the agent leaves behind (see below)
+5. Play for 10-15 minutes. Write gut reactions.
+6. Decide: **continue this direction** or **course correct**
 
 ### Evening Handoff (~midnight)
 Greg goes to sleep. Before signing off:
@@ -407,6 +434,11 @@ docs/
 
 **`CHANGELOG.md`** — Human-readable version history of design docs. Git is authoritative, but this is for quick scanning without `git log`. Updated whenever a design doc changes meaningfully.
 
+**`BUILD-STATUS.md`** — Current local build/playability snapshot. This answers:
+what target to launch, whether the local build is green/recovery/blocked, what
+evidence supports that assessment, and what caveats remain. It is not a test
+log and not a replacement for `BUILD-HEALTH.json`.
+
 **`CONTENT-PLAN.md`** — Post-jam content plan. Twitter threads, blog posts, YouTube video concepts. What to capture during the jam for later.
 
 ### Commit-Driven Handoffs (critical rule)
@@ -419,7 +451,8 @@ If an actor has produced something the next actor should react to — a pulled c
 This means:
 - Orb pulling a task and updating project state/board is a commit
 - Orrery writing or revising a plan/design doc is a commit
-- Forge review output saved into `docs/reference/reviews/` is a commit
+- Forge review output saved into `docs/project/reviews/` is a commit unless it
+  is long-term reference material
 - Corb implementation progress is a sequence of commits, not one end-of-task dump
 - Test results written into project docs/reports are committed
 - Journal/report/state updates are committed at the moment they become true
@@ -434,6 +467,7 @@ This means:
 | **DEVLOG.md** | Orb | At each `ready_for_greg` transition, morning review, evening handoff, and after major pivots | Yes — Orb commits journal updates with `Docs:` prefix |
 | **DECISION-LOG.md** | Orrery (design decisions) or Greg/Orrery via Claude (during sessions) | Immediately when a design fork is decided or revisited. Don't batch. | Yes — whoever writes the entry commits it |
 | **CHANGELOG.md** | Orb (at state transitions) or Corb (when modifying design docs during build) | When design docs change meaningfully. Orb appends at each completed section. | Yes — same commit as the doc change, or batched by Orb at section completion |
+| **BUILD-STATUS.md** | Current actor, with Orb as backstop | After playability-affecting bug fixes, platform/deploy changes, fresh playtests, or stale/full build-health decisions | Yes — same commit as the fix when practical, otherwise next `Docs:` commit |
 | **Night reports** | Orb (compiled from Corb build reports + Forge review + test results) | End of each night shift cycle, in `docs/journal/reports/` | Yes — Orb commits the report |
 | **CONTENT-PLAN.md** | Greg or Orrery | When new content-worthy moments happen | Yes |
 | **PROJECT-STATE.json** | Orb | Every state transition | Yes — Orb commits state changes |
@@ -450,6 +484,7 @@ If the next step depends on it, it should exist as a commit first.
 - task pulls / card movement / orchestration-state updates
 - `DEVLOG.md` entries at checkpoints
 - `CHANGELOG.md` batched updates at section completion (or sooner if needed for handoff clarity)
+- `BUILD-STATUS.md` whenever playability status changes and no other actor recorded it
 - Night reports compiled from build/test/review evidence
 - Forge review files when Forge review lands and Orb is the recorder for that step
 - Commit prefix: `Docs:` for journal/review docs, `State:` for project state
@@ -488,9 +523,10 @@ The journal must be updated at these moments. **Orb is responsible for ensuring 
 3. **Evening handoff** — Orb appends a DEVLOG entry summarizing the day's work, playtest notes, and the night shift plan. Orb commits this.
 4. **Design pivot** — Orrery (or Greg via Claude) appends a DECISION-LOG entry with the full option tree. Committer commits this.
 5. **Design doc change** — The modifying agent (usually Corb or Orrery) adds a CHANGELOG entry in the same commit.
-6. **Forge review lands** — Orb saves the review to `docs/reference/reviews/` and appends relevant decisions to DECISION-LOG if the review influenced any. Orb commits.
-7. **Scope ratchet** — Orb appends a DEVLOG entry explaining what was cut/deferred and why, with pointers to BACKLOG.md. Orb commits.
-8. **Memorable moment** — Whoever notices it adds a DEVLOG entry with enough detail to write a tweet or blog post later.
+6. **Build/playability status changes** — The current actor updates `BUILD-STATUS.md` with the launch target, evidence, caveats, and next evidence needed. Orb backstops this if the status question is asked later and no one recorded it.
+7. **Forge review lands** — Orb saves the review to `docs/project/reviews/` unless the review belongs in long-term reference, and appends relevant decisions to DECISION-LOG if the review influenced any. Orb commits.
+8. **Scope ratchet** — Orb appends a DEVLOG entry explaining what was cut/deferred and why, with pointers to BACKLOG.md. Orb commits.
+9. **Memorable moment** — Whoever notices it adds a DEVLOG entry with enough detail to write a tweet or blog post later.
 
 ### Rules
 

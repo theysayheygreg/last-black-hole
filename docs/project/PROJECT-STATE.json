@@ -1,34 +1,41 @@
 {
   "project": "last-black-hole",
-  "status": "ready_for_build",
+  "status": "v0.2_local_recovery_playtest_needed",
+  "status_updated_at": "2026-06-25T00:00:00-07:00",
+  "status_documents": {
+    "local_build_status": "docs/project/BUILD-STATUS.md",
+    "formal_build_health": "docs/project/BUILD-HEALTH.json",
+    "current_roadmap": "docs/v0.2/ROADMAP.md",
+    "historical_jam_roadmap": "docs/project/ROADMAP.md"
+  },
   "current_checkpoint": {
-    "name": "L0 — The Feel",
-    "goal": "Surfable fluid sim + ASCII visual identity + live tuning. Does it feel good to just fly around?"
+    "name": "v0.2 — Local Build Recovery",
+    "goal": "Keep the Three renderer, authoritative sim, coordinates, lifecycle, and local play path aligned before Deck or public build work resumes."
   },
   "current_section": {
-    "slug": "monday-night-l0",
-    "title": "Monday night shift — parallel physics prototypes + ASCII + dev panel + test harness",
-    "status": "ready_for_build",
-    "owner": "orb",
+    "slug": "v0-2-local-build-status",
+    "title": "Three/local authority stabilization and playable-status refresh",
+    "status": "playtest_needed",
+    "owner": "current actor, with Orb as journal/status backstop",
     "reviewer": "greg",
-    "implementers": ["corb"],
-    "test_owner": "corb (runs project-local Node/CDP tests after build)",
-    "depends_on": [],
+    "implementers": ["codex", "claude", "corb"],
+    "test_owner": "current actor",
+    "depends_on": ["fresh local play stack"],
     "acceptance_criteria": [
-      "At least one prototype (N1a) running with fluid sim, ship, wells, waves at 60fps",
-      "ASCII post-process shader rendering the fluid as colored characters",
-      "Ship renders on Layer 1 above ASCII substrate (Layer 0)",
-      "Dev panel with live sliders for all CONFIG tunables",
-      "Smoke + physics tests passing via node tests/run-all.js",
-      "Greg can open the prototype, play, and tune via dev panel Tuesday morning"
+      "docs/project/BUILD-STATUS.md records the current local launch target, caveats, and next evidence needed",
+      "Fresh local-host stack playtest confirms whether movement/spawn/death behavior is playable",
+      "Formal build health is refreshed only after the local build is stable enough to be worth gating",
+      "Deck deployment follows local build health instead of masking a broken local game"
     ],
-    "artifacts": [],
-    "last_result": "Orchestration bootstrap complete. All design docs, roadmap, agent prompts, context dumps, and orchestration loop finalized. Ready for first real build dispatch.",
-    "blockers": [],
-    "next_action": "Orb pulls N1a into planning, routes through Orrery for spec confirmation, then dispatches Corb. Parallel: N1b if a second Corb is available.",
-    "updated_at": "2026-03-16T00:00:00-07:00"
+    "artifacts": ["docs/project/BUILD-STATUS.md", "docs/design/TEST-HARNESS.md", "docs/project/JAM-CONTRACT.md"],
+    "last_result": "Recent fixes stabilized Three projection, coordinate/flow scaling, stale harness process boundaries, finite sim lifecycle, and GLSL coordinate flip helpers. Build health remains stale and a fresh local playtest is the next evidence step.",
+    "blockers": ["No post-GLSL-helper fresh app-browser playtest recorded yet", "BUILD-HEALTH.json is stale versus current HEAD"],
+    "next_action": "Start a fresh local-host stack and record the playtest result in BUILD-STATUS.md before Deck-first or public-build work resumes.",
+    "updated_at": "2026-06-25T00:00:00-07:00"
   },
   "roadmap": {
+    "status": "historical_jam_queue_preserved_for_context",
+    "current_truth": "Use docs/project/BUILD-STATUS.md for local playability and docs/v0.2/ROADMAP.md for current roadmap execution.",
     "source": "projects/last-black-hole/docs/project/ROADMAP.md",
     "current_layer": "L0",
     "current_focus": "The Feel",

@@ -2,6 +2,7 @@
 
 See also:
 
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/project/BUILD-STATUS.md`
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/reference/RUNTIME-MODES.md`
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/design/TEST-HARNESS.md`
 
@@ -67,6 +68,10 @@ the browser is testing the same authority path as the product. If a session has
 been running for a long time and motion starts to drift, check `npm run
 stack:status` or the sim `/health` process age/memory before drawing
 conclusions, then reset the stack and try again.
+
+If that reset changes the playable assessment, update `BUILD-STATUS.md`. Live
+process status explains the current machine; build status is the durable handoff
+for the next agent.
 
 The service-layer commands are now:
 

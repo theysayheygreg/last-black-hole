@@ -1,6 +1,6 @@
 # Last Singularity Project Board
 
-**Date:** 2026-03-16
+**Date:** 2026-06-25
 **Status owner:** Orb
 **Canonical machine state:** `docs/project/PROJECT-STATE.json`
 
@@ -8,18 +8,28 @@ This is the human-readable operator board.
 Orb owns state transitions.
 Other agents may recommend updates; Orb records them.
 
+> Status: v0.2 current routing note. The old March jam queue is preserved below
+> as history. For the current playable build answer, start with
+> `docs/project/BUILD-STATUS.md`.
+
 ---
 
 ## Current checkpoint
 
-**Checkpoint:** L0 — The Feel
-**Goal:** Surfable fluid sim + ASCII visual identity + live tuning. Does it feel good to just fly around?
+**Checkpoint:** v0.2 — Local Build Recovery
+**Goal:** Keep the Three renderer, authoritative sim, coordinates, lifecycle,
+and local play path aligned before Deck or public build work resumes.
 
-**Priority order:** N1a > N2 > N3 > N1b (Forge Review #2). Test harness is pre-built.
+**Priority order:** local build status → fresh local-host playtest → formal
+build-health refresh → Deck/public packaging.
 
-**Status:** `ready_for_build` — orchestration is bootstrapped, all design docs finalized, ready for first Corb dispatch.
+**Status:** `playtest_needed` — recent Three/camera/coordinate/flow/lifecycle
+fixes landed, but the post-fix local playable baseline still needs a fresh
+app-browser or human playtest recorded in `BUILD-STATUS.md`.
 
-**Next action:** Orb pulls N1a into planning → Orrery confirms spec → Corb builds.
+**Next action:** Start a fresh local-host stack, play the current Three build,
+record the result in `BUILD-STATUS.md`, then refresh build health once the local
+build is worth gating.
 
 ---
 
@@ -32,6 +42,36 @@ Other agents may recommend updates; Orb records them.
 - `Ready for Greg` means: enough evidence exists for Greg review.
 - If a task changes state, Orb updates both the JSON state and this board and commits them.
 - Orb is the journal backstop — commits devlog, changelog, night reports, and state transitions.
+- `BUILD-STATUS.md` owns "what can I play right now?" `BUILD-HEALTH.json` owns
+  "which commit passed the formal verifier?" `stack:status` owns only live
+  process health.
+
+---
+
+## Current v0.2 Board
+
+### Ready for playtest
+
+- **Local Three + authority source build**
+  - Launch with `npm run stack:stop` then `npm run stack -- --no-open`.
+  - Open the printed `Client URL:`.
+  - Check movement, spawn safety, visible hazards, death/extraction, and FPS.
+  - Update `BUILD-STATUS.md` with evidence and caveats.
+
+### Waiting on evidence
+
+- **Build health refresh**
+  - `BUILD-HEALTH.json` is stale versus current `main`.
+  - Run the formal verifier only after the local build is playtest-stable enough
+    that a full gate is meaningful.
+
+- **Steam Deck follow-up**
+  - Tailscale deploy and Gaming Mode wiring exist.
+  - Deck work follows the local build; it should not hide local gameplay bugs.
+
+---
+
+## Historical March Jam Queue
 
 ---
 

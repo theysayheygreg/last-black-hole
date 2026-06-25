@@ -2,13 +2,20 @@
 
 > Originally the jam build plan (March 16-22, 2026).
 > Updated to reflect post-jam development. For the current versioned product
-> snapshot, read `docs/v0.2/README.md` first.
+> snapshot, read `docs/v0.2/README.md` first. For current local playability,
+> read `docs/project/BUILD-STATUS.md`.
 
 ---
 
 ## Current Build Phase: L5/L6 Bridge — Productized Authority + Renderer Hardening
 
 All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work complete.
+
+**2026-06-25 status:** local Three + authoritative sim is the primary build
+target, but the current branch is in recovery/playtest-needed status after a
+large camera, coordinate, flow, lifecycle, and shader-helper repair pass. Do
+not use Deck or public packaging as the next proof point until
+`BUILD-STATUS.md` records a fresh local playtest.
 
 ### L5 Shipped
 - 5 hull classes with abilities (PlayerBrain coefficient resolution, physics wiring)

@@ -23,8 +23,9 @@ Orb should treat commit history as the default machine heartbeat.
 | `PROJECT-BOARD.md` | Every state transition (mirrors JSON) | `State:` |
 | `docs/journal/DEVLOG.md` | At each `ready_for_greg`, morning review, evening handoff, scope ratchet | `Docs:` |
 | `docs/journal/CHANGELOG.md` | Batched at section completion (cover all design doc changes in the section) | `Docs:` |
+| `docs/project/BUILD-STATUS.md` | Whenever playability status, launch target, or caveats change | `Docs:` |
 | `docs/journal/reports/*.md` | End of each night shift cycle | `Docs:` |
-| `docs/reference/reviews/*.md` | When Forge delivers a review | `Docs:` |
+| `docs/project/reviews/*.md` | When a project review lands and should stay with active project docs | `Docs:` |
 
 ### How to Write Each
 
@@ -50,6 +51,11 @@ Orb should treat commit history as the default machine heartbeat.
 
 **State commits** — PROJECT-STATE.json + PROJECT-BOARD.md together. Always commit both in the same commit so they stay in sync.
 
+**BUILD-STATUS.md updates** — short current-truth snapshots. Record the launch
+target, playable assessment, evidence, caveats, and next evidence needed.
+Do this when recent work changes what Greg or the next agent should expect from
+the local build. Do not make future agents infer playability from `git log`.
+
 ### What You Do NOT Commit
 
 - Code authored by Corb or another builder (unless Greg explicitly routes that lane to you)
@@ -65,9 +71,10 @@ You are responsible for ensuring these happen. Either write the entry yourself o
 1. **Section reaches `ready_for_greg`** → you write the DEVLOG entry + CHANGELOG batch
 2. **Morning review** → you write the DEVLOG entry from Greg's feedback
 3. **Evening handoff** → you write the DEVLOG entry summarizing the day
-4. **Forge review lands** → you save the review to `docs/reference/reviews/`, append to DECISION-LOG if it influenced decisions
-5. **Scope ratchet** → you write the DEVLOG entry explaining cuts, pointer to BACKLOG.md
-6. **Night shift ends** → you compile the night report from Corb build reports + test results + Forge review
+4. **Build/playability status changes** → you update `BUILD-STATUS.md` if the current actor did not
+5. **Forge review lands** → you save the review to `docs/project/reviews/`, append to DECISION-LOG if it influenced decisions
+6. **Scope ratchet** → you write the DEVLOG entry explaining cuts, pointer to BACKLOG.md
+7. **Night shift ends** → you compile the night report from Corb build reports + test results + Forge review
 
 If a trigger fires and nobody wrote the entry, **you write it from available evidence.** The journal never falls silent.
 
@@ -90,5 +97,6 @@ git commit -m "Docs: devlog entry for N1a completion, changelog batch"
 ## Full Reference
 
 - `docs/project/JAM-CONTRACT.md` — "Commit Responsibilities by Actor" section
+- `docs/project/BUILD-STATUS.md` — current playable local-build snapshot
 - `WORKSHOP-ORCHESTRATION-LOOP.md` — step 10 for journal duties at `ready_for_greg`
 - `docs/design/AGENT-TESTING.md` — night report format with test summary and screenshots

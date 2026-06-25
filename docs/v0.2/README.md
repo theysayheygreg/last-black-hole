@@ -11,6 +11,8 @@ Everything before this snapshot is treated as **v0.1**: the jam prototype, the p
 3. `V0.2-RELEASE-NOTES.md` — the larger version note for the v0.2 foundation.
 4. `DESIGN.md` — the current v0.2 game bible.
 5. `ROADMAP.md` — current status and what comes next by major area.
+6. `../project/BUILD-STATUS.md` — current local playability snapshot and
+   caveats.
 
 ## Version Meaning
 
@@ -26,6 +28,7 @@ Important current anchors:
 - `docs/design/PILLARS.md`
 - `docs/journal/DECISION-LOG.md`
 - `docs/project/LOCAL-PROTOCOL.md`
+- `docs/project/BUILD-STATUS.md`
 - `docs/project/THREEJS-MIGRATION-PLAN.md`
 - `docs/design/TEST-HARNESS.md`
 - `src/content/*.data.json`

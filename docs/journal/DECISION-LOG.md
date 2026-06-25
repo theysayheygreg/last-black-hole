@@ -1,5 +1,27 @@
 # Decision Log
 
+## 2026-06-25 — Local build status is separate from build health
+
+**Decision:** Add `docs/project/BUILD-STATUS.md` as the canonical local
+playability snapshot and make agents check it before reconstructing status from
+memory, chat, or `git log`. `BUILD-HEALTH.json` remains the formal automated
+health record for a specific commit, while `stack:status` remains live process
+health only.
+
+**Why:** The Three/authority migration produced a long sequence of real fixes,
+but the tracked build-health record stayed stale and the old project board still
+described March L0 work. That made "what does the local build do right now?"
+ambiguous: git history proved work happened, but there was no concise current
+playability answer. Stale memory should not become stale project truth.
+
+**Where it landed:** `docs/project/BUILD-STATUS.md`,
+`docs/project/BUILD-HEALTH.md`, `docs/project/JAM-CONTRACT.md`,
+`docs/design/TEST-HARNESS.md`, `docs/project/PROJECT-STATE.json`,
+`docs/project/PROJECT-BOARD.md`, and `docs/project/ROADMAP.md`.
+
+**Door status:** Closed for process shape. Open for automating a status prompt
+or verifier once the manual status format proves stable.
+
 ## 2026-06-25 — Forge pass audits contracts; daily tests enforce them
 
 **Decision:** Keep the everyday harness and `$lbh-forge-pass` separate. Daily

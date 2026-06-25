@@ -12,6 +12,11 @@ playtest flows should not all live in one default command. When they do, a
 stale browser or a slow menu transition makes unrelated renderer work look
 broken.
 
+For "where does the local build stand?", start with
+`docs/project/BUILD-STATUS.md`, then check `node scripts/build-health.cjs
+status`. The harness provides evidence; the build-status doc records the
+playability assessment and caveats.
+
 Use the CLI harness for deterministic facts. Use the Codex app browser for
 visual/playtest judgment. Use Computer Use only when the target is a real Mac
 app surface or OS UI that the browser cannot expose.
@@ -67,6 +72,11 @@ process memory in the loop.
 Use long-lived browser/sim sessions only when the test is explicitly about
 long-run stability. In that case, record `/health` process age and memory before
 and after the session so "the ship feels haunted" becomes inspectable evidence.
+
+When a fresh playtest or movement/lifecycle fix changes the local playable
+assessment, update `docs/project/BUILD-STATUS.md`. A passing lane buried in
+terminal history is useful for the current actor, but it is not a durable
+handoff by itself.
 
 ## Movement, Coordinates, And Camera Regressions
 
