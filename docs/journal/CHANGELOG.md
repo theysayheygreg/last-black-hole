@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-06-25 — LBH Forge Pass skill and harness boundary
+
+- Added a reusable personal Codex skill, `$lbh-forge-pass`, for periodic LBH architecture hygiene passes across code review, comments, centralization, docs, process, and test harness relevance.
+- Updated the test harness guide with a v0.2 status note and clarified that daily lanes catch known regressions while the Forge pass audits whether the contracts are still right.
+- Updated the project contract with a v0.2 process note and a dedicated Forge Pass section for deep reviews after broad refactors, Three/sim shifts, platform changes, or major feature bursts.
+- Clarified the coordinate authority comment so JS feature code still routes through `coords.js`, while shader-side Y flips are allowed only when local, commented, and fixture-covered.
+
 ## 2026-06-25 — Bounded sim lifecycle and terminal run cleanup
 
 - Made authoritative matches finite by enforcing the configured 10-minute run cap server-side; timed-out active human players now receive a run result and the session ends cleanly.

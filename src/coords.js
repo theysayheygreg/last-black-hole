@@ -12,8 +12,10 @@
  * │ FLUID UV    │ bot-left  │ Y-up     │ 0–1           │ GPU shaders, textures    │
  * └─────────────┴───────────┴──────────┴───────────────┴──────────────────────────┘
  *
- * RULE: If you need to convert between these spaces, use these functions.
- * If you find yourself writing `1.0 - y` inline, you are doing it wrong.
+ * RULE: If JS gameplay, renderer, or test code converts between these spaces,
+ * use these functions. Inline `1.0 - y` flips in feature code are bugs.
+ * GLSL shaders cannot import this module; any shader-side Y flip must be
+ * local, commented, and covered by the coordinate/renderer fixtures.
  *
  * KEY RELATIONSHIPS:
  *   World → Fluid UV:  camera-relative, GRID_WINDOW span (worldToFluidUV)

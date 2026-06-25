@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-06-25 — Forge pass audits contracts; daily tests enforce them
+
+**Decision:** Keep the everyday harness and `$lbh-forge-pass` separate. Daily
+test lanes catch known regressions quickly. The Forge pass is an occasional
+architecture hygiene pass that asks whether code, comments, docs, central
+helpers, and tests still match current v0.2 LBH truth.
+
+**Why:** Turning the Forge pass into "run more tests" would duplicate the
+harness while missing the real risk after major shifts: stale assumptions,
+client-only authority, obsolete docs, old comments, orphaned code, and tests
+that still protect superseded behavior.
+
+**Where it landed:** Personal Codex skill
+`~/.codex/skills/lbh-forge-pass`, `docs/design/TEST-HARNESS.md`,
+`docs/project/JAM-CONTRACT.md`, and `docs/journal/CHANGELOG.md`.
+
+**Door status:** Closed for process boundary. Open for tightening the skill
+after real passes expose recurring blind spots.
+
 ## 2026-06-25 — Matches are finite authority sessions, not forever sims
 
 **Decision:** A live match ends when the last human pilot is terminal or when

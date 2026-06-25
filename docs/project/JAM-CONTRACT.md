@@ -1,7 +1,9 @@
 # Game Jam Contract: Shifts, Checkpoints, and Agent Orchestration
 
-> How Greg, Orrery, and the orbs coordinate a 7-day game jam.
-> Finalize into a detailed roadmap Sunday night before Monday kickoff.
+> Status: v0.2 process contract. This began as the 7-day jam coordination doc;
+> keep that historical context, but current agent work is centered on the
+> Three renderer, authoritative sim, platform targets, and periodic architecture
+> hygiene.
 
 ---
 
@@ -55,6 +57,36 @@ In practice:
 - After the work lands, Forge reviews whether it is technically sound enough to hand back to Greg for playtest.
 
 Forge should be used as an architecture review before work and a code review after work. That is the simplest place for it in the loop.
+
+---
+
+## LBH Forge Pass
+
+Use `$lbh-forge-pass` after large architectural shifts, broad refactors, major
+feature bursts, or when Greg asks for a deep cleanliness/centralization pass.
+This is not the everyday test suite and not a substitute for playtesting.
+
+The daily harness answers: **did a known contract regress?**
+
+The Forge pass answers: **are the code, comments, docs, tests, and process
+contracts still describing the game we are actually building?**
+
+A Forge pass should review:
+
+- Sim/client authority, including client-only features that need sim truth.
+- Coordinate, camera, flow, and radius math that may have drifted from
+  `src/coords.js`.
+- Three renderer assumptions, stale legacy-renderer compatibility, and visual
+  contracts that no longer match v0.2.
+- Comments that describe old behavior, magic numbers without context, and
+  duplicated calculations that should be centralized.
+- Test harness relevance: obsolete tests should be rewritten, deleted, or moved
+  to legacy lanes; new contracts should get representative coverage.
+- Docs holistically, with visible v0.2 status notes in docs that are updated.
+
+Run only the validation lanes justified by the systems touched, then broaden if
+the pass changes shared authority, renderer, controls, lifecycle, or platform
+behavior.
 
 ---
 

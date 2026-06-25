@@ -1,7 +1,8 @@
 # Test Harness
 
-> Current testing contract for Last Singularity. The original headless-only
-> plan in `AGENT-TESTING.md` is historical; this doc is the live operator guide.
+> Status: v0.2 current truth. The Three renderer and authoritative sim are the
+> primary validation targets. The original headless-only plan in
+> `AGENT-TESTING.md` is historical context.
 
 ## Position
 
@@ -14,6 +15,11 @@ broken.
 Use the CLI harness for deterministic facts. Use the Codex app browser for
 visual/playtest judgment. Use Computer Use only when the target is a real Mac
 app surface or OS UI that the browser cannot expose.
+
+The daily harness is not the periodic Forge pass. The harness should answer
+"did a known contract regress?" quickly and repeatably. `$lbh-forge-pass`
+should answer "are these still the right contracts?" after large architecture,
+renderer, sim, platform, or process shifts.
 
 Browser suites run through `tests/browser-driver.cjs`, a small Chrome DevTools
 Protocol wrapper around system Chrome. In Codex desktop sessions headless Chrome
@@ -107,6 +113,22 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
+
+## Forge Pass Alignment
+
+Use `$lbh-forge-pass` occasionally, not as a replacement for daily validation.
+It is the deeper architecture hygiene pass for stale assumptions, comments,
+centralization drift, orphaned code, docs, and harness relevance.
+
+During that pass:
+
+- Choose test lanes by the contracts touched, not by habit.
+- Delete, rewrite, or move tests that only protect superseded v0.1 behavior.
+- Add representative tests for new v0.2 sim authority, Three projection,
+  lifecycle, platform build, or controls contracts.
+- Treat manual playfeel gaps as explicit residual risk rather than pretending
+  automation can prove them.
+- Update this doc when the expected validation path changes.
 
 The underlying runner is manifest-driven:
 
