@@ -25,7 +25,7 @@ const RANGE_HINTS = {
   'ship.size':              { min: 4, max: 30, step: 1, tip: 'Ship triangle radius in pixels' },
 
   'fluid.viscosity':        { min: 0, max: 0.01, step: 0.00005, tip: 'Fluid thickness. 0 = water. Higher = syrup. Damps small-scale motion' },
-  'fluid.resolution':       { min: 64, max: 512, step: 64, tip: 'Sim grid size. 256 = good balance. 128 = fast. 512 = detailed but slow' },
+  'fluid.resolution':       { min: 64, max: 512, step: 64, tip: 'Sim grid size. 192 = local default. 128 = fast. 256+ = detailed but heavy' },
   'fluid.pressureIterations':{ min: 5, max: 80, step: 1, tip: 'Jacobi solver iterations. More = more accurate pressure. 30 = fine' },
   'fluid.curl':             { min: 0, max: 2, step: 0.05, tip: 'Vorticity confinement. Higher = more swirly eddies' },
   'fluid.dissipation':      { min: 0.9, max: 1, step: 0.001, tip: 'Velocity persistence per step. 0.99 = waves fade fast. 0.999 = waves travel far' },

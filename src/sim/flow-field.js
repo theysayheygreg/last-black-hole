@@ -1,4 +1,6 @@
-import { fluidVelToWorld, worldToFluidUV } from '../coords.js';
+import { CONFIG } from '../config.js';
+import { fluidVelToWorld, worldDirectionTo, worldToFluidUV } from '../coords.js';
+import { waveBandForce } from '../physics.js';
 import { emptyFlowSample, normalizeFlowSample } from './flow-sample.js';
 
 function wrapUV(value) {
@@ -6,18 +8,113 @@ function wrapUV(value) {
 }
 
 export class FlowField {
-  constructor(fluid = null) {
+  constructor(fluid = null, sources = {}) {
     this.fluid = fluid;
+    this.setSources(sources);
   }
 
   setFluid(fluid) {
     this.fluid = fluid;
   }
 
+  setSources({ wellSystem = null, starSystem = null, waveRings = null } = {}) {
+    this.wellSystem = wellSystem;
+    this.starSystem = starSystem;
+    this.waveRings = waveRings;
+  }
+
   sample(wx, wy) {
-    if (!this.fluid) return emptyFlowSample();
-    const [u, v] = worldToFluidUV(wx, wy);
-    return this.sampleUV(u, v);
+    const wells = this.wellSystem?.wells || [];
+    const stars = this.starSystem?.stars || [];
+    const rings = this.waveRings?.rings || [];
+    if (wells.length === 0 && stars.length === 0 && rings.length === 0) {
+      return emptyFlowSample();
+    }
+
+    let currentX = 0;
+    let currentY = 0;
+    let gravityX = 0;
+    let gravityY = 0;
+    let waveX = 0;
+    let waveY = 0;
+    let hazard = 0;
+    let surf = 0;
+    let sourceWellId = null;
+    let sourceRingId = null;
+    let bestCurrent = 0;
+
+    const wellCfg = CONFIG.wells;
+    const wellRange = wellCfg.maxRange ?? 1.2;
+    for (const well of wells) {
+      const dirToWell = worldDirectionTo(wx, wy, well.wx, well.wy);
+      if (dirToWell.dist < 0.001 || dirToWell.dist > wellRange) continue;
+      const safeDist = Math.max(0.15, dirToWell.dist);
+      const rangeFade = Math.max(0, 1 - dirToWell.dist / wellRange);
+      const strength = (well.mass || 1) * rangeFade / Math.pow(safeDist / 0.25, wellCfg.falloff ?? 1.5);
+      const orbital = strength * 0.22;
+      const radial = strength * 0.035;
+      const orbitalDir = well.orbitalDir || 1;
+      const tx = -dirToWell.ny * orbitalDir;
+      const ty = dirToWell.nx * orbitalDir;
+      currentX += tx * orbital + dirToWell.nx * radial;
+      currentY += ty * orbital + dirToWell.ny * radial;
+      gravityX += dirToWell.nx * strength;
+      gravityY += dirToWell.ny * strength;
+      surf = Math.max(surf, Math.min(1, orbital / 0.7));
+      hazard = Math.max(hazard, 1 - Math.max(0, dirToWell.dist - (well.killRadius || 0.04)) / Math.max(0.001, wellRange));
+      if (orbital > bestCurrent) {
+        bestCurrent = orbital;
+        sourceWellId = well.name || null;
+      }
+    }
+
+    const starCfg = CONFIG.stars;
+    const starRange = starCfg.maxRange ?? 0.6;
+    for (const star of stars) {
+      if (star.alive === false) continue;
+      const dirFromStar = worldDirectionTo(star.wx, star.wy, wx, wy);
+      if (dirFromStar.dist < 0.001 || dirFromStar.dist > starRange) continue;
+      const safeDist = Math.max(0.15, dirFromStar.dist);
+      const rangeFade = Math.max(0, 1 - dirFromStar.dist / starRange);
+      const typePush = star.typeDef?.pushMult ?? 1;
+      const strength = (star.mass || 1) * typePush * rangeFade / Math.pow(safeDist / 0.25, starCfg.falloff ?? 1.8);
+      currentX += dirFromStar.nx * strength * 0.08;
+      currentY += dirFromStar.ny * strength * 0.08;
+      hazard = Math.max(hazard, Math.min(1, strength / 2.5));
+    }
+
+    const eventCfg = CONFIG.events;
+    const halfWidth = (eventCfg.waveWidth ?? 0.1) * 0.5;
+    for (const ring of rings) {
+      if (!ring || ring.alive === false || ring.amplitude < 0.01) continue;
+      const dirFromRing = worldDirectionTo(ring.sourceWX, ring.sourceWY, wx, wy);
+      const accel = waveBandForce(
+        dirFromRing.dist,
+        ring.radius || 0,
+        halfWidth,
+        eventCfg.waveShipPush ?? 0.8,
+        ring.amplitude || 0
+      );
+      if (accel <= 0) continue;
+      const x = dirFromRing.nx * accel;
+      const y = dirFromRing.ny * accel;
+      waveX += x;
+      waveY += y;
+      currentX += x * 0.4;
+      currentY += y * 0.4;
+      sourceRingId = sourceRingId || `${ring.sourceWX?.toFixed?.(2) ?? 'ring'},${ring.sourceWY?.toFixed?.(2) ?? ''}`;
+      surf = Math.max(surf, Math.min(1, accel / 1.4));
+    }
+
+    return normalizeFlowSample({
+      current: { x: currentX, y: currentY },
+      gravity: { x: gravityX, y: gravityY },
+      wave: { x: waveX, y: waveY },
+      hazard,
+      surf,
+      sources: { wellId: sourceWellId, ringId: sourceRingId },
+      confidence: 1,
+    });
   }
 
   sampleUV(u, v) {

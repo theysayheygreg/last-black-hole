@@ -12,9 +12,11 @@ const {
   stopSimServer,
   launchGame,
 } = require("./helpers.cjs");
+const { CLIENT_PERF_PROFILES } = require("../scripts/content/session-profiles.cjs");
 
 const SIM_PORT = 8794;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
+const EXPECTED_FLUID_RESOLUTION = CLIENT_PERF_PROFILES.fixedGrid.fluidResolution;
 const MAPS = [
   { index: 0, id: "shallows", label: "3x3", scale: 3 },
   { index: 1, id: "expanse", label: "5x5", scale: 5 },
@@ -127,8 +129,8 @@ async function run() {
       if (scenario.phase !== "playing") {
         throw new Error(`${scenario.map} ${scenario.htmlFile} expected playing phase, got ${scenario.phase}`);
       }
-      if (scenario.perf.fluidResolution !== 256) {
-        throw new Error(`${scenario.map} ${scenario.htmlFile} expected fixed 256 fluid grid, got ${scenario.perf.fluidResolution}`);
+      if (scenario.perf.fluidResolution !== EXPECTED_FLUID_RESOLUTION) {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} expected fixed ${EXPECTED_FLUID_RESOLUTION} fluid grid, got ${scenario.perf.fluidResolution}`);
       }
       if (scenario.perf.visibleWellCount > scenario.perf.totalWellCount) {
         throw new Error(`${scenario.map} ${scenario.htmlFile} visible wells exceed total wells`);

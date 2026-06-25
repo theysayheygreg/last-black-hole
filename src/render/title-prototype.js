@@ -154,7 +154,8 @@ if (accretionStrengthOverride !== null) {
 //   coreR    — visible "black hole" radius
 //   peakR    — the hot accretion band (t=0, white-hot HDR)
 //   outerR   — where the outer purple fades to black (t=+1)
-// CAMERA_VIEW is 1.0 world-unit vertically; aspect widens the horizontal span.
+// CAMERA_VIEW matches the square fluid window so title hazards and fabric
+// share the same projection as gameplay.
 // Radii are keyed to the visible vertical frame (half-span = 0.5 world).
 // With the camera centered on the well:
 //   - core (t=-1, black) fills ~16% of radius

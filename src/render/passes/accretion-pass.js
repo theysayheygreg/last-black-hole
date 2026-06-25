@@ -20,8 +20,8 @@
 //
 // So AccretionPass takes its OWN accretion radii (core/peak/outer)
 // keyed to *visible composition*, not gameplay. Caller computes them.
-// Title typical: { coreR: 0.30, peakR: 0.40, outerR: 0.60 } for a
-// CAMERA_VIEW of 1.0 world-unit.
+// Title typical: { coreR: 0.30, peakR: 0.40, outerR: 0.60 } inside the
+// square fluid-window projection.
 //
 // t parameterization (now uses pass-local radii):
 //   dist <= coreR             → t = -1       (event horizon black)
@@ -32,7 +32,7 @@
 // Frame context (frameContext.accretion):
 //   - wellUVs:    Array<[u,v]> well positions in fluid UV
 //   - wellRadii:  Array<[coreR, peakR, outerR]> in world-space
-//   - camFU, camFV, gridWindow, cameraView, viewAspect (aspect-correct camera sampling)
+//   - camFU, camFV, gridWindow, cameraView, viewAspect (square fluid-window sampling)
 //
 // Output is HDR — white-hot band exceeds 1.0 so BloomPass catches it.
 
@@ -49,8 +49,8 @@ uniform vec3 u_wellRadii[${MAX_WELLS}]; // (coreR, peakR, outerR) world-space
 uniform int u_wellCount;
 uniform vec2 u_camOffset;             // camera center in fluid UV
 uniform float u_gridWindow;           // world-units spanned by the fluid grid texture
-uniform float u_cameraView;           // vertical world-units visible through the camera
-uniform float u_viewAspect;           // render target width / height
+uniform float u_cameraView;           // world-units visible on each axis
+uniform float u_viewAspect;           // retained for pass ABI while the window stays square
 uniform float u_strength;             // master blend for the radial color
 
 in vec2 v_uv;
@@ -77,8 +77,8 @@ vec3 tempRamp(float t) {
 void main() {
   vec3 base = texture(u_input, v_uv).rgb;
 
-  // Screen-space UV → fluid UV (same aspect-correct transform FluidDisplayPass uses).
-  vec2 cameraOffset = vec2((v_uv.x - 0.5) * u_viewAspect, v_uv.y - 0.5) * u_cameraView;
+  // Screen-space UV → fluid UV (same square transform FluidDisplayPass uses).
+  vec2 cameraOffset = (v_uv - vec2(0.5) + vec2(u_viewAspect * 0.0, 0.0)) * u_cameraView;
   vec2 fluidUV = u_camOffset + cameraOffset / u_gridWindow;
   vec2 wrapped = fract(fluidUV);
 

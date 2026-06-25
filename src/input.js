@@ -13,7 +13,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { pxPerWorld, screenToWorld, worldDirectionTo } from './coords.js';
+import { screenToWorld, worldDirectionTo, worldToScreen } from './coords.js';
 
 // ---- Stick processing helpers ----
 
@@ -354,7 +354,8 @@ export class InputManager {
       canvasH
     );
     const direction = worldDirectionTo(view.ship.wx, view.ship.wy, targetWX, targetWY);
-    const distancePx = direction.dist * pxPerWorld(canvasW, canvasH);
+    const [shipSX, shipSY] = worldToScreen(view.ship.wx, view.ship.wy, view.camX, view.camY, canvasW, canvasH);
+    const distancePx = Math.hypot(this._mouse.x - shipSX, this._mouse.y - shipSY);
     this._mouse.distancePx = Number.isFinite(distancePx) ? distancePx : 0;
 
     const facing = this._mouse.active && Number.isFinite(direction.nx) && Number.isFinite(direction.ny)

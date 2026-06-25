@@ -14,8 +14,10 @@ const {
   TestRunner,
   assert,
 } = require("./helpers.cjs");
+const { CLIENT_PERF_PROFILES } = require("../scripts/content/session-profiles.cjs");
 
 const htmlFile = process.argv[2] || "index-a.html";
+const EXPECTED_FLUID_RESOLUTION = CLIENT_PERF_PROFILES.fixedGrid.fluidResolution;
 
 const MAPS = [
   { index: 0, label: "shallows", scale: 3, wells: 4 },
@@ -67,7 +69,8 @@ async function run() {
         const stats = grid.perfStats;
         assert(grid.worldScale === map.scale, `${map.label}: expected worldScale ${map.scale}, got ${grid.worldScale}`);
         assert(grid.gridWindow === 3, `${map.label}: expected GRID_WINDOW 3, got ${grid.gridWindow}`);
-        assert(stats.fluidResolution === 256, `${map.label}: expected 256 fluid grid, got ${stats.fluidResolution}`);
+        assert(stats.fluidResolution === EXPECTED_FLUID_RESOLUTION,
+          `${map.label}: expected ${EXPECTED_FLUID_RESOLUTION} fluid grid, got ${stats.fluidResolution}`);
         assert(stats.totalWellCount === map.wells, `${map.label}: expected ${map.wells} wells, got ${stats.totalWellCount}`);
         assert(stats.visibleWellCount > 0, `${map.label}: expected at least one direct render well`);
         assert(stats.visibleWellCount <= stats.totalWellCount,
@@ -81,6 +84,66 @@ async function run() {
         const { visibleWellCount, totalWellCount } = grid.perfStats;
         assert(visibleWellCount < totalWellCount,
           `${map.label}: expected off-window wells to use coarse flow, got ${visibleWellCount}/${totalWellCount} direct wells`);
+      }
+    });
+
+    await runner.run("Spawn and visible wells share the same camera window", async () => {
+      for (const map of MAPS) {
+        await startMapAndReadGrid(page, map);
+        const audit = await page.evaluate(() => {
+          const api = window.__TEST_API;
+          const grid = api.getFluidGridState();
+          const ship = api.getShipPos();
+          const shipScreen = api.getShipScreenPos();
+          const wells = api.getWells();
+          const canvas = document.getElementById('overlay-canvas') || document.querySelector('canvas');
+          const width = canvas?.width || window.innerWidth;
+          const height = canvas?.height || window.innerHeight;
+          const worldScale = grid.worldScale;
+          const cam = grid.fluidCamera;
+          const halfWindow = grid.gridWindow / 2;
+          const wrapDelta = (from, to) => {
+            let d = to - from;
+            const half = worldScale / 2;
+            if (d > half) d -= worldScale;
+            if (d < -half) d += worldScale;
+            return d;
+          };
+          const dist = (ax, ay, bx, by) => Math.hypot(wrapDelta(ax, bx), wrapDelta(ay, by));
+          const nearest = wells.reduce((best, well) => {
+            const d = dist(ship.x, ship.y, well.wx, well.wy);
+            return !best || d < best.dist ? { name: well.name, dist: d, killRadius: well.killRadius } : best;
+          }, null);
+          const windowWells = wells.map((well) => {
+            const dx = wrapDelta(cam.x, well.wx);
+            const dy = wrapDelta(cam.y, well.wy);
+            const inFluidWindow = Math.abs(dx) <= halfWindow + 1e-6 && Math.abs(dy) <= halfWindow + 1e-6;
+            const onScreen = well.x >= -2 && well.x <= width + 2 && well.y >= -2 && well.y <= height + 2;
+            return { name: well.name, x: well.x, y: well.y, dx, dy, inFluidWindow, onScreen };
+          }).filter((well) => well.inFluidWindow);
+          return {
+            phase: api.getGamePhase(),
+            width,
+            height,
+            ship,
+            shipScreen,
+            nearest,
+            windowWells,
+          };
+        });
+
+        assert(audit.phase === 'playing', `${map.label}: expected playing phase after map load, got ${audit.phase}`);
+        assert(audit.shipScreen?.x >= -2 && audit.shipScreen?.x <= audit.width + 2
+          && audit.shipScreen?.y >= -2 && audit.shipScreen?.y <= audit.height + 2,
+          `${map.label}: spawned ship is not on screen (${JSON.stringify(audit.shipScreen)})`);
+        assert(audit.nearest && audit.nearest.dist > (audit.nearest.killRadius || 0) + 0.18,
+          `${map.label}: spawn too close to nearest well ${JSON.stringify(audit.nearest)}`);
+        assert(audit.windowWells.length > 0,
+          `${map.label}: expected at least one well inside the fluid camera window`);
+        for (const well of audit.windowWells) {
+          assert(well.onScreen,
+            `${map.label}: well inside fluid window is off-screen ${JSON.stringify(well)}`);
+        }
       }
     });
 

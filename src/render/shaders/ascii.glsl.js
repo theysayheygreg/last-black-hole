@@ -24,8 +24,8 @@ uniform float u_time;          // elapsed seconds — drives shimmer
 uniform float u_shimmer;       // quantum fluctuation probability (0 = off)
 uniform vec2 u_camOffset;     // camera center in fluid UV (for world-anchored noise)
 uniform float u_gridWindow;   // world-units spanned by the fluid grid (for world-anchored noise)
-uniform float u_cameraView;   // vertical world-units visible through the camera
-uniform float u_viewAspect;   // render target width / height for aspect-correct fluid sampling
+uniform float u_cameraView;   // world-units visible on each axis; matches the square fluid window
+uniform float u_viewAspect;   // retained for pass ABI; ignored while the fluid window is square
 uniform float u_dirThreshold; // speed threshold for directional character selection
 uniform float u_dirBlendRange; // speed window where direction emerges through shimmer
 uniform float u_glitchIntensity; // 0.0 = normal, 1.0 = full corruption (scene transitions)
@@ -51,8 +51,8 @@ void main() {
   float charIdx = lum * (rampSize - 1.0);
 
   // World-anchored shimmer so quantum fluctuations don't slide with camera.
-  // Match FluidDisplayPass' aspect-correct projection before sampling velocity.
-  vec2 cameraOffset = vec2((cellCenter.x - 0.5) * u_viewAspect, cellCenter.y - 0.5) * u_cameraView;
+  // Match FluidDisplayPass' square fluid-window projection before sampling velocity.
+  vec2 cameraOffset = (cellCenter - vec2(0.5) + vec2(u_viewAspect * 0.0, 0.0)) * u_cameraView;
   vec2 fluidUV = u_camOffset + cameraOffset / u_gridWindow;
   vec2 wrappedFluidUV = fract(fluidUV);
   vec2 cellsPerScreen = u_resolution / vec2(cellW, cellH);

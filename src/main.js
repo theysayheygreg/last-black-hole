@@ -708,6 +708,7 @@ function init() {
 
   // Init wave ring system
   waveRings = new WaveRingSystem();
+  flowField.setSources({ wellSystem, starSystem, waveRings });
 
   // Init ship
   ship = new Ship(glCanvas.width, glCanvas.height);
@@ -988,46 +989,62 @@ function seedInitialFluid() {
   }
 }
 
-/**
- * Find a random world position that is "safe" — far enough from all wells,
- * stars, portals, and planetoids to not get immediately pulled in.
- * Tries random positions until one meets the minimum distance, with a fallback.
- */
-function findSafeSpawn(minDist = 0.4) {
-  const allObjects = [
-    ...wellSystem.wells.map(w => ({ wx: w.wx, wy: w.wy })),
-    ...starSystem.stars.map(s => ({ wx: s.wx, wy: s.wy })),
-    ...portalSystem.portals.map(p => ({ wx: p.wx, wy: p.wy })),
-  ];
+function spawnClearance(obj, defaultMinDist) {
+  if (obj.kind === 'well') return Math.max(defaultMinDist, (obj.killRadius || 0.04) + 0.55);
+  if (obj.kind === 'star') return Math.max(defaultMinDist, 0.42 + (obj.mass || 1) * 0.06);
+  if (obj.kind === 'portal') return Math.max(0.28, defaultMinDist * 0.65);
+  if (obj.kind === 'planetoid') return Math.max(0.25, defaultMinDist * 0.55);
+  return defaultMinDist;
+}
 
-  for (let attempt = 0; attempt < 50; attempt++) {
+function collectSpawnHazards(defaultMinDist) {
+  return [
+    ...wellSystem.wells.map(w => ({ kind: 'well', wx: w.wx, wy: w.wy, clearance: spawnClearance({ kind: 'well', ...w }, defaultMinDist) })),
+    ...starSystem.stars.map(s => ({ kind: 'star', wx: s.wx, wy: s.wy, clearance: spawnClearance({ kind: 'star', ...s }, defaultMinDist) })),
+    ...portalSystem.portals.filter(p => p.alive !== false).map(p => ({ kind: 'portal', wx: p.wx, wy: p.wy, clearance: spawnClearance({ kind: 'portal', ...p }, defaultMinDist) })),
+    ...(planetoidSystem?.planetoids || []).filter(p => p.alive !== false).map(p => ({ kind: 'planetoid', wx: p.wx, wy: p.wy, clearance: spawnClearance({ kind: 'planetoid', ...p }, defaultMinDist) })),
+  ];
+}
+
+function scoreSpawnCandidate(wx, wy, hazards) {
+  if (hazards.length === 0) return Infinity;
+  let score = Infinity;
+  for (const hazard of hazards) {
+    score = Math.min(score, worldDistance(wx, wy, hazard.wx, hazard.wy) - hazard.clearance);
+  }
+  return score;
+}
+
+/**
+ * Pick a spawn that is outside each hazard's immediate pull/death envelope.
+ * Random tries preserve variety; a grid fallback prevents unlucky crowded maps
+ * from dropping the player beside an unseen well.
+ */
+function findSafeSpawn(minDist = 0.55) {
+  const hazards = collectSpawnHazards(minDist);
+  let best = { wx: WORLD_SCALE / 2, wy: WORLD_SCALE * 0.15, score: -Infinity };
+  const consider = (wx, wy) => {
+    const score = scoreSpawnCandidate(wx, wy, hazards);
+    if (score > best.score) best = { wx, wy, score };
+    return score >= 0;
+  };
+
+  for (let attempt = 0; attempt < 90; attempt++) {
     const wx = Math.random() * WORLD_SCALE;
     const wy = Math.random() * WORLD_SCALE;
-    let safe = true;
-    for (const obj of allObjects) {
-      if (worldDistance(wx, wy, obj.wx, obj.wy) < minDist) {
-        safe = false;
-        break;
-      }
-    }
-    if (safe) return [wx, wy];
+    if (consider(wx, wy)) return [wx, wy];
   }
-  // Fallback: pick the best of 20 random candidates (furthest from nearest object)
-  let bestDist = 0, bestX = 1.5, bestY = 0.45;
-  for (let i = 0; i < 20; i++) {
-    const wx = Math.random() * WORLD_SCALE;
-    const wy = Math.random() * WORLD_SCALE;
-    let nearest = Infinity;
-    for (const obj of allObjects) {
-      nearest = Math.min(nearest, worldDistance(wx, wy, obj.wx, obj.wy));
-    }
-    if (nearest > bestDist) {
-      bestDist = nearest;
-      bestX = wx;
-      bestY = wy;
+
+  const steps = Math.max(5, Math.ceil(WORLD_SCALE * 2));
+  for (let ix = 0; ix < steps; ix++) {
+    for (let iy = 0; iy < steps; iy++) {
+      const wx = ((ix + 0.5) / steps) * WORLD_SCALE;
+      const wy = ((iy + 0.5) / steps) * WORLD_SCALE;
+      if (consider(wx, wy)) return [wx, wy];
     }
   }
-  return [bestX, bestY];
+
+  return [best.wx, best.wy];
 }
 
 /**

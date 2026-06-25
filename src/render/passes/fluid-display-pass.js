@@ -17,8 +17,8 @@
 //   - wellShapes: Array<[coreR, ringInnerR, ringOuterR, orbitalDir]>
 //   - camFU, camFV:    camera center in fluid UV
 //   - gridWindow:      world-units spanned by the camera-anchored fluid grid
-//   - cameraView:      vertical world-units visible through the camera
-//   - viewAspect:      render target width / height for aspect-correct sampling
+//   - cameraView:      world-units visible on each axis
+//   - viewAspect:      retained for pass ABI while the fluid window stays square
 //   - totalTime:       elapsed seconds (drives fabric noise)
 //   - inhibitorData:   null on title; object when gameplay has an inhibitor
 

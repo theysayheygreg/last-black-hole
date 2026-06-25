@@ -432,8 +432,9 @@ export class ThreeRendererBackend {
     const safeHeight = Math.max(1, Number(height) || 1);
     const aspect = safeWidth / safeHeight;
     this.worldCameraAspect = aspect;
-    // The camera volume matches the canvas aspect, so world-scene meshes keep
-    // equal pixel scale on both axes instead of stretching on widescreen views.
+    // The camera volume matches the canvas aspect, but _scenePoint maps the
+    // square fluid window across it. That preserves the sim/renderer contract
+    // while still letting Three own the 3D scene and screen-space passes.
     this.worldCamera.left = -aspect;
     this.worldCamera.right = aspect;
     this.worldCamera.top = 1;
@@ -498,9 +499,9 @@ export class ThreeRendererBackend {
     const dx = wrappedDelta(wx, state.camX ?? this.lastSceneState.cameraX, worldScale);
     const dy = wrappedDelta(wy, state.camY ?? this.lastSceneState.cameraY, worldScale);
     return {
-      // CAMERA_VIEW is the vertical world span. The orthographic camera already
-      // widens X by aspect, so scale both axes from the same world metric.
-      x: (dx / cameraView) * 2,
+      // The sim window is square; scale X into the aspect-wide orthographic
+      // volume so hazards line up with the stretched fluid texture.
+      x: (dx / cameraView) * 2 * this.worldCameraAspect,
       y: (-dy / cameraView) * 2,
       scale: 2 / cameraView,
     };
@@ -685,12 +686,15 @@ export class ThreeRendererBackend {
       sceneKind: 'top-down-3d',
       camera: {
         kind: 'orthographic-top-down',
+        projection: 'square-fluid-window',
         position: { x: 0, y: 0, z: 4 },
         near: this.worldCamera.near,
         far: this.worldCamera.far,
         aspect: this.worldCameraAspect,
         worldViewHeight: this.lastSceneState.cameraView ?? CAMERA_VIEW,
-        worldViewWidth: (this.lastSceneState.cameraView ?? CAMERA_VIEW) * this.worldCameraAspect,
+        worldViewWidth: this.lastSceneState.cameraView ?? CAMERA_VIEW,
+        sceneViewWidth: (this.worldCamera.right - this.worldCamera.left),
+        sceneViewHeight: (this.worldCamera.top - this.worldCamera.bottom),
         left: this.worldCamera.left,
         right: this.worldCamera.right,
         top: this.worldCamera.top,

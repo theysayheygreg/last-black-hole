@@ -30,7 +30,7 @@
   "CLIENT_PERF_PROFILES": {
     "fixedGrid": {
       "id": "fixedGrid",
-      "fluidResolution": 256,
+      "fluidResolution": 192,
       "remotePresentationExtrapolateLimit": 0.75,
       "perfSmoothing": 0.12
     }

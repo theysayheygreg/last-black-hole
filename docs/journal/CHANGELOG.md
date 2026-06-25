@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-06-25 — Square fluid-window camera realignment
+
+- Re-locked `CAMERA_VIEW` to the 3x3 camera-anchored fluid window so hazards, ASCII fabric, input, and Three scene meshes all describe the same world slice again.
+- Reverted shader sampling away from aspect-widened fluid UVs; the current sim owns a square texture window, so aspect-rectangular fluid sampling is reserved for a later rectangular-window sim pass.
+- Tightened local and authoritative spawn selection with per-hazard clearance scoring and removed the dead duplicate sim spawn helper.
+- Lowered the in-process local sim cadence from 60 Hz to 30 Hz with a two-step catch-up guard so slow frames do not spiral into persistent low FPS on the Three/Deck path.
+- Moved local gameplay flow sampling from synchronous GPU `readPixels` to an analytical field built from wells, stars, and wave rings; GPU fluid remains the visual field.
+- Dropped the fixed local fluid grid from 256 to 192 with an 18-pass pressure solve for the local Three build; ASCII hides the resolution loss while the frame loop gets meaningful headroom.
+- Added browser and sim regressions for map-load spawn safety, visible well alignment, and the Three backend's square-fluid-window projection stats.
+
+---
+
 ## 2026-06-25 — Aspect-correct camera math after Three migration
 
 - Split `CAMERA_VIEW` from `GRID_WINDOW` in the renderer path: the camera now defines the visible world span, while the fluid grid remains the larger sampled texture window.

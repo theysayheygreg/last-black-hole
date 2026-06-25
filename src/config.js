@@ -27,9 +27,9 @@
  */
 export const CONFIG = {
   sim: {
-    fixedHz: 60,            // Authoritative in-process sim tick. Keep 60 for jam stability now;
-                            // decoupling work can lower this later without changing the client loop.
-    maxStepsPerFrame: 4,    // Spiral-of-death guard if a frame stalls.
+    fixedHz: 30,            // In-process sim cadence. Server authority can run its own tick;
+                            // local play prioritizes stable 30-60fps frame pacing.
+    maxStepsPerFrame: 2,    // Spiral-of-death guard if a frame stalls.
   },
 
   ship: {
@@ -87,8 +87,8 @@ export const CONFIG = {
 
   fluid: {
     viscosity: 0.0001,        // Navier-Stokes viscosity. Higher = syrupy, damps small eddies.
-    resolution: 256,          // GPU sim grid size. 256 = good balance. 512 = detailed but heavy.
-    pressureIterations: 30,   // Jacobi solver passes for incompressibility. 20-40 is fine.
+    resolution: 192,          // GPU sim grid size. ASCII hides 192 well; 256 was too heavy locally.
+    pressureIterations: 18,   // Jacobi solver passes. Lower keeps the local Three path playable.
     curl: 0.3,                // Vorticity confinement strength. Amplifies small-scale swirl.
     dissipation: 0.999,       // Velocity persistence per sim step. 0.99 = fast fade, 0.999 = long travel.
     densityDissipation: 0.998,// Base density persistence (overridden by distance-based pass below).

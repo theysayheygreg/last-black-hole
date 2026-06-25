@@ -23,8 +23,8 @@
 //   - glitchIntensity: 0-1, for scene transitions (0 on title)
 //   - camFU, camFV:  camera center in fluid UV (world-anchored shimmer)
 //   - gridWindow:    world-units spanned by the camera-anchored fluid grid
-//   - cameraView:    vertical world-units visible through the camera
-//   - viewAspect:    render target width / height for aspect-correct velocity sampling
+//   - cameraView:    world-units visible on each axis
+//   - viewAspect:    retained for pass ABI while the fluid window stays square
 //   - totalTime:     elapsed seconds
 
 import { Pass } from '../composer.js';

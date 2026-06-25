@@ -27,25 +27,23 @@ async function run() {
 
   const runner = new TestRunner("Coordinates");
 
-  await runner.run("Aspect-correct world/screen projection round-trips", async () => {
+  await runner.run("Square fluid-window world/screen projection round-trips", async () => {
     const coords = await import("../src/coords.js");
     const canvasW = 1280;
     const canvasH = 720;
-    const camX = 1.5;
-    const camY = 1.5;
-    const aspect = canvasW / canvasH;
-    const halfVertical = coords.CAMERA_VIEW / 2;
-    const halfHorizontal = coords.CAMERA_VIEW * aspect / 2;
+    const camX = 1.2;
+    const camY = 1.6;
+    const halfWindow = coords.CAMERA_VIEW / 2;
 
     const [rightEdgeX, rightEdgeY] = coords.screenToWorld(canvasW, canvasH / 2, camX, camY, canvasW, canvasH);
-    assert(Math.abs(rightEdgeX - (camX + halfHorizontal)) < 1e-6,
-      `Right screen edge should be ${halfHorizontal.toFixed(3)} world-units from camera, got ${rightEdgeX - camX}`);
+    assert(Math.abs(rightEdgeX - (camX + halfWindow)) < 1e-6,
+      `Right screen edge should be ${halfWindow.toFixed(3)} world-units from camera, got ${rightEdgeX - camX}`);
     assert(Math.abs(rightEdgeY - camY) < 1e-6, "Right screen edge should preserve camera Y");
 
     const [topX, topY] = coords.screenToWorld(canvasW / 2, 0, camX, camY, canvasW, canvasH);
     assert(Math.abs(topX - camX) < 1e-6, "Top screen edge should preserve camera X");
-    assert(Math.abs(topY - (camY - halfVertical)) < 1e-6,
-      `Top screen edge should be ${halfVertical.toFixed(3)} world-units above camera, got ${camY - topY}`);
+    assert(Math.abs(topY - (camY - halfWindow)) < 1e-6,
+      `Top screen edge should be ${halfWindow.toFixed(3)} world-units above camera, got ${camY - topY}`);
 
     const probeWX = camX + 0.37;
     const probeWY = camY - 0.22;
@@ -54,9 +52,14 @@ async function run() {
     assert(Math.abs(roundWX - probeWX) < 1e-6 && Math.abs(roundWY - probeWY) < 1e-6,
       `worldToScreen/screenToWorld mismatch: (${roundWX}, ${roundWY})`);
 
-    const [oneHalfRightPx] = coords.worldToScreen(camX + halfVertical, camY, camX, camY, canvasW, canvasH);
-    assert(Math.abs(oneHalfRightPx - (canvasW / 2 + canvasH / 2)) < 1e-6,
-      "One vertical half-view world offset should equal half the canvas height in pixels");
+    const edgeInset = 1e-6;
+    const [rightEdgePx] = coords.worldToScreen(camX + halfWindow - edgeInset, camY, camX, camY, canvasW, canvasH);
+    assert(Math.abs(rightEdgePx - (canvasW - edgeInset * (canvasW / coords.CAMERA_VIEW))) < 1e-3,
+      "The square fluid-window right edge should land on the right screen edge");
+
+    const [, bottomEdgePx] = coords.worldToScreen(camX, camY + halfWindow - edgeInset, camX, camY, canvasW, canvasH);
+    assert(Math.abs(bottomEdgePx - (canvasH - edgeInset * (canvasH / coords.CAMERA_VIEW))) < 1e-3,
+      "The square fluid-window bottom edge should land on the bottom screen edge");
   });
 
   await startServer();

@@ -817,31 +817,6 @@ function findPortalSpawnPosition(portalType) {
     wy: rng() * worldScale,
   };
 }
-function findSafeSpawn(map) {
-  const allObjects = [
-    ...map.wells.map((well) => ({ wx: well.wx, wy: well.wy })),
-    ...map.stars.map((star) => ({ wx: star.wx, wy: star.wy })),
-  ];
-  const minDist = Math.max(0.25, map.worldScale * 0.08);
-  const rng = runtime.session?.rng?.rawStream('playerSpawn') || Math.random;
-
-  let best = { wx: map.worldScale / 2, wy: map.worldScale / 2, dist: -Infinity };
-
-  for (let attempt = 0; attempt < 80; attempt++) {
-    const wx = rng() * map.worldScale;
-    const wy = rng() * map.worldScale;
-    let nearest = Infinity;
-    for (const obj of allObjects) {
-      nearest = Math.min(nearest, worldDistance(wx, wy, obj.wx, obj.wy, map.worldScale));
-    }
-    if (nearest >= minDist) return { wx, wy };
-    if (nearest > best.dist) best = { wx, wy, dist: nearest };
-  }
-
-  return { wx: best.wx, wy: best.wy };
-}
-
-
 const args = parseArgs(process.argv.slice(2));
 const HOST = args.host || "127.0.0.1";
 const PORT = Number(args.port || 8787);
@@ -3293,19 +3268,80 @@ function spawnAIPlayers(mapState, session) {
   }
 }
 
+function spawnClearance(entity, defaultMinDist) {
+  if (entity.kind === "well") return Math.max(defaultMinDist, (entity.killRadius || 0.04) + 0.55);
+  if (entity.kind === "star") return Math.max(defaultMinDist, 0.42 + (entity.mass || 1) * 0.06);
+  if (entity.kind === "portal") return Math.max(0.28, defaultMinDist * 0.65);
+  if (entity.kind === "planetoid") return Math.max(0.25, defaultMinDist * 0.55);
+  return defaultMinDist;
+}
+
+function collectSpawnHazards(mapState, defaultMinDist) {
+  return [
+    ...(mapState.wells || []).map((well) => ({
+      kind: "well",
+      wx: well.wx,
+      wy: well.wy,
+      clearance: spawnClearance({ kind: "well", ...well }, defaultMinDist),
+    })),
+    ...(mapState.stars || []).filter((star) => star.alive !== false).map((star) => ({
+      kind: "star",
+      wx: star.wx,
+      wy: star.wy,
+      clearance: spawnClearance({ kind: "star", ...star }, defaultMinDist),
+    })),
+    ...(mapState.portals || []).filter((portal) => portal.alive !== false).map((portal) => ({
+      kind: "portal",
+      wx: portal.wx,
+      wy: portal.wy,
+      clearance: spawnClearance({ kind: "portal", ...portal }, defaultMinDist),
+    })),
+    ...(mapState.planetoids || []).filter((planetoid) => planetoid.alive !== false).map((planetoid) => ({
+      kind: "planetoid",
+      wx: planetoid.wx,
+      wy: planetoid.wy,
+      clearance: spawnClearance({ kind: "planetoid", ...planetoid }, defaultMinDist),
+    })),
+  ];
+}
+
+function scoreSpawnCandidate(wx, wy, hazards, worldScale) {
+  if (hazards.length === 0) return Infinity;
+  let score = Infinity;
+  for (const hazard of hazards) {
+    score = Math.min(score, worldDistance(wx, wy, hazard.wx, hazard.wy, worldScale) - hazard.clearance);
+  }
+  return score;
+}
+
 function findSafeSpawn(mapState) {
   const ws = mapState.worldScale;
+  const minDist = Math.max(0.55, ws * 0.055);
+  const hazards = collectSpawnHazards(mapState, minDist);
   const rng = runtime.session?.rng?.rawStream('safeSpawn') || Math.random;
-  for (let attempt = 0; attempt < 20; attempt++) {
+  let best = { wx: ws / 2, wy: ws * 0.15, score: -Infinity };
+  const consider = (wx, wy) => {
+    const score = scoreSpawnCandidate(wx, wy, hazards, ws);
+    if (score > best.score) best = { wx, wy, score };
+    return score >= 0;
+  };
+
+  for (let attempt = 0; attempt < 90; attempt++) {
     const wx = rng() * ws;
     const wy = rng() * ws;
-    let safe = true;
-    for (const well of mapState.wells) {
-      if (worldDistance(wx, wy, well.wx, well.wy, ws) < 0.3) { safe = false; break; }
-    }
-    if (safe) return { wx, wy };
+    if (consider(wx, wy)) return { wx, wy };
   }
-  return { wx: rng() * ws, wy: rng() * ws };
+
+  const steps = Math.max(5, Math.ceil(ws * 2));
+  for (let ix = 0; ix < steps; ix++) {
+    for (let iy = 0; iy < steps; iy++) {
+      const wx = ((ix + 0.5) / steps) * ws;
+      const wy = ((iy + 0.5) / steps) * ws;
+      if (consider(wx, wy)) return { wx, wy };
+    }
+  }
+
+  return { wx: best.wx, wy: best.wy };
 }
 
 // Analytical FlowSample estimate from well positions (no GPU needed).

@@ -19,6 +19,18 @@ async function getJson(path, options) {
   return { status: response.status, body };
 }
 
+function torusDelta(from, to, worldScale) {
+  let d = to - from;
+  const half = worldScale / 2;
+  if (d > half) d -= worldScale;
+  if (d < -half) d += worldScale;
+  return d;
+}
+
+function torusDistance(ax, ay, bx, by, worldScale) {
+  return Math.hypot(torusDelta(ax, bx, worldScale), torusDelta(ay, by, worldScale));
+}
+
 async function run() {
   const runner = new TestRunner("SimScale");
 
@@ -159,6 +171,41 @@ async function run() {
         body.session.maxPickupChecksPerPlayer === MEDIUM_PROFILE.maxPickupChecksPerPlayer,
         `Expected medium-map maxPickupChecksPerPlayer ${MEDIUM_PROFILE.maxPickupChecksPerPlayer}, got ${body.session.maxPickupChecksPerPlayer}`
       );
+    });
+
+    await runner.run("Authoritative joins spawn clear of immediate well danger", async () => {
+      for (const mapId of ["shallows", "expanse", "deep-field"]) {
+        const start = await getJson("/session/start", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            mapId,
+            requesterId: "sim-scale-test",
+            requesterName: "Scale Test",
+            seed: 60625,
+          }),
+        });
+        assert(start.status === 200, `${mapId}: expected /session/start 200, got ${start.status}`);
+
+        const join = await getJson("/join", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            clientId: `spawn-check-${mapId}`,
+            name: "Spawn Check",
+          }),
+        });
+        assert(join.status === 200 && join.body.ok === true, `${mapId}: expected /join success`);
+        const player = join.body.player;
+        const snapshot = await getJson("/snapshot");
+        const world = snapshot.body.world;
+        const nearestWell = (world.wells || []).reduce((best, well) => {
+          const dist = torusDistance(player.wx, player.wy, well.wx, well.wy, world.worldScale);
+          return !best || dist < best.dist ? { dist, killRadius: well.killRadius, id: well.id } : best;
+        }, null);
+        assert(nearestWell && nearestWell.dist > (nearestWell.killRadius || 0) + 0.18,
+          `${mapId}: authoritative spawn too close to well ${JSON.stringify(nearestWell)}`);
+      }
     });
 
     await runner.run("Authoritative snapshots carry printable wreck labels", async () => {
