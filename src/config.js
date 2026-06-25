@@ -4,20 +4,21 @@
  * Dev panel sliders bind directly to this object for live tuning.
  *
  * UNIT CONVENTIONS:
- *   - World-space: 0 to WORLD_SCALE (3.0). Ship, entities, camera all use this.
- *   - Fluid UV:    0 to 1.0. The GPU sim texture. World ÷ WORLD_SCALE = UV.
- *   - Pixels:      Screen coordinates. World × pxPerWorld(width,height) = pixels.
+ *   - World-space: 0 to WORLD_SCALE. Ship, entities, camera, and sim use this.
+ *   - Fluid UV:    0 to 1.0 across the camera's GRID_WINDOW, not the whole map.
+ *   - Pixels:      Screen coordinates. World radii use axis-specific projection.
  *
  * GPU SPLAT SCALING RULE:
  *   When calling fluid.splat(), UV-space radii must be scaled by uvScale()²
  *   (i.e. s2 = s * s where s = uvScale()). Force values scale by uvScale().
- *   This ensures splats cover the same world-space area regardless of map size.
+ *   This ensures splats cover the same visible world-window area regardless of map size.
  *   Every system follows this: wells, stars, loot, wrecks, ship wake, combat,
  *   planetoids, wave rings. If you add a new splat call, apply s2 to radius.
  *
  * SHADER DISTANCE RULE:
- *   The display shader converts UV distance to world-equivalent via:
- *     float dist = length(diff_uv) / uvS;  where uvS = u_refScale / u_worldScale
+ *   The display shader compares camera-window UV distances against world-window
+ *   shape values. Keep map-scale conversions in coords.js; do not inline
+ *   WORLD_SCALE into shader inputs unless the value truly spans the whole map.
  *   Any shape/radius values passed as uniforms must be in world-space (not UV)
  *   so they compare correctly against dist. See wells.getRenderShapes().
  *
@@ -88,7 +89,7 @@ export const CONFIG = {
   fluid: {
     viscosity: 0.0001,        // Navier-Stokes viscosity. Higher = syrupy, damps small eddies.
     resolution: 192,          // GPU sim grid size. ASCII hides 192 well; 256 was too heavy locally.
-    pressureIterations: 18,   // Jacobi solver passes. Lower keeps the local Three path playable.
+    pressureIterations: 16,   // Jacobi solver passes. Lower keeps the local Three path playable.
     curl: 0.3,                // Vorticity confinement strength. Amplifies small-scale swirl.
     dissipation: 0.999,       // Velocity persistence per sim step. 0.99 = fast fade, 0.999 = long travel.
     densityDissipation: 0.998,// Base density persistence (overridden by distance-based pass below).
@@ -98,8 +99,8 @@ export const CONFIG = {
                              // Boosted 2.5x from 0.0002 so void has enough signal for shimmer to work with.
     nearDissipation: 0.998,   // Density persistence near wells/stars/loot. High = persistent accretion.
     farDissipation: 0.985,    // Density persistence far from any source. Low = quick fadeout in void.
-    dissipationNearRadius: 0.03, // [UV-space] radius where near-dissipation applies. Tuned for WORLD_SCALE=3.
-                                  // fluid.js scales by 3/WORLD_SCALE when passing to shader.
+    dissipationNearRadius: 0.03, // [UV-space] radius where near-dissipation applies. Tuned for GRID_WINDOW=3.
+                                  // fluid.js scales by uvScale() when passing to shader.
     dissipationFarRadius: 0.12,  // [UV-space] radius where transition to far-dissipation completes.
                                   // Same scaling as nearRadius.
   },
@@ -130,7 +131,7 @@ export const CONFIG = {
     // --- Accretion disk visuals (fluid density injection) ---
     accretionRate: 0.015,     // Base density brightness per injection point. Scaled by well mass.
     accretionRadius: 0.023,   // [UV-space] Base disk radius in fluid UV. Scaled by well mass × ring.radiusMult.
-                              // getRenderShapes() converts to world-space via × WORLD_SCALE.
+                              // getRenderShapes() converts through coords.js scaling helpers.
     accretionSpinRate: 0.8,   // Disk rotation in rad/s. Per-well override available.
     accretionPoints: 8,       // Injection points per ring. More = smoother disk, more GPU splats.
     accretionRings: [

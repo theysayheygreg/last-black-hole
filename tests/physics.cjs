@@ -96,68 +96,93 @@ async function run() {
     // 3. Well pull exists
     await runner.run("Gravity well pulls ship toward it", async () => {
       await prepareLocalRun(page);
-      const wells = await page.evaluate(() => window.__TEST_API.getWells());
-      assert(wells && wells.length > 0, "No gravity wells found");
+      const previousFluidCoupling = await page.evaluate(() => window.__TEST_API.getConfig().ship.fluidCoupling);
+      await page.evaluate(() => window.__TEST_API.setConfig("ship.fluidCoupling", 0));
+      try {
+        const wells = await page.evaluate(() => window.__TEST_API.getWells());
+        assert(wells && wells.length > 0, "No gravity wells found");
 
-      const well = wells.reduce((best, candidate) =>
-        !best || candidate.mass > best.mass ? candidate : best,
-        null
-      );
-      const testRadius = Math.max((well.killRadius || 0.04) * 1.35, (well.killRadius || 0.04) + 0.03);
-      const offsets = [
-        [ testRadius, 0 ],
-        [-testRadius, 0 ],
-        [0,  testRadius],
-        [0, -testRadius],
-      ];
-
-      let bestInwardDelta = -Infinity;
-      for (const [dx, dy] of offsets) {
-        await page.evaluate(
-          (wx, wy) => window.__TEST_API.teleportShip(wx, wy),
-          well.wx + dx,
-          well.wy + dy
+        const well = wells.reduce((best, candidate) =>
+          !best || candidate.mass > best.mass ? candidate : best,
+          null
         );
+        const grid = await page.evaluate(() => window.__TEST_API.getFluidGridState?.());
+        const worldScale = grid?.worldScale || 3;
+        const wrapWorld = (value) => ((value % worldScale) + worldScale) % worldScale;
+        const testRadius = Math.max((well.killRadius || 0.04) * 1.35, (well.killRadius || 0.04) + 0.03);
+        const offsets = [
+          [ testRadius, 0 ],
+          [-testRadius, 0 ],
+          [0,  testRadius],
+          [0, -testRadius],
+        ];
 
-        const startDist = await page.evaluate(
-          (wx, wy) => {
-            const ship = window.__TEST_API.getShipPos();
-            const dx = ship.x - wx;
-            const dy = ship.y - wy;
-            return Math.sqrt(dx * dx + dy * dy);
-          },
-          well.wx,
-          well.wy
-        );
+        let bestInwardDelta = -Infinity;
+        for (const [dx, dy] of offsets) {
+          await page.evaluate(
+            (wx, wy) => window.__TEST_API.teleportShip(wx, wy),
+            wrapWorld(well.wx + dx),
+            wrapWorld(well.wy + dy)
+          );
 
-        await tickShip(page, 60, { thrustIntensity: 0, brakeIntensity: 0, wellPullStrength: 0.6 });
+          const startDist = await page.evaluate(
+            (wx, wy, scale) => {
+              const ship = window.__TEST_API.getShipPos();
+              const wrapDelta = (from, to) => {
+                let d = to - from;
+                const half = scale / 2;
+                if (d > half) d -= scale;
+                if (d < -half) d += scale;
+                return d;
+              };
+              const dx = wrapDelta(wx, ship.x);
+              const dy = wrapDelta(wy, ship.y);
+              return Math.sqrt(dx * dx + dy * dy);
+            },
+            well.wx,
+            well.wy,
+            worldScale
+          );
 
-        const result = await page.evaluate(
-          (wx, wy) => {
-            const ship = window.__TEST_API.getShipPos();
-            const dx = ship.x - wx;
-            const dy = ship.y - wy;
-            return {
-              dist: Math.sqrt(dx * dx + dy * dy),
-              phase: window.__TEST_API.getGamePhase(),
-            };
-          },
-          well.wx,
-          well.wy
-        );
+          await tickShip(page, 60, { thrustIntensity: 0, brakeIntensity: 0, wellPullStrength: 0.6 });
 
-        if (result.phase === 'dead') {
-          bestInwardDelta = Math.max(bestInwardDelta, startDist);
-          break;
+          const result = await page.evaluate(
+            (wx, wy, scale) => {
+              const ship = window.__TEST_API.getShipPos();
+              const wrapDelta = (from, to) => {
+                let d = to - from;
+                const half = scale / 2;
+                if (d > half) d -= scale;
+                if (d < -half) d += scale;
+                return d;
+              };
+              const dx = wrapDelta(wx, ship.x);
+              const dy = wrapDelta(wy, ship.y);
+              return {
+                dist: Math.sqrt(dx * dx + dy * dy),
+                phase: window.__TEST_API.getGamePhase(),
+              };
+            },
+            well.wx,
+            well.wy,
+            worldScale
+          );
+
+          if (result.phase === 'dead') {
+            bestInwardDelta = Math.max(bestInwardDelta, startDist);
+            break;
+          }
+
+          bestInwardDelta = Math.max(bestInwardDelta, startDist - result.dist);
         }
 
-        bestInwardDelta = Math.max(bestInwardDelta, startDist - result.dist);
+        assert(
+          bestInwardDelta > 0.001,
+          `Ship didn't show inward pull from any test angle (best distance delta: ${bestInwardDelta.toFixed(4)} world-units)`
+        );
+      } finally {
+        await page.evaluate((value) => window.__TEST_API.setConfig("ship.fluidCoupling", value), previousFluidCoupling);
       }
-
-      assert(
-        bestInwardDelta > 0.001,
-        `Ship didn't show inward pull from any test angle (best distance delta: ${bestInwardDelta.toFixed(4)} world-units)`
-      );
     });
 
     // 4. Steady orbital currents exist

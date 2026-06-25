@@ -154,7 +154,7 @@ export class WellSystem {
    * The display shader computes: dist = length(diff_uv) / uvS  which is world-space.
    * Shape radii must be in the same space to compare correctly.
    *
-   * accretionRadius (CONFIG, UV-space) is converted to world-space via × WORLD_SCALE.
+   * accretionRadius (CONFIG, UV-space) is converted through accretionScale().
    * killRadius (CONFIG, world-space) is used directly.
    *
    * The multiplier constants (1.08, 0.33, 1.18, 0.72, 1.48, 3.8, 2.2) are

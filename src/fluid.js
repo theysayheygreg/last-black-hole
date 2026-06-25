@@ -23,7 +23,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, FLUID_REF_SCALE } from './coords.js';
+import { FLUID_REF_SCALE, uvScale } from './coords.js';
 
 // ---- Shader sources ----
 
@@ -911,9 +911,10 @@ export class FluidSim {
       gl.bindTexture(gl.TEXTURE_2D, this.density.read.tex);
       gl.uniform1f(u['u_nearDissipation'], CONFIG.fluid.nearDissipation);
       gl.uniform1f(u['u_farDissipation'], CONFIG.fluid.farDissipation);
-      // Dissipation radii are tuned for WORLD_SCALE=3 (uvScale=1). Scale them
-      // so the same world-space zone applies on larger maps where UV distances shrink.
-      const dissipScale = FLUID_REF_SCALE / WORLD_SCALE;
+      // Dissipation radii live in the camera-window fluid texture. Scale by
+      // GRID_WINDOW, never total map size, so large maps keep the same visible
+      // persistence zone around wells/stars.
+      const dissipScale = uvScale();
       gl.uniform1f(u['u_nearRadius'], CONFIG.fluid.dissipationNearRadius * dissipScale);
       gl.uniform1f(u['u_farRadius'], CONFIG.fluid.dissipationFarRadius * dissipScale);
       const count = this._wellPositionsUV.length;

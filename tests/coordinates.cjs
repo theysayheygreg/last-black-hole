@@ -62,6 +62,44 @@ async function run() {
       "The square fluid-window bottom edge should land on the bottom screen edge");
   });
 
+  await runner.run("World radii use axis-specific projection helpers", async () => {
+    const coords = await import("../src/coords.js");
+    const canvasW = 1280;
+    const canvasH = 720;
+    const radius = 0.25;
+    const aspect = canvasW / canvasH;
+
+    const worldPx = coords.worldRadiusToScreen(radius, canvasW, canvasH);
+    assert(Math.abs(worldPx.rx - radius * canvasW / coords.CAMERA_VIEW) < 1e-6,
+      `Expected world X radius to use canvas width, got ${worldPx.rx}`);
+    assert(Math.abs(worldPx.ry - radius * canvasH / coords.CAMERA_VIEW) < 1e-6,
+      `Expected world Y radius to use canvas height, got ${worldPx.ry}`);
+
+    const glyphPx = coords.worldRadiusToScreen(radius, canvasW, canvasH, "screen");
+    assert(Math.abs(glyphPx.rx - glyphPx.ry) < 1e-6,
+      "Screen glyph mode should stay visually round");
+
+    const worldScene = coords.worldRadiusToSceneScale(radius, aspect, coords.CAMERA_VIEW);
+    assert(Math.abs(worldScene.x - worldScene.y * aspect) < 1e-6,
+      `Expected Three world radius X scale to include aspect, got ${worldScene.x}/${worldScene.y}`);
+
+    const glyphScene = coords.worldRadiusToSceneScale(radius, aspect, coords.CAMERA_VIEW, "screen");
+    assert(Math.abs(glyphScene.x - glyphScene.y) < 1e-6,
+      "Three screen glyph mode should keep uniform scene scale");
+  });
+
+  await runner.run("Fluid UV radius follows GRID_WINDOW, not total map scale", async () => {
+    const coords = await import("../src/coords.js");
+    coords.setWorldScale(10);
+    const radius = 0.4;
+    const uv = coords.worldRadiusToFluidUV(radius);
+    assert(Math.abs(uv - radius / coords.GRID_WINDOW) < 1e-9,
+      `Expected UV radius ${radius / coords.GRID_WINDOW}, got ${uv}`);
+    assert(Math.abs(coords.uvToWorld(uv) - radius) < 1e-9,
+      "uvToWorld should invert camera-window UV radius");
+    coords.setWorldScale(3);
+  });
+
   await startServer();
 
   let browser, page, errors;

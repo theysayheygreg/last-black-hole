@@ -7,7 +7,7 @@
 // adapts the frame into a 3D scene while preserving LBH's flat top-down read.
 
 import * as THREE from '../../node_modules/three/build/three.module.js';
-import { CAMERA_VIEW } from '../coords.js';
+import { CAMERA_VIEW, worldRadiusToSceneScale } from '../coords.js';
 
 const COPY_VERT = `in vec3 position;
 in vec2 uv;
@@ -527,11 +527,14 @@ export class ThreeRendererBackend {
       : { pool: this.entityMeshPool, cursorKey: 'entityMeshCursor' };
   }
 
-  _addMesh(group, geometry, material, wx, wy, radius, rotation = 0, z = 0, state = this.lastSceneState) {
+  _addMesh(group, geometry, material, wx, wy, radius, rotation = 0, z = 0, state = this.lastSceneState, radiusMode = 'world') {
     if (!Number.isFinite(wx) || !Number.isFinite(wy)) return null;
     const point = this._scenePoint(wx, wy, state);
-    const sceneRadius = Math.max(0.002, radius * point.scale);
-    if (!this._isSceneVisible(point, sceneRadius)) return null;
+    const cameraView = Math.max(0.001, Number.isFinite(state.cameraView) ? state.cameraView : (this.lastSceneState.cameraView ?? CAMERA_VIEW));
+    const sceneScale = worldRadiusToSceneScale(Math.max(0.001, radius), this.worldCameraAspect, cameraView, radiusMode);
+    sceneScale.x = Math.max(0.002, sceneScale.x);
+    sceneScale.y = Math.max(0.002, sceneScale.y);
+    if (!this._isSceneVisible(point, Math.max(sceneScale.x, sceneScale.y))) return null;
     const { pool, cursorKey } = this._meshPoolFor(group);
     let mesh = pool[this[cursorKey]];
     if (!mesh) {
@@ -544,7 +547,7 @@ export class ThreeRendererBackend {
     mesh.geometry = geometry;
     mesh.material = material;
     mesh.position.set(point.x, point.y, z);
-    mesh.scale.set(sceneRadius, sceneRadius, 1);
+    mesh.scale.set(sceneScale.x, sceneScale.y, 1);
     mesh.rotation.z = rotation;
     mesh.renderOrder = 14 + Math.round(z * 100);
     mesh.visible = true;
@@ -586,12 +589,14 @@ export class ThreeRendererBackend {
     let entityCount = 0;
     let semanticCount = 0;
     const addEntity = (...args) => {
-      const mesh = this._addMesh(this.entityGroup, ...args, renderState);
+      const maybeMode = typeof args[args.length - 1] === 'string' ? args.pop() : 'world';
+      const mesh = this._addMesh(this.entityGroup, ...args, renderState, maybeMode);
       if (mesh) entityCount++;
       return mesh;
     };
     const addSemantic = (...args) => {
-      const mesh = this._addMesh(this.semanticGroup, ...args, renderState);
+      const maybeMode = typeof args[args.length - 1] === 'string' ? args.pop() : 'world';
+      const mesh = this._addMesh(this.semanticGroup, ...args, renderState, maybeMode);
       if (mesh) semanticCount++;
       return mesh;
     };
@@ -606,7 +611,7 @@ export class ThreeRendererBackend {
       if (life > 0.02) addSemantic(this.entityGeometries.ring, this.entityMaterials.wave, ring.sourceWX, ring.sourceWY, ring.radius || 0.01, 0, 0.02);
     }
     for (const star of sceneState.stars || []) {
-      addEntity(this.entityGeometries.disc, this.entityMaterials.star, star.wx, star.wy, 0.025 + (star.mass || 1) * 0.012, 0, 0.06);
+      addEntity(this.entityGeometries.disc, this.entityMaterials.star, star.wx, star.wy, 0.025 + (star.mass || 1) * 0.012, 0, 0.06, 'screen');
     }
     for (const portal of sceneState.portals || []) {
       const material = portal.type === 'rift' ? this.entityMaterials.riftPortal : this.entityMaterials.portal;
@@ -615,30 +620,30 @@ export class ThreeRendererBackend {
     for (const wreck of sceneState.wrecks || []) {
       const size = wreck.size === 'large' ? 0.035 : wreck.size === 'small' || wreck.size === 'scattered' ? 0.018 : 0.026;
       const material = wreck.looted ? this.entityMaterials.lootedWreck : this.entityMaterials.wreck;
-      addEntity(this.entityGeometries.square, material, wreck.wx, wreck.wy, size, Math.PI * 0.25, 0.07);
+      addEntity(this.entityGeometries.square, material, wreck.wx, wreck.wy, size, Math.PI * 0.25, 0.07, 'screen');
     }
     for (const planetoid of sceneState.planetoids || []) {
       const angle = Math.atan2(-(planetoid.vy || 0), planetoid.vx || 0);
-      addEntity(this.entityGeometries.triangle, this.entityMaterials.planetoid, planetoid.wx, planetoid.wy, 0.022, angle, 0.09);
+      addEntity(this.entityGeometries.triangle, this.entityMaterials.planetoid, planetoid.wx, planetoid.wy, 0.022, angle, 0.09, 'screen');
     }
     for (const scav of sceneState.scavengers || []) {
-      addEntity(this.entityGeometries.triangle, this.entityMaterials.scavenger, scav.wx, scav.wy, 0.027, -(scav.facing || 0), 0.12);
+      addEntity(this.entityGeometries.triangle, this.entityMaterials.scavenger, scav.wx, scav.wy, 0.027, -(scav.facing || 0), 0.12, 'screen');
     }
     for (const player of sceneState.remotePlayers || []) {
       if (player.status === 'dead') continue;
       const angle = Math.atan2(-(player.vy || 0), player.vx || 0);
-      addEntity(this.entityGeometries.triangle, this.entityMaterials.remoteShip, player.wx, player.wy, 0.030, angle, 0.13);
+      addEntity(this.entityGeometries.triangle, this.entityMaterials.remoteShip, player.wx, player.wy, 0.030, angle, 0.13, 'screen');
     }
     for (const fauna of sceneState.fauna || []) {
-      addEntity(this.entityGeometries.disc, this.entityMaterials.fauna, fauna.wx, fauna.wy, 0.008 + (fauna.size || 2) * 0.003, 0, 0.10);
+      addEntity(this.entityGeometries.disc, this.entityMaterials.fauna, fauna.wx, fauna.wy, 0.008 + (fauna.size || 2) * 0.003, 0, 0.10, 'screen');
     }
     for (const sentry of sceneState.sentries || []) {
-      addEntity(this.entityGeometries.disc, this.entityMaterials.sentry, sentry.wx, sentry.wy, 0.014, 0, 0.11);
+      addEntity(this.entityGeometries.disc, this.entityMaterials.sentry, sentry.wx, sentry.wy, 0.014, 0, 0.11, 'screen');
     }
 
     const ship = sceneState.ship;
     if (ship) {
-      addEntity(this.entityGeometries.triangle, this.entityMaterials.ship, ship.wx, ship.wy, 0.034, -(ship.facing || 0), 0.16);
+      addEntity(this.entityGeometries.triangle, this.entityMaterials.ship, ship.wx, ship.wy, 0.034, -(ship.facing || 0), 0.16, 'screen');
     }
 
     const sling = sceneState.slingshot || {};

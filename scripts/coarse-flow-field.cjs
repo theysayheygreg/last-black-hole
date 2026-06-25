@@ -74,7 +74,7 @@ function buildCoarseFlowField({
         }
 
         const dir = well.orbitalDir || 1;
-        const currentStrength = (well.mass || 1) / Math.pow(dist, 1.5);
+        const currentStrength = (well.mass || 1) / Math.pow(Math.max(dist, FORCE_MIN_DIST), 1.5);
         const currentAccel = currentStrength * wellCurrentScale;
         currentX += (-dy / dist) * dir * currentAccel;
         currentY += (dx / dist) * dir * currentAccel;

@@ -66,6 +66,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "FlowField",
+    file: "flow-field.cjs",
+    lanes: ["core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "WreckDrift",
     file: "wreck-drift.cjs",
     lanes: ["core", "static", "full"],

@@ -96,13 +96,10 @@ class Star {
     this.name = generateStarName(this.type);
     this.alive = true;
 
-    // Stars drift very slowly in a random direction (0.001-0.003 world-units/s).
-    // At this speed, a star takes ~500s to drift 1 world-unit — long enough that
-    // consumption by a well is rare (~1 per long match) and feels like a major event.
-    const driftSpeed = 0.001 + Math.random() * 0.002;
-    const driftAngle = Math.random() * Math.PI * 2;
-    this.driftVX = Math.cos(driftAngle) * driftSpeed;
-    this.driftVY = Math.sin(driftAngle) * driftSpeed;
+    // Map/snapshot data owns stellar drift. Defaults are static so browser
+    // sandbox and authoritative sim start from the same route geometry.
+    this.driftVX = opts.driftVX ?? 0;
+    this.driftVY = opts.driftVY ?? 0;
 
     // Orbiting asteroids — 2-4 tiny bodies
     this.asteroids = [];
@@ -133,10 +130,7 @@ export class StarSystem {
   get consumptionEvents() { return this._consumptionEvents || []; }
   clearConsumptionEvents() { this._consumptionEvents = []; }
 
-  update(fluid, dt, totalTime, wellSystem = null, waveRings = null) {
-    const cfg = CONFIG.stars;
-    const s = uvScale();
-    const s2 = s * s;
+  tick(dt, wellSystem = null, waveRings = null) {
     if (!this._consumptionEvents) this._consumptionEvents = [];
 
     for (const star of this.stars) {
@@ -178,6 +172,17 @@ export class StarSystem {
         }
         if (!star.alive) continue;
       }
+    }
+  }
+
+  injectIntoFluid(fluid, dt) {
+    const cfg = CONFIG.stars;
+    const s = uvScale();
+    const s2 = s * s;
+
+    for (const star of this.stars) {
+      if (!star.alive) continue;
+      const td = star.typeDef;
       const [fu, fv] = worldToFluidUV(star.wx, star.wy);
 
       // Outward push: NEGATIVE gravity, scaled by type
@@ -199,6 +204,13 @@ export class StarSystem {
         cfg.coreBrightness * td.coreDensity[2]
       );
     }
+  }
+
+  update(fluid, dt, totalTime, wellSystem = null, waveRings = null, options = {}) {
+    if (!options.visualOnly) {
+      this.tick(dt, wellSystem, waveRings);
+    }
+    this.injectIntoFluid(fluid, dt);
   }
 
   applyToShip(ship) {

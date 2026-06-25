@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-06-25 — Coordinate and flow authority cleanup
+
+- Centralized world radius projection in `coords.js` so canvas overlays and the Three scene use the same axis-aware world radii, while small glyphs can still opt into screen-round sizing.
+- Moved wave-ring injection and distance-based fluid dissipation to the fixed `GRID_WINDOW` scale instead of total map `WORLD_SCALE`, keeping visible fluid behavior stable on 3x3, 5x5, and 10x10 maps.
+- Reconciled local, coarse, and server fallback flow sampling: orbital current, direct gravity, wave impulses, and star hazards now stay in their intended channels instead of quietly double-counting movement force.
+- Made star drift map/snapshot-owned and prevented visual-only star updates from mutating authoritative consumption state.
+- Added FlowField regression coverage, expanded coordinate tests for radius projection, updated the physics harness to isolate gravity from orbital current, and restored the Three perf probe to 60 FPS with a 16-pass local pressure solve.
+
+---
+
 ## 2026-06-25 — Square fluid-window camera realignment
 
 - Re-locked `CAMERA_VIEW` to the 3x3 camera-anchored fluid window so hazards, ASCII fabric, input, and Three scene meshes all describe the same world slice again.
@@ -12,7 +22,7 @@
 - Tightened local and authoritative spawn selection with per-hazard clearance scoring and removed the dead duplicate sim spawn helper.
 - Lowered the in-process local sim cadence from 60 Hz to 30 Hz with a two-step catch-up guard so slow frames do not spiral into persistent low FPS on the Three/Deck path.
 - Moved local gameplay flow sampling from synchronous GPU `readPixels` to an analytical field built from wells, stars, and wave rings; GPU fluid remains the visual field.
-- Dropped the fixed local fluid grid from 256 to 192 with an 18-pass pressure solve for the local Three build; ASCII hides the resolution loss while the frame loop gets meaningful headroom.
+- Dropped the fixed local fluid grid from 256 to 192 with a reduced pressure solve for the local Three build; ASCII hides the resolution loss while the frame loop gets meaningful headroom.
 - Added browser and sim regressions for map-load spawn safety, visible well alignment, and the Three backend's square-fluid-window projection stats.
 
 ---

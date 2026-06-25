@@ -7,7 +7,7 @@
  * │ Space       │ Origin    │ Y dir    │ Range         │ Used by                  │
  * ├─────────────┼───────────┼──────────┼───────────────┼──────────────────────────┤
  * │ SCREEN      │ top-left  │ Y-down   │ pixels (W×H)  │ canvas, mouse, overlay   │
- * │ WORLD       │ top-left  │ Y-down   │ 0–3 (toroidal)│ entities, ship, physics  │
+ * │ WORLD       │ top-left  │ Y-down   │ 0–WORLD_SCALE │ entities, ship, physics  │
  * │ WELL (old)  │ top-left  │ Y-down   │ 0–1           │ legacy compat only       │
  * │ FLUID UV    │ bot-left  │ Y-up     │ 0–1           │ GPU shaders, textures    │
  * └─────────────┴───────────┴──────────┴───────────────┴──────────────────────────┘
@@ -16,14 +16,15 @@
  * If you find yourself writing `1.0 - y` inline, you are doing it wrong.
  *
  * KEY RELATIONSHIPS:
- *   World → Fluid UV:  x÷3, flip y÷3        (worldToFluidUV)
- *   World → Screen:    offset from camera, ×pxPerWorld   (worldToScreen)
- *   Fluid vel → World vel:  negate Y, ×WORLD_SCALE      (done in ship.js)
+ *   World → Fluid UV:  camera-relative, GRID_WINDOW span (worldToFluidUV)
+ *   World → Screen:    camera-relative, CAMERA_VIEW span (worldToScreen)
+ *   World radius → view: axis-specific scale (worldRadiusToScreen / worldRadiusToSceneScale)
+ *   Fluid vel → World vel:  Y-flipped, reference-scaled (fluidVelToWorld)
  */
 
 // ---- Scale constants ----
 
-/** Total world size. The old 0-1 space scaled up 3×. All entity positions live in 0–WORLD_SCALE. */
+/** Total toroidal world size. All entity positions live in 0–WORLD_SCALE. */
 export let WORLD_SCALE = 3.0;
 
 /**
@@ -63,6 +64,17 @@ export const CAMERA_VIEW = 3.0;
  */
 export function pxPerWorld(screenDim, _screenH = null) {
   return screenDim / CAMERA_VIEW;
+}
+
+/**
+ * Axis-specific pixel scale for one world unit. Use this for projecting
+ * world-space radii/distances onto a non-square render target.
+ */
+export function worldPixelScale(canvasW, canvasH) {
+  return {
+    x: pxPerWorld(canvasW),
+    y: pxPerWorld(canvasH),
+  };
 }
 
 // ---- Fluid camera state ----
@@ -112,6 +124,16 @@ export function worldToFluidUV(wx, wy) {
   return [dx / GRID_WINDOW + 0.5, 0.5 - dy / GRID_WINDOW];
 }
 
+/** Convert a world-space radius/distance to the camera-relative fluid UV span. */
+export function worldRadiusToFluidUV(worldRadius) {
+  return worldRadius / GRID_WINDOW;
+}
+
+/** Convert a camera-relative fluid UV radius/distance back to world units. */
+export function fluidUVRadiusToWorld(uvRadius) {
+  return uvRadius * GRID_WINDOW;
+}
+
 /**
  * Convert fluid UV (Y-up, 0–1) back to world-space (Y-down). Inverse of
  * worldToFluidUV. Result is wrapped into [0, WORLD_SCALE).
@@ -142,7 +164,7 @@ export function worldToScreen(wx, wy, camX, camY, canvasW, canvasH) {
   // Displacement from camera to entity, with toroidal shortest-path
   let dx = wx - camX;
   let dy = wy - camY;
-  const half = WORLD_SCALE / 2;  // 1.5 — half the world; anything farther wraps
+  const half = WORLD_SCALE / 2;
   if (dx > half) dx -= WORLD_SCALE;
   if (dx < -half) dx += WORLD_SCALE;
   if (dy > half) dy -= WORLD_SCALE;
@@ -223,10 +245,10 @@ export function wrapWorld(v) {
 // ---- Fluid UV scaling ----
 
 /**
- * Reference world scale that all fluid UV-space parameters are calibrated for.
- * All CONFIG values for splat radii, force strengths, accretion distances, etc.
- * were tuned at this scale. When WORLD_SCALE differs, UV-space parameters must
- * be adjusted so they produce the same world-space effect.
+ * Reference grid span that all fluid UV-space parameters are calibrated for.
+ * CONFIG values for splat radii, force strengths, accretion distances, etc.
+ * were tuned at this visible-window scale. Total map size must not leak into
+ * these conversions; the camera-anchored grid always describes GRID_WINDOW.
  */
 export const FLUID_REF_SCALE = 3.0;
 
@@ -303,23 +325,22 @@ export function shouldCull(entityWX, entityWY, camX, camY, margin = 0.3) {
 export function fluidVelToScreen(fvx, fvy) { return [fvx, -fvy]; }
 
 // ---- Unit conversion helpers ----
-// Use these instead of inline * WORLD_SCALE or / WORLD_SCALE.
+// Use these instead of inline * GRID_WINDOW or / GRID_WINDOW.
 
 /**
- * Convert fluid UV distance/value to world-units.
- * Fluid UV spans 0–1 across the full world (0–WORLD_SCALE).
- * So 1 UV unit = WORLD_SCALE world-units.
+ * Convert camera-window fluid UV distance/value to world-units.
+ * Fluid UV spans 0–1 across GRID_WINDOW, not the full map.
  */
 export function uvToWorld(uvValue) {
-  return uvValue * WORLD_SCALE;
+  return fluidUVRadiusToWorld(uvValue);
 }
 
 /**
- * Convert world-units distance/value to fluid UV.
+ * Convert world-units distance/value to camera-window fluid UV.
  * Inverse of uvToWorld.
  */
 export function worldToUV(worldValue) {
-  return worldValue / WORLD_SCALE;
+  return worldRadiusToFluidUV(worldValue);
 }
 
 /**
@@ -336,10 +357,41 @@ export function fluidVelToWorld(fvx, fvy) {
 }
 
 /**
- * Convert a world-units value to screen pixels.
- * For consistent overlay rendering of world-space radii, distances, etc.
- * Uses X-axis scale (canvasW). For Y-axis, pass canvasH instead.
+ * Legacy single-axis world→pixel conversion.
+ * Prefer worldPixelScale() for vectors and worldRadiusToScreen() for radii.
  */
 export function worldToPx(worldValue, screenDim, screenH = null) {
   return worldValue * pxPerWorld(screenDim, screenH);
+}
+
+/**
+ * Project a world-space radius into screen pixels.
+ *
+ * mode="world" preserves the same world metric as worldToScreen(). On a
+ * widescreen target that means circles in simulation space become ellipses in
+ * pixels, which is what gameplay hazard/range visuals need.
+ *
+ * mode="screen" keeps a small glyph visually round in pixel space. Use it only
+ * for non-gameplay icon sizing, not collision/range/hazard affordances.
+ */
+export function worldRadiusToScreen(worldRadius, canvasW, canvasH, mode = 'world') {
+  const { x, y } = worldPixelScale(canvasW, canvasH);
+  const ry = worldRadius * y;
+  if (mode === 'screen') return { rx: ry, ry };
+  return { rx: worldRadius * x, ry };
+}
+
+/**
+ * Project a world-space radius into Three scene scale.
+ *
+ * The top-down Three camera spans [-aspect, aspect] × [-1, 1]. Positions use
+ * the same stretched projection as worldToScreen(), so world-space gameplay
+ * radii need an X scale multiplied by aspect. Screen glyphs intentionally keep
+ * uniform scene scale for readability.
+ */
+export function worldRadiusToSceneScale(worldRadius, cameraAspect = 1, cameraView = CAMERA_VIEW, mode = 'world') {
+  const safeView = Math.max(0.001, Number.isFinite(cameraView) ? cameraView : CAMERA_VIEW);
+  const y = (worldRadius / safeView) * 2;
+  if (mode === 'screen') return { x: y, y };
+  return { x: y * Math.max(0.001, cameraAspect || 1), y };
 }

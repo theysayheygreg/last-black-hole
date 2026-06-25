@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { pxPerWorld, worldToFluidUV, worldToScreen,
+import { worldPixelScale, worldToFluidUV, worldToScreen,
          worldDirectionTo, wrapWorld, uvScale } from './coords.js';
 import { inversePowerForce, applyForceToShip } from './physics.js';
 
@@ -377,13 +377,13 @@ export class Ship {
 
     // Debug: velocity vector
     if (CONFIG.debug.showVelocityField) {
-      const ppw = pxPerWorld(this.canvasWidth, this.canvasHeight);
+      const pixelScale = worldPixelScale(this.canvasWidth, this.canvasHeight);
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(sx, sy);
-      ctx.lineTo(sx + this.vx * ppw * 0.1, sy + this.vy * ppw * 0.1);
+      ctx.lineTo(sx + this.vx * pixelScale.x * 0.1, sy + this.vy * pixelScale.y * 0.1);
       ctx.stroke();
       ctx.restore();
     }

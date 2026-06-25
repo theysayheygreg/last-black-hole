@@ -1,6 +1,6 @@
 import { CONFIG } from '../config.js';
 import { fluidVelToWorld, worldDirectionTo, worldToFluidUV } from '../coords.js';
-import { waveBandForce } from '../physics.js';
+import { FORCE_MIN_DIST, inversePowerForce, waveBandForce } from '../physics.js';
 import { emptyFlowSample, normalizeFlowSample } from './flow-sample.js';
 
 function wrapUV(value) {
@@ -47,19 +47,23 @@ export class FlowField {
     const wellRange = wellCfg.maxRange ?? 1.2;
     for (const well of wells) {
       const dirToWell = worldDirectionTo(wx, wy, well.wx, well.wy);
-      if (dirToWell.dist < 0.001 || dirToWell.dist > wellRange) continue;
-      const safeDist = Math.max(0.15, dirToWell.dist);
-      const rangeFade = Math.max(0, 1 - dirToWell.dist / wellRange);
-      const strength = (well.mass || 1) * rangeFade / Math.pow(safeDist / 0.25, wellCfg.falloff ?? 1.5);
-      const orbital = strength * 0.22;
-      const radial = strength * 0.035;
+      if (dirToWell.dist < 0.001) continue;
+      const currentDist = Math.max(dirToWell.dist, FORCE_MIN_DIST);
+      const orbital = (well.mass || 1) / Math.pow(currentDist, wellCfg.shipPullFalloff ?? 1.5) * 0.3;
+      const gravity = inversePowerForce(
+        dirToWell.dist,
+        wellCfg.shipPullStrength ?? 0.6,
+        well.mass || 1,
+        wellCfg.shipPullFalloff ?? 1.5,
+        wellRange
+      );
       const orbitalDir = well.orbitalDir || 1;
       const tx = -dirToWell.ny * orbitalDir;
       const ty = dirToWell.nx * orbitalDir;
-      currentX += tx * orbital + dirToWell.nx * radial;
-      currentY += ty * orbital + dirToWell.ny * radial;
-      gravityX += dirToWell.nx * strength;
-      gravityY += dirToWell.ny * strength;
+      currentX += tx * orbital;
+      currentY += ty * orbital;
+      gravityX += dirToWell.nx * gravity;
+      gravityY += dirToWell.ny * gravity;
       surf = Math.max(surf, Math.min(1, orbital / 0.7));
       hazard = Math.max(hazard, 1 - Math.max(0, dirToWell.dist - (well.killRadius || 0.04)) / Math.max(0.001, wellRange));
       if (orbital > bestCurrent) {
@@ -78,8 +82,6 @@ export class FlowField {
       const rangeFade = Math.max(0, 1 - dirFromStar.dist / starRange);
       const typePush = star.typeDef?.pushMult ?? 1;
       const strength = (star.mass || 1) * typePush * rangeFade / Math.pow(safeDist / 0.25, starCfg.falloff ?? 1.8);
-      currentX += dirFromStar.nx * strength * 0.08;
-      currentY += dirFromStar.ny * strength * 0.08;
       hazard = Math.max(hazard, Math.min(1, strength / 2.5));
     }
 
@@ -100,8 +102,6 @@ export class FlowField {
       const y = dirFromRing.ny * accel;
       waveX += x;
       waveY += y;
-      currentX += x * 0.4;
-      currentY += y * 0.4;
       sourceRingId = sourceRingId || `${ring.sourceWX?.toFixed?.(2) ?? 'ring'},${ring.sourceWY?.toFixed?.(2) ?? ''}`;
       surf = Math.max(surf, Math.min(1, accel / 1.4));
     }

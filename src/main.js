@@ -58,8 +58,8 @@ import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
 import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
 import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
-import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
-         worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld,
+import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV, worldToScreen, screenToWorld,
+         worldDistance, worldDisplacement, uvToWorld, worldRadiusToScreen, wrapWorld,
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
@@ -1015,18 +1015,30 @@ function scoreSpawnCandidate(wx, wy, hazards) {
   return score;
 }
 
+function hasWellInCameraWindow(wx, wy) {
+  const halfWindow = GRID_WINDOW / 2;
+  return wellSystem.wells.some((well) => {
+    const [dx, dy] = worldDisplacement(wx, wy, well.wx, well.wy);
+    return Math.abs(dx) <= halfWindow && Math.abs(dy) <= halfWindow;
+  });
+}
+
 /**
- * Pick a spawn that is outside each hazard's immediate pull/death envelope.
- * Random tries preserve variety; a grid fallback prevents unlucky crowded maps
- * from dropping the player beside an unseen well.
+ * Pick a spawn that is outside each hazard's immediate pull/death envelope and
+ * still frames at least one well in the first camera/fluid window when possible.
+ * Random tries preserve variety; grid fallback prevents unlucky crowded maps
+ * from dropping the player into an empty opening shot.
  */
 function findSafeSpawn(minDist = 0.55) {
   const hazards = collectSpawnHazards(minDist);
   let best = { wx: WORLD_SCALE / 2, wy: WORLD_SCALE * 0.15, score: -Infinity };
+  let bestFramed = null;
   const consider = (wx, wy) => {
     const score = scoreSpawnCandidate(wx, wy, hazards);
+    const framed = hasWellInCameraWindow(wx, wy);
     if (score > best.score) best = { wx, wy, score };
-    return score >= 0;
+    if (framed && score >= 0 && (!bestFramed || score > bestFramed.score)) bestFramed = { wx, wy, score };
+    return score >= 0 && framed;
   };
 
   for (let attempt = 0; attempt < 90; attempt++) {
@@ -1044,7 +1056,8 @@ function findSafeSpawn(minDist = 0.55) {
     }
   }
 
-  return [best.wx, best.wy];
+  const fallback = bestFramed || best;
+  return [fallback.wx, fallback.wy];
 }
 
 /**
@@ -1499,7 +1512,6 @@ async function refreshRemoteSessionHealth(force = false) {
 
 function renderFauna(ctx, camX, camY, canvasW, canvasH, time) {
   if (remoteFauna.length === 0) return;
-  const ppw = canvasW / WORLD_SCALE;
   ctx.save();
   for (const f of remoteFauna) {
     const [sx, sy] = worldToScreen(f.wx, f.wy, camX, camY, canvasW, canvasH);
@@ -2438,7 +2450,7 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
   if (aff) {
     const a = aff.anchor;
     const [sx, sy] = worldToScreen(a.wx, a.wy, camX, camY, canvasW, canvasH);
-    const radiusPx = worldToPx(a.range, canvasW, canvasH);
+    const radiusPx = worldRadiusToScreen(a.range, canvasW, canvasH);
     const palette = SLINGSHOT_COLORS[a.type] || SLINGSHOT_COLORS.well;
     const pulse = 0.85 + 0.15 * Math.sin(time * 4);
     ctx.save();
@@ -2448,7 +2460,7 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
     ctx.lineDashOffset = -time * 30;
     ctx.globalAlpha = pulse;
     ctx.beginPath();
-    ctx.arc(sx, sy, radiusPx, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -2460,14 +2472,14 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
     const a = ship.slingshotAnchor;
     const [ax, ay] = worldToScreen(a.wx, a.wy, camX, camY, canvasW, canvasH);
     const [shipX, shipY] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
-    const radiusPx = worldToPx(a.range, canvasW, canvasH);
+    const radiusPx = worldRadiusToScreen(a.range, canvasW, canvasH);
     const palette = SLINGSHOT_COLORS[a.type] || SLINGSHOT_COLORS.well;
     ctx.save();
     // Solid engaged ring.
     ctx.strokeStyle = palette.engaged;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(ax, ay, radiusPx, 0, Math.PI * 2);
+    ctx.ellipse(ax, ay, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
     ctx.stroke();
     // Tether line ship → anchor.
     ctx.strokeStyle = palette.engaged;
@@ -2487,7 +2499,7 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
       ctx.strokeStyle = palette.engaged.replace(/[\d.]+\)$/, '1)');
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(ax, ay, radiusPx + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * energyFraction);
+      ctx.ellipse(ax, ay, radiusPx.rx + 4, radiusPx.ry + 4, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * energyFraction);
       ctx.stroke();
     }
     // Chain count badge if chained.
@@ -2495,7 +2507,7 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
       ctx.fillStyle = palette.engaged;
       ctx.font = '11px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(`x${ship.slingshotChainCount} chain`, ax, ay - radiusPx - 8);
+      ctx.fillText(`x${ship.slingshotChainCount} chain`, ax, ay - radiusPx.ry - 8);
     }
     ctx.restore();
   }
@@ -3929,7 +3941,7 @@ function gameLoop(now) {
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         ctx.font = 'bold 10px monospace';
-        const labelY = sy + well.killRadius * pxPerWorld(overlayCanvas.width, overlayCanvas.height) + 18;
+        const labelY = sy + worldRadiusToScreen(well.killRadius, overlayCanvas.width, overlayCanvas.height).ry + 18;
         // Dark outline for readability on red accretion background
         ctx.strokeStyle = `rgba(0, 0, 0, ${a * 0.9})`;
         ctx.lineWidth = 3;
@@ -4160,13 +4172,13 @@ function gameLoop(now) {
 
   // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {
-    const ppw = pxPerWorld(overlayCanvas.width, overlayCanvas.height);
+    const pixelScale = worldPixelScale(overlayCanvas.width, overlayCanvas.height);
     ctx.save();
     ctx.fillStyle = '#00ff00';
     ctx.font = '14px monospace';
     ctx.fillText(`FPS: ${fps.toFixed(0)}`, 10, 20);
     ctx.fillText(`Ship: (${ship.wx.toFixed(2)}, ${ship.wy.toFixed(2)})`, 10, 38);
-    ctx.fillText(`Vel: (${(ship.vx * ppw).toFixed(1)}, ${(ship.vy * ppw).toFixed(1)})`, 10, 56);
+    ctx.fillText(`Vel px: (${(ship.vx * pixelScale.x).toFixed(1)}, ${(ship.vy * pixelScale.y).toFixed(1)})`, 10, 56);
     ctx.fillText(`Fluid: (${ship.lastFluidVel.x.toFixed(2)}, ${ship.lastFluidVel.y.toFixed(2)})`, 10, 74);
     ctx.fillText(`Rings: ${waveRings.getActiveCount()} | Planetoids: ${planetoidSystem.planetoids.length}`, 10, 92);
     ctx.fillText(`Input: ${inputManager.lastInputSource} T:${inputManager.thrustIntensity.toFixed(2)} B:${inputManager.brakeIntensity.toFixed(2)}`, 10, 110);
@@ -4263,20 +4275,24 @@ function gameLoop(now) {
 
   // 12. Debug: well radii and labels
   if (CONFIG.debug.showWellRadii) {
-    const ppw = pxPerWorld(overlayCanvas.width, overlayCanvas.height);
+    const drawWorldRadius = (x, y, radius) => {
+      const r = worldRadiusToScreen(radius, overlayCanvas.width, overlayCanvas.height);
+      ctx.beginPath();
+      ctx.ellipse(x, y, r.rx, r.ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    };
     ctx.save();
     const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
     for (let i = 0; i < wellData.length; i++) {
       const w = wellData[i];
       ctx.strokeStyle = 'rgba(255, 100, 0, 0.3)';
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(w.x, w.y, 0.15 * ppw, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.arc(w.x, w.y, 0.3 * ppw, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.arc(w.x, w.y, 0.5 * ppw, 0, Math.PI * 2); ctx.stroke();
+      drawWorldRadius(w.x, w.y, 0.15);
+      drawWorldRadius(w.x, w.y, 0.3);
+      drawWorldRadius(w.x, w.y, 0.5);
       // Kill radius
       ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-      const kr = wellSystem.wells[i].killRadius * ppw;
-      ctx.beginPath(); ctx.arc(w.x, w.y, kr, 0, Math.PI * 2); ctx.stroke();
+      drawWorldRadius(w.x, w.y, wellSystem.wells[i].killRadius);
       // Label
       ctx.fillStyle = 'rgba(255, 50, 0, 0.5)';
       ctx.beginPath(); ctx.arc(w.x, w.y, 4, 0, Math.PI * 2); ctx.fill();
@@ -4289,10 +4305,9 @@ function gameLoop(now) {
     for (let i = 0; i < starSystem.stars.length; i++) {
       const star = starSystem.stars[i];
       const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const pushR1 = worldToPx(uvToWorld(CONFIG.stars.rayLength), overlayCanvas.width, overlayCanvas.height);
       ctx.strokeStyle = 'rgba(255, 255, 100, 0.3)';
       ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(sx, sy, pushR1, 0, Math.PI * 2); ctx.stroke();
+      drawWorldRadius(sx, sy, uvToWorld(CONFIG.stars.rayLength));
       ctx.fillStyle = 'rgba(255, 255, 100, 0.6)';
       ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#ffff66';
@@ -4306,11 +4321,11 @@ function gameLoop(now) {
     for (let i = 0; i < portalSystem.portals.length; i++) {
       const portal = portalSystem.portals[i];
       const [px, py] = worldToScreen(portal.wx, portal.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const captureR = CONFIG.portals.captureRadius * ppw;
+      const captureR = worldRadiusToScreen(CONFIG.portals.captureRadius, overlayCanvas.width, overlayCanvas.height);
       ctx.strokeStyle = 'rgba(180, 80, 255, 0.4)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.arc(px, py, captureR, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(px, py, captureR.rx, captureR.ry, 0, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = '#b855ff';
       ctx.font = '11px monospace';

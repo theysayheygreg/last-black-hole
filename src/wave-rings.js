@@ -6,7 +6,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { WORLD_SCALE, pxPerWorld, worldToScreen, worldDirectionTo, worldToFluidUV, uvScale } from './coords.js';
+import { worldRadiusToFluidUV, worldRadiusToScreen, worldToScreen, worldDirectionTo, worldToFluidUV, splatScale } from './coords.js';
 import { waveBandForce, applyForceToShip } from './physics.js';
 
 class WaveRing {
@@ -75,7 +75,7 @@ export class WaveRingSystem {
 
       const life = ring.amplitude / ring.initialAmplitude;
       const [srcU, srcV] = worldToFluidUV(ring.sourceWX, ring.sourceWY);
-      const radiusUV = ring.radius / WORLD_SCALE;
+      const radiusUV = worldRadiusToFluidUV(ring.radius);
 
       // Inject splats around the ring circumference
       const force = ring.amplitude * 0.003; // velocity outward push
@@ -90,9 +90,8 @@ export class WaveRingSystem {
         const vx = Math.cos(angle) * force;
         const vy = Math.sin(angle) * force;
 
-        // Cyan-white density — scale splat radius by uvScale² (GPU SPLAT SCALING RULE)
-        const s = uvScale();
-        const s2 = s * s;
+        // Cyan-white density — scale splat radius by the central GPU splat rule.
+        const { s, s2 } = splatScale();
         const splatRadius = 0.004;  // UV-space base radius for wave ring splats
         fluid.splat(px, py, vx * s, vy * s, splatRadius * s2,
           brightness * 0.3, brightness * 0.8, brightness);
@@ -104,11 +103,11 @@ export class WaveRingSystem {
    * Render wave rings on the overlay canvas (camera-aware).
    */
   render(ctx, camX, camY, canvasW, canvasH) {
-    const ppw = pxPerWorld(canvasW, canvasH);
-
     for (const ring of this.rings) {
       const [srcX, srcY] = worldToScreen(ring.sourceWX, ring.sourceWY, camX, camY, canvasW, canvasH);
-      const radiusPx = ring.radius * ppw;
+      const radiusPx = worldRadiusToScreen(ring.radius, canvasW, canvasH);
+      const bandPx = worldRadiusToScreen(CONFIG.events.waveWidth, canvasW, canvasH);
+      const lineWidthPx = (bandPx.rx + bandPx.ry) * 0.5;
 
       // life = 1.0 at spawn, decays toward 0 as amplitude fades.
       // Alpha overshoots early (×1.5) then caps at 0.7 — rings start bright, fade gracefully.
@@ -125,12 +124,12 @@ export class WaveRingSystem {
       ctx.save();
       ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
       // Line width = 15% of the wavefront band width, thinning as amplitude fades
-      ctx.lineWidth = Math.max(1, CONFIG.events.waveWidth * ppw * 0.15 * life);
+      ctx.lineWidth = Math.max(1, lineWidthPx * 0.15 * life);
       ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${alpha * 0.5})`;
       ctx.shadowBlur = 8 * life;
 
       ctx.beginPath();
-      ctx.arc(srcX, srcY, radiusPx, 0, Math.PI * 2);
+      ctx.ellipse(srcX, srcY, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
       ctx.stroke();
 
       if (life > 0.5) {
@@ -138,7 +137,7 @@ export class WaveRingSystem {
         ctx.strokeStyle = `rgba(255, 255, 255, ${innerAlpha})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(srcX, srcY, radiusPx, 0, Math.PI * 2);
+        ctx.ellipse(srcX, srcY, radiusPx.rx, radiusPx.ry, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
 

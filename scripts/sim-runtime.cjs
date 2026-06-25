@@ -637,8 +637,8 @@ function cloneMapState(mapId, worldScaleOverride = null, rngStreams = null) {
   const stars = map.stars.map((star) => ({
     ...star,
     alive: star.alive !== false,
-    driftVX: 0,
-    driftVY: 0,
+    driftVX: star.driftVX ?? 0,
+    driftVY: star.driftVY ?? 0,
   }));
   const initialLootStream = rngStreams ? rngStreams.rawStream('initialWreckLoot') : Math.random;
   const initialNameStream = rngStreams ? rngStreams.rawStream('initialWreckNames') : Math.random;
@@ -3360,7 +3360,7 @@ function estimateFlowSample(wx, wy) {
     const dy = worldDisplacement(wy, well.wy, ws);
     const dist = Math.hypot(dx, dy);
     if (dist < 0.01) continue;
-    const strength = (well.mass || 1) / Math.pow(dist, 1.5);
+    const strength = (well.mass || 1) / Math.pow(Math.max(dist, FORCE_MIN_DIST), 1.5);
     const dir = well.orbitalDir || 1;
     const currentAccel = strength * 0.3;
     fx += (-dy / dist) * dir * currentAccel;
