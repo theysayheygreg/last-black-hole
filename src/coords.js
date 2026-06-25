@@ -42,27 +42,37 @@ export function setWorldScale(s) {
 }
 
 /**
- * How many world-units the camera shows per screen axis.
- * The fluid display shader divides UV by WORLD_SCALE, showing 1/3 of the full
- * texture on each axis. Since the texture maps to the full 3×3 world, one axis
- * shows exactly 1 world-unit. This constant keeps the overlay in sync.
+ * How many world-units the camera shows vertically.
+ * Horizontal span is CAMERA_VIEW × screen aspect. This keeps world-space metric:
+ * one world unit is the same number of pixels on X and Y instead of stretching a
+ * square world patch across widescreen displays.
  *
  * Changing this zooms the camera. 0.5 = zoomed in (half a world-unit fills screen).
- * 2.0 = zoomed out (two world-units visible). Must also update the display shader's
- * u_gridWindow uniform to match.
+ * 2.0 = zoomed out (two world-units visible). Do not confuse this with
+ * GRID_WINDOW: the fluid texture may cover more world than the visible camera.
  */
 export const CAMERA_VIEW = 1.0;
 
 /**
- * Convert a screen dimension (width or height) to pixels-per-world-unit.
+ * Convert the current render target to pixels-per-world-unit.
  * Use this everywhere you need world→pixel scale. One source of truth.
  *
- * With CAMERA_VIEW=1.0: a 1200px-wide screen shows 1 world-unit, so 1200 px/world-unit.
- * For X: pxPerWorld(canvasW). For Y: pxPerWorld(canvasH).
- * These differ on non-square screens, which matches the fluid shader's stretch.
+ * With CAMERA_VIEW=1.0 on a 1280x720 canvas: vertical span is 1 world-unit, so
+ * both axes use 720 px/world-unit and the horizontal camera sees 1.777 world-units.
+ * Passing only one dimension preserves the historical helper shape, but new
+ * camera math should pass both canvasW and canvasH.
  */
-export function pxPerWorld(screenDim) {
-  return screenDim / CAMERA_VIEW;
+export function pxPerWorld(screenDim, screenH = null) {
+  const dim = Number.isFinite(screenH) && screenH > 0 ? screenH : screenDim;
+  return dim / CAMERA_VIEW;
+}
+
+export function screenAspect(canvasW, canvasH) {
+  return Math.max(0.001, (Number(canvasW) || 1) / Math.max(1, Number(canvasH) || 1));
+}
+
+export function cameraHorizontalView(canvasW, canvasH) {
+  return CAMERA_VIEW * screenAspect(canvasW, canvasH);
 }
 
 // ---- Fluid camera state ----
@@ -134,8 +144,9 @@ export function fluidUVToWorld(fu, fv) {
  * it wraps to the closer side. This means entities near the world edge
  * appear correctly when the camera is near the opposite edge.
  *
- * Scale: 1 world-unit fills canvasW pixels horizontally and canvasH vertically.
- * This matches the fluid display shader's zoom level exactly.
+ * Scale: vertical span is CAMERA_VIEW world-units; horizontal span is widened by
+ * the canvas aspect. This matches the Three top-down camera and fluid display
+ * sampling, so input, overlays, and scene meshes agree.
  */
 export function worldToScreen(wx, wy, camX, camY, canvasW, canvasH) {
   // Displacement from camera to entity, with toroidal shortest-path
@@ -147,8 +158,9 @@ export function worldToScreen(wx, wy, camX, camY, canvasW, canvasH) {
   if (dy > half) dy -= WORLD_SCALE;
   if (dy < -half) dy += WORLD_SCALE;
   // World offset → pixel offset from screen center
-  const sx = canvasW / 2 + dx * pxPerWorld(canvasW);
-  const sy = canvasH / 2 + dy * pxPerWorld(canvasH);
+  const ppw = pxPerWorld(canvasW, canvasH);
+  const sx = canvasW / 2 + dx * ppw;
+  const sy = canvasH / 2 + dy * ppw;
   return [sx, sy];
 }
 
@@ -158,8 +170,9 @@ export function worldToScreen(wx, wy, camX, camY, canvasW, canvasH) {
  * Result is wrapped to [0, WORLD_SCALE] on both axes.
  */
 export function screenToWorld(sx, sy, camX, camY, canvasW, canvasH) {
-  let wx = camX + (sx - canvasW / 2) / pxPerWorld(canvasW);
-  let wy = camY + (sy - canvasH / 2) / pxPerWorld(canvasH);
+  const ppw = pxPerWorld(canvasW, canvasH);
+  let wx = camX + (sx - canvasW / 2) / ppw;
+  let wy = camY + (sy - canvasH / 2) / ppw;
   // Wrap to valid world range
   wx = ((wx % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
   wy = ((wy % WORLD_SCALE) + WORLD_SCALE) % WORLD_SCALE;
@@ -291,7 +304,9 @@ export function accretionScale() {
  */
 export function shouldCull(entityWX, entityWY, camX, camY, margin = 0.3) {
   if (camX == null) return false;
-  const cullDist = CAMERA_VIEW / 2 + margin;
+  // Conservative for the fixed 16:9 render target; exact rectangular culling
+  // lives in the renderers that know their canvas dimensions.
+  const cullDist = CAMERA_VIEW * (16 / 9) / 2 + margin;
   return worldDistance(entityWX, entityWY, camX, camY) > cullDist;
 }
 
@@ -338,6 +353,6 @@ export function fluidVelToWorld(fvx, fvy) {
  * For consistent overlay rendering of world-space radii, distances, etc.
  * Uses X-axis scale (canvasW). For Y-axis, pass canvasH instead.
  */
-export function worldToPx(worldValue, screenDim) {
-  return worldValue * pxPerWorld(screenDim);
+export function worldToPx(worldValue, screenDim, screenH = null) {
+  return worldValue * pxPerWorld(screenDim, screenH);
 }

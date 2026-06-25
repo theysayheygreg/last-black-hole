@@ -23,6 +23,8 @@
 //   - glitchIntensity: 0-1, for scene transitions (0 on title)
 //   - camFU, camFV:  camera center in fluid UV (world-anchored shimmer)
 //   - gridWindow:    world-units spanned by the camera-anchored fluid grid
+//   - cameraView:    vertical world-units visible through the camera
+//   - viewAspect:    render target width / height for aspect-correct velocity sampling
 //   - totalTime:     elapsed seconds
 
 import { Pass } from '../composer.js';
@@ -108,6 +110,8 @@ export class ASCIIPass extends Pass {
     gl.uniform1f(this.uniforms.u_shimmer, ctx.shimmer);
     gl.uniform2f(this.uniforms.u_camOffset, ctx.camFU, ctx.camFV);
     gl.uniform1f(this.uniforms.u_gridWindow, ctx.gridWindow);
+    gl.uniform1f(this.uniforms.u_cameraView, ctx.cameraView ?? 1);
+    gl.uniform1f(this.uniforms.u_viewAspect, ctx.viewAspect ?? 1);
     gl.uniform1f(this.uniforms.u_dirThreshold, ctx.dirThreshold ?? 0.01);
     gl.uniform1f(this.uniforms.u_dirBlendRange, ctx.dirBlendRange ?? 0.03);
     gl.uniform1f(this.uniforms.u_glitchIntensity, ctx.glitchIntensity ?? 0);

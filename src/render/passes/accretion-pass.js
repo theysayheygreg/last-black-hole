@@ -32,7 +32,7 @@
 // Frame context (frameContext.accretion):
 //   - wellUVs:    Array<[u,v]> well positions in fluid UV
 //   - wellRadii:  Array<[coreR, peakR, outerR]> in world-space
-//   - camFU, camFV, gridWindow (world-units spanned by the fluid grid)
+//   - camFU, camFV, gridWindow, cameraView, viewAspect (aspect-correct camera sampling)
 //
 // Output is HDR — white-hot band exceeds 1.0 so BloomPass catches it.
 
@@ -49,6 +49,8 @@ uniform vec3 u_wellRadii[${MAX_WELLS}]; // (coreR, peakR, outerR) world-space
 uniform int u_wellCount;
 uniform vec2 u_camOffset;             // camera center in fluid UV
 uniform float u_gridWindow;           // world-units spanned by the fluid grid texture
+uniform float u_cameraView;           // vertical world-units visible through the camera
+uniform float u_viewAspect;           // render target width / height
 uniform float u_strength;             // master blend for the radial color
 
 in vec2 v_uv;
@@ -75,8 +77,9 @@ vec3 tempRamp(float t) {
 void main() {
   vec3 base = texture(u_input, v_uv).rgb;
 
-  // Screen-space UV → fluid UV (same transform FluidDisplayPass uses).
-  vec2 fluidUV = u_camOffset + (v_uv - 0.5) / u_gridWindow;
+  // Screen-space UV → fluid UV (same aspect-correct transform FluidDisplayPass uses).
+  vec2 cameraOffset = vec2((v_uv.x - 0.5) * u_viewAspect, v_uv.y - 0.5) * u_cameraView;
+  vec2 fluidUV = u_camOffset + cameraOffset / u_gridWindow;
   vec2 wrapped = fract(fluidUV);
 
   // Find contribution from each well. Additive: if wells overlap, their
@@ -138,6 +141,8 @@ export class AccretionPass extends Pass {
 
     gl.uniform2f(this.prog.uniforms.u_camOffset, ctx.camFU, ctx.camFV);
     gl.uniform1f(this.prog.uniforms.u_gridWindow, ctx.gridWindow);
+    gl.uniform1f(this.prog.uniforms.u_cameraView, ctx.cameraView ?? 1);
+    gl.uniform1f(this.prog.uniforms.u_viewAspect, ctx.viewAspect ?? 1);
     gl.uniform1f(this.prog.uniforms.u_strength, this.strength);
 
     composer.drawQuad();

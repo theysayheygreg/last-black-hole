@@ -242,6 +242,8 @@ uniform float u_gravityScale;
 // Camera offset in fluid UV space and grid window
 uniform vec2 u_camOffset;      // camera center in fluid UV (0-1)
 uniform float u_gridWindow;    // world-units spanned by the camera-anchored fluid texture
+uniform float u_cameraView;    // vertical world-units visible through the camera
+uniform float u_viewAspect;    // screen aspect; widens the sampled camera window on X only
 uniform float u_refScale;      // FLUID_REF_SCALE from coords.js — the scale all UV params were tuned at (3.0)
 uniform float u_time;          // elapsed time in seconds (for shimmer noise)
 // Inhibitor state from server
@@ -255,8 +257,10 @@ in vec2 v_uv;
 out vec4 fragColor;
 
 void main() {
-  // Map screen UV to fluid UV via camera offset
-  vec2 fluidUV = u_camOffset + (v_uv - 0.5) / u_gridWindow;
+  // CAMERA_VIEW is the vertical span; aspect widens X so shader sampling,
+  // overlays, input, and the Three scene all see the same world slice.
+  vec2 cameraOffset = vec2((v_uv.x - 0.5) * u_viewAspect, v_uv.y - 0.5) * u_cameraView;
+  vec2 fluidUV = u_camOffset + cameraOffset / u_gridWindow;
   vec2 wrappedFluidUV = fract(fluidUV);
 
   vec2 vel = texture(u_velocity, wrappedFluidUV).xy;
@@ -967,10 +971,12 @@ export class FluidSim {
    * @param {number} camOffsetU - camera center X in fluid UV (0-1)
    * @param {number} camOffsetV - camera center Y in fluid UV (0-1)
    * @param {number} gridWindow - world-units spanned by the camera-anchored fluid texture
+   * @param {number} cameraView - vertical world-units visible through the camera
+   * @param {number} viewAspect - render target width / height; widens the sampled camera window on X
    * @param {number} totalTime - elapsed time in seconds
    * @param {Array} wellMasses - mass per well, matching wellPositionsUV order
    */
-  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null) {
+  render(target, wellPositionsUV, camOffsetU = 0.5, camOffsetV = 0.5, gridWindow = 1.0, cameraView = 1.0, viewAspect = 1.0, totalTime = 0, wellMasses = [], wellShapes = [], inhibitorData = null) {
     const gl = this.gl;
     const u = this._useProgram(this.programs.display);
     gl.uniform1i(u['u_velocity'], 0);
@@ -993,6 +999,8 @@ export class FluidSim {
     // Camera + time uniforms
     gl.uniform2f(u['u_camOffset'], camOffsetU, camOffsetV);
     gl.uniform1f(u['u_gridWindow'], gridWindow);
+    gl.uniform1f(u['u_cameraView'], cameraView);
+    gl.uniform1f(u['u_viewAspect'], viewAspect);
     gl.uniform1f(u['u_refScale'], FLUID_REF_SCALE);
     gl.uniform1f(u['u_time'], totalTime);
 

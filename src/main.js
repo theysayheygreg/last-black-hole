@@ -58,7 +58,7 @@ import { MAP as MAP_SHALLOWS } from './maps/shallows-3x3.js';
 import { MAP as MAP_EXPANSE } from './maps/expanse-5x5.js';
 import { MAP as MAP_DEEP } from './maps/deep-field-10x10.js';
 import { RENDERER_FIXTURES } from './maps/renderer-fixtures.js';
-import { WORLD_SCALE, GRID_WINDOW, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
+import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, pxPerWorld, worldToFluidUV, worldToScreen, screenToWorld,
          worldDistance, worldDisplacement, uvToWorld, worldToPx, wrapWorld,
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
@@ -2421,7 +2421,7 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
   if (aff) {
     const a = aff.anchor;
     const [sx, sy] = worldToScreen(a.wx, a.wy, camX, camY, canvasW, canvasH);
-    const radiusPx = worldToPx(a.range, canvasW);
+    const radiusPx = worldToPx(a.range, canvasW, canvasH);
     const palette = SLINGSHOT_COLORS[a.type] || SLINGSHOT_COLORS.well;
     const pulse = 0.85 + 0.15 * Math.sin(time * 4);
     ctx.save();
@@ -2443,7 +2443,7 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
     const a = ship.slingshotAnchor;
     const [ax, ay] = worldToScreen(a.wx, a.wy, camX, camY, canvasW, canvasH);
     const [shipX, shipY] = worldToScreen(ship.wx, ship.wy, camX, camY, canvasW, canvasH);
-    const radiusPx = worldToPx(a.range, canvasW);
+    const radiusPx = worldToPx(a.range, canvasW, canvasH);
     const palette = SLINGSHOT_COLORS[a.type] || SLINGSHOT_COLORS.well;
     ctx.save();
     // Solid engaged ring.
@@ -3486,6 +3486,7 @@ function gameLoop(now) {
   perfStats.three = backendStats?.three || null;
   // Camera offset in fluid UV: convert camera world-space to fluid UV
   const [camFU, camFV] = worldToFluidUV(camX, camY);
+  const viewAspect = overlayCanvas.width / Math.max(1, overlayCanvas.height);
   // Inhibitor shader data
   let inhData = null;
   if (inhibitorState.form > 0) {
@@ -3508,6 +3509,7 @@ function gameLoop(now) {
       camX,
       camY,
       gridWindow: GRID_WINDOW,
+      cameraView: CAMERA_VIEW,
       worldScale: WORLD_SCALE,
       totalTime,
       ship: ship ? {
@@ -3523,6 +3525,8 @@ function gameLoop(now) {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,
       gridWindow: GRID_WINDOW,
+      cameraView: CAMERA_VIEW,
+      viewAspect,
       totalTime,
       inhibitorData: inhData,
     },
@@ -3531,6 +3535,8 @@ function gameLoop(now) {
       wellRadii: visibleAccretionRadii,
       camFU, camFV,
       gridWindow: GRID_WINDOW,
+      cameraView: CAMERA_VIEW,
+      viewAspect,
     },
     ascii: {
       velocityTex: fluid.velocity.read.tex,
@@ -3543,6 +3549,8 @@ function gameLoop(now) {
       glitchIntensity: getGlitchIntensity(),
       camFU, camFV,
       gridWindow: GRID_WINDOW,
+      cameraView: CAMERA_VIEW,
+      viewAspect,
       totalTime,
     },
   });
@@ -3904,7 +3912,7 @@ function gameLoop(now) {
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         ctx.font = 'bold 10px monospace';
-        const labelY = sy + well.killRadius * pxPerWorld(overlayCanvas.width) + 18;
+        const labelY = sy + well.killRadius * pxPerWorld(overlayCanvas.width, overlayCanvas.height) + 18;
         // Dark outline for readability on red accretion background
         ctx.strokeStyle = `rgba(0, 0, 0, ${a * 0.9})`;
         ctx.lineWidth = 3;
@@ -4135,7 +4143,7 @@ function gameLoop(now) {
 
   // 9. FPS + debug display
   if (CONFIG.debug.showFPS) {
-    const ppw = pxPerWorld(overlayCanvas.width);
+    const ppw = pxPerWorld(overlayCanvas.width, overlayCanvas.height);
     ctx.save();
     ctx.fillStyle = '#00ff00';
     ctx.font = '14px monospace';
@@ -4238,7 +4246,7 @@ function gameLoop(now) {
 
   // 12. Debug: well radii and labels
   if (CONFIG.debug.showWellRadii) {
-    const ppw = pxPerWorld(overlayCanvas.width);
+    const ppw = pxPerWorld(overlayCanvas.width, overlayCanvas.height);
     ctx.save();
     const wellData = wellSystem.getWellData(camX, camY, overlayCanvas.width, overlayCanvas.height);
     for (let i = 0; i < wellData.length; i++) {
@@ -4264,7 +4272,7 @@ function gameLoop(now) {
     for (let i = 0; i < starSystem.stars.length; i++) {
       const star = starSystem.stars[i];
       const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-      const pushR1 = worldToPx(uvToWorld(CONFIG.stars.rayLength), overlayCanvas.width);
+      const pushR1 = worldToPx(uvToWorld(CONFIG.stars.rayLength), overlayCanvas.width, overlayCanvas.height);
       ctx.strokeStyle = 'rgba(255, 255, 100, 0.3)';
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(sx, sy, pushR1, 0, Math.PI * 2); ctx.stroke();

@@ -6,7 +6,7 @@
  * UNIT CONVENTIONS:
  *   - World-space: 0 to WORLD_SCALE (3.0). Ship, entities, camera all use this.
  *   - Fluid UV:    0 to 1.0. The GPU sim texture. World ÷ WORLD_SCALE = UV.
- *   - Pixels:      Screen coordinates. World × pxPerWorld() = pixels.
+ *   - Pixels:      Screen coordinates. World × pxPerWorld(width,height) = pixels.
  *
  * GPU SPLAT SCALING RULE:
  *   When calling fluid.splat(), UV-space radii must be scaled by uvScale()²

@@ -173,6 +173,10 @@ async function captureFixture(page, outputDir, fixture) {
     const captureAspect = captures[0]?.asciiStats?.width / captures[0]?.asciiStats?.height;
     assert(Math.abs(camera.aspect - captureAspect) < 0.02,
       `Fixture '${fixture.name}' Three camera aspect ${camera.aspect} does not match capture ${captureAspect}`);
+    assert(Math.abs(camera.worldViewHeight - 1.0) < 1e-6,
+      `Fixture '${fixture.name}' Three camera vertical world span should stay 1.0, got ${camera.worldViewHeight}`);
+    assert(Math.abs(camera.worldViewWidth - camera.aspect) < 0.02,
+      `Fixture '${fixture.name}' Three camera horizontal span should be aspect-wide, got ${camera.worldViewWidth}`);
     assert(Math.abs(camera.right + camera.left) < 1e-6 && Math.abs(camera.top + camera.bottom) < 1e-6,
       `Fixture '${fixture.name}' Three camera is not centered on the top-down view`);
     assert(Array.isArray(backendStats?.three?.worldLayers)

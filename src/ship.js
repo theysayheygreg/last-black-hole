@@ -377,7 +377,7 @@ export class Ship {
 
     // Debug: velocity vector
     if (CONFIG.debug.showVelocityField) {
-      const ppw = pxPerWorld(this.canvasWidth);
+      const ppw = pxPerWorld(this.canvasWidth, this.canvasHeight);
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
       ctx.lineWidth = 1;

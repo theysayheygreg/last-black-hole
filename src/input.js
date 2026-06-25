@@ -354,7 +354,7 @@ export class InputManager {
       canvasH
     );
     const direction = worldDirectionTo(view.ship.wx, view.ship.wy, targetWX, targetWY);
-    const distancePx = direction.dist * pxPerWorld(canvasW);
+    const distancePx = direction.dist * pxPerWorld(canvasW, canvasH);
     this._mouse.distancePx = Number.isFinite(distancePx) ? distancePx : 0;
 
     const facing = this._mouse.active && Number.isFinite(direction.nx) && Number.isFinite(direction.ny)

@@ -31,7 +31,7 @@ import { FluidSim } from '../fluid.js';
 import { WellSystem } from '../wells.js';
 import { PlanetoidSystem } from '../planetoids.js';
 import { applySceneOverrides } from '../scene-config.js';
-import { WORLD_SCALE, GRID_WINDOW, worldToFluidUV, setWorldScale,
+import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldToFluidUV, setWorldScale,
          setFluidCamera, getFluidCamera } from '../coords.js';
 import { MAP as MAP_TITLE } from '../maps/title-screen.js';
 
@@ -149,13 +149,13 @@ if (accretionStrengthOverride !== null) {
 // Per-well accretion radii sized for the TITLE composition, not gameplay.
 // The fluid pass uses wellSystem.getRenderShapes() which scales ring size
 // with mass for gameplay feedback. Those radii put the hot ring peak
-// off-screen on the title (visible radius is only 0.5 world-units).
+// off-screen on the title (visible vertical half-span is 0.5 world-units).
 // Here we size the ramp so the full temperature progression is visible:
 //   coreR    — visible "black hole" radius
 //   peakR    — the hot accretion band (t=0, white-hot HDR)
 //   outerR   — where the outer purple fades to black (t=+1)
-// CAMERA_VIEW is 1.0 world-unit, visible half-width = 0.5.
-// Radii keyed to the visible frame (visible half-width = 0.5 world).
+// CAMERA_VIEW is 1.0 world-unit vertically; aspect widens the horizontal span.
+// Radii are keyed to the visible vertical frame (half-span = 0.5 world).
 // With the camera centered on the well:
 //   - core (t=-1, black) fills ~16% of radius
 //   - hot band peak (t=0, white-hot HDR) lands at ~45% of radius
@@ -332,6 +332,7 @@ function frame(now) {
   const wellMasses = wellSystem.getUVMasses();
   const wellShapes = wellSystem.getRenderShapes();
   const [camFU, camFV] = worldToFluidUV(camX, camY);
+  const viewAspect = overlayCanvas.width / Math.max(1, overlayCanvas.height);
   const a = CONFIG.ascii;
 
   const frameContext = {
@@ -339,6 +340,8 @@ function frame(now) {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,
       gridWindow: GRID_WINDOW,
+      cameraView: CAMERA_VIEW,
+      viewAspect,
       totalTime,
       inhibitorData: null,
     },
@@ -347,6 +350,8 @@ function frame(now) {
       wellRadii: TITLE_ACCRETION_RADII,
       camFU, camFV,
       gridWindow: GRID_WINDOW,
+      cameraView: CAMERA_VIEW,
+      viewAspect,
     },
     ascii: {
       velocityTex: fluid.velocity.read.tex,
@@ -359,6 +364,8 @@ function frame(now) {
       glitchIntensity: 0,
       camFU, camFV,
       gridWindow: GRID_WINDOW,
+      cameraView: CAMERA_VIEW,
+      viewAspect,
       totalTime,
     },
   };

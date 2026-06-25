@@ -7,6 +7,7 @@
 // adapts the frame into a 3D scene while preserving LBH's flat top-down read.
 
 import * as THREE from '../../node_modules/three/build/three.module.js';
+import { CAMERA_VIEW } from '../coords.js';
 
 const COPY_VERT = `in vec3 position;
 in vec2 uv;
@@ -166,6 +167,7 @@ export class ThreeRendererBackend {
       cameraY: 0,
       worldScale: 3,
       gridWindow: 3,
+      cameraView: CAMERA_VIEW,
       motionX: 0,
       motionY: 0,
       parallaxStrength: this.settings.parallaxStrength,
@@ -445,6 +447,7 @@ export class ThreeRendererBackend {
     const camY = Number.isFinite(state.camY) ? state.camY : this.lastSceneState.cameraY;
     const worldScale = Number.isFinite(state.worldScale) ? state.worldScale : this.lastSceneState.worldScale;
     const gridWindow = Number.isFinite(state.gridWindow) ? state.gridWindow : this.lastSceneState.gridWindow;
+    const cameraView = Number.isFinite(state.cameraView) ? state.cameraView : (this.lastSceneState.cameraView ?? CAMERA_VIEW);
     const totalTime = Number.isFinite(state.totalTime) ? state.totalTime : 0;
     const prev = this.prevCamera || { x: camX, y: camY };
     const dCamX = wrappedDelta(camX, prev.x, worldScale);
@@ -480,6 +483,7 @@ export class ThreeRendererBackend {
       cameraY: camY,
       worldScale,
       gridWindow,
+      cameraView,
       motionX,
       motionY,
       parallaxStrength,
@@ -490,14 +494,15 @@ export class ThreeRendererBackend {
 
   _scenePoint(wx, wy, state = this.lastSceneState) {
     const worldScale = Number.isFinite(state.worldScale) ? state.worldScale : this.lastSceneState.worldScale;
-    const gridWindow = Math.max(0.001, Number.isFinite(state.gridWindow) ? state.gridWindow : this.lastSceneState.gridWindow);
+    const cameraView = Math.max(0.001, Number.isFinite(state.cameraView) ? state.cameraView : (this.lastSceneState.cameraView ?? CAMERA_VIEW));
     const dx = wrappedDelta(wx, state.camX ?? this.lastSceneState.cameraX, worldScale);
     const dy = wrappedDelta(wy, state.camY ?? this.lastSceneState.cameraY, worldScale);
-    const aspect = Math.max(0.001, this.worldCameraAspect || 1);
     return {
-      x: (dx / gridWindow) * 2 * aspect,
-      y: (-dy / gridWindow) * 2,
-      scale: 2 / gridWindow,
+      // CAMERA_VIEW is the vertical world span. The orthographic camera already
+      // widens X by aspect, so scale both axes from the same world metric.
+      x: (dx / cameraView) * 2,
+      y: (-dy / cameraView) * 2,
+      scale: 2 / cameraView,
     };
   }
 
@@ -575,6 +580,7 @@ export class ThreeRendererBackend {
       camY: this.lastSceneState.cameraY,
       worldScale: this.lastSceneState.worldScale,
       gridWindow: this.lastSceneState.gridWindow,
+      cameraView: this.lastSceneState.cameraView ?? CAMERA_VIEW,
     };
     let entityCount = 0;
     let semanticCount = 0;
@@ -683,6 +689,8 @@ export class ThreeRendererBackend {
         near: this.worldCamera.near,
         far: this.worldCamera.far,
         aspect: this.worldCameraAspect,
+        worldViewHeight: this.lastSceneState.cameraView ?? CAMERA_VIEW,
+        worldViewWidth: (this.lastSceneState.cameraView ?? CAMERA_VIEW) * this.worldCameraAspect,
         left: this.worldCamera.left,
         right: this.worldCamera.right,
         top: this.worldCamera.top,

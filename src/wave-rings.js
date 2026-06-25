@@ -104,7 +104,7 @@ export class WaveRingSystem {
    * Render wave rings on the overlay canvas (camera-aware).
    */
   render(ctx, camX, camY, canvasW, canvasH) {
-    const ppw = pxPerWorld(canvasW);
+    const ppw = pxPerWorld(canvasW, canvasH);
 
     for (const ring of this.rings) {
       const [srcX, srcY] = worldToScreen(ring.sourceWX, ring.sourceWY, camX, camY, canvasW, canvasH);

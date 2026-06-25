@@ -26,6 +26,39 @@ async function run() {
   console.log(`\n=== COORDINATE TESTS (${htmlFile}) ===\n`);
 
   const runner = new TestRunner("Coordinates");
+
+  await runner.run("Aspect-correct world/screen projection round-trips", async () => {
+    const coords = await import("../src/coords.js");
+    const canvasW = 1280;
+    const canvasH = 720;
+    const camX = 1.5;
+    const camY = 1.5;
+    const aspect = canvasW / canvasH;
+    const halfVertical = coords.CAMERA_VIEW / 2;
+    const halfHorizontal = coords.CAMERA_VIEW * aspect / 2;
+
+    const [rightEdgeX, rightEdgeY] = coords.screenToWorld(canvasW, canvasH / 2, camX, camY, canvasW, canvasH);
+    assert(Math.abs(rightEdgeX - (camX + halfHorizontal)) < 1e-6,
+      `Right screen edge should be ${halfHorizontal.toFixed(3)} world-units from camera, got ${rightEdgeX - camX}`);
+    assert(Math.abs(rightEdgeY - camY) < 1e-6, "Right screen edge should preserve camera Y");
+
+    const [topX, topY] = coords.screenToWorld(canvasW / 2, 0, camX, camY, canvasW, canvasH);
+    assert(Math.abs(topX - camX) < 1e-6, "Top screen edge should preserve camera X");
+    assert(Math.abs(topY - (camY - halfVertical)) < 1e-6,
+      `Top screen edge should be ${halfVertical.toFixed(3)} world-units above camera, got ${camY - topY}`);
+
+    const probeWX = camX + 0.37;
+    const probeWY = camY - 0.22;
+    const [sx, sy] = coords.worldToScreen(probeWX, probeWY, camX, camY, canvasW, canvasH);
+    const [roundWX, roundWY] = coords.screenToWorld(sx, sy, camX, camY, canvasW, canvasH);
+    assert(Math.abs(roundWX - probeWX) < 1e-6 && Math.abs(roundWY - probeWY) < 1e-6,
+      `worldToScreen/screenToWorld mismatch: (${roundWX}, ${roundWY})`);
+
+    const [oneHalfRightPx] = coords.worldToScreen(camX + halfVertical, camY, camX, camY, canvasW, canvasH);
+    assert(Math.abs(oneHalfRightPx - (canvasW / 2 + canvasH / 2)) < 1e-6,
+      "One vertical half-view world offset should equal half the canvas height in pixels");
+  });
+
   await startServer();
 
   let browser, page, errors;

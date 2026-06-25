@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-06-25 — Aspect-correct camera math after Three migration
+
+- Split `CAMERA_VIEW` from `GRID_WINDOW` in the renderer path: the camera now defines the visible world span, while the fluid grid remains the larger sampled texture window.
+- Updated world/screen conversion, mouse deadzone math, overlays, wave rings, ship debug vectors, fluid display, accretion, ASCII velocity sampling, and the standalone title prototype to use the same aspect-correct camera projection.
+- Fixed Three world-scene placement so entity meshes, semantic rings, and shader-sampled fabric agree on the same world slice instead of mixing old stretched 2D assumptions with the new orthographic scene.
+- Added regression coverage for aspect-correct world/screen round-trips and Three camera world span reporting in renderer fixtures.
+
+---
+
 ## 2026-06-25 — Local authority movement and Three projection fix
 
 - Fixed a local-authority join regression where a running session stayed on the empty-session idle loop after a human joined, making remote movement visibly snap between sparse 1 Hz authoritative updates.

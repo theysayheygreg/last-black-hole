@@ -17,6 +17,8 @@
 //   - wellShapes: Array<[coreR, ringInnerR, ringOuterR, orbitalDir]>
 //   - camFU, camFV:    camera center in fluid UV
 //   - gridWindow:      world-units spanned by the camera-anchored fluid grid
+//   - cameraView:      vertical world-units visible through the camera
+//   - viewAspect:      render target width / height for aspect-correct sampling
 //   - totalTime:       elapsed seconds (drives fabric noise)
 //   - inhibitorData:   null on title; object when gameplay has an inhibitor
 
@@ -38,6 +40,8 @@ export class FluidDisplayPass extends Pass {
       ctx.wellUVs,
       ctx.camFU, ctx.camFV,
       ctx.gridWindow,
+      ctx.cameraView ?? 1,
+      ctx.viewAspect ?? 1,
       ctx.totalTime,
       ctx.wellMasses,
       ctx.wellShapes,
