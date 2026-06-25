@@ -1,46 +1,39 @@
 {
   "ok": true,
-  "recordedAt": "2026-05-05T03:34:56.828Z",
+  "recordedAt": "2026-06-25T23:58:56.576Z",
   "branch": "main",
-  "gitHead": "e48b033fa35b3f4e04df93e0a7303c6390afa864",
+  "gitHead": "2e038a2dff0269dae80877834efcf52a7e4191c5",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 302830
+      "durationMs": 65247
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 46754
+      "durationMs": 44808
     },
     {
       "name": "perf",
       "command": "npm run test:perf",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 65281
+      "durationMs": 61712
     },
     {
       "name": "title-prototype",
       "command": "npm run test:title-prototype",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 8781
+      "durationMs": 8336
     }
   ],
   "dirtyPaths": [
-    "?? .claude/",
-    "?? .codex/",
-    "?? AGENTS.md",
-    "?? _artifacts/",
-    "?? handoffs/",
-    "?? tests/probe-ship-speed.js",
-    "?? tools/__pycache__/",
-    "?? tools/audio_workbench/__pycache__/"
+    "M docs/project/BUILD-HEALTH.json"
   ]
 }
