@@ -11,6 +11,7 @@
 - Updated the test harness guide with a v0.2 status note and clarified that daily lanes catch known regressions while the Forge pass audits whether the contracts are still right.
 - Updated the project contract with a v0.2 process note and a dedicated Forge Pass section for deep reviews after broad refactors, Three/sim shifts, platform changes, or major feature bursts.
 - Clarified the coordinate authority comment so JS feature code still routes through `coords.js`, while shader-side Y flips are allowed only when local, commented, and fixture-covered.
+- Added a shared GLSL coordinate helper in `fluid.js` so coarse-field and fluid-grid shaders call named world/fluid/coarse conversion functions instead of open-coding Y flips.
 
 ## 2026-06-25 — Bounded sim lifecycle and terminal run cleanup
 

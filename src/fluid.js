@@ -35,6 +35,31 @@ void main() {
   gl_Position = vec4(a_position, 0.0, 1.0);
 }`;
 
+// GLSL cannot import coords.js, so shader passes share this tiny mirror of the
+// world/fluid/coarse-field Y convention. Keep new shader-side flips here.
+const GLSL_COORDS = `
+vec2 lbhGridUvToWorldOffset(vec2 gridUv, float gridWindow) {
+  return vec2(gridUv.x - 0.5, -(gridUv.y - 0.5)) * gridWindow;
+}
+
+vec2 lbhWorldToCoarseUv(vec2 worldPos, float worldScale) {
+  vec2 uv = fract(worldPos / worldScale);
+  return vec2(uv.x, 1.0 - uv.y);
+}
+
+vec2 lbhCoarseUvToWorld(vec2 coarseUv, float worldScale) {
+  return vec2(coarseUv.x, 1.0 - coarseUv.y) * worldScale;
+}
+
+vec2 lbhWorldDeltaToFluidUv(vec2 worldDelta, float gridWindow) {
+  return vec2(worldDelta.x, -worldDelta.y) / gridWindow + 0.5;
+}
+
+vec2 lbhWorldVelocityToFluidVelocity(vec2 worldVelocity) {
+  return vec2(worldVelocity.x, -worldVelocity.y);
+}
+`;
+
 const FRAG_ADVECT = `#version 300 es
 precision highp float;
 uniform sampler2D u_velocity;
@@ -464,6 +489,7 @@ uniform float u_gridWindow;
 uniform float u_worldScale;
 in vec2 v_uv;
 out vec4 fragColor;
+${GLSL_COORDS}
 void main() {
   vec2 src = v_uv - u_delta;
   if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0) {
@@ -472,12 +498,9 @@ void main() {
       return;
     }
     // Off-grid inflow: read the coarse field at the world position
-    // this v_uv represents. The fluid grid is Y-up (UV v increases
-    // with -world_y), so we negate the Y offset on the way out.
-    vec2 worldPos = u_camera + vec2(v_uv.x - 0.5, -(v_uv.y - 0.5)) * u_gridWindow;
-    vec2 coarseUV = fract(worldPos / u_worldScale);
-    // Coarse field is also Y-up; flip Y to match.
-    coarseUV.y = 1.0 - coarseUV.y;
+    // this v_uv represents, then sample the world-anchored coarse field.
+    vec2 worldPos = u_camera + lbhGridUvToWorldOffset(v_uv, u_gridWindow);
+    vec2 coarseUV = lbhWorldToCoarseUv(worldPos, u_worldScale);
     fragColor = texture(u_coarse, coarseUV);
   } else {
     fragColor = texture(u_source, src);
@@ -522,6 +545,7 @@ uniform float u_persistenceDecay;
 
 in vec2 v_uv;
 out vec4 fragColor;
+${GLSL_COORDS}
 
 vec2 toroidalDelta(vec2 a, vec2 b, float worldScale) {
   vec2 d = a - b;
@@ -534,8 +558,7 @@ vec2 toroidalDelta(vec2 a, vec2 b, float worldScale) {
 }
 
 void main() {
-  // Coarse-cell world position. Coarse UV is Y-up; world Y is Y-down.
-  vec2 cellWorld = vec2(v_uv.x, 1.0 - v_uv.y) * u_worldScale;
+  vec2 cellWorld = lbhCoarseUvToWorld(v_uv, u_worldScale);
 
   // 1. Well-driven baseline (cheap O(N_wells) per cell, 64x64 = 4096
   //    fragments × ≤32 wells = trivial cost).
@@ -549,17 +572,15 @@ void main() {
     float pull = u_wellMass[i] / (dist * dist + 0.25);
     // Tangential component for orbital character.
     vec2 tangent = vec2(-dir.y, dir.x) * u_wellOrbitalDir[i];
-    // Fluid grid is Y-up; world Y maps to -V. Flip Y component when
-    // writing into UV-velocity space.
     vec2 worldVel = (dir * 0.7 + tangent * 0.3) * pull;
-    baseline += vec2(worldVel.x, -worldVel.y);
+    baseline += lbhWorldVelocityToFluidVelocity(worldVel);
   }
   baseline *= u_baselineStrength;
 
   // 2. If the cell is currently inside the fluid grid window, sample
   //    the live fluid velocity at this world position and blend it in.
   vec2 cellRelToCamera = toroidalDelta(cellWorld, u_camera, u_worldScale);
-  vec2 fluidUV = vec2(cellRelToCamera.x, -cellRelToCamera.y) / u_gridWindow + 0.5;
+  vec2 fluidUV = lbhWorldDeltaToFluidUv(cellRelToCamera, u_gridWindow);
   vec4 previous = texture(u_previousCoarse, v_uv);
   vec2 persisted = previous.a > 0.5
     ? baseline + (previous.xy - baseline) * u_persistenceDecay

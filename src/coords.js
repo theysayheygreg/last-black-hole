@@ -14,8 +14,9 @@
  *
  * RULE: If JS gameplay, renderer, or test code converts between these spaces,
  * use these functions. Inline `1.0 - y` flips in feature code are bugs.
- * GLSL shaders cannot import this module; any shader-side Y flip must be
- * local, commented, and covered by the coordinate/renderer fixtures.
+ * GLSL shaders cannot import this module; route shader-side Y flips through
+ * that file's GLSL coordinate helper when available. Any other shader flip
+ * must be local, commented, and covered by coordinate/renderer fixtures.
  *
  * KEY RELATIONSHIPS:
  *   World → Fluid UV:  camera-relative, GRID_WINDOW span (worldToFluidUV)
