@@ -41,6 +41,16 @@ Sim `/health` includes `process.pid`, `process.uptimeSec`, and
 `process.memory` so long-run probes can watch process age and memory growth
 instead of inferring leaks from control feel alone.
 
+Each match is a bounded authority session, not a forever simulation. When the
+last human pilot is dead or extracted, or when the configured run cap expires,
+the sim marks the session ended and stops the tick loop while keeping the
+process briefly inspectable. Use `/health.session.status`,
+`/health.session.endReason`, `/health.idleState.activeHumanPlayerCount`, and
+`/health.match` to verify that result screens are not still advancing the
+world. Stress tests can opt into different bounds with
+`LBH_SIM_MAX_SIM_TIME`, `LBH_SIM_TERMINAL_GRACE_MS`, and
+`LBH_SIM_MAX_WRECK_REPEAT_WAVES`.
+
 Manual playtests follow the same rule. If the question is control feel,
 spawning, camera, death, or anything that smells like sim drift, start from a
 fresh stack (`npm run stack:stop` then `npm run stack -- --no-open`, or

@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-06-25 — Matches are finite authority sessions, not forever sims
+
+**Decision:** A live match ends when the last human pilot is terminal or when
+the configured run cap expires. The authoritative sim preserves run results and
+health visibility for a short grace window, but the tick loop stops after
+session end. Post-schedule wreck repeats are disabled by default and only exist
+as a bounded tuning/stress option.
+
+**Why:** LBH runs are fresh maps. Leaving a browser on a death, extraction, or
+title/result surface should not keep world growth, wreck spawning, AI, fields,
+and physics running for hours. Long-lived processes are still useful for
+testing, but they should be explicit probes with health/memory evidence, not an
+accidental product mode.
+
+**Where it landed:** `scripts/sim-runtime.cjs`, `tests/sim-lifecycle.cjs`,
+`docs/design/TEST-HARNESS.md`, and `docs/journal/CHANGELOG.md`.
+
+**Door status:** Closed for v0.2 sim lifecycle. Open for tuning the terminal
+grace window and any future multiplayer spectator/rematch flow.
+
 ## 2026-06-22 — iPad is a native Apple-platform bench, not just a wrapper
 
 **Decision:** Treat iPad like Switch: a hardware and platform-competence bench.

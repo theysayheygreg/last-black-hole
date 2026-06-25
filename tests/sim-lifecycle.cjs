@@ -10,6 +10,8 @@ const AUTO_PORT = 8796;
 const KEEPALIVE_PORT = 8797;
 const JOIN_PORT = 8798;
 const FRESH_PORT = 8801;
+const TERMINAL_PORT = 8802;
+const MATCH_CAP_PORT = 8803;
 
 async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -42,6 +44,26 @@ async function waitForShutdown(port, timeoutMs = 5000) {
     await sleep(150);
   }
   return false;
+}
+
+async function waitForHealth(port, predicate, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < deadline) {
+    try {
+      last = await fetchJson(port, "/health");
+      if (predicate(last.body)) return last;
+    } catch (err) {
+      last = { error: err };
+    }
+    await sleep(100);
+  }
+  const detail = last?.body ? JSON.stringify({
+    session: last.body.session,
+    simTime: last.body.simTime,
+    idleState: last.body.idleState,
+  }) : String(last?.error?.message || "no health response");
+  throw new Error(`Timed out waiting for health condition on ${port}: ${detail}`);
 }
 
 async function run() {
@@ -121,6 +143,109 @@ async function run() {
     }
   });
 
+  await runner.run("Terminal human players end the session instead of running forever", async () => {
+    await startSimServer(TERMINAL_PORT, {
+      idleShutdownMs: 5000,
+      keepAlive: true,
+      env: { LBH_SIM_TERMINAL_GRACE_MS: "60000" },
+    });
+    try {
+      const start = await postJson(TERMINAL_PORT, "/session/start", {
+        mapId: "shallows",
+        requesterId: "terminal-host",
+        requesterName: "Terminal Host",
+      });
+      assert(start.status === 200, `Expected /session/start 200, got ${start.status}`);
+
+      const join = await postJson(TERMINAL_PORT, "/join", {
+        clientId: "terminal-host",
+        name: "Terminal Host",
+      });
+      assert(join.status === 200, `Expected /join 200, got ${join.status}`);
+
+      const death = await postJson(TERMINAL_PORT, "/debug/player-state", {
+        clientId: "terminal-host",
+        status: "dead",
+        cause: "test-terminal",
+      });
+      assert(death.status === 200, `Expected debug death 200, got ${death.status}`);
+
+      const ended = await waitForHealth(TERMINAL_PORT, (body) => body.session?.status === "ended");
+      assert(ended.body.session?.endReason === "terminal-players",
+        `Expected terminal-players end reason, got ${ended.body.session?.endReason}`);
+      assert(ended.body.idleState?.humanPlayerCount === 1,
+        `Expected terminal human to remain visible, got ${ended.body.idleState?.humanPlayerCount}`);
+      assert(ended.body.idleState?.activeHumanPlayerCount === 0,
+        `Expected zero active humans, got ${ended.body.idleState?.activeHumanPlayerCount}`);
+      assert(ended.body.idleState?.currentLoopTickHz === 0,
+        `Expected stopped loop after terminal end, got ${ended.body.idleState?.currentLoopTickHz}`);
+
+      const input = await postJson(TERMINAL_PORT, "/input", {
+        clientId: "terminal-host",
+        seq: 99,
+        moveX: 1,
+      });
+      assert(input.status === 409, `Expected ended session input to reject with 409, got ${input.status}`);
+
+      const leave = await postJson(TERMINAL_PORT, "/leave", { clientId: "terminal-host" });
+      assert(leave.status === 200, `Expected leave after terminal session 200, got ${leave.status}`);
+      assert(leave.body.ok === true, "Expected leave after terminal session to succeed");
+      const afterLeave = await fetchJson(TERMINAL_PORT, "/health");
+      assert(afterLeave.body.idleState?.humanPlayerCount === 0,
+        `Expected leave to remove terminal human, got ${afterLeave.body.idleState?.humanPlayerCount}`);
+
+      const restart = await postJson(TERMINAL_PORT, "/session/start", {
+        mapId: "shallows",
+        requesterId: "terminal-host",
+        requesterName: "Terminal Host",
+      });
+      assert(restart.status === 200, `Expected restart after terminal session 200, got ${restart.status}`);
+      const fresh = await fetchJson(TERMINAL_PORT, "/health");
+      assert(fresh.body.session?.status === "running", `Expected fresh session running, got ${fresh.body.session?.status}`);
+      assert(fresh.body.simTime < 0.5, `Expected fresh simTime reset, got ${fresh.body.simTime}`);
+      assert(fresh.body.match?.wreckRepeatWaveCount === 0,
+        `Expected wreck repeat count reset, got ${fresh.body.match?.wreckRepeatWaveCount}`);
+    } finally {
+      await stopSimServer(TERMINAL_PORT).catch(() => null);
+    }
+  });
+
+  await runner.run("Match lifetime cap collapses active runs", async () => {
+    await startSimServer(MATCH_CAP_PORT, {
+      idleShutdownMs: 5000,
+      keepAlive: true,
+      env: {
+        LBH_SIM_MAX_SIM_TIME: "1",
+        LBH_SIM_TERMINAL_GRACE_MS: "60000",
+      },
+    });
+    try {
+      const start = await postJson(MATCH_CAP_PORT, "/session/start", {
+        mapId: "shallows",
+        requesterId: "cap-host",
+        requesterName: "Cap Host",
+      });
+      assert(start.status === 200, `Expected /session/start 200, got ${start.status}`);
+      const join = await postJson(MATCH_CAP_PORT, "/join", {
+        clientId: "cap-host",
+        name: "Cap Host",
+      });
+      assert(join.status === 200, `Expected /join 200, got ${join.status}`);
+
+      const ended = await waitForHealth(MATCH_CAP_PORT, (body) => body.session?.status === "ended", 6000);
+      assert(ended.body.session?.endReason === "run-timeout",
+        `Expected run-timeout end reason, got ${ended.body.session?.endReason}`);
+      assert(ended.body.simTime >= 1,
+        `Expected simTime to reach cap, got ${ended.body.simTime}`);
+      assert(ended.body.idleState?.activeHumanPlayerCount === 0,
+        `Expected timeout to leave no active humans, got ${ended.body.idleState?.activeHumanPlayerCount}`);
+      assert(ended.body.match?.maxSimTime === 1,
+        `Expected health to expose maxSimTime 1, got ${ended.body.match?.maxSimTime}`);
+    } finally {
+      await stopSimServer(MATCH_CAP_PORT).catch(() => null);
+    }
+  });
+
   const allPassed = runner.summary();
   process.exit(allPassed ? 0 : 1);
 }
@@ -131,5 +256,7 @@ run().catch(async (err) => {
   try { await stopSimServer(KEEPALIVE_PORT); } catch {}
   try { await stopSimServer(JOIN_PORT); } catch {}
   try { await stopSimServer(FRESH_PORT); } catch {}
+  try { await stopSimServer(TERMINAL_PORT); } catch {}
+  try { await stopSimServer(MATCH_CAP_PORT); } catch {}
   process.exit(1);
 });

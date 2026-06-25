@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-06-25 — Bounded sim lifecycle and terminal run cleanup
+
+- Made authoritative matches finite by enforcing the configured 10-minute run cap server-side; timed-out active human players now receive a run result and the session ends cleanly.
+- Ended sessions when all human pilots are terminal instead of keeping the sim alive while the client sits on death, extraction, or result screens.
+- Stopped the sim tick loop after terminal session end while preserving a short health/result grace window, so ended runs remain inspectable without continuing to simulate the world.
+- Disabled post-schedule wreck repeat waves by default and capped them when explicitly enabled for tuning, preventing long-idle sessions from growing wreck state forever.
+- Reset wreck wave repeat state on every new session and fixed Inhibitor vessel deaths to commit the same death outcome path as other hazards.
+- Added lifecycle regression coverage for terminal humans, session restart freshness, and match-cap collapse.
+
 ## 2026-06-25 — Coordinate and flow authority cleanup
 
 - Centralized world radius projection in `coords.js` so canvas overlays and the Three scene use the same axis-aware world radii, while small glyphs can still opt into screen-round sizing.

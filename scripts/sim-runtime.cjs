@@ -64,6 +64,8 @@ const PORTAL_CONFIG = {
 };
 const PLAYER_CARGO_SLOTS = 8;
 const RUN_DURATION = 600;
+const MATCH_MAX_SIM_TIME = readNumber(process.env.LBH_SIM_MAX_SIM_TIME, RUN_DURATION, 1);
+const TERMINAL_SESSION_GRACE_MS = readNumber(process.env.LBH_SIM_TERMINAL_GRACE_MS, 30000, 0);
 const WELL_GROWTH_VARIANCE = 0.01;
 const WELL_GROWTH_AMOUNT = 0.02;
 const WELL_KILL_RADIUS_GROWTH = 0.3;
@@ -78,6 +80,8 @@ const { WELL_NAMES } = SEEDED_GEN;
 const { WRECK_WAVES } = SEEDED_GEN;
 const WRECK_WAVE_REPEAT_INTERVAL = 90; // after last wave, repeat every N seconds
 const WRECK_WAVE_REPEAT = { count: [1, 1], slots: [3, 5], dangerZone: 0.12 };
+const MAX_WRECK_REPEAT_WAVES = readNumber(process.env.LBH_SIM_MAX_WRECK_REPEAT_WAVES, 0, 0);
+const MAX_LIVE_WRECKS = readNumber(process.env.LBH_SIM_MAX_LIVE_WRECKS, 64, 1);
 const IDLE_SESSION_TICK_HZ = 1;
 const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
 
@@ -96,6 +100,12 @@ const WRECK_PREFIXES = ["Wreck", "Remains", "Hulk"];
 function generateWreckName(rng = Math.random) {
   const pick = (list) => list[Math.floor(rng() * list.length)] || list[0];
   return `${pick(WRECK_PREFIXES)} of the ${pick(WRECK_ADJECTIVES)} ${pick(WRECK_NOUNS)}`;
+}
+
+function readNumber(value, fallback, min = -Infinity) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, parsed);
 }
 
 // Wrappers around seeded-generation.js that route through runtime streams.
@@ -919,11 +929,14 @@ const runtime = {
   overload: null,
   keepAlive: KEEP_ALIVE,
   idleShutdownMs: IDLE_SHUTDOWN_MS,
+  terminalSince: null,
+  terminalShutdownAt: null,
   shutdownReason: null,
 };
 
 let tickHandle = null;
 let currentLoopTickHz = DEFAULT_TICK_HZ;
+let terminalShutdownHandle = null;
 
 function publishEvent(type, payload = {}) {
   const event = {
@@ -1122,8 +1135,9 @@ function startSession(config = {}) {
         commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
       }
     }
-    persistEndedSession({ status: "reset" });
+    endSession("reset", { status: "reset" });
   }
+  clearTerminalShutdown();
   const requestedMapId = String(config.mapId || "shallows");
   const requestedWorldScale = config.worldScale == null ? null : Number(config.worldScale);
   // Build the RNG streams BEFORE cloning the map state so well growth
@@ -1233,6 +1247,9 @@ function startSession(config = {}) {
     });
   runtime.tick = 0;
   runtime.simTime = 0;
+  runtime.emptySince = null;
+  runtime.terminalSince = null;
+  runtime.terminalShutdownAt = null;
   runtime.systemAccumulators = {
     world: 0,
     portals: 0,
@@ -1290,6 +1307,9 @@ function startSession(config = {}) {
   spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
+  runtime._wreckWaveIndex = 0;
+  runtime._wreckWaveRepeatTimer = 0;
+  runtime._wreckRepeatWaveCount = 0;
   runtime.waveRings = [];
   runtime.coarseField = null;
   rebuildAuthoritativeField();
@@ -1447,24 +1467,35 @@ function snapshotBody() {
   };
 }
 
-function getHumanPlayerCount() {
-  let count = 0;
-  for (const player of runtime.players.values()) {
-    if (!player.isAI) count += 1;
-  }
-  return count;
+function getHumanPlayers({ activeOnly = false } = {}) {
+  return Array.from(runtime.players.values()).filter((player) =>
+    !player.isAI && (!activeOnly || player.status === "alive")
+  );
+}
+
+function getHumanPlayerCount(options = {}) {
+  return getHumanPlayers(options).length;
 }
 
 function getIdleState() {
   const humanPlayerCount = getHumanPlayerCount();
+  const activeHumanPlayerCount = getHumanPlayerCount({ activeOnly: true });
+  const idle = activeHumanPlayerCount === 0;
   const emptySince = humanPlayerCount === 0 ? runtime.emptySince : null;
   const idleForMs = emptySince ? Math.max(0, Date.now() - emptySince) : 0;
+  const terminalShutdownInMs = runtime.terminalShutdownAt
+    ? Math.max(0, runtime.terminalShutdownAt - Date.now())
+    : null;
   return {
-    idle: humanPlayerCount === 0,
+    idle,
     humanPlayerCount,
+    activeHumanPlayerCount,
     aiPlayerCount: Math.max(0, runtime.players.size - humanPlayerCount),
     emptySince,
     idleForMs,
+    terminalSince: runtime.terminalSince,
+    terminalShutdownAt: runtime.terminalShutdownAt,
+    terminalShutdownInMs,
     keepAlive: runtime.keepAlive,
     idleTickHz: IDLE_SESSION_TICK_HZ,
     currentLoopTickHz: runtime.loopTickHz,
@@ -1510,6 +1541,88 @@ function persistSessionRegistry() {
 function persistEndedSession(extra = {}) {
   if (!runtime.session?.id) return;
   trackControlPlaneWrite(controlPlane.markSessionEnded(runtime.session, Array.from(runtime.players.values()), extra));
+}
+
+function clearTerminalShutdown() {
+  if (terminalShutdownHandle) {
+    clearTimeout(terminalShutdownHandle);
+    terminalShutdownHandle = null;
+  }
+}
+
+function scheduleTerminalShutdown(reason) {
+  clearTerminalShutdown();
+  runtime.terminalSince = Date.now();
+  runtime.terminalShutdownAt = runtime.keepAlive ? null : runtime.terminalSince + TERMINAL_SESSION_GRACE_MS;
+  if (runtime.keepAlive || TERMINAL_SESSION_GRACE_MS <= 0) return;
+  terminalShutdownHandle = setTimeout(() => {
+    runtime.shutdownReason = `terminal-${reason}`;
+    telemetry.info("runtime.terminalShutdown", {
+      reason,
+      terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
+      sessionId: runtime.session?.id || null,
+      mapId: runtime.session?.mapId || null,
+    });
+    shutdown();
+  }, TERMINAL_SESSION_GRACE_MS);
+  terminalShutdownHandle.unref?.();
+}
+
+function endSession(reason, extra = {}) {
+  if (runtime.session.status !== "running") return false;
+  runtime.session.status = "ended";
+  runtime.session.endReason = reason;
+  runtime.session.endedAt = new Date().toISOString();
+  runtime.session.endedSimTime = runtime.simTime;
+  publishEvent("session.ended", {
+    reason,
+    simTime: runtime.simTime,
+    humanPlayerCount: getHumanPlayerCount(),
+    activeHumanPlayerCount: getHumanPlayerCount({ activeOnly: true }),
+  });
+  telemetry.info("session.ended", {
+    sessionId: runtime.session.id,
+    runId: runtime.session.runId,
+    reason,
+    simTime: runtime.simTime,
+    mapId: runtime.session.mapId,
+  });
+  persistEndedSession({ reason, ...extra });
+  writeFiles();
+  stopTickLoop();
+  scheduleTerminalShutdown(reason);
+  return true;
+}
+
+function killActiveHumanPlayers(cause) {
+  let killedCount = 0;
+  for (const player of getHumanPlayers({ activeOnly: true })) {
+    player.status = "dead";
+    player.vx = 0;
+    player.vy = 0;
+    publishEvent("player.died", {
+      clientId: player.clientId,
+      cause,
+    });
+    commitPlayerOutcome(player, "dead");
+    player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
+    killedCount += 1;
+  }
+  return killedCount;
+}
+
+function maybeEnforceMatchLifetime() {
+  if (runtime.session.status !== "running") return false;
+  if (runtime.simTime < MATCH_MAX_SIM_TIME) return false;
+  const killedCount = killActiveHumanPlayers("run-timeout");
+  return endSession("run-timeout", { killedCount, maxSimTime: MATCH_MAX_SIM_TIME });
+}
+
+function maybeEndTerminalSession(reason = "terminal-players") {
+  if (runtime.session.status !== "running") return false;
+  if (getHumanPlayerCount() === 0) return false;
+  if (getHumanPlayerCount({ activeOnly: true }) > 0) return false;
+  return endSession(reason);
 }
 
 function cloneProfileLoadout(profile) {
@@ -1893,6 +2006,7 @@ function tickPortals(dt) {
 function tickWreckWaves(dt) {
   if (!runtime._wreckWaveIndex) runtime._wreckWaveIndex = 0;
   if (!runtime._wreckWaveRepeatTimer) runtime._wreckWaveRepeatTimer = 0;
+  if (!runtime._wreckRepeatWaveCount) runtime._wreckRepeatWaveCount = 0;
   const ws = runtime.session.worldScale;
   const waveRng = runtime.session?.rng?.rawStream('wreckWave') || Math.random;
   const nameRng = runtime.session?.rng?.rawStream('wreckNames') || Math.random;
@@ -1923,8 +2037,15 @@ function tickWreckWaves(dt) {
     runtime._wreckWaveIndex++;
   }
 
-  // Repeating waves after schedule ends
-  if (runtime._wreckWaveIndex >= WRECK_WAVES.length) {
+  // Repeats are bounded because every match is a fresh map; anything beyond
+  // the authored schedule should be an opt-in stress/tuning path, not a leak.
+  if (
+    runtime._wreckWaveIndex >= WRECK_WAVES.length &&
+    MAX_WRECK_REPEAT_WAVES > 0 &&
+    runtime._wreckRepeatWaveCount < MAX_WRECK_REPEAT_WAVES &&
+    runtime.simTime < MATCH_MAX_SIM_TIME &&
+    runtime.mapState.wrecks.length < MAX_LIVE_WRECKS
+  ) {
     runtime._wreckWaveRepeatTimer += dt;
     if (runtime._wreckWaveRepeatTimer >= WRECK_WAVE_REPEAT_INTERVAL) {
       runtime._wreckWaveRepeatTimer -= WRECK_WAVE_REPEAT_INTERVAL;
@@ -1947,6 +2068,7 @@ function tickWreckWaves(dt) {
         };
         runtime.mapState.wrecks.push(wreck);
       }
+      runtime._wreckRepeatWaveCount += 1;
     }
   }
 }
@@ -2011,6 +2133,7 @@ function maybeCollapseRun() {
   if (activePortalCount > 0) return;
   if (hasMorePortalWaves) return;
 
+  let killedCount = 0;
   for (const player of runtime.players.values()) {
     if (player.status !== "alive") continue;
     player.status = "dead";
@@ -2022,7 +2145,9 @@ function maybeCollapseRun() {
     });
     commitPlayerOutcome(player, "dead");
     player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
+    killedCount += 1;
   }
+  if (killedCount > 0) endSession("collapse", { killedCount });
 }
 
 function tickStars(dt, stars = runtime.mapState.stars) {
@@ -4710,6 +4835,8 @@ function tickInhibitor(dt) {
           player.vx = 0;
           player.vy = 0;
           publishEvent("player.died", { clientId: player.clientId, cause: "vessel" });
+          commitPlayerOutcome(player, "dead");
+          player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
         }
       }
 
@@ -4751,19 +4878,20 @@ function tickInhibitor(dt) {
 
 function tickSim() {
   if (runtime.session.status !== "running") return;
-  const humanPlayers = Array.from(runtime.players.values()).filter((player) => !player.isAI);
-  if (humanPlayers.length === 0) {
+  if (getHumanPlayerCount() === 0) {
     runtime.emptySince = runtime.emptySince || Date.now();
     if (!runtime.keepAlive && runtime.idleShutdownMs > 0 && Date.now() - runtime.emptySince >= runtime.idleShutdownMs) {
       shutdownForIdle();
     }
     return;
   }
+  if (maybeEndTerminalSession()) return;
   runtime.emptySince = null;
   const tickStart = performance.now();
   const dt = runtime.session.timeScale / runtime.session.tickHz;
   runtime.tick += 1;
   runtime.simTime += dt;
+  if (maybeEnforceMatchLifetime()) return;
   const relevance = buildRelevanceView();
 
   runSystemAtRate("world", runtime.session.worldTickHz || runtime.session.tickHz, dt, (stepDt) => {
@@ -4785,6 +4913,7 @@ function tickSim() {
   tickFauna(dt);
   tickInhibitor(dt);
   maybeCollapseRun();
+  if (runtime.session.status !== "running") return;
 
   for (const player of runtime.players.values()) {
     if (player.status !== "alive") continue;
@@ -4870,6 +4999,7 @@ function tickSim() {
     if (player.status !== "alive") continue;
     tickPlayerSignal(player, playerDt);
   }
+  if (maybeEndTerminalSession()) return;
 
   const alivePlayerCount = relevance.alivePlayers.length;
   const activeAiCount = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state !== "dying").length;
@@ -4904,13 +5034,24 @@ function tickSim() {
 }
 
 function getLoopTickHz() {
-  const noHumanPlayers = Array.from(runtime.players.values()).every((player) => player.isAI);
-  if (runtime.session.status === "running" && noHumanPlayers) return IDLE_SESSION_TICK_HZ;
+  if (runtime.session.status !== "running") return 0;
+  if (getHumanPlayerCount({ activeOnly: true }) === 0) return IDLE_SESSION_TICK_HZ;
   return runtime.session.tickHz;
+}
+
+function stopTickLoop() {
+  if (tickHandle) clearInterval(tickHandle);
+  tickHandle = null;
+  currentLoopTickHz = 0;
+  runtime.loopTickHz = 0;
 }
 
 function restartTickLoop() {
   const nextTickHz = getLoopTickHz();
+  if (nextTickHz <= 0) {
+    stopTickLoop();
+    return;
+  }
   if (tickHandle && currentLoopTickHz === nextTickHz) return;
   if (tickHandle) clearInterval(tickHandle);
   currentLoopTickHz = nextTickHz;
@@ -4967,6 +5108,13 @@ const server = http.createServer(async (req, res) => {
         simTime: runtime.simTime,
         playerCount: runtime.players.size,
         mapId: runtime.mapState.id,
+        match: {
+          maxSimTime: MATCH_MAX_SIM_TIME,
+          terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
+          wreckRepeatWaveCount: runtime._wreckRepeatWaveCount || 0,
+          maxWreckRepeatWaves: MAX_WRECK_REPEAT_WAVES,
+          maxLiveWrecks: MAX_LIVE_WRECKS,
+        },
         process: {
           pid: process.pid,
           uptimeSec: Number(process.uptime().toFixed(3)),
@@ -5211,6 +5359,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/input") {
       const body = await readJson(req);
+      if (runtime.session.status !== "running") {
+        sendJson(res, 409, { ok: false, error: "No active session", session: runtime.session });
+        return;
+      }
       const message = normalizeInputMessage(body);
       if (!message.clientId) {
         sendJson(res, 400, { ok: false, error: "clientId is required" });
@@ -5239,6 +5391,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/inventory/action") {
       const body = await readJson(req);
+      if (runtime.session.status !== "running") {
+        sendJson(res, 409, { ok: false, error: "No active session", session: runtime.session });
+        return;
+      }
       const message = normalizeInventoryAction(body);
       if (!message.clientId) {
         sendJson(res, 400, { ok: false, error: "clientId is required" });
@@ -5271,6 +5427,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       applyDebugPlayerState(player, body);
+      maybeEndTerminalSession("terminal-players");
       sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
       return;
     }
@@ -5307,6 +5464,7 @@ server.on("error", (err) => {
 
 function shutdown() {
   if (tickHandle) clearInterval(tickHandle);
+  clearTerminalShutdown();
   if (controlPlaneHeartbeat) clearInterval(controlPlaneHeartbeat);
   Promise.race([
     Promise.allSettled([

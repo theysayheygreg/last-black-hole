@@ -623,49 +623,6 @@ async function run() {
       );
     });
 
-    await runner.run("Remote death writes back authoritative profile state", async () => {
-      const beforeProfile = await page.evaluate(() => window.__TEST_API.getProfile());
-      assert(beforeProfile?.id, "Expected active profile id before remote death");
-
-      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
-      const authoritativeBefore = await getSnapshot();
-      const targetWell = authoritativeBefore.world?.wells?.[0];
-      assert(targetWell?.wx != null && targetWell?.wy != null, "Expected authoritative well for death test");
-      const moved = await postDebugPlayerState({
-        clientId: net.clientId,
-        wx: targetWell.wx,
-        wy: targetWell.wy,
-        vx: 0,
-        vy: 0,
-        status: "alive",
-      });
-      assert(moved.ok === true, "Expected debug move near well before death");
-
-      const killed = await postDebugPlayerState({
-        clientId: net.clientId,
-        wx: targetWell.wx,
-        wy: targetWell.wy,
-        vx: 0,
-        vy: 0,
-        status: "dead",
-        cause: "debug",
-      });
-      assert(killed.ok === true, "Expected debug death to succeed");
-      await waitForSnapshotPlayer(
-        net.clientId,
-        (remotePlayer) => remotePlayer.status === "dead",
-        { timeout: 8000 }
-      );
-      await waitForEvents(
-        (allEvents) => allEvents.some((event) => event.type === "profile.updated" && event.payload?.clientId === net.clientId),
-        { timeout: 8000 }
-      );
-
-      const persisted = await getProfile(beforeProfile.id);
-      assert(persisted.ok === true, "Expected persisted profile lookup to succeed after death");
-      assert(persisted.profile.totalDeaths === beforeProfile.totalDeaths + 1, "Expected authoritative death count to increment");
-    });
-
     await runner.run("Second client joins existing authoritative session", async () => {
       const joinResponse = await fetch(`${SIM_URL}/join`, {
         method: "POST",
@@ -720,6 +677,52 @@ async function run() {
       await browser2.close();
       browser2 = null;
       page2 = null;
+    });
+
+    await runner.run("Remote death writes back authoritative profile state", async () => {
+      const beforeProfile = await page.evaluate(() => window.__TEST_API.getProfile());
+      assert(beforeProfile?.id, "Expected active profile id before remote death");
+
+      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const authoritativeBefore = await getSnapshot();
+      const targetWell = authoritativeBefore.world?.wells?.[0];
+      assert(targetWell?.wx != null && targetWell?.wy != null, "Expected authoritative well for death test");
+      const moved = await postDebugPlayerState({
+        clientId: net.clientId,
+        wx: targetWell.wx,
+        wy: targetWell.wy,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(moved.ok === true, "Expected debug move near well before death");
+
+      const killed = await postDebugPlayerState({
+        clientId: net.clientId,
+        wx: targetWell.wx,
+        wy: targetWell.wy,
+        vx: 0,
+        vy: 0,
+        status: "dead",
+        cause: "debug",
+      });
+      assert(killed.ok === true, "Expected debug death to succeed");
+      await waitForSnapshotPlayer(
+        net.clientId,
+        (remotePlayer) => remotePlayer.status === "dead",
+        { timeout: 8000 }
+      );
+      await waitForEvents(
+        (allEvents) => allEvents.some((event) => event.type === "profile.updated" && event.payload?.clientId === net.clientId),
+        { timeout: 8000 }
+      );
+
+      const persisted = await getProfile(beforeProfile.id);
+      assert(persisted.ok === true, "Expected persisted profile lookup to succeed after death");
+      assert(persisted.profile.totalDeaths === beforeProfile.totalDeaths + 1, "Expected authoritative death count to increment");
+
+      const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
+      assert(health.session.status === "running", "Expected session to keep running while another human remains active");
     });
 
     await runner.run("Host leaves and remaining player is promoted", async () => {
