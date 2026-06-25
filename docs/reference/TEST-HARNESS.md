@@ -12,8 +12,11 @@ The harness is not one big test. It is a layered system that checks four differe
 The harness now sits beside an explicit runtime-mode model:
 
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/reference/RUNTIME-MODES.md`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/design/TEST-HARNESS.md`
 
 That keeps `test-harness` mode separate from the normal human launch paths.
+The design harness doc is the live operator guide; this file is the shareable
+overview.
 
 ## Simple Graph
 
@@ -155,6 +158,16 @@ That file is responsible for:
 - cleaning up detached children
 - isolating ports and pid files so test runs do not stomp on each other
 
+Freshness is part of the contract. Browser tests should use `withFreshGame()`
+and authority tests should use `withFreshSimServer()` unless the suite is
+explicitly proving long-lived session behavior. The helpers close Chrome, remove
+temporary profiles, force-stop stale sim listeners on the test port, and clear
+per-port registry state before the case runs.
+
+The sim `/health` response exposes `process.pid`, `process.uptimeSec`, and
+`process.memory`. Long-run probes should record those fields before and after a
+session instead of guessing whether a movement bug came from old process state.
+
 ## What to Run
 
 For normal verification:
@@ -168,6 +181,13 @@ For targeted runtime-telemetry verification:
 For visual/renderer verification:
 
 - `npm run test:renderer`
+
+For movement, camera, or authority-sensitive verification:
+
+- `npm test`
+- `npm run test:playtest`
+- `npm run test:authority`
+- `npm run test:visual` when projection, radius, or renderer scene changes
 
 For build-health verification:
 
@@ -197,6 +217,8 @@ Use the right test for the right question.
 - “Are runtime telemetry events still emitted the way the operator tooling expects?” → `tests/telemetry-smoke.cjs`
 - “Does remote authority still work?” → `tests/remote-authority.cjs`
 - “Does the renderer still look right?” → `npm run test:renderer`
+- “Did coordinate/camera/sim assumptions drift?” → inspect `src/coords.js`,
+  then run core + playtest + authority + visual lanes
 - “Is this commit actually verified?” → `node scripts/build-health.cjs status`
 
 That is the current shape of LBH test automation.

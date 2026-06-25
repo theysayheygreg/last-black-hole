@@ -13,6 +13,7 @@
 - Added a finite range/fade for orbital surf current so distant wells no longer tow the ship through open space, and made wave/star/planetoid ship pushes use the actual frame timestep.
 - Updated controller coverage for the remote input contract: inventory suppresses thrust/brake scalars while preserving facing intent for subsequent actions.
 - Hardened the test harness freshness contract: input/playtest cases now use fresh Chrome processes and fresh remote sim processes, stale sim listeners are force-stopped on test ports, and sim health exposes process age/memory for long-run leak checks.
+- Updated process docs around fresh playtests, coordinate authority, sim/client truth, and Three camera projection checks so future movement regressions start with math/authority verification before tuning.
 - Made star drift map/snapshot-owned and prevented visual-only star updates from mutating authoritative consumption state.
 - Added FlowField regression coverage, expanded coordinate tests for radius projection, updated the physics harness to isolate gravity from orbital current, and restored the Three perf probe to 60 FPS with a 16-pass local pressure solve.
 

@@ -91,6 +91,34 @@ Codex checks *correctness* — will the code crash, loop, or produce wrong behav
 | **Speed** | ~5 min (parallel research agents) | ~3 min (automated diff review) |
 | **When to skip** | Never on new systems. Skip on pure tuning. | Never after audit finds fixes. Skip on docs-only. |
 
+### Math / Authority / Camera Pass
+
+After the Three migration and authority work, movement regressions usually come
+from stale assumptions crossing system boundaries. Any task that touches
+movement, spawning, hazards, death, map scale, flow sampling, sim snapshots,
+camera, or renderer projection gets one extra checklist before Greg playtests:
+
+1. **Coordinate source of truth** — conversions go through `src/coords.js`.
+   Feature code must not inline `1.0 - y`, hand-roll toroidal wrapping, or
+   invent new screen/world/UV scale math.
+2. **Authority parity** — gameplay truth lives in the sim. If a feature exists
+   client-side for presentation or sandbox prediction, the server-side sim path
+   must still own the authoritative version before it is considered shipped.
+3. **Camera/projection agreement** — Three's top-down camera, overlay canvas,
+   fluid window, and sim snapshot all describe the same world slice. Visible
+   wells, stars, hazards, spawn points, kill radii, and loot ranges must line up
+   with the sim, not merely look centered.
+4. **Fresh-process evidence** — movement/playtest evidence comes from a fresh
+   browser and fresh sim unless the task is explicitly a long-run stability
+   probe. Reloading a page is not a clean process boundary.
+5. **Representative lanes** — run `npm test`, `npm run test:playtest`, and
+   `npm run test:authority` for movement/sim work. Add `npm run test:visual`
+   when camera, renderer, radius, or scene projection changes.
+
+If the player dies to an invisible well, spawns off-route, gets pulled by a
+thing they cannot see, or bounces between positions, treat that as a contract
+failure first. Tune only after the math, authority, and camera contracts agree.
+
 ### Trigger Rules
 
 - **Always run both passes:** new system, new entity type, new server↔client wiring
@@ -109,7 +137,9 @@ For automatic Codex review on every commit, add a PostToolUse hook on Bash in `~
 Greg wakes up. First thing:
 
 1. `git log --oneline --since="midnight"` — see what the night shift produced
-2. Open the game in browser — does it work? What changed?
+2. Start a fresh play stack (`npm run stack:stop` then `npm run play`, or
+   `npm run stack -- --no-open` and open the printed URL) — does it work? What
+   changed?
 3. Read the **NIGHT-REPORT.md** the agent leaves behind (see below)
 4. Play for 10-15 minutes. Write gut reactions.
 5. Decide: **continue this direction** or **course correct**
@@ -239,9 +269,13 @@ Estimated scope: [small: <1hr, medium: 1-3hr, large: 3-8hr]
 - [ ] All tunables in the `CONFIG` object (see TUNING.md) — systems read CONFIG every frame, not cached at init
 - [ ] Expose `window.__TEST_API` for automated test access (see AGENT-TESTING.md)
 - [ ] Add dev panel sliders for any new tunable constants
+- [ ] All coordinate conversion, radius projection, wrapping, and fluid UV math goes through `src/coords.js`
+- [ ] Gameplay-affecting behavior is implemented sim-side first; client-only code is presentation, sandbox prediction, or debug support
+- [ ] Camera/projection changes update renderer fixture expectations and any affected tests
 
 ## When Done
 - [ ] All criteria met
+- [ ] If movement, spawning, hazards, camera, renderer projection, or sim/client authority changed: run the Math / Authority / Camera Pass above
 - [ ] Working state committed
 - [ ] If any design doc changed: update CHANGELOG.md in the same commit
 - [ ] If a design decision was made: add DECISION-LOG.md entry

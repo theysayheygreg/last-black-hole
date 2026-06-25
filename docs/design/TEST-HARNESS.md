@@ -41,6 +41,50 @@ Sim `/health` includes `process.pid`, `process.uptimeSec`, and
 `process.memory` so long-run probes can watch process age and memory growth
 instead of inferring leaks from control feel alone.
 
+Manual playtests follow the same rule. If the question is control feel,
+spawning, camera, death, or anything that smells like sim drift, start from a
+fresh stack (`npm run stack:stop` then `npm run stack -- --no-open`, or
+`npm run play`) before judging it. A browser reload is not a clean reset: it can
+leave an old authority process, old WebGL state, old input state, or stale
+process memory in the loop.
+
+Use long-lived browser/sim sessions only when the test is explicitly about
+long-run stability. In that case, record `/health` process age and memory before
+and after the session so "the ship feels haunted" becomes inspectable evidence.
+
+## Movement, Coordinates, And Camera Regressions
+
+Movement bugs are often math bugs, not tuning bugs. When a change touches
+movement, spawning, hazards, map scale, camera, renderer projection, flow
+sampling, or sim snapshots, review these contracts before blaming constants:
+
+- `src/coords.js` is the only place for coordinate conversions. No inline
+  `1.0 - y`, ad hoc world wrapping, or pixel/world scale math in feature code.
+- Server sim truth is world-space, Y-down, toroidal, and authoritative. Client
+  code may present, predict, or debug that truth, but cannot become the only
+  implementation of gameplay physics.
+- The Three camera is top-down 3D, but it is still aligned to the square
+  `CAMERA_VIEW`/fluid window. If a visible hazard, well, star, spawn, or kill
+  radius moves, update the renderer fixture contract as well as gameplay tests.
+- Radius projection is axis-specific on widescreen targets. Gameplay ranges use
+  `worldRadiusToScreen()` / `worldRadiusToSceneScale()` in `world` mode; only
+  decorative glyphs get screen-round sizing.
+- A local sandbox fix is incomplete until the same behavior is correct in the
+  remote/authority path. Movement force, slingshot state, collision/death,
+  spawn placement, signal, loot, and run results must be sim-side first.
+
+Minimum regression lane for this class of work:
+
+```sh
+npm test
+npm run test:playtest
+npm run test:authority
+npm run test:visual
+```
+
+Then do one fresh Codex app browser pass. Automated tests can prove the contract
+did not drift; they cannot prove the ship feels good.
+
 ## Commands
 
 | Command | Purpose |
@@ -123,15 +167,24 @@ weight, menu feel, title presence, and readable motion.
 
 Recommended flow:
 
-1. Start the local client:
+1. For product-feel testing, start a fresh authority stack:
+   ```sh
+   npm run stack:stop
+   npm run stack -- --no-open
+   ```
+   Use the `Client URL:` printed by the command. It includes the local
+   `simServer` query string.
+2. For renderer-only sandbox work, start only the static dev server:
    ```sh
    npm run dev
    ```
-2. Open `http://127.0.0.1:8080/index-a.html?renderer=three` in the Codex app browser.
+   and open `http://127.0.0.1:8080/index-a.html?renderer=three`.
 3. Verify page identity, visible content, console health, and a screenshot.
-4. Exercise one flow: title to profile/home, map launch, a short flying session,
+4. Check `npm run stack:status` or sim `/health` if the session has been open
+   long enough that stale authority state could explain weird movement.
+5. Exercise one flow: title to profile/home, map launch, a short flying session,
    pause, death or extraction fixture when relevant.
-5. Capture screenshots for the states that prove the claim.
+6. Capture screenshots for the states that prove the claim.
 
 Do not force every playtest into a headless script. If the question is "does
 this look/feel right?", the browser lane should produce evidence and a human

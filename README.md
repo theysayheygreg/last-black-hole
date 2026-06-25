@@ -89,6 +89,11 @@ stack stays available for debugging; shut it down with:
 npm run stop
 ```
 
+When testing movement, spawning, hazards, or camera feel, treat a fresh process
+as part of the test. If the game has been running for a while and motion feels
+wrong, run `npm run stop` before launching again. A browser refresh is not a
+clean sim reset.
+
 First launch flow:
 
 1. Press `Space` / `Enter` / gamepad `A` on the title screen.

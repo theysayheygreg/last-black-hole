@@ -3,7 +3,7 @@
 See also:
 
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/reference/RUNTIME-MODES.md`
-- `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/reference/TEST-HARNESS.md`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/docs/design/TEST-HARNESS.md`
 
 ## Current Process Model
 
@@ -54,6 +54,20 @@ The older per-process scripts still exist because they are useful for debugging.
 - `npm run stack:sandbox` → deprecated browser client only
 - `npm run stack:remote -- --sim=http://HOST:PORT` → local browser client against remote authority
 
+For movement feel, spawning, hazards, camera, or death bugs, prefer a fresh
+local-host stack over a browser refresh:
+
+```sh
+npm run stack:stop
+npm run stack -- --no-open
+```
+
+Open the `Client URL:` printed by the command. It carries the local sim URL, so
+the browser is testing the same authority path as the product. If a session has
+been running for a long time and motion starts to drift, check `npm run
+stack:status` or the sim `/health` process age/memory before drawing
+conclusions, then reset the stack and try again.
+
 The service-layer commands are now:
 
 - `npm run control`
@@ -103,7 +117,8 @@ The practical split is:
 
 When using Chrome DevTools MCP:
 
-- prefer the dev server on `http://127.0.0.1:8080/` for normal playtesting
+- prefer the local-host stack URL for normal movement/playtesting
+- use the dev server on `http://127.0.0.1:8080/` for renderer-only sandbox work
 - use the harness server on `http://127.0.0.1:8719/` only when reproducing a test-specific path
 - keep the sim server on `http://127.0.0.1:8787/` if you are inspecting remote-authority mode
 
@@ -179,7 +194,8 @@ That future work is now an extension of the current model, not a different one.
 
 For day-to-day work:
 
-- use `npm run dev` for local playtesting
+- use `npm run play` or a fresh local-host stack for product playtesting
+- use `npm run dev` for static serving and renderer-only sandbox work
 - use `npm run control` + `npm run sim` when testing the real distributed stack manually
 - use `npm test` or `npm run test:renderer` for transient harness work
 - use Chrome DevTools MCP for live browser debugging on top of those paths
