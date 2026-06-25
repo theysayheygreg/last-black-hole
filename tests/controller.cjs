@@ -6,9 +6,8 @@
 const {
   startServer,
   stopServer,
-  startSimServer,
-  stopSimServer,
-  launchGame,
+  withFreshGame,
+  withFreshSimServer,
   screenshot,
   TestRunner,
   assert,
@@ -173,94 +172,92 @@ async function run() {
 
   const runner = new TestRunner('Controller');
   await startServer();
-  await startSimServer(SIM_PORT);
 
-  let browser, page;
-  let browserRemote, pageRemote;
+  let localShot = null;
+  let remoteShot = null;
 
   try {
-    ({ browser, page } = await launchGame(htmlFile));
-    await bootstrapCleanPage(page);
-    await installVirtualGamepad(page);
-
     await runner.run('Synthetic gamepad reaches gameplay and moves locally', async () => {
-      await enterLocalRunWithGamepad(page);
-      const before = await page.evaluate(() => window.__TEST_API.getShipPos());
-      await setGamepadAxes(page, [1, 0, 0, 0, 0, 0]);
-      await setGamepadButton(page, 7, true, 1);
-      await waitFor(page, () => {
-        const input = window.__TEST_API.getInputState();
-        return input && input.lastInputSource === 'gamepad' && input.thrustIntensity > 0.9;
-      }, { timeout: 3000 });
-      await sleep(900);
-      await setGamepadButton(page, 7, false, 0);
-      await setGamepadAxes(page, [0, 0, 0, 0, 0, 0]);
-      await sleep(180);
-      const after = await page.evaluate(() => ({
-        pos: window.__TEST_API.getShipPos(),
-        inventory: window.__TEST_API.getInventory(),
-      }));
-      const moved = Math.hypot(after.pos.x - before.x, after.pos.y - before.y);
-      assert(moved > 0.005, `Expected local controller movement, got ${moved}`);
+      await withFreshGame(htmlFile, async ({ page }) => {
+        await bootstrapCleanPage(page);
+        await installVirtualGamepad(page);
+        await enterLocalRunWithGamepad(page);
+        const before = await page.evaluate(() => window.__TEST_API.getShipPos());
+        await setGamepadAxes(page, [1, 0, 0, 0, 0, 0]);
+        await setGamepadButton(page, 7, true, 1);
+        await waitFor(page, () => {
+          const input = window.__TEST_API.getInputState();
+          return input && input.lastInputSource === 'gamepad' && input.thrustIntensity > 0.9;
+        }, { timeout: 3000 });
+        await sleep(900);
+        await setGamepadButton(page, 7, false, 0);
+        await setGamepadAxes(page, [0, 0, 0, 0, 0, 0]);
+        await sleep(180);
+        const after = await page.evaluate(() => ({
+          pos: window.__TEST_API.getShipPos(),
+          inventory: window.__TEST_API.getInventory(),
+        }));
+        const moved = Math.hypot(after.pos.x - before.x, after.pos.y - before.y);
+        assert(moved > 0.005, `Expected local controller movement, got ${moved}`);
 
-      await tapGamepadButton(page, 17); // inventory open
-      await waitFor(page, () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
-      await tapGamepadButton(page, 1); // back/close
-      await waitFor(page, () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
+        await tapGamepadButton(page, 17); // inventory open
+        await waitFor(page, () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
+        await tapGamepadButton(page, 1); // back/close
+        await waitFor(page, () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
+        localShot = await screenshot(page, 'controller-local');
+      });
     });
-
-    ({ browser: browserRemote, page: pageRemote } = await launchGame(withQuery(htmlFile, { simServer: SIM_URL })));
-    await bootstrapCleanPage(pageRemote);
-    await installVirtualGamepad(pageRemote);
 
     await runner.run('Synthetic gamepad drives remote gameplay input, brake, inventory, and ability', async () => {
-      await enterRemoteRunWithGamepad(pageRemote, { hullType: 'breacher' });
+      await withFreshSimServer(SIM_PORT, async () => {
+        await withFreshGame(withQuery(htmlFile, { simServer: SIM_URL }), async ({ page: pageRemote }) => {
+          await bootstrapCleanPage(pageRemote);
+          await installVirtualGamepad(pageRemote);
+          await enterRemoteRunWithGamepad(pageRemote, { hullType: 'breacher' });
 
-      await tapGamepadButton(pageRemote, 17); // inventory open
-      await waitFor(pageRemote, () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
-      await holdGamepad(pageRemote, {
-        axes: [1, 0, 0, 0, 0, 0],
-        buttons: [{ index: 7, value: 1 }],
-      }, 350);
-      await waitFor(pageRemote, () => {
-        const net = window.__TEST_API.getNetworkState();
-        // Inventory suppresses action scalars but still preserves facing intent
-        // so brake-only and ability packets can steer once the menu closes.
-        return net.lastRemoteInput && net.lastRemoteInput.thrust === 0 && net.lastRemoteInput.brake === 0;
-      }, { timeout: 3000 });
+          await tapGamepadButton(pageRemote, 17); // inventory open
+          await waitFor(pageRemote, () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
+          await holdGamepad(pageRemote, {
+            axes: [1, 0, 0, 0, 0, 0],
+            buttons: [{ index: 7, value: 1 }],
+          }, 350);
+          await waitFor(pageRemote, () => {
+            const net = window.__TEST_API.getNetworkState();
+            // Inventory suppresses action scalars but still preserves facing intent
+            // so brake-only and ability packets can steer once the menu closes.
+            return net.lastRemoteInput && net.lastRemoteInput.thrust === 0 && net.lastRemoteInput.brake === 0;
+          }, { timeout: 3000 });
 
-      await tapGamepadButton(pageRemote, 1); // close inventory
-      await waitFor(pageRemote, () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
+          await tapGamepadButton(pageRemote, 1); // close inventory
+          await waitFor(pageRemote, () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
 
-      await setGamepadButton(pageRemote, 6, true, 1);
-      await sleep(220);
-      await waitFor(pageRemote, () => {
-        const net = window.__TEST_API.getNetworkState();
-        return net.lastRemoteInput && net.lastRemoteInput.brake > 0.9;
-      }, { timeout: 3000 });
-      await setGamepadButton(pageRemote, 6, false, 0);
-      await sleep(160);
+          await setGamepadButton(pageRemote, 6, true, 1);
+          await sleep(220);
+          await waitFor(pageRemote, () => {
+            const net = window.__TEST_API.getNetworkState();
+            return net.lastRemoteInput && net.lastRemoteInput.brake > 0.9;
+          }, { timeout: 3000 });
+          await setGamepadButton(pageRemote, 6, false, 0);
+          await sleep(160);
 
-      await setGamepadButton(pageRemote, 4, true, 1); // ability1 -> burn for breacher
-      const net = await pageRemote.evaluate(() => window.__TEST_API.getNetworkState());
-      const { player } = await waitForSnapshotPlayer(
-        net.clientId,
-        (remotePlayer) => Boolean(remotePlayer.abilityState?.burnActive),
-        { timeout: 5000, interval: 120 }
-      );
-      await setGamepadButton(pageRemote, 4, false, 0);
-      await sleep(160);
-      assert(player.abilityState?.burnActive === true, 'Expected controller ability1 to toggle burn remotely');
+          await setGamepadButton(pageRemote, 4, true, 1); // ability1 -> burn for breacher
+          const net = await pageRemote.evaluate(() => window.__TEST_API.getNetworkState());
+          const { player } = await waitForSnapshotPlayer(
+            net.clientId,
+            (remotePlayer) => Boolean(remotePlayer.abilityState?.burnActive),
+            { timeout: 5000, interval: 120 }
+          );
+          await setGamepadButton(pageRemote, 4, false, 0);
+          await sleep(160);
+          assert(player.abilityState?.burnActive === true, 'Expected controller ability1 to toggle burn remotely');
+          remoteShot = await screenshot(pageRemote, 'controller-remote');
+        });
+      });
     });
 
-    const localShot = await screenshot(page, 'controller-local');
-    const remoteShot = await screenshot(pageRemote, 'controller-remote');
     console.log(`\n  Local screenshot: ${localShot}`);
     console.log(`  Remote screenshot: ${remoteShot}`);
   } finally {
-    if (browser) await browser.close();
-    if (browserRemote) await browserRemote.close();
-    await stopSimServer(SIM_PORT).catch(() => null);
     stopServer();
   }
 
@@ -271,5 +268,5 @@ async function run() {
 run().catch((err) => {
   console.error('Controller test fatal error:', err.message);
   stopServer();
-  stopSimServer(SIM_PORT).catch(() => null).finally(() => process.exit(1));
+  process.exit(1);
 });

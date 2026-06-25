@@ -4967,6 +4967,11 @@ const server = http.createServer(async (req, res) => {
         simTime: runtime.simTime,
         playerCount: runtime.players.size,
         mapId: runtime.mapState.id,
+        process: {
+          pid: process.pid,
+          uptimeSec: Number(process.uptime().toFixed(3)),
+          memory: process.memoryUsage(),
+        },
         idleState,
         shutdownReason: runtime.shutdownReason,
       });

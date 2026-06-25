@@ -9,6 +9,7 @@ const { startSimServer, stopSimServer, TestRunner, assert } = require("./helpers
 const AUTO_PORT = 8796;
 const KEEPALIVE_PORT = 8797;
 const JOIN_PORT = 8798;
+const FRESH_PORT = 8801;
 
 async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,6 +51,8 @@ async function run() {
     await startSimServer(AUTO_PORT, { idleShutdownMs: 1500 });
     const { status, body } = await fetchJson(AUTO_PORT, "/health");
     assert(status === 200, `Expected /health 200, got ${status}`);
+    assert(body.process?.pid > 0, "Expected sim health to expose process pid");
+    assert(body.process?.memory?.rss > 0, "Expected sim health to expose memory usage");
     assert(body.idleState?.idle === true, "Expected new sim with no humans to report idle");
     assert(body.idleState?.keepAlive === false, "Expected keepAlive false by default");
     const stopped = await waitForShutdown(AUTO_PORT, 5000);
@@ -102,6 +105,22 @@ async function run() {
     }
   });
 
+  await runner.run("Harness sim startup replaces any previous process on that test port", async () => {
+    await startSimServer(FRESH_PORT, { idleShutdownMs: 5000, keepAlive: true });
+    try {
+      const first = await fetchJson(FRESH_PORT, "/health");
+      await sleep(150);
+      await startSimServer(FRESH_PORT, { idleShutdownMs: 5000, keepAlive: true });
+      const second = await fetchJson(FRESH_PORT, "/health");
+      assert(first.body.process?.pid !== second.body.process?.pid,
+        `Expected a fresh sim pid after restart, got ${first.body.process?.pid}`);
+      assert(second.body.process?.uptimeSec < 5,
+        `Expected fresh sim uptime, got ${second.body.process?.uptimeSec}s`);
+    } finally {
+      await stopSimServer(FRESH_PORT).catch(() => null);
+    }
+  });
+
   const allPassed = runner.summary();
   process.exit(allPassed ? 0 : 1);
 }
@@ -111,5 +130,6 @@ run().catch(async (err) => {
   try { await stopSimServer(AUTO_PORT); } catch {}
   try { await stopSimServer(KEEPALIVE_PORT); } catch {}
   try { await stopSimServer(JOIN_PORT); } catch {}
+  try { await stopSimServer(FRESH_PORT); } catch {}
   process.exit(1);
 });

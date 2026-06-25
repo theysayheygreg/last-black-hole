@@ -3,6 +3,8 @@
  *
  * Starts a dedicated sim server, then drives the real menu/profile/mapSelect
  * flow into a remote-authority run and verifies snapshot + movement sync.
+ * This suite intentionally keeps one sim alive across assertions because
+ * host transfer, second-client join, and session continuity are the contract.
  *
  * Usage: node tests/remote-authority.cjs [index-a.html]
  */

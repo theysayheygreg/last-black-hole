@@ -22,6 +22,25 @@ may not advance ambient `requestAnimationFrame`, so frame-sensitive tests call
 helper. Tests that need rendered evidence should step frames explicitly before
 reading FPS, perf stats, or pixels.
 
+## Freshness Contract
+
+Browser and sim state are disposable in tests. A browser test should use
+`withFreshGame()` when it needs Chrome, and authority tests should use
+`withFreshSimServer()` when they do not explicitly need one continuous sim
+session. Those helpers close Chrome, remove the temporary profile, force-stop
+stale LBH sim listeners on the test port, clear per-port registry state, and
+start a new process before the case runs.
+
+Only suites whose purpose is a long-lived session contract should keep one sim
+across multiple assertions, and those suites should say so in the file header.
+For movement/input/playtest coverage, prefer fresh process boundaries over page
+reloads. Reloads can preserve renderer, WebGL, input, or sim-side failure modes
+that are exactly what the harness is supposed to isolate.
+
+Sim `/health` includes `process.pid`, `process.uptimeSec`, and
+`process.memory` so long-run probes can watch process age and memory growth
+instead of inferring leaks from control feel alone.
+
 ## Commands
 
 | Command | Purpose |

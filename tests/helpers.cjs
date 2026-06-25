@@ -14,6 +14,7 @@ const META_FILE = path.join(TMP, "harness-server.json");
 const LOG_FILE = path.join(TMP, "harness-server.log");
 const SERVER_SCRIPT = path.join(ROOT, "scripts", "static-server.cjs");
 const SIM_SERVER_SCRIPT = path.join(ROOT, "scripts", "sim-server.cjs");
+const SIM_RUNTIME_SCRIPT = path.join(ROOT, "scripts", "sim-runtime.cjs");
 const CONTROL_PLANE_SERVER_SCRIPT = path.join(ROOT, "scripts", "control-plane-server.cjs");
 
 let serverProcess = null;
@@ -84,6 +85,18 @@ function killHarnessPidSync(pid) {
   waitForPidExitSync(pid);
 }
 
+function killSimPidSync(pid) {
+  if (!pid || pid === process.pid) return;
+  const command = commandForPid(pid);
+  if (!command.includes(SIM_RUNTIME_SCRIPT) && !command.includes("sim-runtime.cjs")) return;
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return;
+  }
+  waitForPidExitSync(pid);
+}
+
 function killStaleHarnessServerSync() {
   try {
     const pid = Number(fs.readFileSync(PID_FILE, "utf8").trim());
@@ -98,6 +111,38 @@ function killStaleHarnessServerSync() {
   for (const line of listeners.stdout.split("\n")) {
     const pid = Number(line.trim());
     if (Number.isFinite(pid)) killHarnessPidSync(pid);
+  }
+}
+
+function simFilesForPort(port) {
+  return {
+    pid: path.join(TMP, `sim-server-${port}.pid`),
+    meta: path.join(TMP, `sim-server-${port}.json`),
+    log: path.join(TMP, `sim-server-${port}.log`),
+    registry: path.join(TMP, `session-registry-${port}.json`),
+  };
+}
+
+function killStaleSimServerSync(port) {
+  const files = simFilesForPort(port);
+  try {
+    const pid = Number(fs.readFileSync(files.pid, "utf8").trim());
+    if (Number.isFinite(pid)) killSimPidSync(pid);
+  } catch {}
+
+  const listeners = spawnSync("lsof", [`-tiTCP:${port}`, "-sTCP:LISTEN"], {
+    encoding: "utf8",
+    timeout: 1000,
+  });
+  if (listeners.status === 0 || listeners.stdout) {
+    for (const line of listeners.stdout.split("\n")) {
+      const pid = Number(line.trim());
+      if (Number.isFinite(pid)) killSimPidSync(pid);
+    }
+  }
+
+  for (const file of [files.pid, files.meta]) {
+    try { fs.rmSync(file, { force: true }); } catch {}
   }
 }
 
@@ -223,6 +268,57 @@ async function launchGame(htmlFile = "index.html") {
   return { browser, page, errors };
 }
 
+async function resetBrowserState(page, { reload = false, waitMs = 2000 } = {}) {
+  await page.evaluate(async () => {
+    try { localStorage.clear(); } catch {}
+    try { sessionStorage.clear(); } catch {}
+    try {
+      if (globalThis.indexedDB?.databases) {
+        const dbs = await indexedDB.databases();
+        await Promise.all((dbs || [])
+          .filter((db) => db?.name)
+          .map((db) => new Promise((resolve) => {
+            const req = indexedDB.deleteDatabase(db.name);
+            req.onsuccess = req.onerror = req.onblocked = () => resolve();
+          })));
+      }
+    } catch {}
+    try {
+      if (globalThis.caches?.keys) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+    } catch {}
+    try {
+      if (navigator.serviceWorker?.getRegistrations) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((reg) => reg.unregister()));
+      }
+    } catch {}
+  });
+  if (reload) {
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+}
+
+async function withFreshGame(htmlFile, fn, options = {}) {
+  let browser;
+  const launched = await launchGame(htmlFile);
+  browser = launched.browser;
+  try {
+    if (options.resetState) {
+      await resetBrowserState(launched.page, {
+        reload: true,
+        waitMs: options.resetWaitMs ?? 2000,
+      });
+    }
+    return await fn(launched);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 async function stepGameFrames(page, frames = 1, dt = 1 / 60) {
   return page.evaluate((count, stepDt) => {
     if (!window.__TEST_API?.stepFrameForTest) return null;
@@ -237,7 +333,12 @@ async function stepGameFrames(page, frames = 1, dt = 1 / 60) {
 async function startSimServer(port = 8788, options = {}) {
   registerProcessCleanup();
   try { await stopSimServer(port); } catch {}
+  killStaleSimServerSync(port);
   fs.mkdirSync(TMP, { recursive: true });
+  const files = simFilesForPort(port);
+  for (const file of [files.log, files.registry]) {
+    try { fs.rmSync(file, { force: true }); } catch {}
+  }
   const args = [SIM_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
   if (options.keepAlive) args.push("--keep-alive", "true");
   if (options.idleShutdownMs) args.push("--idle-shutdown-ms", String(options.idleShutdownMs));
@@ -276,7 +377,9 @@ async function stopSimServer(port = 8788) {
     proc.on("error", reject);
     proc.on("close", (code) => {
       if (code === 0) {
-        for (const file of [path.join(TMP, `session-registry-${port}.json`)]) {
+        killStaleSimServerSync(port);
+        const files = simFilesForPort(port);
+        for (const file of [files.registry]) {
           try { fs.rmSync(file, { force: true }); } catch {}
         }
         startedSimPorts.delete(port);
@@ -285,6 +388,15 @@ async function stopSimServer(port = 8788) {
       else reject(new Error(`Failed to stop sim server on ${port}: ${stderr || stdout || `exit ${code}`}`));
     });
   });
+}
+
+async function withFreshSimServer(port, fn, options = {}) {
+  await startSimServer(port, options);
+  try {
+    return await fn();
+  } finally {
+    await stopSimServer(port).catch(() => null);
+  }
 }
 
 async function startControlPlane(port = 8791, options = {}) {
@@ -484,6 +596,8 @@ module.exports = {
   startControlPlane,
   stopControlPlane,
   launchGame,
+  resetBrowserState,
+  withFreshGame,
   screenshot,
   TestRunner,
   assert,
@@ -494,6 +608,7 @@ module.exports = {
   controlPlaneLogFile,
   readJsonLogEvents,
   waitForLogEvent,
+  withFreshSimServer,
   withQuery,
   toHarnessUrl,
   stepGameFrames,
