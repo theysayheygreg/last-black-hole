@@ -9,11 +9,11 @@
 ## Current Snapshot
 
 **Date:** 2026-06-25
-**Snapshot basis:** `main` through `347e9ec` before this docs repair.
-**Primary playable target:** local source build, Three renderer, local
-authoritative sim.
+**Version:** v0.2.1
+**Primary playable target:** all-target release artifacts plus local source
+build, Three renderer, and local authoritative sim.
 
-Use:
+For source playtesting, use:
 
 ```sh
 npm run stack:stop
@@ -24,9 +24,19 @@ Then open the printed `Client URL:`. That URL includes the local sim endpoint
 and is the product-shaped local path. `npm run stack:sandbox` is still available
 for renderer/debug work, but it is not the build-status target.
 
+For release artifact handoff/playtesting, use:
+
+```sh
+npm run release:build
+```
+
+That command builds `web`, `ipad`, `mac`, `win`, and `linux` release artifacts
+for the current `0.2.x` package version and verifies the output shape.
+
 ## Standing Assessment
 
-**Status:** recovery build, playtest needed.
+**Status:** v0.2.1 all-target release build created; fresh playtest still
+needed.
 
 The recent local work fixed the class of issues that made the Three migration
 feel broken: camera/world projection mismatch, coordinate and flow scaling
@@ -34,10 +44,20 @@ drift, distant surf currents pulling the ship, stale browser/sim reuse in
 movement tests, finite authority-session lifecycle, and shader-side coordinate
 flip centralization.
 
-That is meaningful progress, but it is not the same as a green playable
-baseline. A fresh Codex app browser or human playtest has not yet been recorded
-after the final GLSL helper and docs moves. Treat the local build as ready for a
-fresh playtest pass, not ready for a public or Deck-first push.
+On 2026-06-25, `npm run release:build` passed: it ran `npm run test:fast`, built
+the web, iPad web-app, macOS, Windows, and Linux release targets, staged weekly
+assets into `dist/nightly`, and passed `release:check`.
+
+That is a real artifact baseline, but it is not the same as a green playable
+baseline. A fresh Codex app browser or human playtest still has not been
+recorded after the final local-control and release-process changes. Treat the
+v0.2.1 build as ready for a fresh playtest pass, not as public-ready.
+
+Artifacts:
+
+- `builds/v0.2.1/`
+- `builds/last-singularity-playtest-v0.2.1.zip`
+- `dist/nightly/`
 
 ## Known Caveats
 
@@ -45,8 +65,8 @@ fresh playtest pass, not ready for a public or Deck-first push.
   `node scripts/build-health.cjs status` reported recorded `e48b033` versus the
   post-fix local branch; rerun it for the exact current `HEAD`.
 - Steam Deck deployment and Gaming Mode wiring exist, but the Deck path should
-  follow local build health. A broken local game does not become useful because
-  it launches on Deck.
+  follow local playtest health. A broken local game does not become useful
+  because it launches on Deck.
 - If movement feels bad after a long-open browser or sim process, reset the
   whole stack before judging the build. Page reload alone is not a clean reset.
 - Formal current-health verification still needs a fresh build-health run after
