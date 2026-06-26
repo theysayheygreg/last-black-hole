@@ -551,6 +551,11 @@ The remote repo must stay current. This is a shared workspace — other agents, 
   hash. The helper runs the fast gate, builds every release target
   (`web,ipad,mac,win,linux`), stages weekly assets, and verifies the artifact
   shape.
+- **Commit hook reminder.** With `git config core.hooksPath .githooks`
+  installed, every commit prints `npm run release:status -- --brief`: current
+  public train, current hash build version, and whether the all-target artifact
+  exists. Treat a missing artifact as expected during normal coding and as a
+  handoff blocker before push.
 - **Use the pre-push guard.** Install the tracked hook once with
   `git config core.hooksPath .githooks`. It blocks `origin` pushes when the
   current public train is behind upstream or the matching hash-named all-target

@@ -108,6 +108,31 @@ function checkReleaseBuild() {
   console.log(`Release build check passed for v${version}.`);
 }
 
+function releaseStatus() {
+  const publicVersion = currentPublicVersion();
+  const version = currentVersion();
+  const missing = artifactChecks(version).filter(([, file]) => !fs.existsSync(file));
+  const complete = missing.length === 0;
+  const lines = [
+    `LBH public train: ${publicVersion}`,
+    `LBH build version: ${version}`,
+    `Hash-named release build: ${complete ? 'present' : 'missing'}`,
+  ];
+
+  if (!hasFlag('--brief') && missing.length > 0) {
+    lines.push('Missing artifacts:');
+    for (const [label, file] of missing) {
+      lines.push(`- ${label}: ${path.relative(ROOT, file)}`);
+    }
+  }
+  if (!complete) {
+    lines.push('Run `npm run release:internal` before handoff/push if this commit should publish a build.');
+  }
+
+  console.log(lines.join('\n'));
+  return complete;
+}
+
 function upstreamVersion() {
   let upstream = '';
   try {
@@ -164,6 +189,7 @@ function usage() {
     '  patch        Legacy alias for public.',
     '  check        Verify the current 0.2.x.<hash> has a complete all-target release build.',
     '  prepush      Verify the current hash-named release build exists and public version is not behind upstream.',
+    '  status       Print current public train, hash build version, and artifact presence.',
     '',
     'Options:',
     '  --skip-tests  For build/patch only: build without running npm run test:fast.',
@@ -192,6 +218,10 @@ function main() {
   }
   if (command === 'prepush') {
     prepushCheck();
+    return;
+  }
+  if (command === 'status') {
+    releaseStatus();
     return;
   }
   usage();

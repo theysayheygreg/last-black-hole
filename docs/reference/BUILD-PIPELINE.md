@@ -44,6 +44,8 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 - `npm run release:prepush` — same shape as the tracked pre-push hook: public
   version must not be behind upstream and the current hash-named all-target
   build must exist
+- `npm run release:status` — print the current public train, hash build version,
+  and whether the matching all-target release artifact already exists
 - `LBH_SKIP_RELEASE_PREP=1 git push origin main` — intentional docs/process-only
   push that does not publish a new build
 
@@ -74,6 +76,11 @@ committed `HEAD`.
 Release builds must therefore be made from committed tracked source. If the
 tree is dirty, `npm run release:build` refuses to produce a hash-named artifact
 unless `LBH_ALLOW_DIRTY_BUILD=1` is set for an explicit local probe.
+
+The tracked `.githooks/post-commit` hook runs `npm run release:status -- --brief`
+after each commit when hooks are installed. It is a reminder, not a build step:
+ordinary development commits stay quick, while handoff/push commits still need
+`npm run release:internal` before the pre-push guard will pass.
 
 ## Runtime modes
 

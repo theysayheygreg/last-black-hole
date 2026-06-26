@@ -279,6 +279,7 @@ npm run build:release
 npm run release:internal
 npm run release:public
 npm run release:check
+npm run release:status
 ```
 
 Desktop builds use Electron and package the local-play surface. Web builds write versioned artifacts under `builds/`.
@@ -302,6 +303,11 @@ up the hash field automatically. Public release increments chew up the third
 field. Large decisive `0.3` or `1.0` moves are by Greg's call only. Intentional
 docs/process-only pushes that do not publish a build can use
 `LBH_SKIP_RELEASE_PREP=1 git push origin main`.
+
+With `git config core.hooksPath .githooks` installed, every commit prints the
+new hash build version and whether its all-target artifact already exists. That
+reminder is intentionally cheap; the expensive build still runs only when a
+commit is becoming a real handoff/push build.
 
 ## Deployment Pipelines
 

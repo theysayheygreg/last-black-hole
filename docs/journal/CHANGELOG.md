@@ -9,6 +9,9 @@
 
 - Added `scripts/version.cjs` as the shared version source: public train from
   `package.json`, full build version from `0.2.x.<current-git-hash>`.
+- Added `release:status` and a tracked post-commit hook reminder so each commit
+  reports its hash build version and whether the matching release artifact
+  exists.
 - Updated build, release, Steam Deck deploy, itch deploy, SteamPipe deploy, and
   iOS wrapper metadata to use the same hash-named build version.
 - Changed release handoff semantics: `release:internal` builds the current

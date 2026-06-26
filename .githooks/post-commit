@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${LBH_SKIP_RELEASE_STATUS:-}" == "1" || "${LBH_SKIP_RELEASE_STATUS:-}" == "true" ]]; then
+  exit 0
+fi
+
+echo ""
+node scripts/release.cjs status --brief || true

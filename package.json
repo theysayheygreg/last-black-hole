@@ -59,6 +59,7 @@
     "release:patch": "node scripts/release.cjs patch",
     "release:prepush": "node scripts/release.cjs prepush",
     "release:public": "node scripts/release.cjs public",
+    "release:status": "node scripts/release.cjs status",
     "ios:sync": "node scripts/ios-wrapper.cjs sync",
     "ios:build:sim": "node scripts/ios-wrapper.cjs build-sim",
     "ios:build:device": "node scripts/ios-wrapper.cjs build-device",
