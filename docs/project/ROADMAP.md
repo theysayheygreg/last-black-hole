@@ -7,7 +7,7 @@
 
 ---
 
-## Current Status (2026-06-25)
+## Current Status (2026-06-26)
 
 **Version:** v0.2 — Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set.
 
@@ -22,8 +22,8 @@ reading stale health records or reconstructing status from `git log`.
 | L0: The Feel | DONE | Fluid sim, ship controls, wells, stars, comets, ASCII shader, dev panel, 3 map sizes |
 | L1: The Stakes | DONE | Wrecks with drift, portals with evaporation, well growth, extraction loop, vault + profiles |
 | L2: The Threats | DONE | Signal system (6 zones), fauna (jellies + blooms), gradient sentries, AI players (5 personalities), scavenger AI, force pulse |
-| L3: The Dread | DONE | Inhibitor (3 forms: glitch → swarm → vessel), final portal guarantee, control debuff, HUD degradation |
-| L4: The Look | DONE | Composer render pipeline, ASCII shader, title-prototype Bloom canary, NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering |
+| L3: The Dread | DONE | Inhibitor (3 forms: glitch -> swarm -> vessel), final portal guarantee, control debuff, HUD degradation, localized fabric corruption, form-specific glyph rows |
+| L4: The Look | DONE / NEEDS ENTITY PASS | Composer render pipeline, ASCII shader, title-prototype Bloom canary, NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering, default Three scene with primitive entity projection |
 | L5: The Depth | IN PROGRESS | 5 hull classes with abilities, PlayerBrain coefficient resolution, rig upgrade tracks, loot economy + balance manifest, meta-loop with run results + chronicle, **delta-v fuel system, slingshot anchor network, route-style hull identity** |
 | L6: The Ship | PARTIAL | Title screen, map select, 3 save slots. Balance pass + deploy not yet done. |
 
@@ -58,6 +58,7 @@ reading stale health records or reconstructing status from `git log`.
 
 | Feature | Design Doc | Status |
 |---------|-----------|--------|
+| Three entity visual language | `docs/design/THREE-ENTITY-VISUALS.md` | Designed 2026-06-26; current code has primitive bridge markers, next work is higher-fidelity Three object families |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -67,25 +68,32 @@ reading stale health records or reconstructing status from `git log`.
 
 ### Forward Development Priorities
 
-1. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
-2. **Slingshot authority regression watch** — remote-authority mode now renders slingshot from sim-owned engagement/release state; keep tests representative as numbers and maps change.
-3. **Remote/local physics regression watch** — brake, max-speed, delta-v, fuel cells, and movement coefficients now have server parity; keep tests representative as tuning evolves.
-4. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
-5. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
-6. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
-7. **UI primitive bridge** — design tokens + HUD primitives + reduced inline-style drift
-8. **Meta-loop implementation polish** — results screen, vault/rig/loadout UI, chronicle (foundation shipped 2026-05-04 series)
-9. **Run result write-back** — connect RunResult schema to persistence layer (first slice shipped, full coverage pending)
-10. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
-11. **Balance pass** — hull coefficients (now actually applied!), upgrade costs, loot rarity, signal tuning, delta-v / slingshot numbers
-12. **Deploy** — GitHub Pages web build, nightly playables
+1. **Three entity visual-language pass** — replace bridge primitives for ships,
+   stars, planetoids/comets, wrecks, portals, rivals, fauna, and sentries with
+   first-class scene objects. See `docs/design/THREE-ENTITY-VISUALS.md`.
+2. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
+3. **Slingshot authority regression watch** — remote-authority mode now renders slingshot from sim-owned engagement/release state; keep tests representative as numbers and maps change.
+4. **Remote/local physics regression watch** — brake, max-speed, delta-v, fuel cells, and movement coefficients now have server parity; keep tests representative as tuning evolves.
+5. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
+6. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
+7. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
+8. **UI primitive bridge** — design tokens + HUD primitives + reduced inline-style drift
+9. **Meta-loop implementation polish** — results screen, vault/rig/loadout UI, chronicle (foundation shipped 2026-05-04 series)
+10. **Run result write-back** — connect RunResult schema to persistence layer (first slice shipped, full coverage pending)
+11. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
+12. **Balance pass** — hull coefficients (now actually applied!), upgrade costs, loot rarity, signal tuning, delta-v / slingshot numbers
+13. **Deploy** — GitHub Pages web build, weekly playables
 
 ### Current contract notes
 
 - The shipped loadout contract is still `2 equipped + 2 consumable` slots.
 - The older `3 artifact slots` idea remains a design/backlog item, not live runtime truth.
 - Public product name is **Last Singularity**. The repository path may remain `last-black-hole` until/unless the remote is renamed.
-- The default Three renderer is now a first-class top-down 3D scene: orthographic camera, z-layered backdrop/fabric/foreground groups, motion parallax, and screen-space presentation. Future visual work should target that scene graph before adding more canvas-only overlays.
+- The default Three renderer is now a first-class top-down 3D scene: orthographic camera, z-layered backdrop/fabric/foreground groups, motion parallax, screen-space presentation, and primitive entity projection. Future visual work should target that scene graph before adding more canvas-only overlays.
+- Non-fluid object visuals now have a current design target in
+  `docs/design/THREE-ENTITY-VISUALS.md`. Wells and Inhibitors stay
+  fabric-first; ships, stars, planetoids/comets, wrecks, portals, rivals, fauna,
+  and sentries should become richer Three objects.
 - Production renderer defaults to `FluidDisplayPass -> BloomPass -> TonemapPass -> ColorGradePass -> VignettePass -> ASCIIPass -> ChromaticAberrationPass -> ScanlinesPass`; `?minimalrender=1` gives the cheaper `FluidDisplayPass -> TonemapPass -> ASCIIPass` baseline.
 - Packaged desktop builds are now self-contained local apps with embedded authority on app-owned dynamic loopback ports.
 - Browser remote play still expects separate authority processes.

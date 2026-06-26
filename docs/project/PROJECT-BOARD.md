@@ -1,6 +1,6 @@
 # Last Singularity Project Board
 
-**Date:** 2026-06-25
+**Date:** 2026-06-26
 **Status owner:** Orb
 **Canonical machine state:** `docs/project/PROJECT-STATE.json`
 
@@ -16,20 +16,21 @@ Other agents may recommend updates; Orb records them.
 
 ## Current checkpoint
 
-**Checkpoint:** v0.2 — Local Build Recovery
-**Goal:** Keep the Three renderer, authoritative sim, coordinates, lifecycle,
-and local play path aligned before Deck or public build work resumes.
+**Checkpoint:** v0.2 — Renderer Ownership And Entity Visual Language
+**Goal:** Keep the local Three/authority build honest, then make non-fluid
+world objects feel native to the top-down Three scene.
 
-**Priority order:** local build status → fresh local-host playtest → formal
-build-health refresh → Deck/public packaging.
+**Priority order:** local build status -> Three entity visual pass -> fresh
+renderer fixture/screenshots -> formal build-health refresh -> Deck/public
+packaging.
 
-**Status:** `playtest_needed` — recent Three/camera/coordinate/flow/lifecycle
-fixes landed, but the post-fix local playable baseline still needs a fresh
-app-browser or human playtest recorded in `BUILD-STATUS.md`.
+**Status:** `designed_for_implementation` — recent Three/camera/coordinate/flow
+fixes made the renderer path real, and `docs/design/THREE-ENTITY-VISUALS.md`
+now defines the next object-language pass. `BUILD-STATUS.md` still owns the
+separate answer to "what can I play right now?"
 
-**Next action:** Start a fresh local-host stack, play the current Three build,
-record the result in `BUILD-STATUS.md`, then refresh build health once the local
-build is worth gating.
+**Next action:** Implement the Three entity style kit and replace the highest
+visibility bridge primitives first: player/AI ships and wrecks.
 
 ---
 
@@ -57,6 +58,14 @@ build is worth gating.
   - Open the printed `Client URL:`.
   - Check movement, spawn safety, visible hazards, death/extraction, and FPS.
   - Update `BUILD-STATUS.md` with evidence and caveats.
+
+### Ready for implementation
+
+- **Three entity visual-language pass**
+  - Start from `docs/design/THREE-ENTITY-VISUALS.md`.
+  - Build shared Three geometries/materials before one-off object art.
+  - Replace ship/scavenger triangles and wreck squares first.
+  - Add renderer fixture coverage for the object families as the pass lands.
 
 ### Waiting on evidence
 

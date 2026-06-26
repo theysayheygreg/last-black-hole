@@ -11,11 +11,11 @@
 
 All jam layers (L0-L4) shipped. L5 is in progress with substantial systems work complete.
 
-**2026-06-25 status:** local Three + authoritative sim is the primary build
-target, but the current branch is in recovery/playtest-needed status after a
-large camera, coordinate, flow, lifecycle, and shader-helper repair pass. Do
-not use Deck or public packaging as the next proof point until
-`BUILD-STATUS.md` records a fresh local playtest.
+**2026-06-26 status:** local Three + authoritative sim is the primary build
+target. The current renderer bridge is stable enough to plan the next visual
+ownership pass, but `BUILD-STATUS.md` still owns the exact local playability
+answer. Do not use Deck or public packaging as the next proof point unless that
+file records fresh local playtest evidence.
 
 ### L5 Shipped
 - 5 hull classes with abilities (PlayerBrain coefficient resolution, physics wiring)
@@ -68,13 +68,18 @@ not use Deck or public packaging as the next proof point until
 - The sim is now demand-driven and auto-expiring by default; keep-alive is explicit, not accidental.
 - The design system exists in docs and has now started bridging into code, but most UI compliance still depends on human discipline.
 - Production rendering now defaults to the Three renderer layered over the Composer/ASCII chain; `?minimalrender=1` is the cheap comparison path for perf triage.
+- The Three renderer currently projects many world objects as primitive bridge
+  markers. The next visual ownership pass is `docs/design/THREE-ENTITY-VISUALS.md`:
+  richer ships, stars, planetoids/comets, wrecks, portals, rivals, fauna, and
+  sentries while wells and Inhibitors remain fabric-first.
 - Movement is now an *economy*: thrust costs delta-v, brake costs delta-v (less), drag is gentle, currents and slingshots are how you move at speed. Conservation of momentum is a real mechanic with playable validity windows. The full taxonomy lives in `SLINGSHOT-NETWORK.md` + the in-source comments at `src/ship.js` step 2 / `src/slingshot.js` `SLINGSHOT_CONFIG`.
 
 ### L6: The Ship (Partial)
 - Balance pass (hull coefficients, upgrade costs, loot rarity, signal tuning)
-- Deploy (GitHub Pages web build, nightly playables, itch.io)
+- Deploy (GitHub Pages web build, weekly playables, itch.io)
 - Audio for new systems (hull abilities, fauna, sentries, inhibitor forms)
 - Polish pass (death screen, extraction screen with new data)
+- Three entity visual-language pass for all non-fluid object families
 - Current v0.2 position: title/home/map/save foundations exist, but balance,
   deploy, audio identity, and release polish are still the real L6 work.
 

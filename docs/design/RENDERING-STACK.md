@@ -5,7 +5,8 @@
 > **v0.2 status:** This is a historical v0.1 rendering design. The current
 > renderer direction is Three.js as the default presentation substrate while
 > preserving the ASCII-fluid identity. Start from
-> `docs/v0.2/DESIGN.md` and `docs/project/THREEJS-MIGRATION-PLAN.md`.
+> `docs/v0.2/DESIGN.md`, `docs/project/THREEJS-MIGRATION-PLAN.md`, and
+> `docs/design/THREE-ENTITY-VISUALS.md`.
 
 ---
 
@@ -167,7 +168,12 @@ See DIRECTIONAL-ASCII.md for the directional character selection design.
 
 The 2D canvas overlay. Clean geometry rendered above the ASCII substrate.
 
-**Currently renders:** wave rings, star halos, loot dots, portal rings, planetoid markers, ship.
+**Historical v0.1 version rendered:** wave rings, star halos, loot dots, portal rings, planetoid markers, ship.
+
+**v0.2 current shape:** the Three renderer owns primitive world projection for
+these families, while some labels and VFX still live on the canvas overlay. The
+next pass is to replace primitive markers with the visual language in
+`THREE-ENTITY-VISUALS.md`.
 
 **The contract:** entities exist in BOTH Layer 0 (fluid disturbance) and Layer 2 (overlay marker). The fluid disturbance says "this affects the physics." The overlay marker says "this is here, interact with it." Without the disturbance, entities feel like stickers. Without the overlay, they're lost in the ASCII noise.
 

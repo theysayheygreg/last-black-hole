@@ -10,11 +10,15 @@ The migration should preserve the current identity first: ASCII fluid, dark cock
 
 Recommended migration style: **strangler bridge**. Keep the legacy renderer working behind `?renderer=legacy`, make `?renderer=three` the default product-facing path as parity evidence lands, and continue removing legacy ownership in stages.
 
-## Current Implementation Status (2026-06-22)
+## Current Implementation Status (2026-06-26)
 
 - **Shipped:** `?renderer=three` boot path, shared Composer/Three WebGL2 context on `fluid-canvas`, Three as the default automated renderer target, static build packaging for `three.module.js`, backend diagnostics, fixture coverage, and a first-class top-down Three scene.
 - **Three scene contract:** the visible renderer now uses an orthographic top-down camera, z-separated `background-parallax-field`, `fabric-source-layer`, and `foreground-screen-space-layer`, a depth-backed render target, motion-driven parallax, and a screen-space present pass. The viewpoint remains visually flat; the renderer substrate is now 3D.
 - **Still legacy-owned:** fluid simulation, Composer shader chain, ASCII pass internals, and most overlay/HUD drawing. The bridge no longer performs CPU canvas copies or per-frame `CanvasTexture` uploads.
+- **Entity status:** Phase 5 is partially shipped as primitive Three projection:
+  pooled discs, rings, squares, triangles, lines, and point layers. That proves
+  ownership and projection, but it is not the final object language. The next
+  pass is `docs/design/THREE-ENTITY-VISUALS.md`.
 - **Legacy status:** `?renderer=legacy` remains available as an explicit compatibility/fallback lane, but it is no longer the default harness target.
 - **Harness:** use `npm test` for the Three core gate, `npm run test:three` for smoke + infra + renderer canary, and `npm run test:legacy` only when touching the bridge/fallback.
 
@@ -317,17 +321,23 @@ Performance implications:
 
 Goal: move clean overlay geometry into Three while preserving legibility over ASCII.
 
+Status: partially shipped. The current renderer projects core world entities
+through `world-entity-layer` and `semantic-flow-field-layer`, but most object
+families still use bridge primitives. The next step is visual ownership, not
+only projection parity. Use `docs/design/THREE-ENTITY-VISUALS.md` as the object
+language target.
+
 Deliverables:
 
 - Build an orthographic world scene aligned to LBH world units.
 - Project current entity systems into render objects:
-  - ship triangle/trails
+  - ship hull silhouettes/trails
   - wells and kill radii
   - stars and consumption events
-  - wreck markers and cargo shimmer
-  - portals and evaporation rings
-  - planetoids/comets and wake cues
-  - scavengers and remote players
+  - wreck debris clusters and cargo shimmer
+  - portals and evaporation/blocked rings
+  - planetoids/comets, shaded bodies, tails, and wake cues
+  - scavengers, AI rivals, and remote players
   - fauna, sentries, phantom, haunt, Inhibitor forms
   - force pulse cooldown/readiness
   - slingshot affordance rings, tether, energy arc, chain badge
@@ -338,12 +348,14 @@ Deliverables:
 
 Migration order:
 
-1. Static-ish rings and markers: wells, stars, portals.
-2. Ship and velocity readout anchor.
-3. Wrecks, planetoids, scavengers, remote players.
-4. Slingshot affordances and ability VFX.
-5. Inhibitor and corruption layers.
-6. Menus/end screens only if DOM/canvas remains insufficient.
+1. Shared Three entity style kit: geometries, materials, trails, glints.
+2. Ship family: player, remote players, AI rivals, and scavenger silhouettes.
+3. Wreck family: debris clusters, vault/echo/looted states, drift tells.
+4. Route landmarks: stars, planetoids/comets, portals, slingshot affordances.
+5. Threat ecology: fauna, sentries, phantom/haunt, ability VFX.
+6. Inhibitor screen-space polish only where it complements the fabric/glyph
+   corruption already in the shaders.
+7. Menus/end screens only if DOM/canvas remains insufficient.
 
 Risks:
 
@@ -495,6 +507,11 @@ Deliverables:
   - velocity-direction glyph mix present
   - title accretion highlight present
   - no `undefined` labels in world overlays
+- Add an entity-showcase fixture once the visual-language pass starts:
+  - at least one player/remote ship, wreck, portal, star, comet/planetoid, and
+    threat ecology object in the Three scene
+  - nonzero pooled or instanced resources for the new object families
+  - scene/ascii/debug screenshots for human review
 - Extend perf probe with Three-specific stats:
   - `rendererBackend`
   - draw calls
@@ -702,6 +719,9 @@ Memory notes:
 
 Only after parity:
 
+- **Three entity visual language:** procedural miniatures for ships, wrecks,
+  stars, comets/planetoids, portals, rivals, and ecology. Current design target:
+  `docs/design/THREE-ENTITY-VISUALS.md`.
 - **Depth-layered fabric:** multiple subtle planes of grid, dust, and fluid response before the ASCII pass.
 - **Gravity lensing pass:** screen-space warp around wells and late-run merged masses.
 - **Inhibitor glyph corruption:** form-specific alien glyph replacement rather than generic noise.

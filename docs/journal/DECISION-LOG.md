@@ -1,5 +1,31 @@
 # Decision Log
 
+## 2026-06-26 — Non-fluid objects move to a Three entity language
+
+**Decision:** Treat the current Three entity primitives as bridge markers, not
+final art direction. Wells and Inhibitors remain fabric-first because their
+identity lives in the ASCII/fluid shader stack. Ships, stars,
+planetoids/comets, wrecks, portals, rivals, fauna, sentries, slingshot
+affordances, and future megastructures should move toward a coherent
+Three-owned object language.
+
+**Why:** The Three migration made the scene graph real, but several objects now
+look like simple vector leftovers sitting on top of the richer fabric. The fix
+is not to abandon the flat top-down view or make realistic spaceship models. The
+fix is tiny, readable, higher-fidelity scene objects with shared silhouettes,
+materials, trails, and affordances.
+
+**Where it landed:** `docs/design/THREE-ENTITY-VISUALS.md`,
+`docs/v0.2/DESIGN.md`, `docs/v0.2/ROADMAP.md`,
+`docs/v0.2/DESIGN-CODE-DELTA.md`, `docs/project/ROADMAP.md`,
+`docs/project/BUILD-PLAN.md`, `docs/project/BACKLOG.md`, and
+`docs/project/THREEJS-MIGRATION-PLAN.md`.
+
+**Door status:** Closed for v0.2 visual direction. Open for implementation
+details: procedural geometry versus generated masks, how much hull-specific
+silhouette ships need, and which object effects should also bite into the ASCII
+fabric.
+
 ## 2026-06-25 — Build versions use public train plus commit hash
 
 **Decision:** Use `major.minor.public.commit` for LBH build identifiers.

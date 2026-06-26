@@ -1,7 +1,7 @@
 {
   "project": "last-black-hole",
-  "status": "v0.2_local_recovery_playtest_needed",
-  "status_updated_at": "2026-06-25T00:00:00-07:00",
+  "status": "v0.2_three_entity_visual_pass_planned",
+  "status_updated_at": "2026-06-26T00:00:00-07:00",
   "status_documents": {
     "local_build_status": "docs/project/BUILD-STATUS.md",
     "formal_build_health": "docs/project/BUILD-HEALTH.json",
@@ -9,37 +9,37 @@
     "historical_jam_roadmap": "docs/project/ROADMAP.md"
   },
   "current_checkpoint": {
-    "name": "v0.2 — Local Build Recovery",
-    "goal": "Keep the Three renderer, authoritative sim, coordinates, lifecycle, and local play path aligned before Deck or public build work resumes."
+    "name": "v0.2 — Renderer Ownership And Entity Visual Language",
+    "goal": "Keep the Three renderer and authoritative sim aligned while making non-fluid world objects native to the top-down Three scene."
   },
   "current_section": {
-    "slug": "v0-2-local-build-status",
-    "title": "Three/local authority stabilization and playable-status refresh",
-    "status": "playtest_needed",
+    "slug": "v0-2-three-entity-visual-language",
+    "title": "Three entity visual-language pass",
+    "status": "designed_for_implementation",
     "owner": "current actor, with Orb as journal/status backstop",
     "reviewer": "greg",
     "implementers": ["codex", "claude", "corb"],
     "test_owner": "current actor",
-    "depends_on": ["fresh local play stack"],
+    "depends_on": ["docs/design/THREE-ENTITY-VISUALS.md", "fresh local play stack"],
     "acceptance_criteria": [
-      "docs/project/BUILD-STATUS.md records the current local launch target, caveats, and next evidence needed",
-      "Fresh local-host stack playtest confirms whether movement/spawn/death behavior is playable",
-      "Formal build health is refreshed only after the local build is stable enough to be worth gating",
-      "Deck deployment follows local build health instead of masking a broken local game"
+      "Shared Three entity geometries/materials exist before one-off object art",
+      "Player/AI ships and wrecks no longer use primitive bridge markers",
+      "Renderer fixtures or screenshots cover the upgraded object families",
+      "BUILD-STATUS.md remains the separate source for current playable-build evidence"
     ],
-    "artifacts": ["docs/project/BUILD-STATUS.md", "docs/design/TEST-HARNESS.md", "docs/project/JAM-CONTRACT.md"],
-    "last_result": "Recent fixes stabilized Three projection, coordinate/flow scaling, stale harness process boundaries, finite sim lifecycle, and GLSL coordinate flip helpers. Build health remains stale and a fresh local playtest is the next evidence step.",
-    "blockers": ["No post-GLSL-helper fresh app-browser playtest recorded yet", "BUILD-HEALTH.json is stale versus current HEAD"],
-    "next_action": "Start a fresh local-host stack and record the playtest result in BUILD-STATUS.md before Deck-first or public-build work resumes.",
-    "updated_at": "2026-06-25T00:00:00-07:00"
+    "artifacts": ["docs/design/THREE-ENTITY-VISUALS.md", "docs/v0.2/ROADMAP.md", "docs/project/ROADMAP.md", "docs/project/BUILD-PLAN.md"],
+    "last_result": "The v0.2 docs now distinguish shipped Three primitive projection from the still-needed entity visual-language pass.",
+    "blockers": ["Current local playability still belongs to BUILD-STATUS.md and should not be inferred from this design pass"],
+    "next_action": "Implement the Three entity style kit, then replace player/AI ship triangles and wreck squares before secondary ecology.",
+    "updated_at": "2026-06-26T00:00:00-07:00"
   },
   "roadmap": {
     "status": "historical_jam_queue_preserved_for_context",
     "current_truth": "Use docs/project/BUILD-STATUS.md for local playability and docs/v0.2/ROADMAP.md for current roadmap execution.",
     "source": "projects/last-black-hole/docs/project/ROADMAP.md",
-    "current_layer": "L0",
-    "current_focus": "The Feel",
-    "priority_order": "N1a > N2 > N3 > N1b (Forge Review #2). Test harness is pre-built.",
+    "current_layer": "v0.2.3",
+    "current_focus": "Renderer Ownership And Entity Visual Language",
+    "priority_order": "Local build status first, then Three entity visual language, then renderer fixtures/screenshots.",
     "execution_rule": "Parallelize exploration, serialize adoption. One mainline, probes promote or get backlogged.",
     "sections": [
       {

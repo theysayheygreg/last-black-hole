@@ -2,6 +2,10 @@
 
 > Every seed draws from this catalog. No two runs populate the same way.
 
+> **v0.2 status:** This remains the broad entity taxonomy, but some rendering
+> notes still describe the old canvas-overlay era. Current non-fluid object
+> presentation should follow `docs/design/THREE-ENTITY-VISUALS.md`.
+
 ## The Four Tiers
 
 Each tier has a distinct gameplay contract. The map generator picks from each tier's catalog per seed. Not every type appears every run — variety comes from combination, not exhaustion.

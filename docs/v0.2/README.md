@@ -10,8 +10,10 @@ Everything before this snapshot is treated as **v0.1**: the jam prototype, the p
 2. `V0.1-PATCH-NOTES.md` — historical patch notes for the pre-v0.2 body of work.
 3. `V0.2-RELEASE-NOTES.md` — the larger version note for the v0.2 foundation.
 4. `DESIGN.md` — the current v0.2 game bible.
-5. `ROADMAP.md` — current status and what comes next by major area.
-6. `../project/BUILD-STATUS.md` — current local playability snapshot and
+5. `../design/THREE-ENTITY-VISUALS.md` — current visual target for
+   non-fluid objects in the Three scene.
+6. `ROADMAP.md` — current status and what comes next by major area.
+7. `../project/BUILD-STATUS.md` — current local playability snapshot and
    caveats.
 
 ## Version Meaning
@@ -30,6 +32,7 @@ Important current anchors:
 - `docs/project/LOCAL-PROTOCOL.md`
 - `docs/project/BUILD-STATUS.md`
 - `docs/project/THREEJS-MIGRATION-PLAN.md`
+- `docs/design/THREE-ENTITY-VISUALS.md`
 - `docs/design/TEST-HARNESS.md`
 - `src/content/*.data.json`
 - `scripts/sim-runtime.cjs`

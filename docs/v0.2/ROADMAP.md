@@ -9,7 +9,7 @@
 | Area | Current v0.2 State | Next | Later |
 |------|--------------------|------|-------|
 | Movement | Delta-v, brake, current coupling, slingshot, hull coefficients, server parity | Tune numbers through play; redesign maps for slingshot routes | Advanced anomalies and expert route tech |
-| Renderer | Three default path, shared WebGL2 context, pooled world layers, Composer ASCII | Move more entities/VFX into Three; tune parallax and screen-space effects | Three-owned fluid/ASCII graph and legacy removal |
+| Renderer | Three default path, shared WebGL2 context, pooled primitive world layers, Composer ASCII | Run the Three entity visual-language pass; tune parallax and screen-space effects | Three-owned fluid/ASCII graph and legacy removal |
 | Sim authority | Local control plane + authoritative sim + remote client; slingshot authority; host/join/leave | Keep parity tests strong while tuning movement and abilities | Hosted sessions and public multiplayer ops |
 | Run loop | Map select, loot, cargo, portals, extraction/death, run results | Make run result and vault flow clear enough for playtesters | Deeper missions/factions/daily seeds |
 | World content | Three map sizes, wells/stars/planetoids/wrecks/portals/signatures | Route-oriented map pass; more intentional wreck and portal placement | Procedural map generator and megastructures |
@@ -54,11 +54,21 @@ Definition of done:
 - Upgrading a hull has a visible next-run effect.
 - Death hurts without erasing motivation.
 
-## v0.2.3 — Renderer Ownership Pass
+## v0.2.3 — Renderer Ownership And Entity Visual Pass
 
-Goal: make Three the place future presentation work naturally lands.
+Goal: make Three the place future presentation work naturally lands and replace
+the current primitive bridge markers with a coherent object language.
 
-- Move more world entities and VFX out of canvas overlay into Three scene layers.
+- Build the shared Three entity style kit from
+  `docs/design/THREE-ENTITY-VISUALS.md`.
+- Replace primitive ship/scavenger triangles with small hull/personality
+  silhouettes, thrust cues, and signal glow.
+- Replace wreck squares with debris clusters, vault/echo/looted variants, and
+  drift-aligned salvage glints.
+- Upgrade stars, planetoids/comets, portals, and slingshot affordances as
+  route-reading objects.
+- Move more world entities and VFX out of canvas overlay into Three scene layers
+  only when the Three equivalent has landed.
 - Add semantic render channels for signal, slingshot, current lanes, and Inhibitor presence.
 - Make renderer diagnostics explain scene object counts and pass costs.
 - Preserve DOM for text-heavy HUD and menus.
@@ -68,7 +78,8 @@ Definition of done:
 
 - New visual work starts in `src/render-three/` by default.
 - The game still reads as ASCII-fluid, not generic 3D.
-- Renderer fixtures catch blank frames, missing layers, and accidental canvas-upload regressions.
+- Renderer fixtures catch blank frames, missing layers, missing entity families,
+  and accidental canvas-upload regressions.
 
 ## v0.2.4 — Private Playtest Build
 

@@ -4,6 +4,12 @@
 > This doc defines the relative scale of everything on screen.
 > Informed by Gemini pre-vis (assets/pre-vis/) and Greg's feedback.
 
+> **v0.2 status:** This remains the scale philosophy, but the renderer substrate
+> changed. For current Three.js object iconography, read
+> `docs/design/THREE-ENTITY-VISUALS.md`. "Ship = glyph" now means glyph-scale
+> tactical readability, not a requirement that every non-fluid object stay a
+> literal text mark.
+
 ---
 
 ## The Core Proportion
@@ -147,7 +153,9 @@ This is a visual direction, not a locked spec. Monday's parallel experiments sho
 
 ### Key Takeaways for Implementation
 
-1. **Ship = glyph, not sprite.** `>` or `▶` at most. Identity through trail and color, not detail.
+1. **Ship = glyph-scale, not sprite-scale.** The ship should stay tiny and
+   tactical. In v0.2 Three, that can be a small hull silhouette with trail,
+   color, and thrust cues rather than only a literal text character.
 2. **Wells = landscape features.** The void center should be a dominant visual — the biggest dark region on screen. The accretion ring should be the densest, hottest ASCII on screen.
 3. **Waves = terrain, not obstacles.** They should extend beyond what fits on one screen. The player surfs along them, not over them.
 4. **Inhibitor = wrongness, not a character.** Math symbols, equation fragments, characters from a different alphabet. The corruption spreading ahead of it is as important as the entity itself.

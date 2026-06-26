@@ -21,6 +21,24 @@
 
 ---
 
+## Renderer & Visual Identity
+
+### Three Entity Visual Language Pass
+- **What:** Replace the current Three bridge primitives with coherent object
+  families for ships, rivals/scavengers, wrecks, stars, planetoids/comets,
+  portals, fauna, sentries, slingshot affordances, and future megastructures.
+- **Current state:** `src/render-three/three-renderer.js` owns a real top-down
+  scene and pooled entity layer, but most objects still render as discs, rings,
+  squares, or triangles. Wells and Inhibitors have their own fabric/glyph
+  language and are not part of this normal iconography pass.
+- **Design target:** `docs/design/THREE-ENTITY-VISUALS.md`.
+- **Value if revisited:** Makes the Three migration feel visually intentional
+  instead of transitional, improves route/object readability, and gives future
+  object work a shared geometry/material kit.
+- **First revival step:** Build shared Three geometries/materials, then replace
+  player/AI ship triangles and wreck squares before touching secondary ecology.
+- **Added:** 2026-06-26
+
 ## Physics & Simulation
 
 ### Content Manifest Extraction

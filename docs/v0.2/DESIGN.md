@@ -123,6 +123,23 @@ Renderer priorities:
 3. Keep gameplay truth out of renderer objects.
 4. Use renderer fixtures and screenshots for visual regressions.
 
+### Three Entity Visual Language
+
+The next renderer ownership pass is not another wholesale pipeline rewrite. It
+is the object-language pass for everything that is not primarily represented by
+the ASCII fabric.
+
+- **Stay fabric-first:** wells and Inhibitors remain shader/fabric systems.
+- **Move to semantic Three objects:** player and AI ships, stars,
+  planetoids/comets, wrecks, portals, fauna, sentries, slingshot affordances,
+  and future megastructures.
+- **Upgrade the bridge primitives:** the current discs, rings, triangles, and
+  squares are valid parity markers, not final art direction.
+- **Keep scale discipline:** objects can gain 3D silhouette, rim light, trail,
+  and material identity while staying tiny against the universe.
+
+The current target lives in `docs/design/THREE-ENTITY-VISUALS.md`.
+
 ## Authority Model
 
 The authoritative sim owns gameplay truth. The browser/Electron client owns rendering, local audio, HUD, input collection, interpolation, and visual fluid reconstruction.

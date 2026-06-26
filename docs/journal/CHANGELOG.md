@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-06-26 — Three entity visual-language docs
+
+- Added `docs/design/THREE-ENTITY-VISUALS.md` as the current v0.2 design target
+  for non-fluid objects in the Three scene: ships, stars, planetoids/comets,
+  wrecks, portals, rivals, fauna, sentries, slingshot affordances, and future
+  megastructures.
+- Updated the v0.2 design bible, roadmap, design/code delta, project roadmap,
+  build plan, backlog, and Three migration plan so the current renderer status
+  distinguishes shipped primitive projection from the still-needed visual
+  ownership pass.
+- Marked older visual-scale, rendering-stack, and entity-catalog docs with
+  v0.2 notes so their canvas/glyph-era details remain useful history rather
+  than stale implementation direction.
+
+---
+
 ## 2026-06-26 — Inhibitor fabric/glyph completion
 
 - Added dedicated Inhibitor glyph rows to the ASCII font atlas: math/corruption glyphs for Glitch/Swarm and box/grid glyphs for Vessel.
