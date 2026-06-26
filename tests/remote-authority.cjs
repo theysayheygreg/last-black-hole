@@ -152,6 +152,15 @@ async function postDebugPlayerState(body) {
   return response.json();
 }
 
+async function postDebugInhibitorState(body) {
+  const response = await fetch(`${SIM_URL}/debug/inhibitor-state`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 async function postLeave(body) {
   const response = await fetch(`${SIM_URL}/leave`, {
     method: "POST",
@@ -249,6 +258,35 @@ async function run() {
       const snapshot = await getSnapshot();
       assert(typeof snapshot.inhibitor?.threshold === "number", "Expected inhibitor threshold in remote snapshot");
       assert(typeof snapshot.inhibitor?.pressureFrac === "number", "Expected inhibitor pressureFrac in remote snapshot");
+    });
+
+    await runner.run("Remote debug can force and reset authoritative inhibitor state", async () => {
+      const snapshot = await getSnapshot();
+      const ws = snapshot.session?.worldScale || 5;
+      const forced = await postDebugInhibitorState({
+        form: 2,
+        wx: ws * 0.42,
+        wy: ws * 0.47,
+        radius: 0.25,
+        intensity: 0.85,
+        pressure: 1,
+        threshold: 1,
+        localTime: 12,
+        swarmTargetX: ws * 0.5,
+        swarmTargetY: ws * 0.5,
+      });
+      assert(forced.ok === true, "Expected debug inhibitor force to succeed");
+      assert(forced.snapshot?.inhibitor?.form === 2, `Expected forced swarm form, got ${forced.snapshot?.inhibitor?.form}`);
+      assert(forced.snapshot.inhibitor.intensity >= 0.8, "Expected forced inhibitor intensity in snapshot");
+
+      const reset = await postDebugInhibitorState({
+        form: 0,
+        pressure: 0,
+        intensity: 0,
+        radius: 0,
+      });
+      assert(reset.ok === true, "Expected debug inhibitor reset to succeed");
+      assert(reset.snapshot?.inhibitor?.form === 0, `Expected reset inhibitor form 0, got ${reset.snapshot?.inhibitor?.form}`);
     });
 
     await runner.run("Remote snapshots advance and move the ship under authoritative input", async () => {

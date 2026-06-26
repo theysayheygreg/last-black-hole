@@ -897,6 +897,7 @@ function init() {
       get remoteSessionHealth() { return remoteSessionHealth; },
       get remoteControlState() { return currentRemoteControlState(); },
       get remotePlayers() { return remotePlayers; },
+      get inhibitorState() { return inhibitorState; },
       get localAbilityState() { return localAbilityState; },
       get playableMaps() { return PLAYABLE_MAPS; },
       get homeTab() { return homeTab; },
@@ -1885,10 +1886,8 @@ function applyRemoteEvents(events) {
         }
         break;
       case 'inhibitor.wake':
-        // First moment the inhibitor actually crosses into form 1. The
-        // universe has noticed the player loudly enough that it has
-        // decided to respond. No location shown — direction comes via
-        // the edge-dim vignette, not a pointer.
+        // The Swarm is the irreversible wake. Direction still comes from
+        // the edge-dim vignette, not a literal pointer.
         showWarning('something is watching', 'rgba(204, 26, 128, 0.95)', 3500);
         audioEngine.playEvent?.('inhibitorWake');
         break;
@@ -1900,6 +1899,7 @@ function applyRemoteEvents(events) {
         } else if (payload.form === 3) {
           // The vessel is the terminal form. Loud dread.
           showWarning('THE VESSEL', 'rgba(255, 60, 140, 1.0)', 4000);
+          audioEngine.playEvent?.('inhibitorVessel');
         } else if (payload.form === 0) {
           // Reset — should be rare but handle it (e.g. session reset)
           showWarning('pressure relieved', 'rgba(120, 200, 180, 0.7)', 2000);
@@ -1908,10 +1908,12 @@ function applyRemoteEvents(events) {
       case 'inhibitor.drainCargo':
         if (isLocal) {
           showWarning('cargo drained', 'rgba(204, 26, 128, 0.9)', 1800);
+          audioEngine.playEvent?.('inhibitorDrain');
         }
         break;
       case 'inhibitor.finalPortal':
         showWarning('final portal opened', 'rgba(255, 217, 102, 0.95)', 4000);
+        audioEngine.playEvent?.('inhibitorFinalPortal');
         break;
       case 'player.loot':
         // Echo wreck pickup — show the chronicle fragment as a warning
@@ -2053,6 +2055,7 @@ function syncRemoteWorldState(world) {
 
   if (Array.isArray(world.portals)) {
     portalSystem.portals = world.portals.map((remote) => ({
+      id: remote.id,
       wx: remote.wx,
       wy: remote.wy,
       type: remote.type ?? 'standard',
@@ -2060,15 +2063,17 @@ function syncRemoteWorldState(world) {
       spawnTime: remote.spawnTime ?? 0,
       lifespan: remote.lifespan ?? 90,
       alive: remote.alive !== false,
+      blockedByInhibitor: remote.blockedByInhibitor === true,
+      finalInhibitor: remote.finalInhibitor === true,
       opacity: remote.opacity ?? 1,
       timeLeft(runTime) {
         return Math.max(0, (this.spawnTime + this.lifespan) - runTime);
       },
       isWarning(runTime) {
-        return this.alive && this.timeLeft(runTime) < 15;
+        return this.alive && !this.blockedByInhibitor && this.timeLeft(runTime) < 15;
       },
       isCritical(runTime) {
-        return this.alive && this.timeLeft(runTime) < 5;
+        return this.alive && !this.blockedByInhibitor && this.timeLeft(runTime) < 5;
       },
       getCaptureRadius() {
         const base = CONFIG.portals.captureRadius;
@@ -3492,7 +3497,7 @@ function gameLoop(now) {
   // 6b. Audio update — spatial mixing based on game state
   if (!inMenu) {
     audioEngine.update(dt, wellSystem.wells, ship, camX, camY,
-      overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime, CONFIG.universe.runDuration);
+      overlayCanvas.width, overlayCanvas.height, simState.runElapsedTime, CONFIG.universe.runDuration, inhibitorState);
   }
 
   // Drop slingshot engagement if we left the playing phase via any

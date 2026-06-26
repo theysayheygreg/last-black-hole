@@ -2,6 +2,14 @@
 
 > It doesn't belong here. Neither do you.
 
+> v0.2 status — current implementation lives in the authoritative sim
+> (`scripts/sim-runtime.cjs`) and is consumed by the client renderer from
+> snapshots. Form timing, signal/decoy targeting, Swarm contact, Vessel portal
+> blocking, well absorption, final portal timing, HUD degradation, audio hooks,
+> debug state hooks, and `tests/inhibitor.cjs` coverage are implemented. Future
+> visual polish still belongs in the shader/font-atlas layer: richer tendrils,
+> reserved Inhibitor glyph rows, and stronger form-specific ASCII corruption.
+
 ## What It Is
 
 The Inhibitor is an entity that exists in the fluid/fabric layer of the universe — not a canvas-rendered sprite floating on top, but a distortion in the ASCII field itself. It looks like the universe is breaking. It hunts you by signal. It escalates across three forms during a match.

@@ -21,6 +21,7 @@ export class AudioEngine {
     this.master = null;
     this.initiated = false;
     this.drone = null;
+    this.inhibitorVoice = null;
     this.wellVoices = [];
     this.duckGain = null;
     this._audioState = 'silent';
@@ -105,6 +106,7 @@ export class AudioEngine {
     this._echoWet.connect(this.master);
 
     this._initDrone();
+    this._initInhibitorVoice();
     this._initWellVoices(4);
   }
 
@@ -126,6 +128,10 @@ export class AudioEngine {
     for (const v of this.wellVoices) {
       v.gain.gain.cancelScheduledValues(now);
       v.gain.gain.value = 0;
+    }
+    if (this.inhibitorVoice) {
+      this.inhibitorVoice.gain.gain.cancelScheduledValues(now);
+      this.inhibitorVoice.gain.gain.value = 0;
     }
     if (this.duckGain) {
       this.duckGain.gain.cancelScheduledValues(now);
@@ -166,7 +172,7 @@ export class AudioEngine {
 
   // ---- Per-frame update ----
 
-  update(dt, wells, ship, camX, camY, canvasW, canvasH, runElapsed, runDuration) {
+  update(dt, wells, ship, camX, camY, canvasW, canvasH, runElapsed, runDuration, inhibitorState = null) {
     if (!this.initiated || !CONFIG.audio.enabled) return;
     if (this.ctx.state === 'suspended') this.ctx.resume();
 
@@ -194,6 +200,7 @@ export class AudioEngine {
     // Well harmonics (gameplay only)
     if (this._audioState === 'gameplay') {
       this._updateWellVoices(wells, ship, camX, camY, canvasW, canvasH, now, ramp);
+      this._updateInhibitorVoice(inhibitorState, ship, now, ramp);
     }
   }
 
@@ -230,6 +237,10 @@ export class AudioEngine {
       case 'starConsumed':      this._playStarConsumed(now, vol, pan); break;
       case 'scavDeath':         this._playDebrisClatter(now, vol, pan); break;
       case 'wreckConsumed':     this._playCrunch(now, vol, pan); break;
+      case 'inhibitorWake':     this._playInhibitorWake(now, vol); break;
+      case 'inhibitorVessel':   this._playInhibitorVessel(now, vol); break;
+      case 'inhibitorDrain':    this._playErrorBuzz(now, vol * 0.6); break;
+      case 'inhibitorFinalPortal': this._playExtract(now, vol * 0.6); break;
 
       // Menu/UI events
       case 'menuMove':          this._playMenuBlip(now, vol * 0.3); break;
@@ -314,6 +325,22 @@ export class AudioEngine {
     }
   }
 
+  _initInhibitorVoice() {
+    const osc = this._createSquare(0.5);
+    osc.frequency.value = 74;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 740;
+    filter.Q.value = 5;
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.duckGain);
+    osc.start();
+    this.inhibitorVoice = { osc, filter, gain };
+  }
+
   _updateWellVoices(wells, ship, camX, camY, canvasW, canvasH, now, ramp) {
     // Use toroidal worldDistance — wells near map edges should be audible from the other side
     const wellDists = wells.map((w, i) => ({
@@ -337,6 +364,26 @@ export class AudioEngine {
         voice.gain.gain.linearRampToValueAtTime(0, now + ramp);
       }
     }
+  }
+
+  _updateInhibitorVoice(inhibitorState, ship, now, ramp) {
+    if (!this.inhibitorVoice) return;
+    const form = inhibitorState?.form || 0;
+    if (!ship || form <= 0) {
+      this.inhibitorVoice.gain.gain.linearRampToValueAtTime(0, now + ramp);
+      return;
+    }
+
+    const dist = worldDistance(ship.wx, ship.wy, inhibitorState.wx, inhibitorState.wy);
+    const proximity = Math.max(0, Math.min(1, 1 - dist / 1.4));
+    const intensity = Math.max(0, Math.min(1, inhibitorState.intensity ?? 1));
+    const formWeight = form === 1 ? 0.25 : form === 2 ? 0.55 : 0.9;
+    const gain = CONFIG.audio.droneVolume * formWeight * (0.25 + proximity * 0.75) * intensity;
+    const base = form === 1 ? 740 : form === 2 ? 62 * Math.SQRT2 : 41;
+    const wobble = Math.sin((inhibitorState.localTime || 0) * (form === 3 ? 1.2 : 4.1)) * (form === 1 ? 18 : 5);
+    this.inhibitorVoice.osc.frequency.linearRampToValueAtTime(Math.max(20, base + wobble), now + ramp);
+    this.inhibitorVoice.filter.frequency.linearRampToValueAtTime(form === 1 ? 1900 : form === 2 ? 720 : 360, now + ramp);
+    this.inhibitorVoice.gain.gain.linearRampToValueAtTime(gain, now + ramp);
   }
 
   // ---- Synthesis helpers ----
@@ -690,6 +737,42 @@ export class AudioEngine {
     voice.gain.gain.setValueAtTime(vol * 0.3, now);
     voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
     noise.start(now); noise.stop(now + 0.15);
+  }
+
+  _playInhibitorWake(now, vol) {
+    const noise = this._createNoise(0.5);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1800, now);
+    filter.frequency.exponentialRampToValueAtTime(220, now + 0.45);
+    filter.Q.value = 8;
+    const voice = this._createVoice(0);
+    noise.connect(filter);
+    filter.connect(voice.gain);
+    voice.gain.gain.setValueAtTime(vol * 0.45, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    noise.start(now);
+    noise.stop(now + 0.6);
+    this._duck(now, 0.45, 0.35);
+  }
+
+  _playInhibitorVessel(now, vol) {
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(56, now);
+    osc.frequency.exponentialRampToValueAtTime(24, now + 1.1);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 480;
+    filter.Q.value = 3;
+    const voice = this._createVoice(0);
+    osc.connect(filter);
+    filter.connect(voice.gain);
+    voice.gain.gain.setValueAtTime(vol * 0.7, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    osc.start(now);
+    osc.stop(now + 1.25);
+    this._duck(now, 0.28, 0.8);
   }
 
   // ==== MENU / UI SOUNDS ====

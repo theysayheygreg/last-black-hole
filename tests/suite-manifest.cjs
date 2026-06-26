@@ -102,6 +102,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "Inhibitor",
+    file: "inhibitor.cjs",
+    lanes: ["core", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "Smoke",
     file: "smoke.cjs",
     lanes: ["fast", "core", "browser", "full", "three"],

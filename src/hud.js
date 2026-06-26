@@ -498,6 +498,29 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     }
   }
 
+  if (opts.inhibitorState && opts.ship) {
+    const form = opts.inhibitorState.form || 0;
+    const intensity = Math.max(0, Math.min(1, opts.inhibitorState.intensity ?? 1));
+    const reach = form === 3 ? 1.2 : form === 2 ? 0.9 : 0.6;
+    const dist = form > 0
+      ? worldDistance(opts.ship.wx, opts.ship.wy, opts.inhibitorState.wx, opts.inhibitorState.wy)
+      : Infinity;
+    const corruption = Math.max(0, Math.min(1, 1 - dist / reach)) * intensity;
+    if (corruption > 0.02) {
+      const jitter = 1 + corruption * (form === 3 ? 3 : 2);
+      const jx = Math.sin(runElapsedTime * 41.3) * jitter * corruption;
+      const jy = Math.cos(runElapsedTime * 33.7) * jitter * corruption;
+      _hudEl.style.transform = `translate(${jx.toFixed(1)}px, ${jy.toFixed(1)}px)`;
+      _hudEl.style.filter = `hue-rotate(${(corruption * 16).toFixed(1)}deg) saturate(${(1 + corruption * 0.4).toFixed(2)})`;
+    } else {
+      _hudEl.style.transform = '';
+      _hudEl.style.filter = '';
+    }
+  } else {
+    _hudEl.style.transform = '';
+    _hudEl.style.filter = '';
+  }
+
   // === HULL ABILITIES ===
   if (_ability1El && opts.abilityState) {
     const presentation = getAbilityPresentationState(opts.abilityState);
@@ -539,7 +562,7 @@ function _updatePortalArrow(ship, portalSystem, camX, camY, canvasW, canvasH) {
   let nearestDist = Infinity;
   let nearestPortal = null;
   for (const portal of portalSystem.portals) {
-    if (!portal.alive) continue;
+    if (!portal.alive || portal.blockedByInhibitor) continue;
     const dist = worldDistance(ship.wx, ship.wy, portal.wx, portal.wy);
     if (dist < nearestDist) {
       nearestDist = dist;

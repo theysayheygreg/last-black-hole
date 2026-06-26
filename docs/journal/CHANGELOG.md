@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-06-26 — Authoritative Inhibitor completion
+
+- Completed the sim-side Inhibitor contract: form-time tracking, Shroud decoy signal sources, Swarm search behavior, Vessel player pursuit, portal blocking/unblocking, well absorption, final portal timing, and `inhibitor_vessel` death causes.
+- Wired client-side support for blocked portals, Inhibitor audio events, proximity HUD degradation, and a test API state reader without moving gameplay authority out of the sim.
+- Added a focused `tests/inhibitor.cjs` authority suite covering final portal timing, portal blocking, decoy targeting, and Vessel death events.
+- Updated Inhibitor design docs with a v0.2 status note so future work follows the sim/renderer split instead of the old client-local state-machine plan.
+
+---
+
+## 2026-06-26 — Inhibitor screenshot harness hook
+
+- Added a debug-only sim endpoint for forcing and resetting authoritative Inhibitor state so late-run forms can be verified in screenshots without bypassing the snapshot/renderer path.
+- Added remote-authority coverage for the Inhibitor debug state hook, including reset behavior so shared-session tests remain isolated.
+
+---
+
 ## 2026-06-25 — hash-based v0.2 build identifiers
 
 - Added `scripts/version.cjs` as the shared version source: public train from

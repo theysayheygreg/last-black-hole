@@ -392,6 +392,11 @@ export function initTestAPI(getState) {
       };
     },
 
+    getInhibitorState() {
+      const { inhibitorState } = getState();
+      return clone(inhibitorState);
+    },
+
     async sendRemoteInput(message = {}) {
       const { simClient } = getState();
       if (!simClient?.enabled) return null;

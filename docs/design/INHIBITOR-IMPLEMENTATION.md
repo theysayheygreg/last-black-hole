@@ -2,6 +2,13 @@
 
 > Build order, file changes, shader strategy, integration points.
 > Reference: INHIBITOR.md (behavior design), SIGNAL-SYSTEM.md (wake mechanics), COLOR-SEPARATION.md (palette).
+>
+> v0.2 status — this file is now historical design intent plus remaining visual
+> roadmap, not the live architecture. After the sim/renderer split, gameplay
+> authority moved to `scripts/sim-runtime.cjs`; the client receives
+> `snapshot.inhibitor` and passes `inhibitorData` into the renderer/audio/HUD.
+> Do not add a second client-local `src/inhibitor.js` state machine unless the
+> architecture is intentionally revisited.
 
 ## Architecture Overview
 

@@ -234,6 +234,8 @@ const SIGNAL_CONFIG = {
   lootSpikeT2: 0.10,
   lootSpikeT3: 0.18,
   pulseSpike: 0.12,
+  flareLaunchSpike: 0.04,
+  flareSignalBonus: 0.10,
   // collisionSpike removed — no generic entity-entity collision exists; fauna/sentries
   // have per-type bumpSignal values tuned to their gameplay role.
   // extractionRate removed — extraction is instant (no charge time), so continuous
@@ -284,12 +286,21 @@ const INHIBITOR_CONFIG = {
   swarmControlDebuffDuration: 5.0, // seconds of sluggish controls after Swarm contact
   swarmControlDebuffMult: 0.4,     // thrust multiplier during debuff
   swarmSearchTimeout: 5.0,     // seconds before search pattern
+  swarmSearchRadiusMin: 0.08,
+  swarmSearchRadiusMax: 0.65,
+  swarmSearchRadiusRate: 0.025,
+  swarmSearchTurnRate: 1.4,
   // Form 3: Vessel
   vesselSpeed: 0.08,
   vesselKillRadius: 0.08,
   vesselGravityRange: 0.3,
   vesselGravityStrength: 0.15,
   vesselPortalBlockRange: 0.2,
+  vesselWellPullRange: 0.35,
+  vesselWellPullStrength: 0.025,
+  vesselWellConsumeRadius: 0.06,
+  vesselConsumeRadiusGrowth: 0.025,
+  vesselConsumeGravityBonus: 0.03,
   vesselTimeToForm: 90,        // seconds after Swarm, or instant if signal hits 1.0
   finalPortalDelay: 60,        // seconds after Vessel before guaranteed portal
   finalPortalLifespan: 15,
@@ -467,6 +478,10 @@ function wrapWorld(value, worldScale) {
   while (wrapped < -half) wrapped += worldScale;
   while (wrapped >= half) wrapped -= worldScale;
   return wrapped;
+}
+
+function wrapWorldPosition(value, worldScale) {
+  return ((value % worldScale) + worldScale) % worldScale;
 }
 
 function worldDisplacement(a, b, worldScale) {
@@ -709,6 +724,10 @@ function portalCaptureRadius(portal) {
   return base;
 }
 
+function isPortalAvailable(portal) {
+  return Boolean(portal && portal.alive !== false && portal.blockedByInhibitor !== true);
+}
+
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
@@ -914,6 +933,14 @@ const runtime = {
     silenceTimer: 0,   // how long peak signal has been low
     vesselTimer: 0,    // time since Form 2
     finalPortalSpawned: false,
+    finalPortalExpired: false,
+    formTimes: [null, null, null, null],
+    lastSignalWX: 0,
+    lastSignalWY: 0,
+    lastSignalAge: 0,
+    swarmSearchTimer: 0,
+    swarmSearchAngle: 0,
+    gravityBonus: 0,
   },
   mapState: {
     id: "shallows",
@@ -1270,6 +1297,14 @@ function startSession(config = {}) {
     swarmTargetX: 0, swarmTargetY: 0,
     silenceTimer: 0, vesselTimer: 0,
     finalPortalSpawned: false,
+    finalPortalExpired: false,
+    formTimes: [null, null, null, null],
+    lastSignalWX: 0,
+    lastSignalWY: 0,
+    lastSignalAge: 0,
+    swarmSearchTimer: 0,
+    swarmSearchAngle: inhRng() * Math.PI * 2,
+    gravityBonus: 0,
   };
   runtime.players.clear();
   runtime.recentEvents = [];
@@ -1462,6 +1497,16 @@ function snapshotBody() {
         : 0,
       pressure: runtime.inhibitor.pressure,
       localTime: runtime.inhibitor.localTime,
+      formTimes: Array.isArray(runtime.inhibitor.formTimes)
+        ? runtime.inhibitor.formTimes.slice(0, 4)
+        : [null, null, null, null],
+      targetWX: runtime.inhibitor.swarmTargetX,
+      targetWY: runtime.inhibitor.swarmTargetY,
+      lastSignalWX: runtime.inhibitor.lastSignalWX,
+      lastSignalWY: runtime.inhibitor.lastSignalWY,
+      finalPortalSpawned: Boolean(runtime.inhibitor.finalPortalSpawned),
+      finalPortalExpired: Boolean(runtime.inhibitor.finalPortalExpired),
+      gravityBonus: runtime.inhibitor.gravityBonus || 0,
     },
     recentEvents: runtime.recentEvents.slice(-32),
   };
@@ -1993,6 +2038,11 @@ function tickPortals(dt) {
         portalId: portal.id,
         type: portal.type,
       });
+      if (portal.finalInhibitor) {
+        runtime.inhibitor.finalPortalExpired = true;
+        const killedCount = killActiveHumanPlayers("collapse");
+        if (killedCount > 0) endSession("inhibitor-final-portal-missed", { killedCount, portalId: portal.id });
+      }
       continue;
     }
     portal.opacity = remaining < 15 ? Math.max(0, remaining / 15) : 1;
@@ -2127,11 +2177,16 @@ function tickWaveRings(dt) {
 }
 
 function maybeCollapseRun() {
-  const activePortalCount = runtime.mapState.portals.filter((portal) => portal.alive !== false).length;
+  const activePortalCount = runtime.mapState.portals.filter(isPortalAvailable).length;
   const hasMorePortalWaves = runtime.mapState.nextPortalWaveIndex < PORTAL_CONFIG.waves.length;
   if (runtime.simTime <= 60) return;
   if (activePortalCount > 0) return;
   if (hasMorePortalWaves) return;
+  if (runtime.inhibitor?.form >= 3 &&
+      !runtime.inhibitor.finalPortalSpawned &&
+      !runtime.inhibitor.finalPortalExpired) {
+    return;
+  }
 
   let killedCount = 0;
   for (const player of runtime.players.values()) {
@@ -2517,7 +2572,7 @@ function tickExtraction(player) {
   const nearbyPortals = collectNearestByDistance(
     player.wx,
     player.wy,
-    runtime.mapState.portals.filter((portal) => portal.alive !== false),
+    runtime.mapState.portals.filter(isPortalAvailable),
     runtime.session.maxPortalChecksPerPlayer || runtime.mapState.portals.length || 1
   );
   for (const { entity: portal, dist } of nearbyPortals) {
@@ -2780,11 +2835,17 @@ function applyInventoryAction(player, actionMessage) {
 }
 
 function applyDebugPlayerState(player, body) {
-  if (Number.isFinite(Number(body.wx))) player.wx = wrapWorld(Number(body.wx), runtime.session.worldScale);
-  if (Number.isFinite(Number(body.wy))) player.wy = wrapWorld(Number(body.wy), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.wx))) player.wx = wrapWorldPosition(Number(body.wx), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.wy))) player.wy = wrapWorldPosition(Number(body.wy), runtime.session.worldScale);
   if (Number.isFinite(Number(body.vx))) player.vx = Number(body.vx);
   if (Number.isFinite(Number(body.vy))) player.vy = Number(body.vy);
   if (Number.isFinite(Number(body.deltaV))) player.deltaV = Math.max(0, Math.min(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, Number(body.deltaV)));
+  if (Number.isFinite(Number(body.signalLevel))) {
+    player.signal.level = Math.max(0, Math.min(1, Number(body.signalLevel)));
+    player.signal.zone = signalZoneForLevel(player.signal.level);
+    player._signalPeak = Math.max(player._signalPeak || 0, player.signal.level);
+    player._signalPeakZone = player.signal.zone;
+  }
   if (Number.isFinite(Number(body.timeSinceThrust))) player.timeSinceThrust = Math.max(0, Number(body.timeSinceThrust));
   if (body.resetSlingshot === true) {
     const state = ensurePlayerSlingshot(player);
@@ -2818,18 +2879,107 @@ function applyDebugPlayerState(player, body) {
   return player;
 }
 
+function applyDebugInhibitorState(body) {
+  const inh = runtime.inhibitor;
+  const ws = runtime.session.worldScale || runtime.mapState.worldScale || 5;
+  if (!inh) return null;
+  let requestedForm = null;
+
+  // Harnesses need to render rare late-run forms without waiting through a
+  // full match clock; gameplay still owns normal pressure and transitions.
+  if (Number.isFinite(Number(body.form))) requestedForm = Math.max(0, Math.min(3, Math.round(Number(body.form))));
+  if (Number.isFinite(Number(body.wx))) inh.wx = wrapWorldPosition(Number(body.wx), ws);
+  if (Number.isFinite(Number(body.wy))) inh.wy = wrapWorldPosition(Number(body.wy), ws);
+  if (Number.isFinite(Number(body.pressure))) inh.pressure = Math.max(0, Math.min(1.5, Number(body.pressure)));
+  if (Number.isFinite(Number(body.threshold))) inh.threshold = Math.max(0.01, Math.min(1.5, Number(body.threshold)));
+  if (Number.isFinite(Number(body.intensity))) inh.intensity = Math.max(0, Math.min(1, Number(body.intensity)));
+  if (Number.isFinite(Number(body.radius))) inh.radius = Math.max(0, Math.min(ws, Number(body.radius)));
+  if (Number.isFinite(Number(body.localTime))) inh.localTime = Math.max(0, Number(body.localTime));
+  if (Number.isFinite(Number(body.vesselTimer))) inh.vesselTimer = Math.max(0, Number(body.vesselTimer));
+  if (Number.isFinite(Number(body.swarmTrackTimer))) inh.swarmTrackTimer = Math.max(0, Number(body.swarmTrackTimer));
+  if (Number.isFinite(Number(body.swarmTargetX))) inh.swarmTargetX = wrapWorldPosition(Number(body.swarmTargetX), ws);
+  if (Number.isFinite(Number(body.swarmTargetY))) inh.swarmTargetY = wrapWorldPosition(Number(body.swarmTargetY), ws);
+  if (typeof body.finalPortalSpawned === "boolean") inh.finalPortalSpawned = body.finalPortalSpawned;
+  if (typeof body.finalPortalExpired === "boolean") inh.finalPortalExpired = body.finalPortalExpired;
+  if (Number.isFinite(Number(body.lastSignalWX))) inh.lastSignalWX = wrapWorldPosition(Number(body.lastSignalWX), ws);
+  if (Number.isFinite(Number(body.lastSignalWY))) inh.lastSignalWY = wrapWorldPosition(Number(body.lastSignalWY), ws);
+  if (Number.isFinite(Number(body.gravityBonus))) inh.gravityBonus = Math.max(0, Math.min(0.35, Number(body.gravityBonus)));
+  if (Array.isArray(body.formTimes)) {
+    inh.formTimes = body.formTimes.slice(0, 4).map((value) => Number.isFinite(Number(value)) ? Number(value) : null);
+    while (inh.formTimes.length < 4) inh.formTimes.push(null);
+  }
+
+  if (requestedForm !== null) setInhibitorForm(requestedForm, { debug: true });
+
+  if (inh.form === 0) {
+    inh.intensity = 0;
+    inh.radius = 0;
+  } else {
+    if (!Number.isFinite(inh.intensity) || inh.intensity <= 0) inh.intensity = 1;
+    if (!Number.isFinite(inh.radius) || inh.radius <= 0) {
+      inh.radius = inh.form === 1
+        ? INHIBITOR_CONFIG.glitchRadius
+        : inh.form === 2
+          ? INHIBITOR_CONFIG.swarmRadius
+          : INHIBITOR_CONFIG.swarmRadius * 1.5;
+    }
+    if (!Number.isFinite(inh.swarmTargetX)) inh.swarmTargetX = inh.wx;
+    if (!Number.isFinite(inh.swarmTargetY)) inh.swarmTargetY = inh.wy;
+  }
+
+  return inh;
+}
+
+function applyDebugPortalState(body) {
+  const ws = runtime.session.worldScale || runtime.mapState.worldScale || 5;
+  const requestedId = String(body.portalId || body.id || "").trim();
+  let portal = requestedId
+    ? runtime.mapState.portals.find((entry) => entry.id === requestedId)
+    : null;
+
+  if (!portal) {
+    portal = {
+      id: requestedId || `portal-debug-${runtime.tick}-${runtime.mapState.portals.length}`,
+      wx: 0,
+      wy: 0,
+      type: "stable",
+      wave: 0,
+      spawnTime: runtime.simTime,
+      lifespan: 60,
+      alive: true,
+      opacity: 1,
+      blockedByInhibitor: false,
+      finalInhibitor: false,
+    };
+    runtime.mapState.portals.push(portal);
+  }
+
+  if (Number.isFinite(Number(body.wx))) portal.wx = wrapWorldPosition(Number(body.wx), ws);
+  if (Number.isFinite(Number(body.wy))) portal.wy = wrapWorldPosition(Number(body.wy), ws);
+  if (typeof body.type === "string" && body.type) portal.type = body.type;
+  if (Number.isFinite(Number(body.wave))) portal.wave = Math.max(0, Math.round(Number(body.wave)));
+  if (Number.isFinite(Number(body.spawnTime))) portal.spawnTime = Math.max(0, Number(body.spawnTime));
+  if (Number.isFinite(Number(body.lifespan))) portal.lifespan = Math.max(0.1, Number(body.lifespan));
+  if (Number.isFinite(Number(body.opacity))) portal.opacity = Math.max(0, Math.min(1, Number(body.opacity)));
+  if (typeof body.alive === "boolean") portal.alive = body.alive;
+  if (typeof body.blockedByInhibitor === "boolean") portal.blockedByInhibitor = body.blockedByInhibitor;
+  if (typeof body.finalInhibitor === "boolean") portal.finalInhibitor = body.finalInhibitor;
+
+  return portal;
+}
+
 function applyDebugScavengerState(scavenger, body) {
-  if (Number.isFinite(Number(body.wx))) scavenger.wx = wrapWorld(Number(body.wx), runtime.session.worldScale);
-  if (Number.isFinite(Number(body.wy))) scavenger.wy = wrapWorld(Number(body.wy), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.wx))) scavenger.wx = wrapWorldPosition(Number(body.wx), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.wy))) scavenger.wy = wrapWorldPosition(Number(body.wy), runtime.session.worldScale);
   if (Number.isFinite(Number(body.vx))) scavenger.vx = Number(body.vx);
   if (Number.isFinite(Number(body.vy))) scavenger.vy = Number(body.vy);
   if (Number.isFinite(Number(body.lootCount))) scavenger.lootCount = Math.max(0, Number(body.lootCount));
   if (Number.isFinite(Number(body.deathTimer))) scavenger.deathTimer = Math.max(0, Number(body.deathTimer));
   if (typeof body.deathWellId === "string") scavenger.deathWellId = body.deathWellId;
-  if (Number.isFinite(Number(body.deathWellWX))) scavenger.deathWellWX = wrapWorld(Number(body.deathWellWX), runtime.session.worldScale);
-  if (Number.isFinite(Number(body.deathWellWY))) scavenger.deathWellWY = wrapWorld(Number(body.deathWellWY), runtime.session.worldScale);
-  if (Number.isFinite(Number(body.deathStartWX))) scavenger.deathStartWX = wrapWorld(Number(body.deathStartWX), runtime.session.worldScale);
-  if (Number.isFinite(Number(body.deathStartWY))) scavenger.deathStartWY = wrapWorld(Number(body.deathStartWY), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.deathWellWX))) scavenger.deathWellWX = wrapWorldPosition(Number(body.deathWellWX), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.deathWellWY))) scavenger.deathWellWY = wrapWorldPosition(Number(body.deathWellWY), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.deathStartWX))) scavenger.deathStartWX = wrapWorldPosition(Number(body.deathStartWX), runtime.session.worldScale);
+  if (Number.isFinite(Number(body.deathStartWY))) scavenger.deathStartWY = wrapWorldPosition(Number(body.deathStartWY), runtime.session.worldScale);
   if (typeof body.state === "string" && body.state) scavenger.state = body.state;
   if (typeof body.alive === "boolean") scavenger.alive = body.alive;
   return scavenger;
@@ -2866,7 +3016,7 @@ function nearestPortal(entity) {
   let best = null;
   let bestDist = Infinity;
   for (const portal of runtime.mapState.portals) {
-    if (portal.alive === false) continue;
+    if (!isPortalAvailable(portal)) continue;
     const dist = worldDistance(entity.wx, entity.wy, portal.wx, portal.wy, runtime.session.worldScale);
     if (dist < bestDist) {
       bestDist = dist;
@@ -3068,7 +3218,7 @@ function updateScavengerDeathSpiral(scav, dt) {
 }
 
 function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
-  const activePortalCount = runtime.mapState.portals.filter((portal) => portal.alive !== false).length;
+  const activePortalCount = runtime.mapState.portals.filter(isPortalAvailable).length;
 
   for (const scav of scavengers) {
     if (scav.alive === false) continue;
@@ -3425,7 +3575,7 @@ function collectSpawnHazards(mapState, defaultMinDist) {
       wy: star.wy,
       clearance: spawnClearance({ kind: "star", ...star }, defaultMinDist),
     })),
-    ...(mapState.portals || []).filter((portal) => portal.alive !== false).map((portal) => ({
+    ...(mapState.portals || []).filter(isPortalAvailable).map((portal) => ({
       kind: "portal",
       wx: portal.wx,
       wy: portal.wy,
@@ -3912,7 +4062,7 @@ function aiScoreWreck(ai, wreck) {
 function aiScorePortal(ai, portal) {
   const ws = runtime.session.worldScale;
   const w = ai.personalityWeights;
-  if (!portal.alive) return -Infinity;
+  if (!isPortalAvailable(portal)) return -Infinity;
 
   const dist = worldDistance(ai.wx, ai.wy, portal.wx, portal.wy, ws);
   const timeLeft = portal.lifespan - (runtime.simTime - portal.spawnTime);
@@ -3953,7 +4103,7 @@ function aiShouldExtract(ai) {
   const w = ai.personalityWeights;
   const cargoValue = ai.cargo.reduce((s, item) => s + (item ? (item.value || 0) : 0), 0);
   const cargoCount = ai.cargo.filter(Boolean).length;
-  const portalsAlive = runtime.mapState.portals.filter(p => p.alive).length;
+  const portalsAlive = runtime.mapState.portals.filter(isPortalAvailable).length;
   const inhForm = runtime.inhibitor.form;
 
   // Hard triggers
@@ -4098,7 +4248,7 @@ function tickAIPlayers(dt) {
       }
     } else if (ai.goal === 'extract' && ai.targetPortalId) {
       const portal = runtime.mapState.portals.find(p => p.id === ai.targetPortalId);
-      if (portal && portal.alive) {
+      if (isPortalAvailable(portal)) {
         targetWX = portal.wx; targetWY = portal.wy;
       } else {
         ai.decisionTimer = 0;
@@ -4284,9 +4434,10 @@ function tickHullAbilities(player, dt) {
     if (input.ability2 && as.decoyCharges > 0 && as.decoyCooldown <= 0) {
       as.decoyCharges--;
       as.decoyCooldown = HULL_DEFINITIONS.shroud.abilities.decoyFlare.cooldown;
+      spikePlayerSignal(player, SIGNAL_CONFIG.flareLaunchSpike);
       as.decoys.push({
         wx: player.wx, wy: player.wy,
-        signal: player.signal.level, age: 0,
+        signal: Math.min(1, player.signal.level + SIGNAL_CONFIG.flareSignalBonus), age: 0,
       });
       publishEvent("ability.activated", { clientId: player.clientId, ability: "decoyFlare" });
     }
@@ -4294,6 +4445,9 @@ function tickHullAbilities(player, dt) {
     // Tick decoys
     for (let i = as.decoys.length - 1; i >= 0; i--) {
       as.decoys[i].age += dt;
+      const flow = estimateFlowSample(as.decoys[i].wx, as.decoys[i].wy).current;
+      as.decoys[i].wx = wrapWorldPosition(as.decoys[i].wx + flow.x * dt, ws);
+      as.decoys[i].wy = wrapWorldPosition(as.decoys[i].wy + flow.y * dt, ws);
       as.decoys[i].signal *= (1 - HULL_DEFINITIONS.shroud.abilities.decoyFlare.decayRate * dt);
       if (as.decoys[i].age >= HULL_DEFINITIONS.shroud.abilities.decoyFlare.duration) {
         as.decoys.splice(i, 1);
@@ -4661,138 +4815,273 @@ function tickFauna(dt) {
 // Pressure builds from player signal + time + well growth.
 // Forms: 0=inactive, 1=glitch, 2=swarm, 3=vessel.
 
+function ensureInhibitorFormTimes(inh = runtime.inhibitor) {
+  if (!Array.isArray(inh.formTimes)) inh.formTimes = [null, null, null, null];
+  while (inh.formTimes.length < 4) inh.formTimes.push(null);
+  return inh.formTimes;
+}
+
+function setInhibitorForm(form, payload = {}) {
+  const inh = runtime.inhibitor;
+  if (inh.form === form) return false;
+  inh.form = form;
+  const formTimes = ensureInhibitorFormTimes(inh);
+  if (form > 0 && formTimes[form] == null) formTimes[form] = runtime.simTime;
+  publishEvent("inhibitor.form", { form, pressure: inh.pressure, ...payload });
+  if (form === 2) publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy });
+  return true;
+}
+
+function collectInhibitorSignalSources({ includeDecoys = true, includeZeroPlayers = false } = {}) {
+  const sources = [];
+  for (const player of runtime.players.values()) {
+    if (player.status !== "alive") continue;
+    const signal = Number(player.signal?.level) || 0;
+    if (includeZeroPlayers || signal > 0) {
+      sources.push({
+        kind: player.isAI ? "ai-player" : "player",
+        clientId: player.clientId,
+        player,
+        wx: player.wx,
+        wy: player.wy,
+        signal,
+      });
+    }
+    if (!includeDecoys) continue;
+    const decoys = player.abilityState?.decoys;
+    if (!Array.isArray(decoys)) continue;
+    for (const decoy of decoys) {
+      const decoySignal = Number(decoy.signal) || 0;
+      if (decoySignal <= 0) continue;
+      sources.push({
+        kind: "decoy",
+        clientId: player.clientId,
+        wx: decoy.wx,
+        wy: decoy.wy,
+        signal: decoySignal,
+      });
+    }
+  }
+  sources.sort((a, b) => b.signal - a.signal);
+  return sources;
+}
+
+function selectInhibitorSignalSource(options = {}) {
+  return collectInhibitorSignalSources(options)[0] || null;
+}
+
+function rememberInhibitorSignalSource(inh, source, dt) {
+  if (source && source.signal > SIGNAL_CONFIG.ghostMax) {
+    inh.lastSignalWX = source.wx;
+    inh.lastSignalWY = source.wy;
+    inh.lastSignalAge = 0;
+  } else {
+    inh.lastSignalAge = Math.min(999, (inh.lastSignalAge || 0) + dt);
+  }
+}
+
+function moveInhibitorToward(inh, targetWX, targetWY, speed, dt, ws) {
+  const dx = worldDisplacement(inh.wx, targetWX, ws);
+  const dy = worldDisplacement(inh.wy, targetWY, ws);
+  const dist = Math.hypot(dx, dy);
+  if (dist <= 0.01) return;
+  inh.wx = wrapWorldPosition(inh.wx + (dx / dist) * speed * dt, ws);
+  inh.wy = wrapWorldPosition(inh.wy + (dy / dist) * speed * dt, ws);
+}
+
+function setSwarmSearchTarget(inh, dt, ws) {
+  const cfg = INHIBITOR_CONFIG;
+  inh.swarmSearchTimer = Math.max(0, (inh.swarmSearchTimer || 0) + dt);
+  inh.swarmSearchAngle = (inh.swarmSearchAngle || 0) + cfg.swarmSearchTurnRate * dt;
+  const searchAge = Math.max(0, inh.swarmSearchTimer - cfg.swarmSearchTimeout);
+  const radius = Math.min(
+    cfg.swarmSearchRadiusMax,
+    cfg.swarmSearchRadiusMin + searchAge * cfg.swarmSearchRadiusRate
+  );
+  const centerX = Number.isFinite(inh.lastSignalWX) ? inh.lastSignalWX : inh.swarmTargetX;
+  const centerY = Number.isFinite(inh.lastSignalWY) ? inh.lastSignalWY : inh.swarmTargetY;
+  inh.swarmTargetX = wrapWorldPosition(centerX + Math.cos(inh.swarmSearchAngle) * radius, ws);
+  inh.swarmTargetY = wrapWorldPosition(centerY + Math.sin(inh.swarmSearchAngle) * radius, ws);
+}
+
+function updateInhibitorPortalBlocks(inh, ws) {
+  const cfg = INHIBITOR_CONFIG;
+  for (const portal of runtime.mapState.portals) {
+    if (portal.alive === false) continue;
+    const shouldBlock = inh.form >= 3 &&
+      worldDistance(inh.wx, inh.wy, portal.wx, portal.wy, ws) < cfg.vesselPortalBlockRange;
+    if (portal.blockedByInhibitor !== shouldBlock) {
+      portal.blockedByInhibitor = shouldBlock;
+      publishEvent(shouldBlock ? "portal.blocked" : "portal.unblocked", {
+        portalId: portal.id,
+        by: "inhibitor",
+      });
+    }
+  }
+}
+
+function updateVesselWellDistortion(inh, dt, ws) {
+  const cfg = INHIBITOR_CONFIG;
+  for (const well of runtime.mapState.wells) {
+    if (well.consumedByInhibitor) continue;
+    const dx = worldDisplacement(well.wx, inh.wx, ws);
+    const dy = worldDisplacement(well.wy, inh.wy, ws);
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0.001 && dist < cfg.vesselWellPullRange) {
+      const pull = cfg.vesselWellPullStrength * (1 - dist / cfg.vesselWellPullRange);
+      well.wx = wrapWorldPosition(well.wx + (dx / dist) * pull * dt, ws);
+      well.wy = wrapWorldPosition(well.wy + (dy / dist) * pull * dt, ws);
+    }
+    if (dist < cfg.vesselWellConsumeRadius) {
+      const absorbedMass = Math.max(0, Number(well.mass) || 0);
+      well.consumedByInhibitor = true;
+      well.mass = Math.max(0.05, absorbedMass * 0.25);
+      well.killRadius = wellKillRadiusForMass(well);
+      inh.radius = Math.min(0.75, (inh.radius || cfg.swarmRadius * 1.5) + absorbedMass * cfg.vesselConsumeRadiusGrowth);
+      inh.gravityBonus = Math.min(0.35, (inh.gravityBonus || 0) + absorbedMass * cfg.vesselConsumeGravityBonus);
+      publishEvent("inhibitor.consumeWell", {
+        wellId: well.id,
+        wx: well.wx,
+        wy: well.wy,
+        absorbedMass,
+      });
+    }
+  }
+}
+
+function spawnInhibitorFinalPortal(inh, ws) {
+  const cfg = INHIBITOR_CONFIG;
+  let bestDist = 0, bestX = ws / 2, bestY = ws / 2;
+  const rng = runtime.session?.rng?.rawStream('finalPortal') || Math.random;
+  for (let i = 0; i < 12; i++) {
+    const cx = rng() * ws;
+    const cy = rng() * ws;
+    const d = worldDistance(inh.wx, inh.wy, cx, cy, ws);
+    if (d > bestDist) { bestDist = d; bestX = cx; bestY = cy; }
+  }
+  runtime.mapState.portals.push({
+    id: `portal-final-${runtime.tick}`,
+    wx: bestX, wy: bestY,
+    type: "standard", wave: 99,
+    spawnTime: runtime.simTime,
+    lifespan: cfg.finalPortalLifespan,
+    alive: true, opacity: 1,
+    finalInhibitor: true,
+    blockedByInhibitor: false,
+  });
+  inh.finalPortalSpawned = true;
+  publishEvent("inhibitor.finalPortal", { wx: bestX, wy: bestY });
+}
+
 function tickInhibitor(dt) {
   const inh = runtime.inhibitor;
   const cfg = INHIBITOR_CONFIG;
   const ws = runtime.session.worldScale;
   inh.localTime += dt;
+  ensureInhibitorFormTimes(inh);
 
-  // Find peak player signal
-  let peakSignal = 0;
-  let loudestPlayer = null;
-  for (const player of runtime.players.values()) {
-    if (player.status !== "alive") continue;
-    if (player.signal.level > peakSignal) {
-      peakSignal = player.signal.level;
-      loudestPlayer = player;
-    }
-  }
+  const signalSource = selectInhibitorSignalSource({ includeDecoys: inh.form < 3 });
+  const vesselTarget = selectInhibitorSignalSource({ includeDecoys: false, includeZeroPlayers: true });
+  const peakSignal = signalSource?.signal || 0;
+  rememberInhibitorSignalSource(inh, signalSource, dt);
 
-  // Pressure accumulation (always, even when inactive)
   inh.pressure += peakSignal * cfg.pressureFromSignal * dt;
   inh.pressure += (runtime.simTime / RUN_DURATION) * cfg.pressureFromTime * dt;
-  inh.pressure = Math.min(1.5, inh.pressure); // soft cap
+  inh.pressure = Math.min(1.5, inh.pressure);
 
-  // --- Form transitions ---
   const glitchThreshold = inh.threshold * cfg.glitchFraction;
 
   if (inh.form === 0 && inh.pressure >= glitchThreshold) {
-    // Spawn Glitch at map edge farthest from loudest player
-    inh.form = 1;
     inh.intensity = 0;
     inh.radius = cfg.glitchRadius;
-    if (loudestPlayer) {
-      // Farthest edge point
-      inh.wx = (loudestPlayer.wx + ws / 2) % ws;
-      inh.wy = (loudestPlayer.wy + ws / 2) % ws;
+    const spawnFrom = signalSource || vesselTarget;
+    if (spawnFrom) {
+      inh.wx = wrapWorldPosition(spawnFrom.wx + ws / 2, ws);
+      inh.wy = wrapWorldPosition(spawnFrom.wy + ws / 2, ws);
+      inh.lastSignalWX = spawnFrom.wx;
+      inh.lastSignalWY = spawnFrom.wy;
     } else {
       const rng = runtime.session?.rng?.rawStream('inhibitorSpawn') || Math.random;
       inh.wx = rng() * ws;
       inh.wy = rng() * ws;
     }
     inh.silenceTimer = 0;
-    publishEvent("inhibitor.form", { form: 1, pressure: inh.pressure });
+    setInhibitorForm(1);
   }
 
   if (inh.form === 1 && inh.pressure >= inh.threshold) {
-    // Irreversible: Swarm
-    inh.form = 2;
     inh.intensity = 0;
     inh.radius = cfg.swarmRadius;
     inh.vesselTimer = 0;
     inh.swarmTrackTimer = 0;
-    if (loudestPlayer) {
-      inh.swarmTargetX = loudestPlayer.wx;
-      inh.swarmTargetY = loudestPlayer.wy;
+    inh.swarmSearchTimer = 0;
+    const target = signalSource || vesselTarget;
+    if (target) {
+      inh.swarmTargetX = target.wx;
+      inh.swarmTargetY = target.wy;
     }
-    publishEvent("inhibitor.form", { form: 2, pressure: inh.pressure });
-    publishEvent("inhibitor.wake", { wx: inh.wx, wy: inh.wy });
+    setInhibitorForm(2);
   }
 
-  // vesselTimer ticks in form 2 AND 3 — final portal check needs it to keep advancing
-  if (inh.form >= 2) {
-    inh.vesselTimer += dt;
-  }
+  if (inh.form >= 2) inh.vesselTimer += dt;
+
   if (inh.form === 2) {
     if (inh.vesselTimer >= cfg.vesselTimeToForm || peakSignal >= 1.0) {
-      inh.form = 3;
       inh.intensity = 0;
-      inh.radius = cfg.swarmRadius * 1.5;
-      publishEvent("inhibitor.form", { form: 3, pressure: inh.pressure });
+      inh.radius = Math.max(inh.radius || 0, cfg.swarmRadius * 1.5);
+      setInhibitorForm(3);
     }
   }
 
-  // --- Form behavior ---
   if (inh.form === 1) {
-    // Glitch: drift toward last high-signal position, dissipate if quiet
     inh.intensity = Math.min(1, inh.intensity + dt * 0.5);
     if (peakSignal < SIGNAL_CONFIG.ghostMax) {
       inh.silenceTimer += dt;
       if (inh.silenceTimer >= cfg.glitchDissipateTime) {
-        inh.form = 0;
         inh.intensity = 0;
-        // Reset pressure below glitch threshold so it doesn't immediately reform
         inh.pressure = inh.threshold * cfg.glitchFraction * 0.5;
-        publishEvent("inhibitor.form", { form: 0, pressure: inh.pressure });
+        setInhibitorForm(0);
       }
     } else {
       inh.silenceTimer = 0;
     }
-    // Drift
-    if (loudestPlayer) {
+    const targetX = Number.isFinite(inh.lastSignalWX) ? inh.lastSignalWX : signalSource?.wx;
+    const targetY = Number.isFinite(inh.lastSignalWY) ? inh.lastSignalWY : signalSource?.wy;
+    if (Number.isFinite(targetX) && Number.isFinite(targetY)) {
       const speed = peakSignal > cfg.glitchSolidifySignal ? cfg.glitchSolidifySpeed : cfg.glitchDriftSpeed;
-      const dx = worldDisplacement(inh.wx, loudestPlayer.wx, ws);
-      const dy = worldDisplacement(inh.wy, loudestPlayer.wy, ws);
-      const dist = Math.hypot(dx, dy);
-      if (dist > 0.01) {
-        inh.wx = ((inh.wx + (dx / dist) * speed * dt) % ws + ws) % ws;
-        inh.wy = ((inh.wy + (dy / dist) * speed * dt) % ws + ws) % ws;
-      }
+      moveInhibitorToward(inh, targetX, targetY, speed, dt, ws);
     }
   }
 
   if (inh.form === 2) {
-    // Swarm: hunt by signal, speed scales with player activity
     inh.intensity = Math.min(1, inh.intensity + dt * 0.3);
     inh.swarmTrackTimer += dt;
-    if (inh.swarmTrackTimer >= cfg.swarmTrackInterval && loudestPlayer) {
-      inh.swarmTargetX = loudestPlayer.wx;
-      inh.swarmTargetY = loudestPlayer.wy;
-      inh.swarmTrackTimer = 0;
+
+    if (signalSource && signalSource.signal >= SIGNAL_CONFIG.ghostMax) {
+      inh.swarmSearchTimer = 0;
+      if (inh.swarmTrackTimer >= cfg.swarmTrackInterval) {
+        inh.swarmTargetX = signalSource.wx;
+        inh.swarmTargetY = signalSource.wy;
+        inh.swarmTrackTimer = 0;
+      }
+    } else if (inh.swarmSearchTimer >= cfg.swarmSearchTimeout || inh.silenceTimer >= cfg.swarmSearchTimeout) {
+      setSwarmSearchTarget(inh, dt, ws);
+    } else {
+      inh.swarmSearchTimer = (inh.swarmSearchTimer || 0) + dt;
     }
-    // Speed from player state
+
     let speed = cfg.swarmSpeedSilent;
     if (peakSignal > SIGNAL_CONFIG.flareMax) speed = cfg.swarmSpeedFlare;
     else if (peakSignal > SIGNAL_CONFIG.presenceMax) speed = cfg.swarmSpeedHeavy;
     else if (peakSignal > SIGNAL_CONFIG.ghostMax) speed = cfg.swarmSpeedLight;
+    moveInhibitorToward(inh, inh.swarmTargetX, inh.swarmTargetY, speed, dt, ws);
 
-    const dx = worldDisplacement(inh.wx, inh.swarmTargetX, ws);
-    const dy = worldDisplacement(inh.wy, inh.swarmTargetY, ws);
-    const dist = Math.hypot(dx, dy);
-    if (dist > 0.01) {
-      inh.wx = ((inh.wx + (dx / dist) * speed * dt) % ws + ws) % ws;
-      inh.wy = ((inh.wy + (dy / dist) * speed * dt) % ws + ws) % ws;
-    }
-
-    // Contact effects
     for (const player of runtime.players.values()) {
       if (player.status !== "alive") continue;
       const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
       if (pd < inh.radius * 0.5) {
         spikePlayerSignal(player, cfg.swarmContactSignalSpike * dt);
-        // Sluggish controls — Swarm corrupts ship systems
-        player.controlDebuff = cfg.swarmControlDebuffDuration;
-        // Drain cargo
+        player.controlDebuff = Math.max(player.controlDebuff || 0, cfg.swarmControlDebuffDuration);
         if ((runtime.session?.rng?.rawStream('swarmDrain') || Math.random)() < cfg.swarmContactDrain * dt) {
           for (let i = player.cargo.length - 1; i >= 0; i--) {
             if (player.cargo[i]) {
@@ -4807,72 +5096,45 @@ function tickInhibitor(dt) {
   }
 
   if (inh.form === 3) {
-    // Vessel: constant advance toward player, kills on contact
     inh.intensity = Math.min(1, inh.intensity + dt * 0.2);
-    if (loudestPlayer) {
-      const dx = worldDisplacement(inh.wx, loudestPlayer.wx, ws);
-      const dy = worldDisplacement(inh.wy, loudestPlayer.wy, ws);
-      const dist = Math.hypot(dx, dy);
-      if (dist > 0.01) {
-        inh.wx = ((inh.wx + (dx / dist) * cfg.vesselSpeed * dt) % ws + ws) % ws;
-        inh.wy = ((inh.wy + (dy / dist) * cfg.vesselSpeed * dt) % ws + ws) % ws;
-      }
-
-      // Gravity pull
-      for (const player of runtime.players.values()) {
-        if (player.status !== "alive") continue;
-        const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
-        if (pd < cfg.vesselGravityRange && pd > 0.001) {
-          const pull = cfg.vesselGravityStrength * (1 - pd / cfg.vesselGravityRange);
-          const pdx = worldDisplacement(player.wx, inh.wx, ws);
-          const pdy = worldDisplacement(player.wy, inh.wy, ws);
-          player.vx += (pdx / pd) * pull * dt;
-          player.vy += (pdy / pd) * pull * dt;
-        }
-        // Kill on contact
-        if (pd < cfg.vesselKillRadius) {
-          player.status = "dead";
-          player.vx = 0;
-          player.vy = 0;
-          publishEvent("player.died", { clientId: player.clientId, cause: "vessel" });
-          commitPlayerOutcome(player, "dead");
-          player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
-        }
-      }
-
-      // Block portals
-      for (const portal of runtime.mapState.portals) {
-        if (!portal.alive) continue;
-        const portalDist = worldDistance(inh.wx, inh.wy, portal.wx, portal.wy, ws);
-        if (portalDist < cfg.vesselPortalBlockRange) {
-          portal.alive = false;
-          publishEvent("portal.blocked", { portalId: portal.id });
-        }
-      }
+    if (vesselTarget) {
+      moveInhibitorToward(inh, vesselTarget.wx, vesselTarget.wy, cfg.vesselSpeed, dt, ws);
     }
 
-    // Final portal
-    if (!inh.finalPortalSpawned && inh.vesselTimer >= cfg.vesselTimeToForm + cfg.finalPortalDelay) {
-      // Spawn guaranteed portal farthest from Vessel
-      let bestDist = 0, bestX = ws / 2, bestY = ws / 2;
-      const rng = runtime.session?.rng?.rawStream('finalPortal') || Math.random;
-      for (let i = 0; i < 8; i++) {
-        const cx = rng() * ws;
-        const cy = rng() * ws;
-        const d = worldDistance(inh.wx, inh.wy, cx, cy, ws);
-        if (d > bestDist) { bestDist = d; bestX = cx; bestY = cy; }
+    updateVesselWellDistortion(inh, dt, ws);
+
+    const pullStrength = cfg.vesselGravityStrength + (inh.gravityBonus || 0);
+    for (const player of runtime.players.values()) {
+      if (player.status !== "alive") continue;
+      const pd = worldDistance(inh.wx, inh.wy, player.wx, player.wy, ws);
+      if (pd < cfg.vesselGravityRange && pd > 0.001) {
+        const pull = pullStrength * (1 - pd / cfg.vesselGravityRange);
+        const pdx = worldDisplacement(player.wx, inh.wx, ws);
+        const pdy = worldDisplacement(player.wy, inh.wy, ws);
+        player.vx += (pdx / pd) * pull * dt;
+        player.vy += (pdy / pd) * pull * dt;
       }
-      runtime.mapState.portals.push({
-        id: `portal-final-${runtime.tick}`,
-        wx: bestX, wy: bestY,
-        type: "standard", wave: 99,
-        spawnTime: runtime.simTime,
-        lifespan: cfg.finalPortalLifespan,
-        alive: true, opacity: 1,
-      });
-      inh.finalPortalSpawned = true;
-      publishEvent("inhibitor.finalPortal", { wx: bestX, wy: bestY });
+      if (pd < cfg.vesselKillRadius) {
+        player.status = "dead";
+        player.vx = 0;
+        player.vy = 0;
+        publishEvent("player.died", {
+          clientId: player.clientId,
+          cause: "inhibitor_vessel",
+          entityId: "inhibitor-vessel",
+        });
+        commitPlayerOutcome(player, "dead");
+        player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
+      }
     }
+  }
+
+  updateInhibitorPortalBlocks(inh, ws);
+
+  const formTimes = ensureInhibitorFormTimes(inh);
+  const timeSinceVessel = formTimes[3] == null ? 0 : runtime.simTime - formTimes[3];
+  if (inh.form >= 3 && !inh.finalPortalSpawned && timeSinceVessel >= cfg.finalPortalDelay) {
+    spawnInhibitorFinalPortal(inh, ws);
   }
 }
 
@@ -5004,7 +5266,7 @@ function tickSim() {
   const alivePlayerCount = relevance.alivePlayers.length;
   const activeAiCount = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state !== "dying").length;
   const activeWreckCount = relevance.wrecks.filter((wreck) => wreck.alive !== false && !wreck.looted).length;
-  const activePortalCount = runtime.mapState.portals.filter((portal) => portal.alive !== false).length;
+  const activePortalCount = runtime.mapState.portals.filter(isPortalAvailable).length;
   const activeWaveCount = runtime.waveRings.length;
   const forcePressure = Math.max(
     runtime.mapState.wells.length / Math.max(1, alivePlayerCount * (runtime.session.maxWellInfluencesPerPlayer || 1)),
@@ -5429,6 +5691,24 @@ const server = http.createServer(async (req, res) => {
       applyDebugPlayerState(player, body);
       maybeEndTerminalSession("terminal-players");
       sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/debug/inhibitor-state") {
+      const body = await readJson(req);
+      const inhibitor = applyDebugInhibitorState(body);
+      if (!inhibitor) {
+        sendJson(res, 409, { ok: false, error: "No inhibitor runtime state" });
+        return;
+      }
+      sendJson(res, 200, { ok: true, inhibitor, snapshot: snapshotBody() });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/debug/portal-state") {
+      const body = await readJson(req);
+      const portal = applyDebugPortalState(body);
+      sendJson(res, 200, { ok: true, portal, snapshot: snapshotBody() });
       return;
     }
 
