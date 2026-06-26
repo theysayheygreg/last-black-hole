@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-06-26 — Three contrast target implementation slice
+
+- Translated the latest visual target board into concrete Three scene tasks:
+  layer/post ordering, fabric-backed entity separation, top-down
+  pixel-resolved asset constraints, and a contrast-first acceptance lane.
+- Added the first implementation slice for entity readability: shared Three
+  visual materials, entity subgroups, contact mattes, stronger rim/halo colors,
+  and a brighter Three presentation pass for current bridge primitives.
+- Added a renderer-only entity showcase fixture so visual review can capture
+  player, remote/rival ships, wrecks, portals, stars, planetoids, fauna, and
+  sentries in one deterministic scene without changing gameplay maps.
+- Updated renderer harness checks to guard entity subgroups and verify the
+  showcase renders backing, landmark, salvage, and active visual layers.
+
+---
+
 ## 2026-06-26 — Three entity visual-language docs
 
 - Added `docs/design/THREE-ENTITY-VISUALS.md` as the current v0.2 design target

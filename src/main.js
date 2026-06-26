@@ -1210,6 +1210,49 @@ function loadRendererFixture(name) {
 
   rendererFixtureActive = true;
   loadScene(fixture);
+  for (const portal of fixture.fixturePortals || []) {
+    portalSystem.addPortal(portal.x, portal.y, {
+      id: portal.id,
+      type: portal.type,
+      spawnTime: 0,
+      lifespan: portal.lifespan ?? 120,
+      finalInhibitor: portal.finalInhibitor === true,
+      blockedByInhibitor: portal.blockedByInhibitor === true,
+    });
+  }
+  for (const scav of fixture.fixtureScavengers || []) {
+    const spawned = scavengerSystem.spawn(scav.x, scav.y, scav.archetype || 'drifter');
+    spawned.facing = scav.facing ?? spawned.facing;
+    spawned.vx = scav.vx ?? 0;
+    spawned.vy = scav.vy ?? 0;
+  }
+  remotePlayers = (fixture.fixtureRemotePlayers || []).map((player, index) => ({
+    clientId: player.clientId || `fixture-remote-${index}`,
+    wx: player.wx,
+    wy: player.wy,
+    vx: player.vx || 0,
+    vy: player.vy || 0,
+    status: player.status || 'alive',
+    hullType: player.hullType || 'drifter',
+  }));
+  remoteFauna = (fixture.fixtureFauna || []).map((f, index) => ({
+    id: f.id || `fixture-fauna-${index}`,
+    wx: f.wx,
+    wy: f.wy,
+    size: f.size || 2,
+    kind: f.kind || f.type || 'fauna',
+    type: f.type || f.kind || 'jelly',
+    age: f.age || 1,
+    lifespan: f.lifespan || 20,
+    phase: f.phase || 0,
+  }));
+  remoteSentries = (fixture.fixtureSentries || []).map((s, index) => ({
+    id: s.id || `fixture-sentry-${index}`,
+    wx: s.wx,
+    wy: s.wy,
+    state: s.state || 'patrol',
+    orbitAngle: s.orbitAngle || 0,
+  }));
   inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
   inhibitorWakeGlitchTimer = 0;
   camX = fixture.worldScale / 2;

@@ -8,6 +8,7 @@
 
 import * as THREE from '../../node_modules/three/build/three.module.js';
 import { CAMERA_VIEW, worldRadiusToSceneScale } from '../coords.js';
+import { ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
 
 const COPY_VERT = `in vec3 position;
 in vec2 uv;
@@ -24,6 +25,8 @@ uniform float u_scanlineIntensity;
 uniform float u_vignette;
 uniform float u_motionWarp;
 uniform float u_chromaticMotion;
+uniform float u_entityGain;
+uniform float u_entityGamma;
 in vec2 v_uv;
 out vec4 fragColor;
 
@@ -40,6 +43,8 @@ void main() {
   c.r = texture(u_input, clamp(warpedUv + chroma, vec2(0.001), vec2(0.999))).r;
   c.g = mid.g;
   c.b = texture(u_input, clamp(warpedUv - chroma, vec2(0.001), vec2(0.999))).b;
+
+  c = pow(max(c, vec3(0.0)), vec3(u_entityGamma)) * u_entityGain;
 
   // Kept near-zero by default. The pass exists so Three owns a real
   // post-process stage without changing the legacy visual target.
@@ -61,6 +66,8 @@ function qualitySettings(renderQuality) {
       vignette: 0.0,
       motionWarp: 0.0,
       chromaticMotion: 0.0,
+      entityGain: 1.0,
+      entityGamma: 1.0,
     };
   }
   if (renderQuality === 'default') {
@@ -71,6 +78,8 @@ function qualitySettings(renderQuality) {
       vignette: 0.035,
       motionWarp: 0.004,
       chromaticMotion: 0.0018,
+      entityGain: 1.22,
+      entityGamma: 0.88,
     };
   }
   return {
@@ -80,6 +89,8 @@ function qualitySettings(renderQuality) {
     vignette: 0.055,
     motionWarp: 0.007,
     chromaticMotion: 0.0025,
+    entityGain: 1.38,
+    entityGamma: 0.82,
   };
 }
 
@@ -188,6 +199,11 @@ export class ThreeRendererBackend {
     this.entityGroup = new THREE.Group();
     this.entityGroup.name = 'world-entity-layer';
     this.entityGroup.position.z = 0.24;
+    for (const [propertyName, groupName] of ENTITY_SUBGROUPS) {
+      this[propertyName] = new THREE.Group();
+      this[propertyName].name = groupName;
+      this.entityGroup.add(this[propertyName]);
+    }
     this.foregroundGroup = new THREE.Group();
     this.foregroundGroup.name = 'foreground-screen-space-layer';
     this.foregroundGroup.position.z = 0.35;
@@ -218,6 +234,8 @@ export class ThreeRendererBackend {
         u_vignette: { value: this.settings.vignette },
         u_motionWarp: { value: this.settings.motionWarp },
         u_chromaticMotion: { value: this.settings.chromaticMotion },
+        u_entityGain: { value: this.settings.entityGain },
+        u_entityGamma: { value: this.settings.entityGamma },
       },
     });
     const postQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.copyMaterial);
@@ -240,6 +258,7 @@ export class ThreeRendererBackend {
       parallax: null,
       entityCount: 0,
       semanticCount: 0,
+      visualCounts: {},
       sharedContext: true,
       canvasUploads: 0,
       pooledMeshes: 0,
@@ -335,43 +354,10 @@ export class ThreeRendererBackend {
       ring: new THREE.RingGeometry(0.90, 1.0, 64),
       square: new THREE.PlaneGeometry(1, 1),
     };
-    const mat = (color, opacity, blending = THREE.AdditiveBlending) => new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity,
-      depthTest: false,
-      depthWrite: false,
-      blending,
-      side: THREE.DoubleSide,
-    });
-    this.entityMaterials = {
-      ship: mat(0xf4f8ff, 0.96, THREE.NormalBlending),
-      remoteShip: mat(0x80b8ff, 0.78, THREE.NormalBlending),
-      scavenger: mat(0xff6f5f, 0.78, THREE.NormalBlending),
-      wellCore: mat(0xff2c19, 0.24),
-      wellRing: mat(0x4688ff, 0.25),
-      hazardRing: mat(0xff2c19, 0.18),
-      surfRing: mat(0x7cecff, 0.20),
-      star: mat(0xffcf6d, 0.55),
-      wreck: mat(0xa9bfd6, 0.70, THREE.NormalBlending),
-      lootedWreck: mat(0x52606d, 0.45, THREE.NormalBlending),
-      portal: mat(0xc684ff, 0.48),
-      riftPortal: mat(0x80f4ff, 0.52),
-      planetoid: mat(0xb8e2ff, 0.62, THREE.NormalBlending),
-      wave: mat(0xa6f4ff, 0.20),
-      fauna: mat(0x8cffd6, 0.42),
-      sentry: mat(0x00ff88, 0.55),
-      tether: new THREE.LineBasicMaterial({
-        color: 0xa9ddff,
-        transparent: true,
-        opacity: 0.55,
-        depthTest: false,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      }),
-    };
+    this.entityMaterials = createVisualMaterials();
     this.lastEntityCount = 0;
     this.lastSemanticCount = 0;
+    this.lastVisualCounts = {};
   }
 
   _createTarget(width, height) {
@@ -516,6 +502,7 @@ export class ThreeRendererBackend {
     this.entityMeshCursor = 0;
     this.semanticMeshCursor = 0;
     this.lineCursor = 0;
+    this.visualCounts = {};
     for (const mesh of this.entityMeshPool) mesh.visible = false;
     for (const mesh of this.semanticMeshPool) mesh.visible = false;
     for (const line of this.linePool) line.visible = false;
@@ -542,6 +529,8 @@ export class ThreeRendererBackend {
       mesh.frustumCulled = false;
       pool.push(mesh);
       group.add(mesh);
+    } else if (mesh.parent !== group) {
+      group.add(mesh);
     }
     this[cursorKey] += 1;
     mesh.geometry = geometry;
@@ -551,7 +540,58 @@ export class ThreeRendererBackend {
     mesh.rotation.z = rotation;
     mesh.renderOrder = 14 + Math.round(z * 100);
     mesh.visible = true;
+    this._countVisualGroup(group);
     return mesh;
+  }
+
+  _countVisualGroup(group) {
+    const key = group?.name || 'unknown';
+    this.visualCounts[key] = (this.visualCounts[key] || 0) + 1;
+  }
+
+  _squashMesh(mesh, yScale = 1) {
+    if (mesh && Number.isFinite(yScale) && yScale > 0) {
+      mesh.scale.y *= yScale;
+    }
+    return mesh;
+  }
+
+  _addContrastBacking(wx, wy, radius, rotation, z, state, radiusMode, {
+    opacity = 'normal',
+    radiusScale = 1.65,
+    yScale = 0.72,
+  } = {}) {
+    const material = opacity === 'heavy' ? this.entityMaterials.matteHeavy : this.entityMaterials.matteCore;
+    const soft = this._addMesh(this.entityBackingGroup, this.entityGeometries.disc, this.entityMaterials.matteSoft,
+      wx, wy, radius * radiusScale * 1.28, rotation, z - 0.035, state, radiusMode);
+    const core = this._addMesh(this.entityBackingGroup, this.entityGeometries.disc, material,
+      wx, wy, radius * radiusScale, rotation, z - 0.03, state, radiusMode);
+    this._squashMesh(soft, yScale);
+    this._squashMesh(core, yScale);
+  }
+
+  _addReadableEntity(group, geometry, coreMaterial, wx, wy, radius, rotation, z, state, radiusMode, {
+    haloMaterial = null,
+    rimMaterial = null,
+    haloRadius = 1.55,
+    rimRadius = 1.18,
+    matteRadius = 1.85,
+    matteY = 0.74,
+    matteOpacity = 'normal',
+  } = {}) {
+    this._addContrastBacking(wx, wy, radius, rotation, z, state, radiusMode, {
+      opacity: matteOpacity,
+      radiusScale: matteRadius,
+      yScale: matteY,
+    });
+    if (haloMaterial) {
+      this._addMesh(group, geometry, haloMaterial, wx, wy, radius * haloRadius, rotation, z - 0.012, state, radiusMode);
+    }
+    const core = this._addMesh(group, geometry, coreMaterial, wx, wy, radius, rotation, z, state, radiusMode);
+    if (rimMaterial) {
+      this._addMesh(group, geometry, rimMaterial, wx, wy, radius * rimRadius, rotation, z + 0.006, state, radiusMode);
+    }
+    return core;
   }
 
   _addLine(group, ax, ay, bx, by, material, state = this.lastSceneState) {
@@ -594,6 +634,11 @@ export class ThreeRendererBackend {
       if (mesh) entityCount++;
       return mesh;
     };
+    const addReadable = (group, geometry, coreMaterial, wx, wy, radius, rotation, z, options = {}, mode = 'world') => {
+      const mesh = this._addReadableEntity(group, geometry, coreMaterial, wx, wy, radius, rotation, z, renderState, mode, options);
+      if (mesh) entityCount++;
+      return mesh;
+    };
     const addSemantic = (...args) => {
       const maybeMode = typeof args[args.length - 1] === 'string' ? args.pop() : 'world';
       const mesh = this._addMesh(this.semanticGroup, ...args, renderState, maybeMode);
@@ -611,39 +656,68 @@ export class ThreeRendererBackend {
       if (life > 0.02) addSemantic(this.entityGeometries.ring, this.entityMaterials.wave, ring.sourceWX, ring.sourceWY, ring.radius || 0.01, 0, 0.02);
     }
     for (const star of sceneState.stars || []) {
-      addEntity(this.entityGeometries.disc, this.entityMaterials.star, star.wx, star.wy, 0.025 + (star.mass || 1) * 0.012, 0, 0.06, 'screen');
+      addReadable(this.landmarkEntityGroup, this.entityGeometries.disc, this.entityMaterials.star,
+        star.wx, star.wy, 0.025 + (star.mass || 1) * 0.012, 0, 0.06,
+        { haloMaterial: this.entityMaterials.starHalo, haloRadius: 2.8, rimRadius: 1.18, matteRadius: 1.7, matteY: 1.0 },
+        'screen');
     }
     for (const portal of sceneState.portals || []) {
-      const material = portal.type === 'rift' ? this.entityMaterials.riftPortal : this.entityMaterials.portal;
-      addEntity(this.entityGeometries.ring, material, portal.wx, portal.wy, portal.radius || 0.08, 0, 0.08);
+      const isRift = portal.type === 'rift';
+      const material = isRift ? this.entityMaterials.riftPortal : this.entityMaterials.portal;
+      const halo = isRift ? this.entityMaterials.riftPortalHalo : this.entityMaterials.portalHalo;
+      addReadable(this.landmarkEntityGroup, this.entityGeometries.ring, material,
+        portal.wx, portal.wy, portal.radius || 0.08, 0, 0.08,
+        { haloMaterial: halo, haloRadius: 1.55, rimRadius: 1.10, matteRadius: 1.25, matteY: 1.0, matteOpacity: 'heavy' });
     }
     for (const wreck of sceneState.wrecks || []) {
       const size = wreck.size === 'large' ? 0.035 : wreck.size === 'small' || wreck.size === 'scattered' ? 0.018 : 0.026;
       const material = wreck.looted ? this.entityMaterials.lootedWreck : this.entityMaterials.wreck;
-      addEntity(this.entityGeometries.square, material, wreck.wx, wreck.wy, size, Math.PI * 0.25, 0.07, 'screen');
+      const halo = wreck.looted ? this.entityMaterials.lootedWreckHalo : this.entityMaterials.wreckHalo;
+      addReadable(this.salvageEntityGroup, this.entityGeometries.square, material,
+        wreck.wx, wreck.wy, size, Math.PI * 0.25, 0.07,
+        { haloMaterial: halo, haloRadius: 1.45, rimRadius: 1.10, matteRadius: 2.25, matteY: 0.82, matteOpacity: 'heavy' },
+        'screen');
     }
     for (const planetoid of sceneState.planetoids || []) {
       const angle = Math.atan2(-(planetoid.vy || 0), planetoid.vx || 0);
-      addEntity(this.entityGeometries.triangle, this.entityMaterials.planetoid, planetoid.wx, planetoid.wy, 0.022, angle, 0.09, 'screen');
+      addReadable(this.landmarkEntityGroup, this.entityGeometries.triangle, this.entityMaterials.planetoid,
+        planetoid.wx, planetoid.wy, 0.022, angle, 0.09,
+        { haloMaterial: this.entityMaterials.planetoidHalo, haloRadius: 1.55, rimRadius: 1.12, matteRadius: 1.7 },
+        'screen');
     }
     for (const scav of sceneState.scavengers || []) {
-      addEntity(this.entityGeometries.triangle, this.entityMaterials.scavenger, scav.wx, scav.wy, 0.027, -(scav.facing || 0), 0.12, 'screen');
+      addReadable(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.scavenger,
+        scav.wx, scav.wy, 0.027, -(scav.facing || 0), 0.12,
+        { haloMaterial: this.entityMaterials.scavengerHalo, rimMaterial: this.entityMaterials.scavengerHalo, matteRadius: 1.95 },
+        'screen');
     }
     for (const player of sceneState.remotePlayers || []) {
       if (player.status === 'dead') continue;
       const angle = Math.atan2(-(player.vy || 0), player.vx || 0);
-      addEntity(this.entityGeometries.triangle, this.entityMaterials.remoteShip, player.wx, player.wy, 0.030, angle, 0.13, 'screen');
+      addReadable(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.remoteShip,
+        player.wx, player.wy, 0.030, angle, 0.13,
+        { haloMaterial: this.entityMaterials.remoteShipHalo, rimMaterial: this.entityMaterials.remoteShipHalo, matteRadius: 2.0 },
+        'screen');
     }
     for (const fauna of sceneState.fauna || []) {
-      addEntity(this.entityGeometries.disc, this.entityMaterials.fauna, fauna.wx, fauna.wy, 0.008 + (fauna.size || 2) * 0.003, 0, 0.10, 'screen');
+      addReadable(this.activeEntityGroup, this.entityGeometries.disc, this.entityMaterials.fauna,
+        fauna.wx, fauna.wy, 0.008 + (fauna.size || 2) * 0.003, 0, 0.10,
+        { haloMaterial: this.entityMaterials.faunaHalo, haloRadius: 2.0, matteRadius: 1.9, matteY: 1.0 },
+        'screen');
     }
     for (const sentry of sceneState.sentries || []) {
-      addEntity(this.entityGeometries.disc, this.entityMaterials.sentry, sentry.wx, sentry.wy, 0.014, 0, 0.11, 'screen');
+      addReadable(this.activeEntityGroup, this.entityGeometries.disc, this.entityMaterials.sentry,
+        sentry.wx, sentry.wy, 0.014, 0, 0.11,
+        { haloMaterial: this.entityMaterials.sentryHalo, haloRadius: 2.2, matteRadius: 2.0, matteY: 1.0 },
+        'screen');
     }
 
     const ship = sceneState.ship;
     if (ship) {
-      addEntity(this.entityGeometries.triangle, this.entityMaterials.ship, ship.wx, ship.wy, 0.034, -(ship.facing || 0), 0.16, 'screen');
+      addReadable(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.ship,
+        ship.wx, ship.wy, 0.034, -(ship.facing || 0), 0.16,
+        { haloMaterial: this.entityMaterials.shipHalo, rimMaterial: this.entityMaterials.shipRim, haloRadius: 1.70, rimRadius: 1.18, matteRadius: 2.1 },
+        'screen');
     }
 
     const sling = sceneState.slingshot || {};
@@ -659,6 +733,7 @@ export class ThreeRendererBackend {
 
     this.lastEntityCount = entityCount;
     this.lastSemanticCount = semanticCount;
+    this.lastVisualCounts = { ...this.visualCounts };
   }
 
   render(frameContext) {
@@ -709,6 +784,7 @@ export class ThreeRendererBackend {
       parallax: { ...this.lastSceneState },
       entityCount: this.lastEntityCount,
       semanticCount: this.lastSemanticCount,
+      visualCounts: this.lastVisualCounts,
       sharedContext: true,
       canvasUploads: 0,
       pooledMeshes: this.entityMeshPool.length + this.semanticMeshPool.length,
@@ -721,7 +797,16 @@ export class ThreeRendererBackend {
       { name: this.backgroundGroup.name, z: this.backgroundGroup.position.z, role: 'parallax backdrop' },
       { name: this.fabricGroup.name, z: this.fabricGroup.position.z, role: 'Composer-owned ASCII frame' },
       { name: this.semanticGroup.name, z: this.semanticGroup.position.z, role: 'semantic flow/hazard channels' },
-      { name: this.entityGroup.name, z: this.entityGroup.position.z, role: '3D world entities' },
+      {
+        name: this.entityGroup.name,
+        z: this.entityGroup.position.z,
+        role: '3D world entities',
+        children: ENTITY_SUBGROUPS.map(([propertyName, _groupName, role]) => ({
+          name: this[propertyName].name,
+          z: this[propertyName].position.z,
+          role,
+        })),
+      },
       { name: this.foregroundGroup.name, z: this.foregroundGroup.position.z, role: 'screen-space depth cues' },
     ];
   }

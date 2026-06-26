@@ -52,13 +52,22 @@ Three `z` values centered around zero, but the ordering should stay stable.
 
 ## Post-Processing Order
 
-The end-state renderer should resolve the world as one composed image, then run
-global post, then draw HUD:
+The end-state renderer should resolve the world as one composed image, run most
+world-space and lens post, then draw HUD. A final display treatment can sit on
+top only when it is intentionally a screen/monitor effect:
 
 1. render background, fabric, semantic, entity, and near-camera world layers;
 2. resolve entity separation and bloom prepass;
-3. run full-frame color grade, vignette, chromatic aberration, and CRT/scanline;
-4. draw DOM/HUD with a lighter matching treatment.
+3. run full-frame world post: color grade, vignette, chromatic aberration,
+   source-driven lens flecks, bloom, and any entity/fabric compositing effects;
+4. draw DOM/HUD and menus as crisp UI surfaces;
+5. optionally apply a final CRT/scanline/display-shell treatment over the whole
+   frame, including HUD, or mirror that treatment in CSS when a unified final
+   pass is not available.
+
+The working rule: bloom, lens flecks, color grade, entity separation, and
+fabric effects belong below HUD. CRT can be above everything because it is the
+fictional display, not a world light. When in doubt, keep UI readable first.
 
 Depth of field should be rare or absent. The Octopath-style vibe is useful
 because it places old-school assets inside modern lens/post staging, but LBH is
@@ -97,6 +106,12 @@ owning a small local contrast system:
 
 The contact matte is the critical missing piece in the current screenshots. It
 lets the ASCII ocean stay busy while objects remain separate from it.
+For complex objects such as wreck fields, the matte/backing applies to the
+whole entity footprint, not only a single icon point. The goal is partial
+occlusion and softening of the noisy fabric under the object, not a hard
+cutout. Alpha-textured pixel assets can still show black void through their
+transparent surface, but the fabric immediately behind them should be locally
+quieted enough that the silhouette survives.
 
 Silhouette owns **category** first. At Steam Deck scale, a tiny hull-footprint
 mark can reliably separate broad object families: ship, threat, wreck/loot,

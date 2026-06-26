@@ -65,6 +65,59 @@ Acceptance:
 - bridge primitives can be replaced family by family without changing the
   renderer's public adapter shape.
 
+## Visual Target Breakdown - June 26 Board
+
+The current visual target image breaks into four concrete work lanes:
+
+### Left Panel: Layer Stack And Post Order
+
+Tasks:
+
+- split the entity layer into backing, landmark, salvage, active, immediate VFX,
+  and near-camera groups;
+- keep most post-processing below HUD: bloom, lens flecks, color grade,
+  vignette, chromatic slip, and world compositing;
+- reserve final CRT/scanline treatment as the one effect allowed above the UI,
+  or mirror it as a HUD CSS treatment until the renderer has one final combined
+  pass;
+- expose layer/group counts in renderer diagnostics so tests can guard the
+  stack shape.
+
+### Center Panel: Entities On Top Of The Fabric
+
+Tasks:
+
+- put a dark transparent contact matte behind every player-critical object;
+- add a softer outer backing where entities sit on noisy fabric so the effect
+  reads as partial occlusion/softening instead of a hard cutout;
+- tune backing by family: ship and portal compact, wreck fields wider and
+  heavier, stars glow but still separate from the fabric;
+- add an entity-showcase fixture with all families on screen for repeated
+  screenshot review.
+
+### Right Panel: Top-Down Pixel-Resolved Assets
+
+Tasks:
+
+- treat ships, wrecks, fauna, sentries, stars, comets, and portals as flat
+  planes or low-complexity 3D objects viewed by the top-down camera;
+- allow directional lighting and parallax on those objects, but keep their
+  visible surfaces pixel-authored or nearest-neighbor pixelated;
+- use alpha in textures for void-through shapes, while keeping the backing
+  matte under the full readable footprint;
+- build sprite-card and pixel-textured-mesh helpers before broad asset
+  production.
+
+### Overall: Contrast First
+
+Tasks:
+
+- increase entity core values and rim/halo brightness before adding detail;
+- reserve black/near-black for the void and entity backings, not for tiny
+  gameplay glyphs;
+- review at Steam Deck scale with labels off and desaturated snapshots;
+- reject any asset that looks good only when the ASCII fabric is quiet.
+
 ## Pass 2 - Separation On Existing Primitives
 
 Tasks:

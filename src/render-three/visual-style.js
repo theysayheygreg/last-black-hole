@@ -1,0 +1,82 @@
+// src/render-three/visual-style.js
+//
+// Shared visual language for Three-rendered world objects. The first pass keeps
+// the old primitive silhouettes, but gives them the same local contrast stack:
+// dark backing, bright core, additive rim/halo. Final pixel assets can swap in
+// later without changing how objects separate from the ASCII fabric.
+
+import * as THREE from '../../node_modules/three/build/three.module.js';
+
+export const ENTITY_SUBGROUPS = [
+  ['entityBackingGroup', 'entity-backing-layer', 'contact mattes and fabric softening'],
+  ['landmarkEntityGroup', 'landmark-entity-layer', 'stars, portals, planetoids, route anchors'],
+  ['salvageEntityGroup', 'salvage-entity-layer', 'wrecks, cargo, debris, pickup glints'],
+  ['activeEntityGroup', 'active-entity-layer', 'player, rivals, scavengers, fauna, sentries'],
+  ['immediateVfxGroup', 'immediate-vfx-layer', 'thrust, sparks, short-lived state effects'],
+];
+
+export function makeVisualMaterial(color, opacity, {
+  blending = THREE.AdditiveBlending,
+  depthTest = false,
+  depthWrite = false,
+} = {}) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthTest,
+    depthWrite,
+    blending,
+    side: THREE.DoubleSide,
+  });
+}
+
+export function createVisualMaterials() {
+  const normal = THREE.NormalBlending;
+  const add = THREE.AdditiveBlending;
+  return {
+    matteSoft: makeVisualMaterial(0x000006, 0.28, { blending: normal }),
+    matteCore: makeVisualMaterial(0x000000, 0.54, { blending: normal }),
+    matteHeavy: makeVisualMaterial(0x000000, 0.68, { blending: normal }),
+
+    ship: makeVisualMaterial(0xffffff, 1.0, { blending: normal }),
+    shipHalo: makeVisualMaterial(0x74d7ff, 0.58, { blending: add }),
+    shipRim: makeVisualMaterial(0xd9fbff, 0.72, { blending: add }),
+    remoteShip: makeVisualMaterial(0x98d8ff, 0.96, { blending: normal }),
+    remoteShipHalo: makeVisualMaterial(0x3fb8ff, 0.50, { blending: add }),
+    scavenger: makeVisualMaterial(0xff3b35, 0.98, { blending: normal }),
+    scavengerHalo: makeVisualMaterial(0xff1f39, 0.56, { blending: add }),
+
+    wellCore: makeVisualMaterial(0xff210f, 0.34, { blending: add }),
+    wellRing: makeVisualMaterial(0x74b8ff, 0.40, { blending: add }),
+    hazardRing: makeVisualMaterial(0xff3b22, 0.28, { blending: add }),
+    surfRing: makeVisualMaterial(0x9cfbff, 0.32, { blending: add }),
+    wave: makeVisualMaterial(0xb8ffff, 0.26, { blending: add }),
+
+    star: makeVisualMaterial(0xffe08a, 0.90, { blending: add }),
+    starHalo: makeVisualMaterial(0xff9e38, 0.42, { blending: add }),
+    wreck: makeVisualMaterial(0xe8eef7, 0.92, { blending: normal }),
+    wreckHalo: makeVisualMaterial(0xffc15a, 0.42, { blending: add }),
+    lootedWreck: makeVisualMaterial(0x7f8994, 0.58, { blending: normal }),
+    lootedWreckHalo: makeVisualMaterial(0x9ba5b0, 0.22, { blending: add }),
+    portal: makeVisualMaterial(0xff6de2, 0.86, { blending: add }),
+    portalHalo: makeVisualMaterial(0xff36c8, 0.54, { blending: add }),
+    riftPortal: makeVisualMaterial(0x9dfcff, 0.90, { blending: add }),
+    riftPortalHalo: makeVisualMaterial(0x4beeff, 0.58, { blending: add }),
+    planetoid: makeVisualMaterial(0xd7f2ff, 0.86, { blending: normal }),
+    planetoidHalo: makeVisualMaterial(0x8ee2ff, 0.36, { blending: add }),
+    fauna: makeVisualMaterial(0x7dffd8, 0.76, { blending: add }),
+    faunaHalo: makeVisualMaterial(0x36ffc3, 0.34, { blending: add }),
+    sentry: makeVisualMaterial(0x35ff98, 0.88, { blending: add }),
+    sentryHalo: makeVisualMaterial(0x00ff88, 0.42, { blending: add }),
+
+    tether: new THREE.LineBasicMaterial({
+      color: 0xbfeaff,
+      transparent: true,
+      opacity: 0.72,
+      depthTest: false,
+      depthWrite: false,
+      blending: add,
+    }),
+  };
+}

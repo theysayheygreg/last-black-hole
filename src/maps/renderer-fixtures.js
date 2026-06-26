@@ -112,10 +112,59 @@ export const FIXTURE_INTERFERENCE_10X10 = {
   planetoids: [],
 };
 
+export const FIXTURE_ENTITY_SHOWCASE = {
+  name: 'Renderer Entity Showcase Fixture',
+  worldScale: 3.0,
+  camera: 'locked',
+  wells: [
+    { x: 1.5, y: 1.18, mass: 1.05, orbitalDir: 1, killRadius: 0.05, spinRate: 0.72, points: 8, accretionRadius: 0.03 },
+  ],
+  stars: [
+    { x: 0.72, y: 0.72, mass: 1.2, type: 'yellowDwarf' },
+    { x: 2.35, y: 0.92, mass: 0.9, type: 'whiteDwarf' },
+  ],
+  loot: [],
+  wrecks: [
+    { x: 0.78, y: 1.75, type: 'derelict', tier: 1, size: 'medium' },
+    { x: 1.08, y: 1.98, type: 'vault', tier: 3, size: 'large' },
+    { x: 1.95, y: 1.92, type: 'debris', tier: 1, size: 'small' },
+  ],
+  planetoids: [
+    { type: 'orbit', wellIndex: 0 },
+  ],
+  fixturePortals: [
+    { x: 2.25, y: 2.15, type: 'standard', lifespan: 120 },
+    { x: 2.55, y: 1.55, type: 'rift', lifespan: 120 },
+  ],
+  fixtureScavengers: [
+    { x: 1.94, y: 0.92, archetype: 'vulture', facing: Math.PI * 0.15 },
+    { x: 0.95, y: 2.28, archetype: 'drifter', facing: Math.PI * 1.5 },
+  ],
+  fixtureRemotePlayers: [
+    { clientId: 'fixture-remote', wx: 1.72, wy: 2.23, vx: 0.25, vy: -0.1, status: 'alive', hullType: 'resonant' },
+  ],
+  fixtureFauna: [
+    { id: 'fixture-jelly', wx: 2.20, wy: 0.60, size: 3, kind: 'jelly' },
+  ],
+  fixtureSentries: [
+    { id: 'fixture-sentry', wx: 0.56, wy: 1.15, state: 'patrol' },
+  ],
+  configOverrides: {
+    ascii: {
+      shimmer: 4.5,
+    },
+    fluid: {
+      ambientTurbulence: 0.00035,
+      ambientDensity: 0.00022,
+    },
+  },
+};
+
 export const RENDERER_FIXTURES = {
   title: FIXTURE_TITLE,
   singleWell: FIXTURE_SINGLE_WELL,
   interference: FIXTURE_INTERFERENCE,
   singleWell5x5: FIXTURE_SINGLE_WELL_5X5,
   interference10x10: FIXTURE_INTERFERENCE_10X10,
+  entityShowcase: FIXTURE_ENTITY_SHOWCASE,
 };

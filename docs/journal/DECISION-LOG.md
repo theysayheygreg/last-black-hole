@@ -1,5 +1,30 @@
 # Decision Log
 
+## 2026-06-26 — Entity readability starts with backing and contrast
+
+**Decision:** Start the visual target implementation by increasing contrast and
+adding entity backings before replacing primitive shapes. Every important Three
+entity should get a small local separation stack: transparent dark backing,
+bright core, rim/halo, then later pixel-authored or pixel-textured top-down
+asset surfaces.
+
+**Why:** The current challenge is not only icon shape; complex objects need to
+sit on top of a noisy ASCII fabric without disappearing into it. A backing pass
+proves the z-depth/layering approach immediately and gives future pixel assets a
+stable readability contract. Wrecks and other larger clusters should soften or
+partially occlude the whole footprint underneath them, not draw a tiny symbol on
+unmodified fabric.
+
+**Where it landed:** `src/render-three/visual-style.js`,
+`src/render-three/three-renderer.js`, `src/maps/renderer-fixtures.js`,
+`tests/renderer.cjs`, `tests/suite-manifest.cjs`,
+`docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
+`docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
+
+**Door status:** Closed for first slice ordering. Open for tuning exact matte
+opacity/radius, replacing bridge primitives with pixel surfaces, and deciding
+which post-processing effects move into the eventual final combined pass.
+
 ## 2026-06-26 — Non-fluid objects move to a Three entity language
 
 **Decision:** Treat the current Three entity primitives as bridge markers, not
