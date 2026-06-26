@@ -432,7 +432,9 @@ function stageElectronShell(mode) {
   const shellPkg = {
     name: `${PRODUCT_SLUG}-shell`,
     productName: PRODUCT_NAME,
-    version: BUILD_VERSION,
+    // Electron/Windows package metadata expects numeric semver; LBH's hash build
+    // version stays in BUILD-MANIFEST and artifact paths.
+    version: PUBLIC_VERSION,
     main: 'electron-main.cjs',
   };
 
