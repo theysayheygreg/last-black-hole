@@ -69,6 +69,9 @@ affordances**, not dark everything.
 8. **Separate before decorating.** If an object disappears in the fabric, add a
    contact matte, rim shell, halo, or local background before adding surface
    detail.
+9. **Silhouette is affiliation.** Friend, foe, neutral, loot, route anchor, and
+   anomaly must be discernible by shape language before color, label, or HUD
+   state helps.
 
 ## Scene Ownership And Sublayers
 
@@ -109,6 +112,25 @@ Each first-class entity should be built from the same small local stack:
 This stack is more important than model detail. A tiny clean hull with a matte,
 rim, and tuned brightness will read better than a busy miniature sitting naked
 on the ASCII ocean.
+
+## Visual Pillar: Silhouette Affiliation
+
+Every non-fluid entity family needs a strong silhouette that survives background
+noise. The first read should answer "what relationship does this object have to
+me?" before the player has to parse color, label, or exact type.
+
+| Category | Silhouette Goal | Secondary Cues |
+|----------|-----------------|----------------|
+| Player/friend | clean forward hull, stable readable nose, least visual noise | blue-white/cyan rim, strongest contact matte, thrust/brake ports |
+| Foe | sharper aggressive hull or segmented threat shape, directional pursuit read | red shell, hotter trail, signal sparks |
+| Neutral ecology | softer or drifting organic outline, less weapon-like directionality | green/cyan pulse, slower breathing motion |
+| Loot/wreck | broken cluster or shard pile, no active nose/facing | amber glints, debris matte, looted desaturation |
+| Route anchor | radial, orbital, or aperture silhouette | gold/cyan corona, lane ticks, portal instability marks |
+| Anomaly/Inhibitor | wrong geometry, asymmetry, impossible cutout or shard | magenta/violet corruption, fabric bite, unstable halo |
+
+Color reinforces affiliation, but shape owns it. If all colors were temporarily
+desaturated, the player should still be able to identify player, threat, loot,
+and extraction-route objects at gameplay zoom.
 
 ## Palette Roles
 

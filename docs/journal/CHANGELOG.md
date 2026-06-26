@@ -23,6 +23,9 @@
   fauna, and other discrete entities should be 2D pixel assets or 3D assets with
   pixelated top-down textures. Octopath remains a vibe reference for pixel
   surfaces inside modern staging, not a mandate for heavy depth of field.
+- Added a silhouette-affiliation visual pillar: friend, foe, neutral, loot,
+  route anchor, and anomaly objects should be discernible from shape before
+  color, label, or HUD state.
 - Updated the v0.2 design bible, roadmap, design/code delta, project roadmap,
   build plan, backlog, and Three migration plan so the current renderer status
   distinguishes shipped primitive projection from the still-needed visual

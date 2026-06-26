@@ -17,6 +17,9 @@ The ASCII-over-fluid look IS the game. If the game played identically but looked
 - If we're behind schedule, we cut systems before we cut visual identity
 - "Does it look right?" is as valid a blocker as "does it run at 60fps?"
 - Pre-vis and art direction happen before implementation, not after
+- Non-fluid entities need strong, differentiated silhouettes: the player should
+  tell friend, foe, neutral, loot, route anchor, and anomaly apart before
+  reading a label
 
 **The test:** If someone watches 10 seconds of gameplay footage with no context, do they stop scrolling? That's the product.
 

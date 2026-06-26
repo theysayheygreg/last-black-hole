@@ -91,11 +91,16 @@ owning a small local contrast system:
 The contact matte is the critical missing piece in the current screenshots. It
 lets the ASCII ocean stay busy while objects remain separate from it.
 
+Silhouette is the first affiliation read. Friend, foe, neutral, loot, route
+anchor, and anomaly objects need distinct outlines before color or labels enter
+the read. Color and glow can reinforce category, but the shape should already
+separate "safe", "danger", "valuable", and "route" in a noisy frame.
+
 ## Contrast Budgets
 
 | Family | Minimum Contrast Device | Notes |
 |--------|-------------------------|-------|
-| Player | contact matte + bright hull + rim shell + thrust/brake accents | The player should remain readable in the busiest well field. |
+| Player/friend | contact matte + bright hull + rim shell + thrust/brake accents | The player should remain readable in the busiest well field. |
 | Portal | aperture halo + dark inner well + state ticks | Extraction must read at a glance before labels. |
 | Pickup-ready wreck | debris matte + amber glint | Loot value should punch through black and cyan fabric. |
 | Looted wreck | debris silhouette + muted rim | Still present, but no reward sparkle. |

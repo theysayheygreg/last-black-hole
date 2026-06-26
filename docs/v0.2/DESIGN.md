@@ -143,6 +143,9 @@ the ASCII fabric.
 - **Keep entity surfaces pixel-authored:** ships, enemies, wreck fragments, and
   fauna should be 2D pixel assets or 3D assets with pixelated top-down textures,
   even when lit directionally in the Three scene.
+- **Make silhouette carry affiliation:** friend, foe, neutral, loot, route
+  anchor, and anomaly must be easy to tell apart against ASCII/background noise
+  before labels or HUD state help.
 - **Do not copy heavy depth of field:** the HD-2D vibe is useful, but LBH's
   black void needs sharper contrast, parallax, source glow, lens flecks, and
   CRT discipline more than blurred emptiness.

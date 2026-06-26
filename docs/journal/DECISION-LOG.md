@@ -75,6 +75,26 @@ restrained bloom, CRT treatment, and sharp pixel-readable entity surfaces.
 which first pass uses hand-authored sprites, generated pixel masks, or
 pixel-textured top-down meshes.
 
+## 2026-06-26 — Silhouette carries entity affiliation
+
+**Decision:** Treat strong, well-differentiated silhouettes as a visual pillar
+for non-fluid entities. Player/friend, foe, neutral ecology, loot/wreck, route
+anchor, and anomaly/Inhibitor objects must be discernible against ASCII and
+background noise before color, labels, or HUD state help.
+
+**Why:** LBH's background is intentionally dark, noisy, and alive. If entity
+shape language is weak, brighter colors alone will still collapse into
+confusing glow. The first gameplay read should be "safe, danger, valuable,
+route, or wrong" in a fraction of a second.
+
+**Where it landed:** `docs/design/PILLARS.md`,
+`docs/design/THREE-ENTITY-VISUALS.md`,
+`docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`,
+`docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`, and `docs/v0.2/DESIGN.md`.
+
+**Door status:** Closed for visual direction. Open for exact hull and entity
+silhouette sheets.
+
 ## 2026-06-25 — Build versions use public train plus commit hash
 
 **Decision:** Use `major.minor.public.commit` for LBH build identifiers.

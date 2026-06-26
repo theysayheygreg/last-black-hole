@@ -86,6 +86,7 @@ Acceptance:
 Tasks:
 
 - replace player/remote/rival triangles with tiny pixel hull silhouettes;
+- define friend/foe/neutral silhouettes so affiliation reads without labels;
 - add thrust, brake, roll/lean, and signal glow cues;
 - reserve the cleanest silhouette and highest local contrast for the player;
 - give AI/rival personalities small trail or hull differences without changing
@@ -94,6 +95,8 @@ Tasks:
 Acceptance:
 
 - a still screenshot identifies player versus hostile versus remote;
+- the same screenshot keeps friend, foe, neutral, loot, route, and anomaly reads
+  distinct when viewed small or desaturated;
 - a short clip shows acceleration/braking state without reading HUD numbers.
 
 ## Pass 4 - Wreck And Salvage Family
