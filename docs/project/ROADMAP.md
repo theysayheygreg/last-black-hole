@@ -60,7 +60,7 @@ reading stale health records or reconstructing status from `git log`.
 |---------|-----------|--------|
 | Three entity visual language | `docs/design/THREE-ENTITY-VISUALS.md` | Designed 2026-06-26; current code has primitive bridge markers, next work is higher-fidelity Three object families |
 | Three scene visual hierarchy | `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md` | Designed 2026-06-26; black void remains primary, but interactive objects require bright contrast affordances, mattes, halos, or local backplates |
-| Three entity visual pass plan | `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` | Designed 2026-06-26; implementation starts with shared style kit, separation helpers, player/wreck/portal replacements, and renderer fixture coverage |
+| Three entity visual pass plan | `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` | Designed 2026-06-26; implementation starts with shared style kit, matte/rim proof on existing primitives, player asset bake-off, portal replacement, wreck replacement, and renderer fixture coverage |
 | Three entity mood board | `docs/reference/THREE-ENTITY-MOODBOARD.md` | Designed 2026-06-26; cited references and generated target visuals for 2D identity inside staged 3D depth |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
@@ -74,7 +74,9 @@ reading stale health records or reconstructing status from `git log`.
 1. **Three entity visual-language pass** — replace bridge primitives for ships,
    stars, planetoids/comets, wrecks, portals, rivals, fauna, and sentries with
    first-class scene objects. Preserve a dark void, but make gameplay affordances
-   punchy with bright values, halos, contact mattes, and local backgrounds. See
+   punchy with bright values, halos, contact mattes, and local backgrounds.
+   Start by proving matte + rim on current primitives, then run the player ship
+   sprite-card vs. pixel-textured-mesh bake-off before broad ship production. See
    `docs/design/THREE-ENTITY-VISUALS.md`,
    `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
    `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.

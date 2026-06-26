@@ -75,25 +75,30 @@ restrained bloom, CRT treatment, and sharp pixel-readable entity surfaces.
 which first pass uses hand-authored sprites, generated pixel masks, or
 pixel-textured top-down meshes.
 
-## 2026-06-26 — Silhouette carries entity affiliation
+## 2026-06-26 — Silhouette carries category before affiliation
 
 **Decision:** Treat strong, well-differentiated silhouettes as a visual pillar
-for non-fluid entities. Player/friend, foe, neutral ecology, loot/wreck, route
-anchor, and anomaly/Inhibitor objects must be discernible against ASCII and
-background noise before color, labels, or HUD state help.
+for non-fluid entity categories. The first read is broad category: ship, threat,
+loot/wreck, route anchor, ecology, or anomaly/Inhibitor. Friend/foe/neutral,
+hull subtype, urgency, and state are layered through color, halo, trail, motion,
+and state accents inside those categories.
 
-**Why:** LBH's background is intentionally dark, noisy, and alive. If entity
-shape language is weak, brighter colors alone will still collapse into
-confusing glow. The first gameplay read should be "safe, danger, valuable,
-route, or wrong" in a fraction of a second.
+**Why:** LBH's background is intentionally dark, noisy, and alive, but the
+player-ship footprint is small enough that one outline cannot honestly carry
+category, affiliation, state, and five hull subtypes at once. If entity shape
+language is weak, brighter colors alone will still collapse into confusing
+glow. If shape language is overloaded, it will fail at Deck scale. The honest
+read order is category first, then affiliation/state through the rest of the
+separation stack.
 
 **Where it landed:** `docs/design/PILLARS.md`,
 `docs/design/THREE-ENTITY-VISUALS.md`,
 `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`,
 `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`, and `docs/v0.2/DESIGN.md`.
 
-**Door status:** Closed for visual direction. Open for exact hull and entity
-silhouette sheets.
+**Door status:** Closed for read order. Open for exact category silhouettes,
+color/halo/trail affiliation cues, and hull subtype treatment after the player
+ship asset bake-off.
 
 ## 2026-06-25 — Build versions use public train plus commit hash
 

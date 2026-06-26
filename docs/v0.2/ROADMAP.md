@@ -64,9 +64,15 @@ the current primitive bridge markers with a coherent object language.
   `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
   `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
 - Preserve black void dominance while punching up object/UI contrast with
-  brighter values, contact mattes, halos, and local backplates.
-- Replace primitive ship/scavenger triangles with small hull/personality
-  silhouettes, thrust cues, and signal glow.
+  brighter values, contact mattes, halos, and local backplates; keep an
+  aggregate matte/bloom budget so dense frames do not erase the ASCII fabric.
+- Prove contact matte + rim shell on the current primitives before replacing
+  shapes.
+- Run the player ship twice at the same footprint, as a sprite card and as a
+  pixel-textured top-down mesh, then pick the asset path from Deck-scale
+  screenshots.
+- Replace primitive ship/scavenger triangles with category-stable hull shapes,
+  thrust cues, signal glow, and color/halo/trail affiliation reads.
 - Replace wreck squares with debris clusters, vault/echo/looted variants, and
   drift-aligned salvage glints.
 - Upgrade stars, planetoids/comets, portals, and slingshot affordances as
@@ -84,6 +90,7 @@ Definition of done:
 - The game still reads as ASCII-fluid, not generic 3D.
 - Renderer fixtures catch blank frames, missing layers, missing entity families,
   and accidental canvas-upload regressions.
+- Deck-native screenshots prove category readability without labels.
 
 ## v0.2.4 — Private Playtest Build
 

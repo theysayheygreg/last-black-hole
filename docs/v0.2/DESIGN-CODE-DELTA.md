@@ -46,6 +46,9 @@ The strongest current alignment is in the pillars, movement direction, ASCII ide
    `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` to upgrade ships, wrecks,
    stars, comets/planetoids, portals, rivals, and ecology without moving
    gameplay truth into renderer objects. Preserve the black void, but require
-   bright contrast affordances for gameplay reads.
+   bright contrast affordances for gameplay reads. Prove matte + rim separation
+   on the current primitives before replacing shapes, and decide the player
+   ship surface through a Deck-scale sprite-card versus pixel-textured-mesh
+   bake-off.
 4. **Update public copy to match the playable game.** Do not promise public multiplayer, full procedural maps, or complete progression yet.
 5. **Audit old docs before each feature.** Many older docs are still useful idea mines, but v0.2 work should start from this delta ledger.

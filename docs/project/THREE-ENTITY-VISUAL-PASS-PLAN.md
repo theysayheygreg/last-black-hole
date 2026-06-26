@@ -48,8 +48,9 @@ Tasks:
 
 - create a small `src/render-three/` style module for shared geometries,
   materials, render orders, and color roles;
-- define the pixel-asset path: sprite/card helpers, pixel-textured top-down
-  mesh helpers, nearest-neighbor texture setup, and allowed lighting rules;
+- support both candidate pixel-asset paths: sprite/card helpers and
+  pixel-textured top-down mesh helpers, with nearest-neighbor texture setup and
+  allowed lighting rules;
 - add subgroups for landmark entities, active entities, immediate VFX, and
   near-camera atmosphere;
 - implement reusable contact matte, rim shell, trail, glint, and state spark
@@ -64,29 +65,54 @@ Acceptance:
 - bridge primitives can be replaced family by family without changing the
   renderer's public adapter shape.
 
-## Pass 2 - Separation Before Decoration
+## Pass 2 - Separation On Existing Primitives
 
 Tasks:
 
-- put a contact matte under the player, wrecks, portals, stars, comets, and
-  rivals;
-- add a thin rim shell to active and interactable objects;
+- put a contact matte under the existing player/AI triangles, wreck squares,
+  portal rings, stars, comets, and rivals before changing their shapes;
+- add a thin rim shell to the same existing active and interactable objects;
 - add per-family material roles for player, rival, salvage, portal, ecology,
-  star, and anomaly colors;
-- tune the matte/glow values against current screenshots.
+  star, and anomaly colors without changing gameplay truth;
+- tune matte, rim, and glow values against busy ASCII screenshots;
+- track aggregate matte coverage so entity crowds do not punch too many holes
+  in the fabric.
 
 Acceptance:
 
 - objects read against the busiest ASCII field without labels;
 - the frame stays mostly dark and does not become uniformly neon;
-- Deck-scale screenshots retain player and portal readability.
+- Deck-native screenshots retain player and portal readability;
+- dense frames preserve the ASCII fabric instead of becoming matte craters.
 
-## Pass 3 - Ship And Rival Family
+This pass proves the separation stack before the project spends art effort on
+new shapes. If matte plus rim does not make current primitives readable, the
+style kit is not ready.
+
+## Pass 3 - Player Ship Asset Bake-Off
 
 Tasks:
 
-- replace player/remote/rival triangles with tiny pixel hull silhouettes;
-- define friend/foe/neutral silhouettes so affiliation reads without labels;
+- author the same player footprint twice: one 2D pixel sprite card and one
+  pixel-textured top-down mesh;
+- use the same contact matte, rim shell, thrust/brake cues, and signal glow on
+  both candidates;
+- capture both at Deck-native scale in normal and busy fields;
+- pick one asset path for the player/rival family before broad production.
+
+Acceptance:
+
+- a still screenshot keeps the player readable without labels;
+- the chosen approach is better at Deck scale, not just prettier on desktop;
+- a short clip shows acceleration/braking state without reading HUD numbers.
+
+## Pass 4 - Ship And Rival Family
+
+Tasks:
+
+- replace player/remote/rival triangles with the chosen tiny pixel hull surface;
+- define category-stable ship and threat silhouettes, with friend/foe/neutral
+  distinguished by color, halo, trail heat, and state accents;
 - add thrust, brake, roll/lean, and signal glow cues;
 - reserve the cleanest silhouette and highest local contrast for the player;
 - give AI/rival personalities small trail or hull differences without changing
@@ -95,11 +121,26 @@ Tasks:
 Acceptance:
 
 - a still screenshot identifies player versus hostile versus remote;
-- the same screenshot keeps friend, foe, neutral, loot, route, and anomaly reads
-  distinct when viewed small or desaturated;
+- the same screenshot keeps ship, threat, loot, route, ecology, and anomaly
+  categories distinct when viewed small or desaturated;
 - a short clip shows acceleration/braking state without reading HUD numbers.
 
-## Pass 4 - Wreck And Salvage Family
+## Pass 5 - Portal Family
+
+Tasks:
+
+- upgrade portals with layered apertures, blocked state, instability ticks, and
+  final-portal distinction;
+- tune portal contact matte and aperture bloom against active fabric;
+- keep the portal's sink/wave behavior as sim/fabric truth.
+
+Acceptance:
+
+- portal blocked/final states are visible in screenshots;
+- extraction target reads before labels;
+- portal glow does not wash out nearby ASCII or player silhouettes.
+
+## Pass 6 - Wreck And Salvage Family
 
 Tasks:
 
@@ -114,23 +155,20 @@ Acceptance:
 - looted wrecks do not look like active pickups;
 - debris fields feel like physical wreckage without hiding currents.
 
-## Pass 5 - Route Landmark Family
+## Pass 7 - Route Landmark Family
 
 Tasks:
 
 - upgrade stars with core/corona variants and type color;
 - upgrade planetoids/comets with shaded bodies and cheap tails;
-- upgrade portals with layered apertures, blocked state, instability ticks, and
-  final-portal distinction;
 - upgrade slingshot affordances into lane/rail/release visuals.
 
 Acceptance:
 
 - route planning is possible at a glance: star, portal, comet, and slingshot
-  lane each have a unique non-text read;
-- portal blocked/final states are visible in screenshots.
+  lane each have a unique non-text read.
 
-## Pass 6 - Ecology And Threat Family
+## Pass 8 - Ecology And Threat Family
 
 Tasks:
 
@@ -145,7 +183,7 @@ Acceptance:
 - ambient ecology and active threat do not share silhouettes;
 - Inhibitor-adjacent visuals still feel alien because magenta stays rare.
 
-## Pass 7 - Global Composition And Post
+## Pass 9 - Global Composition And Post
 
 Tasks:
 
@@ -154,7 +192,10 @@ Tasks:
 - keep near-camera particles sparse and speed-driven;
 - avoid heavy depth of field; black void and sparse negative space make DOF read
   as blur more often than depth;
-- document the future combined post stack for the eventual Three-owned graph.
+- document the future combined post stack for the eventual Three-owned graph;
+- explicitly watch split-renderer failures while Composer and Three use
+  separate post stacks: bloom threshold drift, cross-layer contrast drift, and
+  grade/CRT mismatch.
 
 Acceptance:
 
@@ -171,6 +212,8 @@ The daily suite should not grade taste, but it should guard contracts:
 - object family fixture catches black-on-black or `undefined` markers;
 - perf probe tracks material/geometry count and frame budget;
 - playtest lane uses fresh browser and sim processes before screenshot capture.
+- Deck review captures Deck-native frames instead of relying on desktop
+  downscales.
 
 Human review then decides silhouette quality, dread, palette discipline, and
 whether the object feels native to the ASCII ocean.
@@ -185,7 +228,16 @@ whether the object feels native to the ASCII ocean.
   Mitigation: pixel sprites/cards first; pixel-textured top-down meshes only
   when they preserve the pixel read and justify the extra asset cost.
 - **Fabric loss:** entity mattes erase too much ASCII.
-  Mitigation: mattes are local, transparent, and family-tuned.
+  Mitigation: mattes are local, transparent, family-tuned, and capped by
+  aggregate coverage or density-aware decay.
+- **Silhouette overpromise:** tiny outlines are asked to carry category,
+  affiliation, state, and hull subtype at once.
+  Mitigation: silhouette owns category; color, halo, trail, motion, and state
+  sparks own affiliation and urgency.
+- **Premature asset-path lock:** sprite cards or top-down meshes are chosen by
+  taste instead of evidence.
+  Mitigation: run the player ship twice at the same footprint and compare
+  Deck-native screenshots before production.
 - **Test fragility:** pixel tests fail on harmless art changes.
   Mitigation: use semantic counts and broad nonblank checks; keep subjective
   art review manual.
@@ -195,11 +247,11 @@ whether the object feels native to the ASCII ocean.
 Start with the player, wrecks, and portals. They cover the most important
 readability needs:
 
-1. contact matte and rim shell helper;
-2. player pixel-hull replacement with thrust/brake cues;
-3. wreck debris cluster replacement;
+1. contact matte and rim shell helper on existing primitives;
+2. busy-field fixture screenshot and `npm run test:three` update;
+3. player ship sprite-card versus pixel-textured-mesh bake-off at Deck scale;
 4. portal aperture replacement with blocked/final states;
-5. fixture screenshot and `npm run test:three` update.
+5. wreck debris cluster replacement.
 
 Stars, comets, slingshot lanes, and ecology follow once the shared kit proves
 itself on the most player-facing objects.

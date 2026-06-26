@@ -58,8 +58,8 @@ affordances**, not dark everything.
 4. **Renderer objects are projections.** Meshes and particles never decide
    pickup, death, extraction, signal, AI, or slingshot truth. They consume
    frame state from the client/sim boundary.
-5. **Readable at Deck scale.** Every object family must read at 1280x720 and on
-   Steam Deck without relying on tiny labels.
+5. **Readable at Deck scale.** Every object family must read at Deck-native
+   capture scale and on the Steam Deck screen without relying on tiny labels.
 6. **Text is exceptional.** World labels can remain canvas/DOM until there is a
    specific reason to put text in Three. The main pass is shapes, materials,
    trails, and affordances.
@@ -69,9 +69,11 @@ affordances**, not dark everything.
 8. **Separate before decorating.** If an object disappears in the fabric, add a
    contact matte, rim shell, halo, or local background before adding surface
    detail.
-9. **Silhouette is affiliation.** Friend, foe, neutral, loot, route anchor, and
-   anomaly must be discernible by shape language before color, label, or HUD
-   state helps.
+9. **Silhouette is category; affiliation is layered.** Shape language should
+   distinguish ship, threat, wreck/loot, route anchor, ecology, and anomaly
+   before color or labels. Friend/foe/neutral, hull subtype, urgency, and state
+   are carried by color, halo, trail, motion, and state accents inside those
+   categories.
 
 ## Scene Ownership And Sublayers
 
@@ -113,11 +115,19 @@ This stack is more important than model detail. A tiny clean hull with a matte,
 rim, and tuned brightness will read better than a busy miniature sitting naked
 on the ASCII ocean.
 
-## Visual Pillar: Silhouette Affiliation
+The stack also needs a whole-frame budget. A single contact matte is a
+readability tool; a crowd of mattes can erase the ASCII field the player is
+trying to read. Matte strength and radius should decay in dense local clusters
+or be capped by a global coverage budget.
+
+## Visual Pillar: Category Before Affiliation
 
 Every non-fluid entity family needs a strong silhouette that survives background
-noise. The first read should answer "what relationship does this object have to
-me?" before the player has to parse color, label, or exact type.
+noise. The first read should answer "what category of thing is this?" before
+the player has to parse color, label, or exact type. At the current player-ship
+footprint, silhouette can carry only a small number of robust categories. Do
+not ask one tiny outline to also distinguish every friend/foe/neutral state and
+all five hull subtypes.
 
 | Category | Silhouette Goal | Secondary Cues |
 |----------|-----------------|----------------|
@@ -128,9 +138,11 @@ me?" before the player has to parse color, label, or exact type.
 | Route anchor | radial, orbital, or aperture silhouette | gold/cyan corona, lane ticks, portal instability marks |
 | Anomaly/Inhibitor | wrong geometry, asymmetry, impossible cutout or shard | magenta/violet corruption, fabric bite, unstable halo |
 
-Color reinforces affiliation, but shape owns it. If all colors were temporarily
-desaturated, the player should still be able to identify player, threat, loot,
-and extraction-route objects at gameplay zoom.
+Color, halo, trail heat, and state sparks own affiliation and urgency inside a
+category. If all colors were temporarily desaturated, the player should still be
+able to identify ship, threat, loot/wreck, route anchor, ecology, and anomaly
+families at gameplay zoom. They should not be expected to identify every hull
+subtype or social state from silhouette alone.
 
 ## Palette Roles
 
@@ -181,6 +193,11 @@ Practical renderer requirements:
 - light pixel-textured meshes directionally without smoothing their texture
   identity away.
 
+Before locking the ship asset path, run the player ship twice: same footprint,
+same contact matte, same rim shell, once as a 2D pixel sprite card and once as a
+pixel-textured top-down mesh. Capture both at Deck scale, pick the better read,
+and use that answer to steer the rest of the ship/rival family.
+
 ## Object Targets
 
 ### Player Ship
@@ -189,7 +206,9 @@ The ship should be a small pixel hull silhouette with a clear nose, two side
 planes, and one or two emissive ports. It should stay roughly the same screen
 footprint as the current triangle, but gain:
 
-- a hull-specific outline for Drifter, Breacher, Resonant, Shroud, and Hauler;
+- category-stable ship shape first, with Drifter, Breacher, Resonant, Shroud,
+  and Hauler differences expressed as secondary proportions, ports, trails, or
+  state accents rather than five equally critical tiny silhouettes;
 - a slight roll/lean cue when accelerating, braking, or being pulled by flow;
 - thrust and brake ports that show delta-v spending without hiding the wake;
 - a signal glow that is approximate and readable, not a numeric meter clone.
@@ -323,18 +342,27 @@ warning ticks. Avoid one material per entity.
 1. **Renderer style kit.** Add shared pixel-card/pixel-textured mesh surfaces,
    geometries, materials, and effects under `src/render-three/` and keep
    `ThreeRendererBackend` as the adapter.
-2. **Ship family.** Replace player, remote player, and scavenger triangles with
-   pixel hull/personality silhouettes and thrust/brake/signal cues.
-3. **Wreck family.** Replace square markers with pooled debris clusters,
+2. **Separation proof.** Put contact matte + rim shell on the current player,
+   remote, scavenger, wreck, portal, star, and comet primitives before changing
+   object shapes. Tune aggregate matte coverage against busy fabric.
+3. **Player ship bake-off.** Render the same player footprint as both a pixel
+   sprite card and a pixel-textured top-down mesh, capture both at Deck scale,
+   and pick the asset path from evidence.
+4. **Ship family.** Replace player, remote player, and scavenger triangles with
+   the chosen pixel hull surface, using category-stable silhouettes plus
+   color/halo/trail affiliation cues.
+5. **Portal family.** Replace portal rings with apertures, blocked/final states,
+   and timed instability ticks.
+6. **Wreck family.** Replace square markers with pooled debris clusters,
    looted/vault/echo variants, and drift-aligned glints.
-4. **Route landmarks.** Upgrade stars, planetoids/comets, portals, and
+7. **Route landmarks.** Upgrade stars, planetoids/comets, and
    slingshot affordances as route-reading objects.
-5. **Threat ecology.** Give fauna/sentries distinct silhouette and motion
+8. **Threat ecology.** Give fauna/sentries distinct silhouette and motion
    families after their live behavior set is chosen.
-6. **Harness and screenshots.** Add an entity-showcase renderer fixture or
+9. **Harness and screenshots.** Add an entity-showcase renderer fixture or
    seeded playtest route that puts each object family on screen and records
-   scene/ascii/debug captures.
-7. **Legacy cleanup.** Remove canvas overlay drawing only after the Three
+   scene/ascii/debug captures, including Deck-native review frames.
+10. **Legacy cleanup.** Remove canvas overlay drawing only after the Three
    equivalent exists and the renderer fixtures prove the object did not vanish.
 
 ## Test And Review Contract
@@ -356,8 +384,8 @@ readability, dread, and whether the object feels native to the ASCII ocean.
 
 ## Open Questions
 
-- Should the first ship silhouettes be hand-authored pixel sprites, generated
-  pixel masks projected onto small planes, or pixel-textured top-down meshes?
+- Which player ship surface wins the bake-off: hand-authored pixel sprite card,
+  generated pixel mask on a plane, or pixel-textured top-down mesh?
 - How much hull-specific shape should exist before hull ability tuning is done?
 - Do stars and planetoids need true 3D lighting, or are emissive/rim materials
   enough for the top-down camera?

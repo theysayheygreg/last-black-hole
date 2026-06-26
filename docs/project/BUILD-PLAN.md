@@ -76,7 +76,9 @@ file records fresh local playtest evidence.
   planetoids/comets, wrecks, portals, rivals, fauna, and sentries while wells
   and Inhibitors remain fabric-first. The scene should stay black and scary, but
   critical gameplay objects need bright contrast affordances, contact mattes,
-  halos, or local backgrounds.
+  halos, or local backgrounds. First prove matte + rim separation on the
+  current primitives, then run the player ship as a sprite-card versus
+  pixel-textured-mesh bake-off at Deck scale before replacing the ship family.
 - Movement is now an *economy*: thrust costs delta-v, brake costs delta-v (less), drag is gentle, currents and slingshots are how you move at speed. Conservation of momentum is a real mechanic with playable validity windows. The full taxonomy lives in `SLINGSHOT-NETWORK.md` + the in-source comments at `src/ship.js` step 2 / `src/slingshot.js` `SLINGSHOT_CONFIG`.
 
 ### L6: The Ship (Partial)
@@ -85,7 +87,8 @@ file records fresh local playtest evidence.
 - Audio for new systems (hull abilities, fauna, sentries, inhibitor forms)
 - Polish pass (death screen, extraction screen with new data)
 - Three entity visual-language pass for all non-fluid object families, including
-  the shared style kit, contrast helpers, and renderer fixture coverage
+  the shared style kit, matte/rim proof slice, player asset bake-off, contrast
+  helpers, and renderer fixture coverage
 - Current v0.2 position: title/home/map/save foundations exist, but balance,
   deploy, audio identity, and release polish are still the real L6 work.
 

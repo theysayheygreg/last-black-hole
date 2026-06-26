@@ -35,8 +35,11 @@
 - **Value if revisited:** Makes the Three migration feel visually intentional
   instead of transitional, improves route/object readability, and gives future
   object work a shared geometry/material kit.
-- **First revival step:** Build shared Three geometries/materials, then replace
-  player/AI ship triangles and wreck squares before touching secondary ecology.
+- **First revival step:** Build shared Three geometries/materials, then prove
+  contact matte + rim shell on the existing player/AI triangles, wreck squares,
+  and portal rings before replacing shapes. Run the player ship as a sprite-card
+  versus pixel-textured-mesh bake-off at Deck scale before committing to the
+  ship asset path.
 - **Added:** 2026-06-26
 
 ## Physics & Simulation

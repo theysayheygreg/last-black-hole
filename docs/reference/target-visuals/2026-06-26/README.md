@@ -11,6 +11,11 @@ pixel assets or 3D assets with pixelated top-down textures. Likewise, the
 Octopath-style vibe means pixel surfaces inside modern staging, not copying
 heavy depth-of-field behavior into LBH's mostly black void.
 
+They are also not silhouette references. Use them to validate composition,
+layer separation, palette pressure, matte behavior, and whole-frame mood. Do
+not copy their ship/enemy shapes into the implementation or use them to decide
+friend/foe/hull silhouettes.
+
 ## Files
 
 - `01-playable-separation-target.png` - broad gameplay composition with ASCII
@@ -31,6 +36,8 @@ Use these as a pressure test for implementation decisions:
 - can stars, wrecks, portals, and comets become distinct object families;
 - can magenta/violet stay rare enough that Inhibitor space feels invasive;
 - can post-processing make the world cohesive without washing out the ASCII.
+- can the matte/halo/bloom budget hold on a dense frame without erasing the
+  ASCII fabric.
 
 When a target conflicts with `docs/design/PILLARS.md` or
 `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, the docs win.

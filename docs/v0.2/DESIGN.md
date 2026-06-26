@@ -143,9 +143,15 @@ the ASCII fabric.
 - **Keep entity surfaces pixel-authored:** ships, enemies, wreck fragments, and
   fauna should be 2D pixel assets or 3D assets with pixelated top-down textures,
   even when lit directionally in the Three scene.
-- **Make silhouette carry affiliation:** friend, foe, neutral, loot, route
-  anchor, and anomaly must be easy to tell apart against ASCII/background noise
-  before labels or HUD state help.
+- **Make silhouette carry category first:** ship, threat, loot/wreck, route
+  anchor, ecology, and anomaly must be easy to tell apart against
+  ASCII/background noise before labels help. Friend/foe/neutral, hull subtype,
+  and urgent state are layered through color, halo, trail, motion, and state
+  accents.
+- **Prove separation before new art:** contact matte + rim shell should first
+  make the current bridge primitives readable in a busy field. Then the player
+  ship gets a sprite-card versus pixel-textured-mesh bake-off at the same
+  footprint and Deck scale.
 - **Do not copy heavy depth of field:** the HD-2D vibe is useful, but LBH's
   black void needs sharper contrast, parallax, source glow, lens flecks, and
   CRT discipline more than blurred emptiness.

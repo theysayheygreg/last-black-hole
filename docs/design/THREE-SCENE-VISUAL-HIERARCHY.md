@@ -69,8 +69,15 @@ lens flecks, contrast pockets, restrained bloom, and CRT treatment.
 The current bridge is split: Composer owns the ASCII/fabric post stack, while
 `ThreeRendererBackend` renders a transparent world target and applies its own
 copy pass over the canvas. That is acceptable for v0.2 implementation work as
-long as parameters stay visually aligned. The final Three-owned graph should
-move toward one global post stack after the fabric and world are combined.
+long as parameters stay visually aligned, but the split means three things
+cannot be assumed global yet:
+
+- unified bloom threshold across fabric and entities;
+- one cross-layer contrast budget for mattes, halos, and bright fabric;
+- one final grade/CRT treatment after all world layers are combined.
+
+Watch those explicitly in screenshots. The final Three-owned graph should move
+toward one global post stack after the fabric and world are combined.
 
 ## Entity Separation Contract
 
@@ -91,10 +98,19 @@ owning a small local contrast system:
 The contact matte is the critical missing piece in the current screenshots. It
 lets the ASCII ocean stay busy while objects remain separate from it.
 
-Silhouette is the first affiliation read. Friend, foe, neutral, loot, route
-anchor, and anomaly objects need distinct outlines before color or labels enter
-the read. Color and glow can reinforce category, but the shape should already
-separate "safe", "danger", "valuable", and "route" in a noisy frame.
+Silhouette owns **category** first. At Steam Deck scale, a tiny hull-footprint
+mark can reliably separate broad object families: ship, threat, wreck/loot,
+route anchor, ecology, anomaly. It cannot honestly carry every affiliation,
+state, and hull subtype by outline alone. Color, halo, trail heat, and state
+sparks own affiliation and urgency inside each category.
+
+The corrected read order is: silhouette/category first; then color, halo, trail,
+and state for affiliation; then labels only for names and extra detail.
+
+Contact mattes must also have an aggregate budget. One matte preserves
+readability; twenty mattes can punch twenty holes in the ASCII fabric. Tune
+matte opacity/radius with a global ceiling in mind, and reduce matte strength
+or radius when local entity density rises.
 
 ## Contrast Budgets
 
@@ -108,6 +124,18 @@ separate "safe", "danger", "valuable", and "route" in a noisy frame.
 | Ecology | family silhouette + green/cyan pulse | Avoid hiding ambient entities as black specks. |
 | Star/comet | bright core or tail + local glow | Route anchors can be colorful, but not UI-loud. |
 | Inhibitor | fabric corruption + magenta/violet halo/backplate | Rare enough that it feels invasive every time. |
+
+## Steam Deck Acceptance
+
+Deck readability is not proven by a desktop screenshot downscaled later. The
+entity pass must capture at Deck-native scale and review it in handheld
+conditions:
+
+- 1280x800 or 1280x720 capture from the Deck path;
+- labels off for the object-family read;
+- small/desaturated review for category separation;
+- bright ambient light check for matte, halo, and bloom washout;
+- CRT/scanline and lens-fleck alias check at the actual panel size.
 
 ## Entity Asset Rule
 

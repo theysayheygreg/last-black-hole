@@ -23,9 +23,13 @@
   fauna, and other discrete entities should be 2D pixel assets or 3D assets with
   pixelated top-down textures. Octopath remains a vibe reference for pixel
   surfaces inside modern staging, not a mandate for heavy depth of field.
-- Added a silhouette-affiliation visual pillar: friend, foe, neutral, loot,
-  route anchor, and anomaly objects should be discernible from shape before
-  color, label, or HUD state.
+- Added the initial silhouette/category visual pillar and then corrected it
+  after Orrery review: silhouette owns broad object category first; color, halo,
+  trail, motion, and state accents own affiliation and urgency inside that
+  category.
+- Updated the entity pass order so implementation first proves contact matte +
+  rim shell on current primitives, then runs the player ship sprite-card versus
+  pixel-textured-mesh bake-off at Deck scale before broad ship production.
 - Updated the v0.2 design bible, roadmap, design/code delta, project roadmap,
   build plan, backlog, and Three migration plan so the current renderer status
   distinguishes shipped primitive projection from the still-needed visual
