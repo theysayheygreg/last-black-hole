@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-06-25 — v0.2 build-number policy clarification
+
+- Clarified that `0.2.x` is currently a private v0.2 remote-build counter for
+  real build handoffs, not the final public semantic-versioning policy.
+- Documented `LBH_SKIP_RELEASE_PREP=1` for intentional docs/process-only pushes
+  that do not publish a build.
+- Recorded the future split between local CI build IDs and public release
+  versions once LBH has a hosted website, itch page, or Steam branch.
+
 ## 2026-06-25 — v0.2.1 release-build gate
 
 - Bumped Last Singularity to `v0.2.1` for the next remote handoff train.

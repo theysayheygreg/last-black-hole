@@ -174,6 +174,7 @@ function prepushCheck() {
     throw new Error([
       `Current package version ${version} is not ahead of ${upstream.upstream} (${upstream.version}).`,
       'Run `npm run release:patch`, commit the version/build docs, then push again.',
+      'For an intentional docs/process-only push that does not publish a build, set `LBH_SKIP_RELEASE_PREP=1`.',
     ].join('\n'));
   }
   checkReleaseBuild();
@@ -192,6 +193,8 @@ function usage() {
     '',
     'Options:',
     '  --skip-tests  For build/patch only: build without running npm run test:fast.',
+    '',
+    'Set LBH_SKIP_RELEASE_PREP=1 for intentional docs/process-only pushes that do not publish a build.',
   ].join('\n'));
 }
 

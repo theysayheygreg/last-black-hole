@@ -1,5 +1,27 @@
 # Decision Log
 
+## 2026-06-25 — v0.2 patch numbers are temporary build-train counters
+
+**Decision:** Keep `0.2.x` as a practical v0.2 remote-build counter while LBH is
+still using a lightweight local CI/build discipline. Real build or milestone
+handoff pushes should still run `npm run release:patch`. Intentional
+docs/process-only pushes that do not publish a build may skip the guard with
+`LBH_SKIP_RELEASE_PREP=1`.
+
+**Why:** A single commit does not always deserve a public version increment, but
+LBH does not yet have a public playable location whose release cadence needs
+stricter semantics. Right now the higher-value invariant is that remote build
+handoffs carry a visible patch number and complete artifacts. Once there is a
+website, itch page, or Steam branch where people can actually play, local build
+IDs and public release versions should split.
+
+**Where it landed:** `scripts/release.cjs`, README build instructions,
+`docs/reference/BUILD-PIPELINE.md`, and `docs/project/JAM-CONTRACT.md`.
+
+**Door status:** Closed for private v0.2 build-train policy. Open for replacing
+it with separate CI build IDs and public release versions once LBH has a public
+playable channel.
+
 ## 2026-06-25 — Remote handoff pushes require a v0.2 patch build
 
 **Decision:** Treat `0.2.x` as the v0.2 release/handoff train. Before pushing a

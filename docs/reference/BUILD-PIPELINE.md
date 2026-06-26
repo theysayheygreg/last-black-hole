@@ -6,7 +6,7 @@ The rule is simple:
 
 - one gameplay source of truth: the web runtime
 - one build command: `npm run build`
-- one release-push command: `npm run release:patch`
+- one default release-push command for real build handoffs: `npm run release:patch`
 - one runtime mode per build: `dev`, `test`, or `release`
 - versioned outputs under `builds/`
 - a manifest and per-target `BUILD-INFO-*.json` files for traceability
@@ -39,8 +39,29 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
   all-target release build
 - `npm run release:prepush` — same shape as the tracked pre-push hook: version
   must be ahead of upstream and the all-target build must exist
+- `LBH_SKIP_RELEASE_PREP=1 git push origin main` — intentional docs/process-only
+  push that does not publish a new build
 
 `npm run build` currently defaults to `release` mode.
+
+## Version Policy
+
+During the private v0.2 train, `0.2.x` is a simple remote-build counter for
+source handoffs that carry real artifacts. It is fine for each meaningful remote
+build push to bump the patch number while LBH is still inventing its lightweight
+CI discipline.
+
+That does not make every commit a public release. If a change only updates
+docs, process wording, or other non-build material, use
+`LBH_SKIP_RELEASE_PREP=1` deliberately and leave the patch alone.
+
+When LBH has a public playable location, such as a hosted website, itch page, or
+Steam playtest branch, split the numbers:
+
+- local CI/build IDs can advance on every build or commit
+- public release versions should advance only when a public artifact changes
+- release notes should describe the public version, while build metadata records
+  the exact commit and target artifacts
 
 ## Runtime modes
 
@@ -115,6 +136,13 @@ rebuild artifacts for the same commit, use:
 
 ```sh
 npm run release:build
+```
+
+If you are only pushing docs/process cleanup with no new build handoff, skip the
+guard explicitly instead of manufacturing a new patch:
+
+```sh
+LBH_SKIP_RELEASE_PREP=1 git push origin main
 ```
 
 The underlying lightweight verification lane should be green:

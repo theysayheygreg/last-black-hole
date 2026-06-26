@@ -288,6 +288,12 @@ release check for `origin`; install it once with:
 git config core.hooksPath .githooks
 ```
 
+For now, `0.2.x` is a practical remote-build counter for v0.2 handoffs, not the
+final public semantic-versioning policy. Intentional docs/process-only pushes
+that do not publish a build can use `LBH_SKIP_RELEASE_PREP=1 git push origin
+main`. Once there is a public playable location, split local CI build IDs from
+public release version increments.
+
 ## Deployment Pipelines
 
 ```sh
