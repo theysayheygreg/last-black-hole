@@ -19,6 +19,10 @@
 - Added generated target visuals under
   `docs/reference/target-visuals/2026-06-26/` for entity separation, scene
   layering, and wider palette exploration.
+- Added the v0.2 entity asset-surface rule: ships, enemies, wreck fragments,
+  fauna, and other discrete entities should be 2D pixel assets or 3D assets with
+  pixelated top-down textures. Octopath remains a vibe reference for pixel
+  surfaces inside modern staging, not a mandate for heavy depth of field.
 - Updated the v0.2 design bible, roadmap, design/code delta, project roadmap,
   build plan, backlog, and Three migration plan so the current renderer status
   distinguishes shipped primitive projection from the still-needed visual

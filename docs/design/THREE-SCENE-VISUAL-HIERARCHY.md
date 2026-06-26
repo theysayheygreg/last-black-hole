@@ -60,6 +60,12 @@ global post, then draw HUD:
 3. run full-frame color grade, vignette, chromatic aberration, and CRT/scanline;
 4. draw DOM/HUD with a lighter matching treatment.
 
+Depth of field should be rare or absent. The Octopath-style vibe is useful
+because it places old-school assets inside modern lens/post staging, but LBH is
+mostly black void and high-contrast glyph fields. Heavy DOF on empty space will
+usually read as blur rather than depth. Prefer parallax, source-driven glow,
+lens flecks, contrast pockets, restrained bloom, and CRT treatment.
+
 The current bridge is split: Composer owns the ASCII/fabric post stack, while
 `ThreeRendererBackend` renders a transparent world target and applies its own
 copy pass over the canvas. That is acceptable for v0.2 implementation work as
@@ -73,8 +79,9 @@ owning a small local contrast system:
 
 - **contact matte:** a dark transparent ellipse or hull-shaped shadow between
   fabric and object, rendered before the object;
-- **core silhouette:** the gameplay shape, usually normal-blended or emissive;
-- **rim shell:** a thin additive outline or low-poly glow outside the silhouette;
+- **core silhouette:** the gameplay shape, rendered as a pixel sprite/card or a
+  top-down pixel-textured mesh;
+- **rim shell:** a thin additive outline or faceted glow outside the silhouette;
 - **halo/backplate:** a brighter or darker affordance pocket for critical
   states, especially player, portals, pickup-ready wrecks, and danger objects;
 - **velocity trail:** direction and speed cue, never a permanent smear;
@@ -96,6 +103,15 @@ lets the ASCII ocean stay busy while objects remain separate from it.
 | Ecology | family silhouette + green/cyan pulse | Avoid hiding ambient entities as black specks. |
 | Star/comet | bright core or tail + local glow | Route anchors can be colorful, but not UI-loud. |
 | Inhibitor | fabric corruption + magenta/violet halo/backplate | Rare enough that it feels invasive every time. |
+
+## Entity Asset Rule
+
+Discrete entities should stay pixel-resolved even as the scene gains depth. Use
+2D pixel sprites/cards or simple 3D meshes whose visible top-down textures are
+pixel-authored or pixelated with nearest-neighbor sampling. Directional
+lighting, shadows, parallax, bloom, trails, and screen-space effects are welcome
+around those assets, but the ship/enemy/wreck surface should not become smooth
+low-poly or glossy vector art.
 
 ## Palette Hierarchy
 

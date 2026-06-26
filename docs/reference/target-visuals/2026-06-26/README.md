@@ -4,6 +4,13 @@
 > These are not source assets. They are art-direction references for readable
 > layering, entity separation, and palette exploration.
 
+Important: these generated images are composition targets, not asset-surface
+targets. If a ship or enemy in a target visual looks smooth or low-poly, treat
+that as non-canonical. The written rule is that entity assets should be 2D
+pixel assets or 3D assets with pixelated top-down textures. Likewise, the
+Octopath-style vibe means pixel surfaces inside modern staging, not copying
+heavy depth-of-field behavior into LBH's mostly black void.
+
 ## Files
 
 - `01-playable-separation-target.png` - broad gameplay composition with ASCII

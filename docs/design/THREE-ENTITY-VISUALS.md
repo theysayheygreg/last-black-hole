@@ -46,9 +46,10 @@ affordances**, not dark everything.
 
 ## Design Rules
 
-1. **Glyph-size, not glyph-only.** The player should still read as tiny against
-   the universe, but "tiny" can now mean a small low-poly silhouette with
-   emissive details, not only a literal text character.
+1. **Glyph-size, not smooth-miniature.** The player should still read as tiny
+   against the universe, but "tiny" now means a pixel-authored or
+   pixel-resolved top-down asset with emissive details, not only a literal text
+   character and not a smooth low-poly miniature.
 2. **Four reads per object:** silhouette, motion, fluid signature, interaction
    affordance. If an object only has one of these, it will feel like a sticker.
 3. **The fabric stays sovereign.** Wells, currents, pressure, and Inhibitor
@@ -127,13 +128,44 @@ background. Low-saturation dark colors belong to the void, not to interaction.
 The palette rule is not "one hue per screenshot." It is "one void, one fabric,
 and a few bright, meaningful accents."
 
+## Asset Surface Rule
+
+Ships, enemies, wreck fragments, fauna, sentries, and other discrete entity
+assets should use one of two surface styles:
+
+1. **2D pixel assets:** hand-authored pixel sprites, sprite sheets, or small
+   pixel masks projected on planes/cards in the Three scene.
+2. **3D assets with pixelated top-down surfaces:** simple meshes are allowed
+   when their visible top-down texture is pixel-authored or pixelated, with
+   nearest-neighbor sampling and no smooth material read. Directional lighting
+   can shade the asset, but it should still look like a pixel object under a
+   top-down camera.
+
+Avoid smooth low-poly, glossy miniature, or vector-clean entity assets for
+ships and threats. Three can own depth, parallax, lighting, shadows, disciplined
+bloom, lens flecks, CRT treatment, trails, and post-processing; the entity
+surface itself should preserve the pixel/ASCII heritage. This is the HD-2D
+lesson to borrow: modern scene staging around deliberately old-school asset
+surfaces. Do not copy HD-2D depth-of-field wholesale. In LBH's black negative
+space, heavy DOF is more likely to smear emptiness than add depth.
+
+Practical renderer requirements:
+
+- use `NearestFilter` for pixel textures;
+- disable mipmap blur unless a specific minification test proves it reads
+  better;
+- snap sprite-card scale to stable pixel multiples where possible;
+- keep normal maps optional and chunky if used;
+- light pixel-textured meshes directionally without smoothing their texture
+  identity away.
+
 ## Object Targets
 
 ### Player Ship
 
-The ship should be a small hull silhouette with a clear nose, two side planes,
-and one or two emissive ports. It should stay roughly the same screen footprint
-as the current triangle, but gain:
+The ship should be a small pixel hull silhouette with a clear nose, two side
+planes, and one or two emissive ports. It should stay roughly the same screen
+footprint as the current triangle, but gain:
 
 - a hull-specific outline for Drifter, Breacher, Resonant, Shroud, and Hauler;
 - a slight roll/lean cue when accelerating, braking, or being pulled by flow;
@@ -248,8 +280,12 @@ scale system as wrecks and ships.
 
 Create a small renderer-owned kit before hand-authoring every object:
 
-- shared geometries: wedge hull, diamond hull, debris shard, rounded body,
-  ring/aperture, short ribbon, line strip, point cluster;
+- shared surfaces: pixel sprite cards, pixel mask cards, and simple
+  top-down pixel-textured meshes for hulls, debris shards, bodies, fauna, and
+  sentries;
+- shared geometries: card planes, wedge/diamond pixel masks, debris shard
+  meshes, rounded body cards, ring/aperture meshes, short ribbons, line strips,
+  point clusters;
 - shared materials: hull white, remote blue, rival red, salvage gold, portal
   cyan/violet, star warm/cold, comet ice, sentry green, muted looted metal;
 - shared effects: additive glow shell, velocity trail, pulsed rim, signal tint,
@@ -262,10 +298,11 @@ warning ticks. Avoid one material per entity.
 
 ## Implementation Passes
 
-1. **Renderer style kit.** Add shared geometries/materials/effects under
-   `src/render-three/` and keep `ThreeRendererBackend` as the adapter.
+1. **Renderer style kit.** Add shared pixel-card/pixel-textured mesh surfaces,
+   geometries, materials, and effects under `src/render-three/` and keep
+   `ThreeRendererBackend` as the adapter.
 2. **Ship family.** Replace player, remote player, and scavenger triangles with
-   hull/personality silhouettes and thrust/brake/signal cues.
+   pixel hull/personality silhouettes and thrust/brake/signal cues.
 3. **Wreck family.** Replace square markers with pooled debris clusters,
    looted/vault/echo variants, and drift-aligned glints.
 4. **Route landmarks.** Upgrade stars, planetoids/comets, portals, and
@@ -297,8 +334,8 @@ readability, dread, and whether the object feels native to the ASCII ocean.
 
 ## Open Questions
 
-- Should the first ship silhouettes be pure procedural geometry or generated
-  bitmap masks projected onto small planes?
+- Should the first ship silhouettes be hand-authored pixel sprites, generated
+  pixel masks projected onto small planes, or pixel-textured top-down meshes?
 - How much hull-specific shape should exist before hull ability tuning is done?
 - Do stars and planetoids need true 3D lighting, or are emissive/rim materials
   enough for the top-down camera?

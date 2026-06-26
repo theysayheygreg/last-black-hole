@@ -22,9 +22,9 @@ materials, trails, and affordances.
 `docs/project/THREEJS-MIGRATION-PLAN.md`.
 
 **Door status:** Closed for v0.2 visual direction. Open for implementation
-details: procedural geometry versus generated masks, how much hull-specific
-silhouette ships need, and which object effects should also bite into the ASCII
-fabric.
+details: hand-authored sprites versus generated pixel masks versus
+pixel-textured top-down meshes, how much hull-specific silhouette ships need,
+and which object effects should also bite into the ASCII fabric.
 
 ## 2026-06-26 — Three scene hierarchy is dark-first, not low-contrast
 
@@ -48,6 +48,32 @@ requires squinting. The right direction is a dark scene with punchy local reads.
 
 **Door status:** Closed for v0.2 visual hierarchy. Open for exact brightness,
 bloom, matte, and halo tuning after the style kit exists.
+
+## 2026-06-26 — Entity assets stay pixel-resolved
+
+**Decision:** Discrete entity assets, including player ships and enemy ships,
+must be either 2D pixel assets or simple 3D assets with pixelated top-down
+textures. Directional lighting, parallax, post-processing, bloom, trails, and
+depth staging are allowed, but the visible asset surface should not become
+smooth low-poly, glossy miniature, or vector-clean generic 3D. Octopath-style
+depth-of-field is not the recipe; the useful vibe is pixel surfaces inside a
+modern staged scene.
+
+**Why:** LBH can raise fidelity through Three scene staging without abandoning
+its pixel/ASCII heritage. Heavy DOF works for dense scenic dioramas, but LBH's
+black negative space would usually become blurred emptiness. The better depth
+tools here are parallax, contrast pockets, source-driven glow, lens flecks,
+restrained bloom, CRT treatment, and sharp pixel-readable entity surfaces.
+
+**Where it landed:** `docs/design/THREE-ENTITY-VISUALS.md`,
+`docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`,
+`docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`,
+`docs/reference/THREE-ENTITY-MOODBOARD.md`, `docs/v0.2/DESIGN.md`, and
+`docs/reference/target-visuals/2026-06-26/README.md`.
+
+**Door status:** Closed for v0.2 entity asset direction. Open for deciding
+which first pass uses hand-authored sprites, generated pixel masks, or
+pixel-textured top-down meshes.
 
 ## 2026-06-25 — Build versions use public train plus commit hash
 

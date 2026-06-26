@@ -48,6 +48,8 @@ Tasks:
 
 - create a small `src/render-three/` style module for shared geometries,
   materials, render orders, and color roles;
+- define the pixel-asset path: sprite/card helpers, pixel-textured top-down
+  mesh helpers, nearest-neighbor texture setup, and allowed lighting rules;
 - add subgroups for landmark entities, active entities, immediate VFX, and
   near-camera atmosphere;
 - implement reusable contact matte, rim shell, trail, glint, and state spark
@@ -57,6 +59,8 @@ Tasks:
 Acceptance:
 
 - no new object family hand-builds its own one-off material stack;
+- ships/threats/wrecks use 2D pixel assets or pixel-textured top-down 3D assets,
+  not smooth low-poly miniatures;
 - bridge primitives can be replaced family by family without changing the
   renderer's public adapter shape.
 
@@ -81,7 +85,7 @@ Acceptance:
 
 Tasks:
 
-- replace player/remote/rival triangles with tiny hull silhouettes;
+- replace player/remote/rival triangles with tiny pixel hull silhouettes;
 - add thrust, brake, roll/lean, and signal glow cues;
 - reserve the cleanest silhouette and highest local contrast for the player;
 - give AI/rival personalities small trail or hull differences without changing
@@ -145,6 +149,8 @@ Tasks:
 - align Composer and Three CRT/scanline/chromatic parameters;
 - add optional source-driven lens flecks for stars, portals, and wells;
 - keep near-camera particles sparse and speed-driven;
+- avoid heavy depth of field; black void and sparse negative space make DOF read
+  as blur more often than depth;
 - document the future combined post stack for the eventual Three-owned graph.
 
 Acceptance:
@@ -172,8 +178,9 @@ whether the object feels native to the ASCII ocean.
   Mitigation: value budgets and rare accent rules in the visual hierarchy doc.
 - **Renderer-only truth:** an object state appears in Three but not in sim.
   Mitigation: all entity visuals consume snapshots/events only.
-- **Over-modeling:** tiny objects become expensive miniatures.
-  Mitigation: procedural silhouettes, instancing, and low fragment counts.
+- **Over-modeling:** tiny objects become smooth expensive miniatures.
+  Mitigation: pixel sprites/cards first; pixel-textured top-down meshes only
+  when they preserve the pixel read and justify the extra asset cost.
 - **Fabric loss:** entity mattes erase too much ASCII.
   Mitigation: mattes are local, transparent, and family-tuned.
 - **Test fragility:** pixel tests fail on harmless art changes.
@@ -186,7 +193,7 @@ Start with the player, wrecks, and portals. They cover the most important
 readability needs:
 
 1. contact matte and rim shell helper;
-2. player hull replacement with thrust/brake cues;
+2. player pixel-hull replacement with thrust/brake cues;
 3. wreck debris cluster replacement;
 4. portal aperture replacement with blocked/final states;
 5. fixture screenshot and `npm run test:three` update.

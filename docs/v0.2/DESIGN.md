@@ -140,6 +140,12 @@ the ASCII fabric.
 - **Protect contrast:** the void can own most of the frame, but critical
   gameplay objects need bright values, contact mattes, halos, or local
   backplates so "dark and scary" does not become "hard to read."
+- **Keep entity surfaces pixel-authored:** ships, enemies, wreck fragments, and
+  fauna should be 2D pixel assets or 3D assets with pixelated top-down textures,
+  even when lit directionally in the Three scene.
+- **Do not copy heavy depth of field:** the HD-2D vibe is useful, but LBH's
+  black void needs sharper contrast, parallax, source glow, lens flecks, and
+  CRT discipline more than blurred emptiness.
 
 The current targets live in `docs/design/THREE-ENTITY-VISUALS.md`,
 `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and

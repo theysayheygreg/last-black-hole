@@ -14,12 +14,12 @@ of that problem.
 
 | Reference | Useful Technique | LBH Translation | Source |
 |-----------|------------------|-----------------|--------|
-| Octopath Traveler / HD-2D | 2D identity fused with 3D environments, depth of field, lighting, and small-diorama staging | Keep ASCII/glyph identity, but stage it on a real depth stack with local lights and bloom | [Square Enix Octopath Traveler II](https://www.square-enix-games.com/en_US/games/octopath-traveler-ii), [Unreal Engine HD-2D interview](https://www.unrealengine.com/spotlights/octopath-traveler-s-hd-2d-art-style-and-story-make-for-a-jrpg-dream-come-true) |
+| Octopath Traveler / HD-2D | 2D identity fused with 3D environments, lighting, lens language, and diorama staging | Keep ASCII/glyph identity and pixel entity surfaces, but stage them in a modern depth/post stack. Do not copy heavy depth of field; LBH's black void needs sharper contrast tools. | [Square Enix Octopath Traveler II](https://www.square-enix-games.com/en_US/games/octopath-traveler-ii), [Unreal Engine HD-2D interview](https://www.unrealengine.com/spotlights/octopath-traveler-s-hd-2d-art-style-and-story-make-for-a-jrpg-dream-come-true) |
 | Dragon Quest III HD-2D | Modernized classic readability with 3D graphics supporting old-school forms | Let simple symbolic entities gain modern lighting without losing map readability | [Square Enix HD-2D notes](https://www.square-enix.com/asia/newsportal/en/th/dragon-quest-iii-hd-2d/) |
 | Hollow Knight | Layered foreground/background depth, strong silhouettes, dense atmosphere without losing player read | Use near/far parallax, value staging, and negative-space silhouettes around the player | [Team Cherry progress post](https://www.teamcherry.com.au/blog/hollow-knight-then-and-now) |
 | Caves of Qud | Dense symbolic world language and science-fantasy specificity | Keep LBH's ASCII fabric meaningful; iconography can be strange and readable rather than literal | [Caves of Qud official site](https://www.cavesofqud.com/) |
 | Rain World | Fragile player silhouette inside a broken ecosystem, atmosphere as threat context | Make small entities feel alive or hostile through motion and layered habitat, not size | [Rain World Steam page](https://store.steampowered.com/app/312520/Rain_World/) |
-| Dead Cells | 3D pipeline resolved into 2D/pixel-scale animation, modern effects over classic reads | Use procedural/low-poly source shapes and render them as tiny high-readability scene marks | [Game Developer art pipeline](https://www.gamedeveloper.com/production/art-design-deep-dive-using-a-3d-pipeline-for-2d-animation-in-i-dead-cells-i-), [80.lv interview](https://80.lv/articles/interview-with-the-developers-of-dead-cells) |
+| Dead Cells | 3D pipeline resolved into 2D/pixel-scale animation, modern effects over classic reads | If 3D source assets are used, resolve them into pixel-scale top-down reads rather than smooth miniatures | [Game Developer art pipeline](https://www.gamedeveloper.com/production/art-design-deep-dive-using-a-3d-pipeline-for-2d-animation-in-i-dead-cells-i-), [80.lv interview](https://80.lv/articles/interview-with-the-developers-of-dead-cells) |
 | Ori and the Will of the Wisps | Hand-painted depth, glow, foreground atmosphere, rich value control | Borrow the discipline of foreground haze and source-driven glow while keeping LBH darker and harsher | [Ori official site](https://www.orithegame.com/) |
 | Darkest Dungeon | Harsh silhouettes, readable gothic cutouts, high-contrast dread | Use cutout-like hull and threat silhouettes with hard rim lights, not smooth generic ships | [Red Hook Darkest Dungeon about](https://www.darkestdungeon.com/darkest-dungeon/about/) |
 
@@ -32,6 +32,11 @@ of that problem.
   games. Borrow rendering structure and readability tricks only.
 - Do not make the entity layer busier than the fabric. Entities need local
   contrast, not universal glow.
+- Do not use smooth low-poly or glossy vector-clean ships/entities. LBH entity
+  assets should be 2D pixel surfaces or 3D meshes with pixelated top-down
+  textures.
+- Do not lean on heavy depth of field. Octopath can blur rich scenic layers;
+  LBH's empty black space should usually stay sharp, ominous, and high contrast.
 
 ## Mood Board Takeaways
 
