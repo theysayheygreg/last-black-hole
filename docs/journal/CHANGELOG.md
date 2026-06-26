@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-06-26 — Inhibitor fabric/glyph completion
+
+- Added dedicated Inhibitor glyph rows to the ASCII font atlas: math/corruption glyphs for Glitch/Swarm and box/grid glyphs for Vessel.
+- Wired authoritative `snapshot.inhibitor` data into the ASCII pass so corruption is localized around the Inhibitor rather than only global transition noise.
+- Added the Swarm wake shock as a one-second screenwide ASCII glitch and added shader-local Swarm tendrils in the display/ASCII layers.
+- Added sim-side Swarm wreck disturbance with a bounded terminal speed boost, plus authority coverage that nearby wreck drift accelerates.
+- Updated Inhibitor design/implementation docs so the previous font-atlas TODO is now marked shipped and the remaining polish is clearly scoped.
+
+---
+
 ## 2026-06-26 — Authoritative Inhibitor completion
 
 - Completed the sim-side Inhibitor contract: form-time tracking, Shroud decoy signal sources, Swarm search behavior, Vessel player pursuit, portal blocking/unblocking, well absorption, final portal timing, and `inhibitor_vessel` death causes.

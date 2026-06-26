@@ -28,7 +28,15 @@ uniform float u_cameraView;   // world-units visible on each axis; matches the s
 uniform float u_viewAspect;   // retained for pass ABI; ignored while the fluid window is square
 uniform float u_dirThreshold; // speed threshold for directional character selection
 uniform float u_dirBlendRange; // speed window where direction emerges through shimmer
-uniform float u_glitchIntensity; // 0.0 = normal, 1.0 = full corruption (scene transitions)
+uniform float u_glitchIntensity; // 0.0 = normal, 1.0 = full corruption (scene transitions + wake shock)
+uniform int u_inhibitorForm;     // 0=inactive, 1=glitch, 2=swarm, 3=vessel
+uniform vec2 u_inhibitorPos;     // fluid UV position of the authoritative Inhibitor
+uniform float u_inhibitorRadius; // world-space corruption radius
+uniform float u_inhibitorIntensity;
+uniform float u_inhibitorTime;
+
+const float INHIBITOR_MATH_ROW = 4.0;
+const float INHIBITOR_VESSEL_ROW = 5.0;
 
 in vec2 v_uv;
 out vec4 fragColor;
@@ -108,6 +116,45 @@ void main() {
     }
   }
 
+  if (u_inhibitorForm > 0) {
+    vec2 inhDiff = wrappedFluidUV - u_inhibitorPos;
+    inhDiff = inhDiff - round(inhDiff);  // toroidal world wrap in fluid UV
+    float inhDist = length(inhDiff) * u_gridWindow;
+
+    float zone = smoothstep(u_inhibitorRadius * 1.8, u_inhibitorRadius * 0.35, inhDist);
+    float chance = zone * u_inhibitorIntensity * 0.24;
+    float targetRow = INHIBITOR_MATH_ROW;
+
+    if (u_inhibitorForm == 2) {
+      // Swarm tendrils are shader-local: visual corruption follows radial
+      // current-like arms without adding per-frame CPU readback.
+      float angle = atan(inhDiff.y, inhDiff.x);
+      float tendril = pow(max(0.0, sin(angle * 7.0 + u_inhibitorTime * 2.3 + inhDist * 18.0)), 12.0);
+      float tendrilBand = smoothstep(u_inhibitorRadius * 2.55, u_inhibitorRadius * 0.75, inhDist)
+                        * (1.0 - smoothstep(u_inhibitorRadius * 0.55, u_inhibitorRadius * 0.25, inhDist));
+      zone = max(zone, tendril * tendrilBand * 0.85);
+      chance = max(chance, zone * u_inhibitorIntensity * 0.42);
+    } else if (u_inhibitorForm == 3) {
+      targetRow = INHIBITOR_VESSEL_ROW;
+      float cosA = cos(u_inhibitorTime * 0.2);
+      float sinA = sin(u_inhibitorTime * 0.2);
+      vec2 rotDiff = vec2(inhDiff.x * cosA + inhDiff.y * sinA,
+                          -inhDiff.x * sinA + inhDiff.y * cosA) * u_gridWindow;
+      float rectMask = step(abs(rotDiff.x), u_inhibitorRadius * 0.34)
+                     * step(abs(rotDiff.y), u_inhibitorRadius * 1.28);
+      zone = max(zone * 0.45, rectMask);
+      chance = max(chance, rectMask * u_inhibitorIntensity * 0.92);
+    }
+
+    float inhNoise = fract(sin(dot(cellIndex + floor(u_inhibitorTime * 21.0) * 0.43, vec2(53.23, 91.97))) * 43758.5453);
+    if (inhNoise < clamp(chance, 0.0, 0.95)) {
+      float rndChar = fract(sin(dot(cellIndex * 1.7 + u_inhibitorTime * 13.0, vec2(127.1, 311.7))) * 43758.5453);
+      charIdx = floor(rndChar * rampSize);
+      rampRow = targetRow;
+      sceneColor.rgb = mix(sceneColor.rgb, vec3(1.0, 0.18, 0.48), clamp((0.45 + zone * 0.55) * u_inhibitorIntensity, 0.0, 1.0));
+    }
+  }
+
   float atlasCol = charIdx;
   float atlasRow = rampRow;
 
@@ -125,17 +172,20 @@ void main() {
   fragColor = vec4(finalColor, 1.0);
 }`;
 
-// Row 0 = isotropic, 1 = horizontal emphasis, 2 = vertical, 3 = diagonal.
+// Rows 0-3 are normal space. Rows 4-5 are reserved for Inhibitors so their
+// corruption reads as a separate language instead of a denser normal fabric.
 export const RAMPS = [
   ' .`\'-,_:;~*+=#%@',
   ' .-~-=~=--==#%@@',
   ' .:|!:|!|:|!#%@@',
   ' ./\\//\\//++##%@@',
+  ' ΨΩ∞⌁∑∫√∂∆≈≠±×÷∴',
+  ' ╔║╗═╬░▓█╚╝╠╣╦╩╬',
 ];
 export const CHARS_PER_RAMP = 16;
 
 /**
- * Generate a 1024×1024 font atlas canvas. 16 columns × 4 rows of glyphs,
+ * Generate a 1024×1024 font atlas canvas. 16 columns × N glyph rows,
  * 64×64 px per cell. White glyphs on black background — the shader reads
  * the red channel as alpha and mixes it against the scene color.
  */

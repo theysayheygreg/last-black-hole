@@ -301,6 +301,7 @@ let timeSlowRemaining = 0;  // timeSlowLocal consumable — seconds of slow rema
 let signalLevel = 0;        // 0-1 float, read from server snapshot
 let signalZone = 'ghost';   // current signal zone name
 let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
+let inhibitorWakeGlitchTimer = 0;
 let localAbilityState = null;
 let lastRunResult = null;  // populated from run.result event
 // localAbilityState: null in local-sim mode (hull abilities are server-only).
@@ -511,6 +512,7 @@ const TRANSITION_RAMP_UP = 0.6;    // seconds to reach full corruption
 const TRANSITION_HOLD = 0.25;      // seconds at full corruption
 const TRANSITION_RAMP_DOWN = 0.6;  // seconds to resolve into new scene
 const TRANSITION_TOTAL = TRANSITION_RAMP_UP + TRANSITION_HOLD + TRANSITION_RAMP_DOWN;
+const INHIBITOR_WAKE_GLITCH_DURATION = 1.0;
 
 function getConfiguredSimServerUrl() {
   const url = new URL(window.location.href);
@@ -898,6 +900,21 @@ function init() {
       get remoteControlState() { return currentRemoteControlState(); },
       get remotePlayers() { return remotePlayers; },
       get inhibitorState() { return inhibitorState; },
+      // Render-only fixture hook. Gameplay Inhibitor truth still comes from
+      // the authoritative sim snapshot path.
+      setInhibitorVisualStateForTest: (state = {}) => {
+        const form = Math.max(0, Math.min(3, Math.round(Number(state.form) || 0)));
+        inhibitorState = {
+          form,
+          wx: Number.isFinite(Number(state.wx)) ? Number(state.wx) : camX,
+          wy: Number.isFinite(Number(state.wy)) ? Number(state.wy) : camY,
+          intensity: Math.max(0, Math.min(1, Number(state.intensity ?? (form > 0 ? 1 : 0)) || 0)),
+          radius: Math.max(0, Number(state.radius ?? (form === 1 ? 0.1 : form === 2 ? 0.25 : form === 3 ? 0.4 : 0)) || 0),
+          localTime: Math.max(0, Number(state.localTime ?? totalTime) || 0),
+        };
+        inhibitorWakeGlitchTimer = state.wakeShock ? INHIBITOR_WAKE_GLITCH_DURATION : 0;
+        return true;
+      },
       get localAbilityState() { return localAbilityState; },
       get playableMaps() { return PLAYABLE_MAPS; },
       get homeTab() { return homeTab; },
@@ -1157,8 +1174,7 @@ function triggerTransition(callback) {
   transitionCallback = callback;
 }
 
-/** Get current glitch intensity (0-1) for the ASCII shader. */
-function getGlitchIntensity() {
+function getTransitionGlitchIntensity() {
   if (!transitionActive) return 0;
   const t = transitionTimer;
   if (t < TRANSITION_RAMP_UP) {
@@ -1169,6 +1185,12 @@ function getGlitchIntensity() {
     return 1.0 - (t - TRANSITION_RAMP_UP - TRANSITION_HOLD) / TRANSITION_RAMP_DOWN;  // 1 → 0
   }
   return 0;
+}
+
+/** Get current screenwide glitch intensity (0-1) for the ASCII shader. */
+function getGlitchIntensity() {
+  const wakeShock = Math.min(1, inhibitorWakeGlitchTimer / 0.3);
+  return Math.max(getTransitionGlitchIntensity(), wakeShock);
 }
 
 /**
@@ -1188,6 +1210,8 @@ function loadRendererFixture(name) {
 
   rendererFixtureActive = true;
   loadScene(fixture);
+  inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime: 0 };
+  inhibitorWakeGlitchTimer = 0;
   camX = fixture.worldScale / 2;
   camY = fixture.worldScale / 2;
   gamePhase = 'mapSelect';
@@ -1888,6 +1912,7 @@ function applyRemoteEvents(events) {
       case 'inhibitor.wake':
         // The Swarm is the irreversible wake. Direction still comes from
         // the edge-dim vignette, not a literal pointer.
+        inhibitorWakeGlitchTimer = INHIBITOR_WAKE_GLITCH_DURATION;
         showWarning('something is watching', 'rgba(204, 26, 128, 0.95)', 3500);
         audioEngine.playEvent?.('inhibitorWake');
         break;
@@ -2755,6 +2780,9 @@ function gameLoop(now) {
       transitionActive = false;
     }
   }
+  if (inhibitorWakeGlitchTimer > 0) {
+    inhibitorWakeGlitchTimer = Math.max(0, inhibitorWakeGlitchTimer - rawDt);
+  }
 
   const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home' || gamePhase === 'mapSelect' || gamePhase === 'loading' || rendererFixtureActive;
   const remoteVisualMode = remoteAuthorityActive && (gamePhase === 'playing' || gamePhase === 'dead');
@@ -3581,6 +3609,7 @@ function gameLoop(now) {
       dirThreshold: a.dirThreshold ?? 0.01,
       dirBlendRange: a.dirBlendRange ?? 0.03,
       glitchIntensity: getGlitchIntensity(),
+      inhibitorData: inhData,
       camFU, camFV,
       gridWindow: GRID_WINDOW,
       cameraView: CAMERA_VIEW,

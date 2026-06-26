@@ -395,6 +395,13 @@ void main() {
       col = mix(col, inhColor, swarmCore * u_inhibitorIntensity * 0.7);
       float edgePulse = 0.7 + 0.3 * sin(u_inhibitorTime * 2.0 + atan(inhDiff.y, inhDiff.x) * 4.0);
       col += inhColor * swarmEdge * (1.0 - swarmCore) * edgePulse * u_inhibitorIntensity * 0.15;
+      // Shader-local tendrils sell the "corruption riding the flow" read
+      // without asking the CPU to stream per-frame tendril endpoints.
+      float angle = atan(inhDiff.y, inhDiff.x);
+      float tendril = pow(max(0.0, sin(angle * 7.0 + u_inhibitorTime * 2.0 + inhDist * 16.0)), 12.0);
+      float tendrilBand = smoothstep(u_inhibitorRadius * 2.45, u_inhibitorRadius * 0.72, inhDist)
+                        * (1.0 - smoothstep(u_inhibitorRadius * 0.55, u_inhibitorRadius * 0.25, inhDist));
+      col += inhColor * tendril * tendrilBand * u_inhibitorIntensity * 0.24;
     } else if (u_inhibitorForm == 3) {
       // VESSEL: hard geometric rectangle
       float cosA = cos(u_inhibitorTime * 0.2);

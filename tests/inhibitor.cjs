@@ -205,6 +205,29 @@ async function run() {
       const death = dead.recentEvents.find((event) => event.type === "player.died" && event.payload?.cause === "inhibitor_vessel");
       assert(death.payload.clientId === CLIENT_ID, "Expected death event for harness player");
     });
+
+    await runner.run("Swarm disturbance accelerates nearby wreck drift", async () => {
+      await startRun({ seed: 1005 });
+      const before = await getSnapshot();
+      const wreck = before.world.wrecks.find((entry) => entry.alive !== false);
+      assert(wreck, "Expected a wreck in the test map");
+
+      await postDebugInhibitorState({
+        form: 2,
+        wx: wreck.wx - 0.08,
+        wy: wreck.wy,
+        pressure: 1,
+        threshold: 1,
+        intensity: 1,
+      });
+
+      const disturbed = await waitForSnapshot((snapshot) => {
+        const current = snapshot.world.wrecks.find((entry) => entry.id === wreck.id);
+        return current && Math.hypot(current.vx || 0, current.vy || 0) > 0.002;
+      }, { timeout: 5000, interval: 80 });
+      const moved = disturbed.world.wrecks.find((entry) => entry.id === wreck.id);
+      assert(Math.hypot(moved.vx || 0, moved.vy || 0) > 0.002, "Expected Swarm-adjacent wreck velocity to rise");
+    });
   } finally {
     await stopSimServer(SIM_PORT).catch(() => null);
   }

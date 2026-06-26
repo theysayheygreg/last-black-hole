@@ -6,9 +6,10 @@
 > (`scripts/sim-runtime.cjs`) and is consumed by the client renderer from
 > snapshots. Form timing, signal/decoy targeting, Swarm contact, Vessel portal
 > blocking, well absorption, final portal timing, HUD degradation, audio hooks,
-> debug state hooks, and `tests/inhibitor.cjs` coverage are implemented. Future
-> visual polish still belongs in the shader/font-atlas layer: richer tendrils,
-> reserved Inhibitor glyph rows, and stronger form-specific ASCII corruption.
+> debug state hooks, Swarm wreck disturbance, dedicated Inhibitor glyph rows,
+> localized ASCII corruption, wake-shock glitching, and `tests/inhibitor.cjs`
+> coverage are implemented. Future polish is about authored tendril endpoints,
+> stronger HUD text corruption, and more aggressive audio mix takeover.
 
 ## What It Is
 

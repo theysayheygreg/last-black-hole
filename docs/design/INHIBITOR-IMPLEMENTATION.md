@@ -7,6 +7,8 @@
 > roadmap, not the live architecture. After the sim/renderer split, gameplay
 > authority moved to `scripts/sim-runtime.cjs`; the client receives
 > `snapshot.inhibitor` and passes `inhibitorData` into the renderer/audio/HUD.
+> Dedicated math/box glyph rows, localized ASCII corruption, wake-shock
+> glitching, Swarm tendrils, and Swarm wreck disturbance are now implemented.
 > Do not add a second client-local `src/inhibitor.js` state machine unless the
 > architecture is intentionally revisited.
 
@@ -158,9 +160,7 @@ if (u_inhibitorForm > 0) {
                    vec2(53.23, 91.97))) * 43758.5453);
 
   if (inhNoise < corruptionChance) {
-    // Force to upper-half characters (dense/complex glyphs)
-    // The actual math-symbol substitution happens via a dedicated charset ramp
-    // (row 5+ in the font atlas once we add the inhibitor charset)
+    // Force to the dedicated Inhibitor glyph rows.
     float rndChar = fract(sin(dot(cellIndex * 1.7 + u_inhibitorTime * 13.0,
                     vec2(127.1, 311.7))) * 43758.5453);
     charIdx = floor(rndChar * rampSize * 0.4 + rampSize * 0.6);
@@ -171,7 +171,7 @@ if (u_inhibitorForm > 0) {
 }
 ```
 
-**Font atlas expansion (future):** To render the reserved math symbols (`ΨΩ∞⌁∑∫√∂∆≈≠±×÷`) and box-drawing chars (`╔║╗═╬░▓█`), we add row 5 (math/corruption) and row 6 (box-drawing) to the font atlas. For now, corruption uses existing dense characters from the upper ramp — still reads as "wrong" because of the magenta tint and high flicker rate.
+**Font atlas expansion (implemented):** The ASCII atlas now reserves row 4 for math/corruption glyphs (`ΨΩ∞⌁∑∫√∂∆≈≠±×÷∴`) and row 5 for Vessel box/grid glyphs (`╔║╗═╬░▓█╚╝╠╣╦╩╬`). Forms 1-2 route through the math row; Form 3 routes through the box row so the Vessel reads as geometric anti-fluid instead of denser normal fabric.
 
 ## Game Logic: InhibitorSystem
 
@@ -472,7 +472,7 @@ The game logic (InhibitorSystem.update) is trivial: a few distance calculations,
 
 ## What This Doesn't Cover
 
-- **Font atlas expansion** for math symbols and box-drawing — separate task, visual upgrade
+- **Authored Swarm tendril endpoints** — current tendrils are shader-local radial arms; explicit endpoints following sampled currents remain a possible polish pass
 - **Map mutations** (wells drifting, portals destabilizing) — separate system per INHIBITOR.md
 - **Fauna interaction** with Inhibitor — fauna design not yet specced
 - **Multiplayer Inhibitor** — deferred until multiplayer lands

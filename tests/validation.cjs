@@ -47,6 +47,8 @@ const SRC = path.resolve(__dirname, '..', 'src');
 const fluidSrc = fs.readFileSync(path.join(SRC, 'fluid.js'), 'utf8');
 const configSrc = fs.readFileSync(path.join(SRC, 'config.js'), 'utf8');
 const asciiShaderSrc = fs.readFileSync(path.join(SRC, 'render', 'shaders', 'ascii.glsl.js'), 'utf8');
+const mainSrc = fs.readFileSync(path.join(SRC, 'main.js'), 'utf8');
+const testApiSrc = fs.readFileSync(path.join(SRC, 'test-api.js'), 'utf8');
 
 // Extract GLSL array sizes from shader source
 function findGLSLArraySize(src, name) {
@@ -751,14 +753,16 @@ runner.run('Hull definitions expose movement, delta-v, and slingshot truth', () 
   }
 });
 
-// ---- 16. Directional ASCII shader validation ----
+// ---- 16. Directional + Inhibitor ASCII shader validation ----
 
-runner.run('ASCII directional shader keeps four 16-cell ramps', () => {
+runner.run('ASCII shader keeps base and Inhibitor-specific 16-cell ramps', () => {
   const ramps = parseAsciiRamps();
-  assert(ramps.length === 4, `Expected 4 ASCII ramps, got ${ramps.length}`);
+  assert(ramps.length === 6, `Expected 6 ASCII ramps, got ${ramps.length}`);
   for (let i = 0; i < ramps.length; i++) {
     assert(ramps[i].length === 16, `ASCII ramp ${i} has ${ramps[i].length} chars; expected 16`);
   }
+  assert(ramps[4].includes('Ψ') && ramps[4].includes('∫'), 'Inhibitor math ramp must contain wrong-symbol glyphs');
+  assert(ramps[5].includes('╬') && ramps[5].includes('█'), 'Inhibitor vessel ramp must contain box-drawing glyphs');
   assert(asciiShaderSrc.includes('export const CHARS_PER_RAMP = 16'), 'CHARS_PER_RAMP must remain 16');
 });
 
@@ -770,6 +774,15 @@ runner.run('ASCII directional shader samples velocity with tunable blend', () =>
     'Directional blend must use the tunable blend range');
   assert(configSrc.includes('dirThreshold') && configSrc.includes('dirBlendRange'),
     'CONFIG.ascii must expose directional threshold and blend controls');
+});
+
+runner.run('ASCII shader consumes authoritative Inhibitor data', () => {
+  assert(asciiShaderSrc.includes('uniform int u_inhibitorForm'), 'ASCII shader must expose u_inhibitorForm');
+  assert(asciiShaderSrc.includes('uniform vec2 u_inhibitorPos'), 'ASCII shader must expose u_inhibitorPos');
+  assert(asciiShaderSrc.includes('INHIBITOR_MATH_ROW'), 'ASCII shader must route forms 1/2 to the math glyph row');
+  assert(asciiShaderSrc.includes('INHIBITOR_VESSEL_ROW'), 'ASCII shader must route form 3 to the vessel glyph row');
+  assert(mainSrc.includes('inhibitorData: inhData'), 'Main render path must pass Inhibitor data into the ASCII pass');
+  assert(testApiSrc.includes('setInhibitorVisualStateForTest'), 'Test API must expose a render-only Inhibitor fixture hook');
 });
 
 // ---- Done ----

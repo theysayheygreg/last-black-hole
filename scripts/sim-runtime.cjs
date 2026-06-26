@@ -285,6 +285,9 @@ const INHIBITOR_CONFIG = {
   swarmContactSignalSpike: 0.25,
   swarmControlDebuffDuration: 5.0, // seconds of sluggish controls after Swarm contact
   swarmControlDebuffMult: 0.4,     // thrust multiplier during debuff
+  swarmWreckDriftRange: 0.55,
+  swarmWreckDriftStrength: 0.018,
+  swarmWreckTerminalBonus: 0.035,
   swarmSearchTimeout: 5.0,     // seconds before search pattern
   swarmSearchRadiusMin: 0.08,
   swarmSearchRadiusMax: 0.65,
@@ -2254,6 +2257,7 @@ function tickStars(dt, stars = runtime.mapState.stars) {
 }
 
 function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
+  const ws = runtime.session.worldScale;
   for (const wreck of wrecks) {
     if (wreck.alive === false) continue;
     if (wreck.pickupCooldown > 0) wreck.pickupCooldown = Math.max(0, wreck.pickupCooldown - dt);
@@ -2261,13 +2265,36 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
     let ax = 0;
     let ay = 0;
     for (const well of runtime.mapState.wells) {
-      const dx = worldDisplacement(wreck.wx, well.wx, runtime.session.worldScale);
-      const dy = worldDisplacement(wreck.wy, well.wy, runtime.session.worldScale);
+      const dx = worldDisplacement(wreck.wx, well.wx, ws);
+      const dy = worldDisplacement(wreck.wy, well.wy, ws);
       const dist = Math.hypot(dx, dy);
       if (dist > 0.8 || dist < 0.001) continue;
       const accel = (0.0045 * well.mass) / Math.pow(Math.max(dist, 0.02), 1.5);
       ax += (dx / dist) * accel;
       ay += (dy / dist) * accel;
+    }
+
+    let terminal = 0.05;
+    const inh = runtime.inhibitor;
+    if (inh?.form >= 2) {
+      const dx = worldDisplacement(inh.wx, wreck.wx, ws);
+      const dy = worldDisplacement(inh.wy, wreck.wy, ws);
+      const dist = Math.hypot(dx, dy);
+      const range = INHIBITOR_CONFIG.swarmWreckDriftRange;
+      if (dist > 0.001 && dist < range) {
+        const proximity = 1 - dist / range;
+        // The Swarm is a gravity disturbance, not a magnet. Add a capped
+        // tangential shove so nearby wrecks visibly shear without becoming
+        // unbounded projectiles during long matches.
+        const tangentX = -dy / dist;
+        const tangentY = dx / dist;
+        const outwardX = dx / dist;
+        const outwardY = dy / dist;
+        const strength = INHIBITOR_CONFIG.swarmWreckDriftStrength * proximity * proximity;
+        ax += (tangentX * 0.78 + outwardX * 0.22) * strength;
+        ay += (tangentY * 0.78 + outwardY * 0.22) * strength;
+        terminal += INHIBITOR_CONFIG.swarmWreckTerminalBonus * proximity;
+      }
     }
 
     wreck.vx += ax * dt;
@@ -2277,7 +2304,6 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
     wreck.vy *= dragFactor;
 
     const speed = Math.hypot(wreck.vx, wreck.vy);
-    const terminal = 0.05;
     if (speed > terminal) {
       wreck.vx *= terminal / speed;
       wreck.vy *= terminal / speed;
@@ -2287,11 +2313,11 @@ function tickWrecks(dt, wrecks = runtime.mapState.wrecks) {
       wreck.vy = 0;
     }
 
-    wreck.wx = wrapWorld(wreck.wx + wreck.vx * dt, runtime.session.worldScale);
-    wreck.wy = wrapWorld(wreck.wy + wreck.vy * dt, runtime.session.worldScale);
+    wreck.wx = wrapWorld(wreck.wx + wreck.vx * dt, ws);
+    wreck.wy = wrapWorld(wreck.wy + wreck.vy * dt, ws);
 
     for (const well of runtime.mapState.wells) {
-      const dist = worldDistance(wreck.wx, wreck.wy, well.wx, well.wy, runtime.session.worldScale);
+      const dist = worldDistance(wreck.wx, wreck.wy, well.wx, well.wy, ws);
       if (dist < well.killRadius) {
         wreck.alive = false;
         well.mass += 0.1;
