@@ -5,6 +5,10 @@
 > fluid fabric. Wells and Inhibitors remain fabric-first systems; ships, stars,
 > comets, planetoids, wrecks, portals, rivals, fauna, sentries, and future
 > megastructures should become first-class Three scene objects.
+>
+> See also `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md` for the master
+> back-to-front layer stack and `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`
+> for implementation order.
 
 ## Why This Exists
 
@@ -18,6 +22,11 @@ flat-view 3D scene without turning Last Singularity into generic 3D space. The
 game should still read as tiny craft and salvage moving through a vast ASCII
 ocean, but the objects riding on top of that ocean need richer silhouette,
 motion, depth, and material identity.
+
+The palette can widen, but black space remains the organizing lens. The void
+should be dark and scary, while interactable objects and UI affordances must be
+bright enough to read without squinting. The target is **dark scene, punchy
+affordances**, not dark everything.
 
 ## Current Implementation Snapshot
 
@@ -53,6 +62,70 @@ motion, depth, and material identity.
 6. **Text is exceptional.** World labels can remain canvas/DOM until there is a
    specific reason to put text in Three. The main pass is shapes, materials,
    trails, and affordances.
+7. **The void wins, but contrast carries play.** Keep most of the frame dark,
+   then use brighter colors, halos, shadows, and backplates for objects the
+   player must read instantly.
+8. **Separate before decorating.** If an object disappears in the fabric, add a
+   contact matte, rim shell, halo, or local background before adding surface
+   detail.
+
+## Scene Ownership And Sublayers
+
+The current Three bridge has one broad `world-entity-layer`. The next pass
+should split it into semantic subgroups while keeping one top-down camera:
+
+| Subgroup | Contains | Visual Contract |
+|----------|----------|-----------------|
+| `landmarkEntityGroup` | stars, portals, planetoids, comets, megastructure anchors | Stable route objects with modest glow, contact matte, and state ticks |
+| `salvageEntityGroup` | wrecks, vaults, debris fields, echo remnants | Clustered debris silhouettes, amber value glints, looted desaturation |
+| `activeEntityGroup` | player, remote pilots, rivals, scavengers, fauna, sentries | Highest readability, hull or family silhouettes, velocity trails |
+| `immediateVfxGroup` | thrust, brake, pickup, release, portal sparks | Short-lived action explanation, pooled and event-driven |
+| `nearCameraGroup` | sparse dust, speed flecks, lens motes | Depth cue only; never hides player or input-critical objects |
+
+These subgroups can share the same orthographic camera. Parallax should be
+subtle and role-bound: background layers move slower, near-camera atmosphere
+moves slightly faster, and gameplay entities stay locked to sim/world truth.
+
+## Separation Stack
+
+Each first-class entity should be built from the same small local stack:
+
+1. **Contact matte:** a dark transparent ellipse, hull shadow, or shard-shaped
+   patch rendered just above the fabric and below the object. This knocks down
+   high-frequency ASCII behind the entity without erasing the whole field.
+2. **Core silhouette:** the family shape. It must be readable in one frame at
+   Steam Deck scale.
+3. **Rim shell:** a thin additive or emissive outline that separates the object
+   from nearby fabric highlights.
+4. **Halo/backplate:** optional, but required for critical UI-like affordances
+   when the background is black or high-frequency. Use it for player, portals,
+   pickup-ready wrecks, dangerous rivals, and final-run hazards.
+5. **Motion trail:** a short direction/speed cue. Trails describe current state;
+   they are not permanent decorative ribbons.
+6. **State accent:** a small family color or spark for salvage, threat,
+   extraction, ecology, or anomaly state.
+
+This stack is more important than model detail. A tiny clean hull with a matte,
+rim, and tuned brightness will read better than a busy miniature sitting naked
+on the ASCII ocean.
+
+## Palette Roles
+
+Use a wider palette by gameplay role, and bias object colors brighter than the
+background. Low-saturation dark colors belong to the void, not to interaction.
+
+| Role | Color Family | Guidance |
+|------|--------------|----------|
+| Void | black, blue-black | Dominant. Preserve negative space and dread. |
+| Flow/player/portal tech | cyan, blue-white | Core continuity with the current renderer; punch player/portal values high. |
+| High-energy fabric/wells | bone white | Brightest fabric value. Use sparingly so wells remain dangerous and sacred. |
+| Rival/direct danger | warning red | Strong and localized; should read in peripheral vision. |
+| Salvage/stars/reward | amber, gold | Warm counterpoint for value and route anchors. |
+| Ecology/sentries | green | Living/threat systems without stealing Inhibitor magenta. |
+| Inhibitor/anomaly | magenta, violet | Rare, invasive, and unmistakable. |
+
+The palette rule is not "one hue per screenshot." It is "one void, one fabric,
+and a few bright, meaningful accents."
 
 ## Object Targets
 

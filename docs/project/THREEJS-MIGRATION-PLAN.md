@@ -18,7 +18,12 @@ Recommended migration style: **strangler bridge**. Keep the legacy renderer work
 - **Entity status:** Phase 5 is partially shipped as primitive Three projection:
   pooled discs, rings, squares, triangles, lines, and point layers. That proves
   ownership and projection, but it is not the final object language. The next
-  pass is `docs/design/THREE-ENTITY-VISUALS.md`.
+  pass is grounded in `docs/design/THREE-ENTITY-VISUALS.md`,
+  `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
+  `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
+- **Contrast contract:** black space remains the dominant mood and composition
+  field, but player-critical objects must punch through it with bright values,
+  contact mattes, halos, rim shells, or local backplates.
 - **Legacy status:** `?renderer=legacy` remains available as an explicit compatibility/fallback lane, but it is no longer the default harness target.
 - **Harness:** use `npm test` for the Three core gate, `npm run test:three` for smoke + infra + renderer canary, and `npm run test:legacy` only when touching the bridge/fallback.
 
@@ -324,8 +329,10 @@ Goal: move clean overlay geometry into Three while preserving legibility over AS
 Status: partially shipped. The current renderer projects core world entities
 through `world-entity-layer` and `semantic-flow-field-layer`, but most object
 families still use bridge primitives. The next step is visual ownership, not
-only projection parity. Use `docs/design/THREE-ENTITY-VISUALS.md` as the object
-language target.
+only projection parity. Use `docs/design/THREE-ENTITY-VISUALS.md`,
+`docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
+`docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` as the object-language and scene
+hierarchy targets.
 
 Deliverables:
 

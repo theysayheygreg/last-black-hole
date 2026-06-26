@@ -59,6 +59,9 @@ reading stale health records or reconstructing status from `git log`.
 | Feature | Design Doc | Status |
 |---------|-----------|--------|
 | Three entity visual language | `docs/design/THREE-ENTITY-VISUALS.md` | Designed 2026-06-26; current code has primitive bridge markers, next work is higher-fidelity Three object families |
+| Three scene visual hierarchy | `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md` | Designed 2026-06-26; black void remains primary, but interactive objects require bright contrast affordances, mattes, halos, or local backplates |
+| Three entity visual pass plan | `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` | Designed 2026-06-26; implementation starts with shared style kit, separation helpers, player/wreck/portal replacements, and renderer fixture coverage |
+| Three entity mood board | `docs/reference/THREE-ENTITY-MOODBOARD.md` | Designed 2026-06-26; cited references and generated target visuals for 2D identity inside staged 3D depth |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -70,7 +73,11 @@ reading stale health records or reconstructing status from `git log`.
 
 1. **Three entity visual-language pass** — replace bridge primitives for ships,
    stars, planetoids/comets, wrecks, portals, rivals, fauna, and sentries with
-   first-class scene objects. See `docs/design/THREE-ENTITY-VISUALS.md`.
+   first-class scene objects. Preserve a dark void, but make gameplay affordances
+   punchy with bright values, halos, contact mattes, and local backgrounds. See
+   `docs/design/THREE-ENTITY-VISUALS.md`,
+   `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
+   `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
 2. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
 3. **Slingshot authority regression watch** — remote-authority mode now renders slingshot from sim-owned engagement/release state; keep tests representative as numbers and maps change.
 4. **Remote/local physics regression watch** — brake, max-speed, delta-v, fuel cells, and movement coefficients now have server parity; keep tests representative as tuning evolves.
@@ -94,6 +101,10 @@ reading stale health records or reconstructing status from `git log`.
   `docs/design/THREE-ENTITY-VISUALS.md`. Wells and Inhibitors stay
   fabric-first; ships, stars, planetoids/comets, wrecks, portals, rivals, fauna,
   and sentries should become richer Three objects.
+- The current scene hierarchy target is
+  `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`: the void stays black and
+  dominant, the ASCII fabric stays the gameplay ocean, and entities get explicit
+  contrast affordances so dark atmosphere does not become unreadable play.
 - Production renderer defaults to `FluidDisplayPass -> BloomPass -> TonemapPass -> ColorGradePass -> VignettePass -> ASCIIPass -> ChromaticAberrationPass -> ScanlinesPass`; `?minimalrender=1` gives the cheaper `FluidDisplayPass -> TonemapPass -> ASCIIPass` baseline.
 - Packaged desktop builds are now self-contained local apps with embedded authority on app-owned dynamic loopback ports.
 - Browser remote play still expects separate authority processes.

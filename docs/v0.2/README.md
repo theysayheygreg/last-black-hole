@@ -12,8 +12,12 @@ Everything before this snapshot is treated as **v0.1**: the jam prototype, the p
 4. `DESIGN.md` — the current v0.2 game bible.
 5. `../design/THREE-ENTITY-VISUALS.md` — current visual target for
    non-fluid objects in the Three scene.
-6. `ROADMAP.md` — current status and what comes next by major area.
-7. `../project/BUILD-STATUS.md` — current local playability snapshot and
+6. `../design/THREE-SCENE-VISUAL-HIERARCHY.md` — master back-to-front scene
+   stack, contrast contract, parallax targets, and post-processing placement.
+7. `../reference/THREE-ENTITY-MOODBOARD.md` — cited reference board for the
+   current visual pass.
+8. `ROADMAP.md` — current status and what comes next by major area.
+9. `../project/BUILD-STATUS.md` — current local playability snapshot and
    caveats.
 
 ## Version Meaning
@@ -33,6 +37,8 @@ Important current anchors:
 - `docs/project/BUILD-STATUS.md`
 - `docs/project/THREEJS-MIGRATION-PLAN.md`
 - `docs/design/THREE-ENTITY-VISUALS.md`
+- `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`
+- `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`
 - `docs/design/TEST-HARNESS.md`
 - `src/content/*.data.json`
 - `scripts/sim-runtime.cjs`

@@ -11,6 +11,14 @@
   for non-fluid objects in the Three scene: ships, stars, planetoids/comets,
   wrecks, portals, rivals, fauna, sentries, slingshot affordances, and future
   megastructures.
+- Added `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`,
+  `docs/reference/THREE-ENTITY-MOODBOARD.md`, and
+  `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` to define the full
+  back-to-front Three stack, reference board, contrast contract, target visuals,
+  and implementation sequence.
+- Added generated target visuals under
+  `docs/reference/target-visuals/2026-06-26/` for entity separation, scene
+  layering, and wider palette exploration.
 - Updated the v0.2 design bible, roadmap, design/code delta, project roadmap,
   build plan, backlog, and Three migration plan so the current renderer status
   distinguishes shipped primitive projection from the still-needed visual

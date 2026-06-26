@@ -60,7 +60,11 @@ Goal: make Three the place future presentation work naturally lands and replace
 the current primitive bridge markers with a coherent object language.
 
 - Build the shared Three entity style kit from
-  `docs/design/THREE-ENTITY-VISUALS.md`.
+  `docs/design/THREE-ENTITY-VISUALS.md`,
+  `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
+  `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
+- Preserve black void dominance while punching up object/UI contrast with
+  brighter values, contact mattes, halos, and local backplates.
 - Replace primitive ship/scavenger triangles with small hull/personality
   silhouettes, thrust cues, and signal glow.
 - Replace wreck squares with debris clusters, vault/echo/looted variants, and

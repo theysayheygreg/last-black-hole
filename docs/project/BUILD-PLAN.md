@@ -69,9 +69,14 @@ file records fresh local playtest evidence.
 - The design system exists in docs and has now started bridging into code, but most UI compliance still depends on human discipline.
 - Production rendering now defaults to the Three renderer layered over the Composer/ASCII chain; `?minimalrender=1` is the cheap comparison path for perf triage.
 - The Three renderer currently projects many world objects as primitive bridge
-  markers. The next visual ownership pass is `docs/design/THREE-ENTITY-VISUALS.md`:
-  richer ships, stars, planetoids/comets, wrecks, portals, rivals, fauna, and
-  sentries while wells and Inhibitors remain fabric-first.
+  markers. The next visual ownership pass is grounded in
+  `docs/design/THREE-ENTITY-VISUALS.md`,
+  `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
+  `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`: richer ships, stars,
+  planetoids/comets, wrecks, portals, rivals, fauna, and sentries while wells
+  and Inhibitors remain fabric-first. The scene should stay black and scary, but
+  critical gameplay objects need bright contrast affordances, contact mattes,
+  halos, or local backgrounds.
 - Movement is now an *economy*: thrust costs delta-v, brake costs delta-v (less), drag is gentle, currents and slingshots are how you move at speed. Conservation of momentum is a real mechanic with playable validity windows. The full taxonomy lives in `SLINGSHOT-NETWORK.md` + the in-source comments at `src/ship.js` step 2 / `src/slingshot.js` `SLINGSHOT_CONFIG`.
 
 ### L6: The Ship (Partial)
@@ -79,7 +84,8 @@ file records fresh local playtest evidence.
 - Deploy (GitHub Pages web build, weekly playables, itch.io)
 - Audio for new systems (hull abilities, fauna, sentries, inhibitor forms)
 - Polish pass (death screen, extraction screen with new data)
-- Three entity visual-language pass for all non-fluid object families
+- Three entity visual-language pass for all non-fluid object families, including
+  the shared style kit, contrast helpers, and renderer fixture coverage
 - Current v0.2 position: title/home/map/save foundations exist, but balance,
   deploy, audio identity, and release polish are still the real L6 work.
 

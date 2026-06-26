@@ -1,6 +1,6 @@
 {
   "project": "last-black-hole",
-  "status": "v0.2_three_entity_visual_pass_planned",
+  "status": "v0.2_three_scene_visual_hierarchy_planned",
   "status_updated_at": "2026-06-26T00:00:00-07:00",
   "status_documents": {
     "local_build_status": "docs/project/BUILD-STATUS.md",
@@ -9,28 +9,29 @@
     "historical_jam_roadmap": "docs/project/ROADMAP.md"
   },
   "current_checkpoint": {
-    "name": "v0.2 — Renderer Ownership And Entity Visual Language",
-    "goal": "Keep the Three renderer and authoritative sim aligned while making non-fluid world objects native to the top-down Three scene."
+    "name": "v0.2 - Renderer Ownership And Three Visual Hierarchy",
+    "goal": "Keep the Three renderer and authoritative sim aligned while making non-fluid world objects native, readable, and contrast-safe in the top-down Three scene."
   },
   "current_section": {
     "slug": "v0-2-three-entity-visual-language",
-    "title": "Three entity visual-language pass",
+    "title": "Three entity visual-language and scene hierarchy pass",
     "status": "designed_for_implementation",
     "owner": "current actor, with Orb as journal/status backstop",
     "reviewer": "greg",
     "implementers": ["codex", "claude", "corb"],
     "test_owner": "current actor",
-    "depends_on": ["docs/design/THREE-ENTITY-VISUALS.md", "fresh local play stack"],
+    "depends_on": ["docs/design/THREE-ENTITY-VISUALS.md", "docs/design/THREE-SCENE-VISUAL-HIERARCHY.md", "docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md", "fresh local play stack"],
     "acceptance_criteria": [
       "Shared Three entity geometries/materials exist before one-off object art",
+      "Black void remains dominant while interactive objects get bright contrast affordances",
       "Player/AI ships and wrecks no longer use primitive bridge markers",
       "Renderer fixtures or screenshots cover the upgraded object families",
       "BUILD-STATUS.md remains the separate source for current playable-build evidence"
     ],
-    "artifacts": ["docs/design/THREE-ENTITY-VISUALS.md", "docs/v0.2/ROADMAP.md", "docs/project/ROADMAP.md", "docs/project/BUILD-PLAN.md"],
-    "last_result": "The v0.2 docs now distinguish shipped Three primitive projection from the still-needed entity visual-language pass.",
+    "artifacts": ["docs/design/THREE-ENTITY-VISUALS.md", "docs/design/THREE-SCENE-VISUAL-HIERARCHY.md", "docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md", "docs/reference/THREE-ENTITY-MOODBOARD.md", "docs/reference/target-visuals/2026-06-26/README.md", "docs/v0.2/ROADMAP.md", "docs/project/ROADMAP.md", "docs/project/BUILD-PLAN.md"],
+    "last_result": "The v0.2 docs now distinguish shipped Three primitive projection from the still-needed entity visual-language pass, with a master dark-first but contrast-safe scene hierarchy.",
     "blockers": ["Current local playability still belongs to BUILD-STATUS.md and should not be inferred from this design pass"],
-    "next_action": "Implement the Three entity style kit, then replace player/AI ship triangles and wreck squares before secondary ecology.",
+    "next_action": "Implement the Three entity style kit and contrast helpers, then replace player/AI ship triangles, wreck squares, and portal rings before secondary ecology.",
     "updated_at": "2026-06-26T00:00:00-07:00"
   },
   "roadmap": {
@@ -38,8 +39,8 @@
     "current_truth": "Use docs/project/BUILD-STATUS.md for local playability and docs/v0.2/ROADMAP.md for current roadmap execution.",
     "source": "projects/last-black-hole/docs/project/ROADMAP.md",
     "current_layer": "v0.2.3",
-    "current_focus": "Renderer Ownership And Entity Visual Language",
-    "priority_order": "Local build status first, then Three entity visual language, then renderer fixtures/screenshots.",
+    "current_focus": "Renderer Ownership And Three Visual Hierarchy",
+    "priority_order": "Local build status first, then Three entity visual language plus contrast-safe hierarchy, then renderer fixtures/screenshots.",
     "execution_rule": "Parallelize exploration, serialize adoption. One mainline, probes promote or get backlogged.",
     "sections": [
       {

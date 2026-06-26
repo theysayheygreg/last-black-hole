@@ -137,8 +137,13 @@ the ASCII fabric.
   squares are valid parity markers, not final art direction.
 - **Keep scale discipline:** objects can gain 3D silhouette, rim light, trail,
   and material identity while staying tiny against the universe.
+- **Protect contrast:** the void can own most of the frame, but critical
+  gameplay objects need bright values, contact mattes, halos, or local
+  backplates so "dark and scary" does not become "hard to read."
 
-The current target lives in `docs/design/THREE-ENTITY-VISUALS.md`.
+The current targets live in `docs/design/THREE-ENTITY-VISUALS.md`,
+`docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
+`docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
 
 ## Authority Model
 

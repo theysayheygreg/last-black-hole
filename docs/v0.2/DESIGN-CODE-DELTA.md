@@ -28,7 +28,7 @@ The strongest current alignment is in the pillars, movement direction, ASCII ide
 | Procedural maps | Seeded map generator, entity catalog selection, megastructures | Static playable maps plus seeded signatures/content/echo foundations | Full procedural map generation is not shipped |
 | Echoes | Chronicle wrecks, phantoms, scout drifts, Doppler echoes | Chronicle/echo wreck foundations and phantoms shipped; scout/Doppler deferred | v0.2 should focus chronicle wreck playtest before adding more echo types |
 | Renderer | ASCII fluid, then raw WebGL/Composer, later Three plan | Composer/ASCII remains; Three is default scene substrate and shares the context | Move more entities/VFX/HUD toward Three, but preserve ASCII readability |
-| Entity visuals | Older visual docs assumed clean vector/glyph overlays over the ASCII layer | Three currently projects many entities as primitive discs, rings, squares, and triangles | Treat those primitives as bridge markers; next pass is `docs/design/THREE-ENTITY-VISUALS.md` |
+| Entity visuals | Older visual docs assumed clean vector/glyph overlays over the ASCII layer | Three currently projects many entities as primitive discs, rings, squares, and triangles | Treat those primitives as bridge markers; next pass is `docs/design/THREE-ENTITY-VISUALS.md`, `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` |
 | HUD/UI | NERV/EVA DOM HUD, dense warnings, degradation | DOM HUD and canvas/menu surfaces exist; design-token bridge started; some screen text remains canvas-specific | Consolidate UI primitives and reduce inline style drift |
 | Audio | Drone, well harmonics, event sounds, Inhibitor takeover | Audio engine and audio toolkit exist; full score/dynamic mix remains incomplete | Audio is foundation, not final identity yet |
 | Multiplayer | Stretch goal, later private remote play | Local authoritative sim/control plane, remote browser, host/join/leave/promotion all tested | Private/local multiplayer foundation exists; public hosted play does not |
@@ -41,8 +41,11 @@ The strongest current alignment is in the pillars, movement direction, ASCII ide
 2. **Make the meta-loop honest end to end.** Results, vault, run records, and profile shape exist; upgrade buying/write-back needs product polish.
 3. **Give Three entities a real visual language.** Current Three scene is real,
    but many objects still read as primitive bridge markers. Use
-   `docs/design/THREE-ENTITY-VISUALS.md` to upgrade ships, wrecks, stars,
-   comets/planetoids, portals, rivals, and ecology without moving gameplay
-   truth into renderer objects.
+   `docs/design/THREE-ENTITY-VISUALS.md`,
+   `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
+   `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` to upgrade ships, wrecks,
+   stars, comets/planetoids, portals, rivals, and ecology without moving
+   gameplay truth into renderer objects. Preserve the black void, but require
+   bright contrast affordances for gameplay reads.
 4. **Update public copy to match the playable game.** Do not promise public multiplayer, full procedural maps, or complete progression yet.
 5. **Audit old docs before each feature.** Many older docs are still useful idea mines, but v0.2 work should start from this delta ledger.

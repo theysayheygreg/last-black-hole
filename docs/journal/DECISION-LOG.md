@@ -26,6 +26,29 @@ details: procedural geometry versus generated masks, how much hull-specific
 silhouette ships need, and which object effects should also bite into the ASCII
 fabric.
 
+## 2026-06-26 — Three scene hierarchy is dark-first, not low-contrast
+
+**Decision:** Treat black space as the dominant visual field while requiring
+bright, deliberate contrast affordances for anything the player must read:
+contact mattes, rim shells, halos, local backplates, brighter object colors, and
+clean HUD surfaces. The renderer hierarchy should run from black void through
+ASCII fabric, semantic lanes, entity layers, near-camera atmosphere, global post,
+and HUD.
+
+**Why:** The current screenshots prove that the ASCII fabric can be beautiful
+and too high-frequency at the same time. Keeping the void scary is correct, but
+dark-on-dark icons and subtle low-saturation colors make the game feel like it
+requires squinting. The right direction is a dark scene with punchy local reads.
+
+**Where it landed:** `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`,
+`docs/design/THREE-ENTITY-VISUALS.md`,
+`docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`,
+`docs/reference/THREE-ENTITY-MOODBOARD.md`, `docs/v0.2/README.md`,
+`docs/v0.2/ROADMAP.md`, and `docs/project/ROADMAP.md`.
+
+**Door status:** Closed for v0.2 visual hierarchy. Open for exact brightness,
+bloom, matte, and halo tuning after the style kit exists.
+
 ## 2026-06-25 — Build versions use public train plus commit hash
 
 **Decision:** Use `major.minor.public.commit` for LBH build identifiers.
