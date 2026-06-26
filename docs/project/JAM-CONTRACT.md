@@ -544,23 +544,25 @@ The remote repo must stay current. This is a shared workspace — other agents, 
 
 - **Push after every milestone** — feature build, audit cycle, journal update. Not just at session end.
 - **If 5+ commits have accumulated without a push, push.**
-- **Release/handoff pushes bump the v0.2 patch.** Before pushing a real build or
-  handoff milestone to `origin`, run `npm run release:patch`. During the private
-  v0.2 train, `0.2.x` is a practical remote-build counter, not final public
-  semver policy. The helper increments `package.json` / `package-lock.json`,
-  runs the fast gate, builds every release target (`web,ipad,mac,win,linux`),
-  stages weekly assets, and verifies the artifact shape.
+- **Release/handoff pushes get hash-named builds.** Before pushing a real build
+  or handoff milestone to `origin`, commit the source, then run
+  `npm run release:internal`. The build version is `0.2.x.<commit-hash>`: the
+  third number is the public train and the fourth field is the committed source
+  hash. The helper runs the fast gate, builds every release target
+  (`web,ipad,mac,win,linux`), stages weekly assets, and verifies the artifact
+  shape.
 - **Use the pre-push guard.** Install the tracked hook once with
   `git config core.hooksPath .githooks`. It blocks `origin` pushes when the
-  current `0.2.x` version is not ahead of upstream or the matching all-target
+  current public train is behind upstream or the matching hash-named all-target
   release build is missing. For intentional docs/process-only pushes that do not
   publish a build, use `LBH_SKIP_RELEASE_PREP=1 git push origin main`.
-- **Split build IDs from public versions later.** Once LBH has a public playable
-  location, such as a website, itch page, or Steam branch, local CI build IDs can
-  advance every commit while public release versions advance only when public
-  artifacts change.
+- **Public version bumps are Greg calls.** `npm run release:public` advances the
+  third number (`0.2.x`). Commit that bump, then build. Large decisive `0.3` or
+  `1.0` moves are by Greg's explicit call only.
 - **Keep README.md current** — update it when features, architecture, or setup instructions change. The README is the first thing anyone reads.
-- **Tag versions** — use semantic version tags (`v0.2.x`) at meaningful checkpoints. Update `package.json` version to match.
+- **Tag versions** — public checkpoint tags use the public train (`v0.2.x`);
+  build artifacts use `v0.2.x.<hash>`. Update `package.json` only when the
+  public train changes.
 - **Build instructions must be correct** — if you add a new server, script, or dependency, update the README setup section in the same commit or the next one.
 
 ---

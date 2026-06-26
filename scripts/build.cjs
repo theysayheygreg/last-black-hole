@@ -6,14 +6,20 @@ const os = require('os');
 const { execFileSync, execSync } = require('child_process');
 const packagerModule = require('@electron/packager');
 const packager = packagerModule.packager || packagerModule.default || packagerModule;
+const {
+  buildIdForMode,
+  currentBuildVersion,
+  currentPublicVersion,
+} = require('./version.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
-const PKG = require(path.join(ROOT, 'package.json'));
 const BUILD_ROOT = path.join(ROOT, 'builds');
 const STAGING_ROOT = path.join(ROOT, 'release-staging');
 const PRODUCT_NAME = 'Last Singularity';
 const PRODUCT_SLUG = 'last-singularity';
 const PRODUCT_SHORT = 'LS';
+const PUBLIC_VERSION = currentPublicVersion();
+const BUILD_VERSION = currentBuildVersion(PUBLIC_VERSION);
 const DESKTOP_SERVER_SCRIPTS = [
   'sim-runtime.cjs',
   'sim-protocol.cjs',
@@ -76,14 +82,6 @@ function stamp(now = new Date()) {
   ].join('');
 }
 
-function versionTag() {
-  return `v${PKG.version}`;
-}
-
-function buildIdForMode(mode) {
-  return mode === 'release' ? versionTag() : `${versionTag()}-${mode}`;
-}
-
 function ensureDir(target) {
   fs.mkdirSync(target, { recursive: true });
 }
@@ -144,7 +142,8 @@ function makeBuildInfo(base) {
   return {
     project: PRODUCT_SLUG,
     productName: PRODUCT_NAME,
-    version: PKG.version,
+    version: BUILD_VERSION,
+    publicVersion: PUBLIC_VERSION,
     builtAt: new Date().toISOString(),
     host: {
       platform: process.platform,
@@ -433,7 +432,7 @@ function stageElectronShell(mode) {
   const shellPkg = {
     name: `${PRODUCT_SLUG}-shell`,
     productName: PRODUCT_NAME,
-    version: PKG.version,
+    version: BUILD_VERSION,
     main: 'electron-main.cjs',
   };
 
@@ -545,7 +544,7 @@ async function main() {
   }
 
   ensureDir(BUILD_ROOT);
-  const buildId = buildIdForMode(mode);
+  const buildId = buildIdForMode(mode, BUILD_VERSION);
   const targetRoot = path.join(BUILD_ROOT, buildId);
   removeIfExists(targetRoot);
   ensureDir(targetRoot);
@@ -579,7 +578,8 @@ async function main() {
   writeJson(path.join(targetRoot, 'BUILD-MANIFEST.json'), {
     buildId,
     builtAt: new Date().toISOString(),
-    version: PKG.version,
+    version: BUILD_VERSION,
+    publicVersion: PUBLIC_VERSION,
     mode,
     results,
   });

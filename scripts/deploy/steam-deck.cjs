@@ -3,11 +3,12 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { currentBuildVersion } = require('../version.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const PKG = require(path.join(ROOT, 'package.json'));
 const PRODUCT_NAME = 'Last Singularity';
 const DESKTOP_ENTRY_NAME = 'last-singularity.desktop';
+const BUILD_VERSION = currentBuildVersion();
 
 function argValue(name, fallback) {
   const prefix = `${name}=`;
@@ -65,7 +66,7 @@ function writeRemoteFile(ssh, target, remotePath, body) {
 
 function buildRoot(mode) {
   const suffix = mode === 'release' ? '' : `-${mode}`;
-  return path.join(ROOT, 'builds', `v${PKG.version}${suffix}`);
+  return path.join(ROOT, 'builds', `v${BUILD_VERSION}${suffix}`);
 }
 
 function requireDeckHost(host) {

@@ -41,7 +41,7 @@ reading stale health records or reconstructing status from `git log`.
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | PARTIAL | Results view and control-plane persistence slices exist; full meta-loop write-back polish remains |
-| Local build status | v0.2.1 BUILT / PLAYTEST NEEDED | `npm run release:build` produced web, iPad web-app, macOS, Windows, and Linux release artifacts; fresh app-browser or human playtest still needs to record the next playable assessment in `BUILD-STATUS.md` |
+| Local build status | v0.2.1 train BUILT / PLAYTEST NEEDED | `npm run release:build` produced web, iPad web-app, macOS, Windows, and Linux release artifacts; the next artifact naming pass is `v0.2.1.<commit-hash>`; fresh app-browser or human playtest still needs to record the next playable assessment in `BUILD-STATUS.md` |
 | Weekly playables | STALE | Last scheduled green predates the current local feature/fix stack; refresh only after the local build is playtest-stable |
 | Build health gate | GREEN | Refreshed on 2026-06-25 for the v0.2.1 release-build train; use `node scripts/build-health.cjs status` for the exact current-commit answer |
 

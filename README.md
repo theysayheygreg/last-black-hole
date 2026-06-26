@@ -8,7 +8,11 @@ You do not fly through empty space. You fly through spacetime as a hostile ocean
 
 ## Status
 
-Current version: **v0.2.1 — Authority and Three Foundation**
+Current public train: **v0.2.1 — Authority and Three Foundation**
+
+Builds identify themselves as `v0.2.1.<commit-hash>` so private handoff
+artifacts can advance every commit without pretending every commit is a public
+release.
 
 The project is in active pre-public-playtest development. It has a playable local stack, server-authoritative run simulation, persistent profiles, ship classes, AI rivals, extraction/death flows, a Three.js renderer direction, and a large test harness. It does **not** yet ship public hosted multiplayer, matchmaking, final balance, or a public demo page.
 
@@ -272,27 +276,32 @@ The browser suites use `tests/browser-driver.cjs`, a small Chrome DevTools Proto
 npm run build:web
 npm run build:desktop
 npm run build:release
-npm run release:patch
+npm run release:internal
+npm run release:public
 npm run release:check
 ```
 
 Desktop builds use Electron and package the local-play surface. Web builds write versioned artifacts under `builds/`.
 
-Use `npm run release:patch` before remote pushes meant to publish or hand off a
-real build. It increments the `0.2.x` patch revision, runs the fast gate, builds
-web, iPad web-app, macOS, Windows, and Linux release artifacts, stages weekly
-assets, and verifies the output shape. The tracked pre-push hook runs the same
-release check for `origin`; install it once with:
+Use `npm run release:internal` after committing source when a remote handoff
+should carry a real build. It keeps the public train at `0.2.x`, appends the
+current commit hash as the fourth version field, runs the fast gate, builds web,
+iPad web-app, macOS, Windows, and Linux release artifacts, stages weekly assets,
+and verifies the output shape. Use `npm run release:public` only when Greg calls
+for the third number to advance.
+
+The tracked pre-push hook runs the same release check for `origin`; install it
+once with:
 
 ```sh
 git config core.hooksPath .githooks
 ```
 
-For now, `0.2.x` is a practical remote-build counter for v0.2 handoffs, not the
-final public semantic-versioning policy. Intentional docs/process-only pushes
-that do not publish a build can use `LBH_SKIP_RELEASE_PREP=1 git push origin
-main`. Once there is a public playable location, split local CI build IDs from
-public release version increments.
+For now, the version shape is `major.minor.public.commit`. Internal commits chew
+up the hash field automatically. Public release increments chew up the third
+field. Large decisive `0.3` or `1.0` moves are by Greg's call only. Intentional
+docs/process-only pushes that do not publish a build can use
+`LBH_SKIP_RELEASE_PREP=1 git push origin main`.
 
 ## Deployment Pipelines
 

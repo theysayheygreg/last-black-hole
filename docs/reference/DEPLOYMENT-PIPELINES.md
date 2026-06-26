@@ -6,16 +6,17 @@ The key distinction: the existing web build is not automatically the right
 artifact for every platform. Steam Deck, itch.io, and Steam all need different
 wrappers around the same gameplay runtime.
 
-Before pushing a release/handoff commit to `origin`, run:
+Before pushing a release/handoff commit to `origin`, commit the source and run:
 
 ```sh
-npm run release:patch
+npm run release:internal
 ```
 
-That increments the current `0.2.x` patch version and builds the real release
-target set: web, iPad web-app, macOS, Windows, and Linux. Use
-`npm run release:build` only when the patch version is already correct and you
-need to regenerate artifacts for the current version.
+That builds the real release target set: web, iPad web-app, macOS, Windows, and
+Linux. The artifact version is `0.2.x.<current-commit-hash>`. Use
+`npm run release:public` only when Greg wants the public `0.2.x` train to
+advance; commit that bump before building so the hash field names the committed
+source.
 
 ## Current Source Build
 

@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-06-25 — hash-based v0.2 build identifiers
+
+- Added `scripts/version.cjs` as the shared version source: public train from
+  `package.json`, full build version from `0.2.x.<current-git-hash>`.
+- Updated build, release, Steam Deck deploy, itch deploy, SteamPipe deploy, and
+  iOS wrapper metadata to use the same hash-named build version.
+- Changed release handoff semantics: `release:internal` builds the current
+  committed source; `release:public` advances the public third number only when
+  Greg calls it.
+- Updated README, build pipeline, deployment, and project-contract docs so
+  internal commits consume the hash field while `0.3` / `1.0` remain explicit
+  Greg-call milestones.
+
 ## 2026-06-25 — v0.2 build-number policy clarification
 
 - Clarified that `0.2.x` is currently a private v0.2 remote-build counter for

@@ -9,7 +9,8 @@
 ## Current Snapshot
 
 **Date:** 2026-06-25
-**Version:** v0.2.1
+**Public train:** v0.2.1
+**Build version shape:** v0.2.1.`<commit-hash>`
 **Primary playable target:** all-target release artifacts plus local source
 build, Three renderer, and local authoritative sim.
 
@@ -31,12 +32,14 @@ npm run release:build
 ```
 
 That command builds `web`, `ipad`, `mac`, `win`, and `linux` release artifacts
-for the current `0.2.x` package version and verifies the output shape.
+for the current committed `0.2.x.<hash>` build version and verifies the output
+shape.
 
 ## Standing Assessment
 
-**Status:** v0.2.1 all-target release build created; fresh playtest still
-needed.
+**Status:** v0.2.1 all-target release build created under the previous
+three-part artifact naming; the next real release build will use
+`v0.2.1.<commit-hash>`. Fresh playtest still needed.
 
 The recent local work fixed the class of issues that made the Three migration
 feel broken: camera/world projection mismatch, coordinate and flow scaling
@@ -51,12 +54,13 @@ assets into `dist/nightly`, and passed `release:check`.
 That is a real artifact baseline, but it is not the same as a green playable
 baseline. A fresh Codex app browser or human playtest still has not been
 recorded after the final local-control and release-process changes. Treat the
-v0.2.1 build as ready for a fresh playtest pass, not as public-ready.
+v0.2.1 build train as ready for a fresh playtest pass, not as public-ready.
 
 Artifacts:
 
-- `builds/v0.2.1/`
-- `builds/last-singularity-playtest-v0.2.1.zip`
+- `builds/v0.2.1/` (last three-part build, preserved as evidence)
+- next release build: `builds/v0.2.1.<commit-hash>/`
+- next playtest zip: `builds/last-singularity-playtest-v0.2.1.<commit-hash>.zip`
 - `dist/nightly/`
 
 ## Known Caveats

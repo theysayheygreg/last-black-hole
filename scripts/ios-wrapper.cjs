@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFileSync, spawnSync } = require('child_process');
+const { currentBuildVersion, currentPublicVersion } = require('./version.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const IOS_ROOT = path.join(ROOT, 'ios');
@@ -11,7 +12,8 @@ const PROJECT_PATH = path.join(IOS_ROOT, 'LastSingularity.xcodeproj');
 const WEBAPP_DIR = path.join(IOS_ROOT, 'LastSingularity', 'WebApp');
 const PRODUCT_NAME = 'Last Singularity';
 const PRODUCT_SLUG = 'last-singularity';
-const PKG = require(path.join(ROOT, 'package.json'));
+const PUBLIC_VERSION = currentPublicVersion();
+const BUILD_VERSION = currentBuildVersion(PUBLIC_VERSION);
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -148,7 +150,8 @@ function syncWebApp(args = {}) {
   writeJson(path.join(WEBAPP_DIR, 'IOS-WEBAPP-MANIFEST.json'), {
     project: PRODUCT_SLUG,
     productName: PRODUCT_NAME,
-    version: PKG.version,
+    version: BUILD_VERSION,
+    publicVersion: PUBLIC_VERSION,
     mode,
     generatedAt: new Date().toISOString(),
     generatedBy: 'scripts/ios-wrapper.cjs sync',

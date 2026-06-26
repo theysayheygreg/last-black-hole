@@ -1,5 +1,28 @@
 # Decision Log
 
+## 2026-06-25 — Build versions use public train plus commit hash
+
+**Decision:** Use `major.minor.public.commit` for LBH build identifiers.
+`package.json.version` stores the public train (`0.2.x`). Build, release, and
+deploy scripts compute the full build version as `0.2.x.<current-git-hash>`.
+Internal handoff builds consume the hash field automatically. Public releases
+advance the third number only when Greg calls it. Large `0.3` or `1.0` moves are
+also Greg-call milestones only.
+
+**Why:** A numeric fourth counter creates bookkeeping without adding much truth.
+The commit hash is the real internal build identity, and a committed file cannot
+contain its own future commit hash. Keeping the hash computed at build time makes
+artifacts traceable while preserving a human-controlled public release train.
+
+**Where it landed:** `scripts/version.cjs`, `scripts/release.cjs`,
+`scripts/build.cjs`, deploy scripts for Deck/itch/Steam, iOS wrapper metadata,
+README build instructions, `docs/reference/BUILD-PIPELINE.md`,
+`docs/reference/DEPLOYMENT-PIPELINES.md`, and
+`docs/project/JAM-CONTRACT.md`.
+
+**Door status:** Closed for v0.2 build identity. Open only for future public
+release-channel rules once website/itch/Steam publishing is real.
+
 ## 2026-06-25 — v0.2 patch numbers are temporary build-train counters
 
 **Decision:** Keep `0.2.x` as a practical v0.2 remote-build counter while LBH is

@@ -3,11 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, execSync } = require('child_process');
+const { currentBuildVersion, currentPublicVersion } = require('../version.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const PKG = require(path.join(ROOT, 'package.json'));
 const PRODUCT_NAME = 'Last Singularity';
 const DEPLOY_ROOT = path.join(ROOT, 'dist', 'deploy', 'steam');
+const PUBLIC_VERSION = currentPublicVersion();
+const BUILD_VERSION = currentBuildVersion(PUBLIC_VERSION);
 
 const PLATFORM_SPECS = {
   linux: {
@@ -51,7 +53,7 @@ function run(command, args, options = {}) {
 
 function buildRoot(mode) {
   const suffix = mode === 'release' ? '' : `-${mode}`;
-  return path.join(ROOT, 'builds', `v${PKG.version}${suffix}`);
+  return path.join(ROOT, 'builds', `v${BUILD_VERSION}${suffix}`);
 }
 
 function gitSha() {
@@ -191,7 +193,7 @@ function main() {
   const username = argValue('--username', process.env.STEAM_USERNAME || '');
   const password = argValue('--password', process.env.STEAM_PASSWORD || '');
   const guardCode = argValue('--guard-code', process.env.STEAM_GUARD_CODE || '');
-  const desc = argValue('--desc', process.env.STEAM_BUILD_DESC || `Last Singularity v${PKG.version} ${gitSha()}`);
+  const desc = argValue('--desc', process.env.STEAM_BUILD_DESC || `Last Singularity v${BUILD_VERSION}`);
 
   if (!['dev', 'test', 'release'].includes(mode)) {
     throw new Error(`Invalid mode "${mode}". Use dev, test, or release.`);
@@ -202,7 +204,7 @@ function main() {
   }
 
   const sourceRoot = buildRoot(mode);
-  const targetRoot = path.join(DEPLOY_ROOT, `v${PKG.version}`);
+  const targetRoot = path.join(DEPLOY_ROOT, `v${BUILD_VERSION}`);
   const contentRoot = path.join(targetRoot, 'content');
   const scriptRoot = path.join(targetRoot, 'scripts');
   removeIfExists(targetRoot);
@@ -227,7 +229,7 @@ function main() {
   write(path.join(targetRoot, 'STEAMPIPE-README.md'), [
     '# Last Singularity SteamPipe Package',
     '',
-    `Generated from v${PKG.version} (${gitSha()}).`,
+    `Generated from v${BUILD_VERSION}.`,
     '',
     '## Contents',
     '',
@@ -250,7 +252,8 @@ function main() {
 
   const manifest = {
     appId,
-    version: PKG.version,
+    version: BUILD_VERSION,
+    publicVersion: PUBLIC_VERSION,
     git: gitSha(),
     mode,
     preview,

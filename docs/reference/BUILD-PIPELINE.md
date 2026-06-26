@@ -6,7 +6,7 @@ The rule is simple:
 
 - one gameplay source of truth: the web runtime
 - one build command: `npm run build`
-- one default release-push command for real build handoffs: `npm run release:patch`
+- one default release-push command for real build handoffs: `npm run release:internal`
 - one runtime mode per build: `dev`, `test`, or `release`
 - versioned outputs under `builds/`
 - a manifest and per-target `BUILD-INFO-*.json` files for traceability
@@ -30,15 +30,20 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 - `scripts/install-steam-deck.sh` — public Deck installer that downloads the Linux weekly release asset
 - `npm run deploy:itch` — stage an itch HTML5 artifact and push it with butler
 - `npm run deploy:steam` — prepare SteamPipe content and VDF scripts
-- `npm run release:bump` — increment `package.json` and `package-lock.json`
-  from `0.2.x` to the next patch
+- `npm run release:bump` — legacy alias for `release:public`
 - `npm run release:build` — run the fast gate, build every release target
-  (`web,ipad,mac,win,linux`), package weekly assets, and verify outputs
-- `npm run release:patch` — `release:bump` + `release:build`
-- `npm run release:check` — verify the current `0.2.x` version has a complete
-  all-target release build
-- `npm run release:prepush` — same shape as the tracked pre-push hook: version
-  must be ahead of upstream and the all-target build must exist
+  (`web,ipad,mac,win,linux`), package weekly assets, and verify outputs for
+  `0.2.x.<current-commit-hash>`
+- `npm run release:internal` — alias for `release:build`; internal handoffs use
+  the commit hash as the fourth version field
+- `npm run release:public` — increment the public `0.2.x` train; commit that
+  bump, then run `npm run release:build`
+- `npm run release:patch` — legacy alias for `release:public`
+- `npm run release:check` — verify the current `0.2.x.<hash>` version has a
+  complete all-target release build
+- `npm run release:prepush` — same shape as the tracked pre-push hook: public
+  version must not be behind upstream and the current hash-named all-target
+  build must exist
 - `LBH_SKIP_RELEASE_PREP=1 git push origin main` — intentional docs/process-only
   push that does not publish a new build
 
@@ -46,22 +51,29 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 
 ## Version Policy
 
-During the private v0.2 train, `0.2.x` is a simple remote-build counter for
-source handoffs that carry real artifacts. It is fine for each meaningful remote
-build push to bump the patch number while LBH is still inventing its lightweight
-CI discipline.
+LBH uses a four-field product build identifier:
 
-That does not make every commit a public release. If a change only updates
-docs, process wording, or other non-build material, use
-`LBH_SKIP_RELEASE_PREP=1` deliberately and leave the patch alone.
+```text
+major.minor.public.commit
+```
 
-When LBH has a public playable location, such as a hosted website, itch page, or
-Steam playtest branch, split the numbers:
+For the current train, that means builds look like `0.2.1.<git-hash>`.
 
-- local CI/build IDs can advance on every build or commit
-- public release versions should advance only when a public artifact changes
-- release notes should describe the public version, while build metadata records
-  the exact commit and target artifacts
+- `0.2` is the current product era.
+- The third number is the public release train. It advances only when Greg calls
+  a public release bump.
+- The fourth field is the short git commit hash. Internal handoffs chew up this
+  field automatically.
+- Large decisive `0.3` or `1.0` moves are by Greg's call only.
+
+`package.json.version` stores only the public train (`0.2.x`) because a
+committed file cannot contain its own future commit hash. Build, deploy, and
+release scripts compute the full `0.2.x.<hash>` version at build time from the
+committed `HEAD`.
+
+Release builds must therefore be made from committed tracked source. If the
+tree is dirty, `npm run release:build` refuses to produce a hash-named artifact
+unless `LBH_ALLOW_DIRTY_BUILD=1` is set for an explicit local probe.
 
 ## Runtime modes
 
@@ -124,17 +136,26 @@ That folder contains:
 
 The build date now lives inside the manifest and build info files instead of the folder name. The selected runtime mode is recorded in the manifest and per-target build info files.
 
-Before cutting a serious playtest build, use:
+Before cutting a serious internal playtest build, commit the source, then use:
 
 ```sh
-npm run release:patch
+npm run release:internal
 ```
 
-That bumps the patch version inside the v0.2 line and performs the current
-all-target release build. If the version is already correct and you only need to
-rebuild artifacts for the same commit, use:
+That performs the current all-target release build and names the artifact with
+the current commit hash. If you only need to rebuild artifacts for the same
+commit, use:
 
 ```sh
+npm run release:build
+```
+
+For a public release bump, use:
+
+```sh
+npm run release:public
+git add package.json package-lock.json
+git commit -m "L6: bump public release train"
 npm run release:build
 ```
 

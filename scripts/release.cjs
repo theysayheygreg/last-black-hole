@@ -3,73 +3,37 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, execSync } = require('child_process');
+const {
+  VERSION_TRAIN,
+  assertCleanTrackedTree,
+  assertV02PublicVersion,
+  comparePublicVersions,
+  currentBuildVersion,
+  currentPublicVersion,
+  formatPublicVersion,
+  updatePublicVersion,
+} = require('./version.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
-const PACKAGE_PATH = path.join(ROOT, 'package.json');
-const LOCK_PATH = path.join(ROOT, 'package-lock.json');
 const PRODUCT_NAME = 'Last Singularity';
 const PRODUCT_SLUG = 'last-singularity';
-const VERSION_TRAIN = '0.2';
 const REQUIRED_TARGETS = ['web', 'ipad', 'mac', 'win', 'linux'];
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
-function writeJson(file, value) {
-  fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
-}
-
 function currentVersion() {
-  return readJson(PACKAGE_PATH).version;
+  return currentBuildVersion();
 }
 
-function parseVersion(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version).trim());
-  if (!match) throw new Error(`Expected semver version like 0.2.x, got "${version}".`);
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-  };
-}
-
-function assertV02Patch(version = currentVersion()) {
-  const parsed = parseVersion(version);
-  if (parsed.major !== 0 || parsed.minor !== 2) {
-    throw new Error(`Release pushes must stay on the ${VERSION_TRAIN}.x train for now. Current version is ${version}.`);
-  }
-  return parsed;
-}
-
-function compareVersions(a, b) {
-  const left = parseVersion(a);
-  const right = parseVersion(b);
-  for (const key of ['major', 'minor', 'patch']) {
-    if (left[key] !== right[key]) return left[key] - right[key];
-  }
-  return 0;
-}
-
-function updateVersion(version) {
-  const pkg = readJson(PACKAGE_PATH);
-  pkg.version = version;
-  writeJson(PACKAGE_PATH, pkg);
-
-  const lock = readJson(LOCK_PATH);
-  lock.version = version;
-  if (lock.packages && lock.packages['']) {
-    lock.packages[''].version = version;
-  }
-  writeJson(LOCK_PATH, lock);
-}
-
-function bumpPatch() {
-  const version = currentVersion();
-  const parsed = assertV02Patch(version);
-  const next = `${parsed.major}.${parsed.minor}.${parsed.patch + 1}`;
-  updateVersion(next);
-  console.log(`Bumped Last Singularity release version: ${version} -> ${next}`);
+function bumpPublic() {
+  const version = currentPublicVersion();
+  const parsed = assertV02PublicVersion(version);
+  const next = formatPublicVersion({ ...parsed, public: parsed.public + 1 });
+  updatePublicVersion(next);
+  console.log(`Bumped Last Singularity public version: ${version} -> ${next}`);
+  console.log('Commit this version bump, then run `npm run release:build` so the build hash names the committed source.');
   return next;
 }
 
@@ -87,7 +51,10 @@ function hasFlag(name) {
 }
 
 function buildRelease() {
-  assertV02Patch();
+  assertV02PublicVersion();
+  if (process.env.LBH_ALLOW_DIRTY_BUILD !== '1') {
+    assertCleanTrackedTree();
+  }
   if (!hasFlag('--skip-tests')) {
     run('npm', ['run', 'test:fast']);
   }
@@ -112,7 +79,7 @@ function artifactChecks(version) {
 
 function checkReleaseBuild() {
   const version = currentVersion();
-  assertV02Patch(version);
+  assertV02PublicVersion(currentPublicVersion());
   const buildRoot = path.join(ROOT, 'builds', `v${version}`);
   const manifestPath = path.join(buildRoot, 'BUILD-MANIFEST.json');
 
@@ -124,7 +91,7 @@ function checkReleaseBuild() {
 
   const manifest = readJson(manifestPath);
   if (manifest.version !== version) {
-    throw new Error(`Build manifest version ${manifest.version} does not match package version ${version}.`);
+    throw new Error(`Build manifest version ${manifest.version} does not match hash build version ${version}.`);
   }
   if (manifest.mode !== 'release') {
     throw new Error(`Build manifest mode must be release, got ${manifest.mode}.`);
@@ -159,6 +126,10 @@ function upstreamVersion() {
     });
     return {
       upstream,
+      commit: execSync(`git rev-parse ${upstream}`, {
+        cwd: ROOT,
+        encoding: 'utf8',
+      }).trim(),
       version: JSON.parse(pkg).version,
     };
   } catch {
@@ -168,12 +139,13 @@ function upstreamVersion() {
 
 function prepushCheck() {
   const version = currentVersion();
-  assertV02Patch(version);
+  const publicVersion = currentPublicVersion();
+  assertV02PublicVersion(publicVersion);
   const upstream = upstreamVersion();
-  if (upstream?.version && compareVersions(version, upstream.version) <= 0) {
+  if (upstream?.version && comparePublicVersions(publicVersion, upstream.version) < 0) {
     throw new Error([
-      `Current package version ${version} is not ahead of ${upstream.upstream} (${upstream.version}).`,
-      'Run `npm run release:patch`, commit the version/build docs, then push again.',
+      `Current public version ${publicVersion} is behind ${upstream.upstream} (${upstream.version}).`,
+      'Ask Greg before moving to 0.3 or 1.0; otherwise bump the public 0.2.x train and commit it.',
       'For an intentional docs/process-only push that does not publish a build, set `LBH_SKIP_RELEASE_PREP=1`.',
     ].join('\n'));
   }
@@ -185,11 +157,13 @@ function usage() {
     'Usage: node scripts/release.cjs <command>',
     '',
     'Commands:',
-    '  bump-patch   Increment package/package-lock from 0.2.x to the next patch.',
-    '  build        Run fast gate, build all release targets, package weekly assets, and check outputs.',
-    '  patch        bump-patch + build.',
-    '  check        Verify the current version has a complete all-target release build.',
-    '  prepush      Verify current version is ahead of upstream and has a complete release build.',
+    '  bump-public  Increment package/package-lock from 0.2.x to 0.2.(x+1).',
+    '  build        Run fast gate, build all release targets, package weekly assets, and check outputs for 0.2.x.<hash>.',
+    '  internal     Alias for build; internal handoffs consume the commit hash as the fourth field.',
+    '  public       Alias for bump-public; commit it, then run build.',
+    '  patch        Legacy alias for public.',
+    '  check        Verify the current 0.2.x.<hash> has a complete all-target release build.',
+    '  prepush      Verify the current hash-named release build exists and public version is not behind upstream.',
     '',
     'Options:',
     '  --skip-tests  For build/patch only: build without running npm run test:fast.',
@@ -200,17 +174,16 @@ function usage() {
 
 function main() {
   const command = process.argv[2] || 'check';
-  if (command === 'bump-patch') {
-    bumpPatch();
+  if (command === 'bump-public') {
+    bumpPublic();
     return;
   }
-  if (command === 'build') {
+  if (command === 'build' || command === 'internal') {
     buildRelease();
     return;
   }
-  if (command === 'patch') {
-    bumpPatch();
-    buildRelease();
+  if (command === 'public' || command === 'patch') {
+    bumpPublic();
     return;
   }
   if (command === 'check') {

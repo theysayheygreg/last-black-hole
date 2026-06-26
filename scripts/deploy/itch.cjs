@@ -2,10 +2,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync, execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const { currentBuildVersion } = require('../version.cjs');
 
 const ROOT = path.resolve(__dirname, '..', '..');
-const PKG = require(path.join(ROOT, 'package.json'));
+const BUILD_VERSION = currentBuildVersion();
 
 function argValue(name, fallback) {
   const prefix = `${name}=`;
@@ -31,7 +32,7 @@ function run(command, args, options = {}) {
 
 function buildRoot(mode) {
   const suffix = mode === 'release' ? '' : `-${mode}`;
-  return path.join(ROOT, 'builds', `v${PKG.version}${suffix}`);
+  return path.join(ROOT, 'builds', `v${BUILD_VERSION}${suffix}`);
 }
 
 function removeIfExists(target) {
@@ -43,7 +44,7 @@ function ensureDir(dir) {
 }
 
 function stageItchHtml5Artifact(source) {
-  const target = path.join(ROOT, 'dist', 'deploy', 'itch', `v${PKG.version}`, 'html5');
+  const target = path.join(ROOT, 'dist', 'deploy', 'itch', `v${BUILD_VERSION}`, 'html5');
   removeIfExists(target);
   ensureDir(path.dirname(target));
   fs.cpSync(source, target, { recursive: true });
@@ -88,14 +89,6 @@ function stageItchHtml5Artifact(source) {
   return target;
 }
 
-function gitSha() {
-  try {
-    return execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf8' }).trim();
-  } catch {
-    return 'nogit';
-  }
-}
-
 function requireTarget(target) {
   if (!target) {
     throw new Error([
@@ -111,7 +104,7 @@ function main() {
   const channel = argValue('--channel', process.env.LBH_ITCH_CHANNEL || 'html5-private');
   const userVersion = argValue(
     '--user-version',
-    process.env.LBH_ITCH_USER_VERSION || `${PKG.version}+${gitSha()}`
+    process.env.LBH_ITCH_USER_VERSION || BUILD_VERSION
   );
   const butler = argValue('--butler', process.env.BUTLER_PATH || 'butler');
   const noBuild = hasFlag('--no-build');
