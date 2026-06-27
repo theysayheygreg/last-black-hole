@@ -139,6 +139,10 @@ composition. It belongs in validation because it samples stars, wrecks, portals,
 ships, fauna, sentries, and planetoids against the final post-processing stack
 and reports weak family reads in the manifest.
 
+Use the final ASCII captures for visual judgment. Raw `debug-scene-...png`
+captures bypass glyph quantization and are only there to debug shader input;
+they can look hotter and smoother than the intended LBH target.
+
 Do not treat normal smoke screenshots as renderer truth.
 
 ## Process Model the Harness Assumes

@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-06-27 — Scene debug captures fenced off
+
+- Confirmed the hot-white/rainbow well frames came from the raw `scene` view
+  that bypasses the ASCII pass, not from the final player-facing render target.
+- Renamed renderer harness raw scene outputs to `debug-scene-...png` and added
+  manifest context so those frames are treated as pre-ASCII diagnostics.
+- Updated the social screenshot capture skill/script so `visualReference`
+  exports only final ASCII captures by default; raw scene exports now require
+  `--include-scene-debug`.
+- Updated harness docs to make final ASCII captures the visual target and keep
+  pre-ASCII scene captures out of promo/reference review unless debugging
+  shader inputs.
+
 ## 2026-06-27 — Visual reference readability gate
 
 - Promoted `visualReference` into the default renderer harness so `npm run

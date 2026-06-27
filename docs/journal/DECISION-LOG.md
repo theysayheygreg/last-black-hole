@@ -1,5 +1,23 @@
 # Decision Log
 
+## 2026-06-27 — Pre-ASCII scene captures are debug artifacts
+
+**Decision:** Treat `rendererView: "scene"` captures as raw pre-ASCII shader
+diagnostics only. The final ASCII/post view is the visual target for
+`visualReference`, promo review, and player-facing capture.
+
+**Why:** The raw scene path bypasses glyph quantization and can produce smooth,
+hot, rainbowed well bands that are useful for diagnosing shader input but
+misleading as art direction. LBH's product identity still lives in the ASCII
+fabric and the readable entity layers above it.
+
+**Where it landed:** `tests/renderer.cjs`, `docs/reference/RENDERER-HARNESS.md`,
+`docs/reference/TEST-HARNESS.md`, `docs/design/TEST-HARNESS.md`, the LBH social
+screenshot skill, and its capture script.
+
+**Door status:** Closed for default captures. Open for tuning the raw scene
+debug view if it stops explaining useful shader-input problems.
+
 ## 2026-06-27 — visualReference is a validation scene, not a promo scene
 
 **Decision:** Keep `visualReference` out of default promo/social captures, but

@@ -31,9 +31,8 @@
 import { Pass } from '../composer.js';
 import { FRAG_ASCII, CHARS_PER_RAMP, createFontAtlasTexture } from '../shaders/ascii.glsl.js';
 
-// Passthrough shader — used when viewMode === 'scene' to show raw fluid
-// output, bypassing the ASCII quantization. Exposed via setViewMode() so
-// the __TEST_API dev hook can toggle between 'ascii' and 'scene' views.
+// Passthrough shader for raw pre-ASCII diagnostics. This intentionally bypasses
+// the product look, so capture tools must treat it as debug output only.
 const FRAG_SCENE_PASSTHROUGH = `#version 300 es
 precision highp float;
 uniform sampler2D u_scene;

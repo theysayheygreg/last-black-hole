@@ -315,13 +315,15 @@ async function captureFixture(page, outputDir, fixture) {
     await stepForMs(page, t - elapsed);
     elapsed = t;
 
-    const scenePath = path.join(fixtureDir, `scene-${String(t).padStart(4, '0')}ms.png`);
+    const scenePath = path.join(fixtureDir, `debug-scene-${String(t).padStart(4, '0')}ms.png`);
     const asciiPath = path.join(fixtureDir, `ascii-${String(t).padStart(4, '0')}ms.png`);
 
+    // The scene view bypasses ASCII quantization, so it is a shader-input
+    // diagnostic rather than an art target or representative capture.
     await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'scene' });
     await stepGameFrames(page, 2);
     const sceneStats = await takeShot(page, scenePath, backend);
-    assertCaptureHasSignal(sceneStats, `${fixture.name} scene ${t}ms`);
+    assertCaptureHasSignal(sceneStats, `${fixture.name} debug scene ${t}ms`);
 
     await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
     await stepGameFrames(page, 2);
@@ -334,6 +336,7 @@ async function captureFixture(page, outputDir, fixture) {
       fps,
       scenePath,
       asciiPath,
+      scenePurpose: 'debug-pre-ascii',
       sceneStats,
       asciiStats,
     });

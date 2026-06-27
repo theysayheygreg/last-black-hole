@@ -27,16 +27,23 @@ entity families.
 
 For each selected fixture, the harness captures:
 
-- pre-ASCII scene and final ASCII at the default short cadence
+- debug pre-ASCII scene and final ASCII at the default short cadence
 - one debug capture with well radii overlay
 
-Deep runs capture pre-ASCII and final ASCII at `0.5s`, `2.0s`, and `5.0s`.
+Deep runs capture debug pre-ASCII and final ASCII at `0.5s`, `2.0s`, and
+`5.0s`.
 
 The manifest is written to:
 
 `manifest.json`
 
 This harness is for renderer judgment, not shader proof.
+
+The final ASCII capture is the visual target. Files named
+`debug-scene-...png` deliberately bypass the ASCII pass so renderer work can
+inspect raw shader input before glyph quantization. Those debug frames can look
+smooth, hot, or rainbowed around wells, especially in `visualReference`; do not
+use them as promo images or as the target look for LBH.
 
 Use it to answer:
 
@@ -45,7 +52,7 @@ Use it to answer:
 - does the ring stay visible
 - do multiple wells interfere in a controlled way
 - do ring/core reads survive `5x5` and `10x10` world scaling
-- is the pre-ASCII image strong before glyph quantization
+- does the raw debug input explain any final ASCII artifact
 - do stars, wrecks, portals, ships, fauna, sentries, and planetoids stay
   readable against the background and final post-processing stack
 
