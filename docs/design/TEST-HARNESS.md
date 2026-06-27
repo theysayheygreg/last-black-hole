@@ -119,7 +119,7 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:fast` | Cheap static + Three smoke canary for quick iteration. |
 | `npm run test:legacy` | Deprecated compatibility check for the old renderer target. Use only for deliberate fallback archaeology. |
 | `npm run test:three` | Three renderer canary: smoke, infra boot, and renderer fixtures with `?renderer=three`. |
-| `npm run test:visual` | Three renderer fixture pass. Generates screenshots and manifests. |
+| `npm run test:visual` | Three renderer fixture pass. Generates screenshots, manifests, and `visualReference` readability stats. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
@@ -157,9 +157,11 @@ Renderer values:
 - `both` repeats every browser suite once per renderer.
 - `target` preserves the target URL exactly.
 
-Renderer fixtures default to a representative three-scene sweep. Set
-`LBH_RENDERER_DEEP=1` to capture every fixture at the older multi-time cadence
-for a deliberate visual audit.
+Renderer fixtures default to a representative sweep plus the `visualReference`
+object-family scene. That reference scene checks coarse contrast/readability
+for stars, wrecks, portals, ships, fauna, sentries, and planetoids against the
+final post-processed background. Set `LBH_RENDERER_DEEP=1` to capture every
+fixture at the older multi-time cadence for a deliberate visual audit.
 
 ## Lanes
 

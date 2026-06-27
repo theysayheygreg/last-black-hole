@@ -699,12 +699,15 @@ export class ThreeRendererBackend {
         { haloMaterial: halo, haloRadius: 1.55, rimRadius: 1.10, matteRadius: 1.25, matteY: 1.0, matteOpacity: 'heavy' });
     }
     for (const wreck of sceneState.wrecks || []) {
-      const size = wreck.size === 'large' ? 0.035 : wreck.size === 'small' || wreck.size === 'scattered' ? 0.018 : 0.026;
+      const size = wreck.size === 'large' ? 0.042 : wreck.size === 'small' || wreck.size === 'scattered' ? 0.020 : 0.030;
       const material = wreck.looted ? this.entityMaterials.lootedWreck : this.entityMaterials.wreck;
       const halo = wreck.looted ? this.entityMaterials.lootedWreckHalo : this.entityMaterials.wreckHalo;
+      const rim = wreck.looted ? this.entityMaterials.lootedWreckHalo : this.entityMaterials.wreckRim;
+      // Salvage is often embedded in the brightest fabric. Its contact matte is
+      // deliberately broad so wrecks read as physical debris, not loose pixels.
       addReadable(this.salvageEntityGroup, this.entityGeometries.square, material,
         wreck.wx, wreck.wy, size, Math.PI * 0.25, 0.07,
-        { haloMaterial: halo, haloRadius: 1.45, rimRadius: 1.10, matteRadius: 2.25, matteY: 0.82, matteOpacity: 'heavy' },
+        { haloMaterial: halo, rimMaterial: rim, haloRadius: 1.55, rimRadius: 1.16, matteRadius: 3.6, matteY: 1.0, matteOpacity: 'heavy' },
         'screen');
     }
     for (const planetoid of sceneState.planetoids || []) {

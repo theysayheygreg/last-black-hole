@@ -858,6 +858,17 @@ function init() {
       getRendererView: () => rendererBackend?.getViewMode?.() || 'ascii',
       getRendererBackend: () => rendererBackend?.name || 'legacy',
       getRendererBackendStats: () => rendererBackend?.getPerfStats?.() || null,
+      getThreeSceneStateForTest: () => ({
+        ...collectThreeSceneState(),
+        camera: {
+          camX,
+          camY,
+          canvasWidth: glCanvas.width,
+          canvasHeight: glCanvas.height,
+          worldScale: WORLD_SCALE,
+          cameraView: CAMERA_VIEW,
+        },
+      }),
       getRenderCanvasId: () => rendererBackend?.getCanvasId?.() || glCanvas?.id || 'fluid-canvas',
       stepFrameForTest: (dt = 1 / 60) => {
         const stepMs = Math.max(1, Math.min(100, Number(dt) * 1000 || (1000 / 60)));

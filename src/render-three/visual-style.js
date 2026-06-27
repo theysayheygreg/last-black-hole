@@ -55,8 +55,9 @@ export function createVisualMaterials() {
 
     star: makeVisualMaterial(0xffe08a, 0.90, { blending: add }),
     starHalo: makeVisualMaterial(0xff9e38, 0.42, { blending: add }),
-    wreck: makeVisualMaterial(0xe8eef7, 0.92, { blending: normal }),
-    wreckHalo: makeVisualMaterial(0xdcecff, 0.46, { blending: add }),
+    wreck: makeVisualMaterial(0xf8fbff, 1.0, { blending: normal }),
+    wreckHalo: makeVisualMaterial(0xdcecff, 0.52, { blending: add }),
+    wreckRim: makeVisualMaterial(0xffffff, 0.72, { blending: add }),
     lootedWreck: makeVisualMaterial(0x7f8994, 0.58, { blending: normal }),
     lootedWreckHalo: makeVisualMaterial(0x8b96a4, 0.24, { blending: add }),
     portal: makeVisualMaterial(0xff6de2, 0.86, { blending: add }),

@@ -132,6 +132,12 @@ Use it for:
 - ring/core behavior
 - interference between wells
 - `5x5` and `10x10` visual scaling
+- object-family contrast/readability in the `visualReference` scene
+
+The `visualReference` fixture is a dev-only lineup, not a gameplay map or promo
+composition. It belongs in validation because it samples stars, wrecks, portals,
+ships, fauna, sentries, and planetoids against the final post-processing stack
+and reports weak family reads in the manifest.
 
 Do not treat normal smoke screenshots as renderer truth.
 

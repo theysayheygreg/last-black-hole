@@ -1,5 +1,27 @@
 # Decision Log
 
+## 2026-06-27 — visualReference is a validation scene, not a promo scene
+
+**Decision:** Keep `visualReference` out of default promo/social captures, but
+include it in the default renderer harness as a coarse contrast and readability
+gate. The scene is a dev-only lineup for comparing object families against the
+ASCII fabric and final post stack.
+
+**Why:** Player-facing builds still need real title/gameplay/result smoke, but
+the reference scene catches a different class of bug: an entity family can
+render, submit the right layer, and still disappear against bright fabric or
+post-processing. This is especially important while non-fluid objects are still
+bridge primitives and the art direction is moving toward stronger silhouettes.
+
+**Where it landed:** `tests/renderer.cjs`, `src/test-api.js`, `src/main.js`,
+`src/render-three/three-renderer.js`, `src/render-three/visual-style.js`,
+`docs/reference/RENDERER-HARNESS.md`, `docs/design/TEST-HARNESS.md`, and
+`docs/reference/TEST-HARNESS.md`.
+
+**Door status:** Closed for the harness role. Open for tuning thresholds,
+sampling strategy, and which object families join the reference scene as new
+assets and mechanics land.
+
 ## 2026-06-27 — Promo captures stay representative
 
 **Decision:** Default LBH promo captures should use player-reachable material:

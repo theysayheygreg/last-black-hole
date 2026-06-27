@@ -5,13 +5,32 @@
 
 ---
 
+## 2026-06-27 — Visual reference readability gate
+
+- Promoted `visualReference` into the default renderer harness so `npm run
+  test:renderer` / `npm run test:visual` now checks the object-family scene
+  every normal visual pass.
+- Added a renderer readability report that samples final post-processed
+  luminance for stars, wrecks, portals, ships, fauna, sentries, and planetoids
+  against nearby background. The manifest now records per-family readable
+  counts, contrast floors, peak luminance, and weakest sampled objects.
+- Exposed the Three scene-state payload through the test API so visual tests use
+  the same object positions the renderer consumes instead of duplicating fixture
+  coordinates.
+- Strengthened wreck readability after the new gate caught a weak salvage read
+  over bright fabric: wrecks now get a broader occluding matte, brighter core,
+  and rim treatment.
+- Updated renderer and test-harness docs to frame `visualReference` as a coarse
+  contrast/accessibility/readability canary, not a pixel-perfect art judge or
+  promo scene.
+
 ## 2026-06-27 — Promo capture reference-scene split
 
 - Added a dedicated `visualReference` renderer fixture for side-by-side
   development review of stars, wrecks, portals, ships, fauna, and sentries
   without pretending that array is a normal match screenshot.
-- Kept `visualReference` out of default renderer/promo sweeps; it now appears
-  only in the deep renderer sweep or explicit reference capture path.
+- Kept `visualReference` out of default promo sweeps; it remains separate from
+  player-facing screenshots even though it is now part of visual validation.
 - Updated the LBH social screenshot skill and capture script so default promo
   batches use representative title, live gameplay, and run-results frames,
   while `--reference-only` captures the dev-only entity board.

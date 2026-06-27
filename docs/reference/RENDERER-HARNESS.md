@@ -15,18 +15,22 @@ Default runs capture a short deterministic set:
 - `title`
 - `interference10x10`
 - `entityShowcase`
+- `visualReference`
 
 Set `LBH_RENDERER_DEEP=1` to capture the full fixture suite, including
-`singleWell`, `interference`, `singleWell5x5`, and `visualReference`.
+`singleWell`, `interference`, and `singleWell5x5`.
 `visualReference` is the dev-only asset-array scene for checking object
 families together; it is intentionally separate from representative promo
-captures and normal map-match screenshots.
+captures and normal map-match screenshots, but it is now part of the default
+visual harness because it catches contrast/readability regressions across
+entity families.
 
 For each selected fixture, the harness captures:
 
-- pre-ASCII scene at `0.5s`, `2.0s`, and `5.0s`
-- final ASCII at `0.5s`, `2.0s`, and `5.0s`
+- pre-ASCII scene and final ASCII at the default short cadence
 - one debug capture with well radii overlay
+
+Deep runs capture pre-ASCII and final ASCII at `0.5s`, `2.0s`, and `5.0s`.
 
 The manifest is written to:
 
@@ -42,6 +46,15 @@ Use it to answer:
 - do multiple wells interfere in a controlled way
 - do ring/core reads survive `5x5` and `10x10` world scaling
 - is the pre-ASCII image strong before glyph quantization
+- do stars, wrecks, portals, ships, fauna, sentries, and planetoids stay
+  readable against the background and final post-processing stack
+
+`visualReference` adds a structured readability report to the manifest. The
+harness samples final post-processed luminance around each object family,
+compares it with nearby background, and records counts, contrast floors, peak
+luminance, and the weakest sampled object. This is a coarse accessibility and
+readability canary, not a pixel-perfect screenshot comparison or a replacement
+for human art direction.
 
 Do not use the normal smoke or flow screenshots as renderer truth. Those are still health checks, not visual evaluation.
 

@@ -28,7 +28,17 @@ const ALL_FIXTURES = [
   { name: 'entityShowcase', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
   { name: 'visualReference', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
 ];
-const DEFAULT_FIXTURES = new Set(['title', 'interference10x10', 'entityShowcase']);
+const DEFAULT_FIXTURES = new Set(['title', 'interference10x10', 'entityShowcase', 'visualReference']);
+const READABILITY_FIXTURES = new Set(['visualReference']);
+const READABILITY_FAMILY_MINIMUMS = {
+  stars: { targets: 4, readable: 4 },
+  wrecks: { targets: 3, readable: 2 },
+  portals: { targets: 2, readable: 2 },
+  ships: { targets: 4, readable: 4 },
+  fauna: { targets: 2, readable: 2 },
+  sentries: { targets: 2, readable: 2 },
+  planetoids: { targets: 1, readable: 1 },
+};
 const DEEP_RENDERER_SWEEP = process.env.LBH_RENDERER_DEEP === '1';
 const FIXTURES = DEEP_RENDERER_SWEEP
   ? ALL_FIXTURES
@@ -82,6 +92,179 @@ function assertCaptureHasSignal(stats, label) {
   assert(stats.litPixels > 64, `${label} capture has too few lit pixels: ${stats.litPixels}`);
 }
 
+function assertReferenceReadability(report, fixtureName) {
+  assert(report?.fixture === fixtureName, `${fixtureName} readability report missing`);
+  for (const [family, required] of Object.entries(READABILITY_FAMILY_MINIMUMS)) {
+    const summary = report.families?.[family];
+    const weakest = summary?.weakest
+      ? ` weakest=${summary.weakest.id} contrast=${summary.weakest.contrast.toFixed(1)} peak=${summary.weakest.peak.toFixed(1)} bg=${summary.weakest.backgroundAvg.toFixed(1)}`
+      : '';
+    assert(summary, `${fixtureName} missing readability family ${family}`);
+    assert(summary.count >= required.targets,
+      `${fixtureName} expected at least ${required.targets} ${family} targets, got ${summary.count}`);
+    assert(summary.readable >= required.readable,
+      `${fixtureName} ${family} readability too low: ${summary.readable}/${summary.count} readable.${weakest}`);
+    assert(summary.minContrast >= 18,
+      `${fixtureName} ${family} contrast floor too low: ${summary.minContrast.toFixed(1)}.${weakest}`);
+    assert(summary.minPeak >= 42,
+      `${fixtureName} ${family} peak luminance too low: ${summary.minPeak.toFixed(1)}.${weakest}`);
+  }
+}
+
+async function analyzeReferenceReadability(page, fixtureName) {
+  return page.evaluate((name) => {
+    const canvasId = window.__TEST_API?.getRenderCanvasId?.();
+    const source = document.getElementById(canvasId || 'fluid-canvas');
+    const state = window.__TEST_API?.getThreeSceneState?.();
+    if (!source || !state?.camera) {
+      return { fixture: name, error: 'missing render canvas or scene state', families: {} };
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = source.width;
+    canvas.height = source.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(source, 0, 0);
+    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    const { camX, camY, worldScale, cameraView } = state.camera;
+
+    function worldToScreen(wx, wy) {
+      let dx = wx - camX;
+      let dy = wy - camY;
+      const half = worldScale / 2;
+      if (dx > half) dx -= worldScale;
+      if (dx < -half) dx += worldScale;
+      if (dy > half) dy -= worldScale;
+      if (dy < -half) dy += worldScale;
+      return {
+        x: canvas.width / 2 + dx * (canvas.width / cameraView),
+        y: canvas.height / 2 + dy * (canvas.height / cameraView),
+      };
+    }
+
+    function lumaAt(x, y) {
+      const ix = Math.max(0, Math.min(canvas.width - 1, Math.round(x)));
+      const iy = Math.max(0, Math.min(canvas.height - 1, Math.round(y)));
+      const i = (iy * canvas.width + ix) * 4;
+      return pixels[i] + pixels[i + 1] + pixels[i + 2];
+    }
+
+    function samplePatch(target) {
+      const cx = target.screen.x;
+      const cy = target.screen.y;
+      const coreRadius = target.coreRadius;
+      const ringMode = target.sampleMode === 'ring';
+      const coreInner = ringMode ? coreRadius * 0.72 : 0;
+      const coreOuter = ringMode ? coreRadius * 1.20 : coreRadius;
+      const bgInner = coreRadius * (ringMode ? 1.45 : 1.8);
+      const bgOuter = coreRadius * (ringMode ? 2.35 : 3.4);
+      const core = [];
+      let bgSum = 0;
+      let bgCount = 0;
+      for (let y = Math.floor(cy - bgOuter); y <= Math.ceil(cy + bgOuter); y++) {
+        if (y < 0 || y >= canvas.height) continue;
+        for (let x = Math.floor(cx - bgOuter); x <= Math.ceil(cx + bgOuter); x++) {
+          if (x < 0 || x >= canvas.width) continue;
+          const dx = x - cx;
+          const dy = y - cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const luma = lumaAt(x, y);
+          if (dist >= coreInner && dist <= coreOuter) {
+            core.push(luma);
+          } else if (dist >= bgInner && dist <= bgOuter) {
+            bgSum += luma;
+            bgCount++;
+          }
+        }
+      }
+      core.sort((a, b) => a - b);
+      const topCount = core.length ? Math.max(1, Math.ceil(core.length * (ringMode ? 0.04 : 0.12))) : 0;
+      const peak = topCount
+        ? core.slice(-topCount).reduce((sum, value) => sum + value, 0) / topCount
+        : 0;
+      const max = core.length ? core[core.length - 1] : 0;
+      const bgAvg = bgCount ? bgSum / bgCount : 0;
+      return {
+        ...target,
+        coreSamples: core.length,
+        backgroundSamples: bgCount,
+        peak,
+        max,
+        backgroundAvg: bgAvg,
+        contrast: peak - bgAvg,
+        readable: peak >= 42 && (peak - bgAvg) >= 18,
+      };
+    }
+
+    function addTargets(targets, family, items, coreRadius, options = {}) {
+      for (const item of items || []) {
+        if (!Number.isFinite(item?.wx) || !Number.isFinite(item?.wy)) continue;
+        const radius = typeof coreRadius === 'function' ? coreRadius(item) : coreRadius;
+        targets.push({
+          family,
+          id: item.id || item.type || item.kind || family,
+          wx: item.wx,
+          wy: item.wy,
+          screen: worldToScreen(item.wx, item.wy),
+          coreRadius: radius,
+          sampleMode: options.sampleMode || 'solid',
+        });
+      }
+    }
+
+    const targets = [];
+    addTargets(targets, 'stars', state.stars, 14);
+    addTargets(targets, 'wrecks', state.wrecks, 13);
+    addTargets(targets, 'portals', state.portals,
+      (portal) => Math.max(18, (portal.radius || 0.08) * (canvas.height / cameraView) * 1.55),
+      { sampleMode: 'ring' });
+    addTargets(targets, 'planetoids', state.planetoids, 11);
+    addTargets(targets, 'ships', state.ship ? [state.ship] : [], 12);
+    addTargets(targets, 'ships', state.scavengers, 12);
+    addTargets(targets, 'ships', (state.remotePlayers || []).filter((player) => player.status !== 'dead'), 12);
+    addTargets(targets, 'fauna', state.fauna, 10);
+    addTargets(targets, 'sentries', state.sentries, 10);
+
+    const samples = targets.map(samplePatch);
+    const families = {};
+    for (const sample of samples) {
+      const summary = families[sample.family] || {
+        count: 0,
+        readable: 0,
+        minContrast: Infinity,
+        minPeak: Infinity,
+        avgContrast: 0,
+        weakest: null,
+      };
+      summary.count++;
+      if (sample.readable) summary.readable++;
+      summary.minContrast = Math.min(summary.minContrast, sample.contrast);
+      summary.minPeak = Math.min(summary.minPeak, sample.peak);
+      summary.avgContrast += sample.contrast;
+      if (!summary.weakest || sample.contrast < summary.weakest.contrast) {
+        summary.weakest = {
+          id: sample.id,
+          wx: sample.wx,
+          wy: sample.wy,
+          x: sample.screen.x,
+          y: sample.screen.y,
+          peak: sample.peak,
+          backgroundAvg: sample.backgroundAvg,
+          contrast: sample.contrast,
+          readable: sample.readable,
+        };
+      }
+      families[sample.family] = summary;
+    }
+    for (const summary of Object.values(families)) {
+      summary.avgContrast = summary.count ? summary.avgContrast / summary.count : 0;
+      if (summary.minContrast === Infinity) summary.minContrast = 0;
+      if (summary.minPeak === Infinity) summary.minPeak = 0;
+    }
+    return { fixture: name, targetCount: samples.length, families, samples };
+  }, fixtureName);
+}
+
 async function setRenderDebug(page, { overlayVisible = false, showWellRadii = false, rendererView = 'ascii' } = {}) {
   await page.evaluate(({ overlayVisible, showWellRadii, rendererView }) => {
     window.__TEST_API.setOverlayVisible(overlayVisible);
@@ -126,6 +309,7 @@ async function captureFixture(page, outputDir, fixture) {
   assert(fpsAtStart > fixture.minFps, `Fixture '${fixture.name}' FPS too low at start: ${fpsAtStart}`);
 
   const captures = [];
+  let readability = null;
   let elapsed = 0;
   for (const t of fixture.timesMs) {
     await stepForMs(page, t - elapsed);
@@ -153,6 +337,13 @@ async function captureFixture(page, outputDir, fixture) {
       sceneStats,
       asciiStats,
     });
+  }
+
+  if (READABILITY_FIXTURES.has(fixture.name)) {
+    await setRenderDebug(page, { overlayVisible: false, showWellRadii: false, rendererView: 'ascii' });
+    await stepGameFrames(page, 2);
+    readability = await analyzeReferenceReadability(page, fixture.name);
+    assertReferenceReadability(readability, fixture.name);
   }
 
   const debugPath = path.join(fixtureDir, 'ascii-debug.png');
@@ -226,6 +417,7 @@ async function captureFixture(page, outputDir, fixture) {
     wells: wellData,
     perf,
     backendStats,
+    readability,
     captures,
     debugPath,
     debugStats,

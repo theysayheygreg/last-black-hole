@@ -307,6 +307,12 @@ export function initTestAPI(getState) {
       return stats ? JSON.parse(JSON.stringify(stats)) : null;
     },
 
+    getThreeSceneState() {
+      const { getThreeSceneStateForTest } = getState();
+      const state = getThreeSceneStateForTest ? getThreeSceneStateForTest() : null;
+      return state ? JSON.parse(JSON.stringify(state)) : null;
+    },
+
     getRenderCanvasId() {
       const { getRenderCanvasId } = getState();
       return getRenderCanvasId ? getRenderCanvasId() : 'fluid-canvas';
