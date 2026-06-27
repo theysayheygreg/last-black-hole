@@ -5,6 +5,20 @@
 
 ---
 
+## 2026-06-26 — LBH memory checkpoint process
+
+- Added a standing LBH process rule: after any substantial Codex session, write
+  a short Codex memory checkpoint note under
+  `~/.codex/memories/extensions/ad_hoc/notes/`.
+- Updated `AGENTS.md` and `docs/project/JAM-CONTRACT.md` so future agents treat
+  memory as a routing index for current repo docs, build status, and recent
+  architectural decisions, not as a replacement source of truth.
+- Clarified that tiny Q&A, one-line fixes, and duplicate status pings should not
+  create memory spam; broad renderer/sim/platform/build/playtest/process work
+  should.
+
+---
+
 ## 2026-06-26 — Three contrast target implementation slice
 
 - Translated the latest visual target board into concrete Three scene tasks:

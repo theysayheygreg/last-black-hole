@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-06-26 — Substantial LBH sessions write memory checkpoints
+
+**Decision:** After any substantial Last Black Hole / Last Singularity Codex
+session, write one concise memory checkpoint note under
+`~/.codex/memories/extensions/ad_hoc/notes/`.
+
+**Why:** LBH repo docs have stayed current, but Codex memory is a separate
+routing layer. Without regular checkpoints, future sessions can miss recent
+context and spend time rediscovering repo state, build status, and current
+architecture decisions. Memory should point agents to the right current docs and
+commands first; repo docs remain the source of truth.
+
+**Where it landed:** `AGENTS.md`, `docs/project/JAM-CONTRACT.md`, this decision
+log, `docs/journal/CHANGELOG.md`, the personal `$lbh-forge-pass` skill, and the
+ad-hoc memory note
+`~/.codex/memories/extensions/ad_hoc/notes/20260626T173222-0700-lbh-memory-checkpoint.md`.
+
+**Door status:** Closed for the daily habit. Open for tuning what counts as
+"substantial" if memory notes become too noisy or too sparse.
+
 ## 2026-06-26 — Entity readability starts with backing and contrast
 
 **Decision:** Start the visual target implementation by increasing contrast and

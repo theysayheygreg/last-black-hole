@@ -165,6 +165,31 @@ For automatic Codex review on every commit, add a PostToolUse hook on Bash in `~
 
 ## Checkpoint Protocol
 
+### Codex Memory Checkpoint Protocol
+
+After any substantial LBH session, write a short Codex memory checkpoint note in
+`~/.codex/memories/extensions/ad_hoc/notes/`. Repo docs remain the source of
+truth; memory is the routing index that helps future Codex runs find the right
+current docs before falling back to fresh repo archaeology.
+
+Substantial means at least one of:
+
+- broad architecture, Three renderer, sim/client authority, platform, build, or
+  deploy work;
+- a fresh playtest or build-status change;
+- a major feature implementation or deep bug-fix pass;
+- a process/doc update that changes how future agents should work;
+- anything another agent would otherwise have to reconstruct from chat history,
+  terminal output, or scattered commits.
+
+Keep the note concise. It should include durable retrieval facts only: repo
+path, current branch/build/playtest state, canonical docs to read first, new
+decisions, exact commands that worked, and stale-history warnings such as
+"check `BUILD-STATUS.md` before trusting old build-health."
+
+Do not write memory checkpoints for tiny Q&A, one-line fixes, or duplicate
+status pings. The goal is better recency, not memory spam.
+
 ### Build Status Protocol
 
 Before answering "where does the local build stand?", check these in order:
@@ -338,6 +363,8 @@ Estimated scope: [small: <1hr, medium: 1-3hr, large: 3-8hr]
 - [ ] Working state committed
 - [ ] If any design doc changed: update CHANGELOG.md in the same commit
 - [ ] If a design decision was made: add DECISION-LOG.md entry
+- [ ] If this was a substantial LBH session: write a Codex memory checkpoint
+      note in `~/.codex/memories/extensions/ad_hoc/notes/`
 - [ ] If night shift: update night report in docs/journal/reports/
 - [ ] If more tasks remain on this layer: proceed to [next task]
 - [ ] If layer complete: STOP and wait for Greg's review
@@ -468,6 +495,7 @@ This means:
 | **DECISION-LOG.md** | Orrery (design decisions) or Greg/Orrery via Claude (during sessions) | Immediately when a design fork is decided or revisited. Don't batch. | Yes — whoever writes the entry commits it |
 | **CHANGELOG.md** | Orb (at state transitions) or Corb (when modifying design docs during build) | When design docs change meaningfully. Orb appends at each completed section. | Yes — same commit as the doc change, or batched by Orb at section completion |
 | **BUILD-STATUS.md** | Current actor, with Orb as backstop | After playability-affecting bug fixes, platform/deploy changes, fresh playtests, or stale/full build-health decisions | Yes — same commit as the fix when practical, otherwise next `Docs:` commit |
+| **Codex memory checkpoint** | Current Codex actor | After any substantial LBH session, especially renderer/sim/platform/build/playtest/process work | No repo commit; write one short ad-hoc note under `~/.codex/memories/extensions/ad_hoc/notes/` |
 | **Night reports** | Orb (compiled from Corb build reports + Forge review + test results) | End of each night shift cycle, in `docs/journal/reports/` | Yes — Orb commits the report |
 | **CONTENT-PLAN.md** | Greg or Orrery | When new content-worthy moments happen | Yes |
 | **PROJECT-STATE.json** | Orb | Every state transition | Yes — Orb commits state changes |
@@ -527,6 +555,9 @@ The journal must be updated at these moments. **Orb is responsible for ensuring 
 7. **Forge review lands** — Orb saves the review to `docs/project/reviews/` unless the review belongs in long-term reference, and appends relevant decisions to DECISION-LOG if the review influenced any. Orb commits.
 8. **Scope ratchet** — Orb appends a DEVLOG entry explaining what was cut/deferred and why, with pointers to BACKLOG.md. Orb commits.
 9. **Memorable moment** — Whoever notices it adds a DEVLOG entry with enough detail to write a tweet or blog post later.
+10. **Substantial Codex session** — The current Codex actor writes one concise
+    memory checkpoint note under `~/.codex/memories/extensions/ad_hoc/notes/`
+    so future runs can route to the current repo docs and build status.
 
 ### Rules
 
