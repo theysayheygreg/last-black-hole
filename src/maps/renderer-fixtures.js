@@ -160,6 +160,63 @@ export const FIXTURE_ENTITY_SHOWCASE = {
   },
 };
 
+// Dev-only visual board: useful for comparing object families side by side,
+// but deliberately not a representative match or promo scene.
+export const FIXTURE_VISUAL_REFERENCE = {
+  name: 'Renderer Visual Reference Fixture',
+  worldScale: 3.0,
+  camera: 'locked',
+  wells: [
+    { x: 1.5, y: 1.55, mass: 0.95, orbitalDir: 1, killRadius: 0.045, spinRate: 0.6, points: 8, accretionRadius: 0.025 },
+  ],
+  stars: [
+    { x: 0.55, y: 0.55, mass: 1.0, type: 'yellowDwarf' },
+    { x: 1.05, y: 0.55, mass: 1.2, type: 'redGiant' },
+    { x: 1.55, y: 0.55, mass: 0.8, type: 'whiteDwarf' },
+    { x: 2.05, y: 0.55, mass: 0.7, type: 'neutronStar' },
+  ],
+  loot: [],
+  wrecks: [
+    { x: 0.55, y: 1.15, type: 'derelict', tier: 1, size: 'medium' },
+    { x: 0.95, y: 1.15, type: 'debris', tier: 1, size: 'small' },
+    { x: 1.35, y: 1.15, type: 'vault', tier: 3, size: 'large' },
+  ],
+  planetoids: [
+    { type: 'orbit', wellIndex: 0 },
+    { type: 'transit' },
+  ],
+  fixturePortals: [
+    { x: 1.95, y: 1.15, type: 'standard', lifespan: 120 },
+    { x: 2.35, y: 1.15, type: 'rift', lifespan: 120 },
+  ],
+  fixtureScavengers: [
+    { x: 0.65, y: 2.05, archetype: 'drifter', facing: Math.PI * 0.05 },
+    { x: 1.05, y: 2.05, archetype: 'breacher', facing: Math.PI * 0.05 },
+    { x: 1.45, y: 2.05, archetype: 'vulture', facing: Math.PI * 0.05 },
+  ],
+  fixtureRemotePlayers: [
+    { clientId: 'reference-remote-drifter', wx: 1.85, wy: 2.05, vx: 0.20, vy: -0.02, status: 'alive', hullType: 'drifter' },
+    { clientId: 'reference-remote-resonant', wx: 2.20, wy: 2.05, vx: -0.10, vy: 0.08, status: 'alive', hullType: 'resonant' },
+  ],
+  fixtureFauna: [
+    { id: 'reference-jelly', wx: 0.70, wy: 2.50, size: 3, kind: 'jelly' },
+    { id: 'reference-bloom', wx: 1.08, wy: 2.50, size: 4, kind: 'bloom' },
+  ],
+  fixtureSentries: [
+    { id: 'reference-sentry-patrol', wx: 1.52, wy: 2.50, state: 'patrol' },
+    { id: 'reference-sentry-alert', wx: 1.90, wy: 2.50, state: 'alert' },
+  ],
+  configOverrides: {
+    ascii: {
+      shimmer: 4.0,
+    },
+    fluid: {
+      ambientTurbulence: 0.00028,
+      ambientDensity: 0.00018,
+    },
+  },
+};
+
 export const RENDERER_FIXTURES = {
   title: FIXTURE_TITLE,
   singleWell: FIXTURE_SINGLE_WELL,
@@ -167,4 +224,5 @@ export const RENDERER_FIXTURES = {
   singleWell5x5: FIXTURE_SINGLE_WELL_5X5,
   interference10x10: FIXTURE_INTERFERENCE_10X10,
   entityShowcase: FIXTURE_ENTITY_SHOWCASE,
+  visualReference: FIXTURE_VISUAL_REFERENCE,
 };

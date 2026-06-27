@@ -120,6 +120,25 @@ function seededUnit(index) {
   return x - Math.floor(x);
 }
 
+function makeRadialGeometry(pointCount = 4, innerRadius = 0.42) {
+  const positions = [0, 0, 0];
+  const indices = [];
+  const vertexCount = pointCount * 2;
+  for (let i = 0; i < vertexCount; i++) {
+    const radius = i % 2 === 0 ? 1 : innerRadius;
+    const angle = -Math.PI / 2 + i * Math.PI / pointCount;
+    positions.push(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+  }
+  for (let i = 1; i <= vertexCount; i++) {
+    indices.push(0, i, i === vertexCount ? 1 : i + 1);
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setIndex(indices);
+  geom.computeVertexNormals();
+  return geom;
+}
+
 function setCanvasVisible(canvas, visible) {
   if (!canvas) return;
   canvas.style.display = visible ? 'block' : 'none';
@@ -353,6 +372,7 @@ export class ThreeRendererBackend {
       disc: new THREE.CircleGeometry(1, 28),
       ring: new THREE.RingGeometry(0.90, 1.0, 64),
       square: new THREE.PlaneGeometry(1, 1),
+      spark: makeRadialGeometry(4, 0.36),
     };
     this.entityMaterials = createVisualMaterials();
     this.lastEntityCount = 0;
@@ -656,9 +676,18 @@ export class ThreeRendererBackend {
       if (life > 0.02) addSemantic(this.entityGeometries.ring, this.entityMaterials.wave, ring.sourceWX, ring.sourceWY, ring.radius || 0.01, 0, 0.02);
     }
     for (const star of sceneState.stars || []) {
-      addReadable(this.landmarkEntityGroup, this.entityGeometries.disc, this.entityMaterials.star,
-        star.wx, star.wy, 0.025 + (star.mass || 1) * 0.012, 0, 0.06,
-        { haloMaterial: this.entityMaterials.starHalo, haloRadius: 2.8, rimRadius: 1.18, matteRadius: 1.7, matteY: 1.0 },
+      const radius = 0.025 + (star.mass || 1) * 0.012;
+      if (this._addMesh(this.landmarkEntityGroup, this.entityGeometries.ring, this.entityMaterials.starHalo,
+        star.wx, star.wy, radius * 1.85, 0, 0.055, renderState, 'screen')) {
+        entityCount++;
+      }
+      if (this._addMesh(this.landmarkEntityGroup, this.entityGeometries.disc, this.entityMaterials.star,
+        star.wx, star.wy, radius * 0.45, 0, 0.066, renderState, 'screen')) {
+        entityCount++;
+      }
+      addReadable(this.landmarkEntityGroup, this.entityGeometries.spark, this.entityMaterials.star,
+        star.wx, star.wy, radius, 0, 0.07,
+        { haloMaterial: this.entityMaterials.starHalo, haloRadius: 1.55, rimRadius: 1.08, matteRadius: 1.7, matteY: 1.0 },
         'screen');
     }
     for (const portal of sceneState.portals || []) {

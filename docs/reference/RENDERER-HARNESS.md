@@ -10,15 +10,19 @@ Outputs land under:
 
 `/Users/theysayheygreg/clawd/projects/last-black-hole/tests/screenshots/renderer-<timestamp>/`
 
-Each run captures five deterministic fixtures:
+Default runs capture a short deterministic set:
 
 - `title`
-- `singleWell`
-- `interference`
-- `singleWell5x5`
 - `interference10x10`
+- `entityShowcase`
 
-For each fixture, the harness captures:
+Set `LBH_RENDERER_DEEP=1` to capture the full fixture suite, including
+`singleWell`, `interference`, `singleWell5x5`, and `visualReference`.
+`visualReference` is the dev-only asset-array scene for checking object
+families together; it is intentionally separate from representative promo
+captures and normal map-match screenshots.
+
+For each selected fixture, the harness captures:
 
 - pre-ASCII scene at `0.5s`, `2.0s`, and `5.0s`
 - final ASCII at `0.5s`, `2.0s`, and `5.0s`

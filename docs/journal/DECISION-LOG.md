@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-06-27 — Promo captures stay representative
+
+**Decision:** Default LBH promo captures should use player-reachable material:
+the warmed title screen, live gameplay, and run-result/death frames. Custom
+renderer fixtures and entity arrays belong in explicit reference passes such as
+`visualReference`, not in the default social handoff.
+
+**Why:** The latest high-quality batch exposed a useful distinction. Fixture
+shots are excellent for reviewing readability and entity language, but they can
+look like bespoke maps or staged compositions when presented as promo images.
+Social/store captures need to tell the truth about the actual game screen.
+
+**Where it landed:** `src/maps/renderer-fixtures.js`,
+`tests/renderer.cjs`, `docs/reference/RENDERER-HARNESS.md`,
+`~/.codex/skills/lbh-social-screenshot-pass/SKILL.md`, and the social capture
+script's `--reference-only` / `--include-reference` modes.
+
+**Door status:** Closed for default promo capture policy. Open for expanding
+the reference scene as new entity families and asset treatments land.
+
 ## 2026-06-26 — Substantial LBH sessions write memory checkpoints
 
 **Decision:** After any substantial Last Black Hole / Last Singularity Codex

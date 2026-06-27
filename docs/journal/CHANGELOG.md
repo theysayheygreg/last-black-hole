@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-06-27 — Promo capture reference-scene split
+
+- Added a dedicated `visualReference` renderer fixture for side-by-side
+  development review of stars, wrecks, portals, ships, fauna, and sentries
+  without pretending that array is a normal match screenshot.
+- Kept `visualReference` out of default renderer/promo sweeps; it now appears
+  only in the deep renderer sweep or explicit reference capture path.
+- Updated the LBH social screenshot skill and capture script so default promo
+  batches use representative title, live gameplay, and run-results frames,
+  while `--reference-only` captures the dev-only entity board.
+- Improved Three star landmarks with a small core, spark silhouette, and halo so
+  orange route anchors read less like anonymous background dots.
+- Documented that full-quality 4K/30fps promo capture on the Mac mini should be
+  treated as background/overnight work when practical.
+
 ## 2026-06-26 — LBH memory checkpoint process
 
 - Added a standing LBH process rule: after any substantial Codex session, write

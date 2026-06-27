@@ -26,6 +26,7 @@ const ALL_FIXTURES = [
   { name: 'singleWell5x5', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
   { name: 'interference10x10', expectedWells: 2, minFps: 5, timesMs: [500, 2000, 5000] },
   { name: 'entityShowcase', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
+  { name: 'visualReference', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
 ];
 const DEFAULT_FIXTURES = new Set(['title', 'interference10x10', 'entityShowcase']);
 const DEEP_RENDERER_SWEEP = process.env.LBH_RENDERER_DEEP === '1';
@@ -207,12 +208,12 @@ async function captureFixture(page, outputDir, fixture) {
     for (const expectedChild of ['entity-backing-layer', 'landmark-entity-layer', 'salvage-entity-layer', 'active-entity-layer', 'immediate-vfx-layer']) {
       assert(childNames.has(expectedChild), `Fixture '${fixture.name}' missing Three entity subgroup ${expectedChild}`);
     }
-    if (fixture.name === 'entityShowcase') {
+    if (fixture.name === 'entityShowcase' || fixture.name === 'visualReference') {
       const counts = backendStats.three.visualCounts || {};
-      assert((counts['entity-backing-layer'] || 0) > 0, 'Entity showcase did not render contrast backing');
-      assert((counts['landmark-entity-layer'] || 0) > 0, 'Entity showcase did not render landmark entities');
-      assert((counts['salvage-entity-layer'] || 0) > 0, 'Entity showcase did not render salvage entities');
-      assert((counts['active-entity-layer'] || 0) > 0, 'Entity showcase did not render active entities');
+      assert((counts['entity-backing-layer'] || 0) > 0, `${fixture.name} did not render contrast backing`);
+      assert((counts['landmark-entity-layer'] || 0) > 0, `${fixture.name} did not render landmark entities`);
+      assert((counts['salvage-entity-layer'] || 0) > 0, `${fixture.name} did not render salvage entities`);
+      assert((counts['active-entity-layer'] || 0) > 0, `${fixture.name} did not render active entities`);
     }
   }
 
