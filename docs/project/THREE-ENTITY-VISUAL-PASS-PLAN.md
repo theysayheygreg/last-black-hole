@@ -26,6 +26,20 @@ The problem is not missing infrastructure. The problem is that most object
 families still use parity primitives. The next pass should refactor before it
 decorates.
 
+## Current Checkpoint - 2026-06-27
+
+Pass 2 has a measurable foothold. Existing entity primitives now report
+contrast-backing counts and estimated matte coverage through renderer stats, so
+the harness can catch runaway backings before they erase too much ASCII fabric.
+The current visual lane asserts those diagnostics for `entityShowcase`,
+`visualReference`, and the new `shipBakeoff` fixture.
+
+Pass 3 has started but has not chosen a final art path. `shipBakeoff` renders
+the player footprint twice with the same backing/rim stack: once as a 2D pixel
+sprite card and once as a pixel-textured top-down mesh. The fixture is a
+development comparison scene, not a gameplay map, promo capture, or commitment
+to either asset style.
+
 ## Pass 0 - Fixture And Layer Inventory
 
 Tasks:
@@ -261,8 +275,10 @@ Acceptance:
 The daily suite should not grade taste, but it should guard contracts:
 
 - renderer fixtures assert named layer groups and subgroup counts;
-- visual lane captures nonblank `scene`, `ascii`, and `debug` modes;
-- object family fixture catches black-on-black or `undefined` markers;
+- visual lane captures nonblank `debug-scene`, `ascii`, and debug-overlay modes;
+- object family fixtures catch black-on-black or `undefined` markers;
+- `shipBakeoff` keeps the player sprite-card versus pixel-mesh comparison in
+  CI while the art path is unsettled;
 - perf probe tracks material/geometry count and frame budget;
 - playtest lane uses fresh browser and sim processes before screenshot capture.
 - Deck review captures Deck-native frames instead of relying on desktop

@@ -213,6 +213,7 @@ let remoteAuthorityActive = false;
 let remoteMapId = null;
 let remoteSnapshot = null;
 let remotePlayers = [];
+let fixtureShipCandidates = [];
 let remoteLastAckSeq = 0;
 let remoteLastEventSeq = 0;
 let remoteInputRequestInFlight = false;
@@ -1209,6 +1210,7 @@ function getGlitchIntensity() {
  */
 function loadTitleScene() {
   rendererFixtureActive = false;
+  fixtureShipCandidates = [];
   loadScene(MAP_TITLE);
   gamePhase = 'title';
   titleTimer = 0;
@@ -1245,6 +1247,16 @@ function loadRendererFixture(name) {
     vy: player.vy || 0,
     status: player.status || 'alive',
     hullType: player.hullType || 'drifter',
+  }));
+  fixtureShipCandidates = (fixture.fixtureShipCandidates || []).map((candidate, index) => ({
+    id: candidate.id || `ship-candidate-${index}`,
+    wx: candidate.wx,
+    wy: candidate.wy,
+    vx: candidate.vx || 0,
+    vy: candidate.vy || 0,
+    facing: candidate.facing || 0,
+    variant: candidate.variant || 'sprite-card',
+    radius: candidate.radius || 0.040,
   }));
   remoteFauna = (fixture.fixtureFauna || []).map((f, index) => ({
     id: f.id || `fixture-fauna-${index}`,
@@ -1298,6 +1310,7 @@ function startGame(map, seed = null) {
   remoteShipPresentation = null;
   remoteFauna = [];
   remoteSentries = [];
+  fixtureShipCandidates = [];
   rendererFixtureActive = false;
   loadScene(map);
 
@@ -2210,6 +2223,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
   remoteShipPresentation = null;
+  fixtureShipCandidates = [];
 
   loadScene(targetMapEntry.map);
   currentSignature = rollSignature(targetMapEntry.map.worldScale);
@@ -2695,6 +2709,16 @@ function collectThreeSceneState() {
       vy: player.vy || 0,
       status: player.status || 'alive',
       hullType: player.hullType || 'drifter',
+    })),
+    shipCandidates: (fixtureShipCandidates || []).map((candidate) => ({
+      id: candidate.id,
+      wx: candidate.wx,
+      wy: candidate.wy,
+      vx: candidate.vx || 0,
+      vy: candidate.vy || 0,
+      facing: candidate.facing || 0,
+      variant: candidate.variant || 'sprite-card',
+      radius: candidate.radius || 0.040,
     })),
     fauna: (remoteFauna || []).map((f, index) => ({
       id: f.id || `fauna-${index}`,

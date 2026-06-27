@@ -217,6 +217,43 @@ export const FIXTURE_VISUAL_REFERENCE = {
   },
 };
 
+// Dev-only side-by-side target for choosing the player hull asset path.
+// Gameplay maps should not spawn these render candidates.
+export const FIXTURE_SHIP_BAKEOFF = {
+  name: 'Renderer Player Ship Bakeoff Fixture',
+  worldScale: 3.0,
+  camera: 'locked',
+  wells: [
+    { x: 1.5, y: 1.42, mass: 0.92, orbitalDir: 1, killRadius: 0.046, spinRate: 0.72, points: 8, accretionRadius: 0.026 },
+  ],
+  stars: [
+    { x: 0.68, y: 0.70, mass: 0.9, type: 'yellowDwarf' },
+    { x: 2.32, y: 0.70, mass: 0.9, type: 'whiteDwarf' },
+  ],
+  loot: [],
+  wrecks: [
+    { x: 0.76, y: 1.78, type: 'derelict', tier: 1, size: 'medium' },
+    { x: 2.22, y: 1.78, type: 'vault', tier: 3, size: 'large' },
+  ],
+  planetoids: [],
+  fixturePortals: [
+    { x: 1.50, y: 2.28, type: 'rift', lifespan: 120 },
+  ],
+  fixtureShipCandidates: [
+    { id: 'sprite-card-candidate', wx: 1.08, wy: 1.52, vx: 0.30, vy: -0.02, facing: 0.05, variant: 'sprite-card', radius: 0.044 },
+    { id: 'pixel-mesh-candidate', wx: 1.92, wy: 1.52, vx: 0.30, vy: -0.02, facing: 0.05, variant: 'pixel-mesh', radius: 0.044 },
+  ],
+  configOverrides: {
+    ascii: {
+      shimmer: 4.2,
+    },
+    fluid: {
+      ambientTurbulence: 0.00032,
+      ambientDensity: 0.00020,
+    },
+  },
+};
+
 export const RENDERER_FIXTURES = {
   title: FIXTURE_TITLE,
   singleWell: FIXTURE_SINGLE_WELL,
@@ -225,4 +262,5 @@ export const RENDERER_FIXTURES = {
   interference10x10: FIXTURE_INTERFERENCE_10X10,
   entityShowcase: FIXTURE_ENTITY_SHOWCASE,
   visualReference: FIXTURE_VISUAL_REFERENCE,
+  shipBakeoff: FIXTURE_SHIP_BAKEOFF,
 };

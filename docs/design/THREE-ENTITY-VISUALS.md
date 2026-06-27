@@ -32,10 +32,10 @@ affordances**, not dark everything.
 
 | Surface | What exists now | What is missing |
 |---------|-----------------|-----------------|
-| Three substrate | Orthographic top-down camera, z-layered scene groups, shared WebGL2 context, pooled primitive meshes, motion parallax, screen-space present pass | A reusable style kit for semantic entities, richer geometries, entity-specific materials, fixture coverage for visual identity |
+| Three substrate | Orthographic top-down camera, z-layered scene groups, shared WebGL2 context, pooled primitive meshes, motion parallax, screen-space present pass, entity backing diagnostics | Richer geometries, finished entity-specific asset families, final post stack ownership |
 | Wells | Fabric/ASCII-driven voids, accretion, rings, hazard semantics, simple Three ring/core helpers | No change in ownership; wells should stay mostly fabric-first |
 | Inhibitor | Sim-owned forms, localized shader corruption, form-specific glyph rows, Swarm tendrils, Vessel death/portal behavior | More audio/screen-space dread polish, but not a normal object-icon pass |
-| Player ship | A small white triangle in the Three entity layer, plus canvas velocity readout/trails | Hull-specific silhouettes, depth/roll cues, thrust ports, readable delta-v/signal glow |
+| Player ship | A small white triangle in the Three entity layer, plus canvas velocity readout/trails, and a dev-only `shipBakeoff` fixture comparing sprite-card and pixel-textured mesh candidates | Chosen production hull path, hull-specific silhouettes, depth/roll cues, thrust ports, readable delta-v/signal glow |
 | Remote players and scavengers | Blue/red triangles with basic rotation | Personality/hull silhouettes, trail identity, signal/readiness cues, opponent-readable motion |
 | Stars | Small additive discs plus fabric pushes/rays | Emissive star miniatures, type-specific corona shapes, orbital landmark scale, consumption/relic states |
 | Planetoids/comets | Small triangles oriented by velocity | Shaded miniature bodies, icy tails, wake ribbons, orbit/trajectory legibility |
@@ -197,6 +197,13 @@ Before locking the ship asset path, run the player ship twice: same footprint,
 same contact matte, same rim shell, once as a 2D pixel sprite card and once as a
 pixel-textured top-down mesh. Capture both at Deck scale, pick the better read,
 and use that answer to steer the rest of the ship/rival family.
+
+The current implementation has this comparison wired as the `shipBakeoff`
+renderer fixture. It uses inline pixel masks as temporary candidates and reports
+`entitySeparation.shipCandidateCount` in renderer diagnostics. That fixture
+exists to keep the two candidate paths visible while art direction is still
+being chosen; it is not a source of gameplay truth and should not appear in
+normal maps or promo captures.
 
 ## Object Targets
 

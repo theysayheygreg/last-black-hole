@@ -31,9 +31,82 @@ export function makeVisualMaterial(color, opacity, {
   });
 }
 
+function makePixelTexture(rows, palette) {
+  const height = rows.length;
+  const width = Math.max(...rows.map((row) => row.length));
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const row = rows[y] || '';
+    for (let x = 0; x < width; x++) {
+      const color = palette[row[x]] || palette['.'];
+      const i = (y * width + x) * 4;
+      data[i] = color[0];
+      data[i + 1] = color[1];
+      data[i + 2] = color[2];
+      data[i + 3] = color[3];
+    }
+  }
+  const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.generateMipmaps = false;
+  texture.flipY = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function makePixelMaterial(texture, opacity = 1) {
+  return new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    opacity,
+    alphaTest: 0.05,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.NormalBlending,
+    side: THREE.DoubleSide,
+  });
+}
+
 export function createVisualMaterials() {
   const normal = THREE.NormalBlending;
   const add = THREE.AdditiveBlending;
+  // Inline pixel masks are fixture candidates, not final art. They let the
+  // renderer compare sprite-card and pixel-mesh reads before asset production.
+  const shipSpriteTexture = makePixelTexture([
+    '....W....',
+    '....W....',
+    '...WWW...',
+    '...WCW...',
+    '..WCCCW..',
+    '.WWCCCWW.',
+    'W.WCWCW.W',
+    '..WCCCW..',
+    '...C.C...',
+    '...B.B...',
+    '....B....',
+  ], {
+    '.': [0, 0, 0, 0],
+    'W': [235, 252, 255, 255],
+    'C': [89, 211, 255, 255],
+    'B': [48, 152, 255, 220],
+  });
+  const shipMeshTexture = makePixelTexture([
+    '....W....',
+    '...WWW...',
+    '..WCCW...',
+    '.WWCCWW..',
+    'W.WCCW.W.',
+    '..WCCW...',
+    '...CC....',
+    '...BB....',
+  ], {
+    '.': [0, 0, 0, 0],
+    'W': [240, 252, 255, 255],
+    'C': [98, 225, 255, 255],
+    'B': [64, 126, 255, 225],
+  });
   return {
     matteSoft: makeVisualMaterial(0x000006, 0.28, { blending: normal }),
     matteCore: makeVisualMaterial(0x000000, 0.54, { blending: normal }),
@@ -42,6 +115,8 @@ export function createVisualMaterials() {
     ship: makeVisualMaterial(0xffffff, 1.0, { blending: normal }),
     shipHalo: makeVisualMaterial(0x74d7ff, 0.58, { blending: add }),
     shipRim: makeVisualMaterial(0xd9fbff, 0.72, { blending: add }),
+    shipSpriteCandidate: makePixelMaterial(shipSpriteTexture, 1.0),
+    shipMeshCandidate: makePixelMaterial(shipMeshTexture, 1.0),
     remoteShip: makeVisualMaterial(0x98d8ff, 0.96, { blending: normal }),
     remoteShipHalo: makeVisualMaterial(0x3fb8ff, 0.50, { blending: add }),
     scavenger: makeVisualMaterial(0xff3b35, 0.98, { blending: normal }),

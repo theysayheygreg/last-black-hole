@@ -133,11 +133,16 @@ Use it for:
 - interference between wells
 - `5x5` and `10x10` visual scaling
 - object-family contrast/readability in the `visualReference` scene
+- sprite-card versus pixel-textured player hull comparison in `shipBakeoff`
 
 The `visualReference` fixture is a dev-only lineup, not a gameplay map or promo
 composition. It belongs in validation because it samples stars, wrecks, portals,
 ships, fauna, sentries, and planetoids against the final post-processing stack
 and reports weak family reads in the manifest.
+
+The `shipBakeoff` fixture is also dev-only. It belongs in validation because
+the player hull art path is not settled yet, and both candidates need to be
+tested against the same backing/rim stack and noisy fabric.
 
 Use the final ASCII captures for visual judgment. Raw `debug-scene-...png`
 captures bypass glyph quantization and are only there to debug shader input;

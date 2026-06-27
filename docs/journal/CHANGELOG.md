@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-06-27 — Local v0.2.2 source status and ship bakeoff
+
+- Refreshed the local build status around the v0.2.2 source path: a fresh
+  local-host stack, Three renderer, and local authoritative sim reached
+  gameplay, accepted thrust input, advanced remote ticks, and stayed at 60 FPS
+  in the sampled frame.
+- Added entity separation diagnostics to the Three renderer so visual fixtures
+  report contrast-backing counts, estimated matte coverage, and player
+  ship-candidate counts.
+- Added `shipBakeoff` as a default renderer fixture comparing the player
+  footprint as a 2D pixel sprite card and as a pixel-textured top-down mesh,
+  both using the same backing/rim stack.
+- Updated visual-language, renderer-harness, and build-status docs so the
+  bakeoff is treated as a dev validation scene, not a gameplay map or promo
+  capture.
+
 ## 2026-06-27 — Scene debug captures fenced off
 
 - Confirmed the hot-white/rainbow well frames came from the raw `scene` view

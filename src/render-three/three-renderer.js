@@ -139,6 +139,35 @@ function makeRadialGeometry(pointCount = 4, innerRadius = 0.42) {
   return geom;
 }
 
+function makePixelHullMeshGeometry() {
+  const outline = [
+    [1.0, 0.0],
+    [0.28, 0.46],
+    [-0.34, 0.32],
+    [-0.18, 0.12],
+    [-0.72, 0.0],
+    [-0.18, -0.12],
+    [-0.34, -0.32],
+    [0.28, -0.46],
+  ];
+  const positions = [0, 0, 0];
+  const uvs = [0.45, 0.5];
+  const indices = [];
+  for (const [x, y] of outline) {
+    positions.push(x, y, 0);
+    uvs.push((x + 0.72) / 1.72, 1 - ((y + 0.46) / 0.92));
+  }
+  for (let i = 1; i <= outline.length; i++) {
+    indices.push(0, i, i === outline.length ? 1 : i + 1);
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geom.setIndex(indices);
+  geom.computeVertexNormals();
+  return geom;
+}
+
 function setCanvasVisible(canvas, visible) {
   if (!canvas) return;
   canvas.style.display = visible ? 'block' : 'none';
@@ -278,6 +307,11 @@ export class ThreeRendererBackend {
       entityCount: 0,
       semanticCount: 0,
       visualCounts: {},
+      entitySeparation: {
+        matteCount: 0,
+        estimatedCoverage: 0,
+        shipCandidateCount: 0,
+      },
       sharedContext: true,
       canvasUploads: 0,
       pooledMeshes: 0,
@@ -372,12 +406,19 @@ export class ThreeRendererBackend {
       disc: new THREE.CircleGeometry(1, 28),
       ring: new THREE.RingGeometry(0.90, 1.0, 64),
       square: new THREE.PlaneGeometry(1, 1),
+      spriteCard: new THREE.PlaneGeometry(1, 1.22),
+      pixelHullMesh: makePixelHullMeshGeometry(),
       spark: makeRadialGeometry(4, 0.36),
     };
     this.entityMaterials = createVisualMaterials();
     this.lastEntityCount = 0;
     this.lastSemanticCount = 0;
     this.lastVisualCounts = {};
+    this.lastEntitySeparation = {
+      matteCount: 0,
+      estimatedCoverage: 0,
+      shipCandidateCount: 0,
+    };
   }
 
   _createTarget(width, height) {
@@ -523,6 +564,9 @@ export class ThreeRendererBackend {
     this.semanticMeshCursor = 0;
     this.lineCursor = 0;
     this.visualCounts = {};
+    this.matteCount = 0;
+    this.matteCoverage = 0;
+    this.shipCandidateCount = 0;
     for (const mesh of this.entityMeshPool) mesh.visible = false;
     for (const mesh of this.semanticMeshPool) mesh.visible = false;
     for (const line of this.linePool) line.visible = false;
@@ -564,6 +608,15 @@ export class ThreeRendererBackend {
     return mesh;
   }
 
+  _estimateMatteCoverage(radius, radiusScale, yScale, radiusMode, state = this.lastSceneState) {
+    // This is a broad visual budget canary, not a pixel-accurate area test.
+    // It catches runaway backing layers before they erase the ASCII fabric.
+    const cameraView = Math.max(0.001, Number.isFinite(state.cameraView) ? state.cameraView : (this.lastSceneState.cameraView ?? CAMERA_VIEW));
+    const sceneScale = worldRadiusToSceneScale(Math.max(0.001, radius * radiusScale), this.worldCameraAspect, cameraView, radiusMode);
+    const sceneArea = Math.max(0.001, (this.worldCamera.right - this.worldCamera.left) * (this.worldCamera.top - this.worldCamera.bottom));
+    return (Math.PI * sceneScale.x * sceneScale.y * Math.max(0.1, yScale)) / sceneArea;
+  }
+
   _countVisualGroup(group) {
     const key = group?.name || 'unknown';
     this.visualCounts[key] = (this.visualCounts[key] || 0) + 1;
@@ -588,6 +641,10 @@ export class ThreeRendererBackend {
       wx, wy, radius * radiusScale, rotation, z - 0.03, state, radiusMode);
     this._squashMesh(soft, yScale);
     this._squashMesh(core, yScale);
+    if (core) {
+      this.matteCount += 1;
+      this.matteCoverage += this._estimateMatteCoverage(radius, radiusScale, yScale, radiusMode, state);
+    }
   }
 
   _addReadableEntity(group, geometry, coreMaterial, wx, wy, radius, rotation, z, state, radiusMode, {
@@ -611,6 +668,34 @@ export class ThreeRendererBackend {
     if (rimMaterial) {
       this._addMesh(group, geometry, rimMaterial, wx, wy, radius * rimRadius, rotation, z + 0.006, state, radiusMode);
     }
+    return core;
+  }
+
+  _addShipCandidate(candidate, state) {
+    const variant = candidate.variant === 'pixel-mesh' ? 'pixel-mesh' : 'sprite-card';
+    const geometry = variant === 'pixel-mesh'
+      ? this.entityGeometries.pixelHullMesh
+      : this.entityGeometries.spriteCard;
+    const material = variant === 'pixel-mesh'
+      ? this.entityMaterials.shipMeshCandidate
+      : this.entityMaterials.shipSpriteCandidate;
+    const facing = Number.isFinite(candidate.facing)
+      ? candidate.facing
+      : Math.atan2(-(candidate.vy || 0), candidate.vx || 0);
+    const rotation = -facing;
+    const radius = candidate.radius || 0.040;
+    this._addContrastBacking(candidate.wx, candidate.wy, radius, rotation, 0.165, state, 'screen', {
+      opacity: 'heavy',
+      radiusScale: 2.15,
+      yScale: 0.80,
+    });
+    this._addMesh(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.shipHalo,
+      candidate.wx, candidate.wy, radius * 1.75, rotation, 0.168, state, 'screen');
+    const core = this._addMesh(this.activeEntityGroup, geometry, material,
+      candidate.wx, candidate.wy, radius, rotation, 0.18, state, 'screen');
+    this._addMesh(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.shipRim,
+      candidate.wx, candidate.wy, radius * 1.16, rotation, 0.187, state, 'screen');
+    if (core) this.shipCandidateCount += 1;
     return core;
   }
 
@@ -743,6 +828,9 @@ export class ThreeRendererBackend {
         { haloMaterial: this.entityMaterials.sentryHalo, haloRadius: 2.2, matteRadius: 2.0, matteY: 1.0 },
         'screen');
     }
+    for (const candidate of sceneState.shipCandidates || []) {
+      if (this._addShipCandidate(candidate, renderState)) entityCount++;
+    }
 
     const ship = sceneState.ship;
     if (ship) {
@@ -766,6 +854,11 @@ export class ThreeRendererBackend {
     this.lastEntityCount = entityCount;
     this.lastSemanticCount = semanticCount;
     this.lastVisualCounts = { ...this.visualCounts };
+    this.lastEntitySeparation = {
+      matteCount: this.matteCount,
+      estimatedCoverage: Number(this.matteCoverage.toFixed(4)),
+      shipCandidateCount: this.shipCandidateCount,
+    };
   }
 
   render(frameContext) {
@@ -817,6 +910,7 @@ export class ThreeRendererBackend {
       entityCount: this.lastEntityCount,
       semanticCount: this.lastSemanticCount,
       visualCounts: this.lastVisualCounts,
+      entitySeparation: this.lastEntitySeparation,
       sharedContext: true,
       canvasUploads: 0,
       pooledMeshes: this.entityMeshPool.length + this.semanticMeshPool.length,

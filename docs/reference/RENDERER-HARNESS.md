@@ -16,6 +16,7 @@ Default runs capture a short deterministic set:
 - `interference10x10`
 - `entityShowcase`
 - `visualReference`
+- `shipBakeoff`
 
 Set `LBH_RENDERER_DEEP=1` to capture the full fixture suite, including
 `singleWell`, `interference`, and `singleWell5x5`.
@@ -24,6 +25,10 @@ families together; it is intentionally separate from representative promo
 captures and normal map-match screenshots, but it is now part of the default
 visual harness because it catches contrast/readability regressions across
 entity families.
+`shipBakeoff` is the dev-only player hull comparison scene. It renders the same
+player footprint as a temporary pixel sprite card and as a pixel-textured
+top-down mesh, using the same backing/rim stack, so the final ship asset path
+can be judged against the fabric before broad production.
 
 For each selected fixture, the harness captures:
 
@@ -55,6 +60,8 @@ Use it to answer:
 - does the raw debug input explain any final ASCII artifact
 - do stars, wrecks, portals, ships, fauna, sentries, and planetoids stay
   readable against the background and final post-processing stack
+- do both player ship asset candidates still render with the same separation
+  stack and without excessive matte coverage
 
 `visualReference` adds a structured readability report to the manifest. The
 harness samples final post-processed luminance around each object family,

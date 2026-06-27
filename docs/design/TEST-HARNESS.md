@@ -158,12 +158,15 @@ Renderer values:
 - `target` preserves the target URL exactly.
 
 Renderer fixtures default to a representative sweep plus the `visualReference`
-object-family scene. That reference scene checks coarse contrast/readability
-for stars, wrecks, portals, ships, fauna, sentries, and planetoids against the
-final post-processed background. The `ascii-...png` captures are the art-target
-frames. The `debug-scene-...png` captures intentionally bypass ASCII
-quantization so shader input can be inspected; they can look smooth, bright, or
-rainbowed around wells and should not be treated as promo or target visuals.
+object-family scene and `shipBakeoff` player asset comparison. `visualReference`
+checks coarse contrast/readability for stars, wrecks, portals, ships, fauna,
+sentries, and planetoids against the final post-processed background.
+`shipBakeoff` keeps the sprite-card versus pixel-textured top-down mesh
+comparison visible while the player hull art path is unsettled. The
+`ascii-...png` captures are the art-target frames. The `debug-scene-...png`
+captures intentionally bypass ASCII quantization so shader input can be
+inspected; they can look smooth, bright, or rainbowed around wells and should
+not be treated as promo or target visuals.
 Set `LBH_RENDERER_DEEP=1` to capture every fixture at the older multi-time
 cadence for a deliberate visual audit.
 

@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-06-27 — Player ship asset choice needs a fixture bakeoff
+
+**Decision:** Keep the player ship sprite-card versus pixel-textured
+top-down mesh comparison in a renderer fixture named `shipBakeoff` until one
+path wins at gameplay scale.
+
+**Why:** The final ship family should be chosen from evidence, not taste in a
+vacuum. Both candidates need the same contact matte, rim, scale, and noisy
+ASCII background so the comparison answers the real question: which path reads
+best in LBH's actual scene stack?
+
+**Where it landed:** `src/maps/renderer-fixtures.js`,
+`src/render-three/visual-style.js`, `src/render-three/three-renderer.js`,
+`src/main.js`, `tests/renderer.cjs`, `docs/design/THREE-ENTITY-VISUALS.md`,
+`docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`, and renderer harness docs.
+
+**Door status:** Open for art direction. Closed for process: future ship asset
+work should update the bakeoff before replacing the live player hull.
+
 ## 2026-06-27 — Pre-ASCII scene captures are debug artifacts
 
 **Decision:** Treat `rendererView: "scene"` captures as raw pre-ASCII shader

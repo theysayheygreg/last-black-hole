@@ -8,9 +8,9 @@
 
 ## Current Snapshot
 
-**Date:** 2026-06-25
-**Public train:** v0.2.1
-**Build version shape:** v0.2.1.`<commit-hash>`
+**Date:** 2026-06-27
+**Public train:** v0.2.2
+**Build version shape:** v0.2.2.`<commit-hash>`
 **Primary playable target:** all-target release artifacts plus local source
 build, Three renderer, and local authoritative sim.
 
@@ -37,30 +37,52 @@ shape.
 
 ## Standing Assessment
 
-**Status:** v0.2.1 all-target release build created under the previous
-three-part artifact naming; the next real release build will use
-`v0.2.1.<commit-hash>`. Fresh playtest still needed.
+**Status:** v0.2.2 local source path is playable on a fresh local authority
+stack. The current source target is green for a Codex-driven smoke playtest;
+the next release artifact build should use `v0.2.2.<commit-hash>`.
 
 The recent local work fixed the class of issues that made the Three migration
 feel broken: camera/world projection mismatch, coordinate and flow scaling
 drift, distant surf currents pulling the ship, stale browser/sim reuse in
 movement tests, finite authority-session lifecycle, and shader-side coordinate
-flip centralization.
+flip centralization. The latest visual work adds a renderer bakeoff fixture for
+player-ship asset direction and keeps entity separation measurable before
+richer pixel assets land.
+
+On 2026-06-27, a fresh local-host stack was restarted with:
+
+```sh
+npm run stack:restart -- --no-open
+```
+
+Then a fresh Chrome/CDP browser opened
+`index-a.html?renderer=three&simServer=http://127.0.0.1:8787`, created a test
+profile, entered an authoritative run, sent thrust input, and verified:
+
+- `phase: playing`
+- Three renderer, 5-pass graph
+- 60 FPS in the sampled frame
+- authoritative player movement: `0.53530` world units
+- remote tick delta: `34`
+- evidence screenshot:
+  `tmp/playtest-evidence/local-host-authority-2026-06-27T082803508Z.png`
+
+Follow-up validation on the same source snapshot:
+
+- `npm run test:visual` passed, including `shipBakeoff`.
+- `npm test` passed the core Three lane.
+- `npm run test:playtest` passed Flow, MetaFlow, Controller, and
+  KeyboardMouse on the Three target.
 
 On 2026-06-25, `npm run release:build` passed: it ran `npm run test:fast`, built
 the web, iPad web-app, macOS, Windows, and Linux release targets, staged weekly
 assets into `dist/nightly`, and passed `release:check`.
 
-That is a real artifact baseline, but it is not the same as a green playable
-baseline. A fresh Codex app browser or human playtest still has not been
-recorded after the final local-control and release-process changes. Treat the
-v0.2.1 build train as ready for a fresh playtest pass, not as public-ready.
-
 Artifacts:
 
 - `builds/v0.2.1/` (last three-part build, preserved as evidence)
-- next release build: `builds/v0.2.1.<commit-hash>/`
-- next playtest zip: `builds/last-singularity-playtest-v0.2.1.<commit-hash>.zip`
+- next release build: `builds/v0.2.2.<commit-hash>/`
+- next playtest zip: `builds/last-singularity-playtest-v0.2.2.<commit-hash>.zip`
 - `dist/nightly/`
 
 ## Known Caveats
@@ -73,9 +95,9 @@ Artifacts:
   because it launches on Deck.
 - If movement feels bad after a long-open browser or sim process, reset the
   whole stack before judging the build. Page reload alone is not a clean reset.
-- The build is still waiting on a fresh human/Codex app-browser playtest for
-  control feel. Automated health is green, but playfeel is not something the
-  harness can fully certify.
+- The 2026-06-27 source playtest proves local authority viability, not final
+  human feel. Automated health and one CDP smoke cannot certify that the ship
+  feels good in hand.
 
 ## What Each Status Source Means
 

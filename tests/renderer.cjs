@@ -27,8 +27,9 @@ const ALL_FIXTURES = [
   { name: 'interference10x10', expectedWells: 2, minFps: 5, timesMs: [500, 2000, 5000] },
   { name: 'entityShowcase', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
   { name: 'visualReference', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
+  { name: 'shipBakeoff', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
 ];
-const DEFAULT_FIXTURES = new Set(['title', 'interference10x10', 'entityShowcase', 'visualReference']);
+const DEFAULT_FIXTURES = new Set(['title', 'interference10x10', 'entityShowcase', 'visualReference', 'shipBakeoff']);
 const READABILITY_FIXTURES = new Set(['visualReference']);
 const READABILITY_FAMILY_MINIMUMS = {
   stars: { targets: 4, readable: 4 },
@@ -402,12 +403,26 @@ async function captureFixture(page, outputDir, fixture) {
     for (const expectedChild of ['entity-backing-layer', 'landmark-entity-layer', 'salvage-entity-layer', 'active-entity-layer', 'immediate-vfx-layer']) {
       assert(childNames.has(expectedChild), `Fixture '${fixture.name}' missing Three entity subgroup ${expectedChild}`);
     }
-    if (fixture.name === 'entityShowcase' || fixture.name === 'visualReference') {
+    if (fixture.name === 'entityShowcase' || fixture.name === 'visualReference' || fixture.name === 'shipBakeoff') {
       const counts = backendStats.three.visualCounts || {};
+      const separation = backendStats.three.entitySeparation || {};
       assert((counts['entity-backing-layer'] || 0) > 0, `${fixture.name} did not render contrast backing`);
       assert((counts['landmark-entity-layer'] || 0) > 0, `${fixture.name} did not render landmark entities`);
-      assert((counts['salvage-entity-layer'] || 0) > 0, `${fixture.name} did not render salvage entities`);
       assert((counts['active-entity-layer'] || 0) > 0, `${fixture.name} did not render active entities`);
+      assert((separation.matteCount || 0) > 0, `${fixture.name} did not report entity mattes`);
+      assert((separation.estimatedCoverage || 0) > 0 && (separation.estimatedCoverage || 0) < 0.35,
+        `${fixture.name} matte coverage looks wrong: ${separation.estimatedCoverage}`);
+      if (fixture.name !== 'shipBakeoff') {
+        assert((counts['salvage-entity-layer'] || 0) > 0, `${fixture.name} did not render salvage entities`);
+      }
+      if (fixture.name === 'shipBakeoff') {
+        const sceneState = await page.evaluate(() => window.__TEST_API.getThreeSceneState?.() || null);
+        const candidateVariants = new Set((sceneState?.shipCandidates || []).map((candidate) => candidate.variant));
+        assert(candidateVariants.has('sprite-card') && candidateVariants.has('pixel-mesh'),
+          `${fixture.name} did not expose both player ship asset candidates`);
+        assert((separation.shipCandidateCount || 0) === 2,
+          `${fixture.name} expected 2 rendered ship candidates, got ${separation.shipCandidateCount || 0}`);
+      }
     }
   }
 
