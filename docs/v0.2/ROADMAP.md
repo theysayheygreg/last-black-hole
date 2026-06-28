@@ -16,7 +16,8 @@
 | Threats | Signal, Inhibitor, rivals/scavengers, fauna/sentry foundations, phantoms/haunts | Tune Inhibitor timing and signal readability; pick strongest ecology behaviors | Full entity catalog and richer multiplayer threat interactions |
 | Hulls | Five hulls, manifests, PlayerBrain, ability state, several server ability behaviors | Playtest ability feel and cooldowns; improve HUD cues | More artifacts, exclusive builds, no-respec pilot identity |
 | Progression | Profiles, vault, item tiers, rig tracks defined, partial upgrade flow | Complete upgrade purchase/write-back and balance EM economy | Milestones, unlocks, pilots, long-term chronicle |
-| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, UI visual-system docs and target concepts | Run UI primitive pass; improve title/home/map-select/results readability; add couch-test/Deck captures | Full UI primitive system and accessibility pass |
+| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, shared canvas primitive kit, result-screen migration, title-attract first slice, UI visual harness, and UI motion/VFX bridge | Continue profile/home/map-select/HUD/pause migration; tighten couch/Deck thresholds after more surfaces settle | Full UI primitive system, accessibility pass, and reduced-motion coverage |
+| VFX | Event-driven Three VFX plan exists; UI motion now emits VFX only for approved beats, with UI retaining truth | Build `VfxManager`, bounded pools, `screenVfxGroup`, `immediateVfxGroup`, stats, leak tests, and title glyph-fault prototype | Ship motion, portal/pickup, Inhibitor faults, lens impulses, and capture-quality tiers |
 | Audio | Audio engine/toolkit foundations | Define final sonic palette for movement/signal/Inhibitor | Dynamic score and full mix hierarchy |
 | Testing | Fast/core/authority/three lanes; visual fixtures; CDP driver | Add more representative playtest scripts and renderer semantic checks | Public release smoke, hosted-session CI, perf budgets per device |
 | Public presence | Public overview doc exists; website/social not built | Prepare public copy, screenshots, clips, and a playable build page | Itch/Steam-style page, devlog cadence, hosted demo |
@@ -103,12 +104,18 @@ palette as the Three entity pass.
 - Use `docs/design/UI-VISUAL-SYSTEM.md`,
   `docs/reference/UI-MOODBOARD.md`, and
   `docs/project/UI-VISUAL-PASS-PLAN.md` as the current UI art-direction source.
-- Build shared canvas UI primitives for panels, brackets, selected rows,
-  command buttons, segmented gauges, and warnings.
-- Rework title, home/main menu, pre-match/map select, in-match HUD, and results
-  surfaces against the generated target concepts.
+- Build on the shipped shared canvas UI primitives for panels, brackets,
+  selected rows, command buttons, segmented gauges, and warnings.
+- Continue migrating profile, home/main menu, pre-match/map select, in-match
+  HUD, and pause surfaces against the generated target concepts. Results and
+  the first title-attract slice are already on the new path.
 - Keep letter spacing at zero and reserve microtext for texture, not decisions.
-- Add Deck-scale and couch-test visual captures for UI states.
+- Keep UI motion readable without VFX. Title identity, launch, extraction,
+  collapse, portal transitions, and Inhibitor-owned UI faults may emit
+  renderer-neutral VFX accents; normal prompts, timers, fuel, cargo, and
+  controller hints stay clean.
+- Use the shipped `npm run test:ui` lane for UI states, Deck-scale judgment,
+  and couch-test proxy review.
 
 Definition of done:
 
@@ -116,6 +123,30 @@ Definition of done:
   desk, Steam Deck, and couch distances.
 - DOM and canvas UI share the same role palette.
 - UI visual tests catch weak selected actions, warnings, and critical values.
+
+## v0.2.3c — Event-Driven Three VFX Pass
+
+Goal: make the flat top-down Three scene feel alive through bounded,
+renderer-neutral VFX without moving gameplay truth into particles or shaders.
+
+- Use `docs/project/THREE-VFX-PASS-PLAN.md` as the source of truth.
+- Add `VfxManager`, a bounded particle pool, quality tiers, VFX stats, and
+  expiry/leak tests before adding expressive effects.
+- Add `screenVfxGroup` and `immediateVfxGroup` as the first render targets.
+- Prototype `titleGlyphFault` from measured canvas title-glyph positions, with
+  magenta glyph embers, symbol motes, and scan splinters behind the clean
+  wordmark.
+- Follow with ship thrust/brake, portal/extraction, pickup glints, and
+  Inhibitor event faults.
+- Capture short clips for timing review; use still/UI harness captures for
+  readability.
+
+Definition of done:
+
+- `vfx.enabled=false` does not change gameplay or break UI comprehension.
+- VFX counts return to baseline after idle title/menu/result states.
+- Default quality is Deck-friendly; rich/capture quality is opt-in.
+- The first clips show motion value that cannot be judged from still frames.
 
 ## v0.2.4 — Private Playtest Build
 

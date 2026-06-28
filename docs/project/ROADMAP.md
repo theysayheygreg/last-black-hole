@@ -7,7 +7,7 @@
 
 ---
 
-## Current Status (2026-06-26)
+## Current Status (2026-06-28)
 
 **Version:** v0.2 — Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set.
 
@@ -23,7 +23,7 @@ reading stale health records or reconstructing status from `git log`.
 | L1: The Stakes | DONE | Wrecks with drift, portals with evaporation, well growth, extraction loop, vault + profiles |
 | L2: The Threats | DONE | Signal system (6 zones), fauna (jellies + blooms), gradient sentries, AI players (5 personalities), scavenger AI, force pulse |
 | L3: The Dread | DONE | Inhibitor (3 forms: glitch -> swarm -> vessel), final portal guarantee, control debuff, HUD degradation, localized fabric corruption, form-specific glyph rows |
-| L4: The Look | DONE / NEEDS ENTITY + UI PASS | Composer render pipeline, ASCII shader, title-prototype Bloom canary, NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering, default Three scene with primitive entity projection, v0.2 UI visual-system docs, first shared UI primitive kit, result-screen migration, UI visual capture lane |
+| L4: The Look | DONE / NEEDS ENTITY + UI + VFX PASS | Composer render pipeline, ASCII shader, title-prototype Bloom canary, NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering, default Three scene with primitive entity projection, v0.2 UI visual-system docs, first shared UI primitive kit, result-screen migration, title-attract first slice, UI visual capture lane, and event-driven VFX plan |
 | L5: The Depth | IN PROGRESS | 5 hull classes with abilities, PlayerBrain coefficient resolution, rig upgrade tracks, loot economy + balance manifest, meta-loop with run results + chronicle, **delta-v fuel system, slingshot anchor network, route-style hull identity** |
 | L6: The Ship | PARTIAL | Title screen, map select, 3 save slots. Balance pass + deploy not yet done. |
 
@@ -41,7 +41,7 @@ reading stale health records or reconstructing status from `git log`.
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | PARTIAL | Results view and control-plane persistence slices exist; full meta-loop write-back polish remains |
-| Local build status | v0.2.1 train BUILT / PLAYTEST NEEDED | `npm run release:build` produced web, iPad web-app, macOS, Windows, and Linux release artifacts; the next artifact naming pass is `v0.2.1.<commit-hash>`; fresh app-browser or human playtest still needs to record the next playable assessment in `BUILD-STATUS.md` |
+| Local build status | v0.2.2 source path PLAYABLE / RELEASE BUILD NEEDED | `docs/project/BUILD-STATUS.md` records the latest local authority source smoke as playable on 2026-06-27; the next release artifact pass should produce `v0.2.2.<commit-hash>` builds after fresh playtest evidence |
 | Weekly playables | STALE | Last scheduled green predates the current local feature/fix stack; refresh only after the local build is playtest-stable |
 | Build health gate | GREEN | Refreshed on 2026-06-25 for the v0.2.1 release-build train; use `node scripts/build-health.cjs status` for the exact current-commit answer |
 
@@ -65,7 +65,7 @@ reading stale health records or reconstructing status from `git log`.
 | Three entity mood board | `docs/reference/THREE-ENTITY-MOODBOARD.md` | Designed 2026-06-26; cited references and generated target visuals for 2D identity inside staged 3D depth |
 | UI visual system | `docs/design/UI-VISUAL-SYSTEM.md` | Designed 2026-06-28; current contrast, sizing, color-role, and couch-test contract for title, home, map select, HUD, and results |
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
-| UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slice shipped 2026-06-28; shared canvas primitives, UI primitive smoke test, run-results migration, and baseline UI visual harness are live. Remaining work is title/profile/home/map/HUD/pause migration and tighter thresholds. |
+| UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slice shipped 2026-06-28; shared canvas primitives, UI primitive smoke test, run-results migration, title-attract first slice, baseline UI visual harness, and UI motion/VFX bridge are live. Remaining work is profile/home/map/HUD/pause migration and tighter thresholds. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -122,6 +122,10 @@ reading stale health records or reconstructing status from `git log`.
   Three is allowed to get rich and specific for PC/web/Deck, but VFX behavior
   should flow through renderer-neutral events so future native or console paths
   can implement the same effect families without inheriting Three internals.
+- UI motion is now part of that same contract: readable DOM/canvas UI keeps
+  screen truth, while approved beats such as title glyph faults, launch,
+  extraction, collapse, portal transitions, and Inhibitor UI faults may emit
+  Three VFX accents below or around clean UI.
 - The current scene hierarchy target is
   `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`: the void stays black and
   dominant, the ASCII fabric stays the gameplay ocean, and entities get explicit

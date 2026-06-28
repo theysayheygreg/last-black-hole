@@ -244,7 +244,7 @@ export function initTestAPI(getState) {
         state.gamePhase = 'title';
         state.setTitleLayoutForTest?.(options.layout ?? 'center');
         state.setTitleTimerForTest?.(options.titleTimer ?? 1.2);
-        if (options.loopTime != null) state.setTitleLoopTimeForTest?.(options.loopTime);
+        state.setTitleLoopTimeForTest?.(options.loopTime ?? 0);
         return true;
       }
 

@@ -49,6 +49,7 @@ const configSrc = fs.readFileSync(path.join(SRC, 'config.js'), 'utf8');
 const asciiShaderSrc = fs.readFileSync(path.join(SRC, 'render', 'shaders', 'ascii.glsl.js'), 'utf8');
 const mainSrc = fs.readFileSync(path.join(SRC, 'main.js'), 'utf8');
 const testApiSrc = fs.readFileSync(path.join(SRC, 'test-api.js'), 'utf8');
+const rendererFixturesSrc = fs.readFileSync(path.join(SRC, 'maps', 'renderer-fixtures.js'), 'utf8');
 
 // Extract GLSL array sizes from shader source
 function findGLSLArraySize(src, name) {
@@ -796,6 +797,15 @@ runner.run('ASCII shader consumes authoritative Inhibitor data', () => {
   assert(asciiShaderSrc.includes('INHIBITOR_VESSEL_ROW'), 'ASCII shader must route form 3 to the vessel glyph row');
   assert(mainSrc.includes('inhibitorData: inhData'), 'Main render path must pass Inhibitor data into the ASCII pass');
   assert(testApiSrc.includes('setInhibitorVisualStateForTest'), 'Test API must expose a render-only Inhibitor fixture hook');
+});
+
+// ---- 17. Renderer fixture source-of-truth validation ----
+
+runner.run('Renderer title fixture reuses the playable title scene map', () => {
+  assert(rendererFixturesSrc.includes("import { MAP as TITLE_SCREEN_MAP } from './title-screen.js'"),
+    'Renderer title fixture must import the title scene map');
+  assert(rendererFixturesSrc.includes('...TITLE_SCREEN_MAP'),
+    'Renderer title fixture must spread the title scene map instead of duplicating title composition data');
 });
 
 // ---- Done ----

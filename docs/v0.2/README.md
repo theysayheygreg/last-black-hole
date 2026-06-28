@@ -20,8 +20,12 @@ Everything before this snapshot is treated as **v0.1**: the jam prototype, the p
    couch-test contract.
 9. `../reference/UI-MOODBOARD.md` — cited reference board and generated UI
    target-visual index.
-10. `ROADMAP.md` — current status and what comes next by major area.
-11. `../project/BUILD-STATUS.md` — current local playability snapshot and
+10. `../project/UI-VISUAL-PASS-PLAN.md` — current UI implementation order,
+    primitive-kit status, and UI motion/VFX bridge.
+11. `../project/THREE-VFX-PASS-PLAN.md` — renderer-neutral VFX event contract
+    and first implementation slice.
+12. `ROADMAP.md` — current status and what comes next by major area.
+13. `../project/BUILD-STATUS.md` — current local playability snapshot and
    caveats.
 
 ## Version Meaning
@@ -45,6 +49,7 @@ Important current anchors:
 - `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`
 - `docs/design/UI-VISUAL-SYSTEM.md`
 - `docs/project/UI-VISUAL-PASS-PLAN.md`
+- `docs/project/THREE-VFX-PASS-PLAN.md`
 - `docs/design/TEST-HARNESS.md`
 - `src/content/*.data.json`
 - `scripts/sim-runtime.cjs`

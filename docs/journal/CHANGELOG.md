@@ -7,6 +7,10 @@
 
 ## 2026-06-28 — UI visual-system direction
 
+- Ran an LBH forge architecture pass over the recent UI/title/typography/VFX
+  stack, fixed title fixture drift and title-capture clock determinism, updated
+  agent onboarding plus v0.2 roadmaps, and added a review packet under
+  `docs/project/reviews/2026-06-28-forge-pass-ui-vfx-architecture.md`.
 - Connected the UI motion direction to the Three VFX plan: UI motion now owns
   readable screen state and reduced-motion fallbacks, while approved beats such
   as title glyph faults, launch, extraction, collapse, and Inhibitor UI faults

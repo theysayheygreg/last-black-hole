@@ -5,55 +5,11 @@
  * composition target that can be captured over time.
  */
 
+import { MAP as TITLE_SCREEN_MAP } from './title-screen.js';
+
 export const FIXTURE_TITLE = {
+  ...TITLE_SCREEN_MAP,
   name: 'Renderer Title Fixture',
-  worldScale: 3.0,
-  camera: 'locked',
-  wells: [
-    {
-      x: 1.5, y: 1.5,
-      mass: 4.9,
-      orbitalDir: 1,
-      killRadius: 0.15,
-      spinRate: 0.12,
-      points: 16,
-      accretionRadius: 0.075,
-    },
-  ],
-  titleAccretionRadii: [
-    [0.085, 0.37, 0.64],
-  ],
-  stars: [
-    { x: 0.58, y: 0.68, mass: 0.75, type: 'whiteDwarf' },
-    { x: 2.44, y: 0.74, mass: 1.05, type: 'yellowDwarf' },
-    { x: 2.30, y: 2.42, mass: 0.68, type: 'neutronStar' },
-  ],
-  loot: [],
-  wrecks: [
-    { x: 0.74, y: 2.18, type: 'debris', tier: 1, size: 'medium' },
-    { x: 2.12, y: 1.92, type: 'derelict', tier: 2, size: 'large' },
-    { x: 0.94, y: 1.08, type: 'vault', tier: 3, size: 'small' },
-  ],
-  planetoids: [
-    { type: 'orbit', wellIndex: 0 },
-    { type: 'orbit', wellIndex: 0 },
-    { type: 'orbit', wellIndex: 0 },
-  ],
-  fixturePortals: [
-    { id: 'title-rift-aperture', x: 2.36, y: 2.02, type: 'rift', lifespan: 120 },
-  ],
-  configOverrides: {
-    ascii: {
-      shimmer: 5.0,
-    },
-    wells: {
-      accretionRate: 0.03,
-    },
-    fluid: {
-      ambientTurbulence: 0.0002,
-      ambientDensity: 0.0001,
-    },
-  },
 };
 
 export const FIXTURE_SINGLE_WELL = {
