@@ -7,6 +7,12 @@
 
 ## 2026-06-28 — UI visual-system direction
 
+- Added title-screen composition variants for review: left-aligned UI,
+  right-aligned UI, and a left-aligned layout with the title camera panned so
+  the well sits opposite the copy. The UI visual harness now captures all three
+  variants with couch proxies.
+- Tightened title gutters and made the title corruption echo consistently use
+  Inhibitor pink, keeping cyan/flow reserved for stable framing and the CTA.
 - Reworked the title screen into a first attract-mode slice: the red wordmark
   was replaced with a cyan/bone title treatment, only the title text gets
   bounded Inhibitor-style corruption jitter, title/subtitle/CTA text now sits

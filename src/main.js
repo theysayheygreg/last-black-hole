@@ -199,8 +199,12 @@ function getVisibleWellRenderInputs(cameraX, cameraY) {
 const TITLE_CAMERA_DRIFT_AMPLITUDE = 0.03;
 const TITLE_CAMERA_DRIFT_PERIOD_X = 22;
 const TITLE_CAMERA_DRIFT_PERIOD_Y = 17;
+const TITLE_OPPOSITE_WELL_CAMERA_OFFSET = 0.36;
 const TITLE_RIFT_ID = 'title-rift-aperture';
 const TITLE_ATTRACT_LOOP_SECONDS = 11.5;
+const TITLE_LAYOUT_DEFAULT = 'center';
+const TITLE_LAYOUT_IDS = new Set(['center', 'left', 'right', 'opposite-left']);
+let titleLayout = TITLE_LAYOUT_DEFAULT;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -562,6 +566,7 @@ function init() {
   // window size only scales the whole frame, it doesn't reshape anything.
   fitViewport(glCanvas, threeCanvas, overlayCanvas);
   const renderParams = new URLSearchParams(location.search);
+  titleLayout = normalizeTitleLayout(renderParams.get('titleLayout') || titleLayout);
   const preserveDrawingBuffer = renderParams.has('capture') || renderParams.has('preserveDrawingBuffer');
   gl = glCanvas.getContext('webgl2', {
     alpha: false,
@@ -914,6 +919,10 @@ function init() {
         totalTime = titleLoopTime(Number(value) || 0);
         updateTitleAttractScene();
         return titleLoopTime(totalTime);
+      },
+      setTitleLayoutForTest: (value) => {
+        titleLayout = normalizeTitleLayout(value);
+        return titleLayout;
       },
       setProfileCursorForTest: (index) => {
         profileCursor = Math.max(0, Math.min(2, Math.round(Number(index) || 0)));
@@ -2418,8 +2427,9 @@ function applySceneCamera(dt) {
     // composition. Two separate sources (title vs. renderer fixture)
     // both sit on 'locked' maps, only the title actually drifts.
     if (gamePhase === 'title' && !rendererFixtureActive) {
-      camX = cx + Math.sin((totalTime / TITLE_CAMERA_DRIFT_PERIOD_X) * Math.PI * 2) * TITLE_CAMERA_DRIFT_AMPLITUDE;
-      camY = cy + Math.cos((totalTime / TITLE_CAMERA_DRIFT_PERIOD_Y) * Math.PI * 2) * TITLE_CAMERA_DRIFT_AMPLITUDE;
+      const layoutOffset = titleCameraOffsetForLayout();
+      camX = cx + layoutOffset.x + Math.sin((totalTime / TITLE_CAMERA_DRIFT_PERIOD_X) * Math.PI * 2) * TITLE_CAMERA_DRIFT_AMPLITUDE;
+      camY = cy + layoutOffset.y + Math.cos((totalTime / TITLE_CAMERA_DRIFT_PERIOD_Y) * Math.PI * 2) * TITLE_CAMERA_DRIFT_AMPLITUDE;
     } else {
       camX = cx;
       camY = cy;
@@ -2527,6 +2537,70 @@ function smoothstep(edge0, edge1, value) {
   return t * t * (3 - 2 * t);
 }
 
+function normalizeTitleLayout(value) {
+  const key = String(value || TITLE_LAYOUT_DEFAULT).trim().toLowerCase();
+  return TITLE_LAYOUT_IDS.has(key) ? key : TITLE_LAYOUT_DEFAULT;
+}
+
+function titleLayoutMetrics(w, h, layoutName = titleLayout) {
+  const layout = normalizeTitleLayout(layoutName);
+  const gutterX = Math.max(72, Math.min(116, Math.round(w * 0.075)));
+  const gutterY = Math.max(56, Math.min(92, Math.round(h * 0.085)));
+  const sideAligned = layout !== 'center';
+  const panelW = sideAligned ? Math.min(560, Math.max(500, Math.round(w * 0.43))) : Math.min(900, Math.round(w * 0.74));
+  const panelH = sideAligned ? 292 : 266;
+  const panelX = layout === 'right' ? w - gutterX - panelW : layout === 'center' ? (w - panelW) / 2 : gutterX;
+  const panelY = sideAligned ? gutterY + 70 : h / 2 - 154;
+  const textInset = sideAligned ? 40 : 0;
+  const align = layout === 'right' ? 'right' : layout === 'center' ? 'center' : 'left';
+  const textX = align === 'right'
+    ? panelX + panelW - textInset
+    : align === 'left'
+      ? panelX + textInset
+      : w / 2;
+  const textWidth = panelW - (sideAligned ? textInset * 2 : 96);
+  const titleY = panelY + (sideAligned ? 88 : 86);
+  const statusW = Math.min(430, textWidth);
+  const commandW = Math.min(352, textWidth);
+  const commandX = align === 'right'
+    ? textX - commandW
+    : align === 'left'
+      ? textX
+      : textX - commandW / 2;
+  const versionW = 232;
+  const versionX = align === 'right'
+    ? textX - versionW
+    : align === 'left'
+      ? textX
+      : textX - versionW / 2;
+
+  return {
+    layout,
+    align,
+    gutterX,
+    gutterY,
+    panelX,
+    panelY,
+    panelW,
+    panelH,
+    textX,
+    textWidth,
+    titleY,
+    titleFontSize: sideAligned ? 50 : 58,
+    statusW,
+    commandRect: { x: commandX, y: titleY + 130, w: commandW, h: 46 },
+    versionRect: { x: versionX, y: h - gutterY - 24, w: versionW, h: 24 },
+  };
+}
+
+function titleCameraOffsetForLayout(layoutName = titleLayout) {
+  const layout = normalizeTitleLayout(layoutName);
+  // The comparison layout keeps the UI left and pans the camera left, which
+  // leaves the larger title well visible on the opposite side of the frame.
+  if (layout === 'opposite-left') return { x: -TITLE_OPPOSITE_WELL_CAMERA_OFFSET, y: 0.03 };
+  return { x: 0, y: 0 };
+}
+
 function titleAttractState(time) {
   const t = titleLoopTime(time);
   const collapse = smoothstep(6.2, 7.5, t);
@@ -2561,14 +2635,24 @@ function updateTitleAttractScene() {
   portal.alive = portalAlpha > 0.035;
 }
 
-function drawTitleTextMatte(ctx, cx, y, width, height, alpha = 1) {
-  const x = cx - width / 2;
+function drawTitleTextMatte(ctx, rect, alpha = 1) {
+  const { x, y, w: width, h: height, align = 'center' } = rect;
   const gradient = ctx.createLinearGradient(x, 0, x + width, 0);
-  gradient.addColorStop(0, withAlpha('#000421', 0));
-  gradient.addColorStop(0.14, withAlpha('#000421', 0.72 * alpha));
-  gradient.addColorStop(0.5, withAlpha('#000421', 0.88 * alpha));
-  gradient.addColorStop(0.86, withAlpha('#000421', 0.72 * alpha));
-  gradient.addColorStop(1, withAlpha('#000421', 0));
+  if (align === 'left') {
+    gradient.addColorStop(0, withAlpha('#000421', 0.82 * alpha));
+    gradient.addColorStop(0.62, withAlpha('#000421', 0.82 * alpha));
+    gradient.addColorStop(1, withAlpha('#000421', 0));
+  } else if (align === 'right') {
+    gradient.addColorStop(0, withAlpha('#000421', 0));
+    gradient.addColorStop(0.38, withAlpha('#000421', 0.82 * alpha));
+    gradient.addColorStop(1, withAlpha('#000421', 0.82 * alpha));
+  } else {
+    gradient.addColorStop(0, withAlpha('#000421', 0));
+    gradient.addColorStop(0.14, withAlpha('#000421', 0.72 * alpha));
+    gradient.addColorStop(0.5, withAlpha('#000421', 0.88 * alpha));
+    gradient.addColorStop(0.86, withAlpha('#000421', 0.72 * alpha));
+    gradient.addColorStop(1, withAlpha('#000421', 0));
+  }
 
   ctx.save();
   ctx.fillStyle = gradient;
@@ -2588,25 +2672,25 @@ function drawTitleTextMatte(ctx, cx, y, width, height, alpha = 1) {
   ctx.restore();
 }
 
-function drawTitleStatusLine(ctx, cx, y, width, text, role, time) {
+function drawTitleStatusLine(ctx, anchorX, y, width, text, role, time, { align = 'center' } = {}) {
   const pulse = 0.72 + 0.18 * Math.sin(time * 2.4);
+  const x = align === 'right' ? anchorX - width : align === 'left' ? anchorX : anchorX - width / 2;
+  const textX = align === 'right' ? x + width - 14 : align === 'left' ? x + 14 : x + width / 2;
   ctx.save();
   ctx.fillStyle = withAlpha('#000421', 0.64);
-  ctx.fillRect(cx - width / 2, y - 16, width, 28);
+  ctx.fillRect(x, y - 16, width, 28);
   ctx.strokeStyle = roleColor(role, 0.32 * pulse);
-  ctx.strokeRect(cx - width / 2, y - 16, width, 28);
-  ctx.textAlign = 'center';
+  ctx.strokeRect(x, y - 16, width, 28);
+  ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.font = canvasFont(12, { weight: '700' });
   ctx.fillStyle = roleColor(role, 0.88);
-  ctx.fillText(fitUiText(ctx, text.toUpperCase(), width - 24), cx, y - 1);
+  ctx.fillText(fitUiText(ctx, text.toUpperCase(), width - 24), textX, y - 1);
   ctx.restore();
 }
 
 function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
-  const cx = w / 2;
-  const cy = h / 2;
-  const titleY = cy - 68;
+  const layout = titleLayoutMetrics(w, h);
   const titleState = titleAttractState(time);
   const readyAlpha = Math.max(0, Math.min(1, (readyTimer - 0.35) / 0.45));
   const promptPulse = 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(time * 3.0));
@@ -2620,45 +2704,55 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   });
 
   ctx.save();
-  ctx.textAlign = 'center';
+  ctx.textAlign = layout.align;
   ctx.textBaseline = 'alphabetic';
 
   drawUiScanlines(ctx, w, h, 0.018, 5);
-  drawTitleTextMatte(ctx, cx, cy - 154, Math.min(900, w * 0.74), 266, 1);
+  drawTitleTextMatte(ctx, {
+    x: layout.panelX,
+    y: layout.panelY,
+    w: layout.panelW,
+    h: layout.panelH,
+    align: layout.align,
+  }, 1);
 
   ctx.shadowColor = roleColor('flow', 0.48);
   ctx.shadowBlur = 26;
-  ctx.font = canvasFont(58, { role: 'display', weight: '800' });
+  let titleFontSize = layout.titleFontSize;
+  do {
+    ctx.font = canvasFont(titleFontSize, { role: 'display', weight: '800' });
+    if (ctx.measureText(cleanTitle).width <= layout.textWidth || titleFontSize <= 44) break;
+    titleFontSize -= 2;
+  } while (titleFontSize > 44);
   ctx.fillStyle = roleColor('text', 0.20);
-  ctx.fillText(cleanTitle, cx, titleY);
+  ctx.fillText(cleanTitle, layout.textX, layout.titleY);
 
   const jitterX = Math.sin(time * 29.0) * 0.7;
   const jitterY = Math.cos(time * 21.0) * 0.45;
   ctx.fillStyle = roleColor('bone', 0.96);
-  ctx.fillText(displayTitle, cx + jitterX, titleY + jitterY);
-  ctx.shadowColor = roleColor('anomaly', 0.34);
+  ctx.fillText(displayTitle, layout.textX + jitterX, layout.titleY + jitterY);
+  // The lower echo is explicitly Inhibitor-pink so title corruption always
+  // points at the same anomaly language as the in-run Inhibitor effects.
+  ctx.shadowColor = roleColor('inhibitor', 0.40);
   ctx.shadowBlur = 10;
-  ctx.fillStyle = roleColor('anomaly', 0.18);
-  ctx.fillText(displayTitle, cx - jitterX * 0.8, titleY + 1);
+  ctx.fillStyle = roleColor('inhibitor', 0.24);
+  ctx.fillText(displayTitle, layout.textX - jitterX * 0.8, layout.titleY + 1);
 
   ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
   ctx.shadowBlur = 14;
   ctx.font = canvasFont(17, { weight: '700' });
   ctx.fillStyle = roleColor('flow', 0.94);
-  ctx.fillText('out of a dying universe', cx, titleY + 42);
+  ctx.fillText(fitUiText(ctx, 'out of a dying universe', layout.textWidth), layout.textX, layout.titleY + 42);
   ctx.font = canvasFont(13);
   ctx.fillStyle = roleColor('text', 0.78);
-  ctx.fillText('surf the currents. escape the void.', cx, titleY + 67);
+  ctx.fillText(fitUiText(ctx, 'surf the currents. escape the void.', layout.textWidth), layout.textX, layout.titleY + 67);
 
-  drawTitleStatusLine(ctx, cx, titleY + 102, 430, titleState.story, titleState.role, time);
+  drawTitleStatusLine(ctx, layout.textX, layout.titleY + 102, layout.statusW, titleState.story, titleState.role, time, {
+    align: layout.align,
+  });
 
   if (readyAlpha > 0) {
-    drawCommandButton(ctx, {
-      x: cx - 176,
-      y: titleY + 130,
-      w: 352,
-      h: 46,
-    }, 'begin', {
+    drawCommandButton(ctx, layout.commandRect, 'begin', {
       hotkey: 'space',
       role: 'flow',
       active: true,
@@ -2668,12 +2762,13 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
 
   ctx.shadowBlur = 0;
   ctx.fillStyle = withAlpha('#000421', 0.42);
-  ctx.fillRect(cx - 116, h - 36, 232, 24);
+  ctx.fillRect(layout.versionRect.x, layout.versionRect.y, layout.versionRect.w, layout.versionRect.h);
   ctx.strokeStyle = roleColor('flow', 0.12);
-  ctx.strokeRect(cx - 116, h - 36, 232, 24);
+  ctx.strokeRect(layout.versionRect.x, layout.versionRect.y, layout.versionRect.w, layout.versionRect.h);
   ctx.fillStyle = roleColor('muted', 0.46);
   ctx.font = canvasFont(10);
-  ctx.fillText('v0.2 - attract loop online', cx, h - 20);
+  ctx.textAlign = 'center';
+  ctx.fillText('v0.2 - attract loop online', layout.versionRect.x + layout.versionRect.w / 2, layout.versionRect.y + 16);
   ctx.restore();
 }
 

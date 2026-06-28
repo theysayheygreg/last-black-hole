@@ -101,6 +101,12 @@ tooltip or more explanatory copy to compensate for a weak first read.
 - Title copy needs local backing over dense fabric: gradient veils, thin
   brackets, dark inline mattes, or command-button backplates. Do not solve this
   by dimming the whole scene.
+- Side-aligned title variants should keep generous top, side, and bottom
+  gutters so the wordmark reads from a couch while leaving the warmed well and
+  colorscape visible. The comparison set is center, left, right, and a left UI
+  variant with the title camera panned so the well sits opposite the copy.
+- The title's lower corruption echo is always Inhibitor pink; cyan/flow stays
+  reserved for the stable title fill, CTA, and system framing.
 - The title environment should behave like an old attract loop: a larger
   central well, peripheral stars/wrecks/comets/portals, and a small repeating
   event such as an aperture winking out. The backdrop tells the fantasy before

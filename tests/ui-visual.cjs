@@ -195,6 +195,27 @@ async function run() {
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', { titleTimer: 1.4 })),
     },
     {
+      name: 'title-left',
+      expectPhase: 'title',
+      warmMs: 1500,
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', { titleTimer: 1.4, layout: 'left' })),
+    },
+    {
+      name: 'title-right',
+      expectPhase: 'title',
+      warmMs: 1500,
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', { titleTimer: 1.4, layout: 'right' })),
+    },
+    {
+      name: 'title-opposite-left',
+      expectPhase: 'title',
+      warmMs: 1500,
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', {
+        titleTimer: 1.4,
+        layout: 'opposite-left',
+      })),
+    },
+    {
       name: 'title-attract',
       expectPhase: 'title',
       warmMs: 300,

@@ -66,7 +66,7 @@ goal is not a giant UI rewrite. The goal is one vocabulary.
 
 | Surface | Current Owner | Target Reference | Couch-Critical Reads | Current Gap |
 |---------|---------------|------------------|----------------------|-------------|
-| Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | first attract-mode slice shipped; profile flow still follows |
+| Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | attract-mode slice and side-aligned comparison layouts shipped; final default layout still needs review |
 | Profile Select | `src/main.js` | follows title language | selected profile, load/create/delete, destructive state | small modal texture and inconsistent danger treatment |
 | Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | centered terminal frame, dense copy, launch not loud enough |
 | Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | preview is secondary to list data, route colors not strong enough |
@@ -85,6 +85,12 @@ frame with text floating over it. The first action must sit at couch-critical
 size, with lower-priority system readouts allowed as texture. The selected item
 gets cyan/flow focus, while destructive or unavailable states stay out of the
 default title read.
+
+The current comparison set should be captured before choosing the final title
+composition: centered baseline, left-aligned UI, right-aligned UI, and
+left-aligned UI with the title camera shifted so the well reads on the opposite
+side. All variants use the same local backing, safe gutters, and Inhibitor-pink
+corruption echo so the comparison is about composition rather than styling.
 
 ### Profile Select
 
