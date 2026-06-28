@@ -407,6 +407,21 @@ export const CONFIG = {
     pulseDuckDuration: 0.5,      // seconds
   },
 
+  vfx: {
+    enabled: true,               // Presentation only. Disabling VFX must never change sim/gameplay truth.
+    quality: 'default',          // minimal/default/rich/capture. Renderer may clamp to its renderQuality.
+    globalIntensity: 1.0,        // Master visual gain for event-driven Three effects.
+    particleBudget: 350,         // Default budget from THREE-VFX-PASS-PLAN.md; rich/capture are opt-in.
+    titleCorruption: true,       // Title glyph embers and scan splinters behind the clean wordmark.
+    shipMotion: true,            // Future: thrust/brake VFX. Placeholder keeps config shape stable.
+    portalSparks: true,          // Future: portal collapse/extraction VFX.
+    pickupGlints: true,          // Future: salvage/pickup VFX.
+    inhibitorFaults: true,       // Future: Inhibitor-owned screen faults.
+    nearCameraAtmosphere: true,  // Future: sparse foreground flecks.
+    debugBounds: false,
+    freezeSeed: false,
+  },
+
   debug: {
     showVelocityField: false, // Draw fluid velocity arrows on overlay canvas.
     showWellRadii: false,     // Draw well kill radii, star push radii, portal capture radii.

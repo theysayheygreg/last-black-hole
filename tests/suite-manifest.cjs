@@ -132,6 +132,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "VFX",
+    file: "vfx.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "Smoke",
     file: "smoke.cjs",
     lanes: ["fast", "core", "browser", "full", "three"],

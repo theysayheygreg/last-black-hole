@@ -4,6 +4,34 @@
 
 **v0.2 is the product foundation phase.** The game has enough architecture and content truth to stop doing broad rewrites for their own sake. The next work should make the current game more playable, legible, tunable, and shareable.
 
+## Reviewable Slice Roadmap
+
+The old roadmap buckets are still useful for implementation detail, but v0.2
+work should now be organized around reviewable slices that Greg can play,
+capture, or evaluate in a single day/night cycle. Each slice should end with
+fresh harness evidence, screenshots or clips where visual timing matters, and a
+short note about what changed in player-facing terms.
+
+1. **Attract Mode + UI/VFX Identity** — title layout, corruption behavior, UI
+   motion language, and the first real event-driven Three VFX layer. This is
+   the current night-shift front line because it is high-impact, reviewable
+   without deep playtest, and establishes how UI and Three VFX cooperate.
+2. **Feel + Route Pass** — movement, slingshot readability, map routes, spawn
+   safety, and the "can I intentionally move?" review. This absorbs the old
+   v0.2.1 feel pass and should be judged in fresh local runs.
+3. **Entity Visual Language** — player/enemy/neutral/loot silhouettes, contact
+   backing, contrast, the visual-reference harness, and the pixel/low-poly
+   top-down asset direction. This absorbs the old renderer-ownership visual
+   pass.
+4. **Loop + Meta Clarity** — results, cargo, profile/home, loadout, upgrade
+   write-back, and "what did this run earn or change?" This absorbs the old
+   meta-loop pass.
+5. **Playable Build Targets** — local, Steam Deck desktop/gaming mode, itch
+   package shape, public readme/play instructions, and release artifact truth.
+6. **Process + Harness** — fresh sim/browser rules, visual fixtures, couch-test
+   captures, forge-pass cadence, build-status/version checkpointing, and
+   night-shift handoff discipline.
+
 ## Major Area Status
 
 | Area | Current v0.2 State | Next | Later |
@@ -17,7 +45,7 @@
 | Hulls | Five hulls, manifests, PlayerBrain, ability state, several server ability behaviors | Playtest ability feel and cooldowns; improve HUD cues | More artifacts, exclusive builds, no-respec pilot identity |
 | Progression | Profiles, vault, item tiers, rig tracks defined, partial upgrade flow | Complete upgrade purchase/write-back and balance EM economy | Milestones, unlocks, pilots, long-term chronicle |
 | UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, shared canvas primitive kit, result-screen migration, title-attract first slice, UI visual harness, and UI motion/VFX bridge | Continue profile/home/map-select/HUD/pause migration; tighten couch/Deck thresholds after more surfaces settle | Full UI primitive system, accessibility pass, and reduced-motion coverage |
-| VFX | Event-driven Three VFX plan exists; UI motion now emits VFX only for approved beats, with UI retaining truth | Build `VfxManager`, bounded pools, `screenVfxGroup`, `immediateVfxGroup`, stats, leak tests, and title glyph-fault prototype | Ship motion, portal/pickup, Inhibitor faults, lens impulses, and capture-quality tiers |
+| VFX | Event-driven Three VFX plan exists; UI motion emits VFX only for approved beats, with UI retaining truth; the first bounded `VfxManager` and title glyph-fault prototype are live | Review title VFX motion in clips; add ship motion, portal/pickup, and Inhibitor faults one family at a time | Instanced particles, screen-space shader impulses, lens impulses, and richer capture-quality tiers |
 | Audio | Audio engine/toolkit foundations | Define final sonic palette for movement/signal/Inhibitor | Dynamic score and full mix hierarchy |
 | Testing | Fast/core/authority/three lanes; visual fixtures; CDP driver | Add more representative playtest scripts and renderer semantic checks | Public release smoke, hosted-session CI, perf budgets per device |
 | Public presence | Public overview doc exists; website/social not built | Prepare public copy, screenshots, clips, and a playable build page | Itch/Steam-style page, devlog cadence, hosted demo |
@@ -130,12 +158,11 @@ Goal: make the flat top-down Three scene feel alive through bounded,
 renderer-neutral VFX without moving gameplay truth into particles or shaders.
 
 - Use `docs/project/THREE-VFX-PASS-PLAN.md` as the source of truth.
-- Add `VfxManager`, a bounded particle pool, quality tiers, VFX stats, and
-  expiry/leak tests before adding expressive effects.
-- Add `screenVfxGroup` and `immediateVfxGroup` as the first render targets.
-- Prototype `titleGlyphFault` from measured canvas title-glyph positions, with
-  magenta glyph embers, symbol motes, and scan splinters behind the clean
-  wordmark.
+- Shipped first slice: `VfxManager`, bounded particles, quality tiers, VFX
+  stats, expiry/leak coverage, `screenVfxGroup`, and the `titleGlyphFault`
+  prototype from measured canvas title-glyph positions.
+- Review and tune the title VFX motion from short clips; still captures only
+  prove layer presence and contrast.
 - Follow with ship thrust/brake, portal/extraction, pickup glints, and
   Inhibitor event faults.
 - Capture short clips for timing review; use still/UI harness captures for

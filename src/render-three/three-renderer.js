@@ -9,6 +9,7 @@
 import * as THREE from '../../node_modules/three/build/three.module.js';
 import { CAMERA_VIEW, worldRadiusToSceneScale } from '../coords.js';
 import { ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
+import { VfxManager } from './vfx/vfx-manager.js';
 
 const COPY_VERT = `in vec3 position;
 in vec2 uv;
@@ -189,6 +190,7 @@ export class ThreeRendererBackend {
       'composer-ascii-default-frame',
       'three-background-depth',
       'three-pooled-world-scene',
+      'three-vfx-screen-layer',
       'three-world-scene',
       'three-screen-space-post',
     ];
@@ -255,7 +257,10 @@ export class ThreeRendererBackend {
     this.foregroundGroup = new THREE.Group();
     this.foregroundGroup.name = 'foreground-screen-space-layer';
     this.foregroundGroup.position.z = 0.35;
-    this.layerRoot.add(this.backgroundGroup, this.fabricGroup, this.semanticGroup, this.entityGroup, this.foregroundGroup);
+    this.screenVfxGroup = new THREE.Group();
+    this.screenVfxGroup.name = 'screen-vfx-layer';
+    this.screenVfxGroup.position.z = 0.42;
+    this.layerRoot.add(this.backgroundGroup, this.fabricGroup, this.semanticGroup, this.entityGroup, this.foregroundGroup, this.screenVfxGroup);
     this._buildWorldEntityResources();
     this.entityMeshPool = [];
     this.semanticMeshPool = [];
@@ -266,6 +271,11 @@ export class ThreeRendererBackend {
 
     this._buildBackdropLayers();
     this._buildForegroundLayers();
+    this.vfxManager = new VfxManager({
+      screenGroup: this.screenVfxGroup,
+      immediateGroup: this.immediateVfxGroup,
+      renderQuality,
+    });
 
     this.copyMaterial = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -316,6 +326,7 @@ export class ThreeRendererBackend {
       canvasUploads: 0,
       pooledMeshes: 0,
       pooledLines: 0,
+      vfx: this.vfxManager.getStats(),
     };
     this._applyCanvasMode();
     this._installContextHandlers();
@@ -868,6 +879,14 @@ export class ThreeRendererBackend {
     this.renderer.resetState();
 
     this._updateSceneState(frameContext);
+    this.vfxManager.update({
+      dt: frameContext?.three?.dt ?? (1 / 60),
+      totalTime: frameContext?.three?.totalTime ?? 0,
+      viewportWidth: this.sourceCanvas?.width || 1280,
+      viewportHeight: this.sourceCanvas?.height || 800,
+      events: frameContext?.three?.vfxEvents || [],
+      config: frameContext?.three?.vfxConfig || {},
+    });
     this.renderer.info.reset();
     this.renderer.setRenderTarget(this.sceneTarget);
     this.renderer.setClearColor(0x000000, 0);
@@ -915,6 +934,7 @@ export class ThreeRendererBackend {
       canvasUploads: 0,
       pooledMeshes: this.entityMeshPool.length + this.semanticMeshPool.length,
       pooledLines: this.linePool.length,
+      vfx: this.vfxManager.getStats(),
     };
   }
 
@@ -934,6 +954,7 @@ export class ThreeRendererBackend {
         })),
       },
       { name: this.foregroundGroup.name, z: this.foregroundGroup.position.z, role: 'screen-space depth cues' },
+      { name: this.screenVfxGroup.name, z: this.screenVfxGroup.position.z, role: 'screen-space VFX accents below UI' },
     ];
   }
 

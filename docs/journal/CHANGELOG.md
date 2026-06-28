@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-06-28 — Reviewable slices and first title VFX kit
+
+- Reframed v0.2 planning around six reviewable slices: Attract Mode + UI/VFX
+  Identity, Feel + Route Pass, Entity Visual Language, Loop + Meta Clarity,
+  Playable Build Targets, and Process + Harness.
+- Added the first event-driven Three VFX implementation: renderer-neutral
+  `titleGlyphFault` events, quality budgets, bounded pooled particles,
+  `screen-vfx-layer`, title glyph embers/scan splinters, and renderer VFX
+  stats.
+- Added explicit `titleVfx` and `titleVfxHeavy` renderer fixtures plus
+  `tests/vfx.cjs`, so title VFX can be validated without confusing staged
+  review frames for normal gameplay captures.
+- Exposed VFX tuning in the dev panel, including a quality dropdown and
+  bounded intensity/budget controls.
+- Restored local planetoid/comet updates and added deterministic fixture
+  positions/transit loading so the visual-reference harness can judge them as
+  real object families instead of empty or off-board targets.
+- Updated the v0.2 roadmap, project roadmap, UI visual pass plan, and Three
+  VFX pass plan so future work routes through the six-slice cadence.
+
 ## 2026-06-28 — Steam Deck compatibility and app-surface pass
 
 - Centralized Deck/controller prompt labels in `src/ui/input-prompts.js` and

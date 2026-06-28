@@ -7,6 +7,18 @@
 
 import { setWorldScale } from './coords.js';
 
+function applyPlanetoidOverrides(planetoid, data = {}) {
+  if (!planetoid) return planetoid;
+  if (data.id) planetoid.id = data.id;
+  if (data.name) planetoid.name = data.name;
+  if (Number.isFinite(data.x)) planetoid.wx = data.x;
+  if (Number.isFinite(data.y)) planetoid.wy = data.y;
+  if (Number.isFinite(data.vx)) planetoid.vx = data.vx;
+  if (Number.isFinite(data.vy)) planetoid.vy = data.vy;
+  if (Number.isFinite(data.phase)) planetoid.t = data.phase;
+  return planetoid;
+}
+
 /**
  * Load a map definition into the game.
  *
@@ -84,11 +96,13 @@ export function loadMap(map, systems) {
   for (const pd of (map.planetoids || [])) {
     if (pd.type === 'orbit') {
       const well = wellSystem.wells[pd.wellIndex];
-      if (well) planetoidSystem.spawnOrbit(well);
+      if (well) applyPlanetoidOverrides(planetoidSystem.spawnOrbit(well), pd);
     } else if (pd.type === 'figure8') {
       const wA = wellSystem.wells[pd.wellA];
       const wB = wellSystem.wells[pd.wellB];
-      if (wA && wB) planetoidSystem.spawnFigure8(wA, wB);
+      if (wA && wB) applyPlanetoidOverrides(planetoidSystem.spawnFigure8(wA, wB), pd);
+    } else if (pd.type === 'transit') {
+      applyPlanetoidOverrides(planetoidSystem.spawnTransit(), pd);
     }
   }
 

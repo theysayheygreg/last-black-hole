@@ -12,6 +12,24 @@ export const FIXTURE_TITLE = {
   name: 'Renderer Title Fixture',
 };
 
+export const FIXTURE_TITLE_VFX = {
+  ...TITLE_SCREEN_MAP,
+  name: 'Renderer Title VFX Fixture',
+  fixtureVfx: {
+    layout: 'opposite-left',
+    titleGlyphFault: { heavy: false },
+  },
+};
+
+export const FIXTURE_TITLE_VFX_HEAVY = {
+  ...TITLE_SCREEN_MAP,
+  name: 'Renderer Title VFX Heavy Fixture',
+  fixtureVfx: {
+    layout: 'opposite-left',
+    titleGlyphFault: { heavy: true },
+  },
+};
+
 export const FIXTURE_SINGLE_WELL = {
   name: 'Renderer Single Well Fixture',
   worldScale: 3.0,
@@ -101,7 +119,7 @@ export const FIXTURE_ENTITY_SHOWCASE = {
     { x: 1.95, y: 1.92, type: 'debris', tier: 1, size: 'small' },
   ],
   planetoids: [
-    { type: 'orbit', wellIndex: 0 },
+    { type: 'orbit', wellIndex: 0, x: 2.10, y: 1.42, vx: 0.09, vy: -0.05 },
   ],
   fixturePortals: [
     { x: 2.25, y: 2.15, type: 'standard', lifespan: 120 },
@@ -153,8 +171,8 @@ export const FIXTURE_VISUAL_REFERENCE = {
     { x: 1.35, y: 1.15, type: 'vault', tier: 3, size: 'large' },
   ],
   planetoids: [
-    { type: 'orbit', wellIndex: 0 },
-    { type: 'transit' },
+    { id: 'reference-orbiting-comet', type: 'orbit', wellIndex: 0, x: 2.34, y: 1.55, vx: 0.10, vy: -0.04 },
+    { id: 'reference-transit-comet', type: 'transit', x: 2.58, y: 1.55, vx: -0.18, vy: 0.02 },
   ],
   fixturePortals: [
     { x: 1.95, y: 1.15, type: 'standard', lifespan: 120 },
@@ -227,6 +245,8 @@ export const FIXTURE_SHIP_BAKEOFF = {
 
 export const RENDERER_FIXTURES = {
   title: FIXTURE_TITLE,
+  titleVfx: FIXTURE_TITLE_VFX,
+  titleVfxHeavy: FIXTURE_TITLE_VFX_HEAVY,
   singleWell: FIXTURE_SINGLE_WELL,
   interference: FIXTURE_INTERFERENCE,
   singleWell5x5: FIXTURE_SINGLE_WELL_5X5,

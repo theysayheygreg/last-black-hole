@@ -103,6 +103,14 @@ Acceptance:
 - `npm run test:ui` proves still-frame readability, while short capture clips
   are used for title, launch, and results timing review.
 
+First bridge status:
+
+- `titleGlyphFault` events now emit from measured title glyph slots.
+- The Three renderer has a `screen-vfx-layer` below clean UI text.
+- `titleVfx` and `titleVfxHeavy` renderer fixtures are explicit review states,
+  separate from representative promo/gameplay captures.
+- The next judgment should be motion clips, not single stills.
+
 ## Screen Inventory
 
 | Surface | Current Owner | Target Reference | Couch-Critical Reads | Current Gap |
@@ -317,6 +325,9 @@ Shipped title slice:
   cyan/bone wordmark, title-only bounded glyph-flicker corruption, local
   gradient backing, a clean subtitle/tagline, a status strip, and a shared
   command button CTA.
+- Title glyph faults now emit renderer-neutral VFX events that the Three
+  `screen-vfx-layer` turns into bounded magenta/bone embers and scan splinters
+  behind the clean wordmark.
 - `src/maps/title-screen.js` and the renderer title fixture now use a larger
   central well plus stars, wreck clusters, orbiting bodies, and a rift aperture
   that fades out and returns on the attract loop.

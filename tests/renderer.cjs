@@ -21,6 +21,8 @@ const {
 const htmlFile = process.argv[2] || 'index-a.html';
 const ALL_FIXTURES = [
   { name: 'title', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000] },
+  { name: 'titleVfx', expectedWells: 1, minFps: 10, timesMs: [900, 1800] },
+  { name: 'titleVfxHeavy', expectedWells: 1, minFps: 8, timesMs: [900, 1800] },
   { name: 'singleWell', expectedWells: 1, minFps: 10, timesMs: [500, 2000, 5000] },
   { name: 'interference', expectedWells: 2, minFps: 10, timesMs: [500, 2000, 5000] },
   { name: 'singleWell5x5', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
@@ -29,7 +31,7 @@ const ALL_FIXTURES = [
   { name: 'visualReference', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
   { name: 'shipBakeoff', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
 ];
-const DEFAULT_FIXTURES = new Set(['title', 'interference10x10', 'entityShowcase', 'visualReference', 'shipBakeoff']);
+const DEFAULT_FIXTURES = new Set(['title', 'titleVfx', 'interference10x10', 'entityShowcase', 'visualReference', 'shipBakeoff']);
 const READABILITY_FIXTURES = new Set(['visualReference']);
 const READABILITY_FAMILY_MINIMUMS = {
   stars: { targets: 4, readable: 4 },
@@ -384,7 +386,8 @@ async function captureFixture(page, outputDir, fixture) {
       && backendStats.three.worldLayers.some((layer) => layer.name === 'fabric-source-layer')
       && backendStats.three.worldLayers.some((layer) => layer.name === 'background-parallax-field')
       && backendStats.three.worldLayers.some((layer) => layer.name === 'semantic-flow-field-layer')
-      && backendStats.three.worldLayers.some((layer) => layer.name === 'world-entity-layer'),
+      && backendStats.three.worldLayers.some((layer) => layer.name === 'world-entity-layer')
+      && backendStats.three.worldLayers.some((layer) => layer.name === 'screen-vfx-layer'),
     `Fixture '${fixture.name}' Three world layers missing`);
     assert((backendStats.three.entityCount || 0) > 0,
       `Fixture '${fixture.name}' Three scene did not submit world entities`);
@@ -423,6 +426,14 @@ async function captureFixture(page, outputDir, fixture) {
         assert((separation.shipCandidateCount || 0) === 2,
           `${fixture.name} expected 2 rendered ship candidates, got ${separation.shipCandidateCount || 0}`);
       }
+    }
+    if (fixture.name === 'titleVfx' || fixture.name === 'titleVfxHeavy') {
+      const vfx = backendStats.three.vfx || {};
+      assert(vfx.enabled === true, `${fixture.name} expected VFX enabled`);
+      assert((vfx.emittedTotal || vfx.emittedEvents || 0) > 0, `${fixture.name} did not consume titleGlyphFault events`);
+      assert((vfx.poolCapacity || 0) > 0, `${fixture.name} did not allocate a bounded VFX pool`);
+      assert((vfx.activeParticles || 0) <= (vfx.particleBudget || 0),
+        `${fixture.name} exceeded VFX particle budget: ${vfx.activeParticles}/${vfx.particleBudget}`);
     }
   }
 

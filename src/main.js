@@ -76,6 +76,7 @@ import {
 } from './ui/canvas-primitives.js';
 import { ctaLabel, isDeckMode, mapSelectHint, menuHint, movementHint, promptLabel } from './ui/input-prompts.js';
 import { corruptGlyphText } from './text-corruption.js';
+import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
 
 window.__LBH_BOOT_MARK__?.('main.module.evaluated', {
   href: window.location.href,
@@ -312,6 +313,7 @@ function rerollPreviewSeed() {
 }
 let currentCameraMode = 'follow';
 let rendererFixtureActive = false;
+let activeRendererFixture = null;
 const RUNTIME_FLAGS = applyRuntimeFlags(CONFIG);
 
 // Run state
@@ -1295,6 +1297,7 @@ function spawnPresentationPortals(portals = []) {
  */
 function loadTitleScene() {
   rendererFixtureActive = false;
+  activeRendererFixture = null;
   clearPresentationActors();
   loadScene(MAP_TITLE);
   spawnPresentationPortals(MAP_TITLE.fixturePortals);
@@ -1308,6 +1311,7 @@ function loadRendererFixture(name) {
   if (!fixture) return false;
 
   rendererFixtureActive = true;
+  activeRendererFixture = fixture;
   loadScene(fixture);
   spawnPresentationPortals(fixture.fixturePortals);
   for (const scav of fixture.fixtureScavengers || []) {
@@ -1389,6 +1393,7 @@ function startGame(map, seed = null) {
   remoteSentries = [];
   fixtureShipCandidates = [];
   rendererFixtureActive = false;
+  activeRendererFixture = null;
   loadScene(map);
 
   // Local-sim seed: use the previewed seed when one is supplied, otherwise
@@ -2729,11 +2734,89 @@ function drawTitleStatusLine(ctx, anchorX, y, width, text, role, time, { align =
   ctx.restore();
 }
 
+function selectTitleFont(ctx, cleanTitle, layout) {
+  let titleFontSize = layout.titleFontSize;
+  do {
+    ctx.font = canvasFont(titleFontSize, { role: 'display', weight: '800' });
+    if (ctx.measureText(cleanTitle).width <= layout.textWidth || titleFontSize <= 44) break;
+    titleFontSize -= 2;
+  } while (titleFontSize > 44);
+  return titleFontSize;
+}
+
 function titleTextStartX(ctx, text, layout) {
   const width = ctx.measureText(text).width;
   if (layout.align === 'right') return layout.textX - width;
   if (layout.align === 'center') return layout.textX - width / 2;
   return layout.textX;
+}
+
+function titleGlitchForVfx(time, fixtureVfx = null) {
+  const titleVfx = fixtureVfx?.titleGlyphFault;
+  if (titleVfx) {
+    const heavy = titleVfx === 'heavy' || titleVfx.heavy === true;
+    return {
+      active: heavy ? 1 : 0.82,
+      seed: heavy ? 9107 : 4103,
+      amount: heavy ? 0.96 : 0.72,
+      heavy,
+      forced: true,
+    };
+  }
+  return titleGlitchState(time);
+}
+
+function collectTitleGlyphFaultEvents(ctx, cleanTitle, corruptedTitle, layout, time, glitchState = {}) {
+  const cleanGlyphs = Array.from(cleanTitle);
+  const corruptedGlyphs = Array.from(corruptedTitle);
+  const titleFontSize = selectTitleFont(ctx, cleanTitle, layout);
+  const faultAlpha = Math.max(0, Math.min(1, glitchState.active || 0));
+  const bucket = Math.floor(time * (10 + (glitchState.amount || 0) * 18));
+  const events = [];
+  let x = titleTextStartX(ctx, cleanTitle, layout);
+
+  for (let i = 0; i < cleanGlyphs.length; i++) {
+    const cleanGlyph = cleanGlyphs[i];
+    const faultGlyph = corruptedGlyphs[i] || cleanGlyph;
+    const advance = ctx.measureText(cleanGlyph).width;
+    if (faultGlyph !== cleanGlyph) {
+      const event = titleGlyphFaultEvent({
+        eventId: `title:${glitchState.seed || 0}:${i}:${bucket}:${glitchState.heavy ? 'heavy' : 'normal'}`,
+        glyph: faultGlyph,
+        cleanGlyph,
+        screenX: x + advance / 2,
+        screenY: layout.titleY,
+        glyphWidth: advance,
+        glyphHeight: titleFontSize,
+        intensity: faultAlpha,
+        seed: `title-${glitchState.seed || 0}-${i}-${bucket}`,
+        heavy: glitchState.heavy === true,
+      });
+      if (event) events.push(event);
+    }
+    x += advance;
+  }
+
+  return events;
+}
+
+function collectTitleVfxEvents(ctx, w, h, time, {
+  fixtureVfx = null,
+  layoutName = titleLayout,
+} = {}) {
+  const glitchState = titleGlitchForVfx(time, fixtureVfx);
+  if ((glitchState.active || 0) <= 0.01) return [];
+  const layout = titleLayoutMetrics(w, h, layoutName);
+  const cleanTitle = 'LAST SINGULARITY';
+  selectTitleFont(ctx, cleanTitle, layout);
+  const glitchTitle = corruptGlyphText(cleanTitle, glitchState.amount, `title-burst-${glitchState.seed}`, {
+    density: glitchState.forced ? 1.0 : 0.92,
+    frequencyHz: 9 + glitchState.amount * 24,
+    time,
+    maxChars: cleanTitle.length,
+    glyphs: TITLE_GLITCH_GLYPHS,
+  });
+  return collectTitleGlyphFaultEvents(ctx, cleanTitle, glitchTitle, layout, time, glitchState);
 }
 
 function drawTitleCorruptionOverlay(ctx, cleanTitle, corruptedTitle, layout, time, alpha) {
@@ -2796,12 +2879,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
 
   ctx.shadowColor = roleColor('flow', 0.48);
   ctx.shadowBlur = 26;
-  let titleFontSize = layout.titleFontSize;
-  do {
-    ctx.font = canvasFont(titleFontSize, { role: 'display', weight: '800' });
-    if (ctx.measureText(cleanTitle).width <= layout.textWidth || titleFontSize <= 44) break;
-    titleFontSize -= 2;
-  } while (titleFontSize > 44);
+  selectTitleFont(ctx, cleanTitle, layout);
   ctx.fillStyle = roleColor('text', 0.20);
   ctx.fillText(cleanTitle, layout.textX, layout.titleY);
 
@@ -3152,6 +3230,19 @@ function collectThreeSceneState() {
   };
 }
 
+function collectFrameVfxEvents(ctx, w, h) {
+  if (rendererFixtureActive && activeRendererFixture?.fixtureVfx) {
+    return collectTitleVfxEvents(ctx, w, h, totalTime, {
+      fixtureVfx: activeRendererFixture.fixtureVfx,
+      layoutName: activeRendererFixture.fixtureVfx.layout || titleLayout,
+    });
+  }
+  if (gamePhase === 'title') {
+    return collectTitleVfxEvents(ctx, w, h, totalTime);
+  }
+  return [];
+}
+
 /**
  * Apply the active profile's hull stats and equipped-item bonuses to the
  * ship. Fresh runs refill the tank; mid-run inventory swaps preserve the
@@ -3273,6 +3364,8 @@ function gameLoop(now) {
       combatSystem.applyDisruptions(fluid);
       waveRings.update(dt);
       waveRings.injectIntoFluid(fluid);
+    } else if (!rendererFixtureActive) {
+      planetoidSystem.update(dt, fluid, totalTime, wellSystem, waveRings, camX, camY);
     }
     recordPerfStat('simMs', performance.now() - simStart);
 
@@ -4037,9 +4130,11 @@ function gameLoop(now) {
   // Renderer fixtures are render-only composition targets. They suppress menu
   // overlays, but should use the same visible well/accretion tuning as title.
   applyRenderTuningForPhase(gamePhase === 'title' || rendererFixtureActive);
+  const vfxEvents = collectFrameVfxEvents(ctx, overlayCanvas.width, overlayCanvas.height);
   const composerStart = performance.now();
   rendererBackend.render({
     three: {
+      dt,
       camX,
       camY,
       gridWindow: GRID_WINDOW,
@@ -4054,6 +4149,8 @@ function gameLoop(now) {
       } : null,
       phase: gamePhase,
       scene: collectThreeSceneState(),
+      vfxEvents,
+      vfxConfig: CONFIG.vfx,
     },
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,

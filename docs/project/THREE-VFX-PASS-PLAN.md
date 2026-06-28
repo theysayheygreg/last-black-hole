@@ -98,12 +98,8 @@ The default Three renderer already gives us a useful staging ground:
 
 What is missing:
 
-- a real VFX event queue;
-- a central VFX manager;
-- particle and trail pools;
-- VFX-specific materials;
-- effect lifetimes and cleanup;
-- VFX stats in renderer diagnostics;
+- richer world-space VFX event families beyond the title;
+- instanced particle upgrades if mesh-pool draw calls become expensive;
 - motion capture tests for effects that cannot be judged in a single still.
 
 ## Target Data Flow
@@ -207,6 +203,25 @@ src/render-three/vfx/
 `src/main.js` should eventually stop knowing the details of each effect. It
 should gather or emit events, then hand them to the renderer through the frame
 context.
+
+## First Implementation Slice
+
+Status: first title slice live.
+
+- `src/render-three/vfx/vfx-events.js` defines renderer-neutral
+  `titleGlyphFault` events.
+- `src/render-three/vfx/vfx-quality.js` owns minimal/default/rich/capture
+  particle budgets.
+- `src/render-three/vfx/vfx-manager.js` owns bounded mesh particles, pooling,
+  expiry, duplicate-event throttling, and renderer stats.
+- `ThreeRendererBackend` now exposes a `screen-vfx-layer` and reports VFX stats
+  in `getRendererBackendStats()`.
+- `src/main.js` measures title glyph overlay positions and submits VFX events
+  only for approved title corruption beats.
+- `titleVfx` and `titleVfxHeavy` renderer fixtures make the effect reviewable
+  without pretending those staged frames are representative gameplay.
+- `tests/vfx.cjs` covers event shape, bounded spawning, expiry/recycling, and
+  `vfx.enabled=false` cleanup.
 
 ## Layer Placement
 
@@ -332,8 +347,9 @@ Backlog this until a specific effect demands it.
 
 ### 1. Title Corruption VFX
 
-Current state: the title wordmark stays clean underneath and
-`corruptGlyphText()` selects glyph slots for pink overlay faults.
+Current state: the title wordmark stays clean underneath,
+`corruptGlyphText()` selects glyph slots for pink overlay faults, and the
+first `titleGlyphFault` VFX particles now emit from measured title glyph slots.
 
 Goal: keep that logic layer, but add a VFX layer so large title text feels
 attacked rather than merely typo-swapped.
@@ -353,12 +369,13 @@ Concepts:
 
 Implementation path:
 
-1. Keep canvas title text as canonical.
-2. Expose measured glyph positions from `drawTitleCorruptionOverlay()` as
-   screen-space VFX events during title faults.
-3. Let `screenVfxGroup` spawn particles behind the overlay canvas text first.
-4. Add a `title-vfx` and `title-vfx-heavy` fixture.
-5. Capture short clips, because the effect is mostly temporal.
+1. Shipped: keep canvas title text as canonical.
+2. Shipped: expose measured glyph positions as screen-space VFX events during
+   title faults.
+3. Shipped: let `screenVfxGroup` spawn bounded particles behind the overlay
+   canvas text first.
+4. Shipped: add `titleVfx` and `titleVfxHeavy` fixtures.
+5. Next: capture short clips, because the effect is mostly temporal.
 
 Open question:
 

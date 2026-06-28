@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-06-28 — v0.2 roadmap uses reviewable slices
+
+**Decision:** Organize the next v0.2 work around six reviewable slices instead
+of only system buckets: Attract Mode + UI/VFX Identity, Feel + Route Pass,
+Entity Visual Language, Loop + Meta Clarity, Playable Build Targets, and
+Process + Harness.
+
+**Why:** The project now has enough systems that "renderer," "UI," "sim," and
+"platform" buckets hide the player-facing question. The day-shift/night-shift
+cadence works better when each pass ends in something Greg can play, capture,
+or compare. System roadmaps remain the implementation ledger, but the slice is
+the unit of review.
+
+**Where it landed:** `docs/v0.2/ROADMAP.md`, `docs/project/ROADMAP.md`,
+`docs/project/UI-VISUAL-PASS-PLAN.md`,
+`docs/project/THREE-VFX-PASS-PLAN.md`, and this decision log.
+
+**Door status:** Closed for v0.2 planning cadence. Open for exact weekly
+ordering as playtest feedback shifts priority.
+
 ## 2026-06-28 — Deck compatibility is a first-class UI contract
 
 **Decision:** Treat Steam Deck compatibility as a dedicated presentation mode,

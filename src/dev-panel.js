@@ -20,6 +20,7 @@ const SECTION_ORDER = [
   'ship',
   'input',
   'inhibitor',
+  'vfx',
   'ascii',
   'color',
   'wells',
@@ -48,12 +49,26 @@ const COLLAPSED_BY_DEFAULT = new Set([
   'planetoids',
   'combat',
   'audio',
+  'vfx',
   'debug',
   'sim',
 ]);
 
 const CONTROL_LABELS = {
   'inhibitor.textCorruption.amount': 'how corrupted',
+  'vfx.globalIntensity': 'global VFX intensity',
+  'vfx.particleBudget': 'particle budget',
+  'vfx.quality': 'VFX quality',
+  'vfx.titleCorruption': 'title corruption sparks',
+  'vfx.inhibitorFaults': 'inhibitor VFX',
+  'vfx.nearCameraAtmosphere': 'near-camera atmosphere',
+};
+
+const CHOICE_HINTS = {
+  'vfx.quality': {
+    options: ['minimal', 'default', 'rich', 'capture'],
+    tip: 'Presentation budget preset. Capture is for promo/media runs, not normal play.',
+  },
 };
 
 // Slider range hints and tooltips per key.
@@ -103,6 +118,15 @@ const RANGE_HINTS = {
   'inhibitor.textCorruption.vesselBoost': { min: 0.2, max: 2.5, step: 0.05, tip: 'Extra corruption when the Inhibitor reaches vessel form.' },
   'inhibitor.textCorruption.proximityScale':{ min: 0, max: 1, step: 0.05, tip: 'How much the small form label reacts to player proximity.' },
   'inhibitor.textCorruption.refreshHz':   { min: 1, max: 12, step: 1, tip: 'How often animated corrupted labels reshuffle.' },
+
+  // Three VFX — presentation-only particles and accents.
+  'vfx.globalIntensity':        { min: 0, max: 2, step: 0.05, tip: 'Global multiplier for presentation-only VFX. 1 = authored default.' },
+  'vfx.particleBudget':         { min: 0, max: 1200, step: 10, tip: 'Upper bound for active VFX particles. Renderer quality may clamp this lower.' },
+  'vfx.shipMotion':             { min: 0, max: 2, step: 0.05, tip: 'Reserved multiplier for ship motion VFX as those effects come online.' },
+  'vfx.portalSparks':           { min: 0, max: 2, step: 0.05, tip: 'Reserved multiplier for portal spark VFX.' },
+  'vfx.pickupGlints':           { min: 0, max: 2, step: 0.05, tip: 'Reserved multiplier for cargo pickup glints.' },
+  'vfx.inhibitorFaults':        { min: 0, max: 2, step: 0.05, tip: 'Reserved multiplier for Inhibitor corruption VFX.' },
+  'vfx.nearCameraAtmosphere':   { min: 0, max: 2, step: 0.05, tip: 'Reserved multiplier for near-camera dust/sparkle passes.' },
 
   // Stars — visual: rays should be visible across screen, core should glow
   // Stars
@@ -562,6 +586,8 @@ function addGroupControls(container, group, prefix, sectionRoot) {
       container.appendChild(createToggleNested(group, key, path));
     } else if (typeof val === 'number') {
       container.appendChild(createSliderNested(group, key, path));
+    } else if (typeof val === 'string' && CHOICE_HINTS[path]) {
+      container.appendChild(createSelectNested(group, key, path));
     } else if (Array.isArray(val) && val.every(v => typeof v === 'number')) {
       for (let i = 0; i < val.length; i++) {
         const compLabel = ['R', 'G', 'B', 'A'][i] || String(i);
@@ -587,6 +613,52 @@ function addGroupControls(container, group, prefix, sectionRoot) {
 }
 
 // Nested versions that work with any object reference (not just CONFIG[section])
+function createSelectNested(obj, key, path) {
+  const row = document.createElement('div');
+  Object.assign(row.style, {
+    display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0',
+  });
+  row.dataset.configRow = 'true';
+  row.dataset.configSearch = `${path} ${CONTROL_LABELS[path] || key}`.toLowerCase();
+
+  const hint = CHOICE_HINTS[path];
+  const label = document.createElement('span');
+  label.style.width = '150px';
+  label.style.flexShrink = '0';
+  label.style.overflow = 'hidden';
+  label.style.textOverflow = 'ellipsis';
+  label.style.cursor = 'help';
+  label.textContent = CONTROL_LABELS[path] || key;
+  label.title = hint.tip || path;
+  row.dataset.configSearch += ` ${hint.tip || ''} ${hint.options.join(' ')}`.toLowerCase();
+
+  const select = document.createElement('select');
+  select.dataset.configPath = path;
+  Object.assign(select.style, {
+    flex: '1',
+    minWidth: '0',
+    background: '#101426',
+    border: '1px solid #33406f',
+    color: '#d9f6ff',
+    fontFamily: UI_FONT_STACK,
+    fontSize: '11px',
+    padding: '2px 4px',
+  });
+  for (const optionValue of hint.options) {
+    const option = document.createElement('option');
+    option.value = optionValue;
+    option.textContent = optionValue;
+    select.appendChild(option);
+  }
+  select.value = obj[key];
+  select.addEventListener('change', () => { obj[key] = select.value; });
+  select._update = () => { select.value = obj[key]; };
+
+  row.appendChild(label);
+  row.appendChild(select);
+  return row;
+}
+
 function createSliderNested(obj, key, path) {
   const row = document.createElement('div');
   Object.assign(row.style, {

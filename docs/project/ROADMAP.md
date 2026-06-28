@@ -75,38 +75,31 @@ reading stale health records or reconstructing status from `git log`.
 
 ### Forward Development Priorities
 
-1. **Three entity visual-language pass** — replace bridge primitives for ships,
-   stars, planetoids/comets, wrecks, portals, rivals, fauna, and sentries with
-   first-class scene objects. Preserve a dark void, but make gameplay affordances
-   punchy with bright values, halos, contact mattes, and local backgrounds.
-   Start by proving matte + rim on current primitives, then run the player ship
-   sprite-card vs. pixel-textured-mesh bake-off before broad ship production. See
+Use reviewable slices for day-shift/night-shift planning. The detailed system
+backlog still matters, but each session should land something Greg can play,
+capture, or compare.
+
+1. **Attract Mode + UI/VFX Identity** — title layout, corruption behavior, UI
+   motion language, and first event-driven Three VFX. Current slice: pooled
+   `VfxManager`, `screen-vfx-layer`, `titleGlyphFault` events, and title VFX
+   fixtures.
+2. **Feel + Route Pass** — slingshot/speed tuning, map route redesign, spawn
+   safety, and remote/local movement parity checks.
+3. **Entity Visual Language** — replace bridge primitives for ships, stars,
+   planetoids/comets, wrecks, portals, rivals, fauna, and sentries with
+   high-contrast first-class Three objects. See
    `docs/design/THREE-ENTITY-VISUALS.md`,
    `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
    `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
-2. **Three VFX kit** — add a pooled, event-driven VFX manager for title
-   corruption, ship thrust/brake, portal sparks, pickup glints, Inhibitor
-   faults, and short motion clips. Keep events renderer-neutral so future
-   native/console ports copy effect behavior rather than Three internals. See
-   `docs/project/THREE-VFX-PASS-PLAN.md`.
-3. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
-4. **Slingshot authority regression watch** — remote-authority mode now renders slingshot from sim-owned engagement/release state; keep tests representative as numbers and maps change.
-5. **Remote/local physics regression watch** — brake, max-speed, delta-v, fuel cells, and movement coefficients now have server parity; keep tests representative as tuning evolves.
-6. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
-7. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
-8. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
-9. **UI visual pass** — first shared canvas primitive kit, result-screen
-   migration, and UI visual harness are live. Continue with title/profile,
-   home, map-select, HUD, and pause rebuilds, then tighten Deck/couch
-   readability thresholds.
-   See `docs/design/UI-VISUAL-SYSTEM.md`,
-   `docs/reference/UI-MOODBOARD.md`, and
-   `docs/project/UI-VISUAL-PASS-PLAN.md`.
-10. **Meta-loop implementation polish** — results screen, vault/rig/loadout UI, chronicle (foundation shipped 2026-05-04 series)
-11. **Run result write-back** — connect RunResult schema to persistence layer (first slice shipped, full coverage pending)
-12. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
-13. **Balance pass** — hull coefficients (now actually applied!), upgrade costs, loot rarity, signal tuning, delta-v / slingshot numbers
-14. **Deploy** — GitHub Pages web build, weekly playables
+4. **Loop + Meta Clarity** — results, vault/rig/loadout, profile/home,
+   chronicle, upgrade write-back, EM balance, and "what changed after this
+   run?" readability.
+5. **Playable Build Targets** — local source build, Steam Deck desktop/gaming
+   mode, itch package shape, public play instructions, release artifacts, and
+   current build-status truth.
+6. **Process + Harness** — fresh browser/sim rules, visual fixtures, UI
+   couch-test captures, forge pass cadence, version/build checkpoints, and
+   nightly handoff discipline.
 
 ### Current contract notes
 
