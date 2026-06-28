@@ -16,7 +16,7 @@
 | Threats | Signal, Inhibitor, rivals/scavengers, fauna/sentry foundations, phantoms/haunts | Tune Inhibitor timing and signal readability; pick strongest ecology behaviors | Full entity catalog and richer multiplayer threat interactions |
 | Hulls | Five hulls, manifests, PlayerBrain, ability state, several server ability behaviors | Playtest ability feel and cooldowns; improve HUD cues | More artifacts, exclusive builds, no-respec pilot identity |
 | Progression | Profiles, vault, item tiers, rig tracks defined, partial upgrade flow | Complete upgrade purchase/write-back and balance EM economy | Milestones, unlocks, pilots, long-term chronicle |
-| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge | Reduce remaining inline color/layout drift; improve loadout/home/results readability | Full UI primitive system and accessibility pass |
+| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, UI visual-system docs and target concepts | Run UI primitive pass; improve title/home/map-select/results readability; add couch-test/Deck captures | Full UI primitive system and accessibility pass |
 | Audio | Audio engine/toolkit foundations | Define final sonic palette for movement/signal/Inhibitor | Dynamic score and full mix hierarchy |
 | Testing | Fast/core/authority/three lanes; visual fixtures; CDP driver | Add more representative playtest scripts and renderer semantic checks | Public release smoke, hosted-session CI, perf budgets per device |
 | Public presence | Public overview doc exists; website/social not built | Prepare public copy, screenshots, clips, and a playable build page | Itch/Steam-style page, devlog cadence, hosted demo |
@@ -94,6 +94,28 @@ Definition of done:
 - Renderer fixtures catch blank frames, missing layers, missing entity families,
   and accidental canvas-upload regressions.
 - Deck-native screenshots prove category readability without labels.
+
+## v0.2.3b — UI Visual Pass
+
+Goal: bring menus, HUD, and run overlays up to the same readability and role
+palette as the Three entity pass.
+
+- Use `docs/design/UI-VISUAL-SYSTEM.md`,
+  `docs/reference/UI-MOODBOARD.md`, and
+  `docs/project/UI-VISUAL-PASS-PLAN.md` as the current UI art-direction source.
+- Build shared canvas UI primitives for panels, brackets, selected rows,
+  command buttons, segmented gauges, and warnings.
+- Rework title, home/main menu, pre-match/map select, in-match HUD, and results
+  surfaces against the generated target concepts.
+- Keep letter spacing at zero and reserve microtext for texture, not decisions.
+- Add Deck-scale and couch-test visual captures for UI states.
+
+Definition of done:
+
+- The current screen, selected action, danger state, and next input read from
+  desk, Steam Deck, and couch distances.
+- DOM and canvas UI share the same role palette.
+- UI visual tests catch weak selected actions, warnings, and critical values.
 
 ## v0.2.4 — Private Playtest Build
 

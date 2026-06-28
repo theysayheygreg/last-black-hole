@@ -67,16 +67,21 @@
       --lbh-font-glyph: 'Monaspace Neon', 'Monaspace Argon', 'Noto Sans Mono', 'Noto Sans Symbols', 'Apple Symbols', 'Segoe UI Symbol', monospace;
       --lbh-font-mono: var(--lbh-font-ui);
       --lbh-void: #000021;
-      --lbh-panel-bg: rgba(0, 2, 12, 0.6);
-      --lbh-panel-border: rgba(80, 100, 140, 0.2);
-      --lbh-timer-normal: rgba(150, 170, 200, 0.8);
-      --lbh-timer-glow: rgba(150, 170, 200, 0.3);
-      --lbh-signal: rgba(80, 200, 180, 0.85);
-      --lbh-signal-label: rgba(80, 180, 160, 0.65);
-      --lbh-inhibitor: rgba(204, 26, 128, 0.9);
-      --lbh-inhibitor-glow: rgba(204, 26, 128, 0.5);
-      --lbh-portal: rgba(180, 120, 255, 0.85);
-      --lbh-salvage: rgba(212, 168, 67, 0.85);
+      --lbh-panel-bg: rgba(0, 4, 18, 0.72);
+      --lbh-panel-border: rgba(0, 226, 255, 0.32);
+      --lbh-text-primary: rgba(234, 247, 255, 0.94);
+      --lbh-text-muted: rgba(154, 180, 206, 0.72);
+      --lbh-timer-normal: rgba(234, 247, 255, 0.9);
+      --lbh-timer-glow: rgba(0, 226, 255, 0.28);
+      --lbh-signal: rgba(0, 226, 255, 0.9);
+      --lbh-signal-label: rgba(0, 226, 255, 0.62);
+      --lbh-danger: rgba(255, 51, 54, 0.95);
+      --lbh-ecology: rgba(56, 245, 138, 0.9);
+      --lbh-inhibitor: rgba(255, 62, 181, 0.95);
+      --lbh-inhibitor-glow: rgba(255, 62, 181, 0.55);
+      --lbh-portal: rgba(0, 226, 255, 0.9);
+      --lbh-salvage: rgba(255, 185, 56, 0.92);
+      --lbh-track-bg: rgba(24, 38, 52, 0.7);
       --lbh-warning-shadow: rgba(0, 0, 0, 0.8);
       --lbh-panel-radius: 2px;
       --lbh-edge-margin: 16px;
@@ -127,14 +132,14 @@
       color: rgba(200, 210, 225, 0.9);
       font-family: var(--lbh-font-mono);
       font-size: 14px;
-      letter-spacing: 0.08em;
+      letter-spacing: 0;
       text-transform: lowercase;
       text-align: center;
       padding: 24px;
     }
     #min-window-overlay .min-window-title {
       font-size: 18px;
-      letter-spacing: 0.15em;
+      letter-spacing: 0;
       color: rgba(220, 230, 245, 1.0);
     }
     #min-window-overlay .min-window-hint {
@@ -155,7 +160,7 @@
     #hud .hud-panel {
       position: absolute;
       font-size: 13px;
-      letter-spacing: 0.05em;
+      letter-spacing: 0;
       padding: 8px 12px;
       background: var(--lbh-panel-bg);
       border: 1px solid var(--lbh-panel-border);
@@ -166,12 +171,12 @@
       color: var(--lbh-timer-normal);
       text-shadow: 0 0 6px var(--lbh-timer-glow);
       line-height: 1.5;
-      border-color: rgba(150, 170, 200, 0.15);
+      border-color: rgba(234, 247, 255, 0.18);
     }
     #hud-collapse .hud-label {
       font-size: 9px;
-      letter-spacing: 0.15em;
-      color: rgba(140, 160, 190, 0.65);
+      letter-spacing: 0;
+      color: var(--lbh-text-muted);
       text-transform: uppercase;
     }
     #hud-collapse .hud-value {
@@ -185,19 +190,19 @@
     #hud-signal {
       top: 72px; left: var(--lbh-edge-margin);
       color: var(--lbh-signal);
-      text-shadow: 0 0 6px rgba(80, 200, 180, 0.3);
+      text-shadow: 0 0 6px rgba(0, 226, 255, 0.32);
       line-height: 1.4;
-      border-color: rgba(80, 200, 180, 0.15);
+      border-color: rgba(0, 226, 255, 0.18);
     }
     #hud-signal .hud-label {
       font-size: 9px;
-      letter-spacing: 0.15em;
+      letter-spacing: 0;
       color: var(--lbh-signal-label);
       text-transform: uppercase;
     }
     #hud-signal-bar {
       width: 120px; height: 4px;
-      background: rgba(40, 50, 60, 0.6);
+      background: var(--lbh-track-bg);
       border-radius: 2px;
       margin: 3px 0 2px 0;
       overflow: hidden;
@@ -210,25 +215,25 @@
     }
     #hud-signal-zone {
       font-size: 10px;
-      letter-spacing: 0.1em;
+      letter-spacing: 0;
     }
     #hud-fuel {
       top: 72px; right: var(--lbh-edge-margin);
-      color: rgba(180, 220, 200, 0.85);
-      text-shadow: 0 0 6px rgba(80, 200, 140, 0.25);
+      color: var(--lbh-ecology);
+      text-shadow: 0 0 6px rgba(56, 245, 138, 0.28);
       line-height: 1.4;
-      border-color: rgba(80, 200, 140, 0.18);
+      border-color: rgba(56, 245, 138, 0.22);
       text-align: right;
     }
     #hud-fuel .hud-label {
       font-size: 9px;
-      letter-spacing: 0.15em;
-      color: rgba(140, 200, 170, 0.7);
+      letter-spacing: 0;
+      color: rgba(56, 245, 138, 0.72);
       text-transform: uppercase;
     }
     #hud-fuel-bar {
       width: 120px; height: 4px;
-      background: rgba(40, 50, 60, 0.6);
+      background: var(--lbh-track-bg);
       border-radius: 2px;
       margin: 3px 0 2px 0;
       overflow: hidden;
@@ -241,20 +246,20 @@
     }
     #hud-fuel-readout {
       font-size: 10px;
-      letter-spacing: 0.1em;
+      letter-spacing: 0;
     }
     #hud-inhibitor {
       top: 128px; left: var(--lbh-edge-margin);
       color: var(--lbh-inhibitor);
       text-shadow: 0 0 8px var(--lbh-inhibitor-glow);
       line-height: 1.4;
-      border-color: rgba(204, 26, 128, 0.2);
+      border-color: rgba(255, 62, 181, 0.24);
       animation: inhibitorPulse 2.4s ease-in-out infinite;
     }
     #hud-inhibitor .hud-label {
       font-size: 9px;
-      letter-spacing: 0.15em;
-      color: rgba(180, 60, 120, 0.7);
+      letter-spacing: 0;
+      color: rgba(255, 120, 205, 0.72);
       text-transform: uppercase;
     }
     #hud-inhibitor-form {
@@ -264,8 +269,8 @@
       line-height: 1.05;
     }
     #hud-inhibitor.form-vessel {
-      color: rgba(255, 60, 140, 1.0);
-      text-shadow: 0 0 12px rgba(255, 60, 140, 0.7);
+      color: rgba(255, 70, 150, 1.0);
+      text-shadow: 0 0 12px rgba(255, 70, 150, 0.7);
       animation: inhibitorPulseVessel 1.4s ease-in-out infinite;
     }
     @keyframes inhibitorPulse {
@@ -280,14 +285,14 @@
       top: 12px; right: var(--lbh-edge-margin);
       text-align: right;
       color: var(--lbh-portal);
-      text-shadow: 0 0 6px rgba(180, 120, 255, 0.3);
+      text-shadow: 0 0 6px rgba(0, 226, 255, 0.32);
       line-height: 1.5;
-      border-color: rgba(180, 120, 255, 0.15);
+      border-color: rgba(0, 226, 255, 0.18);
     }
     #hud-portals .hud-label {
       font-size: 9px;
-      letter-spacing: 0.15em;
-      color: rgba(160, 120, 220, 0.65);
+      letter-spacing: 0;
+      color: rgba(0, 226, 255, 0.62);
       text-transform: uppercase;
     }
     #hud-portals .hud-value {
@@ -295,14 +300,14 @@
     }
     #hud-portals .hud-sub {
       font-size: 10px;
-      color: rgba(160, 120, 220, 0.65);
+      color: var(--lbh-text-muted);
     }
     #hud-salvage {
       bottom: var(--lbh-edge-margin); left: var(--lbh-edge-margin);
       color: var(--lbh-salvage);
-      text-shadow: 0 0 6px rgba(212, 168, 67, 0.3);
+      text-shadow: 0 0 6px rgba(255, 185, 56, 0.32);
       line-height: 1.5;
-      border-color: rgba(212, 168, 67, 0.15);
+      border-color: rgba(255, 185, 56, 0.2);
     }
     #hud-salvage .hud-sub {
       font-size: 10px;
@@ -382,7 +387,7 @@
     .hud-warning {
       font-size: 11px;
       font-weight: normal;
-      letter-spacing: 0.03em;
+      letter-spacing: 0;
       text-shadow: 0 0 6px var(--lbh-warning-shadow);
       opacity: 0;
       padding: 2px 0;
@@ -396,7 +401,7 @@
         0 0 2px rgba(255, 255, 255, 0.5);
     }
     .hud-warning.hud-zalgo {
-      letter-spacing: 0.05em;
+      letter-spacing: 0;
       padding: 4px 0;
     }
     .hud-warning.fading {
@@ -416,14 +421,14 @@
       left: 16px;
       top: 50%;
       transform: translateY(-50%);
-      background: rgba(0, 2, 12, 0.92);
-      border: 1px solid rgba(80, 100, 140, 0.3);
+      background: rgba(0, 4, 18, 0.92);
+      border: 1px solid rgba(0, 226, 255, 0.26);
       border-radius: 2px;
       padding: 10px 14px;
       min-width: 260px;
       max-width: 320px;
       font-size: 11px;
-      color: rgba(180, 190, 210, 0.9);
+      color: var(--lbh-text-primary);
       line-height: 1.6;
       display: none;
       pointer-events: auto;
@@ -432,10 +437,10 @@
     #hud-inventory-panel.open { display: block; }
     #hud-inventory-panel .inv-header {
       font-size: 9px;
-      letter-spacing: 0.15em;
+      letter-spacing: 0;
       text-transform: uppercase;
-      color: rgba(130, 150, 185, 0.65);
-      border-bottom: 1px solid rgba(80, 100, 140, 0.15);
+      color: var(--lbh-text-muted);
+      border-bottom: 1px solid rgba(0, 226, 255, 0.14);
       padding-bottom: 4px;
       margin-bottom: 6px;
     }
@@ -459,13 +464,13 @@
       font-size: 9px;
       margin-left: 8px;
       opacity: 0.45;
-      letter-spacing: 0.05em;
+      letter-spacing: 0;
     }
     #hud-inventory-panel .inv-item .inv-drop {
       margin-left: 8px;
       color: rgba(255, 100, 80, 0.6);
       font-size: 9px;
-      letter-spacing: 0.05em;
+      letter-spacing: 0;
     }
     #hud-inventory-panel .inv-empty {
       color: rgba(110, 120, 140, 0.5);

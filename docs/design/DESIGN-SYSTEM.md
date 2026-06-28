@@ -2,6 +2,10 @@
 
 > Machine-readable design tokens and visual contracts for AI agents building UI, shaders, and HUD elements.
 > This is the source of truth for how LBH looks, sounds, and feels at the implementation level.
+>
+> **v0.2 status:** The Three scene is now layered. Use
+> `UI-VISUAL-SYSTEM.md`, `THREE-SCENE-VISUAL-HIERARCHY.md`, and
+> `THREE-ENTITY-VISUALS.md` with this doc when changing UI or renderer colors.
 
 ---
 
@@ -9,16 +13,16 @@
 
 LBH is an ASCII-dithered space extraction game rendered through a GPU fluid simulation. Every pixel passes through a character-mapped display shader that converts fluid density and velocity into directional ASCII glyphs. The result is a living, breathing text-art universe — not retro pastiche, but a modern rendering technique that makes the fluid sim legible as cosmic terrain.
 
-The palette is dominated by void black, accretion gold, and teal flow currents. Color enters through physical simulation — gravity wells glow gold-to-white-hot, radiation sources clear dark bubbles, and portals spiral in cool violet. The Inhibitor system bleeds magenta-cyan corruption across the field.
+The palette is dominated by void black, accretion gold, and teal flow currents. Color starts in physical simulation — gravity wells glow gold-to-white-hot, radiation sources clear dark bubbles, and portals spiral in cool violet. UI and entity colors mirror those simulation roles so the whole game teaches one visual language.
 
 **Key Characteristics:**
 - ASCII shader is core identity, not decoration — Art Is Product (Pillar 1)
-- All color comes from simulation, never from decoration
+- All color earns a gameplay or interface role; decoration stays quiet
 - Void is `[0.0, 0.0, 0.13]` — deep blue-black, not pure black
 - Accretion: gold `[1.0, 0.85, 0.4]` → white-hot `[1.0, 0.95, 0.8]` (85° hue gap from inhibitor magenta)
 - Teal fluid base `[0.0, 0.5, 0.5]` — the color of "normal space"
 - Glitch corruption: magenta `[0.8, 0.1, 0.5]` + cyan `[0.1, 0.8, 0.7]`
-- HUD overlays use deep blue-black panels `rgba(0, 2, 12, 0.6)` — never veil the simulation underneath
+- HUD overlays use deep blue-black panels `rgba(0, 4, 18, 0.72)` — never veil the simulation underneath
 
 ---
 
@@ -41,14 +45,17 @@ The palette is dominated by void black, accretion gold, and teal flow currents. 
 ### HUD Colors (rgba)
 | Role | Value | Usage |
 |------|-------|-------|
-| **Timer (normal)** | `rgba(150, 170, 200, 0.7)` | Collapse countdown |
-| **Timer (warning)** | `rgba(240, 144, 58, 0.9)` | <60s remaining |
-| **Timer (critical)** | `rgba(232, 25, 0, 0.9)` | <30s remaining |
-| **Portal Count** | `rgba(180, 120, 255, 0.8)` | Exit indicator |
-| **Salvage Count** | `rgba(212, 168, 67, 0.8)` | Cargo indicator |
-| **Signal Meter** | `rgba(80, 200, 180, 0.85)` | Signal level bar |
-| **Panel Background** | `rgba(0, 2, 12, 0.6)` | HUD card fill |
-| **Panel Border** | `rgba(80, 100, 140, 0.2)` | Subtle accent edge |
+| **Primary Text** | `rgba(234, 247, 255, 0.94)` | Key values and selected text |
+| **Muted Text** | `rgba(154, 180, 206, 0.72)` | Secondary labels |
+| **Timer (normal)** | `rgba(234, 247, 255, 0.9)` | Collapse countdown |
+| **Timer (warning)** | `rgba(255, 185, 56, 0.95)` | <60s remaining |
+| **Timer (critical)** | `rgba(255, 51, 54, 0.95)` | <30s remaining |
+| **Portal / Tech** | `rgba(0, 226, 255, 0.9)` | Exit, route, selection |
+| **Salvage / Value** | `rgba(255, 185, 56, 0.92)` | Cargo and reward |
+| **Signal Meter** | `rgba(0, 226, 255, 0.9)` | Signal level bar |
+| **Inhibitor / Anomaly** | `rgba(255, 62, 181, 0.95)` | Exotic threat |
+| **Panel Background** | `rgba(0, 4, 18, 0.72)` | Local backing for readable UI |
+| **Panel Border** | `rgba(0, 226, 255, 0.32)` | Instrument edge |
 
 ---
 
@@ -65,7 +72,7 @@ The palette is dominated by void black, accretion gold, and teal flow currents. 
 |------|------|--------|-------|-------|
 | Timer | 16px | 400 | normal | Top-left, always visible |
 | Panel text | 13px | 400 | normal | HUD cards, counts |
-| Label | 9px | 400 | uppercase | Letter-spacing 0.15em |
+| Label | 9px | 400 | uppercase | Letter-spacing 0; texture only, not decision text |
 | Warning | 16px | 600 | normal | Center screen, transient |
 | Menu title | 24px | 600 | ALLCAPS | Title screen only |
 | Menu body | 14px | 400 | lowercase | Everything else lowercase |
@@ -76,15 +83,16 @@ The palette is dominated by void black, accretion gold, and teal flow currents. 
 - **Noto is coverage insurance** — it stays in the glyph stack for math, symbols, box drawing, and combining marks, but it is not the visual default
 - **ALLCAPS for titles only** — lowercase everything else. No shouting.
 - **Glow, not weight** — emphasis via `text-shadow: 0 0 6px currentColor`, not bold weight
-- **No overlay veils** — text sits on transparent or near-transparent panels, never obscures the simulation
+- **No overlay veils** — text uses local backing, never a whole-scene veil
+- **Couch test primary decisions** — selected action, danger state, and next input must read from across the room
 
 ---
 
 ## 4. Component Stylings
 
 ### HUD Panels
-- **Background**: `rgba(0, 2, 12, 0.6)` — translucent deep blue-black
-- **Border**: `1px solid rgba(80, 100, 140, 0.2)`
+- **Background**: `rgba(0, 4, 18, 0.72)` — translucent deep blue-black
+- **Border**: `1px solid rgba(0, 226, 255, 0.32)`
 - **Radius**: 2px
 - **Padding**: 8px 12px
 - **Shadow**: none (panels float via transparency, not elevation)
@@ -136,12 +144,15 @@ The simulation IS the content. HUD elements are annotation, not interface. They 
 | Level | Treatment | Use |
 |-------|-----------|-----|
 | **Simulation** | Full-screen, always behind | The game world |
-| **HUD panels** | `rgba(0, 2, 12, 0.6)` translucent | Score, timer, indicators |
+| **HUD panels** | `rgba(0, 4, 18, 0.72)` translucent | Score, timer, indicators |
 | **Warnings** | Centered, scaled, glow shadow | Transient alerts |
 | **Menus** | Over simulation, minimal chrome | Title, map select, results |
 | **Glitch overlay** | `u_glitchIntensity` 0→1 shader uniform | Dimensional tear transition |
 
-**Depth Philosophy:** There are only two visual layers — the simulation and the annotations on top of it. The ASCII shader is not a filter applied to a "real" game underneath; it IS the rendering. Depth comes from simulation density and color, not from UI layering.
+**Depth Philosophy:** v0.2 uses a layered Three scene, but UI remains an
+annotation layer over gameplay truth. World bloom, lens flecks, entity
+separation, and color grade belong below UI. CRT/scanlines may sit above
+everything only when the final display shell stays readable.
 
 ---
 
@@ -151,12 +162,15 @@ The simulation IS the content. HUD elements are annotation, not interface. They 
 - Use Monaspace for operational text and glyph-heavy surfaces
 - Use Oxanium only for major headings and title-scale moments
 - Let simulation color be the primary visual signal
+- Keep UI colors aligned to the world role palette
 - Use `text-shadow` glow for emphasis, not font-weight
 - Keep HUD at screen edges, center belongs to gameplay
 - Use ALLCAPS only for titles; lowercase body text
-- Match accretion gold `[1.0, 0.85, 0.4]` for positive indicators (loot, portals)
+- Match amber/gold to salvage, stars, route value, and reward states
+- Match cyan to player, flow, tech, selection, and exit-route states
 - Match inhibitor magenta `[0.8, 0.1, 0.5]` for threat indicators
-- Use `rgba(0, 2, 12, 0.6)` for any panel background
+- Use local dark backings for text over moving fabric
+- Run the couch test for title, menus, map select, HUD, and results
 
 ### Don't
 - Don't put decorative overlays or veils over the fluid sim
@@ -165,9 +179,10 @@ The simulation IS the content. HUD elements are annotation, not interface. They 
 - Don't use pure black `#000000` — void is `#000021`
 - Don't use cool blue for "safe" — teal `#008080` is the base, blue is neutral/dim
 - Don't bold text above weight 600
-- Don't stack multiple UI layers — the game has two layers: simulation and HUD
+- Don't put world bloom, lens flecks, or color grade above critical UI text
 - Don't use border-radius above 4px — this is precision machinery, not soft UI
 - Don't animate HUD elements continuously — animation is for warnings and transitions only
+- Don't use microtext as the only carrier for a player decision
 
 ---
 
@@ -280,17 +295,19 @@ The signature transition: ASCII characters progressively corrupt into glitch noi
 - White-hot: `#FFF2CC`
 - Inhibitor magenta: `#CC1A80`
 - Inhibitor cyan: `#1ACCB3`
-- HUD panel: `rgba(0, 2, 12, 0.6)`
-- HUD border: `rgba(80, 100, 140, 0.2)`
-- Timer normal: `rgba(150, 170, 200, 0.7)`
-- Timer warning: `rgba(240, 144, 58, 0.9)`
-- Timer critical: `rgba(232, 25, 0, 0.9)`
-- Portal: `rgba(180, 120, 255, 0.8)`
-- Salvage: `rgba(212, 168, 67, 0.8)`
-- Signal: `rgba(80, 200, 180, 0.85)`
+- HUD panel: `rgba(0, 4, 18, 0.72)`
+- HUD border: `rgba(0, 226, 255, 0.32)`
+- Primary text: `rgba(234, 247, 255, 0.94)`
+- Muted text: `rgba(154, 180, 206, 0.72)`
+- Timer normal: `rgba(234, 247, 255, 0.9)`
+- Timer warning: `rgba(255, 185, 56, 0.95)`
+- Timer critical: `rgba(255, 51, 54, 0.95)`
+- Portal / tech: `rgba(0, 226, 255, 0.9)`
+- Salvage: `rgba(255, 185, 56, 0.92)`
+- Signal: `rgba(0, 226, 255, 0.9)`
 
 ### Example Component Prompts
-- "Build a HUD panel with Monaspace Neon 13px, background rgba(0, 2, 12, 0.6), border 1px solid rgba(80, 100, 140, 0.2), radius 2px, padding 8px 12px, text-shadow 0 0 6px currentColor"
+- "Build a HUD panel with Monaspace Neon 13px, background rgba(0, 4, 18, 0.72), border 1px solid rgba(0, 226, 255, 0.32), radius 2px, padding 8px 12px, text-shadow 0 0 6px currentColor"
 - "Build a results screen: ALLCAPS title 24px weight 600, lowercase body 14px, monospace font, no background overlay, void color #000021 behind content"
 - "Build a warning message: centered, 16px weight 600, fade in 0.3s scale 0.95→1.0, hold 2500ms, fade out 0.5s scale 1.0→1.02, glow shadow matching text color"
 - "Build a signal meter: 120px × 4px bar, fill color varies by zone, positioned below timer top-left"

@@ -5,6 +5,23 @@
 
 ---
 
+## 2026-06-28 — UI visual-system direction
+
+- Added `docs/reference/UI-MOODBOARD.md` to translate Evangelion/NERV,
+  Marathon, Returnal, and the current LBH Three visual hierarchy into an
+  original UI direction for v0.2.
+- Added `docs/design/UI-VISUAL-SYSTEM.md` with contrast, role-palette, sizing,
+  post-processing placement, surface rules, and a named couch-test rule.
+- Added `docs/project/UI-VISUAL-PASS-PLAN.md` to sequence token cleanup,
+  canvas UI primitives, title/home/map-select/HUD/results rebuilds, and future
+  UI visual-harness coverage.
+- Generated five UI target concepts under
+  `docs/reference/target-visuals/2026-06-28-ui/` for title, home, pre-match,
+  in-match HUD, and post-match results.
+- Brightened shared UI tokens and DOM HUD CSS variables toward the v0.2 entity
+  role palette, and reset remaining DOM UI letter spacing to zero for
+  readability.
+
 ## 2026-06-27 — Inhibitor text corruption and dev panel refresh
 
 - Added bounded Inhibitor-owned Zalgo text corruption for the active form label

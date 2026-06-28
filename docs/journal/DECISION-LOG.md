@@ -1,5 +1,32 @@
 # Decision Log
 
+## 2026-06-28 — UI uses role color, local contrast, and the couch test
+
+**Decision:** Treat UI readability as part of the v0.2 visual contract. The UI
+uses the same role palette as the Three scene, with black void and translucent
+blue-black panels as the base; cyan for player/flow/tech; amber for value;
+red for direct danger; magenta/violet for anomaly/Inhibitor; and bone-white for
+primary text. Major screens must pass a couch read, not only a desktop monitor
+read.
+
+**Why:** LBH is supposed to be dark, but the player still needs to make fast
+decisions. The entity pass already established "dark scene, punchy
+affordances." Menus, HUD, map select, and results need the same rule so UI
+mood does not become squinting. The couch test gives future reviews a plain
+language gate: if the screen, selected action, danger state, and next input
+cannot be read from across the room, the hierarchy is wrong.
+
+**Where it landed:** `docs/design/UI-VISUAL-SYSTEM.md`,
+`docs/reference/UI-MOODBOARD.md`, `docs/project/UI-VISUAL-PASS-PLAN.md`,
+`docs/reference/target-visuals/2026-06-28-ui/`,
+`docs/design/DESIGN-SYSTEM.md`, `docs/v0.2/DESIGN.md`,
+`docs/v0.2/ROADMAP.md`, `docs/project/ROADMAP.md`,
+`src/ui/design-tokens.js`, and `index-a.html`.
+
+**Door status:** Closed for the UI visual contract. Open for implementation:
+canvas UI primitives, screen rebuilds, UI visual harness coverage, and exact
+color/size tuning after live captures.
+
 ## 2026-06-27 — Typography roles use Oxanium and Monaspace
 
 **Decision:** Use Oxanium for title-scale headings and Monaspace as the

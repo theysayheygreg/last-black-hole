@@ -169,6 +169,34 @@ The current targets live in `docs/design/THREE-ENTITY-VISUALS.md`,
 `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
 `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
 
+## UI Direction
+
+The UI should now follow the same role palette and contrast discipline as the
+Three scene. It is a crisp operational layer over a hostile cosmic instrument:
+black void, translucent blue-black backing, cyan flow/tech, amber value, red
+danger, magenta anomaly/Inhibitor, bone-white primary text.
+
+Current UI rules:
+
+- **Readability beats mood.** Dark space can dominate, but player decisions,
+  selected actions, warnings, and resource states must be bright enough to read
+  without squinting.
+- **Use local backing, not full-screen veils.** Text over moving ASCII fabric
+  gets a panel, matte, shadow, or bracketed contrast pocket.
+- **Keep the center clear in play.** In-match UI belongs at edges except for
+  brief warnings and world-anchored affordances.
+- **Menus can be denser than play.** Title, home, map select, and results can
+  feel like tactical command screens as long as primary actions pass Deck and
+  couch reads.
+- **Microtext is texture.** Calibration marks and tiny status copy are allowed
+  only when they are not the sole carrier of a decision.
+- **Couch test major surfaces.** From across the room, a player should still
+  understand the current screen, selected action, danger state, and next input.
+
+The current UI art-direction docs are `docs/design/UI-VISUAL-SYSTEM.md`,
+`docs/reference/UI-MOODBOARD.md`, and
+`docs/project/UI-VISUAL-PASS-PLAN.md`.
+
 ## Authority Model
 
 The authoritative sim owns gameplay truth. The browser/Electron client owns rendering, local audio, HUD, input collection, interpolation, and visual fluid reconstruction.
