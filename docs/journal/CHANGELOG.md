@@ -21,6 +21,10 @@
 - Brightened shared UI tokens and DOM HUD CSS variables toward the v0.2 entity
   role palette, and reset remaining DOM UI letter spacing to zero for
   readability.
+- Expanded the UI pass plan with the current canvas/DOM implementation shape,
+  per-screen contracts, a concrete shared canvas primitive kit, UI visual
+  harness expectations, implementation order, non-goals, and open choices for
+  Greg review.
 
 ## 2026-06-27 — Inhibitor text corruption and dev panel refresh
 

@@ -1,5 +1,27 @@
 # Decision Log
 
+## 2026-06-28 — UI rebuild starts with shared primitives, not a framework jump
+
+**Decision:** Keep the current v0.2 UI ownership split while rebuilding the
+visual language: DOM remains responsible for live HUD/dev surfaces, and canvas
+remains responsible for title, profile, menus, map select, pause, and run
+results. Add a shared `src/ui/canvas-primitives.js` kit before migrating
+screens, then add a UI-focused visual harness with deterministic captures and
+couch-proxy outputs.
+
+**Why:** The current UI is already wired into input, game state, and the test
+API. A framework rewrite would delay the visual/readability work we actually
+need. Shared primitives give menus and results one role-color/focus/backing
+vocabulary now, while the harness gives future changes a repeatable way to
+check whether the player can read the decision.
+
+**Where it landed:** `docs/project/UI-VISUAL-PASS-PLAN.md` and this decision
+log. Implementation is still pending.
+
+**Door status:** Closed for the next UI implementation slice. Open later if
+text-heavy menus become painful enough to justify moving them to DOM or another
+UI layer.
+
 ## 2026-06-28 — UI uses role color, local contrast, and the couch test
 
 **Decision:** Treat UI readability as part of the v0.2 visual contract. The UI
