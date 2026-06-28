@@ -44,10 +44,10 @@ short note about what changed in player-facing terms.
 | Threats | Signal, Inhibitor, rivals/scavengers, fauna/sentry foundations, phantoms/haunts | Tune Inhibitor timing and signal readability; pick strongest ecology behaviors | Full entity catalog and richer multiplayer threat interactions |
 | Hulls | Five hulls, manifests, PlayerBrain, ability state, several server ability behaviors | Playtest ability feel and cooldowns; improve HUD cues | More artifacts, exclusive builds, no-respec pilot identity |
 | Progression | Profiles, vault, item tiers, rig tracks defined, partial upgrade flow | Complete upgrade purchase/write-back and balance EM economy | Milestones, unlocks, pilots, long-term chronicle |
-| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, shared canvas primitive kit, result-screen migration, title-attract first slice, UI visual harness, and UI motion/VFX bridge | Continue profile/home/map-select/HUD/pause migration; tighten couch/Deck thresholds after more surfaces settle | Full UI primitive system, accessibility pass, and reduced-motion coverage |
+| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, shared canvas primitive kit, result-screen migration, title-attract first slice, UI visual harness, UI motion/VFX bridge, shared UI motion kit, and reduced-motion title coverage | Continue profile/home/map-select/HUD/pause composition migration; tighten couch/Deck thresholds after more surfaces settle | Full accessibility pass, motion clips, and final primitive cleanup |
 | VFX | Event-driven Three VFX plan exists; UI motion emits VFX only for approved beats, with UI retaining truth; the first bounded `VfxManager` and title glyph-fault prototype are live | Review title VFX motion in clips; add ship motion, portal/pickup, and Inhibitor faults one family at a time | Instanced particles, screen-space shader impulses, lens impulses, and richer capture-quality tiers |
 | Audio | Audio engine/toolkit foundations | Define final sonic palette for movement/signal/Inhibitor | Dynamic score and full mix hierarchy |
-| Testing | Fast/core/authority/three lanes; visual fixtures; CDP driver | Add more representative playtest scripts and renderer semantic checks | Public release smoke, hosted-session CI, perf budgets per device |
+| Testing | Fast/core/authority/three lanes; visual fixtures; CDP driver; UI motion helper suite; UI visual reduced-motion capture | Add more representative playtest scripts, renderer semantic checks, and motion-clip review | Public release smoke, hosted-session CI, perf budgets per device |
 | Public presence | Public overview doc exists; website/social not built | Prepare public copy, screenshots, clips, and a playable build page | Itch/Steam-style page, devlog cadence, hosted demo |
 
 ## v0.2.1 — Feel And Route Pass
@@ -143,7 +143,8 @@ palette as the Three entity pass.
   renderer-neutral VFX accents; normal prompts, timers, fuel, cargo, and
   controller hints stay clean.
 - Use the shipped `npm run test:ui` lane for UI states, Deck-scale judgment,
-  and couch-test proxy review.
+  couch-test proxy review, and reduced-motion title coverage. Use
+  `tests/ui-motion.cjs` for cheap helper-level timing coverage.
 
 Definition of done:
 

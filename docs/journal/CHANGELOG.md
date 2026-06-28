@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-06-28 — UI motion layer
+
+- Added `src/ui/motion.js` as the shared canvas UI motion kit: panel reveal
+  clipping, staggered rows, type-on text, CTA pulses, directional wipes, and
+  reduced-motion resolution.
+- Applied the first motion pass to title, profile select, home, map select,
+  run results, meta report, pause, and screen transitions while keeping the
+  in-match HUD stable.
+- Added `CONFIG.ui.motion` plus dev-panel controls for motion enable/reduced
+  state, intensity, panel/text duration, row stagger, and CTA pulse timing.
+- Added `tests/ui-motion.cjs`, wired `UIMotion` into the fast/core/static/full
+  harness lanes, and added a reduced-motion title capture to `npm run test:ui`.
+- Updated the UI visual harness to let ordinary animated surfaces settle before
+  couch/readability sampling.
+
 ## 2026-06-28 — Title telemetry polish
 
 - Made the left-aligned title layout the default shipped title composition;

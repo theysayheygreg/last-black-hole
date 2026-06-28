@@ -50,6 +50,14 @@ result must still be understandable when VFX is disabled.
 - Motion review needs clips, not only still screenshots. Still captures prove
   readability; clips prove timing, rhythm, and restraint.
 
+Current implementation starts in `src/ui/motion.js`. It provides panel reveal
+clipping, type-on text, staggered rows, CTA pulses, directional wipes, and
+reduced-motion resolution. `CONFIG.ui.motion` owns the tunable values, and the
+dev panel exposes them for review. The first shipped application covers title,
+profile select, home, map select, run results, meta report, pause, and scene
+transition accents; in-match HUD values stay still unless a future playtest
+proves a specific motion cue helps.
+
 ## Role Palette
 
 | Role | Color Target | Use |
@@ -194,7 +202,10 @@ The current renderer harness already validates object readability through
 `visualReference`. UI needs an equivalent lane:
 
 - `npm run test:ui` scripted state captures for title, profile select, home,
-  pre-match/map select, in-match HUD, extracted results, and death results;
+  pre-match/map select, in-match HUD, extracted results, death results, and a
+  reduced-motion title state;
+- `node tests/ui-motion.cjs` for pure timing, type-on, reveal, CTA pulse, wipe,
+  and reduced-motion helper behavior;
 - Deck-scale screenshots for each surface;
 - couch-test screenshots reviewed at reduced scale;
 - contrast sampling for selected actions, warnings, and critical values;

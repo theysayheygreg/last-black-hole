@@ -1,6 +1,5 @@
 import { canvasFont } from './ui/typography.js';
 import {
-  drawCommandButton,
   drawKeyValueRow,
   drawScanlines,
   drawSectionLabel,
@@ -12,6 +11,13 @@ import {
   withAlpha,
 } from './ui/canvas-primitives.js';
 import { promptLabel } from './ui/input-prompts.js';
+import {
+  drawCommandButtonMotion,
+  motionProgress,
+  resolveMotionSettings,
+  staggerProgress,
+  withRevealClip,
+} from './ui/motion.js';
 
 const INHIBITOR_FORMS = ['dormant', 'glitch', 'swarm', 'vessel'];
 
@@ -129,8 +135,10 @@ export function drawRunResultsOverlay(ctx, canvas, {
   rawTime = 0,
   totalTime = 0,
   lingerDuration = 1.2,
+  motionSettings = null,
 } = {}) {
   if (!view) return;
+  const motion = motionSettings || resolveMotionSettings();
   const w = canvas.width;
   const h = canvas.height;
   const cx = w / 2;
@@ -164,27 +172,47 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const panelH = Math.min(540, h - 48);
   const panelX = cx - panelW / 2;
   const panelY = cy - panelH / 2;
-  drawUiPanel(ctx, { x: panelX, y: panelY, w: panelW, h: panelH }, {
-    role,
-    fillAlpha: 0.68,
-    borderAlpha: 0.26,
-    cornerLength: 46,
+  const panelRect = { x: panelX, y: panelY, w: panelW, h: panelH };
+  const panelReveal = motionProgress(reveal, {
+    delay: 0.02,
+    duration: motion.panelDuration,
+    reducedMotion: motion.reducedMotion,
+  });
+  withRevealClip(ctx, panelRect, panelReveal, 'center', () => {
+    drawUiPanel(ctx, panelRect, {
+      role,
+      fillAlpha: 0.68,
+      borderAlpha: 0.26,
+      cornerLength: 46,
+    });
   });
 
   ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
   ctx.shadowBlur = 14;
   ctx.textAlign = 'center';
 
-  const titleAlpha = clamp01((reveal - 0.15) * 2.5);
+  const titleAlpha = motionProgress(reveal, {
+    delay: 0.15,
+    duration: 0.38,
+    reducedMotion: motion.reducedMotion,
+  });
   ctx.fillStyle = withAlpha(accent, titleAlpha);
   ctx.font = canvasFont(success ? 38 : 42, { role: 'display', weight: '800' });
   ctx.fillText(fitUiText(ctx, view.status, panelW - 72), cx, panelY + 58);
 
-  ctx.fillStyle = roleColor('muted', 0.78 * clamp01((reveal - 0.35) * 2));
+  ctx.fillStyle = roleColor('muted', 0.78 * motionProgress(reveal, {
+    delay: 0.35,
+    duration: 0.5,
+    reducedMotion: motion.reducedMotion,
+  }));
   ctx.font = canvasFont(15);
   ctx.fillText(success ? 'you made it through the aperture' : 'this is what the universe kept', cx, panelY + 84);
 
-  const contentAlpha = clamp01((reveal - 0.65) * 2);
+  const contentAlpha = motionProgress(reveal, {
+    delay: 0.65,
+    duration: motion.textDuration,
+    reducedMotion: motion.reducedMotion,
+  });
   const leftX = panelX + 42;
   const rightX = panelX + panelW / 2 + 42;
   const mapLabel = view.mapContext.mapId ? String(view.mapContext.mapId).toUpperCase() : 'UNKNOWN MAP';
@@ -233,18 +261,23 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ctx.font = canvasFont(13);
   const cargoLines = view.cargoLabels.length > 0 ? view.cargoLabels.slice(0, 6) : ['[ empty ]'];
   for (let i = 0; i < cargoLines.length; i++) {
+    const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {
+      delay: 0.82,
+      stagger: motion.rowStagger,
+      reducedMotion: motion.reducedMotion,
+    }));
     drawSelectedRow(ctx, { x: rightX - 6, y: ry - 13, w: panelW / 2 - 64, h: 18 }, {
       role: success ? 'salvage' : 'danger',
       active: cargoLines[i] !== '[ empty ]',
-      alpha: contentAlpha,
+      alpha: rowAlpha,
       fillAlpha: success ? 0.075 : 0.09,
       borderAlpha: success ? 0.14 : 0.22,
       railWidth: 2,
     });
-    ctx.fillStyle = success ? roleColor('text', 0.85 * contentAlpha) : roleColor('danger', 0.72 * contentAlpha);
+    ctx.fillStyle = success ? roleColor('text', 0.85 * rowAlpha) : roleColor('danger', 0.72 * rowAlpha);
     ctx.fillText(fitUiText(ctx, cargoLines[i], panelW / 2 - 82), rightX, ry);
     if (!success && cargoLines[i] !== '[ empty ]') {
-      ctx.strokeStyle = roleColor('danger', 0.45 * contentAlpha);
+      ctx.strokeStyle = roleColor('danger', 0.45 * rowAlpha);
       ctx.beginPath();
       ctx.moveTo(rightX, ry - 4);
       ctx.lineTo(rightX + Math.min(panelW / 2 - 90, cargoLines[i].length * 7), ry - 4);
@@ -261,15 +294,26 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ctx.font = canvasFont(13);
   ctx.fillStyle = roleColor('muted', 0.84 * contentAlpha);
   const lines = notableLines.length > 0 ? notableLines.slice(0, 5) : ['no unusual telemetry'];
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const rowAlpha = Math.min(contentAlpha, staggerProgress(reveal, i, {
+      delay: 1.02,
+      stagger: motion.rowStagger,
+      reducedMotion: motion.reducedMotion,
+    }));
+    ctx.fillStyle = roleColor('muted', 0.84 * rowAlpha);
     ctx.fillText(fitUiText(ctx, line, panelW / 2 - 72), rightX, ry);
     ry += 16;
   }
 
-  const promptAlpha = clamp01((reveal - 2.0) * 2);
+  const promptAlpha = motionProgress(reveal, {
+    delay: 1.55,
+    duration: 0.45,
+    reducedMotion: motion.reducedMotion,
+  });
   if (promptAlpha > 0) {
     const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.65;
-    drawCommandButton(ctx, {
+    drawCommandButtonMotion(ctx, {
       x: cx - 150,
       y: panelY + panelH - 64,
       w: 300,
@@ -279,6 +323,10 @@ export function drawRunResultsOverlay(ctx, canvas, {
       role,
       active: true,
       alpha: promptAlpha * blink,
+      progress: promptAlpha,
+      pulseTime: (totalTime % 1.4) / 1.4,
+      reducedMotion: motion.reducedMotion,
+      commandPulse: motion.commandPulse,
     });
   }
 

@@ -23,6 +23,8 @@ screen easier to read at desk, Steam Deck, social-capture, and couch distances.
   rules, and first shared token brightening are already in the repo.
 - The remaining work is mostly screen composition, shared canvas primitives,
   focus language, and repeatable visual validation.
+- The first shared motion layer is live in `src/ui/motion.js` and has been
+  applied as a light pass across the canvas menu/result stack.
 
 ## Implementation Shape
 
@@ -109,6 +111,11 @@ First bridge status:
 - The Three renderer has a `screen-vfx-layer` below clean UI text.
 - `titleVfx` and `titleVfxHeavy` renderer fixtures are explicit review states,
   separate from representative promo/gameplay captures.
+- `src/ui/motion.js` now owns UI-only panel reveals, type-on copy, row stagger,
+  CTA pulses, directional wipes, and reduced-motion fallbacks.
+- Title, profile select, home, map select, run results, meta report, pause, and
+  transition overlays have the first shared motion pass. This is not the final
+  composition pass for those screens; it is the timing vocabulary.
 - The next judgment should be motion clips, not single stills.
 
 ## Screen Inventory
@@ -116,13 +123,13 @@ First bridge status:
 | Surface | Current Owner | Target Reference | Couch-Critical Reads | Current Gap |
 |---------|---------------|------------------|----------------------|-------------|
 | Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | attract-mode slice and side-aligned comparison layouts shipped; final default layout still needs review |
-| Profile Select | `src/main.js` | follows title language | selected profile, load/create/delete, destructive state | small modal texture and inconsistent danger treatment |
-| Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | centered terminal frame, dense copy, launch not loud enough |
-| Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | preview is secondary to list data, route colors not strong enough |
+| Profile Select | `src/main.js` | follows title language | selected profile, load/create/delete, destructive state | first motion pass shipped; danger/delete composition still needs stronger treatment |
+| Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | first motion pass shipped; composition is still centered terminal/dense copy |
+| Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | first motion pass shipped; preview is still secondary to list data |
 | In-Match HUD | `index-a.html`, `src/hud.js` | `in-match-hud.png` | fuel, hull, signal, cargo, exits, warning, active ability | edge reads need stronger icon/bar hierarchy and better backing |
-| Pause | `src/main.js` | shared command overlay | paused state, resume, settings, abandon | should inherit command panel language after core screens |
-| Results / Run Report | `src/run-results.js` | `post-match-results.png` | outcome, cause/reward, cargo accounting, earnings, continue | too narrow and terminal-flat for the most consequential screen |
-| Meta Salvage Report | `src/main.js` | results-adjacent | profile delta, unlock/reward, next action | should share results primitives instead of a separate visual dialect |
+| Pause | `src/main.js` | shared command overlay | paused state, resume, settings, abandon | first motion pass shipped; needs command-panel composition cleanup |
+| Results / Run Report | `src/run-results.js` | `post-match-results.png` | outcome, cause/reward, cargo accounting, earnings, continue | primitives and motion shipped; still needs final theatrical layout review |
+| Meta Salvage Report | `src/main.js` | results-adjacent | profile delta, unlock/reward, next action | first motion pass shipped; should still converge with results primitives |
 
 ## Screen Contracts
 
@@ -420,7 +427,8 @@ Shipped slice:
 
 ## Pass 8 - UI Visual Harness
 
-Status: baseline harness shipped, thresholds intentionally loose.
+Status: baseline harness plus reduced-motion/motion-helper canaries shipped,
+thresholds intentionally loose.
 
 Tasks:
 
@@ -442,11 +450,13 @@ Acceptance:
 Shipped slice:
 
 - `npm run test:ui` captures title, profile select, home, map select, in-match
-  HUD, extracted results, and death results.
+  HUD, extracted results, death results, and reduced-motion title.
 - Each capture writes full-size screenshots plus 50 percent and 25 percent
   couch-proxy images under `tests/screenshots/ui-visual-<timestamp>/`.
 - The default `visual` lane now includes the UI visual harness alongside the
   renderer fixture harness.
+- `tests/ui-motion.cjs` verifies the pure motion helpers through the
+  fast/core/static/full lanes.
 
 ## Suggested Implementation Order
 
@@ -456,12 +466,13 @@ Shipped slice:
    assertions. Capture current screens before redesigning them.
 3. Done: migrate results first. `src/run-results.js` is isolated,
    consequence-heavy, and a good proof that the primitives work.
-4. Migrate title and profile select. Prove warm-up timing, title hierarchy, and
-   destructive profile focus.
-5. Migrate home/main menu. This is the largest composition pass and should use
-   evidence from the earlier screens.
-6. Migrate pre-match/map select. Promote the map preview and align route colors
-   to in-run semantics.
+4. Partly done: migrate title and profile select. Title hierarchy and first
+   motion language shipped; destructive profile focus still needs composition
+   work.
+5. Partly done: migrate home/main menu. Motion language shipped, but this is
+   still the largest remaining composition pass.
+6. Partly done: migrate pre-match/map select. Motion language shipped; the map
+   preview still needs promotion and stronger route semantics.
 7. Migrate the in-match HUD. Keep this last because gameplay clarity needs
    live playtest after the menu language settles.
 8. Tighten harness thresholds after at least three screens have landed. Avoid

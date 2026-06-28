@@ -132,6 +132,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "UIMotion",
+    file: "ui-motion.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "VFX",
     file: "vfx.cjs",
     lanes: ["fast", "core", "static", "full"],

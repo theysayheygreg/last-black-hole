@@ -305,6 +305,17 @@ export function initTestAPI(getState) {
       if (setTimeScale) setTimeScale(scale);
     },
 
+    setUiMotionTime(value) {
+      const { setUiMotionTimeForTest } = getState();
+      return setUiMotionTimeForTest ? setUiMotionTimeForTest(value) : null;
+    },
+
+    getUiMotionState() {
+      const { getUiMotionStateForTest } = getState();
+      const state = getUiMotionStateForTest ? getUiMotionStateForTest() : null;
+      return state ? JSON.parse(JSON.stringify(state)) : null;
+    },
+
     loadTitleScene() {
       const { loadTitleScene } = getState();
       if (!loadTitleScene) return false;

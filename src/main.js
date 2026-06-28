@@ -67,13 +67,21 @@ import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { HULL_DEFINITIONS } from './content/hulls.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
 import {
-  drawCommandButton,
   drawCornerFrame,
   drawScanlines as drawUiScanlines,
   fitUiText,
   roleColor,
   withAlpha,
 } from './ui/canvas-primitives.js';
+import {
+  drawCommandButtonMotion,
+  drawDirectionalWipe,
+  motionProgress,
+  resolveMotionSettings,
+  staggerProgress,
+  typeOnText,
+  withRevealClip,
+} from './ui/motion.js';
 import { ctaLabel, isDeckMode, mapSelectHint, menuHint, movementHint, promptLabel } from './ui/input-prompts.js';
 import { corruptGlyphText } from './text-corruption.js';
 import { titleGlyphFaultEvent } from './render-three/vfx/vfx-events.js';
@@ -223,6 +231,10 @@ let loadingMapName = '';
 let deathTimer = 0;
 let escapeTimer = 0;
 let titleTimer = 0;
+let uiMotionPhase = gamePhase;
+let uiMotionTimer = 0;
+let uiFocusKey = 'title';
+let uiFocusPulseTimer = 999;
 
 // Camera state — world-space center of screen
 let camX = 1.5;
@@ -534,6 +546,76 @@ function currentRunResultsViewModel() {
     fallbackSurvivalTime: simState.runEndTime,
     fallbackCargoValue: fallbackCargo.reduce((sum, item) => sum + (item?.value || 0), 0),
     deathTax: lastDeathTax,
+  });
+}
+
+function currentUiMotionSettings() {
+  return resolveMotionSettings(CONFIG.ui?.motion);
+}
+
+function currentUiFocusKey() {
+  if (gamePhase === 'profileSelect') return `${gamePhase}:${profileCursor}:${nameInputActive ? 'name' : deleteConfirmSlot >= 0 ? 'delete' : 'list'}`;
+  if (gamePhase === 'home') {
+    if (homeTab === 0) return `${gamePhase}:${homeTab}:${homeShipCursor}`;
+    if (homeTab === 1) return `${gamePhase}:${homeTab}:${homeVaultCursor}`;
+    if (homeTab === 2) return `${gamePhase}:${homeTab}:${homeRigCursor}`;
+    return `${gamePhase}:${homeTab}`;
+  }
+  if (gamePhase === 'mapSelect') return `${gamePhase}:${mapSelectIndex}:${previewSeed}`;
+  if (gamePhase === 'paused') return `${gamePhase}:${pauseMenuSelection}`;
+  if (gamePhase === 'dead' || gamePhase === 'escaped') return `${gamePhase}:${lastRunResult?.runId || ''}`;
+  return gamePhase;
+}
+
+function setUiMotionTimeForTest(value) {
+  uiMotionTimer = Math.max(0, Number(value) || 0);
+  return uiMotionTimer;
+}
+
+function getUiMotionStateForTest() {
+  return {
+    phase: uiMotionPhase,
+    focusKey: uiFocusKey,
+    timer: uiMotionTimer,
+    focusPulseTimer: uiFocusPulseTimer,
+    settings: currentUiMotionSettings(),
+  };
+}
+
+function updateUiMotion(rawDt) {
+  const step = Math.max(0, Math.min(Number(rawDt) || 0, 0.25));
+  if (gamePhase !== uiMotionPhase) {
+    uiMotionPhase = gamePhase;
+    uiMotionTimer = 0;
+    uiFocusKey = currentUiFocusKey();
+    uiFocusPulseTimer = 0;
+    return;
+  }
+  uiMotionTimer += step;
+  const nextFocusKey = currentUiFocusKey();
+  if (nextFocusKey !== uiFocusKey) {
+    uiFocusKey = nextFocusKey;
+    uiFocusPulseTimer = 0;
+  } else {
+    uiFocusPulseTimer += step;
+  }
+}
+
+function uiPanelReveal(delay = 0, duration = currentUiMotionSettings().panelDuration) {
+  const motion = currentUiMotionSettings();
+  return motionProgress(uiMotionTimer, {
+    delay,
+    duration,
+    reducedMotion: motion.reducedMotion,
+  });
+}
+
+function uiContentReveal(delay = 0.1, duration = currentUiMotionSettings().textDuration) {
+  const motion = currentUiMotionSettings();
+  return motionProgress(uiMotionTimer, {
+    delay,
+    duration,
+    reducedMotion: motion.reducedMotion,
   });
 }
 
@@ -928,6 +1010,8 @@ function init() {
         deathTimer = death;
         escapeTimer = escape;
       },
+      setUiMotionTimeForTest,
+      getUiMotionStateForTest,
       setTitleTimerForTest: (value) => {
         titleTimer = Math.max(0, Number(value) || 0);
         return titleTimer;
@@ -2820,8 +2904,9 @@ function drawTitleTelemetryLabel(ctx, item, index, w, h, time) {
   ctx.restore();
 }
 
-function drawTitleObjectTelemetry(ctx, w, h, time, layout) {
+function drawTitleObjectTelemetry(ctx, w, h, time, layout, reveal = 1) {
   const items = [];
+  const revealAlpha = Math.max(0, Math.min(1, reveal));
   const add = (wx, wy, name, kind, role, priority = 10, alpha = 0.72) => {
     if (!Number.isFinite(wx) || !Number.isFinite(wy)) return;
     const [sx, sy] = worldToScreen(wx, wy, camX, camY, w, h);
@@ -2834,7 +2919,7 @@ function drawTitleObjectTelemetry(ctx, w, h, time, layout) {
       kind,
       role,
       priority,
-      alpha,
+      alpha: alpha * revealAlpha,
       fix: titleNavFix(wx, wy),
     });
   };
@@ -2999,6 +3084,32 @@ function drawTitleCorruptionOverlay(ctx, cleanTitle, corruptedTitle, layout, tim
 function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   const layout = titleLayoutMetrics(w, h);
   const titleState = titleAttractState(time);
+  const motion = currentUiMotionSettings();
+  const matteReveal = motionProgress(readyTimer, {
+    delay: 0.04,
+    duration: motion.panelDuration,
+    reducedMotion: motion.reducedMotion,
+  });
+  const titleReveal = motionProgress(readyTimer, {
+    delay: 0.12,
+    duration: 0.5,
+    reducedMotion: motion.reducedMotion,
+  });
+  const textReveal = motionProgress(readyTimer, {
+    delay: 0.36,
+    duration: motion.textDuration,
+    reducedMotion: motion.reducedMotion,
+  });
+  const statusReveal = motionProgress(readyTimer, {
+    delay: 0.62,
+    duration: 0.45,
+    reducedMotion: motion.reducedMotion,
+  });
+  const telemetryReveal = motionProgress(readyTimer, {
+    delay: 0.72,
+    duration: 0.6,
+    reducedMotion: motion.reducedMotion,
+  });
   const readyAlpha = Math.max(0, Math.min(1, (readyTimer - 0.35) / 0.45));
   const promptPulse = 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(time * 3.0));
   const cleanTitle = 'LAST SINGULARITY';
@@ -3015,21 +3126,21 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
     w: layout.panelW,
     h: layout.panelH,
     align: layout.align,
-  }, 1);
-  drawTitleObjectTelemetry(ctx, w, h, time, layout);
+  }, matteReveal);
+  drawTitleObjectTelemetry(ctx, w, h, time, layout, telemetryReveal);
 
   ctx.shadowColor = roleColor('flow', 0.48);
   ctx.shadowBlur = 26;
   selectTitleFont(ctx, cleanTitle, layout);
-  ctx.fillStyle = roleColor('text', 0.20);
+  ctx.fillStyle = roleColor('text', 0.20 * titleReveal);
   ctx.fillText(cleanTitle, layout.textX, layout.titleY);
 
   const baseJitterX = glitchState.active > 0 ? Math.sin(time * 81.0) * 0.45 * glitchState.active : 0;
   const baseJitterY = glitchState.active > 0 ? Math.cos(time * 67.0) * 0.32 * glitchState.active : 0;
-  ctx.fillStyle = roleColor('bone', 0.96);
+  ctx.fillStyle = roleColor('bone', 0.96 * titleReveal);
   ctx.fillText(cleanTitle, layout.textX + baseJitterX, layout.titleY + baseJitterY);
 
-  if (glitchState.active > 0.01) {
+  if (titleReveal > 0.2 && glitchState.active > 0.01) {
     const glitchTitle = corruptGlyphText(cleanTitle, glitchState.amount, `title-burst-${glitchState.seed}`, {
       density: 0.92,
       frequencyHz: 9 + glitchState.amount * 24,
@@ -3039,37 +3150,61 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
     });
     // The title text stays clean; corruption is a per-glyph UI fault overlay
     // whose unstable slots and swap rate rise with the burst intensity.
-    drawTitleCorruptionOverlay(ctx, cleanTitle, glitchTitle, layout, time, glitchState.active);
+    drawTitleCorruptionOverlay(ctx, cleanTitle, glitchTitle, layout, time, glitchState.active * titleReveal);
   }
 
   ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
   ctx.shadowBlur = 14;
   ctx.font = canvasFont(17, { weight: '700' });
-  ctx.fillStyle = roleColor('flow', 0.94);
-  ctx.fillText(fitUiText(ctx, 'out of a dying universe', layout.textWidth), layout.textX, layout.titleY + 42);
+  ctx.fillStyle = roleColor('flow', 0.94 * textReveal);
+  ctx.fillText(fitUiText(ctx, typeOnText('out of a dying universe', {
+    time: readyTimer,
+    delay: 0.42,
+    duration: 0.55,
+    reducedMotion: motion.reducedMotion,
+  }), layout.textWidth), layout.textX, layout.titleY + 42);
   ctx.font = canvasFont(13);
-  ctx.fillStyle = roleColor('text', 0.78);
-  ctx.fillText(fitUiText(ctx, 'surf the currents. escape the void.', layout.textWidth), layout.textX, layout.titleY + 67);
+  ctx.fillStyle = roleColor('text', 0.78 * textReveal);
+  ctx.fillText(fitUiText(ctx, typeOnText('surf the currents. escape the void.', {
+    time: readyTimer,
+    delay: 0.64,
+    duration: 0.72,
+    reducedMotion: motion.reducedMotion,
+  }), layout.textWidth), layout.textX, layout.titleY + 67);
 
-  drawTitleStatusLine(ctx, layout.textX, layout.titleY + 102, layout.statusW, titleState.story, titleState.role, time, {
-    align: layout.align,
-  });
+  if (statusReveal > 0) {
+    ctx.save();
+    ctx.globalAlpha *= statusReveal;
+    drawTitleStatusLine(ctx, layout.textX, layout.titleY + 102, layout.statusW, typeOnText(titleState.story, {
+      time: readyTimer,
+      delay: 0.86,
+      duration: 0.8,
+      reducedMotion: motion.reducedMotion,
+    }), titleState.role, time, {
+      align: layout.align,
+    });
+    ctx.restore();
+  }
 
   if (readyAlpha > 0) {
-    drawCommandButton(ctx, layout.commandRect, 'launch run', {
+    drawCommandButtonMotion(ctx, layout.commandRect, 'launch run', {
       hotkey: 'space',
       role: 'flow',
       active: true,
       alpha: readyAlpha * promptPulse,
+      progress: readyAlpha,
+      pulseTime: (time % 1.45) / 1.45,
+      reducedMotion: motion.reducedMotion,
+      commandPulse: motion.commandPulse,
     });
   }
 
   ctx.shadowBlur = 0;
-  ctx.fillStyle = withAlpha('#000421', 0.42);
+  ctx.fillStyle = withAlpha('#000421', 0.42 * textReveal);
   ctx.fillRect(layout.versionRect.x, layout.versionRect.y, layout.versionRect.w, layout.versionRect.h);
-  ctx.strokeStyle = roleColor('flow', 0.12);
+  ctx.strokeStyle = roleColor('flow', 0.12 * textReveal);
   ctx.strokeRect(layout.versionRect.x, layout.versionRect.y, layout.versionRect.w, layout.versionRect.h);
-  ctx.fillStyle = roleColor('muted', 0.46);
+  ctx.fillStyle = roleColor('muted', 0.46 * textReveal);
   ctx.font = canvasFont(10);
   ctx.textAlign = 'center';
   ctx.fillText('v0.2 - attract loop online', layout.versionRect.x + layout.versionRect.w / 2, layout.versionRect.y + 16);
@@ -4181,6 +4316,7 @@ function gameLoop(now) {
   }
 
   updateTitleAttractScene();
+  updateUiMotion(rawDt);
 
   _prevConfirm = confirmNow;
   _prevPause = pauseNow;
@@ -5105,7 +5241,14 @@ function gameLoop(now) {
     ctx.shadowBlur = 8;
 
     // Terminal frame — title is the only label (no double)
-    drawTerminalFrame(ctx, cx - 220, y - 30, 440, 290, null, 'rgba(100, 200, 220, 0.25)');
+    const motion = currentUiMotionSettings();
+    const panelReveal = uiPanelReveal();
+    const contentReveal = uiContentReveal(0.12);
+    const panelRect = { x: cx - 220, y: y - 30, w: 440, h: 290 };
+    withRevealClip(ctx, panelRect, panelReveal, 'center', () => {
+      drawTerminalFrame(ctx, panelRect.x, panelRect.y, panelRect.w, panelRect.h, null, 'rgba(100, 200, 220, 0.25)');
+    });
+    ctx.globalAlpha *= contentReveal;
 
     ctx.fillStyle = 'rgba(160, 230, 245, 0.95)';
     ctx.font = canvasFont(22, { role: 'display', weight: '700' });
@@ -5117,6 +5260,13 @@ function gameLoop(now) {
       const profile = profileManager.slots[i];
       const boxY = y;
       const boxH = 60;
+      const rowReveal = staggerProgress(uiMotionTimer, i, {
+        delay: 0.22,
+        stagger: motion.rowStagger,
+        reducedMotion: motion.reducedMotion,
+      });
+      ctx.save();
+      ctx.globalAlpha *= rowReveal;
 
       // Selection highlight
       if (selected) {
@@ -5141,6 +5291,7 @@ function gameLoop(now) {
       }
 
       y += boxH + 10;
+      ctx.restore();
     }
 
     // Name input overlay
@@ -5195,7 +5346,14 @@ function gameLoop(now) {
     ctx.shadowBlur = 8;
 
     // Terminal frame — no title label (header text inside is enough)
-    drawTerminalFrame(ctx, cx - 280, 15, 560, h - 50, null, 'rgba(80, 100, 140, 0.2)');
+    const motion = currentUiMotionSettings();
+    const panelReveal = uiPanelReveal();
+    const contentReveal = uiContentReveal(0.1);
+    const homePanelRect = { x: cx - 280, y: 15, w: 560, h: h - 50 };
+    withRevealClip(ctx, homePanelRect, panelReveal, 'top', () => {
+      drawTerminalFrame(ctx, homePanelRect.x, homePanelRect.y, homePanelRect.w, homePanelRect.h, null, 'rgba(80, 100, 140, 0.2)');
+    });
+    ctx.globalAlpha *= contentReveal;
 
     // Header: pilot name + EM
     ctx.textAlign = 'center';
@@ -5501,7 +5659,14 @@ function gameLoop(now) {
     drawScanlines(ctx, w, h, 0.025);
     ctx.textAlign = 'center';
 
-    drawTerminalFrame(ctx, cx - 250, cy - 180, 500, 320, null, 'rgba(100, 150, 255, 0.2)');
+    const motion = currentUiMotionSettings();
+    const panelReveal = uiPanelReveal();
+    const contentReveal = uiContentReveal(0.1);
+    const selectPanelRect = { x: cx - 250, y: cy - 180, w: 500, h: 320 };
+    withRevealClip(ctx, selectPanelRect, panelReveal, 'left', () => {
+      drawTerminalFrame(ctx, selectPanelRect.x, selectPanelRect.y, selectPanelRect.w, selectPanelRect.h, null, 'rgba(100, 150, 255, 0.2)');
+    });
+    ctx.globalAlpha *= contentReveal;
 
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
@@ -5516,6 +5681,13 @@ function gameLoop(now) {
       const map = MAP_LIST[i];
       const y = listTop + i * itemHeight;
       const selected = i === mapSelectIndex;
+      const rowReveal = staggerProgress(uiMotionTimer, i, {
+        delay: 0.2,
+        stagger: motion.rowStagger,
+        reducedMotion: motion.reducedMotion,
+      });
+      ctx.save();
+      ctx.globalAlpha *= rowReveal;
 
       if (selected) {
         ctx.fillStyle = 'rgba(60, 80, 140, 0.3)';
@@ -5534,6 +5706,7 @@ function gameLoop(now) {
       ctx.fillStyle = selected ? 'rgba(180, 190, 210, 0.85)' : 'rgba(130, 140, 160, 0.5)';
       ctx.font = canvasFont(12);
       ctx.fillText(stats, cx, y + 26);
+      ctx.restore();
     }
 
     let hintY = listTop + MAP_LIST.length * itemHeight + 25;
@@ -5605,7 +5778,9 @@ function gameLoop(now) {
     const panelY = cy - 180;
     const panelW = 240;
     const panelH = 320;
-    drawTerminalFrame(ctx, panelX, panelY, panelW, panelH, null, 'rgba(120, 160, 220, 0.15)');
+    withRevealClip(ctx, { x: panelX, y: panelY, w: panelW, h: panelH }, uiPanelReveal(0.12), 'right', () => {
+      drawTerminalFrame(ctx, panelX, panelY, panelW, panelH, null, 'rgba(120, 160, 220, 0.15)');
+    });
     ctx.textAlign = 'left';
     ctx.shadowBlur = 8;
 
@@ -5674,6 +5849,7 @@ function gameLoop(now) {
       rawTime: rawT,
       totalTime,
       lingerDuration: DEATH_LINGER_DURATION,
+      motionSettings: currentUiMotionSettings(),
     });
   }
 
@@ -5693,7 +5869,14 @@ function gameLoop(now) {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
 
-    drawTerminalFrame(ctx, cx - 200, cy - 180, 400, 340, null, 'rgba(100, 255, 255, 0.2)');
+    const motion = currentUiMotionSettings();
+    const panelReveal = uiPanelReveal();
+    const contentReveal = uiContentReveal(0.12);
+    const metaPanelRect = { x: cx - 200, y: cy - 180, w: 400, h: 340 };
+    withRevealClip(ctx, metaPanelRect, panelReveal, 'bottom', () => {
+      drawTerminalFrame(ctx, metaPanelRect.x, metaPanelRect.y, metaPanelRect.w, metaPanelRect.h, null, 'rgba(100, 255, 255, 0.2)');
+    });
+    ctx.globalAlpha *= contentReveal;
 
     // Title
     if (t > 0.2) {
@@ -5771,7 +5954,13 @@ function gameLoop(now) {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
 
-    drawTerminalFrame(ctx, cx - 180, cy - 150, 360, 260, null, 'rgba(100, 150, 255, 0.2)');
+    const panelReveal = uiPanelReveal();
+    const contentReveal = uiContentReveal(0.08);
+    const pausePanelRect = { x: cx - 180, y: cy - 150, w: 360, h: 260 };
+    withRevealClip(ctx, pausePanelRect, panelReveal, 'center', () => {
+      drawTerminalFrame(ctx, pausePanelRect.x, pausePanelRect.y, pausePanelRect.w, pausePanelRect.h, null, 'rgba(100, 150, 255, 0.2)');
+    });
+    ctx.globalAlpha *= contentReveal;
 
     // Title
     ctx.fillStyle = 'rgba(140, 175, 255, 0.95)';
@@ -5818,6 +6007,17 @@ function gameLoop(now) {
     ctx.fillText(`${promptLabel('select', currentPromptOptions())} select  ·  ${prompt('confirm', 'confirm')}  ·  ${prompt('back', 'resume')}`, cx, cy + 130);
 
     ctx.restore();
+  }
+
+  if (transitionActive) {
+    const motion = currentUiMotionSettings();
+    drawDirectionalWipe(ctx, { x: 0, y: 0, w: overlayCanvas.width, h: overlayCanvas.height }, {
+      progress: transitionTimer / TRANSITION_TOTAL,
+      direction: 'right',
+      role: 'anomaly',
+      alpha: 0.9 * Math.max(0.35, motion.intensity || 0),
+      reducedMotion: motion.reducedMotion,
+    });
   }
 
   recordPerfStat('overlayMs', performance.now() - overlayStart);

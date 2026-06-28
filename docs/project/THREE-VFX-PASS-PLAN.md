@@ -169,6 +169,11 @@ HUD gauges, and controller prompts should stay pure UI motion. If those need
 more readability, fix contrast, size, backing, icon shape, or focus treatment
 before reaching for VFX.
 
+Current UI-motion implementation lives in `src/ui/motion.js` with config under
+`CONFIG.ui.motion`. It handles panel reveals, type-on text, row stagger, CTA
+pulses, directional wipes, and reduced-motion fallbacks. VFX should consume only
+approved renderer-neutral events on top of that baseline.
+
 Implementation order:
 
 1. Keep the UI primitive/title overlay as the canonical readable surface.

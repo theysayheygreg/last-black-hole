@@ -20,6 +20,7 @@ const SECTION_ORDER = [
   'ship',
   'input',
   'inhibitor',
+  'ui',
   'vfx',
   'ascii',
   'color',
@@ -56,6 +57,12 @@ const COLLAPSED_BY_DEFAULT = new Set([
 
 const CONTROL_LABELS = {
   'inhibitor.textCorruption.amount': 'how corrupted',
+  'ui.motion.intensity': 'UI motion intensity',
+  'ui.motion.reduced': 'reduced motion',
+  'ui.motion.panelDuration': 'panel reveal',
+  'ui.motion.textDuration': 'text reveal',
+  'ui.motion.rowStagger': 'row stagger',
+  'ui.motion.commandPulse': 'CTA pulse',
   'vfx.globalIntensity': 'global VFX intensity',
   'vfx.particleBudget': 'particle budget',
   'vfx.quality': 'VFX quality',
@@ -118,6 +125,13 @@ const RANGE_HINTS = {
   'inhibitor.textCorruption.vesselBoost': { min: 0.2, max: 2.5, step: 0.05, tip: 'Extra corruption when the Inhibitor reaches vessel form.' },
   'inhibitor.textCorruption.proximityScale':{ min: 0, max: 1, step: 0.05, tip: 'How much the small form label reacts to player proximity.' },
   'inhibitor.textCorruption.refreshHz':   { min: 1, max: 12, step: 1, tip: 'How often animated corrupted labels reshuffle.' },
+
+  // UI motion stays presentation-only: no movement, input, or sim values depend on it.
+  'ui.motion.intensity':      { min: 0, max: 1, step: 0.05, tip: 'Master gain for UI reveals and transition accents. Use reduced motion to disable movement.' },
+  'ui.motion.panelDuration':  { min: 0.05, max: 1.2, step: 0.01, tip: 'Seconds for terminal panels to expand into place.' },
+  'ui.motion.textDuration':   { min: 0.05, max: 1.5, step: 0.01, tip: 'Seconds for title and menu copy to type/walk on.' },
+  'ui.motion.rowStagger':     { min: 0, max: 0.2, step: 0.005, tip: 'Delay between repeated rows in menus and result manifests.' },
+  'ui.motion.commandPulse':   { min: 0.1, max: 2, step: 0.01, tip: 'Seconds for CTA and focus edge pulses to fade.' },
 
   // Three VFX — presentation-only particles and accents.
   'vfx.globalIntensity':        { min: 0, max: 2, step: 0.05, tip: 'Global multiplier for presentation-only VFX. 1 = authored default.' },

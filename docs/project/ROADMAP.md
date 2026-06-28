@@ -65,7 +65,7 @@ reading stale health records or reconstructing status from `git log`.
 | Three entity mood board | `docs/reference/THREE-ENTITY-MOODBOARD.md` | Designed 2026-06-26; cited references and generated target visuals for 2D identity inside staged 3D depth |
 | UI visual system | `docs/design/UI-VISUAL-SYSTEM.md` | Designed 2026-06-28; current contrast, sizing, color-role, and couch-test contract for title, home, map select, HUD, and results |
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
-| UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slice shipped 2026-06-28; shared canvas primitives, UI primitive smoke test, run-results migration, title-attract first slice, baseline UI visual harness, and UI motion/VFX bridge are live. Remaining work is profile/home/map/HUD/pause migration and tighter thresholds. |
+| UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared canvas primitives, UI primitive smoke test, run-results migration, title-attract first slice, baseline UI visual harness, shared UI motion kit, reduced-motion title coverage, and UI motion/VFX bridge are live. Remaining work is profile/home/map/HUD/pause composition migration and tighter thresholds. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -81,8 +81,8 @@ capture, or compare.
 
 1. **Attract Mode + UI/VFX Identity** — title layout, corruption behavior, UI
    motion language, and first event-driven Three VFX. Current slice: pooled
-   `VfxManager`, `screen-vfx-layer`, `titleGlyphFault` events, and title VFX
-   fixtures.
+   `VfxManager`, `screen-vfx-layer`, `titleGlyphFault` events, title VFX
+   fixtures, `src/ui/motion.js`, and first-pass title/menu/result motion.
 2. **Feel + Route Pass** — slingshot/speed tuning, map route redesign, spawn
    safety, and remote/local movement parity checks.
 3. **Entity Visual Language** — replace bridge primitives for ships, stars,
@@ -118,7 +118,8 @@ capture, or compare.
 - UI motion is now part of that same contract: readable DOM/canvas UI keeps
   screen truth, while approved beats such as title glyph faults, launch,
   extraction, collapse, portal transitions, and Inhibitor UI faults may emit
-  Three VFX accents below or around clean UI.
+  Three VFX accents below or around clean UI. The shipped first pass is
+  `src/ui/motion.js` plus reduced-motion/config/test harness coverage.
 - The current scene hierarchy target is
   `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`: the void stays black and
   dominant, the ASCII fabric stays the gameplay ocean, and entities get explicit

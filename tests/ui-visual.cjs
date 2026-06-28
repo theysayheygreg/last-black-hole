@@ -71,15 +71,16 @@ async function stepForMs(page, ms, dt = 1 / 60) {
   return stepGameFrames(page, frames, dt);
 }
 
-async function setUiDebugQuiet(page) {
-  await page.evaluate(() => {
+async function setUiDebugQuiet(page, { reducedMotion = false } = {}) {
+  await page.evaluate((reduce) => {
     window.__TEST_API?.setOverlayVisible?.(true);
     window.__TEST_API?.setConfig?.('debug.showFPS', false);
     window.__TEST_API?.setConfig?.('debug.showWellRadii', false);
     window.__TEST_API?.setConfig?.('debug.showFluidDiagnostic', false);
     window.__TEST_API?.setConfig?.('debug.showVelocityField', false);
     window.__TEST_API?.setConfig?.('debug.showCoordDiagnostic', false);
-  });
+    window.__TEST_API?.setConfig?.('ui.motion.reduced', Boolean(reduce));
+  }, reducedMotion);
 }
 
 async function analyzePngInPage(page, base64, { scale = 1 } = {}) {
@@ -138,8 +139,8 @@ function assertReadableStats(stats, label, { minLitPixels = 900, minRgbMax = 90 
 
 async function captureSurface(page, outputDir, surface) {
   await surface.setup(page);
-  await setUiDebugQuiet(page);
-  await stepForMs(page, surface.warmMs ?? 260);
+  await setUiDebugQuiet(page, { reducedMotion: surface.reducedMotion === true });
+  await stepForMs(page, surface.warmMs ?? 900);
 
   if (surface.expectPhase) {
     const phase = await page.evaluate(() => window.__TEST_API?.getGamePhase?.() || null);
@@ -228,6 +229,17 @@ async function run() {
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', {
         titleTimer: 1.8,
         layout: 'opposite-left',
+        loopTime: 2.11,
+      })),
+    },
+    {
+      name: 'title-reduced-motion',
+      expectPhase: 'title',
+      warmMs: 180,
+      reducedMotion: true,
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', {
+        titleTimer: 1.4,
+        layout: 'left',
         loopTime: 2.11,
       })),
     },

@@ -422,6 +422,18 @@ export const CONFIG = {
     freezeSeed: false,
   },
 
+  ui: {
+    motion: {
+      enabled: true,             // UI-only motion language; gameplay truth and HUD data are unchanged.
+      reduced: false,            // Test/dev override. OS reduced-motion preference is also honored.
+      intensity: 1.0,            // Master gain for UI reveals, pulses, and transition wipes.
+      panelDuration: 0.42,       // Seconds for panels/windows to expand into place.
+      textDuration: 0.7,         // Seconds for terminal copy to type/walk on.
+      rowStagger: 0.055,         // Delay between repeated rows in menus/results.
+      commandPulse: 0.8,         // Seconds for CTA/focus edge pulses to fade.
+    },
+  },
+
   debug: {
     showVelocityField: false, // Draw fluid velocity arrows on overlay canvas.
     showWellRadii: false,     // Draw well kill radii, star push radii, portal capture radii.
