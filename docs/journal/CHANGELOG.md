@@ -7,6 +7,10 @@
 
 ## 2026-06-28 — Title telemetry polish
 
+- Made the left-aligned title layout the default shipped title composition;
+  center, right, and opposite-left remain available for comparison fixtures.
+- Updated the title UI fixture baseline so it follows the shipped default
+  layout unless a test explicitly requests another variant.
 - Removed title-screen-only red well core/hazard debug markers from the Three
   entity layer and suppressed canvas well/coordinate debug overlays on the
   title phase while leaving the ASCII accretion fabric intact.
