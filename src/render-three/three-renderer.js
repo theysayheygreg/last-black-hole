@@ -762,10 +762,14 @@ export class ThreeRendererBackend {
       return mesh;
     };
 
+    const suppressWellDebugMarkers = sceneState.isTitleBackdrop === true;
     for (const well of sceneState.wells || []) {
-      addSemantic(this.entityGeometries.ring, this.entityMaterials.hazardRing, well.wx, well.wy, well.ringOuter || 0.1, 0, 0.01);
+      const semanticMaterial = suppressWellDebugMarkers ? this.entityMaterials.wave : this.entityMaterials.hazardRing;
+      addSemantic(this.entityGeometries.ring, semanticMaterial, well.wx, well.wy, well.ringOuter || 0.1, 0, 0.01);
       addEntity(this.entityGeometries.ring, this.entityMaterials.wellRing, well.wx, well.wy, Math.max(0.07, (well.killRadius || 0.04) * 2.6), 0, 0.03);
-      addEntity(this.entityGeometries.disc, this.entityMaterials.wellCore, well.wx, well.wy, Math.max(0.018, well.killRadius || 0.04), 0, 0.04);
+      if (!suppressWellDebugMarkers) {
+        addEntity(this.entityGeometries.disc, this.entityMaterials.wellCore, well.wx, well.wy, Math.max(0.018, well.killRadius || 0.04), 0, 0.04);
+      }
     }
     for (const ring of sceneState.waveRings || []) {
       const life = Math.max(0, Math.min(1, (ring.amplitude || 0) / Math.max(1e-4, ring.initialAmplitude || 1)));

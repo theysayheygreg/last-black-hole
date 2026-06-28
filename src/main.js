@@ -2646,22 +2646,27 @@ function titleCameraOffsetForLayout(layoutName = titleLayout) {
   return { x: 0, y: 0 };
 }
 
+function isTitleBackdropActive() {
+  const mapName = String(currentMap?.name || '').toLowerCase();
+  return gamePhase === 'title' || mapName.includes('title');
+}
+
 function titleAttractState(time) {
   const t = titleLoopTime(time);
   const collapse = smoothstep(6.2, 7.5, t);
   const returnFade = smoothstep(8.8, 10.6, t);
   const portalAlpha = t < 6.2 ? 1 : t < 8.8 ? 1 - collapse : returnFade;
-  let story = 'wake scan: singularity stable';
+  let story = 'wake scan nominal';
   let role = 'flow';
 
   if (t >= 2.5 && t < 5.0) {
-    story = 'derelict signatures caught in orbit';
+    story = 'derelict signatures indexed';
     role = 'salvage';
   } else if (t >= 5.0 && t < 7.9) {
-    story = 'rift aperture collapsing';
+    story = 'rift aperture decay';
     role = 'anomaly';
   } else if (t >= 7.9 && t < 10.4) {
-    story = 'exit lost - route memory persists';
+    story = 'route memory degraded';
     role = 'muted';
   }
 
@@ -2720,18 +2725,153 @@ function drawTitleTextMatte(ctx, rect, alpha = 1) {
 function drawTitleStatusLine(ctx, anchorX, y, width, text, role, time, { align = 'center' } = {}) {
   const pulse = 0.72 + 0.18 * Math.sin(time * 2.4);
   const x = align === 'right' ? anchorX - width : align === 'left' ? anchorX : anchorX - width / 2;
-  const textX = align === 'right' ? x + width - 14 : align === 'left' ? x + 14 : x + width / 2;
+  const textX = align === 'right' ? x + width : align === 'left' ? x : x + width / 2;
+  const railY = y + 13;
   ctx.save();
-  ctx.fillStyle = withAlpha('#000421', 0.64);
-  ctx.fillRect(x, y - 16, width, 28);
-  ctx.strokeStyle = roleColor(role, 0.32 * pulse);
-  ctx.strokeRect(x, y - 16, width, 28);
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
-  ctx.font = canvasFont(12, { weight: '700' });
-  ctx.fillStyle = roleColor(role, 0.88);
-  ctx.fillText(fitUiText(ctx, text.toUpperCase(), width - 24), textX, y - 1);
+  ctx.font = canvasFont(10, { weight: '700' });
+  ctx.fillStyle = roleColor(role, 0.64 + 0.18 * pulse);
+  ctx.shadowColor = roleColor(role, 0.42);
+  ctx.shadowBlur = 8;
+  ctx.fillText(fitUiText(ctx, `attractor telemetry // ${text}`.toUpperCase(), width), textX, y - 1);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = roleColor(role, 0.26 * pulse);
+  ctx.beginPath();
+  ctx.moveTo(x, railY);
+  ctx.lineTo(x + width, railY);
+  ctx.stroke();
   ctx.restore();
+}
+
+function titleObjectDisplayName(source, fallback) {
+  const raw = String(source?.name || source?.id || fallback || 'SIGNATURE').trim();
+  return raw
+    .replace(/^title[-_ ]?/i, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function titleObjectKindLabel(kind) {
+  return String(kind || 'signature')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function titleNavFix(wx, wy) {
+  const x = Math.round((wrapWorld(wx) / WORLD_SCALE) * 999);
+  const y = Math.round((wrapWorld(wy) / WORLD_SCALE) * 999);
+  return `NAV ${String(x).padStart(3, '0')}:${String(y).padStart(3, '0')}`;
+}
+
+function titleTelemetryOverlapsPanel(sx, sy, layout) {
+  return sx > layout.panelX - 42
+    && sx < layout.panelX + layout.panelW + 42
+    && sy > layout.panelY - 34
+    && sy < layout.panelY + layout.panelH + 34;
+}
+
+function drawTitleTelemetryLabel(ctx, item, index, w, h, time) {
+  const side = item.sx > w * 0.58 ? -1 : 1;
+  const lineAlpha = item.alpha * (0.76 + 0.12 * Math.sin(time * 1.7 + index));
+  const labelX = Math.max(28, Math.min(w - 28, item.sx + side * (26 + (index % 3) * 8)));
+  const labelY = Math.max(34, Math.min(h - 34, item.sy + ((index % 2 === 0) ? -24 : 28)));
+  const align = side < 0 ? 'right' : 'left';
+  const textX = align === 'right' ? labelX - 8 : labelX + 8;
+  const maxWidth = Math.min(190, Math.max(120, side < 0 ? labelX - 34 : w - labelX - 34));
+
+  ctx.save();
+  ctx.textAlign = align;
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = canvasFont(9, { weight: '700' });
+  const name = fitUiText(ctx, item.name.toUpperCase(), maxWidth);
+  ctx.font = canvasFont(8);
+  const meta = fitUiText(ctx, `${item.kind} // ${item.fix}`, maxWidth);
+  const measured = Math.max(
+    ctx.measureText(name).width,
+    ctx.measureText(meta).width,
+    58,
+  );
+  const boxW = Math.min(maxWidth + 18, measured + 20);
+  const boxX = align === 'right' ? textX - boxW + 8 : textX - 8;
+  const boxY = labelY - 18;
+
+  ctx.fillStyle = withAlpha('#000421', 0.42 * item.alpha);
+  ctx.fillRect(boxX, boxY, boxW, 29);
+  ctx.strokeStyle = roleColor(item.role, 0.22 * item.alpha);
+  ctx.strokeRect(boxX, boxY, boxW, 29);
+  ctx.strokeStyle = roleColor(item.role, 0.30 * lineAlpha);
+  ctx.beginPath();
+  ctx.moveTo(item.sx, item.sy);
+  ctx.lineTo(labelX, labelY - 7);
+  ctx.stroke();
+  ctx.fillStyle = roleColor(item.role, 0.88 * lineAlpha);
+  ctx.beginPath();
+  ctx.arc(item.sx, item.sy, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.font = canvasFont(9, { weight: '700' });
+  ctx.fillStyle = roleColor(item.role, 0.88 * item.alpha);
+  ctx.fillText(name, textX, labelY - 5);
+  ctx.font = canvasFont(8);
+  ctx.fillStyle = roleColor('muted', 0.64 * item.alpha);
+  ctx.fillText(meta, textX, labelY + 7);
+  ctx.restore();
+}
+
+function drawTitleObjectTelemetry(ctx, w, h, time, layout) {
+  const items = [];
+  const add = (wx, wy, name, kind, role, priority = 10, alpha = 0.72) => {
+    if (!Number.isFinite(wx) || !Number.isFinite(wy)) return;
+    const [sx, sy] = worldToScreen(wx, wy, camX, camY, w, h);
+    if (sx < 22 || sx > w - 22 || sy < 22 || sy > h - 22) return;
+    if (titleTelemetryOverlapsPanel(sx, sy, layout)) return;
+    items.push({
+      sx,
+      sy,
+      name,
+      kind,
+      role,
+      priority,
+      alpha,
+      fix: titleNavFix(wx, wy),
+    });
+  };
+
+  (starSystem?.stars || [])
+    .filter((star) => star.alive !== false)
+    .slice(0, 4)
+    .forEach((star, index) => {
+      add(star.wx, star.wy, titleObjectDisplayName(star, `star ${index + 1}`), titleObjectKindLabel(star.type || 'star core'), 'salvage', 2 + index, 0.70);
+    });
+
+  (wreckSystem?.wrecks || [])
+    .filter((wreck) => wreck.alive !== false)
+    .slice(0, 4)
+    .forEach((wreck, index) => {
+      const kind = `${titleObjectKindLabel(wreck.type || 'derelict')} SIGNATURE`;
+      add(wreck.wx, wreck.wy, titleObjectDisplayName(wreck, `derelict ${index + 1}`), kind, 'text', 4 + index, 0.66);
+    });
+
+  (portalSystem?.portals || [])
+    .filter((portal) => portal.alive !== false && (portal.opacity ?? 1) > 0.08)
+    .slice(0, 2)
+    .forEach((portal, index) => {
+      add(portal.wx, portal.wy, titleObjectDisplayName(portal, 'rift aperture'), 'APERTURE DECAY', 'anomaly', 1 + index, 0.82);
+    });
+
+  (planetoidSystem?.planetoids || [])
+    .filter((body) => body.alive !== false)
+    .slice(0, 3)
+    .forEach((body, index) => {
+      add(body.wx, body.wy, titleObjectDisplayName(body, `orbit body ${index + 1}`), 'ORBITAL TRACK', 'flow', 8 + index, 0.58);
+    });
+
+  items
+    .sort((a, b) => a.priority - b.priority)
+    .slice(0, 9)
+    .forEach((item, index) => drawTitleTelemetryLabel(ctx, item, index, w, h, time));
 }
 
 function selectTitleFont(ctx, cleanTitle, layout) {
@@ -2876,6 +3016,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
     h: layout.panelH,
     align: layout.align,
   }, 1);
+  drawTitleObjectTelemetry(ctx, w, h, time, layout);
 
   ctx.shadowColor = roleColor('flow', 0.48);
   ctx.shadowBlur = 26;
@@ -2915,7 +3056,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   });
 
   if (readyAlpha > 0) {
-    drawCommandButton(ctx, layout.commandRect, 'begin', {
+    drawCommandButton(ctx, layout.commandRect, 'launch run', {
       hotkey: 'space',
       role: 'flow',
       active: true,
@@ -3103,8 +3244,11 @@ function collectThreeSceneState() {
     ? slingshotSystem.findAffordance(ship, slingshotSystem.collectAnchors(wellSystem, starSystem, planetoidSystem))
     : null;
   const fieldSample = flowField?.sample?.(ship.wx, ship.wy) || null;
+  const isTitleBackdrop = isTitleBackdropActive();
 
   return {
+    phase: gamePhase,
+    isTitleBackdrop,
     ship: ship ? {
       wx: ship.wx,
       wy: ship.wy,
@@ -4859,7 +5003,7 @@ function gameLoop(now) {
   }
 
   // 11. Debug: coordinate diagnostic
-  if (CONFIG.debug.showCoordDiagnostic) {
+  if (CONFIG.debug.showCoordDiagnostic && !isTitleBackdropActive()) {
     for (const well of wellSystem.wells) {
       const [fu, fv] = worldToFluidUV(well.wx, well.wy);
       fluid.splat(fu, fv, 0, 0, 0.003, 0.0, 1.0, 0.0);
@@ -4879,7 +5023,7 @@ function gameLoop(now) {
   }
 
   // 12. Debug: well radii and labels
-  if (CONFIG.debug.showWellRadii) {
+  if (CONFIG.debug.showWellRadii && !isTitleBackdropActive()) {
     const drawWorldRadius = (x, y, radius) => {
       const r = worldRadiusToScreen(radius, overlayCanvas.width, overlayCanvas.height);
       ctx.beginPath();

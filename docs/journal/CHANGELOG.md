@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-06-28 — Title telemetry polish
+
+- Removed title-screen-only red well core/hazard debug markers from the Three
+  entity layer and suppressed canvas well/coordinate debug overlays on the
+  title phase while leaving the ASCII accretion fabric intact.
+- Demoted the attract-loop status copy into a small telemetry rail and changed
+  the primary CTA from `SPACE BEGIN` to `SPACE LAUNCH RUN`.
+- Added title backdrop object telemetry labels with thematic generated names
+  and NAV fixes for stars, wrecks, portals, and orbiting bodies.
+
 ## 2026-06-28 — Reviewable slices and first title VFX kit
 
 - Reframed v0.2 planning around six reviewable slices: Attract Mode + UI/VFX
