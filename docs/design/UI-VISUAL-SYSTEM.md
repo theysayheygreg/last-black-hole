@@ -97,9 +97,10 @@ tooltip or more explanatory copy to compensate for a weak first read.
 - The well/fabric behind the title must be visible after warm-up.
 - The title wordmark keeps a clean bone/cyan base aesthetic most of the time.
   Inhibitor corruption appears as brief pink burst faults, not a persistent
-  resting color. Title-scale text may use louder Zalgo than normal HUD text
-  during those bursts because it is identity, not a decision surface.
-  Subtitles, profile/menu copy, and the primary CTA stay clean.
+  resting color. Title-scale corruption is a UI animation overlay: unstable
+  glyph slots flicker pink over the clean wordmark, and intensity means more
+  slots changing more often. Subtitles, profile/menu copy, and the primary CTA
+  stay clean.
 - Title copy needs local backing over dense fabric: gradient veils, thin
   brackets, dark inline mattes, or command-button backplates. Do not solve this
   by dimming the whole scene.

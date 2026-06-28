@@ -74,7 +74,7 @@ import {
   roleColor,
   withAlpha,
 } from './ui/canvas-primitives.js';
-import { corruptText } from './text-corruption.js';
+import { corruptGlyphText } from './text-corruption.js';
 
 window.__LBH_BOOT_MARK__?.('main.module.evaluated', {
   href: window.location.href,
@@ -204,6 +204,7 @@ const TITLE_RIFT_ID = 'title-rift-aperture';
 const TITLE_ATTRACT_LOOP_SECONDS = 11.5;
 const TITLE_GLITCH_PERIOD = 2.15;
 const TITLE_GLITCH_WINDOW = 0.34;
+const TITLE_GLITCH_GLYPHS = 'ΨΩ∞⌁∆≈≠╳╱╲#$%@&*!?';
 const TITLE_LAYOUT_DEFAULT = 'center';
 const TITLE_LAYOUT_IDS = new Set(['center', 'left', 'right', 'opposite-left']);
 let titleLayout = TITLE_LAYOUT_DEFAULT;
@@ -2559,8 +2560,8 @@ function titleGlitchState(time) {
   const active = attack * release;
   return {
     active,
-    seed: cycle * 31 + Math.floor(age * 42),
-    amount: 0.42 + active * 0.34,
+    seed: cycle * 31,
+    amount: 0.22 + active * 0.62,
   };
 }
 
@@ -2716,6 +2717,50 @@ function drawTitleStatusLine(ctx, anchorX, y, width, text, role, time, { align =
   ctx.restore();
 }
 
+function titleTextStartX(ctx, text, layout) {
+  const width = ctx.measureText(text).width;
+  if (layout.align === 'right') return layout.textX - width;
+  if (layout.align === 'center') return layout.textX - width / 2;
+  return layout.textX;
+}
+
+function drawTitleCorruptionOverlay(ctx, cleanTitle, corruptedTitle, layout, time, alpha) {
+  const cleanGlyphs = Array.from(cleanTitle);
+  const corruptedGlyphs = Array.from(corruptedTitle);
+  let x = titleTextStartX(ctx, cleanTitle, layout);
+  const faultAlpha = Math.max(0, Math.min(1, alpha));
+
+  ctx.save();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.shadowBlur = 10 + 14 * faultAlpha;
+  ctx.shadowColor = roleColor('inhibitor', 0.7 * faultAlpha);
+
+  for (let i = 0; i < cleanGlyphs.length; i++) {
+    const cleanGlyph = cleanGlyphs[i];
+    const faultGlyph = corruptedGlyphs[i] || cleanGlyph;
+    const advance = ctx.measureText(cleanGlyph).width;
+
+    if (faultGlyph !== cleanGlyph) {
+      const noise = titleNoise(time * 19.7 + i * 3.91);
+      const pulse = 0.62 + 0.38 * Math.sin(time * (17 + noise * 26) + i);
+      const jitterX = (titleNoise(time * 43.1 + i * 5.37) - 0.5) * 3.4 * faultAlpha;
+      const jitterY = (titleNoise(time * 37.9 + i * 4.19) - 0.5) * 2.4 * faultAlpha;
+      ctx.fillStyle = roleColor('inhibitor', (0.46 + 0.42 * pulse) * faultAlpha);
+      ctx.fillText(faultGlyph, x + jitterX, layout.titleY + jitterY);
+
+      if (faultAlpha > 0.45 && noise > 0.56) {
+        ctx.fillStyle = roleColor('flow', 0.12 * faultAlpha);
+        ctx.fillText(cleanGlyph, x - jitterX * 0.7, layout.titleY + 1);
+      }
+    }
+
+    x += advance;
+  }
+
+  ctx.restore();
+}
+
 function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   const layout = titleLayoutMetrics(w, h);
   const titleState = titleAttractState(time);
@@ -2754,24 +2799,16 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   ctx.fillText(cleanTitle, layout.textX + baseJitterX, layout.titleY + baseJitterY);
 
   if (glitchState.active > 0.01) {
-    const glitchTitle = corruptText(cleanTitle, glitchState.amount, `title-burst-${glitchState.seed}`, {
-      density: 0.86,
-      maxMarks: 4,
+    const glitchTitle = corruptGlyphText(cleanTitle, glitchState.amount, `title-burst-${glitchState.seed}`, {
+      density: 0.92,
+      frequencyHz: 9 + glitchState.amount * 24,
+      time,
       maxChars: cleanTitle.length,
+      glyphs: TITLE_GLITCH_GLYPHS,
     });
-    const glitchAlpha = glitchState.active;
-    const jitterX = Math.sin(time * 127.0) * 2.4 * glitchAlpha;
-    const jitterY = Math.cos(time * 91.0) * 1.2 * glitchAlpha;
-    // Title-scale text gets the one indulgent corruption treatment: a brief
-    // pink fault that can be louder than normal HUD Zalgo, then it vanishes.
-    ctx.shadowColor = roleColor('inhibitor', 0.66 * glitchAlpha);
-    ctx.shadowBlur = 12 + 12 * glitchAlpha;
-    ctx.fillStyle = roleColor('inhibitor', 0.34 + 0.46 * glitchAlpha);
-    ctx.fillText(glitchTitle, layout.textX + jitterX, layout.titleY + jitterY);
-    ctx.shadowColor = roleColor('flow', 0.20 * glitchAlpha);
-    ctx.shadowBlur = 6;
-    ctx.fillStyle = roleColor('flow', 0.10 * glitchAlpha);
-    ctx.fillText(cleanTitle, layout.textX - jitterX * 0.7, layout.titleY + 1);
+    // The title text stays clean; corruption is a per-glyph UI fault overlay
+    // whose unstable slots and swap rate rise with the burst intensity.
+    drawTitleCorruptionOverlay(ctx, cleanTitle, glitchTitle, layout, time, glitchState.active);
   }
 
   ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';

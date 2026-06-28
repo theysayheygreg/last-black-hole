@@ -18,6 +18,7 @@ const MIDDLE_MARKS = [
 const BELOW_MARKS = [
   0x0316, 0x0317, 0x0318, 0x0319, 0x031c, 0x0323, 0x0324, 0x0325, 0x0326, 0x0329,
 ].map(codePointToMark);
+const DEFAULT_GLITCH_GLYPHS = 'ΨΩ∞⌁∑∫√∂∆≈≠±×÷╳╱╲#$%@&*!?/=+_-';
 
 function codePointToMark(codePoint) {
   return String.fromCharCode(codePoint);
@@ -105,6 +106,57 @@ export function corruptText(text, intensity = 0, seed = 0, options = {}) {
       const pool = pickMarkPool(amount, random());
       out.push(pool[Math.floor(random() * pool.length)]);
     }
+  }
+
+  return out.join('');
+}
+
+/**
+ * Select glyph-slot replacements for animated UI corruption overlays.
+ *
+ * Unlike Zalgo corruption, this preserves the underlying text length. Intensity
+ * controls both how many glyph slots can fail and how rapidly those slots swap,
+ * which makes it suitable for title/menu animation overlays.
+ */
+export function corruptGlyphText(text, intensity = 0, seed = 0, options = {}) {
+  const clean = stripCombiningMarks(text);
+  const amount = clamp(Number(intensity) || 0, 0, 1);
+  const maxChars = clamp(Math.round(Number(options.maxChars ?? 160) || 160), 1, 512);
+  const truncated = Array.from(clean).slice(0, maxChars).join('');
+  if (amount <= 0.02) return truncated;
+
+  const density = clamp(Number(options.density ?? 0.72) || 0, 0, 1);
+  const preserveDigits = options.preserveDigits !== false;
+  const glyphs = Array.from(String(options.glyphs || DEFAULT_GLITCH_GLYPHS));
+  if (glyphs.length === 0) return truncated;
+
+  const frequencyHz = Math.max(1, Number(options.frequencyHz ?? (3 + amount * 21)) || 1);
+  const time = Number(options.time ?? 0) || 0;
+  const frame = Math.floor(time * frequencyHz);
+  const slotChance = clamp((0.06 + amount * 0.84) * density, 0, 1);
+  const flickerChance = clamp(0.14 + amount * 0.78, 0, 1);
+  const slotRandom = mulberry32(hashString(`${truncated}|${seed}|glyph-slots`));
+  const frameRandom = mulberry32(hashString(`${truncated}|${seed}|glyph-frame|${frame}`));
+  const out = [];
+
+  for (const char of truncated) {
+    if (!isCorruptibleChar(char, preserveDigits)) {
+      out.push(char);
+      continue;
+    }
+
+    const slotIsUnstable = slotRandom() < slotChance;
+    const slotIsLit = frameRandom() < flickerChance;
+    if (!slotIsUnstable || !slotIsLit) {
+      out.push(char);
+      continue;
+    }
+
+    let replacement = glyphs[Math.floor(frameRandom() * glyphs.length)] || char;
+    if (replacement === char && glyphs.length > 1) {
+      replacement = glyphs[(Math.floor(frameRandom() * glyphs.length) + 1) % glyphs.length];
+    }
+    out.push(replacement);
   }
 
   return out.join('');

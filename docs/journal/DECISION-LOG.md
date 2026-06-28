@@ -5,7 +5,8 @@
 **Decision:** Treat the title screen as a short looping attract-mode scene. The
 wordmark keeps a strong clean bone/cyan base and uses brief Inhibitor-pink
 corruption bursts as disturbances, not as the default title color. Title-scale
-bursts may use louder bounded Zalgo than normal HUD text, but subtitles,
+bursts use a glyph-slot overlay rather than mutating the title text: intensity
+means more glyph slots flicker and the swaps happen more often. Subtitles,
 status copy, and the primary CTA stay clean and locally backed. The live title
 map should carry some story with a larger central well, peripheral readable
 objects, and a repeatable rift wink.
@@ -18,13 +19,14 @@ Keeping the resting title clean also preserves the new base aesthetic instead
 of making the anomaly color feel normal.
 
 **Where it landed:** `src/main.js`, `src/maps/title-screen.js`,
-`src/maps/renderer-fixtures.js`, `tests/ui-visual.cjs`,
+`src/maps/renderer-fixtures.js`, `src/text-corruption.js`,
+`tests/text-corruption.cjs`, `tests/ui-visual.cjs`,
 `docs/design/UI-VISUAL-SYSTEM.md`,
 `docs/project/UI-VISUAL-PASS-PLAN.md`, and the test-harness docs.
 
-**Door status:** Closed for the title corruption boundary and clean-resting
-wordmark rule. Open for exact object density, wordmark art, and future
-title-loop beats after fresh captures.
+**Door status:** Closed for the title corruption boundary, clean-resting
+wordmark rule, and glyph-overlay model. Open for exact object density,
+wordmark art, and future title-loop beats after fresh captures.
 
 ## 2026-06-28 — UI rebuild starts with shared primitives, not a framework jump
 

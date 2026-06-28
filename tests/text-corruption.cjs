@@ -42,6 +42,48 @@ async function run() {
       `Expected bounded length, got ${corrupted.length}`);
   });
 
+  await runner.run("Glyph corruption preserves clean length", async () => {
+    const source = "LAST SINGULARITY";
+    assert(mod.corruptGlyphText(source, 0, "seed") === source, "Expected zero-intensity glyph text to remain clean");
+    const corrupted = mod.corruptGlyphText(source, 1, "seed", { density: 1, time: 0.25 });
+    assert(Array.from(corrupted).length === Array.from(source).length,
+      `Expected slot-preserving corruption, got ${corrupted}`);
+  });
+
+  await runner.run("Glyph corruption is deterministic per animation frame", async () => {
+    const source = "LAST SINGULARITY";
+    const options = { density: 1, frequencyHz: 12, time: 0.25 };
+    const a = mod.corruptGlyphText(source, 0.85, "same-seed", options);
+    const b = mod.corruptGlyphText(source, 0.85, "same-seed", options);
+    const c = mod.corruptGlyphText(source, 0.85, "same-seed", { ...options, time: 0.35 });
+    assert(a === b, "Expected same seed/time to produce the same glyph corruption");
+    assert(a !== c, "Expected a later animation frame to flicker different glyphs");
+  });
+
+  await runner.run("Glyph corruption intensity increases affected slots over time", async () => {
+    const source = "LAST SINGULARITY";
+    const changedSlots = (intensity) => {
+      let changes = 0;
+      for (let i = 0; i < 10; i++) {
+        const corrupted = mod.corruptGlyphText(source, intensity, "intensity-seed", {
+          density: 1,
+          frequencyHz: 18,
+          time: i / 10,
+        });
+        const cleanGlyphs = Array.from(source);
+        const faultGlyphs = Array.from(corrupted);
+        for (let j = 0; j < cleanGlyphs.length; j++) {
+          if (cleanGlyphs[j] !== faultGlyphs[j]) changes++;
+        }
+      }
+      return changes;
+    };
+
+    const low = changedSlots(0.16);
+    const high = changedSlots(0.9);
+    assert(high > low, `Expected stronger corruption to affect more glyph slots over time, got low=${low} high=${high}`);
+  });
+
   const allPassed = runner.summary();
   process.exit(allPassed ? 0 : 1);
 }

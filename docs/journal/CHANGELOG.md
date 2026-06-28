@@ -7,6 +7,9 @@
 
 ## 2026-06-28 — UI visual-system direction
 
+- Reworked title corruption into a per-glyph UI overlay: the clean wordmark
+  remains stable while Inhibitor-pink glyph slots flicker during bursts, with
+  higher intensity increasing both affected slots and swap frequency.
 - Changed title-wordmark corruption from a persistent Zalgo/pink treatment to a
   clean bone/cyan base with short Inhibitor-pink burst faults, and added a
   `title-glitch` UI visual capture for the deliberate burst frame.

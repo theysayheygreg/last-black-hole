@@ -91,8 +91,10 @@ composition: centered baseline, left-aligned UI, right-aligned UI, and
 left-aligned UI with the title camera shifted so the well reads on the opposite
 side. All variants use the same local backing and safe gutters. The wordmark's
 base state stays clean; Inhibitor-pink corruption appears only in short
-deterministic fault bursts so the comparison is about composition rather than
-styling.
+deterministic glyph-overlay bursts so the comparison is about composition
+rather than styling. Treat title corruption as an animation layer: the source
+label remains clean, while intensity controls how many glyph slots flicker and
+how rapidly they swap.
 
 ### Profile Select
 
@@ -251,7 +253,7 @@ Tasks:
 - warm the title scene before captures so the well/fabric is visible;
 - keep the title over the live sim rather than a card;
 - make the first action readable from couch distance;
-- keep wordmark corruption bounded to title-scale identity text only;
+- keep wordmark corruption as a bounded title-scale glyph overlay only;
 - use local backing for title copy and command surfaces instead of dimming the
   full scene;
 - use the title map as a small attract loop with a larger well, peripheral
@@ -271,9 +273,9 @@ Acceptance:
 Shipped title slice:
 
 - `src/main.js` now draws the title through a dedicated overlay helper with a
-  cyan/bone wordmark, title-only bounded corruption jitter, local gradient
-  backing, a clean subtitle/tagline, a status strip, and a shared command
-  button CTA.
+  cyan/bone wordmark, title-only bounded glyph-flicker corruption, local
+  gradient backing, a clean subtitle/tagline, a status strip, and a shared
+  command button CTA.
 - `src/maps/title-screen.js` and the renderer title fixture now use a larger
   central well plus stars, wreck clusters, orbiting bodies, and a rift aperture
   that fades out and returns on the attract loop.
