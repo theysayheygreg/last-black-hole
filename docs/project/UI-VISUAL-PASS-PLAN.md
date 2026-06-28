@@ -66,7 +66,7 @@ goal is not a giant UI rewrite. The goal is one vocabulary.
 
 | Surface | Current Owner | Target Reference | Couch-Critical Reads | Current Gap |
 |---------|---------------|------------------|----------------------|-------------|
-| Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | old red title weight, prompt hierarchy, warm-up/capture timing |
+| Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | first attract-mode slice shipped; profile flow still follows |
 | Profile Select | `src/main.js` | follows title language | selected profile, load/create/delete, destructive state | small modal texture and inconsistent danger treatment |
 | Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | centered terminal frame, dense copy, launch not loud enough |
 | Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | preview is secondary to list data, route colors not strong enough |
@@ -236,22 +236,40 @@ Shipped slice:
 
 ## Pass 3 - Title And Profile Flow
 
-Status: follows primitives and baseline captures.
+Status: title first slice shipped; profile flow follows.
 
 Tasks:
 
 - warm the title scene before captures so the well/fabric is visible;
 - keep the title over the live sim rather than a card;
 - make the first action readable from couch distance;
+- keep wordmark corruption bounded to title-scale identity text only;
+- use local backing for title copy and command surfaces instead of dimming the
+  full scene;
+- use the title map as a small attract loop with a larger well, peripheral
+  readable objects, and a repeatable rift event;
 - simplify profile creation/delete overlays with stronger focus and danger
   treatment.
 
 Acceptance:
 
 - a title screenshot reads as LBH within one second;
+- the `title-attract` harness frame shows the loop still readable after the
+  first warmed title frame;
 - title and profile flows work with keyboard and controller;
 - deletion is clearly destructive without becoming a full-screen panic state;
 - first action text is 24px or larger at the current 1280-wide game scale.
+
+Shipped title slice:
+
+- `src/main.js` now draws the title through a dedicated overlay helper with a
+  cyan/bone wordmark, title-only bounded corruption jitter, local gradient
+  backing, a clean subtitle/tagline, a status strip, and a shared command
+  button CTA.
+- `src/maps/title-screen.js` and the renderer title fixture now use a larger
+  central well plus stars, wreck clusters, orbiting bodies, and a rift aperture
+  that fades out and returns on the attract loop.
+- `tests/ui-visual.cjs` captures both `title` and `title-attract`.
 
 ## Pass 4 - Home / Main Menu
 

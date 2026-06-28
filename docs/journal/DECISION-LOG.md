@@ -1,5 +1,26 @@
 # Decision Log
 
+## 2026-06-28 — Title screen becomes an attract loop, not a static logo
+
+**Decision:** Treat the title screen as a short looping attract-mode scene. The
+wordmark can use low-mid bounded Inhibitor-style corruption and a brighter
+cyan/bone palette, but subtitles, status copy, and the primary CTA stay clean
+and locally backed. The live title map should carry some story with a larger
+central well, peripheral readable objects, and a repeatable rift wink.
+
+**Why:** The title is a product read, not just navigation. It should show the
+ASCII fabric, cosmic object language, and dread tone before the player starts a
+run. At the same time, the first action must remain couch-readable, so
+corruption belongs only to identity text and not to prompts or menu decisions.
+
+**Where it landed:** `src/main.js`, `src/maps/title-screen.js`,
+`src/maps/renderer-fixtures.js`, `tests/ui-visual.cjs`,
+`docs/design/UI-VISUAL-SYSTEM.md`,
+`docs/project/UI-VISUAL-PASS-PLAN.md`, and the test-harness docs.
+
+**Door status:** Closed for the title corruption boundary. Open for exact
+object density, wordmark art, and future title-loop beats after fresh captures.
+
 ## 2026-06-28 — UI rebuild starts with shared primitives, not a framework jump
 
 **Decision:** Keep the current v0.2 UI ownership split while rebuilding the

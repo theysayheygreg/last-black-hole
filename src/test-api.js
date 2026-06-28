@@ -243,6 +243,7 @@ export function initTestAPI(getState) {
         state.loadTitleScene?.();
         state.gamePhase = 'title';
         state.setTitleTimerForTest?.(options.titleTimer ?? 1.2);
+        if (options.loopTime != null) state.setTitleLoopTimeForTest?.(options.loopTime);
         return true;
       }
 

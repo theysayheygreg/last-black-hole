@@ -175,8 +175,10 @@ UI visual captures run through `tests/ui-visual.cjs`. They use deterministic
 test API fixtures rather than fragile menu key choreography, then save full-page
 screenshots plus 50 percent and 25 percent downscaled couch proxies. This lane
 checks that major UI surfaces exist, are not blank, preserve the expected phase,
-and keep a basic brightness/readability floor. It is a canary for UI drift, not
-a pixel-perfect approval gate.
+and keep a basic brightness/readability floor. The title surface includes both
+the immediate `title` frame and a later `title-attract` frame so attract-mode
+events can change without regressing the couch read. It is a canary for UI
+drift, not a pixel-perfect approval gate.
 
 ## Lanes
 

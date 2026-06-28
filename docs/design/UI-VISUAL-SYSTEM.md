@@ -95,6 +95,16 @@ tooltip or more explanatory copy to compensate for a weak first read.
 
 - Title text sits over the live world, not inside a hero card.
 - The well/fabric behind the title must be visible after warm-up.
+- The title is allowed a low-mid bounded Inhibitor corruption jitter because it
+  is identity, not a decision surface. Subtitles, profile/menu copy, and the
+  primary CTA stay clean.
+- Title copy needs local backing over dense fabric: gradient veils, thin
+  brackets, dark inline mattes, or command-button backplates. Do not solve this
+  by dimming the whole scene.
+- The title environment should behave like an old attract loop: a larger
+  central well, peripheral stars/wrecks/comets/portals, and a small repeating
+  event such as an aperture winking out. The backdrop tells the fantasy before
+  the player presses anything.
 - Menu choices can live left or lower-left, but the first action must be
   obvious from a couch distance.
 - System-status microtext is allowed as mood, not navigation.

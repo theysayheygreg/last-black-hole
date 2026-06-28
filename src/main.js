@@ -66,6 +66,15 @@ import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { HULL_DEFINITIONS } from './content/hulls.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
+import {
+  drawCommandButton,
+  drawCornerFrame,
+  drawScanlines as drawUiScanlines,
+  fitUiText,
+  roleColor,
+  withAlpha,
+} from './ui/canvas-primitives.js';
+import { corruptText } from './text-corruption.js';
 
 window.__LBH_BOOT_MARK__?.('main.module.evaluated', {
   href: window.location.href,
@@ -190,6 +199,8 @@ function getVisibleWellRenderInputs(cameraX, cameraY) {
 const TITLE_CAMERA_DRIFT_AMPLITUDE = 0.03;
 const TITLE_CAMERA_DRIFT_PERIOD_X = 22;
 const TITLE_CAMERA_DRIFT_PERIOD_Y = 17;
+const TITLE_RIFT_ID = 'title-rift-aperture';
+const TITLE_ATTRACT_LOOP_SECONDS = 11.5;
 let running = true;
 let totalTime = 0;
 let timeScale = 1.0;
@@ -899,6 +910,11 @@ function init() {
         titleTimer = Math.max(0, Number(value) || 0);
         return titleTimer;
       },
+      setTitleLoopTimeForTest: (value) => {
+        totalTime = titleLoopTime(Number(value) || 0);
+        updateTitleAttractScene();
+        return titleLoopTime(totalTime);
+      },
       setProfileCursorForTest: (index) => {
         profileCursor = Math.max(0, Math.min(2, Math.round(Number(index) || 0)));
         return profileCursor;
@@ -1176,7 +1192,9 @@ function loadScene(map) {
   //    frame — not to gameplay hit radii. Gameplay runs with
   //    strength=0 so these never paint, but we populate them anyway
   //    so context is always valid.
-  sceneAccretionRadii = wellSystem.wells.map(() => [0.07, 0.30, 0.52]);
+  sceneAccretionRadii = wellSystem.wells.map((_, index) => (
+    currentMap.titleAccretionRadii?.[index] || [0.07, 0.30, 0.52]
+  ));
 }
 
 function applyRenderTuningForPhase(isTitle) {
@@ -1228,13 +1246,34 @@ function getGlitchIntensity() {
   return Math.max(getTransitionGlitchIntensity(), wakeShock);
 }
 
+function clearPresentationActors() {
+  remotePlayers = [];
+  remoteFauna = [];
+  remoteSentries = [];
+  fixtureShipCandidates = [];
+}
+
+function spawnPresentationPortals(portals = []) {
+  for (const portal of portals || []) {
+    portalSystem.addPortal(portal.x, portal.y, {
+      id: portal.id,
+      type: portal.type,
+      spawnTime: 0,
+      lifespan: portal.lifespan ?? 120,
+      finalInhibitor: portal.finalInhibitor === true,
+      blockedByInhibitor: portal.blockedByInhibitor === true,
+    });
+  }
+}
+
 /**
  * Load the title screen scene. Runs the title map as ambient background.
  */
 function loadTitleScene() {
   rendererFixtureActive = false;
-  fixtureShipCandidates = [];
+  clearPresentationActors();
   loadScene(MAP_TITLE);
+  spawnPresentationPortals(MAP_TITLE.fixturePortals);
   gamePhase = 'title';
   titleTimer = 0;
   hideHUD();
@@ -1246,16 +1285,7 @@ function loadRendererFixture(name) {
 
   rendererFixtureActive = true;
   loadScene(fixture);
-  for (const portal of fixture.fixturePortals || []) {
-    portalSystem.addPortal(portal.x, portal.y, {
-      id: portal.id,
-      type: portal.type,
-      spawnTime: 0,
-      lifespan: portal.lifespan ?? 120,
-      finalInhibitor: portal.finalInhibitor === true,
-      blockedByInhibitor: portal.blockedByInhibitor === true,
-    });
-  }
+  spawnPresentationPortals(fixture.fixturePortals);
   for (const scav of fixture.fixtureScavengers || []) {
     const spawned = scavengerSystem.spawn(scav.x, scav.y, scav.archetype || 'drifter');
     spawned.facing = scav.facing ?? spawned.facing;
@@ -2488,6 +2518,165 @@ function drawTerminalFrame(ctx, x, y, w, h, title, color = 'rgba(80, 100, 140, 0
   }
 }
 
+function titleLoopTime(time) {
+  return ((time % TITLE_ATTRACT_LOOP_SECONDS) + TITLE_ATTRACT_LOOP_SECONDS) % TITLE_ATTRACT_LOOP_SECONDS;
+}
+
+function smoothstep(edge0, edge1, value) {
+  const t = Math.max(0, Math.min(1, (value - edge0) / Math.max(0.0001, edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function titleAttractState(time) {
+  const t = titleLoopTime(time);
+  const collapse = smoothstep(6.2, 7.5, t);
+  const returnFade = smoothstep(8.8, 10.6, t);
+  const portalAlpha = t < 6.2 ? 1 : t < 8.8 ? 1 - collapse : returnFade;
+  let story = 'wake scan: singularity stable';
+  let role = 'flow';
+
+  if (t >= 2.5 && t < 5.0) {
+    story = 'derelict signatures caught in orbit';
+    role = 'salvage';
+  } else if (t >= 5.0 && t < 7.9) {
+    story = 'rift aperture collapsing';
+    role = 'anomaly';
+  } else if (t >= 7.9 && t < 10.4) {
+    story = 'exit lost - route memory persists';
+    role = 'muted';
+  }
+
+  return { portalAlpha, story, role };
+}
+
+function updateTitleAttractScene() {
+  if (rendererFixtureActive || gamePhase !== 'title' || !portalSystem) return;
+  const portal = portalSystem.portals.find((p) => p.id === TITLE_RIFT_ID);
+  if (!portal) return;
+
+  const { portalAlpha } = titleAttractState(totalTime);
+  portal.opacity = portalAlpha;
+  // Menus do not advance runElapsedTime, so the title rift uses the attract
+  // loop clock instead of gameplay evaporation to blink out and return.
+  portal.alive = portalAlpha > 0.035;
+}
+
+function drawTitleTextMatte(ctx, cx, y, width, height, alpha = 1) {
+  const x = cx - width / 2;
+  const gradient = ctx.createLinearGradient(x, 0, x + width, 0);
+  gradient.addColorStop(0, withAlpha('#000421', 0));
+  gradient.addColorStop(0.14, withAlpha('#000421', 0.72 * alpha));
+  gradient.addColorStop(0.5, withAlpha('#000421', 0.88 * alpha));
+  gradient.addColorStop(0.86, withAlpha('#000421', 0.72 * alpha));
+  gradient.addColorStop(1, withAlpha('#000421', 0));
+
+  ctx.save();
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x, y, width, height);
+  ctx.strokeStyle = roleColor('flow', 0.18 * alpha);
+  ctx.beginPath();
+  ctx.moveTo(x + width * 0.12, y);
+  ctx.lineTo(x + width * 0.88, y);
+  ctx.moveTo(x + width * 0.18, y + height);
+  ctx.lineTo(x + width * 0.82, y + height);
+  ctx.stroke();
+  drawCornerFrame(ctx, { x: x + width * 0.06, y: y + 8, w: width * 0.88, h: height - 16 }, {
+    role: 'flow',
+    alpha: 0.28 * alpha,
+    length: 26,
+  });
+  ctx.restore();
+}
+
+function drawTitleStatusLine(ctx, cx, y, width, text, role, time) {
+  const pulse = 0.72 + 0.18 * Math.sin(time * 2.4);
+  ctx.save();
+  ctx.fillStyle = withAlpha('#000421', 0.64);
+  ctx.fillRect(cx - width / 2, y - 16, width, 28);
+  ctx.strokeStyle = roleColor(role, 0.32 * pulse);
+  ctx.strokeRect(cx - width / 2, y - 16, width, 28);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = canvasFont(12, { weight: '700' });
+  ctx.fillStyle = roleColor(role, 0.88);
+  ctx.fillText(fitUiText(ctx, text.toUpperCase(), width - 24), cx, y - 1);
+  ctx.restore();
+}
+
+function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
+  const cx = w / 2;
+  const cy = h / 2;
+  const titleY = cy - 68;
+  const titleState = titleAttractState(time);
+  const readyAlpha = Math.max(0, Math.min(1, (readyTimer - 0.35) / 0.45));
+  const promptPulse = 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(time * 3.0));
+  const corruptionSeed = Math.floor(time * 8);
+  const corruptionAmount = 0.26 + 0.06 * (0.5 + 0.5 * Math.sin(time * 1.7));
+  const cleanTitle = 'LAST SINGULARITY';
+  const displayTitle = corruptText(cleanTitle, corruptionAmount, `title-${corruptionSeed}`, {
+    density: 0.42,
+    maxMarks: 2,
+    maxChars: cleanTitle.length,
+  });
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  drawUiScanlines(ctx, w, h, 0.018, 5);
+  drawTitleTextMatte(ctx, cx, cy - 154, Math.min(900, w * 0.74), 266, 1);
+
+  ctx.shadowColor = roleColor('flow', 0.48);
+  ctx.shadowBlur = 26;
+  ctx.font = canvasFont(58, { role: 'display', weight: '800' });
+  ctx.fillStyle = roleColor('text', 0.20);
+  ctx.fillText(cleanTitle, cx, titleY);
+
+  const jitterX = Math.sin(time * 29.0) * 0.7;
+  const jitterY = Math.cos(time * 21.0) * 0.45;
+  ctx.fillStyle = roleColor('bone', 0.96);
+  ctx.fillText(displayTitle, cx + jitterX, titleY + jitterY);
+  ctx.shadowColor = roleColor('anomaly', 0.34);
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = roleColor('anomaly', 0.18);
+  ctx.fillText(displayTitle, cx - jitterX * 0.8, titleY + 1);
+
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+  ctx.shadowBlur = 14;
+  ctx.font = canvasFont(17, { weight: '700' });
+  ctx.fillStyle = roleColor('flow', 0.94);
+  ctx.fillText('out of a dying universe', cx, titleY + 42);
+  ctx.font = canvasFont(13);
+  ctx.fillStyle = roleColor('text', 0.78);
+  ctx.fillText('surf the currents. escape the void.', cx, titleY + 67);
+
+  drawTitleStatusLine(ctx, cx, titleY + 102, 430, titleState.story, titleState.role, time);
+
+  if (readyAlpha > 0) {
+    drawCommandButton(ctx, {
+      x: cx - 176,
+      y: titleY + 130,
+      w: 352,
+      h: 46,
+    }, 'begin', {
+      hotkey: 'space',
+      role: 'flow',
+      active: true,
+      alpha: readyAlpha * promptPulse,
+    });
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = withAlpha('#000421', 0.42);
+  ctx.fillRect(cx - 116, h - 36, 232, 24);
+  ctx.strokeStyle = roleColor('flow', 0.12);
+  ctx.strokeRect(cx - 116, h - 36, 232, 24);
+  ctx.fillStyle = roleColor('muted', 0.46);
+  ctx.font = canvasFont(10);
+  ctx.fillText('v0.2 - attract loop online', cx, h - 20);
+  ctx.restore();
+}
+
 /**
  * Velocity readout drawn directly under the ship sprite. Shows current
  * speed magnitude + a tiny direction arrow. Color tier names the speed
@@ -3574,6 +3763,8 @@ function gameLoop(now) {
     }
   }
 
+  updateTitleAttractScene();
+
   _prevConfirm = confirmNow;
   _prevPause = pauseNow;
   _prevBack = backNow;
@@ -4472,53 +4663,8 @@ function gameLoop(now) {
 
   // === TITLE SCREEN ===
   if (!rendererFixtureActive && gamePhase === 'title') {
-    const cx = overlayCanvas.width / 2;
-    const cy = overlayCanvas.height / 2;
     const w = overlayCanvas.width, h = overlayCanvas.height;
-
-    ctx.save();
-    ctx.textAlign = 'center';
-
-    // Subtle scanlines over the simulation backdrop
-    drawScanlines(ctx, w, h, 0.03);
-
-    // Title — bold red glow
-    const titlePulse = 0.85 + 0.15 * Math.sin(totalTime * 1.5);
-    ctx.shadowColor = 'rgba(255, 40, 20, 0.4)';
-    ctx.shadowBlur = 30;
-    ctx.fillStyle = `rgba(255, 70, 40, ${titlePulse})`;
-    ctx.font = canvasFont(52, { role: 'display', weight: '800' });
-    ctx.fillText('LAST SINGULARITY', cx, cy - 50);
-    ctx.fillText('LAST SINGULARITY', cx, cy - 50); // double for glow
-
-    // Subtitle
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = 'rgba(140, 210, 240, 0.9)';
-    ctx.font = canvasFont(15);
-    ctx.fillText('out of a dying universe', cx, cy - 8);
-
-    // Tagline
-    ctx.fillStyle = 'rgba(200, 210, 230, 0.7)';
-    ctx.font = canvasFont(13);
-    ctx.fillText('surf the currents. escape the void.', cx, cy + 16);
-
-    // Prompt (fades in after 0.5s)
-    if (titleTimer > 0.5) {
-      const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.4;
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = `rgba(220, 225, 240, ${blink})`;
-      ctx.font = canvasFont(16);
-      ctx.fillText('press space to begin', cx, cy + 80);
-    }
-
-    // Version
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(100, 110, 130, 0.3)';
-    ctx.font = canvasFont(10);
-    ctx.fillText('v0.2 — week 2 build', cx, h - 20);
-
-    ctx.restore();
+    drawTitleScreenOverlay(ctx, w, h, totalTime, titleTimer);
   }
 
   // === PROFILE SELECT SCREEN ===

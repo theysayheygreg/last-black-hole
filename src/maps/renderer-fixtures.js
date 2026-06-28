@@ -12,20 +12,35 @@ export const FIXTURE_TITLE = {
   wells: [
     {
       x: 1.5, y: 1.5,
-      mass: 4.0,
+      mass: 4.9,
       orbitalDir: 1,
-      killRadius: 0.12,
+      killRadius: 0.15,
       spinRate: 0.12,
       points: 16,
-      accretionRadius: 0.06,
+      accretionRadius: 0.075,
     },
   ],
-  stars: [],
+  titleAccretionRadii: [
+    [0.085, 0.37, 0.64],
+  ],
+  stars: [
+    { x: 0.58, y: 0.68, mass: 0.75, type: 'whiteDwarf' },
+    { x: 2.44, y: 0.74, mass: 1.05, type: 'yellowDwarf' },
+    { x: 2.30, y: 2.42, mass: 0.68, type: 'neutronStar' },
+  ],
   loot: [],
-  wrecks: [],
+  wrecks: [
+    { x: 0.74, y: 2.18, type: 'debris', tier: 1, size: 'medium' },
+    { x: 2.12, y: 1.92, type: 'derelict', tier: 2, size: 'large' },
+    { x: 0.94, y: 1.08, type: 'vault', tier: 3, size: 'small' },
+  ],
   planetoids: [
     { type: 'orbit', wellIndex: 0 },
     { type: 'orbit', wellIndex: 0 },
+    { type: 'orbit', wellIndex: 0 },
+  ],
+  fixturePortals: [
+    { id: 'title-rift-aperture', x: 2.36, y: 2.02, type: 'rift', lifespan: 120 },
   ],
   configOverrides: {
     ascii: {

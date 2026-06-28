@@ -165,15 +165,16 @@ It runs:
 - `tests/ui-visual.cjs`
 
 This layer is for UI readability, not gameplay truth. It captures title,
-profile select, home, map select, in-match HUD, extraction results, and death
-results with deterministic fixture state. Each surface writes a full screenshot
-plus 50 percent and 25 percent downscaled couch proxies under
+title-attract, profile select, home, map select, in-match HUD, extraction
+results, and death results with deterministic fixture state. Each surface writes
+a full screenshot plus 50 percent and 25 percent downscaled couch proxies under
 `tests/screenshots/ui-visual-<timestamp>/`.
 
 Use it for:
 
 - checking that the live HUD is included in screenshots, not just the canvas
 - reviewing title/menu/result hierarchy at a glance
+- checking that the title attract loop stays readable after the first warm frame
 - making sure result outcomes and continue actions stay visible at reduced size
 - catching accidental first-frame black captures or missing overlay phases
 

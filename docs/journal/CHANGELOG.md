@@ -7,6 +7,13 @@
 
 ## 2026-06-28 — UI visual-system direction
 
+- Reworked the title screen into a first attract-mode slice: the red wordmark
+  was replaced with a cyan/bone title treatment, only the title text gets
+  bounded Inhibitor-style corruption jitter, title/subtitle/CTA text now sits
+  on local backing, and the title map gained a larger central well, stars,
+  wrecks, orbiting bodies, and a rift that winks out on the title loop.
+- Expanded `npm run test:ui` with a `title-attract` capture so the UI harness
+  verifies both the immediate title read and a later attract-loop frame.
 - Added `docs/reference/UI-MOODBOARD.md` to translate Evangelion/NERV,
   Marathon, Returnal, and the current LBH Three visual hierarchy into an
   original UI direction for v0.2.
