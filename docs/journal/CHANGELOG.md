@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-06-28 — Steam Deck demo deploy
+
+- Built and deployed Linux release `0.2.2.332007f` to Greg's Steam Deck at
+  `/home/deck/Games/last-singularity` over Tailscale.
+- Refreshed the Steam Gaming Mode non-Steam shortcut for **Last Singularity** so
+  it points at the Deck launcher wrapper instead of the raw Electron binary.
+- Verified Deck reachability, launcher/executable permissions, and absence of a
+  stale running Last Singularity process after deploy; physical Gaming Mode
+  launch and controller review remain the demo acceptance step.
+
 ## 2026-06-28 — UI visual-system direction
 
 - Ran an LBH forge architecture pass over the recent UI/title/typography/VFX

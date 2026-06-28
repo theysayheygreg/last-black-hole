@@ -8,10 +8,10 @@
 
 ## Current Snapshot
 
-**Date:** 2026-06-27
+**Date:** 2026-06-28
 **Public train:** v0.2.2
 **Build version shape:** v0.2.2.`<commit-hash>`
-**Primary playable target:** all-target release artifacts plus local source
+**Primary playable target:** Steam Deck Linux release artifact plus local source
 build, Three renderer, and local authoritative sim.
 
 For source playtesting, use:
@@ -38,8 +38,26 @@ shape.
 ## Standing Assessment
 
 **Status:** v0.2.2 local source path is playable on a fresh local authority
-stack. The current source target is green for a Codex-driven smoke playtest;
-the next release artifact build should use `v0.2.2.<commit-hash>`.
+stack, and `0.2.2.332007f` has a fresh Linux release deploy on Greg's Steam
+Deck for demo testing. The Deck install was verified at the file/shortcut level;
+the next evidence gap is Greg launching it from Gaming Mode and confirming
+controller navigation in hand.
+
+On 2026-06-28, Codex refreshed the private Deck demo build:
+
+- `npm run deck:preflight -- --host=steamdeck --prepare` found
+  `steamdeck.tail1ac9cf.ts.net` online at `100.77.19.24` with SSH ready.
+- `npm run test:fast` passed, including the desktop package, Deck Gaming Mode,
+  Deck installer, play instructions, typography, UI primitive, and Three smoke
+  lanes.
+- `LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deploy:deck` built the
+  Linux release artifact at `builds/v0.2.2.332007f/Last Singularity-linux-x64`
+  and copied it to `/home/deck/Games/last-singularity`.
+- The Gaming Mode refresh command wrote **Last Singularity** into Steam userdata
+  as a non-Steam shortcut pointing at
+  `/home/deck/Games/last-singularity/run-last-singularity.sh`.
+- Remote verification confirmed the Deck executable and launcher are fresh and
+  executable, with no active Last Singularity process left running.
 
 The recent local work fixed the class of issues that made the Three migration
 feel broken: camera/world projection mismatch, coordinate and flow scaling
@@ -81,8 +99,10 @@ assets into `dist/nightly`, and passed `release:check`.
 Artifacts:
 
 - `builds/v0.2.1/` (last three-part build, preserved as evidence)
-- next release build: `builds/v0.2.2.<commit-hash>/`
-- next playtest zip: `builds/last-singularity-playtest-v0.2.2.<commit-hash>.zip`
+- latest Deck/demo release build:
+  `builds/v0.2.2.332007f/Last Singularity-linux-x64`
+- latest Deck/demo playtest zip:
+  `builds/last-singularity-playtest-v0.2.2.332007f.zip`
 - `dist/nightly/`
 
 ## Known Caveats
