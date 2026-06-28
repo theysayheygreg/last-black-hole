@@ -7,6 +7,14 @@
 
 ## 2026-06-28 — UI visual-system direction
 
+- Added `docs/project/THREE-VFX-PASS-PLAN.md`, a detailed implementation plan
+  for a pooled, event-driven Three VFX kit covering title corruption, ship
+  thrust/brake, portal sparks, pickup glints, Inhibitor faults, quality
+  budgets, harness coverage, and future renderer portability.
+- Logged the VFX architecture decision: build rich Three effects for the
+  current PC/web/Steam Deck path, but keep effect behavior behind
+  renderer-neutral events so future native/console ports copy the contract
+  instead of inheriting Three internals.
 - Reworked title corruption into a per-glyph UI overlay: the clean wordmark
   remains stable while Inhibitor-pink glyph slots flicker during bursts, with
   higher intensity increasing both affected slots and swap frequency.

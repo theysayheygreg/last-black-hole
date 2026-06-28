@@ -3,6 +3,8 @@
 > **v0.2 status:** Current master target for the top-down Three scene.
 > This supersedes the canvas-era layer stack in `DEPTH-LAYERS.md` for new
 > renderer work. The older doc remains useful as historical reasoning.
+> See `docs/project/THREE-VFX-PASS-PLAN.md` for the implementation plan behind
+> the immediate VFX, near-camera atmosphere, and screen-space fault layers.
 
 ## North Star
 
@@ -195,5 +197,8 @@ Use a wider palette, but keep it role-bound.
   the top-down compositing contract.
 - Pool repeated meshes, trails, particles, and glints. The visual hierarchy is
   not permission to allocate per entity per frame.
+- Drive VFX from renderer-neutral events such as `thrusterBurst`,
+  `titleGlyphFault`, and `portalCollapse`; do not let particles decide gameplay
+  truth.
 - Treat the current canvas/DOM world labels as text surfaces only. New world
   shape, glow, trail, and aura work should start in the Three scene.

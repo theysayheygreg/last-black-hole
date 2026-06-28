@@ -61,6 +61,7 @@ reading stale health records or reconstructing status from `git log`.
 | Three entity visual language | `docs/design/THREE-ENTITY-VISUALS.md` | Designed 2026-06-26; current code has primitive bridge markers, next work is higher-fidelity Three object families |
 | Three scene visual hierarchy | `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md` | Designed 2026-06-26; black void remains primary, but interactive objects require bright contrast affordances, mattes, halos, or local backplates |
 | Three entity visual pass plan | `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` | Designed 2026-06-26; implementation starts with shared style kit, matte/rim proof on existing primitives, player asset bake-off, portal replacement, wreck replacement, and renderer fixture coverage |
+| Three VFX pass plan | `docs/project/THREE-VFX-PASS-PLAN.md` | Designed 2026-06-28; build rich Three effects now behind renderer-neutral VFX events so title corruption, ship motion, portals, pickups, and Inhibitor faults can port later without putting gameplay truth in particles |
 | Three entity mood board | `docs/reference/THREE-ENTITY-MOODBOARD.md` | Designed 2026-06-26; cited references and generated target visuals for 2D identity inside staged 3D depth |
 | UI visual system | `docs/design/UI-VISUAL-SYSTEM.md` | Designed 2026-06-28; current contrast, sizing, color-role, and couch-test contract for title, home, map select, HUD, and results |
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
@@ -83,24 +84,29 @@ reading stale health records or reconstructing status from `git log`.
    `docs/design/THREE-ENTITY-VISUALS.md`,
    `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and
    `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`.
-2. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
-3. **Slingshot authority regression watch** — remote-authority mode now renders slingshot from sim-owned engagement/release state; keep tests representative as numbers and maps change.
-4. **Remote/local physics regression watch** — brake, max-speed, delta-v, fuel cells, and movement coefficients now have server parity; keep tests representative as tuning evolves.
-5. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
-6. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
-7. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
-8. **UI visual pass** — first shared canvas primitive kit, result-screen
+2. **Three VFX kit** — add a pooled, event-driven VFX manager for title
+   corruption, ship thrust/brake, portal sparks, pickup glints, Inhibitor
+   faults, and short motion clips. Keep events renderer-neutral so future
+   native/console ports copy effect behavior rather than Three internals. See
+   `docs/project/THREE-VFX-PASS-PLAN.md`.
+3. **Slingshot + speed playtest tuning** — first-pass numbers ship with the system; feel needs a real session. See `docs/design/SLINGSHOT-NETWORK.md` "Open Decisions" + the `Slingshot numbers tuning + map redesign for routes` BACKLOG entry.
+4. **Slingshot authority regression watch** — remote-authority mode now renders slingshot from sim-owned engagement/release state; keep tests representative as numbers and maps change.
+5. **Remote/local physics regression watch** — brake, max-speed, delta-v, fuel cells, and movement coefficients now have server parity; keep tests representative as tuning evolves.
+6. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
+7. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
+8. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
+9. **UI visual pass** — first shared canvas primitive kit, result-screen
    migration, and UI visual harness are live. Continue with title/profile,
    home, map-select, HUD, and pause rebuilds, then tighten Deck/couch
    readability thresholds.
    See `docs/design/UI-VISUAL-SYSTEM.md`,
    `docs/reference/UI-MOODBOARD.md`, and
    `docs/project/UI-VISUAL-PASS-PLAN.md`.
-9. **Meta-loop implementation polish** — results screen, vault/rig/loadout UI, chronicle (foundation shipped 2026-05-04 series)
-10. **Run result write-back** — connect RunResult schema to persistence layer (first slice shipped, full coverage pending)
-11. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
-12. **Balance pass** — hull coefficients (now actually applied!), upgrade costs, loot rarity, signal tuning, delta-v / slingshot numbers
-13. **Deploy** — GitHub Pages web build, weekly playables
+10. **Meta-loop implementation polish** — results screen, vault/rig/loadout UI, chronicle (foundation shipped 2026-05-04 series)
+11. **Run result write-back** — connect RunResult schema to persistence layer (first slice shipped, full coverage pending)
+12. **Hull ability client-side** — keybindings for ability1/ability2, HUD cooldown display, ability-specific rendering (eddies, decoys, tractor beam)
+13. **Balance pass** — hull coefficients (now actually applied!), upgrade costs, loot rarity, signal tuning, delta-v / slingshot numbers
+14. **Deploy** — GitHub Pages web build, weekly playables
 
 ### Current contract notes
 
@@ -112,6 +118,10 @@ reading stale health records or reconstructing status from `git log`.
   `docs/design/THREE-ENTITY-VISUALS.md`. Wells and Inhibitors stay
   fabric-first; ships, stars, planetoids/comets, wrecks, portals, rivals, fauna,
   and sentries should become richer Three objects.
+- VFX should now be planned through `docs/project/THREE-VFX-PASS-PLAN.md`:
+  Three is allowed to get rich and specific for PC/web/Deck, but VFX behavior
+  should flow through renderer-neutral events so future native or console paths
+  can implement the same effect families without inheriting Three internals.
 - The current scene hierarchy target is
   `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`: the void stays black and
   dominant, the ASCII fabric stays the gameplay ocean, and entities get explicit

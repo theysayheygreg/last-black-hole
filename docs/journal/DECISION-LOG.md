@@ -1,5 +1,29 @@
 # Decision Log
 
+## 2026-06-28 — Three VFX uses renderer-neutral events
+
+**Decision:** Build the v0.2 VFX kit in Three.js for the current PC/web/Steam
+Deck path, but describe every effect through renderer-neutral events such as
+`thrusterBurst`, `titleGlyphFault`, `portalCollapse`, `pickupGlint`, and
+`inhibitorScreenFault`. The Three renderer can implement those events with
+pooled particles, instancing, additive sprites, screen-space passes, or future
+text surfaces, but particles and materials never own gameplay truth.
+
+**Why:** Three is the right near-term tool for making the default renderer rich
+and motionful, but future Switch/iPad/native/console paths should port the
+behavior and visual contract, not inherit the literal Three scene graph. This
+lets the web/Deck version become the visual reference while preserving the
+sim/client/renderer separation that makes later ports possible.
+
+**Where it landed:** `docs/project/THREE-VFX-PASS-PLAN.md`,
+`docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`,
+`docs/design/THREE-ENTITY-VISUALS.md`, and `docs/project/ROADMAP.md`.
+
+**Door status:** Closed for the VFX architecture stance. Open for exact first
+implementation details: whether title particles stay behind canvas text or
+promote the title wordmark into Three, which fixture owns VFX review, and which
+fullscreen shader impulse earns a prototype.
+
 ## 2026-06-28 — Title screen becomes an attract loop, not a static logo
 
 **Decision:** Treat the title screen as a short looping attract-mode scene. The

@@ -8,7 +8,8 @@
 >
 > See also `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md` for the master
 > back-to-front layer stack and `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md`
-> for implementation order.
+> for implementation order. Use `docs/project/THREE-VFX-PASS-PLAN.md` for
+> pooled particles, trails, screen faults, and motion-effect sequencing.
 
 ## Why This Exists
 
