@@ -35,7 +35,7 @@ import { ChromaticAberrationPass } from './render/passes/chromatic-aberration-pa
 import { ScanlinesPass } from './render/passes/scanlines-pass.js';
 import { initTestAPI } from './test-api.js';
 import { initDevPanel } from './dev-panel.js';
-import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, setDropCallback,
+import { initHUD, showHUD, hideHUD, fadeHUD, updateHUD, showWarning, showInhibitorWarning, setDropCallback,
          resetInventoryCursor, inventoryCursorUp, inventoryCursorDown, inventoryConfirm, getInventoryActionAtCursor } from './hud.js';
 import { applyRuntimeFlags } from './runtime-flags.js';
 import { ScavengerSystem } from './scavengers.js';
@@ -1980,17 +1980,17 @@ function applyRemoteEvents(events) {
         // The Swarm is the irreversible wake. Direction still comes from
         // the edge-dim vignette, not a literal pointer.
         inhibitorWakeGlitchTimer = INHIBITOR_WAKE_GLITCH_DURATION;
-        showWarning('something is watching', 'rgba(204, 26, 128, 0.95)', 3500);
+        showInhibitorWarning('something is watching', 1, payload.intensity ?? 0.85, 3500);
         audioEngine.playEvent?.('inhibitorWake');
         break;
       case 'inhibitor.form':
         if (payload.form === 1) {
-          showWarning('— glitch —', 'rgba(204, 26, 128, 0.88)', 2600);
+          showInhibitorWarning('— glitch —', 1, payload.intensity ?? 0.8, 2600, 'rgba(204, 26, 128, 0.88)');
         } else if (payload.form === 2) {
-          showWarning('— swarm —', 'rgba(204, 26, 128, 0.95)', 3200);
+          showInhibitorWarning('— swarm —', 2, payload.intensity ?? 0.95, 3200);
         } else if (payload.form === 3) {
           // The vessel is the terminal form. Loud dread.
-          showWarning('THE VESSEL', 'rgba(255, 60, 140, 1.0)', 4000);
+          showInhibitorWarning('THE VESSEL', 3, payload.intensity ?? 1, 4000, 'rgba(255, 60, 140, 1.0)', { boost: 1.2 });
           audioEngine.playEvent?.('inhibitorVessel');
         } else if (payload.form === 0) {
           // Reset — should be rare but handle it (e.g. session reset)
@@ -1999,7 +1999,7 @@ function applyRemoteEvents(events) {
         break;
       case 'inhibitor.drainCargo':
         if (isLocal) {
-          showWarning('cargo drained', 'rgba(204, 26, 128, 0.9)', 1800);
+          showInhibitorWarning('cargo drained', Math.max(1, payload.form || 2), payload.intensity ?? 0.9, 1800, 'rgba(204, 26, 128, 0.9)');
           audioEngine.playEvent?.('inhibitorDrain');
         }
         break;

@@ -11,6 +11,7 @@
 
 import { CONFIG } from './config.js';
 import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
+import { corruptText, stripCombiningMarks } from './text-corruption.js';
 import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
 import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
 
@@ -31,6 +32,7 @@ let _inhibitorEl, _inhibitorFormEl;
 let _dropCallback = null;  // set by main.js for drop handling
 let _lastPortalCount = -1;
 let _lastCollapseStr = '';
+const INHIBITOR_FORM_NAMES = ['dormant', 'glitch', 'swarm', 'vessel'];
 
 // Inventory selection state
 let _invCursor = 0;          // which slot is selected (0-7 = cargo, 8-9 = equipped, 10-11 = consumable)
@@ -59,6 +61,74 @@ export function initHUD() {
   _ability2El = document.getElementById('hud-ability2');
   _inhibitorEl = document.getElementById('hud-inhibitor');
   _inhibitorFormEl = document.getElementById('hud-inhibitor-form');
+}
+
+function textCorruptionConfig() {
+  return CONFIG.inhibitor?.textCorruption || {};
+}
+
+function inhibitorFormName(form) {
+  return INHIBITOR_FORM_NAMES[form] || 'dormant';
+}
+
+function getInhibitorHUDState(opts = {}) {
+  const state = opts.inhibitorState || null;
+  const form = Math.max(0, Math.min(3, Math.floor(Number(state?.form) || 0)));
+  const intensity = clamp01(state?.intensity ?? (form > 0 ? 1 : 0));
+  const reach = form === 3 ? 1.2 : form === 2 ? 0.9 : 0.6;
+  const dist = form > 0 && opts.ship
+    ? worldDistance(opts.ship.wx, opts.ship.wy, state.wx, state.wy)
+    : Infinity;
+  const proximity = Number.isFinite(dist) ? clamp01(1 - dist / reach) : 0;
+  return {
+    form,
+    intensity,
+    reach,
+    dist,
+    proximity,
+    corruption: proximity * intensity,
+  };
+}
+
+function inhibitorTextAmount(inhibitorHud, boost = 1) {
+  const cfg = textCorruptionConfig();
+  if (!cfg.enabled || !inhibitorHud || inhibitorHud.form <= 0) return 0;
+
+  const base = clamp01(cfg.amount ?? 0);
+  const formBoost = inhibitorHud.form === 3
+    ? Number(cfg.vesselBoost ?? 1.35)
+    : inhibitorHud.form === 2 ? 1.0 : 0.72;
+  const proximityScale = clamp01(cfg.proximityScale ?? 0.75);
+  const proximityFactor = 0.25 + clamp01(inhibitorHud.proximity * proximityScale) * 0.75;
+  return clamp01(base * inhibitorHud.intensity * formBoost * Number(boost || 1) * proximityFactor);
+}
+
+function textCorruptionOptions(maxChars = 160) {
+  const cfg = textCorruptionConfig();
+  return {
+    density: cfg.density,
+    maxMarks: cfg.maxMarks,
+    maxChars,
+    preserveDigits: cfg.preserveDigits !== false,
+  };
+}
+
+function setMaybeCorruptedText(el, text, corruption, seed, options = {}) {
+  if (!el) return;
+  const cleanText = stripCombiningMarks(text);
+  const amount = clamp01(corruption);
+  if (amount > 0.02) {
+    el.textContent = corruptText(cleanText, amount, seed, {
+      ...textCorruptionOptions(options.maxChars),
+      ...options,
+    });
+    el.classList.add('hud-zalgo');
+    el.dataset.plainText = cleanText;
+  } else {
+    el.textContent = cleanText;
+    el.classList.remove('hud-zalgo');
+    delete el.dataset.plainText;
+  }
 }
 
 export function showHUD() {
@@ -103,7 +173,8 @@ function fmtSeconds(seconds) {
 }
 
 function clamp01(value) {
-  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+  const numeric = Number(value);
+  return Math.max(0, Math.min(1, Number.isFinite(numeric) ? numeric : 0));
 }
 
 function abilityTone(slot) {
@@ -477,20 +548,29 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     }
   }
 
+  const inhibitorHud = getInhibitorHUDState(opts);
+
   // === INHIBITOR FORM ===
   if (_inhibitorEl && opts.inhibitorState) {
-    const form = opts.inhibitorState.form || 0;
-    if (form <= 0) {
+    if (inhibitorHud.form <= 0) {
       _inhibitorEl.style.display = 'none';
+      _inhibitorEl.classList.remove('form-vessel');
+      setMaybeCorruptedText(_inhibitorFormEl, 'dormant', 0, 'inhibitor-dormant');
     } else {
       _inhibitorEl.style.display = '';
-      const formName = form === 1 ? 'glitch'
-        : form === 2 ? 'swarm'
-        : form === 3 ? 'vessel'
-        : 'dormant';
-      if (_inhibitorFormEl) _inhibitorFormEl.textContent = formName;
+      const cfg = textCorruptionConfig();
+      const stateTime = opts.inhibitorState.localTime ?? runElapsedTime;
+      const refreshHz = Math.max(1, Number(cfg.refreshHz ?? 5) || 5);
+      const textSeed = `form-${inhibitorHud.form}-${Math.floor(stateTime * refreshHz)}`;
+      setMaybeCorruptedText(
+        _inhibitorFormEl,
+        inhibitorFormName(inhibitorHud.form),
+        inhibitorTextAmount(inhibitorHud),
+        textSeed,
+        { maxChars: 24 }
+      );
       // Swap the CSS class so the vessel form pulses harder
-      if (form === 3) {
+      if (inhibitorHud.form === 3) {
         _inhibitorEl.classList.add('form-vessel');
       } else {
         _inhibitorEl.classList.remove('form-vessel');
@@ -499,13 +579,8 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   }
 
   if (opts.inhibitorState && opts.ship) {
-    const form = opts.inhibitorState.form || 0;
-    const intensity = Math.max(0, Math.min(1, opts.inhibitorState.intensity ?? 1));
-    const reach = form === 3 ? 1.2 : form === 2 ? 0.9 : 0.6;
-    const dist = form > 0
-      ? worldDistance(opts.ship.wx, opts.ship.wy, opts.inhibitorState.wx, opts.inhibitorState.wy)
-      : Infinity;
-    const corruption = Math.max(0, Math.min(1, 1 - dist / reach)) * intensity;
+    const form = inhibitorHud.form;
+    const corruption = inhibitorHud.corruption;
     if (corruption > 0.02) {
       const jitter = 1 + corruption * (form === 3 ? 3 : 2);
       const jx = Math.sin(runElapsedTime * 41.3) * jitter * corruption;
@@ -816,7 +891,7 @@ function _renderInventoryPanel(inv) {
  * Replaces the old center-screen warning system.
  * Max 8 visible entries — oldest removed when full.
  */
-export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs = 4000) {
+export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs = 4000, options = {}) {
   if (!_warningsEl) return;
 
   // Cap visible entries
@@ -826,7 +901,23 @@ export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs
 
   const el = document.createElement('div');
   el.className = 'hud-warning';
-  el.textContent = text;
+  if (options.corrupt) {
+    const warningBoost = Number(textCorruptionConfig().warningBoost ?? 1.15) || 1;
+    const corruption = inhibitorTextAmount({
+      form: Math.max(1, Math.min(3, Number(options.form ?? 1) || 1)),
+      intensity: clamp01(options.intensity ?? 1),
+      proximity: clamp01(options.proximity ?? 1),
+    }, warningBoost * Number(options.boost ?? 1));
+    setMaybeCorruptedText(
+      el,
+      text,
+      corruption,
+      options.seed ?? `warning-${Date.now()}-${_warningsEl.children.length}`,
+      { maxChars: options.maxChars ?? 96 }
+    );
+  } else {
+    el.textContent = stripCombiningMarks(text);
+  }
   setWarningColor(el, color);
   _warningsEl.appendChild(el);
 
@@ -834,4 +925,20 @@ export function showWarning(text, color = 'rgba(200, 200, 220, 0.9)', durationMs
     el.classList.add('fading');
     setTimeout(() => el.remove(), 1000);
   }, durationMs);
+}
+
+export function showInhibitorWarning(
+  text,
+  form = 1,
+  intensity = 1,
+  durationMs = 3200,
+  color = 'rgba(204, 26, 128, 0.95)',
+  options = {}
+) {
+  showWarning(text, color, durationMs, {
+    corrupt: true,
+    form,
+    intensity,
+    ...options,
+  });
 }

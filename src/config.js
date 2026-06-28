@@ -192,6 +192,20 @@ export const CONFIG = {
                                       // warm-up but never dominates the density ring signal.
   },
 
+  inhibitor: {
+    textCorruption: {
+      enabled: true,        // Inhibitor-only Zalgo text. Critical HUD values stay clean.
+      amount: 0.45,         // Master "how corrupted" slider. 0 = clean, 1 = maximal readable damage.
+      density: 0.75,        // Chance that an eligible character receives marks at full amount.
+      maxMarks: 3,          // Hard cap per character. Prevents unreadable or unbounded strings.
+      warningBoost: 1.15,   // Event log warnings can be louder than the small form readout.
+      vesselBoost: 1.35,    // Terminal form gets the strongest language damage.
+      proximityScale: 0.75, // Form readout reacts to player proximity instead of always screaming.
+      refreshHz: 5,         // Animation cadence for the form label. Low Hz keeps it legible.
+      preserveDigits: true, // Avoid corrupting counts/timers if this helper is reused later.
+    },
+  },
+
   stars: {
     // --- Fluid forces (GPU-side, NEGATIVE gravity = outward push) ---
     radiationStrength: 0.001, // Outward push on fluid. Same formula as well gravity but negative.

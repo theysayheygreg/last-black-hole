@@ -197,6 +197,7 @@
       font-size: 13px;
       text-transform: lowercase;
       font-weight: 600;
+      line-height: 1.05;
     }
     #hud-inhibitor.form-vessel {
       color: rgba(255, 60, 140, 1.0);
@@ -322,6 +323,17 @@
       opacity: 0;
       padding: 2px 0;
       animation: hud-warning-in 0.2s ease-out forwards;
+    }
+    .hud-zalgo {
+      display: inline-block;
+      line-height: 1.05;
+      text-shadow:
+        0 0 9px rgba(204, 26, 128, 0.75),
+        0 0 2px rgba(255, 255, 255, 0.5);
+    }
+    .hud-warning.hud-zalgo {
+      letter-spacing: 0.05em;
+      padding: 4px 0;
     }
     .hud-warning.fading {
       animation: hud-warning-out 1.0s ease-in forwards;

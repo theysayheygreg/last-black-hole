@@ -108,6 +108,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "TextCorruption",
+    file: "text-corruption.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "Smoke",
     file: "smoke.cjs",
     lanes: ["fast", "core", "browser", "full", "three"],

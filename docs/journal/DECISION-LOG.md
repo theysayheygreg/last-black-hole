@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-06-27 — Inhibitor can corrupt language, but only in bounded surfaces
+
+**Decision:** Use Zalgo-style combining marks as an Inhibitor-owned HUD effect
+for the Inhibitor form label and Inhibitor-origin event warnings. Do not apply
+it globally to timers, fuel, cargo counts, inventory, or normal prompts.
+
+**Why:** The Inhibitor should feel like a wrong alphabet entering the UI, but
+the game still needs readable operational information. Bounded corruption gives
+us dread and a live-tunable aesthetic without turning play-critical text into
+noise or creating unbounded DOM strings.
+
+**Where it landed:** `src/text-corruption.js`, `src/hud.js`, `src/main.js`,
+`src/config.js`, `src/dev-panel.js`, `index-a.html`,
+`tests/text-corruption.cjs`, and `tests/validation.cjs`.
+
+**Door status:** Closed for global corruption. Open for adding more
+Inhibitor-specific surfaces, provided they use the same bounded helper and keep
+plain source text recoverable.
+
 ## 2026-06-27 — Player ship asset choice needs a fixture bakeoff
 
 **Decision:** Keep the player ship sprite-card versus pixel-textured

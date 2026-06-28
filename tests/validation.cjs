@@ -364,6 +364,19 @@ runner.run('wells.killRadius > 0', () => {
     `wells.killRadius=${CONFIG.wells.killRadius} must be > 0`);
 });
 
+runner.run('Inhibitor text corruption stays bounded', () => {
+  const cfg = CONFIG.inhibitor?.textCorruption;
+  assert(cfg && typeof cfg === 'object', 'CONFIG.inhibitor.textCorruption is missing');
+  assert(cfg.amount >= 0 && cfg.amount <= 1,
+    `inhibitor.textCorruption.amount=${cfg.amount} must stay within 0..1`);
+  assert(cfg.density >= 0 && cfg.density <= 1,
+    `inhibitor.textCorruption.density=${cfg.density} must stay within 0..1`);
+  assert(cfg.maxMarks >= 0 && cfg.maxMarks <= 6,
+    `inhibitor.textCorruption.maxMarks=${cfg.maxMarks} must stay within 0..6`);
+  assert(cfg.refreshHz >= 1 && cfg.refreshHz <= 12,
+    `inhibitor.textCorruption.refreshHz=${cfg.refreshHz} must stay within 1..12`);
+});
+
 // ---- 8. Negative mass guard: growthVariance cannot exceed growthAmount ----
 
 runner.run('Well growth variance cannot produce negative growth rate', () => {

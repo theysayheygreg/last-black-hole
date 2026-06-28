@@ -223,6 +223,23 @@ async function run() {
       }
     });
 
+    await runner.run('Dev panel exposes filter and Inhibitor corruption tuning', async () => {
+      const panel = await page.evaluate(() => {
+        const el = document.getElementById('dev-panel');
+        if (!el) return null;
+        const labels = Array.from(el.querySelectorAll('span')).map(span => span.textContent);
+        return {
+          hasFilter: Boolean(el.querySelector('input[type="search"]')),
+          hasInhibitorSlider: Boolean(el.querySelector('[data-config-path="inhibitor.textCorruption.amount"]')),
+          hasFriendlyLabel: labels.includes('how corrupted'),
+        };
+      });
+      assert(panel !== null, 'Dev panel missing');
+      assert(panel.hasFilter, 'Dev panel filter input missing');
+      assert(panel.hasInhibitorSlider, 'Inhibitor text corruption slider missing');
+      assert(panel.hasFriendlyLabel, 'Inhibitor slider should be labeled "how corrupted"');
+    });
+
     await runner.run('Hull ability presentation exposes active, cooldown, charge, fuel, anchor, decoy, and tractor states', async () => {
       const presentations = await page.evaluate(() => {
         const fixture = window.__TEST_API.getAbilityPresentationFixture;

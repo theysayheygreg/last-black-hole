@@ -15,6 +15,46 @@ const DEFAULTS = JSON.parse(JSON.stringify(CONFIG));
 // Currently active preset name (exported so other systems can read it)
 export let activePreset = 'Default';
 
+const SECTION_ORDER = [
+  'ship',
+  'input',
+  'inhibitor',
+  'ascii',
+  'color',
+  'wells',
+  'stars',
+  'portals',
+  'wrecks',
+  'scavengers',
+  'planetoids',
+  'fluid',
+  'events',
+  'camera',
+  'universe',
+  'combat',
+  'audio',
+  'debug',
+  'sim',
+];
+
+const COLLAPSED_BY_DEFAULT = new Set([
+  'fluid',
+  'events',
+  'stars',
+  'portals',
+  'wrecks',
+  'scavengers',
+  'planetoids',
+  'combat',
+  'audio',
+  'debug',
+  'sim',
+]);
+
+const CONTROL_LABELS = {
+  'inhibitor.textCorruption.amount': 'how corrupted',
+};
+
 // Slider range hints and tooltips per key.
 // V2 SIMPLIFICATION: matches collapsed CONFIG — no affordances, fewer ship knobs
 const RANGE_HINTS = {
@@ -53,6 +93,15 @@ const RANGE_HINTS = {
   'ascii.contrast':         { min: 0.1, max: 2, step: 0.05, tip: 'Luminance curve power. <1 = more chars in dark areas. >1 = sharper contrast' },
   'ascii.shimmer':          { min: 0, max: 6, step: 0.25, tip: 'Character index jitter. 0 = static, 2-3 = living texture, 5+ = noisy' },
   'ascii.colorTemperature': { min: -1, max: 1, step: 0.05, tip: 'Global color shift. Negative = cooler/bluer. Positive = warmer/amber' },
+
+  // Inhibitor text
+  'inhibitor.textCorruption.amount':      { min: 0, max: 1, step: 0.01, tip: 'How much the Inhibitor corrupts warning/form text. 0 = clean, 1 = maximal readable damage.' },
+  'inhibitor.textCorruption.density':     { min: 0, max: 1, step: 0.05, tip: 'Chance an eligible character receives marks at high corruption.' },
+  'inhibitor.textCorruption.maxMarks':    { min: 0, max: 6, step: 1, tip: 'Hard cap on stacked marks per character.' },
+  'inhibitor.textCorruption.warningBoost':{ min: 0.2, max: 2, step: 0.05, tip: 'Multiplier for Inhibitor event-log warnings.' },
+  'inhibitor.textCorruption.vesselBoost': { min: 0.2, max: 2.5, step: 0.05, tip: 'Extra corruption when the Inhibitor reaches vessel form.' },
+  'inhibitor.textCorruption.proximityScale':{ min: 0, max: 1, step: 0.05, tip: 'How much the small form label reacts to player proximity.' },
+  'inhibitor.textCorruption.refreshHz':   { min: 1, max: 12, step: 1, tip: 'How often animated corrupted labels reshuffle.' },
 
   // Stars — visual: rays should be visible across screen, core should glow
   // Stars
@@ -212,10 +261,10 @@ export function initDevPanel() {
     position: 'fixed',
     top: '8px',
     right: '8px',
-    width: '420px',
+    width: '460px',
     maxHeight: 'calc(100vh - 16px)',
     overflowY: 'auto',
-    background: 'rgba(10, 10, 30, 0.85)',
+    background: 'rgba(6, 8, 22, 0.92)',
     color: '#ccc',
     fontFamily: 'monospace',
     fontSize: '11px',
@@ -243,7 +292,7 @@ export function initDevPanel() {
   const headerLabel = document.createElement('span');
   headerLabel.style.fontWeight = 'bold';
   headerLabel.style.color = '#88f';
-  headerLabel.textContent = 'DEV PANEL';
+  headerLabel.textContent = 'DEV CONFIG';
   header.appendChild(headerLabel);
 
   // Active preset badge in header
@@ -303,19 +352,62 @@ export function initDevPanel() {
 
   panel.appendChild(presetRow);
 
+  // ---- Filter + section controls ----
+  const toolRow = document.createElement('div');
+  Object.assign(toolRow.style, {
+    display: 'flex',
+    gap: '6px',
+    padding: '6px 10px',
+    background: 'rgba(12, 14, 34, 0.9)',
+    borderBottom: '1px solid rgba(100, 100, 255, 0.2)',
+  });
+
+  const filterInput = document.createElement('input');
+  filterInput.type = 'search';
+  filterInput.placeholder = 'filter config';
+  Object.assign(filterInput.style, {
+    flex: '1',
+    minWidth: '0',
+    background: 'rgba(0, 0, 20, 0.72)',
+    color: '#d8e8ff',
+    border: '1px solid rgba(100, 100, 255, 0.35)',
+    borderRadius: '3px',
+    padding: '3px 6px',
+    fontFamily: 'monospace',
+    fontSize: '10px',
+    outline: 'none',
+  });
+
+  const expandBtn = makeButton('Expand', () => {
+    body.querySelectorAll('[data-config-section]').forEach(sec => sec._setCollapsed?.(false));
+  });
+  const collapseBtn = makeButton('Collapse', () => {
+    body.querySelectorAll('[data-config-section]').forEach(sec => sec._setCollapsed?.(true));
+  });
+  toolRow.appendChild(filterInput);
+  toolRow.appendChild(expandBtn);
+  toolRow.appendChild(collapseBtn);
+  panel.appendChild(toolRow);
+
   // ---- Body (sections) ----
   const body = document.createElement('div');
   body.style.padding = '4px 0';
   panel.appendChild(body);
 
   // Build sections from CONFIG keys
-  for (const section of Object.keys(CONFIG)) {
+  const orderedSections = [
+    ...SECTION_ORDER.filter(section => section in CONFIG),
+    ...Object.keys(CONFIG).filter(section => !SECTION_ORDER.includes(section)),
+  ];
+  for (const section of orderedSections) {
     const group = CONFIG[section];
     if (typeof group !== 'object' || group === null || Array.isArray(group)) continue;
 
-    const sec = createSection(section, group, section);
+    const sec = createSection(section, group, section, { collapsed: COLLAPSED_BY_DEFAULT.has(section) });
     body.appendChild(sec);
   }
+
+  filterInput.addEventListener('input', () => applyFilter(body, filterInput.value));
 
   document.body.appendChild(panel);
 
@@ -356,7 +448,9 @@ export function initDevPanel() {
   // ---- Toggle with backtick, presets with 1-4 ----
   let visible = false;
   window.addEventListener('keydown', (e) => {
-    if (e.key === '`') {
+    const tagName = e.target?.tagName;
+    const isTyping = tagName === 'INPUT' || tagName === 'TEXTAREA';
+    if (e.key === '`' && !isTyping) {
       e.preventDefault();
       visible = !visible;
       panel.style.display = visible ? 'block' : 'none';
@@ -364,7 +458,7 @@ export function initDevPanel() {
     }
 
     // Preset shortcuts: 1-4 (only when not typing in an input)
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (isTyping) return;
     const num = parseInt(e.key, 10);
     if (num >= 1 && num <= PRESET_NAMES.length) {
       e.preventDefault();
@@ -392,9 +486,11 @@ function makeButton(label, onClick) {
   return btn;
 }
 
-function createSection(name, group, sectionRoot) {
+function createSection(name, group, sectionRoot, options = {}) {
   const wrapper = document.createElement('div');
   wrapper.style.marginBottom = '2px';
+  wrapper.dataset.configSection = name;
+  wrapper.dataset.configSearch = name.toLowerCase();
 
   // Section header (collapsible)
   const hdr = document.createElement('div');
@@ -407,20 +503,23 @@ function createSection(name, group, sectionRoot) {
     fontSize: '11px',
     borderBottom: '1px solid rgba(80, 80, 160, 0.3)',
   });
-  let collapsed = false;
+  let collapsed = Boolean(options.collapsed);
   const arrow = document.createElement('span');
-  arrow.textContent = '- ';
+  arrow.textContent = collapsed ? '+ ' : '- ';
   hdr.appendChild(arrow);
   hdr.appendChild(document.createTextNode(name.toUpperCase()));
 
   const content = document.createElement('div');
   content.style.padding = '2px 10px';
+  content.style.display = collapsed ? 'none' : 'block';
 
-  hdr.addEventListener('click', () => {
-    collapsed = !collapsed;
+  wrapper._setCollapsed = (nextCollapsed) => {
+    collapsed = Boolean(nextCollapsed);
     content.style.display = collapsed ? 'none' : 'block';
     arrow.textContent = collapsed ? '+ ' : '- ';
-  });
+  };
+
+  hdr.addEventListener('click', () => wrapper._setCollapsed(!collapsed));
 
   wrapper.appendChild(hdr);
   wrapper.appendChild(content);
@@ -428,6 +527,29 @@ function createSection(name, group, sectionRoot) {
   addGroupControls(content, group, name, sectionRoot);
 
   return wrapper;
+}
+
+function applyFilter(body, rawTerm) {
+  const term = String(rawTerm || '').trim().toLowerCase();
+  const filtering = term.length > 0;
+
+  body.querySelectorAll('[data-config-section]').forEach(section => {
+    const sectionMatches = section.dataset.configSearch.includes(term);
+    let hasVisibleRow = sectionMatches && filtering;
+
+    section.querySelectorAll('[data-config-row]').forEach(row => {
+      const matches = !filtering || sectionMatches || row.dataset.configSearch.includes(term);
+      row.style.display = matches ? '' : 'none';
+      if (matches) hasVisibleRow = true;
+    });
+
+    section.querySelectorAll('[data-config-subheader]').forEach(subHdr => {
+      const matches = !filtering || sectionMatches || subHdr.dataset.configSearch.includes(term);
+      subHdr.style.display = matches ? '' : 'none';
+    });
+
+    section.style.display = !filtering || hasVisibleRow ? '' : 'none';
+  });
 }
 
 function addGroupControls(container, group, prefix, sectionRoot) {
@@ -455,6 +577,8 @@ function addGroupControls(container, group, prefix, sectionRoot) {
         marginTop: '4px',
       });
       subHdr.textContent = `— ${key} —`;
+      subHdr.dataset.configSubheader = 'true';
+      subHdr.dataset.configSearch = path.toLowerCase();
       container.appendChild(subHdr);
       addGroupControls(container, val, path, sectionRoot);
     }
@@ -467,6 +591,8 @@ function createSliderNested(obj, key, path) {
   Object.assign(row.style, {
     display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 0',
   });
+  row.dataset.configRow = 'true';
+  row.dataset.configSearch = `${path} ${CONTROL_LABELS[path] || key}`.toLowerCase();
 
   const val = obj[key];
   const hint = RANGE_HINTS[path] || autoRange(val);
@@ -477,8 +603,9 @@ function createSliderNested(obj, key, path) {
   label.style.overflow = 'hidden';
   label.style.textOverflow = 'ellipsis';
   label.style.cursor = 'help';
-  label.textContent = key;
+  label.textContent = CONTROL_LABELS[path] || key;
   label.title = hint.tip || path;
+  row.dataset.configSearch += ` ${hint.tip || ''}`.toLowerCase();
 
   const slider = document.createElement('input');
   slider.type = 'range';
@@ -518,6 +645,8 @@ function createToggleNested(obj, key, path) {
   Object.assign(row.style, {
     display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0',
   });
+  row.dataset.configRow = 'true';
+  row.dataset.configSearch = `${path} ${CONTROL_LABELS[path] || key}`.toLowerCase();
 
   const cb = document.createElement('input');
   cb.type = 'checkbox';
@@ -526,7 +655,7 @@ function createToggleNested(obj, key, path) {
   cb.style.accentColor = '#66f';
 
   const label = document.createElement('span');
-  label.textContent = key;
+  label.textContent = CONTROL_LABELS[path] || key;
   label.title = path;
   label.style.cursor = 'pointer';
   label.addEventListener('click', () => { cb.click(); });
@@ -544,6 +673,8 @@ function createArraySliderNested(obj, key, index, compLabel, path) {
   Object.assign(row.style, {
     display: 'flex', alignItems: 'center', gap: '4px', padding: '1px 0', paddingLeft: '8px',
   });
+  row.dataset.configRow = 'true';
+  row.dataset.configSearch = `${path} ${key}.${compLabel}`.toLowerCase();
 
   const val = obj[key][index];
 
@@ -584,155 +715,6 @@ function createArraySliderNested(obj, key, index, compLabel, path) {
   row.appendChild(label);
   row.appendChild(slider);
   row.appendChild(display);
-  return row;
-}
-
-function createSlider(section, key, path) {
-  const row = document.createElement('div');
-  Object.assign(row.style, {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    padding: '2px 0',
-  });
-
-  const val = CONFIG[section][key];
-  const hint = RANGE_HINTS[path] || autoRange(val);
-
-  const label = document.createElement('span');
-  label.style.width = '150px';
-  label.style.flexShrink = '0';
-  label.style.overflow = 'hidden';
-  label.style.textOverflow = 'ellipsis';
-  label.style.cursor = 'help';
-  label.textContent = key;
-  label.title = hint.tip || path;
-
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = hint.min;
-  slider.max = hint.max;
-  slider.step = hint.step;
-  slider.value = val;
-  slider.dataset.configPath = path;
-  Object.assign(slider.style, {
-    flex: '1',
-    accentColor: '#66f',
-    height: '14px',
-  });
-
-  const display = document.createElement('span');
-  display.style.width = '52px';
-  display.style.textAlign = 'right';
-  display.style.flexShrink = '0';
-  display.style.color = '#8f8';
-  display.textContent = fmt(val);
-
-  slider.addEventListener('input', () => {
-    const v = parseFloat(slider.value);
-    CONFIG[section][key] = v;
-    display.textContent = fmt(v);
-  });
-
-  // For updateControl after reset/preset
-  slider._update = () => {
-    slider.value = CONFIG[section][key];
-    display.textContent = fmt(CONFIG[section][key]);
-  };
-
-  row.appendChild(label);
-  row.appendChild(slider);
-  row.appendChild(display);
-  return row;
-}
-
-function createArraySlider(section, key, index, compLabel, path) {
-  const row = document.createElement('div');
-  Object.assign(row.style, {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    padding: '1px 0',
-    paddingLeft: '8px',
-  });
-
-  const val = CONFIG[section][key][index];
-
-  const label = document.createElement('span');
-  label.style.width = '112px';
-  label.style.flexShrink = '0';
-  label.style.color = '#999';
-  label.textContent = `${key}.${compLabel}`;
-  label.title = path;
-
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.min = 0;
-  slider.max = 1;
-  slider.step = 0.01;
-  slider.value = val;
-  slider.dataset.configPath = path;
-  Object.assign(slider.style, {
-    flex: '1',
-    accentColor: '#66f',
-    height: '14px',
-  });
-
-  const display = document.createElement('span');
-  display.style.width = '52px';
-  display.style.textAlign = 'right';
-  display.style.flexShrink = '0';
-  display.style.color = '#8f8';
-  display.textContent = fmt(val);
-
-  slider.addEventListener('input', () => {
-    const v = parseFloat(slider.value);
-    CONFIG[section][key][index] = v;
-    display.textContent = fmt(v);
-  });
-
-  slider._update = () => {
-    slider.value = CONFIG[section][key][index];
-    display.textContent = fmt(CONFIG[section][key][index]);
-  };
-
-  row.appendChild(label);
-  row.appendChild(slider);
-  row.appendChild(display);
-  return row;
-}
-
-function createToggle(section, key, path) {
-  const row = document.createElement('div');
-  Object.assign(row.style, {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '3px 0',
-  });
-
-  const cb = document.createElement('input');
-  cb.type = 'checkbox';
-  cb.checked = CONFIG[section][key];
-  cb.dataset.configPath = path;
-  cb.style.accentColor = '#66f';
-
-  const label = document.createElement('span');
-  label.textContent = key;
-  label.title = path;
-  label.style.cursor = 'pointer';
-  label.addEventListener('click', () => { cb.click(); });
-
-  cb.addEventListener('change', () => {
-    CONFIG[section][key] = cb.checked;
-  });
-
-  cb._update = () => {
-    cb.checked = CONFIG[section][key];
-  };
-
-  row.appendChild(cb);
-  row.appendChild(label);
   return row;
 }
 

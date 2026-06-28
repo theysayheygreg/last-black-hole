@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-06-27 — Inhibitor text corruption and dev panel refresh
+
+- Added bounded Inhibitor-owned Zalgo text corruption for the active form label
+  and Inhibitor event warnings. The helper strips previous combining marks
+  before every pass, caps marks per character, and preserves the clean source
+  text so corruption cannot compound over time.
+- Added `CONFIG.inhibitor.textCorruption` with a dev-panel "how corrupted"
+  slider plus density, max-mark, vessel, warning, proximity, and refresh-rate
+  tuning knobs.
+- Cleaned up the dev panel: prioritized commonly tuned sections, added config
+  filtering plus expand/collapse controls, default-collapsed long-tail sections,
+  fixed typing/backtick behavior, and removed stale unused control builders.
+- Added `tests/text-corruption.cjs` plus validation bounds so the corruption
+  effect stays deterministic, readable after stripping, and size-bounded.
+
 ## 2026-06-27 — Local v0.2.2 source status and ship bakeoff
 
 - Refreshed the local build status around the v0.2.2 source path: a fresh
