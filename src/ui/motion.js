@@ -118,12 +118,10 @@ export function drawMotionPanel(ctx, rect, {
   role = 'flow',
   fillAlpha = 0.46,
   borderAlpha = 0.34,
-  corner = 18,
-  lineWidth = 1.5,
-  scanlines = true,
+  cornerLength = 18,
 } = {}) {
   withRevealClip(ctx, rect, progress, origin, () => {
-    drawUiPanel(ctx, rect, { role, fillAlpha, borderAlpha, corner, lineWidth, scanlines });
+    drawUiPanel(ctx, rect, { role, fillAlpha, borderAlpha, cornerLength });
   });
 }
 

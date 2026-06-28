@@ -619,6 +619,14 @@ function uiContentReveal(delay = 0.1, duration = currentUiMotionSettings().textD
   });
 }
 
+function uiFocusPulseAmount() {
+  const motion = currentUiMotionSettings();
+  if (motion.reducedMotion) return 0;
+  return 1 - motionProgress(uiFocusPulseTimer, {
+    duration: motion.commandPulse,
+  });
+}
+
 // Scene transition state
 let transitionActive = false;
 let transitionTimer = 0;
@@ -5244,6 +5252,7 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const panelReveal = uiPanelReveal();
     const contentReveal = uiContentReveal(0.12);
+    const focusPulse = uiFocusPulseAmount();
     const panelRect = { x: cx - 220, y: y - 30, w: 440, h: 290 };
     withRevealClip(ctx, panelRect, panelReveal, 'center', () => {
       drawTerminalFrame(ctx, panelRect.x, panelRect.y, panelRect.w, panelRect.h, null, 'rgba(100, 200, 220, 0.25)');
@@ -5270,9 +5279,9 @@ function gameLoop(now) {
 
       // Selection highlight
       if (selected) {
-        ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+        ctx.fillStyle = `rgba(60, 80, 120, ${(0.4 + 0.12 * focusPulse).toFixed(3)})`;
         ctx.fillRect(cx - 200, boxY - 5, 400, boxH);
-        ctx.strokeStyle = 'rgba(100, 150, 255, 0.6)';
+        ctx.strokeStyle = `rgba(100, 150, 255, ${(0.6 + 0.25 * focusPulse).toFixed(3)})`;
         ctx.lineWidth = 1;
         ctx.strokeRect(cx - 200, boxY - 5, 400, boxH);
       }
@@ -5349,6 +5358,7 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const panelReveal = uiPanelReveal();
     const contentReveal = uiContentReveal(0.1);
+    const focusPulse = uiFocusPulseAmount();
     const homePanelRect = { x: cx - 280, y: 15, w: 560, h: h - 50 };
     withRevealClip(ctx, homePanelRect, panelReveal, 'top', () => {
       drawTerminalFrame(ctx, homePanelRect.x, homePanelRect.y, homePanelRect.w, homePanelRect.h, null, 'rgba(80, 100, 140, 0.2)');
@@ -5386,8 +5396,8 @@ function gameLoop(now) {
       ctx.font = active ? canvasFont(13, { weight: 'bold' }) : canvasFont(12);
       ctx.fillText(tabNames[i], tx, 96);
       if (active) {
-        ctx.fillStyle = 'rgba(100, 150, 255, 0.6)';
-        ctx.fillRect(tx - tabWidth / 2 + 10, 101, tabWidth - 20, 2);
+        ctx.fillStyle = `rgba(100, 150, 255, ${(0.6 + 0.22 * focusPulse).toFixed(3)})`;
+        ctx.fillRect(tx - tabWidth / 2 + 10, 101, tabWidth - 20, 2 + focusPulse);
       }
     }
 
@@ -5437,7 +5447,7 @@ function gameLoop(now) {
         const eq = p.loadout.equipped[i];
         const sel = (homeShipCursor === i);
         if (sel) {
-          ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+          ctx.fillStyle = `rgba(60, 80, 120, ${(0.4 + 0.12 * focusPulse).toFixed(3)})`;
           ctx.fillRect(leftMargin - 4, sy - 12, 450, 18);
         }
         ctx.fillStyle = eq ? 'rgba(255, 200, 60, 0.8)' : 'rgba(100, 100, 120, 0.4)';
@@ -5449,7 +5459,7 @@ function gameLoop(now) {
         const con = p.loadout.consumables[i];
         const sel = (homeShipCursor === i + 2);
         if (sel) {
-          ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+          ctx.fillStyle = `rgba(60, 80, 120, ${(0.4 + 0.12 * focusPulse).toFixed(3)})`;
           ctx.fillRect(leftMargin - 4, sy - 12, 450, 18);
         }
         ctx.fillStyle = con ? 'rgba(200, 160, 255, 0.8)' : 'rgba(100, 100, 120, 0.4)';
@@ -5471,7 +5481,7 @@ function gameLoop(now) {
         const item = p.vault[i];
         const selected = (i === homeVaultCursor);
         if (selected) {
-          ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+          ctx.fillStyle = `rgba(60, 80, 120, ${(0.4 + 0.12 * focusPulse).toFixed(3)})`;
           ctx.fillRect(leftMargin - 4, vy - 12, 450, 18);
         }
         const tierColor = TIER_COLORS[item.tier] || 'rgba(180, 180, 190, 0.8)';
@@ -5529,7 +5539,7 @@ function gameLoop(now) {
         const canAfford = profileManager.canAffordRigUpgrade(ti);
 
         if (selected) {
-          ctx.fillStyle = 'rgba(60, 80, 120, 0.4)';
+          ctx.fillStyle = `rgba(60, 80, 120, ${(0.4 + 0.12 * focusPulse).toFixed(3)})`;
           ctx.fillRect(leftMargin - 4, uy - 13, 450, 48);
         }
 
@@ -5662,6 +5672,7 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const panelReveal = uiPanelReveal();
     const contentReveal = uiContentReveal(0.1);
+    const focusPulse = uiFocusPulseAmount();
     const selectPanelRect = { x: cx - 250, y: cy - 180, w: 500, h: 320 };
     withRevealClip(ctx, selectPanelRect, panelReveal, 'left', () => {
       drawTerminalFrame(ctx, selectPanelRect.x, selectPanelRect.y, selectPanelRect.w, selectPanelRect.h, null, 'rgba(100, 150, 255, 0.2)');
@@ -5690,9 +5701,9 @@ function gameLoop(now) {
       ctx.globalAlpha *= rowReveal;
 
       if (selected) {
-        ctx.fillStyle = 'rgba(60, 80, 140, 0.3)';
+        ctx.fillStyle = `rgba(60, 80, 140, ${(0.3 + 0.1 * focusPulse).toFixed(3)})`;
         ctx.fillRect(cx - 230, y - 18, 460, itemHeight - 8);
-        ctx.strokeStyle = 'rgba(100, 150, 255, 0.5)';
+        ctx.strokeStyle = `rgba(100, 150, 255, ${(0.5 + 0.22 * focusPulse).toFixed(3)})`;
         ctx.lineWidth = 1;
         ctx.strokeRect(cx - 230, y - 18, 460, itemHeight - 8);
       }
@@ -5956,6 +5967,7 @@ function gameLoop(now) {
 
     const panelReveal = uiPanelReveal();
     const contentReveal = uiContentReveal(0.08);
+    const focusPulse = uiFocusPulseAmount();
     const pausePanelRect = { x: cx - 180, y: cy - 150, w: 360, h: 260 };
     withRevealClip(ctx, pausePanelRect, panelReveal, 'center', () => {
       drawTerminalFrame(ctx, pausePanelRect.x, pausePanelRect.y, pausePanelRect.w, pausePanelRect.h, null, 'rgba(100, 150, 255, 0.2)');
@@ -5974,9 +5986,9 @@ function gameLoop(now) {
       const selected = i === pauseMenuSelection;
 
       if (selected) {
-        ctx.fillStyle = 'rgba(60, 80, 140, 0.3)';
+        ctx.fillStyle = `rgba(60, 80, 140, ${(0.3 + 0.1 * focusPulse).toFixed(3)})`;
         ctx.fillRect(cx - 150, y - 16, 300, 34);
-        ctx.strokeStyle = 'rgba(100, 150, 255, 0.5)';
+        ctx.strokeStyle = `rgba(100, 150, 255, ${(0.5 + 0.22 * focusPulse).toFixed(3)})`;
         ctx.lineWidth = 1;
         ctx.strokeRect(cx - 150, y - 16, 300, 34);
       }
@@ -6011,13 +6023,16 @@ function gameLoop(now) {
 
   if (transitionActive) {
     const motion = currentUiMotionSettings();
-    drawDirectionalWipe(ctx, { x: 0, y: 0, w: overlayCanvas.width, h: overlayCanvas.height }, {
-      progress: transitionTimer / TRANSITION_TOTAL,
-      direction: 'right',
-      role: 'anomaly',
-      alpha: 0.9 * Math.max(0.35, motion.intensity || 0),
-      reducedMotion: motion.reducedMotion,
-    });
+    const wipeAlpha = motion.reducedMotion ? 0.32 : 0.9 * motion.intensity;
+    if (motion.enabled && wipeAlpha > 0) {
+      drawDirectionalWipe(ctx, { x: 0, y: 0, w: overlayCanvas.width, h: overlayCanvas.height }, {
+        progress: transitionTimer / TRANSITION_TOTAL,
+        direction: 'right',
+        role: 'anomaly',
+        alpha: wipeAlpha,
+        reducedMotion: motion.reducedMotion,
+      });
+    }
   }
 
   recordPerfStat('overlayMs', performance.now() - overlayStart);

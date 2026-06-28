@@ -49,8 +49,17 @@ function makeRecordingContext() {
   assert.strictEqual(typeOnText('launch run', { reducedMotion: true }), 'launch run');
 
   const reduced = resolveMotionSettings({ enabled: false });
+  assert.strictEqual(reduced.enabled, false);
   assert.strictEqual(reduced.reducedMotion, true);
   assert.strictEqual(reduced.intensity, 0);
+
+  const prefersReduced = resolveMotionSettings({}, {
+    matchMedia(query) {
+      return { matches: query === '(prefers-reduced-motion: reduce)' };
+    },
+  });
+  assert.strictEqual(prefersReduced.enabled, true);
+  assert.strictEqual(prefersReduced.reducedMotion, true);
 
   const panelCtx = makeRecordingContext();
   drawMotionPanel(panelCtx, { x: 10, y: 20, w: 100, h: 40 }, { progress: 0.5, origin: 'right' });

@@ -121,6 +121,7 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:three` | Three renderer canary: smoke, infra boot, and renderer fixtures with `?renderer=three`. |
 | `npm run test:visual` | Visual lane: Three renderer fixtures plus UI surface captures. Generates screenshots, manifests, `visualReference` readability stats, and UI couch proxies. |
 | `npm run test:ui` | Focused UI visual pass. Captures title, profile, home, map select, in-match HUD, extraction results, and death results with 50%/25% couch-proxy images. |
+| `npm run test:ui-motion` | Pure Node checks for shared UI motion helpers: reduced-motion resolution, reveal clips, type-on text, command pulses, and directional wipes. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
@@ -177,8 +178,9 @@ screenshots plus 50 percent and 25 percent downscaled couch proxies. This lane
 checks that major UI surfaces exist, are not blank, preserve the expected phase,
 and keep a basic brightness/readability floor. The title surface includes both
 the immediate `title` frame and a later `title-attract` frame so attract-mode
-events can change without regressing the couch read. It is a canary for UI
-drift, not a pixel-perfect approval gate.
+events can change without regressing the couch read, plus a reduced-motion title
+capture so accessibility fallback state stays visible in the review bundle. It is
+a canary for UI drift, not a pixel-perfect approval gate.
 
 ## Lanes
 

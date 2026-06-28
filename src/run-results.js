@@ -5,7 +5,6 @@ import {
   drawSectionLabel,
   drawSelectedRow,
   drawStatusPill,
-  drawUiPanel,
   fitUiText,
   roleColor,
   withAlpha,
@@ -13,10 +12,10 @@ import {
 import { promptLabel } from './ui/input-prompts.js';
 import {
   drawCommandButtonMotion,
+  drawMotionPanel,
   motionProgress,
   resolveMotionSettings,
   staggerProgress,
-  withRevealClip,
 } from './ui/motion.js';
 
 const INHIBITOR_FORMS = ['dormant', 'glitch', 'swarm', 'vessel'];
@@ -178,13 +177,13 @@ export function drawRunResultsOverlay(ctx, canvas, {
     duration: motion.panelDuration,
     reducedMotion: motion.reducedMotion,
   });
-  withRevealClip(ctx, panelRect, panelReveal, 'center', () => {
-    drawUiPanel(ctx, panelRect, {
-      role,
-      fillAlpha: 0.68,
-      borderAlpha: 0.26,
-      cornerLength: 46,
-    });
+  drawMotionPanel(ctx, panelRect, {
+    progress: panelReveal,
+    origin: 'center',
+    role,
+    fillAlpha: 0.68,
+    borderAlpha: 0.26,
+    cornerLength: 46,
   });
 
   ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';

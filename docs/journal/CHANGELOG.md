@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-06-28 — UI motion forge pass
+
+- Ran a Forge review pass on the shared UI motion layer, its first production
+  call sites, and the harness/docs that describe it.
+- Tightened UI motion disable semantics so disabled/intensity-zero motion no
+  longer draws transition accents, while reduced motion still keeps static
+  readable state.
+- Wired the tracked focus-pulse timer into selected profile/home/map/pause
+  affordances and moved the results overlay onto the shared motion panel helper.
+- Updated the test harness guide to name `npm run test:ui-motion` and the
+  reduced-motion title capture explicitly.
+
 ## 2026-06-28 — UI motion layer
 
 - Added `src/ui/motion.js` as the shared canvas UI motion kit: panel reveal
