@@ -18,6 +18,7 @@ const STAGING_ROOT = path.join(ROOT, 'release-staging');
 const PRODUCT_NAME = 'Last Singularity';
 const PRODUCT_SLUG = 'last-singularity';
 const PRODUCT_SHORT = 'LS';
+const APP_ICON_PNG = path.join(ROOT, 'assets', 'app', 'icon-512.png');
 const PUBLIC_VERSION = currentPublicVersion();
 const BUILD_VERSION = currentBuildVersion(PUBLIC_VERSION);
 const DESKTOP_SERVER_SCRIPTS = [
@@ -267,12 +268,12 @@ function writeStartHere(targetRoot, results) {
     '',
     '## First launch flow',
     '',
-    '- Press Space / Enter / gamepad A on the title screen.',
+    '- Press Space / Enter on keyboard or A on controller/Steam Deck at the title screen.',
     '- Choose a pilot slot. Empty slots ask for a pilot name; type one and press Enter.',
-    '- On the home screen, use Q/E or L1/R1 to move between tabs.',
-    '- Go to LAUNCH, confirm, choose a destination, then confirm again to drop in.',
+    '- On the home screen, use Q/E on keyboard or L1/R1 on controller/Steam Deck to move between tabs.',
+    '- Go to LAUNCH, confirm with Space or A, choose a destination, then confirm again to drop in.',
     '- During a run, loot wrecks, conserve delta-v, follow wormhole arrows, and extract before portals expire or the universe collapses.',
-    '- After extraction or death, press Space / A to return to the pilot flow.',
+    '- After extraction or death, press Space or A to return to the pilot flow.',
     '',
     '## What is in this folder?',
     '',
@@ -503,6 +504,7 @@ async function buildElectronTarget(targetRoot, target, mode) {
     arch,
     executableName: PRODUCT_NAME,
     appCopyright: `${PRODUCT_NAME} playtest build`,
+    icon: fs.existsSync(APP_ICON_PNG) ? APP_ICON_PNG : undefined,
     prune: false,
     quiet: true,
   });
@@ -528,6 +530,9 @@ async function buildElectronTarget(targetRoot, target, mode) {
     removeIfExists(finalPath);
     fs.renameSync(packagedRoot, finalPath);
     if (target === 'mac') signMacApp(finalPath);
+    if (fs.existsSync(APP_ICON_PNG) && target !== 'mac') {
+      fs.copyFileSync(APP_ICON_PNG, path.join(finalPath, 'last-singularity-icon.png'));
+    }
     result.artifact = finalName;
   }
 

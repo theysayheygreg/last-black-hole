@@ -74,6 +74,7 @@ import {
   roleColor,
   withAlpha,
 } from './ui/canvas-primitives.js';
+import { ctaLabel, isDeckMode, mapSelectHint, menuHint, movementHint, promptLabel } from './ui/input-prompts.js';
 import { corruptGlyphText } from './text-corruption.js';
 
 window.__LBH_BOOT_MARK__?.('main.module.evaluated', {
@@ -402,6 +403,17 @@ function formatClock(seconds = 0) {
   const mins = Math.floor(safe / 60);
   const secs = safe % 60;
   return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+function currentPromptOptions() {
+  return {
+    deck: isDeckMode(),
+    lastInputSource: inputManager?.lastInputSource,
+  };
+}
+
+function prompt(action, label = '', options = currentPromptOptions()) {
+  return ctaLabel(action, label, options).toLowerCase();
 }
 
 function profileRunRecords(profile) {
@@ -3820,7 +3832,7 @@ function gameLoop(now) {
           w.alive && !w.looted && worldDistance(ship.wx, ship.wy, w.wx, w.wy) < CONFIG.wrecks.pickupRadius * 1.5
         );
         if (nearWreck && !inventorySystem._fullWarningShown) {
-          showWarning('cargo full — open inventory [Tab] to drop', 'rgba(255, 100, 80, 0.9)', 3000);
+          showWarning(`cargo full — ${prompt('inventory', 'inventory')} to drop`, 'rgba(255, 100, 80, 0.9)', 3000);
           inventorySystem._fullWarningShown = true;
         }
         if (!nearWreck) inventorySystem._fullWarningShown = false;
@@ -4654,6 +4666,8 @@ function gameLoop(now) {
       inhibitorState,
       ship,
       fuelRatio: ship.getDeltaVRatio(),
+      deckMode: isDeckMode(),
+      lastInputSource: inputManager.lastInputSource,
       camX, camY,
       canvasW: overlayCanvas.width,
       canvasH: overlayCanvas.height,
@@ -4914,13 +4928,13 @@ function gameLoop(now) {
       ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, overlayCanvas.height * 0.45 + 28);
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
       ctx.font = canvasFont(11);
-      ctx.fillText('space: confirm    esc: cancel', cx, overlayCanvas.height * 0.45 + 52);
+      ctx.fillText(`${prompt('confirm', 'confirm')}    ${prompt('back', 'cancel')}`, cx, overlayCanvas.height * 0.45 + 52);
     }
 
     // Controls hint
     ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
     ctx.font = canvasFont(11);
-    ctx.fillText('↑↓ select    space/A: load    X/Y: delete    esc/B: back', cx, overlayCanvas.height * 0.85);
+    ctx.fillText(`${promptLabel('select', currentPromptOptions())} select    ${prompt('confirm', 'load')}    ${prompt('delete', 'delete')}    ${prompt('back', 'back')}`, cx, overlayCanvas.height * 0.85);
 
     ctx.restore();
   }
@@ -5028,7 +5042,7 @@ function gameLoop(now) {
           ctx.fillRect(leftMargin - 4, sy - 12, 450, 18);
         }
         ctx.fillStyle = eq ? 'rgba(255, 200, 60, 0.8)' : 'rgba(100, 100, 120, 0.4)';
-        const action = (sel && eq) ? '  [space: unequip]' : '';
+        const action = (sel && eq) ? `  [${prompt('confirm', 'unequip')}]` : '';
         ctx.fillText(`equip ${i + 1}: ${eq ? eq.name : '— empty —'}${action}`, leftMargin, sy);
         sy += 18;
       }
@@ -5040,7 +5054,7 @@ function gameLoop(now) {
           ctx.fillRect(leftMargin - 4, sy - 12, 450, 18);
         }
         ctx.fillStyle = con ? 'rgba(200, 160, 255, 0.8)' : 'rgba(100, 100, 120, 0.4)';
-        const action = (sel && con) ? '  [space: remove]' : '';
+        const action = (sel && con) ? `  [${prompt('confirm', 'remove')}]` : '';
         ctx.fillText(`hotbar ${i + 1}: ${con ? con.name : '— empty —'}${action}`, leftMargin, sy);
         sy += 18;
       }
@@ -5075,7 +5089,7 @@ function gameLoop(now) {
           if (item.subcategory === 'equippable') action = 'equip';
           else if (item.subcategory === 'consumable') action = 'load';
           ctx.fillStyle = 'rgba(255, 220, 100, 0.7)';
-          ctx.fillText(`[space: ${action}]`, leftMargin + 310, vy);
+          ctx.fillText(`[${prompt('confirm', action)}]`, leftMargin + 310, vy);
         }
         vy += 18;
       }
@@ -5128,7 +5142,7 @@ function gameLoop(now) {
 
         if (cost) {
           ctx.fillStyle = canAfford ? 'rgba(100, 255, 150, 0.7)' : 'rgba(255, 100, 100, 0.5)';
-          const action = selected ? (canAfford ? '  [space: buy]' : '  [need EM]') : '';
+          const action = selected ? (canAfford ? `  [${prompt('confirm', 'buy')}]` : '  [need EM]') : '';
           ctx.fillText(`next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM${action}`, leftMargin + 20, uy + 30);
         } else {
           ctx.fillStyle = 'rgba(255, 220, 100, 0.6)';
@@ -5218,7 +5232,7 @@ function gameLoop(now) {
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(100, 255, 200, 0.8)';
       ctx.font = canvasFont(20, { role: 'display', weight: '700' });
-      ctx.fillText('press space to launch', cx, contentY + contentH / 2 - 20);
+      ctx.fillText(ctaLabel('confirm', 'launch', currentPromptOptions()).toUpperCase(), cx, contentY + contentH / 2 - 20);
       ctx.fillStyle = 'rgba(120, 150, 170, 0.5)';
       ctx.font = canvasFont(13);
       ctx.fillText('select your map on the next screen', cx, contentY + contentH / 2 + 10);
@@ -5228,7 +5242,7 @@ function gameLoop(now) {
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
     ctx.font = canvasFont(11);
-    ctx.fillText('Q/E or L1/R1: tabs    ↑↓ select    space/A: confirm    esc/B: back', cx, overlayCanvas.height - 20);
+    ctx.fillText(menuHint(currentPromptOptions()), cx, overlayCanvas.height - 20);
 
     ctx.restore();
   }
@@ -5304,18 +5318,22 @@ function gameLoop(now) {
           ? 'rgba(255, 210, 140, 0.9)'
           : 'rgba(160, 180, 210, 0.75)';
         if (remoteControl.selectedDiffersFromLive) {
+          const confirmLabel = promptLabel('confirm', currentPromptOptions());
+          const resetLabel = promptLabel('delete', currentPromptOptions());
           ctx.fillText(
             remoteControl.canHostReset
-              ? `space/A joins ${remoteControl.sessionMapName}; X/Y resets host cycle to ${remoteControl.selectedMapName}`
-              : `space/A joins ${remoteControl.sessionMapName}; only host can reset to ${remoteControl.selectedMapName}`,
+              ? `${confirmLabel} joins ${remoteControl.sessionMapName}; ${resetLabel} resets host cycle to ${remoteControl.selectedMapName}`
+              : `${confirmLabel} joins ${remoteControl.sessionMapName}; only host can reset to ${remoteControl.selectedMapName}`,
             cx,
             infoY + 20
           );
         } else {
+          const confirmLabel = promptLabel('confirm', currentPromptOptions());
+          const resetLabel = promptLabel('delete', currentPromptOptions());
           ctx.fillText(
             remoteControl.canHostReset
-              ? 'space/A: join live cycle    X/Y: host reset current cycle'
-              : 'space/A: join live cycle',
+              ? `${confirmLabel}: join live cycle    ${resetLabel}: host reset current cycle`
+              : `${confirmLabel}: join live cycle`,
             cx,
             infoY + 20
           );
@@ -5330,9 +5348,11 @@ function gameLoop(now) {
     ctx.fillStyle = 'rgba(150, 160, 190, 0.6)';
     ctx.font = canvasFont(11);
     ctx.fillText(
-      simClient?.enabled
-        ? '↑↓ select    space/A: join or host    X/Y: host reset    S: reroll seed    esc/B: back'
-        : '↑↓ select    space/A: launch    S: reroll seed    esc/B: back',
+      mapSelectHint({
+        ...currentPromptOptions(),
+        remote: Boolean(simClient?.enabled),
+        hostReset: Boolean(simClient?.enabled),
+      }),
       cx,
       hintY
     );
@@ -5453,7 +5473,8 @@ function gameLoop(now) {
         if (a <= 0) continue;
         const color = TIER_COLORS[item.tier] || 'rgba(200, 200, 210, 0.8)';
         ctx.fillStyle = color.replace(/[\d.]+\)$/, `${a})`);
-        ctx.fillText(`${item.name} [${item.category}] — ${item.value}`, cx, itemY);
+        const category = item.category || item.subcategory || item.type || 'salvage';
+        ctx.fillText(`${item.name} [${category}] — ${item.value}`, cx, itemY);
         itemY += 20;
       }
       if (metaExtractedItems.length > 8) {
@@ -5489,7 +5510,7 @@ function gameLoop(now) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
       ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
       ctx.font = canvasFont(18);
-      ctx.fillText('press space to drop back in', cx, cy + 120);
+      ctx.fillText(ctaLabel('confirm', 'drop back in', currentPromptOptions()).toUpperCase(), cx, cy + 120);
     }
 
     ctx.restore();
@@ -5548,12 +5569,12 @@ function gameLoop(now) {
     // Controls reference (compact)
     ctx.font = canvasFont(11);
     ctx.fillStyle = 'rgba(150, 155, 185, 0.55)';
-    ctx.fillText('steer: stick / arrows   thrust: R2 / space   brake: L2 / ctrl   pulse: □ / E   abilities: L1/R1 / Q/R', cx, cy + 110);
+    ctx.fillText(movementHint(currentPromptOptions()), cx, cy + 110);
 
     // Navigation hint
     ctx.fillStyle = 'rgba(130, 130, 170, 0.4)';
     ctx.font = canvasFont(12);
-    ctx.fillText('up/down to select  ·  X / space to confirm  ·  O / esc to resume', cx, cy + 130);
+    ctx.fillText(`${promptLabel('select', currentPromptOptions())} select  ·  ${prompt('confirm', 'confirm')}  ·  ${prompt('back', 'resume')}`, cx, cy + 130);
 
     ctx.restore();
   }

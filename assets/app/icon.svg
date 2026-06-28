@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="47%" r="52%">
+      <stop offset="0%" stop-color="#fff4da"/>
+      <stop offset="23%" stop-color="#00e2ff"/>
+      <stop offset="48%" stop-color="#b84cff"/>
+      <stop offset="70%" stop-color="#cc1a80"/>
+      <stop offset="100%" stop-color="#000021"/>
+    </radialGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="512" height="512" rx="72" fill="#000021"/>
+  <ellipse cx="256" cy="256" rx="176" ry="74" fill="none" stroke="url(#g)" stroke-width="18" filter="url(#glow)"/>
+  <ellipse cx="256" cy="256" rx="108" ry="42" fill="#000006" stroke="#00e2ff" stroke-opacity="0.5" stroke-width="4"/>
+  <circle cx="256" cy="256" r="35" fill="#000006" stroke="#fff4da" stroke-opacity="0.7" stroke-width="3"/>
+  <text x="256" y="272" text-anchor="middle" font-family="Oxanium, Arial, sans-serif" font-weight="800" font-size="74" fill="#eaf7ff" letter-spacing="0">LS</text>
+</svg>

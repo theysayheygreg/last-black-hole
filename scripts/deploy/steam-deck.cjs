@@ -165,6 +165,7 @@ function main() {
     `Comment=${PRODUCT_NAME} local playtest build`,
     `Exec=${launcher}`,
     `Path=${remoteDir}`,
+    `Icon=${path.posix.join(remoteDir, 'last-singularity-icon.png')}`,
     'Terminal=false',
     'Categories=Game;',
     'StartupNotify=false',

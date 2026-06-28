@@ -61,6 +61,7 @@
     "release:prepush": "node scripts/release.cjs prepush",
     "release:public": "node scripts/release.cjs public",
     "release:status": "node scripts/release.cjs status",
+    "assets:app": "node scripts/generate-app-assets.cjs",
     "ios:sync": "node scripts/ios-wrapper.cjs sync",
     "ios:build:sim": "node scripts/ios-wrapper.cjs build-sim",
     "ios:build:device": "node scripts/ios-wrapper.cjs build-device",

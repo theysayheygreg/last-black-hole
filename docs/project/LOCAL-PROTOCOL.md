@@ -247,7 +247,9 @@ In the current eleventh slice, the browser client finally exposes that control p
 
 - map select now polls and surfaces live session state instead of pretending every remote launch is a fresh host action
 - the client now knows whether a live run exists, which map it is on, who the host is, how many players are in it, and whether this browser is the host
-- `space/A` is now explicitly the join-or-host action, while `X/Y` is the host-only reset action for the selected map
+- the confirm action is explicitly the join-or-host action, while the secondary
+  host-reset action remains host-only for the selected map; Deck UI presents
+  those as `A` and `Y`
 - remote-authority coverage now proves that a non-host browser can see it will join the live run rather than reset it, and that the original browser reports host reset authority
 
 In the current twelfth slice, the authoritative sim also starts scaling its clocks by map size:

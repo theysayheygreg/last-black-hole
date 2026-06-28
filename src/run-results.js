@@ -11,6 +11,7 @@ import {
   roleColor,
   withAlpha,
 } from './ui/canvas-primitives.js';
+import { promptLabel } from './ui/input-prompts.js';
 
 const INHIBITOR_FORMS = ['dormant', 'glitch', 'swarm', 'vessel'];
 
@@ -159,8 +160,8 @@ export function drawRunResultsOverlay(ctx, canvas, {
   }
 
   drawScanlines(ctx, w, h, 0.026);
-  const panelW = Math.min(780, w - 64);
-  const panelH = Math.min(500, h - 56);
+  const panelW = Math.min(840, w - 64);
+  const panelH = Math.min(540, h - 48);
   const panelX = cx - panelW / 2;
   const panelY = cy - panelH / 2;
   drawUiPanel(ctx, { x: panelX, y: panelY, w: panelW, h: panelH }, {
@@ -180,18 +181,18 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ctx.fillText(fitUiText(ctx, view.status, panelW - 72), cx, panelY + 58);
 
   ctx.fillStyle = roleColor('muted', 0.78 * clamp01((reveal - 0.35) * 2));
-  ctx.font = canvasFont(13);
+  ctx.font = canvasFont(15);
   ctx.fillText(success ? 'you made it through the aperture' : 'this is what the universe kept', cx, panelY + 84);
 
   const contentAlpha = clamp01((reveal - 0.65) * 2);
-  const leftX = panelX + 34;
-  const rightX = panelX + panelW / 2 + 34;
+  const leftX = panelX + 42;
+  const rightX = panelX + panelW / 2 + 42;
   const mapLabel = view.mapContext.mapId ? String(view.mapContext.mapId).toUpperCase() : 'UNKNOWN MAP';
-  drawStatusPill(ctx, { x: cx - 122, y: panelY + 112, w: 102, h: 22 }, mapLabel, { role, alpha: contentAlpha });
-  drawStatusPill(ctx, { x: cx, y: panelY + 112, w: 102, h: 22 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
-  drawStatusPill(ctx, { x: cx + 122, y: panelY + 112, w: 102, h: 22 }, `${view.emEarned} EM`, { role: 'salvage', alpha: contentAlpha });
+  drawStatusPill(ctx, { x: cx - 138, y: panelY + 114, w: 118, h: 26 }, mapLabel, { role, alpha: contentAlpha });
+  drawStatusPill(ctx, { x: cx, y: panelY + 114, w: 118, h: 26 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
+  drawStatusPill(ctx, { x: cx + 138, y: panelY + 114, w: 118, h: 26 }, `${view.emEarned} EM`, { role: 'salvage', alpha: contentAlpha });
 
-  let y = panelY + 154;
+  let y = panelY + 160;
 
   drawSectionLabel(ctx, 'RUN SUMMARY', leftX, y, { role, alpha: contentAlpha });
   y += 25;
@@ -220,7 +221,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
     drawKeyValueRow(ctx, 'tax', `-${view.deathTax} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'danger' });
   }
 
-  let ry = panelY + 154;
+  let ry = panelY + 160;
   drawSectionLabel(ctx, view.cargoTitle, rightX, ry, { role: success ? 'salvage' : 'danger', alpha: contentAlpha });
   ry += 24;
   drawKeyValueRow(ctx, 'manifest', `${view.cargoCount} items / ${view.cargoValue} EM`, rightX, ry, {
@@ -229,7 +230,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   });
   ry += 22;
   ctx.textAlign = 'left';
-  ctx.font = canvasFont(12);
+  ctx.font = canvasFont(13);
   const cargoLines = view.cargoLabels.length > 0 ? view.cargoLabels.slice(0, 6) : ['[ empty ]'];
   for (let i = 0; i < cargoLines.length; i++) {
     drawSelectedRow(ctx, { x: rightX - 6, y: ry - 13, w: panelW / 2 - 64, h: 18 }, {
@@ -257,7 +258,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   if (view.aiLines.length > 0) notableLines.push(...view.aiLines);
   drawSectionLabel(ctx, 'NOTABLE', rightX, ry, { role, alpha: contentAlpha });
   ry += 24;
-  ctx.font = canvasFont(11);
+  ctx.font = canvasFont(13);
   ctx.fillStyle = roleColor('muted', 0.84 * contentAlpha);
   const lines = notableLines.length > 0 ? notableLines.slice(0, 5) : ['no unusual telemetry'];
   for (const line of lines) {
@@ -270,11 +271,11 @@ export function drawRunResultsOverlay(ctx, canvas, {
     const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.65;
     drawCommandButton(ctx, {
       x: cx - 150,
-      y: panelY + panelH - 56,
+      y: panelY + panelH - 64,
       w: 300,
-      h: 34,
+      h: 44,
     }, 'continue', {
-      hotkey: 'space',
+      hotkey: promptLabel('confirm'),
       role,
       active: true,
       alpha: promptAlpha * blink,

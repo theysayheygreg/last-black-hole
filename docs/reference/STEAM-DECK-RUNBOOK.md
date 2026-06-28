@@ -21,6 +21,10 @@ starts the control plane and sim as child processes on dynamic `127.0.0.1`
 ports. A `simServer=http://127.0.0.1:<port>` URL is local IPC over loopback, not
 a network-streamed renderer.
 
+The Deck launcher also tags the renderer URL with `deck=1`. That is the
+source-of-truth switch for Deck/controller CTAs and handheld HUD minimums. Do
+not rely on viewport guessing for Deck UI behavior.
+
 ## Public Tester Install
 
 Use this when someone has a Steam Deck and should install the latest public
@@ -62,6 +66,10 @@ It creates Desktop Mode launchers at:
 
 It also closes Steam if needed, backs up `shortcuts.vdf`, and adds **Last
 Singularity** as a non-Steam shortcut so it appears in Gaming Mode.
+
+The installed folder also contains `last-singularity-icon.png`. Desktop entries
+and Steam shortcut metadata point at that icon so the build appears as a real
+app instead of a generic Electron executable.
 
 After the installer finishes, restart Steam or return to Gaming Mode and launch
 **Last Singularity** from **Library -> Non-Steam**.
@@ -227,8 +235,13 @@ Before calling a Deck build bulletproof, verify all of this from Gaming Mode:
   launch and a short play session.
 - **Controller path:** controller can reach title, map select, flight, brake,
   slingshot, inventory, pause, extraction, death/results, and quit.
+- **Deck prompts:** visible CTAs use Deck/controller labels (`A`, `B`, `View`,
+  `L1/R1`, `R2`, `L2`) instead of keyboard-only prompts such as `press space`.
 - **Text entry:** profile/name flows do not require a physical keyboard.
-- **Legibility:** HUD text is readable at 1280x800 handheld distance.
+- **Legibility:** HUD text is readable at 1280x800 handheld distance, body text
+  stays at or above 12px, and fuel/signal/progress bars are thick enough to
+  read as quickly as labels.
+- **App surface:** the Gaming Mode entry shows the Last Singularity icon.
 - **Suspend/resume:** suspend during a run, resume, continue, and quit without
   corrupting the run or profile.
 - **Logs:** `deck-launch.log` and `electron.log` exist after the session.

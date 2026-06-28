@@ -1,5 +1,26 @@
 # Decision Log
 
+## 2026-06-28 — Deck compatibility is a first-class UI contract
+
+**Decision:** Treat Steam Deck compatibility as a dedicated presentation mode,
+not only as a Linux packaging target. The Deck launcher passes `deck=1`, the UI
+routes visible prompts through action-based helpers, and the HUD keeps
+handheld/couch minimums for text, gauges, panel backing, and bottom-left stack
+spacing.
+
+**Why:** The game could boot on Deck while still presenting keyboard-first copy,
+hairline fuel bars, and overlapping HUD clusters. That fails the actual SteamOS
+play surface even if the executable is healthy. Centralizing prompts and sizing
+rules lets local browser, packaged desktop, and Deck tests share one contract.
+
+**Where it landed:** `src/ui/input-prompts.js`, `index-a.html`, `src/hud.js`,
+`src/main.js`, `src/run-results.js`, `desktop/electron-main.cjs`,
+`tests/steam-deck-compat.cjs`, and the Steam Deck runbooks.
+
+**Door status:** Closed for v0.2 prompt/layout ownership. Open for true native
+16:10 playfield support, Steam Input action-set artwork, and a final visual
+brand pass.
+
 ## 2026-06-28 — UI motion can trigger VFX, but UI keeps the truth
 
 **Decision:** Reframe the UI motion pass as a two-layer contract. DOM/canvas UI

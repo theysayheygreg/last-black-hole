@@ -37,6 +37,22 @@ shape.
 
 ## Standing Assessment
 
+**Status update, 2026-06-28 Deck compatibility pass:** the source tree now has
+a first-class Deck UI mode instead of only a Deck package. The Electron Deck
+launcher passes `deck=1` to the renderer, UI prompts route through
+`src/ui/input-prompts.js`, HUD text/gauge minimums were raised for handheld
+readability, bottom-left HUD panels no longer overlap in the Deck visual
+capture, and placeholder app/Steam assets now exist under `assets/app/` and
+`docs/public/steam/`.
+
+Validation for this source snapshot:
+
+- `npm run test:fast` passed after adding the `SteamDeckCompat` suite.
+- `npm run test:ui` passed on the normal Three path.
+- `node tests/ui-visual.cjs "index-a.html?renderer=three&deck=1"` passed; the
+  reviewed Deck HUD capture uses `X`/`View` prompts and no longer shows the
+  empty ability panel or keyboard-only Q/R fallback.
+
 **Status:** v0.2.2 local source path is playable on a fresh local authority
 stack, and `0.2.2.332007f` has a fresh Linux release deploy on Greg's Steam
 Deck for demo testing. The Deck install was verified at the file/shortcut level;

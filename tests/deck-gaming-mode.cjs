@@ -25,6 +25,7 @@ function run() {
   assert.strictEqual(entry.AppName, "Last Singularity");
   assert.strictEqual(entry.Exe, `"/home/deck/Games/last-singularity/run-last-singularity.sh"`);
   assert.strictEqual(entry.StartDir, `"/home/deck/Games/last-singularity"`);
+  assert.strictEqual(entry.icon, "/home/deck/Games/last-singularity/last-singularity-icon.png");
   assert.strictEqual(entry.ShortcutPath, "/home/deck/Games/last-singularity/last-singularity.desktop");
   assert.strictEqual(entry.tags[0], "Last Singularity");
   assert.strictEqual(entry.tags[1], "Deck Playtest");

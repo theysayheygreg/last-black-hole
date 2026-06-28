@@ -85,6 +85,14 @@
       --lbh-warning-shadow: rgba(0, 0, 0, 0.8);
       --lbh-panel-radius: 2px;
       --lbh-edge-margin: 16px;
+      --lbh-couch-micro: 12px;
+      --lbh-couch-small: 13px;
+      --lbh-couch-body: 15px;
+      --lbh-couch-button: 18px;
+      --lbh-gauge-height: 14px;
+      --lbh-hud-gap: 8px;
+      --lbh-deck-panel-pad-y: 10px;
+      --lbh-deck-panel-pad-x: 14px;
     }
     * {
       margin: 0;
@@ -159,12 +167,14 @@
     }
     #hud .hud-panel {
       position: absolute;
-      font-size: 13px;
+      font-size: var(--lbh-couch-small);
       letter-spacing: 0;
-      padding: 8px 12px;
+      padding: var(--lbh-deck-panel-pad-y) var(--lbh-deck-panel-pad-x);
       background: var(--lbh-panel-bg);
       border: 1px solid var(--lbh-panel-border);
       border-radius: var(--lbh-panel-radius);
+      min-height: 44px;
+      backdrop-filter: blur(2px);
     }
     #hud-collapse {
       top: 12px; left: var(--lbh-edge-margin);
@@ -174,37 +184,38 @@
       border-color: rgba(234, 247, 255, 0.18);
     }
     #hud-collapse .hud-label {
-      font-size: 9px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
       color: var(--lbh-text-muted);
       text-transform: uppercase;
     }
     #hud-collapse .hud-value {
-      font-size: 18px;
+      font-size: 22px;
       font-weight: bold;
     }
     #hud-collapse .hud-sub {
-      font-size: 10px;
+      font-size: var(--lbh-couch-micro);
       color: rgba(140, 160, 190, 0.65);
     }
     #hud-signal {
-      top: 72px; left: var(--lbh-edge-margin);
+      top: 88px; left: var(--lbh-edge-margin);
       color: var(--lbh-signal);
       text-shadow: 0 0 6px rgba(0, 226, 255, 0.32);
       line-height: 1.4;
       border-color: rgba(0, 226, 255, 0.18);
     }
     #hud-signal .hud-label {
-      font-size: 9px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
       color: var(--lbh-signal-label);
       text-transform: uppercase;
     }
     #hud-signal-bar {
-      width: 120px; height: 4px;
+      width: 160px; height: var(--lbh-gauge-height);
       background: var(--lbh-track-bg);
+      border: 1px solid rgba(234, 247, 255, 0.14);
       border-radius: 2px;
-      margin: 3px 0 2px 0;
+      margin: 6px 0 4px 0;
       overflow: hidden;
     }
     #hud-signal-fill {
@@ -214,11 +225,11 @@
       transition: width 0.15s, background-color 0.3s;
     }
     #hud-signal-zone {
-      font-size: 10px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
     }
     #hud-fuel {
-      top: 72px; right: var(--lbh-edge-margin);
+      top: 88px; right: var(--lbh-edge-margin);
       color: var(--lbh-ecology);
       text-shadow: 0 0 6px rgba(56, 245, 138, 0.28);
       line-height: 1.4;
@@ -226,16 +237,17 @@
       text-align: right;
     }
     #hud-fuel .hud-label {
-      font-size: 9px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
       color: rgba(56, 245, 138, 0.72);
       text-transform: uppercase;
     }
     #hud-fuel-bar {
-      width: 120px; height: 4px;
+      width: 160px; height: var(--lbh-gauge-height);
       background: var(--lbh-track-bg);
+      border: 1px solid rgba(234, 247, 255, 0.14);
       border-radius: 2px;
-      margin: 3px 0 2px 0;
+      margin: 6px 0 4px 0;
       overflow: hidden;
     }
     #hud-fuel-fill {
@@ -245,11 +257,11 @@
       transition: width 0.15s, background-color 0.3s;
     }
     #hud-fuel-readout {
-      font-size: 10px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
     }
     #hud-inhibitor {
-      top: 128px; left: var(--lbh-edge-margin);
+      top: 166px; left: var(--lbh-edge-margin);
       color: var(--lbh-inhibitor);
       text-shadow: 0 0 8px var(--lbh-inhibitor-glow);
       line-height: 1.4;
@@ -257,13 +269,13 @@
       animation: inhibitorPulse 2.4s ease-in-out infinite;
     }
     #hud-inhibitor .hud-label {
-      font-size: 9px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
       color: rgba(255, 120, 205, 0.72);
       text-transform: uppercase;
     }
     #hud-inhibitor-form {
-      font-size: 13px;
+      font-size: var(--lbh-couch-body);
       text-transform: lowercase;
       font-weight: 600;
       line-height: 1.05;
@@ -290,16 +302,16 @@
       border-color: rgba(0, 226, 255, 0.18);
     }
     #hud-portals .hud-label {
-      font-size: 9px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
       color: rgba(0, 226, 255, 0.62);
       text-transform: uppercase;
     }
     #hud-portals .hud-value {
-      font-size: 13px;
+      font-size: var(--lbh-couch-body);
     }
     #hud-portals .hud-sub {
-      font-size: 10px;
+      font-size: var(--lbh-couch-micro);
       color: var(--lbh-text-muted);
     }
     #hud-salvage {
@@ -310,17 +322,17 @@
       border-color: rgba(255, 185, 56, 0.2);
     }
     #hud-salvage .hud-sub {
-      font-size: 10px;
+      font-size: var(--lbh-couch-micro);
       color: rgba(190, 165, 90, 0.7);
     }
     #hud-scavengers {
       display: none;  /* hidden — scavenger count is better as organic discovery */
     }
     #hud-signature {
-      bottom: 46px; left: 50%;
+      bottom: 48px; left: 50%;
       transform: translateX(-50%);
       text-align: center;
-      font-size: 10px;
+      font-size: var(--lbh-couch-micro);
       color: rgba(140, 170, 190, 0.5);
       text-shadow: 0 0 4px rgba(140, 170, 190, 0.2);
       background: none;
@@ -328,25 +340,26 @@
       padding: 0;
     }
     #hud-pulse {
-      bottom: 62px; left: var(--lbh-edge-margin);
-      font-size: 10px;
+      bottom: 76px; left: var(--lbh-edge-margin);
+      font-size: var(--lbh-couch-small);
       color: rgba(200, 180, 100, 0.7);
       text-shadow: 0 0 4px rgba(200, 180, 100, 0.2);
-      background: none;
-      border: none;
-      padding: 2px 0;
+      border-color: rgba(255, 185, 56, 0.18);
+      padding: 8px 12px;
+      min-height: 34px;
     }
     #hud-pulse.ready {
       color: rgba(100, 220, 160, 0.8);
       text-shadow: 0 0 6px rgba(100, 220, 160, 0.3);
     }
     #hud-abilities {
-      bottom: 80px; left: var(--lbh-edge-margin);
-      font-size: 9px;
-      background: none;
-      border: none;
-      padding: 0;
-      line-height: 1.6;
+      bottom: 126px; left: var(--lbh-edge-margin);
+      width: 300px;
+      font-size: var(--lbh-couch-micro);
+      border-color: rgba(0, 226, 255, 0.18);
+      padding: 9px 12px;
+      line-height: 1.45;
+      min-height: 74px;
     }
     .hud-ability {
       color: rgba(160, 170, 180, 0.6);
@@ -354,6 +367,8 @@
     .hud-ability-key {
       color: rgba(120, 140, 160, 0.5);
       font-weight: bold;
+      display: inline-block;
+      min-width: 26px;
     }
     .hud-ability.active .hud-ability-name {
       color: rgba(100, 255, 200, 0.9);
@@ -365,6 +380,27 @@
     .hud-ability.ready .hud-ability-name {
       color: rgba(180, 200, 220, 0.8);
     }
+    .hud-ability-detail {
+      color: rgba(154, 180, 206, 0.64);
+      font-size: var(--lbh-couch-micro);
+      margin-left: 28px;
+      max-width: 246px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .hud-ability-meter {
+      height: 12px;
+      width: 230px;
+      background: rgba(90,110,130,0.24);
+      border: 1px solid rgba(234,247,255,0.12);
+      margin: 4px 0 2px 28px;
+      overflow: hidden;
+    }
+    .hud-ability-meter-fill {
+      height: 100%;
+      transition: width 0.12s linear, background-color 0.18s linear;
+    }
     #hud-portal-arrow {
       position: absolute;
       bottom: 50%;
@@ -375,7 +411,7 @@
     /* Events log — left side, stacks entries, fades by age (like MMO chat) */
     #hud-warnings {
       position: absolute;
-      bottom: 90px;
+      bottom: 222px;
       left: var(--lbh-edge-margin);
       width: 280px;
       text-align: left;
@@ -385,7 +421,7 @@
       pointer-events: none;
     }
     .hud-warning {
-      font-size: 11px;
+      font-size: var(--lbh-couch-micro);
       font-weight: normal;
       letter-spacing: 0;
       text-shadow: 0 0 6px var(--lbh-warning-shadow);
@@ -427,7 +463,7 @@
       padding: 10px 14px;
       min-width: 260px;
       max-width: 320px;
-      font-size: 11px;
+      font-size: var(--lbh-couch-small);
       color: var(--lbh-text-primary);
       line-height: 1.6;
       display: none;
@@ -436,7 +472,7 @@
     }
     #hud-inventory-panel.open { display: block; }
     #hud-inventory-panel .inv-header {
-      font-size: 9px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
       text-transform: uppercase;
       color: var(--lbh-text-muted);
@@ -458,10 +494,10 @@
     }
     #hud-inventory-panel .inv-item .inv-name {
       flex: 1;
-      font-size: 11px;
+      font-size: var(--lbh-couch-small);
     }
     #hud-inventory-panel .inv-item .inv-cat {
-      font-size: 9px;
+      font-size: var(--lbh-couch-micro);
       margin-left: 8px;
       opacity: 0.45;
       letter-spacing: 0;
@@ -469,12 +505,12 @@
     #hud-inventory-panel .inv-item .inv-drop {
       margin-left: 8px;
       color: rgba(255, 100, 80, 0.6);
-      font-size: 9px;
+      font-size: var(--lbh-couch-micro);
       letter-spacing: 0;
     }
     #hud-inventory-panel .inv-empty {
       color: rgba(110, 120, 140, 0.5);
-      font-size: 10px;
+      font-size: var(--lbh-couch-micro);
     }
     #hud-inventory-panel .inv-section {
       margin-top: 8px;
@@ -527,8 +563,8 @@
     </div>
     <div id="hud-pulse" class="hud-panel"></div>
     <div id="hud-abilities" class="hud-panel">
-      <div id="hud-ability1" class="hud-ability"><span class="hud-ability-key">Q</span> <span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
-      <div id="hud-ability2" class="hud-ability"><span class="hud-ability-key">R</span> <span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
+      <div id="hud-ability1" class="hud-ability"><span class="hud-ability-key">--</span> <span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
+      <div id="hud-ability2" class="hud-ability"><span class="hud-ability-key">--</span> <span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
     </div>
     <div id="hud-signature" class="hud-panel"></div>
     <div id="hud-portal-arrow"></div>

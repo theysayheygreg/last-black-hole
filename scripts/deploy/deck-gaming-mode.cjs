@@ -200,6 +200,7 @@ function shortcutEntry(options = {}) {
   const remoteDir = options.remoteDir || DEFAULT_REMOTE_DIR;
   const launcher = `${remoteDir.replace(/\/$/, "")}/run-last-singularity.sh`;
   const desktopEntry = `${remoteDir.replace(/\/$/, "")}/${DESKTOP_ENTRY_NAME}`;
+  const icon = `${remoteDir.replace(/\/$/, "")}/last-singularity-icon.png`;
   const exe = `"${launcher}"`;
   const startDir = `"${remoteDir.replace(/\/$/, "")}"`;
 
@@ -208,7 +209,7 @@ function shortcutEntry(options = {}) {
     AppName: name,
     Exe: exe,
     StartDir: startDir,
-    icon: "",
+    icon,
     ShortcutPath: desktopEntry,
     LaunchOptions: "",
     IsHidden: 0,

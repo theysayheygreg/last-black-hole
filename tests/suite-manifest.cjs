@@ -54,6 +54,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SteamDeckCompat",
+    file: "steam-deck-compat.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "PlayInstructions",
     file: "play-instructions.cjs",
     lanes: ["fast", "core", "static", "full"],

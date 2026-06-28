@@ -14,6 +14,7 @@ import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
 import { corruptText, stripCombiningMarks } from './text-corruption.js';
 import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
 import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
+import { inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
 
 let _hudEl;
 let _collapseTimerEl, _collapseEventEl;
@@ -27,11 +28,13 @@ let _inventoryPanelEl;
 let _warningsEl;
 let _signalFillEl, _signalZoneEl;
 let _fuelFillEl, _fuelReadoutEl;
+let _abilitiesEl;
 let _ability1El, _ability2El;
 let _inhibitorEl, _inhibitorFormEl;
 let _dropCallback = null;  // set by main.js for drop handling
 let _lastPortalCount = -1;
 let _lastCollapseStr = '';
+let _promptOptions = {};
 const INHIBITOR_FORM_NAMES = ['dormant', 'glitch', 'swarm', 'vessel'];
 
 // Inventory selection state
@@ -57,10 +60,13 @@ export function initHUD() {
   _signalZoneEl = document.getElementById('hud-signal-zone');
   _fuelFillEl = document.getElementById('hud-fuel-fill');
   _fuelReadoutEl = document.getElementById('hud-fuel-readout');
+  _abilitiesEl = document.getElementById('hud-abilities');
   _ability1El = document.getElementById('hud-ability1');
   _ability2El = document.getElementById('hud-ability2');
   _inhibitorEl = document.getElementById('hud-inhibitor');
   _inhibitorFormEl = document.getElementById('hud-inhibitor-form');
+  renderAbilitySlot(_ability1El, abilitySlot('Q', '---', { status: '', ready: false }));
+  renderAbilitySlot(_ability2El, abilitySlot('R', '---', { status: '', ready: false }));
 }
 
 function textCorruptionConfig() {
@@ -191,6 +197,7 @@ function cooldownMeter(cooldown, max) {
 function abilitySlot(key, name, state) {
   const slot = {
     key,
+    action: state.action || (key === 'R' ? 'ability2' : 'ability1'),
     name,
     status: state.status || '',
     ready: Boolean(state.ready),
@@ -328,13 +335,13 @@ function renderAbilitySlot(el, slot) {
   const className = `hud-ability ${slot.tone}`;
   const html = `
     <div class="hud-ability-line">
-      <span class="hud-ability-key">${slot.key}</span>
+      <span class="hud-ability-key">${promptLabel(slot.action, _promptOptions)}</span>
       <span class="hud-ability-name">${slot.name}</span>
       <span class="hud-ability-status">${slot.status}</span>
     </div>
     <div class="hud-ability-detail">${slot.detail}</div>
-    <div class="hud-ability-meter" style="height:2px;width:92px;background:rgba(90,110,130,0.22);margin:2px 0 1px 15px;">
-      <div style="height:2px;width:${Math.round(slot.meter * 100)}%;background:${fillColor};box-shadow:0 0 5px ${fillColor};"></div>
+    <div class="hud-ability-meter">
+      <div class="hud-ability-meter-fill" style="width:${Math.round(slot.meter * 100)}%;background:${fillColor};box-shadow:0 0 5px ${fillColor};"></div>
     </div>
     ${abilityResourceMarkup(slot)}
   `;
@@ -366,6 +373,8 @@ function renderAbilitySlot(el, slot) {
  */
 export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, opts = {}) {
   if (!_hudEl) return;
+  _promptOptions = { lastInputSource: opts.lastInputSource, deck: opts.deckMode };
+  setDeckModeAttribute(_hudEl, _promptOptions);
 
   const runDuration = CONFIG.universe.runDuration;
   const remaining = Math.max(0, runDuration - runElapsedTime);
@@ -469,9 +478,9 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     _salvageCountEl.textContent = count > 0 ? `◈ cargo ${count}/${max}` : `◈ cargo 0/${max}`;
     if (count > 0) {
       const totalValue = inv.getCargoValue();
-      _salvageValueEl.textContent = `value: ${totalValue}  [Tab]`;
+      _salvageValueEl.textContent = `value ${totalValue}  ${promptLabel('inventory', _promptOptions)}`;
     } else {
-      _salvageValueEl.textContent = '[Tab] inventory';
+      _salvageValueEl.textContent = `${promptLabel('inventory', _promptOptions)} inventory`;
     }
     // Warn when nearly full
     if (count >= max) {
@@ -499,7 +508,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   // === PULSE STATUS ===
   if (opts.combatSystem && _pulseEl) {
     if (opts.combatSystem.playerReady) {
-      _pulseEl.textContent = 'pulse ready [E]';
+      _pulseEl.textContent = `${promptLabel('pulse', _promptOptions)} pulse ready`;
       _pulseEl.className = 'hud-panel ready';
     } else {
       const cd = opts.combatSystem.playerCooldown;
@@ -598,6 +607,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
 
   // === HULL ABILITIES ===
   if (_ability1El && opts.abilityState) {
+    if (_abilitiesEl) _abilitiesEl.style.display = '';
     const presentation = getAbilityPresentationState(opts.abilityState);
     renderAbilitySlot(_ability1El, presentation.slots[0]);
     if (presentation.slots[1]) {
@@ -605,6 +615,10 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     } else {
       _ability2El.style.display = 'none';
     }
+  } else if (_ability1El) {
+    if (_abilitiesEl) _abilitiesEl.style.display = 'none';
+    renderAbilitySlot(_ability1El, abilitySlot('Q', '---', { status: '', ready: false }));
+    renderAbilitySlot(_ability2El, abilitySlot('R', '---', { status: '', ready: false }));
   }
 
   // === SIGNATURE ===
@@ -828,7 +842,7 @@ function _renderInventoryPanel(inv) {
   const sel = _invCursor;
 
   // ---- Cargo ----
-  let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}  ↑↓ select  X/space confirm  Tab close</div>`;
+  let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}  ${inventoryHint(_promptOptions)}</div>`;
 
   for (let i = 0; i < inv.cargo.length; i++) {
     const isSel = (sel === i);

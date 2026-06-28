@@ -445,7 +445,9 @@ function loadGameRenderer() {
   if (!mainWindow || !simPort) return;
   const rendererPath = path.join(__dirname, 'renderer', 'index.html');
   const simServer = `http://127.0.0.1:${simPort}`;
-  const rendererUrl = `${RENDERER_SCHEME}://renderer/index.html?${new URLSearchParams({ simServer }).toString()}`;
+  const params = new URLSearchParams({ simServer });
+  if (isDeckRuntime()) params.set('deck', '1');
+  const rendererUrl = `${RENDERER_SCHEME}://renderer/index.html?${params.toString()}`;
   let settled = false;
   let timeout = null;
 
@@ -534,8 +536,11 @@ function createMainWindow() {
   // Packaged mode falls through to the bundled desktop/renderer/.
   const devUrl = process.env.LBH_DEV_URL;
   if (devUrl) {
-    logMain('renderer.dev-load.request', { devUrl });
-    mainWindow.loadURL(devUrl).catch((err) => {
+    const deckAwareDevUrl = deckRuntime
+      ? `${devUrl}${devUrl.includes('?') ? '&' : '?'}deck=1`
+      : devUrl;
+    logMain('renderer.dev-load.request', { devUrl: deckAwareDevUrl });
+    mainWindow.loadURL(deckAwareDevUrl).catch((err) => {
       console.error('[electron] dev loadURL failed:', err.message);
     });
     return;

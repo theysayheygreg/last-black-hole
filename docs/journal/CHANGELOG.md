@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-06-28 — Steam Deck compatibility and app-surface pass
+
+- Centralized Deck/controller prompt labels in `src/ui/input-prompts.js` and
+  routed the DOM HUD, canvas menu hints, map-select copy, results overlay,
+  pause screen, cargo-full warning, and meta prompt through it.
+- Added a Deck renderer flag (`deck=1`) from the Electron launcher so handheld
+  UI behavior is explicit instead of inferred from viewport size.
+- Raised HUD couch-test minimums: larger body text, thicker signal/fuel/ability
+  gauges, stronger panel backing, and separated bottom-left ability/pulse/cargo
+  panels to avoid overlap on 1280x800 Deck captures.
+- Fixed the salvage report category fallback so extracted items no longer print
+  `[undefined]`.
+- Added reproducible app and Steam placeholder assets with `npm run assets:app`,
+  including app icons, Steam capsule/library images, and draft Steam store copy.
+- Wired the app icon into desktop packaging, Deck `.desktop` entries, the
+  one-click installer, and the Gaming Mode shortcut writer.
+- Added `tests/steam-deck-compat.cjs` to guard Deck prompts, HUD minimums,
+  renderer Deck mode, app icon wiring, and Steam asset dimensions.
+
 ## 2026-06-28 — Steam Deck demo deploy
 
 - Built and deployed Linux release `0.2.2.332007f` to Greg's Steam Deck at

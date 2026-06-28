@@ -1,6 +1,8 @@
 import {
   UI_COLORS,
+  UI_DECK,
   UI_SPACING,
+  UI_TYPOGRAPHY,
 } from './design-tokens.js';
 import { canvasFont } from './typography.js';
 
@@ -125,7 +127,7 @@ export function drawUiPanel(ctx, rect, {
   drawCornerFrame(ctx, r, { role, alpha: Math.min(0.95, borderAlpha + 0.2), length: cornerLength });
 
   if (title) {
-    ctx.font = canvasFont(11, { weight: '700' });
+    ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
     ctx.textAlign = 'left';
     ctx.fillStyle = roleColor(role, titleAlpha);
     ctx.fillText(String(title).toUpperCase(), r.x + padding, r.y + 19);
@@ -204,7 +206,7 @@ export function drawCommandButton(ctx, rect, label, {
     railWidth: 4,
   });
 
-  ctx.font = canvasFont(Math.max(14, Math.min(22, r.h * 0.45)), { weight: '700' });
+  ctx.font = canvasFont(Math.max(UI_TYPOGRAPHY.couchButton, Math.min(24, r.h * 0.48)), { weight: '700' });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = roleColor(disabled ? 'muted' : 'text', a);
@@ -230,10 +232,11 @@ export function drawSegmentedGauge(ctx, rect, {
   const gaugeRole = dangerAt != null && ratio <= dangerAt ? 'danger' : role;
   const gap = 2;
   const cellW = Math.max(1, (r.w - gap * (count - 1)) / count);
+  const cellH = Math.max(r.h, UI_DECK.minGaugeHeight);
 
   ctx.save();
   if (label) {
-    ctx.font = canvasFont(10, { weight: '700' });
+    ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     ctx.fillStyle = roleColor('muted', 0.72 * a);
@@ -245,7 +248,7 @@ export function drawSegmentedGauge(ctx, rect, {
     ctx.fillStyle = i < filled
       ? roleColor(gaugeRole, 0.88 * a)
       : withAlpha(UI_COLORS.terminalRowBackground, 0.72 * a);
-    ctx.fillRect(x, r.y, cellW, r.h);
+    ctx.fillRect(x, r.y, cellW, cellH);
   }
   ctx.restore();
 }
@@ -261,13 +264,13 @@ export function drawWarningStrip(ctx, rect, {
 
   ctx.save();
   drawUiPanel(ctx, r, { role, fillAlpha: 0.76 * a, borderAlpha: 0.62 * a, cornerLength: 20 });
-  ctx.font = canvasFont(12, { weight: '700' });
+  ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = roleColor(role, 0.94 * a);
   ctx.fillText(String(title).toUpperCase(), r.x + 12, r.y + 8);
   if (body) {
-    ctx.font = canvasFont(11);
+    ctx.font = canvasFont(UI_TYPOGRAPHY.couchSmall);
     ctx.fillStyle = roleColor('text', 0.84 * a);
     ctx.fillText(fitUiText(ctx, body, r.w - 24), r.x + 12, r.y + 27);
   }
@@ -282,11 +285,11 @@ export function drawStatusPill(ctx, rect, label, {
   const source = String(label ?? '');
   const r = normalizeRect(rect);
   ctx.save();
-  ctx.font = canvasFont(10, { weight: '700' });
+  ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const width = Math.max(minWidth, r.w || ctx.measureText(source).width + 18);
-  const height = r.h || 20;
+  const height = Math.max(r.h || 20, 24);
   const x = r.x - width / 2;
   const y = r.y - height / 2;
   ctx.fillStyle = roleColor(role, 0.14 * alpha);
@@ -306,7 +309,7 @@ export function drawSectionLabel(ctx, text, x, y, {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = roleColor(role, 0.74 * alpha);
-  ctx.font = canvasFont(11, { weight: '700' });
+  ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
   ctx.fillText(`-- ${String(text).toUpperCase()} --`, x, y);
   ctx.restore();
 }
@@ -320,7 +323,7 @@ export function drawKeyValueRow(ctx, label, value, x, y, {
   ctx.save();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.font = canvasFont(12);
+  ctx.font = canvasFont(UI_TYPOGRAPHY.couchSmall);
   ctx.fillStyle = roleColor('muted', 0.75 * a);
   ctx.fillText(String(label), x, y);
   ctx.fillStyle = roleColor(valueRole, 0.9 * a);

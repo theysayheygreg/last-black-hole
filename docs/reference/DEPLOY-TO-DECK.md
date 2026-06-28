@@ -92,7 +92,11 @@ Valve's docs confirm that Deck supports installing external apps and adding them
 Before calling a Deck build good, verify:
 
 - the game is fully playable on controller
-- the HUD is legible at handheld distance
+- HUD text is legible at handheld distance; avoid sub-12px body text for
+  player-facing UI
+- fuel/signal/progress bars are thick enough to read at least as quickly as text
+- Deck builds show Deck/controller CTAs (`A`, `B`, `View`, `L1/R1`, `R2`,
+  `L2`) instead of keyboard-only prompts such as `press space`
 - fullscreen behavior is sane
 - suspend/resume does not immediately break the session
 
@@ -144,6 +148,10 @@ and sim are launched as Deck child processes on dynamic `127.0.0.1` ports. The
 `simServer` URL in launch logs should point at loopback. Tailscale is only the
 deployment transport from Codex/Mac to Deck, not a gameplay-rendering path.
 
+The Deck launcher also passes `deck=1` to the renderer. That flag is the
+player-facing compatibility switch for controller prompts and handheld HUD
+minimums; do not key Deck UI behavior off guessy viewport checks.
+
 After deploy, register the wrapper with Steam for Gaming Mode:
 
 ```sh
@@ -162,6 +170,10 @@ The deploy also writes launcher shortcuts to:
 - `/home/deck/Games/last-singularity/last-singularity.desktop`
 - `/home/deck/.local/share/applications/last-singularity.desktop`
 - `/home/deck/Desktop/Last Singularity.desktop`
+
+The build now carries `last-singularity-icon.png` beside the executable, and
+the Desktop Mode and Gaming Mode shortcut writers point at that icon so the app
+does not appear as an anonymous Electron binary in SteamOS.
 
 Use a Tailscale MagicDNS name or Tailscale IP:
 

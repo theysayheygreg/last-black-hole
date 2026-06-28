@@ -83,6 +83,7 @@ Name=${PRODUCT_NAME}
 Comment=${PRODUCT_NAME} Steam Deck playtest build
 Exec=${launcher}
 Path=${INSTALL_DIR}
+Icon=${INSTALL_DIR}/last-singularity-icon.png
 Terminal=false
 Categories=Game;
 StartupNotify=false
@@ -182,7 +183,7 @@ install_steam_shortcut() {
     return 0
   fi
 
-  python3 - "$userdata_root" "$INSTALL_DIR/run-last-singularity.sh" "$INSTALL_DIR" "$INSTALL_DIR/$DESKTOP_ENTRY_NAME" <<'PY'
+  python3 - "$userdata_root" "$INSTALL_DIR/run-last-singularity.sh" "$INSTALL_DIR" "$INSTALL_DIR/$DESKTOP_ENTRY_NAME" "$INSTALL_DIR/last-singularity-icon.png" <<'PY'
 import binascii
 import os
 import struct
@@ -195,6 +196,7 @@ userdata_root = Path(sys.argv[1]).expanduser()
 launcher = Path(sys.argv[2]).expanduser()
 install_dir = Path(sys.argv[3]).expanduser()
 desktop_entry = Path(sys.argv[4]).expanduser()
+icon_path = Path(sys.argv[5]).expanduser()
 
 TYPE_OBJECT = 0x00
 TYPE_STRING = 0x01
@@ -304,7 +306,7 @@ def upsert(root):
         "AppName": PRODUCT_NAME,
         "Exe": exe,
         "StartDir": f'"{install_dir}"',
-        "icon": "",
+        "icon": str(icon_path) if icon_path.exists() else "",
         "ShortcutPath": str(desktop_entry),
         "LaunchOptions": "",
         "IsHidden": 0,

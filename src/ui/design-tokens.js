@@ -59,8 +59,23 @@ export const UI_TYPOGRAPHY = {
   micro: 9,
   small: 10,
   body: 12,
+  couchMicro: 12,
+  couchSmall: 13,
+  couchBody: 15,
+  couchButton: 18,
   labelTransform: 'uppercase',
   labelLetterSpacing: '0',
+};
+
+export const UI_DECK = {
+  edge: 18,
+  panelPaddingX: 14,
+  panelPaddingY: 10,
+  minBodyPx: 12,
+  targetBodyPx: 15,
+  minGaugeHeight: 12,
+  targetGaugeHeight: 14,
+  commandHeight: 44,
 };
 
 export const UI_TIERS = {

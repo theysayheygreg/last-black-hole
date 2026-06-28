@@ -100,12 +100,14 @@ clean sim reset.
 
 First launch flow:
 
-1. Press `Space` / `Enter` / gamepad `A` on the title screen.
+1. Press `Space` / `Enter` on keyboard or `A` on Steam Deck/controller at the
+   title screen.
 2. Choose an existing pilot or select an empty slot, type a pilot name, and
    press `Enter`.
-3. On the home screen, use `Q/E` or `L1/R1` to switch tabs.
-4. Go to `LAUNCH`, press `Space` / `A`, choose a destination, then press
-   `Space` / `A` again to drop in.
+3. On the home screen, use `Q/E` on keyboard or `L1/R1` on Deck/controller to
+   switch tabs.
+4. Go to `LAUNCH`, confirm with `Space` or `A`, choose a destination, then
+   confirm again to drop in.
 5. In a run, loot wrecks, manage signal and delta-v, follow wormhole arrows, and
    extract before portals expire or the universe collapses.
 6. After extraction or death, press `Space` / `A` to return to the pilot flow.
@@ -125,6 +127,10 @@ Steam or return to Gaming Mode and launch **Last Singularity** from the normal
 library.
 
 Steam Deck operational notes live in the [Steam Deck runbook](docs/reference/STEAM-DECK-RUNBOOK.md).
+
+The Deck UI uses controller-first prompts (`A`, `B`, `View`, `L1/R1`, `R2`,
+`L2`) and larger HUD minimums. If you see keyboard-only labels like
+`press space` in a Deck build, treat that as a compatibility regression.
 
 The Deck build is not a networked renderer. It packages the renderer inside the
 Electron app, serves those local assets through the app-owned `lbh://` protocol,
