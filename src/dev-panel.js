@@ -8,6 +8,7 @@
 
 import { CONFIG } from './config.js';
 import { PRESETS, PRESET_NAMES, deepMerge } from './presets.js';
+import { UI_FONT_STACK } from './ui/typography.js';
 
 // Deep-clone CONFIG at import time for reset
 const DEFAULTS = JSON.parse(JSON.stringify(CONFIG));
@@ -230,7 +231,7 @@ function showPresetOverlay(name) {
       left: '50%',
       transform: 'translate(-50%, -50%)',
       color: '#88f',
-      fontFamily: 'monospace',
+      fontFamily: UI_FONT_STACK,
       fontSize: '28px',
       fontWeight: 'bold',
       letterSpacing: '2px',
@@ -266,7 +267,7 @@ export function initDevPanel() {
     overflowY: 'auto',
     background: 'rgba(6, 8, 22, 0.92)',
     color: '#ccc',
-    fontFamily: 'monospace',
+    fontFamily: UI_FONT_STACK,
     fontSize: '11px',
     lineHeight: '1.4',
     borderRadius: '4px',
@@ -373,7 +374,7 @@ export function initDevPanel() {
     border: '1px solid rgba(100, 100, 255, 0.35)',
     borderRadius: '3px',
     padding: '3px 6px',
-    fontFamily: 'monospace',
+    fontFamily: UI_FONT_STACK,
     fontSize: '10px',
     outline: 'none',
   });
@@ -479,7 +480,7 @@ function makeButton(label, onClick) {
     borderRadius: '3px',
     padding: '2px 8px',
     cursor: 'pointer',
-    fontFamily: 'monospace',
+    fontFamily: UI_FONT_STACK,
     fontSize: '10px',
   });
   btn.addEventListener('click', onClick);

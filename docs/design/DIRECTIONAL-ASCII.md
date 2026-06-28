@@ -138,7 +138,7 @@ const RAMPS = {
 
 Each ramp is padded/trimmed to exactly 16 characters. Characters are placed in the atlas at their row × 16 + column position.
 
-**Fallback for missing glyphs:** some characters (═, ║, ╱) may not render in all monospace fonts. The atlas generator should check if a glyph renders (non-zero pixel area) and substitute ASCII fallbacks if not:
+**Fallback for missing glyphs:** the atlas now uses Monaspace first with bundled Noto Sans Mono / Noto Sans Symbols fallbacks. Some characters (═, ║, ╱) can still be lost if future font stacks drift, so `tests/typography.cjs` keeps the current non-ASCII ramp glyphs in the probe string. A future runtime glyph probe can still substitute ASCII fallbacks if an installed platform lies about coverage:
 - `═` → `=`, `║` → `|`, `╱` → `/`, `╲` → `\`, `╳` → `x`
 
 ---

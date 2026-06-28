@@ -4,7 +4,7 @@
 // This file is the implementation-side token bundle that keeps HUD/overlay
 // code from re-inventing colors, shadows, and spacing ad hoc.
 
-export const UI_FONT_STACK = `'JetBrains Mono', 'SF Mono', 'Fira Code', monospace`;
+export { DISPLAY_FONT_STACK, UI_FONT_STACK, GLYPH_FONT_STACK } from './typography.js';
 
 export const UI_COLORS = {
   void: '#000021',

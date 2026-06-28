@@ -190,7 +190,7 @@ async function run() {
         };
       });
       assert(styles !== null, 'No HUD panel found in DOM');
-      assert(styles.fontFamily.includes('monospace') || styles.fontFamily.includes('Mono'),
+      assert(styles.fontFamily.includes('monospace') || styles.fontFamily.includes('Mono') || styles.fontFamily.includes('Monaspace'),
         `HUD font should be monospace, got: ${styles.fontFamily}`);
     });
 

@@ -1,3 +1,5 @@
+import { canvasFont } from './ui/typography.js';
+
 const INHIBITOR_FORMS = ['dormant', 'glitch', 'swarm', 'vessel'];
 
 function clamp01(value) {
@@ -137,7 +139,7 @@ function drawSectionLabel(ctx, text, x, y, color) {
   ctx.save();
   ctx.textAlign = 'left';
   ctx.fillStyle = color;
-  ctx.font = 'bold 11px monospace';
+  ctx.font = canvasFont(11, { weight: 'bold' });
   ctx.fillText(`-- ${text} --`, x, y);
   ctx.restore();
 }
@@ -145,7 +147,7 @@ function drawSectionLabel(ctx, text, x, y, color) {
 function drawKeyValue(ctx, key, value, x, y, alpha = 1) {
   ctx.save();
   ctx.textAlign = 'left';
-  ctx.font = '12px monospace';
+  ctx.font = canvasFont(12);
   ctx.fillStyle = `rgba(130, 150, 175, ${0.75 * alpha})`;
   ctx.fillText(key, x, y);
   ctx.fillStyle = `rgba(218, 226, 236, ${0.9 * alpha})`;
@@ -156,7 +158,7 @@ function drawKeyValue(ctx, key, value, x, y, alpha = 1) {
 function drawStatusPill(ctx, text, x, y, color, alpha = 1) {
   ctx.save();
   ctx.textAlign = 'center';
-  ctx.font = 'bold 10px monospace';
+  ctx.font = canvasFont(10, { weight: 'bold' });
   const width = Math.max(68, text.length * 7 + 16);
   ctx.fillStyle = withAlpha(color, 0.13 * alpha);
   ctx.fillRect(x - width / 2, y - 11, width, 18);
@@ -194,7 +196,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
     const a = Math.min(0.35, lingerFrac * 0.4);
     ctx.textAlign = 'center';
     ctx.fillStyle = withAlpha(accent, a);
-    ctx.font = '12px monospace';
+    ctx.font = canvasFont(12);
     ctx.shadowColor = withAlpha(accent, a * 0.5);
     ctx.shadowBlur = 10;
     ctx.fillText('-- cycle ended --', cx, cy);
@@ -215,11 +217,11 @@ export function drawRunResultsOverlay(ctx, canvas, {
 
   const titleAlpha = clamp01((reveal - 0.15) * 2.5);
   ctx.fillStyle = withAlpha(accent, titleAlpha);
-  ctx.font = 'bold 34px monospace';
+  ctx.font = canvasFont(34, { role: 'display', weight: '700' });
   ctx.fillText(view.status, cx, panelY + 48);
 
   ctx.fillStyle = `rgba(150, 165, 188, ${0.72 * clamp01((reveal - 0.35) * 2)})`;
-  ctx.font = '12px monospace';
+  ctx.font = canvasFont(12);
   ctx.fillText(success ? 'you made it through the aperture' : 'this is what the universe kept', cx, panelY + 70);
 
   const contentAlpha = clamp01((reveal - 0.65) * 2);
@@ -265,7 +267,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   drawKeyValue(ctx, 'manifest', `${view.cargoCount} items / ${view.cargoValue} EM`, rightX, ry, contentAlpha);
   ry += 22;
   ctx.textAlign = 'left';
-  ctx.font = '12px monospace';
+  ctx.font = canvasFont(12);
   const cargoLines = view.cargoLabels.length > 0 ? view.cargoLabels.slice(0, 6) : ['[ empty ]'];
   for (let i = 0; i < cargoLines.length; i++) {
     ctx.fillStyle = success ? `rgba(225, 232, 220, ${0.85 * contentAlpha})` : `rgba(170, 118, 118, ${0.8 * contentAlpha})`;
@@ -285,7 +287,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   if (view.aiLines.length > 0) notableLines.push(...view.aiLines);
   drawSectionLabel(ctx, 'NOTABLE', rightX, ry, withAlpha(accent, 0.72 * contentAlpha));
   ry += 24;
-  ctx.font = '11px monospace';
+  ctx.font = canvasFont(11);
   ctx.fillStyle = `rgba(172, 186, 205, ${0.82 * contentAlpha})`;
   const lines = notableLines.length > 0 ? notableLines.slice(0, 5) : ['no unusual telemetry'];
   for (const line of lines) {
@@ -297,7 +299,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   if (promptAlpha > 0) {
     const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.35;
     ctx.textAlign = 'center';
-    ctx.font = '16px monospace';
+    ctx.font = canvasFont(16);
     ctx.fillStyle = `rgba(210, 220, 235, ${(promptAlpha * blink).toFixed(3)})`;
     ctx.fillText('press space to continue', cx, panelY + panelH - 28);
   }

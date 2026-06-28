@@ -55,8 +55,10 @@ The palette is dominated by void black, accretion gold, and teal flow currents. 
 ## 3. Typography Rules
 
 ### Font Family
-- **Primary**: `'JetBrains Mono', 'SF Mono', 'Fira Code', monospace`
-- **ASCII Shader**: System monospace rendered to atlas at 85% cell size (64×64px per glyph, 1024×1024 atlas)
+- **Display / headings**: `'Oxanium', 'Monaspace Neon', 'Monaspace Argon', sans-serif`
+- **UI / data**: `'Monaspace Neon', 'Monaspace Argon', 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace`
+- **ASCII shader glyph atlas**: `'Monaspace Neon', 'Monaspace Argon', 'Noto Sans Mono', 'Noto Sans Symbols', 'Apple Symbols', 'Segoe UI Symbol', monospace` rendered at 85% cell size (64×64px per glyph, 1024×1024 atlas)
+- **Bundling**: fonts are self-hosted under `assets/fonts/` so Steam Deck, iPad wrapper, desktop, and offline web builds render deterministically.
 
 ### Hierarchy
 | Role | Size | Weight | Style | Notes |
@@ -69,7 +71,9 @@ The palette is dominated by void black, accretion gold, and teal flow currents. 
 | Menu body | 14px | 400 | lowercase | Everything else lowercase |
 
 ### Principles
-- **Monospace only** — the ASCII shader is the game's identity; UI type should feel like the same instrument
+- **Monaspace is the instrument** — UI/data text and ASCII glyphs should feel like the same terminal-native material
+- **Display type is rare** — Oxanium is for the title, major screen headings, and store-facing title moments until a proper wordmark exists
+- **Noto is coverage insurance** — it stays in the glyph stack for math, symbols, box drawing, and combining marks, but it is not the visual default
 - **ALLCAPS for titles only** — lowercase everything else. No shouting.
 - **Glow, not weight** — emphasis via `text-shadow: 0 0 6px currentColor`, not bold weight
 - **No overlay veils** — text sits on transparent or near-transparent panels, never obscures the simulation
@@ -144,7 +148,8 @@ The simulation IS the content. HUD elements are annotation, not interface. They 
 ## 7. Do's and Don'ts
 
 ### Do
-- Use monospace for all text — `'JetBrains Mono'` stack
+- Use Monaspace for operational text and glyph-heavy surfaces
+- Use Oxanium only for major headings and title-scale moments
 - Let simulation color be the primary visual signal
 - Use `text-shadow` glow for emphasis, not font-weight
 - Keep HUD at screen edges, center belongs to gameplay
@@ -155,7 +160,8 @@ The simulation IS the content. HUD elements are annotation, not interface. They 
 
 ### Don't
 - Don't put decorative overlays or veils over the fluid sim
-- Don't use sans-serif or serif fonts — monospace only
+- Don't use generic sans-serif or serif body fonts
+- Don't use Oxanium for dense HUD data or paragraph-scale UI
 - Don't use pure black `#000000` — void is `#000021`
 - Don't use cool blue for "safe" — teal `#008080` is the base, blue is neutral/dim
 - Don't bold text above weight 600
@@ -284,13 +290,13 @@ The signature transition: ASCII characters progressively corrupt into glitch noi
 - Signal: `rgba(80, 200, 180, 0.85)`
 
 ### Example Component Prompts
-- "Build a HUD panel with JetBrains Mono 13px, background rgba(0, 2, 12, 0.6), border 1px solid rgba(80, 100, 140, 0.2), radius 2px, padding 8px 12px, text-shadow 0 0 6px currentColor"
+- "Build a HUD panel with Monaspace Neon 13px, background rgba(0, 2, 12, 0.6), border 1px solid rgba(80, 100, 140, 0.2), radius 2px, padding 8px 12px, text-shadow 0 0 6px currentColor"
 - "Build a results screen: ALLCAPS title 24px weight 600, lowercase body 14px, monospace font, no background overlay, void color #000021 behind content"
 - "Build a warning message: centered, 16px weight 600, fade in 0.3s scale 0.95→1.0, hold 2500ms, fade out 0.5s scale 1.0→1.02, glow shadow matching text color"
 - "Build a signal meter: 120px × 4px bar, fill color varies by zone, positioned below timer top-left"
 
 ### Iteration Guide
-1. Always use the monospace font stack — never substitute
+1. Always use the typography roles in `src/ui/typography.js` — never substitute ad hoc font stacks
 2. Panel backgrounds must be translucent, never opaque
 3. The simulation must always be visible through/around UI elements
 4. ALLCAPS is title-only — if it's not a screen title, it's lowercase

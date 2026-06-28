@@ -114,6 +114,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "Typography",
+    file: "typography.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "Smoke",
     file: "smoke.cjs",
     lanes: ["fast", "core", "browser", "full", "three"],

@@ -9,6 +9,7 @@
 import { CONFIG } from './config.js';
 import { worldToFluidUV, worldToScreen, worldDistance, worldDirectionTo, shouldCull, uvScale, wrapWorld } from './coords.js';
 import { applyWreckAgeValue, generateLoot, wreckAgeValueMultiplier } from './items.js';
+import { canvasFont } from './ui/typography.js';
 
 // ---- Name generation ----
 
@@ -294,7 +295,7 @@ export class WreckSystem {
 
         // Heavy ship-cluster glyphs — different set from derelicts
         ctx.save();
-        ctx.font = `${Math.round(10 * tierScale)}px "JetBrains Mono", "SF Mono", monospace`;
+        ctx.font = canvasFont(Math.round(10 * tierScale));
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = `rgba(255, 217, 102, ${goldAlpha.toFixed(3)})`;

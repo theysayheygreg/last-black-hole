@@ -1,5 +1,26 @@
 # Decision Log
 
+## 2026-06-27 — Typography roles use Oxanium and Monaspace
+
+**Decision:** Use Oxanium for title-scale headings and Monaspace as the
+primary UI/data/glyph voice. The ASCII atlas uses Monaspace first and bundled
+Noto Sans Mono / Noto Sans Symbols as fallback coverage for math, symbol, box
+drawing, and combining-mark edge cases.
+
+**Why:** Oxanium matches the sci-fi title direction without forcing a display
+font into dense HUD data. Monaspace feels native to LBH's terminal/ASCII
+identity and gives the UI, entity labels, and shader glyphs one instrument.
+Noto should protect the weird alphabet, not replace Monaspace as the visual
+target.
+
+**Where it landed:** `assets/fonts/`, `index-a.html`,
+`src/ui/typography.js`, `src/ui/design-tokens.js`, canvas overlay callers,
+the ASCII atlas generator, and `tests/typography.cjs`.
+
+**Door status:** Closed for the v0.2 typography roles. Open for a future
+wordmark and for adding a browser-level runtime glyph coverage probe if a
+target platform renders tofu despite the bundled fallbacks.
+
 ## 2026-06-27 — Inhibitor can corrupt language, but only in bounded surfaces
 
 **Decision:** Use Zalgo-style combining marks as an Inhibitor-owned HUD effect

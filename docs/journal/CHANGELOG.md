@@ -20,6 +20,19 @@
 - Added `tests/text-corruption.cjs` plus validation bounds so the corruption
   effect stays deterministic, readable after stripping, and size-bounded.
 
+## 2026-06-27 — Typography roles and bundled fonts
+
+- Bundled Oxanium, the full Monaspace variable webfont family, and Noto glyph
+  fallbacks under `assets/fonts/` so local, Deck, iPad, desktop, and offline web
+  builds do not depend on external font services.
+- Added `src/ui/typography.js` as the shared display/UI/glyph font role helper.
+  Canvas overlays, the dev panel, HUD tokens, and the ASCII atlas now route
+  through the same Monaspace-first stacks.
+- Updated boot to wait briefly for webfonts before generating the ASCII font
+  atlas, preventing first-frame fallback fonts from being baked into the shader.
+- Added `tests/typography.cjs` to the fast/static/core lanes so missing font
+  files or font-stack drift fail loudly.
+
 ## 2026-06-27 — Local v0.2.2 source status and ship bakeoff
 
 - Refreshed the local build status around the v0.2.2 source path: a fresh

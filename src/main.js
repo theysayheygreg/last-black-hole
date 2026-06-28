@@ -65,6 +65,7 @@ import { createRNGStreams } from './rng-stream.js';
 import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { HULL_DEFINITIONS } from './content/hulls.js';
+import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
 
 window.__LBH_BOOT_MARK__?.('main.module.evaluated', {
   href: window.location.href,
@@ -1765,7 +1766,7 @@ function renderPhantom(ctx, camX, camY, canvasW, canvasH, simTime) {
   // Deep muted red. Deliberately close to invisible against the void.
   const base = opacity * 0.32;
   ctx.save();
-  ctx.font = '11px "JetBrains Mono", "SF Mono", monospace';
+  ctx.font = canvasFont(11);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -1852,7 +1853,7 @@ function renderHaunt(ctx, simTime) {
   // Inhibitor magenta, very faint — the haunt is a hint, not a reveal.
   const alpha = op * 0.35;
   ctx.save();
-  ctx.font = '12px "JetBrains Mono", monospace';
+  ctx.font = canvasFont(12);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = `rgba(204, 26, 128, ${alpha.toFixed(3)})`;
@@ -1918,7 +1919,7 @@ function renderRemotePlayers(ctx, camX, camY, canvasW, canvasH) {
 
     if (player.name) {
       ctx.save();
-      ctx.font = '9px monospace';
+      ctx.font = canvasFont(9);
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(180, 210, 255, 0.7)';
       ctx.fillText(player.name, sx, sy - 14);
@@ -2459,7 +2460,7 @@ function drawTerminalFrame(ctx, x, y, w, h, title, color = 'rgba(80, 100, 140, 0
     const tw = ctx.measureText(title).width + 16;
     ctx.fillRect(x + 12, y - 7, tw, 14);
     ctx.fillStyle = color.replace(/[\d.]+\)$/, '0.7)');
-    ctx.font = '9px monospace';
+    ctx.font = canvasFont(9);
     ctx.textAlign = 'left';
     ctx.fillText(title.toUpperCase(), x + 20, y + 3);
   }
@@ -2484,7 +2485,7 @@ function renderShipVelocityReadout(ctx, ship, camX, camY, canvasW, canvasH) {
   else                   { tierLabel = 'perilous'; color = 'rgba(240, 80, 80, 0.95)'; }
 
   ctx.save();
-  ctx.font = '11px monospace';
+  ctx.font = canvasFont(11);
   ctx.textAlign = 'center';
   ctx.fillStyle = color;
   // Speed line directly below ship — far enough not to overlap the
@@ -2603,7 +2604,7 @@ function renderSlingshotOverlay(ctx, camX, camY, canvasW, canvasH, time) {
     // Chain count badge if chained.
     if (ship.slingshotChainCount > 1) {
       ctx.fillStyle = palette.engaged;
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       ctx.textAlign = 'center';
       ctx.fillText(`x${ship.slingshotChainCount} chain`, ax, ay - radiusPx.ry - 8);
     }
@@ -3733,7 +3734,7 @@ function gameLoop(now) {
     ctx.stroke();
 
     // Map name
-    ctx.font = '11px monospace';
+    ctx.font = canvasFont(11);
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(140, 160, 180, 0.6)';
     ctx.fillText(loadingMapName.toLowerCase(), cx, cy + 40);
@@ -4052,7 +4053,7 @@ function gameLoop(now) {
         const a = labelAlpha(dist);
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(well.wx, well.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        ctx.font = 'bold 10px monospace';
+        ctx.font = canvasFont(10, { weight: 'bold' });
         const labelY = sy + worldRadiusToScreen(well.killRadius, overlayCanvas.width, overlayCanvas.height).ry + 18;
         // Dark outline for readability on red accretion background
         ctx.strokeStyle = `rgba(0, 0, 0, ${a * 0.9})`;
@@ -4070,7 +4071,7 @@ function gameLoop(now) {
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(star.wx, star.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         const [cr, cg, cb] = star.typeDef.color;
-        ctx.font = '10px monospace';
+        ctx.font = canvasFont(10);
         ctx.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${a * 0.6})`;
         const haloR = (60 + 20 * star.mass) * star.typeDef.sizeMult;
         ctx.fillText(star.name, sx, sy + haloR + 10);
@@ -4083,7 +4084,7 @@ function gameLoop(now) {
         const a = labelAlpha(dist);
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(p.wx, p.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
-        ctx.font = '9px monospace';
+        ctx.font = canvasFont(9);
         ctx.fillStyle = `rgba(180, 210, 240, ${a * 0.6})`;
         ctx.fillText(p.name, sx, sy + 16);
       }
@@ -4099,7 +4100,7 @@ function gameLoop(now) {
         if (wreck.type === 'vault') color = `rgba(255, 215, 60, ${a * 0.7})`;
         else if (wreck.type === 'debris') color = `rgba(180, 140, 80, ${a * 0.6})`;
         else color = `rgba(160, 180, 200, ${a * 0.6})`;
-        ctx.font = '10px monospace';
+        ctx.font = canvasFont(10);
         ctx.fillStyle = color;
         const label = wreck.name || (wreck.isEcho ? 'echo wreck' : `${wreck.type || 'wreck'} contact`);
         const itemText = wreck.looted ? '' : ` (${wreck.loot.length})`;
@@ -4116,7 +4117,7 @@ function gameLoop(now) {
         const color = scav.archetype === 'vulture'
           ? `rgba(212, 160, 96, ${a * 0.7})`
           : `rgba(138, 174, 196, ${a * 0.7})`;
-        ctx.font = '9px monospace';
+        ctx.font = canvasFont(9);
         ctx.fillStyle = color;
         ctx.fillText(scav.name, sx, sy - 14);
       }
@@ -4204,17 +4205,17 @@ function gameLoop(now) {
 
       // Name
       ctx.fillStyle = `rgba(150, 200, 220, ${alpha * 0.9})`;
-      ctx.font = '14px monospace';
+      ctx.font = canvasFont(14);
       ctx.fillText(`entering: ${currentSignature.name}`, cx, cy);
 
       // Flavor text
       ctx.fillStyle = `rgba(120, 150, 170, ${alpha * 0.7})`;
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       ctx.fillText(currentSignature.flavor, cx, cy + 22);
 
       // Mechanical callouts
       ctx.fillStyle = `rgba(100, 130, 150, ${alpha * 0.5})`;
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       ctx.fillText(currentSignature.mechanical, cx, cy + 40);
 
       ctx.restore();
@@ -4287,7 +4288,7 @@ function gameLoop(now) {
     const pixelScale = worldPixelScale(overlayCanvas.width, overlayCanvas.height);
     ctx.save();
     ctx.fillStyle = '#00ff00';
-    ctx.font = '14px monospace';
+    ctx.font = canvasFont(14);
     ctx.fillText(`FPS: ${fps.toFixed(0)}`, 10, 20);
     ctx.fillText(`Ship: (${ship.wx.toFixed(2)}, ${ship.wy.toFixed(2)})`, 10, 38);
     ctx.fillText(`Vel px: (${(ship.vx * pixelScale.x).toFixed(1)}, ${(ship.vy * pixelScale.y).toFixed(1)})`, 10, 56);
@@ -4302,7 +4303,7 @@ function gameLoop(now) {
   if (CONFIG.debug.showFluidDiagnostic) {
     ctx.save();
     ctx.fillStyle = '#00ff00';
-    ctx.font = '11px monospace';
+    ctx.font = canvasFont(11);
     let diagY = 140;
 
     const shipUVDiag = worldToFluidUV(ship.wx, ship.wy);
@@ -4379,7 +4380,7 @@ function gameLoop(now) {
       ctx.arc(sx, sy, 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#ffffff';
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       ctx.fillText(`well(${well.wx.toFixed(2)}, ${well.wy.toFixed(2)})`, sx + 12, sy - 4);
     }
     ctx.restore();
@@ -4409,7 +4410,7 @@ function gameLoop(now) {
       ctx.fillStyle = 'rgba(255, 50, 0, 0.5)';
       ctx.beginPath(); ctx.arc(w.x, w.y, 4, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#ff6633';
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       ctx.fillText(`W${i} m:${wellSystem.wells[i].mass.toFixed(2)}`, w.x + 8, w.y - 6);
     }
 
@@ -4423,7 +4424,7 @@ function gameLoop(now) {
       ctx.fillStyle = 'rgba(255, 255, 100, 0.6)';
       ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#ffff66';
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       ctx.fillText(`S${i} m:${star.mass.toFixed(2)}`, sx + 8, sy - 6);
     }
 
@@ -4440,7 +4441,7 @@ function gameLoop(now) {
       ctx.beginPath(); ctx.ellipse(px, py, captureR.rx, captureR.ry, 0, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = '#b855ff';
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       ctx.fillText(`P${i}`, px + 8, py - 6);
     }
 
@@ -4464,7 +4465,7 @@ function gameLoop(now) {
     ctx.shadowColor = 'rgba(255, 40, 20, 0.4)';
     ctx.shadowBlur = 30;
     ctx.fillStyle = `rgba(255, 70, 40, ${titlePulse})`;
-    ctx.font = 'bold 52px monospace';
+    ctx.font = canvasFont(52, { role: 'display', weight: '800' });
     ctx.fillText('LAST SINGULARITY', cx, cy - 50);
     ctx.fillText('LAST SINGULARITY', cx, cy - 50); // double for glow
 
@@ -4472,12 +4473,12 @@ function gameLoop(now) {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
     ctx.fillStyle = 'rgba(140, 210, 240, 0.9)';
-    ctx.font = '15px monospace';
+    ctx.font = canvasFont(15);
     ctx.fillText('out of a dying universe', cx, cy - 8);
 
     // Tagline
     ctx.fillStyle = 'rgba(200, 210, 230, 0.7)';
-    ctx.font = '13px monospace';
+    ctx.font = canvasFont(13);
     ctx.fillText('surf the currents. escape the void.', cx, cy + 16);
 
     // Prompt (fades in after 0.5s)
@@ -4485,14 +4486,14 @@ function gameLoop(now) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.4;
       ctx.shadowBlur = 8;
       ctx.fillStyle = `rgba(220, 225, 240, ${blink})`;
-      ctx.font = '16px monospace';
+      ctx.font = canvasFont(16);
       ctx.fillText('press space to begin', cx, cy + 80);
     }
 
     // Version
     ctx.shadowBlur = 0;
     ctx.fillStyle = 'rgba(100, 110, 130, 0.3)';
-    ctx.font = '10px monospace';
+    ctx.font = canvasFont(10);
     ctx.fillText('v0.2 — week 2 build', cx, h - 20);
 
     ctx.restore();
@@ -4516,7 +4517,7 @@ function gameLoop(now) {
     drawTerminalFrame(ctx, cx - 220, y - 30, 440, 290, null, 'rgba(100, 200, 220, 0.25)');
 
     ctx.fillStyle = 'rgba(160, 230, 245, 0.95)';
-    ctx.font = 'bold 22px monospace';
+    ctx.font = canvasFont(22, { role: 'display', weight: '700' });
     ctx.fillText('SELECT PILOT', cx, y);
     y += 45;
 
@@ -4537,14 +4538,14 @@ function gameLoop(now) {
 
       if (profile) {
         ctx.fillStyle = selected ? 'rgba(230, 240, 255, 1)' : 'rgba(180, 190, 210, 0.85)';
-        ctx.font = 'bold 15px monospace';
+        ctx.font = canvasFont(15, { weight: 'bold' });
         ctx.fillText(profile.name, cx, boxY + 18);
-        ctx.font = '11px monospace';
+        ctx.font = canvasFont(11);
         ctx.fillStyle = selected ? 'rgba(255, 225, 110, 0.95)' : 'rgba(180, 170, 140, 0.6)';
         ctx.fillText(`${profile.exoticMatter} EM  |  ${profile.totalExtractions} extractions`, cx, boxY + 38);
       } else {
         ctx.fillStyle = selected ? 'rgba(170, 195, 220, 0.9)' : 'rgba(120, 130, 150, 0.5)';
-        ctx.font = '13px monospace';
+        ctx.font = canvasFont(13);
         ctx.fillText('— empty slot —', cx, boxY + 25);
       }
 
@@ -4558,10 +4559,10 @@ function gameLoop(now) {
       ctx.strokeStyle = 'rgba(100, 200, 255, 0.6)';
       ctx.strokeRect(cx - 200, overlayCanvas.height * 0.45, 400, 80);
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       ctx.fillText('type name + enter to confirm    esc to cancel', cx, overlayCanvas.height * 0.45 + 25);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.font = '18px monospace';
+      ctx.font = canvasFont(18);
       const blink = Math.sin(totalTime * 6) > 0 ? '|' : '';
       ctx.fillText(nameInputBuffer + blink, cx, overlayCanvas.height * 0.45 + 55);
     }
@@ -4573,16 +4574,16 @@ function gameLoop(now) {
       ctx.strokeStyle = 'rgba(255, 80, 80, 0.6)';
       ctx.strokeRect(cx - 180, overlayCanvas.height * 0.45, 360, 70);
       ctx.fillStyle = 'rgba(255, 100, 80, 0.9)';
-      ctx.font = '13px monospace';
+      ctx.font = canvasFont(13);
       ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, overlayCanvas.height * 0.45 + 28);
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       ctx.fillText('space: confirm    esc: cancel', cx, overlayCanvas.height * 0.45 + 52);
     }
 
     // Controls hint
     ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
-    ctx.font = '11px monospace';
+    ctx.font = canvasFont(11);
     ctx.fillText('↑↓ select    space/A: load    X/Y: delete    esc/B: back', cx, overlayCanvas.height * 0.85);
 
     ctx.restore();
@@ -4608,10 +4609,10 @@ function gameLoop(now) {
     // Header: pilot name + EM
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(200, 210, 230, 0.8)';
-    ctx.font = '12px monospace';
+    ctx.font = canvasFont(12);
     ctx.fillText(`pilot: ${p?.name || '???'}  |  hull: ${(p?.hullType || 'drifter')}`, cx, 35);
     ctx.fillStyle = 'rgba(255, 220, 100, 0.85)';
-    ctx.font = 'bold 14px monospace';
+    ctx.font = canvasFont(14, { weight: 'bold' });
     ctx.fillText(`${p?.exoticMatter || 0} EM`, cx, 55);
     if (p) {
       const bestSecs = Math.max(0, Math.floor(p.bestSurvivalTime || 0));
@@ -4621,7 +4622,7 @@ function gameLoop(now) {
       ctx.strokeStyle = 'rgba(110, 150, 210, 0.18)';
       ctx.strokeRect(cx - 238, 64, 476, 18);
       ctx.fillStyle = 'rgba(155, 175, 205, 0.72)';
-      ctx.font = '10px monospace';
+      ctx.font = canvasFont(10);
       ctx.fillText(`extractions ${p.totalExtractions || 0}  |  best ${bestLabel}  |  vault ${p.vault.length}/${p.vaultCapacity}`, cx, 77);
     }
 
@@ -4633,7 +4634,7 @@ function gameLoop(now) {
       const tx = tabStartX + i * tabWidth + tabWidth / 2;
       const active = (homeTab === i);
       ctx.fillStyle = active ? 'rgba(130, 175, 255, 1)' : 'rgba(140, 150, 170, 0.65)';
-      ctx.font = active ? 'bold 13px monospace' : '12px monospace';
+      ctx.font = active ? canvasFont(13, { weight: 'bold' }) : canvasFont(12);
       ctx.fillText(tabNames[i], tx, 96);
       if (active) {
         ctx.fillStyle = 'rgba(100, 150, 255, 0.6)';
@@ -4656,14 +4657,14 @@ function gameLoop(now) {
         HAULER: 'rgba(220, 200, 100, 0.9)',
       };
       ctx.fillStyle = HULL_LABEL_COLORS[hullName] || 'rgba(180, 200, 220, 0.8)';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = canvasFont(13, { weight: 'bold' });
       ctx.fillText(`hull: ${hullName.toLowerCase()}`, leftMargin, contentY);
       ctx.textAlign = 'right';
       ctx.fillStyle = 'rgba(145, 165, 190, 0.68)';
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       ctx.fillText(`${p.loadout.equipped.filter(Boolean).length}/2 artifacts  ${p.loadout.consumables.filter(Boolean).length}/2 hotbar`, leftMargin + 440, contentY);
       ctx.textAlign = 'left';
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       let sy = contentY + 25;
       const tracks = Object.keys(UPGRADE_TRACKS);
       for (const track of tracks) {
@@ -4679,10 +4680,10 @@ function gameLoop(now) {
       // Loadout
       sy += 15;
       ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = canvasFont(13, { weight: 'bold' });
       ctx.fillText('loadout', leftMargin, sy);
       sy += 20;
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       for (let i = 0; i < 2; i++) {
         const eq = p.loadout.equipped[i];
         const sel = (homeShipCursor === i);
@@ -4711,9 +4712,9 @@ function gameLoop(now) {
     } else if (homeTab === 1 && p) {
       // === VAULT subscreen ===
       ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = canvasFont(13, { weight: 'bold' });
       ctx.fillText(`vault  ${p.vault.length}/${p.vaultCapacity}`, leftMargin, contentY);
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       let vy = contentY + 25;
       const maxVisible = Math.min(p.vault.length, 12);
       const scrollStart = Math.max(0, homeVaultCursor - 6);
@@ -4752,7 +4753,7 @@ function gameLoop(now) {
         const selItem = p.vault[homeVaultCursor];
         const descY = contentY + Math.min(p.vault.length, 12) * 18 + 45;
         ctx.fillStyle = 'rgba(140, 150, 170, 0.6)';
-        ctx.font = '11px monospace';
+        ctx.font = canvasFont(11);
         const desc = selItem.effectDesc || selItem.useDesc || selItem.desc
           || (selItem.upgradeTarget ? `upgrade: ${selItem.upgradeTarget}` : `${selItem.category} — ${selItem.tier}`);
         ctx.fillText(desc, leftMargin, descY);
@@ -4763,13 +4764,13 @@ function gameLoop(now) {
       const rig = profileManager.getRigProgression();
       const tracks = rig?.tracks || [];
       ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = canvasFont(13, { weight: 'bold' });
       ctx.fillText(`rig: ${rig?.hullType || p.hullType || 'drifter'}`, leftMargin, contentY);
       ctx.textAlign = 'right';
       ctx.fillStyle = 'rgba(255, 220, 100, 0.82)';
       ctx.fillText(`${p.exoticMatter} EM`, leftMargin + 440, contentY);
       ctx.textAlign = 'left';
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       let uy = contentY + 25;
       for (let ti = 0; ti < tracks.length; ti++) {
         const track = tracks[ti];
@@ -4805,11 +4806,11 @@ function gameLoop(now) {
       // === CHRONICLE subscreen ===
       const chronicle = buildChronicleViewModel();
       ctx.fillStyle = 'rgba(180, 200, 220, 0.8)';
-      ctx.font = 'bold 13px monospace';
+      ctx.font = canvasFont(13, { weight: 'bold' });
       ctx.fillText('chronicle', leftMargin, contentY);
       ctx.textAlign = 'right';
       ctx.fillStyle = 'rgba(145, 165, 190, 0.72)';
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       ctx.fillText(`${chronicle.stats.totalRuns} cycles  ${chronicle.stats.totalExoticMatterEarned} EM earned`, leftMargin + 440, contentY);
       ctx.textAlign = 'left';
 
@@ -4819,7 +4820,7 @@ function gameLoop(now) {
       ctx.strokeStyle = 'rgba(110, 150, 210, 0.16)';
       ctx.strokeRect(leftMargin - 4, statY - 13, 450, 42);
       ctx.fillStyle = 'rgba(170, 190, 220, 0.78)';
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       ctx.fillText(`best survival ${chronicle.stats.bestSurvivalLabel}`, leftMargin + 8, statY);
       ctx.fillText(`extract/death ${chronicle.stats.totalExtractions}/${chronicle.stats.totalDeaths}`, leftMargin + 228, statY);
       ctx.fillStyle = 'rgba(255, 220, 100, 0.75)';
@@ -4829,10 +4830,10 @@ function gameLoop(now) {
 
       let cyLine = contentY + 86;
       ctx.fillStyle = 'rgba(130, 175, 255, 0.82)';
-      ctx.font = 'bold 11px monospace';
+      ctx.font = canvasFont(11, { weight: 'bold' });
       ctx.fillText('-- recent cycles --', leftMargin, cyLine);
       cyLine += 20;
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       if (chronicle.records.length === 0) {
         ctx.fillStyle = 'rgba(100, 100, 120, 0.45)';
         ctx.fillText('— no recorded cycles yet —', leftMargin, cyLine);
@@ -4857,10 +4858,10 @@ function gameLoop(now) {
 
       cyLine += 8;
       ctx.fillStyle = 'rgba(255, 217, 102, 0.78)';
-      ctx.font = 'bold 11px monospace';
+      ctx.font = canvasFont(11, { weight: 'bold' });
       ctx.fillText('-- echoes recovered --', leftMargin, cyLine);
       cyLine += 20;
-      ctx.font = '11px monospace';
+      ctx.font = canvasFont(11);
       if (chronicle.echoes.length === 0) {
         ctx.fillStyle = 'rgba(100, 100, 120, 0.45)';
         ctx.fillText('— no echo fragments in this session —', leftMargin, cyLine);
@@ -4880,17 +4881,17 @@ function gameLoop(now) {
       // === LAUNCH subscreen ===
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(100, 255, 200, 0.8)';
-      ctx.font = 'bold 20px monospace';
+      ctx.font = canvasFont(20, { role: 'display', weight: '700' });
       ctx.fillText('press space to launch', cx, contentY + contentH / 2 - 20);
       ctx.fillStyle = 'rgba(120, 150, 170, 0.5)';
-      ctx.font = '13px monospace';
+      ctx.font = canvasFont(13);
       ctx.fillText('select your map on the next screen', cx, contentY + contentH / 2 + 10);
     }
 
     // Controls hint
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
-    ctx.font = '11px monospace';
+    ctx.font = canvasFont(11);
     ctx.fillText('Q/E or L1/R1: tabs    ↑↓ select    space/A: confirm    esc/B: back', cx, overlayCanvas.height - 20);
 
     ctx.restore();
@@ -4914,7 +4915,7 @@ function gameLoop(now) {
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
     ctx.fillStyle = 'rgba(140, 175, 255, 0.95)';
-    ctx.font = 'bold 24px monospace';
+    ctx.font = canvasFont(24, { role: 'display', weight: '700' });
     ctx.fillText('SELECT DESTINATION', cx, cy - 150);
 
     const listTop = cy - 100;
@@ -4934,20 +4935,20 @@ function gameLoop(now) {
       }
 
       ctx.fillStyle = selected ? 'rgba(240, 245, 255, 1)' : 'rgba(160, 170, 190, 0.7)';
-      ctx.font = selected ? 'bold 20px monospace' : '18px monospace';
+      ctx.font = selected ? canvasFont(20, { role: 'display', weight: '700' }) : canvasFont(18);
       ctx.fillText(map.name, cx, y + 6);
 
       const size = `${map.worldScale}x${map.worldScale}`;
       const stats = `${size}  |  ${map.wells.length} wells  ${map.stars.length} stars  ${(map.wrecks || []).length} wrecks`;
       ctx.fillStyle = selected ? 'rgba(180, 190, 210, 0.85)' : 'rgba(130, 140, 160, 0.5)';
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       ctx.fillText(stats, cx, y + 26);
     }
 
     let hintY = listTop + MAP_LIST.length * itemHeight + 25;
     if (remoteControl?.enabled) {
       const infoY = hintY - 36;
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       if (remoteControl.error) {
         ctx.fillStyle = 'rgba(255, 130, 110, 0.9)';
         ctx.fillText(`remote sim unavailable: ${remoteControl.error}`, cx, infoY);
@@ -4962,7 +4963,7 @@ function gameLoop(now) {
           cx,
           infoY
         );
-        ctx.font = '11px monospace';
+        ctx.font = canvasFont(11);
         ctx.fillStyle = remoteControl.selectedDiffersFromLive
           ? 'rgba(255, 210, 140, 0.9)'
           : 'rgba(160, 180, 210, 0.75)';
@@ -4991,7 +4992,7 @@ function gameLoop(now) {
     }
 
     ctx.fillStyle = 'rgba(150, 160, 190, 0.6)';
-    ctx.font = '11px monospace';
+    ctx.font = canvasFont(11);
     ctx.fillText(
       simClient?.enabled
         ? '↑↓ select    space/A: join or host    X/Y: host reset    S: reroll seed    esc/B: back'
@@ -5012,19 +5013,19 @@ function gameLoop(now) {
     ctx.shadowBlur = 8;
 
     ctx.fillStyle = 'rgba(140, 175, 255, 0.7)';
-    ctx.font = 'bold 11px monospace';
+    ctx.font = canvasFont(11, { weight: 'bold' });
     ctx.fillText('SEED PREVIEW', panelX + 12, panelY + 20);
 
     ctx.fillStyle = 'rgba(200, 210, 230, 0.8)';
-    ctx.font = '12px monospace';
+    ctx.font = canvasFont(12);
     ctx.fillText(`seed: ${previewSeed}`, panelX + 12, panelY + 40);
 
     // Signature
     ctx.fillStyle = 'rgba(180, 120, 255, 0.8)';
-    ctx.font = 'bold 13px monospace';
+    ctx.font = canvasFont(13, { weight: 'bold' });
     ctx.fillText(`[${preview.signature.name}]`, panelX + 12, panelY + 62);
     ctx.fillStyle = 'rgba(140, 150, 170, 0.5)';
-    ctx.font = '10px monospace';
+    ctx.font = canvasFont(10);
     const modLines = Object.entries(preview.signature.mods).slice(0, 3);
     for (let i = 0; i < modLines.length; i++) {
       const [k, v] = modLines[i];
@@ -5033,17 +5034,17 @@ function gameLoop(now) {
 
     // Well names
     ctx.fillStyle = 'rgba(160, 170, 200, 0.7)';
-    ctx.font = '11px monospace';
+    ctx.font = canvasFont(11);
     ctx.fillText('wells:', panelX + 12, panelY + 130);
     for (let i = 0; i < Math.min(5, preview.wellNames.length); i++) {
       ctx.fillStyle = 'rgba(140, 160, 200, 0.6)';
-      ctx.font = '10px monospace';
+      ctx.font = canvasFont(10);
       ctx.fillText(`  ${preview.wellNames[i]}`, panelX + 12, panelY + 146 + i * 12);
     }
 
     // Sample loot from wave 4
     ctx.fillStyle = 'rgba(160, 170, 200, 0.7)';
-    ctx.font = '11px monospace';
+    ctx.font = canvasFont(11);
     ctx.fillText('sample loot (wave 4):', panelX + 12, panelY + 222);
     const TIER_COLOR = {
       1: 'rgba(180, 190, 200, 0.6)',
@@ -5054,13 +5055,13 @@ function gameLoop(now) {
     for (let i = 0; i < Math.min(4, preview.sampleLoot.length); i++) {
       const item = preview.sampleLoot[i];
       ctx.fillStyle = TIER_COLOR[item.tier] || 'rgba(160, 170, 190, 0.6)';
-      ctx.font = '10px monospace';
+      ctx.font = canvasFont(10);
       const tierLabel = typeof item.tier === 'number' ? `T${item.tier}` : '  ';
       ctx.fillText(`  ${tierLabel} ${item.name.slice(0, 20)}`, panelX + 12, panelY + 238 + i * 12);
     }
 
     ctx.fillStyle = 'rgba(100, 120, 150, 0.5)';
-    ctx.font = '9px monospace';
+    ctx.font = canvasFont(9);
     ctx.fillText(`quality: ${preview.lootQualityBias.toFixed(2)}×`, panelX + 12, panelY + 298);
 
     ctx.restore();
@@ -5101,13 +5102,13 @@ function gameLoop(now) {
     if (t > 0.2) {
       const a = Math.min((t - 0.2) * 2, 1);
       ctx.fillStyle = `rgba(100, 255, 255, ${a})`;
-      ctx.font = 'bold 28px monospace';
+      ctx.font = canvasFont(28, { role: 'display', weight: '700' });
       ctx.fillText('SALVAGE REPORT', cx, cy - 155);
     }
 
     // Extracted items
     if (t > 0.5 && metaExtractedItems.length > 0) {
-      ctx.font = '13px monospace';
+      ctx.font = canvasFont(13);
       const maxShow = Math.min(metaExtractedItems.length, 8);
       let itemY = cy - 120;
       for (let i = 0; i < maxShow; i++) {
@@ -5131,7 +5132,7 @@ function gameLoop(now) {
     if (t > summaryT) {
       const a = Math.min((t - summaryT) * 2, 1);
       const totalValue = metaExtractedItems.reduce((sum, i) => sum + (i.value || 0), 0);
-      ctx.font = '15px monospace';
+      ctx.font = canvasFont(15);
 
       let sy = cy + 30;
       ctx.fillStyle = `rgba(255, 220, 100, ${a})`;
@@ -5151,7 +5152,7 @@ function gameLoop(now) {
     if (t > promptT) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
       ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
-      ctx.font = '18px monospace';
+      ctx.font = canvasFont(18);
       ctx.fillText('press space to drop back in', cx, cy + 120);
     }
 
@@ -5176,7 +5177,7 @@ function gameLoop(now) {
 
     // Title
     ctx.fillStyle = 'rgba(140, 175, 255, 0.95)';
-    ctx.font = 'bold 28px monospace';
+    ctx.font = canvasFont(28, { role: 'display', weight: '700' });
     ctx.fillText('PAUSED', cx, cy - 110);
 
     // Menu buttons
@@ -5194,28 +5195,28 @@ function gameLoop(now) {
       }
 
       ctx.fillStyle = selected ? 'rgba(240, 245, 255, 1)' : 'rgba(160, 170, 195, 0.65)';
-      ctx.font = selected ? 'bold 18px monospace' : '16px monospace';
+      ctx.font = selected ? canvasFont(18, { weight: 'bold' }) : canvasFont(16);
       ctx.fillText(buttons[i], cx, y + 6);
     }
 
     // Signature info on pause screen
     if (currentSignature) {
       ctx.fillStyle = 'rgba(140, 170, 190, 0.7)';
-      ctx.font = '12px monospace';
+      ctx.font = canvasFont(12);
       ctx.fillText(currentSignature.name, cx, cy + 55);
       ctx.fillStyle = 'rgba(120, 150, 170, 0.5)';
-      ctx.font = '10px monospace';
+      ctx.font = canvasFont(10);
       ctx.fillText(currentSignature.mechanical, cx, cy + 72);
     }
 
     // Controls reference (compact)
-    ctx.font = '11px monospace';
+    ctx.font = canvasFont(11);
     ctx.fillStyle = 'rgba(150, 155, 185, 0.55)';
     ctx.fillText('steer: stick / arrows   thrust: R2 / space   brake: L2 / ctrl   pulse: □ / E   abilities: L1/R1 / Q/R', cx, cy + 110);
 
     // Navigation hint
     ctx.fillStyle = 'rgba(130, 130, 170, 0.4)';
-    ctx.font = '12px monospace';
+    ctx.font = canvasFont(12);
     ctx.fillText('up/down to select  ·  X / space to confirm  ·  O / esc to resume', cx, cy + 130);
 
     ctx.restore();
@@ -5235,8 +5236,10 @@ window.addEventListener('error', (e) => {
 });
 
 // ---- Start ----
-function boot() {
+async function boot() {
   try {
+    const fontsReady = await waitForTypographyFonts();
+    window.__LBH_BOOT_MARK__?.('typography.fonts.checked', { ready: fontsReady });
     const ok = init();
     if (ok !== false) {
       window.__LBH_BOOT_MARK__?.('init.completed', {

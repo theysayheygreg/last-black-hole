@@ -26,7 +26,7 @@ Five surfaces are currently rendered:
 ### Where LBH Already Complies
 
 **In-game HUD panels** are on-spec:
-- Font stack `'JetBrains Mono', 'SF Mono', 'Fira Code', monospace` ✓
+- Font stack now routes through Monaspace-first typography roles ✓
 - Panel background `rgba(0, 2, 12, 0.6)` ✓
 - Panel border `1px solid rgba(80, 100, 140, 0.2)` ✓
 - Signal meter is 120px × 4px, teal-fill, positioned below timer ✓
@@ -54,9 +54,9 @@ Five concrete violations to fix:
 
 **Fix:** replace all panel borders with `rgba(80, 100, 140, 0.2)` unless there's a documented reason to go darker or lighter. The signal panel's teal border tint (`rgba(80, 200, 180, 0.15)`) is a *deliberate* exception (teal accent on signal) and should be preserved — add a comment making that intentional.
 
-**3. Home screen / meta tabs use canvas text, not DOM.** Home/vault/rig/loadout are all drawn via `ctx.fillText()` in `main.js`. This means they can't inherit the design system's font stack automatically and have to re-specify on every call. They're also fragile — spacing is pixel-perfect per line, hard to adjust.
+**3. Home screen / meta tabs use canvas text, not DOM.** Home/vault/rig/loadout are all drawn via `ctx.fillText()` in `main.js`. They now use `canvasFont()` from `src/ui/typography.js`, so font identity is centralized, but spacing is still pixel-perfect per line and hard to adjust.
 
-**Fix (medium lift):** this is a bigger refactor — migrate home screens to DOM overlays. But the immediate cleanup is to centralize the canvas text calls into a helper like `drawHUDText(ctx, { text, x, y, role })` where `role` is one of `title | body | label | ability-cyan | ability-gold` etc. The helper pulls font/size/color from a single table. This is a 1-hour fix that buys us all future compliance for free.
+**Remaining fix (medium lift):** migrate home screens to DOM overlays or introduce a fuller `drawHUDText(ctx, { text, x, y, role })` helper for color/spacing roles. The font portion is centralized; layout and semantic color roles still need the next pass.
 
 **4. Map select seed preview panel has no canonical spec.** I wrote the preview panel fresh during the seed determinism work, and I made up the colors (`rgba(140, 175, 255, 0.7)` for labels, custom tier colors). Most of them happen to be close to the design system but not exact.
 
@@ -106,7 +106,7 @@ This rule is doing *semantic* work, not aesthetic work. When the player learns "
 
 §10 of DESIGN-SYSTEM.md has four example component prompts. I should start using them verbatim in future PRs:
 
-> "Build a HUD panel with JetBrains Mono 13px, background rgba(0, 2, 12, 0.6), border 1px solid rgba(80, 100, 140, 0.2), radius 2px, padding 8px 12px, text-shadow 0 0 6px currentColor"
+> "Build a HUD panel with Monaspace Neon 13px, background rgba(0, 2, 12, 0.6), border 1px solid rgba(80, 100, 140, 0.2), radius 2px, padding 8px 12px, text-shadow 0 0 6px currentColor"
 
 When another agent (or a future me) writes a new HUD panel, they should be pasting that prompt. Same for results screens, warnings, signal meters. The prompt guide is a copy-paste contract — it eliminates the "I made up a color" failure mode.
 

@@ -16,7 +16,7 @@
 | Threats | Signal, Inhibitor, rivals/scavengers, fauna/sentry foundations, phantoms/haunts | Tune Inhibitor timing and signal readability; pick strongest ecology behaviors | Full entity catalog and richer multiplayer threat interactions |
 | Hulls | Five hulls, manifests, PlayerBrain, ability state, several server ability behaviors | Playtest ability feel and cooldowns; improve HUD cues | More artifacts, exclusive builds, no-respec pilot identity |
 | Progression | Profiles, vault, item tiers, rig tracks defined, partial upgrade flow | Complete upgrade purchase/write-back and balance EM economy | Milestones, unlocks, pilots, long-term chronicle |
-| UI/HUD | DOM HUD, canvas screens, inventory/results, design-token bridge | Reduce inline style drift; improve loadout/home/results readability | Full UI primitive system and accessibility pass |
+| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge | Reduce remaining inline color/layout drift; improve loadout/home/results readability | Full UI primitive system and accessibility pass |
 | Audio | Audio engine/toolkit foundations | Define final sonic palette for movement/signal/Inhibitor | Dynamic score and full mix hierarchy |
 | Testing | Fast/core/authority/three lanes; visual fixtures; CDP driver | Add more representative playtest scripts and renderer semantic checks | Public release smoke, hosted-session CI, perf budgets per device |
 | Public presence | Public overview doc exists; website/social not built | Prepare public copy, screenshots, clips, and a playable build page | Itch/Steam-style page, devlog cadence, hosted demo |
@@ -79,6 +79,9 @@ the current primitive bridge markers with a coherent object language.
   route-reading objects.
 - Move more world entities and VFX out of canvas overlay into Three scene layers
   only when the Three equivalent has landed.
+- Keep typography centralized through `src/ui/typography.js`: Oxanium for
+  major headings, Monaspace for operational UI/glyphs, Noto only as fallback
+  coverage.
 - Add semantic render channels for signal, slingshot, current lanes, and Inhibitor presence.
 - Make renderer diagnostics explain scene object counts and pass costs.
 - Preserve DOM for text-heavy HUD and menus.

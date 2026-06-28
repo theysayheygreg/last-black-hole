@@ -8,6 +8,7 @@
 
 import { CONFIG } from './config.js';
 import { WORLD_SCALE, worldToFluidUV, worldToScreen, worldDistance, shouldCull, uvScale, wrapWorld } from './coords.js';
+import { canvasFont } from './ui/typography.js';
 
 class Portal {
   constructor(wx, wy, opts = {}) {
@@ -263,7 +264,7 @@ export class PortalSystem {
       // Label
       const label = portal.type === 'rift' ? 'RIFT' : portal.type === 'unstable' ? 'EXIT?' : 'EXIT';
       ctx.fillStyle = `rgba(180, 120, 255, ${(0.5 + 0.2 * pulse) * a})`;
-      ctx.font = '10px monospace';
+      ctx.font = canvasFont(10);
       ctx.textAlign = 'center';
       ctx.fillText(label, sx, sy - size - 6);
 
@@ -271,7 +272,7 @@ export class PortalSystem {
       if (portal.isWarning(runElapsedTime)) {
         const secs = Math.ceil(portal.timeLeft(runElapsedTime));
         ctx.fillStyle = `rgba(255, 80, 80, ${a})`;
-        ctx.font = '11px monospace';
+        ctx.font = canvasFont(11);
         ctx.fillText(`${secs}s`, sx, sy + size + 14);
       }
 

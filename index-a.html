@@ -5,8 +5,67 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Last Singularity</title>
   <style>
+    @font-face {
+      font-family: 'Oxanium';
+      src: url('./assets/fonts/oxanium/Oxanium-Variable.ttf') format('truetype');
+      font-weight: 200 800;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Monaspace Neon';
+      src: url('./assets/fonts/monaspace/MonaspaceNeonVar.woff2') format('woff2');
+      font-weight: 200 800;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Monaspace Argon';
+      src: url('./assets/fonts/monaspace/MonaspaceArgonVar.woff2') format('woff2');
+      font-weight: 200 800;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Monaspace Krypton';
+      src: url('./assets/fonts/monaspace/MonaspaceKryptonVar.woff2') format('woff2');
+      font-weight: 200 800;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Monaspace Xenon';
+      src: url('./assets/fonts/monaspace/MonaspaceXenonVar.woff2') format('woff2');
+      font-weight: 200 800;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Monaspace Radon';
+      src: url('./assets/fonts/monaspace/MonaspaceRadonVar.woff2') format('woff2');
+      font-weight: 200 800;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Noto Sans Mono';
+      src: url('./assets/fonts/noto/NotoSansMono-Variable.ttf') format('truetype');
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Noto Sans Symbols';
+      src: url('./assets/fonts/noto/NotoSansSymbols-Variable.ttf') format('truetype');
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
     :root {
-      --lbh-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+      --lbh-font-display: 'Oxanium', 'Monaspace Neon', 'Monaspace Argon', sans-serif;
+      --lbh-font-ui: 'Monaspace Neon', 'Monaspace Argon', 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+      --lbh-font-glyph: 'Monaspace Neon', 'Monaspace Argon', 'Noto Sans Mono', 'Noto Sans Symbols', 'Apple Symbols', 'Segoe UI Symbol', monospace;
+      --lbh-font-mono: var(--lbh-font-ui);
       --lbh-void: #000021;
       --lbh-panel-bg: rgba(0, 2, 12, 0.6);
       --lbh-panel-border: rgba(80, 100, 140, 0.2);
@@ -33,6 +92,9 @@
       overflow: hidden;
       background: var(--lbh-void);
       cursor: crosshair;
+      font-family: var(--lbh-font-ui);
+      font-variant-ligatures: none;
+      font-feature-settings: "liga" 0, "calt" 0;
     }
     /* Canvases are sized by viewport.js (fixed 1280x720 backing,
        letterboxed CSS rect). Explicit left/top are written by JS. */
@@ -86,6 +148,8 @@
       z-index: 10;
       pointer-events: none;
       font-family: var(--lbh-font-mono);
+      font-variant-ligatures: none;
+      font-feature-settings: "liga" 0, "calt" 0;
       user-select: none;
     }
     #hud .hud-panel {

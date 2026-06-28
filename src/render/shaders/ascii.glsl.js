@@ -9,6 +9,8 @@
 // comments inline for behavior (shimmer, glitch corruption, directional
 // selection).
 
+import { canvasFont } from '../../ui/typography.js';
+
 export const FRAG_ASCII = `#version 300 es
 precision highp float;
 
@@ -205,7 +207,7 @@ export function generateFontAtlas() {
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `${Math.floor(cellSize * 0.85)}px monospace`;
+  ctx.font = canvasFont(Math.floor(cellSize * 0.85), { role: 'glyph' });
 
   for (let row = 0; row < RAMPS.length; row++) {
     const ramp = RAMPS[row];

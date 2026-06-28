@@ -123,6 +123,15 @@ Renderer priorities:
 3. Keep gameplay truth out of renderer objects.
 4. Use renderer fixtures and screenshots for visual regressions.
 
+Typography is now part of the renderer/UI contract:
+
+- **Oxanium** handles title-scale headings until a proper wordmark exists.
+- **Monaspace** is the primary HUD, menu, label, and ASCII glyph voice.
+- **Noto Sans Mono / Symbols** stay bundled as fallback coverage for math,
+  symbol, box-drawing, and Inhibitor/corruption edge cases.
+- Font stacks live in `src/ui/typography.js`; avoid ad hoc canvas or DOM font
+  declarations.
+
 ### Three Entity Visual Language
 
 The next renderer ownership pass is not another wholesale pipeline rewrite. It
