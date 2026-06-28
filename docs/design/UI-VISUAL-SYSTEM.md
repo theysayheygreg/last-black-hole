@@ -27,6 +27,29 @@ Most post-processing belongs below the UI:
 This keeps gameplay text and menu decisions crisp while preserving the fiction
 that the whole view is a degraded instrument display.
 
+## Motion And VFX Rules
+
+UI motion and Three VFX should reinforce each other, but they are not the same
+system. UI motion owns screen state, focus, hierarchy, and readability. VFX
+owns spatial accent, impact, and dread. A menu selection, command, warning, or
+result must still be understandable when VFX is disabled.
+
+- Normal focus moves, tab changes, body text, prompts, timers, fuel, cargo, and
+  controller hints do not emit particles or corruption by default.
+- Title identity, launch, extraction, collapse, pickup confirmation, portal
+  state changes, and Inhibitor-owned faults can emit renderer-neutral VFX
+  events because those beats benefit from motion and atmosphere.
+- Text-heavy motion stays in DOM/canvas unless a presentation beat truly needs
+  depth. The first title/VFX bridge should use measured glyph positions from
+  the canvas overlay and let Three draw behind the clean text.
+- VFX should usually render below readable UI and above or beside the world
+  layer it clarifies. CRT/display-shell treatment is the exception, and only if
+  it keeps text readable.
+- Reduced-motion mode replaces movement with static contrast and state changes.
+  The couch-critical read cannot depend on flicker, scan tears, or particles.
+- Motion review needs clips, not only still screenshots. Still captures prove
+  readability; clips prove timing, rhythm, and restraint.
+
 ## Role Palette
 
 | Role | Color Target | Use |

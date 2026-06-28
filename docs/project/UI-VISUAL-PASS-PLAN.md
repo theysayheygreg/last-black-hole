@@ -62,6 +62,47 @@ The first implementation pass should move duplicated helpers out of
 `src/main.js` and `src/run-results.js`, then migrate screens one at a time. The
 goal is not a giant UI rewrite. The goal is one vocabulary.
 
+## UI Motion And VFX Bridge
+
+The earlier UI motion ideas should be reframed as a two-layer system:
+
+- **UI motion layer:** DOM/canvas transforms, text reveals, panel expansion,
+  focus movement, command timing, and reduced-motion fallbacks. This layer owns
+  screen truth and remains readable without Three VFX.
+- **VFX accent layer:** renderer-neutral events consumed by the Three VFX kit.
+  This layer adds particles, scan splinters, aperture pulls, glyph embers, and
+  screen-space faults when a UI beat deserves spatial presence.
+
+Concrete reframes:
+
+- **Typing/walking text:** keep normal operational text in DOM/canvas. Title
+  identity and Inhibitor-owned warnings may emit `titleGlyphFault` or
+  `inhibitorUiFault` events from measured glyph slots, but subtitles, CTAs,
+  timers, cargo, fuel, and controller prompts stay clean.
+- **Directional wipes:** use UI masks for ordinary screen transitions. Launch,
+  extraction, collapse, and portal/rift transitions can add `launchTransition`,
+  `portalTransition`, or `collapseReportFault` VFX underneath the readable UI
+  so the transition feels spatial instead of just graphical.
+- **Windows expanding from a point/corner:** keep the panel geometry in the UI
+  primitive kit. Add only small edge ticks, contact glow, or command pulses for
+  high-value panels; do not attach particle storms to every modal.
+- **Title attract loop:** this is the best first bridge. The clean wordmark
+  remains canvas text, while corruption faults emit screen-space VFX behind it:
+  magenta glyph embers, symbol motes, scan splinters, and a small rift/aperture
+  response in the title world.
+- **Results screens:** death/collapse/extraction VFX may continue under the
+  local matte for a few seconds, but outcome, cause, cargo, earnings, and
+  continue remain normal UI reads.
+
+Acceptance:
+
+- disabling VFX never breaks navigation or state comprehension;
+- reduced-motion captures still show the selected action and outcome clearly;
+- in-match UI motion does not add center-field noise while the player is
+  steering;
+- `npm run test:ui` proves still-frame readability, while short capture clips
+  are used for title, launch, and results timing review.
+
 ## Screen Inventory
 
 | Surface | Current Owner | Target Reference | Couch-Critical Reads | Current Gap |

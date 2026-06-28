@@ -7,6 +7,10 @@
 
 ## 2026-06-28 — UI visual-system direction
 
+- Connected the UI motion direction to the Three VFX plan: UI motion now owns
+  readable screen state and reduced-motion fallbacks, while approved beats such
+  as title glyph faults, launch, extraction, collapse, and Inhibitor UI faults
+  can emit renderer-neutral VFX accents below or around clean UI.
 - Added `docs/project/THREE-VFX-PASS-PLAN.md`, a detailed implementation plan
   for a pooled, event-driven Three VFX kit covering title corruption, ship
   thrust/brake, portal sparks, pickup glints, Inhibitor faults, quality

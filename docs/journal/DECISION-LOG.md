@@ -1,5 +1,30 @@
 # Decision Log
 
+## 2026-06-28 — UI motion can trigger VFX, but UI keeps the truth
+
+**Decision:** Reframe the UI motion pass as a two-layer contract. DOM/canvas UI
+motion owns screen state, focus, hierarchy, text reveal, panel expansion, and
+reduced-motion fallbacks. Three VFX may respond to approved UI events such as
+`titleGlyphFault`, `launchTransition`, `portalTransition`,
+`collapseReportFault`, `inhibitorUiFault`, and `commandConfirmPulse`, but those
+effects are accents around readable UI, not the source of navigation or state
+truth.
+
+**Why:** The new VFX plan can make the title, launch, extraction, collapse, and
+Inhibitor moments feel much more alive, but the UI style pass is deliberately
+about contrast and couch readability. If every hover, tab, prompt, and number
+emits particles, VFX becomes noise and the UI loses authority. Keeping normal
+menu motion pure UI while allowing a few ritual moments to echo into Three
+preserves both directions.
+
+**Where it landed:** `docs/design/UI-VISUAL-SYSTEM.md`,
+`docs/project/UI-VISUAL-PASS-PLAN.md`,
+`docs/project/THREE-VFX-PASS-PLAN.md`, and this decision log.
+
+**Door status:** Closed for the ownership split. Open for exact animation
+timing, first VFX event payloads, and whether the title wordmark eventually
+moves into Three after the behind-canvas bridge is tested.
+
 ## 2026-06-28 — Three VFX uses renderer-neutral events
 
 **Decision:** Build the v0.2 VFX kit in Three.js for the current PC/web/Steam

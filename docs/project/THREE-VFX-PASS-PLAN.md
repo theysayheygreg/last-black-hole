@@ -151,6 +151,39 @@ Example screen-space event:
 Those same events can later be implemented by a native renderer, a Godot port,
 or a platform-specific Metal path. They should not require Three.js vocabulary.
 
+## UI Motion Integration
+
+The UI visual pass should not be swallowed by the VFX pass. Treat UI motion as
+the source of screen meaning and VFX as an event-driven echo for the moments
+that deserve depth or disturbance.
+
+Recommended UI-originated VFX events:
+
+| Event | Source | Intended Effect | Guardrail |
+|-------|--------|-----------------|-----------|
+| `titleGlyphFault` | measured title glyph overlay slots | glyph embers, symbol motes, scan splinters behind the clean wordmark | title identity only; never CTA/subtitle/status copy |
+| `inhibitorUiFault` | Inhibitor-owned warnings or form labels | magenta/violet symbol leakage and rare screen faults | no normal prompts, timers, cargo, fuel, or controller hints |
+| `launchTransition` | confirmed run launch | directional route wipe, aperture streaks, brief command pulse | does not hide launch confirmation text |
+| `portalTransition` | title rift, extraction, or portal collapse | aperture pull, rim sparks, collapse wink | route/extraction state remains readable |
+| `collapseReportFault` | death/collapse result entry | short under-panel scan tear or inward collapse residue | outcome and cause text stay clean |
+| `commandConfirmPulse` | high-value command only | one edge tick or small contact glow | not used for every hover/focus move |
+
+Normal tab changes, row focus, body text reveal, profile names, map legends,
+HUD gauges, and controller prompts should stay pure UI motion. If those need
+more readability, fix contrast, size, backing, icon shape, or focus treatment
+before reaching for VFX.
+
+Implementation order:
+
+1. Keep the UI primitive/title overlay as the canonical readable surface.
+2. Expose optional screen-space event positions from UI helpers only for
+   approved beats.
+3. Let `screenVfxGroup` and `immediateVfxGroup` render behind or around clean
+   UI rather than replacing text with Three text.
+4. Add reduced-motion and `vfx.enabled=false` captures so the same screens
+   still read without motion.
+5. Review motion with clips and readability with stills/couch proxies.
+
 ## Proposed File Shape
 
 Start small and keep the first kit vanilla ES modules:
@@ -747,4 +780,3 @@ Recommended tomorrow slice:
 
 This gives us a small, reviewable proof without pretending the whole VFX
 language is solved.
-
