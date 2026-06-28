@@ -21,6 +21,9 @@
   including app icons, Steam capsule/library images, and draft Steam store copy.
 - Wired the app icon into desktop packaging, Deck `.desktop` entries, the
   one-click installer, and the Gaming Mode shortcut writer.
+- Hardened `deploy:deck` so it reuses an existing current Linux artifact by
+  default instead of clobbering a complete all-target release folder; use
+  `--force-build` for an intentional Deck-only Linux rebuild.
 - Added `tests/steam-deck-compat.cjs` to guard Deck prompts, HUD minimums,
   renderer Deck mode, app icon wiring, and Steam asset dimensions.
 

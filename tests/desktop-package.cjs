@@ -85,6 +85,8 @@ function run() {
   assert(deckDeploy.includes("deck-launch.log"), "Deck launcher must persist stderr/stdout for remote triage");
   assert(deckDeploy.includes("remoteCommand(command)"), "Deck deploy SSH commands must seed a stable remote PATH");
   assert(deckDeploy.includes("--rsync-path=/usr/bin/rsync"), "Deck deploy rsync must not depend on remote shell PATH");
+  assert(deckDeploy.includes("--force-build"), "Deck deploy must make rebuilds explicit instead of clobbering complete release folders");
+  assert(deckDeploy.includes("Reusing existing Linux Deck artifact"), "Deck deploy must reuse the current hash artifact when present");
 
   console.log("Desktop package server bundle closure is complete.");
 }

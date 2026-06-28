@@ -87,6 +87,7 @@ function main() {
     process.env.LBH_DECK_DIR || '/home/deck/Games/last-singularity'
   );
   const noBuild = hasFlag('--no-build');
+  const forceBuild = hasFlag('--force-build');
   const dryRun = hasFlag('--dry-run');
   const skipPreflight = hasFlag('--skip-preflight');
   const ssh = process.env.LBH_SSH || 'ssh';
@@ -102,11 +103,13 @@ function main() {
     run(ssh, [...sshOptions(), target, remoteCommand('true')], { skipOnDryRun: true });
   }
 
-  if (!noBuild) {
+  const artifact = path.join(buildRoot(mode), `${PRODUCT_NAME}-linux-x64`);
+  if (!noBuild && (forceBuild || !fs.existsSync(artifact))) {
     run('node', ['scripts/build.cjs', '--targets=linux', `--mode=${mode}`]);
+  } else if (!noBuild) {
+    console.log(`Reusing existing Linux Deck artifact: ${artifact}`);
   }
 
-  const artifact = path.join(buildRoot(mode), `${PRODUCT_NAME}-linux-x64`);
   if (!fs.existsSync(artifact)) {
     throw new Error(`Missing Linux Deck artifact: ${artifact}`);
   }

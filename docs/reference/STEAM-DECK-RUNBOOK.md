@@ -134,6 +134,16 @@ Deploy or redeploy the current local build:
 LBH_DECK_HOST=steamdeck npm run deploy:deck
 ```
 
+`deploy:deck` reuses the current `builds/v0.2.x.<hash>/Last
+Singularity-linux-x64` artifact when it already exists. That keeps Deck deploys
+from pruning a complete all-target release folder after `npm run
+release:internal`. If you intentionally want to rebuild only the Linux package
+for the Deck, pass:
+
+```sh
+LBH_DECK_HOST=steamdeck npm run deploy:deck -- --force-build
+```
+
 Register the wrapper in Gaming Mode:
 
 ```sh

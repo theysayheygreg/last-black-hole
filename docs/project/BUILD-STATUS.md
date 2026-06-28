@@ -54,10 +54,11 @@ Validation for this source snapshot:
   empty ability panel or keyboard-only Q/R fallback.
 
 **Status:** v0.2.2 local source path is playable on a fresh local authority
-stack, and `0.2.2.332007f` has a fresh Linux release deploy on Greg's Steam
-Deck for demo testing. The Deck install was verified at the file/shortcut level;
-the next evidence gap is Greg launching it from Gaming Mode and confirming
-controller navigation in hand.
+stack, and the current `0.2.2.<commit-hash>` Linux release artifact is deployed
+on Greg's Steam Deck for demo testing after `npm run release:internal`. Use
+`npm run release:status` for the exact hash-named artifact folder. The Deck
+install was verified at the file/shortcut level; the next evidence gap is Greg
+launching it from Gaming Mode and confirming controller navigation in hand.
 
 On 2026-06-28, Codex refreshed the private Deck demo build:
 
@@ -66,9 +67,11 @@ On 2026-06-28, Codex refreshed the private Deck demo build:
 - `npm run test:fast` passed, including the desktop package, Deck Gaming Mode,
   Deck installer, play instructions, typography, UI primitive, and Three smoke
   lanes.
-- `LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deploy:deck` built the
-  Linux release artifact at `builds/v0.2.2.332007f/Last Singularity-linux-x64`
-  and copied it to `/home/deck/Games/last-singularity`.
+- `npm run release:internal` built the web, iPad web-app, macOS, Windows, and
+  Linux release artifacts for the current committed hash.
+- `LBH_DECK_HOST=steamdeck.tail1ac9cf.ts.net npm run deploy:deck` reused the
+  current Linux release artifact when present and copied it to
+  `/home/deck/Games/last-singularity`.
 - The Gaming Mode refresh command wrote **Last Singularity** into Steam userdata
   as a non-Steam shortcut pointing at
   `/home/deck/Games/last-singularity/run-last-singularity.sh`.
@@ -115,10 +118,10 @@ assets into `dist/nightly`, and passed `release:check`.
 Artifacts:
 
 - `builds/v0.2.1/` (last three-part build, preserved as evidence)
-- latest Deck/demo release build:
-  `builds/v0.2.2.332007f/Last Singularity-linux-x64`
-- latest Deck/demo playtest zip:
-  `builds/last-singularity-playtest-v0.2.2.332007f.zip`
+- latest Deck/demo release build: run `npm run release:status` and open
+  `builds/v0.2.2.<hash>/Last Singularity-linux-x64`
+- latest Deck/demo playtest zip: run `npm run release:status` and open
+  `builds/last-singularity-playtest-v0.2.2.<hash>.zip`
 - `dist/nightly/`
 
 ## Known Caveats
