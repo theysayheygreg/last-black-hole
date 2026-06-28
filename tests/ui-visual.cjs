@@ -222,6 +222,16 @@ async function run() {
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', { titleTimer: 1.8, loopTime: 8.1 })),
     },
     {
+      name: 'title-glitch',
+      expectPhase: 'title',
+      warmMs: 300,
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('title', {
+        titleTimer: 1.8,
+        layout: 'opposite-left',
+        loopTime: 2.11,
+      })),
+    },
+    {
       name: 'profile-select',
       expectPhase: 'profileSelect',
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('profile-select', { cursor: 0 })),

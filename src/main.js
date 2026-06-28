@@ -202,6 +202,8 @@ const TITLE_CAMERA_DRIFT_PERIOD_Y = 17;
 const TITLE_OPPOSITE_WELL_CAMERA_OFFSET = 0.36;
 const TITLE_RIFT_ID = 'title-rift-aperture';
 const TITLE_ATTRACT_LOOP_SECONDS = 11.5;
+const TITLE_GLITCH_PERIOD = 2.15;
+const TITLE_GLITCH_WINDOW = 0.34;
 const TITLE_LAYOUT_DEFAULT = 'center';
 const TITLE_LAYOUT_IDS = new Set(['center', 'left', 'right', 'opposite-left']);
 let titleLayout = TITLE_LAYOUT_DEFAULT;
@@ -2537,6 +2539,31 @@ function smoothstep(edge0, edge1, value) {
   return t * t * (3 - 2 * t);
 }
 
+function titleNoise(value) {
+  const raw = Math.sin(value * 127.1 + 311.7) * 43758.5453123;
+  return raw - Math.floor(raw);
+}
+
+function titleGlitchState(time) {
+  const cycle = Math.floor(time / TITLE_GLITCH_PERIOD);
+  const local = time - cycle * TITLE_GLITCH_PERIOD;
+  const gate = titleNoise(cycle + 0.17);
+  if (gate < 0.38) return { active: 0, seed: cycle, amount: 0 };
+
+  const offset = 0.12 + titleNoise(cycle + 2.3) * 0.72;
+  const age = local - offset;
+  if (age < 0 || age > TITLE_GLITCH_WINDOW) return { active: 0, seed: cycle, amount: 0 };
+
+  const attack = smoothstep(0, 0.045, age);
+  const release = 1 - smoothstep(TITLE_GLITCH_WINDOW * 0.34, TITLE_GLITCH_WINDOW, age);
+  const active = attack * release;
+  return {
+    active,
+    seed: cycle * 31 + Math.floor(age * 42),
+    amount: 0.42 + active * 0.34,
+  };
+}
+
 function normalizeTitleLayout(value) {
   const key = String(value || TITLE_LAYOUT_DEFAULT).trim().toLowerCase();
   return TITLE_LAYOUT_IDS.has(key) ? key : TITLE_LAYOUT_DEFAULT;
@@ -2694,14 +2721,8 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   const titleState = titleAttractState(time);
   const readyAlpha = Math.max(0, Math.min(1, (readyTimer - 0.35) / 0.45));
   const promptPulse = 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(time * 3.0));
-  const corruptionSeed = Math.floor(time * 8);
-  const corruptionAmount = 0.26 + 0.06 * (0.5 + 0.5 * Math.sin(time * 1.7));
   const cleanTitle = 'LAST SINGULARITY';
-  const displayTitle = corruptText(cleanTitle, corruptionAmount, `title-${corruptionSeed}`, {
-    density: 0.42,
-    maxMarks: 2,
-    maxChars: cleanTitle.length,
-  });
+  const glitchState = titleGlitchState(time);
 
   ctx.save();
   ctx.textAlign = layout.align;
@@ -2727,16 +2748,31 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   ctx.fillStyle = roleColor('text', 0.20);
   ctx.fillText(cleanTitle, layout.textX, layout.titleY);
 
-  const jitterX = Math.sin(time * 29.0) * 0.7;
-  const jitterY = Math.cos(time * 21.0) * 0.45;
+  const baseJitterX = glitchState.active > 0 ? Math.sin(time * 81.0) * 0.45 * glitchState.active : 0;
+  const baseJitterY = glitchState.active > 0 ? Math.cos(time * 67.0) * 0.32 * glitchState.active : 0;
   ctx.fillStyle = roleColor('bone', 0.96);
-  ctx.fillText(displayTitle, layout.textX + jitterX, layout.titleY + jitterY);
-  // The lower echo is explicitly Inhibitor-pink so title corruption always
-  // points at the same anomaly language as the in-run Inhibitor effects.
-  ctx.shadowColor = roleColor('inhibitor', 0.40);
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = roleColor('inhibitor', 0.24);
-  ctx.fillText(displayTitle, layout.textX - jitterX * 0.8, layout.titleY + 1);
+  ctx.fillText(cleanTitle, layout.textX + baseJitterX, layout.titleY + baseJitterY);
+
+  if (glitchState.active > 0.01) {
+    const glitchTitle = corruptText(cleanTitle, glitchState.amount, `title-burst-${glitchState.seed}`, {
+      density: 0.86,
+      maxMarks: 4,
+      maxChars: cleanTitle.length,
+    });
+    const glitchAlpha = glitchState.active;
+    const jitterX = Math.sin(time * 127.0) * 2.4 * glitchAlpha;
+    const jitterY = Math.cos(time * 91.0) * 1.2 * glitchAlpha;
+    // Title-scale text gets the one indulgent corruption treatment: a brief
+    // pink fault that can be louder than normal HUD Zalgo, then it vanishes.
+    ctx.shadowColor = roleColor('inhibitor', 0.66 * glitchAlpha);
+    ctx.shadowBlur = 12 + 12 * glitchAlpha;
+    ctx.fillStyle = roleColor('inhibitor', 0.34 + 0.46 * glitchAlpha);
+    ctx.fillText(glitchTitle, layout.textX + jitterX, layout.titleY + jitterY);
+    ctx.shadowColor = roleColor('flow', 0.20 * glitchAlpha);
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = roleColor('flow', 0.10 * glitchAlpha);
+    ctx.fillText(cleanTitle, layout.textX - jitterX * 0.7, layout.titleY + 1);
+  }
 
   ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
   ctx.shadowBlur = 14;

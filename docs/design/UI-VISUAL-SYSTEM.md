@@ -95,9 +95,11 @@ tooltip or more explanatory copy to compensate for a weak first read.
 
 - Title text sits over the live world, not inside a hero card.
 - The well/fabric behind the title must be visible after warm-up.
-- The title is allowed a low-mid bounded Inhibitor corruption jitter because it
-  is identity, not a decision surface. Subtitles, profile/menu copy, and the
-  primary CTA stay clean.
+- The title wordmark keeps a clean bone/cyan base aesthetic most of the time.
+  Inhibitor corruption appears as brief pink burst faults, not a persistent
+  resting color. Title-scale text may use louder Zalgo than normal HUD text
+  during those bursts because it is identity, not a decision surface.
+  Subtitles, profile/menu copy, and the primary CTA stay clean.
 - Title copy needs local backing over dense fabric: gradient veils, thin
   brackets, dark inline mattes, or command-button backplates. Do not solve this
   by dimming the whole scene.
@@ -105,8 +107,8 @@ tooltip or more explanatory copy to compensate for a weak first read.
   gutters so the wordmark reads from a couch while leaving the warmed well and
   colorscape visible. The comparison set is center, left, right, and a left UI
   variant with the title camera panned so the well sits opposite the copy.
-- The title's lower corruption echo is always Inhibitor pink; cyan/flow stays
-  reserved for the stable title fill, CTA, and system framing.
+- Pink title corruption should flicker in only during those title faults;
+  cyan/flow stays reserved for stable framing, CTA, and system readouts.
 - The title environment should behave like an old attract loop: a larger
   central well, peripheral stars/wrecks/comets/portals, and a small repeating
   event such as an aperture winking out. The backdrop tells the fantasy before

@@ -89,8 +89,10 @@ default title read.
 The current comparison set should be captured before choosing the final title
 composition: centered baseline, left-aligned UI, right-aligned UI, and
 left-aligned UI with the title camera shifted so the well reads on the opposite
-side. All variants use the same local backing, safe gutters, and Inhibitor-pink
-corruption echo so the comparison is about composition rather than styling.
+side. All variants use the same local backing and safe gutters. The wordmark's
+base state stays clean; Inhibitor-pink corruption appears only in short
+deterministic fault bursts so the comparison is about composition rather than
+styling.
 
 ### Profile Select
 
