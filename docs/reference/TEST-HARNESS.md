@@ -8,6 +8,7 @@ The harness is not one big test. It is a layered system that checks four differe
 - the distributed stack can boot
 - the authoritative sim/control-plane path behaves correctly
 - the renderer still looks right on deterministic fixtures
+- the major UI surfaces remain readable at normal and couch-proxy scales
 
 The harness now sits beside an explicit runtime-mode model:
 
@@ -45,6 +46,9 @@ flowchart LR
 
     F["npm run test:renderer"] --> G["renderer.cjs"]
     G --> H["Deterministic visual fixtures"]
+
+    N["npm run test:ui"] --> O["ui-visual.cjs"]
+    O --> P["UI screenshots + couch proxies"]
 
     I["tests/helpers.cjs"] --> J["Harness static server :8719"]
     I --> K["Transient control plane"]
@@ -150,6 +154,32 @@ they can look hotter and smoother than the intended LBH target.
 
 Do not treat normal smoke screenshots as renderer truth.
 
+### 5. UI visual harness
+
+This is a separate command:
+
+- `npm run test:ui`
+
+It runs:
+
+- `tests/ui-visual.cjs`
+
+This layer is for UI readability, not gameplay truth. It captures title,
+profile select, home, map select, in-match HUD, extraction results, and death
+results with deterministic fixture state. Each surface writes a full screenshot
+plus 50 percent and 25 percent downscaled couch proxies under
+`tests/screenshots/ui-visual-<timestamp>/`.
+
+Use it for:
+
+- checking that the live HUD is included in screenshots, not just the canvas
+- reviewing title/menu/result hierarchy at a glance
+- making sure result outcomes and continue actions stay visible at reduced size
+- catching accidental first-frame black captures or missing overlay phases
+
+Do not treat the UI visual harness as final UX judgment. It is a repeatable
+baseline that points reviewers at the right frames.
+
 ## Process Model the Harness Assumes
 
 The main runtime ports are:
@@ -196,6 +226,10 @@ For targeted runtime-telemetry verification:
 For visual/renderer verification:
 
 - `npm run test:renderer`
+
+For UI surface verification:
+
+- `npm run test:ui`
 
 For movement, camera, or authority-sensitive verification:
 

@@ -228,6 +228,56 @@ export function initTestAPI(getState) {
       return true;
     },
 
+    showUiFixture(surface, options = {}) {
+      const state = getState();
+      const name = String(surface || '').toLowerCase().replace(/[-_\s]/g, '');
+      const ensureProfile = () => {
+        if (state.profileManager && !state.profileManager.active) {
+          state.profileManager.createProfile(0, options.profileName || 'UI Pilot');
+        }
+      };
+
+      state.setOverlayVisible?.(true);
+
+      if (name === 'title') {
+        state.loadTitleScene?.();
+        state.gamePhase = 'title';
+        state.setTitleTimerForTest?.(options.titleTimer ?? 1.2);
+        return true;
+      }
+
+      if (name === 'profileselect' || name === 'profile') {
+        state.gamePhase = 'profileSelect';
+        state.setProfileCursorForTest?.(options.cursor ?? 0);
+        return true;
+      }
+
+      if (name === 'home' || name === 'mainmenu') {
+        ensureProfile();
+        state.gamePhase = 'home';
+        state.setHomeTabForTest?.(options.tabIndex ?? 0);
+        return true;
+      }
+
+      if (name === 'mapselect' || name === 'prematch') {
+        ensureProfile();
+        state.gamePhase = 'mapSelect';
+        state.setMapSelectIndexForTest?.(options.mapIndex ?? 0);
+        state.setPreviewSeedForTest?.(options.seed ?? 424242);
+        return true;
+      }
+
+      if (name === 'playinghud' || name === 'hud') {
+        ensureProfile();
+        const map = state.mapList?.[options.mapIndex ?? 0] || state.mapList?.[0] || state.currentMap;
+        if (!state.startGame || !map) return false;
+        state.startGame(map, options.seed ?? 424242);
+        return true;
+      }
+
+      return false;
+    },
+
     getWells() {
       const { wellSystem, camX, camY, canvasWidth, canvasHeight } = getState();
       if (!wellSystem) return [];

@@ -6,6 +6,10 @@ Run:
 
 `npm run test:renderer`
 
+For UI surface captures, use the companion command:
+
+`npm run test:ui`
+
 Outputs land under:
 
 `/Users/theysayheygreg/clawd/projects/last-black-hole/tests/screenshots/renderer-<timestamp>/`
@@ -71,6 +75,19 @@ readability canary, not a pixel-perfect screenshot comparison or a replacement
 for human art direction.
 
 Do not use the normal smoke or flow screenshots as renderer truth. Those are still health checks, not visual evaluation.
+
+## Companion UI visual harness
+
+`npm run test:ui` writes full-page UI captures under:
+
+`/Users/theysayheygreg/clawd/projects/last-black-hole/tests/screenshots/ui-visual-<timestamp>/`
+
+It captures title, profile select, home, map select, in-match HUD, extraction
+results, and death results, then emits 50 percent and 25 percent couch-proxy
+images for each surface. Use it when the question is UI hierarchy,
+readability, or whether DOM HUD layers are present in captures. Use the
+renderer harness when the question is world composition, entity readability,
+or shader/post-processing behavior.
 
 ## Chrome DevTools MCP relationship
 

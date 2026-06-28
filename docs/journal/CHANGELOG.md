@@ -25,6 +25,17 @@
   per-screen contracts, a concrete shared canvas primitive kit, UI visual
   harness expectations, implementation order, non-goals, and open choices for
   Greg review.
+- Added `src/ui/canvas-primitives.js` plus `tests/ui-primitives.cjs` so canvas
+  menus/results can share role colors, alpha handling, panels, focus rows,
+  command buttons, gauges, warning strips, status pills, labels, key/value rows,
+  and text fitting.
+- Migrated the run-results overlay onto the shared canvas primitives, with
+  stronger outcome hierarchy, clearer cargo/accounting reads, and a readable
+  continue command.
+- Added `tests/ui-visual.cjs` and `npm run test:ui` for deterministic UI
+  captures of title, profile select, home, map select, in-match HUD,
+  extraction results, and death results, including 50% and 25% couch-proxy
+  images.
 
 ## 2026-06-27 — Inhibitor text corruption and dev panel refresh
 

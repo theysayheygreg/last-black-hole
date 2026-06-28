@@ -151,8 +151,8 @@ tooltip or more explanatory copy to compensate for a weak first read.
 The current renderer harness already validates object readability through
 `visualReference`. UI needs an equivalent lane:
 
-- a `uiReference` or scripted state capture for title, home, pre-match,
-  in-match HUD, and results;
+- `npm run test:ui` scripted state captures for title, profile select, home,
+  pre-match/map select, in-match HUD, extracted results, and death results;
 - Deck-scale screenshots for each surface;
 - couch-test screenshots reviewed at reduced scale;
 - contrast sampling for selected actions, warnings, and critical values;
@@ -160,4 +160,3 @@ The current renderer harness already validates object readability through
 
 This should supplement, not replace, real playtests. A UI can pass contrast and
 still feel noisy during movement.
-

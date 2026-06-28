@@ -23,7 +23,7 @@ reading stale health records or reconstructing status from `git log`.
 | L1: The Stakes | DONE | Wrecks with drift, portals with evaporation, well growth, extraction loop, vault + profiles |
 | L2: The Threats | DONE | Signal system (6 zones), fauna (jellies + blooms), gradient sentries, AI players (5 personalities), scavenger AI, force pulse |
 | L3: The Dread | DONE | Inhibitor (3 forms: glitch -> swarm -> vessel), final portal guarantee, control debuff, HUD degradation, localized fabric corruption, form-specific glyph rows |
-| L4: The Look | DONE / NEEDS ENTITY + UI PASS | Composer render pipeline, ASCII shader, title-prototype Bloom canary, NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering, default Three scene with primitive entity projection, v0.2 UI visual-system docs |
+| L4: The Look | DONE / NEEDS ENTITY + UI PASS | Composer render pipeline, ASCII shader, title-prototype Bloom canary, NERV HUD, signal bar, warning cascades, SNES audio engine, ship trails, star rendering, default Three scene with primitive entity projection, v0.2 UI visual-system docs, first shared UI primitive kit, result-screen migration, UI visual capture lane |
 | L5: The Depth | IN PROGRESS | 5 hull classes with abilities, PlayerBrain coefficient resolution, rig upgrade tracks, loot economy + balance manifest, meta-loop with run results + chronicle, **delta-v fuel system, slingshot anchor network, route-style hull identity** |
 | L6: The Ship | PARTIAL | Title screen, map select, 3 save slots. Balance pass + deploy not yet done. |
 
@@ -64,7 +64,7 @@ reading stale health records or reconstructing status from `git log`.
 | Three entity mood board | `docs/reference/THREE-ENTITY-MOODBOARD.md` | Designed 2026-06-26; cited references and generated target visuals for 2D identity inside staged 3D depth |
 | UI visual system | `docs/design/UI-VISUAL-SYSTEM.md` | Designed 2026-06-28; current contrast, sizing, color-role, and couch-test contract for title, home, map select, HUD, and results |
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
-| UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | Designed 2026-06-28; implementation sequence for tokens, canvas primitives, screen rebuilds, and UI visual harness coverage |
+| UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slice shipped 2026-06-28; shared canvas primitives, UI primitive smoke test, run-results migration, and baseline UI visual harness are live. Remaining work is title/profile/home/map/HUD/pause migration and tighter thresholds. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -89,8 +89,10 @@ reading stale health records or reconstructing status from `git log`.
 5. **Map redesign for slingshot routes** — existing maps were laid out for "wells everywhere" gameplay. Slingshot turns geography into puzzle space; maps want a route-design pass with 2-hop opportunities, 3-chain runs, signature lines.
 6. **Tailscale hardware playtest** — Mac mini control plane + sim, MacBook local-rendering client
 7. **Runtime productization** — explicit runtime modes, stack launcher, stack status, clearer embedded/local/remote contracts
-8. **UI visual pass** — shared canvas primitives, brighter role-bound UI
-   palette, Deck/couch readability, title/home/map-select/HUD/results rebuild.
+8. **UI visual pass** — first shared canvas primitive kit, result-screen
+   migration, and UI visual harness are live. Continue with title/profile,
+   home, map-select, HUD, and pause rebuilds, then tighten Deck/couch
+   readability thresholds.
    See `docs/design/UI-VISUAL-SYSTEM.md`,
    `docs/reference/UI-MOODBOARD.md`, and
    `docs/project/UI-VISUAL-PASS-PLAN.md`.

@@ -207,7 +207,7 @@ Acceptance:
 
 ## Pass 2 - Canvas UI Primitive Kit
 
-Status: ready next.
+Status: first slice shipped.
 
 Tasks:
 
@@ -225,6 +225,14 @@ Acceptance:
 - every selectable row and command button has the same focus language;
 - no UI helper owns gameplay state;
 - the helper kit can be smoke-tested without starting a match.
+
+Shipped slice:
+
+- `src/ui/canvas-primitives.js` now owns role colors, alpha handling, scanlines,
+  panels, corner frames, selected rows, command buttons, segmented gauges,
+  warning strips, status pills, section labels, key/value rows, and text
+  fitting.
+- `tests/ui-primitives.cjs` keeps the kit token-backed and gameplay-state-free.
 
 ## Pass 3 - Title And Profile Flow
 
@@ -306,7 +314,7 @@ Acceptance:
 
 ## Pass 7 - Results / Run Report
 
-Status: best first screen migration after primitives.
+Status: first screen migration shipped.
 
 Tasks:
 
@@ -324,9 +332,15 @@ Acceptance:
 - death, extraction, and abandoned-run variants share layout but not color
   meaning.
 
+Shipped slice:
+
+- `src/run-results.js` now draws through the shared canvas primitives.
+- Death/collapse and extraction share structure while using different role
+  colors for outcome, cargo, cause, value, and continue action.
+
 ## Pass 8 - UI Visual Harness
 
-Status: plan before implementation, then tighten after first screen migration.
+Status: baseline harness shipped, thresholds intentionally loose.
 
 Tasks:
 
@@ -345,14 +359,23 @@ Acceptance:
 - the harness always uses a fresh browser/sim or an explicit reset, matching
   current playtest process rules.
 
+Shipped slice:
+
+- `npm run test:ui` captures title, profile select, home, map select, in-match
+  HUD, extracted results, and death results.
+- Each capture writes full-size screenshots plus 50 percent and 25 percent
+  couch-proxy images under `tests/screenshots/ui-visual-<timestamp>/`.
+- The default `visual` lane now includes the UI visual harness alongside the
+  renderer fixture harness.
+
 ## Suggested Implementation Order
 
-1. Build `src/ui/canvas-primitives.js` and a tiny smoke/static test for token
-   access, alpha handling, text fitting, and no gameplay imports.
-2. Add the first UI visual harness as a baseline capture lane with loose
+1. Done: build `src/ui/canvas-primitives.js` and a tiny smoke/static test for
+   token access, alpha handling, text fitting, and no gameplay imports.
+2. Done: add the first UI visual harness as a baseline capture lane with loose
    assertions. Capture current screens before redesigning them.
-3. Migrate results first. `src/run-results.js` is isolated, consequence-heavy,
-   and a good proof that the primitives work.
+3. Done: migrate results first. `src/run-results.js` is isolated,
+   consequence-heavy, and a good proof that the primitives work.
 4. Migrate title and profile select. Prove warm-up timing, title hierarchy, and
    destructive profile focus.
 5. Migrate home/main menu. This is the largest composition pass and should use

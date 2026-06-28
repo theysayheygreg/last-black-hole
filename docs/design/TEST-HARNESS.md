@@ -119,7 +119,8 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:fast` | Cheap static + Three smoke canary for quick iteration. |
 | `npm run test:legacy` | Deprecated compatibility check for the old renderer target. Use only for deliberate fallback archaeology. |
 | `npm run test:three` | Three renderer canary: smoke, infra boot, and renderer fixtures with `?renderer=three`. |
-| `npm run test:visual` | Three renderer fixture pass. Generates screenshots, manifests, and `visualReference` readability stats. |
+| `npm run test:visual` | Visual lane: Three renderer fixtures plus UI surface captures. Generates screenshots, manifests, `visualReference` readability stats, and UI couch proxies. |
+| `npm run test:ui` | Focused UI visual pass. Captures title, profile, home, map select, in-match HUD, extraction results, and death results with 50%/25% couch-proxy images. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
@@ -169,6 +170,13 @@ inspected; they can look smooth, bright, or rainbowed around wells and should
 not be treated as promo or target visuals.
 Set `LBH_RENDERER_DEEP=1` to capture every fixture at the older multi-time
 cadence for a deliberate visual audit.
+
+UI visual captures run through `tests/ui-visual.cjs`. They use deterministic
+test API fixtures rather than fragile menu key choreography, then save full-page
+screenshots plus 50 percent and 25 percent downscaled couch proxies. This lane
+checks that major UI surfaces exist, are not blank, preserve the expected phase,
+and keep a basic brightness/readability floor. It is a canary for UI drift, not
+a pixel-perfect approval gate.
 
 ## Lanes
 

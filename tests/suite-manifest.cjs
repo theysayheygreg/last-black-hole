@@ -120,6 +120,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "UIPrimitives",
+    file: "ui-primitives.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "Smoke",
     file: "smoke.cjs",
     lanes: ["fast", "core", "browser", "full", "three"],
@@ -219,6 +225,14 @@ const SUITES = [
     browser: true,
     visual: true,
     timeout: 240000,
+  },
+  {
+    name: "UIVisual",
+    file: "ui-visual.cjs",
+    lanes: ["visual", "full", "three"],
+    browser: true,
+    visual: true,
+    timeout: 180000,
   },
 ];
 

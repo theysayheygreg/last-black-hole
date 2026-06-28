@@ -15,8 +15,11 @@ need. Shared primitives give menus and results one role-color/focus/backing
 vocabulary now, while the harness gives future changes a repeatable way to
 check whether the player can read the decision.
 
-**Where it landed:** `docs/project/UI-VISUAL-PASS-PLAN.md` and this decision
-log. Implementation is still pending.
+**Where it landed:** `docs/project/UI-VISUAL-PASS-PLAN.md`, this decision log,
+`src/ui/canvas-primitives.js`, `src/run-results.js`,
+`tests/ui-primitives.cjs`, `tests/ui-visual.cjs`, `tests/suite-manifest.cjs`,
+and `package.json`. The first implementation slice is live for shared canvas
+primitives, result-screen migration, and baseline UI captures.
 
 **Door status:** Closed for the next UI implementation slice. Open later if
 text-heavy menus become painful enough to justify moving them to DOM or another

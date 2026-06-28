@@ -1,0 +1,123 @@
+/**
+ * Canvas UI primitive smoke checks.
+ *
+ * These guard the shared canvas UI vocabulary without judging final art taste.
+ */
+
+const fs = require('fs');
+const path = require('path');
+const { pathToFileURL } = require('url');
+
+const ROOT = path.resolve(__dirname, '..');
+
+class TestRunner {
+  constructor(suiteName) {
+    this.suite = suiteName;
+    this.results = [];
+  }
+  async run(name, fn) {
+    try {
+      await fn();
+      this.results.push({ name, passed: true });
+      console.log(`  PASS: ${name}`);
+    } catch (err) {
+      this.results.push({ name, passed: false, error: err.message });
+      console.log(`  FAIL: ${name}`);
+      console.log(`        ${err.message}`);
+    }
+  }
+  summary() {
+    const passed = this.results.filter((r) => r.passed).length;
+    const failed = this.results.filter((r) => !r.passed).length;
+    console.log(`\n${this.suite}: ${passed} passed, ${failed} failed`);
+    return failed === 0;
+  }
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message || 'Assertion failed');
+}
+
+function createRecordingContext() {
+  const calls = [];
+  const ctx = {
+    calls,
+    save: () => calls.push(['save']),
+    restore: () => calls.push(['restore']),
+    fillRect: (...args) => calls.push(['fillRect', ...args]),
+    strokeRect: (...args) => calls.push(['strokeRect', ...args]),
+    beginPath: () => calls.push(['beginPath']),
+    moveTo: (...args) => calls.push(['moveTo', ...args]),
+    lineTo: (...args) => calls.push(['lineTo', ...args]),
+    stroke: () => calls.push(['stroke']),
+    fillText: (...args) => calls.push(['fillText', ...args]),
+    measureText: (text) => ({ width: String(text).length * 8 }),
+    set fillStyle(value) { calls.push(['fillStyle', value]); },
+    set strokeStyle(value) { calls.push(['strokeStyle', value]); },
+    set lineWidth(value) { calls.push(['lineWidth', value]); },
+    set font(value) { calls.push(['font', value]); this._font = value; },
+    get font() { return this._font || '12px monospace'; },
+    set textAlign(value) { calls.push(['textAlign', value]); },
+    set textBaseline(value) { calls.push(['textBaseline', value]); },
+  };
+  return ctx;
+}
+
+async function run() {
+  console.log('\n=== UI PRIMITIVE TESTS ===\n');
+  const runner = new TestRunner('UIPrimitives');
+  const sourcePath = path.join(ROOT, 'src', 'ui', 'canvas-primitives.js');
+  const source = fs.readFileSync(sourcePath, 'utf8');
+  const mod = await import(pathToFileURL(sourcePath).href);
+
+  await runner.run('Primitive module stays UI-only and stateless', async () => {
+    assert(source.includes("from './design-tokens.js'"), 'Expected token import');
+    assert(source.includes("from './typography.js'"), 'Expected typography import');
+    for (const forbidden of ['../main.js', '../config.js', '../ship.js', '../fluid.js', 'window.', 'document.']) {
+      assert(!source.includes(forbidden), `Primitive kit should not depend on ${forbidden}`);
+    }
+  });
+
+  await runner.run('Role colors and alpha handling are centralized', async () => {
+    assert(mod.withAlpha('#fff', 0.5) === 'rgba(255, 255, 255, 0.500)', 'Short hex alpha failed');
+    assert(mod.withAlpha('#00e2ff', 0.25) === 'rgba(0, 226, 255, 0.250)', 'Hex alpha failed');
+    assert(mod.withAlpha('rgba(1, 2, 3, 0.9)', 0.1) === 'rgba(1, 2, 3, 0.100)', 'RGBA alpha failed');
+    assert(mod.roleColor('danger', 0.5).includes('255, 51, 54'), 'Danger role should map to shared red');
+    assert(mod.roleColor('salvage', 0.5).includes('255, 185, 56'), 'Salvage role should map to shared amber');
+  });
+
+  await runner.run('Text fitting truncates instead of overflowing', async () => {
+    const ctx = createRecordingContext();
+    const fitted = mod.fitUiText(ctx, 'a very long artifact name', 72);
+    assert(fitted.endsWith('...'), `Expected ellipsis suffix, got ${fitted}`);
+    assert(ctx.measureText(fitted).width <= 72, `Fitted text still too wide: ${fitted}`);
+    assert(mod.fitUiText(ctx, 'short', 72) === 'short', 'Short text should remain unchanged');
+    assert(mod.fitUiText(ctx, 'narrow', 24) === '...', 'Narrow text should fall back to suffix only');
+  });
+
+  await runner.run('Core primitives draw against a minimal canvas context', async () => {
+    const ctx = createRecordingContext();
+    mod.drawUiPanel(ctx, { x: 10, y: 12, w: 180, h: 90 }, { title: 'status', role: 'flow' });
+    mod.drawSelectedRow(ctx, { x: 12, y: 40, w: 120, h: 22 }, { role: 'danger' });
+    mod.drawCommandButton(ctx, { x: 20, y: 70, w: 150, h: 34 }, 'continue', { hotkey: 'space' });
+    mod.drawSegmentedGauge(ctx, { x: 20, y: 120, w: 160, h: 8 }, { value: 6, max: 10, segments: 10 });
+    mod.drawWarningStrip(ctx, { x: 20, y: 140, w: 220, h: 46 }, { title: 'collapse', body: 'the exits are closing' });
+    mod.drawStatusPill(ctx, { x: 160, y: 210, w: 90, h: 20 }, '10x10');
+    mod.drawSectionLabel(ctx, 'summary', 20, 245);
+    mod.drawKeyValueRow(ctx, 'earned', '240 EM', 20, 270);
+
+    assert(ctx.calls.some((call) => call[0] === 'fillRect'), 'Expected fillRect calls');
+    assert(ctx.calls.some((call) => call[0] === 'strokeRect'), 'Expected strokeRect calls');
+    assert(ctx.calls.some((call) => call[0] === 'fillText'), 'Expected fillText calls');
+    assert(ctx.calls.some((call) => call[0] === 'font' && String(call[1]).includes('Monaspace')),
+      'Expected shared canvas font usage');
+  });
+
+  const allPassed = runner.summary();
+  process.exit(allPassed ? 0 : 1);
+}
+
+run().catch((err) => {
+  console.error('UIPrimitives fatal error:', err.message);
+  process.exit(1);
+});

@@ -895,6 +895,28 @@ function init() {
         deathTimer = death;
         escapeTimer = escape;
       },
+      setTitleTimerForTest: (value) => {
+        titleTimer = Math.max(0, Number(value) || 0);
+        return titleTimer;
+      },
+      setProfileCursorForTest: (index) => {
+        profileCursor = Math.max(0, Math.min(2, Math.round(Number(index) || 0)));
+        return profileCursor;
+      },
+      setHomeTabForTest: (index) => {
+        const count = HOME_TABS.length || 1;
+        homeTab = ((Math.round(Number(index) || 0) % count) + count) % count;
+        return homeTab;
+      },
+      setMapSelectIndexForTest: (index) => {
+        const count = MAP_LIST.length || 1;
+        mapSelectIndex = ((Math.round(Number(index) || 0) % count) + count) % count;
+        return mapSelectIndex;
+      },
+      setPreviewSeedForTest: (seed) => {
+        previewSeed = Math.max(1, Math.floor(Number(seed) || 1));
+        return previewSeed;
+      },
       get inventoryOpen() { return inventoryOpen; },
       setInventoryOpenForTest: (open) => {
         inventoryOpen = Boolean(open);

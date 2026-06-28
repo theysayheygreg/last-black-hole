@@ -1,4 +1,16 @@
 import { canvasFont } from './ui/typography.js';
+import {
+  drawCommandButton,
+  drawKeyValueRow,
+  drawScanlines,
+  drawSectionLabel,
+  drawSelectedRow,
+  drawStatusPill,
+  drawUiPanel,
+  fitUiText,
+  roleColor,
+  withAlpha,
+} from './ui/canvas-primitives.js';
 
 const INHIBITOR_FORMS = ['dormant', 'glitch', 'swarm', 'vessel'];
 
@@ -111,64 +123,6 @@ export function buildRunResultsViewModel({
   };
 }
 
-function withAlpha(color, alpha) {
-  return color.replace(/[\d.]+\)$/, `${clamp01(alpha).toFixed(3)})`);
-}
-
-function drawScanlines(ctx, w, h, alpha = 0.035) {
-  ctx.save();
-  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-  for (let y = 0; y < h; y += 4) ctx.fillRect(0, y, w, 1);
-  ctx.restore();
-}
-
-function drawFrame(ctx, x, y, w, h, color) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x, y, w, h);
-  ctx.fillStyle = color;
-  ctx.fillRect(x, y, 42, 1);
-  ctx.fillRect(x + w - 42, y + h - 1, 42, 1);
-  ctx.fillRect(x, y, 1, 42);
-  ctx.fillRect(x + w - 1, y + h - 42, 1, 42);
-  ctx.restore();
-}
-
-function drawSectionLabel(ctx, text, x, y, color) {
-  ctx.save();
-  ctx.textAlign = 'left';
-  ctx.fillStyle = color;
-  ctx.font = canvasFont(11, { weight: 'bold' });
-  ctx.fillText(`-- ${text} --`, x, y);
-  ctx.restore();
-}
-
-function drawKeyValue(ctx, key, value, x, y, alpha = 1) {
-  ctx.save();
-  ctx.textAlign = 'left';
-  ctx.font = canvasFont(12);
-  ctx.fillStyle = `rgba(130, 150, 175, ${0.75 * alpha})`;
-  ctx.fillText(key, x, y);
-  ctx.fillStyle = `rgba(218, 226, 236, ${0.9 * alpha})`;
-  ctx.fillText(value, x + 122, y);
-  ctx.restore();
-}
-
-function drawStatusPill(ctx, text, x, y, color, alpha = 1) {
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.font = canvasFont(10, { weight: 'bold' });
-  const width = Math.max(68, text.length * 7 + 16);
-  ctx.fillStyle = withAlpha(color, 0.13 * alpha);
-  ctx.fillRect(x - width / 2, y - 11, width, 18);
-  ctx.strokeStyle = withAlpha(color, 0.32 * alpha);
-  ctx.strokeRect(x - width / 2, y - 11, width, 18);
-  ctx.fillStyle = withAlpha(color, 0.82 * alpha);
-  ctx.fillText(text, x, y + 2);
-  ctx.restore();
-}
-
 export function drawRunResultsOverlay(ctx, canvas, {
   view,
   rawTime = 0,
@@ -181,8 +135,8 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const cx = w / 2;
   const cy = h / 2;
   const success = view.tone === 'extract';
-  const accent = success ? 'rgba(98, 242, 165, 0.92)' : 'rgba(232, 25, 0, 0.92)';
-  const dimAccent = success ? 'rgba(98, 242, 165, 0.22)' : 'rgba(232, 25, 0, 0.18)';
+  const role = success ? 'extract' : 'danger';
+  const accent = roleColor(role, 0.95);
   const lingerFrac = clamp01(rawTime / lingerDuration);
   const dimEase = lingerFrac * lingerFrac * (3 - 2 * lingerFrac);
   const overlayAlpha = lingerFrac < 1 ? dimEase * 0.55 : 0.55 + Math.min(0.2, (rawTime - lingerDuration) * 0.6);
@@ -205,11 +159,16 @@ export function drawRunResultsOverlay(ctx, canvas, {
   }
 
   drawScanlines(ctx, w, h, 0.026);
-  const panelW = Math.min(680, w - 72);
-  const panelH = Math.min(460, h - 70);
+  const panelW = Math.min(780, w - 64);
+  const panelH = Math.min(500, h - 56);
   const panelX = cx - panelW / 2;
   const panelY = cy - panelH / 2;
-  drawFrame(ctx, panelX, panelY, panelW, panelH, dimAccent);
+  drawUiPanel(ctx, { x: panelX, y: panelY, w: panelW, h: panelH }, {
+    role,
+    fillAlpha: 0.68,
+    borderAlpha: 0.26,
+    cornerLength: 46,
+  });
 
   ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
   ctx.shadowBlur = 14;
@@ -217,66 +176,77 @@ export function drawRunResultsOverlay(ctx, canvas, {
 
   const titleAlpha = clamp01((reveal - 0.15) * 2.5);
   ctx.fillStyle = withAlpha(accent, titleAlpha);
-  ctx.font = canvasFont(34, { role: 'display', weight: '700' });
-  ctx.fillText(view.status, cx, panelY + 48);
+  ctx.font = canvasFont(success ? 38 : 42, { role: 'display', weight: '800' });
+  ctx.fillText(fitUiText(ctx, view.status, panelW - 72), cx, panelY + 58);
 
-  ctx.fillStyle = `rgba(150, 165, 188, ${0.72 * clamp01((reveal - 0.35) * 2)})`;
-  ctx.font = canvasFont(12);
-  ctx.fillText(success ? 'you made it through the aperture' : 'this is what the universe kept', cx, panelY + 70);
+  ctx.fillStyle = roleColor('muted', 0.78 * clamp01((reveal - 0.35) * 2));
+  ctx.font = canvasFont(13);
+  ctx.fillText(success ? 'you made it through the aperture' : 'this is what the universe kept', cx, panelY + 84);
 
   const contentAlpha = clamp01((reveal - 0.65) * 2);
   const leftX = panelX + 34;
-  const rightX = panelX + panelW / 2 + 26;
+  const rightX = panelX + panelW / 2 + 34;
   const mapLabel = view.mapContext.mapId ? String(view.mapContext.mapId).toUpperCase() : 'UNKNOWN MAP';
-  drawStatusPill(ctx, mapLabel, cx - 95, panelY + 92, accent, contentAlpha);
-  drawStatusPill(ctx, `${view.cargoCount} CARGO`, cx, panelY + 92, accent, contentAlpha);
-  drawStatusPill(ctx, `${view.emEarned} EM`, cx + 95, panelY + 92, accent, contentAlpha);
+  drawStatusPill(ctx, { x: cx - 122, y: panelY + 112, w: 102, h: 22 }, mapLabel, { role, alpha: contentAlpha });
+  drawStatusPill(ctx, { x: cx, y: panelY + 112, w: 102, h: 22 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
+  drawStatusPill(ctx, { x: cx + 122, y: panelY + 112, w: 102, h: 22 }, `${view.emEarned} EM`, { role: 'salvage', alpha: contentAlpha });
 
-  let y = panelY + 126;
+  let y = panelY + 154;
 
-  drawSectionLabel(ctx, 'RUN SUMMARY', leftX, y, withAlpha(accent, 0.72 * contentAlpha));
+  drawSectionLabel(ctx, 'RUN SUMMARY', leftX, y, { role, alpha: contentAlpha });
   y += 25;
-  drawKeyValue(ctx, 'survival', view.survival, leftX, y, contentAlpha);
+  drawKeyValueRow(ctx, 'survival', view.survival, leftX, y, { alpha: contentAlpha });
   y += 18;
-  drawKeyValue(ctx, 'signal peak', view.signalPeakLabel, leftX, y, contentAlpha);
+  drawKeyValueRow(ctx, 'signal peak', view.signalPeakLabel, leftX, y, { alpha: contentAlpha, valueRole: 'flow' });
   y += 18;
-  drawKeyValue(ctx, 'inhibitor', view.inhibitorLabel, leftX, y, contentAlpha);
+  drawKeyValueRow(ctx, 'inhibitor', view.inhibitorLabel, leftX, y, { alpha: contentAlpha, valueRole: 'inhibitor' });
   y += 18;
   if (view.wellsVisited != null) {
-    drawKeyValue(ctx, 'wells visited', String(view.wellsVisited), leftX, y, contentAlpha);
+    drawKeyValueRow(ctx, 'wells visited', String(view.wellsVisited), leftX, y, { alpha: contentAlpha });
     y += 18;
   }
   if (view.deathCause) {
     y += 8;
-    drawKeyValue(ctx, 'cause', view.deathCause, leftX, y, contentAlpha);
+    drawKeyValueRow(ctx, 'cause', view.deathCause, leftX, y, { alpha: contentAlpha, valueRole: 'danger' });
     y += 18;
   }
 
   y += 18;
-  drawSectionLabel(ctx, 'EARNINGS', leftX, y, withAlpha(accent, 0.72 * contentAlpha));
+  drawSectionLabel(ctx, 'EARNINGS', leftX, y, { role: 'salvage', alpha: contentAlpha });
   y += 25;
-  drawKeyValue(ctx, 'earned', `${view.emEarned} EM`, leftX, y, contentAlpha);
+  drawKeyValueRow(ctx, 'earned', `${view.emEarned} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'salvage' });
   y += 18;
   if (view.deathTax > 0) {
-    drawKeyValue(ctx, 'tax', `-${view.deathTax} EM`, leftX, y, contentAlpha);
+    drawKeyValueRow(ctx, 'tax', `-${view.deathTax} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'danger' });
   }
 
-  let ry = panelY + 126;
-  drawSectionLabel(ctx, view.cargoTitle, rightX, ry, withAlpha(accent, 0.72 * contentAlpha));
+  let ry = panelY + 154;
+  drawSectionLabel(ctx, view.cargoTitle, rightX, ry, { role: success ? 'salvage' : 'danger', alpha: contentAlpha });
   ry += 24;
-  drawKeyValue(ctx, 'manifest', `${view.cargoCount} items / ${view.cargoValue} EM`, rightX, ry, contentAlpha);
+  drawKeyValueRow(ctx, 'manifest', `${view.cargoCount} items / ${view.cargoValue} EM`, rightX, ry, {
+    alpha: contentAlpha,
+    valueRole: success ? 'salvage' : 'danger',
+  });
   ry += 22;
   ctx.textAlign = 'left';
   ctx.font = canvasFont(12);
   const cargoLines = view.cargoLabels.length > 0 ? view.cargoLabels.slice(0, 6) : ['[ empty ]'];
   for (let i = 0; i < cargoLines.length; i++) {
-    ctx.fillStyle = success ? `rgba(225, 232, 220, ${0.85 * contentAlpha})` : `rgba(170, 118, 118, ${0.8 * contentAlpha})`;
-    ctx.fillText(cargoLines[i].slice(0, 36), rightX, ry);
+    drawSelectedRow(ctx, { x: rightX - 6, y: ry - 13, w: panelW / 2 - 64, h: 18 }, {
+      role: success ? 'salvage' : 'danger',
+      active: cargoLines[i] !== '[ empty ]',
+      alpha: contentAlpha,
+      fillAlpha: success ? 0.075 : 0.09,
+      borderAlpha: success ? 0.14 : 0.22,
+      railWidth: 2,
+    });
+    ctx.fillStyle = success ? roleColor('text', 0.85 * contentAlpha) : roleColor('danger', 0.72 * contentAlpha);
+    ctx.fillText(fitUiText(ctx, cargoLines[i], panelW / 2 - 82), rightX, ry);
     if (!success && cargoLines[i] !== '[ empty ]') {
-      ctx.strokeStyle = `rgba(232, 25, 0, ${0.45 * contentAlpha})`;
+      ctx.strokeStyle = roleColor('danger', 0.45 * contentAlpha);
       ctx.beginPath();
       ctx.moveTo(rightX, ry - 4);
-      ctx.lineTo(rightX + Math.min(245, cargoLines[i].length * 7), ry - 4);
+      ctx.lineTo(rightX + Math.min(panelW / 2 - 90, cargoLines[i].length * 7), ry - 4);
       ctx.stroke();
     }
     ry += 18;
@@ -285,23 +255,30 @@ export function drawRunResultsOverlay(ctx, canvas, {
   ry += 14;
   const notableLines = [...view.notableLines];
   if (view.aiLines.length > 0) notableLines.push(...view.aiLines);
-  drawSectionLabel(ctx, 'NOTABLE', rightX, ry, withAlpha(accent, 0.72 * contentAlpha));
+  drawSectionLabel(ctx, 'NOTABLE', rightX, ry, { role, alpha: contentAlpha });
   ry += 24;
   ctx.font = canvasFont(11);
-  ctx.fillStyle = `rgba(172, 186, 205, ${0.82 * contentAlpha})`;
+  ctx.fillStyle = roleColor('muted', 0.84 * contentAlpha);
   const lines = notableLines.length > 0 ? notableLines.slice(0, 5) : ['no unusual telemetry'];
   for (const line of lines) {
-    ctx.fillText(String(line).slice(0, 42), rightX, ry);
+    ctx.fillText(fitUiText(ctx, line, panelW / 2 - 72), rightX, ry);
     ry += 16;
   }
 
   const promptAlpha = clamp01((reveal - 2.0) * 2);
   if (promptAlpha > 0) {
-    const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.35;
-    ctx.textAlign = 'center';
-    ctx.font = canvasFont(16);
-    ctx.fillStyle = `rgba(210, 220, 235, ${(promptAlpha * blink).toFixed(3)})`;
-    ctx.fillText('press space to continue', cx, panelY + panelH - 28);
+    const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.65;
+    drawCommandButton(ctx, {
+      x: cx - 150,
+      y: panelY + panelH - 56,
+      w: 300,
+      h: 34,
+    }, 'continue', {
+      hotkey: 'space',
+      role,
+      active: true,
+      alpha: promptAlpha * blink,
+    });
   }
 
   ctx.restore();
