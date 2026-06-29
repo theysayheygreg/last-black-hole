@@ -44,8 +44,8 @@ short note about what changed in player-facing terms.
 | Threats | Signal, Inhibitor, rivals/scavengers, fauna/sentry foundations, phantoms/haunts | Tune Inhibitor timing and signal readability; pick strongest ecology behaviors | Full entity catalog and richer multiplayer threat interactions |
 | Hulls | Five hulls, manifests, PlayerBrain, ability state, several server ability behaviors | Playtest ability feel and cooldowns; improve HUD cues | More artifacts, exclusive builds, no-respec pilot identity |
 | Progression | Profiles, vault, item tiers, rig tracks defined, partial upgrade flow | Complete upgrade purchase/write-back and balance EM economy | Milestones, unlocks, pilots, long-term chronicle |
-| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, shared canvas primitive kit, result-screen migration, title-attract first slice, UI visual harness, UI motion/VFX bridge, shared UI motion kit, and reduced-motion title coverage | Continue profile/home/map-select/HUD/pause composition migration; tighten couch/Deck thresholds after more surfaces settle | Full accessibility pass, motion clips, and final primitive cleanup |
-| VFX | Event-driven Three VFX plan exists; UI motion emits VFX only for approved beats, with UI retaining truth; the first bounded `VfxManager` and title glyph-fault prototype are live | Review title VFX motion in clips; add ship motion, portal/pickup, and Inhibitor faults one family at a time | Instanced particles, screen-space shader impulses, lens impulses, and richer capture-quality tiers |
+| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, shared canvas primitive kit, result-screen migration, title-attract first slice, UI visual harness, UI motion/VFX bridge, shared UI motion kit, and reduced-motion title coverage | Home + map-select static composition/contrast first; enforce readability-before-motion, then continue HUD/pause/profile cleanup | Full accessibility pass, motion clips, and final primitive cleanup |
+| VFX | Event-driven Three VFX plan exists; UI motion emits VFX only for approved beats, with UI retaining truth; the first bounded `VfxManager` and title glyph-fault prototype are live | Tune title VFX in clips; after Home/Map readability, combine player ship silhouette/contact matte with thrust/brake VFX | Portal/pickup/Inhibitor families, instanced particles, screen-space shader impulses, lens impulses, and richer capture-quality tiers |
 | Audio | Audio engine/toolkit foundations | Define final sonic palette for movement/signal/Inhibitor | Dynamic score and full mix hierarchy |
 | Testing | Fast/core/authority/three lanes; visual fixtures; CDP driver; UI motion helper suite; UI visual reduced-motion capture | Add more representative playtest scripts, renderer semantic checks, and motion-clip review | Public release smoke, hosted-session CI, perf budgets per device |
 | Public presence | Public overview doc exists; website/social not built | Prepare public copy, screenshots, clips, and a playable build page | Itch/Steam-style page, devlog cadence, hosted demo |
@@ -142,6 +142,9 @@ palette as the Three entity pass.
   collapse, portal transitions, and Inhibitor-owned UI faults may emit
   renderer-neutral VFX accents; normal prompts, timers, fuel, cargo, and
   controller hints stay clean.
+- Composition and token brightening must land on a screen before more motion
+  polish is added to it. The 2026-06-28 Orrery review names Home and Map Select
+  as the current drift points.
 - Use the shipped `npm run test:ui` lane for UI states, Deck-scale judgment,
   couch-test proxy review, and reduced-motion title coverage. Use
   `tests/ui-motion.cjs` for cheap helper-level timing coverage.
@@ -164,8 +167,11 @@ renderer-neutral VFX without moving gameplay truth into particles or shaders.
   prototype from measured canvas title-glyph positions.
 - Review and tune the title VFX motion from short clips; still captures only
   prove layer presence and contrast.
-- Follow with ship thrust/brake, portal/extraction, pickup glints, and
-  Inhibitor event faults.
+- Follow with a combined player ship slice: silhouette/contact matte plus
+  thrust/brake VFX, because the player read and movement VFX target the same
+  object and the same couch-scale gap.
+- Portal/extraction, pickup glints, and Inhibitor event faults follow after the
+  player ship slice.
 - Capture short clips for timing review; use still/UI harness captures for
   readability.
 

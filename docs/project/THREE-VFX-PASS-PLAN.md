@@ -185,6 +185,11 @@ Implementation order:
    still read without motion.
 5. Review motion with clips and readability with stills/couch proxies.
 
+Do not add motion or VFX to a screen that fails its static read. Orrery's
+2026-06-28 review flagged Home and Map Select as having motion polish before the
+composition/token-brightening pass; those screens should be fixed before more UI
+VFX families are added.
+
 ## Proposed File Shape
 
 Start small and keep the first kit vanilla ES modules:
@@ -227,6 +232,16 @@ Status: first title slice live.
   without pretending those staged frames are representative gameplay.
 - `tests/vfx.cjs` covers event shape, bounded spawning, expiry/recycling, and
   `vfx.enabled=false` cleanup.
+
+Next sequencing:
+
+- tune title corruption from short clips before escalating it into particles or
+  shaders;
+- hold new world VFX families until Home/Map static readability is back on the
+  roadmap rails;
+- schedule player ship silhouette/contact matte and thrust/brake VFX as one
+  combined "player ship" slice, because the same couch-readability gap owns both
+  the entity visual and movement VFX work.
 
 ## Layer Placement
 

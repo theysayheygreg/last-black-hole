@@ -137,8 +137,9 @@ tooltip or more explanatory copy to compensate for a weak first read.
   by dimming the whole scene.
 - Side-aligned title variants should keep generous top, side, and bottom
   gutters so the wordmark reads from a couch while leaving the warmed well and
-  colorscape visible. The comparison set is center, left, right, and a left UI
-  variant with the title camera panned so the well sits opposite the copy.
+  colorscape visible. Plain-left is the current shipped v0.2 default; center and
+  right are reference/archive variants, and opposite-left remains the live taste
+  challenger if Greg wants the wordmark on darker backing.
 - Pink title corruption should flicker in only during those title faults;
   cyan/flow stays reserved for stable framing, CTA, and system readouts.
 - The title environment should behave like an old attract loop: a larger
@@ -174,6 +175,8 @@ tooltip or more explanatory copy to compensate for a weak first read.
   abilities.
 - Bars and icons should remain readable if labels are hidden.
 - Warning panels can punch into the field briefly, then leave.
+- Zone, signature, and event callouts over moving fabric need local backing and
+  should dock away from exact center unless the message is a true emergency.
 
 ### Results
 
@@ -213,3 +216,8 @@ The current renderer harness already validates object readability through
 
 This should supplement, not replace, real playtests. A UI can pass contrast and
 still feel noisy during movement.
+
+Automated thresholds should follow composition work. Once Home and Map Select
+finish their static pass, selected action and primary value regions should fail
+the UI lane when they fall under the contrast/readability floor; before that,
+the same measurements are useful review telemetry rather than hard art approval.

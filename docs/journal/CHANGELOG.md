@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-06-28 — Orrery visual review integration
+
+- Wrote the Orrery visual review prompt and captured Orrery's response under
+  `docs/project/reviews/`.
+- Integrated the low-risk review findings: wreck telemetry labels now dedupe
+  nearby repeated cluster names, and the run signature callout is edge-docked
+  with local backing instead of lingering dead-center over the playfield.
+- Updated UI/VFX roadmaps, the decision log, and harness docs to lock in
+  readability-before-motion sequencing: Home and Map Select static composition
+  come before more screen motion or new VFX families.
+- Recorded the current title truth: plain-left is the shipped v0.2 default,
+  while opposite-left remains a review challenger for Greg's taste call.
+
 ## 2026-06-28 — UI motion forge pass
 
 - Ran a Forge review pass on the shared UI motion layer, its first production

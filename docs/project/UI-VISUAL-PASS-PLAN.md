@@ -122,10 +122,10 @@ First bridge status:
 
 | Surface | Current Owner | Target Reference | Couch-Critical Reads | Current Gap |
 |---------|---------------|------------------|----------------------|-------------|
-| Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | attract-mode slice and side-aligned comparison layouts shipped; final default layout still needs review |
+| Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | plain-left is the shipped v0.2 default; opposite-left remains a taste challenger for Greg's review |
 | Profile Select | `src/main.js` | follows title language | selected profile, load/create/delete, destructive state | first motion pass shipped; danger/delete composition still needs stronger treatment |
-| Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | first motion pass shipped; composition is still centered terminal/dense copy |
-| Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | first motion pass shipped; preview is still secondary to list data |
+| Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | first motion pass shipped; Orrery review flags this as the weakest static read and next composition priority |
+| Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | first motion pass shipped; right panel must brighten now, map preview still needs promotion |
 | In-Match HUD | `index-a.html`, `src/hud.js` | `in-match-hud.png` | fuel, hull, signal, cargo, exits, warning, active ability | edge reads need stronger icon/bar hierarchy and better backing |
 | Pause | `src/main.js` | shared command overlay | paused state, resume, settings, abandon | first motion pass shipped; needs command-panel composition cleanup |
 | Results / Run Report | `src/run-results.js` | `post-match-results.png` | outcome, cause/reward, cargo accounting, earnings, continue | primitives and motion shipped; still needs final theatrical layout review |
@@ -142,12 +142,12 @@ size, with lower-priority system readouts allowed as texture. The selected item
 gets cyan/flow focus, while destructive or unavailable states stay out of the
 default title read.
 
-The current comparison set should be captured before choosing the final title
-composition: centered baseline, left-aligned UI, right-aligned UI, and
-left-aligned UI with the title camera shifted so the well reads on the opposite
-side. All variants use the same local backing and safe gutters. The wordmark's
-base state stays clean; Inhibitor-pink corruption appears only in short
-deterministic glyph-overlay bursts so the comparison is about composition
+Plain-left is the current shipped v0.2 title layout. Center and right variants
+are archive/reference fixtures; opposite-left stays as a taste challenger
+because it gives the wordmark darker backing and stages the void/rift depth
+differently. All variants use the same local backing and safe gutters. The
+wordmark's base state stays clean; Inhibitor-pink corruption appears only in
+short deterministic glyph-overlay bursts so the comparison is about composition
 rather than styling. Treat title corruption as an animation layer: the source
 label remains clean, while intensity controls how many glyph slots flicker and
 how rapidly they swap.
@@ -186,6 +186,10 @@ ability state should read as shape/bar/icon first and text second. Any text
 over moving fabric needs local backing. Inhibitor corruption can appear only on
 Inhibitor-owned labels and warnings, and must remain bounded by the existing
 corruption config.
+
+Zone/signature/event callouts over the playfield must punch in, read, and leave.
+They need a local matte/backing, should avoid exact center unless they are true
+emergency warnings, and should not linger over the well or the player's route.
 
 ### Pause
 
@@ -230,6 +234,11 @@ The lane should:
 
 This lane should not assert pixel-perfect art. It should answer "can the player
 read the decision?" and leave taste to playtest/review.
+
+As Home and Map Select receive their composition pass, promote selected-action
+and primary-value region samples from soft telemetry to hard checks. Do not
+tighten broad art thresholds before the static screen composition has actually
+landed.
 
 ## Pass 0 - Direction Package
 
@@ -342,7 +351,7 @@ Shipped title slice:
 
 ## Pass 4 - Home / Main Menu
 
-Status: main composition pass.
+Status: next composition priority after the 2026-06-28 Orrery visual review.
 
 Tasks:
 
@@ -354,6 +363,8 @@ Tasks:
 Acceptance:
 
 - selected tab and next action are readable at couch distance;
+- central ship/readiness uses the same silhouette/contact-matte language as the
+  world entity pass;
 - ship/vault/rig/chronicle/launch are visually distinct without relying on
   paragraph copy;
 - inventory rows still handle long item names without overflowing;
@@ -362,11 +373,13 @@ Acceptance:
 
 ## Pass 5 - Pre-Match / Map Select
 
-Status: needs composition redesign.
+Status: needs immediate brightening plus the later hero-preview redesign.
 
 Tasks:
 
 - make the map preview the hero surface;
+- brighten the seed/loot/details panel before the full preview pass so selected
+  sector, risk, value, and launch readiness meet the existing contrast contract;
 - use route colors from the world role palette;
 - show risk, signal pressure, expected run shape, hull, cargo objective, and
   launch readiness in a consistent hierarchy;
@@ -469,11 +482,12 @@ Shipped slice:
 4. Partly done: migrate title and profile select. Title hierarchy and first
    motion language shipped; destructive profile focus still needs composition
    work.
-5. Partly done: migrate home/main menu. Motion language shipped, but this is
-   still the largest remaining composition pass.
-6. Partly done: migrate pre-match/map select. Motion language shipped; the map
-   preview still needs promotion and stronger route semantics.
-7. Migrate the in-match HUD. Keep this last because gameplay clarity needs
+5. Next: migrate home/main menu static composition and token brightening.
+   Motion language is already present; stop adding more motion here until the
+   ship/readiness center and LAUNCH read at couch distance.
+6. Then: migrate pre-match/map select static composition. Brighten the current
+   right panel immediately, then promote the map preview and route semantics.
+7. Migrate the in-match HUD. Keep this after Home/Map because gameplay clarity needs
    live playtest after the menu language settles.
 8. Tighten harness thresholds after at least three screens have landed. Avoid
    failing future art exploration on premature pixel assumptions.

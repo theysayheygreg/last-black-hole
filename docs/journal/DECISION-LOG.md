@@ -1,5 +1,28 @@
 # Decision Log
 
+## 2026-06-28 — UI readability lands before more motion polish
+
+**Decision:** Treat static composition, token brightness, local backing, and
+couch readability as prerequisites for additional UI motion or VFX on a screen.
+Plain-left remains the shipped v0.2 title layout, while opposite-left stays as a
+comparison/taste challenger. The next UI visual slice is Home, then Map Select;
+new VFX families wait until those per-loop surfaces read clearly.
+
+**Why:** Orrery's visual review agreed that the visual direction holds, but
+flagged sequencing drift: title and results received real composition work,
+while Home and Map Select received timing polish over weaker static reads. Motion
+can sell a surface that already reads, but it cannot rescue dim actions,
+unbacked text over fabric, or missing hierarchy.
+
+**Where it landed:** `docs/project/reviews/2026-06-28-orrery-visual-review.md`,
+`docs/design/UI-VISUAL-SYSTEM.md`,
+`docs/project/UI-VISUAL-PASS-PLAN.md`,
+`docs/project/THREE-VFX-PASS-PLAN.md`, `docs/v0.2/ROADMAP.md`,
+`docs/project/ROADMAP.md`, and the UI harness docs.
+
+**Door status:** Closed for ordering. Open for Greg's taste call on whether
+plain-left or opposite-left becomes the long-term title composition.
+
 ## 2026-06-28 — v0.2 roadmap uses reviewable slices
 
 **Decision:** Organize the next v0.2 work around six reviewable slices instead

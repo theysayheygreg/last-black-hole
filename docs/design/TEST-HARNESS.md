@@ -182,6 +182,12 @@ events can change without regressing the couch read, plus a reduced-motion title
 capture so accessibility fallback state stays visible in the review bundle. It is
 a canary for UI drift, not a pixel-perfect approval gate.
 
+As each major screen receives its static composition pass, promote its
+selected-action and primary-value regions from review telemetry to hard UI-lane
+checks. Home and Map Select are next in line; until their composition lands, keep
+their samples visible in manifests/captures without using broad pixel thresholds
+as a false art-direction verdict.
+
 ## Lanes
 
 | Lane | What Belongs Here | What Does Not |

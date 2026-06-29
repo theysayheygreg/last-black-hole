@@ -61,11 +61,11 @@ reading stale health records or reconstructing status from `git log`.
 | Three entity visual language | `docs/design/THREE-ENTITY-VISUALS.md` | Designed 2026-06-26; current code has primitive bridge markers, next work is higher-fidelity Three object families |
 | Three scene visual hierarchy | `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md` | Designed 2026-06-26; black void remains primary, but interactive objects require bright contrast affordances, mattes, halos, or local backplates |
 | Three entity visual pass plan | `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` | Designed 2026-06-26; implementation starts with shared style kit, matte/rim proof on existing primitives, player asset bake-off, portal replacement, wreck replacement, and renderer fixture coverage |
-| Three VFX pass plan | `docs/project/THREE-VFX-PASS-PLAN.md` | Designed 2026-06-28; build rich Three effects now behind renderer-neutral VFX events so title corruption, ship motion, portals, pickups, and Inhibitor faults can port later without putting gameplay truth in particles |
+| Three VFX pass plan | `docs/project/THREE-VFX-PASS-PLAN.md` | Designed 2026-06-28; first title glyph-fault slice is live. Next VFX work is title-clip tuning, then a combined player ship silhouette/contact-matte + thrust/brake slice after Home/Map static readability lands. |
 | Three entity mood board | `docs/reference/THREE-ENTITY-MOODBOARD.md` | Designed 2026-06-26; cited references and generated target visuals for 2D identity inside staged 3D depth |
 | UI visual system | `docs/design/UI-VISUAL-SYSTEM.md` | Designed 2026-06-28; current contrast, sizing, color-role, and couch-test contract for title, home, map select, HUD, and results |
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
-| UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared canvas primitives, UI primitive smoke test, run-results migration, title-attract first slice, baseline UI visual harness, shared UI motion kit, reduced-motion title coverage, and UI motion/VFX bridge are live. Remaining work is profile/home/map/HUD/pause composition migration and tighter thresholds. |
+| UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared primitives, result/title slices, UI visual harness, shared motion kit, reduced-motion coverage, and UI motion/VFX bridge are live. Orrery review makes Home + Map Select static composition/contrast the next priority before more screen motion. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -82,7 +82,8 @@ capture, or compare.
 1. **Attract Mode + UI/VFX Identity** — title layout, corruption behavior, UI
    motion language, and first event-driven Three VFX. Current slice: pooled
    `VfxManager`, `screen-vfx-layer`, `titleGlyphFault` events, title VFX
-   fixtures, `src/ui/motion.js`, and first-pass title/menu/result motion.
+   fixtures, `src/ui/motion.js`, and first-pass title/menu/result motion. Next:
+   Home + Map Select static readability before more motion polish.
 2. **Feel + Route Pass** — slingshot/speed tuning, map route redesign, spawn
    safety, and remote/local movement parity checks.
 3. **Entity Visual Language** — replace bridge primitives for ships, stars,
@@ -120,6 +121,9 @@ capture, or compare.
   extraction, collapse, portal transitions, and Inhibitor UI faults may emit
   Three VFX accents below or around clean UI. The shipped first pass is
   `src/ui/motion.js` plus reduced-motion/config/test harness coverage.
+- Readability precedes timing. If a screen fails its static selected-action,
+  primary-value, or local-backing read, brighten and compose it before adding
+  new motion or VFX. The current ordered targets are Home, then Map Select.
 - The current scene hierarchy target is
   `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`: the void stays black and
   dominant, the ASCII fabric stays the gameplay ocean, and entities get explicit

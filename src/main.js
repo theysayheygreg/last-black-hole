@@ -68,6 +68,7 @@ import { HULL_DEFINITIONS } from './content/hulls.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
 import {
   drawCornerFrame,
+  drawUiPanel,
   drawScanlines as drawUiScanlines,
   fitUiText,
   roleColor,
@@ -4867,20 +4868,28 @@ function gameLoop(now) {
         ctx.fillText(p.name, sx, sy + 16);
       }
 
-      // Wrecks — name + item count, type-colored
+      // Wrecks — cluster labels dedupe nearby fragments so telemetry reads as one contact.
+      const renderedWreckLabels = [];
       for (const wreck of wreckSystem.wrecks) {
         if (!wreck.alive) continue;
         const dist = worldDistance(ship.wx, ship.wy, wreck.wx, wreck.wy);
         const a = labelAlpha(dist);
         if (a <= 0) continue;
         const [sx, sy] = worldToScreen(wreck.wx, wreck.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
+        const label = wreck.name || (wreck.isEcho ? 'echo wreck' : `${wreck.type || 'wreck'} contact`);
+        const labelKey = label.toLowerCase();
+        const duplicateNearbyLabel = renderedWreckLabels.some((rendered) => (
+          rendered.key === labelKey && Math.hypot(rendered.sx - sx, rendered.sy - sy) < 170
+        ));
+        if (duplicateNearbyLabel) continue;
+        renderedWreckLabels.push({ key: labelKey, sx, sy });
+
         let color;
         if (wreck.type === 'vault') color = `rgba(255, 215, 60, ${a * 0.7})`;
         else if (wreck.type === 'debris') color = `rgba(180, 140, 80, ${a * 0.6})`;
         else color = `rgba(160, 180, 200, ${a * 0.6})`;
         ctx.font = canvasFont(10);
         ctx.fillStyle = color;
-        const label = wreck.name || (wreck.isEcho ? 'echo wreck' : `${wreck.type || 'wreck'} contact`);
         const itemText = wreck.looted ? '' : ` (${wreck.loot.length})`;
         ctx.fillText(label + itemText, sx, sy + 18);
       }
@@ -4968,33 +4977,42 @@ function gameLoop(now) {
       ctx.restore();
     }
 
-    // Signature display — first 4 seconds of run
-    if (currentSignature && simState.runElapsedTime < 4.0) {
-      const cx = overlayCanvas.width / 2;
-      const cy = overlayCanvas.height * 0.3;
-      const fadeIn = Math.min(simState.runElapsedTime / 0.5, 1);
-      const fadeOut = simState.runElapsedTime > 3.0 ? 1 - (simState.runElapsedTime - 3.0) : 1;
-      const alpha = fadeIn * fadeOut;
+    // Signature display — transient and edge-docked so it does not cover the well/fabric read.
+    if (currentSignature && simState.runElapsedTime < 3.0) {
+      const elapsed = simState.runElapsedTime;
+      const fadeIn = Math.min(elapsed / 0.35, 1);
+      const fadeOut = elapsed > 2.1 ? 1 - ((elapsed - 2.1) / 0.9) : 1;
+      const alpha = Math.max(0, fadeIn * fadeOut);
+      const margin = Math.max(28, overlayCanvas.width * 0.055);
+      const panelW = Math.min(520, overlayCanvas.width - margin * 2);
+      const panelX = Math.min(Math.max(230, overlayCanvas.width * 0.18), overlayCanvas.width - panelW - margin);
+      const panelY = Math.max(86, overlayCanvas.height * 0.12);
+      const panelH = 88;
+      const textX = panelX + 18;
+      const textW = panelW - 36;
 
       ctx.save();
-      ctx.textAlign = 'center';
+      drawUiPanel(ctx, { x: panelX, y: panelY, w: panelW, h: panelH }, {
+        role: 'flow',
+        fillAlpha: 0.58 * alpha,
+        borderAlpha: 0.22 * alpha,
+        cornerLength: 22,
+      });
+      ctx.textAlign = 'left';
       ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
       ctx.shadowBlur = 12;
 
-      // Name
       ctx.fillStyle = `rgba(150, 200, 220, ${alpha * 0.9})`;
-      ctx.font = canvasFont(14);
-      ctx.fillText(`entering: ${currentSignature.name}`, cx, cy);
+      ctx.font = canvasFont(13, { weight: '700' });
+      ctx.fillText(fitUiText(ctx, `signature lock // ${currentSignature.name}`.toUpperCase(), textW), textX, panelY + 27);
 
-      // Flavor text
       ctx.fillStyle = `rgba(120, 150, 170, ${alpha * 0.7})`;
-      ctx.font = canvasFont(12);
-      ctx.fillText(currentSignature.flavor, cx, cy + 22);
+      ctx.font = canvasFont(11);
+      ctx.fillText(fitUiText(ctx, currentSignature.flavor, textW), textX, panelY + 51);
 
-      // Mechanical callouts
       ctx.fillStyle = `rgba(100, 130, 150, ${alpha * 0.5})`;
       ctx.font = canvasFont(11);
-      ctx.fillText(currentSignature.mechanical, cx, cy + 40);
+      ctx.fillText(fitUiText(ctx, currentSignature.mechanical, textW), textX, panelY + 69);
 
       ctx.restore();
     }
