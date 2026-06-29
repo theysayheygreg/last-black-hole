@@ -80,6 +80,10 @@ function makeRecordingContext() {
     active: true,
   });
   assert(buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1].includes('CONTINUE')), 'button label should render');
+  assert(buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1] === 'A CONTINUE' && call[3] > 34),
+    'button input prompt should render as subheading below the button');
+  assert(!buttonCtx.calls.some((call) => call[0] === 'fillText' && call[1] === 'A  CONTINUE'),
+    'button label must not fuse input affordance into the main action text');
   assert(buttonCtx.calls.some((call) => call[0] === 'strokeRect'), 'button pulse should draw an edge');
 
   const wipeCtx = makeRecordingContext();

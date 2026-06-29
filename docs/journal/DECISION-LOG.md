@@ -1,5 +1,26 @@
 # Decision Log
 
+## 2026-06-28 — Command buttons separate actions from input affordances
+
+**Decision:** Command-button labels are action labels only. Keyboard/controller
+affordances render as smaller support text below the button, using the active
+input mode from `src/ui/input-prompts.js`. Examples: button label `BEGIN DROP`
+with subprompt `A begin drop` on Deck, or `Space begin drop` on keyboard.
+
+**Why:** Fusing prompts into labels (`SPACE BEGIN DROP`, `A RETURN HOME`) makes
+the button harder to scan, reads keyboard-first on Deck, and fights Steam
+Input's action-oriented presentation. The player should learn the command first
+and the current input binding second.
+
+**Where it landed:** `src/ui/canvas-primitives.js`, `src/ui/motion.js`,
+`src/main.js`, `src/run-results.js`, `tests/ui-primitives.cjs`,
+`tests/ui-motion.cjs`, `tests/steam-deck-compat.cjs`,
+`docs/design/UI-VISUAL-SYSTEM.md`, `docs/reference/STEAM-DECK-RUNBOOK.md`, and
+`docs/reference/DEPLOY-TO-DECK.md`.
+
+**Door status:** Closed for command buttons. Open for future Steam Input glyph
+art, where the subprompt may become an icon+text row instead of plain text.
+
 ## 2026-06-28 — UI readability lands before more motion polish
 
 **Decision:** Treat static composition, token brightness, local backing, and

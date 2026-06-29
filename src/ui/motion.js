@@ -135,13 +135,14 @@ export function drawCommandButtonMotion(ctx, rect, label, {
   commandPulse = 0.8,
   textColor,
   hotkey,
+  prompt,
   font = '16px "Mona Space", monospace',
 } = {}) {
   const p = clamp01(progress);
   if (p <= 0.001) return;
   ctx.save();
   ctx.globalAlpha = (ctx.globalAlpha ?? 1) * alpha * p;
-  drawCommandButton(ctx, rect, label, { role, active, alpha: 1, textColor, hotkey, font });
+  drawCommandButton(ctx, rect, label, { role, active, alpha: 1, textColor, hotkey, prompt, font });
   if (!reducedMotion) {
     const pulse = 1 - motionProgress(pulseTime, { duration: commandPulse, ease: easeOutCubic });
     if (pulse > 0.001) {

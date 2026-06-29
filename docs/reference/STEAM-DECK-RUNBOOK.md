@@ -25,6 +25,13 @@ The Deck launcher also tags the renderer URL with `deck=1`. That is the
 source-of-truth switch for Deck/controller CTAs and handheld HUD minimums. Do
 not rely on viewport guessing for Deck UI behavior.
 
+Deck command-button rule: the button face is the action, and the affordance is
+supporting text below it. For example, a launch button reads `BEGIN DROP` inside
+the slab, with `A begin drop` or `Space begin drop` below it depending on active
+input mode. Do not merge the affordance into the action label as `A BEGIN DROP`
+or `SPACE BEGIN DROP`; Steam Deck/Steam Input review should see controller
+prompts as action hints, not as part of the menu label.
+
 ## Public Tester Install
 
 Use this when someone has a Steam Deck and should install the latest public

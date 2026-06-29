@@ -52,7 +52,8 @@ Initial helper set:
 - `drawSelectedRow(ctx, rect, options)` - shared row focus with rail, outline,
   and optional icon slot.
 - `drawCommandButton(ctx, rect, label, options)` - large command actions only:
-  launch, continue, delete, confirm.
+  launch, continue, delete, confirm. The action label stays inside the button;
+  input affordances draw as smaller subprompt text below the button.
 - `drawSegmentedGauge(ctx, rect, options)` - fuel, hull, signal, cargo capacity,
   or readiness cells.
 - `drawWarningStrip(ctx, rect, options)` - compact danger/anomaly/signal panels

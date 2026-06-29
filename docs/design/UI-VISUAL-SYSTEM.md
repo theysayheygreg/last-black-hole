@@ -207,7 +207,10 @@ tooltip or more explanatory copy to compensate for a weak first read.
 - **Gauges:** segmented bars with bright filled cells and dim tracks; critical
   states change color and add pattern/label.
 - **Buttons:** large command slabs only for real actions. Small options stay as
-  rows or tabs.
+  rows or tabs. The slab label is the action only (`BEGIN DROP`, `RETURN HOME`);
+  keyboard/controller affordances render as smaller support text below the
+  slab (`A begin drop`, `Space return home`). Never fuse prompts into the main
+  button label as `A BEGIN DROP` or `SPACE RETURN HOME`.
 - **Icons:** simple geometric/pixel glyphs aligned with entity categories.
 
 ## Validation Hooks

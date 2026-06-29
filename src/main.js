@@ -3387,7 +3387,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
 
   if (readyAlpha > 0) {
     drawCommandButtonMotion(ctx, layout.commandRect, 'launch run', {
-      hotkey: 'space',
+      hotkey: promptLabel('confirm', currentPromptOptions()),
       role: 'flow',
       active: true,
       alpha: readyAlpha * promptPulse,
@@ -6117,12 +6117,12 @@ function gameLoop(now) {
       by += 15;
     }
 
-    const authorityY = briefPanel.y + briefPanel.h - 106;
+    const authorityY = briefPanel.y + briefPanel.h - 138;
     drawSectionLabel(ctx, 'authority', briefX, authorityY, { role: simClient?.enabled ? 'flow' : 'muted', alpha: 0.84 });
     ctx.font = canvasFont(10);
     ctx.fillStyle = roleColor('muted', 0.72);
     let authorityLine = 'local run will host selected map';
-    let authorityLine2 = `${promptLabel('confirm', promptOptions)} begin drop`;
+    let authorityLine2 = 'selected route ready';
     if (remoteControl?.enabled) {
       if (remoteControl.error) {
         authorityLine = `remote sim unavailable: ${remoteControl.error}`;
@@ -6142,7 +6142,7 @@ function gameLoop(now) {
             : `${promptLabel('confirm', promptOptions)} join live`);
       } else {
         authorityLine = 'no live cycle detected';
-        authorityLine2 = 'this client will host the selected map';
+        authorityLine2 = 'this client will host selected map';
       }
     }
     ctx.fillText(fitUiText(ctx, authorityLine, briefPanel.w - 44), briefX, authorityY + 22);
@@ -6150,7 +6150,7 @@ function gameLoop(now) {
 
     drawCommandButtonMotion(ctx, {
       x: briefX,
-      y: briefPanel.y + briefPanel.h - 56,
+      y: briefPanel.y + briefPanel.h - 70,
       w: briefPanel.w - 40,
       h: 42,
     }, 'begin drop', {
@@ -6260,9 +6260,21 @@ function gameLoop(now) {
     const promptT = summaryT + 0.8;
     if (t > promptT) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
-      ctx.fillStyle = `rgba(200, 200, 220, ${blink * Math.min((t - promptT) * 2, 1)})`;
-      ctx.font = canvasFont(18);
-      ctx.fillText(ctaLabel('confirm', 'drop back in', currentPromptOptions()).toUpperCase(), cx, cy + 120);
+      drawCommandButtonMotion(ctx, {
+        x: cx - 150,
+        y: cy + 92,
+        w: 300,
+        h: 42,
+      }, 'drop back in', {
+        hotkey: promptLabel('confirm', currentPromptOptions()),
+        role: 'flow',
+        active: true,
+        alpha: blink * Math.min((t - promptT) * 2, 1),
+        progress: Math.min((t - promptT) * 2, 1),
+        pulseTime: (totalTime % 1.45) / 1.45,
+        reducedMotion: motion.reducedMotion,
+        commandPulse: motion.commandPulse,
+      });
     }
 
     ctx.restore();

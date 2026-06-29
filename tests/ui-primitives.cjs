@@ -113,6 +113,18 @@ async function run() {
       'Expected shared canvas font usage');
   });
 
+  await runner.run('Command buttons separate action labels from input prompts', async () => {
+    const ctx = createRecordingContext();
+    mod.drawCommandButton(ctx, { x: 20, y: 70, w: 150, h: 34 }, 'continue', { hotkey: 'space' });
+    const labels = ctx.calls.filter((call) => call[0] === 'fillText');
+    const action = labels.find((call) => call[1] === 'CONTINUE');
+    const prompt = labels.find((call) => call[1] === 'SPACE CONTINUE');
+    assert(action, 'Expected clean button action label');
+    assert(prompt, 'Expected separate input subprompt');
+    assert(prompt[3] > 70 + 34, 'Input prompt should draw below the button rect');
+    assert(!labels.some((call) => call[1] === 'SPACE  CONTINUE'), 'Input prompt must not be fused into the button label');
+  });
+
   const allPassed = runner.summary();
   process.exit(allPassed ? 0 : 1);
 }

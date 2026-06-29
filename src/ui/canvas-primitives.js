@@ -187,14 +187,19 @@ export function fitUiText(ctx, text, maxWidth, {
 
 export function drawCommandButton(ctx, rect, label, {
   hotkey = '',
+  prompt = '',
   role = 'flow',
   active = true,
   disabled = false,
   alpha = 1,
+  textColor,
 } = {}) {
   const r = normalizeRect(rect);
   const a = clamp01(disabled ? alpha * 0.42 : alpha);
   const buttonRole = disabled ? 'muted' : role;
+  const labelText = String(label ?? '').trim();
+  const hotkeyText = String(hotkey ?? '').trim();
+  const promptText = String(prompt || labelText || 'confirm').trim();
 
   ctx.save();
   drawSelectedRow(ctx, r, {
@@ -209,9 +214,18 @@ export function drawCommandButton(ctx, rect, label, {
   ctx.font = canvasFont(Math.max(UI_TYPOGRAPHY.couchButton, Math.min(24, r.h * 0.48)), { weight: '700' });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = roleColor(disabled ? 'muted' : 'text', a);
-  const copy = hotkey ? `${String(hotkey).toUpperCase()}  ${String(label).toUpperCase()}` : String(label).toUpperCase();
-  ctx.fillText(fitUiText(ctx, copy, r.w - 18), r.x + r.w / 2, r.y + r.h / 2);
+  ctx.fillStyle = textColor ? withAlpha(textColor, a) : roleColor(disabled ? 'muted' : 'text', a);
+  ctx.fillText(fitUiText(ctx, labelText.toUpperCase(), r.w - 18), r.x + r.w / 2, r.y + r.h / 2);
+
+  // Keep the command label clean; controller/keyboard affordances live as
+  // supporting prompt text so the action remains readable across input modes.
+  if (hotkeyText) {
+    ctx.font = canvasFont(Math.max(10, Math.min(UI_TYPOGRAPHY.couchSmall, r.h * 0.32)), { weight: '700' });
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = roleColor(buttonRole, 0.78 * a);
+    const subcopy = `${hotkeyText.toUpperCase()} ${promptText.toUpperCase()}`;
+    ctx.fillText(fitUiText(ctx, subcopy, r.w - 18), r.x + r.w / 2, r.y + r.h + 8);
+  }
   ctx.restore();
 }
 

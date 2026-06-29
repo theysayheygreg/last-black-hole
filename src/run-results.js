@@ -316,7 +316,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
     const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.65;
     drawCommandButtonMotion(ctx, {
       x: cx - 150,
-      y: panelY + panelH - 64,
+      y: panelY + panelH - 86,
       w: 300,
       h: 44,
     }, continueLabel, {

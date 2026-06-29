@@ -51,6 +51,7 @@ async function run() {
   const main = read("src/main.js");
   const hud = read("src/hud.js");
   const results = read("src/run-results.js");
+  const primitives = read("src/ui/canvas-primitives.js");
   for (const source of [main, hud, results]) {
     excludes(source, "press space", "Player-facing code must not hardcode press-space prompts");
     excludes(source, "space/A", "Player-facing code must use centralized prompt helpers");
@@ -59,6 +60,8 @@ async function run() {
   includes(main, "currentPromptOptions()", "Canvas overlays must route through prompt options");
   includes(hud, "promptLabel('inventory'", "HUD cargo prompt must use centralized input labels");
   includes(results, "promptLabel('confirm'", "Results overlay must use centralized input labels");
+  includes(primitives, "r.y + r.h + 8", "Command button affordances must draw below the button label");
+  excludes(primitives, "hotkey ? `${String(hotkey).toUpperCase()}  ${String(label).toUpperCase()}`", "Command labels must not fuse input affordances into the action label");
 
   const electronMain = read("desktop/electron-main.cjs");
   includes(electronMain, "params.set('deck', '1')", "Packaged Deck renderer must receive an explicit deck mode flag");

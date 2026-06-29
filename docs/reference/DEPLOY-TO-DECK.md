@@ -97,6 +97,8 @@ Before calling a Deck build good, verify:
 - fuel/signal/progress bars are thick enough to read at least as quickly as text
 - Deck builds show Deck/controller CTAs (`A`, `B`, `View`, `L1/R1`, `R2`,
   `L2`) instead of keyboard-only prompts such as `press space`
+- command buttons keep the action label separate from the prompt: `BEGIN DROP`
+  in the button, `A begin drop` as subtext below it
 - fullscreen behavior is sane
 - suspend/resume does not immediately break the session
 

@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-06-28 — Command button affordance split
+
+- Changed the shared canvas command-button primitive so button faces render
+  action labels only, with keyboard/controller prompts as smaller subheading
+  text below the slab.
+- Applied the split to title, Home launch rail, Map Select `BEGIN DROP`, meta
+  salvage report, and run-results CTAs.
+- Updated UI primitive, UI motion, and Steam Deck compatibility tests to guard
+  against fused labels such as `SPACE LAUNCH RUN` returning.
+- Documented the Deck/UI rule in the UI visual system and Steam Deck runbooks.
+
 ## 2026-06-28 — Home, drop briefing, and result CTA UI pass
 
 - Rebuilt the Home screen around a three-panel instrument-console layout:
@@ -68,7 +79,8 @@
   entity layer and suppressed canvas well/coordinate debug overlays on the
   title phase while leaving the ASCII accretion fabric intact.
 - Demoted the attract-loop status copy into a small telemetry rail and changed
-  the primary CTA from `SPACE BEGIN` to `SPACE LAUNCH RUN`.
+  the primary CTA from `SPACE BEGIN` to a clean `LAUNCH RUN` button with a
+  separate input prompt.
 - Added title backdrop object telemetry labels with thematic generated names
   and NAV fixes for stars, wrecks, portals, and orbiting bodies.
 
