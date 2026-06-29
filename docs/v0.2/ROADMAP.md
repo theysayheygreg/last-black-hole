@@ -44,8 +44,8 @@ short note about what changed in player-facing terms.
 | Threats | Signal, Inhibitor, rivals/scavengers, fauna/sentry foundations, phantoms/haunts | Tune Inhibitor timing and signal readability; pick strongest ecology behaviors | Full entity catalog and richer multiplayer threat interactions |
 | Hulls | Five hulls, manifests, PlayerBrain, ability state, several server ability behaviors | Playtest ability feel and cooldowns; improve HUD cues | More artifacts, exclusive builds, no-respec pilot identity |
 | Progression | Profiles, vault, item tiers, rig tracks defined, partial upgrade flow | Complete upgrade purchase/write-back and balance EM economy | Milestones, unlocks, pilots, long-term chronicle |
-| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, shared canvas primitive kit, result-screen migration, title-attract first slice, UI visual harness, UI motion/VFX bridge, shared UI motion kit, and reduced-motion title coverage | Home + map-select static composition/contrast first; enforce readability-before-motion, then continue HUD/pause/profile cleanup | Full accessibility pass, motion clips, and final primitive cleanup |
-| VFX | Event-driven Three VFX plan exists; UI motion emits VFX only for approved beats, with UI retaining truth; the first bounded `VfxManager` and title glyph-fault prototype are live | Tune title VFX in clips; after Home/Map readability, combine player ship silhouette/contact matte with thrust/brake VFX | Portal/pickup/Inhibitor families, instanced particles, screen-space shader impulses, lens impulses, and richer capture-quality tiers |
+| UI/HUD | DOM HUD, canvas screens, inventory/results, Monaspace/Oxanium typography roles, design-token bridge, shared canvas primitive kit, result-screen migration, title-attract first slice, UI visual harness, UI motion/VFX bridge, shared UI motion kit, reduced-motion title coverage, first Home instrument-console pass, and first Map Select drop-briefing pass | Continue HUD/pause/profile cleanup, richer route/objective language, Deck prompt review, and accessibility pass | Full accessibility pass, motion clips, and final primitive cleanup |
+| VFX | Event-driven Three VFX plan exists; UI motion emits VFX only for approved beats, with UI retaining truth; the first bounded `VfxManager` and title glyph-fault prototype are live | Tune title VFX in clips; after the first Home/Map static pass, combine player ship silhouette/contact matte with thrust/brake VFX | Portal/pickup/Inhibitor families, instanced particles, screen-space shader impulses, lens impulses, and richer capture-quality tiers |
 | Audio | Audio engine/toolkit foundations | Define final sonic palette for movement/signal/Inhibitor | Dynamic score and full mix hierarchy |
 | Testing | Fast/core/authority/three lanes; visual fixtures; CDP driver; UI motion helper suite; UI visual reduced-motion capture | Add more representative playtest scripts, renderer semantic checks, and motion-clip review | Public release smoke, hosted-session CI, perf budgets per device |
 | Public presence | Public overview doc exists; website/social not built | Prepare public copy, screenshots, clips, and a playable build page | Itch/Steam-style page, devlog cadence, hosted demo |
@@ -134,17 +134,18 @@ palette as the Three entity pass.
   `docs/project/UI-VISUAL-PASS-PLAN.md` as the current UI art-direction source.
 - Build on the shipped shared canvas UI primitives for panels, brackets,
   selected rows, command buttons, segmented gauges, and warnings.
-- Continue migrating profile, home/main menu, pre-match/map select, in-match
-  HUD, and pause surfaces against the generated target concepts. Results and
-  the first title-attract slice are already on the new path.
+- Continue migrating profile, in-match HUD, and pause surfaces against the
+  generated target concepts. Results, title-attract, Home/main menu, and the
+  first pre-match/drop-briefing slice are already on the new path.
 - Keep letter spacing at zero and reserve microtext for texture, not decisions.
 - Keep UI motion readable without VFX. Title identity, launch, extraction,
   collapse, portal transitions, and Inhibitor-owned UI faults may emit
   renderer-neutral VFX accents; normal prompts, timers, fuel, cargo, and
   controller hints stay clean.
 - Composition and token brightening must land on a screen before more motion
-  polish is added to it. The 2026-06-28 Orrery review names Home and Map Select
-  as the current drift points.
+  polish is added to it. The first Home and Map Select static slices are live;
+  next UI drift points are HUD, pause, profile destructive states, and richer
+  route/objective language.
 - Use the shipped `npm run test:ui` lane for UI states, Deck-scale judgment,
   couch-test proxy review, and reduced-motion title coverage. Use
   `tests/ui-motion.cjs` for cheap helper-level timing coverage.

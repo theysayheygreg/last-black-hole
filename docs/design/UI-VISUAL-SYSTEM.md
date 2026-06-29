@@ -158,6 +158,10 @@ tooltip or more explanatory copy to compensate for a weak first read.
   details go to a right-side panel.
 - Launch is the loudest action and may use red/orange warning language because
   entering the run is an intentional risk.
+- Current v0.2 implementation uses a three-panel instrument console: pilot/tab
+  rail, central selected-tab work surface, and a persistent launch/readiness
+  rail. Future changes should preserve that scan path unless a better
+  couch-readable structure replaces it wholesale.
 
 ### Pre-Match / Map Select
 
@@ -167,6 +171,10 @@ tooltip or more explanatory copy to compensate for a weak first read.
   are the couch-critical reads.
 - Map legends are useful but must not be required to distinguish route anchors,
   danger, salvage, and anomaly colors.
+- Current v0.2 implementation frames this as a drop briefing: destinations,
+  route-preview table, and briefing panel. The route table can remain schematic;
+  it should not pretend to be an exact camera screenshot unless it is backed by
+  actual map/renderer truth.
 
 ### In-Match HUD
 
@@ -186,6 +194,9 @@ tooltip or more explanatory copy to compensate for a weak first read.
 - The third read is cargo/accounting and next action.
 - Results can be denser and more theatrical than in-match UI, but every number
   the player cares about needs a strong backing and enough size.
+- Outcome danger/extraction color can dominate the panel, but the continue
+  action should read as navigation. Do not make the player press a red warning
+  button just to leave the report.
 
 ## Component Language
 

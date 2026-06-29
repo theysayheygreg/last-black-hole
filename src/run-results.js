@@ -144,6 +144,8 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const cy = h / 2;
   const success = view.tone === 'extract';
   const role = success ? 'extract' : 'danger';
+  const continueRole = success ? 'extract' : 'flow';
+  const continueLabel = success ? 'review salvage' : 'return home';
   const accent = roleColor(role, 0.95);
   const lingerFrac = clamp01(rawTime / lingerDuration);
   const dimEase = lingerFrac * lingerFrac * (3 - 2 * lingerFrac);
@@ -317,9 +319,9 @@ export function drawRunResultsOverlay(ctx, canvas, {
       y: panelY + panelH - 64,
       w: 300,
       h: 44,
-    }, 'continue', {
+    }, continueLabel, {
       hotkey: promptLabel('confirm'),
-      role,
+      role: continueRole,
       active: true,
       alpha: promptAlpha * blink,
       progress: promptAlpha,

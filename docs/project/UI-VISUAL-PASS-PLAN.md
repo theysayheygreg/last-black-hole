@@ -124,8 +124,8 @@ First bridge status:
 |---------|---------------|------------------|----------------------|-------------|
 | Title | `src/main.js` | `docs/reference/target-visuals/2026-06-28-ui/title-screen.png` | game identity, first action, live well/fabric | plain-left is the shipped v0.2 default; opposite-left remains a taste challenger for Greg's review |
 | Profile Select | `src/main.js` | follows title language | selected profile, load/create/delete, destructive state | first motion pass shipped; danger/delete composition still needs stronger treatment |
-| Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | first motion pass shipped; Orrery review flags this as the weakest static read and next composition priority |
-| Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | first motion pass shipped; right panel must brighten now, map preview still needs promotion |
+| Home / Main Menu | `src/main.js` | `main-menu-home.png` | selected tab, pilot/ship status, EM/cargo summary, launch | first static composition slice shipped; next work is content density, profile/destructive-state polish, and Deck-specific prompt review |
+| Pre-Match / Map Select | `src/main.js` | `pre-match-drop-briefing.png` | selected sector, risk, objective, hull, launch action | first drop-briefing slice shipped with route preview, risk panel, seed/signature/hazard/salvage read; next work is richer route semantics and actual objective language |
 | In-Match HUD | `index-a.html`, `src/hud.js` | `in-match-hud.png` | fuel, hull, signal, cargo, exits, warning, active ability | edge reads need stronger icon/bar hierarchy and better backing |
 | Pause | `src/main.js` | shared command overlay | paused state, resume, settings, abandon | first motion pass shipped; needs command-panel composition cleanup |
 | Results / Run Report | `src/run-results.js` | `post-match-results.png` | outcome, cause/reward, cargo accounting, earnings, continue | primitives and motion shipped; still needs final theatrical layout review |
@@ -351,7 +351,7 @@ Shipped title slice:
 
 ## Pass 4 - Home / Main Menu
 
-Status: next composition priority after the 2026-06-28 Orrery visual review.
+Status: first static composition slice shipped on 2026-06-28.
 
 Tasks:
 
@@ -371,9 +371,19 @@ Acceptance:
 - launch remains the strongest action even when the selected tab is not
   `launch`.
 
+Shipped slice:
+
+- `src/main.js` now draws Home as three major surfaces: pilot console/tab rail,
+  central selected-tab content, and a persistent launch rail.
+- Ship/Home uses a small shared ship-silhouette/contact-matte treatment, role
+  colors, segmented readiness gauges, and larger command CTA language.
+- Footer prompts are split into short lines so they remain legible instead of
+  truncating inside the narrow right rail.
+
 ## Pass 5 - Pre-Match / Map Select
 
-Status: needs immediate brightening plus the later hero-preview redesign.
+Status: first drop-briefing slice shipped on 2026-06-28; later route-language
+redesign still open.
 
 Tasks:
 
@@ -392,6 +402,16 @@ Acceptance:
 - map preview colors match in-run semantics;
 - controller focus does not disappear in dense map information;
 - route anchors remain distinguishable in a reduced couch-proxy screenshot.
+
+Shipped slice:
+
+- Map Select is now a three-panel pre-match briefing: destinations, route
+  preview, and drop briefing.
+- The center preview plots existing map wells, stars, wrecks, and a tentative
+  cyan route path using the shared role palette.
+- The right panel promotes selected route risk, world size, seed, signature,
+  named hazards, sample salvage, remote/local authority state, and a large
+  `BEGIN DROP` command.
 
 ## Pass 6 - In-Match HUD
 
@@ -437,6 +457,9 @@ Shipped slice:
 - `src/run-results.js` now draws through the shared canvas primitives.
 - Death/collapse and extraction share structure while using different role
   colors for outcome, cargo, cause, value, and continue action.
+- Death continues to use danger language for outcome/cargo/cause, but the
+  continue CTA is flow-colored `RETURN HOME` so navigation does not read as
+  another damage warning.
 
 ## Pass 8 - UI Visual Harness
 
@@ -482,12 +505,11 @@ Shipped slice:
 4. Partly done: migrate title and profile select. Title hierarchy and first
    motion language shipped; destructive profile focus still needs composition
    work.
-5. Next: migrate home/main menu static composition and token brightening.
-   Motion language is already present; stop adding more motion here until the
-   ship/readiness center and LAUNCH read at couch distance.
-6. Then: migrate pre-match/map select static composition. Brighten the current
-   right panel immediately, then promote the map preview and route semantics.
-7. Migrate the in-match HUD. Keep this after Home/Map because gameplay clarity needs
+5. Done: migrate the first home/main menu static composition and token
+   brightening slice. Continue with profile/destructive-state cleanup later.
+6. Done: migrate the first pre-match/map select drop-briefing composition.
+   Continue with richer objective/route semantics later.
+7. Next: migrate the in-match HUD. Keep this after Home/Map because gameplay clarity needs
    live playtest after the menu language settles.
 8. Tighten harness thresholds after at least three screens have landed. Avoid
    failing future art exploration on premature pixel assumptions.

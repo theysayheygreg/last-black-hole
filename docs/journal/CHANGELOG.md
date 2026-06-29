@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-06-28 — Home, drop briefing, and result CTA UI pass
+
+- Rebuilt the Home screen around a three-panel instrument-console layout:
+  primary tab rail, central ship/readiness surface, and a loud launch rail with
+  EM/vault/best-run/readiness summaries.
+- Rebuilt Map Select into a pre-match drop briefing: destination list, large
+  route-preview table, risk/seed/signature/hazard/salvage briefing, authority
+  copy, and a clear `BEGIN DROP` CTA.
+- Tuned post-match continue actions so death/loss outcomes can stay dangerous
+  while the actual exit CTA reads as navigation instead of another red warning.
+- Re-ran `npm run test:ui`; the final evidence set is
+  `tests/screenshots/ui-visual-2026-06-29T004847716Z/`.
+
 ## 2026-06-28 — Orrery visual review integration
 
 - Wrote the Orrery visual review prompt and captured Orrery's response under
