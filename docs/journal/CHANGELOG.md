@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-07-01 — Version-line branching process added
+
+- Added `docs/project/BRANCHING-AND-RELEASE-LINES.md` as the tracked process
+  source for branch roles, routing, merge cadence, promotion, and validation.
+- Added branch routing, subagent branch discipline, merge-forward cadence, and
+  promotion rules to `docs/project/JAM-CONTRACT.md`.
+- Logged the branch-by-version-line decision so future agents keep big
+  next-version work off the demo line until Greg calls promotion.
+
 ## 2026-07-01 — v0.3 Ballpark roadmap planned
 
 - Added `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md` as the new
