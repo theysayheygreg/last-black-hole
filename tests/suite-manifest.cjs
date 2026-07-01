@@ -120,6 +120,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "ProtocolJournal",
+    file: "protocol-journal.cjs",
+    lanes: ["fast", "core", "static", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "SnapshotRebase",
+    file: "snapshot-rebase.cjs",
+    lanes: ["fast", "core", "static", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "Inhibitor",
     file: "inhibitor.cjs",
     lanes: ["core", "authority", "full"],
