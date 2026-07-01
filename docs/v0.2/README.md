@@ -24,8 +24,10 @@ Everything before this snapshot is treated as **v0.1**: the jam prototype, the p
     primitive-kit status, and UI motion/VFX bridge.
 11. `../project/THREE-VFX-PASS-PLAN.md` — renderer-neutral VFX event contract
     and first implementation slice.
-12. `ROADMAP.md` — current status and what comes next by major area.
-13. `../project/BUILD-STATUS.md` — current local playability snapshot and
+12. `../reference/CARBON-ENGINE-RESEARCH.md` — source-level Carbon/EVE engine
+    lessons to mine without adopting the runtime.
+13. `ROADMAP.md` — current status and what comes next by major area.
+14. `../project/BUILD-STATUS.md` — current local playability snapshot and
    caveats.
 
 ## Version Meaning
@@ -50,6 +52,7 @@ Important current anchors:
 - `docs/design/UI-VISUAL-SYSTEM.md`
 - `docs/project/UI-VISUAL-PASS-PLAN.md`
 - `docs/project/THREE-VFX-PASS-PLAN.md`
+- `docs/reference/CARBON-ENGINE-RESEARCH.md`
 - `docs/design/TEST-HARNESS.md`
 - `src/content/*.data.json`
 - `scripts/sim-runtime.cjs`

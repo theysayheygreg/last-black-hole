@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-07-01 — Carbon Engine research added
+
+- Investigated CCP's open-source Carbon Engine repos as LBH reference material:
+  Destiny simulation, Trinity renderer, Blue/runtime, scheduler, pathfinder,
+  resources, mesh, audio, and spatial clustering.
+- Added `docs/reference/CARBON-ENGINE-RESEARCH.md` with source links and LBH
+  takeaways for stamped sim authority, snapshot/rebase tests, relevance lanes,
+  explicit Three render-plan discipline, manifests, and audio/VFX budgets.
+- Updated the v0.2 read order, v0.2/project roadmaps, EVE architecture note,
+  and decision log to make Carbon an idea mine rather than a v0.2 engine
+  migration target.
+
 ## 2026-06-28 — Command button affordance split
 
 - Changed the shared canvas command-button primitive so button faces render

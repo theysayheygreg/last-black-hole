@@ -66,6 +66,7 @@ reading stale health records or reconstructing status from `git log`.
 | UI visual system | `docs/design/UI-VISUAL-SYSTEM.md` | Designed 2026-06-28; current contrast, sizing, color-role, and couch-test contract for title, home, map select, HUD, and results |
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
 | UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared primitives, result/title slices, UI visual harness, shared motion kit, reduced-motion coverage, UI motion/VFX bridge, Home instrument-console pass, and Map Select drop-briefing pass are live. Next UI work is HUD, pause, profile destructive states, and richer route/objective language. |
+| Carbon Engine source research | `docs/reference/CARBON-ENGINE-RESEARCH.md` | Added 2026-07-01; mine Carbon/Destiny/Trinity for stamped sim authority, relevance lanes, explicit render-plan discipline, asset manifests, and audio/VFX budgets without adopting Carbon as a dependency. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -123,6 +124,11 @@ capture, or compare.
   extraction, collapse, portal transitions, and Inhibitor UI faults may emit
   Three VFX accents below or around clean UI. The shipped first pass is
   `src/ui/motion.js` plus reduced-motion/config/test harness coverage.
+- Carbon Engine source research is reference material, not a dependency plan.
+  Use `docs/reference/CARBON-ENGINE-RESEARCH.md` to inform sim-event history,
+  snapshot/rebase tests, relevance lanes, render-pass budgets, material/asset
+  manifests, and audio/VFX prioritization. Do not hide gameplay truth inside
+  Three or chase native Carbon/Trinity adoption for v0.2.
 - Readability precedes timing. If a screen fails its static selected-action,
   primary-value, or local-backing read, brighten and compose it before adding
   new motion or VFX. Home and Map Select now have their first static slices; the

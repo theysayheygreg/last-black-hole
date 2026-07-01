@@ -1,5 +1,28 @@
 # Decision Log
 
+## 2026-07-01 — Carbon Engine is reference material, not a migration target
+
+**Decision:** Mine CCP's open-source Carbon Engine repos for durable patterns,
+not dependencies. The useful LBH transfers are stamped sim authority,
+snapshot/rebase tests, relevance lanes, explicit render-pass contracts,
+material/asset manifests, profiler surfaces, and audio/VFX budgets. Carbon,
+Destiny, Trinity, Blue, and Wwise are not v0.2 runtime adoption targets.
+
+**Why:** Carbon is a mature C++/Python MMO stack with EVE-specific movement,
+visibility, topology, backend, and build assumptions. LBH's current direction is
+Three-first, server-authoritative local/web/Deck play with renderer-neutral sim
+events. Copying Carbon's machinery would slow the project down; borrowing its
+contracts makes LBH easier to debug, port, and scale.
+
+**Where it landed:** `docs/reference/CARBON-ENGINE-RESEARCH.md`,
+`docs/project/EVE-ARCHITECTURE-RESEARCH.md`, `docs/v0.2/README.md`, and
+`docs/project/ROADMAP.md`.
+
+**Door status:** Closed for direct Carbon/Trinity adoption in v0.2. Open for
+Carbon-informed follow-up tickets: sim action journal, snapshot/rebase harness,
+render-plan descriptor, material registry, route graph fixture,
+asset/capture manifests, and audio priority budgets.
+
 ## 2026-06-28 — Command buttons separate actions from input affordances
 
 **Decision:** Command-button labels are action labels only. Keyboard/controller

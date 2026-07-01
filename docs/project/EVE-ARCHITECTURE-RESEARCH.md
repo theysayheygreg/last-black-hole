@@ -10,6 +10,12 @@ This is a focused read on what CCP has publicly said about EVE Online's server/c
 - node/system allocation concepts
 - what likely transfers cleanly to LBH versus what does not
 
+**2026-07-01 source-level follow-up:** CCP's open-source Carbon Engine repos
+now have their own LBH knowledge-base read in
+`docs/reference/CARBON-ENGINE-RESEARCH.md`. Prefer that newer note when the
+question is "what does the code suggest?" Use this page when the question is
+"what has CCP publicly said about EVE's architecture?"
+
 One important caveat: CCP's **public** explanations of Tranquility's core runtime are uneven and somewhat old. The best primary sources on the core sim are mostly from 2011–2016. More recent public material is stronger on adjacent infrastructure like ESI caching than on the live combat runtime itself. So this report separates:
 
 - **directly stated by CCP / official docs**
