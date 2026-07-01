@@ -84,6 +84,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "BodyRegistry",
+    file: "body-registry.cjs",
+    lanes: ["fast", "core", "static", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "SpatialIndex",
+    file: "spatial-index.cjs",
+    lanes: ["fast", "core", "static", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ControlPlane",
     file: "control-plane.cjs",
     lanes: ["core", "authority", "full"],
