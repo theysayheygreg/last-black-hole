@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-07-01 — v0.3 Ballpark roadmap planned
+
+- Added `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md` as the new
+  branch-first planning home for the v0.3 line.
+- Reframed v0.3 around Ballpark Lite sim authority, ECS-ready data shape,
+  multiplayer-minded events/snapshots/relevance, renderer contracts, and
+  structural harness gates.
+- Updated the v0.2 roadmap and project roadmap so `main` stays focused on
+  v0.2 demo fixes while v0.3 architectural work lives on a dedicated branch.
+- Logged the branch decision in the decision log.
+
 ## 2026-07-01 — Carbon Engine research added
 
 - Investigated CCP's open-source Carbon Engine repos as LBH reference material:

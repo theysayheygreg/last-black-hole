@@ -1,5 +1,28 @@
 # Decision Log
 
+## 2026-07-01 — v0.3 Ballpark work branches away from v0.2 demo fixes
+
+**Decision:** Plan v0.3 as a branch-first structural release centered on
+Ballpark Lite sim authority, ECS-ready data shape, stamped events, snapshot
+watermarks, replication lanes, renderer contracts, and harness gates. Keep
+`main` focused on v0.2 demo fixes and weekend-build polish. The initial
+planning branch is `codex/v0.3-ballpark-roadmap`.
+
+**Why:** The v0.2 line is close enough to demo that it should not absorb a
+large architectural migration while Greg is trying to show the build. At the
+same time, the Carbon Engine read and recent sim/renderer audits point to a
+real structural next step: stop letting dynamic bodies, contacts, snapshots,
+events, and renderer projection live as scattered game-jam loops. v0.3 should
+install production-style contracts without prematurely adopting Carbon, a full
+ECS, a generic physics engine, or native runtime work.
+
+**Where it landed:** `docs/v0.3/README.md`, `docs/v0.3/ROADMAP.md`,
+`docs/v0.2/ROADMAP.md`, and `docs/project/ROADMAP.md`.
+
+**Door status:** Closed for doing v0.3 structural migration directly on `main`.
+Open for small v0.2 fixes on `main`, then merging those fixes forward into the
+v0.3 branch.
+
 ## 2026-07-01 — Carbon Engine is reference material, not a migration target
 
 **Decision:** Mine CCP's open-source Carbon Engine repos for durable patterns,

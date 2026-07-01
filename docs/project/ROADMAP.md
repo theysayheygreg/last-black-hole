@@ -3,13 +3,15 @@
 > Originally the hour-by-hour game jam plan (March 16-22, 2026).
 > Now the project roadmap covering jam + post-jam development.
 > The jam plan below is historical — see **Current Status** for where we are.
-> Current versioned docs live in `docs/v0.2/`.
+> Current versioned docs live in `docs/v0.2/`. v0.3 planning now lives in
+> `docs/v0.3/` and should stay on a branch while `main` carries v0.2 demo
+> fixes.
 
 ---
 
-## Current Status (2026-06-28)
+## Current Status (2026-07-01)
 
-**Version:** v0.2 — Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set.
+**Version:** v0.2 - Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set. The next structural line is v0.3, tracked in `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md`.
 
 **Local build status:** `docs/project/BUILD-STATUS.md` is now the canonical
 playability snapshot. Use it to answer "what can I launch right now?" before
@@ -67,6 +69,7 @@ reading stale health records or reconstructing status from `git log`.
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
 | UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared primitives, result/title slices, UI visual harness, shared motion kit, reduced-motion coverage, UI motion/VFX bridge, Home instrument-console pass, and Map Select drop-briefing pass are live. Next UI work is HUD, pause, profile destructive states, and richer route/objective language. |
 | Carbon Engine source research | `docs/reference/CARBON-ENGINE-RESEARCH.md` | Added 2026-07-01; mine Carbon/Destiny/Trinity for stamped sim authority, relevance lanes, explicit render-plan discipline, asset manifests, and audio/VFX budgets without adopting Carbon as a dependency. |
+| v0.3 Ballpark architecture plan | `docs/v0.3/ROADMAP.md` | Planned 2026-07-01; branch-first structural roadmap for Ballpark Lite sim authority, ECS-ready data shape, multiplayer-minded snapshots/events, renderer contracts, and harness gates while `main` stays v0.2 demo-focused. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -107,6 +110,10 @@ capture, or compare.
 
 ### Current contract notes
 
+- v0.3 structural work should happen on a dedicated branch such as
+  `codex/v0.3-ballpark-roadmap`. Keep `main` focused on v0.2 demo fixes,
+  weekend builds, Deck deploys, and small product-polish corrections. Merge
+  `main` forward into v0.3 after demo fixes land.
 - The shipped loadout contract is still `2 equipped + 2 consumable` slots.
 - The older `3 artifact slots` idea remains a design/backlog item, not live runtime truth.
 - Public product name is **Last Singularity**. The repository path may remain `last-black-hole` until/unless the remote is renamed.
@@ -129,6 +136,10 @@ capture, or compare.
   snapshot/rebase tests, relevance lanes, render-pass budgets, material/asset
   manifests, and audio/VFX prioritization. Do not hide gameplay truth inside
   Three or chase native Carbon/Trinity adoption for v0.2.
+- The v0.3 application of that research is `docs/v0.3/ROADMAP.md`: a Ballpark
+  Lite authority layer with stable bodies, lifecycle, masks, query helpers,
+  stamped events, replication lanes, renderable hints, and structural harness
+  gates. This is ECS-ready architecture, not an immediate ECS rewrite.
 - Readability precedes timing. If a screen fails its static selected-action,
   primary-value, or local-backing read, brighten and compose it before adding
   new motion or VFX. Home and Map Select now have their first static slices; the

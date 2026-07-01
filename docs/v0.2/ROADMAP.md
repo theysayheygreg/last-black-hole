@@ -200,20 +200,37 @@ Definition of done:
 - The build does not promise public multiplayer.
 - Feedback can be gathered around movement, readability, and loop clarity.
 
-## v0.3 Candidate
+## v0.3 Candidate / Branch Plan
 
-v0.3 should be the first broader public-facing milestone only after:
+v0.3 planning now lives in `../v0.3/`. The initial planning branch is
+`codex/v0.3-ballpark-roadmap`, while `main` remains the v0.2 demo and
+stabilization line.
+
+v0.3 should become the production-readiness architecture release before it
+becomes a larger public content milestone. The current release thesis is:
+
+**Ballpark authority, ECS-ready shape, multiplayer-minded contracts.**
+
+That means:
+
+- add a small authoritative Ballpark Lite layer for dynamic bodies, lifecycle,
+  spatial queries, masks, and replication lanes;
+- move collision, pickup, extraction, death, signal, and movement contacts onto
+  shared sim-owned body/query helpers;
+- add stamped event history, snapshot watermarks, and bounded snapshot rings;
+- keep Three/VFX/UI as consumers of renderer-neutral snapshots and events, not
+  owners of gameplay truth;
+- upgrade the harness so it catches coordinate drift, stale events, unbounded
+  sim growth, and renderer-owned gameplay assumptions.
+
+The older public-facing v0.3 ideas still matter, but they should follow the
+architecture gate:
 
 - movement and slingshot are fun enough to play without objectives;
 - one full run loop is understandable;
 - meta progression has a reason to continue;
 - renderer identity is stable;
-- the public website/itch page can show real gameplay footage honestly.
+- local/Deck/web builds can show real gameplay footage honestly.
 
-Likely v0.3 themes:
-
-- public demo packaging;
-- hosted/private multiplayer decision;
-- procedural map generation or authored route campaign;
-- richer audio/Inhibitor identity;
-- public devlog cadence.
+See `../v0.3/ROADMAP.md` for delegated workstreams, milestones, options, and
+release gates.
