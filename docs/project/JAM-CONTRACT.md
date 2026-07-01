@@ -1,9 +1,9 @@
 # Game Jam Contract: Shifts, Checkpoints, and Agent Orchestration
 
-> Status: v0.2 process contract. This began as the 7-day jam coordination doc;
-> keep that historical context, but current agent work is centered on the
-> Three renderer, authoritative sim, platform targets, and periodic architecture
-> hygiene.
+> Status: v0.2/v0.3 branch process contract. This began as the 7-day jam
+> coordination doc; keep that historical context, but current agent work is
+> centered on the Three renderer, authoritative sim, platform targets,
+> next-version branch work, and periodic architecture hygiene.
 
 ---
 
@@ -274,6 +274,114 @@ At the end of a night shift, the working agent writes `docs/journal/reports/YYYY
 ---
 
 ## Task Sequencing Rules
+
+## Branching And Version-Line Protocol
+
+Detailed policy lives in `docs/project/BRANCHING-AND-RELEASE-LINES.md`. This
+section is the quick operating version.
+
+The project now has two active kinds of work:
+
+1. **Current public/demo line** — small fixes and polish that make the current
+   build more demoable.
+2. **Next-version line** — bigger systems work that should not destabilize the
+   public demo while it is still being shown.
+
+Treat these as separate release trains.
+
+### Branch Roles
+
+| Branch | Role | Allowed Work | Not Allowed |
+|--------|------|--------------|-------------|
+| `main` | Current v0.2 demo/public build line | Small fixes, playability polish, Deck deploy fixes, README/play instructions, build-status updates, v0.2 release artifacts | Large refactors, new architecture kernels, speculative renderer rewrites, broad harness migrations |
+| `codex/v0.3-ballpark-roadmap` | Current v0.3 integration branch | Ballpark authority, ECS-ready data shape, event/snapshot spine, renderer contracts, structural harness work, next-version docs | Weekend demo fixes that should ship immediately on v0.2 |
+| `codex/v0.3/<slice>` or equivalent | Optional child branch | One risky/overlapping v0.3 slice with a clear owner | Long-lived drift or mixed unrelated work |
+
+Greg can rename or replace the active next-version branch. Until then, agents
+should treat `codex/v0.3-ballpark-roadmap` as the v0.3 integration branch.
+
+### Routing Rules
+
+- If the work makes this weekend's demo better, it starts on `main`.
+- If the work changes architecture for the next version, it starts on the
+  active next-version branch.
+- If the work is a process rule that affects all agents now, land it on `main`
+  first, then merge `main` forward into the next-version branch.
+- If a next-version task reveals a current-version bug, fix the bug on `main`
+  first when practical, then merge forward.
+- Do not merge next-version work back to `main` until Greg explicitly calls the
+  v0.3 promotion.
+
+This is the new normal: **big changes go forward, small demo fixes stay
+public.**
+
+### Subagent Branch Discipline
+
+Every delegated task prompt should include:
+
+- target branch;
+- owned write scope;
+- files/modules to avoid;
+- expected validation lane;
+- whether the worker should commit directly or report a patch for integration.
+
+Default:
+
+- Direct commits to the next-version integration branch are acceptable only
+  when write scopes are disjoint.
+- Use child branches when two workers may touch the same file, especially
+  `scripts/sim-runtime.cjs`, `src/main.js`, `src/render-three/three-renderer.js`,
+  `tests/suite-manifest.cjs`, or shared docs.
+- One agent should act as integrator for high-conflict files.
+- Workers must not switch the shared main-thread checkout without saying so in
+  their handoff.
+
+### Merge Flow
+
+For a v0.2 demo fix:
+
+1. Start on `main`.
+2. Make the smallest useful fix.
+3. Run the risk-matched validation lane.
+4. Commit to `main`.
+5. If the fix still matters to v0.3, merge `main` into the v0.3 branch or
+   cherry-pick the single commit if the branch is intentionally isolated.
+
+For v0.3 structural work:
+
+1. Start from the active v0.3 integration branch.
+2. Use a child branch if the work overlaps another active slice.
+3. Keep commits slice-sized: scaffold, adapter, migration, harness gate,
+   cleanup.
+4. Run targeted tests first, then the branch's current integration gate.
+5. Do not change public v0.2 docs or release status unless the finding also
+   affects `main`.
+
+For promotion from v0.2 to v0.3:
+
+1. Greg calls the promotion window.
+2. Freeze new v0.2-only work except urgent demo fixes.
+3. Merge current `main` into the v0.3 branch.
+4. Resolve conflicts on the v0.3 branch, not on `main`.
+5. Run full release gates, including local playtest and Deck acceptance.
+6. Update version docs, build status, release notes, README, and public train.
+7. Merge v0.3 into `main` intentionally.
+8. Tag or build according to the release process.
+
+### Branch Checks
+
+Before any non-trivial edit, run:
+
+```sh
+git branch --show-current
+git status --short
+```
+
+If the branch does not match the work type, switch before editing. If switching
+would strand local changes, stop and decide whether to commit, stash, or move
+the changes to the right branch. Never use `git reset --hard` as branch hygiene.
+For the full branch policy, promotion flow, subagent prompt template, and
+validation expectations, read `docs/project/BRANCHING-AND-RELEASE-LINES.md`.
 
 ### When Agents Can Pick Up the Next Task
 An agent can autonomously start the next task when ALL of these are true:

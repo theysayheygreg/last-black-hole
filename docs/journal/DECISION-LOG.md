@@ -1,5 +1,27 @@
 # Decision Log
 
+## 2026-07-01 — Branch by version line, not by convenience
+
+**Decision:** Treat `main` as the current v0.2 demo/public build line and keep
+larger next-version work on a dedicated integration branch. For the current
+cycle, `codex/v0.3-ballpark-roadmap` is the active v0.3 branch. Small demo
+fixes land on `main`; structural v0.3 work lands on the v0.3 branch or
+short-lived children; `main` merges forward into v0.3 regularly; v0.3 does not
+merge back until Greg explicitly calls the promotion.
+
+**Why:** LBH now has two different risks. The public/demo build needs frequent
+small fixes without absorbing architecture churn. The v0.3 Ballpark/snapshot/
+renderer-contract work needs room to move fast without destabilizing the build
+Greg may show this weekend. Branching by version line makes that split obvious
+to agents and keeps handoffs honest.
+
+**Where it landed:** `docs/project/BRANCHING-AND-RELEASE-LINES.md`,
+`docs/project/JAM-CONTRACT.md`, and local agent instructions.
+
+**Door status:** Closed for casual large refactors directly on `main` while a
+public/demo line is active. Open for narrow cherry-picks from next-version work
+when the fix independently helps the current demo.
+
 ## 2026-07-01 — Carbon Engine is reference material, not a migration target
 
 **Decision:** Mine CCP's open-source Carbon Engine repos for durable patterns,

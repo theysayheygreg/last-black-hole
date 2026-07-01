@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-07-01 — Version-line branching process added
+
+- Added `docs/project/BRANCHING-AND-RELEASE-LINES.md` as the tracked process
+  source for branch roles, routing, merge cadence, promotion, and validation.
+- Added branch routing, subagent branch discipline, merge-forward cadence, and
+  promotion rules to `docs/project/JAM-CONTRACT.md`.
+- Logged the branch-by-version-line decision so future agents keep big
+  next-version work off the demo line until Greg calls promotion.
+
 ## 2026-07-01 — Carbon Engine research added
 
 - Investigated CCP's open-source Carbon Engine repos as LBH reference material:
