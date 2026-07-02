@@ -10,6 +10,7 @@
  * - fast: cheap commit canary
  * - core: stable local regression gate
  * - authority: control-plane/sim/remote stack
+ * - sim-structure: v0.3 body, query, event, and snapshot contracts
  * - visual: screenshot renderer fixtures
  * - playtest: real menu/input flows best reviewed in Codex Browser
  * - full: all committed automated suites

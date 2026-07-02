@@ -5,6 +5,23 @@
 
 ---
 
+## 2026-07-02 — v0.3 Ballpark runtime mirror slice
+
+- Added `scripts/sim/ballpark-mirror.cjs`, an observational adapter that
+  rebuilds the v0.3 `BodyRegistry` + `SpatialIndex` from live runtime players,
+  wells, stars, wrecks, portals, planetoids, scavengers, sentries, fauna, wave
+  emitters, and active Inhibitor state.
+- Wired the mirror into `scripts/sim-runtime.cjs` at session start, joins,
+  leaves, debug mutations, echo hydration, inventory actions, and authority
+  ticks without changing the normal `/snapshot` payload.
+- Exposed Ballpark stats through `/health.ballpark` and `/debug/ballpark` so
+  agents/tests can inspect body counts, categories, broadphase stats, duplicate
+  ids, skipped bodies, and rebuild cost.
+- Added `tests/ballpark-mirror.cjs` plus a `sim-structure` harness lane and
+  `npm run test:sim-structure` for v0.3 body/query/event/snapshot contracts.
+- Hardened the remote-authority slingshot fixture so it stays above the
+  server-side tangential-speed gate after the first authority integration step.
+
 ## 2026-07-01 — Version-line branching process added
 
 - Added `docs/project/BRANCHING-AND-RELEASE-LINES.md` as the tracked process

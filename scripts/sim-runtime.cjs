@@ -50,6 +50,7 @@ const {
   normalizeInputMessage,
   normalizeInventoryAction,
 } = require("./sim-protocol.cjs");
+const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -921,6 +922,7 @@ const runtime = {
   },
   players: new Map(),
   waveRings: [],
+  ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   coarseField: null,
   inhibitor: {
     pressure: 0,
@@ -980,6 +982,17 @@ function publishEvent(type, payload = {}) {
     runtime.recentEvents.shift();
   }
   return event;
+}
+
+function refreshBallparkMirror(reason = "runtime") {
+  if (!runtime.ballparkMirror) return null;
+  // v0.3 starts Ballpark as an observation layer. Rebuild-at-tick is simple
+  // and deterministic while the old arrays remain the public protocol view.
+  return runtime.ballparkMirror.rebuildFromRuntime(runtime, {
+    tick: runtime.tick,
+    simTime: runtime.simTime,
+    reason,
+  });
 }
 
 function applyOverloadProfile({ forceRestart = false } = {}) {
@@ -1271,6 +1284,7 @@ function startSession(config = {}) {
       for (const echo of echoes) {
         runtime.mapState.wrecks.push(hydrateEchoWreck(echo));
       }
+      refreshBallparkMirror("echo-hydration");
     })
     .catch((err) => {
       console.error('[echoes] hydrate failed:', err?.message || err);
@@ -1362,6 +1376,7 @@ function startSession(config = {}) {
     worldScale: runtime.session.worldScale,
     maxPlayers: runtime.session.maxPlayers,
   });
+  refreshBallparkMirror("session-started");
   persistSessionRegistry();
   restartTickLoop();
 }
@@ -5288,6 +5303,7 @@ function tickSim() {
     tickPlayerSignal(player, playerDt);
   }
   if (maybeEndTerminalSession()) return;
+  refreshBallparkMirror("tick");
 
   const alivePlayerCount = relevance.alivePlayers.length;
   const activeAiCount = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state !== "dying").length;
@@ -5396,6 +5412,7 @@ const server = http.createServer(async (req, res) => {
         simTime: runtime.simTime,
         playerCount: runtime.players.size,
         mapId: runtime.mapState.id,
+        ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
         match: {
           maxSimTime: MATCH_MAX_SIM_TIME,
           terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
@@ -5410,6 +5427,14 @@ const server = http.createServer(async (req, res) => {
         },
         idleState,
         shutdownReason: runtime.shutdownReason,
+      });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/debug/ballpark") {
+      sendJson(res, 200, {
+        ok: true,
+        ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
       });
       return;
     }
@@ -5598,6 +5623,7 @@ const server = http.createServer(async (req, res) => {
         restartTickLoop();
       }
 
+      refreshBallparkMirror("player-joined");
       sendJson(res, 200, { ok: true, player });
       return;
     }
@@ -5641,6 +5667,7 @@ const server = http.createServer(async (req, res) => {
       });
       promoteHostIfNeeded();
       persistSessionRegistry();
+      refreshBallparkMirror("player-left");
       sendJson(res, 200, { ok: true, session: runtime.session, playerCount: runtime.players.size });
       return;
     }
@@ -5698,6 +5725,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 409, { ok: false, error: result.error });
         return;
       }
+      refreshBallparkMirror("inventory-action");
       sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
       return;
     }
@@ -5716,6 +5744,7 @@ const server = http.createServer(async (req, res) => {
       }
       applyDebugPlayerState(player, body);
       maybeEndTerminalSession("terminal-players");
+      refreshBallparkMirror("debug-player-state");
       sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
       return;
     }
@@ -5727,6 +5756,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 409, { ok: false, error: "No inhibitor runtime state" });
         return;
       }
+      refreshBallparkMirror("debug-inhibitor-state");
       sendJson(res, 200, { ok: true, inhibitor, snapshot: snapshotBody() });
       return;
     }
@@ -5734,6 +5764,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/debug/portal-state") {
       const body = await readJson(req);
       const portal = applyDebugPortalState(body);
+      refreshBallparkMirror("debug-portal-state");
       sendJson(res, 200, { ok: true, portal, snapshot: snapshotBody() });
       return;
     }
@@ -5751,6 +5782,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       applyDebugScavengerState(scavenger, body);
+      refreshBallparkMirror("debug-scavenger-state");
       sendJson(res, 200, { ok: true, scavenger, snapshot: snapshotBody() });
       return;
     }

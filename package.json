@@ -36,6 +36,7 @@
     "test:three": "node tests/run-all.cjs --lane=three --renderer=three",
     "test:visual": "node tests/run-all.cjs --lane=visual --renderer=three",
     "test:authority": "node tests/run-all.cjs --lane=authority --renderer=three",
+    "test:sim-structure": "node tests/run-all.cjs --lane=sim-structure --renderer=three",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
     "test:telemetry": "node tests/telemetry-smoke.cjs",
     "test:renderer": "node tests/renderer.cjs \"index-a.html?renderer=three\"",

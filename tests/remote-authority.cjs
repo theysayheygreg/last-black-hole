@@ -417,7 +417,10 @@ async function run() {
         wx: startX,
         wy: startY,
         vx: 0,
-        vy: -0.35,
+        // The server applies flow/current coupling before the edge-triggered
+        // slingshot check, so the fixture needs enough tangential speed to
+        // remain above the authoritative gate after that first integration.
+        vy: -1.2,
         deltaV: 40,
         status: "alive",
         resetSlingshot: true,

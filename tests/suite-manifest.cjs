@@ -86,13 +86,19 @@ const SUITES = [
   {
     name: "BodyRegistry",
     file: "body-registry.cjs",
-    lanes: ["fast", "core", "static", "authority", "full"],
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
     browser: false,
   },
   {
     name: "SpatialIndex",
     file: "spatial-index.cjs",
-    lanes: ["fast", "core", "static", "authority", "full"],
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "BallparkMirror",
+    file: "ballpark-mirror.cjs",
+    lanes: ["core", "authority", "sim-structure", "full"],
     browser: false,
   },
   {
@@ -122,13 +128,13 @@ const SUITES = [
   {
     name: "ProtocolJournal",
     file: "protocol-journal.cjs",
-    lanes: ["fast", "core", "static", "authority", "full"],
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
     browser: false,
   },
   {
     name: "SnapshotRebase",
     file: "snapshot-rebase.cjs",
-    lanes: ["fast", "core", "static", "authority", "full"],
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
     browser: false,
   },
   {
@@ -284,6 +290,7 @@ const LANES = [
   "static",
   "browser",
   "authority",
+  "sim-structure",
   "visual",
   "playtest",
   "three",

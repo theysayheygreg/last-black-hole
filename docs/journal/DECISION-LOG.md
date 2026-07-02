@@ -1,5 +1,30 @@
 # Decision Log
 
+## 2026-07-02 — Ballpark enters runtime as a mirror before authority
+
+**Decision:** Wire the v0.3 Ballpark kernel into the live sim as an
+observational mirror first. The mirror rebuilds `BodyRegistry` and
+`SpatialIndex` state from the current v0.2 runtime arrays/maps and exposes
+stats through health/debug endpoints, but normal snapshots, movement, collision,
+pickup, extraction, death, signal, and renderer projection remain owned by the
+existing authoritative sim paths until parity tests exist for each migration
+lane.
+
+**Why:** This gives the branch structural truth without creating duplicate
+gameplay truth. Agents can now inspect body counts, categories, lifecycle,
+masks, broadphase stats, duplicate ids, and skipped bodies while the current
+demo protocol remains stable. It also creates a safe stepping stone for moving
+one interaction family at a time onto shared body/query helpers.
+
+**Where it landed:** `scripts/sim/ballpark-mirror.cjs`,
+`scripts/sim-runtime.cjs`, `tests/ballpark-mirror.cjs`,
+`tests/suite-manifest.cjs`, `package.json`, and
+`docs/design/TEST-HARNESS.md`.
+
+**Door status:** Closed for making Ballpark authoritative by implication.
+Open for migrating individual gameplay lanes after each lane has parity tests
+and a clear removal/demotion path for the old helper.
+
 ## 2026-07-01 — Branch by version line, not by convenience
 
 **Decision:** Treat `main` as the current v0.2 demo/public build line and keep

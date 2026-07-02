@@ -7,6 +7,12 @@
 **Target line:** v0.3, after the v0.2 demo/build line is stable enough to show
 publicly.
 
+**Current integration slice (2026-07-02):** Ballpark is now wired into the live
+sim as a mirror, not an authority. `scripts/sim/ballpark-mirror.cjs` rebuilds
+the `BodyRegistry` and `SpatialIndex` from current runtime state, `/health`
+and `/debug/ballpark` expose stats, and normal `/snapshot` output intentionally
+does not include Ballpark debug payloads.
+
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
 authoritative sim a boring, inspectable "Ballpark Lite" kernel that owns dynamic
@@ -113,6 +119,11 @@ arrays/maps remain the materialized v0.2 protocol view while the registry is
 introduced as an internal mirror. A gameplay lane only becomes Ballpark-owned
 after its parity tests are in place and the old inline helper can be removed or
 demoted to view construction.
+
+The first mirror slice is deliberately rebuild-based. That is less clever than
+incremental dirty updates, but it is deterministic, easy to compare, and safe
+while the old arrays still own behavior. Optimize or incrementally dirty-update
+only after query usage and body churn data justify the complexity.
 
 Use a toroidal uniform grid before considering a quadtree. LBH's current world
 is wrapped, dense, and radius-query heavy; a quadtree adds ceremony before the
@@ -225,6 +236,9 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Add schema validation for required body fields.
 - Keep `scripts/sim-runtime.cjs` behind an adapter initially; do not migrate
   all gameplay loops in the first commit.
+- Shipped first runtime slice: `BallparkMirror` observes the live sim, refreshes
+  on tick and explicit state mutations, and exposes health/debug stats without
+  changing client snapshots.
 
 **Acceptance:**
 
@@ -235,6 +249,9 @@ and expected output, so the main thread can coordinate without stepping on work.
   authoritative.
 - Snapshot/event JSON stays unchanged for v0.2 clients until a deliberate
   protocol version bump.
+- `npm run test:sim-structure` passes as the structural canary for
+  BodyRegistry, SpatialIndex, BallparkMirror, ProtocolJournal, and
+  SnapshotRebase.
 
 ### B. Movement And Body Adapters
 
