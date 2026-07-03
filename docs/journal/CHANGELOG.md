@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-07-03 — v0.3 Ballpark relevance query slice
+
+- Added `scripts/sim/sim-queries.cjs` as the first shared Ballpark query helper,
+  starting with center-distance relevance selection over mirrored bodies.
+- Routed live sim relevance for stars, wrecks, planetoids, and non-dying
+  scavengers through Ballpark queries while keeping dying scavengers, snapshots,
+  movement, pickups, extraction, death, and renderer projection on the existing
+  authoritative paths.
+- Added mirror-level query usage counters so `/health.ballpark` remains useful
+  even though the mirror still rebuilds its spatial index every tick.
+- Exposed `ballparkRelevance` in `/health` and `/debug/ballpark`, but kept the
+  normal `/snapshot` payload free of Ballpark diagnostics.
+- Added `tests/ballpark-queries.cjs` to the `sim-structure` and `authority`
+  lanes to prove the query helper behavior and live sim relevance routing.
+
 ## 2026-07-02 — v0.3 Ballpark runtime mirror slice
 
 - Added `scripts/sim/ballpark-mirror.cjs`, an observational adapter that

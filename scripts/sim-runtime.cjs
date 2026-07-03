@@ -50,7 +50,9 @@ const {
   normalizeInputMessage,
   normalizeInventoryAction,
 } = require("./sim-protocol.cjs");
+const { BODY_MASKS } = require("./sim/body-masks.cjs");
 const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
+const { collectRelevantBodies } = require("./sim/sim-queries.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -923,6 +925,7 @@ const runtime = {
   players: new Map(),
   waveRings: [],
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
+  ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
   coarseField: null,
   inhibitor: {
     pressure: 0,
@@ -3085,12 +3088,35 @@ function collectNearestByDistance(originWX, originWY, entities, limit, getPositi
   return ranked.slice(0, max);
 }
 
+function indexEntitiesById(entities) {
+  const byId = new Map();
+  for (const entity of entities || []) {
+    if (!entity || entity.id === undefined || entity.id === null) continue;
+    const id = String(entity.id);
+    if (!byId.has(id)) byId.set(id, entity);
+  }
+  return byId;
+}
+
 function buildRelevanceView() {
   const alivePlayers = getAlivePlayers();
   const entityRadius = runtime.session.entityRelevanceRadius || runtime.session.worldScale;
   const scavengerRadius = runtime.session.scavengerRelevanceRadius || entityRadius;
+  const relevanceStats = {
+    mode: "legacy",
+    tick: runtime.tick,
+    simTime: runtime.simTime,
+    categories: {},
+  };
 
   if (alivePlayers.length === 0) {
+    relevanceStats.mode = "empty";
+    relevanceStats.categories.scavenger = {
+      mode: "legacy",
+      selectedCount: runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state === "dying").length,
+      reason: "no-alive-players",
+    };
+    runtime.ballparkRelevance = relevanceStats;
     return {
       alivePlayers,
       stars: [],
@@ -3100,7 +3126,7 @@ function buildRelevanceView() {
     };
   }
 
-  function collectRelevantEntities(entities, radius, perPlayerLimit) {
+  function collectRelevantEntitiesLegacy(entities, radius, perPlayerLimit, category) {
     const limit = clampBudgetCount(perPlayerLimit, entities.length || 1);
     const selectedIds = new Set();
     const selected = [];
@@ -3122,35 +3148,108 @@ function buildRelevanceView() {
       }
     }
 
+    relevanceStats.categories[category] = {
+      mode: "legacy",
+      radius,
+      perPlayerLimit: limit,
+      selectedCount: selected.length,
+    };
     return selected;
   }
 
-  return {
+  function collectRelevantEntities(entities, radius, perPlayerLimit, category, query) {
+    if (!Array.isArray(entities) || entities.length === 0) {
+      relevanceStats.categories[category] = {
+        mode: "empty",
+        radius,
+        perPlayerLimit: 0,
+        selectedCount: 0,
+      };
+      return [];
+    }
+
+    const mirror = runtime.ballparkMirror;
+    const mirrorStats = mirror?.stats?.();
+    if (mirror && mirrorStats?.activeBodyCount > 0) {
+      const { bodies, stats } = collectRelevantBodies(mirror, alivePlayers, {
+        category,
+        radius,
+        perOriginLimit: clampBudgetCount(perPlayerLimit, entities.length || 1),
+        query,
+      });
+      const byId = indexEntitiesById(entities);
+      const selected = [];
+      let missingEntityCount = 0;
+      let inactiveEntityCount = 0;
+      for (const hit of bodies) {
+        const entity = byId.get(String(hit.sourceId));
+        if (!entity) {
+          missingEntityCount += 1;
+          continue;
+        }
+        if (entity.alive === false) {
+          inactiveEntityCount += 1;
+          continue;
+        }
+        selected.push(entity);
+      }
+      relevanceStats.mode = "ballpark";
+      relevanceStats.categories[category] = {
+        ...stats,
+        materializedCount: selected.length,
+        missingEntityCount,
+        inactiveEntityCount,
+      };
+      return selected;
+    }
+
+    return collectRelevantEntitiesLegacy(entities, radius, perPlayerLimit, category);
+  }
+
+  const dyingScavengers = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state === "dying");
+  const nonDyingScavengers = runtime.mapState.scavengers.filter((scav) => scav.state !== "dying");
+
+  const view = {
     alivePlayers,
     stars: collectRelevantEntities(
       runtime.mapState.stars,
       entityRadius,
-      runtime.session.maxRelevantStarsPerPlayer || runtime.mapState.stars.length || 1
+      runtime.session.maxRelevantStarsPerPlayer || runtime.mapState.stars.length || 1,
+      "star",
+      { collisionMask: BODY_MASKS.STAR }
     ),
     wrecks: collectRelevantEntities(
       runtime.mapState.wrecks,
       entityRadius,
-      runtime.session.maxRelevantWrecksPerPlayer || runtime.mapState.wrecks.length || 1
+      runtime.session.maxRelevantWrecksPerPlayer || runtime.mapState.wrecks.length || 1,
+      "wreck",
+      { interactionMask: BODY_MASKS.PICKUP }
     ),
     planetoids: collectRelevantEntities(
       runtime.mapState.planetoids,
       entityRadius,
-      runtime.session.maxRelevantPlanetoidsPerPlayer || runtime.mapState.planetoids.length || 1
+      runtime.session.maxRelevantPlanetoidsPerPlayer || runtime.mapState.planetoids.length || 1,
+      "planetoid",
+      { collisionMask: BODY_MASKS.PLANETOID }
     ),
     scavengers: [
-      ...runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state === "dying"),
+      ...dyingScavengers,
       ...collectRelevantEntities(
-        runtime.mapState.scavengers.filter((scav) => scav.state !== "dying"),
+        nonDyingScavengers,
         scavengerRadius,
-        runtime.session.maxRelevantScavengersPerPlayer || runtime.mapState.scavengers.length || 1
+        runtime.session.maxRelevantScavengersPerPlayer || runtime.mapState.scavengers.length || 1,
+        "scavenger",
+        { collisionMask: BODY_MASKS.AI, lifecycleStates: ["alive", "spawning"] }
       ),
     ].filter((scav, index, list) => list.findIndex((entry) => entry.id === scav.id) === index),
   };
+  relevanceStats.categories.scavenger = {
+    ...(relevanceStats.categories.scavenger || {}),
+    dyingAlwaysRelevantCount: dyingScavengers.length,
+    totalSelectedCount: view.scavengers.length,
+  };
+  runtime.ballparkRelevance = relevanceStats;
+  return view;
 }
 
 function steerToward(entity, targetWX, targetWY, intensity = 1) {
@@ -5413,6 +5512,7 @@ const server = http.createServer(async (req, res) => {
         playerCount: runtime.players.size,
         mapId: runtime.mapState.id,
         ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
+        ballparkRelevance: runtime.ballparkRelevance,
         match: {
           maxSimTime: MATCH_MAX_SIM_TIME,
           terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
@@ -5435,6 +5535,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, {
         ok: true,
         ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
+        relevance: runtime.ballparkRelevance,
       });
       return;
     }

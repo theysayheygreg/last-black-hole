@@ -7,11 +7,14 @@
 **Target line:** v0.3, after the v0.2 demo/build line is stable enough to show
 publicly.
 
-**Current integration slice (2026-07-02):** Ballpark is now wired into the live
-sim as a mirror, not an authority. `scripts/sim/ballpark-mirror.cjs` rebuilds
-the `BodyRegistry` and `SpatialIndex` from current runtime state, `/health`
-and `/debug/ballpark` expose stats, and normal `/snapshot` output intentionally
-does not include Ballpark debug payloads.
+**Current integration slice (2026-07-03):** Ballpark is now wired into the live
+sim as a mirror plus a read-only relevance query adapter, not gameplay
+authority. `scripts/sim/ballpark-mirror.cjs` rebuilds the `BodyRegistry` and
+`SpatialIndex` from current runtime state, `scripts/sim/sim-queries.cjs` lets
+`buildRelevanceView()` select stars, wrecks, planetoids, and non-dying
+scavengers through the mirror, `/health` and `/debug/ballpark` expose body and
+query stats, and normal `/snapshot` output intentionally does not include
+Ballpark debug payloads.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -239,6 +242,9 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Shipped first runtime slice: `BallparkMirror` observes the live sim, refreshes
   on tick and explicit state mutations, and exposes health/debug stats without
   changing client snapshots.
+- Shipped first query slice: `sim-queries.cjs` provides center-distance
+  relevance selection over mirrored bodies, and the live sim uses it for
+  read-only relevance families while consequence checks remain on old paths.
 
 **Acceptance:**
 
@@ -250,8 +256,8 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Snapshot/event JSON stays unchanged for v0.2 clients until a deliberate
   protocol version bump.
 - `npm run test:sim-structure` passes as the structural canary for
-  BodyRegistry, SpatialIndex, BallparkMirror, ProtocolJournal, and
-  SnapshotRebase.
+  BodyRegistry, SpatialIndex, BallparkMirror, BallparkQueries,
+  ProtocolJournal, and SnapshotRebase.
 
 ### B. Movement And Body Adapters
 
@@ -279,6 +285,9 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Replace nearest/relevance helper calls gradually: nearest well, nearest
   portal, nearest unlooted wreck, pulse radius scans, pickup checks, extraction
   checks, and `buildRelevanceView`.
+- Shipped first adapter slice: `buildRelevanceView()` now uses Ballpark for
+  stars, wrecks, planetoids, and non-dying scavengers, with dying scavengers
+  still always relevant and the old scan path retained as fallback.
 - Preserve the current movement feel while routing body positions/radii through
   shared coordinate and world-distance helpers.
 - Add explicit movement modes: drift, thrust, brake, slingshot approach,
@@ -504,6 +513,7 @@ and expected output, so the main thread can coordinate without stepping on work.
 ### v0.3.2 - Movement Mirror
 
 - Mirror players and major world objects into Ballpark bodies.
+- Route read-only relevance through Ballpark queries before consequence checks.
 - Extract movement step and compare against golden fixture tolerances.
 - Add movement/body debug stats.
 

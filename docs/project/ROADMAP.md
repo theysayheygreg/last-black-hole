@@ -69,7 +69,7 @@ reading stale health records or reconstructing status from `git log`.
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
 | UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared primitives, result/title slices, UI visual harness, shared motion kit, reduced-motion coverage, UI motion/VFX bridge, Home instrument-console pass, and Map Select drop-briefing pass are live. Next UI work is HUD, pause, profile destructive states, and richer route/objective language. |
 | Carbon Engine source research | `docs/reference/CARBON-ENGINE-RESEARCH.md` | Added 2026-07-01; mine Carbon/Destiny/Trinity for stamped sim authority, relevance lanes, explicit render-plan discipline, asset manifests, and audio/VFX budgets without adopting Carbon as a dependency. |
-| v0.3 Ballpark architecture plan | `docs/v0.3/ROADMAP.md` | Planned 2026-07-01; branch-first structural roadmap for Ballpark Lite sim authority, ECS-ready data shape, multiplayer-minded snapshots/events, renderer contracts, and harness gates while `main` stays v0.2 demo-focused. |
+| v0.3 Ballpark architecture plan | `docs/v0.3/ROADMAP.md` | Planned 2026-07-01; branch-first structural roadmap for Ballpark Lite sim authority, ECS-ready data shape, multiplayer-minded snapshots/events, renderer contracts, and harness gates while `main` stays v0.2 demo-focused. First mirror and read-only relevance query slices are live on the v0.3 branch. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
@@ -139,7 +139,9 @@ capture, or compare.
 - The v0.3 application of that research is `docs/v0.3/ROADMAP.md`: a Ballpark
   Lite authority layer with stable bodies, lifecycle, masks, query helpers,
   stamped events, replication lanes, renderable hints, and structural harness
-  gates. This is ECS-ready architecture, not an immediate ECS rewrite.
+  gates. The current branch has a runtime mirror and read-only relevance query
+  adapter; consequence checks still need explicit parity gates. This is
+  ECS-ready architecture, not an immediate ECS rewrite.
 - Readability precedes timing. If a screen fails its static selected-action,
   primary-value, or local-backing read, brighten and compose it before adding
   new motion or VFX. Home and Map Select now have their first static slices; the

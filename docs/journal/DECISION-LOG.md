@@ -1,5 +1,29 @@
 # Decision Log
 
+## 2026-07-03 — Ballpark relevance before Ballpark consequences
+
+**Decision:** Let the v0.3 Ballpark mirror answer read-only relevance queries
+before it owns gameplay consequences. Live sim relevance for stars, wrecks,
+planetoids, and non-dying scavengers now routes through `scripts/sim/sim-queries.cjs`
+and the mirrored `SpatialIndex`. Normal snapshots remain unchanged, and
+movement, collision, pickup, extraction, death, signal, and renderer projection
+still use the existing authoritative runtime paths.
+
+**Why:** Relevance is the safest first query migration because it reduces
+hand-rolled per-category scans without deciding whether the player died,
+looted, extracted, or moved. It also gives useful broadphase/query stats while
+the mirror is still rebuild-based and observational.
+
+**Where it landed:** `scripts/sim/sim-queries.cjs`,
+`scripts/sim-runtime.cjs`, `scripts/sim/ballpark-mirror.cjs`,
+`tests/ballpark-queries.cjs`, `tests/suite-manifest.cjs`, and
+`docs/v0.3/ROADMAP.md`.
+
+**Door status:** Closed for migrating consequence checks by implication. Open
+for the next explicit parity-gated query family: nearest well/portal/wreck,
+then pickup/extraction/contact only after the test harness proves equivalent
+outcomes.
+
 ## 2026-07-02 — Ballpark enters runtime as a mirror before authority
 
 **Decision:** Wire the v0.3 Ballpark kernel into the live sim as an

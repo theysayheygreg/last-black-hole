@@ -82,6 +82,7 @@ class BallparkMirror {
     this.cellSize = positiveNumber(options.cellSize, DEFAULT_CELL_SIZE);
     this.registry = new BodyRegistry({ worldScale: this.worldScale });
     this.index = new SpatialIndex({ worldScale: this.worldScale, cellSize: this.cellSize });
+    this.queryUsage = this._emptyQueryUsage();
     this.lastStats = this._emptyStats();
   }
 
@@ -133,6 +134,7 @@ class BallparkMirror {
       duplicateIds,
       registry: registry.stats(),
       spatialIndex: index.stats(),
+      queryUsage: this._cloneQueryUsage(),
     };
     return this.stats();
   }
@@ -145,15 +147,24 @@ class BallparkMirror {
       duplicateIds: [...(this.lastStats.duplicateIds || [])],
       registry: this.registry.stats(),
       spatialIndex: this.index.stats(),
+      queryUsage: this._cloneQueryUsage(),
     };
   }
 
   queryCircle(...args) {
-    return this.index.queryCircle(...args);
+    const before = this.index.stats();
+    const started = performance.now();
+    const hits = this.index.queryCircle(...args);
+    this._recordQuery("queryCircle", before, hits, started);
+    return hits;
   }
 
   nearest(...args) {
-    return this.index.nearest(...args);
+    const before = this.index.stats();
+    const started = performance.now();
+    const hits = this.index.nearest(...args);
+    this._recordQuery("nearest", before, hits, started);
+    return hits;
   }
 
   getBodyById(id) {
@@ -177,7 +188,45 @@ class BallparkMirror {
       duplicateIds: [],
       registry: this.registry.stats(),
       spatialIndex: this.index.stats(),
+      queryUsage: this._cloneQueryUsage(),
     };
+  }
+
+  _emptyQueryUsage() {
+    return {
+      queryCount: 0,
+      queryCircleCount: 0,
+      nearestCount: 0,
+      candidateCount: 0,
+      hitCount: 0,
+      maskRejects: 0,
+      stateRejects: 0,
+      duplicateCandidates: 0,
+      lastKind: null,
+      lastHitCount: 0,
+      lastQueryMs: 0,
+      totalQueryMs: 0,
+    };
+  }
+
+  _cloneQueryUsage() {
+    return { ...this.queryUsage };
+  }
+
+  _recordQuery(kind, before, hits, started) {
+    const after = this.index.stats();
+    const elapsedMs = performance.now() - started;
+    this.queryUsage.queryCount += 1;
+    this.queryUsage[`${kind}Count`] = (this.queryUsage[`${kind}Count`] || 0) + 1;
+    this.queryUsage.candidateCount += Math.max(0, after.candidateCount - before.candidateCount);
+    this.queryUsage.hitCount += Array.isArray(hits) ? hits.length : 0;
+    this.queryUsage.maskRejects += Math.max(0, after.maskRejects - before.maskRejects);
+    this.queryUsage.stateRejects += Math.max(0, after.stateRejects - before.stateRejects);
+    this.queryUsage.duplicateCandidates += Math.max(0, after.duplicateCandidates - before.duplicateCandidates);
+    this.queryUsage.lastKind = kind;
+    this.queryUsage.lastHitCount = Array.isArray(hits) ? hits.length : 0;
+    this.queryUsage.lastQueryMs = Number(elapsedMs.toFixed(3));
+    this.queryUsage.totalQueryMs = Number((this.queryUsage.totalQueryMs + elapsedMs).toFixed(3));
   }
 
   _addPlayers(runtime, addBody) {

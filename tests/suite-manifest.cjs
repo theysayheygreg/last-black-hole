@@ -102,6 +102,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "BallparkQueries",
+    file: "ballpark-queries.cjs",
+    lanes: ["core", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "ControlPlane",
     file: "control-plane.cjs",
     lanes: ["core", "authority", "full"],
