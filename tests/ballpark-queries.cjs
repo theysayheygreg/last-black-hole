@@ -1,9 +1,9 @@
 const { TestRunner, assert, startSimServer, stopSimServer } = require("./helpers.cjs");
 const { BODY_MASKS } = require("../scripts/sim/body-masks.cjs");
 const { createBallparkMirror } = require("../scripts/sim/ballpark-mirror.cjs");
-const { collectRelevantBodies } = require("../scripts/sim/sim-queries.cjs");
+const { collectNearestBodies, collectRelevantBodies } = require("../scripts/sim/sim-queries.cjs");
 
-const SIM_PORT = 8798;
+const SIM_PORT = 8804;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 
 async function getJson(path, options) {
@@ -40,7 +40,10 @@ function fakeQueryRuntime() {
         { id: "radius-edge", wx: 2.25, wy: 2, radius: 0.2, alive: true },
       ],
       wrecks: [],
-      portals: [],
+      portals: [
+        { id: "blocked", wx: 2.05, wy: 2, alive: true, blockedByInhibitor: true },
+        { id: "open", wx: 2.2, wy: 2, alive: true },
+      ],
       planetoids: [],
       scavengers: [],
       sentries: [],
@@ -67,6 +70,25 @@ async function run() {
     assert(bodies[0].sourceId === "near", `Expected near star, got ${bodies[0].sourceId}`);
     assert(stats.radiusRejects === 1, `Expected radius-edge candidate to be rejected, got ${JSON.stringify(stats)}`);
     assert(mirror.stats().queryUsage.queryCircleCount === 1, "Expected mirror query usage to record helper query");
+  });
+
+  await runner.run("Collects nearest available bodies with lifecycle filtering", async () => {
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(fakeQueryRuntime(), { reason: "nearest-test" });
+
+    const { bodies, stats } = collectNearestBodies(mirror, { wx: 2, wy: 2 }, {
+      category: "portal",
+      radius: 1,
+      limit: 2,
+      query: {
+        interactionMask: BODY_MASKS.PORTAL,
+        lifecycleStates: ["alive", "spawning"],
+      },
+    });
+
+    assert(bodies.length === 1, `Expected one available portal, got ${bodies.map((hit) => hit.id).join(",")}`);
+    assert(bodies[0].sourceId === "open", `Expected open portal, got ${bodies[0].sourceId}`);
+    assert(stats.selectedCount === 1, `Expected selected count 1, got ${JSON.stringify(stats)}`);
   });
 
   await runner.run("Live sim uses Ballpark for relevance without changing snapshots", async () => {

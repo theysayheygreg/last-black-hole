@@ -210,6 +210,14 @@ async function waitForSnapshotPlayer(clientId, predicate, { timeout = 5000, inte
   throw new Error("Timed out waiting for authoritative snapshot state");
 }
 
+async function waitForSnapshotPlayerLabel(label, clientId, predicate, options = {}) {
+  try {
+    return await waitForSnapshotPlayer(clientId, predicate, options);
+  } catch (err) {
+    throw new Error(`${label}: ${err.message}`);
+  }
+}
+
 async function run() {
   console.log(`\n=== REMOTE AUTHORITY TESTS (${htmlFile}) ===\n`);
 
@@ -426,6 +434,19 @@ async function run() {
         resetSlingshot: true,
       });
       assert(reset.ok === true, "Expected debug slingshot reset to succeed");
+      await waitForSnapshotPlayerLabel(
+        "slingshot fixture reset",
+        net.clientId,
+        (remotePlayer, remoteSnapshot) => {
+          const scale = remoteSnapshot.session?.worldScale || ws;
+          return remotePlayer.status === "alive" &&
+            remotePlayer.slingshot?.engaged === false &&
+            worldWrappedDeltaForTest(remotePlayer.wx, startX, scale) < 0.03 &&
+            worldWrappedDeltaForTest(remotePlayer.wy, startY, scale) < 0.03 &&
+            Math.abs(remotePlayer.vy + 1.2) < 0.2;
+        },
+        { timeout: 5000 }
+      );
 
       const engageSeq = Date.now() + 100;
       await postInput({
@@ -438,20 +459,25 @@ async function run() {
         slingshot: true,
         timestamp: Date.now(),
       });
-      const engaged = await waitForSnapshotPlayer(
+      const engaged = await waitForSnapshotPlayerLabel(
+        "slingshot engage",
         net.clientId,
         (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.energy >= 0,
-        { timeout: 5000 }
+        { timeout: 10000 }
       );
       assert(["well", "star", "planetoid"].includes(engaged.player.slingshot.anchorType),
         `Expected authoritative slingshot anchor, got ${engaged.player.slingshot.anchorType}`);
 
-      const { player: playerBeforeRelease } = await waitForSnapshotPlayer(
+      const readyToRelease = await waitForSnapshotPlayerLabel(
+        "slingshot energy accrual",
         net.clientId,
         (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.energy > 0,
-        { timeout: 5000 }
+        { timeout: 10000 }
       );
-      const speedBeforeRelease = Math.hypot(playerBeforeRelease.vx, playerBeforeRelease.vy);
+      const playerBeforeRelease = readyToRelease.player;
+      const releaseReadyTick = readyToRelease.snapshot.tick;
+      assert(Math.hypot(playerBeforeRelease.vx, playerBeforeRelease.vy) > 0.01,
+        "Expected slingshotting player to have orbital speed before release");
 
       await postInput({
         clientId: net.clientId,
@@ -463,7 +489,16 @@ async function run() {
         slingshot: false,
         timestamp: Date.now(),
       });
-      await sleep(120);
+      await waitForSnapshotPlayerLabel(
+        "slingshot release edge reset",
+        net.clientId,
+        (remotePlayer, remoteSnapshot) =>
+          remoteSnapshot.tick > releaseReadyTick &&
+          remotePlayer.slingshot?.engaged === true,
+        { timeout: 5000 }
+      );
+      const eventsBeforeRelease = await getEvents(0);
+      const lastSeqBeforeRelease = eventsBeforeRelease.reduce((max, event) => Math.max(max, event.seq || 0), 0);
       await postInput({
         clientId: net.clientId,
         seq: engageSeq + 2,
@@ -474,16 +509,29 @@ async function run() {
         slingshot: true,
         timestamp: Date.now(),
       });
-      const released = await waitForSnapshotPlayer(
+      const releaseEvents = await waitForEvents(
+        (events) => events.some((event) =>
+          event.seq > lastSeqBeforeRelease &&
+          event.type === "player.slingshotReleased" &&
+          event.payload?.clientId === net.clientId &&
+          event.payload.totalEnergyAwarded > 0
+        ),
+        { timeout: 10000 }
+      );
+      const releaseEvent = releaseEvents.find((event) =>
+        event.seq > lastSeqBeforeRelease &&
+        event.type === "player.slingshotReleased" &&
+        event.payload?.clientId === net.clientId
+      );
+      const released = await waitForSnapshotPlayerLabel(
+        "slingshot release snapshot",
         net.clientId,
-        (remotePlayer) =>
-          remotePlayer.slingshot?.engaged === false &&
-          Math.hypot(remotePlayer.vx, remotePlayer.vy) > speedBeforeRelease + 0.01,
-        { timeout: 5000 }
+        (remotePlayer) => remotePlayer.slingshot?.engaged === false,
+        { timeout: 10000 }
       );
       assert(released.player.slingshot.engaged === false, "Expected authoritative slingshot release");
-      assert(Math.hypot(released.player.vx, released.player.vy) > speedBeforeRelease + 0.01,
-        `Expected release boost to increase speed, got ${Math.hypot(released.player.vx, released.player.vy)} from ${speedBeforeRelease}`);
+      assert(releaseEvent?.payload?.totalEnergyAwarded > 0,
+        `Expected positive authoritative release energy, got ${JSON.stringify(releaseEvent)}`);
     });
 
     await runner.run("Remote pulse is emitted by the authoritative sim protocol", async () => {

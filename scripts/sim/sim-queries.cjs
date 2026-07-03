@@ -93,7 +93,15 @@ function collectRelevantBodies(mirror, origins, options = {}) {
   return { bodies: selectedBodies, stats };
 }
 
+function collectNearestBodies(mirror, origin, options = {}) {
+  return collectRelevantBodies(mirror, [origin], {
+    ...options,
+    perOriginLimit: positiveInteger(options.limit, 1),
+  });
+}
+
 module.exports = {
+  collectNearestBodies,
   collectRelevantBodies,
   sourceIdForHit,
 };

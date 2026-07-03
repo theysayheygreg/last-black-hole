@@ -19,6 +19,12 @@
   normal `/snapshot` payload free of Ballpark diagnostics.
 - Added `tests/ballpark-queries.cjs` to the `sim-structure` and `authority`
   lanes to prove the query helper behavior and live sim relevance routing.
+- Added a tested `collectNearestBodies()` helper as prep for the next nearest
+  well/portal/wreck migration, but kept those live runtime helpers on the
+  legacy path until their full parity/perf slice is ready.
+- Hardened the remote-authority slingshot fixture so release validation waits
+  on sim ticks, the authoritative event journal, and final snapshot state
+  instead of a brittle frame-local speed delta.
 
 ## 2026-07-02 — v0.3 Ballpark runtime mirror slice
 

@@ -245,6 +245,10 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Shipped first query slice: `sim-queries.cjs` provides center-distance
   relevance selection over mirrored bodies, and the live sim uses it for
   read-only relevance families while consequence checks remain on old paths.
+- Shipped helper prep for the next slice: `collectNearestBodies()` is tested for
+  nearest body selection and lifecycle filtering, but nearest well/portal/wreck
+  runtime helpers intentionally still use the legacy loops until the migration
+  has dedicated parity and perf evidence.
 
 **Acceptance:**
 
@@ -288,6 +292,9 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Shipped first adapter slice: `buildRelevanceView()` now uses Ballpark for
   stars, wrecks, planetoids, and non-dying scavengers, with dying scavengers
   still always relevant and the old scan path retained as fallback.
+- Prepared `collectNearestBodies()` for the next nearest-helper migration; do
+  not wire nearest well/portal/wreck live until the full authority lane remains
+  green and the slice has explicit old-vs-Ballpark parity checks.
 - Preserve the current movement feel while routing body positions/radii through
   shared coordinate and world-distance helpers.
 - Add explicit movement modes: drift, thrust, brake, slingshot approach,
@@ -514,6 +521,8 @@ and expected output, so the main thread can coordinate without stepping on work.
 
 - Mirror players and major world objects into Ballpark bodies.
 - Route read-only relevance through Ballpark queries before consequence checks.
+- Add nearest-query parity for wells, portals, and unlooted wrecks before
+  replacing the live helpers.
 - Extract movement step and compare against golden fixture tolerances.
 - Add movement/body debug stats.
 
