@@ -18,7 +18,10 @@ Ballpark debug payloads. Nearest well, unlooted wreck, and available portal
 selection now have old-vs-Ballpark parity tests, including wrap-edge cases.
 Wreck pickup is the first migrated consequence adapter: Ballpark supplies the
 nearby pickup candidates, while the existing authoritative sim path still owns
-cargo transfer, looted state, signal spikes, and `player.loot` events.
+cargo transfer, looted state, signal spikes, and `player.loot` events. The
+server movement drive/brake/integrate core now lives in a shared movement-step
+module with golden fixtures so future force/collision extraction can prove it
+did not retune basic control math by accident.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -307,6 +310,10 @@ and expected output, so the main thread can coordinate without stepping on work.
   `tests/ballpark-pickup.cjs` proving a fresh authoritative sim can loot a real
   wreck through Ballpark-selected candidates while preserving cargo and event
   consequences.
+- Extracted the deterministic drive/brake/integrate phases into
+  `scripts/sim/player-movement-step.cjs` and added movement golden fixtures for
+  thrust, braking, current coupling, speed clamp, world wrap, and non-default
+  brain coefficients.
 - Preserve the current movement feel while routing body positions/radii through
   shared coordinate and world-distance helpers.
 - Add explicit movement modes: drift, thrust, brake, slingshot approach,

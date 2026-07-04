@@ -18,6 +18,10 @@
 - Added `tests/ballpark-pickup.cjs` to prove a fresh sim can loot a real wreck
   through the migrated candidate path and still publish the same authoritative
   consequence.
+- Extracted the deterministic server movement drive/brake/integrate phases into
+  `scripts/sim/player-movement-step.cjs` and added `tests/movement-golden.cjs`
+  with fixed numeric fixtures for thrust, braking, current coupling, speed
+  clamp, wrapping, and non-default brain coefficients.
 - Kept extraction, death, movement, and other consequence families on the
   existing runtime paths until their family-specific outcome tests pass.
 

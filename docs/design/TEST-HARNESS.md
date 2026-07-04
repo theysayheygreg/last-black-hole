@@ -123,7 +123,7 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:ui` | Focused UI visual pass. Captures title, profile, home, map select, in-match HUD, extraction results, and death results with 50%/25% couch-proxy images. |
 | `npm run test:ui-motion` | Pure Node checks for shared UI motion helpers: reduced-motion resolution, reveal clips, type-on text, command pulses, and directional wipes. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
-| `npm run test:sim-structure` | v0.3 structural canary for Ballpark bodies, relevance/query adapters, first consequence adapters, event journal, and snapshot ring contracts. |
+| `npm run test:sim-structure` | v0.3 structural canary for Ballpark bodies, relevance/query adapters, movement golden fixtures, first consequence adapters, event journal, and snapshot ring contracts. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
 
@@ -199,7 +199,7 @@ as a false art-direction verdict.
 | `static` | pure Node/data invariants | browser or process lifecycle |
 | `browser` | headless browser checks through `__TEST_API` | aesthetic approval |
 | `authority` | sim/control-plane/remote protocol health | local-only visual questions |
-| `sim-structure` | Ballpark body/query mirror, relevance adapters, first consequence adapters, event journal, and snapshot ring contracts | browser visuals or playfeel |
+| `sim-structure` | Ballpark body/query mirror, relevance adapters, movement golden fixtures, first consequence adapters, event journal, and snapshot ring contracts | browser visuals or playfeel |
 | `visual` | deterministic renderer fixtures and screenshot manifests | gameplay balance |
 | `playtest` | synthetic real-flow menu/input coverage | final UX judgment |
 | `full` | all committed automated suites | Codex app browser/manual review |

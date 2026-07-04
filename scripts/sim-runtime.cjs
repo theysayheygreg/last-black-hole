@@ -53,6 +53,10 @@ const {
 const { BODY_MASKS } = require("./sim/body-masks.cjs");
 const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
 const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queries.cjs");
+const {
+  applyPlayerBrakeAndIntegrate,
+  applyPlayerDriveAndFlow,
+} = require("./sim/player-movement-step.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -183,14 +187,6 @@ const SERVER_COMBAT = {
   pulseRecoilForce: 0.4,
   timeSlowScale: 0.3,
   timeSlowDuration: 3.0,
-};
-const SERVER_INPUT = {
-  baseDragPer60HzFrame: 0.015,
-  fluidCoupling: 1.2,
-  brakeThrustScale: 0.4,
-  brakeFuelScale: 0.6,
-  maxSpeedWorld: 8.0,
-  deltaVRegenDelay: 0.5,
 };
 const SERVER_WELLS = {
   shipPullStrength: 0.6,
@@ -4719,41 +4715,6 @@ function getMomentumShieldMult(player) {
   return 1 - HULL_DEFINITIONS.breacher.abilities.momentumShield.wellPullReduction;
 }
 
-function consumePlayerDeltaV(player, intensity, dt, costScale = 1) {
-  const requested = Math.max(0, Math.min(1, Number(intensity) || 0));
-  if (requested <= 0 || player.deltaV <= 0) return 0;
-  const burnRate = (player.deltaVBurnRate || BRAIN_DEFAULTS.deltaVBurnRate)
-    * (player.deltaVBurnEff || 1)
-    * costScale;
-  const burnCost = burnRate * requested * dt;
-  const allowedRatio = burnCost > 0 ? Math.min(1, player.deltaV / burnCost) : 1;
-  player.deltaV = Math.max(0, player.deltaV - burnCost * allowedRatio);
-  return requested * allowedRatio;
-}
-
-function applyPlayerDeltaVRegen(player, dt, burned) {
-  if (burned) {
-    player.timeSinceThrust = 0;
-    return;
-  }
-  player.timeSinceThrust = (player.timeSinceThrust || 0) + dt;
-  const boost = player.timeSinceThrust >= SERVER_INPUT.deltaVRegenDelay
-    ? (player.deltaVRegenBoost || 0)
-    : 0;
-  const regenRate = (player.deltaVRegen || 0) + boost;
-  player.deltaV = Math.min(player.deltaVMax || BRAIN_DEFAULTS.deltaVMax, (player.deltaV || 0) + regenRate * dt);
-}
-
-function clampPlayerSpeed(player) {
-  const speed = Math.hypot(player.vx, player.vy);
-  const maxSpeed = SERVER_INPUT.maxSpeedWorld;
-  if (Number.isFinite(maxSpeed) && speed > maxSpeed) {
-    const scale = maxSpeed / speed;
-    player.vx *= scale;
-    player.vy *= scale;
-  }
-}
-
 // --- Gradient Sentries (Active Tier) ---
 // Patrol well orbits at ringOuter × 1.2-1.8. Three states:
 // patrol (orbit) → lunge (rush toward player) → recover (drift back to orbit).
@@ -5404,19 +5365,13 @@ function tickSim() {
 
     const controlMult = player.controlDebuff > 0 ? INHIBITOR_CONFIG.swarmControlDebuffMult : 1.0;
     const b = player.brain || BRAIN_DEFAULTS;
-    const burnMod = getBurnModifiers(player);
-    const thrustIntensity = consumePlayerDeltaV(player, input.thrust, playerDt, 1);
-    const accel = 2.5 * b.thrustScale * burnMod.thrust * thrustIntensity * controlMult;
-    player.vx += input.moveX * accel * playerDt;
-    player.vy += input.moveY * accel * playerDt;
-
-    // Match the client: every hull lerps toward the sampled current, and
-    // currentCoupling scales that baseline instead of being a delta from 1.
     const flowSample = estimateFlowSample(player.wx, player.wy);
-    const currentCoupling = Math.max(0, Number(b.currentCoupling) || 0);
-    const coupling = Math.min(SERVER_INPUT.fluidCoupling * currentCoupling * playerDt, 0.5);
-    player.vx = player.vx * (1 - coupling) + flowSample.current.x * coupling;
-    player.vy = player.vy * (1 - coupling) + flowSample.current.y * coupling;
+    const driveStep = applyPlayerDriveAndFlow(player, input, playerDt, {
+      brain: b,
+      burnModifiers: getBurnModifiers(player),
+      controlMult,
+      flowSample,
+    });
 
     applyWellGravity(player, playerDt);
     if (player.status !== "alive") continue;
@@ -5424,20 +5379,12 @@ function tickSim() {
     applyStarPush(player, playerDt, relevance.stars);
     applyPlanetoidPush(player, playerDt, relevance.planetoids);
     applyWaveRingPush(player, playerDt);
-    const brakeIntensity = consumePlayerDeltaV(player, input.brake, playerDt, SERVER_INPUT.brakeFuelScale);
-    if (brakeIntensity > 0) {
-      const brakeAccel = 2.5 * b.thrustScale * SERVER_INPUT.brakeThrustScale * brakeIntensity * controlMult;
-      player.vx -= input.moveX * brakeAccel * playerDt;
-      player.vy -= input.moveY * brakeAccel * playerDt;
-    }
-    applyPlayerDeltaVRegen(player, playerDt, thrustIntensity > 0.01 || brakeIntensity > 0.01);
-    const dragPerFrame = Math.max(0, Math.min(0.95, SERVER_INPUT.baseDragPer60HzFrame * b.dragScale));
-    const dragFactor = Math.pow(1 - dragPerFrame, playerDt * 60);
-    player.vx *= dragFactor;
-    player.vy *= dragFactor;
-    clampPlayerSpeed(player);
-    player.wx = ((player.wx + player.vx * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-    player.wy = ((player.wy + player.vy * playerDt) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    applyPlayerBrakeAndIntegrate(player, input, playerDt, {
+      brain: b,
+      controlMult,
+      thrustIntensity: driveStep.thrustIntensity,
+      worldScale: runtime.session.worldScale,
+    });
     applyScavengerBump(player, relevance.scavengers);
 
     tickPlayerPickups(player, relevance.wrecks);

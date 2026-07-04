@@ -1,5 +1,26 @@
 # Decision Log
 
+## 2026-07-04 — Movement fixtures pin server drive math before deeper migration
+
+**Decision:** Extract the deterministic server movement drive/brake/integrate
+phases into a shared module and pin their numeric behavior with golden fixtures.
+The authoritative loop still owns external forces and consequences around that
+core: wells, slingshot, stars, planetoids, waves, scavenger bump, pickup,
+extraction, signal, and death.
+
+**Why:** Ballpark and future ECS-shaped work should not accidentally retune
+movement. A small shared movement core gives tests and the live sim one source
+for delta-v burn, current coupling, braking, regen, drag, speed clamp, and
+world wrapping while leaving subjective feel changes to explicit tuning commits.
+
+**Where it landed:** `scripts/sim/player-movement-step.cjs`,
+`scripts/sim-runtime.cjs`, `tests/movement-golden.cjs`, and
+`tests/suite-manifest.cjs`.
+
+**Door status:** Closed for moving more movement logic without a fixture.
+Open for adding well/slingshot/external-force golden cases as the next movement
+extraction slice.
+
 ## 2026-07-04 — Wreck pickup is the first Ballpark consequence adapter
 
 **Decision:** Move wreck pickup candidate selection to Ballpark nearest queries

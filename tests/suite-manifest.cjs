@@ -126,6 +126,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MovementGolden",
+    file: "movement-golden.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "SimLifecycle",
     file: "sim-lifecycle.cjs",
     lanes: ["authority", "full"],
