@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-07-04 — Bounded-growth soak is a structural gate, not a benchmark
+
+**Decision:** Add a short deep-field bounded-growth soak to the structural
+harness. The gate verifies body counts stay under a fixed ceiling, Ballpark ids
+do not duplicate, event journal retention stays within capacity, snapshot
+payloads stay below a hard size ceiling, and ended sessions stop ticking and
+stop changing body/event counts.
+
+**Why:** v0.3 needs protection against the class of leak Greg observed during
+long-running sessions, but a CI soak should catch structural runaway first, not
+pretend to be a Deck or local FPS benchmark. Longer perf probes and hardware
+captures remain separate evidence.
+
+**Where it landed:** `tests/sim-bounded-growth.cjs` and
+`tests/suite-manifest.cjs`.
+
+**Door status:** Closed for calling the architecture playable-ready without a
+bounded-growth structural pass. Open for adding a longer manual/overnight perf
+probe once the RC gate is closer.
+
 ## 2026-07-04 — Renderer contract becomes live diagnostics before ownership
 
 **Decision:** Expose the v0.3 render-plan descriptor through Three backend

@@ -26,7 +26,9 @@ did not retune basic control math by accident. Live sim events now flow through
 journal stats, and snapshot `lastEventSeq`; the snapshot ring is still a
 debug/rebase scaffold, not the live snapshot producer. The Three renderer now
 reports the v0.3 render-plan contract through backend stats so fixture tests can
-catch drift between the planned pass graph and the live renderer.
+catch drift between the planned pass graph and the live renderer. A short
+deep-field bounded-growth soak now checks body counts, duplicate ids, event
+retention, snapshot payload size, and post-timeout stability.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -498,6 +500,9 @@ and expected output, so the main thread can coordinate without stepping on work.
   lifecycle tests.
 - Add a deterministic long-run bounded-growth test for match reset, title/death
   idle, and event/body retention limits.
+- Shipped first bounded-growth soak: a deep-field run to forced timeout now
+  asserts Ballpark body counts, duplicate ids, event retention, snapshot bytes,
+  and stopped-session stability.
 - Add perf probes for body count, query count, event count, snapshot bytes,
   render pass costs, and tick time.
 - Keep fresh sim/browser reset rules explicit for all playtest-style tests.
@@ -592,6 +597,8 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Steam Deck build is playable in Gaming Mode.
 - Harness passes structure, authority, renderer, UI, and lifecycle lanes.
 - Snapshots/events/render passes have clear budgets.
+- Structural soak proves deep-field body counts, event retention, snapshot size,
+  and stopped-session stability stay bounded.
 - v0.2 demo fixes from `main` are merged into the branch.
 
 ## Migration Options And Position

@@ -30,6 +30,9 @@
 - Surfaced the v0.3 Three render-plan descriptor through live backend stats and
   taught the renderer fixture suite to assert the contract id, quality tier,
   canonical surface, and required pass ids.
+- Added `tests/sim-bounded-growth.cjs`, a short deep-field soak that verifies
+  Ballpark body counts, event journal retention, snapshot payload size, and
+  post-timeout tick/body/event stability stay bounded.
 - Kept extraction, death, movement, and other consequence families on the
   existing runtime paths until their family-specific outcome tests pass.
 
