@@ -33,6 +33,9 @@
 - Added `tests/sim-bounded-growth.cjs`, a short deep-field soak that verifies
   Ballpark body counts, event journal retention, snapshot payload size, and
   post-timeout tick/body/event stability stay bounded.
+- Added `docs/v0.3/RC-GATE.md` so the final v0.3 staircase step has concrete
+  automated, local playtest, Steam Deck, and architecture-promotion evidence
+  instead of a vague "ready" label.
 - Kept extraction, death, movement, and other consequence families on the
   existing runtime paths until their family-specific outcome tests pass.
 

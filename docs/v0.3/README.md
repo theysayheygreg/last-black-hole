@@ -28,16 +28,18 @@ The working theme is:
 ## Read Order
 
 1. `ROADMAP.md` - v0.3 plan, delegated workstreams, milestones, and gates.
-2. `../reference/CARBON-ENGINE-RESEARCH.md` - Carbon/Destiny/Trinity lessons
+2. `RC-GATE.md` - playable release-candidate checklist, current blockers, and
+   required evidence.
+3. `../reference/CARBON-ENGINE-RESEARCH.md` - Carbon/Destiny/Trinity lessons
    being mined for LBH-sized contracts.
-3. `../project/LOCAL-PROTOCOL.md` - current local authority protocol.
-4. `../project/NETWORK-ARCHITECTURE-PLAN.md` - older network plan and context.
-5. `../project/SIM-DECOUPLING-PLAN.md` - previous sim/client split planning.
-6. `../project/MECHANICS-SIM-RENDER-AUDIT.md` - current mechanics and
+4. `../project/LOCAL-PROTOCOL.md` - current local authority protocol.
+5. `../project/NETWORK-ARCHITECTURE-PLAN.md` - older network plan and context.
+6. `../project/SIM-DECOUPLING-PLAN.md` - previous sim/client split planning.
+7. `../project/MECHANICS-SIM-RENDER-AUDIT.md` - current mechanics and
    sim/renderer audit baseline.
-7. `../design/PILLARS.md` and `../design/MOVEMENT.md` - design guardrails.
-8. `../design/TEST-HARNESS.md` - current harness contract.
-9. `../v0.2/ROADMAP.md` - active demo/stabilization roadmap.
+8. `../design/PILLARS.md` and `../design/MOVEMENT.md` - design guardrails.
+9. `../design/TEST-HARNESS.md` - current harness contract.
+10. `../v0.2/ROADMAP.md` - active demo/stabilization roadmap.
 
 ## What v0.3 Is Not
 

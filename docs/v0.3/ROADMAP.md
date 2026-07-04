@@ -593,6 +593,8 @@ and expected output, so the main thread can coordinate without stepping on work.
 
 ### v0.3 RC - Public-Ready Architecture Gate
 
+Detailed gate: `RC-GATE.md`.
+
 - Local source playtest passes.
 - Steam Deck build is playable in Gaming Mode.
 - Harness passes structure, authority, renderer, UI, and lifecycle lanes.
@@ -673,6 +675,7 @@ arrive later if it earns the cost.
 
 v0.3 is not ready until:
 
+- `docs/v0.3/RC-GATE.md` is green with current evidence;
 - movement still feels good after the sim structure changes;
 - contact, pickup, extraction, and death are all sim-owned through shared query
   helpers;
