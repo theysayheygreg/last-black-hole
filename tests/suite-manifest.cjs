@@ -310,7 +310,7 @@ const SUITES = [
     lanes: ["visual", "full", "three"],
     browser: true,
     visual: true,
-    timeout: 180000,
+    timeout: 360000,
   },
 ];
 

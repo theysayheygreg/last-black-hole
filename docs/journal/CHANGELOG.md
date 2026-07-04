@@ -36,6 +36,8 @@
 - Added `docs/v0.3/RC-GATE.md` so the final v0.3 staircase step has concrete
   automated, local playtest, Steam Deck, and architecture-promotion evidence
   instead of a vague "ready" label.
+- Raised the manifest timeout for the expanded UI visual capture suite so
+  combined `test:three` runs stop killing a healthy 13-state screenshot pass.
 - Kept extraction, death, movement, and other consequence families on the
   existing runtime paths until their family-specific outcome tests pass.
 
