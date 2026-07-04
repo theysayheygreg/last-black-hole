@@ -5,6 +5,7 @@ const { collectNearestBodies, collectRelevantBodies } = require("../scripts/sim/
 
 const SIM_PORT = 8804;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
+const EPSILON = 1e-9;
 
 async function getJson(path, options) {
   const response = await fetch(`${SIM_URL}${path}`, options);
@@ -34,12 +35,20 @@ function fakeQueryRuntime() {
     inhibitor: null,
     mapState: {
       worldScale: 4,
-      wells: [],
+      wells: [
+        { id: "well-far", wx: 2.9, wy: 2, killRadius: 0.07, mass: 1, alive: true },
+        { id: "well-near", wx: 2.12, wy: 2, killRadius: 0.07, mass: 1, alive: true },
+      ],
       stars: [
         { id: "near", wx: 2.1, wy: 2, radius: 0.03, alive: true },
         { id: "radius-edge", wx: 2.25, wy: 2, radius: 0.2, alive: true },
       ],
-      wrecks: [],
+      wrecks: [
+        { id: "looted", wx: 2.03, wy: 2, alive: true, looted: true, pickupCooldown: 0, loot: [] },
+        { id: "cooldown", wx: 2.04, wy: 2, alive: true, looted: false, pickupCooldown: 2, loot: [{ id: "cool" }] },
+        { id: "pickup-near", wx: 2.06, wy: 2, alive: true, looted: false, pickupCooldown: 0, loot: [{ id: "a" }] },
+        { id: "pickup-far", wx: 2.4, wy: 2, alive: true, looted: false, pickupCooldown: 0, loot: [{ id: "b" }] },
+      ],
       portals: [
         { id: "blocked", wx: 2.05, wy: 2, alive: true, blockedByInhibitor: true },
         { id: "open", wx: 2.2, wy: 2, alive: true },
@@ -50,6 +59,82 @@ function fakeQueryRuntime() {
       fauna: [],
     },
   };
+}
+
+function fakeWrappedRuntime() {
+  return {
+    tick: 8,
+    simTime: 1.75,
+    session: { worldScale: 4, flowFieldCellSize: 0.5 },
+    players: new Map(),
+    waveRings: [],
+    inhibitor: null,
+    mapState: {
+      worldScale: 4,
+      wells: [
+        { id: "center-well", wx: 2.2, wy: 2, killRadius: 0.07, mass: 1, alive: true },
+        { id: "wrapped-well", wx: 3.96, wy: 2, killRadius: 0.07, mass: 1, alive: true },
+      ],
+      stars: [],
+      wrecks: [
+        { id: "center-wreck", wx: 2.1, wy: 2, alive: true, looted: false, pickupCooldown: 0, loot: [{ id: "c" }] },
+        { id: "wrapped-wreck", wx: 3.95, wy: 2, alive: true, looted: false, pickupCooldown: 0, loot: [{ id: "d" }] },
+      ],
+      portals: [
+        { id: "center-portal", wx: 2.25, wy: 2, alive: true },
+        { id: "wrapped-portal", wx: 3.94, wy: 2, alive: true },
+      ],
+      planetoids: [],
+      scavengers: [],
+      sentries: [],
+      fauna: [],
+    },
+  };
+}
+
+function worldDisplacement(from, to, worldScale) {
+  let delta = to - from;
+  if (delta > worldScale / 2) delta -= worldScale;
+  if (delta < -worldScale / 2) delta += worldScale;
+  return delta;
+}
+
+function worldDistance(ax, ay, bx, by, worldScale) {
+  return Math.hypot(
+    worldDisplacement(ax, bx, worldScale),
+    worldDisplacement(ay, by, worldScale),
+  );
+}
+
+function legacyNearest(origin, entities, limit, worldScale, predicate = () => true) {
+  return entities
+    .filter((entity) => entity && predicate(entity))
+    .map((entity) => ({
+      entity,
+      dist: worldDistance(origin.wx, origin.wy, entity.wx, entity.wy, worldScale),
+    }))
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, Math.max(1, Math.trunc(limit || 1)));
+}
+
+function nearestSourceIds(result) {
+  return result.bodies.map((hit) => hit.sourceId);
+}
+
+function assertNearestParity(label, legacy, result) {
+  const legacyIds = legacy.map(({ entity }) => entity.id);
+  const ballparkIds = nearestSourceIds(result);
+  assert(
+    JSON.stringify(ballparkIds) === JSON.stringify(legacyIds),
+    `${label} expected ids ${legacyIds.join(",")}, got ${ballparkIds.join(",")}`,
+  );
+  for (let i = 0; i < legacy.length; i += 1) {
+    const ballparkDistance = result.bodies[i]?.distance;
+    assert(
+      Math.abs(ballparkDistance - legacy[i].dist) <= EPSILON,
+      `${label} expected distance ${legacy[i].dist}, got ${ballparkDistance}`,
+    );
+  }
 }
 
 async function run() {
@@ -89,6 +174,103 @@ async function run() {
     assert(bodies.length === 1, `Expected one available portal, got ${bodies.map((hit) => hit.id).join(",")}`);
     assert(bodies[0].sourceId === "open", `Expected open portal, got ${bodies[0].sourceId}`);
     assert(stats.selectedCount === 1, `Expected selected count 1, got ${JSON.stringify(stats)}`);
+  });
+
+  await runner.run("Matches legacy nearest well, wreck, and portal selection", async () => {
+    const runtime = fakeQueryRuntime();
+    const origin = { wx: 2, wy: 2 };
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(runtime, { reason: "nearest-parity-test" });
+
+    const wellLegacy = legacyNearest(origin, runtime.mapState.wells, 2, runtime.session.worldScale);
+    const wellBallpark = collectNearestBodies(mirror, origin, {
+      category: "well",
+      radius: runtime.session.worldScale,
+      limit: 2,
+      query: { collisionMask: BODY_MASKS.WELL },
+    });
+    assertNearestParity("nearest wells", wellLegacy, wellBallpark);
+
+    const wreckLegacy = legacyNearest(
+      origin,
+      runtime.mapState.wrecks,
+      2,
+      runtime.session.worldScale,
+      (wreck) => wreck.alive !== false && !wreck.looted && wreck.pickupCooldown <= 0,
+    );
+    const wreckBallpark = collectNearestBodies(mirror, origin, {
+      category: "wreck",
+      radius: runtime.session.worldScale,
+      limit: 4,
+      query: {
+        interactionMask: BODY_MASKS.PICKUP,
+        lifecycleStates: ["alive", "spawning"],
+      },
+    });
+    assertNearestParity("nearest unlooted wrecks", wreckLegacy, {
+      ...wreckBallpark,
+      bodies: wreckBallpark.bodies
+        .filter((hit) => hit.body?.data?.looted !== true && hit.body?.data?.pickupCooldown <= 0)
+        .slice(0, wreckLegacy.length),
+    });
+
+    const portalLegacy = legacyNearest(
+      origin,
+      runtime.mapState.portals,
+      2,
+      runtime.session.worldScale,
+      (portal) => portal.alive !== false && portal.blockedByInhibitor !== true,
+    );
+    const portalBallpark = collectNearestBodies(mirror, origin, {
+      category: "portal",
+      radius: runtime.session.worldScale,
+      limit: 2,
+      query: {
+        interactionMask: BODY_MASKS.PORTAL,
+        lifecycleStates: ["alive", "spawning"],
+      },
+    });
+    assertNearestParity("nearest available portals", portalLegacy, portalBallpark);
+  });
+
+  await runner.run("Matches legacy nearest selection across world wrap", async () => {
+    const runtime = fakeWrappedRuntime();
+    const origin = { wx: 0.03, wy: 2 };
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(runtime, { reason: "nearest-wrap-parity-test" });
+
+    const wellLegacy = legacyNearest(origin, runtime.mapState.wells, 1, runtime.session.worldScale);
+    const wellBallpark = collectNearestBodies(mirror, origin, {
+      category: "well",
+      radius: runtime.session.worldScale,
+      limit: 1,
+      query: { collisionMask: BODY_MASKS.WELL },
+    });
+    assertNearestParity("wrapped nearest well", wellLegacy, wellBallpark);
+
+    const wreckLegacy = legacyNearest(origin, runtime.mapState.wrecks, 1, runtime.session.worldScale);
+    const wreckBallpark = collectNearestBodies(mirror, origin, {
+      category: "wreck",
+      radius: runtime.session.worldScale,
+      limit: 1,
+      query: {
+        interactionMask: BODY_MASKS.PICKUP,
+        lifecycleStates: ["alive", "spawning"],
+      },
+    });
+    assertNearestParity("wrapped nearest wreck", wreckLegacy, wreckBallpark);
+
+    const portalLegacy = legacyNearest(origin, runtime.mapState.portals, 1, runtime.session.worldScale);
+    const portalBallpark = collectNearestBodies(mirror, origin, {
+      category: "portal",
+      radius: runtime.session.worldScale,
+      limit: 1,
+      query: {
+        interactionMask: BODY_MASKS.PORTAL,
+        lifecycleStates: ["alive", "spawning"],
+      },
+    });
+    assertNearestParity("wrapped nearest portal", portalLegacy, portalBallpark);
   });
 
   await runner.run("Live sim uses Ballpark for relevance without changing snapshots", async () => {

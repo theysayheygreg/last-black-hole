@@ -7,14 +7,16 @@
 **Target line:** v0.3, after the v0.2 demo/build line is stable enough to show
 publicly.
 
-**Current integration slice (2026-07-03):** Ballpark is now wired into the live
+**Current integration slice (2026-07-04):** Ballpark is now wired into the live
 sim as a mirror plus a read-only relevance query adapter, not gameplay
 authority. `scripts/sim/ballpark-mirror.cjs` rebuilds the `BodyRegistry` and
 `SpatialIndex` from current runtime state, `scripts/sim/sim-queries.cjs` lets
 `buildRelevanceView()` select stars, wrecks, planetoids, and non-dying
 scavengers through the mirror, `/health` and `/debug/ballpark` expose body and
 query stats, and normal `/snapshot` output intentionally does not include
-Ballpark debug payloads.
+Ballpark debug payloads. Nearest well, unlooted wreck, and available portal
+selection now have old-vs-Ballpark parity tests, including wrap-edge cases, but
+those helpers are still not live consequence authority.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -295,6 +297,10 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Prepared `collectNearestBodies()` for the next nearest-helper migration; do
   not wire nearest well/portal/wreck live until the full authority lane remains
   green and the slice has explicit old-vs-Ballpark parity checks.
+- Added those explicit nearest parity checks for wells, unlooted wrecks, and
+  available portals; the next runtime migration should be wreck pickup because
+  it is the smallest consequence family that can keep mutation in the existing
+  authoritative path while Ballpark supplies equivalent candidates.
 - Preserve the current movement feel while routing body positions/radii through
   shared coordinate and world-distance helpers.
 - Add explicit movement modes: drift, thrust, brake, slingshot approach,

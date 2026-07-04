@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-07-04 — v0.3 Ballpark nearest parity gate
+
+- Added old-vs-Ballpark parity coverage for nearest well, unlooted wreck, and
+  available portal selection, including toroidal world-wrap cases.
+- Added passive wreck `pickupCooldown` metadata to the Ballpark mirror so the
+  next pickup migration can filter the same eligibility facts as the legacy
+  sim path without reaching back into bespoke array scans.
+- Kept nearest helper migration non-authoritative: pickup, extraction, death,
+  and movement consequences still use the existing runtime paths until their
+  family-specific outcome tests pass.
+
 ## 2026-07-03 — v0.3 Ballpark relevance query slice
 
 - Added `scripts/sim/sim-queries.cjs` as the first shared Ballpark query helper,

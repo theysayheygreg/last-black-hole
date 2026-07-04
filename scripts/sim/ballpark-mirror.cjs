@@ -312,6 +312,7 @@ class BallparkMirror {
           sourceId: wreck.id ?? null,
           type: wreck.type || null,
           looted: Boolean(wreck.looted),
+          pickupCooldown: finiteNumber(wreck.pickupCooldown, 0),
           lootCount: Array.isArray(wreck.loot) ? wreck.loot.length : 0,
         },
       });

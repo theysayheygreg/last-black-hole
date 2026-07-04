@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-07-04 — Nearest parity before first consequence migration
+
+**Decision:** Treat nearest well, wreck, and portal Ballpark helpers as
+parity-gated infrastructure before letting them change live gameplay outcomes.
+The test harness now compares legacy nearest selection against
+`collectNearestBodies()` for normal and toroidal wrap cases, while pickup,
+extraction, death, and movement consequences stay on the existing runtime paths.
+
+**Why:** Nearest selection is small enough to prove precisely and central
+enough to break several systems if it drifts. Locking selection parity first
+lets v0.3 migrate wreck pickup, portal capture, and well contact one family at
+a time without smuggling in coordinate or lifecycle changes.
+
+**Where it landed:** `tests/ballpark-queries.cjs` and
+`scripts/sim/ballpark-mirror.cjs`.
+
+**Door status:** Closed for live-wiring nearest helpers without family-specific
+outcome tests. Open for migrating wreck pickup first, because it is the lowest
+risk consequence family once candidate selection is proven.
+
 ## 2026-07-03 — Ballpark relevance before Ballpark consequences
 
 **Decision:** Let the v0.3 Ballpark mirror answer read-only relevance queries
