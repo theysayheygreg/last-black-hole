@@ -4027,12 +4027,13 @@ function gameLoop(now) {
     if (simClient?.enabled) void refreshRemoteSessionHealth(false);
     if (upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
     if (downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
-    // S: reroll preview seed
-    if (inputManager._keys && inputManager._keys['KeyS'] && !_prevSeedReroll) {
+    // Reroll stays on the pulse/X path so controller hints match behavior and
+    // Y remains free for slingshot rather than overlapping host reset.
+    if (((inputManager._keys && inputManager._keys['KeyS']) || pulseNow) && !_prevSeedReroll) {
       rerollPreviewSeed();
       audioEngine.playEvent('menuMove');
     }
-    _prevSeedReroll = !!(inputManager._keys && inputManager._keys['KeyS']);
+    _prevSeedReroll = !!((inputManager._keys && inputManager._keys['KeyS']) || pulseNow);
     if (!transitionActive && confirmNow && !_prevConfirm) {
       audioEngine.init();
       audioEngine.playEvent('launch');

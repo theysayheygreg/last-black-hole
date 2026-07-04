@@ -20,12 +20,19 @@ function normalizeInputMessage(body = {}) {
     consumeSlotValue === null || consumeSlotValue === undefined || consumeSlotValue === ""
       ? null
       : clamp(Math.floor(asNumber(consumeSlotValue, -1)), 0, 1);
+  let moveX = clamp(asNumber(body.moveX, 0), -1, 1);
+  let moveY = clamp(asNumber(body.moveY, 0), -1, 1);
+  const moveMag = Math.hypot(moveX, moveY);
+  if (moveMag > 1) {
+    moveX /= moveMag;
+    moveY /= moveMag;
+  }
   return {
     type: "input",
     clientId: String(body.clientId || "").trim(),
     seq: Math.max(0, Math.floor(asNumber(body.seq, 0))),
-    moveX: clamp(asNumber(body.moveX, 0), -1, 1),
-    moveY: clamp(asNumber(body.moveY, 0), -1, 1),
+    moveX,
+    moveY,
     thrust: clamp(asNumber(body.thrust, 0), 0, 1),
     brake: clamp(asNumber(body.brake, 0), 0, 1),
     slingshot: Boolean(body.slingshot),

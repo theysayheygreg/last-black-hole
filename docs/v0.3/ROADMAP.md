@@ -8,7 +8,7 @@
 publicly.
 
 **Current integration slice (2026-07-04):** Ballpark is now wired into the live
-sim as a mirror plus a read-only relevance query adapter, not gameplay
+sim as a mirror plus a read-only relevance query adapter, not broad gameplay
 authority. `scripts/sim/ballpark-mirror.cjs` rebuilds the `BodyRegistry` and
 `SpatialIndex` from current runtime state, `scripts/sim/sim-queries.cjs` lets
 `buildRelevanceView()` select stars, wrecks, planetoids, and non-dying
@@ -27,8 +27,18 @@ journal stats, and snapshot `lastEventSeq`; the snapshot ring is still a
 debug/rebase scaffold, not the live snapshot producer. The Three renderer now
 reports the v0.3 render-plan contract through backend stats so fixture tests can
 catch drift between the planned pass graph and the live renderer. A short
-deep-field bounded-growth soak now checks body counts, duplicate ids, event
-retention, snapshot payload size, and post-timeout stability.
+deep-field bounded-growth soak checks body counts, duplicate ids, event
+retention, snapshot payload size, and post-timeout stability. The follow-up
+Orrery review's S0/S1 pass is partially integrated: the spatial index now
+snaps its cell grid to the exact toroidal world period, query ordering no longer
+depends on locale, mirror rebuild budgets and duplicate-id canaries are in the
+structural harness, portal extraction/star-or-planetoid push/scavenger contact
+have authority tests, server input vectors clamp to unit magnitude, Breacher
+Burn is edge-triggered, scavenger bump config exists on the server, AI thrust
+uses unit facing plus scalar intensity, thrust signal keys on delivered output,
+overlapping-well shield/grace handling continues across the well list, map
+reroll now uses the controller X path, and the desktop server package includes
+the event-journal dependency closure.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -90,6 +100,50 @@ v0.3 should install those contracts in LBH-sized form.
 - Do not rewrite UI/VFX merely because the sim architecture changes.
 - Do not merge unfinished v0.3 architecture into `main` while `main` is needed
   for v0.2 demo fixes.
+
+## S0/S1 Review Queue Status
+
+Source review: `docs/project/2026-07-04-orrery-v0.3-deep-review.md`.
+
+### Integrated Now
+
+- **S0.1 SpatialIndex seam bug:** fixed by snapping the requested cell size to
+  an exact grid period; non-divisible seam/corner tests now cover the failure.
+- **S0.2 Locale-sensitive ordering:** fixed with explicit codepoint ordering.
+- **S0.3 Mirror hygiene:** structural tests now assert duplicate-id cleanliness
+  and bounded rebuild cost on representative live/deep-field runs.
+- **S0.4 Authority coverage:** portal extraction, star-or-planetoid push, and
+  scavenger contact now have remote-authority consequence tests.
+- **S1.1 Server scavenger contact:** server bump radius/force now exist.
+- **S1.2 Ability edge detection:** held ability input no longer tick-toggles
+  Breacher Burn or re-fires edge abilities every authority tick.
+- **S1.7 AI thrust:** AI input now passes unit facing plus scalar thrust instead
+  of squaring personality intensity.
+- **S1.8 Signal:** thrust signal now uses delivered thrust after delta-v gates.
+- **S1.10 Overlapping wells:** shield/grace/survive consumption continues
+  through remaining wells instead of ending the whole gravity check early.
+- **S1.11 Protocol input:** server input normalization clamps move vector
+  magnitude to one without losing brake-only facing intent.
+- **S1.12 Map Select:** controller reroll moved to X/Square; host reset is
+  keyboard-only until it gets a proper hold-confirm controller path.
+
+### Deferred Into Roadmap
+
+- **S0.5 Remote input packaging:** the protocol clamp and held-burn controller
+  path are covered, but slingshot edge latching still needs a dedicated client
+  packaging test and likely a latch/ack shape like pulse.
+- **S1.3 Resonant hull:** decision-gated; see `OPEN-DECISIONS.md`.
+- **S1.4 Hauler Salvage Lock:** wire tagged wrecks into scavenger targeting or
+  replace/remove the ability.
+- **S1.5 Star remnants and scavenger debris:** roll non-empty loot from existing
+  tables/cargo instead of spawning dramatic empty wrecks.
+- **S1.6 Cosmic signatures:** make server signature roll and modifiers
+  authoritative; client consumes presentation only.
+- **S1.9 Slingshot tap latching:** latch engage/release edges through the
+  remote input path so taps between POSTs cannot vanish.
+- **S1.13 Scavenger convergence:** port client-side player awareness/signal
+  reaction/flee nuance into the authoritative server species, then retire the
+  client-only behavior path.
 
 ## Architecture Target
 

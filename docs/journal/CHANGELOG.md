@@ -5,6 +5,34 @@
 
 ---
 
+## 2026-07-04 — v0.3 S0/S1 review fixes
+
+- Fixed the Ballpark `SpatialIndex` toroidal seam bug by snapping requested
+  cell sizes to an exact world-period grid and added non-divisible seam/corner
+  regression coverage.
+- Made Ballpark query tie-breaks independent of host locale.
+- Added structural mirror canaries for duplicate ids and rebuild cost in the
+  mirror/deep-field harness lanes.
+- Added remote-authority tests for portal extraction, star-or-planetoid push,
+  scavenger contact, and empty-tank thrust signal behavior.
+- Normalized server input move vectors to unit length without losing brake-only
+  facing intent.
+- Fixed server scavenger contact by adding missing bump radius/force config.
+- Changed held ability input to edge-trigger active abilities, including
+  Breacher Burn, and extended controller coverage so holding L1 does not
+  tick-toggle burn off.
+- Fixed AI player thrust input so facing is unit length and personality thrust
+  stays scalar.
+- Changed thrust signal generation to use delivered thrust after delta-v gates.
+- Changed shield/grace/reinforced-hull well contact handling so one consumed
+  protection does not skip every remaining overlapping well that tick.
+- Moved Map Select controller reroll to X/Square and made host reset
+  keyboard-only until it gets a hold-confirm controller path.
+- Restored the desktop package closure by adding the event-journal and
+  replication-lane dependencies to the server bundle list.
+- Added `docs/v0.3/OPEN-DECISIONS.md` and updated the v0.3 roadmap/RC gate with
+  S0/S1 integrated status, deferred items, and Greg-decision items.
+
 ## 2026-07-04 — v0.3 Ballpark nearest parity gate
 
 - Added old-vs-Ballpark parity coverage for nearest well, unlooted wreck, and

@@ -9,7 +9,7 @@
 
 ---
 
-## Current Status (2026-07-01)
+## Current Status (2026-07-04)
 
 **Version:** v0.2 - Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set. The next structural line is v0.3, tracked in `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md`.
 
@@ -69,7 +69,7 @@ reading stale health records or reconstructing status from `git log`.
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
 | UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared primitives, result/title slices, UI visual harness, shared motion kit, reduced-motion coverage, UI motion/VFX bridge, Home instrument-console pass, and Map Select drop-briefing pass are live. Next UI work is HUD, pause, profile destructive states, and richer route/objective language. |
 | Carbon Engine source research | `docs/reference/CARBON-ENGINE-RESEARCH.md` | Added 2026-07-01; mine Carbon/Destiny/Trinity for stamped sim authority, relevance lanes, explicit render-plan discipline, asset manifests, and audio/VFX budgets without adopting Carbon as a dependency. |
-| v0.3 Ballpark architecture plan | `docs/v0.3/ROADMAP.md` | Planned 2026-07-01; branch-first structural roadmap for Ballpark Lite sim authority, ECS-ready data shape, multiplayer-minded snapshots/events, renderer contracts, and harness gates while `main` stays v0.2 demo-focused. First mirror and read-only relevance query slices are live on the v0.3 branch. |
+| v0.3 Ballpark architecture plan | `docs/v0.3/ROADMAP.md` | Active on `codex/v0.3-ballpark-roadmap`; branch-first structural roadmap for Ballpark Lite sim authority, ECS-ready data shape, multiplayer-minded snapshots/events, renderer contracts, and harness gates while `main` stays v0.2 demo-focused. Mirror, read-only relevance, first pickup adapter, event journal, movement fixtures, bounded-growth soak, and S0/S1 review fixes are live on the v0.3 branch. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |

@@ -132,6 +132,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SimProtocolInput",
+    file: "sim-protocol-input.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "SimLifecycle",
     file: "sim-lifecycle.cjs",
     lanes: ["authority", "full"],

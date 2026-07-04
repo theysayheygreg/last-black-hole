@@ -134,6 +134,15 @@ async function postInput(body) {
   return response.json();
 }
 
+async function postJoin(body) {
+  const response = await fetch(`${SIM_URL}/join`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 async function postInventoryAction(body) {
   const response = await fetch(`${SIM_URL}/inventory/action`, {
     method: "POST",
@@ -154,6 +163,15 @@ async function postDebugPlayerState(body) {
 
 async function postDebugInhibitorState(body) {
   const response = await fetch(`${SIM_URL}/debug/inhibitor-state`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
+async function postDebugPortalState(body) {
+  const response = await fetch(`${SIM_URL}/debug/portal-state`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -216,6 +234,33 @@ async function waitForSnapshotPlayerLabel(label, clientId, predicate, options = 
   } catch (err) {
     throw new Error(`${label}: ${err.message}`);
   }
+}
+
+function chooseSafePoint(snapshot, index = 0) {
+  const ws = snapshot.session?.worldScale || 5;
+  const wells = snapshot.world?.wells || [];
+  const candidates = [
+    [ws * 0.18, ws * 0.18],
+    [ws * 0.82, ws * 0.18],
+    [ws * 0.18, ws * 0.82],
+    [ws * 0.82, ws * 0.82],
+    [ws * 0.50, ws * 0.22],
+    [ws * 0.22, ws * 0.50],
+    [ws * 0.78, ws * 0.50],
+    [ws * 0.50, ws * 0.78],
+  ];
+  const ranked = candidates.map(([wx, wy], candidateIndex) => {
+    let nearest = Infinity;
+    for (const well of wells) {
+      const dist = Math.hypot(
+        worldWrappedDeltaForTest(wx, well.wx, ws),
+        worldWrappedDeltaForTest(wy, well.wy, ws)
+      );
+      nearest = Math.min(nearest, dist);
+    }
+    return { wx, wy, candidateIndex, nearest };
+  }).sort((a, b) => b.nearest - a.nearest || a.candidateIndex - b.candidateIndex);
+  return ranked[index % ranked.length] || { wx: ws * 0.5, wy: ws * 0.5 };
 }
 
 async function run() {
@@ -295,6 +340,174 @@ async function run() {
       });
       assert(reset.ok === true, "Expected debug inhibitor reset to succeed");
       assert(reset.snapshot?.inhibitor?.form === 0, `Expected reset inhibitor form 0, got ${reset.snapshot?.inhibitor?.form}`);
+    });
+
+    await runner.run("Remote portal extraction is a server consequence", async () => {
+      const clientId = "remote-portal-authority-test";
+      const joined = await postJoin({ clientId, name: "Portal Authority Test" });
+      assert(joined.ok === true, `Expected direct portal test client to join, got ${JSON.stringify(joined)}`);
+
+      const snapshot = await getSnapshot();
+      const point = chooseSafePoint(snapshot, 0);
+      const moved = await postDebugPlayerState({
+        clientId,
+        wx: point.wx,
+        wy: point.wy,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(moved.ok === true, "Expected debug player placement before portal extraction");
+
+      const baselineEvents = await getEvents(0);
+      const baselineSeq = baselineEvents.reduce((max, event) => Math.max(max, event.seq || 0), 0);
+      const portalId = "portal-authority-test";
+      const portal = await postDebugPortalState({
+        id: portalId,
+        wx: point.wx,
+        wy: point.wy,
+        type: "standard",
+        alive: true,
+        blockedByInhibitor: false,
+        lifespan: 30,
+        opacity: 1,
+      });
+      assert(portal.ok === true, `Expected debug portal placement, got ${JSON.stringify(portal)}`);
+
+      const { player } = await waitForSnapshotPlayer(
+        clientId,
+        (remotePlayer) => remotePlayer.status === "escaped",
+        { timeout: 8000 }
+      );
+      assert(player.status === "escaped", `Expected player to escape, got ${player.status}`);
+      const events = await waitForEvents(
+        (allEvents) => allEvents.some((event) =>
+          event.seq > baselineSeq &&
+          event.type === "player.escaped" &&
+          event.payload?.clientId === clientId &&
+          event.payload?.portalId === portalId
+        ),
+        { timeout: 5000 }
+      );
+      assert(events.some((event) => event.seq > baselineSeq && event.type === "player.escaped" && event.payload?.portalId === portalId),
+        "Expected authoritative escaped event for the debug portal");
+      await postLeave({ clientId });
+    });
+
+    await runner.run("Remote star or planetoid push is server-authored", async () => {
+      const clientId = "remote-push-authority-test";
+      const joined = await postJoin({ clientId, name: "Push Authority Test" });
+      assert(joined.ok === true, `Expected direct push test client to join, got ${JSON.stringify(joined)}`);
+
+      const snapshot = await getSnapshot();
+      const ws = snapshot.session?.worldScale || 5;
+      const star = snapshot.world?.stars?.find((entry) => entry.alive !== false);
+      const planetoid = snapshot.world?.planetoids?.find((entry) => entry.alive !== false);
+      const source = star || planetoid;
+      assert(source, "Expected an authoritative star or planetoid for push test");
+      const offset = star ? 0.16 : 0.04;
+      const placed = await postDebugPlayerState({
+        clientId,
+        wx: ((source.wx + offset) % ws + ws) % ws,
+        wy: source.wy,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(placed.ok === true, "Expected debug player placement before push test");
+
+      const { player } = await waitForSnapshotPlayer(
+        clientId,
+        (remotePlayer) => remotePlayer.status === "alive" && Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.005,
+        { timeout: 8000 }
+      );
+      assert(Math.hypot(player.vx, player.vy) > 0.005,
+        `Expected server-authored push velocity, got vx=${player.vx} vy=${player.vy}`);
+      await postLeave({ clientId });
+    });
+
+    await runner.run("Remote scavenger contact bumps the player", async () => {
+      const clientId = "remote-scavenger-bump-test";
+      const joined = await postJoin({ clientId, name: "Scavenger Bump Test" });
+      assert(joined.ok === true, `Expected direct scavenger bump test client to join, got ${JSON.stringify(joined)}`);
+
+      const snapshot = await getSnapshot();
+      const scavenger = snapshot.world?.scavengers?.find((entry) => entry.alive !== false);
+      assert(scavenger?.id, "Expected an authoritative scavenger for contact test");
+      const point = chooseSafePoint(snapshot, 1);
+      const playerPlaced = await postDebugPlayerState({
+        clientId,
+        wx: point.wx,
+        wy: point.wy,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      assert(playerPlaced.ok === true, "Expected debug player placement before scavenger bump");
+      const scavPlaced = await postDebugScavengerState({
+        scavengerId: scavenger.id,
+        wx: point.wx + 0.02,
+        wy: point.wy,
+        vx: 0,
+        vy: 0,
+        state: "drift",
+        alive: true,
+      });
+      assert(scavPlaced.ok === true, "Expected debug scavenger placement before bump");
+
+      const { player } = await waitForSnapshotPlayer(
+        clientId,
+        (remotePlayer) => remotePlayer.status === "alive" && Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.05,
+        { timeout: 8000 }
+      );
+      assert(Math.hypot(player.vx, player.vy) > 0.05,
+        `Expected scavenger contact impulse, got vx=${player.vx} vy=${player.vy}`);
+      await postLeave({ clientId });
+    });
+
+    await runner.run("Remote signal follows delivered thrust, not empty-tank intent", async () => {
+      const clientId = "remote-signal-output-test";
+      const joined = await postJoin({ clientId, name: "Signal Output Test" });
+      assert(joined.ok === true, `Expected direct signal test client to join, got ${JSON.stringify(joined)}`);
+
+      const snapshot = await getSnapshot();
+      const point = chooseSafePoint(snapshot, 2);
+      const baselineSignal = 0.35;
+      const placed = await postDebugPlayerState({
+        clientId,
+        wx: point.wx,
+        wy: point.wy,
+        vx: 0,
+        vy: 0,
+        deltaV: 0,
+        signalLevel: baselineSignal,
+        timeSinceThrust: 0,
+        status: "alive",
+      });
+      assert(placed.ok === true, "Expected debug player placement before signal output test");
+      const beforeTick = placed.snapshot?.tick || snapshot.tick || 0;
+
+      await postInput({
+        clientId,
+        seq: Date.now() + 99,
+        moveX: 1,
+        moveY: 0,
+        thrust: 1,
+        brake: 0,
+        consumeSlot: null,
+        timestamp: Date.now(),
+      });
+
+      const { player, snapshot: after } = await waitForSnapshotPlayer(
+        clientId,
+        (remotePlayer, currentSnapshot) =>
+          currentSnapshot.tick >= beforeTick + 4 &&
+          remotePlayer.signal?.level <= baselineSignal + 0.02,
+        { timeout: 8000 }
+      );
+      assert(player.signal.level <= baselineSignal + 0.02,
+        `Expected empty-tank thrust intent not to create thrust signal by tick ${after.tick}, got ${player.signal.level}`);
+      await postLeave({ clientId });
     });
 
     await runner.run("Remote snapshots advance and move the ship under authoritative input", async () => {
@@ -415,11 +628,15 @@ async function run() {
     await runner.run("Remote slingshot is resolved by the authoritative sim", async () => {
       const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
       const snapshot = await getSnapshot();
+      const star = snapshot.world?.stars?.find((entry) => entry.alive !== false);
+      const planetoid = snapshot.world?.planetoids?.find((entry) => entry.alive !== false);
       const well = snapshot.world?.wells?.[0];
-      assert(well, "Expected a well anchor for authoritative slingshot test");
+      const anchor = star || planetoid || well;
+      assert(anchor, "Expected a star, planetoid, or well anchor for authoritative slingshot test");
       const ws = snapshot.session?.worldScale || 5;
-      const startX = ((well.wx + 0.25) % ws + ws) % ws;
-      const startY = well.wy;
+      const startOffset = star ? 0.18 : planetoid ? 0.09 : 0.25;
+      const startX = ((anchor.wx + startOffset) % ws + ws) % ws;
+      const startY = anchor.wy;
       const reset = await postDebugPlayerState({
         clientId: net.clientId,
         wx: startX,

@@ -297,11 +297,9 @@ export class InputManager {
     return false;
   }
 
-  /** Delete action — X key or gamepad triangle/Y (button 3). */
+  /** Delete action — keyboard only. Controller Y is reserved for slingshot. */
   get deletePressed() {
     if (this._keys['KeyX']) return true;
-    const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 3 && gp.buttons[3].pressed) return true;
     return false;
   }
 

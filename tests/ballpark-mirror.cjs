@@ -68,6 +68,8 @@ async function run() {
     assert(stats.categories.wreck === 2, `Expected duplicate wrecks to stay mirrored, got ${stats.categories.wreck}`);
     assert(stats.duplicateIds.length === 1 && stats.duplicateIds[0] === "wreck:vault",
       `Expected duplicate source id to be recorded, got ${JSON.stringify(stats.duplicateIds)}`);
+    assert(Number.isFinite(stats.lastRebuildMs) && stats.lastRebuildMs >= 0,
+      `Expected finite mirror rebuild cost, got ${stats.lastRebuildMs}`);
   });
 
   await runner.run("Provides wrapped spatial queries over mirrored bodies", async () => {
@@ -113,6 +115,10 @@ async function run() {
 
       const ballpark = health.body.ballpark;
       assert(ballpark && ballpark.enabled === true, `Expected health.ballpark payload, got ${JSON.stringify(ballpark)}`);
+      assert((ballpark.duplicateIds || []).length === 0,
+        `Expected live mirror to avoid duplicate public ids, got ${JSON.stringify(ballpark.duplicateIds)}`);
+      assert(Number.isFinite(ballpark.lastRebuildMs) && ballpark.lastRebuildMs <= 75,
+        `Expected representative live mirror rebuild to stay within the structural runaway budget, got ${ballpark.lastRebuildMs}ms`);
       assert(ballpark.categories.player === 1, `Expected one human player body, got ${JSON.stringify(ballpark.categories)}`);
       assert(ballpark.categories.aiPlayer >= 1, `Expected AI player bodies, got ${JSON.stringify(ballpark.categories)}`);
       assert(ballpark.categories.well === snapshot.body.world.wells.length,

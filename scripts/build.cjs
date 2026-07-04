@@ -23,6 +23,8 @@ const PUBLIC_VERSION = currentPublicVersion();
 const BUILD_VERSION = currentBuildVersion(PUBLIC_VERSION);
 const DESKTOP_SERVER_SCRIPTS = [
   'sim-runtime.cjs',
+  'sim-event-journal.cjs',
+  'replication-lanes.cjs',
   'sim-protocol.cjs',
   'sim-server.cjs',
   'shared-map-loader.cjs',

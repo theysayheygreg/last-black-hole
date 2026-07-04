@@ -179,6 +179,8 @@ const SCAVENGER_CONFIG = {
   drag: 0.06,
   fleeWellDist: 0.15,
   pickupRadius: 0.08,
+  bumpRadius: 0.04,
+  bumpForce: 0.3,
   deathSpiralDuration: 1.5,
 };
 const SERVER_COMBAT = {
@@ -2467,12 +2469,12 @@ function applyWellGravity(player, dt) {
           wellId: well.id,
           wellName: well.name || well.id,
         });
-        return;
+        continue;
       }
       if ((player.effectState.hullGraceRemaining || 0) > 0) {
         player.effectState.hullGraceRemaining = Math.max(0, player.effectState.hullGraceRemaining - dt);
         if (player.effectState.hullGraceRemaining > 0) {
-          return;
+          continue;
         }
       } else if ((player.brain?.wellGraceDuration || 0) > 0) {
         player.effectState.hullGraceRemaining = player.brain.wellGraceDuration;
@@ -2482,7 +2484,7 @@ function applyWellGravity(player, dt) {
           wellName: well.name || well.id,
           duration: player.brain.wellGraceDuration,
         });
-        return;
+        continue;
       }
       // Hauler Reinforced Hull: survive one well contact per run
       if (player.abilityState && player.abilityState.hullType === 'hauler'
@@ -2505,7 +2507,7 @@ function applyWellGravity(player, dt) {
         publishEvent("ability.activated", {
           clientId: player.clientId, ability: "reinforcedHull", wellId: well.id,
         });
-        return;
+        continue;
       }
       player.status = "dead";
       player.vx = 0;
@@ -3550,7 +3552,8 @@ function tickPlayerSignal(player, dt) {
   const sig = player.signal;
   const input = player.lastInput;
   const speed = Math.sqrt(player.vx * player.vx + player.vy * player.vy);
-  const isThrusting = input.thrust > 0.1;
+  const deliveredThrust = Math.max(0, Math.min(1, Number(player.lastDeliveredThrustIntensity) || 0));
+  const isThrusting = deliveredThrust > 0.1;
 
   // --- Generation ---
   let generation = 0;
@@ -3569,7 +3572,7 @@ function tickPlayerSignal(player, dt) {
       // alignment: -1 (fighting) to +1 (surfing). Scale opposition: 1.0 (surfing) to 3.0 (fighting)
       oppositionMult = 1.0 + Math.max(0, -alignment) * (cfg.thrustOppositionMult - 1.0);
     }
-    generation += cfg.thrustBaseRate * oppositionMult * input.thrust;
+    generation += cfg.thrustBaseRate * oppositionMult * deliveredThrust;
   } else if (speed > 0.001) {
     // Coasting — minimal signal
     generation += cfg.coastRate;
@@ -4463,8 +4466,8 @@ function tickAIPlayers(dt) {
 
     // Set lastInput — main tick loop handles all physics (thrust, gravity, drag).
     // Do NOT apply velocity directly here or AI gets double-thrust.
-    player.lastInput.moveX = Math.cos(ai.facingAngle) * ai.thrustIntensity;
-    player.lastInput.moveY = Math.sin(ai.facingAngle) * ai.thrustIntensity;
+    player.lastInput.moveX = Math.cos(ai.facingAngle);
+    player.lastInput.moveY = Math.sin(ai.facingAngle);
     player.lastInput.thrust = ai.thrustIntensity;
 
     // Pickup: handled by tickPlayerPickups in main loop (uses same cargo system)
@@ -4484,6 +4487,10 @@ function tickHullAbilities(player, dt) {
   const as = player.abilityState;
   const ws = runtime.session.worldScale;
   const input = player.lastInput;
+  const ability1Down = Boolean(input.ability1);
+  const ability2Down = Boolean(input.ability2);
+  const ability1Pressed = ability1Down && !as.ability1WasDown;
+  const ability2Pressed = ability2Down && !as.ability2WasDown;
 
   if (as.hullType === 'drifter') {
     // Flow Lock: current-aligned for 3s → locked surfing state
@@ -4524,7 +4531,7 @@ function tickHullAbilities(player, dt) {
 
     // Eddy Brake: active ability — input.ability1 triggers instant stop + turbulence
     if (as.eddyBrakeCooldown > 0) as.eddyBrakeCooldown -= dt;
-    if (input.ability1 && as.eddyBrakeCooldown <= 0 && speed > 0.02) {
+    if (ability1Pressed && as.eddyBrakeCooldown <= 0 && speed > 0.02) {
       player.vx = 0;
       player.vy = 0;
       as.eddyBrakeCooldown = HULL_DEFINITIONS.drifter.abilities.eddyBrake.cooldown;
@@ -4547,10 +4554,10 @@ function tickHullAbilities(player, dt) {
 
   } else if (as.hullType === 'breacher') {
     // Burn: toggle with ability1, drains fuel
-    if (input.ability1 && !as.burnActive && as.burnFuel > 1.0) {
+    if (ability1Pressed && !as.burnActive && as.burnFuel > 1.0) {
       as.burnActive = true;
       publishEvent("ability.activated", { clientId: player.clientId, ability: "burn" });
-    } else if (input.ability1 && as.burnActive) {
+    } else if (ability1Pressed && as.burnActive) {
       as.burnActive = false;
       publishEvent("ability.deactivated", { clientId: player.clientId, ability: "burn" });
     }
@@ -4584,7 +4591,7 @@ function tickHullAbilities(player, dt) {
 
     // Resonance Tap: place anchor with ability1
     if (as.tapCooldown > 0) as.tapCooldown -= dt;
-    if (input.ability1 && as.tapCooldown <= 0) {
+    if (ability1Pressed && as.tapCooldown <= 0) {
       as.tapAnchor = { wx: player.wx, wy: player.wy };
       as.tapCooldown = HULL_DEFINITIONS.resonant.abilities.resonanceTap.cooldown;
       publishEvent("ability.activated", { clientId: player.clientId, ability: "resonanceTap" });
@@ -4592,7 +4599,7 @@ function tickHullAbilities(player, dt) {
 
     // Frequency Shift: invert next pulse with ability2
     if (as.frequencyShiftCooldown > 0) as.frequencyShiftCooldown -= dt;
-    if (input.ability2 && as.frequencyShiftCooldown <= 0 && !as.nextPulseInverted) {
+    if (ability2Pressed && as.frequencyShiftCooldown <= 0 && !as.nextPulseInverted) {
       as.nextPulseInverted = true;
       as.frequencyShiftCooldown = HULL_DEFINITIONS.resonant.abilities.frequencyShift.cooldown;
       publishEvent("ability.activated", { clientId: player.clientId, ability: "frequencyShift" });
@@ -4601,7 +4608,7 @@ function tickHullAbilities(player, dt) {
   } else if (as.hullType === 'shroud') {
     // Wake Cloak: ability1 drops signal by 1 zone
     if (as.wakeCloakCooldown > 0) as.wakeCloakCooldown -= dt;
-    if (input.ability1 && as.wakeCloakCooldown <= 0 && player.signal.zone !== 'threshold') {
+    if (ability1Pressed && as.wakeCloakCooldown <= 0 && player.signal.zone !== 'threshold') {
       // Drop signal to the top of the zone below current
       const zones = ['ghost', 'whisper', 'presence', 'beacon', 'flare', 'threshold'];
       const zoneThresholds = [0, 0.15, 0.35, 0.55, 0.75, 0.90];
@@ -4619,7 +4626,7 @@ function tickHullAbilities(player, dt) {
 
     // Decoy Flare: ability2 spawns decoy
     if (as.decoyCooldown > 0) as.decoyCooldown -= dt;
-    if (input.ability2 && as.decoyCharges > 0 && as.decoyCooldown <= 0) {
+    if (ability2Pressed && as.decoyCharges > 0 && as.decoyCooldown <= 0) {
       as.decoyCharges--;
       as.decoyCooldown = HULL_DEFINITIONS.shroud.abilities.decoyFlare.cooldown;
       spikePlayerSignal(player, SIGNAL_CONFIG.flareLaunchSpike);
@@ -4644,7 +4651,7 @@ function tickHullAbilities(player, dt) {
 
   } else if (as.hullType === 'hauler') {
     // Salvage Lock: ability1 tags nearest wreck in sensor range
-    if (input.ability1 && as.salvageLockCharges > 0) {
+    if (ability1Pressed && as.salvageLockCharges > 0) {
       let nearestWreck = null, nearestDist = Infinity;
       const sensorRange = 0.5 * (player.brain ? player.brain.sensorRange : 1.0);
       for (const wreck of runtime.mapState.wrecks) {
@@ -4667,7 +4674,7 @@ function tickHullAbilities(player, dt) {
 
     // Tractor Field: ability2 channels pull on nearest entity
     if (as.tractorCooldown > 0) as.tractorCooldown -= dt;
-    if (input.ability2 && as.tractorCooldown <= 0) {
+    if (ability2Down && as.tractorCooldown <= 0) {
       const tractorCfg = HULL_DEFINITIONS.hauler.abilities.tractorField;
       // Find nearest wreck/star in range
       let target = null, targetDist = Infinity;
@@ -4698,6 +4705,8 @@ function tickHullAbilities(player, dt) {
       as.tractorChannelTimer = 0;
     }
   }
+  as.ability1WasDown = ability1Down;
+  as.ability2WasDown = ability2Down;
 }
 
 // Breacher Burn modifies thrust and signal in the per-player physics loop.
@@ -5380,6 +5389,7 @@ function tickSim() {
       controlMult,
       flowSample,
     });
+    player.lastDeliveredThrustIntensity = driveStep.thrustIntensity;
 
     applyWellGravity(player, playerDt);
     if (player.status !== "alive") continue;

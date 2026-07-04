@@ -1,5 +1,61 @@
 # Decision Log
 
+## 2026-07-04 — Ballpark spatial grid period must equal world scale
+
+**Decision:** Quantize `SpatialIndex` cell size so `columns * cellSize` and
+`rows * cellSize` exactly equal the toroidal world scale. Preserve the requested
+cell size in stats for diagnostics, but use the snapped size for indexing.
+
+**Why:** A raw `ceil(worldScale / cellSize)` grid creates a phantom seam beyond
+the wrapped world. On non-divisible cell sizes, query boxes near the right/top
+edge can wrap into the wrong cell period and miss bodies near zero. Ballpark
+now feeds live pickup/relevance work, so this must be an invariant rather than
+a caller convention.
+
+**Where it landed:** `scripts/sim/spatial-index.cjs` and
+`tests/spatial-index.cjs`.
+
+**Door status:** Closed for broadphase grids whose period differs from
+`worldScale`. Open for replacing the rebuild mirror with incremental upserts
+after the perf/budget gate justifies that complexity.
+
+## 2026-07-04 — Server input and signal use delivered movement truth
+
+**Decision:** Clamp authoritative move vectors to unit magnitude at protocol
+ingest, keep scalar actions separate, and generate thrust signal from delivered
+thrust after delta-v gates instead of requested trigger pressure.
+
+**Why:** The server must not award diagonal free thrust, and an empty-tank ship
+holding thrust should not radiate full thrust signal while producing no thrust.
+This keeps "Signal Is Consequence" tied to output and makes future
+multiplayer-minded input validation stricter before prediction or ECS work
+adds more moving pieces.
+
+**Where it landed:** `scripts/sim-protocol.cjs`,
+`scripts/sim-runtime.cjs`, `tests/sim-protocol-input.cjs`, and
+`tests/remote-authority.cjs`.
+
+**Door status:** Closed for trusting client vector magnitude. Open for the
+remaining S0.5 slingshot edge-latching package test and ack shape.
+
+## 2026-07-04 — Map Select reroll owns controller X; host reset waits for hold-confirm
+
+**Decision:** Move Map Select seed reroll to the controller X/Square path and
+remove controller Y from the host-reset path. Host reset remains keyboard-only
+until it gets a proper hold-confirm controller interaction.
+
+**Why:** The previous prompt advertised Y for reroll while Y was also wired to
+remote host reset. That made controller players unable to reroll and made the
+visible hint capable of resetting a live authoritative session. The safer
+interim is to make reroll real and keep destructive controller reset out of
+the path until the UI can communicate consequence.
+
+**Where it landed:** `src/main.js`, `src/input.js`,
+`src/ui/input-prompts.js`, and `tests/controller.cjs`.
+
+**Door status:** Closed for duplicate controller prompt labels on Map Select.
+Open for a real hold-confirm host reset screen/state.
+
 ## 2026-07-04 — Bounded-growth soak is a structural gate, not a benchmark
 
 **Decision:** Add a short deep-field bounded-growth soak to the structural

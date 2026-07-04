@@ -22,8 +22,10 @@ function worldDistance(ax, ay, bx, by, worldScale) {
 function compareQueryResults(a, b) {
   const delta = a.distance - b.distance;
   if (Math.abs(delta) > 1e-12) return delta;
-  const idCompare = String(a.id).localeCompare(String(b.id));
-  if (idCompare !== 0) return idCompare;
+  const aId = String(a.id);
+  const bId = String(b.id);
+  if (aId < bId) return -1;
+  if (aId > bId) return 1;
   if (a.handle.slot !== b.handle.slot) return a.handle.slot - b.handle.slot;
   return a.handle.generation - b.handle.generation;
 }
@@ -35,9 +37,14 @@ function cloneHandle(handle) {
 class SpatialIndex {
   constructor({ worldScale = 1, cellSize = 0.25 } = {}) {
     this.worldScale = positiveNumber(Number(worldScale), 1);
-    this.cellSize = positiveNumber(Number(cellSize), this.worldScale);
-    this.columns = Math.max(1, Math.ceil(this.worldScale / this.cellSize));
-    this.rows = Math.max(1, Math.ceil(this.worldScale / this.cellSize));
+    this.requestedCellSize = positiveNumber(Number(cellSize), this.worldScale);
+    const cellsPerAxis = Math.max(1, Math.round(this.worldScale / this.requestedCellSize));
+    // The toroidal grid period must equal worldScale exactly. A raw ceil() cell
+    // count creates a phantom seam outside the world, so wrapped candidates can
+    // miss bodies near x/y=0 when cellSize does not divide the map cleanly.
+    this.cellSize = this.worldScale / cellsPerAxis;
+    this.columns = cellsPerAxis;
+    this.rows = cellsPerAxis;
     this.cells = Array.from({ length: this.columns * this.rows }, () => new Set());
     this.records = new Map();
     this.recordCells = new Map();
@@ -144,7 +151,15 @@ class SpatialIndex {
   }
 
   stats() {
-    return { ...this._stats, bodyCount: this.records.size, columns: this.columns, rows: this.rows };
+    return {
+      ...this._stats,
+      bodyCount: this.records.size,
+      worldScale: this.worldScale,
+      requestedCellSize: this.requestedCellSize,
+      cellSize: this.cellSize,
+      columns: this.columns,
+      rows: this.rows,
+    };
   }
 
   _recordFromBody(body) {

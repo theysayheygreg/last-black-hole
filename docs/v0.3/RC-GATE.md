@@ -11,7 +11,11 @@
 The branch now has the important structural pieces v0.3 needs: Ballpark bodies,
 nearest-query parity, the first Ballpark-backed consequence adapter, movement
 golden fixtures, live event-journal reads, Three render-plan diagnostics, and a
-bounded-growth soak. That is the right architecture shape.
+bounded-growth soak. The first Orrery S0/S1 review fixes are also integrated:
+Ballpark seam math, input normalization, authority consequence tests, scavenger
+contact, held ability edges, delivered-thrust signal, AI thrust, overlapping
+well handling, and map-select controller reroll. That is the right architecture
+shape.
 
 It still needs fresh product evidence before it can be called playable:
 
@@ -142,6 +146,8 @@ Before calling v0.3 playable, inspect or test these contracts:
 - Finish parity-gated migration for extraction, death/contact, signal-adjacent
   consequence checks, and the remaining load-bearing movement/contact families;
   wreck pickup is only the first migrated consequence adapter.
+- Resolve or explicitly schedule the decision-gated items in
+  `docs/v0.3/OPEN-DECISIONS.md`.
 - Promote the snapshot ring from scaffold/debug-rebase support into the live
   protocol path, or explicitly defer it with a documented reason.
 - Drive renderer output from snapshot/renderable hints and event streams, not

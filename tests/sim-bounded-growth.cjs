@@ -80,6 +80,8 @@ async function run() {
           "Expected active body count to stay within total body count");
         assert((sample.ballpark?.duplicateIds || []).length === 0,
           `Expected no duplicate Ballpark ids, got ${JSON.stringify(sample.ballpark?.duplicateIds)}`);
+        assert(Number.isFinite(sample.ballpark?.lastRebuildMs) && sample.ballpark.lastRebuildMs <= 100,
+          `Expected deep-field Ballpark rebuild to stay within structural budget, got ${sample.ballpark?.lastRebuildMs}ms`);
         assert(sample.eventJournal?.retainedCount <= sample.eventJournal?.capacity,
           "Expected event journal retained events to stay within capacity");
       }

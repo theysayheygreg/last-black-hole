@@ -247,9 +247,16 @@ async function run() {
             (remotePlayer) => Boolean(remotePlayer.abilityState?.burnActive),
             { timeout: 5000, interval: 120 }
           );
+          await sleep(650);
+          const held = await waitForSnapshotPlayer(
+            net.clientId,
+            (remotePlayer) => Boolean(remotePlayer.abilityState?.burnActive),
+            { timeout: 2000, interval: 120 }
+          );
           await setGamepadButton(pageRemote, 4, false, 0);
           await sleep(160);
           assert(player.abilityState?.burnActive === true, 'Expected controller ability1 to toggle burn remotely');
+          assert(held.player.abilityState?.burnActive === true, 'Expected held ability1 not to tick-toggle Breacher burn off');
           remoteShot = await screenshot(pageRemote, 'controller-remote');
         });
       });

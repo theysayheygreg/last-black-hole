@@ -39,6 +39,45 @@ async function run() {
     assert(Math.abs(hits[0].distance - 0.16) < 1e-12, `Expected wrapped distance 0.16, got ${hits[0].distance}`);
   });
 
+  await runner.run("quantizes non-divisible cell sizes to preserve the toroidal period", async () => {
+    const registry = new BodyRegistry({ worldScale: 10 });
+    const index = new SpatialIndex({ worldScale: 10, cellSize: 0.45 });
+    addBody(registry, index, {
+      id: "wreck:seam",
+      category: "wreck",
+      wx: 0.1,
+      wy: 5,
+      radius: 0.01,
+      interactionMask: BODY_MASKS.PICKUP,
+    });
+
+    const stats = index.stats();
+    assert(Math.abs(stats.columns * stats.cellSize - stats.worldScale) < 1e-12,
+      `Expected exact grid period, got ${stats.columns} * ${stats.cellSize} vs ${stats.worldScale}`);
+    assert(stats.requestedCellSize === 0.45, `Expected requested cell size to stay inspectable, got ${stats.requestedCellSize}`);
+
+    const hits = index.queryCircle({ wx: 9.9, wy: 5, radius: 0.35, interactionMask: BODY_MASKS.PICKUP });
+    assert(hits.length === 1 && hits[0].id === "wreck:seam",
+      `Expected wrapped seam hit with non-divisible cell size, got ${hits.map((hit) => hit.id).join(",")}`);
+  });
+
+  await runner.run("non-divisible cell sizes wrap on both axes", async () => {
+    const registry = new BodyRegistry({ worldScale: 5 });
+    const index = new SpatialIndex({ worldScale: 5, cellSize: 0.32 });
+    addBody(registry, index, {
+      id: "star:corner",
+      category: "star",
+      wx: 0.06,
+      wy: 0.08,
+      radius: 0.015,
+      collisionMask: BODY_MASKS.STAR,
+    });
+
+    const hits = index.queryAABB(4.94, 4.93, 0.16, 0.18, { collisionMask: BODY_MASKS.STAR });
+    assert(hits.length === 1 && hits[0].id === "star:corner",
+      `Expected wrapped corner hit with snapped cell size, got ${hits.map((hit) => hit.id).join(",")}`);
+  });
+
   await runner.run("queryCircle filters masks and orders by distance then public id", async () => {
     const registry = new BodyRegistry({ worldScale: 3 });
     const index = new SpatialIndex({ worldScale: 3, cellSize: 0.4 });
