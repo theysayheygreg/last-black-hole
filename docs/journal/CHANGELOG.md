@@ -27,6 +27,9 @@
   lane-filtered `/events`, health retention stats, and snapshot `lastEventSeq`.
 - Added `tests/protocol-runtime.cjs` to prove the live `/events` endpoint,
   snapshot watermark, reset/future windows, and health journal stats agree.
+- Surfaced the v0.3 Three render-plan descriptor through live backend stats and
+  taught the renderer fixture suite to assert the contract id, quality tier,
+  canonical surface, and required pass ids.
 - Kept extraction, death, movement, and other consequence families on the
   existing runtime paths until their family-specific outcome tests pass.
 

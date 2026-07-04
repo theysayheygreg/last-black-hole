@@ -24,7 +24,9 @@ module with golden fixtures so future force/collision extraction can prove it
 did not retune basic control math by accident. Live sim events now flow through
 `SimEventJournal`, with run-aware and lane-filtered `/events`, `/health`
 journal stats, and snapshot `lastEventSeq`; the snapshot ring is still a
-debug/rebase scaffold, not the live snapshot producer.
+debug/rebase scaffold, not the live snapshot producer. The Three renderer now
+reports the v0.3 render-plan contract through backend stats so fixture tests can
+catch drift between the planned pass graph and the live renderer.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -446,6 +448,9 @@ and expected output, so the main thread can coordinate without stepping on work.
 
 - Add a render-plan descriptor for pass names, inputs, outputs, quality tiers,
   fixture ownership, capture policy, debug views, and budget targets.
+- Shipped live render-plan diagnostics: Three backend stats now expose the
+  render-plan id, quality tier, canonical surface, budget target, and required
+  pass ids, and renderer fixtures assert those fields.
 - Add a material family registry for `asciiFabric`, `gravityContour`,
   `entityEcho`, `shipContactMatte`, `thrusterWake`, `portalAperture`,
   `inhibitorShard`, `titleFault`, and `scanNoise`.

@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-07-04 — Renderer contract becomes live diagnostics before ownership
+
+**Decision:** Expose the v0.3 render-plan descriptor through Three backend
+stats and assert it in renderer fixtures. The renderer now reports its contract
+id, active quality tier, canonical surface, product capture surface, budget
+target, and required pass ids through `getRendererBackendStats()`.
+
+**Why:** The render plan should guide diagnostics before it owns more runtime
+data. Surfacing it through the live backend lets tests catch drift between the
+planned pass graph and the running Three renderer without making Three own
+gameplay state or forcing renderable hints into snapshots prematurely.
+
+**Where it landed:** `src/render-three/three-renderer.js` and
+`tests/renderer.cjs`.
+
+**Door status:** Closed for treating the render-plan files as inert docs only.
+Open for the later renderable-hints slice, where snapshots/events can start
+feeding renderer-neutral presentation hints.
+
 ## 2026-07-04 — Event journal is live before snapshot rebase
 
 **Decision:** Route live sim events through `SimEventJournal` while preserving

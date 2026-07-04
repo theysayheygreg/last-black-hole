@@ -364,6 +364,16 @@ async function captureFixture(page, outputDir, fixture) {
   if (backend === 'three') {
     assert(backendStats?.backend === 'three', `Fixture '${fixture.name}' backend stats did not report three`);
     assert(backendStats?.passCount >= 5, `Fixture '${fixture.name}' Three render graph is missing passes`);
+    assert(backendStats?.renderPlan?.id === 'last-singularity-three-render-plan-v0.3',
+      `Fixture '${fixture.name}' Three renderer did not expose the v0.3 render plan contract`);
+    assert(backendStats.renderPlan.activeQualityTier === backendStats.renderQuality,
+      `Fixture '${fixture.name}' Three render plan quality did not match backend quality`);
+    assert(backendStats.renderPlan.canonicalSurface === 'asciiComposite',
+      `Fixture '${fixture.name}' Three render plan canonical surface drifted`);
+    for (const requiredPass of ['fabricSource', 'entityEchoes', 'vfxEvents', 'asciiComposite', 'hudBridge']) {
+      assert(backendStats.renderPlan.passIds.includes(requiredPass),
+        `Fixture '${fixture.name}' Three render plan missing contract pass ${requiredPass}`);
+    }
     assert(backendStats?.three?.sceneKind === 'top-down-3d',
       `Fixture '${fixture.name}' Three scene is not first-class 3D`);
     assert(backendStats?.three?.camera?.kind === 'orthographic-top-down',

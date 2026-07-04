@@ -10,6 +10,7 @@ import * as THREE from '../../node_modules/three/build/three.module.js';
 import { CAMERA_VIEW, worldRadiusToSceneScale } from '../coords.js';
 import { ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
 import { VfxManager } from './vfx/vfx-manager.js';
+import { RENDER_PLAN_DESCRIPTOR, RENDER_PLAN_PASS_IDS } from './render-plan.js';
 
 const COPY_VERT = `in vec3 position;
 in vec2 uv;
@@ -981,6 +982,17 @@ export class ThreeRendererBackend {
       renderQuality: this.renderQuality,
       passCount: this.passNames.length,
       composerPasses: this.composer?.passes?.map((p) => p.name) || [],
+      renderPlan: {
+        id: RENDER_PLAN_DESCRIPTOR.id,
+        version: RENDER_PLAN_DESCRIPTOR.version,
+        line: RENDER_PLAN_DESCRIPTOR.line,
+        defaultQualityTier: RENDER_PLAN_DESCRIPTOR.defaultQualityTier,
+        activeQualityTier: this.renderQuality,
+        canonicalSurface: RENDER_PLAN_DESCRIPTOR.capturePolicy?.canonicalSurface || null,
+        productCapture: RENDER_PLAN_DESCRIPTOR.capturePolicy?.productCapture || null,
+        budgetTarget: RENDER_PLAN_DESCRIPTOR.budgetTarget,
+        passIds: RENDER_PLAN_PASS_IDS.slice(),
+      },
       three: {
         passNames: this.passNames.slice(),
         ...this.lastThreeStats,
