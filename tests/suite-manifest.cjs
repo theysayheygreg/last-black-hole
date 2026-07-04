@@ -108,6 +108,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "BallparkPickup",
+    file: "ballpark-pickup.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "ControlPlane",
     file: "control-plane.cjs",
     lanes: ["core", "authority", "full"],

@@ -52,7 +52,7 @@ const {
 } = require("./sim-protocol.cjs");
 const { BODY_MASKS } = require("./sim/body-masks.cjs");
 const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
-const { collectRelevantBodies } = require("./sim/sim-queries.cjs");
+const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queries.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -2554,19 +2554,63 @@ function applyWellGravity(player, dt) {
   player.vy += pullY * pullScale * dt;
 }
 
+function pickupRadiusForPlayer(player) {
+  return 0.08 * (player.brain ? player.brain.pickupRadius : 1.0);
+}
+
+function legacyPickupWreckCandidates(player, wrecks, limit) {
+  return collectNearestByDistance(
+    player.wx,
+    player.wy,
+    wrecks.filter((wreck) => wreck.alive !== false && !wreck.looted && wreck.pickupCooldown <= 0),
+    limit
+  );
+}
+
+function collectPickupWreckCandidates(player, wrecks, pickupDist, limit) {
+  const mirror = runtime.ballparkMirror;
+  const mirrorStats = mirror?.stats?.();
+  if (!mirror || !mirrorStats?.activeBodyCount) {
+    return {
+      mode: "legacy",
+      candidates: legacyPickupWreckCandidates(player, wrecks, limit),
+    };
+  }
+
+  const materializedById = indexEntitiesById(wrecks);
+  const { bodies } = collectNearestBodies(mirror, { wx: player.wx, wy: player.wy }, {
+    category: "wreck",
+    radius: pickupDist,
+    // Cooldown is a wreck-specific gameplay fact, so gather the full local
+    // pickup bubble and filter materialized entities before applying budget.
+    limit: Math.max(limit, wrecks.length || 1),
+    query: {
+      interactionMask: BODY_MASKS.PICKUP,
+      lifecycleStates: ["alive", "spawning"],
+    },
+  });
+
+  const ranked = [];
+  for (const hit of bodies) {
+    const wreck = materializedById.get(String(hit.sourceId));
+    if (!wreck || wreck.alive === false || wreck.looted || wreck.pickupCooldown > 0) continue;
+    ranked.push({
+      entity: wreck,
+      dist: worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale),
+    });
+  }
+  ranked.sort((a, b) => a.dist - b.dist);
+  return { mode: "ballpark", candidates: ranked.slice(0, limit) };
+}
+
 function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
   if (player.status !== "alive") return;
   const maxCargo = player.brain ? player.brain.cargoSlots : PLAYER_CARGO_SLOTS;
   if (getCargoCount(player) >= maxCargo) return;
 
-  const nearbyWrecks = collectNearestByDistance(
-    player.wx,
-    player.wy,
-    wrecks.filter((wreck) => wreck.alive !== false && !wreck.looted && wreck.pickupCooldown <= 0),
-    runtime.session.maxPickupChecksPerPlayer || wrecks.length || 1
-  );
-
-  const pickupDist = 0.08 * (player.brain ? player.brain.pickupRadius : 1.0);
+  const pickupDist = pickupRadiusForPlayer(player);
+  const limit = clampBudgetCount(runtime.session.maxPickupChecksPerPlayer || wrecks.length || 1, wrecks.length || 1);
+  const { candidates: nearbyWrecks } = collectPickupWreckCandidates(player, wrecks, pickupDist, limit);
   for (const { entity: wreck, dist } of nearbyWrecks) {
     if (dist >= pickupDist) continue;
 

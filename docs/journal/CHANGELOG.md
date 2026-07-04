@@ -12,9 +12,14 @@
 - Added passive wreck `pickupCooldown` metadata to the Ballpark mirror so the
   next pickup migration can filter the same eligibility facts as the legacy
   sim path without reaching back into bespoke array scans.
-- Kept nearest helper migration non-authoritative: pickup, extraction, death,
-  and movement consequences still use the existing runtime paths until their
-  family-specific outcome tests pass.
+- Moved wreck pickup candidate selection onto Ballpark nearest queries while
+  keeping cargo mutation, looted state, signal spikes, and `player.loot` events
+  in the existing authoritative sim path.
+- Added `tests/ballpark-pickup.cjs` to prove a fresh sim can loot a real wreck
+  through the migrated candidate path and still publish the same authoritative
+  consequence.
+- Kept extraction, death, movement, and other consequence families on the
+  existing runtime paths until their family-specific outcome tests pass.
 
 ## 2026-07-03 — v0.3 Ballpark relevance query slice
 

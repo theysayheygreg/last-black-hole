@@ -15,8 +15,10 @@ authority. `scripts/sim/ballpark-mirror.cjs` rebuilds the `BodyRegistry` and
 scavengers through the mirror, `/health` and `/debug/ballpark` expose body and
 query stats, and normal `/snapshot` output intentionally does not include
 Ballpark debug payloads. Nearest well, unlooted wreck, and available portal
-selection now have old-vs-Ballpark parity tests, including wrap-edge cases, but
-those helpers are still not live consequence authority.
+selection now have old-vs-Ballpark parity tests, including wrap-edge cases.
+Wreck pickup is the first migrated consequence adapter: Ballpark supplies the
+nearby pickup candidates, while the existing authoritative sim path still owns
+cargo transfer, looted state, signal spikes, and `player.loot` events.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -301,6 +303,10 @@ and expected output, so the main thread can coordinate without stepping on work.
   available portals; the next runtime migration should be wreck pickup because
   it is the smallest consequence family that can keep mutation in the existing
   authoritative path while Ballpark supplies equivalent candidates.
+- Shipped wreck pickup as that first consequence adapter, with
+  `tests/ballpark-pickup.cjs` proving a fresh authoritative sim can loot a real
+  wreck through Ballpark-selected candidates while preserving cargo and event
+  consequences.
 - Preserve the current movement feel while routing body positions/radii through
   shared coordinate and world-distance helpers.
 - Add explicit movement modes: drift, thrust, brake, slingshot approach,
@@ -336,6 +342,9 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Move pickup, portal capture, well death, scavenger bump/contact, star push,
   planetoid/comet push, pulse contact, and Inhibitor contact to Ballpark
   queries one family at a time.
+- Shipped first family: wreck pickup candidate selection now uses Ballpark
+  nearest queries; cargo mutation and event emission remain in the existing
+  authoritative sim path.
 - Centralize body radii and interaction masks.
 - Make collision grace/near-miss rules explicit, especially near wells and
   portals.

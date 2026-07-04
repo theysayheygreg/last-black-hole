@@ -1,5 +1,23 @@
 # Decision Log
 
+## 2026-07-04 — Wreck pickup is the first Ballpark consequence adapter
+
+**Decision:** Move wreck pickup candidate selection to Ballpark nearest queries
+first, while leaving the actual loot transfer, `wreck.looted` mutation, signal
+spike, and `player.loot` event in the existing authoritative runtime path.
+
+**Why:** Pickup has the smallest consequence surface: no run-ending state, no
+death edge cases, and no renderer-owned behavior. It is still meaningful enough
+to prove the v0.3 pattern of "Ballpark supplies candidates; the sim commits the
+gameplay fact."
+
+**Where it landed:** `scripts/sim-runtime.cjs`,
+`tests/ballpark-pickup.cjs`, and `tests/suite-manifest.cjs`.
+
+**Door status:** Closed for migrating additional consequence families without
+their own outcome tests. Open for portal extraction next once capture-radius
+parity is explicitly tested.
+
 ## 2026-07-04 — Nearest parity before first consequence migration
 
 **Decision:** Treat nearest well, wreck, and portal Ballpark helpers as
