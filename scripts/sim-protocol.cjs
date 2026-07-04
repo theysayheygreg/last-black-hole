@@ -14,6 +14,21 @@ function asNumber(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizeSlingshotEdges(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const edges = [];
+  for (const entry of value) {
+    const rawId = typeof entry === "object" && entry !== null ? entry.id : entry;
+    const id = Math.max(0, Math.floor(asNumber(rawId, 0)));
+    if (id <= 0 || seen.has(id)) continue;
+    seen.add(id);
+    edges.push(id);
+    if (edges.length >= 8) break;
+  }
+  return edges;
+}
+
 function normalizeInputMessage(body = {}) {
   const consumeSlotValue = body.consumeSlot;
   const consumeSlot =
@@ -36,6 +51,7 @@ function normalizeInputMessage(body = {}) {
     thrust: clamp(asNumber(body.thrust, 0), 0, 1),
     brake: clamp(asNumber(body.brake, 0), 0, 1),
     slingshot: Boolean(body.slingshot),
+    slingshotEdges: normalizeSlingshotEdges(body.slingshotEdges),
     pulse: Boolean(body.pulse),
     ability1: Boolean(body.ability1),
     ability2: Boolean(body.ability2),
@@ -84,6 +100,7 @@ function createProtocolDescription() {
           thrust: "number[0..1]",
           brake: "number[0..1]",
           slingshot: "boolean",
+          slingshotEdges: "number[] queued press edges, max 8",
           pulse: "boolean",
           consumeSlot: "number[0..1] | null",
           timestamp: "unix-ms",

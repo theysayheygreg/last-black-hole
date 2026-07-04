@@ -52,6 +52,13 @@ Sim `/health` includes `process.pid`, `process.uptimeSec`, and
 `process.memory` so long-run probes can watch process age and memory growth
 instead of inferring leaks from control feel alone.
 
+Remote client state also exposes protocol timing through
+`window.__TEST_API.getNetworkState().networkMetrics`. Use
+`lastInputAckRttMs`, `lastInputToSnapshotMs`, `lastSnapshotLagMs`,
+`pendingInputCount`, and the mirrored remote fields in
+`window.__TEST_API.getPerfStats()` to distinguish network packaging,
+presentation delay, and actual movement tuning.
+
 Each match is a bounded authority session, not a forever simulation. When the
 last human pilot is dead or extracted, or when the configured run cap expires,
 the sim marks the session ended and stops the tick loop while keeping the
@@ -123,7 +130,7 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:ui` | Focused UI visual pass. Captures title, profile, home, map select, in-match HUD, extraction results, and death results with 50%/25% couch-proxy images. |
 | `npm run test:ui-motion` | Pure Node checks for shared UI motion helpers: reduced-motion resolution, reveal clips, type-on text, command pulses, and directional wipes. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
-| `npm run test:sim-structure` | v0.3 structural canary for Ballpark bodies, relevance/query adapters, movement golden fixtures, protocol input normalization, first consequence adapters, bounded-growth soak, event journal, and snapshot ring contracts. |
+| `npm run test:sim-structure` | v0.3 structural canary for Ballpark bodies, relevance/query adapters, movement golden fixtures, protocol input normalization, queued slingshot edges, first consequence adapters, bounded-growth soak, event journal, and snapshot ring contracts. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
 
@@ -199,7 +206,7 @@ as a false art-direction verdict.
 | `static` | pure Node/data invariants | browser or process lifecycle |
 | `browser` | headless browser checks through `__TEST_API` | aesthetic approval |
 | `authority` | sim/control-plane/remote protocol health | local-only visual questions |
-| `sim-structure` | Ballpark body/query mirror, relevance adapters, movement golden fixtures, protocol input normalization, first consequence adapters, bounded-growth soak, event journal, and snapshot ring contracts | browser visuals or playfeel |
+| `sim-structure` | Ballpark body/query mirror, relevance adapters, movement golden fixtures, protocol input normalization, queued slingshot edges, first consequence adapters, bounded-growth soak, event journal, and snapshot ring contracts | browser visuals or playfeel |
 | `visual` | deterministic renderer fixtures and screenshot manifests | gameplay balance |
 | `playtest` | synthetic real-flow menu/input coverage | final UX judgment |
 | `full` | all committed automated suites | Codex app browser/manual review |

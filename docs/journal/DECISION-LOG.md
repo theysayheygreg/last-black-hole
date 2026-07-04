@@ -2111,3 +2111,38 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 **Door status:** Open — implementation is deferred, but the server-side layering is now explicit enough to build toward cleanly.
 
 | Mar 31 | Implementation lands: the first persistent control-plane slice now exists. Browser profiles carry stable ids, the sim bootstraps durable profile state on join, the server writes back death/extraction/abandon outcomes outside the tick loop, and the client resyncs its local profile from authoritative server truth after remote runs. |
+
+
+## v0.3 Ballpark Authority Follow-Through
+
+### Q: How should remote slingshot input survive client/server cadence?
+
+| Date | Event |
+|------|-------|
+| Jul 4 | Review of the remote input path found that held boolean `slingshot` state could miss quick tap edges when engage/release happened between client POSTs. |
+| Jul 4 | Decision: treat slingshot press intent as a queued edge stream in the protocol, while preserving the existing boolean field as a compatibility and held-state fallback. |
+| Jul 4 | Implementation lands: clients send bounded `slingshotEdges`, the sim merges and dedupes them per player, consumes one edge per authority tick, returns accepted edge ids, and exposes pending edge count in snapshots for debugging. |
+
+**Options:**
+1. **Sample only the current held button** — simple, but it drops fast taps and makes slingshot feel unreliable under normal input cadence.
+2. **Raise the input POST rate** — masks the problem with more network/process work and still does not guarantee edge delivery.
+3. **Queue explicit slingshot press edges with server ack** (chosen) — gives the sim every intentional toggle while keeping release/engage consequences authoritative.
+
+**Where it landed:** Option 3. `slingshotEdges` are protocol input facts; the sim owns capture/release outcomes and the client only drops pending edges after ack.
+**Door status:** Closed for slingshot. Reuse the same edge-stream shape for future quick-tap authority actions before inventing another input latch.
+
+### Q: Which Ballpark consequence should migrate after wreck pickup?
+
+| Date | Event |
+|------|-------|
+| Jul 4 | Wreck pickup proved the candidate-only Ballpark adapter pattern: Ballpark can provide nearby bodies without taking over final gameplay mutation. |
+| Jul 4 | Decision: migrate portal extraction next because extraction is a clean radius/candidate query with an existing authoritative outcome path and explicit tests. |
+| Jul 4 | Implementation lands: portal extraction queries Ballpark for nearby available portal candidates, rematerializes the real portal object, and still performs exact `isPortalAvailable()` plus `portalCaptureRadius()` checks before setting escape outcome and events. |
+
+**Options:**
+1. **Migrate well death/contact next** — high value, but riskier because this is where feel, grace, kill radius, and visible hazard readability meet.
+2. **Migrate portal extraction next** (chosen) — smaller blast radius, proves a second consequence family, and keeps mutation/outcome authority in the sim.
+3. **Pause consequence migration until full ECS** — overkill; the candidate-adapter pattern is already useful and testable without a framework jump.
+
+**Where it landed:** Option 2. Wreck pickup and portal extraction are now the first two Ballpark-backed consequence adapters. Death/contact remain the next high-risk migration family.
+**Door status:** Open — continue one family at a time with parity/outcome tests before replacing old inline helpers.

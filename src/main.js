@@ -169,6 +169,11 @@ const perfStats = {
   visibleWellCount: 0,
   totalWellCount: 0,
   fluidResolution: 0,
+  remoteInputAckRttMs: null,
+  remoteInputToSnapshotMs: null,
+  remoteSnapshotLagMs: null,
+  remotePresentationAgeMs: null,
+  remoteInputToPresentationMs: null,
   composerPasses: [],
   three: null,
 };
@@ -263,6 +268,8 @@ let remoteSessionRequestInFlight = false;
 let remoteSessionLastFetchedAt = 0;
 let remotePendingPulse = false;
 let remotePendingConsumeSlot = null;
+let remotePendingSlingshotEdges = [];
+let remoteNextSlingshotEdgeId = 1;
 let remoteShipPresentation = null;
 let startingMasses = [];
 let mapSelectIndex = 0;
@@ -1671,6 +1678,8 @@ function startGame(map, seed = null) {
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remotePendingSlingshotEdges = [];
+  remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
   remoteFauna = [];
   remoteSentries = [];
@@ -1771,8 +1780,20 @@ function applyRemoteInventoryShape(localPlayer) {
   }
 }
 
+function syncRemoteNetworkPerfStats() {
+  const metrics = simClient?.getMetrics?.();
+  if (!metrics) return;
+  perfStats.remoteInputAckRttMs = metrics.lastInputAckRttMs;
+  perfStats.remoteInputToSnapshotMs = metrics.lastInputToSnapshotMs;
+  perfStats.remoteSnapshotLagMs = metrics.lastSnapshotLagMs;
+  if (perfStats.remoteInputToSnapshotMs != null && perfStats.remotePresentationAgeMs != null) {
+    perfStats.remoteInputToPresentationMs = perfStats.remoteInputToSnapshotMs + perfStats.remotePresentationAgeMs;
+  }
+}
+
 function applyRemoteSnapshot(snapshot) {
   if (!snapshot) return;
+  syncRemoteNetworkPerfStats();
   const duplicateSnapshot = remoteSnapshot &&
     snapshot.tick === remoteSnapshot.tick &&
     snapshot.simTime === remoteSnapshot.simTime;
@@ -1894,6 +1915,8 @@ function updateRemoteShipPresentation(dt) {
     REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT,
     Math.max(0, (performance.now() - remoteShipPresentation.receivedAt) / 1000),
   );
+  perfStats.remotePresentationAgeMs = elapsed * 1000;
+  syncRemoteNetworkPerfStats();
   const targetX = wrapWorld(remoteShipPresentation.wx + remoteShipPresentation.vx * elapsed);
   const targetY = wrapWorld(remoteShipPresentation.wy + remoteShipPresentation.vy * elapsed);
   const [dx, dy] = worldDisplacement(ship.wx, ship.wy, targetX, targetY);
@@ -2587,6 +2610,8 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remotePendingSlingshotEdges = [];
+  remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
   fixtureShipCandidates = [];
 
@@ -2683,6 +2708,8 @@ async function leaveRemoteSessionToHome() {
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remotePendingSlingshotEdges = [];
+  remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
 }
 
@@ -2704,6 +2731,8 @@ async function restartRemoteSession() {
   remoteLastEventSeq = 0;
   remotePendingPulse = false;
   remotePendingConsumeSlot = null;
+  remotePendingSlingshotEdges = [];
+  remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
   applyRemoteSnapshot(snapshot);
   gamePhase = 'playing';
@@ -4205,6 +4234,10 @@ function gameLoop(now) {
         if (pulseNow && !_prevPulse) {
           remotePendingPulse = true;
         }
+        if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
+          remotePendingSlingshotEdges.push(remoteNextSlingshotEdgeId++);
+          if (remotePendingSlingshotEdges.length > 8) remotePendingSlingshotEdges.shift();
+        }
 
         if (!remoteInputRequestInFlight) {
           const facing = inputManager.facing ?? ship.facing;
@@ -4214,6 +4247,7 @@ function gameLoop(now) {
           const intentY = Number.isFinite(facing) ? Math.sin(facing) : 0;
           const sentPulse = remotePendingPulse;
           const sentConsumeSlot = remotePendingConsumeSlot;
+          const sentSlingshotEdges = remotePendingSlingshotEdges.slice(0, 8);
           remoteInputRequestInFlight = true;
           void simClient.sendInput({
             // The scalar action fields decide whether thrust/brake happens;
@@ -4223,13 +4257,21 @@ function gameLoop(now) {
             thrust,
             brake,
             slingshot: !inventoryOpen && slingshotNow,
+            slingshotEdges: sentSlingshotEdges,
             pulse: sentPulse,
             ability1: inputManager.ability1 || false,
             ability2: inputManager.ability2 || false,
             consumeSlot: sentConsumeSlot,
           }).then((response) => {
             remoteLastAckSeq = response.acceptedSeq ?? remoteLastAckSeq;
+            syncRemoteNetworkPerfStats();
             if (sentPulse) remotePendingPulse = false;
+            const acceptedEdges = Array.isArray(response.acceptedSlingshotEdges)
+              ? new Set(response.acceptedSlingshotEdges)
+              : new Set(sentSlingshotEdges);
+            if (acceptedEdges.size > 0) {
+              remotePendingSlingshotEdges = remotePendingSlingshotEdges.filter((id) => !acceptedEdges.has(id));
+            }
             if (sentConsumeSlot !== null && remotePendingConsumeSlot === sentConsumeSlot) {
               remotePendingConsumeSlot = null;
             }

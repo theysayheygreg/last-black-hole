@@ -114,6 +114,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "BallparkExtraction",
+    file: "ballpark-extraction.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "ControlPlane",
     file: "control-plane.cjs",
     lanes: ["core", "authority", "full"],
@@ -135,6 +141,12 @@ const SUITES = [
     name: "SimProtocolInput",
     file: "sim-protocol-input.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "SlingshotEdgeQueue",
+    file: "slingshot-edge-queue.cjs",
+    lanes: ["authority", "sim-structure", "full"],
     browser: false,
   },
   {

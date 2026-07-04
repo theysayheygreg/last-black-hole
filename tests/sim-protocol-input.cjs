@@ -15,6 +15,7 @@ async function run() {
       pulse: true,
       ability1: true,
       ability2: true,
+      slingshotEdges: [3, { id: 4 }, 4, 0, -1, "5"],
       consumeSlot: 1,
       timestamp: 123,
     });
@@ -23,6 +24,8 @@ async function run() {
       `Expected unit move vector, got ${input.moveX},${input.moveY}`);
     assert(input.thrust === 1 && input.brake === 1, "Expected scalar action fields to keep their requested intensity");
     assert(input.pulse === true && input.ability1 === true && input.ability2 === true, "Expected boolean actions to survive normalization");
+    assert(input.slingshotEdges.join(",") === "3,4,5",
+      `Expected deduped slingshot edges to survive normalization, got ${input.slingshotEdges.join(",")}`);
     assert(input.consumeSlot === 1, `Expected consume slot 1, got ${input.consumeSlot}`);
   });
 

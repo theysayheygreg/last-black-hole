@@ -1125,6 +1125,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       thrust: 0,
       brake: 0,
       slingshot: false,
+      slingshotEdges: [],
       pulse: false,
       ability1: false,
       ability2: false,
@@ -1434,6 +1435,7 @@ function snapshotBody() {
     session: { ...runtime.session },
     tick: runtime.tick,
     simTime: runtime.simTime,
+    serverTime: Date.now(),
     lastEventSeq: runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1),
     players: Array.from(runtime.players.values()).map((player) => ({
       clientId: player.clientId,
@@ -1492,6 +1494,7 @@ function snapshotBody() {
       deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
       lastInputSeq: player.lastInput.seq,
       lastInputBrake: player.lastInput.brake || 0,
+      pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges) ? player.lastInput.slingshotEdges.length : 0,
       cargo: player.cargo,
       cargoCount: getCargoCount(player),
       equipped: player.equipped,
@@ -2609,6 +2612,49 @@ function collectPickupWreckCandidates(player, wrecks, pickupDist, limit) {
   return { mode: "ballpark", candidates: ranked.slice(0, limit) };
 }
 
+function legacyPortalExtractionCandidates(player, portals, limit) {
+  return collectNearestByDistance(
+    player.wx,
+    player.wy,
+    portals.filter(isPortalAvailable),
+    limit
+  );
+}
+
+function collectPortalExtractionCandidates(player, portals, captureDist, limit) {
+  const mirror = runtime.ballparkMirror;
+  const mirrorStats = mirror?.stats?.();
+  if (!mirror || !mirrorStats?.activeBodyCount) {
+    return {
+      mode: "legacy",
+      candidates: legacyPortalExtractionCandidates(player, portals, limit),
+    };
+  }
+
+  const materializedById = indexEntitiesById(portals);
+  const { bodies } = collectNearestBodies(mirror, { wx: player.wx, wy: player.wy }, {
+    category: "portal",
+    radius: captureDist,
+    limit: Math.max(limit, portals.length || 1),
+    query: {
+      interactionMask: BODY_MASKS.PORTAL,
+      lifecycleStates: ["alive", "spawning"],
+    },
+  });
+
+  const ranked = [];
+  for (const hit of bodies) {
+    const portal = materializedById.get(String(hit.sourceId));
+    if (!portal || !isPortalAvailable(portal)) continue;
+    ranked.push({
+      entity: portal,
+      dist: worldDistance(player.wx, player.wy, portal.wx, portal.wy, runtime.session.worldScale),
+    });
+  }
+  ranked.sort((a, b) => a.dist - b.dist);
+  return { mode: "ballpark", candidates: ranked.slice(0, limit) };
+}
+
 function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
   if (player.status !== "alive") return;
   const maxCargo = player.brain ? player.brain.cargoSlots : PLAYER_CARGO_SLOTS;
@@ -2663,12 +2709,13 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
 
 function tickExtraction(player) {
   if (player.status !== "alive") return;
-  const nearbyPortals = collectNearestByDistance(
-    player.wx,
-    player.wy,
-    runtime.mapState.portals.filter(isPortalAvailable),
-    runtime.session.maxPortalChecksPerPlayer || runtime.mapState.portals.length || 1
-  );
+  const portals = runtime.mapState.portals;
+  const maxCaptureDist = portals.reduce((best, portal) => {
+    if (!isPortalAvailable(portal)) return best;
+    return Math.max(best, portalCaptureRadius(portal));
+  }, 0.08);
+  const limit = clampBudgetCount(runtime.session.maxPortalChecksPerPlayer || portals.length || 1, portals.length || 1);
+  const { candidates: nearbyPortals } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
   for (const { entity: portal, dist } of nearbyPortals) {
     if (dist < portalCaptureRadius(portal)) {
       player.status = "escaped";
@@ -2956,6 +3003,8 @@ function applyDebugPlayerState(player, body) {
     state.inputWasDown = false;
     state.lastReleaseTime = -Infinity;
     state.lastReleasedAnchorKey = null;
+    state.consumedEdgeIds = [];
+    if (player.lastInput) player.lastInput.slingshotEdges = [];
   }
   if (typeof body.status === "string" && body.status) {
     player.status = body.status;
@@ -4089,6 +4138,37 @@ function releasePlayerSlingshot(player, currentTime, input = player.lastInput, {
   return { totalEnergy, baseEnergy, chainCount: state.chainCount || 1 };
 }
 
+function rememberConsumedSlingshotEdge(state, edgeId) {
+  if (!Number.isFinite(Number(edgeId)) || Number(edgeId) <= 0) return;
+  const id = Math.trunc(Number(edgeId));
+  if (!Array.isArray(state.consumedEdgeIds)) state.consumedEdgeIds = [];
+  state.consumedEdgeIds.push(id);
+  if (state.consumedEdgeIds.length > 64) {
+    state.consumedEdgeIds.splice(0, state.consumedEdgeIds.length - 64);
+  }
+}
+
+function hasSeenSlingshotEdge(player, edgeId) {
+  const state = ensurePlayerSlingshot(player);
+  if (!Number.isFinite(Number(edgeId)) || Number(edgeId) <= 0) return true;
+  const id = Math.trunc(Number(edgeId));
+  const pending = Array.isArray(player.lastInput?.slingshotEdges) ? player.lastInput.slingshotEdges : [];
+  return pending.includes(id) || (Array.isArray(state.consumedEdgeIds) && state.consumedEdgeIds.includes(id));
+}
+
+function mergePendingSlingshotEdges(player, incomingEdges) {
+  const pending = Array.isArray(player.lastInput?.slingshotEdges)
+    ? player.lastInput.slingshotEdges.slice(0, 8)
+    : [];
+  for (const rawId of incomingEdges || []) {
+    const id = Math.trunc(Number(rawId));
+    if (id <= 0 || pending.includes(id) || hasSeenSlingshotEdge(player, id)) continue;
+    pending.push(id);
+    if (pending.length >= 8) break;
+  }
+  return pending;
+}
+
 function applyPlayerSlingshotForces(player, dt, input) {
   const state = ensurePlayerSlingshot(player);
   const anchor = findSlingshotAnchorByState(state);
@@ -4137,6 +4217,16 @@ function applyPlayerSlingshotForces(player, dt, input) {
 
 function tickPlayerSlingshot(player, dt, input) {
   const state = ensurePlayerSlingshot(player);
+  const pendingEdges = Array.isArray(input?.slingshotEdges) ? input.slingshotEdges : [];
+  const edgeId = pendingEdges.shift();
+  if (edgeId !== undefined) {
+    if (state.engaged) releasePlayerSlingshot(player, runtime.simTime, input);
+    else engagePlayerSlingshot(player, runtime.simTime);
+    rememberConsumedSlingshotEdge(state, edgeId);
+    state.inputWasDown = Boolean(input?.slingshot);
+    if (state.engaged) applyPlayerSlingshotForces(player, dt, input);
+    return;
+  }
   const down = Boolean(input?.slingshot);
   if (down && !state.inputWasDown) {
     if (state.engaged) releasePlayerSlingshot(player, runtime.simTime, input);
@@ -5809,13 +5899,20 @@ const server = http.createServer(async (req, res) => {
       }
       player.lastInput = {
         ...message,
+        slingshotEdges: mergePendingSlingshotEdges(player, message.slingshotEdges),
         pulse: Boolean(player.lastInput.pulse || message.pulse),
         consumeSlot:
           message.consumeSlot === null || message.consumeSlot === undefined
             ? player.lastInput.consumeSlot
             : message.consumeSlot,
       };
-      sendJson(res, 200, { ok: true, acceptedSeq: message.seq, tick: runtime.tick });
+      sendJson(res, 200, {
+        ok: true,
+        acceptedSeq: message.seq,
+        acceptedSlingshotEdges: message.slingshotEdges,
+        pendingSlingshotEdgeCount: player.lastInput.slingshotEdges.length,
+        tick: runtime.tick,
+      });
       return;
     }
 

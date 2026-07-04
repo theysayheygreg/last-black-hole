@@ -239,6 +239,11 @@ async function run() {
           }, { timeout: 3000 });
           await setGamepadButton(pageRemote, 6, false, 0);
           await sleep(160);
+          await waitFor(pageRemote, () => {
+            const stats = window.__TEST_API.getPerfStats();
+            return Number.isFinite(stats?.remoteInputAckRttMs) &&
+              Number.isFinite(stats?.remoteInputToSnapshotMs);
+          }, { timeout: 5000 });
 
           await setGamepadButton(pageRemote, 4, true, 1); // ability1 -> burn for breacher
           const net = await pageRemote.evaluate(() => window.__TEST_API.getNetworkState());
@@ -255,8 +260,11 @@ async function run() {
           );
           await setGamepadButton(pageRemote, 4, false, 0);
           await sleep(160);
+          const latencyStats = await pageRemote.evaluate(() => window.__TEST_API.getPerfStats());
           assert(player.abilityState?.burnActive === true, 'Expected controller ability1 to toggle burn remotely');
           assert(held.player.abilityState?.burnActive === true, 'Expected held ability1 not to tick-toggle Breacher burn off');
+          assert(Number.isFinite(latencyStats.remoteInputAckRttMs), 'Expected remote input ACK RTT metric');
+          assert(Number.isFinite(latencyStats.remoteInputToSnapshotMs), 'Expected remote input-to-snapshot metric');
           remoteShot = await screenshot(pageRemote, 'controller-remote');
         });
       });

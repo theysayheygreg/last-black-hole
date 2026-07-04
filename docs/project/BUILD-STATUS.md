@@ -8,11 +8,13 @@
 
 ## Current Snapshot
 
-**Date:** 2026-06-28
-**Public train:** v0.2.2
+**Date:** 2026-07-04
+**Public train:** v0.2.2 on `main`
+**Active structural branch:** `codex/v0.3-ballpark-roadmap`
 **Build version shape:** v0.2.2.`<commit-hash>`
-**Primary playable target:** Steam Deck Linux release artifact plus local source
-build, Three renderer, and local authoritative sim.
+**Primary playable target:** local source build, Three renderer, and local
+authoritative sim. Steam Deck Linux artifacts remain the v0.2 demo handoff path
+until a committed v0.3 release build is produced.
 
 For source playtesting, use:
 
@@ -36,6 +38,34 @@ for the current committed `0.2.x.<hash>` build version and verifies the output
 shape.
 
 ## Standing Assessment
+
+**Status update, 2026-07-04 v0.3 branch source validation:** the current
+`codex/v0.3-ballpark-roadmap` source tree has fresh automated evidence for the
+mechanical v0.3 slice. Remote slingshot input now sends queued press edges so a
+quick engage/release tap cannot disappear between authority POSTs. The remote
+client also exposes input RTT, input-to-snapshot, snapshot-lag, and
+presentation-age metrics through `__TEST_API.getNetworkState()`. Portal
+extraction is now the second Ballpark-backed consequence adapter after wreck
+pickup: Ballpark supplies candidate portals, while the authoritative sim still
+owns availability checks, exact capture radius, escape state, outcome, and
+events.
+
+Validation for this source snapshot:
+
+- `npm run test:fast` passed.
+- `npm run test:playtest` passed on the Three target, including Flow,
+  MetaFlow, Controller, and KeyboardMouse.
+- `npm run test:sim-structure` passed after adding `BallparkExtraction` and
+  `SlingshotEdgeQueue`.
+- `npm run test:authority` passed with the new consequence and input-edge
+  coverage included.
+- Targeted checks passed for `tests/sim-protocol-input.cjs`,
+  `tests/slingshot-edge-queue.cjs`, `tests/ballpark-extraction.cjs`, and
+  `tests/controller.cjs "index-a.html?renderer=three"`.
+
+**Status:** this is a healthier v0.3 source candidate, not an RC. Greg has not
+yet played this branch by hand, no hash-named v0.3 release artifact has been
+built, and the Deck Gaming Mode gate has not been rerun for the branch.
 
 **Status update, 2026-06-28 Deck compatibility pass:** the source tree now has
 a first-class Deck UI mode instead of only a Deck package. The Electron Deck
@@ -137,6 +167,10 @@ Artifacts:
 - The 2026-06-27 source playtest proves local authority viability, not final
   human feel. Automated health and one CDP smoke cannot certify that the ship
   feels good in hand.
+- The 2026-07-04 v0.3 source evidence proves structural input/consequence
+  contracts and synthetic flow coverage, not final RC readiness. Do not promote
+  it until a human local feel pass, hash-named release build, and Deck Gaming
+  Mode pass are recorded.
 
 ## What Each Status Source Means
 

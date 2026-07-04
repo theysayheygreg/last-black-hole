@@ -16,29 +16,32 @@ scavengers through the mirror, `/health` and `/debug/ballpark` expose body and
 query stats, and normal `/snapshot` output intentionally does not include
 Ballpark debug payloads. Nearest well, unlooted wreck, and available portal
 selection now have old-vs-Ballpark parity tests, including wrap-edge cases.
-Wreck pickup is the first migrated consequence adapter: Ballpark supplies the
-nearby pickup candidates, while the existing authoritative sim path still owns
-cargo transfer, looted state, signal spikes, and `player.loot` events. The
-server movement drive/brake/integrate core now lives in a shared movement-step
-module with golden fixtures so future force/collision extraction can prove it
-did not retune basic control math by accident. Live sim events now flow through
-`SimEventJournal`, with run-aware and lane-filtered `/events`, `/health`
-journal stats, and snapshot `lastEventSeq`; the snapshot ring is still a
-debug/rebase scaffold, not the live snapshot producer. The Three renderer now
-reports the v0.3 render-plan contract through backend stats so fixture tests can
-catch drift between the planned pass graph and the live renderer. A short
-deep-field bounded-growth soak checks body counts, duplicate ids, event
-retention, snapshot payload size, and post-timeout stability. The follow-up
-Orrery review's S0/S1 pass is partially integrated: the spatial index now
-snaps its cell grid to the exact toroidal world period, query ordering no longer
-depends on locale, mirror rebuild budgets and duplicate-id canaries are in the
-structural harness, portal extraction/star-or-planetoid push/scavenger contact
-have authority tests, server input vectors clamp to unit magnitude, Breacher
-Burn is edge-triggered, scavenger bump config exists on the server, AI thrust
-uses unit facing plus scalar intensity, thrust signal keys on delivered output,
-overlapping-well shield/grace handling continues across the well list, map
-reroll now uses the controller X path, and the desktop server package includes
-the event-journal dependency closure.
+Wreck pickup and portal extraction are the first migrated consequence adapters:
+Ballpark supplies nearby candidates, while the existing authoritative sim path
+still owns final eligibility, cargo/escape mutation, signal spikes, outcomes,
+and events. The server movement drive/brake/integrate core now lives in a
+shared movement-step module with golden fixtures so future force/collision
+extraction can prove it did not retune basic control math by accident. Remote
+slingshot now sends queued press edges through the input protocol so fast taps
+between POSTs are consumed by authority ticks, and the remote client exposes
+input RTT/input-to-snapshot/presentation-age metrics for feel debugging. Live
+sim events now flow through `SimEventJournal`, with run-aware and lane-filtered
+`/events`, `/health` journal stats, and snapshot `lastEventSeq`; the snapshot
+ring is still a debug/rebase scaffold, not the live snapshot producer. The
+Three renderer now reports the v0.3 render-plan contract through backend stats
+so fixture tests can catch drift between the planned pass graph and the live
+renderer. A short deep-field bounded-growth soak checks body counts, duplicate
+ids, event retention, snapshot payload size, and post-timeout stability. The
+follow-up Orrery review's S0/S1 pass is partially integrated: the spatial index
+now snaps its cell grid to the exact toroidal world period, query ordering no
+longer depends on locale, mirror rebuild budgets and duplicate-id canaries are
+in the structural harness, portal extraction/star-or-planetoid push/scavenger
+contact have authority tests, server input vectors clamp to unit magnitude,
+Breacher Burn is edge-triggered, scavenger bump config exists on the server, AI
+thrust uses unit facing plus scalar intensity, thrust signal keys on delivered
+output, overlapping-well shield/grace handling continues across the well list,
+map reroll now uses the controller X path, and the desktop server package
+includes the event-journal dependency closure.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -114,6 +117,9 @@ Source review: `docs/project/2026-07-04-orrery-v0.3-deep-review.md`.
   and bounded rebuild cost on representative live/deep-field runs.
 - **S0.4 Authority coverage:** portal extraction, star-or-planetoid push, and
   scavenger contact now have remote-authority consequence tests.
+- **S0.5 Remote input packaging:** remote slingshot now carries queued press
+  edges with accepted-edge acks, and controller coverage asserts remote latency
+  metrics are visible after input.
 - **S1.1 Server scavenger contact:** server bump radius/force now exist.
 - **S1.2 Ability edge detection:** held ability input no longer tick-toggles
   Breacher Burn or re-fires edge abilities every authority tick.
@@ -126,12 +132,11 @@ Source review: `docs/project/2026-07-04-orrery-v0.3-deep-review.md`.
   magnitude to one without losing brake-only facing intent.
 - **S1.12 Map Select:** controller reroll moved to X/Square; host reset is
   keyboard-only until it gets a proper hold-confirm controller path.
+- **S1.9 Slingshot tap latching:** engage/release edges now survive the
+  remote client input queue and are consumed one per authority tick.
 
 ### Deferred Into Roadmap
 
-- **S0.5 Remote input packaging:** the protocol clamp and held-burn controller
-  path are covered, but slingshot edge latching still needs a dedicated client
-  packaging test and likely a latch/ack shape like pulse.
 - **S1.3 Resonant hull:** decision-gated; see `OPEN-DECISIONS.md`.
 - **S1.4 Hauler Salvage Lock:** wire tagged wrecks into scavenger targeting or
   replace/remove the ability.
@@ -139,8 +144,6 @@ Source review: `docs/project/2026-07-04-orrery-v0.3-deep-review.md`.
   tables/cargo instead of spawning dramatic empty wrecks.
 - **S1.6 Cosmic signatures:** make server signature roll and modifiers
   authoritative; client consumes presentation only.
-- **S1.9 Slingshot tap latching:** latch engage/release edges through the
-  remote input path so taps between POSTs cannot vanish.
 - **S1.13 Scavenger convergence:** port client-side player awareness/signal
   reaction/flee nuance into the authoritative server species, then retire the
   client-only behavior path.
@@ -371,10 +374,18 @@ and expected output, so the main thread can coordinate without stepping on work.
   `tests/ballpark-pickup.cjs` proving a fresh authoritative sim can loot a real
   wreck through Ballpark-selected candidates while preserving cargo and event
   consequences.
+- Shipped portal extraction as the second consequence adapter, with
+  `tests/ballpark-extraction.cjs` proving a fresh authoritative sim can escape
+  through a Ballpark-selected portal while preserving the exact server-side
+  availability, radius, outcome, and event path.
 - Extracted the deterministic drive/brake/integrate phases into
   `scripts/sim/player-movement-step.cjs` and added movement golden fixtures for
   thrust, braking, current coupling, speed clamp, world wrap, and non-default
   brain coefficients.
+- Added remote input observability through `SimClient.getMetrics()` and the
+  test API so controller/playtest runs can inspect input RTT, input-to-snapshot,
+  snapshot lag, presentation age, and pending input count instead of guessing
+  from feel alone.
 - Preserve the current movement feel while routing body positions/radii through
   shared coordinate and world-distance helpers.
 - Add explicit movement modes: drift, thrust, brake, slingshot approach,
@@ -413,6 +424,10 @@ and expected output, so the main thread can coordinate without stepping on work.
 - Shipped first family: wreck pickup candidate selection now uses Ballpark
   nearest queries; cargo mutation and event emission remain in the existing
   authoritative sim path.
+- Shipped second family: portal extraction candidate selection now uses
+  Ballpark nearest queries; final capture radius, blocked/final availability,
+  escape mutation, outcome, and event emission remain in the authoritative sim
+  path.
 - Centralize body radii and interaction masks.
 - Make collision grace/near-miss rules explicit, especially near wells and
   portals.
@@ -559,6 +574,9 @@ and expected output, so the main thread can coordinate without stepping on work.
   and stopped-session stability.
 - Add perf probes for body count, query count, event count, snapshot bytes,
   render pass costs, and tick time.
+- Keep remote input latency metrics in the playtest/controller lane so
+  movement complaints can be separated into protocol delay, presentation delay,
+  and actual physics/tuning.
 - Keep fresh sim/browser reset rules explicit for all playtest-style tests.
 - Make visual-reference fixtures judge contrast/readability, not just blank
   frames.
@@ -624,8 +642,10 @@ and expected output, so the main thread can coordinate without stepping on work.
 ### v0.3.3 - Interaction Migration
 
 - Migrate one interaction family at a time to Ballpark queries.
-- Prioritize well death, portal capture, wreck pickup, scavenger contact, and
-  star/planetoid push.
+- Wreck pickup and portal extraction are the first shipped families.
+- Prioritize well death/contact, scavenger contact migration, signal-adjacent
+  consequence checks, pulse/Inhibitor contact, and remaining star/planetoid
+  query cleanup.
 
 ### v0.3.4 - Event Journal And Snapshot Ring
 

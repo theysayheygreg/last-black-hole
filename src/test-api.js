@@ -458,6 +458,7 @@ export function initTestAPI(getState) {
         sessionWillJoinLiveRun: Boolean(remoteControlState?.willJoinLiveRun),
         sessionSelectedDiffersFromLive: Boolean(remoteControlState?.selectedDiffersFromLive),
         lastRemoteInput: simClient?.lastSentInput ? { ...simClient.lastSentInput } : null,
+        networkMetrics: simClient?.getMetrics ? simClient.getMetrics() : null,
       };
     },
 

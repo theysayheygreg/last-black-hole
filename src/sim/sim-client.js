@@ -12,6 +12,15 @@ export class SimClient {
     this.lastPollAt = 0;
     this.pollIntervalMs = 100;
     this.lastSentInput = null;
+    this.pendingInputs = [];
+    this.metrics = {
+      lastInputAckRttMs: null,
+      lastInputToSnapshotMs: null,
+      lastSnapshotLagMs: null,
+      lastSnapshotIntervalMs: null,
+      lastAcceptedSeq: 0,
+      lastSnapshotTick: null,
+    };
   }
 
   _applySessionClocks(session) {
@@ -109,12 +118,47 @@ export class SimClient {
     }
     this.lastPollAt = now;
     this.latestSnapshot = await this._json('/snapshot');
+    this._recordSnapshotMetrics(this.latestSnapshot);
     this._applySessionClocks(this.latestSnapshot?.session);
     return this.latestSnapshot;
   }
 
-  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, pulse = false, ability1 = false, ability2 = false, consumeSlot = null }) {
+  _nowMs() {
+    return globalThis.performance?.now ? globalThis.performance.now() : Date.now();
+  }
+
+  _recordSnapshotMetrics(snapshot) {
+    const now = this._nowMs();
+    if (this._lastSnapshotClientAt != null) {
+      this.metrics.lastSnapshotIntervalMs = now - this._lastSnapshotClientAt;
+    }
+    this._lastSnapshotClientAt = now;
+    if (Number.isFinite(Number(snapshot?.serverTime))) {
+      this.metrics.lastSnapshotLagMs = Date.now() - Number(snapshot.serverTime);
+    }
+    this.metrics.lastSnapshotTick = snapshot?.tick ?? this.metrics.lastSnapshotTick;
+
+    const localPlayer = snapshot?.players?.find((player) => player.clientId === this.clientId);
+    const acceptedSeq = Number(localPlayer?.lastInputSeq);
+    if (!Number.isFinite(acceptedSeq)) return;
+    const acknowledged = this.pendingInputs.filter((entry) => entry.seq <= acceptedSeq);
+    if (acknowledged.length === 0) return;
+    const last = acknowledged[acknowledged.length - 1];
+    this.metrics.lastInputToSnapshotMs = now - last.sentAt;
+    this.pendingInputs = this.pendingInputs.filter((entry) => entry.seq > acceptedSeq);
+  }
+
+  getMetrics() {
+    return {
+      ...this.metrics,
+      pendingInputCount: this.pendingInputs.length,
+      pollIntervalMs: this.pollIntervalMs,
+    };
+  }
+
+  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, slingshotEdges = [], pulse = false, ability1 = false, ability2 = false, consumeSlot = null }) {
     this.seq += 1;
+    const sentAt = this._nowMs();
     this.lastSentInput = {
       clientId: this.clientId,
       seq: this.seq,
@@ -123,18 +167,25 @@ export class SimClient {
       thrust,
       brake,
       slingshot,
+      slingshotEdges: Array.isArray(slingshotEdges) ? slingshotEdges.slice(0, 8) : [],
       pulse,
       ability1,
       ability2,
       consumeSlot,
+      sentAt,
     };
-    return this._json('/input', {
+    this.pendingInputs.push({ seq: this.seq, sentAt });
+    if (this.pendingInputs.length > 32) this.pendingInputs.splice(0, this.pendingInputs.length - 32);
+    const response = await this._json('/input', {
       method: 'POST',
       body: JSON.stringify({
         ...this.lastSentInput,
         timestamp: Date.now(),
       }),
     });
+    this.metrics.lastAcceptedSeq = response.acceptedSeq ?? this.metrics.lastAcceptedSeq;
+    this.metrics.lastInputAckRttMs = this._nowMs() - sentAt;
+    return response;
   }
 
   async inventoryAction({ action, cargoSlot = -1, equipSlot = -1, consumableSlot = -1 }) {

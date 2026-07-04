@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-07-04 — v0.3 input edges and portal extraction
+
+- Added queued remote slingshot press edges to the input protocol so quick
+  engage/release taps survive client POST cadence and are consumed one per
+  authority tick.
+- Added server acks for accepted slingshot edge ids and a structural
+  `SlingshotEdgeQueue` test that sends two edges in one input packet and
+  verifies engage plus release events.
+- Exposed remote input/presentation timing through `SimClient.getMetrics()` and
+  `__TEST_API.getNetworkState().networkMetrics`, and taught controller coverage
+  to assert finite remote input timing after gameplay input.
+- Migrated portal extraction candidate selection onto Ballpark nearest queries
+  while leaving final availability, exact capture radius, outcome mutation, and
+  `player.escaped` events on the authoritative sim path.
+- Added `tests/ballpark-extraction.cjs` and included it in the authority and
+  sim-structure lanes.
+- Updated `BUILD-STATUS.md`, the v0.3 roadmap/RC gate, the project roadmap, and
+  the harness guide with the new source evidence and remaining human/Deck
+  verification gaps.
+
 ## 2026-07-04 — v0.3 S0/S1 review fixes
 
 - Fixed the Ballpark `SpatialIndex` toroidal seam bug by snapping requested
