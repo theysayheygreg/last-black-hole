@@ -101,6 +101,7 @@ function createProtocolDescription() {
           session: "session metadata",
           tick: "number",
           simTime: "seconds",
+          lastEventSeq: "latest authoritative event sequence watermark",
           players: "array of player state",
           recentEvents: "array of authoritative events",
         },

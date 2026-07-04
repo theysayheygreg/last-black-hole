@@ -21,7 +21,10 @@ nearby pickup candidates, while the existing authoritative sim path still owns
 cargo transfer, looted state, signal spikes, and `player.loot` events. The
 server movement drive/brake/integrate core now lives in a shared movement-step
 module with golden fixtures so future force/collision extraction can prove it
-did not retune basic control math by accident.
+did not retune basic control math by accident. Live sim events now flow through
+`SimEventJournal`, with run-aware and lane-filtered `/events`, `/health`
+journal stats, and snapshot `lastEventSeq`; the snapshot ring is still a
+debug/rebase scaffold, not the live snapshot producer.
 
 v0.3 should make Last Singularity feel less like a successful game-jam stack
 and more like a small production game architecture. The key move is to give the
@@ -390,8 +393,14 @@ and expected output, so the main thread can coordinate without stepping on work.
 
 - Replace the current small `recentEvents` ring with a stamped event journal
   that has sequence ids, tick stamps, run ids, and bounded retention.
+- Shipped live event-journal wiring: `publishEvent()` appends through
+  `SimEventJournal`, snapshots retain a compatibility `recentEvents` window,
+  `/events` supports `since`, `runId`, and `lane` filters, and `/health`
+  exposes journal retention stats.
 - Add snapshot watermarks: `lastEventSeq`, `bodySchemaVersion`, and
   `snapshotSchemaVersion`.
+- Shipped first snapshot watermark: `lastEventSeq` now reflects the live event
+  journal sequence.
 - Add protocol envelope fields: `snapshotId`, `baselineSnapshotId`,
   `serverTime`, `eventSeq`, and capability metadata.
 - Add lanes for `global`, `playerLocal`, `neighborhood`, `vfx`, `debug`, and

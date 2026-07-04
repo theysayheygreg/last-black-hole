@@ -1,5 +1,26 @@
 # Decision Log
 
+## 2026-07-04 — Event journal is live before snapshot rebase
+
+**Decision:** Route live sim events through `SimEventJournal` while preserving
+the existing `/events` and snapshot `recentEvents` compatibility surfaces.
+Snapshots now expose `lastEventSeq`, `/events` supports run and lane filters,
+and `/health` exposes bounded journal stats. The snapshot ring remains a
+debug/rebase scaffold until a later runtime slice wires it deliberately.
+
+**Why:** Events are the safer protocol productization step. They are already
+the source for remote authority assertions and VFX triggers, and adding run ids,
+tick stamps, lane filters, retention stats, and stale/future/reset responses
+improves debuggability without forcing the renderer or client to adopt a new
+snapshot format all at once.
+
+**Where it landed:** `scripts/sim-runtime.cjs`,
+`tests/protocol-runtime.cjs`, and `tests/suite-manifest.cjs`.
+
+**Door status:** Closed for claiming snapshot rebase is live. Open for wiring
+`SimSnapshotRing` around produced snapshots after event watermarks have stayed
+stable through the authority lane.
+
 ## 2026-07-04 — Movement fixtures pin server drive math before deeper migration
 
 **Decision:** Extract the deterministic server movement drive/brake/integrate

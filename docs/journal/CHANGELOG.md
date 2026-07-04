@@ -22,6 +22,11 @@
   `scripts/sim/player-movement-step.cjs` and added `tests/movement-golden.cjs`
   with fixed numeric fixtures for thrust, braking, current coupling, speed
   clamp, wrapping, and non-default brain coefficients.
+- Wired the live sim event stream through `SimEventJournal`, preserving
+  snapshot `recentEvents` compatibility while adding run ids, tick stamps,
+  lane-filtered `/events`, health retention stats, and snapshot `lastEventSeq`.
+- Added `tests/protocol-runtime.cjs` to prove the live `/events` endpoint,
+  snapshot watermark, reset/future windows, and health journal stats agree.
 - Kept extraction, death, movement, and other consequence families on the
   existing runtime paths until their family-specific outcome tests pass.
 

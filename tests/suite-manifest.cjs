@@ -150,6 +150,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "ProtocolRuntime",
+    file: "protocol-runtime.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "SnapshotRebase",
     file: "snapshot-rebase.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],

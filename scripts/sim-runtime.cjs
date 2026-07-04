@@ -57,6 +57,7 @@ const {
   applyPlayerBrakeAndIntegrate,
   applyPlayerDriveAndFlow,
 } = require("./sim/player-movement-step.cjs");
+const { createSimEventJournal } = require("./sim-event-journal.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -908,6 +909,7 @@ const runtime = {
   tick: 0,
   simTime: 0,
   loopTickHz: DEFAULT_TICK_HZ,
+  eventJournal: createSimEventJournal({ capacity: 256, runId: "idle" }),
   recentEvents: [],
   nextEventSeq: 1,
   systemAccumulators: {
@@ -969,17 +971,21 @@ let tickHandle = null;
 let currentLoopTickHz = DEFAULT_TICK_HZ;
 let terminalShutdownHandle = null;
 
-function publishEvent(type, payload = {}) {
-  const event = {
-    seq: runtime.nextEventSeq++,
-    type,
+function publishEvent(type, payload = {}, options = {}) {
+  const event = runtime.eventJournal.append({
+    tick: runtime.tick,
     simTime: runtime.simTime,
+    type,
+    lane: options.lane,
+    source: options.source,
+    subject: options.subject,
+    visibility: options.visibility,
     payload,
-  };
-  runtime.recentEvents.push(event);
-  if (runtime.recentEvents.length > 128) {
-    runtime.recentEvents.shift();
-  }
+  });
+  runtime.nextEventSeq = runtime.eventJournal.nextSeq;
+  runtime.recentEvents = runtime.eventJournal.read({
+    since: Math.max(0, runtime.eventJournal.lastSeq - 128),
+  }).events;
   return event;
 }
 
@@ -1323,8 +1329,9 @@ function startSession(config = {}) {
     gravityBonus: 0,
   };
   runtime.players.clear();
+  runtime.eventJournal.startRun(runtime.session.runId);
   runtime.recentEvents = [];
-  runtime.nextEventSeq = 1;
+  runtime.nextEventSeq = runtime.eventJournal.nextSeq;
   runtime.emptySince = null;
   runtime.overload = createOverloadController({
     tickHz: runtime.session.baseTickHz,
@@ -1425,6 +1432,7 @@ function snapshotBody() {
     session: { ...runtime.session },
     tick: runtime.tick,
     simTime: runtime.simTime,
+    lastEventSeq: runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1),
     players: Array.from(runtime.players.values()).map((player) => ({
       clientId: player.clientId,
       profileId: player.profileId || null,
@@ -5504,6 +5512,7 @@ const server = http.createServer(async (req, res) => {
         mapId: runtime.mapState.id,
         ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
         ballparkRelevance: runtime.ballparkRelevance,
+        eventJournal: runtime.eventJournal ? runtime.eventJournal.describe() : null,
         match: {
           maxSimTime: MATCH_MAX_SIM_TIME,
           terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
@@ -5590,10 +5599,14 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && req.url?.startsWith("/events")) {
       const url = new URL(req.url, `http://${HOST}:${PORT}`);
       const since = Number(url.searchParams.get("since") || 0);
+      const lane = url.searchParams.get("lane") || url.searchParams.get("lanes") || null;
+      const runId = url.searchParams.get("runId") || null;
+      const journalRead = runtime.eventJournal.read({ since, lane, runId });
       sendJson(res, 200, {
         type: "events",
         protocolVersion: PROTOCOL_VERSION,
-        events: runtime.recentEvents.filter((event) => event.seq > since),
+        ...journalRead,
+        events: journalRead.events,
       });
       return;
     }
