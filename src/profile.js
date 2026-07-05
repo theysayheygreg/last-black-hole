@@ -13,7 +13,7 @@
  * Everything persists here — vault.js is replaced by this.
  */
 
-import { BALANCE, deathTaxEm } from './content/balance.js';
+import { BALANCE, runEmEarned, survivalBonusEm } from './content/balance.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
@@ -127,6 +127,10 @@ function normalizeProfileShape(profile = {}) {
   next.rigLevels = normalizeRigLevels(profile.rigLevels);
   next.loadout = normalizeLoadoutShape(profile.loadout);
   return next;
+}
+
+function normalizeEmCredit(value) {
+  return Math.max(0, Math.round(Number(value) || 0));
 }
 
 // ---- Vault capacity per upgrade rank ----
@@ -273,10 +277,13 @@ export class ProfileManager {
   /** Add exotic matter. */
   addEM(amount) {
     const p = this.active;
-    if (!p) return;
-    p.exoticMatter += amount;
-    p.totalExoticMatterEarned += amount;
+    if (!p) return 0;
+    const credit = normalizeEmCredit(amount);
+    if (credit <= 0) return 0;
+    p.exoticMatter += credit;
+    p.totalExoticMatterEarned += credit;
     this.save();
+    return credit;
   }
 
   /** Spend exotic matter. Returns false if can't afford. */
@@ -432,22 +439,31 @@ export class ProfileManager {
   /** Record run outcome. */
   recordExtraction(survivalTime) {
     const p = this.active;
-    if (!p) return;
+    if (!p) return 0;
+    const emCredited = survivalBonusEm(survivalTime);
     p.totalExtractions++;
     if (survivalTime > p.bestSurvivalTime) p.bestSurvivalTime = survivalTime;
+    if (emCredited > 0) {
+      p.exoticMatter += emCredited;
+      p.totalExoticMatterEarned += emCredited;
+    }
     p.lastPlayed = new Date().toISOString();
     this.save();
+    return emCredited;
   }
 
-  recordDeath() {
+  recordDeath(survivalTime = 0) {
     const p = this.active;
-    if (!p) return;
+    if (!p) return 0;
+    const emCredited = runEmEarned({ outcome: 'dead', survivalTime });
     p.totalDeaths++;
-    const tax = deathTaxEm(p.exoticMatter);
-    p.exoticMatter -= tax;
+    if (emCredited > 0) {
+      p.exoticMatter += emCredited;
+      p.totalExoticMatterEarned += emCredited;
+    }
     p.lastPlayed = new Date().toISOString();
     this.save();
-    return tax;
+    return emCredited;
   }
 
   // ---- Upgrades ----

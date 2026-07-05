@@ -77,7 +77,7 @@ export function buildRunResultsViewModel({
   phase = 'dead',
   fallbackCargo = [],
   fallbackSurvivalTime = 0,
-  fallbackCargoValue = 0,
+  fallbackEmEarned = 0,
   deathTax = 0,
 } = {}) {
   const outcome = normalizeOutcome(runResult?.outcome, phase);
@@ -89,7 +89,7 @@ export function buildRunResultsViewModel({
   const survivalTime = runResult?.survivalTime ?? fallbackSurvivalTime ?? 0;
   const emEarned = Number.isFinite(Number(runResult?.emEarned))
     ? Math.max(0, Math.round(Number(runResult.emEarned)))
-    : Math.max(0, Math.round(Number(fallbackCargoValue) || 0));
+    : Math.max(0, Math.round(Number(fallbackEmEarned) || 0));
 
   const aiOutcomes = Array.isArray(runResult?.aiOutcomes) ? runResult.aiOutcomes : [];
   const notables = Array.isArray(runResult?.notables) ? runResult.notables : [];
@@ -219,7 +219,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const mapLabel = view.mapContext.mapId ? String(view.mapContext.mapId).toUpperCase() : 'UNKNOWN MAP';
   drawStatusPill(ctx, { x: cx - 138, y: panelY + 114, w: 118, h: 26 }, mapLabel, { role, alpha: contentAlpha });
   drawStatusPill(ctx, { x: cx, y: panelY + 114, w: 118, h: 26 }, `${view.cargoCount} CARGO`, { role, alpha: contentAlpha });
-  drawStatusPill(ctx, { x: cx + 138, y: panelY + 114, w: 118, h: 26 }, `${view.emEarned} EM`, { role: 'salvage', alpha: contentAlpha });
+  drawStatusPill(ctx, { x: cx + 138, y: panelY + 114, w: 118, h: 26 }, `+${view.emEarned} EM`, { role: 'salvage', alpha: contentAlpha });
 
   let y = panelY + 160;
 
@@ -242,18 +242,23 @@ export function drawRunResultsOverlay(ctx, canvas, {
   }
 
   y += 18;
-  drawSectionLabel(ctx, 'EARNINGS', leftX, y, { role: 'salvage', alpha: contentAlpha });
+  drawSectionLabel(ctx, 'LEDGER', leftX, y, { role: 'salvage', alpha: contentAlpha });
   y += 25;
-  drawKeyValueRow(ctx, 'earned', `${view.emEarned} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'salvage' });
+  drawKeyValueRow(ctx, success ? 'credited' : 'residue', `${view.emEarned} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'salvage' });
   y += 18;
   if (view.deathTax > 0) {
-    drawKeyValueRow(ctx, 'tax', `-${view.deathTax} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'danger' });
+    drawKeyValueRow(ctx, 'death tax', `-${view.deathTax} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'danger' });
   }
 
   let ry = panelY + 160;
   drawSectionLabel(ctx, view.cargoTitle, rightX, ry, { role: success ? 'salvage' : 'danger', alpha: contentAlpha });
   ry += 24;
-  drawKeyValueRow(ctx, 'manifest', `${view.cargoCount} items / ${view.cargoValue} EM`, rightX, ry, {
+  drawKeyValueRow(ctx, 'manifest', `${view.cargoCount} items`, rightX, ry, {
+    alpha: contentAlpha,
+    valueRole: success ? 'salvage' : 'danger',
+  });
+  ry += 22;
+  drawKeyValueRow(ctx, 'salvage value', `${view.cargoValue} EM`, rightX, ry, {
     alpha: contentAlpha,
     valueRole: success ? 'salvage' : 'danger',
   });

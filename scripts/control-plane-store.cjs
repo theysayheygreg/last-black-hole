@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { deathTaxEm } = require("./content/balance.cjs");
+const { runEmEarned, survivalBonusEm } = require("./content/balance.cjs");
 
 // Rig tracks: 3 per hull, levels 0-5. Stored as array [track0, track1, track2].
 const DEFAULT_RIG_LEVELS = [0, 0, 0];
@@ -121,6 +121,18 @@ function toFiniteNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normalizeEmCredit(value) {
+  return Math.max(0, Math.round(toFiniteNumber(value, 0)));
+}
+
+function creditProfileEm(profile, amount) {
+  const credit = normalizeEmCredit(amount);
+  if (credit <= 0) return 0;
+  profile.exoticMatter = normalizeEmCredit(profile.exoticMatter) + credit;
+  profile.totalExoticMatterEarned = normalizeEmCredit(profile.totalExoticMatterEarned) + credit;
+  return credit;
+}
+
 function normalizeRunOutcome(outcome) {
   if (outcome === "escaped" || outcome === "extracted") return "extracted";
   if (outcome === "dead") return "dead";
@@ -153,7 +165,8 @@ function compactStatsDelta(runResult = {}, normalizedOutcome, survivalTime, emEa
       normalizedOutcome === "extracted" ? 1 : 0
     ),
     totalSurvivalTime: toFiniteNumber(provided.totalSurvivalTime, survivalTime),
-    totalEmEarned: toFiniteNumber(provided.totalEmEarned, emEarned),
+    // Stats follow the committed ledger, not the sim's pre-vault cargo valuation.
+    totalEmEarned: emEarned,
     cargoExtracted: toFiniteNumber(provided.cargoExtracted, cloneItems(runResult.cargoExtracted).length),
     cargoLost: toFiniteNumber(provided.cargoLost, cloneItems(runResult.cargoLost).length),
   };
@@ -164,12 +177,15 @@ function buildRunEntry({ profile, player, outcome, runDuration, session, runResu
   const survivalTime = toFiniteNumber(runResult?.survivalTime, runDuration);
   const survivalBonus = Number.isFinite(Number(runResult?.survivalBonus))
     ? Number(runResult.survivalBonus)
-    : Math.floor(survivalTime * 0.5 * (normalizedOutcome === "dead" ? 0.5 : 1));
+    : survivalBonusEm(survivalTime);
   const cargoExtracted = cloneItems(runResult?.cargoExtracted || (normalizedOutcome === "extracted" ? player?.cargo : []));
   const cargoLost = cloneItems(runResult?.cargoLost || (normalizedOutcome !== "extracted" ? player?.cargo : []));
-  const emEarned = Number.isFinite(Number(runResult?.emEarned))
-    ? Number(runResult.emEarned)
-    : cargoExtracted.reduce((sum, item) => sum + toFiniteNumber(item.value, 0), 0) + survivalBonus;
+  const fallbackEmEarned = runEmEarned({ outcome: normalizedOutcome, survivalTime });
+  const emEarned = Number.isFinite(Number(result?.emCredited))
+    ? normalizeEmCredit(result.emCredited)
+    : Number.isFinite(Number(runResult?.emEarned))
+      ? normalizeEmCredit(runResult.emEarned)
+      : fallbackEmEarned;
   const runId = runResult?.runId || session?.runId || session?.id || crypto.randomUUID();
   const loadoutSnapshot = snapshotLoadout(player, runResult);
   const mapContext = {
@@ -204,6 +220,7 @@ function buildRunEntry({ profile, player, outcome, runDuration, session, runResu
     inhibitorFormReached: runResult?.inhibitorFormReached ?? null,
     inhibitorFormTimes: Array.isArray(runResult?.inhibitorFormTimes) ? [...runResult.inhibitorFormTimes] : [],
     emEarned,
+    emCredited: emEarned,
     tax: result.tax || 0,
     overflowValue: result.overflowValue || 0,
     extractedCount: result.extractedCount || cargoExtracted.length,
@@ -300,6 +317,7 @@ class ControlPlaneStore {
     const result = {
       outcome,
       tax: 0,
+      emCredited: 0,
       overflowValue: 0,
       extractedCount: 0,
     };
@@ -310,12 +328,17 @@ class ControlPlaneStore {
       consumables: player?.consumables || [],
     });
 
-    const normalizedOutcome = normalizeRunOutcome(outcome);
+    const normalizedOutcome = normalizeRunOutcome(runResult?.outcome || outcome);
+    const survivalTime = toFiniteNumber(runResult?.survivalTime, runDuration);
+    const runLedgerCredit = Number.isFinite(Number(runResult?.emEarned))
+      ? normalizeEmCredit(runResult.emEarned)
+      : runEmEarned({ outcome: normalizedOutcome, survivalTime });
+    if (normalizedOutcome === "dead" || normalizedOutcome === "extracted") {
+      result.emCredited += creditProfileEm(profile, runLedgerCredit);
+    }
 
     if (normalizedOutcome === "dead") {
       profile.totalDeaths += 1;
-      result.tax = deathTaxEm(profile.exoticMatter || 0);
-      profile.exoticMatter = Math.max(0, (profile.exoticMatter || 0) - result.tax);
     }
 
     if (normalizedOutcome === "extracted") {
@@ -333,8 +356,7 @@ class ControlPlaneStore {
         } else {
           const value = item.value || 0;
           result.overflowValue += value;
-          profile.exoticMatter += value;
-          profile.totalExoticMatterEarned += value;
+          result.emCredited += creditProfileEm(profile, value);
         }
       }
       sortVault(profile.vault);

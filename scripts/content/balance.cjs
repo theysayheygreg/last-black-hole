@@ -17,10 +17,10 @@ function survivalBonusEm(survivalTime = 0) {
   return Math.floor(Math.max(0, Number(survivalTime) || 0) * BALANCE.economy.survivalEmPerSecond);
 }
 
-function runEmEarned({ outcome = "dead", cargoValue = 0, survivalTime = 0 } = {}) {
+function runEmEarned({ outcome = "dead", survivalTime = 0 } = {}) {
   const bonus = survivalBonusEm(survivalTime);
   if (outcome === "escaped" || outcome === "extracted") {
-    return Math.max(0, Math.floor(Number(cargoValue) || 0)) + bonus;
+    return bonus;
   }
   return Math.floor(bonus * BALANCE.economy.deathSurvivalPayoutMult);
 }

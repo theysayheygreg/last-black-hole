@@ -181,10 +181,10 @@ async function run() {
           inhibitorFormReached: 2,
           inhibitorFormTimes: [null, 92, 144, null],
           survivalBonus: 90,
-          emEarned: 290,
+          emEarned: 90,
           aiOutcomes: [{ personality: "raider", hullType: "breacher", outcome: "dead", cargoCount: 1 }],
           notables: [{ type: "cargo_extracted", description: "2 cargo recovered", value: 2 }],
-          statsDelta: { runsAttempted: 1, runsCompleted: 1, totalSurvivalTime: 180, totalEmEarned: 290, cargoExtracted: 2, cargoLost: 0 },
+          statsDelta: { runsAttempted: 1, runsCompleted: 1, totalSurvivalTime: 180, totalEmEarned: 90, cargoExtracted: 2, cargoLost: 0 },
           mapId: "shallows",
           mapScale: 3,
           wellCount: 5,
@@ -194,18 +194,23 @@ async function run() {
 
       const state = JSON.parse(fs.readFileSync(storeFile, "utf8"));
       const run = state.runs[runId];
+      const profile = state.profiles[profileId];
       assert(run, "Expected run entry to be persisted");
+      assert(profile, "Expected profile to be persisted");
       assert(run.outcome === "extracted", `Expected normalized extracted outcome, got ${run.outcome}`);
       assert(run.legacyOutcome === "escaped", "Expected legacy escaped outcome to be retained");
       assert(run.cargoExtracted.length === 2, "Expected extracted cargo in run record");
       assert(run.cargoLost.length === 0, "Expected no lost cargo on extraction");
-      assert(run.emEarned === 290, "Expected RunResult EM earned to persist");
+      assert(run.emEarned === 90, "Expected RunResult ledger EM earned to persist");
       assert(run.survivalBonus === 90, "Expected survival bonus to persist");
       assert(run.signalPeak === 0.82 && run.signalPeakZone === "flare", "Expected signal peak context");
       assert(run.mapContext.mapId === "shallows" && run.mapContext.seed === 4242, "Expected map context");
       assert(run.loadoutSnapshot.equipped.length === 2, "Expected canonical loadout snapshot shape");
       assert(run.loadoutSnapshot.equipped[0].id === "equip-a", "Expected equipped item snapshot");
-      assert(run.statsDelta.totalEmEarned === 290, "Expected compact stats delta");
+      assert(run.statsDelta.totalEmEarned === 90, "Expected compact stats delta");
+      assert(profile.exoticMatter === 90, `Expected profile ledger credit 90 EM, got ${profile.exoticMatter}`);
+      assert(profile.totalExoticMatterEarned === 90, "Expected total profile EM earned to match ledger credit");
+      assert(profile.vault.length === 2, "Expected extracted cargo to be vaulted instead of sold for EM");
     });
 
     await runner.run("RunResult package persists death and abandon-like losses", async () => {
@@ -274,14 +279,18 @@ async function run() {
       const state = JSON.parse(fs.readFileSync(storeFile, "utf8"));
       const deadRun = state.runs[deadRunId];
       const abandonedRun = state.runs[abandonRunId];
+      const profile = state.profiles[profileId];
       assert(deadRun.outcome === "dead", "Expected death run outcome");
       assert(deadRun.deathCause === "well" && deadRun.deathEntityId === "charybdis", "Expected death cause context");
       assert(deadRun.cargoLost.length === 1 && deadRun.cargoExtracted.length === 0, "Expected death cargo loss");
       assert(deadRun.emEarned === 16, "Expected reduced death EM to persist");
+      assert(deadRun.tax === 0, "Expected demo death path to stop taxing existing EM");
       assert(deadRun.notables[0].type === "death_cause", "Expected notable death cause");
       assert(abandonedRun.outcome === "abandoned", "Expected abandoned outcome");
       assert(abandonedRun.cargoLost.length === 1, "Expected abandoned cargo to be recorded as lost");
       assert(abandonedRun.signalPeakZone === "ghost", "Expected fallback signal zone for abandoned run");
+      assert(profile.exoticMatter === 16, `Expected death residue to credit profile, got ${profile.exoticMatter}`);
+      assert(profile.totalExoticMatterEarned === 16, "Expected profile lifetime earned to include death residue");
     });
 
     await runner.run("Echoes are scoped by map and seed", async () => {

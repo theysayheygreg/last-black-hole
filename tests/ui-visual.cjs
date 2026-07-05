@@ -34,7 +34,7 @@ const extractedResult = {
   signalPeak: 0.82,
   signalPeakZone: 'flare',
   inhibitorFormReached: 2,
-  emEarned: 290,
+  emEarned: 90,
   aiOutcomes: [
     { personality: 'raider', hullType: 'breacher', outcome: 'dead', cargoCount: 1 },
     { personality: 'ghost', hullType: 'shroud', outcome: 'extracted', cargoCount: 3 },
