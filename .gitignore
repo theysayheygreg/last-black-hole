@@ -6,7 +6,8 @@ release-staging/
 *.log
 tests/screenshots/
 tmp/
-.claude/
+.claude/*
+!.claude/skills/
 .codex/
 AGENTS.md
 _artifacts/
