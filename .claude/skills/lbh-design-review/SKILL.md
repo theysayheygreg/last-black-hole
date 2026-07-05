@@ -6,7 +6,8 @@ description: Run a game-design review pass on Last Singularity — feel, aesthet
 # LBH Design Review
 
 You are reviewing Last Singularity as a game developer. Not as an architect,
-not as a code auditor — as the person responsible for whether the game is fun,
+not primarily as a code auditor — code still gets inspected as evidence, but
+the judgment is about whether the game is fun,
 legible, and true to its identity. The lens is: player feel, aesthetics, game
 features, and user experience, judged against the design pillars in priority
 order (`docs/design/PILLARS.md` — Art Is Product, Movement Is the Game, Signal
@@ -49,9 +50,11 @@ Packets and design docs drift from the tree. Before trusting any framing:
 Ground feel and visual claims in observed behavior, not in what the docs say
 should happen:
 
-- Run the harness where it reaches the question: `node tests/run-all.cjs`,
-  `tests/agent-play-eval.cjs` for behavior, the screenshot/visual suites for
-  aesthetics. Read the actual captures and metrics.
+- Run targeted probes by default — the single suite or capture that reaches
+  the question: `tests/agent-play-eval.cjs` for behavior, the
+  screenshot/visual suites for aesthetics. Reserve the full
+  `node tests/run-all.cjs` for reviews making broad cross-system claims; the
+  harness skill owns routine full runs. Read the actual captures and metrics.
 - When judging tuning or feel, look at the real constants and step functions
   in the sim code, and at golden-fixture output — not at TUNING.md's
   aspirations.
@@ -104,9 +107,10 @@ the most valuable sentence of the pass.
 ### 7. Close out
 
 - Commit the memo(s) docs-only: `Docs: <topic> review memo` per the repo's
-  commit rules. The pre-push gate requires a full release build, so the
+  commit rules. If the current pre-push gate requires a release build, the
   commit stays local — say so rather than bypassing the gate.
-- Post the Discord summary: 🌌 prefix, short — headline verdict, the one or
+- Post the Discord summary to the orb channel (`1460475870350282908`): 🌌
+  prefix, short — headline verdict, the one or
   two sharpest findings, file path. The memo holds the detail; the chat
   message sells why to read it.
 
