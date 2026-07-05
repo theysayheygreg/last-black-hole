@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-07-05 — Fable/Orrery weekend prompt packets
+
+- Added three targeted delegation prompts for Fable through Orrery: movement
+  feel and route design, entity visual hybrid direction, and loop/meta clarity.
+- Each prompt names current source docs, context, review questions, guardrails,
+  and expected deliverables so weekend exploration can return actionable
+  recommendations instead of a broad unfocused review.
+
 ## 2026-07-05 — Agent play eval lane and harness north star
 
 - Added `tests/agent-play-eval.cjs` and `npm run test:agent-eval`, a fresh
