@@ -88,6 +88,25 @@ Run only the validation lanes justified by the systems touched, then broaden if
 the pass changes shared authority, renderer, controls, lifecycle, or platform
 behavior.
 
+## Agent QA North Star
+
+Agents should verify that features work before Greg plays them. Greg's time is
+for feel, taste, art direction, and product judgment, not first-contact QA.
+
+Before handing over meaningful gameplay, renderer, UI, platform, or architecture
+work, the responsible agent should leave three kinds of evidence:
+
+- the deterministic contract lane that matches the changed system;
+- a playable or visual artifact showing the feature in context;
+- a short written readout of what was proved, what remains subjective, and what
+  is still blocked.
+
+`npm run test:agent-eval` is the standard source-build playable receipt for
+v0.3 work. It is not as deep as `npm run test:authority` and not as artful as a
+promo capture, but it proves an agent could boot fresh sessions, move, see the
+scene, and exercise at least one sim-owned consequence before Greg becomes the
+human polish gate.
+
 ---
 
 ## Review Protocol: Audit → Codex
@@ -233,12 +252,14 @@ Greg wakes up. First thing:
 1. `git log --oneline --since="midnight"` — see what the night shift produced
 2. Read `docs/project/BUILD-STATUS.md` — know the latest local-build caveats
    before playtesting
-3. Start a fresh play stack (`npm run stack:stop` then `npm run play`, or
+3. If present, read the latest `tests/screenshots/agent-play-eval-*/summary.md`
+   for what agents already proved and what they left for human judgment
+4. Start a fresh play stack (`npm run stack:stop` then `npm run play`, or
    `npm run stack -- --no-open` and open the printed URL) — does it work? What
    changed?
-4. Read the **NIGHT-REPORT.md** the agent leaves behind (see below)
-5. Play for 10-15 minutes. Write gut reactions.
-6. Decide: **continue this direction** or **course correct**
+5. Read the **NIGHT-REPORT.md** the agent leaves behind (see below)
+6. Play for 10-15 minutes. Write gut reactions.
+7. Decide: **continue this direction** or **course correct**
 
 ### Evening Handoff (~midnight)
 Greg goes to sleep. Before signing off:

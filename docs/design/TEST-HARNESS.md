@@ -26,6 +26,30 @@ The daily harness is not the periodic Forge pass. The harness should answer
 should answer "are these still the right contracts?" after large architecture,
 renderer, sim, platform, or process shifts.
 
+## North Star: Agents As First QA
+
+The harness should let agents play, look, and understand LBH well enough that
+Greg is the last stop for feel, taste, and polish, not the first person to
+discover that a feature does not work.
+
+That means every meaningful feature should have evidence in three layers:
+
+1. **Contract proof** — deterministic tests prove the sim, renderer, protocol,
+   or UI contract that changed.
+2. **Playable proof** — an agent reaches the relevant state from fresh browser
+   and sim processes, performs the action, and records what happened.
+3. **Visual proof** — screenshots or fixture manifests show that the feature
+   can be seen and understood in the Three scene or UI.
+
+`npm run test:agent-eval` is the first explicit playable-proof lane. It starts
+fresh authoritative sessions for Shallows, Expanse, and Deep Field, drives real
+remote input, captures screenshots, verifies a sim-authored extraction
+consequence, and writes a short report under `tests/screenshots/agent-play-eval-*`.
+The report should say what the agent proved and what remains a human taste call.
+
+This lane is not a replacement for manual playfeel. It is the handoff receipt
+that should exist before asking Greg to spend attention on a build.
+
 Browser suites run through `tests/browser-driver.cjs`, a small Chrome DevTools
 Protocol wrapper around system Chrome. In Codex desktop sessions headless Chrome
 may not advance ambient `requestAnimationFrame`, so frame-sensitive tests call
@@ -132,6 +156,7 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:sim-structure` | v0.3 structural canary for Ballpark bodies, relevance/query adapters, movement golden fixtures, protocol input normalization, queued slingshot edges, first consequence adapters, bounded-growth soak, event journal, and snapshot ring contracts. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
+| `npm run test:agent-eval` | Playable agent evidence: fresh remote-authority runs across the main maps, movement input, screenshots, and a short report that names what was proved before Greg reviews the build. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
 
 ## Forge Pass Alignment
@@ -156,6 +181,7 @@ The underlying runner is manifest-driven:
 node tests/run-all.cjs --lane=core --renderer=three
 node tests/run-all.cjs --lane=sim-structure --renderer=three
 node tests/run-all.cjs --lane=visual --renderer=three
+node tests/run-all.cjs --lane=agent-eval --renderer=three
 node tests/run-all.cjs --lane=browser --renderer=three
 node tests/run-all.cjs --suite=Smoke,Renderer --renderer=both
 node tests/run-all.cjs --list --lane=full
@@ -209,6 +235,7 @@ as a false art-direction verdict.
 | `sim-structure` | Ballpark body/query mirror, relevance adapters, movement golden fixtures, protocol input normalization, queued slingshot edges, first consequence adapters, bounded-growth soak, event journal, and snapshot ring contracts | browser visuals or playfeel |
 | `visual` | deterministic renderer fixtures and screenshot manifests | gameplay balance |
 | `playtest` | synthetic real-flow menu/input coverage | final UX judgment |
+| `agent-eval` | agent-readable playable proof with fresh sessions, map coverage, screenshots, and a narrative report | exhaustive authority coverage or subjective art approval |
 | `full` | all committed automated suites | Codex app browser/manual review |
 
 ## Three.js Applicability
@@ -219,7 +246,8 @@ gate is:
 
 1. `npm run test:three`
 2. `npm run test:visual`
-3. A Codex app browser pass on `index-a.html?renderer=three`
+3. `npm run test:agent-eval`
+4. A Codex app browser pass on `index-a.html?renderer=three`
 
 The legacy renderer remains as an explicit fallback lane, but it is no longer a
 default migration target. A browser test that asserts gameplay state should use

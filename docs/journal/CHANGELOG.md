@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-07-05 — Agent play eval lane and harness north star
+
+- Added `tests/agent-play-eval.cjs` and `npm run test:agent-eval`, a fresh
+  browser/sim playable-evidence lane for Shallows, Expanse, and Deep Field.
+- The new lane primes authoritative map sessions, drives real remote movement,
+  captures screenshots, verifies scene presence, and spot-checks sim-owned
+  extraction before writing a human-readable report.
+- Updated the harness and process docs with the north star that agents should
+  prove features work before Greg spends playtest time on feel and polish.
+- Refreshed the v0.3 RC gate and build-status snapshot with the 2026-07-05
+  automated validation pass.
+
 ## 2026-07-04 — LBH public update skill
 
 - Added the local `$lbh-public-update-pass` Codex skill for turning checkpoint

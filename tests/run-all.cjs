@@ -13,6 +13,7 @@
  * - sim-structure: v0.3 body, query, event, and snapshot contracts
  * - visual: screenshot renderer fixtures
  * - playtest: real menu/input flows best reviewed in Codex Browser
+ * - agent-eval: fresh playable map checks with screenshots and a narrative report
  * - full: all committed automated suites
  */
 const path = require("path");

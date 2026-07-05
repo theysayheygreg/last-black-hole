@@ -315,6 +315,15 @@ const SUITES = [
     timeout: 120000,
   },
   {
+    name: "AgentPlayEval",
+    file: "agent-play-eval.cjs",
+    lanes: ["agent-eval", "full"],
+    browser: true,
+    retries: 1,
+    slow: true,
+    timeout: 240000,
+  },
+  {
     name: "Renderer",
     file: "renderer.cjs",
     lanes: ["visual", "full", "three"],
@@ -341,6 +350,7 @@ const LANES = [
   "sim-structure",
   "visual",
   "playtest",
+  "agent-eval",
   "three",
   "full",
 ];

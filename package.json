@@ -38,6 +38,7 @@
     "test:authority": "node tests/run-all.cjs --lane=authority --renderer=three",
     "test:sim-structure": "node tests/run-all.cjs --lane=sim-structure --renderer=three",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
+    "test:agent-eval": "node tests/run-all.cjs --lane=agent-eval --renderer=three",
     "test:telemetry": "node tests/telemetry-smoke.cjs",
     "test:renderer": "node tests/renderer.cjs \"index-a.html?renderer=three\"",
     "test:renderer:legacy": "node tests/renderer.cjs \"index-a.html?renderer=legacy\"",

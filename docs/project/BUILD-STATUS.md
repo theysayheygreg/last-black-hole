@@ -8,7 +8,7 @@
 
 ## Current Snapshot
 
-**Date:** 2026-07-04
+**Date:** 2026-07-05
 **Public train:** v0.2.2 on `main`
 **Active structural branch:** `codex/v0.3-ballpark-roadmap`
 **Build version shape:** v0.2.2.`<commit-hash>`
@@ -38,6 +38,35 @@ for the current committed `0.2.x.<hash>` build version and verifies the output
 shape.
 
 ## Standing Assessment
+
+**Status update, 2026-07-05 agent QA harness pass:** the current
+`codex/v0.3-ballpark-roadmap` source tree has a new `AgentPlayEval` lane for
+playable evidence. It starts fresh authoritative sessions for Shallows, Expanse,
+and Deep Field, drives remote mouse-thrust input, captures screenshots, verifies
+scene/entity presence, and forces one sim-authored Shallows extraction so the
+result screen is reached by an authoritative consequence.
+
+Validation for this source snapshot:
+
+- `npm run stack:stop` passed before validation.
+- `npm run test:fast` passed.
+- `npm test` passed.
+- `npm run test:sim-structure` passed.
+- `npm run test:authority` passed.
+- `npm run test:three`, `npm run test:visual`, and `npm run test:ui` passed.
+- `npm run test:playtest` passed.
+- `npm run test:agent-eval` passed as a standalone lane.
+- `npm run test:full` passed after adding `AgentPlayEval` to the manifest.
+- Latest full-run agent report:
+  `tests/screenshots/agent-play-eval-2026-07-05T014144810Z/summary.md`.
+- Latest full-run visual manifests:
+  `tests/screenshots/renderer-2026-07-05T014207866Z/manifest.json` and
+  `tests/screenshots/ui-visual-2026-07-05T014346256Z/manifest.json`.
+
+**Status:** this improves agent-side QA confidence for v0.3 but still does not
+make the branch RC-green. Greg has not yet played the branch by hand, no
+hash-named v0.3 release artifact has been built from the final candidate commit,
+and the Deck Gaming Mode gate has not been rerun for this branch.
 
 **Status update, 2026-07-04 v0.3 branch source validation:** the current
 `codex/v0.3-ballpark-roadmap` source tree has fresh automated evidence for the

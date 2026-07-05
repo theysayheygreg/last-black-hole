@@ -26,13 +26,23 @@ It still needs fresh product evidence before it can be called playable:
 - a merge-forward from the current v0.2 demo line;
 - one final review that no renderer/client path now owns gameplay outcomes.
 
-Current automated evidence from 2026-07-04:
+Current automated evidence from 2026-07-05:
 
+- `npm run stack:stop` passed before validation.
 - `npm run test:fast` passed.
-- `npm run test:playtest` passed on the Three target.
+- `npm test` passed on the Three target.
 - `npm run test:sim-structure` passed with `BallparkExtraction` and
   `SlingshotEdgeQueue`.
 - `npm run test:authority` passed with the new input and consequence coverage.
+- `npm run test:three`, `npm run test:visual`, and `npm run test:ui` passed.
+- `npm run test:playtest` passed on the Three target.
+- `npm run test:agent-eval` passed as a standalone lane.
+- `npm run test:full` passed after the new agent-eval lane was added.
+- The latest full-run agent-readable playable report is
+  `tests/screenshots/agent-play-eval-2026-07-05T014144810Z/summary.md`.
+- The latest full-run visual manifests are
+  `tests/screenshots/renderer-2026-07-05T014207866Z/manifest.json` and
+  `tests/screenshots/ui-visual-2026-07-05T014346256Z/manifest.json`.
 
 ## Required Automated Gates
 
@@ -50,6 +60,7 @@ npm run test:three
 npm run test:visual
 npm run test:ui
 npm run test:playtest
+npm run test:agent-eval
 ```
 
 For a promotion candidate, also run:
