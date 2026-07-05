@@ -175,6 +175,9 @@ For docs-only or marketing-only Fridays, replace gameplay gates with `git diff -
 ## Social Post Format
 
 Use this template for every Feature Friday, then tune per platform.
+Run `$lbh-public-update-pass` after capture and QA evidence exist so the final
+copy stays grounded in the playable build, pairs with specific screenshots or
+clips, and keeps unfinished features out of public promises.
 
 ```text
 Feature Friday: <feature name>

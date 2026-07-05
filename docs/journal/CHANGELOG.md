@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-07-04 — LBH public update skill
+
+- Added the local `$lbh-public-update-pass` Codex skill for turning checkpoint
+  work, screenshots, clips, and build-status truth into public-facing devlog,
+  Discord, Twitter/X, Feature Friday, and teaser copy.
+- Updated the checkpoint/process docs so major v0.2/v0.3 milestones run the
+  public update pass after build evidence and media capture are available.
+
 ## 2026-07-04 — Public-friendly devlog and social update pack
 
 - Added a narrative `DEVLOG.md` entry that translates the recent visual, UI,

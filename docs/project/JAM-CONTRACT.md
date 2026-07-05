@@ -190,6 +190,18 @@ decisions, exact commands that worked, and stale-history warnings such as
 Do not write memory checkpoints for tiny Q&A, one-line fixes, or duplicate
 status pings. The goal is better recency, not memory spam.
 
+### Public Update Checkpoint Protocol
+
+Around visible milestones, run `$lbh-public-update-pass` after the build/status
+truth is known and after any fresh screenshot or GIF capture exists. Use it for
+v0.2/v0.3 checkpoint notes, Feature Friday copy, public devlog paragraphs,
+Discord updates, Twitter/X posts, itch/Steam page copy, and teaser captions.
+
+The public update pass should not duplicate the changelog. Its job is to turn
+the current project truth into player-facing language, media pairings, and claim
+guardrails: what is fun to show, what is still internal, and what must not be
+promised until the build gate or playtest gate is actually green.
+
 ### Build Status Protocol
 
 Before answering "where does the local build stand?", check these in order:

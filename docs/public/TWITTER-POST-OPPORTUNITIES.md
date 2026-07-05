@@ -5,6 +5,10 @@ on 2026-06-27. Updated on 2026-07-04 with the current public update pack.
 
 Guidance: post like you are reporting from the workbench, not announcing a product. Pair each post with a screenshot, GIF, short clip, or annotated still whenever possible.
 
+Reusable pass: for new checkpoint packs, run `$lbh-public-update-pass` after
+the current build/status docs and any fresh capture manifests are updated. This
+keeps public copy tied to real evidence instead of internal task notes.
+
 ## 2026-07-04 Public Update Pack
 
 Use this when the recent devlog/task notes feel too internal. The story is not
