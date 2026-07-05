@@ -49,7 +49,7 @@ async function run() {
     assert(wreckAgeValueMultiplier(0, 999) === BALANCE.loot.wreckAgeValueCap, "Old wreck should stay capped");
   });
 
-  await runner.run("EM earnings preserve extraction advantage over death", async () => {
+  await runner.run("EM earnings track profile credit, not vaulted cargo value", async () => {
     const cargoValue = 200;
     const survivalTime = 180;
     const survivalBonus = survivalBonusEm(survivalTime);
@@ -57,7 +57,7 @@ async function run() {
     const dead = runEmEarned({ outcome: "dead", cargoValue, survivalTime });
 
     assert(survivalBonus === 90, `Expected 90 EM survival bonus, got ${survivalBonus}`);
-    assert(extracted === cargoValue + survivalBonus, "Extraction should pay cargo plus survival bonus");
+    assert(extracted === survivalBonus, "Extraction should credit survival EM while cargo goes to vault");
     assert(dead < survivalBonus && dead < extracted, "Death should earn less than extraction");
     assert(deathTaxEm(999) === 99, "Death tax should be a bounded percentage, rounded down");
   });

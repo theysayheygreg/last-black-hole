@@ -65,6 +65,7 @@ import { createRNGStreams } from './rng-stream.js';
 import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { HULL_DEFINITIONS } from './content/hulls.js';
+import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
 import {
   drawCornerFrame,
@@ -399,11 +400,12 @@ let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
 let hullGraceTimer = 0;     // hull upgrade grace period (seconds remaining in kill zone before death)
 let hullGraceUsed = false;  // hull rank 2+: one free survive per run
-let lastDeathTax = 0;       // EM lost on last death (for display)
+let lastDeathTax = 0;       // Legacy display hook; demo deaths now credit residue instead of taxing EM.
 
 // Profile + meta/home screen
 const profileManager = new ProfileManager();
 let metaExtractedItems = []; // items from the extraction, shown on meta screen
+let metaEmCredited = 0;      // actual profile EM delta from the last extraction
 let metaPhaseTimer = 0;      // animation timer for meta screen
 let profileCursor = 0;       // profile select cursor (0-2)
 let homeTab = 0;             // home screen tab (see HOME_TABS)
@@ -550,7 +552,10 @@ function currentRunResultsViewModel() {
     phase: gamePhase,
     fallbackCargo,
     fallbackSurvivalTime: simState.runEndTime,
-    fallbackCargoValue: fallbackCargo.reduce((sum, item) => sum + (item?.value || 0), 0),
+    fallbackEmEarned: runEmEarned({
+      outcome: gamePhase === 'escaped' ? 'extracted' : gamePhase === 'dead' ? 'dead' : 'abandoned',
+      survivalTime: simState.runEndTime,
+    }),
     deathTax: lastDeathTax,
   });
 }
@@ -4111,11 +4116,12 @@ function gameLoop(now) {
         }
         // Save loadout on death — consumed items stay consumed, equipment changes persist
         profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
-        lastDeathTax = profileManager.recordDeath();
+        const deathCredit = profileManager.recordDeath(simState.runEndTime);
+        lastDeathTax = 0;
         recordChronicleRun(lastRunResult, {
           outcome: 'dead',
           survivalTime: simState.runEndTime,
-          emEarned: 0,
+          emEarned: deathCredit,
           cargo: inventorySystem.getCargoItems?.() || [],
         });
         triggerTransition(() => {
@@ -4129,6 +4135,7 @@ function gameLoop(now) {
       if (gamePhase === 'escaped' && escapeTimer > endScreenUnlock) {
         // Extract cargo → profile vault, then transition to home
         metaExtractedItems = inventorySystem.extractCargo();
+        metaEmCredited = Math.max(0, Math.round(Number(lastRunResult?.emEarned) || 0));
         if (remoteAuthorityActive) {
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
@@ -4139,18 +4146,20 @@ function gameLoop(now) {
             });
           });
         } else {
-          profileManager.recordExtraction(simState.runEndTime);
+          const extractionCredit = profileManager.recordExtraction(simState.runEndTime);
           const overflow = profileManager.storeItems(metaExtractedItems.map(i => ({ ...i })));
+          let overflowCredit = 0;
           // Sell overflow items automatically (vault full)
           for (const item of overflow) {
-            profileManager.addEM(item.value || 0);
+            overflowCredit += profileManager.addEM(item.value || 0);
           }
+          metaEmCredited = extractionCredit + overflowCredit;
           // Save loadout
           profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
           recordChronicleRun(lastRunResult, {
             outcome: 'extracted',
             survivalTime: simState.runEndTime,
-            emEarned: metaExtractedItems.reduce((sum, item) => sum + (Number(item?.value) || 0), 0),
+            emEarned: metaEmCredited,
             cargo: metaExtractedItems,
           });
           triggerTransition(() => {
@@ -6245,11 +6254,13 @@ function gameLoop(now) {
 
       let sy = cy + 30;
       ctx.fillStyle = `rgba(255, 220, 100, ${a})`;
-      ctx.fillText(`+${totalValue} exotic matter`, cx, sy);
+      ctx.fillText(`+${metaEmCredited} exotic matter`, cx, sy);
       sy += 25;
       ctx.fillStyle = `rgba(180, 180, 200, ${a * 0.8})`;
+      ctx.fillText(`salvage value: ${totalValue} EM`, cx, sy);
+      sy += 20;
       const prof = profileManager.active;
-      ctx.fillText(`vault: ${prof?.exoticMatter ?? 0} total  |  ${prof?.totalExtractions ?? 0} extractions`, cx, sy);
+      ctx.fillText(`ledger: ${prof?.exoticMatter ?? 0} EM  |  ${prof?.totalExtractions ?? 0} extractions`, cx, sy);
       sy += 20;
       const mins = Math.floor((prof?.bestSurvivalTime ?? 0) / 60);
       const secs = Math.floor((prof?.bestSurvivalTime ?? 0) % 60);

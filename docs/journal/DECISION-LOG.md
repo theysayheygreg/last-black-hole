@@ -1,5 +1,28 @@
 # Decision Log
 
+## 2026-07-05 — Results EM means ledger credit, not cargo valuation
+
+**Decision:** `emEarned` now means the EM credited to the profile ledger for a
+run. Extracted or lost cargo keeps a separate salvage value. Cargo that fits in
+the vault is not sold into EM; overflow cargo may still auto-sell and add to the
+same ledger credit. For the v0.2 demo path, death no longer taxes existing EM
+and instead credits the reduced survival residue.
+
+**Why:** The result screen, chronicle, run record, and durable profile were
+telling different economy stories. Showing `+290 EM` while the profile only
+received overflow cargo value made the meta loop feel arbitrary. Separating
+ledger credit from salvage value makes the post-run screen honest and preserves
+the future choice between vaulting, selling, and upgrading.
+
+**Where it landed:** `src/content/balance.js`,
+`scripts/content/balance.cjs`, `src/profile.js`,
+`scripts/control-plane-store.cjs`, `src/run-results.js`, `src/main.js`,
+and the balance/control-plane/run-results/meta-flow/UI-visual tests.
+
+**Door status:** Closed for labeling vaulted cargo as earned EM. Open for
+future economy tuning around death penalties, overflow sale rules, and manual
+sell/upgrade pacing.
+
 ## 2026-07-01 — Branch by version line, not by convenience
 
 **Decision:** Treat `main` as the current v0.2 demo/public build line and keep

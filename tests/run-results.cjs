@@ -33,7 +33,7 @@ const extractedResult = {
   signalPeak: 0.82,
   signalPeakZone: "flare",
   inhibitorFormReached: 2,
-  emEarned: 290,
+  emEarned: 90,
   aiOutcomes: [
     { personality: "raider", hullType: "breacher", outcome: "dead", cargoCount: 1 },
     { personality: "ghost", hullType: "shroud", outcome: "extracted", cargoCount: 3 },
@@ -92,7 +92,8 @@ async function run() {
       assert(view.inhibitorLabel === "swarm", `Expected inhibitor swarm, got ${view.inhibitorLabel}`);
       assert(view.cargoTitle === "CARGO EXTRACTED", `Expected extracted cargo title, got ${view.cargoTitle}`);
       assert(view.cargoCount === 2, `Expected two extracted cargo items, got ${view.cargoCount}`);
-      assert(view.emEarned === 290, `Expected 290 EM, got ${view.emEarned}`);
+      assert(view.cargoValue === 200, `Expected 200 EM salvage value, got ${view.cargoValue}`);
+      assert(view.emEarned === 90, `Expected 90 EM ledger credit, got ${view.emEarned}`);
       assert(view.aiLines.some((line) => line.includes("ghost") && line.includes("extracted")), "Expected AI extraction line");
       assert(view.notableLines.includes("new milestone: DEEP DIVE"), "Expected milestone notable");
     });

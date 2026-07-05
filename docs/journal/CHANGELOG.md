@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-07-05 — Ledger honesty pass
+
+- Changed shared EM earnings semantics so `runEmEarned()` means profile ledger
+  credit, not extracted cargo value. Extracted cargo now stays visible as
+  salvage value and goes to the vault unless overflow is auto-sold.
+- Wired the same ledger credit through local profile write-back, control-plane
+  write-back, run records, chronicle fallback records, and result-screen copy.
+- Stopped the current demo death path from taxing existing EM; death now awards
+  the reduced survival residue while cargo/equipped losses remain the main
+  pressure.
+- Updated balance, control-plane, run-results, meta-flow, and UI visual tests to
+  prove displayed EM matches durable profile deltas.
+
 ## 2026-07-01 — Version-line branching process added
 
 - Added `docs/project/BRANCHING-AND-RELEASE-LINES.md` as the tracked process

@@ -40,7 +40,7 @@ reading stale health records or reconstructing status from `git log`.
 | Large-map scale model | DONE (first pass) | map-scale clocks, relevance gating, AI/hazard budgets, coarse authoritative field |
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
-| Run result package | PARTIAL | Results view and control-plane persistence slices exist; full meta-loop write-back polish remains |
+| Run result package | PARTIAL | Results view, control-plane persistence, and ledger-vs-salvage write-back are live; broader meta-loop polish remains |
 | Local build status | v0.2.2 source path PLAYABLE / RELEASE BUILD NEEDED | `docs/project/BUILD-STATUS.md` records the latest local authority source smoke as playable on 2026-06-27; the next release artifact pass should produce `v0.2.2.<commit-hash>` builds after fresh playtest evidence |
 | Weekly playables | STALE | Last scheduled green predates the current local feature/fix stack; refresh only after the local build is playtest-stable |
 | Build health gate | GREEN | Refreshed on 2026-06-25 for the v0.2.1 release-build train; use `node scripts/build-health.cjs status` for the exact current-commit answer |
@@ -67,9 +67,9 @@ reading stale health records or reconstructing status from `git log`.
 | UI mood board | `docs/reference/UI-MOODBOARD.md` | Designed 2026-06-28; Evangelion/NERV, Marathon, Returnal, and LBH Three-hierarchy translation notes plus generated target visuals |
 | UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared primitives, result/title slices, UI visual harness, shared motion kit, reduced-motion coverage, UI motion/VFX bridge, Home instrument-console pass, and Map Select drop-briefing pass are live. Next UI work is HUD, pause, profile destructive states, and richer route/objective language. |
 | Carbon Engine source research | `docs/reference/CARBON-ENGINE-RESEARCH.md` | Added 2026-07-01; mine Carbon/Destiny/Trinity for stamped sim authority, relevance lanes, explicit render-plan discipline, asset manifests, and audio/VFX budgets without adopting Carbon as a dependency. |
-| Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist; chronicle and UI clarity need finish work |
+| Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist, and ledger credit is now separated from salvage value; chronicle and UI clarity still need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
-| Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, and earnings exist; balance/playtest remains |
+| Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, ledger credit, and salvage values exist; balance/playtest remains |
 | Item catalog (artifacts with coefficients) | Partially in CLASSES-AND-PROGRESSION.md | T1-T4 catalog exists as content data; needs curation and more authored build identity |
 | Stat tracking / chronicle | META-LOOP.md | Run records and echo foundations are partial; player-readable chronicle remains |
 | Milestone triggers | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Triggers defined; unlock pacing and UI surfacing still need implementation |

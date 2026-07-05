@@ -74,15 +74,15 @@ Goal: make a run connect cleanly to the next run.
 
 - Finish upgrade purchase/write-back for rig tracks.
 - Clarify vault, sell, equip, load consumable, and profile state in UI.
-- Make run results explain earnings, cargo loss, signal peak, Inhibitor state, rivals, and notable events.
+- Make run results explain ledger credit, salvage value, cargo loss, signal peak, Inhibitor state, rivals, and notable events.
 - Decide whether chronicle/echo wrecks are v0.2 public-facing or still internal.
-- Balance EM earnings, death tax, item value, and upgrade costs.
+- Balance EM earnings, item value, upgrade costs, and the deferred death-penalty model.
 
 Definition of done:
 
 - A player understands what changed after a run.
 - Upgrading a hull has a visible next-run effect.
-- Death hurts without erasing motivation.
+- Death hurts through lost cargo/state while still crediting a small survival residue.
 
 ## v0.2.3 — Renderer Ownership And Entity Visual Pass
 

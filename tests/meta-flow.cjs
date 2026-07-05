@@ -207,7 +207,7 @@ async function run() {
             survivalTime: 223,
             hullType: "drifter",
             mapId: "shallows",
-            emEarned: 290,
+            emEarned: 90,
             cargoCount: 2,
             cargoValue: 200,
             signalPeakZone: "flare",
@@ -256,7 +256,7 @@ async function run() {
           cargoExtracted: [
             { id: "em-a", name: "Sungold Core", value: 140, tier: 2, category: "salvage" },
           ],
-          emEarned: 190,
+          emEarned: 75,
           signalPeakZone: "whisper",
           signalPeak: 0.22,
           inhibitorFormReached: 0,
@@ -273,7 +273,7 @@ async function run() {
       const chronicle = await page.evaluate(() => window.__TEST_API.getChronicleView());
       assert(chronicle.records[0].runId === "chronicle-result-run", `Expected latest RunResult record, got ${chronicle.records[0]?.runId}`);
       assert(chronicle.records[0].survivalLabel === "2:31", `Expected survival 2:31, got ${chronicle.records[0].survivalLabel}`);
-      assert(chronicle.records[0].emEarned === 190, `Expected 190 EM from result, got ${chronicle.records[0].emEarned}`);
+      assert(chronicle.records[0].emEarned === 75, `Expected 75 EM ledger credit from result, got ${chronicle.records[0].emEarned}`);
       assert(chronicle.records[0].cargoCount === 1, `Expected cargo count 1, got ${chronicle.records[0].cargoCount}`);
     });
 
