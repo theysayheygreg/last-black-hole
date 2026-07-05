@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-07-05 — Fable/Orrery feedback triage
+
+- Added a synthesis memo for Orrery's three Fable review returns, separating
+  immediate fixes, roadmap items, Greg decisions, and explicit deferrals.
+- Expanded the v0.3 open-decision queue with the new product choices from the
+  movement, visual-hybrid, and loop/meta reviews: death economy, portal entry,
+  Shallows route teaching, progression grammar, chronicle scope, and cosmic
+  signature truth.
+
 ## 2026-07-05 — Fable/Orrery weekend prompt packets
 
 - Added three targeted delegation prompts for Fable through Orrery: movement
