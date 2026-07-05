@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-07-04 — Public-friendly devlog and social update pack
+
+- Added a narrative `DEVLOG.md` entry that translates the recent visual, UI,
+  Steam Deck, and v0.3 authority work into a human-facing story.
+- Expanded `docs/public/TWITTER-POST-OPPORTUNITIES.md` with a current Discord
+  update, short Discord version, Twitter/X singles, mini-threads, translation
+  bank, and public-claim guardrails.
+
 ## 2026-07-04 — v0.3 input edges and portal extraction
 
 - Added queued remote slingshot press edges to the input protocol so quick

@@ -5,6 +5,62 @@
 
 ---
 
+## Week 15, Day 6: July 4, 2026 — Making the Dying Universe Readable
+
+This stretch of work has been less about adding one more feature and more
+about making Last Singularity feel like a game we can actually show people.
+The jam version proved the strange core idea: ASCII fluid, gravity wells,
+salvage, extraction, dread. The recent work has been about turning that proof
+into something legible, playable, and honest.
+
+The big visual direction is clearer now. The game is still black space and
+ASCII fabric first; that is the soul of it. But the objects riding on top of
+that fabric need to read instantly. Ships, wrecks, stars, portals, rivals, and
+loot cannot just be tiny shapes lost in the noise. They need silhouettes,
+halos, backing, motion, and color roles strong enough to survive the couch
+test, the Steam Deck screen, and a fast social clip. Wells and the Inhibitor
+stay woven into the fabric itself. Everything else is starting to become a
+clearer layer in the scene.
+
+The UI is moving the same way. The title screen, home screen, drop briefing,
+and results screens are becoming less like prototype overlays and more like
+the control surface of a doomed instrument. Buttons are now separating the
+action from the input prompt. Text has stronger backing. Monaspace gives the
+whole game a better terminal voice. Oxanium is holding the big title/header
+moments until a real wordmark exists. The title corruption is no longer just
+"make text weird"; it is becoming a little visual system, a controlled fault
+that interrupts the clean surface without swallowing it.
+
+The Steam Deck work mattered too, even when it was awkward. Desktop Mode was
+useful for logs and deployment, but Gaming Mode is the real target. That forced
+better button prompts, bigger text, stronger HUD spacing, app assets, and a
+more realistic deployment path. It also clarified the product shape: Last
+Singularity is not just a browser toy anymore. The local app owns its renderer,
+control plane, and sim on loopback, and the Deck is a serious test of whether
+the interface can survive outside a developer monitor.
+
+Under the hood, the v0.3 branch is about trust. The game now has the start of a
+single authoritative world catalog for "what exists, where it is, and what it
+can touch." That sounds dry, but the player-facing reason is simple: if a wreck
+can be looted, a portal can extract you, or a well can kill you, those facts
+should come from the same world truth. Recent work moved wreck pickup and
+portal extraction onto that shared candidate path while keeping the actual
+gameplay consequences server-owned. Slingshot taps also stopped being fragile:
+quick engage/release inputs now queue through the authority path instead of
+vanishing between network ticks.
+
+The current public-friendly summary:
+
+Last Singularity is becoming more readable at every layer. The world looks more
+intentional, the UI is starting to feel like a real cockpit, the Deck path is
+forcing good accessibility habits, and the sim is getting stricter about what
+is real. It is not a finished release yet. The next truth check is still human:
+does it feel good to fly, can the player read a route, and does the universe
+feel like it is closing around them for reasons they understand?
+
+That is a much better problem than "does the game exist?" It exists. Now the
+work is making the end of everything worth posting.
+
 ## Week 14, Day 4: June 25, 2026 — The Local Build Gets a Truth Ledger
 
 The Three migration had a messy but useful day: the game exposed every place
