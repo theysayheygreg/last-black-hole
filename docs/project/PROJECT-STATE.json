@@ -297,7 +297,7 @@
       "Orrery revises if Forge pushes back",
       "Orb dispatches Corb with approved task packet",
       "Corb builds and commits",
-      "Corb runs project-local tests (node tests/run-all.js)",
+      "Corb runs project-local tests (npm test / node tests/run-all.cjs --lane=core --renderer=three)",
       "Orb records pass/fail evidence",
       "Forge reviews the tested result",
       "Orb routes fixes (to Corb for bugs, to Orrery for architectural issues) or marks ready_for_greg",

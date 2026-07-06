@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-07-06 — v0.2 main consistency pass
+
+- Fixed a Home render crash caused by reading `homePromptOptions` before it was
+  initialized; this had stopped the frame loop after reaching Home and made
+  Deck/controller tab navigation appear broken.
+- Tightened remote slingshot input so controller-held Y reaches the
+  authoritative sim, while direct protocol tests cover queued press edges.
+- Aligned Deck/home prompts with actual controls, including controller X for
+  map seed reroll and prompt-label inventory rows.
+- Made rig copy honest by adding server-owned coefficients for shipped low
+  levels and showing v0.2 caps in the Home rig UI instead of advertising
+  unshipped levels.
+- Removed stale death-tax balance/display hooks so current results speak in
+  ledger credit, residue, and cargo salvage value.
+- Fixed Three camera sync and initial fluid seeding assumptions that could use
+  stale camera state or wrap off-window wells into the visible fluid buffer.
+- Added harness guards for sim protocol normalization, unknown suite names,
+  safer authority slingshot placement, and weekly playable fast validation.
+
 ## 2026-07-05 — Ledger honesty pass
 
 - Changed shared EM earnings semantics so `runEmEarned()` means profile ledger

@@ -3,6 +3,7 @@ const {
   createPlayerBrain,
   normalizeProfileUpgrades,
 } = require("../scripts/player-brain.cjs");
+const { HULL_DEFINITIONS } = require("../scripts/content/hulls.cjs");
 
 const SIM_PORT = 8795;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
@@ -92,6 +93,25 @@ async function run() {
       const player = update.body.player;
       assert(player.brain.wellResistScale > 1.0, `Expected wellResistScale > 1, got ${player.brain.wellResistScale}`);
       assert(player.activeEffects.includes("reduceWellPull"), "Expected active reduceWellPull effect");
+    });
+
+    await runner.run("Rig copy-backed levels have server-owned coefficients", async () => {
+      const breacher = createPlayerBrain({
+        hullType: "breacher",
+        rigLevels: [2, 2, 2],
+      });
+      assert(breacher.thrustScale > HULL_DEFINITIONS.breacher.thrustScale, `Expected breacher rig thrust boost, got ${breacher.thrustScale}`);
+      assert(breacher.pickupRadius > HULL_DEFINITIONS.breacher.pickupRadius, `Expected breacher pickup boost, got ${breacher.pickupRadius}`);
+      assert(breacher.controlDebuffResist > HULL_DEFINITIONS.breacher.controlDebuffResist, `Expected breacher control resistance, got ${breacher.controlDebuffResist}`);
+
+      const resonant = createPlayerBrain({
+        hullType: "resonant",
+        rigLevels: [1, 1, 0],
+      });
+      assert(Math.abs(resonant.pulseRadiusScale - (HULL_DEFINITIONS.resonant.pulseRadiusScale * 1.1)) < 1e-6,
+        `Expected resonant pulse radius rig boost, got ${resonant.pulseRadiusScale}`);
+      assert(resonant.pulseCooldownScale < HULL_DEFINITIONS.resonant.pulseCooldownScale,
+        `Expected resonant pulse cooldown reduction, got ${resonant.pulseCooldownScale}`);
     });
   } finally {
     await stopSimServer(SIM_PORT);

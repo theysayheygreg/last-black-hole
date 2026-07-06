@@ -26,6 +26,15 @@ async function getSnapshot() {
   return response.json();
 }
 
+async function postSim(path, body) {
+  const response = await fetch(`${SIM_URL}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+}
+
 async function waitForSnapshotPlayer(clientId, predicate, { timeout = 5000, interval = 100 } = {}) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -39,6 +48,24 @@ async function waitForSnapshotPlayer(clientId, predicate, { timeout = 5000, inte
 
 async function waitForPhase(page, phase, timeout = 9000) {
   await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, { timeout }, phase);
+}
+
+async function waitForLabeled(page, label, predicate, options = {}, ...args) {
+  try {
+    await waitFor(page, predicate, options, ...args);
+  } catch (err) {
+    let debug = null;
+    try {
+      debug = await page.evaluate(() => ({
+        phase: window.__TEST_API?.getGamePhase?.() || null,
+        input: window.__TEST_API?.getInputState?.() || null,
+        network: window.__TEST_API?.getNetworkState?.() || null,
+        inventory: window.__TEST_API?.getInventory?.() || null,
+      }));
+    } catch {}
+    const suffix = debug ? ` state=${JSON.stringify(debug)}` : '';
+    throw new Error(`${label}: ${err.message}${suffix}`);
+  }
 }
 
 async function bootstrapCleanPage(page) {
@@ -101,9 +128,19 @@ async function tapGamepadButton(page, buttonIndex, { holdMs = 90, value = null }
 }
 
 async function moveHomeTabWithGamepad(page, tabName) {
-  for (let i = 0; i < 8; i++) {
-    if (await page.evaluate((name) => window.__TEST_API.getHomeState().tabName === name, tabName)) return;
-    await tapGamepadButton(page, 5);
+  const tabOrder = ['SHIP', 'VAULT', 'RIG', 'CHRONICLE', 'LAUNCH'];
+  const targetIndex = tabOrder.indexOf(tabName);
+  if (targetIndex < 0) throw new Error(`Unknown home tab ${tabName}`);
+  for (let i = 0; i < tabOrder.length + 2; i++) {
+    const current = await page.evaluate(() => window.__TEST_API.getHomeState());
+    if (current.tabName === tabName) return;
+    const currentIndex = Number.isInteger(current.tabIndex)
+      ? current.tabIndex
+      : tabOrder.indexOf(current.tabName);
+    if (currentIndex < 0) break;
+    const forward = (targetIndex - currentIndex + tabOrder.length) % tabOrder.length;
+    const backward = (currentIndex - targetIndex + tabOrder.length) % tabOrder.length;
+    await tapGamepadButton(page, forward <= backward ? 5 : 4);
   }
   const current = await page.evaluate(() => window.__TEST_API.getHomeState().tabName);
   throw new Error(`Expected home tab ${tabName}, got ${current}`);
@@ -136,6 +173,18 @@ async function enterLocalRunWithGamepad(page) {
   await waitForPhase(page, 'playing', 12000);
 }
 
+async function enterMapSelectWithGamepad(page) {
+  await waitForPhase(page, 'title');
+  await tapGamepadButton(page, 0); // confirm -> profileSelect
+  await waitForPhase(page, 'profileSelect');
+  await tapGamepadButton(page, 0); // create/select
+  await tapGamepadButton(page, 0); // confirm generated name if needed
+  await waitForPhase(page, 'home');
+  await moveHomeTabWithGamepad(page, 'LAUNCH');
+  await tapGamepadButton(page, 0); // open map select
+  await waitForPhase(page, 'mapSelect');
+}
+
 async function enterRemoteRunWithGamepad(page, { hullType = 'breacher' } = {}) {
   await waitForPhase(page, 'title');
   await tapGamepadButton(page, 0);
@@ -161,7 +210,7 @@ async function enterRemoteRunWithGamepad(page, { hullType = 'breacher' } = {}) {
   await waitForPhase(page, 'mapSelect');
   await tapGamepadButton(page, 0);
   await waitForPhase(page, 'playing', 12000);
-  await waitFor(page, () => {
+  await waitForLabeled(page, 'remote authority activation', () => {
     const net = window.__TEST_API.getNetworkState();
     return net.simEnabled && net.remoteAuthorityActive && typeof net.remoteTick === 'number';
   }, { timeout: 12000 });
@@ -177,6 +226,20 @@ async function run() {
   let remoteShot = null;
 
   try {
+    await runner.run('Synthetic gamepad rerolls the map seed from map select', async () => {
+      await withFreshGame(htmlFile, async ({ page }) => {
+        await bootstrapCleanPage(page);
+        await installVirtualGamepad(page);
+        await enterMapSelectWithGamepad(page);
+        const before = await page.evaluate(() => window.__TEST_API.getMapSelectState());
+        await tapGamepadButton(page, 2); // reroll seed
+        await waitFor(page, (oldSeed) => window.__TEST_API.getMapSelectState().seed !== oldSeed, { timeout: 3000 }, before.seed);
+        const after = await page.evaluate(() => window.__TEST_API.getMapSelectState());
+        assert(after.phase === 'mapSelect', `Expected to remain in mapSelect, got ${after.phase}`);
+        assert(after.seed !== before.seed, `Expected controller reroll to change seed ${before.seed}`);
+      });
+    });
+
     await runner.run('Synthetic gamepad reaches gameplay and moves locally', async () => {
       await withFreshGame(htmlFile, async ({ page }) => {
         await bootstrapCleanPage(page);
@@ -216,12 +279,12 @@ async function run() {
           await enterRemoteRunWithGamepad(pageRemote, { hullType: 'breacher' });
 
           await tapGamepadButton(pageRemote, 17); // inventory open
-          await waitFor(pageRemote, () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
+          await waitForLabeled(pageRemote, 'remote inventory open', () => window.__TEST_API.getInventory()?.open === true, { timeout: 3000 });
           await holdGamepad(pageRemote, {
             axes: [1, 0, 0, 0, 0, 0],
             buttons: [{ index: 7, value: 1 }],
           }, 350);
-          await waitFor(pageRemote, () => {
+          await waitForLabeled(pageRemote, 'remote inventory suppresses action scalars', () => {
             const net = window.__TEST_API.getNetworkState();
             // Inventory suppresses action scalars but still preserves facing intent
             // so brake-only and ability packets can steer once the menu closes.
@@ -229,16 +292,41 @@ async function run() {
           }, { timeout: 3000 });
 
           await tapGamepadButton(pageRemote, 1); // close inventory
-          await waitFor(pageRemote, () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
+          await waitForLabeled(pageRemote, 'remote inventory close', () => window.__TEST_API.getInventory()?.open === false, { timeout: 3000 });
 
           await setGamepadButton(pageRemote, 6, true, 1);
           await sleep(220);
-          await waitFor(pageRemote, () => {
+          await waitForLabeled(pageRemote, 'remote brake packet', () => {
             const net = window.__TEST_API.getNetworkState();
             return net.lastRemoteInput && net.lastRemoteInput.brake > 0.9;
           }, { timeout: 3000 });
           await setGamepadButton(pageRemote, 6, false, 0);
           await sleep(160);
+
+          const slingshotNet = await pageRemote.evaluate(() => window.__TEST_API.getNetworkState());
+          const snapshot = await getSnapshot();
+          const well = snapshot.world?.wells?.[0];
+          assert(well, 'Expected a well anchor for controller slingshot test');
+          const ws = snapshot.session?.worldScale || 5;
+          const moved = await postSim('/debug/player-state', {
+            clientId: slingshotNet.clientId,
+            wx: ((well.wx + 0.36) % ws + ws) % ws,
+            wy: well.wy,
+            vx: 0,
+            vy: -0.35,
+            deltaV: 40,
+            status: 'alive',
+            resetSlingshot: true,
+          });
+          assert(moved.ok === true, 'Expected debug placement for controller slingshot test');
+          await setGamepadButton(pageRemote, 3, true, 1);
+          const engaged = await waitForSnapshotPlayer(
+            slingshotNet.clientId,
+            (remotePlayer) => remotePlayer.slingshot?.engaged === true,
+            { timeout: 5000, interval: 120 }
+          );
+          await setGamepadButton(pageRemote, 3, false, 0);
+          assert(engaged.player.slingshot?.engaged === true, 'Expected controller slingshot to engage remotely');
 
           await setGamepadButton(pageRemote, 4, true, 1); // ability1 -> burn for breacher
           const net = await pageRemote.evaluate(() => window.__TEST_API.getNetworkState());

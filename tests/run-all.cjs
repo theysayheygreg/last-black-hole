@@ -60,6 +60,13 @@ if (!LANES.includes(options.lane)) {
 if (!["legacy", "three", "both", "target"].includes(options.renderer)) {
   throw new Error("Renderer must be one of: legacy, three, both, target");
 }
+if (options.suiteFilter) {
+  const knownSuites = new Set(SUITES.map((suite) => suite.name));
+  const unknownSuites = [...options.suiteFilter].filter((name) => !knownSuites.has(name));
+  if (unknownSuites.length > 0) {
+    throw new Error(`Unknown suite '${unknownSuites.join(", ")}'. Known suites: ${[...knownSuites].join(", ")}`);
+  }
+}
 
 function variantsForSuite(suite) {
   if (!suite.browser || options.renderer === "target") return [{ label: "target", target }];

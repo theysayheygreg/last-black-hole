@@ -305,6 +305,14 @@ export class InputManager {
     return false;
   }
 
+  /** Seed reroll — S key or gamepad X/Square. Contextual to map select. */
+  get rerollPressed() {
+    if (this._keys['KeyS']) return true;
+    const gp = this._getGamepad();
+    if (gp && gp.buttons.length > 2 && gp.buttons[2].pressed) return true;
+    return false;
+  }
+
   _getGamepad() {
     const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
     if (this.gamepadIndex >= 0) return gamepads[this.gamepadIndex] || null;

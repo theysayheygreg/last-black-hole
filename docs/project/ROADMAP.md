@@ -7,7 +7,7 @@
 
 ---
 
-## Current Status (2026-06-28)
+## Current Status (2026-07-06)
 
 **Version:** v0.2 — Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set.
 
@@ -41,9 +41,9 @@ reading stale health records or reconstructing status from `git log`.
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | PARTIAL | Results view, control-plane persistence, and ledger-vs-salvage write-back are live; broader meta-loop polish remains |
-| Local build status | v0.2.2 source path PLAYABLE / RELEASE BUILD NEEDED | `docs/project/BUILD-STATUS.md` records the latest local authority source smoke as playable on 2026-06-27; the next release artifact pass should produce `v0.2.2.<commit-hash>` builds after fresh playtest evidence |
-| Weekly playables | STALE | Last scheduled green predates the current local feature/fix stack; refresh only after the local build is playtest-stable |
-| Build health gate | GREEN | Refreshed on 2026-06-25 for the v0.2.1 release-build train; use `node scripts/build-health.cjs status` for the exact current-commit answer |
+| Local build status | v0.2.2 source path VALIDATED / RELEASE BUILD NEEDED | `docs/project/BUILD-STATUS.md` records the 2026-07-06 main consistency pass: fast, core, renderer, title, perf, authority, controller, and meta-flow lanes passed; no current hash-named release artifact has been rebuilt yet |
+| Weekly playables | VALIDATION-GATED | Weekly workflow now runs `npm run test:fast` once before platform artifacts build; next weekly artifact still needs a successful scheduled/manual run |
+| Build health gate | STALE | Formal `BUILD-HEALTH.json` still records 2026-06-25; rerun `node scripts/build-health.cjs verify` after committing this source pass if the formal gate should be refreshed |
 
 ### What's Designed Or Partially Implemented
 

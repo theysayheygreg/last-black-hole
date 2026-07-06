@@ -20,6 +20,7 @@ function normalizeInputMessage(body = {}) {
     consumeSlotValue === null || consumeSlotValue === undefined || consumeSlotValue === ""
       ? null
       : clamp(Math.floor(asNumber(consumeSlotValue, -1)), 0, 1);
+  const slingshotPresses = clamp(Math.floor(asNumber(body.slingshotPresses, 0)), 0, 4);
   return {
     type: "input",
     clientId: String(body.clientId || "").trim(),
@@ -29,6 +30,7 @@ function normalizeInputMessage(body = {}) {
     thrust: clamp(asNumber(body.thrust, 0), 0, 1),
     brake: clamp(asNumber(body.brake, 0), 0, 1),
     slingshot: Boolean(body.slingshot),
+    slingshotPresses,
     pulse: Boolean(body.pulse),
     ability1: Boolean(body.ability1),
     ability2: Boolean(body.ability2),
@@ -77,6 +79,7 @@ function createProtocolDescription() {
           thrust: "number[0..1]",
           brake: "number[0..1]",
           slingshot: "boolean",
+          slingshotPresses: "number[0..4]",
           pulse: "boolean",
           consumeSlot: "number[0..1] | null",
           timestamp: "unix-ms",

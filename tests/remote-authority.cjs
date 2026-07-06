@@ -410,7 +410,7 @@ async function run() {
       const well = snapshot.world?.wells?.[0];
       assert(well, "Expected a well anchor for authoritative slingshot test");
       const ws = snapshot.session?.worldScale || 5;
-      const startX = ((well.wx + 0.25) % ws + ws) % ws;
+      const startX = ((well.wx + 0.36) % ws + ws) % ws;
       const startY = well.wy;
       const reset = await postDebugPlayerState({
         clientId: net.clientId,
@@ -432,7 +432,8 @@ async function run() {
         moveY: 0,
         thrust: 0,
         brake: 0,
-        slingshot: true,
+        slingshot: false,
+        slingshotPresses: 1,
         timestamp: Date.now(),
       });
       const engaged = await waitForSnapshotPlayer(
@@ -458,6 +459,7 @@ async function run() {
         thrust: 0,
         brake: 0,
         slingshot: false,
+        slingshotPresses: 0,
         timestamp: Date.now(),
       });
       await sleep(120);
@@ -468,7 +470,8 @@ async function run() {
         moveY: 0,
         thrust: 0,
         brake: 0,
-        slingshot: true,
+        slingshot: false,
+        slingshotPresses: 1,
         timestamp: Date.now(),
       });
       const released = await waitForSnapshotPlayer(

@@ -195,17 +195,17 @@ export const RIG_LEVEL_EFFECTS = {
     ['+0.1 pickupRadius', 'wreck tier estimate in HUD', '+0.1 pickupRadius', '+1 extraction item chance', 'slip stream signal reduction -> 0.5'],
   ],
   breacher: [
-    ['+5s burn fuel', '+0.1 thrustScale', '+5s burn fuel', 'burn recharge rate +50%', 'burn thrust mult -> 2.5'],
+    ['+0.05 thrustScale', '+0.1 thrustScale', '+5s burn fuel', 'burn recharge rate +50%', 'burn thrust mult -> 2.5'],
     ['+0.1 wellResistScale', '+0.15 controlDebuffResist', 'momentum shield threshold -10%', 'shield charge on first burn', 'shockwave stun +1s'],
-    ['pickup at 90% speed', '+0.1 pickupRadius', 'pickup at 70% speed', 'death cargo scatters further', 'loot signal spikes -30%'],
+    ['+0.05 pickupRadius', '+0.1 pickupRadius', 'pickup at 70% speed', 'death cargo scatters further', 'loot signal spikes -30%'],
   ],
   resonant: [
-    ['+1 max eddy', 'eddy duration +2s', 'eddies pull wrecks', '+1 max eddy', 'team-visible eddies'],
-    ['tap range +0.1 wu', 'tap cooldown -5s', 'pulse cooldown -20% near anchor', 'anchor persists through death', 'frequency shift cooldown -15s'],
+    ['pulse radius +10%', 'eddy duration +2s', 'eddies pull wrecks', '+1 max eddy', 'team-visible eddies'],
+    ['pulse cooldown -5%', 'tap cooldown -5s', 'pulse cooldown -20% near anchor', 'anchor persists through death', 'frequency shift cooldown -15s'],
     ['dampening slow +10%', 'eddies reduce signal inside', 'dampening slow +10%', 'eddies block inhibitor form 1', 'form 3 vessel slow'],
   ],
   shroud: [
-    ['ghost trail threshold -> PRESENCE', '+0.1 signalDecayMult', 'wake cloak cooldown -10s', 'scavengers never detect ghost trail', 'wake cloak works at THRESHOLD'],
+    ['signal decay +5%', '+0.1 signalDecayMult', 'wake cloak cooldown -10s', 'scavengers never detect ghost trail', 'wake cloak works at THRESHOLD'],
     ['+0.1 sensorRange', 'see inhibitor tracking target', '+0.1 sensorRange', 'see wreck contents', 'see player equipped items'],
     ['+1 decoy charge', 'decoy duration +4s', 'decoy cooldown -20s', 'decoys attract fauna', 'remote decoy placement'],
   ],
@@ -215,6 +215,22 @@ export const RIG_LEVEL_EFFECTS = {
     ['reinforced hull scatters 0 cargo', '+0.1 wellResistScale', 'tractor cooldown -10s', 'reinforced hull +1 charge', 'full-cargo speed +10%'],
   ],
 };
+
+// v0.2 only exposes ranks backed by current authoritative gameplay code.
+// Higher-rank ideas stay in the design list above, but cannot take EM yet.
+export const RIG_SHIPPED_LEVEL_CAPS = {
+  drifter: [1, 3, 1],
+  breacher: [2, 2, 2],
+  resonant: [1, 1, 0],
+  shroud: [2, 1, 0],
+  hauler: [1, 0, 2],
+};
+
+function shippedRigLevelCap(hullType, trackIndex) {
+  const caps = RIG_SHIPPED_LEVEL_CAPS[normalizeHullType(hullType)];
+  const value = Number(caps?.[trackIndex]);
+  return Number.isFinite(value) ? Math.max(0, Math.min(MAX_RIG_LEVEL, Math.round(value))) : MAX_RIG_LEVEL;
+}
 
 // ---- Profile Manager ----
 
@@ -383,7 +399,10 @@ export class ProfileManager {
         ...track,
         index,
         level: levels[index] ?? 0,
-        nextEffect: RIG_LEVEL_EFFECTS[hullType]?.[index]?.[levels[index] ?? 0] || null,
+        maxLevel: shippedRigLevelCap(hullType, index),
+        nextEffect: (levels[index] ?? 0) < shippedRigLevelCap(hullType, index)
+          ? RIG_LEVEL_EFFECTS[hullType]?.[index]?.[levels[index] ?? 0] || null
+          : null,
       })),
     };
   }
@@ -395,11 +414,13 @@ export class ProfileManager {
     if (!Number.isInteger(index) || index < 0 || index >= RIG_SLOT_COUNT) return null;
     const levels = normalizeRigLevels(p.rigLevels);
     const currentLevel = levels[index] ?? 0;
-    if (currentLevel >= MAX_RIG_LEVEL) return null;
+    const maxLevel = shippedRigLevelCap(p.hullType || p.shipType, index);
+    if (currentLevel >= maxLevel) return null;
     return {
       em: RIG_LEVEL_COSTS[currentLevel],
       trackIndex: index,
       nextLevel: currentLevel + 1,
+      maxLevel,
       nextEffect: RIG_LEVEL_EFFECTS[normalizeHullType(p.hullType, p.shipType)]?.[index]?.[currentLevel] || null,
     };
   }

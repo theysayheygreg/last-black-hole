@@ -8,9 +8,9 @@ You do not fly through empty space. You fly through spacetime as a hostile ocean
 
 ## Status
 
-Current public train: **v0.2.1 — Authority and Three Foundation**
+Current public train: **v0.2.2 — Authority, Three, and Deck Foundation**
 
-Builds identify themselves as `v0.2.1.<commit-hash>` so private handoff
+Builds identify themselves as `v0.2.2.<commit-hash>` so private handoff
 artifacts can advance every commit without pretending every commit is a public
 release.
 

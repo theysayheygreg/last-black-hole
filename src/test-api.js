@@ -205,6 +205,16 @@ export function initTestAPI(getState) {
       return gamePhase;
     },
 
+    getMapSelectState() {
+      const { gamePhase, mapSelectIndex, previewSeed, mapList } = getState();
+      return {
+        phase: gamePhase,
+        index: mapSelectIndex ?? null,
+        seed: previewSeed ?? null,
+        mapName: mapList?.[mapSelectIndex]?.name || null,
+      };
+    },
+
     getRunResultsView() {
       const { getRunResultsViewModel } = getState();
       return getRunResultsViewModel ? getRunResultsViewModel() : null;
@@ -438,7 +448,7 @@ export function initTestAPI(getState) {
     },
 
     getNetworkState() {
-      const { simClient, remoteAuthorityActive, remoteMapId, remoteSnapshot, remoteControlState } = getState();
+      const { simClient, remoteAuthorityActive, remoteMapId, remoteSnapshot, remoteControlState, remotePendingSlingshotPresses } = getState();
       return {
         simEnabled: Boolean(simClient?.enabled),
         simUrl: simClient?.baseUrl || null,
@@ -457,6 +467,7 @@ export function initTestAPI(getState) {
         sessionCanHostReset: Boolean(remoteControlState?.canHostReset),
         sessionWillJoinLiveRun: Boolean(remoteControlState?.willJoinLiveRun),
         sessionSelectedDiffersFromLive: Boolean(remoteControlState?.selectedDiffersFromLive),
+        remotePendingSlingshotPresses: Math.max(0, Math.floor(Number(remotePendingSlingshotPresses) || 0)),
         lastRemoteInput: simClient?.lastSentInput ? { ...simClient.lastSentInput } : null,
       };
     },
@@ -683,6 +694,9 @@ export function initTestAPI(getState) {
         mouseDistancePx: inputManager._mouse?.distancePx ?? 0,
         ability1: Boolean(inputManager.ability1),
         ability2: Boolean(inputManager.ability2),
+        slingshot: Boolean(inputManager.slingshotPressed),
+        tabLeft: Boolean(inputManager.tabLeftPressed),
+        tabRight: Boolean(inputManager.tabRightPressed),
       };
     },
 

@@ -113,7 +113,7 @@ export class SimClient {
     return this.latestSnapshot;
   }
 
-  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, pulse = false, ability1 = false, ability2 = false, consumeSlot = null }) {
+  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, slingshotPresses = 0, pulse = false, ability1 = false, ability2 = false, consumeSlot = null }) {
     this.seq += 1;
     this.lastSentInput = {
       clientId: this.clientId,
@@ -123,6 +123,7 @@ export class SimClient {
       thrust,
       brake,
       slingshot,
+      slingshotPresses,
       pulse,
       ability1,
       ability2,

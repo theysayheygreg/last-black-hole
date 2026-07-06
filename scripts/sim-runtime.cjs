@@ -1105,6 +1105,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       thrust: 0,
       brake: 0,
       slingshot: false,
+      slingshotPresses: 0,
       pulse: false,
       ability1: false,
       ability2: false,
@@ -3973,9 +3974,12 @@ function applyPlayerSlingshotForces(player, dt, input) {
 function tickPlayerSlingshot(player, dt, input) {
   const state = ensurePlayerSlingshot(player);
   const down = Boolean(input?.slingshot);
-  if (down && !state.inputWasDown) {
+  const queuedPresses = Math.max(0, Math.floor(Number(input?.slingshotPresses) || 0));
+  const hasPressEdge = queuedPresses > 0 || (down && !state.inputWasDown);
+  if (hasPressEdge) {
     if (state.engaged) releasePlayerSlingshot(player, runtime.simTime, input);
     else engagePlayerSlingshot(player, runtime.simTime);
+    if (queuedPresses > 0) input.slingshotPresses = queuedPresses - 1;
   }
   state.inputWasDown = down;
   if (state.engaged) applyPlayerSlingshotForces(player, dt, input);
@@ -4977,13 +4981,33 @@ function updateVesselWellDistortion(inh, dt, ws) {
 
 function spawnInhibitorFinalPortal(inh, ws) {
   const cfg = INHIBITOR_CONFIG;
-  let bestDist = 0, bestX = ws / 2, bestY = ws / 2;
+  let bestScore = -Infinity, bestX = ws / 2, bestY = ws / 2;
   const rng = runtime.session?.rng?.rawStream('finalPortal') || Math.random;
-  for (let i = 0; i < 12; i++) {
+  const minWellClearance = 0.22;
+  const minInhibitorClearance = (cfg.vesselPortalBlockRange || 0) + portalCaptureRadius({ type: "standard" });
+  for (let i = 0; i < 32; i++) {
     const cx = rng() * ws;
     const cy = rng() * ws;
-    const d = worldDistance(inh.wx, inh.wy, cx, cy, ws);
-    if (d > bestDist) { bestDist = d; bestX = cx; bestY = cy; }
+    const inhibitorDist = worldDistance(inh.wx, inh.wy, cx, cy, ws);
+    let wellClearance = ws;
+    for (const well of runtime.mapState.wells) {
+      if (well.consumedByInhibitor) continue;
+      const radius = Math.max(0, Number(well.killRadius) || 0);
+      wellClearance = Math.min(wellClearance, worldDistance(well.wx, well.wy, cx, cy, ws) - radius);
+    }
+    let portalClearance = ws;
+    for (const portal of runtime.mapState.portals) {
+      if (portal.alive === false) continue;
+      portalClearance = Math.min(portalClearance, worldDistance(portal.wx, portal.wy, cx, cy, ws) - portalCaptureRadius(portal));
+    }
+    const wellPenalty = wellClearance < minWellClearance ? (minWellClearance - wellClearance) * 6 : 0;
+    const inhibitorPenalty = inhibitorDist < minInhibitorClearance ? (minInhibitorClearance - inhibitorDist) * 8 : 0;
+    const score = inhibitorDist * 0.5 + wellClearance * 1.4 + portalClearance * 0.15 - wellPenalty - inhibitorPenalty;
+    if (score > bestScore) {
+      bestScore = score;
+      bestX = cx;
+      bestY = cy;
+    }
   }
   runtime.mapState.portals.push({
     id: `portal-final-${runtime.tick}`,
@@ -5221,15 +5245,17 @@ function tickSim() {
       }
     }
 
-    const input = player.lastInput;
+    let input = player.lastInput;
     if (input.consumeSlot !== null && input.consumeSlot !== undefined) {
       applyConsumable(player, input.consumeSlot);
       player.lastInput = { ...player.lastInput, consumeSlot: null };
+      input = player.lastInput;
     }
 
     if (input.pulse) {
       applyPulse(player);
       player.lastInput = { ...player.lastInput, pulse: false };
+      input = player.lastInput;
     }
 
     const playerDt =
@@ -5668,12 +5694,18 @@ const server = http.createServer(async (req, res) => {
       player.lastInput = {
         ...message,
         pulse: Boolean(player.lastInput.pulse || message.pulse),
+        // Slingshot is a press/toggle, so quick taps between POSTs must queue
+        // like pulse instead of being sampled only as a held button.
+        slingshotPresses: Math.min(
+          8,
+          Math.max(0, Math.floor(Number(player.lastInput.slingshotPresses) || 0)) + message.slingshotPresses
+        ),
         consumeSlot:
           message.consumeSlot === null || message.consumeSlot === undefined
             ? player.lastInput.consumeSlot
             : message.consumeSlot,
       };
-      sendJson(res, 200, { ok: true, acceptedSeq: message.seq, tick: runtime.tick });
+      sendJson(res, 200, { ok: true, acceptedSeq: message.seq, acceptedSlingshotPresses: message.slingshotPresses, tick: runtime.tick });
       return;
     }
 

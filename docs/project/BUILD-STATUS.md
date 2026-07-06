@@ -8,11 +8,12 @@
 
 ## Current Snapshot
 
-**Date:** 2026-06-28
+**Date:** 2026-07-06
 **Public train:** v0.2.2
 **Build version shape:** v0.2.2.`<commit-hash>`
-**Primary playable target:** Steam Deck Linux release artifact plus local source
-build, Three renderer, and local authoritative sim.
+**Primary playable target:** local source build, Three renderer, and local
+authoritative sim. Steam Deck Linux artifacts remain the handoff target after a
+fresh committed release build.
 
 For source playtesting, use:
 
@@ -37,6 +38,35 @@ shape.
 
 ## Standing Assessment
 
+**Status update, 2026-07-06 v0.2 main consistency pass:** the current source
+tree is green across the main v0.2 validation lanes after a bug/consistency
+review of Home, Deck/controller prompts, remote slingshot, Three camera sync,
+fluid-window seeding, Inhibitor final-portal safety, rig effects/caps, and EM
+ledger copy.
+
+Validation for this source snapshot:
+
+- `npm run test:fast` passed, including the new `SimProtocol` fast suite and
+  the weekly-build guard lanes.
+- `npm test` passed the core Three lane.
+- `npm run test:renderer` passed all six renderer fixtures.
+- `npm run test:title-prototype` passed the Composer/title canary.
+- `npm run test:perf` held roughly 60 FPS across 3x3, 5x5, 10x10, minimal, and
+  post-disabled scenarios.
+- Focused authority/playtest probes passed: `RemoteAuthority`, `Controller`
+  with `deck=1`, `MetaFlow`, `Systems`, `RunResults`, `PlayerBrain`,
+  `Balance`, `Inhibitor`, and `SimProtocol`.
+- A deliberately misspelled suite name now fails loudly instead of producing a
+  false-green no-op harness run.
+
+This pass also found and fixed a Home render crash:
+`homePromptOptions` was read before initialization, which stopped the frame loop
+after reaching Home and made Deck/controller tab navigation appear dead.
+
+No new hash-named release artifact has been produced from this pass yet. Run
+`npm run release:internal` or `npm run release:build` from a committed tree
+before calling a Deck/public artifact current.
+
 **Status update, 2026-06-28 Deck compatibility pass:** the source tree now has
 a first-class Deck UI mode instead of only a Deck package. The Electron Deck
 launcher passes `deck=1` to the renderer, UI prompts route through
@@ -53,12 +83,11 @@ Validation for this source snapshot:
   reviewed Deck HUD capture uses `X`/`View` prompts and no longer shows the
   empty ability panel or keyboard-only Q/R fallback.
 
-**Status:** v0.2.2 local source path is playable on a fresh local authority
-stack, and the current `0.2.2.<commit-hash>` Linux release artifact is deployed
-on Greg's Steam Deck for demo testing after `npm run release:internal`. Use
-`npm run release:status` for the exact hash-named artifact folder. The Deck
-install was verified at the file/shortcut level; the next evidence gap is Greg
-launching it from Gaming Mode and confirming controller navigation in hand.
+**Status:** v0.2.2 local source path is validated on a fresh local authority
+stack. A previously built `0.2.2.<commit-hash>` Linux artifact may exist on
+Greg's Steam Deck, but it should not be treated as current until rebuilt from
+this pass and redeployed. Use `npm run release:status` for the exact
+hash-named artifact folder.
 
 On 2026-06-28, Codex refreshed the private Deck demo build:
 
@@ -118,16 +147,17 @@ assets into `dist/nightly`, and passed `release:check`.
 Artifacts:
 
 - `builds/v0.2.1/` (last three-part build, preserved as evidence)
-- latest Deck/demo release build: run `npm run release:status` and open
+- latest Deck/demo release build, if present: run `npm run release:status` and open
   `builds/v0.2.2.<hash>/Last Singularity-linux-x64`
-- latest Deck/demo playtest zip: run `npm run release:status` and open
+- latest Deck/demo playtest zip, if present: run `npm run release:status` and open
   `builds/last-singularity-playtest-v0.2.2.<hash>.zip`
 - `dist/nightly/`
 
 ## Known Caveats
 
-- `docs/project/BUILD-HEALTH.json` was refreshed on 2026-06-25 for the v0.2.1
-  release-build train. Use `node scripts/build-health.cjs status` for the exact
+- `docs/project/BUILD-HEALTH.json` was last refreshed on 2026-06-25 and is
+  stale for the current v0.2.2 source pass until the formal verifier is rerun
+  after commit. Use `node scripts/build-health.cjs status` for the exact
   current commit relationship.
 - Steam Deck deployment and Gaming Mode wiring exist, but the Deck path should
   follow local playtest health. A broken local game does not become useful

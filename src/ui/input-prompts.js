@@ -14,9 +14,11 @@ const BUTTON_LABELS = {
   brake: { keyboard: 'Ctrl', controller: 'L2', deck: 'L2' },
   navigate: { keyboard: 'Arrows', controller: 'D-pad', deck: 'D-pad' },
   select: { keyboard: 'Arrows', controller: 'D-pad', deck: 'D-pad' },
-  reroll: { keyboard: 'S', controller: 'Y', deck: 'Y' },
+  reroll: { keyboard: 'S', controller: 'X', deck: 'X' },
   delete: { keyboard: 'X', controller: 'Y', deck: 'Y' },
   consumables: { keyboard: '1/2', controller: 'D-pad L/R', deck: 'D-pad L/R' },
+  consumable1: { keyboard: '1', controller: 'D-pad L', deck: 'D-pad L' },
+  consumable2: { keyboard: '2', controller: 'D-pad R', deck: 'D-pad R' },
 };
 
 function queryHasDeckMode() {

@@ -59,7 +59,7 @@ LBH uses a four-field product build identifier:
 major.minor.public.commit
 ```
 
-For the current train, that means builds look like `0.2.1.<git-hash>`.
+For the current train, that means builds look like `0.2.2.<git-hash>`.
 
 - `0.2` is the current product era.
 - The third number is the public release train. It advances only when Greg calls
@@ -184,7 +184,10 @@ The release helper currently runs `npm run test:fast` before packaging because
 it is meant to be usable during active development. A public milestone should
 still refresh full build health before it is announced.
 
-`npm test` already includes the telemetry smoke suite, but keeping the focused telemetry command around is useful when diagnosing stack-status and embedded-runtime regressions without rerunning the whole harness.
+The telemetry smoke suite lives in the authority lane rather than the everyday
+core lane. Keep `npm run test:telemetry` or the authority lane around when
+diagnosing stack-status and embedded-runtime regressions without rerunning the
+whole harness.
 
 Alongside the version folder, the build also writes:
 

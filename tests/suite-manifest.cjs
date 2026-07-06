@@ -24,6 +24,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SimProtocol",
+    file: "sim-protocol.cjs",
+    lanes: ["fast", "core", "authority", "static", "full"],
+    browser: false,
+  },
+  {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
     lanes: ["static", "full"],

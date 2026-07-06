@@ -882,17 +882,18 @@ function _renderInventoryPanel(inv) {
   html += '</div>';
 
   // ---- Consumables ----
-  html += `<div class="inv-section"><div class="inv-header">consumables [1] [2]</div>`;
+  html += `<div class="inv-section"><div class="inv-header">consumables ${promptLabel('consumables', _promptOptions)}</div>`;
   for (let i = 0; i < inv.consumables.length; i++) {
     const globalIdx = 10 + i;
     const isSel = (sel === globalIdx);
     const item = inv.consumables[i];
     const rowStyle = inventorySelectionStyle(isSel);
+    const slotLabel = promptLabel(i === 0 ? 'consumable1' : 'consumable2', _promptOptions);
     if (item) {
       const action = isSel ? '<span class="inv-drop">[remove]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${inventoryItemColor(item)}">[${i + 1}] ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${inventoryItemColor(item)}">${slotLabel} ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
     } else {
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">[${i + 1}] — empty —</span></div>`;
+      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">${slotLabel} — empty —</span></div>`;
     }
   }
   html += '</div>';
