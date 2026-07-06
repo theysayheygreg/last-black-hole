@@ -43,7 +43,7 @@ reading stale health records or reconstructing status from `git log`.
 | Run result package | PARTIAL | Results view, control-plane persistence, and ledger-vs-salvage write-back are live; broader meta-loop polish remains |
 | Local build status | v0.2.2 source path VALIDATED / RELEASE BUILD NEEDED | `docs/project/BUILD-STATUS.md` records the 2026-07-06 main consistency pass: fast, core, renderer, title, perf, authority, controller, and meta-flow lanes passed; no current hash-named release artifact has been rebuilt yet |
 | Weekly playables | VALIDATION-GATED | Weekly workflow now runs `npm run test:fast` once before platform artifacts build; next weekly artifact still needs a successful scheduled/manual run |
-| Build health gate | STALE | Formal `BUILD-HEALTH.json` still records 2026-06-25; rerun `node scripts/build-health.cjs verify` after committing this source pass if the formal gate should be refreshed |
+| Build health gate | GREEN | Refreshed on 2026-07-06 for the v0.2 main consistency pass; use `node scripts/build-health.cjs status` for the exact current-commit relationship |
 
 ### What's Designed Or Partially Implemented
 

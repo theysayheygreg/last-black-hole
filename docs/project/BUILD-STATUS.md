@@ -58,6 +58,8 @@ Validation for this source snapshot:
   `Balance`, `Inhibitor`, and `SimProtocol`.
 - A deliberately misspelled suite name now fails loudly instead of producing a
   false-green no-op harness run.
+- `node scripts/build-health.cjs verify` refreshed the formal build-health
+  record after the core, renderer, perf, and title-prototype lanes passed.
 
 This pass also found and fixed a Home render crash:
 `homePromptOptions` was read before initialization, which stopped the frame loop
@@ -155,10 +157,10 @@ Artifacts:
 
 ## Known Caveats
 
-- `docs/project/BUILD-HEALTH.json` was last refreshed on 2026-06-25 and is
-  stale for the current v0.2.2 source pass until the formal verifier is rerun
-  after commit. Use `node scripts/build-health.cjs status` for the exact
-  current commit relationship.
+- `docs/project/BUILD-HEALTH.json` was refreshed on 2026-07-06 after the v0.2
+  main consistency pass. If current `HEAD` is only a health-record follow-up,
+  `node scripts/build-health.cjs status` should report current; after any later
+  code or doc commit, rerun the verifier.
 - Steam Deck deployment and Gaming Mode wiring exist, but the Deck path should
   follow local playtest health. A broken local game does not become useful
   because it launches on Deck.

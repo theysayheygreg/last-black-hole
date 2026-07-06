@@ -23,6 +23,8 @@
   stale camera state or wrap off-window wells into the visible fluid buffer.
 - Added harness guards for sim protocol normalization, unknown suite names,
   safer authority slingshot placement, and weekly playable fast validation.
+- Refreshed the formal build-health record after core, renderer, perf, and
+  title-prototype verification passed.
 
 ## 2026-07-05 — Ledger honesty pass
 
