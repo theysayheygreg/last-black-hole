@@ -50,6 +50,11 @@ const TARGET_ALIASES = {
   linux: 'linux',
   ipad: 'ipad',
   ios: 'ipad',
+  drop: 'drop',
+  cloudflare: 'drop',
+  'cloudflare-drop': 'drop',
+  cf: 'drop',
+  'cf-drop': 'drop',
 };
 
 function parseTargets(argv) {
@@ -93,6 +98,22 @@ function removeIfExists(target) {
 
 function copyIfExists(from, to) {
   if (fs.existsSync(from)) fs.cpSync(from, to, { recursive: true });
+}
+
+function removePlatformMetadata(target) {
+  if (!fs.existsSync(target)) return;
+
+  const stat = fs.statSync(target);
+  if (!stat.isDirectory()) return;
+
+  for (const entry of fs.readdirSync(target)) {
+    const filepath = path.join(target, entry);
+    if (entry === '.DS_Store' || entry === '__MACOSX') {
+      removeIfExists(filepath);
+      continue;
+    }
+    removePlatformMetadata(filepath);
+  }
 }
 
 function copyThreeRuntime(rendererDir) {
@@ -227,6 +248,71 @@ function zipDir(sourceDir, zipPath) {
   });
 }
 
+function zipDirContents(sourceDir, zipPath) {
+  if (process.platform === 'darwin') {
+    execFileSync('zip', ['-rq', zipPath, '.', '-x', '*.DS_Store', '__MACOSX/*'], {
+      cwd: sourceDir,
+      stdio: 'inherit',
+    });
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    const destPath = zipPath.replace(/'/g, "''");
+    execFileSync(
+      'powershell.exe',
+      [
+        '-NoLogo',
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Compress-Archive -Path * -DestinationPath '${destPath}' -Force`,
+      ],
+      {
+        cwd: sourceDir,
+        stdio: 'inherit',
+      }
+    );
+    return;
+  }
+
+  execFileSync('zip', ['-rq', zipPath, '.', '-x', '*.DS_Store', '__MACOSX/*'], {
+    cwd: sourceDir,
+    stdio: 'inherit',
+  });
+}
+
+function injectStaticSandboxBootstrap(indexPath, label) {
+  const markerPattern = /  <script type="module" src="src\/main\.js"[^>]*><\/script>/;
+  const source = fs.readFileSync(indexPath, 'utf8');
+  const match = source.match(markerPattern);
+  if (!match) {
+    throw new Error(`Could not find main script marker while preparing ${label}: ${indexPath}`);
+  }
+
+  const sandboxBootstrap = [
+    '  <script>',
+    '    (() => {',
+    '      const url = new URL(window.location.href);',
+    "      url.searchParams.set('localSandbox', '1');",
+    "      url.searchParams.delete('simServer');",
+    "      if (!url.searchParams.has('renderer')) url.searchParams.set('renderer', 'three');",
+    "      window.history.replaceState(null, '', url.toString());",
+    '      try {',
+    "        localStorage.removeItem('lbh.simServerUrl');",
+    '      } catch {}',
+    '    })();',
+    '  </script>',
+  ].join('\n');
+
+  fs.writeFileSync(indexPath, source.replace(match[0], `${sandboxBootstrap}\n${match[0]}`));
+
+  const checked = fs.readFileSync(indexPath, 'utf8');
+  if (!checked.includes("url.searchParams.set('localSandbox', '1')")) {
+    throw new Error(`Failed to inject localSandbox bootstrap into ${label}: ${indexPath}`);
+  }
+}
+
 function signMacApp(appPath) {
   execFileSync('codesign', ['--force', '--deep', '--sign', '-', appPath], {
     stdio: 'inherit',
@@ -264,6 +350,7 @@ function writeStartHere(targetRoot, results) {
     `- **Windows:** \`${PRODUCT_NAME}-win32-x64/${PRODUCT_NAME}.exe\``,
     `- **Linux / Steam Deck:** \`${PRODUCT_NAME}-linux-x64/${PRODUCT_NAME}\``,
     `- **Browser fallback:** \`${PRODUCT_SLUG}-web/index.html\``,
+    `- **Temporary Cloudflare share:** drop \`${PRODUCT_SLUG}-cloudflare-drop\` or its zip on Cloudflare Drop`,
     `- **iPad local install:** read \`${PRODUCT_SLUG}-ipad-webapp/README-IPAD-INSTALL.md\``,
     '',
     '## First launch flow',
@@ -314,6 +401,9 @@ function writeStartHere(targetRoot, results) {
   if (built.has('web')) {
     lines.push('- The web target is the source-of-truth runtime and safest fallback.');
   }
+  if (built.has('drop')) {
+    lines.push('- The Cloudflare Drop target is a static sandbox share build. It does not include the embedded authority stack.');
+  }
 
   fs.writeFileSync(path.join(targetRoot, 'START-HERE.md'), lines.join('\n') + '\n');
 }
@@ -338,6 +428,72 @@ function buildWeb(targetRoot, mode) {
     target: 'web',
     outputDir: targetRoot,
     artifact: `${PRODUCT_SLUG}-web`,
+    status: 'built',
+  };
+}
+
+function buildCloudflareDrop(targetRoot, mode) {
+  const dropDir = path.join(targetRoot, `${PRODUCT_SLUG}-cloudflare-drop`);
+  removeIfExists(dropDir);
+  ensureDir(dropDir);
+
+  copyWebRuntime(dropDir, mode);
+  injectStaticSandboxBootstrap(path.join(dropDir, 'index.html'), 'Cloudflare Drop index');
+  injectStaticSandboxBootstrap(path.join(dropDir, 'index-a.html'), 'Cloudflare Drop debug index');
+
+  fs.writeFileSync(
+    path.join(dropDir, 'CLOUDFLARE-DROP.md'),
+    [
+      '# Cloudflare Drop Build',
+      '',
+      'This folder is prepared for Cloudflare Drop or Cloudflare Pages drag-and-drop sharing.',
+      '',
+      '## Share it',
+      '',
+      '1. Run `npm run release:drop` from a committed source tree.',
+      `2. Open https://www.cloudflare.com/drop/ and drop either this folder or \`${PRODUCT_SLUG}-cloudflare-drop-*.zip\`.`,
+      '3. Copy the generated URL and send it to testers.',
+      '',
+      'Cloudflare Drop links are temporary unless you claim them. Treat them as quick social/playtest links, not release channels.',
+      '',
+      '## Runtime shape',
+      '',
+      '- This is a static browser sandbox build.',
+      '- It forces `localSandbox=1` before the game boots.',
+      '- It clears remembered local or remote sim URLs.',
+      '- It defaults to the Three renderer.',
+      '- It does not run the Node control plane or authoritative sim.',
+      '',
+      'Use the desktop, Steam Deck, itch downloadable, or Steam targets for embedded-authority play.',
+      '',
+    ].join('\n')
+  );
+  removePlatformMetadata(dropDir);
+
+  const buildId = buildIdForMode(mode, BUILD_VERSION);
+  const zipName = `${PRODUCT_SLUG}-cloudflare-drop-${buildId}.zip`;
+  const zipPath = path.join(BUILD_ROOT, zipName);
+  removeIfExists(zipPath);
+  zipDirContents(dropDir, zipPath);
+
+  const info = makeBuildInfo({
+    target: 'drop',
+    mode,
+    entrypointSource: 'index-a.html',
+    entrypointArtifact: 'index.html',
+    artifact: `${PRODUCT_SLUG}-cloudflare-drop/`,
+    zipArtifact: zipName,
+    hosting: 'Cloudflare Drop / Cloudflare Pages drag-and-drop',
+    runtimeMode: 'local-sandbox',
+    authority: 'none',
+  });
+  writeJson(path.join(targetRoot, 'BUILD-INFO-drop.json'), info);
+
+  return {
+    target: 'drop',
+    outputDir: targetRoot,
+    artifact: `${PRODUCT_SLUG}-cloudflare-drop`,
+    zipArtifact: zipName,
     status: 'built',
   };
 }
@@ -563,12 +719,17 @@ async function main() {
     results.push(buildWeb(targetRoot, mode));
   }
 
+  if (targets.includes('drop')) {
+    console.log('Building Cloudflare Drop artifact...');
+    results.push(buildCloudflareDrop(targetRoot, mode));
+  }
+
   if (targets.includes('ipad')) {
     console.log('Building ipad web-app artifact...');
     results.push(buildIpadWebApp(targetRoot, mode));
   }
 
-  for (const target of targets.filter((item) => !['web', 'ipad'].includes(item))) {
+  for (const target of targets.filter((item) => !['web', 'drop', 'ipad'].includes(item))) {
     console.log(`Building ${target} desktop artifact...`);
     try {
       results.push(await buildElectronTarget(targetRoot, target, mode));

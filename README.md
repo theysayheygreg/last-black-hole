@@ -69,6 +69,7 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 | Packaged desktop | Friend/tester handoff target | Open the platform artifact and read `START-HERE.md` |
 | iPad / iOS | Native Apple-platform bench + controller wrapper target | `npm run build:ipad` for Safari install, `npm run ios:build:sim` for native simulator |
 | Browser sandbox | Debug/demo fallback | `npm run stack:sandbox`; not product play |
+| Cloudflare Drop | Temporary browser-share lane | `npm run release:drop`, then drop the zip or folder on Cloudflare Drop; sandboxed, not full authority |
 | itch.io HTML5 | Planned public demo lane | Uses a sandboxed web artifact, not the full authority stack |
 | Steam Early Access | Planned storefront lane | Uses desktop depots; not public yet |
 
@@ -280,8 +281,10 @@ The browser suites use `tests/browser-driver.cjs`, a small Chrome DevTools Proto
 
 ```sh
 npm run build:web
+npm run build:drop
 npm run build:desktop
 npm run build:release
+npm run release:drop
 npm run release:internal
 npm run release:public
 npm run release:check
@@ -319,12 +322,13 @@ commit is becoming a real handoff/push build.
 
 ```sh
 npm run deploy:deck           # local Steam Deck copy over Tailscale/SSH
+npm run release:drop          # temporary Cloudflare Drop static sandbox build
 npm run deploy:itch           # itch.io HTML5 staging + butler push
 npm run deploy:steam          # SteamPipe content/VDF package prep
 npm run deploy:steam:upload   # SteamCMD upload when Steamworks config is ready
 ```
 
-See [Deployment Pipelines](docs/reference/DEPLOYMENT-PIPELINES.md) for the important target split: Deck wants a Linux desktop package, itch HTML5 wants a self-contained sandbox artifact, and Steam wants desktop depots rather than the raw web folder.
+See [Deployment Pipelines](docs/reference/DEPLOYMENT-PIPELINES.md) for the important target split: Deck wants a Linux desktop package, Cloudflare Drop and itch HTML5 want self-contained sandbox artifacts, and Steam wants desktop depots rather than the raw web folder.
 
 ## Project Structure
 

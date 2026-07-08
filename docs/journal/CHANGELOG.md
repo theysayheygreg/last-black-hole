@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-07-08 — Cloudflare Drop share build target
+
+- Added `npm run build:drop` and `npm run release:drop` for temporary
+  Cloudflare Drop / Pages drag-and-drop browser sharing.
+- The Drop target builds a content-rooted zip, forces `localSandbox=1`, clears
+  stale sim-server browser state, defaults to the Three renderer, and records
+  that it is not an embedded-authority build.
+- `release:drop` now goes through the release helper so hash-named Drop builds
+  require committed tracked source unless explicitly overridden for a probe.
+- Added a fast/static harness guard that builds the Drop artifact and checks
+  the share notes, sandbox bootstrap, Three runtime copy, build metadata, and
+  archive root shape.
+- Updated README and deployment/build docs so Cloudflare Drop sits beside itch
+  as a quick sandbox-share lane rather than a durable product release channel.
+
 ## 2026-07-06 — v0.2 main consistency pass
 
 - Fixed a Home render crash caused by reading `homePromptOptions` before it was
