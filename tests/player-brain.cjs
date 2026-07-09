@@ -17,6 +17,25 @@ async function post(path, body) {
   return { status: response.status, body: await response.json() };
 }
 
+async function postAuthorized(path, body, authority) {
+  const response = await fetch(`${SIM_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      ...body,
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+    }),
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 async function run() {
   const runner = new TestRunner("PlayerBrain");
 
@@ -41,6 +60,7 @@ async function run() {
   });
 
   await startSimServer(SIM_PORT);
+  let playerAuthority = null;
   try {
     await runner.run("Remote join hydrates brain from durable profile upgrades", async () => {
       const start = await post("/session/start", {
@@ -63,6 +83,7 @@ async function run() {
         },
       });
       assert(join.status === 200, `Expected /join 200, got ${join.status}`);
+      playerAuthority = join.body.authority;
       const player = join.body.player;
       assert(player.brain, "Expected server player brain");
       assert(Math.abs(player.brain.thrustScale - (0.7 * 1.3)) < 1e-6, `Unexpected hydrated thrustScale ${player.brain.thrustScale}`);
@@ -72,7 +93,7 @@ async function run() {
     });
 
     await runner.run("Equipping an artifact refreshes the live brain", async () => {
-      const update = await post("/join", {
+      const update = await postAuthorized("/join", {
         clientId: "brain-client",
         profileSnapshot: {
           upgrades: { thrust: 2, coupling: 1, drag: 1, sensor: 3, hull: 2 },
@@ -88,7 +109,7 @@ async function run() {
           },
           null,
         ],
-      });
+      }, playerAuthority);
       assert(update.status === 200, `Expected join update 200, got ${update.status}`);
       const player = update.body.player;
       assert(player.brain.wellResistScale > 1.0, `Expected wellResistScale > 1, got ${player.brain.wellResistScale}`);

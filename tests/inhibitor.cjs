@@ -14,8 +14,9 @@ const {
 
 const SIM_PORT = Number(process.env.LBH_INHIBITOR_SIM_PORT || 8816);
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
-const HOST_ID = "inhibitor-host";
 const CLIENT_ID = "inhibitor-human";
+let authority = null;
+let commandSeq = 0;
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
@@ -25,11 +26,24 @@ function worldDistance(aX, aY, bX, bY, worldScale = 5) {
   return Math.hypot(dx, dy);
 }
 
-async function request(path, body = null) {
+async function request(path, body = null, { authorized = false } = {}) {
+  const envelope = authorized ? {
+    runId: authority.runId,
+    playerId: authority.playerId,
+    commandCredential: authority.commandCredential,
+    commandSeq: ++commandSeq,
+  } : {};
   const response = await fetch(`${SIM_URL}${path}`, body == null ? undefined : {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    headers: {
+      "content-type": "application/json",
+      ...(authorized ? {
+        "x-lbh-command-credential": authority.commandCredential,
+        "x-lbh-player-id": authority.playerId,
+        "x-lbh-run-id": authority.runId,
+      } : {}),
+    },
+    body: JSON.stringify({ ...body, ...envelope }),
   });
   const json = await response.json();
   if (!response.ok || json.ok === false) {
@@ -43,19 +57,26 @@ async function getSnapshot() {
 }
 
 async function startRun({ hullType = "drifter", seed = 4242 } = {}) {
-  await request("/session/start", {
+  const started = await request("/session/start", {
     mapId: "shallows",
-    requesterId: HOST_ID,
+    requesterId: CLIENT_ID,
     requesterName: "Inhibitor Harness",
     maxPlayers: 1,
     seed,
-  });
+  }, { authorized: Boolean(authority) });
   const joined = await request("/join", {
+    runId: started.session.runId,
     clientId: CLIENT_ID,
     name: "Inhibitor Pilot",
-    hullType,
+    hullType: "drifter",
+    joinTicket: started.joinTicket,
   });
+  authority = joined.authority;
+  commandSeq = authority.lastCommandSeq || 0;
   assert(joined.player?.clientId === CLIENT_ID, "Expected harness player to join");
+  if (hullType !== "drifter") {
+    await request("/debug/player-state", { clientId: CLIENT_ID, hullType });
+  }
   return joined.player;
 }
 
@@ -84,14 +105,13 @@ async function postDebugPortalState(body) {
 
 async function postInput(body) {
   return request("/input", {
-    clientId: CLIENT_ID,
     seq: Date.now(),
     moveX: 0,
     moveY: 0,
     thrust: 0,
     brake: 0,
     ...body,
-  });
+  }, { authorized: true });
 }
 
 async function run() {

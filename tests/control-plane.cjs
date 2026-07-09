@@ -50,6 +50,28 @@ async function postJson(url, body) {
   return json;
 }
 
+async function postAuthorized(url, body, authority, commandSeq) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      ...body,
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+      commandSeq,
+    }),
+  });
+  const json = await response.json();
+  if (!response.ok || json.ok === false) throw new Error(json.error || `POST ${url} failed (${response.status})`);
+  return json;
+}
+
 async function waitFor(fn, { timeout = 5000, interval = 100 } = {}) {
   const deadline = Date.now() + timeout;
   let lastError = null;
@@ -69,6 +91,7 @@ async function run() {
   const runner = new TestRunner("ControlPlane");
   const profileId = `profile-${crypto.randomUUID()}`;
   const clientId = `client-${crypto.randomUUID()}`;
+  let playerAuthority = null;
 
   await startControlPlane(CONTROL_PORT);
   await startSimServer(SIM_PORT, {
@@ -91,7 +114,7 @@ async function run() {
     });
 
     await runner.run("Join hydrates profile through external control plane", async () => {
-      await postJson(`${SIM_URL}/join`, {
+      const joined = await postJson(`${SIM_URL}/join`, {
         clientId,
         profileId,
         name: "Remote Pilot",
@@ -105,6 +128,7 @@ async function run() {
           shipType: "hauler",
         },
       });
+      playerAuthority = joined.authority;
 
       const profileBody = await waitFor(async () => {
         const body = await getJson(`${CONTROL_URL}/profile?profileId=${encodeURIComponent(profileId)}`);
@@ -128,7 +152,7 @@ async function run() {
     });
 
     await runner.run("Leave writes outcome back without sim-local store ownership", async () => {
-      await postJson(`${SIM_URL}/leave`, { clientId });
+      await postAuthorized(`${SIM_URL}/leave`, { clientId }, playerAuthority, 1);
 
       const health = await waitFor(async () => {
         const body = await getJson(`${CONTROL_URL}/health`);

@@ -61,8 +61,10 @@ async function run() {
       });
       assert(start.status === 200 && start.body.ok === true, `Expected start success, got ${start.status}`);
       const join = await postJson("/join", {
+        runId: start.body.session.runId,
         clientId: "bounded-growth-test",
         name: "Bounded Growth Test",
+        joinTicket: start.body.joinTicket,
       });
       assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
 

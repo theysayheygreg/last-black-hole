@@ -105,7 +105,12 @@ async function run() {
       });
       assert(start.status === 200 && start.body.ok === true, `Expected session start, got ${start.status}`);
 
-      const join = await postJson("/join", { clientId: "item-shape-test", name: "Item Shape Test" });
+      const join = await postJson("/join", {
+        runId: start.body.session.runId,
+        clientId: "item-shape-test",
+        name: "Item Shape Test",
+        joinTicket: start.body.joinTicket,
+      });
       assert(join.status === 200 && join.body.ok === true, `Expected player join, got ${join.status}`);
 
       const before = await waitForSnapshot((snapshot) => snapshot.world?.wrecks?.some((wreck) => wreck.loot?.length));

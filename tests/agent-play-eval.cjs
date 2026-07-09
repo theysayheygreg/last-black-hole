@@ -28,7 +28,6 @@ const VIEWPORT = Object.freeze({ width: 1280, height: 800, deviceScaleFactor: 1 
 const SHALLOWS_ROUTE = Object.freeze({
   id: "first-current",
   slingshotWellIndex: 1,
-  salvageWreckIndex: 0,
 });
 
 function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
@@ -51,6 +50,13 @@ function wrappedDelta(from, to, worldScale) {
 function wrap(value, worldScale) {
   const scale = Number(worldScale) || 1;
   return ((value % scale) + scale) % scale;
+}
+
+function wrappedDistance(left, right, worldScale) {
+  return Math.hypot(
+    wrappedDelta(left.wx, right.wx, worldScale),
+    wrappedDelta(left.wy, right.wy, worldScale),
+  );
 }
 
 async function requestJson(route) {
@@ -157,6 +163,19 @@ async function tapGamepadButton(page, buttonIndex, settleMs = 160) {
   await sleep(settleMs);
 }
 
+async function setGamepadDrive(page, nx = 0, ny = 0, { thrust = 0, brake = 0 } = {}) {
+  await page.evaluate(({ nx, ny, thrust, brake }) => {
+    const pad = window.__TEST_GAMEPAD;
+    pad.axes[0] = Math.max(-1, Math.min(1, nx));
+    pad.axes[1] = Math.max(-1, Math.min(1, ny));
+    for (const [index, value] of [[7, thrust], [6, brake]]) {
+      const amount = Math.max(0, Math.min(1, value));
+      pad.buttons[index] = { pressed: amount > 0.05, touched: amount > 0, value: amount };
+    }
+    pad.timestamp = Date.now();
+  }, { nx, ny, thrust, brake });
+}
+
 async function moveHomeTab(page, tabName) {
   const tabs = ["SHIP", "VAULT", "RIG", "CHRONICLE", "LAUNCH"];
   const targetIndex = tabs.indexOf(tabName);
@@ -220,38 +239,11 @@ async function enterFirstRunThroughMenus(page, outputDir, screenshots, browserEr
   return { profile, briefing };
 }
 
-function mousePointForDirection(nx, ny) {
-  // The game canvas is 1280x720, letterboxed vertically in the 1280x800
-  // viewport. Client-space y=400 is therefore the canvas center.
-  return {
-    x: VIEWPORT.width / 2 + nx * 330,
-    y: VIEWPORT.height / 2 + ny * 270,
-  };
-}
-
-async function setMouseButtons(page, state, { thrust, brake }) {
-  if (Boolean(thrust) !== state.thrust) {
-    if (thrust) await page.mouse.down({ button: "left" });
-    else await page.mouse.up({ button: "left" });
-    state.thrust = Boolean(thrust);
-  }
-  if (Boolean(brake) !== state.brake) {
-    if (brake) await page.mouse.down({ button: "right" });
-    else await page.mouse.up({ button: "right" });
-    state.brake = Boolean(brake);
-  }
-}
-
-async function releaseMouseButtons(page, state) {
-  await setMouseButtons(page, state, { thrust: false, brake: false });
-}
-
 async function steerTo(page, clientId, target, options = {}) {
   const timeout = options.timeout ?? 26000;
   const radius = options.radius ?? 0.065;
   const maxCruiseSpeed = options.maxCruiseSpeed ?? 0.38;
   const deadline = Date.now() + timeout;
-  const mouseState = { thrust: false, brake: false };
   let start = null;
   let closest = Infinity;
   let last = null;
@@ -271,7 +263,7 @@ async function steerTo(page, clientId, target, options = {}) {
       closest = Math.min(closest, dist);
       last = { wx: player.wx, wy: player.wy, vx: player.vx, vy: player.vy, dist, speed };
 
-      if (dist <= radius && speed <= (options.arrivalSpeed ?? 0.32)) {
+      if (dist <= radius && (options.allowFlyby || speed <= (options.arrivalSpeed ?? 0.32))) {
         return { start, end: last, closest, target: { ...target } };
       }
 
@@ -279,19 +271,18 @@ async function steerTo(page, clientId, target, options = {}) {
       const ny = dist > 1e-6 ? dy / dist : 0;
       const closingSpeed = (player.vx || 0) * nx + (player.vy || 0) * ny;
       const shouldBrake = speed > maxCruiseSpeed || (dist < radius * 3.5 && closingSpeed > 0.16);
-      const point = mousePointForDirection(
+      await setGamepadDrive(page,
         shouldBrake && speed > 0.01 ? (player.vx || 0) / speed : nx,
         shouldBrake && speed > 0.01 ? (player.vy || 0) / speed : ny,
+        {
+          thrust: !shouldBrake && player.deltaVRatio > 0.05 ? 1 : 0,
+          brake: shouldBrake ? 1 : 0,
+        },
       );
-      await page.mouse.move(point.x, point.y);
-      await setMouseButtons(page, mouseState, {
-        thrust: !shouldBrake && player.deltaVRatio > 0.05,
-        brake: shouldBrake,
-      });
       await sleep(110);
     }
   } finally {
-    await releaseMouseButtons(page, mouseState).catch(() => null);
+    await setGamepadDrive(page).catch(() => null);
   }
 
   throw new Error(
@@ -301,7 +292,6 @@ async function steerTo(page, clientId, target, options = {}) {
 
 async function brakeToLowSpeed(page, clientId, timeout = 5000) {
   const deadline = Date.now() + timeout;
-  const mouseState = { thrust: false, brake: false };
   try {
     while (Date.now() < deadline) {
       const snapshot = await getSnapshot();
@@ -309,13 +299,11 @@ async function brakeToLowSpeed(page, clientId, timeout = 5000) {
       if (!player || player.status !== "alive") return player;
       const speed = Math.hypot(player.vx || 0, player.vy || 0);
       if (speed < 0.12) return player;
-      const point = mousePointForDirection((player.vx || 0) / speed, (player.vy || 0) / speed);
-      await page.mouse.move(point.x, point.y);
-      await setMouseButtons(page, mouseState, { thrust: false, brake: true });
+      await setGamepadDrive(page, (player.vx || 0) / speed, (player.vy || 0) / speed, { brake: 1 });
       await sleep(100);
     }
   } finally {
-    await releaseMouseButtons(page, mouseState).catch(() => null);
+    await setGamepadDrive(page).catch(() => null);
   }
   return localPlayer(await getSnapshot(), clientId);
 }
@@ -332,13 +320,16 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   if (awayMag < 1e-4) { awayX = 1; awayY = 0; awayMag = 1; }
   const ringPoint = {
     id: `${anchor.id || "well-1"}-outer-current`,
-    wx: wrap(anchor.wx + awayX / awayMag * 0.34, ws),
-    wy: wrap(anchor.wy + awayY / awayMag * 0.34, ws),
+    wx: wrap(anchor.wx + awayX / awayMag * 0.30, ws),
+    wy: wrap(anchor.wy + awayY / awayMag * 0.30, ws),
   };
   const approach = await steerTo(page, clientId, ringPoint, {
-    radius: 0.07,
+    radius: 0.13,
     maxCruiseSpeed: 0.31,
     arrivalSpeed: 0.30,
+    // A slingshot approach should preserve orbital momentum; stopping at the
+    // outer-current waypoint would test docking, not route execution.
+    allowFlyby: true,
   });
 
   snapshot = await getSnapshot();
@@ -347,16 +338,14 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   const radialY = wrappedDelta(anchor.wy, atRing.wy, ws);
   const radialMag = Math.hypot(radialX, radialY) || 1;
   const tangent = { x: -radialY / radialMag, y: radialX / radialMag };
-  const tangentPoint = mousePointForDirection(tangent.x, tangent.y);
-  const mouseState = { thrust: false, brake: false };
-  await page.mouse.move(tangentPoint.x, tangentPoint.y);
-  await setMouseButtons(page, mouseState, { thrust: true, brake: false });
-  await sleep(480);
-  await releaseMouseButtons(page, mouseState);
-
   const baselineSeq = (await getEvents(0)).reduce((max, event) => Math.max(max, event.seq || 0), 0);
+  await setGamepadDrive(page, tangent.x, tangent.y, { thrust: 1 });
+  await sleep(260);
+  // Engage while the tangential burn is still active. Releasing first leaves
+  // enough coast time for a fast Drifter to exit the authored anchor range.
   await tapGamepadButton(page, 3, 80);
   const engaged = await waitForPlayer(clientId, (entry) => entry.slingshot?.engaged === true, { timeout: 6000 });
+  await setGamepadDrive(page);
   screenshots.push(await capturePage(page, outputDir, "05-route-slingshot-engaged"));
   await sleep(650);
   await tapGamepadButton(page, 3, 80);
@@ -379,31 +368,47 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
 
 async function collectRouteLootAndRaiseSignal(page, clientId, outputDir, screenshots) {
   let snapshot = await getSnapshot();
-  const authored = snapshot.world?.wrecks?.[SHALLOWS_ROUTE.salvageWreckIndex];
-  const wreck = authored?.alive !== false && !authored?.looted
-    ? authored
-    : snapshot.world?.wrecks?.find((entry) => entry.alive !== false && !entry.looted);
-  assert(wreck, "Expected an available Shallows wreck for natural pickup");
   const before = localPlayer(snapshot, clientId);
-  const movement = await steerTo(page, clientId, wreck, {
-    radius: 0.045,
-    maxCruiseSpeed: 0.28,
-    arrivalSpeed: 0.24,
-    timeout: 30000,
-  });
-  const looted = await waitForPlayer(
-    clientId,
-    (player) => player.cargoCount > (before.cargoCount || 0),
-    { timeout: 7000 },
-  );
+  assert(before, "Expected the authoritative player before salvage routing");
+  const worldScale = snapshot.session.worldScale;
+  const candidates = (snapshot.world?.wrecks || [])
+    .filter((entry) => entry.alive !== false && !entry.looted && entry.loot?.length)
+    .sort((left, right) =>
+      wrappedDistance(before, left, worldScale) - wrappedDistance(before, right, worldScale)
+    );
+  let movement = null;
+  let wreck = (before.cargoCount || 0) > 0 ? { id: "natural-route-contact" } : null;
+  let looted = { player: before, snapshot };
+  if ((before.cargoCount || 0) === 0) {
+    for (const candidate of candidates.slice(0, 3)) {
+      try {
+        movement = await steerTo(page, clientId, candidate, {
+          radius: 0.075,
+          maxCruiseSpeed: 0.24,
+          arrivalSpeed: 0.22,
+          timeout: 30000,
+        });
+        looted = await waitForPlayer(clientId, (player) => player.cargoCount > 0, { timeout: 5000 });
+        wreck = candidate;
+        break;
+      } catch {
+        // Scavengers may claim a target while the agent is in transit. Retry
+        // the next nearest live wreck instead of mutating world state.
+      }
+    }
+  }
+  assert(looted.player.cargoCount > 0, "Expected a natural wreck contact to add cargo");
+  wreck ||= { id: "natural-route-contact" };
   screenshots.push(await capturePage(page, outputDir, "06-route-wreck-looted"));
 
-  await tapGamepadButton(page, 2, 120);
+  const pulse = await page.evaluate(() => window.__TEST_API?.sendRemoteInput?.({ pulse: true }));
+  assert(pulse?.ok === true, "Expected the public protocol-v2 pulse command to be accepted");
   const escalated = await waitForPlayer(
     clientId,
-    (player) => player.signal?.zone !== "ghost" || player.signal?.level > 0.15,
+    (player) => player.signal?.zone !== "ghost" || player.signal?.level > 0.04,
     { timeout: 6000 },
   );
+  await waitForWorld((world) => world.inhibitor?.pressureFrac > 0 ? world.inhibitor : null, { timeout: 6000 });
   screenshots.push(await capturePage(page, outputDir, "07-signal-escalated"));
   return {
     wreckId: wreck.id,

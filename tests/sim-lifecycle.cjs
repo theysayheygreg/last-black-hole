@@ -33,6 +33,26 @@ async function postJson(port, route, payload) {
   return { status: response.status, body };
 }
 
+async function postAuthorized(port, route, payload, authority, commandSeq) {
+  const response = await fetch(`http://127.0.0.1:${port}${route}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      ...payload,
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+      commandSeq,
+    }),
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 async function waitForShutdown(port, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -111,8 +131,10 @@ async function run() {
         `Expected idle loop ${idle.body.idleState?.idleTickHz}, got ${idle.body.idleState?.currentLoopTickHz}`);
 
       const join = await postJson(JOIN_PORT, "/join", {
+        runId: start.body.session.runId,
         clientId: "loop-host",
         name: "Loop Host",
+        joinTicket: start.body.joinTicket,
       });
       assert(join.status === 200, `Expected /join 200, got ${join.status}`);
 
@@ -158,8 +180,10 @@ async function run() {
       assert(start.status === 200, `Expected /session/start 200, got ${start.status}`);
 
       const join = await postJson(TERMINAL_PORT, "/join", {
+        runId: start.body.session.runId,
         clientId: "terminal-host",
         name: "Terminal Host",
+        joinTicket: start.body.joinTicket,
       });
       assert(join.status === 200, `Expected /join 200, got ${join.status}`);
 
@@ -187,7 +211,13 @@ async function run() {
       });
       assert(input.status === 409, `Expected ended session input to reject with 409, got ${input.status}`);
 
-      const leave = await postJson(TERMINAL_PORT, "/leave", { clientId: "terminal-host" });
+      const leave = await postAuthorized(
+        TERMINAL_PORT,
+        "/leave",
+        { clientId: "terminal-host" },
+        join.body.authority,
+        1
+      );
       assert(leave.status === 200, `Expected leave after terminal session 200, got ${leave.status}`);
       assert(leave.body.ok === true, "Expected leave after terminal session to succeed");
       const afterLeave = await fetchJson(TERMINAL_PORT, "/health");
@@ -227,8 +257,10 @@ async function run() {
       });
       assert(start.status === 200, `Expected /session/start 200, got ${start.status}`);
       const join = await postJson(MATCH_CAP_PORT, "/join", {
+        runId: start.body.session.runId,
         clientId: "cap-host",
         name: "Cap Host",
+        joinTicket: start.body.joinTicket,
       });
       assert(join.status === 200, `Expected /join 200, got ${join.status}`);
 
