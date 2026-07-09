@@ -176,6 +176,72 @@ async function run() {
     assert(stats.selectedCount === 1, `Expected selected count 1, got ${JSON.stringify(stats)}`);
   });
 
+  await runner.run("Returns mutation-safe handles and immediately reflects lifecycle changes", async () => {
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(fakeQueryRuntime(), { tick: 7, reason: "query-handle-test" });
+
+    const playerHandle = mirror.createBody({
+      id: "player:query-pilot",
+      category: "player",
+      wx: 2,
+      wy: 2,
+      radius: 0.035,
+      collisionMask: BODY_MASKS.PLAYER,
+      interactionMask: [BODY_MASKS.PICKUP, BODY_MASKS.PORTAL],
+      ownerId: "query-pilot",
+      replicationLane: "self",
+      lifecycle: { state: "alive" },
+    }, { tick: 8 });
+    const playerHits = mirror.queryCircle(2, 2, 0.01, { collisionMask: BODY_MASKS.PLAYER });
+    assert(playerHits.length === 1 && playerHits[0].handle.epoch === playerHandle.epoch,
+      `Expected query hit to expose epoch-aware handle, got ${JSON.stringify(playerHits[0]?.handle)}`);
+
+    mirror.updateBody(playerHits[0].handle, { wx: 2.5, wy: 2.5 }, { tick: 9 });
+    const movedHits = mirror.queryCircle(2.5, 2.5, 0.01, { collisionMask: BODY_MASKS.PLAYER });
+    assert(movedHits.length === 1 && movedHits[0].id === "player:query-pilot",
+      "Expected a query-returned handle to mutate the indexed player body");
+
+    const wreckHit = mirror.nearest({
+      wx: 2,
+      wy: 2,
+      radius: 0.2,
+      limit: 4,
+      interactionMask: BODY_MASKS.PICKUP,
+      lifecycleStates: ["alive"],
+    }).find((hit) => hit.id === "wreck:pickup-near");
+    assert(wreckHit?.id === "wreck:pickup-near", `Expected nearest live wreck, got ${wreckHit?.id}`);
+    mirror.setLifecycle(wreckHit.handle, "dead", { tick: 10 });
+    const afterDeath = mirror.nearest({
+      wx: 2,
+      wy: 2,
+      radius: 0.2,
+      limit: 2,
+      interactionMask: BODY_MASKS.PICKUP,
+      lifecycleStates: ["alive"],
+    });
+    assert(afterDeath.every((hit) => hit.id !== wreckHit.id),
+      "Expected lifecycle mutation to update spatial query filtering immediately");
+
+    const portalHit = mirror.nearest({
+      wx: 2,
+      wy: 2,
+      radius: 1,
+      limit: 1,
+      collisionMask: BODY_MASKS.PORTAL,
+      lifecycleStates: ["alive"],
+    })[0];
+    assert(portalHit?.id === "portal:open", `Expected nearest open portal, got ${portalHit?.id}`);
+    mirror.removeBody(portalHit.handle, { tick: 11 });
+    assert(mirror.nearest({
+      wx: 2,
+      wy: 2,
+      radius: 1,
+      limit: 4,
+      collisionMask: BODY_MASKS.PORTAL,
+      lifecycleStates: ["alive"],
+    }).length === 0, "Expected removed portal to leave load-bearing queries immediately");
+  });
+
   await runner.run("Matches legacy nearest well, wreck, and portal selection", async () => {
     const runtime = fakeQueryRuntime();
     const origin = { wx: 2, wy: 2 };
@@ -291,7 +357,12 @@ async function run() {
       const join = await getJson("/join", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ clientId: "ballpark-query-test", name: "Ballpark Query Test" }),
+        body: JSON.stringify({
+          runId: start.body.session.runId,
+          clientId: "ballpark-query-test",
+          joinTicket: start.body.joinTicket,
+          name: "Ballpark Query Test",
+        }),
       });
       assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
 

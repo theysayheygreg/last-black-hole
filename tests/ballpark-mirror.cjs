@@ -154,6 +154,175 @@ async function run() {
       `Expected collector to resolve duplicate source ids before registry insertion, got ${mirror.registry.stats().duplicateIdRejects}`);
   });
 
+  await runner.run("Owns deterministic lifecycle identity for load-bearing body families", async () => {
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(fakeRuntime(), { tick: 42, reason: "identity-test" });
+    const ids = ["player:greg", "wreck:vault", "portal:exit", "scavenger:scav-a", "well:maw"];
+    const handles = new Map(ids.map((id) => [id, mirror.getHandleById(id)]));
+
+    for (const id of ids) {
+      const identity = mirror.getIdentity(handles.get(id));
+      assert(identity?.id === id && identity.incarnation === 1,
+        `Expected first incarnation for ${id}, got ${JSON.stringify(identity)}`);
+      assert(identity.handle.epoch === mirror.stats().identities.epoch,
+        `Expected ${id} handle to carry the live Ballpark epoch`);
+    }
+
+    mirror.updateBody(handles.get("player:greg"), { wx: 0.8, wy: 0.7 }, { tick: 43 });
+    mirror.updateBody(handles.get("scavenger:scav-a"), { wx: 3.25, wy: 3.1 }, { tick: 43 });
+    mirror.updateBody(handles.get("well:maw"), { mass: 3 }, { tick: 43 });
+    mirror.setLifecycle(handles.get("wreck:vault"), "dying", { tick: 44 });
+    mirror.setLifecycle(handles.get("wreck:vault"), "dead", { tick: 45 });
+    mirror.setLifecycle(handles.get("portal:exit"), "dying", { tick: 44 });
+
+    assert(Math.abs(mirror.getBody(handles.get("player:greg")).wx - 0.8) <= 1e-12,
+      "Expected epoch-aware player handle to resolve its mutation");
+    assert(mirror.getBody(handles.get("well:maw")).mass === 3,
+      "Expected well mutation to remain attached to its stable identity");
+    assert(mirror.listBodies({ category: "wreck", lifecycleStates: ["dead"] })
+      .some((body) => body.id === "wreck:vault"),
+    "Expected lifecycle-filtered body listing to include the transitioned wreck");
+    assert(mirror.listBodies({ category: "portal", lifecycleStates: ["alive"] }).length === 0,
+      "Expected the dying portal to leave alive-only body listings");
+
+    const removed = mirror.removeBody(handles.get("wreck:vault"), { tick: 46 });
+    const retired = mirror.getIdentity(handles.get("wreck:vault"));
+    assert(removed.id === "wreck:vault" && retired?.state === "removed" && retired.removedTick === 46,
+      `Expected queryable wreck tombstone, got ${JSON.stringify(retired)}`);
+
+    const replacement = mirror.createBody({
+      id: "wreck:replacement",
+      category: "wreck",
+      wx: 1.1,
+      wy: 1.1,
+      radius: 0.045,
+      collisionMask: BODY_MASKS.WRECK,
+      interactionMask: BODY_MASKS.PICKUP,
+      lifecycle: { state: "alive" },
+      data: { sourceId: "replacement" },
+    }, { tick: 46 });
+    assert(replacement.slot === handles.get("wreck:vault").slot,
+      `Expected deterministic recycled slot ${handles.get("wreck:vault").slot}, got ${replacement.slot}`);
+    assert(replacement.generation === handles.get("wreck:vault").generation + 1,
+      `Expected recycled generation to advance, got ${replacement.generation}`);
+    assert(mirror.getIdentity(handles.get("wreck:vault")).key !== mirror.getIdentity(replacement).key,
+      "Expected retired and replacement bodies to keep distinct lifecycle identities");
+    const identities = mirror.listIdentities({ includeRetired: true });
+    const sortedKeys = [...identities]
+      .sort((a, b) => a.handle.epoch - b.handle.epoch || a.handle.slot - b.handle.slot
+        || a.handle.generation - b.handle.generation)
+      .map((entry) => entry.key);
+    assert(JSON.stringify(identities.map((entry) => entry.key)) === JSON.stringify(sortedKeys),
+      "Expected lifecycle identity listing to be deterministic by epoch, slot, and generation");
+  });
+
+  await runner.run("Respawns terminal ids as new incarnations and rejects backward lifecycle", async () => {
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(fakeRuntime(), { tick: 42, reason: "respawn-test" });
+    const portalHandle = mirror.getHandleById("portal:exit");
+    mirror.setLifecycle(portalHandle, "dying", { tick: 43 });
+    mirror.setLifecycle(portalHandle, "dead", { tick: 44 });
+
+    let backwardError = null;
+    try {
+      mirror.setLifecycle(portalHandle, "alive", { tick: 45 });
+    } catch (error) {
+      backwardError = error;
+    }
+    assert(backwardError?.message.includes("cannot move backward"),
+      `Expected backward lifecycle rejection, got ${backwardError?.message}`);
+
+    const nextHandle = mirror.upsertBody({
+      id: "portal:exit",
+      category: "portal",
+      wx: 2.8,
+      wy: 0.6,
+      radius: 0.08,
+      collisionMask: BODY_MASKS.PORTAL,
+      interactionMask: BODY_MASKS.PORTAL,
+      lifecycle: { state: "alive" },
+      data: { sourceId: "exit" },
+    }, { tick: 46 });
+    const history = mirror.getIdentityHistory("portal:exit");
+    assert(history.length === 2 && history[0].state === "removed" && history[1].state === "alive",
+      `Expected retired and live portal incarnations, got ${JSON.stringify(history)}`);
+    assert(nextHandle.slot === portalHandle.slot && nextHandle.generation === portalHandle.generation + 1,
+      `Expected same-id respawn to advance generation, got ${JSON.stringify(nextHandle)}`);
+    assert(history[1].incarnation === 2, `Expected portal incarnation 2, got ${history[1].incarnation}`);
+  });
+
+  await runner.run("Preserves identities for index refreshes and invalidates them on registry reset", async () => {
+    const runtime = fakeRuntime();
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(runtime, { tick: 42, reason: "first-tick" });
+    const playerHandle = mirror.getHandleById("player:greg");
+
+    runtime.tick = 43;
+    runtime.session.flowFieldCellSize = 0.4;
+    mirror.rebuildFromRuntime(runtime, { tick: 43, reason: "echo-hydration" });
+    const afterIndexRefresh = mirror.getHandleById("player:greg");
+    assert(afterIndexRefresh.epoch === playerHandle.epoch
+      && afterIndexRefresh.slot === playerHandle.slot
+      && afterIndexRefresh.generation === playerHandle.generation,
+    `Expected cell-size/echo refresh to preserve player identity, got ${JSON.stringify(afterIndexRefresh)}`);
+    assert(mirror.stats().lastSyncMode === "index-rebuild",
+      `Expected index-only rebuild, got ${mirror.stats().lastSyncMode}`);
+
+    runtime.tick = 44;
+    mirror.rebuildFromRuntime(runtime, { tick: 44, reason: "session-started" });
+    const afterReset = mirror.getHandleById("player:greg");
+    assert(afterReset.epoch === playerHandle.epoch + 1,
+      `Expected registry reset to advance epoch, got ${JSON.stringify(afterReset)}`);
+    const retired = mirror.getIdentity(playerHandle);
+    assert(retired?.state === "removed" && retired.removedTick === 44,
+      `Expected old epoch identity to remain queryable, got ${JSON.stringify(retired)}`);
+    let staleEpochError = null;
+    try {
+      mirror.getBody(playerHandle);
+    } catch (error) {
+      staleEpochError = error;
+    }
+    assert(staleEpochError?.code === "STALE_BALLPARK_EPOCH",
+      `Expected old epoch reference rejection, got ${staleEpochError?.code}`);
+  });
+
+  await runner.run("Bounds retired identity history without reusing incarnation numbers", async () => {
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5, retiredIdentityLimit: 1 });
+    const first = mirror.createBody({
+      id: "wreck:bounded",
+      category: "wreck",
+      wx: 1,
+      wy: 1,
+      radius: 0.04,
+      lifecycle: { state: "alive" },
+    }, { tick: 1 });
+    mirror.removeBody(first, { tick: 2 });
+    const other = mirror.createBody({
+      id: "portal:bounded",
+      category: "portal",
+      wx: 2,
+      wy: 2,
+      radius: 0.08,
+      lifecycle: { state: "alive" },
+    }, { tick: 3 });
+    mirror.removeBody(other, { tick: 4 });
+    assert(mirror.getIdentity(first) === null,
+      "Expected the oldest retired identity to be pruned at the configured bound");
+    assert(mirror.stats().identities.retiredIdentities === 1 && mirror.stats().identities.pruned === 1,
+      `Expected bounded retired identity stats, got ${JSON.stringify(mirror.stats().identities)}`);
+
+    const respawned = mirror.createBody({
+      id: "wreck:bounded",
+      category: "wreck",
+      wx: 1.5,
+      wy: 1.5,
+      radius: 0.04,
+      lifecycle: { state: "alive" },
+    }, { tick: 5 });
+    assert(mirror.getIdentity(respawned).incarnation === 2,
+      "Expected incarnation numbering to remain monotonic after tombstone pruning");
+  });
+
   await runner.run("Live sim exposes Ballpark health without changing snapshots", async () => {
     await startSimServer(SIM_PORT, { keepAlive: true });
     try {
@@ -172,7 +341,12 @@ async function run() {
       const join = await getJson("/join", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ clientId: "ballpark-test", name: "Ballpark Test" }),
+        body: JSON.stringify({
+          runId: start.body.session.runId,
+          clientId: "ballpark-test",
+          joinTicket: start.body.joinTicket,
+          name: "Ballpark Test",
+        }),
       });
       assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
 
