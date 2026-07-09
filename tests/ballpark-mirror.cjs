@@ -85,6 +85,75 @@ async function run() {
     assert(pickupHits.every((hit) => hit.category === "wreck"), "Expected pickup query to isolate wreck bodies");
   });
 
+  await runner.run("Keeps handles stable while updating moving bodies in place", async () => {
+    const runtime = fakeRuntime();
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(runtime, { tick: 42, reason: "first-tick" });
+    const before = mirror.getBodyById("player:greg");
+    const stableHandle = { ...before.handle };
+
+    runtime.tick = 43;
+    runtime.players.get("greg").wx = 0.9;
+    runtime.players.get("greg").wy = 0.75;
+    mirror.rebuildFromRuntime(runtime, { tick: 43, reason: "next-tick" });
+
+    const after = mirror.getBodyById("player:greg");
+    assert(after.handle.slot === stableHandle.slot && after.handle.generation === stableHandle.generation,
+      `Expected stable handle ${JSON.stringify(stableHandle)}, got ${JSON.stringify(after.handle)}`);
+    assert(Math.abs(after.prevWX - 0.4) <= 1e-12 && Math.abs(after.prevWY - 0.5) <= 1e-12,
+      `Expected previous position 0.4,0.5, got ${after.prevWX},${after.prevWY}`);
+    assert(Math.abs(after.wx - 0.9) <= 1e-12 && Math.abs(after.wy - 0.75) <= 1e-12,
+      `Expected current position 0.9,0.75, got ${after.wx},${after.wy}`);
+    const movedHits = mirror.queryCircle(0.9, 0.75, 0.01, { collisionMask: BODY_MASKS.PLAYER });
+    assert(movedHits.length === 1 && movedHits[0].id === "player:greg",
+      `Expected spatial index at updated position, got ${movedHits.map((hit) => hit.id).join(",")}`);
+    assert(mirror.stats().lastSyncMode === "incremental", "Expected matching configuration to synchronize incrementally");
+  });
+
+  await runner.run("Removes disappeared bodies and safely recycles their slots", async () => {
+    const runtime = fakeRuntime();
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    mirror.rebuildFromRuntime(runtime, { tick: 42, reason: "first-tick" });
+    const removedHandle = { ...mirror.getBodyById("star:edge-star").handle };
+
+    runtime.tick = 43;
+    runtime.mapState.stars = [{ id: "new-star", wx: 0.25, wy: 2, mass: 1, alive: true }];
+    mirror.rebuildFromRuntime(runtime, { tick: 43, reason: "next-tick" });
+
+    assert(mirror.getBodyById("star:edge-star") === null, "Expected disappeared star to leave the registry");
+    assert(mirror.registry.has(removedHandle) === false, "Expected removed handle to be stale after recycling");
+    const replacement = mirror.getBodyById("star:new-star");
+    assert(replacement.handle.slot === removedHandle.slot,
+      `Expected deterministic slot reuse at ${removedHandle.slot}, got ${replacement.handle.slot}`);
+    assert(replacement.handle.generation === removedHandle.generation + 1,
+      `Expected recycled generation ${removedHandle.generation + 1}, got ${replacement.handle.generation}`);
+    const oldHits = mirror.queryCircle(3.96, 2, 0.02, { collisionMask: BODY_MASKS.STAR });
+    const newHits = mirror.queryCircle(0.25, 2, 0.02, { collisionMask: BODY_MASKS.STAR });
+    assert(oldHits.length === 0, `Expected removed star out of the index, got ${oldHits.map((hit) => hit.id).join(",")}`);
+    assert(newHits.length === 1 && newHits[0].id === "star:new-star",
+      `Expected replacement star in the index, got ${newHits.map((hit) => hit.id).join(",")}`);
+  });
+
+  await runner.run("Keeps duplicate source ids unique and stable across refreshes", async () => {
+    const runtime = fakeRuntime();
+    const mirror = createBallparkMirror({ worldScale: 4, cellSize: 0.5 });
+    const firstStats = mirror.rebuildFromRuntime(runtime, { tick: 42, reason: "first-tick" });
+    const firstDuplicate = { ...mirror.getBodyById("wreck:vault#2").handle };
+
+    runtime.tick = 43;
+    const nextStats = mirror.rebuildFromRuntime(runtime, { tick: 43, reason: "next-tick" });
+    const ids = mirror.registry.entries().map((body) => body.id);
+    const duplicate = mirror.getBodyById("wreck:vault#2");
+
+    assert(new Set(ids).size === ids.length, `Expected unique public ids, got ${JSON.stringify(ids)}`);
+    assert(firstStats.duplicateIds.length === 1 && nextStats.duplicateIds.length === 1,
+      `Expected one honest duplicate diagnostic per refresh, got ${JSON.stringify(nextStats.duplicateIds)}`);
+    assert(duplicate.handle.slot === firstDuplicate.slot && duplicate.handle.generation === firstDuplicate.generation,
+      `Expected duplicate-derived id handle to remain stable, got ${JSON.stringify(duplicate.handle)}`);
+    assert(mirror.registry.stats().duplicateIdRejects === 0,
+      `Expected collector to resolve duplicate source ids before registry insertion, got ${mirror.registry.stats().duplicateIdRejects}`);
+  });
+
   await runner.run("Live sim exposes Ballpark health without changing snapshots", async () => {
     await startSimServer(SIM_PORT, { keepAlive: true });
     try {

@@ -38,7 +38,7 @@ function radiusFor(entity, keys, fallback) {
   return fallback;
 }
 
-function createBodyAdder(registry, categories, skipped, duplicateIds, tick) {
+function createBodyCollector(bodies, categories, skipped, duplicateIds) {
   const seenIds = new Map();
 
   return function addBody(input) {
@@ -59,17 +59,21 @@ function createBodyAdder(registry, categories, skipped, duplicateIds, tick) {
     }
     seenIds.set(id, duplicateCount + 1);
 
-    const handle = registry.createBody({
+    const body = {
       ...input,
       id: uniqueId,
       wx,
       wy,
       radius: Math.max(0, finiteNumber(input.radius, 0)),
-    }, { tick });
-    registry.setLifecycle(handle, input.lifecycle?.state || "alive", { tick });
+    };
+    bodies.push(body);
     categories[input.category] = (categories[input.category] || 0) + 1;
-    return registry.getBody(handle);
+    return body;
   };
+}
+
+function sameConfiguration(left, right) {
+  return Math.abs(left - right) <= Number.EPSILON * Math.max(1, Math.abs(left), Math.abs(right));
 }
 
 function createBallparkMirror(options = {}) {
@@ -97,12 +101,11 @@ class BallparkMirror {
       Math.min(DEFAULT_CELL_SIZE, worldScale),
     );
     const tick = Math.max(0, Math.trunc(finiteNumber(options.tick ?? runtime?.tick, 0)));
-    const registry = new BodyRegistry({ worldScale });
-    const index = new SpatialIndex({ worldScale, cellSize });
     const categories = {};
     const skipped = {};
     const duplicateIds = [];
-    const addBody = createBodyAdder(registry, categories, skipped, duplicateIds, tick);
+    const desiredBodies = [];
+    const addBody = createBodyCollector(desiredBodies, categories, skipped, duplicateIds);
 
     this._addPlayers(runtime, addBody);
     this._addWorldAnchors(runtime, addBody);
@@ -110,14 +113,27 @@ class BallparkMirror {
     this._addWaveEmitters(runtime, addBody);
     this._addInhibitor(runtime, addBody);
 
-    const bodies = registry.entries();
-    index.rebuild(bodies);
-    const activeBodyCount = bodies.filter((body) => lifecycleStateIsActive(body.lifecycle?.state)).length;
+    const reason = String(options.reason || "runtime");
+    const configurationChanged = !sameConfiguration(worldScale, this.worldScale)
+      || !sameConfiguration(cellSize, this.cellSize);
+    const explicitReset = options.reset === true
+      || options.forceRebuild === true
+      || reason === "session-started"
+      || reason === "echo-hydration";
+    const rebuilt = configurationChanged || explicitReset;
+
+    if (rebuilt) {
+      this.registry = new BodyRegistry({ worldScale });
+      this.index = new SpatialIndex({ worldScale, cellSize });
+    }
 
     this.worldScale = worldScale;
     this.cellSize = cellSize;
-    this.registry = registry;
-    this.index = index;
+    this._synchronizeBodies(desiredBodies, tick);
+
+    const bodies = this.registry.entries();
+    const activeBodyCount = bodies.filter((body) => lifecycleStateIsActive(body.lifecycle?.state)).length;
+
     this.lastStats = {
       enabled: true,
       schemaVersion: BODY_SCHEMA_VERSION,
@@ -125,15 +141,16 @@ class BallparkMirror {
       cellSize,
       lastRebuildTick: tick,
       lastRebuildSimTime: finiteNumber(options.simTime ?? runtime?.simTime, 0),
-      lastRebuildReason: String(options.reason || "runtime"),
+      lastRebuildReason: reason,
       lastRebuildMs: Number((performance.now() - started).toFixed(3)),
+      lastSyncMode: rebuilt ? "rebuild" : "incremental",
       bodyCount: bodies.length,
       activeBodyCount,
       categories,
       skipped,
       duplicateIds,
-      registry: registry.stats(),
-      spatialIndex: index.stats(),
+      registry: this.registry.stats(),
+      spatialIndex: this.index.stats(),
       queryUsage: this._cloneQueryUsage(),
     };
     return this.stats();
@@ -181,6 +198,7 @@ class BallparkMirror {
       lastRebuildSimTime: null,
       lastRebuildReason: "not-built",
       lastRebuildMs: 0,
+      lastSyncMode: "not-built",
       bodyCount: 0,
       activeBodyCount: 0,
       categories: {},
@@ -227,6 +245,36 @@ class BallparkMirror {
     this.queryUsage.lastHitCount = Array.isArray(hits) ? hits.length : 0;
     this.queryUsage.lastQueryMs = Number(elapsedMs.toFixed(3));
     this.queryUsage.totalQueryMs = Number((this.queryUsage.totalQueryMs + elapsedMs).toFixed(3));
+  }
+
+  _synchronizeBodies(desiredBodies, tick) {
+    const desiredIds = new Set(desiredBodies.map((body) => body.id));
+    const removedBodies = this.registry.entries()
+      .filter((body) => !desiredIds.has(body.id))
+      .sort((left, right) => left.id.localeCompare(right.id));
+
+    // Remove missing bodies first so any slots recycled below always advance
+    // their generation and stale handles can never target the replacement.
+    for (const body of removedBodies) {
+      this.index.remove(body.handle);
+      this.registry.removeBody(body.handle, { tick });
+    }
+
+    for (const input of desiredBodies) {
+      const existing = this.registry.getBodyById(input.id);
+      if (!existing) {
+        const handle = this.registry.createBody(input, { tick });
+        this.index.upsert(this.registry.getBody(handle));
+        continue;
+      }
+
+      const body = this.registry.updateBody(existing.handle, input, { tick });
+      const lifecycleState = input.lifecycle?.state || "alive";
+      if (body.lifecycle.state !== lifecycleState) {
+        this.registry.setLifecycle(body.handle, lifecycleState, { tick });
+      }
+      this.index.upsert(body);
+    }
   }
 
   _addPlayers(runtime, addBody) {
