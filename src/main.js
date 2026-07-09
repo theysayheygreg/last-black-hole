@@ -5927,7 +5927,7 @@ function gameLoop(now) {
           ctx.fillText(fitUiText(ctx, `next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM${action}`, centerTextW - 26), centerX + 22, uy + 31);
         } else {
           ctx.fillStyle = roleColor('salvage', 0.72);
-          ctx.fillText(maxLevel < MAX_RIG_LEVEL ? 'V0.2 CAP' : 'MAX', centerX + 22, uy + 31);
+          ctx.fillText(maxLevel < MAX_RIG_LEVEL ? 'CURRENT CAP' : 'MAX', centerX + 22, uy + 31);
         }
 
         uy += 60;

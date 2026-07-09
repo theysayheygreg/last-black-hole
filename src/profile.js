@@ -14,7 +14,7 @@
  */
 
 import { BALANCE, runEmEarned, survivalBonusEm } from './content/balance.js';
-import { PUBLIC_HULL_IDS } from './content/hulls.js';
+import { PUBLIC_HULL_IDS, RIG_TRACKS as HULL_RIG_TRACKS } from './content/hulls.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
@@ -158,46 +158,30 @@ const VAULT_RANK_COSTS = BALANCE.progression.vaultUpgradeCosts;
 
 export const MAX_RANK = BALANCE.progression.maxProfileRank;
 
-export const RIG_TRACKS = {
-  drifter: [
-    { key: 'laminar', label: 'laminar', focus: 'current mastery' },
-    { key: 'edgerunner', label: 'edgerunner', focus: 'well navigation' },
-    { key: 'gleanings', label: 'gleanings', focus: 'extraction value' },
-  ],
-  breacher: [
-    { key: 'afterburner', label: 'afterburner', focus: 'raw speed' },
-    { key: 'ironclad', label: 'ironclad', focus: 'survivability' },
-    { key: 'smashgrab', label: 'smash & grab', focus: 'speed-looting' },
-  ],
-  resonant: [
-    { key: 'harmonics', label: 'harmonics', focus: 'eddy mastery' },
-    { key: 'anchor', label: 'anchor', focus: 'territorial control' },
-    { key: 'dampening', label: 'dampening', focus: 'anti-inhibitor' },
-  ],
-  shroud: [
-    { key: 'phantom', label: 'phantom', focus: 'stealth depth' },
-    { key: 'sensor', label: 'sensor', focus: 'information' },
-    { key: 'decoy', label: 'decoy', focus: 'misdirection' },
-  ],
-  hauler: [
-    { key: 'cargo', label: 'cargo', focus: 'carrying capacity' },
-    { key: 'salvage', label: 'salvage', focus: 'loot quality' },
-    { key: 'endurance', label: 'endurance', focus: 'survivability' },
-  ],
-};
+// Adapt the canonical hull manifest once for the ordered profile UI shape.
+export const RIG_TRACKS = Object.fromEntries(
+  Object.entries(HULL_RIG_TRACKS).map(([hullType, tracks]) => [
+    hullType,
+    Object.entries(tracks).map(([key, track]) => ({
+      key,
+      label: track.name,
+      focus: track.focus,
+    })),
+  ])
+);
 
 const RIG_LEVEL_COSTS = BALANCE.progression.rigLevelCosts;
 
 export const RIG_LEVEL_EFFECTS = {
   drifter: [
-    ['+0.1 currentCoupling', 'flow lock align time -0.5s', '+0.1 currentCoupling', 'flow lock align time -0.5s', 'flow lock signal mult -> 0.05'],
-    ['+0.1 wellResistScale', 'accretion shadow signal masking', '+0.1 wellResistScale', 'show well kill radius', 'eddy brake cooldown -5s'],
-    ['+0.1 pickupRadius', 'wreck tier estimate in HUD', '+0.1 pickupRadius', '+1 extraction item chance', 'slip stream signal reduction -> 0.5'],
+    ['current coupling +0.1', 'flow lock aligns 0.5s faster', 'current coupling +0.1', 'flow lock aligns 0.5s faster', 'flow lock signal halved'],
+    ['well resistance +0.1', 'signal masking in accretion shadows', 'well resistance +0.1', 'show well kill radius', 'eddy brake cooldown -5s'],
+    ['salvage reach +0.1', 'wreck tier estimate in HUD', 'salvage reach +0.1', '+1 extraction item chance', 'slip stream masking +50%'],
   ],
   breacher: [
-    ['+0.05 thrustScale', '+0.1 thrustScale', '+5s burn fuel', 'burn recharge rate +50%', 'burn thrust mult -> 2.5'],
-    ['+0.1 wellResistScale', '+0.15 controlDebuffResist', 'momentum shield threshold -10%', 'shield charge on first burn', 'shockwave stun +1s'],
-    ['+0.05 pickupRadius', '+0.1 pickupRadius', 'pickup at 70% speed', 'death cargo scatters further', 'loot signal spikes -30%'],
+    ['thrust output +0.05', 'thrust output +0.1', '+5s burn fuel', 'burn recharge +50%', 'burn thrust x2.5'],
+    ['well resistance +0.1', 'control recovery +0.15', 'momentum shield threshold -10%', 'shield charge on first burn', 'shockwave stun +1s'],
+    ['salvage reach +0.05', 'salvage reach +0.1', 'pickup at 70% speed', 'death cargo scatters further', 'loot signal spikes -30%'],
   ],
   resonant: [
     ['pulse radius +10%', 'eddy duration +2s', 'eddies pull wrecks', '+1 max eddy', 'team-visible eddies'],
