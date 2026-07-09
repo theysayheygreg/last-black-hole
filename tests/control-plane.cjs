@@ -207,6 +207,10 @@ async function run() {
       assert(run.mapContext.mapId === "shallows" && run.mapContext.seed === 4242, "Expected map context");
       assert(run.loadoutSnapshot.equipped.length === 2, "Expected canonical loadout snapshot shape");
       assert(run.loadoutSnapshot.equipped[0].id === "equip-a", "Expected equipped item snapshot");
+
+      const recentRuns = store.getRecentRuns(profileId, 5);
+      assert(recentRuns[0]?.runId === runId,
+        `Expected latest run ${runId}, got ${recentRuns[0]?.runId}`);
       assert(run.statsDelta.totalEmEarned === 90, "Expected compact stats delta");
       assert(profile.exoticMatter === 90, `Expected profile ledger credit 90 EM, got ${profile.exoticMatter}`);
       assert(profile.totalExoticMatterEarned === 90, "Expected total profile EM earned to match ledger credit");
@@ -291,6 +295,34 @@ async function run() {
       assert(abandonedRun.signalPeakZone === "ghost", "Expected fallback signal zone for abandoned run");
       assert(profile.exoticMatter === 16, `Expected death residue to credit profile, got ${profile.exoticMatter}`);
       assert(profile.totalExoticMatterEarned === 16, "Expected profile lifetime earned to include death residue");
+    });
+
+    await runner.run("Chronicle returns a bounded newest-first five-run strip", async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-chronicle-strip-"));
+      const store = new ControlPlaneStore(path.join(tmpDir, "store.json"));
+      const profileId = `profile-${crypto.randomUUID()}`;
+      for (let index = 1; index <= 7; index++) {
+        store.applyOutcome({
+          profileId,
+          outcome: index % 2 === 0 ? "escaped" : "dead",
+          runDuration: index * 10,
+          session: { id: `session-${index}`, runId: `run-${String(index).padStart(2, "0")}`, mapId: "shallows" },
+          player: { clientId: "chronicle-pilot", name: "Chronicle Pilot", cargo: [], equipped: [], consumables: [] },
+          runResult: {
+            runId: `run-${String(index).padStart(2, "0")}`,
+            outcome: index % 2 === 0 ? "extracted" : "dead",
+            survivalTime: index * 10,
+            emEarned: index,
+          },
+        });
+      }
+      const recent = store.getRecentRuns(profileId);
+      assert(recent.length === 5, `Expected five recent runs, got ${recent.length}`);
+      assert(recent.map((run) => run.runId).join(",") === "run-07,run-06,run-05,run-04,run-03",
+        `Expected newest five runs, got ${recent.map((run) => run.runId).join(",")}`);
+      const profile = store.getProfile(profileId);
+      assert(profile.totalDeaths === 4 && profile.totalExtractions === 3,
+        "Expected career totals to remain available beside the recent strip");
     });
 
     await runner.run("Echoes are scoped by map and seed", async () => {

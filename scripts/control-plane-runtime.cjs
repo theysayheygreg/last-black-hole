@@ -226,7 +226,12 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, error: "Unknown profile" });
         return;
       }
-      sendJson(res, 200, { ok: true, profile });
+      const limit = Number(url.searchParams.get("runLimit") || 5);
+      sendJson(res, 200, {
+        ok: true,
+        profile,
+        recentRuns: store.getRecentRuns(profileId, limit),
+      });
       return;
     }
 

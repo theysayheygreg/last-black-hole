@@ -304,6 +304,20 @@ class ControlPlaneStore {
     return profile ? clone(profile) : null;
   }
 
+  getRecentRuns(profileId, limit = 5) {
+    if (!profileId) return [];
+    const safeLimit = Math.max(1, Math.min(20, Math.floor(Number(limit) || 5)));
+    return Object.values(this.state.runs)
+      .filter((run) => run?.profileId === profileId)
+      .sort((a, b) => {
+        const timeOrder = String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+        if (timeOrder !== 0) return timeOrder;
+        return String(b.runId || "").localeCompare(String(a.runId || ""));
+      })
+      .slice(0, safeLimit)
+      .map(clone);
+  }
+
   saveProfile(profile) {
     if (!profile?.id) throw new Error("profile.id is required");
     const normalized = normalizeProfileSnapshot(profile, profile.id, profile.name);

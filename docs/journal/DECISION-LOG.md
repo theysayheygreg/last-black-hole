@@ -1,5 +1,23 @@
 # Decision Log
 
+## 2026-07-09 — Chronicle ships as career totals plus the last five runs
+
+**Decision:** The first remote-authority Chronicle surface carries compact
+career totals and the five most recent authoritative run records. Deeper
+records, milestones, and behavioral profiling stay hidden until they have an
+equally truthful persistence and presentation path.
+
+**Why:** Five runs are enough to show consequence and changing play without
+turning Home into a database browser. The shape is bounded for network and UI
+budgets and can be proved end to end before broader Chronicle scope returns.
+
+**Where it landed:** `scripts/control-plane-store.cjs`,
+`scripts/control-plane-runtime.cjs`, `scripts/control-plane-client.cjs`, and
+`tests/control-plane.cjs`.
+
+**Door status:** Closed for the v0.3 first-demo scope. Open for later record and
+milestone views after the five-run bridge is exercised by the natural journey.
+
 ## 2026-07-09 — Load-bearing contacts use swept toroidal geometry
 
 **Decision:** Resolve player crossings against wells, wrecks, portals, and

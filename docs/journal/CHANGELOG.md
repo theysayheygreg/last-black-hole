@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-07-09 — Remote Chronicle five-run bridge
+
+- Added a bounded newest-first recent-run query to the durable control-plane
+  store and exposed it through local and remote control-plane clients.
+- Extended the profile endpoint with the last five authoritative run records,
+  while lifetime extraction/death/earnings totals remain the compact career
+  strip.
+- Added coverage for ordering, retention, and career totals across seven runs.
+
 ## 2026-07-09 — Swept authoritative gameplay contacts
 
 - Routed well hazards, wreck pickup, portal extraction, and scavenger bumps

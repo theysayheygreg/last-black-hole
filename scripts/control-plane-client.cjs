@@ -28,6 +28,10 @@ class LocalControlPlaneClient {
     return this.store.getProfile(profileId);
   }
 
+  async getRecentRuns(profileId, limit = 5) {
+    return this.store.getRecentRuns(profileId, limit);
+  }
+
   async saveProfile(profile) {
     return this.store.saveProfile(profile);
   }
@@ -113,6 +117,15 @@ class RemoteControlPlaneClient {
   async getProfile(profileId) {
     const body = await requestJson("GET", this.baseUrl, `/profile?profileId=${encodeURIComponent(profileId)}`);
     return body.profile;
+  }
+
+  async getRecentRuns(profileId, limit = 5) {
+    const body = await requestJson(
+      "GET",
+      this.baseUrl,
+      `/profile?profileId=${encodeURIComponent(profileId)}&runLimit=${encodeURIComponent(limit)}`,
+    );
+    return Array.isArray(body.recentRuns) ? body.recentRuns : [];
   }
 
   async saveProfile(profile) {
