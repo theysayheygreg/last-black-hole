@@ -41,6 +41,10 @@ const DESKTOP_SERVER_SCRIPTS = [
   'runtime-telemetry.cjs',
   'seeded-generation.cjs',
 ];
+const DESKTOP_SERVER_DIRECTORIES = [
+  'content',
+  'sim',
+];
 
 const TARGET_ALIASES = {
   web: 'web',
@@ -213,6 +217,73 @@ function copyWebRuntime(rendererDir, mode) {
     path.join(rendererDir, 'src', 'build-flags.js'),
     `window.__LBH_BUILD_FLAGS__ = ${JSON.stringify(buildFlagsForMode(mode), null, 2)};\n`
   );
+}
+
+function resolveLocalRuntimeModule(fromFile, request) {
+  const resolved = path.resolve(path.dirname(fromFile), request);
+  const candidates = path.extname(resolved)
+    ? [resolved]
+    : [resolved, `${resolved}.cjs`, `${resolved}.js`, `${resolved}.json`];
+  return candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()) || null;
+}
+
+function collectDesktopServerClosure() {
+  const scriptsRoot = path.join(ROOT, 'scripts');
+  const queue = DESKTOP_SERVER_SCRIPTS.map((script) => path.join(scriptsRoot, script));
+  const collected = new Map();
+
+  while (queue.length > 0) {
+    const source = queue.shift();
+    if (!fs.existsSync(source)) {
+      throw new Error(`Missing desktop authority runtime module: ${source}`);
+    }
+
+    const relative = path.relative(scriptsRoot, source);
+    if (relative.startsWith('..') || path.isAbsolute(relative) || collected.has(relative)) continue;
+    collected.set(relative, source);
+
+    if (!/\.(?:cjs|js)$/.test(source)) continue;
+    const moduleSource = fs.readFileSync(source, 'utf8');
+    const pattern = /require\((['"])(\.[^'"]+)\1\)/g;
+    let match;
+    while ((match = pattern.exec(moduleSource))) {
+      const dependency = resolveLocalRuntimeModule(source, match[2]);
+      if (!dependency) {
+        throw new Error(`${relative} requires missing local module ${match[2]}`);
+      }
+      const dependencyRelative = path.relative(scriptsRoot, dependency);
+      if (!dependencyRelative.startsWith('..') && !path.isAbsolute(dependencyRelative)) {
+        queue.push(dependency);
+      }
+    }
+  }
+
+  return collected;
+}
+
+function stageDesktopAuthorityRuntime(stagingRoot) {
+  const serverDir = path.join(stagingRoot, 'server');
+  ensureDir(serverDir);
+
+  for (const [relative, source] of collectDesktopServerClosure()) {
+    const destination = path.join(serverDir, relative);
+    ensureDir(path.dirname(destination));
+    fs.copyFileSync(source, destination);
+  }
+
+  // These scopes can also contain data or dynamically selected modules that a
+  // static CommonJS walk cannot see, so stage each complete runtime unit.
+  for (const directory of DESKTOP_SERVER_DIRECTORIES) {
+    copyIfExists(
+      path.join(ROOT, 'scripts', directory),
+      path.join(serverDir, directory)
+    );
+  }
+
+  // shared-map-loader resolves maps one level above server/, while the CJS
+  // content wrappers resolve their JSON payloads from src/content.
+  copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(stagingRoot, 'src', 'maps'));
+  copyIfExists(path.join(ROOT, 'src', 'content'), path.join(stagingRoot, 'src', 'content'));
 }
 
 function zipDir(sourceDir, zipPath) {
@@ -616,20 +687,7 @@ function stageElectronShell(mode) {
 
   copyWebRuntime(path.join(STAGING_ROOT, 'renderer'), mode);
 
-  // Bundle server scripts for embedded sim in desktop builds
-  const serverDir = path.join(STAGING_ROOT, 'server');
-  ensureDir(serverDir);
-  for (const script of DESKTOP_SERVER_SCRIPTS) {
-    const src = path.join(ROOT, 'scripts', script);
-    if (fs.existsSync(src)) {
-      fs.copyFileSync(src, path.join(serverDir, script));
-    }
-  }
-  copyIfExists(path.join(ROOT, 'scripts', 'content'), path.join(serverDir, 'content'));
-  // Copy map files where shared-map-loader.js expects them (../src/maps relative to server/)
-  copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(STAGING_ROOT, 'src', 'maps'));
-  // CJS server content wrappers require ../../src/content/*.data.json.
-  copyIfExists(path.join(ROOT, 'src', 'content'), path.join(STAGING_ROOT, 'src', 'content'));
+  stageDesktopAuthorityRuntime(STAGING_ROOT);
 }
 
 async function buildElectronTarget(targetRoot, target, mode) {
@@ -789,5 +847,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  DESKTOP_SERVER_DIRECTORIES,
   DESKTOP_SERVER_SCRIPTS,
+  stageDesktopAuthorityRuntime,
 };
