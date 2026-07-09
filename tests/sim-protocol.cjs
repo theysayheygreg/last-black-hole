@@ -1,12 +1,22 @@
 const { TestRunner, assert } = require("./helpers.cjs");
-const { normalizeInputMessage } = require("../scripts/sim-protocol.cjs");
+const {
+  PROTOCOL_VERSION,
+  createProtocolDescription,
+  normalizeInputMessage,
+  normalizeInventoryAction,
+  playerEventVisibility,
+  eventVisibleToPlayer,
+} = require("../scripts/sim-protocol.cjs");
 
 async function run() {
   const runner = new TestRunner("SimProtocol");
 
   await runner.run("Input normalization preserves bounded slingshot edge ids", async () => {
     const normalized = normalizeInputMessage({
-      clientId: "pilot",
+      runId: "run-7",
+      playerId: "pilot",
+      commandSeq: 12,
+      commandCredential: "secret",
       seq: 7.9,
       moveX: 8,
       moveY: -8,
@@ -19,6 +29,10 @@ async function run() {
     });
 
     assert(normalized.seq === 7, `Expected floored seq 7, got ${normalized.seq}`);
+    assert(normalized.runId === "run-7" && normalized.playerId === "pilot" && normalized.clientId === "pilot",
+      "Expected v2 run and player identity to normalize once");
+    assert(normalized.commandSeq === 12 && normalized.commandCredential === "secret",
+      "Expected v2 command authority fields to survive normalization");
     assert(Math.abs(Math.hypot(normalized.moveX, normalized.moveY) - 1) < 1e-9, "Expected unit movement vector clamp");
     assert(normalized.thrust === 1 && normalized.brake === 0, "Expected scalar action clamp");
     assert(normalized.slingshot === false, "Held slingshot state should remain distinct from press edges");
@@ -32,6 +46,34 @@ async function run() {
     const normalized = normalizeInputMessage({ clientId: "pilot", seq: 1 });
     assert(Array.isArray(normalized.slingshotEdges) && normalized.slingshotEdges.length === 0,
       "Expected absent press edges to normalize to an empty queue");
+  });
+
+  await runner.run("Protocol description and inventory actions expose the v2 authority envelope", async () => {
+    const description = createProtocolDescription();
+    assert(PROTOCOL_VERSION === "lbh-local-v2" && description.version === PROTOCOL_VERSION,
+      `Expected lbh-local-v2, got ${description.version}`);
+    assert(description.authority?.headers?.["x-lbh-command-credential"],
+      "Expected command credential header in protocol description");
+
+    const action = normalizeInventoryAction({
+      runId: "run-a",
+      clientId: "pilot-a",
+      commandSeq: 9,
+      commandCredential: "credential-a",
+      action: "unequip",
+      equipSlot: 1,
+    });
+    assert(action.playerId === "pilot-a" && action.clientId === "pilot-a",
+      "Expected clientId compatibility alias to normalize to playerId");
+    assert(action.runId === "run-a" && action.commandSeq === 9,
+      "Expected inventory action to carry run and command identity");
+  });
+
+  await runner.run("Player-local visibility is owner-only", async () => {
+    const event = { visibility: playerEventVisibility("pilot-a") };
+    assert(eventVisibleToPlayer(event, "pilot-a") === true, "Expected owner visibility");
+    assert(eventVisibleToPlayer(event, "pilot-b") === false, "Expected cross-player privacy");
+    assert(eventVisibleToPlayer({ visibility: "public" }, null) === true, "Expected public visibility");
   });
 
   const allPassed = runner.summary();

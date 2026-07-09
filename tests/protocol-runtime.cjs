@@ -33,10 +33,14 @@ async function run() {
       const runId = start.body.session.runId;
 
       const join = await postJson("/join", {
+        runId,
         clientId: "protocol-runtime-test",
+        joinTicket: start.body.joinTicket,
         name: "Protocol Runtime Test",
       });
       assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
+      assert(join.body.authority?.runId === runId && join.body.authority?.commandCredential,
+        "Expected join to return v2 command authority");
 
       const events = await getJson("/events?since=0&lane=global");
       assert(events.status === 200, `Expected /events 200, got ${events.status}`);

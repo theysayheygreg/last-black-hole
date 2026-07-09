@@ -46,9 +46,14 @@ const {
   DEFAULT_SNAPSHOT_HZ,
   DEFAULT_WORLD_SCALE,
   DEFAULT_MAX_PLAYERS,
+  AUTHORITY_HEADER,
+  PLAYER_ID_HEADER,
+  RUN_ID_HEADER,
   createProtocolDescription,
   normalizeInputMessage,
   normalizeInventoryAction,
+  playerEventVisibility,
+  filterEventsForPlayer,
 } = require("./sim-protocol.cjs");
 const { BODY_MASKS } = require("./sim/body-masks.cjs");
 const { BODY_SCHEMA_VERSION } = require("./sim/body-schema.cjs");
@@ -465,7 +470,7 @@ function sendJson(res, statusCode, body) {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "content-type");
+  res.setHeader("Access-Control-Allow-Headers", `content-type,${AUTHORITY_HEADER},${PLAYER_ID_HEADER},${RUN_ID_HEADER}`);
   res.end(payload);
 }
 
@@ -894,6 +899,16 @@ const controlPlane = createControlPlaneClient({
 const pendingControlPlaneWrites = new Set();
 let controlPlaneHeartbeat = null;
 
+const PLAYER_LOCAL_EVENT_TYPES = new Set([
+  "profile.updated",
+  "run.result",
+  "player.inventoryAction",
+  "player.loot",
+  "player.effectUsed",
+  "signal.zoneCrossing",
+  "inhibitor.drainCargo",
+]);
+
 const protocol = createProtocolDescription();
 const runtime = {
   startedAt: new Date().toISOString(),
@@ -930,6 +945,8 @@ const runtime = {
     field: 0,
   },
   players: new Map(),
+  playerAuthorities: new Map(),
+  joinClaims: new Map(),
   waveRings: [],
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
@@ -981,14 +998,16 @@ let currentLoopTickHz = DEFAULT_TICK_HZ;
 let terminalShutdownHandle = null;
 
 function publishEvent(type, payload = {}, options = {}) {
+  const playerId = String(payload?.clientId || options.playerId || "").trim();
+  const isPlayerLocal = PLAYER_LOCAL_EVENT_TYPES.has(type) && playerId;
   const event = runtime.eventJournal.append({
     tick: runtime.tick,
     simTime: runtime.simTime,
     type,
-    lane: options.lane,
+    lane: isPlayerLocal ? "playerLocal" : options.lane,
     source: options.source,
     subject: options.subject,
-    visibility: options.visibility,
+    visibility: isPlayerLocal ? playerEventVisibility(playerId) : options.visibility,
     payload,
   });
   runtime.nextEventSeq = runtime.eventJournal.nextSeq;
@@ -1339,6 +1358,8 @@ function startSession(config = {}) {
     gravityBonus: 0,
   };
   runtime.players.clear();
+  runtime.playerAuthorities.clear();
+  runtime.joinClaims.clear();
   runtime.eventJournal.startRun(runtime.session.runId);
   runtime.snapshotRing.startRun(runtime.session.runId);
   runtime.recentEvents = [];
@@ -1410,17 +1431,137 @@ function assignHost(clientId, name) {
   persistSessionRegistry();
 }
 
-function ensureHostPermission(requesterId) {
-  if (!requesterId) return { ok: false, error: "requesterId is required" };
-  if (!runtime.session.hostClientId) return { ok: true };
-  if (runtime.session.hostClientId !== requesterId) {
-    return { ok: false, error: "Only the session host can do that" };
+function newAuthoritySecret() {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function secretsMatch(left, right) {
+  const a = Buffer.from(String(left || ""));
+  const b = Buffer.from(String(right || ""));
+  return a.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function issueJoinClaim(playerId) {
+  const normalized = String(playerId || "").trim();
+  if (!normalized) return null;
+  const claim = newAuthoritySecret();
+  runtime.joinClaims.set(normalized, claim);
+  return claim;
+}
+
+function issuePlayerAuthority(playerId) {
+  const authority = {
+    runId: runtime.session.runId,
+    playerId,
+    commandCredential: newAuthoritySecret(),
+    lastCommandSeq: 0,
+    lastSlingshotEdgeId: 0,
+  };
+  runtime.playerAuthorities.set(playerId, authority);
+  return authority;
+}
+
+function publicAuthority(authority, { reconnected = false } = {}) {
+  return {
+    protocolVersion: PROTOCOL_VERSION,
+    runId: authority.runId,
+    playerId: authority.playerId,
+    commandCredential: authority.commandCredential,
+    lastCommandSeq: authority.lastCommandSeq,
+    nextCommandSeq: authority.lastCommandSeq + 1,
+    reconnected,
+  };
+}
+
+function requestIdentity(req, body = {}) {
+  const bodyPlayerId = String(body.playerId || body.clientId || "").trim();
+  const headerPlayerId = String(req.headers[PLAYER_ID_HEADER] || "").trim();
+  const bodyRunId = String(body.runId || "").trim();
+  const headerRunId = String(req.headers[RUN_ID_HEADER] || "").trim();
+  const bodyCredential = String(body.commandCredential || "").trim();
+  const headerCredential = String(req.headers[AUTHORITY_HEADER] || "").trim();
+  return {
+    playerId: headerPlayerId || bodyPlayerId,
+    runId: headerRunId || bodyRunId,
+    commandCredential: headerCredential || bodyCredential,
+    conflict:
+      Boolean(headerPlayerId && bodyPlayerId && headerPlayerId !== bodyPlayerId) ||
+      Boolean(headerRunId && bodyRunId && headerRunId !== bodyRunId) ||
+      Boolean(headerCredential && bodyCredential && headerCredential !== bodyCredential),
+  };
+}
+
+function authorizePlayerRequest(req, body = {}, { requireCommandSeq = true } = {}) {
+  const identity = requestIdentity(req, body);
+  if (identity.conflict) {
+    return { ok: false, status: 400, code: "conflicting-identity", error: "Header and body authority identity disagree" };
   }
-  return { ok: true };
+  if (!identity.runId || identity.runId !== runtime.session.runId) {
+    return {
+      ok: false,
+      status: 409,
+      code: "stale-run",
+      error: "Command does not belong to the active run",
+      activeRunId: runtime.session.runId || null,
+    };
+  }
+  if (!identity.playerId) {
+    return { ok: false, status: 400, code: "player-required", error: "playerId is required" };
+  }
+  const authority = runtime.playerAuthorities.get(identity.playerId);
+  if (!authority || !secretsMatch(identity.commandCredential, authority.commandCredential)) {
+    const credentialOwner = Array.from(runtime.playerAuthorities.values()).find((candidate) =>
+      secretsMatch(identity.commandCredential, candidate.commandCredential)
+    );
+    if (credentialOwner && credentialOwner.playerId !== identity.playerId) {
+      return { ok: false, status: 403, code: "wrong-player", error: "Command authority does not own that player" };
+    }
+    return { ok: false, status: 403, code: "invalid-authority", error: "Invalid player command authority" };
+  }
+  const bodyPlayerId = String(body.playerId || body.clientId || "").trim();
+  if (bodyPlayerId && bodyPlayerId !== authority.playerId) {
+    return { ok: false, status: 403, code: "wrong-player", error: "Command authority does not own that player" };
+  }
+  const commandSeq = Math.max(0, Math.floor(Number(body.commandSeq) || 0));
+  if (requireCommandSeq && commandSeq <= authority.lastCommandSeq) {
+    return {
+      ok: false,
+      status: 409,
+      code: "stale-command",
+      error: "Command sequence is not newer than the last accepted command",
+      acceptedCommandSeq: authority.lastCommandSeq,
+    };
+  }
+  return { ok: true, identity, authority, commandSeq };
+}
+
+function acceptCommand(auth) {
+  auth.authority.lastCommandSeq = auth.commandSeq;
+}
+
+function sendAuthorityError(res, result) {
+  sendJson(res, result.status || 403, {
+    ok: false,
+    code: result.code || "invalid-authority",
+    error: result.error || "Invalid player command authority",
+    activeRunId: result.activeRunId,
+    acceptedCommandSeq: result.acceptedCommandSeq,
+  });
+}
+
+function ensureHostAuthority(req, body = {}) {
+  if (!runtime.session.hostClientId) return { ok: true, unclaimed: true };
+  const auth = authorizePlayerRequest(req, body, { requireCommandSeq: true });
+  if (!auth.ok) return auth;
+  if (auth.authority.playerId !== runtime.session.hostClientId) {
+    return { ok: false, status: 403, code: "host-required", error: "Only the session host can do that" };
+  }
+  return auth;
 }
 
 function promoteHostIfNeeded() {
-  if (runtime.players.size === 0) {
+  const humanPlayers = Array.from(runtime.players.values()).filter((player) => !player.isAI);
+  if (humanPlayers.length === 0) {
     runtime.session.hostClientId = null;
     runtime.session.hostProfileId = null;
     runtime.session.hostName = null;
@@ -1432,7 +1573,7 @@ function promoteHostIfNeeded() {
   restartTickLoop();
   if (runtime.session.hostClientId && runtime.players.has(runtime.session.hostClientId)) return;
   // Only promote human players to host — AI can't accept /start or /reset
-  const nextHost = Array.from(runtime.players.values()).find(p => !p.isAI);
+  const nextHost = humanPlayers[0];
   if (nextHost) assignHost(nextHost.clientId, nextHost.name);
 }
 
@@ -1546,7 +1687,9 @@ function buildSnapshotBody() {
       finalPortalExpired: Boolean(runtime.inhibitor.finalPortalExpired),
       gravityBonus: runtime.inhibitor.gravityBonus || 0,
     },
-    recentEvents: runtime.recentEvents.slice(-32),
+    // Snapshot baselines are shared and cacheable. Player-local events are
+    // recovered through the authenticated event stream instead.
+    recentEvents: filterEventsForPlayer(runtime.recentEvents.slice(-32), null),
   };
 }
 
@@ -5727,7 +5870,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "content-type");
+    res.setHeader("Access-Control-Allow-Headers", `content-type,${AUTHORITY_HEADER},${PLAYER_ID_HEADER},${RUN_ID_HEADER}`);
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.end();
     return;
@@ -5850,12 +5993,24 @@ const server = http.createServer(async (req, res) => {
       const since = Number(url.searchParams.get("since") || 0);
       const lane = url.searchParams.get("lane") || url.searchParams.get("lanes") || null;
       const runId = url.searchParams.get("runId") || null;
+      const wantsPrivateEvents = Boolean(
+        req.headers[AUTHORITY_HEADER] || req.headers[PLAYER_ID_HEADER]
+      );
+      let playerId = null;
+      if (wantsPrivateEvents) {
+        const auth = authorizePlayerRequest(req, { runId }, { requireCommandSeq: false });
+        if (!auth.ok) {
+          sendAuthorityError(res, auth);
+          return;
+        }
+        playerId = auth.authority.playerId;
+      }
       const journalRead = runtime.eventJournal.read({ since, lane, runId });
       sendJson(res, 200, {
         type: "events",
         protocolVersion: PROTOCOL_VERSION,
         ...journalRead,
-        events: journalRead.events,
+        events: filterEventsForPlayer(journalRead.events, playerId),
       });
       return;
     }
@@ -5863,30 +6018,42 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/session/start") {
       const body = await readJson(req);
       if (runtime.session.status === "running") {
-        const permission = ensureHostPermission(String(body.requesterId || "").trim());
+        const permission = ensureHostAuthority(req, {
+          ...body,
+          playerId: body.playerId || body.requesterId,
+        });
         if (!permission.ok) {
-          sendJson(res, 403, { ok: false, error: permission.error, session: runtime.session });
+          sendAuthorityError(res, permission);
           return;
         }
+        if (permission.authority) acceptCommand(permission);
       }
       startSession(body);
-      sendJson(res, 200, { ok: true, session: runtime.session });
+      const joinTicket = issueJoinClaim(body.requesterId || body.playerId);
+      sendJson(res, 200, { ok: true, session: runtime.session, joinTicket });
       return;
     }
 
     if (req.method === "POST" && req.url === "/session/reset") {
       const body = await readJson(req);
-      const permission = ensureHostPermission(String(body.requesterId || "").trim());
+      const permission = ensureHostAuthority(req, {
+        ...body,
+        playerId: body.playerId || body.requesterId,
+      });
       if (!permission.ok) {
-        sendJson(res, 403, { ok: false, error: permission.error, session: runtime.session });
+        sendAuthorityError(res, permission);
         return;
       }
+      if (permission.authority) acceptCommand(permission);
+      const requesterId = runtime.session.hostClientId || body.requesterId || body.playerId;
+      const requesterName = runtime.session.hostName;
       startSession({
         ...runtime.session,
-        requesterId: runtime.session.hostClientId,
-        requesterName: runtime.session.hostName,
+        requesterId,
+        requesterName,
       });
-      sendJson(res, 200, { ok: true, session: runtime.session });
+      const joinTicket = issueJoinClaim(requesterId);
+      sendJson(res, 200, { ok: true, session: runtime.session, joinTicket });
       return;
     }
 
@@ -5903,7 +6070,38 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      const requestedRunId = String(body.runId || "").trim();
+      if (requestedRunId && requestedRunId !== runtime.session.runId) {
+        sendJson(res, 409, {
+          ok: false,
+          code: "stale-run",
+          error: "Join does not belong to the active run",
+          activeRunId: runtime.session.runId,
+        });
+        return;
+      }
+
       let player = runtime.players.get(clientId);
+      let authority = runtime.playerAuthorities.get(clientId) || null;
+      const reconnected = Boolean(player);
+      if (player) {
+        const auth = authorizePlayerRequest(req, {
+          ...body,
+          runId: requestedRunId || runtime.session.runId,
+          playerId: clientId,
+        }, { requireCommandSeq: false });
+        if (!auth.ok) {
+          sendAuthorityError(res, auth);
+          return;
+        }
+        authority = auth.authority;
+      } else {
+        const pendingClaim = runtime.joinClaims.get(clientId);
+        if (pendingClaim && !secretsMatch(body.joinTicket, pendingClaim)) {
+          sendJson(res, 403, { ok: false, code: "join-claim-required", error: "A valid host join ticket is required" });
+          return;
+        }
+      }
       if (!player) {
         const humanCount = Array.from(runtime.players.values()).filter(p => !p.isAI).length;
         if (humanCount >= runtime.session.maxPlayers) {
@@ -5939,6 +6137,8 @@ const server = http.createServer(async (req, res) => {
         player.wx = spawn.wx;
         player.wy = spawn.wy;
         runtime.players.set(clientId, player);
+        authority = issuePlayerAuthority(clientId);
+        runtime.joinClaims.delete(clientId);
         telemetry.info("player.joined", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, hullType: player.hullType, mapId: runtime.session.mapId });
         if (!runtime.session.hostClientId) assignHost(clientId, player.name);
         publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
@@ -5978,7 +6178,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       refreshBallparkMirror("player-joined");
-      sendJson(res, 200, { ok: true, player });
+      sendJson(res, 200, { ok: true, player, authority: publicAuthority(authority, { reconnected }) });
       return;
     }
 
@@ -6000,11 +6200,13 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/leave") {
       const body = await readJson(req);
-      const clientId = String(body.clientId || "").trim();
-      if (!clientId) {
-        sendJson(res, 400, { ok: false, error: "clientId is required" });
+      const auth = authorizePlayerRequest(req, body);
+      if (!auth.ok) {
+        sendAuthorityError(res, auth);
         return;
       }
+      acceptCommand(auth);
+      const clientId = auth.authority.playerId;
       const player = runtime.players.get(clientId);
       if (!player) {
         sendJson(res, 404, { ok: false, error: "Unknown client" });
@@ -6014,6 +6216,7 @@ const server = http.createServer(async (req, res) => {
         commitPlayerOutcome(player, player.status === "escaped" ? "escaped" : "abandoned");
       }
       runtime.players.delete(clientId);
+      runtime.playerAuthorities.delete(clientId);
       telemetry.info("player.left", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, status: player.status });
       publishEvent("player.left", {
         clientId,
@@ -6033,22 +6236,37 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const message = normalizeInputMessage(body);
-      if (!message.clientId) {
-        sendJson(res, 400, { ok: false, error: "clientId is required" });
+      const auth = authorizePlayerRequest(req, message);
+      if (!auth.ok) {
+        sendAuthorityError(res, auth);
         return;
       }
-      const player = runtime.players.get(message.clientId);
+      acceptCommand(auth);
+      const player = runtime.players.get(auth.authority.playerId);
       if (!player) {
         sendJson(res, 404, { ok: false, error: "Unknown client" });
         return;
       }
       if (message.seq <= player.lastInput.seq) {
-        sendJson(res, 200, { ok: true, ignored: true, reason: "stale-seq" });
+        sendJson(res, 409, {
+          ok: false,
+          code: "stale-input",
+          error: "Input sequence is not newer than the last accepted input",
+          acceptedCommandSeq: auth.authority.lastCommandSeq,
+          acceptedSeq: player.lastInput.seq,
+        });
         return;
       }
+      const acceptedSlingshotEdges = message.slingshotEdges.filter((edgeId) =>
+        edgeId > (auth.authority.lastSlingshotEdgeId || 0)
+      );
+      if (acceptedSlingshotEdges.length > 0) {
+        auth.authority.lastSlingshotEdgeId = acceptedSlingshotEdges[acceptedSlingshotEdges.length - 1];
+      }
+      const { commandCredential: _commandCredential, ...inputState } = message;
       player.lastInput = {
-        ...message,
-        slingshotEdges: mergePendingSlingshotEdges(player, message.slingshotEdges),
+        ...inputState,
+        slingshotEdges: mergePendingSlingshotEdges(player, acceptedSlingshotEdges),
         pulse: Boolean(player.lastInput.pulse || message.pulse),
         consumeSlot:
           message.consumeSlot === null || message.consumeSlot === undefined
@@ -6057,8 +6275,9 @@ const server = http.createServer(async (req, res) => {
       };
       sendJson(res, 200, {
         ok: true,
+        acceptedCommandSeq: auth.authority.lastCommandSeq,
         acceptedSeq: message.seq,
-        acceptedSlingshotEdges: message.slingshotEdges,
+        acceptedSlingshotEdges,
         pendingSlingshotEdgeCount: player.lastInput.slingshotEdges.length,
         tick: runtime.tick,
       });
@@ -6072,11 +6291,13 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const message = normalizeInventoryAction(body);
-      if (!message.clientId) {
-        sendJson(res, 400, { ok: false, error: "clientId is required" });
+      const auth = authorizePlayerRequest(req, message);
+      if (!auth.ok) {
+        sendAuthorityError(res, auth);
         return;
       }
-      const player = runtime.players.get(message.clientId);
+      acceptCommand(auth);
+      const player = runtime.players.get(auth.authority.playerId);
       if (!player) {
         sendJson(res, 404, { ok: false, error: "Unknown client" });
         return;
@@ -6087,7 +6308,12 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       refreshBallparkMirror("inventory-action");
-      sendJson(res, 200, { ok: true, player, snapshot: snapshotBody({ force: true }) });
+      sendJson(res, 200, {
+        ok: true,
+        acceptedCommandSeq: auth.authority.lastCommandSeq,
+        player,
+        snapshot: snapshotBody({ force: true }),
+      });
       return;
     }
 

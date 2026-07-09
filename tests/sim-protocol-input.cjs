@@ -6,7 +6,10 @@ async function run() {
 
   await runner.run("normalizes crafted move vectors without changing scalar actions", async () => {
     const input = normalizeInputMessage({
-      clientId: "diag",
+      runId: "run-input",
+      playerId: "diag",
+      commandSeq: 4,
+      commandCredential: "diag-secret",
       seq: 7,
       moveX: 1,
       moveY: 1,
@@ -27,6 +30,8 @@ async function run() {
     assert(input.slingshotEdges.join(",") === "3,4,5",
       `Expected deduped slingshot edges to survive normalization, got ${input.slingshotEdges.join(",")}`);
     assert(input.consumeSlot === 1, `Expected consume slot 1, got ${input.consumeSlot}`);
+    assert(input.runId === "run-input" && input.playerId === "diag" && input.commandSeq === 4,
+      "Expected v2 command envelope on normalized input");
   });
 
   await runner.run("leaves brake-only facing vectors intact", async () => {

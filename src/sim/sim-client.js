@@ -8,6 +8,11 @@ export class SimClient {
     this.baseUrl = String(baseUrl || '').replace(/\/+$/, '');
     this.clientId = randomClientId();
     this.seq = 0;
+    this.commandSeq = 0;
+    this.commandCredential = null;
+    this.authorityRunId = null;
+    this.joinTicket = null;
+    this._commandTail = Promise.resolve();
     this.latestSnapshot = null;
     this.latestEvents = [];
     this.runId = null;
@@ -44,9 +49,20 @@ export class SimClient {
 
   async _json(path, options = {}) {
     if (!this.enabled) throw new Error('Sim client is not configured');
+    const authorityHeaders = this.commandCredential && this.authorityRunId
+      ? {
+          'x-lbh-command-credential': this.commandCredential,
+          'x-lbh-player-id': this.clientId,
+          'x-lbh-run-id': this.authorityRunId,
+        }
+      : {};
     const response = await fetch(`${this.baseUrl}${path}`, {
-      headers: { 'content-type': 'application/json' },
       ...options,
+      headers: {
+        'content-type': 'application/json',
+        ...authorityHeaders,
+        ...(options.headers || {}),
+      },
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -66,11 +82,24 @@ export class SimClient {
   }
 
   async startSession({ mapId, worldScale, maxPlayers = 4, seed = null, requesterId = this.clientId, requesterName = null, requesterProfileId = null, requesterProfile = null }) {
-    const body = await this._json('/session/start', {
+    const command = this.commandCredential ? this._nextCommandEnvelope() : {};
+    const request = () => this._json('/session/start', {
       method: 'POST',
-      body: JSON.stringify({ mapId, worldScale, maxPlayers, seed, requesterId, requesterName, requesterProfileId, requesterProfile }),
+      body: JSON.stringify({
+        mapId,
+        worldScale,
+        maxPlayers,
+        seed,
+        requesterId,
+        requesterName,
+        requesterProfileId,
+        requesterProfile,
+        ...command,
+      }),
     });
+    const body = await (this.commandCredential ? this._enqueueCommand(request) : request());
     this._applySessionClocks(body?.session);
+    this._clearAuthority(body?.session?.runId || null, body?.joinTicket || null);
     this._resetStreamState(body?.session?.runId || null);
     return body.session;
   }
@@ -78,27 +107,33 @@ export class SimClient {
   async ensureSession({ mapId, worldScale, maxPlayers = 4 }) {
     const health = await this.getHealth();
     const session = health?.session;
-    if (session?.status === 'running' && session.mapId === mapId) {
+    const hasHumanPilot = Number(health?.idleState?.humanPlayerCount || 0) > 0;
+    if (session?.status === 'running' && session.mapId === mapId && hasHumanPilot) {
+      if (this.runId !== session.runId) this._resetStreamState(session.runId || null);
       return session;
     }
     return this.startSession({ mapId, worldScale, maxPlayers });
   }
 
   async resetSession({ requesterId = this.clientId } = {}) {
-    const body = await this._json('/session/reset', {
+    const command = this._nextCommandEnvelope();
+    const body = await this._enqueueCommand(() => this._json('/session/reset', {
       method: 'POST',
-      body: JSON.stringify({ requesterId }),
-    });
+      body: JSON.stringify({ requesterId, ...command }),
+    }));
     this._applySessionClocks(body?.session);
+    this._clearAuthority(body?.session?.runId || null, body?.joinTicket || null);
     this._resetStreamState(body?.session?.runId || null);
     return body.session;
   }
 
   async join({ name, profileId = null, profileSnapshot = null, equipped = null, consumables = null }) {
-    return this._json('/join', {
+    const body = await this._json('/join', {
       method: 'POST',
       body: JSON.stringify({
         clientId: this.clientId,
+        runId: this.runId,
+        joinTicket: this.joinTicket,
         name,
         profileId,
         profileSnapshot,
@@ -106,15 +141,20 @@ export class SimClient {
         consumables,
       }),
     });
+    this._adoptAuthority(body?.authority);
+    return body;
   }
 
   async leave() {
-    return this._json('/leave', {
+    const envelope = this._nextCommandEnvelope();
+    const response = await this._enqueueCommand(() => this._json('/leave', {
       method: 'POST',
       body: JSON.stringify({
-        clientId: this.clientId,
+        ...envelope,
       }),
-    });
+    }));
+    this._clearAuthority(this.runId, null);
+    return response;
   }
 
   async pollSnapshot(force = false) {
@@ -139,6 +179,43 @@ export class SimClient {
     this.lastPollAt = 0;
   }
 
+  _clearAuthority(runId = null, joinTicket = null) {
+    this.commandSeq = 0;
+    this.commandCredential = null;
+    this.authorityRunId = null;
+    this.joinTicket = joinTicket;
+    if (runId) this.runId = runId;
+  }
+
+  _adoptAuthority(authority) {
+    if (!authority?.commandCredential || !authority?.runId) {
+      throw new Error('Sim join did not return protocol-v2 command authority');
+    }
+    this.commandCredential = authority.commandCredential;
+    this.authorityRunId = authority.runId;
+    this.runId = authority.runId;
+    this.commandSeq = Math.max(0, Number(authority.lastCommandSeq) || 0);
+    this.joinTicket = null;
+  }
+
+  _nextCommandEnvelope() {
+    if (!this.commandCredential || !this.authorityRunId) {
+      throw new Error('Join the active sim run before sending commands');
+    }
+    this.commandSeq += 1;
+    return {
+      runId: this.authorityRunId,
+      playerId: this.clientId,
+      commandSeq: this.commandSeq,
+    };
+  }
+
+  _enqueueCommand(send) {
+    const pending = this._commandTail.then(send, send);
+    this._commandTail = pending.catch(() => null);
+    return pending;
+  }
+
   async _syncEventWindow(snapshot) {
     const runId = snapshot?.runId || snapshot?.session?.runId || null;
     const watermark = Math.max(0, Number(snapshot?.lastEventSeq) || 0);
@@ -150,6 +227,9 @@ export class SimClient {
       this.runId = runId;
       this.eventCursor = 0;
       this.latestEvents = [];
+      if (this.authorityRunId && this.authorityRunId !== runId) {
+        this._clearAuthority(runId, null);
+      }
     }
     this.lastSnapshotId = Math.max(0, Number(snapshot?.snapshotId) || 0);
     this.metrics.lastSnapshotId = this.lastSnapshotId;
@@ -218,7 +298,7 @@ export class SimClient {
     this.seq += 1;
     const sentAt = this._nowMs();
     this.lastSentInput = {
-      clientId: this.clientId,
+      ...this._nextCommandEnvelope(),
       seq: this.seq,
       moveX,
       moveY,
@@ -234,29 +314,28 @@ export class SimClient {
     };
     this.pendingInputs.push({ seq: this.seq, sentAt });
     if (this.pendingInputs.length > 32) this.pendingInputs.splice(0, this.pendingInputs.length - 32);
-    const response = await this._json('/input', {
+    const inputPayload = { ...this.lastSentInput, timestamp: Date.now() };
+    const response = await this._enqueueCommand(() => this._json('/input', {
       method: 'POST',
-      body: JSON.stringify({
-        ...this.lastSentInput,
-        timestamp: Date.now(),
-      }),
-    });
+      body: JSON.stringify(inputPayload),
+    }));
     this.metrics.lastAcceptedSeq = response.acceptedSeq ?? this.metrics.lastAcceptedSeq;
     this.metrics.lastInputAckRttMs = this._nowMs() - sentAt;
     return response;
   }
 
   async inventoryAction({ action, cargoSlot = -1, equipSlot = -1, consumableSlot = -1 }) {
-    return this._json('/inventory/action', {
+    const envelope = this._nextCommandEnvelope();
+    return this._enqueueCommand(() => this._json('/inventory/action', {
       method: 'POST',
       body: JSON.stringify({
-        clientId: this.clientId,
+        ...envelope,
         action,
         cargoSlot,
         equipSlot,
         consumableSlot,
       }),
-    });
+    }));
   }
 
   async getProfile(profileId) {

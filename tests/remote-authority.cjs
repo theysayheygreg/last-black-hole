@@ -24,6 +24,7 @@ const {
 const htmlFile = process.argv[2] || "index-a.html";
 const SIM_PORT = Number(process.env.LBH_REMOTE_AUTHORITY_SIM_PORT || 8798);
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
+const directAuthorities = new Map();
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
@@ -126,30 +127,70 @@ async function getProfile(profileId) {
 }
 
 async function postInput(body) {
+  const authority = directAuthorities.get(body.clientId);
+  assert(authority, `No direct protocol authority for ${body.clientId}`);
+  authority.commandSeq += 1;
   const response = await fetch(`${SIM_URL}/input`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      ...body,
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+      commandSeq: authority.commandSeq,
+    }),
   });
   return response.json();
 }
 
 async function postJoin(body) {
+  const snapshot = await getSnapshot();
   const response = await fetch(`${SIM_URL}/join`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ runId: snapshot.runId || snapshot.session?.runId, ...body }),
+  });
+  const result = await response.json();
+  if (result.authority) {
+    directAuthorities.set(result.authority.playerId, {
+      ...result.authority,
+      commandSeq: result.authority.lastCommandSeq || 0,
+    });
+  }
+  return result;
+}
+
+async function postInventoryAction(body) {
+  const authority = directAuthorities.get(body.clientId);
+  assert(authority, `No direct protocol authority for ${body.clientId}`);
+  authority.commandSeq += 1;
+  const response = await fetch(`${SIM_URL}/inventory/action`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      ...body,
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+      commandSeq: authority.commandSeq,
+    }),
   });
   return response.json();
 }
 
-async function postInventoryAction(body) {
-  const response = await fetch(`${SIM_URL}/inventory/action`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return response.json();
+async function sendBrowserInput(targetPage, body) {
+  return targetPage.evaluate((message) => window.__TEST_API.sendRemoteInput(message), body);
 }
 
 async function postDebugPlayerState(body) {
@@ -180,12 +221,27 @@ async function postDebugPortalState(body) {
 }
 
 async function postLeave(body) {
+  const authority = directAuthorities.get(body.clientId);
+  assert(authority, `No direct protocol authority for ${body.clientId}`);
+  authority.commandSeq += 1;
   const response = await fetch(`${SIM_URL}/leave`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+      commandSeq: authority.commandSeq,
+    }),
   });
-  return response.json();
+  const result = await response.json();
+  if (result.ok) directAuthorities.delete(body.clientId);
+  return result;
 }
 
 async function postDebugScavengerState(body) {
@@ -198,10 +254,24 @@ async function postDebugScavengerState(body) {
 }
 
 async function postSessionReset(body) {
+  const authority = directAuthorities.get(body.requesterId);
+  assert(authority, `No direct protocol authority for ${body.requesterId}`);
+  authority.commandSeq += 1;
   const response = await fetch(`${SIM_URL}/session/reset`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      requesterId: authority.playerId,
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+      commandSeq: authority.commandSeq,
+    }),
   });
   const json = await response.json();
   return { status: response.status, body: json };
@@ -520,8 +590,7 @@ async function run() {
       assert(beforePlayer, "Expected local browser player in authoritative snapshot");
 
       for (let i = 0; i < 5; i++) {
-        await postInput({
-          clientId: before.net.clientId,
+        await sendBrowserInput(page, {
           seq: Date.now() + i,
           moveX: 1,
           moveY: 0,
@@ -550,9 +619,25 @@ async function run() {
     });
 
     await runner.run("Remote delta-v gates brake, fuel cells, and speed cap", async () => {
-      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const clientId = "remote-delta-v-authority-test";
+      const joined = await postJoin({
+        clientId,
+        name: "Delta-V Authority Test",
+        consumables: [null, {
+          id: "fuel-cell-fixture",
+          name: "Test Fuel Cell",
+          category: "artifact",
+          subcategory: "consumable",
+          tier: "common",
+          value: 35,
+          useEffect: "fuelRefill",
+          amount: 35,
+          charges: 1,
+        }],
+      });
+      assert(joined.ok === true, "Expected dedicated delta-v client to join");
       let result = await postDebugPlayerState({
-        clientId: net.clientId,
+        clientId,
         wx: 1.5,
         wy: 1.5,
         vx: 0,
@@ -564,7 +649,7 @@ async function run() {
       assert(result.ok === true, "Expected debug fuel reset to succeed");
 
       await postInput({
-        clientId: net.clientId,
+        clientId,
         seq: Date.now() + 10,
         moveX: 1,
         moveY: 0,
@@ -574,7 +659,7 @@ async function run() {
         timestamp: Date.now(),
       });
       let observed = await waitForSnapshotPlayer(
-        net.clientId,
+        clientId,
         (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) > 0.001 && remotePlayer.deltaV < 20,
         { timeout: 5000 }
       );
@@ -583,7 +668,7 @@ async function run() {
       assert(observed.player.deltaV < 20, `Expected brake to spend delta-v, got ${observed.player.deltaV}`);
 
       result = await postDebugPlayerState({
-        clientId: net.clientId,
+        clientId,
         vx: 0,
         vy: 0,
         deltaV: 0,
@@ -592,7 +677,7 @@ async function run() {
       });
       assert(result.ok === true, "Expected debug empty tank to succeed");
       await postInput({
-        clientId: net.clientId,
+        clientId,
         seq: Date.now() + 20,
         moveX: 1,
         moveY: 0,
@@ -602,7 +687,7 @@ async function run() {
         timestamp: Date.now(),
       });
       observed = await waitForSnapshotPlayer(
-        net.clientId,
+        clientId,
         (remotePlayer) => remotePlayer.consumables?.[1] === null && remotePlayer.deltaV > 20,
         { timeout: 5000 }
       );
@@ -610,19 +695,20 @@ async function run() {
       assert(observed.player.deltaV > 20, `Expected fuel cell to refill delta-v, got ${observed.player.deltaV}`);
 
       result = await postDebugPlayerState({
-        clientId: net.clientId,
+        clientId,
         vx: 20,
         vy: 0,
         status: "alive",
       });
       assert(result.ok === true, "Expected debug high velocity to succeed");
       observed = await waitForSnapshotPlayer(
-        net.clientId,
+        clientId,
         (remotePlayer) => Math.hypot(remotePlayer.vx, remotePlayer.vy) <= 8.01,
         { timeout: 5000 }
       );
       assert(Math.hypot(observed.player.vx, observed.player.vy) <= 8.01,
         `Expected server speed cap near 8 wu/s, got ${Math.hypot(observed.player.vx, observed.player.vy)}`);
+      await postLeave({ clientId });
     });
 
     await runner.run("Remote slingshot is resolved by the authoritative sim", async () => {
@@ -666,8 +752,7 @@ async function run() {
       );
 
       const engageSeq = Date.now() + 100;
-      await postInput({
-        clientId: net.clientId,
+      await sendBrowserInput(page, {
         seq: engageSeq,
         moveX: 1,
         moveY: 0,
@@ -697,8 +782,7 @@ async function run() {
       assert(Math.hypot(playerBeforeRelease.vx, playerBeforeRelease.vy) > 0.01,
         "Expected slingshotting player to have orbital speed before release");
 
-      await postInput({
-        clientId: net.clientId,
+      await sendBrowserInput(page, {
         seq: engageSeq + 1,
         moveX: 1,
         moveY: 0,
@@ -718,8 +802,7 @@ async function run() {
       );
       const eventsBeforeRelease = await getEvents(0);
       const lastSeqBeforeRelease = eventsBeforeRelease.reduce((max, event) => Math.max(max, event.seq || 0), 0);
-      await postInput({
-        clientId: net.clientId,
+      await sendBrowserInput(page, {
         seq: engageSeq + 2,
         moveX: 1,
         moveY: 0,
@@ -768,8 +851,7 @@ async function run() {
       const seq = Date.now() + 1;
       const beforeEvents = await getEvents(0);
       const baselineSeq = beforeEvents.reduce((max, event) => Math.max(max, event.seq || 0), 0);
-      await postInput({
-        clientId: net.clientId,
+      await sendBrowserInput(page, {
         seq,
         moveX: 0,
         moveY: 0,
@@ -792,9 +874,23 @@ async function run() {
     });
 
     await runner.run("Remote inventory actions mutate authoritative cargo and loadout", async () => {
-      const net = await page.evaluate(() => window.__TEST_API.getNetworkState());
+      const clientId = "remote-inventory-authority-test";
+      const joined = await postJoin({
+        clientId,
+        name: "Inventory Authority Test",
+        equipped: [{
+          id: "pull-dampener-fixture",
+          name: "Pull Dampener",
+          category: "artifact",
+          subcategory: "equippable",
+          tier: "rare",
+          value: 450,
+          effect: "reduceWellPull",
+        }],
+      });
+      assert(joined.ok === true, "Expected dedicated inventory client to join");
       const resetPlayer = await postDebugPlayerState({
-        clientId: net.clientId,
+        clientId,
         wx: 1.5,
         wy: 1.5,
         vx: 0,
@@ -804,7 +900,7 @@ async function run() {
       assert(resetPlayer.ok === true, "Expected debug reset to safe alive state before inventory mutation");
 
       let result = await postInventoryAction({
-        clientId: net.clientId,
+        clientId,
         action: "unequip",
         equipSlot: 0,
       });
@@ -812,13 +908,13 @@ async function run() {
 
       let snapshotState = {
         snapshot: result.snapshot,
-        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === net.clientId),
+        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
       };
       assert(snapshotState.player?.cargo?.some((item) => item?.name === "Pull Dampener"), "Expected unequipped artifact in cargo");
 
       const cargoSlot = snapshotState.player.cargo.findIndex((item) => item?.name === "Pull Dampener");
       result = await postInventoryAction({
-        clientId: net.clientId,
+        clientId,
         action: "equipCargo",
         cargoSlot,
         equipSlot: 1,
@@ -827,12 +923,12 @@ async function run() {
 
       snapshotState = {
         snapshot: result.snapshot,
-        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === net.clientId),
+        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
       };
       assert(snapshotState.player?.equipped?.[1]?.name === "Pull Dampener", "Expected authoritative re-equip into slot 1");
 
       result = await postInventoryAction({
-        clientId: net.clientId,
+        clientId,
         action: "unequip",
         equipSlot: 1,
       });
@@ -840,12 +936,12 @@ async function run() {
 
       snapshotState = {
         snapshot: result.snapshot,
-        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === net.clientId),
+        player: result.snapshot.players.find((remotePlayer) => remotePlayer.clientId === clientId),
       };
       const dropSlot = snapshotState.player.cargo.findIndex(Boolean);
       assert(dropSlot >= 0, "Expected an occupied cargo slot before remote drop");
       result = await postInventoryAction({
-        clientId: net.clientId,
+        clientId,
         action: "dropCargo",
         cargoSlot: dropSlot,
       });
@@ -858,6 +954,7 @@ async function run() {
         dropSnapshot.world?.wrecks?.some((wreck) => wreck.name === authoritativeDropped.name),
         "Expected dropped wreck to remain in authoritative world snapshot"
       );
+      await postLeave({ clientId });
     });
 
     await runner.run("Remote authoritative hazards push the player without local fallback", async () => {
@@ -933,14 +1030,10 @@ async function run() {
     });
 
     await runner.run("Second client joins existing authoritative session", async () => {
-      const joinResponse = await fetch(`${SIM_URL}/join`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          clientId: "remote-test-second-client",
-          name: "Second Client",
-        }),
-      }).then((response) => response.json());
+      const joinResponse = await postJoin({
+        clientId: "remote-test-second-client",
+        name: "Second Client",
+      });
 
       assert(joinResponse.ok === true, "Expected direct second join to succeed");
 
@@ -970,18 +1063,8 @@ async function run() {
       const snapshot = await getSnapshot();
       assert(snapshot.session.mapId === "shallows", `Expected live authoritative map to stay on shallows, got ${snapshot.session.mapId}`);
 
-      const deniedReset = await postSessionReset({ requesterId: net.clientId });
+      const deniedReset = await postSessionReset({ requesterId: "remote-test-second-client" });
       assert(deniedReset.status === 403, `Expected non-host reset denial, got ${deniedReset.status}`);
-
-       const leaveResponse = await postLeave({ clientId: net.clientId });
-       assert(leaveResponse.ok === true, "Expected browser-backed client leave to succeed");
-
-       const afterLeave = await getSnapshot();
-       assert(afterLeave.session.mapId === "shallows", `Expected session map to remain shallows after leave, got ${afterLeave.session.mapId}`);
-       assert(
-         !afterLeave.players.some((player) => player.clientId === net.clientId),
-         "Expected leaving browser client to be removed from authoritative session"
-       );
 
       await browser2.close();
       browser2 = null;
@@ -1021,11 +1104,6 @@ async function run() {
         (remotePlayer) => remotePlayer.status === "dead",
         { timeout: 8000 }
       );
-      await waitForEvents(
-        (allEvents) => allEvents.some((event) => event.type === "profile.updated" && event.payload?.clientId === net.clientId),
-        { timeout: 8000 }
-      );
-
       const persisted = await getProfile(beforeProfile.id);
       assert(persisted.ok === true, "Expected persisted profile lookup to succeed after death");
       assert(persisted.profile.totalDeaths === beforeProfile.totalDeaths + 1, "Expected authoritative death count to increment");
@@ -1036,8 +1114,19 @@ async function run() {
 
     await runner.run("Host leaves and remaining player is promoted", async () => {
       const hostNet = await page.evaluate(() => window.__TEST_API.getNetworkState());
-      const leaveResponse = await postLeave({ clientId: hostNet.clientId });
-      assert(leaveResponse.ok === true, "Expected host leave to succeed");
+      await waitForPhase(page, "dead", 8000);
+      await page.evaluate(() => window.__TEST_API.showRunResultsFixture(null, "dead"));
+      await sleep(180);
+      await tap(page, "Enter", "Enter");
+      const leaveDeadline = Date.now() + 8000;
+      while (Date.now() < leaveDeadline) {
+        const snapshot = await getSnapshot();
+        if (!snapshot.players.some((entry) => entry.clientId === hostNet.clientId)) break;
+        await sleep(100);
+      }
+      const afterHostLeave = await getSnapshot();
+      assert(!afterHostLeave.players.some((entry) => entry.clientId === hostNet.clientId),
+        "Expected host to leave through its authenticated end-screen flow");
 
       const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
       assert(

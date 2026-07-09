@@ -17,6 +17,25 @@ async function postJson(path, payload) {
   });
 }
 
+async function postCommand(path, authority, commandSeq, payload) {
+  return getJson(path, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+      commandSeq,
+      ...payload,
+    }),
+  });
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -68,10 +87,13 @@ async function run() {
       assert(start.status === 200 && start.body.ok === true, `Expected start success, got ${start.status}`);
 
       const join = await postJson("/join", {
+        runId: start.body.session.runId,
         clientId: "slingshot-edge-queue-test",
+        joinTicket: start.body.joinTicket,
         name: "Slingshot Edge Queue Test",
       });
       assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
+      const authority = join.body.authority;
 
       const initial = await waitForSnapshot((body) => body.players?.some((player) => player.clientId === "slingshot-edge-queue-test"));
       const anchor = initial.world?.stars?.find((entry) => entry.alive !== false) || initial.world?.planetoids?.find((entry) => entry.alive !== false) || initial.world?.wells?.[0];
@@ -93,8 +115,7 @@ async function run() {
       assert(moved.status === 200 && moved.body.ok === true, `Expected debug player move success, got ${moved.status}`);
 
       const watermark = maxEventSeq((await getJson("/events")).body);
-      const input = await postJson("/input", {
-        clientId: "slingshot-edge-queue-test",
+      const input = await postCommand("/input", authority, 1, {
         seq: 1,
         moveX: 1,
         moveY: 0,

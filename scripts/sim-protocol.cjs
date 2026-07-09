@@ -1,4 +1,7 @@
-const PROTOCOL_VERSION = "lbh-local-v1";
+const PROTOCOL_VERSION = "lbh-local-v2";
+const AUTHORITY_HEADER = "x-lbh-command-credential";
+const PLAYER_ID_HEADER = "x-lbh-player-id";
+const RUN_ID_HEADER = "x-lbh-run-id";
 const DEFAULT_SIM_PORT = 8787;
 const DEFAULT_TICK_HZ = 15;
 const DEFAULT_SNAPSHOT_HZ = 10;
@@ -29,7 +32,25 @@ function normalizeSlingshotEdges(value) {
   return edges;
 }
 
+function normalizeIdentity(value) {
+  return String(value || "").trim();
+}
+
+function normalizeCommandEnvelope(body = {}) {
+  const playerId = normalizeIdentity(body.playerId || body.clientId);
+  return {
+    runId: normalizeIdentity(body.runId),
+    playerId,
+    // Keep clientId as a read-only compatibility alias inside the sim while
+    // v2 names the authority subject playerId at the wire boundary.
+    clientId: playerId,
+    commandSeq: Math.max(0, Math.floor(asNumber(body.commandSeq, 0))),
+    commandCredential: normalizeIdentity(body.commandCredential),
+  };
+}
+
 function normalizeInputMessage(body = {}) {
+  const envelope = normalizeCommandEnvelope(body);
   const consumeSlotValue = body.consumeSlot;
   const consumeSlot =
     consumeSlotValue === null || consumeSlotValue === undefined || consumeSlotValue === ""
@@ -43,8 +64,8 @@ function normalizeInputMessage(body = {}) {
     moveY /= moveMag;
   }
   return {
+    ...envelope,
     type: "input",
-    clientId: String(body.clientId || "").trim(),
     seq: Math.max(0, Math.floor(asNumber(body.seq, 0))),
     moveX,
     moveY,
@@ -61,15 +82,35 @@ function normalizeInputMessage(body = {}) {
 }
 
 function normalizeInventoryAction(body = {}) {
+  const envelope = normalizeCommandEnvelope(body);
   const action = String(body.action || "").trim();
   return {
+    ...envelope,
     type: "inventoryAction",
-    clientId: String(body.clientId || "").trim(),
     action,
     cargoSlot: Math.max(-1, Math.floor(asNumber(body.cargoSlot, -1))),
     equipSlot: Math.max(-1, Math.floor(asNumber(body.equipSlot, -1))),
     consumableSlot: Math.max(-1, Math.floor(asNumber(body.consumableSlot, -1))),
   };
+}
+
+function playerEventVisibility(playerId) {
+  const normalized = normalizeIdentity(playerId);
+  if (!normalized) throw new Error("Player-local visibility requires a playerId");
+  return `player:${normalized}`;
+}
+
+function eventVisibleToPlayer(event, playerId = null) {
+  const visibility = normalizeIdentity(event?.visibility || "public");
+  if (!visibility || visibility === "public") return true;
+  if (!visibility.startsWith("player:")) return false;
+  return visibility.slice("player:".length) === normalizeIdentity(playerId);
+}
+
+function filterEventsForPlayer(events, playerId = null) {
+  return Array.isArray(events)
+    ? events.filter((event) => eventVisibleToPlayer(event, playerId))
+    : [];
 }
 
 function createProtocolDescription() {
@@ -85,15 +126,22 @@ function createProtocolDescription() {
         direction: "client->server",
         body: {
           type: "join",
+          runId: "active run id",
           clientId: "string",
           name: "string",
+          joinTicket: "one-time host claim when starting/resetting a run",
+          commandCredential: "required only when reconnecting an existing player",
         },
+        response: "server-issued per-player command authority",
       },
       input: {
         direction: "client->server",
         body: {
           type: "input",
-          clientId: "string",
+          runId: "active run id",
+          playerId: "authority subject",
+          commandSeq: "monotonic per-player command id",
+          commandCredential: "server-issued secret (body or authority header)",
           seq: "number",
           moveX: "number[-1..1]",
           moveY: "number[-1..1]",
@@ -110,7 +158,10 @@ function createProtocolDescription() {
         direction: "client->server",
         body: {
           type: "inventoryAction",
-          clientId: "string",
+          runId: "active run id",
+          playerId: "authority subject",
+          commandSeq: "monotonic per-player command id",
+          commandCredential: "server-issued secret (body or authority header)",
           action: "'dropCargo' | 'equipCargo' | 'loadConsumable' | 'unequip' | 'unloadConsumable'",
           cargoSlot: "number | -1",
           equipSlot: "number | -1",
@@ -130,6 +181,23 @@ function createProtocolDescription() {
           recentEvents: "array of authoritative events",
         },
       },
+      events: {
+        direction: "server->client",
+        body: {
+          runId: "active run id",
+          nextSince: "global authoritative event watermark",
+          events: "public events plus authenticated player-local events",
+        },
+      },
+    },
+    authority: {
+      headers: {
+        [AUTHORITY_HEADER]: "server-issued command credential",
+        [PLAYER_ID_HEADER]: "authority subject",
+        [RUN_ID_HEADER]: "active run identity",
+      },
+      reconnect: "same run + player id + credential resumes authority and monotonic counters",
+      rejection: "stale run, wrong player, invalid credential, stale command, and stale input are deterministic errors",
     },
   };
 }
@@ -141,7 +209,14 @@ module.exports = {
   DEFAULT_SNAPSHOT_HZ,
   DEFAULT_WORLD_SCALE,
   DEFAULT_MAX_PLAYERS,
+  AUTHORITY_HEADER,
+  PLAYER_ID_HEADER,
+  RUN_ID_HEADER,
+  normalizeCommandEnvelope,
   normalizeInputMessage,
   normalizeInventoryAction,
+  playerEventVisibility,
+  eventVisibleToPlayer,
+  filterEventsForPlayer,
   createProtocolDescription,
 };
