@@ -49,6 +49,10 @@ async function run() {
 
       const snapshot = await getJson("/snapshot");
       assert(snapshot.status === 200, `Expected /snapshot 200, got ${snapshot.status}`);
+      assert(snapshot.body.snapshotId === 1, `Expected first live snapshot id 1, got ${snapshot.body.snapshotId}`);
+      assert(snapshot.body.runId === runId, `Expected snapshot runId ${runId}, got ${snapshot.body.runId}`);
+      assert(snapshot.body.snapshotSchemaVersion === 2,
+        `Expected live snapshot schema 2, got ${snapshot.body.snapshotSchemaVersion}`);
       assert(snapshot.body.lastEventSeq === events.body.lastSeq,
         `Expected snapshot lastEventSeq ${events.body.lastSeq}, got ${snapshot.body.lastEventSeq}`);
       assert(snapshot.body.recentEvents.every((event) => event.runId === runId),
@@ -60,6 +64,19 @@ async function run() {
         "Expected health event journal watermark to match snapshot");
       assert(health.body.eventJournal?.retainedCount <= health.body.eventJournal?.capacity,
         "Expected event journal retention to stay within capacity");
+      assert(health.body.snapshotRing?.runId === runId, "Expected health to expose current snapshot ring runId");
+      assert(health.body.snapshotRing?.lastSnapshotId === snapshot.body.snapshotId,
+        "Expected health snapshot watermark to match the served snapshot");
+
+      const snapshots = await getJson(`/snapshots?runId=${encodeURIComponent(runId)}&since=0`);
+      assert(snapshots.status === 200 && snapshots.body.status === "ok",
+        `Expected live snapshot window, got ${snapshots.status}/${snapshots.body.status}`);
+      assert(snapshots.body.snapshots.length === 1, "Expected one retained live snapshot");
+      assert(snapshots.body.snapshots[0].snapshotId === snapshot.body.snapshotId,
+        "Expected snapshot window to contain the served baseline");
+
+      const staleSnapshots = await getJson("/snapshots?runId=old-run&since=0");
+      assert(staleSnapshots.body.status === "reset", "Expected old snapshot run to request rebase");
 
       const future = await getJson(`/events?since=${events.body.lastSeq + 99}`);
       assert(future.body.future === true, "Expected future since windows to be explicit");

@@ -1865,7 +1865,12 @@ function applyRemoteSnapshot(snapshot) {
     ship.setFacingDirect(inputManager.facing);
   }
 
-  if (Array.isArray(snapshot.recentEvents)) {
+  const liveEvents = simClient?.consumeEvents?.() || [];
+  if (liveEvents.length > 0) {
+    applyRemoteEvents(liveEvents);
+  } else if (!snapshot.snapshotId && Array.isArray(snapshot.recentEvents)) {
+    // Compatibility path for older local authority builds without event-window
+    // recovery. v0.3 snapshots carry snapshotId and use SimClient events.
     applyRemoteEvents(snapshot.recentEvents);
   }
 

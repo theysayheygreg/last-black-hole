@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-07-09 — Live snapshot rebase and event recovery
+
+- Promoted the bounded snapshot ring from a test scaffold into the live sim,
+  with run-stamped snapshot ids, schema metadata, health diagnostics, and a
+  `/snapshots` recovery window.
+- Changed the remote client to consume the authoritative event journal instead
+  of replaying the snapshot compatibility tail. Event gaps now rebase at a
+  full-snapshot watermark instead of mixing partial history with current state.
+- Forced mutation responses to publish a fresh snapshot so inventory and debug
+  actions cannot return a cached pre-mutation view.
+- Extended live protocol coverage for snapshot identity, bounded windows, and
+  stale-run reset behavior.
+
 ## 2026-07-08 — Cloudflare Drop share build target
 
 - Added `npm run build:drop` and `npm run release:drop` for temporary

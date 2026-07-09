@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-07-09 — Full snapshots are the event-gap rebase boundary
+
+**Decision:** Give live authoritative snapshots monotonic ids and retain a
+bounded full-snapshot window. The client reads events from the run-stamped event
+journal; if that bounded history cannot bridge its cursor, it accepts the full
+snapshot as current truth and resumes after the snapshot event watermark.
+
+**Why:** Replaying whichever events happen to remain after a gap can apply an
+incomplete consequence history to fresh world state. Full snapshots already
+carry the complete gameplay view, so they are a deterministic recovery point
+without introducing delta-state ambiguity or renderer ownership.
+
+**Where it landed:** `scripts/sim-runtime.cjs`, `src/sim/sim-client.js`,
+`src/main.js`, and `tests/protocol-runtime.cjs`.
+
+**Door status:** Closed for using snapshot `recentEvents` as the v0.3 live
+transport. Open for compact delta snapshots only after baseline and recovery
+semantics remain equally explicit.
+
 ## 2026-07-08 — Cloudflare Drop is a temporary sandbox share lane
 
 **Decision:** Add a dedicated Cloudflare Drop build target for quick links to

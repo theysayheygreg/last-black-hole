@@ -9,6 +9,10 @@ export class SimClient {
     this.clientId = randomClientId();
     this.seq = 0;
     this.latestSnapshot = null;
+    this.latestEvents = [];
+    this.runId = null;
+    this.eventCursor = 0;
+    this.lastSnapshotId = 0;
     this.lastPollAt = 0;
     this.pollIntervalMs = 100;
     this.lastSentInput = null;
@@ -20,6 +24,10 @@ export class SimClient {
       lastSnapshotIntervalMs: null,
       lastAcceptedSeq: 0,
       lastSnapshotTick: null,
+      lastSnapshotId: 0,
+      lastEventSeq: 0,
+      eventGapRecoveries: 0,
+      lastRecoveryReason: null,
     };
   }
 
@@ -63,8 +71,7 @@ export class SimClient {
       body: JSON.stringify({ mapId, worldScale, maxPlayers, seed, requesterId, requesterName, requesterProfileId, requesterProfile }),
     });
     this._applySessionClocks(body?.session);
-    this.latestSnapshot = null;
-    this.lastPollAt = 0;
+    this._resetStreamState(body?.session?.runId || null);
     return body.session;
   }
 
@@ -83,8 +90,7 @@ export class SimClient {
       body: JSON.stringify({ requesterId }),
     });
     this._applySessionClocks(body?.session);
-    this.latestSnapshot = null;
-    this.lastPollAt = 0;
+    this._resetStreamState(body?.session?.runId || null);
     return body.session;
   }
 
@@ -120,7 +126,58 @@ export class SimClient {
     this.latestSnapshot = await this._json('/snapshot');
     this._recordSnapshotMetrics(this.latestSnapshot);
     this._applySessionClocks(this.latestSnapshot?.session);
+    await this._syncEventWindow(this.latestSnapshot);
     return this.latestSnapshot;
+  }
+
+  _resetStreamState(runId = null) {
+    this.latestSnapshot = null;
+    this.latestEvents = [];
+    this.runId = runId;
+    this.eventCursor = 0;
+    this.lastSnapshotId = 0;
+    this.lastPollAt = 0;
+  }
+
+  async _syncEventWindow(snapshot) {
+    const runId = snapshot?.runId || snapshot?.session?.runId || null;
+    const watermark = Math.max(0, Number(snapshot?.lastEventSeq) || 0);
+    if (!runId) {
+      this.latestEvents = [];
+      return;
+    }
+    if (this.runId !== runId) {
+      this.runId = runId;
+      this.eventCursor = 0;
+      this.latestEvents = [];
+    }
+    this.lastSnapshotId = Math.max(0, Number(snapshot?.snapshotId) || 0);
+    this.metrics.lastSnapshotId = this.lastSnapshotId;
+    if (watermark <= this.eventCursor) return;
+
+    const window = await this._json(
+      `/events?since=${this.eventCursor}&runId=${encodeURIComponent(runId)}`,
+    );
+    if (window.reset || window.stale || window.future) {
+      // Full snapshots are authoritative rebases. If the bounded event window
+      // cannot bridge the gap, continue after its watermark instead of
+      // applying a partial history to fresh state.
+      this.latestEvents = [];
+      this.eventCursor = watermark;
+      this.metrics.eventGapRecoveries += 1;
+      this.metrics.lastRecoveryReason = window.reason || 'event-window-reset';
+    } else {
+      this.latestEvents = Array.isArray(window.events) ? window.events : [];
+      this.eventCursor = Math.max(this.eventCursor, Number(window.nextSince) || watermark);
+      this.metrics.lastRecoveryReason = null;
+    }
+    this.metrics.lastEventSeq = this.eventCursor;
+  }
+
+  consumeEvents() {
+    const events = this.latestEvents;
+    this.latestEvents = [];
+    return events;
   }
 
   _nowMs() {
@@ -137,6 +194,7 @@ export class SimClient {
       this.metrics.lastSnapshotLagMs = Date.now() - Number(snapshot.serverTime);
     }
     this.metrics.lastSnapshotTick = snapshot?.tick ?? this.metrics.lastSnapshotTick;
+    this.metrics.lastSnapshotId = snapshot?.snapshotId ?? this.metrics.lastSnapshotId;
 
     const localPlayer = snapshot?.players?.find((player) => player.clientId === this.clientId);
     const acceptedSeq = Number(localPlayer?.lastInputSeq);

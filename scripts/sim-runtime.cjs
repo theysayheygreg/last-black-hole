@@ -51,6 +51,7 @@ const {
   normalizeInventoryAction,
 } = require("./sim-protocol.cjs");
 const { BODY_MASKS } = require("./sim/body-masks.cjs");
+const { BODY_SCHEMA_VERSION } = require("./sim/body-schema.cjs");
 const { createBallparkMirror } = require("./sim/ballpark-mirror.cjs");
 const { collectNearestBodies, collectRelevantBodies } = require("./sim/sim-queries.cjs");
 const {
@@ -58,6 +59,7 @@ const {
   applyPlayerDriveAndFlow,
 } = require("./sim/player-movement-step.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
+const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -912,6 +914,7 @@ const runtime = {
   simTime: 0,
   loopTickHz: DEFAULT_TICK_HZ,
   eventJournal: createSimEventJournal({ capacity: 256, runId: "idle" }),
+  snapshotRing: createSimSnapshotRing({ capacity: 32, runId: "idle" }),
   recentEvents: [],
   nextEventSeq: 1,
   systemAccumulators: {
@@ -1333,6 +1336,7 @@ function startSession(config = {}) {
   };
   runtime.players.clear();
   runtime.eventJournal.startRun(runtime.session.runId);
+  runtime.snapshotRing.startRun(runtime.session.runId);
   runtime.recentEvents = [];
   runtime.nextEventSeq = runtime.eventJournal.nextSeq;
   runtime.emptySince = null;
@@ -1428,7 +1432,7 @@ function promoteHostIfNeeded() {
   if (nextHost) assignHost(nextHost.clientId, nextHost.name);
 }
 
-function snapshotBody() {
+function buildSnapshotBody() {
   return {
     type: "snapshot",
     protocolVersion: PROTOCOL_VERSION,
@@ -1540,6 +1544,21 @@ function snapshotBody() {
     },
     recentEvents: runtime.recentEvents.slice(-32),
   };
+}
+
+function snapshotBody({ force = false } = {}) {
+  const lastEventSeq = runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1);
+  const latest = runtime.snapshotRing.latest({ runId: runtime.session.runId || "idle" });
+  if (!force && latest.status === "hit" && latest.snapshot?.tick === runtime.tick &&
+      latest.snapshot?.lastEventSeq === lastEventSeq &&
+      latest.snapshot?.session?.status === runtime.session.status) {
+    return latest.snapshot;
+  }
+  return runtime.snapshotRing.append(buildSnapshotBody(), {
+    bodySchemaVersion: BODY_SCHEMA_VERSION,
+    snapshotSchemaVersion: 2,
+    lastEventSeq,
+  });
 }
 
 function getHumanPlayers({ activeOnly = false } = {}) {
@@ -5635,6 +5654,7 @@ const server = http.createServer(async (req, res) => {
         ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
         ballparkRelevance: runtime.ballparkRelevance,
         eventJournal: runtime.eventJournal ? runtime.eventJournal.describe() : null,
+        snapshotRing: runtime.snapshotRing ? runtime.snapshotRing.describe() : null,
         match: {
           maxSimTime: MATCH_MAX_SIM_TIME,
           terminalGraceMs: TERMINAL_SESSION_GRACE_MS,
@@ -5710,6 +5730,18 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && req.url === "/protocol") {
       sendJson(res, 200, protocol);
+      return;
+    }
+
+    if (req.method === "GET" && req.url?.startsWith("/snapshots")) {
+      const url = new URL(req.url, `http://${HOST}:${PORT}`);
+      const sinceSnapshotId = Number(url.searchParams.get("since") || 0);
+      const runId = url.searchParams.get("runId") || null;
+      sendJson(res, 200, {
+        type: "snapshots",
+        protocolVersion: PROTOCOL_VERSION,
+        ...runtime.snapshotRing.list({ sinceSnapshotId, runId }),
+      });
       return;
     }
 
@@ -5960,7 +5992,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       refreshBallparkMirror("inventory-action");
-      sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
+      sendJson(res, 200, { ok: true, player, snapshot: snapshotBody({ force: true }) });
       return;
     }
 
@@ -5979,7 +6011,7 @@ const server = http.createServer(async (req, res) => {
       applyDebugPlayerState(player, body);
       maybeEndTerminalSession("terminal-players");
       refreshBallparkMirror("debug-player-state");
-      sendJson(res, 200, { ok: true, player, snapshot: snapshotBody() });
+      sendJson(res, 200, { ok: true, player, snapshot: snapshotBody({ force: true }) });
       return;
     }
 
@@ -5991,7 +6023,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       refreshBallparkMirror("debug-inhibitor-state");
-      sendJson(res, 200, { ok: true, inhibitor, snapshot: snapshotBody() });
+      sendJson(res, 200, { ok: true, inhibitor, snapshot: snapshotBody({ force: true }) });
       return;
     }
 
@@ -5999,7 +6031,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJson(req);
       const portal = applyDebugPortalState(body);
       refreshBallparkMirror("debug-portal-state");
-      sendJson(res, 200, { ok: true, portal, snapshot: snapshotBody() });
+      sendJson(res, 200, { ok: true, portal, snapshot: snapshotBody({ force: true }) });
       return;
     }
 
@@ -6017,7 +6049,7 @@ const server = http.createServer(async (req, res) => {
       }
       applyDebugScavengerState(scavenger, body);
       refreshBallparkMirror("debug-scavenger-state");
-      sendJson(res, 200, { ok: true, scavenger, snapshot: snapshotBody() });
+      sendJson(res, 200, { ok: true, scavenger, snapshot: snapshotBody({ force: true }) });
       return;
     }
 
