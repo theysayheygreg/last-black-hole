@@ -9,7 +9,7 @@
 
 ---
 
-## Current Status (2026-07-04)
+## Current Status (2026-07-09)
 
 **Version:** v0.2 - Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set. The next structural line is v0.3, tracked in `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md`.
 
@@ -43,9 +43,10 @@ reading stale health records or reconstructing status from `git log`.
 | Remote authority client | DONE (local stack) | host/join/leave, remote inventory, remote hazards, rival players, infra smoke |
 | Sim lifecycle hardening | DONE | idle-aware sim loop, empty-sim auto-stop, keep-alive mode, stale test-process cleanup, architecture-aware infra smoke |
 | Run result package | PARTIAL | Results view, control-plane persistence, and ledger-vs-salvage write-back are live; broader meta-loop polish remains |
-| Local build status | v0.2.2 source path PLAYABLE / RELEASE BUILD NEEDED | `docs/project/BUILD-STATUS.md` records the latest local authority source smoke as playable on 2026-06-27; the next release artifact pass should produce `v0.2.2.<commit-hash>` builds after fresh playtest evidence |
-| Weekly playables | STALE | Last scheduled green predates the current local feature/fix stack; refresh only after the local build is playtest-stable |
-| Build health gate | GREEN | Refreshed on 2026-06-25 for the v0.2.1 release-build train; use `node scripts/build-health.cjs status` for the exact current-commit answer |
+| Local build status | MAIN BASELINE VALIDATED / MERGED CANDIDATE NEEDS RETEST | The July 6 main snapshot passed fast, core, renderer, title, perf, authority, controller, and meta-flow lanes. The v0.3 merge candidate is newer and must earn fresh evidence. |
+| Weekly playables | VALIDATION-GATED | Weekly workflow runs `npm run test:fast` before platform artifacts build; the next artifact still needs a successful scheduled or manual run. |
+| Build health gate | LAST RECORD GREEN / CURRENT HEAD STALE | The formal record is green at `0cc3a3f`; both current `main` and this merge candidate are newer. Use `node scripts/build-health.cjs status` for exact commit relationship. |
+| Cloudflare Drop | BUILT / SANDBOX ONLY | `v0.2.2.83953aa` exists as a temporary static browser-share target; it is not embedded-authority, Deck, or all-target release evidence. |
 
 ### What's Designed Or Partially Implemented
 

@@ -21,8 +21,10 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 - `npm run build:test` — build with test API enabled but dev UX stripped
 - `npm run build:dev` — build with dev panel + test API + debug overlays enabled
 - `npm run build:web` — build only the web playtest artifact
+- `npm run build:drop` — build only the static Cloudflare Drop share artifact
 - `npm run build:ipad` — build only the Safari/Add-to-Home-Screen iPad web-app artifact
 - `npm run build:desktop` — build web + desktop/mobile wrapper targets
+- `npm run release:drop` — build a committed-source Cloudflare Drop artifact for temporary public sharing
 - `npm run ios:sync` — sync the current web runtime into the native iOS wrapper
 - `npm run ios:build:sim` — sync and build the native iOS wrapper for iPad Simulator
 - `npm run ios:build:device` — sync and build the native iOS wrapper for signed devices
@@ -59,7 +61,7 @@ LBH uses a four-field product build identifier:
 major.minor.public.commit
 ```
 
-For the current train, that means builds look like `0.2.1.<git-hash>`.
+For the current train, that means builds look like `0.2.2.<git-hash>`.
 
 - `0.2` is the current product era.
 - The third number is the public release train. It advances only when Greg calls
@@ -129,11 +131,13 @@ That folder contains:
 
 - `BUILD-MANIFEST.json`
 - `BUILD-INFO-web.json`
+- `BUILD-INFO-drop.json` if the Cloudflare Drop target succeeded
 - `BUILD-INFO-ipad.json` if the iPad web-app target succeeded
 - `BUILD-INFO-mac.json` if mac packaging succeeded
 - `BUILD-INFO-win.json` if Windows packaging succeeded
 - `BUILD-INFO-linux.json` if Linux packaging succeeded
 - `last-singularity-web/`
+- `last-singularity-cloudflare-drop/` if the Cloudflare Drop target succeeded
 - `last-singularity-ipad-webapp/` if the iPad web-app target succeeded
 - `Last Singularity.app` if mac packaging succeeded
 - `Last Singularity-win32-x64/` if Windows packaging succeeded
@@ -184,15 +188,23 @@ The release helper currently runs `npm run test:fast` before packaging because
 it is meant to be usable during active development. A public milestone should
 still refresh full build health before it is announced.
 
-`npm test` already includes the telemetry smoke suite, but keeping the focused telemetry command around is useful when diagnosing stack-status and embedded-runtime regressions without rerunning the whole harness.
+The telemetry smoke suite lives in the authority lane rather than the everyday
+core lane. Keep `npm run test:telemetry` or the authority lane around when
+diagnosing stack-status and embedded-runtime regressions without rerunning the
+whole harness.
 
 Alongside the version folder, the build also writes:
 
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-singularity-playtest-v<version>.zip`
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-singularity-playtest-v<version>-test.zip`
 - `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-singularity-playtest-v<version>-dev.zip`
+- `/Users/theysayheygreg/clawd/projects/last-black-hole/builds/last-singularity-cloudflare-drop-v<version>.zip` when the Drop target is built
 
 Each zip contains the whole matching build folder. In practice, the friend-facing handoff should almost always be the plain `release` zip with no mode suffix.
+
+The Cloudflare Drop zip is the exception: it is content-rooted so `index.html`
+is at the archive root. That is the safer shape for dragging the zip directly
+onto Cloudflare Drop or Cloudflare Pages drag-and-drop upload surfaces.
 
 ## Current wrapper strategy
 
@@ -216,6 +228,7 @@ files such as `three.core.js` beside `three.module.js`.
 The build story now splits cleanly by target.
 
 - web builds are still plain rendering clients
+- Cloudflare Drop builds are browser-sandbox share links with no embedded authority
 - packaged desktop builds now embed the control plane + sim for ordinary local packaged play
 - remote-authority play remains a separate mode and still expects a browser client to point at an external sim authority
 - packaged desktop builds also expose a small in-app stack-status window so embedded authority state is visible without a terminal
@@ -227,6 +240,7 @@ So the honest rule is:
 
 - **desktop package** = self-contained local playtest app
 - **Steam Deck package** = self-contained Linux desktop package plus Deck launcher/Gaming Mode wrapper
+- **Cloudflare Drop package** = temporary static sandbox link for quick public sharing
 - **browser remote mode** = local-rendering client against separate authority
 
 If you want mini→MacBook play, run the authority machine separately and start the MacBook browser client in `remote-client` mode.

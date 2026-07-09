@@ -5,6 +5,42 @@
 
 ---
 
+## 2026-07-08 — Cloudflare Drop share build target
+
+- Added `npm run build:drop` and `npm run release:drop` for temporary
+  Cloudflare Drop / Pages drag-and-drop browser sharing.
+- The Drop target builds a content-rooted zip, forces `localSandbox=1`, clears
+  stale sim-server browser state, defaults to the Three renderer, and records
+  that it is not an embedded-authority build.
+- `release:drop` now goes through the release helper so hash-named Drop builds
+  require committed tracked source unless explicitly overridden for a probe.
+- Added a fast/static harness guard that builds the Drop artifact and checks
+  the share notes, sandbox bootstrap, Three runtime copy, build metadata, and
+  archive root shape.
+- Updated README and deployment/build docs so Cloudflare Drop sits beside itch
+  as a quick sandbox-share lane rather than a durable product release channel.
+
+## 2026-07-06 — v0.2 main consistency pass
+
+- Fixed a Home render crash caused by reading `homePromptOptions` before it was
+  initialized; this had stopped the frame loop after reaching Home and made
+  Deck/controller tab navigation appear broken.
+- Tightened remote slingshot input so controller-held Y reaches the
+  authoritative sim, while direct protocol tests cover queued press edges.
+- Aligned Deck/home prompts with actual controls, including controller X for
+  map seed reroll and prompt-label inventory rows.
+- Made rig copy honest by adding server-owned coefficients for shipped low
+  levels and showing v0.2 caps in the Home rig UI instead of advertising
+  unshipped levels.
+- Removed stale death-tax balance/display hooks so current results speak in
+  ledger credit, residue, and cargo salvage value.
+- Fixed Three camera sync and initial fluid seeding assumptions that could use
+  stale camera state or wrap off-window wells into the visible fluid buffer.
+- Added harness guards for sim protocol normalization, unknown suite names,
+  safer authority slingshot placement, and weekly playable fast validation.
+- Refreshed the formal build-health record after core, renderer, perf, and
+  title-prototype verification passed.
+
 ## 2026-07-05 — Ledger honesty pass
 
 - Changed shared EM earnings semantics so `runEmEarned()` means profile ledger

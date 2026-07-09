@@ -7,7 +7,6 @@ const {
   wreckAgeValueMultiplier,
   survivalBonusEm,
   runEmEarned,
-  deathTaxEm,
 } = require("../scripts/content/balance.cjs");
 const { HULL_DEFINITIONS } = require("../scripts/content/hulls.cjs");
 
@@ -59,7 +58,7 @@ async function run() {
     assert(survivalBonus === 90, `Expected 90 EM survival bonus, got ${survivalBonus}`);
     assert(extracted === survivalBonus, "Extraction should credit survival EM while cargo goes to vault");
     assert(dead < survivalBonus && dead < extracted, "Death should earn less than extraction");
-    assert(deathTaxEm(999) === 99, "Death tax should be a bounded percentage, rounded down");
+    assert(BALANCE.economy.deathTaxRate === undefined, "Death tax should stay removed from current ledger balance");
   });
 
   await runner.run("Rig and upgrade costs rise monotonically", async () => {

@@ -5203,13 +5203,33 @@ function updateVesselWellDistortion(inh, dt, ws) {
 
 function spawnInhibitorFinalPortal(inh, ws) {
   const cfg = INHIBITOR_CONFIG;
-  let bestDist = 0, bestX = ws / 2, bestY = ws / 2;
+  let bestScore = -Infinity, bestX = ws / 2, bestY = ws / 2;
   const rng = runtime.session?.rng?.rawStream('finalPortal') || Math.random;
-  for (let i = 0; i < 12; i++) {
+  const minWellClearance = 0.22;
+  const minInhibitorClearance = (cfg.vesselPortalBlockRange || 0) + portalCaptureRadius({ type: "standard" });
+  for (let i = 0; i < 32; i++) {
     const cx = rng() * ws;
     const cy = rng() * ws;
-    const d = worldDistance(inh.wx, inh.wy, cx, cy, ws);
-    if (d > bestDist) { bestDist = d; bestX = cx; bestY = cy; }
+    const inhibitorDist = worldDistance(inh.wx, inh.wy, cx, cy, ws);
+    let wellClearance = ws;
+    for (const well of runtime.mapState.wells) {
+      if (well.consumedByInhibitor) continue;
+      const radius = Math.max(0, Number(well.killRadius) || 0);
+      wellClearance = Math.min(wellClearance, worldDistance(well.wx, well.wy, cx, cy, ws) - radius);
+    }
+    let portalClearance = ws;
+    for (const portal of runtime.mapState.portals) {
+      if (portal.alive === false) continue;
+      portalClearance = Math.min(portalClearance, worldDistance(portal.wx, portal.wy, cx, cy, ws) - portalCaptureRadius(portal));
+    }
+    const wellPenalty = wellClearance < minWellClearance ? (minWellClearance - wellClearance) * 6 : 0;
+    const inhibitorPenalty = inhibitorDist < minInhibitorClearance ? (minInhibitorClearance - inhibitorDist) * 8 : 0;
+    const score = inhibitorDist * 0.5 + wellClearance * 1.4 + portalClearance * 0.15 - wellPenalty - inhibitorPenalty;
+    if (score > bestScore) {
+      bestScore = score;
+      bestX = cx;
+      bestY = cy;
+    }
   }
   runtime.mapState.portals.push({
     id: `portal-final-${runtime.tick}`,
@@ -5447,15 +5467,17 @@ function tickSim() {
       }
     }
 
-    const input = player.lastInput;
+    let input = player.lastInput;
     if (input.consumeSlot !== null && input.consumeSlot !== undefined) {
       applyConsumable(player, input.consumeSlot);
       player.lastInput = { ...player.lastInput, consumeSlot: null };
+      input = player.lastInput;
     }
 
     if (input.pulse) {
       applyPulse(player);
       player.lastInput = { ...player.lastInput, pulse: false };
+      input = player.lastInput;
     }
 
     const playerDt =

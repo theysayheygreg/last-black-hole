@@ -8,13 +8,16 @@
 
 ## Current Snapshot
 
-**Date:** 2026-07-05
-**Public train:** v0.2.2 on `main`
-**Active structural branch:** `codex/v0.3-ballpark-roadmap`
-**Build version shape:** v0.2.2.`<commit-hash>`
-**Primary playable target:** local source build, Three renderer, and local
-authoritative sim. Steam Deck Linux artifacts remain the v0.2 demo handoff path
-until a committed v0.3 release build is produced.
+**Date:** 2026-07-09
+**Public/demo line:** v0.2.2 on `main` through `83953aa`
+**Active integration line:** `codex/v0.3-ballpark-roadmap`
+**Integration state:** current `main` is being merged forward; the resulting
+combined source has not yet been revalidated.
+**Formal build-health record:** green at `0cc3a3f` on `main`; stale for both
+current `main` and the v0.3 merge candidate.
+**Primary product-shaped target:** local Three renderer plus authoritative sim.
+**Temporary browser-share target:** Cloudflare Drop `v0.2.2.83953aa`, static
+sandbox only.
 
 For source playtesting, use:
 
@@ -37,9 +40,43 @@ That command builds `web`, `ipad`, `mac`, `win`, and `linux` release artifacts
 for the current committed `0.2.x.<hash>` build version and verifies the output
 shape.
 
-## Standing Assessment
+## Current v0.2 Public-Line Assessment
 
-**Status update, 2026-07-05 agent QA harness pass:** the current
+**Status update, 2026-07-08 Cloudflare Drop target:** the committed v0.2 public
+line can produce a static, content-rooted browser-share folder and zip tagged
+`v0.2.2.83953aa`. The artifact forces local sandbox mode, clears remembered sim
+URLs, defaults to Three, and is covered by a fast artifact-shape guard. It is a
+temporary visual/share lane, not evidence for embedded authority, Steam Deck,
+or an all-target release.
+
+**Status update, 2026-07-06 v0.2 main consistency pass:** the July 6 main
+snapshot passed the v0.2 validation lanes after a consistency review of Home,
+Deck/controller prompts, remote slingshot, Three camera sync, fluid-window
+seeding, Inhibitor final-portal safety, rig effects/caps, and EM ledger copy.
+
+Validation for that source snapshot:
+
+- `npm run test:fast` passed, including the new `SimProtocol` fast suite and
+  weekly-build guard lanes.
+- `npm test` passed the core Three lane.
+- `npm run test:renderer` passed all six renderer fixtures.
+- `npm run test:title-prototype` passed the Composer/title canary.
+- `npm run test:perf` held roughly 60 FPS across 3x3, 5x5, 10x10, minimal, and
+  post-disabled scenarios.
+- Focused authority/playtest probes passed: `RemoteAuthority`, `Controller`
+  with `deck=1`, `MetaFlow`, `Systems`, `RunResults`, `PlayerBrain`, `Balance`,
+  `Inhibitor`, and `SimProtocol`.
+- A deliberately misspelled suite name failed loudly instead of producing a
+  false-green no-op harness run.
+- `node scripts/build-health.cjs verify` refreshed the formal health record at
+  `0cc3a3f`; that record is now stale relative to current `main`.
+
+No current embedded-authority or all-target hash-named release artifact has
+been produced from the July 6-8 public line.
+
+## Current v0.3 Integration Assessment
+
+**Status update, 2026-07-05 agent QA harness pass:** the pre-merge
 `codex/v0.3-ballpark-roadmap` source tree has a new `AgentPlayEval` lane for
 playable evidence. It starts fresh authoritative sessions for Shallows, Expanse,
 and Deep Field, drives remote mouse-thrust input, captures screenshots, verifies
@@ -63,10 +100,8 @@ Validation for this source snapshot:
   `tests/screenshots/renderer-2026-07-05T014207866Z/manifest.json` and
   `tests/screenshots/ui-visual-2026-07-05T014346256Z/manifest.json`.
 
-**Status:** this improves agent-side QA confidence for v0.3 but still does not
-make the branch RC-green. Greg has not yet played the branch by hand, no
-hash-named v0.3 release artifact has been built from the final candidate commit,
-and the Deck Gaming Mode gate has not been rerun for this branch.
+**Status:** this improved agent-side QA confidence for the pre-merge v0.3
+snapshot but did not make the branch RC-green.
 
 **Status update, 2026-07-04 v0.3 branch source validation:** the current
 `codex/v0.3-ballpark-roadmap` source tree has fresh automated evidence for the
@@ -92,9 +127,12 @@ Validation for this source snapshot:
   `tests/slingshot-edge-queue.cjs`, `tests/ballpark-extraction.cjs`, and
   `tests/controller.cjs "index-a.html?renderer=three"`.
 
-**Status:** this is a healthier v0.3 source candidate, not an RC. Greg has not
-yet played this branch by hand, no hash-named v0.3 release artifact has been
-built, and the Deck Gaming Mode gate has not been rerun for the branch.
+**Status:** the current merge candidate has not yet inherited any of those
+green claims. It must be revalidated after the merge commit. Not RC-green;
+merge-forward validation, human playtest, committed v0.3 release artifact, and
+Deck Gaming Mode evidence remain open.
+
+## Historical Platform And Playtest Evidence
 
 **Status update, 2026-06-28 Deck compatibility pass:** the source tree now has
 a first-class Deck UI mode instead of only a Deck package. The Electron Deck
@@ -112,12 +150,11 @@ Validation for this source snapshot:
   reviewed Deck HUD capture uses `X`/`View` prompts and no longer shows the
   empty ability panel or keyboard-only Q/R fallback.
 
-**Status:** v0.2.2 local source path is playable on a fresh local authority
-stack, and the current `0.2.2.<commit-hash>` Linux release artifact is deployed
-on Greg's Steam Deck for demo testing after `npm run release:internal`. Use
-`npm run release:status` for the exact hash-named artifact folder. The Deck
-install was verified at the file/shortcut level; the next evidence gap is Greg
-launching it from Gaming Mode and confirming controller navigation in hand.
+**Status:** v0.2.2 local source path is validated on a fresh local authority
+stack. A previously built `0.2.2.<commit-hash>` Linux artifact may exist on
+Greg's Steam Deck, but it should not be treated as current until rebuilt from
+this pass and redeployed. Use `npm run release:status` for the exact
+hash-named artifact folder.
 
 On 2026-06-28, Codex refreshed the private Deck demo build:
 
@@ -177,17 +214,18 @@ assets into `dist/nightly`, and passed `release:check`.
 Artifacts:
 
 - `builds/v0.2.1/` (last three-part build, preserved as evidence)
-- latest Deck/demo release build: run `npm run release:status` and open
+- latest Deck/demo release build, if present: run `npm run release:status` and open
   `builds/v0.2.2.<hash>/Last Singularity-linux-x64`
-- latest Deck/demo playtest zip: run `npm run release:status` and open
+- latest Deck/demo playtest zip, if present: run `npm run release:status` and open
   `builds/last-singularity-playtest-v0.2.2.<hash>.zip`
 - `dist/nightly/`
 
 ## Known Caveats
 
-- `docs/project/BUILD-HEALTH.json` was refreshed on 2026-06-25 for the v0.2.1
-  release-build train. Use `node scripts/build-health.cjs status` for the exact
-  current commit relationship.
+- `docs/project/BUILD-HEALTH.json` was refreshed on 2026-07-06 after the v0.2
+  main consistency pass. If current `HEAD` is only a health-record follow-up,
+  `node scripts/build-health.cjs status` should report current; after any later
+  code or doc commit, rerun the verifier.
 - Steam Deck deployment and Gaming Mode wiring exist, but the Deck path should
   follow local playtest health. A broken local game does not become useful
   because it launches on Deck.

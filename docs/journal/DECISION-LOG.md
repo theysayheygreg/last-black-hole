@@ -1,5 +1,25 @@
 # Decision Log
 
+## 2026-07-08 — Cloudflare Drop is a temporary sandbox share lane
+
+**Decision:** Add a dedicated Cloudflare Drop build target for quick links to
+other people, but keep it explicitly sandboxed. The Drop artifact forces
+`localSandbox=1`, clears remembered sim URLs, defaults to the Three renderer,
+and does not bundle or imply the embedded Node control plane/sim.
+
+**Why:** Cloudflare Drop can turn a folder or zip into a temporary public URL
+without account friction, which is ideal for "look at this today" demos. LBH's
+product-faithful v0.2 architecture still depends on an embedded/local authority
+stack for real play, so the share target must not masquerade as the final
+runtime.
+
+**Where it landed:** `scripts/build.cjs`, `scripts/release.cjs`,
+`package.json`, `tests/cloudflare-drop.cjs`, `tests/suite-manifest.cjs`,
+README, and deployment/build pipeline docs.
+
+**Door status:** Closed for quick public browser-share builds. Open for a later
+durable website/itch/Steam release channel with clearer public-demo semantics.
+
 ## 2026-07-05 — Results EM means ledger credit, not cargo valuation
 
 **Decision:** `emEarned` now means the EM credited to the profile ledger for a
@@ -58,8 +78,9 @@ adds more moving pieces.
 `scripts/sim-runtime.cjs`, `tests/sim-protocol-input.cjs`, and
 `tests/remote-authority.cjs`.
 
-**Door status:** Closed for trusting client vector magnitude. Open for the
-remaining S0.5 slingshot edge-latching package test and ack shape.
+**Door status:** Closed for trusting client vector magnitude. Slingshot edge
+latching closed on 2026-07-04 through queued press edges and accepted-edge
+acknowledgements.
 
 ## 2026-07-04 — Map Select reroll owns controller X; host reset waits for hold-confirm
 
@@ -175,8 +196,9 @@ gameplay fact."
 `tests/ballpark-pickup.cjs`, and `tests/suite-manifest.cjs`.
 
 **Door status:** Closed for migrating additional consequence families without
-their own outcome tests. Open for portal extraction next once capture-radius
-parity is explicitly tested.
+their own outcome tests. Portal extraction candidate selection subsequently
+moved to Ballpark; final availability, capture, escape, and result consequences
+remain sim-owned.
 
 ## 2026-07-04 — Nearest parity before first consequence migration
 

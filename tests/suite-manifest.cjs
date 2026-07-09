@@ -24,6 +24,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SimProtocol",
+    file: "sim-protocol.cjs",
+    lanes: ["fast", "core", "authority", "static", "full"],
+    browser: false,
+  },
+  {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
     lanes: ["static", "full"],
@@ -62,6 +68,12 @@ const SUITES = [
   {
     name: "PlayInstructions",
     file: "play-instructions.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "CloudflareDrop",
+    file: "cloudflare-drop.cjs",
     lanes: ["fast", "core", "static", "full"],
     browser: false,
   },

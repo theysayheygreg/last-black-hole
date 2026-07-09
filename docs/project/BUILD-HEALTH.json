@@ -1,39 +1,46 @@
 {
   "ok": true,
-  "recordedAt": "2026-06-25T23:58:56.576Z",
+  "recordedAt": "2026-07-06T02:12:44.460Z",
   "branch": "main",
-  "gitHead": "2e038a2dff0269dae80877834efcf52a7e4191c5",
+  "gitHead": "0cc3a3fb185ee49cdbdb6b74a8ec8f961b72c4b6",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 65247
+      "durationMs": 66623
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 44808
+      "durationMs": 100162
     },
     {
       "name": "perf",
       "command": "npm run test:perf",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 61712
+      "durationMs": 60893
     },
     {
       "name": "title-prototype",
       "command": "npm run test:title-prototype",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 8336
+      "durationMs": 8126
     }
   ],
   "dirtyPaths": [
-    "M docs/project/BUILD-HEALTH.json"
+    "?? docs/journal/screenshots/2026-06-26-fresh-run/",
+    "?? docs/journal/screenshots/2026-06-26-warmed-run-v2/",
+    "?? docs/journal/screenshots/social-promo-2026-06-27-042817/",
+    "?? docs/journal/screenshots/social-promo-2026-06-27-045729/",
+    "?? docs/journal/screenshots/social-promo-2026-06-27-052605/",
+    "?? docs/journal/screenshots/social-promo-2026-06-27-053018/",
+    "?? docs/journal/screenshots/social-promo-2026-06-30-162304/",
+    "?? docs/journal/screenshots/social-promo-2026-06-30-162637/"
   ]
 }

@@ -62,8 +62,28 @@ jobs:
             core.info(`Current SHA ${currentSha} differs from last successful weekly SHA ${priorRun.head_sha}; building.`);
             core.setOutput('should_build', 'true');
 
-  build-web:
+  validate-source:
     needs: detect-changes
+    if: needs.detect-changes.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Run fast validation
+        run: npm run test:fast
+
+  build-web:
+    needs: [detect-changes, validate-source]
     if: needs.detect-changes.outputs.should_build == 'true'
     env:
       ENABLE_GITHUB_PAGES: ${{ vars.LBH_ENABLE_GITHUB_PAGES == 'true' }}
@@ -134,7 +154,7 @@ jobs:
           path: dist/nightly/last-singularity-web-nightly.zip
 
   build-win:
-    needs: detect-changes
+    needs: [detect-changes, validate-source]
     if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: windows-latest
     steps:
@@ -168,7 +188,7 @@ jobs:
           path: dist/nightly/last-singularity-win-nightly.zip
 
   build-linux:
-    needs: detect-changes
+    needs: [detect-changes, validate-source]
     if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -202,7 +222,7 @@ jobs:
           path: dist/nightly/last-singularity-linux-nightly.zip
 
   build-mac:
-    needs: detect-changes
+    needs: [detect-changes, validate-source]
     if: needs.detect-changes.outputs.should_build == 'true'
     runs-on: macos-latest
     steps:

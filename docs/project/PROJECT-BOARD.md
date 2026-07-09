@@ -115,8 +115,8 @@ visibility bridge primitives first: player/AI ships and wrecks.
 - **Key refs:** VISUAL-SCALE.md, DESIGN-DEEP-DIVE.md
 
 ### Test Harness — PRE-BUILT (not a task)
-- Already in repo: `tests/smoke.js`, `tests/physics.js`, `tests/run-all.js`
-- Corb runs `npm install && node tests/run-all.js index-a.html` after building
+- Current runner: `node tests/run-all.cjs --lane=core --renderer=three`
+- Corb runs `npm install && npm test` after building
 - Grows with the game — new test files added as features land
 
 ### n1b-dual-solver-probe — PRIORITY 4 (probe, not mainline)

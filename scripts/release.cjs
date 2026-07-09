@@ -7,6 +7,7 @@ const {
   VERSION_TRAIN,
   assertCleanTrackedTree,
   assertV02PublicVersion,
+  buildIdForMode,
   comparePublicVersions,
   currentBuildVersion,
   currentPublicVersion,
@@ -63,6 +64,18 @@ function buildRelease() {
   checkReleaseBuild();
 }
 
+function buildDropRelease() {
+  assertV02PublicVersion();
+  if (process.env.LBH_ALLOW_DIRTY_BUILD !== '1') {
+    assertCleanTrackedTree();
+  }
+  if (!hasFlag('--skip-tests')) {
+    run('node', ['tests/run-all.cjs', '--lane=fast', '--suite=CloudflareDrop', '--renderer=three']);
+  }
+  run('node', ['scripts/build.cjs', '--targets=drop', '--mode=release']);
+  checkDropReleaseBuild();
+}
+
 function artifactChecks(version) {
   const buildRoot = path.join(ROOT, 'builds', `v${version}`);
   return [
@@ -106,6 +119,51 @@ function checkReleaseBuild() {
   }
 
   console.log(`Release build check passed for v${version}.`);
+}
+
+function dropArtifactChecks(version) {
+  const buildRoot = path.join(ROOT, 'builds', buildIdForMode('release', version));
+  return [
+    ['manifest', path.join(buildRoot, 'BUILD-MANIFEST.json')],
+    ['drop build info', path.join(buildRoot, 'BUILD-INFO-drop.json')],
+    ['drop entrypoint', path.join(buildRoot, `${PRODUCT_SLUG}-cloudflare-drop`, 'index.html')],
+    ['drop debug entrypoint', path.join(buildRoot, `${PRODUCT_SLUG}-cloudflare-drop`, 'index-a.html')],
+    ['drop notes', path.join(buildRoot, `${PRODUCT_SLUG}-cloudflare-drop`, 'CLOUDFLARE-DROP.md')],
+    ['drop zip', path.join(ROOT, 'builds', `${PRODUCT_SLUG}-cloudflare-drop-${buildIdForMode('release', version)}.zip`)],
+  ];
+}
+
+function checkDropReleaseBuild() {
+  const version = currentVersion();
+  assertV02PublicVersion(currentPublicVersion());
+  const buildRoot = path.join(ROOT, 'builds', buildIdForMode('release', version));
+  const manifestPath = path.join(buildRoot, 'BUILD-MANIFEST.json');
+
+  const missing = dropArtifactChecks(version).filter(([, file]) => !fs.existsSync(file));
+  if (missing.length > 0) {
+    const details = missing.map(([label, file]) => `- ${label}: ${path.relative(ROOT, file)}`).join('\n');
+    throw new Error(`Cloudflare Drop release build for v${version} is incomplete:\n${details}`);
+  }
+
+  const manifest = readJson(manifestPath);
+  if (manifest.version !== version) {
+    throw new Error(`Drop build manifest version ${manifest.version} does not match hash build version ${version}.`);
+  }
+  if (manifest.mode !== 'release') {
+    throw new Error(`Drop build manifest mode must be release, got ${manifest.mode}.`);
+  }
+
+  const dropResult = (manifest.results || []).find((item) => item.target === 'drop');
+  if (!dropResult || dropResult.status !== 'built') {
+    throw new Error('Cloudflare Drop release build is missing a built drop target.');
+  }
+
+  const info = readJson(path.join(buildRoot, 'BUILD-INFO-drop.json'));
+  if (info.runtimeMode !== 'local-sandbox' || info.authority !== 'none') {
+    throw new Error('Cloudflare Drop release build must stay a local-sandbox, no-authority artifact.');
+  }
+
+  console.log(`Cloudflare Drop release build check passed for v${version}.`);
 }
 
 function releaseStatus() {
@@ -184,6 +242,7 @@ function usage() {
     'Commands:',
     '  bump-public  Increment package/package-lock from 0.2.x to 0.2.(x+1).',
     '  build        Run fast gate, build all release targets, package weekly assets, and check outputs for 0.2.x.<hash>.',
+    '  drop         Run Drop gate, build the Cloudflare Drop target, and check outputs for 0.2.x.<hash>.',
     '  internal     Alias for build; internal handoffs consume the commit hash as the fourth field.',
     '  public       Alias for bump-public; commit it, then run build.',
     '  patch        Legacy alias for public.',
@@ -192,7 +251,7 @@ function usage() {
     '  status       Print current public train, hash build version, and artifact presence.',
     '',
     'Options:',
-    '  --skip-tests  For build/patch only: build without running npm run test:fast.',
+    '  --skip-tests  For build/drop only: build without running the matching fast gate.',
     '',
     'Set LBH_SKIP_RELEASE_PREP=1 for intentional docs/process-only pushes that do not publish a build.',
   ].join('\n'));
@@ -206,6 +265,10 @@ function main() {
   }
   if (command === 'build' || command === 'internal') {
     buildRelease();
+    return;
+  }
+  if (command === 'drop') {
+    buildDropRelease();
     return;
   }
   if (command === 'public' || command === 'patch') {

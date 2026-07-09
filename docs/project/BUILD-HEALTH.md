@@ -39,7 +39,9 @@ Right now it records:
 
 That is intentionally narrow. It covers the real architecture stack, deterministic renderer fixtures, and the standalone title-prototype Composer lane without trying to turn every commit into a release build.
 
-`npm test` now includes the telemetry smoke suite, so structured runtime logging regressions in the distributed stack are part of the normal green/red contract rather than a side check.
+Telemetry smoke is intentionally kept in the authority lane, not the everyday
+core `npm test` lane. Run `npm run test:telemetry` or the authority lane when a
+change touches stack status, embedded runtime logs, or process health.
 
 `npm run test:title-prototype` guards the LBH-native title prototype path specifically: `FluidDisplayPass -> BloomPass -> ASCIIPass`, non-black GPU readback pixels, and canvas export. This keeps the prototype/title visual canary from becoming another invisible side quest.
 

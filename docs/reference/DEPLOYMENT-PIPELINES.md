@@ -245,6 +245,41 @@ Before calling a Deck build playable, confirm:
 - HUD text remains legible at 1280x800;
 - suspend/resume does not corrupt the local session or save files.
 
+## Cloudflare Drop
+
+Command:
+
+```sh
+npm run release:drop
+```
+
+What Cloudflare Drop needs that the generic web build does not:
+
+- a self-contained static folder or zip with `index.html` at the root;
+- no expectation that Cloudflare can run the Node control plane or sim process;
+- a forced sandbox boot so stale browser storage cannot point at Greg's local
+  sim URL;
+- a share note that explains the temporary-link/runtime limitation to testers.
+
+The build writes:
+
+```text
+builds/v<version>/last-singularity-cloudflare-drop/
+builds/last-singularity-cloudflare-drop-v<version>.zip
+```
+
+Use either artifact at [Cloudflare Drop](https://www.cloudflare.com/drop/).
+The Drop page accepts a folder or zip, then gives you a temporary URL you can
+send to other people. The source announcement says no account is needed, and
+the deployment is active for 60 minutes unless claimed. Treat this as a fast
+social/playtest link, not a durable release channel.
+
+This target deliberately mirrors the itch HTML5 sandbox rule: it injects
+`localSandbox=1`, clears `lbh.simServerUrl`, removes any explicit `simServer`
+query parameter, and defaults the renderer to Three before `src/main.js` loads.
+It is useful for title/UI/visual demos and casual browser play. It is not the
+product-faithful embedded-authority build.
+
 ## itch.io
 
 Command:

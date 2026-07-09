@@ -3,6 +3,10 @@
 > Historical jam-era plan. For the current manifest-driven harness, renderer
 > lanes, Codex app browser workflow, and Computer Use boundary, start with
 > `docs/design/TEST-HARNESS.md`.
+>
+> Current runner: `node tests/run-all.cjs --lane=core --renderer=three`.
+> The older `tests/*.js` examples below are preserved as jam-era context, not
+> current command names.
 
 > Agents can open browsers, take screenshots, read console output, measure
 > performance, and simulate inputs. Every minute Greg spends confirming
@@ -431,7 +435,7 @@ After Greg tunes via the dev panel and commits new CONFIG values, the agent runs
 1. Greg opens the dev panel, drags sliders, finds settings that feel good
 2. Greg commits the new CONFIG values (e.g., `Tune: widened catch window to 45deg, surfing feels more forgiving`)
 3. Agent detects the commit (or Greg asks the agent to verify)
-4. Agent runs `node tests/run-all.js`
+4. Agent runs `node tests/run-all.cjs --lane=core --renderer=three`
 5. If all tests pass: agent confirms in report, Greg's tuning is safe
 6. If a test fails: agent reports which test broke and why, with a concrete explanation
 
@@ -490,7 +494,7 @@ Numbered checklist the night shift agent follows. Every night shift, every time.
    - Signal/threat work (signal, Inhibitor, fauna) → `node tests/signal.js`
    - Cross-system work or unsure → `node tests/integration.js`
 
-3. **After all tasks for the night are complete:** run the full suite (`node tests/run-all.js`). This is the final gate before the night report.
+3. **After all tasks for the night are complete:** run the full suite (`node tests/run-all.cjs --lane=full --renderer=three`). This is the final gate before the night report.
 
 4. **Take screenshots at each key moment** (see Screenshot Review Pipeline above). Run the screenshot capture after the full suite passes, so screenshots reflect the final working state — not an intermediate broken one.
 
@@ -536,7 +540,7 @@ The test harness is CI-agnostic. Any agent that can run shell commands can verif
 ```
 cd /path/to/last-black-hole
 npm install
-node tests/run-all.js
+node tests/run-all.cjs --lane=core --renderer=three
 ```
 
 That is it. OpenAI's Codex, Claude Code, a GitHub Action, a local dev machine — anything that can run those three lines can verify the build. The test output is stdout text (pass/fail per test, summary at end) and screenshots written to `tests/screenshots/`.

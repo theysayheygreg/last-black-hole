@@ -127,6 +127,13 @@ async function run() {
       );
       const finalPortal = spawned.world.portals.find((portal) => portal.finalInhibitor);
       assert(finalPortal.blockedByInhibitor !== true, "Guaranteed final portal must start usable");
+      const ws = spawned.session?.worldScale || 5;
+      const nearestWellClearance = spawned.world.wells.reduce((nearest, well) => {
+        const clearance = worldDistance(well.wx, well.wy, finalPortal.wx, finalPortal.wy, ws) - (Number(well.killRadius) || 0);
+        return Math.min(nearest, clearance);
+      }, Infinity);
+      assert(nearestWellClearance >= 0.18,
+        `Guaranteed final portal must clear lethal well space, got clearance ${nearestWellClearance.toFixed(3)}`);
     });
 
     await runner.run("Vessel blocks and unblocks portals without destroying them", async () => {

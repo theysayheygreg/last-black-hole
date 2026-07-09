@@ -78,7 +78,6 @@ export function buildRunResultsViewModel({
   fallbackCargo = [],
   fallbackSurvivalTime = 0,
   fallbackEmEarned = 0,
-  deathTax = 0,
 } = {}) {
   const outcome = normalizeOutcome(runResult?.outcome, phase);
   const extracted = outcome === 'extracted';
@@ -117,7 +116,6 @@ export function buildRunResultsViewModel({
     deathCause: !extracted && runResult?.deathCause
       ? (runResult.deathEntityId ? `${runResult.deathCause}: ${runResult.deathEntityId}` : runResult.deathCause)
       : null,
-    deathTax: Math.max(0, Math.round(Number(deathTax) || 0)),
     aiLines: aiOutcomes.slice(0, 4).map((ai) => {
       const personality = ai.personality || ai.name || 'rival';
       const hull = ai.hullType || 'unknown';
@@ -245,10 +243,6 @@ export function drawRunResultsOverlay(ctx, canvas, {
   drawSectionLabel(ctx, 'LEDGER', leftX, y, { role: 'salvage', alpha: contentAlpha });
   y += 25;
   drawKeyValueRow(ctx, success ? 'credited' : 'residue', `${view.emEarned} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'salvage' });
-  y += 18;
-  if (view.deathTax > 0) {
-    drawKeyValueRow(ctx, 'death tax', `-${view.deathTax} EM`, leftX, y, { alpha: contentAlpha, valueRole: 'danger' });
-  }
 
   let ry = panelY + 160;
   drawSectionLabel(ctx, view.cargoTitle, rightX, ry, { role: success ? 'salvage' : 'danger', alpha: contentAlpha });

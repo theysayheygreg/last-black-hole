@@ -25,14 +25,9 @@ function runEmEarned({ outcome = "dead", survivalTime = 0 } = {}) {
   return Math.floor(bonus * BALANCE.economy.deathSurvivalPayoutMult);
 }
 
-function deathTaxEm(exoticMatter = 0) {
-  return Math.floor(Math.max(0, Number(exoticMatter) || 0) * BALANCE.economy.deathTaxRate);
-}
-
 module.exports = {
   BALANCE,
   wreckAgeValueMultiplier,
   survivalBonusEm,
   runEmEarned,
-  deathTaxEm,
 };

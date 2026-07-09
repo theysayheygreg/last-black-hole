@@ -158,7 +158,9 @@ Before calling v0.3 playable, inspect or test these contracts:
 
 ## Blockers To Clear Before Promotion
 
-- Merge current `main` into the v0.3 branch after v0.2 demo fixes land.
+- [x] Merge current `main` into the v0.3 branch after v0.2 demo fixes land.
+  Fresh validation of the combined candidate remains required after the merge
+  commit.
 - Run a fresh human local source playtest and update `BUILD-STATUS.md`.
 - Produce a committed hash-named release artifact with `npm run
   release:internal`.

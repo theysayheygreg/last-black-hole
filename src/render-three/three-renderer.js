@@ -535,7 +535,8 @@ export class ThreeRendererBackend {
     const motionLen = this.motion.length();
     this.lensRing.material.opacity = (0.035 + clamp(motionLen * 1.1, 0, 0.055)) * (renderQualityOpacityScale(this.renderQuality));
 
-    this._syncWorldScene(state.scene || {});
+    const renderState = { camX, camY, cameraX: camX, cameraY: camY, worldScale, gridWindow, cameraView };
+    this._syncWorldScene(state.scene || {}, renderState);
     const motionX = Math.abs(this.motion.x) < 1e-7 ? 0 : this.motion.x;
     const motionY = Math.abs(this.motion.y) < 1e-7 ? 0 : this.motion.y;
     this.lastSceneState = {
@@ -734,14 +735,14 @@ export class ThreeRendererBackend {
     return line;
   }
 
-  _syncWorldScene(sceneState) {
+  _syncWorldScene(sceneState, currentRenderState = null) {
     this._beginDynamicScene();
     const renderState = {
-      camX: this.lastSceneState.cameraX,
-      camY: this.lastSceneState.cameraY,
-      worldScale: this.lastSceneState.worldScale,
-      gridWindow: this.lastSceneState.gridWindow,
-      cameraView: this.lastSceneState.cameraView ?? CAMERA_VIEW,
+      camX: currentRenderState?.camX ?? this.lastSceneState.cameraX,
+      camY: currentRenderState?.camY ?? this.lastSceneState.cameraY,
+      worldScale: currentRenderState?.worldScale ?? this.lastSceneState.worldScale,
+      gridWindow: currentRenderState?.gridWindow ?? this.lastSceneState.gridWindow,
+      cameraView: currentRenderState?.cameraView ?? this.lastSceneState.cameraView ?? CAMERA_VIEW,
     };
     let entityCount = 0;
     let semanticCount = 0;

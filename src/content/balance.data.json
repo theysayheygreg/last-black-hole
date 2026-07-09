@@ -7,8 +7,7 @@
   },
   "economy": {
     "survivalEmPerSecond": 0.5,
-    "deathSurvivalPayoutMult": 0.5,
-    "deathTaxRate": 0.1
+    "deathSurvivalPayoutMult": 0.5
   },
   "progression": {
     "profileUpgradeCosts": [

@@ -673,7 +673,8 @@ async function run() {
         moveY: 0,
         thrust: 0,
         brake: 0,
-        slingshot: true,
+        slingshot: false,
+        slingshotEdges: [1],
         timestamp: Date.now(),
       });
       const engaged = await waitForSnapshotPlayerLabel(
@@ -704,6 +705,7 @@ async function run() {
         thrust: 0,
         brake: 0,
         slingshot: false,
+        slingshotEdges: [],
         timestamp: Date.now(),
       });
       await waitForSnapshotPlayerLabel(
@@ -723,7 +725,8 @@ async function run() {
         moveY: 0,
         thrust: 0,
         brake: 0,
-        slingshot: true,
+        slingshot: false,
+        slingshotEdges: [2],
         timestamp: Date.now(),
       });
       const releaseEvents = await waitForEvents(

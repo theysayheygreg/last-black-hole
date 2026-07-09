@@ -407,7 +407,6 @@ let _starFlashTimer = 0;    // dramatic flash when star consumed by well
 let _starFlashColor = [255, 255, 255];
 let hullGraceTimer = 0;     // hull upgrade grace period (seconds remaining in kill zone before death)
 let hullGraceUsed = false;  // hull rank 2+: one free survive per run
-let lastDeathTax = 0;       // Legacy display hook; demo deaths now credit residue instead of taxing EM.
 
 // Profile + meta/home screen
 const profileManager = new ProfileManager();
@@ -563,7 +562,6 @@ function currentRunResultsViewModel() {
       outcome: gamePhase === 'escaped' ? 'extracted' : gamePhase === 'dead' ? 'dead' : 'abandoned',
       survivalTime: simState.runEndTime,
     }),
-    deathTax: lastDeathTax,
   });
 }
 
@@ -1209,6 +1207,8 @@ function init() {
       },
       get gamePhase() { return gamePhase; },
       set gamePhase(p) { gamePhase = p; },
+      get mapSelectIndex() { return mapSelectIndex; },
+      get previewSeed() { return previewSeed; },
       inventorySystem,
       get lastRunResult() { return lastRunResult; },
       setLastRunResult: (result) => { lastRunResult = result ? JSON.parse(JSON.stringify(result)) : null; },
@@ -1268,6 +1268,7 @@ function init() {
       get remoteAuthorityActive() { return remoteAuthorityActive; },
       get remoteMapId() { return remoteMapId; },
       get remoteSnapshot() { return remoteSnapshot; },
+      get remotePendingSlingshotEdges() { return remotePendingSlingshotEdges; },
       get remoteSessionHealth() { return remoteSessionHealth; },
       get remoteControlState() { return currentRemoteControlState(); },
       get remotePlayers() { return remotePlayers; },
@@ -1351,7 +1352,17 @@ function init() {
 }
 
 function seedInitialFluid() {
-  for (const well of wellSystem.wells) {
+  const [fluidCamX, fluidCamY] = getFluidCamera();
+  const halfWindow = GRID_WINDOW / 2;
+  const renderShapes = wellSystem.getRenderShapes?.() || [];
+  for (let wi = 0; wi < wellSystem.wells.length; wi++) {
+    const well = wellSystem.wells[wi];
+    const [dx, dy] = worldDisplacement(fluidCamX, fluidCamY, well.wx, well.wy);
+    const shape = renderShapes[wi] || [0.01, 0.02, 0.03, 1.0];
+    const ringExtent = Math.max(0.05, shape[2] * 1.4);
+    // Off-window UVs wrap in the splat shader; skip them here so the first
+    // frame cannot inherit ghost density from wells outside the camera window.
+    if (Math.abs(dx) > halfWindow + ringExtent || Math.abs(dy) > halfWindow + ringExtent) continue;
     const [wellFU, wellFV] = worldToFluidUV(well.wx, well.wy);
     for (let i = 0; i < 12; i++) {
       const angle = (i / 12) * Math.PI * 2;
@@ -1478,7 +1489,6 @@ function loadScene(map) {
   _starFlashTimer = 0;
   hullGraceTimer = 0;
   hullGraceUsed = false;
-  lastDeathTax = 0;
   waveRings.rings = [];
   scavengerSystem.scavengers = [];
   combatSystem.playerCooldown = 0;
@@ -2676,6 +2686,8 @@ function transitionToRemoteGame(mapEntry, options = {}) {
       remoteSnapshot = null;
       remotePlayers = [];
       remoteSessionHealth = null;
+      remotePendingSlingshotEdges = [];
+      remoteNextSlingshotEdgeId = 1;
       remoteShipPresentation = null;
       startGame(mapEntry.map, previewSeed);
     });
@@ -2721,9 +2733,12 @@ async function leaveRemoteSessionToHome() {
 async function restartRemoteSession() {
   if (!simClient?.enabled || !remoteMapId) return;
   const mapEntry = getPlayableMapEntryById(remoteMapId);
+  const profileSnapshot = profileManager.exportActiveProfile?.() || null;
   await simClient.resetSession();
   await simClient.join({
     name: profileManager.active?.name || 'Pilot',
+    profileId: profileManager.active?.id || null,
+    profileSnapshot,
     equipped: inventorySystem.equipped,
     consumables: inventorySystem.consumables,
   });
@@ -3420,7 +3435,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   }
 
   if (readyAlpha > 0) {
-    drawCommandButtonMotion(ctx, layout.commandRect, 'launch run', {
+    drawCommandButtonMotion(ctx, layout.commandRect, 'select pilot', {
       hotkey: promptLabel('confirm', currentPromptOptions()),
       role: 'flow',
       active: true,
@@ -4061,13 +4076,11 @@ function gameLoop(now) {
     if (simClient?.enabled) void refreshRemoteSessionHealth(false);
     if (upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
     if (downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
-    // Reroll stays on the pulse/X path so controller hints match behavior and
-    // Y remains free for slingshot rather than overlapping host reset.
-    if (((inputManager._keys && inputManager._keys['KeyS']) || pulseNow) && !_prevSeedReroll) {
+    if (inputManager.rerollPressed && !_prevSeedReroll) {
       rerollPreviewSeed();
       audioEngine.playEvent('menuMove');
     }
-    _prevSeedReroll = !!((inputManager._keys && inputManager._keys['KeyS']) || pulseNow);
+    _prevSeedReroll = inputManager.rerollPressed;
     if (!transitionActive && confirmNow && !_prevConfirm) {
       audioEngine.init();
       audioEngine.playEvent('launch');
@@ -4113,13 +4126,11 @@ function gameLoop(now) {
       const endScreenUnlock = DEATH_LINGER_DURATION + 1.0;
       if (gamePhase === 'dead' && deathTimer > endScreenUnlock) {
         if (remoteAuthorityActive) {
-          const previousEM = profileManager.active?.exoticMatter ?? 0;
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave failed:', err);
               showWarning(`remote exit failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
             }).finally(() => {
-              lastDeathTax = Math.max(0, previousEM - (profileManager.active?.exoticMatter ?? previousEM));
               loadTitleScene();
               gamePhase = 'home';
               homeTab = 0;
@@ -4147,7 +4158,6 @@ function gameLoop(now) {
         // Save loadout on death — consumed items stay consumed, equipment changes persist
         profileManager.setLoadout(inventorySystem.equipped, inventorySystem.consumables);
         const deathCredit = profileManager.recordDeath(simState.runEndTime);
-        lastDeathTax = 0;
         recordChronicleRun(lastRunResult, {
           outcome: 'dead',
           survivalTime: simState.runEndTime,
@@ -5838,6 +5848,7 @@ function gameLoop(now) {
       for (let ti = 0; ti < tracks.length; ti++) {
         const track = tracks[ti];
         const rank = track.level || 0;
+        const maxLevel = Math.max(0, Math.min(MAX_RIG_LEVEL, Number(track.maxLevel ?? MAX_RIG_LEVEL) || 0));
         const selected = (ti === homeRigCursor);
         const cost = profileManager.getRigUpgradeCost(ti);
         const canAfford = profileManager.canAffordRigUpgrade(ti);
@@ -5851,9 +5862,11 @@ function gameLoop(now) {
           railWidth: selected ? 4 : 2,
         });
 
-        const bars = '#'.repeat(rank) + '-'.repeat(MAX_RIG_LEVEL - rank);
+        const filledBars = '#'.repeat(Math.min(rank, maxLevel));
+        const emptyBars = '-'.repeat(Math.max(0, maxLevel - rank));
+        const bars = maxLevel > 0 ? `${filledBars}${emptyBars}` : 'prototype';
         ctx.fillStyle = selected ? roleColor('text', 0.92) : roleColor('muted', 0.70);
-        ctx.fillText(`${track.label.padEnd(12)} ${bars}  ${rank}/${MAX_RIG_LEVEL}`, centerX + 4, uy);
+        ctx.fillText(`${track.label.padEnd(12)} ${bars}  ${Math.min(rank, maxLevel)}/${maxLevel}`, centerX + 4, uy);
         ctx.fillStyle = roleColor('muted', 0.74);
         ctx.fillText(fitUiText(ctx, track.focus, centerTextW - 26), centerX + 22, uy + 15);
 
@@ -5863,7 +5876,7 @@ function gameLoop(now) {
           ctx.fillText(fitUiText(ctx, `next: ${cost.nextEffect || track.nextEffect || 'rig tuning'}  cost: ${cost.em} EM${action}`, centerTextW - 26), centerX + 22, uy + 31);
         } else {
           ctx.fillStyle = roleColor('salvage', 0.72);
-          ctx.fillText('MAX', centerX + 22, uy + 31);
+          ctx.fillText(maxLevel < MAX_RIG_LEVEL ? 'V0.2 CAP' : 'MAX', centerX + 22, uy + 31);
         }
 
         uy += 60;
@@ -5969,22 +5982,30 @@ function gameLoop(now) {
 
     const sidebarX = rightPanel.x + 20;
     let sideY = rightPanel.y + 58;
+    const homePromptOptions = currentPromptOptions();
     const launchActive = homeTab === 4;
-    drawCommandButtonMotion(ctx, {
-      x: rightPanel.x + 18,
-      y: sideY,
-      w: rightPanel.w - 36,
-      h: 50,
-    }, launchActive ? 'select destination' : 'open launch', {
-      hotkey: launchActive ? promptLabel('confirm', currentPromptOptions()) : promptLabel('tabs', currentPromptOptions()),
-      role: 'salvage',
-      active: true,
-      alpha: 0.96,
-      progress: contentReveal,
-      pulseTime: (totalTime % 1.5) / 1.5,
-      reducedMotion: motion.reducedMotion,
-      commandPulse: motion.commandPulse,
-    });
+    if (launchActive) {
+      drawCommandButtonMotion(ctx, {
+        x: rightPanel.x + 18,
+        y: sideY,
+        w: rightPanel.w - 36,
+        h: 50,
+      }, 'select destination', {
+        hotkey: promptLabel('confirm', currentPromptOptions()),
+        role: 'salvage',
+        active: true,
+        alpha: 0.96,
+        progress: contentReveal,
+        pulseTime: (totalTime % 1.5) / 1.5,
+        reducedMotion: motion.reducedMotion,
+        commandPulse: motion.commandPulse,
+      });
+    } else {
+      drawSectionLabel(ctx, 'next operation', rightPanel.x + 24, sideY + 8, { role: 'salvage', alpha: 0.82 });
+      ctx.font = canvasFont(12);
+      ctx.fillStyle = roleColor('muted', 0.78);
+      ctx.fillText(fitUiText(ctx, `${promptLabel('tabs', homePromptOptions)} to LAUNCH`, rightPanel.w - 48), rightPanel.x + 24, sideY + 34);
+    }
     sideY += 82;
     drawKeyValueRow(ctx, 'exotic matter', `${p?.exoticMatter || 0} EM`, sidebarX, sideY, { labelWidth: 136, valueRole: 'salvage' });
     sideY += 24;
@@ -6017,7 +6038,6 @@ function gameLoop(now) {
     ctx.font = canvasFont(11);
     ctx.fillStyle = roleColor('muted', 0.74);
     ctx.fillText(fitUiText(ctx, launchActive ? 'map briefing opens on confirm' : 'tab to LAUNCH when ready', rightPanel.w - 42), sidebarX, sideY);
-    const homePromptOptions = currentPromptOptions();
     ctx.fillText(`${promptLabel('tabs', homePromptOptions)} tabs`, sidebarX, rightPanel.y + rightPanel.h - 52);
     ctx.fillText(`${promptLabel('select', homePromptOptions)} select`, sidebarX, rightPanel.y + rightPanel.h - 36);
     ctx.fillText(`${promptLabel('confirm', homePromptOptions)} confirm   ${promptLabel('back', homePromptOptions)} back`, sidebarX, rightPanel.y + rightPanel.h - 20);

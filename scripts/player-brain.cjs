@@ -219,7 +219,7 @@ function applyRigUpgrades(brain, hullType, rigLevels) {
   } else if (hullType === 'breacher') {
     const [afterburner, ironclad, smashgrab] = levels;
     // Afterburner: raw speed
-    if (afterburner >= 1) { /* +5s burn fuel — applied in ability state init */ }
+    if (afterburner >= 1) brain.thrustScale += 0.05;
     if (afterburner >= 2) brain.thrustScale += 0.1;
     if (afterburner >= 3) { /* +5s burn fuel — applied in ability state init */ }
     if (afterburner >= 4) { /* burn recharge +50% — applied in ability tick */ }
@@ -231,7 +231,7 @@ function applyRigUpgrades(brain, hullType, rigLevels) {
     if (ironclad >= 4) brain.freeWellSurvives += 1; // shield charge on first burn
     if (ironclad >= 5) { /* shockwave stun +1s — applied in ability tick */ }
     // Smash & Grab: speed-looting
-    if (smashgrab >= 1) { /* smashGrab: pickup at 90% speed — applied in pickup logic */ }
+    if (smashgrab >= 1) brain.pickupRadius += 0.05;
     if (smashgrab >= 2) brain.pickupRadius += 0.1;
     if (smashgrab >= 3) { /* smashGrab: pickup at 70% speed — applied in pickup logic */ }
     if (smashgrab >= 4) { /* cargo eject scatters further — applied in death logic */ }
@@ -240,13 +240,13 @@ function applyRigUpgrades(brain, hullType, rigLevels) {
   } else if (hullType === 'resonant') {
     const [harmonics, anchor, dampening] = levels;
     // Harmonics: eddy mastery
-    if (harmonics >= 1) { /* +1 max eddy — applied in ability tick */ }
+    if (harmonics >= 1) brain.pulseRadiusScale *= 1.1;
     if (harmonics >= 2) { /* eddy duration +2s — applied in ability tick */ }
     if (harmonics >= 3) { /* eddies pull wrecks — applied in ability tick */ }
     if (harmonics >= 4) { /* +1 max eddy — applied in ability tick */ }
     if (harmonics >= 5) { /* eddies visible to all — client rendering */ }
     // Anchor: territorial control
-    if (anchor >= 1) { /* resonanceTap range +0.1 — applied in ability tick */ }
+    if (anchor >= 1) brain.pulseCooldownScale *= 0.95;
     if (anchor >= 2) { /* tap cooldown -5s — applied in ability tick */ }
     if (anchor >= 3) brain.pulseCooldownScale *= 0.8; // -20% near anchor
     if (anchor >= 4) { /* tap persists through death — applied in death logic */ }
@@ -261,7 +261,7 @@ function applyRigUpgrades(brain, hullType, rigLevels) {
   } else if (hullType === 'shroud') {
     const [phantom, sensor, decoy] = levels;
     // Phantom: stealth depth
-    if (phantom >= 1) { /* ghostTrail threshold → PRESENCE — applied in ability tick */ }
+    if (phantom >= 1) brain.signalDecayMult *= 1.05;
     if (phantom >= 2) brain.signalDecayMult *= 1.1;
     if (phantom >= 3) { /* wakeCloak cooldown -10s — applied in ability tick */ }
     if (phantom >= 4) { /* scavengers never detect — applied in scavenger AI */ }
