@@ -168,15 +168,46 @@ function rollTier(rng, sessionTime, qualityBias = 1.0) {
   return tiers[0] || 1;
 }
 
+function coefficientSummary(coefficients = {}) {
+  return Object.entries(coefficients)
+    .map(([key, value]) => key === "cargoSlots" ? `${key} +${value}` : `${key} x${Number(value).toFixed(2)}`)
+    .join(", ");
+}
+
+// Seeded rolls cross the sim/client boundary, so shape them for inventory here
+// instead of making each wreck, cargo, and persistence path repair raw catalog data.
+function shapeArtifact(entry, value) {
+  return {
+    ...entry,
+    catalogId: entry.id,
+    category: "artifact",
+    subcategory: "equippable",
+    value,
+    baseValue: value,
+    effectDesc: coefficientSummary(entry.coefficients) || entry.special || "",
+  };
+}
+
+function shapeConsumable(entry, value) {
+  return {
+    ...entry,
+    catalogId: entry.id,
+    category: "artifact",
+    subcategory: "consumable",
+    value,
+    baseValue: value,
+    useEffect: entry.effect,
+    useDesc: entry.effect,
+    charges: 1,
+  };
+}
+
 function rollItem(rng, tier) {
   const pool = ITEM_CATALOG[tier];
   if (!pool || pool.length === 0) return null;
   const item = pool[Math.floor(rng() * pool.length)];
   const baseValue = item.value[0] + rng() * (item.value[1] - item.value[0]);
-  return {
-    ...item,
-    value: Math.round(baseValue),
-  };
+  return shapeArtifact(item, Math.round(baseValue));
 }
 
 function rollConsumable(rng, sessionTime) {
@@ -185,10 +216,7 @@ function rollConsumable(rng, sessionTime) {
   if (eligible.length === 0) return null;
   const c = eligible[Math.floor(rng() * eligible.length)];
   const baseValue = c.value[0] + rng() * (c.value[1] - c.value[0]);
-  return {
-    ...c,
-    value: Math.round(baseValue),
-  };
+  return shapeConsumable(c, Math.round(baseValue));
 }
 
 function generateWreckLoot(rng, sessionTime, slotCount, qualityBias = 1.0) {
