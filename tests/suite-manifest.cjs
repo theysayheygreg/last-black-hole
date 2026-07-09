@@ -6,6 +6,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "Versioning",
+    file: "versioning.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "Signatures",
     file: "signatures.cjs",
     lanes: ["fast", "core", "static", "full"],

@@ -1,5 +1,22 @@
 # Decision Log
 
+## 2026-07-09 — The v0.3 branch builds as 0.3.0.<commit-hash>
+
+**Decision:** Activate `0.3.0` as the public base on the dedicated v0.3 branch.
+Every internal build appends the current commit hash as the fourth field. Patch
+increments remain intentional public releases; major/minor train changes remain
+Greg's call.
+
+**Why:** A v0.3 candidate labeled `0.2.2` makes artifacts, logs, screenshots,
+and Deck deployments lie about which architecture they contain. Branch isolation
+lets the next train identify itself honestly without promoting it to `main`.
+
+**Where it landed:** `package.json`, `package-lock.json`,
+`scripts/version.cjs`, `scripts/release.cjs`, and `tests/versioning.cjs`.
+
+**Door status:** Closed for v0.3 artifact identity. Open for Greg to call a
+future `0.4` or `1.0` train.
+
 ## 2026-07-09 — Chronicle ships as career totals plus the last five runs
 
 **Decision:** The first remote-authority Chronicle surface carries compact

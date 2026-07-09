@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-07-09 — v0.3 version train activated
+
+- Advanced the v0.3 branch public base to `0.3.0`; internal and release builds
+  now identify as `0.3.0.<commit-hash>`.
+- Generalized release validation to follow the active semantic version train
+  instead of hard-coding v0.2, while public patch bumps still change only the
+  third field.
+- Added fast coverage for the four-part version contract.
+
 ## 2026-07-09 — Remote Chronicle five-run bridge
 
 - Added a bounded newest-first recent-run query to the durable control-plane

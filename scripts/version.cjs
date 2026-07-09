@@ -7,7 +7,6 @@ const { execSync } = require('child_process');
 const ROOT = path.resolve(__dirname, '..');
 const PACKAGE_PATH = path.join(ROOT, 'package.json');
 const LOCK_PATH = path.join(ROOT, 'package-lock.json');
-const VERSION_TRAIN = '0.2';
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -19,7 +18,7 @@ function writeJson(file, value) {
 
 function parsePublicVersion(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(version).trim());
-  if (!match) throw new Error(`Expected public version like 0.2.x, got "${version}".`);
+  if (!match) throw new Error(`Expected public version like 0.3.x, got "${version}".`);
   return {
     major: Number(match[1]),
     minor: Number(match[2]),
@@ -29,7 +28,7 @@ function parsePublicVersion(version) {
 
 function parseBuildVersion(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)\.([0-9a-fA-F]{7,40}|nogit)$/.exec(String(version).trim());
-  if (!match) throw new Error(`Expected build version like 0.2.x.<hash>, got "${version}".`);
+  if (!match) throw new Error(`Expected build version like 0.3.x.<hash>, got "${version}".`);
   return {
     ...parsePublicVersion(`${match[1]}.${match[2]}.${match[3]}`),
     hash: match[4],
@@ -44,12 +43,13 @@ function currentPublicVersion() {
   return readJson(PACKAGE_PATH).version;
 }
 
-function assertV02PublicVersion(version = currentPublicVersion()) {
-  const parsed = parsePublicVersion(version);
-  if (parsed.major !== 0 || parsed.minor !== 2) {
-    throw new Error(`Automated release helpers stay on ${VERSION_TRAIN}.x. Ask Greg before moving to 0.3 or 1.0.`);
-  }
-  return parsed;
+function assertPublicVersion(version = currentPublicVersion()) {
+  return parsePublicVersion(version);
+}
+
+function currentVersionTrain(version = currentPublicVersion()) {
+  const parsed = assertPublicVersion(version);
+  return `${parsed.major}.${parsed.minor}`;
 }
 
 function comparePublicVersions(a, b) {
@@ -70,7 +70,7 @@ function gitShortHash() {
 }
 
 function currentBuildVersion(publicVersion = currentPublicVersion(), hash = gitShortHash()) {
-  assertV02PublicVersion(publicVersion);
+  assertPublicVersion(publicVersion);
   return `${publicVersion}.${hash}`;
 }
 
@@ -79,7 +79,7 @@ function buildIdForMode(mode, buildVersion = currentBuildVersion()) {
 }
 
 function updatePublicVersion(version) {
-  assertV02PublicVersion(version);
+  assertPublicVersion(version);
   const pkg = readJson(PACKAGE_PATH);
   pkg.version = version;
   writeJson(PACKAGE_PATH, pkg);
@@ -103,7 +103,7 @@ function assertCleanTrackedTree() {
   const status = trackedStatus();
   if (!status) return;
   throw new Error([
-    'Release builds must be made from committed tracked source so 0.2.x.<hash> is truthful.',
+    'Release builds must be made from committed tracked source so 0.3.x.<hash> is truthful.',
     'Commit or stash tracked changes, then run the release build again.',
     'Set LBH_ALLOW_DIRTY_BUILD=1 only for an explicit local probe.',
     status,
@@ -112,13 +112,13 @@ function assertCleanTrackedTree() {
 
 module.exports = {
   ROOT,
-  VERSION_TRAIN,
   assertCleanTrackedTree,
-  assertV02PublicVersion,
+  assertPublicVersion,
   buildIdForMode,
   comparePublicVersions,
   currentBuildVersion,
   currentPublicVersion,
+  currentVersionTrain,
   formatPublicVersion,
   gitShortHash,
   parseBuildVersion,
