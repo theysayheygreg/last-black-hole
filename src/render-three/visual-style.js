@@ -6,6 +6,7 @@
 // later without changing how objects separate from the ASCII fabric.
 
 import * as THREE from '../../node_modules/three/build/three.module.js';
+import { PRESENTATION_PALETTE } from '../presentation/presentation-style.js';
 
 export const ENTITY_SUBGROUPS = [
   ['entityBackingGroup', 'entity-backing-layer', 'contact mattes and fabric softening'],
@@ -69,7 +70,16 @@ function makePixelMaterial(texture, opacity = 1) {
   });
 }
 
-export function createVisualMaterials() {
+function rgba(hex, alpha = 255) {
+  return [
+    (hex >> 16) & 0xff,
+    (hex >> 8) & 0xff,
+    hex & 0xff,
+    alpha,
+  ];
+}
+
+export function createVisualMaterials(palette = PRESENTATION_PALETTE) {
   const normal = THREE.NormalBlending;
   const add = THREE.AdditiveBlending;
   // Inline pixel masks are fixture candidates, not final art. They let the
@@ -88,9 +98,9 @@ export function createVisualMaterials() {
     '....B....',
   ], {
     '.': [0, 0, 0, 0],
-    'W': [235, 252, 255, 255],
-    'C': [89, 211, 255, 255],
-    'B': [48, 152, 255, 220],
+    'W': rgba(palette.playerWhite),
+    'C': rgba(palette.playerCyan),
+    'B': rgba(palette.remoteBlue, 220),
   });
   const shipMeshTexture = makePixelTexture([
     '....W....',
@@ -103,51 +113,52 @@ export function createVisualMaterials() {
     '...BB....',
   ], {
     '.': [0, 0, 0, 0],
-    'W': [240, 252, 255, 255],
-    'C': [98, 225, 255, 255],
-    'B': [64, 126, 255, 225],
+    'W': rgba(palette.playerWhite),
+    'C': rgba(palette.playerCyan),
+    'B': rgba(palette.remoteBlue, 225),
   });
   return {
-    matteSoft: makeVisualMaterial(0x000006, 0.28, { blending: normal }),
-    matteCore: makeVisualMaterial(0x000000, 0.54, { blending: normal }),
-    matteHeavy: makeVisualMaterial(0x000000, 0.68, { blending: normal }),
+    matteSoft: makeVisualMaterial(palette.matteNearBlack, 0.28, { blending: normal }),
+    matteCore: makeVisualMaterial(palette.voidBlack, 0.54, { blending: normal }),
+    matteHeavy: makeVisualMaterial(palette.voidBlack, 0.68, { blending: normal }),
 
-    ship: makeVisualMaterial(0xffffff, 1.0, { blending: normal }),
-    shipHalo: makeVisualMaterial(0x74d7ff, 0.58, { blending: add }),
-    shipRim: makeVisualMaterial(0xd9fbff, 0.72, { blending: add }),
+    ship: makeVisualMaterial(palette.neutralWhite, 1.0, { blending: normal }),
+    shipHalo: makeVisualMaterial(palette.playerCyan, 0.58, { blending: add }),
+    shipRim: makeVisualMaterial(palette.playerRim, 0.72, { blending: add }),
     shipSpriteCandidate: makePixelMaterial(shipSpriteTexture, 1.0),
     shipMeshCandidate: makePixelMaterial(shipMeshTexture, 1.0),
-    remoteShip: makeVisualMaterial(0x98d8ff, 0.96, { blending: normal }),
-    remoteShipHalo: makeVisualMaterial(0x3fb8ff, 0.50, { blending: add }),
-    scavenger: makeVisualMaterial(0xff3b35, 0.98, { blending: normal }),
-    scavengerHalo: makeVisualMaterial(0xff1f39, 0.56, { blending: add }),
+    remoteShip: makeVisualMaterial(palette.remoteWhite, 0.96, { blending: normal }),
+    remoteShipHalo: makeVisualMaterial(palette.remoteBlue, 0.50, { blending: add }),
+    scavenger: makeVisualMaterial(palette.threatRed, 0.98, { blending: normal }),
+    scavengerHalo: makeVisualMaterial(palette.threatHalo, 0.56, { blending: add }),
 
-    wellCore: makeVisualMaterial(0xff210f, 0.34, { blending: add }),
-    wellRing: makeVisualMaterial(0x74b8ff, 0.40, { blending: add }),
-    hazardRing: makeVisualMaterial(0xff3b22, 0.28, { blending: add }),
-    surfRing: makeVisualMaterial(0x9cfbff, 0.32, { blending: add }),
-    wave: makeVisualMaterial(0xb8ffff, 0.26, { blending: add }),
+    wellCore: makeVisualMaterial(palette.hazardCore, 0.34, { blending: add }),
+    wellRing: makeVisualMaterial(palette.fabricBlue, 0.40, { blending: add }),
+    hazardRing: makeVisualMaterial(palette.hazardRing, 0.28, { blending: add }),
+    surfRing: makeVisualMaterial(palette.fabricSurf, 0.32, { blending: add }),
+    wave: makeVisualMaterial(palette.fabricWave, 0.26, { blending: add }),
 
-    star: makeVisualMaterial(0xffe08a, 0.90, { blending: add }),
-    starHalo: makeVisualMaterial(0xff9e38, 0.42, { blending: add }),
-    wreck: makeVisualMaterial(0xf8fbff, 1.0, { blending: normal }),
-    wreckHalo: makeVisualMaterial(0xdcecff, 0.52, { blending: add }),
-    wreckRim: makeVisualMaterial(0xffffff, 0.72, { blending: add }),
-    lootedWreck: makeVisualMaterial(0x7f8994, 0.58, { blending: normal }),
-    lootedWreckHalo: makeVisualMaterial(0x8b96a4, 0.24, { blending: add }),
-    portal: makeVisualMaterial(0xff6de2, 0.86, { blending: add }),
-    portalHalo: makeVisualMaterial(0xff36c8, 0.54, { blending: add }),
-    riftPortal: makeVisualMaterial(0x9dfcff, 0.90, { blending: add }),
-    riftPortalHalo: makeVisualMaterial(0x4beeff, 0.58, { blending: add }),
-    planetoid: makeVisualMaterial(0xd7f2ff, 0.86, { blending: normal }),
-    planetoidHalo: makeVisualMaterial(0x8ee2ff, 0.36, { blending: add }),
-    fauna: makeVisualMaterial(0x7dffd8, 0.76, { blending: add }),
-    faunaHalo: makeVisualMaterial(0x36ffc3, 0.34, { blending: add }),
-    sentry: makeVisualMaterial(0x35ff98, 0.88, { blending: add }),
-    sentryHalo: makeVisualMaterial(0x00ff88, 0.42, { blending: add }),
+    star: makeVisualMaterial(palette.warmStar, 0.90, { blending: add }),
+    starHalo: makeVisualMaterial(palette.warmStarHalo, 0.42, { blending: add }),
+    wreck: makeVisualMaterial(palette.salvageBone, 1.0, { blending: normal }),
+    wreckHalo: makeVisualMaterial(palette.salvageRim, 0.52, { blending: add }),
+    wreckRim: makeVisualMaterial(palette.neutralWhite, 0.72, { blending: add }),
+    lootedWreck: makeVisualMaterial(palette.salvageMuted, 0.58, { blending: normal }),
+    lootedWreckHalo: makeVisualMaterial(palette.salvageMutedRim, 0.24, { blending: add }),
+    // Route apertures stay cyan. Magenta belongs to Inhibitor/corruption.
+    portal: makeVisualMaterial(palette.routeCyanCore, 0.86, { blending: add }),
+    portalHalo: makeVisualMaterial(palette.routeCyan, 0.54, { blending: add }),
+    riftPortal: makeVisualMaterial(palette.playerWhite, 0.90, { blending: add }),
+    riftPortalHalo: makeVisualMaterial(palette.routeCyanCore, 0.58, { blending: add }),
+    planetoid: makeVisualMaterial(palette.routeWhite, 0.86, { blending: normal }),
+    planetoidHalo: makeVisualMaterial(palette.routeHalo, 0.36, { blending: add }),
+    fauna: makeVisualMaterial(palette.ecologyCore, 0.76, { blending: add }),
+    faunaHalo: makeVisualMaterial(palette.ecologyGreen, 0.34, { blending: add }),
+    sentry: makeVisualMaterial(palette.sentryCore, 0.88, { blending: add }),
+    sentryHalo: makeVisualMaterial(palette.sentryHalo, 0.42, { blending: add }),
 
     tether: new THREE.LineBasicMaterial({
-      color: 0xbfeaff,
+      color: palette.playerWhite,
       transparent: true,
       opacity: 0.72,
       depthTest: false,

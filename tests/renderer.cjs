@@ -411,6 +411,16 @@ async function captureFixture(page, outputDir, fixture) {
       `Fixture '${fixture.name}' Three renderer is still reporting canvas uploads`);
     assert((backendStats.three.pooledMeshes || 0) > 0,
       `Fixture '${fixture.name}' Three scene did not allocate pooled meshes`);
+    const visualFamilies = backendStats.three.visualFamilies || {};
+    for (const familyName of ['player', 'wreck', 'portal']) {
+      const family = visualFamilies[familyName];
+      assert(family?.created === true && family.disposed === false,
+        `Fixture '${fixture.name}' ${familyName} visual family is not live`);
+      assert(family.objectBudget > 0,
+        `Fixture '${fixture.name}' ${familyName} visual family has no object budget`);
+      assert(family.activeObjects <= family.objectBudget,
+        `Fixture '${fixture.name}' ${familyName} visual family exceeded ${family.activeObjects}/${family.objectBudget}`);
+    }
     const entityLayer = backendStats.three.worldLayers.find((layer) => layer.name === 'world-entity-layer');
     const childNames = new Set((entityLayer?.children || []).map((child) => child.name));
     for (const expectedChild of ['entity-backing-layer', 'landmark-entity-layer', 'salvage-entity-layer', 'active-entity-layer', 'immediate-vfx-layer']) {

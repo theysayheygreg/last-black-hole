@@ -112,6 +112,8 @@ async function run() {
       assert(family.defaults?.blendMode, `${family.id} missing blend mode default`);
       assert(family.budgetClass, `${family.id} missing budget class`);
     }
+    assert(materials.getMaterialFamily('portalAperture').defaults.paletteRole === 'routeCyan',
+      'Route portals must use cyan; magenta is reserved for Inhibitor/corruption');
   });
 
   await runner.run('Renderable hints validate required visual fields', async () => {

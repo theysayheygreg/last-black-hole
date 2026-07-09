@@ -106,7 +106,7 @@ export const MATERIAL_FAMILIES = Object.freeze([
     minimumQualityTier: 'minimal',
     captureQualityTier: 'capture',
     defaults: Object.freeze({
-      paletteRole: 'anomalyMagenta',
+      paletteRole: 'routeCyan',
       blendMode: 'additiveAperture',
       contrastRole: 'routeExit',
     }),
@@ -171,4 +171,3 @@ export function getMaterialFamily(id) {
 export function hasMaterialFamily(id) {
   return Boolean(getMaterialFamily(id));
 }
-

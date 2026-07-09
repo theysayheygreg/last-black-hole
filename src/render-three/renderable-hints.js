@@ -24,6 +24,7 @@ export const ROLE_COLORS = Object.freeze([
   'threatRed',
   'salvageBone',
   'routeAmber',
+  'routeCyan',
   'ecologyGreen',
   'anomalyMagenta',
   'fabricBlue',
@@ -142,4 +143,3 @@ export function makeRenderableHint(overrides = {}) {
   validateRenderableHint(hint);
   return hint;
 }
-

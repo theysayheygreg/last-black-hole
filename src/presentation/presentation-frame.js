@@ -1,0 +1,284 @@
+// The presentation frame is the only world-shaped input a renderer needs.
+// It contains display facts and semantic roles, never mutable sim objects or
+// gameplay callbacks, so Three and future native renderers share one boundary.
+
+import { CAMERA_VIEW } from '../coords.js';
+import {
+  PRESENTATION_PALETTE_ID,
+  PRESENTATION_ROLE_HINTS,
+  normalizePresentationQuality,
+  resolvePresentationQuality,
+} from './presentation-style.js';
+
+export const PRESENTATION_FRAME_VERSION = 1;
+
+const WORLD_FAMILIES = Object.freeze([
+  'wells',
+  'waveRings',
+  'stars',
+  'wrecks',
+  'portals',
+  'planetoids',
+  'scavengers',
+  'remotePlayers',
+  'shipCandidates',
+  'fauna',
+  'sentries',
+]);
+
+function finite(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function optionalFinite(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function text(value, fallback = '') {
+  return value == null ? fallback : String(value);
+}
+
+function id(value, fallback) {
+  const resolved = text(value, fallback).trim();
+  return resolved || fallback;
+}
+
+function point(source = {}, xKey = 'wx', yKey = 'wy') {
+  return Object.freeze({ x: finite(source[xKey]), y: finite(source[yKey]) });
+}
+
+function velocity(source = {}) {
+  const x = finite(source.vx);
+  const y = finite(source.vy);
+  return Object.freeze({ x, y, speed: Math.hypot(x, y) });
+}
+
+function hint(role, overrides = null) {
+  return Object.freeze({
+    ...(PRESENTATION_ROLE_HINTS[role] || PRESENTATION_ROLE_HINTS.anomaly),
+    ...(overrides || {}),
+  });
+}
+
+function anchor(source = {}) {
+  if (!source || !Number.isFinite(Number(source.wx)) || !Number.isFinite(Number(source.wy))) return null;
+  return Object.freeze({
+    world: point(source),
+    range: Math.max(0, finite(source.range, 0.1)),
+    kind: text(source.type, 'gravity'),
+    energy: Math.max(0, finite(source.energy)),
+    chainCount: Math.max(0, Math.floor(finite(source.chainCount))),
+  });
+}
+
+function normalizeLocalPlayer(source = null, scene = {}) {
+  if (!source) return null;
+  const motion = velocity(source);
+  const sling = scene.slingshot || source.slingshot || {};
+  return Object.freeze({
+    id: id(source.id || source.clientId, 'local-player'),
+    world: point(source),
+    movement: Object.freeze({
+      velocity: motion,
+      facing: finite(source.facing, Math.atan2(motion.y, motion.x)),
+      fuelRatio: Math.max(0, Math.min(1, finite(source.deltaVRatio ?? source.fuelRatio, 1))),
+      thrusting: source.thrusting === true,
+      braking: source.braking === true,
+    }),
+    slingshot: Object.freeze({
+      engaged: Boolean(source.slingshotEngaged || sling.engaged),
+      affordance: anchor(sling.affordance),
+      anchor: anchor(sling.engaged || source.slingshotAnchor),
+    }),
+    status: text(source.status, 'alive'),
+    hint: hint('player'),
+  });
+}
+
+function normalizeEntity(family, source, index) {
+  const base = {
+    id: id(source?.id || source?.name, `${family}-${index}`),
+    world: point(source, family === 'waveRings' ? 'sourceWX' : 'wx', family === 'waveRings' ? 'sourceWY' : 'wy'),
+  };
+  switch (family) {
+    case 'wells':
+      return Object.freeze({
+        ...base,
+        visual: Object.freeze({
+          coreRadius: Math.max(0.001, finite(source.killRadius, 0.04)),
+          contourRadius: Math.max(0.001, finite(source.ringOuter, 0.1)),
+        }),
+        hint: hint('anomaly', { category: 'fabric', roleColor: 'neutralWhite', vfxFamily: 'gravityContour' }),
+      });
+    case 'waveRings':
+      return Object.freeze({
+        ...base,
+        radius: Math.max(0, finite(source.radius, 0.01)),
+        strength: Math.max(0, finite(source.amplitude)),
+        initialStrength: Math.max(0.0001, finite(source.initialAmplitude, source.amplitude || 1)),
+        hint: hint('anomaly', { category: 'fabric', roleColor: 'fabricBlue', vfxFamily: 'gravityContour' }),
+      });
+    case 'stars':
+      return Object.freeze({
+        ...base,
+        visualScale: Math.max(0.1, finite(source.mass, 1)),
+        variant: text(source.type, 'mainSequence'),
+        hint: hint('portal', { category: 'routeAnchor', roleColor: 'routeAmber', vfxFamily: 'none' }),
+      });
+    case 'wrecks':
+      return Object.freeze({
+        ...base,
+        size: text(source.size, 'medium'),
+        tier: Math.max(1, Math.floor(finite(source.tier, 1))),
+        variant: text(source.type, 'derelict'),
+        looted: source.looted === true,
+        hint: hint('wreck', source.looted ? { priority: 'low', roleColor: 'neutralWhite' } : null),
+      });
+    case 'portals':
+      return Object.freeze({
+        ...base,
+        variant: text(source.type, 'standard'),
+        radius: Math.max(0.001, finite(source.radius ?? source.captureRadius, 0.08)),
+        opacity: Math.max(0, Math.min(1, finite(source.opacity, 1))),
+        blocked: source.blocked === true || source.blockedByInhibitor === true,
+        final: source.final === true || source.finalInhibitor === true,
+        hint: hint('portal'),
+      });
+    case 'planetoids':
+      return Object.freeze({ ...base, movement: velocity(source), hint: hint('portal', { priority: 'normal' }) });
+    case 'scavengers':
+      return Object.freeze({
+        ...base,
+        movement: Object.freeze({ velocity: velocity(source), facing: finite(source.facing) }),
+        variant: text(source.archetype, 'scavenger'),
+        status: text(source.state, 'patrol'),
+        hint: hint('threat'),
+      });
+    case 'remotePlayers':
+      return Object.freeze({
+        ...base,
+        movement: Object.freeze({ velocity: velocity(source), facing: optionalFinite(source.facing) }),
+        status: text(source.status, 'alive'),
+        variant: text(source.hullType, 'drifter'),
+        hint: hint('remotePlayer'),
+      });
+    case 'shipCandidates':
+      return Object.freeze({
+        ...base,
+        movement: Object.freeze({ velocity: velocity(source), facing: optionalFinite(source.facing) }),
+        variant: source.variant === 'pixel-mesh' ? 'pixel-mesh' : 'sprite-card',
+        radius: Math.max(0.001, finite(source.radius, 0.04)),
+        hint: hint('player'),
+      });
+    case 'fauna':
+      return Object.freeze({
+        ...base,
+        size: Math.max(1, finite(source.size, 2)),
+        variant: text(source.kind, 'fauna'),
+        hint: hint('ecology'),
+      });
+    case 'sentries':
+      return Object.freeze({ ...base, status: text(source.state, 'patrol'), hint: hint('ecology', { priority: 'high' }) });
+    default:
+      return Object.freeze({ ...base, hint: hint('anomaly') });
+  }
+}
+
+function normalizeWorld(scene = {}) {
+  const world = {};
+  for (const family of WORLD_FAMILIES) {
+    const list = Array.isArray(scene[family]) ? scene[family] : [];
+    world[family] = Object.freeze(list.map((entry, index) => normalizeEntity(family, entry || {}, index)));
+  }
+  world.titleBackdrop = scene.isTitleBackdrop === true;
+  world.semanticField = Object.freeze({
+    localSample: scene.semanticField?.shipSample ? Object.freeze({
+      hazard: finite(scene.semanticField.shipSample.hazard),
+      surf: finite(scene.semanticField.shipSample.surf),
+      signalShadow: finite(scene.semanticField.shipSample.signalShadow),
+    }) : null,
+  });
+  return Object.freeze(world);
+}
+
+function normalizeEvent(source, index) {
+  if (!source || !source.type) return null;
+  const eventId = id(source.eventId || source.id || source.seq, `presentation-event-${index}`);
+  const event = {
+    eventId,
+    type: text(source.type),
+    sequence: Math.max(0, Math.floor(finite(source.seq ?? source.sequence))),
+    runId: source.runId == null ? null : text(source.runId),
+    lane: text(source.lane, 'vfx'),
+    sourceId: source.sourceId == null && source.source == null ? null : text(source.sourceId ?? source.source),
+    subjectId: source.subjectId == null && source.subject == null ? null : text(source.subjectId ?? source.subject),
+    simTime: Math.max(0, finite(source.simTime ?? source.time)),
+  };
+  for (const key of ['screenX', 'screenY', 'glyphWidth', 'glyphHeight', 'intensity']) {
+    const value = optionalFinite(source[key]);
+    if (value !== undefined) event[key] = value;
+  }
+  for (const key of ['glyph', 'cleanGlyph', 'seed', 'role', 'variant']) {
+    if (source[key] != null) event[key] = text(source[key]);
+  }
+  if (source.heavy === true) event.heavy = true;
+  if (Number.isFinite(Number(source.wx)) && Number.isFinite(Number(source.wy))) {
+    event.world = point(source);
+  }
+  return Object.freeze(event);
+}
+
+export function createPresentationFrame(input = {}, defaults = {}) {
+  const scene = input.world || input.scene || {};
+  const qualityTier = normalizePresentationQuality(
+    input.style?.qualityTier || input.qualityTier || defaults.qualityTier || 'default'
+  );
+  const quality = resolvePresentationQuality(qualityTier);
+  const camera = input.camera || {};
+  const localSource = input.localPlayer || scene.ship || input.ship
+    ? { ...(input.ship || {}), ...(scene.ship || {}), ...(input.localPlayer || {}) }
+    : null;
+  const localPlayer = normalizeLocalPlayer(localSource, scene);
+  const events = (Array.isArray(input.events) ? input.events : input.vfxEvents || [])
+    .map(normalizeEvent)
+    .filter(Boolean);
+  return Object.freeze({
+    version: PRESENTATION_FRAME_VERSION,
+    frameId: Math.max(0, Math.floor(finite(input.frameId))),
+    runId: input.runId == null ? null : text(input.runId),
+    phase: text(input.phase || scene.phase, 'title'),
+    timing: Object.freeze({
+      dt: Math.max(0, finite(input.timing?.dt ?? input.dt, 1 / 60)),
+      totalTime: Math.max(0, finite(input.timing?.totalTime ?? input.totalTime)),
+    }),
+    camera: Object.freeze({
+      x: finite(camera.x ?? camera.camX ?? input.camX),
+      y: finite(camera.y ?? camera.camY ?? input.camY),
+      worldScale: Math.max(0.001, finite(camera.worldScale ?? input.worldScale, 3)),
+      gridWindow: Math.max(0.001, finite(camera.gridWindow ?? input.gridWindow, 3)),
+      view: Math.max(0.001, finite(camera.view ?? camera.cameraView ?? input.cameraView, CAMERA_VIEW)),
+    }),
+    localPlayer,
+    world: normalizeWorld(scene),
+    hints: Object.freeze({
+      localPlayer: localPlayer?.hint || null,
+      semanticField: scene.semanticField ? 'fabric-owned' : 'none',
+    }),
+    style: Object.freeze({
+      qualityTier,
+      paletteId: text(input.style?.paletteId, PRESENTATION_PALETTE_ID),
+      roleHints: PRESENTATION_ROLE_HINTS,
+      entityBudgets: quality.entityBudgets,
+    }),
+    events: Object.freeze(events),
+    vfxConfig: Object.freeze({ ...(input.vfxConfig || {}) }),
+  });
+}
+
+export function resolvePresentationFrame(frameContext = {}, defaults = {}) {
+  if (frameContext.presentation?.version === PRESENTATION_FRAME_VERSION) return frameContext.presentation;
+  if (frameContext.presentation) return createPresentationFrame(frameContext.presentation, defaults);
+  return createPresentationFrame(frameContext.three || {}, defaults);
+}

@@ -7,10 +7,23 @@
 // adapts the frame into a 3D scene while preserving LBH's flat top-down read.
 
 import * as THREE from '../../node_modules/three/build/three.module.js';
-import { CAMERA_VIEW, worldRadiusToSceneScale } from '../coords.js';
+import { CAMERA_VIEW } from '../coords.js';
+import { resolvePresentationFrame } from '../presentation/presentation-frame.js';
+import {
+  getPresentationPalette,
+  resolvePresentationQuality,
+} from '../presentation/presentation-style.js';
 import { ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
+import { PlayerVisualFamily } from './entities/player-visual-family.js';
+import { PortalVisualFamily } from './entities/portal-visual-family.js';
+import { WreckVisualFamily } from './entities/wreck-visual-family.js';
 import { VfxManager } from './vfx/vfx-manager.js';
 import { RENDER_PLAN_DESCRIPTOR, RENDER_PLAN_PASS_IDS } from './render-plan.js';
+import {
+  createWorldProjection,
+  normalizedWorldPhase,
+  wrappedAxisDelta,
+} from './world-projection.js';
 
 const COPY_VERT = `in vec3 position;
 in vec2 uv;
@@ -59,62 +72,8 @@ void main() {
   fragColor = vec4(c, alpha);
 }`;
 
-function qualitySettings(renderQuality) {
-  if (renderQuality === 'minimal') {
-    return {
-      backdropReveal: 0.0,
-      parallaxStrength: 0.0,
-      scanlineIntensity: 0.0,
-      vignette: 0.0,
-      motionWarp: 0.0,
-      chromaticMotion: 0.0,
-      entityGain: 1.0,
-      entityGamma: 1.0,
-    };
-  }
-  if (renderQuality === 'default') {
-    return {
-      backdropReveal: 0.07,
-      parallaxStrength: 0.55,
-      scanlineIntensity: 0.006,
-      vignette: 0.035,
-      motionWarp: 0.004,
-      chromaticMotion: 0.0018,
-      entityGain: 1.22,
-      entityGamma: 0.88,
-    };
-  }
-  return {
-    backdropReveal: 0.12,
-    parallaxStrength: 0.85,
-    scanlineIntensity: 0.010,
-    vignette: 0.055,
-    motionWarp: 0.007,
-    chromaticMotion: 0.0025,
-    entityGain: 1.38,
-    entityGamma: 0.82,
-  };
-}
-
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
-}
-
-function wrappedDelta(next, prev, wrap) {
-  if (!Number.isFinite(next) || !Number.isFinite(prev)) return 0;
-  let d = next - prev;
-  if (Number.isFinite(wrap) && wrap > 0) {
-    const half = wrap / 2;
-    if (d > half) d -= wrap;
-    if (d < -half) d += wrap;
-  }
-  return d;
-}
-
-function normalizedPhase(value, wrap) {
-  if (!Number.isFinite(value) || !Number.isFinite(wrap) || wrap <= 0) return 0;
-  const unit = ((value / wrap) % 1 + 1) % 1;
-  return unit - 0.5;
 }
 
 function seededUnit(index) {
@@ -180,7 +139,7 @@ export class ThreeRendererBackend {
   constructor({ composer, asciiPass, gl, sourceCanvas, targetCanvas, renderQuality = 'rich' }) {
     this.name = 'three';
     this.renderQuality = renderQuality;
-    this.settings = qualitySettings(renderQuality);
+    this.settings = resolvePresentationQuality(renderQuality);
     this.composer = composer;
     this.asciiPass = asciiPass;
     this.gl = gl;
@@ -269,6 +228,32 @@ export class ThreeRendererBackend {
     this.entityMeshCursor = 0;
     this.semanticMeshCursor = 0;
     this.lineCursor = 0;
+    this.currentProjection = createWorldProjection({
+      x: 0,
+      y: 0,
+      worldScale: this.lastSceneState.worldScale,
+      view: this.lastSceneState.cameraView,
+    }, this.worldCameraAspect);
+
+    this.visualFamilies = {
+      player: new PlayerVisualFamily({
+        group: this.activeEntityGroup,
+        geometries: this.entityGeometries,
+        materials: this.entityMaterials,
+      }).create(),
+      wreck: new WreckVisualFamily({
+        group: this.salvageEntityGroup,
+        geometries: this.entityGeometries,
+        materials: this.entityMaterials,
+      }).create(),
+      portal: new PortalVisualFamily({
+        group: this.landmarkEntityGroup,
+        geometries: this.entityGeometries,
+        materials: this.entityMaterials,
+      }).create(),
+    };
+    this.lastPresentationPhase = null;
+    this.lastPresentationRunId = null;
 
     this._buildBackdropLayers();
     this._buildForegroundLayers();
@@ -422,7 +407,7 @@ export class ThreeRendererBackend {
       pixelHullMesh: makePixelHullMeshGeometry(),
       spark: makeRadialGeometry(4, 0.36),
     };
-    this.entityMaterials = createVisualMaterials();
+    this.entityMaterials = createVisualMaterials(getPresentationPalette());
     this.lastEntityCount = 0;
     this.lastSemanticCount = 0;
     this.lastVisualCounts = {};
@@ -501,30 +486,41 @@ export class ThreeRendererBackend {
     this.worldCamera.updateProjectionMatrix();
   }
 
-  _updateSceneState(frameContext) {
-    const state = frameContext?.three || {};
-    const camX = Number.isFinite(state.camX) ? state.camX : this.lastSceneState.cameraX;
-    const camY = Number.isFinite(state.camY) ? state.camY : this.lastSceneState.cameraY;
-    const worldScale = Number.isFinite(state.worldScale) ? state.worldScale : this.lastSceneState.worldScale;
-    const gridWindow = Number.isFinite(state.gridWindow) ? state.gridWindow : this.lastSceneState.gridWindow;
-    const cameraView = Number.isFinite(state.cameraView) ? state.cameraView : (this.lastSceneState.cameraView ?? CAMERA_VIEW);
-    const totalTime = Number.isFinite(state.totalTime) ? state.totalTime : 0;
+  _applyPresentationStyle(style = {}) {
+    this.settings = resolvePresentationQuality(style.qualityTier || this.renderQuality);
+    this.copyMaterial.uniforms.u_scanlineIntensity.value = this.settings.scanlineIntensity;
+    this.copyMaterial.uniforms.u_vignette.value = this.settings.vignette;
+    this.copyMaterial.uniforms.u_motionWarp.value = this.settings.motionWarp;
+    this.copyMaterial.uniforms.u_chromaticMotion.value = this.settings.chromaticMotion;
+    this.copyMaterial.uniforms.u_entityGain.value = this.settings.entityGain;
+    this.copyMaterial.uniforms.u_entityGamma.value = this.settings.entityGamma;
+    this.vfxManager.renderQuality = style.qualityTier || this.renderQuality;
+  }
+
+  _updateSceneState(frame) {
+    const camera = frame.camera || {};
+    const camX = Number.isFinite(camera.x) ? camera.x : this.lastSceneState.cameraX;
+    const camY = Number.isFinite(camera.y) ? camera.y : this.lastSceneState.cameraY;
+    const worldScale = Number.isFinite(camera.worldScale) ? camera.worldScale : this.lastSceneState.worldScale;
+    const gridWindow = Number.isFinite(camera.gridWindow) ? camera.gridWindow : this.lastSceneState.gridWindow;
+    const cameraView = Number.isFinite(camera.view) ? camera.view : (this.lastSceneState.cameraView ?? CAMERA_VIEW);
+    const totalTime = Number.isFinite(frame.timing?.totalTime) ? frame.timing.totalTime : 0;
     const prev = this.prevCamera || { x: camX, y: camY };
-    const dCamX = wrappedDelta(camX, prev.x, worldScale);
-    const dCamY = wrappedDelta(camY, prev.y, worldScale);
+    const dCamX = wrappedAxisDelta(camX, prev.x, worldScale);
+    const dCamY = wrappedAxisDelta(camY, prev.y, worldScale);
     this.prevCamera = { x: camX, y: camY };
 
-    const ship = state.ship || {};
-    const shipVX = Number.isFinite(ship.vx) ? ship.vx : 0;
-    const shipVY = Number.isFinite(ship.vy) ? ship.vy : 0;
+    const shipVelocity = frame.localPlayer?.movement?.velocity || {};
+    const shipVX = Number.isFinite(shipVelocity.x) ? shipVelocity.x : 0;
+    const shipVY = Number.isFinite(shipVelocity.y) ? shipVelocity.y : 0;
     const parallaxStrength = this.settings.parallaxStrength;
     const targetX = clamp((dCamX / Math.max(gridWindow, 0.001)) * 0.75 + (shipVX / Math.max(gridWindow, 0.001)) * 0.006, -0.045, 0.045);
     const targetY = clamp((-dCamY / Math.max(gridWindow, 0.001)) * 0.75 + (-shipVY / Math.max(gridWindow, 0.001)) * 0.006, -0.045, 0.045);
     this.targetMotion.set(targetX, targetY).multiplyScalar(parallaxStrength);
     this.motion.lerp(this.targetMotion, 0.22);
 
-    const phaseX = normalizedPhase(camX, worldScale);
-    const phaseY = normalizedPhase(camY, worldScale);
+    const phaseX = normalizedWorldPhase(camX, worldScale);
+    const phaseY = normalizedWorldPhase(camY, worldScale);
     this.backgroundGroup.position.x = -phaseX * 0.10 * parallaxStrength - this.motion.x * 0.65;
     this.backgroundGroup.position.y = phaseY * 0.10 * parallaxStrength - this.motion.y * 0.65;
     this.farStars.position.x = -phaseX * 0.08 * parallaxStrength;
@@ -536,7 +532,15 @@ export class ThreeRendererBackend {
     this.lensRing.material.opacity = (0.035 + clamp(motionLen * 1.1, 0, 0.055)) * (renderQualityOpacityScale(this.renderQuality));
 
     const renderState = { camX, camY, cameraX: camX, cameraY: camY, worldScale, gridWindow, cameraView };
-    this._syncWorldScene(state.scene || {}, renderState);
+    this.currentProjection = createWorldProjection({ x: camX, y: camY, worldScale, view: cameraView }, this.worldCameraAspect);
+    const phaseChanged = frame.phase !== this.lastPresentationPhase;
+    const runChanged = frame.runId && this.lastPresentationRunId && frame.runId !== this.lastPresentationRunId;
+    if (phaseChanged || runChanged) {
+      for (const family of Object.values(this.visualFamilies)) family.reset();
+    }
+    this.lastPresentationPhase = frame.phase;
+    this.lastPresentationRunId = frame.runId || this.lastPresentationRunId;
+    this._syncWorldScene(frame, renderState);
     const motionX = Math.abs(this.motion.x) < 1e-7 ? 0 : this.motion.x;
     const motionY = Math.abs(this.motion.y) < 1e-7 ? 0 : this.motion.y;
     this.lastSceneState = {
@@ -554,22 +558,11 @@ export class ThreeRendererBackend {
   }
 
   _scenePoint(wx, wy, state = this.lastSceneState) {
-    const worldScale = Number.isFinite(state.worldScale) ? state.worldScale : this.lastSceneState.worldScale;
-    const cameraView = Math.max(0.001, Number.isFinite(state.cameraView) ? state.cameraView : (this.lastSceneState.cameraView ?? CAMERA_VIEW));
-    const dx = wrappedDelta(wx, state.camX ?? this.lastSceneState.cameraX, worldScale);
-    const dy = wrappedDelta(wy, state.camY ?? this.lastSceneState.cameraY, worldScale);
-    return {
-      // The sim window is square; scale X into the aspect-wide orthographic
-      // volume so hazards line up with the stretched fluid texture.
-      x: (dx / cameraView) * 2 * this.worldCameraAspect,
-      y: (-dy / cameraView) * 2,
-      scale: 2 / cameraView,
-    };
+    return this.currentProjection.project(wx, wy);
   }
 
   _isSceneVisible(point, radius = 0.04) {
-    const xLimit = Math.max(1, this.worldCameraAspect || 1) + 0.25 + radius;
-    return Math.abs(point.x) <= xLimit && Math.abs(point.y) <= 1.25 + radius;
+    return this.currentProjection.isVisible(point, radius);
   }
 
   _beginDynamicScene() {
@@ -594,8 +587,7 @@ export class ThreeRendererBackend {
   _addMesh(group, geometry, material, wx, wy, radius, rotation = 0, z = 0, state = this.lastSceneState, radiusMode = 'world') {
     if (!Number.isFinite(wx) || !Number.isFinite(wy)) return null;
     const point = this._scenePoint(wx, wy, state);
-    const cameraView = Math.max(0.001, Number.isFinite(state.cameraView) ? state.cameraView : (this.lastSceneState.cameraView ?? CAMERA_VIEW));
-    const sceneScale = worldRadiusToSceneScale(Math.max(0.001, radius), this.worldCameraAspect, cameraView, radiusMode);
+    const sceneScale = this.currentProjection.radius(Math.max(0.001, radius), radiusMode);
     sceneScale.x = Math.max(0.002, sceneScale.x);
     sceneScale.y = Math.max(0.002, sceneScale.y);
     if (!this._isSceneVisible(point, Math.max(sceneScale.x, sceneScale.y))) return null;
@@ -624,8 +616,7 @@ export class ThreeRendererBackend {
   _estimateMatteCoverage(radius, radiusScale, yScale, radiusMode, state = this.lastSceneState) {
     // This is a broad visual budget canary, not a pixel-accurate area test.
     // It catches runaway backing layers before they erase the ASCII fabric.
-    const cameraView = Math.max(0.001, Number.isFinite(state.cameraView) ? state.cameraView : (this.lastSceneState.cameraView ?? CAMERA_VIEW));
-    const sceneScale = worldRadiusToSceneScale(Math.max(0.001, radius * radiusScale), this.worldCameraAspect, cameraView, radiusMode);
+    const sceneScale = this.currentProjection.radius(Math.max(0.001, radius * radiusScale), radiusMode);
     const sceneArea = Math.max(0.001, (this.worldCamera.right - this.worldCamera.left) * (this.worldCamera.top - this.worldCamera.bottom));
     return (Math.PI * sceneScale.x * sceneScale.y * Math.max(0.1, yScale)) / sceneArea;
   }
@@ -692,22 +683,22 @@ export class ThreeRendererBackend {
     const material = variant === 'pixel-mesh'
       ? this.entityMaterials.shipMeshCandidate
       : this.entityMaterials.shipSpriteCandidate;
-    const facing = Number.isFinite(candidate.facing)
-      ? candidate.facing
-      : Math.atan2(-(candidate.vy || 0), candidate.vx || 0);
+    const facing = Number.isFinite(candidate.movement?.facing)
+      ? candidate.movement.facing
+      : Math.atan2(-(candidate.movement?.velocity?.y || 0), candidate.movement?.velocity?.x || 0);
     const rotation = -facing;
     const radius = candidate.radius || 0.040;
-    this._addContrastBacking(candidate.wx, candidate.wy, radius, rotation, 0.165, state, 'screen', {
+    this._addContrastBacking(candidate.world.x, candidate.world.y, radius, rotation, 0.165, state, 'screen', {
       opacity: 'heavy',
       radiusScale: 2.15,
       yScale: 0.80,
     });
     this._addMesh(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.shipHalo,
-      candidate.wx, candidate.wy, radius * 1.75, rotation, 0.168, state, 'screen');
+      candidate.world.x, candidate.world.y, radius * 1.75, rotation, 0.168, state, 'screen');
     const core = this._addMesh(this.activeEntityGroup, geometry, material,
-      candidate.wx, candidate.wy, radius, rotation, 0.18, state, 'screen');
+      candidate.world.x, candidate.world.y, radius, rotation, 0.18, state, 'screen');
     this._addMesh(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.shipRim,
-      candidate.wx, candidate.wy, radius * 1.16, rotation, 0.187, state, 'screen');
+      candidate.world.x, candidate.world.y, radius * 1.16, rotation, 0.187, state, 'screen');
     if (core) this.shipCandidateCount += 1;
     return core;
   }
@@ -735,8 +726,9 @@ export class ThreeRendererBackend {
     return line;
   }
 
-  _syncWorldScene(sceneState, currentRenderState = null) {
+  _syncWorldScene(frame, currentRenderState = null) {
     this._beginDynamicScene();
+    const sceneState = frame.world || {};
     const renderState = {
       camX: currentRenderState?.camX ?? this.lastSceneState.cameraX,
       camY: currentRenderState?.camY ?? this.lastSceneState.cameraY,
@@ -763,110 +755,77 @@ export class ThreeRendererBackend {
       if (mesh) semanticCount++;
       return mesh;
     };
+    const draw = {
+      readable: addReadable,
+      semantic: addSemantic,
+      line: (ax, ay, bx, by, material) => {
+        const line = this._addLine(this.entityGroup, ax, ay, bx, by, material, renderState);
+        if (line) entityCount++;
+        return line;
+      },
+      shipCandidate: (candidate) => {
+        const mesh = this._addShipCandidate(candidate, renderState);
+        if (mesh) entityCount++;
+        return mesh;
+      },
+    };
 
-    const suppressWellDebugMarkers = sceneState.isTitleBackdrop === true;
+    const suppressWellDebugMarkers = sceneState.titleBackdrop === true;
     for (const well of sceneState.wells || []) {
       const semanticMaterial = suppressWellDebugMarkers ? this.entityMaterials.wave : this.entityMaterials.hazardRing;
-      addSemantic(this.entityGeometries.ring, semanticMaterial, well.wx, well.wy, well.ringOuter || 0.1, 0, 0.01);
-      addEntity(this.entityGeometries.ring, this.entityMaterials.wellRing, well.wx, well.wy, Math.max(0.07, (well.killRadius || 0.04) * 2.6), 0, 0.03);
+      addSemantic(this.entityGeometries.ring, semanticMaterial, well.world.x, well.world.y, well.visual.contourRadius, 0, 0.01);
+      addEntity(this.entityGeometries.ring, this.entityMaterials.wellRing, well.world.x, well.world.y, Math.max(0.07, well.visual.coreRadius * 2.6), 0, 0.03);
       if (!suppressWellDebugMarkers) {
-        addEntity(this.entityGeometries.disc, this.entityMaterials.wellCore, well.wx, well.wy, Math.max(0.018, well.killRadius || 0.04), 0, 0.04);
+        addEntity(this.entityGeometries.disc, this.entityMaterials.wellCore, well.world.x, well.world.y, Math.max(0.018, well.visual.coreRadius), 0, 0.04);
       }
     }
     for (const ring of sceneState.waveRings || []) {
-      const life = Math.max(0, Math.min(1, (ring.amplitude || 0) / Math.max(1e-4, ring.initialAmplitude || 1)));
-      if (life > 0.02) addSemantic(this.entityGeometries.ring, this.entityMaterials.wave, ring.sourceWX, ring.sourceWY, ring.radius || 0.01, 0, 0.02);
+      const life = Math.max(0, Math.min(1, ring.strength / ring.initialStrength));
+      if (life > 0.02) addSemantic(this.entityGeometries.ring, this.entityMaterials.wave, ring.world.x, ring.world.y, ring.radius || 0.01, 0, 0.02);
     }
     for (const star of sceneState.stars || []) {
-      const radius = 0.025 + (star.mass || 1) * 0.012;
+      const radius = 0.025 + star.visualScale * 0.012;
       if (this._addMesh(this.landmarkEntityGroup, this.entityGeometries.ring, this.entityMaterials.starHalo,
-        star.wx, star.wy, radius * 1.85, 0, 0.055, renderState, 'screen')) {
+        star.world.x, star.world.y, radius * 1.85, 0, 0.055, renderState, 'screen')) {
         entityCount++;
       }
       if (this._addMesh(this.landmarkEntityGroup, this.entityGeometries.disc, this.entityMaterials.star,
-        star.wx, star.wy, radius * 0.45, 0, 0.066, renderState, 'screen')) {
+        star.world.x, star.world.y, radius * 0.45, 0, 0.066, renderState, 'screen')) {
         entityCount++;
       }
       addReadable(this.landmarkEntityGroup, this.entityGeometries.spark, this.entityMaterials.star,
-        star.wx, star.wy, radius, 0, 0.07,
+        star.world.x, star.world.y, radius, 0, 0.07,
         { haloMaterial: this.entityMaterials.starHalo, haloRadius: 1.55, rimRadius: 1.08, matteRadius: 1.7, matteY: 1.0 },
         'screen');
     }
-    for (const portal of sceneState.portals || []) {
-      const isRift = portal.type === 'rift';
-      const material = isRift ? this.entityMaterials.riftPortal : this.entityMaterials.portal;
-      const halo = isRift ? this.entityMaterials.riftPortalHalo : this.entityMaterials.portalHalo;
-      addReadable(this.landmarkEntityGroup, this.entityGeometries.ring, material,
-        portal.wx, portal.wy, portal.radius || 0.08, 0, 0.08,
-        { haloMaterial: halo, haloRadius: 1.55, rimRadius: 1.10, matteRadius: 1.25, matteY: 1.0, matteOpacity: 'heavy' });
-    }
-    for (const wreck of sceneState.wrecks || []) {
-      const size = wreck.size === 'large' ? 0.042 : wreck.size === 'small' || wreck.size === 'scattered' ? 0.020 : 0.030;
-      const material = wreck.looted ? this.entityMaterials.lootedWreck : this.entityMaterials.wreck;
-      const halo = wreck.looted ? this.entityMaterials.lootedWreckHalo : this.entityMaterials.wreckHalo;
-      const rim = wreck.looted ? this.entityMaterials.lootedWreckHalo : this.entityMaterials.wreckRim;
-      // Salvage is often embedded in the brightest fabric. Its contact matte is
-      // deliberately broad so wrecks read as physical debris, not loose pixels.
-      addReadable(this.salvageEntityGroup, this.entityGeometries.square, material,
-        wreck.wx, wreck.wy, size, Math.PI * 0.25, 0.07,
-        { haloMaterial: halo, rimMaterial: rim, haloRadius: 1.55, rimRadius: 1.16, matteRadius: 3.6, matteY: 1.0, matteOpacity: 'heavy' },
-        'screen');
-    }
+    this.visualFamilies.portal.update(frame, draw);
+    this.visualFamilies.wreck.update(frame, draw);
     for (const planetoid of sceneState.planetoids || []) {
-      const angle = Math.atan2(-(planetoid.vy || 0), planetoid.vx || 0);
+      const angle = Math.atan2(-(planetoid.movement.y || 0), planetoid.movement.x || 0);
       addReadable(this.landmarkEntityGroup, this.entityGeometries.triangle, this.entityMaterials.planetoid,
-        planetoid.wx, planetoid.wy, 0.022, angle, 0.09,
+        planetoid.world.x, planetoid.world.y, 0.022, angle, 0.09,
         { haloMaterial: this.entityMaterials.planetoidHalo, haloRadius: 1.55, rimRadius: 1.12, matteRadius: 1.7 },
         'screen');
     }
     for (const scav of sceneState.scavengers || []) {
       addReadable(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.scavenger,
-        scav.wx, scav.wy, 0.027, -(scav.facing || 0), 0.12,
+        scav.world.x, scav.world.y, 0.027, -(scav.movement.facing || 0), 0.12,
         { haloMaterial: this.entityMaterials.scavengerHalo, rimMaterial: this.entityMaterials.scavengerHalo, matteRadius: 1.95 },
-        'screen');
-    }
-    for (const player of sceneState.remotePlayers || []) {
-      if (player.status === 'dead') continue;
-      const angle = Math.atan2(-(player.vy || 0), player.vx || 0);
-      addReadable(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.remoteShip,
-        player.wx, player.wy, 0.030, angle, 0.13,
-        { haloMaterial: this.entityMaterials.remoteShipHalo, rimMaterial: this.entityMaterials.remoteShipHalo, matteRadius: 2.0 },
         'screen');
     }
     for (const fauna of sceneState.fauna || []) {
       addReadable(this.activeEntityGroup, this.entityGeometries.disc, this.entityMaterials.fauna,
-        fauna.wx, fauna.wy, 0.008 + (fauna.size || 2) * 0.003, 0, 0.10,
+        fauna.world.x, fauna.world.y, 0.008 + fauna.size * 0.003, 0, 0.10,
         { haloMaterial: this.entityMaterials.faunaHalo, haloRadius: 2.0, matteRadius: 1.9, matteY: 1.0 },
         'screen');
     }
     for (const sentry of sceneState.sentries || []) {
       addReadable(this.activeEntityGroup, this.entityGeometries.disc, this.entityMaterials.sentry,
-        sentry.wx, sentry.wy, 0.014, 0, 0.11,
+        sentry.world.x, sentry.world.y, 0.014, 0, 0.11,
         { haloMaterial: this.entityMaterials.sentryHalo, haloRadius: 2.2, matteRadius: 2.0, matteY: 1.0 },
         'screen');
     }
-    for (const candidate of sceneState.shipCandidates || []) {
-      if (this._addShipCandidate(candidate, renderState)) entityCount++;
-    }
-
-    const ship = sceneState.ship;
-    if (ship) {
-      addReadable(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.ship,
-        ship.wx, ship.wy, 0.034, -(ship.facing || 0), 0.16,
-        { haloMaterial: this.entityMaterials.shipHalo, rimMaterial: this.entityMaterials.shipRim, haloRadius: 1.70, rimRadius: 1.18, matteRadius: 2.1 },
-        'screen');
-    }
-
-    const sling = sceneState.slingshot || {};
-    const slingAnchor = sling.engaged || sling.affordance;
-    if (slingAnchor) {
-      addSemantic(this.entityGeometries.ring, this.entityMaterials.surfRing, slingAnchor.wx, slingAnchor.wy, slingAnchor.range || 0.1, 0, 0.13);
-      if (sling.engaged && ship) {
-        if (this._addLine(this.entityGroup, ship.wx, ship.wy, slingAnchor.wx, slingAnchor.wy, this.entityMaterials.tether, renderState)) {
-          entityCount++;
-        }
-      }
-    }
+    this.visualFamilies.player.update(frame, draw);
 
     this.lastEntityCount = entityCount;
     this.lastSemanticCount = semanticCount;
@@ -884,14 +843,16 @@ export class ThreeRendererBackend {
     this.composer.render(frameContext);
     this.renderer.resetState();
 
-    this._updateSceneState(frameContext);
+    const presentationFrame = resolvePresentationFrame(frameContext, { qualityTier: this.renderQuality });
+    this._applyPresentationStyle(presentationFrame.style);
+    this._updateSceneState(presentationFrame);
     this.vfxManager.update({
-      dt: frameContext?.three?.dt ?? (1 / 60),
-      totalTime: frameContext?.three?.totalTime ?? 0,
+      dt: presentationFrame.timing.dt,
+      totalTime: presentationFrame.timing.totalTime,
       viewportWidth: this.sourceCanvas?.width || 1280,
       viewportHeight: this.sourceCanvas?.height || 800,
-      events: frameContext?.three?.vfxEvents || [],
-      config: frameContext?.three?.vfxConfig || {},
+      events: presentationFrame.events,
+      config: presentationFrame.vfxConfig,
     });
     this.renderer.info.reset();
     this.renderer.setRenderTarget(this.sceneTarget);
@@ -936,6 +897,16 @@ export class ThreeRendererBackend {
       semanticCount: this.lastSemanticCount,
       visualCounts: this.lastVisualCounts,
       entitySeparation: this.lastEntitySeparation,
+      presentation: {
+        version: presentationFrame.version,
+        phase: presentationFrame.phase,
+        qualityTier: presentationFrame.style.qualityTier,
+        paletteId: presentationFrame.style.paletteId,
+        eventCount: presentationFrame.events.length,
+      },
+      visualFamilies: Object.fromEntries(
+        Object.entries(this.visualFamilies).map(([name, family]) => [name, family.getStats()])
+      ),
       sharedContext: true,
       canvasUploads: 0,
       pooledMeshes: this.entityMeshPool.length + this.semanticMeshPool.length,
@@ -1002,6 +973,7 @@ export class ThreeRendererBackend {
   }
 
   dispose() {
+    for (const family of Object.values(this.visualFamilies)) family.dispose();
     this.sceneTarget.dispose();
     this.copyMaterial.dispose();
     this._disposeObject(this.worldScene);
