@@ -14,6 +14,7 @@
 
 import { CONFIG } from './config.js';
 import { worldToScreen, worldDistance } from './coords.js';
+import { cueForAuthoritativeEvent, EventVoiceBudget } from './audio-events.js';
 
 export class AudioEngine {
   constructor() {
@@ -26,6 +27,8 @@ export class AudioEngine {
     this.duckGain = null;
     this._audioState = 'silent';
     this._lastDistortionAmount = -1; // cache to avoid per-frame allocation
+    this._eventBudget = new EventVoiceBudget(CONFIG.audio?.maxEventVoices ?? 16);
+    this._portalProximityActive = false;
   }
 
   // ---- Lifecycle ----
@@ -111,6 +114,8 @@ export class AudioEngine {
   }
 
   reset() {
+    this._eventBudget.reset();
+    this._portalProximityActive = false;
     if (!this.initiated) return;
     const now = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
@@ -207,10 +212,11 @@ export class AudioEngine {
   // ---- Event sounds ----
 
   playEvent(type, wx, wy, camX, camY, canvasW, canvasH) {
-    if (!this.initiated || !CONFIG.audio.enabled) return;
+    if (!this.initiated || !CONFIG.audio.enabled) return false;
 
     const now = this.ctx.currentTime;
     const vol = CONFIG.audio.eventVolume;
+    if (type !== 'death' && !this._eventBudget.admit(type, now)) return false;
 
     let pan = 0;
     if (wx !== undefined && canvasW) {
@@ -221,6 +227,12 @@ export class AudioEngine {
     switch (type) {
       // Gameplay events
       case 'loot':              this._playLootChime(now, vol, pan); break;
+      case 'slingshotEngage':   this._playSlingshotEngage(now, vol, pan); break;
+      case 'slingshotRelease':  this._playSlingshotRelease(now, vol, pan); break;
+      case 'portalProximity':   this._playPortalProximity(now, vol, pan); break;
+      case 'portalConfirm':     this._playPortalConfirm(now, vol, pan); break;
+      case 'scavengerBump':     this._playScavengerBump(now, vol, pan); break;
+      case 'inhibitorGlitch':   this._playInhibitorGlitch(now, vol); break;
       case 'pulse':             this._playPulse(now, vol, pan); break;
       case 'portalDeath':       this._playPortalDeath(now, vol, pan); break;
       case 'thrustOn':          this._playThrustOn(now, vol); break;
@@ -253,7 +265,42 @@ export class AudioEngine {
       case 'cantAfford':        this._playErrorBuzz(now, vol * 0.3); break;
       case 'launch':            this._playLaunchSpool(now, vol * 0.5); break;
       case 'itemReveal':        this._playItemPlink(now, vol * 0.25); break;
+      default:                  return false;
     }
+    return true;
+  }
+
+  /** Translate one sim event into one local cue. Returns false when filtered. */
+  playAuthoritativeEvent(event, context = {}) {
+    const mapped = cueForAuthoritativeEvent(event, context);
+    if (!mapped) return false;
+    const payload = mapped.payload || {};
+    return this.playEvent(
+      mapped.cue,
+      payload.wx,
+      payload.wy,
+      context.camX,
+      context.camY,
+      context.canvasW,
+      context.canvasH
+    );
+  }
+
+  /** Edge-triggered local proximity cue until the sim publishes proximity. */
+  setPortalProximity(active, context = {}) {
+    const next = Boolean(active);
+    if (next === this._portalProximityActive) return false;
+    this._portalProximityActive = next;
+    if (!next) return false;
+    return this.playEvent(
+      'portalProximity',
+      context.wx,
+      context.wy,
+      context.camX,
+      context.camY,
+      context.canvasW,
+      context.canvasH
+    );
   }
 
   // ---- Init helpers ----
@@ -499,6 +546,127 @@ export class AudioEngine {
       osc.start(now + i * 0.08);
       osc.stop(now + i * 0.08 + 0.3);
     }
+  }
+
+  _playSlingshotEngage(now, vol, pan) {
+    for (const [index, frequency] of [180, 270].entries()) {
+      const osc = this.ctx.createOscillator();
+      osc.type = index === 0 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(frequency, now);
+      osc.frequency.exponentialRampToValueAtTime(frequency * 1.7, now + 0.28);
+      const voice = this._createVoice(pan);
+      osc.connect(voice.gain);
+      voice.gain.gain.setValueAtTime(vol * (index === 0 ? 0.28 : 0.18), now);
+      voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+      osc.start(now);
+      osc.stop(now + 0.46);
+    }
+  }
+
+  _playSlingshotRelease(now, vol, pan) {
+    const snap = this._createNoise(0.08);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.value = 1600;
+    const noiseVoice = this._createVoice(pan);
+    snap.connect(filter);
+    filter.connect(noiseVoice.gain);
+    noiseVoice.gain.gain.setValueAtTime(vol * 0.35, now);
+    noiseVoice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+    snap.start(now);
+    snap.stop(now + 0.09);
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.5);
+    const voice = this._createVoice(pan);
+    osc.connect(voice.gain);
+    voice.gain.gain.setValueAtTime(vol * 0.32, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    osc.start(now);
+    osc.stop(now + 0.6);
+  }
+
+  _playPortalProximity(now, vol, pan) {
+    const osc = this.ctx.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(330, now);
+    osc.frequency.linearRampToValueAtTime(392, now + 0.18);
+    const voice = this._createVoice(pan);
+    osc.connect(voice.gain);
+    voice.gain.gain.setValueAtTime(vol * 0.12, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+    osc.start(now);
+    osc.stop(now + 0.44);
+  }
+
+  _playPortalConfirm(now, vol, pan) {
+    for (const [index, frequency] of [392, 587].entries()) {
+      const osc = this.ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = frequency;
+      const voice = this._createVoice(pan);
+      osc.connect(voice.gain);
+      const start = now + index * 0.09;
+      voice.gain.gain.setValueAtTime(0, start);
+      voice.gain.gain.linearRampToValueAtTime(vol * 0.22, start + 0.015);
+      voice.gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+      osc.start(start);
+      osc.stop(start + 0.4);
+    }
+  }
+
+  _playScavengerBump(now, vol, pan) {
+    const impact = this.ctx.createOscillator();
+    impact.type = 'sine';
+    impact.frequency.setValueAtTime(95, now);
+    impact.frequency.exponentialRampToValueAtTime(42, now + 0.22);
+    const impactVoice = this._createVoice(pan);
+    impact.connect(impactVoice.gain);
+    impactVoice.gain.gain.setValueAtTime(vol * 0.4, now);
+    impactVoice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+    impact.start(now);
+    impact.stop(now + 0.3);
+
+    const scrape = this._createNoise(0.12);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 720;
+    filter.Q.value = 2.5;
+    const scrapeVoice = this._createVoice(pan);
+    scrape.connect(filter);
+    filter.connect(scrapeVoice.gain);
+    scrapeVoice.gain.gain.setValueAtTime(vol * 0.22, now);
+    scrapeVoice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    scrape.start(now);
+    scrape.stop(now + 0.14);
+  }
+
+  _playInhibitorGlitch(now, vol) {
+    const noise = this._createNoise(0.12);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(2400, now);
+    filter.frequency.exponentialRampToValueAtTime(680, now + 0.1);
+    filter.Q.value = 10;
+    const voice = this._createVoice(0);
+    noise.connect(filter);
+    filter.connect(voice.gain);
+    voice.gain.gain.setValueAtTime(vol * 0.28, now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    noise.start(now);
+    noise.stop(now + 0.15);
+
+    const osc = this._createSquare(0.2);
+    osc.frequency.setValueAtTime(910, now);
+    osc.frequency.exponentialRampToValueAtTime(137, now + 0.25);
+    const toneVoice = this._createVoice(0);
+    osc.connect(toneVoice.gain);
+    toneVoice.gain.gain.setValueAtTime(vol * 0.12, now);
+    toneVoice.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+    osc.start(now);
+    osc.stop(now + 0.34);
   }
 
   _playPulse(now, vol, pan) {

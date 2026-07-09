@@ -43,8 +43,10 @@ async function run() {
 
   const index = read("index-a.html");
   includes(index, "--lbh-couch-body: 15px", "HUD must keep a couch-readable body-size target");
-  includes(index, "--lbh-gauge-height: 14px", "HUD gauges must stay at least text-sized on Deck");
-  includes(index, "width: 160px; height: var(--lbh-gauge-height)", "Fuel/signal bars must not regress to hairlines");
+  includes(index, "--lbh-gauge-height: 16px", "HUD gauges must stay at least text-sized on Deck");
+  includes(index, "width: 100%; height: var(--lbh-gauge-height)", "Grouped fuel/signal bars must fill their readable status rail");
+  includes(index, "id=\"hud-hull-bar\" role=\"progressbar\"", "Deck HUD must expose hull state alongside fuel and signal");
+  includes(index, "id=\"hud-interaction\"", "Deck HUD must reserve a non-overlapping interaction confirmation surface");
   includes(index, "#hud-abilities", "Deck HUD must keep abilities in an explicit panel");
   includes(index, "backdrop-filter: blur(2px)", "HUD panels need backing separation over dense ASCII fields");
 
@@ -58,7 +60,7 @@ async function run() {
     excludes(source, "[Tab]", "Player-facing code must not hardcode Tab inventory prompts");
   }
   includes(main, "currentPromptOptions()", "Canvas overlays must route through prompt options");
-  includes(hud, "promptLabel('inventory'", "HUD cargo prompt must use centralized input labels");
+  includes(hud, "affordanceCaption('inventory'", "HUD cargo prompt must use centralized input labels");
   includes(results, "promptLabel('confirm'", "Results overlay must use centralized input labels");
   includes(primitives, "r.y + r.h + 8", "Command button affordances must draw below the button label");
   excludes(primitives, "hotkey ? `${String(hotkey).toUpperCase()}  ${String(label).toUpperCase()}`", "Command labels must not fuse input affordances into the action label");

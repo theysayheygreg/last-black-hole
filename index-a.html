@@ -85,11 +85,11 @@
       --lbh-warning-shadow: rgba(0, 0, 0, 0.8);
       --lbh-panel-radius: 2px;
       --lbh-edge-margin: 16px;
-      --lbh-couch-micro: 12px;
-      --lbh-couch-small: 13px;
+      --lbh-couch-micro: 13px;
+      --lbh-couch-small: 14px;
       --lbh-couch-body: 15px;
       --lbh-couch-button: 18px;
-      --lbh-gauge-height: 14px;
+      --lbh-gauge-height: 16px;
       --lbh-hud-gap: 8px;
       --lbh-deck-panel-pad-y: 10px;
       --lbh-deck-panel-pad-x: 14px;
@@ -173,7 +173,7 @@
       background: var(--lbh-panel-bg);
       border: 1px solid var(--lbh-panel-border);
       border-radius: var(--lbh-panel-radius);
-      min-height: 44px;
+      min-height: 48px;
       backdrop-filter: blur(2px);
     }
     #hud-collapse {
@@ -197,12 +197,45 @@
       font-size: var(--lbh-couch-micro);
       color: rgba(140, 160, 190, 0.65);
     }
+    #hud-vitals {
+      top: 118px;
+      left: var(--lbh-edge-margin);
+      width: 254px;
+      display: grid;
+      gap: 10px;
+      padding: 12px 14px;
+      color: var(--lbh-text-primary);
+      border-color: rgba(234, 247, 255, 0.2);
+    }
+    #hud-vitals .hud-vital {
+      position: static;
+      min-height: 0;
+      padding: 0;
+      background: none;
+      border: 0;
+      text-align: left;
+      line-height: 1.25;
+    }
+    #hud-vitals .hud-vital-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 18px;
+    }
+    #hud-vitals .hud-label {
+      font-size: var(--lbh-couch-micro);
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    #hud-vitals .hud-vital-readout {
+      font-size: var(--lbh-couch-small);
+      color: var(--lbh-text-primary);
+      text-align: right;
+    }
     #hud-signal {
-      top: 88px; left: var(--lbh-edge-margin);
       color: var(--lbh-signal);
       text-shadow: 0 0 6px rgba(0, 226, 255, 0.32);
-      line-height: 1.4;
-      border-color: rgba(0, 226, 255, 0.18);
     }
     #hud-signal .hud-label {
       font-size: var(--lbh-couch-micro);
@@ -211,11 +244,11 @@
       text-transform: uppercase;
     }
     #hud-signal-bar {
-      width: 160px; height: var(--lbh-gauge-height);
+      width: 100%; height: var(--lbh-gauge-height);
       background: var(--lbh-track-bg);
       border: 1px solid rgba(234, 247, 255, 0.14);
       border-radius: 2px;
-      margin: 6px 0 4px 0;
+      margin: 4px 0 0;
       overflow: hidden;
     }
     #hud-signal-fill {
@@ -225,16 +258,12 @@
       transition: width 0.15s, background-color 0.3s;
     }
     #hud-signal-zone {
-      font-size: var(--lbh-couch-micro);
+      font-size: var(--lbh-couch-small);
       letter-spacing: 0;
     }
     #hud-fuel {
-      top: 88px; right: var(--lbh-edge-margin);
       color: var(--lbh-ecology);
       text-shadow: 0 0 6px rgba(56, 245, 138, 0.28);
-      line-height: 1.4;
-      border-color: rgba(56, 245, 138, 0.22);
-      text-align: right;
     }
     #hud-fuel .hud-label {
       font-size: var(--lbh-couch-micro);
@@ -243,11 +272,11 @@
       text-transform: uppercase;
     }
     #hud-fuel-bar {
-      width: 160px; height: var(--lbh-gauge-height);
+      width: 100%; height: var(--lbh-gauge-height);
       background: var(--lbh-track-bg);
       border: 1px solid rgba(234, 247, 255, 0.14);
       border-radius: 2px;
-      margin: 6px 0 4px 0;
+      margin: 4px 0 0;
       overflow: hidden;
     }
     #hud-fuel-fill {
@@ -257,11 +286,35 @@
       transition: width 0.15s, background-color 0.3s;
     }
     #hud-fuel-readout {
-      font-size: var(--lbh-couch-micro);
+      font-size: var(--lbh-couch-small);
       letter-spacing: 0;
     }
+    #hud-hull {
+      color: var(--lbh-text-primary);
+      text-shadow: 0 0 6px rgba(234, 247, 255, 0.2);
+    }
+    #hud-hull .hud-label { color: var(--lbh-text-muted); }
+    #hud-hull-bar {
+      width: 100%; height: var(--lbh-gauge-height);
+      background: var(--lbh-track-bg);
+      border: 1px solid rgba(234, 247, 255, 0.14);
+      border-radius: 2px;
+      margin: 4px 0 0;
+      overflow: hidden;
+    }
+    #hud-hull-fill {
+      height: 100%;
+      width: 100%;
+      background: rgba(234, 247, 255, 0.76);
+      transition: width 0.15s linear, background-color 0.2s linear;
+    }
+    #hud-hull-fill[data-tone="shielded"] { background: var(--lbh-portal); }
+    #hud-hull-fill[data-tone="critical"] { background: var(--lbh-danger); }
+    #hud-hull-readout[data-tone="shielded"] { color: var(--lbh-portal); }
+    #hud-hull-readout[data-tone="critical"] { color: var(--lbh-danger); }
     #hud-inhibitor {
-      top: 166px; left: var(--lbh-edge-margin);
+      top: 356px; left: var(--lbh-edge-margin);
+      width: 254px;
       color: var(--lbh-inhibitor);
       text-shadow: 0 0 8px var(--lbh-inhibitor-glow);
       line-height: 1.4;
@@ -295,6 +348,7 @@
     }
     #hud-portals {
       top: 12px; right: var(--lbh-edge-margin);
+      width: 292px;
       text-align: right;
       color: var(--lbh-portal);
       text-shadow: 0 0 6px rgba(0, 226, 255, 0.32);
@@ -308,14 +362,18 @@
       text-transform: uppercase;
     }
     #hud-portals .hud-value {
-      font-size: var(--lbh-couch-body);
+      font-size: 18px;
+      font-weight: 650;
     }
     #hud-portals .hud-sub {
       font-size: var(--lbh-couch-micro);
       color: var(--lbh-text-muted);
     }
+    #hud-portals [data-tone="critical"] { color: var(--lbh-danger); }
+    #hud-portals [data-tone="active"] { color: var(--lbh-portal); }
     #hud-salvage {
       bottom: var(--lbh-edge-margin); left: var(--lbh-edge-margin);
+      width: 254px;
       color: var(--lbh-salvage);
       text-shadow: 0 0 6px rgba(255, 185, 56, 0.32);
       line-height: 1.5;
@@ -324,12 +382,14 @@
     #hud-salvage .hud-sub {
       font-size: var(--lbh-couch-micro);
       color: rgba(190, 165, 90, 0.7);
+      display: grid;
+      gap: 3px;
     }
     #hud-scavengers {
       display: none;  /* hidden — scavenger count is better as organic discovery */
     }
     #hud-signature {
-      bottom: 48px; left: 50%;
+      top: 18px; left: 50%;
       transform: translateX(-50%);
       text-align: center;
       font-size: var(--lbh-couch-micro);
@@ -339,36 +399,63 @@
       border: none;
       padding: 0;
     }
+    #hud-actions {
+      right: var(--lbh-edge-margin);
+      bottom: var(--lbh-edge-margin);
+      width: 336px;
+      display: grid;
+      gap: 10px;
+      padding: 12px 14px;
+      border-color: rgba(0, 226, 255, 0.2);
+    }
     #hud-pulse {
-      bottom: 76px; left: var(--lbh-edge-margin);
       font-size: var(--lbh-couch-small);
       color: rgba(200, 180, 100, 0.7);
       text-shadow: 0 0 4px rgba(200, 180, 100, 0.2);
-      border-color: rgba(255, 185, 56, 0.18);
-      padding: 8px 12px;
-      min-height: 34px;
+      min-height: 48px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 2px 12px;
+      align-items: baseline;
     }
     #hud-pulse.ready {
       color: rgba(100, 220, 160, 0.8);
       text-shadow: 0 0 6px rgba(100, 220, 160, 0.3);
     }
+    .hud-command-label {
+      color: var(--lbh-text-primary);
+      font-size: var(--lbh-couch-body);
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+    .hud-command-state { text-align: right; }
+    #hud-pulse .hud-action-caption { grid-column: 1 / -1; }
     #hud-abilities {
-      bottom: 126px; left: var(--lbh-edge-margin);
-      width: 300px;
+      width: 100%;
       font-size: var(--lbh-couch-micro);
-      border-color: rgba(0, 226, 255, 0.18);
-      padding: 9px 12px;
       line-height: 1.45;
-      min-height: 74px;
+      display: grid;
+      gap: 10px;
     }
     .hud-ability {
       color: rgba(160, 170, 180, 0.6);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 3px;
+      min-height: 78px;
+      padding-top: 9px;
+      border-top: 1px solid rgba(0, 226, 255, 0.12);
     }
-    .hud-ability-key {
-      color: rgba(120, 140, 160, 0.5);
-      font-weight: bold;
-      display: inline-block;
-      min-width: 26px;
+    .hud-ability-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 18px;
+    }
+    .hud-ability-name {
+      font-size: var(--lbh-couch-small);
+      text-transform: uppercase;
+      font-weight: 650;
     }
     .hud-ability.active .hud-ability-name {
       color: rgba(100, 255, 200, 0.9);
@@ -383,24 +470,48 @@
     .hud-ability-detail {
       color: rgba(154, 180, 206, 0.64);
       font-size: var(--lbh-couch-micro);
-      margin-left: 28px;
-      max-width: 246px;
+      max-width: 100%;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .hud-ability-meter {
       height: 12px;
-      width: 230px;
+      width: 100%;
       background: rgba(90,110,130,0.24);
       border: 1px solid rgba(234,247,255,0.12);
-      margin: 4px 0 2px 28px;
+      margin: 2px 0;
       overflow: hidden;
     }
     .hud-ability-meter-fill {
       height: 100%;
       transition: width 0.12s linear, background-color 0.18s linear;
     }
+    .hud-action-caption,
+    .inv-caption {
+      color: var(--lbh-text-muted);
+      font-size: var(--lbh-couch-micro);
+      font-weight: 500;
+      line-height: 1.35;
+    }
+    #hud-interaction {
+      left: 50%;
+      bottom: 24px;
+      width: min(360px, calc(100vw - 600px));
+      min-width: 300px;
+      transform: translateX(-50%);
+      text-align: center;
+      border-color: rgba(0, 226, 255, 0.5);
+      background: rgba(0, 4, 18, 0.9);
+    }
+    #hud-interaction-action {
+      color: var(--lbh-text-primary);
+      font-size: var(--lbh-couch-body);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    #hud-interaction-detail { color: var(--lbh-text-muted); margin-top: 3px; }
+    #hud-interaction-caption { color: var(--lbh-portal); margin-top: 5px; }
     #hud-portal-arrow {
       position: absolute;
       bottom: 50%;
@@ -411,9 +522,9 @@
     /* Events log — left side, stacks entries, fades by age (like MMO chat) */
     #hud-warnings {
       position: absolute;
-      bottom: 222px;
+      bottom: 102px;
       left: var(--lbh-edge-margin);
-      width: 280px;
+      width: 320px;
       text-align: left;
       display: flex;
       flex-direction: column;
@@ -479,6 +590,8 @@
       border-bottom: 1px solid rgba(0, 226, 255, 0.14);
       padding-bottom: 4px;
       margin-bottom: 6px;
+      display: grid;
+      gap: 3px;
     }
     #hud-inventory-panel .inv-item {
       display: flex;
@@ -517,6 +630,20 @@
       padding-top: 6px;
       border-top: 1px solid rgba(80, 100, 140, 0.12);
     }
+    #hud[data-reduced-motion="true"] *,
+    #hud[data-reduced-motion="true"] *::before,
+    #hud[data-reduced-motion="true"] *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #hud *, #hud *::before, #hud *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -534,23 +661,27 @@
       <div class="hud-value" id="hud-collapse-timer">10:00</div>
       <div class="hud-sub" id="hud-collapse-event"></div>
     </div>
-    <div id="hud-signal" class="hud-panel">
-      <div class="hud-label">signal</div>
-      <div id="hud-signal-bar"><div id="hud-signal-fill"></div></div>
-      <div id="hud-signal-zone">ghost</div>
-    </div>
-    <div id="hud-fuel" class="hud-panel">
-      <div class="hud-label">fuel</div>
-      <div id="hud-fuel-bar"><div id="hud-fuel-fill"></div></div>
-      <div id="hud-fuel-readout">100%</div>
+    <div id="hud-vitals" class="hud-panel" role="group" aria-label="ship status">
+      <div id="hud-fuel" class="hud-vital">
+        <div class="hud-vital-head"><div class="hud-label">movement fuel</div><div id="hud-fuel-readout" class="hud-vital-readout">100%</div></div>
+        <div id="hud-fuel-bar" role="progressbar" aria-label="movement fuel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="hud-fuel-fill"></div></div>
+      </div>
+      <div id="hud-hull" class="hud-vital">
+        <div class="hud-vital-head"><div class="hud-label">hull</div><div id="hud-hull-readout" class="hud-vital-readout">nominal</div></div>
+        <div id="hud-hull-bar" role="progressbar" aria-label="hull condition" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="hud-hull-fill"></div></div>
+      </div>
+      <div id="hud-signal" class="hud-vital">
+        <div class="hud-vital-head"><div class="hud-label">signal</div><div id="hud-signal-zone" class="hud-vital-readout">ghost</div></div>
+        <div id="hud-signal-bar" role="progressbar" aria-label="signal level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="hud-signal-fill"></div></div>
+      </div>
     </div>
     <div id="hud-inhibitor" class="hud-panel" style="display: none;">
       <div class="hud-label">inhibitor</div>
       <div id="hud-inhibitor-form">dormant</div>
     </div>
     <div id="hud-portals" class="hud-panel">
-      <div class="hud-label">wormholes</div>
-      <div class="hud-value" id="hud-portals-status">no active wormholes</div>
+      <div class="hud-label">route objective</div>
+      <div class="hud-value" id="hud-portals-status">route closed</div>
       <div class="hud-sub" id="hud-portals-next"></div>
     </div>
     <div id="hud-salvage" class="hud-panel">
@@ -561,15 +692,22 @@
       <div id="hud-scavengers-count"></div>
       <div class="hud-sub" id="hud-scavengers-sub"></div>
     </div>
-    <div id="hud-pulse" class="hud-panel"></div>
-    <div id="hud-abilities" class="hud-panel">
-      <div id="hud-ability1" class="hud-ability"><span class="hud-ability-key">--</span> <span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
-      <div id="hud-ability2" class="hud-ability"><span class="hud-ability-key">--</span> <span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
+    <div id="hud-actions" class="hud-panel" role="group" aria-label="ship actions">
+      <div id="hud-pulse" class="hud-command"></div>
+      <div id="hud-abilities">
+        <div id="hud-ability1" class="hud-ability"><span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
+        <div id="hud-ability2" class="hud-ability"><span class="hud-ability-name">---</span> <span class="hud-ability-status"></span></div>
+      </div>
     </div>
     <div id="hud-signature" class="hud-panel"></div>
+    <div id="hud-interaction" class="hud-panel" role="status" aria-live="polite" style="display:none;">
+      <div id="hud-interaction-action"></div>
+      <div id="hud-interaction-detail"></div>
+      <div id="hud-interaction-caption" class="hud-action-caption"></div>
+    </div>
     <div id="hud-portal-arrow"></div>
     <div id="hud-inventory-panel"></div>
-    <div id="hud-warnings"></div>
+    <div id="hud-warnings" role="log" aria-live="polite" aria-relevant="additions"></div>
   </div>
   <script>
     window.__LBH_BOOT_STATE__ = { stage: 'html', at: Date.now(), details: null };

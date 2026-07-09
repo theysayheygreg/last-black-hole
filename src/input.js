@@ -14,6 +14,7 @@
 
 import { CONFIG } from './config.js';
 import { screenToWorld, worldDirectionTo, worldToScreen } from './coords.js';
+import { gamepadActionPressed } from './ui/input-bindings.js';
 
 // ---- Stick processing helpers ----
 
@@ -165,14 +166,14 @@ export class InputManager {
   get confirmPressed() {
     if (this._keys['Space'] || this._keys['Enter']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 0 && gp.buttons[0].pressed) return true;
+    if (gamepadActionPressed(gp, 'confirm')) return true;
     return false;
   }
 
   /** Is back/cancel pressed? (gamepad Circle — button 1) */
   get backPressed() {
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 1 && gp.buttons[1].pressed) return true;
+    if (gamepadActionPressed(gp, 'back')) return true;
     return false;
   }
 
@@ -180,7 +181,7 @@ export class InputManager {
   get pulsePressed() {
     if (this._keys['KeyE']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 2 && gp.buttons[2].pressed) return true;
+    if (gamepadActionPressed(gp, 'pulse')) return true;
     return false;
   }
 
@@ -192,7 +193,7 @@ export class InputManager {
   get slingshotPressed() {
     if (this._keys['KeyF']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 3 && gp.buttons[3].pressed) return true;
+    if (gamepadActionPressed(gp, 'slingshot')) return true;
     return false;
   }
 
@@ -200,9 +201,8 @@ export class InputManager {
   get inventoryPressed() {
     if (this._keys['Tab'] || this._keys['KeyI']) return true;
     const gp = this._getGamepad();
-    // Button 17 = touchpad click on DualSense. Fallback: button 8 = Share/Create.
-    if (gp && gp.buttons.length > 17 && gp.buttons[17].pressed) return true;
-    if (gp && gp.buttons.length > 8 && gp.buttons[8].pressed) return true;
+    // Standard button 8 is View/Create; DualSense touchpad click is button 17.
+    if (gamepadActionPressed(gp, 'inventory')) return true;
     return false;
   }
 
@@ -210,7 +210,7 @@ export class InputManager {
   get consumable1Pressed() {
     if (this._keys['Digit1']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 14 && gp.buttons[14].pressed) return true;
+    if (gamepadActionPressed(gp, 'consumable1')) return true;
     return false;
   }
 
@@ -218,7 +218,7 @@ export class InputManager {
   get consumable2Pressed() {
     if (this._keys['Digit2']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 15 && gp.buttons[15].pressed) return true;
+    if (gamepadActionPressed(gp, 'consumable2')) return true;
     return false;
   }
 
@@ -226,7 +226,7 @@ export class InputManager {
   get ability1() {
     if (this._keys['KeyQ']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 4 && gp.buttons[4].pressed) return true;
+    if (gamepadActionPressed(gp, 'ability1')) return true;
     return false;
   }
 
@@ -234,7 +234,7 @@ export class InputManager {
   get ability2() {
     if (this._keys['KeyR']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 5 && gp.buttons[5].pressed) return true;
+    if (gamepadActionPressed(gp, 'ability2')) return true;
     return false;
   }
 
@@ -242,7 +242,7 @@ export class InputManager {
   get pausePressed() {
     const gp = this._getGamepad();
     // Button 9 = Options on DualSense, Menu on Xbox
-    if (gp && gp.buttons.length > 9 && gp.buttons[9].pressed) return true;
+    if (gamepadActionPressed(gp, 'pause')) return true;
     return false;
   }
 
@@ -250,7 +250,7 @@ export class InputManager {
   get upPressed() {
     if (this._keys['ArrowUp'] || this._keys['KeyW']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 12 && gp.buttons[12].pressed) return true;
+    if (gamepadActionPressed(gp, 'up')) return true;
     // Also check left stick up (below -0.5 threshold for menus)
     if (gp && gp.axes.length > 1 && gp.axes[1] < -0.5) return true;
     return false;
@@ -260,7 +260,7 @@ export class InputManager {
   get downPressed() {
     if (this._keys['ArrowDown'] || this._keys['KeyS']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 13 && gp.buttons[13].pressed) return true;
+    if (gamepadActionPressed(gp, 'down')) return true;
     if (gp && gp.axes.length > 1 && gp.axes[1] > 0.5) return true;
     return false;
   }
@@ -269,7 +269,7 @@ export class InputManager {
   get leftPressed() {
     if (this._keys['ArrowLeft'] || this._keys['KeyA']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 14 && gp.buttons[14].pressed) return true;
+    if (gamepadActionPressed(gp, 'left')) return true;
     if (gp && gp.axes.length > 0 && gp.axes[0] < -0.5) return true;
     return false;
   }
@@ -278,7 +278,7 @@ export class InputManager {
   get rightPressed() {
     if (this._keys['ArrowRight'] || this._keys['KeyD']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 15 && gp.buttons[15].pressed) return true;
+    if (gamepadActionPressed(gp, 'right')) return true;
     if (gp && gp.axes.length > 0 && gp.axes[0] > 0.5) return true;
     return false;
   }
@@ -287,19 +287,21 @@ export class InputManager {
   get tabLeftPressed() {
     if (this._keys['KeyQ']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 4 && gp.buttons[4].pressed) return true;
+    if (gamepadActionPressed(gp, 'tabPrev')) return true;
     return false;
   }
   get tabRightPressed() {
     if (this._keys['KeyE']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 5 && gp.buttons[5].pressed) return true;
+    if (gamepadActionPressed(gp, 'tabNext')) return true;
     return false;
   }
 
-  /** Delete action — keyboard only. Controller Y is reserved for slingshot. */
+  /** Delete action in menus. Y is contextually reused for slingshot in a run. */
   get deletePressed() {
     if (this._keys['KeyX']) return true;
+    const gp = this._getGamepad();
+    if (gamepadActionPressed(gp, 'delete')) return true;
     return false;
   }
 
@@ -307,7 +309,7 @@ export class InputManager {
   get rerollPressed() {
     if (this._keys['KeyS']) return true;
     const gp = this._getGamepad();
-    if (gp && gp.buttons.length > 2 && gp.buttons[2].pressed) return true;
+    if (gamepadActionPressed(gp, 'reroll')) return true;
     return false;
   }
 

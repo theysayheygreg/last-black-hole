@@ -1,25 +1,4 @@
-const BUTTON_LABELS = {
-  confirm: { keyboard: 'Space', controller: 'A', deck: 'A' },
-  back: { keyboard: 'Esc', controller: 'B', deck: 'B' },
-  tabs: { keyboard: 'Q/E', controller: 'L1/R1', deck: 'L1/R1' },
-  tabPrev: { keyboard: 'Q', controller: 'L1', deck: 'L1' },
-  tabNext: { keyboard: 'E', controller: 'R1', deck: 'R1' },
-  inventory: { keyboard: 'Tab', controller: 'View', deck: 'View' },
-  pause: { keyboard: 'Esc', controller: 'Menu', deck: 'Menu' },
-  pulse: { keyboard: 'E', controller: 'X', deck: 'X' },
-  slingshot: { keyboard: 'F', controller: 'Y', deck: 'Y' },
-  ability1: { keyboard: 'Q', controller: 'L1', deck: 'L1' },
-  ability2: { keyboard: 'R', controller: 'R1', deck: 'R1' },
-  thrust: { keyboard: 'Space', controller: 'R2', deck: 'R2' },
-  brake: { keyboard: 'Ctrl', controller: 'L2', deck: 'L2' },
-  navigate: { keyboard: 'Arrows', controller: 'D-pad', deck: 'D-pad' },
-  select: { keyboard: 'Arrows', controller: 'D-pad', deck: 'D-pad' },
-  reroll: { keyboard: 'S', controller: 'X', deck: 'X' },
-  delete: { keyboard: 'X', controller: 'Y', deck: 'Y' },
-  consumables: { keyboard: '1/2', controller: 'D-pad L/R', deck: 'D-pad L/R' },
-  consumable1: { keyboard: '1', controller: 'D-pad L', deck: 'D-pad L' },
-  consumable2: { keyboard: '2', controller: 'D-pad R', deck: 'D-pad R' },
-};
+import { ACTION_PROMPT_LABELS } from './input-bindings.js';
 
 function queryHasDeckMode() {
   const search = globalThis?.location?.search || '';
@@ -48,7 +27,7 @@ export function preferredInputMode(options = {}) {
 }
 
 export function promptLabel(action, options = {}) {
-  const labels = BUTTON_LABELS[action];
+  const labels = ACTION_PROMPT_LABELS[action];
   if (!labels) return String(action || '').toUpperCase();
   const mode = preferredInputMode(options);
   return labels[mode] || labels.controller || labels.keyboard;
@@ -57,6 +36,17 @@ export function promptLabel(action, options = {}) {
 export function ctaLabel(action, label, options = {}) {
   const button = promptLabel(action, options);
   const copy = String(label || '').trim();
+  return copy ? `${button} ${copy}` : button;
+}
+
+/**
+ * Supporting copy for a command whose visible label is rendered separately.
+ * Keeping the affordance out of the command face lets the same action read as
+ * a verb first while keyboard and controller prompts swap underneath it.
+ */
+export function affordanceCaption(action, verb, options = {}) {
+  const button = promptLabel(action, options);
+  const copy = String(verb || '').trim();
   return copy ? `${button} ${copy}` : button;
 }
 

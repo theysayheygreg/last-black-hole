@@ -1,10 +1,8 @@
 /**
  * hud.js — DOM-based HUD overlay.
  *
- * Panels: collapse timer (top-left), wormholes (top-right),
- * salvage (bottom-left), scavengers (bottom-right),
- * pulse status (above salvage), signature (bottom-center),
- * portal direction arrow (screen-space), center warnings.
+ * The HUD is grouped into stable edge rails so values cannot collide at the
+ * 1280x800 Deck target. Live world truth remains supplied by the caller.
  *
  * All lowercase text, soft glow via text-shadow.
  */
@@ -14,7 +12,8 @@ import { worldToScreen, worldDistance, worldDisplacement } from './coords.js';
 import { corruptText, stripCombiningMarks } from './text-corruption.js';
 import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
 import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
-import { inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
+import { affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
+import { resolveMotionSettings } from './ui/motion.js';
 
 let _hudEl;
 let _collapseTimerEl, _collapseEventEl;
@@ -28,11 +27,12 @@ let _inventoryPanelEl;
 let _warningsEl;
 let _signalFillEl, _signalZoneEl;
 let _fuelFillEl, _fuelReadoutEl;
+let _hullFillEl, _hullReadoutEl;
+let _interactionEl, _interactionActionEl, _interactionDetailEl, _interactionCaptionEl;
 let _abilitiesEl;
 let _ability1El, _ability2El;
 let _inhibitorEl, _inhibitorFormEl;
 let _dropCallback = null;  // set by main.js for drop handling
-let _lastPortalCount = -1;
 let _lastCollapseStr = '';
 let _promptOptions = {};
 const INHIBITOR_FORM_NAMES = ['dormant', 'glitch', 'swarm', 'vessel'];
@@ -60,6 +60,12 @@ export function initHUD() {
   _signalZoneEl = document.getElementById('hud-signal-zone');
   _fuelFillEl = document.getElementById('hud-fuel-fill');
   _fuelReadoutEl = document.getElementById('hud-fuel-readout');
+  _hullFillEl = document.getElementById('hud-hull-fill');
+  _hullReadoutEl = document.getElementById('hud-hull-readout');
+  _interactionEl = document.getElementById('hud-interaction');
+  _interactionActionEl = document.getElementById('hud-interaction-action');
+  _interactionDetailEl = document.getElementById('hud-interaction-detail');
+  _interactionCaptionEl = document.getElementById('hud-interaction-caption');
   _abilitiesEl = document.getElementById('hud-abilities');
   _ability1El = document.getElementById('hud-ability1');
   _ability2El = document.getElementById('hud-ability2');
@@ -335,7 +341,6 @@ function renderAbilitySlot(el, slot) {
   const className = `hud-ability ${slot.tone}`;
   const html = `
     <div class="hud-ability-line">
-      <span class="hud-ability-key">${promptLabel(slot.action, _promptOptions)}</span>
       <span class="hud-ability-name">${slot.name}</span>
       <span class="hud-ability-status">${slot.status}</span>
     </div>
@@ -343,6 +348,7 @@ function renderAbilitySlot(el, slot) {
     <div class="hud-ability-meter">
       <div class="hud-ability-meter-fill" style="width:${Math.round(slot.meter * 100)}%;background:${fillColor};box-shadow:0 0 5px ${fillColor};"></div>
     </div>
+    <div class="hud-action-caption">${affordanceCaption(slot.action, slot.active ? 'release' : 'activate', _promptOptions)}</div>
     ${abilityResourceMarkup(slot)}
   `;
 
@@ -352,6 +358,61 @@ function renderAbilitySlot(el, slot) {
     el.innerHTML = html;
     el.dataset.renderKey = html;
   }
+}
+
+function nearestActivePortal(ship, portalSystem) {
+  if (!ship || !portalSystem?.portals) return null;
+  let nearest = null;
+  for (const portal of portalSystem.portals) {
+    if (!portal?.alive || portal.blockedByInhibitor) continue;
+    const distance = worldDistance(ship.wx, ship.wy, portal.wx, portal.wy);
+    if (!nearest || distance < nearest.distance) nearest = { portal, distance };
+  }
+  return nearest;
+}
+
+export function getRouteObjectiveState(ship, portalSystem, nextWaveTime = null, isFinalWave = false) {
+  const count = portalSystem?.activeCount || 0;
+  const nearest = nearestActivePortal(ship, portalSystem);
+  if (nearest) {
+    return {
+      count,
+      tone: 'active',
+      label: `aperture ${nearest.distance.toFixed(1)}`,
+      detail: `${count} active · enter cyan aperture`,
+      nearest,
+    };
+  }
+  if (nextWaveTime != null) {
+    return {
+      count: 0,
+      tone: isFinalWave ? 'critical' : 'waiting',
+      label: isFinalWave ? 'final aperture inbound' : 'aperture inbound',
+      detail: `${fmtTime(nextWaveTime)} until route opens`,
+      nearest: null,
+    };
+  }
+  return { count: 0, tone: 'critical', label: 'route closed', detail: 'no extraction aperture', nearest: null };
+}
+
+export function getHullPresentationState(hullState = {}, ship = null) {
+  const status = String(hullState.status || ship?.status || 'nominal').toLowerCase();
+  const shielded = Boolean(hullState.shielded || hullState.shieldCharges > 0);
+  const grace = Math.max(0, Number(hullState.graceRemaining) || 0);
+  const ratio = clamp01(hullState.ratio ?? (status === 'dead' ? 0 : 1));
+  if (shielded) return { ratio, label: 'shielded', tone: 'shielded' };
+  if (grace > 0) return { ratio, label: `impact ${grace.toFixed(1)}s`, tone: 'critical' };
+  if (status === 'dead' || status === 'critical') return { ratio, label: status, tone: 'critical' };
+  return { ratio, label: status === 'alive' ? 'nominal' : status, tone: ratio < 0.35 ? 'critical' : 'nominal' };
+}
+
+export function getInteractionPresentationState(interaction, promptOptions = {}) {
+  if (!interaction || interaction.visible === false) return null;
+  const action = interaction.action || 'confirm';
+  const label = String(interaction.label || 'confirm interaction');
+  const detail = String(interaction.detail || 'hold position');
+  const verb = String(interaction.verb || 'confirm');
+  return { action, label, detail, caption: affordanceCaption(action, verb, promptOptions) };
 }
 
 /**
@@ -375,6 +436,9 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   if (!_hudEl) return;
   _promptOptions = { lastInputSource: opts.lastInputSource, deck: opts.deckMode };
   setDeckModeAttribute(_hudEl, _promptOptions);
+  const motion = resolveMotionSettings(CONFIG.ui?.motion || {});
+  const reducedMotion = opts.reducedMotion ?? motion.reducedMotion;
+  _hudEl.dataset.reducedMotion = reducedMotion ? 'true' : 'false';
 
   const runDuration = CONFIG.universe.runDuration;
   const remaining = Math.max(0, runDuration - runElapsedTime);
@@ -382,7 +446,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   // === COLLAPSE TIMER ===
   const collapseStr = fmtTime(remaining);
   if (collapseStr !== _lastCollapseStr) {
-    _collapseTimerEl.textContent = `collapse: ${collapseStr}`;
+    _collapseTimerEl.textContent = collapseStr;
     _lastCollapseStr = collapseStr;
   }
 
@@ -438,37 +502,12 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   }
   _collapseEventEl.textContent = eventText;
 
-  // === WORMHOLES ===
-  const count = portalSystem ? portalSystem.activeCount : 0;
-
-  if (count !== _lastPortalCount) {
-    if (count > 0) {
-      _portalsStatusEl.textContent = `active wormholes: ${count}`;
-      _portalsStatusEl.style.color = 'rgba(180, 120, 255, 0.9)';
-    } else {
-      _portalsStatusEl.textContent = 'no active wormholes';
-      _portalsStatusEl.style.color = 'rgba(100, 80, 140, 0.5)';
-    }
-    _lastPortalCount = count;
-  }
-
-  if (nextWaveTime !== null) {
-    if (isFinalWave) {
-      _portalsNextEl.textContent = `last spawn: ${fmtTime(nextWaveTime)}`;
-      _portalsNextEl.style.color = 'rgba(255, 80, 80, 0.8)';
-    } else {
-      _portalsNextEl.textContent = `next spawn: ${fmtTime(nextWaveTime)}`;
-      _portalsNextEl.style.color = '';
-    }
-  } else {
-    if (count > 0) {
-      _portalsNextEl.textContent = 'no more spawns';
-      _portalsNextEl.style.color = 'rgba(255, 80, 80, 0.6)';
-    } else {
-      _portalsNextEl.textContent = 'no way out';
-      _portalsNextEl.style.color = 'rgba(255, 40, 40, 0.9)';
-    }
-  }
+  // === ROUTE OBJECTIVE ===
+  const route = getRouteObjectiveState(opts.ship, portalSystem, nextWaveTime, isFinalWave);
+  _portalsStatusEl.textContent = route.label;
+  _portalsNextEl.textContent = route.detail;
+  _portalsStatusEl.dataset.tone = route.tone;
+  _portalsNextEl.dataset.tone = route.tone;
 
   // === CARGO (count/max + total value) ===
   const inv = opts.inventorySystem;
@@ -478,9 +517,9 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     _salvageCountEl.textContent = count > 0 ? `◈ cargo ${count}/${max}` : `◈ cargo 0/${max}`;
     if (count > 0) {
       const totalValue = inv.getCargoValue();
-      _salvageValueEl.textContent = `value ${totalValue}  ${promptLabel('inventory', _promptOptions)}`;
+      _salvageValueEl.innerHTML = `<span>value ${totalValue}</span><span class="hud-action-caption">${affordanceCaption('inventory', 'inventory', _promptOptions)}</span>`;
     } else {
-      _salvageValueEl.textContent = `${promptLabel('inventory', _promptOptions)} inventory`;
+      _salvageValueEl.innerHTML = `<span>hold space for salvage</span><span class="hud-action-caption">${affordanceCaption('inventory', 'inventory', _promptOptions)}</span>`;
     }
     // Warn when nearly full
     if (count >= max) {
@@ -507,13 +546,14 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
 
   // === PULSE STATUS ===
   if (opts.combatSystem && _pulseEl) {
+    const actionCaption = affordanceCaption('pulse', 'activate', _promptOptions);
     if (opts.combatSystem.playerReady) {
-      _pulseEl.textContent = `${promptLabel('pulse', _promptOptions)} pulse ready`;
-      _pulseEl.className = 'hud-panel ready';
+      _pulseEl.innerHTML = `<div class="hud-command-label">force pulse</div><div class="hud-command-state">ready</div><div class="hud-action-caption">${actionCaption}</div>`;
+      _pulseEl.className = 'hud-command ready';
     } else {
       const cd = opts.combatSystem.playerCooldown;
-      _pulseEl.textContent = `pulse ${cd.toFixed(1)}s`;
-      _pulseEl.className = 'hud-panel';
+      _pulseEl.innerHTML = `<div class="hud-command-label">force pulse</div><div class="hud-command-state">${cd.toFixed(1)}s</div><div class="hud-action-caption">${actionCaption}</div>`;
+      _pulseEl.className = 'hud-command';
     }
   }
 
@@ -523,6 +563,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     const zone = opts.signalZone || 'ghost';
     const pct = Math.round(level * 100);
     _signalFillEl.style.width = `${pct}%`;
+    _signalFillEl.parentElement?.setAttribute('aria-valuenow', String(pct));
 
     // Zone-based color
     const zoneColors = {
@@ -543,6 +584,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     const ratio = Math.max(0, Math.min(1, opts.fuelRatio));
     const pct = Math.round(ratio * 100);
     _fuelFillEl.style.width = `${pct}%`;
+    _fuelFillEl.parentElement?.setAttribute('aria-valuenow', String(pct));
     // Threshold-based color: green → yellow → orange → red as the gauge
     // empties. Players see the cost climbing before they hit the wall.
     let color;
@@ -554,6 +596,29 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
     if (_fuelReadoutEl) {
       _fuelReadoutEl.textContent = `${pct}%`;
       _fuelReadoutEl.style.color = color;
+    }
+  }
+
+  // === HULL ===
+  if (_hullFillEl && _hullReadoutEl) {
+    const hull = getHullPresentationState(opts.hullState, opts.ship);
+    _hullFillEl.style.width = `${Math.round(hull.ratio * 100)}%`;
+    _hullFillEl.parentElement?.setAttribute('aria-valuenow', String(Math.round(hull.ratio * 100)));
+    _hullReadoutEl.textContent = hull.label;
+    _hullReadoutEl.dataset.tone = hull.tone;
+    _hullFillEl.dataset.tone = hull.tone;
+  }
+
+  // === CONTEXTUAL INTERACTION ===
+  if (_interactionEl) {
+    const interaction = getInteractionPresentationState(opts.interaction, _promptOptions);
+    if (!interaction) {
+      _interactionEl.style.display = 'none';
+    } else {
+      _interactionEl.style.display = '';
+      _interactionActionEl.textContent = interaction.label;
+      _interactionDetailEl.textContent = interaction.detail;
+      _interactionCaptionEl.textContent = interaction.caption;
     }
   }
 
@@ -590,7 +655,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   if (opts.inhibitorState && opts.ship) {
     const form = inhibitorHud.form;
     const corruption = inhibitorHud.corruption;
-    if (corruption > 0.02) {
+    if (!reducedMotion && corruption > 0.02) {
       const jitter = 1 + corruption * (form === 3 ? 3 : 2);
       const jx = Math.sin(runElapsedTime * 41.3) * jitter * corruption;
       const jy = Math.cos(runElapsedTime * 33.7) * jitter * corruption;
@@ -842,7 +907,7 @@ function _renderInventoryPanel(inv) {
   const sel = _invCursor;
 
   // ---- Cargo ----
-  let html = `<div class="inv-header">cargo ${inv.cargoCount}/${inv.cargoMax}  ${inventoryHint(_promptOptions)}</div>`;
+  let html = `<div class="inv-header"><span>cargo ${inv.cargoCount}/${inv.cargoMax}</span><span class="inv-caption">${inventoryHint(_promptOptions)}</span></div>`;
 
   for (let i = 0; i < inv.cargo.length; i++) {
     const isSel = (sel === i);
@@ -882,7 +947,7 @@ function _renderInventoryPanel(inv) {
   html += '</div>';
 
   // ---- Consumables ----
-  html += `<div class="inv-section"><div class="inv-header">consumables ${promptLabel('consumables', _promptOptions)}</div>`;
+  html += `<div class="inv-section"><div class="inv-header"><span>consumables</span><span class="inv-caption">${affordanceCaption('consumables', 'use', _promptOptions)}</span></div>`;
   for (let i = 0; i < inv.consumables.length; i++) {
     const globalIdx = 10 + i;
     const isSel = (sel === globalIdx);
