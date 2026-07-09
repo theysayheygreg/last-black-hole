@@ -1,5 +1,23 @@
 # Decision Log
 
+## 2026-07-09 — Authority budgets measure rates and bytes, not only counts
+
+**Decision:** Keep bounded-count canaries, but require a Deep Field authority
+probe with explicit tick, latency, snapshot, bandwidth, heap, and Ballpark sync
+ceilings before a v0.3 candidate can call its sim healthy.
+
+**Why:** A fixed entity ceiling can stay green while every tick becomes slow or
+every snapshot becomes expensive. The measured contract catches performance
+shape regressions while leaving physical Deck rendering to its own evidence
+lane.
+
+**Where it landed:** `tests/authority-budget.cjs` and the authority/structural
+suite manifest.
+
+**Door status:** Closed for count-only authority health claims. Budget values
+can tighten after more hardware and multiplayer samples, but must not silently
+disappear.
+
 ## 2026-07-09 — Drifter and Breacher are the v0.3 public roster
 
 **Decision:** Expose Drifter and Breacher as the v0.3 player roster. Keep

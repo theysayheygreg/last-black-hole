@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-07-09 — Deep Field authority budget gate
+
+- Added a short product-shaped authority probe that measures observed tick
+  cadence, snapshot latency/size/bandwidth, heap growth, Ballpark sync time,
+  and bounded event/snapshot retention with a live Deep Field player.
+- Recorded the first v0.3 local baseline: 7.66/8 Hz, 46.41 ms snapshot p95,
+  107.75 KiB snapshot p95, 0.33 MB/s estimated stream, 6.08 MiB heap growth,
+  and 4.81 ms Ballpark sync p95.
+- Kept physical 1280x800 Deck frame evidence as a separate hardware gate;
+  this probe measures the authority process, not presentation FPS.
+
 ## 2026-07-09 — Honest v0.3 public hull roster
 
 - Added a shared `PUBLIC_HULL_IDS` contract containing Drifter and Breacher.

@@ -210,6 +210,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AuthorityBudget",
+    file: "authority-budget.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "ProtocolJournal",
     file: "protocol-journal.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
