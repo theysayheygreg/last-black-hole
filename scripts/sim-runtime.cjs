@@ -58,6 +58,10 @@ const {
   applyPlayerBrakeAndIntegrate,
   applyPlayerDriveAndFlow,
 } = require("./sim/player-movement-step.cjs");
+const {
+  sweptMovingCircleVsCircle,
+  wrappedDelta,
+} = require("./sim/world-geometry.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 
@@ -2431,16 +2435,51 @@ function applyPlanetoidPush(player, dt, planetoids = runtime.mapState.planetoids
   }
 }
 
-function applyScavengerBump(player, scavengers = runtime.mapState.scavengers) {
+function movementSweep(startWX, startWY, player) {
+  const worldScale = runtime.session.worldScale;
+  return {
+    startX: startWX,
+    startY: startWY,
+    deltaX: wrappedDelta(startWX, player.wx, worldScale),
+    deltaY: wrappedDelta(startWY, player.wy, worldScale),
+    worldScale,
+  };
+}
+
+function sweptEntityContact(sweep, entity, radius) {
+  if (!sweep) return null;
+  const result = sweptMovingCircleVsCircle({
+    ...sweep,
+    movingRadius: 0,
+    targetX: entity.wx,
+    targetY: entity.wy,
+    targetRadius: Math.max(0, radius),
+  });
+  return result.hit ? result : null;
+}
+
+function applyScavengerBump(player, scavengers = runtime.mapState.scavengers, sweep = null) {
   for (const scav of scavengers) {
     if (scav.alive === false || scav.state === "dying") continue;
     const { dist, nx, ny } = worldDirection(scav.wx, scav.wy, player.wx, player.wy, runtime.session.worldScale);
-    if (dist < SCAVENGER_CONFIG.bumpRadius && dist > 0.0001) {
+    const swept = dist >= SCAVENGER_CONFIG.bumpRadius
+      ? sweptEntityContact(sweep, scav, SCAVENGER_CONFIG.bumpRadius)
+      : null;
+    if ((dist < SCAVENGER_CONFIG.bumpRadius || swept) && dist > 0.0001) {
       const impulse = SCAVENGER_CONFIG.bumpForce;
-      player.vx += nx * impulse;
-      player.vy += ny * impulse;
-      scav.vx -= nx * impulse;
-      scav.vy -= ny * impulse;
+      const contactNX = swept?.normalX || nx;
+      const contactNY = swept?.normalY || ny;
+      player.vx += contactNX * impulse;
+      player.vy += contactNY * impulse;
+      scav.vx -= contactNX * impulse;
+      scav.vy -= contactNY * impulse;
+      publishEvent("player.scavengerBumped", {
+        clientId: player.clientId,
+        scavengerId: scav.id,
+        swept: Boolean(swept),
+        wx: swept?.contactX ?? player.wx,
+        wy: swept?.contactY ?? player.wy,
+      }, { lane: "neighborhood", subject: player.clientId });
     }
   }
 }
@@ -2470,6 +2509,67 @@ function applyWaveRingPush(player, dt) {
   }
 }
 
+function resolveWellContact(player, well, dt, dx, dy) {
+  if (player.effectState.shieldCharges > 0) {
+    player.effectState.shieldCharges -= 1;
+    refreshPlayerEffects(player);
+    publishEvent("player.shieldAbsorbed", {
+      clientId: player.clientId,
+      wellId: well.id,
+      wellName: well.name || well.id,
+    });
+    return "protected";
+  }
+  if ((player.effectState.hullGraceRemaining || 0) > 0) {
+    player.effectState.hullGraceRemaining = Math.max(0, player.effectState.hullGraceRemaining - dt);
+    if (player.effectState.hullGraceRemaining > 0) return "protected";
+  } else if ((player.brain?.wellGraceDuration || 0) > 0) {
+    player.effectState.hullGraceRemaining = player.brain.wellGraceDuration;
+    publishEvent("player.hullGraceStarted", {
+      clientId: player.clientId,
+      wellId: well.id,
+      wellName: well.name || well.id,
+      duration: player.brain.wellGraceDuration,
+    });
+    return "protected";
+  }
+  if (player.abilityState && player.abilityState.hullType === 'hauler'
+      && player.abilityState.wellSurvivesRemaining > 0) {
+    player.abilityState.wellSurvivesRemaining--;
+    const ejectAngle = Math.atan2(dy, dx) + Math.PI;
+    player.vx = Math.cos(ejectAngle) * 0.3;
+    player.vy = Math.sin(ejectAngle) * 0.3;
+    player.wx = ((player.wx + Math.cos(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    player.wy = ((player.wy + Math.sin(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
+    const scatterRng = runtime.session?.rng?.rawStream('hullSave') || Math.random;
+    const filled = player.cargo.map((cargo, index) => cargo ? index : -1).filter((index) => index >= 0);
+    const scatterCount = Math.min(filled.length, 1 + Math.floor(scatterRng() * 2));
+    for (let scatter = 0; scatter < scatterCount; scatter++) {
+      const index = filled[Math.floor(scatterRng() * filled.length)];
+      player.cargo[index] = null;
+    }
+    publishEvent("ability.activated", {
+      clientId: player.clientId,
+      ability: "reinforcedHull",
+      wellId: well.id,
+    });
+    return "protected";
+  }
+
+  player.status = "dead";
+  player.vx = 0;
+  player.vy = 0;
+  publishEvent("player.died", {
+    clientId: player.clientId,
+    cause: "well",
+    wellId: well.id,
+    wellName: well.name || well.id,
+  });
+  commitPlayerOutcome(player, "dead");
+  player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
+  return "dead";
+}
+
 function applyWellGravity(player, dt) {
   const relevantWells = collectNearestByDistance(
     player.wx,
@@ -2482,70 +2582,7 @@ function applyWellGravity(player, dt) {
     const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
     const dist = Math.hypot(dx, dy);
     if (dist < 0.0001) continue;
-    if (dist < well.killRadius) {
-      if (player.effectState.shieldCharges > 0) {
-        player.effectState.shieldCharges -= 1;
-        refreshPlayerEffects(player);
-        publishEvent("player.shieldAbsorbed", {
-          clientId: player.clientId,
-          wellId: well.id,
-          wellName: well.name || well.id,
-        });
-        continue;
-      }
-      if ((player.effectState.hullGraceRemaining || 0) > 0) {
-        player.effectState.hullGraceRemaining = Math.max(0, player.effectState.hullGraceRemaining - dt);
-        if (player.effectState.hullGraceRemaining > 0) {
-          continue;
-        }
-      } else if ((player.brain?.wellGraceDuration || 0) > 0) {
-        player.effectState.hullGraceRemaining = player.brain.wellGraceDuration;
-        publishEvent("player.hullGraceStarted", {
-          clientId: player.clientId,
-          wellId: well.id,
-          wellName: well.name || well.id,
-          duration: player.brain.wellGraceDuration,
-        });
-        continue;
-      }
-      // Hauler Reinforced Hull: survive one well contact per run
-      if (player.abilityState && player.abilityState.hullType === 'hauler'
-          && player.abilityState.wellSurvivesRemaining > 0) {
-        player.abilityState.wellSurvivesRemaining--;
-        // Eject violently, scatter 1-2 cargo items
-        const ejectAngle = Math.atan2(dy, dx) + Math.PI;
-        player.vx = Math.cos(ejectAngle) * 0.3;
-        player.vy = Math.sin(ejectAngle) * 0.3;
-        player.wx = ((player.wx + Math.cos(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-        player.wy = ((player.wy + Math.sin(ejectAngle) * 0.1) % runtime.session.worldScale + runtime.session.worldScale) % runtime.session.worldScale;
-        // Scatter cargo (seeded — same hull save always scatters the same slots)
-        const scatterRng = runtime.session?.rng?.rawStream('hullSave') || Math.random;
-        const filled = player.cargo.map((c, i) => c ? i : -1).filter(i => i >= 0);
-        const scatterCount = Math.min(filled.length, 1 + Math.floor(scatterRng() * 2));
-        for (let s = 0; s < scatterCount; s++) {
-          const idx = filled[Math.floor(scatterRng() * filled.length)];
-          player.cargo[idx] = null;
-        }
-        publishEvent("ability.activated", {
-          clientId: player.clientId, ability: "reinforcedHull", wellId: well.id,
-        });
-        continue;
-      }
-      player.status = "dead";
-      player.vx = 0;
-      player.vy = 0;
-      // Publish death event BEFORE commit so buildRunResult can find the cause
-      publishEvent("player.died", {
-        clientId: player.clientId,
-        cause: "well",
-        wellId: well.id,
-        wellName: well.name || well.id,
-      });
-      // Commit outcome BEFORE clearing cargo so cargoLost is captured
-      commitPlayerOutcome(player, "dead");
-      player.cargo = new Array(player.brain?.cargoSlots || PLAYER_CARGO_SLOTS).fill(null);
-      return;
-    }
+    if (dist < well.killRadius && resolveWellContact(player, well, dt, dx, dy) === "dead") return;
   }
   if ((player.effectState.hullGraceRemaining || 0) > 0) {
     player.effectState.hullGraceRemaining = 0;
@@ -2580,6 +2617,21 @@ function applyWellGravity(player, dt) {
   pullScale *= getMomentumShieldMult(player);
   player.vx += pullX * pullScale * dt;
   player.vy += pullY * pullScale * dt;
+}
+
+function applySweptWellContacts(player, dt, sweep) {
+  const contacts = [];
+  for (const well of runtime.mapState.wells) {
+    const hit = sweptEntityContact(sweep, well, well.killRadius);
+    if (!hit || hit.startedOverlapping) continue;
+    contacts.push({ well, hit });
+  }
+  contacts.sort((a, b) => a.hit.t - b.hit.t || String(a.well.id).localeCompare(String(b.well.id)));
+  for (const { well, hit } of contacts) {
+    const dx = worldDisplacement(hit.contactX, well.wx, runtime.session.worldScale);
+    const dy = worldDisplacement(hit.contactY, well.wy, runtime.session.worldScale);
+    if (resolveWellContact(player, well, dt, dx, dy) === "dead") return;
+  }
 }
 
 function pickupRadiusForPlayer(player) {
@@ -2674,16 +2726,35 @@ function collectPortalExtractionCandidates(player, portals, captureDist, limit) 
   return { mode: "ballpark", candidates: ranked.slice(0, limit) };
 }
 
-function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
+function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = null) {
   if (player.status !== "alive") return;
   const maxCargo = player.brain ? player.brain.cargoSlots : PLAYER_CARGO_SLOTS;
   if (getCargoCount(player) >= maxCargo) return;
 
   const pickupDist = pickupRadiusForPlayer(player);
   const limit = clampBudgetCount(runtime.session.maxPickupChecksPerPlayer || wrecks.length || 1, wrecks.length || 1);
-  const { candidates: nearbyWrecks } = collectPickupWreckCandidates(player, wrecks, pickupDist, limit);
-  for (const { entity: wreck, dist } of nearbyWrecks) {
-    if (dist >= pickupDist) continue;
+  const { candidates: endpointCandidates } = collectPickupWreckCandidates(player, wrecks, pickupDist, limit);
+  const nearbyById = new Map(endpointCandidates.map((candidate) => [String(candidate.entity.id), {
+    ...candidate,
+    contactT: 1,
+  }]));
+  if (sweep) {
+    for (const wreck of wrecks) {
+      if (wreck.alive === false || wreck.looted || wreck.pickupCooldown > 0) continue;
+      const hit = sweptEntityContact(sweep, wreck, pickupDist);
+      if (!hit) continue;
+      const key = String(wreck.id);
+      const existing = nearbyById.get(key);
+      if (!existing || hit.t < existing.contactT) {
+        nearbyById.set(key, { entity: wreck, dist: hit.distance ?? 0, contactT: hit.t });
+      }
+    }
+  }
+  const nearbyWrecks = [...nearbyById.values()]
+    .sort((a, b) => a.contactT - b.contactT || a.dist - b.dist)
+    .slice(0, limit);
+  for (const { entity: wreck, dist, contactT } of nearbyWrecks) {
+    if (contactT >= 1 && dist >= pickupDist) continue;
 
     // Wreck age scales EM sell value only, not artifact coefficients.
     // Coefficients are fixed by the catalog — aging makes loot worth more to sell,
@@ -2726,7 +2797,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks) {
   }
 }
 
-function tickExtraction(player) {
+function tickExtraction(player, sweep = null) {
   if (player.status !== "alive") return;
   const portals = runtime.mapState.portals;
   const maxCaptureDist = portals.reduce((best, portal) => {
@@ -2734,9 +2805,28 @@ function tickExtraction(player) {
     return Math.max(best, portalCaptureRadius(portal));
   }, 0.08);
   const limit = clampBudgetCount(runtime.session.maxPortalChecksPerPlayer || portals.length || 1, portals.length || 1);
-  const { candidates: nearbyPortals } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
-  for (const { entity: portal, dist } of nearbyPortals) {
-    if (dist < portalCaptureRadius(portal)) {
+  const { candidates: endpointCandidates } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
+  const nearbyById = new Map(endpointCandidates.map((candidate) => [String(candidate.entity.id), {
+    ...candidate,
+    contactT: 1,
+  }]));
+  if (sweep) {
+    for (const portal of portals) {
+      if (!isPortalAvailable(portal)) continue;
+      const hit = sweptEntityContact(sweep, portal, portalCaptureRadius(portal));
+      if (!hit) continue;
+      const key = String(portal.id);
+      const existing = nearbyById.get(key);
+      if (!existing || hit.t < existing.contactT) {
+        nearbyById.set(key, { entity: portal, dist: hit.distance ?? 0, contactT: hit.t });
+      }
+    }
+  }
+  const nearbyPortals = [...nearbyById.values()]
+    .sort((a, b) => a.contactT - b.contactT || a.dist - b.dist)
+    .slice(0, limit);
+  for (const { entity: portal, dist, contactT } of nearbyPortals) {
+    if (contactT < 1 || dist < portalCaptureRadius(portal)) {
       player.status = "escaped";
       player.vx = 0;
       player.vy = 0;
@@ -5528,16 +5618,21 @@ function tickSim() {
     applyStarPush(player, playerDt, relevance.stars);
     applyPlanetoidPush(player, playerDt, relevance.planetoids);
     applyWaveRingPush(player, playerDt);
+    const movementStartWX = player.wx;
+    const movementStartWY = player.wy;
     applyPlayerBrakeAndIntegrate(player, input, playerDt, {
       brain: b,
       controlMult,
       thrustIntensity: driveStep.thrustIntensity,
       worldScale: runtime.session.worldScale,
     });
-    applyScavengerBump(player, relevance.scavengers);
+    const sweep = movementSweep(movementStartWX, movementStartWY, player);
+    applySweptWellContacts(player, playerDt, sweep);
+    if (player.status !== "alive") continue;
+    applyScavengerBump(player, relevance.scavengers, sweep);
 
-    tickPlayerPickups(player, relevance.wrecks);
-    tickExtraction(player);
+    tickPlayerPickups(player, relevance.wrecks, sweep);
+    tickExtraction(player, sweep);
     if (player.status !== "alive") continue;
     tickPlayerSignal(player, playerDt);
   }

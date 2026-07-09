@@ -18,6 +18,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AuthoritativeItemShape",
+    file: "authoritative-item-shape.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "Balance",
     file: "balance.cjs",
     lanes: ["fast", "core", "static", "full"],
@@ -108,6 +114,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "WorldGeometry",
+    file: "world-geometry.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "BallparkMirror",
     file: "ballpark-mirror.cjs",
     lanes: ["core", "authority", "sim-structure", "full"],
@@ -158,6 +170,12 @@ const SUITES = [
   {
     name: "SlingshotEdgeQueue",
     file: "slingshot-edge-queue.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "SweptAuthority",
+    file: "swept-authority.cjs",
     lanes: ["authority", "sim-structure", "full"],
     browser: false,
   },

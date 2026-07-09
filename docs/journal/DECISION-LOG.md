@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-07-09 — Load-bearing contacts use swept toroidal geometry
+
+**Decision:** Resolve player crossings against wells, wrecks, portals, and
+scavengers over the full authoritative movement segment. Point overlap remains
+valid, but no gameplay consequence may depend only on the two 15 Hz endpoints.
+
+**Why:** A player can move farther than several interaction radii in one tick.
+Endpoint sampling therefore allowed invisible well survival, missed loot and
+portals, and inconsistent bumps. One server-only toroidal primitive keeps seam
+handling and collision timing identical across consequence families.
+
+**Where it landed:** `scripts/sim/world-geometry.cjs`,
+`scripts/sim-runtime.cjs`, `tests/world-geometry.cjs`,
+`tests/swept-authority.cjs`, and `tests/suite-manifest.cjs`.
+
+**Door status:** Closed for point-only load-bearing player contacts. Open for
+moving-vs-moving continuous collision if future entity speeds make stationary
+targets within one tick insufficient.
+
 ## 2026-07-09 — Full snapshots are the event-gap rebase boundary
 
 **Decision:** Give live authoritative snapshots monotonic ids and retain a

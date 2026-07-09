@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-07-09 — Swept authoritative gameplay contacts
+
+- Routed well hazards, wreck pickup, portal extraction, and scavenger bumps
+  through the shared toroidal sweep primitive after player integration.
+- Centralized well protection and death consequences so point and swept
+  contacts share shield, grace, reinforced-hull, event, and result behavior.
+- Added live consequence tests that cross each interaction between snapshots,
+  including seam-safe high-speed geometry coverage.
+- Added authoritative item-shape, world-geometry, and swept-contact suites to
+  the authority and structural harness lanes.
+
 ## 2026-07-09 — Live snapshot rebase and event recovery
 
 - Promoted the bounded snapshot ring from a test scaffold into the live sim,
