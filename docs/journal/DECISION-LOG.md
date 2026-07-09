@@ -1,5 +1,22 @@
 # Decision Log
 
+## 2026-07-09 — Drifter and Breacher are the v0.3 public roster
+
+**Decision:** Expose Drifter and Breacher as the v0.3 player roster. Keep
+Resonant, Shroud, and Hauler definitions intact for AI, fixtures, and future
+work, but do not present them as finished player promises.
+
+**Why:** Two legible, mechanically distinct hulls produce a more honest demo
+than five uneven ones. This preserves authored work without making internal
+coverage indistinguishable from public product scope.
+
+**Where it landed:** `src/content/hulls.data.json`, client/server hull wrappers,
+`src/profile.js`, and `tests/public-roster.cjs`.
+
+**Door status:** Closed for the v0.3 first-demo roster. Reopen each internal
+hull only after its complete authority, UI, visual, audio, and journey evidence
+passes the same gate.
+
 ## 2026-07-09 — The v0.3 branch builds as 0.3.0.<commit-hash>
 
 **Decision:** Activate `0.3.0` as the public base on the dedicated v0.3 branch.

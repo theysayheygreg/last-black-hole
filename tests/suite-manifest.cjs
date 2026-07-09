@@ -36,6 +36,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "PublicRoster",
+    file: "public-roster.cjs",
+    lanes: ["fast", "core", "static", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "SimProtocol",
     file: "sim-protocol.cjs",
     lanes: ["fast", "core", "authority", "static", "full"],

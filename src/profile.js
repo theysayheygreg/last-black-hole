@@ -14,6 +14,7 @@
  */
 
 import { BALANCE, runEmEarned, survivalBonusEm } from './content/balance.js';
+import { PUBLIC_HULL_IDS } from './content/hulls.js';
 
 const STORAGE_PREFIX = 'lbh_profile_';
 const INDEX_KEY = 'lbh_profiles_index';
@@ -22,7 +23,6 @@ const MAX_SLOTS = 3;
 const MAX_NAME_LENGTH = 16;
 const EQUIPPED_SLOT_COUNT = 2;
 const CONSUMABLE_SLOT_COUNT = 2;
-const HULL_TYPES = ['drifter', 'breacher', 'resonant', 'shroud', 'hauler'];
 const DEFAULT_HULL_TYPE = 'drifter';
 const RIG_SLOT_COUNT = 3;
 export const MAX_RIG_LEVEL = BALANCE.progression.maxRigLevel;
@@ -109,7 +109,7 @@ function normalizeLoadoutShape(loadout = {}) {
 
 function normalizeHullType(hullType, legacyShipType) {
   const raw = String(hullType || legacyShipType || DEFAULT_HULL_TYPE).toLowerCase();
-  return HULL_TYPES.includes(raw) ? raw : DEFAULT_HULL_TYPE;
+  return PUBLIC_HULL_IDS.includes(raw) ? raw : DEFAULT_HULL_TYPE;
 }
 
 function normalizeRigLevels(rigLevels = []) {

@@ -3,6 +3,7 @@
 // JSON so hull definitions cannot drift between client and server.
 import data from './hulls.data.json' with { type: 'json' };
 
+export const PUBLIC_HULL_IDS = data.PUBLIC_HULL_IDS;
 export const RIG_TRACKS = data.RIG_TRACKS;
 export const PROFILE_SHIP_TO_HULL = data.PROFILE_SHIP_TO_HULL;
 export const HULL_DEFINITIONS = data.HULL_DEFINITIONS;

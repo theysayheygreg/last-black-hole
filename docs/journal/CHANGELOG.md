@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-07-09 — Honest v0.3 public hull roster
+
+- Added a shared `PUBLIC_HULL_IDS` contract containing Drifter and Breacher.
+- Local profiles now normalize unsupported public hull choices back to
+  Drifter, while unfinished hull definitions remain available to AI, internal
+  fixtures, and continued development.
+- Added fast/static coverage so player-facing code cannot accidentally expose
+  Resonant, Shroud, or Hauler as finished choices.
+
 ## 2026-07-09 — v0.3 version train activated
 
 - Advanced the v0.3 branch public base to `0.3.0`; internal and release builds
