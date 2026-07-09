@@ -1,6 +1,7 @@
 # Deployment Pipelines
 
-This is the current v0.2 deployment map for Last Singularity.
+This is the shared deployment map for Last Singularity's v0.2 public line and
+v0.3 integration line.
 
 The key distinction: the existing web build is not automatically the right
 artifact for every platform. Steam Deck, itch.io, and Steam all need different
@@ -13,10 +14,11 @@ npm run release:internal
 ```
 
 That builds the real release target set: web, iPad web-app, macOS, Windows, and
-Linux. The artifact version is `0.2.x.<current-commit-hash>`. Use
-`npm run release:public` only when Greg wants the public `0.2.x` train to
-advance; commit that bump before building so the hash field names the committed
-source.
+Linux. The artifact version is
+`<major>.<minor>.<public>.<current-commit-hash>`; the active branch's
+`package.json` supplies the first three fields. Use `npm run release:public`
+only when Greg wants that train's public patch to advance; commit the bump
+before building so the hash field names the committed source.
 
 ## Current Source Build
 

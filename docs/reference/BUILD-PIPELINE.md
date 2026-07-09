@@ -35,13 +35,13 @@ From `/Users/theysayheygreg/clawd/projects/last-black-hole`:
 - `npm run release:bump` — legacy alias for `release:public`
 - `npm run release:build` — run the fast gate, build every release target
   (`web,ipad,mac,win,linux`), package weekly assets, and verify outputs for
-  `0.2.x.<current-commit-hash>`
+  `<major>.<minor>.<public>.<current-commit-hash>`
 - `npm run release:internal` — alias for `release:build`; internal handoffs use
   the commit hash as the fourth version field
-- `npm run release:public` — increment the public `0.2.x` train; commit that
+- `npm run release:public` — increment the public patch on the active train; commit that
   bump, then run `npm run release:build`
 - `npm run release:patch` — legacy alias for `release:public`
-- `npm run release:check` — verify the current `0.2.x.<hash>` version has a
+- `npm run release:check` — verify the current four-field hash version has a
   complete all-target release build
 - `npm run release:prepush` — same shape as the tracked pre-push hook: public
   version must not be behind upstream and the current hash-named all-target
@@ -61,18 +61,20 @@ LBH uses a four-field product build identifier:
 major.minor.public.commit
 ```
 
-For the current train, that means builds look like `0.2.2.<git-hash>`.
+On the v0.3 integration branch, builds look like `0.3.0.<git-hash>`. The v0.2
+public/demo line on `main` keeps its own `0.2.2.<git-hash>` identity until Greg
+promotes a version.
 
-- `0.2` is the current product era.
+- The first two fields identify the product era Greg has called for that branch.
 - The third number is the public release train. It advances only when Greg calls
   a public release bump.
 - The fourth field is the short git commit hash. Internal handoffs chew up this
   field automatically.
-- Large decisive `0.3` or `1.0` moves are by Greg's call only.
+- Large decisive train moves remain Greg's call only.
 
-`package.json.version` stores only the public train (`0.2.x`) because a
+`package.json.version` stores only the three-field public train because a
 committed file cannot contain its own future commit hash. Build, deploy, and
-release scripts compute the full `0.2.x.<hash>` version at build time from the
+release scripts compute the full `<public-version>.<hash>` version at build time from the
 committed `HEAD`.
 
 Release builds must therefore be made from committed tracked source. If the
