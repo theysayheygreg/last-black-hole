@@ -17,6 +17,25 @@ async function postJson(path, payload) {
   });
 }
 
+async function postAuthorizedInput(authority, commandSeq, payload) {
+  return getJson("/input", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+    body: JSON.stringify({
+      ...payload,
+      runId: authority.runId,
+      playerId: authority.playerId,
+      commandCredential: authority.commandCredential,
+      commandSeq,
+    }),
+  });
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -64,10 +83,13 @@ async function run() {
       assert(start.status === 200 && start.body.ok === true, `Expected start success, got ${start.status}`);
 
       const join = await postJson("/join", {
+        runId: start.body.session.runId,
         clientId: "ballpark-extraction-test",
         name: "Ballpark Extraction Test",
+        joinTicket: start.body.joinTicket,
       });
       assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
+      const authority = join.body.authority;
 
       await waitForSnapshot((body) => body.players?.some((player) => player.clientId === "ballpark-extraction-test"));
       const beforeHealth = await getJson("/health");
@@ -97,6 +119,54 @@ async function run() {
         blockedByInhibitor: false,
       });
       assert(portal.status === 200 && portal.body.ok === true, `Expected debug portal placement, got ${portal.status}`);
+
+      const ready = await waitForSnapshot((body) =>
+        body.players?.some((player) =>
+          player.clientId === "ballpark-extraction-test" &&
+          player.status === "alive" &&
+          player.portalInteraction?.portalId === "ballpark-extraction-portal"
+        )
+      );
+      const readyPlayer = ready.players.find((entry) => entry.clientId === "ballpark-extraction-test");
+      assert(readyPlayer?.status === "alive", "Portal proximity must not auto-extract the player");
+
+      await postJson("/debug/player-state", {
+        clientId: "ballpark-extraction-test",
+        wx: 2.2,
+        wy: 2.2,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      const aborted = await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "ballpark-extraction-test" &&
+        player.status === "alive" &&
+        player.portalInteraction === null
+      ));
+      assert(aborted.players.find((entry) => entry.clientId === "ballpark-extraction-test")?.status === "alive",
+        "Leaving the portal zone must abort without extracting");
+
+      await postJson("/debug/player-state", {
+        clientId: "ballpark-extraction-test",
+        wx: 2.72,
+        wy: 2.72,
+        vx: 0,
+        vy: 0,
+        status: "alive",
+      });
+      await waitForSnapshot((body) => body.players?.some((player) =>
+        player.clientId === "ballpark-extraction-test" &&
+        player.portalInteraction?.portalId === "ballpark-extraction-portal"
+      ));
+
+      const confirmed = await postAuthorizedInput(authority, 1, {
+        seq: 1,
+        moveX: 0,
+        moveY: 0,
+        extractConfirm: true,
+      });
+      assert(confirmed.status === 200 && confirmed.body.ok === true,
+        `Expected extraction confirmation to be accepted, got ${confirmed.status}`);
 
       const escaped = await waitForSnapshot((body) =>
         body.players?.some((player) =>

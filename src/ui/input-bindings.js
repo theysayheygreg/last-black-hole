@@ -2,6 +2,7 @@
 
 export const ACTION_PROMPT_LABELS = Object.freeze({
   confirm: { keyboard: 'Space', controller: 'A', deck: 'A' },
+  extract: { keyboard: 'Enter', controller: 'A', deck: 'A' },
   back: { keyboard: 'Esc', controller: 'B', deck: 'B' },
   tabs: { keyboard: 'Q/E', controller: 'L1/R1', deck: 'L1/R1' },
   tabPrev: { keyboard: 'Q', controller: 'L1', deck: 'L1' },
@@ -16,6 +17,8 @@ export const ACTION_PROMPT_LABELS = Object.freeze({
   brake: { keyboard: 'Ctrl', controller: 'L2', deck: 'L2' },
   navigate: { keyboard: 'Arrows', controller: 'D-pad', deck: 'D-pad' },
   select: { keyboard: 'Arrows', controller: 'D-pad', deck: 'D-pad' },
+  hullPrev: { keyboard: 'Left', controller: 'D-pad L', deck: 'D-pad L' },
+  hullNext: { keyboard: 'Right', controller: 'D-pad R', deck: 'D-pad R' },
   reroll: { keyboard: 'S', controller: 'X', deck: 'X' },
   delete: { keyboard: 'X', controller: 'Y', deck: 'Y' },
   consumables: { keyboard: '1/2', controller: 'D-pad L/R', deck: 'D-pad L/R' },
@@ -25,6 +28,7 @@ export const ACTION_PROMPT_LABELS = Object.freeze({
 
 export const GAMEPAD_ACTION_BUTTONS = Object.freeze({
   confirm: [0],
+  extract: [0],
   back: [1],
   pulse: [2],
   reroll: [2],

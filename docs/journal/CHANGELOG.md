@@ -5,6 +5,23 @@
 
 ---
 
+## 2026-07-09 — Protocol-v2, route, presentation, and Deck HUD integration
+
+- Replaced raw client-id mutations with protocol-v2 run/player authority,
+  server-issued command credentials, monotonic commands, private event
+  filtering, reconnect continuity, and stale-run rejection. AI-only ghost
+  sessions are replaced instead of silently reused.
+- Made seeded map briefings match launched signatures, named wells, initial
+  loot, and route anchors. Shallows now declares a teaching sequence, while
+  Expanse and Deep Field carry distinct route identities.
+- Added a renderer-neutral presentation frame and lifecycle-owned player,
+  wreck, and portal Three families with centralized projection, palette, and
+  quality budgets. Route portals are cyan; magenta remains Inhibitor language.
+- Rebuilt the 1280x800 HUD rails and controller captions, added reduced-motion
+  behavior, and added bounded event-audio cues for loot, slingshot, portals,
+  scavenger contact, extraction, and Inhibitor escalation.
+- Registered every new contract in the manifest-driven harness.
+
 ## 2026-07-09 — Deep Field authority budget gate
 
 - Added a short product-shaped authority probe that measures observed tick

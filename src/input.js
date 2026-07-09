@@ -170,6 +170,12 @@ export class InputManager {
     return false;
   }
 
+  /** Confirm extraction without sharing the Space/R2 thrust affordance. */
+  get extractPressed() {
+    if (this._keys['Enter']) return true;
+    return gamepadActionPressed(this._getGamepad(), 'extract');
+  }
+
   /** Is back/cancel pressed? (gamepad Circle — button 1) */
   get backPressed() {
     const gp = this._getGamepad();

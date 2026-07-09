@@ -444,6 +444,20 @@ async function run() {
       });
       assert(portal.ok === true, `Expected debug portal placement, got ${JSON.stringify(portal)}`);
 
+      const { player: readyPlayer } = await waitForSnapshotPlayer(
+        clientId,
+        (remotePlayer) => remotePlayer.status === "alive" && remotePlayer.portalInteraction?.portalId === portalId,
+        { timeout: 8000 }
+      );
+      assert(readyPlayer.status === "alive", "Expected portal zone to wait for explicit confirmation");
+      const confirm = await postInput({
+        clientId,
+        seq: 1,
+        moveX: 0,
+        moveY: 0,
+        extractConfirm: true,
+      });
+      assert(confirm.ok === true, `Expected extraction confirmation input, got ${JSON.stringify(confirm)}`);
       const { player } = await waitForSnapshotPlayer(
         clientId,
         (remotePlayer) => remotePlayer.status === "escaped",
@@ -1107,9 +1121,23 @@ async function run() {
       const persisted = await getProfile(beforeProfile.id);
       assert(persisted.ok === true, "Expected persisted profile lookup to succeed after death");
       assert(persisted.profile.totalDeaths === beforeProfile.totalDeaths + 1, "Expected authoritative death count to increment");
+      assert(Array.isArray(persisted.recentRuns) && persisted.recentRuns.length > 0,
+        "Expected the profile endpoint to return authoritative recent runs");
+      assert(Array.isArray(persisted.profile.runRecords) && persisted.profile.runRecords.length === persisted.recentRuns.length,
+        "Expected Chronicle-compatible run records on the returned profile");
 
       const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
       assert(health.session.status === "running", "Expected session to keep running while another human remains active");
+    });
+
+    await runner.run("Human joins cannot select internal prototype hulls", async () => {
+      const clientId = "internal-hull-authority-test";
+      const joined = await postJoin({ clientId, name: "Roster Test", hullType: "resonant" });
+      assert(joined.ok === true, `Expected roster test client to join, got ${JSON.stringify(joined)}`);
+      assert(joined.player?.hullType === "drifter",
+        `Expected internal hull request to normalize to Drifter, got ${joined.player?.hullType}`);
+      const left = await postLeave({ clientId });
+      assert(left.ok === true, "Expected roster test client to leave cleanly");
     });
 
     await runner.run("Host leaves and remaining player is promoted", async () => {

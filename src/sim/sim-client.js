@@ -294,7 +294,7 @@ export class SimClient {
     };
   }
 
-  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, slingshotEdges = [], pulse = false, ability1 = false, ability2 = false, consumeSlot = null }) {
+  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, slingshotEdges = [], pulse = false, extractConfirm = false, ability1 = false, ability2 = false, consumeSlot = null }) {
     this.seq += 1;
     const sentAt = this._nowMs();
     this.lastSentInput = {
@@ -307,6 +307,7 @@ export class SimClient {
       slingshot,
       slingshotEdges: Array.isArray(slingshotEdges) ? slingshotEdges.slice(0, 8) : [],
       pulse,
+      extractConfirm,
       ability1,
       ability2,
       consumeSlot,

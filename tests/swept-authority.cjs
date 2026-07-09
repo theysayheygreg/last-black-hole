@@ -26,6 +26,17 @@ async function waitFor(port, read, predicate, timeoutMs = 6000) {
   throw new Error(`Timed out waiting for swept consequence: ${JSON.stringify(last)}`);
 }
 
+async function readAuthorizedEvents(port, authority, since = 0) {
+  const response = await fetch(`http://127.0.0.1:${port}/events?since=${since}`, {
+    headers: {
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+  });
+  return response.json();
+}
+
 async function withPlayer(port, clientId, work) {
   await startSimServer(port, { keepAlive: true });
   try {
@@ -36,9 +47,15 @@ async function withPlayer(port, clientId, work) {
       seed: 90317,
     });
     assert(start.status === 200 && start.body.ok, "Expected session start");
-    const join = await request(port, "/join", { clientId, name: clientId, hullType: "drifter" });
+    const join = await request(port, "/join", {
+      runId: start.body.session.runId,
+      clientId,
+      name: clientId,
+      hullType: "drifter",
+      joinTicket: start.body.joinTicket,
+    });
     assert(join.status === 200 && join.body.ok, "Expected player join");
-    await work();
+    await work(join.body.authority);
   } finally {
     await stopSimServer(port).catch(() => null);
   }
@@ -50,7 +67,7 @@ async function run() {
   await runner.run("High-speed well crossing resolves death between snapshots", async () => {
     const port = BASE_PORT;
     const clientId = "swept-well";
-    await withPlayer(port, clientId, async () => {
+    await withPlayer(port, clientId, async (authority) => {
       const initial = (await request(port, "/snapshot")).body;
       const well = initial.world.wells[0];
       const scale = initial.session.worldScale;
@@ -77,7 +94,7 @@ async function run() {
   await runner.run("High-speed wreck crossing resolves pickup between snapshots", async () => {
     const port = BASE_PORT + 1;
     const clientId = "swept-wreck";
-    await withPlayer(port, clientId, async () => {
+    await withPlayer(port, clientId, async (authority) => {
       const initial = (await request(port, "/snapshot")).body;
       const wreck = initial.world.wrecks.find((entry) => entry.alive !== false && !entry.looted && entry.loot?.length);
       assert(wreck, "Expected seeded wreck with loot");
@@ -95,13 +112,14 @@ async function run() {
         async () => (await request(port, "/snapshot")).body,
         (body) => body.players.some((player) => player.clientId === clientId && player.cargoCount > 0),
       );
-      assert(snapshot.recentEvents.some((event) =>
+      const events = await readAuthorizedEvents(port, authority);
+      assert(events.events.some((event) =>
         event.type === "player.loot" && event.payload?.clientId === clientId),
-      "Expected swept pickup to publish player.loot");
+      "Expected swept pickup to publish a private player.loot event");
     });
   });
 
-  await runner.run("High-speed portal crossing resolves extraction between snapshots", async () => {
+  await runner.run("High-speed portal crossing does not bypass explicit confirmation", async () => {
     const port = BASE_PORT + 2;
     const clientId = "swept-portal";
     await withPlayer(port, clientId, async () => {
@@ -126,14 +144,17 @@ async function run() {
         vy: 0,
         status: "alive",
       });
+      const beforeTick = initial.tick;
       const snapshot = await waitFor(
         port,
         async () => (await request(port, "/snapshot")).body,
-        (body) => body.players.some((entry) => entry.clientId === clientId && entry.status === "escaped"),
+        (body) => body.tick >= beforeTick + 3,
       );
-      assert(snapshot.recentEvents.some((event) =>
+      const crossedPlayer = snapshot.players.find((entry) => entry.clientId === clientId);
+      assert(crossedPlayer?.status !== "escaped", "A swept fly-through must not extract without confirmation");
+      assert(!snapshot.recentEvents.some((event) =>
         event.type === "player.escaped" && event.payload?.portalId === "swept-portal-target"),
-      "Expected swept extraction to publish player.escaped");
+      "A fly-through must not publish player.escaped");
     });
   });
 

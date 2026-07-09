@@ -23,6 +23,7 @@ import { InputManager } from './input.js';
 import { Composer } from './render/composer.js';
 import { fitViewport, RENDER_W, RENDER_H } from './render/viewport.js';
 import { createRendererBackend, requestedRendererBackend, requestedRenderQuality } from './render/renderer-backend.js';
+import { createPresentationFrame } from './presentation/presentation-frame.js';
 import { FluidDisplayPass } from './render/passes/fluid-display-pass.js';
 import { GainPass } from './render/passes/gain-pass.js';
 import { AccretionPass } from './render/passes/accretion-pass.js';
@@ -44,7 +45,7 @@ import { SlingshotSystem } from './slingshot.js';
 import { AudioEngine } from './audio.js';
 import { buildRunBriefing } from './signatures.js';
 import { InventorySystem } from './inventory.js';
-import { ProfileManager, UPGRADE_TRACKS, MAX_RANK, MAX_RIG_LEVEL, generatePilotName, sanitizePilotName } from './profile.js';
+import { ProfileManager, MAX_RIG_LEVEL, generatePilotName, sanitizePilotName } from './profile.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
 import { buildRunResultsViewModel, drawRunResultsOverlay } from './run-results.js';
 import { FlowField } from './sim/flow-field.js';
@@ -63,7 +64,7 @@ import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV,
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
-import { HULL_DEFINITIONS } from './content/hulls.js';
+import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
 import {
@@ -267,6 +268,7 @@ let remoteSessionHealth = null;
 let remoteSessionRequestInFlight = false;
 let remoteSessionLastFetchedAt = 0;
 let remotePendingPulse = false;
+let remotePendingExtractConfirm = false;
 let remotePendingConsumeSlot = null;
 let remotePendingSlingshotEdges = [];
 let remoteNextSlingshotEdgeId = 1;
@@ -380,6 +382,10 @@ let deleteConfirmSlot = -1;  // which slot is pending delete confirmation (-1 = 
 let recentEchoes = [];
 
 const HOME_TABS = ['SHIP', 'VAULT', 'RIG', 'CHRONICLE', 'LAUNCH'];
+const PUBLIC_HULL_COPY = Object.freeze({
+  drifter: 'current-coupled route runner',
+  breacher: 'high-burn salvage interceptor',
+});
 
 function formatClock(seconds = 0) {
   const safe = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -1673,6 +1679,7 @@ function startGame(map, seed = null) {
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
+  remotePendingExtractConfirm = false;
   remotePendingConsumeSlot = null;
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
@@ -2325,6 +2332,13 @@ function applyRemoteEvents(events) {
     remoteLastEventSeq = event.seq;
     const payload = event.payload || {};
     const isLocal = payload.clientId && payload.clientId === simClient?.clientId;
+    audioEngine.playAuthoritativeEvent?.(event, {
+      clientId: simClient?.clientId,
+      camX,
+      camY,
+      canvasW: overlayCanvas.width,
+      canvasH: overlayCanvas.height,
+    });
 
     switch (event.type) {
       case 'player.pulse':
@@ -2372,7 +2386,6 @@ function applyRemoteEvents(events) {
         // the edge-dim vignette, not a literal pointer.
         inhibitorWakeGlitchTimer = INHIBITOR_WAKE_GLITCH_DURATION;
         showInhibitorWarning('something is watching', 1, payload.intensity ?? 0.85, 3500);
-        audioEngine.playEvent?.('inhibitorWake');
         break;
       case 'inhibitor.form':
         if (payload.form === 1) {
@@ -2382,7 +2395,6 @@ function applyRemoteEvents(events) {
         } else if (payload.form === 3) {
           // The vessel is the terminal form. Loud dread.
           showInhibitorWarning('THE VESSEL', 3, payload.intensity ?? 1, 4000, 'rgba(255, 60, 140, 1.0)', { boost: 1.2 });
-          audioEngine.playEvent?.('inhibitorVessel');
         } else if (payload.form === 0) {
           // Reset — should be rare but handle it (e.g. session reset)
           showWarning('pressure relieved', 'rgba(120, 200, 180, 0.7)', 2000);
@@ -2612,6 +2624,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
+  remotePendingExtractConfirm = false;
   remotePendingConsumeSlot = null;
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
@@ -2676,6 +2689,7 @@ function transitionToRemoteGame(mapEntry, options = {}) {
       remoteSnapshot = null;
       remotePlayers = [];
       remoteSessionHealth = null;
+      remotePendingExtractConfirm = false;
       remotePendingSlingshotEdges = [];
       remoteNextSlingshotEdgeId = 1;
       remoteShipPresentation = null;
@@ -2714,6 +2728,7 @@ async function leaveRemoteSessionToHome() {
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
+  remotePendingExtractConfirm = false;
   remotePendingConsumeSlot = null;
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
@@ -2740,6 +2755,7 @@ async function restartRemoteSession() {
   remoteInventoryRequestInFlight = false;
   remoteLastEventSeq = 0;
   remotePendingPulse = false;
+  remotePendingExtractConfirm = false;
   remotePendingConsumeSlot = null;
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
@@ -2805,6 +2821,7 @@ function updateCamera(dt) {
 // holding a button would fire the action every frame instead of once.
 // Pattern: if (buttonNow && !_prevButton) { /* fires once */ }
 let _prevConfirm = false;
+let _prevExtract = false;
 let _prevPause = false;
 let _prevBack = false;
 let _prevUp = false;
@@ -3899,10 +3916,13 @@ function gameLoop(now) {
   });
 
   const confirmNow = inputManager.confirmPressed;
+  const extractNow = inputManager.extractPressed;
   const pauseNow = inputManager.pausePressed;
   const backNow = inputManager.backPressed;
   const upNow = inputManager.upPressed;
   const downNow = inputManager.downPressed;
+  const leftNow = inputManager.leftPressed;
+  const rightNow = inputManager.rightPressed;
   const pulseNow = inputManager.pulsePressed;
   const slingshotNow = inputManager.slingshotPressed;
   const inventoryNow = inputManager.inventoryPressed;
@@ -3981,7 +4001,16 @@ function gameLoop(now) {
     if (inputManager.tabLeftPressed && !_prevTabLeft) { homeTab = (homeTab - 1 + tabCount) % tabCount; audioEngine.playEvent('tabSwitch'); }
     if (inputManager.tabRightPressed && !_prevTabRight) { homeTab = (homeTab + 1) % tabCount; audioEngine.playEvent('tabSwitch'); }
 
-    if (homeTab === 0) { // SHIP — loadout management
+    if (homeTab === 0) { // SHIP — public hull selection + loadout management
+      const activeProfile = profileManager.active;
+      if (activeProfile && ((leftNow && !_prevLeft) || (rightNow && !_prevRight))) {
+        const currentIndex = Math.max(0, PUBLIC_HULL_IDS.indexOf(activeProfile.hullType));
+        const direction = rightNow && !_prevRight ? 1 : -1;
+        const nextIndex = (currentIndex + direction + PUBLIC_HULL_IDS.length) % PUBLIC_HULL_IDS.length;
+        profileManager.setHullType(PUBLIC_HULL_IDS[nextIndex]);
+        homeRigCursor = 0;
+        audioEngine.playEvent('menuMove');
+      }
       if (upNow && !_prevUp && homeShipCursor > 0) homeShipCursor--;
       if (downNow && !_prevDown && homeShipCursor < 3) homeShipCursor++;
       if (confirmNow && !_prevConfirm) {
@@ -4243,6 +4272,9 @@ function gameLoop(now) {
         if (pulseNow && !_prevPulse) {
           remotePendingPulse = true;
         }
+        if (!inventoryOpen && extractNow && !_prevExtract) {
+          remotePendingExtractConfirm = true;
+        }
         if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
           remotePendingSlingshotEdges.push(remoteNextSlingshotEdgeId++);
           if (remotePendingSlingshotEdges.length > 8) remotePendingSlingshotEdges.shift();
@@ -4255,6 +4287,7 @@ function gameLoop(now) {
           const intentX = Number.isFinite(facing) ? Math.cos(facing) : 1;
           const intentY = Number.isFinite(facing) ? Math.sin(facing) : 0;
           const sentPulse = remotePendingPulse;
+          const sentExtractConfirm = remotePendingExtractConfirm;
           const sentConsumeSlot = remotePendingConsumeSlot;
           const sentSlingshotEdges = remotePendingSlingshotEdges.slice(0, 8);
           remoteInputRequestInFlight = true;
@@ -4268,6 +4301,7 @@ function gameLoop(now) {
             slingshot: !inventoryOpen && slingshotNow,
             slingshotEdges: sentSlingshotEdges,
             pulse: sentPulse,
+            extractConfirm: sentExtractConfirm,
             ability1: inputManager.ability1 || false,
             ability2: inputManager.ability2 || false,
             consumeSlot: sentConsumeSlot,
@@ -4275,6 +4309,7 @@ function gameLoop(now) {
             remoteLastAckSeq = response.acceptedSeq ?? remoteLastAckSeq;
             syncRemoteNetworkPerfStats();
             if (sentPulse) remotePendingPulse = false;
+            if (sentExtractConfirm) remotePendingExtractConfirm = false;
             const acceptedEdges = Array.isArray(response.acceptedSlingshotEdges)
               ? new Set(response.acceptedSlingshotEdges)
               : new Set(sentSlingshotEdges);
@@ -4570,12 +4605,13 @@ function gameLoop(now) {
   updateUiMotion(rawDt);
 
   _prevConfirm = confirmNow;
+  _prevExtract = extractNow;
   _prevPause = pauseNow;
   _prevBack = backNow;
   _prevUp = upNow;
   _prevDown = downNow;
-  _prevLeft = inputManager.leftPressed;
-  _prevRight = inputManager.rightPressed;
+  _prevLeft = leftNow;
+  _prevRight = rightNow;
   _prevTabLeft = inputManager.tabLeftPressed;
   _prevTabRight = inputManager.tabRightPressed;
   _prevDelete = inputManager.deletePressed;
@@ -4662,27 +4698,24 @@ function gameLoop(now) {
   // overlays, but should use the same visible well/accretion tuning as title.
   applyRenderTuningForPhase(gamePhase === 'title' || rendererFixtureActive);
   const vfxEvents = collectFrameVfxEvents(ctx, overlayCanvas.width, overlayCanvas.height);
+  const presentation = createPresentationFrame({
+    dt,
+    camX,
+    camY,
+    gridWindow: GRID_WINDOW,
+    cameraView: CAMERA_VIEW,
+    worldScale: WORLD_SCALE,
+    totalTime,
+    phase: gamePhase,
+    runId: remoteSnapshot?.session?.runId || null,
+    frameId: remoteSnapshot?.snapshotId || Math.floor(totalTime * 60),
+    scene: collectThreeSceneState(),
+    vfxEvents,
+    vfxConfig: CONFIG.vfx,
+  }, { qualityTier: rendererBackend?.renderQuality });
   const composerStart = performance.now();
   rendererBackend.render({
-    three: {
-      dt,
-      camX,
-      camY,
-      gridWindow: GRID_WINDOW,
-      cameraView: CAMERA_VIEW,
-      worldScale: WORLD_SCALE,
-      totalTime,
-      ship: ship ? {
-        wx: ship.wx,
-        wy: ship.wy,
-        vx: ship.vx,
-        vy: ship.vy,
-      } : null,
-      phase: gamePhase,
-      scene: collectThreeSceneState(),
-      vfxEvents,
-      vfxConfig: CONFIG.vfx,
-    },
+    presentation,
     fluidDisplay: {
       wellUVs, wellMasses, wellShapes,
       camFU, camFV,
@@ -5299,6 +5332,10 @@ function gameLoop(now) {
 
     // Update HUD during gameplay
     const cargoItems = inventorySystem.getCargoItems();
+    const authoritativePlayer = remoteAuthorityActive
+      ? remoteSnapshot?.players?.find((player) => player.clientId === simClient?.clientId)
+      : null;
+    const portalInteraction = authoritativePlayer?.portalInteraction;
     updateHUD(simState.runElapsedTime, portalSystem, cargoItems, simState.growthTimer, {
       scavengerSystem,
       combatSystem,
@@ -5311,6 +5348,18 @@ function gameLoop(now) {
       inhibitorState,
       ship,
       fuelRatio: ship.getDeltaVRatio(),
+      hullState: authoritativePlayer ? {
+        status: authoritativePlayer.status,
+        shieldCharges: authoritativePlayer.effectState?.shieldCharges || 0,
+        graceRemaining: authoritativePlayer.effectState?.hullGraceRemaining || 0,
+        ratio: authoritativePlayer.status === 'dead' ? 0 : 1,
+      } : { status: ship.status || 'alive', ratio: ship.status === 'dead' ? 0 : 1 },
+      interaction: portalInteraction?.ready ? {
+        action: 'extract',
+        label: 'confirm extraction',
+        detail: 'remain inside cyan aperture',
+        verb: 'extract',
+      } : null,
       deckMode: isDeckMode(),
       lastInputSource: inputManager.lastInputSource,
       camX, camY,
@@ -5712,26 +5761,38 @@ function gameLoop(now) {
       });
 
       ctx.textAlign = 'left';
-      let sy = centerY + 60;
-      const tracks = Object.keys(UPGRADE_TRACKS);
-      for (const track of tracks) {
-        if (track === 'vault') continue;
-        const rank = p.upgrades[track] || 0;
-        const td = UPGRADE_TRACKS[track];
-        ctx.fillStyle = rank > 0 ? roleColor('ecology', 0.84) : roleColor('muted', 0.58);
-        ctx.font = canvasFont(11);
-        ctx.fillText(td.label.toUpperCase(), centerX, sy);
-        drawSegmentedGauge(ctx, { x: centerX + 122, y: sy - 10, w: 146, h: 10 }, {
-          value: rank,
-          max: MAX_RANK,
-          segments: MAX_RANK,
-          role: rank > 0 ? 'ecology' : 'muted',
-          alpha: 0.88,
-        });
-        sy += 22;
+      let sy = centerY + 58;
+      drawSectionLabel(ctx, 'flight hull', centerX, sy, { role: 'flow', alpha: 0.86 });
+      sy += 20;
+      for (const publicHullId of PUBLIC_HULL_IDS) {
+        const selected = publicHullId === hullType;
+        const definition = HULL_DEFINITIONS[publicHullId];
+        ctx.font = canvasFont(12, { weight: selected ? '700' : '500' });
+        ctx.fillStyle = selected ? roleColor('text', 0.96) : roleColor('muted', 0.55);
+        ctx.fillText(`${selected ? '>' : ' '} ${String(definition?.name || publicHullId).toUpperCase()}`, centerX, sy);
+        ctx.fillStyle = selected ? roleColor('flow', 0.8) : roleColor('muted', 0.4);
+        ctx.font = canvasFont(10);
+        ctx.fillText(
+          fitUiText(ctx, String(PUBLIC_HULL_COPY[publicHullId] || 'flight-ready hull').toUpperCase(), 220),
+          centerX + 100,
+          sy
+        );
+        sy += 18;
       }
+      ctx.font = canvasFont(9);
+      ctx.fillStyle = roleColor('muted', 0.64);
+      ctx.fillText(`${prompt('hullPrev', 'previous hull')}  //  ${prompt('hullNext', 'next hull')}`.toUpperCase(), centerX, sy + 2);
+      sy += 20;
 
-      sy += 10;
+      const rigDefinitions = Object.values(RIG_TRACKS[hullType] || {});
+      const rigLevels = Array.isArray(p.rigLevels) ? p.rigLevels : [];
+      ctx.font = canvasFont(10);
+      ctx.fillStyle = roleColor('ecology', 0.78);
+      ctx.fillText(fitUiText(ctx, rigDefinitions.map((track, index) =>
+        `${String(track.name).toUpperCase()} ${rigLevels[index] || 0}/${MAX_RIG_LEVEL}`
+      ).join('  //  '), centerTextW * 0.66), centerX, sy);
+      sy += 22;
+
       drawSectionLabel(ctx, 'loadout', centerX, sy, { role: 'salvage', alpha: 0.86 });
       sy += 20;
       ctx.font = canvasFont(12);

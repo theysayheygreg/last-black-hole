@@ -18,6 +18,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "RouteBriefing",
+    file: "route-briefing.cjs",
+    lanes: ["core", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "Items",
     file: "items.cjs",
     lanes: ["fast", "core", "static", "full"],
@@ -48,9 +54,21 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "ProtocolV2Authority",
+    file: "protocol-v2-authority.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
     lanes: ["static", "full"],
+    browser: false,
+  },
+  {
+    name: "AudioEvents",
+    file: "audio-events.cjs",
+    lanes: ["fast", "core", "static", "full"],
     browser: false,
   },
   {
@@ -267,6 +285,24 @@ const SUITES = [
     name: "VFX",
     file: "vfx.cjs",
     lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "PresentationFrame",
+    file: "presentation-frame.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "ThreeEntityLifecycle",
+    file: "three-entity-lifecycle.cjs",
+    lanes: ["fast", "core", "static", "three", "full"],
+    browser: false,
+  },
+  {
+    name: "HudDeck",
+    file: "hud-deck.cjs",
+    lanes: ["core", "visual", "playtest", "full"],
     browser: false,
   },
   {

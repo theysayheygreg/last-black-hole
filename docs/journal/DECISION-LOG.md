@@ -1,5 +1,60 @@
 # Decision Log
 
+## 2026-07-09 — Protocol v2 binds commands to run and player authority
+
+**Decision:** Every gameplay mutation carries the active run, player authority,
+and a monotonic command identity backed by a server-issued credential. Shared
+snapshots omit private event tails, and event reads filter player-local facts.
+
+**Why:** Client ids are labels, not authority. Future multiplayer and reconnect
+traffic need deterministic rejection of stale runs, reordered commands, and
+cross-player mutation before more entities or prediction increase the blast
+radius.
+
+**Door status:** Closed for raw client-id-only mutations and successful stale
+input no-ops. Open for transport encryption and internet-facing identity when
+LBH leaves trusted local/embedded networks.
+
+## 2026-07-09 — Routes are seeded authoritative content
+
+**Decision:** A map route is authored metadata whose briefing, anchors,
+signature, named wells, and initial loot derive from the same seed the server
+launches. Shallows teaches slingshot, salvage, signal, then confirmed cyan
+extraction; larger maps vary route shape rather than merely adding objects.
+
+**Why:** A beautiful preview that describes a different run is false UI. Route
+truth must survive the client/sim boundary before it can teach movement.
+
+**Door status:** Closed for unseeded client-only briefing rolls. Open for route
+tuning after natural journey evidence.
+
+## 2026-07-09 — Three consumes renderer-neutral presentation frames
+
+**Decision:** Three receives sanitized presentation frames and lifecycle-owned
+visual families. Projection, quality, and palette roles are shared presentation
+policy; gameplay consequences remain sim-owned and the ASCII fabric remains the
+dominant product surface.
+
+**Why:** A renderer should be replaceable without rewriting authority, and
+entity managers must have bounded create/update/dispose behavior instead of
+growing beside the scene graph.
+
+**Door status:** Closed for new ad hoc entity managers and sim-internal payloads
+inside Three. Open for richer assets and VFX behind the same frame contract.
+
+## 2026-07-09 — Deck HUD uses stable rails and event audio budgets
+
+**Decision:** The in-match HUD has non-overlapping 1280x800 rails, minimum text
+and gauge sizes, command/caption separation, and reduced-motion rules. New
+authoritative audio cues enter through a bounded voice budget.
+
+**Why:** Readability and audible consequence are product behavior on a couch,
+not optional desktop polish. Event bursts also need resource ownership just as
+renderer objects do.
+
+**Door status:** Closed for overlapping handheld HUD clusters and unbounded
+event voices. Physical Deck taste remains a release gate.
+
 ## 2026-07-09 — Authority budgets measure rates and bytes, not only counts
 
 **Decision:** Keep bounded-count canaries, but require a Deep Field authority

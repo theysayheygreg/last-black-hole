@@ -15,10 +15,19 @@ const {
 } = require("./coarse-flow-field.cjs");
 const { normalizeFlowSample } = require("./flow-sample.cjs");
 const {
+  PUBLIC_HULL_IDS,
   PERSONALITY_HULL_MAP,
   HULL_DEFINITIONS,
   RIG_TRACKS,
 } = require("./content/hulls.cjs");
+
+function normalizePublicHullType(...candidates) {
+  for (const candidate of candidates) {
+    const normalized = String(candidate || "").trim().toLowerCase();
+    if (PUBLIC_HULL_IDS.includes(normalized)) return normalized;
+  }
+  return PUBLIC_HULL_IDS[0] || "drifter";
+}
 const {
   wreckAgeValueMultiplier,
   survivalBonusEm,
@@ -905,6 +914,8 @@ const PLAYER_LOCAL_EVENT_TYPES = new Set([
   "player.inventoryAction",
   "player.loot",
   "player.effectUsed",
+  "player.portalProximity",
+  "player.portalConfirmed",
   "signal.zoneCrossing",
   "inhibitor.drainCargo",
 ]);
@@ -1153,6 +1164,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       slingshot: false,
       slingshotEdges: [],
       pulse: false,
+      extractConfirm: false,
       ability1: false,
       ability2: false,
       consumeSlot: null,
@@ -1175,6 +1187,7 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       prevZone: "ghost",
     },
     controlDebuff: 0,
+    portalInteraction: null,
     slingshot: {
       engaged: false,
       anchorId: null,
@@ -1650,6 +1663,7 @@ function buildSnapshotBody() {
       consumables: player.consumables,
       activeEffects: player.activeEffects,
       effectState: player.effectState,
+      portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
       signal: player.signal,
       controlDebuff: player.controlDebuff || 0,
     })),
@@ -2230,6 +2244,8 @@ function tickPortals(dt) {
     if (remaining <= 0) {
       portal.alive = false;
       portal.opacity = 0;
+      const handle = runtime.ballparkMirror?.getHandleById(`portal:${portal.id}`);
+      if (handle) runtime.ballparkMirror.setLifecycle(handle, "dead", { tick: runtime.tick });
       publishEvent("portal.expired", {
         portalId: portal.id,
         type: portal.type,
@@ -2781,24 +2797,9 @@ function pickupRadiusForPlayer(player) {
   return 0.08 * (player.brain ? player.brain.pickupRadius : 1.0);
 }
 
-function legacyPickupWreckCandidates(player, wrecks, limit) {
-  return collectNearestByDistance(
-    player.wx,
-    player.wy,
-    wrecks.filter((wreck) => wreck.alive !== false && !wreck.looted && wreck.pickupCooldown <= 0),
-    limit
-  );
-}
-
 function collectPickupWreckCandidates(player, wrecks, pickupDist, limit) {
   const mirror = runtime.ballparkMirror;
-  const mirrorStats = mirror?.stats?.();
-  if (!mirror || !mirrorStats?.activeBodyCount) {
-    return {
-      mode: "legacy",
-      candidates: legacyPickupWreckCandidates(player, wrecks, limit),
-    };
-  }
+  if (!mirror) throw new Error("Ballpark is required for authoritative pickup queries");
 
   const materializedById = indexEntitiesById(wrecks);
   const { bodies } = collectNearestBodies(mirror, { wx: player.wx, wy: player.wy }, {
@@ -2819,31 +2820,17 @@ function collectPickupWreckCandidates(player, wrecks, pickupDist, limit) {
     if (!wreck || wreck.alive === false || wreck.looted || wreck.pickupCooldown > 0) continue;
     ranked.push({
       entity: wreck,
+      handle: mirror.getHandleById(hit.id),
       dist: worldDistance(player.wx, player.wy, wreck.wx, wreck.wy, runtime.session.worldScale),
     });
   }
   ranked.sort((a, b) => a.dist - b.dist);
-  return { mode: "ballpark", candidates: ranked.slice(0, limit) };
-}
-
-function legacyPortalExtractionCandidates(player, portals, limit) {
-  return collectNearestByDistance(
-    player.wx,
-    player.wy,
-    portals.filter(isPortalAvailable),
-    limit
-  );
+  return { candidates: ranked.slice(0, limit) };
 }
 
 function collectPortalExtractionCandidates(player, portals, captureDist, limit) {
   const mirror = runtime.ballparkMirror;
-  const mirrorStats = mirror?.stats?.();
-  if (!mirror || !mirrorStats?.activeBodyCount) {
-    return {
-      mode: "legacy",
-      candidates: legacyPortalExtractionCandidates(player, portals, limit),
-    };
-  }
+  if (!mirror) throw new Error("Ballpark is required for authoritative portal queries");
 
   const materializedById = indexEntitiesById(portals);
   const { bodies } = collectNearestBodies(mirror, { wx: player.wx, wy: player.wy }, {
@@ -2862,11 +2849,12 @@ function collectPortalExtractionCandidates(player, portals, captureDist, limit) 
     if (!portal || !isPortalAvailable(portal)) continue;
     ranked.push({
       entity: portal,
+      handle: mirror.getHandleById(hit.id),
       dist: worldDistance(player.wx, player.wy, portal.wx, portal.wy, runtime.session.worldScale),
     });
   }
   ranked.sort((a, b) => a.dist - b.dist);
-  return { mode: "ballpark", candidates: ranked.slice(0, limit) };
+  return { candidates: ranked.slice(0, limit) };
 }
 
 function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = null) {
@@ -2896,7 +2884,7 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
   const nearbyWrecks = [...nearbyById.values()]
     .sort((a, b) => a.contactT - b.contactT || a.dist - b.dist)
     .slice(0, limit);
-  for (const { entity: wreck, dist, contactT } of nearbyWrecks) {
+  for (const { entity: wreck, handle, dist, contactT } of nearbyWrecks) {
     if (contactT >= 1 && dist >= pickupDist) continue;
 
     // Wreck age scales EM sell value only, not artifact coefficients.
@@ -2914,6 +2902,8 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
     }
     if (!wreck.loot || wreck.loot.length === 0) {
       wreck.looted = true;
+      const lifecycleHandle = handle || runtime.ballparkMirror.getHandleById(`wreck:${wreck.id}`);
+      if (lifecycleHandle) runtime.ballparkMirror.setLifecycle(lifecycleHandle, "dead", { tick: runtime.tick });
     }
     // Track the peak cargo value this player ever held during the cycle.
     // Used later to tier-rate their chronicle echo wreck if they die.
@@ -2940,7 +2930,20 @@ function tickPlayerPickups(player, wrecks = runtime.mapState.wrecks, sweep = nul
   }
 }
 
-function tickExtraction(player, sweep = null) {
+function clearPortalInteraction(player, reason = "left-zone") {
+  if (!player.portalInteraction) return;
+  const previous = player.portalInteraction;
+  player.portalInteraction = null;
+  publishEvent("player.portalProximity", {
+    clientId: player.clientId,
+    portalId: previous.portalId,
+    portalType: previous.portalType,
+    entered: false,
+    reason,
+  });
+}
+
+function tickExtraction(player, confirmRequested = false) {
   if (player.status !== "alive") return;
   const portals = runtime.mapState.portals;
   const maxCaptureDist = portals.reduce((best, portal) => {
@@ -2949,40 +2952,50 @@ function tickExtraction(player, sweep = null) {
   }, 0.08);
   const limit = clampBudgetCount(runtime.session.maxPortalChecksPerPlayer || portals.length || 1, portals.length || 1);
   const { candidates: endpointCandidates } = collectPortalExtractionCandidates(player, portals, maxCaptureDist, limit);
-  const nearbyById = new Map(endpointCandidates.map((candidate) => [String(candidate.entity.id), {
-    ...candidate,
-    contactT: 1,
-  }]));
-  if (sweep) {
-    for (const portal of portals) {
-      if (!isPortalAvailable(portal)) continue;
-      const hit = sweptEntityContact(sweep, portal, portalCaptureRadius(portal));
-      if (!hit) continue;
-      const key = String(portal.id);
-      const existing = nearbyById.get(key);
-      if (!existing || hit.t < existing.contactT) {
-        nearbyById.set(key, { entity: portal, dist: hit.distance ?? 0, contactT: hit.t });
-      }
-    }
+  const portalHit = endpointCandidates
+    .filter(({ entity: portal, dist }) => dist < portalCaptureRadius(portal))
+    .sort((a, b) => a.dist - b.dist)[0] || null;
+
+  if (!portalHit) {
+    clearPortalInteraction(player);
+    return;
   }
-  const nearbyPortals = [...nearbyById.values()]
-    .sort((a, b) => a.contactT - b.contactT || a.dist - b.dist)
-    .slice(0, limit);
-  for (const { entity: portal, dist, contactT } of nearbyPortals) {
-    if (contactT < 1 || dist < portalCaptureRadius(portal)) {
-      player.status = "escaped";
-      player.vx = 0;
-      player.vy = 0;
-      commitPlayerOutcome(player, "escaped");
-      publishEvent("player.escaped", {
-        clientId: player.clientId,
-        portalId: portal.id,
-        portalType: portal.type,
-        cargoCount: getCargoCount(player),
-      });
-      return;
-    }
+
+  const portal = portalHit.entity;
+  const samePortal = player.portalInteraction?.portalId === portal.id;
+  if (!samePortal) {
+    clearPortalInteraction(player, "changed-zone");
+    player.portalInteraction = {
+      portalId: portal.id,
+      portalType: portal.type,
+      enteredTick: runtime.tick,
+      ready: true,
+    };
+    publishEvent("player.portalProximity", {
+      clientId: player.clientId,
+      portalId: portal.id,
+      portalType: portal.type,
+      entered: true,
+    });
   }
+
+  if (!confirmRequested) return;
+  publishEvent("player.portalConfirmed", {
+    clientId: player.clientId,
+    portalId: portal.id,
+    portalType: portal.type,
+  });
+  player.status = "escaped";
+  player.vx = 0;
+  player.vy = 0;
+  player.portalInteraction = null;
+  commitPlayerOutcome(player, "escaped");
+  publishEvent("player.escaped", {
+    clientId: player.clientId,
+    portalId: portal.id,
+    portalType: portal.type,
+    cargoCount: getCargoCount(player),
+  });
 }
 
 function refreshPlayerEffects(player) {
@@ -3228,6 +3241,15 @@ function applyInventoryAction(player, actionMessage) {
 }
 
 function applyDebugPlayerState(player, body) {
+  if (typeof body.hullType === "string" && HULL_DEFINITIONS[body.hullType]) {
+    // Internal hulls stay out of the public join contract, but targeted
+    // authority tests still need a harness-only way to exercise their rules.
+    player.hullType = normalizeHullType(body.hullType);
+    player.rigLevels = normalizeRigLevels(body.rigLevels, player.hullType);
+    refreshPlayerBrain(player);
+    player.abilityState = createAbilityState(player.hullType, player.brain);
+    refreshPlayerEffects(player);
+  }
   if (Number.isFinite(Number(body.wx))) player.wx = wrapWorldPosition(Number(body.wx), runtime.session.worldScale);
   if (Number.isFinite(Number(body.wy))) player.wy = wrapWorldPosition(Number(body.wy), runtime.session.worldScale);
   if (Number.isFinite(Number(body.vx))) player.vx = Number(body.vx);
@@ -3454,7 +3476,7 @@ function buildRelevanceView() {
   const entityRadius = runtime.session.entityRelevanceRadius || runtime.session.worldScale;
   const scavengerRadius = runtime.session.scavengerRelevanceRadius || entityRadius;
   const relevanceStats = {
-    mode: "legacy",
+    mode: "ballpark",
     tick: runtime.tick,
     simTime: runtime.simTime,
     categories: {},
@@ -3463,7 +3485,7 @@ function buildRelevanceView() {
   if (alivePlayers.length === 0) {
     relevanceStats.mode = "empty";
     relevanceStats.categories.scavenger = {
-      mode: "legacy",
+      mode: "empty",
       selectedCount: runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state === "dying").length,
       reason: "no-alive-players",
     };
@@ -3475,37 +3497,6 @@ function buildRelevanceView() {
       planetoids: [],
       scavengers: runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state === "dying"),
     };
-  }
-
-  function collectRelevantEntitiesLegacy(entities, radius, perPlayerLimit, category) {
-    const limit = clampBudgetCount(perPlayerLimit, entities.length || 1);
-    const selectedIds = new Set();
-    const selected = [];
-
-    for (const player of alivePlayers) {
-      const candidates = [];
-      for (const entity of entities) {
-        if (!entity || entity.alive === false) continue;
-        const dist = worldDistance(entity.wx, entity.wy, player.wx, player.wy, runtime.session.worldScale);
-        if (dist > radius) continue;
-        candidates.push({ entity, dist });
-      }
-      candidates.sort((a, b) => a.dist - b.dist);
-      for (let i = 0; i < Math.min(limit, candidates.length); i++) {
-        const entity = candidates[i].entity;
-        if (selectedIds.has(entity.id)) continue;
-        selectedIds.add(entity.id);
-        selected.push(entity);
-      }
-    }
-
-    relevanceStats.categories[category] = {
-      mode: "legacy",
-      radius,
-      perPlayerLimit: limit,
-      selectedCount: selected.length,
-    };
-    return selected;
   }
 
   function collectRelevantEntities(entities, radius, perPlayerLimit, category, query) {
@@ -3520,41 +3511,36 @@ function buildRelevanceView() {
     }
 
     const mirror = runtime.ballparkMirror;
-    const mirrorStats = mirror?.stats?.();
-    if (mirror && mirrorStats?.activeBodyCount > 0) {
-      const { bodies, stats } = collectRelevantBodies(mirror, alivePlayers, {
-        category,
-        radius,
-        perOriginLimit: clampBudgetCount(perPlayerLimit, entities.length || 1),
-        query,
-      });
-      const byId = indexEntitiesById(entities);
-      const selected = [];
-      let missingEntityCount = 0;
-      let inactiveEntityCount = 0;
-      for (const hit of bodies) {
-        const entity = byId.get(String(hit.sourceId));
-        if (!entity) {
-          missingEntityCount += 1;
-          continue;
-        }
-        if (entity.alive === false) {
-          inactiveEntityCount += 1;
-          continue;
-        }
-        selected.push(entity);
+    if (!mirror) throw new Error("Ballpark is required for authoritative relevance queries");
+    const { bodies, stats } = collectRelevantBodies(mirror, alivePlayers, {
+      category,
+      radius,
+      perOriginLimit: clampBudgetCount(perPlayerLimit, entities.length || 1),
+      query,
+    });
+    const byId = indexEntitiesById(entities);
+    const selected = [];
+    let missingEntityCount = 0;
+    let inactiveEntityCount = 0;
+    for (const hit of bodies) {
+      const entity = byId.get(String(hit.sourceId));
+      if (!entity) {
+        missingEntityCount += 1;
+        continue;
       }
-      relevanceStats.mode = "ballpark";
-      relevanceStats.categories[category] = {
-        ...stats,
-        materializedCount: selected.length,
-        missingEntityCount,
-        inactiveEntityCount,
-      };
-      return selected;
+      if (entity.alive === false) {
+        inactiveEntityCount += 1;
+        continue;
+      }
+      selected.push(entity);
     }
-
-    return collectRelevantEntitiesLegacy(entities, radius, perPlayerLimit, category);
+    relevanceStats.categories[category] = {
+      ...stats,
+      materializedCount: selected.length,
+      missingEntityCount,
+      inactiveEntityCount,
+    };
+    return selected;
   }
 
   const dyingScavengers = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state === "dying");
@@ -3768,6 +3754,8 @@ function tickScavengers(dt, scavengers = runtime.mapState.scavengers) {
         if (dist < SCAVENGER_CONFIG.pickupRadius) {
           scav.lootCount += Math.max(1, wreck.loot?.length || 1);
           wreck.looted = true;
+          const handle = runtime.ballparkMirror?.getHandleById(`wreck:${wreck.id}`);
+          if (handle) runtime.ballparkMirror.setLifecycle(handle, "dead", { tick: runtime.tick });
           publishEvent("scavenger.loot", {
             scavengerId: scav.id,
             wreckId: wreck.id,
@@ -5732,6 +5720,12 @@ function tickSim() {
       input = player.lastInput;
     }
 
+    const extractConfirm = Boolean(input.extractConfirm);
+    if (extractConfirm) {
+      player.lastInput = { ...player.lastInput, extractConfirm: false };
+      input = player.lastInput;
+    }
+
     const playerDt =
       player.effectState.timeSlowRemaining > 0
         ? dt * SERVER_COMBAT.timeSlowScale
@@ -5775,7 +5769,7 @@ function tickSim() {
     applyScavengerBump(player, relevance.scavengers, sweep);
 
     tickPlayerPickups(player, relevance.wrecks, sweep);
-    tickExtraction(player, sweep);
+    tickExtraction(player, extractConfirm);
     if (player.status !== "alive") continue;
     tickPlayerSignal(player, playerDt);
   }
@@ -6116,7 +6110,13 @@ const server = http.createServer(async (req, res) => {
               fallbackName: body.name,
             })
           : null;
-        const explicitHullType = normalizeHullType(body.hullType, durableProfile?.hullType || durableProfile?.shipType || body.profileSnapshot?.hullType || body.profileSnapshot?.shipType);
+        const explicitHullType = normalizePublicHullType(
+          body.hullType,
+          durableProfile?.hullType,
+          durableProfile?.shipType,
+          body.profileSnapshot?.hullType,
+          body.profileSnapshot?.shipType
+        );
         const durableLoadout = cloneProfileLoadout(durableProfile);
         const equipped = durableProfile ? durableLoadout.equipped : cloneLoadoutItems(body.equipped);
         const consumables = durableProfile ? durableLoadout.consumables : cloneLoadoutItems(body.consumables);
@@ -6157,8 +6157,8 @@ const server = http.createServer(async (req, res) => {
           player.profileUpgrades = normalizeProfileUpgrades(body.profileSnapshot.upgrades);
         }
         if (body.profileSnapshot?.shipType) {
-          player.profileShipType = body.profileSnapshot.shipType;
-          player.hullType = normalizeHullType(player.hullType, player.profileShipType);
+          player.profileShipType = normalizePublicHullType(body.profileSnapshot.shipType);
+          player.hullType = normalizePublicHullType(player.profileShipType, player.hullType);
         }
         if (Array.isArray(body.equipped)) {
           player.equipped = cloneLoadoutItems(body.equipped);
@@ -6194,7 +6194,12 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, error: "Unknown profile" });
         return;
       }
-      sendJson(res, 200, { ok: true, profile });
+      const recentRuns = await controlPlane.getRecentRuns(profileId, 5);
+      sendJson(res, 200, {
+        ok: true,
+        profile: { ...profile, runRecords: recentRuns },
+        recentRuns,
+      });
       return;
     }
 
@@ -6268,6 +6273,7 @@ const server = http.createServer(async (req, res) => {
         ...inputState,
         slingshotEdges: mergePendingSlingshotEdges(player, acceptedSlingshotEdges),
         pulse: Boolean(player.lastInput.pulse || message.pulse),
+        extractConfirm: Boolean(player.lastInput.extractConfirm || message.extractConfirm),
         consumeSlot:
           message.consumeSlot === null || message.consumeSlot === undefined
             ? player.lastInput.consumeSlot

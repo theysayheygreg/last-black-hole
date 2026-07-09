@@ -33,11 +33,17 @@ async function waitForSnapshot(predicate, timeoutMs = 5000) {
   throw new Error(`Timed out waiting for snapshot. Last tick=${last?.tick} simTime=${last?.simTime}`);
 }
 
-async function waitForEvents(sinceSeq, predicate, timeoutMs = 5000) {
+async function waitForEvents(sinceSeq, predicate, authority, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   let lastEvents = [];
   while (Date.now() < deadline) {
-    const { body } = await getJson(`/events?since=${sinceSeq}`);
+    const { body } = await getJson(`/events?since=${sinceSeq}`, authority ? {
+      headers: {
+        "x-lbh-command-credential": authority.commandCredential,
+        "x-lbh-player-id": authority.playerId,
+        "x-lbh-run-id": authority.runId,
+      },
+    } : undefined);
     lastEvents = body.events || [];
     if (predicate(lastEvents)) return lastEvents;
     await sleep(100);
@@ -91,8 +97,10 @@ async function run() {
       assert(start.status === 200 && start.body.ok === true, `Expected start success, got ${start.status}`);
 
       const join = await postJson("/join", {
+        runId: start.body.session.runId,
         clientId: "ballpark-pickup-test",
         name: "Ballpark Pickup Test",
+        joinTicket: start.body.joinTicket,
       });
       assert(join.status === 200 && join.body.ok === true, `Expected join success, got ${join.status}`);
 
@@ -114,7 +122,7 @@ async function run() {
 
       const events = await waitForEvents(eventWatermark, (allEvents) =>
         allEvents.some((event) => event.type === "player.loot" && event.payload?.wreckId === target.id)
-      );
+      , join.body.authority);
       const lootEvent = events.find((event) => event.type === "player.loot" && event.payload?.wreckId === target.id);
       assert(lootEvent, `Expected player.loot event for ${target.id}`);
 
