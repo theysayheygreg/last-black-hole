@@ -1,9 +1,10 @@
 /**
- * signatures.js — cosmic signatures. Per-run universe personality.
+ * signatures.js — seeded run briefing and cosmic-signature helpers.
  *
- * Each signature defines flavor text, config overrides, and layout hints
- * that shape a run's feel. Pure data + selection logic — no audio or
- * visual dependencies.
+ * buildRunBriefing() is the live preview contract. It consumes the same named
+ * RNG streams as the authoritative sim, using the selected map's real entity
+ * counts. The older template helpers remain available for design experiments,
+ * but they do not describe a launched authoritative run.
  *
  * Selection: rollSignature(mapScale) picks a random signature whose
  * mapSizes includes the current scale, with streak protection (never
@@ -19,6 +20,8 @@
  */
 
 import { CONFIG } from './config.js';
+import { createRNGStreams } from './rng-stream.js';
+import { generateWreckLoot, pickCosmicSignature, WELL_NAMES } from './seeded-generation.js';
 import {
   SIGNATURE_DEFINITIONS,
   SIGNATURE_POOLS_BY_MAP_SIZE,
@@ -27,7 +30,64 @@ import {
 
 export { SIGNATURE_DEFINITIONS, SIGNATURE_POOLS_BY_MAP_SIZE, LAYOUT_MULTIPLIERS };
 
-// ---- Selection ----
+function cloneRoute(route) {
+  return route ? JSON.parse(JSON.stringify(route)) : null;
+}
+
+/**
+ * Build the exact seeded facts shown before launch.
+ *
+ * Named RNG streams make unrelated generation order irrelevant. The explicit
+ * burns below only mirror calls made on the same stream by applyRunSeed().
+ */
+export function buildRunBriefing(map, seed) {
+  const runSeed = Number.isFinite(Number(seed)) ? Number(seed) : 1;
+  const rng = createRNGStreams(runSeed);
+  const wellCount = Array.isArray(map?.wells) ? map.wells.length : 0;
+  const wreckCount = Array.isArray(map?.wrecks) ? map.wrecks.length : 0;
+  const wellNames = [];
+
+  for (let i = 0; i < wellCount; i++) {
+    rng.range('wellMass', 0.85, 1.15);
+    rng.range('wellGrowth', 0.80, 1.20);
+    rng.float('wellDir');
+    wellNames.push(rng.pick('wellNames', WELL_NAMES));
+  }
+
+  const lootQualityBias = rng.range('qualityBias', 0.8, 1.2);
+  const signature = pickCosmicSignature(rng.rawStream('signature'));
+
+  // Initial wrecks use their own stream and a neutral quality bias in the sim.
+  // Keeping the full per-wreck list lets tests compare preview and snapshot.
+  const initialLootStream = rng.rawStream('initialWreckLoot');
+  const initialWrecks = [];
+  for (let i = 0; i < wreckCount; i++) {
+    const slots = 1 + Math.floor(initialLootStream() * 2);
+    initialWrecks.push({
+      index: i,
+      loot: generateWreckLoot(initialLootStream, 0, slots, 1.0),
+    });
+  }
+
+  const route = cloneRoute(map?.route);
+  return {
+    seed: runSeed,
+    mapId: map?.id || null,
+    mapName: map?.name || 'Unknown Route',
+    worldScale: Number(map?.worldScale) || 1,
+    wellCount,
+    wreckCount,
+    wellNames,
+    signature: signature ? { ...signature } : null,
+    lootQualityBias,
+    initialWrecks,
+    sampleLoot: initialWrecks.flatMap((wreck) => wreck.loot).slice(0, 4),
+    route,
+    objective: route?.objective || 'survey the fabric and find a viable exit.',
+  };
+}
+
+// ---- Dormant template selection ----
 
 let _lastSignature = null;
 

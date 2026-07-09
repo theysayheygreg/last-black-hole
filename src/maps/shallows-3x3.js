@@ -2,8 +2,26 @@
  * shallows-3x3.js — The original 3×3 layout, extracted verbatim from main.js init().
  */
 export const MAP = {
+  id: 'shallows',
   name: 'The Shallows',
   worldScale: 3.0,
+  route: {
+    id: 'first-current',
+    name: 'the first current',
+    identity: 'guided orbit',
+    objective: 'ride a well, strip a wreck, survive the answer, then confirm a cyan aperture.',
+    briefing: [
+      'ride a well. strip a sheltered wreck.',
+      'survive the answer. confirm cyan.',
+    ],
+    portalPalette: 'cyan',
+    stages: [
+      { id: 'ride', kind: 'slingshot', label: 'catch the outer current', anchor: { entity: 'well', index: 1 } },
+      { id: 'loot', kind: 'salvage', label: 'strip the sheltered wreck', anchor: { entity: 'wreck', index: 0 } },
+      { id: 'answer', kind: 'signal', label: 'hold through the answer' },
+      { id: 'extract', kind: 'portal', label: 'confirm the cyan aperture', confirm: true },
+    ],
+  },
   wells: [
     { x: 1.0, y: 1.2, mass: 1.5, orbitalDir: 1, killRadius: 0.06, spinRate: 0.6, points: 8 },
     { x: 2.1, y: 0.9, mass: 0.8, orbitalDir: -1, killRadius: 0.035, spinRate: 1.4, points: 4 },

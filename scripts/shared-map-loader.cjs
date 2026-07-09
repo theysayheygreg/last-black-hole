@@ -39,6 +39,9 @@ function normalizeMap(mapId, map) {
     name: map.name,
     worldScale: map.worldScale,
     fluidResolution: map.fluidResolution || 256,
+    // Route metadata is static map truth. Runtime entities still own every
+    // gameplay consequence; the route only names their intended sequence.
+    route: map.route ? JSON.parse(JSON.stringify(map.route)) : null,
     wells: cloneEntityArray(map.wells, "well", (w, _index, id) => ({
       id,
       wx: w.x,

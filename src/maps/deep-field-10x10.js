@@ -5,8 +5,26 @@
  * Hz / fluid res / pressure overrides needed.
  */
 export const MAP = {
+  id: 'deep-field',
   name: 'Deep Field',
   worldScale: 10.0,
+  route: {
+    id: 'long-descent',
+    name: 'the long descent',
+    identity: 'deep expedition',
+    objective: 'bank momentum across the fringe, descend to the core, and earn the long way home.',
+    briefing: [
+      'bank momentum across the fringe.',
+      'descend to the core. confirm cyan.',
+    ],
+    portalPalette: 'cyan',
+    stages: [
+      { id: 'fringe', kind: 'salvage', label: 'mark the fringe wreck', anchor: { entity: 'wreck', index: 0 } },
+      { id: 'descent', kind: 'slingshot', label: 'bank the mid-ring current', anchor: { entity: 'well', index: 5 } },
+      { id: 'core', kind: 'salvage', label: 'reach the buried vault', anchor: { entity: 'wreck', index: 30 } },
+      { id: 'return', kind: 'portal', label: 'confirm the distant cyan exit', confirm: true },
+    ],
+  },
   wells: [
     // Central mega-well
     { x: 5.0, y: 5.0, mass: 2.5, orbitalDir: 1, killRadius: 0.08, spinRate: 0.4, points: 12 },

@@ -42,7 +42,7 @@ import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
 import { SlingshotSystem } from './slingshot.js';
 import { AudioEngine } from './audio.js';
-import { rollSignature, applySignatureConfig } from './signatures.js';
+import { buildRunBriefing } from './signatures.js';
 import { InventorySystem } from './inventory.js';
 import { ProfileManager, UPGRADE_TRACKS, MAX_RANK, MAX_RIG_LEVEL, generatePilotName, sanitizePilotName } from './profile.js';
 import { CATEGORY_COLORS, TIER_COLORS } from './items.js';
@@ -62,7 +62,6 @@ import { WORLD_SCALE, GRID_WINDOW, CAMERA_VIEW, worldPixelScale, worldToFluidUV,
          worldDistance, worldDisplacement, uvToWorld, worldRadiusToScreen, wrapWorld,
          setFluidCamera, getFluidCamera } from './coords.js';
 import { createRNGStreams } from './rng-stream.js';
-import { generateWreckLoot, pickCosmicSignature, WELL_NAMES, ITEM_CATALOG, WRECK_WAVES } from './seeded-generation.js';
 import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { HULL_DEFINITIONS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
@@ -280,56 +279,12 @@ let mapSelectIndex = 0;
 // well names, and a sample of wreck loot — all without hitting the server.
 // Proof that the seeded generation layer is portable.
 let previewSeed = Math.floor(Math.random() * 1e9);
-let previewCache = null; // { seed, signature, wellNames[], sampleLoot[] }
+let previewCache = null;
 
-function computeSeedPreview(seed) {
-  if (previewCache && previewCache.seed === seed) return previewCache;
-  const rng = createRNGStreams(seed);
-
-  // Match the server's applyRunSeed consumption order so the preview
-  // describes the exact run the server would start with this seed.
-  // We don't know the actual well count until startSession runs against
-  // the chosen map; assume 8 wells for the preview as an upper bound.
-  const wellNames = [];
-  for (let i = 0; i < 8; i++) {
-    rng.range('wellMass', 0.85, 1.15);
-    rng.range('wellGrowth', 0.80, 1.20);
-    rng.float('wellDir');
-    wellNames.push(rng.pick('wellNames', WELL_NAMES));
-  }
-  const lootQualityBias = rng.range('qualityBias', 0.8, 1.2);
-  const signature = pickCosmicSignature(rng.rawStream('signature'));
-
-  // Walk waves 0..3 against the wreckWave + wreckLoot streams in the same
-  // order as tickWreckWaves so the wave-4 sample reflects the server's
-  // actual stream state at t=240. The wreckLoot stream is shared across
-  // waves so we must consume it before previewing wave 4.
-  const waveStream = rng.rawStream('wreckWave');
-  const lootStream = rng.rawStream('wreckLoot');
-  for (let w = 0; w < 4; w++) {
-    const wave = WRECK_WAVES[w];
-    if (!wave) break;
-    const count = wave.count[0] + Math.floor(waveStream() * (wave.count[1] - wave.count[0] + 1));
-    for (let i = 0; i < count; i++) {
-      const slots = wave.slots[0] + Math.floor(waveStream() * (wave.slots[1] - wave.slots[0] + 1));
-      // Burn loot stream as the server would for this wreck (using its tier+slot count)
-      generateWreckLoot(lootStream, wave.time, slots, lootQualityBias);
-    }
-  }
-
-  // Now sample wave 4 — both streams are at the same state the server
-  // will be in when wave 4 fires (~t=240 to 250).
-  const wave4 = WRECK_WAVES[4];
-  const wave4SampleSlots = wave4 ? wave4.slots[0] + Math.floor(waveStream() * (wave4.slots[1] - wave4.slots[0] + 1)) : 4;
-  const sampleLoot = generateWreckLoot(lootStream, wave4 ? wave4.time + 10 : 250, wave4SampleSlots, lootQualityBias);
-
-  previewCache = {
-    seed,
-    signature,
-    wellNames: wellNames.slice(0, 5),
-    sampleLoot,
-    lootQualityBias,
-  };
+function computeSeedPreview(map, seed) {
+  const mapId = map?.id || map?.name || 'unknown';
+  if (previewCache && previewCache.seed === seed && previewCache.mapId === mapId) return previewCache;
+  previewCache = buildRunBriefing(map, seed);
   return previewCache;
 }
 
@@ -687,17 +642,25 @@ function drawMapRoutePreview(ctx, map, rect, {
   const stars = Array.isArray(map?.stars) ? map.stars : [];
   const wrecks = Array.isArray(map?.wrecks) ? map.wrecks : [];
   const wells = Array.isArray(map?.wells) ? map.wells : [];
-  const route = [
-    { x: scale / 2, y: scale / 2 },
-    ...stars.slice(0, 2),
-    ...(wrecks.filter((wreck) => (wreck.tier || 1) >= 2).slice(0, 1)),
-  ].filter(Boolean);
-  if (route.length > 1) {
+  const routePoints = (map?.route?.stages || []).map((stage) => {
+    const anchor = stage?.anchor;
+    if (!anchor || !Number.isInteger(anchor.index)) return null;
+    const source = anchor.entity === 'well'
+      ? wells
+      : anchor.entity === 'wreck'
+        ? wrecks
+        : anchor.entity === 'star'
+          ? stars
+          : [];
+    const point = source[anchor.index];
+    return point ? { ...point, stage } : null;
+  }).filter(Boolean);
+  if (routePoints.length > 1) {
     ctx.strokeStyle = roleColor('flow', 0.46);
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 6]);
     ctx.beginPath();
-    route.forEach((point, index) => {
+    routePoints.forEach((point, index) => {
       const [px, py] = toPx(point);
       if (index === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
@@ -739,6 +702,23 @@ function drawMapRoutePreview(ctx, map, rect, {
     ctx.lineWidth = wreck.type === 'vault' ? 2 : 1.2;
     ctx.strokeRect(px - 4, py - 4, 8, 8);
   }
+
+  // Numbered route anchors sit above the map symbols so the teaching path is
+  // readable without pretending the eventual portal has a fixed position.
+  routePoints.forEach((point, index) => {
+    const [px, py] = toPx(point);
+    ctx.fillStyle = roleColor('void', 0.88);
+    ctx.strokeStyle = roleColor('flow', 0.92);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(px, py, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = roleColor('text', 0.94);
+    ctx.font = canvasFont(9, { weight: '700' });
+    ctx.textAlign = 'center';
+    ctx.fillText(String(index + 1), px, py + 3);
+  });
 
   ctx.textAlign = 'left';
   ctx.font = canvasFont(10, { weight: '700' });
@@ -1252,6 +1232,7 @@ function init() {
       },
       setPreviewSeedForTest: (seed) => {
         previewSeed = Math.max(1, Math.floor(Number(seed) || 1));
+        previewCache = null;
         return previewSeed;
       },
       get inventoryOpen() { return inventoryOpen; },
@@ -1711,9 +1692,8 @@ function startGame(map, seed = null) {
     : Math.floor(Math.random() * 1e9);
   const localRng = createRNGStreams(localSeed);
 
-  // Roll and apply cosmic signature (seeded)
-  currentSignature = rollSignature(map.worldScale, localRng.rawStream('legacySignature'));
-  applySignatureConfig(currentSignature);
+  // Local fallback presents the same seeded signature as authority would.
+  currentSignature = computeSeedPreview(map, localSeed).signature;
 
   // Reset audio for new run
   audioEngine.reset();
@@ -1819,6 +1799,9 @@ function applyRemoteSnapshot(snapshot) {
     showHUD();
   }
   remoteSnapshot = snapshot;
+  if (snapshot.session?.cosmicSignature) {
+    currentSignature = { ...snapshot.session.cosmicSignature };
+  }
   remoteSessionHealth = {
     ok: true,
     session: snapshot.session ?? null,
@@ -2636,8 +2619,10 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   fixtureShipCandidates = [];
 
   loadScene(targetMapEntry.map);
-  currentSignature = rollSignature(targetMapEntry.map.worldScale);
-  applySignatureConfig(currentSignature);
+  const briefingSeed = runningSession?.seed ?? previewSeed;
+  currentSignature = runningSession?.cosmicSignature
+    ? { ...runningSession.cosmicSignature }
+    : computeSeedPreview(targetMapEntry.map, briefingSeed).signature;
   audioEngine.reset();
   // Enter loading phase — transition to 'playing' when first snapshot arrives
   loadingMapName = targetMapEntry.name || targetMapEntry.id || '';
@@ -6055,7 +6040,7 @@ function gameLoop(now) {
     const remoteControl = simClient?.enabled ? currentRemoteControlState() : null;
     const w = overlayCanvas.width, h = overlayCanvas.height;
     const selectedMap = MAP_LIST[mapSelectIndex] || MAP_LIST[0];
-    const preview = computeSeedPreview(previewSeed);
+    const preview = computeSeedPreview(selectedMap, previewSeed);
     const routeRole = mapRiskRole(selectedMap);
     const promptOptions = currentPromptOptions();
 
@@ -6156,41 +6141,39 @@ function gameLoop(now) {
     drawKeyValueRow(ctx, 'salvage', `${(selectedMap.wrecks || []).length} contacts`, briefX, by, { labelWidth: 94, valueRole: 'salvage' });
     by += 36;
 
-    drawSectionLabel(ctx, 'run modifiers', briefX, by, { role: 'anomaly', alpha: 0.86 });
+    drawSectionLabel(ctx, 'fabric read', briefX, by, { role: 'anomaly', alpha: 0.86 });
     by += 22;
     ctx.font = canvasFont(11);
-    const modLines = Object.entries(preview.signature?.mods || {}).slice(0, 4);
-    if (modLines.length === 0) {
-      ctx.fillStyle = roleColor('muted', 0.56);
-      ctx.fillText('nominal fabric response', briefX, by);
+    ctx.fillStyle = roleColor('muted', 0.76);
+    ctx.fillText(fitUiText(ctx, preview.signature?.mechanical || 'nominal fabric response', briefPanel.w - 44), briefX, by);
+    by += 25;
+
+    drawSectionLabel(ctx, preview.route?.name || 'route objective', briefX, by, { role: 'flow', alpha: 0.86 });
+    by += 22;
+    for (const line of (preview.route?.briefing || [preview.objective]).slice(0, 2)) {
+      ctx.fillStyle = roleColor('muted', 0.76);
+      ctx.font = canvasFont(11);
+      ctx.fillText(fitUiText(ctx, line, briefPanel.w - 44), briefX, by);
       by += 17;
-    } else {
-      for (const [key, value] of modLines) {
-        ctx.fillStyle = roleColor('muted', 0.76);
-        ctx.fillText(fitUiText(ctx, `${key}: ${value}x`, briefPanel.w - 44), briefX, by);
-        by += 17;
-      }
+    }
+
+    by += 10;
+    drawSectionLabel(ctx, 'route sequence', briefX, by, { role: 'flow', alpha: 0.86 });
+    by += 22;
+    for (const [index, stage] of (preview.route?.stages || []).slice(0, 5).entries()) {
+      ctx.fillStyle = roleColor(stage.kind === 'salvage' ? 'salvage' : 'flow', 0.78);
+      ctx.font = canvasFont(10, { weight: '600' });
+      ctx.fillText(fitUiText(ctx, `${index + 1}. ${stage.label}`, briefPanel.w - 44), briefX, by);
+      by += 15;
     }
 
     by += 10;
     drawSectionLabel(ctx, 'named hazards', briefX, by, { role: routeRole, alpha: 0.86 });
     by += 22;
-    for (const name of preview.wellNames.slice(0, 4)) {
+    for (const name of preview.wellNames.slice(0, 2)) {
       ctx.fillStyle = roleColor(routeRole, 0.72);
-      ctx.font = canvasFont(11);
-      ctx.fillText(fitUiText(ctx, name, briefPanel.w - 44), briefX, by);
-      by += 17;
-    }
-
-    by += 10;
-    drawSectionLabel(ctx, 'sample salvage', briefX, by, { role: 'salvage', alpha: 0.86 });
-    by += 22;
-    for (const item of preview.sampleLoot.slice(0, 4)) {
-      const tierRole = item.tier >= 4 ? 'anomaly' : item.tier >= 3 ? 'salvage' : 'muted';
-      ctx.fillStyle = roleColor(tierRole, tierRole === 'muted' ? 0.72 : 0.86);
       ctx.font = canvasFont(10);
-      const tierLabel = typeof item.tier === 'number' ? `T${item.tier}` : 'T?';
-      ctx.fillText(fitUiText(ctx, `${tierLabel} ${item.name}`, briefPanel.w - 44), briefX, by);
+      ctx.fillText(fitUiText(ctx, name, briefPanel.w - 44), briefX, by);
       by += 15;
     }
 

@@ -6,6 +6,7 @@
  */
 const { startSimServer, stopSimServer, TestRunner, assert } = require("./helpers.cjs");
 const { SESSION_PROFILES } = require("../scripts/content/session-profiles.cjs");
+const { loadPlayableMaps } = require("../scripts/shared-map-loader.cjs");
 
 const SIM_PORT = 8789;
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
@@ -17,6 +18,11 @@ async function getJson(path, options) {
   const response = await fetch(`${SIM_URL}${path}`, options);
   const body = await response.json();
   return { status: response.status, body };
+}
+
+async function restartFreshSim() {
+  await stopSimServer(SIM_PORT).catch(() => null);
+  await startSimServer(SIM_PORT);
 }
 
 function torusDelta(from, to, worldScale) {
@@ -33,6 +39,7 @@ function torusDistance(ax, ay, bx, by, worldScale) {
 
 async function run() {
   const runner = new TestRunner("SimScale");
+  const authoritativeMaps = loadPlayableMaps();
 
   await startSimServer(SIM_PORT);
   try {
@@ -44,6 +51,15 @@ async function run() {
       const expanse = maps.find((map) => map.id === "expanse");
       const deepField = maps.find((map) => map.id === "deep-field");
       assert(shallows && expanse && deepField, "Expected shallows, expanse, and deep-field in /maps");
+      for (const advertised of maps) {
+        const source = authoritativeMaps[advertised.id];
+        assert(source, `Maps endpoint advertised unknown map ${advertised.id}`);
+        assert(advertised.wellCount === source.wells.length,
+          `${advertised.id}: advertised well count drifted from map truth`);
+        assert(advertised.wreckCount === source.wrecks.length,
+          `${advertised.id}: advertised wreck count drifted from map truth`);
+        assert(source.route?.id, `${advertised.id}: authoritative map is missing route identity`);
+      }
       assert(shallows.tickHz > expanse.tickHz, `Expected shallows tickHz > expanse (${shallows.tickHz} vs ${expanse.tickHz})`);
       assert(expanse.tickHz > deepField.tickHz, `Expected expanse tickHz > deep-field (${expanse.tickHz} vs ${deepField.tickHz})`);
       assert(shallows.worldTickHz > expanse.worldTickHz, "Expected shallows worldTickHz > expanse");
@@ -89,6 +105,7 @@ async function run() {
     });
 
     await runner.run("Starting deep-field session applies the large-map server profile", async () => {
+      await restartFreshSim();
       const { status, body } = await getJson("/session/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -136,6 +153,7 @@ async function run() {
     });
 
     await runner.run("Starting expanse session applies the medium-map server profile", async () => {
+      await restartFreshSim();
       const { status, body } = await getJson("/session/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -175,6 +193,7 @@ async function run() {
 
     await runner.run("Authoritative joins spawn clear of immediate well danger", async () => {
       for (const mapId of ["shallows", "expanse", "deep-field"]) {
+        await restartFreshSim();
         const start = await getJson("/session/start", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -209,6 +228,7 @@ async function run() {
     });
 
     await runner.run("Authoritative snapshots carry printable wreck labels", async () => {
+      await restartFreshSim();
       const { status } = await getJson("/session/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -232,6 +252,7 @@ async function run() {
     });
 
     await runner.run("Starting high-player deep-field session applies explicit AI spawn budget", async () => {
+      await restartFreshSim();
       const { status, body } = await getJson("/session/start", {
         method: "POST",
         headers: { "content-type": "application/json" },

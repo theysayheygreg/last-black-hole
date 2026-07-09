@@ -199,6 +199,8 @@
     {
       "id": "heavy_current",
       "name": "heavy current",
+      "flavor": "the fabric is already moving. choose what carries you.",
+      "mechanical": "strong current / high coupling",
       "mods": {
         "currentCouplingMult": 1.3
       }
@@ -206,6 +208,8 @@
     {
       "id": "dead_calm",
       "name": "dead calm",
+      "flavor": "nothing offers momentum here. every burn belongs to you.",
+      "mechanical": "weak current / efficient coast",
       "mods": {
         "currentCouplingMult": 0.5,
         "dragMult": 0.8
@@ -214,6 +218,8 @@
     {
       "id": "signal_storm",
       "name": "signal storm",
+      "flavor": "the dark is listening harder than usual.",
+      "mechanical": "loud thrust / slow signal decay",
       "mods": {
         "signalGenMult": 1.5,
         "signalDecayMult": 0.7
@@ -222,6 +228,8 @@
     {
       "id": "deep_gravity",
       "name": "deep gravity",
+      "flavor": "the wells hold long memories and stronger tides.",
+      "mechanical": "strong wells / slower growth",
       "mods": {
         "wellGravityMult": 1.3,
         "wellGrowthMult": 0.7
@@ -230,6 +238,8 @@
     {
       "id": "thin_space",
       "name": "thin space",
+      "flavor": "the pull is light. the exits are not patient.",
+      "mechanical": "weak wells / short portal life",
       "mods": {
         "wellGravityMult": 0.7,
         "portalLifespanMult": 0.6
@@ -238,6 +248,8 @@
     {
       "id": "dark_run",
       "name": "dark run",
+      "flavor": "distance hides more than it reveals.",
+      "mechanical": "short sensors / close discovery",
       "mods": {
         "sensorRangeMult": 0.6
       }

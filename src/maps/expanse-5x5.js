@@ -3,8 +3,27 @@
  * World scale 5.0 — camera still shows 1 unit, so ~25× more area than visible at once.
  */
 export const MAP = {
+  id: 'expanse',
   name: 'The Expanse',
   worldScale: 5.0,
+  route: {
+    id: 'outer-circuit',
+    name: 'the outer circuit',
+    identity: 'risk ladder',
+    objective: 'work the quiet rim, cross the crowded center, and leave with core salvage.',
+    briefing: [
+      'work the quiet rim. cross the center.',
+      'take core salvage. confirm cyan.',
+    ],
+    portalPalette: 'cyan',
+    stages: [
+      { id: 'rim', kind: 'slingshot', label: 'ride the fringe current', anchor: { entity: 'well', index: 4 } },
+      { id: 'cache', kind: 'salvage', label: 'take the rim cache', anchor: { entity: 'wreck', index: 3 } },
+      { id: 'crossing', kind: 'slingshot', label: 'cross the central wake', anchor: { entity: 'well', index: 0 } },
+      { id: 'core', kind: 'salvage', label: 'steal from the core vault', anchor: { entity: 'wreck', index: 15 } },
+      { id: 'extract', kind: 'portal', label: 'confirm a cyan exit', confirm: true },
+    ],
+  },
   wells: [
     // Central cluster — the main arena
     { x: 2.5, y: 2.5, mass: 2.0, orbitalDir: 1, killRadius: 0.07, spinRate: 0.5, points: 10 },

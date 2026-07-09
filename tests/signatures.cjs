@@ -1,34 +1,13 @@
-const fs = require("fs");
-const os = require("os");
 const path = require("path");
+const { pathToFileURL } = require("url");
 const { TestRunner, assert } = require("./helpers.cjs");
 const serverManifest = require("../scripts/content/signatures.cjs");
 
 const ROOT = path.join(__dirname, "..");
 
 async function loadSignatureModule() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-signatures-"));
-  fs.mkdirSync(path.join(tmp, "content"), { recursive: true });
-  fs.writeFileSync(path.join(tmp, "signatures.mjs"), fs.readFileSync(path.join(ROOT, "src", "signatures.js"), "utf8"));
-  fs.writeFileSync(path.join(tmp, "config.mjs"), fs.readFileSync(path.join(ROOT, "src", "config.js"), "utf8"));
-  // Copy the canonical signatures module + its data JSON so the temp tree
-  // is self-contained.
-  fs.writeFileSync(
-    path.join(tmp, "content", "signatures.mjs"),
-    fs.readFileSync(path.join(ROOT, "src", "content", "signatures.js"), "utf8")
-  );
-  fs.copyFileSync(
-    path.join(ROOT, "src", "content", "signatures.data.json"),
-    path.join(tmp, "content", "signatures.data.json")
-  );
-
-  let signaturesSrc = fs.readFileSync(path.join(tmp, "signatures.mjs"), "utf8");
-  signaturesSrc = signaturesSrc
-    .replace("./config.js", "./config.mjs")
-    .replace("./content/signatures.js", "./content/signatures.mjs");
-  fs.writeFileSync(path.join(tmp, "signatures.mjs"), signaturesSrc);
-
-  return import(`file://${path.join(tmp, "signatures.mjs")}`);
+  const url = pathToFileURL(path.join(ROOT, "src", "signatures.js"));
+  return import(`${url.href}?test=${Date.now()}`);
 }
 
 async function run() {
@@ -64,6 +43,31 @@ async function run() {
       JSON.stringify(signatures.SIGNATURE_POOLS_BY_MAP_SIZE) === JSON.stringify(serverManifest.SIGNATURE_POOLS_BY_MAP_SIZE),
       "Runtime SIGNATURE_POOLS_BY_MAP_SIZE drifted from server manifest"
     );
+  });
+
+  await runner.run("seeded signatures carry player-facing briefing copy", async () => {
+    for (const signature of serverManifest.SEEDED_SIGNATURES) {
+      assert(typeof signature.flavor === "string" && signature.flavor.length > 0,
+        `${signature.id}: missing flavor copy`);
+      assert(typeof signature.mechanical === "string" && signature.mechanical.length > 0,
+        `${signature.id}: missing mechanical copy`);
+    }
+  });
+
+  await runner.run("run briefings use real map counts and stable named streams", async () => {
+    const { MAP: shallows } = await import(pathToFileURL(path.join(ROOT, "src", "maps", "shallows-3x3.js")).href);
+    const { MAP: deepField } = await import(pathToFileURL(path.join(ROOT, "src", "maps", "deep-field-10x10.js")).href);
+    const first = signatures.buildRunBriefing(shallows, 424242);
+    const repeat = signatures.buildRunBriefing(shallows, 424242);
+    const deep = signatures.buildRunBriefing(deepField, 424242);
+
+    assert(JSON.stringify(first) === JSON.stringify(repeat), "Same map and seed produced different briefings");
+    assert(first.wellCount === shallows.wells.length, "Shallows briefing used the wrong well count");
+    assert(deep.wellCount === deepField.wells.length, "Deep Field briefing used the wrong well count");
+    assert(first.wellNames.length === shallows.wells.length, "Shallows well names were truncated or padded");
+    assert(deep.wellNames.length === deepField.wells.length, "Deep Field well names were truncated or padded");
+    assert(first.signature.id === deep.signature.id,
+      "Independent signature stream should not change with map entity count");
   });
 
   const allPassed = runner.summary();
