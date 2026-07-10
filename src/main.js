@@ -5258,7 +5258,7 @@ function gameLoop(now) {
       ctx.save();
       drawUiPanel(ctx, { x: panelX, y: panelY, w: panelW, h: panelH }, {
         role: 'flow',
-        fillAlpha: 0.58 * alpha,
+        fillAlpha: 0.88 * alpha,
         borderAlpha: 0.22 * alpha,
         cornerLength: 22,
       });
@@ -5558,7 +5558,7 @@ function gameLoop(now) {
       state: windowState,
       origin: 'top-left',
       role: 'flow',
-      fillAlpha: 0.72,
+      fillAlpha: 0.88,
       borderAlpha: 0.34,
       cornerLength: 34,
     });
@@ -5672,15 +5672,15 @@ function gameLoop(now) {
 
     drawTerminalWindow(ctx, leftPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
-      origin: 'top-left', role: 'flow', fillAlpha: 0.70, borderAlpha: 0.30, cornerLength: 34,
+      origin: 'top-left', role: 'flow', fillAlpha: 0.88, borderAlpha: 0.30, cornerLength: 34,
     });
     drawTerminalWindow(ctx, centerPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { delay: 0.05, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
-      origin: 'top-left', role: homeTabRole(homeTab), fillAlpha: 0.64, borderAlpha: 0.26, cornerLength: 42,
+      origin: 'top-left', role: homeTabRole(homeTab), fillAlpha: 0.86, borderAlpha: 0.26, cornerLength: 42,
     });
     drawTerminalWindow(ctx, rightPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { delay: 0.10, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
-      origin: 'top-right', role: 'salvage', fillAlpha: 0.68, borderAlpha: 0.34, cornerLength: 34,
+      origin: 'top-right', role: 'salvage', fillAlpha: 0.88, borderAlpha: 0.34, cornerLength: 34,
     });
     ctx.globalAlpha *= contentReveal;
 
@@ -6128,15 +6128,15 @@ function gameLoop(now) {
 
     drawTerminalWindow(ctx, listPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
-      origin: 'top-left', role: routeRole, fillAlpha: 0.70, borderAlpha: 0.30, cornerLength: 34,
+      origin: 'top-left', role: routeRole, fillAlpha: 0.90, borderAlpha: 0.30, cornerLength: 34,
     });
     drawTerminalWindow(ctx, previewPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { delay: 0.05, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
-      origin: 'top-left', role: 'flow', fillAlpha: 0.28, borderAlpha: 0.24, cornerLength: 42,
+      origin: 'top-left', role: 'flow', fillAlpha: 0.78, borderAlpha: 0.24, cornerLength: 42,
     });
     drawTerminalWindow(ctx, briefPanel, {
       state: sampleTerminalWindow(uiMotionTimer, { delay: 0.10, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
-      origin: 'top-right', role: 'salvage', fillAlpha: 0.68, borderAlpha: 0.34, cornerLength: 34,
+      origin: 'top-right', role: 'salvage', fillAlpha: 0.90, borderAlpha: 0.34, cornerLength: 34,
     });
     drawMapRoutePreview(ctx, selectedMap, previewPanel, { alpha: contentReveal, seedLabel: previewSeed });
     ctx.globalAlpha *= contentReveal;
@@ -6330,7 +6330,7 @@ function gameLoop(now) {
       state: windowState,
       origin: 'bottom-left',
       role: 'flow',
-      fillAlpha: 0.76,
+      fillAlpha: 0.90,
       borderAlpha: 0.34,
       cornerLength: 34,
     });
@@ -6440,7 +6440,7 @@ function gameLoop(now) {
       state: windowState,
       origin: 'top-left',
       role: 'flow',
-      fillAlpha: 0.80,
+      fillAlpha: 0.90,
       borderAlpha: 0.36,
       cornerLength: 34,
     });

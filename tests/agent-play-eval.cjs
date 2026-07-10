@@ -136,6 +136,15 @@ async function waitForSettledResult(page, outcome, timeout = 12000) {
   }, { timeout }, outcome);
 }
 
+async function waitForSettledMetaReport(page, timeout = 12000) {
+  await waitFor(page, () => {
+    const motion = window.__TEST_API?.getUiMotionState?.();
+    return window.__TEST_API?.getGamePhase?.() === "meta"
+      && motion?.phase === "meta"
+      && Number(motion?.timer || 0) >= 0.9;
+  }, { timeout });
+}
+
 function assertNoBrowserErrors(errors, checkpoint) {
   if (!errors?.length) return;
   throw new Error(`${checkpoint}: browser runtime error: ${errors.join("; ")}`);
@@ -620,6 +629,7 @@ async function proveHomeAndSecondRun(page, firstRun, outputDir, screenshots) {
   await sleep(2400);
   await tapGamepadButton(page, 0, 220);
   await waitForPhase(page, "meta", 10000);
+  await waitForSettledMetaReport(page, 10000);
   screenshots.push(await capturePage(page, outputDir, "10-salvage-report"));
   await sleep(1400);
   await tapGamepadButton(page, 0, 220);

@@ -441,7 +441,7 @@ export const CONFIG = {
   debug: {
     showVelocityField: false, // Draw fluid velocity arrows on overlay canvas.
     showWellRadii: false,     // Draw well kill radii, star push radii, portal capture radii.
-    showFPS: true,            // Show FPS, ship position, velocity, input method.
+    showFPS: false,           // Opt-in diagnostic; never cover the default title or playable frame.
     showCoordDiagnostic: false, // Inject green dots at well positions to verify coord alignment.
     showFluidDiagnostic: false, // Show density/velocity readouts at well positions.
   },

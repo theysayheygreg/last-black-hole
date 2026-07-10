@@ -54,7 +54,6 @@ function configureTexture(texture, id) {
   texture.generateMipmaps = false;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.needsUpdate = true;
   return texture;
 }
 
