@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-10T18:47:39.333Z",
   "sourceDirectory": "assets/source/generated/v0.3",
+  "sourceDigest": "7526cb34623058664b8b1ad3c520fab0317404c83e9eb782edf6845c7fe40dac",
   "atlases": {
     "entities": [
       "assets/visual/entities/ship-drifter.png",
@@ -409,7 +409,7 @@
     },
     "shield-cell": {
       "file": "assets/visual/items/shield-cell.png",
-      "family": "plating",
+      "family": "shield-cell",
       "tier": 1,
       "consumable": true
     },
@@ -427,7 +427,7 @@
     },
     "foam-anchor": {
       "file": "assets/visual/items/foam-anchor.png",
-      "family": "gravity",
+      "family": "shield-cell",
       "tier": 2,
       "consumable": true
     },

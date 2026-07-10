@@ -80,6 +80,8 @@ async function writeAtlas(atlasKey, atlas) {
   const source = path.join(SOURCE_DIR, atlas.file);
   const metadata = await sharp(source).metadata();
   const output = path.join(OUTPUT_DIR, atlasKey === 'itemFamilies' ? 'item-families' : atlasKey);
+  // Generated directories are replaced as a unit so renamed cells cannot leave orphaned runtime art.
+  fs.rmSync(output, { recursive: true, force: true });
   ensureDir(output);
 
   const written = [];
@@ -109,6 +111,11 @@ async function writeAtlas(atlasKey, atlas) {
 
 function resolveItemFamily(id) {
   const rules = [
+    // Match named consumable families before broad artifact words such as shield or anchor.
+    [/shield-cell|foam-anchor/, 'shield-cell'],
+    [/time-dilator|dead-air-ampoule/, 'time-dilator'],
+    [/breach-flare|crown-breach-match/, 'breach-flare'],
+    [/fuel-cell|plasma-cell|antimatter-cell/, 'fuel-cell'],
     [/shield|plating|hull|keel|reinforcement|suture/, 'plating'],
     [/thruster|afterburner|burn-extender|drift-engine|singularity-drive|overcharged-core/, 'thruster'],
     [/signal|baffle|dampener|echo-sink|codex/, 'signal'],
@@ -125,10 +132,6 @@ function resolveItemFamily(id) {
     [/resonance|resonator|coil|braided|harmonic/, 'resonance'],
     [/phase|ghost|veil|negative-space|chamber/, 'phase'],
     [/pickup|magnet|hook/, 'pickup'],
-    [/shield-cell|foam-anchor/, 'shield-cell'],
-    [/time-dilator|dead-air-ampoule/, 'time-dilator'],
-    [/breach-flare|crown-breach-match/, 'breach-flare'],
-    [/fuel-cell|plasma-cell|antimatter-cell/, 'fuel-cell'],
   ];
   return rules.find(([pattern]) => pattern.test(id))?.[1] || 'resonance';
 }
@@ -153,6 +156,7 @@ function iconOverlay(id, tier, consumable = false) {
 async function writeItemIcons() {
   const content = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'content', 'items.data.json'), 'utf8'));
   const output = path.join(OUTPUT_DIR, 'items');
+  fs.rmSync(output, { recursive: true, force: true });
   ensureDir(output);
   const entries = [];
 
@@ -192,8 +196,12 @@ async function main() {
   const items = await writeItemIcons();
   const manifest = {
     version: 1,
-    generatedAt: new Date().toISOString(),
     sourceDirectory: path.relative(ROOT, SOURCE_DIR),
+    sourceDigest: crypto.createHash('sha256')
+      .update(Object.values(ATLASES)
+        .map((atlas) => fs.readFileSync(path.join(SOURCE_DIR, atlas.file)))
+        .reduce((all, value) => Buffer.concat([all, value]), Buffer.alloc(0)))
+      .digest('hex'),
     atlases,
     items,
   };

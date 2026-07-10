@@ -40,7 +40,25 @@ async function run() {
   const fetchImpl = async () => ({ ok: true, json: async () => MANIFEST });
   mod.resetAssetKitForTest();
 
+  assert.match(MANIFEST.sourceDigest, /^[a-f0-9]{64}$/,
+    'Generated manifest must identify its source atlases without a wall-clock timestamp');
+  assert.strictEqual(Object.hasOwn(MANIFEST, 'generatedAt'), false,
+    'Generated manifest should be reproducible across identical asset builds');
   assert.strictEqual(Object.keys(MANIFEST.items).length, 67, 'Expected complete generated item catalog');
+  for (const [catalogId, family] of Object.entries({
+    'shield-cell': 'shield-cell',
+    'foam-anchor': 'shield-cell',
+    'time-dilator': 'time-dilator',
+    'dead-air-ampoule': 'time-dilator',
+    'breach-flare': 'breach-flare',
+    'crown-breach-match': 'breach-flare',
+    'fuel-cell': 'fuel-cell',
+    'plasma-cell': 'fuel-cell',
+    'antimatter-cell': 'fuel-cell',
+  })) {
+    assert.strictEqual(MANIFEST.items[catalogId]?.family, family,
+      `${catalogId} should use its dedicated consumable icon family`);
+  }
   for (const [catalogId, entry] of Object.entries(MANIFEST.items)) {
     assert.strictEqual(path.basename(entry.file, '.png'), catalogId, `Catalog path drift for ${catalogId}`);
     assert(fs.existsSync(path.join(ROOT, entry.file)), `Missing icon for ${catalogId}`);
@@ -82,7 +100,7 @@ async function run() {
   assert(iconCtx.calls.filter((call) => call[0] === 'fillRect').length >= 2,
     'Icon should include backing and equipped-state rail');
 
-  console.log('UIAssets: 7 passed, 0 failed');
+  console.log('UIAssets: 10 passed, 0 failed');
 }
 
 run().catch((error) => {
