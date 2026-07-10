@@ -11,11 +11,10 @@
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** source candidate. The architecture and natural Shallows
-journey are implemented and automated gates are green. Promotion still needs a
-hash-named package built from the final commit, package boot evidence, and any
-available physical Steam Deck Gaming Mode check. Movement feel and visual taste
-remain Greg's final calls.
+**Current state:** packaged candidate. The architecture, two natural Shallows
+outcome journeys, automated gates, and hash-named package boot proof are green.
+Promotion still needs any available physical Steam Deck Gaming Mode check.
+Movement feel and visual taste remain Greg's final calls.
 
 v0.3 converts the successful game-jam stack into a small production-shaped
 game architecture without replacing the custom physics or ASCII-fluid visual
@@ -138,12 +137,12 @@ Latest authority evidence on 2026-07-10:
 
 | Measure | Observed |
 |---|---:|
-| authority tick | 7.68 / 8 Hz |
-| snapshot p95 latency | 2.73 ms |
+| authority tick | 7.74 / 8 Hz |
+| snapshot p95 latency | 5.72 ms |
 | snapshot p95 size | 107.88 KiB |
 | estimated snapshot transport | 0.33 MB/s |
-| heap growth | 4.16 MiB |
-| Ballpark sync p95 | 0.652 ms |
+| heap growth | 4.12 MiB |
+| Ballpark sync p95 | 1.555 ms |
 
 ## Playable Evidence
 
@@ -154,7 +153,7 @@ or Inhibitor debug state.
 
 Latest passing report:
 
-`tests/screenshots/agent-play-eval-2026-07-09T202554776Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-10T172257400Z/summary.md`
 
 It proves:
 
@@ -165,15 +164,18 @@ It proves:
 - authoritative extraction and result writeback;
 - Home rig and Chronicle continuity;
 - a rerolled, changed second run with renewed movement;
-- fourteen screenshots covering the journey and UI surfaces.
+- a second fresh journey that selects Breacher, dies to a visible named well,
+  and returns Home through normal controller input;
+- eighteen screenshots covering both outcome branches and UI surfaces.
 
 ## Remaining Release Gates
 
 These are evidence gates, not missing architecture:
 
-- [ ] Build the final hash-named artifact from a clean committed tree.
-- [ ] Boot the embedded control plane and sim from that artifact.
-- [ ] Run the complete automated candidate lane after the final docs/source
+- [x] Build the final hash-named artifact from a clean committed tree.
+- [x] Boot the embedded control plane, sim, and packaged Three client from that
+  artifact.
+- [x] Run the complete automated candidate lane after the final docs/source
   commit.
 - [ ] If the physical Deck is online, deploy and verify Gaming Mode launch,
   Steam Input, 1280x800 readability, suspend/resume, and log paths.

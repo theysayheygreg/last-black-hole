@@ -41,13 +41,15 @@ That means every meaningful feature should have evidence in three layers:
 3. **Visual proof** — screenshots or fixture manifests show that the feature
    can be seen and understood in the Three scene or UI.
 
-`npm run test:agent-eval` is the explicit playable-proof lane. It starts a
-fresh authoritative Shallows session and disposable browser, drives normal
-menus and virtual Steam-style controller input, performs a real slingshot,
-salvages live wrecks, raises signal/Inhibitor pressure, enters and confirms a
-portal, verifies result/Profile/Rig/Chronicle continuity, starts a changed
-second run, and writes a report plus fourteen 1280x800 screenshots under
-`tests/screenshots/agent-play-eval-*`. It does not mutate sim debug state.
+`npm run test:agent-eval` is the explicit playable-proof lane. It runs two
+fresh authoritative Shallows sessions in disposable browsers with normal menus
+and virtual Steam-style controller input. The first performs a real slingshot,
+salvages live wrecks, raises signal/Inhibitor pressure, confirms extraction,
+verifies result/Profile/Rig/Chronicle continuity, and starts a changed second
+run. The second selects the public Breacher through Home, dives into a visible
+well, verifies server-owned death, and returns Home. The report carries eighteen
+1280x800 screenshots under `tests/screenshots/agent-play-eval-*`. Neither
+journey mutates sim debug state.
 
 This lane is not a replacement for manual playfeel. It is the handoff receipt
 that should exist before asking Greg to spend attention on a build.

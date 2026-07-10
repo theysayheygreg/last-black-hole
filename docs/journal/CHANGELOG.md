@@ -27,6 +27,21 @@
 - Revalidated the authority lane and recorded the latest Deep Field budget:
   7.68/8 Hz, 2.73 ms snapshot p95, 107.88 KiB snapshot p95, 0.33 MB/s,
   4.16 MiB heap growth, and 0.652 ms Ballpark sync p95.
+- Built the all-target v0.3 internal release and booted the embedded control
+  plane and `lbh-local-v2` sim directly from the generated Linux `app.asar`.
+- Split playable proof into extraction/continuity and death/recovery journeys;
+  the fresh agent report now carries eighteen 1280x800 frames without debug
+  state mutation.
+- Added a real release-package gate that checks the exact HEAD artifact,
+  extracts its Linux `app.asar`, boots embedded authority, and drives the macOS
+  package from a rendered Three title into a live authoritative run.
+- Kept packaged authority resident but idle on the title screen so a player who
+  waits longer than 30 seconds can still launch.
+- Carried authored well names through run results so death screens say
+  `CONSUMED BY XIBALBA`, not `CONSUMED BY WELL-1`.
+- Re-ran the complete Three source lane after integration; all selected
+  authority, gameplay, renderer, UI, package-staging, and agent-eval suites
+  passed.
 
 ## 2026-07-09 — Protocol-v2, route, presentation, and Deck HUD integration
 

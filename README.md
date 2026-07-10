@@ -287,7 +287,9 @@ npm run test:fast       # quick validation + smoke canary
 npm run test:three      # Three renderer, infra, and fixture lane
 npm run test:authority  # control-plane + sim + remote-authority checks
 npm run test:visual     # renderer screenshots and fixture manifests
+npm run test:agent-eval # fresh no-debug extraction and death journeys
 npm run test:full       # long full automated lane
+npm run test:package    # exact HEAD artifact boot; run after release:internal
 ```
 
 The browser suites use `tests/browser-driver.cjs`, a small Chrome DevTools Protocol driver. Set `LBH_CHROME_PATH` if Chrome is not discoverable.

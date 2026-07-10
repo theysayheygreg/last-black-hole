@@ -18,8 +18,13 @@ does not erase newer committed work.
 
 **Source status:** green candidate.
 
-**Package status:** final hash artifact pending after the last docs/source
-commit.
+**Package status:** green. `release:internal` built all targets, the release
+checker found the matching hash directory, and the Linux artifact's actual
+`app.asar` booted its embedded control plane and `lbh-local-v2` sim with live
+registration. The macOS package also reaches a rendered Three title, keeps its
+idle authority resident through an extended attract-screen wait, and joins a
+live run through normal keyboard input. `npm run release:status` is the
+authority for the exact current HEAD hash.
 
 **Physical Steam Deck status:** pending Gaming Mode acceptance. Automated
 1280x800 evidence exists; that is not a substitute for the real device.
@@ -49,6 +54,10 @@ call.
 - 1280x800 HUD hierarchy, controller prompts, reduced motion, and event-driven
   bounded audio;
 - staged desktop/package tests that boot embedded authority runtimes.
+- final-package extraction proof that boots the authority runtimes from the
+  generated Linux `app.asar`, not source staging.
+- packaged Electron proof that boots Three, survives 31 seconds on the title
+  screen, and launches a human player against embedded protocol-v2 authority.
 
 ### Current Automated Evidence
 
@@ -57,7 +66,8 @@ Completed on 2026-07-10:
 - `npm run test:fast`: pass.
 - `npm run test:authority`: pass.
 - `npm run test:agent-eval`: pass from a fresh sim and disposable browser.
-- focused package closure: staged control plane and sim boot pass.
+- `npm run test:package`: staged closure plus hash artifact authority/client
+  boot pass.
 - focused HUD, audio, presentation, lifecycle, protocol, route, world geometry,
   Ballpark, bounded-growth, and Deep Field budget suites: pass.
 
@@ -65,21 +75,21 @@ Latest Deep Field measurement:
 
 | Measure | Observed |
 |---|---:|
-| authority tick | 7.68 / 8 Hz |
-| snapshot p95 latency | 2.73 ms |
+| authority tick | 7.74 / 8 Hz |
+| snapshot p95 latency | 5.72 ms |
 | snapshot p95 size | 107.88 KiB |
 | estimated transport | 0.33 MB/s |
-| heap growth | 4.16 MiB |
-| Ballpark sync p95 | 0.652 ms |
+| heap growth | 4.12 MiB |
+| Ballpark sync p95 | 1.555 ms |
 
 ### Natural Playable Evidence
 
 Latest passing report:
 
-`tests/screenshots/agent-play-eval-2026-07-09T202554776Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-10T172257400Z/summary.md`
 
-It contains fourteen 1280x800 screenshots and proves a fresh protocol-v2
-Shallows journey through:
+It contains eighteen 1280x800 screenshots and proves two fresh protocol-v2
+Shallows journeys through:
 
 1. title, profile, Home, and route briefing;
 2. authoritative launch and intentional controller movement;
@@ -89,16 +99,14 @@ Shallows journey through:
 6. portal ready state before explicit A confirmation;
 7. authoritative extraction and salvage report;
 8. Home rig and Chronicle continuity;
-9. a rerolled second run with a different run/seed and new movement.
+9. a rerolled second run with a different run/seed and new movement;
+10. public Breacher selection, a visible well approach, authoritative death,
+    an authored death label, and normal A-to-Home recovery.
 
 The agent journey does not call sim debug mutation endpoints.
 
 ### What Still Must Happen
 
-- commit final docs/source;
-- run the complete candidate lane from that commit;
-- build `0.3.0.<final-hash>` with `npm run release:internal`;
-- record artifact path/checksum and boot its embedded authority;
 - deploy to the physical Deck if reachable;
 - verify Gaming Mode, Steam Input, readability, suspend/resume, and logs;
 - Greg reviews feel, route pleasure, visual hierarchy, and polish;
@@ -134,7 +142,7 @@ Interpretation:
 | `stack:status` | current process health | source correctness after restart |
 | git log | change history | feel or package acceptance |
 | agent-eval report | fresh functional/playable journey | Greg's taste or physical Deck behavior |
-| release manifest | artifact/hash/checksum identity | Gaming Mode acceptance |
+| release manifest/status | artifact/hash/checksum identity and package presence | Gaming Mode acceptance |
 
 ## Fresh Local Play
 

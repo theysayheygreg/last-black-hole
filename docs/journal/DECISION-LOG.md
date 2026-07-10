@@ -1,5 +1,24 @@
 # Decision Log
 
+## 2026-07-10 — Packaged authority lives for the app lifetime
+
+**Decision:** Electron owns its embedded control plane and sim from app launch
+through app exit. An empty sim remains idle but does not terminate while the
+player watches the title attract loop. Release acceptance boots the exact HEAD
+artifact, proves the packaged Three title, waits past the former idle timeout,
+and joins a real authoritative run.
+
+**Why:** Process idle shutdown is correct for detached test/server sessions but
+made a self-contained desktop build silently unplayable after 30 seconds on the
+title screen. Staged require-closure tests could not catch that lifecycle bug.
+
+**Where it landed:** `desktop/electron-main.cjs`, `tests/desktop-package.cjs`,
+`tests/release-package.cjs`, the package scripts, RC gate, and build process.
+
+**Door status:** Closed for app-owned sim self-termination and source-only
+package claims. Open for platform-specific suspend/resume policy after physical
+Deck evidence.
+
 ## 2026-07-10 — v0.3 closes on confirmed extraction and required Ballpark queries
 
 **Decision:** Portal extraction is an authority-owned interaction, not a

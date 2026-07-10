@@ -106,8 +106,15 @@ work, the responsible agent should leave three kinds of evidence:
 v0.3 work. It is not as deep as `npm run test:authority` and not as artful as a
 promo capture, but it proves a fresh no-debug Shallows journey through normal
 menus/controller input, slingshot, salvage, signal, confirmed extraction,
-results, Rig, Chronicle, and a changed second run before Greg becomes the human
-polish gate.
+results, Rig, Chronicle, and a changed second run. A second fresh branch selects
+Breacher, dies to a named visible well, and returns Home. Greg remains the human
+polish gate, not first-contact QA.
+
+For a release handoff, source proof is not enough. Commit first, run
+`npm run release:internal`, then run `npm run release:status` and
+`npm run test:package`. The package gate must find the exact HEAD artifact,
+boot authority from its real `app.asar`, render the packaged Three title, keep
+idle authority alive through the attract-screen wait, and launch a human run.
 
 ---
 
@@ -508,6 +515,8 @@ Estimated scope: [small: <1hr, medium: 1-3hr, large: 3-8hr]
 - [ ] If a design decision was made: add DECISION-LOG.md entry
 - [ ] If this was a substantial LBH session: write a Codex memory checkpoint
       note in `~/.codex/memories/extensions/ad_hoc/notes/`
+- [ ] If this is a release handoff: the exact committed hash passes
+      `release:status` and `test:package`
 - [ ] If night shift: update night report in docs/journal/reports/
 - [ ] If more tasks remain on this layer: proceed to [next task]
 - [ ] If layer complete: STOP and wait for Greg's review

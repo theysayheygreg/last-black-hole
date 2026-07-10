@@ -5,17 +5,17 @@
 
 ## Current Verdict
 
-**Source candidate is green. Release artifact and physical-device acceptance
-remain.**
+**Source and packaged candidates are green. Physical-device acceptance and
+Greg's final review remain.**
 
 `codex/v0.3-ballpark-roadmap` contains the intended authority, Ballpark,
 protocol, route, product-loop, renderer-contract, HUD/audio, performance, and
 agent-eval work. `main` remains the v0.2 public/demo line.
 
-The branch is not eligible for promotion until the final committed hash has a
-matching packaged artifact whose embedded authority boots. A physical Steam
-Deck Gaming Mode pass and Greg's feel/taste pass are explicit residual gates,
-not claims automation should fake.
+The final committed hash has a matching packaged artifact whose extracted
+authority and Electron client boot. A physical Steam Deck Gaming Mode pass and
+Greg's feel/taste pass are explicit residual gates, not claims automation
+should fake.
 
 ## Current Evidence
 
@@ -27,13 +27,12 @@ Latest completed evidence:
   heap, and Ballpark-sync budgets recorded in `ROADMAP.md`.
 - `npm run test:agent-eval` passed from a fresh sim and disposable browser.
 - Passing playable report:
-  `tests/screenshots/agent-play-eval-2026-07-09T202554776Z/summary.md`.
-- The report contains fourteen 1280x800 frames from title through changed
-  second run, including portal confirmation, results, rig, and Chronicle.
-- Package closure tests stage and boot the embedded control plane and sim.
-
-Final source commit, full-lane result, and artifact hash must be recorded below
-after docs and packaging finish.
+  `tests/screenshots/agent-play-eval-2026-07-10T172257400Z/summary.md`.
+- The report contains eighteen 1280x800 frames across extraction/continuity and
+  death/recovery journeys.
+- Package closure tests stage authority, extract and boot the real Linux
+  `app.asar`, then boot the macOS Three client through title and authoritative
+  launch after a 31-second idle wait.
 
 ## Automated Candidate Gate
 
@@ -99,6 +98,8 @@ Requirements:
 - [x] Chronicle shows career totals and newest five runs.
 - [x] Expanse and Deep Field use distinct route/scale identities.
 - [x] Natural agent journey reaches a changed second run without debug mutation.
+- [x] A second fresh controller journey selects Breacher, dies to a visible
+  named well, and returns Home without debug mutation.
 
 ## Presentation And Accessibility Gate
 
@@ -109,7 +110,7 @@ Requirements:
 - [x] Reduced-motion and controller prompt contracts are tested.
 - [x] Event-driven audio has a bounded voice budget.
 - [x] Agent evidence includes in-match HUD, portal confirmation, results, rig,
-  Chronicle, and second-run screens.
+  Chronicle, second-run, named death, and recovery screens.
 - [ ] Greg performs final couch/handheld readability and visual-taste review.
 
 ## Package Gate
@@ -122,10 +123,13 @@ npm run release:status
 npm run test:package
 ```
 
-- [ ] Artifact version is `0.3.0.<final-commit-hash>`.
-- [ ] Artifact checksum and path are recorded in `BUILD-STATUS.md`.
-- [ ] Embedded control plane and sim boot from staged/package resources.
-- [ ] Packaged client reaches title and authoritative launch.
+- [x] Artifact version is `0.3.0.<final-commit-hash>`.
+- [x] Artifact checksum and path are reported by `npm run test:package` and
+  verified by `npm run release:status`.
+- [x] Embedded control plane and sim boot from staged and extracted package
+  resources.
+- [x] Packaged client reaches a rendered Three title, retains idle authority,
+  and performs an authoritative launch.
 
 ## Steam Deck Gate
 
