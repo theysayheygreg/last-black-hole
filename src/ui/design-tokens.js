@@ -8,7 +8,9 @@ export { DISPLAY_FONT_STACK, UI_FONT_STACK, GLYPH_FONT_STACK } from './typograph
 
 export const UI_COLORS = {
   void: '#000021',
-  panelBackground: 'rgba(0, 4, 18, 0.72)',
+  panelBackground: 'rgba(0, 2, 10, 0.78)',
+  panelBacking: 'rgba(0, 0, 8, 0.56)',
+  iconBacking: 'rgba(0, 0, 8, 0.68)',
   panelBorder: 'rgba(0, 226, 255, 0.32)',
   panelText: 'rgba(234, 247, 255, 0.94)',
   mutedText: 'rgba(154, 180, 206, 0.72)',
@@ -37,7 +39,12 @@ export const UI_COLORS = {
 };
 
 export const UI_SHADOWS = {
-  panelText: '0 0 6px rgba(0, 226, 255, 0.28)',
+  panelText: '2px 3px 5px rgba(0, 0, 8, 0.9)',
+  panel: '4px 6px 12px rgba(0, 0, 8, 0.72)',
+  canvasTextColor: 'rgba(0, 0, 8, 0.92)',
+  canvasTextBlur: 4,
+  canvasTextOffsetX: 2,
+  canvasTextOffsetY: 3,
   portalGlow: '0 0 6px rgba(0, 226, 255, 0.5)',
   warningGlow: '0 0 6px rgba(0, 0, 0, 0.8)',
   inhibitorGlow: '0 0 8px rgba(255, 62, 181, 0.55)',

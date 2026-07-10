@@ -67,7 +67,10 @@
       --lbh-font-glyph: 'Monaspace Neon', 'Monaspace Argon', 'Noto Sans Mono', 'Noto Sans Symbols', 'Apple Symbols', 'Segoe UI Symbol', monospace;
       --lbh-font-mono: var(--lbh-font-ui);
       --lbh-void: #000021;
-      --lbh-panel-bg: rgba(0, 4, 18, 0.72);
+      --lbh-panel-bg: rgba(0, 2, 10, 0.78);
+      --lbh-panel-backing: rgba(0, 0, 8, 0.56);
+      --lbh-panel-shadow: 4px 6px 12px rgba(0, 0, 8, 0.72);
+      --lbh-text-shadow: 2px 3px 5px rgba(0, 0, 8, 0.9);
       --lbh-panel-border: rgba(0, 226, 255, 0.32);
       --lbh-text-primary: rgba(234, 247, 255, 0.94);
       --lbh-text-muted: rgba(154, 180, 206, 0.72);
@@ -175,6 +178,8 @@
       border-radius: var(--lbh-panel-radius);
       min-height: 48px;
       backdrop-filter: blur(2px);
+      box-shadow: var(--lbh-panel-shadow);
+      text-shadow: var(--lbh-text-shadow);
     }
     #hud-collapse {
       top: 12px; left: var(--lbh-edge-margin);
@@ -568,18 +573,20 @@
       left: 16px;
       top: 50%;
       transform: translateY(-50%);
-      background: rgba(0, 4, 18, 0.92);
+      background: rgba(0, 2, 10, 0.94);
       border: 1px solid rgba(0, 226, 255, 0.26);
       border-radius: 2px;
       padding: 10px 14px;
-      min-width: 260px;
-      max-width: 320px;
+      width: min(420px, calc(100vw - 32px));
+      min-width: min(360px, calc(100vw - 32px));
+      max-width: 420px;
       font-size: var(--lbh-couch-small);
       color: var(--lbh-text-primary);
       line-height: 1.6;
       display: none;
       pointer-events: auto;
-      box-shadow: 0 0 20px rgba(0, 0, 30, 0.8), inset 0 0 30px rgba(0, 0, 20, 0.3);
+      box-shadow: var(--lbh-panel-shadow), inset 0 0 30px rgba(0, 0, 20, 0.3);
+      text-shadow: var(--lbh-text-shadow);
     }
     #hud-inventory-panel.open { display: block; }
     #hud-inventory-panel .inv-header {
@@ -601,6 +608,7 @@
       margin: 1px 0;
       border-radius: 1px;
       transition: background 0.1s;
+      min-height: 38px;
     }
     #hud-inventory-panel .inv-item:hover {
       background: rgba(80, 100, 160, 0.12);
@@ -609,6 +617,37 @@
       flex: 1;
       font-size: var(--lbh-couch-small);
     }
+    #hud-inventory-panel .inv-icon {
+      position: relative;
+      flex: 0 0 32px;
+      width: 32px;
+      height: 32px;
+      margin-right: 9px;
+      overflow: hidden;
+      background: rgba(0, 0, 8, 0.68);
+      border: 1px solid rgba(234, 247, 255, 0.28);
+      box-shadow: 2px 3px 5px rgba(0, 0, 8, 0.86);
+    }
+    #hud-inventory-panel .inv-icon img { width: 100%; height: 100%; display: block; image-rendering: auto; }
+    #hud-inventory-panel .inv-icon[data-tier="uncommon"] { border-color: rgba(56, 245, 138, 0.66); }
+    #hud-inventory-panel .inv-icon[data-tier="rare"] { border-color: rgba(0, 226, 255, 0.76); }
+    #hud-inventory-panel .inv-icon[data-tier="unique"] { border-color: rgba(255, 185, 56, 0.82); }
+    #hud-inventory-panel .inv-icon.is-selected { box-shadow: 0 0 0 1px rgba(0, 226, 255, 0.9), 2px 3px 5px rgba(0, 0, 8, 0.86); }
+    #hud-inventory-panel .inv-icon-equipped::after,
+    #hud-inventory-panel .inv-icon-consumable::after {
+      content: '';
+      position: absolute;
+      right: 2px;
+      top: 2px;
+      bottom: 2px;
+      width: 3px;
+      background: var(--lbh-signal);
+    }
+    #hud-inventory-panel .inv-icon-consumable::after {
+      left: 2px; right: 2px; top: auto; bottom: 2px; width: auto; height: 3px;
+      background: var(--lbh-salvage);
+    }
+    #hud-inventory-panel .inv-icon-missing { opacity: 0.35; }
     #hud-inventory-panel .inv-item .inv-cat {
       font-size: var(--lbh-couch-micro);
       margin-left: 8px;

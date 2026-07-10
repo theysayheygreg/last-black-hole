@@ -5,6 +5,7 @@ import {
   UI_TYPOGRAPHY,
 } from './design-tokens.js';
 import { canvasFont } from './typography.js';
+import { applyCanvasTextShadow, drawGeneratedFrame } from './asset-kit.js';
 
 const ROLE_COLORS = {
   flow: UI_COLORS.signal,
@@ -119,16 +120,29 @@ export function drawUiPanel(ctx, rect, {
 } = {}) {
   const r = normalizeRect(rect);
   ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 8, 0.72)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 4;
+  ctx.shadowOffsetY = 6;
+  ctx.fillStyle = UI_COLORS.panelBacking;
+  ctx.fillRect(r.x + 3, r.y + 4, r.w, r.h);
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
   ctx.fillStyle = withAlpha(UI_COLORS.panelBackground, fillAlpha);
   ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.strokeStyle = roleColor(role, borderAlpha);
   ctx.lineWidth = 1;
   ctx.strokeRect(r.x, r.y, r.w, r.h);
-  drawCornerFrame(ctx, r, { role, alpha: Math.min(0.95, borderAlpha + 0.2), length: cornerLength });
+  if (!drawGeneratedFrame(ctx, r, { alpha: Math.min(0.8, borderAlpha + 0.24), segmentSize: cornerLength })) {
+    drawCornerFrame(ctx, r, { role, alpha: Math.min(0.95, borderAlpha + 0.2), length: cornerLength });
+  }
 
   if (title) {
     ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
     ctx.textAlign = 'left';
+    applyCanvasTextShadow(ctx);
     ctx.fillStyle = roleColor(role, titleAlpha);
     ctx.fillText(String(title).toUpperCase(), r.x + padding, r.y + 19);
   }
@@ -202,6 +216,7 @@ export function drawCommandButton(ctx, rect, label, {
   const promptText = String(prompt || labelText || 'confirm').trim();
 
   ctx.save();
+  applyCanvasTextShadow(ctx);
   drawSelectedRow(ctx, r, {
     role: buttonRole,
     active,
@@ -210,6 +225,7 @@ export function drawCommandButton(ctx, rect, label, {
     borderAlpha: active ? 0.68 : 0.25,
     railWidth: 4,
   });
+  applyCanvasTextShadow(ctx);
 
   ctx.font = canvasFont(Math.max(UI_TYPOGRAPHY.couchButton, Math.min(24, r.h * 0.48)), { weight: '700' });
   ctx.textAlign = 'center';
@@ -250,6 +266,8 @@ export function drawSegmentedGauge(ctx, rect, {
 
   ctx.save();
   if (label) {
+    applyCanvasTextShadow(ctx);
+    applyCanvasTextShadow(ctx);
     ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
@@ -278,6 +296,8 @@ export function drawWarningStrip(ctx, rect, {
 
   ctx.save();
   drawUiPanel(ctx, r, { role, fillAlpha: 0.76 * a, borderAlpha: 0.62 * a, cornerLength: 20 });
+  applyCanvasTextShadow(ctx);
+  applyCanvasTextShadow(ctx);
   ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
@@ -299,6 +319,7 @@ export function drawStatusPill(ctx, rect, label, {
   const source = String(label ?? '');
   const r = normalizeRect(rect);
   ctx.save();
+  applyCanvasTextShadow(ctx);
   ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -311,6 +332,7 @@ export function drawStatusPill(ctx, rect, label, {
   ctx.strokeStyle = roleColor(role, 0.34 * alpha);
   ctx.strokeRect(x, y, width, height);
   ctx.fillStyle = roleColor('text', 0.88 * alpha);
+  applyCanvasTextShadow(ctx);
   ctx.fillText(fitUiText(ctx, source.toUpperCase(), width - 12), r.x, r.y + 1);
   ctx.restore();
 }
@@ -320,9 +342,11 @@ export function drawSectionLabel(ctx, text, x, y, {
   alpha = 1,
 } = {}) {
   ctx.save();
+  applyCanvasTextShadow(ctx);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = roleColor(role, 0.74 * alpha);
+  applyCanvasTextShadow(ctx);
   ctx.font = canvasFont(UI_TYPOGRAPHY.couchMicro, { weight: '700' });
   ctx.fillText(`-- ${String(text).toUpperCase()} --`, x, y);
   ctx.restore();
@@ -335,9 +359,11 @@ export function drawKeyValueRow(ctx, label, value, x, y, {
 } = {}) {
   const a = clamp01(alpha);
   ctx.save();
+  applyCanvasTextShadow(ctx);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.font = canvasFont(UI_TYPOGRAPHY.couchSmall);
+  applyCanvasTextShadow(ctx);
   ctx.fillStyle = roleColor('muted', 0.75 * a);
   ctx.fillText(String(label), x, y);
   ctx.fillStyle = roleColor(valueRole, 0.9 * a);

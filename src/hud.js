@@ -14,6 +14,7 @@ import { UI_COLORS, UI_TIERS } from './ui/design-tokens.js';
 import { inventoryItemColor, inventorySelectionStyle, portalArrowMarkup, setWarningColor } from './ui/hud-primitives.js';
 import { affordanceCaption, inventoryHint, promptLabel, setDeckModeAttribute } from './ui/input-prompts.js';
 import { resolveMotionSettings } from './ui/motion.js';
+import { itemIconMarkup, preloadInventoryIcons, preloadUiAssets } from './ui/asset-kit.js';
 
 let _hudEl;
 let _collapseTimerEl, _collapseEventEl;
@@ -73,6 +74,7 @@ export function initHUD() {
   _inhibitorFormEl = document.getElementById('hud-inhibitor-form');
   renderAbilitySlot(_ability1El, abilitySlot('Q', '---', { status: '', ready: false }));
   renderAbilitySlot(_ability2El, abilitySlot('R', '---', { status: '', ready: false }));
+  void preloadUiAssets().catch(() => {});
 }
 
 function textCorruptionConfig() {
@@ -905,6 +907,8 @@ function _renderInventoryPanel(inv) {
   if (!_inventoryPanelEl) return;
 
   const sel = _invCursor;
+  const inventoryItems = [...inv.cargo, ...inv.equipped, ...inv.consumables].filter(Boolean);
+  void preloadInventoryIcons(inventoryItems).catch(() => {});
 
   // ---- Cargo ----
   let html = `<div class="inv-header"><span>cargo ${inv.cargoCount}/${inv.cargoMax}</span><span class="inv-caption">${inventoryHint(_promptOptions)}</span></div>`;
@@ -921,6 +925,7 @@ function _renderInventoryPanel(inv) {
       else if (item.subcategory === 'consumable') actionLabel = 'load';
       const action = isSel ? `<span class="inv-drop">[${actionLabel}]</span>` : '';
       html += `<div class="inv-item" style="${rowStyle}">
+        ${itemIconMarkup(item, { state: 'cargo', selected: isSel })}
         <span class="inv-name" style="color:${color}">${item.name}</span>
         <span class="inv-cat">${catLabel}</span>
         ${action}
@@ -939,7 +944,7 @@ function _renderInventoryPanel(inv) {
     const rowStyle = inventorySelectionStyle(isSel);
     if (item) {
       const action = isSel ? '<span class="inv-drop">[unequip]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${inventoryItemColor(item)}">${item.name}</span><span class="inv-cat">${item.effectDesc || ''}</span>${action}</div>`;
+      html += `<div class="inv-item" style="${rowStyle}">${itemIconMarkup(item, { state: 'equipped', selected: isSel })}<span class="inv-name" style="color:${inventoryItemColor(item)}">${item.name}</span><span class="inv-cat">${item.effectDesc || ''}</span>${action}</div>`;
     } else {
       html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">— empty slot —</span></div>`;
     }
@@ -956,7 +961,7 @@ function _renderInventoryPanel(inv) {
     const slotLabel = promptLabel(i === 0 ? 'consumable1' : 'consumable2', _promptOptions);
     if (item) {
       const action = isSel ? '<span class="inv-drop">[remove]</span>' : '';
-      html += `<div class="inv-item" style="${rowStyle}"><span class="inv-name" style="color:${inventoryItemColor(item)}">${slotLabel} ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
+      html += `<div class="inv-item" style="${rowStyle}">${itemIconMarkup(item, { state: 'consumable', selected: isSel })}<span class="inv-name" style="color:${inventoryItemColor(item)}">${slotLabel} ${item.name}</span><span class="inv-cat">${item.useDesc || ''}</span>${action}</div>`;
     } else {
       html += `<div class="inv-item" style="${rowStyle}"><span class="inv-empty">${slotLabel} — empty —</span></div>`;
     }

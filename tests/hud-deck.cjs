@@ -65,6 +65,7 @@ async function run() {
     });
     await waitFor(page, () => window.__TEST_API.getGamePhase() === 'playing', { timeout: 9000 });
     await new Promise((resolve) => setTimeout(resolve, 800));
+    assert.strictEqual(errors.length, 0, `browser errors before HUD inspection: ${errors.join('; ')}`);
 
     const layout = await page.evaluate(() => {
       const ids = ['hud-collapse', 'hud-portals', 'hud-vitals', 'hud-salvage', 'hud-actions'];
@@ -73,7 +74,11 @@ async function run() {
         const rect = el.getBoundingClientRect();
         return [id, { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height }];
       }));
-      const px = (selector, property) => parseFloat(getComputedStyle(document.querySelector(selector))[property]);
+      const px = (selector, property) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing HUD selector: ${selector}`);
+        return parseFloat(getComputedStyle(element)[property]);
+      };
       return {
         rects,
         labelSize: px('#hud-vitals .hud-label', 'fontSize'),
@@ -88,6 +93,7 @@ async function run() {
         commandCaption: document.querySelector('#hud-pulse .hud-action-caption')?.textContent || '',
         routeLabel: document.getElementById('hud-portals-status').textContent,
         hullLabel: document.getElementById('hud-hull-readout').textContent,
+        panelShadow: getComputedStyle(document.getElementById('hud-vitals')).boxShadow,
       };
     });
     console.log('  1280x800 HUD rects:', JSON.stringify(layout.rects));
@@ -112,6 +118,62 @@ async function run() {
     assert.strictEqual(layout.commandCaption, 'X activate');
     assert(!/^x\s/i.test(layout.commandLabel), 'button affordance leaked into command label');
     assert(layout.routeLabel.length > 0 && layout.hullLabel.length > 0);
+    assert(layout.panelShadow.includes('rgba(0, 0, 8'), `HUD panel lacks near-black offset shadow: ${layout.panelShadow}`);
+
+    await page.evaluate(() => {
+      const api = window.__TEST_API;
+      const ship = api.getShipPos();
+      api.spawnTestWreck(ship.x, ship.y, {
+        loot: [{
+          id: 'runtime-instance-must-not-drive-icon',
+          catalogId: 'event-horizon-keel',
+          name: 'Event Horizon Keel',
+          category: 'artifact',
+          subcategory: 'equippable',
+          tier: 4,
+          value: 420,
+          effectDesc: 'well resist x1.18',
+        }],
+      });
+      api.pickupAtShip();
+      api.setInventoryOpenForTest(true);
+    });
+    await waitFor(page, () => document.querySelector('#hud-inventory-panel.open .inv-icon img')?.complete, { timeout: 3000 });
+    const inventoryVisuals = await page.evaluate(() => {
+      const panel = document.getElementById('hud-inventory-panel');
+      const panelRect = panel.getBoundingClientRect();
+      const item = panel.querySelector('.inv-item:has(.inv-icon img)');
+      const icon = item.querySelector('.inv-icon');
+      const image = icon.querySelector('img');
+      const itemRect = item.getBoundingClientRect();
+      const iconRect = icon.getBoundingClientRect();
+      const iconStyle = getComputedStyle(icon);
+      return {
+        panelWidth: panelRect.width,
+        panelRight: panelRect.right,
+        itemHeight: itemRect.height,
+        iconWidth: iconRect.width,
+        iconHeight: iconRect.height,
+        iconBorder: iconStyle.borderColor,
+        catalogId: icon.dataset.catalogId,
+        imagePath: new URL(image.src).pathname,
+        imageWidth: image.naturalWidth,
+        runtimeIdLeaked: panel.innerHTML.includes('runtime-instance-must-not-drive-icon'),
+      };
+    });
+    assert(inventoryVisuals.panelWidth >= 360 && inventoryVisuals.panelRight <= 1280,
+      `Inventory panel violates Deck width: ${JSON.stringify(inventoryVisuals)}`);
+    assert(inventoryVisuals.itemHeight >= 38, `Inventory row below Deck minimum: ${inventoryVisuals.itemHeight}`);
+    assert(inventoryVisuals.iconWidth >= 32 && inventoryVisuals.iconHeight >= 32,
+      `Inventory icon below Deck minimum: ${inventoryVisuals.iconWidth}x${inventoryVisuals.iconHeight}`);
+    assert(inventoryVisuals.iconBorder.includes('255, 185, 56'),
+      `Unique tier lost amber semantic role: ${inventoryVisuals.iconBorder}`);
+    assert.strictEqual(inventoryVisuals.catalogId, 'event-horizon-keel');
+    assert(inventoryVisuals.imagePath.endsWith('/assets/visual/items/event-horizon-keel.png'));
+    assert(inventoryVisuals.imageWidth > 0, 'Inventory icon image did not decode');
+    assert.strictEqual(inventoryVisuals.runtimeIdLeaked, false, 'Transient runtime id leaked into inventory markup');
+    await page.screenshot({ path: '/tmp/lbh-v03-ui-assets-inventory-1280x800.png' });
+    await page.evaluate(() => window.__TEST_API.setInventoryOpenForTest(false));
 
     await page.evaluate(() => window.__TEST_API.setConfig('ui.motion.reduced', true));
     await waitFor(page, () => document.getElementById('hud')?.dataset.reducedMotion === 'true', { timeout: 3000 });

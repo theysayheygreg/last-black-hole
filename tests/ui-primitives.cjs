@@ -46,6 +46,7 @@ function createRecordingContext() {
     restore: () => calls.push(['restore']),
     fillRect: (...args) => calls.push(['fillRect', ...args]),
     strokeRect: (...args) => calls.push(['strokeRect', ...args]),
+    drawImage: (...args) => calls.push(['drawImage', ...args]),
     beginPath: () => calls.push(['beginPath']),
     moveTo: (...args) => calls.push(['moveTo', ...args]),
     lineTo: (...args) => calls.push(['lineTo', ...args]),
@@ -55,6 +56,11 @@ function createRecordingContext() {
     set fillStyle(value) { calls.push(['fillStyle', value]); },
     set strokeStyle(value) { calls.push(['strokeStyle', value]); },
     set lineWidth(value) { calls.push(['lineWidth', value]); },
+    set globalAlpha(value) { calls.push(['globalAlpha', value]); },
+    set shadowColor(value) { calls.push(['shadowColor', value]); },
+    set shadowBlur(value) { calls.push(['shadowBlur', value]); },
+    set shadowOffsetX(value) { calls.push(['shadowOffsetX', value]); },
+    set shadowOffsetY(value) { calls.push(['shadowOffsetY', value]); },
     set font(value) { calls.push(['font', value]); this._font = value; },
     get font() { return this._font || '12px monospace'; },
     set textAlign(value) { calls.push(['textAlign', value]); },
@@ -73,6 +79,7 @@ async function run() {
   await runner.run('Primitive module stays UI-only and stateless', async () => {
     assert(source.includes("from './design-tokens.js'"), 'Expected token import');
     assert(source.includes("from './typography.js'"), 'Expected typography import');
+    assert(source.includes("from './asset-kit.js'"), 'Expected generated frame asset integration');
     for (const forbidden of ['../main.js', '../config.js', '../ship.js', '../fluid.js', 'window.', 'document.']) {
       assert(!source.includes(forbidden), `Primitive kit should not depend on ${forbidden}`);
     }
@@ -109,6 +116,7 @@ async function run() {
     assert(ctx.calls.some((call) => call[0] === 'fillRect'), 'Expected fillRect calls');
     assert(ctx.calls.some((call) => call[0] === 'strokeRect'), 'Expected strokeRect calls');
     assert(ctx.calls.some((call) => call[0] === 'fillText'), 'Expected fillText calls');
+    assert(ctx.calls.some((call) => call[0] === 'shadowOffsetY' && call[1] > 0), 'Expected soft offset text shadow');
     assert(ctx.calls.some((call) => call[0] === 'font' && String(call[1]).includes('Monaspace')),
       'Expected shared canvas font usage');
   });
