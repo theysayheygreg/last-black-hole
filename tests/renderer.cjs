@@ -31,7 +31,8 @@ const ALL_FIXTURES = [
   { name: 'visualReference', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
   { name: 'shipBakeoff', expectedWells: 1, minFps: 8, timesMs: [500, 2000, 5000] },
 ];
-const DEFAULT_FIXTURES = new Set(['title', 'titleVfx', 'interference10x10', 'entityShowcase', 'visualReference', 'shipBakeoff']);
+// The bake-off is retained for deliberate art review, not the production visual gate.
+const DEFAULT_FIXTURES = new Set(['title', 'titleVfx', 'interference10x10', 'entityShowcase', 'visualReference']);
 const READABILITY_FIXTURES = new Set(['visualReference']);
 const READABILITY_FAMILY_MINIMUMS = {
   stars: { targets: 4, readable: 4 },

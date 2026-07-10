@@ -30,6 +30,8 @@ const MIN_FPS = {
   "5x5": 20,
   "10x10": 20,
 };
+const MAX_THREE_CALLS = 700;
+const MAX_POOLED_MESHES = 600;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -137,6 +139,16 @@ async function run() {
       }
       if (scenario.map === "10x10" && scenario.perf.visibleWellCount >= scenario.perf.totalWellCount) {
         throw new Error(`10x10 ${scenario.htmlFile} rendered all wells directly; expected off-window coarse-field path`);
+      }
+      const three = scenario.perf.three;
+      if (three?.calls > MAX_THREE_CALLS) {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} submitted ${three.calls} Three calls; expected <= ${MAX_THREE_CALLS}`);
+      }
+      if (three?.pooledMeshes > MAX_POOLED_MESHES) {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} retained ${three.pooledMeshes} pooled meshes; expected <= ${MAX_POOLED_MESHES}`);
+      }
+      if ((three?.entityAssets?.loadErrors || 0) > 0) {
+        throw new Error(`${scenario.map} ${scenario.htmlFile} failed to load generated entity assets`);
       }
       const floor = MIN_FPS[scenario.map];
       if (scenario.fps < floor) {
