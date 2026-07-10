@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-07-10 — v0.3 visual production system
+
+- Turned the recent visual concepts into a production style guide covering
+  scene depth, silhouette, palette roles, contrast, typography, panel backing,
+  pixel treatment, and screen-space post-processing.
+- Added a reproducible generated-asset pipeline and committed source atlases,
+  transparent top-down entity sprites, all 67 catalog item icons, and sliced
+  UI frame parts. Wells, the ASCII fabric, and Inhibitor corruption remain
+  procedural because motion and simulation state are part of their identity.
+- Replaced placeholder Three entity marks with hull-aware player sprites,
+  state-aware wrecks and portals, and lifecycle-owned star, planetoid,
+  scavenger, fauna, and sentry sprites. Texture ownership, nearest filtering,
+  disposal, and object budgets remain centralized in the Three lifecycle.
+- Applied the new frame kit, stronger local occlusion, restrained shadows,
+  item icons, and controller-readable hierarchy to Profile, Home, route select,
+  pause, results, and in-match surfaces.
+- Added a deterministic UI-motion vocabulary for terminal frame construction,
+  content reveal, focus movement, stagger, directional transitions, and
+  reduced-motion equivalents. Motion remains presentation-only and never
+  delays or owns gameplay state.
+- Expanded UI and renderer evidence to check named regions, local contrast,
+  multiple resolutions, transition progression, reduced motion, generated
+  asset loading, and texture-cache cleanup.
+- Re-ran both natural AgentPlayEval journeys. The current report shows a live
+  route, populated salvage report, new sprites against the ASCII fabric,
+  authoritative extraction, and visible-well death from fresh processes.
+
 ## 2026-07-10 — v0.3 authority journey and release-candidate closure
 
 - Promoted Ballpark from optional per-tick query fallback to persistent,

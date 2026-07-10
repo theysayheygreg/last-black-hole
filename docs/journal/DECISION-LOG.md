@@ -1,5 +1,43 @@
 # Decision Log
 
+## 2026-07-10 — Generated assets are source material with deterministic runtime slices
+
+**Decision:** v0.3 keeps the image-generated atlases as auditable source art,
+then derives stable transparent entity sprites, catalog-keyed item icons, and
+UI frame slices through `npm run assets:visual`. Generated pixels do not decide
+gameplay identity or state; code selects the appropriate asset from canonical
+sim and catalog facts. Wells, the fluid fabric, and corruption stay procedural.
+
+**Why:** Directly dropping concept sheets into runtime code would make crop,
+alpha, naming, and catalog coverage fragile. A deterministic slice step gives
+the game a complete visual kit that can be regenerated and tested while
+preserving the animated systems that define LBH's identity.
+
+**Where it landed:** `assets/source/generated/v0.3/`, `assets/visual/`,
+`scripts/build-visual-assets.cjs`, `src/ui/asset-kit.js`, and the Three entity
+visual lifecycle.
+
+**Door status:** Closed for runtime use of unsliced concept sheets. Open for
+future hand-authored replacements that preserve the manifest ids and style
+contracts.
+
+## 2026-07-10 — UI motion has one deterministic presentation clock
+
+**Decision:** LBH uses its own deterministic UI timeline for terminal-frame
+construction, content reveal, focus, stagger, and screen transitions. Reduced
+motion resolves the same states immediately. Browser view-transition machinery
+does not become a second timing authority over the continuously animated canvas.
+
+**Why:** UI motion needs to be testable, work in packaged Chromium, cooperate
+with canvas and Three rendering, and remain incapable of blocking authoritative
+state changes. One clock keeps those guarantees explicit.
+
+**Where it landed:** `src/ui/motion.js`, screen drawing paths in `src/main.js`,
+`tests/ui-motion.cjs`, and `tests/ui-visual.cjs`.
+
+**Door status:** Closed for multiple competing transition clocks. Open for new
+motion motifs built from the shared vocabulary and bounded VFX accents.
+
 ## 2026-07-10 — Packaged authority lives for the app lifetime
 
 **Decision:** Electron owns its embedded control plane and sim from app launch

@@ -11,8 +11,9 @@
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** packaged candidate. The architecture, two natural Shallows
-outcome journeys, automated gates, and hash-named package boot proof are green.
+**Current state:** visual-production candidate. The architecture, generated
+asset kit, two natural Shallows outcome journeys, automated gates, and
+hash-named package boot proof are green.
 Promotion still needs any available physical Steam Deck Gaming Mode check.
 Movement feel and visual taste remain Greg's final calls.
 
@@ -110,8 +111,9 @@ explicit presentation contracts.
 
 - `src/presentation/presentation-frame.js` sanitizes the renderer-neutral live
   frame, palette roles, quality tier, scene facts, and VFX events.
-- Three adapts that frame into lifecycle-owned player, wreck, and portal visual
-  families with bounded object budgets.
+- Three adapts that frame into lifecycle-owned player, wreck, portal, star,
+  planetoid, scavenger, fauna, and sentry visual families with bounded object
+  budgets and explicit texture cleanup.
 - Projection, toroidal seam handling, square fluid alignment, route cyan,
   corruption magenta, and quality ownership are centralized.
 - The ASCII-fluid fabric remains the visual product. Entity backing, silhouette,
@@ -122,6 +124,16 @@ explicit presentation contracts.
   non-overlapping interaction panels.
 - Reduced-motion behavior and event-driven audio cover loot, slingshot, portal,
   scavenger, Inhibitor, extraction, and UI actions with bounded voices.
+- The visual source kit contains auditable entity, item-family, and UI-frame
+  atlases. A deterministic build produces transparent top-down runtime sprites,
+  stable icons for all 67 catalog items, and sliced terminal frame parts.
+- The generated UI kit now frames Profile, Home, route select, pause, results,
+  and inventory surfaces with stronger local backing and restrained shadows.
+- One deterministic motion clock owns terminal expansion, content reveal,
+  focus, stagger, and directional screen transitions. Reduced motion reaches
+  the same settled states without animation.
+- Wells, the ASCII-fluid fabric, and Inhibitor corruption remain procedural;
+  generated sprites complement rather than replace simulation-driven visuals.
 
 ### Build And Performance
 
@@ -151,9 +163,9 @@ The natural agent journey starts a fresh sim and disposable browser at
 controller input, and world contact. It does not mutate player, portal, wreck,
 or Inhibitor debug state.
 
-Latest passing report:
+Latest passing report after the visual production pass:
 
-`tests/screenshots/agent-play-eval-2026-07-10T172257400Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-10T195614367Z/summary.md`
 
 It proves:
 
@@ -166,7 +178,9 @@ It proves:
 - a rerolled, changed second run with renewed movement;
 - a second fresh journey that selects Breacher, dies to a visible named well,
   and returns Home through normal controller input;
-- eighteen screenshots covering both outcome branches and UI surfaces.
+- eighteen screenshots covering both outcome branches and UI surfaces,
+  including generated entity sprites and a populated icon-bearing salvage
+  report.
 
 ## Remaining Release Gates
 

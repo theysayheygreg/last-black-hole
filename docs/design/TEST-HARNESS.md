@@ -202,8 +202,11 @@ Renderer fixtures default to a representative sweep plus the `visualReference`
 object-family scene and `shipBakeoff` player asset comparison. `visualReference`
 checks coarse contrast/readability for stars, wrecks, portals, ships, fauna,
 sentries, and planetoids against the final post-processed background.
-`shipBakeoff` keeps the sprite-card versus pixel-textured top-down mesh
-comparison visible while the player hull art path is unsettled. The
+It also verifies that generated assets load, bind through the shared texture
+cache, and release when their lifecycle owner is disposed. `shipBakeoff` keeps
+the historical sprite-card versus pixel-textured top-down mesh comparison
+available as an art-direction reference; production player hulls now use the
+generated top-down sprite family. The
 `ascii-...png` captures are the art-target frames. The `debug-scene-...png`
 captures intentionally bypass ASCII quantization so shader input can be
 inspected; they can look smooth, bright, or rainbowed around wells and should
@@ -215,17 +218,18 @@ UI visual captures run through `tests/ui-visual.cjs`. They use deterministic
 test API fixtures rather than fragile menu key choreography, then save full-page
 screenshots plus 50 percent and 25 percent downscaled couch proxies. This lane
 checks that major UI surfaces exist, are not blank, preserve the expected phase,
-and keep a basic brightness/readability floor. The title surface includes both
+and keep named action/value/text regions above local contrast floors. It covers
+1280x800 and 1280x720 layouts, verifies transition progression and settled
+states, and proves reduced motion resolves the same UI state. The title surface includes both
 the immediate `title` frame and a later `title-attract` frame so attract-mode
 events can change without regressing the couch read, plus a reduced-motion title
 capture so accessibility fallback state stays visible in the review bundle. It is
 a canary for UI drift, not a pixel-perfect approval gate.
 
-As each major screen receives its static composition pass, promote its
-selected-action and primary-value regions from review telemetry to hard UI-lane
-checks. Home and Map Select are next in line; until their composition lands, keep
-their samples visible in manifests/captures without using broad pixel thresholds
-as a false art-direction verdict.
+Home, Map Select, in-match HUD, extraction results, and death results now carry
+hard named-region checks. Broad whole-frame brightness remains review telemetry,
+not a false art-direction verdict: the final game is intentionally black and
+local readability matters more than making every pixel bright.
 
 ## Lanes
 

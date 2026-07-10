@@ -16,7 +16,7 @@ does not erase newer committed work.
 
 ## v0.3 Candidate
 
-**Source status:** green candidate.
+**Source status:** green visual-production candidate.
 
 **Package status:** green. `release:internal` built all targets, the release
 checker found the matching hash directory, and the Linux artifact's actual
@@ -49,8 +49,14 @@ call.
 - Drifter/Breacher public roster and hull-specific rig progression;
 - authoritative item/result/loadout/vault/Chronicle continuity;
 - renderer-neutral live presentation frames and lifecycle-owned Three player,
-  wreck, and portal families;
+  wreck, portal, star, planetoid, scavenger, fauna, and sentry families;
 - centralized projection, quality, palette, route cyan, and corruption magenta;
+- reproducible generated source atlases and runtime slices for entity sprites,
+  all 67 catalog item icons, and terminal UI frame parts;
+- deterministic terminal expansion, focus, stagger, directional transitions,
+  and reduced-motion equivalents across major game screens;
+- stronger local backing and restrained shadows that separate windows, titles,
+  and inventory content from the animated ASCII fabric;
 - 1280x800 HUD hierarchy, controller prompts, reduced motion, and event-driven
   bounded audio;
 - staged desktop/package tests that boot embedded authority runtimes.
@@ -70,6 +76,8 @@ Completed on 2026-07-10:
   boot pass.
 - focused HUD, audio, presentation, lifecycle, protocol, route, world geometry,
   Ballpark, bounded-growth, and Deep Field budget suites: pass.
+- focused UI motion: pass; latest UI visual lane: 16/16 checks with named
+  contrast regions, transition states, reduced motion, and dual-size captures.
 
 Latest Deep Field measurement:
 
@@ -86,7 +94,7 @@ Latest Deep Field measurement:
 
 Latest passing report:
 
-`tests/screenshots/agent-play-eval-2026-07-10T172257400Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-10T195614367Z/summary.md`
 
 It contains eighteen 1280x800 screenshots and proves two fresh protocol-v2
 Shallows journeys through:

@@ -10,7 +10,8 @@ Greg's final review remain.**
 
 `codex/v0.3-ballpark-roadmap` contains the intended authority, Ballpark,
 protocol, route, product-loop, renderer-contract, HUD/audio, performance, and
-agent-eval work. `main` remains the v0.2 public/demo line.
+agent-eval work, plus the v0.3 generated visual kit and UI motion system.
+`main` remains the v0.2 public/demo line.
 
 The final committed hash has a matching packaged artifact whose extracted
 authority and Electron client boot. A physical Steam Deck Gaming Mode pass and
@@ -27,7 +28,7 @@ Latest completed evidence:
   heap, and Ballpark-sync budgets recorded in `ROADMAP.md`.
 - `npm run test:agent-eval` passed from a fresh sim and disposable browser.
 - Passing playable report:
-  `tests/screenshots/agent-play-eval-2026-07-10T172257400Z/summary.md`.
+  `tests/screenshots/agent-play-eval-2026-07-10T195614367Z/summary.md`.
 - The report contains eighteen 1280x800 frames across extraction/continuity and
   death/recovery journeys.
 - Package closure tests stage authority, extract and boot the real Linux
@@ -80,6 +81,8 @@ Requirements:
 - [x] Empty and terminal sessions stop unbounded simulation.
 - [x] Three consumes a renderer-neutral presentation frame.
 - [x] Player, wreck, and portal visual families own bounded lifecycles.
+- [x] Generated world sprites use one texture cache, nearest filtering,
+  explicit disposal, and bounded lifecycle ownership.
 - [x] Projection, quality, and palette ownership are centralized.
 - [x] Gameplay remains sim-owned; renderer/UI/VFX/audio do not author outcomes.
 
@@ -109,6 +112,12 @@ Requirements:
 - [x] Fuel/hull/signal gauges meet the committed minimum dimensions.
 - [x] Reduced-motion and controller prompt contracts are tested.
 - [x] Event-driven audio has a bounded voice budget.
+- [x] All 67 catalog items have stable generated icon ids, and the UI frame kit
+  is derived reproducibly from committed source atlases.
+- [x] Profile, Home, route select, pause, results, and inventory surfaces use
+  backed terminal frames and deterministic screen motion.
+- [x] UI evidence checks named-region contrast, transition progression,
+  reduced-motion settled state, and 1280x720 plus 1280x800 layouts.
 - [x] Agent evidence includes in-match HUD, portal confirmation, results, rig,
   Chronicle, second-run, named death, and recovery screens.
 - [ ] Greg performs final couch/handheld readability and visual-taste review.
