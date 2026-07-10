@@ -78,6 +78,8 @@ Completed on 2026-07-10:
   Ballpark, bounded-growth, and Deep Field budget suites: pass.
 - focused UI motion: pass; latest UI visual lane: 16/16 checks with named
   contrast regions, transition states, reduced motion, and dual-size captures.
+- complete v0.3 manifest: pass after visual integration; AgentPlayEval needed
+  its reported timing retry before both natural journeys passed.
 
 Latest Deep Field measurement:
 
@@ -94,7 +96,7 @@ Latest Deep Field measurement:
 
 Latest passing report:
 
-`tests/screenshots/agent-play-eval-2026-07-10T195614367Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-10T205224580Z/summary.md`
 
 It contains eighteen 1280x800 screenshots and proves two fresh protocol-v2
 Shallows journeys through:

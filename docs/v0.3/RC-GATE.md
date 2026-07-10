@@ -28,9 +28,12 @@ Latest completed evidence:
   heap, and Ballpark-sync budgets recorded in `ROADMAP.md`.
 - `npm run test:agent-eval` passed from a fresh sim and disposable browser.
 - Passing playable report:
-  `tests/screenshots/agent-play-eval-2026-07-10T195614367Z/summary.md`.
+  `tests/screenshots/agent-play-eval-2026-07-10T205224580Z/summary.md`.
 - The report contains eighteen 1280x800 frames across extraction/continuity and
   death/recovery journeys.
+- `npm run test:full` passed after visual integration. AgentPlayEval used its
+  explicit timing retry before both natural journeys passed; review the first
+  attempt when tuning movement/play-eval reliability.
 - Package closure tests stage authority, extract and boot the real Linux
   `app.asar`, then boot the macOS Three client through title and authoritative
   launch after a 31-second idle wait.

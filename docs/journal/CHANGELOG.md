@@ -34,6 +34,10 @@
 - Re-ran both natural AgentPlayEval journeys. The current report shows a live
   route, populated salvage report, new sprites against the ASCII fabric,
   authoritative extraction, and visible-well death from fresh processes.
+- Ran the complete v0.3 manifest after integration. Every selected static,
+  authority, gameplay, input, Three, UI, and visual suite passed. AgentPlayEval
+  required its declared timing retry before both natural journeys passed; that
+  variability remains visible rather than being reported as a clean first run.
 
 ## 2026-07-10 — v0.3 authority journey and release-candidate closure
 

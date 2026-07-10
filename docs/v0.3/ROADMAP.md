@@ -165,7 +165,7 @@ or Inhibitor debug state.
 
 Latest passing report after the visual production pass:
 
-`tests/screenshots/agent-play-eval-2026-07-10T195614367Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-10T205224580Z/summary.md`
 
 It proves:
 
@@ -181,6 +181,11 @@ It proves:
 - eighteen screenshots covering both outcome branches and UI surfaces,
   including generated entity sprites and a populated icon-bearing salvage
   report.
+
+The complete lane passed after the visual integration. Its first AgentPlayEval
+attempt missed one movement-timing target and the declared isolated retry
+passed both journeys. That is a residual play-eval variability signal, not a
+suppressed failure or a reason to weaken authority assertions.
 
 ## Remaining Release Gates
 
