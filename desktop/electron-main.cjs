@@ -250,6 +250,9 @@ async function startEmbeddedServers() {
       LBH_SIM_INSTANCE_ID: embeddedSimInstanceId,
       LBH_CONTROL_PLANE_URL: `http://127.0.0.1:${controlPort}`,
       LBH_SESSION_REGISTRY_FILE: path.join(dataDir, 'session-registry.json'),
+      // The packaged app owns this child for its whole lifetime. Empty sessions
+      // already idle without ticking; only Electron should retire the process.
+      LBH_SIM_KEEP_ALIVE: 'true',
     },
     stdio: 'pipe',
   });
