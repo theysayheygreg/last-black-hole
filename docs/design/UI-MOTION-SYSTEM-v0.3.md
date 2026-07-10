@@ -309,3 +309,16 @@ Every new or revised motion sequence must satisfy all applicable checks:
   and the relevant renderer/VFX tests pass.
 - A short normal-motion clip, a reduced-motion still/clip, a Deck-scale frame,
   and a 25 percent couch proxy receive visual review.
+
+## Platform References
+
+- [MDN: View Transition API](https://developer.mozilla.org/en-US/docs/Web/API/View_Transition_API)
+  informs the snapshot/handoff vocabulary, but LBH does not delegate its
+  continuously animated canvas state to that DOM API.
+- [MDN: requestAnimationFrame](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame)
+  remains the single timing source for canvas UI and Three presentation.
+- [MDN: prefers-reduced-motion](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion)
+  defines the platform preference honored by `resolveMotionSettings()`.
+- [web.dev: Animations and performance](https://web.dev/articles/animations-and-performance)
+  supports the DOM rule that transient HUD movement uses compositor-friendly
+  opacity and transforms rather than layout-changing dimensions.

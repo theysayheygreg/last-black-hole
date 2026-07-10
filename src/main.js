@@ -3432,7 +3432,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   ctx.fillStyle = roleColor('muted', 0.46 * textReveal);
   ctx.font = canvasFont(10);
   ctx.textAlign = 'center';
-  ctx.fillText('v0.2 - attract loop online', layout.versionRect.x + layout.versionRect.w / 2, layout.versionRect.y + 16);
+  ctx.fillText('v0.3 // visual systems online', layout.versionRect.x + layout.versionRect.w / 2, layout.versionRect.y + 16);
   ctx.restore();
 }
 

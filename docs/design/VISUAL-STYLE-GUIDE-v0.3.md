@@ -69,11 +69,12 @@ Use color by semantic role, not by screen or component.
 |---|---|---|
 | Void | `#000021` | Clear, panel core, negative space. |
 | Panel backing | `rgba(0, 4, 18, 0.72)` | Raise toward 0.88 only over dense moving fabric. |
-| Flow / technology | `#008080`, brightened cyan accents | Normal fabric, navigation, selected neutral controls. |
+| Fabric / flow | `#008080` | Normal spacetime fabric and low-priority current structure. |
+| Route / technology | `#00E2FF`, `#9DFCFF` | Navigation, extraction, selected neutral controls, player instruments. |
 | Value / energy | `#FFD966`, `#FFF2CC` | Salvage, rewards, stars, high-value item emphasis. |
 | Danger / hostile | warm red | Immediate damage, hostile ships, destructive actions, failed outcomes. |
-| Signal / Inhibitor | `#CC1A80`, `#1ACCB3` | Anomaly pressure, corruption, Inhibitor state. |
-| Ecology | cool green-cyan | Non-hostile living systems; shift to danger only when behavior becomes hostile. |
+| Signal / Inhibitor | `#FF3EB5`, `#B84CFF` | Anomaly pressure, corruption, Inhibitor state. |
+| Ecology | `#38F58A` with cyan-white core | Non-hostile living systems; shift to danger only when behavior becomes hostile. |
 | Neutral / wreck | bone white and cool gray | Hull structure, debris, secondary text. |
 
 Rules:
