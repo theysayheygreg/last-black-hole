@@ -79,7 +79,7 @@ function localPlayer(snapshot, clientId) {
   return snapshot.players?.find((player) => player.clientId === clientId) || null;
 }
 
-async function waitForPlayer(clientId, predicate, { timeout = 12000, interval = 100 } = {}) {
+async function waitForPlayer(clientId, predicate, { timeout = 12000, interval = 100, label = "player state" } = {}) {
   const deadline = Date.now() + timeout;
   let lastPlayer = null;
   let lastSnapshot = null;
@@ -91,7 +91,7 @@ async function waitForPlayer(clientId, predicate, { timeout = 12000, interval = 
     }
     await sleep(interval);
   }
-  throw new Error(`Timed out waiting for player state; last=${JSON.stringify(lastPlayer)}`);
+  throw new Error(`Timed out waiting for ${label}; last=${JSON.stringify(lastPlayer)}`);
 }
 
 async function waitForWorld(predicate, { timeout = 60000, interval = 200 } = {}) {
@@ -266,10 +266,12 @@ async function steerTo(page, clientId, target, options = {}) {
       const speed = Math.hypot(player.vx || 0, player.vy || 0);
       const fuelRatio = player.deltaVRatio || 0;
       closest = Math.min(closest, dist);
-      if (fuelRatio < 0.015) recharging = true;
-      else if (dist < Math.max(radius * 4, 0.16)) recharging = false;
-      else if (fuelRatio < 0.08) recharging = true;
-      if (fuelRatio > 0.42) recharging = false;
+      const commitDistance = Math.max(radius * 4, 0.16);
+      if (recharging) {
+        if (fuelRatio > 0.42) recharging = false;
+      } else if (fuelRatio < 0.015 || (fuelRatio < 0.08 && dist >= commitDistance)) {
+        recharging = true;
+      }
       last = { wx: player.wx, wy: player.wy, vx: player.vx, vy: player.vy, dist, speed, fuelRatio, recharging };
 
       if (dist <= radius && (options.allowFlyby || speed <= (options.arrivalSpeed ?? 0.32))) {
@@ -327,6 +329,15 @@ async function brakeToLowSpeed(page, clientId, timeout = 5000) {
   return localPlayer(await getSnapshot(), clientId);
 }
 
+async function rechargeForManeuver(page, clientId, minimumRatio = 0.42, timeout = 10000) {
+  await setGamepadDrive(page);
+  return waitForPlayer(
+    clientId,
+    (player) => player.status === "alive" && player.deltaVRatio >= minimumRatio,
+    { timeout, interval: 120 },
+  );
+}
+
 async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   let snapshot = await getSnapshot();
   const player = localPlayer(snapshot, clientId);
@@ -338,12 +349,12 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   let awayMag = Math.hypot(awayX, awayY);
   if (awayMag < 1e-4) { awayX = 1; awayY = 0; awayMag = 1; }
   const ringPoint = {
-    id: `${anchor.id || "well-1"}-outer-current`,
-    wx: wrap(anchor.wx + awayX / awayMag * 0.30, ws),
-    wy: wrap(anchor.wy + awayY / awayMag * 0.30, ws),
+    id: `${anchor.id || "well-1"}-inner-current`,
+    wx: wrap(anchor.wx + awayX / awayMag * 0.22, ws),
+    wy: wrap(anchor.wy + awayY / awayMag * 0.22, ws),
   };
   const approach = await steerTo(page, clientId, ringPoint, {
-    radius: 0.13,
+    radius: 0.09,
     maxCruiseSpeed: 0.31,
     arrivalSpeed: 0.30,
     // A slingshot approach should preserve orbital momentum; stopping at the
@@ -351,24 +362,57 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
     allowFlyby: true,
   });
 
-  snapshot = await getSnapshot();
-  const atRing = localPlayer(snapshot, clientId);
-  const radialX = wrappedDelta(anchor.wx, atRing.wx, ws);
-  const radialY = wrappedDelta(anchor.wy, atRing.wy, ws);
-  const radialMag = Math.hypot(radialX, radialY) || 1;
-  const tangent = { x: -radialY / radialMag, y: radialX / radialMag };
   const baselineSeq = (await getEvents(0)).reduce((max, event) => Math.max(max, event.seq || 0), 0);
-  await setGamepadDrive(page, tangent.x, tangent.y, { thrust: 1 });
-  await sleep(260);
-  // Engage while the tangential burn is still active. Releasing first leaves
-  // enough coast time for a fast Drifter to exit the authored anchor range.
-  await tapGamepadButton(page, 3, 80);
-  const engaged = await waitForPlayer(clientId, (entry) => entry.slingshot?.engaged === true, { timeout: 6000 });
+  let engaged = null;
+  let engageError = null;
+  for (let attempt = 0; attempt < 3 && !engaged; attempt++) {
+    snapshot = await getSnapshot();
+    let atRing = localPlayer(snapshot, clientId);
+    if ((atRing.deltaVRatio || 0) < 0.20) {
+      await rechargeForManeuver(page, clientId);
+      await steerTo(page, clientId, ringPoint, {
+        radius: 0.09,
+        maxCruiseSpeed: 0.31,
+        allowFlyby: true,
+        timeout: 40000,
+      });
+      snapshot = await getSnapshot();
+      atRing = localPlayer(snapshot, clientId);
+    }
+    const radialX = wrappedDelta(anchor.wx, atRing.wx, ws);
+    const radialY = wrappedDelta(anchor.wy, atRing.wy, ws);
+    const radialMag = Math.hypot(radialX, radialY) || 1;
+    const tangent = { x: -radialY / radialMag, y: radialX / radialMag };
+    await setGamepadDrive(page, tangent.x, tangent.y, { thrust: 1 });
+    await sleep(140);
+    await tapGamepadButton(page, 3, 80);
+    try {
+      engaged = await waitForPlayer(
+        clientId,
+        (entry) => entry.slingshot?.engaged === true,
+        { timeout: 3000, label: "slingshot engagement" },
+      );
+    } catch (error) {
+      engageError = error;
+      await setGamepadDrive(page);
+      await steerTo(page, clientId, ringPoint, {
+        radius: 0.09,
+        maxCruiseSpeed: 0.31,
+        allowFlyby: true,
+        timeout: 40000,
+      });
+    }
+  }
+  assert(engaged, `Could not engage authored slingshot after reacquiring the current; ${engageError?.message || "unknown"}`);
   await setGamepadDrive(page);
   screenshots.push(await capturePage(page, outputDir, "05-route-slingshot-engaged"));
   await sleep(650);
   await tapGamepadButton(page, 3, 80);
-  const released = await waitForPlayer(clientId, (entry) => entry.slingshot?.engaged === false, { timeout: 6000 });
+  const released = await waitForPlayer(
+    clientId,
+    (entry) => entry.slingshot?.engaged === false,
+    { timeout: 6000, label: "slingshot release" },
+  );
   const routeEvents = (await getEvents(baselineSeq)).filter((event) =>
     event.payload?.clientId === clientId && event.type.startsWith("player.slingshot")
   );
@@ -450,12 +494,11 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
     snapshot.world?.portals?.find((portal) => portal.alive !== false && !portal.blockedByInhibitor)
   );
   const travel = await steerTo(page, clientId, initialPortal, {
-    radius: 0.035,
+    radius: Math.max(0.045, (Number(initialPortal.radius) || 0.06) * 0.6),
     maxCruiseSpeed: 0.27,
     arrivalSpeed: 0.19,
-    timeout: 50000,
+    timeout: 70000,
   });
-  await brakeToLowSpeed(page, clientId, 2500);
   const ready = await waitForPlayer(
     clientId,
     (player) => player.portalInteraction?.portalId === initialPortal.id && player.portalInteraction?.ready === true,
