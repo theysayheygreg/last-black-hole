@@ -240,19 +240,23 @@ async function enterFirstRunThroughMenus(page, outputDir, screenshots, browserEr
 }
 
 async function steerTo(page, clientId, target, options = {}) {
-  const timeout = options.timeout ?? 26000;
+  const timeout = options.timeout ?? 40000;
   const radius = options.radius ?? 0.065;
   const maxCruiseSpeed = options.maxCruiseSpeed ?? 0.38;
   const deadline = Date.now() + timeout;
   let start = null;
   let closest = Infinity;
   let last = null;
+  let recharging = false;
 
   try {
     while (Date.now() < deadline) {
       const snapshot = await getSnapshot();
       const player = localPlayer(snapshot, clientId);
       assert(player, "Authoritative player disappeared while steering");
+      if (options.acceptDeath && player.status === "dead") {
+        return { start, end: last, closest, target: { ...target }, died: true, snapshot, player };
+      }
       assert(player.status === "alive", `Player became ${player.status} while steering toward ${target.id || "target"}`);
       if (!start) start = { wx: player.wx, wy: player.wy };
       const ws = snapshot.session?.worldScale || 3;
@@ -260,8 +264,13 @@ async function steerTo(page, clientId, target, options = {}) {
       const dy = wrappedDelta(player.wy, target.wy, ws);
       const dist = Math.hypot(dx, dy);
       const speed = Math.hypot(player.vx || 0, player.vy || 0);
+      const fuelRatio = player.deltaVRatio || 0;
       closest = Math.min(closest, dist);
-      last = { wx: player.wx, wy: player.wy, vx: player.vx, vy: player.vy, dist, speed };
+      if (fuelRatio < 0.015) recharging = true;
+      else if (dist < Math.max(radius * 4, 0.16)) recharging = false;
+      else if (fuelRatio < 0.08) recharging = true;
+      if (fuelRatio > 0.42) recharging = false;
+      last = { wx: player.wx, wy: player.wy, vx: player.vx, vy: player.vy, dist, speed, fuelRatio, recharging };
 
       if (dist <= radius && (options.allowFlyby || speed <= (options.arrivalSpeed ?? 0.32))) {
         return { start, end: last, closest, target: { ...target } };
@@ -269,14 +278,24 @@ async function steerTo(page, clientId, target, options = {}) {
 
       const nx = dist > 1e-6 ? dx / dist : 1;
       const ny = dist > 1e-6 ? dy / dist : 0;
-      const closingSpeed = (player.vx || 0) * nx + (player.vy || 0) * ny;
-      const shouldBrake = speed > maxCruiseSpeed || (dist < radius * 3.5 && closingSpeed > 0.16);
+      const desiredSpeed = options.allowFlyby
+        ? maxCruiseSpeed
+        : Math.max(0.06, Math.min(maxCruiseSpeed, dist * 1.35));
+      const correctionX = nx * desiredSpeed - (player.vx || 0);
+      const correctionY = ny * desiredSpeed - (player.vy || 0);
+      const correctionMagnitude = Math.hypot(correctionX, correctionY);
+      const emergencyBrake = speed > Math.max(0.52, maxCruiseSpeed * 1.6);
+      if (recharging) {
+        await setGamepadDrive(page);
+        await sleep(150);
+        continue;
+      }
       await setGamepadDrive(page,
-        shouldBrake && speed > 0.01 ? (player.vx || 0) / speed : nx,
-        shouldBrake && speed > 0.01 ? (player.vy || 0) / speed : ny,
+        emergencyBrake && speed > 0.01 ? (player.vx || 0) / speed : correctionX / (correctionMagnitude || 1),
+        emergencyBrake && speed > 0.01 ? (player.vy || 0) / speed : correctionY / (correctionMagnitude || 1),
         {
-          thrust: !shouldBrake && player.deltaVRatio > 0.05 ? 1 : 0,
-          brake: shouldBrake ? 1 : 0,
+          thrust: !emergencyBrake && fuelRatio > 0.01 && correctionMagnitude > 0.035 ? 1 : 0,
+          brake: emergencyBrake && fuelRatio > 0.01 ? 1 : 0,
         },
       );
       await sleep(110);
@@ -386,7 +405,7 @@ async function collectRouteLootAndRaiseSignal(page, clientId, outputDir, screens
           radius: 0.075,
           maxCruiseSpeed: 0.24,
           arrivalSpeed: 0.22,
-          timeout: 30000,
+          timeout: 45000,
         });
         looted = await waitForPlayer(clientId, (player) => player.cargoCount > 0, { timeout: 5000 });
         wreck = candidate;
@@ -434,7 +453,7 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
     radius: 0.035,
     maxCruiseSpeed: 0.27,
     arrivalSpeed: 0.19,
-    timeout: 35000,
+    timeout: 50000,
   });
   await brakeToLowSpeed(page, clientId, 2500);
   const ready = await waitForPlayer(
@@ -456,6 +475,84 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
     readyTick: ready.snapshot.tick,
     escapedTick: escaped.snapshot.tick,
     travel,
+  };
+}
+
+async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
+  const initial = await getSnapshot();
+  const player = localPlayer(initial, clientId);
+  assert(player, "Expected a live player for natural death proof");
+  const worldScale = initial.session?.worldScale || 3;
+  const well = (initial.world?.wells || [])
+    .filter((entry) => entry.alive !== false && !entry.consumedByInhibitor)
+    .sort((left, right) =>
+      (Number(right.killRadius) || 0) - (Number(left.killRadius) || 0)
+      || wrappedDistance(player, left, worldScale) - wrappedDistance(player, right, worldScale)
+    )[0];
+  assert(well, "Expected a visible well for natural death proof");
+  const initialDX = wrappedDelta(player.wx, well.wx, worldScale);
+  const initialDY = wrappedDelta(player.wy, well.wy, worldScale);
+  const initialDistance = Math.hypot(initialDX, initialDY) || 1;
+  const approachDirection = {
+    x: initialDX / initialDistance,
+    y: initialDY / initialDistance,
+  };
+  const baselineSeq = (await getEvents(0)).reduce((max, event) => Math.max(max, event.seq || 0), 0);
+  const nearOffset = Math.max(0.34, (Number(well.killRadius) || 0.04) * 6);
+  const nearPoint = {
+    id: `${well.id}-near-side`,
+    wx: wrap(well.wx - approachDirection.x * nearOffset, worldScale),
+    wy: wrap(well.wy - approachDirection.y * nearOffset, worldScale),
+  };
+  await steerTo(page, clientId, nearPoint, {
+    radius: 0.08,
+    maxCruiseSpeed: 0.38,
+    allowFlyby: true,
+    timeout: 60000,
+  });
+  screenshots.push(await capturePage(page, outputDir, "16-well-contact-approach"));
+  await tapGamepadButton(page, 4, 80);
+  await waitForPlayer(clientId, (entry) => entry.abilityState?.burnActive === true, { timeout: 5000 });
+
+  let dead = null;
+  let lastInterceptError = null;
+  for (let attempt = 0; attempt < 3 && !dead?.died; attempt++) {
+    try {
+      dead = await steerTo(page, clientId, { ...well, id: `${well.id}-center` }, {
+        acceptDeath: true,
+        radius: 0.005,
+        maxCruiseSpeed: 0.65,
+        allowFlyby: true,
+        timeout: 22000,
+      });
+    } catch (error) {
+      lastInterceptError = error;
+    }
+  }
+  assert(
+    dead?.died && dead.player?.status === "dead",
+    `Expected natural well death while crossing ${well.id}; ${lastInterceptError?.message || "no terminal contact"}`,
+  );
+  const deathEvent = (await getEvents(baselineSeq)).find((event) =>
+    event.type === "player.died" && event.payload?.clientId === clientId
+  );
+  assert(deathEvent?.payload?.cause === "well", `Expected a public well death event, got ${deathEvent?.payload?.cause}`);
+  assert(deathEvent.payload.wellId === well.id, `Expected death at ${well.id}, got ${deathEvent.payload.wellId}`);
+  await waitForPhase(page, "dead", 8000);
+  await sleep(1500);
+  screenshots.push(await capturePage(page, outputDir, "17-natural-well-death"));
+
+  // The result screen deliberately locks confirm for one beat. This proves the
+  // same Deck A path a player uses, including authority leave and Home recovery.
+  await sleep(1300);
+  await tapGamepadButton(page, 0, 220);
+  await waitForPhase(page, "home", 10000);
+  screenshots.push(await capturePage(page, outputDir, "18-death-return-home"));
+  return {
+    cause: deathEvent.payload.cause,
+    wellId: deathEvent.payload.wellId || well.id,
+    wellName: deathEvent.payload.wellName || well.name || well.id,
+    tick: dead.snapshot.tick,
   };
 }
 
@@ -509,7 +606,7 @@ async function proveHomeAndSecondRun(page, firstRun, outputDir, screenshots) {
     radius: 0.09,
     maxCruiseSpeed: 0.30,
     arrivalSpeed: 0.30,
-    timeout: 12000,
+    timeout: 20000,
   });
   screenshots.push(await capturePage(page, outputDir, "14-second-run-changed-and-moving"));
   return {
@@ -552,6 +649,7 @@ function writeReport(outputDir, report) {
     `- Extraction: ${proof.portal?.portalId || "not reached"}; ${proof.portal ? "entered ready zone before explicit confirmation" : "portal proof not reached"}.`,
     `- Profile: ${proof.home?.profile?.totalExtractions ?? "?"} extraction(s); ${proof.home?.chronicle?.recordCount ?? "?"} Chronicle record(s).`,
     `- Second run: ${proof.secondRun?.runId || "not reached"}; changed from ${proof.firstRun?.runId || "not reached"}.`,
+    `- Death recovery: ${proof.death?.cause || "not reached"} at ${proof.death?.wellName || "n/a"}; returned Home through normal input.`,
     "",
     "## Evidence",
     "",
@@ -619,6 +717,48 @@ async function runJourney(page, outputDir, report, browserErrors) {
   };
 }
 
+async function enterFreshDeathRun(page, browserErrors) {
+  await configureEvidenceView(page);
+  await waitForPhase(page, "title");
+  await sleep(650);
+  await tapGamepadButton(page, 0);
+  await waitForPhase(page, "profileSelect");
+  await tapGamepadButton(page, 0);
+  await tapGamepadButton(page, 0);
+  await waitForPhase(page, "home");
+  const initialHome = await page.evaluate(() => window.__TEST_API?.getHomeState?.() || null);
+  if (initialHome?.hullType !== "breacher") {
+    await tapGamepadButton(page, 15);
+  }
+  await waitFor(
+    page,
+    () => window.__TEST_API?.getHomeState?.()?.hullType === "breacher",
+    { timeout: 5000 },
+  );
+  await moveHomeTab(page, "LAUNCH");
+  await tapGamepadButton(page, 0);
+  await waitForPhase(page, "mapSelect");
+  await tapGamepadButton(page, 0);
+  await waitForPhase(page, "playing", 15000);
+  await waitFor(page, () => {
+    const net = window.__TEST_API?.getNetworkState?.();
+    return net?.remoteAuthorityActive && net.sessionMapId === "shallows" && Number.isFinite(net.remoteTick);
+  }, { timeout: 15000 });
+  assertNoBrowserErrors(browserErrors, "Natural death launch");
+  const network = await page.evaluate(() => window.__TEST_API?.getNetworkState?.() || null);
+  assert(network?.clientId, "Expected a protocol-v2 identity for natural death proof");
+  return network.clientId;
+}
+
+async function runDeathJourney(page, outputDir, report, browserErrors) {
+  const clientId = await enterFreshDeathRun(page, browserErrors);
+  report.screenshots.push(await capturePage(page, outputDir, "15-natural-death-run-start"));
+  const death = await proveNaturalWellDeath(page, clientId, outputDir, report.screenshots);
+  report.journey ||= {};
+  report.journey.death = death;
+  assertNoBrowserErrors(browserErrors, "Natural death recovery");
+}
+
 async function run() {
   console.log(`\n=== AGENT PLAY EVAL (${htmlFile}) ===\n`);
   const runner = new TestRunner("AgentPlayEval");
@@ -639,14 +779,25 @@ async function run() {
 
   await startServer();
   try {
-    await runner.run("fresh protocol-v2 Shallows journey reaches a changed second run", async () => {
+    if (process.env.LBH_AGENT_EVAL_DEATH_ONLY !== "1") {
+      await runner.run("fresh protocol-v2 Shallows journey reaches a changed second run", async () => {
+        await withFreshSimServer(SIM_PORT, async () => {
+          await withFreshGame(
+            withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
+            async ({ page, errors }) => {
+              await runJourney(page, outputDir, report, errors);
+              assertNoBrowserErrors(errors, "Journey complete");
+            },
+            { resetState: true },
+          );
+        }, { idleShutdownMs: 30000 });
+      });
+    }
+    await runner.run("fresh controller journey dies to a visible well and returns Home", async () => {
       await withFreshSimServer(SIM_PORT, async () => {
         await withFreshGame(
           withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
-          async ({ page, errors }) => {
-            await runJourney(page, outputDir, report, errors);
-            assertNoBrowserErrors(errors, "Journey complete");
-          },
+          async ({ page, errors }) => runDeathJourney(page, outputDir, report, errors),
           { resetState: true },
         );
       }, { idleShutdownMs: 30000 });
