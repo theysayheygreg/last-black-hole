@@ -51,7 +51,8 @@ const deathResult = {
   hullType: "drifter",
   outcome: "dead",
   deathCause: "well",
-  deathEntityId: "charybdis",
+  deathEntityId: "well-1",
+  deathEntityName: "Charybdis",
   survivalTime: 64,
   cargoExtracted: [],
   cargoLost: [{ id: "lost-a", name: "Drowned Core", value: 75, tier: 2, category: "artifact" }],
@@ -105,7 +106,7 @@ async function run() {
       const view = await page.evaluate(() => window.__TEST_API.getRunResultsView());
       assert(view.status === "CONSUMED BY CHARYBDIS", `Expected well death status, got ${view.status}`);
       assert(view.cargoTitle === "CARGO LOST", `Expected lost cargo title, got ${view.cargoTitle}`);
-      assert(view.deathCause === "well: charybdis", `Expected death cause context, got ${view.deathCause}`);
+      assert(view.deathCause === "well: Charybdis", `Expected death cause context, got ${view.deathCause}`);
       assert(view.inhibitorLabel === "vessel", `Expected vessel form, got ${view.inhibitorLabel}`);
       assert(view.cargoLabels[0].includes("Drowned Core"), "Expected lost cargo label");
       assert(view.aiLines[0].includes("redline") && view.aiLines[0].includes("4 cargo"), "Expected AI outcome cargo count");

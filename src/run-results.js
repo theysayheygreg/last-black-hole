@@ -56,7 +56,7 @@ function normalizeOutcome(rawOutcome, phase) {
 
 function deathStatus(result) {
   const cause = result?.deathCause || null;
-  const entity = result?.deathEntityId || null;
+  const entity = result?.deathEntityName || result?.deathEntityId || null;
   if (cause === 'well') return entity ? `CONSUMED BY ${String(entity).toUpperCase()}` : 'CONSUMED';
   if (cause === 'inhibitor_vessel') return 'DEVOURED';
   if (cause === 'inhibitor_swarm') return 'SHREDDED';
@@ -92,6 +92,7 @@ export function buildRunResultsViewModel({
 
   const aiOutcomes = Array.isArray(runResult?.aiOutcomes) ? runResult.aiOutcomes : [];
   const notables = Array.isArray(runResult?.notables) ? runResult.notables : [];
+  const deathEntityLabel = runResult?.deathEntityName || runResult?.deathEntityId || null;
   const mapContext = {
     mapId: runResult?.mapId || runResult?.mapContext?.mapId || null,
     seed: runResult?.seed ?? runResult?.mapContext?.seed ?? null,
@@ -114,7 +115,7 @@ export function buildRunResultsViewModel({
     cargoLabels: cargo.map(itemLabel),
     emEarned,
     deathCause: !extracted && runResult?.deathCause
-      ? (runResult.deathEntityId ? `${runResult.deathCause}: ${runResult.deathEntityId}` : runResult.deathCause)
+      ? (deathEntityLabel ? `${runResult.deathCause}: ${deathEntityLabel}` : runResult.deathCause)
       : null,
     aiLines: aiOutcomes.slice(0, 4).map((ai) => {
       const personality = ai.personality || ai.name || 'rival';

@@ -1910,6 +1910,7 @@ function buildRunResult(player, outcome) {
   // Death cause taxonomy
   let deathCause = null;
   let deathEntityId = null;
+  let deathEntityName = null;
   if (outcome === 'dead') {
     // Find the most recent death event for this player
     const deathEvent = [...runtime.recentEvents].reverse().find(
@@ -1918,6 +1919,7 @@ function buildRunResult(player, outcome) {
     if (deathEvent) {
       deathCause = deathEvent.payload.cause || 'unknown';
       deathEntityId = deathEvent.payload.wellId || deathEvent.payload.entityId || null;
+      deathEntityName = deathEvent.payload.wellName || deathEvent.payload.entityName || null;
     }
   }
 
@@ -1945,7 +1947,8 @@ function buildRunResult(player, outcome) {
     notables.push({ type: "cargo_lost", description: `${cargoLost.length} cargo lost`, value: cargoLost.length });
   }
   if (deathCause) {
-    notables.push({ type: "death_cause", description: deathEntityId ? `${deathCause}: ${deathEntityId}` : deathCause, value: deathCause });
+    const deathLabel = deathEntityName || deathEntityId;
+    notables.push({ type: "death_cause", description: deathLabel ? `${deathCause}: ${deathLabel}` : deathCause, value: deathCause });
   }
 
   return {
@@ -1957,6 +1960,7 @@ function buildRunResult(player, outcome) {
     outcome: resultOutcome,
     deathCause,
     deathEntityId,
+    deathEntityName,
     survivalTime,
     cargoExtracted,
     cargoLost,

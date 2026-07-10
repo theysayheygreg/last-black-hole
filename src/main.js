@@ -440,6 +440,7 @@ function runResultToChronicleRecord(runResult, fallback = {}) {
     signalPeakZone: runResult?.signalPeakZone || fallback.signalPeakZone || null,
     deathCause: runResult?.deathCause || fallback.deathCause || null,
     deathEntityId: runResult?.deathEntityId || fallback.deathEntityId || null,
+    deathEntityName: runResult?.deathEntityName || fallback.deathEntityName || null,
     notable: runResult?.notables?.[0]?.description || fallback.notable || null,
   };
 }

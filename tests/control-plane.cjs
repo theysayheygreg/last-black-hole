@@ -271,7 +271,8 @@ async function run() {
           hullType: "drifter",
           outcome: "dead",
           deathCause: "well",
-          deathEntityId: "charybdis",
+          deathEntityId: "well-1",
+          deathEntityName: "Charybdis",
           survivalTime: 64,
           cargoExtracted: [],
           cargoLost: deathCargo,
@@ -309,7 +310,8 @@ async function run() {
       const abandonedRun = state.runs[abandonRunId];
       const profile = state.profiles[profileId];
       assert(deadRun.outcome === "dead", "Expected death run outcome");
-      assert(deadRun.deathCause === "well" && deadRun.deathEntityId === "charybdis", "Expected death cause context");
+      assert(deadRun.deathCause === "well" && deadRun.deathEntityId === "well-1", "Expected stable death entity id");
+      assert(deadRun.deathEntityName === "Charybdis", "Expected authored death entity name");
       assert(deadRun.cargoLost.length === 1 && deadRun.cargoExtracted.length === 0, "Expected death cargo loss");
       assert(deadRun.emEarned === 16, "Expected reduced death EM to persist");
       assert(deadRun.tax === 0, "Expected demo death path to stop taxing existing EM");

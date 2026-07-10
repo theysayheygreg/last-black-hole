@@ -208,6 +208,7 @@ function buildRunEntry({ profile, player, outcome, runDuration, session, runResu
     survivalBonus,
     deathCause: runResult?.deathCause || null,
     deathEntityId: runResult?.deathEntityId || null,
+    deathEntityName: runResult?.deathEntityName || null,
     cargoExtracted,
     cargoLost,
     salvageBrought: cloneItems(runResult?.salvageBrought || [
