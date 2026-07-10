@@ -5553,7 +5553,7 @@ function gameLoop(now) {
       reducedMotion: motion.reducedMotion,
     });
     const focusPulse = uiFocusPulseAmount();
-    const panelRect = { x: cx - 220, y: y - 30, w: 440, h: 290 };
+    const panelRect = { x: cx - 220, y: y - 30, w: 440, h: 340 };
     drawTerminalWindow(ctx, panelRect, {
       state: windowState,
       origin: 'top-left',
@@ -5638,7 +5638,7 @@ function gameLoop(now) {
     // Controls hint
     ctx.fillStyle = roleColor('muted', 0.76);
     ctx.font = canvasFont(12);
-    ctx.fillText(`${promptLabel('select', currentPromptOptions())} select    ${prompt('confirm', 'load')}    ${prompt('delete', 'delete')}    ${prompt('back', 'back')}`, cx, panelRect.y + panelRect.h + 38);
+    ctx.fillText(`${promptLabel('select', currentPromptOptions())} select    ${prompt('confirm', 'load')}    ${prompt('delete', 'delete')}    ${prompt('back', 'back')}`, cx, panelRect.y + panelRect.h - 18);
 
     ctx.restore();
   }
