@@ -19,6 +19,10 @@ export function easeInOutCubic(value) {
     : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+export function linear(value) {
+  return clamp01(value);
+}
+
 export function prefersReducedMotion(source = globalThis) {
   try {
     return source?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
@@ -39,6 +43,10 @@ export function resolveMotionSettings(config = {}, source = globalThis) {
     textDuration: Number.isFinite(config?.textDuration) ? Math.max(0.01, config.textDuration) : 0.7,
     rowStagger: Number.isFinite(config?.rowStagger) ? Math.max(0, config.rowStagger) : 0.055,
     commandPulse: Number.isFinite(config?.commandPulse) ? Math.max(0.01, config.commandPulse) : 0.8,
+    transitionDuration: Number.isFinite(config?.transitionDuration) ? Math.max(0.01, config.transitionDuration) : 0.34,
+    windowDuration: Number.isFinite(config?.windowDuration) ? Math.max(0.01, config.windowDuration) : 0.42,
+    focusDuration: Number.isFinite(config?.focusDuration) ? Math.max(0.01, config.focusDuration) : 0.16,
+    maxOcclusion: clamp01(Number.isFinite(config?.maxOcclusion) ? config.maxOcclusion : 0.68),
   };
 }
 
@@ -68,6 +76,169 @@ export function staggerProgress(time, index, {
   });
 }
 
+function normalizePhases(phases) {
+  const entries = Array.isArray(phases) ? phases : [];
+  return entries.map((phase, index) => ({
+    name: String(phase?.name || `phase-${index}`),
+    duration: Math.max(0, Number.isFinite(phase?.duration) ? phase.duration : 0),
+  }));
+}
+
+export function sampleTimeline(time, phases, {
+  delay = 0,
+  reducedMotion = false,
+  ease = linear,
+} = {}) {
+  const entries = normalizePhases(phases);
+  const totalDuration = entries.reduce((sum, phase) => sum + phase.duration, 0);
+  if (reducedMotion || entries.length === 0 || totalDuration <= 0) {
+    return {
+      phase: entries.at(-1)?.name || null,
+      phaseIndex: Math.max(0, entries.length - 1),
+      phaseProgress: 1,
+      progress: 1,
+      settled: true,
+      elapsed: totalDuration,
+      totalDuration,
+    };
+  }
+
+  const elapsed = Math.max(0, Number.isFinite(time) ? time - delay : 0);
+  let cursor = 0;
+  for (let index = 0; index < entries.length; index += 1) {
+    const phase = entries[index];
+    const end = cursor + phase.duration;
+    if (elapsed < end || index === entries.length - 1) {
+      const rawPhaseProgress = phase.duration <= 0 ? 1 : clamp01((elapsed - cursor) / phase.duration);
+      const settled = elapsed >= totalDuration;
+      return {
+        phase: phase.name,
+        phaseIndex: index,
+        phaseProgress: settled ? 1 : ease(rawPhaseProgress),
+        progress: settled ? 1 : clamp01(elapsed / totalDuration),
+        settled,
+        elapsed: Math.min(elapsed, totalDuration),
+        totalDuration,
+      };
+    }
+    cursor = end;
+  }
+
+  return {
+    phase: entries.at(-1)?.name || null,
+    phaseIndex: Math.max(0, entries.length - 1),
+    phaseProgress: 1,
+    progress: 1,
+    settled: true,
+    elapsed: totalDuration,
+    totalDuration,
+  };
+}
+
+export function sampleScreenTransition(time, {
+  delay = 0,
+  duration = 0.34,
+  reducedMotion = false,
+  maxOcclusion = 0.68,
+} = {}) {
+  const safeDuration = Math.max(0.01, duration);
+  const timeline = sampleTimeline(time, [
+    { name: 'depart', duration: safeDuration * 0.38 },
+    { name: 'handoff', duration: safeDuration * 0.18 },
+    { name: 'arrive', duration: safeDuration * 0.44 },
+  ], { delay, reducedMotion, ease: easeInOutCubic });
+
+  if (reducedMotion || timeline.settled) {
+    return {
+      ...timeline,
+      outgoingAlpha: 0,
+      incomingAlpha: 1,
+      occlusionAlpha: 0,
+      criticalAlpha: 1,
+    };
+  }
+
+  const cap = Math.min(0.82, clamp01(maxOcclusion));
+  let outgoingAlpha = 0;
+  let incomingAlpha = 0;
+  let occlusionAlpha = cap;
+  if (timeline.phase === 'depart') {
+    outgoingAlpha = 1 - timeline.phaseProgress;
+    occlusionAlpha = cap * timeline.phaseProgress;
+  } else if (timeline.phase === 'handoff') {
+    incomingAlpha = 0.18 * timeline.phaseProgress;
+  } else {
+    incomingAlpha = 0.18 + 0.82 * timeline.phaseProgress;
+    occlusionAlpha = cap * (1 - timeline.phaseProgress);
+  }
+
+  return {
+    ...timeline,
+    outgoingAlpha: clamp01(outgoingAlpha),
+    incomingAlpha: clamp01(incomingAlpha),
+    occlusionAlpha: Math.min(cap, clamp01(occlusionAlpha)),
+    criticalAlpha: 1,
+  };
+}
+
+export function sampleTerminalWindow(time, {
+  delay = 0,
+  duration = 0.42,
+  reducedMotion = false,
+} = {}) {
+  const safeDuration = Math.max(0.01, duration);
+  const timeline = sampleTimeline(time, [
+    { name: 'node', duration: safeDuration * 0.12 },
+    { name: 'rail', duration: safeDuration * 0.28 },
+    { name: 'frame', duration: safeDuration * 0.34 },
+    { name: 'content', duration: safeDuration * 0.26 },
+  ], { delay, reducedMotion, ease: easeOutCubic });
+
+  const completeBefore = (phaseIndex) => timeline.phaseIndex > phaseIndex ? 1 : 0;
+  const progressAt = (phaseIndex) => timeline.phaseIndex === phaseIndex ? timeline.phaseProgress : completeBefore(phaseIndex);
+  return {
+    ...timeline,
+    node: progressAt(0),
+    rail: progressAt(1),
+    frame: progressAt(2),
+    content: progressAt(3),
+  };
+}
+
+export function sampleStaggeredRows(time, count, options = {}) {
+  const total = Math.max(0, Math.floor(Number.isFinite(count) ? count : 0));
+  const reducedMotion = options.reducedMotion === true;
+  const distance = Math.max(0, Number.isFinite(options.distance) ? options.distance : 8);
+  return Array.from({ length: total }, (_, index) => {
+    const progress = staggerProgress(time, index, options);
+    return {
+      index,
+      progress,
+      alpha: reducedMotion ? 1 : progress,
+      offset: reducedMotion ? 0 : (1 - progress) * distance,
+      settled: reducedMotion || progress >= 1,
+    };
+  });
+}
+
+export function sampleFocusShift(time, {
+  delay = 0,
+  duration = 0.16,
+  reducedMotion = false,
+} = {}) {
+  const progress = motionProgress(time, { delay, duration, reducedMotion, ease: easeInOutCubic });
+  if (reducedMotion || progress >= 1) {
+    return { progress: 1, previousAlpha: 0.58, currentAlpha: 1, edgeAlpha: 0, settled: true };
+  }
+  return {
+    progress,
+    previousAlpha: 1 - 0.42 * progress,
+    currentAlpha: 0.72 + 0.28 * progress,
+    edgeAlpha: Math.sin(Math.PI * progress) * 0.34,
+    settled: false,
+  };
+}
+
 export function typeOnText(text, {
   time = 0,
   delay = 0,
@@ -94,6 +265,16 @@ function revealRectForOrigin(rect, progress, origin = 'left') {
     const w = r.w * p;
     const h = r.h * p;
     return { x: r.x + (r.w - w) / 2, y: r.y + (r.h - h) / 2, w, h };
+  }
+  if (origin === 'top-left' || origin === 'top-right' || origin === 'bottom-left' || origin === 'bottom-right') {
+    const w = r.w * p;
+    const h = r.h * p;
+    return {
+      x: origin.endsWith('right') ? r.x + r.w - w : r.x,
+      y: origin.startsWith('bottom') ? r.y + r.h - h : r.y,
+      w,
+      h,
+    };
   }
   return { x: r.x, y: r.y, w: r.w * p, h: r.h };
 }
@@ -123,6 +304,68 @@ export function drawMotionPanel(ctx, rect, {
   withRevealClip(ctx, rect, progress, origin, () => {
     drawUiPanel(ctx, rect, { role, fillAlpha, borderAlpha, cornerLength });
   });
+}
+
+function terminalCorner(rect, origin) {
+  const right = origin.endsWith('right');
+  const bottom = origin.startsWith('bottom');
+  return {
+    x: right ? rect.x + rect.w : rect.x,
+    y: bottom ? rect.y + rect.h : rect.y,
+    xDirection: right ? -1 : 1,
+    yDirection: bottom ? -1 : 1,
+  };
+}
+
+export function drawTerminalWindow(ctx, rect, {
+  state = sampleTerminalWindow(Infinity, { reducedMotion: true }),
+  origin = 'top-left',
+  role = 'flow',
+  fillAlpha = 0.46,
+  borderAlpha = 0.34,
+  cornerLength = 18,
+  drawContent,
+} = {}) {
+  const r = normalizeRect(rect);
+  const corner = terminalCorner(r, origin);
+  const nodeSize = 3 + 2 * clamp01(state.node);
+  ctx.save();
+  ctx.fillStyle = roleColor(role, 0.86);
+  ctx.fillRect(corner.x - nodeSize / 2, corner.y - nodeSize / 2, nodeSize, nodeSize);
+
+  if (state.rail > 0.001) {
+    const horizontal = r.w * clamp01(state.rail);
+    const vertical = r.h * clamp01((state.rail - 0.38) / 0.62);
+    ctx.beginPath();
+    ctx.moveTo(corner.x, corner.y);
+    ctx.lineTo(corner.x + corner.xDirection * horizontal, corner.y);
+    if (vertical > 0) {
+      ctx.moveTo(corner.x, corner.y);
+      ctx.lineTo(corner.x, corner.y + corner.yDirection * vertical);
+    }
+    ctx.strokeStyle = roleColor(role, 0.72);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  if (state.frame > 0.001) {
+    drawMotionPanel(ctx, r, {
+      progress: state.frame,
+      origin,
+      role,
+      fillAlpha,
+      borderAlpha,
+      cornerLength,
+    });
+  }
+
+  if (typeof drawContent === 'function' && state.content > 0.001) {
+    ctx.save();
+    ctx.globalAlpha = (ctx.globalAlpha ?? 1) * clamp01(state.content);
+    drawContent(r, clamp01(state.content));
+    ctx.restore();
+  }
 }
 
 export function drawCommandButtonMotion(ctx, rect, label, {

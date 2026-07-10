@@ -431,6 +431,10 @@ export const CONFIG = {
       textDuration: 0.7,         // Seconds for terminal copy to type/walk on.
       rowStagger: 0.055,         // Delay between repeated rows in menus/results.
       commandPulse: 0.8,         // Seconds for CTA/focus edge pulses to fade.
+      transitionDuration: 0.34,  // Phased depart/handoff/arrive transition, capped below blackout.
+      windowDuration: 0.42,      // Terminal node, rail, frame, then content reveal.
+      focusDuration: 0.16,       // Short focus transfer; never a repeating attention loop.
+      maxOcclusion: 0.68,        // Full-frame transition matte cap keeps critical reads visible.
     },
   },
 

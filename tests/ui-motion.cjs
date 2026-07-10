@@ -32,8 +32,14 @@ function makeRecordingContext() {
     drawCommandButtonMotion,
     drawDirectionalWipe,
     drawMotionPanel,
+    drawTerminalWindow,
     motionProgress,
     resolveMotionSettings,
+    sampleFocusShift,
+    sampleScreenTransition,
+    sampleStaggeredRows,
+    sampleTerminalWindow,
+    sampleTimeline,
     staggerProgress,
     typeOnText,
     withRevealClip,
@@ -43,6 +49,13 @@ function makeRecordingContext() {
   assert.strictEqual(motionProgress(9, { delay: 0.2, duration: 1 }), 1);
   assert.strictEqual(motionProgress(0, { reducedMotion: true }), 1);
   assert(staggerProgress(0.3, 0, { duration: 1 }) > staggerProgress(0.3, 3, { duration: 1 }));
+
+  const timeline = sampleTimeline(0.25, [
+    { name: 'first', duration: 0.2 },
+    { name: 'second', duration: 0.2 },
+  ]);
+  assert.strictEqual(timeline.phase, 'second');
+  assert.strictEqual(sampleTimeline(9, [{ name: 'done', duration: 0.2 }]).settled, true);
 
   assert.strictEqual(typeOnText('launch run', { time: 0, duration: 1 }), '');
   assert.strictEqual(typeOnText('launch run', { time: 9, duration: 1 }), 'launch run');
@@ -60,11 +73,40 @@ function makeRecordingContext() {
   });
   assert.strictEqual(prefersReduced.enabled, true);
   assert.strictEqual(prefersReduced.reducedMotion, true);
+  assert.strictEqual(prefersReduced.maxOcclusion, 0.68);
+
+  const transition = sampleScreenTransition(0.17);
+  assert(transition.occlusionAlpha < 1, 'screen transitions must never produce a full-frame flash');
+  assert.strictEqual(transition.criticalAlpha, 1, 'critical text remains independently readable');
+  assert.deepStrictEqual(
+    sampleScreenTransition(0, { reducedMotion: true }),
+    sampleScreenTransition(9),
+    'reduced motion should resolve to the settled transition state',
+  );
+
+  const windowState = sampleTerminalWindow(0.3);
+  assert.strictEqual(windowState.rail, 1, 'window rail should finish before content starts');
+  assert(windowState.frame > 0, 'window frame should follow its terminal rail');
+  assert.strictEqual(windowState.content, 0, 'content must wait for the frame');
+
+  const rows = sampleStaggeredRows(0.2, 3, { duration: 0.3, stagger: 0.08 });
+  assert(rows[0].progress > rows[2].progress, 'row state should preserve deterministic stagger order');
+  assert(sampleFocusShift(0.08).edgeAlpha > 0, 'focus transfer should have one brief edge accent');
 
   const panelCtx = makeRecordingContext();
   drawMotionPanel(panelCtx, { x: 10, y: 20, w: 100, h: 40 }, { progress: 0.5, origin: 'right' });
   assert(panelCtx.calls.some((call) => call[0] === 'clip'), 'panel reveal should clip partial panels');
   assert(panelCtx.calls.some((call) => call[0] === 'strokeRect'), 'panel reveal should draw panel chrome');
+
+  const terminalCtx = makeRecordingContext();
+  let contentDrawn = false;
+  drawTerminalWindow(terminalCtx, { x: 10, y: 20, w: 100, h: 40 }, {
+    state: sampleTerminalWindow(9),
+    origin: 'bottom-right',
+    drawContent() { contentDrawn = true; },
+  });
+  assert(terminalCtx.calls.some((call) => call[0] === 'lineTo'), 'terminal window should grow rails from its origin node');
+  assert(contentDrawn, 'settled terminal window should draw content');
 
   const fullCtx = makeRecordingContext();
   withRevealClip(fullCtx, { x: 0, y: 0, w: 40, h: 20 }, 1, 'left', () => {
@@ -90,5 +132,6 @@ function makeRecordingContext() {
   drawDirectionalWipe(wipeCtx, { x: 0, y: 0, w: 400, h: 240 }, { progress: 0.5 });
   assert(wipeCtx.calls.filter((call) => call[0] === 'fillRect').length >= 2, 'directional wipe should draw a band and leading edge');
 
+  await require('./ui-motion-temporal.cjs')();
   console.log('UI motion helpers passed');
 })();
