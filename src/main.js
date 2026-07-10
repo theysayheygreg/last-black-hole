@@ -67,6 +67,7 @@ import { CLIENT_PERF_PROFILES } from './content/session-profiles.js';
 import { HULL_DEFINITIONS, PUBLIC_HULL_IDS, RIG_TRACKS } from './content/hulls.js';
 import { runEmEarned } from './content/balance.js';
 import { canvasFont, waitForTypographyFonts } from './ui/typography.js';
+import { drawItemIcon } from './ui/asset-kit.js';
 import {
   drawCornerFrame,
   drawKeyValueRow,
@@ -83,11 +84,13 @@ import {
 import {
   drawCommandButtonMotion,
   drawDirectionalWipe,
+  drawTerminalWindow,
   motionProgress,
   resolveMotionSettings,
+  sampleScreenTransition,
+  sampleTerminalWindow,
   staggerProgress,
   typeOnText,
-  withRevealClip,
 } from './ui/motion.js';
 import { ctaLabel, isDeckMode, movementHint, promptLabel } from './ui/input-prompts.js';
 import { corruptGlyphText } from './text-corruption.js';
@@ -787,15 +790,6 @@ function updateUiMotion(rawDt) {
   } else {
     uiFocusPulseTimer += step;
   }
-}
-
-function uiPanelReveal(delay = 0, duration = currentUiMotionSettings().panelDuration) {
-  const motion = currentUiMotionSettings();
-  return motionProgress(uiMotionTimer, {
-    delay,
-    duration,
-    reducedMotion: motion.reducedMotion,
-  });
 }
 
 function uiContentReveal(delay = 0.1, duration = currentUiMotionSettings().textDuration) {
@@ -2860,31 +2854,6 @@ function drawScanlines(ctx, w, h, alpha = 0.04) {
   ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
   for (let y = 0; y < h; y += 3) {
     ctx.fillRect(0, y, w, 1);
-  }
-}
-
-/** Draw a terminal frame border with optional title */
-function drawTerminalFrame(ctx, x, y, w, h, title, color = 'rgba(80, 100, 140, 0.3)') {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x, y, w, h);
-  // Corner accents
-  const c = 6;
-  ctx.strokeStyle = color.replace(/[\d.]+\)$/, '0.6)');
-  ctx.beginPath();
-  ctx.moveTo(x, y + c); ctx.lineTo(x, y); ctx.lineTo(x + c, y); // top-left
-  ctx.moveTo(x + w - c, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + c); // top-right
-  ctx.moveTo(x + w, y + h - c); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - c, y + h); // bottom-right
-  ctx.moveTo(x + c, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - c); // bottom-left
-  ctx.stroke();
-  if (title) {
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.9)';
-    const tw = ctx.measureText(title).width + 16;
-    ctx.fillRect(x + 12, y - 7, tw, 14);
-    ctx.fillStyle = color.replace(/[\d.]+\)$/, '0.7)');
-    ctx.font = canvasFont(9);
-    ctx.textAlign = 'left';
-    ctx.fillText(title.toUpperCase(), x + 20, y + 3);
   }
 }
 
@@ -5562,7 +5531,7 @@ function gameLoop(now) {
 
     ctx.save();
     const w = overlayCanvas.width, h = overlayCanvas.height;
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.88)';
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.80)';
     ctx.fillRect(0, 0, w, h);
     drawScanlines(ctx, w, h);
     ctx.textAlign = 'center';
@@ -5571,14 +5540,21 @@ function gameLoop(now) {
 
     // Terminal frame — title is the only label (no double)
     const motion = currentUiMotionSettings();
-    const panelReveal = uiPanelReveal();
-    const contentReveal = uiContentReveal(0.12);
+    const windowState = sampleTerminalWindow(uiMotionTimer, {
+      duration: motion.windowDuration,
+      reducedMotion: motion.reducedMotion,
+    });
     const focusPulse = uiFocusPulseAmount();
     const panelRect = { x: cx - 220, y: y - 30, w: 440, h: 290 };
-    withRevealClip(ctx, panelRect, panelReveal, 'center', () => {
-      drawTerminalFrame(ctx, panelRect.x, panelRect.y, panelRect.w, panelRect.h, null, 'rgba(100, 200, 220, 0.25)');
+    drawTerminalWindow(ctx, panelRect, {
+      state: windowState,
+      origin: 'top-left',
+      role: 'flow',
+      fillAlpha: 0.72,
+      borderAlpha: 0.34,
+      cornerLength: 34,
     });
-    ctx.globalAlpha *= contentReveal;
+    ctx.globalAlpha *= windowState.content;
 
     ctx.fillStyle = 'rgba(160, 230, 245, 0.95)';
     ctx.font = canvasFont(22, { role: 'display', weight: '700' });
@@ -5626,10 +5602,9 @@ function gameLoop(now) {
 
     // Name input overlay
     if (nameInputActive) {
-      ctx.fillStyle = 'rgba(0, 0, 20, 0.9)';
-      ctx.fillRect(cx - 200, overlayCanvas.height * 0.45, 400, 80);
-      ctx.strokeStyle = 'rgba(100, 200, 255, 0.6)';
-      ctx.strokeRect(cx - 200, overlayCanvas.height * 0.45, 400, 80);
+      drawUiPanel(ctx, { x: cx - 200, y: overlayCanvas.height * 0.45, w: 400, h: 80 }, {
+        role: 'flow', fillAlpha: 0.86, borderAlpha: 0.62, cornerLength: 22,
+      });
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
       ctx.font = canvasFont(12);
       ctx.fillText('type name + enter to confirm    esc to cancel', cx, overlayCanvas.height * 0.45 + 25);
@@ -5641,10 +5616,9 @@ function gameLoop(now) {
 
     // Delete confirmation overlay
     if (deleteConfirmSlot >= 0) {
-      ctx.fillStyle = 'rgba(0, 0, 20, 0.85)';
-      ctx.fillRect(cx - 180, overlayCanvas.height * 0.45, 360, 70);
-      ctx.strokeStyle = 'rgba(255, 80, 80, 0.6)';
-      ctx.strokeRect(cx - 180, overlayCanvas.height * 0.45, 360, 70);
+      drawUiPanel(ctx, { x: cx - 180, y: overlayCanvas.height * 0.45, w: 360, h: 70 }, {
+        role: 'danger', fillAlpha: 0.86, borderAlpha: 0.64, cornerLength: 22,
+      });
       ctx.fillStyle = 'rgba(255, 100, 80, 0.9)';
       ctx.font = canvasFont(13);
       ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, overlayCanvas.height * 0.45 + 28);
@@ -5667,14 +5641,13 @@ function gameLoop(now) {
     const w = overlayCanvas.width, h = overlayCanvas.height;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.88)';
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.74)';
     ctx.fillRect(0, 0, w, h);
     drawUiScanlines(ctx, w, h, 0.025, 4);
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 8;
 
     const motion = currentUiMotionSettings();
-    const panelReveal = uiPanelReveal();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
     const marginX = Math.max(34, Math.min(64, w * 0.045));
@@ -5689,14 +5662,17 @@ function gameLoop(now) {
     const centerPanel = { x: leftPanel.x + leftPanel.w + gap, y: top, w: centerW, h: panelH };
     const rightPanel = { x: centerPanel.x + centerPanel.w + gap, y: top, w: rightW, h: panelH };
 
-    withRevealClip(ctx, leftPanel, panelReveal, 'left', () => {
-      drawUiPanel(ctx, leftPanel, { role: 'flow', title: 'pilot console', fillAlpha: 0.70, borderAlpha: 0.30, cornerLength: 34 });
+    drawTerminalWindow(ctx, leftPanel, {
+      state: sampleTerminalWindow(uiMotionTimer, { duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
+      origin: 'top-left', role: 'flow', fillAlpha: 0.70, borderAlpha: 0.30, cornerLength: 34,
     });
-    withRevealClip(ctx, centerPanel, panelReveal, 'top', () => {
-      drawUiPanel(ctx, centerPanel, { role: homeTabRole(homeTab), fillAlpha: 0.64, borderAlpha: 0.26, cornerLength: 42 });
+    drawTerminalWindow(ctx, centerPanel, {
+      state: sampleTerminalWindow(uiMotionTimer, { delay: 0.05, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
+      origin: 'top-left', role: homeTabRole(homeTab), fillAlpha: 0.64, borderAlpha: 0.26, cornerLength: 42,
     });
-    withRevealClip(ctx, rightPanel, panelReveal, 'right', () => {
-      drawUiPanel(ctx, rightPanel, { role: 'salvage', title: 'launch rail', fillAlpha: 0.68, borderAlpha: 0.34, cornerLength: 34 });
+    drawTerminalWindow(ctx, rightPanel, {
+      state: sampleTerminalWindow(uiMotionTimer, { delay: 0.10, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
+      origin: 'top-right', role: 'salvage', fillAlpha: 0.68, borderAlpha: 0.34, cornerLength: 34,
     });
     ctx.globalAlpha *= contentReveal;
 
@@ -5821,7 +5797,8 @@ function gameLoop(now) {
         });
         ctx.fillStyle = eq ? roleColor('salvage', 0.9) : roleColor('muted', 0.48);
         const action = (sel && eq) ? `  [${prompt('confirm', 'unequip')}]` : '';
-        ctx.fillText(fitUiText(ctx, `equip ${i + 1}: ${eq ? eq.name : '- empty -'}${action}`, centerTextW * 0.62), centerX + 4, sy);
+        if (eq) drawItemIcon(ctx, eq, { x: centerX, y: sy - 16, w: 20, h: 20 }, { state: 'equipped', selected: sel });
+        ctx.fillText(fitUiText(ctx, `equip ${i + 1}: ${eq ? eq.name : '- empty -'}${action}`, centerTextW * 0.58), centerX + 26, sy);
         sy += 25;
       }
       for (let i = 0; i < 2; i++) {
@@ -5837,7 +5814,8 @@ function gameLoop(now) {
         });
         ctx.fillStyle = con ? roleColor('anomaly', 0.86) : roleColor('muted', 0.48);
         const action = (sel && con) ? `  [${prompt('confirm', 'remove')}]` : '';
-        ctx.fillText(fitUiText(ctx, `hotbar ${i + 1}: ${con ? con.name : '- empty -'}${action}`, centerTextW * 0.62), centerX + 4, sy);
+        if (con) drawItemIcon(ctx, con, { x: centerX, y: sy - 16, w: 20, h: 20 }, { state: 'consumable', selected: sel });
+        ctx.fillText(fitUiText(ctx, `hotbar ${i + 1}: ${con ? con.name : '- empty -'}${action}`, centerTextW * 0.58), centerX + 26, sy);
         sy += 25;
       }
 
@@ -5862,10 +5840,11 @@ function gameLoop(now) {
           railWidth: selected ? 4 : 2,
         });
         const tierColor = TIER_COLORS[item.tier] || 'rgba(180, 180, 190, 0.8)';
+        drawItemIcon(ctx, item, { x: centerX, y: vy - 17, w: 22, h: 22 }, { state: 'vault', selected });
         ctx.fillStyle = tierColor;
         const tierLabel = typeof item.tier === 'number' ? `T${item.tier} ` : '';
         const affinityTag = item.affinity ? ` [${item.affinity}]` : '';
-        ctx.fillText(fitUiText(ctx, `${tierLabel}${item.name}${affinityTag}`, centerTextW - 128), centerX + 4, vy);
+        ctx.fillText(fitUiText(ctx, `${tierLabel}${item.name}${affinityTag}`, centerTextW - 154), centerX + 28, vy);
         ctx.fillStyle = roleColor('muted', 0.72);
         ctx.textAlign = 'right';
         ctx.fillText(`${item.value || '?'} EM`, centerX + centerTextW - 12, vy);
@@ -6118,14 +6097,13 @@ function gameLoop(now) {
     const promptOptions = currentPromptOptions();
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.88)';
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.72)';
     ctx.fillRect(0, 0, w, h);
     drawUiScanlines(ctx, w, h, 0.024, 4);
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
 
     const motion = currentUiMotionSettings();
-    const panelReveal = uiPanelReveal();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
     const marginX = Math.max(34, Math.min(64, w * 0.045));
@@ -6140,15 +6118,19 @@ function gameLoop(now) {
     const previewPanel = { x: listPanel.x + listPanel.w + gap, y: top, w: centerW, h: panelH };
     const briefPanel = { x: previewPanel.x + previewPanel.w + gap, y: top, w: rightW, h: panelH };
 
-    withRevealClip(ctx, listPanel, panelReveal, 'left', () => {
-      drawUiPanel(ctx, listPanel, { role: routeRole, title: 'destinations', fillAlpha: 0.70, borderAlpha: 0.30, cornerLength: 34 });
+    drawTerminalWindow(ctx, listPanel, {
+      state: sampleTerminalWindow(uiMotionTimer, { duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
+      origin: 'top-left', role: routeRole, fillAlpha: 0.70, borderAlpha: 0.30, cornerLength: 34,
     });
-    withRevealClip(ctx, previewPanel, panelReveal, 'top', () => {
-      drawMapRoutePreview(ctx, selectedMap, previewPanel, { alpha: 1, seedLabel: previewSeed });
+    drawTerminalWindow(ctx, previewPanel, {
+      state: sampleTerminalWindow(uiMotionTimer, { delay: 0.05, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
+      origin: 'top-left', role: 'flow', fillAlpha: 0.28, borderAlpha: 0.24, cornerLength: 42,
     });
-    withRevealClip(ctx, briefPanel, panelReveal, 'right', () => {
-      drawUiPanel(ctx, briefPanel, { role: 'salvage', title: 'drop briefing', fillAlpha: 0.68, borderAlpha: 0.34, cornerLength: 34 });
+    drawTerminalWindow(ctx, briefPanel, {
+      state: sampleTerminalWindow(uiMotionTimer, { delay: 0.10, duration: motion.windowDuration, reducedMotion: motion.reducedMotion }),
+      origin: 'top-right', role: 'salvage', fillAlpha: 0.68, borderAlpha: 0.34, cornerLength: 34,
     });
+    drawMapRoutePreview(ctx, selectedMap, previewPanel, { alpha: contentReveal, seedLabel: previewSeed });
     ctx.globalAlpha *= contentReveal;
 
     ctx.textAlign = 'left';
@@ -6323,7 +6305,7 @@ function gameLoop(now) {
 
     const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.92)';
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.82)';
     ctx.fillRect(0, 0, w, h);
     drawScanlines(ctx, w, h);
     ctx.textAlign = 'center';
@@ -6331,13 +6313,20 @@ function gameLoop(now) {
     ctx.shadowBlur = 12;
 
     const motion = currentUiMotionSettings();
-    const panelReveal = uiPanelReveal();
-    const contentReveal = uiContentReveal(0.12);
-    const metaPanelRect = { x: cx - 200, y: cy - 180, w: 400, h: 340 };
-    withRevealClip(ctx, metaPanelRect, panelReveal, 'bottom', () => {
-      drawTerminalFrame(ctx, metaPanelRect.x, metaPanelRect.y, metaPanelRect.w, metaPanelRect.h, null, 'rgba(100, 255, 255, 0.2)');
+    const windowState = sampleTerminalWindow(uiMotionTimer, {
+      duration: motion.windowDuration,
+      reducedMotion: motion.reducedMotion,
     });
-    ctx.globalAlpha *= contentReveal;
+    const metaPanelRect = { x: cx - 200, y: cy - 180, w: 400, h: 340 };
+    drawTerminalWindow(ctx, metaPanelRect, {
+      state: windowState,
+      origin: 'bottom-left',
+      role: 'flow',
+      fillAlpha: 0.76,
+      borderAlpha: 0.34,
+      cornerLength: 34,
+    });
+    ctx.globalAlpha *= windowState.content;
 
     // Title
     if (t > 0.2) {
@@ -6356,10 +6345,13 @@ function gameLoop(now) {
         const item = metaExtractedItems[i];
         const a = Math.min((t - 0.5 - i * 0.1) * 3, 1);
         if (a <= 0) continue;
+        drawItemIcon(ctx, item, { x: cx - 172, y: itemY - 16, w: 22, h: 22 }, { state: 'vault', alpha: a });
         const color = TIER_COLORS[item.tier] || 'rgba(200, 200, 210, 0.8)';
         ctx.fillStyle = color.replace(/[\d.]+\)$/, `${a})`);
         const category = item.category || item.subcategory || item.type || 'salvage';
-        ctx.fillText(`${item.name} [${category}] — ${item.value}`, cx, itemY);
+        ctx.textAlign = 'left';
+        ctx.fillText(fitUiText(ctx, `${item.name} [${category}] - ${item.value}`, 306), cx - 142, itemY);
+        ctx.textAlign = 'center';
         itemY += 20;
       }
       if (metaExtractedItems.length > 8) {
@@ -6422,21 +6414,29 @@ function gameLoop(now) {
 
     const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 2, 12, 0.8)';
+    ctx.fillStyle = 'rgba(0, 2, 12, 0.64)';
     ctx.fillRect(0, 0, w, h);
     drawScanlines(ctx, w, h, 0.03);
     ctx.textAlign = 'center';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 12;
 
-    const panelReveal = uiPanelReveal();
-    const contentReveal = uiContentReveal(0.08);
+    const motion = currentUiMotionSettings();
+    const windowState = sampleTerminalWindow(uiMotionTimer, {
+      duration: motion.windowDuration,
+      reducedMotion: motion.reducedMotion,
+    });
     const focusPulse = uiFocusPulseAmount();
     const pausePanelRect = { x: cx - 180, y: cy - 150, w: 360, h: 260 };
-    withRevealClip(ctx, pausePanelRect, panelReveal, 'center', () => {
-      drawTerminalFrame(ctx, pausePanelRect.x, pausePanelRect.y, pausePanelRect.w, pausePanelRect.h, null, 'rgba(100, 150, 255, 0.2)');
+    drawTerminalWindow(ctx, pausePanelRect, {
+      state: windowState,
+      origin: 'top-left',
+      role: 'flow',
+      fillAlpha: 0.80,
+      borderAlpha: 0.36,
+      cornerLength: 34,
     });
-    ctx.globalAlpha *= contentReveal;
+    ctx.globalAlpha *= windowState.content;
 
     // Title
     ctx.fillStyle = 'rgba(140, 175, 255, 0.95)';
@@ -6489,8 +6489,17 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const wipeAlpha = motion.reducedMotion ? 0.32 : 0.9 * motion.intensity;
     if (motion.enabled && wipeAlpha > 0) {
+      const transitionState = sampleScreenTransition(transitionTimer, {
+        duration: TRANSITION_TOTAL,
+        reducedMotion: motion.reducedMotion,
+        maxOcclusion: motion.maxOcclusion,
+      });
+      ctx.save();
+      ctx.fillStyle = `rgba(0, 2, 12, ${transitionState.occlusionAlpha.toFixed(3)})`;
+      ctx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      ctx.restore();
       drawDirectionalWipe(ctx, { x: 0, y: 0, w: overlayCanvas.width, h: overlayCanvas.height }, {
-        progress: transitionTimer / TRANSITION_TOTAL,
+        progress: transitionState.progress,
         direction: 'right',
         role: 'anomaly',
         alpha: wipeAlpha,
