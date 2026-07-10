@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-07-10 — v0.3 authority journey and release-candidate closure
+
+- Promoted Ballpark from optional per-tick query fallback to persistent,
+  epoch-aware lifecycle identity with stable handles, incarnation history,
+  stale-reference rejection, and required relevance/pickup/portal queries.
+- Replaced touch-to-win portal behavior with cyan zone-plus-confirm extraction:
+  Enter/A confirms while resident, leaving aborts immediately, and swept
+  fly-throughs cannot extract.
+- Enforced Drifter/Breacher at the human authority boundary, replaced the Ship
+  screen's legacy global-upgrade grid with public hull and rig truth, and made
+  rig effect copy player-readable from the canonical hull track manifest.
+- Connected authoritative recent runs to the Chronicle career strip and newest
+  five records.
+- Rebuilt AgentPlayEval around a fresh protocol-v2 sim/browser and normal
+  controller play. The passing 1280x800 journey proves slingshot, natural
+  salvage, signal/Inhibitor pressure, confirmed extraction, results, rig,
+  Chronicle, and a changed second run without debug mutation.
+- Updated v0.3 roadmap, RC gate, open decisions, build status, local protocol,
+  and harness docs to replace July 4 scaffold claims with current branch truth.
+- Revalidated the authority lane and recorded the latest Deep Field budget:
+  7.68/8 Hz, 2.73 ms snapshot p95, 107.88 KiB snapshot p95, 0.33 MB/s,
+  4.16 MiB heap growth, and 0.652 ms Ballpark sync p95.
+
 ## 2026-07-09 — Protocol-v2, route, presentation, and Deck HUD integration
 
 - Replaced raw client-id mutations with protocol-v2 run/player authority,

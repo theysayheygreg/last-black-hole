@@ -1,6 +1,10 @@
 # Last Singularity v0.3 Docs
 
-This folder is the planning home for the v0.3 line.
+> Document revision: v0.3. Updated 2026-07-10.
+
+This folder is the source-of-truth home for the v0.3 candidate line. The
+architecture is implemented; remaining work is release evidence, physical
+device acceptance, Greg's feel/taste review, and explicit promotion.
 
 ## Branch Contract
 
@@ -28,8 +32,8 @@ The working theme is:
 ## Read Order
 
 1. `ROADMAP.md` - v0.3 plan, delegated workstreams, milestones, and gates.
-2. `OPEN-DECISIONS.md` - Greg-decision items and current recommendations from
-   the v0.3 review queue.
+2. `OPEN-DECISIONS.md` - resolved defaults plus the few decisions still owned
+   by Greg.
 3. `RC-GATE.md` - playable release-candidate checklist, current blockers, and
    required evidence.
 4. `../reference/CARBON-ENGINE-RESEARCH.md` - Carbon/Destiny/Trinity lessons

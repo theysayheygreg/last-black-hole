@@ -1,7 +1,7 @@
 # Test Harness
 
-> Status: v0.2 current truth. The Three renderer and authoritative sim are the
-> primary validation targets. The original headless-only plan in
+> Document revision: v0.3. The Three renderer and authoritative sim are the
+> release validation targets. The original headless-only plan in
 > `AGENT-TESTING.md` is historical context.
 
 ## Position
@@ -41,11 +41,13 @@ That means every meaningful feature should have evidence in three layers:
 3. **Visual proof** — screenshots or fixture manifests show that the feature
    can be seen and understood in the Three scene or UI.
 
-`npm run test:agent-eval` is the first explicit playable-proof lane. It starts
-fresh authoritative sessions for Shallows, Expanse, and Deep Field, drives real
-remote input, captures screenshots, verifies a sim-authored extraction
-consequence, and writes a short report under `tests/screenshots/agent-play-eval-*`.
-The report should say what the agent proved and what remains a human taste call.
+`npm run test:agent-eval` is the explicit playable-proof lane. It starts a
+fresh authoritative Shallows session and disposable browser, drives normal
+menus and virtual Steam-style controller input, performs a real slingshot,
+salvages live wrecks, raises signal/Inhibitor pressure, enters and confirms a
+portal, verifies result/Profile/Rig/Chronicle continuity, starts a changed
+second run, and writes a report plus fourteen 1280x800 screenshots under
+`tests/screenshots/agent-play-eval-*`. It does not mutate sim debug state.
 
 This lane is not a replacement for manual playfeel. It is the handoff receipt
 that should exist before asking Greg to spend attention on a build.
@@ -154,9 +156,9 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:ui` | Focused UI visual pass. Captures title, profile, home, map select, in-match HUD, extraction results, and death results with 50%/25% couch-proxy images. |
 | `npm run test:ui-motion` | Pure Node checks for shared UI motion helpers: reduced-motion resolution, reveal clips, type-on text, command pulses, and directional wipes. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
-| `npm run test:sim-structure` | v0.3 structural canary for Ballpark bodies, relevance/query adapters, movement golden fixtures, protocol input normalization, queued slingshot edges, first consequence adapters, bounded-growth soak, event journal, and snapshot ring contracts. |
+| `npm run test:sim-structure` | v0.3 structural gate for persistent Ballpark identity/lifecycle, required relevance/pickup/portal queries, toroidal geometry and swept contacts, movement fixtures, protocol v2, bounded growth, journal, and live snapshot rebase. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
-| `npm run test:agent-eval` | Playable agent evidence: fresh remote-authority runs across the main maps, movement input, screenshots, and a short report that names what was proved before Greg reviews the build. |
+| `npm run test:agent-eval` | Natural Shallows product journey plus 1280x800 visual/readability evidence before Greg reviews feel and taste. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
 
 ## Forge Pass Alignment
@@ -189,7 +191,7 @@ node tests/run-all.cjs --list --lane=full
 
 Renderer values:
 
-- `legacy` sets `?renderer=legacy` for the deprecated fallback.
+- `legacy` is archaeology for the retired renderer, not candidate evidence.
 - `three` sets `?renderer=three`.
 - `both` repeats every browser suite once per renderer.
 - `target` preserves the target URL exactly.
@@ -232,10 +234,10 @@ as a false art-direction verdict.
 | `static` | pure Node/data invariants | browser or process lifecycle |
 | `browser` | headless browser checks through `__TEST_API` | aesthetic approval |
 | `authority` | sim/control-plane/remote protocol health | local-only visual questions |
-| `sim-structure` | Ballpark body/query mirror, relevance adapters, movement golden fixtures, protocol input normalization, queued slingshot edges, first consequence adapters, bounded-growth soak, event journal, and snapshot ring contracts | browser visuals or playfeel |
+| `sim-structure` | persistent Ballpark identity, required spatial queries, world geometry/sweeps, movement fixtures, protocol v2, bounded growth, journal, and snapshot rebase | browser visuals or playfeel |
 | `visual` | deterministic renderer fixtures and screenshot manifests | gameplay balance |
 | `playtest` | synthetic real-flow menu/input coverage | final UX judgment |
-| `agent-eval` | agent-readable playable proof with fresh sessions, map coverage, screenshots, and a narrative report | exhaustive authority coverage or subjective art approval |
+| `agent-eval` | fresh no-debug Shallows journey, second-run continuity, screenshots, and a narrative report | exhaustive authority coverage or subjective art approval |
 | `full` | all committed automated suites | Codex app browser/manual review |
 
 ## Three.js Applicability
@@ -249,11 +251,9 @@ gate is:
 3. `npm run test:agent-eval`
 4. A Codex app browser pass on `index-a.html?renderer=three`
 
-The legacy renderer remains as an explicit fallback lane, but it is no longer a
-default migration target. A browser test that asserts gameplay state should use
-Three unless the task is specifically about fallback behavior; renderer fixtures
-record backend diagnostics so failures say whether the visual graph or gameplay
-state moved.
+The legacy renderer is not a v0.3 release requirement. Default browser runs,
+screenshots, packages, and build health use Three. Do not weaken Three or
+authority contracts to preserve old 2D output.
 
 The Three renderer is no longer allowed to be a copy-only fullscreen bridge.
 Renderer fixtures assert the first-class scene contract:

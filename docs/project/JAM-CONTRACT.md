@@ -77,12 +77,13 @@ A Forge pass should review:
 - Coordinate, camera, flow, and radius math that may have drifted from
   `src/coords.js`.
 - Three renderer assumptions, stale legacy-renderer compatibility, and visual
-  contracts that no longer match v0.2.
+  contracts that no longer match the active version branch.
 - Comments that describe old behavior, magic numbers without context, and
   duplicated calculations that should be centralized.
 - Test harness relevance: obsolete tests should be rewritten, deleted, or moved
   to legacy lanes; new contracts should get representative coverage.
-- Docs holistically, with visible v0.2 status notes in docs that are updated.
+- Docs holistically, with a visible version/revision note in every updated
+  source-of-truth document.
 
 Run only the validation lanes justified by the systems touched, then broaden if
 the pass changes shared authority, renderer, controls, lifecycle, or platform
@@ -103,9 +104,10 @@ work, the responsible agent should leave three kinds of evidence:
 
 `npm run test:agent-eval` is the standard source-build playable receipt for
 v0.3 work. It is not as deep as `npm run test:authority` and not as artful as a
-promo capture, but it proves an agent could boot fresh sessions, move, see the
-scene, and exercise at least one sim-owned consequence before Greg becomes the
-human polish gate.
+promo capture, but it proves a fresh no-debug Shallows journey through normal
+menus/controller input, slingshot, salvage, signal, confirmed extraction,
+results, Rig, Chronicle, and a changed second run before Greg becomes the human
+polish gate.
 
 ---
 
@@ -734,11 +736,12 @@ The remote repo must stay current. This is a shared workspace — other agents, 
   release build is missing. For intentional docs/process-only pushes that do not
   publish a build, use `LBH_SKIP_RELEASE_PREP=1 git push origin main`.
 - **Public version bumps are Greg calls.** `npm run release:public` advances the
-  third number (`0.2.x`). Commit that bump, then build. Large decisive `0.3` or
-  `1.0` moves are by Greg's explicit call only.
+  active train's third number. Commit that bump, then build. Large decisive
+  minor/major train moves remain Greg's explicit call.
 - **Keep README.md current** — update it when features, architecture, or setup instructions change. The README is the first thing anyone reads.
-- **Tag versions** — public checkpoint tags use the public train (`v0.2.x`);
-  build artifacts use `v0.2.x.<hash>`. Update `package.json` only when the
+- **Tag versions** — public checkpoint tags use the active public train
+  (`v0.2.x` on `main`, `v0.3.x` after promotion); build artifacts use
+  `<public-version>.<hash>`. Update `package.json` only when the
   public train changes.
 - **Build instructions must be correct** — if you add a new server, script, or dependency, update the README setup section in the same commit or the next one.
 

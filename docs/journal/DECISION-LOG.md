@@ -1,5 +1,40 @@
 # Decision Log
 
+## 2026-07-10 — v0.3 closes on confirmed extraction and required Ballpark queries
+
+**Decision:** Portal extraction is an authority-owned interaction, not a
+collision side effect. A player must remain inside a cyan aperture and confirm
+with Enter/A; leaving clears readiness immediately. Load-bearing relevance,
+wreck pickup, and portal selection require persistent Ballpark identity and no
+longer fall back to bespoke array scans.
+
+**Why:** Touch-to-win made high-speed fly-throughs ambiguous and gave UI no
+honest interaction state. Optional Ballpark paths allowed the production sim to
+silently preserve two spatial authorities after parity had already been proven.
+
+**Where it landed:** `scripts/sim-runtime.cjs`, `scripts/sim-protocol.cjs`,
+`scripts/sim/ballpark-mirror.cjs`, controller/HUD wiring, and the authority,
+swept-contact, Ballpark, and natural agent journey suites.
+
+**Door status:** Closed for v0.3. Future extraction charge time or multiplayer
+prediction may change presentation and transport, but not server ownership or
+the residence-plus-explicit-intent rule.
+
+## 2026-07-10 — Product proof is a fresh natural journey, not debug choreography
+
+**Decision:** A v0.3 handoff requires AgentPlayEval to create a disposable
+browser and fresh sim, use normal menus/controller input and public protocol,
+capture 1280x800 evidence, and reach a changed second run. Debug mutation can
+support focused contract fixtures but cannot count as playable proof.
+
+**Why:** Contract tests can prove consequences in isolation while leaving a
+broken player journey between them. Greg should be the final judge of feel and
+taste, not the first person to discover that launch, movement, extraction, or
+writeback does not work.
+
+**Door status:** Closed for release evidence. Open for deeper agent navigation,
+visual understanding, and multi-route evaluation after v0.3.
+
 ## 2026-07-09 — Protocol v2 binds commands to run and player authority
 
 **Decision:** Every gameplay mutation carries the active run, player authority,

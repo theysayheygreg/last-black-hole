@@ -10,6 +10,9 @@ You do not fly through empty space. You fly through spacetime as a hostile ocean
 
 Current public train: **v0.2.2 — Authority, Three, and Deck Foundation**
 
+Next candidate branch: **v0.3.0 — Ballpark Authority** on
+`codex/v0.3-ballpark-roadmap`. It is not promoted to the public/demo line yet.
+
 Builds identify themselves as `v0.2.2.<commit-hash>` so private handoff
 artifacts can advance every commit without pretending every commit is a public
 release.
@@ -22,6 +25,8 @@ For the current design snapshot, start here:
 - [v0.2 release notes](docs/v0.2/V0.2-RELEASE-NOTES.md)
 - [design/code delta](docs/v0.2/DESIGN-CODE-DELTA.md)
 - [v0.2 roadmap](docs/v0.2/ROADMAP.md)
+- [v0.3 Ballpark roadmap](docs/v0.3/ROADMAP.md)
+- [v0.3 release-candidate gate](docs/v0.3/RC-GATE.md)
 
 ## Pitch
 
@@ -32,7 +37,7 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
         -> EXTRACT OR DIE -> RESULTS -> VAULT/UPGRADE -> REPEAT
 ```
 
-## v0.2 Highlights
+## Current Foundation And v0.3 Candidate
 
 - **Three.js is now the product renderer direction.** The default target is `?renderer=three`: an orthographic top-down 3D scene layered over the ASCII fluid fabric.
 - **The renderer no longer copies the game canvas through the CPU.** Three and the Composer/ASCII chain share the `fluid-canvas` WebGL2 context.
@@ -40,9 +45,16 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 - **Steam Deck local play is self-contained.** The Deck package starts its own embedded control plane and sim on dynamic `127.0.0.1` ports; Tailscale/SSH is only for deploying builds to the device.
 - **Movement is an economy.** Thrust costs delta-v, braking is reverse-thrust, currents are free motion, and slingshot anchors turn map geometry into route puzzles.
 - **Slingshot authority is shipped.** Remote-authority runs expose sim-owned engagement, energy, release, and chain state.
-- **Five hulls have mechanical identities.** Drifter, Breacher, Resonant, Shroud, and Hauler resolve through PlayerBrain and shared content manifests.
+- **The public roster is honest.** Drifter and Breacher are the selectable
+  v0.3 hulls; Resonant, Shroud, and Hauler remain internal until their complete
+  authority, UI, balance, and journey proof exists.
 - **The run loop has persistent shape.** Profiles, save slots, vault foundations, item tiers, consumables, run results, chronicle records, and echo-wreck foundations exist.
 - **The test harness is first-class.** Fast, core, Three, visual, playtest, and authority lanes use the project CDP browser driver and sim/control-plane probes.
+- **Ballpark makes world identity boring.** Stable generation-checked bodies,
+  wrapped spatial queries, lifecycle, swept contacts, event/snapshot recovery,
+  and protocol-v2 credentials support future multiplayer without forcing ECS.
+- **Shallows has a truthful teaching route.** Slingshot, salvage, signal, and
+  cyan zone-plus-confirm extraction are seeded authority facts.
 
 ## Current Features
 
@@ -54,7 +66,9 @@ PROFILE -> LOADOUT -> DROP -> READ FLOW -> LOOT -> MANAGE SIGNAL
 - Signal system with six zones and Inhibitor escalation.
 - AI players and scavenger/rival behavior.
 - Ambient fauna, signal blooms, gradient sentries, phantoms, haunts, stars, wells, planetoids, and comets.
-- Five hulls with movement, delta-v, slingshot, ability, and cargo differences.
+- Drifter and Breacher public hulls with distinct movement, delta-v, slingshot,
+  ability, cargo, and rig identities; three internal hull prototypes remain in
+  development.
 - SNES-flavored synthesized Web Audio.
 - Keyboard/mouse and gamepad support.
 - Web and Electron local-play surfaces.
@@ -109,8 +123,9 @@ First launch flow:
    switch tabs.
 4. Go to `LAUNCH`, confirm with `Space` or `A`, choose a destination, then
    confirm again to drop in.
-5. In a run, loot wrecks, manage signal and delta-v, follow wormhole arrows, and
-   extract before portals expire or the universe collapses.
+5. In a run, loot wrecks, manage signal and delta-v, follow cyan route
+   apertures, remain inside one, then press `Enter` / `A` to extract before it
+   expires or the universe collapses.
 6. After extraction or death, press `Space` / `A` to return to the pilot flow.
 
 ### Steam Deck Weekly Build

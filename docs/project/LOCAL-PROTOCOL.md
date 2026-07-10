@@ -1,325 +1,248 @@
 # Local Protocol
 
-> The first client/server contract for LBH. This is the protocol the MacBook client should speak to the mini-hosted sim before any public hosting exists.
+> Document revision: v0.3. Updated 2026-07-10 from
+> `scripts/sim-protocol.cjs`, `scripts/sim-runtime.cjs`, and live protocol tests.
 
 ## Purpose
 
-Freeze the smallest viable conversation between:
+`lbh-local-v2` is the current contract between the authoritative sim and a
+locally rendered client. It is intentionally HTTP/poll based: the release goal
+is a clear process and authority boundary, not premature public networking.
 
-- an authoritative sim/server
-- a locally rendered client
+Both processes run on the same packaged machine for desktop and Steam Deck.
+Tailscale/LAN can host the sim elsewhere for development, but that is not the
+default local game shape.
 
-The point is not to finish networking. The point is to stop hiding game-state ownership inside one browser loop.
+## Transport And Clocks
 
-## Current transport
+- control plane and sim are separate processes;
+- packaged desktop owns both child runtimes on dynamic loopback ports;
+- development defaults to sim port `8787`;
+- authority ticks are profile driven (`15 Hz` Shallows, lower on large maps);
+- snapshot cadence is profile driven (`10 Hz` Shallows);
+- the renderer runs at its own frame rate;
+- transport is plain HTTP for the current private/local milestone.
 
-For the first private milestone:
+## Identity And Authority
 
-- transport can be plain HTTP over Tailscale or LAN
-- server listens locally on one fixed port
-- control plane can listen on a separate fixed port
-- client polls snapshots and posts inputs
-- browser client can opt into remote authority with `?simServer=http://<host>:8787`
-- sim server can bind beyond localhost with `LBH_SIM_HOST=0.0.0.0 npm run sim`
-- control plane can run separately with `npm run control`
+Protocol version: `lbh-local-v2`.
 
-This is not the final transport. It is the simplest useful transport for proving the boundary.
+Every command belongs to one run and one player. The server issues a command
+credential; the client does not invent authority by naming a `clientId`.
 
-## Protocol version
+Authority headers:
 
-`lbh-local-v1`
+```text
+x-lbh-command-credential: <server-issued secret>
+x-lbh-player-id: <player id>
+x-lbh-run-id: <active run id>
+```
 
-## Authoritative clocks
+The same values may be included in command bodies. Header/body disagreement is
+an error.
 
-- sim tick: `15 Hz`
-- snapshot cadence target: `10 Hz`
+Two counters are deliberate:
 
-The client still renders locally at its own frame rate.
+- `commandSeq`: monotonic across every authoritative mutation request;
+- input `seq`: monotonic across continuous input packets.
 
-## Core messages
+The server deterministically rejects stale run, stale command, stale input,
+wrong player, invalid credential, and conflicting identity.
 
-### `GET /maps`
+## Session Flow
 
-Returns the authoritative playable map catalog.
+### `POST /session/start`
 
-This is the first step toward a real launch flow where the client does not invent its own map truth.
+Starts a run. If a run already has a host, the request requires host command
+authority. A successful start returns session data plus a one-time `joinTicket`
+for the requested host identity.
+
+```json
+{
+  "mapId": "shallows",
+  "requesterId": "pilot-1",
+  "requesterName": "Quiet Void",
+  "seed": 749456454
+}
+```
 
 ### `POST /join`
 
-Registers a client/player with the authoritative session.
+Claims a new player with the start ticket or reconnects an existing player with
+its current command credential.
 
 ```json
 {
-  "type": "join",
-  "clientId": "greg-macbook",
-  "name": "Greg"
+  "runId": "run-id",
+  "clientId": "pilot-1",
+  "name": "Quiet Void",
+  "joinTicket": "one-time-ticket",
+  "profileId": "profile-id",
+  "profileSnapshot": {},
+  "hullType": "drifter"
 }
 ```
 
-The first client to join a new run becomes the authoritative session host. If the host leaves, the server promotes another remaining client.
+Response authority:
+
+```json
+{
+  "protocolVersion": "lbh-local-v2",
+  "runId": "run-id",
+  "playerId": "pilot-1",
+  "commandCredential": "secret",
+  "lastCommandSeq": 0,
+  "nextCommandSeq": 1,
+  "reconnected": false
+}
+```
+
+Human joins accept only the public Drifter/Breacher roster. Internal hulls are
+not selectable by wire requests.
 
 ### `POST /leave`
 
-Removes a client from the authoritative session without resetting the run.
+Requires command authority. It commits an uncommitted outcome, removes player
+authority, and promotes another human host when available.
 
-```json
-{
-  "type": "leave",
-  "clientId": "greg-macbook"
-}
-```
+### `POST /session/reset`
+
+Requires host authority. It starts a fresh run boundary and returns a fresh
+host join ticket.
+
+## Continuous Input
 
 ### `POST /input`
-
-Client input envelope.
 
 ```json
 {
   "type": "input",
-  "clientId": "greg-macbook",
-  "seq": 12,
-  "moveX": 0.5,
-  "moveY": -0.1,
+  "runId": "run-id",
+  "playerId": "pilot-1",
+  "commandSeq": 42,
+  "seq": 318,
+  "moveX": 0.8,
+  "moveY": -0.2,
   "thrust": 1.0,
+  "brake": 0.0,
+  "slingshot": false,
+  "slingshotEdges": [7],
   "pulse": false,
+  "extractConfirm": false,
+  "ability1": false,
+  "ability2": false,
   "consumeSlot": null,
-  "timestamp": 1774600000000
+  "timestamp": 1783630000000
 }
 ```
 
-This is intentionally small. It is enough to prove:
+Rules:
 
-- input crosses the process boundary
-- the server owns the authoritative player state
-- the client is no longer pretending to be the world
+- movement vector magnitude is clamped to one;
+- thrust/brake remain scalar intent;
+- queued slingshot edge ids are deduplicated, bounded to eight, and
+  acknowledged so short taps survive network cadence;
+- pulse, consumable, and extraction confirmation are latched one-shots;
+- `extractConfirm` succeeds only while authority says the player remains in an
+  available portal zone;
+- the server returns accepted command/input sequence and slingshot edges.
+
+## Discrete Inventory
 
 ### `POST /inventory/action`
 
-Discrete inventory/loadout mutation for authoritative runs.
+Requires command authority. Supported actions are cargo drop, equip, load
+consumable, unequip, and unload consumable. Cargo/loadout mutation remains a
+server fact and uses the canonical item shape.
 
-```json
-{
-  "type": "inventoryAction",
-  "clientId": "greg-macbook",
-  "action": "equipCargo",
-  "cargoSlot": 2,
-  "equipSlot": 1,
-  "consumableSlot": -1
-}
-```
+## Reads
 
-This exists because inventory management is not really part of the continuous input stream. It is a state mutation request against the authoritative run.
+### `GET /protocol`
+
+Returns the machine-readable current contract.
+
+### `GET /maps`
+
+Returns playable maps, session scale profiles, and route/signature briefing
+facts used by launch UI.
 
 ### `GET /snapshot`
 
-Authoritative state read.
+Returns the latest authority snapshot:
 
-```json
-{
-  "type": "snapshot",
-  "protocolVersion": "lbh-local-v1",
-  "session": {
-    "id": "session-id",
-    "status": "running",
-    "mapId": "rush",
-    "worldScale": 5,
-    "overloadState": "NORMAL",
-    "timeScale": 1.0,
-    "tickHz": 15,
-    "snapshotHz": 10,
-    "maxPlayers": 4
-  },
-  "tick": 42,
-  "simTime": 2.8,
-  "players": [
-    {
-      "clientId": "greg-macbook",
-      "name": "Greg",
-      "wx": 0.2,
-      "wy": -0.1,
-      "vx": 0.8,
-      "vy": -0.2,
-      "lastInputSeq": 12
-    }
-  ],
-  "world": {
-    "wells": [],
-    "stars": [],
-    "wrecks": [],
-    "planetoids": [],
-    "portals": []
-  },
-  "recentEvents": []
-}
-```
+- protocol, schema, snapshot, and baseline identity;
+- run/session identity and clocks;
+- monotonic tick, sim/server time, and event watermark;
+- players with transform, velocity, hull/rig, delta-v, ability, slingshot,
+  cargo/loadout, effects, signal, status, and portal interaction state;
+- authoritative wells, stars, wrecks, planetoids, portals, scavengers, fauna,
+  and sentries;
+- Inhibitor form/pressure/target facts;
+- only public recent events.
 
-### `GET /events?since=<seq>`
+Ballpark private handles and debug registries are not snapshot protocol.
 
-Pull recent authoritative events without forcing the client to parse every snapshot change as an event.
+### `GET /snapshots?since=<snapshotId>&runId=<runId>`
 
-### `POST /session/start`
+Reads the bounded snapshot ring. The response identifies stale, future,
+missing, and valid continuity windows. Old run ids cannot rebase a new run.
 
-Starts or resets the local authoritative run instance.
+### `GET /events?since=<seq>&runId=<runId>&lane=<lane>`
 
-If a run is already active, only the current session host may start/reset it.
+Reads the bounded event journal. Unauthenticated reads return public facts.
+Authenticated reads additionally return events visible to that player.
 
-## Server ownership
+Lanes include:
 
-The server owns:
+- `global`;
+- `playerLocal`;
+- `neighborhood`;
+- `vfx`;
+- `debug`;
+- `cinematic`.
 
-- player and AI state
-- map identity and entity state
-- collisions and run outcomes
-- run timer and collapse progression
-- item and pickup truth
-- future signal truth
-- a coarse gameplay-relevant flow model
+Private inventory, loot, effect, signal-crossing, and portal-interaction events
+use `player:<id>` visibility and never leak into another player's read.
 
-In the current first slice, the server already owns:
+### `GET /profile?profileId=<id>`
 
-- authoritative session lifecycle
-- authoritative player transforms and velocities
-- map entity snapshots for wells, stars, wrecks, and planetoids
-- safe spawn selection
-- well death and run reset boundary
+Returns the durable profile plus the newest five run records for Chronicle.
 
-In the current second slice, the browser client already:
+### `GET /health`
 
-- starts a fresh authoritative session from map select
-- joins that session with a stable client id
-- sends thrust/pulse input across the boundary
-- renders locally from authoritative snapshots instead of local player truth
+Returns process identity, uptime/memory, session lifecycle, tick-loop state,
+match bounds, journal/snapshot retention, Ballpark body/query/lifecycle stats,
+overload profile, and control-plane connectivity.
 
-In the current third slice, the server also owns:
+## Gap Recovery
 
-- portal wave spawning and expiry
-- extraction capture checks
-- cargo pickup from wrecks
-- cargo loss on death
-- the first gameplay-affecting equip effect (`reduceWellPull`)
-- authoritative scavenger state for remote runs
+The client tracks both event and snapshot watermarks.
 
-In the current fourth slice, the server also owns:
+1. Read events from the last accepted sequence.
+2. If the journal reports a gap/stale window, request snapshots for the active
+   run.
+3. Rebase only from a valid full snapshot and its `lastEventSeq` watermark.
+4. Drop duplicate events and events from a previous run.
+5. Resume event consumption strictly after the rebased watermark.
 
-- remote consumable activation
-- remote pulse cooldown and pulse events
-- shield and time-slow active effect state
-- breach-flare portal spawning from authoritative item use
+Recovery is corrective state replacement, not renderer-authored gameplay.
 
-In the current fifth slice, the server also owns:
+## Ownership
 
-- remote cargo/equip/consumable slot mutation during live runs
-- authoritative dropped-item wreck spawning from inventory actions
-- the canonical eight-slot cargo model instead of the old variable-length cargo list
-- same-map join-existing-session behavior for remote clients instead of always forcing a reset
+The sim owns movement integration, flow approximation, contacts, death, grace,
+pickup, cargo, inventory, signal, abilities, AI, Inhibitor, portal residence,
+extraction, outcomes, and profile writeback.
 
-In the current sixth slice, the server also owns:
+The client owns input sampling, local presentation/interpolation, Three scene
+lifecycle, ASCII-fluid reconstruction, VFX, UI, audio, and diagnostics. It may
+predict or smooth presentation; it may not author gameplay consequences.
 
-- star push and planetoid/comet push on the player ship
-- scavenger bump collision against the player ship
-- stellar-remnant wreck spawning when stars are consumed by wells
-- the first explicit debug/player-state hook for remote-authority validation
+The control plane owns durable profiles, run ledger, Chronicle records, echo
+history, and session registry.
 
-In the current seventh slice, the remote client also mirrors the same wave consequences the server now owns:
+## Future Transport
 
-- remote clients reconstruct authoritative pulse visuals locally from `player.pulse` events, including the shockwave ring, fluid splats, and temporary well-disruption presentation, without re-owning gameplay force math
-- remote clients render growth/consumption rings from authoritative `well.grew`, `star.consumed`, and `planetoid.consumed` events
-- remote visual mode now updates and injects those rings locally so the presentation layer stays in sync with server-owned contact forces
-
-In the current eighth slice, remote browser startup semantics are also closer to a real multiplayer client:
-
-- if an authoritative session is already running, a new remote browser joins that live run by default instead of resetting it to its own locally selected map
-- the client now treats the authoritative session map as the source of truth at launch time, not the stale local menu selection
-
-In the current ninth slice, remote clients can also leave a run cleanly:
-
-- the protocol now supports `POST /leave`
-- a remote browser can exit a run without resetting the authoritative session for everyone else
-- death/extraction flows no longer force a full server reset just because one remote client is done
-
-In the current tenth slice, the control plane has a real host concept:
-
-- the first joining client becomes the session host
-- only the host may start/reset an already-running session
-- when the host leaves, the server promotes another remaining client instead of leaving reset authority ambiguous
-
-In the current eleventh slice, the browser client finally exposes that control plane honestly:
-
-- map select now polls and surfaces live session state instead of pretending every remote launch is a fresh host action
-- the client now knows whether a live run exists, which map it is on, who the host is, how many players are in it, and whether this browser is the host
-- the confirm action is explicitly the join-or-host action, while the secondary
-  host-reset action remains host-only for the selected map; Deck UI presents
-  those as `A` and `Y`
-- remote-authority coverage now proves that a non-host browser can see it will join the live run rather than reset it, and that the original browser reports host reset authority
-
-In the current twelfth slice, the authoritative sim also starts scaling its clocks by map size:
-
-- `shallows`, `expanse`, and `deep-field` now advertise explicit server-side scale profiles through `/maps`
-- larger maps now run with cheaper authoritative `tickHz`, `snapshotHz`, and slower background-world cadences instead of pretending every world needs the small-map clock budget
-- the server now keeps player/contact truth at the main tick rate while throttling background systems like stars, wrecks, planetoids, portals, growth, and scavenger AI to map-sized cadences
-- the browser client now adapts its snapshot polling interval to the authoritative session’s advertised `snapshotHz` instead of polling small-map rates against every map
-
-In the current thirteenth slice, the authoritative sim also starts scaling its spatial work by player relevance:
-
-- map-scale profiles now advertise `entityRelevanceRadius` and `scavengerRelevanceRadius` alongside their clock budgets
-- larger maps no longer update every star, wreck, planetoid, and scavenger every background tick just because they exist somewhere in the world
-- background-world systems now only fully update entities near alive players, while dying scavengers remain authoritative until their consequence chain resolves
-
-In the current fourteenth slice, the authoritative sim now carries an explicit overload state machine:
-
-- the server tracks moving tick-cost pressure instead of only silently applying map-size budgets
-- the run now exposes `overloadState`, `overloadPressure`, and `timeScale` through session state
-- overload states project effective clocks and budgets from one base profile instead of each subsystem inventing its own slowdown rule
-- `DILATED` now deliberately slows the shared run clock instead of only trimming background work, and the browser can inspect that visible truth through `/snapshot` and `/health`
-- player-contact systems reuse those same relevance-filtered sets, so large maps stop paying whole-world scan costs just to apply nearby star push, planetoid push, scavenger bump, and pickup truth
-
-In the current fourteenth slice, the authoritative sim also starts carrying explicit AI and per-player hazard budgets:
-
-- scale profiles now advertise AI spawn budgets (`spawnScavengersBase`, `spawnScavengersPerPlayer`, `maxScavengers`) instead of hardcoding one fixed ambient-AI count forever
-- scale profiles also advertise per-player relevance caps for stars, planetoids, wrecks, and scavengers, so larger multiplayer sessions have an explicit upper bound on how much nearby hazard and AI work each player can force
-- the server now spawns scavengers from those budgets and uses the same per-player caps to choose which nearby entities receive full background updates on larger worlds
-
-In the current fifteenth slice, the authoritative sim also starts carrying explicit player-force budgets:
-
-- scale profiles now advertise `maxWellInfluencesPerPlayer`, `maxWaveInfluencesPerPlayer`, `maxPickupChecksPerPlayer`, and `maxPortalChecksPerPlayer`
-- larger maps no longer let every player sum against every well, wave ring, wreck, and portal on every tick
-- authoritative player motion and extraction still remain server-owned, but the expensive per-player scans now run against capped nearest-source sets instead of whole-world arrays
-
-In the current sixteenth slice, medium and large authoritative sessions also carry an explicit coarse field contract:
-
-- `fieldTickHz`
-- `useCoarseField`
-- `flowFieldCellSize`
-- `fieldFlowScale`
-
-That means larger runs no longer scale only by trimming per-player scans. They now rebuild and sample a coarser wrapped field for orbital current, well pull, and wave push on purpose.
-
-## Client ownership
-
-The client owns:
-
-- local rendering
-- camera
-- audio
-- HUD
-- local interpolation and prediction
-- visual fluid/fabric reconstruction
-
-## Explicit non-goals
-
-- streaming a rendered game view from the mini
-- final multiplayer transport
-- public hosting
-- matchmaking
-- Godot/native runtime decisions
-
-## Next step after this protocol
-
-Keep replacing client-owned world truth with server-owned truth behind the same message shapes.
-
-The next useful transfers are:
-
-- coarse authoritative flow sampling
-- broader combat consequences beyond pulse events and contact forces
-- real lobby/session selection semantics beyond the current "join live run / host reset selected map" control plane
-- more aggressive map-scale simulation changes for 4-8 player sessions beyond the first clock-profile cut
+Multiplayer may replace polling with a streaming transport and add interest
+deltas, prediction, correction, and rollback. The v2 identity, sequence,
+privacy, event, snapshot, Ballpark, and authority boundaries are designed to
+survive that change.
