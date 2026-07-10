@@ -1,6 +1,8 @@
 # Design / Code Delta
 
-This is the practical gap map between the accumulated design docs and the actual game code at the v0.2 snapshot.
+This is the practical gap map at the v0.2 snapshot. On the v0.3 integration
+branch, use `docs/v0.3/ROADMAP.md` and the current Three visual docs for newer
+implementation truth; this page remains the public-line historical baseline.
 
 ## Summary
 
@@ -28,7 +30,7 @@ The strongest current alignment is in the pillars, movement direction, ASCII ide
 | Procedural maps | Seeded map generator, entity catalog selection, megastructures | Static playable maps plus seeded signatures/content/echo foundations | Full procedural map generation is not shipped |
 | Echoes | Chronicle wrecks, phantoms, scout drifts, Doppler echoes | Chronicle/echo wreck foundations and phantoms shipped; scout/Doppler deferred | v0.2 should focus chronicle wreck playtest before adding more echo types |
 | Renderer | ASCII fluid, then raw WebGL/Composer, later Three plan | Composer/ASCII remains; Three is default scene substrate and shares the context | Move more entities/VFX/HUD toward Three, but preserve ASCII readability |
-| Entity visuals | Older visual docs assumed clean vector/glyph overlays over the ASCII layer | Three currently projects many entities as primitive discs, rings, squares, and triangles | Treat those primitives as bridge markers; next pass is `docs/design/THREE-ENTITY-VISUALS.md`, `docs/design/THREE-SCENE-VISUAL-HIERARCHY.md`, and `docs/project/THREE-ENTITY-VISUAL-PASS-PLAN.md` |
+| Entity visuals | Older visual docs assumed clean vector/glyph overlays over the ASCII layer | v0.2 used primitive bridge marks; the v0.3 branch now has lifecycle-owned top-down pixel sprites for the public entity families | Keep v0.2 history here; use the v0.3 visual docs and generated asset manifest for current integration truth |
 | HUD/UI | NERV/EVA DOM HUD, dense warnings, degradation | DOM HUD and canvas/menu surfaces exist; design-token bridge started; some screen text remains canvas-specific | Consolidate UI primitives and reduce inline style drift |
 | Audio | Drone, well harmonics, event sounds, Inhibitor takeover | Audio engine and audio toolkit exist; full score/dynamic mix remains incomplete | Audio is foundation, not final identity yet |
 | Multiplayer | Stretch goal, later private remote play | Local authoritative sim/control plane, remote browser, host/join/leave/promotion all tested | Private/local multiplayer foundation exists; public hosted play does not |

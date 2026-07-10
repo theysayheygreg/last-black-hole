@@ -1,6 +1,8 @@
 # Three Scene Visual Hierarchy
 
-> **v0.2 status:** Current master target for the top-down Three scene.
+> **v0.3 status (2026-07-10):** Current master contract for the top-down Three
+> scene. Generated sprite families, entity backing, and the named scene groups
+> are now implemented; remaining sections describe refinement targets.
 > This supersedes the canvas-era layer stack in `DEPTH-LAYERS.md` for new
 > renderer work. The older doc remains useful as historical reasoning.
 > See `docs/project/THREE-VFX-PASS-PLAN.md` for the implementation plan behind

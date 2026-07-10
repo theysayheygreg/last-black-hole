@@ -1,6 +1,6 @@
 # Three Entity Visual Language
 
-> **v0.2 status:** Current design target for the next renderer ownership pass.
+> **v0.3 status (2026-07-10):** Current design and implementation contract.
 > This doc covers world objects that are not primarily expressed by the ASCII
 > fluid fabric. Wells and Inhibitors remain fabric-first systems; ships, stars,
 > comets, planetoids, wrecks, portals, rivals, fauna, sentries, and future
@@ -13,10 +13,11 @@
 
 ## Why This Exists
 
-The Three renderer is now the default presentation path, but the entity layer is
-still mostly a bridge: discs, rings, squares, and triangles projected over the
-Composer/ASCII frame. That was the right parity step. It is not the final visual
-language.
+The Three renderer is now the default presentation path. The first production
+asset pass replaced the main bridge marks with pixel-resolved sprite families,
+while shared mattes, rims, halos, and lifecycle-owned pools keep those assets
+readable over the Composer/ASCII frame. Procedural marks remain where movement
+or field behavior is the identity, not because the renderer lacks assets.
 
 The next visual pass should make non-fluid objects feel like they belong in a
 flat-view 3D scene without turning Last Singularity into generic 3D space. The
@@ -33,16 +34,16 @@ affordances**, not dark everything.
 
 | Surface | What exists now | What is missing |
 |---------|-----------------|-----------------|
-| Three substrate | Orthographic top-down camera, z-layered scene groups, shared WebGL2 context, pooled primitive meshes, motion parallax, screen-space present pass, entity backing diagnostics | Richer geometries, finished entity-specific asset families, final post stack ownership |
+| Three substrate | Orthographic top-down camera, z-layered scene groups, shared WebGL2 context, pooled primitive and sprite meshes, motion parallax, screen-space present pass, entity backing diagnostics | Atlas/instancing optimization if measured draw-call pressure warrants it; final post stack ownership |
 | Wells | Fabric/ASCII-driven voids, accretion, rings, hazard semantics, simple Three ring/core helpers | No change in ownership; wells should stay mostly fabric-first |
 | Inhibitor | Sim-owned forms, localized shader corruption, form-specific glyph rows, Swarm tendrils, Vessel death/portal behavior | More audio/screen-space dread polish, but not a normal object-icon pass |
-| Player ship | A small white triangle in the Three entity layer, plus canvas velocity readout/trails, and a dev-only `shipBakeoff` fixture comparing sprite-card and pixel-textured mesh candidates | Chosen production hull path, hull-specific silhouettes, depth/roll cues, thrust ports, readable delta-v/signal glow |
-| Remote players and scavengers | Blue/red triangles with basic rotation | Personality/hull silhouettes, trail identity, signal/readiness cues, opponent-readable motion |
-| Stars | Small additive discs plus fabric pushes/rays | Emissive star miniatures, type-specific corona shapes, orbital landmark scale, consumption/relic states |
-| Planetoids/comets | Small triangles oriented by velocity | Shaded miniature bodies, icy tails, wake ribbons, orbit/trajectory legibility |
-| Wrecks | Rotated squares, color changes for looted state, canvas proximity labels | Debris clusters, tier/material language, salvage glints, broken-hull silhouettes, drift/consumption tells |
-| Portals | Additive rings | Layered apertures, unstable rims, blocked/decaying states, extraction funnel depth |
-| Fauna/sentries | Simple discs | Family silhouettes and motion signatures that separate ambient ecology from active threat |
+| Player ship | Drifter and Breacher top-down sprites with nearest filtering, backing/rim stack, rotation, and bounded lifecycle | More hull-state accents, thrust/brake ports, readable delta-v/signal glow |
+| Remote players and scavengers | Dedicated remote, raider, and Breacher sprite roles with movement heading | Deeper personality trails, signal/readiness cues, opponent-readable state changes |
+| Stars | Warm pixel star sprite plus fabric pushes/rays and local backing | Type-specific corona variants, consumption/relic states |
+| Planetoids/comets | Separate pixel-resolved planet and comet sprites oriented by movement | Icy wake ribbons and richer orbit/trajectory legibility |
+| Wrecks | Intact, looted, and debris-cluster sprites selected from authoritative visual state | Tier/material variants, stronger drift/consumption tells |
+| Portals | Extraction and rift sprite families over procedural aperture semantics | More blocked/decaying state accents and funnel depth |
+| Fauna/sentries | Shared ecology sprite family with bounded active-layer ownership | Split fauna/sentry silhouettes as the ecology catalog becomes mechanically distinct |
 | Labels/HUD | DOM HUD plus canvas world labels and warnings | Keep most text out of Three; migrate only world-anchored non-text affordances |
 
 ## Design Rules

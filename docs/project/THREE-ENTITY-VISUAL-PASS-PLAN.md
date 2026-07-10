@@ -1,7 +1,7 @@
 # Three Entity Visual Pass Plan
 
-> **v0.2 status:** Implementation plan for moving non-fluid objects from bridge
-> primitives to a first-class Three visual language.
+> **v0.3 status (2026-07-10):** First production asset pass implemented. This
+> plan now distinguishes shipped structure from later visual refinement.
 
 ## Goal
 
@@ -11,7 +11,7 @@ fabric-first. Ships, wrecks, stars, planetoids, comets, portals, rivals, fauna,
 sentries, and future megastructures become small, staged Three objects with
 shared style rules.
 
-## Current Starting Point
+## Current Shipped Point
 
 `src/render-three/three-renderer.js` already has the important spine:
 
@@ -20,13 +20,14 @@ shared style rules.
 - grouped world layers for background, fabric, semantics, entities, and
   foreground;
 - a transparent Three render target composited over the ASCII frame;
-- pooled primitive meshes for rings, discs, squares, and triangles.
+- pooled primitive and generated sprite meshes with shared asset ownership.
 
-The problem is not missing infrastructure. The problem is that most object
-families still use parity primitives. The next pass should refactor before it
-decorates.
+Player hulls, remote ships, scavengers, wreck states, stars, planetoids,
+comets, portals, and ecology now use generated pixel-resolved sprites selected
+from renderer-neutral frame facts. Wells, Inhibitors, semantic lanes, mattes,
+rims, and field behavior remain procedural by design.
 
-## Current Checkpoint - 2026-06-27
+## Current Checkpoint - 2026-07-10
 
 Pass 2 has a measurable foothold. Existing entity primitives now report
 contrast-backing counts and estimated matte coverage through renderer stats, so
@@ -34,11 +35,11 @@ the harness can catch runaway backings before they erase too much ASCII fabric.
 The current visual lane asserts those diagnostics for `entityShowcase`,
 `visualReference`, and the new `shipBakeoff` fixture.
 
-Pass 3 has started but has not chosen a final art path. `shipBakeoff` renders
-the player footprint twice with the same backing/rim stack: once as a 2D pixel
-sprite card and once as a pixel-textured top-down mesh. The fixture is a
-development comparison scene, not a gameplay map, promo capture, or commitment
-to either asset style.
+Pass 3 selected top-down pixel sprite cards for the current production hull and
+entity path. `shipBakeoff` remains a deep/manual historical comparison fixture;
+it is no longer part of the default visual gate. The next measured optimization
+is atlas/instancing only if dense production scenes exceed the renderer call and
+pool ceilings in `tests/perf-probe.cjs`.
 
 ## Pass 0 - Fixture And Layer Inventory
 

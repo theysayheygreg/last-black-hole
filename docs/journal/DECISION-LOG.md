@@ -1,5 +1,40 @@
 # Decision Log
 
+## 2026-07-10 — Promo evidence must disclose how the state was reached
+
+**Decision:** A social capture manifest must distinguish product-flow,
+fixture/beauty, and reference evidence. “Representative” is reserved for a
+fresh player-reachable flow whose required phases and browser health pass; a
+test API composition can still be useful art, but it must say that it is staged.
+
+**Why:** A visually plausible frame is not proof that the current profile,
+authority, map, and result flow can produce it. Promo tooling should help us
+market the real game without turning fixtures into accidental product claims.
+
+**Where it landed:** the LBH social screenshot skill and its capture manifest,
+plus Forge review guidance in the visual harness docs.
+
+**Door status:** Closed for unlabeled fixture-based “representative” captures.
+Open for richer natural extraction/death choreography as the agent play lane
+becomes faster and more reliable.
+
+## 2026-07-10 — Measure sprite batching need before adding atlas machinery
+
+**Decision:** Keep the current lifecycle-owned sprite implementation for v0.3,
+but bound renderer calls, pooled meshes, and asset-load errors in the production
+perf probe. Move to atlas/instancing when representative scenes approach those
+ceilings or physical Deck evidence requires it.
+
+**Why:** The first visual review found a plausible worst-case draw-call risk,
+but current production measurements remain well below the new catastrophic
+ceilings. A speculative batching rewrite would add material/atlas complexity
+before the actual bottleneck is proven.
+
+**Where it landed:** `tests/perf-probe.cjs`, Three lifecycle diagnostics, and
+the v0.3 entity visual plan.
+
+**Door status:** Open, measurement-gated.
+
 ## 2026-07-10 — Generated assets are source material with deterministic runtime slices
 
 **Decision:** v0.3 keeps the image-generated atlases as auditable source art,

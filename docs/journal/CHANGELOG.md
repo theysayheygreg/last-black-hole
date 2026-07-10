@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-07-10 — v0.3 visual Forge review and promo truth pass
+
+- Fixed Three entity budgets so offscreen candidates do not hide later visible
+  entities, honored explicit zero budgets, and removed canvas context listeners
+  when a renderer backend is disposed.
+- Classified every generated entity asset as runtime or explicit reference art;
+  procedural well and Inhibitor systems remain intentional exclusions rather
+  than silent integration drift.
+- Unified screen transition timing under `CONFIG.ui.motion`, removed shader
+  corruption under reduced motion, synchronized salvage-report input with its
+  visible CTA, added compact Home/map layouts, and made profile prompts reflect
+  empty, occupied, naming, and delete-confirm states.
+- Replaced AgentPlayEval's whole-journey retry with one acknowledged slingshot
+  engage edge and one acknowledged release edge, including sequence, timing,
+  tick, RTT, and event-order evidence.
+- Made generated art builds deterministic and self-cleaning. Fixed shield-cell
+  and foam-anchor icon-family precedence and added manifest/source checks.
+- Moved the retired ship asset bake-off to the deep visual lane and added
+  catastrophic Three call, pooled-mesh, and asset-load ceilings to the
+  production performance probe.
+- Audited the promo pipeline so player-reachable product captures, fixture
+  beauty shots, and reference scenes cannot be mislabeled as one another.
+
 ## 2026-07-10 — v0.3 visual production system
 
 - Turned the recent visual concepts into a production style guide covering

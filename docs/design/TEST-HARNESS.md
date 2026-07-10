@@ -199,13 +199,13 @@ Renderer values:
 - `target` preserves the target URL exactly.
 
 Renderer fixtures default to a representative sweep plus the `visualReference`
-object-family scene and `shipBakeoff` player asset comparison. `visualReference`
+object-family scene. `visualReference`
 checks coarse contrast/readability for stars, wrecks, portals, ships, fauna,
 sentries, and planetoids against the final post-processed background.
 It also verifies that generated assets load, bind through the shared texture
 cache, and release when their lifecycle owner is disposed. `shipBakeoff` keeps
-the historical sprite-card versus pixel-textured top-down mesh comparison
-available as an art-direction reference; production player hulls now use the
+the historical sprite-card versus pixel-textured top-down mesh comparison in
+the `LBH_RENDERER_DEEP=1` art-direction lane; production player hulls use the
 generated top-down sprite family. The
 `ascii-...png` captures are the art-target frames. The `debug-scene-...png`
 captures intentionally bypass ASCII quantization so shader input can be
@@ -220,7 +220,7 @@ screenshots plus 50 percent and 25 percent downscaled couch proxies. This lane
 analyzes those PNGs with the local Sharp pipeline so evidence generation does
 not add large temporary canvases to the game page under test. It checks that
 major UI surfaces exist, are not blank, preserve the expected phase,
-and keep named action/value/text regions above local contrast floors. It covers
+and keep named action/value/text regions above local brightness/backing floors. It covers
 1280x800 and 1280x720 layouts, verifies transition progression and settled
 states, and proves reduced motion resolves the same UI state. The title surface includes both
 the immediate `title` frame and a later `title-attract` frame so attract-mode
@@ -229,7 +229,9 @@ capture so accessibility fallback state stays visible in the review bundle. It i
 a canary for UI drift, not a pixel-perfect approval gate.
 
 Home, Map Select, in-match HUD, extraction results, and death results now carry
-hard named-region checks. Broad whole-frame brightness remains review telemetry,
+hard named-region checks. These are tonal readability proxies, not a claim that
+canvas pixels identify semantic foreground/background pairs or calculate WCAG
+contrast. Broad whole-frame brightness remains review telemetry,
 not a false art-direction verdict: the final game is intentionally black and
 local readability matters more than making every pixel bright.
 
