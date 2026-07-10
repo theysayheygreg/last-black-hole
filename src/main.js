@@ -3178,10 +3178,18 @@ function drawTitleObjectTelemetry(ctx, w, h, time, layout, reveal = 1) {
       add(body.wx, body.wy, titleObjectDisplayName(body, `orbit body ${index + 1}`), 'ORBITAL TRACK', 'flow', 8 + index, 0.58);
     });
 
-  items
-    .sort((a, b) => a.priority - b.priority)
-    .slice(0, 9)
-    .forEach((item, index) => drawTitleTelemetryLabel(ctx, item, index, w, h, time));
+  const placed = [];
+  for (const item of items.sort((a, b) => a.priority - b.priority)) {
+    // Telemetry is environmental flavor, not a catalog. Nearby contacts share
+    // one readable label instead of forming an illegible stack over the fabric.
+    const crowded = placed.some((other) => (
+      Math.abs(item.sx - other.sx) < 118 && Math.abs(item.sy - other.sy) < 42
+    ));
+    if (crowded) continue;
+    placed.push(item);
+    if (placed.length >= 6) break;
+  }
+  placed.forEach((item, index) => drawTitleTelemetryLabel(ctx, item, index, w, h, time));
 }
 
 function selectTitleFont(ctx, cleanTitle, layout) {
@@ -5241,7 +5249,7 @@ function gameLoop(now) {
       const alpha = Math.max(0, fadeIn * fadeOut);
       const margin = Math.max(28, overlayCanvas.width * 0.055);
       const panelW = Math.min(520, overlayCanvas.width - margin * 2);
-      const panelX = Math.min(Math.max(230, overlayCanvas.width * 0.18), overlayCanvas.width - panelW - margin);
+      const panelX = Math.min(Math.max(286, overlayCanvas.width * 0.22), overlayCanvas.width - panelW - margin);
       const panelY = Math.max(86, overlayCanvas.height * 0.12);
       const panelH = 88;
       const textX = panelX + 18;
@@ -5628,9 +5636,9 @@ function gameLoop(now) {
     }
 
     // Controls hint
-    ctx.fillStyle = 'rgba(120, 130, 150, 0.5)';
-    ctx.font = canvasFont(11);
-    ctx.fillText(`${promptLabel('select', currentPromptOptions())} select    ${prompt('confirm', 'load')}    ${prompt('delete', 'delete')}    ${prompt('back', 'back')}`, cx, overlayCanvas.height * 0.85);
+    ctx.fillStyle = roleColor('muted', 0.76);
+    ctx.font = canvasFont(12);
+    ctx.fillText(`${promptLabel('select', currentPromptOptions())} select    ${prompt('confirm', 'load')}    ${prompt('delete', 'delete')}    ${prompt('back', 'back')}`, cx, panelRect.y + panelRect.h + 38);
 
     ctx.restore();
   }
