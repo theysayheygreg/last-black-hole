@@ -421,6 +421,16 @@ async function captureFixture(page, outputDir, fixture) {
       assert(family.activeObjects <= family.objectBudget,
         `Fixture '${fixture.name}' ${familyName} visual family exceeded ${family.activeObjects}/${family.objectBudget}`);
     }
+    const assets = backendStats.three.entityAssets || {};
+    assert((assets.loadErrors || 0) === 0,
+      `Fixture '${fixture.name}' generated entity assets reported ${assets.loadErrors} load errors`);
+    assert((assets.textureCount || 0) <= (assets.assetCount || 0),
+      `Fixture '${fixture.name}' entity texture cache exceeded its asset manifest: ${assets.textureCount}/${assets.assetCount}`);
+    assert((assets.materialCount || 0) <= (assets.assetCount || 0),
+      `Fixture '${fixture.name}' entity material cache exceeded its asset manifest: ${assets.materialCount}/${assets.assetCount}`);
+    assert((assets.peakTextureCount || 0) <= (assets.assetCount || 0)
+      && (assets.peakMaterialCount || 0) <= (assets.assetCount || 0),
+      `Fixture '${fixture.name}' generated asset cache grew beyond its bounded manifest`);
     const entityLayer = backendStats.three.worldLayers.find((layer) => layer.name === 'world-entity-layer');
     const childNames = new Set((entityLayer?.children || []).map((child) => child.name));
     for (const expectedChild of ['entity-backing-layer', 'landmark-entity-layer', 'salvage-entity-layer', 'active-entity-layer', 'immediate-vfx-layer']) {

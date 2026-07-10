@@ -120,6 +120,22 @@ async function waitForPhase(page, phase, timeout = 12000) {
   await waitFor(page, (expected) => window.__TEST_API?.getGamePhase?.() === expected, { timeout }, phase);
 }
 
+async function waitForSettledResult(page, outcome, timeout = 12000) {
+  await waitFor(page, (expected) => {
+    const phase = window.__TEST_API?.getGamePhase?.();
+    const view = window.__TEST_API?.getRunResultsView?.();
+    const motion = window.__TEST_API?.getUiMotionState?.();
+    const expectedPhase = expected === "extracted" ? "escaped" : "dead";
+    const settledAfter = Math.max(0.8, Number(motion?.settings?.panelDuration || 0) + 0.35);
+    return phase === expectedPhase
+      && view?.outcome === expected
+      && Boolean(view?.status)
+      && Boolean(view?.cargoTitle)
+      && motion?.phase === expectedPhase
+      && Number(motion?.timer || 0) >= settledAfter;
+  }, { timeout }, outcome);
+}
+
 function assertNoBrowserErrors(errors, checkpoint) {
   if (!errors?.length) return;
   throw new Error(`${checkpoint}: browser runtime error: ${errors.join("; ")}`);
@@ -511,6 +527,7 @@ async function enterAndConfirmPortal(page, clientId, outputDir, screenshots) {
   await tapGamepadButton(page, 0, 100);
   const escaped = await waitForPlayer(clientId, (player) => player.status === "escaped", { timeout: 8000 });
   await waitForPhase(page, "escaped", 8000);
+  await waitForSettledResult(page, "extracted", 12000);
   screenshots.push(await capturePage(page, outputDir, "09-authoritative-extraction-result"));
   return {
     portalId: initialPortal.id,
@@ -582,7 +599,7 @@ async function proveNaturalWellDeath(page, clientId, outputDir, screenshots) {
   assert(deathEvent?.payload?.cause === "well", `Expected a public well death event, got ${deathEvent?.payload?.cause}`);
   assert(deathEvent.payload.wellId === well.id, `Expected death at ${well.id}, got ${deathEvent.payload.wellId}`);
   await waitForPhase(page, "dead", 8000);
-  await sleep(1500);
+  await waitForSettledResult(page, "dead", 12000);
   screenshots.push(await capturePage(page, outputDir, "17-natural-well-death"));
 
   // The result screen deliberately locks confirm for one beat. This proves the

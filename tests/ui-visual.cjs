@@ -83,8 +83,8 @@ async function setUiDebugQuiet(page, { reducedMotion = false } = {}) {
   }, reducedMotion);
 }
 
-async function analyzePngInPage(page, base64, { scale = 1 } = {}) {
-  return page.evaluate(async ({ base64Png, scaleValue }) => {
+async function analyzePngInPage(page, base64, { scale = 1, regions = [] } = {}) {
+  return page.evaluate(async ({ base64Png, scaleValue, regionsValue }) => {
     const dataUrl = `data:image/png;base64,${base64Png}`;
     const img = new Image();
     await new Promise((resolve, reject) => {
@@ -111,15 +111,71 @@ async function analyzePngInPage(page, base64, { scale = 1 } = {}) {
       if (rgb > 18) litPixels++;
     }
 
+    const regionStats = regionsValue.map((region) => {
+      const x0 = Math.max(0, Math.floor(region.x * scaleValue));
+      const y0 = Math.max(0, Math.floor(region.y * scaleValue));
+      const x1 = Math.min(out.width, Math.ceil((region.x + region.width) * scaleValue));
+      const y1 = Math.min(out.height, Math.ceil((region.y + region.height) * scaleValue));
+      let sum = 0;
+      let max = 0;
+      let lit = 0;
+      let count = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          const i = (y * out.width + x) * 4;
+          const rgb = pixels[i] + pixels[i + 1] + pixels[i + 2];
+          sum += rgb;
+          max = Math.max(max, rgb);
+          if (rgb > 18) lit++;
+          count++;
+        }
+      }
+      return { name: region.name, x: x0, y: y0, width: x1 - x0, height: y1 - y0,
+        rgbMax: max, rgbAvg: count ? sum / count : 0, litPixels: lit, pixelCount: count };
+    });
     return {
       width: out.width,
       height: out.height,
       rgbMax,
       rgbAvg: rgbSum / (pixels.length / 4),
       litPixels,
+      regions: regionStats,
       dataUrl: out.toDataURL('image/png'),
     };
-  }, { base64Png: base64, scaleValue: scale });
+  }, { base64Png: base64, scaleValue: scale, regionsValue: regions });
+}
+
+async function resolveRegions(page, definitions = []) {
+  return page.evaluate((items) => items.map((item) => {
+    if (item.selector) {
+      const rect = document.querySelector(item.selector)?.getBoundingClientRect();
+      if (!rect) return null;
+      return { name: item.name, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }
+    return {
+      name: item.name,
+      x: item.x * innerWidth,
+      y: item.y * innerHeight,
+      width: item.width * innerWidth,
+      height: item.height * innerHeight,
+    };
+  }).filter(Boolean), definitions);
+}
+
+function assertNamedRegions(stats, surface) {
+  for (const expected of surface.regions || []) {
+    const region = stats.regions.find((entry) => entry.name === expected.name);
+    assert(region, `${surface.name} missing named region ${expected.name}`);
+    assert(region.pixelCount > 0, `${surface.name} ${expected.name} has no pixels`);
+    assert(region.rgbMax >= (expected.minRgbMax ?? 72),
+      `${surface.name} ${expected.name} is too dim; max RGB ${region.rgbMax}`);
+    assert(region.litPixels >= (expected.minLitPixels ?? 24),
+      `${surface.name} ${expected.name} has too few lit pixels: ${region.litPixels}`);
+    if (Number.isFinite(expected.minBackingAvg)) {
+      assert(region.rgbAvg >= expected.minBackingAvg,
+        `${surface.name} ${expected.name} lacks local backing; avg RGB ${region.rgbAvg.toFixed(1)}`);
+    }
+  }
 }
 
 function writeDataUrl(filepath, dataUrl) {
@@ -138,6 +194,10 @@ function assertReadableStats(stats, label, { minLitPixels = 900, minRgbMax = 90 
 }
 
 async function captureSurface(page, outputDir, surface) {
+  const viewport = surface.viewport || { width: 1280, height: 800 };
+  await page.session.send('Emulation.setDeviceMetricsOverride', {
+    width: viewport.width, height: viewport.height, deviceScaleFactor: 1, mobile: false,
+  });
   await surface.setup(page);
   await setUiDebugQuiet(page, { reducedMotion: surface.reducedMotion === true });
   await stepForMs(page, surface.warmMs ?? 900);
@@ -151,10 +211,20 @@ async function captureSurface(page, outputDir, surface) {
     assert(domOk, `${surface.name} DOM assertion failed`);
   }
 
+  const motion = await page.evaluate(() => window.__TEST_API?.getUiMotionState?.() || null);
+  if (surface.expectSettled != null) {
+    const settledAfter = Math.max(0.5, Number(motion?.settings?.panelDuration || 0));
+    const settled = motion?.settings?.reducedMotion === true || Number(motion?.timer || 0) >= settledAfter;
+    assert(settled === surface.expectSettled,
+      `${surface.name} expected motion settled=${surface.expectSettled}, got ${settled}`);
+  }
+
   const filepath = path.join(outputDir, `${surface.name}.png`);
   const base64 = await captureFullPage(page, filepath);
-  const stats = await analyzePngInPage(page, base64);
+  const regions = await resolveRegions(page, surface.regions);
+  const stats = await analyzePngInPage(page, base64, { regions });
   assertReadableStats(stats, surface.name, surface.thresholds);
+  assertNamedRegions(stats, surface);
 
   const proxies = [];
   for (const scale of [0.5, 0.25]) {
@@ -171,6 +241,8 @@ async function captureSurface(page, outputDir, surface) {
   return {
     name: surface.name,
     phase: await page.evaluate(() => window.__TEST_API?.getGamePhase?.() || null),
+    viewport,
+    motion,
     path: filepath,
     stats: { ...stats, dataUrl: undefined },
     proxies,
@@ -252,6 +324,32 @@ async function run() {
       name: 'home-ship',
       expectPhase: 'home',
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 })),
+      regions: [
+        { name: 'home-tabs', x: 0.04, y: 0.08, width: 0.92, height: 0.09, minBackingAvg: 5 },
+        { name: 'ship-loadout', x: 0.32, y: 0.20, width: 0.36, height: 0.62, minBackingAvg: 4 },
+      ],
+    },
+    {
+      name: 'home-transition-entering',
+      expectPhase: 'home',
+      warmMs: 1,
+      setup: async (p) => {
+        await p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 }));
+        await p.evaluate(() => window.__TEST_API.setUiMotionTime(0.08));
+      },
+      regions: [{ name: 'home-transition-panel', x: 0.05, y: 0.16, width: 0.90, height: 0.70 }],
+    },
+    {
+      name: 'home-transition-reduced-motion',
+      expectPhase: 'home',
+      warmMs: 1,
+      reducedMotion: true,
+      expectSettled: true,
+      setup: async (p) => {
+        await p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 }));
+        await p.evaluate(() => window.__TEST_API.setUiMotionTime(0.08));
+      },
+      regions: [{ name: 'home-transition-panel', x: 0.05, y: 0.16, width: 0.90, height: 0.70 }],
     },
     {
       name: 'map-select',
@@ -273,6 +371,35 @@ async function run() {
         return !!hud && getComputedStyle(hud).display !== 'none' && !!fuel?.textContent && !!signal?.textContent;
       },
       thresholds: { minLitPixels: 1200, minRgbMax: 90 },
+      regions: [
+        { name: 'vitals', selector: '#hud-vitals', minBackingAvg: 6 },
+        { name: 'route-objective', selector: '#hud-portals', minBackingAvg: 6 },
+        { name: 'ship-actions', selector: '#hud-actions', minBackingAvg: 6 },
+      ],
+    },
+    {
+      name: 'playing-hud-1280x720',
+      viewport: { width: 1280, height: 720 },
+      expectPhase: 'playing',
+      warmMs: 1700,
+      setup: async (p) => {
+        await p.evaluate(() => window.__TEST_API.showUiFixture('playing-hud', { mapIndex: 2, seed: 424242 }));
+        await waitFor(p, () => window.__TEST_API.getGamePhase() === 'playing', { timeout: 6000 });
+      },
+      assertDom: () => {
+        const hud = document.getElementById('hud');
+        const panels = [...document.querySelectorAll('#hud .hud-panel')].filter((el) => getComputedStyle(el).display !== 'none');
+        return !!hud && panels.every((el) => {
+          const r = el.getBoundingClientRect();
+          return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+        });
+      },
+      thresholds: { minLitPixels: 1100, minRgbMax: 90 },
+      regions: [
+        { name: 'vitals', selector: '#hud-vitals', minBackingAvg: 6 },
+        { name: 'route-objective', selector: '#hud-portals', minBackingAvg: 6 },
+        { name: 'ship-actions', selector: '#hud-actions', minBackingAvg: 6 },
+      ],
     },
     {
       name: 'results-extracted',
