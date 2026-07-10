@@ -1,5 +1,7 @@
 # Steam Deck Runbook
 
+> Document revision: v0.3. Updated 2026-07-10.
+
 This is the operational runbook for getting Last Singularity onto a Steam Deck,
 launching it the way SteamOS expects, and diagnosing the failures we have
 already seen.
@@ -93,8 +95,8 @@ First launch flow on Deck:
 6. Use the left stick to aim, `R2` to thrust, `L2` to brake, `Y` to
    engage/release slingshot anchors, `X` for pulse, and D-pad left/right for
    consumables.
-7. Loot wrecks, preserve delta-v, follow wormhole arrows, and extract before
-   portals expire or the universe collapses.
+7. Loot wrecks, preserve delta-v, follow cyan route apertures, remain inside
+   one, then press `A` to extract before it expires or the universe collapses.
 
 ### Public Installer Overrides
 

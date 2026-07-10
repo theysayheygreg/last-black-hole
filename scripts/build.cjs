@@ -432,7 +432,7 @@ function writeStartHere(targetRoot, results) {
     '- Choose a pilot slot. Empty slots ask for a pilot name; type one and press Enter.',
     '- On the home screen, use Q/E on keyboard or L1/R1 on controller/Steam Deck to move between tabs.',
     '- Go to LAUNCH, confirm with Space or A, choose a destination, then confirm again to drop in.',
-    '- During a run, loot wrecks, conserve delta-v, follow wormhole arrows, and extract before portals expire or the universe collapses.',
+    '- During a run, loot wrecks, conserve delta-v, follow cyan route apertures, remain inside one, then press Enter or A to extract before it expires or the universe collapses.',
     '- After extraction or death, press Space or A to return to the pilot flow.',
     '',
     '## What is in this folder?',
