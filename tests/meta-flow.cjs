@@ -149,6 +149,34 @@ async function run() {
         `Expected readable pasted text to remain, got ${profile.name}`);
     });
 
+    await runner.run("Profile prompts match empty, occupied, and modal states", async () => {
+      await bootstrapCleanPage(page);
+      await waitForPhase(page, "title");
+      await tapConfirm(page);
+      await waitForPhase(page, "profileSelect");
+
+      const emptyPrompt = await page.evaluate(() => window.__TEST_API.getUiMotionState().profilePrompt);
+      assert(emptyPrompt.includes("create") && !emptyPrompt.includes("delete"), `Expected empty-slot create prompt, got ${emptyPrompt}`);
+
+      await tapEnter(page);
+      const namePrompt = await page.evaluate(() => window.__TEST_API.getUiMotionState().profilePrompt);
+      assert(namePrompt.includes("confirm") && namePrompt.includes("cancel") && !namePrompt.includes("select"),
+        `Expected name modal prompt, got ${namePrompt}`);
+      await tapEnter(page);
+      await waitForPhase(page, "home");
+      await page.evaluate(() => window.__TEST_API.showUiFixture("profile-select", { cursor: 0 }));
+      await waitForPhase(page, "profileSelect");
+
+      const occupiedPrompt = await page.evaluate(() => window.__TEST_API.getUiMotionState().profilePrompt);
+      assert(occupiedPrompt.includes("load") && occupiedPrompt.includes("delete"), `Expected occupied-slot prompt, got ${occupiedPrompt}`);
+
+      await dispatchKey(page, "KeyX", "x");
+      await sleep(120);
+      const deletePrompt = await page.evaluate(() => window.__TEST_API.getUiMotionState().profilePrompt);
+      assert(deletePrompt.includes("delete") && deletePrompt.includes("cancel") && !deletePrompt.includes("select"),
+        `Expected delete modal prompt, got ${deletePrompt}`);
+    });
+
     await runner.run("Real launch flow reaches gameplay from home", async () => {
       await bootstrapCleanPage(page);
       await runRealEntryFlow(page);
@@ -266,7 +294,7 @@ async function run() {
       await waitForPhase(page, "escaped");
       await tapConfirm(page);
       await waitForPhase(page, "meta");
-      await sleep(1400);
+      await waitFor(page, () => window.__TEST_API.getUiMotionState().salvageReport.ready === true, { timeout: 4000 });
       await tapConfirm(page);
       await waitForPhase(page, "home");
 
@@ -275,6 +303,39 @@ async function run() {
       assert(chronicle.records[0].survivalLabel === "2:31", `Expected survival 2:31, got ${chronicle.records[0].survivalLabel}`);
       assert(chronicle.records[0].emEarned === 75, `Expected 75 EM ledger credit from result, got ${chronicle.records[0].emEarned}`);
       assert(chronicle.records[0].cargoCount === 1, `Expected cargo count 1, got ${chronicle.records[0].cargoCount}`);
+    });
+
+    await runner.run("Reduced-motion salvage report is settled and transition corruption stays off", async () => {
+      await bootstrapCleanPage(page);
+      await page.evaluate(() => {
+        window.__TEST_API.createTestProfile("Reduced Pilot");
+        window.__TEST_API.setConfig("ui.motion.reduced", true);
+        window.__TEST_API.showRunResultsFixture({
+          runId: "reduced-result-run",
+          outcome: "extracted",
+          survivalTime: 90,
+          cargoExtracted: [],
+          emEarned: 10,
+        }, "escaped");
+      });
+      await waitForPhase(page, "escaped");
+      await tapConfirm(page);
+
+      const transition = await page.evaluate(() => window.__TEST_API.getUiMotionState().transition);
+      assert(transition.duration === 0.34, `Expected configured 0.34s transition, got ${transition.duration}`);
+      assert(transition.glitchIntensity === 0, `Expected reduced-motion shader corruption off, got ${transition.glitchIntensity}`);
+
+      await sleep(500);
+      const metaPhase = await page.evaluate(() => window.__TEST_API.getGamePhase());
+      assert(metaPhase === "meta", `Expected reduced-motion result transition to reach meta, got ${metaPhase}`);
+      await waitFor(page, () => window.__TEST_API.getUiMotionState().salvageReport.ready === true, { timeout: 2000 });
+      const report = await page.evaluate(() => window.__TEST_API.getUiMotionState().salvageReport);
+      assert(report.ready === true && report.displayTime > report.readyAt,
+        `Expected settled visible salvage CTA, got ${JSON.stringify(report)}`);
+      await tapConfirm(page);
+      await sleep(500);
+      const homePhase = await page.evaluate(() => window.__TEST_API.getGamePhase());
+      assert(homePhase === "home", `Expected ready salvage CTA to accept confirm, got ${homePhase}`);
     });
 
     const filepath = await screenshot(page, "meta-flow");

@@ -744,6 +744,56 @@ function currentUiMotionSettings() {
   return resolveMotionSettings(CONFIG.ui?.motion);
 }
 
+function transitionTiming() {
+  const duration = currentUiMotionSettings().transitionDuration;
+  return {
+    duration,
+    handoff: duration * 0.38,
+  };
+}
+
+function salvageReportTiming() {
+  const itemCount = Math.min(metaExtractedItems.length, 8);
+  const summary = 0.5 + itemCount * 0.1 + 0.5;
+  return { summary, readyAt: summary + 0.8 };
+}
+
+function salvageReportDisplayTime() {
+  const motion = currentUiMotionSettings();
+  const ready = salvageReportTiming().readyAt;
+  return motion.reducedMotion ? Math.max(metaPhaseTimer, ready + 0.5) : metaPhaseTimer;
+}
+
+function isSalvageReportReady() {
+  return salvageReportDisplayTime() > salvageReportTiming().readyAt;
+}
+
+function profilePromptText() {
+  const options = currentPromptOptions();
+  if (nameInputActive) return `${promptLabel('confirm', options)} confirm    ${promptLabel('back', options)} cancel`;
+  if (deleteConfirmSlot >= 0) return `${promptLabel('confirm', options)} delete    ${promptLabel('back', options)} cancel`;
+  const occupied = profileManager.hasProfile(profileCursor);
+  return occupied
+    ? `${promptLabel('select', options)} select    ${promptLabel('confirm', options)} load    ${promptLabel('delete', options)} delete    ${promptLabel('back', options)} back`
+    : `${promptLabel('select', options)} select    ${promptLabel('confirm', options)} create    ${promptLabel('back', options)} back`;
+}
+
+function threePanelLayout(width, height, kind, viewportWidth = width) {
+  const compact = viewportWidth < 984;
+  const marginX = compact ? Math.max(18, width * 0.025) : Math.max(34, Math.min(64, width * 0.045));
+  const top = Math.max(kind === 'home' ? 28 : 30, height * (kind === 'home' ? 0.05 : 0.052));
+  const bottom = height - Math.max(kind === 'home' ? 28 : 32, height * (kind === 'home' ? 0.045 : 0.048));
+  const gap = compact ? 10 : 18;
+  const leftW = kind === 'home'
+    ? (compact ? Math.max(150, width * 0.18) : Math.min(220, Math.max(190, width * 0.17)))
+    : (compact ? Math.max(180, width * 0.22) : Math.min(300, Math.max(248, width * 0.23)));
+  const rightW = kind === 'home'
+    ? (compact ? Math.max(210, width * 0.24) : Math.min(324, Math.max(284, width * 0.245)))
+    : (compact ? Math.max(220, width * 0.25) : Math.min(336, Math.max(292, width * 0.25)));
+  const centerW = width - marginX * 2 - leftW - rightW - gap * 2;
+  return { compact, width, viewportWidth, marginX, top, bottom, gap, leftW, rightW, centerW, panelH: bottom - top };
+}
+
 function currentUiFocusKey() {
   if (gamePhase === 'profileSelect') return `${gamePhase}:${profileCursor}:${nameInputActive ? 'name' : deleteConfirmSlot >= 0 ? 'delete' : 'list'}`;
   if (gamePhase === 'home') {
@@ -770,6 +820,12 @@ function getUiMotionStateForTest() {
     timer: uiMotionTimer,
     focusPulseTimer: uiFocusPulseTimer,
     settings: currentUiMotionSettings(),
+    transition: { active: transitionActive, timer: transitionTimer, ...transitionTiming(), glitchIntensity: getTransitionGlitchIntensity() },
+    salvageReport: { timer: metaPhaseTimer, displayTime: salvageReportDisplayTime(), ready: isSalvageReportReady(), ...salvageReportTiming() },
+    profilePrompt: gamePhase === 'profileSelect' ? profilePromptText() : null,
+    layout: (gamePhase === 'home' || gamePhase === 'mapSelect')
+      ? threePanelLayout(overlayCanvas.width, overlayCanvas.height, gamePhase === 'home' ? 'home' : 'map', window.innerWidth)
+      : null,
   };
 }
 
@@ -814,10 +870,6 @@ let transitionActive = false;
 let transitionTimer = 0;
 let transitionCallback = null;  // called at midpoint to swap the scene
 let transitionFired = false;
-const TRANSITION_RAMP_UP = 0.6;    // seconds to reach full corruption
-const TRANSITION_HOLD = 0.25;      // seconds at full corruption
-const TRANSITION_RAMP_DOWN = 0.6;  // seconds to resolve into new scene
-const TRANSITION_TOTAL = TRANSITION_RAMP_UP + TRANSITION_HOLD + TRANSITION_RAMP_DOWN;
 const INHIBITOR_WAKE_GLITCH_DURATION = 1.0;
 
 function getConfiguredSimServerUrl() {
@@ -1541,16 +1593,15 @@ function triggerTransition(callback) {
 }
 
 function getTransitionGlitchIntensity() {
-  if (!transitionActive) return 0;
-  const t = transitionTimer;
-  if (t < TRANSITION_RAMP_UP) {
-    return t / TRANSITION_RAMP_UP;  // 0 → 1
-  } else if (t < TRANSITION_RAMP_UP + TRANSITION_HOLD) {
-    return 1.0;  // full corruption
-  } else if (t < TRANSITION_TOTAL) {
-    return 1.0 - (t - TRANSITION_RAMP_UP - TRANSITION_HOLD) / TRANSITION_RAMP_DOWN;  // 1 → 0
-  }
-  return 0;
+  const motion = currentUiMotionSettings();
+  if (!transitionActive || motion.reducedMotion) return 0;
+  const state = sampleScreenTransition(transitionTimer, {
+    duration: motion.transitionDuration,
+    maxOcclusion: motion.maxOcclusion,
+  });
+  if (state.phase === 'depart') return 1 - state.outgoingAlpha;
+  if (state.phase === 'handoff') return 1;
+  return 1 - state.incomingAlpha;
 }
 
 /** Get current screenwide glitch intensity (0-1) for the ASCII shader. */
@@ -3853,14 +3904,15 @@ function gameLoop(now) {
   // Scene transition: tick timer, fire callback at midpoint, end when done
   if (transitionActive) {
     transitionTimer += rawDt;  // use rawDt, not scaled dt
+    const timing = transitionTiming();
     // Fire scene swap at the midpoint (full corruption — scene invisible)
-    if (!transitionFired && transitionTimer >= TRANSITION_RAMP_UP) {
+    if (!transitionFired && transitionTimer >= timing.handoff) {
       transitionFired = true;
       if (transitionCallback) transitionCallback();
       transitionCallback = null;
     }
     // End transition
-    if (transitionTimer >= TRANSITION_TOTAL) {
+    if (transitionTimer >= timing.duration) {
       transitionActive = false;
     }
   }
@@ -4218,7 +4270,7 @@ function gameLoop(now) {
       }
       if (gamePhase === 'meta') {
         // Go to home screen after viewing salvage report
-        triggerTransition(() => {
+        if (isSalvageReportReady()) triggerTransition(() => {
           loadTitleScene();
           gamePhase = 'home';
           homeTab = 0;
@@ -5615,7 +5667,7 @@ function gameLoop(now) {
       });
       ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
       ctx.font = canvasFont(12);
-      ctx.fillText('type name + enter to confirm    esc to cancel', cx, overlayCanvas.height * 0.45 + 25);
+      ctx.fillText('type pilot name', cx, overlayCanvas.height * 0.45 + 25);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
       ctx.font = canvasFont(18);
       const blink = Math.sin(totalTime * 6) > 0 ? '|' : '';
@@ -5630,15 +5682,12 @@ function gameLoop(now) {
       ctx.fillStyle = 'rgba(255, 100, 80, 0.9)';
       ctx.font = canvasFont(13);
       ctx.fillText(`delete "${profileManager.slots[deleteConfirmSlot]?.name}"?`, cx, overlayCanvas.height * 0.45 + 28);
-      ctx.fillStyle = 'rgba(200, 200, 220, 0.7)';
-      ctx.font = canvasFont(11);
-      ctx.fillText(`${prompt('confirm', 'confirm')}    ${prompt('back', 'cancel')}`, cx, overlayCanvas.height * 0.45 + 52);
     }
 
     // Controls hint
     ctx.fillStyle = roleColor('muted', 0.76);
     ctx.font = canvasFont(12);
-    ctx.fillText(`${promptLabel('select', currentPromptOptions())} select    ${prompt('confirm', 'load')}    ${prompt('delete', 'delete')}    ${prompt('back', 'back')}`, cx, panelRect.y + panelRect.h - 18);
+    ctx.fillText(profilePromptText(), cx, panelRect.y + panelRect.h - 18);
 
     ctx.restore();
   }
@@ -5658,14 +5707,7 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
-    const marginX = Math.max(34, Math.min(64, w * 0.045));
-    const top = Math.max(28, h * 0.05);
-    const bottom = h - Math.max(28, h * 0.045);
-    const gap = 18;
-    const leftW = Math.min(220, Math.max(190, w * 0.17));
-    const rightW = Math.min(324, Math.max(284, w * 0.245));
-    const centerW = Math.max(430, w - marginX * 2 - leftW - rightW - gap * 2);
-    const panelH = bottom - top;
+    const { marginX, top, gap, leftW, rightW, centerW, panelH } = threePanelLayout(w, h, 'home', window.innerWidth);
     const leftPanel = { x: marginX, y: top, w: leftW, h: panelH };
     const centerPanel = { x: leftPanel.x + leftPanel.w + gap, y: top, w: centerW, h: panelH };
     const rightPanel = { x: centerPanel.x + centerPanel.w + gap, y: top, w: rightW, h: panelH };
@@ -6114,14 +6156,7 @@ function gameLoop(now) {
     const motion = currentUiMotionSettings();
     const contentReveal = uiContentReveal(0.1);
     const focusPulse = uiFocusPulseAmount();
-    const marginX = Math.max(34, Math.min(64, w * 0.045));
-    const top = Math.max(30, h * 0.052);
-    const bottom = h - Math.max(32, h * 0.048);
-    const gap = 18;
-    const leftW = Math.min(300, Math.max(248, w * 0.23));
-    const rightW = Math.min(336, Math.max(292, w * 0.25));
-    const centerW = Math.max(360, w - marginX * 2 - leftW - rightW - gap * 2);
-    const panelH = bottom - top;
+    const { marginX, top, gap, leftW, rightW, centerW, panelH } = threePanelLayout(w, h, 'map', window.innerWidth);
     const listPanel = { x: marginX, y: top, w: leftW, h: panelH };
     const previewPanel = { x: listPanel.x + listPanel.w + gap, y: top, w: centerW, h: panelH };
     const briefPanel = { x: previewPanel.x + previewPanel.w + gap, y: top, w: rightW, h: panelH };
@@ -6309,7 +6344,7 @@ function gameLoop(now) {
     metaPhaseTimer += dt;
     const cx = overlayCanvas.width / 2;
     const cy = overlayCanvas.height / 2;
-    const t = metaPhaseTimer;
+    const t = salvageReportDisplayTime();
 
     const w = overlayCanvas.width, h = overlayCanvas.height;
     ctx.save();
@@ -6370,7 +6405,7 @@ function gameLoop(now) {
     }
 
     // Vault summary
-    const summaryT = 0.5 + Math.min(metaExtractedItems.length, 8) * 0.1 + 0.5;
+    const summaryT = salvageReportTiming().summary;
     if (t > summaryT) {
       const a = Math.min((t - summaryT) * 2, 1);
       const totalValue = metaExtractedItems.reduce((sum, i) => sum + (i.value || 0), 0);
@@ -6392,7 +6427,7 @@ function gameLoop(now) {
     }
 
     // Prompt
-    const promptT = summaryT + 0.8;
+    const promptT = salvageReportTiming().readyAt;
     if (t > promptT) {
       const blink = Math.sin(totalTime * 3) > 0 ? 1 : 0.3;
       drawCommandButtonMotion(ctx, {
@@ -6495,10 +6530,10 @@ function gameLoop(now) {
 
   if (transitionActive) {
     const motion = currentUiMotionSettings();
-    const wipeAlpha = motion.reducedMotion ? 0.32 : 0.9 * motion.intensity;
+    const wipeAlpha = 0.9 * motion.intensity;
     if (motion.enabled && wipeAlpha > 0) {
       const transitionState = sampleScreenTransition(transitionTimer, {
-        duration: TRANSITION_TOTAL,
+        duration: motion.transitionDuration,
         reducedMotion: motion.reducedMotion,
         maxOcclusion: motion.maxOcclusion,
       });

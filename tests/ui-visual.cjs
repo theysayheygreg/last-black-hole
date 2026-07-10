@@ -321,6 +321,18 @@ async function run() {
       ],
     },
     {
+      name: 'home-compact',
+      expectPhase: 'home',
+      viewport: { width: 960, height: 720 },
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('home', { tabIndex: 0 })),
+      assertDom: () => {
+        const layout = window.__TEST_API.getUiMotionState()?.layout;
+        if (!layout?.compact || layout.centerW <= 0) return false;
+        return layout.viewportWidth === 960
+          && layout.marginX * 2 + layout.leftW + layout.centerW + layout.rightW + layout.gap * 2 <= layout.width + 0.01;
+      },
+    },
+    {
       name: 'home-transition-entering',
       expectPhase: 'home',
       warmMs: 1,
@@ -346,6 +358,18 @@ async function run() {
       name: 'map-select',
       expectPhase: 'mapSelect',
       setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('map-select', { mapIndex: 1, seed: 424242 })),
+    },
+    {
+      name: 'map-select-compact',
+      expectPhase: 'mapSelect',
+      viewport: { width: 960, height: 720 },
+      setup: (p) => p.evaluate(() => window.__TEST_API.showUiFixture('map-select', { mapIndex: 1, seed: 424242 })),
+      assertDom: () => {
+        const layout = window.__TEST_API.getUiMotionState()?.layout;
+        if (!layout?.compact || layout.centerW <= 0) return false;
+        return layout.viewportWidth === 960
+          && layout.marginX * 2 + layout.leftW + layout.centerW + layout.rightW + layout.gap * 2 <= layout.width + 0.01;
+      },
     },
     {
       name: 'playing-hud',
