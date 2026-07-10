@@ -20,24 +20,29 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     this.beginUpdate();
     const remotePlayers = frame.world?.remotePlayers || [];
     const candidates = frame.world?.shipCandidates || [];
-    const budget = Math.max(1, frame.style?.entityBudgets?.players || 32);
+    const budget = Math.max(0, frame.style?.entityBudgets?.players ?? 32);
     this.objectBudget = budget;
     let remaining = budget;
 
-    // The local ship is the strongest scene read and always claims the first
-    // slot; multiplayer density may drop remote echoes, never the pilot.
+    // When enabled, the local ship claims the first slot; multiplayer density
+    // may drop remote echoes, never the pilot.
     const player = frame.localPlayer;
-    if (player && player.status !== 'dead') {
+    if (remaining > 0 && player && player.status !== 'dead') {
       const core = draw.sprite(this.group, selectPlayerAsset(player), player.world.x, player.world.y,
         0.044, -player.movement.facing - Math.PI * 0.5, 'player');
       if (core) { this.countObject(4); remaining -= 1; }
     }
 
-    const candidateCount = Math.min(candidates.length, 2, remaining);
-    for (let index = 0; index < candidateCount; index++) {
-      if (draw.shipCandidate(candidates[index])) { this.countObject(4); remaining -= 1; }
+    let candidateIndex = 0;
+    let visibleCandidates = 0;
+    for (; candidateIndex < candidates.length && visibleCandidates < 2 && remaining > 0; candidateIndex++) {
+      if (draw.shipCandidate(candidates[candidateIndex])) {
+        this.countObject(4);
+        visibleCandidates += 1;
+        remaining -= 1;
+      }
     }
-    this.drop(candidates.length - candidateCount);
+    this.drop(Math.max(0, candidates.length - candidateIndex));
 
     let remoteIndex = 0;
     for (; remoteIndex < remotePlayers.length && remaining > 0; remoteIndex++) {

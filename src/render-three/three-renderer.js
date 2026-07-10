@@ -431,15 +431,17 @@ export class ThreeRendererBackend {
   }
 
   _installContextHandlers() {
-    this.sourceCanvas.addEventListener('webglcontextlost', (event) => {
+    this.onContextLost = (event) => {
       event.preventDefault();
       console.warn('[render-three] WebGL context lost');
-    });
-    this.sourceCanvas.addEventListener('webglcontextrestored', () => {
+    };
+    this.onContextRestored = () => {
       console.warn('[render-three] WebGL context restored');
       this.renderer.setSize(this.sourceCanvas.width, this.sourceCanvas.height, false);
       this._setWorldCameraAspect(this.sourceCanvas.width, this.sourceCanvas.height);
-    });
+    };
+    this.sourceCanvas.addEventListener('webglcontextlost', this.onContextLost);
+    this.sourceCanvas.addEventListener('webglcontextrestored', this.onContextRestored);
   }
 
   resize(width, height) {
@@ -921,6 +923,9 @@ export class ThreeRendererBackend {
   }
 
   dispose() {
+    // Stable handler identities make backend replacement release the canvas owner cleanly.
+    this.sourceCanvas.removeEventListener('webglcontextlost', this.onContextLost);
+    this.sourceCanvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     for (const family of Object.values(this.visualFamilies)) family.dispose();
     this.entityAssets.dispose();
     this.sceneTarget.dispose();

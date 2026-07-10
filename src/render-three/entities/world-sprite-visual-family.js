@@ -35,15 +35,19 @@ export class WorldSpriteVisualFamily extends VisualFamilyLifecycle {
 
     for (const [name, budget, group, selectAsset, selectRadius, selectRotation] of families) {
       const entities = world[name] || [];
-      const limit = Math.min(entities.length, Math.max(0, budget));
-      for (let index = 0; index < limit; index++) {
+      const familyBudget = Math.max(0, budget);
+      let active = 0;
+      let index = 0;
+      // Walk past culled entries so budgets describe visible scene density.
+      for (; index < entities.length && active < familyBudget; index++) {
         const entity = entities[index];
         if (draw.sprite(group, selectAsset(entity), entity.world.x, entity.world.y,
           selectRadius(entity), selectRotation(entity), name)) {
           this.countObject(4);
+          active += 1;
         }
       }
-      this.drop(entities.length - limit);
+      this.drop(entities.length - index);
     }
     return this.getStats();
   }

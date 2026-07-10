@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { TestRunner, assert } = require('./helpers.cjs');
 
@@ -132,6 +133,49 @@ async function run() {
       'Reset must clear active family counts');
   });
 
+  await runner.run('Invisible submissions do not consume budgets and explicit zero disables families', async () => {
+    const resources = makeResources();
+    const players = new PlayerVisualFamily(resources).create();
+    const wrecks = new WreckVisualFamily(resources).create();
+    const portals = new PortalVisualFamily(resources).create();
+    const worldSprites = new WorldSpriteVisualFamily({ landmarkGroup: {}, activeGroup: {} }).create();
+    const calls = [];
+    const draw = {
+      sprite(...args) {
+        calls.push(args);
+        return args[2] >= 0.5 ? { visible: true } : null;
+      },
+    };
+    const entities = [worldEntity('culled', 0), worldEntity('visible-a', 50), worldEntity('visible-b', 60)];
+    const wreckStats = wrecks.update({ world: { wrecks: entities }, style: { entityBudgets: { wrecks: 1 } } }, draw);
+    const portalStats = portals.update({ world: { portals: entities }, style: { entityBudgets: { portals: 1 } } }, draw);
+    assert(wreckStats.activeObjects === 1 && portalStats.activeObjects === 1,
+      'A culled leading entity must not starve a later visible entity');
+    assert(calls.some((args) => args[2] === 0.5), 'Families must scan through culled entities');
+    const playerStats = players.update({
+      localPlayer: null,
+      world: { shipCandidates: entities, remotePlayers: [] },
+      style: { entityBudgets: { players: 1 } },
+    }, {
+      shipCandidate: (entity) => entity.world.x >= 0.5 ? {} : null,
+    });
+    const worldStats = worldSprites.update({
+      world: { stars: entities },
+      style: { entityBudgets: { stars: 1, planetoids: 0, scavengers: 0, ecology: 0 } },
+    }, draw);
+    assert(playerStats.activeObjects === 1, 'Culled candidates must not consume the player budget');
+    assert(worldStats.activeObjects === 1, 'Culled ambient sprites must not consume their family budget');
+    const zeroWrecks = wrecks.update({ world: { wrecks: entities }, style: { entityBudgets: { wrecks: 0 } } }, draw);
+    const zeroPortals = portals.update({ world: { portals: entities }, style: { entityBudgets: { portals: 0 } } }, draw);
+    const zeroPlayers = players.update({
+      localPlayer: worldEntity('local'), world: { shipCandidates: [], remotePlayers: [] },
+      style: { entityBudgets: { players: 0 } },
+    }, { sprite: () => ({}) });
+    assert(zeroWrecks.activeObjects === 0 && zeroWrecks.objectBudget === 0, 'Zero wreck budget must be honored');
+    assert(zeroPortals.activeObjects === 0 && zeroPortals.objectBudget === 0, 'Zero portal budget must be honored');
+    assert(zeroPlayers.activeObjects === 0 && zeroPlayers.objectBudget === 0, 'Zero player budget must be honored');
+  });
+
   await runner.run('Generated asset selection is state aware and every catalog path exists', async () => {
     assert(assets.selectPlayerAsset({ hull: { type: 'breacher' } }) === 'shipBreacher', 'Breacher hull selection failed');
     assert(assets.selectPlayerAsset({ hull: { type: 'drifter' } }) === 'shipDrifter', 'Drifter hull selection failed');
@@ -141,6 +185,44 @@ async function run() {
     assert(assets.selectPortalAsset({ visualState: 'rift' }) === 'portalRift', 'Rift portal selection failed');
     for (const relativePath of Object.values(assets.ENTITY_ASSET_PATHS)) {
       assert(require('fs').existsSync(path.join(ROOT, relativePath)), `Missing generated entity asset ${relativePath}`);
+    }
+  });
+
+  await runner.run('Entity asset manifest and runtime usage agree in both directions', async () => {
+    const assetDir = path.join(ROOT, 'assets/visual/entities');
+    const diskPaths = fs.readdirSync(assetDir).filter((name) => name.endsWith('.png'))
+      .map((name) => `assets/visual/entities/${name}`).sort();
+    const manifestPaths = Object.values(assets.ENTITY_ASSET_MANIFEST).map((asset) => asset.path).sort();
+    assert(JSON.stringify(diskPaths) === JSON.stringify(manifestPaths),
+      `Entity files and classified manifest drifted: disk=${diskPaths} manifest=${manifestPaths}`);
+    const runtimeEntries = Object.entries(assets.ENTITY_ASSET_MANIFEST)
+      .filter(([, asset]) => asset.classification === 'runtime');
+    assert(runtimeEntries.every(([id, asset]) => assets.ENTITY_ASSET_PATHS[id] === asset.path),
+      'Every runtime-classified asset must enter the runtime store');
+    assert(Object.keys(assets.ENTITY_ASSET_PATHS).every((id) => assets.ENTITY_ASSET_MANIFEST[id]?.classification === 'runtime'),
+      'Every runtime store asset must be explicitly runtime-classified');
+    const familySource = fs.readdirSync(path.join(ROOT, 'src/render-three/entities'))
+      .filter((name) => name.endsWith('-visual-family.js'))
+      .map((name) => fs.readFileSync(path.join(ROOT, 'src/render-three/entities', name), 'utf8'))
+      .join('\n');
+    const assetSource = fs.readFileSync(path.join(ROOT, 'src/render-three/entity-assets.js'), 'utf8');
+    const selectorSource = assetSource.slice(assetSource.indexOf('export function selectPlayerAsset'), assetSource.indexOf('function configureTexture'));
+    const usedRuntimeIds = runtimeEntries.map(([id]) => id).filter((id) => (familySource + selectorSource).includes(`'${id}'`));
+    assert(usedRuntimeIds.length === runtimeEntries.length,
+      `Runtime-classified assets without visual-family usage: ${runtimeEntries.map(([id]) => id).filter((id) => !usedRuntimeIds.includes(id))}`);
+    assert(assets.ENTITY_ASSET_MANIFEST.wellInstrument.classification === 'reference'
+      && assets.ENTITY_ASSET_MANIFEST.inhibitorShard.classification === 'reference',
+    'Procedural wells and Inhibitors must remain reference-only assets');
+  });
+
+  await runner.run('Canvas context handlers have symmetric install and dispose ownership', async () => {
+    const source = fs.readFileSync(path.join(ROOT, 'src/render-three/three-renderer.js'), 'utf8');
+    for (const [eventName, handlerName] of [
+      ['webglcontextlost', 'onContextLost'],
+      ['webglcontextrestored', 'onContextRestored'],
+    ]) {
+      assert(source.includes(`addEventListener('${eventName}', this.${handlerName})`), `Missing ${eventName} install`);
+      assert(source.includes(`removeEventListener('${eventName}', this.${handlerName})`), `Missing ${eventName} teardown`);
     }
   });
 

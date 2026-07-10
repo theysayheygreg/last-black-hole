@@ -1,21 +1,30 @@
 import * as THREE from '../../node_modules/three/build/three.module.js';
 
-export const ENTITY_ASSET_PATHS = Object.freeze({
-  shipDrifter: 'assets/visual/entities/ship-drifter.png',
-  shipBreacher: 'assets/visual/entities/ship-breacher.png',
-  shipRemote: 'assets/visual/entities/ship-remote.png',
-  scavengerRaider: 'assets/visual/entities/scavenger-raider.png',
-  scavengerBreacher: 'assets/visual/entities/scavenger-breacher.png',
-  wreckIntact: 'assets/visual/entities/wreck-intact.png',
-  wreckLooted: 'assets/visual/entities/wreck-looted.png',
-  wreckCluster: 'assets/visual/entities/wreck-cluster.png',
-  planetoid: 'assets/visual/entities/planetoid.png',
-  comet: 'assets/visual/entities/comet.png',
-  starWarm: 'assets/visual/entities/star-warm.png',
-  portalExtraction: 'assets/visual/entities/portal-extraction.png',
-  portalRift: 'assets/visual/entities/portal-rift.png',
-  sentryFauna: 'assets/visual/entities/sentry-fauna.png',
+export const ENTITY_ASSET_MANIFEST = Object.freeze({
+  shipDrifter: { path: 'assets/visual/entities/ship-drifter.png', classification: 'runtime' },
+  shipBreacher: { path: 'assets/visual/entities/ship-breacher.png', classification: 'runtime' },
+  shipRemote: { path: 'assets/visual/entities/ship-remote.png', classification: 'runtime' },
+  scavengerRaider: { path: 'assets/visual/entities/scavenger-raider.png', classification: 'runtime' },
+  scavengerBreacher: { path: 'assets/visual/entities/scavenger-breacher.png', classification: 'runtime' },
+  wreckIntact: { path: 'assets/visual/entities/wreck-intact.png', classification: 'runtime' },
+  wreckLooted: { path: 'assets/visual/entities/wreck-looted.png', classification: 'runtime' },
+  wreckCluster: { path: 'assets/visual/entities/wreck-cluster.png', classification: 'runtime' },
+  planetoid: { path: 'assets/visual/entities/planetoid.png', classification: 'runtime' },
+  comet: { path: 'assets/visual/entities/comet.png', classification: 'runtime' },
+  starWarm: { path: 'assets/visual/entities/star-warm.png', classification: 'runtime' },
+  portalExtraction: { path: 'assets/visual/entities/portal-extraction.png', classification: 'runtime' },
+  portalRift: { path: 'assets/visual/entities/portal-rift.png', classification: 'runtime' },
+  sentryFauna: { path: 'assets/visual/entities/sentry-fauna.png', classification: 'runtime' },
+  // Wells and Inhibitors stay procedural; these files are authored references, not runtime textures.
+  wellInstrument: { path: 'assets/visual/entities/well-instrument.png', classification: 'reference' },
+  inhibitorShard: { path: 'assets/visual/entities/inhibitor-shard.png', classification: 'reference' },
 });
+
+export const ENTITY_ASSET_PATHS = Object.freeze(Object.fromEntries(
+  Object.entries(ENTITY_ASSET_MANIFEST)
+    .filter(([, asset]) => asset.classification === 'runtime')
+    .map(([id, asset]) => [id, asset.path])
+));
 
 export function selectPlayerAsset(entity = {}, { remote = false } = {}) {
   if (remote) return 'shipRemote';
