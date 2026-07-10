@@ -28,6 +28,9 @@
 - Expanded UI and renderer evidence to check named regions, local contrast,
   multiple resolutions, transition progression, reduced motion, generated
   asset loading, and texture-cache cleanup.
+- Moved screenshot pixel analysis out of the live game page and into the local
+  Sharp pipeline, removing an intermittent late-suite browser-canvas failure
+  without relaxing any readability threshold.
 - Re-ran both natural AgentPlayEval journeys. The current report shows a live
   route, populated salvage report, new sprites against the ASCII fabric,
   authoritative extraction, and visible-well death from fresh processes.

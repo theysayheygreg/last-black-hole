@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 const {
   startServer,
   stopServer,
@@ -83,24 +84,15 @@ async function setUiDebugQuiet(page, { reducedMotion = false } = {}) {
   }, reducedMotion);
 }
 
-async function analyzePngInPage(page, base64, { scale = 1, regions = [] } = {}) {
-  return page.evaluate(async ({ base64Png, scaleValue, regionsValue }) => {
-    const dataUrl = `data:image/png;base64,${base64Png}`;
-    const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = () => reject(new Error('failed to load screenshot image'));
-      img.src = dataUrl;
-    });
+async function analyzePngInPage(_page, base64, { scale = 1, regions = [] } = {}) {
+  const source = Buffer.from(base64, 'base64');
+  const metadata = await sharp(source).metadata();
+  const width = Math.max(1, Math.round(metadata.width * scale));
+  const height = Math.max(1, Math.round(metadata.height * scale));
+  const pipeline = sharp(source).resize(width, height).ensureAlpha();
+  const { data: pixels, info } = await pipeline.clone().raw().toBuffer({ resolveWithObject: true });
+  const png = await pipeline.png().toBuffer();
 
-    const out = document.createElement('canvas');
-    out.width = Math.max(1, Math.round(img.width * scaleValue));
-    out.height = Math.max(1, Math.round(img.height * scaleValue));
-    const ctx = out.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(img, 0, 0, out.width, out.height);
-
-    const pixels = ctx.getImageData(0, 0, out.width, out.height).data;
     let rgbMax = 0;
     let rgbSum = 0;
     let litPixels = 0;
@@ -111,18 +103,18 @@ async function analyzePngInPage(page, base64, { scale = 1, regions = [] } = {}) 
       if (rgb > 18) litPixels++;
     }
 
-    const regionStats = regionsValue.map((region) => {
-      const x0 = Math.max(0, Math.floor(region.x * scaleValue));
-      const y0 = Math.max(0, Math.floor(region.y * scaleValue));
-      const x1 = Math.min(out.width, Math.ceil((region.x + region.width) * scaleValue));
-      const y1 = Math.min(out.height, Math.ceil((region.y + region.height) * scaleValue));
+    const regionStats = regions.map((region) => {
+      const x0 = Math.max(0, Math.floor(region.x * scale));
+      const y0 = Math.max(0, Math.floor(region.y * scale));
+      const x1 = Math.min(info.width, Math.ceil((region.x + region.width) * scale));
+      const y1 = Math.min(info.height, Math.ceil((region.y + region.height) * scale));
       let sum = 0;
       let max = 0;
       let lit = 0;
       let count = 0;
       for (let y = y0; y < y1; y++) {
         for (let x = x0; x < x1; x++) {
-          const i = (y * out.width + x) * 4;
+          const i = (y * info.width + x) * info.channels;
           const rgb = pixels[i] + pixels[i + 1] + pixels[i + 2];
           sum += rgb;
           max = Math.max(max, rgb);
@@ -133,16 +125,15 @@ async function analyzePngInPage(page, base64, { scale = 1, regions = [] } = {}) 
       return { name: region.name, x: x0, y: y0, width: x1 - x0, height: y1 - y0,
         rgbMax: max, rgbAvg: count ? sum / count : 0, litPixels: lit, pixelCount: count };
     });
-    return {
-      width: out.width,
-      height: out.height,
+  return {
+      width: info.width,
+      height: info.height,
       rgbMax,
       rgbAvg: rgbSum / (pixels.length / 4),
       litPixels,
       regions: regionStats,
-      dataUrl: out.toDataURL('image/png'),
-    };
-  }, { base64Png: base64, scaleValue: scale, regionsValue: regions });
+      dataUrl: `data:image/png;base64,${png.toString('base64')}`,
+  };
 }
 
 async function resolveRegions(page, definitions = []) {
