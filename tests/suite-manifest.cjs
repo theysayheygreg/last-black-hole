@@ -403,7 +403,6 @@ const SUITES = [
     file: "agent-play-eval.cjs",
     lanes: ["agent-eval", "full"],
     browser: true,
-    retries: 1,
     slow: true,
     timeout: 240000,
   },

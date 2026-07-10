@@ -32,6 +32,7 @@ export class SimClient {
       lastSnapshotId: 0,
       lastEventSeq: 0,
       eventGapRecoveries: 0,
+      slingshotEdgeAcks: [],
       lastRecoveryReason: null,
     };
   }
@@ -289,6 +290,11 @@ export class SimClient {
   getMetrics() {
     return {
       ...this.metrics,
+      slingshotEdgeAcks: this.metrics.slingshotEdgeAcks.map((entry) => ({
+        ...entry,
+        requestedEdgeIds: [...entry.requestedEdgeIds],
+        acceptedEdgeIds: [...entry.acceptedEdgeIds],
+      })),
       pendingInputCount: this.pendingInputs.length,
       pollIntervalMs: this.pollIntervalMs,
     };
@@ -322,6 +328,24 @@ export class SimClient {
     }));
     this.metrics.lastAcceptedSeq = response.acceptedSeq ?? this.metrics.lastAcceptedSeq;
     this.metrics.lastInputAckRttMs = this._nowMs() - sentAt;
+    if (inputPayload.slingshotEdges.length > 0) {
+      this.metrics.slingshotEdgeAcks.push({
+        inputSeq: inputPayload.seq,
+        commandSeq: inputPayload.commandSeq,
+        requestedEdgeIds: [...inputPayload.slingshotEdges],
+        acceptedEdgeIds: Array.isArray(response.acceptedSlingshotEdges)
+          ? [...response.acceptedSlingshotEdges]
+          : [],
+        sentAtUnixMs: inputPayload.timestamp,
+        acknowledgedAtUnixMs: Date.now(),
+        ackRttMs: this.metrics.lastInputAckRttMs,
+        serverTick: response.tick ?? null,
+        pendingEdgeCount: response.pendingSlingshotEdgeCount ?? null,
+      });
+      if (this.metrics.slingshotEdgeAcks.length > 16) {
+        this.metrics.slingshotEdgeAcks.splice(0, this.metrics.slingshotEdgeAcks.length - 16);
+      }
+    }
     return response;
   }
 

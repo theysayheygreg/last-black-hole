@@ -75,6 +75,42 @@ async function getEvents(since = 0) {
   return body.events || [];
 }
 
+async function slingshotEdgeAcks(page) {
+  return page.evaluate(() =>
+    window.__TEST_API?.getNetworkState?.()?.networkMetrics?.slingshotEdgeAcks || []
+  );
+}
+
+async function tapAcknowledgedSlingshotEdge(page, label) {
+  const before = await slingshotEdgeAcks(page);
+  await tapGamepadButton(page, 3, 80);
+  await waitFor(page, (count) => {
+    const acks = window.__TEST_API?.getNetworkState?.()?.networkMetrics?.slingshotEdgeAcks || [];
+    return acks.length === count + 1;
+  }, { timeout: 5000, label: `${label} edge acknowledgement` }, before.length);
+  const after = await slingshotEdgeAcks(page);
+  const ack = after[after.length - 1];
+  assert(ack.inputSeq > 0 && ack.commandSeq > 0, `${label} edge acknowledgement lacked input sequence diagnostics`);
+  assert(ack.requestedEdgeIds.length === 1, `${label} requested ${ack.requestedEdgeIds.length} edges`);
+  assert(ack.acceptedEdgeIds.length === 1, `${label} accepted ${ack.acceptedEdgeIds.length} edges`);
+  assert(ack.acceptedEdgeIds[0] === ack.requestedEdgeIds[0], `${label} acknowledged a different edge`);
+  assert(ack.acknowledgedAtUnixMs >= ack.sentAtUnixMs, `${label} acknowledgement timestamp preceded send`);
+  return ack;
+}
+
+async function waitForSlingshotEvent(clientId, since, type, timeout = 6000) {
+  const deadline = Date.now() + timeout;
+  let events = [];
+  while (Date.now() < deadline) {
+    events = (await getEvents(since)).filter((event) =>
+      event.payload?.clientId === clientId && event.type.startsWith("player.slingshot")
+    );
+    if (events.some((event) => event.type === type)) return events;
+    await sleep(80);
+  }
+  throw new Error(`Timed out waiting for ${type}; events=${JSON.stringify(events)}`);
+}
+
 function localPlayer(snapshot, clientId) {
   return snapshot.players?.find((player) => player.clientId === clientId) || null;
 }
@@ -388,69 +424,45 @@ async function performRouteSlingshot(page, clientId, outputDir, screenshots) {
   });
 
   const baselineSeq = (await getEvents(0)).reduce((max, event) => Math.max(max, event.seq || 0), 0);
-  let engaged = null;
-  let engageError = null;
-  for (let attempt = 0; attempt < 3 && !engaged; attempt++) {
-    snapshot = await getSnapshot();
-    let atRing = localPlayer(snapshot, clientId);
-    if ((atRing.deltaVRatio || 0) < 0.20) {
-      await rechargeForManeuver(page, clientId);
-      await steerTo(page, clientId, ringPoint, {
-        radius: 0.09,
-        maxCruiseSpeed: 0.31,
-        allowFlyby: true,
-        timeout: 40000,
-      });
-      snapshot = await getSnapshot();
-      atRing = localPlayer(snapshot, clientId);
-    }
-    const radialX = wrappedDelta(anchor.wx, atRing.wx, ws);
-    const radialY = wrappedDelta(anchor.wy, atRing.wy, ws);
-    const radialMag = Math.hypot(radialX, radialY) || 1;
-    const tangent = { x: -radialY / radialMag, y: radialX / radialMag };
-    await setGamepadDrive(page, tangent.x, tangent.y, { thrust: 1 });
-    await sleep(140);
-    await tapGamepadButton(page, 3, 80);
-    try {
-      engaged = await waitForPlayer(
-        clientId,
-        (entry) => entry.slingshot?.engaged === true,
-        { timeout: 3000, label: "slingshot engagement" },
-      );
-    } catch (error) {
-      engageError = error;
-      await setGamepadDrive(page);
-      await steerTo(page, clientId, ringPoint, {
-        radius: 0.09,
-        maxCruiseSpeed: 0.31,
-        allowFlyby: true,
-        timeout: 40000,
-      });
-    }
-  }
-  assert(engaged, `Could not engage authored slingshot after reacquiring the current; ${engageError?.message || "unknown"}`);
+  snapshot = await getSnapshot();
+  const atRing = localPlayer(snapshot, clientId);
+  const radialX = wrappedDelta(anchor.wx, atRing.wx, ws);
+  const radialY = wrappedDelta(anchor.wy, atRing.wy, ws);
+  const radialMag = Math.hypot(radialX, radialY) || 1;
+  const tangent = { x: -radialY / radialMag, y: radialX / radialMag };
+  await setGamepadDrive(page, tangent.x, tangent.y, { thrust: 1 });
+  await sleep(140);
+  const engageAck = await tapAcknowledgedSlingshotEdge(page, "engage");
+  let routeEvents = await waitForSlingshotEvent(clientId, baselineSeq, "player.slingshotEngaged");
+  assert(routeEvents.length === 1 && routeEvents[0].type === "player.slingshotEngaged",
+    `Expected exactly one engage event before release, got ${routeEvents.map((event) => event.type)}`);
+  const engagedEvent = routeEvents[0];
+  const releaseAck = await tapAcknowledgedSlingshotEdge(page, "release");
+  routeEvents = await waitForSlingshotEvent(clientId, baselineSeq, "player.slingshotReleased");
   await setGamepadDrive(page);
-  screenshots.push(await capturePage(page, outputDir, "05-route-slingshot-engaged"));
-  await sleep(650);
-  await tapGamepadButton(page, 3, 80);
+  screenshots.push(await capturePage(page, outputDir, "05-route-slingshot-release"));
   const released = await waitForPlayer(
     clientId,
     (entry) => entry.slingshot?.engaged === false,
     { timeout: 6000, label: "slingshot release" },
   );
-  const routeEvents = (await getEvents(baselineSeq)).filter((event) =>
-    event.payload?.clientId === clientId && event.type.startsWith("player.slingshot")
-  );
-  assert(routeEvents.some((event) => event.type === "player.slingshotEngaged"), "Expected a public slingshot-engaged event");
-  assert(routeEvents.some((event) => event.type === "player.slingshotReleased"), "Expected a public slingshot-released event");
+  assert(routeEvents.length === 2, `Expected exactly two slingshot events, got ${routeEvents.map((event) => event.type)}`);
+  assert(routeEvents[0].type === "player.slingshotEngaged", "Expected engage event first");
+  assert(routeEvents[1].type === "player.slingshotReleased", "Expected release event second");
   await brakeToLowSpeed(page, clientId);
   return {
     routeId: SHALLOWS_ROUTE.id,
-    anchorId: engaged.player.slingshot.anchorId,
-    anchorType: engaged.player.slingshot.anchorType,
+    anchorId: engagedEvent.payload?.anchorId || anchor.id,
+    anchorType: engagedEvent.payload?.anchorType || "well",
     approach,
     releaseSpeed: Math.hypot(released.player.vx || 0, released.player.vy || 0),
-    events: routeEvents.map((event) => event.type),
+    edges: { engage: engageAck, release: releaseAck },
+    events: routeEvents.map((event) => ({
+      seq: event.seq,
+      tick: event.tick,
+      simTime: event.simTime,
+      type: event.type,
+    })),
   };
 }
 
@@ -754,6 +766,17 @@ async function runJourney(page, outputDir, report, browserErrors) {
   report.screenshots.push(await capturePage(page, outputDir, "04-shallows-authoritative-start"));
 
   const slingshot = await performRouteSlingshot(page, network.clientId, outputDir, report.screenshots);
+  if (process.env.LBH_AGENT_EVAL_SLINGSHOT_ONLY === "1") {
+    report.journey = {
+      protocolVersion: firstSnapshot.protocolVersion,
+      firstRun: {
+        runId: firstSnapshot.session.runId || firstSnapshot.runId,
+        seed: firstSnapshot.session.seed,
+      },
+      slingshot,
+    };
+    return;
+  }
   const loot = await collectRouteLootAndRaiseSignal(page, network.clientId, outputDir, report.screenshots);
   const portal = await enterAndConfirmPortal(page, network.clientId, outputDir, report.screenshots);
   const firstRun = {
@@ -863,15 +886,17 @@ async function run() {
         }, { idleShutdownMs: 30000 });
       });
     }
-    await runner.run("fresh controller journey dies to a visible well and returns Home", async () => {
-      await withFreshSimServer(SIM_PORT, async () => {
-        await withFreshGame(
-          withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
-          async ({ page, errors }) => runDeathJourney(page, outputDir, report, errors),
-          { resetState: true },
-        );
-      }, { idleShutdownMs: 30000 });
-    });
+    if (process.env.LBH_AGENT_EVAL_SLINGSHOT_ONLY !== "1") {
+      await runner.run("fresh controller journey dies to a visible well and returns Home", async () => {
+        await withFreshSimServer(SIM_PORT, async () => {
+          await withFreshGame(
+            withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
+            async ({ page, errors }) => runDeathJourney(page, outputDir, report, errors),
+            { resetState: true },
+          );
+        }, { idleShutdownMs: 30000 });
+      });
+    }
   } catch (error) {
     report.failure = error.message;
   } finally {
