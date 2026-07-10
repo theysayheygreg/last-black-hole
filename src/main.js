@@ -3646,6 +3646,7 @@ function collectThreeSceneState() {
       vx: ship.vx,
       vy: ship.vy,
       facing: ship.facing,
+      hullType: profileManager.active?.hullType || profileManager.active?.shipType || 'drifter',
       deltaVRatio: ship.getDeltaVRatio?.() ?? 1,
       slingshotEngaged: Boolean(ship.slingshotEngaged),
     } : null,
@@ -3671,6 +3672,11 @@ function collectThreeSceneState() {
       size: wreck.size || 'medium',
       tier: wreck.tier || 1,
       type: wreck.type || 'derelict',
+      vx: wreck.vx || 0,
+      vy: wreck.vy || 0,
+      lootCount: Array.isArray(wreck.loot) ? wreck.loot.length : (wreck.lootCount || 0),
+      pickupCooldown: Math.max(0, wreck.pickupCooldown || 0),
+      isEcho: wreck.type === 'echo' || wreck.isEcho === true,
       looted: Boolean(wreck.looted),
     })),
     portals: (portalSystem?.portals || []).filter((portal) => portal.alive !== false).map((portal, index) => ({
@@ -3680,6 +3686,10 @@ function collectThreeSceneState() {
       type: portal.type || 'standard',
       opacity: portal.opacity ?? 1,
       radius: portal.getCaptureRadius?.() || CONFIG.portals.captureRadius,
+      blockedByInhibitor: portal.blockedByInhibitor === true,
+      finalInhibitor: portal.finalInhibitor === true,
+      warning: portal.isWarning?.(simState.runElapsedTime) === true,
+      critical: portal.isCritical?.(simState.runElapsedTime) === true,
     })),
     planetoids: (planetoidSystem?.planetoids || []).filter((p) => p.alive !== false).map((p, index) => ({
       id: p.id || `planetoid-${index}`,
@@ -3687,6 +3697,7 @@ function collectThreeSceneState() {
       wy: p.wy,
       vx: p.vx || 0,
       vy: p.vy || 0,
+      pathType: p.pathType || 'orbit',
     })),
     waveRings: (waveRings?.rings || []).map((ring, index) => ({
       id: ring.id || `wave-${index}`,
