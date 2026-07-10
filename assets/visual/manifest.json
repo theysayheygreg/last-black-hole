@@ -1,0 +1,465 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-10T18:47:39.333Z",
+  "sourceDirectory": "assets/source/generated/v0.3",
+  "atlases": {
+    "entities": [
+      "assets/visual/entities/ship-drifter.png",
+      "assets/visual/entities/ship-breacher.png",
+      "assets/visual/entities/ship-remote.png",
+      "assets/visual/entities/scavenger-raider.png",
+      "assets/visual/entities/scavenger-breacher.png",
+      "assets/visual/entities/inhibitor-shard.png",
+      "assets/visual/entities/wreck-intact.png",
+      "assets/visual/entities/wreck-looted.png",
+      "assets/visual/entities/wreck-cluster.png",
+      "assets/visual/entities/planetoid.png",
+      "assets/visual/entities/comet.png",
+      "assets/visual/entities/star-warm.png",
+      "assets/visual/entities/portal-extraction.png",
+      "assets/visual/entities/portal-rift.png",
+      "assets/visual/entities/sentry-fauna.png",
+      "assets/visual/entities/well-instrument.png"
+    ],
+    "itemFamilies": [
+      "assets/visual/item-families/thruster.png",
+      "assets/visual/item-families/plating.png",
+      "assets/visual/item-families/signal.png",
+      "assets/visual/item-families/coupling.png",
+      "assets/visual/item-families/drag.png",
+      "assets/visual/item-families/cargo.png",
+      "assets/visual/item-families/pulse.png",
+      "assets/visual/item-families/sensor.png",
+      "assets/visual/item-families/flow.png",
+      "assets/visual/item-families/burn.png",
+      "assets/visual/item-families/recirculator.png",
+      "assets/visual/item-families/gravity.png",
+      "assets/visual/item-families/decay.png",
+      "assets/visual/item-families/resonance.png",
+      "assets/visual/item-families/phase.png",
+      "assets/visual/item-families/pickup.png",
+      "assets/visual/item-families/shield-cell.png",
+      "assets/visual/item-families/time-dilator.png",
+      "assets/visual/item-families/breach-flare.png",
+      "assets/visual/item-families/fuel-cell.png"
+    ],
+    "ui": [
+      "assets/visual/ui/corner-top-left.png",
+      "assets/visual/ui/corner-top-right.png",
+      "assets/visual/ui/corner-bottom-left.png",
+      "assets/visual/ui/corner-bottom-right.png",
+      "assets/visual/ui/rail-top.png",
+      "assets/visual/ui/rail-bottom.png",
+      "assets/visual/ui/rail-left.png",
+      "assets/visual/ui/rail-right.png",
+      "assets/visual/ui/corner-selected.png",
+      "assets/visual/ui/corner-warning.png",
+      "assets/visual/ui/divider-junction.png",
+      "assets/visual/ui/terminal-node.png"
+    ]
+  },
+  "items": {
+    "patched-thruster": {
+      "file": "assets/visual/items/patched-thruster.png",
+      "family": "thruster",
+      "tier": 1,
+      "consumable": false
+    },
+    "scrap-plating": {
+      "file": "assets/visual/items/scrap-plating.png",
+      "family": "plating",
+      "tier": 1,
+      "consumable": false
+    },
+    "signal-baffle": {
+      "file": "assets/visual/items/signal-baffle.png",
+      "family": "signal",
+      "tier": 1,
+      "consumable": false
+    },
+    "worn-coupling": {
+      "file": "assets/visual/items/worn-coupling.png",
+      "family": "coupling",
+      "tier": 1,
+      "consumable": false
+    },
+    "drag-foil": {
+      "file": "assets/visual/items/drag-foil.png",
+      "family": "drag",
+      "tier": 1,
+      "consumable": false
+    },
+    "cargo-netting": {
+      "file": "assets/visual/items/cargo-netting.png",
+      "family": "cargo",
+      "tier": 1,
+      "consumable": false
+    },
+    "pulse-lens": {
+      "file": "assets/visual/items/pulse-lens.png",
+      "family": "pulse",
+      "tier": 1,
+      "consumable": false
+    },
+    "sensor-dish": {
+      "file": "assets/visual/items/sensor-dish.png",
+      "family": "sensor",
+      "tier": 1,
+      "consumable": false
+    },
+    "flow-vane": {
+      "file": "assets/visual/items/flow-vane.png",
+      "family": "flow",
+      "tier": 1,
+      "consumable": false
+    },
+    "burn-canister": {
+      "file": "assets/visual/items/burn-canister.png",
+      "family": "burn",
+      "tier": 1,
+      "consumable": false
+    },
+    "quiet-suture": {
+      "file": "assets/visual/items/quiet-suture.png",
+      "family": "plating",
+      "tier": 1,
+      "consumable": false
+    },
+    "freight-hook": {
+      "file": "assets/visual/items/freight-hook.png",
+      "family": "cargo",
+      "tier": 1,
+      "consumable": false
+    },
+    "worn-tank": {
+      "file": "assets/visual/items/worn-tank.png",
+      "family": "recirculator",
+      "tier": 1,
+      "consumable": false
+    },
+    "tuned-thruster": {
+      "file": "assets/visual/items/tuned-thruster.png",
+      "family": "thruster",
+      "tier": 2,
+      "consumable": false
+    },
+    "recirculator": {
+      "file": "assets/visual/items/recirculator.png",
+      "family": "recirculator",
+      "tier": 2,
+      "consumable": false
+    },
+    "gravity-sheath": {
+      "file": "assets/visual/items/gravity-sheath.png",
+      "family": "gravity",
+      "tier": 2,
+      "consumable": false
+    },
+    "signal-dampener": {
+      "file": "assets/visual/items/signal-dampener.png",
+      "family": "signal",
+      "tier": 2,
+      "consumable": false
+    },
+    "decay-accelerator": {
+      "file": "assets/visual/items/decay-accelerator.png",
+      "family": "decay",
+      "tier": 2,
+      "consumable": false
+    },
+    "current-amplifier": {
+      "file": "assets/visual/items/current-amplifier.png",
+      "family": "flow",
+      "tier": 2,
+      "consumable": false
+    },
+    "afterburner-injector": {
+      "file": "assets/visual/items/afterburner-injector.png",
+      "family": "thruster",
+      "tier": 2,
+      "consumable": false
+    },
+    "resonance-coil": {
+      "file": "assets/visual/items/resonance-coil.png",
+      "family": "resonance",
+      "tier": 2,
+      "consumable": false
+    },
+    "ghost-weave": {
+      "file": "assets/visual/items/ghost-weave.png",
+      "family": "phase",
+      "tier": 2,
+      "consumable": false
+    },
+    "cargo-brace": {
+      "file": "assets/visual/items/cargo-brace.png",
+      "family": "cargo",
+      "tier": 2,
+      "consumable": false
+    },
+    "pulse-sharpener": {
+      "file": "assets/visual/items/pulse-sharpener.png",
+      "family": "pulse",
+      "tier": 2,
+      "consumable": false
+    },
+    "debuff-purge": {
+      "file": "assets/visual/items/debuff-purge.png",
+      "family": "resonance",
+      "tier": 2,
+      "consumable": false
+    },
+    "hull-reinforcement": {
+      "file": "assets/visual/items/hull-reinforcement.png",
+      "family": "plating",
+      "tier": 2,
+      "consumable": false
+    },
+    "drag-coefficient": {
+      "file": "assets/visual/items/drag-coefficient.png",
+      "family": "coupling",
+      "tier": 2,
+      "consumable": false
+    },
+    "pickup-magnet": {
+      "file": "assets/visual/items/pickup-magnet.png",
+      "family": "pickup",
+      "tier": 2,
+      "consumable": false
+    },
+    "mass-stitcher": {
+      "file": "assets/visual/items/mass-stitcher.png",
+      "family": "cargo",
+      "tier": 2,
+      "consumable": false
+    },
+    "echo-sink": {
+      "file": "assets/visual/items/echo-sink.png",
+      "family": "signal",
+      "tier": 2,
+      "consumable": false
+    },
+    "wake-needle": {
+      "file": "assets/visual/items/wake-needle.png",
+      "family": "sensor",
+      "tier": 2,
+      "consumable": false
+    },
+    "dead-mans-thruster": {
+      "file": "assets/visual/items/dead-mans-thruster.png",
+      "family": "thruster",
+      "tier": 3,
+      "consumable": false
+    },
+    "overcharged-core": {
+      "file": "assets/visual/items/overcharged-core.png",
+      "family": "thruster",
+      "tier": 3,
+      "consumable": false
+    },
+    "helium-3-reservoir": {
+      "file": "assets/visual/items/helium-3-reservoir.png",
+      "family": "burn",
+      "tier": 3,
+      "consumable": false
+    },
+    "solar-spinneret": {
+      "file": "assets/visual/items/solar-spinneret.png",
+      "family": "flow",
+      "tier": 3,
+      "consumable": false
+    },
+    "harmonic-anchor": {
+      "file": "assets/visual/items/harmonic-anchor.png",
+      "family": "gravity",
+      "tier": 3,
+      "consumable": false
+    },
+    "phase-veil": {
+      "file": "assets/visual/items/phase-veil.png",
+      "family": "phase",
+      "tier": 3,
+      "consumable": false
+    },
+    "cargo-brace-mk2": {
+      "file": "assets/visual/items/cargo-brace-mk2.png",
+      "family": "cargo",
+      "tier": 3,
+      "consumable": false
+    },
+    "tidal-resonator": {
+      "file": "assets/visual/items/tidal-resonator.png",
+      "family": "pulse",
+      "tier": 3,
+      "consumable": false
+    },
+    "well-skimmer": {
+      "file": "assets/visual/items/well-skimmer.png",
+      "family": "drag",
+      "tier": 3,
+      "consumable": false
+    },
+    "signal-siphon": {
+      "file": "assets/visual/items/signal-siphon.png",
+      "family": "signal",
+      "tier": 3,
+      "consumable": false
+    },
+    "precision-pulse": {
+      "file": "assets/visual/items/precision-pulse.png",
+      "family": "pulse",
+      "tier": 3,
+      "consumable": false
+    },
+    "drift-engine": {
+      "file": "assets/visual/items/drift-engine.png",
+      "family": "thruster",
+      "tier": 3,
+      "consumable": false
+    },
+    "burn-extender": {
+      "file": "assets/visual/items/burn-extender.png",
+      "family": "thruster",
+      "tier": 3,
+      "consumable": false
+    },
+    "sensor-array": {
+      "file": "assets/visual/items/sensor-array.png",
+      "family": "sensor",
+      "tier": 3,
+      "consumable": false
+    },
+    "event-horizon-keel": {
+      "file": "assets/visual/items/event-horizon-keel.png",
+      "family": "plating",
+      "tier": 3,
+      "consumable": false
+    },
+    "negative-space-spool": {
+      "file": "assets/visual/items/negative-space-spool.png",
+      "family": "phase",
+      "tier": 3,
+      "consumable": false
+    },
+    "braided-eddy-core": {
+      "file": "assets/visual/items/braided-eddy-core.png",
+      "family": "resonance",
+      "tier": 3,
+      "consumable": false
+    },
+    "gravity-lens": {
+      "file": "assets/visual/items/gravity-lens.png",
+      "family": "gravity",
+      "tier": 4,
+      "consumable": false
+    },
+    "echo-chamber": {
+      "file": "assets/visual/items/echo-chamber.png",
+      "family": "phase",
+      "tier": 4,
+      "consumable": false
+    },
+    "void-anchor": {
+      "file": "assets/visual/items/void-anchor.png",
+      "family": "gravity",
+      "tier": 4,
+      "consumable": false
+    },
+    "singularity-drive": {
+      "file": "assets/visual/items/singularity-drive.png",
+      "family": "thruster",
+      "tier": 4,
+      "consumable": false
+    },
+    "laminar-flow-core": {
+      "file": "assets/visual/items/laminar-flow-core.png",
+      "family": "flow",
+      "tier": 4,
+      "consumable": false
+    },
+    "salvage-titan": {
+      "file": "assets/visual/items/salvage-titan.png",
+      "family": "cargo",
+      "tier": 4,
+      "consumable": false
+    },
+    "inhibitor-resonance": {
+      "file": "assets/visual/items/inhibitor-resonance.png",
+      "family": "resonance",
+      "tier": 4,
+      "consumable": false
+    },
+    "temporal-displacement": {
+      "file": "assets/visual/items/temporal-displacement.png",
+      "family": "decay",
+      "tier": 4,
+      "consumable": false
+    },
+    "cinder-geometry": {
+      "file": "assets/visual/items/cinder-geometry.png",
+      "family": "burn",
+      "tier": 4,
+      "consumable": false
+    },
+    "last-wake-codex": {
+      "file": "assets/visual/items/last-wake-codex.png",
+      "family": "signal",
+      "tier": 4,
+      "consumable": false
+    },
+    "shield-cell": {
+      "file": "assets/visual/items/shield-cell.png",
+      "family": "plating",
+      "tier": 1,
+      "consumable": true
+    },
+    "time-dilator": {
+      "file": "assets/visual/items/time-dilator.png",
+      "family": "time-dilator",
+      "tier": 2,
+      "consumable": true
+    },
+    "breach-flare": {
+      "file": "assets/visual/items/breach-flare.png",
+      "family": "breach-flare",
+      "tier": 2,
+      "consumable": true
+    },
+    "foam-anchor": {
+      "file": "assets/visual/items/foam-anchor.png",
+      "family": "gravity",
+      "tier": 2,
+      "consumable": true
+    },
+    "dead-air-ampoule": {
+      "file": "assets/visual/items/dead-air-ampoule.png",
+      "family": "time-dilator",
+      "tier": 2,
+      "consumable": true
+    },
+    "crown-breach-match": {
+      "file": "assets/visual/items/crown-breach-match.png",
+      "family": "breach-flare",
+      "tier": 3,
+      "consumable": true
+    },
+    "fuel-cell": {
+      "file": "assets/visual/items/fuel-cell.png",
+      "family": "fuel-cell",
+      "tier": 1,
+      "consumable": true
+    },
+    "plasma-cell": {
+      "file": "assets/visual/items/plasma-cell.png",
+      "family": "fuel-cell",
+      "tier": 2,
+      "consumable": true
+    },
+    "antimatter-cell": {
+      "file": "assets/visual/items/antimatter-cell.png",
+      "family": "fuel-cell",
+      "tier": 3,
+      "consumable": true
+    }
+  }
+}

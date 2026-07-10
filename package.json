@@ -68,6 +68,7 @@
     "release:public": "node scripts/release.cjs public",
     "release:status": "node scripts/release.cjs status",
     "assets:app": "node scripts/generate-app-assets.cjs",
+    "assets:visual": "node scripts/build-visual-assets.cjs",
     "ios:sync": "node scripts/ios-wrapper.cjs sync",
     "ios:build:sim": "node scripts/ios-wrapper.cjs build-sim",
     "ios:build:device": "node scripts/ios-wrapper.cjs build-device",
@@ -89,6 +90,7 @@
   },
   "devDependencies": {
     "@electron/packager": "^19.1.0",
-    "electron": "^41.0.2"
+    "electron": "^41.0.2",
+    "sharp": "^0.34.5"
   }
 }
