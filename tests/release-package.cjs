@@ -92,10 +92,13 @@ function sha256(filepath) {
   return hash.digest("hex");
 }
 
-async function connectCdp(port) {
-  const targets = await fetchJson(`http://127.0.0.1:${port}/json/list`);
-  const target = targets.find((entry) => entry.type === "page" && entry.url.startsWith("lbh://renderer/"));
-  assert(target?.webSocketDebuggerUrl, "Packaged Electron renderer did not expose a page target");
+async function connectCdp(port, child) {
+  const target = await waitFor(async () => {
+    const targets = await fetchJson(`http://127.0.0.1:${port}/json/list`);
+    const page = targets.find((entry) => entry.type === "page" && entry.url.startsWith("lbh://renderer/"));
+    assert(page?.webSocketDebuggerUrl, "Packaged Electron renderer did not expose a page target");
+    return page;
+  }, [child], 15000);
   const socket = new WebSocket(target.webSocketDebuggerUrl);
   const pending = new Map();
   let nextId = 0;
@@ -143,6 +146,7 @@ async function pressKey(cdp, code, key, virtualKeyCode, text = "") {
       windowsVirtualKeyCode: virtualKeyCode,
       nativeVirtualKeyCode: virtualKeyCode,
     });
+    if (type === "keyDown") await sleep(90);
   }
 }
 
@@ -178,9 +182,9 @@ async function provePackagedClientBoot(buildRoot) {
   let cdp = null;
   try {
     await waitFor(() => fetchJson(`http://127.0.0.1:${debugPort}/json/list`), [appProcess], 15000);
-    cdp = await connectCdp(debugPort);
+    cdp = await connectCdp(debugPort, appProcess);
     const boot = await waitFor(async () => {
-      const state = await cdp.evaluate("({ title: document.title, boot: window.__LBH_BOOT_STATE || null })");
+      const state = await cdp.evaluate("({ title: document.title, boot: window.__LBH_BOOT_STATE__ || null })");
       assert(state?.title === "Last Singularity", "Packaged renderer title mismatch");
       assert(state.boot?.stage === "init.completed", `Packaged renderer boot stalled at ${state.boot?.stage || "unknown"}`);
       assert(state.boot?.details?.rendererBackend === "three", "Packaged renderer did not boot Three");
