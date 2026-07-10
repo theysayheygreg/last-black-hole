@@ -76,10 +76,15 @@ Completed on 2026-07-10:
   boot pass.
 - focused HUD, audio, presentation, lifecycle, protocol, route, world geometry,
   Ballpark, bounded-growth, and Deep Field budget suites: pass.
-- focused UI motion: pass; latest UI visual lane: 16/16 checks with named
+- focused UI motion: pass; latest UI visual lane: 18/18 checks with named
   contrast regions, transition states, reduced motion, and dual-size captures.
-- complete v0.3 manifest: pass after visual integration; AgentPlayEval needed
-  its reported timing retry before both natural journeys passed.
+- focused Three lifecycle: 9/9 checks, including visible-budget selection,
+  explicit zero budgets, generated-asset classification, and clean disposal.
+- AgentPlayEval's focused slingshot journey passed on its first attempt with
+  exactly one acknowledged engage edge and one acknowledged release edge.
+- production renderer and performance lanes: pass with zero asset-load errors;
+  Deep Field remained near 60 fps and below the catastrophic draw-call and
+  pooled-mesh ceilings.
 
 Latest Deep Field measurement:
 
@@ -94,7 +99,7 @@ Latest Deep Field measurement:
 
 ### Natural Playable Evidence
 
-Latest passing report:
+Latest complete passing report:
 
 `tests/screenshots/agent-play-eval-2026-07-10T205224580Z/summary.md`
 
@@ -114,6 +119,24 @@ Shallows journeys through:
     an authored death label, and normal A-to-Home recovery.
 
 The agent journey does not call sim debug mutation endpoints.
+
+Latest no-retry slingshot evidence:
+
+`tests/screenshots/agent-play-eval-2026-07-10T224511366Z/summary.md`
+
+### Latest Representative Promo Evidence
+
+The 2026-07-10 promo batch used a fresh profile, Home, route briefing, and
+authoritative gameplay flow. It contains no fixture injection, reference-scene
+composition, or debug mutation:
+
+`docs/journal/screenshots/social-promo-2026-07-10-234309/manifest.json`
+
+The batch contains ten 4K stills plus two 30 fps MP4/GIF motion pairs. Capture
+validation found no weak frames or browser errors and measured nonzero motion
+in both clips. The shareable copies are mirrored to:
+
+`~/Library/Mobile Documents/com~apple~CloudDocs/LastSingularity/promo-media/social-promo-2026-07-10-234309/`
 
 ### What Still Must Happen
 

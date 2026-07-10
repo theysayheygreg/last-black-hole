@@ -27,6 +27,8 @@
   production performance probe.
 - Audited the promo pipeline so player-reachable product captures, fixture
   beauty shots, and reference scenes cannot be mislabeled as one another.
+- Captured a fresh authority-backed promo batch with ten 4K stills and two
+  validated 30 fps MP4/GIF pairs, then mirrored the shareable media to iCloud.
 
 ## 2026-07-10 — v0.3 visual production system
 
