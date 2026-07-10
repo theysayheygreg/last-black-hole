@@ -25,13 +25,13 @@ async function run() {
       cameraView: 3,
       phase: 'playing',
       scene: {
-        ship: { id: 'pilot', wx: 2.95, wy: 0.2, vx: 1.2, vy: -0.4, facing: 0.25, deltaVRatio: 0.6 },
+        ship: { id: 'pilot', wx: 2.95, wy: 0.2, vx: 1.2, vy: -0.4, facing: 0.25, deltaVRatio: 0.6, hullType: 'breacher', thrusting: true },
         slingshot: {
           affordance: { wx: 0.05, wy: 0.2, range: 0.22, type: 'star' },
           engaged: null,
         },
-        wrecks: [{ id: 'wreck-a', wx: 0.1, wy: 0.2, size: 'large', looted: false, loot: ['sim-secret'] }],
-        portals: [{ id: 'exit-a', wx: 0.2, wy: 0.3, radius: 0.1, type: 'standard', blockedByInhibitor: false }],
+        wrecks: [{ id: 'wreck-a', wx: 0.1, wy: 0.2, size: 'scattered', type: 'debris', looted: false, loot: ['sim-secret'] }],
+        portals: [{ id: 'exit-a', wx: 0.2, wy: 0.3, radius: 0.1, type: 'standard', blockedByInhibitor: true }],
         remotePlayers: [{ id: 'friend-a', wx: 0.4, wy: 0.5, vx: 0.2, vy: 0, hullType: 'drifter' }],
       },
       vfxEvents: [{
@@ -53,9 +53,13 @@ async function run() {
     assert(frame.camera.x === 2.9 && frame.camera.worldScale === 3, 'Expected normalized camera');
     assert(frame.localPlayer.id === 'pilot', 'Expected local player identity');
     assert(frame.localPlayer.movement.velocity.speed > 1.2, 'Expected renderer-neutral movement state');
+    assert(frame.localPlayer.hull.type === 'breacher' && frame.localPlayer.movement.pathState === 'thrusting',
+      'Expected normalized hull and path presentation state');
     assert(frame.localPlayer.slingshot.affordance.kind === 'star', 'Expected slingshot affordance');
     assert(frame.world.wrecks[0].hint.category === 'salvage', 'Expected semantic wreck hint');
     assert(frame.world.portals[0].hint.roleColor === 'routeCyan', 'Expected cyan route hint');
+    assert(frame.world.wrecks[0].visualState === 'cluster', 'Expected normalized wreck visual state');
+    assert(frame.world.portals[0].visualState === 'blocked', 'Expected normalized portal visual state');
     assert(frame.world.remotePlayers[0].hint.category === 'remoteShip', 'Expected remote-player hint');
     assert(!('loot' in frame.world.wrecks[0]), 'Presentation frame must omit inventory internals');
     assert(!('payload' in frame.events[0]), 'Presentation events must omit arbitrary sim payloads');

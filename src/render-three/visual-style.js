@@ -1,9 +1,7 @@
 // src/render-three/visual-style.js
 //
-// Shared visual language for Three-rendered world objects. The first pass keeps
-// the old primitive silhouettes, but gives them the same local contrast stack:
-// dark backing, bright core, additive rim/halo. Final pixel assets can swap in
-// later without changing how objects separate from the ASCII fabric.
+// Shared visual language for Three-rendered world objects. Generated sprite
+// cores and procedural affordances use one bounded contrast treatment table.
 
 import * as THREE from '../../node_modules/three/build/three.module.js';
 import { PRESENTATION_PALETTE } from '../presentation/presentation-style.js';
@@ -32,91 +30,21 @@ export function makeVisualMaterial(color, opacity, {
   });
 }
 
-function makePixelTexture(rows, palette) {
-  const height = rows.length;
-  const width = Math.max(...rows.map((row) => row.length));
-  const data = new Uint8Array(width * height * 4);
-  for (let y = 0; y < height; y++) {
-    const row = rows[y] || '';
-    for (let x = 0; x < width; x++) {
-      const color = palette[row[x]] || palette['.'];
-      const i = (y * width + x) * 4;
-      data[i] = color[0];
-      data[i + 1] = color[1];
-      data[i + 2] = color[2];
-      data[i + 3] = color[3];
-    }
-  }
-  const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.magFilter = THREE.NearestFilter;
-  texture.minFilter = THREE.NearestFilter;
-  texture.generateMipmaps = false;
-  texture.flipY = false;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function makePixelMaterial(texture, opacity = 1) {
-  return new THREE.MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    opacity,
-    alphaTest: 0.05,
-    depthTest: false,
-    depthWrite: false,
-    blending: THREE.NormalBlending,
-    side: THREE.DoubleSide,
-  });
-}
-
-function rgba(hex, alpha = 255) {
-  return [
-    (hex >> 16) & 0xff,
-    (hex >> 8) & 0xff,
-    hex & 0xff,
-    alpha,
-  ];
-}
+export const ENTITY_SPRITE_TREATMENTS = Object.freeze({
+  player: Object.freeze({ halo: 'shipHalo', rim: 'shipRim', haloRadius: 1.45, rimRadius: 1.08, matteRadius: 1.72, matteY: 0.78 }),
+  remotePlayers: Object.freeze({ halo: 'remoteShipHalo', rim: 'remoteShipHalo', haloRadius: 1.42, rimRadius: 1.07, matteRadius: 1.65, matteY: 0.78 }),
+  wrecks: Object.freeze({ halo: 'wreckHalo', rim: 'wreckRim', haloRadius: 1.35, rimRadius: 1.05, matteRadius: 2.35, matteY: 0.82, matteOpacity: 'heavy' }),
+  portals: Object.freeze({ halo: 'portalHalo', rim: 'portal', haloRadius: 1.34, rimRadius: 1.04, matteRadius: 1.24, matteY: 1, matteOpacity: 'heavy' }),
+  stars: Object.freeze({ halo: 'starHalo', rim: 'star', haloRadius: 1.42, rimRadius: 1.04, matteRadius: 1.35, matteY: 1 }),
+  planetoids: Object.freeze({ halo: 'planetoidHalo', rim: 'planetoid', haloRadius: 1.35, rimRadius: 1.04, matteRadius: 1.45, matteY: 0.82 }),
+  scavengers: Object.freeze({ halo: 'scavengerHalo', rim: 'scavengerHalo', haloRadius: 1.38, rimRadius: 1.05, matteRadius: 1.55, matteY: 0.78 }),
+  fauna: Object.freeze({ halo: 'faunaHalo', rim: 'fauna', haloRadius: 1.45, rimRadius: 1.04, matteRadius: 1.55, matteY: 0.9 }),
+  sentries: Object.freeze({ halo: 'sentryHalo', rim: 'sentry', haloRadius: 1.5, rimRadius: 1.04, matteRadius: 1.6, matteY: 0.9 }),
+});
 
 export function createVisualMaterials(palette = PRESENTATION_PALETTE) {
   const normal = THREE.NormalBlending;
   const add = THREE.AdditiveBlending;
-  // Inline pixel masks are fixture candidates, not final art. They let the
-  // renderer compare sprite-card and pixel-mesh reads before asset production.
-  const shipSpriteTexture = makePixelTexture([
-    '....W....',
-    '....W....',
-    '...WWW...',
-    '...WCW...',
-    '..WCCCW..',
-    '.WWCCCWW.',
-    'W.WCWCW.W',
-    '..WCCCW..',
-    '...C.C...',
-    '...B.B...',
-    '....B....',
-  ], {
-    '.': [0, 0, 0, 0],
-    'W': rgba(palette.playerWhite),
-    'C': rgba(palette.playerCyan),
-    'B': rgba(palette.remoteBlue, 220),
-  });
-  const shipMeshTexture = makePixelTexture([
-    '....W....',
-    '...WWW...',
-    '..WCCW...',
-    '.WWCCWW..',
-    'W.WCCW.W.',
-    '..WCCW...',
-    '...CC....',
-    '...BB....',
-  ], {
-    '.': [0, 0, 0, 0],
-    'W': rgba(palette.playerWhite),
-    'C': rgba(palette.playerCyan),
-    'B': rgba(palette.remoteBlue, 225),
-  });
   return {
     matteSoft: makeVisualMaterial(palette.matteNearBlack, 0.28, { blending: normal }),
     matteCore: makeVisualMaterial(palette.voidBlack, 0.54, { blending: normal }),
@@ -125,8 +53,6 @@ export function createVisualMaterials(palette = PRESENTATION_PALETTE) {
     ship: makeVisualMaterial(palette.neutralWhite, 1.0, { blending: normal }),
     shipHalo: makeVisualMaterial(palette.playerCyan, 0.58, { blending: add }),
     shipRim: makeVisualMaterial(palette.playerRim, 0.72, { blending: add }),
-    shipSpriteCandidate: makePixelMaterial(shipSpriteTexture, 1.0),
-    shipMeshCandidate: makePixelMaterial(shipMeshTexture, 1.0),
     remoteShip: makeVisualMaterial(palette.remoteWhite, 0.96, { blending: normal }),
     remoteShipHalo: makeVisualMaterial(palette.remoteBlue, 0.50, { blending: add }),
     scavenger: makeVisualMaterial(palette.threatRed, 0.98, { blending: normal }),

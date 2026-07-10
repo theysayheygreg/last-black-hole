@@ -1,4 +1,5 @@
 import { VisualFamilyLifecycle } from './visual-family.js';
+import { selectPortalAsset } from '../entity-assets.js';
 
 export class PortalVisualFamily extends VisualFamilyLifecycle {
   constructor({ group, geometries, materials }) {
@@ -16,12 +17,8 @@ export class PortalVisualFamily extends VisualFamilyLifecycle {
     const limit = Math.min(portals.length, budget);
     for (let index = 0; index < limit; index++) {
       const portal = portals[index];
-      const isRift = portal.variant === 'rift';
-      const material = isRift ? this.materials.riftPortal : this.materials.portal;
-      const halo = isRift ? this.materials.riftPortalHalo : this.materials.portalHalo;
-      const core = draw.readable(this.group, this.geometries.ring, material,
-        portal.world.x, portal.world.y, portal.radius || 0.08, 0, 0.08,
-        { haloMaterial: halo, haloRadius: 1.55, rimRadius: 1.10, matteRadius: 1.25, matteY: 1.0, matteOpacity: 'heavy' });
+      const core = draw.sprite(this.group, selectPortalAsset(portal), portal.world.x, portal.world.y,
+        (portal.radius || 0.08) * 1.15, 0, 'portals', portal);
       if (core) this.countObject(3);
     }
     this.drop(portals.length - limit);

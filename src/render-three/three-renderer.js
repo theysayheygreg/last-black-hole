@@ -13,10 +13,12 @@ import {
   getPresentationPalette,
   resolvePresentationQuality,
 } from '../presentation/presentation-style.js';
-import { ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
+import { ENTITY_SPRITE_TREATMENTS, ENTITY_SUBGROUPS, createVisualMaterials } from './visual-style.js';
+import { EntityAssetStore, selectPlayerAsset } from './entity-assets.js';
 import { PlayerVisualFamily } from './entities/player-visual-family.js';
 import { PortalVisualFamily } from './entities/portal-visual-family.js';
 import { WreckVisualFamily } from './entities/wreck-visual-family.js';
+import { WorldSpriteVisualFamily } from './entities/world-sprite-visual-family.js';
 import { VfxManager } from './vfx/vfx-manager.js';
 import { RENDER_PLAN_DESCRIPTOR, RENDER_PLAN_PASS_IDS } from './render-plan.js';
 import {
@@ -95,35 +97,6 @@ function makeRadialGeometry(pointCount = 4, innerRadius = 0.42) {
   }
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geom.setIndex(indices);
-  geom.computeVertexNormals();
-  return geom;
-}
-
-function makePixelHullMeshGeometry() {
-  const outline = [
-    [1.0, 0.0],
-    [0.28, 0.46],
-    [-0.34, 0.32],
-    [-0.18, 0.12],
-    [-0.72, 0.0],
-    [-0.18, -0.12],
-    [-0.34, -0.32],
-    [0.28, -0.46],
-  ];
-  const positions = [0, 0, 0];
-  const uvs = [0.45, 0.5];
-  const indices = [];
-  for (const [x, y] of outline) {
-    positions.push(x, y, 0);
-    uvs.push((x + 0.72) / 1.72, 1 - ((y + 0.46) / 0.92));
-  }
-  for (let i = 1; i <= outline.length; i++) {
-    indices.push(0, i, i === outline.length ? 1 : i + 1);
-  }
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geom.setIndex(indices);
   geom.computeVertexNormals();
   return geom;
@@ -251,6 +224,10 @@ export class ThreeRendererBackend {
         geometries: this.entityGeometries,
         materials: this.entityMaterials,
       }).create(),
+      worldSprites: new WorldSpriteVisualFamily({
+        landmarkGroup: this.landmarkEntityGroup,
+        activeGroup: this.activeEntityGroup,
+      }).create(),
     };
     this.lastPresentationPhase = null;
     this.lastPresentationRunId = null;
@@ -312,6 +289,7 @@ export class ThreeRendererBackend {
       canvasUploads: 0,
       pooledMeshes: 0,
       pooledLines: 0,
+      entityAssets: this.entityAssets.getStats(),
       vfx: this.vfxManager.getStats(),
     };
     this._applyCanvasMode();
@@ -403,11 +381,11 @@ export class ThreeRendererBackend {
       disc: new THREE.CircleGeometry(1, 28),
       ring: new THREE.RingGeometry(0.90, 1.0, 64),
       square: new THREE.PlaneGeometry(1, 1),
-      spriteCard: new THREE.PlaneGeometry(1, 1.22),
-      pixelHullMesh: makePixelHullMeshGeometry(),
+      spriteCard: new THREE.PlaneGeometry(1, 1),
       spark: makeRadialGeometry(4, 0.36),
     };
     this.entityMaterials = createVisualMaterials(getPresentationPalette());
+    this.entityAssets = new EntityAssetStore();
     this.lastEntityCount = 0;
     this.lastSemanticCount = 0;
     this.lastVisualCounts = {};
@@ -676,30 +654,32 @@ export class ThreeRendererBackend {
   }
 
   _addShipCandidate(candidate, state) {
-    const variant = candidate.variant === 'pixel-mesh' ? 'pixel-mesh' : 'sprite-card';
-    const geometry = variant === 'pixel-mesh'
-      ? this.entityGeometries.pixelHullMesh
-      : this.entityGeometries.spriteCard;
-    const material = variant === 'pixel-mesh'
-      ? this.entityMaterials.shipMeshCandidate
-      : this.entityMaterials.shipSpriteCandidate;
     const facing = Number.isFinite(candidate.movement?.facing)
       ? candidate.movement.facing
       : Math.atan2(-(candidate.movement?.velocity?.y || 0), candidate.movement?.velocity?.x || 0);
-    const rotation = -facing;
+    const rotation = -facing - Math.PI * 0.5;
     const radius = candidate.radius || 0.040;
-    this._addContrastBacking(candidate.world.x, candidate.world.y, radius, rotation, 0.165, state, 'screen', {
-      opacity: 'heavy',
-      radiusScale: 2.15,
-      yScale: 0.80,
-    });
-    this._addMesh(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.shipHalo,
-      candidate.world.x, candidate.world.y, radius * 1.75, rotation, 0.168, state, 'screen');
-    const core = this._addMesh(this.activeEntityGroup, geometry, material,
-      candidate.world.x, candidate.world.y, radius, rotation, 0.18, state, 'screen');
-    this._addMesh(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.shipRim,
-      candidate.world.x, candidate.world.y, radius * 1.16, rotation, 0.187, state, 'screen');
+    const core = this._addSpriteEntity(this.activeEntityGroup, selectPlayerAsset(candidate),
+      candidate.world.x, candidate.world.y, radius, rotation, 0.18, state, 'player');
     if (core) this.shipCandidateCount += 1;
+    return core;
+  }
+
+  _addSpriteEntity(group, assetId, wx, wy, radius, rotation, z, state, treatmentId, entity = {}) {
+    const treatment = ENTITY_SPRITE_TREATMENTS[treatmentId] || ENTITY_SPRITE_TREATMENTS.fauna;
+    const haloKey = treatmentId === 'portals' && entity.blocked ? 'riftPortalHalo' : treatment.halo;
+    const rimKey = treatmentId === 'portals' && entity.visualState === 'rift' ? 'riftPortal' : treatment.rim;
+    this._addContrastBacking(wx, wy, radius, rotation, z, state, 'screen', {
+      opacity: treatment.matteOpacity,
+      radiusScale: treatment.matteRadius,
+      yScale: treatment.matteY,
+    });
+    this._addMesh(group, this.entityGeometries.disc, this.entityMaterials[haloKey],
+      wx, wy, radius * treatment.haloRadius, 0, z - 0.012, state, 'screen');
+    const core = this._addMesh(group, this.entityGeometries.spriteCard, this.entityAssets.getMaterial(assetId),
+      wx, wy, radius * 1.65, rotation, z, state, 'screen');
+    this._addMesh(group, this.entityGeometries.ring, this.entityMaterials[rimKey],
+      wx, wy, radius * treatment.rimRadius, 0, z + 0.006, state, 'screen');
     return core;
   }
 
@@ -768,6 +748,12 @@ export class ThreeRendererBackend {
         if (mesh) entityCount++;
         return mesh;
       },
+      sprite: (group, assetId, wx, wy, radius, rotation, treatmentId, entity = {}) => {
+        const mesh = this._addSpriteEntity(group, assetId, wx, wy, radius, rotation, 0.13,
+          renderState, treatmentId, entity);
+        if (mesh) entityCount++;
+        return mesh;
+      },
     };
 
     const suppressWellDebugMarkers = sceneState.titleBackdrop === true;
@@ -783,48 +769,9 @@ export class ThreeRendererBackend {
       const life = Math.max(0, Math.min(1, ring.strength / ring.initialStrength));
       if (life > 0.02) addSemantic(this.entityGeometries.ring, this.entityMaterials.wave, ring.world.x, ring.world.y, ring.radius || 0.01, 0, 0.02);
     }
-    for (const star of sceneState.stars || []) {
-      const radius = 0.025 + star.visualScale * 0.012;
-      if (this._addMesh(this.landmarkEntityGroup, this.entityGeometries.ring, this.entityMaterials.starHalo,
-        star.world.x, star.world.y, radius * 1.85, 0, 0.055, renderState, 'screen')) {
-        entityCount++;
-      }
-      if (this._addMesh(this.landmarkEntityGroup, this.entityGeometries.disc, this.entityMaterials.star,
-        star.world.x, star.world.y, radius * 0.45, 0, 0.066, renderState, 'screen')) {
-        entityCount++;
-      }
-      addReadable(this.landmarkEntityGroup, this.entityGeometries.spark, this.entityMaterials.star,
-        star.world.x, star.world.y, radius, 0, 0.07,
-        { haloMaterial: this.entityMaterials.starHalo, haloRadius: 1.55, rimRadius: 1.08, matteRadius: 1.7, matteY: 1.0 },
-        'screen');
-    }
     this.visualFamilies.portal.update(frame, draw);
     this.visualFamilies.wreck.update(frame, draw);
-    for (const planetoid of sceneState.planetoids || []) {
-      const angle = Math.atan2(-(planetoid.movement.y || 0), planetoid.movement.x || 0);
-      addReadable(this.landmarkEntityGroup, this.entityGeometries.triangle, this.entityMaterials.planetoid,
-        planetoid.world.x, planetoid.world.y, 0.022, angle, 0.09,
-        { haloMaterial: this.entityMaterials.planetoidHalo, haloRadius: 1.55, rimRadius: 1.12, matteRadius: 1.7 },
-        'screen');
-    }
-    for (const scav of sceneState.scavengers || []) {
-      addReadable(this.activeEntityGroup, this.entityGeometries.triangle, this.entityMaterials.scavenger,
-        scav.world.x, scav.world.y, 0.027, -(scav.movement.facing || 0), 0.12,
-        { haloMaterial: this.entityMaterials.scavengerHalo, rimMaterial: this.entityMaterials.scavengerHalo, matteRadius: 1.95 },
-        'screen');
-    }
-    for (const fauna of sceneState.fauna || []) {
-      addReadable(this.activeEntityGroup, this.entityGeometries.disc, this.entityMaterials.fauna,
-        fauna.world.x, fauna.world.y, 0.008 + fauna.size * 0.003, 0, 0.10,
-        { haloMaterial: this.entityMaterials.faunaHalo, haloRadius: 2.0, matteRadius: 1.9, matteY: 1.0 },
-        'screen');
-    }
-    for (const sentry of sceneState.sentries || []) {
-      addReadable(this.activeEntityGroup, this.entityGeometries.disc, this.entityMaterials.sentry,
-        sentry.world.x, sentry.world.y, 0.014, 0, 0.11,
-        { haloMaterial: this.entityMaterials.sentryHalo, haloRadius: 2.2, matteRadius: 2.0, matteY: 1.0 },
-        'screen');
-    }
+    this.visualFamilies.worldSprites.update(frame, draw);
     this.visualFamilies.player.update(frame, draw);
 
     this.lastEntityCount = entityCount;
@@ -911,6 +858,7 @@ export class ThreeRendererBackend {
       canvasUploads: 0,
       pooledMeshes: this.entityMeshPool.length + this.semanticMeshPool.length,
       pooledLines: this.linePool.length,
+      entityAssets: this.entityAssets.getStats(),
       vfx: this.vfxManager.getStats(),
     };
   }
@@ -974,6 +922,7 @@ export class ThreeRendererBackend {
 
   dispose() {
     for (const family of Object.values(this.visualFamilies)) family.dispose();
+    this.entityAssets.dispose();
     this.sceneTarget.dispose();
     this.copyMaterial.dispose();
     this._disposeObject(this.worldScene);
@@ -988,7 +937,7 @@ export class ThreeRendererBackend {
       if (child.geometry) geometries.add(child.geometry);
       const mats = Array.isArray(child.material) ? child.material : [child.material];
       for (const mat of mats) {
-        if (mat) materials.add(mat);
+        if (mat && !mat.name?.startsWith('entity-sprite-material:')) materials.add(mat);
       }
     });
     for (const geom of geometries) geom.dispose();

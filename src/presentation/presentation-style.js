@@ -56,7 +56,7 @@ const QUALITY_PROFILES = Object.freeze({
     chromaticMotion: 0,
     entityGain: 1,
     entityGamma: 1,
-    entityBudgets: Object.freeze({ players: 16, wrecks: 48, portals: 12 }),
+    entityBudgets: Object.freeze({ players: 16, wrecks: 48, portals: 12, stars: 16, planetoids: 24, scavengers: 24, ecology: 32 }),
   }),
   default: Object.freeze({
     backdropReveal: 0.07,
@@ -67,7 +67,7 @@ const QUALITY_PROFILES = Object.freeze({
     chromaticMotion: 0.0018,
     entityGain: 1.22,
     entityGamma: 0.88,
-    entityBudgets: Object.freeze({ players: 32, wrecks: 96, portals: 20 }),
+    entityBudgets: Object.freeze({ players: 32, wrecks: 96, portals: 20, stars: 32, planetoids: 48, scavengers: 48, ecology: 64 }),
   }),
   rich: Object.freeze({
     backdropReveal: 0.12,
@@ -78,7 +78,7 @@ const QUALITY_PROFILES = Object.freeze({
     chromaticMotion: 0.0025,
     entityGain: 1.38,
     entityGamma: 0.82,
-    entityBudgets: Object.freeze({ players: 48, wrecks: 144, portals: 28 }),
+    entityBudgets: Object.freeze({ players: 48, wrecks: 144, portals: 28, stars: 48, planetoids: 72, scavengers: 72, ecology: 96 }),
   }),
   capture: Object.freeze({
     backdropReveal: 0.14,
@@ -89,7 +89,7 @@ const QUALITY_PROFILES = Object.freeze({
     chromaticMotion: 0.0025,
     entityGain: 1.42,
     entityGamma: 0.80,
-    entityBudgets: Object.freeze({ players: 64, wrecks: 192, portals: 32 }),
+    entityBudgets: Object.freeze({ players: 64, wrecks: 192, portals: 32, stars: 64, planetoids: 96, scavengers: 96, ecology: 128 }),
   }),
 });
 

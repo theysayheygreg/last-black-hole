@@ -1,4 +1,5 @@
 import { VisualFamilyLifecycle } from './visual-family.js';
+import { selectPlayerAsset } from '../entity-assets.js';
 
 function heading(entity) {
   const facing = entity?.movement?.facing;
@@ -27,10 +28,8 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     // slot; multiplayer density may drop remote echoes, never the pilot.
     const player = frame.localPlayer;
     if (player && player.status !== 'dead') {
-      const core = draw.readable(this.group, this.geometries.triangle, this.materials.ship,
-        player.world.x, player.world.y, 0.034, -player.movement.facing, 0.16,
-        { haloMaterial: this.materials.shipHalo, rimMaterial: this.materials.shipRim, haloRadius: 1.70, rimRadius: 1.18, matteRadius: 2.1 },
-        'screen');
+      const core = draw.sprite(this.group, selectPlayerAsset(player), player.world.x, player.world.y,
+        0.044, -player.movement.facing - Math.PI * 0.5, 'player');
       if (core) { this.countObject(4); remaining -= 1; }
     }
 
@@ -44,10 +43,8 @@ export class PlayerVisualFamily extends VisualFamilyLifecycle {
     for (; remoteIndex < remotePlayers.length && remaining > 0; remoteIndex++) {
       const remote = remotePlayers[remoteIndex];
       if (remote.status === 'dead') continue;
-      const core = draw.readable(this.group, this.geometries.triangle, this.materials.remoteShip,
-        remote.world.x, remote.world.y, 0.030, heading(remote), 0.13,
-        { haloMaterial: this.materials.remoteShipHalo, rimMaterial: this.materials.remoteShipHalo, matteRadius: 2.0 },
-        'screen');
+      const core = draw.sprite(this.group, selectPlayerAsset(remote, { remote: true }),
+        remote.world.x, remote.world.y, 0.040, heading(remote) - Math.PI * 0.5, 'remotePlayers');
       if (core) { this.countObject(4); remaining -= 1; }
     }
     this.drop(remotePlayers.length - remoteIndex);

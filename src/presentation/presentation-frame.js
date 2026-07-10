@@ -55,6 +55,21 @@ function velocity(source = {}) {
   return Object.freeze({ x, y, speed: Math.hypot(x, y) });
 }
 
+function hull(source = {}) {
+  return Object.freeze({
+    type: text(source.hullType || source.shipType, 'drifter').toLowerCase(),
+    integrityRatio: Math.max(0, Math.min(1, finite(source.hullRatio ?? source.integrityRatio, 1))),
+  });
+}
+
+function pathState(source = {}, sling = {}) {
+  if (source.status === 'dead') return 'disabled';
+  if (source.braking === true) return 'braking';
+  if (source.thrusting === true) return 'thrusting';
+  if (source.slingshotEngaged === true || sling.engaged) return 'slingshot';
+  return Math.hypot(finite(source.vx), finite(source.vy)) > 0.01 ? 'coasting' : 'idle';
+}
+
 function hint(role, overrides = null) {
   return Object.freeze({
     ...(PRESENTATION_ROLE_HINTS[role] || PRESENTATION_ROLE_HINTS.anomaly),
@@ -86,7 +101,9 @@ function normalizeLocalPlayer(source = null, scene = {}) {
       fuelRatio: Math.max(0, Math.min(1, finite(source.deltaVRatio ?? source.fuelRatio, 1))),
       thrusting: source.thrusting === true,
       braking: source.braking === true,
+      pathState: pathState(source, sling),
     }),
+    hull: hull(source),
     slingshot: Object.freeze({
       engaged: Boolean(source.slingshotEngaged || sling.engaged),
       affordance: anchor(sling.affordance),
@@ -128,26 +145,45 @@ function normalizeEntity(family, source, index) {
         hint: hint('portal', { category: 'routeAnchor', roleColor: 'routeAmber', vfxFamily: 'none' }),
       });
     case 'wrecks':
+      {
+      const variant = text(source.type, 'derelict');
+      const visualState = source.looted === true
+        ? 'looted'
+        : (source.cluster === true || source.size === 'scattered' || variant === 'debris' ? 'cluster' : 'intact');
       return Object.freeze({
         ...base,
         size: text(source.size, 'medium'),
         tier: Math.max(1, Math.floor(finite(source.tier, 1))),
-        variant: text(source.type, 'derelict'),
+        variant,
         looted: source.looted === true,
+        visualState,
         hint: hint('wreck', source.looted ? { priority: 'low', roleColor: 'neutralWhite' } : null),
       });
+      }
     case 'portals':
+      {
+      const variant = text(source.type, 'standard');
+      const blocked = source.blocked === true || source.blockedByInhibitor === true;
+      const final = source.final === true || source.finalInhibitor === true;
       return Object.freeze({
         ...base,
-        variant: text(source.type, 'standard'),
+        variant,
         radius: Math.max(0.001, finite(source.radius ?? source.captureRadius, 0.08)),
         opacity: Math.max(0, Math.min(1, finite(source.opacity, 1))),
-        blocked: source.blocked === true || source.blockedByInhibitor === true,
-        final: source.final === true || source.finalInhibitor === true,
+        blocked,
+        final,
+        visualState: variant === 'rift'
+          ? 'rift'
+          : blocked
+            ? 'blocked'
+            : source.ready === true || source.interactionReady === true
+              ? 'ready'
+              : final ? 'final' : 'available',
         hint: hint('portal'),
       });
+      }
     case 'planetoids':
-      return Object.freeze({ ...base, movement: velocity(source), hint: hint('portal', { priority: 'normal' }) });
+      return Object.freeze({ ...base, movement: velocity(source), variant: text(source.type, 'orbit'), hint: hint('portal', { priority: 'normal' }) });
     case 'scavengers':
       return Object.freeze({
         ...base,
@@ -162,6 +198,7 @@ function normalizeEntity(family, source, index) {
         movement: Object.freeze({ velocity: velocity(source), facing: optionalFinite(source.facing) }),
         status: text(source.status, 'alive'),
         variant: text(source.hullType, 'drifter'),
+        hull: hull(source),
         hint: hint('remotePlayer'),
       });
     case 'shipCandidates':
@@ -169,6 +206,7 @@ function normalizeEntity(family, source, index) {
         ...base,
         movement: Object.freeze({ velocity: velocity(source), facing: optionalFinite(source.facing) }),
         variant: source.variant === 'pixel-mesh' ? 'pixel-mesh' : 'sprite-card',
+        hull: hull(source),
         radius: Math.max(0.001, finite(source.radius, 0.04)),
         hint: hint('player'),
       });
