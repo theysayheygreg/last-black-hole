@@ -116,6 +116,8 @@ coordinator owns the integrated documents.
 - network model and per-session/per-player budgets;
 - hosted topology/vendor comparison and cost calculator assumptions;
 - $4.99 unit economics at 1K, 10K, 100K, and 1M copies;
+- named fixed-service stacks, cohort duration, launch CCU, payout reserve, and
+  loaded operations labor at those sales scales;
 - phased prototype-to-production roadmap with acceptance gates;
 - explicit open decisions for Greg;
 - implementation prompt packets only after the architecture choice is ready.

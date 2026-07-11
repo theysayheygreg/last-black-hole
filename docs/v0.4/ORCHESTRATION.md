@@ -1,6 +1,6 @@
 # v0.4 Multiplayer Orchestration
 
-> Durable handoff for the active Codex goal on
+> Durable handoff for the v0.4 work on
 > `codex/v0.4-multiplayer-architecture`.
 
 ## Goal Prompt
@@ -72,13 +72,15 @@ Local automation:
 
 `~/.codex/automations/lbh-v04-multiplayer-orchestrator/automation.toml`
 
-It targets this goal thread every 30 minutes and runs:
+It is installed with `status = "ACTIVE"`, targets this thread, and is configured
+for a 30-minute recurrence. Its first actual LBH scheduler execution is still
+pending verification. It runs:
 
 ```sh
 codexbar usage --provider codex --source cli --format json --pretty
 ```
 
-Behavior:
+Configured behavior:
 
 - inspect the five-hour `usedPercent` and `resetsAt` values;
 - inspect the active goal, live agents, branch, and worktree;
@@ -92,8 +94,22 @@ Behavior:
 
 This does not bypass a Codex usage limit. If the service cannot execute while
 the five-hour window is exhausted, the heartbeat resumes on the first
-scheduled run that can execute after `resetsAt`. The durable branch/docs/goal
-checkpoint prevents that reset from becoming lost context.
+scheduled run that can execute after `resetsAt`. The durable branch and docs
+prevent that reset from becoming lost project context.
+
+Runtime verification requires a logged heartbeat submission containing this
+automation id after the target thread has been idle for a scheduler pass. The
+06:51 continuation on July 11 came from automatic goal persistence, not this
+automation, so it does not count as proof.
+
+## Goal Metadata Note
+
+The thread goal was created before Greg corrected the work from v0.3 to v0.4,
+and the goal API cannot edit an active objective in place. Its database text
+still names v0.3. The actual branch, committed artifacts, orchestration prompt,
+and later user correction are v0.4. The stale goal should be marked complete
+only after the completion audit passes; do not treat its version string as
+current branch truth.
 
 ## Ownership Rules
 
@@ -104,4 +120,3 @@ checkpoint prevents that reset from becoming lost context.
 - The coordinator owns `ARCHITECTURE.md`, `ROADMAP.md`, `OPEN-DECISIONS.md`,
   journal integration, and this orchestration file.
 - One clean handoff per agent; no bot-to-bot bounce loop.
-

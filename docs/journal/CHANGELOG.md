@@ -55,8 +55,19 @@
   clocks; higher counts add explicit single-writer/internal-worker, AOI,
   performance, network, host, cost, and TiDi gates.
 - Added the durable v0.4 orchestration checkpoint and documented the local
-  30-minute CodexBar heartbeat, 90% usage checkpoint behavior, post-reset
-  continuation, completed research lanes, and next implementation boundary.
+  30-minute CodexBar heartbeat configuration, 90% usage checkpoint behavior,
+  post-reset continuation, completed research lanes, and next implementation
+  boundary. Runtime scheduler execution remains pending direct log proof.
+- Added the decision-grade fixed-stack and cohort economics model: named
+  $162/$803/$20,300 monthly service postures, 3/12/40-hour play cohorts,
+  12/36/84-month service terms, launch CCU and regional placement, loaded
+  operations labor, 45-day payout timing, and pre-payout reserves. It confirms
+  that compact match hosting fits $4.99 while an indefinite staffed live-service
+  promise does not automatically fit the price.
+- Corrected orchestration metadata after the v0.4 branch rename: the durable
+  branch and documents are authoritative while the original active goal text
+  still says v0.3, and the installed heartbeat is not called operational until
+  a real scheduler submission is logged.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 

@@ -1,5 +1,11 @@
 # Hosted Authority Costs And $4.99 Unit Economics
 
+> This is the first-pass variable hosting model. The later
+> [`fixed-stack-cohort-unit-economics.md`](fixed-stack-cohort-unit-economics.md)
+> adds named monthly stacks, launch CCU, service-tail duration, payout timing,
+> and loaded labor. Use the later memo for business conclusions; retain this
+> one for vendor/runtime and variable-cost derivation.
+
 > Research snapshot: 2026-07-10. Prices and limits are current-source inputs,
 > not vendor quotes. Re-run this model before any production commitment.
 
@@ -234,8 +240,10 @@ total/player-hour = egress + compute + shared + relay/voice
                     + incident/abuse reserve
 ```
 
-The current memo does not yet supply measured run density or a named fixed
-monthly stack. `$0.18/copy` stays a benchmark target until those inputs exist.
+Measured run density remains open. The companion fixed-stack/cohort memo now
+supplies explicit monthly stack, service-duration, labor, and cash-timing
+assumptions. `$0.18/copy` remains only the earlier variable-service benchmark;
+its refined base target is $0.172/copy at $0.0143/player-hour.
 
 ## Required Spikes Before Vendor Choice
 
@@ -263,9 +271,10 @@ and Durable Objects as the high-upside experimental authority runtime.
 
 Do not choose true authority-free P2P to save hosting cost until its cheat,
 determinism, host-loss, progression-settlement, and movement-feel costs are
-compared against the approximately $0.18/copy low-egress hosted-service target.
-At compact-delta rates, central authority is cheap enough that correctness is
-worth buying.
+compared against the compact-delta hosted-service target. At those traffic
+rates, central authority is cheap enough that correctness is worth buying;
+calendar-time operations and service-tail labor, not match compute alone, are
+the commercial constraint.
 
 ## High-Count Extension
 

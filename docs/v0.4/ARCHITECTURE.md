@@ -533,10 +533,16 @@ authority because the price formula looks attractive.
   externalized room state are a poor fit pending vendor confirmation and a
   stateful-run proof. Vercel remains usable for web/control surfaces.
 
-The economic design target is $0.015/player-hour after delta optimization, or
-about $0.18/copy at 12 lifetime hosted hours. It is not a forecast: run density,
-fixed services, regional mix, operations, support, and actual wire bytes remain
-unmeasured.
+The base compact-delta experiment target is now $0.0143/player-hour, or about
+$0.172 for a 12-hour buyer. That is a variable-service target, not the whole
+business. The calendar stack floors are modeled separately at $162/month for
+an owner-operated service, $803/month for a recommended production posture,
+and $20,300/month for a contracted scale posture. With explicit 3/12/40-hour
+cohorts, 12/36/84-month service terms, loaded operations labor, and a 45-day
+payout lag, the $4.99 price can fund compact authoritative hosting but does not
+automatically fund an indefinite live-service organization. The viable product
+needs a deliberately lean support tail, a finite online-service promise,
+additional revenue, or an offline/player-hosted continuity plan.
 
 ## Private Player-Hosted Fallback
 
@@ -560,6 +566,7 @@ This preserves long-tail/private play without weakening verified sessions.
 - [P2P history and network budgets](research/p2p-history-network-budgets.md)
 - [Hosted costs and unit economics](research/hosted-costs-unit-economics.md)
 - [Hosted cost audit](research/hosted-costs-unit-economics-audit.md)
+- [Fixed stack and cohort unit economics](research/fixed-stack-cohort-unit-economics.md)
 - [Architecture red team](research/architecture-red-team.md)
 - [High-count synthetic baseline](research/2026-07-10-high-player-count-synthetic-baseline.md)
 - [High-count performance model](research/high-player-count-performance-model.md)
