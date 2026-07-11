@@ -88,6 +88,10 @@ Singularity that:
   byte-compatible; then add bounded admission/resume tickets and field revision.
 - Do not start the `ws` adapter, dependency/package staging, or `src/main.js`
   cutover before those parity gates.
+- Post-reset prompt packets are durable under `docs/project/prompts/` for the
+  executor-parity, ticket-registry, and field-revision slices. Executor parity
+  owns the high-conflict runtime first; the ticket registry can proceed in
+  parallel; field-revision runtime integration waits for the executor commit.
 - The automation remains installed/configured; a scheduler-fired execution is
   still pending proof because this target thread has remained busy.
 

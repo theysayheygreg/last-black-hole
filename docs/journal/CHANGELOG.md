@@ -32,6 +32,10 @@
   HTTP server and tick loop—no second process, port, writer, or sim timer—and
   explicitly closes admission, field revision, packaging, and command-parity
   seams before the adapter goes live.
+- Added post-reset Phase 1 packets for transport-neutral executor parity, a
+  bounded single-use admission/resume ticket registry, and authoritative field
+  revision. Their ownership order keeps parallel work out of the 6K-line sim
+  runtime until the HTTP parity extraction is committed.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 
