@@ -1,10 +1,12 @@
 const { ControlPlaneStore } = require("./control-plane-store.cjs");
 const { SessionRegistry } = require("./session-registry.cjs");
 
-async function requestJson(method, baseUrl, route, body = null) {
+async function requestJson(method, baseUrl, route, body = null, extraHeaders = null) {
   const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}${route}`, {
     method,
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers: body || extraHeaders
+      ? { ...(body ? { "content-type": "application/json" } : {}), ...(extraHeaders || {}) }
+      : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await response.json().catch(() => ({}));
@@ -101,8 +103,9 @@ class LocalControlPlaneClient {
 }
 
 class RemoteControlPlaneClient {
-  constructor({ baseUrl }) {
+  constructor({ baseUrl, serviceToken = process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN || "" }) {
     this.baseUrl = String(baseUrl).replace(/\/$/, "");
+    this.serviceToken = String(serviceToken || "");
   }
 
   async bootstrapProfile({ profileId, snapshot, fallbackName }) {
@@ -134,7 +137,10 @@ class RemoteControlPlaneClient {
   }
 
   async applyOutcome(payload) {
-    const body = await requestJson("POST", this.baseUrl, "/profile/outcome", payload);
+    const serviceHeaders = this.serviceToken
+      ? { "x-lbh-service-token": this.serviceToken }
+      : null;
+    const body = await requestJson("POST", this.baseUrl, "/profile/outcome", payload, serviceHeaders);
     return body.committed;
   }
 
@@ -183,7 +189,10 @@ class RemoteControlPlaneClient {
 
 function createControlPlaneClient(options = {}) {
   if (options.baseUrl) {
-    return new RemoteControlPlaneClient({ baseUrl: options.baseUrl });
+    return new RemoteControlPlaneClient({
+      baseUrl: options.baseUrl,
+      serviceToken: options.serviceToken ?? process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN ?? "",
+    });
   }
   return new LocalControlPlaneClient(options);
 }

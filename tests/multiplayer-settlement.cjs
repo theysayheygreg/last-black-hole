@@ -10,6 +10,7 @@ const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
 const { ControlPlaneStore } = require("../scripts/control-plane-store.cjs");
+const { createControlPlaneClient } = require("../scripts/control-plane-client.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -65,6 +66,15 @@ async function waitForHealth(baseUrl) {
   throw new Error("control plane did not become healthy");
 }
 
+async function waitFor(predicate, label) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`timed out waiting for ${label}`);
+}
+
 async function post(baseUrl, payload, token) {
   const headers = { "content-type": "application/json" };
   if (token != null) headers["x-lbh-service-token"] = token;
@@ -80,11 +90,14 @@ async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-settlement-"));
   const embeddedFile = path.join(tmp, "embedded.json");
   const payload = makePayload();
-  const embedded = new ControlPlaneStore(embeddedFile);
+  const embedded = createControlPlaneClient({
+    controlPlaneFile: embeddedFile,
+    sessionRegistryFile: path.join(tmp, "embedded-registry.json"),
+  });
 
   let first;
   for (let index = 0; index < 100; index++) {
-    const committed = embedded.applyOutcome(payload);
+    const committed = await embedded.applyOutcome(payload);
     if (index === 0) first = committed;
     else assert.strictEqual(committed.replayed, true, `replay ${index} should return the original commit`);
   }
@@ -121,6 +134,7 @@ async function main() {
   });
   let stderr = "";
   child.stderr.on("data", (chunk) => { stderr += chunk; });
+  let simChild = null;
 
   try {
     await waitForHealth(baseUrl);
@@ -130,10 +144,14 @@ async function main() {
     assert.strictEqual(wrong.response.status, 401);
 
     const remotePayload = makePayload();
+    const previousServiceToken = process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN;
+    process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN = serviceToken;
+    const remote = createControlPlaneClient({ baseUrl });
+    if (previousServiceToken == null) delete process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN;
+    else process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN = previousServiceToken;
     for (let index = 0; index < 100; index++) {
-      const result = await post(baseUrl, remotePayload, serviceToken);
-      assert.strictEqual(result.response.status, 200, JSON.stringify(result.body));
-      assert.strictEqual(result.body.committed.replayed, index > 0);
+      const committed = await remote.applyOutcome(remotePayload);
+      assert.strictEqual(committed.replayed, index > 0);
     }
     const conflict = await post(baseUrl, {
       ...remotePayload,
@@ -146,7 +164,65 @@ async function main() {
     assert.strictEqual(Object.keys(runtimeState.settlements).length, 1);
     assert.strictEqual(runtimeState.profiles[remotePayload.profileId].exoticMatter, 60);
     assert.strictEqual(runtimeState.profiles[remotePayload.profileId].totalExtractions, 1);
+
+    const simPort = await freePort();
+    const simUrl = `http://127.0.0.1:${simPort}`;
+    simChild = spawn(process.execPath, [
+      path.join(ROOT, "scripts/sim-runtime.cjs"),
+      "--host", "127.0.0.1",
+      "--port", String(simPort),
+      "--control-plane-url", baseUrl,
+    ], {
+      cwd: ROOT,
+      env: {
+        ...process.env,
+        LBH_CONTROL_PLANE_SERVICE_TOKEN: serviceToken,
+        LBH_SIM_INSTANCE_ID: "settlement-integration-sim",
+      },
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    simChild.stderr.on("data", (chunk) => { stderr += chunk; });
+    await waitForHealth(simUrl);
+
+    const simProfileId = `profile-${crypto.randomUUID()}`;
+    const joinedResponse = await fetch(`${simUrl}/join`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        clientId: `client-${crypto.randomUUID()}`,
+        profileId: simProfileId,
+        name: "Authenticated Sim Pilot",
+      }),
+    });
+    const joined = await joinedResponse.json();
+    assert.strictEqual(joinedResponse.status, 200, JSON.stringify(joined));
+    const authority = joined.authority;
+    const leaveResponse = await fetch(`${simUrl}/leave`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-lbh-command-credential": authority.commandCredential,
+        "x-lbh-player-id": authority.playerId,
+        "x-lbh-run-id": authority.runId,
+      },
+      body: JSON.stringify({
+        runId: authority.runId,
+        playerId: authority.playerId,
+        commandCredential: authority.commandCredential,
+        commandSeq: 1,
+      }),
+    });
+    const left = await leaveResponse.json();
+    assert.strictEqual(leaveResponse.status, 200, JSON.stringify(left));
+    await waitFor(() => {
+      const state = JSON.parse(fs.readFileSync(runtimeFile, "utf8"));
+      return Object.values(state.settlements).some((entry) => entry.profileId === simProfileId);
+    }, "authenticated sim outcome settlement");
   } finally {
+    if (simChild) {
+      simChild.kill("SIGTERM");
+      await new Promise((resolve) => simChild.once("close", resolve));
+    }
     child.kill("SIGTERM");
     await new Promise((resolve) => child.once("close", resolve));
     fs.rmSync(tmp, { recursive: true, force: true });
