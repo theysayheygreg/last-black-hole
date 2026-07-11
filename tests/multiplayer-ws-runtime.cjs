@@ -191,11 +191,20 @@ async function runReliableActionsFixture() {
     const edgeAck = await sendAction(client, slingshot);
     assert(edgeAck.status === "accepted" && edgeAck.result.code === "queued" && edgeAck.result.edgeId === 1000,
       `Slingshot edge must queue authoritatively: ${JSON.stringify(edgeAck)}`);
+    const edgeRetry = await sendAction(client, { ...slingshot, clientTimeMs: Date.now() + 500 }, 0);
+    assert(edgeRetry.status === edgeAck.status
+      && JSON.stringify(edgeRetry.result) === JSON.stringify(edgeAck.result)
+      && edgeRetry.deliveryId !== edgeAck.deliveryId,
+    "Slingshot exact retry must return cached queue semantics under a fresh delivery");
     await waitFor(async () => {
       const health = await request(ACTION_PORT, "/health");
-      return health.body.multiplayer.adapter.queuedMessages === 1 ? health : null;
+      return health.body.multiplayer.adapter.queuedMessages === 2
+        && health.body.multiplayer.actions.adjudicated === 1
+        && health.body.multiplayer.actions.replays === 1
+        ? health : null;
     }, "accepted action retained by delivery id");
     client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: edgeAck.deliveryId }));
+    client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: edgeRetry.deliveryId }));
     await waitFor(async () => {
       const health = await request(ACTION_PORT, "/health");
       return health.body.multiplayer.adapter.queuedMessages === 0 ? health : null;
@@ -205,18 +214,34 @@ async function runReliableActionsFixture() {
       actionId: "reliable-consume", actionSeq: 2, commandSeq: 2,
       actionKind: "consume", payload: { slot: 0 },
     };
-    const consumeAck = await sendAction(client, consume, 0);
-    assert(consumeAck.status === "accepted" && consumeAck.result.itemId === "reliable-fuel",
-      `Consumable use must bind the validated item: ${JSON.stringify(consumeAck)}`);
-    const racedInventory = await sendAction(client, {
+    const consumeAckStart = frames(client, "ack").length;
+    client.ws.send(JSON.stringify({ type: "action", clientTimeMs: Date.now(), ...consume }));
+    client.ws.send(JSON.stringify({ type: "action", clientTimeMs: Date.now() + 750, ...consume }));
+    client.ws.send(JSON.stringify({
+      type: "action", clientTimeMs: Date.now() + 1,
       actionId: "consume-race", actionSeq: 3, commandSeq: 3,
       actionKind: "inventory", payload: { action: "unloadConsumable", consumableSlot: 0 },
-    });
+    }));
+    const consumeAcks = await waitFor(() => {
+      const received = frames(client, "ack").slice(consumeAckStart).filter((entry) => entry.ackKind === "action");
+      return received.filter((entry) => entry.actionId === consume.actionId).length === 2
+        && received.some((entry) => entry.actionId === "consume-race")
+        ? received : null;
+    }, "serialized consume retry and inventory race ACKs");
+    const [consumeAck, consumeRetry] = consumeAcks.filter((entry) => entry.actionId === consume.actionId);
+    const racedInventory = consumeAcks.find((entry) => entry.actionId === "consume-race");
+    assert(consumeAck.status === "accepted" && consumeAck.result.itemId === "reliable-fuel",
+      `Consumable use must bind the validated item: ${JSON.stringify(consumeAck)}`);
+    assert(consumeRetry.status === consumeAck.status
+      && JSON.stringify(consumeRetry.result) === JSON.stringify(consumeAck.result)
+      && consumeRetry.deliveryId !== consumeAck.deliveryId,
+    "Consume exact retry must return cached queue semantics under a fresh delivery");
     assert(racedInventory.status === "rejected" && racedInventory.result.code === "inventory-rejected",
       "Inventory must not replace a pending consumable request");
-    await waitFor(async () => (await request(ACTION_PORT, "/health")).body.multiplayer.adapter.queuedMessages === 2,
-      "accepted consume and rejected inventory retained by delivery ids");
+    await waitFor(async () => (await request(ACTION_PORT, "/health")).body.multiplayer.adapter.queuedMessages === 3,
+      "accepted consume retry and rejected inventory retained by delivery ids");
     client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: consumeAck.deliveryId }));
+    client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: consumeRetry.deliveryId }));
     client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: racedInventory.deliveryId }));
     await waitFor(async () => (await request(ACTION_PORT, "/health")).body.multiplayer.adapter.queuedMessages === 0,
       "rejected action delivery release");
@@ -355,13 +380,24 @@ async function runReliableActionsFixture() {
     const extract = await sendAction(resumed, {
       actionId: "reliable-extract", actionSeq: 37, commandSeq: 38,
       actionKind: "extractConfirm", payload: {},
-    });
+    }, 0);
     assert(extract.status === "accepted" && extract.result.portalId === "reliable-exit",
       "Extraction confirmation must queue only while authority reports ready");
+    const extractRetry = await sendAction(resumed, {
+      actionId: "reliable-extract", actionSeq: 37, commandSeq: 38,
+      actionKind: "extractConfirm", payload: {}, clientTimeMs: Date.now() + 900,
+    }, 0);
+    assert(extractRetry.status === extract.status
+      && JSON.stringify(extractRetry.result) === JSON.stringify(extract.result)
+      && extractRetry.deliveryId !== extract.deliveryId,
+    "Extraction exact retry must return cached queue semantics under a fresh delivery");
     await waitFor(async () => {
       const snapshot = await request(ACTION_PORT, `/snapshot?runId=${encodeURIComponent(authority.runId)}`, { authority });
       return snapshot.body.players?.find((player) => player.clientId === authority.playerId)?.status === "escaped";
     }, "authoritative extraction consequence");
+    assert(await playerEventCount(ACTION_PORT, authority, "player.portalConfirmed") === 1
+      && await playerEventCount(ACTION_PORT, authority, "player.escaped") === 1,
+    "Extraction exact retry must produce one portal confirmation and one escape consequence");
 
     const health = await request(ACTION_PORT, "/health");
     assert(health.body.multiplayer.actions.capacityPerMembership === 32
@@ -393,6 +429,23 @@ async function runReliableActionsFixture() {
     assert(cleanReceipt.result.code === "invalid-consumable-slot"
       && frame(resetClient, "welcome").lastActionSeq === 0,
     "New run must start a clean receipt lineage even when an old action id is reused");
+    const descendingEdges = await request(ACTION_PORT, "/input", {
+      method: "POST",
+      authority: resetJoin.body.authority,
+      body: command(resetJoin.body.authority, 2, {
+        seq: 1, moveX: 0, moveY: 0, thrust: 0, brake: 0,
+        slingshotEdges: [2000, 1999],
+      }),
+    });
+    assert(descendingEdges.status === 200
+      && JSON.stringify(descendingEdges.body.acceptedSlingshotEdges) === JSON.stringify([2000]),
+    `HTTP slingshot batches must retain a monotonic edge cursor: ${JSON.stringify(descendingEdges.body)}`);
+    const interleavedOldEdge = await sendAction(resetClient, {
+      actionId: "http-ws-old-edge", actionSeq: 2, commandSeq: 3,
+      actionKind: "slingshotEdge", payload: { edgeId: 1999 },
+    });
+    assert(interleavedOldEdge.status === "rejected" && interleavedOldEdge.result.code === "stale-slingshot-edge",
+      "A lower edge discarded by HTTP batching must remain stale on the WebSocket action lane");
   } finally {
     await closeClient(client);
     await closeClient(resumed);

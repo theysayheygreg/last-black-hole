@@ -6557,11 +6557,14 @@ function executeInputCommand({ body = {}, identity = {} } = {}) {
       acceptedSeq: player.lastInput.seq,
     });
   }
-  const acceptedSlingshotEdges = message.slingshotEdges.filter((edgeId) =>
-    edgeId > (auth.authority.lastSlingshotEdgeId || 0)
-  );
+  let slingshotEdgeCursor = auth.authority.lastSlingshotEdgeId || 0;
+  const acceptedSlingshotEdges = message.slingshotEdges.filter((edgeId) => {
+    if (edgeId <= slingshotEdgeCursor) return false;
+    slingshotEdgeCursor = edgeId;
+    return true;
+  });
   if (acceptedSlingshotEdges.length > 0) {
-    auth.authority.lastSlingshotEdgeId = acceptedSlingshotEdges[acceptedSlingshotEdges.length - 1];
+    auth.authority.lastSlingshotEdgeId = slingshotEdgeCursor;
   }
   const { commandCredential: _commandCredential, ...inputState } = message;
   player.lastInput = {
