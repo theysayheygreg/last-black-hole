@@ -179,7 +179,7 @@ function createProtocolDescription() {
           tick: "number",
           simTime: "seconds",
           lastEventSeq: "latest authoritative event sequence watermark",
-          players: "array of player state",
+          players: "public player state plus only the authenticated owner's private fields",
           recentEvents: "array of authoritative events",
         },
       },
@@ -198,7 +198,8 @@ function createProtocolDescription() {
         [PLAYER_ID_HEADER]: "authority subject",
         [RUN_ID_HEADER]: "active run identity",
       },
-      reconnect: "same run + player id + credential resumes authority and monotonic counters",
+      reconnect: "same run + player id + credential rotates connection authority while preserving membership and monotonic counters",
+      snapshotPrivacy: "unauthenticated reads receive public projection; current connection authority adds only its owner-private overlay",
       rejection: "stale run, wrong player, invalid credential, stale command, and stale input are deterministic errors",
     },
   };

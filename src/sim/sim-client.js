@@ -11,6 +11,10 @@ export class SimClient {
     this.commandSeq = 0;
     this.commandCredential = null;
     this.authorityRunId = null;
+    this.authorityPlayerId = null;
+    this.membershipId = null;
+    this.connectionId = null;
+    this.connectionEpoch = 0;
     this.joinTicket = null;
     this._commandTail = Promise.resolve();
     this.latestSnapshot = null;
@@ -53,7 +57,7 @@ export class SimClient {
     const authorityHeaders = this.commandCredential && this.authorityRunId
       ? {
           'x-lbh-command-credential': this.commandCredential,
-          'x-lbh-player-id': this.clientId,
+          'x-lbh-player-id': this.authorityPlayerId || this.clientId,
           'x-lbh-run-id': this.authorityRunId,
         }
       : {};
@@ -184,6 +188,10 @@ export class SimClient {
     this.commandSeq = 0;
     this.commandCredential = null;
     this.authorityRunId = null;
+    this.authorityPlayerId = null;
+    this.membershipId = null;
+    this.connectionId = null;
+    this.connectionEpoch = 0;
     this.joinTicket = joinTicket;
     if (runId) this.runId = runId;
   }
@@ -194,6 +202,10 @@ export class SimClient {
     }
     this.commandCredential = authority.commandCredential;
     this.authorityRunId = authority.runId;
+    this.authorityPlayerId = authority.playerId || this.clientId;
+    this.membershipId = authority.membershipId || null;
+    this.connectionId = authority.connectionId || null;
+    this.connectionEpoch = Math.max(0, Number(authority.connectionEpoch) || 0);
     this.runId = authority.runId;
     this.commandSeq = Math.max(0, Number(authority.lastCommandSeq) || 0);
     this.joinTicket = null;
@@ -206,7 +218,7 @@ export class SimClient {
     this.commandSeq += 1;
     return {
       runId: this.authorityRunId,
-      playerId: this.clientId,
+      playerId: this.authorityPlayerId || this.clientId,
       commandSeq: this.commandSeq,
     };
   }

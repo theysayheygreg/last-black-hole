@@ -1598,83 +1598,109 @@ function promoteHostIfNeeded() {
   if (nextHost) assignHost(nextHost.clientId, nextHost.name);
 }
 
+function publicSessionSnapshot() {
+  const { hostProfileId: _hostProfileId, ...session } = runtime.session;
+  return { ...session };
+}
+
+function publicPlayerSnapshot(player) {
+  return {
+    clientId: player.clientId,
+    name: player.name,
+    isAI: Boolean(player.isAI),
+    personality: player.personality || null,
+    hullType: player.hullType || "drifter",
+    status: player.status,
+    wx: player.wx,
+    wy: player.wy,
+    vx: player.vx,
+    vy: player.vy,
+    slingshot: player.slingshot ? {
+      engaged: Boolean(player.slingshot.engaged),
+      anchorId: player.slingshot.anchorId ?? null,
+      anchorType: player.slingshot.anchorType ?? null,
+      anchorWX: player.slingshot.anchorWX ?? null,
+      anchorWY: player.slingshot.anchorWY ?? null,
+      anchorRange: player.slingshot.anchorRange ?? 0,
+      orbitDir: player.slingshot.orbitDir || 0,
+    } : null,
+  };
+}
+
+function ownerPrivatePlayerSnapshot(player) {
+  return {
+    profileId: player.profileId || null,
+    rigLevels: player.rigLevels || [0, 0, 0],
+    abilityState: player.abilityState ? {
+      hullType: player.abilityState.hullType,
+      flowLockActive: player.abilityState.flowLockActive,
+      flowLockCooldown: player.abilityState.flowLockCooldown,
+      eddyBrakeCooldown: player.abilityState.eddyBrakeCooldown,
+      burnActive: player.abilityState.burnActive,
+      burnFuel: player.abilityState.burnFuel,
+      momentumShieldActive: player.abilityState.momentumShieldActive,
+      eddies: player.abilityState.eddies,
+      tapAnchor: player.abilityState.tapAnchor,
+      tapCooldown: player.abilityState.tapCooldown,
+      frequencyShiftCooldown: player.abilityState.frequencyShiftCooldown,
+      nextPulseInverted: player.abilityState.nextPulseInverted,
+      ghostTrailActive: player.abilityState.ghostTrailActive,
+      wakeCloakCooldown: player.abilityState.wakeCloakCooldown,
+      decoyCharges: player.abilityState.decoyCharges,
+      decoyCooldown: player.abilityState.decoyCooldown,
+      decoys: player.abilityState.decoys,
+      salvageLockCharges: player.abilityState.salvageLockCharges,
+      tractorCooldown: player.abilityState.tractorCooldown,
+      tractorChannelTimer: player.abilityState.tractorChannelTimer,
+    } : null,
+    deltaV: player.deltaV,
+    deltaVMax: player.deltaVMax,
+    deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
+    lastInputSeq: player.lastInput.seq,
+    lastInputBrake: player.lastInput.brake || 0,
+    pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges) ? player.lastInput.slingshotEdges.length : 0,
+    cargo: player.cargo,
+    cargoCount: getCargoCount(player),
+    equipped: player.equipped,
+    consumables: player.consumables,
+    activeEffects: player.activeEffects,
+    effectState: player.effectState,
+    portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
+    signal: player.signal,
+    controlDebuff: player.controlDebuff || 0,
+    slingshot: player.slingshot ? {
+      ...publicPlayerSnapshot(player).slingshot,
+      energy: player.slingshot.energy || 0,
+      chainCount: player.slingshot.chainCount || 0,
+      engageRadius: player.slingshot.engageRadius || 0,
+    } : null,
+  };
+}
+
+function projectSnapshotForPlayer(snapshot, playerId = null) {
+  if (!snapshot || !playerId) return snapshot;
+  const owner = runtime.players.get(playerId);
+  if (!owner) return snapshot;
+  return {
+    ...snapshot,
+    players: Array.isArray(snapshot.players)
+      ? snapshot.players.map((player) => player.clientId === playerId
+        ? { ...player, ...ownerPrivatePlayerSnapshot(owner) }
+        : player)
+      : [],
+  };
+}
+
 function buildSnapshotBody() {
   return {
     type: "snapshot",
     protocolVersion: PROTOCOL_VERSION,
-    session: { ...runtime.session },
+    session: publicSessionSnapshot(),
     tick: runtime.tick,
     simTime: runtime.simTime,
     serverTime: Date.now(),
     lastEventSeq: runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1),
-    players: Array.from(runtime.players.values()).map((player) => ({
-      clientId: player.clientId,
-      profileId: player.profileId || null,
-      name: player.name,
-      isAI: Boolean(player.isAI),
-      personality: player.personality || null,
-      hullType: player.hullType || 'drifter',
-      rigLevels: player.rigLevels || [0, 0, 0],
-      abilityState: player.abilityState ? {
-        hullType: player.abilityState.hullType,
-        // Drifter
-        flowLockActive: player.abilityState.flowLockActive,
-        flowLockCooldown: player.abilityState.flowLockCooldown,
-        eddyBrakeCooldown: player.abilityState.eddyBrakeCooldown,
-        // Breacher
-        burnActive: player.abilityState.burnActive,
-        burnFuel: player.abilityState.burnFuel,
-        momentumShieldActive: player.abilityState.momentumShieldActive,
-        // Resonant
-        eddies: player.abilityState.eddies,
-        tapAnchor: player.abilityState.tapAnchor,
-        tapCooldown: player.abilityState.tapCooldown,
-        frequencyShiftCooldown: player.abilityState.frequencyShiftCooldown,
-        nextPulseInverted: player.abilityState.nextPulseInverted,
-        // Shroud
-        ghostTrailActive: player.abilityState.ghostTrailActive,
-        wakeCloakCooldown: player.abilityState.wakeCloakCooldown,
-        decoyCharges: player.abilityState.decoyCharges,
-        decoyCooldown: player.abilityState.decoyCooldown,
-        decoys: player.abilityState.decoys,
-        // Hauler
-        salvageLockCharges: player.abilityState.salvageLockCharges,
-        tractorCooldown: player.abilityState.tractorCooldown,
-        tractorChannelTimer: player.abilityState.tractorChannelTimer,
-      } : null,
-      status: player.status,
-      wx: player.wx,
-      wy: player.wy,
-      vx: player.vx,
-      vy: player.vy,
-      slingshot: player.slingshot ? {
-        engaged: Boolean(player.slingshot.engaged),
-        anchorId: player.slingshot.anchorId ?? null,
-        anchorType: player.slingshot.anchorType ?? null,
-        anchorWX: player.slingshot.anchorWX ?? null,
-        anchorWY: player.slingshot.anchorWY ?? null,
-        anchorRange: player.slingshot.anchorRange ?? 0,
-        energy: player.slingshot.energy || 0,
-        chainCount: player.slingshot.chainCount || 0,
-        engageRadius: player.slingshot.engageRadius || 0,
-        orbitDir: player.slingshot.orbitDir || 0,
-      } : null,
-      deltaV: player.deltaV,
-      deltaVMax: player.deltaVMax,
-      deltaVRatio: player.deltaVMax > 0 ? player.deltaV / player.deltaVMax : 0,
-      lastInputSeq: player.lastInput.seq,
-      lastInputBrake: player.lastInput.brake || 0,
-      pendingSlingshotEdgeCount: Array.isArray(player.lastInput.slingshotEdges) ? player.lastInput.slingshotEdges.length : 0,
-      cargo: player.cargo,
-      cargoCount: getCargoCount(player),
-      equipped: player.equipped,
-      consumables: player.consumables,
-      activeEffects: player.activeEffects,
-      effectState: player.effectState,
-      portalInteraction: player.portalInteraction ? { ...player.portalInteraction } : null,
-      signal: player.signal,
-      controlDebuff: player.controlDebuff || 0,
-    })),
+    players: Array.from(runtime.players.values()).map(publicPlayerSnapshot),
     world: {
       wells: runtime.mapState.wells,
       stars: runtime.mapState.stars,
@@ -1728,6 +1754,16 @@ function snapshotBody({ force = false } = {}) {
     snapshotSchemaVersion: 2,
     lastEventSeq,
   });
+}
+
+function authorizeSnapshotReader(req, runId = null) {
+  const wantsPrivate = Boolean(
+    req.headers[AUTHORITY_HEADER] || req.headers[PLAYER_ID_HEADER] || req.headers[RUN_ID_HEADER]
+  );
+  if (!wantsPrivate) return { ok: true, playerId: null };
+  const auth = authorizePlayerRequest(req, { runId }, { requireCommandSeq: false });
+  if (!auth.ok) return auth;
+  return { ok: true, playerId: auth.authority.playerId };
 }
 
 function getHumanPlayers({ activeOnly = false } = {}) {
@@ -5981,16 +6017,32 @@ const server = http.createServer(async (req, res) => {
       const url = new URL(req.url, `http://${HOST}:${PORT}`);
       const sinceSnapshotId = Number(url.searchParams.get("since") || 0);
       const runId = url.searchParams.get("runId") || null;
+      const reader = authorizeSnapshotReader(req, runId);
+      if (!reader.ok) {
+        sendAuthorityError(res, reader);
+        return;
+      }
+      const history = runtime.snapshotRing.list({ sinceSnapshotId, runId });
       sendJson(res, 200, {
         type: "snapshots",
         protocolVersion: PROTOCOL_VERSION,
-        ...runtime.snapshotRing.list({ sinceSnapshotId, runId }),
+        ...history,
+        snapshots: history.snapshots.map((snapshot) =>
+          projectSnapshotForPlayer(snapshot, reader.playerId)
+        ),
       });
       return;
     }
 
     if (req.method === "GET" && req.url?.startsWith("/snapshot")) {
-      sendJson(res, 200, snapshotBody());
+      const url = new URL(req.url, `http://${HOST}:${PORT}`);
+      const runId = url.searchParams.get("runId") || null;
+      const reader = authorizeSnapshotReader(req, runId);
+      if (!reader.ok) {
+        sendAuthorityError(res, reader);
+        return;
+      }
+      sendJson(res, 200, projectSnapshotForPlayer(snapshotBody(), reader.playerId));
       return;
     }
 
@@ -6326,7 +6378,10 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         acceptedCommandSeq: auth.authority.lastCommandSeq,
         player,
-        snapshot: snapshotBody({ force: true }),
+        snapshot: projectSnapshotForPlayer(
+          snapshotBody({ force: true }),
+          auth.authority.playerId,
+        ),
       });
       return;
     }
