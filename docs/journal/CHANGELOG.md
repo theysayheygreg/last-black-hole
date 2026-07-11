@@ -126,6 +126,10 @@
   baselines, captured projection upper bounds, and bounded replay with reserved
   action-ACK headroom. Adapter 25/25, runtime 10/10, network 7/7 suites, and
   authority 37/37 suites are green with 1/4/8 cadence preserved.
+- Staged sequential Phase 1 client packets: dual-transport SimClient first,
+  preserving HTTP as the diagnostic/default oracle while proving zero hot-path
+  polling in stream mode; then a real four/eight-browser journey with private
+  state, gameplay actions/consequences, reconnect, metrics, and visual proof.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 
