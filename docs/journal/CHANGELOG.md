@@ -54,6 +54,9 @@
   decisions. The first playable slice is now deliberately JSON WSS at existing
   clocks; higher counts add explicit single-writer/internal-worker, AOI,
   performance, network, host, cost, and TiDi gates.
+- Added the durable v0.4 orchestration checkpoint and documented the local
+  30-minute CodexBar heartbeat, 90% usage checkpoint behavior, post-reset
+  continuation, completed research lanes, and next implementation boundary.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 

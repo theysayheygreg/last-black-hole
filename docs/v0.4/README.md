@@ -67,6 +67,8 @@ coordinator owns the integrated documents.
   identity, recovery, hosting, and private fallback.
 - `ROADMAP.md` — phased prototype-to-alpha plan with falsifiable gates.
 - `OPEN-DECISIONS.md` — recommended defaults and the product calls Greg owns.
+- `ORCHESTRATION.md` — durable goal prompt, completed lanes, continuation
+  order, ownership, and CodexBar heartbeat behavior.
 
 ## Evidence Standard
 
