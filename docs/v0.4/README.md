@@ -12,10 +12,21 @@ extend v0.3 Ballpark authority, protocol-v2 identity, stamped events,
 snapshots, relevance lanes, and the EVE-inspired one-run/one-authority model.
 It must not quietly turn research assumptions into shipped claims.
 
+“One authority” in this program always means **one logical single-writer
+authority instance per live match/group**. Concurrent matches have concurrent
+authorities. Those match instances are scheduled and packed across a regional
+fleet; the authority boundary is not a requirement to buy one VM or container
+for every match.
+
 The target outcome is a multiplayer game Greg can play with at least four and
 at most eight human players. This program chooses how to reach that outcome;
 it does not pre-decide that decentralized peer-to-peer or hosted authority is
 the winner.
+
+The capacity model also pressure-tests 24, 48, and 96 simultaneous clients in
+one heavier match authority. Those are future scale envelopes and stress
+profiles, not v0.4 launch promises. Horizontal forecasts separately multiply
+one authority per concurrent match across the regional fleet.
 
 ## Questions This Branch Must Resolve
 
@@ -34,6 +45,9 @@ the winner.
 6. At a $4.99 price point, what margin remains after storefront fees, refunds,
    taxes assumptions, payment/platform costs, compute, bandwidth, persistence,
    observability, support, and fraud/abuse reserves?
+7. At 24/48/96 clients in one match, when do AOI, binary deltas, internal
+   workers, dedicated hosts, lower clocks, or TiDi become mandatory, and what
+   do light/representative/heavy versions of that sim cost?
 
 ## Research Lanes
 
@@ -46,6 +60,13 @@ Returned research belongs in `docs/v0.4/research/`. The coordinator integrates
 it into architecture decisions, cost models, open decisions, and a phased
 implementation roadmap. Research agents own only their named memo files; the
 coordinator owns the integrated documents.
+
+## Integrated Documents
+
+- `ARCHITECTURE.md` — recommended topology, authority, transport, network,
+  identity, recovery, hosting, and private fallback.
+- `ROADMAP.md` — phased prototype-to-alpha plan with falsifiable gates.
+- `OPEN-DECISIONS.md` — recommended defaults and the product calls Greg owns.
 
 ## Evidence Standard
 
@@ -96,4 +117,3 @@ coordinator owns the integrated documents.
 - phased prototype-to-production roadmap with acceptance gates;
 - explicit open decisions for Greg;
 - implementation prompt packets only after the architecture choice is ready.
-

@@ -47,6 +47,13 @@
   light/representative/heavy CPU curves, projection/queue/memory budgets, and
   host-start envelopes. Representative 96 is plausible at 20 Hz on a 4-vCPU
   class after offload; the modeled heavy 96 tick is 83 ms and fails that clock.
+- Added the 4/8/24/48/96 hosting-cost extension with full-JSON versus delta
+  traffic, S1/S2/S3 compute envelopes, packed-versus-dedicated fleet formulas,
+  and named Fly/Cloudflare/Railway/Render/Cloud Run/GameLift scenarios.
+- Integrated the research and audits into v0.4 architecture, roadmap, and open
+  decisions. The first playable slice is now deliberately JSON WSS at existing
+  clocks; higher counts add explicit single-writer/internal-worker, AOI,
+  performance, network, host, cost, and TiDi gates.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 

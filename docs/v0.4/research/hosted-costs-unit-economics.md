@@ -20,14 +20,21 @@ Use a **hybrid hosted-authority stack**:
 5. Prototype a **Cloudflare Durable Object per run** separately. Its economics
    are unusually attractive, but it is a runtime/architecture port, not a
    deployment target for the existing Node child process.
-6. Do not use Vercel Functions as the live authority. Vercel explicitly says
-   Functions cannot act as WebSocket servers, and their request-duration model
-   is the wrong lifecycle for a run.
+6. Do not use Vercel Functions as the live authority without direct vendor
+   confirmation and a stateful-run proof. Current official Vercel pages
+   conflict on WebSocket support; the newer guidance still describes bounded
+   function duration and no guarantee that later connections reach the same
+   function, which is the wrong default lifecycle for a single-writer run.
 
 The business conclusion is encouraging but conditional: $4.99 can support
 hosted 4–8-player sessions if LBH ships interest-managed deltas. It is much
 less comfortable if it sends today's full JSON snapshots to every player for
 the lifetime of the game.
+
+Here “one run as one authority” is logical isolation. Every concurrent match
+has its own single-writer authority instance, while a regional fleet may pack
+many isolated match workers into one VM/container/node. Cost depends on
+measured concurrent authorities per host, not on buying one host per match.
 
 ## Current LBH Baseline
 
@@ -76,7 +83,7 @@ All linked claims were checked 2026-07-10.
 | Render | Good process fit, weaker traffic economics | Web services support WebSockets. Starter is $7/month/0.5 CPU/512 MB and Standard is $25/month/1 CPU/2 GB; bandwidth overage is $0.15/GB on listed plans. ([pricing](https://render.com/pricing), [WebSockets](https://render.com/docs/websocket)) | Viable control plane or early low-traffic host. Expensive for snapshot-heavy authority unless higher plans/quotes alter egress. |
 | Google Cloud Run | Conditional fit | WebSockets are supported, but connections are HTTP requests capped at 60 minutes, clients must reconnect, affinity is best-effort, and an open WebSocket makes the instance active/billable. Listed default prices include $0.000018/vCPU-s and $0.000002/GiB-s. ([WebSockets](https://docs.cloud.google.com/run/docs/triggering/websockets), [pricing](https://cloud.google.com/run/pricing)) | Useful autoscaled container/control service, but run ownership must survive forced reconnect and non-sticky replacement. A run router and external state are mandatory. |
 | AWS GameLift Servers | Strong later dedicated-host fit | GameLift provides managed dedicated game server fleets, Spot/on-demand instances, matchmaking/session features, and usage-based instance pricing. ([pricing](https://aws.amazon.com/gamelift/servers/pricing/instance-pricing/), [cost planning](https://docs.aws.amazon.com/gameliftservers/latest/developerguide/gamelift-intro-pricing.html)) | Revisit when concurrency, regions, fleet placement, and operations justify its integration weight. It is not the cheapest learning environment. |
-| Vercel Functions | Not a live-authority host | Vercel states Functions do not support acting as a WebSocket server. Function duration is bounded even with Fluid Compute. ([limits](https://vercel.com/docs/limits), [function limits](https://vercel.com/docs/functions/limitations)) | Fine for website, lightweight APIs, build previews, and control-plane calls. Reject for the live sim. |
+| Vercel Functions | Not recommended for live authority | Vercel's limits page says Functions cannot act as WebSocket servers, while a newer official knowledge-base article says WebSockets are supported but pinned only for bounded function duration and later connections may reach another function. ([limits](https://vercel.com/docs/limits), [WebSocket guidance](https://vercel.com/kb/guide/do-vercel-serverless-functions-support-websocket-connections), [function limits](https://vercel.com/docs/functions/limitations)) | The official contradiction needs vendor confirmation. Bounded lifetime, non-sticky reconnect, and external room state remain poor defaults for one match authority. Fine for website and control surfaces. |
 
 ### P2P Relay/Voice Cost Reference
 
@@ -121,13 +128,15 @@ placement, explicit session allocation, and mature operations.
 
 ## Cost Per Active Hour
 
-These are planning bands, not quotes. They include compute, state egress,
-control/database/observability allowance, but exclude salaries and taxes.
+These are design envelopes, not quotes or forecasts. Only egress arithmetic is
+directly reproducible today. Compute density, fixed control/database/observability
+cost, regional mix, warm capacity, operations, support, salaries, and taxes are
+unmeasured and must be added after the hosted benchmark.
 
 | State shape | State downlink/player | Approx variable cost/player-hour | 12-hour lifetime cost/copy | Meaning |
 |---|---:|---:|---:|---|
 | optimized low | 32 KiB/s | $0.008 | $0.10 | efficient deltas, low-cost egress, well-packed authorities |
-| planning case | 64–96 KiB/s | $0.015 | $0.18 | target used in the sales table |
+| low-egress design target | 64–96 KiB/s | $0.015 | $0.18 | falsification target used illustratively in the sales table |
 | stressed production | 192–256 KiB/s | $0.040 | $0.48 | excess churn/rebases/telemetry or costly regions |
 | current full-snapshot shape | 0.33–1.08 MB/s | $0.08–$0.60+ | $0.96–$7.20+ | depends heavily on map cadence and $/GB; unacceptable as the shipped default |
 
@@ -141,7 +150,7 @@ real sim passes CPU, scheduling, restart, and recovery tests in the runtime.
 Copies sold does not determine concurrency. The model therefore separates
 receipts from play cost.
 
-### Planning Assumptions
+### Illustrative Cohort Assumptions
 
 - list price: $4.99;
 - refunds: 8% of gross units/receipts;
@@ -150,18 +159,20 @@ receipts from play cost.
 - developer receipts before corporate income tax:
   `copies * 4.99 * 0.92 * 0.70 * 0.97 = copies * $3.117`;
 - expected lifetime hosted play: 12 player-hours/copy;
-- expected service cost: $0.015/player-hour = $0.18/copy;
-- illustrative labor/support reserve: $0.50/copy. This is not a salary model;
-  it merely prevents presenting infrastructure-only margin as profit.
+- low-egress service target: $0.015/player-hour = $0.18/copy;
+- illustrative per-copy support reserve: $0.50/copy. This is explicitly not a
+  salary, fixed-service, or ongoing support model.
 
-| Copies | Gross at $4.99 | Modeled developer receipts | Expected hosted service cost | Contribution before labor | After $0.50/copy support reserve |
+| Copies | Gross at $4.99 | Modeled developer receipts | Illustrative hosted service target | Contribution before fixed/labor | After $0.50/copy support reserve |
 |---:|---:|---:|---:|---:|---:|
 | 1,000 | $4,990 | $3,117 | $180 | $2,937 | $2,437 |
 | 10,000 | $49,900 | $31,172 | $1,800 | $29,372 | $24,372 |
 | 100,000 | $499,000 | $311,715 | $18,000 | $293,715 | $243,715 |
 | 1,000,000 | $4,990,000 | $3,117,153 | $180,000 | $2,937,153 | $2,437,153 |
 
-These figures exclude corporate income tax, development recoupment, publisher
+These figures are not a production margin forecast. They exclude fixed hosting
+and service months, loaded labor/on-call/support, corporate income tax,
+development recoupment, publisher
 share, regional price mix, discounts, chargeback spikes, platform-specific
 minimums, and ongoing content development. They also treat the sales cohort's
 lifetime play as if it can be funded from its receipts; cash-flow timing needs
@@ -187,11 +198,15 @@ Use CCU rather than copies sold to size live capacity:
 
 `run CCU = player CCU / average occupied seats`
 
+`authority instance CCU = run CCU`
+
+`compute host CCU = ceil(authority instance CCU / safe authorities per host)`
+
 `monthly player-hours = average CCU * 730`
 
 `monthly variable service = monthly player-hours * cost/player-hour`
 
-At the $0.015 planning case:
+At the $0.015 low-egress design target:
 
 | Average player CCU | Approx runs at 4.5 players | Monthly player-hours | Variable service/month |
 |---:|---:|---:|---:|
@@ -203,6 +218,24 @@ At the $0.015 planning case:
 Peak capacity, idle/warm headroom, database, support, and incident response sit
 on top. A 20–40% peak/warm reserve is reasonable for planning until real hourly
 curves exist.
+
+### Reproducible Cost Formula Required After Benchmark
+
+```text
+transport GB/player-hour = KiB/s * 1024 * 3600 / 1,000,000,000
+egress/player-hour = transport GB/player-hour * regional $/GB
+compute/player-hour = host $/hour * warm factor
+                      / safe concurrent authorities per host
+                      / occupied seats per authority
+shared/player-hour = monthly control + auth + database + backups
+                     + storage + logs/metrics + support plan
+                     divided by conservative monthly player-hours
+total/player-hour = egress + compute + shared + relay/voice
+                    + incident/abuse reserve
+```
+
+The current memo does not yet supply measured run density or a named fixed
+monthly stack. `$0.18/copy` stays a benchmark target until those inputs exist.
 
 ## Required Spikes Before Vendor Choice
 
@@ -230,6 +263,24 @@ and Durable Objects as the high-upside experimental authority runtime.
 
 Do not choose true authority-free P2P to save hosting cost until its cheat,
 determinism, host-loss, progression-settlement, and movement-feel costs are
-compared against the approximately $0.18/copy expected hosted-service budget.
+compared against the approximately $0.18/copy low-egress hosted-service target.
 At compact-delta rates, central authority is cheap enough that correctness is
 worth buying.
+
+## High-Count Extension
+
+The detailed 24/48/96 model now lives in
+`docs/v0.4/research/high-player-count-hosting-cost-model.md`. Its key 96-seat
+comparison is:
+
+- 64 KiB/s/player: 22.65 GB/match-hour and about 50.3 Mbit/s payload;
+- current 1.08 MB/s full-JSON ceiling: 373.25 GB/match-hour and about
+  829 Mbit/s payload;
+- illustrative S1 total at 64 KiB/s: about $0.882/match-hour on the modeled
+  Fly NA/EU packed fleet, $1.328 on Railway, and $3.637 on Render;
+- modeled heavy compute rises from 6 vCPU/8 GiB at S2 to 12 vCPU/16 GiB at S3,
+  but those cores help only after deterministic worker offload around the one
+  canonical writer.
+
+Those numbers exclude shared fixed services and remain forecasts until the
+high-count benchmark proves CPU, packing, bytes, and regional behavior.

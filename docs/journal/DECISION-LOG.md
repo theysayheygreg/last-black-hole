@@ -1,5 +1,40 @@
 # Decision Log
 
+## 2026-07-10 — Multiplayer authority is per match and horizontally multiplied
+
+**Decision:** v0.4 keeps one logical single-writer gameplay authority for every
+live match. Concurrent matches create concurrent authority instances, packed
+across a regional fleet by measured safe density; the rule does not require
+one VM per match and does not create one global simulation. The first playable
+slice keeps existing map clocks and uses JSON WebSockets, server-created
+membership/connection epochs, owner/public projection, and idempotent results.
+Binary deltas, AOI, prediction, higher clocks, hosted progression, and vendor
+runtime choices must earn adoption through measured traces.
+
+For higher-count experiments, 24 remains one isolated writer process, 48 adds
+mandatory AOI/deltas/quota and optional projection workers, and 96 remains one
+logical authority implemented as a canonical writer plus deterministic
+internal workers. Independently writable spatial shards stay rejected until an
+optimized 96-player service fails and a sharding prototype proves at least 2x
+benefit with correct handoff.
+
+**Why:** v0.3 already has Ballpark identity, sim-owned consequences, stamped
+events, snapshot recovery, and an explicit overload model. Per-match authority
+extends that truth and keeps contested movement/loot/extraction canonical.
+Horizontal fleet placement solves concurrent-match scale, while bounded
+internal parallelism addresses heavier single matches without introducing
+split-brain gameplay.
+
+**Where it landed:** `docs/v0.4/README.md`, `docs/v0.4/ARCHITECTURE.md`,
+`docs/v0.4/ROADMAP.md`, `docs/v0.4/OPEN-DECISIONS.md`, and the research memos
+under `docs/v0.4/research/`.
+
+**Door status:** Closed for calling a player-hosted listen server true P2P,
+using client ids as authority, or treating one logical authority as one global
+server/one VM per match. Open and evidence-gated for 24/48/96 product modes,
+movement clocks, replication codec, hosted identity/progression, vendor,
+private-host rewards, voice, late join, and any future sharding experiment.
+
 ## 2026-07-10 — Specialist polish lanes run behind Greg's verdict, with one presentation-fact owner
 
 **Decision:** The v0.3 palette, timbre, and troubadorb plans execute as
