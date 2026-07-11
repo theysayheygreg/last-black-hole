@@ -37,6 +37,8 @@
     "test:visual": "node tests/run-all.cjs --lane=visual --renderer=three",
     "test:authority": "node tests/run-all.cjs --lane=authority --renderer=three",
     "test:sim-structure": "node tests/run-all.cjs --lane=sim-structure --renderer=three",
+    "test:multiplayer-structure": "node tests/run-all.cjs --lane=multiplayer-structure --renderer=three",
+    "test:multiplayer-authority": "node tests/run-all.cjs --lane=multiplayer-authority --renderer=three",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
     "test:agent-eval": "node tests/run-all.cjs --lane=agent-eval --renderer=three",
     "test:package": "node tests/desktop-package.cjs && node tests/release-package.cjs",

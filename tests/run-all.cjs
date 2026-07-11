@@ -11,6 +11,8 @@
  * - core: stable local regression gate
  * - authority: control-plane/sim/remote stack
  * - sim-structure: v0.3 body, query, event, and snapshot contracts
+ * - multiplayer-structure: membership, privacy, and settlement contracts
+ * - multiplayer-authority: deterministic 1/4/8 authority and structure proof
  * - visual: screenshot renderer fixtures
  * - playtest: real menu/input flows best reviewed in Codex Browser
  * - agent-eval: fresh playable map checks with screenshots and a narrative report
