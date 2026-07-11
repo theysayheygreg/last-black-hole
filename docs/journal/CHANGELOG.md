@@ -119,6 +119,13 @@
   rebase ordering, byte-aware replay headroom, and one captured journal upper
   bound per measured projection. Corrected the journal suite path to the real
   `tests/protocol-journal.cjs`.
+- Implemented and independently closed reliable event recovery in `99cbc52`
+  plus `31f0a78`: run-qualified resume cursors, membership-scoped private
+  journal visibility over WebSocket and HTTP, issued-only playback ACKs,
+  public cursor checkpoints across private holes, atomic validated rebase
+  baselines, captured projection upper bounds, and bounded replay with reserved
+  action-ACK headroom. Adapter 25/25, runtime 10/10, network 7/7 suites, and
+  authority 37/37 suites are green with 1/4/8 cadence preserved.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

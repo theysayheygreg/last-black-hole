@@ -24,8 +24,8 @@ now has a genuine in-adapter delayed-reset proof. Research/design is complete.
 
 **Playable status:** not multiplayer-playable yet. Real 1/4/8 WebSocket clients
 share one authority and pass identity/privacy/input/action/reset/shutdown truth,
-but event replay/gap recovery, SimClient/browser cutover, invite UI, WAN proof,
-and a natural multi-human journey remain.
+including event replay/gap recovery. SimClient/browser cutover, invite UI, WAN
+proof, and a natural multi-human journey remain.
 
 **Current evidence:** `npm run test:multiplayer-structure` and
 `npm run test:multiplayer-authority` pass. The Phase 1
@@ -37,8 +37,11 @@ process, port, tick, and authority. The corrected focused baseline held
 loopback sockets, with roughly 20--23 KiB public frames and 1--1.6 KiB owner
 overlays. All five reliable action kinds now have bounded 32-receipt
 membership/run idempotency, reconnect replay, deterministic conflict/gap
-semantics, and exact-once consequence evidence. These are local Shallows
-measurements, not hosted or heavy-sim capacity claims. See
+semantics, and exact-once consequence evidence. Event recovery adds
+run-qualified cursors, membership-private HTTP/WS filtering, issued-only
+playback ACKs, atomic full-baseline rebase, and bounded 32-frame/64 KiB replay
+with action headroom. These are local Shallows measurements, not hosted or
+heavy-sim capacity claims. See
 `docs/v0.4/research/phase1-ws-runtime-baseline.md`.
 
 ## v0.3 Candidate

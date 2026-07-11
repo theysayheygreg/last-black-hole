@@ -135,6 +135,19 @@ Singularity that:
 - The event-journal recovery packet now has exclusive runtime/adapter
   ownership. SimClient/browser cutover remains gated on its review.
 
+### Server transport closure — 2026-07-11 22:25 UTC
+
+- Reliable actions closed in `f260f10` + `c67d0f9`; reliable event recovery
+  closed in `99cbc52` + `31f0a78`. Both independent re-reviews returned no
+  findings.
+- Current gates: adapter 25/25, runtime 10/10, multiplayer-network 7/7 suites,
+  authority 37/37 suites, with 1/4/8 `NORMAL` cadence preserved.
+- Event replay is capped at 32 frames / 64 KiB pending per binding and eight
+  enqueues per pass, reserving 16 messages / 32 KiB for action ACKs.
+- Next bounded lane is dual-transport SimClient/browser cutover. Keep HTTP as
+  the diagnostic reference until parity and fallback tests pass; no WAN or
+  playable claim precedes a natural four/eight-client browser journey.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`

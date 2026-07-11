@@ -16,8 +16,9 @@ The runtime gate proves authenticated single-use admission/resume tickets,
 connection-epoch fencing, continuous monotonic input, public/private isolation,
 bounded queues and inbound bytes, ordered shutdown, run reset, and cross-run
 projection-accounting lineage. All five admitted gameplay action kinds now use
-bounded membership/run receipts and the reliable ACK lane. Event replay is the
-next runtime slice.
+bounded membership/run receipts and the reliable ACK lane. Journal consequences
+now replay through a separate bounded delivery/playback window with explicit
+gap and run-change baselines.
 
 ## Latest local measurements
 
@@ -67,8 +68,6 @@ low-count replication anchor; it does not replace their H24/H48/H96/X96 tests.
 
 ## Remaining gates before playable multiplayer
 
-- deliver/replay event-journal consequences and force explicit gap rebase;
-- reconnect with action/delivery/event cursors without duplicate consequence;
 - cut SimClient and browser play over the stream transport;
 - run loss, jitter, reorder, slow-reader, WAN, TLS-edge, and hosted soak proof;
 - complete a natural four- and eight-human playable journey.

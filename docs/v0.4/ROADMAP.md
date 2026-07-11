@@ -56,17 +56,23 @@ Goal: prove multiplayer truth before optimizing the wire.
 the bounded/coalesced per-connection send queue are implemented and pass the
 `multiplayer-network` lane. The same-process adapter plan chooses a pinned
 `ws` 8.x dependency attached to the existing sim HTTP server with no second
-process, authority, port, or timer. Before socket integration, the runtime
-still needs to integrate the now-implemented bounded single-use
-admission/resume ticket registry, plus a real field revision,
-transport-neutral command executors, and explicit package staging.
+process, authority, port, or timer. At that checkpoint, ticket integration,
+field revision, command parity, and package staging were the remaining seams;
+the runtime checkpoint below supersedes that status.
 
-- Add a persistent JSON WSS adapter with hello/version, membership binding,
+**Runtime checkpoint — 2026-07-11:** the optional same-process `/stream`
+runtime, authenticated admission/resume, bounded queues, 1/4/8 cadence,
+projection-cost accounting, reconnect-safe idempotent actions, and
+run-qualified membership-private event replay/rebase are implemented and pass
+the multiplayer-network and authority lanes. The remaining Phase 1 critical
+path is SimClient/browser cutover and a natural four/eight-client journey.
+
+- [x] Add a persistent JSON WSS adapter with hello/version, membership binding,
   heartbeat, and bounded queues.
-- Send owner-private state plus the complete public world; no AOI yet.
-- Keep existing Shallows/Expanse/Deep Field sim clocks.
-- Split latest-wins input from reliable idempotent actions.
-- Drive four, then eight clients through natural movement, salvage, signal,
+- [x] Send owner-private state plus the complete public world; no AOI yet.
+- [x] Keep existing Shallows/Expanse/Deep Field sim clocks.
+- [x] Split latest-wins input from reliable idempotent actions.
+- [ ] Drive four, then eight clients through natural movement, salvage, signal,
   death, and extraction.
 
 Gate:
