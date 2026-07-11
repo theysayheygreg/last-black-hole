@@ -84,6 +84,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerExecutorParity",
+    file: "multiplayer-executor-parity.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "MultiplayerFieldRevision",
+    file: "multiplayer-field-revision.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerWireProtocol",
     file: "multiplayer-wire-protocol.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "static", "full"],

@@ -50,6 +50,14 @@
   field revision as `(runId, fieldRevision)` over actual coarse-flow-field
   replacement/invalidation—not Ballpark mirror refreshes—and identified the
   duplicate initialization build that must be collapsed before exposure.
+- Extracted HTTP input and inventory authority work into transport-neutral
+  executors without changing validation order, sequence consumption, one-shot
+  latching, Ballpark refresh, or owner projection. Added a golden HTTP parity
+  matrix and registered it across multiplayer and authority lanes.
+- Added real run-scoped coarse-field revision ownership. New runs begin at 1,
+  actual rebuilds/invalidation advance it, disabled no-ops and reconnects stay
+  stable, snapshots/health expose it, and cache validity includes it. The
+  focused lineage proof is registered across multiplayer and authority lanes.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

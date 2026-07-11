@@ -17,7 +17,8 @@ does not erase newer committed work.
 
 ## v0.4 Multiplayer Program
 
-**Source status:** Phase 0 trust closure in progress; research/design complete.
+**Source status:** Phase 0 trust closure is green; Phase 1 transport integration
+is in progress; research/design is complete.
 
 **Playable status:** not multiplayer-playable yet. Four and eight synthetic
 HTTP clients share one authority and pass identity/privacy/settlement truth,
@@ -26,8 +27,11 @@ or natural multi-human journey.
 
 **Current evidence:** `npm run test:multiplayer-structure` and
 `npm run test:multiplayer-authority` pass. The Phase 1
-`npm run test:multiplayer-network` primitive lane also passes, but no socket is
-integrated yet. The latest 8-human loopback fixture
+`npm run test:multiplayer-network` primitive lane also passes. HTTP input and
+inventory now share transport-neutral executors with parity coverage, and
+public snapshots expose a run-scoped authoritative coarse-field revision that
+is stable through reads/reconnects and advances on real field rebuilds. No
+socket is integrated yet. The latest 8-human loopback fixture
 measured 42,474-byte public and 43,761-byte owner snapshot p95 bodies, with a
 1,288-byte private overlay p95. These are Shallows diagnostic measurements,
 not hosted or heavy-sim capacity claims. See
