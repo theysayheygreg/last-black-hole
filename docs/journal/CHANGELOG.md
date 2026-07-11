@@ -35,6 +35,10 @@
   JSON WebSockets, owner/public projection, and measured bytes; they also
   downgrade `$0.18/copy` to a benchmark target and flag contradictory current
   Vercel WebSocket documentation.
+- Recorded a live 4/8/24/48/96-human Deep Field synthetic baseline. The current
+  authority held near its effective 8 Hz under joined/input/pulse load, while
+  full snapshots grew from 112.53 to 261.25 KiB; the test also exposed current
+  overload pressure counting AI pilots against the human admission cap.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
