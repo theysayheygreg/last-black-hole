@@ -77,6 +77,54 @@ async function run() {
     assert(state === "DILATED", `Expected DILATED, got ${state}`);
   });
 
+  await runner.run("Declared player and AI capacity stays healthy and recoverable", async () => {
+    const controller = createOverloadController(makeBase());
+    for (let i = 0; i < 120; i++) {
+      advanceOverload(controller, {
+        tickCostMs: 2,
+        playerCount: 8,
+        aiCount: 7,
+        forcePressure: 0.2,
+      });
+    }
+    assert(controller.state === "NORMAL", `Expected exact capacity to remain NORMAL, got ${controller.state}`);
+    assert(controller.pressure <= 0.62, `Expected healthy exact-capacity pressure, got ${controller.pressure}`);
+
+    for (let i = 0; i < 6; i++) {
+      advanceOverload(controller, {
+        tickCostMs: 2,
+        playerCount: 14,
+        aiCount: 7,
+        forcePressure: 0.2,
+      });
+    }
+    assert(controller.state === "THROTTLED", `Expected meaningful over-cap count to throttle, got ${controller.state}`);
+
+    for (let i = 0; i < 40; i++) {
+      advanceOverload(controller, {
+        tickCostMs: 2,
+        playerCount: 8,
+        aiCount: 7,
+        forcePressure: 0.2,
+      });
+    }
+    assert(controller.state === "NORMAL", `Expected exact capacity to recover to NORMAL, got ${controller.state}`);
+  });
+
+  await runner.run("Expensive work still degrades at otherwise healthy counts", async () => {
+    const controller = createOverloadController(makeBase());
+    let state = controller.state;
+    for (let i = 0; i < 18; i++) {
+      state = advanceOverload(controller, {
+        tickCostMs: 180,
+        playerCount: 8,
+        aiCount: 7,
+        forcePressure: 0.2,
+      }).state;
+    }
+    assert(state === "DILATED", `Expected expensive work to reach DILATED, got ${state}`);
+  });
+
   await runner.run("Dilation projection slows the shared run and trims budgets", async () => {
     const projection = projectOverloadBudget(makeBase(), "DILATED");
     assert(projection.timeScale < 1, "Expected timeScale below 1 in DILATED");

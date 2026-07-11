@@ -137,7 +137,12 @@ function percentile(values, quantile) {
 }
 
 function commonSnapshotId(clients) {
-  const sets = clients.map((client) => new Set(frames(client, "publicState").map((entry) => entry.snapshotId)));
+  const sets = clients.map((client) => {
+    const ownerIds = new Set(frames(client, "ownerState").map((entry) => entry.snapshotId));
+    return new Set(frames(client, "publicState")
+      .filter((entry) => ownerIds.has(entry.snapshotId))
+      .map((entry) => entry.snapshotId));
+  });
   if (sets.some((set) => set.size === 0)) return null;
   return [...sets[0]].filter((id) => sets.every((set) => set.has(id))).sort((a, b) => b - a)[0] || null;
 }
@@ -342,6 +347,10 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
     const tickStart = await request(port, "/health");
     assert(tickStart.body.session.baseSnapshotHz === 10 && tickStart.body.session.baseTickHz === 15,
       "Shallows must retain its declared NORMAL 15Hz authority and 10Hz projection clocks");
+    assert(tickStart.body.session.overloadState === "NORMAL"
+      && tickStart.body.session.snapshotHz === 10
+      && tickStart.body.session.tickHz === 15,
+    `Shallows cadence gate must begin at declared NORMAL clocks: ${JSON.stringify(tickStart.body.session)}`);
     const cadenceStartedAt = Date.now();
     await waitFor(() => clients.every((client, index) =>
       frames(client, "publicState").length >= cadenceStart[index] + 11
@@ -354,16 +363,18 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
     });
     const observedProjectionHz = projectionRates.reduce((sum, value) => sum + value, 0) / projectionRates.length;
     const observedTickHz = (tickEnd.body.tick - tickStart.body.tick) * 1000 / (cadenceEndedAt - cadenceStartedAt);
-    const projectionTargets = [tickStart.body.session.snapshotHz, tickEnd.body.session.snapshotHz];
-    const tickTargets = [tickStart.body.session.tickHz, tickEnd.body.session.tickHz];
-    const projectionFloor = Math.min(...projectionTargets) * 0.72;
-    const projectionCeiling = Math.max(...projectionTargets) * 1.28;
-    const tickFloor = Math.min(...tickTargets) * 0.72;
-    const tickCeiling = Math.max(...tickTargets) * 1.28;
+    assert(tickEnd.body.session.overloadState === "NORMAL"
+      && tickEnd.body.session.snapshotHz === 10
+      && tickEnd.body.session.tickHz === 15,
+    `Shallows cadence gate must end at declared NORMAL clocks: ${JSON.stringify(tickEnd.body.session)}`);
+    const projectionFloor = tickStart.body.session.baseSnapshotHz * 0.72;
+    const projectionCeiling = tickStart.body.session.baseSnapshotHz * 1.28;
+    const tickFloor = tickStart.body.session.baseTickHz * 0.72;
+    const tickCeiling = tickStart.body.session.baseTickHz * 1.28;
     assert(observedProjectionHz >= projectionFloor && observedProjectionHz <= projectionCeiling,
-      `Expected loaded Shallows projection within active ${projectionTargets.join("->")}Hz target, got ${observedProjectionHz.toFixed(2)}; health=${JSON.stringify({ overloadStart: tickStart.body.session.overloadState, overloadEnd: tickEnd.body.session.overloadState, multiplayer: tickEnd.body.multiplayer })}`);
+      `Expected loaded Shallows projection near declared 10Hz target, got ${observedProjectionHz.toFixed(2)}; health=${JSON.stringify({ overloadStart: tickStart.body.session.overloadState, overloadEnd: tickEnd.body.session.overloadState, multiplayer: tickEnd.body.multiplayer })}`);
     assert(observedTickHz >= tickFloor && observedTickHz <= tickCeiling,
-      `Expected loaded Shallows authority tick within active ${tickTargets.join("->")}Hz target, got ${observedTickHz.toFixed(2)}`);
+      `Expected loaded Shallows authority tick near declared 15Hz target, got ${observedTickHz.toFixed(2)}`);
 
     const actionClient = clients[0];
     actionClient.ws.send(JSON.stringify({
@@ -515,6 +526,25 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
     }
 
     const health = await request(port, "/health");
+    const accounting = health.body.multiplayer.projection.accounting;
+    assert(accounting.projectionDurationSamples > 0
+      && accounting.projectionDurationLatestMs >= 0
+      && accounting.projectionDurationAverageMs >= 0
+      && accounting.projectionDurationWorstMs >= accounting.projectionDurationLatestMs
+      && accounting.projectionDurationTotalMs >= accounting.projectionDurationWorstMs,
+    `Projection duration diagnostics must be finite and ordered: ${JSON.stringify(accounting)}`);
+    assert(accounting.pendingReplicationCostMs >= 0
+      && accounting.pendingReplicationCostMs <= accounting.pendingReplicationCostCapMs,
+    `Pending replication cost must remain bounded: ${JSON.stringify(accounting)}`);
+    assert(Math.abs(accounting.lastCombinedSampledCostMs
+      - accounting.lastSimTickCostMs
+      - accounting.lastReplicationCostConsumedMs) < 1e-6,
+    `Combined overload sample must equal sim plus one consumed replication bucket: ${JSON.stringify(accounting)}`);
+    assert(Math.abs(accounting.projectionDurationTotalMs
+      - accounting.replicationCostConsumedTotalMs
+      - accounting.pendingReplicationCostMs
+      - accounting.replicationCostOverflowMs) < 1e-6,
+    `Completed projection cost must be consumed, pending, or explicitly overflowed exactly once: ${JSON.stringify(accounting)}`);
     const publicBytes = clients.flatMap((client) => frames(client, "publicState").map((entry) => entry._bytes));
     const ownerBytes = clients.flatMap((client) => frames(client, "ownerState").map((entry) => entry._bytes));
     let shutdownProof = null;
@@ -555,6 +585,16 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
         health.body.multiplayer.projection.maxQueuedBytes,
       ),
       adapterMaxPendingInboundBytes: health.body.multiplayer.projection.maxPendingInboundBytes,
+      projectionDurationSamples: accounting.projectionDurationSamples,
+      projectionDurationLatestMs: Number(accounting.projectionDurationLatestMs.toFixed(3)),
+      projectionDurationAverageMs: Number(accounting.projectionDurationAverageMs.toFixed(3)),
+      projectionDurationWorstMs: Number(accounting.projectionDurationWorstMs.toFixed(3)),
+      projectionDurationTotalMs: Number(accounting.projectionDurationTotalMs.toFixed(3)),
+      pendingReplicationCostMs: Number(accounting.pendingReplicationCostMs.toFixed(3)),
+      replicationCostConsumedTotalMs: Number(accounting.replicationCostConsumedTotalMs.toFixed(3)),
+      lastSimTickCostMs: Number(accounting.lastSimTickCostMs.toFixed(3)),
+      lastReplicationCostConsumedMs: Number(accounting.lastReplicationCostConsumedMs.toFixed(3)),
+      lastCombinedSampledCostMs: Number(accounting.lastCombinedSampledCostMs.toFixed(3)),
       skippedProjectionBeats: health.body.multiplayer.projection.skippedBeats,
       projectionErrors: health.body.multiplayer.projection.errors,
       admissionErrors: health.body.multiplayer.projection.admissionErrors,

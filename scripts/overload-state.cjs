@@ -130,8 +130,12 @@ function measurePressure(sample, controller) {
   const worstPressure = clampPositive(sample.worstTickMs, 0) / Math.max(1, budgetMs * 1.2);
   const playerPressure = clampPositive(sample.playerCount, 0) / Math.max(1, base.maxPlayers);
   const aiPressure = clampPositive(sample.aiCount, 0) / Math.max(1, base.maxScavengers);
+  // Declared maxima are healthy capacity. Count pressure reaches the healthy
+  // ceiling when either population reaches its cap, then rises monotonically
+  // so a population at 5/3 of capacity becomes overload pressure by itself.
+  const countPressure = Math.max(playerPressure, aiPressure) * 0.6;
   const forcePressure = clampPositive(sample.forcePressure, 0);
-  return Math.max(avgPressure, worstPressure, playerPressure * 0.7 + aiPressure * 0.4, forcePressure);
+  return Math.max(avgPressure, worstPressure, countPressure, forcePressure);
 }
 
 function projectOverloadBudget(baseSession, state) {

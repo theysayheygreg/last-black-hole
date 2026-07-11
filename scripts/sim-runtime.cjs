@@ -122,6 +122,35 @@ const MAX_WRECK_REPEAT_WAVES = readNumber(process.env.LBH_SIM_MAX_WRECK_REPEAT_W
 const MAX_LIVE_WRECKS = readNumber(process.env.LBH_SIM_MAX_LIVE_WRECKS, 64, 1);
 const IDLE_SESSION_TICK_HZ = 1;
 const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
+const MULTIPLAYER_PENDING_REPLICATION_BUDGETS = 4;
+
+function createMultiplayerProjectionStats() {
+  return {
+    accumulator: 0,
+    inFlight: false,
+    beats: 0,
+    projectedConnections: 0,
+    skippedBeats: 0,
+    errors: 0,
+    admissionErrors: 0,
+    lastSnapshotId: 0,
+    lastProjectedAt: null,
+    maxQueuedBytes: 0,
+    maxPendingInboundBytes: 0,
+    projectionDurationSamples: 0,
+    projectionDurationLatestMs: 0,
+    projectionDurationAverageMs: 0,
+    projectionDurationWorstMs: 0,
+    projectionDurationTotalMs: 0,
+    pendingReplicationCostMs: 0,
+    pendingReplicationCostCapMs: 0,
+    replicationCostOverflowMs: 0,
+    replicationCostConsumedTotalMs: 0,
+    lastReplicationCostConsumedMs: 0,
+    lastSimTickCostMs: 0,
+    lastCombinedSampledCostMs: 0,
+  };
+}
 
 const WRECK_ADJECTIVES = [
   "Ascending", "Crystalline", "Shattered", "Infinite", "Dreaming",
@@ -1018,19 +1047,7 @@ const runtime = {
   terminalSince: null,
   terminalShutdownAt: null,
   shutdownReason: null,
-  multiplayerProjection: {
-    accumulator: 0,
-    inFlight: false,
-    beats: 0,
-    projectedConnections: 0,
-    skippedBeats: 0,
-    errors: 0,
-    admissionErrors: 0,
-    lastSnapshotId: 0,
-    lastProjectedAt: null,
-    maxQueuedBytes: 0,
-    maxPendingInboundBytes: 0,
-  },
+  multiplayerProjection: createMultiplayerProjectionStats(),
 };
 
 let tickHandle = null;
@@ -1382,19 +1399,7 @@ function startSession(config = {}) {
     waves: 0,
     field: 0,
   };
-  runtime.multiplayerProjection = {
-    accumulator: 0,
-    inFlight: false,
-    beats: 0,
-    projectedConnections: 0,
-    skippedBeats: 0,
-    errors: 0,
-    admissionErrors: 0,
-    lastSnapshotId: 0,
-    lastProjectedAt: null,
-    maxQueuedBytes: 0,
-    maxPendingInboundBytes: 0,
-  };
+  runtime.multiplayerProjection = createMultiplayerProjectionStats();
   // Inhibitor: threshold per run, seeded for determinism
   const inh = INHIBITOR_CONFIG;
   const inhRng = runtime.session.rng.rawStream('inhibitorInit');
@@ -5906,20 +5911,35 @@ function tickSim() {
   refreshBallparkMirror("tick");
   scheduleMultiplayerProjection();
 
-  const alivePlayerCount = relevance.alivePlayers.length;
+  const activeHumanPlayerCount = relevance.alivePlayers.filter((player) => !player.isAI).length;
   const activeAiCount = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state !== "dying").length;
   const activeWreckCount = relevance.wrecks.filter((wreck) => wreck.alive !== false && !wreck.looted).length;
   const activePortalCount = runtime.mapState.portals.filter(isPortalAvailable).length;
   const activeWaveCount = runtime.waveRings.length;
-  const forcePressure = Math.max(
-    runtime.mapState.wells.length / Math.max(1, alivePlayerCount * (runtime.session.maxWellInfluencesPerPlayer || 1)),
-    activeWaveCount / Math.max(1, alivePlayerCount * (runtime.session.maxWaveInfluencesPerPlayer || 1)),
-    activeWreckCount / Math.max(1, alivePlayerCount * (runtime.session.maxPickupChecksPerPlayer || 1)),
-    activePortalCount / Math.max(1, alivePlayerCount * (runtime.session.maxPortalChecksPerPlayer || 1))
+  const boundedForceUtilization = (activeCount, perPlayerLimit) => {
+    const limit = Math.max(1, Number(perPlayerLimit) || 1);
+    // These loops already cap work per player. Fixed world counts above the
+    // cap are not executed force work and must not punish smaller cohorts.
+    return Math.min(Math.max(0, Number(activeCount) || 0), limit) / limit;
+  };
+  const forcePressure = 0.6 * Math.max(
+    boundedForceUtilization(runtime.mapState.wells.length, runtime.session.maxWellInfluencesPerPlayer),
+    boundedForceUtilization(activeWaveCount, runtime.session.maxWaveInfluencesPerPlayer),
+    boundedForceUtilization(activeWreckCount, runtime.session.maxPickupChecksPerPlayer),
+    boundedForceUtilization(activePortalCount, runtime.session.maxPortalChecksPerPlayer)
   );
+  const simTickCostMs = performance.now() - tickStart;
+  const replicationCostMs = consumePendingReplicationCost();
+  const combinedSampledCostMs = simTickCostMs + replicationCostMs;
+  runtime.multiplayerProjection.lastSimTickCostMs = simTickCostMs;
+  runtime.multiplayerProjection.lastReplicationCostConsumedMs = replicationCostMs;
+  runtime.multiplayerProjection.lastCombinedSampledCostMs = combinedSampledCostMs;
   const overload = advanceOverload(runtime.overload, {
-    tickCostMs: performance.now() - tickStart,
-    playerCount: alivePlayerCount,
+    tickCostMs: combinedSampledCostMs,
+    // maxPlayers is the admitted human-client cap. The three adversarial
+    // player bots are preserved and paid for by measured CPU, not miscounted
+    // as client slots or scavengers.
+    playerCount: activeHumanPlayerCount,
     aiCount: activeAiCount,
     forcePressure,
   });
@@ -6243,6 +6263,35 @@ function buildOwnerMultiplayerState(binding, publicFrame) {
   return frame;
 }
 
+function replicationCostCapMs() {
+  return Math.max(1, Number(runtime.overload?.budgetMs) || (1000 / DEFAULT_TICK_HZ))
+    * MULTIPLAYER_PENDING_REPLICATION_BUDGETS;
+}
+
+function recordCompletedProjectionCost(durationMs) {
+  const stats = runtime.multiplayerProjection;
+  const duration = Math.max(0, Number(durationMs) || 0);
+  stats.projectionDurationSamples += 1;
+  stats.projectionDurationLatestMs = duration;
+  stats.projectionDurationTotalMs += duration;
+  stats.projectionDurationAverageMs = stats.projectionDurationTotalMs / stats.projectionDurationSamples;
+  stats.projectionDurationWorstMs = Math.max(stats.projectionDurationWorstMs, duration);
+  const cap = replicationCostCapMs();
+  stats.pendingReplicationCostCapMs = cap;
+  const unboundedPending = stats.pendingReplicationCostMs + duration;
+  stats.pendingReplicationCostMs = Math.min(cap, unboundedPending);
+  stats.replicationCostOverflowMs += Math.max(0, unboundedPending - cap);
+}
+
+function consumePendingReplicationCost() {
+  const stats = runtime.multiplayerProjection;
+  const pending = Math.max(0, Number(stats.pendingReplicationCostMs) || 0);
+  stats.pendingReplicationCostMs = 0;
+  stats.pendingReplicationCostCapMs = replicationCostCapMs();
+  stats.replicationCostConsumedTotalMs += pending;
+  return pending;
+}
+
 function scheduleMultiplayerProjection() {
   if (!multiplayerAdapter || runtime.session.status !== "running") return;
   const stats = runtime.multiplayerProjection;
@@ -6256,7 +6305,9 @@ function scheduleMultiplayerProjection() {
     return;
   }
   stats.inFlight = true;
-  Promise.resolve(multiplayerAdapter.projectNow())
+  const projectionStartedAt = performance.now();
+  Promise.resolve()
+    .then(() => multiplayerAdapter.projectNow())
     .then((result) => {
       stats.projectedConnections += Math.max(0, Number(result?.projected) || 0);
       stats.lastSnapshotId = Math.max(stats.lastSnapshotId, Number(result?.snapshotId) || 0);
@@ -6267,6 +6318,7 @@ function scheduleMultiplayerProjection() {
       stats.errors += 1;
     })
     .finally(() => {
+      recordCompletedProjectionCost(performance.now() - projectionStartedAt);
       stats.inFlight = false;
     });
 }
@@ -6299,6 +6351,20 @@ function multiplayerDiagnostics() {
       lastProjectedAt: projection.lastProjectedAt,
       maxQueuedBytes: projection.maxQueuedBytes,
       maxPendingInboundBytes: projection.maxPendingInboundBytes,
+      accounting: {
+        projectionDurationSamples: projection.projectionDurationSamples,
+        projectionDurationLatestMs: projection.projectionDurationLatestMs,
+        projectionDurationAverageMs: projection.projectionDurationAverageMs,
+        projectionDurationWorstMs: projection.projectionDurationWorstMs,
+        projectionDurationTotalMs: projection.projectionDurationTotalMs,
+        pendingReplicationCostMs: projection.pendingReplicationCostMs,
+        pendingReplicationCostCapMs: projection.pendingReplicationCostCapMs,
+        replicationCostOverflowMs: projection.replicationCostOverflowMs,
+        replicationCostConsumedTotalMs: projection.replicationCostConsumedTotalMs,
+        lastReplicationCostConsumedMs: projection.lastReplicationCostConsumedMs,
+        lastSimTickCostMs: projection.lastSimTickCostMs,
+        lastCombinedSampledCostMs: projection.lastCombinedSampledCostMs,
+      },
     },
   };
 }
