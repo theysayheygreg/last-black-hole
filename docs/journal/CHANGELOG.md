@@ -43,6 +43,10 @@
   one isolated writer process, makes AOI/deltas/isolation serious at 48, and
   models 96 as one logical authority with a canonical writer plus deterministic
   internal workers—not independently writable shards.
+- Added a source-anchored high-count performance model with fresh M4 probes,
+  light/representative/heavy CPU curves, projection/queue/memory budgets, and
+  host-start envelopes. Representative 96 is plausible at 20 Hz on a 4-vCPU
+  class after offload; the modeled heavy 96 tick is 83 ms and fails that clock.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
