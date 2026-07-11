@@ -13,6 +13,7 @@
  * - sim-structure: v0.3 body, query, event, and snapshot contracts
  * - multiplayer-structure: membership, privacy, and settlement contracts
  * - multiplayer-authority: deterministic 1/4/8 authority and structure proof
+ * - multiplayer-network: JSON frame and bounded queue/backpressure primitives
  * - visual: screenshot renderer fixtures
  * - playtest: real menu/input flows best reviewed in Codex Browser
  * - agent-eval: fresh playable map checks with screenshots and a narrative report

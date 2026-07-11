@@ -84,6 +84,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerWireProtocol",
+    file: "multiplayer-wire-protocol.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "MultiplayerSendQueue",
+    file: "multiplayer-send-queue.cjs",
+    lanes: ["multiplayer-network", "static", "full"],
+    browser: false,
+  },
+  {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
     lanes: ["static", "full"],
@@ -469,6 +481,7 @@ const LANES = [
   "sim-structure",
   "multiplayer-structure",
   "multiplayer-authority",
+  "multiplayer-network",
   "visual",
   "playtest",
   "agent-eval",
