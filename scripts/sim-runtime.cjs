@@ -1514,6 +1514,10 @@ function hasCallerIdentityConflict(body = {}) {
 
 function authorizePlayerRequest(req, body = {}, { requireCommandSeq = true } = {}) {
   const identity = requestIdentity(req, body);
+  return authorizePlayerIdentity(identity, body, { requireCommandSeq });
+}
+
+function authorizePlayerIdentity(identity, body = {}, { requireCommandSeq = true } = {}) {
   if (identity.conflict) {
     return { ok: false, status: 400, code: "conflicting-identity", error: "Header and body authority identity disagree" };
   }
@@ -1561,13 +1565,22 @@ function acceptCommand(auth) {
 }
 
 function sendAuthorityError(res, result) {
-  sendJson(res, result.status || 403, {
+  const response = authorityErrorResponse(result);
+  sendJson(res, response.status, response.body);
+}
+
+function authorityErrorResponse(result) {
+  return commandResponse(result.status || 403, {
     ok: false,
     code: result.code || "invalid-authority",
     error: result.error || "Invalid player command authority",
     activeRunId: result.activeRunId,
     acceptedCommandSeq: result.acceptedCommandSeq,
   });
+}
+
+function commandResponse(status, body) {
+  return { status, body };
 }
 
 function ensureHostAuthority(req, body = {}) {
@@ -5923,6 +5936,90 @@ function writeFiles() {
   }
 }
 
+// Command executors deliberately accept parsed data and return plain results so
+// HTTP and the future stream adapter share one authority/mutation path.
+function executeInputCommand({ body = {}, identity = {} } = {}) {
+  if (runtime.session.status !== "running") {
+    return commandResponse(409, { ok: false, error: "No active session", session: runtime.session });
+  }
+  if (hasCallerIdentityConflict(body)) {
+    return commandResponse(400, { ok: false, code: "conflicting-identity", error: "playerId and clientId disagree" });
+  }
+  const message = normalizeInputMessage(body);
+  const auth = authorizePlayerIdentity(identity, message);
+  if (!auth.ok) return authorityErrorResponse(auth);
+  acceptCommand(auth);
+  const player = runtime.players.get(auth.authority.playerId);
+  if (!player) {
+    return commandResponse(404, { ok: false, error: "Unknown client" });
+  }
+  if (message.seq <= player.lastInput.seq) {
+    return commandResponse(409, {
+      ok: false,
+      code: "stale-input",
+      error: "Input sequence is not newer than the last accepted input",
+      acceptedCommandSeq: auth.authority.lastCommandSeq,
+      acceptedSeq: player.lastInput.seq,
+    });
+  }
+  const acceptedSlingshotEdges = message.slingshotEdges.filter((edgeId) =>
+    edgeId > (auth.authority.lastSlingshotEdgeId || 0)
+  );
+  if (acceptedSlingshotEdges.length > 0) {
+    auth.authority.lastSlingshotEdgeId = acceptedSlingshotEdges[acceptedSlingshotEdges.length - 1];
+  }
+  const { commandCredential: _commandCredential, ...inputState } = message;
+  player.lastInput = {
+    ...inputState,
+    slingshotEdges: mergePendingSlingshotEdges(player, acceptedSlingshotEdges),
+    pulse: Boolean(player.lastInput.pulse || message.pulse),
+    extractConfirm: Boolean(player.lastInput.extractConfirm || message.extractConfirm),
+    consumeSlot:
+      message.consumeSlot === null || message.consumeSlot === undefined
+        ? player.lastInput.consumeSlot
+        : message.consumeSlot,
+  };
+  return commandResponse(200, {
+    ok: true,
+    acceptedCommandSeq: auth.authority.lastCommandSeq,
+    acceptedSeq: message.seq,
+    acceptedSlingshotEdges,
+    pendingSlingshotEdgeCount: player.lastInput.slingshotEdges.length,
+    tick: runtime.tick,
+  });
+}
+
+function executeInventoryActionCommand({ body = {}, identity = {} } = {}) {
+  if (runtime.session.status !== "running") {
+    return commandResponse(409, { ok: false, error: "No active session", session: runtime.session });
+  }
+  if (hasCallerIdentityConflict(body)) {
+    return commandResponse(400, { ok: false, code: "conflicting-identity", error: "playerId and clientId disagree" });
+  }
+  const message = normalizeInventoryAction(body);
+  const auth = authorizePlayerIdentity(identity, message);
+  if (!auth.ok) return authorityErrorResponse(auth);
+  acceptCommand(auth);
+  const player = runtime.players.get(auth.authority.playerId);
+  if (!player) {
+    return commandResponse(404, { ok: false, error: "Unknown client" });
+  }
+  const result = applyInventoryAction(player, message);
+  if (!result.ok) {
+    return commandResponse(409, { ok: false, error: result.error });
+  }
+  refreshBallparkMirror("inventory-action");
+  return commandResponse(200, {
+    ok: true,
+    acceptedCommandSeq: auth.authority.lastCommandSeq,
+    player,
+    snapshot: projectSnapshotForPlayer(
+      snapshotBody({ force: true }),
+      auth.authority.playerId,
+    ),
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
@@ -6305,101 +6402,15 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/input") {
       const body = await readJson(req);
-      if (runtime.session.status !== "running") {
-        sendJson(res, 409, { ok: false, error: "No active session", session: runtime.session });
-        return;
-      }
-      if (hasCallerIdentityConflict(body)) {
-        sendJson(res, 400, { ok: false, code: "conflicting-identity", error: "playerId and clientId disagree" });
-        return;
-      }
-      const message = normalizeInputMessage(body);
-      const auth = authorizePlayerRequest(req, message);
-      if (!auth.ok) {
-        sendAuthorityError(res, auth);
-        return;
-      }
-      acceptCommand(auth);
-      const player = runtime.players.get(auth.authority.playerId);
-      if (!player) {
-        sendJson(res, 404, { ok: false, error: "Unknown client" });
-        return;
-      }
-      if (message.seq <= player.lastInput.seq) {
-        sendJson(res, 409, {
-          ok: false,
-          code: "stale-input",
-          error: "Input sequence is not newer than the last accepted input",
-          acceptedCommandSeq: auth.authority.lastCommandSeq,
-          acceptedSeq: player.lastInput.seq,
-        });
-        return;
-      }
-      const acceptedSlingshotEdges = message.slingshotEdges.filter((edgeId) =>
-        edgeId > (auth.authority.lastSlingshotEdgeId || 0)
-      );
-      if (acceptedSlingshotEdges.length > 0) {
-        auth.authority.lastSlingshotEdgeId = acceptedSlingshotEdges[acceptedSlingshotEdges.length - 1];
-      }
-      const { commandCredential: _commandCredential, ...inputState } = message;
-      player.lastInput = {
-        ...inputState,
-        slingshotEdges: mergePendingSlingshotEdges(player, acceptedSlingshotEdges),
-        pulse: Boolean(player.lastInput.pulse || message.pulse),
-        extractConfirm: Boolean(player.lastInput.extractConfirm || message.extractConfirm),
-        consumeSlot:
-          message.consumeSlot === null || message.consumeSlot === undefined
-            ? player.lastInput.consumeSlot
-            : message.consumeSlot,
-      };
-      sendJson(res, 200, {
-        ok: true,
-        acceptedCommandSeq: auth.authority.lastCommandSeq,
-        acceptedSeq: message.seq,
-        acceptedSlingshotEdges,
-        pendingSlingshotEdgeCount: player.lastInput.slingshotEdges.length,
-        tick: runtime.tick,
-      });
+      const result = executeInputCommand({ body, identity: requestIdentity(req, body) });
+      sendJson(res, result.status, result.body);
       return;
     }
 
     if (req.method === "POST" && req.url === "/inventory/action") {
       const body = await readJson(req);
-      if (runtime.session.status !== "running") {
-        sendJson(res, 409, { ok: false, error: "No active session", session: runtime.session });
-        return;
-      }
-      if (hasCallerIdentityConflict(body)) {
-        sendJson(res, 400, { ok: false, code: "conflicting-identity", error: "playerId and clientId disagree" });
-        return;
-      }
-      const message = normalizeInventoryAction(body);
-      const auth = authorizePlayerRequest(req, message);
-      if (!auth.ok) {
-        sendAuthorityError(res, auth);
-        return;
-      }
-      acceptCommand(auth);
-      const player = runtime.players.get(auth.authority.playerId);
-      if (!player) {
-        sendJson(res, 404, { ok: false, error: "Unknown client" });
-        return;
-      }
-      const result = applyInventoryAction(player, message);
-      if (!result.ok) {
-        sendJson(res, 409, { ok: false, error: result.error });
-        return;
-      }
-      refreshBallparkMirror("inventory-action");
-      sendJson(res, 200, {
-        ok: true,
-        acceptedCommandSeq: auth.authority.lastCommandSeq,
-        player,
-        snapshot: projectSnapshotForPlayer(
-          snapshotBody({ force: true }),
-          auth.authority.playerId,
-        ),
-      });
+      const result = executeInventoryActionCommand({ body, identity: requestIdentity(req, body) });
+      sendJson(res, result.status, result.body);
       return;
     }
 
