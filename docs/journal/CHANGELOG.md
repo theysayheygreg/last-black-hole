@@ -103,6 +103,10 @@
   `e9b2757`, proved exactly one new-lineage completion, passed independent
   re-review, and registered the 23-case adapter plus 1/4/8 runtime suites in
   the multiplayer-network, multiplayer-authority, authority, and full lanes.
+- Staged sequential Phase 1 packets for reliable idempotent gameplay actions
+  and event-journal recovery. Action receipts land first without adapter/schema
+  churn; binding-aware replay, ACK cursors, and explicit gap rebase follow only
+  after that commit is integrated and reviewed.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 
