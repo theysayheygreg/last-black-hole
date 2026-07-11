@@ -18,6 +18,10 @@
   Functions for live authority, recommends a container-hosted first spike plus
   a separate Durable Object benchmark, and shows why compact interest deltas
   are the economic gate rather than copies-sold totals alone.
+- Added the multiplayer identity/data design: Steam ticket authentication for
+  hosted MVP, separate local/cloud progression lineages, server-created run
+  memberships, short-lived authority epochs, relational progression records,
+  and atomic idempotent run settlement before public hosting.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
