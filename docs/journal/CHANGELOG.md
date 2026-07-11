@@ -14,6 +14,10 @@
   infrastructure costs plus $4.99 unit economics.
 - Reserved integrated architecture, roadmap, cost, and decision documents for
   the coordinator so independent research can land without conflicting edits.
+- Added the first hosted-authority and $4.99 economics model. It rejects Vercel
+  Functions for live authority, recommends a container-hosted first spike plus
+  a separate Durable Object benchmark, and shows why compact interest deltas
+  are the economic gate rather than copies-sold totals alone.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
