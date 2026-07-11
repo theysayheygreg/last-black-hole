@@ -3,6 +3,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { ControlPlaneStore } = require("./control-plane-store.cjs");
 const { SessionRegistry } = require("./session-registry.cjs");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
@@ -88,6 +89,7 @@ const SESSION_REGISTRY_FILE = path.resolve(
 const PID_FILE = args["pid-file"] ? path.resolve(args["pid-file"]) : null;
 const META_FILE = args["meta-file"] ? path.resolve(args["meta-file"]) : null;
 const LABEL = args.label || process.env.LBH_CONTROL_PLANE_LABEL || "lbh-control-plane";
+const SERVICE_TOKEN = String(process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN || "");
 const telemetry = createRuntimeLogger("control-plane", { label: LABEL, host: HOST, port: PORT });
 
 const store = new ControlPlaneStore(CONTROL_PLANE_FILE);
@@ -135,6 +137,16 @@ function removeRegistrySession(sessionId) {
   const state = registry.read();
   delete state.sessions[sessionId];
   registry.write(state);
+}
+
+function serviceTokenMatches(req) {
+  if (!SERVICE_TOKEN) return true;
+  const supplied = String(req.headers["x-lbh-service-token"] || "");
+  const expectedBytes = Buffer.from(SERVICE_TOKEN);
+  const suppliedBytes = Buffer.from(supplied);
+  return expectedBytes.length === suppliedBytes.length
+    && expectedBytes.length > 0
+    && crypto.timingSafeEqual(expectedBytes, suppliedBytes);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -243,6 +255,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/profile/outcome") {
+      if (!serviceTokenMatches(req)) {
+        sendJson(res, 401, { ok: false, error: "Valid control-plane service authentication is required" });
+        return;
+      }
       const body = await readJson(req);
       const committed = store.applyOutcome({
         profileId: body.profileId,
@@ -251,6 +267,7 @@ const server = http.createServer(async (req, res) => {
         runDuration: Number(body.runDuration || 0),
         session: body.session || null,
         runResult: body.runResult || null,
+        settlement: body.settlement || null,
       });
       sendJson(res, 200, { ok: true, committed });
       return;
@@ -341,7 +358,8 @@ const server = http.createServer(async (req, res) => {
 
     sendJson(res, 404, { ok: false, error: "Not found" });
   } catch (error) {
-    sendJson(res, 500, { ok: false, error: error.message || "Control plane error" });
+    const statusCode = error?.code === "SETTLEMENT_CONFLICT" ? 409 : 500;
+    sendJson(res, statusCode, { ok: false, error: error.message || "Control plane error", code: error?.code || undefined });
   }
 });
 

@@ -36,6 +36,18 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value === undefined ? null : value);
+}
+
+function resultHash(value) {
+  return crypto.createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
 function createProfileSkeleton(profileId, name = "Pilot") {
   const now = nowIso();
   return {
@@ -254,10 +266,11 @@ class ControlPlaneStore {
       const raw = fs.readFileSync(this.filepath, "utf8");
       const parsed = JSON.parse(raw);
       return {
-        version: 1,
+        version: 2,
         profiles: parsed.profiles || {},
         sessions: parsed.sessions || {},
         runs: parsed.runs || {},
+        settlements: parsed.settlements || {},
         // Echoes: map of mapId → seed → array of chronicle wrecks (max 8 each).
         // An echo is evidence of a past cycle that persists in the
         // present one. Scoped by both map and seed so identical numeric
@@ -266,10 +279,11 @@ class ControlPlaneStore {
       };
     } catch {
       return {
-        version: 1,
+        version: 2,
         profiles: {},
         sessions: {},
         runs: {},
+        settlements: {},
         echoes: {},
       };
     }
@@ -277,7 +291,9 @@ class ControlPlaneStore {
 
   _save() {
     fs.mkdirSync(path.dirname(this.filepath), { recursive: true });
-    fs.writeFileSync(this.filepath, `${JSON.stringify(this.state, null, 2)}\n`);
+    const temporary = `${this.filepath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+    fs.writeFileSync(temporary, `${JSON.stringify(this.state, null, 2)}\n`);
+    fs.renameSync(temporary, this.filepath);
   }
 
   bootstrapProfile({ profileId, snapshot, fallbackName = "Pilot" }) {
@@ -327,7 +343,39 @@ class ControlPlaneStore {
     return clone(normalized);
   }
 
-  applyOutcome({ profileId, player, outcome, runDuration = 0, session = null, runResult = null }) {
+  applyOutcome({ profileId, player, outcome, runDuration = 0, session = null, runResult = null, settlement = null }) {
+    const runId = runResult?.runId || session?.runId || session?.id || null;
+    const settlementKey = runId && profileId
+      ? `${encodeURIComponent(String(runId))}:${encodeURIComponent(String(profileId))}`
+      : null;
+    const immutableResult = {
+      profileId,
+      player,
+      outcome,
+      runDuration,
+      session,
+      runResult,
+      settlement: settlement ? {
+        authorityInstanceId: settlement.authorityInstanceId || null,
+        authorityEpoch: settlement.authorityEpoch ?? null,
+      } : null,
+    };
+    const hash = settlementKey ? resultHash(immutableResult) : null;
+    const existing = settlementKey ? this.state.settlements[settlementKey] : null;
+    if (existing) {
+      if (existing.resultHash !== hash) {
+        const error = new Error(`Settlement key ${settlementKey} was reused with a conflicting result`);
+        error.code = "SETTLEMENT_CONFLICT";
+        throw error;
+      }
+      return {
+        ...clone(existing.committed),
+        settlement: clone(existing),
+        replayed: true,
+      };
+    }
+
+    const stateBefore = clone(this.state);
     const profile = this.getProfile(profileId) || createProfileSkeleton(profileId, player?.name || "Pilot");
     const result = {
       outcome,
@@ -377,7 +425,8 @@ class ControlPlaneStore {
       sortVault(profile.vault);
     }
 
-    const saved = this.saveProfile(profile);
+    const saved = normalizeProfileSnapshot(profile, profile.id, profile.name);
+    this.state.profiles[saved.id] = clone(saved);
     if (session?.id) {
       const entry = buildRunEntry({
         profile: saved,
@@ -389,9 +438,31 @@ class ControlPlaneStore {
         result,
       });
       this.state.runs[entry.runId] = entry;
-      this._save();
     }
-    return { profile: saved, result };
+    const committed = { profile: clone(saved), result: clone(result) };
+    if (settlementKey) {
+      this.state.settlements[settlementKey] = {
+        settlementKey,
+        runId: String(runId),
+        profileId: String(profileId),
+        authorityInstanceId: settlement?.authorityInstanceId || null,
+        authorityEpoch: settlement?.authorityEpoch ?? null,
+        resultHash: hash,
+        committedAt: nowIso(),
+        committed: clone(committed),
+      };
+    }
+    try {
+      this._save();
+    } catch (error) {
+      this.state = stateBefore;
+      throw error;
+    }
+    return {
+      ...committed,
+      settlement: settlementKey ? clone(this.state.settlements[settlementKey]) : null,
+      replayed: false,
+    };
   }
 
   upsertSession(session, players = []) {
