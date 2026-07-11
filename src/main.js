@@ -43,6 +43,7 @@ import { ScavengerSystem } from './scavengers.js';
 import { CombatSystem } from './combat.js';
 import { SlingshotSystem } from './slingshot.js';
 import { AudioEngine } from './audio.js';
+import { AudioRouter } from './audio/audio-router.js';
 import { buildRunBriefing } from './signatures.js';
 import { InventorySystem } from './inventory.js';
 import { ProfileManager, MAX_RIG_LEVEL, generatePilotName, sanitizePilotName } from './profile.js';
@@ -123,7 +124,7 @@ let glCanvas, threeCanvas, gl;
 let overlayCanvas, ctx;
 let fluid, ship, wellSystem, starSystem, wreckSystem, waveRings;
 let portalSystem, planetoidSystem;
-let scavengerSystem, combatSystem, audioEngine, inventorySystem;
+let scavengerSystem, combatSystem, audioEngine, audioRouter, inventorySystem;
 let slingshotSystem;
 let flowField, simCore;
 let simClient = null;
@@ -1061,6 +1062,7 @@ function init() {
   scavengerSystem = new ScavengerSystem();
   combatSystem = new CombatSystem();
   audioEngine = new AudioEngine();
+  audioRouter = new AudioRouter(audioEngine);
   inventorySystem = new InventorySystem();
   slingshotSystem = new SlingshotSystem();
 
@@ -2378,8 +2380,8 @@ function applyRemoteEvents(events) {
     remoteLastEventSeq = event.seq;
     const payload = event.payload || {};
     const isLocal = payload.clientId && payload.clientId === simClient?.clientId;
-    audioEngine.playAuthoritativeEvent?.(event, {
-      clientId: simClient?.clientId,
+    audioRouter?.setClientId(simClient?.clientId);
+    audioRouter?.authoritative(event, {
       camX,
       camY,
       canvasW: overlayCanvas.width,
@@ -2391,16 +2393,13 @@ function applyRemoteEvents(events) {
         if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
           combatSystem.spawnRemotePulseVisual(payload.wx, payload.wy, fluid, waveRings, wellSystem);
         }
-        audioEngine.playEvent('pulse', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         break;
       case 'player.effectUsed':
         if (!isLocal) break;
         if (payload.effectId === 'shieldBurst') {
           showWarning('shield active — survive one well contact', 'rgba(100, 200, 255, 0.95)', 3000);
-          audioEngine.playEvent('shieldActivate');
         } else if (payload.effectId === 'timeSlowLocal') {
           showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
-          audioEngine.playEvent('timeSlow');
         } else if (payload.effectId === 'breachFlare') {
           showWarning('breach flare — portal for 15s', 'rgba(255, 200, 100, 0.95)', 3000);
           audioEngine.playEvent('breachFlare');

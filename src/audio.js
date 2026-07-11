@@ -15,6 +15,7 @@
 import { CONFIG } from './config.js';
 import { worldToScreen, worldDistance } from './coords.js';
 import { cueForAuthoritativeEvent, EventVoiceBudget } from './audio-events.js';
+import { AudioMixer } from './audio/mixer.js';
 
 export class AudioEngine {
   constructor() {
@@ -28,7 +29,12 @@ export class AudioEngine {
     this._audioState = 'silent';
     this._lastDistortionAmount = -1; // cache to avoid per-frame allocation
     this._eventBudget = new EventVoiceBudget(CONFIG.audio?.maxEventVoices ?? 16);
+    this._mixer = new AudioMixer({ caps: CONFIG.audio?.voiceCaps });
     this._portalProximityActive = false;
+  }
+
+  getDiagnostics() {
+    return { phase: this._audioState, mixer: this._mixer.snapshot(this.ctx?.currentTime ?? 0) };
   }
 
   // ---- Lifecycle ----
@@ -115,6 +121,7 @@ export class AudioEngine {
 
   reset() {
     this._eventBudget.reset();
+    this._mixer.reset();
     this._portalProximityActive = false;
     if (!this.initiated) return;
     const now = this.ctx.currentTime;
@@ -217,6 +224,7 @@ export class AudioEngine {
     const now = this.ctx.currentTime;
     const vol = CONFIG.audio.eventVolume;
     if (type !== 'death' && !this._eventBudget.admit(type, now)) return false;
+    if (!this._mixer.admit(type, now)) return false;
 
     let pan = 0;
     if (wx !== undefined && canvasW) {
