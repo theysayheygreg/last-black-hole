@@ -963,6 +963,7 @@ const runtime = {
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
   coarseField: null,
+  fieldRevision: 1,
   inhibitor: {
     pressure: 0,
     threshold: 0.90,  // randomized per run
@@ -1040,7 +1041,7 @@ function refreshBallparkMirror(reason = "runtime") {
   });
 }
 
-function applyOverloadProfile({ forceRestart = false } = {}) {
+function applyOverloadProfile({ forceRestart = false, rebuildField = true } = {}) {
   if (!runtime.overload) return;
   const projection = projectOverloadBudget(runtime.overload.base, runtime.overload.state);
   const previousTickHz = runtime.session.tickHz;
@@ -1075,7 +1076,7 @@ function applyOverloadProfile({ forceRestart = false } = {}) {
   if (forceRestart || previousTickHz !== runtime.session.tickHz) {
     restartTickLoop();
   }
-  rebuildAuthoritativeField();
+  if (rebuildField) rebuildAuthoritativeField();
 }
 
 function syncPlayerCargoCapacity(player) {
@@ -1376,6 +1377,7 @@ function startSession(config = {}) {
   runtime.joinClaims.clear();
   runtime.eventJournal.startRun(runtime.session.runId);
   runtime.snapshotRing.startRun(runtime.session.runId);
+  runtime.fieldRevision = 1;
   runtime.recentEvents = [];
   runtime.nextEventSeq = runtime.eventJournal.nextSeq;
   runtime.emptySince = null;
@@ -1406,7 +1408,7 @@ function startSession(config = {}) {
     maxPortalChecksPerPlayer: runtime.session.baseMaxPortalChecksPerPlayer,
     maxPlayers: runtime.session.maxPlayers,
   });
-  applyOverloadProfile();
+  applyOverloadProfile({ rebuildField: false });
   // Spawn AI players
   spawnAIPlayers(runtime.mapState, runtime.session);
   runtime.growthTimer = 0;
@@ -1416,7 +1418,7 @@ function startSession(config = {}) {
   runtime._wreckRepeatWaveCount = 0;
   runtime.waveRings = [];
   runtime.coarseField = null;
-  rebuildAuthoritativeField();
+  rebuildAuthoritativeField({ initialize: true });
   telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
   publishEvent("session.started", {
     sessionId: runtime.session.id,
@@ -1726,6 +1728,7 @@ function buildSnapshotBody() {
     session: publicSessionSnapshot(),
     tick: runtime.tick,
     simTime: runtime.simTime,
+    fieldRevision: runtime.fieldRevision,
     serverTime: Date.now(),
     lastEventSeq: runtime.eventJournal?.lastSeq ?? Math.max(0, runtime.nextEventSeq - 1),
     players: Array.from(runtime.players.values()).map(publicPlayerSnapshot),
@@ -1774,6 +1777,7 @@ function snapshotBody({ force = false } = {}) {
   const latest = runtime.snapshotRing.latest({ runId: runtime.session.runId || "idle" });
   if (!force && latest.status === "hit" && latest.snapshot?.tick === runtime.tick &&
       latest.snapshot?.lastEventSeq === lastEventSeq &&
+      latest.snapshot?.fieldRevision === runtime.fieldRevision &&
       latest.snapshot?.session?.status === runtime.session.status) {
     return latest.snapshot;
   }
@@ -4552,10 +4556,13 @@ function tickPlayerSlingshot(player, dt, input) {
   if (state.engaged) applyPlayerSlingshotForces(player, dt, input);
 }
 
-function rebuildAuthoritativeField() {
+function rebuildAuthoritativeField(options = {}) {
+  const initialize = Boolean(options && typeof options === "object" && options.initialize);
   if (!runtime.session.useCoarseField) {
+    const invalidated = runtime.coarseField !== null;
     runtime.coarseField = null;
-    return;
+    if (invalidated && !initialize) runtime.fieldRevision += 1;
+    return invalidated;
   }
   runtime.coarseField = buildCoarseFlowField({
     worldScale: runtime.session.worldScale,
@@ -4571,6 +4578,8 @@ function rebuildAuthoritativeField() {
     waveShipPush: WAVE_SERVER.waveShipPush * runtime.session.fieldFlowScale,
     waveWidth: WAVE_SERVER.waveWidth,
   });
+  if (!initialize) runtime.fieldRevision += 1;
+  return true;
 }
 
 // Sample flow along the path from (ax,ay) to (bx,by) at N points.
@@ -6041,6 +6050,7 @@ const server = http.createServer(async (req, res) => {
         session: runtime.session,
         tick: runtime.tick,
         simTime: runtime.simTime,
+        fieldRevision: runtime.fieldRevision,
         playerCount: runtime.players.size,
         mapId: runtime.mapState.id,
         ballpark: runtime.ballparkMirror ? runtime.ballparkMirror.stats() : null,
