@@ -198,6 +198,12 @@ tooltip or more explanatory copy to compensate for a weak first read.
   action should read as navigation. Do not make the player press a red warning
   button just to leave the report.
 
+## Frame And Icon Deployment
+
+Generated frame parts are punctuation, not wallpaper. Use one complete generated frame around a major decision group only; subsections use rail, divider, junction, or whitespace. Warning corners are for genuine danger or confirmation, not generic focus. Focus uses position, backing/value, and one marker/frame change instead of extra chrome.
+
+At Deck size item signals resolve: **family silhouette → tier rail → selected/equipped/consumable state → optional identity hash**. Remove the hash when it aliases or competes with the family read. Tier and state need pattern/text alternatives and must survive grayscale, reduced motion, and keyboard/gamepad focus. Magenta is anomaly/Inhibitor-only except a documented mechanical-family exception.
+
 ## Component Language
 
 - **Panels:** translucent blue-black backing, thin cyan/role-color border,
@@ -212,6 +218,15 @@ tooltip or more explanatory copy to compensate for a weak first read.
   slab (`A begin drop`, `Space return home`). Never fuse prompts into the main
   button label as `A BEGIN DROP` or `SPACE RETURN HOME`.
 - **Icons:** simple geometric/pixel glyphs aligned with entity categories.
+
+## Required Review Matrix
+
+For title, Home, map select, HUD, pause, inventory, extracted results, and death
+results: capture 1280×800; retain 1280×720 compact coverage; inspect 25% couch
+proxy, grayscale, bright-light conditions, normal motion, and reduced motion.
+A reviewer identifies screen, selected action, primary status/outcome, danger,
+and next input within two seconds. Evidence labels and stable index live in
+`docs/v0.3/evidence/visual-review-manifest.md`.
 
 ## Validation Hooks
 

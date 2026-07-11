@@ -326,6 +326,26 @@ icon: Dyson panels, stargate pylons, derelict station fragments, beacon beams,
 and halo arcs. That lets them feel large while still obeying the same top-down
 scale system as wrecks and ships.
 
+## v0.3 Shared Presentation Contract
+
+Renderer and audio consume the same renderer-neutral facts from `src/presentation/presentation-frame.js`; neither may infer gameplay. The palette lane owns this boundary. Missing data is absent, not guessed, and coordinates remain in `src/coords.js`.
+
+| Fact | Type | Authoritative meaning | Renderer use |
+|---|---|---|---|
+| portal state | `ready | blocked | expiring | final | rift` | published portal/run truth, including abort edges | one tick/geometry plus backplate; black center remains open |
+| wreck state | `intact | looted | cluster` + velocity when published | wreck/sim truth | asset, amber-glint policy, drift rotation only when velocity exists |
+| player motion | `thrust | brake | coast` + slingshot events | published player/run truth | bounded port/trail/tether accents that settle on state end |
+| run pressure | number `[0, 1]` | authoritative run progress, signal zone, Inhibitor form | restrained environmental intensity only |
+| quality tier | shared presentation enum | shared quality policy | one renderer/audio degradation key |
+
+## State And Separation Policy
+
+- Portal states use one geometry/tick change plus a backplate; they never fill the aperture or infer availability.
+- Intact wrecks get one amber glint; looted wrecks get muted rim only; clusters are broken mass. Rotation uses published drift velocity and remains static when absent.
+- Player states are thrust/brake/coast and slingshot readiness → engaged tether → release vector burst. They are pooled, event/state-driven, and below HUD priority.
+- Fauna and sentries require different runtime IDs, fallback diagnostics, and grayscale/25% review across minimal, default, and rich tiers.
+- Separation resolves from family, explicit state, sprite scale, local density, and quality tier. Decay low-priority cluster matte before core value; record aggregate/local-peak coverage and tune thresholds from measured representative scenes.
+
 ## Shared Three Style Kit
 
 Create a small renderer-owned kit before hand-authoring every object:
