@@ -71,6 +71,9 @@
   public/owner projection, and measured 1/4/8 socket baselines. Reliable
   gameplay actions, journal recovery, SimClient, and browser cutover remain
   explicit later slices.
+- Added a disjoint protocol-discovery packet so the optional `/stream` path,
+  wire version, JSON framing, environment gate, and same-process authority
+  topology come from one cycle-free constant without duplicating wire schemas.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 
