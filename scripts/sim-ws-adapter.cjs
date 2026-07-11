@@ -11,110 +11,64 @@ const {
   encodeWireFrame,
 } = require("./multiplayer-wire-protocol.cjs");
 const { createMultiplayerSendQueue } = require("./multiplayer-send-queue.cjs");
-
-const DEFAULTS = Object.freeze({
-  path: "/stream",
-  helloTimeoutMs: 3_000,
-  heartbeatIntervalMs: 10_000,
-  backpressureTimeoutMs: 10_000,
-  shutdownTimeoutMs: 1_000,
-});
-
-function positiveInteger(value, fallback, label) {
-  const candidate = value === undefined ? fallback : Number(value);
-  if (!Number.isSafeInteger(candidate) || candidate <= 0) throw new TypeError(`${label} must be a positive integer`);
-  return candidate;
-}
-
-function requiredCallback(value, label) {
-  if (typeof value !== "function") throw new TypeError(`${label} must be a function`);
-  return value;
-}
-
-function safeCode(value, fallback = "authority-error") {
-  return typeof value === "string" && /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(value) ? value : fallback;
-}
-
-function publicError(error, fallback = "authority-error") {
-  const code = error instanceof WireProtocolError ? error.code : safeCode(error?.code, fallback);
-  return {
-    code,
-    message: code.replace(/[._-]+/g, " ").slice(0, LIMITS.maxErrorMessageLength),
-    closeCode: Number.isInteger(error?.closeCode) && error.closeCode >= 4000 && error.closeCode <= 4999
-      ? error.closeCode
-      : 4400,
-    retryable: Boolean(error?.retryable),
-  };
-}
-
-function createBucket(rate, burst, now) {
-  return { rate, burst, tokens: burst, updatedAt: now };
-}
-
-function consumeBucket(bucket, now) {
-  const elapsedSeconds = Math.max(0, now - bucket.updatedAt) / 1000;
-  bucket.tokens = Math.min(bucket.burst, bucket.tokens + elapsedSeconds * bucket.rate);
-  bucket.updatedAt = now;
-  if (bucket.tokens < 1) return false;
-  bucket.tokens -= 1;
-  return true;
-}
+const {
+  DEFAULTS,
+  publicError,
+  consumeRateBucket,
+  stableBindingKey,
+  normalizeAdapterOptions,
+  createConnectionState,
+  summarizeConnections,
+  assertOwnerProjection,
+  createUpgradeHandler,
+  createLifecycleGuards,
+  enqueueBoundedInbound,
+} = require("./sim-ws-adapter-guards.cjs");
 
 function createSimWebSocketAdapter(options = {}) {
-  const server = options.server;
-  if (!server || typeof server.on !== "function" || typeof server.removeListener !== "function") {
-    throw new TypeError("server must be an injected http.Server");
-  }
-  const redeemHello = requiredCallback(options.redeemHello, "redeemHello");
-  const revalidateBinding = requiredCallback(options.revalidateBinding, "revalidateBinding");
-  const onInput = requiredCallback(options.onInput, "onInput");
-  const onAction = requiredCallback(options.onAction, "onAction");
-  const buildPublicState = requiredCallback(options.buildPublicState, "buildPublicState");
-  const buildOwnerState = requiredCallback(options.buildOwnerState, "buildOwnerState");
-  const onPong = typeof options.onPong === "function" ? options.onPong : async () => {};
-  const onAck = typeof options.onAck === "function" ? options.onAck : async () => {};
-  const now = typeof options.now === "function" ? options.now : Date.now;
-  const path = typeof options.path === "string" && options.path.startsWith("/") ? options.path : DEFAULTS.path;
-  const helloTimeoutMs = positiveInteger(options.helloTimeoutMs, DEFAULTS.helloTimeoutMs, "helloTimeoutMs");
-  const heartbeatIntervalMs = positiveInteger(
-    options.heartbeatIntervalMs,
-    DEFAULTS.heartbeatIntervalMs,
-    "heartbeatIntervalMs",
-  );
-  const backpressureTimeoutMs = positiveInteger(
-    options.backpressureTimeoutMs,
-    DEFAULTS.backpressureTimeoutMs,
-    "backpressureTimeoutMs",
-  );
-  const shutdownTimeoutMs = positiveInteger(options.shutdownTimeoutMs, DEFAULTS.shutdownTimeoutMs, "shutdownTimeoutMs");
-  const queueOptions = Object.freeze({ ...(options.queueOptions || {}) });
+  const config = normalizeAdapterOptions(options);
+  const {
+    server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
+    onPong, onAck, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
+    maxConnections, maxPendingHello, maxPendingInbound, sweepIntervalMs, queueOptions,
+  } = config;
   const connections = new Set();
-  const byBinding = new Map();
+  const byBindingKey = new Map();
+  const bindingKeys = new WeakMap();
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: LIMITS.maxFrameBytes });
+  const lifecycle = new AbortController();
   let closed = false;
-  let currentRunId = options.runId || null;
+  let generation = 1;
+  let currentRunId = config.runId;
   let heartbeatCounter = 0;
+  let pendingHello = 0;
+  let rejectedConnections = 0;
+  let rejectedPendingHello = 0;
+  let maxObservedPendingInbound = 0;
 
-  function rejectUpgrade(socket, status = "404 Not Found") {
-    if (!socket.destroyed) socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
-  }
-
-  function handleUpgrade(request, socket, head) {
-    if (closed) return rejectUpgrade(socket, "503 Service Unavailable");
-    let target;
-    try {
-      target = new URL(request.url, "http://localhost");
-    } catch {
-      return rejectUpgrade(socket, "400 Bad Request");
-    }
-    if (target.pathname !== path || target.search) return rejectUpgrade(socket);
-    wss.handleUpgrade(request, socket, head, (ws) => wss.emit("connection", ws, request));
-  }
+  const handleUpgrade = createUpgradeHandler({
+    wss,
+    path,
+    maxConnections,
+    maxPendingHello,
+    isClosed: () => closed,
+    connectionCount: () => connections.size,
+    pendingHelloCount: () => pendingHello,
+    onConnectionRejected: () => { rejectedConnections += 1; },
+    onPendingHelloRejected: () => { rejectedPendingHello += 1; },
+  });
+  const { callbackContext, stateIsLive } = createLifecycleGuards({
+    lifecycle,
+    getGeneration: () => generation,
+    isClosed: () => closed,
+  });
 
   async function isBindingCurrent(state, purpose) {
-    if (!state.bound || state.closing) return false;
+    if (!state.bound || !stateIsLive(state)) return false;
+    const expectedGeneration = state.generation;
     try {
-      return (await revalidateBinding(state.binding, { purpose })) !== false;
+      const valid = await revalidateBinding(state.binding, callbackContext(state, purpose));
+      return stateIsLive(state, expectedGeneration) && valid !== false;
     } catch {
       return false;
     }
@@ -122,30 +76,37 @@ function createSimWebSocketAdapter(options = {}) {
 
   function sendWire(state, wire) {
     if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) return false;
-    state.pendingSends += 1;
-    state.ws.send(wire, (error) => {
-      state.pendingSends = Math.max(0, state.pendingSends - 1);
-      if (error) terminate(state);
-      else flush(state);
-    });
-    return true;
-  }
-
-  function sendFrame(state, frame) {
     try {
-      return sendWire(state, encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }));
+      state.pendingSends += 1;
+      state.ws.send(wire, (error) => {
+        state.pendingSends = Math.max(0, state.pendingSends - 1);
+        if (error) terminate(state);
+        else flush(state);
+      });
+      return true;
     } catch {
+      state.pendingSends = Math.max(0, state.pendingSends - 1);
       terminate(state);
       return false;
     }
   }
 
-  function sendApplicationClose(state, code, reason, reconnectable, retryAfterMs) {
+  function sendFrame(state, frame) {
+    return sendWire(state, encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }));
+  }
+
+  function sendApplicationClose(state, code, reason, reconnectable, retryAfterMs, transportCode = code) {
+    state.closing = true;
+    state.closingSince ??= now();
     const closeFrame = { type: "close", code, reason, reconnectable };
     if (retryAfterMs !== undefined) closeFrame.retryAfterMs = retryAfterMs;
     sendFrame(state, closeFrame);
     if (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING) {
-      state.ws.close(code, reason);
+      try {
+        state.ws.close(transportCode, transportCode === 1013 ? "server overloaded" : reason);
+      } catch {
+        terminate(state);
+      }
     }
   }
 
@@ -164,9 +125,14 @@ function createSimWebSocketAdapter(options = {}) {
   function cleanup(state) {
     if (state.cleaned) return;
     state.cleaned = true;
+    state.abortController.abort();
     clearTimeout(state.helloTimer);
+    if (state.helloPending) {
+      state.helloPending = false;
+      pendingHello = Math.max(0, pendingHello - 1);
+    }
     connections.delete(state);
-    if (state.binding !== null && byBinding.get(state.binding) === state) byBinding.delete(state.binding);
+    if (state.bindingKey !== null && byBindingKey.get(state.bindingKey) === state) byBindingKey.delete(state.bindingKey);
     state.queue.reset();
   }
 
@@ -190,7 +156,7 @@ function createSimWebSocketAdapter(options = {}) {
     }
     if (outcome.action === "disconnect") {
       state.closing = true;
-      sendApplicationClose(state, 4008, "queue policy", true, 250);
+      sendApplicationClose(state, 4008, "queue policy", true, 250, 1013);
     }
   }
 
@@ -224,68 +190,104 @@ function createSimWebSocketAdapter(options = {}) {
 
   function enqueueReliableState(state, frame) {
     if (state.closing) return { accepted: false, action: "disconnect", reason: "connection-closing" };
-    const nextId = state.queue.status().highestIssuedReliableId + 1;
-    const retainedFrame = frame.deliveryId === undefined ? { ...frame, deliveryId: nextId } : frame;
-    encodeWireFrame(retainedFrame, { direction: SERVER_TO_CLIENT });
-    const result = state.queue.enqueueConsequence(retainedFrame, { reliableId: retainedFrame.deliveryId });
-    queueOutcome(state, result);
-    flush(state);
-    return result.accepted ? { ...result, frame: retainedFrame } : result;
+    try {
+      const nextId = state.queue.status().highestIssuedReliableId + 1;
+      const retainedFrame = frame?.deliveryId === undefined ? { ...frame, deliveryId: nextId } : frame;
+      encodeWireFrame(retainedFrame, { direction: SERVER_TO_CLIENT });
+      const result = state.queue.enqueueConsequence(retainedFrame, { reliableId: retainedFrame.deliveryId });
+      queueOutcome(state, result);
+      flush(state);
+      return result.accepted ? { ...result, frame: retainedFrame } : result;
+    } catch (error) {
+      const safe = publicError(error, "reliable-frame-invalid");
+      failConnection(state, error);
+      return { accepted: false, action: "reject", reason: safe.code };
+    }
   }
 
   async function handleHello(state, frame) {
     if (state.bound) throw new WireProtocolError("duplicate-hello", "hello is only valid once", 4400);
-    const result = await redeemHello(frame);
+    const expectedGeneration = state.generation;
+    const result = await redeemHello(frame, callbackContext(state, "redeem-hello"));
+    if (!stateIsLive(state, expectedGeneration)) return;
     if (!result || typeof result !== "object" || !result.binding || !result.welcome || !result.rebase) {
-      throw Object.assign(new Error("invalid hello redemption"), { code: "admission-rejected", closeCode: 4401 });
+      throw Object.assign(new Error("invalid hello redemption"), { publicCode: "admission-rejected", closeCode: 4401 });
     }
     encodeWireFrame(result.welcome, { direction: SERVER_TO_CLIENT });
     encodeWireFrame(result.rebase, { direction: SERVER_TO_CLIENT });
+    const identity = Object.freeze({
+      runId: result.welcome.runId,
+      membershipId: result.welcome.membershipId,
+      playerId: result.welcome.playerId,
+      connectionId: result.welcome.connectionId,
+      connectionEpoch: result.welcome.connectionEpoch,
+    });
+    const bindingKey = stableBindingKey(result.bindingKey || identity);
+    if (!bindingKey) throw Object.assign(new Error("stable binding identity missing"), { publicCode: "admission-rejected", closeCode: 4401 });
     state.binding = result.binding;
+    state.bindingKey = bindingKey;
+    state.identity = identity;
+    if (typeof state.binding === "object" && state.binding !== null) bindingKeys.set(state.binding, bindingKey);
     state.bound = true;
+    if (!(await isBindingCurrent(state, "private-welcome"))) {
+      if (!stateIsLive(state, expectedGeneration)) return;
+      throw Object.assign(new Error("redeemed binding is no longer current"), { publicCode: "connection-fenced", closeCode: 4003 });
+    }
+    if (!stateIsLive(state, expectedGeneration)) return;
+    if (state.helloPending) {
+      state.helloPending = false;
+      pendingHello = Math.max(0, pendingHello - 1);
+    }
+    clearTimeout(state.helloTimer);
     state.heartbeatIntervalMs = result.welcome.heartbeatIntervalMs;
     state.nextHeartbeatAt = now() + state.heartbeatIntervalMs;
-    clearTimeout(state.helloTimer);
-    const prior = byBinding.get(state.binding);
+    const prior = byBindingKey.get(bindingKey);
     if (prior && prior !== state) {
+      if (prior.identity.connectionEpoch >= identity.connectionEpoch) {
+        state.closing = true;
+        sendApplicationClose(state, 4003, "connection superseded", true);
+        return;
+      }
+      prior.queue.reset();
       prior.closing = true;
       sendApplicationClose(prior, 4003, "connection replaced", true);
     }
-    byBinding.set(state.binding, state);
+    byBindingKey.set(bindingKey, state);
     currentRunId = result.welcome.runId;
-    if (!(await isBindingCurrent(state, "private-welcome"))) {
-      throw Object.assign(new Error("redeemed binding is no longer current"), { code: "connection-fenced", closeCode: 4003 });
-    }
     sendFrame(state, result.welcome);
     sendFrame(state, result.rebase);
   }
 
   async function handleBoundFrame(state, frame) {
+    const expectedGeneration = state.generation;
     if (!(await isBindingCurrent(state, `inbound:${frame.type}`))) {
+      if (!stateIsLive(state, expectedGeneration)) return;
       state.closing = true;
       return sendApplicationClose(state, 4003, "connection fenced", true);
     }
     if (frame.type === "input") {
-      if (!consumeBucket(state.inputBucket, now())) {
+      if (!consumeRateBucket(state.inputBucket, now())) {
         state.closing = true;
-        return sendApplicationClose(state, 4008, "input rate exceeded", true, 250);
+        return sendApplicationClose(state, 4008, "input rate exceeded", true, 250, 1013);
       }
-      const reply = await onInput(state.binding, frame);
+      const reply = await onInput(state.binding, frame, callbackContext(state, "input"));
+      if (!stateIsLive(state, expectedGeneration)) return;
       if (reply && await isBindingCurrent(state, "private-input-ack")) sendFrame(state, reply.frame || reply);
-      else if (reply) {
+      else if (reply && stateIsLive(state, expectedGeneration)) {
         state.closing = true;
         sendApplicationClose(state, 4003, "connection fenced", true);
       }
       return;
     }
     if (frame.type === "action") {
-      if (!consumeBucket(state.actionBucket, now())) {
+      if (!consumeRateBucket(state.actionBucket, now())) {
         state.closing = true;
-        return sendApplicationClose(state, 4008, "action rate exceeded", true, 250);
+        return sendApplicationClose(state, 4008, "action rate exceeded", true, 250, 1013);
       }
-      const reply = await onAction(state.binding, frame);
+      const reply = await onAction(state.binding, frame, callbackContext(state, "action"));
+      if (!stateIsLive(state, expectedGeneration)) return;
       if (reply && await isBindingCurrent(state, "private-action-ack")) enqueueReliableState(state, reply.frame || reply);
-      else if (reply) {
+      else if (reply && stateIsLive(state, expectedGeneration)) {
         state.closing = true;
         sendApplicationClose(state, 4003, "connection fenced", true);
       }
@@ -297,37 +299,43 @@ function createSimWebSocketAdapter(options = {}) {
       }
       state.pendingHeartbeat = null;
       state.nextHeartbeatAt = now() + state.heartbeatIntervalMs;
-      await onPong(state.binding, frame);
+      await onPong(state.binding, frame, callbackContext(state, "pong"));
+      if (!stateIsLive(state, expectedGeneration)) return;
       return;
     }
     if (frame.type === "ack") {
       if (frame.ackKind === "delivery") queueOutcome(state, state.queue.acknowledge(frame.deliveryId));
-      await onAck(state.binding, frame);
+      if (!stateIsLive(state, expectedGeneration)) return;
+      await onAck(state.binding, frame, callbackContext(state, "ack"));
+      if (!stateIsLive(state, expectedGeneration)) return;
       flush(state);
       return;
     }
     throw new WireProtocolError("unexpected-frame", `unexpected ${frame.type} frame`, 4400);
   }
 
+  async function processInboundFrame(state, raw, isBinary) {
+    if (!stateIsLive(state)) return;
+    if (isBinary) throw new WireProtocolError("binary-frame", "binary application frames are not supported", 4403);
+    const frame = parseWireFrame(raw, { direction: CLIENT_TO_SERVER });
+    if (!state.bound) {
+      if (frame.type !== "hello") throw new WireProtocolError("hello-required", "first frame must be hello", 4401);
+      await handleHello(state, frame);
+    } else {
+      await handleBoundFrame(state, frame);
+    }
+  }
+
   function connection(ws) {
     const timestamp = now();
-    const state = {
+    const state = createConnectionState({
       ws,
       queue: createMultiplayerSendQueue(queueOptions),
-      binding: null,
-      bound: false,
-      closing: false,
-      cleaned: false,
-      flushing: false,
-      pendingSends: 0,
-      backpressuredSince: null,
+      generation,
+      timestamp,
       heartbeatIntervalMs,
-      nextHeartbeatAt: timestamp + heartbeatIntervalMs,
-      pendingHeartbeat: null,
-      inputBucket: createBucket(40, 12, timestamp),
-      actionBucket: createBucket(10, 8, timestamp),
-      helloTimer: null,
-    };
+    });
+    pendingHello += 1;
     connections.add(state);
     state.helloTimer = setTimeout(() => {
       if (!state.bound && !state.closing) {
@@ -337,17 +345,19 @@ function createSimWebSocketAdapter(options = {}) {
     }, helloTimeoutMs);
     state.helloTimer.unref?.();
     ws.on("message", (raw, isBinary) => {
-      Promise.resolve().then(async () => {
-        if (state.closing) return;
-        if (isBinary) throw new WireProtocolError("binary-frame", "binary application frames are not supported", 4403);
-        const frame = parseWireFrame(raw, { direction: CLIENT_TO_SERVER });
-        if (!state.bound) {
-          if (frame.type !== "hello") throw new WireProtocolError("hello-required", "first frame must be hello", 4401);
-          await handleHello(state, frame);
-        } else {
-          await handleBoundFrame(state, frame);
-        }
-      }).catch((error) => failConnection(state, error));
+      enqueueBoundedInbound({
+        state,
+        raw,
+        isBinary,
+        maxPendingInbound,
+        onDepth: (depth) => { maxObservedPendingInbound = Math.max(maxObservedPendingInbound, depth); },
+        onFrame: (frameRaw, binary) => processInboundFrame(state, frameRaw, binary),
+        onError: (error) => failConnection(state, error),
+        onOverflow: () => {
+          state.closing = true;
+          sendApplicationClose(state, 4008, "inbound queue full", true, 250, 1013);
+        },
+      });
     });
     ws.on("close", () => cleanup(state));
     ws.on("error", () => terminate(state));
@@ -355,28 +365,51 @@ function createSimWebSocketAdapter(options = {}) {
 
   async function projectNow(context = {}) {
     if (closed) return { projected: 0, skipped: connections.size };
-    const publicFrame = await buildPublicState(context);
-    encodeWireFrame(publicFrame, { direction: SERVER_TO_CLIENT });
+    const candidates = [...connections].filter((state) => state.bound && !state.closing && !state.cleaned);
+    if (candidates.length === 0) return { projected: 0, skipped: connections.size };
+    const expectedGeneration = generation;
+    let publicFrame;
+    try {
+      publicFrame = await buildPublicState(context, callbackContext(null, "public-project"));
+      if (closed || generation !== expectedGeneration || lifecycle.signal.aborted) {
+        return { projected: 0, skipped: connections.size, aborted: true };
+      }
+      encodeWireFrame(publicFrame, { direction: SERVER_TO_CLIENT });
+    } catch (error) {
+      const safe = publicError(error, "public-projection-failed");
+      for (const state of connections) {
+        if (state.bound && stateIsLive(state)) failConnection(state, error, { fatal: false });
+      }
+      return { projected: 0, skipped: connections.size, error: safe.code };
+    }
     let projected = 0;
-    let skipped = 0;
-    for (const state of [...connections]) {
+    let skipped = Math.max(0, connections.size - candidates.length);
+    for (const state of candidates) {
       if (!(await isBindingCurrent(state, "private-project"))) {
         skipped += 1;
+        if (!stateIsLive(state)) continue;
         state.closing = true;
         sendApplicationClose(state, 4003, "connection fenced", true);
         continue;
       }
       try {
-        const ownerFrame = await buildOwnerState(state.binding, publicFrame, context);
-        encodeWireFrame(ownerFrame, { direction: SERVER_TO_CLIENT });
-        for (const watermark of [
-          "runId", "snapshotId", "tick", "simTime", "lastEventSeq", "fieldRevision", "overloadMode",
-        ]) {
-          if (ownerFrame[watermark] !== publicFrame[watermark]) {
-            throw Object.assign(new Error("projection watermark mismatch"), { code: "projection-watermark-mismatch" });
-          }
+        const ownerFrame = await buildOwnerState(
+          state.binding,
+          publicFrame,
+          context,
+          callbackContext(state, "owner-project"),
+        );
+        if (!stateIsLive(state)) {
+          skipped += 1;
+          continue;
         }
+        encodeWireFrame(ownerFrame, { direction: SERVER_TO_CLIENT });
+        assertOwnerProjection(ownerFrame, publicFrame, state.identity);
         if (!(await isBindingCurrent(state, "private-project-send"))) {
+          if (!stateIsLive(state)) {
+            skipped += 1;
+            continue;
+          }
           state.closing = true;
           sendApplicationClose(state, 4003, "connection fenced", true);
           skipped += 1;
@@ -392,16 +425,24 @@ function createSimWebSocketAdapter(options = {}) {
         else skipped += 1;
       } catch (error) {
         skipped += 1;
-        failConnection(state, error, { fatal: false });
+        failConnection(state, error, { fatal: error?.fatal === true });
       }
     }
     return { projected, skipped, snapshotId: publicFrame.snapshotId };
   }
 
+  function bindingKeyFor(binding) {
+    return typeof binding === "object" && binding !== null
+      ? bindingKeys.get(binding) || stableBindingKey(binding)
+      : stableBindingKey(binding);
+  }
+
   async function enqueueReliable(binding, frame) {
-    const state = byBinding.get(binding);
+    const key = bindingKeyFor(binding);
+    const state = key ? byBindingKey.get(key) : null;
     if (!state) return { accepted: false, action: "ignore", reason: "binding-not-connected" };
     if (!(await isBindingCurrent(state, "private-reliable-send"))) {
+      if (!stateIsLive(state)) return { accepted: false, action: "ignore", reason: "connection-not-live" };
       state.closing = true;
       sendApplicationClose(state, 4003, "connection fenced", true);
       return { accepted: false, action: "disconnect", reason: "connection-fenced" };
@@ -414,13 +455,26 @@ function createSimWebSocketAdapter(options = {}) {
     for (const state of connections) {
       if (!state.bound || state.closing) continue;
       if (!(await isBindingCurrent(state, "private-reliable-send"))) {
+        if (!stateIsLive(state)) continue;
         state.closing = true;
         sendApplicationClose(state, 4003, "connection fenced", true);
         results.push({ accepted: false, action: "disconnect", reason: "connection-fenced" });
         continue;
       }
-      const frame = typeof frameFactory === "function" ? frameFactory(state.binding) : frameFactory;
-      if (frame) results.push(enqueueReliableState(state, frame));
+      try {
+        const frame = typeof frameFactory === "function"
+          ? await frameFactory(state.binding, callbackContext(state, "broadcast-reliable"))
+          : frameFactory;
+        if (!stateIsLive(state)) {
+          results.push({ accepted: false, action: "ignore", reason: "connection-not-live" });
+        } else if (frame) {
+          results.push(enqueueReliableState(state, frame));
+        }
+      } catch (error) {
+        const safe = publicError(error, "reliable-factory-failed");
+        failConnection(state, error, { fatal: false });
+        results.push({ accepted: false, action: "reject", reason: safe.code });
+      }
     }
     return results;
   }
@@ -430,7 +484,7 @@ function createSimWebSocketAdapter(options = {}) {
     let fenced = 0;
     for (const state of [...connections]) {
       state.queue.reset();
-      if (state.bound && !state.closing) {
+      if (!state.closing) {
         fenced += 1;
         state.closing = true;
         sendApplicationClose(state, 4003, "run changed", true);
@@ -443,13 +497,17 @@ function createSimWebSocketAdapter(options = {}) {
     if (closed) return;
     const timestamp = now();
     for (const state of [...connections]) {
-      if (!state.bound || state.closing) continue;
+      if (state.closing) {
+        if (state.closingSince !== null && timestamp - state.closingSince >= closeGraceMs) terminate(state);
+        continue;
+      }
+      if (!state.bound) continue;
       const queueStatus = state.queue.observeTransportBufferedBytes(state.ws.bufferedAmount);
       if (queueStatus.backpressured) state.backpressuredSince ??= timestamp;
       else state.backpressuredSince = null;
       if (state.backpressuredSince !== null && timestamp - state.backpressuredSince >= backpressureTimeoutMs) {
         state.closing = true;
-        sendApplicationClose(state, 4008, "backpressure timeout", true, 250);
+        sendApplicationClose(state, 4008, "backpressure timeout", true, 250, 1013);
         continue;
       }
       if (state.pendingHeartbeat && timestamp - state.pendingHeartbeat.sentAt >= state.heartbeatIntervalMs * 2) {
@@ -467,33 +525,38 @@ function createSimWebSocketAdapter(options = {}) {
     }
   }
 
-  const heartbeatTimer = setInterval(heartbeatSweep, Math.min(heartbeatIntervalMs, backpressureTimeoutMs));
-  heartbeatTimer.unref?.();
-  server.on("upgrade", handleUpgrade);
   wss.on("connection", connection);
+  wss.on("error", () => {
+    for (const state of [...connections]) terminate(state);
+  });
+  if (upgradeRouter) upgradeRouter.attach(handleUpgrade);
+  else server.on("upgrade", handleUpgrade);
+  const detachUpgrade = () => {
+    if (upgradeRouter) upgradeRouter.detach(handleUpgrade);
+    else server.removeListener("upgrade", handleUpgrade);
+  };
+  const heartbeatTimer = setInterval(heartbeatSweep, sweepIntervalMs);
+  heartbeatTimer.unref?.();
 
   function diagnostics() {
-    let bound = 0;
-    let queuedMessages = 0;
-    let queuedBytes = 0;
-    let backpressured = 0;
-    for (const state of connections) {
-      const status = state.queue.status();
-      if (state.bound) bound += 1;
-      queuedMessages += status.queuedMessages;
-      queuedBytes += status.queuedBytes;
-      if (status.backpressured) backpressured += 1;
-    }
+    const summary = summarizeConnections(connections);
     return Object.freeze({
       path,
       closed,
       currentRunId,
       connections: connections.size,
-      bound,
-      queuedMessages,
-      queuedBytes,
-      backpressured,
-      helloTimers: [...connections].filter((state) => !state.bound).length,
+      ...summary,
+      pendingHello,
+      maxObservedPendingInbound,
+      maxConnections,
+      maxPendingHello,
+      maxPendingInbound,
+      backpressureTimeoutMs,
+      closeGraceMs,
+      rejectedConnections,
+      rejectedPendingHello,
+      sweepIntervalMs,
+      helloTimers: pendingHello,
       livenessTimers: closed ? 0 : 1,
     });
   }
@@ -501,8 +564,10 @@ function createSimWebSocketAdapter(options = {}) {
   async function shutdown() {
     if (closed) return diagnostics();
     closed = true;
+    generation += 1;
+    lifecycle.abort();
     clearInterval(heartbeatTimer);
-    server.removeListener("upgrade", handleUpgrade);
+    detachUpgrade();
     for (const state of [...connections]) terminate(state);
     await new Promise((resolve) => {
       let settled = false;
@@ -524,6 +589,7 @@ function createSimWebSocketAdapter(options = {}) {
     projectNow,
     enqueueReliable,
     broadcastReliable,
+    bindingKeyFor,
     rotateRun,
     diagnostics,
     shutdown,

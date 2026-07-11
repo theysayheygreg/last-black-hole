@@ -5,299 +5,26 @@ const http = require("http");
 const nodeAssert = require("assert");
 const { WebSocket } = require("ws");
 const { TestRunner, assert } = require("./helpers.cjs");
-const { createSimWebSocketAdapter } = require("../scripts/sim-ws-adapter.cjs");
+const { DEFAULTS, createSimWebSocketAdapter } = require("../scripts/sim-ws-adapter.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
-  SIM_PROTOCOL_VERSION,
-  SERVER_TO_CLIENT,
-  parseWireFrame,
-} = require("../scripts/multiplayer-wire-protocol.cjs");
-
-function waitFor(predicate, { timeout = 2_000, interval = 5, label = "condition" } = {}) {
-  const deadline = Date.now() + timeout;
-  return new Promise((resolve, reject) => {
-    const poll = () => {
-      let value;
-      try {
-        value = predicate();
-      } catch (error) {
-        reject(error);
-        return;
-      }
-      if (value) {
-        resolve(value);
-        return;
-      }
-      if (Date.now() >= deadline) {
-        reject(new Error(`Timed out waiting for ${label}`));
-        return;
-      }
-      setTimeout(poll, interval);
-    };
-    poll();
-  });
-}
-
-function nextFrame(messages, type, after = -1) {
-  return messages.find((frame, index) => index > after && frame.type === type);
-}
-
-async function openClient(url, { collect = true } = {}) {
-  const ws = new WebSocket(url);
-  const messages = [];
-  const rawMessages = [];
-  const close = { code: null, reason: null };
-  if (collect) {
-    ws.on("message", (raw) => {
-      rawMessages.push(raw.toString());
-      messages.push(parseWireFrame(raw, { direction: SERVER_TO_CLIENT }));
-    });
-  }
-  ws.on("close", (code, reason) => {
-    close.code = code;
-    close.reason = reason.toString();
-  });
-  await new Promise((resolve, reject) => {
-    ws.once("open", resolve);
-    ws.once("error", reject);
-  });
-  return { ws, messages, rawMessages, close };
-}
-
-function hello(ticket) {
-  return {
-    type: "hello",
-    wireVersion: WIRE_PROTOCOL_VERSION,
-    simProtocolVersion: SIM_PROTOCOL_VERSION,
-    admissionTicket: ticket,
-  };
-}
-
-function inputFrame(inputSeq = 1) {
-  return {
-    type: "input",
-    inputSeq,
-    moveX: 0.6,
-    moveY: 0.8,
-    thrust: 1,
-    brake: 0,
-    slingshot: false,
-    ability1: false,
-    ability2: true,
-    clientTimeMs: Date.now(),
-  };
-}
-
-function actionFrame(actionSeq = 1, commandSeq = 1) {
-  return {
-    type: "action",
-    actionId: `action-${actionSeq}`,
-    actionSeq,
-    commandSeq,
-    actionKind: "pulse",
-    payload: {},
-    clientTimeMs: Date.now(),
-  };
-}
-
-function eventFrame(runId, eventSeq, marker = `event-${eventSeq}`) {
-  return {
-    type: "event",
-    runId,
-    eventSeq,
-    tick: eventSeq,
-    visibility: "owner",
-    eventType: "test.event",
-    payload: { marker },
-  };
-}
-
-async function createHarness(options = {}) {
-  const server = http.createServer((_request, response) => {
-    response.writeHead(404).end();
-  });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const address = server.address();
-  const baseUrl = `ws://127.0.0.1:${address.port}`;
-  const tickets = new Map();
-  const bindings = [];
-  const inputs = [];
-  const actions = [];
-  const pongs = [];
-  const acks = [];
-  const validations = [];
-  let snapshotId = 0;
-
-  function issueTicket(name, overrides = {}) {
-    const ticket = overrides.ticket || `ticket-${name}-${Math.random().toString(36).slice(2)}`;
-    tickets.set(ticket, {
-      name,
-      playerId: `player-${name}`,
-      membershipId: `membership-${name}`,
-      credential: `credential-${name}`,
-      expiresAt: Date.now() + 5_000,
-      ...overrides,
-    });
-    return ticket;
-  }
-
-  const adapter = createSimWebSocketAdapter({
-    server,
-    runId: "run-a",
-    helloTimeoutMs: options.helloTimeoutMs || 80,
-    heartbeatIntervalMs: options.heartbeatIntervalMs || 1_000,
-    backpressureTimeoutMs: options.backpressureTimeoutMs || 1_000,
-    queueOptions: options.queueOptions,
-    async redeemHello(frame) {
-      const claim = tickets.get(frame.admissionTicket);
-      if (!claim || claim.expiresAt <= Date.now()) {
-        const error = new Error("opaque ticket rejected");
-        error.code = "admission-rejected";
-        error.closeCode = 4401;
-        throw error;
-      }
-      tickets.delete(frame.admissionTicket);
-      const binding = {
-        name: claim.name,
-        runId: "run-a",
-        playerId: claim.playerId,
-        membershipId: claim.membershipId,
-        current: true,
-        snapshotId: 1,
-        lastEventSeq: 0,
-      };
-      bindings.push(binding);
-      return {
-        binding,
-        welcome: {
-          type: "welcome",
-          wireVersion: WIRE_PROTOCOL_VERSION,
-          simProtocolVersion: SIM_PROTOCOL_VERSION,
-          runId: binding.runId,
-          membershipId: binding.membershipId,
-          playerId: binding.playerId,
-          connectionId: `connection-${claim.name}`,
-          connectionEpoch: 1,
-          commandCredential: claim.credential,
-          lastCommandSeq: 0,
-          nextCommandSeq: 1,
-          lastInputSeq: 0,
-          lastActionSeq: 0,
-          heartbeatIntervalMs: options.heartbeatIntervalMs || 1_000,
-          reconnected: false,
-        },
-        rebase: {
-          type: "rebase",
-          runId: binding.runId,
-          reason: "initial",
-          snapshotId: 1,
-          lastEventSeq: 0,
-        },
-      };
-    },
-    async revalidateBinding(binding, context) {
-      validations.push({ name: binding.name, purpose: context.purpose });
-      return binding.current;
-    },
-    async onInput(binding, frame) {
-      inputs.push({ binding, frame });
-      return { type: "ack", ackKind: "input", inputSeq: frame.inputSeq };
-    },
-    async onAction(binding, frame) {
-      actions.push({ binding, frame });
-      return {
-        type: "ack",
-        ackKind: "action",
-        actionId: frame.actionId,
-        actionSeq: frame.actionSeq,
-        commandSeq: frame.commandSeq,
-        status: "accepted",
-        result: { pulsed: true },
-      };
-    },
-    async onPong(binding, frame) {
-      pongs.push({ binding, frame });
-    },
-    async onAck(binding, frame) {
-      acks.push({ binding, frame });
-    },
-    async buildPublicState(context = {}) {
-      snapshotId += 1;
-      const payload = context.payload || { bodies: [{ id: "public-body", x: 0.25, y: 0.5 }], despawns: [] };
-      return {
-        type: "publicState",
-        runId: "run-a",
-        snapshotId,
-        tick: snapshotId * 2,
-        simTime: snapshotId / 10,
-        lastEventSeq: snapshotId,
-        fieldRevision: 1,
-        overloadMode: "NORMAL",
-        lastInputSeq: 0,
-        lastActionSeq: 0,
-        manifestHash: "sha256:test",
-        full: true,
-        state: payload,
-      };
-    },
-    async buildOwnerState(binding, publicFrame) {
-      return {
-        type: "ownerState",
-        runId: publicFrame.runId,
-        membershipId: binding.membershipId,
-        playerId: binding.playerId,
-        snapshotId: publicFrame.snapshotId,
-        tick: publicFrame.tick,
-        simTime: publicFrame.simTime,
-        lastEventSeq: publicFrame.lastEventSeq,
-        fieldRevision: publicFrame.fieldRevision,
-        overloadMode: publicFrame.overloadMode,
-        lastInputSeq: 0,
-        lastActionSeq: 0,
-        state: { privateMarker: `private-${binding.name}` },
-      };
-    },
-  });
-
-  async function admit(name, overrides = {}) {
-    const ticket = issueTicket(name, overrides);
-    const client = await openClient(`${baseUrl}/stream`);
-    client.ws.send(JSON.stringify(hello(ticket)));
-    await waitFor(
-      () => nextFrame(client.messages, "welcome") && nextFrame(client.messages, "rebase"),
-      { label: `${name} welcome and rebase` },
-    );
-    client.binding = bindings.find((binding) => binding.name === name);
-    return client;
-  }
-
-  async function close() {
-    await adapter.shutdown();
-    await new Promise((resolve) => server.close(resolve));
-  }
-
-  return {
-    server,
-    baseUrl,
-    adapter,
-    tickets,
-    bindings,
-    inputs,
-    actions,
-    pongs,
-    acks,
-    validations,
-    issueTicket,
-    admit,
-    close,
-  };
-}
+  waitFor,
+  deferred,
+  upgradeStatus,
+  nextFrame,
+  openClient,
+  hello,
+  inputFrame,
+  actionFrame,
+  eventFrame,
+  createHarness,
+} = require("./multiplayer-ws-adapter-fixture.cjs");
 
 async function run() {
   const runner = new TestRunner("MultiplayerWsAdapterCore");
 
   await runner.run("rejects non-stream upgrades and closes sockets that miss the hello deadline", async () => {
-    const harness = await createHarness({ helloTimeoutMs: 40 });
+    const harness = await createHarness({ helloTimeoutMs: 40, closeGraceMs: 100, sweepIntervalMs: 50 });
     try {
       const wrongPath = new WebSocket(`${harness.baseUrl}/not-stream`);
       const status = await new Promise((resolve, reject) => {
@@ -319,7 +46,159 @@ async function run() {
       await waitFor(() => idle.close.code !== null, { label: "hello-timeout close" });
       assert(idle.close.code === 4401, `Expected hello timeout 4401, got ${idle.close.code}`);
       assert(nextFrame(idle.messages, "close")?.reason === "hello timeout", "Timeout should emit a codec-valid close frame");
+
+      const stubborn = await openClient(`${harness.baseUrl}/stream`);
+      stubborn.ws._socket.pause();
+      await waitFor(() => harness.adapter.diagnostics().closing === 1, { label: "stubborn hello timeout" });
+      await waitFor(() => harness.adapter.diagnostics().connections === 0, {
+        timeout: 1_000,
+        label: "forced hello-timeout cleanup",
+      });
+      stubborn.ws._socket.resume();
     } finally {
+      await harness.close();
+    }
+
+  });
+
+  await runner.run("fails construction when another component already owns Upgrade routing", async () => {
+    const server = http.createServer();
+    server.on("upgrade", () => {});
+    nodeAssert.throws(
+      () => createSimWebSocketAdapter({ server }),
+      /already owns Upgrade routing/,
+      "Adapter should require an explicit cooperative router instead of racing Upgrade listeners",
+    );
+    server.removeAllListeners();
+  });
+
+  await runner.run("bounds total connections and pending hellos and recovers capacity after cleanup", async () => {
+    assert(DEFAULTS.maxConnections === 128 && DEFAULTS.maxPendingHello === 32 && DEFAULTS.maxPendingInbound === 64,
+      "Production defaults should expose explicit hard connection, hello, and inbound caps");
+    assert(DEFAULTS.backpressureTimeoutMs === 2_000, "Production no-progress default should match the 2s plan bound");
+    const connectionHarness = await createHarness({ maxConnections: 1, maxPendingHello: 1, helloTimeoutMs: 40 });
+    try {
+      const idle = await openClient(`${connectionHarness.baseUrl}/stream`);
+      assert(await upgradeStatus(`${connectionHarness.baseUrl}/stream`) === 503, "Connection cap should reject excess Upgrade");
+      assert(connectionHarness.adapter.diagnostics().rejectedConnections === 1, "Connection rejection should be counted");
+      await waitFor(() => idle.close.code !== null, { label: "connection-cap idle cleanup" });
+      await waitFor(() => connectionHarness.adapter.diagnostics().connections === 0, { label: "connection capacity release" });
+      const recovered = await connectionHarness.admit("capacity-recovered");
+      assert(nextFrame(recovered.messages, "welcome"), "Released connection capacity should accept a later hello");
+    } finally {
+      await connectionHarness.close();
+    }
+
+    const helloHarness = await createHarness({ maxConnections: 2, maxPendingHello: 1, helloTimeoutMs: 40 });
+    try {
+      const idle = await openClient(`${helloHarness.baseUrl}/stream`);
+      assert(await upgradeStatus(`${helloHarness.baseUrl}/stream`) === 503, "Pending-hello cap should reject excess Upgrade");
+      assert(helloHarness.adapter.diagnostics().rejectedPendingHello === 1, "Pending-hello rejection should be counted");
+      await waitFor(() => idle.close.code !== null, { label: "pending-hello timeout" });
+      await waitFor(() => helloHarness.adapter.diagnostics().pendingHello === 0, { label: "pending-hello capacity release" });
+      const recovered = await helloHarness.admit("hello-recovered");
+      assert(nextFrame(recovered.messages, "welcome"), "Hello timeout cleanup should release pending capacity");
+    } finally {
+      await helloHarness.close();
+    }
+  });
+
+  await runner.run("skips projection for a hello-pending socket without closing or projecting private state", async () => {
+    const gate = deferred();
+    let redemptionStarted = false;
+    const harness = await createHarness({
+      beforeRedeem: async () => {
+        redemptionStarted = true;
+        await gate.promise;
+      },
+    });
+    try {
+      const ticket = harness.issueTicket("pending-project");
+      const client = await openClient(`${harness.baseUrl}/stream`);
+      client.ws.send(JSON.stringify(hello(ticket)));
+      await waitFor(() => redemptionStarted, { label: "delayed redemption start" });
+      const projection = await harness.adapter.projectNow();
+      assert(projection.projected === 0 && projection.skipped === 1, "Pending hello should be skipped, not fenced");
+      assert(client.close.code === null && client.messages.length === 0, "Pending hello should receive no state or close frame");
+      gate.resolve();
+      await waitFor(() => nextFrame(client.messages, "welcome"), { label: "post-projection welcome" });
+    } finally {
+      gate.resolve();
+      await harness.close();
+    }
+  });
+
+  await runner.run("serializes raw frames so double hello redeems once and commands retain arrival order", async () => {
+    const redeemGate = deferred();
+    let redeemStarted = false;
+    const helloHarness = await createHarness({
+      beforeRedeem: async () => {
+        redeemStarted = true;
+        await redeemGate.promise;
+      },
+    });
+    try {
+      const ticket = helloHarness.issueTicket("double");
+      const client = await openClient(`${helloHarness.baseUrl}/stream`);
+      const wire = JSON.stringify(hello(ticket));
+      client.ws.send(wire);
+      client.ws.send(wire);
+      await waitFor(() => redeemStarted, { label: "first hello redemption" });
+      redeemGate.resolve();
+      await waitFor(() => client.close.code !== null, { label: "duplicate hello close" });
+      assert(helloHarness.getRedemptionCount() === 1, "Concurrent double hello must redeem exactly once");
+      assert(helloHarness.adapter.diagnostics().maxObservedPendingInbound <= 2, "Double hello queue should remain bounded");
+    } finally {
+      redeemGate.resolve();
+      await helloHarness.close();
+    }
+
+    const inputGate = deferred();
+    const starts = [];
+    const orderHarness = await createHarness({
+      beforeInput: async (_binding, frame) => {
+        starts.push(frame.inputSeq);
+        if (frame.inputSeq === 1) await inputGate.promise;
+      },
+    });
+    try {
+      const client = await orderHarness.admit("ordered");
+      client.ws.send(JSON.stringify(inputFrame(1)));
+      client.ws.send(JSON.stringify(inputFrame(2)));
+      await waitFor(() => starts.length === 1, { label: "first ordered command start" });
+      nodeAssert.deepStrictEqual(starts, [1], "Second callback must not overtake a delayed first callback");
+      inputGate.resolve();
+      await waitFor(() => orderHarness.inputs.length === 2, { label: "ordered command completion" });
+      nodeAssert.deepStrictEqual(
+        orderHarness.inputs.map((entry) => entry.frame.inputSeq),
+        [1, 2],
+        "Command callbacks should preserve socket arrival order",
+      );
+    } finally {
+      inputGate.resolve();
+      await orderHarness.close();
+    }
+  });
+
+  await runner.run("closes an inbound raw-frame flood without exceeding its configured pending cap", async () => {
+    const gate = deferred();
+    const harness = await createHarness({
+      maxPendingInbound: 4,
+      beforeInput: async (_binding, frame) => {
+        if (frame.inputSeq === 1) await gate.promise;
+      },
+    });
+    try {
+      const client = await harness.admit("inbound-flood");
+      for (let sequence = 1; sequence <= 8; sequence += 1) client.ws.send(JSON.stringify(inputFrame(sequence)));
+      await waitFor(() => client.close.code !== null, { label: "inbound flood close" });
+      assert(client.close.code === 1013, "Inbound queue exhaustion should use retry-later transport close");
+      assert(nextFrame(client.messages, "close")?.code === 4008, "Inbound flood should retain codec-valid app close");
+      assert(harness.adapter.diagnostics().maxObservedPendingInbound <= 4, "Raw-frame tail must never exceed configured cap");
+      gate.resolve();
+      await waitFor(() => harness.adapter.diagnostics().pendingInbound === 0, { label: "inbound tail cleanup" });
+    } finally {
+      gate.resolve();
       await harness.close();
     }
   });
@@ -427,6 +306,155 @@ async function run() {
     }
   });
 
+  await runner.run("replaces old epochs by stable run and membership identity across new binding objects", async () => {
+    const harness = await createHarness();
+    try {
+      const identity = { runId: "run-a", membershipId: "membership-stable" };
+      const first = await harness.admit("stable-old", {
+        membershipId: identity.membershipId,
+        playerId: "player-stable",
+        epoch: 1,
+      });
+      const second = await harness.admit("stable-new", {
+        membershipId: identity.membershipId,
+        playerId: "player-stable",
+        epoch: 2,
+      });
+      await waitFor(() => first.close.code !== null, { label: "old epoch immediate fence" });
+      assert(first.close.code === 4003, "New epoch should immediately close the old stable membership socket");
+      assert(harness.adapter.bindingKeyFor(first.binding) === harness.adapter.bindingKeyFor(second.binding),
+        "Distinct binding objects for one membership should resolve to one stable key");
+
+      const reliable = await harness.adapter.enqueueReliable(identity, eventFrame("run-a", 1, "stable-route"));
+      assert(reliable.accepted, "Reliable lookup should accept a stable runId+membershipId object");
+      await waitFor(
+        () => second.messages.some((frame) => frame.type === "event" && frame.payload.marker === "stable-route"),
+        { label: "stable reliable route" },
+      );
+      await harness.adapter.projectNow();
+      await waitFor(() => nextFrame(second.messages, "ownerState"), { label: "new epoch owner state" });
+      assert(!nextFrame(first.messages, "ownerState"), "Old epoch must not receive owner state after replacement");
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await runner.run("rejects an owner projection whose identity differs from the redeemed welcome", async () => {
+    const harness = await createHarness({
+      ownerFrameMutation(frame) {
+        return { ...frame, membershipId: "membership-attacker" };
+      },
+    });
+    try {
+      const client = await harness.admit("owner-mismatch");
+      const result = await harness.adapter.projectNow();
+      assert(result.projected === 0 && result.skipped === 1, "Identity-mismatched owner frame must be skipped");
+      await waitFor(() => client.close.code !== null, { label: "owner identity mismatch close" });
+      assert(client.close.code === 4403, "Private identity mismatch should close the connection");
+      assert(!nextFrame(client.messages, "ownerState"), "Mismatched owner frame must never reach the wire");
+      assert(nextFrame(client.messages, "error")?.code === "owner-identity-mismatch",
+        "Identity mismatch should surface only a bounded error code");
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await runner.run("aborts delayed redemption on shutdown without repopulating adapter state", async () => {
+    const gate = deferred();
+    const returned = deferred();
+    let redemptionContext = null;
+    const harness = await createHarness({
+      beforeRedeem: async (_frame, context) => {
+        redemptionContext = context;
+        await gate.promise;
+      },
+      afterRedeem: async () => returned.resolve(),
+    });
+    let serverClosed = false;
+    try {
+      const ticket = harness.issueTicket("shutdown-race");
+      const client = await openClient(`${harness.baseUrl}/stream`);
+      client.ws.send(JSON.stringify(hello(ticket)));
+      await waitFor(() => redemptionContext, { label: "shutdown-race redemption start" });
+      const diagnostics = await harness.adapter.shutdown();
+      assert(redemptionContext.signal.aborted, "Shutdown must abort the callback signal");
+      assert(diagnostics.connections === 0 && diagnostics.bound === 0 && diagnostics.pendingHello === 0,
+        "Shutdown should clear connection and hello state before delayed callback returns");
+      gate.resolve();
+      await returned.promise;
+      await new Promise((resolve) => setImmediate(resolve));
+      const after = harness.adapter.diagnostics();
+      assert(after.connections === 0 && after.bound === 0 && after.pendingHello === 0,
+        "Resolved redemption must not repopulate maps after lifecycle generation changes");
+      await waitFor(() => client.close.code !== null, { label: "shutdown-race socket close" });
+      await new Promise((resolve) => harness.server.close(resolve));
+      serverClosed = true;
+    } finally {
+      gate.resolve();
+      if (!serverClosed) await harness.close();
+    }
+  });
+
+  await runner.run("uses a safe sweep for a 1s negotiated heartbeat even when the factory default is 60s", async () => {
+    const harness = await createHarness({ heartbeatIntervalMs: 60_000, welcomeHeartbeatIntervalMs: 1_000 });
+    try {
+      const client = await harness.admit("heartbeat-divergence");
+      assert(harness.adapter.diagnostics().sweepIntervalMs <= 1_000, "Sweep cadence must stay at or below one second");
+      const heartbeat = await waitFor(
+        () => nextFrame(client.messages, "heartbeat"),
+        { timeout: 2_500, label: "negotiated 1s heartbeat" },
+      );
+      client.ws.send(JSON.stringify({ type: "pong", heartbeatId: heartbeat.heartbeatId, clientTimeMs: Date.now() }));
+      await waitFor(() => harness.pongs.length === 1, { label: "divergent heartbeat pong" });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await runner.run("contains projection, broadcast-factory, and reliable-encoding failures", async () => {
+    const secret = "CALLBACK-SECRET-MUST-NOT-LEAK";
+    let failPublic = true;
+    const harness = await createHarness({
+      beforePublicState: async () => {
+        if (failPublic) throw new Error(secret);
+      },
+    });
+    try {
+      const client = await harness.admit("callback-errors");
+      const projection = await harness.adapter.projectNow();
+      assert(projection.error === "public-projection-failed", "Public callback failure should return a bounded result");
+      await waitFor(() => nextFrame(client.messages, "error"), { label: "public projection error frame" });
+      failPublic = false;
+
+      const broadcast = await harness.adapter.broadcastReliable(() => {
+        throw new Error(secret);
+      });
+      assert(broadcast[0].action === "reject" && broadcast[0].reason === "reliable-factory-failed",
+        "Broadcast factory failure should be contained per connection");
+
+      const invalid = await harness.adapter.enqueueReliable(client.binding, { type: "event", payload: {} });
+      assert(invalid.action === "reject", "Invalid reliable frame should return a bounded rejection");
+      await waitFor(() => client.close.code !== null, { label: "invalid reliable frame close" });
+      const serialized = JSON.stringify({ messages: client.messages, diagnostics: harness.adapter.diagnostics() });
+      assert(!serialized.includes(secret), "Callback errors and diagnostics must not expose callback messages");
+    } finally {
+      await harness.close();
+    }
+
+    const invalidCallbackHarness = await createHarness({
+      inputReplyMutation: (reply) => ({ ...reply, inputSeq: 0 }),
+    });
+    try {
+      const client = await invalidCallbackHarness.admit("invalid-callback-reply");
+      client.ws.send(JSON.stringify(inputFrame(1)));
+      await waitFor(() => client.close.code !== null, { label: "invalid callback reply close" });
+      assert(nextFrame(client.messages, "error")?.code === "invalid-field",
+        "Invalid callback output should become a bounded protocol error and close");
+    } finally {
+      await invalidCallbackHarness.close();
+    }
+  });
+
   await runner.run("retains reliable frames until cumulative ack and disconnects future acknowledgements", async () => {
     const harness = await createHarness();
     try {
@@ -448,7 +476,8 @@ async function run() {
 
       client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: 99 }));
       await waitFor(() => client.close.code !== null, { label: "future ack close" });
-      assert(client.close.code === 4008, "Future delivery ack should follow terminal queue policy");
+      assert(client.close.code === 1013, "Queue overload should use transport retry-later code 1013");
+      assert(nextFrame(client.messages, "close")?.code === 4008, "Application close frame should preserve queue-policy code");
     } finally {
       await harness.close();
     }
@@ -469,14 +498,13 @@ async function run() {
     try {
       const client = await harness.admit("slow");
       client.ws._socket.pause();
-      const reliablePromises = [];
       for (let index = 1; index <= 300; index += 1) {
-        reliablePromises.push(harness.adapter.enqueueReliable(
+        const queued = await harness.adapter.enqueueReliable(
           client.binding,
           eventFrame("run-a", index, `${String(index).padStart(3, "0")}:${"x".repeat(7_500)}`),
-        ));
+        );
+        assert(queued.accepted, `Reliable fixture event ${index} should fit explicit bounds`);
       }
-      await Promise.all(reliablePromises);
       await waitFor(
         () => harness.adapter.diagnostics().backpressured === 1,
         { timeout: 3_000, label: "real socket backpressure" },
@@ -490,14 +518,18 @@ async function run() {
       const queuedStateBytes = during.queuedBytes - before.queuedBytes;
 
       client.ws._socket.resume();
-      client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: 1 }));
       await waitFor(
-        () => client.messages.some((frame) => frame.type === "publicState" && frame.snapshotId === latest.snapshotId),
-        { timeout: 4_000, label: "latest coalesced projection" },
+        () => client.messages.filter((frame) => frame.type === "event").length === 300
+          && client.messages.some((frame) => frame.type === "publicState" && frame.snapshotId === latest.snapshotId),
+        { timeout: 5_000, label: "all reliable events and latest coalesced projection" },
       );
       const events = client.messages.filter((frame) => frame.type === "event");
       const deliveryIds = events.map((frame) => frame.deliveryId);
-      nodeAssert.deepStrictEqual(deliveryIds, [...deliveryIds].sort((a, b) => a - b), "Reliable delivery order must stay monotonic");
+      nodeAssert.deepStrictEqual(
+        deliveryIds,
+        Array.from({ length: 300 }, (_unused, index) => index + 1),
+        "All 300 retained deliveries must arrive exactly once and monotonically",
+      );
       const latestPublic = client.messages.find(
         (frame) => frame.type === "publicState" && frame.snapshotId === latest.snapshotId,
       );
@@ -516,6 +548,60 @@ async function run() {
         !client.messages.some((frame) => frame.type === "ownerState" && frame.snapshotId !== latest.snapshotId),
         "Coalescing must not emit an orphan owner frame from a replaced projection",
       );
+      client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: 300 }));
+      await waitFor(
+        () => harness.adapter.diagnostics().queuedMessages === 0
+          && harness.adapter.diagnostics().backpressured === 0,
+        { label: "post-resume queue depth recovery" },
+      );
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await runner.run("closes a real no-progress consumer after the hard backpressure deadline", async () => {
+    const marker = "NO-PROGRESS-SECRET";
+    const harness = await createHarness({
+      queueOptions: {
+        maxMessages: 384,
+        maxBytes: 4 * 1024 * 1024,
+        maxReliableMessages: 384,
+        maxReliableBytes: 3 * 1024 * 1024,
+        transportHighWaterBytes: 16 * 1024,
+        transportLowWaterBytes: 0,
+      },
+      backpressureTimeoutMs: 200,
+      sweepIntervalMs: 100,
+    });
+    try {
+      const client = await harness.admit("no-progress", { ticket: marker, credential: marker });
+      client.ws._socket.pause();
+      for (let index = 1; index <= 300; index += 1) {
+        const queued = await harness.adapter.enqueueReliable(
+          client.binding,
+          eventFrame("run-a", index, `${String(index).padStart(3, "0")}:${"z".repeat(7_500)}`),
+        );
+        assert(queued.accepted, `No-progress fixture event ${index} should fit explicit caps`);
+      }
+      await waitFor(() => harness.adapter.diagnostics().backpressured === 1, {
+        timeout: 3_000,
+        label: "no-progress transport pressure",
+      });
+      await waitFor(() => harness.adapter.diagnostics().closing === 1, {
+        timeout: 1_500,
+        label: "hard no-progress policy close",
+      });
+      client.ws._socket.resume();
+      await waitFor(() => client.close.code !== null, { timeout: 5_000, label: "no-progress transport close" });
+      assert(client.close.code === 1013, "No-progress pressure should close transport with retry-later 1013");
+      assert(nextFrame(client.messages, "close")?.code === 4008, "No-progress close should retain codec-valid app code 4008");
+      const serialized = JSON.stringify({
+        close: client.close,
+        closeFrames: client.messages.filter((frame) => frame.type === "close" || frame.type === "error"),
+        diagnostics: harness.adapter.diagnostics(),
+      });
+      assert(!serialized.includes(marker), "No-progress diagnostics and close reasons must not contain supplied markers");
+      await waitFor(() => harness.adapter.diagnostics().connections === 0, { label: "no-progress cleanup" });
     } finally {
       await harness.close();
     }
