@@ -58,6 +58,9 @@
   actual rebuilds/invalidation advance it, disabled no-ops and reconnects stay
   stable, snapshots/health expose it, and cache validity includes it. The
   focused lineage proof is registered across multiplayer and authority lanes.
+- Added a bounded implementation packet for the injected WebSocket adapter
+  core. It owns only the new adapter module and loopback fake-authority test,
+  preserving the sim runtime for a subsequent single-owner integration slice.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 
