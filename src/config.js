@@ -405,6 +405,9 @@ export const CONFIG = {
     eventVolume: 0.3,
     pulseDuckAmount: 0.25,       // multiply other gains by this during pulse (= -12dB)
     pulseDuckDuration: 0.5,      // seconds
+    maxEventVoices: 16,
+    controlUpdateHz: 15,         // continuous controls are never driven by render FPS
+    voiceCaps: { ambient: 6, world: 6, player: 4, ui: 2, critical: 5, transient: 16 },
   },
 
   vfx: {

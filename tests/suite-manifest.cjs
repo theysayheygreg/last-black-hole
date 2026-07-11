@@ -72,6 +72,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AudioMixer",
+    file: "audio-mixer.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
     name: "AudioEvents",
     file: "audio-events.cjs",
     lanes: ["fast", "core", "static", "full"],
