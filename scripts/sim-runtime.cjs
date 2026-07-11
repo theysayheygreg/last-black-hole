@@ -6326,14 +6326,10 @@ function scheduleMultiplayerProjection() {
   let projectionStartedAt = null;
   let task = null;
   task = Promise.resolve()
-    .then(async () => {
+    .then(() => {
       if (!isCurrentProjectionLineage(stats, runId, generation)) return null;
       projectionStartedAt = performance.now();
-      const projection = Promise.resolve(multiplayerAdapter.projectNow());
-      if (MULTIPLAYER_PROJECTION_TEST_DELAY_MS > 0) {
-        await new Promise((resolve) => setTimeout(resolve, MULTIPLAYER_PROJECTION_TEST_DELAY_MS));
-      }
-      return projection;
+      return multiplayerAdapter.projectNow();
     })
     .then((result) => {
       if (!isCurrentProjectionLineage(stats, runId, generation) || !result) return;
@@ -7002,6 +6998,16 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+async function buildPublicMultiplayerStateForAdapter(...args) {
+  const frame = buildPublicMultiplayerState(...args);
+  if (MULTIPLAYER_PROJECTION_TEST_DELAY_MS > 0) {
+    // Test-only suspension occurs inside projectNow's awaited builder so reset
+    // can rotate the adapter while an old-lineage projection is genuinely live.
+    await new Promise((resolve) => setTimeout(resolve, MULTIPLAYER_PROJECTION_TEST_DELAY_MS));
+  }
+  return frame;
+}
+
 if (MULTIPLAYER_WS_ENABLED) {
   multiplayerAdapter = createSimWebSocketAdapter({
     server,
@@ -7016,7 +7022,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     revalidateBinding: revalidateMultiplayerBinding,
     onInput: (binding, frame) => executeStreamInput(binding, frame),
     onAction: (binding, frame) => rejectStreamAction(binding, frame),
-    buildPublicState: buildPublicMultiplayerState,
+    buildPublicState: buildPublicMultiplayerStateForAdapter,
     buildOwnerState: buildOwnerMultiplayerState,
     onAck: acknowledgeMultiplayerCursor,
   });

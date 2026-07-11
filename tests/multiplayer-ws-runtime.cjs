@@ -307,10 +307,10 @@ async function runProjectionLineageFixture() {
     }, "new-run projection settlement", 3500);
     const completed = completedHealth.body.multiplayer.projection;
     const accounting = completed.accounting;
-    assert(completed.projectedConnections >= 1
-      && accounting.projectionDurationSamples >= 1
+    assert(completed.projectedConnections === 1
+      && accounting.projectionDurationSamples === 1
       && accounting.projectionDurationTotalMs > 0,
-    `New lineage must account only its own completed projection: ${JSON.stringify(completed)}`);
+    `New lineage must record exactly one completion for its one projected connection: ${JSON.stringify(completed)}`);
     assert(Math.abs(accounting.projectionDurationTotalMs
       - accounting.replicationCostConsumedTotalMs
       - accounting.pendingReplicationCostMs
