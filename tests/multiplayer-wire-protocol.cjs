@@ -101,12 +101,19 @@ async function run() {
       thrust: 1,
       brake: 0,
       slingshot: true,
+      ability1: false,
+      ability2: true,
       clientTimeMs: 999,
     };
     validateWireFrame(input, { direction: CLIENT_TO_SERVER });
     expectProtocolError(() => validateWireFrame({ ...input, moveX: 1, moveY: 1 }), "invalid-field");
     expectProtocolError(() => validateWireFrame({ ...input, commandSeq: 9 }), "unknown-field");
     expectProtocolError(() => validateWireFrame({ ...input, pulse: true }), "unknown-field");
+    expectProtocolError(() => validateWireFrame({ ...input, ability1: 1 }), "invalid-field");
+    expectProtocolError(() => {
+      const { ability2, ...missingAbility } = input;
+      validateWireFrame(missingAbility);
+    }, "invalid-field");
   });
 
   await runner.run("reliable actions retain idempotency plus monotonic action and command sequences", async () => {
@@ -123,6 +130,7 @@ async function run() {
     const ack = {
       type: "ack",
       ackKind: "action",
+      deliveryId: 17,
       actionId: action.actionId,
       actionSeq: action.actionSeq,
       commandSeq: action.commandSeq,
@@ -134,6 +142,10 @@ async function run() {
     expectProtocolError(() => validateWireFrame({ ...action, commandSeq: 0 }), "invalid-field");
     expectProtocolError(() => validateWireFrame({ ...action, actionKind: "adminMutation" }), "invalid-action-kind");
     expectProtocolError(() => validateWireFrame(ack, { direction: CLIENT_TO_SERVER }), "invalid-direction");
+    expectProtocolError(() => {
+      const { deliveryId, ...unretainedAck } = ack;
+      validateWireFrame(unretainedAck, { direction: SERVER_TO_CLIENT });
+    }, "invalid-field");
   });
 
   await runner.run("public and owner state stay in distinct recipient lanes", async () => {
@@ -154,6 +166,10 @@ async function run() {
       state: { cargo: [{ type: "salvage" }], exactSignal: 0.37 },
     };
     validateWireFrame(owner, { direction: SERVER_TO_CLIENT });
+    for (const overloadMode of ["NORMAL", "THROTTLED", "DEGRADED", "DILATED"]) {
+      validateWireFrame(publicState({ overloadMode }), { direction: SERVER_TO_CLIENT });
+    }
+    expectProtocolError(() => validateWireFrame(publicState({ overloadMode: "SHED_VISUAL" })), "invalid-overload-mode");
     expectProtocolError(() => validateWireFrame({ ...publicState(), membershipId: "leak" }), "unknown-field");
     expectProtocolError(() => validateWireFrame({ ...owner, manifestHash: "wrong-lane" }), "unknown-field");
     expectProtocolError(
@@ -165,6 +181,7 @@ async function run() {
   await runner.run("events, acknowledgements, rebases, errors, and closes are explicit", async () => {
     validateWireFrame({
       type: "event",
+      deliveryId: 18,
       runId: "run-a",
       eventSeq: 5,
       tick: 121,
@@ -173,6 +190,7 @@ async function run() {
       payload: { itemId: "item-a" },
     }, { direction: SERVER_TO_CLIENT });
     validateWireFrame({ type: "ack", ackKind: "baseline", snapshotId: 9, eventSeq: 5 }, { direction: CLIENT_TO_SERVER });
+    validateWireFrame({ type: "ack", ackKind: "delivery", deliveryId: 18 }, { direction: CLIENT_TO_SERVER });
     validateWireFrame({ type: "ack", ackKind: "input", inputSeq: 22 }, { direction: SERVER_TO_CLIENT });
     validateWireFrame({ type: "rebase", runId: "run-a", reason: "event-gap", snapshotId: 10, lastEventSeq: 8 }, { direction: SERVER_TO_CLIENT });
     validateWireFrame({
@@ -185,6 +203,16 @@ async function run() {
       acceptedCommandSeq: 8,
     }, { direction: SERVER_TO_CLIENT });
     validateWireFrame({ type: "close", code: 4401, reason: "admission expired", reconnectable: true, retryAfterMs: 500 }, { direction: SERVER_TO_CLIENT });
+    expectProtocolError(() => validateWireFrame({ type: "ack", ackKind: "delivery", deliveryId: 18 }, { direction: SERVER_TO_CLIENT }), "invalid-direction");
+    expectProtocolError(() => validateWireFrame({
+      type: "event",
+      runId: "run-a",
+      eventSeq: 6,
+      tick: 122,
+      visibility: "public",
+      eventType: "signal.changed",
+      payload: {},
+    }, { direction: SERVER_TO_CLIENT }), "invalid-field");
   });
 
   await runner.run("strict parsing rejects unknown fields, invalid JSON values, direction errors, and byte excess", async () => {

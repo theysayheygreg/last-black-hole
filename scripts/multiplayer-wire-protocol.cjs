@@ -63,14 +63,12 @@ const ACTION_KINDS = new Set([
   "consume",
   "inventory",
 ]);
-const ACK_KINDS = new Set(["baseline", "event", "input", "action"]);
+const ACK_KINDS = new Set(["baseline", "event", "delivery", "input", "action"]);
 const OVERLOAD_MODES = new Set([
   "NORMAL",
-  "SHED_VISUAL",
-  "SHED_BACKGROUND",
-  "REDUCE_REPLICATION",
+  "THROTTLED",
+  "DEGRADED",
   "DILATED",
-  "ABORT",
 ]);
 const REBASE_REASONS = new Set([
   "initial",
@@ -224,7 +222,9 @@ function validatePong(frame) {
 }
 
 function validateInput(frame) {
-  exactKeys(frame, new Set(["type", "inputSeq", "moveX", "moveY", "thrust", "brake", "slingshot", "clientTimeMs"]));
+  exactKeys(frame, new Set([
+    "type", "inputSeq", "moveX", "moveY", "thrust", "brake", "slingshot", "ability1", "ability2", "clientTimeMs",
+  ]));
   integer(frame.inputSeq, "inputSeq", { min: 1 });
   const moveX = finiteNumber(frame.moveX, "moveX", { min: -1, max: 1 });
   const moveY = finiteNumber(frame.moveY, "moveY", { min: -1, max: 1 });
@@ -232,6 +232,8 @@ function validateInput(frame) {
   finiteNumber(frame.thrust, "thrust", { min: 0, max: 1 });
   finiteNumber(frame.brake, "brake", { min: 0, max: 1 });
   boolean(frame.slingshot, "slingshot");
+  boolean(frame.ability1, "ability1");
+  boolean(frame.ability2, "ability2");
   integer(frame.clientTimeMs, "clientTimeMs");
 }
 
@@ -292,7 +294,8 @@ function validateStateCommon(frame, owner) {
 }
 
 function validateEvent(frame) {
-  exactKeys(frame, new Set(["type", "runId", "eventSeq", "tick", "visibility", "eventType", "payload"]));
+  exactKeys(frame, new Set(["type", "deliveryId", "runId", "eventSeq", "tick", "visibility", "eventType", "payload"]));
+  integer(frame.deliveryId, "deliveryId", { min: 1 });
   requiredString(frame.runId, "runId");
   integer(frame.eventSeq, "eventSeq", { min: 1 });
   integer(frame.tick, "tick");
@@ -304,7 +307,7 @@ function validateEvent(frame) {
 
 function validateAck(frame, direction) {
   exactKeys(frame, new Set([
-    "type", "ackKind", "snapshotId", "eventSeq", "inputSeq", "actionId", "actionSeq", "commandSeq", "status", "result",
+    "type", "ackKind", "deliveryId", "snapshotId", "eventSeq", "inputSeq", "actionId", "actionSeq", "commandSeq", "status", "result",
   ]));
   requiredString(frame.ackKind, "ackKind");
   if (!ACK_KINDS.has(frame.ackKind)) fail("invalid-ack-kind", `unsupported ackKind ${frame.ackKind}`);
@@ -317,13 +320,18 @@ function validateAck(frame, direction) {
     if (direction && direction !== CLIENT_TO_SERVER) fail("invalid-direction", "event ack is client->server");
     exactKeys(frame, new Set(["type", "ackKind", "eventSeq"]), "event ack");
     integer(frame.eventSeq, "eventSeq", { min: 1 });
+  } else if (frame.ackKind === "delivery") {
+    if (direction && direction !== CLIENT_TO_SERVER) fail("invalid-direction", "delivery ack is client->server");
+    exactKeys(frame, new Set(["type", "ackKind", "deliveryId"]), "delivery ack");
+    integer(frame.deliveryId, "deliveryId", { min: 1 });
   } else if (frame.ackKind === "input") {
     if (direction && direction !== SERVER_TO_CLIENT) fail("invalid-direction", "input ack is server->client");
     exactKeys(frame, new Set(["type", "ackKind", "inputSeq"]), "input ack");
     integer(frame.inputSeq, "inputSeq", { min: 1 });
   } else {
     if (direction && direction !== SERVER_TO_CLIENT) fail("invalid-direction", "action ack is server->client");
-    exactKeys(frame, new Set(["type", "ackKind", "actionId", "actionSeq", "commandSeq", "status", "result"]), "action ack");
+    exactKeys(frame, new Set(["type", "ackKind", "deliveryId", "actionId", "actionSeq", "commandSeq", "status", "result"]), "action ack");
+    integer(frame.deliveryId, "deliveryId", { min: 1 });
     requiredString(frame.actionId, "actionId");
     integer(frame.actionSeq, "actionSeq", { min: 1 });
     integer(frame.commandSeq, "commandSeq", { min: 1 });
