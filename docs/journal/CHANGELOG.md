@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-07-10 — v0.4 multiplayer architecture program opened
+
+- Forked `codex/v0.4-multiplayer-architecture` from the current v0.3 Ballpark
+  integration line for a decision-first 4–8 player multiplayer program.
+- Added the v0.4 charter and four bounded research lanes covering Ballpark
+  architecture, identity/data, true P2P history and network budgets, and hosted
+  infrastructure costs plus $4.99 unit economics.
+- Reserved integrated architecture, roadmap, cost, and decision documents for
+  the coordinator so independent research can land without conflicting edits.
+
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
 - Reviewed the palette and timbre overnight plans against branch source;
