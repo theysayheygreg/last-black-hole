@@ -111,6 +111,18 @@ Singularity that:
   reset, assert one current-lineage completion sample, rerun focused/full
   authority, and obtain read-only review before manifest registration.
 
+### Projection evidence closure — 2026-07-11 19:31 UTC
+
+- `e9b2757` moved the test suspension inside the adapter's awaited public-state
+  builder. Reset now occurs during a genuinely pending `projectNow()`.
+- Independent re-review returned no findings. The focused runtime remains 6/6,
+  adapter core 23/23, and all 1/4/8 cohorts remain `NORMAL` near 10/15 Hz.
+- Adapter and runtime suites are now part of multiplayer-network,
+  multiplayer-authority, authority, and full harness lanes.
+- Next implementation slice: reliable idempotent gameplay action execution,
+  delivery acknowledgement, event-journal replay/gap rebase, and reconnect
+  recovery before SimClient/browser cutover.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`

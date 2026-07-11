@@ -114,6 +114,19 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerWsAdapterCore",
+    file: "multiplayer-ws-adapter-core.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "MultiplayerWsRuntime",
+    file: "multiplayer-ws-runtime.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+    slow: true,
+  },
+  {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
     lanes: ["static", "full"],

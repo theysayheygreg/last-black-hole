@@ -99,6 +99,10 @@
   Follow-up review found the artificial delay sits outside the adapter's
   synchronous work, so manifest promotion still waits for a test hook that
   suspends `buildPublicState` inside `projectNow()` across reset.
+- Moved the delay inside the adapter's awaited public-state builder in
+  `e9b2757`, proved exactly one new-lineage completion, passed independent
+  re-review, and registered the 23-case adapter plus 1/4/8 runtime suites in
+  the multiplayer-network, multiplayer-authority, authority, and full lanes.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

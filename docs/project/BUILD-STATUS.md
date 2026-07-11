@@ -18,11 +18,9 @@ does not erase newer committed work.
 ## v0.4 Multiplayer Program
 
 **Source status:** Phase 0 trust closure is green; the optional same-process
-Phase 1 WebSocket runtime is integrated and focused-loopback green. The
-cross-run projection-accounting guard is implemented and full authority is
-green, but one test-evidence correction remains before manifest promotion:
-suspend adapter projection itself across reset rather than only delaying its
-outer wrapper settlement. Research/design is complete.
+Phase 1 WebSocket runtime is integrated, independently reviewed, and registered
+in the multiplayer and authority harness lanes. The cross-run projection guard
+now has a genuine in-adapter delayed-reset proof. Research/design is complete.
 
 **Playable status:** not multiplayer-playable yet. Real 1/4/8 WebSocket clients
 share one authority and pass identity/privacy/input/reset/shutdown truth, but
@@ -38,9 +36,7 @@ process, port, tick, and authority. The corrected focused baseline held
 `NORMAL` around 9.7 Hz projection and 14.5--14.8 Hz authority for 1/4/8 real
 loopback sockets, with roughly 20--23 KiB public frames and 1--1.6 KiB owner
 overlays. These are local Shallows measurements, not hosted or heavy-sim
-capacity claims. The runtime suites stay outside the final manifest gate until
-the delayed-reset fixture exercises a genuinely pending adapter projection and
-is reviewed.
+capacity claims. See `docs/v0.4/research/phase1-ws-runtime-baseline.md`.
 
 ## v0.3 Candidate
 

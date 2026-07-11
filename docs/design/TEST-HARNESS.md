@@ -160,8 +160,8 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:sim-structure` | v0.3 structural gate for persistent Ballpark identity/lifecycle, required relevance/pickup/portal queries, toroidal geometry and swept contacts, movement fixtures, protocol v2, bounded growth, journal, and live snapshot rebase. |
 | `npm run test:multiplayer-structure` | v0.4 membership/connection fencing, owner-private projection, public history, bounded admission/resume tickets, authenticated idempotent settlement, executor parity, and field-revision lineage. |
-| `npm run test:multiplayer-authority` | v0.4 structure plus deterministic 1/4/8-human shared truth, privacy, bytes, tick, heap, 100x result replay, executor parity, and field-revision lineage. |
-| `npm run test:multiplayer-network` | v0.4 strict JSON frame validation, bounded/coalesced reliable-state queue and backpressure primitives, transport-neutral executor parity, and authority field-revision recovery facts. |
+| `npm run test:multiplayer-authority` | v0.4 structure plus deterministic 1/4/8-human shared truth, privacy, bytes, tick, heap, result replay, real same-process WebSocket authority, reset lineage, executor parity, and field revision. |
+| `npm run test:multiplayer-network` | v0.4 strict JSON frames, bounded queues/backpressure, adversarial real-socket adapter behavior, authenticated admission/resume, 1/4/8 runtime cadence, reset lineage, executor parity, and field recovery facts. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:agent-eval` | Natural Shallows product journey plus 1280x800 visual/readability evidence before Greg reviews feel and taste. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
@@ -252,8 +252,8 @@ local readability matters more than making every pixel bright.
 | `authority` | sim/control-plane/remote protocol health | local-only visual questions |
 | `sim-structure` | persistent Ballpark identity, required spatial queries, world geometry/sweeps, movement fixtures, protocol v2, bounded growth, journal, and snapshot rebase | browser visuals or playfeel |
 | `multiplayer-structure` | membership, connection fencing, privacy projection, public history, bounded tickets, settlement idempotency/authentication, executor parity, and field lineage | WAN feel, hosted capacity, or natural multiplayer journeys |
-| `multiplayer-authority` | structure plus deterministic 1/4/8-human truth, baseline measurements, executor parity, and field lineage | loss/reorder/slow-reader soak or a claim of public playability |
-| `multiplayer-network` | strict JSON frames, exact byte limits, reliable delivery ids, state coalescing, queue bounds, ack/replay, transport backpressure, executor parity, and field lineage | a real socket, WAN feel, or hosted capacity |
+| `multiplayer-authority` | structure plus deterministic 1/4/8-human truth, real same-process WebSocket authority, reset-lineage accounting, baseline measurements, executor parity, and field lineage | WAN loss/reorder soak or a claim of public playability |
+| `multiplayer-network` | strict JSON frames, exact byte limits, reliable delivery ids, state coalescing, queue bounds, ack/replay, real-socket transport backpressure, authenticated runtime cadence, reset lineage, executor parity, and field lineage | WAN feel, browser cutover, or hosted capacity |
 | `visual` | deterministic renderer fixtures and screenshot manifests | gameplay balance |
 | `playtest` | synthetic real-flow menu/input coverage | final UX judgment |
 | `agent-eval` | fresh no-debug Shallows journey, second-run continuity, screenshots, and a narrative report | exhaustive authority coverage or subjective art approval |
