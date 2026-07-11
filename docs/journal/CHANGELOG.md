@@ -30,6 +30,11 @@
   no-authority P2P for production, retains relay-assisted listen authority for
   trusted private play, and recommends deterministic replay plus bounded local
   rollback as useful capabilities beneath an authoritative model.
+- Added independent hosted-cost and architecture red-team audits. They retain
+  per-match central authority but narrow the first slice to existing clocks,
+  JSON WebSockets, owner/public projection, and measured bytes; they also
+  downgrade `$0.18/copy` to a benchmark target and flag contradictory current
+  Vercel WebSocket documentation.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
