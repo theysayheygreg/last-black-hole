@@ -116,7 +116,7 @@ const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
 const WRECK_ADJECTIVES = [
   "Ascending", "Crystalline", "Shattered", "Infinite", "Dreaming",
   "Ossified", "Luminous", "Drifting", "Harmonic", "Forgotten",
-  "Silent", "Fractured", "Prismatic", "Hollow", "Resonant",
+  "Silent", "Fractured", "Prismatic", "Hollow", "Echoing",
 ];
 const WRECK_NOUNS = [
   "Chorus", "Lattice", "Meridian", "Archive", "Theorem",

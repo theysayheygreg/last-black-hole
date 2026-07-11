@@ -18,6 +18,9 @@ async function run() {
   assert.strictEqual(cueSpec('extract').priority, 'critical');
   assert.strictEqual(cueSpec('portalConfirm').motif, 'route-cell');
   assert.strictEqual(cueSpec('loot').motif, 'amber-salvage');
+  assert.strictEqual(cueSpec('inhibitorFinalPortal').maxVoices, 5);
+  assert.strictEqual(cueSpec('scavDeath').maxVoices, 4);
+  assert.strictEqual(cueSpec('upgrade').maxVoices, 4);
   assert.strictEqual(cueSpec('missing'), null);
   console.log('AudioCueSpec: 1 passed, 0 failed');
 }

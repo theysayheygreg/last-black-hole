@@ -328,7 +328,11 @@ scale system as wrecks and ships.
 
 ## v0.3 Shared Presentation Contract
 
-Renderer and audio consume the same renderer-neutral facts from `src/presentation/presentation-frame.js`; neither may infer gameplay. The palette lane owns this boundary. Missing data is absent, not guessed, and coordinates remain in `src/coords.js`.
+Renderer and audio should converge on the same renderer-neutral facts from
+`src/presentation/presentation-frame.js`; neither may infer gameplay. This is a
+reviewed v0.3 integration target, not completed runtime truth: the current audio
+router still consumes authoritative event payloads directly. Missing data is
+absent, not guessed, and coordinates remain in `src/coords.js`.
 
 | Fact | Type | Authoritative meaning | Renderer use |
 |---|---|---|---|

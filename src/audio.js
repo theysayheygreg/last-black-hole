@@ -31,6 +31,7 @@ export class AudioEngine {
     this._eventBudget = new EventVoiceBudget(CONFIG.audio?.maxEventVoices ?? 16);
     this._mixer = new AudioMixer({ caps: CONFIG.audio?.voiceCaps });
     this._portalProximityActive = false;
+    this._controlAccumulator = 0;
   }
 
   getDiagnostics() {
@@ -116,13 +117,14 @@ export class AudioEngine {
 
     this._initDrone();
     this._initInhibitorVoice();
-    this._initWellVoices(4);
+    this._initWellVoices(2);
   }
 
   reset() {
     this._eventBudget.reset();
     this._mixer.reset();
     this._portalProximityActive = false;
+    this._controlAccumulator = 0;
     if (!this.initiated) return;
     const now = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(now);
@@ -188,6 +190,11 @@ export class AudioEngine {
     if (!this.initiated || !CONFIG.audio.enabled) return;
     if (this.ctx.state === 'suspended') this.ctx.resume();
 
+    const controlInterval = 1 / Math.max(1, CONFIG.audio.controlUpdateHz || 15);
+    this._controlAccumulator = Math.min(controlInterval, this._controlAccumulator + Math.max(0, dt || 0));
+    if (this._controlAccumulator < controlInterval) return;
+    this._controlAccumulator = 0;
+
     const now = this.ctx.currentTime;
     const ramp = 0.05;
 
@@ -224,7 +231,10 @@ export class AudioEngine {
     const now = this.ctx.currentTime;
     const vol = CONFIG.audio.eventVolume;
     if (type !== 'death' && !this._eventBudget.admit(type, now)) return false;
-    if (!this._mixer.admit(type, now)) return false;
+    if (!this._mixer.admit(type, now)) {
+      this._eventBudget.release(type, now);
+      return false;
+    }
 
     let pan = 0;
     if (wx !== undefined && canvasW) {

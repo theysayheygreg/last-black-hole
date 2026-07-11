@@ -87,7 +87,7 @@ const CHRONICLE_FRAGMENTS = {
   swarm: [
     "they drained everything. even the name of the thing i was holding.",
     "i dropped it so i could run. then i dropped the other one.",
-    "the hauler i saw at 03:11 — was that you?",
+    "the freighter i saw at 03:11 — was that you?",
     "every swarm is the same swarm.",
     "i didn't hear them arrive.",
     "there is no silence loud enough.",

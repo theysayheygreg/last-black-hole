@@ -15,7 +15,7 @@ import { canvasFont } from './ui/typography.js';
 
 const ADJ = ['Ascending', 'Crystalline', 'Shattered', 'Infinite', 'Dreaming',
   'Ossified', 'Luminous', 'Drifting', 'Harmonic', 'Forgotten',
-  'Silent', 'Fractured', 'Prismatic', 'Hollow', 'Resonant'];
+  'Silent', 'Fractured', 'Prismatic', 'Hollow', 'Echoing'];
 const NOUN = ['Chorus', 'Lattice', 'Meridian', 'Archive', 'Theorem',
   'Garden', 'Beacon', 'Chrysalis', 'Mandate', 'Confluence',
   'Helix', 'Axiom', 'Tempest', 'Orbit', 'Zenith'];

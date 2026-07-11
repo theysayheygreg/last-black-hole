@@ -14,7 +14,7 @@ The router maps a server event to at most one cue. The downstream UI switch may 
 
 ## Bus and priority policy
 
-Buses: `ambient`, `world`, `player`, `ui`, `critical`. Initial caps: 6, 6, 4, 2, 5; global scheduled transient cap: 16. Priority order: `critical > action > warning > navigation > ui > world-detail > ambience`.
+Buses: `ambient`, `world`, `player`, `ui`, `critical`. Initial caps: 6, 6, 4, 2, 5; global scheduled transient cap: 16. Cue costs count the actual scheduled oscillator/noise sources, not merely one recipe call. Priority order: `critical > action > warning > navigation > ui > world-detail > ambience`.
 
 Critical (death, extraction, Inhibitor transitions) reserves space. `AudioMixer` tracks admitted/dropped bounded leases for diagnostics; `EventVoiceBudget` remains the source-scheduling safeguard. This is admission accounting, not server authority.
 

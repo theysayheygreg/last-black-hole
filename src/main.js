@@ -1751,7 +1751,7 @@ function startGame(map, seed = null) {
   currentSignature = computeSeedPreview(map, localSeed).signature;
 
   // Reset audio for new run
-  audioEngine.reset();
+  audioRouter?.reset(`local:${localSeed}`);
 
   // Place ship in a safe spawn
   const [spawnX, spawnY] = findSafeSpawn();
@@ -2402,23 +2402,19 @@ function applyRemoteEvents(events) {
           showWarning('time dilated — 3s', 'rgba(180, 140, 255, 0.95)', 2000);
         } else if (payload.effectId === 'breachFlare') {
           showWarning('breach flare — portal for 15s', 'rgba(255, 200, 100, 0.95)', 3000);
-          audioEngine.playEvent('breachFlare');
         }
         break;
       case 'player.effectExpired':
         if (isLocal && payload.effectId === 'timeSlowLocal') {
-          audioEngine.playEvent('timeSlowEnd');
         }
         break;
       case 'player.shieldAbsorbed':
         if (isLocal) {
           showWarning('shield absorbed!', 'rgba(100, 200, 255, 0.95)', 2000);
-          audioEngine.playEvent('shieldAbsorb');
         }
         break;
       case 'player.died':
         if (isLocal) {
-          audioEngine.playEvent('death');
         }
         break;
       case 'run.result':
@@ -2448,12 +2444,10 @@ function applyRemoteEvents(events) {
       case 'inhibitor.drainCargo':
         if (isLocal) {
           showInhibitorWarning('cargo drained', Math.max(1, payload.form || 2), payload.intensity ?? 0.9, 1800, 'rgba(204, 26, 128, 0.9)');
-          audioEngine.playEvent?.('inhibitorDrain');
         }
         break;
       case 'inhibitor.finalPortal':
         showWarning('final portal opened', 'rgba(255, 217, 102, 0.95)', 4000);
-        audioEngine.playEvent?.('inhibitorFinalPortal');
         break;
       case 'player.loot':
         // Echo wreck pickup — show the chronicle fragment as a warning
@@ -2681,7 +2675,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   currentSignature = runningSession?.cosmicSignature
     ? { ...runningSession.cosmicSignature }
     : computeSeedPreview(targetMapEntry.map, briefingSeed).signature;
-  audioEngine.reset();
+  audioRouter?.reset(`remote:${targetMapEntry.id}:${briefingSeed}`);
   // Enter loading phase — transition to 'playing' when first snapshot arrives
   loadingMapName = targetMapEntry.name || targetMapEntry.id || '';
   loadingStartTime = performance.now();
