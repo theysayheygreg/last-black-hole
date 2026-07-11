@@ -15,6 +15,7 @@ const { PROTOCOL_VERSION } = require("../scripts/sim-protocol.cjs");
 
 const DISABLED_PORT = 8840;
 const SECURITY_PORT = 8841;
+const LINEAGE_PORT = 8843;
 const COHORT_PORTS = { 1: 8842, 4: 8844, 8: 8848 };
 
 async function waitFor(check, label, timeoutMs = 5000) {
@@ -233,6 +234,95 @@ async function runSecurityFixture() {
   }
 }
 
+async function runProjectionLineageFixture() {
+  let oldClient = null;
+  let newClient = null;
+  await startSimServer(LINEAGE_PORT, {
+    keepAlive: true,
+    env: {
+      LBH_SIM_WS_ENABLED: "true",
+      LBH_SIM_WS_TEST_PROJECTION_DELAY_MS: "600",
+    },
+  });
+  try {
+    const started = await request(LINEAGE_PORT, "/session/start", {
+      method: "POST",
+      body: { mapId: "shallows", requesterId: "lineage-a", requesterName: "Lineage A", maxPlayers: 1 },
+    });
+    const joined = await request(LINEAGE_PORT, "/join", {
+      method: "POST",
+      body: {
+        runId: started.body.session.runId,
+        clientId: "lineage-a",
+        joinTicket: started.body.joinTicket,
+        name: "Lineage A",
+      },
+    });
+    const authority = joined.body.authority;
+    const ticket = await issueTicket(LINEAGE_PORT, authority);
+    oldClient = await openBoundClient(LINEAGE_PORT, ticket.body.ticket);
+    await waitFor(async () => {
+      const health = await request(LINEAGE_PORT, "/health");
+      return health.body.multiplayer.projection.inFlight ? health : null;
+    }, "old-run delayed projection");
+
+    const reset = await request(LINEAGE_PORT, "/session/reset", {
+      method: "POST",
+      authority,
+      body: command(authority, 1, { requesterId: authority.playerId }),
+    });
+    assert(reset.status === 200 && reset.body.session.runId !== authority.runId,
+      "Delayed projection fixture must rotate run lineage");
+    await waitFor(() => oldClient.close, "old delayed socket reset fence");
+
+    const newJoin = await request(LINEAGE_PORT, "/join", {
+      method: "POST",
+      body: {
+        runId: reset.body.session.runId,
+        clientId: "lineage-b",
+        joinTicket: reset.body.joinTicket,
+        name: "Lineage B",
+      },
+    });
+    const newTicket = await issueTicket(LINEAGE_PORT, newJoin.body.authority);
+    newClient = await openBoundClient(LINEAGE_PORT, newTicket.body.ticket);
+    const serialized = await waitFor(async () => {
+      const health = await request(LINEAGE_PORT, "/health");
+      return health.body.multiplayer.projection.skippedBeats > 0 ? health : null;
+    }, "new run waits behind old projection");
+    const during = serialized.body.multiplayer.projection;
+    assert(during.inFlight === true
+      && during.projectedConnections === 0
+      && during.accounting.projectionDurationSamples === 0
+      && during.accounting.projectionDurationTotalMs === 0
+      && during.accounting.pendingReplicationCostMs === 0,
+    `Old completion must not charge or unlock new lineage: ${JSON.stringify(during)}`);
+    assert(frames(newClient, "publicState").length === 0,
+      "New projection overlapped the delayed old-run task");
+
+    await waitFor(() => frame(newClient, "publicState"), "serialized new-run projection", 3500);
+    const completedHealth = await waitFor(async () => {
+      const health = await request(LINEAGE_PORT, "/health");
+      return health.body.multiplayer.projection.accounting.projectionDurationSamples >= 1 ? health : null;
+    }, "new-run projection settlement", 3500);
+    const completed = completedHealth.body.multiplayer.projection;
+    const accounting = completed.accounting;
+    assert(completed.projectedConnections >= 1
+      && accounting.projectionDurationSamples >= 1
+      && accounting.projectionDurationTotalMs > 0,
+    `New lineage must account only its own completed projection: ${JSON.stringify(completed)}`);
+    assert(Math.abs(accounting.projectionDurationTotalMs
+      - accounting.replicationCostConsumedTotalMs
+      - accounting.pendingReplicationCostMs
+      - accounting.replicationCostOverflowMs) < 1e-6,
+    "Delayed reset must preserve exact-once replication accounting");
+  } finally {
+    await closeClient(oldClient);
+    await closeClient(newClient);
+    await stopSimServer(LINEAGE_PORT).catch(() => null);
+  }
+}
+
 async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown = false } = {}) {
   const port = COHORT_PORTS[count];
   const clients = [];
@@ -343,7 +433,6 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       return owner && player && Math.hypot(player.wx - initial.wx, player.wy - initial.wy) > 0.001;
     }), `${count}-client authoritative input integration`);
 
-    const cadenceStart = clients.map((client) => frames(client, "publicState").length);
     const tickStart = await request(port, "/health");
     assert(tickStart.body.session.baseSnapshotHz === 10 && tickStart.body.session.baseTickHz === 15,
       "Shallows must retain its declared NORMAL 15Hz authority and 10Hz projection clocks");
@@ -351,26 +440,27 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       && tickStart.body.session.snapshotHz === 10
       && tickStart.body.session.tickHz === 15,
     `Shallows cadence gate must begin at declared NORMAL clocks: ${JSON.stringify(tickStart.body.session)}`);
+    const cadenceStart = clients.map((client) => frames(client, "publicState").length);
     const cadenceStartedAt = Date.now();
     await waitFor(() => clients.every((client, index) =>
       frames(client, "publicState").length >= cadenceStart[index] + 11
     ), `${count}-client projection cadence`, 3500);
-    const cadenceEndedAt = Date.now();
     const tickEnd = await request(port, "/health");
-    const projectionRates = clients.map((client, index) => {
-      const sample = frames(client, "publicState").slice(cadenceStart[index], cadenceStart[index] + 11);
-      return (sample.length - 1) * 1000 / (sample.at(-1)._receivedAt - sample[0]._receivedAt);
-    });
+    const cadenceEndedAt = Date.now();
+    const cadenceElapsedMs = cadenceEndedAt - cadenceStartedAt;
+    const projectionRates = clients.map((client, index) =>
+      (frames(client, "publicState").length - cadenceStart[index]) * 1000 / cadenceElapsedMs
+    );
     const observedProjectionHz = projectionRates.reduce((sum, value) => sum + value, 0) / projectionRates.length;
     const observedTickHz = (tickEnd.body.tick - tickStart.body.tick) * 1000 / (cadenceEndedAt - cadenceStartedAt);
     assert(tickEnd.body.session.overloadState === "NORMAL"
       && tickEnd.body.session.snapshotHz === 10
       && tickEnd.body.session.tickHz === 15,
     `Shallows cadence gate must end at declared NORMAL clocks: ${JSON.stringify(tickEnd.body.session)}`);
-    const projectionFloor = tickStart.body.session.baseSnapshotHz * 0.72;
-    const projectionCeiling = tickStart.body.session.baseSnapshotHz * 1.28;
-    const tickFloor = tickStart.body.session.baseTickHz * 0.72;
-    const tickCeiling = tickStart.body.session.baseTickHz * 1.28;
+    const projectionFloor = tickStart.body.session.baseSnapshotHz * 0.85;
+    const projectionCeiling = tickStart.body.session.baseSnapshotHz * 1.2;
+    const tickFloor = tickStart.body.session.baseTickHz * 0.85;
+    const tickCeiling = tickStart.body.session.baseTickHz * 1.2;
     assert(observedProjectionHz >= projectionFloor && observedProjectionHz <= projectionCeiling,
       `Expected loaded Shallows projection near declared 10Hz target, got ${observedProjectionHz.toFixed(2)}; health=${JSON.stringify({ overloadStart: tickStart.body.session.overloadState, overloadEnd: tickEnd.body.session.overloadState, multiplayer: tickEnd.body.multiplayer })}`);
     assert(observedTickHz >= tickFloor && observedTickHz <= tickCeiling,
@@ -638,6 +728,10 @@ async function run() {
     await runSecurityFixture();
   });
 
+  await runner.run("delayed old-run projection cannot charge, unlock, or overlap the new lineage", async () => {
+    await runProjectionLineageFixture();
+  });
+
   for (const count of [1, 4, 8]) {
     await runner.run(`${count} real clients share one tick-coupled authority stream`, async () => {
       const measurement = await runCohort(count, {
@@ -655,7 +749,7 @@ async function run() {
 }
 
 run().catch(async (error) => {
-  for (const port of [DISABLED_PORT, SECURITY_PORT, ...Object.values(COHORT_PORTS)]) {
+  for (const port of [DISABLED_PORT, SECURITY_PORT, LINEAGE_PORT, ...Object.values(COHORT_PORTS)]) {
     await stopSimServer(port).catch(() => null);
   }
   console.error("MultiplayerWsRuntime test fatal error:", error.stack || error.message);

@@ -123,9 +123,17 @@ const MAX_LIVE_WRECKS = readNumber(process.env.LBH_SIM_MAX_LIVE_WRECKS, 64, 1);
 const IDLE_SESSION_TICK_HZ = 1;
 const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
 const MULTIPLAYER_PENDING_REPLICATION_BUDGETS = 4;
+const MULTIPLAYER_PROJECTION_TEST_DELAY_MS = readNumber(
+  process.env.LBH_SIM_WS_TEST_PROJECTION_DELAY_MS,
+  0,
+  0,
+);
+let multiplayerProjectionGeneration = 0;
 
-function createMultiplayerProjectionStats() {
+function createMultiplayerProjectionStats(runId = null) {
   return {
+    runId: runId == null ? null : String(runId),
+    generation: ++multiplayerProjectionGeneration,
     accumulator: 0,
     inFlight: false,
     beats: 0,
@@ -1055,6 +1063,7 @@ let currentLoopTickHz = DEFAULT_TICK_HZ;
 let terminalShutdownHandle = null;
 let multiplayerTicketRegistry = null;
 let multiplayerAdapter = null;
+let multiplayerProjectionTask = null;
 let shutdownPromise = null;
 
 function publishEvent(type, payload = {}, options = {}) {
@@ -1399,7 +1408,7 @@ function startSession(config = {}) {
     waves: 0,
     field: 0,
   };
-  runtime.multiplayerProjection = createMultiplayerProjectionStats();
+  runtime.multiplayerProjection = createMultiplayerProjectionStats(runtime.session.runId);
   // Inhibitor: threshold per run, seeded for determinism
   const inh = INHIBITOR_CONFIG;
   const inhRng = runtime.session.rng.rawStream('inhibitorInit');
@@ -5918,8 +5927,8 @@ function tickSim() {
   const activeWaveCount = runtime.waveRings.length;
   const boundedForceUtilization = (activeCount, perPlayerLimit) => {
     const limit = Math.max(1, Number(perPlayerLimit) || 1);
-    // These loops already cap work per player. Fixed world counts above the
-    // cap are not executed force work and must not punish smaller cohorts.
+    // Capped influence/candidate kernels must not treat unvisited world
+    // objects as executed work. Uncapped work remains visible through CPU.
     return Math.min(Math.max(0, Number(activeCount) || 0), limit) / limit;
   };
   const forcePressure = 0.6 * Math.max(
@@ -6268,8 +6277,7 @@ function replicationCostCapMs() {
     * MULTIPLAYER_PENDING_REPLICATION_BUDGETS;
 }
 
-function recordCompletedProjectionCost(durationMs) {
-  const stats = runtime.multiplayerProjection;
+function recordCompletedProjectionCost(stats, durationMs) {
   const duration = Math.max(0, Number(durationMs) || 0);
   stats.projectionDurationSamples += 1;
   stats.projectionDurationLatestMs = duration;
@@ -6281,6 +6289,13 @@ function recordCompletedProjectionCost(durationMs) {
   const unboundedPending = stats.pendingReplicationCostMs + duration;
   stats.pendingReplicationCostMs = Math.min(cap, unboundedPending);
   stats.replicationCostOverflowMs += Math.max(0, unboundedPending - cap);
+}
+
+function isCurrentProjectionLineage(stats, runId, generation) {
+  return runtime.multiplayerProjection === stats
+    && runtime.session.runId === runId
+    && stats.runId === runId
+    && stats.generation === generation;
 }
 
 function consumePendingReplicationCost() {
@@ -6295,32 +6310,49 @@ function consumePendingReplicationCost() {
 function scheduleMultiplayerProjection() {
   if (!multiplayerAdapter || runtime.session.status !== "running") return;
   const stats = runtime.multiplayerProjection;
+  const runId = runtime.session.runId;
+  const generation = stats.generation;
+  stats.inFlight = Boolean(multiplayerProjectionTask);
   stats.accumulator += 1 / Math.max(1, runtime.session.tickHz);
   const interval = 1 / Math.max(1, runtime.session.snapshotHz);
   if (stats.accumulator + 1e-9 < interval) return;
   stats.accumulator = Math.max(0, stats.accumulator - interval);
   stats.beats += 1;
-  if (stats.inFlight) {
+  if (multiplayerProjectionTask) {
     stats.skippedBeats += 1;
     return;
   }
   stats.inFlight = true;
-  const projectionStartedAt = performance.now();
-  Promise.resolve()
-    .then(() => multiplayerAdapter.projectNow())
+  let projectionStartedAt = null;
+  let task = null;
+  task = Promise.resolve()
+    .then(async () => {
+      if (!isCurrentProjectionLineage(stats, runId, generation)) return null;
+      projectionStartedAt = performance.now();
+      const projection = Promise.resolve(multiplayerAdapter.projectNow());
+      if (MULTIPLAYER_PROJECTION_TEST_DELAY_MS > 0) {
+        await new Promise((resolve) => setTimeout(resolve, MULTIPLAYER_PROJECTION_TEST_DELAY_MS));
+      }
+      return projection;
+    })
     .then((result) => {
+      if (!isCurrentProjectionLineage(stats, runId, generation) || !result) return;
       stats.projectedConnections += Math.max(0, Number(result?.projected) || 0);
       stats.lastSnapshotId = Math.max(stats.lastSnapshotId, Number(result?.snapshotId) || 0);
       stats.lastProjectedAt = Date.now();
       if (result?.error) stats.errors += 1;
     })
     .catch(() => {
-      stats.errors += 1;
+      if (isCurrentProjectionLineage(stats, runId, generation)) stats.errors += 1;
     })
     .finally(() => {
-      recordCompletedProjectionCost(performance.now() - projectionStartedAt);
+      if (projectionStartedAt !== null && isCurrentProjectionLineage(stats, runId, generation)) {
+        recordCompletedProjectionCost(stats, performance.now() - projectionStartedAt);
+      }
       stats.inFlight = false;
+      if (multiplayerProjectionTask === task) multiplayerProjectionTask = null;
     });
+  multiplayerProjectionTask = task;
 }
 
 function multiplayerDiagnostics() {
@@ -6341,7 +6373,7 @@ function multiplayerDiagnostics() {
       ? multiplayerTicketRegistry.diagnostics()
       : null,
     projection: {
-      inFlight: projection.inFlight,
+      inFlight: Boolean(multiplayerProjectionTask),
       beats: projection.beats,
       projectedConnections: projection.projectedConnections,
       skippedBeats: projection.skippedBeats,
