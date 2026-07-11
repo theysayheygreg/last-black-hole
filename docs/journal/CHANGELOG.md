@@ -61,6 +61,16 @@
 - Added a bounded implementation packet for the injected WebSocket adapter
   core. It owns only the new adapter module and loopback fake-authority test,
   preserving the sim runtime for a subsequent single-owner integration slice.
+- Hardened the injected adapter through two independent review loops: bounded
+  hello/connection/inbound count and byte budgets, serialized callbacks,
+  stable reconnect fencing, enforced owner identity, truthful shutdown memory
+  accounting, final post-await revalidation, explicit rebase, safe Upgrade
+  ownership, real backpressure, and 23 adversarial loopback cases.
+- Added the next single-owner runtime packet for authenticated ticket
+  issuance, real admission/resume binding, continuous input, tick-coupled
+  public/owner projection, and measured 1/4/8 socket baselines. Reliable
+  gameplay actions, journal recovery, SimClient, and browser cutover remain
+  explicit later slices.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 
