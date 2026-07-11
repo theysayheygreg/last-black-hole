@@ -24,6 +24,21 @@ The visual priority order is:
 4. Feel scale, decay, and dread.
 5. Enjoy detail that does not interfere with the first four reads.
 
+## The Failing Instrument
+
+The shared product metaphor is **the failing instrument**. This guide is its visual rendering: a failing astronomical instrument observing a fluid universe. The ASCII fabric is the living measurement surface and route-reading tool; pixel entities are compact physical evidence caught in it; the UI is a stable, sparse bezel around decisions.
+
+**Read order:**
+
+1. Flow direction, open travel line, well danger, and usable route.
+2. Player, immediate hostile threat, portal/anchor, and actionable salvage.
+3. Current command and consequence through the edge HUD.
+4. Dread, scale, debris detail, and display failure.
+
+A later read never wins by harming an earlier one. Fabric is the medium; sprites are evidence, not a second full-field texture. Category owns silhouette; state owns at most one persistent accent plus one short event-driven motion cue. Ordinary entities do not stack permanent halo, rim, trail, label, ring, and sparkle treatments.
+
+**Family grammar:** player cores are bone/blue-white with cyan instrumentation; Drifter/Breacher differ through silhouette and ports, not resting amber. Remote ships use a cooler outline/notch plus a quiet trail. Hostiles use hooked/segmented silhouettes and localized red heat. Intact wrecks carry one amber value glint; looted wrecks lose it; clusters privilege broken mass. Star = radial corona, planetoid = dense body, comet = body plus velocity-opposed tail, extraction = stable cyan aperture, rift = broken discontinuity; apertures remain black at center. Fauna are soft asymmetric current-led pulses; sentries are segmented directional scan/lunge forms. They never share a base asset. Magenta is primary only for Inhibitor/corruption/anomaly.
+
 ## Authority Boundary
 
 - The sim owns position, velocity, collision, death, pickup, extraction,
@@ -148,6 +163,26 @@ World scale stays restrained. Ships are small against the universe. When an
 entity is hard to read, improve its local contrast and silhouette before making
 it dramatically larger.
 
+## Separation And Density Budget
+
+This policy supersedes only the older documents' entity-overlay implications;
+`VISUAL-DENSITY.md` still owns the accumulated fluid-density buffer and its
+no-negative-splats rule.
+
+- Contact mattes are hard/local and normally no larger than 1.25× the core.
+  Player and portal retain minimum separation.
+- In local clusters, decay low-priority matte radius/opacity before core value.
+  Wreck clusters and ambient ecology yield first; decoration never erases route
+  fabric.
+- Rims preserve edges; halos communicate energy/state, not mass; trails are
+  short, directional, pooled, and settle when authoritative state ends.
+- Report aggregate/local-peak matte coverage plus family totals, halo/rim, and
+  state-accent counts. Set thresholds from representative 1280×800 scenes per
+  quality tier, never from unmeasured taste.
+- Quality reduction may remove secondary halo/trail density but preserves
+  category silhouette, player/portal separation, black apertures, and
+  reduced-motion static equivalents.
+
 ## Item Taxonomy
 
 The asset kit has two linked levels:
@@ -172,6 +207,14 @@ grayscale and to color-vision-deficient players. Never infer item effects from
 filename or art; bind icons through `assets/visual/manifest.json` and catalog
 IDs.
 
+## Item Signal Priority
+
+At Deck scale: **family silhouette → tier rail → selected/equipped/consumable
+state → optional hashed identity mark**. The mark is removable when it muddies
+the 25% proxy and is never a required mechanical signal. Tier/state remain
+independent from family imagery and readable in grayscale. Magenta is reserved
+for anomaly-related families or a documented mechanical-family exception.
+
 ## UI Frame Anatomy
 
 UI is an operational frame, not a pile of boxes. A major panel may contain:
@@ -191,6 +234,15 @@ terminal nodes are punctuation; do not decorate every edge.
 Selection requires at least three cues: position/focus, increased value or
 backing, and a frame/marker change. Destructive selection uses the danger role
 only after focus reaches that action.
+
+## UI Frame Deployment
+
+A full generated frame belongs only to a major decision group. Subsections use
+a rail, divider, junction, or whitespace. Warning corners are genuine danger or
+confirmation only, never generic selected state. Selection uses exactly three
+complementary cues: focus position, stronger backing/value, and one marker/frame
+change. Icon-only status has text/pattern alternatives; keyboard/gamepad focus
+shows the same state without motion.
 
 ## Typography And Couch Test
 
@@ -280,6 +332,14 @@ from visual proximity; display the sim-provided result and event record.
 - Concept-only resources and objectives presented as shipped truth.
 - Dense nested cards, ornamental corners on every row, or unreadable microcopy.
 - Motion, flicker, or color as the sole carrier of required information.
+
+## Required Review Conditions
+
+Review material visual changes at 1280×800 handheld scale and 1280×720 compact
+UI coverage; inspect grayscale, bright-light conditions, a 25% couch proxy,
+normal motion, and reduced motion. Capture paths and labels are governed by
+`docs/v0.3/evidence/visual-review-manifest.md`; fixtures are never
+player-reachable proof.
 
 ## Acceptance
 
