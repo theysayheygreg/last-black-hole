@@ -68,6 +68,12 @@
   branch and documents are authoritative while the original active goal text
   still says v0.3, and the installed heartbeat is not called operational until
   a real scheduler submission is logged.
+- Audited every explicit multiplayer-program requirement, separating completed
+  research/design from unimplemented 4–8 multiplayer, modeled heavy-sim
+  capacity from measured proof, and configured automation from observed
+  scheduler/reset continuation.
+- Merged the latest v0.3 audio, text, and visual-contract work forward into
+  v0.4, then reran the full core harness successfully at the merge tip.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
