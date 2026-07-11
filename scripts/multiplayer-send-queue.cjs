@@ -120,9 +120,28 @@ class MultiplayerSendQueue {
     };
   }
 
-  enqueueConsequence(payload) {
+  enqueueConsequence(payload, options = {}) {
     if (this.terminal) return this._terminalResult();
-    const id = this.nextReliableId;
+    const requestedId = options.reliableId === undefined
+      ? this.nextReliableId
+      : positiveInteger(options.reliableId, undefined, "reliableId");
+    if (requestedId < this.nextReliableId) {
+      return {
+        accepted: false,
+        action: "ignore",
+        reason: "stale-reliable-id",
+        expectedReliableId: this.nextReliableId,
+      };
+    }
+    if (requestedId > this.nextReliableId) {
+      return {
+        accepted: false,
+        action: "reject",
+        reason: "future-reliable-id",
+        expectedReliableId: this.nextReliableId,
+      };
+    }
+    const id = requestedId;
     const candidate = {
       ...serializeFrame(payload),
       lane: "consequence",

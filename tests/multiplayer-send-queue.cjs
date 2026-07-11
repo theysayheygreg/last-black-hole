@@ -63,6 +63,43 @@ function testReliableFifoAckAndReplay() {
   assert.strictEqual(queue.status().rebaseRequired, true);
 }
 
+function testExplicitReliableIdsPreserveWire() {
+  const queue = createMultiplayerSendQueue({ nextReliableId: 50 });
+  const frame = { type: "event", deliveryId: 50, consequence: { kind: "loot" } };
+  const accepted = queue.enqueueConsequence(frame, { reliableId: 50 });
+  assert.strictEqual(accepted.accepted, true);
+  assert.strictEqual(accepted.id, 50);
+
+  const duplicate = queue.enqueueConsequence(frame, { reliableId: 50 });
+  assert.deepStrictEqual(duplicate, {
+    accepted: false,
+    action: "ignore",
+    reason: "stale-reliable-id",
+    expectedReliableId: 51,
+  });
+  const stale = queue.enqueueConsequence({ deliveryId: 49 }, { reliableId: 49 });
+  assert.strictEqual(stale.reason, "stale-reliable-id");
+  const future = queue.enqueueConsequence({ deliveryId: 52 }, { reliableId: 52 });
+  assert.deepStrictEqual(future, {
+    accepted: false,
+    action: "reject",
+    reason: "future-reliable-id",
+    expectedReliableId: 51,
+  });
+  assert.strictEqual(queue.status().highestIssuedReliableId, 50,
+    "duplicate, stale, and future ids cannot advance allocation");
+
+  const drained = queue.drain();
+  assert.strictEqual(drained.messages.length, 1);
+  assert.strictEqual(drained.messages[0].reliableId, 50);
+  assert.deepStrictEqual(drained.messages[0].envelope, frame);
+  assert.strictEqual(drained.messages[0].wire, JSON.stringify(frame));
+
+  const automatic = queue.enqueueConsequence({ type: "event", deliveryId: 51 });
+  assert.strictEqual(automatic.id, 51, "generic callers retain automatic monotonic allocation");
+  assert.throws(() => queue.enqueueConsequence({}, { reliableId: 0 }), /reliableId/);
+}
+
 function testDeterministicPriorityAndDrainBudgets() {
   const queue = createMultiplayerSendQueue({ maxMessages: 8, maxBytes: 4096 });
   const consequence = queue.enqueueConsequence({ event: "signal" });
@@ -183,6 +220,7 @@ function testInvalidWatermarksDisconnectExplicitly() {
 function main() {
   testStateCoalescingAndOrdering();
   testReliableFifoAckAndReplay();
+  testExplicitReliableIdsPreserveWire();
   testDeterministicPriorityAndDrainBudgets();
   testExactAccountingAndFloodBounds();
   testReplaceableFloodAndOversizeRebase();
