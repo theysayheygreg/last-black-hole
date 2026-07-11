@@ -39,6 +39,10 @@
   authority held near its effective 8 Hz under joined/input/pulse load, while
   full snapshots grew from 112.53 to 261.25 KiB; the test also exposed current
   overload pressure counting AI pilots against the human admission cap.
+- Added the 24/48/96 single-match architecture pressure test. It keeps 24 in
+  one isolated writer process, makes AOI/deltas/isolation serious at 48, and
+  models 96 as one logical authority with a canonical writer plus deterministic
+  internal workers—not independently writable shards.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
