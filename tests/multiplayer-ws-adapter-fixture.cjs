@@ -185,6 +185,36 @@ async function createHarness(options = {}) {
         lastEventSeq: 0,
       };
       bindings.push(binding);
+      const baselinePublic = {
+        type: "publicState",
+        runId: binding.runId,
+        snapshotId: 1,
+        tick: 0,
+        simTime: 0,
+        lastEventSeq: 0,
+        fieldRevision: 1,
+        overloadMode: "NORMAL",
+        lastInputSeq: 0,
+        lastActionSeq: 0,
+        manifestHash: "sha256:test",
+        full: true,
+        state: { bodies: [{ id: "public-body", x: 0.25, y: 0.5 }], despawns: [] },
+      };
+      const baselineOwner = {
+        type: "ownerState",
+        runId: binding.runId,
+        membershipId: binding.membershipId,
+        playerId: binding.playerId,
+        snapshotId: 1,
+        tick: 0,
+        simTime: 0,
+        lastEventSeq: 0,
+        fieldRevision: 1,
+        overloadMode: "NORMAL",
+        lastInputSeq: 0,
+        lastActionSeq: 0,
+        state: { privateMarker: `private-${binding.name}` },
+      };
       const result = {
         binding,
         welcome: {
@@ -205,6 +235,12 @@ async function createHarness(options = {}) {
           reconnected: false,
         },
         rebase: { type: "rebase", runId: binding.runId, reason: "initial", snapshotId: 1, lastEventSeq: 0 },
+        baselineFrames: [
+          baselinePublic,
+          options.helloOwnerFrameMutation
+            ? options.helloOwnerFrameMutation(baselineOwner, binding)
+            : baselineOwner,
+        ],
       };
       if (options.afterRedeem) await options.afterRedeem(result, context);
       return result;
@@ -283,6 +319,7 @@ async function createHarness(options = {}) {
       };
       return options.ownerFrameMutation ? options.ownerFrameMutation(frame, binding) : frame;
     },
+    buildEventRecovery: options.buildEventRecovery,
   });
 
   async function admit(name, overrides = {}) {

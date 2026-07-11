@@ -269,6 +269,16 @@ function createSimWebSocketAdapter(options = {}) {
     });
     const bindingKey = stableBindingKey(result.bindingKey || identity);
     if (!bindingKey) throw Object.assign(new Error("stable binding identity missing"), { publicCode: "admission-rejected", closeCode: 4401 });
+    if (!Array.isArray(result.baselineFrames)
+      || result.baselineFrames.length !== 2
+      || result.baselineFrames[0]?.type !== "publicState"
+      || result.baselineFrames[1]?.type !== "ownerState") {
+      throw Object.assign(new Error("invalid hello baseline"), { publicCode: "admission-rejected", closeCode: 4401 });
+    }
+    const [baselinePublicFrame, baselineOwnerFrame] = result.baselineFrames;
+    encodeWireFrame(baselinePublicFrame, { direction: SERVER_TO_CLIENT });
+    encodeWireFrame(baselineOwnerFrame, { direction: SERVER_TO_CLIENT });
+    assertOwnerProjection(baselineOwnerFrame, baselinePublicFrame, identity);
     state.binding = result.binding;
     state.bindingKey = bindingKey;
     state.identity = identity;
@@ -300,13 +310,17 @@ function createSimWebSocketAdapter(options = {}) {
       prior.closing = true;
       sendApplicationClose(prior, 4003, "connection replaced", true);
     }
+    if (!(await isBindingCurrent(state, "private-welcome-send"))) {
+      if (!stateIsLive(state, expectedGeneration)) return;
+      throw Object.assign(new Error("redeemed binding is no longer current"), { publicCode: "connection-fenced", closeCode: 4003 });
+    }
+    if (!stateIsLive(state, expectedGeneration)) return;
     byBindingKey.set(bindingKey, state);
     currentRunId = result.welcome.runId;
     sendFrame(state, result.welcome);
     sendFrame(state, result.rebase);
-    if (Array.isArray(result.baselineFrames)) {
-      for (const baselineFrame of result.baselineFrames) sendFrame(state, baselineFrame);
-    }
+    sendFrame(state, baselinePublicFrame);
+    sendFrame(state, baselineOwnerFrame);
     if (Array.isArray(result.reliableEvents)) {
       let enqueued = 0;
       for (const event of result.reliableEvents) {
@@ -528,6 +542,7 @@ function createSimWebSocketAdapter(options = {}) {
             recoveryAccepted = false;
             break;
           }
+          state.binding.eventScanSeq = Math.max(state.binding.eventScanSeq || 0, event.eventSeq);
         }
         if (recoveryAccepted && Number.isSafeInteger(recovery?.scanThrough)) {
           state.binding.eventScanSeq = Math.max(state.binding.eventScanSeq || 0, recovery.scanThrough);
@@ -647,7 +662,7 @@ function createSimWebSocketAdapter(options = {}) {
     return results;
   }
 
-  function rotateRun(nextRunId, watermarks = null) {
+  function rotateRun(nextRunId) {
     currentRunId = nextRunId || null;
     let fenced = 0;
     for (const state of [...connections]) {
@@ -656,16 +671,6 @@ function createSimWebSocketAdapter(options = {}) {
       state.pendingEventBytes = 0;
       if (!state.closing) {
         fenced += 1;
-        if (watermarks) {
-          sendFrame(state, {
-            type: "rebase",
-            runId: currentRunId,
-            reason: "run-changed",
-            snapshotId: Math.max(1, Number(watermarks.snapshotId) || 1),
-            lastEventSeq: Math.max(0, Number(watermarks.lastEventSeq) || 0),
-          });
-          eventReplayStats.forcedRebases += 1;
-        }
         state.closing = true;
         sendApplicationClose(state, 4003, "run changed", true);
       }

@@ -406,6 +406,7 @@ async function run() {
         playerId: "player-stable",
         epoch: 1,
       });
+      const firstOwnerCount = first.messages.filter((frame) => frame.type === "ownerState").length;
       const second = await harness.admit("stable-new", {
         membershipId: identity.membershipId,
         playerId: "player-stable",
@@ -424,7 +425,8 @@ async function run() {
       );
       await harness.adapter.projectNow();
       await waitFor(() => nextFrame(second.messages, "ownerState"), { label: "new epoch owner state" });
-      assert(!nextFrame(first.messages, "ownerState"), "Old epoch must not receive owner state after replacement");
+      assert(first.messages.filter((frame) => frame.type === "ownerState").length === firstOwnerCount,
+        "Old epoch received owner state after replacement");
     } finally {
       await harness.close();
     }
@@ -442,9 +444,32 @@ async function run() {
       assert(result.projected === 0 && result.skipped === 1, "Identity-mismatched owner frame must be skipped");
       await waitFor(() => client.close.code !== null, { label: "owner identity mismatch close" });
       assert(client.close.code === 4403, "Private identity mismatch should close the connection");
-      assert(!nextFrame(client.messages, "ownerState"), "Mismatched owner frame must never reach the wire");
+      assert(client.messages.filter((frame) => frame.type === "ownerState").length === 1
+        && !client.messages.some((frame) => frame.type === "ownerState" && frame.membershipId === "membership-attacker"),
+      "Mismatched projected owner frame reached the wire");
       assert(nextFrame(client.messages, "error")?.code === "owner-identity-mismatch",
         "Identity mismatch should surface only a bounded error code");
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await runner.run("rejects a rival hello owner baseline before sending any admission bytes", async () => {
+    const harness = await createHarness({
+      helloOwnerFrameMutation(frame) {
+        return { ...frame, membershipId: "membership-rival" };
+      },
+    });
+    try {
+      const ticket = harness.issueTicket("hello-owner-mismatch");
+      const client = await openClient(`${harness.baseUrl}/stream`);
+      client.ws.send(JSON.stringify(hello(ticket)));
+      await waitFor(() => client.close.code !== null, { label: "hello owner mismatch close" });
+      assert(client.close.code === 4403, "Rival hello owner baseline should close as a private identity violation");
+      assert(!client.messages.some((frame) => ["welcome", "rebase", "publicState", "ownerState"].includes(frame.type)),
+        "Invalid hello baseline emitted admission or private baseline bytes");
+      assert(nextFrame(client.messages, "error")?.code === "owner-identity-mismatch",
+        "Hello owner mismatch should expose only the bounded identity error");
     } finally {
       await harness.close();
     }
@@ -634,6 +659,42 @@ async function run() {
     }
   });
 
+  await runner.run("partial replay enqueue advances its accepted prefix and eventually sends the suffix", async () => {
+    const sourceEvents = [1, 2, 3].map((seq) => eventFrame("run-a", seq, `partial-${seq}`));
+    const harness = await createHarness({
+      queueOptions: { maxReliableMessages: 18 },
+      buildEventRecovery(binding) {
+        const scan = binding.eventScanSeq || 0;
+        return {
+          events: sourceEvents.filter((event) => event.eventSeq > scan),
+          scanThrough: 3,
+        };
+      },
+    });
+    try {
+      const client = await harness.admit("partial-replay");
+      await harness.adapter.projectNow();
+      await waitFor(() => client.messages.filter((frame) => frame.type === "event").length === 2, {
+        label: "accepted replay prefix",
+      });
+      nodeAssert.deepStrictEqual(
+        client.messages.filter((frame) => frame.type === "event").map((frame) => frame.eventSeq),
+        [1, 2],
+        "Small reliable headroom should accept only the ordered prefix",
+      );
+      assert(client.binding.eventScanSeq === 2, "Accepted replay prefix did not advance its scan cursor");
+      client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: 2 }));
+      await waitFor(() => harness.adapter.diagnostics().queuedMessages === 0, { label: "prefix delivery release" });
+      await harness.adapter.projectNow();
+      await waitFor(() => client.messages.some((frame) => frame.type === "event" && frame.eventSeq === 3), {
+        label: "eventual replay suffix",
+      });
+      assert(client.binding.eventScanSeq === 3, "Replay suffix did not complete scan progress");
+    } finally {
+      await harness.close();
+    }
+  });
+
   await runner.run("coalesces replaceable state for a paused real consumer while preserving reliable order", async () => {
     const harness = await createHarness({
       queueOptions: {
@@ -692,11 +753,13 @@ async function run() {
         "Adapter-private state-pair accounting should conservatively cover both encoded frames",
       );
       assert(
-        !client.messages.some((frame) => frame.type === "publicState" && frame.snapshotId !== latest.snapshotId),
+        !client.messages.some((frame) => frame.type === "publicState"
+          && frame.snapshotId !== 1 && frame.snapshotId !== latest.snapshotId),
         "Only the newest coalesced public frame should leave the paused socket",
       );
       assert(
-        !client.messages.some((frame) => frame.type === "ownerState" && frame.snapshotId !== latest.snapshotId),
+        !client.messages.some((frame) => frame.type === "ownerState"
+          && frame.snapshotId !== 1 && frame.snapshotId !== latest.snapshotId),
         "Coalescing must not emit an orphan owner frame from a replaced projection",
       );
       client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: 300 }));
@@ -769,6 +832,8 @@ async function run() {
       await waitFor(() => client.close.code !== null, { label: "run-rotation close" });
       assert(client.close.code === 4003, "Run rotation should use the fencing close code");
       assert(harness.adapter.diagnostics().queuedMessages === 0, "Run rotation should clear queue state");
+      assert(!client.messages.some((frame) => frame.type === "rebase" && frame.runId === "run-b"),
+        "Destroyed old membership received a guessed new-run rebase without an authenticated baseline");
     } finally {
       await harness.close();
     }

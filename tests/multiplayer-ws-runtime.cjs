@@ -1172,6 +1172,8 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       assert(reset.status === 200 && reset.body.session.runId !== runId, "Expected WebSocket-authority reset");
       await waitFor(() => resumed.close, "reset socket fence");
       assert(resumed.close.code === 4003, "Reset must close the resumed old-run socket");
+      assert(!frames(resumed, "rebase").some((entry) => entry.runId === reset.body.session.runId),
+        "Destroyed old membership received a guessed new-run rebase without a validated baseline");
       const invalidated = await openBoundClient(port, pendingOldRunTicket.body.ticket);
       await waitFor(() => invalidated.close, "reset-invalidated ticket");
       assert(invalidated.close.code === 4401, "Reset must invalidate old-run admission tickets");

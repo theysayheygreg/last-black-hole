@@ -1488,7 +1488,7 @@ function startSession(config = {}) {
   runtime.waveRings = [];
   runtime.coarseField = null;
   rebuildAuthoritativeField({ initialize: true });
-  rotateMultiplayerRun(runtime.session.runId, { snapshotId: 1, lastEventSeq: 0 });
+  rotateMultiplayerRun(runtime.session.runId);
   telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
   publishEvent("session.started", {
     sessionId: runtime.session.id,
@@ -6040,7 +6040,7 @@ function writeFiles() {
   }
 }
 
-function rotateMultiplayerRun(runId, watermarks = null) {
+function rotateMultiplayerRun(runId) {
   if (multiplayerTicketRegistry) multiplayerTicketRegistry.rotateRun(runId);
   else {
     multiplayerTicketRegistry = createMultiplayerTicketRegistry({
@@ -6049,7 +6049,7 @@ function rotateMultiplayerRun(runId, watermarks = null) {
       capacity: 32,
     });
   }
-  if (multiplayerAdapter) multiplayerAdapter.rotateRun(runId, watermarks);
+  if (multiplayerAdapter) multiplayerAdapter.rotateRun(runId);
 }
 
 function currentMultiplayerProfileId(player, authority) {
