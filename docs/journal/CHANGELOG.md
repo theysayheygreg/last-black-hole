@@ -74,6 +74,11 @@
 - Added a disjoint protocol-discovery packet so the optional `/stream` path,
   wire version, JSON framing, environment gate, and same-process authority
   topology come from one cycle-free constant without duplicating wire schemas.
+- Added a corrective overload packet after runtime review proved the first
+  socket fixture degraded to roughly 12/6 Hz. The packet makes configured
+  player/AI maxima healthy by definition, charges completed async projection
+  cost into the next overload sample exactly once, and restores a real 15/10
+  Shallows gate instead of accepting an already-degraded target.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 
