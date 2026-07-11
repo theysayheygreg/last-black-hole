@@ -86,6 +86,9 @@ function main() {
     '--dir',
     process.env.LBH_DECK_DIR || '/home/deck/Games/last-singularity'
   );
+  const displayName = argValue('--name', process.env.LBH_DECK_NAME || PRODUCT_NAME);
+  const installSlug = argValue('--slug', process.env.LBH_DECK_SLUG || 'last-singularity');
+  const artifactOverride = argValue('--artifact', process.env.LBH_DECK_ARTIFACT || '');
   const noBuild = hasFlag('--no-build');
   const forceBuild = hasFlag('--force-build');
   const dryRun = hasFlag('--dry-run');
@@ -103,8 +106,10 @@ function main() {
     run(ssh, [...sshOptions(), target, remoteCommand('true')], { skipOnDryRun: true });
   }
 
-  const artifact = path.join(buildRoot(mode), `${PRODUCT_NAME}-linux-x64`);
-  if (!noBuild && (forceBuild || !fs.existsSync(artifact))) {
+  const artifact = artifactOverride
+    ? path.resolve(artifactOverride)
+    : path.join(buildRoot(mode), `${PRODUCT_NAME}-linux-x64`);
+  if (!artifactOverride && !noBuild && (forceBuild || !fs.existsSync(artifact))) {
     run('node', ['scripts/build.cjs', '--targets=linux', `--mode=${mode}`]);
   } else if (!noBuild) {
     console.log(`Reusing existing Linux Deck artifact: ${artifact}`);
@@ -116,16 +121,17 @@ function main() {
 
   const executable = path.join(remoteDir, PRODUCT_NAME);
   const launcher = path.join(remoteDir, 'run-last-singularity.sh');
-  const desktopEntry = path.join(remoteDir, DESKTOP_ENTRY_NAME);
-  const localDesktopEntry = `/home/${user}/.local/share/applications/${DESKTOP_ENTRY_NAME}`;
-  const desktopShortcut = `/home/${user}/Desktop/Last Singularity.desktop`;
+  const desktopEntryName = `${installSlug}.desktop`;
+  const desktopEntry = path.join(remoteDir, desktopEntryName);
+  const localDesktopEntry = `/home/${user}/.local/share/applications/${desktopEntryName}`;
+  const desktopShortcut = `/home/${user}/Desktop/${displayName}.desktop`;
   const launcherBody = [
     '#!/usr/bin/env bash',
     'set -euo pipefail',
     'cd "$(dirname "$0")"',
     'export LBH_DECK=1',
     'export ELECTRON_ENABLE_LOGGING="${ELECTRON_ENABLE_LOGGING:-1}"',
-    'LOG_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/last-singularity"',
+    `LOG_DIR="\${XDG_STATE_HOME:-$HOME/.local/state}/${installSlug}"`,
     'mkdir -p "$LOG_DIR"',
     'for name in deck-launch electron; do',
     '  if [ -f "$LOG_DIR/$name.log" ]; then',
@@ -155,6 +161,7 @@ function main() {
       '--ignore-gpu-blocklist',
       '--ozone-platform=x11',
       '--enable-logging=stderr',
+      `"--user-data-dir=\${XDG_CONFIG_HOME:-$HOME/.config}/${installSlug}"`,
       '"${EXTRA_FLAGS[@]}"',
       '"$@"',
       '>> "$LOG_DIR/deck-launch.log" 2>&1',
@@ -164,8 +171,8 @@ function main() {
   const desktopBody = [
     '[Desktop Entry]',
     'Type=Application',
-    `Name=${PRODUCT_NAME}`,
-    `Comment=${PRODUCT_NAME} local playtest build`,
+    `Name=${displayName}`,
+    `Comment=${displayName} local playtest build`,
     `Exec=${launcher}`,
     `Path=${remoteDir}`,
     `Icon=${path.posix.join(remoteDir, 'last-singularity-icon.png')}`,
@@ -214,8 +221,10 @@ function main() {
   console.log(`- target: ${target}:${remoteDir}`);
   console.log(`- launcher: ${launcher}`);
   console.log(`- desktop entry: ${desktopEntry}`);
+  console.log(`- display name: ${displayName}`);
+  console.log(`- data namespace: ${installSlug}`);
   console.log('');
-  console.log('On the Deck, add run-last-singularity.sh or the Last Singularity desktop shortcut as a non-Steam game from Desktop Mode.');
+  console.log(`On the Deck, launch ${displayName} from Desktop Mode or register it with deck:gaming-mode.`);
 }
 
 main();

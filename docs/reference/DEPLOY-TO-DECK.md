@@ -190,3 +190,34 @@ split and the build-target deltas from the web runtime.
 Desktop Mode remains an install and triage surface. Steam Input may keep the
 built-in controls on the Desktop layout there, so LBH controller acceptance
 should happen from **Library -> Non-Steam** in Gaming Mode.
+
+## Side-by-side version comparison
+
+Deploy comparison builds to separate directories with distinct display names
+and data namespaces. `--artifact` accepts a Linux package produced from another
+clean worktree, so neither source branch needs to be switched in place:
+
+```sh
+node scripts/deploy/steam-deck.cjs \
+  --host=steamdeck.tail1ac9cf.ts.net \
+  --artifact=/absolute/path/to/Last\ Singularity-linux-x64 \
+  --dir=/home/deck/Games/last-singularity-v02 \
+  --name="Last Singularity v0.2 Demo" \
+  --slug=last-singularity-v02 \
+  --no-build
+```
+
+Register each directory with the same `--name` and `--slug` values:
+
+```sh
+node scripts/deploy/deck-gaming-mode.cjs \
+  --host=steamdeck.tail1ac9cf.ts.net \
+  --dir=/home/deck/Games/last-singularity-v02 \
+  --name="Last Singularity v0.2 Demo" \
+  --slug=last-singularity-v02 \
+  --shutdown-steam --all-users
+```
+
+The slug separates launcher logs, Electron user data, desktop entries, and
+Steam shortcut identity. This prevents a preview build from overwriting the
+demo build or sharing its profile/cache state during comparison.

@@ -31,6 +31,16 @@ function run() {
   assert.strictEqual(entry.tags[1], "Deck Playtest");
   assert.strictEqual(entry.appid, shortcutAppId(entry.Exe, entry.AppName));
 
+  const previewEntry = shortcutEntry({
+    remoteDir: "/home/deck/Games/last-singularity-v03",
+    name: "Last Singularity v0.3 Preview",
+    slug: "last-singularity-v03",
+  });
+  assert.strictEqual(previewEntry.AppName, "Last Singularity v0.3 Preview");
+  assert.strictEqual(previewEntry.ShortcutPath, "/home/deck/Games/last-singularity-v03/last-singularity-v03.desktop");
+  assert.notStrictEqual(previewEntry.appid, entry.appid, "Side-by-side installs need distinct Steam app ids");
+  assert.notStrictEqual(previewEntry.Exe, entry.Exe, "Side-by-side installs need distinct launchers");
+
   const root = { shortcuts: {} };
   const firstKey = upsertShortcut(root, entry);
   const secondKey = upsertShortcut(root, entry);
@@ -62,6 +72,10 @@ function run() {
 
   assert.strictEqual(nextKey, "1");
   assert.strictEqual(shortcutCount(decoded), 2);
+
+  const previewKey = upsertShortcut(decoded, previewEntry);
+  assert.strictEqual(previewKey, "2");
+  assert.strictEqual(shortcutCount(decoded), 3);
 
   console.log("Deck Gaming Mode shortcut VDF guard passed.");
 }

@@ -29,6 +29,9 @@
   beauty shots, and reference scenes cannot be mislabeled as one another.
 - Captured a fresh authority-backed promo batch with ten 4K stills and two
   validated 30 fps MP4/GIF pairs, then mirrored the shareable media to iCloud.
+- Generalized private Deck deployment for side-by-side version comparisons:
+  external artifacts can now install under distinct names, directories, logs,
+  user-data namespaces, desktop entries, and Steam shortcut app ids.
 
 ## 2026-07-10 — v0.3 visual production system
 

@@ -198,8 +198,9 @@ function shortcutAppId(exe, appName) {
 function shortcutEntry(options = {}) {
   const name = options.name || PRODUCT_NAME;
   const remoteDir = options.remoteDir || DEFAULT_REMOTE_DIR;
+  const slug = options.slug || "last-singularity";
   const launcher = `${remoteDir.replace(/\/$/, "")}/run-last-singularity.sh`;
-  const desktopEntry = `${remoteDir.replace(/\/$/, "")}/${DESKTOP_ENTRY_NAME}`;
+  const desktopEntry = `${remoteDir.replace(/\/$/, "")}/${slug}.desktop`;
   const icon = `${remoteDir.replace(/\/$/, "")}/last-singularity-icon.png`;
   const exe = `"${launcher}"`;
   const startDir = `"${remoteDir.replace(/\/$/, "")}"`;
@@ -223,6 +224,7 @@ function shortcutEntry(options = {}) {
     tags: {
       0: "Last Singularity",
       1: "Deck Playtest",
+      2: name,
     },
   };
 }
@@ -327,7 +329,11 @@ function installShortcutIntoSelection(options, selection) {
 
   const existing = readRemoteFileOrEmpty(ssh, target, selection.shortcutsPath);
   const root = parseShortcutsVdf(existing);
-  const key = upsertShortcut(root, shortcutEntry({ remoteDir }));
+  const key = upsertShortcut(root, shortcutEntry({
+    remoteDir,
+    name: options.name,
+    slug: options.slug,
+  }));
   const output = writeShortcutsVdf(root);
   const backupPath = `${selection.shortcutsPath}.lbh-backup-${timestamp()}`;
 
@@ -401,6 +407,8 @@ function main() {
   const host = argValue("--host", process.env.LBH_DECK_HOST || "");
   const user = argValue("--user", process.env.LBH_DECK_USER || "deck");
   const remoteDir = argValue("--dir", process.env.LBH_DECK_DIR || DEFAULT_REMOTE_DIR);
+  const name = argValue("--name", process.env.LBH_DECK_NAME || PRODUCT_NAME);
+  const slug = argValue("--slug", process.env.LBH_DECK_SLUG || "last-singularity");
   const steamUserId = argValue("--steam-user-id", process.env.LBH_DECK_STEAM_USER_ID || "");
   const ssh = process.env.LBH_SSH || "ssh";
   const dryRun = hasFlag("--dry-run");
@@ -422,6 +430,8 @@ function main() {
     allUsers,
     dryRun,
     shutdown,
+    name,
+    slug,
   });
 
   console.log("");
@@ -430,7 +440,7 @@ function main() {
   for (const entry of result.entries) {
     console.log(`- shortcuts: ${entry.shortcutsPath}`);
     if (entry.backupPath) console.log(`  ${dryRun ? "backup would be" : "backup"}: ${entry.backupPath}`);
-    console.log(`  entry: ${PRODUCT_NAME} (key ${entry.key}, appid ${entry.appid})`);
+    console.log(`  entry: ${name} (key ${entry.key}, appid ${entry.appid})`);
   }
   console.log(`- launcher: ${result.launcher}`);
   console.log("");
