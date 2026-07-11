@@ -67,6 +67,14 @@ run-qualified membership-private event replay/rebase are implemented and pass
 the multiplayer-network and authority lanes. The remaining Phase 1 critical
 path is SimClient/browser cutover and a natural four/eight-client journey.
 
+**Client checkpoint — 2026-07-11:** `SimClient` now keeps HTTP as the default
+oracle and exposes an explicit `simTransport=stream` browser path. The stream
+path merges exact public/owner lineage, separates continuous input ACKs from
+reliable semantic actions, preserves action identity across reconnect, splits
+delivery from playback ACK, fences stale connection generations, bounds
+cancellation/leave, and performs no hot-path HTTP. Phase 1 still requires the
+natural four/eight-browser journey before any playable claim.
+
 - [x] Add a persistent JSON WSS adapter with hello/version, membership binding,
   heartbeat, and bounded queues.
 - [x] Send owner-private state plus the complete public world; no AOI yet.

@@ -7,6 +7,18 @@
 
 ## 2026-07-11 — v0.4 Phase 0 multiplayer trust closure
 
+- Added the dual-transport browser SimClient behind explicit
+  `simTransport=stream`, while preserving HTTP as the default diagnostic
+  oracle. Stream mode now merges exact public/owner state lineage, keeps
+  continuous input independent from reliable action settlement, retries stable
+  action identities across reconnect, and uses separate delivery/playback ACKs.
+- Extracted stream lifecycle/recovery into a focused helper and added seven
+  live regressions for admission cancellation, owner-private baseline merge,
+  rejected one-shot settlement, inventory/event ACK behavior, reconnect
+  rotation, clean leave, dead-socket bounded failure, and zero hot-path HTTP.
+- Generation-fenced pulse, extraction, and consumable intents in the browser
+  loop so an older semantic ACK cannot erase a newer physical press.
+
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection
   fencing, and server-only reconnect state rehydration.

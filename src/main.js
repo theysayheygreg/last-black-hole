@@ -266,6 +266,7 @@ let fixtureShipCandidates = [];
 let remoteLastAckSeq = 0;
 let remoteLastEventSeq = 0;
 let remoteInputRequestInFlight = false;
+let remoteActionSettlementInFlight = false;
 let remoteSnapshotRequestInFlight = false;
 let remoteInventoryRequestInFlight = false;
 let remoteSessionHealth = null;
@@ -274,6 +275,9 @@ let remoteSessionLastFetchedAt = 0;
 let remotePendingPulse = false;
 let remotePendingExtractConfirm = false;
 let remotePendingConsumeSlot = null;
+let remotePulseIntentGeneration = 0;
+let remoteExtractIntentGeneration = 0;
+let remoteConsumeIntentGeneration = 0;
 let remotePendingSlingshotEdges = [];
 let remoteNextSlingshotEdgeId = 1;
 let remoteShipPresentation = null;
@@ -887,6 +891,12 @@ function getConfiguredSimServerUrl() {
   return localStorage.getItem('lbh.simServerUrl') || '';
 }
 
+function getConfiguredSimTransport() {
+  return new URL(window.location.href).searchParams.get('simTransport') === 'stream'
+    ? 'stream'
+    : 'http';
+}
+
 // ---- Init ----
 
 function init() {
@@ -1093,8 +1103,8 @@ function init() {
 
   const simServerUrl = getConfiguredSimServerUrl();
   if (simServerUrl) {
-    simClient = new SimClient(simServerUrl);
-    console.log(`[LBH] remote sim configured: ${simServerUrl}`);
+    simClient = new SimClient(simServerUrl, { transport: getConfiguredSimTransport() });
+    console.log(`[LBH] remote sim configured: ${simServerUrl} (${simClient.transport})`);
   }
 
   // Load title scene (clears everything, loads default map, seeds fluid)
@@ -1724,11 +1734,15 @@ function startGame(map, seed = null) {
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
+  remoteActionSettlementInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingExtractConfirm = false;
   remotePendingConsumeSlot = null;
+  remotePulseIntentGeneration = 0;
+  remoteExtractIntentGeneration = 0;
+  remoteConsumeIntentGeneration = 0;
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
@@ -2666,11 +2680,15 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
+  remoteActionSettlementInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingExtractConfirm = false;
   remotePendingConsumeSlot = null;
+  remotePulseIntentGeneration = 0;
+  remoteExtractIntentGeneration = 0;
+  remoteConsumeIntentGeneration = 0;
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
@@ -2770,11 +2788,15 @@ async function leaveRemoteSessionToHome() {
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
+  remoteActionSettlementInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
   remotePendingPulse = false;
   remotePendingExtractConfirm = false;
   remotePendingConsumeSlot = null;
+  remotePulseIntentGeneration = 0;
+  remoteExtractIntentGeneration = 0;
+  remoteConsumeIntentGeneration = 0;
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
@@ -2796,12 +2818,16 @@ async function restartRemoteSession() {
   remoteAuthorityActive = true;
   remotePlayers = [];
   remoteInputRequestInFlight = false;
+  remoteActionSettlementInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
   remoteLastEventSeq = 0;
   remotePendingPulse = false;
   remotePendingExtractConfirm = false;
   remotePendingConsumeSlot = null;
+  remotePulseIntentGeneration = 0;
+  remoteExtractIntentGeneration = 0;
+  remoteConsumeIntentGeneration = 0;
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
@@ -4306,14 +4332,18 @@ function gameLoop(now) {
 
         if (!inventoryOpen && consumable1Now && !_prevConsumable1) {
           remotePendingConsumeSlot = 0;
+          remoteConsumeIntentGeneration += 1;
         } else if (!inventoryOpen && consumable2Now && !_prevConsumable2) {
           remotePendingConsumeSlot = 1;
+          remoteConsumeIntentGeneration += 1;
         }
         if (pulseNow && !_prevPulse) {
           remotePendingPulse = true;
+          remotePulseIntentGeneration += 1;
         }
         if (!inventoryOpen && extractNow && !_prevExtract) {
           remotePendingExtractConfirm = true;
+          remoteExtractIntentGeneration += 1;
         }
         if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
           remotePendingSlingshotEdges.push(remoteNextSlingshotEdgeId++);
@@ -4326,10 +4356,18 @@ function gameLoop(now) {
           const brake = inventoryOpen ? 0 : inputManager.brakeIntensity;
           const intentX = Number.isFinite(facing) ? Math.cos(facing) : 1;
           const intentY = Number.isFinite(facing) ? Math.sin(facing) : 0;
-          const sentPulse = remotePendingPulse;
-          const sentExtractConfirm = remotePendingExtractConfirm;
-          const sentConsumeSlot = remotePendingConsumeSlot;
-          const sentSlingshotEdges = remotePendingSlingshotEdges.slice(0, 8);
+          const canDispatchActions = simClient.transport !== 'stream' || !remoteActionSettlementInFlight;
+          const sentPulse = canDispatchActions && remotePendingPulse;
+          const sentExtractConfirm = canDispatchActions && remotePendingExtractConfirm;
+          const sentConsumeSlot = canDispatchActions ? remotePendingConsumeSlot : null;
+          const sentPulseGeneration = remotePulseIntentGeneration;
+          const sentExtractGeneration = remoteExtractIntentGeneration;
+          const sentConsumeGeneration = remoteConsumeIntentGeneration;
+          const sentSlingshotEdges = canDispatchActions ? remotePendingSlingshotEdges.slice(0, 8) : [];
+          const hasStreamActions = simClient.transport === 'stream' && (
+            sentPulse || sentExtractConfirm || sentConsumeSlot !== null || sentSlingshotEdges.length > 0
+          );
+          if (hasStreamActions) remoteActionSettlementInFlight = true;
           remoteInputRequestInFlight = true;
           void simClient.sendInput({
             // The scalar action fields decide whether thrust/brake happens;
@@ -4348,19 +4386,50 @@ function gameLoop(now) {
           }).then((response) => {
             remoteLastAckSeq = response.acceptedSeq ?? remoteLastAckSeq;
             syncRemoteNetworkPerfStats();
-            if (sentPulse) remotePendingPulse = false;
-            if (sentExtractConfirm) remotePendingExtractConfirm = false;
-            const acceptedEdges = Array.isArray(response.acceptedSlingshotEdges)
-              ? new Set(response.acceptedSlingshotEdges)
-              : new Set(sentSlingshotEdges);
-            if (acceptedEdges.size > 0) {
-              remotePendingSlingshotEdges = remotePendingSlingshotEdges.filter((id) => !acceptedEdges.has(id));
-            }
-            if (sentConsumeSlot !== null && remotePendingConsumeSlot === sentConsumeSlot) {
-              remotePendingConsumeSlot = null;
+            if (response.actionResults) {
+              void response.actionResults.then((results) => {
+                if (sentPulse && results.pulseSettled
+                    && remotePulseIntentGeneration === sentPulseGeneration) remotePendingPulse = false;
+                if (sentExtractConfirm && results.extractConfirmSettled
+                    && remoteExtractIntentGeneration === sentExtractGeneration) remotePendingExtractConfirm = false;
+                const settledEdges = new Set(results.settledSlingshotEdges || []);
+                if (settledEdges.size > 0) {
+                  remotePendingSlingshotEdges = remotePendingSlingshotEdges.filter((id) => !settledEdges.has(id));
+                }
+                if (results.consumeSettledSlot !== null
+                    && remotePendingConsumeSlot === results.consumeSettledSlot
+                    && remoteConsumeIntentGeneration === sentConsumeGeneration) {
+                  remotePendingConsumeSlot = null;
+                }
+                const rejected = results.actionAcks?.filter((ack) => ack.status === 'rejected') || [];
+                if (rejected.length > 0) {
+                  console.warn('[LBH] remote actions rejected:', rejected.map((ack) => ({
+                    kind: ack.actionKind,
+                    code: ack.result?.code || 'rejected',
+                  })));
+                }
+              }).catch((err) => {
+                console.error('[LBH] remote action settlement failed:', err);
+              }).finally(() => {
+                remoteActionSettlementInFlight = false;
+              });
+            } else {
+              if (sentPulse && remotePulseIntentGeneration === sentPulseGeneration) remotePendingPulse = false;
+              if (sentExtractConfirm && remoteExtractIntentGeneration === sentExtractGeneration) remotePendingExtractConfirm = false;
+              const acceptedEdges = Array.isArray(response.acceptedSlingshotEdges)
+                ? new Set(response.acceptedSlingshotEdges)
+                : new Set(sentSlingshotEdges);
+              if (acceptedEdges.size > 0) {
+                remotePendingSlingshotEdges = remotePendingSlingshotEdges.filter((id) => !acceptedEdges.has(id));
+              }
+              if (sentConsumeSlot !== null && remotePendingConsumeSlot === sentConsumeSlot
+                  && remoteConsumeIntentGeneration === sentConsumeGeneration) {
+                remotePendingConsumeSlot = null;
+              }
             }
           }).catch((err) => {
             console.error('[LBH] remote input failed:', err);
+            if (hasStreamActions) remoteActionSettlementInFlight = false;
           }).finally(() => {
             remoteInputRequestInFlight = false;
           });

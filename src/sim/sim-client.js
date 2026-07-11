@@ -1,14 +1,25 @@
-function randomClientId() {
+import * as streamOps from './sim-stream-transport.js';
+
+function randomId(prefix = 'lbh-client') {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return `lbh-client-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function socketOpen(socket) {
+  return socket && socket.readyState === 1;
 }
 
 export class SimClient {
-  constructor(baseUrl) {
+  constructor(baseUrl, { transport = 'http', WebSocketImpl = globalThis.WebSocket, actionDrainTimeoutMs = 8000 } = {}) {
     this.baseUrl = String(baseUrl || '').replace(/\/+$/, '');
-    this.clientId = randomClientId();
+    this.transport = transport === 'stream' ? 'stream' : 'http';
+    this.activeTransport = 'http';
+    this.WebSocketImpl = WebSocketImpl;
+    this.actionDrainTimeoutMs = Math.max(1, Number(actionDrainTimeoutMs) || 8000);
+    this.clientId = randomId();
     this.seq = 0;
     this.commandSeq = 0;
+    this.actionSeq = 0;
     this.commandCredential = null;
     this.authorityRunId = null;
     this.authorityPlayerId = null;
@@ -26,6 +37,25 @@ export class SimClient {
     this.pollIntervalMs = 100;
     this.lastSentInput = null;
     this.pendingInputs = [];
+    this._protocol = null;
+    this._socket = null;
+    this._socketGeneration = 0;
+    this._streamState = 'idle';
+    this._streamVersion = 0;
+    this._streamWaiters = [];
+    this._inputAcks = new Map();
+    this._pendingPublic = new Map();
+    this._pendingOwner = new Map();
+    this._pendingActions = new Map();
+    this._eventFrames = new Map();
+    this._rebase = null;
+    this._latestOwnerActionSeq = 0;
+    this._heartbeatTimer = null;
+    this._connectionAttempts = new Map();
+    this._reconnectPromise = null;
+    this._shuttingDown = false;
+    this._closeDirective = null;
+    this._hotPathHttpCount = 0;
     this.metrics = {
       lastInputAckRttMs: null,
       lastInputToSnapshotMs: null,
@@ -38,6 +68,13 @@ export class SimClient {
       eventGapRecoveries: 0,
       slingshotEdgeAcks: [],
       lastRecoveryReason: null,
+      reconnectCount: 0,
+      reconnectReason: null,
+      lastInputAck: 0,
+      lastActionAck: 0,
+      lastDeliveryAck: 0,
+      lastEventAck: 0,
+      hotPathHttpCount: 0,
     };
   }
 
@@ -54,6 +91,10 @@ export class SimClient {
 
   async _json(path, options = {}) {
     if (!this.enabled) throw new Error('Sim client is not configured');
+    if (this.transport === 'stream' && /^\/(?:input|snapshot|events|inventory\/action)(?:[/?]|$)/.test(path)) {
+      this._hotPathHttpCount += 1;
+      this.metrics.hotPathHttpCount = this._hotPathHttpCount;
+    }
     const authorityHeaders = this.commandCredential && this.authorityRunId
       ? {
           'x-lbh-command-credential': this.commandCredential,
@@ -70,9 +111,7 @@ export class SimClient {
       },
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(body?.error || `HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
     return body;
   }
 
@@ -87,20 +126,12 @@ export class SimClient {
   }
 
   async startSession({ mapId, worldScale, maxPlayers = 4, seed = null, requesterId = this.clientId, requesterName = null, requesterProfileId = null, requesterProfile = null }) {
+    await this._awaitPendingActions();
+    await this._stopStream('session-start');
     const command = this.commandCredential ? this._nextCommandEnvelope() : {};
     const request = () => this._json('/session/start', {
       method: 'POST',
-      body: JSON.stringify({
-        mapId,
-        worldScale,
-        maxPlayers,
-        seed,
-        requesterId,
-        requesterName,
-        requesterProfileId,
-        requesterProfile,
-        ...command,
-      }),
+      body: JSON.stringify({ mapId, worldScale, maxPlayers, seed, requesterId, requesterName, requesterProfileId, requesterProfile, ...command }),
     });
     const body = await (this.commandCredential ? this._enqueueCommand(request) : request());
     this._applySessionClocks(body?.session);
@@ -121,10 +152,11 @@ export class SimClient {
   }
 
   async resetSession({ requesterId = this.clientId } = {}) {
+    await this._awaitPendingActions();
+    await this._stopStream('session-reset');
     const command = this._nextCommandEnvelope();
     const body = await this._enqueueCommand(() => this._json('/session/reset', {
-      method: 'POST',
-      body: JSON.stringify({ requesterId, ...command }),
+      method: 'POST', body: JSON.stringify({ requesterId, ...command }),
     }));
     this._applySessionClocks(body?.session);
     this._clearAuthority(body?.session?.runId || null, body?.joinTicket || null);
@@ -135,38 +167,43 @@ export class SimClient {
   async join({ name, profileId = null, profileSnapshot = null, equipped = null, consumables = null }) {
     const body = await this._json('/join', {
       method: 'POST',
-      body: JSON.stringify({
-        clientId: this.clientId,
-        runId: this.runId,
-        joinTicket: this.joinTicket,
-        name,
-        profileId,
-        profileSnapshot,
-        equipped,
-        consumables,
-      }),
+      body: JSON.stringify({ clientId: this.clientId, runId: this.runId, joinTicket: this.joinTicket, name, profileId, profileSnapshot, equipped, consumables }),
     });
     this._adoptAuthority(body?.authority);
+    if (this.transport === 'stream') await this._connectStream('admission');
     return body;
   }
 
   async leave() {
-    const envelope = this._nextCommandEnvelope();
-    const response = await this._enqueueCommand(() => this._json('/leave', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...envelope,
-      }),
-    }));
-    this._clearAuthority(this.runId, null);
-    return response;
+    await this._drainPendingActions(this.actionDrainTimeoutMs);
+    this._shuttingDown = true;
+    try {
+      const envelope = this._nextCommandEnvelope();
+      const response = await this._enqueueCommand(() => this._json('/leave', {
+        method: 'POST', body: JSON.stringify({ ...envelope }),
+      }));
+      await this._stopStream('leave');
+      this._clearAuthority(this.runId, null);
+      return response;
+    } finally {
+      this._shuttingDown = false;
+    }
+  }
+
+  async shutdown() {
+    this._shuttingDown = true;
+    await this._stopStream('shutdown');
   }
 
   async pollSnapshot(force = false) {
-    const now = Date.now();
-    if (!force && now - this.lastPollAt < this.pollIntervalMs && this.latestSnapshot) {
+    if (this.transport === 'stream') {
+      const version = this._streamVersion;
+      if (this.latestSnapshot && !force) return this.latestSnapshot;
+      if (!this.latestSnapshot || force) await this._waitForStreamState(version, 5000);
       return this.latestSnapshot;
     }
+    const now = Date.now();
+    if (!force && now - this.lastPollAt < this.pollIntervalMs && this.latestSnapshot) return this.latestSnapshot;
     this.lastPollAt = now;
     this.latestSnapshot = await this._json('/snapshot');
     this._recordSnapshotMetrics(this.latestSnapshot);
@@ -182,10 +219,15 @@ export class SimClient {
     this.eventCursor = 0;
     this.lastSnapshotId = 0;
     this.lastPollAt = 0;
+    this._pendingPublic.clear();
+    this._pendingOwner.clear();
+    this._eventFrames.clear();
+    this._rebase = null;
   }
 
   _clearAuthority(runId = null, joinTicket = null) {
     this.commandSeq = 0;
+    this.actionSeq = 0;
     this.commandCredential = null;
     this.authorityRunId = null;
     this.authorityPlayerId = null;
@@ -197,9 +239,7 @@ export class SimClient {
   }
 
   _adoptAuthority(authority) {
-    if (!authority?.commandCredential || !authority?.runId) {
-      throw new Error('Sim join did not return protocol-v2 command authority');
-    }
+    if (!authority?.commandCredential || !authority?.runId) throw new Error('Sim join did not return protocol-v2 command authority');
     this.commandCredential = authority.commandCredential;
     this.authorityRunId = authority.runId;
     this.authorityPlayerId = authority.playerId || this.clientId;
@@ -211,16 +251,25 @@ export class SimClient {
     this.joinTicket = null;
   }
 
-  _nextCommandEnvelope() {
-    if (!this.commandCredential || !this.authorityRunId) {
-      throw new Error('Join the active sim run before sending commands');
+  _adoptWelcome(frame) {
+    this.commandCredential = frame.commandCredential;
+    this.authorityRunId = frame.runId;
+    this.runId = frame.runId;
+    this.authorityPlayerId = frame.playerId;
+    this.membershipId = frame.membershipId;
+    this.connectionId = frame.connectionId;
+    this.connectionEpoch = frame.connectionEpoch;
+    this.commandSeq = Math.max(this.commandSeq, frame.lastCommandSeq);
+    this.actionSeq = Math.max(this.actionSeq, frame.lastActionSeq);
+    for (const [inputSeq, pending] of this._inputAcks) {
+      if (inputSeq <= frame.lastInputSeq) this._settleInputAck(inputSeq, { type: 'ack', ackKind: 'input', inputSeq });
     }
+  }
+
+  _nextCommandEnvelope() {
+    if (!this.commandCredential || !this.authorityRunId) throw new Error('Join the active sim run before sending commands');
     this.commandSeq += 1;
-    return {
-      runId: this.authorityRunId,
-      playerId: this.authorityPlayerId || this.clientId,
-      commandSeq: this.commandSeq,
-    };
+    return { runId: this.authorityRunId, playerId: this.authorityPlayerId || this.clientId, commandSeq: this.commandSeq };
   }
 
   _enqueueCommand(send) {
@@ -232,29 +281,18 @@ export class SimClient {
   async _syncEventWindow(snapshot) {
     const runId = snapshot?.runId || snapshot?.session?.runId || null;
     const watermark = Math.max(0, Number(snapshot?.lastEventSeq) || 0);
-    if (!runId) {
-      this.latestEvents = [];
-      return;
-    }
+    if (!runId) { this.latestEvents = []; return; }
     if (this.runId !== runId) {
       this.runId = runId;
       this.eventCursor = 0;
       this.latestEvents = [];
-      if (this.authorityRunId && this.authorityRunId !== runId) {
-        this._clearAuthority(runId, null);
-      }
+      if (this.authorityRunId && this.authorityRunId !== runId) this._clearAuthority(runId, null);
     }
     this.lastSnapshotId = Math.max(0, Number(snapshot?.snapshotId) || 0);
     this.metrics.lastSnapshotId = this.lastSnapshotId;
     if (watermark <= this.eventCursor) return;
-
-    const window = await this._json(
-      `/events?since=${this.eventCursor}&runId=${encodeURIComponent(runId)}`,
-    );
+    const window = await this._json(`/events?since=${this.eventCursor}&runId=${encodeURIComponent(runId)}`);
     if (window.reset || window.stale || window.future) {
-      // Full snapshots are authoritative rebases. If the bounded event window
-      // cannot bridge the gap, continue after its watermark instead of
-      // applying a partial history to fresh state.
       this.latestEvents = [];
       this.eventCursor = watermark;
       this.metrics.eventGapRecoveries += 1;
@@ -268,9 +306,25 @@ export class SimClient {
   }
 
   consumeEvents() {
-    const events = this.latestEvents;
+    if (this.transport !== 'stream') {
+      const events = this.latestEvents;
+      this.latestEvents = [];
+      return events;
+    }
+    const frames = [...this._eventFrames.values()].sort((a, b) => a.eventSeq - b.eventSeq);
+    this._eventFrames.clear();
     this.latestEvents = [];
-    return events;
+    if (frames.length > 0) {
+      const eventSeq = frames.at(-1).eventSeq;
+      this.eventCursor = Math.max(this.eventCursor, eventSeq);
+      this.metrics.lastEventAck = this.eventCursor;
+      this.metrics.lastEventSeq = this.eventCursor;
+      this._sendFrame({ type: 'ack', ackKind: 'event', eventSeq: this.eventCursor });
+    }
+    return frames.map((frame) => ({
+      runId: frame.runId, seq: frame.eventSeq, tick: frame.tick,
+      visibility: frame.visibility, type: frame.eventType, payload: frame.payload,
+    }));
   }
 
   _nowMs() {
@@ -279,104 +333,143 @@ export class SimClient {
 
   _recordSnapshotMetrics(snapshot) {
     const now = this._nowMs();
-    if (this._lastSnapshotClientAt != null) {
-      this.metrics.lastSnapshotIntervalMs = now - this._lastSnapshotClientAt;
-    }
+    if (this._lastSnapshotClientAt != null) this.metrics.lastSnapshotIntervalMs = now - this._lastSnapshotClientAt;
     this._lastSnapshotClientAt = now;
-    if (Number.isFinite(Number(snapshot?.serverTime))) {
-      this.metrics.lastSnapshotLagMs = Date.now() - Number(snapshot.serverTime);
-    }
+    if (Number.isFinite(Number(snapshot?.serverTime))) this.metrics.lastSnapshotLagMs = Date.now() - Number(snapshot.serverTime);
     this.metrics.lastSnapshotTick = snapshot?.tick ?? this.metrics.lastSnapshotTick;
     this.metrics.lastSnapshotId = snapshot?.snapshotId ?? this.metrics.lastSnapshotId;
-
     const localPlayer = snapshot?.players?.find((player) => player.clientId === this.clientId);
     const acceptedSeq = Number(localPlayer?.lastInputSeq);
     if (!Number.isFinite(acceptedSeq)) return;
     const acknowledged = this.pendingInputs.filter((entry) => entry.seq <= acceptedSeq);
     if (acknowledged.length === 0) return;
-    const last = acknowledged[acknowledged.length - 1];
-    this.metrics.lastInputToSnapshotMs = now - last.sentAt;
+    this.metrics.lastInputToSnapshotMs = now - acknowledged.at(-1).sentAt;
     this.pendingInputs = this.pendingInputs.filter((entry) => entry.seq > acceptedSeq);
   }
 
   getMetrics() {
     return {
       ...this.metrics,
-      slingshotEdgeAcks: this.metrics.slingshotEdgeAcks.map((entry) => ({
-        ...entry,
-        requestedEdgeIds: [...entry.requestedEdgeIds],
-        acceptedEdgeIds: [...entry.acceptedEdgeIds],
-      })),
+      selectedTransport: this.transport,
+      activeTransport: this.activeTransport,
+      streamState: this._streamState,
+      pendingActionCount: this._pendingActions.size,
       pendingInputCount: this.pendingInputs.length,
       pollIntervalMs: this.pollIntervalMs,
+      latestRunId: this.runId,
+      latestSnapshotId: this.lastSnapshotId,
+      latestEventSeq: this.eventCursor,
+      hotPathHttpOccurred: this._hotPathHttpCount > 0,
+      slingshotEdgeAcks: this.metrics.slingshotEdgeAcks.map((entry) => ({ ...entry, requestedEdgeIds: [...entry.requestedEdgeIds], acceptedEdgeIds: [...entry.acceptedEdgeIds] })),
     };
   }
 
-  async sendInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, slingshotEdges = [], pulse = false, extractConfirm = false, ability1 = false, ability2 = false, consumeSlot = null }) {
+  async sendInput(input = {}) {
+    if (this.transport !== 'stream') return this._sendHttpInput(input);
+    if (!socketOpen(this._socket)) await (this._reconnectPromise || Promise.reject(new Error('Sim stream is not connected')));
     this.seq += 1;
     const sentAt = this._nowMs();
-    this.lastSentInput = {
-      ...this._nextCommandEnvelope(),
-      seq: this.seq,
-      moveX,
-      moveY,
-      thrust,
-      brake,
-      slingshot,
-      slingshotEdges: Array.isArray(slingshotEdges) ? slingshotEdges.slice(0, 8) : [],
-      pulse,
-      extractConfirm,
-      ability1,
-      ability2,
-      consumeSlot,
-      sentAt,
+    const continuous = {
+      type: 'input', inputSeq: this.seq,
+      moveX: input.moveX || 0, moveY: input.moveY || 0,
+      thrust: input.thrust || 0, brake: input.brake || 0,
+      slingshot: Boolean(input.slingshot), ability1: Boolean(input.ability1), ability2: Boolean(input.ability2),
+      clientTimeMs: Date.now(),
     };
+    this.lastSentInput = { ...continuous, seq: this.seq, sentAt };
+    this.pendingInputs.push({ seq: this.seq, sentAt });
+    if (this.pendingInputs.length > 32) this.pendingInputs.splice(0, this.pendingInputs.length - 32);
+    const inputAck = this._awaitInputAck(continuous.inputSeq, sentAt);
+    this._sendFrame(continuous);
+    const edgeIds = Array.isArray(input.slingshotEdges) ? input.slingshotEdges.slice(0, 8) : [];
+    const actions = edgeIds.map((edgeId) => this._queueAction('slingshotEdge', { edgeId }));
+    if (input.pulse) actions.push(this._queueAction('pulse', {}));
+    if (input.extractConfirm) actions.push(this._queueAction('extractConfirm', {}));
+    if (input.consumeSlot !== null && input.consumeSlot !== undefined) actions.push(this._queueAction('consume', { slot: input.consumeSlot }));
+    const actionResults = Promise.all(actions).then((actionAcks) => {
+      const accepted = actionAcks.filter((entry) => entry.status === 'accepted');
+      const acceptedEdges = accepted.filter((entry) => entry.actionKind === 'slingshotEdge').map((entry) => entry.payload.edgeId);
+      const settledEdges = actionAcks.filter((entry) => entry.actionKind === 'slingshotEdge').map((entry) => entry.payload.edgeId);
+      if (edgeIds.length > 0) this._recordSlingshotAck(continuous, edgeIds, acceptedEdges, sentAt, {});
+      return {
+        actionAcks,
+        acceptedSlingshotEdges: acceptedEdges,
+        settledSlingshotEdges: settledEdges,
+        pendingSlingshotEdgeCount: accepted.find((entry) => entry.actionKind === 'slingshotEdge')?.result?.pending ?? null,
+        pulseSettled: actionAcks.some((entry) => entry.actionKind === 'pulse'),
+        pulseAccepted: accepted.some((entry) => entry.actionKind === 'pulse'),
+        extractConfirmSettled: actionAcks.some((entry) => entry.actionKind === 'extractConfirm'),
+        extractConfirmAccepted: accepted.some((entry) => entry.actionKind === 'extractConfirm'),
+        consumeSettledSlot: actionAcks.find((entry) => entry.actionKind === 'consume')?.payload?.slot ?? null,
+        consumeAcceptedSlot: accepted.find((entry) => entry.actionKind === 'consume')?.payload?.slot ?? null,
+      };
+    });
+    const ack = await inputAck;
+    return {
+      ok: true,
+      acceptedSeq: ack.inputSeq,
+      acceptedSlingshotEdges: [],
+      actionResults,
+    };
+  }
+
+  async _sendHttpInput({ moveX = 0, moveY = 0, thrust = 0, brake = 0, slingshot = false, slingshotEdges = [], pulse = false, extractConfirm = false, ability1 = false, ability2 = false, consumeSlot = null }) {
+    this.seq += 1;
+    const sentAt = this._nowMs();
+    this.lastSentInput = { ...this._nextCommandEnvelope(), seq: this.seq, moveX, moveY, thrust, brake, slingshot, slingshotEdges: Array.isArray(slingshotEdges) ? slingshotEdges.slice(0, 8) : [], pulse, extractConfirm, ability1, ability2, consumeSlot, sentAt };
     this.pendingInputs.push({ seq: this.seq, sentAt });
     if (this.pendingInputs.length > 32) this.pendingInputs.splice(0, this.pendingInputs.length - 32);
     const inputPayload = { ...this.lastSentInput, timestamp: Date.now() };
-    const response = await this._enqueueCommand(() => this._json('/input', {
-      method: 'POST',
-      body: JSON.stringify(inputPayload),
-    }));
+    const response = await this._enqueueCommand(() => this._json('/input', { method: 'POST', body: JSON.stringify(inputPayload) }));
     this.metrics.lastAcceptedSeq = response.acceptedSeq ?? this.metrics.lastAcceptedSeq;
     this.metrics.lastInputAckRttMs = this._nowMs() - sentAt;
-    if (inputPayload.slingshotEdges.length > 0) {
-      this.metrics.slingshotEdgeAcks.push({
-        inputSeq: inputPayload.seq,
-        commandSeq: inputPayload.commandSeq,
-        requestedEdgeIds: [...inputPayload.slingshotEdges],
-        acceptedEdgeIds: Array.isArray(response.acceptedSlingshotEdges)
-          ? [...response.acceptedSlingshotEdges]
-          : [],
-        sentAtUnixMs: inputPayload.timestamp,
-        acknowledgedAtUnixMs: Date.now(),
-        ackRttMs: this.metrics.lastInputAckRttMs,
-        serverTick: response.tick ?? null,
-        pendingEdgeCount: response.pendingSlingshotEdgeCount ?? null,
-      });
-      if (this.metrics.slingshotEdgeAcks.length > 16) {
-        this.metrics.slingshotEdgeAcks.splice(0, this.metrics.slingshotEdgeAcks.length - 16);
-      }
-    }
+    if (inputPayload.slingshotEdges.length > 0) this._recordSlingshotAck(inputPayload, inputPayload.slingshotEdges, response.acceptedSlingshotEdges || [], sentAt, response);
     return response;
   }
 
+  _recordSlingshotAck(input, requestedEdgeIds, acceptedEdgeIds, sentAt, response) {
+    this.metrics.slingshotEdgeAcks.push({
+      inputSeq: input.inputSeq || input.seq, commandSeq: input.commandSeq ?? null,
+      requestedEdgeIds: [...requestedEdgeIds], acceptedEdgeIds: [...acceptedEdgeIds],
+      sentAtUnixMs: input.timestamp || input.clientTimeMs, acknowledgedAtUnixMs: Date.now(),
+      ackRttMs: this._nowMs() - sentAt, serverTick: response.tick ?? null,
+      pendingEdgeCount: response.pendingSlingshotEdgeCount ?? null,
+    });
+    if (this.metrics.slingshotEdgeAcks.length > 16) this.metrics.slingshotEdgeAcks.splice(0, this.metrics.slingshotEdgeAcks.length - 16);
+  }
+
   async inventoryAction({ action, cargoSlot = -1, equipSlot = -1, consumableSlot = -1 }) {
+    if (this.transport === 'stream') {
+      const ack = await this._queueAction('inventory', { action, cargoSlot, equipSlot, consumableSlot });
+      if (ack.status !== 'accepted') throw new Error(ack.result?.code || 'Inventory action rejected');
+      await this._waitForOwnerAction(ack.actionSeq, 5000);
+      return { ok: true, acceptedCommandSeq: ack.commandSeq, action: ack.result?.action || action };
+    }
     const envelope = this._nextCommandEnvelope();
-    return this._enqueueCommand(() => this._json('/inventory/action', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...envelope,
-        action,
-        cargoSlot,
-        equipSlot,
-        consumableSlot,
-      }),
-    }));
+    return this._enqueueCommand(() => this._json('/inventory/action', { method: 'POST', body: JSON.stringify({ ...envelope, action, cargoSlot, equipSlot, consumableSlot }) }));
   }
 
   async getProfile(profileId) {
     if (!profileId) throw new Error('profileId is required');
     return this._json(`/profile?profileId=${encodeURIComponent(profileId)}`);
   }
+
+  async _discoverProtocol(...args) { return streamOps._discoverProtocol.apply(this, args); }
+  async _issueStreamTicket(...args) { return streamOps._issueStreamTicket.apply(this, args); }
+  async _connectStream(...args) { return streamOps._connectStream.apply(this, args); }
+  _handleStreamFrame(...args) { return streamOps._handleStreamFrame.apply(this, args); }
+  _mergeFrame(...args) { return streamOps._mergeFrame.apply(this, args); }
+  _trimFrameMaps(...args) { return streamOps._trimFrameMaps.apply(this, args); }
+  _waitForStreamState(...args) { return streamOps._waitForStreamState.apply(this, args); }
+  _awaitInputAck(...args) { return streamOps._awaitInputAck.apply(this, args); }
+  _settleInputAck(...args) { return streamOps._settleInputAck.apply(this, args); }
+  _queueAction(...args) { return streamOps._queueAction.apply(this, args); }
+  _awaitPendingActions(...args) { return streamOps._awaitPendingActions.apply(this, args); }
+  async _drainPendingActions(...args) { return streamOps._drainPendingActions.apply(this, args); }
+  _waitForOwnerAction(...args) { return streamOps._waitForOwnerAction.apply(this, args); }
+  _armHeartbeatWatchdog(...args) { return streamOps._armHeartbeatWatchdog.apply(this, args); }
+  _sendFrame(...args) { return streamOps._sendFrame.apply(this, args); }
+  _handleSocketClose(...args) { return streamOps._handleSocketClose.apply(this, args); }
+  _scheduleReconnect(...args) { return streamOps._scheduleReconnect.apply(this, args); }
+  async _stopStream(...args) { return streamOps._stopStream.apply(this, args); }
 }

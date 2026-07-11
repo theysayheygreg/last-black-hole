@@ -148,6 +148,17 @@ Singularity that:
   the diagnostic reference until parity and fallback tests pass; no WAN or
   playable claim precedes a natural four/eight-client browser journey.
 
+### SimClient transport closure — 2026-07-11 23:00 UTC
+
+- Dual-transport SimClient and explicit browser stream selection are integrated;
+  HTTP remains the default oracle and stream mode performs no hot-path polling.
+- Focused client proof covers exact public/owner merge, independent input/action
+  ACKs, reliable rejection settlement, delivery/playback separation, reconnect
+  authority rotation, cancellation, and bounded leave behavior.
+- Next bounded lane is the natural four/eight-browser journey with real menus,
+  movement, private inventory, reconnect, and leave/rejoin evidence. Do not call
+  Phase 1 playable before that journey passes.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`

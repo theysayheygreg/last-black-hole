@@ -1,0 +1,379 @@
+function randomId(prefix = 'action') {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function socketUrl(baseUrl, path) {
+  const url = new URL(path, `${String(baseUrl).replace(/\/+$/, '')}/`);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
+
+function socketOpen(socket) {
+  return socket && socket.readyState === 1;
+}
+
+function frameData(event) {
+  const value = event?.data ?? event;
+  if (typeof value === 'string') return value;
+  if (value instanceof ArrayBuffer) return new TextDecoder().decode(value);
+  if (ArrayBuffer.isView(value)) return new TextDecoder().decode(value);
+  return String(value);
+}
+
+export async function _discoverProtocol() {
+  if (this._protocol) return this._protocol;
+  const protocol = await this._json('/protocol');
+  const stream = protocol?.transports?.stream;
+  if (!stream?.path || !stream?.wireVersion || !protocol?.version) throw new Error('Sim server did not advertise a stream protocol');
+  this._protocol = { path: stream.path, wireVersion: stream.wireVersion, simProtocolVersion: protocol.version };
+  return this._protocol;
+}
+
+export async function _issueStreamTicket(kind) {
+  return this._json('/multiplayer/ticket', { method: 'POST', body: JSON.stringify({ kind }) });
+}
+
+export async function _connectStream(kind = 'admission') {
+  if (!this.WebSocketImpl) throw new Error('WebSocket is unavailable in this client');
+  const generation = ++this._socketGeneration;
+  const canceled = new Promise((_, reject) => {
+    this._connectionAttempts.set(generation, { reject });
+  });
+  let protocol;
+  let ticket;
+  try {
+    protocol = await Promise.race([this._discoverProtocol(), canceled]);
+    if (generation !== this._socketGeneration) throw new Error('Sim stream connection superseded during discovery');
+    ticket = await Promise.race([this._issueStreamTicket(kind), canceled]);
+    if (generation !== this._socketGeneration) throw new Error('Sim stream connection superseded during ticket issuance');
+  } catch (error) {
+    this._connectionAttempts.delete(generation);
+    throw error;
+  }
+  const ws = new this.WebSocketImpl(socketUrl(this.baseUrl, protocol.path));
+  this._socket = ws;
+  this._streamState = kind === 'resume' ? 'reconnecting' : 'connecting';
+  this._closeDirective = null;
+  const baselineVersion = this._streamVersion;
+  const hello = {
+    type: 'hello', wireVersion: protocol.wireVersion, simProtocolVersion: protocol.simProtocolVersion,
+    ...(kind === 'resume' ? {
+      resumeTicket: ticket.ticket,
+      ...(this.runId && this.lastSnapshotId > 0 ? { lastRunId: this.runId, lastSnapshotId: this.lastSnapshotId, lastEventSeq: this.eventCursor } : {}),
+    } : { admissionTicket: ticket.ticket }),
+  };
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = null;
+    const finish = (fn, value) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        this._connectionAttempts.delete(generation);
+        fn(value);
+      }
+    };
+    this._connectionAttempts.set(generation, {
+      reject: (error) => finish(reject, error),
+      socket: ws,
+    });
+    ws.addEventListener('open', () => {
+      if (generation !== this._socketGeneration) return;
+      ws.send(JSON.stringify(hello));
+    });
+    ws.addEventListener('message', (event) => {
+      if (generation !== this._socketGeneration) return;
+      try {
+        this._handleStreamFrame(JSON.parse(frameData(event)), generation);
+        if (this._streamVersion > baselineVersion) finish(resolve);
+      } catch (error) { finish(reject, error); }
+    });
+    ws.addEventListener('error', () => {
+      if (generation === this._socketGeneration) finish(reject, new Error('Sim stream connection failed'));
+    });
+    ws.addEventListener('close', (event) => {
+      if (generation !== this._socketGeneration) return;
+      if (!settled) finish(reject, new Error(`Sim stream closed during admission (${event.code})`));
+      this._handleSocketClose(event, generation);
+    });
+    timer = setTimeout(() => {
+      if (generation === this._socketGeneration) finish(reject, new Error('Timed out waiting for sim stream baseline'));
+    }, 5000);
+    timer.unref?.();
+  });
+  this.activeTransport = 'stream';
+  this._streamState = 'open';
+  if (kind === 'resume') {
+    this.metrics.reconnectCount += 1;
+    if (this.lastSentInput && this.lastSentInput.inputSeq > this.metrics.lastInputAck) this._sendFrame({
+      type: 'input', inputSeq: this.lastSentInput.inputSeq,
+      moveX: this.lastSentInput.moveX, moveY: this.lastSentInput.moveY,
+      thrust: this.lastSentInput.thrust, brake: this.lastSentInput.brake,
+      slingshot: this.lastSentInput.slingshot, ability1: this.lastSentInput.ability1,
+      ability2: this.lastSentInput.ability2, clientTimeMs: Date.now(),
+    });
+    for (const pending of this._pendingActions.values()) this._sendFrame(pending.frame);
+  }
+}
+
+export function _handleStreamFrame(frame, generation) {
+  if (generation !== this._socketGeneration) return;
+  if (frame.type === 'welcome') {
+    this._adoptWelcome(frame);
+    this._armHeartbeatWatchdog(frame.heartbeatIntervalMs, generation);
+    return;
+  }
+  if (frame.type === 'heartbeat') {
+    this._armHeartbeatWatchdog(null, generation);
+    this._sendFrame({ type: 'pong', heartbeatId: frame.heartbeatId, clientTimeMs: Date.now() });
+    return;
+  }
+  if (frame.type === 'rebase') {
+    if (frame.runId !== this.runId) {
+      this.lastSnapshotId = 0;
+      this.latestSnapshot = null;
+    }
+    this._rebase = frame;
+    this.metrics.lastRecoveryReason = frame.reason;
+    this._pendingPublic.clear();
+    this._pendingOwner.clear();
+    if (frame.reason === 'event-gap' || frame.reason === 'run-changed') this.metrics.eventGapRecoveries += 1;
+    this._eventFrames.clear();
+    this.latestEvents = [];
+    this.eventCursor = frame.lastEventSeq;
+    return;
+  }
+  if (frame.type === 'publicState') {
+    this._pendingPublic.set(frame.snapshotId, frame);
+    this._trimFrameMaps();
+    this._mergeFrame(frame.snapshotId);
+    return;
+  }
+  if (frame.type === 'ownerState') {
+    if (frame.runId !== this.runId || frame.membershipId !== this.membershipId || frame.playerId !== this.authorityPlayerId) return;
+    this._pendingOwner.set(frame.snapshotId, frame);
+    this._trimFrameMaps();
+    this._mergeFrame(frame.snapshotId);
+    return;
+  }
+  if (frame.type === 'event') {
+    if (frame.runId !== this.runId || frame.eventSeq <= this.eventCursor) {
+      this._sendFrame({ type: 'ack', ackKind: 'delivery', deliveryId: frame.deliveryId });
+      return;
+    }
+    if (this._eventFrames.size < 64 || this._eventFrames.has(frame.eventSeq)) this._eventFrames.set(frame.eventSeq, frame);
+    this.latestEvents = [...this._eventFrames.values()];
+    this.metrics.lastDeliveryAck = Math.max(this.metrics.lastDeliveryAck, frame.deliveryId);
+    this._sendFrame({ type: 'ack', ackKind: 'delivery', deliveryId: frame.deliveryId });
+    return;
+  }
+  if (frame.type === 'ack' && frame.ackKind === 'input') {
+    this.metrics.lastInputAck = Math.max(this.metrics.lastInputAck, frame.inputSeq);
+    this.metrics.lastAcceptedSeq = Math.max(this.metrics.lastAcceptedSeq, frame.inputSeq);
+    this._settleInputAck(frame.inputSeq, frame);
+    return;
+  }
+  if (frame.type === 'ack' && frame.ackKind === 'action') {
+    this.metrics.lastDeliveryAck = Math.max(this.metrics.lastDeliveryAck, frame.deliveryId);
+    this._sendFrame({ type: 'ack', ackKind: 'delivery', deliveryId: frame.deliveryId });
+    const pending = this._pendingActions.get(frame.actionId);
+    if (!pending || pending.frame.actionSeq !== frame.actionSeq || pending.frame.commandSeq !== frame.commandSeq) return;
+    this._pendingActions.delete(frame.actionId);
+    this.metrics.lastActionAck = Math.max(this.metrics.lastActionAck, frame.actionSeq);
+    pending.resolve({ ...frame, actionKind: pending.frame.actionKind, payload: pending.frame.payload });
+    return;
+  }
+  if (frame.type === 'error') {
+    this.metrics.reconnectReason = frame.code;
+    if (frame.fatal && !frame.retryable) throw new Error(frame.message || frame.code);
+    return;
+  }
+  if (frame.type === 'close') this._closeDirective = frame;
+}
+
+export function _mergeFrame(snapshotId) {
+  const pub = this._pendingPublic.get(snapshotId);
+  const owner = this._pendingOwner.get(snapshotId);
+  if (!pub || !owner) return;
+  if (!this._rebase && snapshotId <= this.lastSnapshotId) {
+    this._pendingPublic.delete(snapshotId);
+    this._pendingOwner.delete(snapshotId);
+    return;
+  }
+  if (this._rebase && snapshotId < this._rebase.snapshotId) return;
+  const aligned = pub.runId === owner.runId
+    && pub.runId === this.runId
+    && pub.snapshotId === owner.snapshotId
+    && pub.tick === owner.tick
+    && pub.simTime === owner.simTime
+    && pub.lastEventSeq === owner.lastEventSeq
+    && pub.fieldRevision === owner.fieldRevision;
+  if (!aligned) return;
+  const state = pub.state || {};
+  const players = Array.isArray(state.players) ? state.players.map((player) =>
+    player.clientId === owner.playerId ? { ...player, ...owner.state } : player) : [];
+  this.latestSnapshot = { ...state, players };
+  this.runId = pub.runId;
+  this.lastSnapshotId = pub.snapshotId;
+  this._recordSnapshotMetrics(this.latestSnapshot);
+  this._applySessionClocks(this.latestSnapshot.session);
+  this.metrics.lastSnapshotId = pub.snapshotId;
+  this.metrics.lastEventSeq = Math.max(this.metrics.lastEventSeq, pub.lastEventSeq);
+  this._latestOwnerActionSeq = Math.max(this._latestOwnerActionSeq, owner.lastActionSeq);
+  this._pendingPublic.delete(snapshotId);
+  this._pendingOwner.delete(snapshotId);
+  if (this._rebase) {
+    this._sendFrame({ type: 'ack', ackKind: 'baseline', snapshotId, eventSeq: this._rebase.lastEventSeq });
+    this._rebase = null;
+  }
+  this._streamVersion += 1;
+  for (const waiter of [...this._streamWaiters]) {
+    if (!waiter.predicate || waiter.predicate()) {
+      this._streamWaiters.splice(this._streamWaiters.indexOf(waiter), 1);
+      waiter.resolve();
+    }
+  }
+}
+
+export function _trimFrameMaps() {
+  for (const map of [this._pendingPublic, this._pendingOwner]) {
+    while (map.size > 4) map.delete(map.keys().next().value);
+  }
+}
+
+export function _waitForStreamState(afterVersion, timeoutMs, predicate = null) {
+  if (this._streamVersion > afterVersion) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const waiter = { resolve, reject, predicate };
+    this._streamWaiters.push(waiter);
+    setTimeout(() => {
+      const index = this._streamWaiters.indexOf(waiter);
+      if (index >= 0) this._streamWaiters.splice(index, 1);
+      reject(new Error('Timed out waiting for authoritative stream state'));
+    }, timeoutMs);
+  });
+}
+
+export function _awaitInputAck(inputSeq, sentAt) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      this._inputAcks.delete(inputSeq);
+      reject(new Error('Timed out waiting for input ACK'));
+    }, 5000);
+    this._inputAcks.set(inputSeq, { resolve, reject, timer, sentAt });
+  });
+}
+
+export function _settleInputAck(inputSeq, frame) {
+  for (const [pendingSeq, pending] of this._inputAcks) {
+    if (pendingSeq > inputSeq) continue;
+    clearTimeout(pending.timer);
+    this._inputAcks.delete(pendingSeq);
+    this.metrics.lastInputAckRttMs = this._nowMs() - pending.sentAt;
+    this.pendingInputs = this.pendingInputs.filter((entry) => entry.seq > inputSeq);
+    pending.resolve(frame);
+  }
+}
+
+export function _queueAction(actionKind, payload) {
+  if (this._pendingActions.size >= 32) return Promise.reject(new Error('Reliable action queue is full'));
+  this.actionSeq += 1;
+  this.commandSeq += 1;
+  const actionId = randomId('action');
+  const frame = { type: 'action', actionId, actionSeq: this.actionSeq, commandSeq: this.commandSeq, actionKind, payload, clientTimeMs: Date.now() };
+  const promise = new Promise((resolve, reject) => {
+    this._pendingActions.set(actionId, { frame, resolve, reject, promise: null });
+    this._sendFrame(frame);
+  });
+  this._pendingActions.get(actionId).promise = promise;
+  return promise;
+}
+
+export function _awaitPendingActions() {
+  return Promise.all([...this._pendingActions.values()].map((entry) => entry.promise));
+}
+
+export async function _drainPendingActions(timeoutMs) {
+  if (this._pendingActions.size === 0) return;
+  let timer = null;
+  try {
+    await Promise.race([
+      this._awaitPendingActions(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Timed out draining reliable actions before control-plane mutation')), timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function _waitForOwnerAction(actionSeq, timeoutMs) {
+  if (this._latestOwnerActionSeq >= actionSeq) return Promise.resolve();
+  return this._waitForStreamState(this._streamVersion, timeoutMs, () => this._latestOwnerActionSeq >= actionSeq);
+}
+
+export function _armHeartbeatWatchdog(intervalMs, generation) {
+  clearTimeout(this._heartbeatTimer);
+  const interval = Math.max(1000, Number(intervalMs) || Number(this._heartbeatIntervalMs) || 5000);
+  this._heartbeatIntervalMs = interval;
+  this._heartbeatTimer = setTimeout(() => {
+    if (generation !== this._socketGeneration || !socketOpen(this._socket)) return;
+    this.metrics.reconnectReason = 'heartbeat-blackout';
+    this._socket.close(4000, 'heartbeat blackout');
+  }, interval * 2.5);
+  this._heartbeatTimer.unref?.();
+}
+
+export function _sendFrame(frame) {
+  if (!socketOpen(this._socket)) return false;
+  this._socket.send(JSON.stringify(frame));
+  return true;
+}
+
+export function _handleSocketClose(event, generation) {
+  if (generation !== this._socketGeneration || this._shuttingDown || this.transport !== 'stream') return;
+  clearTimeout(this._heartbeatTimer);
+  this.activeTransport = 'http';
+  this._streamState = 'disconnected';
+  const directive = this._closeDirective;
+  const reconnectable = directive ? directive.reconnectable : ![1000, 4400, 4401, 4403, 4406].includes(event.code);
+  const reason = directive?.reason || event.reason || `socket-${event.code}`;
+  this.metrics.reconnectReason = reason;
+  if (reconnectable) this._scheduleReconnect(reason, directive?.retryAfterMs || 0);
+}
+
+export function _scheduleReconnect(reason, initialDelay = 0) {
+  if (this._reconnectPromise || this._shuttingDown) return this._reconnectPromise;
+  this.metrics.reconnectReason = reason;
+  this._reconnectPromise = (async () => {
+    let lastError = null;
+    for (let attempt = 0; attempt < 5 && !this._shuttingDown; attempt += 1) {
+      const delay = attempt === 0 ? initialDelay : Math.min(2000, 100 * (2 ** (attempt - 1)));
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+      try { await this._connectStream('resume'); return; } catch (error) { lastError = error; }
+    }
+    this._streamState = 'failed';
+    throw lastError || new Error('Sim stream reconnect exhausted');
+  })().finally(() => { this._reconnectPromise = null; });
+  this._reconnectPromise.catch(() => null);
+  return this._reconnectPromise;
+}
+
+export async function _stopStream(reason) {
+  this._socketGeneration += 1;
+  for (const [generation, attempt] of this._connectionAttempts) {
+    this._connectionAttempts.delete(generation);
+    attempt.reject(new Error(`Sim stream connection canceled: ${reason}`));
+    if (attempt.socket?.readyState < 2) attempt.socket.close(1000, 'connection canceled');
+  }
+  const ws = this._socket;
+  this._socket = null;
+  this.activeTransport = 'http';
+  this._streamState = reason || 'closed';
+  clearTimeout(this._heartbeatTimer);
+  if (ws && ws.readyState < 2) ws.close(1000, String(reason || 'closed').slice(0, 120));
+  for (const pending of this._pendingActions.values()) pending.reject(new Error(`Sim stream stopped: ${reason}`));
+  this._pendingActions.clear();
+}

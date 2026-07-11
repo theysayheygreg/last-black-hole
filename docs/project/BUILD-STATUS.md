@@ -18,14 +18,16 @@ does not erase newer committed work.
 ## v0.4 Multiplayer Program
 
 **Source status:** Phase 0 trust closure is green; the optional same-process
-Phase 1 WebSocket runtime is integrated, independently reviewed, and registered
-in the multiplayer and authority harness lanes. The cross-run projection guard
-now has a genuine in-adapter delayed-reset proof. Research/design is complete.
+Phase 1 WebSocket runtime and dual-transport SimClient are integrated,
+independently reviewed, and registered in the multiplayer and authority harness
+lanes. HTTP remains the default diagnostic oracle; `simTransport=stream`
+explicitly selects the live stream path. Research/design is complete.
 
-**Playable status:** not multiplayer-playable yet. Real 1/4/8 WebSocket clients
-share one authority and pass identity/privacy/input/action/reset/shutdown truth,
-including event replay/gap recovery. SimClient/browser cutover, invite UI, WAN
-proof, and a natural multi-human journey remain.
+**Playable status:** browser transport cutover is implemented but has not yet
+passed the natural four/eight-browser journey, so this is not a multiplayer
+playability claim. Real 1/4/8 WebSocket clients share one authority and pass
+identity/privacy/input/action/reset/shutdown truth, including event replay/gap
+recovery. Invite UI, WAN proof, and a natural multi-human journey remain.
 
 **Current evidence:** `npm run test:multiplayer-structure` and
 `npm run test:multiplayer-authority` pass. The Phase 1
@@ -41,7 +43,10 @@ semantics, and exact-once consequence evidence. Event recovery adds
 run-qualified cursors, membership-private HTTP/WS filtering, issued-only
 playback ACKs, atomic full-baseline rebase, and bounded 32-frame/64 KiB replay
 with action headroom. These are local Shallows measurements, not hosted or
-heavy-sim capacity claims. See
+heavy-sim capacity claims. The browser client now proves exact public/owner
+merge lineage, continuous-input ACKs independent of semantic action settlement,
+reconnect credential rotation, bounded cancellation/leave behavior, distinct
+delivery/playback ACKs, and zero hot-path HTTP in stream mode. See
 `docs/v0.4/research/phase1-ws-runtime-baseline.md`.
 
 ## v0.3 Candidate

@@ -127,6 +127,13 @@ const SUITES = [
     slow: true,
   },
   {
+    name: "SimClientStream",
+    file: "sim-client-stream.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+    slow: true,
+  },
+  {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
     lanes: ["static", "full"],
