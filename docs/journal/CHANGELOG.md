@@ -94,6 +94,11 @@
   projection from an old run could otherwise charge its completion time into
   a newly reset run. The runtime baseline is not promoted into the manifest as
   final Phase 1 proof until that race and the cadence tolerance are closed.
+- Implemented the run/generation identity guard and process-wide single-flight
+  projection gate in `d19265e`; focused 1/4/8 and full authority remain green.
+  Follow-up review found the artificial delay sits outside the adapter's
+  synchronous work, so manifest promotion still waits for a test hook that
+  suspends `buildPublicState` inside `projectNow()` across reset.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

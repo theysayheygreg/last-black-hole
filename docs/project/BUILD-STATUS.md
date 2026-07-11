@@ -18,9 +18,11 @@ does not erase newer committed work.
 ## v0.4 Multiplayer Program
 
 **Source status:** Phase 0 trust closure is green; the optional same-process
-Phase 1 WebSocket runtime is integrated and focused-loopback green, but one
-cross-run projection-accounting race remains under a committed corrective
-packet. Research/design is complete.
+Phase 1 WebSocket runtime is integrated and focused-loopback green. The
+cross-run projection-accounting guard is implemented and full authority is
+green, but one test-evidence correction remains before manifest promotion:
+suspend adapter projection itself across reset rather than only delaying its
+outer wrapper settlement. Research/design is complete.
 
 **Playable status:** not multiplayer-playable yet. Real 1/4/8 WebSocket clients
 share one authority and pass identity/privacy/input/reset/shutdown truth, but
@@ -37,7 +39,8 @@ process, port, tick, and authority. The corrected focused baseline held
 loopback sockets, with roughly 20--23 KiB public frames and 1--1.6 KiB owner
 overlays. These are local Shallows measurements, not hosted or heavy-sim
 capacity claims. The runtime suites stay outside the final manifest gate until
-the committed projection-lineage correction is implemented and reviewed.
+the delayed-reset fixture exercises a genuinely pending adapter projection and
+is reviewed.
 
 ## v0.3 Candidate
 

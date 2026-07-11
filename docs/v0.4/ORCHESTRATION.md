@@ -96,6 +96,21 @@ Singularity that:
 - Do not describe Phase 1 as playable multiplayer yet and do not start a
   larger slice before the reset/usage continuation check.
 
+### Near-limit correction — 2026-07-11 19:27 UTC
+
+- `d19265e` implements the run/generation accounting guard and process-wide
+  projection single-flight gate; focused runtime, adapter, overload, and full
+  authority suites are green.
+- Independent review found no implementation defect, but the delayed-reset
+  fixture delays wrapper settlement after synchronous adapter work. It does
+  not yet prove `projectNow()` itself remains pending across reset.
+- Primary usage reached 97%. The narrow follow-up was stopped before edits;
+  the branch remains clean.
+- Exact next action after reset: move the test-only delay into the injected
+  `buildPublicState` callback so `projectNow()` is genuinely awaiting during
+  reset, assert one current-lineage completion sample, rerun focused/full
+  authority, and obtain read-only review before manifest registration.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`
