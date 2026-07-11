@@ -26,6 +26,10 @@
   dedicated authority, binary WSS first, recipient-private deltas, 30 Hz
   player/contact target, local-player-only prediction against versioned coarse
   fields, explicit network budgets, and fail-closed authority loss.
+- Added the historical P2P and network-budget study. It rejects true
+  no-authority P2P for production, retains relay-assisted listen authority for
+  trusted private play, and recommends deterministic replay plus bounded local
+  rollback as useful capabilities beneath an authoritative model.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
