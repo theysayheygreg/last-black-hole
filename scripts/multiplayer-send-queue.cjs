@@ -27,8 +27,8 @@ function nonNegativeInteger(value, fallback, name) {
   return parsed;
 }
 
-function serializeEnvelope(envelope) {
-  const wire = JSON.stringify(envelope);
+function serializeFrame(frame) {
+  const wire = JSON.stringify(frame);
   if (wire === undefined) throw new TypeError("message must be JSON serializable");
   const snapshot = deepFreezeJson(JSON.parse(wire));
   return Object.freeze({
@@ -92,7 +92,11 @@ class MultiplayerSendQueue {
       return { accepted: false, action: "ignore", reason: "stale-state" };
     }
 
-    const candidate = serializeEnvelope({ type: "state", sequence: normalizedSequence, payload });
+    const candidate = {
+      ...serializeFrame(payload),
+      lane: "state",
+      stateSequence: normalizedSequence,
+    };
     const replacedBytes = this.state ? this.state.byteLength : 0;
     const projectedBytes = this.queuedBytes - replacedBytes + candidate.byteLength;
     const projectedMessages = this.queuedMessages - (this.state ? 1 : 0) + 1;
@@ -119,7 +123,11 @@ class MultiplayerSendQueue {
   enqueueConsequence(payload) {
     if (this.terminal) return this._terminalResult();
     const id = this.nextReliableId;
-    const candidate = serializeEnvelope({ type: "consequence", id, payload });
+    const candidate = {
+      ...serializeFrame(payload),
+      lane: "consequence",
+      reliableId: id,
+    };
     const projectedReliableMessages = this.reliable.length + 1;
     const projectedReliableBytes = this.reliableBytes + candidate.byteLength;
     const projectedMessages = this.queuedMessages + 1;
@@ -160,7 +168,7 @@ class MultiplayerSendQueue {
 
     let removedMessages = 0;
     let removedBytes = 0;
-    while (this.reliable.length > 0 && this.reliable[0].envelope.id <= normalizedId) {
+    while (this.reliable.length > 0 && this.reliable[0].reliableId <= normalizedId) {
       const entry = this.reliable.shift();
       removedMessages += 1;
       removedBytes += entry.byteLength;
@@ -194,7 +202,7 @@ class MultiplayerSendQueue {
 
     let replayMessages = 0;
     for (const entry of this.reliable) {
-      if (entry.envelope.id > normalizedId) {
+      if (entry.reliableId > normalizedId) {
         entry.needsSend = true;
         replayMessages += 1;
       }
@@ -229,6 +237,9 @@ class MultiplayerSendQueue {
     const append = (entry) => {
       if (messages.length >= maxMessages || bytes + entry.byteLength > maxBytes) return false;
       messages.push(Object.freeze({
+        lane: entry.lane,
+        stateSequence: entry.stateSequence,
+        reliableId: entry.reliableId,
         envelope: entry.envelope,
         wire: entry.wire,
         byteLength: entry.byteLength,
@@ -245,7 +256,7 @@ class MultiplayerSendQueue {
         break;
       }
       entry.needsSend = false;
-      this.highestSentReliableId = Math.max(this.highestSentReliableId, entry.envelope.id);
+      this.highestSentReliableId = Math.max(this.highestSentReliableId, entry.reliableId);
     }
     if (!reliableBlocked && this.state && append(this.state)) this.state = null;
 

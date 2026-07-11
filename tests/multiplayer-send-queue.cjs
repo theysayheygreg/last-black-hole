@@ -4,8 +4,8 @@
 const assert = require("assert");
 const { createMultiplayerSendQueue } = require("../scripts/multiplayer-send-queue.cjs");
 
-function bytes(envelope) {
-  return Buffer.byteLength(JSON.stringify(envelope), "utf8");
+function bytes(frame) {
+  return Buffer.byteLength(JSON.stringify(frame), "utf8");
 }
 
 function testStateCoalescingAndOrdering() {
@@ -13,7 +13,7 @@ function testStateCoalescingAndOrdering() {
   assert.deepStrictEqual(queue.enqueueState(10, { x: 1 }), {
     accepted: true,
     action: "queued",
-    byteLength: bytes({ type: "state", sequence: 10, payload: { x: 1 } }),
+    byteLength: bytes({ x: 1 }),
   });
   assert.strictEqual(queue.enqueueState(12, { x: 3 }).action, "coalesced");
   assert.strictEqual(queue.enqueueState(11, { x: 2 }).reason, "stale-state");
@@ -21,7 +21,11 @@ function testStateCoalescingAndOrdering() {
 
   const batch = queue.drain();
   assert.strictEqual(batch.messages.length, 1);
-  assert.deepStrictEqual(batch.messages[0].envelope, { type: "state", sequence: 12, payload: { x: 3 } });
+  assert.deepStrictEqual(batch.messages[0].envelope, { x: 3 });
+  assert.strictEqual(batch.messages[0].wire, JSON.stringify({ x: 3 }));
+  assert.strictEqual(batch.messages[0].lane, "state");
+  assert.strictEqual(batch.messages[0].stateSequence, 12);
+  assert.strictEqual(batch.messages[0].reliableId, undefined);
   assert.strictEqual(batch.bytes, batch.messages[0].byteLength);
   assert.strictEqual(batch.bytes, Buffer.byteLength(batch.messages[0].wire, "utf8"));
   assert.strictEqual(queue.status().queuedBytes, 0);
@@ -35,11 +39,17 @@ function testReliableFifoAckAndReplay() {
   assert.deepStrictEqual([first.id, second.id, third.id], [1, 2, 3]);
 
   const sent = queue.drain();
-  assert.deepStrictEqual(sent.messages.map((message) => message.envelope.id), [1, 2, 3]);
+  assert.deepStrictEqual(sent.messages.map((message) => message.reliableId), [1, 2, 3]);
+  assert.deepStrictEqual(sent.messages.map((message) => message.envelope.kind), ["loot", "death", "extract"]);
+  assert.deepStrictEqual(sent.messages.map((message) => message.wire), [
+    JSON.stringify({ kind: "loot" }),
+    JSON.stringify({ kind: "death" }),
+    JSON.stringify({ kind: "extract" }),
+  ]);
   assert.strictEqual(queue.drain().messages.length, 0, "sent reliable entries await ack without hot-loop resend");
 
   assert.strictEqual(queue.replayAfter(1).replayMessages, 2);
-  assert.deepStrictEqual(queue.drain().messages.map((message) => message.envelope.id), [2, 3]);
+  assert.deepStrictEqual(queue.drain().messages.map((message) => message.reliableId), [2, 3]);
   const ack = queue.acknowledge(2);
   assert.strictEqual(ack.removedMessages, 2);
   assert.strictEqual(ack.removedBytes, first.byteLength + second.byteLength);
@@ -60,14 +70,14 @@ function testDeterministicPriorityAndDrainBudgets() {
 
   const firstOnly = queue.drain({ maxMessages: 1, maxBytes: 4096 });
   assert.strictEqual(firstOnly.messages.length, 1);
-  assert.strictEqual(firstOnly.messages[0].envelope.type, "consequence");
+  assert.strictEqual(firstOnly.messages[0].lane, "consequence");
   assert.strictEqual(firstOnly.bytes, consequence.byteLength);
   assert.strictEqual(queue.status().pendingState, true);
 
-  const stateBytes = bytes({ type: "state", sequence: 1, payload: { tick: 1 } });
+  const stateBytes = bytes({ tick: 1 });
   assert.strictEqual(queue.drain({ maxMessages: 8, maxBytes: stateBytes - 1 }).messages.length, 0);
   const state = queue.drain({ maxMessages: 8, maxBytes: stateBytes });
-  assert.strictEqual(state.messages[0].envelope.type, "state");
+  assert.strictEqual(state.messages[0].lane, "state");
   assert.strictEqual(state.bytes, stateBytes);
 
   const blocked = createMultiplayerSendQueue({ maxMessages: 8, maxBytes: 4096 });
@@ -78,7 +88,7 @@ function testDeterministicPriorityAndDrainBudgets() {
 }
 
 function testExactAccountingAndFloodBounds() {
-  const sample = { type: "consequence", id: 1, payload: { text: "black hole 🌌" } };
+  const sample = { text: "black hole 🌌" };
   const sampleBytes = bytes(sample);
   const queue = createMultiplayerSendQueue({
     maxMessages: 3,
@@ -86,9 +96,9 @@ function testExactAccountingAndFloodBounds() {
     maxReliableMessages: 3,
     maxReliableBytes: sampleBytes * 3,
   });
-  const one = queue.enqueueConsequence(sample.payload);
-  const two = queue.enqueueConsequence(sample.payload);
-  const three = queue.enqueueConsequence(sample.payload);
+  const one = queue.enqueueConsequence(sample);
+  const two = queue.enqueueConsequence(sample);
+  const three = queue.enqueueConsequence(sample);
   const expectedBytes = one.byteLength + two.byteLength + three.byteLength;
   assert.strictEqual(queue.status().queuedBytes, expectedBytes);
   assert.strictEqual(queue.status().queuedMessages, 3);
