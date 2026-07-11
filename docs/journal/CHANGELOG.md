@@ -22,6 +22,10 @@
   hosted MVP, separate local/cloud progression lineages, server-created run
   memberships, short-lived authority epochs, relational progression records,
   and atomic idempotent run settlement before public hosting.
+- Added the Ballpark-compatible 4–8 player architecture: one run-scoped
+  dedicated authority, binary WSS first, recipient-private deltas, 30 Hz
+  player/contact target, local-player-only prediction against versioned coarse
+  fields, explicit network budgets, and fail-closed authority loss.
 
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
