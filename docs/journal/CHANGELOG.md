@@ -107,6 +107,12 @@
   and event-journal recovery. Action receipts land first without adapter/schema
   churn; binding-aware replay, ACK cursors, and explicit gap rebase follow only
   after that commit is integrated and reviewed.
+- Implemented and independently closed reliable WebSocket gameplay actions in
+  `f260f10` plus `c67d0f9`: 32 bounded receipts per membership/run, canonical
+  reconnect retries, deterministic conflict/stale/gap behavior, all five
+  admitted action kinds, consume/inventory fencing, cross-transport monotonic
+  slingshot edges, and fresh-delivery one-consequence proof. Full multiplayer
+  network and authority lanes remain green at `NORMAL` 1/4/8 cadence.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

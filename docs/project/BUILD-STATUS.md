@@ -23,9 +23,9 @@ in the multiplayer and authority harness lanes. The cross-run projection guard
 now has a genuine in-adapter delayed-reset proof. Research/design is complete.
 
 **Playable status:** not multiplayer-playable yet. Real 1/4/8 WebSocket clients
-share one authority and pass identity/privacy/input/reset/shutdown truth, but
-reliable gameplay actions, event replay/gap recovery, SimClient/browser
-cutover, invite UI, WAN proof, and a natural multi-human journey remain.
+share one authority and pass identity/privacy/input/action/reset/shutdown truth,
+but event replay/gap recovery, SimClient/browser cutover, invite UI, WAN proof,
+and a natural multi-human journey remain.
 
 **Current evidence:** `npm run test:multiplayer-structure` and
 `npm run test:multiplayer-authority` pass. The Phase 1
@@ -35,8 +35,11 @@ run-scoped field revision, and the optional `/stream` adapter uses the same
 process, port, tick, and authority. The corrected focused baseline held
 `NORMAL` around 9.7 Hz projection and 14.5--14.8 Hz authority for 1/4/8 real
 loopback sockets, with roughly 20--23 KiB public frames and 1--1.6 KiB owner
-overlays. These are local Shallows measurements, not hosted or heavy-sim
-capacity claims. See `docs/v0.4/research/phase1-ws-runtime-baseline.md`.
+overlays. All five reliable action kinds now have bounded 32-receipt
+membership/run idempotency, reconnect replay, deterministic conflict/gap
+semantics, and exact-once consequence evidence. These are local Shallows
+measurements, not hosted or heavy-sim capacity claims. See
+`docs/v0.4/research/phase1-ws-runtime-baseline.md`.
 
 ## v0.3 Candidate
 

@@ -123,6 +123,18 @@ Singularity that:
   delivery acknowledgement, event-journal replay/gap rebase, and reconnect
   recovery before SimClient/browser cutover.
 
+### Automated post-limit continuation — 2026-07-11 21:36 UTC
+
+- The installed heartbeat fired across the exhausted window and verified a
+  fresh primary window at 0%, resetting next at `2026-07-12T02:22:05Z`.
+- The branch resumed clean at `f328ab8`; the stale v0.3 goal string did not
+  redirect work away from `codex/v0.4-multiplayer-architecture`.
+- Reliable actions landed in `f260f10` and the independent-review correction
+  in `c67d0f9`. Re-review returned no findings. Full multiplayer-network and
+  authority lanes pass, with 1/4/8 still `NORMAL` near 10/15 Hz.
+- The event-journal recovery packet now has exclusive runtime/adapter
+  ownership. SimClient/browser cutover remains gated on its review.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`

@@ -15,8 +15,9 @@ mean one global authority, one VM per match, or one writer per player.
 The runtime gate proves authenticated single-use admission/resume tickets,
 connection-epoch fencing, continuous monotonic input, public/private isolation,
 bounded queues and inbound bytes, ordered shutdown, run reset, and cross-run
-projection-accounting lineage. Gameplay actions are still reliably rejected;
-action execution and event replay are the next slice.
+projection-accounting lineage. All five admitted gameplay action kinds now use
+bounded membership/run receipts and the reliable ACK lane. Event replay is the
+next runtime slice.
 
 ## Latest local measurements
 
@@ -66,7 +67,6 @@ low-count replication anchor; it does not replace their H24/H48/H96/X96 tests.
 
 ## Remaining gates before playable multiplayer
 
-- execute reliable idempotent gameplay actions instead of rejecting them;
 - deliver/replay event-journal consequences and force explicit gap rebase;
 - reconnect with action/delivery/event cursors without duplicate consequence;
 - cut SimClient and browser play over the stream transport;
