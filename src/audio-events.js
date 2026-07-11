@@ -3,18 +3,10 @@
  * The adapter owns locality filtering and cue names; AudioEngine owns synthesis.
  */
 
-export const EVENT_AUDIO_SPECS = Object.freeze({
-  loot: { voices: 3, duration: 0.55, cooldown: 0.08 },
-  slingshotEngage: { voices: 2, duration: 0.5, cooldown: 0.08 },
-  slingshotRelease: { voices: 2, duration: 0.65, cooldown: 0.08 },
-  portalProximity: { voices: 1, duration: 0.45, cooldown: 0.75 },
-  portalConfirm: { voices: 2, duration: 0.55, cooldown: 0.12 },
-  extract: { voices: 5, duration: 2.2, cooldown: 0.5, critical: true },
-  scavengerBump: { voices: 2, duration: 0.4, cooldown: 0.16 },
-  inhibitorGlitch: { voices: 2, duration: 0.45, cooldown: 0.35 },
-  inhibitorWake: { voices: 1, duration: 0.65, cooldown: 0.5 },
-  inhibitorVessel: { voices: 1, duration: 1.3, cooldown: 0.8, critical: true },
-});
+import { CUE_SPECS } from './audio/cue-spec.js';
+
+// Compatibility export for existing callers/tests. New code consumes CUE_SPECS.
+export const EVENT_AUDIO_SPECS = CUE_SPECS;
 
 const LOCAL_PLAYER_EVENTS = new Set([
   'player.loot',
@@ -81,15 +73,16 @@ export class EventVoiceBudget {
   }
 
   admit(cue, now) {
-    const spec = this.specs[cue] || { voices: 1, duration: 0.5, cooldown: 0 };
+    const spec = this.specs[cue] || { maxVoices: 1, duration: 0.5, cooldown: 0, priority: 'world-detail' };
     const lastStart = this.lastStartByCue.get(cue) ?? -Infinity;
     if (now - lastStart < Math.max(0, spec.cooldown || 0)) return false;
 
-    const voices = Math.max(1, Math.floor(spec.voices || 1));
+    const voices = Math.max(1, Math.floor(spec.maxVoices ?? spec.voices ?? 1));
     const criticalReserve = Math.max(0, ...Object.values(this.specs)
-      .filter((entry) => entry.critical)
-      .map((entry) => Math.max(1, Math.floor(entry.voices || 1))));
-    const ceiling = spec.critical
+      .filter((entry) => entry.priority === 'critical' || entry.critical)
+      .map((entry) => Math.max(1, Math.floor(entry.maxVoices ?? entry.voices ?? 1))));
+    const critical = spec.priority === 'critical' || spec.critical;
+    const ceiling = critical
       ? this.maxVoices
       : Math.max(1, this.maxVoices - criticalReserve);
     if (this.activeVoices(now) + voices > ceiling) return false;

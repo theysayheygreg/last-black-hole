@@ -91,6 +91,10 @@ Pack different systems into different RGB channels.
 - Breaks: color expressiveness. Current splats use all three channels for actual color (cyan loot, purple portals, gold wrecks).
 - Verdict: **never.** Wrong tool for the problem.
 
+## v0.3 Reconciliation
+
+This document owns **fluid-density buffer** policy only. Its additive-only rule and measured splat accounting remain current. Entity contact mattes, halos, trails, local coverage decay, and quality-tier policy are owned by `VISUAL-STYLE-GUIDE-v0.3.md` and `THREE-ENTITY-VISUALS.md`. Do not use density splats as unbounded sprite separation or add negative splats to carve entity-shaped holes in the fabric.
+
 ## Design Rule
 
 **No subtractive signals in the accumulated buffer.** If a future system needs darkness:

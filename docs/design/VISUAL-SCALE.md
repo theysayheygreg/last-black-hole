@@ -103,6 +103,10 @@ From Gemini pre-vis images (assets/pre-vis/), Greg's feedback:
 
 ---
 
+## v0.3 Reconciliation
+
+This file preserves the scale thesis: a player-scale tactical mark navigates waves and wells vastly larger than itself. Its literal glyph-era examples are historical, not a ban on current nearest-neighbor sprite cards. `VISUAL-STYLE-GUIDE-v0.3.md` and `THREE-ENTITY-VISUALS.md` supersede those examples for production Three sizing and Deck evidence. When a family is unreadable, improve silhouette and local separation before scale.
+
 ## Rendering Layers and Visual Hierarchy
 
 Objects exist in two places simultaneously: they disturb the ASCII substrate (Layer 0) AND render above it (Layer 1). This dual presence is what makes the world feel physical.
