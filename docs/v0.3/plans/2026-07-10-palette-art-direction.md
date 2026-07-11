@@ -1,6 +1,12 @@
 # v0.3 Visual Cohesion and Deck-Scale Art Direction Implementation Plan
 
-> **For Hermes:** execute this plan task-by-task using the current v0.3 branch architecture. Keep the sim authoritative and treat all renderer/UI work as presentation-only.
+> **For the assigned implementer** (Hermes proposed; lane routing is Greg's call): execute this plan task-by-task using the current v0.3 branch architecture. Keep the sim authoritative and treat all renderer/UI work as presentation-only.
+>
+> **Orrery review integrated 2026-07-10** — see `docs/v0.3/reviews/2026-07-10-orrery-specialist-plan-review.md`. Key amendments: Tasks 2–3 are the docs-only Wave 0 and may proceed now; all code/art tasks (0, 4–8) wait for Greg's feel/taste verdict (v0.3 Open Decisions 1–2), which directs this pass. This lane **owns** `src/render-three/**`, `src/ui/**` draw paths, `assets/**`, `scripts/build-visual-assets.cjs`, the visual design docs, and — via Task 0 below — all writes to `src/presentation/presentation-frame.js` and `presentation-style.js` (the timbre lane consumes those facts read-only). In `src/main.js` this lane edits draw/frame call sites only, and only **after** the timbre lane's audio-router slice merges (it removes ~40 scattered cue call sites and shrinks the conflict surface). Shared test files (`agent-play-eval`, `perf-probe`, `ui-motion*`, `suite-manifest`) take append-only, lane-labeled additions. `docs/v0.3/RC-GATE.md` is edited by the integrator only. Any landed code slice re-opens the automated candidate gate; rerun the full lane before a renewed RC claim.
+>
+> **Terminology ruling:** *amber* is the semantic value/salvage color in all docs, cue sheets, and strings; "gold" may only describe raw source-art pixels. The shared product metaphor across art, sound, and text lanes is **"the failing instrument"**; this plan's "failing astronomical instrument" is its visual rendering. Do not drift the metaphor without changing all three lanes.
+>
+> **Greg sign-off required before executing:** Breacher resting-palette retint (Task 5 step 2) and any replacement of `world-entities-atlas.png`, including new fauna/sentry source cells (Task 4). "After approval" in this plan means Greg's approval.
 
 **Goal:** Make the shipped Sol-generated entity, item, and UI assets read as one unmistakable “ASCII-fluid tactical instrument” at desktop and Steam Deck scale, while preserving fluid readability, 60 fps, and server-authoritative gameplay truth.
 
@@ -28,13 +34,11 @@ This plan was grounded in the checked-out branch `overnight/20260710-230616-pale
 
 ### Evidence limitation to resolve before art approval
 
-`npm run test:visual` was attempted from this worktree on 2026-07-10 and failed before usable captures:
+`npm run test:visual` was attempted from the overnight `/tmp` worktree on 2026-07-10 and failed before usable captures (missing `__TEST_API`, `Cannot find module 'sharp'`).
 
-1. `HudDeck` attempted `window.__TEST_API.setConfig` before the API was available.
-2. `Renderer` reported `window.__TEST_API not found`.
-3. `UIVisual` could not resolve the declared `sharp` dependency (`Cannot find module 'sharp'`).
+**Orrery correction (2026-07-10):** this is a worktree provisioning artifact, not a product defect. `sharp` is a declared devDependency and is installed on the integration branch, where `npm run test:full` — including the visual lane — passed on 2026-07-10 per `RC-GATE.md`. The overnight worktree simply lacked `node_modules`. Task 1 is therefore an environment prerequisite (provision the implementation worktree, confirm the lane is green), not an S0 finding; treat any failure that *survives* provisioning as a real blocker.
 
-The source tree has no committed screenshot files in `tests/`; historical evidence references ignored screenshot folders that must not be edited. Therefore the source-atlas and individual-runtime-asset audit in this plan is real, but no claim here substitutes for a fresh, working 1280x800 Three/Deck capture review. First restore the local dependency/browser-test prerequisite, then create a new timestamped evidence folder only through the existing harness; do not modify historical untracked screenshot directories.
+The source tree has no committed screenshot files in `tests/`; historical evidence references ignored screenshot folders that must not be edited. Therefore the source-atlas and individual-runtime-asset audit in this plan is real, but no claim here substitutes for a fresh, working 1280x800 Three/Deck capture review. Create new timestamped evidence folders only through the existing harness; do not modify historical untracked screenshot directories.
 
 ## Current-state inventory
 
@@ -59,7 +63,7 @@ The source tree has no committed screenshot files in `tests/`; historical eviden
 ### S0 — category truth/readability failures
 
 1. **Fauna and sentries are one sprite family.** `src/render-three/entities/world-sprite-visual-family.js:31-32` maps both to `sentryFauna`; this violates the documented category-before-affiliation contract. At gameplay scale, the ornamental symmetrical cyan-green mark has neither a calm organic drift read nor a directional threat read. It cannot teach the player whether to ignore, avoid, or react.
-2. **The visual test command is not currently executable in this bound worktree.** `npm run test:visual` fails before a reliable capture because the test API is unavailable and `sharp` cannot resolve. This blocks the required context and Deck-scale audit of actual integration. Fix/declare local test prerequisites before approving any visual tuning.
+2. ~~The visual test command is not currently executable.~~ **Downgraded by Orrery review:** the failure was overnight-worktree provisioning (missing `node_modules`), not source truth; the lane is green on the integration branch. Retained only as the Task 1 environment prerequisite. Not an S0.
 
 ### S1 — first-glance hierarchy and style cohesion
 
@@ -145,9 +149,27 @@ If a treatment harms an earlier read, it loses—even when the asset is beautifu
 
 ## Bite-sized implementation tasks
 
-### Task 1: Restore a trustworthy visual-review baseline
+### Task 0: Define the shared presentation-fact schema (added by Orrery review)
 
-**Objective:** Make the current visual lanes runnable in this worktree before judging production art.
+**Objective:** Publish, in one commit, the renderer-neutral facts that both this lane and the timbre soundscape lane consume: portal state (`ready`, `blocked`, `expiring`, `final`, `rift`) and its abort edges, wreck state (intact/looted/cluster, drift velocity where sim truth exists), player motion state (thrust/brake/coast, slingshot readiness/engage/release), run-pressure (0–1 from authoritative run progress, signal zone, Inhibitor form), and the quality tier.
+
+**Files:**
+- Modify: `src/presentation/presentation-frame.js`, `src/presentation/presentation-style.js`.
+- Modify: `tests/` presentation-frame coverage as appropriate.
+
+**Steps:**
+1. Derive every fact from existing sim truth only; if the sim does not publish a needed fact, coordinate a reviewed additive sim event field rather than inferring client-side.
+2. Document each fact's name, type, and owner in `docs/design/THREE-ENTITY-VISUALS.md` (or a short shared contract section) so the timbre lane can cite it.
+3. Collect the timbre lane's fact requests before freezing the schema; audio consumes these facts read-only and does not edit the presentation boundary.
+4. Audio quality degradation keys off the same quality tier exposed here — no second quality knob.
+
+**Acceptance:** One schema serves both lanes; no lane adds private near-duplicate facts later; sanitization/tests cover the new fields.
+
+**Sequencing:** This is the first code commit of the lane, after Greg's verdict gate.
+
+### Task 1: Provision and confirm the visual-review baseline
+
+**Objective:** Provision the implementation worktree (the overnight worktree lacked `node_modules`) and confirm the already-green visual lanes run locally before judging production art.
 
 **Files:**
 - Inspect/modify only if root cause requires it: `package-lock.json`, test bootstrap files referenced by `tests/run-all.cjs`, `tests/helpers.cjs`, `tests/hud-deck.cjs`.
@@ -187,8 +209,9 @@ If a treatment harms an earlier read, it loses—even when the asset is beautifu
 - Modify: `docs/design/VISUAL-STYLE-GUIDE-v0.3.md`, `docs/design/THREE-ENTITY-VISUALS.md`, `docs/design/UI-VISUAL-SYSTEM.md`.
 
 **Steps:**
-1. Add the “failing astronomical instrument” thesis and read order.
+1. Add the “failing astronomical instrument” thesis and read order, naming it explicitly as the visual rendering of the shared cross-lane metaphor “the failing instrument.”
 2. Add explicit family grammar for player, remote, hostile, wreck, portal, star, planetoid/comet, fauna, sentry, well, and Inhibitor.
+2b. Reconcile the new density/matte and scale rules with the existing `docs/design/VISUAL-DENSITY.md` and `docs/design/VISUAL-SCALE.md` — amend or supersede them explicitly; do not create a parallel rulebook.
 3. Add the matte/halo/trail value and density budgets; specify player/portal priority and cluster falloff.
 4. Add the full-frame/rail-only UI rule, item icon signal priority, and magenta reservation.
 5. Add the required 1280×800 handheld, grayscale, bright-light, 25% couch, normal-motion, and reduced-motion reviews.
@@ -223,7 +246,7 @@ If a treatment harms an earlier read, it loses—even when the asset is beautifu
 
 **Steps:**
 1. Keep Drifter’s clean cyan/white spine as baseline player read.
-2. Retint/rebalance Breacher’s persistent amber so its core remains friend-category neutral/blue-white; reserve amber for active burn/heat only.
+2. Retint/rebalance Breacher’s persistent amber so its core remains friend-category neutral/blue-white; reserve amber for active burn/heat only. **Requires Greg's explicit sign-off before execution** — this changes shipped hull identity while his visual verdict is open.
 3. Define remote marker (cooler outline/notch plus short low-intensity trail) that is not another cyan portal read.
 4. Keep scavengers’ hooked red silhouette but confine red brightness to rim/heat and remove any reward-like white/gold competition.
 5. From authoritative presentation state/events only, add bounded thrust, brake, signal, and slingshot state accents; each must disappear/settle correctly when event/state ends.
@@ -240,7 +263,7 @@ If a treatment harms an earlier read, it loses—even when the asset is beautifu
 
 **Steps:**
 1. Define an explicit portal state table: extraction-ready, blocked, expiring, final, rift. Each gets one geometry/state tick change plus an aperture/backplate treatment; never fill the black aperture.
-2. Bind the table strictly to existing authoritative facts/events supplied through the presentation frame. If a fact is absent, add it at the presentation boundary from existing sim truth; do not infer it in Three.
+2. Bind the table strictly to the Task 0 presentation-fact schema. If a fact is absent, extend the Task 0 schema (this lane owns that boundary) from existing sim truth; do not infer it in Three, and coordinate the addition with the timbre lane, which consumes the same facts.
 3. Rotate wreck clusters/appropriate hull fragments from provided velocity only; maintain no rotation if unavailable.
 4. Make intact actionable salvage use one amber glint; make looted state remove it and use muted rim; make cluster state prioritise broken mass over lots of individual sparkles.
 5. Preserve star radial geometry, planetoid dense body, and comet velocity-opposed tail. Add state/type variants only where canonical data exists.

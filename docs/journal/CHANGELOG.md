@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-07-10 — Orrery review of the v0.3 specialist plans
+
+- Reviewed the palette and timbre overnight plans against branch source;
+  verified every cited file/line claim, corrected two (the `test:visual`
+  failure was overnight-worktree provisioning, not a product defect;
+  `EVENT_AUDIO_SPECS` declares ten cue specs, not seven).
+- Found the troubadorb theme/text overnight lane produced no plan (zero
+  commits); wrote an Orrery reconstruction at
+  `docs/v0.3/plans/2026-07-10-troubadorb-theme-text.md`, pending ratification.
+- Established lane ownership and sequencing: palette owns the presentation
+  boundary via a shared Task 0 fact schema, timbre's audio router lands first
+  in `main.js`, troubadorb strings land last, RC-GATE edits go through the
+  integrator, and code waves wait for Greg's feel/taste verdict.
+- Full review: `docs/v0.3/reviews/2026-07-10-orrery-specialist-plan-review.md`;
+  accepted amendments and rejected items integrated into all three plans.
+
 ## 2026-07-10 — v0.3 visual Forge review and promo truth pass
 
 - Fixed Three entity budgets so offscreen candidates do not hide later visible

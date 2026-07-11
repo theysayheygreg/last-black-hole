@@ -3,6 +3,10 @@
 > Date: 2026-07-10
 > Status: planning only — no production audio or gameplay changes in this plan
 > Scope: the v0.3 Three/authoritative candidate line
+>
+> **Orrery review integrated 2026-07-10** — see `docs/v0.3/reviews/2026-07-10-orrery-specialist-plan-review.md`. Key amendments: Task 1 is the docs-only Wave 0 and may proceed now; all code tasks (2–8) wait for Greg's feel/taste verdict (v0.3 Open Decisions 1–2). This lane **owns** `src/audio.js`, `src/audio-events.js`, the new `src/audio/**` modules, the audio block of `src/config.js`, and the audio rows of `src/dev-panel.js`. It does **not** edit `src/presentation/presentation-frame.js` or `presentation-style.js` — the palette lane owns that boundary via its Task 0 shared presentation-fact schema (portal states/abort edges, wreck state, player motion state, run-pressure, quality tier); file fact requests there and consume the facts read-only. In `src/main.js` this lane owns the event/menu cue call sites, and its router slice (Task 2) **lands first** among the specialist lanes because it removes ~40 scattered call sites and shrinks the conflict surface for everyone after it. Shared test files (`agent-play-eval`, `perf-probe`, `ui-motion*`, `suite-manifest`) take append-only, lane-labeled additions. `docs/v0.3/RC-GATE.md` is edited by the integrator only. Any landed code slice re-opens the automated candidate gate; rerun the full lane before a renewed RC claim. Splitting the 1,072-line `src/audio.js` into `src/audio/*` modules is endorsed per the repo's ~500-line rule.
+>
+> **Terminology ruling:** the shared product metaphor across art, sound, and text lanes is **"the failing instrument"**; this plan's "damaged instrument panel listening to a dying ocean" is its sonic rendering. *Amber* is the semantic value/salvage color name everywhere. User-facing volume-control persistence ("after product/UI review") means Greg's review.
 
 ## Purpose
 
@@ -25,7 +29,7 @@ This plan preserves the current v0.3 contract:
 |---|---|---|---|
 | Audio engine | `src/audio.js` | One procedural Web Audio engine: voices feed `duckGain`, dual low-pass “SNES” filters, bit crusher, shared feedback echo, then master. It has title/menu/meta/gameplay contexts, an always-running drone, four well voices, one Inhibitor voice, 27+ one-shot cue branches, stereo panning, and a bounded `EventVoiceBudget`. | A good procedural-first base, but it is a single broad bus/duck system rather than a role-based mix. |
 | Audio configuration | `src/config.js:392-408`; `src/dev-panel.js:184-188` | Global master/drone/well/event levels plus pulse duck duration/amount are tunable. The dev panel exposes only five broad knobs. | There is no per-bus level, accessibility mode, dynamic-range policy, or route/state mix policy. |
-| Event adapter | `src/audio-events.js`; `tests/audio-events.cjs` | Only seven authoritative cue specs are declared. Local-player filtering maps loot, slingshot edges, portal proximity/confirm, escape, scavenger bump, and selected Inhibitor events. It reserves voices for extraction/Inhibitor vessel. | This is the correct boundary but has incomplete coverage, no event priority model, no payload-driven variants, and a separate local-event path in `main.js`. |
+| Event adapter | `src/audio-events.js`; `tests/audio-events.cjs` | Ten event cue specs are declared in `EVENT_AUDIO_SPECS` (count corrected by Orrery review; the coverage-gap finding stands). Local-player filtering maps loot, slingshot edges, portal proximity/confirm, escape, scavenger bump, and selected Inhibitor events. It reserves voices for extraction/Inhibitor vessel. | This is the correct boundary but has incomplete coverage, no event priority model, no payload-driven variants, and a separate local-event path in `main.js`. |
 | Event consumption | `src/main.js:2375-2534` | Remote events call `playAuthoritativeEvent`, then several event types add direct local cue calls (`pulse`, effect use/expiry/absorb, death, star consumed, scavenger consumed, Inhibitor drain/final portal). | A future cue can be doubled or omitted because one event is split across adapter and switch logic. |
 | Local/sandbox gameplay calls | `src/main.js:4404-4598`, `src/main.js:5369` | Local loop directly triggers pulse, loot, shield, death, extract, star-consumed, and scavenger-death cues. | The local and authoritative routes need one explicitly tested presentation-event bridge, without moving truth out of the sim. |
 | Menu and UI calls | `src/main.js:3973-4147` and subsequent phase handlers | Title confirm, profile selection, Home tabs, hull switches, vault equip/sell, rig upgrade/failure, map selection, reroll, and launch call individual cues. Several navigation paths are silent or share generic tones. | UI presently has feedback but no state-family grammar, focus hierarchy, debounce policy across all input paths, or screen-transition sound. |
@@ -191,7 +195,7 @@ Keep adaptive audio low-rate and derived from authoritative/presentation facts o
 3. **Spatial fields:** nearest relevant well/portal/Inhibitor use `worldDistance` and `worldToScreen` from `src/coords.js`, updating control parameters at 10–20 Hz. Cap audible wells to the closest two in normal play; choose one dominant landmark in high-pressure states.
 4. **Route state:** portal entry, ready, blocked, final are edge/state transitions. Ready can add a restrained spatial harmonic while resident; it must stop immediately on authoritative abort/exit.
 5. **Movement state:** presentation frame `pathState`, velocity, thrust/brake and sim-owned slingshot facts control player texture. They do not change physics and must not use raw frame rate as an audio-event rate.
-6. **Quality/degradation:** minimal quality reduces decorative density first (extra well partials, particulate/noise layers, tails), never critical cues or event translation.
+6. **Quality/degradation:** minimal quality reduces decorative density first (extra well partials, particulate/noise layers, tails), never critical cues or event translation. Key this off the same presentation quality tier the renderer consumes (palette lane's Task 0 schema) — do not add a second audio-only quality knob.
 
 ### Intentional silence
 
@@ -259,7 +263,7 @@ Keep adaptive audio low-rate and derived from authoritative/presentation facts o
 - Add `src/audio/mixer.js` and `src/audio/audio-diagnostics.js` if the engine split is justified.
 - Modify `src/audio.js` and `src/config.js`.
 - Modify `src/dev-panel.js` only for developer-facing mix diagnostics/tuners; do not turn the player HUD into a mixing console.
-- Add `tests/audio-mixer.cjs` and browser coverage in `tests/smoke.cjs` or a new browser audio suite.
+- Add `tests/audio-mixer.cjs` and a dedicated focused browser audio suite. (**Orrery review:** do not put audio browser coverage in `tests/smoke.cjs` — smoke stays fast and universal.)
 
 **Work**
 
@@ -283,13 +287,13 @@ Keep adaptive audio low-rate and derived from authoritative/presentation facts o
 - Modify `src/audio.js` or split generators into `src/audio/voices/*.js`.
 - Modify `src/config.js`.
 - Add `docs/v0.3/audio-cue-sheet.md`.
-- Add deterministic recipe JSON files under `assets/audio/recipes/` only if the project wants committed machine-readable tuning data; otherwise keep recipes in `src/audio/cue-spec.js`.
+- ~~Add deterministic recipe JSON files under `assets/audio/recipes/`~~ **Rejected for v0.3 (Orrery review):** no authored runtime asset exists yet; keep recipes in `src/audio/cue-spec.js` where tests can reach them. Revisit only when an approved authored asset actually needs packaging.
 
 **Work**
 
 1. Retune/rewrite shared procedural building blocks: filtered noise bed, low oscillator mass, constrained well resonators, player propulsion texture, tactile UI click, route interval cell, salvage partial, consequence thud, and Inhibitor instability.
 2. Replace generic major-triad reward and bright square-beep patterns where they conflict with LBH’s dread/terminal identity; preserve distinction by function, not by more layers.
-3. Make random variation bounded and reproducible for capture/analysis: use event id/run seed-derived choices where variation matters; use non-determinism only for nonsemantic texture where repeatability is not required.
+3. Make random variation bounded and reproducible for capture/analysis: derive seeded choices from event id/run seed using the existing deterministic RNG helpers in `src/rng-stream.js` (`mulberry32`, `hashString` — already mirrored client/server); do not introduce a new randomness scheme. Use non-determinism only for nonsemantic texture where repeatability is not required.
 4. Keep all runtime sounds procedural by default. Do not add sample files merely to make a sound “bigger.”
 5. Define each cue with attack/body/tail, spectral target, pan/spatial rules, cooldown, and bus/priority in the cue sheet.
 
@@ -374,7 +378,7 @@ Keep adaptive audio low-rate and derived from authoritative/presentation facts o
 
 - Modify `tests/suite-manifest.cjs`.
 - Add/update targeted `tests/audio-*.cjs` files.
-- Update `docs/design/TEST-HARNESS.md`, `docs/v0.3/RC-GATE.md`, and `docs/project/BUILD-STATUS.md` only after actual implementation/evidence changes.
+- Update `docs/design/TEST-HARNESS.md` and `docs/project/BUILD-STATUS.md` only after actual implementation/evidence changes. `docs/v0.3/RC-GATE.md` changes are proposed here but committed by the integrator only (Orrery review).
 - Add a planned audio section to `tests/agent-play-eval.cjs` report output only if it can report structural cue trace evidence honestly.
 
 **Work**
@@ -416,14 +420,14 @@ Keep adaptive audio low-rate and derived from authoritative/presentation facts o
 - `src/config.js`
 - `src/main.js`
 - `src/dev-panel.js`
-- `src/presentation/presentation-frame.js` only if a missing presentation-safe fact must be explicitly normalized for audio
+- ~~`src/presentation/presentation-frame.js`~~ **not edited by this lane** (Orrery review): the palette lane owns the presentation boundary via its Task 0 shared fact schema. File missing-fact requests against that schema and consume the published facts read-only
 - `src/test-api.js` only for read-only audio diagnostics
 - `tests/audio-events.cjs`
 - `tests/audio-toolkit.cjs`
 - `tests/suite-manifest.cjs`
 - focused browser/flow tests chosen from `tests/smoke.cjs`, `tests/meta-flow.cjs`, `tests/agent-play-eval.cjs`, `tests/perf-probe.cjs`, and `tests/ui-motion*.cjs`
 - `docs/tools/AUDIO-WORKBENCH.md` only if actual workflow/commands change
-- `docs/design/TEST-HARNESS.md`, `docs/v0.3/RC-GATE.md`, and `docs/project/BUILD-STATUS.md` only after implementation evidence exists
+- `docs/design/TEST-HARNESS.md` and `docs/project/BUILD-STATUS.md` only after implementation evidence exists; `docs/v0.3/RC-GATE.md` via the integrator only
 
 ### Files explicitly not in scope for audio ownership changes
 
@@ -438,7 +442,7 @@ Keep adaptive audio low-rate and derived from authoritative/presentation facts o
 ### Before coding
 
 ```sh
-cd /private/tmp/lbh-v03-overnight-20260710-230616/timbre-plan
+cd <repo root>  # integration-branch checkout (path corrected by Orrery review)
 git status --short
 node tests/audio-events.cjs
 npm run test:fast
@@ -447,7 +451,7 @@ npm run test:fast
 Provision audio analysis only when needed, inside this worktree:
 
 ```sh
-cd /private/tmp/lbh-v03-overnight-20260710-230616/timbre-plan
+cd <repo root>  # integration-branch checkout (path corrected by Orrery review)
 uv venv .venv
 .venv/bin/python -m pip --version
 uv pip install --python .venv/bin/python -r tools/audio-requirements.txt
@@ -469,7 +473,7 @@ npm run test:audio
 Use a fresh stack, normal input, and Three renderer for listening review:
 
 ```sh
-cd /private/tmp/lbh-v03-overnight-20260710-230616/timbre-plan
+cd <repo root>  # integration-branch checkout (path corrected by Orrery review)
 npm run stack:stop
 npm run stack -- --no-open
 ```

@@ -1,5 +1,31 @@
 # Decision Log
 
+## 2026-07-10 — Specialist polish lanes run behind Greg's verdict, with one presentation-fact owner
+
+**Decision:** The v0.3 palette, timbre, and troubadorb plans execute as
+post-candidate polish: docs-only tasks may proceed now; all code waves wait
+for Greg's feel/taste verdict, which directs them. The palette lane owns all
+writes to `src/presentation/presentation-frame.js`/`presentation-style.js`
+via a shared Task 0 fact schema; timbre consumes read-only. In `src/main.js`,
+the timbre audio-router slice lands first, palette draw-path edits rebase
+after it, and the troubadorb string sweep lands last. `docs/v0.3/RC-GATE.md`
+is integrator-edited only, and any landed code slice re-opens the automated
+candidate gate. Terminology: "amber" is the semantic value color; the shared
+cross-lane metaphor is "the failing instrument."
+
+**Why:** Both existing plans independently need the same new presentation
+facts and the same 6,589-line `main.js`; without named ownership the lanes
+converge on a collision two decisions from now. The candidate is green — churn
+under Greg's review would invalidate the evidence the review depends on.
+
+**Where it landed:** `docs/v0.3/reviews/2026-07-10-orrery-specialist-plan-review.md`,
+integrated amendments in all three `docs/v0.3/plans/2026-07-10-*.md` files.
+
+**Door status:** Open where marked: Breacher retint, atlas replacement,
+volume-control persistence, executor routing, and troubadorb plan ratification
+are Greg's calls. The troubadorb plan is an Orrery reconstruction because the
+overnight lane produced no output.
+
 ## 2026-07-10 — Promo evidence must disclose how the state was reached
 
 **Decision:** A social capture manifest must distinguish product-flow,
