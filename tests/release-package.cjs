@@ -7,6 +7,7 @@
 const crypto = require("crypto");
 const { execFileSync, spawn } = require("child_process");
 const fs = require("fs");
+const { createRequire } = require("module");
 const net = require("net");
 const os = require("os");
 const path = require("path");
@@ -257,12 +258,27 @@ async function run() {
     path.join(appRoot, "renderer", "index.html"),
     path.join(appRoot, "renderer", "src", "main.js"),
     path.join(appRoot, "renderer", "node_modules", "three", "build", "three.module.js"),
+    path.join(appRoot, "package.json"),
+    path.join(appRoot, "node_modules", "ws", "package.json"),
     path.join(appRoot, "server", "control-plane-runtime.cjs"),
     path.join(appRoot, "server", "sim-runtime.cjs"),
     path.join(appRoot, "server", "sim", "world-geometry.cjs"),
   ]) {
     assert(fs.existsSync(expected), `Extracted app.asar is missing ${path.relative(appRoot, expected)}`);
   }
+
+  const sourcePackage = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const shellPackage = JSON.parse(fs.readFileSync(path.join(appRoot, "package.json"), "utf8"));
+  const packagedWs = JSON.parse(fs.readFileSync(path.join(appRoot, "node_modules", "ws", "package.json"), "utf8"));
+  assert(shellPackage.dependencies?.ws === sourcePackage.dependencies.ws, "Packaged shell must declare the exact ws dependency");
+  assert(packagedWs.version === sourcePackage.dependencies.ws, "Packaged app must contain the exactly pinned ws version");
+  const packagedRequire = createRequire(path.join(appRoot, "server", "sim-runtime.cjs"));
+  const packagedWsEntry = packagedRequire.resolve("ws");
+  assert(
+    path.relative(fs.realpathSync(appRoot), fs.realpathSync(packagedWsEntry)).split(path.sep).slice(0, 2).join("/") === "node_modules/ws",
+    "Packaged sim runtime must resolve ws from app node_modules"
+  );
+  assert(typeof packagedRequire("ws").WebSocketServer === "function", "Packaged ws dependency must expose WebSocketServer");
 
   const controlPort = await openPort();
   let simPort = await openPort();

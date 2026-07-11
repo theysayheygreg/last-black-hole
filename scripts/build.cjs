@@ -21,6 +21,7 @@ const PRODUCT_SHORT = 'LS';
 const APP_ICON_PNG = path.join(ROOT, 'assets', 'app', 'icon-512.png');
 const PUBLIC_VERSION = currentPublicVersion();
 const BUILD_VERSION = currentBuildVersion(PUBLIC_VERSION);
+const ROOT_PACKAGE = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const DESKTOP_SERVER_SCRIPTS = [
   'sim-runtime.cjs',
   'sim-event-journal.cjs',
@@ -44,6 +45,9 @@ const DESKTOP_SERVER_SCRIPTS = [
 const DESKTOP_SERVER_DIRECTORIES = [
   'content',
   'sim',
+];
+const DESKTOP_SERVER_DEPENDENCIES = [
+  'ws',
 ];
 
 const TARGET_ALIASES = {
@@ -284,6 +288,26 @@ function stageDesktopAuthorityRuntime(stagingRoot) {
   // content wrappers resolve their JSON payloads from src/content.
   copyIfExists(path.join(ROOT, 'src', 'maps'), path.join(stagingRoot, 'src', 'maps'));
   copyIfExists(path.join(ROOT, 'src', 'content'), path.join(stagingRoot, 'src', 'content'));
+
+  // The local closure walk above deliberately ignores package imports. Stage
+  // each reviewed server dependency explicitly so the packaged authority
+  // resolves the same exact code as the source runtime.
+  for (const dependency of DESKTOP_SERVER_DEPENDENCIES) {
+    const expectedVersion = ROOT_PACKAGE.dependencies?.[dependency];
+    if (!expectedVersion) {
+      throw new Error(`Desktop authority dependency ${dependency} is not pinned in package.json`);
+    }
+    const packageJson = require.resolve(`${dependency}/package.json`, { paths: [ROOT] });
+    const installedPackage = JSON.parse(fs.readFileSync(packageJson, 'utf8'));
+    if (installedPackage.version !== expectedVersion) {
+      throw new Error(`Desktop authority dependency ${dependency} resolved ${installedPackage.version}, expected ${expectedVersion}`);
+    }
+    fs.cpSync(
+      path.dirname(packageJson),
+      path.join(stagingRoot, 'node_modules', dependency),
+      { recursive: true }
+    );
+  }
 }
 
 function zipDir(sourceDir, zipPath) {
@@ -666,6 +690,12 @@ function stageElectronShell(mode) {
     // version stays in BUILD-MANIFEST and artifact paths.
     version: PUBLIC_VERSION,
     main: 'electron-main.cjs',
+    dependencies: Object.fromEntries(
+      DESKTOP_SERVER_DEPENDENCIES.map((dependency) => [
+        dependency,
+        ROOT_PACKAGE.dependencies[dependency],
+      ])
+    ),
   };
 
   fs.writeFileSync(
@@ -847,6 +877,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  DESKTOP_SERVER_DEPENDENCIES,
   DESKTOP_SERVER_DIRECTORIES,
   DESKTOP_SERVER_SCRIPTS,
   stageDesktopAuthorityRuntime,

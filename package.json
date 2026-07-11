@@ -89,7 +89,8 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "ws": "8.21.0"
   },
   "devDependencies": {
     "@electron/packager": "^19.1.0",

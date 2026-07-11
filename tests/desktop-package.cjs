@@ -7,6 +7,7 @@
  */
 const { spawn } = require("child_process");
 const fs = require("fs");
+const { createRequire } = require("module");
 const net = require("net");
 const os = require("os");
 const path = require("path");
@@ -97,6 +98,19 @@ async function proveStagedAuthorityBoot() {
 
   const nestedModule = path.join(serverDir, "sim", "body-masks.cjs");
   assert(fs.existsSync(nestedModule), "Desktop stage must include nested sim runtime modules");
+
+  const sourcePackage = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const stagedWsPackagePath = path.join(stagingRoot, "node_modules", "ws", "package.json");
+  assert(fs.existsSync(stagedWsPackagePath), "Desktop stage must include the ws server dependency");
+  const stagedWsPackage = JSON.parse(fs.readFileSync(stagedWsPackagePath, "utf8"));
+  assert(stagedWsPackage.version === sourcePackage.dependencies.ws, "Desktop stage must contain the exactly pinned ws version");
+  const stagedRequire = createRequire(path.join(serverDir, "sim-runtime.cjs"));
+  const stagedWsEntry = stagedRequire.resolve("ws");
+  assert(
+    path.relative(fs.realpathSync(stagingRoot), fs.realpathSync(stagedWsEntry)).split(path.sep).slice(0, 2).join("/") === "node_modules/ws",
+    "Staged sim runtime must resolve ws from its packaged node_modules"
+  );
+  assert(typeof stagedRequire("ws").WebSocketServer === "function", "Staged ws package must expose WebSocketServer");
 
   const controlPort = await getOpenPort();
   let simPort = await getOpenPort();
