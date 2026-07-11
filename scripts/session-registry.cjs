@@ -27,10 +27,12 @@ function createMembershipAuthority({ runId, playerId, previous = null }) {
     runId: normalizedRunId,
     membershipId: previous?.membershipId || newOpaqueId("membership"),
     playerId: normalizedPlayerId,
+    localProfileId: previous?.localProfileId || newOpaqueId("local-profile"),
     connectionId: newOpaqueId("connection"),
     connectionEpoch: Math.max(0, Number(previous?.connectionEpoch) || 0) + 1,
     commandCredential: newAuthoritySecret(),
     lastCommandSeq: Math.max(0, Number(previous?.lastCommandSeq) || 0),
+    lastActionSeq: Math.max(0, Number(previous?.lastActionSeq) || 0),
     lastSlingshotEdgeId: Math.max(0, Number(previous?.lastSlingshotEdgeId) || 0),
   };
 }

@@ -79,6 +79,15 @@ const {
 } = require("./sim/world-geometry.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
+const { createSimWebSocketAdapter } = require("./sim-ws-adapter.cjs");
+const {
+  WIRE_PROTOCOL_VERSION,
+  SIM_PROTOCOL_VERSION,
+} = require("./multiplayer-wire-protocol.cjs");
+const {
+  MultiplayerTicketError,
+  createMultiplayerTicketRegistry,
+} = require("./multiplayer-ticket-registry.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -892,6 +901,11 @@ const telemetry = createRuntimeLogger("sim", { label: LOG_LABEL, host: HOST, por
 const SIM_INSTANCE_ID = String(args["sim-instance-id"] || process.env.LBH_SIM_INSTANCE_ID || `sim-${PORT}`);
 const CONTROL_PLANE_URL = String(args["control-plane-url"] || process.env.LBH_CONTROL_PLANE_URL || "").trim();
 const KEEP_ALIVE = String(args["keep-alive"] || process.env.LBH_SIM_KEEP_ALIVE || "").trim() === "true";
+const MULTIPLAYER_WS_ENABLED = String(process.env.LBH_SIM_WS_ENABLED || "").trim() === "true";
+const MULTIPLAYER_HEARTBEAT_INTERVAL_MS = 10_000;
+const MULTIPLAYER_TICKET_TTL_MS = process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS
+  ? Math.max(1, Math.floor(Number(process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS) || 30_000))
+  : 30_000;
 const IDLE_SHUTDOWN_MS = KEEP_ALIVE
   ? 0
   : Math.max(1000, Number(args["idle-shutdown-ms"] || process.env.LBH_SIM_IDLE_SHUTDOWN_MS || DEFAULT_IDLE_SHUTDOWN_MS));
@@ -1004,11 +1018,27 @@ const runtime = {
   terminalSince: null,
   terminalShutdownAt: null,
   shutdownReason: null,
+  multiplayerProjection: {
+    accumulator: 0,
+    inFlight: false,
+    beats: 0,
+    projectedConnections: 0,
+    skippedBeats: 0,
+    errors: 0,
+    admissionErrors: 0,
+    lastSnapshotId: 0,
+    lastProjectedAt: null,
+    maxQueuedBytes: 0,
+    maxPendingInboundBytes: 0,
+  },
 };
 
 let tickHandle = null;
 let currentLoopTickHz = DEFAULT_TICK_HZ;
 let terminalShutdownHandle = null;
+let multiplayerTicketRegistry = null;
+let multiplayerAdapter = null;
+let shutdownPromise = null;
 
 function publishEvent(type, payload = {}, options = {}) {
   const playerId = String(payload?.clientId || options.playerId || "").trim();
@@ -1314,6 +1344,7 @@ function startSession(config = {}) {
     configurable: true,
   });
   applyRunSeed(runtime.session.rng, mapState, runtime.session);
+  rotateMultiplayerRun(runtime.session.runId);
 
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
@@ -1350,6 +1381,19 @@ function startSession(config = {}) {
     scavengers: 0,
     waves: 0,
     field: 0,
+  };
+  runtime.multiplayerProjection = {
+    accumulator: 0,
+    inFlight: false,
+    beats: 0,
+    projectedConnections: 0,
+    skippedBeats: 0,
+    errors: 0,
+    admissionErrors: 0,
+    lastSnapshotId: 0,
+    lastProjectedAt: null,
+    maxQueuedBytes: 0,
+    maxPendingInboundBytes: 0,
   };
   // Inhibitor: threshold per run, seeded for determinism
   const inh = INHIBITOR_CONFIG;
@@ -5860,6 +5904,7 @@ function tickSim() {
   }
   if (maybeEndTerminalSession()) return;
   refreshBallparkMirror("tick");
+  scheduleMultiplayerProjection();
 
   const alivePlayerCount = relevance.alivePlayers.length;
   const activeAiCount = runtime.mapState.scavengers.filter((scav) => scav.alive !== false && scav.state !== "dying").length;
@@ -5943,6 +5988,319 @@ function writeFiles() {
     ensureParent(META_FILE);
     fs.writeFileSync(META_FILE, `${JSON.stringify(meta, null, 2)}\n`, "utf8");
   }
+}
+
+function rotateMultiplayerRun(runId) {
+  if (multiplayerTicketRegistry) multiplayerTicketRegistry.rotateRun(runId);
+  else {
+    multiplayerTicketRegistry = createMultiplayerTicketRegistry({
+      runId,
+      ttlMs: MULTIPLAYER_TICKET_TTL_MS,
+      capacity: 32,
+    });
+  }
+  if (multiplayerAdapter) multiplayerAdapter.rotateRun(runId);
+}
+
+function currentMultiplayerProfileId(player, authority) {
+  return String(player?.profileId || authority?.localProfileId || "").trim();
+}
+
+function currentMultiplayerBinding(binding) {
+  if (!binding || binding.runId !== runtime.session.runId) return null;
+  const authority = runtime.playerAuthorities.get(binding.playerId);
+  const player = runtime.players.get(binding.playerId);
+  if (!authority || !player) return null;
+  if (
+    authority.runId !== binding.runId
+    || authority.membershipId !== binding.membershipId
+    || authority.connectionId !== binding.connectionId
+    || authority.connectionEpoch !== binding.connectionEpoch
+    || currentMultiplayerProfileId(player, authority) !== binding.profileId
+  ) return null;
+  return { authority, player };
+}
+
+function admissionFailure(error) {
+  const codes = {
+    "expired-ticket": "ticket-expired",
+    "reused-ticket": "ticket-reused",
+    "cross-run-ticket": "ticket-run-mismatch",
+    "wrong-ticket-kind": "ticket-kind-mismatch",
+    "ticket-capacity-exceeded": "ticket-capacity",
+  };
+  return Object.assign(new Error("multiplayer admission rejected"), {
+    publicCode: codes[error?.code] || "ticket-invalid",
+    closeCode: 4401,
+    retryable: error?.code === "expired-ticket" || error?.code === "unknown-ticket",
+  });
+}
+
+function redeemMultiplayerHello(frame, { signal } = {}) {
+  if (signal?.aborted) throw admissionFailure();
+  const kind = frame.resumeTicket ? "resume" : "admission";
+  const ticket = frame.resumeTicket || frame.admissionTicket;
+  let reservation;
+  try {
+    reservation = multiplayerTicketRegistry.redeem(ticket, {
+      kind,
+      runId: runtime.session.runId,
+    });
+  } catch (error) {
+    runtime.multiplayerProjection.admissionErrors += 1;
+    throw admissionFailure(error instanceof MultiplayerTicketError ? error : null);
+  }
+  if (signal?.aborted) throw admissionFailure();
+
+  const claims = reservation.claims;
+  let authority = runtime.playerAuthorities.get(claims.playerId);
+  const player = runtime.players.get(claims.playerId);
+  if (
+    !authority
+    || !player
+    || authority.runId !== runtime.session.runId
+    || authority.membershipId !== claims.membershipId
+    || currentMultiplayerProfileId(player, authority) !== claims.profileId
+  ) throw admissionFailure();
+
+  const snapshot = snapshotBody({ force: true });
+  const requestedSnapshotId = Math.max(0, Number(frame.lastSnapshotId) || 0);
+  const requestedEventSeq = Math.max(0, Number(frame.lastEventSeq) || 0);
+  if (
+    requestedSnapshotId > snapshot.snapshotId
+    || requestedEventSeq > snapshot.lastEventSeq
+  ) {
+    throw streamCommandFailure("future-recovery-cursor");
+  }
+
+  if (kind === "resume") {
+    if (
+      authority.connectionId !== claims.connectionId
+      || authority.connectionEpoch !== claims.connectionEpoch
+    ) throw admissionFailure();
+    // Rotation is intentionally synchronous after every ticket/cursor check.
+    // Once redeemMultiplayerHello returns to the adapter's first await, the old
+    // connection epoch is already incapable of mutating or receiving owner state.
+    authority = issuePlayerAuthority(claims.playerId, authority);
+  }
+
+  const binding = {
+    runId: runtime.session.runId,
+    membershipId: authority.membershipId,
+    playerId: authority.playerId,
+    connectionId: authority.connectionId,
+    connectionEpoch: authority.connectionEpoch,
+    profileId: currentMultiplayerProfileId(player, authority),
+    snapshotId: snapshot.snapshotId,
+    lastEventSeq: snapshot.lastEventSeq,
+    // Event replay is not enabled in this baseline. Every hello rebases to the
+    // current full snapshot and advances recovery cursors to that exact lineage.
+    requestedSnapshotId: snapshot.snapshotId,
+    requestedEventSeq: snapshot.lastEventSeq,
+  };
+  return {
+    binding,
+    bindingKey: { runId: binding.runId, membershipId: binding.membershipId },
+    welcome: {
+      type: "welcome",
+      wireVersion: WIRE_PROTOCOL_VERSION,
+      simProtocolVersion: SIM_PROTOCOL_VERSION,
+      runId: binding.runId,
+      membershipId: binding.membershipId,
+      playerId: binding.playerId,
+      connectionId: binding.connectionId,
+      connectionEpoch: binding.connectionEpoch,
+      commandCredential: authority.commandCredential,
+      lastCommandSeq: authority.lastCommandSeq,
+      nextCommandSeq: authority.lastCommandSeq + 1,
+      lastInputSeq: player.lastInput.seq,
+      lastActionSeq: authority.lastActionSeq || 0,
+      heartbeatIntervalMs: MULTIPLAYER_HEARTBEAT_INTERVAL_MS,
+      reconnected: kind === "resume",
+    },
+    rebase: {
+      type: "rebase",
+      runId: binding.runId,
+      reason: kind === "resume" ? "resume" : "initial",
+      snapshotId: snapshot.snapshotId,
+      lastEventSeq: snapshot.lastEventSeq,
+    },
+  };
+}
+
+function revalidateMultiplayerBinding(binding) {
+  return Boolean(currentMultiplayerBinding(binding));
+}
+
+function streamCommandFailure(code, closeCode = 4400) {
+  return Object.assign(new Error("multiplayer command rejected"), {
+    publicCode: code,
+    closeCode,
+  });
+}
+
+function executeStreamInput(binding, frame) {
+  const current = currentMultiplayerBinding(binding);
+  if (!current) throw streamCommandFailure("connection-fenced", 4003);
+  const { player } = current;
+  if (frame.inputSeq <= player.lastInput.seq) throw streamCommandFailure("stale-input");
+  player.lastInput = {
+    ...player.lastInput,
+    seq: frame.inputSeq,
+    moveX: frame.moveX,
+    moveY: frame.moveY,
+    thrust: frame.thrust,
+    brake: frame.brake,
+    slingshot: frame.slingshot,
+    ability1: frame.ability1,
+    ability2: frame.ability2,
+    timestamp: frame.clientTimeMs,
+  };
+  return { type: "ack", ackKind: "input", inputSeq: frame.inputSeq };
+}
+
+function rejectStreamAction(binding, frame) {
+  if (!currentMultiplayerBinding(binding)) throw streamCommandFailure("connection-fenced", 4003);
+  return {
+    type: "ack",
+    ackKind: "action",
+    actionId: frame.actionId,
+    actionSeq: frame.actionSeq,
+    commandSeq: frame.commandSeq,
+    status: "rejected",
+    result: { code: "action-not-enabled" },
+  };
+}
+
+function jsonProjection(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function buildPublicMultiplayerState() {
+  const snapshot = snapshotBody({ force: true });
+  if (!snapshot.runId || !Number.isSafeInteger(snapshot.snapshotId) || snapshot.snapshotId < 1) {
+    throw streamCommandFailure("snapshot-lineage-invalid");
+  }
+  const { recentEvents: _recentEvents, ...state } = snapshot;
+  return {
+    type: "publicState",
+    runId: snapshot.runId,
+    snapshotId: snapshot.snapshotId,
+    tick: snapshot.tick,
+    simTime: snapshot.simTime,
+    lastEventSeq: snapshot.lastEventSeq,
+    fieldRevision: snapshot.fieldRevision,
+    overloadMode: runtime.session.overloadState,
+    lastInputSeq: 0,
+    lastActionSeq: 0,
+    full: true,
+    state,
+  };
+}
+
+function acknowledgeMultiplayerCursor(binding, frame) {
+  if (!currentMultiplayerBinding(binding)) throw streamCommandFailure("connection-fenced", 4003);
+  const latestSnapshotId = binding.snapshotId;
+  const latestEventSeq = binding.lastEventSeq;
+  if (frame.ackKind === "baseline") {
+    if (frame.snapshotId > latestSnapshotId || frame.eventSeq > latestEventSeq) {
+      throw streamCommandFailure("future-recovery-cursor");
+    }
+    if (
+      frame.snapshotId < binding.requestedSnapshotId
+      || frame.eventSeq < binding.requestedEventSeq
+    ) return;
+    binding.requestedSnapshotId = frame.snapshotId;
+    binding.requestedEventSeq = frame.eventSeq;
+  } else if (frame.ackKind === "event") {
+    if (frame.eventSeq > latestEventSeq) throw streamCommandFailure("future-recovery-cursor");
+    if (frame.eventSeq >= binding.requestedEventSeq) binding.requestedEventSeq = frame.eventSeq;
+  }
+}
+
+function buildOwnerMultiplayerState(binding, publicFrame) {
+  const current = currentMultiplayerBinding(binding);
+  if (!current) throw streamCommandFailure("connection-fenced", 4003);
+  const { authority, player } = current;
+  const frame = {
+    type: "ownerState",
+    runId: publicFrame.runId,
+    membershipId: binding.membershipId,
+    playerId: binding.playerId,
+    snapshotId: publicFrame.snapshotId,
+    tick: publicFrame.tick,
+    simTime: publicFrame.simTime,
+    lastEventSeq: publicFrame.lastEventSeq,
+    fieldRevision: publicFrame.fieldRevision,
+    overloadMode: publicFrame.overloadMode,
+    lastInputSeq: player.lastInput.seq,
+    lastActionSeq: authority.lastActionSeq || 0,
+    state: jsonProjection(ownerPrivatePlayerSnapshot(player)),
+  };
+  if (!currentMultiplayerBinding(binding)) throw streamCommandFailure("connection-fenced", 4003);
+  binding.snapshotId = publicFrame.snapshotId;
+  binding.lastEventSeq = publicFrame.lastEventSeq;
+  return frame;
+}
+
+function scheduleMultiplayerProjection() {
+  if (!multiplayerAdapter || runtime.session.status !== "running") return;
+  const stats = runtime.multiplayerProjection;
+  stats.accumulator += 1 / Math.max(1, runtime.session.tickHz);
+  const interval = 1 / Math.max(1, runtime.session.snapshotHz);
+  if (stats.accumulator + 1e-9 < interval) return;
+  stats.accumulator = Math.max(0, stats.accumulator - interval);
+  stats.beats += 1;
+  if (stats.inFlight) {
+    stats.skippedBeats += 1;
+    return;
+  }
+  stats.inFlight = true;
+  Promise.resolve(multiplayerAdapter.projectNow())
+    .then((result) => {
+      stats.projectedConnections += Math.max(0, Number(result?.projected) || 0);
+      stats.lastSnapshotId = Math.max(stats.lastSnapshotId, Number(result?.snapshotId) || 0);
+      stats.lastProjectedAt = Date.now();
+      if (result?.error) stats.errors += 1;
+    })
+    .catch(() => {
+      stats.errors += 1;
+    })
+    .finally(() => {
+      stats.inFlight = false;
+    });
+}
+
+function multiplayerDiagnostics() {
+  const projection = runtime.multiplayerProjection;
+  const adapter = multiplayerAdapter?.diagnostics() || null;
+  if (adapter) {
+    projection.maxQueuedBytes = Math.max(projection.maxQueuedBytes, adapter.queuedBytes || 0);
+    projection.maxPendingInboundBytes = Math.max(
+      projection.maxPendingInboundBytes,
+      adapter.maxObservedPendingInboundBytes || 0,
+    );
+  }
+  return {
+    enabled: MULTIPLAYER_WS_ENABLED,
+    state: !MULTIPLAYER_WS_ENABLED ? "disabled" : adapter ? "bound" : "enabled-unbound",
+    adapter,
+    tickets: MULTIPLAYER_WS_ENABLED && multiplayerTicketRegistry
+      ? multiplayerTicketRegistry.diagnostics()
+      : null,
+    projection: {
+      inFlight: projection.inFlight,
+      beats: projection.beats,
+      projectedConnections: projection.projectedConnections,
+      skippedBeats: projection.skippedBeats,
+      errors: projection.errors,
+      admissionErrors: projection.admissionErrors,
+      lastSnapshotId: projection.lastSnapshotId,
+      lastProjectedAt: projection.lastProjectedAt,
+      maxQueuedBytes: projection.maxQueuedBytes,
+      maxPendingInboundBytes: projection.maxPendingInboundBytes,
+    },
+  };
 }
 
 // Command executors deliberately accept parsed data and return plain results so
@@ -6071,6 +6429,7 @@ const server = http.createServer(async (req, res) => {
         },
         idleState,
         shutdownReason: runtime.shutdownReason,
+        multiplayer: multiplayerDiagnostics(),
       });
       return;
     }
@@ -6194,6 +6553,64 @@ const server = http.createServer(async (req, res) => {
         ...journalRead,
         events: filterEventsForPlayer(journalRead.events, playerId),
       });
+      return;
+    }
+
+    if (MULTIPLAYER_WS_ENABLED && req.method === "POST" && req.url === "/multiplayer/ticket") {
+      const body = await readJson(req);
+      // Identity is header-authenticated. The request body selects only the
+      // server-owned ticket flow and cannot smuggle identity or cursor claims.
+      const allowed = new Set(["kind"]);
+      const unsupported = Object.keys(body).find((key) => !allowed.has(key));
+      if (unsupported) {
+        sendJson(res, 400, {
+          ok: false,
+          code: "caller-claims-forbidden",
+          error: "Multiplayer ticket claims are server-owned",
+        });
+        return;
+      }
+      const kind = String(body.kind || "").trim();
+      if (kind !== "admission" && kind !== "resume") {
+        sendJson(res, 400, {
+          ok: false,
+          code: "invalid-ticket-kind",
+          error: "kind must be admission or resume",
+        });
+        return;
+      }
+      const auth = authorizePlayerRequest(req, body, { requireCommandSeq: false });
+      if (!auth.ok) {
+        sendAuthorityError(res, auth);
+        return;
+      }
+      const player = runtime.players.get(auth.authority.playerId);
+      if (!player) {
+        sendJson(res, 404, { ok: false, error: "Unknown client" });
+        return;
+      }
+      const claims = {
+        membershipId: auth.authority.membershipId,
+        playerId: auth.authority.playerId,
+        profileId: currentMultiplayerProfileId(player, auth.authority),
+      };
+      if (kind === "resume") {
+        claims.connectionId = auth.authority.connectionId;
+        claims.connectionEpoch = auth.authority.connectionEpoch;
+      }
+      try {
+        const issued = kind === "resume"
+          ? multiplayerTicketRegistry.issueResume(claims)
+          : multiplayerTicketRegistry.issueAdmission(claims);
+        sendJson(res, 200, { ok: true, ...issued });
+      } catch (error) {
+        const failure = admissionFailure(error);
+        sendJson(res, error?.code === "ticket-capacity-exceeded" ? 429 : 400, {
+          ok: false,
+          code: failure.publicCode,
+          error: "Multiplayer ticket could not be issued",
+        });
+      }
       return;
     }
 
@@ -6487,6 +6904,26 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+if (MULTIPLAYER_WS_ENABLED) {
+  multiplayerAdapter = createSimWebSocketAdapter({
+    server,
+    path: "/stream",
+    heartbeatIntervalMs: MULTIPLAYER_HEARTBEAT_INTERVAL_MS,
+    // Eight live players plus one bounded overlapping resume attempt per
+    // membership. Stable-key replacement immediately fences the old epoch.
+    maxConnections: 16,
+    maxPendingHello: 8,
+    runId: null,
+    redeemHello: redeemMultiplayerHello,
+    revalidateBinding: revalidateMultiplayerBinding,
+    onInput: (binding, frame) => executeStreamInput(binding, frame),
+    onAction: (binding, frame) => rejectStreamAction(binding, frame),
+    buildPublicState: buildPublicMultiplayerState,
+    buildOwnerState: buildOwnerMultiplayerState,
+    onAck: acknowledgeMultiplayerCursor,
+  });
+}
+
 server.on("error", (err) => {
   telemetry.error("runtime.error", { message: err.message });
   console.error(`[${LOG_LABEL}] ${err.message}`);
@@ -6495,21 +6932,23 @@ server.on("error", (err) => {
 });
 
 function shutdown() {
-  if (tickHandle) clearInterval(tickHandle);
+  if (shutdownPromise) return shutdownPromise;
+  stopTickLoop();
   clearTerminalShutdown();
   if (controlPlaneHeartbeat) clearInterval(controlPlaneHeartbeat);
-  Promise.race([
+  shutdownPromise = Promise.race([
     Promise.allSettled([
       Promise.allSettled(Array.from(pendingControlPlaneWrites)),
       controlPlane.unregisterSimInstance({ simInstanceId: SIM_INSTANCE_ID }).catch(() => null),
     ]),
     new Promise((resolve) => setTimeout(resolve, 1200)),
-  ]).finally(() => {
-    server.close(() => {
-      cleanupFiles(PID_FILE, META_FILE);
-      process.exit(0);
-    });
+  ]).then(async () => {
+    if (multiplayerAdapter) await multiplayerAdapter.shutdown();
+    await new Promise((resolve) => server.close(resolve));
+    cleanupFiles(PID_FILE, META_FILE);
+    process.exit(0);
   });
+  return shutdownPromise;
 }
 
 process.on("SIGTERM", shutdown);
