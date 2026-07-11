@@ -17,25 +17,27 @@ does not erase newer committed work.
 
 ## v0.4 Multiplayer Program
 
-**Source status:** Phase 0 trust closure is green; Phase 1 transport integration
-is in progress; research/design is complete.
+**Source status:** Phase 0 trust closure is green; the optional same-process
+Phase 1 WebSocket runtime is integrated and focused-loopback green, but one
+cross-run projection-accounting race remains under a committed corrective
+packet. Research/design is complete.
 
-**Playable status:** not multiplayer-playable yet. Four and eight synthetic
-HTTP clients share one authority and pass identity/privacy/settlement truth,
-but there is no JSON WebSocket adapter, invite UI, WAN failure/reconnect proof,
-or natural multi-human journey.
+**Playable status:** not multiplayer-playable yet. Real 1/4/8 WebSocket clients
+share one authority and pass identity/privacy/input/reset/shutdown truth, but
+reliable gameplay actions, event replay/gap recovery, SimClient/browser
+cutover, invite UI, WAN proof, and a natural multi-human journey remain.
 
 **Current evidence:** `npm run test:multiplayer-structure` and
 `npm run test:multiplayer-authority` pass. The Phase 1
 `npm run test:multiplayer-network` primitive lane also passes. HTTP input and
-inventory now share transport-neutral executors with parity coverage, and
-public snapshots expose a run-scoped authoritative coarse-field revision that
-is stable through reads/reconnects and advances on real field rebuilds. No
-socket is integrated yet. The latest 8-human loopback fixture
-measured 42,474-byte public and 43,761-byte owner snapshot p95 bodies, with a
-1,288-byte private overlay p95. These are Shallows diagnostic measurements,
-not hosted or heavy-sim capacity claims. See
-`docs/v0.4/research/phase0-multiplayer-baseline.md`.
+inventory share transport-neutral executors, public snapshots carry a
+run-scoped field revision, and the optional `/stream` adapter uses the same
+process, port, tick, and authority. The corrected focused baseline held
+`NORMAL` around 9.7 Hz projection and 14.5--14.8 Hz authority for 1/4/8 real
+loopback sockets, with roughly 20--23 KiB public frames and 1--1.6 KiB owner
+overlays. These are local Shallows measurements, not hosted or heavy-sim
+capacity claims. The runtime suites stay outside the final manifest gate until
+the committed projection-lineage correction is implemented and reviewed.
 
 ## v0.3 Candidate
 

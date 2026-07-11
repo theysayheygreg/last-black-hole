@@ -78,7 +78,22 @@
   socket fixture degraded to roughly 12/6 Hz. The packet makes configured
   player/AI maxima healthy by definition, charges completed async projection
   cost into the next overload sample exactly once, and restores a real 15/10
-  Shallows gate instead of accepting an already-degraded target.
+  Hz target for 1/4/8 live socket cohorts.
+- Integrated the optional same-process JSON WebSocket runtime behind
+  `LBH_SIM_WS_ENABLED=true`: authenticated single-use admission/resume
+  tickets, one tick-coupled public plus owner-private projection, bounded
+  sockets/hellos/queues, monotonic continuous input, reset fencing, and
+  ordered adapter-before-HTTP shutdown. Gameplay actions remain explicitly
+  rejected until reliable action/event recovery lands.
+- Corrected overload accounting so declared human and scavenger maxima remain
+  healthy while measured sim plus completed replication CPU still drives
+  degradation. Focused live results held `NORMAL` at approximately 9.7 Hz
+  projection and 14.5--14.8 Hz authority for 1/4/8 clients; average projection
+  work rose from about 3.0 ms at one client to 7.2 ms at eight.
+- Staged a follow-up lineage-fence packet after review found that a delayed
+  projection from an old run could otherwise charge its completion time into
+  a newly reset run. The runtime baseline is not promoted into the manifest as
+  final Phase 1 proof until that race and the cadence tolerance are closed.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

@@ -76,6 +76,26 @@ Singularity that:
 
 ## CodexBar Heartbeat
 
+### Usage checkpoint — 2026-07-11 19:20 UTC
+
+- Primary five-hour usage reached 90%; reset is
+  `2026-07-11T21:07:07Z`.
+- Clean implementation boundary: `76d16b6` followed by the committed
+  corrective packet `009c965` on `codex/v0.4-multiplayer-architecture`.
+- The optional same-process WebSocket runtime is focused-loopback green for
+  real 1/4/8 cohorts. Corrected measurements held `NORMAL` near 10 Hz
+  projection / 15 Hz authority while charging completed per-recipient
+  projection CPU into overload accounting.
+- Independent review found one pre-manifest blocker: an old run's delayed
+  async projection can finish after reset and mutate the new run's accounting.
+  The exact next task is
+  `docs/project/prompts/2026-07-11-agent-phase1-overload-lineage-fence.md`.
+- After that fix: independently review, register adapter/runtime suites in the
+  manifest, document the measured baseline, then implement reliable idempotent
+  actions plus journal replay/gap rebase before SimClient/browser cutover.
+- Do not describe Phase 1 as playable multiplayer yet and do not start a
+  larger slice before the reset/usage continuation check.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`
