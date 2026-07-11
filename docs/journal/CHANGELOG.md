@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-07-11 — v0.4 Phase 0 multiplayer trust closure
+
+- Began Phase 0 implementation with server-created membership and connection
+  ids/epochs, credential rotation on reconnect, immediate stale-connection
+  fencing, and server-only reconnect state rehydration.
+- Split snapshots into public state plus the authenticated owner's private
+  overlay. Retained history stays public-only and exposes one separately
+  stamped current owner state instead of falsifying historical ticks.
+- Made run/profile settlement atomically persistent and exact-retry idempotent,
+  rejects conflicting reuse, and authenticates configured sim-to-control-plane
+  writes without exposing the service token to browser clients.
+- Added deterministic 1/4/8-human evidence and explicit
+  `multiplayer-structure`/`multiplayer-authority` lanes. The latest 8-human
+  loopback pass measured 42,474-byte public and 43,761-byte owner p95 snapshots
+  while 100 result attempts produced one durable outcome.
+- Migrated legacy authority tests to authenticate owner-private reads and
+  replaced the old reconnect-loadout brain fixture with real authoritative
+  inventory actions.
+
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 
 - Forked `codex/v0.4-multiplayer-architecture` from the current v0.3 Ballpark

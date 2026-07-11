@@ -1,5 +1,37 @@
 # Decision Log
 
+## 2026-07-11 — Reconnect rotates connection authority; history stays public
+
+**Decision:** A run membership survives reconnect, but its connection id,
+connection epoch, and command credential rotate immediately; the old
+connection is fenced. Reconnect rehydrates only server state and ignores
+caller-supplied profile, hull, rig, loadout, and consumable mutations. Live
+snapshots are public projections plus only the authenticated owner's private
+overlay. Retained snapshot history is public-only; authenticated history adds
+one separately stamped current `ownerState` instead of copying present private
+state into historical ticks. Result settlement is keyed by `(runId, profileId)`,
+exact-retry idempotent, conflict-rejecting, atomically persisted, and service
+authenticated when the local service token is configured.
+
+**Why:** Membership continuity and connection authority are different
+lifetimes. Preserving a credential across reconnect lets a stale socket keep
+control, while accepting reconnect loadout state turns transport recovery into
+a gameplay mutation API. Grafting current cargo/signal/input onto old snapshots
+would falsify replay time. Idempotent authenticated settlement keeps network
+retry from duplicating progression without moving outcome truth to clients.
+
+**Where it landed:** `scripts/session-registry.cjs`, `scripts/sim-runtime.cjs`,
+`scripts/control-plane-runtime.cjs`, `scripts/control-plane-store.cjs`,
+`scripts/control-plane-client.cjs`, `src/sim/sim-client.js`, the four
+`tests/multiplayer-*.cjs` fixtures, and
+`docs/v0.4/research/phase0-multiplayer-baseline.md`.
+
+**Door status:** Closed for credential-preserving reconnect, caller-authored
+reconnect state, rival-private snapshots, present-state historical overlays,
+and duplicate settlement credit. Open for durable admission claims,
+process-loss resume, per-authority workload identity/lease fencing, and later
+checkpoint/replay recovery.
+
 ## 2026-07-10 — Multiplayer authority is per match and horizontally multiplied
 
 **Decision:** v0.4 keeps one logical single-writer gameplay authority for every

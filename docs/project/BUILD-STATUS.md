@@ -9,10 +9,27 @@
 |---|---|---|
 | Current public/demo | `main` | v0.2 build line for weekend demos, small fixes, and existing Deck deploys |
 | Next candidate | `codex/v0.3-ballpark-roadmap` | v0.3 authority/Ballpark/product candidate; do not merge backward until Greg promotes it |
+| Multiplayer program | `codex/v0.4-multiplayer-architecture` | v0.3-forward branch with Phase 0 trust/proof implementation; not yet a playable internet multiplayer build |
 
 When someone asks “what is the build status,” name the branch and evidence.
 Git activity alone is not a playability verdict, and an old build-health ledger
 does not erase newer committed work.
+
+## v0.4 Multiplayer Program
+
+**Source status:** Phase 0 trust closure in progress; research/design complete.
+
+**Playable status:** not multiplayer-playable yet. Four and eight synthetic
+HTTP clients share one authority and pass identity/privacy/settlement truth,
+but there is no JSON WebSocket adapter, invite UI, WAN failure/reconnect proof,
+or natural multi-human journey.
+
+**Current evidence:** `npm run test:multiplayer-structure` and
+`npm run test:multiplayer-authority` pass. The latest 8-human loopback fixture
+measured 42,474-byte public and 43,761-byte owner snapshot p95 bodies, with a
+1,288-byte private overlay p95. These are Shallows diagnostic measurements,
+not hosted or heavy-sim capacity claims. See
+`docs/v0.4/research/phase0-multiplayer-baseline.md`.
 
 ## v0.3 Candidate
 

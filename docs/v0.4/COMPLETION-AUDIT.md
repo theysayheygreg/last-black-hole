@@ -1,5 +1,18 @@
 # v0.4 Multiplayer Program Completion Audit
 
+## Post-Audit Implementation Update — 2026-07-11
+
+The audit below is the closure snapshot that triggered implementation. Since
+that snapshot, Phase 0 has landed deterministic 1/4/8 authority evidence,
+server-created membership/connection epochs, reconnect rotation and fencing,
+owner-private live projection, semantically public history, authenticated
+idempotent settlement, and explicit `multiplayer-structure` and
+`multiplayer-authority` harness lanes. The research/planning verdict remains
+valid, while the prior statements that all multiplayer-specific lanes and all
+Phase 0 trust work were merely planned are superseded by this update. WSS,
+WAN failure/reconnect, hosted identity/fleet proof, heavy 24/48/96 measurement,
+and a playable four-to-eight-human internet match remain incomplete.
+
 > Audited 2026-07-10 on `codex/v0.4-multiplayer-architecture` through committed
 > tip `11e54ec`, including the economics closure and latest v0.3 forward merge.
 > This audit compares the current repository and local automation

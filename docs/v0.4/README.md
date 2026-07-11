@@ -69,6 +69,8 @@ coordinator owns the integrated documents.
 - `OPEN-DECISIONS.md` — recommended defaults and the product calls Greg owns.
 - `ORCHESTRATION.md` — durable goal prompt, completed lanes, continuation
   order, ownership, and CodexBar heartbeat behavior.
+- `research/phase0-multiplayer-baseline.md` — implemented 1/4/8 trust,
+  privacy, settlement, bytes, latency, tick, and heap evidence.
 
 ## Evidence Standard
 

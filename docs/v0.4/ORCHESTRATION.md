@@ -29,14 +29,16 @@ Singularity that:
 ## Current Checkpoint
 
 - Branch: `codex/v0.4-multiplayer-architecture`.
-- Base: current v0.3 Ballpark integration line at branch creation.
+- Base: the latest v0.3 Ballpark integration line has been merged forward.
 - Integrated docs: `README.md`, `ARCHITECTURE.md`, `ROADMAP.md`,
   `OPEN-DECISIONS.md`.
 - Core research, audits, high-count measurements, performance/architecture,
   and hosting-cost memos are under `research/`.
 - Full manifest-driven core harness passed after the integrated architecture
-  commit.
-- No v0.4 multiplayer implementation code has been authorized or landed.
+  and v0.3 forward merge.
+- Phase 0 implementation has landed 1/4/8 authority evidence, membership and
+  connection epochs, reconnect fencing, owner-private projection, public-only
+  history, authenticated idempotent settlement, and two multiplayer lanes.
 
 ## Completed Independent Lanes
 
@@ -49,14 +51,16 @@ Singularity that:
 - 24/48/96 performance and heavier-sim model.
 - 24/48/96 single-authority architecture pressure test.
 - High-count vendor/packing/egress/compute cost model.
+- Phase 0 membership/privacy/settlement implementation and deterministic
+  1/4/8 baseline.
 
 ## Continuation Order
 
-1. Keep the research recommendation current when Greg resolves an item in
-   `OPEN-DECISIONS.md`.
-2. Before implementation, create a bounded Phase 0 prompt packet from
-   `ROADMAP.md`: trust closure, owner/public schemas, idempotent outcomes,
-   server-created membership/connection epoch, and measured 1/4/8 fixtures.
+1. Finish Phase 0 verification and keep its remaining admission, durable
+   resume, and service-identity gaps explicit.
+2. Start the bounded Phase 1 JSON WSS adapter at existing map clocks, with
+   hello/version, membership binding, heartbeat, bounded queues, latest-wins
+   input, and reliable idempotent action lanes.
 3. Keep the first playable slice JSON WSS at existing map clocks. Do not pull
    binary, AOI, prediction, cloud progression, or 30 Hz forward without its
    preceding evidence gate.

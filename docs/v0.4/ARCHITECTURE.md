@@ -4,6 +4,18 @@
 > `codex/v0.4-multiplayer-architecture`. This is the target design and
 > falsification plan, not a claim that public multiplayer is implemented.
 
+## Implementation Checkpoint
+
+Phase 0 trust closure is now partially implemented on this branch. Current
+HTTP diagnostics prove 1/4/8 shared-run truth, server-issued membership and
+connection epochs, reconnect fencing, owner-private projection, public-only
+history, and authenticated idempotent settlement. At eight humans, the latest
+local run measured a 42,474-byte public snapshot p95 and 43,761-byte owner
+snapshot p95; that full-state shape would still fan out roughly 5.25 MB/s at
+15 snapshots/s. This is why Phase 1 keeps JSON for truth but Phase 4 must earn
+compact deltas before production. See
+[`research/phase0-multiplayer-baseline.md`](research/phase0-multiplayer-baseline.md).
+
 ## Decision
 
 Last Singularity v0.4 should use **one logical single-writer authority instance
@@ -572,5 +584,6 @@ This preserves long-tail/private play without weakening verified sessions.
 - [High-count performance model](research/high-player-count-performance-model.md)
 - [High-count architecture review](research/high-player-count-architecture-review.md)
 - [High-count hosting cost model](research/high-player-count-hosting-cost-model.md)
+- [Phase 0 multiplayer authority baseline](research/phase0-multiplayer-baseline.md)
 - `docs/project/EVE-ARCHITECTURE-RESEARCH.md`
 - `docs/project/LOCAL-PROTOCOL.md`

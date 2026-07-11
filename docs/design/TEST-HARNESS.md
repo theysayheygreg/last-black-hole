@@ -1,7 +1,7 @@
 # Test Harness
 
-> Document revision: v0.3. The Three renderer and authoritative sim are the
-> release validation targets. The original headless-only plan in
+> Document revision: v0.3 release plus v0.4 multiplayer lanes. The Three
+> renderer and authoritative sim are the release validation targets. The original headless-only plan in
 > `AGENT-TESTING.md` is historical context.
 
 ## Position
@@ -159,6 +159,8 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:ui-motion` | Pure Node checks for shared UI motion helpers: reduced-motion resolution, reveal clips, type-on text, command pulses, and directional wipes. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:sim-structure` | v0.3 structural gate for persistent Ballpark identity/lifecycle, required relevance/pickup/portal queries, toroidal geometry and swept contacts, movement fixtures, protocol v2, bounded growth, journal, and live snapshot rebase. |
+| `npm run test:multiplayer-structure` | v0.4 membership/connection fencing, owner-private projection, public history, and authenticated idempotent settlement. |
+| `npm run test:multiplayer-authority` | v0.4 structure plus deterministic 1/4/8-human shared truth, privacy, bytes, tick, heap, and 100x result replay evidence. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:agent-eval` | Natural Shallows product journey plus 1280x800 visual/readability evidence before Greg reviews feel and taste. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
@@ -184,6 +186,8 @@ The underlying runner is manifest-driven:
 ```sh
 node tests/run-all.cjs --lane=core --renderer=three
 node tests/run-all.cjs --lane=sim-structure --renderer=three
+node tests/run-all.cjs --lane=multiplayer-structure --renderer=three
+node tests/run-all.cjs --lane=multiplayer-authority --renderer=three
 node tests/run-all.cjs --lane=visual --renderer=three
 node tests/run-all.cjs --lane=agent-eval --renderer=three
 node tests/run-all.cjs --lane=browser --renderer=three
@@ -245,6 +249,8 @@ local readability matters more than making every pixel bright.
 | `browser` | headless browser checks through `__TEST_API` | aesthetic approval |
 | `authority` | sim/control-plane/remote protocol health | local-only visual questions |
 | `sim-structure` | persistent Ballpark identity, required spatial queries, world geometry/sweeps, movement fixtures, protocol v2, bounded growth, journal, and snapshot rebase | browser visuals or playfeel |
+| `multiplayer-structure` | membership, connection fencing, privacy projection, public history, and settlement idempotency/authentication | WAN feel, hosted capacity, or natural multiplayer journeys |
+| `multiplayer-authority` | structure plus deterministic 1/4/8-human truth and baseline measurements | loss/reorder/slow-reader soak or a claim of public playability |
 | `visual` | deterministic renderer fixtures and screenshot manifests | gameplay balance |
 | `playtest` | synthetic real-flow menu/input coverage | final UX judgment |
 | `agent-eval` | fresh no-debug Shallows journey, second-run continuity, screenshots, and a narrative report | exhaustive authority coverage or subjective art approval |

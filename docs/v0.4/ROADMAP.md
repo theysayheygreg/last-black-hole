@@ -21,6 +21,15 @@ reconnect, atomic progression, and movement that Greg accepts.
 Goal: make the current v0.3 authority safe enough to test and measurable at
 1/4/8 clients without redesigning its transport or persistence.
 
+**Implementation checkpoint — 2026-07-11:** the deterministic 1/4/8 fixture,
+server-created membership/connection epochs, reconnect credential rotation,
+old-connection fencing, owner/public live projection, public-only history with
+separate current owner state, 100x idempotent settlement, and configured
+sim-to-control-plane service authentication are implemented. The two new
+`multiplayer-structure` and `multiplayer-authority` lanes pass. Non-host
+admission claims, durable process-loss resume, per-authority service identity,
+and WAN/queue evidence remain open.
+
 - Add a deterministic multi-client fixture for 1/4/8 humans.
 - Record current snapshot fields, bytes, encode time, tick cost, heap, and
   result replay behavior.
