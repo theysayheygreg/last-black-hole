@@ -13,6 +13,8 @@ const DEFAULTS = Object.freeze({
   maxConnections: 128,
   maxPendingHello: 32,
   maxPendingInbound: 64,
+  maxPendingInboundBytes: 512 * 1024,
+  maxPendingInboundBytesTotal: 8 * 1024 * 1024,
 });
 
 function positiveInteger(value, fallback, label) {
@@ -104,6 +106,16 @@ function normalizeAdapterOptions(options) {
     maxConnections: positiveInteger(options.maxConnections, DEFAULTS.maxConnections, "maxConnections"),
     maxPendingHello: positiveInteger(options.maxPendingHello, DEFAULTS.maxPendingHello, "maxPendingHello"),
     maxPendingInbound: positiveInteger(options.maxPendingInbound, DEFAULTS.maxPendingInbound, "maxPendingInbound"),
+    maxPendingInboundBytes: positiveInteger(
+      options.maxPendingInboundBytes,
+      DEFAULTS.maxPendingInboundBytes,
+      "maxPendingInboundBytes",
+    ),
+    maxPendingInboundBytesTotal: positiveInteger(
+      options.maxPendingInboundBytesTotal,
+      DEFAULTS.maxPendingInboundBytesTotal,
+      "maxPendingInboundBytesTotal",
+    ),
     sweepIntervalMs: Math.min(
       DEFAULTS.sweepIntervalMs,
       positiveInteger(options.sweepIntervalMs, DEFAULTS.sweepIntervalMs, "sweepIntervalMs"),
@@ -131,6 +143,8 @@ function createConnectionState({ ws, queue, generation, timestamp, heartbeatInte
     abortController: new AbortController(),
     pendingSends: 0,
     pendingInbound: 0,
+    pendingInboundBytes: 0,
+    inboundItems: new Set(),
     inboundTail: Promise.resolve(),
     backpressuredSince: null,
     heartbeatIntervalMs,
@@ -143,7 +157,15 @@ function createConnectionState({ ws, queue, generation, timestamp, heartbeatInte
 }
 
 function summarizeConnections(connections) {
-  const summary = { bound: 0, queuedMessages: 0, queuedBytes: 0, backpressured: 0, pendingInbound: 0, closing: 0 };
+  const summary = {
+    bound: 0,
+    queuedMessages: 0,
+    queuedBytes: 0,
+    backpressured: 0,
+    pendingInbound: 0,
+    pendingInboundBytes: 0,
+    closing: 0,
+  };
   for (const state of connections) {
     const status = state.queue.status();
     if (state.bound) summary.bound += 1;
@@ -151,6 +173,7 @@ function summarizeConnections(connections) {
     summary.queuedBytes += status.queuedBytes;
     if (status.backpressured) summary.backpressured += 1;
     summary.pendingInbound += state.pendingInbound;
+    summary.pendingInboundBytes += state.pendingInboundBytes;
     if (state.closing) summary.closing += 1;
   }
   return summary;
@@ -231,20 +254,64 @@ function createLifecycleGuards({ lifecycle, getGeneration, isClosed }) {
   return { callbackContext, stateIsLive };
 }
 
-function enqueueBoundedInbound({ state, raw, isBinary, maxPendingInbound, onOverflow, onFrame, onError, onDepth }) {
+function rawByteLength(raw) {
+  if (typeof raw === "string") return Buffer.byteLength(raw, "utf8");
+  if (Buffer.isBuffer(raw)) return raw.byteLength;
+  if (ArrayBuffer.isView(raw)) return raw.byteLength;
+  if (raw instanceof ArrayBuffer) return raw.byteLength;
+  return Buffer.byteLength(String(raw), "utf8");
+}
+
+function releasePendingInbound(state) {
+  for (const item of [...state.inboundItems]) item.release();
+}
+
+function enqueueBoundedInbound({
+  state,
+  raw,
+  isBinary,
+  maxPendingInbound,
+  maxPendingInboundBytes,
+  maxPendingInboundBytesTotal,
+  getPendingInboundBytesTotal,
+  onBytes,
+  onOverflow,
+  onFrame,
+  onError,
+  onDepth,
+  onByteDepth,
+}) {
   if (state.closing || state.cleaned) return false;
-  if (state.pendingInbound >= maxPendingInbound) {
+  const bytes = rawByteLength(raw);
+  if (
+    state.pendingInbound >= maxPendingInbound
+    || state.pendingInboundBytes + bytes > maxPendingInboundBytes
+    || getPendingInboundBytesTotal() + bytes > maxPendingInboundBytesTotal
+  ) {
     onOverflow();
     return false;
   }
   state.pendingInbound += 1;
+  state.pendingInboundBytes += bytes;
+  onBytes(bytes);
   onDepth(state.pendingInbound);
+  onByteDepth(state.pendingInboundBytes, getPendingInboundBytesTotal());
+  const item = {
+    released: false,
+    release() {
+      if (item.released) return;
+      item.released = true;
+      state.inboundItems.delete(item);
+      state.pendingInbound = Math.max(0, state.pendingInbound - 1);
+      state.pendingInboundBytes = Math.max(0, state.pendingInboundBytes - bytes);
+      onBytes(-bytes);
+    },
+  };
+  state.inboundItems.add(item);
   state.inboundTail = state.inboundTail
     .then(() => onFrame(raw, isBinary))
     .catch(onError)
-    .finally(() => {
-      state.pendingInbound = Math.max(0, state.pendingInbound - 1);
-    });
+    .finally(item.release);
   return true;
 }
 
@@ -263,5 +330,6 @@ module.exports = {
   rejectUpgrade,
   createUpgradeHandler,
   createLifecycleGuards,
+  releasePendingInbound,
   enqueueBoundedInbound,
 };

@@ -22,6 +22,7 @@ const {
   assertOwnerProjection,
   createUpgradeHandler,
   createLifecycleGuards,
+  releasePendingInbound,
   enqueueBoundedInbound,
 } = require("./sim-ws-adapter-guards.cjs");
 
@@ -30,7 +31,8 @@ function createSimWebSocketAdapter(options = {}) {
   const {
     server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
     onPong, onAck, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
-    maxConnections, maxPendingHello, maxPendingInbound, sweepIntervalMs, queueOptions,
+    maxConnections, maxPendingHello, maxPendingInbound, maxPendingInboundBytes, maxPendingInboundBytesTotal,
+    sweepIntervalMs, queueOptions,
   } = config;
   const connections = new Set();
   const byBindingKey = new Map();
@@ -45,6 +47,8 @@ function createSimWebSocketAdapter(options = {}) {
   let rejectedConnections = 0;
   let rejectedPendingHello = 0;
   let maxObservedPendingInbound = 0;
+  let pendingInboundBytesTotal = 0;
+  let maxObservedPendingInboundBytes = 0;
 
   const handleUpgrade = createUpgradeHandler({
     wss,
@@ -125,6 +129,7 @@ function createSimWebSocketAdapter(options = {}) {
   function cleanup(state) {
     if (state.cleaned) return;
     state.cleaned = true;
+    releasePendingInbound(state);
     state.abortController.abort();
     clearTimeout(state.helloTimer);
     if (state.helloPending) {
@@ -350,7 +355,14 @@ function createSimWebSocketAdapter(options = {}) {
         raw,
         isBinary,
         maxPendingInbound,
+        maxPendingInboundBytes,
+        maxPendingInboundBytesTotal,
+        getPendingInboundBytesTotal: () => pendingInboundBytesTotal,
+        onBytes: (delta) => { pendingInboundBytesTotal = Math.max(0, pendingInboundBytesTotal + delta); },
         onDepth: (depth) => { maxObservedPendingInbound = Math.max(maxObservedPendingInbound, depth); },
+        onByteDepth: (_socketBytes, totalBytes) => {
+          maxObservedPendingInboundBytes = Math.max(maxObservedPendingInboundBytes, totalBytes);
+        },
         onFrame: (frameRaw, binary) => processInboundFrame(state, frameRaw, binary),
         onError: (error) => failConnection(state, error),
         onOverflow: () => {
@@ -450,6 +462,26 @@ function createSimWebSocketAdapter(options = {}) {
     return enqueueReliableState(state, frame);
   }
 
+  async function sendRebase(binding, frame) {
+    const key = bindingKeyFor(binding);
+    const state = key ? byBindingKey.get(key) : null;
+    if (!state) return { accepted: false, action: "ignore", reason: "binding-not-connected" };
+    try {
+      encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
+    } catch (error) {
+      return { accepted: false, action: "reject", reason: publicError(error, "rebase-frame-invalid").code };
+    }
+    if (!(await isBindingCurrent(state, "private-rebase-send-final"))) {
+      if (!stateIsLive(state)) return { accepted: false, action: "ignore", reason: "connection-not-live" };
+      state.closing = true;
+      sendApplicationClose(state, 4003, "connection fenced", true);
+      return { accepted: false, action: "disconnect", reason: "connection-fenced" };
+    }
+    state.queue.reset();
+    if (!sendFrame(state, frame)) return { accepted: false, action: "disconnect", reason: "send-failed" };
+    return { accepted: true, action: "sent" };
+  }
+
   async function broadcastReliable(frameFactory) {
     const results = [];
     for (const state of connections) {
@@ -467,6 +499,14 @@ function createSimWebSocketAdapter(options = {}) {
           : frameFactory;
         if (!stateIsLive(state)) {
           results.push({ accepted: false, action: "ignore", reason: "connection-not-live" });
+        } else if (frame && !(await isBindingCurrent(state, "private-reliable-send-final"))) {
+          if (!stateIsLive(state)) {
+            results.push({ accepted: false, action: "ignore", reason: "connection-not-live" });
+          } else {
+            state.closing = true;
+            sendApplicationClose(state, 4003, "connection fenced", true);
+            results.push({ accepted: false, action: "disconnect", reason: "connection-fenced" });
+          }
         } else if (frame) {
           results.push(enqueueReliableState(state, frame));
         }
@@ -548,9 +588,12 @@ function createSimWebSocketAdapter(options = {}) {
       ...summary,
       pendingHello,
       maxObservedPendingInbound,
+      maxObservedPendingInboundBytes,
       maxConnections,
       maxPendingHello,
       maxPendingInbound,
+      maxPendingInboundBytes,
+      maxPendingInboundBytesTotal,
       backpressureTimeoutMs,
       closeGraceMs,
       rejectedConnections,
@@ -588,6 +631,8 @@ function createSimWebSocketAdapter(options = {}) {
     project: projectNow,
     projectNow,
     enqueueReliable,
+    rebase: sendRebase,
+    sendRebase,
     broadcastReliable,
     bindingKeyFor,
     rotateRun,

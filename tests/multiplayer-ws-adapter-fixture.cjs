@@ -163,6 +163,8 @@ async function createHarness(options = {}) {
     maxConnections: options.maxConnections,
     maxPendingHello: options.maxPendingHello,
     maxPendingInbound: options.maxPendingInbound,
+    maxPendingInboundBytes: options.maxPendingInboundBytes,
+    maxPendingInboundBytesTotal: options.maxPendingInboundBytesTotal,
     queueOptions: options.queueOptions,
     async redeemHello(frame, context) {
       redemptionCount += 1;

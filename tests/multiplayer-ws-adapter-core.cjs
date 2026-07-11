@@ -75,6 +75,8 @@ async function run() {
   await runner.run("bounds total connections and pending hellos and recovers capacity after cleanup", async () => {
     assert(DEFAULTS.maxConnections === 128 && DEFAULTS.maxPendingHello === 32 && DEFAULTS.maxPendingInbound === 64,
       "Production defaults should expose explicit hard connection, hello, and inbound caps");
+    assert(DEFAULTS.maxPendingInboundBytes === 512 * 1024 && DEFAULTS.maxPendingInboundBytesTotal === 8 * 1024 * 1024,
+      "Production defaults should bound retained inbound bytes per socket and per adapter");
     assert(DEFAULTS.backpressureTimeoutMs === 2_000, "Production no-progress default should match the 2s plan bound");
     const connectionHarness = await createHarness({ maxConnections: 1, maxPendingHello: 1, helloTimeoutMs: 40 });
     try {
@@ -197,6 +199,74 @@ async function run() {
       assert(harness.adapter.diagnostics().maxObservedPendingInbound <= 4, "Raw-frame tail must never exceed configured cap");
       gate.resolve();
       await waitFor(() => harness.adapter.diagnostics().pendingInbound === 0, { label: "inbound tail cleanup" });
+    } finally {
+      gate.resolve();
+      await harness.close();
+    }
+  });
+
+  await runner.run("bounds inbound bytes per socket and recovers accounting after overflow", async () => {
+    const gate = deferred();
+    const large = actionFrame(1, 1);
+    large.payload = { marker: "x".repeat(1_000) };
+    const wire = JSON.stringify(large);
+    const wireBytes = Buffer.byteLength(wire, "utf8");
+    const harness = await createHarness({
+      maxPendingInbound: 64,
+      maxPendingInboundBytes: wireBytes + 16,
+      beforeAction: async () => gate.promise,
+    });
+    try {
+      const client = await harness.admit("byte-socket");
+      client.ws.send(wire);
+      await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === wireBytes, {
+        label: "first retained socket bytes",
+      });
+      client.ws.send(wire);
+      await waitFor(() => client.close.code !== null, { label: "per-socket byte overflow close" });
+      assert(client.close.code === 1013 && nextFrame(client.messages, "close")?.code === 4008,
+        "Per-socket byte overflow should use retry-later transport plus codec close");
+      await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === 0, {
+        label: "per-socket byte accounting recovery",
+      });
+      assert(harness.adapter.diagnostics().maxObservedPendingInbound <= 1,
+        "Byte overflow test must not depend on the inbound count cap");
+    } finally {
+      gate.resolve();
+      await harness.close();
+    }
+  });
+
+  await runner.run("bounds aggregate inbound bytes across sockets and releases the match budget", async () => {
+    const gate = deferred();
+    const large = actionFrame(1, 1);
+    large.payload = { marker: "y".repeat(1_000) };
+    const wire = JSON.stringify(large);
+    const wireBytes = Buffer.byteLength(wire, "utf8");
+    const harness = await createHarness({
+      maxPendingInbound: 64,
+      maxPendingInboundBytes: wireBytes * 2,
+      maxPendingInboundBytesTotal: wireBytes + 16,
+      beforeAction: async () => gate.promise,
+    });
+    try {
+      const first = await harness.admit("byte-total-a");
+      const second = await harness.admit("byte-total-b");
+      first.ws.send(wire);
+      await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === wireBytes, {
+        label: "first retained aggregate bytes",
+      });
+      second.ws.send(wire);
+      await waitFor(() => second.close.code !== null, { label: "aggregate byte overflow close" });
+      assert(second.close.code === 1013 && nextFrame(second.messages, "close")?.code === 4008,
+        "Match-wide byte overflow should reject only the socket that exceeds the cap");
+      assert(harness.adapter.diagnostics().pendingInboundBytes === wireBytes,
+        "Rejected aggregate bytes must never enter retained accounting");
+      gate.resolve();
+      await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === 0, {
+        label: "aggregate byte budget release",
+      });
+      assert(first.close.code === null, "A within-budget peer should remain connected after aggregate rejection");
     } finally {
       gate.resolve();
       await harness.close();
@@ -452,6 +522,63 @@ async function run() {
         "Invalid callback output should become a bounded protocol error and close");
     } finally {
       await invalidCallbackHarness.close();
+    }
+  });
+
+  await runner.run("final-revalidates authority after an awaited reliable broadcast factory", async () => {
+    const gate = deferred();
+    let factoryStarted = false;
+    const harness = await createHarness();
+    try {
+      const client = await harness.admit("broadcast-rotation");
+      const pending = harness.adapter.broadcastReliable(async () => {
+        factoryStarted = true;
+        await gate.promise;
+        return eventFrame("run-a", 1, "must-not-cross-authority-rotation");
+      });
+      await waitFor(() => factoryStarted, { label: "delayed reliable factory" });
+      client.binding.current = false;
+      gate.resolve();
+      const [result] = await pending;
+      assert(result.action === "disconnect" && result.reason === "connection-fenced",
+        "A post-factory authority rotation must fence the old epoch");
+      await waitFor(() => client.close.code !== null, { label: "broadcast authority fence close" });
+      assert(client.close.code === 4003, "The stale broadcast recipient should close as fenced");
+      assert(!client.messages.some((frame) => frame.type === "event" && frame.payload?.marker === "must-not-cross-authority-rotation"),
+        "No reliable event may cross an authority rotation that happened during the factory await");
+    } finally {
+      gate.resolve();
+      await harness.close();
+    }
+  });
+
+  await runner.run("sends explicit rebases only to current bindings and clears their reliable window", async () => {
+    const harness = await createHarness();
+    try {
+      const client = await harness.admit("explicit-rebase");
+      await harness.adapter.enqueueReliable(client.binding, eventFrame("run-a", 1, "retained-before-rebase"));
+      await waitFor(() => harness.adapter.diagnostics().queuedMessages === 1, { label: "pre-rebase reliable retention" });
+      const frame = { type: "rebase", runId: "run-a", reason: "event-gap", snapshotId: 9, lastEventSeq: 8 };
+      const result = await harness.adapter.sendRebase(client.binding, frame);
+      assert(result.accepted && result.action === "sent", "Current binding should receive an explicit rebase");
+      assert(harness.adapter.diagnostics().queuedMessages === 0,
+        "Explicit rebase should reset the socket reliable window before sending");
+      await waitFor(
+        () => client.messages.some((message) => message.type === "rebase" && message.reason === "event-gap"),
+        { label: "explicit event-gap rebase" },
+      );
+
+      client.binding.current = false;
+      const stale = await harness.adapter.rebase(client.binding, {
+        type: "rebase", runId: "run-a", reason: "server-recovery", snapshotId: 10, lastEventSeq: 9,
+      });
+      assert(stale.action === "disconnect" && stale.reason === "connection-fenced",
+        "A stale binding must be fenced instead of receiving a rebase");
+      await waitFor(() => client.close.code !== null, { label: "stale rebase binding close" });
+      assert(!client.messages.some((message) => message.type === "rebase" && message.reason === "server-recovery"),
+        "A stale binding must not receive the requested rebase frame");
+    } finally {
+      await harness.close();
     }
   });
 
