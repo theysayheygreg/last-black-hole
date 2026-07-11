@@ -41,6 +41,10 @@
   single-use replay tombstones, run rotation/reset invalidation, constant-time
   digest matching, injected-clock tests, and secret-free diagnostics. HTTP/WSS
   issuance and redemption remain authority-integration work.
+- Verified the v0.4 control loop across a real five-hour CodexBar reset. The
+  branch stayed clean at `76d1dde`; post-reset work resumed at 5% usage with
+  executor parity exclusively owning the sim runtime and WebSocket packaging
+  plus field revision proceeding as non-conflicting read-only audits.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

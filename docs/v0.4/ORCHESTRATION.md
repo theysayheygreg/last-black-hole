@@ -76,6 +76,23 @@ Singularity that:
 
 ## CodexBar Heartbeat
 
+### Post-reset continuation — 2026-07-11 17:50 UTC
+
+- The prior five-hour window reset successfully after the durable `76d1dde`
+  checkpoint. The first verified post-reset read reported 5% primary usage and
+  a new reset at `2026-07-11T21:07:07Z`.
+- Branch remained clean at `76d1dde` on
+  `codex/v0.4-multiplayer-architecture`; no shared-runtime work leaked across
+  the exhausted window.
+- Executor parity was dispatched with exclusive ownership of
+  `scripts/sim-runtime.cjs` and `tests/multiplayer-executor-parity.cjs`.
+- WebSocket dependency/package staging and authority field revision were
+  dispatched as read-only audits. Field-revision runtime edits remain gated on
+  the executor commit, so no two agents own the sim runtime concurrently.
+- This proves the active goal continued across an actual five-hour reset. It
+  does not prove the separately installed 30-minute scheduler heartbeat fired;
+  that still requires a logged automation submission while the thread is idle.
+
 ### Usage checkpoint — 2026-07-11 07:45 UTC
 
 - Primary five-hour usage: 90%.
