@@ -11,6 +11,12 @@ const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
 const HUMAN_COUNTS = [1, 4, 8];
 const SNAPSHOT_ROUNDS = 6;
 const RESULT_REPLAY_COUNT = 100;
+const PRIVATE_PLAYER_KEYS = [
+  "profileId", "rigLevels", "abilityState", "deltaV", "deltaVMax", "deltaVRatio",
+  "lastInputSeq", "lastInputBrake", "pendingSlingshotEdgeCount", "cargo", "cargoCount",
+  "equipped", "consumables", "activeEffects", "effectState", "portalInteraction", "signal",
+  "controlDebuff",
+];
 
 function percentile(values, fraction) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -77,10 +83,59 @@ function stableMembership(snapshot) {
     .filter((player) => !player.isAI)
     .map((player) => ({
       clientId: player.clientId,
-      profileId: player.profileId,
-      lastInputSeq: player.lastInputSeq,
+      name: player.name,
+      hullType: player.hullType,
+      status: player.status,
     }))
     .sort((a, b) => a.clientId.localeCompare(b.clientId));
+}
+
+function publicPlayerProjection(player) {
+  const projected = { ...player };
+  for (const key of PRIVATE_PLAYER_KEYS) delete projected[key];
+  if (projected.slingshot) {
+    projected.slingshot = { ...projected.slingshot };
+    delete projected.slingshot.energy;
+    delete projected.slingshot.chainCount;
+    delete projected.slingshot.engageRadius;
+  }
+  return projected;
+}
+
+function publicSnapshotProjection(snapshot) {
+  return {
+    ...snapshot,
+    players: snapshot.players.map(publicPlayerProjection),
+  };
+}
+
+function assertPublicPlayer(player, label) {
+  for (const key of PRIVATE_PLAYER_KEYS) {
+    assert(!Object.prototype.hasOwnProperty.call(player, key), `${label} leaked private key '${key}'`);
+  }
+  assert(!Object.prototype.hasOwnProperty.call(player?.slingshot || {}, "energy"),
+    `${label} leaked private slingshot energy`);
+  assert(!Object.prototype.hasOwnProperty.call(player?.slingshot || {}, "chainCount"),
+    `${label} leaked private slingshot chain state`);
+  assert(!Object.prototype.hasOwnProperty.call(player?.slingshot || {}, "engageRadius"),
+    `${label} leaked private slingshot engage radius`);
+}
+
+function firstDifference(left, right, path = "snapshot") {
+  if (Object.is(left, right)) return null;
+  if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {
+    return `${path}: ${JSON.stringify(left)} !== ${JSON.stringify(right)}`;
+  }
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.join(",") !== rightKeys.join(",")) {
+    return `${path} keys: ${leftKeys.join(",")} !== ${rightKeys.join(",")}`;
+  }
+  for (const key of leftKeys) {
+    const difference = firstDifference(left[key], right[key], `${path}.${key}`);
+    if (difference) return difference;
+  }
+  return null;
 }
 
 async function waitFor(predicate, { timeoutMs = 4000, intervalMs = 25 } = {}) {
@@ -111,6 +166,25 @@ async function waitForProfileResult(profileId, runId, deathsBefore) {
 function reportExpectedGap(label, present, detail) {
   const state = present == null ? "NOT-EXERCISED" : present ? "EXPECTED-FAIL" : "RESOLVED";
   console.log(`        ${state}: ${label}${detail ? ` — ${detail}` : ""}`);
+}
+
+async function readAlignedViews(runId, authorities) {
+  return waitFor(async () => {
+    const [publicView, ...ownerViews] = await Promise.all([
+      request(`/snapshot?runId=${encodeURIComponent(runId)}`),
+      ...authorities.map((authority) => request(`/snapshot?runId=${encodeURIComponent(runId)}`, {
+        authority,
+      })),
+    ]);
+    const views = [publicView, ...ownerViews];
+    const snapshotIds = new Set(views.map((view) => view.body.snapshotId));
+    return {
+      ok: views.every((view) => view.status === 200 && view.body.runId === runId) && snapshotIds.size === 1,
+      value: { publicView, ownerViews },
+      statuses: views.map((view) => view.status),
+      snapshotIds: [...snapshotIds],
+    };
+  });
 }
 
 async function runScenario(humanCount) {
@@ -185,59 +259,71 @@ async function runScenario(humanCount) {
         `Human ${index + 1}/${humanCount} input acknowledgement diverged`);
     });
 
-    const settledSnapshot = await waitFor(async () => {
-      const response = await request("/snapshot");
-      const membership = stableMembership(response.body);
+    const settledViews = await waitFor(async () => {
+      const aligned = await readAlignedViews(runId, joins);
+      const membership = stableMembership(aligned.publicView.body);
       return {
-        ok: response.body.runId === runId &&
+        ok: aligned.publicView.body.runId === runId &&
           membership.length === humanCount &&
-          membership.every((player) => player.lastInputSeq === 1),
-        value: response,
-        runId: response.body.runId,
+          aligned.ownerViews.every((view, index) => {
+            const owner = view.body.players.find((player) => player.clientId === joins[index].playerId);
+            return owner?.lastInputSeq === 1;
+          }),
+        value: aligned,
+        runId: aligned.publicView.body.runId,
         membership,
       };
     });
     const expectedMembership = fixtures.map((fixture) => fixture.clientId).sort();
-    assert(stableMembership(settledSnapshot.body).map((player) => player.clientId).join(",") === expectedMembership.join(","),
+    assert(stableMembership(settledViews.publicView.body).map((player) => player.clientId).join(",") === expectedMembership.join(","),
       "Authoritative membership did not contain the exact expected humans");
 
     const baselineHealth = await request("/health");
     const sampleStarted = performance.now();
-    const samples = [];
+    const publicSamples = [];
+    const ownerSamples = [];
+    const ownerOverlayBytes = [];
     for (let roundIndex = 0; roundIndex < SNAPSHOT_ROUNDS; roundIndex++) {
-      const clientViews = await Promise.all(joins.map(() => request("/snapshot")));
-      for (const view of clientViews) {
-        assert(view.status === 200 && view.body.runId === runId, "A client view left the shared run");
-        assert(JSON.stringify(stableMembership(view.body)) === JSON.stringify(stableMembership(settledSnapshot.body)),
-          "Clients disagreed on stable membership or accepted input truth");
-        samples.push(view);
+      const { publicView, ownerViews } = await readAlignedViews(runId, joins);
+      assert(!Object.prototype.hasOwnProperty.call(publicView.body.session, "hostProfileId"),
+        "Public session projection leaked host profile identity");
+      for (const player of publicView.body.players) assertPublicPlayer(player, "public player");
+      const publicJson = JSON.stringify(publicView.body);
+      for (const fixture of fixtures) {
+        assert(!publicJson.includes(fixture.profileId) && !publicJson.includes(fixture.secretItemId),
+          `Public snapshot leaked ${fixture.clientId} profile or loadout identity`);
       }
+
+      ownerViews.forEach((view, ownerIndex) => {
+        const projectionDifference = firstDifference(publicSnapshotProjection(view.body), publicView.body);
+        assert(!projectionDifference,
+          `Owner ${ownerIndex + 1} disagreed with the aligned shared public snapshot: ${projectionDifference}`);
+        const privatePlayers = view.body.players.filter((player) =>
+          Object.prototype.hasOwnProperty.call(player, "profileId")
+        );
+        assert(privatePlayers.length === 1 && privatePlayers[0].clientId === joins[ownerIndex].playerId,
+          `Owner ${ownerIndex + 1} view contained another player's private overlay`);
+        const owner = privatePlayers[0];
+        assert(owner.profileId === fixtures[ownerIndex].profileId && owner.lastInputSeq === 1,
+          `Owner ${ownerIndex + 1} did not receive its own profile/input truth`);
+        assert(owner.equipped.some((item) => item?.id === fixtures[ownerIndex].secretItemId),
+          `Owner ${ownerIndex + 1} did not receive its private loadout marker`);
+        for (const rival of view.body.players.filter((player) => player.clientId !== owner.clientId)) {
+          assertPublicPlayer(rival, `rival in owner ${ownerIndex + 1} view`);
+        }
+      });
+
+      assert(JSON.stringify(stableMembership(publicView.body)) === JSON.stringify(stableMembership(settledViews.publicView.body)),
+        "Aligned views disagreed on stable public membership truth");
+      publicSamples.push(publicView);
+      ownerSamples.push(...ownerViews);
+      ownerOverlayBytes.push(...ownerViews.map((view) => view.bytes - publicView.bytes));
       await sleep(35);
     }
     const finalHealth = await request("/health");
     const sampleElapsedSec = Math.max(0.001, (performance.now() - sampleStarted) / 1000);
     const observedTickHz = (finalHealth.body.tick - baselineHealth.body.tick) / sampleElapsedSec;
 
-    const sharedSnapshot = samples[samples.length - 1].body;
-    const serializedSnapshot = JSON.stringify(sharedSnapshot);
-    const exposedPrivateFields = sharedSnapshot.players
-      .filter((player) => !player.isAI)
-      .some((player) => player.profileId && (
-        Array.isArray(player.cargo) ||
-        Array.isArray(player.equipped) ||
-        Array.isArray(player.consumables) ||
-        player.signal ||
-        player.portalInteraction !== undefined ||
-        player.deltaV !== undefined
-      ));
-    const exposedRivalMarker = humanCount > 1 && fixtures.some((fixture) =>
-      serializedSnapshot.includes(fixture.secretItemId)
-    );
-    reportExpectedGap(
-      "owner-private projection is not implemented",
-      exposedPrivateFields,
-      "the unauthenticated shared snapshot contains exact profile/loadout/cargo/signal/portal/delta-v fields",
-    );
     reportExpectedGap(
       "server-created membership is not required for non-host joins",
       humanCount > 1 ? true : null,
@@ -287,19 +373,27 @@ async function runScenario(humanCount) {
     assert(persisted.recentRuns.filter((run) => run.runId === runId).length === 1,
       "100 outcome attempts must produce one durable run record");
 
-    const snapshotBytes = samples.map((sample) => sample.bytes);
-    const snapshotLatencies = samples.map((sample) => sample.elapsedMs);
+    const publicSnapshotBytes = publicSamples.map((sample) => sample.bytes);
+    const ownerSnapshotBytes = ownerSamples.map((sample) => sample.bytes);
+    const publicSnapshotLatencies = publicSamples.map((sample) => sample.elapsedMs);
+    const ownerSnapshotLatencies = ownerSamples.map((sample) => sample.elapsedMs);
     const heapStart = baselineHealth.body.process.memory.heapUsed;
     const heapEnd = finalHealth.body.process.memory.heapUsed;
     const metrics = {
       humans: humanCount,
-      runMembership: stableMembership(settledSnapshot.body).length,
+      runMembership: stableMembership(settledViews.publicView.body).length,
       inputReceipts: inputReceipts.length,
-      snapshotSamples: samples.length,
-      snapshotBytesP50: percentile(snapshotBytes, 0.50),
-      snapshotBytesP95: percentile(snapshotBytes, 0.95),
-      snapshotResponseMsP50: round(percentile(snapshotLatencies, 0.50), 3),
-      snapshotResponseMsP95: round(percentile(snapshotLatencies, 0.95), 3),
+      publicSnapshotSamples: publicSamples.length,
+      ownerSnapshotSamples: ownerSamples.length,
+      publicSnapshotBytesP50: percentile(publicSnapshotBytes, 0.50),
+      publicSnapshotBytesP95: percentile(publicSnapshotBytes, 0.95),
+      ownerSnapshotBytesP50: percentile(ownerSnapshotBytes, 0.50),
+      ownerSnapshotBytesP95: percentile(ownerSnapshotBytes, 0.95),
+      ownerOverlayBytesP95: percentile(ownerOverlayBytes, 0.95),
+      publicSnapshotResponseMsP50: round(percentile(publicSnapshotLatencies, 0.50), 3),
+      publicSnapshotResponseMsP95: round(percentile(publicSnapshotLatencies, 0.95), 3),
+      ownerSnapshotResponseMsP50: round(percentile(ownerSnapshotLatencies, 0.50), 3),
+      ownerSnapshotResponseMsP95: round(percentile(ownerSnapshotLatencies, 0.95), 3),
       observedTickHz: round(observedTickHz),
       targetTickHz: finalHealth.body.session.tickHz,
       ballparkLastRebuildMs: round(finalHealth.body.ballpark?.lastRebuildMs, 3),
@@ -308,8 +402,8 @@ async function runScenario(humanCount) {
       resultReplayAttempts: RESULT_REPLAY_COUNT,
       durableDeathDelta: persisted.profile.totalDeaths - deathsBefore,
       durableRunRecordsForRun: persisted.recentRuns.filter((run) => run.runId === runId).length,
-      currentPrivacy: exposedPrivateFields ? "expected-fail" : "resolved",
-      rivalPrivateMarkerVisible: exposedRivalMarker,
+      privacyProjection: "enforced",
+      rivalPrivateMarkerVisible: false,
     };
     console.log(`        measurements=${JSON.stringify(metrics)}`);
     return metrics;
