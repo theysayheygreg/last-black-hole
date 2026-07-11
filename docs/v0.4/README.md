@@ -71,6 +71,8 @@ coordinator owns the integrated documents.
   order, ownership, and CodexBar heartbeat behavior.
 - `research/phase0-multiplayer-baseline.md` — implemented 1/4/8 trust,
   privacy, settlement, bytes, latency, tick, and heap evidence.
+- `phase1-json-wss-adapter-plan.md` — same-process JSON WebSocket integration,
+  queue/backpressure, packaging, migration, rollback, and acceptance gates.
 
 ## Evidence Standard
 

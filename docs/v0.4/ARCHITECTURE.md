@@ -585,5 +585,6 @@ This preserves long-tail/private play without weakening verified sessions.
 - [High-count architecture review](research/high-player-count-architecture-review.md)
 - [High-count hosting cost model](research/high-player-count-hosting-cost-model.md)
 - [Phase 0 multiplayer authority baseline](research/phase0-multiplayer-baseline.md)
+- [Phase 1 same-process JSON WSS adapter plan](phase1-json-wss-adapter-plan.md)
 - `docs/project/EVE-ARCHITECTURE-RESEARCH.md`
 - `docs/project/LOCAL-PROTOCOL.md`

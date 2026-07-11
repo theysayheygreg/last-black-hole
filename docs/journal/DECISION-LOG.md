@@ -1,5 +1,33 @@
 # Decision Log
 
+## 2026-07-11 — Phase 1 WebSocket is an I/O face on the match authority
+
+**Decision:** Phase 1 will pin a reviewed `ws` 8.x production dependency and
+attach `/stream` with `noServer: true` to the existing match authority's HTTP
+server. It gets no second process, port, gameplay writer, or timer. Projection
+is tick-coupled at the existing 15/10, 12/8, and 10/6 authority/snapshot
+clocks. Full JSON proves transport truth first; binary, AOI, compression,
+prediction, and higher clocks remain evidence-gated. Strict frames and the
+bounded send queue are transport-neutral prerequisites, not socket-owned
+copies.
+
+**Why:** Hand-writing RFC 6455 is security-sensitive work, while a separate
+stream service would blur one-match/one-authority ownership and duplicate
+scheduling. The same-process adapter can remove request-per-input and polling
+hot paths without changing gameplay truth. Explicit queue bounds keep one slow
+client from consuming the match authority.
+
+**Where it landed:** `scripts/multiplayer-wire-protocol.cjs`,
+`scripts/multiplayer-send-queue.cjs`, their focused tests,
+`docs/v0.4/phase1-json-wss-adapter-plan.md`, and the
+`multiplayer-network` harness lane.
+
+**Door status:** Closed for a second socket authority process, bespoke
+WebSocket framing, unbounded send buffers, silent reliable-event loss, and
+compression by default. Open after prerequisite gates for the pinned package
+version, executor extraction, tickets, field revision, adapter, client
+cutover, and staged Electron proof.
+
 ## 2026-07-11 — Reconnect rotates connection authority; history stays public
 
 **Decision:** A run membership survives reconnect, but its connection id,

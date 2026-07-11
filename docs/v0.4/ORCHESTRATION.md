@@ -39,6 +39,8 @@ Singularity that:
 - Phase 0 implementation has landed 1/4/8 authority evidence, membership and
   connection epochs, reconnect fencing, owner-private projection, public-only
   history, authenticated idempotent settlement, and two multiplayer lanes.
+- Phase 1 scaffolding has landed a strict JSON frame codec, bounded/coalesced
+  send queue, `multiplayer-network` lane, and same-process WSS adapter plan.
 
 ## Completed Independent Lanes
 
@@ -58,9 +60,10 @@ Singularity that:
 
 1. Finish Phase 0 verification and keep its remaining admission, durable
    resume, and service-identity gaps explicit.
-2. Start the bounded Phase 1 JSON WSS adapter at existing map clocks, with
-   hello/version, membership binding, heartbeat, bounded queues, latest-wins
-   input, and reliable idempotent action lanes.
+2. Start Phase 1 by extracting transport-neutral HTTP/input/action executors,
+   then add bounded admission/resume tickets and field-revision ownership.
+   After those parity gates, pin/stage `ws` and attach `/stream` to the existing
+   sim server; do not create a second authority process or timer.
 3. Keep the first playable slice JSON WSS at existing map clocks. Do not pull
    binary, AOI, prediction, cloud progression, or 30 Hz forward without its
    preceding evidence gate.
@@ -71,6 +74,22 @@ Singularity that:
    harness lane. Preserve v0.3 and do not merge v0.4 back without Greg's call.
 
 ## CodexBar Heartbeat
+
+### Usage checkpoint — 2026-07-11 07:38 UTC
+
+- Primary five-hour usage: 85%.
+- Reset: `2026-07-11T11:02:18Z`.
+- All Phase 0 and bounded Phase 1 scaffold agents have returned.
+- Latest completed slices: strict JSON wire contract, protocol-agnostic bounded
+  send queue with explicit reliable delivery ids, same-process adapter plan,
+  and `multiplayer-network` lane.
+- Next bounded implementation after reset: extract transport-neutral HTTP
+  input/inventory executors while holding responses and authority semantics
+  byte-compatible; then add bounded admission/resume tickets and field revision.
+- Do not start the `ws` adapter, dependency/package staging, or `src/main.js`
+  cutover before those parity gates.
+- The automation remains installed/configured; a scheduler-fired execution is
+  still pending proof because this target thread has remained busy.
 
 Local automation:
 

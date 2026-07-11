@@ -52,6 +52,14 @@ Gate:
 
 Goal: prove multiplayer truth before optimizing the wire.
 
+**Scaffold checkpoint — 2026-07-11:** strict transport-neutral JSON frames and
+the bounded/coalesced per-connection send queue are implemented and pass the
+`multiplayer-network` lane. The same-process adapter plan chooses a pinned
+`ws` 8.x dependency attached to the existing sim HTTP server with no second
+process, authority, port, or timer. Before socket integration, the runtime
+still needs bounded admission/resume tickets, a real field revision,
+transport-neutral command executors, and explicit package staging.
+
 - Add a persistent JSON WSS adapter with hello/version, membership binding,
   heartbeat, and bounded queues.
 - Send owner-private state plus the complete public world; no AOI yet.

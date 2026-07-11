@@ -23,6 +23,15 @@
 - Migrated legacy authority tests to authenticate owner-private reads and
   replaced the old reconnect-loadout brain fixture with real authoritative
   inventory actions.
+- Began Phase 1 with a strict `lbh-multiplayer-json-v1` frame contract and a
+  protocol-agnostic bounded send queue. Latest-wins input is separate from
+  reliable idempotent action/delivery lanes; state coalesces, consequences do
+  not, and slow-reader overflow produces explicit rebase or disconnect.
+- Added the `multiplayer-network` harness lane and a source-level same-process
+  JSON WSS plan. The selected shape pins `ws` 8.x to the existing authority
+  HTTP server and tick loop—no second process, port, writer, or sim timer—and
+  explicitly closes admission, field revision, packaging, and command-parity
+  seams before the adapter goes live.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

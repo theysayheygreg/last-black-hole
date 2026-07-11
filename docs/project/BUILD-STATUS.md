@@ -25,7 +25,9 @@ but there is no JSON WebSocket adapter, invite UI, WAN failure/reconnect proof,
 or natural multi-human journey.
 
 **Current evidence:** `npm run test:multiplayer-structure` and
-`npm run test:multiplayer-authority` pass. The latest 8-human loopback fixture
+`npm run test:multiplayer-authority` pass. The Phase 1
+`npm run test:multiplayer-network` primitive lane also passes, but no socket is
+integrated yet. The latest 8-human loopback fixture
 measured 42,474-byte public and 43,761-byte owner snapshot p95 bodies, with a
 1,288-byte private overlay p95. These are Shallows diagnostic measurements,
 not hosted or heavy-sim capacity claims. See
