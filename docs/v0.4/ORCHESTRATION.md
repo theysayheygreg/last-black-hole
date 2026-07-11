@@ -76,14 +76,16 @@ Singularity that:
 
 ## CodexBar Heartbeat
 
-### Usage checkpoint — 2026-07-11 07:38 UTC
+### Usage checkpoint — 2026-07-11 07:45 UTC
 
-- Primary five-hour usage: 85%.
+- Primary five-hour usage: 90%.
 - Reset: `2026-07-11T11:02:18Z`.
-- All Phase 0 and bounded Phase 1 scaffold agents have returned.
+- Clean branch boundary: `b9ae027` on
+  `codex/v0.4-multiplayer-architecture`.
+- All Phase 0 and bounded Phase 1 scaffold/ticket agents have returned.
 - Latest completed slices: strict JSON wire contract, protocol-agnostic bounded
-  send queue with explicit reliable delivery ids, same-process adapter plan,
-  and `multiplayer-network` lane.
+  send queue with explicit reliable delivery ids, bounded opaque admission and
+  resume tickets, same-process adapter plan, and `multiplayer-network` lane.
 - Next bounded implementation after reset: extract transport-neutral HTTP
   input/inventory executors while holding responses and authority semantics
   byte-compatible; then add bounded admission/resume tickets and field revision.
