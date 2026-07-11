@@ -226,6 +226,9 @@ async function run() {
       await waitFor(() => client.close.code !== null, { label: "per-socket byte overflow close" });
       assert(client.close.code === 1013 && nextFrame(client.messages, "close")?.code === 4008,
         "Per-socket byte overflow should use retry-later transport plus codec close");
+      assert(harness.adapter.diagnostics().pendingInboundBytes === wireBytes,
+        "Cleanup must keep bytes charged while the blocked callback still retains its raw frame");
+      gate.resolve();
       await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === 0, {
         label: "per-socket byte accounting recovery",
       });
@@ -237,17 +240,21 @@ async function run() {
     }
   });
 
-  await runner.run("bounds aggregate inbound bytes across sockets and releases the match budget", async () => {
+  await runner.run("retains closed-socket bytes until callback settlement and then recovers match capacity", async () => {
     const gate = deferred();
+    const recoveryGate = deferred();
     const large = actionFrame(1, 1);
     large.payload = { marker: "y".repeat(1_000) };
     const wire = JSON.stringify(large);
     const wireBytes = Buffer.byteLength(wire, "utf8");
     const harness = await createHarness({
       maxPendingInbound: 64,
-      maxPendingInboundBytes: wireBytes * 2,
+      maxPendingInboundBytes: wireBytes + 16,
       maxPendingInboundBytesTotal: wireBytes + 16,
-      beforeAction: async () => gate.promise,
+      beforeAction: async (binding) => {
+        if (binding.name === "byte-total-a") await gate.promise;
+        if (binding.name === "byte-total-c") await recoveryGate.promise;
+      },
     });
     try {
       const first = await harness.admit("byte-total-a");
@@ -256,6 +263,10 @@ async function run() {
       await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === wireBytes, {
         label: "first retained aggregate bytes",
       });
+      first.ws.send(wire);
+      await waitFor(() => first.close.code !== null, { label: "retaining socket cleanup" });
+      assert(harness.adapter.diagnostics().pendingInboundBytes === wireBytes,
+        "A detached socket must retain its aggregate charge while its callback holds the raw frame");
       second.ws.send(wire);
       await waitFor(() => second.close.code !== null, { label: "aggregate byte overflow close" });
       assert(second.close.code === 1013 && nextFrame(second.messages, "close")?.code === 4008,
@@ -266,9 +277,19 @@ async function run() {
       await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === 0, {
         label: "aggregate byte budget release",
       });
-      assert(first.close.code === null, "A within-budget peer should remain connected after aggregate rejection");
+      const recovered = await harness.admit("byte-total-c");
+      recovered.ws.send(wire);
+      await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === wireBytes, {
+        label: "recovered aggregate byte capacity",
+      });
+      assert(recovered.close.code === null, "A fresh socket should consume capacity released by the settled callback");
+      recoveryGate.resolve();
+      await waitFor(() => harness.adapter.diagnostics().pendingInboundBytes === 0, {
+        label: "recovered socket byte release",
+      });
     } finally {
       gate.resolve();
+      recoveryGate.resolve();
       await harness.close();
     }
   });
@@ -450,12 +471,15 @@ async function run() {
       assert(redemptionContext.signal.aborted, "Shutdown must abort the callback signal");
       assert(diagnostics.connections === 0 && diagnostics.bound === 0 && diagnostics.pendingHello === 0,
         "Shutdown should clear connection and hello state before delayed callback returns");
+      assert(diagnostics.pendingInboundBytes > 0,
+        "Bounded shutdown must report bytes retained by a callback that has not honored abort yet");
       gate.resolve();
       await returned.promise;
       await new Promise((resolve) => setImmediate(resolve));
       const after = harness.adapter.diagnostics();
       assert(after.connections === 0 && after.bound === 0 && after.pendingHello === 0,
         "Resolved redemption must not repopulate maps after lifecycle generation changes");
+      assert(after.pendingInboundBytes === 0, "Settled redemption should release its retained inbound bytes exactly once");
       await waitFor(() => client.close.code !== null, { label: "shutdown-race socket close" });
       await new Promise((resolve) => harness.server.close(resolve));
       serverClosed = true;

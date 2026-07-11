@@ -22,7 +22,6 @@ const {
   assertOwnerProjection,
   createUpgradeHandler,
   createLifecycleGuards,
-  releasePendingInbound,
   enqueueBoundedInbound,
 } = require("./sim-ws-adapter-guards.cjs");
 
@@ -129,7 +128,6 @@ function createSimWebSocketAdapter(options = {}) {
   function cleanup(state) {
     if (state.cleaned) return;
     state.cleaned = true;
-    releasePendingInbound(state);
     state.abortController.abort();
     clearTimeout(state.helloTimer);
     if (state.helloPending) {
@@ -586,6 +584,7 @@ function createSimWebSocketAdapter(options = {}) {
       currentRunId,
       connections: connections.size,
       ...summary,
+      pendingInboundBytes: pendingInboundBytesTotal,
       pendingHello,
       maxObservedPendingInbound,
       maxObservedPendingInboundBytes,

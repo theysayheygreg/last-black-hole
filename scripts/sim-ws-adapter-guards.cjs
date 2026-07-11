@@ -262,10 +262,6 @@ function rawByteLength(raw) {
   return Buffer.byteLength(String(raw), "utf8");
 }
 
-function releasePendingInbound(state) {
-  for (const item of [...state.inboundItems]) item.release();
-}
-
 function enqueueBoundedInbound({
   state,
   raw,
@@ -330,6 +326,5 @@ module.exports = {
   rejectUpgrade,
   createUpgradeHandler,
   createLifecycleGuards,
-  releasePendingInbound,
   enqueueBoundedInbound,
 };
