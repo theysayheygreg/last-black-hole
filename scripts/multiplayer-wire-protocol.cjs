@@ -1,6 +1,9 @@
 const { PROTOCOL_VERSION: SIM_PROTOCOL_VERSION } = require("./sim-protocol.cjs");
+const {
+  WIRE_PROTOCOL_VERSION,
+  STREAM_PATH,
+} = require("./multiplayer-protocol-constants.cjs");
 
-const WIRE_PROTOCOL_VERSION = "lbh-multiplayer-json-v1";
 const CLIENT_TO_SERVER = "client->server";
 const SERVER_TO_CLIENT = "server->client";
 
@@ -444,6 +447,7 @@ function encodeWireFrame(frame, options = {}) {
 
 module.exports = {
   WIRE_PROTOCOL_VERSION,
+  STREAM_PATH,
   SIM_PROTOCOL_VERSION,
   CLIENT_TO_SERVER,
   SERVER_TO_CLIENT,

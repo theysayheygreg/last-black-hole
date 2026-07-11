@@ -1,3 +1,8 @@
+const {
+  WIRE_PROTOCOL_VERSION,
+  STREAM_PATH,
+} = require("./multiplayer-protocol-constants.cjs");
+
 const PROTOCOL_VERSION = "lbh-local-v2";
 const AUTHORITY_HEADER = "x-lbh-command-credential";
 const PLAYER_ID_HEADER = "x-lbh-player-id";
@@ -209,6 +214,18 @@ function createProtocolDescription() {
       snapshotPrivacy: "unauthenticated reads receive public projection; current connection authority adds only its owner-private overlay",
       snapshotHistoryPrivacy: "history is always public-only; authenticated reads receive one separately labeled current owner state, never private state copied into historical ticks",
       rejection: "stale run, wrong player, invalid credential, stale command, and stale input are deterministic errors",
+    },
+    transports: {
+      stream: {
+        optional: true,
+        enabledByDefault: false,
+        environmentGate: "LBH_SIM_WS_ENABLED",
+        path: STREAM_PATH,
+        wireVersion: WIRE_PROTOCOL_VERSION,
+        framing: "UTF-8 JSON text",
+        upgrade: "WebSocket Upgrade",
+        authorityTopology: "same-process per-match single-writer authority",
+      },
     },
   };
 }

@@ -1,6 +1,7 @@
 const { TestRunner, assert } = require("./helpers.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
+  STREAM_PATH,
   SIM_PROTOCOL_VERSION,
   CLIENT_TO_SERVER,
   SERVER_TO_CLIENT,
@@ -10,6 +11,10 @@ const {
   parseWireFrame,
   encodeWireFrame,
 } = require("../scripts/multiplayer-wire-protocol.cjs");
+const {
+  WIRE_PROTOCOL_VERSION: SHARED_WIRE_PROTOCOL_VERSION,
+  STREAM_PATH: SHARED_STREAM_PATH,
+} = require("../scripts/multiplayer-protocol-constants.cjs");
 
 function expectProtocolError(fn, code) {
   try {
@@ -43,6 +48,13 @@ function publicState(overrides = {}) {
 
 async function run() {
   const runner = new TestRunner("MultiplayerWireProtocol");
+
+  await runner.run("codec exports the shared stream wire identity", async () => {
+    assert(WIRE_PROTOCOL_VERSION === SHARED_WIRE_PROTOCOL_VERSION,
+      "Strict codec and discovery must share one wire version constant");
+    assert(STREAM_PATH === SHARED_STREAM_PATH && STREAM_PATH === "/stream",
+      `Expected shared canonical stream path, got ${STREAM_PATH}`);
+  });
 
   await runner.run("hello and welcome bind protocol-v2 membership and connection authority", async () => {
     const hello = {
