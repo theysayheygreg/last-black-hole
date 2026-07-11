@@ -45,6 +45,11 @@
   branch stayed clean at `76d1dde`; post-reset work resumed at 5% usage with
   executor parity exclusively owning the sim runtime and WebSocket packaging
   plus field revision proceeding as non-conflicting read-only audits.
+- Pinned the Phase 1 packaging plan to audited `ws@8.21.0`, with explicit
+  staged-module resolution and a real packaged Upgrade/hello gate. Clarified
+  field revision as `(runId, fieldRevision)` over actual coarse-flow-field
+  replacement/invalidation—not Ballpark mirror refreshes—and identified the
+  duplicate initialization build that must be collapsed before exposure.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

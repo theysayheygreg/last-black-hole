@@ -53,18 +53,23 @@ Use `ws` as a pinned production dependency and the browser's native
 - The current dependency surface is deliberately small, but one focused
   runtime dependency is cheaper and safer than a bespoke frame parser.
 
-Implementation should pin the reviewed `ws` 8.x release exactly in
-`package.json` and `package-lock.json`, not use an open-ended range. Do not
-enable `perMessageDeflate` in Phase 1; compression cost and memory behavior
-must be measured separately.
+The post-reset registry audit selected exact production version `ws@8.21.0`
+(published 2026-05-22). Pin `"ws": "8.21.0"` in `package.json` and
+`package-lock.json`, not an open-ended range. It has no required transitive
+dependencies; its optional native peers are deliberately excluded from the
+Phase 1 package. Do not enable `perMessageDeflate`; compression cost and memory
+behavior must be measured separately.
 
 The Electron release staging code currently copies only the local CommonJS
 closure and data directories. Adding `require("ws")` without packaging it
 would pass source tests and fail in the built app. `scripts/build.cjs` must
 therefore stage the exact `ws` package closure into
 `release-staging/node_modules/ws` and record it in the generated shell
-`package.json`. Package tests must execute the staged adapter, not merely check
-that the source file exists.
+`package.json`. `scripts/build.cjs` must resolve `ws/package.json`, copy that
+package root explicitly, and preserve it under the existing `prune: false`
+install. Package tests must resolve the exact staged version from the staged
+sim runtime and execute a real Upgrade/hello through the adapter, not merely
+check that source files exist.
 
 ## Current Source Truth
 
@@ -114,9 +119,15 @@ close four source-discovered contract gaps in those primitives:
    single-use, expiring ticket issuer/redeemer before routing hello. Do not
    weaken hello to caller-supplied player ids or put credentials in the URL.
 
-The wire's `fieldRevision` also needs a real authority fact. Initialize it on
-run start and increment it when the coarse authoritative field is rebuilt;
-do not send a decorative constant once client recovery depends on it.
+The wire's `fieldRevision` also needs a real authority fact. Its identity is
+the pair `(runId, fieldRevision)`: establish revision 1 on each new run, then
+increment only when the coarse authoritative flow field is actually replaced
+or invalidated. Disabled-field scheduled no-ops, reads, reconnects, and
+Ballpark mirror refreshes do not increment it. The current session initializer
+performs two coarse-field builds, including one before old wave state is
+cleared; collapse that to one clean revision-1 initial build before exposing
+the counter. Do not send a decorative constant or a per-tick counter once
+client recovery depends on this lineage.
 
 ## Transport-Neutral Command Boundary
 
