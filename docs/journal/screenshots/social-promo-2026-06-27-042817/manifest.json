@@ -1,0 +1,230 @@
+{
+  "generatedAt": "2026-06-27T04:28:17.362Z",
+  "repo": "/Users/theysayheygreg/clawd/projects/last-black-hole",
+  "html": "index-a.html?renderer=three",
+  "outputDir": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817",
+  "commit": "d885909",
+  "viewports": [
+    {
+      "viewport": {
+        "name": "wide",
+        "width": 1600,
+        "height": 900,
+        "deviceScaleFactor": 1
+      },
+      "shots": [
+        {
+          "name": "01 title-active-well",
+          "viewport": "wide",
+          "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-01-title-active-well.png",
+          "stats": {
+            "rgbMax": 765,
+            "litPixels": 368812,
+            "width": 1280,
+            "height": 720
+          },
+          "phase": "title"
+        },
+        {
+          "name": "02 entity-showcase-ascii",
+          "viewport": "wide",
+          "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-02-entity-showcase-ascii.png",
+          "stats": {
+            "rgbMax": 765,
+            "litPixels": 100781,
+            "width": 1280,
+            "height": 720
+          },
+          "fixture": "entityShowcase",
+          "view": "ascii"
+        },
+        {
+          "name": "03 entity-showcase-scene",
+          "viewport": "wide",
+          "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-03-entity-showcase-scene.png",
+          "stats": {
+            "rgbMax": 765,
+            "litPixels": 109776,
+            "width": 1280,
+            "height": 720
+          },
+          "fixture": "entityShowcase",
+          "view": "scene"
+        },
+        {
+          "name": "04 deep-field-interference",
+          "viewport": "wide",
+          "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-04-deep-field-interference.png",
+          "stats": {
+            "rgbMax": 765,
+            "litPixels": 166925,
+            "width": 1280,
+            "height": 720
+          },
+          "fixture": "interference10x10"
+        },
+        {
+          "name": "05 gameplay-drop",
+          "viewport": "wide",
+          "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-05-gameplay-drop.png",
+          "stats": {
+            "rgbMax": 765,
+            "litPixels": 268276,
+            "width": 1280,
+            "height": 720
+          },
+          "phase": "playing",
+          "map": "shallows"
+        },
+        {
+          "name": "06 gameplay-warmed",
+          "viewport": "wide",
+          "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-06-gameplay-warmed.png",
+          "stats": {
+            "rgbMax": 765,
+            "litPixels": 374905,
+            "width": 1280,
+            "height": 720
+          },
+          "phase": "playing",
+          "map": "shallows"
+        },
+        {
+          "name": "07 collapse-results",
+          "viewport": "wide",
+          "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-07-collapse-results.png",
+          "stats": {
+            "rgbMax": 765,
+            "litPixels": 428351,
+            "width": 1280,
+            "height": 720
+          },
+          "phase": "dead"
+        }
+      ],
+      "errors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    }
+  ],
+  "squareCrops": {
+    "shots": [
+      {
+        "name": "01 title-active-well",
+        "viewport": "square-crop",
+        "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-01-title-active-well.png",
+        "stats": {
+          "rgbMax": 765,
+          "litPixels": 368812,
+          "width": 1280,
+          "height": 720
+        },
+        "phase": "title",
+        "sourceFile": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-01-title-active-well.png"
+      },
+      {
+        "name": "02 entity-showcase-ascii",
+        "viewport": "square-crop",
+        "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-02-entity-showcase-ascii.png",
+        "stats": {
+          "rgbMax": 765,
+          "litPixels": 100781,
+          "width": 1280,
+          "height": 720
+        },
+        "fixture": "entityShowcase",
+        "view": "ascii",
+        "sourceFile": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-02-entity-showcase-ascii.png"
+      },
+      {
+        "name": "03 entity-showcase-scene",
+        "viewport": "square-crop",
+        "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-03-entity-showcase-scene.png",
+        "stats": {
+          "rgbMax": 765,
+          "litPixels": 109776,
+          "width": 1280,
+          "height": 720
+        },
+        "fixture": "entityShowcase",
+        "view": "scene",
+        "sourceFile": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-03-entity-showcase-scene.png"
+      },
+      {
+        "name": "04 deep-field-interference",
+        "viewport": "square-crop",
+        "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-04-deep-field-interference.png",
+        "stats": {
+          "rgbMax": 765,
+          "litPixels": 166925,
+          "width": 1280,
+          "height": 720
+        },
+        "fixture": "interference10x10",
+        "sourceFile": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-04-deep-field-interference.png"
+      },
+      {
+        "name": "05 gameplay-drop",
+        "viewport": "square-crop",
+        "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-05-gameplay-drop.png",
+        "stats": {
+          "rgbMax": 765,
+          "litPixels": 268276,
+          "width": 1280,
+          "height": 720
+        },
+        "phase": "playing",
+        "map": "shallows",
+        "sourceFile": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-05-gameplay-drop.png"
+      },
+      {
+        "name": "06 gameplay-warmed",
+        "viewport": "square-crop",
+        "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-06-gameplay-warmed.png",
+        "stats": {
+          "rgbMax": 765,
+          "litPixels": 374905,
+          "width": 1280,
+          "height": 720
+        },
+        "phase": "playing",
+        "map": "shallows",
+        "sourceFile": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-06-gameplay-warmed.png"
+      },
+      {
+        "name": "07 collapse-results",
+        "viewport": "square-crop",
+        "file": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-07-collapse-results.png",
+        "stats": {
+          "rgbMax": 765,
+          "litPixels": 428351,
+          "width": 1280,
+          "height": 720
+        },
+        "phase": "dead",
+        "sourceFile": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-07-collapse-results.png"
+      }
+    ],
+    "error": null
+  },
+  "summary": {
+    "count": 14,
+    "files": [
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-01-title-active-well.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-02-entity-showcase-ascii.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-03-entity-showcase-scene.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-04-deep-field-interference.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-05-gameplay-drop.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-06-gameplay-warmed.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/wide-07-collapse-results.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-01-title-active-well.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-02-entity-showcase-ascii.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-03-entity-showcase-scene.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-04-deep-field-interference.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-05-gameplay-drop.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-06-gameplay-warmed.png",
+      "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-042817/square-07-collapse-results.png"
+    ],
+    "weakFrames": []
+  }
+}

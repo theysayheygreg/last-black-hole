@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-06-27T04:57:29.643Z",
+  "repo": "/Users/theysayheygreg/clawd/projects/last-black-hole",
+  "html": "index-a.html?renderer=three",
+  "outputDir": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729",
+  "commit": "d885909",
+  "viewports": [
+    {
+      "viewport": {
+        "name": "wide",
+        "width": 1600,
+        "height": 900,
+        "deviceScaleFactor": 1
+      },
+      "shots": [],
+      "clips": [
+        {
+          "name": "title-loop",
+          "viewport": "wide",
+          "frameDir": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/frames/wide-title-loop",
+          "mp4Path": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/wide-title-loop.mp4",
+          "gifPath": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/wide-title-loop.gif",
+          "fps": 8,
+          "gifWidth": 720,
+          "mp4Bytes": 764454,
+          "gifBytes": 3087079,
+          "durationSec": 2.8,
+          "frameCount": 22
+        },
+        {
+          "name": "gameplay-surf",
+          "viewport": "wide",
+          "frameDir": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/frames/wide-gameplay-surf",
+          "mp4Path": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/wide-gameplay-surf.mp4",
+          "gifPath": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/wide-gameplay-surf.gif",
+          "fps": 8,
+          "gifWidth": 720,
+          "mp4Bytes": 1449181,
+          "gifBytes": 5266551,
+          "durationSec": 2.8,
+          "frameCount": 22
+        }
+      ],
+      "errors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    }
+  ],
+  "squareCrops": {
+    "shots": [],
+    "error": null
+  },
+  "summary": {
+    "media": "clips",
+    "stillCount": 0,
+    "clipCount": 2,
+    "count": 2,
+    "files": [],
+    "clips": [
+      {
+        "name": "title-loop",
+        "mp4Path": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/wide-title-loop.mp4",
+        "gifPath": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/wide-title-loop.gif",
+        "durationSec": 2.8,
+        "frameCount": 22,
+        "mp4Bytes": 764454,
+        "gifBytes": 3087079
+      },
+      {
+        "name": "gameplay-surf",
+        "mp4Path": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/wide-gameplay-surf.mp4",
+        "gifPath": "/Users/theysayheygreg/clawd/projects/last-black-hole/docs/journal/screenshots/social-promo-2026-06-27-045729/wide-gameplay-surf.gif",
+        "durationSec": 2.8,
+        "frameCount": 22,
+        "mp4Bytes": 1449181,
+        "gifBytes": 5266551
+      }
+    ],
+    "weakFrames": []
+  }
+}
