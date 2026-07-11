@@ -33,8 +33,8 @@ async function request(path, body = null, { authorized = false } = {}) {
     commandCredential: authority.commandCredential,
     commandSeq: ++commandSeq,
   } : {};
-  const response = await fetch(`${SIM_URL}${path}`, body == null ? undefined : {
-    method: "POST",
+  const response = await fetch(`${SIM_URL}${path}`, {
+    ...(body == null ? {} : { method: "POST" }),
     headers: {
       "content-type": "application/json",
       ...(authorized ? {
@@ -43,7 +43,7 @@ async function request(path, body = null, { authorized = false } = {}) {
         "x-lbh-run-id": authority.runId,
       } : {}),
     },
-    body: JSON.stringify({ ...body, ...envelope }),
+    ...(body == null ? {} : { body: JSON.stringify({ ...body, ...envelope }) }),
   });
   const json = await response.json();
   if (!response.ok || json.ok === false) {
@@ -52,8 +52,8 @@ async function request(path, body = null, { authorized = false } = {}) {
   return json;
 }
 
-async function getSnapshot() {
-  return request("/snapshot");
+async function getSnapshot({ authorized = false } = {}) {
+  return request("/snapshot", null, { authorized });
 }
 
 async function startRun({ hullType = "drifter", seed = 4242 } = {}) {
@@ -80,11 +80,11 @@ async function startRun({ hullType = "drifter", seed = 4242 } = {}) {
   return joined.player;
 }
 
-async function waitForSnapshot(predicate, { timeout = 5000, interval = 80 } = {}) {
+async function waitForSnapshot(predicate, { timeout = 5000, interval = 80, authorized = false } = {}) {
   const deadline = Date.now() + timeout;
   let last = null;
   while (Date.now() < deadline) {
-    last = await getSnapshot();
+    last = await getSnapshot({ authorized });
     if (predicate(last)) return last;
     await sleep(interval);
   }
@@ -192,7 +192,7 @@ async function run() {
       const withDecoy = await waitForSnapshot((snapshot) => {
         const player = snapshot.players.find((entry) => entry.clientId === CLIENT_ID);
         return player?.abilityState?.decoys?.length > 0;
-      });
+      }, { authorized: true });
       const decoy = withDecoy.players.find((entry) => entry.clientId === CLIENT_ID).abilityState.decoys[0];
 
       await postDebugPlayerState({ wx: 3.0, wy: 3.0, vx: 0, vy: 0, signalLevel: 0.05 });

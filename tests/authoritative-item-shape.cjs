@@ -44,10 +44,18 @@ async function postJson(path, body) {
   });
 }
 
-async function waitForSnapshot(predicate, timeoutMs = 5000) {
+function authorityHeaders(authority) {
+  return {
+    "x-lbh-command-credential": authority.commandCredential,
+    "x-lbh-player-id": authority.playerId,
+    "x-lbh-run-id": authority.runId,
+  };
+}
+
+async function waitForSnapshot(predicate, authority = null, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const { body } = await requestJson("/snapshot");
+    const { body } = await requestJson("/snapshot", authority ? { headers: authorityHeaders(authority) } : undefined);
     if (predicate(body)) return body;
     await new Promise((resolve) => setTimeout(resolve, 75));
   }
@@ -131,7 +139,7 @@ async function run() {
       const after = await waitForSnapshot((snapshot) => {
         const player = snapshot.players?.find((entry) => entry.clientId === "item-shape-test");
         return player?.cargo?.some(Boolean);
-      });
+      }, join.body.authority);
       const cargoItem = after.players.find((entry) => entry.clientId === "item-shape-test").cargo.find(Boolean);
       assertInventoryShape(cargoItem);
       assert(typeof cargoItem.id === "string", "Expected cargo to retain its catalog item id");

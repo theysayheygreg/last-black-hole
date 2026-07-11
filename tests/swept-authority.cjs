@@ -37,6 +37,17 @@ async function readAuthorizedEvents(port, authority, since = 0) {
   return response.json();
 }
 
+async function readAuthorizedSnapshot(port, authority) {
+  const response = await fetch(`http://127.0.0.1:${port}/snapshot`, {
+    headers: {
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+  });
+  return response.json();
+}
+
 async function withPlayer(port, clientId, work) {
   await startSimServer(port, { keepAlive: true });
   try {
@@ -109,7 +120,7 @@ async function run() {
       });
       const snapshot = await waitFor(
         port,
-        async () => (await request(port, "/snapshot")).body,
+        async () => readAuthorizedSnapshot(port, authority),
         (body) => body.players.some((player) => player.clientId === clientId && player.cargoCount > 0),
       );
       const events = await readAuthorizedEvents(port, authority);

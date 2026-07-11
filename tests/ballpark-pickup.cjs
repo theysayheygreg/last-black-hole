@@ -21,11 +21,19 @@ async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForSnapshot(predicate, timeoutMs = 5000) {
+function authorityHeaders(authority) {
+  return {
+    "x-lbh-command-credential": authority.commandCredential,
+    "x-lbh-player-id": authority.playerId,
+    "x-lbh-run-id": authority.runId,
+  };
+}
+
+async function waitForSnapshot(predicate, authority = null, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
-    const { body } = await getJson("/snapshot");
+    const { body } = await getJson("/snapshot", authority ? { headers: authorityHeaders(authority) } : undefined);
     last = body;
     if (predicate(body)) return body;
     await sleep(100);
@@ -126,7 +134,7 @@ async function run() {
       const lootEvent = events.find((event) => event.type === "player.loot" && event.payload?.wreckId === target.id);
       assert(lootEvent, `Expected player.loot event for ${target.id}`);
 
-      const after = await getJson("/snapshot");
+      const after = await getJson("/snapshot", { headers: authorityHeaders(join.body.authority) });
       const player = after.body.players.find((entry) => entry.clientId === "ballpark-pickup-test");
       const wreck = after.body.world.wrecks.find((entry) => entry.id === target.id);
       assert(player?.cargoCount > 0, `Expected player cargo after pickup, got ${player?.cargoCount}`);

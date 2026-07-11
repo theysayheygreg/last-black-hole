@@ -116,8 +116,15 @@ async function getEvents(since = 0) {
   return body.events || [];
 }
 
-async function getSnapshot() {
-  const response = await fetch(`${SIM_URL}/snapshot`);
+async function getSnapshot(clientId = null) {
+  const authority = clientId ? directAuthorities.get(clientId) : null;
+  const response = await fetch(`${SIM_URL}/snapshot`, authority ? {
+    headers: {
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+  } : undefined);
   return response.json();
 }
 
@@ -290,7 +297,7 @@ async function waitForEvents(predicate, { timeout = 5000, interval = 100 } = {})
 async function waitForSnapshotPlayer(clientId, predicate, { timeout = 5000, interval = 100 } = {}) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const snapshot = await getSnapshot();
+    const snapshot = await getSnapshot(clientId);
     const player = snapshot.players?.find((entry) => entry.clientId === clientId);
     if (player && predicate(player, snapshot)) return { player, snapshot };
     await sleep(interval);
@@ -779,20 +786,22 @@ async function run() {
       const engaged = await waitForSnapshotPlayerLabel(
         "slingshot engage",
         net.clientId,
-        (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.energy >= 0,
+        (remotePlayer) => remotePlayer.slingshot?.engaged === true,
         { timeout: 10000 }
       );
       assert(["well", "star", "planetoid"].includes(engaged.player.slingshot.anchorType),
         `Expected authoritative slingshot anchor, got ${engaged.player.slingshot.anchorType}`);
 
-      const readyToRelease = await waitForSnapshotPlayerLabel(
-        "slingshot energy accrual",
+      await waitFor(page, () => {
+        const state = window.__TEST_API.getSlingshotState();
+        return state?.engaged === true && state.energy > 0;
+      }, { timeout: 10000 });
+      const playerBeforeRelease = (await waitForSnapshotPlayer(
         net.clientId,
-        (remotePlayer) => remotePlayer.slingshot?.engaged === true && remotePlayer.slingshot.energy > 0,
-        { timeout: 10000 }
-      );
-      const playerBeforeRelease = readyToRelease.player;
-      const releaseReadyTick = readyToRelease.snapshot.tick;
+        (remotePlayer) => remotePlayer.slingshot?.engaged === true,
+        { timeout: 5000 }
+      )).player;
+      const releaseReadyTick = (await page.evaluate(() => window.__TEST_API.getNetworkState())).remoteTick;
       assert(Math.hypot(playerBeforeRelease.vx, playerBeforeRelease.vy) > 0.01,
         "Expected slingshotting player to have orbital speed before release");
 

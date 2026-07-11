@@ -40,11 +40,19 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForSnapshot(predicate, timeoutMs = 5000) {
+function authorityHeaders(authority) {
+  return {
+    "x-lbh-command-credential": authority.commandCredential,
+    "x-lbh-player-id": authority.playerId,
+    "x-lbh-run-id": authority.runId,
+  };
+}
+
+async function waitForSnapshot(predicate, authority = null, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
-    const { body } = await getJson("/snapshot");
+    const { body } = await getJson("/snapshot", authority ? { headers: authorityHeaders(authority) } : undefined);
     last = body;
     if (predicate(body)) return body;
     await sleep(100);
@@ -126,7 +134,7 @@ async function run() {
           player.status === "alive" &&
           player.portalInteraction?.portalId === "ballpark-extraction-portal"
         )
-      );
+      , authority);
       const readyPlayer = ready.players.find((entry) => entry.clientId === "ballpark-extraction-test");
       assert(readyPlayer?.status === "alive", "Portal proximity must not auto-extract the player");
 
@@ -142,7 +150,7 @@ async function run() {
         player.clientId === "ballpark-extraction-test" &&
         player.status === "alive" &&
         player.portalInteraction === null
-      ));
+      ), authority);
       assert(aborted.players.find((entry) => entry.clientId === "ballpark-extraction-test")?.status === "alive",
         "Leaving the portal zone must abort without extracting");
 
@@ -157,7 +165,7 @@ async function run() {
       await waitForSnapshot((body) => body.players?.some((player) =>
         player.clientId === "ballpark-extraction-test" &&
         player.portalInteraction?.portalId === "ballpark-extraction-portal"
-      ));
+      ), authority);
 
       const confirmed = await postAuthorizedInput(authority, 1, {
         seq: 1,

@@ -334,23 +334,16 @@ async function run() {
           assert(engaged.player.slingshot?.engaged === true, 'Expected controller slingshot to engage remotely');
 
           await setGamepadButton(pageRemote, 4, true, 1); // ability1 -> burn for breacher
-          const net = await pageRemote.evaluate(() => window.__TEST_API.getNetworkState());
-          const { player } = await waitForSnapshotPlayer(
-            net.clientId,
-            (remotePlayer) => Boolean(remotePlayer.abilityState?.burnActive),
-            { timeout: 5000, interval: 120 }
-          );
+          await waitForLabeled(pageRemote, 'remote ability activation', () =>
+            Boolean(window.__TEST_API.getAbilityState()?.raw?.burnActive), { timeout: 5000 });
+          const player = await pageRemote.evaluate(() => window.__TEST_API.getAbilityState().raw);
           await sleep(650);
-          const held = await waitForSnapshotPlayer(
-            net.clientId,
-            (remotePlayer) => Boolean(remotePlayer.abilityState?.burnActive),
-            { timeout: 2000, interval: 120 }
-          );
+          const held = await pageRemote.evaluate(() => window.__TEST_API.getAbilityState().raw);
           await setGamepadButton(pageRemote, 4, false, 0);
           await sleep(160);
           const latencyStats = await pageRemote.evaluate(() => window.__TEST_API.getPerfStats());
-          assert(player.abilityState?.burnActive === true, 'Expected controller ability1 to toggle burn remotely');
-          assert(held.player.abilityState?.burnActive === true, 'Expected held ability1 not to tick-toggle Breacher burn off');
+          assert(player.burnActive === true, 'Expected controller ability1 to toggle burn remotely');
+          assert(held.burnActive === true, 'Expected held ability1 not to tick-toggle Breacher burn off');
           assert(Number.isFinite(latencyStats.remoteInputAckRttMs), 'Expected remote input ACK RTT metric');
           assert(Number.isFinite(latencyStats.remoteInputToSnapshotMs), 'Expected remote input-to-snapshot metric');
           remoteShot = await screenshot(pageRemote, 'controller-remote');

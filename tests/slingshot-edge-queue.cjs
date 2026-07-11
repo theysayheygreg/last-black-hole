@@ -44,6 +44,14 @@ function maxEventSeq(eventsBody) {
   return Math.max(0, ...(eventsBody.events || []).map((event) => event.seq || 0));
 }
 
+function authorityHeaders(authority) {
+  return {
+    "x-lbh-command-credential": authority.commandCredential,
+    "x-lbh-player-id": authority.playerId,
+    "x-lbh-run-id": authority.runId,
+  };
+}
+
 async function waitForSnapshot(predicate, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
@@ -137,7 +145,7 @@ async function run() {
       assert(events.some((event) => event.type === "player.slingshotEngaged"), "Expected queued edge to engage slingshot");
       assert(events.some((event) => event.type === "player.slingshotReleased"), "Expected queued edge to release slingshot");
 
-      const final = await getJson("/snapshot");
+      const final = await getJson("/snapshot", { headers: authorityHeaders(authority) });
       const player = final.body.players?.find((entry) => entry.clientId === "slingshot-edge-queue-test");
       assert(player?.slingshot?.engaged === false, "Expected second queued edge to leave slingshot released");
       assert(player?.pendingSlingshotEdgeCount === 0, `Expected no queued edges left, got ${player?.pendingSlingshotEdgeCount}`);

@@ -24,6 +24,7 @@ const htmlFile = process.argv[2] || "index-a.html?renderer=three";
 // default prevents one fresh-stack test from resetting another test's session.
 const SIM_PORT = Number(process.env.LBH_AGENT_EVAL_SIM_PORT || (9200 + process.pid % 500));
 const SIM_URL = `http://127.0.0.1:${SIM_PORT}`;
+const snapshotAuthorities = new Map();
 const VIEWPORT = Object.freeze({ width: 1280, height: 800, deviceScaleFactor: 1 });
 const SHALLOWS_ROUTE = Object.freeze({
   id: "first-current",
@@ -59,15 +60,32 @@ function wrappedDistance(left, right, worldScale) {
   );
 }
 
-async function requestJson(route) {
-  const response = await fetch(`${SIM_URL}${route}`);
+async function requestJson(route, options) {
+  const response = await fetch(`${SIM_URL}${route}`, options);
   const body = await response.json();
   if (!response.ok) throw new Error(`${route} failed (${response.status}): ${body.error || "unknown error"}`);
   return body;
 }
 
-async function getSnapshot() {
-  return requestJson("/snapshot");
+function trackJoinAuthorities(page) {
+  page.on("response", async (response) => {
+    try {
+      if (new URL(response.url()).pathname !== "/join" || response.request().method() !== "POST") return;
+      const body = await response.json();
+      if (body.authority?.playerId) snapshotAuthorities.set(body.authority.playerId, body.authority);
+    } catch {}
+  });
+}
+
+async function getSnapshot(clientId = null) {
+  const authority = clientId ? snapshotAuthorities.get(clientId) : null;
+  return requestJson("/snapshot", authority ? {
+    headers: {
+      "x-lbh-command-credential": authority.commandCredential,
+      "x-lbh-player-id": authority.playerId,
+      "x-lbh-run-id": authority.runId,
+    },
+  } : undefined);
 }
 
 async function getEvents(since = 0) {
@@ -120,7 +138,7 @@ async function waitForPlayer(clientId, predicate, { timeout = 12000, interval = 
   let lastPlayer = null;
   let lastSnapshot = null;
   while (Date.now() < deadline) {
-    lastSnapshot = await getSnapshot();
+    lastSnapshot = await getSnapshot(clientId);
     lastPlayer = localPlayer(lastSnapshot, clientId);
     if (lastPlayer && predicate(lastPlayer, lastSnapshot)) {
       return { player: lastPlayer, snapshot: lastSnapshot };
@@ -878,6 +896,7 @@ async function run() {
           await withFreshGame(
             withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
             async ({ page, errors }) => {
+              trackJoinAuthorities(page);
               await runJourney(page, outputDir, report, errors);
               assertNoBrowserErrors(errors, "Journey complete");
             },
@@ -891,7 +910,10 @@ async function run() {
         await withFreshSimServer(SIM_PORT, async () => {
           await withFreshGame(
             withQuery(htmlFile, { simServer: SIM_URL, capture: 1, deck: 1 }),
-            async ({ page, errors }) => runDeathJourney(page, outputDir, report, errors),
+            async ({ page, errors }) => {
+              trackJoinAuthorities(page);
+              await runDeathJourney(page, outputDir, report, errors);
+            },
             { resetState: true },
           );
         }, { idleShutdownMs: 30000 });
