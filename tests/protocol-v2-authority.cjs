@@ -126,15 +126,29 @@ async function run() {
       });
       assert(reconnected.status === 200 && reconnected.body.authority?.reconnected === true,
         "Expected an authenticated reconnect to resume the existing player");
-      assert(reconnected.body.authority.commandCredential === authorityA.commandCredential,
-        "Reconnect should preserve command authority within the same run");
+      assert(reconnected.body.authority.commandCredential !== authorityA.commandCredential,
+        "Reconnect must rotate command authority within the same run");
+      assert(reconnected.body.authority.membershipId === authorityA.membershipId,
+        "Reconnect must preserve the server-issued membership");
+      assert(reconnected.body.authority.connectionId !== authorityA.connectionId
+        && reconnected.body.authority.connectionEpoch === authorityA.connectionEpoch + 1,
+      "Reconnect must rotate connection identity and advance its epoch");
       assert(reconnected.body.authority.lastCommandSeq === 1,
         "Reconnect should preserve the monotonic command watermark");
+      let activeAuthorityA = reconnected.body.authority;
+
+      const fencedConnection = await request("/input", {
+        method: "POST",
+        authority: authorityA,
+        body: command(authorityA, 2, { seq: 1, moveX: 1 }),
+      });
+      assert(fencedConnection.status === 403 && fencedConnection.body.code === "invalid-authority",
+        `Expected old reconnect authority to be fenced, got ${fencedConnection.status}/${fencedConnection.body.code}`);
 
       const accepted = await request("/input", {
         method: "POST",
-        authority: authorityA,
-        body: command(authorityA, 2, {
+        authority: activeAuthorityA,
+        body: command(activeAuthorityA, 2, {
           seq: 1,
           moveX: 1,
           moveY: 0,
@@ -145,31 +159,32 @@ async function run() {
         "Expected ordered queued edges to be accepted once");
       const inputReconnect = await request("/join", {
         method: "POST",
-        authority: authorityA,
-        body: { runId, clientId: authorityA.playerId, name: "Authority A" },
+        authority: activeAuthorityA,
+        body: { runId, clientId: activeAuthorityA.playerId, name: "Authority A" },
       });
       assert(!JSON.stringify(inputReconnect.body.player).includes(authorityA.commandCredential),
         "Accepted gameplay state must not retain the command credential");
+      activeAuthorityA = inputReconnect.body.authority;
 
       const staleCommand = await request("/input", {
         method: "POST",
-        authority: authorityA,
-        body: command(authorityA, 2, { seq: 2 }),
+        authority: activeAuthorityA,
+        body: command(activeAuthorityA, 2, { seq: 2 }),
       });
       assert(staleCommand.status === 409 && staleCommand.body.code === "stale-command",
         `Expected stale command rejection, got ${staleCommand.status}/${staleCommand.body.code}`);
 
       const staleInput = await request("/input", {
         method: "POST",
-        authority: authorityA,
-        body: command(authorityA, 3, { seq: 1 }),
+        authority: activeAuthorityA,
+        body: command(activeAuthorityA, 3, { seq: 1 }),
       });
       assert(staleInput.status === 409 && staleInput.body.code === "stale-input",
         `Expected stale input rejection, got ${staleInput.status}/${staleInput.body.code}`);
 
       const wrongPlayer = await request("/input", {
         method: "POST",
-        body: command(authorityA, 4, {
+        body: command(activeAuthorityA, 4, {
           playerId: authorityB.playerId,
           seq: 2,
         }),
@@ -179,16 +194,16 @@ async function run() {
 
       const dedupedEdge = await request("/input", {
         method: "POST",
-        authority: authorityA,
-        body: command(authorityA, 4, { seq: 2, slingshotEdges: [11, 12] }),
+        authority: activeAuthorityA,
+        body: command(activeAuthorityA, 4, { seq: 2, slingshotEdges: [11, 12] }),
       });
       assert(dedupedEdge.status === 200 && dedupedEdge.body.acceptedSlingshotEdges.join(",") === "12",
         `Expected consumed edge 11 to stay rejected, got ${JSON.stringify(dedupedEdge.body.acceptedSlingshotEdges)}`);
 
       const reset = await request("/session/reset", {
         method: "POST",
-        authority: authorityA,
-        body: command(authorityA, 5, { requesterId: authorityA.playerId }),
+        authority: activeAuthorityA,
+        body: command(activeAuthorityA, 5, { requesterId: activeAuthorityA.playerId }),
       });
       assert(reset.status === 200 && reset.body.session.runId !== runId && reset.body.joinTicket,
         "Expected host reset to create a new run and join claim");

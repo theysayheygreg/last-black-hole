@@ -1,5 +1,39 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+
+function newOpaqueId(prefix) {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
+function newAuthoritySecret() {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function createMembershipAuthority({ runId, playerId, previous = null }) {
+  const normalizedRunId = String(runId || "").trim();
+  const normalizedPlayerId = String(playerId || "").trim();
+  if (!normalizedRunId) throw new Error("Membership authority requires a runId");
+  if (!normalizedPlayerId) throw new Error("Membership authority requires a playerId");
+
+  if (previous && previous.runId !== normalizedRunId) {
+    throw new Error("Membership authority cannot cross run boundaries");
+  }
+  if (previous && previous.playerId !== normalizedPlayerId) {
+    throw new Error("Membership authority cannot change player ownership");
+  }
+
+  return {
+    runId: normalizedRunId,
+    membershipId: previous?.membershipId || newOpaqueId("membership"),
+    playerId: normalizedPlayerId,
+    connectionId: newOpaqueId("connection"),
+    connectionEpoch: Math.max(0, Number(previous?.connectionEpoch) || 0) + 1,
+    commandCredential: newAuthoritySecret(),
+    lastCommandSeq: Math.max(0, Number(previous?.lastCommandSeq) || 0),
+    lastSlingshotEdgeId: Math.max(0, Number(previous?.lastSlingshotEdgeId) || 0),
+  };
+}
 
 class SessionRegistry {
   constructor(filepath) {
@@ -25,4 +59,5 @@ class SessionRegistry {
 
 module.exports = {
   SessionRegistry,
+  createMembershipAuthority,
 };

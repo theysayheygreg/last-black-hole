@@ -44,6 +44,7 @@ const {
   createAbilityState,
 } = require("./player-brain.cjs");
 const { createControlPlaneClient } = require("./control-plane-client.cjs");
+const { createMembershipAuthority } = require("./session-registry.cjs");
 const {
   createOverloadController,
   projectOverloadBudget,
@@ -1462,14 +1463,12 @@ function issueJoinClaim(playerId) {
   return claim;
 }
 
-function issuePlayerAuthority(playerId) {
-  const authority = {
+function issuePlayerAuthority(playerId, previous = null) {
+  const authority = createMembershipAuthority({
     runId: runtime.session.runId,
     playerId,
-    commandCredential: newAuthoritySecret(),
-    lastCommandSeq: 0,
-    lastSlingshotEdgeId: 0,
-  };
+    previous,
+  });
   runtime.playerAuthorities.set(playerId, authority);
   return authority;
 }
@@ -1478,7 +1477,10 @@ function publicAuthority(authority, { reconnected = false } = {}) {
   return {
     protocolVersion: PROTOCOL_VERSION,
     runId: authority.runId,
+    membershipId: authority.membershipId,
     playerId: authority.playerId,
+    connectionId: authority.connectionId,
+    connectionEpoch: authority.connectionEpoch,
     commandCredential: authority.commandCredential,
     lastCommandSeq: authority.lastCommandSeq,
     nextCommandSeq: authority.lastCommandSeq + 1,
@@ -1502,6 +1504,12 @@ function requestIdentity(req, body = {}) {
       Boolean(headerRunId && bodyRunId && headerRunId !== bodyRunId) ||
       Boolean(headerCredential && bodyCredential && headerCredential !== bodyCredential),
   };
+}
+
+function hasCallerIdentityConflict(body = {}) {
+  const playerId = String(body.playerId || "").trim();
+  const clientId = String(body.clientId || "").trim();
+  return Boolean(playerId && clientId && playerId !== clientId);
 }
 
 function authorizePlayerRequest(req, body = {}, { requireCommandSeq = true } = {}) {
@@ -6148,30 +6156,18 @@ const server = http.createServer(async (req, res) => {
         publishEvent("player.joined", { clientId, name: player.name, wx: player.wx, wy: player.wy });
         persistSessionRegistry();
       } else {
-        if (body.name) {
-          player.name = String(body.name);
-        }
-        if (body.profileId) {
-          player.profileId = String(body.profileId);
-        }
-        if (body.profileSnapshot?.rigLevels) {
-          player.rigLevels = normalizeRigLevels(body.profileSnapshot.rigLevels, player.hullType);
-        }
-        if (body.profileSnapshot?.upgrades) {
-          player.profileUpgrades = normalizeProfileUpgrades(body.profileSnapshot.upgrades);
-        }
-        if (body.profileSnapshot?.shipType) {
-          player.profileShipType = normalizePublicHullType(body.profileSnapshot.shipType);
-          player.hullType = normalizePublicHullType(player.profileShipType, player.hullType);
-        }
-        if (Array.isArray(body.equipped)) {
-          player.equipped = cloneLoadoutItems(body.equipped);
-        }
-        if (Array.isArray(body.consumables)) {
-          player.consumables = cloneLoadoutItems(body.consumables);
-        }
-        refreshPlayerBrain(player);
-        refreshPlayerEffects(player);
+        // Reconnect proves the old connection authority, then immediately
+        // replaces it. Gameplay/profile state is rehydrated exclusively from
+        // the live server record; caller-supplied loadout/profile mutations
+        // are intentionally ignored at this boundary.
+        authority = issuePlayerAuthority(clientId, authority);
+        telemetry.info("player.reconnected", {
+          sessionId: runtime.session.id,
+          clientId,
+          membershipId: authority.membershipId,
+          connectionId: authority.connectionId,
+          connectionEpoch: authority.connectionEpoch,
+        });
       }
 
       if (!player.isAI) {
@@ -6244,6 +6240,10 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 409, { ok: false, error: "No active session", session: runtime.session });
         return;
       }
+      if (hasCallerIdentityConflict(body)) {
+        sendJson(res, 400, { ok: false, code: "conflicting-identity", error: "playerId and clientId disagree" });
+        return;
+      }
       const message = normalizeInputMessage(body);
       const auth = authorizePlayerRequest(req, message);
       if (!auth.ok) {
@@ -6298,6 +6298,10 @@ const server = http.createServer(async (req, res) => {
       const body = await readJson(req);
       if (runtime.session.status !== "running") {
         sendJson(res, 409, { ok: false, error: "No active session", session: runtime.session });
+        return;
+      }
+      if (hasCallerIdentityConflict(body)) {
+        sendJson(res, 400, { ok: false, code: "conflicting-identity", error: "playerId and clientId disagree" });
         return;
       }
       const message = normalizeInventoryAction(body);
