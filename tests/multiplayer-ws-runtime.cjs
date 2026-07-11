@@ -16,6 +16,7 @@ const { PROTOCOL_VERSION } = require("../scripts/sim-protocol.cjs");
 const DISABLED_PORT = 8840;
 const SECURITY_PORT = 8841;
 const LINEAGE_PORT = 8843;
+const ACTION_PORT = 8845;
 const COHORT_PORTS = { 1: 8842, 4: 8844, 8: 8848 };
 
 async function waitFor(check, label, timeoutMs = 5000) {
@@ -129,6 +130,275 @@ async function closeClient(client) {
   await waitFor(() => client.close, "client close").catch(() => {
     client.ws.terminate();
   });
+}
+
+async function sendAction(client, action, paceMs = 120) {
+  const before = frames(client, "ack").length;
+  client.ws.send(JSON.stringify({ type: "action", clientTimeMs: Date.now(), ...action }));
+  const ack = await waitFor(() => frames(client, "ack").slice(before).find((entry) =>
+    entry.ackKind === "action" && entry.actionId === action.actionId
+  ), `action ACK ${action.actionId}`);
+  // Stay below the production action bucket while this fixture deliberately
+  // exercises many semantic failures in a short local interval.
+  if (paceMs > 0) await new Promise((resolve) => setTimeout(resolve, paceMs));
+  return ack;
+}
+
+async function ownerPlayer(client, predicate = () => true) {
+  return waitFor(() => {
+    const owner = frames(client, "ownerState").at(-1);
+    return owner && predicate(owner.state) ? owner.state : null;
+  }, "matching owner state");
+}
+
+async function playerEventCount(port, authority, type) {
+  const response = await request(port, `/events?runId=${encodeURIComponent(authority.runId)}&since=0`, { authority });
+  return response.body.events.filter((event) => event.type === type).length;
+}
+
+async function runReliableActionsFixture() {
+  await startSimServer(ACTION_PORT, { keepAlive: true, env: { LBH_SIM_WS_ENABLED: "true" } });
+  let client = null;
+  let resumed = null;
+  let resetClient = null;
+  try {
+    const started = await request(ACTION_PORT, "/session/start", {
+      method: "POST",
+      body: { mapId: "shallows", requesterId: "action-pilot", requesterName: "Action Pilot", maxPlayers: 1 },
+    });
+    const joined = await request(ACTION_PORT, "/join", {
+      method: "POST",
+      body: {
+        runId: started.body.session.runId,
+        clientId: "action-pilot",
+        joinTicket: started.body.joinTicket,
+        name: "Action Pilot",
+        consumables: [
+          { id: "reliable-fuel", name: "Reliable Fuel", subcategory: "consumable", charges: 2, useEffect: "fuelRefill" },
+          { id: "reliable-shield", name: "Reliable Shield", subcategory: "consumable", charges: 1, useEffect: "shieldBurst" },
+        ],
+      },
+    });
+    let authority = joined.body.authority;
+    const ticket = await issueTicket(ACTION_PORT, authority);
+    client = await openBoundClient(ACTION_PORT, ticket.body.ticket);
+    await waitFor(() => frame(client, "ownerState"), "initial action owner state");
+
+    const slingshot = {
+      actionId: "reliable-edge", actionSeq: 1, commandSeq: 1,
+      actionKind: "slingshotEdge", payload: { edgeId: 1000 },
+    };
+    const edgeAck = await sendAction(client, slingshot);
+    assert(edgeAck.status === "accepted" && edgeAck.result.code === "queued" && edgeAck.result.edgeId === 1000,
+      `Slingshot edge must queue authoritatively: ${JSON.stringify(edgeAck)}`);
+    await waitFor(async () => {
+      const health = await request(ACTION_PORT, "/health");
+      return health.body.multiplayer.adapter.queuedMessages === 1 ? health : null;
+    }, "accepted action retained by delivery id");
+    client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: edgeAck.deliveryId }));
+    await waitFor(async () => {
+      const health = await request(ACTION_PORT, "/health");
+      return health.body.multiplayer.adapter.queuedMessages === 0 ? health : null;
+    }, "accepted action delivery release");
+
+    const consume = {
+      actionId: "reliable-consume", actionSeq: 2, commandSeq: 2,
+      actionKind: "consume", payload: { slot: 0 },
+    };
+    const consumeAck = await sendAction(client, consume, 0);
+    assert(consumeAck.status === "accepted" && consumeAck.result.itemId === "reliable-fuel",
+      `Consumable use must bind the validated item: ${JSON.stringify(consumeAck)}`);
+    const racedInventory = await sendAction(client, {
+      actionId: "consume-race", actionSeq: 3, commandSeq: 3,
+      actionKind: "inventory", payload: { action: "unloadConsumable", consumableSlot: 0 },
+    });
+    assert(racedInventory.status === "rejected" && racedInventory.result.code === "inventory-rejected",
+      "Inventory must not replace a pending consumable request");
+    await waitFor(async () => (await request(ACTION_PORT, "/health")).body.multiplayer.adapter.queuedMessages === 2,
+      "accepted consume and rejected inventory retained by delivery ids");
+    client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: consumeAck.deliveryId }));
+    client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: racedInventory.deliveryId }));
+    await waitFor(async () => (await request(ACTION_PORT, "/health")).body.multiplayer.adapter.queuedMessages === 0,
+      "rejected action delivery release");
+    await waitFor(async () => await playerEventCount(ACTION_PORT, authority, "player.effectUsed") === 1,
+      "one consumable consequence");
+
+    const pulse = {
+      actionId: "reliable-pulse", actionSeq: 4, commandSeq: 4,
+      actionKind: "pulse", payload: {},
+    };
+    const pulseAck = await sendAction(client, pulse);
+    assert(pulseAck.status === "accepted" && pulseAck.result.code === "queued", "Pulse must queue");
+    const pulseRetry = await sendAction(client, { ...pulse, clientTimeMs: Date.now() + 1000 });
+    assert(pulseRetry.status === pulseAck.status && JSON.stringify(pulseRetry.result) === JSON.stringify(pulseAck.result)
+      && pulseRetry.deliveryId !== pulseAck.deliveryId,
+    "Same-socket exact retry must return cached semantics under a fresh delivery");
+    await waitFor(async () => await playerEventCount(ACTION_PORT, authority, "player.pulse") === 1,
+      "one pulse consequence");
+
+    const inventory = {
+      actionId: "reliable-inventory", actionSeq: 5, commandSeq: 5,
+      actionKind: "inventory", payload: { consumableSlot: 1, action: "unloadConsumable" },
+    };
+    const inventoryAck = await sendAction(client, inventory);
+    assert(inventoryAck.status === "accepted" && inventoryAck.result.code === "applied",
+      `Inventory mutation must apply: ${JSON.stringify(inventoryAck)}`);
+    await ownerPlayer(client, (player) => player.consumables[1] == null
+      && player.cargo.some((item) => item?.id === "reliable-shield"));
+    const inventoryRetry = await sendAction(client, {
+      ...inventory,
+      payload: { action: "unloadConsumable", consumableSlot: 1 },
+      clientTimeMs: Date.now() + 2000,
+    });
+    assert(inventoryRetry.status === "accepted" && inventoryRetry.result.code === "applied",
+      "Reordered JSON keys and client time must preserve exact retry identity");
+    const laterPulseRetry = await sendAction(client, { ...pulse, clientTimeMs: Date.now() + 3000 });
+    assert(laterPulseRetry.status === pulseAck.status
+      && JSON.stringify(laterPulseRetry.result) === JSON.stringify(pulseAck.result)
+      && laterPulseRetry.deliveryId !== pulseRetry.deliveryId,
+    "Retained-window retry after a later action must return cached semantics under a fresh delivery");
+    assert(await playerEventCount(ACTION_PORT, authority, "player.pulse") === 1,
+      "Retained-window pulse retry must not create a second consequence");
+
+    const payloadConflict = await sendAction(client, {
+      ...inventory, payload: { action: "unloadConsumable", consumableSlot: 0 },
+    });
+    assert(payloadConflict.status === "rejected" && payloadConflict.result.code === "action-id-conflict",
+      "Action id reuse with changed payload must conflict");
+    const seqConflict = await sendAction(client, {
+      actionId: "sequence-conflict", actionSeq: 5, commandSeq: 6,
+      actionKind: "pulse", payload: {},
+    });
+    assert(seqConflict.result.code === "action-seq-conflict", "Consumed action sequence must conflict");
+    const gap = await sendAction(client, {
+      actionId: "action-gap", actionSeq: 7, commandSeq: 6,
+      actionKind: "pulse", payload: {},
+    });
+    assert(gap.result.code === "action-sequence-gap", "Action gap must be rejected without cursor advance");
+    const future = await sendAction(client, {
+      actionId: "command-future", actionSeq: 6, commandSeq: 8,
+      actionKind: "pulse", payload: {},
+    });
+    assert(future.result.code === "command-sequence-gap", "Future command cursor must be rejected");
+
+    const staleEdge = await sendAction(client, {
+      actionId: "old-edge", actionSeq: 6, commandSeq: 6,
+      actionKind: "slingshotEdge", payload: { edgeId: 999 },
+    });
+    assert(staleEdge.status === "rejected" && staleEdge.result.code === "stale-slingshot-edge",
+      "Slingshot uniqueness must remain monotonic beyond the consumed-edge ring");
+
+    const httpInput = await request(ACTION_PORT, "/input", {
+      method: "POST",
+      authority,
+      body: command(authority, 7, { seq: 1, moveX: 0, moveY: 0, thrust: 0, brake: 0 }),
+    });
+    assert(httpInput.status === 200 && httpInput.body.acceptedCommandSeq === 7,
+      "HTTP commands must interleave on the shared authoritative command cursor");
+    const staleCommand = await sendAction(client, {
+      actionId: "stale-http-command", actionSeq: 7, commandSeq: 7,
+      actionKind: "consume", payload: { slot: 9 },
+    });
+    assert(staleCommand.status === "rejected" && staleCommand.result.code === "stale-command",
+      "An HTTP-consumed command sequence must reject a stale unknown stream action without advancing");
+    const afterHttp = await sendAction(client, {
+      actionId: "after-http", actionSeq: 7, commandSeq: 8,
+      actionKind: "consume", payload: { slot: 9 },
+    });
+    assert(afterHttp.status === "rejected" && afterHttp.result.code === "invalid-consumable-slot",
+      "Deterministic gameplay rejection must adjudicate the next shared cursor");
+    client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: afterHttp.deliveryId }));
+
+    const resumeTicket = await issueTicket(ACTION_PORT, authority, "resume");
+    resumed = await openBoundClient(ACTION_PORT, resumeTicket.body.ticket, "resume");
+    const resumedWelcome = frame(resumed, "welcome");
+    authority = resumedWelcome;
+    await waitFor(() => client.close, "action socket epoch fence");
+    const reconnectRetry = await sendAction(resumed, {
+      actionId: "after-http", actionSeq: 7, commandSeq: 8,
+      actionKind: "consume", payload: { slot: 9 },
+    });
+    assert(reconnectRetry.status === "rejected" && reconnectRetry.result.code === "invalid-consumable-slot",
+      "Reconnect exact retry must recover cached rejected semantics");
+    assert(frame(resumed, "welcome").lastActionSeq === 7 && frame(resumed, "welcome").lastCommandSeq === 8,
+      "Reconnect welcome must expose authoritative action and command cursors");
+    resumed.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: reconnectRetry.deliveryId }));
+
+    for (let actionSeq = 8; actionSeq <= 36; actionSeq += 1) {
+      const rejected = await sendAction(resumed, {
+        actionId: `receipt-fill-${actionSeq}`,
+        actionSeq,
+        commandSeq: actionSeq + 1,
+        actionKind: "consume",
+        payload: { slot: 9 },
+      });
+      assert(rejected.status === "rejected" && rejected.result.code === "invalid-consumable-slot",
+        `Receipt filler ${actionSeq} must be deterministically adjudicated`);
+      resumed.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: rejected.deliveryId }));
+    }
+    const staleEvicted = await sendAction(resumed, {
+      actionId: "evicted-stale-action", actionSeq: 1, commandSeq: 38,
+      actionKind: "pulse", payload: {},
+    });
+    assert(staleEvicted.status === "rejected" && staleEvicted.result.code === "stale-action",
+      "An unknown action older than the bounded receipt window must reject as stale without gameplay mutation");
+
+    const debugState = await request(ACTION_PORT, "/debug/player-state", {
+      method: "POST",
+      body: { clientId: authority.playerId, wx: 2.5, wy: 2.5, vx: 0, vy: 0 },
+    });
+    await request(ACTION_PORT, "/debug/portal-state", {
+      method: "POST",
+      body: { id: "reliable-exit", wx: debugState.body.player.wx, wy: debugState.body.player.wy, alive: true, lifespan: 60 },
+    });
+    await ownerPlayer(resumed, (player) => player.portalInteraction?.portalId === "reliable-exit");
+    const extract = await sendAction(resumed, {
+      actionId: "reliable-extract", actionSeq: 37, commandSeq: 38,
+      actionKind: "extractConfirm", payload: {},
+    });
+    assert(extract.status === "accepted" && extract.result.portalId === "reliable-exit",
+      "Extraction confirmation must queue only while authority reports ready");
+    await waitFor(async () => {
+      const snapshot = await request(ACTION_PORT, `/snapshot?runId=${encodeURIComponent(authority.runId)}`, { authority });
+      return snapshot.body.players?.find((player) => player.clientId === authority.playerId)?.status === "escaped";
+    }, "authoritative extraction consequence");
+
+    const health = await request(ACTION_PORT, "/health");
+    assert(health.body.multiplayer.actions.capacityPerMembership === 32
+      && health.body.multiplayer.actions.replays >= 3
+      && health.body.multiplayer.actions.conflicts >= 2
+      && health.body.multiplayer.actions.gaps >= 2
+      && health.body.multiplayer.actions.stale >= 2
+      && health.body.multiplayer.actions.evicted >= 1
+      && health.body.multiplayer.actions.retained === 32,
+    `Action receipt metrics must expose bounded replay/conflict/gap evidence: ${JSON.stringify(health.body.multiplayer.actions)}`);
+    assert(health.body.multiplayer.actions.rejected >= 2,
+      "Rejected action metrics must remain visible independently of transport delivery release");
+
+    const reset = await request(ACTION_PORT, "/session/reset", {
+      method: "POST",
+      authority,
+      body: command(authority, 39, { requesterId: authority.playerId }),
+    });
+    const resetJoin = await request(ACTION_PORT, "/join", {
+      method: "POST",
+      body: { runId: reset.body.session.runId, clientId: authority.playerId, joinTicket: reset.body.joinTicket },
+    });
+    const resetTicket = await issueTicket(ACTION_PORT, resetJoin.body.authority);
+    resetClient = await openBoundClient(ACTION_PORT, resetTicket.body.ticket);
+    const cleanReceipt = await sendAction(resetClient, {
+      actionId: "after-http", actionSeq: 1, commandSeq: 1,
+      actionKind: "consume", payload: { slot: 9 },
+    });
+    assert(cleanReceipt.result.code === "invalid-consumable-slot"
+      && frame(resetClient, "welcome").lastActionSeq === 0,
+    "New run must start a clean receipt lineage even when an old action id is reused");
+  } finally {
+    await closeClient(client);
+    await closeClient(resumed);
+    await closeClient(resetClient);
+    await stopSimServer(ACTION_PORT).catch(() => null);
+  }
 }
 
 function percentile(values, quantile) {
@@ -477,10 +747,10 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       clientTimeMs: Date.now(),
     }));
     const actionAck = await waitFor(() => frame(actionClient, "ack", (entry) => entry.ackKind === "action"),
-      "reliable action rejection");
-    assert(actionAck.status === "rejected" && actionAck.result?.code === "action-not-enabled"
+      "reliable action acceptance");
+    assert(actionAck.status === "accepted" && actionAck.result?.code === "queued"
       && Number.isSafeInteger(actionAck.deliveryId),
-    "Baseline actions must be explicitly and reliably rejected");
+    "Admitted actions must be explicitly and reliably acknowledged");
     const retainedActionHealth = await waitFor(async () => {
       const health = await request(port, "/health");
       return health.body.multiplayer.adapter.queuedMessages >= 1 ? health : null;
@@ -543,7 +813,7 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       const reset = await request(port, "/session/reset", {
         method: "POST",
         authority: resumedWelcome,
-        body: command(resumedWelcome, 1, { requesterId: resumedWelcome.playerId }),
+        body: command(resumedWelcome, resumedWelcome.nextCommandSeq, { requesterId: resumedWelcome.playerId }),
       });
       assert(reset.status === 200 && reset.body.session.runId !== runId, "Expected WebSocket-authority reset");
       await waitFor(() => resumed.close, "reset socket fence");
@@ -732,6 +1002,10 @@ async function run() {
     await runProjectionLineageFixture();
   });
 
+  await runner.run("reliable gameplay actions are bounded, idempotent, reconnect-safe authority commands", async () => {
+    await runReliableActionsFixture();
+  });
+
   for (const count of [1, 4, 8]) {
     await runner.run(`${count} real clients share one tick-coupled authority stream`, async () => {
       const measurement = await runCohort(count, {
@@ -749,7 +1023,7 @@ async function run() {
 }
 
 run().catch(async (error) => {
-  for (const port of [DISABLED_PORT, SECURITY_PORT, LINEAGE_PORT, ...Object.values(COHORT_PORTS)]) {
+  for (const port of [DISABLED_PORT, SECURITY_PORT, LINEAGE_PORT, ACTION_PORT, ...Object.values(COHORT_PORTS)]) {
     await stopSimServer(port).catch(() => null);
   }
   console.error("MultiplayerWsRuntime test fatal error:", error.stack || error.message);

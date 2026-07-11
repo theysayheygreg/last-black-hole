@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { createActionReceiptState } = require("./action-receipt-window.cjs");
 
 function newOpaqueId(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -34,6 +35,7 @@ function createMembershipAuthority({ runId, playerId, previous = null }) {
     lastCommandSeq: Math.max(0, Number(previous?.lastCommandSeq) || 0),
     lastActionSeq: Math.max(0, Number(previous?.lastActionSeq) || 0),
     lastSlingshotEdgeId: Math.max(0, Number(previous?.lastSlingshotEdgeId) || 0),
+    actionReceiptState: createActionReceiptState(previous?.actionReceiptState),
   };
 }
 

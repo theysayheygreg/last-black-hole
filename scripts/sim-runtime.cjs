@@ -46,6 +46,11 @@ const {
 const { createControlPlaneClient } = require("./control-plane-client.cjs");
 const { createMembershipAuthority } = require("./session-registry.cjs");
 const {
+  inspectActionReceipt,
+  recordActionReceipt,
+  describeActionReceipts,
+} = require("./action-receipt-window.cjs");
+const {
   createOverloadController,
   projectOverloadBudget,
   advanceOverload,
@@ -3297,6 +3302,12 @@ function applyInventoryAction(player, actionMessage) {
   }
 
   const { action, cargoSlot, equipSlot, consumableSlot } = actionMessage;
+  if (
+    (action === "loadConsumable" || action === "unloadConsumable")
+    && player.lastInput?.consumeSlot === consumableSlot
+  ) {
+    return { ok: false, error: "Consumable slot has a pending use" };
+  }
   let changed = false;
   let itemName = null;
 
@@ -5852,8 +5863,11 @@ function tickSim() {
 
     let input = player.lastInput;
     if (input.consumeSlot !== null && input.consumeSlot !== undefined) {
-      applyConsumable(player, input.consumeSlot);
-      player.lastInput = { ...player.lastInput, consumeSlot: null };
+      const queuedItem = player.consumables[input.consumeSlot] || null;
+      if (!input.consumeItemId || queuedItem?.id === input.consumeItemId) {
+        applyConsumable(player, input.consumeSlot);
+      }
+      player.lastInput = { ...player.lastInput, consumeSlot: null, consumeItemId: null };
       input = player.lastInput;
     }
 
@@ -6188,17 +6202,110 @@ function executeStreamInput(binding, frame) {
   return { type: "ack", ackKind: "input", inputSeq: frame.inputSeq };
 }
 
-function rejectStreamAction(binding, frame) {
-  if (!currentMultiplayerBinding(binding)) throw streamCommandFailure("connection-fenced", 4003);
+function streamActionAck(frame, status, result) {
   return {
     type: "ack",
     ackKind: "action",
     actionId: frame.actionId,
     actionSeq: frame.actionSeq,
     commandSeq: frame.commandSeq,
-    status: "rejected",
-    result: { code: "action-not-enabled" },
+    status,
+    result,
   };
+}
+
+function hasExactPayloadKeys(payload, keys) {
+  const actual = Object.keys(payload).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function rejectAction(code) {
+  return { status: "rejected", result: { code } };
+}
+
+function adjudicateStreamGameplayAction(authority, player, frame) {
+  if (player.status !== "alive") return rejectAction("player-not-alive");
+  const payload = frame.payload;
+  switch (frame.actionKind) {
+    case "slingshotEdge": {
+      if (!hasExactPayloadKeys(payload, ["edgeId"])) return rejectAction("invalid-slingshot-payload");
+      const edgeId = Number(payload.edgeId);
+      if (!Number.isSafeInteger(edgeId) || edgeId < 1) return rejectAction("invalid-slingshot-edge");
+      if (edgeId <= (authority.lastSlingshotEdgeId || 0) || hasSeenSlingshotEdge(player, edgeId)) {
+        return rejectAction("stale-slingshot-edge");
+      }
+      const merged = mergePendingSlingshotEdges(player, [edgeId]);
+      if (!merged.includes(edgeId)) return rejectAction("slingshot-edge-queue-full");
+      player.lastInput = { ...player.lastInput, slingshotEdges: merged };
+      authority.lastSlingshotEdgeId = edgeId;
+      return { status: "accepted", result: { code: "queued", edgeId, pending: merged.length } };
+    }
+    case "pulse": {
+      if (!hasExactPayloadKeys(payload, [])) return rejectAction("invalid-pulse-payload");
+      if (player.lastInput.pulse) return rejectAction("pulse-pending");
+      if (player.effectState.pulseCooldownRemaining > 0) return rejectAction("pulse-cooldown");
+      player.lastInput = { ...player.lastInput, pulse: true };
+      return { status: "accepted", result: { code: "queued" } };
+    }
+    case "extractConfirm": {
+      if (!hasExactPayloadKeys(payload, [])) return rejectAction("invalid-extract-payload");
+      if (player.lastInput.extractConfirm) return rejectAction("extract-pending");
+      if (!player.portalInteraction?.ready) return rejectAction("extraction-not-ready");
+      player.lastInput = { ...player.lastInput, extractConfirm: true };
+      return { status: "accepted", result: { code: "queued", portalId: player.portalInteraction.portalId } };
+    }
+    case "consume": {
+      if (!hasExactPayloadKeys(payload, ["slot"])) return rejectAction("invalid-consume-payload");
+      const slot = Number(payload.slot);
+      if (!Number.isSafeInteger(slot) || slot < 0 || slot >= player.consumables.length) {
+        return rejectAction("invalid-consumable-slot");
+      }
+      if (player.lastInput.consumeSlot !== null && player.lastInput.consumeSlot !== undefined) {
+        return rejectAction("consume-pending");
+      }
+      const item = player.consumables[slot];
+      if (!item || typeof item.id !== "string" || !item.id || (item.charges || 0) <= 0) {
+        return rejectAction("consumable-unavailable");
+      }
+      player.lastInput = { ...player.lastInput, consumeSlot: slot, consumeItemId: item.id };
+      return { status: "accepted", result: { code: "queued", slot, itemId: item.id } };
+    }
+    case "inventory": {
+      const allowed = new Set(["action", "cargoSlot", "equipSlot", "consumableSlot"]);
+      if (Object.keys(payload).some((key) => !allowed.has(key)) || typeof payload.action !== "string") {
+        return rejectAction("invalid-inventory-payload");
+      }
+      const message = normalizeInventoryAction(payload);
+      const result = applyInventoryAction(player, message);
+      if (!result.ok) return rejectAction("inventory-rejected");
+      refreshBallparkMirror("inventory-action");
+      return { status: "accepted", result: { code: "applied", action: message.action } };
+    }
+    default:
+      return rejectAction("unsupported-action-kind");
+  }
+}
+
+function executeStreamAction(binding, frame) {
+  const current = currentMultiplayerBinding(binding);
+  if (!current) throw streamCommandFailure("connection-fenced", 4003);
+  const { authority, player } = current;
+  const receiptState = authority.actionReceiptState;
+  const inspection = inspectActionReceipt(receiptState, frame, {
+    lastActionSeq: authority.lastActionSeq || 0,
+    lastCommandSeq: authority.lastCommandSeq || 0,
+  });
+  if (inspection.kind === "replay") return inspection.ack;
+  if (inspection.kind !== "new") {
+    return streamActionAck(frame, "rejected", { code: inspection.code });
+  }
+
+  const outcome = adjudicateStreamGameplayAction(authority, player, frame);
+  authority.lastActionSeq = frame.actionSeq;
+  authority.lastCommandSeq = frame.commandSeq;
+  const ack = streamActionAck(frame, outcome.status, outcome.result);
+  return recordActionReceipt(receiptState, inspection.identity, ack);
 }
 
 function jsonProjection(value) {
@@ -6368,6 +6475,7 @@ function multiplayerDiagnostics() {
     tickets: MULTIPLAYER_WS_ENABLED && multiplayerTicketRegistry
       ? multiplayerTicketRegistry.diagnostics()
       : null,
+    actions: multiplayerActionDiagnostics(),
     projection: {
       inFlight: Boolean(multiplayerProjectionTask),
       beats: projection.beats,
@@ -6395,6 +6503,32 @@ function multiplayerDiagnostics() {
       },
     },
   };
+}
+
+function multiplayerActionDiagnostics() {
+  const totals = {
+    memberships: 0,
+    capacityPerMembership: 32,
+    retained: 0,
+    adjudicated: 0,
+    accepted: 0,
+    rejected: 0,
+    replays: 0,
+    conflicts: 0,
+    stale: 0,
+    gaps: 0,
+    evicted: 0,
+  };
+  for (const authority of runtime.playerAuthorities.values()) {
+    if (!authority.actionReceiptState) continue;
+    const description = describeActionReceipts(authority.actionReceiptState);
+    totals.memberships += 1;
+    totals.capacityPerMembership = description.capacity;
+    for (const key of ["retained", "adjudicated", "accepted", "rejected", "replays", "conflicts", "stale", "gaps", "evicted"]) {
+      totals[key] += description[key];
+    }
+  }
+  return totals;
 }
 
 // Command executors deliberately accept parsed data and return plain results so
@@ -6436,9 +6570,13 @@ function executeInputCommand({ body = {}, identity = {} } = {}) {
     pulse: Boolean(player.lastInput.pulse || message.pulse),
     extractConfirm: Boolean(player.lastInput.extractConfirm || message.extractConfirm),
     consumeSlot:
-      message.consumeSlot === null || message.consumeSlot === undefined
+      player.lastInput.consumeSlot !== null && player.lastInput.consumeSlot !== undefined
         ? player.lastInput.consumeSlot
         : message.consumeSlot,
+    consumeItemId:
+      player.lastInput.consumeSlot !== null && player.lastInput.consumeSlot !== undefined
+        ? player.lastInput.consumeItemId || null
+        : null,
   };
   return commandResponse(200, {
     ok: true,
@@ -7021,7 +7159,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     redeemHello: redeemMultiplayerHello,
     revalidateBinding: revalidateMultiplayerBinding,
     onInput: (binding, frame) => executeStreamInput(binding, frame),
-    onAction: (binding, frame) => rejectStreamAction(binding, frame),
+    onAction: (binding, frame) => executeStreamAction(binding, frame),
     buildPublicState: buildPublicMultiplayerStateForAdapter,
     buildOwnerState: buildOwnerMultiplayerState,
     onAck: acknowledgeMultiplayerCursor,
