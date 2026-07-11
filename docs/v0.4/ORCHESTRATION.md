@@ -40,7 +40,8 @@ Singularity that:
   connection epochs, reconnect fencing, owner-private projection, public-only
   history, authenticated idempotent settlement, and two multiplayer lanes.
 - Phase 1 scaffolding has landed a strict JSON frame codec, bounded/coalesced
-  send queue, `multiplayer-network` lane, and same-process WSS adapter plan.
+  send queue, bounded single-use admission/resume ticket registry,
+  `multiplayer-network` lane, and same-process WSS adapter plan.
 
 ## Completed Independent Lanes
 
@@ -91,7 +92,8 @@ Singularity that:
 - Post-reset prompt packets are durable under `docs/project/prompts/` for the
   executor-parity, ticket-registry, and field-revision slices. Executor parity
   owns the high-conflict runtime first; the ticket registry can proceed in
-  parallel; field-revision runtime integration waits for the executor commit.
+  parallel and is now complete; field-revision runtime integration waits for
+  the executor commit.
 - The automation remains installed/configured; a scheduler-fired execution is
   still pending proof because this target thread has remained busy.
 

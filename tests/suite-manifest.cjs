@@ -90,6 +90,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerTicketRegistry",
+    file: "multiplayer-ticket-registry.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "static", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerSendQueue",
     file: "multiplayer-send-queue.cjs",
     lanes: ["multiplayer-network", "static", "full"],

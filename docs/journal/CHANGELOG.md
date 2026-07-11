@@ -36,6 +36,11 @@
   bounded single-use admission/resume ticket registry, and authoritative field
   revision. Their ownership order keeps parallel work out of the 6K-line sim
   runtime until the HTTP parity extraction is committed.
+- Implemented the isolated ticket-registry prerequisite: opaque 32-byte
+  admission/resume tickets, 30-second default expiry, 32-record cap,
+  single-use replay tombstones, run rotation/reset invalidation, constant-time
+  digest matching, injected-clock tests, and secret-free diagnostics. HTTP/WSS
+  issuance and redemption remain authority-integration work.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

@@ -159,7 +159,7 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:ui-motion` | Pure Node checks for shared UI motion helpers: reduced-motion resolution, reveal clips, type-on text, command pulses, and directional wipes. |
 | `npm run test:authority` | Control-plane, sim, telemetry, lifecycle, and remote-authority stack checks. |
 | `npm run test:sim-structure` | v0.3 structural gate for persistent Ballpark identity/lifecycle, required relevance/pickup/portal queries, toroidal geometry and swept contacts, movement fixtures, protocol v2, bounded growth, journal, and live snapshot rebase. |
-| `npm run test:multiplayer-structure` | v0.4 membership/connection fencing, owner-private projection, public history, and authenticated idempotent settlement. |
+| `npm run test:multiplayer-structure` | v0.4 membership/connection fencing, owner-private projection, public history, bounded admission/resume tickets, and authenticated idempotent settlement. |
 | `npm run test:multiplayer-authority` | v0.4 structure plus deterministic 1/4/8-human shared truth, privacy, bytes, tick, heap, and 100x result replay evidence. |
 | `npm run test:multiplayer-network` | v0.4 strict JSON frame validation plus bounded/coalesced reliable-state queue and backpressure primitives. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
@@ -251,7 +251,7 @@ local readability matters more than making every pixel bright.
 | `browser` | headless browser checks through `__TEST_API` | aesthetic approval |
 | `authority` | sim/control-plane/remote protocol health | local-only visual questions |
 | `sim-structure` | persistent Ballpark identity, required spatial queries, world geometry/sweeps, movement fixtures, protocol v2, bounded growth, journal, and snapshot rebase | browser visuals or playfeel |
-| `multiplayer-structure` | membership, connection fencing, privacy projection, public history, and settlement idempotency/authentication | WAN feel, hosted capacity, or natural multiplayer journeys |
+| `multiplayer-structure` | membership, connection fencing, privacy projection, public history, bounded tickets, and settlement idempotency/authentication | WAN feel, hosted capacity, or natural multiplayer journeys |
 | `multiplayer-authority` | structure plus deterministic 1/4/8-human truth and baseline measurements | loss/reorder/slow-reader soak or a claim of public playability |
 | `multiplayer-network` | strict JSON frames, exact byte limits, reliable delivery ids, state coalescing, queue bounds, ack/replay, and transport backpressure | a real socket, WAN feel, or hosted capacity |
 | `visual` | deterministic renderer fixtures and screenshot manifests | gameplay balance |
