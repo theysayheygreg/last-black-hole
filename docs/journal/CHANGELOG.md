@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-07-11 — v0.3 overnight specialist integration review
+
+- Confirmed Palette, Timbre, Troubadorb, and Orrery work is contained to the
+  v0.3 branch; the active v0.4 multiplayer worktree remained untouched.
+- Removed an accidental 925 MiB promo-media archive from current source and
+  made generated journal captures ignored by default.
+- Fixed duplicate and stale-run authoritative audio, bounded router history,
+  ownerless private-event leakage, undercounted oscillator costs, failed
+  admission rollback, continuous control rate, and nearest-well layer count.
+- Removed internal hull names from generated public copy and added regression
+  coverage for the v0.3 Drifter/Breacher roster boundary.
+- Corrected plan-versus-runtime claims: Palette's shared presentation schema and
+  Troubadorb's broad copy retune remain reviewed v0.3 work, not shipped code.
+- Added a review record under `docs/project/reviews/` with remaining visual,
+  listening, Git-history, and runtime-copy acceptance gaps.
+
 ## 2026-07-10 — Orrery review of the v0.3 specialist plans
 
 - Reviewed the palette and timbre overnight plans against branch source;

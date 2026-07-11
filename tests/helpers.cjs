@@ -151,10 +151,18 @@ function registerProcessCleanup() {
   cleanupRegistered = true;
   const cleanup = () => {
     for (const port of startedSimPorts) {
-      spawn(process.execPath, [SIM_SERVER_SCRIPT, "stop", "--host", "127.0.0.1", "--port", String(port)], { cwd: ROOT, stdio: "ignore" });
+      spawnSync(process.execPath, [SIM_SERVER_SCRIPT, "stop", "--host", "127.0.0.1", "--port", String(port)], {
+        cwd: ROOT,
+        stdio: "ignore",
+        timeout: 5000,
+      });
     }
     for (const port of startedControlPorts) {
-      spawn(process.execPath, [CONTROL_PLANE_SERVER_SCRIPT, "stop", "--host", "127.0.0.1", "--port", String(port)], { cwd: ROOT, stdio: "ignore" });
+      spawnSync(process.execPath, [CONTROL_PLANE_SERVER_SCRIPT, "stop", "--host", "127.0.0.1", "--port", String(port)], {
+        cwd: ROOT,
+        stdio: "ignore",
+        timeout: 5000,
+      });
     }
   };
   process.on("exit", cleanup);
