@@ -113,6 +113,12 @@
   admitted action kinds, consume/inventory fencing, cross-transport monotonic
   slingshot edges, and fresh-delivery one-consequence proof. Full multiplayer
   network and authority lanes remain green at `NORMAL` 1/4/8 cadence.
+- Red-teamed event recovery before its first commit and amended the packet with
+  required run-identified cursors, membership-scoped private visibility,
+  since-zero retention gaps, issued-eligible ACK bounds, atomic full-baseline
+  rebase ordering, byte-aware replay headroom, and one captured journal upper
+  bound per measured projection. Corrected the journal suite path to the real
+  `tests/protocol-journal.cjs`.
 
 ## 2026-07-10 — v0.4 multiplayer architecture program opened
 

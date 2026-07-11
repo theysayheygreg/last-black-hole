@@ -25,20 +25,28 @@ events reliable.
   ACK, queue reset, and run rotation
 - `scripts/multiplayer-send-queue.cjs`
 - `scripts/multiplayer-wire-protocol.cjs` event/rebase/ACK contracts
+- `scripts/sim-protocol.cjs` player-local visibility/filtering
+- `scripts/session-registry.cjs` reconnect-preserved membership authority
 - `tests/multiplayer-ws-runtime.cjs`
 - `tests/multiplayer-ws-adapter-core.cjs`
-- `tests/sim-event-journal.cjs`
+- `tests/protocol-journal.cjs`
 
 ## Owned Files
 
 - `scripts/sim-runtime.cjs`
 - `scripts/sim-ws-adapter.cjs` only for a minimal binding-aware reliable-event
   API or dedupe metadata that the existing API cannot express safely
+- `scripts/multiplayer-wire-protocol.cjs` and its focused test for the required
+  cursor run identity proved missing by red-team review
+- `scripts/sim-protocol.cjs`, `scripts/session-registry.cjs`, and their focused
+  tests for membership-scoped private visibility and reconnect floor lineage
+- `scripts/sim-event-journal.cjs` only if the captured upper-bound read cannot
+  be expressed safely by the runtime
 - `tests/multiplayer-ws-runtime.cjs`
 - `tests/multiplayer-ws-adapter-core.cjs` for any adapter API change
 
-Do not edit SimClient/browser, wire schema unless current frames are provably
-insufficient, manifest, package, or integrated docs in this slice.
+Do not edit SimClient/browser, manifest, package, or integrated docs in this
+slice.
 
 ## Required Changes
 
@@ -63,6 +71,31 @@ insufficient, manifest, package, or integrated docs in this slice.
    replayed events, pending event frames, event ACKs, and forced rebases.
 7. Preserve final binding revalidation after awaits, reset/shutdown ordering,
    exact-once replication accounting, and 1/4/8 cadence.
+8. Any resume hello that supplies snapshot/event cursors must also supply the
+   cursor's `lastRunId`. Numeric cursors restart each run and are not valid
+   cross-run identity. A mismatch forces `run-changed`; resume without cursors
+   may take a current full rebase.
+9. Stamp owner events to membership lineage, not reusable caller-selected
+   player id alone. A new membership reusing the same player id must never read
+   the previous membership's private events through either WebSocket recovery
+   or authenticated `/events`. Owner-sensitive publication without a current
+   membership fails closed instead of becoming public.
+10. Treat `since=0` as a gap when the journal has dropped earlier events. Do
+    not exploit the generic journal reader's HTTP-style zero exception to send
+    a partial retained tail as complete recovery.
+11. Validate event ACK only through the highest eligible event actually issued
+    to that binding. Public/owner state watermarks and delivery ACKs cannot
+    advance playback truth. Account for private-event sequence holes with an
+    explicit eligible-through cursor/checkpoint rather than trusting a generic
+    contiguous sequence.
+12. Capture one journal upper bound per projection and never send an event
+    newer than the full public/owner baseline paired with that pass. Gap/run
+    recovery must order `rebase -> matching full public -> matching owner`
+    before later events, with final binding revalidation around awaited work.
+13. Bound replay by frames and encoded bytes while reserving reliable queue
+    headroom for action ACKs. Delivery ACK releases bytes only; event ACK
+    advances playback and releases pending replay state. Keep all replay work
+    inside measured serialized projection accounting.
 
 ## Verification
 
@@ -74,12 +107,22 @@ Add real-socket proof for:
 - duplicate/regressive ACK tolerance and future cursor rejection;
 - retention overflow producing explicit rebase rather than partial replay;
 - run reset producing run-changed recovery and no old-run event leakage;
+- equal numeric cursors from another `lastRunId` forcing run-changed;
+- reused player id under a new membership seeing no prior owner marker through
+  WebSocket or `/events`;
+- state watermark or delivery ACK unable to skip an unissued/unplayed event;
+- exact ordered rebase plus matching public/owner full baseline;
+- private sequence holes advancing only after every eligible event is issued;
+- replay near byte/message caps retaining action-ACK headroom;
+- an event published during delayed owner projection waiting for the next
+  captured baseline;
 - slow-reader bounds, reconnect fencing, and 1/4/8 cadence.
 
 Run:
 
 ```sh
-node tests/sim-event-journal.cjs
+node tests/protocol-journal.cjs
+node tests/multiplayer-wire-protocol.cjs
 node tests/multiplayer-ws-adapter-core.cjs
 node tests/multiplayer-ws-runtime.cjs
 npm run test:multiplayer-network
