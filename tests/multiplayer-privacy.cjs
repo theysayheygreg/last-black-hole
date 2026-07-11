@@ -139,6 +139,8 @@ async function run() {
       const publicHistory = await request(`/snapshots?runId=${encodeURIComponent(runId)}&since=0`);
       assert(publicHistory.status === 200 && publicHistory.body.snapshots.length >= 1,
         "Expected retained snapshot history");
+      assert(publicHistory.body.ownerState === null,
+        "Unauthenticated history must not carry a current owner state");
       for (const snapshot of publicHistory.body.snapshots) {
         for (const entry of snapshot.players) assertPublicPlayer(entry, "public history player");
       }
@@ -148,10 +150,21 @@ async function run() {
       const historyA = await request(`/snapshots?runId=${encodeURIComponent(runId)}&since=0`, {
         authority: authorityA1,
       });
-      assert(historyA.body.snapshots.every((snapshot) =>
-        player(snapshot, authorityA1.playerId)?.profileId === "private-profile-a"
-        && !Object.prototype.hasOwnProperty.call(player(snapshot, authorityB.playerId), "profileId")
-      ), "Authenticated history did not preserve owner/rival projection");
+      assert(historyA.body.snapshots.every((snapshot) => {
+        const historicalA = player(snapshot, authorityA1.playerId);
+        const historicalB = player(snapshot, authorityB.playerId);
+        return historicalA
+          && historicalB
+          && !Object.prototype.hasOwnProperty.call(historicalA, "profileId")
+          && !Object.prototype.hasOwnProperty.call(historicalB, "profileId");
+      }), "Authenticated history must keep every retained tick public-only");
+      const latestHistoricalTick = Math.max(...historyA.body.snapshots.map((snapshot) => snapshot.tick));
+      assert(historyA.body.ownerState?.playerId === authorityA1.playerId
+        && Number.isFinite(historyA.body.ownerState?.asOfTick)
+        && historyA.body.ownerState.asOfTick >= latestHistoricalTick
+        && historyA.body.ownerState?.player?.profileId === "private-profile-a"
+        && !JSON.stringify(historyA.body.ownerState).includes("private-profile-b"),
+      "Authenticated history must label one current owner state without rival private data");
 
       const rebase = await request("/snapshots?runId=retired-run&since=0");
       assert(rebase.status === 200 && rebase.body.status === "reset" && rebase.body.snapshots.length === 0,

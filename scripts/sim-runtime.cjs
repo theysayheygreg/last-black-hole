@@ -1691,6 +1691,21 @@ function projectSnapshotForPlayer(snapshot, playerId = null) {
   };
 }
 
+function currentOwnerSnapshotState(playerId = null) {
+  if (!playerId) return null;
+  const owner = runtime.players.get(playerId);
+  if (!owner) return null;
+  return {
+    playerId,
+    asOfTick: runtime.tick,
+    asOfSimTime: runtime.simTime,
+    player: {
+      ...publicPlayerSnapshot(owner),
+      ...ownerPrivatePlayerSnapshot(owner),
+    },
+  };
+}
+
 function buildSnapshotBody() {
   return {
     type: "snapshot",
@@ -6027,9 +6042,11 @@ const server = http.createServer(async (req, res) => {
         type: "snapshots",
         protocolVersion: PROTOCOL_VERSION,
         ...history,
-        snapshots: history.snapshots.map((snapshot) =>
-          projectSnapshotForPlayer(snapshot, reader.playerId)
-        ),
+        // The retained ring is a public historical baseline. Do not graft
+        // today's private state onto old ticks; authenticated diagnostics get
+        // one explicitly current owner state beside that public history.
+        snapshots: history.snapshots,
+        ownerState: currentOwnerSnapshotState(reader.playerId),
       });
       return;
     }

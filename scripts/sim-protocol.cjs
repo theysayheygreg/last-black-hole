@@ -183,6 +183,13 @@ function createProtocolDescription() {
           recentEvents: "array of authoritative events",
         },
       },
+      snapshotHistory: {
+        direction: "server->client",
+        body: {
+          snapshots: "bounded public-only historical baselines",
+          ownerState: "authenticated current owner state with explicit asOfTick/asOfSimTime; null for public readers",
+        },
+      },
       events: {
         direction: "server->client",
         body: {
@@ -200,6 +207,7 @@ function createProtocolDescription() {
       },
       reconnect: "same run + player id + credential rotates connection authority while preserving membership and monotonic counters",
       snapshotPrivacy: "unauthenticated reads receive public projection; current connection authority adds only its owner-private overlay",
+      snapshotHistoryPrivacy: "history is always public-only; authenticated reads receive one separately labeled current owner state, never private state copied into historical ticks",
       rejection: "stale run, wrong player, invalid credential, stale command, and stale input are deterministic errors",
     },
   };
