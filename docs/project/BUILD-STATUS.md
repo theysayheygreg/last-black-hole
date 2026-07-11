@@ -145,6 +145,26 @@ in both clips. The shareable copies are mirrored to:
 - Greg reviews feel, route pleasure, visual hierarchy, and polish;
 - Greg explicitly promotes v0.3 to `main` when ready.
 
+### Steam Deck Side-by-side Comparison
+
+Installed and checksum-verified on 2026-07-10:
+
+| Steam entry | Source | Install directory | App id |
+|---|---|---|---:|
+| Last Singularity v0.2 Demo | `main` at `83953aa`, build `0.2.2.83953aa` | `/home/deck/Games/last-singularity-v02` | `2947990413` |
+| Last Singularity v0.3 Preview | v0.3 at `fb2432a`, build `0.3.0.fb2432a` | `/home/deck/Games/last-singularity-v03` | `3771676273` |
+
+Both branches passed their clean `release:internal` gate from detached
+worktrees. The v0.3 package also passed `test:package`. Remote executable and
+`app.asar` SHA-256 values match the local artifacts. The two launchers use
+separate log and Electron user-data namespaces, so profiles and caches do not
+contaminate the comparison.
+
+This proves installation and shortcut identity, not physical Gaming Mode
+acceptance. Steam was shut down safely while `shortcuts.vdf` was updated;
+return to Gaming Mode so Steam reloads both entries, then compare controller
+navigation, movement feel, readability, suspend/resume, and runtime logs.
+
 ## v0.2 Public/Demo Line
 
 `main` remains the stable current-version line. It is the correct place for

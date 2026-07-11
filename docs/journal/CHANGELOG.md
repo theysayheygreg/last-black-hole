@@ -32,6 +32,9 @@
 - Generalized private Deck deployment for side-by-side version comparisons:
   external artifacts can now install under distinct names, directories, logs,
   user-data namespaces, desktop entries, and Steam shortcut app ids.
+- Built clean all-target releases from `main` (`0.2.2.83953aa`) and the v0.3
+  branch (`0.3.0.fb2432a`), deployed them as **v0.2 Demo** and **v0.3 Preview**,
+  registered both in Gaming Mode, and checksum-verified both remote packages.
 
 ## 2026-07-10 — v0.3 visual production system
 
