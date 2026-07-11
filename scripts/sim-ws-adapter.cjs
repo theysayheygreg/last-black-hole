@@ -25,8 +25,17 @@ const {
   enqueueBoundedInbound,
 } = require("./sim-ws-adapter-guards.cjs");
 
+const MAX_PENDING_REPLAY_EVENTS = 32;
+const MAX_REPLAY_EVENTS_PER_PASS = 8;
+const MAX_PENDING_REPLAY_BYTES = 64 * 1024;
+const ACTION_RELIABLE_MESSAGE_RESERVE = 16;
+const ACTION_RELIABLE_BYTE_RESERVE = 32 * 1024;
+
 function createSimWebSocketAdapter(options = {}) {
   const config = normalizeAdapterOptions(options);
+  const buildEventRecovery = typeof options.buildEventRecovery === "function"
+    ? options.buildEventRecovery
+    : async () => null;
   const {
     server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
     onPong, onAck, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
@@ -48,6 +57,12 @@ function createSimWebSocketAdapter(options = {}) {
   let maxObservedPendingInbound = 0;
   let pendingInboundBytesTotal = 0;
   let maxObservedPendingInboundBytes = 0;
+  const eventReplayStats = {
+    replayedEvents: 0,
+    eventAcks: 0,
+    forcedRebases: 0,
+    duplicatePendingEvents: 0,
+  };
 
   const handleUpgrade = createUpgradeHandler({
     wss,
@@ -191,14 +206,41 @@ function createSimWebSocketAdapter(options = {}) {
     }
   }
 
-  function enqueueReliableState(state, frame) {
+  function enqueueReliableState(state, frame, { replayEvent = false } = {}) {
     if (state.closing) return { accepted: false, action: "disconnect", reason: "connection-closing" };
     try {
+      if (replayEvent && frame?.type === "event") {
+        if (frame.eventSeq <= state.lastEventAckSeq || state.pendingEventSeqs.has(frame.eventSeq)) {
+          eventReplayStats.duplicatePendingEvents += 1;
+          return { accepted: false, action: "ignore", reason: "event-already-pending" };
+        }
+        if (state.pendingEventSeqs.size >= MAX_PENDING_REPLAY_EVENTS) {
+          return { accepted: false, action: "ignore", reason: "event-replay-window-full" };
+        }
+      }
       const nextId = state.queue.status().highestIssuedReliableId + 1;
       const retainedFrame = frame?.deliveryId === undefined ? { ...frame, deliveryId: nextId } : frame;
       encodeWireFrame(retainedFrame, { direction: SERVER_TO_CLIENT });
+      const wireBytes = Buffer.byteLength(JSON.stringify(retainedFrame), "utf8");
+      if (replayEvent && retainedFrame.type === "event") {
+        const queueStatus = state.queue.status();
+        if (
+          state.pendingEventBytes + wireBytes > MAX_PENDING_REPLAY_BYTES
+          || queueStatus.reliableMessages >= state.queue.limits.maxReliableMessages - ACTION_RELIABLE_MESSAGE_RESERVE
+          || queueStatus.reliableBytes + wireBytes > state.queue.limits.maxReliableBytes - ACTION_RELIABLE_BYTE_RESERVE
+        ) return { accepted: false, action: "ignore", reason: "event-replay-budget-full" };
+      }
       const result = state.queue.enqueueConsequence(retainedFrame, { reliableId: retainedFrame.deliveryId });
       queueOutcome(state, result);
+      if (result.accepted && replayEvent && retainedFrame.type === "event") {
+        state.pendingEventSeqs.set(retainedFrame.eventSeq, result.byteLength);
+        state.pendingEventBytes += result.byteLength;
+        state.binding.highestIssuedEventSeq = Math.max(
+          state.binding.highestIssuedEventSeq || 0,
+          retainedFrame.eventSeq,
+        );
+        eventReplayStats.replayedEvents += 1;
+      }
       flush(state);
       return result.accepted ? { ...result, frame: retainedFrame } : result;
     } catch (error) {
@@ -232,6 +274,9 @@ function createSimWebSocketAdapter(options = {}) {
     state.identity = identity;
     if (typeof state.binding === "object" && state.binding !== null) bindingKeys.set(state.binding, bindingKey);
     state.bound = true;
+    state.pendingEventSeqs = new Map();
+    state.pendingEventBytes = 0;
+    state.lastEventAckSeq = Math.max(0, Number(result.binding.requestedEventSeq) || 0);
     if (!(await isBindingCurrent(state, "private-welcome"))) {
       if (!stateIsLive(state, expectedGeneration)) return;
       throw Object.assign(new Error("redeemed binding is no longer current"), { publicCode: "connection-fenced", closeCode: 4003 });
@@ -259,6 +304,17 @@ function createSimWebSocketAdapter(options = {}) {
     currentRunId = result.welcome.runId;
     sendFrame(state, result.welcome);
     sendFrame(state, result.rebase);
+    if (Array.isArray(result.baselineFrames)) {
+      for (const baselineFrame of result.baselineFrames) sendFrame(state, baselineFrame);
+    }
+    if (Array.isArray(result.reliableEvents)) {
+      let enqueued = 0;
+      for (const event of result.reliableEvents) {
+        if (enqueued >= MAX_REPLAY_EVENTS_PER_PASS) break;
+        const outcome = enqueueReliableState(state, event, { replayEvent: true });
+        if (outcome.accepted) enqueued += 1;
+      }
+    }
   }
 
   async function handleBoundFrame(state, frame) {
@@ -311,6 +367,19 @@ function createSimWebSocketAdapter(options = {}) {
       if (!stateIsLive(state, expectedGeneration)) return;
       await onAck(state.binding, frame, callbackContext(state, "ack"));
       if (!stateIsLive(state, expectedGeneration)) return;
+      if (frame.ackKind === "event" || frame.ackKind === "baseline") {
+        const eventSeq = frame.eventSeq;
+        if (eventSeq > state.lastEventAckSeq) {
+          state.lastEventAckSeq = eventSeq;
+          eventReplayStats.eventAcks += 1;
+          for (const [pendingSeq, bytes] of state.pendingEventSeqs) {
+            if (pendingSeq <= eventSeq) {
+              state.pendingEventSeqs.delete(pendingSeq);
+              state.pendingEventBytes = Math.max(0, state.pendingEventBytes - bytes);
+            }
+          }
+        }
+      }
       flush(state);
       return;
     }
@@ -415,6 +484,20 @@ function createSimWebSocketAdapter(options = {}) {
         }
         encodeWireFrame(ownerFrame, { direction: SERVER_TO_CLIENT });
         assertOwnerProjection(ownerFrame, publicFrame, state.identity);
+        const recovery = await buildEventRecovery(
+          state.binding,
+          publicFrame,
+          ownerFrame,
+          Object.freeze({
+            maxEvents: Math.min(
+              MAX_REPLAY_EVENTS_PER_PASS,
+              Math.max(0, MAX_PENDING_REPLAY_EVENTS - state.pendingEventSeqs.size),
+            ),
+            maxBytes: Math.max(0, MAX_PENDING_REPLAY_BYTES - state.pendingEventBytes),
+            pendingEventSeqs: Object.freeze([...state.pendingEventSeqs.keys()]),
+          }),
+          callbackContext(state, "event-recovery"),
+        );
         if (!(await isBindingCurrent(state, "private-project-send"))) {
           if (!stateIsLive(state)) {
             skipped += 1;
@@ -424,6 +507,30 @@ function createSimWebSocketAdapter(options = {}) {
           sendApplicationClose(state, 4003, "connection fenced", true);
           skipped += 1;
           continue;
+        }
+        if (recovery?.rebase) {
+          encodeWireFrame(recovery.rebase, { direction: SERVER_TO_CLIENT });
+          state.queue.reset();
+          state.pendingEventSeqs.clear();
+          state.pendingEventBytes = 0;
+          state.lastEventAckSeq = recovery.rebase.lastEventSeq;
+          eventReplayStats.forcedRebases += 1;
+          sendFrame(state, recovery.rebase);
+          sendFrame(state, publicFrame);
+          sendFrame(state, ownerFrame);
+          projected += 1;
+          continue;
+        }
+        let recoveryAccepted = true;
+        for (const event of recovery?.events || []) {
+          const eventOutcome = enqueueReliableState(state, event, { replayEvent: true });
+          if (!eventOutcome.accepted) {
+            recoveryAccepted = false;
+            break;
+          }
+        }
+        if (recoveryAccepted && Number.isSafeInteger(recovery?.scanThrough)) {
+          state.binding.eventScanSeq = Math.max(state.binding.eventScanSeq || 0, recovery.scanThrough);
         }
         const outcome = state.queue.enqueueState(publicFrame.snapshotId, {
           kind: "state-pair",
@@ -476,6 +583,10 @@ function createSimWebSocketAdapter(options = {}) {
       return { accepted: false, action: "disconnect", reason: "connection-fenced" };
     }
     state.queue.reset();
+    state.pendingEventSeqs.clear();
+    state.pendingEventBytes = 0;
+    state.lastEventAckSeq = Math.max(state.lastEventAckSeq, Number(frame.lastEventSeq) || 0);
+    eventReplayStats.forcedRebases += 1;
     if (!sendFrame(state, frame)) return { accepted: false, action: "disconnect", reason: "send-failed" };
     return { accepted: true, action: "sent" };
   }
@@ -492,12 +603,12 @@ function createSimWebSocketAdapter(options = {}) {
         continue;
       }
       try {
-        const frame = typeof frameFactory === "function"
+        const produced = typeof frameFactory === "function"
           ? await frameFactory(state.binding, callbackContext(state, "broadcast-reliable"))
           : frameFactory;
         if (!stateIsLive(state)) {
           results.push({ accepted: false, action: "ignore", reason: "connection-not-live" });
-        } else if (frame && !(await isBindingCurrent(state, "private-reliable-send-final"))) {
+        } else if (produced && !(await isBindingCurrent(state, "private-reliable-send-final"))) {
           if (!stateIsLive(state)) {
             results.push({ accepted: false, action: "ignore", reason: "connection-not-live" });
           } else {
@@ -505,8 +616,27 @@ function createSimWebSocketAdapter(options = {}) {
             sendApplicationClose(state, 4003, "connection fenced", true);
             results.push({ accepted: false, action: "disconnect", reason: "connection-fenced" });
           }
-        } else if (frame) {
-          results.push(enqueueReliableState(state, frame));
+        } else if (produced?.rebase) {
+          encodeWireFrame(produced.rebase, { direction: SERVER_TO_CLIENT });
+          state.queue.reset();
+          state.pendingEventSeqs.clear();
+          state.pendingEventBytes = 0;
+          state.lastEventAckSeq = Math.max(0, Number(produced.rebase.lastEventSeq) || 0);
+          eventReplayStats.forcedRebases += 1;
+          results.push(sendFrame(state, produced.rebase)
+            ? { accepted: true, action: "rebase" }
+            : { accepted: false, action: "disconnect", reason: "send-failed" });
+        } else if (produced) {
+          const replayFrames = Array.isArray(produced) ? produced : [produced];
+          let accepted = 0;
+          let ignored = 0;
+          for (const frame of replayFrames) {
+            if (accepted >= MAX_REPLAY_EVENTS_PER_PASS) break;
+            const outcome = enqueueReliableState(state, frame, { replayEvent: frame?.type === "event" });
+            if (outcome.accepted) accepted += 1;
+            else ignored += 1;
+          }
+          results.push({ accepted: accepted > 0, action: accepted > 0 ? "queued" : "ignore", acceptedFrames: accepted, ignoredFrames: ignored });
         }
       } catch (error) {
         const safe = publicError(error, "reliable-factory-failed");
@@ -517,13 +647,25 @@ function createSimWebSocketAdapter(options = {}) {
     return results;
   }
 
-  function rotateRun(nextRunId) {
+  function rotateRun(nextRunId, watermarks = null) {
     currentRunId = nextRunId || null;
     let fenced = 0;
     for (const state of [...connections]) {
       state.queue.reset();
+      state.pendingEventSeqs?.clear();
+      state.pendingEventBytes = 0;
       if (!state.closing) {
         fenced += 1;
+        if (watermarks) {
+          sendFrame(state, {
+            type: "rebase",
+            runId: currentRunId,
+            reason: "run-changed",
+            snapshotId: Math.max(1, Number(watermarks.snapshotId) || 1),
+            lastEventSeq: Math.max(0, Number(watermarks.lastEventSeq) || 0),
+          });
+          eventReplayStats.forcedRebases += 1;
+        }
         state.closing = true;
         sendApplicationClose(state, 4003, "run changed", true);
       }
@@ -578,6 +720,10 @@ function createSimWebSocketAdapter(options = {}) {
 
   function diagnostics() {
     const summary = summarizeConnections(connections);
+    let pendingEventFrames = 0;
+    let pendingEventBytes = 0;
+    for (const state of connections) pendingEventFrames += state.pendingEventSeqs?.size || 0;
+    for (const state of connections) pendingEventBytes += state.pendingEventBytes || 0;
     return Object.freeze({
       path,
       closed,
@@ -600,6 +746,16 @@ function createSimWebSocketAdapter(options = {}) {
       sweepIntervalMs,
       helloTimers: pendingHello,
       livenessTimers: closed ? 0 : 1,
+      eventReplay: Object.freeze({
+        maxPendingPerBinding: MAX_PENDING_REPLAY_EVENTS,
+        maxEnqueuePerPass: MAX_REPLAY_EVENTS_PER_PASS,
+        maxPendingBytesPerBinding: MAX_PENDING_REPLAY_BYTES,
+        actionMessageReserve: ACTION_RELIABLE_MESSAGE_RESERVE,
+        actionByteReserve: ACTION_RELIABLE_BYTE_RESERVE,
+        pendingEventFrames,
+        pendingEventBytes,
+        ...eventReplayStats,
+      }),
     });
   }
 

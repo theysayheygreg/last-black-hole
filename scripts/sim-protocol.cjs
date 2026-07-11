@@ -100,22 +100,25 @@ function normalizeInventoryAction(body = {}) {
   };
 }
 
-function playerEventVisibility(playerId) {
-  const normalized = normalizeIdentity(playerId);
-  if (!normalized) throw new Error("Player-local visibility requires a playerId");
-  return `player:${normalized}`;
+function playerEventVisibility(membershipId) {
+  const normalized = normalizeIdentity(membershipId);
+  if (!normalized) throw new Error("Player-local visibility requires a membershipId");
+  return `membership:${normalized}`;
 }
 
-function eventVisibleToPlayer(event, playerId = null) {
+function eventVisibleToPlayer(event, reader = null) {
   const visibility = normalizeIdentity(event?.visibility || "public");
   if (!visibility || visibility === "public") return true;
-  if (!visibility.startsWith("player:")) return false;
-  return visibility.slice("player:".length) === normalizeIdentity(playerId);
+  if (!visibility.startsWith("membership:")) return false;
+  const membershipId = typeof reader === "object" && reader !== null
+    ? reader.membershipId
+    : null;
+  return visibility.slice("membership:".length) === normalizeIdentity(membershipId);
 }
 
-function filterEventsForPlayer(events, playerId = null) {
+function filterEventsForPlayer(events, reader = null) {
   return Array.isArray(events)
-    ? events.filter((event) => eventVisibleToPlayer(event, playerId))
+    ? events.filter((event) => eventVisibleToPlayer(event, reader))
     : [];
 }
 

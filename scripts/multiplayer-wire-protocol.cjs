@@ -176,7 +176,7 @@ function protocolHeader(frame) {
 }
 
 function validateHello(frame) {
-  exactKeys(frame, new Set(["type", "wireVersion", "simProtocolVersion", "admissionTicket", "resumeTicket", "lastSnapshotId", "lastEventSeq"]));
+  exactKeys(frame, new Set(["type", "wireVersion", "simProtocolVersion", "admissionTicket", "resumeTicket", "lastRunId", "lastSnapshotId", "lastEventSeq"]));
   protocolHeader(frame);
   requiredString(frame.simProtocolVersion, "simProtocolVersion");
   if (frame.simProtocolVersion !== SIM_PROTOCOL_VERSION) {
@@ -185,10 +185,15 @@ function validateHello(frame) {
   const admission = optionalString(frame.admissionTicket, "admissionTicket", LIMITS.maxTicketLength);
   const resume = optionalString(frame.resumeTicket, "resumeTicket", LIMITS.maxTicketLength);
   if (Boolean(admission) === Boolean(resume)) fail("invalid-ticket", "hello requires exactly one admissionTicket or resumeTicket", 4401);
+  const lastRunId = optionalString(frame.lastRunId, "lastRunId");
   if (frame.lastSnapshotId !== undefined) integer(frame.lastSnapshotId, "lastSnapshotId");
   if (frame.lastEventSeq !== undefined) integer(frame.lastEventSeq, "lastEventSeq");
-  if (!resume && (frame.lastSnapshotId !== undefined || frame.lastEventSeq !== undefined)) {
+  if (!resume && (lastRunId || frame.lastSnapshotId !== undefined || frame.lastEventSeq !== undefined)) {
     fail("invalid-resume-cursor", "resume cursors require a resumeTicket");
+  }
+  const cursorParts = [Boolean(lastRunId), frame.lastSnapshotId !== undefined, frame.lastEventSeq !== undefined];
+  if (resume && cursorParts.some(Boolean) && !cursorParts.every(Boolean)) {
+    fail("invalid-resume-cursor", "resume cursor requires lastRunId, lastSnapshotId, and lastEventSeq");
   }
 }
 

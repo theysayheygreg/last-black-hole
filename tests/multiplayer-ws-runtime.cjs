@@ -17,6 +17,9 @@ const DISABLED_PORT = 8840;
 const SECURITY_PORT = 8841;
 const LINEAGE_PORT = 8843;
 const ACTION_PORT = 8845;
+const EVENT_PORT = 8846;
+const EVENT_GAP_PORT = 8847;
+const EVENT_UPPER_PORT = 8849;
 const COHORT_PORTS = { 1: 8842, 4: 8844, 8: 8848 };
 
 async function waitFor(check, label, timeoutMs = 5000) {
@@ -156,6 +159,291 @@ async function playerEventCount(port, authority, type) {
   return response.body.events.filter((event) => event.type === type).length;
 }
 
+async function runEventRecoveryFixture() {
+  await startSimServer(EVENT_PORT, { keepAlive: true, env: { LBH_SIM_WS_ENABLED: "true" } });
+  const clients = [];
+  try {
+    const started = await request(EVENT_PORT, "/session/start", {
+      method: "POST",
+      body: { mapId: "shallows", requesterId: "event-a", requesterName: "Event A", maxPlayers: 2 },
+    });
+    const authorities = [];
+    for (const id of ["event-a", "event-b"]) {
+      const joined = await request(EVENT_PORT, "/join", {
+        method: "POST",
+        body: {
+          runId: started.body.session.runId,
+          clientId: id,
+          joinTicket: id === "event-a" ? started.body.joinTicket : undefined,
+          name: id,
+          equipped: [{ id: `event-rig-${id}`, name: `Event Rig ${id}`, subcategory: "equippable" }],
+        },
+      });
+      authorities.push(joined.body.authority);
+    }
+    for (const authority of authorities) {
+      const ticket = await issueTicket(EVENT_PORT, authority);
+      clients.push(await openBoundClient(EVENT_PORT, ticket.body.ticket));
+    }
+    const [a, b] = clients;
+    const baselineSeq = frame(a, "rebase").lastEventSeq;
+    for (const client of [a, b]) {
+      const result = await request(EVENT_PORT, "/inventory/action", {
+        method: "POST",
+        authority: frame(client, "welcome"),
+        body: command(frame(client, "welcome"), 1, { action: "unequip", equipSlot: 0 }),
+      });
+      assert(result.status === 200, "Expected private inventory event fixture");
+    }
+    const eventA = await waitFor(() => frames(a, "event").find((entry) =>
+      entry.eventType === "player.inventoryAction" && entry.payload.clientId === authorities[0].playerId
+    ), "owner A inventory event");
+    await waitFor(() => frames(b, "event").some((entry) =>
+      entry.eventType === "player.inventoryAction" && entry.payload.clientId === authorities[1].playerId
+    ), "owner B inventory event");
+    assert(!frames(a, "event").some((entry) =>
+      entry.eventType === "player.inventoryAction" && entry.payload.clientId === authorities[1].playerId
+    ), "Owner A received owner B's private consequence");
+    const checkpoint = await waitFor(() => frames(a, "event").find((entry) =>
+      entry.eventType === "system.eventCursor" && entry.eventSeq > eventA.eventSeq
+    ), "private-hole cursor checkpoint");
+    a.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: eventA.deliveryId }));
+    const deliveredOnly = await waitFor(async () => {
+      const health = await request(EVENT_PORT, "/health");
+      return health.body.multiplayer.adapter.eventReplay.pendingEventFrames > 0 ? health : null;
+    }, "delivery ACK preserves playback pending state");
+    assert(deliveredOnly.body.multiplayer.adapter.eventReplay.pendingEventBytes > 0,
+      "Playback-pending diagnostics must remain byte bounded after delivery ACK");
+    a.ws.send(JSON.stringify({ type: "ack", ackKind: "event", eventSeq: checkpoint.eventSeq }));
+
+    const inventory = await request(EVENT_PORT, "/inventory/action", {
+      method: "POST",
+      authority: frame(a, "welcome"),
+      body: command(frame(a, "welcome"), 2, { action: "equipCargo", cargoSlot: 0, equipSlot: 0 }),
+    });
+    assert(inventory.status === 200, "Expected owner-private inventory consequence");
+    const inventoryEvent = await waitFor(() => frames(a, "event").find((entry) =>
+      entry.eventType === "player.inventoryAction" && entry.payload.action === "equipCargo"
+    ), "inventory event before disconnect");
+    a.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: inventoryEvent.deliveryId }));
+    const resumeTicket = await issueTicket(EVENT_PORT, frame(a, "welcome"), "resume");
+    const resumed = await openBoundClient(EVENT_PORT, resumeTicket.body.ticket, "resume", {
+      lastRunId: started.body.session.runId,
+      lastSnapshotId: frame(a, "publicState").snapshotId,
+      lastEventSeq: checkpoint.eventSeq,
+    });
+    clients[0] = resumed;
+    const replay = await waitFor(() => frames(resumed, "event").find((entry) =>
+      entry.eventType === "player.inventoryAction" && entry.eventSeq === inventoryEvent.eventSeq
+    ), "unacknowledged event replay");
+    const order = ["welcome", "rebase", "publicState", "ownerState"].map((type) =>
+      resumed.frames.findIndex((entry) => entry.type === type));
+    assert(order.every((index, position) => index >= 0 && (position === 0 || index > order[position - 1]))
+      && resumed.frames.indexOf(replay) > order.at(-1),
+    `Resume baseline must be atomic before replay: ${JSON.stringify(order)}`);
+    assert(frame(resumed, "rebase").lastEventSeq === checkpoint.eventSeq,
+      "Resume rebase must advertise the acknowledged replay cursor, not the state watermark");
+    resumed.ws.send(JSON.stringify({ type: "ack", ackKind: "event", eventSeq: replay.eventSeq }));
+
+    const fillStart = frames(resumed, "event").length;
+    for (let offset = 0; offset < 32; offset += 1) {
+      const commandSeq = 3 + offset;
+      const unequip = offset % 2 === 0;
+      const result = await request(EVENT_PORT, "/inventory/action", {
+        method: "POST",
+        authority: frame(resumed, "welcome"),
+        body: command(frame(resumed, "welcome"), commandSeq, unequip
+          ? { action: "unequip", equipSlot: 0 }
+          : { action: "equipCargo", cargoSlot: 0, equipSlot: 0 }),
+      });
+      assert(result.status === 200, `Expected replay-window filler ${offset + 1}`);
+    }
+    const fillEvents = await waitFor(() => {
+      const entries = frames(resumed, "event").slice(fillStart)
+        .filter((entry) => entry.eventType === "player.inventoryAction");
+      return entries.length >= 32 ? entries.slice(0, 32) : null;
+    }, "full playback-pending event window", 8000);
+    for (const entry of fillEvents) {
+      resumed.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: entry.deliveryId }));
+    }
+    const fullWindow = await waitFor(async () => {
+      const health = await request(EVENT_PORT, "/health");
+      return health.body.multiplayer.adapter.eventReplay.pendingEventFrames >= 32 ? health : null;
+    }, "32-event playback window");
+    assert(fullWindow.body.multiplayer.adapter.eventReplay.actionMessageReserve === 16
+      && fullWindow.body.multiplayer.adapter.eventReplay.actionByteReserve === 32 * 1024,
+    "Event replay must reserve explicit reliable headroom for action ACKs");
+    const beatsBefore = fullWindow.body.multiplayer.projection.beats;
+    await new Promise((resolve) => setTimeout(resolve, 450));
+    const backlogHealth = await request(EVENT_PORT, "/health");
+    assert(backlogHealth.body.multiplayer.projection.beats >= beatsBefore + 2
+      && backlogHealth.body.multiplayer.projection.errors === 0,
+    "A full playback backlog must not stall the tick-coupled projection cadence");
+    const actionWithFullReplay = await sendAction(resumed, {
+      actionId: "event-window-action",
+      actionSeq: 1,
+      commandSeq: 35,
+      actionKind: "pulse",
+      payload: {},
+    });
+    assert(actionWithFullReplay.status === "accepted", "Full event playback window starved a reliable action ACK");
+    resumed.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: actionWithFullReplay.deliveryId }));
+
+    const hidden = await request(EVENT_PORT, "/inventory/action", {
+      method: "POST",
+      authority: frame(b, "welcome"),
+      body: command(frame(b, "welcome"), 2, { action: "equipCargo", cargoSlot: 0, equipSlot: 0 }),
+    });
+    assert(hidden.status === 200, "Expected hidden-tail event while owner A replay window was full");
+    const hiddenEvent = await waitFor(() => frames(b, "event").find((entry) =>
+      entry.eventType === "player.inventoryAction" && entry.payload.action === "equipCargo"
+    ), "hidden private tail event");
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert(!frames(resumed, "event").some((entry) =>
+      entry.eventType === "system.eventCursor" && entry.eventSeq >= hiddenEvent.eventSeq
+    ), "A full replay window advanced a hidden-tail scan without issuing its checkpoint");
+    resumed.ws.send(JSON.stringify({ type: "ack", ackKind: "event", eventSeq: fillEvents.at(-1).eventSeq }));
+    await waitFor(() => frames(resumed, "event").find((entry) =>
+      entry.eventType === "system.eventCursor" && entry.eventSeq >= hiddenEvent.eventSeq
+    ), "deferred hidden-tail checkpoint after capacity release");
+
+    const left = await request(EVENT_PORT, "/leave", {
+      method: "POST",
+      authority: frame(b, "welcome"),
+      body: command(frame(b, "welcome"), 3, { playerId: authorities[1].playerId }),
+    });
+    assert(left.status === 200, "Expected old membership to leave");
+    const rejoined = await request(EVENT_PORT, "/join", {
+      method: "POST",
+      body: { runId: started.body.session.runId, clientId: authorities[1].playerId, name: "Event B New" },
+    });
+    assert(rejoined.body.authority.membershipId !== authorities[1].membershipId,
+      "Reused player id must receive a new membership lineage");
+    const eventsHttp = await request(EVENT_PORT, `/events?runId=${encodeURIComponent(started.body.session.runId)}&since=0`, {
+      authority: rejoined.body.authority,
+    });
+    assert(!eventsHttp.body.events.some((entry) =>
+      entry.type === "player.inventoryAction" && entry.payload.clientId === authorities[1].playerId
+    ), "New membership recovered prior occupant private events over HTTP");
+    const newResumeTicket = await issueTicket(EVENT_PORT, rejoined.body.authority, "resume");
+    const reused = await openBoundClient(EVENT_PORT, newResumeTicket.body.ticket, "resume", {
+      lastRunId: started.body.session.runId,
+      lastSnapshotId: 1,
+      lastEventSeq: baselineSeq,
+    });
+    clients.push(reused);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert(!frames(reused, "event").some((entry) =>
+      entry.eventType === "player.inventoryAction" && entry.payload.clientId === authorities[1].playerId
+    ), "New membership recovered prior occupant private events over WebSocket");
+    reused.ws.send(JSON.stringify({ type: "ack", ackKind: "event", eventSeq: 999999 }));
+    await waitFor(() => reused.close, "issued-only future event ACK rejection");
+    assert(frame(reused, "error")?.code === "future-recovery-cursor",
+      "Event ACK must be bounded by the highest eligible cursor actually issued");
+  } finally {
+    await Promise.all(clients.map(closeClient));
+    await stopSimServer(EVENT_PORT).catch(() => null);
+  }
+}
+
+async function runEventUpperBoundFixture() {
+  await startSimServer(EVENT_UPPER_PORT, {
+    keepAlive: true,
+    env: { LBH_SIM_WS_ENABLED: "true", LBH_SIM_WS_TEST_PROJECTION_DELAY_MS: "600" },
+  });
+  let client = null;
+  try {
+    const started = await request(EVENT_UPPER_PORT, "/session/start", {
+      method: "POST",
+      body: { mapId: "shallows", requesterId: "upper-a", requesterName: "Upper A", maxPlayers: 1 },
+    });
+    const joined = await request(EVENT_UPPER_PORT, "/join", {
+      method: "POST",
+      body: {
+        runId: started.body.session.runId,
+        clientId: "upper-a",
+        joinTicket: started.body.joinTicket,
+        equipped: [{ id: "upper-rig", name: "Upper Rig", subcategory: "equippable" }],
+      },
+    });
+    const ticket = await issueTicket(EVENT_UPPER_PORT, joined.body.authority);
+    client = await openBoundClient(EVENT_UPPER_PORT, ticket.body.ticket);
+    await waitFor(async () => {
+      const health = await request(EVENT_UPPER_PORT, "/health");
+      return health.body.multiplayer.projection.inFlight ? health : null;
+    }, "captured delayed projection");
+    const inventory = await request(EVENT_UPPER_PORT, "/inventory/action", {
+      method: "POST",
+      authority: frame(client, "welcome"),
+      body: command(frame(client, "welcome"), 1, { action: "unequip", equipSlot: 0 }),
+    });
+    assert(inventory.status === 200, "Expected event injected after projection capture");
+    await waitFor(async () => {
+      const health = await request(EVENT_UPPER_PORT, "/health");
+      return health.body.multiplayer.projection.accounting.projectionDurationSamples === 1 ? health : null;
+    }, "first delayed projection settlement", 3000);
+    assert(!frames(client, "event").some((entry) => entry.eventType === "player.inventoryAction"),
+      "A projection delivered an event newer than its captured public watermark");
+    await waitFor(() => frames(client, "event").find((entry) => entry.eventType === "player.inventoryAction"),
+      "next captured projection event", 3000);
+  } finally {
+    await closeClient(client);
+    await stopSimServer(EVENT_UPPER_PORT).catch(() => null);
+  }
+}
+
+async function runEventGapFixture() {
+  await startSimServer(EVENT_GAP_PORT, {
+    keepAlive: true,
+    env: { LBH_SIM_WS_ENABLED: "true", LBH_SIM_EVENT_JOURNAL_CAPACITY: "4" },
+  });
+  let client = null;
+  try {
+    const started = await request(EVENT_GAP_PORT, "/session/start", {
+      method: "POST",
+      body: { mapId: "shallows", requesterId: "gap-a", requesterName: "Gap A", maxPlayers: 1 },
+    });
+    const joined = await request(EVENT_GAP_PORT, "/join", {
+      method: "POST",
+      body: {
+        runId: started.body.session.runId,
+        clientId: "gap-a",
+        joinTicket: started.body.joinTicket,
+        equipped: [{ id: "gap-rig", name: "Gap Rig", subcategory: "equippable" }],
+      },
+    });
+    let authority = joined.body.authority;
+    for (let seq = 1; seq <= 8; seq += 1) {
+      const unequip = seq % 2 === 1;
+      const result = await request(EVENT_GAP_PORT, "/inventory/action", {
+        method: "POST",
+        authority,
+        body: command(authority, seq, unequip
+          ? { action: "unequip", equipSlot: 0 }
+          : { action: "equipCargo", cargoSlot: 0, equipSlot: 0 }),
+      });
+      assert(result.status === 200, `Expected retention filler ${seq}`);
+      authority = { ...authority, lastCommandSeq: seq, nextCommandSeq: seq + 1 };
+    }
+    const ticket = await issueTicket(EVENT_GAP_PORT, authority, "resume");
+    client = await openBoundClient(EVENT_GAP_PORT, ticket.body.ticket, "resume", {
+      lastRunId: started.body.session.runId,
+      lastSnapshotId: 1,
+      lastEventSeq: 0,
+    });
+    assert(frame(client, "rebase")?.reason === "event-gap", "since=0 retention loss must force event-gap rebase");
+    const baselineEnd = client.frames.findIndex((entry) => entry.type === "ownerState");
+    assert(baselineEnd > client.frames.findIndex((entry) => entry.type === "rebase"),
+      "Gap rebase must precede its captured public/owner baseline");
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert(!frames(client, "event").some((entry) => entry.eventSeq < frame(client, "rebase").lastEventSeq),
+      "Retention recovery must not replay a partial tail as complete history");
+  } finally {
+    await closeClient(client);
+    await stopSimServer(EVENT_GAP_PORT).catch(() => null);
+  }
+}
+
 async function runReliableActionsFixture() {
   await startSimServer(ACTION_PORT, { keepAlive: true, env: { LBH_SIM_WS_ENABLED: "true" } });
   let client = null;
@@ -198,7 +486,7 @@ async function runReliableActionsFixture() {
     "Slingshot exact retry must return cached queue semantics under a fresh delivery");
     await waitFor(async () => {
       const health = await request(ACTION_PORT, "/health");
-      return health.body.multiplayer.adapter.queuedMessages === 2
+      return health.body.multiplayer.adapter.queuedMessages >= 2
         && health.body.multiplayer.actions.adjudicated === 1
         && health.body.multiplayer.actions.replays === 1
         ? health : null;
@@ -207,7 +495,8 @@ async function runReliableActionsFixture() {
     client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: edgeRetry.deliveryId }));
     await waitFor(async () => {
       const health = await request(ACTION_PORT, "/health");
-      return health.body.multiplayer.adapter.queuedMessages === 0 ? health : null;
+      return health.body.multiplayer.adapter.queuedMessages
+        <= health.body.multiplayer.adapter.eventReplay.pendingEventFrames ? health : null;
     }, "accepted action delivery release");
 
     const consume = {
@@ -238,13 +527,15 @@ async function runReliableActionsFixture() {
     "Consume exact retry must return cached queue semantics under a fresh delivery");
     assert(racedInventory.status === "rejected" && racedInventory.result.code === "inventory-rejected",
       "Inventory must not replace a pending consumable request");
-    await waitFor(async () => (await request(ACTION_PORT, "/health")).body.multiplayer.adapter.queuedMessages === 3,
+    await waitFor(async () => (await request(ACTION_PORT, "/health")).body.multiplayer.adapter.queuedMessages >= 3,
       "accepted consume retry and rejected inventory retained by delivery ids");
     client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: consumeAck.deliveryId }));
     client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: consumeRetry.deliveryId }));
     client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: racedInventory.deliveryId }));
-    await waitFor(async () => (await request(ACTION_PORT, "/health")).body.multiplayer.adapter.queuedMessages === 0,
-      "rejected action delivery release");
+    await waitFor(async () => {
+      const health = (await request(ACTION_PORT, "/health")).body.multiplayer.adapter;
+      return health.queuedMessages <= health.eventReplay.pendingEventFrames;
+    }, "rejected action delivery release");
     await waitFor(async () => await playerEventCount(ACTION_PORT, authority, "player.effectUsed") === 1,
       "one consumable consequence");
 
@@ -620,8 +911,9 @@ async function runProjectionLineageFixture() {
       && during.accounting.projectionDurationTotalMs === 0
       && during.accounting.pendingReplicationCostMs === 0,
     `Old completion must not charge or unlock new lineage: ${JSON.stringify(during)}`);
-    assert(frames(newClient, "publicState").length === 0,
-      "New projection overlapped the delayed old-run task");
+    assert(frames(newClient, "publicState").length === 1
+      && frames(newClient, "ownerState").length === 1,
+    "Admission may send only its atomic baseline while the delayed old projection settles");
 
     await waitFor(() => frame(newClient, "publicState"), "serialized new-run projection", 3500);
     const completedHealth = await waitFor(async () => {
@@ -692,6 +984,12 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
     assert(clients.every((client) => frame(client, "welcome") && frame(client, "rebase")),
       "Every client must receive strict welcome and initial rebase");
 
+    await waitFor(() => clients.every((client) => frames(client, "publicState").length >= 2),
+      `${count}-client first measured projection`);
+    await waitFor(async () => {
+      const health = await request(port, "/health");
+      return health.body.multiplayer.projection.accounting.projectionDurationSamples >= 1 ? health : null;
+    }, `${count}-client projection accounting`);
     const sharedSnapshotId = await waitFor(() => commonSnapshotId(clients), `${count}-client aligned projection`);
     for (let index = 0; index < count; index += 1) {
       const publicState = frame(clients[index], "publicState", (entry) => entry.snapshotId === sharedSnapshotId);
@@ -811,7 +1109,8 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
     actionClient.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: actionAck.deliveryId }));
     await waitFor(async () => {
       const health = await request(port, "/health");
-      return health.body.multiplayer.adapter.queuedMessages === 0 ? health : null;
+      return health.body.multiplayer.adapter.queuedMessages
+        <= health.body.multiplayer.adapter.eventReplay.pendingEventFrames ? health : null;
     }, "delivery ACK release");
 
     let resumeFacts = null;
@@ -821,6 +1120,7 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       const futureResumeTicket = await issueTicket(port, oldWelcome, "resume");
       assert(futureResumeTicket.status === 200, "Expected future-cursor resume ticket");
       const futureResume = await openBoundClient(port, futureResumeTicket.body.ticket, "resume", {
+        lastRunId: runId,
         lastSnapshotId: tickEnd.body.snapshotRing.lastSnapshotId + 100,
         lastEventSeq: tickEnd.body.eventJournal.lastSeq + 100,
       });
@@ -845,6 +1145,7 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       const resumeTicket = await issueTicket(port, oldWelcome, "resume");
       assert(resumeTicket.status === 200, "Expected authenticated resume ticket");
       const resumed = await openBoundClient(port, resumeTicket.body.ticket, "resume", {
+        lastRunId: runId,
         lastSnapshotId: sharedSnapshotId,
         lastEventSeq: frame(oldClient, "publicState", (entry) => entry.snapshotId === sharedSnapshotId).lastEventSeq,
       });
@@ -884,8 +1185,14 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
           name: "WS Reset Pilot",
         },
       });
-      const newTicket = await issueTicket(port, newJoin.body.authority, "admission");
-      const newClient = await openBoundClient(port, newTicket.body.ticket);
+      const newTicket = await issueTicket(port, newJoin.body.authority, "resume");
+      const newClient = await openBoundClient(port, newTicket.body.ticket, "resume", {
+        lastRunId: runId,
+        lastSnapshotId: 1,
+        lastEventSeq: 0,
+      });
+      assert(frame(newClient, "rebase")?.reason === "run-changed",
+        "Equal numeric cursors from another run must force run-changed recovery");
       const newPublic = await waitFor(() => frame(newClient, "publicState"), "new-run public state");
       const newOwner = await waitFor(() => frame(newClient, "ownerState", (entry) => entry.snapshotId === newPublic.snapshotId),
         "new-run owner state");
@@ -897,6 +1204,10 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
         newConnectionEpoch: resumedWelcome.connectionEpoch,
         resetRunChanged: true,
       };
+      await waitFor(async () => {
+        const health = await request(port, "/health");
+        return health.body.multiplayer.projection.accounting.projectionDurationSamples >= 1 ? health : null;
+      }, "new-run measured projection");
       newClient.ws.send(JSON.stringify({
         type: "ack",
         ackKind: "baseline",
@@ -1059,6 +1370,18 @@ async function run() {
     await runReliableActionsFixture();
   });
 
+  await runner.run("event journal recovery is private, replayable, ACK-bounded, and membership-scoped", async () => {
+    await runEventRecoveryFixture();
+  });
+
+  await runner.run("retention overflow rebases explicitly without replaying a partial tail", async () => {
+    await runEventGapFixture();
+  });
+
+  await runner.run("each projection replays only through its captured journal upper bound", async () => {
+    await runEventUpperBoundFixture();
+  });
+
   for (const count of [1, 4, 8]) {
     await runner.run(`${count} real clients share one tick-coupled authority stream`, async () => {
       const measurement = await runCohort(count, {
@@ -1076,7 +1399,7 @@ async function run() {
 }
 
 run().catch(async (error) => {
-  for (const port of [DISABLED_PORT, SECURITY_PORT, LINEAGE_PORT, ACTION_PORT, ...Object.values(COHORT_PORTS)]) {
+  for (const port of [DISABLED_PORT, SECURITY_PORT, LINEAGE_PORT, ACTION_PORT, EVENT_PORT, EVENT_GAP_PORT, EVENT_UPPER_PORT, ...Object.values(COHORT_PORTS)]) {
     await stopSimServer(port).catch(() => null);
   }
   console.error("MultiplayerWsRuntime test fatal error:", error.stack || error.message);

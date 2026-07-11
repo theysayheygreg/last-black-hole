@@ -128,6 +128,7 @@ const MAX_LIVE_WRECKS = readNumber(process.env.LBH_SIM_MAX_LIVE_WRECKS, 64, 1);
 const IDLE_SESSION_TICK_HZ = 1;
 const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
 const MULTIPLAYER_PENDING_REPLICATION_BUDGETS = 4;
+const EVENT_JOURNAL_CAPACITY = readNumber(process.env.LBH_SIM_EVENT_JOURNAL_CAPACITY, 256, 1);
 const MULTIPLAYER_PROJECTION_TEST_DELAY_MS = readNumber(
   process.env.LBH_SIM_WS_TEST_PROJECTION_DELAY_MS,
   0,
@@ -1000,7 +1001,7 @@ const runtime = {
   tick: 0,
   simTime: 0,
   loopTickHz: DEFAULT_TICK_HZ,
-  eventJournal: createSimEventJournal({ capacity: 256, runId: "idle" }),
+  eventJournal: createSimEventJournal({ capacity: EVENT_JOURNAL_CAPACITY, runId: "idle" }),
   snapshotRing: createSimSnapshotRing({ capacity: 32, runId: "idle" }),
   recentEvents: [],
   nextEventSeq: 1,
@@ -1074,6 +1075,9 @@ let shutdownPromise = null;
 function publishEvent(type, payload = {}, options = {}) {
   const playerId = String(payload?.clientId || options.playerId || "").trim();
   const isPlayerLocal = PLAYER_LOCAL_EVENT_TYPES.has(type) && playerId;
+  const membershipId = isPlayerLocal
+    ? runtime.playerAuthorities.get(playerId)?.membershipId
+    : null;
   const event = runtime.eventJournal.append({
     tick: runtime.tick,
     simTime: runtime.simTime,
@@ -1081,7 +1085,11 @@ function publishEvent(type, payload = {}, options = {}) {
     lane: isPlayerLocal ? "playerLocal" : options.lane,
     source: options.source,
     subject: options.subject,
-    visibility: isPlayerLocal ? playerEventVisibility(playerId) : options.visibility,
+    // A player id can be reused by a later membership. Missing authority must
+    // fail closed instead of making a local consequence public.
+    visibility: isPlayerLocal
+      ? membershipId ? playerEventVisibility(membershipId) : "private-unavailable"
+      : options.visibility,
     payload,
   });
   runtime.nextEventSeq = runtime.eventJournal.nextSeq;
@@ -1375,8 +1383,6 @@ function startSession(config = {}) {
     configurable: true,
   });
   applyRunSeed(runtime.session.rng, mapState, runtime.session);
-  rotateMultiplayerRun(runtime.session.runId);
-
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
   runtime.mapState.sentries = spawnSentries(mapState);
@@ -1482,6 +1488,7 @@ function startSession(config = {}) {
   runtime.waveRings = [];
   runtime.coarseField = null;
   rebuildAuthoritativeField({ initialize: true });
+  rotateMultiplayerRun(runtime.session.runId, { snapshotId: 1, lastEventSeq: 0 });
   telemetry.info("session.started", { sessionId: runtime.session.id, runId: runtime.session.runId, mapId: runtime.session.mapId, hostClientId: runtime.session.hostClientId, maxPlayers: runtime.session.maxPlayers, simScaleProfile: runtime.session.simScaleProfile });
   publishEvent("session.started", {
     sessionId: runtime.session.id,
@@ -6033,7 +6040,7 @@ function writeFiles() {
   }
 }
 
-function rotateMultiplayerRun(runId) {
+function rotateMultiplayerRun(runId, watermarks = null) {
   if (multiplayerTicketRegistry) multiplayerTicketRegistry.rotateRun(runId);
   else {
     multiplayerTicketRegistry = createMultiplayerTicketRegistry({
@@ -6042,7 +6049,7 @@ function rotateMultiplayerRun(runId) {
       capacity: 32,
     });
   }
-  if (multiplayerAdapter) multiplayerAdapter.rotateRun(runId);
+  if (multiplayerAdapter) multiplayerAdapter.rotateRun(runId, watermarks);
 }
 
 function currentMultiplayerProfileId(player, authority) {
@@ -6107,12 +6114,16 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
   ) throw admissionFailure();
 
   const snapshot = snapshotBody({ force: true });
+  const hasResumeCursor = kind === "resume" && frame.lastRunId !== undefined;
+  const cursorRunChanged = hasResumeCursor && frame.lastRunId !== runtime.session.runId;
   const requestedSnapshotId = Math.max(0, Number(frame.lastSnapshotId) || 0);
-  const requestedEventSeq = Math.max(0, Number(frame.lastEventSeq) || 0);
-  if (
+  const requestedEventSeq = kind === "resume"
+    ? Math.max(0, Number(frame.lastEventSeq) || 0)
+    : snapshot.lastEventSeq;
+  if (!cursorRunChanged && (
     requestedSnapshotId > snapshot.snapshotId
     || requestedEventSeq > snapshot.lastEventSeq
-  ) {
+  )) {
     throw streamCommandFailure("future-recovery-cursor");
   }
 
@@ -6127,6 +6138,15 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
     authority = issuePlayerAuthority(claims.playerId, authority);
   }
 
+  const recoveryRead = runtime.eventJournal.read({
+    since: requestedEventSeq,
+    runId: runtime.session.runId,
+  });
+  const retentionGap = requestedEventSeq < recoveryRead.droppedBeforeSeq - 1;
+  const mustRebaseEventCursor = kind === "resume" && (
+    !hasResumeCursor || cursorRunChanged || recoveryRead.stale || recoveryRead.reset || retentionGap
+  );
+  const acknowledgedEventSeq = mustRebaseEventCursor ? snapshot.lastEventSeq : requestedEventSeq;
   const binding = {
     runId: runtime.session.runId,
     membershipId: authority.membershipId,
@@ -6136,11 +6156,19 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
     profileId: currentMultiplayerProfileId(player, authority),
     snapshotId: snapshot.snapshotId,
     lastEventSeq: snapshot.lastEventSeq,
-    // Event replay is not enabled in this baseline. Every hello rebases to the
-    // current full snapshot and advances recovery cursors to that exact lineage.
     requestedSnapshotId: snapshot.snapshotId,
-    requestedEventSeq: snapshot.lastEventSeq,
+    requestedEventSeq: acknowledgedEventSeq,
+    baselineAckEventSeq: acknowledgedEventSeq,
+    eventScanSeq: acknowledgedEventSeq,
+    highestIssuedEventSeq: acknowledgedEventSeq,
   };
+  const publicFrame = buildPublicMultiplayerState();
+  const ownerFrame = buildOwnerMultiplayerState(binding, publicFrame);
+  const rebaseReason = cursorRunChanged
+    ? "run-changed"
+    : mustRebaseEventCursor && hasResumeCursor
+      ? "event-gap"
+      : kind === "resume" ? "resume" : "initial";
   return {
     binding,
     bindingKey: { runId: binding.runId, membershipId: binding.membershipId },
@@ -6164,11 +6192,91 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
     rebase: {
       type: "rebase",
       runId: binding.runId,
-      reason: kind === "resume" ? "resume" : "initial",
-      snapshotId: snapshot.snapshotId,
-      lastEventSeq: snapshot.lastEventSeq,
+      reason: rebaseReason,
+      snapshotId: publicFrame.snapshotId,
+      lastEventSeq: acknowledgedEventSeq,
     },
+    baselineFrames: [publicFrame, ownerFrame],
   };
+}
+
+function multiplayerEventFramesForBinding(binding, events) {
+  return filterEventsForPlayer(events, {
+    playerId: binding.playerId,
+    membershipId: binding.membershipId,
+  }).map((event) => ({
+    type: "event",
+    runId: event.runId,
+    eventSeq: event.seq,
+    tick: event.tick,
+    visibility: event.visibility === "public" ? "public" : "owner",
+    eventType: event.type,
+    payload: jsonProjection(event.payload),
+  }));
+}
+
+function buildMultiplayerEventRecovery(binding, publicFrame, _ownerFrame, limits) {
+  const current = currentMultiplayerBinding(binding);
+  if (!current) throw streamCommandFailure("connection-fenced", 4003);
+  const upperEventSeq = publicFrame.lastEventSeq;
+  const read = runtime.eventJournal.read({
+    since: binding.eventScanSeq,
+    runId: binding.runId,
+  });
+  const retentionGap = binding.requestedEventSeq < read.droppedBeforeSeq - 1
+    && binding.highestIssuedEventSeq < read.droppedBeforeSeq - 1;
+  if (read.stale || read.reset || read.future || retentionGap) {
+    binding.requestedSnapshotId = publicFrame.snapshotId;
+    binding.requestedEventSeq = upperEventSeq;
+    binding.baselineAckEventSeq = upperEventSeq;
+    binding.eventScanSeq = upperEventSeq;
+    binding.highestIssuedEventSeq = upperEventSeq;
+    return {
+      rebase: {
+        type: "rebase",
+        runId: publicFrame.runId,
+        reason: read.reset ? "run-changed" : "event-gap",
+        snapshotId: publicFrame.snapshotId,
+        lastEventSeq: upperEventSeq,
+      },
+    };
+  }
+  const rawEvents = read.events.filter((event) => event.seq <= upperEventSeq);
+  const events = [];
+  let bytes = 0;
+  let scanThrough = binding.eventScanSeq;
+  let lastEligibleSeq = binding.eventScanSeq;
+  for (const event of rawEvents) {
+    const [frame] = multiplayerEventFramesForBinding(binding, [event]);
+    if (!frame) {
+      scanThrough = event.seq;
+      continue;
+    }
+    const frameBytes = Buffer.byteLength(JSON.stringify({ ...frame, deliveryId: 999999999 }), "utf8");
+    if (events.length >= limits.maxEvents || bytes + frameBytes > limits.maxBytes) break;
+    events.push(frame);
+    bytes += frameBytes;
+    scanThrough = event.seq;
+    lastEligibleSeq = event.seq;
+  }
+  if (rawEvents.length === 0 && binding.eventScanSeq < upperEventSeq) scanThrough = upperEventSeq;
+  if (scanThrough > lastEligibleSeq && events.length < limits.maxEvents) {
+    const checkpoint = {
+      type: "event",
+      runId: binding.runId,
+      eventSeq: scanThrough,
+      tick: publicFrame.tick,
+      visibility: "public",
+      eventType: "system.eventCursor",
+      payload: {},
+    };
+    const checkpointBytes = Buffer.byteLength(JSON.stringify({ ...checkpoint, deliveryId: 999999999 }), "utf8");
+    if (bytes + checkpointBytes <= limits.maxBytes) events.push(checkpoint);
+    else scanThrough = lastEligibleSeq;
+  } else if (scanThrough > lastEligibleSeq) {
+    scanThrough = lastEligibleSeq;
+  }
+  return { events, scanThrough, upperEventSeq };
 }
 
 function revalidateMultiplayerBinding(binding) {
@@ -6339,7 +6447,11 @@ function acknowledgeMultiplayerCursor(binding, frame) {
   const latestSnapshotId = binding.snapshotId;
   const latestEventSeq = binding.lastEventSeq;
   if (frame.ackKind === "baseline") {
-    if (frame.snapshotId > latestSnapshotId || frame.eventSeq > latestEventSeq) {
+    if (
+      frame.snapshotId > latestSnapshotId
+      || frame.eventSeq > latestEventSeq
+      || frame.eventSeq > binding.baselineAckEventSeq
+    ) {
       throw streamCommandFailure("future-recovery-cursor");
     }
     if (
@@ -6349,7 +6461,7 @@ function acknowledgeMultiplayerCursor(binding, frame) {
     binding.requestedSnapshotId = frame.snapshotId;
     binding.requestedEventSeq = frame.eventSeq;
   } else if (frame.ackKind === "event") {
-    if (frame.eventSeq > latestEventSeq) throw streamCommandFailure("future-recovery-cursor");
+    if (frame.eventSeq > binding.highestIssuedEventSeq) throw streamCommandFailure("future-recovery-cursor");
     if (frame.eventSeq >= binding.requestedEventSeq) binding.requestedEventSeq = frame.eventSeq;
   }
 }
@@ -6772,21 +6884,24 @@ const server = http.createServer(async (req, res) => {
       const wantsPrivateEvents = Boolean(
         req.headers[AUTHORITY_HEADER] || req.headers[PLAYER_ID_HEADER]
       );
-      let playerId = null;
+      let reader = null;
       if (wantsPrivateEvents) {
         const auth = authorizePlayerRequest(req, { runId }, { requireCommandSeq: false });
         if (!auth.ok) {
           sendAuthorityError(res, auth);
           return;
         }
-        playerId = auth.authority.playerId;
+        reader = {
+          playerId: auth.authority.playerId,
+          membershipId: auth.authority.membershipId,
+        };
       }
       const journalRead = runtime.eventJournal.read({ since, lane, runId });
       sendJson(res, 200, {
         type: "events",
         protocolVersion: PROTOCOL_VERSION,
         ...journalRead,
-        events: filterEventsForPlayer(journalRead.events, playerId),
+        events: filterEventsForPlayer(journalRead.events, reader),
       });
       return;
     }
@@ -7165,6 +7280,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     onAction: (binding, frame) => executeStreamAction(binding, frame),
     buildPublicState: buildPublicMultiplayerStateForAdapter,
     buildOwnerState: buildOwnerMultiplayerState,
+    buildEventRecovery: buildMultiplayerEventRecovery,
     onAck: acknowledgeMultiplayerCursor,
   });
 }

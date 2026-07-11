@@ -92,6 +92,18 @@ async function run() {
     expectProtocolError(() => validateWireFrame({ ...hello, playerId: "caller-chosen" }, { direction: CLIENT_TO_SERVER }), "unknown-field");
     expectProtocolError(() => validateWireFrame({ ...hello, simProtocolVersion: "v3" }), "unsupported-sim-version");
     expectProtocolError(() => validateWireFrame({ ...hello, resumeTicket: "also-present" }), "invalid-ticket");
+    const resumeHello = {
+      ...hello,
+      admissionTicket: undefined,
+      resumeTicket: "resume-ticket",
+      lastRunId: "run-a",
+      lastSnapshotId: 9,
+      lastEventSeq: 4,
+    };
+    validateWireFrame(resumeHello, { direction: CLIENT_TO_SERVER });
+    validateWireFrame({ ...resumeHello, lastRunId: undefined, lastSnapshotId: undefined, lastEventSeq: undefined }, { direction: CLIENT_TO_SERVER });
+    expectProtocolError(() => validateWireFrame({ ...resumeHello, lastRunId: undefined }, { direction: CLIENT_TO_SERVER }), "invalid-resume-cursor");
+    expectProtocolError(() => validateWireFrame({ ...resumeHello, lastEventSeq: undefined }, { direction: CLIENT_TO_SERVER }), "invalid-resume-cursor");
     expectProtocolError(() => validateWireFrame({ ...welcome, nextCommandSeq: 7 }), "invalid-sequence");
   });
 

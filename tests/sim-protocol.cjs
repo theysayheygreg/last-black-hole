@@ -106,9 +106,11 @@ async function run() {
   });
 
   await runner.run("Player-local visibility is owner-only", async () => {
-    const event = { visibility: playerEventVisibility("pilot-a") };
-    assert(eventVisibleToPlayer(event, "pilot-a") === true, "Expected owner visibility");
-    assert(eventVisibleToPlayer(event, "pilot-b") === false, "Expected cross-player privacy");
+    const event = { visibility: playerEventVisibility("membership-a") };
+    assert(eventVisibleToPlayer(event, { membershipId: "membership-a" }) === true, "Expected owner membership visibility");
+    assert(eventVisibleToPlayer(event, { membershipId: "membership-b" }) === false, "Expected cross-membership privacy");
+    assert(eventVisibleToPlayer(event, { playerId: "pilot-a" }) === false,
+      "A reused player id must not recover an earlier membership's private event");
     assert(eventVisibleToPlayer({ visibility: "public" }, null) === true, "Expected public visibility");
   });
 
