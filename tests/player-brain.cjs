@@ -38,6 +38,7 @@ async function postAuthorized(path, body, authority) {
 
 async function run() {
   const runner = new TestRunner("PlayerBrain");
+  const profileId = `brain-profile-${process.pid}-${Date.now()}`;
 
   await runner.run("PlayerBrain resolves durable upgrade coefficients", async () => {
     const brain = createPlayerBrain({
@@ -73,13 +74,23 @@ async function run() {
       const join = await post("/join", {
         clientId: "brain-client",
         name: "Brain Pilot",
-        profileId: "brain-profile",
+        profileId,
         profileSnapshot: {
-          id: "brain-profile",
+          id: profileId,
           name: "Brain Pilot",
           shipType: "standard",
           upgrades: { thrust: 2, coupling: 1, drag: 1, sensor: 3, hull: 2 },
-          loadout: { equipped: [null, null], consumables: [null, null] },
+          loadout: {
+            equipped: [{
+              id: "gravity-anchor",
+              name: "Gravity Anchor",
+              category: "artifact",
+              subcategory: "equippable",
+              tier: "unique",
+              effect: "reduceWellPull",
+            }, null],
+            consumables: [null, null],
+          },
         },
       });
       assert(join.status === 200, `Expected /join 200, got ${join.status}`);
@@ -92,26 +103,26 @@ async function run() {
       assert(player.abilityState.wellSurvivesRemaining === 1, `Expected one profile free pass, got ${player.abilityState.wellSurvivesRemaining}`);
     });
 
-    await runner.run("Equipping an artifact refreshes the live brain", async () => {
-      const update = await postAuthorized("/join", {
-        clientId: "brain-client",
-        profileSnapshot: {
-          upgrades: { thrust: 2, coupling: 1, drag: 1, sensor: 3, hull: 2 },
-        },
-        equipped: [
-          {
-            id: "gravity-anchor",
-            name: "Gravity Anchor",
-            category: "artifact",
-            subcategory: "equippable",
-            tier: "unique",
-            effect: "reduceWellPull",
-          },
-          null,
-        ],
+    await runner.run("Authoritative inventory actions refresh the live brain", async () => {
+      const unequipped = await postAuthorized("/inventory/action", {
+        commandSeq: 1,
+        action: "unequip",
+        equipSlot: 0,
       }, playerAuthority);
-      assert(update.status === 200, `Expected join update 200, got ${update.status}`);
-      const player = update.body.player;
+      assert(unequipped.status === 200, `Expected unequip 200, got ${unequipped.status}`);
+      assert(unequipped.body.player.brain.wellResistScale === 1.0,
+        `Expected base wellResistScale after unequip, got ${unequipped.body.player.brain.wellResistScale}`);
+      const cargoSlot = unequipped.body.player.cargo.findIndex((item) => item?.id === "gravity-anchor");
+      assert(cargoSlot >= 0, "Expected server-owned artifact in cargo after unequip");
+
+      const equipped = await postAuthorized("/inventory/action", {
+        commandSeq: 2,
+        action: "equipCargo",
+        cargoSlot,
+        equipSlot: 0,
+      }, playerAuthority);
+      assert(equipped.status === 200, `Expected equipCargo 200, got ${equipped.status}`);
+      const player = equipped.body.player;
       assert(player.brain.wellResistScale > 1.0, `Expected wellResistScale > 1, got ${player.brain.wellResistScale}`);
       assert(player.activeEffects.includes("reduceWellPull"), "Expected active reduceWellPull effect");
     });
