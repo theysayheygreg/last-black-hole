@@ -218,6 +218,23 @@ handling, and complete cleanup. One traffic minute reached about 98.4% of the
 near-limit product debt. This is six-minute PR smoke, not soak or leak evidence;
 the 45-minute normal and 90-minute churn profiles remain unrun.
 
+**First 45-minute normal result — canonical FAIL, 2026-07-12:** artifact
+`multiplayer-soak-2026-07-12T210956086Z-normal-45m-08A04E45-e35556818d18`
+at clean commit `2b5e497` is preserved with aggregate file-list SHA-256
+`dfe023185bc8cf069912ffbdf789c991900ff4a43aa7728c1b842cb2e33bc359`.
+It may not be retried or stitched. The natural universe collapsed at sim time
+600.0667, so tick 9001/projection 6000 stopped while the 45-minute process and
+clients remained alive. This exposes a real mismatch between authored match
+lifecycle and an infrastructure-long single-run soak. Minute nine also measured
+2,526,338 B/s aggregate full-JSON traffic, 1.05% above the decimal 2.5 MB/s
+canonical regression ceiling and far above the 64 KiB/s/player product target.
+Other substantive evidence passed: 140 scheduled actions, 14 forced-GC points,
+exact dual ACKs, 123,500 privacy-inspected frames with zero violations, 99.81%
+diagnostics coverage with zero faults, 7,164 B/min post-GC heap slope, bounded
+RSS/GC/CPU/ELU/retention/topology/reliability, wall time, and clean PID/port/
+diagnostics teardown. Resolve lifecycle and traffic policy before a from-zero
+rerun; do not begin the 90-minute churn profile.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

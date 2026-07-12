@@ -66,6 +66,15 @@
   ceiling, but one measured minute reached about 98.4% of it; this is explicit
   product debt. The run is machinery PR smoke only—heap/RSS slope, GC duty,
   long-window recovery, and canonical 45/90-minute soak remain unproven.
+- Ran the first canonical 45-minute steady profile once from clean `2b5e497`
+  and preserved it as negative evidence. LBH's authored universe collapse ended
+  the natural match at sim time 600.0667, freezing tick/projection work for the
+  rest of the infrastructure timer; minute-nine full-JSON traffic also reached
+  2,526,338 B/s, 1.05% above the decimal 2.5 MB/s regression ceiling. The run
+  still closed 140 actions, 14 forced-GC checkpoints, exact ACK/privacy,
+  bounded retention, 7,164 B/min post-GC heap slope, diagnostics, wall time,
+  and physical cleanup. No retry is authorized until lifecycle semantics and
+  the traffic budget are decided explicitly.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval

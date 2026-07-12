@@ -367,3 +367,31 @@ smoke ceiling, while the first run's busiest included minute reached about
 KiB/s/player product target. Heap/RSS slope, GC duty, long-window recovery, and
 leak freedom remain `NOT_APPLICABLE_SHORT_RUN`; the 45-minute normal and
 90-minute churn profiles are still unrun and own those claims.
+
+## First normal-45m result — preserved negative evidence
+
+The first no-retry canonical run from clean `2b5e497` completed as `FAIL` and
+must remain immutable:
+`multiplayer-soak-2026-07-12T210956086Z-normal-45m-08A04E45-e35556818d18`.
+Its aggregate file-list SHA-256 is
+`dfe023185bc8cf069912ffbdf789c991900ff4a43aa7728c1b842cb2e33bc359`.
+
+Two failures require decisions, not harness threshold edits:
+
+1. The authored universe collapse ended the match at sim time 600.0667. Tick
+   9001 and projection 6000 then remained fixed even though the process,
+   transport, diagnostics, and 45-minute schedule stayed alive. The existing
+   `LBH_SIM_MAX_SIM_TIME` lifetime cap does not disable authored collapse.
+2. Minute-nine aggregate full-JSON application traffic was 2,526,338 B/s,
+   1.05% above the canonical decimal 2.5 MB/s regression ceiling. This also
+   reinforces the much larger gap to the 64 KiB/s/player product target.
+
+All other substantive gates remain useful evidence: 140 planned actions, 14
+forced-GC checkpoints, 3,444 exact delivery/event ACK pairs, 123,500 frames
+privacy-inspected with zero violations, 99.81% diagnostics coverage with zero
+faults, 7,164 B/min post-GC Theil-Sen heap slope, and bounded RSS, GC, CPU, ELU,
+retention, topology, reliability, wall time, artifact size, PID, port, and
+diagnostics cleanup. Harness-only terminal-window and cleanup-inventory defects
+found during finalization were fixed through clean HEAD `86e31e3`, but those
+fixes do not convert or authorize rerunning the canonical evidence. A lifecycle
+decision and a traffic-budget decision must land first; churn-90m stays blocked.

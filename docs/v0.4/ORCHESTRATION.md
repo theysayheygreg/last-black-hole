@@ -288,6 +288,15 @@ Singularity that:
   45-minute normal profile only from clean committed HEAD. Do not call the
   short runs soak/leak evidence or begin the 90-minute churn profile before the
   normal artifact is independently accepted.
+- The first canonical normal-45m attempt is valid negative evidence, not an
+  acceptance artifact. Preserve
+  `multiplayer-soak-2026-07-12T210956086Z-normal-45m-08A04E45-e35556818d18`
+  and its SHA-256. Authored collapse stopped simulation at 600.0667 seconds,
+  and minute-nine traffic exceeded the decimal 2.5 MB/s regression ceiling by
+  1.05%; no automatic retry or threshold edit is allowed. Heap, diagnostics,
+  identity, retention, privacy, wall-time, and cleanup evidence otherwise
+  passed. Run separate lifecycle-seam and traffic-budget decision lanes before
+  restarting normal from zero. Keep churn blocked meanwhile.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
