@@ -67,6 +67,132 @@ function createSimWebSocketAdapter(options = {}) {
     forcedRebases: 0,
     duplicatePendingEvents: 0,
   };
+  const pressureMetricNames = Object.freeze([
+    "wsBufferedBytes",
+    "queuedBytes",
+    "reliableBytes",
+    "replayEventBytes",
+    "pendingInboundBytes",
+    "pendingSends",
+    "scheduledSends",
+  ]);
+  const pressureTotals = Object.fromEntries(pressureMetricNames.map((name) => [name, 0]));
+  const pressureMaxima = Object.fromEntries(pressureMetricNames.map((name) => [name, {
+    total: 0,
+    worstConnection: 0,
+  }]));
+  const pressurePolicy = {
+    transportHighWaterBytes: null,
+    applicationQueueBytes: null,
+    reliableQueueBytes: null,
+    replayEventBytes: MAX_PENDING_REPLAY_BYTES,
+    inboundPendingBytes: maxPendingInboundBytes,
+    connectionsCrossedTransportHighWater: 0,
+    transportHighWaterCrossings: 0,
+    connectionsHitQueuePolicy: 0,
+    queuePolicyLimitCrossings: 0,
+    queuePolicyEvents: 0,
+    queuePolicyRebases: 0,
+    queuePolicyDisconnects: 0,
+  };
+
+  function pressureValues(state) {
+    const status = state.queue.status();
+    let wsBufferedBytes = 0;
+    try { wsBufferedBytes = Math.max(0, Number(state.ws.bufferedAmount) || 0); } catch {}
+    return {
+      wsBufferedBytes,
+      queuedBytes: Math.max(0, Number(status.queuedBytes) || 0),
+      reliableBytes: Math.max(0, Number(status.reliableBytes) || 0),
+      replayEventBytes: Math.max(0, Number(state.pendingEventBytes) || 0),
+      pendingInboundBytes: Math.max(0, Number(state.pendingInboundBytes) || 0),
+      pendingSends: Math.max(0, Number(state.pendingSends) || 0),
+      scheduledSends: Math.max(0, Number(state.scheduledSends?.size) || 0),
+    };
+  }
+
+  function samplePressure(state) {
+    if (!state?.queue || !state?.ws) return;
+    const previous = state.pressureSnapshot || Object.fromEntries(pressureMetricNames.map((name) => [name, 0]));
+    const current = pressureValues(state);
+    state.pressureSnapshot = current;
+    for (const name of pressureMetricNames) {
+      pressureTotals[name] = Math.max(0, pressureTotals[name] + current[name] - previous[name]);
+      pressureMaxima[name].total = Math.max(pressureMaxima[name].total, pressureTotals[name]);
+      pressureMaxima[name].worstConnection = Math.max(pressureMaxima[name].worstConnection, current[name]);
+    }
+    const threshold = state.queue.limits.transportHighWaterBytes;
+    pressurePolicy.transportHighWaterBytes ??= threshold;
+    pressurePolicy.applicationQueueBytes ??= state.queue.limits.maxBytes;
+    pressurePolicy.reliableQueueBytes ??= state.queue.limits.maxReliableBytes;
+    const crossed = current.wsBufferedBytes >= threshold;
+    if (crossed && !state.pressureTransportHigh) {
+      pressurePolicy.transportHighWaterCrossings += 1;
+      if (!state.pressureEverTransportHigh) {
+        state.pressureEverTransportHigh = true;
+        pressurePolicy.connectionsCrossedTransportHighWater += 1;
+      }
+    }
+    state.pressureTransportHigh = crossed;
+    const status = state.queue.status();
+    const queueAtLimit = status.queuedBytes >= state.queue.limits.maxBytes
+      || status.queuedMessages >= state.queue.limits.maxMessages
+      || status.reliableBytes >= state.queue.limits.maxReliableBytes
+      || status.reliableMessages >= state.queue.limits.maxReliableMessages
+      || status.rebaseRequired
+      || status.disconnectRequired;
+    if (queueAtLimit && !state.pressureQueueAtLimit) {
+      pressurePolicy.queuePolicyLimitCrossings += 1;
+      if (!state.pressureEverQueuePolicy) {
+        state.pressureEverQueuePolicy = true;
+        pressurePolicy.connectionsHitQueuePolicy += 1;
+      }
+    }
+    state.pressureQueueAtLimit = queueAtLimit;
+  }
+
+  function detachPressure(state) {
+    samplePressure(state);
+    for (const name of pressureMetricNames) {
+      pressureTotals[name] = Math.max(0, pressureTotals[name] - (state.pressureSnapshot?.[name] || 0));
+    }
+    state.pressureSnapshot = Object.fromEntries(pressureMetricNames.map((name) => [name, 0]));
+    state.pressureTransportHigh = false;
+    state.pressureQueueAtLimit = false;
+  }
+
+  function markQueuePolicy(state, action) {
+    if (action !== "rebase" && action !== "disconnect") return;
+    pressurePolicy.queuePolicyEvents += 1;
+    if (action === "rebase") pressurePolicy.queuePolicyRebases += 1;
+    else pressurePolicy.queuePolicyDisconnects += 1;
+    if (!state.pressureEverQueuePolicy) {
+      state.pressureEverQueuePolicy = true;
+      pressurePolicy.connectionsHitQueuePolicy += 1;
+    }
+    samplePressure(state);
+  }
+
+  function pressureDiagnostics() {
+    for (const state of connections) samplePressure(state);
+    const currentWorst = Object.fromEntries(pressureMetricNames.map((name) => [name, 0]));
+    for (const state of connections) {
+      for (const name of pressureMetricNames) {
+        currentWorst[name] = Math.max(currentWorst[name], state.pressureSnapshot?.[name] || 0);
+      }
+    }
+    const current = {};
+    const maxima = {};
+    for (const name of pressureMetricNames) {
+      current[name] = Object.freeze({ total: pressureTotals[name], worstConnection: currentWorst[name] });
+      maxima[name] = Object.freeze({ ...pressureMaxima[name] });
+    }
+    return Object.freeze({
+      current: Object.freeze(current),
+      maxima: Object.freeze(maxima),
+      policy: Object.freeze({ ...pressurePolicy }),
+    });
+  }
 
   const handleUpgrade = createUpgradeHandler({
     wss,
@@ -97,13 +223,16 @@ function createSimWebSocketAdapter(options = {}) {
   }
 
   function resetOutbound(state) {
+    samplePressure(state);
     for (const token of [...(state.scheduledSends || [])]) {
       token.active = false;
       try { token.cancel?.(); } catch {}
     }
     state.scheduledSends?.clear();
     state.outboundGeneration = (state.outboundGeneration || 0) + 1;
-    return state.queue.reset();
+    const result = state.queue.reset();
+    samplePressure(state);
+    return result;
   }
 
   function sendWireImmediate(state, wire, sendAttempt = null, { completeAttempt = true } = {}) {
@@ -114,8 +243,10 @@ function createSimWebSocketAdapter(options = {}) {
     if (sendAttempt && !state.queue.authorizePhysicalSend(sendAttempt)) return false;
     try {
       state.pendingSends += 1;
+      samplePressure(state);
       state.ws.send(wire, (error) => {
         state.pendingSends = Math.max(0, state.pendingSends - 1);
+        samplePressure(state);
         if (error) terminate(state);
         else flush(state);
       });
@@ -126,9 +257,11 @@ function createSimWebSocketAdapter(options = {}) {
           return false;
         }
       }
+      samplePressure(state);
       return true;
     } catch {
       state.pendingSends = Math.max(0, state.pendingSends - 1);
+      samplePressure(state);
       if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
       terminate(state);
       return false;
@@ -186,17 +319,20 @@ function createSimWebSocketAdapter(options = {}) {
     };
     state.scheduledSends ??= new Set();
     state.scheduledSends.add(token);
+    samplePressure(state);
     const settle = () => {
       if (!token.active) return true;
       if (token.sendAttempt
         && !state.queue.completeSendAttempt(token.sendAttempt, { physicalCopies: token.physicalCopies })) {
         token.active = false;
         state.scheduledSends.delete(token);
+        samplePressure(state);
         terminate(state);
         return false;
       }
       token.active = false;
       state.scheduledSends.delete(token);
+      samplePressure(state);
       return true;
     };
     const deliver = () => {
@@ -227,6 +363,7 @@ function createSimWebSocketAdapter(options = {}) {
             && state.queue.status().lastAckedReliableId >= token.sendAttempt.reliableId) {
             token.active = false;
             state.scheduledSends.delete(token);
+            samplePressure(state);
             return false;
           }
           sent = sendWireImmediate(state, wire, token.sendAttempt, { completeAttempt: false });
@@ -315,6 +452,7 @@ function createSimWebSocketAdapter(options = {}) {
     connections.delete(state);
     if (state.bindingKey !== null && byBindingKey.get(state.bindingKey) === state) byBindingKey.delete(state.bindingKey);
     resetOutbound(state);
+    detachPressure(state);
   }
 
   function terminate(state) {
@@ -326,6 +464,7 @@ function createSimWebSocketAdapter(options = {}) {
 
   function queueOutcome(state, outcome, rebaseWatermarks = null) {
     if (!outcome || outcome.action === "queued" || outcome.action === "coalesced" || outcome.action === "ignore") return;
+    markQueuePolicy(state, outcome.action);
     if (outcome.action === "rebase") {
       const binding = state.binding;
       const runId = rebaseWatermarks?.runId || binding?.runId || currentRunId;
@@ -357,6 +496,7 @@ function createSimWebSocketAdapter(options = {}) {
       // not strand later entries in a pre-leased batch; later enqueue/sweep
       // passes can lease the next ready entry independently.
       const drained = state.queue.drain(scheduleOutboundFrame ? { maxMessages: 1 } : {});
+      samplePressure(state);
       if (drained.action === "pause") return;
       for (const message of drained.messages) {
         if (message.lane === "state") {
@@ -377,6 +517,7 @@ function createSimWebSocketAdapter(options = {}) {
       failConnection(state, error);
     } finally {
       state.flushing = false;
+      samplePressure(state);
     }
   }
 
@@ -405,10 +546,12 @@ function createSimWebSocketAdapter(options = {}) {
         ) return { accepted: false, action: "ignore", reason: "event-replay-budget-full" };
       }
       const result = state.queue.enqueueConsequence(retainedFrame, { reliableId: retainedFrame.deliveryId });
+      samplePressure(state);
       queueOutcome(state, result);
       if (result.accepted && replayEvent && retainedFrame.type === "event") {
         state.pendingEventSeqs.set(retainedFrame.eventSeq, result.byteLength);
         state.pendingEventBytes += result.byteLength;
+        samplePressure(state);
         state.binding.highestIssuedEventSeq = Math.max(
           state.binding.highestIssuedEventSeq || 0,
           retainedFrame.eventSeq,
@@ -553,6 +696,7 @@ function createSimWebSocketAdapter(options = {}) {
     }
     if (frame.type === "ack") {
       if (frame.ackKind === "delivery") queueOutcome(state, state.queue.acknowledge(frame.deliveryId));
+      samplePressure(state);
       if (!stateIsLive(state, expectedGeneration)) return;
       await onAck(state.binding, frame, callbackContext(state, "ack"));
       if (!stateIsLive(state, expectedGeneration)) return;
@@ -567,6 +711,7 @@ function createSimWebSocketAdapter(options = {}) {
               state.pendingEventBytes = Math.max(0, state.pendingEventBytes - bytes);
             }
           }
+          samplePressure(state);
         }
       }
       flush(state);
@@ -601,6 +746,7 @@ function createSimWebSocketAdapter(options = {}) {
     state.scheduledSends = new Set();
     pendingHello += 1;
     connections.add(state);
+    samplePressure(state);
     state.helloTimer = setTimeout(() => {
       if (!state.bound && !state.closing) {
         state.closing = true;
@@ -617,7 +763,10 @@ function createSimWebSocketAdapter(options = {}) {
         maxPendingInboundBytes,
         maxPendingInboundBytesTotal,
         getPendingInboundBytesTotal: () => pendingInboundBytesTotal,
-        onBytes: (delta) => { pendingInboundBytesTotal = Math.max(0, pendingInboundBytesTotal + delta); },
+        onBytes: (delta) => {
+          pendingInboundBytesTotal = Math.max(0, pendingInboundBytesTotal + delta);
+          samplePressure(state);
+        },
         onDepth: (depth) => { maxObservedPendingInbound = Math.max(maxObservedPendingInbound, depth); },
         onByteDepth: (_socketBytes, totalBytes) => {
           maxObservedPendingInboundBytes = Math.max(maxObservedPendingInboundBytes, totalBytes);
@@ -729,6 +878,7 @@ function createSimWebSocketAdapter(options = {}) {
           kind: "state-pair",
           frames: [publicFrame, ownerFrame],
         });
+        samplePressure(state);
         queueOutcome(state, outcome, publicFrame);
         flush(state);
         if (outcome.accepted) projected += 1;
@@ -932,6 +1082,7 @@ function createSimWebSocketAdapter(options = {}) {
       sweepIntervalMs,
       helloTimers: pendingHello,
       livenessTimers: closed ? 0 : 1,
+      pressure: pressureDiagnostics(),
       eventReplay: Object.freeze({
         maxPendingPerBinding: MAX_PENDING_REPLAY_EVENTS,
         maxEnqueuePerPass: MAX_REPLAY_EVENTS_PER_PASS,

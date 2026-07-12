@@ -183,6 +183,12 @@ misses short spikes and does not produce a tick distribution. A PR-smoke runner
 may land before these counters only if its summary marks those gates
 `unavailable` and makes no canonical pass claim.
 
+Both prerequisites are now landed: adapter diagnostics retain privacy-safe
+aggregate and worst-connection current/lifetime maxima, while authority health
+reports bounded every-tick and every-projection rolling quantiles. The browser
+runner must still prove it samples and persists these schemas correctly before
+making a canonical scenario claim.
+
 ## Common gates
 
 - exactly four unique profiles, memberships, and authority players share one

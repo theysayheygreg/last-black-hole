@@ -94,6 +94,11 @@
   health diagnostics. A fixed 512-sample rolling ring reports nearest-rank p50,
   p95, p99, max, retained count, and lineage total without adding hot-path sort
   work or changing overload decisions; run reset starts a fresh distribution.
+- Added privacy-safe adapter pressure diagnostics with aggregate and
+  worst-connection current/lifetime maxima for socket buffering, total and
+  reliable queues, replay retention, inbound bytes, and physical/scheduled
+  sends. Fixed policy-crossing counters capture short spikes at mutation points
+  without retaining connection identity or unbounded history.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

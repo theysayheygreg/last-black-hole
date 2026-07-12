@@ -6,6 +6,7 @@ const nodeAssert = require("assert");
 const { WebSocket } = require("ws");
 const { TestRunner, assert } = require("./helpers.cjs");
 const { DEFAULTS, createSimWebSocketAdapter } = require("../scripts/sim-ws-adapter.cjs");
+const { SIM_PROTOCOL_VERSION } = require("../scripts/multiplayer-wire-protocol.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
   waitFor,
@@ -102,6 +103,239 @@ async function run() {
       assert(nextFrame(recovered.messages, "welcome"), "Hello timeout cleanup should release pending capacity");
     } finally {
       await helloHarness.close();
+    }
+  });
+
+  await runner.run("retains bounded privacy-safe adapter pressure maxima after unequal connections recover", async () => {
+    const gate = deferred();
+    const originalBufferedAmount = Object.getOwnPropertyDescriptor(WebSocket.prototype, "bufferedAmount");
+    const serverSockets = new WeakMap();
+    let nextServerSocket = 0;
+    let forceBufferedAmount = false;
+    Object.defineProperty(WebSocket.prototype, "bufferedAmount", {
+      configurable: true,
+      enumerable: originalBufferedAmount.enumerable,
+      get() {
+        if (!forceBufferedAmount || this._isServer !== true) return originalBufferedAmount.get.call(this);
+        if (!serverSockets.has(this)) serverSockets.set(this, nextServerSocket++);
+        return serverSockets.get(this) === 0 ? 300_000 : 1_000;
+      },
+    });
+    const harness = await createHarness({
+      maxPendingInbound: 8,
+      beforeAction: async () => gate.promise,
+    });
+    let shutdownDiagnostics = null;
+    try {
+      const first = await harness.admit("pressure-first");
+      const second = await harness.admit("pressure-second");
+      forceBufferedAmount = true;
+      let diagnostics = harness.adapter.diagnostics();
+      assert(diagnostics.pressure.current.wsBufferedBytes.total === 301_000
+        && diagnostics.pressure.current.wsBufferedBytes.worstConnection === 300_000,
+      "Current pressure must distinguish aggregate from the worst unequal connection");
+      assert(diagnostics.pressure.policy.connectionsCrossedTransportHighWater === 1
+        && diagnostics.pressure.policy.transportHighWaterCrossings === 1,
+      "Exactly one connection should cross the existing 256 KiB transport high water");
+      forceBufferedAmount = false;
+      diagnostics = harness.adapter.diagnostics();
+      assert(diagnostics.pressure.current.wsBufferedBytes.total === 0
+        && diagnostics.pressure.maxima.wsBufferedBytes.total === 301_000
+        && diagnostics.pressure.maxima.wsBufferedBytes.worstConnection === 300_000,
+      "Transport maxima must survive current recovery");
+
+      await harness.adapter.broadcastReliable(eventFrame("run-a", 1, "pressure-replay"));
+      await harness.adapter.enqueueReliable(first.binding, eventFrame("run-a", 2, "pressure-extra"));
+      diagnostics = harness.adapter.diagnostics();
+      assert(diagnostics.pressure.current.queuedBytes.total > diagnostics.pressure.current.queuedBytes.worstConnection,
+        "Unequal retained queues must expose total and worst-connection values");
+      assert(diagnostics.pressure.current.reliableBytes.total > 0
+        && diagnostics.pressure.current.replayEventBytes.total > 0,
+      "Reliable and replay-event retention must be instrumented separately");
+
+      const largeFirst = actionFrame(1, 1);
+      largeFirst.payload = { marker: "a".repeat(900) };
+      const largeSecond = actionFrame(1, 1);
+      largeSecond.payload = { marker: "b".repeat(1_100) };
+      first.ws.send(JSON.stringify(largeFirst));
+      second.ws.send(JSON.stringify(largeSecond));
+      second.ws.send(JSON.stringify(actionFrame(2, 2)));
+      await waitFor(() => harness.adapter.diagnostics().pressure.current.pendingInboundBytes.total > 0, {
+        label: "instrumented inbound spike",
+      });
+      diagnostics = harness.adapter.diagnostics();
+      assert(diagnostics.pressure.current.pendingInboundBytes.total
+        > diagnostics.pressure.current.pendingInboundBytes.worstConnection,
+      "Inbound instrumentation must retain unequal per-connection aggregation");
+      assert(diagnostics.pressure.maxima.pendingSends.worstConnection >= 1,
+        "Physical send callbacks must capture pending-send spikes");
+
+      gate.resolve();
+      await waitFor(() => harness.actions.length === 3, { label: "pressure action release" });
+      await waitFor(() => first.messages.filter((frame) => frame.deliveryId).length >= 3
+        && second.messages.filter((frame) => frame.deliveryId).length >= 3, {
+        label: "pressure reliable action replies",
+      });
+      for (const client of [first, second]) {
+        const deliveryId = Math.max(...client.messages.map((frame) => frame.deliveryId || 0));
+        client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId }));
+        client.ws.send(JSON.stringify({ type: "ack", ackKind: "event", eventSeq: 1 }));
+      }
+      await waitFor(() => {
+        const current = harness.adapter.diagnostics().pressure.current;
+        return current.queuedBytes.total === 0 && current.reliableBytes.total === 0
+          && current.replayEventBytes.total === 0 && current.pendingInboundBytes.total === 0
+          && current.pendingSends.total === 0;
+      }, { label: "pressure current recovery" });
+      shutdownDiagnostics = await harness.adapter.shutdown();
+      for (const metric of Object.values(shutdownDiagnostics.pressure.current)) {
+        assert(metric.total === 0 && metric.worstConnection === 0,
+          "Cleanup must zero every current pressure metric");
+      }
+      assert(shutdownDiagnostics.pressure.maxima.queuedBytes.total > 0
+        && shutdownDiagnostics.pressure.maxima.reliableBytes.worstConnection > 0
+        && shutdownDiagnostics.pressure.maxima.replayEventBytes.worstConnection > 0
+        && shutdownDiagnostics.pressure.maxima.pendingInboundBytes.worstConnection > 0,
+      "Adapter-lifetime maxima must survive cleanup");
+      const serialized = JSON.stringify(shutdownDiagnostics);
+      for (const secret of ["pressure-first", "pressure-second", "membership-pressure", "credential-pressure"]) {
+        assert(!serialized.includes(secret), `Pressure diagnostics leaked identity marker ${secret}`);
+      }
+    } finally {
+      gate.resolve();
+      forceBufferedAmount = false;
+      Object.defineProperty(WebSocket.prototype, "bufferedAmount", originalBufferedAmount);
+      await harness.close();
+    }
+
+    const fresh = await createHarness();
+    try {
+      const diagnostics = fresh.adapter.diagnostics();
+      for (const metric of Object.values(diagnostics.pressure.maxima)) {
+        assert(metric.total === 0 && metric.worstConnection === 0,
+          "A new adapter must start with zero pressure maxima");
+      }
+      assert(diagnostics.pressure.policy.connectionsCrossedTransportHighWater === 0
+        && diagnostics.pressure.policy.connectionsHitQueuePolicy === 0,
+      "A new adapter must start with zero pressure-policy counts");
+    } finally {
+      await fresh.close();
+    }
+  });
+
+  await runner.run("captures scheduled-send spikes and queue-policy connection counts without history", async () => {
+    const server = http.createServer((_request, response) => response.writeHead(404).end());
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `ws://127.0.0.1:${server.address().port}`;
+    let holdProjection = false;
+    const held = [];
+    const binding = {
+      name: "instrumentation-private-marker",
+      runId: "run-instrumentation",
+      membershipId: "membership-instrumentation-private",
+      playerId: "player-instrumentation-private",
+      current: true,
+      snapshotId: 1,
+      lastEventSeq: 0,
+    };
+    const identity = {
+      runId: binding.runId,
+      membershipId: binding.membershipId,
+      playerId: binding.playerId,
+      connectionId: "connection-instrumentation-private",
+      connectionEpoch: 1,
+    };
+    let snapshotId = 1;
+    const publicFrame = () => ({
+      type: "publicState", runId: binding.runId, snapshotId, tick: snapshotId, simTime: snapshotId / 10,
+      lastEventSeq: 0, fieldRevision: 1, overloadMode: "NORMAL", lastInputSeq: 0, lastActionSeq: 0,
+      manifestHash: "sha256:test", full: true, state: { bodies: [], despawns: [] },
+    });
+    const ownerFrame = (frame) => ({
+      type: "ownerState", runId: frame.runId, membershipId: binding.membershipId, playerId: binding.playerId,
+      snapshotId: frame.snapshotId, tick: frame.tick, simTime: frame.simTime, lastEventSeq: frame.lastEventSeq,
+      fieldRevision: frame.fieldRevision, overloadMode: frame.overloadMode, lastInputSeq: 0, lastActionSeq: 0,
+      state: { privateMarker: binding.name },
+    });
+    const adapter = createSimWebSocketAdapter({
+      server,
+      runId: binding.runId,
+      heartbeatIntervalMs: 60_000,
+      scheduleOutboundFrame(_wire, context, deliver) {
+        if (holdProjection && (context.frameType === "publicState" || context.frameType === "ownerState")) {
+          const record = { deliver, cancelled: false };
+          held.push(record);
+          return { accepted: true, deliveryCount: 1, cancel() { record.cancelled = true; } };
+        }
+        deliver();
+        return { accepted: true, deliveryCount: 1 };
+      },
+      async redeemHello() {
+        const baseline = publicFrame();
+        return {
+          binding,
+          bindingKey: { runId: binding.runId, membershipId: binding.membershipId },
+          welcome: {
+            type: "welcome", wireVersion: WIRE_PROTOCOL_VERSION, simProtocolVersion: SIM_PROTOCOL_VERSION,
+            ...identity, commandCredential: "credential-instrumentation-private", lastCommandSeq: 0,
+            nextCommandSeq: 1, lastInputSeq: 0, lastActionSeq: 0, heartbeatIntervalMs: 60_000,
+            reconnected: false,
+          },
+          rebase: { type: "rebase", runId: binding.runId, reason: "initial", snapshotId: 1, lastEventSeq: 0 },
+          baselineFrames: [baseline, ownerFrame(baseline)],
+        };
+      },
+      async revalidateBinding() { return true; },
+      async onInput(_binding, frame) { return { type: "ack", ackKind: "input", inputSeq: frame.inputSeq }; },
+      async onAction(_binding, frame) {
+        return { type: "ack", ackKind: "action", actionId: frame.actionId, actionSeq: frame.actionSeq,
+          commandSeq: frame.commandSeq, status: "accepted", result: {} };
+      },
+      async buildPublicState() { snapshotId += 1; return publicFrame(); },
+      async buildOwnerState(_binding, frame) { return ownerFrame(frame); },
+    });
+    try {
+      const client = await openClient(`${baseUrl}/stream`);
+      client.ws.send(JSON.stringify(hello("instrumentation-ticket-private")));
+      await waitFor(() => nextFrame(client.messages, "welcome"), { label: "instrumentation welcome" });
+      holdProjection = true;
+      await adapter.projectNow();
+      let diagnostics = adapter.diagnostics();
+      assert(diagnostics.pressure.current.scheduledSends.total === 2
+        && diagnostics.pressure.current.scheduledSends.worstConnection === 2,
+      "Held public/owner frames must expose bounded scheduled-send current pressure");
+      for (const record of held) record.deliver();
+      await waitFor(() => adapter.diagnostics().pressure.current.scheduledSends.total === 0, {
+        label: "scheduled pressure recovery",
+      });
+      diagnostics = await adapter.shutdown();
+      assert(diagnostics.pressure.maxima.scheduledSends.worstConnection === 2,
+        "Scheduled-send maximum must survive cleanup");
+      assert(!JSON.stringify(diagnostics).includes("instrumentation-private"),
+        "Pressure diagnostics must not expose binding, player, membership, credential, or ticket markers");
+    } finally {
+      await adapter.shutdown();
+      await new Promise((resolve) => server.close(resolve));
+    }
+
+    const policyHarness = await createHarness({ queueOptions: { maxReliableMessages: 1 } });
+    try {
+      const client = await policyHarness.admit("pressure-policy-private");
+      const first = await policyHarness.adapter.enqueueReliable(client.binding, eventFrame("run-a", 1, "first"));
+      const second = await policyHarness.adapter.enqueueReliable(client.binding, eventFrame("run-a", 2, "second"));
+      assert(first.accepted && second.action === "disconnect", "Second retained frame must hit the configured queue policy");
+      await waitFor(() => policyHarness.adapter.diagnostics().pressure.policy.connectionsHitQueuePolicy === 1, {
+        label: "queue policy instrumentation",
+      });
+      const diagnostics = policyHarness.adapter.diagnostics();
+      assert(diagnostics.pressure.policy.queuePolicyEvents === 1
+        && diagnostics.pressure.policy.queuePolicyDisconnects === 1
+        && diagnostics.pressure.policy.queuePolicyRebases === 0,
+      "Queue-policy diagnostics must distinguish event and connection counts");
+      assert(!JSON.stringify(diagnostics).includes("pressure-policy-private"),
+        "Queue-policy diagnostics must not expose connection identity");
+    } finally {
+      await policyHarness.close();
     }
   });
 
