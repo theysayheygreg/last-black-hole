@@ -12,6 +12,11 @@
   is measured from verified toxic activation; endpoint no-progress, not live
   proxy counters, proves the outage. Healthy proxies remain untouched, and
   recovery requires a distinct socket and greater authority epoch.
+- Implemented the focused F5 proxy-control prerequisite. Two established paths
+  prove timeout-zero silence on only the impaired endpoint, uninterrupted
+  healthy traffic, one-path disable/cleanup/re-enable, same-listener recovery,
+  exact rollback snapshots, malformed-response ownership, signal cleanup, and
+  bounded teardown without claiming packets or synchronous RST behavior.
 
 - Froze the next T1 implementation packet around one pinned Toxiproxy v2.12.0
   daemon, four independent browser listeners, and one shared match authority.

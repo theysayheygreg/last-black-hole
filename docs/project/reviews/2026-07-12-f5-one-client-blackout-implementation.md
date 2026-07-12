@@ -244,3 +244,18 @@ cut/fence task before proxy cleanup.
 3. Run clean no-retry F5 once from committed HEAD, audit immutable evidence,
    and add a docs-only acceptance commit.
 4. Keep T2 slow-reader, netem, and hosted WSS in later separate lanes.
+
+## Controller slice status — implemented
+
+Commit `271b7a8` adds exact timeout-zero toxic validation and typed per-proxy
+enabled PATCH handling without weakening T1 latency/bandwidth definitions. The
+focused real-daemon proof keeps two established proxy paths open, verifies the
+impaired path makes no endpoint progress after the 250 ms guard while the
+healthy path continues, then disables only the impaired proxy, cleans its
+toxics, restores the same listener/upstream, and proves a fresh connection.
+
+The proof also covers partial activation rollback to an exact inactive GET,
+malformed proxy-update ownership, exact guarded toxic snapshots, phase-scoped
+signal cleanup, bounded socket timers, idempotent daemon/port cleanup, and no
+counter/RST/packet claim. The focused proof and all 11 multiplayer-network
+suites pass. Browser-level F5 authority recovery remains the next slice.
