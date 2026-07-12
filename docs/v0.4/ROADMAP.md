@@ -160,6 +160,13 @@ Both retain one dedicated authority for the match and privacy-safe
 per-connection attribution. Linux/browser `T2c`, packet netem, and hosted WSS
 remain separate.
 
+**T2 adapter checkpoint — 2026-07-12:** `381f435` plus fix-forward `c09882d`
+lands exact timeout action/reason accounting, default-absent per-connection
+telemetry, immutable pressure transitions, causal sweep timing, cleanup-only
+reset counts, and final cleanup events. Adapter core is 28/28 and the full
+multiplayer-network lane is 11/11. The next bounded slice is the four-raw-
+client T2a drain-before-timeout cohort and pressure preload.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

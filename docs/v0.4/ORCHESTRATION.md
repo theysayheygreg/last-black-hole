@@ -251,6 +251,10 @@ Singularity that:
   of which is read-gated. T2c alone owns real-browser corroboration.
 - Linux/browser ingress corroboration (`T2c`), netem packet truth, hosted WSS,
   and 24/48/96 capacity remain separate evidence lanes.
+- T2's adapter prerequisite landed at `381f435` with causal fix-forward
+  `c09882d`. Independent review closed double-read, event-order, reset-count,
+  cleanup-finality, and default-path overhead defects; focused adapter and full
+  multiplayer-network regressions are green. Dispatch T2a next, not T2b/T2c.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

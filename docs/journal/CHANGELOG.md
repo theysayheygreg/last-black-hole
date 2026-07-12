@@ -12,6 +12,11 @@
   corroboration. The approved packet requires exact per-connection authority
   attribution, production queue limits/timeouts, state coalescing, bounded
   reliable retention/replay, healthy-peer isolation, and hard cleanup.
+- Implemented T2's adapter telemetry prerequisite and its independent
+  fix-forward review. Backpressure timeout now records an exact action/reason;
+  opt-in per-connection transitions are causal, immutable, privacy-safe, and
+  cleanup-bounded, while the default production path retains aggregate-only
+  diagnostics without detailed telemetry allocations.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval

@@ -18,8 +18,9 @@ and bounded isolation without weakening production limits.
 
 **Door status:** Closed for lowering thresholds, extending timeouts, synthetic
 giant frames, aggregate-only attribution, or mixing raw pressure with netem,
-WAN, WSS, TLS, hosted, or 24/48/96 capacity claims. Open for the adapter
-telemetry/accounting prerequisite, then T2a and T2b in separate commits.
+WAN, WSS, TLS, hosted, or 24/48/96 capacity claims. The adapter prerequisite is
+accepted at `381f435` plus causal fix-forward `c09882d`. Open for T2a, then T2b
+in separate commits.
 
 ## 2026-07-12 — F5 uses timeout drop plus a one-client proxy fence
 

@@ -262,3 +262,21 @@ label.
 3. Add T2b reconnect/replay. Run T2a/T2b and regressions. Commit alone.
 4. Run clean 4p cases, audit artifacts, and add docs-only acceptance.
 5. Add 8p only after 4p is accepted. Keep T2c/netem in a later Linux slice.
+
+## Adapter prerequisite status — implemented
+
+Commits `381f435` and fix-forward `c09882d` implement the step-one adapter
+contract without changing queue limits, timeout, wire semantics, or gameplay.
+The timeout path now records exactly one
+`disconnect:backpressure-timeout` policy action. An injected observer enables
+privacy-safe per-live-connection pressure facts and immutable transitions;
+ordinary production diagnostics omit the detailed table and its allocations.
+
+Independent review found and fixed double-reading of `bufferedAmount`, stale
+`backpressuredSince` event ordering, rebase contamination of cleanup-reset
+counts, post-cleanup transitions, and default-path detailed telemetry work.
+One immutable sample now owns aggregate/detail/transition/maxima facts,
+`connection-cleanup` is final for its ordinal, and cleanup-only reset accounting
+stays distinct from operational rebase. The focused adapter core passes 28/28
+and the full multiplayer-network lane passes all 11 suites. T2a raw-client and
+preload evidence is the next code slice.
