@@ -95,6 +95,8 @@ async function main() {
     compiledDecisionHash: compiled.hash,
     claimBoundary: scenario.transport?.kind === "cdp-websocket-smoke"
       ? "CDP browser shaping/offline-gap PR smoke only; no claim CDP caused an observed socket close/reconnect, and not canonical duration, memory slope, TCP loss, netem, WAN, TLS, congestion, retransmission, receive-window, or hosted evidence"
+      : scenario.transport?.kind === "managed-tcp-proxy"
+        ? "Configured fixed userspace TCP-stream proxy latency/rate and observed browser/gameplay outcomes only; not packet loss/reorder, throughput accuracy, congestion, retransmission, receive-window, WAN, WSS, TLS, hosted, live throughput, queue depth, or connection-drain evidence"
       : "application-frame PR smoke only; not canonical duration, memory slope, TCP, packet loss, WAN, TLS, or hosted evidence",
     duration: { warmupMs: scenario.warmupMs, activeMs: scenario.activeMs, recoveryMs: scenario.recoveryMs },
     transport: scenario.transport || null,
@@ -108,8 +110,12 @@ async function main() {
       osRelease: os.release(),
     },
     ports: reportResult?.partial
-      ? { static: reportResult.partial.staticPort, sim: reportResult.partial.simPort }
-      : (reportResult ? { static: reportResult.staticPort, sim: reportResult.simPort } : null),
+      ? { static: reportResult.partial.staticPort, sim: reportResult.partial.simPort,
+        proxyControl: reportResult.partial.t1Proxy?.tool?.controlPort || null,
+        proxyListeners: reportResult.partial.t1Proxy?.mappings?.map((entry) => entry.listenerPort) || null }
+      : (reportResult ? { static: reportResult.staticPort, sim: reportResult.simPort,
+        proxyControl: reportResult.t1ProxyTransport?.tool?.controlPort || null,
+        proxyListeners: reportResult.t1ProxyTransport?.mappings?.map((entry) => entry.listenerPort) || null } : null),
     stableSlots: reportResult?.slotMap || reportResult?.partial?.slotMap || null,
     timelines: reportResult?.timelines || null,
     processes: reportResult?.processes || reportResult?.partial?.processes || null,
@@ -119,6 +125,7 @@ async function main() {
       preloadInstalledForWrappedProcess: cleanup?.preloadInstalledForWrappedProcess ?? null,
       preloadAdapterWrappedOnce: cleanup?.preloadAdapterWrappedOnce ?? null,
     },
+    tcpProxy: reportResult?.t1ProxyTransport || reportResult?.partial?.t1Proxy || null,
     receivedSignal,
   };
   fs.writeFileSync(path.join(runDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });

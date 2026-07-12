@@ -145,6 +145,59 @@
         "postAdmissionReconnects": 1
       }
     },
+    "T1-cap-headroom": {
+      "profile": "pr-smoke",
+      "rootSeed": "0x0411CA90",
+      "players": 4,
+      "warmupMs": 5000,
+      "activeMs": 30000,
+      "recoveryMs": 10000,
+      "connectionEpochs": 1,
+      "rules": {
+        "copies": 1,
+        "delayMs": 0,
+        "omitted": false
+      },
+      "transport": {
+        "kind": "managed-tcp-proxy",
+        "durationProfile": "pr-smoke-5-30-10",
+        "activationGuardMs": 250,
+        "maximumApplySkewMs": 100,
+        "finalDrainMs": 6000,
+        "profile": {
+          "roundingPolicy": "nearest-integer-decimal-kBps",
+          "jitterMs": 0,
+          "upstream": {
+            "latencyMs": 25,
+            "targetBytesPerSecond": 65536,
+            "rateKBps": 66,
+            "nominalAppliedBytesPerSecond": 66000,
+            "nominalAppliedKiBPerSecond": 64.453125
+          },
+          "downstream": {
+            "latencyMs": 45,
+            "targetBytesPerSecond": 327680,
+            "rateKBps": 328,
+            "nominalAppliedBytesPerSecond": 328000,
+            "nominalAppliedKiBPerSecond": 320.3125
+          }
+        }
+      },
+      "stimulus": {
+        "inputIntervalMs": 100,
+        "inputPilots": ["pilot-0", "pilot-1", "pilot-2", "pilot-3"]
+      },
+      "gates": {
+        "minimumInputAckSamplesPerPilot": 100,
+        "minimumAlignedPairSamplesPerPilot": 100,
+        "minimumReliableActionsPerPilot": 2,
+        "inputAckP95Ms": 250,
+        "snapshotCadenceP95Ms": 300,
+        "reliableConsequenceP95Ms": 700,
+        "postAdmissionRebases": 0,
+        "postAdmissionReconnects": 0
+      }
+    },
     "T0-cdp-smoke": {
       "profile": "pr-smoke",
       "rootSeed": "0x0410CD90",

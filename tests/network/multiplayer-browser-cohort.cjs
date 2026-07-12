@@ -20,6 +20,7 @@ const {
   sha256,
 } = require("./browser-frame-impairment.cjs");
 const { createCdpBrowserTransport } = require("./cdp-browser-transport.cjs");
+const { createTcpProxyBrowserTransport } = require("./tcp-proxy-browser-transport.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const TMP = path.join(ROOT, "tmp");
@@ -51,6 +52,24 @@ function sleep(ms, signal) {
 function appendJsonl(file, value) { fs.appendFileSync(file, `${JSON.stringify(value)}\n`); }
 function hashId(value) { return value == null ? null : sha256(String(value)); }
 function pidAlive(pid) { try { process.kill(pid, 0); return true; } catch { return false; } }
+
+async function closeBrowserBounded(browser, timeoutMs = 2500) {
+  if (!browser) return { stopped: true, forcedKill: false };
+  const pid = browser.proc?.pid;
+  let forcedKill = false;
+  await Promise.race([browser.close().catch(() => null), sleep(timeoutMs)]);
+  if (pidAlive(pid)) {
+    try { process.kill(pid, "SIGTERM"); } catch {}
+    await sleep(500);
+  }
+  if (pidAlive(pid)) {
+    forcedKill = true;
+    try { process.kill(pid, "SIGKILL"); } catch {}
+    await sleep(250);
+  }
+  assert(!pidAlive(pid), `browser PID ${pid} remained alive after bounded TERM/KILL`);
+  return { stopped: true, forcedKill };
+}
 
 function copyRedactedSimLog(source, destination) {
   const identityKeys = new Set(["sessionId", "runId", "clientId", "profileId", "membershipId", "playerId",
@@ -173,7 +192,8 @@ function sanitizeFrameEvidence(entry) {
   return copy;
 }
 
-async function launchPilot({ index, staticPort, simPort, fixture, compiled, htmlTarget }) {
+async function launchPilot({ index, staticPort, simPort, simBaseUrl = null, assignedProxy = null,
+  fixture, compiled, htmlTarget }) {
   const browser = await launchBrowser({ viewport: { width: 1280, height: 800, deviceScaleFactor: 1 } });
   const page = await browser.newPage({ width: 1280, height: 800, deviceScaleFactor: 1 });
   const pilot = { index, slot: `pilot-${index}`, browser, page, pageErrors: [], consoleErrors: [],
@@ -181,7 +201,8 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
     rewriteErrors: [], networkFailures: [], privacyFrames: [], hotHttp: [], cdp: {
       inboundBytes: 0, outboundBytes: 0, inboundFrames: 0, outboundFrames: 0, lifecycle: [],
     },
-    evidence: [], consumedEvents: [], rotateSchedulerOnNextSocket: false, reconnectRotationPromise: null };
+    evidence: [], consumedEvents: [], rotateSchedulerOnNextSocket: false, reconnectRotationPromise: null,
+    assignedProxy, streamUrls: [] };
   try {
   page.on("pageerror", (error) => pilot.pageErrors.push(error.message));
   page.on("console", (message) => {
@@ -201,8 +222,10 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
     }
     pilot.cdp.lifecycle.push(entry);
   };
-  page.session.on("Network.webSocketCreated", ({ requestId }) => {
-    pushLifecycle({ event: "created", atWallMs: Date.now(), requestIdHash: hashId(requestId) });
+  page.session.on("Network.webSocketCreated", ({ requestId, url }) => {
+    pilot.streamUrls.push(url);
+    pushLifecycle({ event: "created", atWallMs: Date.now(), requestIdHash: hashId(requestId),
+      endpoint: (() => { try { const value = new URL(url); return `${value.protocol}//${value.host}${value.pathname}`; } catch { return null; } })() });
     if (pilot.rotateSchedulerOnNextSocket) {
       pilot.rotateSchedulerOnNextSocket = false;
       pilot.reconnectRotationPromise = pilot.page.evaluate(() =>
@@ -277,7 +300,7 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
       }
     } catch {}
   });
-  const query = new URLSearchParams({ renderer: "three", simServer: `http://127.0.0.1:${simPort}`,
+  const query = new URLSearchParams({ renderer: "three", simServer: simBaseUrl || `http://127.0.0.1:${simPort}`,
     simTransport: "stream", simMaxPlayers: "4", capture: "1", deck: "1" });
   await page.goto(`http://127.0.0.1:${staticPort}/${htmlTarget}?${query}`, { timeout: 15000 });
   await sleep(1800);
@@ -293,13 +316,17 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
     return state?.transport?.activeTransport === "stream" && state.transport.streamState === "open"
       && Number.isSafeInteger(state.snapshotId);
   }, { timeout: 25000 });
+  if (assignedProxy) {
+    const expected = `ws://${assignedProxy.listen}/stream`;
+    assert(pilot.streamUrls.length === 1 && pilot.streamUrls[0] === expected,
+      `${pilot.slot} stream bypassed assigned proxy: expected ${expected}, got ${pilot.streamUrls.join(",")}`);
+    assert(!pilot.streamUrls.some((url) => url === `ws://127.0.0.1:${simPort}/stream`),
+      `${pilot.slot} connected directly to authority port`);
+  }
   return pilot;
   } catch (error) {
     await pilot.rewriter?.close().catch(() => null);
-    await browser.close().catch(() => null);
-    if (pidAlive(browser.proc?.pid)) {
-      try { process.kill(browser.proc.pid, "SIGKILL"); } catch {}
-    }
+    await closeBrowserBounded(browser).catch(() => null);
     throw error;
   }
 }
@@ -963,6 +990,14 @@ async function runBrowserCohort(options) {
   let t0Error = null;
   let t0Result = null;
   let t0FinalDrain = null;
+  let t1Transport = null;
+  let t1ActivationTask = null;
+  let t1ActivationError = null;
+  let t1Finalized = null;
+  let t1FinalDrain = null;
+  let t1BrowsersClosed = false;
+  const t1ExclusionWindows = new Map();
+  const observedAuthorityPids = new Set();
   const compiledDecisionFile = path.join(runDir, "compiled-decisions.json");
   const writePartialResult = (stage, extra = {}) => {
     const value = {
@@ -976,6 +1011,9 @@ async function runBrowserCohort(options) {
         browserPids: resources.pilots.map((pilot) => pilot.browser.proc?.pid || null),
       },
       profileDirectories: resources.pilots.map((pilot) => pilot.browser.userDataDir),
+      t1Proxy: t1Transport ? { stage: t1Transport.stage, tool: t1Transport.tool,
+        mappings: t1Transport.mappings, claimBoundary: t1Transport.claimBoundary,
+        packetCapture: t1Transport.packetCapture } : null,
       ...extra,
     };
     fs.writeFileSync(partialResultFile, `${JSON.stringify(value, null, 2)}\n`);
@@ -1003,8 +1041,20 @@ async function runBrowserCohort(options) {
       }
     }
     resources.simStarted = true;
+    if (scenario.transport?.kind === "managed-tcp-proxy") {
+      t1Transport = await createTcpProxyBrowserTransport({ transport: scenario.transport,
+        simPort, runDir, signal });
+      assert(t1Transport.mappings.length === 4
+        && new Set(t1Transport.mappings.map((entry) => entry.upstream)).size === 1
+        && t1Transport.mappings.every((entry) => entry.upstream === `127.0.0.1:${simPort}`),
+      "T1 did not map four browser paths to one authority");
+      writePartialResult("t1-listeners-ready");
+    }
     for (let index = 0; index < 4; index += 1) {
-      resources.pilots.push(await launchPilot({ index, staticPort, simPort, fixture, compiled, htmlTarget }));
+      const assignedProxy = t1Transport?.mappings[index] || null;
+      resources.pilots.push(await launchPilot({ index, staticPort, simPort,
+        simBaseUrl: assignedProxy ? `http://${assignedProxy.listen}` : null,
+        assignedProxy, fixture, compiled, htmlTarget }));
       writePartialResult(`pilot-${index}-admitted`);
     }
     await Promise.all(resources.pilots.map((pilot) => waitFor(pilot.page, () => {
@@ -1020,11 +1070,24 @@ async function runBrowserCohort(options) {
       playerHash: hashId(state.clientId), membershipHash: hashId(state.membershipId),
       profileHash: hashId(state.owner?.profileId), connectionEpoch: state.connectionEpoch }));
     expectedSlotMap = slotMap;
+    if (t1Transport) {
+      const admissionHealth = await (await fetch(`http://127.0.0.1:${simPort}/health`, {
+        headers: { "x-lbh-test-oracle": "authority" }, signal: AbortSignal.timeout(1000) })).json();
+      assert(Number.isSafeInteger(admissionHealth.process?.pid), "T1 admission health lacked one sim PID");
+      lastHealth = admissionHealth;
+      observedAuthorityPids.add(admissionHealth.process.pid);
+      await t1Transport.markAdmitted({ simPid: admissionHealth.process.pid });
+    }
     writePartialResult("cohort-admitted", { slotMap });
     const startWallMs = Date.now() + 1500;
     fs.writeFileSync(controlFile, `${JSON.stringify({ startWallMs })}\n`, { flag: "wx" });
     const timelines = await Promise.all(resources.pilots.map((pilot) => pilot.page.evaluate(
       (start) => window.__LBH_FRAME_IMPAIRMENT__.start(start), startWallMs)));
+    if (t1Transport) {
+      const activationDeadlineWallMs = startWallMs + scenario.warmupMs;
+      t1ActivationTask = t1Transport.activate(activationDeadlineWallMs)
+        .catch((error) => { t1ActivationError = error; return null; });
+    }
     if (scenario.transport?.kind === "cdp-websocket-smoke") {
       t0Transport = createCdpBrowserTransport({ pilots: resources.pilots, transport: scenario.transport,
         startWallMs, runDir, journeyState, signal });
@@ -1072,6 +1135,11 @@ async function runBrowserCohort(options) {
           headers: { "x-lbh-test-oracle": "authority" }, signal: AbortSignal.timeout(1000) })).json();
         const accounting = health.multiplayer?.projection?.accounting;
         lastHealth = health;
+        if (t1Transport) {
+          assert(Number.isSafeInteger(health.process?.pid), "T1 authority sample lacked sim PID");
+          observedAuthorityPids.add(health.process.pid);
+          assert(observedAuthorityPids.size === 1, "T1 authority PID changed within one run");
+        }
         assert(health.multiplayer?.adapter?.pressure?.current && health.multiplayer?.adapter?.pressure?.maxima,
           "Authority sample missing adapter pressure schema");
         assert(accounting?.costDistributions?.simTickMs && accounting.costDistributions.projectionReplicationMs,
@@ -1085,6 +1153,7 @@ async function runBrowserCohort(options) {
         appendJsonl(authorityFile, { sampledAt, tick: health.tick, mode: health.session?.overloadState,
           process: health.process, pressure: health.multiplayer.adapter.pressure,
           costDistributions: accounting.costDistributions });
+        if (t1Transport) await t1Transport.sampleMetrics("periodic-diagnostic");
         if (scenario.transport?.kind === "cdp-websocket-smoke") {
           const insideOfflineRecoveryWindow = sampledAt >= startWallMs + scenario.transport.offlineWindow.startMs
             && sampledAt <= startWallMs + scenario.transport.offlineWindow.endMs
@@ -1113,6 +1182,20 @@ async function runBrowserCohort(options) {
     })().catch((error) => { samplingError = error; sampling = false; });
     const warmupCapture = await capture(resources.pilots[0], runDir, `${scenarioLabel}-warmup-host`);
     await sleep(Math.max(0, startWallMs - Date.now()) + scenario.warmupMs + 2000, signal);
+    if (t1ActivationTask) {
+      await t1ActivationTask;
+      if (t1ActivationError) throw t1ActivationError;
+      const wallWindow = t1Transport.activation.exclusionWindow;
+      for (const pilot of resources.pilots) {
+        const clock = await pilot.page.evaluate(() => ({ wallMs: Date.now(), monoMs: performance.now() }));
+        t1ExclusionWindows.set(pilot.slot, { pilotSlot: pilot.slot,
+          startWallMs: wallWindow.startWallMs, endWallMs: wallWindow.endWallMs,
+          startMonoMs: clock.monoMs + wallWindow.startWallMs - clock.wallMs,
+          endMonoMs: clock.monoMs + wallWindow.endWallMs - clock.wallMs,
+          guardMs: wallWindow.guardMs, reason: wallWindow.reason });
+      }
+      t1Transport.activation.perPilotExclusionWindows = [...t1ExclusionWindows.values()];
+    }
     if (samplingError) throw samplingError;
     for (const pilot of resources.pilots) await tap(pilot.page, "KeyE", "e", 50);
     if (scenario.stimulus?.actionIntervalMs) {
@@ -1175,6 +1258,17 @@ async function runBrowserCohort(options) {
       }, { timeout: scenario.transport.offlineWindow.finalDrainMs })));
       t0FinalDrain = { startedWallMs: drainStartedWallMs, completedWallMs: Date.now(),
         budgetMs: scenario.transport.offlineWindow.finalDrainMs };
+    } else if (scenario.transport?.kind === "managed-tcp-proxy") {
+      const drainStartedWallMs = Date.now();
+      for (const pilot of resources.pilots) await tap(pilot.page, "Escape", "Escape", 50);
+      await Promise.all(resources.pilots.map((pilot) => waitFor(pilot.page, () =>
+        window.__TEST_API?.getGamePhase?.() === "paused", { timeout: 2000 })));
+      await Promise.all(resources.pilots.map((pilot) => waitFor(pilot.page, () => {
+        const state = window.__TEST_API?.getMultiplayerJourneyState?.();
+        return state?.transport?.pendingInputCount === 0 && state?.transport?.pendingActionCount === 0;
+      }, { timeout: scenario.transport.finalDrainMs })));
+      t1FinalDrain = { startedWallMs: drainStartedWallMs, completedWallMs: Date.now(),
+        budgetMs: scenario.transport.finalDrainMs };
     }
     sampling = false;
     await samplingTask;
@@ -1191,8 +1285,12 @@ async function runBrowserCohort(options) {
       ownerPlayerId: final[index].clientId, membershipId: final[index].membershipId,
     }));
     const ledgers = resources.pilots.map((pilot, index) => clientLedger(pilot, final[index].clientId, {
-      excludedWindows: t0Result?.steadyStateExclusionWindow?.pilotSlot === pilot.slot
-        ? [t0Result.steadyStateExclusionWindow] : [],
+      excludedWindows: [
+        ...(t0Result?.steadyStateExclusionWindow?.pilotSlot === pilot.slot
+          ? [t0Result.steadyStateExclusionWindow] : []),
+        ...(t1Transport?.activation?.exclusionWindow ? [t1Transport.activation.exclusionWindow] : []),
+        ...(t1ExclusionWindows.has(pilot.slot) ? [t1ExclusionWindows.get(pilot.slot)] : []),
+      ],
     }));
     const impairment = decisionProfile(scenario, resources.pilots, serverEvidenceFile, t0Result);
     if (scenario.transport?.kind === "cdp-websocket-smoke"
@@ -1319,7 +1417,7 @@ async function runBrowserCohort(options) {
       } else {
         assert(final[index].transport.reconnectCount === 0, `${resources.pilots[index].slot} unexpectedly reconnected`);
       }
-      if (scenario.rules.faults || scenario.transport?.kind === "cdp-websocket-smoke") {
+      if (scenario.rules.faults || ["cdp-websocket-smoke", "managed-tcp-proxy"].includes(scenario.transport?.kind)) {
         assert(final[index].transport.pendingInputCount === 0 && final[index].transport.pendingActionCount === 0,
           `${resources.pilots[index].slot} did not converge pending input/action work`);
       }
@@ -1365,6 +1463,20 @@ async function runBrowserCohort(options) {
         && [...oracleSequences].every((sequence) => clientSequences.has(sequence)),
       `${resources.pilots[index].slot} pulse outcomes and consequences differ`);
     }
+    if (t1Transport) {
+      assert(observedAuthorityPids.size === 1 && observedAuthorityPids.has(lastHealth.process.pid),
+        "T1 did not retain exactly one sim authority PID");
+      for (const pilot of resources.pilots) {
+        const drained = await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.drain());
+        for (const event of drained) appendJsonl(clientEvidenceFile, sanitizeFrameEvidence(event));
+        resources.browserSchedulerStatuses.push(await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.status()));
+        await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.stop());
+        await pilot.rewriter?.close();
+        await closeBrowserBounded(pilot.browser);
+      }
+      t1BrowsersClosed = true;
+      t1Finalized = await t1Transport.finalizeAfterBrowserClose({ simPid: lastHealth?.process?.pid || null });
+    }
     return { startedAt, completedAt: Date.now(), staticPort, simPort, slotMap, timelines, screenshots,
       privacy, clientSummaries: ledgers.map((entry) => entry.summary), cdp: resources.pilots.map((pilot) => pilot.cdp),
       impairment,
@@ -1372,6 +1484,12 @@ async function runBrowserCohort(options) {
       t0CdpTransport: t0Result,
       t0FinalDrain,
       t0InputTimeoutCausality,
+      t1ProxyTransport: t1Transport ? { tool: t1Transport.tool, mappings: t1Transport.mappings,
+        activation: t1Transport.activation, finalized: t1Finalized,
+        browserStreams: resources.pilots.map((pilot) => ({ pilotSlot: pilot.slot,
+          assignedListener: pilot.assignedProxy.listen, observedStreamEndpoints: pilot.streamUrls })),
+        packetCapture: t1Transport.packetCapture, claimBoundary: t1Transport.claimBoundary } : null,
+      t1FinalDrain,
       pulseConsequences: final.map((state) => authorityPulseEvents.get(state.clientId)?.size || 0),
       processes: { staticPid: resources.staticServer.pid, simPid: lastHealth?.process?.pid || null,
         browserPids: resources.pilots.map((pilot) => pilot.browser.proc?.pid || null) },
@@ -1379,6 +1497,8 @@ async function runBrowserCohort(options) {
       activation: { browserRewriteCounts: resources.pilots.map((pilot) => pilot.rewriter.status().rewrites) },
       scope: scenario.transport?.kind === "cdp-websocket-smoke"
         ? "PR-smoke CDP browser shaping/offline-gap evidence; no claim CDP caused an observed socket close/reconnect, and not TCP loss, netem, WAN, TLS, congestion, retransmission, or receive-window evidence"
+        : scenario.transport?.kind === "managed-tcp-proxy"
+          ? t1Transport.claimBoundary
         : "pr-smoke application-frame evidence; not canonical duration, memory slope, TCP, WAN, TLS, or packet loss" };
   } finally {
     sampling = false;
@@ -1388,6 +1508,7 @@ async function runBrowserCohort(options) {
     await t0Task?.catch(() => null);
     await t0Transport?.restore().catch(() => null);
     for (const pilot of resources.pilots) {
+      if (t1BrowsersClosed) continue;
       try {
         const drained = await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.drain());
         for (const event of drained) appendJsonl(clientEvidenceFile, sanitizeFrameEvidence(event));
@@ -1395,11 +1516,14 @@ async function runBrowserCohort(options) {
         await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.stop());
       } catch {}
       await pilot.rewriter?.close().catch(() => null);
-      await pilot.browser.close().catch(() => null);
-      if (pidAlive(pilot.browser.proc?.pid)) {
-        try { process.kill(pilot.browser.proc.pid, "SIGKILL"); } catch {}
-      }
+      await closeBrowserBounded(pilot.browser).catch(() => null);
     }
+    if (t1Transport && t1BrowsersClosed && !t1Finalized) {
+      try { t1Finalized = await t1Transport.finalizeAfterBrowserClose({ simPid: lastHealth?.process?.pid || null }); }
+      catch {}
+    }
+    await t1ActivationTask?.catch(() => null);
+    const t1Cleanup = t1Transport ? await t1Transport.stop().catch(() => null) : null;
     await stopSimServer(simPort).catch(() => null);
     const simLog = simLogFile(simPort);
     if (fs.existsSync(simLog)) copyRedactedSimLog(simLog, path.join(runDir, "sim.log"));
@@ -1451,6 +1575,12 @@ async function runBrowserCohort(options) {
       preloadStoppedClean: serverStops.at(-1)?.pending === 0 && serverStops.at(-1)?.pendingBlocks === 0,
       preloadFailuresAbsent: preloadFailures.length === 0,
       cdpProfilesRestored: t0Transport ? t0Transport.restorationComplete : true,
+      t1ToxicsRemoved: t1Transport ? t1Cleanup?.toxicsRemoved === true : true,
+      t1ProxiesDeleted: t1Transport ? t1Cleanup?.proxiesDeleted === true : true,
+      t1DaemonStopped: t1Transport ? t1Cleanup?.daemonStopped === true : true,
+      t1ControlPortClosed: t1Transport ? t1Cleanup?.controlPortClosed === true : true,
+      t1ProxyPortsClosed: t1Transport ? t1Cleanup?.proxyPortsClosed === true : true,
+      t1BrowsersClosedBeforeFinalMetrics: t1Transport ? t1BrowsersClosed === true : true,
     };
     fs.writeFileSync(path.join(runDir, "cleanup.json"), `${JSON.stringify(cleanup, null, 2)}\n`, { flag: "wx" });
     releaseLock();
