@@ -5,7 +5,13 @@
 
 ---
 
-## 2026-07-12 — v0.4 Chrome transport stall evidence
+## 2026-07-12 — v0.4 network impairment evidence
+
+- Froze the next T1 implementation packet around one pinned Toxiproxy v2.12.0
+  daemon, four independent browser listeners, and one shared match authority.
+  The fixture will record nearest representable decimal-kB/s rates alongside
+  the intended KiB/s targets and keep TCP-stream proxy truth separate from
+  packet, slow-reader, WAN, TLS, and hosted claims.
 
 - Added the four-browser T0 CDP transport smoke with a post-admission aggregate
   35 ms / 64 KiB/s upload / 320 KiB/s download profile and a measured

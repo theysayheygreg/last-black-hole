@@ -204,6 +204,14 @@ per client if evenly divided. `T2` is intentionally below the current
 uncompressed stream and is expected to fence the slow client, not keep it
 playable by consuming unbounded memory.
 
+The canonical T1 row remains 15 seconds clean warm-up, 60 seconds active, and
+15 seconds recovery. Its first local PR-smoke variant uses 5/30/10 seconds with
+the same seed, topology, fixed values, and gates and must label itself
+`pr-smoke`; it is not canonical duration evidence. Toxiproxy v2.12.0 represents
+bandwidth as integer decimal kB/s, so implementation records the 64/320 KiB/s
+targets beside nearest representable 66,000/328,000 B/s applied values rather
+than silently relabeling units.
+
 Run `F0` and the Layer A unit corpus on every relevant PR. Run one 4p
 `F1/F3/F6` browser cohort on the multiplayer-network PR lane. Run the full
 4p/8p matrix plus netem nightly and before a hosted pilot. A failed seeded run

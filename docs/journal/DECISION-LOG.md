@@ -1,5 +1,28 @@
 # Decision Log
 
+## 2026-07-12 — T1 uses four proxy paths into one match authority
+
+**Decision:** T1 will run one pinned Toxiproxy v2.12.0 daemon per harness run,
+create one independently controlled listener per browser, and forward all four
+listeners to the same match authority. Fixed latency uses zero jitter. The
+integer bandwidth toxic records both the intended 64/320 KiB/s targets and its
+nearest representable 66,000/328,000 B/s values.
+
+**Why:** Independent listeners isolate per-client paths without creating a
+second gameplay writer or one authority per client. Toxiproxy is portable
+across local macOS and ordinary Linux CI, but it manipulates userspace TCP
+stream chunks rather than IP packets. Its stable bandwidth unit is decimal
+kB/s and its jitter is not replay-seeded, so precise labels and fixed values
+are necessary for reproducible, honest evidence.
+
+**Where it landed:**
+`docs/project/reviews/2026-07-12-t1-managed-tcp-proxy-implementation.md`.
+
+**Door status:** Closed for a shared browser listener, production proxy
+dependency, ambiguous KiB/s labels, seeded-jitter claims, Toxiproxy packet-loss
+claims, or combining T1 with F5/T2/netem. Open for the pinned control-helper
+slice, then the four-browser T1 cohort.
+
 ## 2026-07-12 — T0 proves a Chrome transport stall, not a reconnect
 
 **Decision:** The zero-dependency T0 browser lane uses
