@@ -300,8 +300,10 @@ For fleet and cohort arithmetic, keep mode hours explicit:
 active_matches[r,m,t] = ceil(CCU[r,m,t] / mean_occupied_seats[r,m,t])
 required_slots[r,m,t] = ceil(active_matches[r,m,t] / target_slot_occupancy[r,m,t])
 
-host fit = min(writer lanes, mean CPU, RAM, egress, encode throughput,
+host fit = min(writer lanes, reserved mean-billable CPU, RAM, egress, encode throughput,
                packet/s, process caps, failure-domain policy)
+
+writer feasibility = measured writer p95/p99 <= mode thresholds
 
 variable cost/copy
   = sum(hours_per_copy[m,t]
@@ -310,7 +312,8 @@ variable cost/copy
            + per_player_variable_services[r,m,t]))
 ```
 
-This keeps per-copy variable service attached to mode hours and actual
+Writer feasibility is a prerequisite, not another CPU-packing quotient; p95/p99
+wall time must never be divided into core capacity. This keeps per-copy variable service attached to mode hours and actual
 occupancy. Fixed stack, warm regional floor, loaded labor, and the long service
 tail remain separate calendar-time costs; do not smear them into a high-count
 player-hour and then also charge them in the cohort table.

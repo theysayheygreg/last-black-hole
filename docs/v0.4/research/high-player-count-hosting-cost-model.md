@@ -80,13 +80,16 @@ egress $/match-hour = GB/match-hour * regional $/GB
 
 safe packing = floor(min(
   host isolated writer lanes / writer lanes per authority,
-  host usable cores / p95 authority cores,
+  host usable mean-billable core budget
+    / reserved mean billable cores per authority,
   host usable GiB / p95 authority GiB,
   host network budget / p95 authority network,
   host encode budget / p95 authority encode,
   host packet budget / p95 authority packets,
   platform process/session cap
 ))
+
+writer feasibility gate = measured writer p95/p99 <= mode thresholds
 
 packed compute $/match-hour = host $/hour
                               / safe packing
@@ -98,9 +101,11 @@ total $/player-hour = (compute + egress + per-match services) / seats
                       + per-player services + shared monthly cost/player-hour
 ```
 
-Do not substitute mean CPU for the serial-writer term. Mean billable CPU sizes
-the reservation and invoice; writer p95/p99 decides whether one authority can
-commit a tick in time. More vCPU does not rescue an over-budget serial writer.
+Packing is permitted only after the writer feasibility gate passes. Mean
+billable CPU sizes the reservation, packing CPU dimension, and invoice; writer
+p95/p99 decides whether one authority can commit a tick in time and is not a
+quantity measured in cores. More vCPU does not rescue an over-budget serial
+writer. The isolated writer-lane term remains a separate packing constraint.
 
 For a mixed fleet, capacity is a regional, tiered vector rather than one global
 seat average:
@@ -112,7 +117,7 @@ active_matches[region, mode, tier]
 required_slots[region, mode, tier]
   = ceil(active_matches[region, mode, tier] / target_slot_occupancy)
 
-host fit = min(writer-lane fit, CPU fit, RAM fit, egress fit,
+host fit = min(writer-lane fit, reserved mean-billable CPU fit, RAM fit, egress fit,
                encode fit, packet/s fit, process fit)
 
 fleet $/hour = sum(host_count[region, shape] * host_price[region, shape])
