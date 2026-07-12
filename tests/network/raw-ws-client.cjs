@@ -19,7 +19,7 @@ function waitFor(check, label, timeoutMs = 10000) {
 }
 
 async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 10000,
-  kind = "admission", cursors = {} }) {
+  kind = "admission", cursors = {}, shouldWithholdEventAck = null }) {
   const client = {
     pilotSlot,
     ws: new WebSocket(`ws://127.0.0.1:${port}/stream`, { perMessageDeflate: false }),
@@ -55,6 +55,11 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
       client.lastSnapshotAck = frame.snapshotId;
     }
     if (frame.type === "event") {
+      const withheld = shouldWithholdEventAck
+        ? shouldWithholdEventAck({ frame, pilotSlot, client }) === true : false;
+      record({ type: "event-ack-decision", pilotSlot, at: Date.now(), eventSeq: frame.eventSeq,
+        deliveryId: frame.deliveryId, withheld });
+      if (withheld) return;
       client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: frame.deliveryId }));
       record({ type: "delivery-ack", pilotSlot, at: Date.now(), deliveryId: frame.deliveryId,
         eventSeq: frame.eventSeq });

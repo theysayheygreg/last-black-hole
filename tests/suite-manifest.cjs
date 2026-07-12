@@ -139,6 +139,13 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerSoakSmoke",
+    file: "multiplayer-soak-smoke.cjs",
+    lanes: ["multiplayer-soak-smoke"],
+    browser: false,
+    slow: true,
+  },
+  {
     name: "SimClientStream",
     file: "sim-client-stream.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],

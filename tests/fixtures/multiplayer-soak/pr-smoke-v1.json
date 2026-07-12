@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "scenarioVersion": "eight-player-soak-pr-smoke-v1",
+  "profile": "pr-smoke",
+  "rootSeed": "0x08A04E01",
+  "pilotCount": 8,
+  "wallTimeMs": 360000,
+  "warmupMs": 60000,
+  "measuredBodyMs": 240000,
+  "recoveryMs": 60000,
+  "inputCadenceMs": 1000,
+  "healthCadenceMs": 5000,
+  "actionCadenceMs": 15000,
+  "barriers": [
+    { "atMs": 120000, "kind": "reconnect", "seat": 4 },
+    { "atMs": 210000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 240000, "kind": "leave-join", "seat": 5 }
+  ],
+  "evidence": {
+    "maxJsonlBytes": 16777216,
+    "maxJsonlRecords": 25000,
+    "maxRawFramesPerClient": 10000,
+    "maxArtifactBytes": 33554432,
+    "maxStdoutStderrBytes": 2097152
+  }
+}
