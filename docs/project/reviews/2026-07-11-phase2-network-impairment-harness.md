@@ -351,7 +351,10 @@ Extract reusable journey observation only after contract tests exist.
 4. **Instrumented 4p browser lane.** Add
    `tests/multiplayer-network-impairment.cjs` and a small reusable cohort helper.
    Land `F0/F1/F3/F6` at 4p with manifest, JSONL, strict timeouts, and process
-   cleanup before adding more scenarios.
+   cleanup before adding more scenarios. The staged implementation, stable tape
+   identity, test-owned injection, evidence, and canonical instrumentation
+   prerequisites are specified in
+   `2026-07-11-phase2-browser-cohort-implementation.md`.
 5. **Browser transport smoke.** Use existing CDP sessions for fixed
    latency/rate/offline after admission, restore profiles in cleanup, and add
    `T0`. Do not use its WebRTC-only packet controls.

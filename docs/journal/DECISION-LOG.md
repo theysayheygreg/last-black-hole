@@ -1,5 +1,31 @@
 # Decision Log
 
+## 2026-07-11 — Browser impairment injection stays test-owned
+
+**Decision:** The four-browser Layer A harness will exercise the real client and
+adapter scheduling seams without adding an impairment control surface to normal
+product code. Chrome DevTools response interception will patch the exact
+SimClient construction call in memory after asserting its expected source; a
+guarded Node preload will inject the adapter scheduler only into the test sim
+child. Fresh-cohort decisions use stable pilot-slot/phase/ordinal keys, while
+runtime IDs and payload hashes remain evidence only.
+
+**Why:** A production query, environment read, or global scheduler hook would
+ship a fault-control path. A generic WebSocket facade would stay test-owned but
+bypass the seams Phase 2 is meant to validate. Runtime-generated IDs and
+timestamps also make strict payload-fingerprint tapes non-replayable across
+fresh browsers. Test-owned source interception plus stable compiled decisions
+keeps the shipped path clean and the evidence reproducible.
+
+**Where it landed:**
+`docs/project/reviews/2026-07-11-phase2-browser-cohort-implementation.md`.
+Implementation starts with an isolated F0 PR-smoke runner after bounded adapter
+and authority quantile instrumentation lands.
+
+**Door status:** Closed for product impairment flags, automatic retries, and
+calling browser callback delay packet loss or WAN latency. Open for the staged
+F0/F1/F3/F6 Layer A runner and later separate proxy/netem/WAN evidence.
+
 ## 2026-07-11 — Reliable delivery faults wait for contiguous ACK semantics
 
 **Decision:** The first authority-to-client impairment seam may schedule only
