@@ -6,7 +6,7 @@ const path = require("path");
 const { startSimServer, stopSimServer } = require("../helpers.cjs");
 const { waitFor, openRawClient, pauseAfterAuthorityPong, closeRawClient,
   terminateRawClient } = require("./raw-ws-client.cjs");
-const { runAllReadingControl } = require("./raw-ws-slow-reader-cohort.cjs");
+const { runAllReadingControl, assertPrivateCohort } = require("./raw-ws-slow-reader-cohort.cjs");
 
 async function request(port, pathname, { method = "GET", body = null, authority = null,
   accounting = null, category = "oracle" } = {}) {
@@ -101,6 +101,7 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
       || new Set(connectionMap.map((entry) => entry.schedulerOrdinals[0])).size !== fixture.pilotCount) {
       throw new Error(`T2b match did not admit exactly ${fixture.pilotCount} distinct raw clients`);
     }
+    assertPrivateCohort(clients, authorities, "t2b");
 
     const admittedHealth = (await request(port, "/health", { accounting })).body;
     const authorityPid = admittedHealth.process.pid;

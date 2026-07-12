@@ -31,6 +31,26 @@ function readJsonl(file) {
   return fs.readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
 }
 
+function assertPrivateCohort(clients, authorities, markerPrefix) {
+  const markers = clients.map((_, index) => `${markerPrefix}-rig-${index}`);
+  for (let index = 0; index < clients.length; index += 1) {
+    const owner = [...clients[index].frames].reverse().find((frame) => frame.type === "ownerState");
+    if (owner?.membershipId !== authorities[index].membershipId
+      || owner.playerId !== authorities[index].playerId
+      || !JSON.stringify(owner).includes(markers[index])) {
+      throw new Error(`owner-private baseline did not bind pilot-${index}`);
+    }
+    const publicWire = JSON.stringify(clients[index].frames.filter((frame) => frame.type === "publicState"));
+    if (markers.some((marker) => publicWire.includes(marker))) {
+      throw new Error(`public baseline leaked a private ${markerPrefix} marker`);
+    }
+    const clientWire = JSON.stringify(clients[index].frames);
+    if (markers.some((marker, rival) => rival !== index && clientWire.includes(marker))) {
+      throw new Error(`rival private ${markerPrefix} marker crossed into pilot-${index}`);
+    }
+  }
+}
+
 async function portIsDead(port) {
   return new Promise((resolve) => {
     const socket = net.connect({ host: "127.0.0.1", port }, () => { socket.destroy(); resolve(false); });
@@ -95,6 +115,7 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
       || new Set(connectionMap.map((entry) => entry.schedulerConnectionId)).size !== fixture.pilotCount) {
       throw new Error(`pressure match did not admit exactly ${fixture.pilotCount} distinct raw clients`);
     }
+    assertPrivateCohort(clients, authorities, "t2a");
     healthAtAdmission = (await request(port, "/health", { accounting: httpAccounting })).body;
     const authorityPid = healthAtAdmission.process?.pid;
     if (!Number.isSafeInteger(authorityPid)) throw new Error("one dedicated match authority PID unavailable");
@@ -492,6 +513,7 @@ async function runAllReadingControl({ fixture, runDir, port }) {
       || new Set(connectionMap.map((entry) => entry.schedulerConnectionId)).size !== fixture.pilotCount) {
       throw new Error(`control match did not admit exactly ${fixture.pilotCount} distinct raw clients`);
     }
+    assertPrivateCohort(clients, authorities, "t2a-control");
     await waitFor(() => {
       const events = readJsonl(pressureFile).filter((event) => event.type === "heartbeat-pong");
       return connectionMap.every((entry) => events.some((event) => event.schedulerConnectionId === entry.schedulerConnectionId));
@@ -519,4 +541,4 @@ async function runAllReadingControl({ fixture, runDir, port }) {
   }
 }
 
-module.exports = { runRawSlowReaderCohort, runAllReadingControl };
+module.exports = { runRawSlowReaderCohort, runAllReadingControl, assertPrivateCohort };
