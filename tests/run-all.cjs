@@ -14,6 +14,7 @@
  * - multiplayer-structure: membership, privacy, and settlement contracts
  * - multiplayer-authority: deterministic 1/4/8 authority and structure proof
  * - multiplayer-network: JSON frame and bounded queue/backpressure primitives
+ * - multiplayer-impairment-browser: isolated four-browser application-frame PR smoke
  * - visual: screenshot renderer fixtures
  * - playtest: real menu/input flows best reviewed in Codex Browser
  * - agent-eval: fresh playable map checks with screenshots and a narrative report

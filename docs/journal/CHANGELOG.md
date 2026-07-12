@@ -99,6 +99,11 @@
   reliable queues, replay retention, inbound bytes, and physical/scheduled
   sends. Fixed policy-crossing counters capture short spikes at mutation points
   without retaining connection identity or unbounded history.
+- Added the isolated F0 four-browser impairment PR-smoke runner. Test-owned CDP
+  response rewriting and a guarded sim preload exercise the real client and
+  adapter seams without shipping an impairment flag; stable pilot-slot decision
+  books, per-frame exact-once/privacy ledgers, redacted artifacts, screenshots,
+  authority diagnostics, and process/profile/port cleanup are strict gates.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

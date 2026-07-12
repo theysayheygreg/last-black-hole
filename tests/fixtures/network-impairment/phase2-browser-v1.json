@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "scenarioVersion": "phase2-browser-v1",
+  "mainSource": {
+    "sha256": "3b952bda18c3bc17376568e354dccf7dd189bef94332e6d9b7bc2ec4803ed559",
+    "constructor": "simClient = new SimClient(simServerUrl, { transport: getConfiguredSimTransport() });"
+  },
+  "decisionCapacity": {
+    "input": 512,
+    "action": 16,
+    "ack": 512,
+    "pong": 16,
+    "publicState": 512,
+    "ownerState": 512,
+    "event": 64,
+    "heartbeat": 16,
+    "unknown": 32
+  },
+  "scenarios": {
+    "F0-clean": {
+      "profile": "pr-smoke",
+      "rootSeed": "0x0400C1EA",
+      "players": 4,
+      "warmupMs": 5000,
+      "activeMs": 20000,
+      "recoveryMs": 10000,
+      "rules": {
+        "copies": 1,
+        "delayMs": 0,
+        "omitted": false
+      },
+      "gates": {
+        "minimumInputAckSamplesPerPilot": 100,
+        "minimumAlignedPairSamplesPerPilot": 100,
+        "minimumReliableActionsPerPilot": 2,
+        "inputAckP95Ms": 125,
+        "snapshotCadenceP95Ms": 175,
+        "reliableConsequenceP95Ms": 300,
+        "postAdmissionRebases": 0,
+        "postAdmissionReconnects": 0
+      }
+    }
+  }
+}

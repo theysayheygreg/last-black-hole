@@ -513,6 +513,14 @@ const SUITES = [
     timeout: 360000,
   },
   {
+    name: "MultiplayerNetworkImpairment",
+    file: "multiplayer-network-impairment.cjs",
+    lanes: ["multiplayer-impairment-browser"],
+    browser: true,
+    slow: true,
+    timeout: 240000,
+  },
+  {
     name: "Renderer",
     file: "renderer.cjs",
     lanes: ["visual", "full", "three"],
@@ -541,6 +549,7 @@ const LANES = [
   "multiplayer-authority",
   "multiplayer-network",
   "multiplayer-playable",
+  "multiplayer-impairment-browser",
   "visual",
   "playtest",
   "agent-eval",

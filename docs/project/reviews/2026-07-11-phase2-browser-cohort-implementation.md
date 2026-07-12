@@ -109,7 +109,7 @@ actual start skew. Decision and release ordering uses monotonic time only.
 
 ## Scenario staging
 
-### Commit A: F0 PR scaffold
+### Commit A: F0 PR scaffold — implemented
 
 - four fresh Chrome profiles join one fresh authority through normal host/guest
   menus;
@@ -119,6 +119,10 @@ actual start skew. Decision and release ordering uses monotonic time only.
 - exact-once/privacy/hot-HTTP/cleanup ledgers and evidence artifacts;
 - PR gates use the F0 latency/cadence thresholds but make no memory-slope,
   canonical-duration, or WAN claim.
+
+Acceptance requires one no-retry run from the committed clean HEAD plus a
+separate SIGTERM diagnostic after all four pilots are admitted. Dirty-tree runs
+remain explicitly diagnostic-only and cannot become immutable evidence.
 
 ### Commit B: F1 regional frame delay
 
