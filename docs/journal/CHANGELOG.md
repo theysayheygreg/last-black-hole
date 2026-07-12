@@ -34,6 +34,9 @@
 - Measured steady uncompressed application traffic at 0.810--0.812 MB/s for
   four browsers and 1.927 MB/s for eight while authority stayed `NORMAL` at
   15/10 Hz. WAN, TLS, hosted soak, and Greg hands-on remain pending.
+- Added a bounded Phase 2 delegation packet for a seeded two-layer network
+  impairment harness, separating deterministic frame faults from later real
+  WAN/TLS proof and preserving the one-authority-per-match contract.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection
