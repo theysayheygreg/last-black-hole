@@ -1075,6 +1075,9 @@ let multiplayerTicketRegistry = null;
 let multiplayerAdapter = null;
 let multiplayerProjectionTask = null;
 let shutdownPromise = null;
+const soakRuntimeDiagnostics = process.env.LBH_SOAK_DIAGNOSTICS === "1"
+  ? require("./soak-runtime-diagnostics.cjs").createSoakRuntimeDiagnostics()
+  : null;
 
 function publishEvent(type, payload = {}, options = {}) {
   const playerId = String(payload?.clientId || options.playerId || "").trim();
@@ -6763,7 +6766,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
       const idleState = getIdleState();
-      sendJson(res, 200, {
+      const health = {
         ok: true,
         protocolVersion: PROTOCOL_VERSION,
         simInstanceId: SIM_INSTANCE_ID,
@@ -6793,7 +6796,9 @@ const server = http.createServer(async (req, res) => {
         idleState,
         shutdownReason: runtime.shutdownReason,
         multiplayer: multiplayerDiagnostics(),
-      });
+      };
+      if (soakRuntimeDiagnostics) health.soakDiagnostics = soakRuntimeDiagnostics.status();
+      sendJson(res, 200, health);
       return;
     }
 
@@ -7304,12 +7309,14 @@ if (MULTIPLAYER_WS_ENABLED) {
 server.on("error", (err) => {
   telemetry.error("runtime.error", { message: err.message });
   console.error(`[${LOG_LABEL}] ${err.message}`);
+  if (soakRuntimeDiagnostics) soakRuntimeDiagnostics.stop();
   cleanupFiles(PID_FILE, META_FILE);
   process.exit(1);
 });
 
 function shutdown() {
   if (shutdownPromise) return shutdownPromise;
+  if (soakRuntimeDiagnostics) soakRuntimeDiagnostics.stop();
   stopTickLoop();
   clearTerminalShutdown();
   if (controlPlaneHeartbeat) clearInterval(controlPlaneHeartbeat);

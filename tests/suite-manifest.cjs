@@ -133,6 +133,12 @@ const SUITES = [
     slow: true,
   },
   {
+    name: "SoakRuntimeDiagnostics",
+    file: "soak-runtime-diagnostics.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "SimClientStream",
     file: "sim-client-stream.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
