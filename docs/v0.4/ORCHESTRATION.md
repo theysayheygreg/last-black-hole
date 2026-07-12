@@ -237,8 +237,14 @@ Singularity that:
 - Claim boundary remains configured userspace TCP-stream headroom and gameplay
   outcomes only. Canonical duration, packet truth, slow-reader pressure,
   throughput accuracy, WAN/WSS/TLS, and hosted behavior remain pending.
-- Next bounded implementation is F5 one-client blackout/reset and recovery.
-  T2 and netem remain separate evidence lanes.
+- F5 one-client blackout/reset and authoritative recovery landed at `8f5133a`.
+  Clean artifact
+  `multiplayer-impairment-2026-07-12T122241558Z-f5-one-client-blackout-4p-0405B1AC-11747e`
+  proves a stable one-per-match authority, pilot-3-only drop/fence, distinct
+  replacement socket, epoch 1-to-2 recovery in 158 ms, exact reliable-action
+  identity, healthy-client isolation, and complete cleanup.
+- Next bounded implementation is T2 slow-reader pressure. Netem packet truth
+  and hosted WSS remain separate evidence lanes.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

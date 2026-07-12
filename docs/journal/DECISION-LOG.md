@@ -19,7 +19,9 @@ endpoint progress is the honest outage clock.
 
 **Door status:** Closed for global proxy reset, synchronous-RST claims,
 shortening the verified 25-second drop, or combining F5 with T2/netem/hosted
-evidence. Open for the controller proof, then the isolated F5 cohort.
+evidence. The controller and isolated four-browser cohort are accepted at
+`271b7a8` and `8f5133a`; T2 slow-reader and Linux packet truth remain separate
+open lanes.
 
 ## 2026-07-12 — T1 uses four proxy paths into one match authority
 

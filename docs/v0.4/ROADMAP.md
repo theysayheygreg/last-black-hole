@@ -145,9 +145,16 @@ accepted from clean commit `b15ea6a`. Four independently shaped listeners fed
 one stable authority, all client latency/consequence gates passed, and every
 tool/path/client/process cleanup fact closed. This remains 45-second local
 TCP-stream evidence, not canonical 90-second or packet/WAN/TLS proof. The next
-bounded slice is F5 one-client blackout plus forced transport rotation and
-authoritative reconnect proof; it must reuse the accepted controller without
-combining T2 slow-reader or netem behavior.
+bounded slice was F5 one-client blackout plus forced transport rotation and
+authoritative reconnect proof.
+
+**F5 checkpoint — 2026-07-12:** clean commit `8f5133a` and artifact
+`multiplayer-impairment-2026-07-12T122241558Z-f5-one-client-blackout-4p-0405B1AC-11747e`
+are accepted. Four listeners still fed one stable match authority. Only pilot
+3 saw the 25-second timeout-zero drop and one-listener fence; it recovered on a
+distinct socket at epoch 2 in 158 ms while all healthy clients stayed at epoch
+1. The next bounded evidence lane is T2 slow-reader authority-pressure proof;
+Linux receiver-ingress netem and hosted WSS remain separate.
 
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.

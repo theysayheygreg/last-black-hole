@@ -258,4 +258,27 @@ The proof also covers partial activation rollback to an exact inactive GET,
 malformed proxy-update ownership, exact guarded toxic snapshots, phase-scoped
 signal cleanup, bounded socket timers, idempotent daemon/port cleanup, and no
 counter/RST/packet claim. The focused proof and all 11 multiplayer-network
-suites pass. Browser-level F5 authority recovery remains the next slice.
+suites pass.
+
+## Browser cohort acceptance — implemented
+
+Commit `8f5133a` implements the four-browser F5 fixture, Layer-A discard seam,
+managed timeout/fence transport, timeout-causality binding, lifecycle gates,
+runner wiring, and bounded cleanup. Clean no-retry artifact
+`multiplayer-impairment-2026-07-12T122241558Z-f5-one-client-blackout-4p-0405B1AC-11747e`
+passes from committed HEAD.
+
+The accepted run retained one authority PID and four upstream connections
+through the guarded outage. Pilot 3 recorded six upstream and 316 downstream
+Layer-A discards, including the named action, with zero inbound frames,
+snapshot movement, or input-ACK movement during guarded silence. After 25.007
+seconds of verified physical drop, only its listener was fenced and restored.
+A distinct WebSocket recovered from epoch 1 to 2 in 158 ms; the action kept one
+identity and converged to one semantic outcome. Pilots 0 through 2 kept their
+original sockets and epoch 1. All scheduler, browser, process, proxy, port, and
+registry cleanup gates closed.
+
+This accepts only the local 5/40/15 userspace stream proof. It does not add a
+packet-loss, synchronous-RST, live-counter, congestion, WAN, WSS, TLS, hosted,
+or canonical-duration claim. T2 slow-reader pressure and Linux netem remain
+separate work.

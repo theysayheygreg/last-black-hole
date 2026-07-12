@@ -17,6 +17,13 @@
   healthy traffic, one-path disable/cleanup/re-enable, same-listener recovery,
   exact rollback snapshots, malformed-response ownership, signal cleanup, and
   bounded teardown without claiming packets or synchronous RST behavior.
+- Implemented and accepted the four-browser F5 blackout/recovery smoke. One
+  match authority retained the same PID while only pilot 3 experienced a
+  verified 25-second bidirectional drop, a one-listener connection fence, a
+  distinct replacement WebSocket, and epoch 1-to-2 recovery in 158 ms. The
+  named reliable action retained one identity across discard and replay; the
+  three healthy pilots neither reconnected nor rotated epoch. Evidence remains
+  local userspace stream behavior, not packet, RST, WAN, WSS, or TLS proof.
 
 - Froze the next T1 implementation packet around one pinned Toxiproxy v2.12.0
   daemon, four independent browser listeners, and one shared match authority.
