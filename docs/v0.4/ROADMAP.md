@@ -205,6 +205,19 @@ cleanup gates pass, as does a fresh independent rerun. The local raw-WebSocket
 4–8 pressure envelope is closed; Linux packet/browser T2c, WAN/WSS, hosted,
 soak, and 24/48/96 capacity remain separate open gates.
 
+**Eight-player soak-smoke checkpoint — 2026-07-12:** the deterministic local
+machinery lane is independently accepted through `df6ea4b`. Clean artifacts
+`multiplayer-soak-2026-07-12T202149588Z-pr-smoke-08A04E01-62e806c96537` and
+`multiplayer-soak-2026-07-12T202805064Z-pr-smoke-08A04E01-62e806c96537` share
+schedule hash `62e806c96537e432eaafa7aa6af31f49cb4547e9e8e2d2aaeb3e6522745f5d41`.
+Each runs eight raw clients against one logical match authority and proves the
+short reconnect/leave/replacement schedule, exact consequence and ACK ledgers,
+private isolation, diagnostics integrity, bounds, classified HTTP, abort
+handling, and complete cleanup. One traffic minute reached about 98.4% of the
+2.5 MiB/s aggregate full-JSON regression ceiling, so network payload remains
+near-limit product debt. This is six-minute PR smoke, not soak or leak evidence;
+the 45-minute normal and 90-minute churn profiles remain unrun.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

@@ -279,6 +279,15 @@ Singularity that:
   selected explicitly among soak/churn on this substrate or prerequisite work
   for Linux packet/browser T2c and hosted WSS; heavy 24/48/96 remains the
   conditional scale track.
+- The staged soak contract is accepted at `9068e53` plus GC-attribution bound
+  `722dce2`; default-off authority diagnostics landed at `b7d262d`. The short
+  deterministic eight-player machinery smoke is independently accepted through
+  `df6ea4b` from two clean six-minute artifacts with the same schedule hash.
+  Exact lifecycle/reliability/privacy/bounds/cleanup gates pass, but one traffic
+  minute used about 98.4% of the current full-JSON smoke ceiling. Advance to the
+  45-minute normal profile only from clean committed HEAD. Do not call the
+  short runs soak/leak evidence or begin the 90-minute churn profile before the
+  normal artifact is independently accepted.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

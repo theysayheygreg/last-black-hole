@@ -346,3 +346,24 @@ of canonical authority occupancy plus implementation/audit time and at most
 192 MiB of retained canonical artifacts before later pruning. These local raw
 WebSocket results must not be extrapolated into WAN quality, hosted cost, TLS
 edge behavior, packet mechanics, public readiness, or heavy-sim capacity.
+
+## PR-smoke status — accepted
+
+The deterministic machinery stage is independently accepted through `df6ea4b`.
+Two clean six-minute artifacts,
+`multiplayer-soak-2026-07-12T202149588Z-pr-smoke-08A04E01-62e806c96537` and
+`multiplayer-soak-2026-07-12T202805064Z-pr-smoke-08A04E01-62e806c96537`, share
+the exact schedule hash
+`62e806c96537e432eaafa7aa6af31f49cb4547e9e8e2d2aaeb3e6522745f5d41`.
+Both close eight-client topology, one logical authority for the match,
+reconnect and replacement membership changes, exact FIFO consequence/delivery/
+event-ACK retirement, private isolation, diagnostics, bounds, classified HTTP,
+ABORTED cleanup, process/port ownership, and final teardown. The complete
+multiplayer-network lane passes all 12 suites.
+
+Traffic is a watch item: both runs passed the 2.5 MiB/s aggregate full-JSON
+smoke ceiling, while the first run's busiest included minute reached about
+98.4% of that ceiling. The smoke therefore validates machinery, not the 64
+KiB/s/player product target. Heap/RSS slope, GC duty, long-window recovery, and
+leak freedom remain `NOT_APPLICABLE_SHORT_RUN`; the 45-minute normal and
+90-minute churn profiles are still unrun and own those claims.

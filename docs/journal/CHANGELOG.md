@@ -58,6 +58,14 @@
   logical authority per test match. This closes the local raw-WebSocket 4–8
   pressure envelope at $0 provider spend, not Linux packet, browser, WAN/WSS,
   hosted, soak, or 24/48/96 evidence.
+- Implemented and independently accepted the deterministic eight-player soak
+  machinery smoke through `df6ea4b`. Two clean six-minute runs used the same
+  schedule hash and closed reconnect, replacement join, exact consequence/ACK,
+  privacy, bounds, HTTP, diagnostics, abort, and teardown gates under one match
+  authority. Aggregate traffic passed the current 2.5 MiB/s full-JSON smoke
+  ceiling, but one measured minute reached about 98.4% of it; this is explicit
+  product debt. The run is machinery PR smoke only—heap/RSS slope, GC duty,
+  long-window recovery, and canonical 45/90-minute soak remain unproven.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval
