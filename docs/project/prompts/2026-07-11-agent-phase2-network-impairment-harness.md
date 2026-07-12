@@ -21,7 +21,7 @@ readers, and simultaneous reconnect should be injected.
 - `docs/v0.4/ROADMAP.md` Phase 2
 - `docs/v0.4/research/phase1-ws-runtime-baseline.md`
 - `docs/v0.4/research/ballpark-multiplayer-architecture.md`
-- `docs/v0.4/research/network-budget-model.md`
+- `docs/v0.4/research/p2p-history-network-budgets.md`
 - `docs/design/TEST-HARNESS.md`
 - `src/sim/sim-client.js`
 - `src/sim/sim-stream-transport.js`

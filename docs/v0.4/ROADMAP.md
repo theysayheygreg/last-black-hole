@@ -103,6 +103,20 @@ Gate:
 
 Goal: make the smallest slice honest under imperfect connectivity.
 
+**Impairment architecture decision — 2026-07-11:** use distinct evidence
+layers. A seeded directional application-frame scheduler owns deterministic
+ACK/replay/rebase/epoch adversaries but must never call them packet loss. CDP
+owns fixed real-browser latency/rate/offline smoke. Per-client TCP proxies own
+fixed directional buffering/rate/reset cases, with authority-side
+`bufferedAmount` required for a slow-reader claim. Receiver-ingress Linux
+`netem` owns later seeded IP loss/reorder/duplication and TCP retransmit/HOL
+truth. None of these alone is WAN/TLS proof. See
+`docs/project/reviews/2026-07-11-phase2-network-impairment-harness.md`.
+
+Implementation order starts with the pure seeded scheduler kernel and decision
+tapes, then adapter/client injection, then a 4p F0/F1/F3/F6 browser lane. Proxy,
+CDP, netem, and the full 4p/8p matrix follow as separately reviewable slices.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

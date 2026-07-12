@@ -175,6 +175,22 @@ Singularity that:
   reorder, blackout, bandwidth caps, simultaneous reconnect, and WAN/TLS edge.
   Greg hands-on and hosted/public readiness remain explicitly pending.
 
+### Phase 2 impairment decision — 2026-07-12 00:10 UTC
+
+- Independent design plus tooling red-team selected a four-rung evidence
+  ladder: seeded application-frame faults, CDP fixed browser throttle/offline,
+  per-client TCP proxy behavior, then receiver-ingress Linux netem.
+- Frame omission/reorder/duplication is protocol adversity, not packet loss.
+  TCP/netem loss must surface through retransmission, ordered WebSocket data,
+  head-of-line delay, or connection failure; Toxiproxy's byte-chunk
+  `packet_loss` toxic is explicitly rejected as WAN evidence.
+- First implementation slice is a pure deterministic scheduler kernel under
+  `tests/network/` with virtual time, stable derived seeds, decision tapes,
+  replay/minimization, and no runtime edits. Adapter/client seams remain later
+  exclusive-owner slices.
+- The memo reserves supported RTT tier, slow-client UX, recovery presentation,
+  prediction timing, and hosted-pilot spend/provider for Greg.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`

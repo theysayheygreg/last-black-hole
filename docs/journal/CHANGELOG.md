@@ -37,6 +37,13 @@
 - Added a bounded Phase 2 delegation packet for a seeded two-layer network
   impairment harness, separating deterministic frame faults from later real
   WAN/TLS proof and preserving the one-authority-per-match contract.
+- Integrated the Phase 2 impairment review and tooling red-team. The chosen
+  evidence ladder separates seeded application-frame adversity, CDP fixed
+  browser throttling, per-client TCP proxy behavior, Linux netem packet truth,
+  and a later one-origin WSS WAN pilot; none may claim another layer's facts.
+- Defined seeded 4p/8p F0--F6 and T0--T4 scenarios, per-client latency/cadence/
+  consequence/queue/memory gates, immutable decision tapes, replay/minimization
+  artifacts, strict cleanup, and eight atomic implementation slices.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection
