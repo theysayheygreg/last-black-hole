@@ -437,3 +437,16 @@ passed and their artifacts remain non-credit failure evidence. The seam agent
 did not weaken HTTP classification or alter the action/reconnect lane. A
 separate causal comparison against the accepted `df6ea4b` smoke is required
 before any normal-45m rerun.
+
+The causal comparison confirmed a harness precondition bug, not a lifecycle
+regression. Ambient pickups could fill cargo before the reconnect barrier, so a
+hard-coded `unequip` was invalid. `4ddb81f` now chooses an owner-observed valid
+inventory consequence and retains strict HTTP failure handling. Its one clean
+rerun (`multiplayer-soak-2026-07-12T231243916Z-pr-smoke-08A04E01-dbbb34d44c57`)
+closed reconnect, epoch fencing, replay, retirement, privacy, bounds, and
+cleanup, then stopped at the forced-GC drain because the oracle incorrectly
+required physical replay attempts to equal unique event ACKs. The one withheld
+old-epoch ACK necessarily creates one extra replay attempt; all current queue
+and pending metrics were zero and the identity ledger was closed. Preserve the
+failure and replace the equality with pending/retained plus identity-level
+drain truth before one from-zero rerun.

@@ -314,6 +314,13 @@ Singularity that:
   normal-45m blocked while a separate causal regression audit compares those
   failures with the accepted `df6ea4b` smoke. Delta implementation also remains
   gated on independent review of `5694407`.
+- Delta packet hardening at `c54ac4f` is independently accepted. Dispatch S0
+  directional/class/frame/cadence accounting alone; do not combine manifest,
+  delta wire semantics, binary, AOI, or compression in that commit. Separately,
+  the smoke 409 fix landed at `4ddb81f`; its clean rerun stopped on a false
+  equality between physical replay attempts and unique event ACKs. Fix that
+  drain oracle from pending queues plus exact identity closure, then rerun once
+  from zero. Keep canonical normal/churn blocked throughout.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

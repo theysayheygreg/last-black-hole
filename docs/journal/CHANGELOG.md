@@ -84,6 +84,18 @@
   smoke regressions then exposed a deterministic inventory-action HTTP 409 at
   the reconnect barrier; both cleaned up and remain non-credit failures pending
   causal diagnosis.
+- Accepted the hardened delta-replication implementation packet at `c54ac4f`.
+  The first slice is direction/class/frame/cadence accounting only. Initial
+  JSON deltas structural-diff canonical projections against each recipient's
+  materialized ACK base every beat; dirty markers remain hints. Recovery is
+  manifest-gated and fail-closed, and byte wins cannot pass while regressing
+  authority projection or client apply/60fps budgets.
+- Fixed the smoke reconnect action's invalid free-cargo assumption at
+  `4ddb81f`. A clean rerun proved exact reconnect/replay/retirement and then
+  stopped on a drain-oracle contradiction: physical replay attempts exceeded
+  unique event ACKs by the one deliberately withheld old-epoch ACK, although
+  all actual queues and the identity ledger were closed. The artifact remains
+  a cleanly torn-down non-credit failure; no automatic retry occurred.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval

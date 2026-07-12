@@ -248,6 +248,17 @@ baseline/delta replication are the next critical architecture mechanism;
 binary, AOI, compression, hosted WSS, and high-count work remain later measured
 steps.
 
+**Delta implementation packet — accepted:** `5694407` plus hardening
+`c54ac4f` defines the 4–8-player replication staircase. S0 measures direction,
+wire class, recipient, encoded bytes/frame, and actual cadence. S1 extracts a
+canonical served-byte-hashed static manifest and pauses admission until its
+authenticated ACK. S2 begins with canonical full projection plus per-recipient
+structural diff against the atomic materialized ACK base every beat; dirty
+journals are hints until exhaustive coverage is proven. S3 gates 1/4/8 recovery
+and privacy at <=64 KiB/s/player steady and <=80 KiB/s sensitivity, with
+authority and client performance gates. Binary, AOI, compression, hosted, and
+high-count work remain measured follow-ups. S0 is now the active code slice.
+
 **Synthetic steady-lifecycle seam — accepted:** `82bae10` plus `ca7fd8f`
 implements the strict test/diagnostics-only authored-collapse suppression used
 only by normal-45m infrastructure evidence. Generic collapse and final-portal
@@ -258,6 +269,15 @@ time is explicitly synthetic and cannot support product-duration/gameplay
 claims. Two subsequent clean PR-smoke attempts failed deterministically on an
 inventory-action HTTP 409 at the reconnect barrier while still cleaning every
 resource; diagnose that regression before any canonical rerun.
+
+The 409 was an invalid harness precondition: ambient pickups filled cargo, so
+hard-coded `unequip` could not move its item. `4ddb81f` now selects a valid
+owner-observed consequence without changing gameplay or HTTP strictness. Its
+one clean rerun then exposed a second harness-only drain mismatch: a physical
+replay attempt is correctly one higher than unique event ACKs after the
+deliberate old-epoch hold, even though pending/reliable queues and exact
+identity retirement are closed. Preserve that failure and fix the drain oracle
+before another smoke or normal run.
 
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
