@@ -148,7 +148,7 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
     if (low.timestamp >= authorityPong.nextHeartbeatTimeoutEligibleAt) throw new Error("transport low crossed heartbeat-timeout eligibility");
     await waitFor(() => impaired.frames.filter((frame) => frame.type === "event"
       && frame.eventType === "player.inventoryAction").length >= 8, "eight reliable inventory consequences", 5000);
-    const finalHealth = (await request(port, "/health", { accounting: httpAccounting })).body;
+    let finalHealth = (await request(port, "/health", { accounting: httpAccounting })).body;
     if (finalHealth.process.pid !== authorityPid) throw new Error("pressure authority PID changed");
     let pressureEvents = readJsonl(pressureFile);
     const policyEvents = pressureEvents.filter((event) => event.type === "queue-policy" || event.type === "close-dispatched");
@@ -183,7 +183,45 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
         && event.schedulerConnectionId === ordinal && queuedEvents.some((queued) => queued.reliableId === event.reliableId));
       return new Set(retired.filter((event) => event.removedCount > 0).map((event) => event.reliableId)).size === 8;
     }, "delivery ACK retirement for all eight reliable IDs", 3000);
+    finalHealth = (await request(port, "/health", { accounting: httpAccounting })).body;
+    if (finalHealth.process.pid !== authorityPid) throw new Error("pressure authority PID changed after ACK retirement");
     pressureEvents = readJsonl(pressureFile);
+    const reliableAccepted = pressureEvents.filter((event) => event.type === "reliable-ws-send-accepted"
+      && event.schedulerConnectionId === ordinal && queuedEvents.some((queued) => queued.reliableId === event.reliableId));
+    const reliableRetired = pressureEvents.filter((event) => event.type === "reliable-ack-retired"
+      && event.schedulerConnectionId === ordinal && queuedEvents.some((queued) => queued.reliableId === event.reliableId)
+      && event.removedCount > 0);
+    const reliableIdentityLedger = queuedEvents.map((queued, index) => {
+      const accepted = reliableAccepted.find((event) => event.reliableId === queued.reliableId);
+      const retired = reliableRetired.find((event) => event.reliableId === queued.reliableId);
+      const received = inventoryEvents.find((event) => event.deliveryId === queued.reliableId);
+      const queuedIndex = pressureEvents.indexOf(queued);
+      const acceptedIndex = pressureEvents.indexOf(accepted);
+      const retiredIndex = pressureEvents.indexOf(retired);
+      if (!accepted || !retired || !received || accepted.eventSeq !== queued.eventSeq
+        || acceptedIndex <= queuedIndex || accepted.timestamp < low.timestamp || retiredIndex <= acceptedIndex
+        || retired.cumulativeRetired < index + 1) {
+        throw new Error(`T2a reliable identity ${queued.reliableId} lacked ordered acceptance/retirement evidence`);
+      }
+      return {
+        reliableId: queued.reliableId,
+        eventSeq: queued.eventSeq,
+        queued: { timestamp: queued.timestamp, byteLength: queued.byteLength,
+          messages: queued.pressure.current.reliableMessages, bytes: queued.pressure.current.reliableBytes },
+        wsSendAccepted: { timestamp: accepted.timestamp, eventSeq: accepted.eventSeq },
+        received: { timestamp: received._receivedAt, action: received.payload.action, bytes: received._bytes },
+        ackRetired: { timestamp: retired.timestamp, removedCount: retired.removedCount,
+          cumulativeRetired: retired.cumulativeRetired },
+      };
+    });
+    const cleanupResetReliableIds = [];
+    const replayedReliableIds = [];
+    if (reliableIdentityLedger.length !== 8
+      || new Set(reliableIdentityLedger.map((entry) => entry.reliableId)).size !== 8
+      || finalHealth.multiplayer.adapter.pressure.connections[String(ordinal)].current.reliableMessages !== 0
+      || cleanupResetReliableIds.length !== 0 || replayedReliableIds.length !== 0) {
+      throw new Error("T2a reliable identity-set closure failed");
+    }
     const coalesced = pressureEvents.filter((event) => event.type === "state-coalesced"
       && event.schedulerConnectionId === ordinal && event.timestamp >= tB && event.timestamp <= low.timestamp);
     const resumedStates = impaired.frames.filter((frame) => (frame.type === "publicState" || frame.type === "ownerState")
@@ -203,9 +241,30 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
       && event.schedulerConnectionId === ordinal && index > highEventIndex && index < lowEventIndex);
     const stateAccepted = pressureEvents.filter((event) => event.type === "state-ws-send-accepted"
       && event.schedulerConnectionId === ordinal);
+    const allReceivedStates = impaired.frames.filter((frame) => frame.type === "publicState" || frame.type === "ownerState");
+    if (allReceivedStates.length % 2 !== 0) throw new Error("T2a received an incomplete state pair");
+    const receivedStatePairLedger = [];
+    for (let index = 0; index < allReceivedStates.length; index += 2) {
+      const publicFrame = allReceivedStates[index];
+      const ownerFrame = allReceivedStates[index + 1];
+      const publicAccepted = stateAccepted.find((event) => event.snapshotId === publicFrame.snapshotId
+        && event.frameClass === "publicState");
+      const ownerAccepted = stateAccepted.find((event) => event.snapshotId === ownerFrame.snapshotId
+        && event.frameClass === "ownerState");
+      if (publicFrame.type !== "publicState" || ownerFrame.type !== "ownerState"
+        || publicFrame.snapshotId !== ownerFrame.snapshotId || !publicAccepted || !ownerAccepted) {
+        throw new Error(`T2a received state pair ${publicFrame.snapshotId} without matching wsSendAccepted pair`);
+      }
+      receivedStatePairLedger.push({
+        snapshotId: publicFrame.snapshotId,
+        received: { publicAt: publicFrame._receivedAt, ownerAt: ownerFrame._receivedAt,
+          publicBytes: publicFrame._bytes, ownerBytes: ownerFrame._bytes },
+        wsSendAccepted: { publicAt: publicAccepted.timestamp, ownerAt: ownerAccepted.timestamp },
+      });
+    }
     if (pressureEvents.length > fixture.evidence.maxPressureEvents
-      || resumedStates.length + stateOffered.length + stateAccepted.length > fixture.evidence.maxStateLedgerEntries
-      || queuedEvents.length + inventoryEvents.length > fixture.evidence.maxReliableLedgerEntries
+      || receivedStatePairLedger.length + stateOffered.length + stateAccepted.length > fixture.evidence.maxStateLedgerEntries
+      || reliableIdentityLedger.length * 4 > fixture.evidence.maxReliableLedgerEntries
       || finalHealth.multiplayer.adapter.pressure.observer.failures !== 0) {
       throw new Error("T2a evidence/observer capacity gate failed");
     }
@@ -244,7 +303,8 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
         timestamp: event.timestamp })),
       wsSendAccepted: stateAccepted.map((event) => ({ snapshotId: event.snapshotId, frameClass: event.frameClass,
         timestamp: event.timestamp })),
-      receivedPairs: resumedStates.map((frame) => ({ type: frame.type, snapshotId: frame.snapshotId, bytes: frame._bytes })),
+      receivedPairs: receivedStatePairLedger,
+      assertions: { everyReceivedPairHasWsSendAcceptedPair: true, receivedPairCount: receivedStatePairLedger.length },
     }, null, 2)}\n`, { flag: "wx" });
     fs.writeFileSync(path.join(runDir, "reliable-ledger.json"), `${JSON.stringify({ issued,
       highCounts: { offered: highCounts.reliableOffered, queued: highCounts.reliableQueued,
@@ -256,6 +316,11 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
         queuedBytes: event.pressure.current.reliableBytes, timestamp: event.timestamp })),
       received: inventoryEvents.map((event) => ({ action: event.payload.action, eventSeq: event.eventSeq,
         deliveryId: event.deliveryId, bytes: event._bytes })),
+      identities: reliableIdentityLedger,
+      cleanupResetReliableIds,
+      replayedReliableIds,
+      assertions: { everyStimulatedIdQueuedAcceptedReceivedAndRetired: true,
+        acceptedOnlyAfterResume: true, cleanupResetSetEmpty: true, replayedSetEmpty: true },
     }, null, 2)}\n`, { flag: "wx" });
     fs.writeFileSync(path.join(runDir, "healthy-peers.json"), `${JSON.stringify(healthy, null, 2)}\n`, { flag: "wx" });
     fs.writeFileSync(path.join(runDir, "pressure-performance.json"), `${JSON.stringify(performance, null, 2)}\n`, { flag: "wx" });
