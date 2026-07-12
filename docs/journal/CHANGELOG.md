@@ -5,6 +5,24 @@
 
 ---
 
+## 2026-07-12 — v0.4 Chrome transport stall evidence
+
+- Added the four-browser T0 CDP transport smoke with a post-admission aggregate
+  35 ms / 64 KiB/s upload / 320 KiB/s download profile and a measured
+  five-second pilot-3 offline interval. It uses the current rule-based CDP
+  shaping plus navigator-state override APIs and restores/verifies every
+  browser in cleanup.
+- Kept the evidence claim honest: Chrome may stall and queue an existing
+  WebSocket rather than reconnect it. T0 proves a guarded zero-progress gap,
+  first progress, settled gameplay state, steady-state and recovery latency
+  distributions, exact expected-timeout causality, bounded rejection pressure,
+  final queue drain, and cleanup; TCP loss, WAN, TLS, and receive-window claims
+  remain in later proxy/netem/hosted lanes.
+- Corrected browser-cohort input latency accounting for cumulative ACKs: one
+  ACK settles every previously unmeasured physical input it covers exactly
+  once. Shared F0, F1, F3, F6 and the full multiplayer-network lane remain
+  green after the change.
+
 ## 2026-07-11 — v0.4 Phase 0 multiplayer trust closure
 
 - Added the dual-transport browser SimClient behind explicit

@@ -93,8 +93,11 @@ async function main() {
     rootSeed: scenario.rootSeed,
     derivedSeeds: compiled.book.derivedSeeds,
     compiledDecisionHash: compiled.hash,
-    claimBoundary: "application-frame PR smoke only; not canonical duration, memory slope, TCP, packet loss, WAN, TLS, or hosted evidence",
+    claimBoundary: scenario.transport?.kind === "cdp-websocket-smoke"
+      ? "CDP browser shaping/offline-gap PR smoke only; no claim CDP caused an observed socket close/reconnect, and not canonical duration, memory slope, TCP loss, netem, WAN, TLS, congestion, retransmission, receive-window, or hosted evidence"
+      : "application-frame PR smoke only; not canonical duration, memory slope, TCP, packet loss, WAN, TLS, or hosted evidence",
     duration: { warmupMs: scenario.warmupMs, activeMs: scenario.activeMs, recoveryMs: scenario.recoveryMs },
+    transport: scenario.transport || null,
     gates: scenario.gates,
     runtime: {
       node: process.version,
@@ -136,7 +139,7 @@ async function main() {
     result: reportResult,
     cleanup,
     unavailableCanonicalGates: ["canonical sample duration", "heap growth slope", "RSS versus paired canonical F0",
-      "monotonic snapshot age offset", "TCP and WAN transport behavior"],
+      "monotonic snapshot age offset", "TCP loss/netem and WAN transport behavior"],
     evidenceFiles: fs.readdirSync(runDir).sort(),
   };
   fs.writeFileSync(path.join(runDir, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`, { flag: "wx" });

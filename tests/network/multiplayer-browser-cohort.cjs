@@ -19,6 +19,7 @@ const {
   installMainResponseRewrite,
   sha256,
 } = require("./browser-frame-impairment.cjs");
+const { createCdpBrowserTransport } = require("./cdp-browser-transport.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const TMP = path.join(ROOT, "tmp");
@@ -177,8 +178,10 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
   const page = await browser.newPage({ width: 1280, height: 800, deviceScaleFactor: 1 });
   const pilot = { index, slot: `pilot-${index}`, browser, page, pageErrors: [], consoleErrors: [],
     consoleErrorEvents: [],
-    rewriteErrors: [], networkFailures: [], privacyFrames: [], hotHttp: [], cdp: { inboundBytes: 0, outboundBytes: 0, inboundFrames: 0, outboundFrames: 0 },
-    evidence: [], consumedEvents: [] };
+    rewriteErrors: [], networkFailures: [], privacyFrames: [], hotHttp: [], cdp: {
+      inboundBytes: 0, outboundBytes: 0, inboundFrames: 0, outboundFrames: 0, lifecycle: [],
+    },
+    evidence: [], consumedEvents: [], rotateSchedulerOnNextSocket: false, reconnectRotationPromise: null };
   try {
   page.on("pageerror", (error) => pilot.pageErrors.push(error.message));
   page.on("console", (message) => {
@@ -191,6 +194,37 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
   });
   pilot.rewriter = await installMainResponseRewrite(page, fixture, (error) => pilot.rewriteErrors.push(error.message));
   await page.session.send("Network.enable");
+  const pushLifecycle = (entry) => {
+    if (pilot.cdp.lifecycle.length >= 256) {
+      pilot.pageErrors.push("bounded CDP WebSocket lifecycle evidence exceeded");
+      return;
+    }
+    pilot.cdp.lifecycle.push(entry);
+  };
+  page.session.on("Network.webSocketCreated", ({ requestId }) => {
+    pushLifecycle({ event: "created", atWallMs: Date.now(), requestIdHash: hashId(requestId) });
+    if (pilot.rotateSchedulerOnNextSocket) {
+      pilot.rotateSchedulerOnNextSocket = false;
+      pilot.reconnectRotationPromise = pilot.page.evaluate(() =>
+        window.__LBH_FRAME_IMPAIRMENT__.rotateEpoch()).catch((error) => {
+        pilot.pageErrors.push(`T0 reconnect scheduler rotation failed: ${error.message}`);
+        throw error;
+      });
+    }
+  });
+  page.session.on("Network.webSocketClosed", ({ requestId, timestamp }) => {
+    pushLifecycle({ event: "closed", atWallMs: Date.now(), timestamp, requestIdHash: hashId(requestId) });
+  });
+  page.session.on("Network.webSocketWillSendHandshakeRequest", ({ requestId, timestamp }) => {
+    pushLifecycle({ event: "handshake-request", atWallMs: Date.now(), timestamp, requestIdHash: hashId(requestId) });
+  });
+  page.session.on("Network.webSocketHandshakeResponseReceived", ({ requestId, timestamp, response }) => {
+    pushLifecycle({ event: "handshake-response", atWallMs: Date.now(), timestamp,
+      requestIdHash: hashId(requestId), status: response?.status ?? null });
+  });
+  page.session.on("Network.webSocketFrameError", ({ requestId, timestamp }) => {
+    pushLifecycle({ event: "frame-error", atWallMs: Date.now(), timestamp, requestIdHash: hashId(requestId) });
+  });
   page.session.on("Network.responseReceived", ({ response }) => {
     if (Number(response?.status) >= 400) pilot.networkFailures.push({ status: response.status, url: response.url });
   });
@@ -229,6 +263,8 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
       if (frame.type === "ack") {
         if (pilot.privacyFrames.length >= 10000) throw new Error("bounded privacy-frame evidence exceeded");
         pilot.privacyFrames.push({ direction: "outbound", timestamp, type: frame.type, ackKind: frame.ackKind,
+          snapshotId: Number.isSafeInteger(frame.snapshotId) ? frame.snapshotId : undefined,
+          inputSeq: Number.isSafeInteger(frame.inputSeq) ? frame.inputSeq : undefined,
           privateLeaks: [] });
       }
     } catch (error) { pilot.pageErrors.push(error.message); }
@@ -306,6 +342,57 @@ function isExpectedF6CloseInputError(scenarioId, pilot, errorEvent, f6CloseSched
   if (!invocation || !outcome) return false;
   return errorEvent.atWallMs >= invocation.actualWallMs - 100
     && errorEvent.atWallMs <= outcome.observedWallMs + 100;
+}
+
+function isExpectedT0OfflineInputError(scenarioId, pilot, errorEvent) {
+  return scenarioId === "T0-cdp-smoke" && pilot.slot === "pilot-3"
+    && Number.isSafeInteger(errorEvent?.t0MatchedInputSeq);
+}
+
+function bindT0InputTimeoutCausality(pilot, scenario, transportResult) {
+  const contract = scenario.transport.offlineWindow;
+  const command = transportResult.commands.offline.shaping;
+  const startMonoMs = command.pageMonoBefore;
+  const settleMonoMs = startMonoMs + (transportResult.settled.observedWallMs - command.requestedWallMs);
+  const sends = pilot.evidence.filter((entry) => entry.direction === "client-to-authority"
+    && entry.frameClass === "input" && entry.event === "copy-delivered" && entry.delivered === true
+    && Number.isSafeInteger(entry.inputSeq) && Number.isFinite(entry.actualMonoMs));
+  const acks = pilot.evidence.filter((entry) => entry.direction === "authority-to-client"
+    && entry.frameClass === "ack" && entry.ackKind === "input" && entry.event === "application-delivered"
+    && Number.isSafeInteger(entry.inputSeq) && Number.isFinite(entry.actualMonoMs));
+  const candidates = [];
+  for (const send of sends) {
+    const ack = acks.find((entry) => entry.inputSeq >= send.inputSeq && entry.actualMonoMs >= send.actualMonoMs);
+    const terminalMonoMs = ack?.actualMonoMs ?? settleMonoMs;
+    const latencyMs = ack ? ack.actualMonoMs - send.actualMonoMs : null;
+    if (send.actualMonoMs > settleMonoMs || terminalMonoMs < startMonoMs) continue;
+    if (ack && latencyMs < contract.inputAckTimeoutMs) continue;
+    candidates.push({ inputSeq: send.inputSeq, sendMonoMs: send.actualMonoMs,
+      ackMonoMs: ack?.actualMonoMs ?? null, coveringAckSeq: ack?.inputSeq ?? null, latencyMs,
+      expectedWallMs: command.requestedWallMs + (send.actualMonoMs - command.pageMonoBefore)
+        + contract.inputAckTimeoutMs });
+  }
+  const timeoutEvents = pilot.consoleErrorEvents.filter((entry) =>
+    /^\[LBH\] remote input failed: Error: Timed out waiting for input ACK\n/.test(String(entry.message)));
+  const unmatched = new Set(candidates.map((_, index) => index));
+  const matches = [];
+  for (const errorEvent of timeoutEvents) {
+    let bestIndex = -1;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    for (const index of unmatched) {
+      const delta = Math.abs(errorEvent.atWallMs - candidates[index].expectedWallMs);
+      if (delta < bestDelta) { bestIndex = index; bestDelta = delta; }
+    }
+    if (bestIndex < 0 || bestDelta > contract.timeoutMatchToleranceMs) continue;
+    unmatched.delete(bestIndex);
+    errorEvent.t0MatchedInputSeq = candidates[bestIndex].inputSeq;
+    matches.push({ errorAtWallMs: errorEvent.atWallMs, deltaMs: bestDelta, ...candidates[bestIndex] });
+  }
+  return { inputAckTimeoutMs: contract.inputAckTimeoutMs,
+    matchToleranceMs: contract.timeoutMatchToleranceMs, startMonoMs, settleMonoMs,
+    candidates, matches, unmatchedCandidateInputSeqs: [...unmatched].map((index) => candidates[index].inputSeq),
+    unmatchedErrorWallMs: timeoutEvents
+      .filter((entry) => !Number.isSafeInteger(entry.t0MatchedInputSeq)).map((entry) => entry.atWallMs) };
 }
 
 function faultDecisionProfile(scenario, pilots, serverRecords) {
@@ -444,13 +531,14 @@ function faultDecisionProfile(scenario, pilots, serverRecords) {
     runtimeGroupTape: { decisions: runtimeGroupTape.length, sha256: sha256(JSON.stringify(runtimeGroupTape)) } };
 }
 
-function decisionProfile(scenario, pilots, serverEvidenceFile) {
+function decisionProfile(scenario, pilots, serverEvidenceFile, transportResult = null) {
   const serverRecords = fs.readFileSync(serverEvidenceFile, "utf8").split("\n").filter(Boolean)
     .map((line) => JSON.parse(line));
   if (scenario.rules.faults) return faultDecisionProfile(scenario, pilots, serverRecords);
   const allUpstream = pilots.flatMap((pilot) => pilot.evidence.filter((entry) =>
     entry.direction === "client-to-authority"));
   const allDownstream = serverRecords.filter((entry) => entry.direction === "authority-to-client");
+  const serverTimeline = serverRecords.find((entry) => entry.event === "timeline");
   const upstream = allUpstream.filter((entry) => entry.phase === "active");
   const downstream = allDownstream.filter((entry) => entry.phase === "active");
   const configured = (direction) => {
@@ -482,10 +570,37 @@ function decisionProfile(scenario, pilots, serverEvidenceFile) {
       assert(!Object.prototype.hasOwnProperty.call(entry.decision, "overshootMs"),
         "Timer overshoot entered the deterministic decision tape");
     }
+    const transportRejected = [];
     for (const entry of released) {
       assert(Number.isFinite(entry.overshootMs) && entry.overshootMs >= 0,
         `${direction} release omitted timer overshoot evidence`);
-      assert(entry.delivered === true, `${direction} release was not delivered exactly once`);
+      if (entry.delivered !== true && scenario.transport?.kind === "cdp-websocket-smoke"
+        && direction === "authority-to-client") {
+        const windowStart = serverTimeline?.startMonoMs
+          + (transportResult?.steadyStateExclusionWindow?.startWallMs - serverTimeline?.startWallMs);
+        const recoveryEndWallMs = transportResult?.settled?.observedWallMs;
+        const windowEnd = serverTimeline?.startMonoMs + (recoveryEndWallMs - serverTimeline?.startWallMs)
+          + scenario.transport.offlineWindow.guardMs;
+        assert(entry.pilotSlot === scenario.transport.offlineWindow.pilotSlot
+          && Number.isFinite(windowStart) && entry.actualMonoMs >= windowStart && entry.actualMonoMs <= windowEnd,
+        `${direction} release rejection escaped the declared T0 pilot/window`);
+        transportRejected.push(entry);
+      } else {
+        assert(entry.delivered === true, `${direction} release was not delivered exactly once`);
+      }
+    }
+    const transportRejectedReleaseClasses = Object.fromEntries([...new Set(transportRejected.map((entry) =>
+      entry.ackKind ? `${entry.frameClass}:${entry.ackKind}` : entry.frameClass))].sort().map((frameClass) => [frameClass,
+        transportRejected.filter((entry) => (entry.ackKind ? `${entry.frameClass}:${entry.ackKind}` : entry.frameClass)
+          === frameClass).length]));
+    if (scenario.transport?.kind === "cdp-websocket-smoke" && direction === "authority-to-client") {
+      const budget = scenario.transport.releaseRejectionBudget;
+      assert(budget && transportRejected.length <= budget.maximumTotal,
+        `${direction} exceeded the T0 release-rejection budget`);
+      for (const [frameClass, count] of Object.entries(transportRejectedReleaseClasses)) {
+        assert(Number.isSafeInteger(budget.classes?.[frameClass]) && count <= budget.classes[frameClass],
+          `${direction} ${frameClass} exceeded or escaped the T0 release-rejection class budget`);
+      }
     }
     const releaseGroups = new Map();
     for (const entry of released) {
@@ -497,10 +612,8 @@ function decisionProfile(scenario, pilots, serverEvidenceFile) {
       for (let index = 1; index < entries.length; index += 1) {
         const prior = entries[index - 1];
         const next = entries[index];
-        assert(prior.scheduledReleaseMonoMs < next.scheduledReleaseMonoMs
-          || (prior.scheduledReleaseMonoMs === next.scheduledReleaseMonoMs
-            && prior.enqueueOrdinal < next.enqueueOrdinal),
-        `${direction} release order reversed for ${pilotSlot}`);
+        assert(prior.actualMonoMs <= next.actualMonoMs,
+          `${direction} observed release time reversed for ${pilotSlot}`);
       }
     }
     return {
@@ -511,6 +624,8 @@ function decisionProfile(scenario, pilots, serverEvidenceFile) {
         observedMax: Math.max(...queued.map((entry) => entry.decision.delayMs)) },
       overshootMs: { p95: percentile(released.map((entry) => entry.overshootMs), 0.95),
         max: Math.max(...released.map((entry) => entry.overshootMs)) },
+      transportRejectedReleases: transportRejected.length,
+      transportRejectedReleaseClasses,
     };
   };
   const bypass = {};
@@ -547,12 +662,18 @@ function decisionProfile(scenario, pilots, serverEvidenceFile) {
   };
 }
 
-function clientLedger(pilot, ownerPlayerId) {
+function clientLedger(pilot, ownerPlayerId, options = {}) {
   const events = pilot.evidence;
+  const excludedWindows = options.excludedWindows || [];
+  const overlapsExcludedWindow = (start, end = start) => excludedWindows.some((window) =>
+    Number.isFinite(window.startMonoMs) && Number.isFinite(window.endMonoMs)
+      && start <= window.endMonoMs && end >= window.startMonoMs);
   const inputs = new Map();
   const inputLatencies = [];
+  const excludedInputLatencies = [];
   const actions = new Map();
   const actionLatencies = [];
+  const excludedActionLatencies = [];
   const pulseEvents = [];
   const deliveredEventCounts = new Map();
   const pairs = new Map();
@@ -563,8 +684,16 @@ function clientLedger(pilot, ownerPlayerId) {
       if (!inputs.has(event.inputSeq)) inputs.set(event.inputSeq, event.atMonoMs);
     }
     if (event.direction === "authority-to-client" && event.event === "application-delivered"
-      && event.frameClass === "ack" && event.ackKind === "input" && event.inputSeq && inputs.has(event.inputSeq)) {
-      inputLatencies.push(event.actualMonoMs - inputs.get(event.inputSeq));
+      && event.frameClass === "ack" && event.ackKind === "input" && event.inputSeq) {
+      for (const [inputSeq, sentAt] of inputs) {
+        if (inputSeq > event.inputSeq) continue;
+        assert(event.actualMonoMs >= sentAt,
+          `${pilot.slot} covering input ACK ${event.inputSeq} preceded input ${inputSeq}`);
+        const latency = event.actualMonoMs - sentAt;
+        if (overlapsExcludedWindow(sentAt, event.actualMonoMs)) excludedInputLatencies.push(latency);
+        else inputLatencies.push(latency);
+        inputs.delete(inputSeq);
+      }
     }
     if (active && event.direction === "client-to-authority" && event.event === "queued" && event.frameClass === "action") {
       if (!actions.has(event.actionId)) actions.set(event.actionId,
@@ -627,9 +756,17 @@ function clientLedger(pilot, ownerPlayerId) {
       if (pulseIndex < pulseEvents.length) settledAt = Math.max(settledAt, pulseEvents[pulseIndex++].actualMonoMs);
       else settledAt = Number.POSITIVE_INFINITY;
     }
-    actionLatencies.push(settledAt - action.sentAt);
+    const latency = settledAt - action.sentAt;
+    if (overlapsExcludedWindow(action.sentAt, settledAt)) excludedActionLatencies.push(latency);
+    else actionLatencies.push(latency);
   }
-  const cadence = alignedTimes.slice(1).map((at, index) => at - alignedTimes[index]);
+  const excludedCadenceSamples = [];
+  const cadence = [];
+  for (let index = 1; index < alignedTimes.length; index += 1) {
+    const interval = alignedTimes[index] - alignedTimes[index - 1];
+    if (overlapsExcludedWindow(alignedTimes[index - 1], alignedTimes[index])) excludedCadenceSamples.push(interval);
+    else cadence.push(interval);
+  }
   return {
     inputLatencies,
     actionLatencies,
@@ -644,6 +781,17 @@ function clientLedger(pilot, ownerPlayerId) {
       reliableActions: actions.size,
       reliableConsequenceP95Ms: percentile(actionLatencies, 0.95),
       duplicateDeliveredEventSequences: duplicateDeliveredEventSequences.length,
+      recoveryWindowSamples: { inputAck: excludedInputLatencies.length,
+        cadence: excludedCadenceSamples.length, reliableConsequence: excludedActionLatencies.length },
+      recoveryLatencyDistribution: {
+        inputAckMs: { p50: percentile(excludedInputLatencies, 0.5), p95: percentile(excludedInputLatencies, 0.95),
+          max: excludedInputLatencies.length ? Math.max(...excludedInputLatencies) : null },
+        cadenceMs: { p50: percentile(excludedCadenceSamples, 0.5), p95: percentile(excludedCadenceSamples, 0.95),
+          max: excludedCadenceSamples.length ? Math.max(...excludedCadenceSamples) : null },
+        reliableConsequenceMs: { p50: percentile(excludedActionLatencies, 0.5),
+          p95: percentile(excludedActionLatencies, 0.95),
+          max: excludedActionLatencies.length ? Math.max(...excludedActionLatencies) : null },
+      },
     },
   };
 }
@@ -810,6 +958,11 @@ async function runBrowserCohort(options) {
   let f6CloseSchedule = null;
   let f6CloseTask = null;
   let f6CloseError = null;
+  let t0Transport = null;
+  let t0Task = null;
+  let t0Error = null;
+  let t0Result = null;
+  let t0FinalDrain = null;
   const compiledDecisionFile = path.join(runDir, "compiled-decisions.json");
   const writePartialResult = (stage, extra = {}) => {
     const value = {
@@ -872,16 +1025,31 @@ async function runBrowserCohort(options) {
     fs.writeFileSync(controlFile, `${JSON.stringify({ startWallMs })}\n`, { flag: "wx" });
     const timelines = await Promise.all(resources.pilots.map((pilot) => pilot.page.evaluate(
       (start) => window.__LBH_FRAME_IMPAIRMENT__.start(start), startWallMs)));
+    if (scenario.transport?.kind === "cdp-websocket-smoke") {
+      t0Transport = createCdpBrowserTransport({ pilots: resources.pilots, transport: scenario.transport,
+        startWallMs, runDir, journeyState, signal });
+      t0Task = t0Transport.run().catch(async (error) => {
+        t0Error = error;
+        try { await t0Transport.restore(); }
+        catch (restoreError) {
+          t0Error = new AggregateError([error, restoreError], "T0 failed and immediate profile restoration failed");
+        }
+        return null;
+      });
+    }
     f6CloseTask = scenario.closeSchedule
       ? runF6CloseSchedule({ pilots: resources.pilots, scenario, startWallMs, clientEvidenceFile, runDir, signal })
         .catch((error) => { f6CloseError = error; return null; })
       : null;
     if (scenario.stimulus?.inputIntervalMs) {
-      await resources.pilots[3].page.evaluate((intervalMs) => {
-        window.__LBH_F3_INPUT_STIMULUS__ = setInterval(() => {
+      const stimulusSlots = new Set(scenario.stimulus.inputPilots || ["pilot-3"]);
+      for (const pilot of resources.pilots.filter((entry) => stimulusSlots.has(entry.slot))) {
+        await pilot.page.evaluate((intervalMs) => {
+          window.__LBH_IMPAIRMENT_INPUT_STIMULUS__ = setInterval(() => {
           window.__TEST_API?.sendRemoteInput?.({ moveX: 0.35, moveY: -0.2, thrust: 0.7 })?.catch(() => {});
-        }, intervalMs);
-      }, scenario.stimulus.inputIntervalMs);
+          }, intervalMs);
+        }, scenario.stimulus.inputIntervalMs);
+      }
     }
     for (const pilot of resources.pilots) {
       await pilot.page.evaluate(() => {
@@ -914,19 +1082,32 @@ async function runBrowserCohort(options) {
           && accounting.costDistributions.projectionReplicationMs.count > 0,
         "Authority quantile distributions have no observations");
         const pressure = health.multiplayer.adapter.pressure;
-        assert(pressure.maxima.wsBufferedBytes.worstConnection < pressure.policy.transportHighWaterBytes,
-          `${scenarioId} crossed WebSocket high water`);
+        appendJsonl(authorityFile, { sampledAt, tick: health.tick, mode: health.session?.overloadState,
+          process: health.process, pressure: health.multiplayer.adapter.pressure,
+          costDistributions: accounting.costDistributions });
+        if (scenario.transport?.kind === "cdp-websocket-smoke") {
+          const insideOfflineRecoveryWindow = sampledAt >= startWallMs + scenario.transport.offlineWindow.startMs
+            && sampledAt <= startWallMs + scenario.transport.offlineWindow.endMs
+              + scenario.transport.offlineWindow.settleMs;
+          if (!insideOfflineRecoveryWindow) {
+            assert(pressure.current.wsBufferedBytes.worstConnection < pressure.policy.transportHighWaterBytes,
+              `${scenarioId} retained WebSocket pressure outside its declared offline/recovery window`);
+          }
+          assert(pressure.policy.connectionsCrossedTransportHighWater <= 1,
+            `${scenarioId} allowed more than the one intentionally offline connection to cross high water`);
+        } else {
+          assert(pressure.maxima.wsBufferedBytes.worstConnection < pressure.policy.transportHighWaterBytes,
+            `${scenarioId} crossed WebSocket high water`);
+        }
         assert(pressure.maxima.queuedBytes.worstConnection <= pressure.policy.applicationQueueBytes
           && pressure.maxima.reliableBytes.worstConnection <= pressure.policy.reliableQueueBytes
           && pressure.maxima.replayEventBytes.worstConnection <= pressure.policy.replayEventBytes
           && pressure.maxima.pendingInboundBytes.worstConnection <= pressure.policy.inboundPendingBytes,
         `${scenarioId} exceeded an adapter pressure policy bound`);
-        assert(pressure.policy.connectionsCrossedTransportHighWater === 0
+        assert((scenario.transport?.kind === "cdp-websocket-smoke"
+          || pressure.policy.connectionsCrossedTransportHighWater === 0)
           && pressure.policy.connectionsHitQueuePolicy === 0,
         `${scenarioId} unexpectedly crossed a transport or queue policy`);
-        appendJsonl(authorityFile, { sampledAt, tick: health.tick, mode: health.session?.overloadState,
-          process: health.process, pressure: health.multiplayer.adapter.pressure,
-          costDistributions: accounting.costDistributions });
         await sleep(1000, signal);
       }
     })().catch((error) => { samplingError = error; sampling = false; });
@@ -955,14 +1136,21 @@ async function runBrowserCohort(options) {
       for (const pilot of resources.pilots) await tap(pilot.page, "KeyE", "e", 50);
     }
     if (scenario.stimulus?.inputIntervalMs) {
-      await resources.pilots[3].page.evaluate(() => {
-        clearInterval(window.__LBH_F3_INPUT_STIMULUS__);
-        window.__LBH_F3_INPUT_STIMULUS__ = null;
-      });
+      const stimulusSlots = new Set(scenario.stimulus.inputPilots || ["pilot-3"]);
+      for (const pilot of resources.pilots.filter((entry) => stimulusSlots.has(entry.slot))) {
+        await pilot.page.evaluate(() => {
+          clearInterval(window.__LBH_IMPAIRMENT_INPUT_STIMULUS__);
+          window.__LBH_IMPAIRMENT_INPUT_STIMULUS__ = null;
+        });
+      }
     }
     if (f6CloseTask) {
       f6CloseSchedule = await f6CloseTask;
       if (f6CloseError) throw f6CloseError;
+    }
+    if (t0Task) {
+      t0Result = await t0Task;
+      if (t0Error) throw t0Error;
     }
     const endWallMs = startWallMs + scenario.warmupMs + scenario.activeMs + scenario.recoveryMs;
     await sleep(Math.max(0, endWallMs - Date.now()), signal);
@@ -976,6 +1164,18 @@ async function runBrowserCohort(options) {
     const screenshots = [warmupCapture,
       await capture(resources.pilots[0], runDir, `${scenarioLabel}-recovery-host`),
       await capture(resources.pilots[3], runDir, `${scenarioLabel}-recovery-pilot-3`)];
+    if (scenario.transport?.kind === "cdp-websocket-smoke") {
+      const drainStartedWallMs = Date.now();
+      for (const pilot of resources.pilots) await tap(pilot.page, "Escape", "Escape", 50);
+      await Promise.all(resources.pilots.map((pilot) => waitFor(pilot.page, () =>
+        window.__TEST_API?.getGamePhase?.() === "paused", { timeout: 2000 })));
+      await Promise.all(resources.pilots.map((pilot) => waitFor(pilot.page, () => {
+        const state = window.__TEST_API?.getMultiplayerJourneyState?.();
+        return state?.transport?.pendingInputCount === 0 && state?.transport?.pendingActionCount === 0;
+      }, { timeout: scenario.transport.offlineWindow.finalDrainMs })));
+      t0FinalDrain = { startedWallMs: drainStartedWallMs, completedWallMs: Date.now(),
+        budgetMs: scenario.transport.offlineWindow.finalDrainMs };
+    }
     sampling = false;
     await samplingTask;
     for (const pilot of resources.pilots) {
@@ -990,8 +1190,24 @@ async function runBrowserCohort(options) {
     const privacy = resources.pilots.map((pilot, index) => scanPrivacy(pilot, {
       ownerPlayerId: final[index].clientId, membershipId: final[index].membershipId,
     }));
-    const ledgers = resources.pilots.map((pilot, index) => clientLedger(pilot, final[index].clientId));
-    const impairment = decisionProfile(scenario, resources.pilots, serverEvidenceFile);
+    const ledgers = resources.pilots.map((pilot, index) => clientLedger(pilot, final[index].clientId, {
+      excludedWindows: t0Result?.steadyStateExclusionWindow?.pilotSlot === pilot.slot
+        ? [t0Result.steadyStateExclusionWindow] : [],
+    }));
+    const impairment = decisionProfile(scenario, resources.pilots, serverEvidenceFile, t0Result);
+    if (scenario.transport?.kind === "cdp-websocket-smoke"
+      && impairment.downstream.transportRejectedReleases > 0) {
+      const pressure = lastHealth?.multiplayer?.adapter?.pressure;
+      assert(pressure?.policy?.connectionsCrossedTransportHighWater === 1
+        && pressure.maxima.wsBufferedBytes.worstConnection >= pressure.policy.transportHighWaterBytes,
+      "T0 downstream release rejections lacked a matching single-client transport-pressure crossing");
+    }
+    const t0InputTimeoutCausality = scenario.transport?.kind === "cdp-websocket-smoke"
+      ? bindT0InputTimeoutCausality(resources.pilots[3], scenario, t0Result) : null;
+    if (t0InputTimeoutCausality) {
+      fs.writeFileSync(path.join(runDir, "t0-input-timeout-causality.json"),
+        `${JSON.stringify(t0InputTimeoutCausality, null, 2)}\n`, { flag: "wx" });
+    }
     const eventsOracle = await (await fetch(`http://127.0.0.1:${simPort}/events?since=0`, {
       headers: { "x-lbh-test-oracle": "events" }, signal: AbortSignal.timeout(2000) })).json();
     const authorityPulseEvents = new Map();
@@ -1010,8 +1226,11 @@ async function runBrowserCohort(options) {
       }
       for (const errorEvent of pilot.consoleErrorEvents) {
         appendJsonl(errorFile, { pilotSlot: pilot.slot, error: errorEvent.message,
+          atWallMs: errorEvent.atWallMs,
+          t0MatchedInputSeq: errorEvent.t0MatchedInputSeq,
           expectedFault: isExpectedF3InputTimeout(scenarioId, pilot, errorEvent.message)
-            || isExpectedF6CloseInputError(scenarioId, pilot, errorEvent, f6CloseSchedule) });
+            || isExpectedF6CloseInputError(scenarioId, pilot, errorEvent, f6CloseSchedule)
+            || isExpectedT0OfflineInputError(scenarioId, pilot, errorEvent) });
       }
     }
     for (let index = 0; index < 4; index += 1) {
@@ -1047,10 +1266,60 @@ async function runBrowserCohort(options) {
           assert(final[index].transport.streamState === "failed",
             `${resources.pilots[index].slot} F6 terminal outcome was not explicit`);
         }
+      } else if (scenario.transport?.kind === "cdp-websocket-smoke") {
+        assert(final[index].transport.activeTransport === "stream" && final[index].transport.streamState === "open",
+          `${resources.pilots[index].slot} did not finish T0 on an open stream`);
+        if (resources.pilots[index].slot === scenario.transport.offlineWindow.pilotSlot) {
+          assert(final[index].transport.reconnectCount <= gates.maximumImpairedPilotReconnects,
+            `${resources.pilots[index].slot} T0 reconnect count ${final[index].transport.reconnectCount}`);
+          assert(t0Result?.settled?.state?.connectionEpoch === final[index].connectionEpoch,
+            `${resources.pilots[index].slot} T0 settled epoch changed before final state`);
+          assert(["same-socket-resume", "new-socket-recovery"].includes(t0Result.immediateSocketOutcome)
+            && ["same-socket-resume", "new-socket-recovery"].includes(t0Result.finalConnectionOutcome),
+            `${resources.pilots[index].slot} lacked a classified T0 delivery outcome`);
+          const postOnlineFrames = resources.pilots[index].privacyFrames.slice(t0Result.privacyFrameCountAtOnline);
+          const publicSnapshots = new Set(postOnlineFrames.filter((frame) => frame.type === "publicState")
+            .map((frame) => frame.snapshotId));
+          assert(postOnlineFrames.some((frame) => frame.type === "ownerState"
+            && publicSnapshots.has(frame.snapshotId)), `${resources.pilots[index].slot} lacked an aligned recovery baseline`);
+          if (t0Result.finalConnectionOutcome === "new-socket-recovery") {
+            const welcomeIndex = postOnlineFrames.findIndex((frame) => frame.type === "welcome"
+              && frame.reconnected === true && frame.connectionEpoch === final[index].connectionEpoch);
+            assert(welcomeIndex >= 0, `${resources.pilots[index].slot} lacked a final reconnected welcome`);
+            const finalEpochFrames = postOnlineFrames.slice(welcomeIndex + 1);
+            const rebase = finalEpochFrames.find((frame) => frame.type === "rebase"
+              && Number.isSafeInteger(frame.snapshotId));
+            assert(rebase && finalEpochFrames.some((frame) => frame.type === "publicState"
+              && frame.snapshotId === rebase.snapshotId)
+              && finalEpochFrames.some((frame) => frame.type === "ownerState"
+                && frame.snapshotId === rebase.snapshotId),
+            `${resources.pilots[index].slot} lacked a final-epoch rebase/aligned baseline`);
+            const physicalBaselineAck = resources.pilots[index].evidence.find((entry) =>
+              entry.direction === "client-to-authority" && entry.connectionEpochOrdinal === 2
+                && entry.frameClass === "ack" && entry.ackKind === "baseline"
+                && entry.snapshotId === rebase.snapshotId && entry.delivered === true
+                && (entry.event === "immediate" || entry.event === "copy-delivered"));
+            assert(physicalBaselineAck, `${resources.pilots[index].slot} lacked a physical baseline ACK`);
+            const newPhysicalInput = resources.pilots[index].evidence.find((entry) =>
+              entry.direction === "client-to-authority" && entry.connectionEpochOrdinal === 2
+                && entry.frameClass === "input" && entry.event === "copy-delivered" && entry.delivered === true
+                && entry.actualMonoMs >= physicalBaselineAck.actualMonoMs);
+            assert(newPhysicalInput, `${resources.pilots[index].slot} lacked a new physical final-epoch input`);
+            assert(resources.pilots[index].evidence.some((entry) =>
+              entry.direction === "authority-to-client" && entry.connectionEpochOrdinal === 2
+                && entry.frameClass === "ack" && entry.ackKind === "input"
+                && entry.event === "application-delivered" && entry.inputSeq >= newPhysicalInput.inputSeq
+                && entry.actualMonoMs >= newPhysicalInput.actualMonoMs),
+            `${resources.pilots[index].slot} lacked a covering final-epoch input ACK`);
+          }
+        } else {
+          assert(final[index].transport.reconnectCount === gates.healthyPilotReconnects,
+            `${resources.pilots[index].slot} healthy T0 pilot reconnected`);
+        }
       } else {
         assert(final[index].transport.reconnectCount === 0, `${resources.pilots[index].slot} unexpectedly reconnected`);
       }
-      if (scenario.rules.faults) {
+      if (scenario.rules.faults || scenario.transport?.kind === "cdp-websocket-smoke") {
         assert(final[index].transport.pendingInputCount === 0 && final[index].transport.pendingActionCount === 0,
           `${resources.pilots[index].slot} did not converge pending input/action work`);
       }
@@ -1070,7 +1339,8 @@ async function runBrowserCohort(options) {
         isExpectedF3InputTimeout(scenarioId, resources.pilots[index], error));
       const fatalConsoleErrors = resources.pilots[index].consoleErrorEvents.filter((errorEvent) =>
         !isExpectedF3InputTimeout(scenarioId, resources.pilots[index], errorEvent.message)
-        && !isExpectedF6CloseInputError(scenarioId, resources.pilots[index], errorEvent, f6CloseSchedule));
+        && !isExpectedF6CloseInputError(scenarioId, resources.pilots[index], errorEvent, f6CloseSchedule)
+        && !isExpectedT0OfflineInputError(scenarioId, resources.pilots[index], errorEvent));
       if (scenario.rules.faults && resources.pilots[index].slot === "pilot-3") {
         const omittedInputs = impairment.faultClasses["pilot-3/client-to-authority/input"].omitted;
         assert(expectedInputTimeouts.length <= omittedInputs,
@@ -1099,16 +1369,24 @@ async function runBrowserCohort(options) {
       privacy, clientSummaries: ledgers.map((entry) => entry.summary), cdp: resources.pilots.map((pilot) => pilot.cdp),
       impairment,
       f6CloseSchedule,
+      t0CdpTransport: t0Result,
+      t0FinalDrain,
+      t0InputTimeoutCausality,
       pulseConsequences: final.map((state) => authorityPulseEvents.get(state.clientId)?.size || 0),
       processes: { staticPid: resources.staticServer.pid, simPid: lastHealth?.process?.pid || null,
         browserPids: resources.pilots.map((pilot) => pilot.browser.proc?.pid || null) },
       profileDirectories: resources.pilots.map((pilot) => pilot.browser.userDataDir),
       activation: { browserRewriteCounts: resources.pilots.map((pilot) => pilot.rewriter.status().rewrites) },
-      scope: "pr-smoke application-frame evidence; not canonical duration, memory slope, TCP, WAN, TLS, or packet loss" };
+      scope: scenario.transport?.kind === "cdp-websocket-smoke"
+        ? "PR-smoke CDP browser shaping/offline-gap evidence; no claim CDP caused an observed socket close/reconnect, and not TCP loss, netem, WAN, TLS, congestion, retransmission, or receive-window evidence"
+        : "pr-smoke application-frame evidence; not canonical duration, memory slope, TCP, WAN, TLS, or packet loss" };
   } finally {
     sampling = false;
     await samplingTask?.catch(() => null);
     await f6CloseTask?.catch(() => null);
+    t0Transport?.cancel();
+    await t0Task?.catch(() => null);
+    await t0Transport?.restore().catch(() => null);
     for (const pilot of resources.pilots) {
       try {
         const drained = await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.drain());
@@ -1172,6 +1450,7 @@ async function runBrowserCohort(options) {
       preloadBarriersBypassed: forbiddenBarriers.length === 0,
       preloadStoppedClean: serverStops.at(-1)?.pending === 0 && serverStops.at(-1)?.pendingBlocks === 0,
       preloadFailuresAbsent: preloadFailures.length === 0,
+      cdpProfilesRestored: t0Transport ? t0Transport.restorationComplete : true,
     };
     fs.writeFileSync(path.join(runDir, "cleanup.json"), `${JSON.stringify(cleanup, null, 2)}\n`, { flag: "wx" });
     releaseLock();

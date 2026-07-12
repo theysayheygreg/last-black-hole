@@ -1,5 +1,30 @@
 # Decision Log
 
+## 2026-07-12 — T0 proves a Chrome transport stall, not a reconnect
+
+**Decision:** The zero-dependency T0 browser lane uses
+`Network.emulateNetworkConditionsByRule` and `Network.overrideNetworkState`
+after admission. Its five-second offline interval is classified as a Chrome
+transport stall unless CDP lifecycle evidence independently proves a socket
+rotation. Steady-state latency excludes the impaired pilot's offline-through-
+settled interval; that interval remains visible in a separate recovery
+distribution. The 500 ms steady-state input-ACK p95 gate is provisional local
+harness calibration, not a product or WAN SLO.
+
+**Why:** Chrome 150 can stop progress and queue an existing WebSocket while
+offline without closing it. Labeling that behavior reconnect, packet loss, or
+TCP pressure would overstate the injector. Separating steady-state and recovery
+latency prevents the known outage from contaminating the shaped baseline while
+preserving every recovery sample for review.
+
+**Where it landed:** `tests/network/cdp-browser-transport.cjs`, the T0 scenario
+in `tests/fixtures/network-impairment/phase2-browser-v1.json`, the browser
+cohort runner, and the Phase 2 impairment review documents.
+
+**Door status:** Closed for CDP packet-loss, receive-window, WAN, TLS, or
+automatic reconnect claims. Open for the managed per-browser TCP proxy lane,
+Linux netem packet evidence, and later hosted WSS validation.
+
 ## 2026-07-11 — Browser impairment injection stays test-owned
 
 **Decision:** The four-browser Layer A harness will exercise the real client and

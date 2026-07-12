@@ -2,8 +2,8 @@
 
 > Decision-ready implementation contract for
 > `codex/v0.4-multiplayer-architecture`, 2026-07-11. This covers seeded Layer A
-> application-frame evidence only. It does not claim TCP packet loss, WAN,
-> TLS, proxy, or netem behavior.
+> application-frame evidence plus the bounded T0 Chrome transport smoke. It
+> does not claim TCP packet loss, WAN, TLS, proxy, or netem behavior.
 
 ## Decision
 
@@ -178,6 +178,34 @@ recovered in 62--66 ms after a 4 ms hook-invocation skew, finished open on the
 stream transport, and passed exact consequence, privacy, pressure, and cleanup
 gates. Physical socket-close, TCP-reset, proxy, WAN, TLS, and hosted evidence
 remain pending.
+
+### Commit E: T0 Chrome transport stall — implemented
+
+T0 configures all four admitted Chrome profiles with the current experimental
+CDP pair: `Network.emulateNetworkConditionsByRule` for browser traffic and
+`Network.overrideNetworkState` for `navigator` state. The aggregate profile is
+35 ms configured latency, 64 KiB/s upload, and 320 KiB/s download. Pilot 3 is
+then configured offline for five seconds. Cleanup clears every rule, restores
+online/unlimited state, and verifies `navigator.onLine` in every browser.
+
+Chrome 150 stalled and queued the existing WebSocket during the offline gap;
+it did not reliably close it. T0 therefore claims only a configured aggregate
+Chrome shaping profile, an observed five-second zero-progress gap after a
+250 ms guard, and bounded gameplay recovery. It does not claim a disconnect,
+TCP loss, receive-window pressure, or reconnect. If the normal heartbeat later
+rotates the socket, the runner accepts it only with hash-correlated CDP close,
+new socket, handshake request, HTTP 101 response, and the full F6 authority
+baseline/input proof.
+
+The provisional local-smoke steady-state input-ACK p95 gate is 500 ms with at
+least 100 post-exclusion samples per pilot. Pilot 3's interval from the offline
+command through its settled recovery observation is excluded from that
+steady-state percentile and reported separately as a recovery distribution.
+The runner also proves exact causal matching for expected five-second input
+timeouts, bounded rejected releases under one declared pressure crossing, zero
+pending input/action work after the final drain, and full CDP/profile/process
+cleanup. This 500 ms gate is a harness-regression threshold, not a product or
+WAN SLO.
 
 Canonical profiles retain the review's 15-second warm-up, declared active
 duration, and 15-second recovery. PR profiles use the same scenario version,

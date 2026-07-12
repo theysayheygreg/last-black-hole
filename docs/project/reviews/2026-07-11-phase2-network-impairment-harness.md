@@ -91,15 +91,19 @@ retransmission, congestion control, or TLS.
 
 Start with a zero-dependency Chrome smoke using the existing CDP sessions:
 apply fixed latency and upload/download throughput only after admission, then
-exercise one offline/reconnect window. Chrome documents that DevTools throttles
+exercise one offline window. Chrome documents that DevTools throttles
 WebSocket connections, but its packet-loss and reorder controls are WebRTC
 controls, not WebSocket controls
 ([Chrome WebSocket throttling](https://developer.chrome.com/docs/devtools/network/reference/#throttle-websocket-connections),
 [CDP Network API](https://chromedevtools.github.io/devtools-protocol/tot/Network/#method-emulateNetworkConditions)).
-CDP has no seeded jitter or duplication. It is a real-Chrome smoke, not the
-source of deterministic frame or packet evidence. Because its profile can
-also affect admission HTTP, enable it after the initial baseline and always
-reset it in `finally`.
+CDP has no seeded jitter or duplication. Chrome 150 testing showed that its
+offline profile can stall and queue an existing WebSocket without closing it,
+so T0 must prove a zero-progress gap and recovery without claiming reconnect.
+Any incidental heartbeat reconnect needs separately correlated lifecycle and
+authority-baseline evidence. T0 is a real-Chrome smoke, not the source of
+deterministic frame or packet evidence. Because its profile can also affect
+admission HTTP, enable it after the initial baseline and always reset it in
+`finally`.
 
 For deeper local TCP behavior, launch one proxy listener per browser so
 upstream (client to authority) and downstream (authority to client) are
@@ -355,9 +359,13 @@ Extract reusable journey observation only after contract tests exist.
    identity, test-owned injection, evidence, and canonical instrumentation
    prerequisites are specified in
    `2026-07-11-phase2-browser-cohort-implementation.md`.
-5. **Browser transport smoke.** Use existing CDP sessions for fixed
-   latency/rate/offline after admission, restore profiles in cleanup, and add
-   `T0`. Do not use its WebRTC-only packet controls.
+5. **Browser transport smoke.** Use
+   `Network.emulateNetworkConditionsByRule` plus
+   `Network.overrideNetworkState` for fixed aggregate latency/rate/offline
+   after admission, restore and verify profiles in cleanup, and add `T0`.
+   Treat the offline interval as a transport stall unless correlated lifecycle
+   evidence proves an incidental reconnect. Do not use WebRTC-only packet
+   controls or the deprecated all-in-one emulation command.
 6. **Managed TCP proxy lane.** Add a pinned proxy launcher/control helper and
    `T1/F5`, one listener per browser. Add the paused raw-WebSocket slow reader,
    and accept `T2` only when authority `bufferedAmount` and queue policy prove
