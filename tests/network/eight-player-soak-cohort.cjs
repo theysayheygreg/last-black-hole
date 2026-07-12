@@ -442,12 +442,23 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       membershipHash: digest(salt, oldAuthority.membershipId), elapsedMs: Math.round(performance.now() - monotonicStarted) });
     membershipCounts.leaves += 1;
     let invalidatedRejected = false;
+    let invalidatedClassification = null;
     try {
       await openRawClient({ port, ticket: invalidatedTicket, kind: "resume", pilotSlot: `seat-${seat}-invalidated`,
         record: clientRecord(seat), maxFrames: 32, maxReceivedFrames: 32, sampleStateEvery: 50,
         inspectFrame: inspectPrivacyFrame(seat), shouldWithholdEventAck() { return false; } });
-    } catch { invalidatedRejected = true; }
+    } catch (error) {
+      invalidatedRejected = true;
+      invalidatedClassification = { closedBeforeWelcome: error.message.includes("closed before welcome"),
+        protocolFence: /4403|invalid|expired|redeem/i.test(error.message) };
+    }
     if (!invalidatedRejected) throw new Error("departed membership resume ticket redeemed after leave");
+    if (!invalidatedClassification.closedBeforeWelcome || !invalidatedClassification.protocolFence) {
+      throw new Error("invalidated ticket failed without an auditable protocol fence classification");
+    }
+    files["membership-ledger"]({ type: "invalidated-ticket-rejected", seat,
+      incarnation: incarnations[seat], ...invalidatedClassification,
+      elapsedMs: Math.round(performance.now() - monotonicStarted) });
     membershipCounts.invalidatedTicketRejections += 1;
     await admit(seat, started, true);
     if (authorities[seat].membershipId === oldAuthority.membershipId) throw new Error("replacement reused membership lineage");
@@ -698,12 +709,18 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       + (lastDiagnosticStatus?.currentWindow?.sampleCount || 0);
     const coverageDenominator = timeScale === 1 ? fixture.wallTimeMs / 1000 : fixture.wallTimeMs * timeScale / 1000;
     const sampleCoverage = diagnosticSamples / coverageDenominator;
-    const performanceWindows = windows.filter((window) => {
-      const minute = Math.max(0, Math.floor(window.endedMonotonicMs / 60000) - 1);
+    const performanceWindows = windows.map((window) => ({ window,
+      minute: Math.max(0, Math.floor(window.endedMonotonicMs / 60000) - 1) })).filter(({ minute }) => {
       return !schedule.excludedPerformanceMinutes.includes(minute) && minute >= 1;
     });
-    const eventLoopPass = performanceWindows.every((window) => window.eventLoopDelay.p99Ms <= 50
-      && window.eventLoopDelay.maxMs <= 250);
+    const currentDiagnosticWindow = lastDiagnosticStatus?.currentWindow;
+    if (currentDiagnosticWindow?.durationMs >= 57000 && currentDiagnosticWindow.sampleCount >= 57) {
+      performanceWindows.push({ minute: 5, window: currentDiagnosticWindow });
+    }
+    const eventLoopMinutes = [...performanceWindows.map((entry) => entry.minute)].sort((a, b) => a - b);
+    const eventLoopPass = JSON.stringify(eventLoopMinutes) === JSON.stringify([1, 2, 5])
+      && performanceWindows.every(({ window }) => window.eventLoopDelay.p99Ms <= 50
+        && window.eventLoopDelay.maxMs <= 250);
     const minuteRates = [1, 2, 5].map((minute) => {
       const samples = healthSamples.filter((sample) => (timeScale === 1 ? sample.actualElapsedMs : sample.plannedElapsedMs) >= minute * 60000
         && (timeScale === 1 ? sample.actualElapsedMs : sample.plannedElapsedMs) <= (minute + 1) * 60000);
@@ -828,8 +845,9 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
         totalSamples: postWarmHealth.length, normalRatio }, denominator: postWarmHealth.length,
       threshold: "zero diagnostic failures/misses/overflow and NORMAL >=99%", source: "runtime-windows.jsonl" },
       eventLoop: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC"
-        : eventLoopPass && performanceWindows.length >= 2 ? "PASS" : "FAIL",
-        numerator: performanceWindows.map((window) => window.eventLoopDelay), denominator: performanceWindows.length,
+        : eventLoopPass && performanceWindows.length === 3 ? "PASS" : "FAIL",
+        numerator: performanceWindows.map(({ minute, window }) => ({ minute, ...window.eventLoopDelay,
+          durationMs: window.durationMs, sampleCount: window.sampleCount })), denominator: performanceWindows.length,
         threshold: "each included minute p99<=50ms max<=250ms", source: "runtime-windows.jsonl" },
       traffic: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC"
         : trafficPass ? "PASS" : "FAIL", numerator: { aggregateBytesPerSec: trafficBps,
