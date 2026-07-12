@@ -185,7 +185,9 @@ listed seeds; a seed replay must make the same decisions.
 | `F6-all-flap` | A + proxy / 75 s | all physical connections reset in the same 100 ms barrier at t=25 s; proxy remains available for resume | `0x0406F1A9` | `0x0806F1A9` |
 | `T0-cdp-smoke` | CDP / 60 s | after baseline: each browser 35 ms fixed latency, 64 KiB/s upload, 320 KiB/s download; last browser offline t=25--30 s | `0x0410CD90` | `0x0810CD90` |
 | `T1-cap-headroom` | proxy / 90 s | each client: 64 KiB/s upstream, 320 KiB/s downstream, fixed 25 ms up and 45 ms down; no unseeded jitter in the strict gate | `0x0411CA90` | `0x0811CA90` |
-| `T2-slow-reader` | raw WS + netem / 60 s | last admitted client pauses its TCP reads after baseline until server high-water; browser corroboration caps receiver ingress at 96 KiB/s; generate one reliable event/s for 20 s | `0x0412510A` | `0x0812510A` |
+| `T2a-slow-reader-drain` | raw WS / 60 s | last admitted client pauses TCP reads after baseline; cross exact authority high-water, coalesce state, retain eight bounded consequences, then resume before policy timeout | `0x0412510A` | `0x0812510A` |
+| `T2b-slow-reader-hard` | raw WS / 60 s | repeat on a fresh impaired admission, hold through the real backpressure timeout, fence only that client, then reconnect/rebase/replay exactly once | `0x0412510B` | `0x0812510B` |
+| `T2c-browser-ingress` | Linux netem / 60 s | separate browser receiver-ingress corroboration at 96 KiB/s; no slow-reader claim unless that exact authority connection also crosses high water | `0x0412510C` | `0x0812510C` |
 | `T3-random-loss` | netem / 120 s | receiver ingress both directions: 60 ms RTT total, 15 ms jitter normal, 1% random packet loss, seed as listed | `0x04131055` | `0x08131055` |
 | `T4-burst-loss` | netem / 120 s | receiver ingress both directions: 100 ms RTT total, 30 ms jitter normal, `GE(2%,25%,90%,0.2%)`, 0.5% duplicate, 1% reorder with 4-packet gap | `0x0414B057` | `0x0814B057` |
 
@@ -200,9 +202,10 @@ The Toxiproxy rows' seeds govern the schedule and cohort identity, not proxy
 jitter; strict proxy values are fixed because its stochastic jitter is not
 replay-seeded. `T1` is deliberately just above the measured current per-client downstream
 shape: the 8p local cohort used 1.927 MB/s aggregate, approximately 241 kB/s
-per client if evenly divided. `T2` is intentionally below the current
-uncompressed stream and is expected to fence the slow client, not keep it
-playable by consuming unbounded memory.
+per client if evenly divided. T2 is split because the shipping two-second
+backpressure policy cannot both preserve a 20-second pressured connection and
+prove bounded fencing. `T2a` drains before policy, `T2b` proves the hard fence
+and replay, and `T2c` keeps Linux/browser ingress corroboration separate.
 
 The canonical T1 row remains 15 seconds clean warm-up, 60 seconds active, and
 15 seconds recovery. Its first local PR-smoke variant uses 5/30/10 seconds with
@@ -271,13 +274,16 @@ Global hard gates for every row:
 - healthy connections stay below 256 KiB socket high water and 512 KiB
   application queue, 256 KiB reliable queue, 64 KiB replay-event retention,
   512 KiB inbound per connection, and 8 MiB inbound total;
-- `T2` may disconnect only the impaired client. Once its socket buffer reaches
-  the 256 KiB high-water mark, it must rebase or disconnect within the existing
-  2-second backpressure timeout plus one sweep and close grace (4 seconds
-  total). Its application queue still must never exceed 512 KiB;
-- after warm-up, authority heap growth slope is at most 1 MiB/minute and final
-  RSS growth is at most 64 MiB versus the paired `F0` cohort. No retained
-  membership/socket/timer remains after cleanup;
+- `T2a` may not disconnect. It resumes within 1 second of the exact impaired
+  connection's 256 KiB crossing and must drain to 64 KiB before the existing
+  two-second policy timeout. `T2b` may disconnect only that connection: policy
+  dispatch occurs after two seconds of continuous backpressure plus at most one
+  sweep, and cleanup occurs within close grace plus the next sweep. Both retain
+  the 512 KiB application, 256 KiB reliable, and 64 KiB replay-event caps;
+- after warm-up, final authority RSS is at most 64 MiB above the adjacent
+  matched control and all explicit queue/retention caps hold. A 60-second T2
+  run records heap slope as diagnostic only; a repeated-cycle soak owns the
+  1 MiB/minute leak gate. No membership/socket/timer remains after cleanup;
 - authority remains `NORMAL` except if an independently specified overload
   stress case deliberately crosses the existing overload threshold. Sim-tick
   p95 must be `<= max(F0 + 2 ms, 10 ms)` and projection-average p95
@@ -380,10 +386,11 @@ Extract reusable journey observation only after contract tests exist.
    Treat the offline interval as a transport stall unless correlated lifecycle
    evidence proves an incidental reconnect. Do not use WebRTC-only packet
    controls or the deprecated all-in-one emulation command.
-6. **Managed TCP proxy lane.** Add a pinned proxy launcher/control helper and
-   `T1/F5`, one listener per browser. Add the paused raw-WebSocket slow reader,
-   and accept `T2` only when authority `bufferedAmount` and queue policy prove
-   pressure rather than proxy buffering. Do not add a game runtime dependency.
+6. **Managed TCP proxy and raw-pressure lanes.** Add a pinned proxy
+   launcher/control helper and `T1/F5`, one listener per browser. Keep T2 in a
+   dedicated raw-WebSocket lane; accept `T2a/T2b` only when per-connection
+   authority `bufferedAmount`, queue transitions, policy, and cleanup attribute
+   pressure to the impaired pilot. Do not add a game runtime dependency.
 7. **Linux netem lane.** Add a capability-checked wrapper, disposable
    namespaces, exact qdisc commands, pcap capture, and `T3/T4`. Missing
    capability is an explicit job-configuration failure in the scheduled lane.

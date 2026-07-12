@@ -153,8 +153,12 @@ authoritative reconnect proof.
 are accepted. Four listeners still fed one stable match authority. Only pilot
 3 saw the 25-second timeout-zero drop and one-listener fence; it recovered on a
 distinct socket at epoch 2 in 158 ms while all healthy clients stayed at epoch
-1. The next bounded evidence lane is T2 slow-reader authority-pressure proof;
-Linux receiver-ingress netem and hosted WSS remain separate.
+1. The next bounded evidence lane is now split by the approved T2 packet:
+`T2a` drains one exact raw-client authority connection before policy timeout,
+then `T2b` holds a fresh connection through bounded fence/reconnect/replay.
+Both retain one dedicated authority for the match and privacy-safe
+per-connection attribution. Linux/browser `T2c`, packet netem, and hosted WSS
+remain separate.
 
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.

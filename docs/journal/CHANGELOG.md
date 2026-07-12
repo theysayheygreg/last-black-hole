@@ -7,6 +7,12 @@
 
 ## 2026-07-12 — v0.4 network impairment evidence
 
+- Replaced the contradictory single T2 slow-reader row with separate drainable
+  and hard-pressure raw-WebSocket cases plus later Linux/browser ingress
+  corroboration. The approved packet requires exact per-connection authority
+  attribution, production queue limits/timeouts, state coalescing, bounded
+  reliable retention/replay, healthy-peer isolation, and hard cleanup.
+
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval
   is measured from verified toxic activation; endpoint no-progress, not live

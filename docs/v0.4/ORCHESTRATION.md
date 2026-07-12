@@ -243,8 +243,14 @@ Singularity that:
   proves a stable one-per-match authority, pilot-3-only drop/fence, distinct
   replacement socket, epoch 1-to-2 recovery in 158 ms, exact reliable-action
   identity, healthy-client isolation, and complete cleanup.
-- Next bounded implementation is T2 slow-reader pressure. Netem packet truth
-  and hosted WSS remain separate evidence lanes.
+- T2 planning rejected the former single row as internally contradictory with
+  the shipping two-second pressure timeout. The approved packet now sequences
+  a small adapter accounting/per-connection telemetry prerequisite, `T2a`
+  drain-before-timeout, then `T2b` hard fence/reconnect/replay. Each uses one
+  dedicated authority for that match and four independent raw WebSockets, one
+  of which is read-gated. T2c alone owns real-browser corroboration.
+- Linux/browser ingress corroboration (`T2c`), netem packet truth, hosted WSS,
+  and 24/48/96 capacity remain separate evidence lanes.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

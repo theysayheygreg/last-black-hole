@@ -1,5 +1,26 @@
 # Decision Log
 
+## 2026-07-12 — T2 splits drainable pressure from hard fencing
+
+**Decision:** Replace the single T2 slow-reader row with `T2a` drain-before-
+timeout, `T2b` hard timeout/fence/replay, and later `T2c` Linux/browser ingress
+corroboration. Attribute every primary pressure fact to one privacy-safe
+authority connection ordinal; aggregate worst-connection metrics cannot pass.
+
+**Why:** The shipping policy closes after two seconds of continuous transport
+backpressure plus sweep/grace. The former 20-second reliable-event requirement
+could not coexist with that policy, and a proxy or delayed browser callback can
+buffer away from the authority. Splitting the cases proves both bounded drain
+and bounded isolation without weakening production limits.
+
+**Where it landed:**
+`docs/project/reviews/2026-07-12-t2-slow-reader-pressure-implementation.md`.
+
+**Door status:** Closed for lowering thresholds, extending timeouts, synthetic
+giant frames, aggregate-only attribution, or mixing raw pressure with netem,
+WAN, WSS, TLS, hosted, or 24/48/96 capacity claims. Open for the adapter
+telemetry/accounting prerequisite, then T2a and T2b in separate commits.
+
 ## 2026-07-12 — F5 uses timeout drop plus a one-client proxy fence
 
 **Decision:** F5 will precreate inert bidirectional `timeout:0` toxics on pilot
