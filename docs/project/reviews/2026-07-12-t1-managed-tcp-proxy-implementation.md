@@ -230,3 +230,20 @@ are safe evidence.
    acceptance in a docs-only commit.
 4. Implement F5 blackout/reset only after T1 acceptance. Do not combine F5,
    T2 slow-reader pressure, netem, or hosted WSS evidence with T1.
+
+## Slice A status — implemented
+
+Commit `b5b3d38` pins and explicitly provisions the v2.12.0 binary, adds the
+loopback-only dedicated-daemon controller, and registers the standalone
+two-listener lifecycle proof. Ordinary test runs never download the tool; an
+absent cache fails with the exact opt-in provisioning command.
+
+The accepted proof verifies binary hash/version, deterministic inactive toxic
+chains, exact create/PATCH state, independent ephemeral listeners, both exact
+received/sent byte-counter families, requested-name cleanup after deliberately
+malformed successful API responses, bounded first-failure evidence, direct
+child `error`/`close`/TERM/KILL handling, idempotent deletion, and closed ports.
+Provisioning is bounded by size, an absolute deadline, and the observed HTTPS
+host chain `github.com -> release-assets.githubusercontent.com`. The focused
+proof and all 11 multiplayer-network suites pass. This slice is explicitly a
+non-timing control/lifecycle proof; active latency/rate evidence remains T1.

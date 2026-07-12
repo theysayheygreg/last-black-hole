@@ -12,6 +12,13 @@
   The fixture will record nearest representable decimal-kB/s rates alongside
   the intended KiB/s targets and keep TCP-stream proxy truth separate from
   packet, slow-reader, WAN, TLS, and hosted claims.
+- Implemented the pinned Toxiproxy provisioning and control layer. Explicit
+  opt-in provisioning verifies platform hash/version through a bounded HTTPS
+  host chain; ordinary tests never download. The standalone two-listener proof
+  covers exact inactive chains and PATCH state, per-proxy received/sent byte
+  metrics, malformed-response cleanup identity, first-failure evidence,
+  child-process bounds, idempotent teardown, and closed ports. It deliberately
+  makes no shaping/timing claim before the T1 browser cohort.
 
 - Added the four-browser T0 CDP transport smoke with a post-admission aggregate
   35 ms / 64 KiB/s upload / 320 KiB/s download profile and a measured
