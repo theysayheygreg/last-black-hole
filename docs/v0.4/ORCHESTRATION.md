@@ -254,7 +254,14 @@ Singularity that:
 - T2's adapter prerequisite landed at `381f435` with causal fix-forward
   `c09882d`. Independent review closed double-read, event-order, reset-count,
   cleanup-finality, and default-path overhead defects; focused adapter and full
-  multiplayer-network regressions are green. Dispatch T2a next, not T2b/T2c.
+  multiplayer-network regressions are green.
+- T2a drainable pressure is independently accepted at `3cfc9a8` with clean
+  artifact `multiplayer-transport-2026-07-12T144443527Z-t2a-432a63`. Its exact
+  impaired ordinal crossed authority high-water, coalesced state, retained and
+  retired eight dynamic reliable identities, drained before timeout, isolated
+  healthy peers, and closed every bounded evidence and cleanup gate. Dispatch
+  T2b next as a fresh hard-pressure authority/admission; do not blend T2c,
+  netem packet truth, browser ingress, WAN/WSS, hosted, or capacity claims.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

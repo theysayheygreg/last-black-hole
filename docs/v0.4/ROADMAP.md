@@ -164,8 +164,20 @@ remain separate.
 lands exact timeout action/reason accounting, default-absent per-connection
 telemetry, immutable pressure transitions, causal sweep timing, cleanup-only
 reset counts, and final cleanup events. Adapter core is 28/28 and the full
-multiplayer-network lane is 11/11. The next bounded slice is the four-raw-
-client T2a drain-before-timeout cohort and pressure preload.
+multiplayer-network lane is 11/11.
+
+**T2a checkpoint — 2026-07-12:** T2a is independently accepted at `3cfc9a8`.
+The clean canonical artifact is
+`multiplayer-transport-2026-07-12T144443527Z-t2a-432a63`; a fresh focused rerun
+also passed. One exact read-gated connection among four raw clients crossed
+high water, coalesced replaceable state, retained eight dynamic reliable
+identities, then drained before heartbeat or pressure timeout. Exact-one
+queue/send/receive/ACK cardinality, normalized public/owner state coverage,
+healthy-peer isolation, stable one-per-match authority PID, bounded evidence,
+HTTP classification, privacy, and cleanup are closed. This remains local PR-
+smoke pressure evidence. The next bounded slice is T2b hard pressure with an
+isolated fence, reconnect/rebase, and exactly-once replay; T2c, packet truth,
+browser ingress, WAN, WSS, and capacity remain separate.
 
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.

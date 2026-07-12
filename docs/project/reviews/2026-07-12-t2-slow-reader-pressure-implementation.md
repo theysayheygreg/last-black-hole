@@ -278,5 +278,17 @@ counts, post-cleanup transitions, and default-path detailed telemetry work.
 One immutable sample now owns aggregate/detail/transition/maxima facts,
 `connection-cleanup` is final for its ordinal, and cleanup-only reset accounting
 stays distinct from operational rebase. The focused adapter core passes 28/28
-and the full multiplayer-network lane passes all 11 suites. T2a raw-client and
-preload evidence is the next code slice.
+and the full multiplayer-network lane passes all 11 suites.
+
+## T2a status — accepted
+
+T2a is independently accepted at `3cfc9a8` from clean artifact
+`multiplayer-transport-2026-07-12T144443527Z-t2a-432a63`. One exact impaired
+ordinal crossed transport high water and later drained before timeout. The
+artifact closes exact-one reliable queue/send/receive/ACK identity flow,
+normalized state-pair acceptance coverage, authority-validated heartbeat
+causality, healthy-peer isolation, stable authority PID, bounded observer and
+artifact limits, classified HTTP use, privacy, and teardown. Its claim remains
+local PR-smoke raw-WebSocket pressure only. T2b hard fence/reconnect/replay is
+the next code slice; T2c and packet/browser/WAN/WSS/hosted/capacity evidence
+remain separate.

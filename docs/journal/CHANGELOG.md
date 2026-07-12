@@ -34,6 +34,14 @@
   opt-in per-connection transitions are causal, immutable, privacy-safe, and
   cleanup-bounded, while the default production path retains aggregate-only
   diagnostics without detailed telemetry allocations.
+- Implemented and independently accepted T2a drainable slow-reader pressure at
+  `3cfc9a8`. One of four raw clients crossed the exact authority high-water,
+  retained eight reliable consequences while replaceable state coalesced, then
+  drained before timeout with exact queue/send/receive/ACK identity ledgers.
+  Healthy peers, one-per-match authority stability, HTTP accounting, bounded
+  evidence, privacy, and teardown all passed. This is local PR-smoke transport
+  pressure evidence, not T2b fencing, packet, browser, WAN, WSS, or capacity
+  proof.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval
