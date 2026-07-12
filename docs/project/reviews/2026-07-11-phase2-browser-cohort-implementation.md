@@ -143,12 +143,19 @@ event/action duplication, and bounded state/ACK release-window rules. Increase
 stimulus until every required fault class has at least one seeded decision;
 otherwise fail for insufficient stimulus. IDs and payloads remain unchanged.
 
-The PR-smoke implementation uses seed `0x0403AC11`, shared bounded windows for
-upstream delivery/event ACKs and downstream state/input/action ACKs, and a
+The accepted PR-smoke implementation uses seed `0x0403AC11`, shared bounded
+windows for upstream delivery/event ACKs and downstream state/input/action ACKs, and a
 five-second recovery drain. It correlates the exact F3 pilot-3 input-ACK
 timeout signature to seeded input omissions; that exception is not available
-to any other scenario, pilot, or browser error. Acceptance still requires a
-no-retry run from the committed clean HEAD; dirty-tree runs are diagnostic.
+to any other scenario, pilot, or browser error. Dirty-tree runs remain
+diagnostic and cannot replace the clean-HEAD evidence below.
+
+Immutable F3 acceptance is
+`tests/screenshots/multiplayer-impairment-2026-07-12T073844656Z-f3-frame-defense-4p-0403AC11-cf536a`
+from clean commit `e949283`. It exercised every declared fault class, three
+duplicated delivered event sequences consumed exactly once, bounded shared
+reorder displacement of three, zero reconnects or pending work, and complete
+process, port, profile, registry, scheduler, privacy, and pressure cleanup.
 
 ### Commit D: F6 Layer A close schedule
 
