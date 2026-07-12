@@ -167,7 +167,13 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
     const sweeps = events.filter((event) => event.type === "pressure-sweep"
       && event.schedulerConnectionId === oldOrdinal && event.timestamp >= tB);
     const firstEligible = sweeps.find((event) => event.actualAt - tB >= fixture.queuePolicy.backpressureTimeoutMs);
-    if (!firstEligible || policy.timestamp !== firstEligible.timestamp
+    const firstEligibleIndex = events.indexOf(firstEligible);
+    const policyIndex = events.indexOf(policy);
+    const nextImpairedSweepIndex = events.findIndex((event, index) => index > firstEligibleIndex
+      && event.type === "pressure-sweep" && event.schedulerConnectionId === oldOrdinal);
+    if (!firstEligible || firstEligible.pressure.transportHigh !== true
+      || policyIndex <= firstEligibleIndex
+      || (nextImpairedSweepIndex >= 0 && policyIndex >= nextImpairedSweepIndex)
       || sweeps.some((event) => event.actualAt - event.scheduledAt > fixture.queuePolicy.maxSweepLatenessMs)) {
       throw new Error("T2b timeout was not dispatched on the first punctual eligible pressure sweep");
     }
