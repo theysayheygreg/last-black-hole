@@ -139,6 +139,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AuthoredCollapseTestLifecycle",
+    file: "authored-collapse-test-lifecycle.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerSoakSmoke",
     file: "multiplayer-soak-smoke.cjs",
     lanes: ["multiplayer-soak-smoke"],

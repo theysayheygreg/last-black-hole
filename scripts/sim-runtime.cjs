@@ -85,6 +85,7 @@ const {
 } = require("./sim/world-geometry.cjs");
 const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
+const { createAuthoredCollapseTestLifecycle } = require("./authored-collapse-test-lifecycle.cjs");
 const { createSimWebSocketAdapter } = require("./sim-ws-adapter.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
@@ -109,6 +110,10 @@ const PORTAL_CONFIG = {
 const PLAYER_CARGO_SLOTS = 8;
 const RUN_DURATION = 600;
 const MATCH_MAX_SIM_TIME = readNumber(process.env.LBH_SIM_MAX_SIM_TIME, RUN_DURATION, 1);
+const authoredCollapseTestLifecycle = createAuthoredCollapseTestLifecycle({
+  env: process.env,
+  maxSimTime: MATCH_MAX_SIM_TIME,
+});
 const TERMINAL_SESSION_GRACE_MS = readNumber(process.env.LBH_SIM_TERMINAL_GRACE_MS, 30000, 0);
 const WELL_GROWTH_VARIANCE = 0.01;
 const WELL_GROWTH_AMOUNT = 0.02;
@@ -1306,6 +1311,7 @@ function startSession(config = {}) {
     endSession("reset", { status: "reset" });
   }
   clearTerminalShutdown();
+  authoredCollapseTestLifecycle.reset();
   const requestedMapId = String(config.mapId || "shallows");
   const requestedWorldScale = config.worldScale == null ? null : Number(config.worldScale);
   // Build the RNG streams BEFORE cloning the map state so well growth
@@ -2409,8 +2415,10 @@ function tickPortals(dt) {
       });
       if (portal.finalInhibitor) {
         runtime.inhibitor.finalPortalExpired = true;
-        const killedCount = killActiveHumanPlayers("collapse");
-        if (killedCount > 0) endSession("inhibitor-final-portal-missed", { killedCount, portalId: portal.id });
+        if (!authoredCollapseTestLifecycle.suppress("inhibitor-final-portal-missed", runtime.simTime)) {
+          const killedCount = killActiveHumanPlayers("collapse");
+          if (killedCount > 0) endSession("inhibitor-final-portal-missed", { killedCount, portalId: portal.id });
+        }
       }
       continue;
     }
@@ -2556,6 +2564,8 @@ function maybeCollapseRun() {
       !runtime.inhibitor.finalPortalExpired) {
     return;
   }
+
+  if (authoredCollapseTestLifecycle.suppress("collapse", runtime.simTime)) return;
 
   let killedCount = 0;
   for (const player of runtime.players.values()) {
@@ -6798,6 +6808,8 @@ const server = http.createServer(async (req, res) => {
         multiplayer: multiplayerDiagnostics(),
       };
       if (soakRuntimeDiagnostics) health.soakDiagnostics = soakRuntimeDiagnostics.status();
+      const authoredCollapseTest = authoredCollapseTestLifecycle.health();
+      if (authoredCollapseTest) health.authoredCollapseTest = authoredCollapseTest;
       sendJson(res, 200, health);
       return;
     }

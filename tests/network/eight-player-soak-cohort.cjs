@@ -110,6 +110,7 @@ function safeHealth(body, plannedElapsedMs, actualElapsedMs) {
       actions: body.multiplayer?.actions, memberships: body.multiplayer?.memberships,
       adapterEventReplay: body.multiplayer?.adapter?.eventReplay },
     soakDiagnostics: body.soakDiagnostics || null,
+    authoredCollapseTest: body.authoredCollapseTest || null,
   };
 }
 
@@ -651,6 +652,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     await startSimServer(port, { keepAlive: true, registerProcessCleanup: false,
       nodeArgs: ["--expose-gc"], env: { LBH_SIM_WS_ENABLED: "true",
       LBH_SOAK_DIAGNOSTICS: "1",
+      ...(normal ? { NODE_ENV: "test", LBH_SIM_TEST_DISABLE_AUTHORED_COLLAPSE: "1" } : {}),
       LBH_SIM_MAX_SIM_TIME: "7200",
       ...(timeScale === 1 ? {} : { LBH_SIM_WS_TEST_TICKET_TTL_MS: "300" }),
       LBH_SOAK_GC_FILE: gcFile,
@@ -741,6 +743,13 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       if (!covered) throw new Error("final authority diagnostic minute did not reach 57 samples within 9s");
     }
     const final = await getHealth(fixture.wallTimeMs);
+    if (normal && !(final.safe.authoredCollapseTest?.mode === "synthetic-infrastructure-longevity"
+      && final.safe.authoredCollapseTest?.count === 1
+      && ["collapse", "inhibitor-final-portal-missed"].includes(final.safe.authoredCollapseTest?.firstReason)
+      && Number.isFinite(final.safe.authoredCollapseTest?.firstSimTime)
+      && final.safe.authoredCollapseTest?.maxSimTime === 7200)) {
+      throw new Error(`normal soak lacks exact authored-collapse lifecycle proof: ${JSON.stringify(final.safe.authoredCollapseTest)}`);
+    }
     if (digest(salt, final.raw.session?.runId) !== authorityRunHash) throw new Error("authority run identity changed");
     const details = final.raw.multiplayer.adapter.pressure.connections || {};
     for (let seat = 0; seat < 8; seat += 1) {
