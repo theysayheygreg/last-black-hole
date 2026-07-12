@@ -177,7 +177,7 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
   const page = await browser.newPage({ width: 1280, height: 800, deviceScaleFactor: 1 });
   const pilot = { index, slot: `pilot-${index}`, browser, page, pageErrors: [], consoleErrors: [],
     rewriteErrors: [], networkFailures: [], privacyFrames: [], hotHttp: [], cdp: { inboundBytes: 0, outboundBytes: 0, inboundFrames: 0, outboundFrames: 0 },
-    evidence: [] };
+    evidence: [], consumedEvents: [] };
   try {
   page.on("pageerror", (error) => pilot.pageErrors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") pilot.consoleErrors.push(message.text()); });
@@ -280,9 +280,151 @@ function percentile(values, probability) {
   return sorted[Math.min(sorted.length - 1, Math.ceil(probability * sorted.length) - 1)];
 }
 
+function isExpectedF3InputTimeout(scenarioId, pilot, error) {
+  return scenarioId === "F3-frame-defense" && pilot.slot === "pilot-3"
+    && /^\[LBH\] remote input failed: Error: Timed out waiting for input ACK\n/.test(String(error));
+}
+
+function faultDecisionProfile(scenario, pilots, serverRecords) {
+  const allRecords = [
+    ...pilots.flatMap((pilot) => pilot.evidence.filter((entry) => entry.direction === "client-to-authority")),
+    ...serverRecords.filter((entry) => entry.direction === "authority-to-client"),
+  ];
+  const keyFor = (entry) => [entry.pilotSlot, entry.phase, entry.direction, entry.connectionEpochOrdinal,
+    entry.decisionClass || entry.frameClass, entry.streamOrdinal].join("|");
+  for (const phase of ["warmup", "recovery"]) {
+    const decisions = allRecords.filter((entry) => entry.phase === phase
+      && (entry.event === "queued" || entry.event === "omitted"));
+    assert(decisions.length > 0, `F3 produced no ${phase} decisions`);
+    assert(decisions.every((entry) => entry.decision?.delayMs === 0 && entry.decision.copies === 1
+      && entry.decision.omitted === false && Number(entry.decision.reorderWindow || 0) === 0),
+    `F3 ${phase} was not a clean bypass phase`);
+  }
+  const active = allRecords.filter((entry) => entry.phase === "active");
+  const decisionRecords = active.filter((entry) => entry.event === "queued" || entry.event === "omitted");
+  for (const entry of decisionRecords) {
+    const rule = scenario.rules.faults?.[entry.pilotSlot]?.[entry.direction]
+      ?.[entry.decisionClass || entry.frameClass] || {};
+    if (entry.pilotSlot !== "pilot-3" || Object.keys(rule).length === 0) {
+      assert(entry.decision.copies === 1 && !entry.decision.omitted
+        && Number(entry.decision.reorderWindow || 0) === 0,
+      `F3 contaminated ${entry.pilotSlot} ${entry.direction} ${entry.decisionClass || entry.frameClass}`);
+    }
+  }
+  const faultClasses = {};
+  for (const [pilotSlot, directions] of Object.entries(scenario.rules.faults)) {
+    for (const [direction, classes] of Object.entries(directions)) {
+      for (const [decisionClass, rule] of Object.entries(classes)) {
+        const records = active.filter((entry) => entry.pilotSlot === pilotSlot && entry.direction === direction
+          && (entry.decisionClass || entry.frameClass) === decisionClass);
+        const decisions = records.filter((entry) => entry.event === "queued" || entry.event === "omitted");
+        const queued = records.filter((entry) => entry.event === "queued");
+        const omitted = records.filter((entry) => entry.event === "omitted");
+        const released = records.filter((entry) => entry.event === "released");
+        const cancelled = records.filter((entry) => entry.event === "cancelled");
+        const copies = records.filter((entry) => entry.event === "copy-delivered");
+        assert(decisions.length > 0, `${pilotSlot} ${direction} ${decisionClass} lacked stimulus`);
+        const queuedKeys = new Set(queued.map(keyFor));
+        const releasedKeys = new Set(released.map(keyFor));
+        const cancelledKeys = new Set(cancelled.map(keyFor));
+        const terminalKeys = new Set([...releasedKeys, ...cancelledKeys]);
+        assert(queuedKeys.size === queued.length && releasedKeys.size === released.length
+          && cancelledKeys.size === cancelled.length && queuedKeys.size === terminalKeys.size
+          && [...queuedKeys].every((key) => terminalKeys.has(key))
+          && ![...releasedKeys].some((key) => cancelledKeys.has(key)),
+        `${decisionClass} queued/terminal decision sets differ`);
+        for (const entry of queued) {
+          const expectedCopies = entry.decision.copies;
+          const actualCopies = copies.filter((copy) => keyFor(copy) === keyFor(entry)).length;
+          assert((cancelledKeys.has(keyFor(entry)) && actualCopies === 0)
+            || (releasedKeys.has(keyFor(entry)) && actualCopies === expectedCopies),
+            `${decisionClass} physical copy count changed`);
+        }
+        if (rule.omitRate) assert(omitted.length > 0, `${decisionClass} omission was not stimulated`);
+        const duplicated = queued.filter((entry) => entry.decision.copies === 2
+          && releasedKeys.has(keyFor(entry)));
+        if (rule.duplicateRate) assert(duplicated.length > 0, `${decisionClass} duplication was not stimulated`);
+        let reorderedBlocks = 0;
+        let maxDisplacement = 0;
+        if (rule.reorderWindow) {
+          const blocks = new Map();
+          for (const entry of released) {
+            const block = entry.decision.reorderBlock;
+            const values = blocks.get(block) || [];
+            values.push(entry);
+            blocks.set(block, values);
+            assert(entry.decision.reorderWindow === rule.reorderWindow,
+              `${decisionClass} changed reorder window`);
+          }
+          for (const values of blocks.values()) {
+            if (values.length < 2) continue;
+            const original = [...values].sort((a, b) => a.streamOrdinal - b.streamOrdinal);
+            if (values.some((entry, index) => entry.streamOrdinal !== original[index].streamOrdinal)) reorderedBlocks += 1;
+            for (let index = 0; index < values.length; index += 1) {
+              maxDisplacement = Math.max(maxDisplacement,
+                Math.abs(index - original.findIndex((entry) => entry.streamOrdinal === values[index].streamOrdinal)));
+            }
+          }
+          assert(maxDisplacement <= rule.reorderWindow, `${decisionClass} exceeded bounded reorder`);
+          assert(copies.every((entry) => entry.blockHoldMs <= rule.maxBlockHoldMs + 25),
+            `${decisionClass} exceeded max block hold`);
+        }
+        faultClasses[`${pilotSlot}/${direction}/${decisionClass}`] = {
+          decisions: decisions.length, queued: queued.length, omitted: omitted.length, cancelled: cancelled.length,
+          duplicated: duplicated.length, physicalCopies: copies.length, reorderedBlocks, maxDisplacement,
+        };
+      }
+    }
+  }
+  const reorderGroups = {};
+  const grouped = new Map();
+  for (const entry of active.filter((record) => record.event === "released" && record.decision?.reorderGroup)) {
+    const key = [entry.pilotSlot, entry.direction, entry.decision.reorderGroup, entry.decision.reorderBlock].join("|");
+    const values = grouped.get(key) || [];
+    values.push(entry);
+    grouped.set(key, values);
+  }
+  for (const [blockKey, values] of grouped) {
+    const groupKey = blockKey.split("|").slice(0, 3).join("/");
+    const stats = reorderGroups[groupKey] || { blocks: 0, reorderedBlocks: 0, maxDisplacement: 0 };
+    stats.blocks += 1;
+    const original = [...values].sort((a, b) => a.decision.reorderOrdinal - b.decision.reorderOrdinal);
+    if (values.some((entry, index) => entry.decision.reorderOrdinal !== original[index].decision.reorderOrdinal)) {
+      stats.reorderedBlocks += 1;
+    }
+    for (let index = 0; index < values.length; index += 1) {
+      stats.maxDisplacement = Math.max(stats.maxDisplacement,
+        Math.abs(index - original.findIndex((entry) =>
+          entry.decision.reorderOrdinal === values[index].decision.reorderOrdinal)));
+    }
+    reorderGroups[groupKey] = stats;
+  }
+  for (const [group, stats] of Object.entries(reorderGroups)) {
+    assert(stats.reorderedBlocks > 0 && stats.maxDisplacement <= 3,
+      `${group} did not prove a bounded shared reorder window`);
+  }
+  assert(Object.keys(reorderGroups).length === 2, "F3 did not activate both shared reorder groups");
+  const runtimeGroupTape = decisionRecords.filter((entry) => entry.decision?.reorderGroup).map((entry) => ({
+    pilotSlot: entry.pilotSlot, direction: entry.direction,
+    decisionClass: entry.decisionClass || entry.frameClass, streamOrdinal: entry.streamOrdinal,
+    group: entry.decision.reorderGroup, groupOrdinal: entry.decision.reorderOrdinal,
+    reorderBlock: entry.decision.reorderBlock, reorderOffset: entry.decision.reorderOffset,
+    copies: entry.decision.copies, omitted: entry.decision.omitted,
+  }));
+  for (const group of new Set(runtimeGroupTape.map((entry) =>
+    `${entry.pilotSlot}|${entry.direction}|${entry.group}`))) {
+    const ordinals = runtimeGroupTape.filter((entry) =>
+      `${entry.pilotSlot}|${entry.direction}|${entry.group}` === group).map((entry) => entry.groupOrdinal);
+    assert(ordinals.every((ordinal, index) => ordinal === index), `${group} runtime group tape diverged`);
+  }
+  return { faultClasses, reorderGroups,
+    runtimeGroupTape: { decisions: runtimeGroupTape.length, sha256: sha256(JSON.stringify(runtimeGroupTape)) } };
+}
+
 function decisionProfile(scenario, pilots, serverEvidenceFile) {
   const serverRecords = fs.readFileSync(serverEvidenceFile, "utf8").split("\n").filter(Boolean)
     .map((line) => JSON.parse(line));
+  if (scenario.rules.faults) return faultDecisionProfile(scenario, pilots, serverRecords);
   const allUpstream = pilots.flatMap((pilot) => pilot.evidence.filter((entry) =>
     entry.direction === "client-to-authority"));
   const allDownstream = serverRecords.filter((entry) => entry.direction === "authority-to-client");
@@ -301,7 +443,7 @@ function decisionProfile(scenario, pilots, serverEvidenceFile) {
     assert(queued.length > 0 && released.length > 0, `${direction} produced no active decisions/releases`);
     assert(!records.some((entry) => entry.event === "omitted"), `${direction} emitted an omission record`);
     const keyFor = (entry) => [entry.pilotSlot, entry.phase, entry.direction, entry.connectionEpochOrdinal,
-      entry.frameClass, entry.streamOrdinal].join("|");
+      entry.decisionClass || entry.frameClass, entry.streamOrdinal].join("|");
     const queuedKeys = queued.map(keyFor);
     const releasedKeys = released.map(keyFor);
     assert(new Set(queuedKeys).size === queuedKeys.length, `${direction} queued duplicate decision keys`);
@@ -392,28 +534,29 @@ function clientLedger(pilot, ownerPlayerId) {
   const pairs = new Map();
   const alignedTimes = [];
   for (const event of events) {
-    if (event.phase !== "active") continue;
-    if (event.direction === "client-to-authority" && event.event === "queued" && event.inputSeq) {
+    const active = event.phase === "active";
+    if (active && event.direction === "client-to-authority" && event.event === "queued" && event.inputSeq) {
       if (!inputs.has(event.inputSeq)) inputs.set(event.inputSeq, event.atMonoMs);
     }
     if (event.direction === "authority-to-client" && event.event === "application-delivered"
       && event.frameClass === "ack" && event.ackKind === "input" && event.inputSeq && inputs.has(event.inputSeq)) {
       inputLatencies.push(event.actualMonoMs - inputs.get(event.inputSeq));
     }
-    if (event.direction === "client-to-authority" && event.event === "queued" && event.frameClass === "action") {
-      if (!actions.has(event.actionId)) actions.set(event.actionId, { sentAt: event.atMonoMs, outcomes: [] });
+    if (active && event.direction === "client-to-authority" && event.event === "queued" && event.frameClass === "action") {
+      if (!actions.has(event.actionId)) actions.set(event.actionId,
+        { sentAt: event.atMonoMs, outcomes: [], semanticOutcome: null });
     }
     if (event.direction === "authority-to-client" && event.event === "application-delivered"
       && event.frameClass === "ack" && event.ackKind === "action" && actions.has(event.actionId)) {
-      actions.get(event.actionId).outcomes.push(event);
+      const action = actions.get(event.actionId);
+      action.outcomes.push(event);
+      if (!action.semanticOutcome) action.semanticOutcome = event;
+      else assert(action.semanticOutcome.status === event.status
+        && action.semanticOutcome.actionSeq === event.actionSeq
+        && action.semanticOutcome.commandSeq === event.commandSeq,
+        `${pilot.slot} duplicate action ACK changed semantic status`);
     }
-    if (event.direction === "authority-to-client" && event.event === "application-delivered"
-      && event.frameClass === "event" && event.eventType === "player.pulse"
-      && event.eventPlayerId === ownerPlayerId) {
-      assert(Number.isSafeInteger(event.eventSeq), `${pilot.slot} pulse event lacked a safe event sequence`);
-      pulseEvents.push({ eventSeq: event.eventSeq, actualMonoMs: event.actualMonoMs });
-    }
-    if (event.direction === "authority-to-client" && event.event === "application-delivered"
+    if (active && event.direction === "authority-to-client" && event.event === "application-delivered"
       && (event.frameClass === "publicState" || event.frameClass === "ownerState") && event.snapshotId) {
       const pair = pairs.get(event.snapshotId) || {};
       pair[event.frameClass] = event.actualMonoMs;
@@ -424,13 +567,18 @@ function clientLedger(pilot, ownerPlayerId) {
       }
     }
   }
+  for (const event of pilot.consumedEvents.filter((entry) =>
+    entry.eventType === "player.pulse" && entry.eventPlayerId === ownerPlayerId)) {
+    assert(Number.isSafeInteger(event.eventSeq), `${pilot.slot} consumed pulse lacked a safe event sequence`);
+    pulseEvents.push({ eventSeq: event.eventSeq, actualMonoMs: event.actualMonoMs });
+  }
   alignedTimes.sort((a, b) => a - b);
   pulseEvents.sort((a, b) => a.actualMonoMs - b.actualMonoMs);
   assert(new Set(pulseEvents.map((event) => event.eventSeq)).size === pulseEvents.length,
     `${pilot.slot} observed duplicate pulse event sequences`);
   let pulseIndex = 0;
   for (const action of [...actions.values()].sort((left, right) => left.sentAt - right.sentAt)) {
-    const outcome = action.outcomes[0];
+    const outcome = action.semanticOutcome;
     if (!outcome) continue;
     let settledAt = outcome.actualMonoMs;
     if (outcome.status === "accepted") {
@@ -553,6 +701,13 @@ async function runBrowserCohort(options) {
     fs.writeFileSync(controlFile, `${JSON.stringify({ startWallMs })}\n`, { flag: "wx" });
     const timelines = await Promise.all(resources.pilots.map((pilot) => pilot.page.evaluate(
       (start) => window.__LBH_FRAME_IMPAIRMENT__.start(start), startWallMs)));
+    if (scenario.stimulus?.inputIntervalMs) {
+      await resources.pilots[3].page.evaluate((intervalMs) => {
+        window.__LBH_F3_INPUT_STIMULUS__ = setInterval(() => {
+          window.__TEST_API?.sendRemoteInput?.({ moveX: 0.35, moveY: -0.2, thrust: 0.7 })?.catch(() => {});
+        }, intervalMs);
+      }, scenario.stimulus.inputIntervalMs);
+    }
     for (const pilot of resources.pilots) {
       await pilot.page.evaluate(() => {
         window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight", key: "ArrowRight", bubbles: true }));
@@ -604,9 +759,32 @@ async function runBrowserCohort(options) {
     await sleep(Math.max(0, startWallMs - Date.now()) + scenario.warmupMs + 2000, signal);
     if (samplingError) throw samplingError;
     for (const pilot of resources.pilots) await tap(pilot.page, "KeyE", "e", 50);
-    await sleep(10000, signal);
-    if (samplingError) throw samplingError;
-    for (const pilot of resources.pilots) await tap(pilot.page, "KeyE", "e", 50);
+    if (scenario.stimulus?.actionIntervalMs) {
+      const activeEnd = startWallMs + scenario.warmupMs + scenario.activeMs;
+      let nextActionAt = Date.now() + scenario.stimulus.actionIntervalMs;
+      let secondCohortActionSent = false;
+      while (nextActionAt < activeEnd - Number(scenario.stimulus.drainMs || 500)) {
+        await sleep(Math.max(0, nextActionAt - Date.now()), signal);
+        if (!secondCohortActionSent && Date.now() >= startWallMs + scenario.warmupMs + 12000) {
+          for (const pilot of resources.pilots.slice(0, 3)) await tap(pilot.page, "KeyE", "e", 50);
+          secondCohortActionSent = true;
+        }
+        await tap(resources.pilots[3].page, "KeyE", "e", 50);
+        nextActionAt += scenario.stimulus.actionIntervalMs;
+        if (samplingError) throw samplingError;
+      }
+      assert(secondCohortActionSent, `${scenarioId} did not complete cohort action stimulus`);
+    } else {
+      await sleep(10000, signal);
+      if (samplingError) throw samplingError;
+      for (const pilot of resources.pilots) await tap(pilot.page, "KeyE", "e", 50);
+    }
+    if (scenario.stimulus?.inputIntervalMs) {
+      await resources.pilots[3].page.evaluate(() => {
+        clearInterval(window.__LBH_F3_INPUT_STIMULUS__);
+        window.__LBH_F3_INPUT_STIMULUS__ = null;
+      });
+    }
     const endWallMs = startWallMs + scenario.warmupMs + scenario.activeMs + scenario.recoveryMs;
     await sleep(Math.max(0, endWallMs - Date.now()), signal);
     if (samplingError) throw samplingError;
@@ -625,6 +803,9 @@ async function runBrowserCohort(options) {
       const drained = await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.drain());
       pilot.evidence.push(...drained);
       for (const event of drained) appendJsonl(clientEvidenceFile, sanitizeFrameEvidence(event));
+      pilot.consumedEvents = await pilot.page.evaluate(() => window.__LBH_CONSUMED_EVENTS__ || []);
+      for (const event of pilot.consumedEvents) appendJsonl(clientEvidenceFile,
+        sanitizeFrameEvidence({ ...event, pilotSlot: pilot.slot, event: "gameplay-consumed" }));
     }
     const final = await Promise.all(resources.pilots.map(journeyState));
     const privacy = resources.pilots.map((pilot, index) => scanPrivacy(pilot, {
@@ -646,7 +827,8 @@ async function runBrowserCohort(options) {
     for (const pilot of resources.pilots) {
       for (const error of [...pilot.pageErrors, ...pilot.consoleErrors, ...pilot.rewriteErrors,
         ...pilot.networkFailures.map((entry) => `${entry.status} ${entry.url}`)]) {
-        appendJsonl(errorFile, { pilotSlot: pilot.slot, error });
+        appendJsonl(errorFile, { pilotSlot: pilot.slot, error,
+          expectedFault: isExpectedF3InputTimeout(scenarioId, pilot, error) });
       }
     }
     for (let index = 0; index < 4; index += 1) {
@@ -664,12 +846,18 @@ async function runBrowserCohort(options) {
       assert(summary.reliableConsequenceP95Ms <= gates.reliableConsequenceP95Ms,
         `${resources.pilots[index].slot} reliable p95 ${summary.reliableConsequenceP95Ms}`);
       for (const [actionId, action] of ledgers[index].actions) {
-        assert(action.outcomes.length === 1, `${resources.pilots[index].slot} action ${actionId} outcomes=${action.outcomes.length}`);
+        assert(action.semanticOutcome && new Set(action.outcomes.map((entry) => entry.status)).size === 1,
+          `${resources.pilots[index].slot} action ${actionId} lacked one stable semantic outcome`);
       }
       assert(final[index].transport.reconnectCount === 0, `${resources.pilots[index].slot} unexpectedly reconnected`);
+      if (scenario.rules.faults) {
+        assert(final[index].transport.pendingInputCount === 0 && final[index].transport.pendingActionCount === 0,
+          `${resources.pilots[index].slot} did not converge pending input/action work`);
+      }
       const rebases = resources.pilots[index].privacyFrames.filter((frame) => frame.direction === "inbound"
         && frame.type === "rebase").length;
-      assert(rebases === 1, `${resources.pilots[index].slot} had ${Math.max(0, rebases - 1)} post-admission rebases`);
+      assert(Math.max(0, rebases - 1) <= gates.postAdmissionRebases,
+        `${resources.pilots[index].slot} had ${Math.max(0, rebases - 1)} post-admission rebases`);
       const inboundAckKinds = new Set(resources.pilots[index].privacyFrames.filter((frame) => frame.direction === "inbound"
         && frame.type === "ack").map((frame) => frame.ackKind));
       const outboundAckKinds = new Set(resources.pilots[index].privacyFrames.filter((frame) => frame.direction === "outbound"
@@ -678,11 +866,20 @@ async function runBrowserCohort(options) {
         && outboundAckKinds.has("delivery") && outboundAckKinds.has("event") && outboundAckKinds.has("baseline"),
       `${resources.pilots[index].slot} did not preserve distinct ACK kinds`);
       assert(resources.pilots[index].hotHttp.length === 0, `${resources.pilots[index].slot} used hot HTTP`);
-      assert(resources.pilots[index].pageErrors.length === 0 && resources.pilots[index].consoleErrors.length === 0
+      const expectedInputTimeouts = resources.pilots[index].consoleErrors.filter((error) =>
+        isExpectedF3InputTimeout(scenarioId, resources.pilots[index], error));
+      const fatalConsoleErrors = resources.pilots[index].consoleErrors.filter((error) =>
+        !isExpectedF3InputTimeout(scenarioId, resources.pilots[index], error));
+      if (scenario.rules.faults && resources.pilots[index].slot === "pilot-3") {
+        const omittedInputs = impairment.faultClasses["pilot-3/client-to-authority/input"].omitted;
+        assert(expectedInputTimeouts.length <= omittedInputs,
+          `pilot-3 input timeout evidence did not correlate to ${omittedInputs} omissions`);
+      }
+      assert(resources.pilots[index].pageErrors.length === 0 && fatalConsoleErrors.length === 0
         && resources.pilots[index].rewriteErrors.length === 0 && resources.pilots[index].networkFailures.length === 0,
         `${resources.pilots[index].slot} browser/rewrite errors`);
       const acceptedPulses = [...ledgers[index].actions.values()].filter((action) =>
-        action.outcomes[0]?.status === "accepted").length;
+        action.semanticOutcome?.status === "accepted").length;
       const oracleSequences = authorityPulseEvents.get(final[index].clientId) || new Set();
       const clientSequences = new Set(ledgers[index].pulseEvents.map((event) => event.eventSeq));
       assert(oracleSequences.size === acceptedPulses && clientSequences.size === acceptedPulses
@@ -748,6 +945,8 @@ async function runBrowserCohort(options) {
       browserSchedulerStatusesComplete: resources.browserSchedulerStatuses.length === 4,
       browserSchedulersPending: resources.browserSchedulerStatuses.length === 4
         ? resources.browserSchedulerStatuses.reduce((sum, status) => sum + (status.queued || 0), 0) : -1,
+      browserSchedulerBlocksPending: resources.browserSchedulerStatuses.length === 4
+        ? resources.browserSchedulerStatuses.reduce((sum, status) => sum + (status.blocks || 0), 0) : -1,
       preloadTimelineObserved: serverRecords.some((entry) => entry.event === "timeline"),
       preloadInstalledForWrappedProcess: adapterWraps.length === 1
         && preloadInstalled.some((entry) => entry.pid === adapterWraps[0].pid),
@@ -760,7 +959,7 @@ async function runBrowserCohort(options) {
         serverQueued.some((entry) => entry.pilotSlot === expected.pilotSlot)
           && serverReleased.some((entry) => entry.pilotSlot === expected.pilotSlot)),
       preloadBarriersBypassed: forbiddenBarriers.length === 0,
-      preloadStoppedClean: serverStops.at(-1)?.pending === 0,
+      preloadStoppedClean: serverStops.at(-1)?.pending === 0 && serverStops.at(-1)?.pendingBlocks === 0,
       preloadFailuresAbsent: preloadFailures.length === 0,
     };
     fs.writeFileSync(path.join(runDir, "cleanup.json"), `${JSON.stringify(cleanup, null, 2)}\n`, { flag: "wx" });

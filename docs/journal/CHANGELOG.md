@@ -34,6 +34,12 @@
 - Measured steady uncompressed application traffic at 0.810--0.812 MB/s for
   four browsers and 1.927 MB/s for eight while authority stayed `NORMAL` at
   15/10 Hz. WAN, TLS, hosted soak, and Greg hands-on remain pending.
+- Implemented the seeded F3 four-browser frame-defense scenario. Only pilot 3
+  receives declared input/delivery/action-ACK omissions, event/action-ACK
+  duplication, and bounded shared state/ACK reorder windows; the harness now
+  proves physical fault activation, stable semantic outcomes, exact-once
+  consumed consequences, convergence, privacy, pressure, and cleanup without
+  claiming TCP loss or WAN behavior.
 - Added a bounded Phase 2 delegation packet for a seeded two-layer network
   impairment harness, separating deterministic frame faults from later real
   WAN/TLS proof and preserving the one-authority-per-match contract.

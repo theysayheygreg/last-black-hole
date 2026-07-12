@@ -136,12 +136,19 @@ clean HEAD. The PR profile measures from scheduler interception—not physical
 release—so the reported input and reliable-consequence latencies include the
 configured upstream application-frame delay.
 
-### Commit C: F3 frame defense
+### Commit C: F3 frame defense — implemented
 
 Only `pilot-3` receives the declared input/delivery/action ACK omission,
 event/action duplication, and bounded state/ACK release-window rules. Increase
 stimulus until every required fault class has at least one seeded decision;
 otherwise fail for insufficient stimulus. IDs and payloads remain unchanged.
+
+The PR-smoke implementation uses seed `0x0403AC11`, shared bounded windows for
+upstream delivery/event ACKs and downstream state/input/action ACKs, and a
+five-second recovery drain. It correlates the exact F3 pilot-3 input-ACK
+timeout signature to seeded input omissions; that exception is not available
+to any other scenario, pilot, or browser error. Acceptance still requires a
+no-retry run from the committed clean HEAD; dirty-tree runs are diagnostic.
 
 ### Commit D: F6 Layer A close schedule
 

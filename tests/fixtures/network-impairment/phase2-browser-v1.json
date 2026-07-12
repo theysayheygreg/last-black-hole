@@ -66,6 +66,55 @@
         "postAdmissionRebases": 0,
         "postAdmissionReconnects": 0
       }
+    },
+    "F3-frame-defense": {
+      "profile": "pr-smoke",
+      "rootSeed": "0x0403AC11",
+      "players": 4,
+      "warmupMs": 5000,
+      "activeMs": 30000,
+      "recoveryMs": 10000,
+      "impairPhases": ["active"],
+      "decisionCapacity": {
+        "action": 256,
+        "ack:input": 1024,
+        "ack:action": 256,
+        "ack:delivery": 768,
+        "ack:event": 128,
+        "ack:baseline": 32
+      },
+      "rules": {
+        "copies": 1,
+        "delayMs": 0,
+        "omitted": false,
+        "faults": {
+          "pilot-3": {
+            "client-to-authority": {
+              "input": { "omitRate": 0.05 },
+              "ack:delivery": { "omitRate": 0.20, "reorderWindow": 3, "reorderGroup": "upstream-ack", "maxBlockHoldMs": 250 },
+              "ack:event": { "duplicateRate": 0.10, "reorderWindow": 3, "reorderGroup": "upstream-ack", "maxBlockHoldMs": 250 }
+            },
+            "authority-to-client": {
+              "ack:input": { "reorderWindow": 3, "reorderGroup": "downstream-state-ack", "maxBlockHoldMs": 250 },
+              "ack:action": { "omitRate": 0.20, "duplicateRate": 0.10, "reorderWindow": 3, "reorderGroup": "downstream-state-ack", "maxBlockHoldMs": 250 },
+              "publicState": { "reorderWindow": 3, "reorderGroup": "downstream-state-ack", "maxBlockHoldMs": 250 },
+              "ownerState": { "reorderWindow": 3, "reorderGroup": "downstream-state-ack", "maxBlockHoldMs": 250 },
+              "event": { "duplicateRate": 0.10 }
+            }
+          }
+        }
+      },
+      "stimulus": { "actionIntervalMs": 1000, "inputIntervalMs": 100, "drainMs": 5000 },
+      "gates": {
+        "minimumInputAckSamplesPerPilot": 100,
+        "minimumAlignedPairSamplesPerPilot": 100,
+        "minimumReliableActionsPerPilot": 2,
+        "inputAckP95Ms": 800,
+        "snapshotCadenceP95Ms": 750,
+        "reliableConsequenceP95Ms": 2500,
+        "postAdmissionRebases": 2,
+        "postAdmissionReconnects": 0
+      }
     }
   }
 }

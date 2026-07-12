@@ -43,6 +43,7 @@
     "test:multiplayer-playable": "node tests/run-all.cjs --lane=multiplayer-playable --renderer=three",
     "test:multiplayer-impairment:browser": "node tests/run-all.cjs --lane=multiplayer-impairment-browser --renderer=three --no-retries",
     "test:multiplayer-impairment:f1": "LBH_IMPAIRMENT_SCENARIO=F1-regional node tests/run-all.cjs --lane=multiplayer-impairment-browser --renderer=three --no-retries",
+    "test:multiplayer-impairment:f3": "LBH_IMPAIRMENT_SCENARIO=F3-frame-defense node tests/run-all.cjs --lane=multiplayer-impairment-browser --renderer=three --no-retries",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
     "test:agent-eval": "node tests/run-all.cjs --lane=agent-eval --renderer=three",
     "test:package": "node tests/desktop-package.cjs && node tests/release-package.cjs",

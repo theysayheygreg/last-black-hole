@@ -47,6 +47,12 @@ function install(file) {
 function createServerSeam(config, book) {
   const queue = [];
   const ordinals = new Map();
+  const blockCounts = new Map();
+  const blockReleaseTimes = new Map();
+  const blockFirstAt = new Map();
+  const blockMaxHold = new Map();
+  const blockPhases = new Map();
+  const groupOrdinals = new Map();
   const slots = new Map();
   let nextSlot = 0;
   let timeline = null;
@@ -90,17 +96,48 @@ function createServerSeam(config, book) {
     if (stopped) return;
     readControl();
     const now = performance.now();
-    queue.sort((left, right) => left.releaseAtMs - right.releaseAtMs
+    const currentPhase = phaseAt(now);
+    const ready = queue.filter((item) => item.cancelled || (item.releaseAtMs <= now
+      && (item.decision.reorderWindow === 0
+        || blockCounts.get(item.streamBlockKey) >= item.decision.reorderWindow + 1
+        || now - blockFirstAt.get(item.streamBlockKey) >= item.decision.maxBlockHoldMs
+        || currentPhase !== item.record.phase)));
+    ready.sort((left, right) => (blockReleaseTimes.get(left.streamBlockKey) || left.releaseAtMs)
+      - (blockReleaseTimes.get(right.streamBlockKey) || right.releaseAtMs)
+      || left.streamBlockKey.localeCompare(right.streamBlockKey)
+      || left.decision.reorderOffset - right.decision.reorderOffset
       || left.enqueueOrdinal - right.enqueueOrdinal);
-    while (queue.length > 0) {
-      const item = queue[0];
-      if (!item.cancelled && item.releaseAtMs > now) break;
-      queue.shift();
+    for (const item of ready) {
+      const index = queue.indexOf(item);
+      if (index >= 0) queue.splice(index, 1);
       if (item.cancelled) continue;
       let delivered = false;
-      for (let copy = 0; copy < item.decision.copies; copy += 1) delivered = item.deliver() !== false || delivered;
+      for (let copy = 0; copy < item.decision.copies; copy += 1) {
+        const copyDelivered = item.deliver() !== false;
+        delivered = copyDelivered || delivered;
+        append({ ...item.record, event: "copy-delivered", copyIndex: copy,
+          actualMonoMs: performance.now(), delivered: copyDelivered,
+          blockHoldMs: now - blockFirstAt.get(item.streamBlockKey) });
+      }
       append({ ...item.record, event: "released", actualMonoMs: now,
         overshootMs: Math.max(0, now - item.releaseAtMs), delivered });
+      item.completed = true;
+    }
+    for (const key of new Set(ready.map((item) => item.streamBlockKey))) {
+      if (!queue.some((item) => item.streamBlockKey === key)) {
+        blockCounts.delete(key);
+        blockReleaseTimes.delete(key);
+        blockFirstAt.delete(key);
+        blockMaxHold.delete(key);
+        blockPhases.delete(key);
+      }
+    }
+    for (const [key, firstAt] of blockFirstAt) {
+      if (!queue.some((item) => item.streamBlockKey === key)
+        && (now - firstAt >= blockMaxHold.get(key) || currentPhase !== blockPhases.get(key))) {
+        blockCounts.delete(key); blockReleaseTimes.delete(key); blockFirstAt.delete(key);
+        blockMaxHold.delete(key); blockPhases.delete(key);
+      }
     }
   };
   const pump = setInterval(releaseDue, 5);
@@ -125,6 +162,9 @@ function createServerSeam(config, book) {
       frameClass: context.frameClass || frame.type || "unknown",
       ackKind: frame.ackKind,
       semanticIdHash: semantic === undefined ? undefined : hash(semantic),
+      wireHash: hash(wire),
+      actionSeq: Number.isSafeInteger(frame.actionSeq) ? frame.actionSeq : undefined,
+      commandSeq: Number.isSafeInteger(frame.commandSeq) ? frame.commandSeq : undefined,
       byteLength: Buffer.byteLength(wire),
     };
   };
@@ -142,25 +182,53 @@ function createServerSeam(config, book) {
       append({ ...record, event: "immediate", actualMonoMs: performance.now(), delivered });
       return { accepted: true, deliveryCount: 1 };
     }
-    const requestedClass = parsed.frameClass;
+    const requestedClass = parsed.frameClass === "ack" && parsed.ackKind
+      ? `ack:${parsed.ackKind}` : parsed.frameClass;
     const exactKey = [book.scenarioVersion, book.scenarioId, pilotSlot, phase,
       "authority-to-client", requestedClass, 1].join("|");
-    const frameClass = book.streams[exactKey] ? requestedClass : "unknown";
+    const baseKey = [book.scenarioVersion, book.scenarioId, pilotSlot, phase,
+      "authority-to-client", parsed.frameClass, 1].join("|");
+    const decisionClass = book.streams[exactKey] ? requestedClass : (book.streams[baseKey] ? parsed.frameClass : "unknown");
     const key = [book.scenarioVersion, book.scenarioId, pilotSlot, phase,
-      "authority-to-client", frameClass, 1].join("|");
+      "authority-to-client", decisionClass, 1].join("|");
     const ordinal = ordinals.get(key) || 0;
-    const decision = book.streams[key]?.[ordinal];
-    if (!decision) throw new Error(`server compiled decision exhaustion: ${key}#${ordinal}`);
+    const compiledDecision = book.streams[key]?.[ordinal];
+    if (!compiledDecision) throw new Error(`server compiled decision exhaustion: ${key}#${ordinal}`);
     ordinals.set(key, ordinal + 1);
+    let decision = { reorderWindow: 0, reorderBlock: ordinal, reorderOffset: 0,
+      maxBlockHoldMs: 0, reorderGroup: null, ...compiledDecision };
+    let blockDomain = key;
+    if (decision.reorderGroup) {
+      blockDomain = [pilotSlot, phase, "authority-to-client", decision.reorderGroup].join("|");
+      const groupOrdinal = groupOrdinals.get(blockDomain) || 0;
+      groupOrdinals.set(blockDomain, groupOrdinal + 1);
+      decision = { ...decision, reorderOrdinal: groupOrdinal,
+        reorderBlock: Math.floor(groupOrdinal / (decision.reorderWindow + 1)) };
+    }
+    const streamBlockKey = `${blockDomain}|${decision.reorderBlock}`;
+    blockCounts.set(streamBlockKey, (blockCounts.get(streamBlockKey) || 0) + 1);
+    if (!blockFirstAt.has(streamBlockKey)) blockFirstAt.set(streamBlockKey, now);
+    blockMaxHold.set(streamBlockKey, decision.maxBlockHoldMs || 0);
+    blockPhases.set(streamBlockKey, phase);
+    blockReleaseTimes.set(streamBlockKey,
+      Math.max(blockReleaseTimes.get(streamBlockKey) || 0, now + decision.delayMs));
     const item = { deliver, decision, cancelled: false, releaseAtMs: now + decision.delayMs,
-      enqueueOrdinal: nextEnqueueOrdinal++,
-      record: { ...record, frameClass, streamOrdinal: ordinal, decision,
+      enqueueOrdinal: nextEnqueueOrdinal++, streamBlockKey,
+      record: { ...record, decisionClass, streamOrdinal: ordinal, decision,
         scheduledReleaseMonoMs: now + decision.delayMs, enqueueOrdinal: nextEnqueueOrdinal - 1 } };
     append({ ...item.record, event: decision.omitted ? "omitted" : "queued" });
     if (!decision.omitted && decision.copies > 0) queue.push(item);
+    if (decision.omitted && blockCounts.get(streamBlockKey) >= decision.reorderWindow + 1
+      && !queue.some((queued) => queued.streamBlockKey === streamBlockKey)) {
+      blockCounts.delete(streamBlockKey); blockReleaseTimes.delete(streamBlockKey); blockFirstAt.delete(streamBlockKey);
+      blockMaxHold.delete(streamBlockKey); blockPhases.delete(streamBlockKey);
+    }
     if (decision.delayMs === 0) releaseDue();
     return { accepted: true, deliveryCount: decision.omitted ? 0 : decision.copies,
-      cancel() { item.cancelled = true; } };
+      cancel() {
+        if (!item.cancelled && !item.completed) append({ ...item.record, event: "cancelled", actualMonoMs: performance.now() });
+        item.cancelled = true;
+      } };
   };
   return {
     schedule,
@@ -171,7 +239,9 @@ function createServerSeam(config, book) {
       clearInterval(evidencePump);
       for (const item of queue) item.cancelled = true;
       queue.length = 0;
-      append({ event: "scheduler-stop", side: "authority", pending: 0 });
+      const pendingBlocks = blockCounts.size;
+      blockCounts.clear(); blockReleaseTimes.clear(); blockFirstAt.clear(); blockMaxHold.clear(); blockPhases.clear();
+      append({ event: "scheduler-stop", side: "authority", pending: 0, pendingBlocks });
       flushEvidence();
     },
   };

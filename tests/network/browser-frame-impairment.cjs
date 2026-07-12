@@ -21,24 +21,54 @@ function compileDecisionBook(fixture, scenarioId) {
   for (let pilot = 0; pilot < scenario.players; pilot += 1) {
     for (const phase of PHASES) {
       for (const direction of DIRECTIONS) {
-        for (const [frameClass, capacity] of Object.entries(fixture.decisionCapacity)) {
+        const capacities = { ...fixture.decisionCapacity, ...(scenario.decisionCapacity || {}) };
+        for (const [frameClass, capacity] of Object.entries(capacities)) {
           const key = [fixture.scenarioVersion, scenarioId, `pilot-${pilot}`, phase, direction, frameClass, 1].join("|");
-          derivedSeeds[key] = sha256(`${scenario.rootSeed}|${key}`).slice(0, 16);
+          derivedSeeds[key] = scenario.rules.faults
+            ? (BigInt(scenario.rootSeed) ^ crypto.createHash("sha256").update(key).digest().readBigUInt64BE(0))
+              .toString(16).padStart(16, "0")
+            : sha256(`${scenario.rootSeed}|${key}`).slice(0, 16);
           const next64 = createSplitMix64(BigInt(`0x${derivedSeeds[key]}`));
           const directionRule = scenario.rules.directions?.[direction] || scenario.rules;
           const impaired = !scenario.impairPhases || scenario.impairPhases.includes(phase);
           const baseDelayMs = impaired ? Number(directionRule.delayMs || 0) : 0;
           const jitterMs = impaired ? Number(directionRule.jitterMs || 0) : 0;
           streams[key] = Array.from({ length: capacity }, (_unused, streamOrdinal) => {
-            const draw = Number(next64() >> 11n) / UINT53;
-            const jitter = jitterMs === 0 ? 0 : Math.floor(draw * ((jitterMs * 2) + 1)) - jitterMs;
+            if (!scenario.rules.faults) {
+              const draw = Number(next64() >> 11n) / UINT53;
+              const jitter = jitterMs === 0 ? 0 : Math.floor(draw * ((jitterMs * 2) + 1)) - jitterMs;
+              return {
+                streamOrdinal,
+                copies: scenario.rules.copies,
+                baseDelayMs,
+                jitterMs,
+                delayMs: baseDelayMs + jitter,
+                omitted: scenario.rules.omitted,
+              };
+            }
+            const faultRule = impaired
+              ? (scenario.rules.faults?.[`pilot-${pilot}`]?.[direction]?.[frameClass] || {}) : {};
+            const jitterDraw = Number(next64() >> 11n) / UINT53;
+            const omitDraw = Number(next64() >> 11n) / UINT53;
+            const duplicateDraw = Number(next64() >> 11n) / UINT53;
+            const reorderDraw = Number(next64() >> 11n) / UINT53;
+            const jitter = jitterMs === 0 ? 0 : Math.floor(jitterDraw * ((jitterMs * 2) + 1)) - jitterMs;
+            const omitted = Boolean(scenario.rules.omitted) || omitDraw < Number(faultRule.omitRate || 0);
+            const copies = omitted ? 0
+              : (duplicateDraw < Number(faultRule.duplicateRate || 0) ? 2 : Number(scenario.rules.copies || 1));
+            const reorderWindow = Number(faultRule.reorderWindow || 0);
             return {
               streamOrdinal,
-              copies: scenario.rules.copies,
+              copies,
               baseDelayMs,
               jitterMs,
               delayMs: baseDelayMs + jitter,
-              omitted: scenario.rules.omitted,
+              omitted,
+              reorderWindow,
+              reorderGroup: reorderWindow === 0 ? null : (faultRule.reorderGroup || null),
+              maxBlockHoldMs: reorderWindow === 0 ? 0 : Number(faultRule.maxBlockHoldMs || 250),
+              reorderBlock: reorderWindow === 0 ? streamOrdinal : Math.floor(streamOrdinal / (reorderWindow + 1)),
+              reorderOffset: reorderWindow === 0 ? 0 : Math.floor(reorderDraw * (reorderWindow + 1)),
             };
           });
         }
@@ -78,6 +108,12 @@ function browserInitSource({ pilotSlot, decisionBook }) {
     const book = ${book};
     const queue = [];
     const ordinals = new Map();
+    const blockCounts = new Map();
+    const blockReleaseTimes = new Map();
+    const blockFirstAt = new Map();
+    const blockMaxHold = new Map();
+    const blockPhases = new Map();
+    const groupOrdinals = new Map();
     const evidence = [];
     let timeline = null;
     let stopped = false;
@@ -95,6 +131,8 @@ function browserInitSource({ pilotSlot, decisionBook }) {
           ackKind: frame.ackKind,
           inputSeq: Number.isSafeInteger(frame.inputSeq) ? frame.inputSeq : undefined,
           actionId: typeof frame.actionId === "string" ? frame.actionId : undefined,
+          actionSeq: Number.isSafeInteger(frame.actionSeq) ? frame.actionSeq : undefined,
+          commandSeq: Number.isSafeInteger(frame.commandSeq) ? frame.commandSeq : undefined,
           deliveryId: Number.isSafeInteger(frame.deliveryId) ? frame.deliveryId : undefined,
           eventSeq: Number.isSafeInteger(frame.eventSeq) ? frame.eventSeq : undefined,
           snapshotId: Number.isSafeInteger(frame.snapshotId) ? frame.snapshotId : undefined,
@@ -118,17 +156,48 @@ function browserInitSource({ pilotSlot, decisionBook }) {
     const releaseDue = () => {
       if (stopped) return;
       const now = performance.now();
-      queue.sort((left, right) => left.releaseAtMs - right.releaseAtMs
+      const currentPhase = phaseAt(now);
+      const ready = queue.filter((item) => item.cancelled || (item.releaseAtMs <= now
+        && (item.decision.reorderWindow === 0
+          || blockCounts.get(item.streamBlockKey) >= item.decision.reorderWindow + 1
+          || now - blockFirstAt.get(item.streamBlockKey) >= item.decision.maxBlockHoldMs
+          || currentPhase !== item.record.phase)));
+      ready.sort((left, right) => (blockReleaseTimes.get(left.streamBlockKey) || left.releaseAtMs)
+        - (blockReleaseTimes.get(right.streamBlockKey) || right.releaseAtMs)
+        || left.streamBlockKey.localeCompare(right.streamBlockKey)
+        || left.decision.reorderOffset - right.decision.reorderOffset
         || left.enqueueOrdinal - right.enqueueOrdinal);
-      while (queue.length > 0) {
-        const item = queue[0];
-        if (!item.cancelled && item.releaseAtMs > now) break;
-        queue.shift();
+      for (const item of ready) {
+        const index = queue.indexOf(item);
+        if (index >= 0) queue.splice(index, 1);
         if (item.cancelled) continue;
         let delivered = false;
-        for (let copy = 0; copy < item.decision.copies; copy += 1) delivered = item.deliver() !== false || delivered;
+        for (let copy = 0; copy < item.decision.copies; copy += 1) {
+          const copyDelivered = item.deliver() !== false;
+          delivered = copyDelivered || delivered;
+          boundedPush({ ...item.record, event: "copy-delivered", copyIndex: copy,
+            actualMonoMs: performance.now(), delivered: copyDelivered,
+            blockHoldMs: now - blockFirstAt.get(item.streamBlockKey) });
+        }
         boundedPush({ ...item.record, event: "released", actualMonoMs: now,
           overshootMs: Math.max(0, now - item.releaseAtMs), copies: item.decision.copies, delivered });
+        item.completed = true;
+      }
+      for (const key of new Set(ready.map((item) => item.streamBlockKey))) {
+        if (!queue.some((item) => item.streamBlockKey === key)) {
+          blockCounts.delete(key);
+          blockReleaseTimes.delete(key);
+          blockFirstAt.delete(key);
+          blockMaxHold.delete(key);
+          blockPhases.delete(key);
+        }
+      }
+      for (const [key, firstAt] of blockFirstAt) {
+        if (!queue.some((item) => item.streamBlockKey === key)
+          && (now - firstAt >= blockMaxHold.get(key) || currentPhase !== blockPhases.get(key))) {
+          blockCounts.delete(key); blockReleaseTimes.delete(key); blockFirstAt.delete(key);
+          blockMaxHold.delete(key); blockPhases.delete(key);
+        }
       }
     };
     const pump = setInterval(releaseDue, 5);
@@ -151,26 +220,54 @@ function browserInitSource({ pilotSlot, decisionBook }) {
         boundedPush({ ...record, event: "immediate", delivered, actualMonoMs: performance.now() });
         return { accepted: true, deliveryCount: 1 };
       }
-      const frameClass = Object.prototype.hasOwnProperty.call(book.streams,
-        [book.scenarioVersion, book.scenarioId, pilotSlot, phase, direction, parsed.frameClass, epochOrdinal].join("|"))
-        ? parsed.frameClass : "unknown";
-      const key = [book.scenarioVersion, book.scenarioId, pilotSlot, phase, direction, frameClass, epochOrdinal].join("|");
+      const requestedClass = parsed.frameClass === "ack" && parsed.ackKind
+        ? "ack:" + parsed.ackKind : parsed.frameClass;
+      const exactKey = [book.scenarioVersion, book.scenarioId, pilotSlot, phase, direction, requestedClass, epochOrdinal].join("|");
+      const baseKey = [book.scenarioVersion, book.scenarioId, pilotSlot, phase, direction, parsed.frameClass, epochOrdinal].join("|");
+      const decisionClass = Object.prototype.hasOwnProperty.call(book.streams, exactKey)
+        ? requestedClass : (Object.prototype.hasOwnProperty.call(book.streams, baseKey) ? parsed.frameClass : "unknown");
+      const key = [book.scenarioVersion, book.scenarioId, pilotSlot, phase, direction, decisionClass, epochOrdinal].join("|");
       const ordinal = ordinals.get(key) || 0;
       const decisions = book.streams[key];
-      const decision = decisions?.[ordinal];
-      if (!decision) throw new Error("compiled decision exhaustion: " + key + "#" + ordinal);
+      const compiledDecision = decisions?.[ordinal];
+      if (!compiledDecision) throw new Error("compiled decision exhaustion: " + key + "#" + ordinal);
       ordinals.set(key, ordinal + 1);
+      let decision = { reorderWindow: 0, reorderBlock: ordinal, reorderOffset: 0,
+        maxBlockHoldMs: 0, reorderGroup: null, ...compiledDecision };
+      let blockDomain = key;
+      if (decision.reorderGroup) {
+        blockDomain = [pilotSlot, phase, direction, decision.reorderGroup].join("|");
+        const groupOrdinal = groupOrdinals.get(blockDomain) || 0;
+        groupOrdinals.set(blockDomain, groupOrdinal + 1);
+        decision = { ...decision, reorderOrdinal: groupOrdinal,
+          reorderBlock: Math.floor(groupOrdinal / (decision.reorderWindow + 1)) };
+      }
+      const streamBlockKey = blockDomain + "|" + decision.reorderBlock;
+      blockCounts.set(streamBlockKey, (blockCounts.get(streamBlockKey) || 0) + 1);
+      if (!blockFirstAt.has(streamBlockKey)) blockFirstAt.set(streamBlockKey, now);
+      blockMaxHold.set(streamBlockKey, decision.maxBlockHoldMs || 0);
+      blockPhases.set(streamBlockKey, phase);
+      blockReleaseTimes.set(streamBlockKey,
+        Math.max(blockReleaseTimes.get(streamBlockKey) || 0, now + decision.delayMs));
       const item = { deliver, decision, cancelled: false, releaseAtMs: now + decision.delayMs,
-        enqueueOrdinal: nextEnqueueOrdinal++,
-        record: { ...record, frameClass, streamOrdinal: ordinal, decision,
+        enqueueOrdinal: nextEnqueueOrdinal++, streamBlockKey,
+        record: { ...record, decisionClass, streamOrdinal: ordinal, decision,
           scheduledReleaseMonoMs: now + decision.delayMs, enqueueOrdinal: nextEnqueueOrdinal - 1 } };
       boundedPush({ ...item.record, event: decision.omitted ? "omitted" : "queued" });
       if (!decision.omitted && decision.copies > 0) queue.push(item);
+      if (decision.omitted && blockCounts.get(streamBlockKey) >= decision.reorderWindow + 1
+        && !queue.some((queued) => queued.streamBlockKey === streamBlockKey)) {
+        blockCounts.delete(streamBlockKey); blockReleaseTimes.delete(streamBlockKey); blockFirstAt.delete(streamBlockKey);
+        blockMaxHold.delete(streamBlockKey); blockPhases.delete(streamBlockKey);
+      }
       if (decision.delayMs === 0) releaseDue();
       return {
         accepted: true,
         deliveryCount: decision.omitted ? 0 : decision.copies,
-        cancel() { item.cancelled = true; },
+        cancel() {
+          if (!item.cancelled && !item.completed) boundedPush({ ...item.record, event: "cancelled", actualMonoMs: performance.now() });
+          item.cancelled = true;
+        },
       };
     };
     globalThis.__LBH_FRAME_IMPAIRMENT__ = Object.freeze({
@@ -184,13 +281,15 @@ function browserInitSource({ pilotSlot, decisionBook }) {
       },
       rotateEpoch() { epochOrdinal += 1; return epochOrdinal; },
       drain() { return evidence.splice(0, evidence.length); },
-      status() { return { pilotSlot, queued: queue.length, evidence: evidence.length, epochOrdinal,
+      status() { return { pilotSlot, queued: queue.length, blocks: blockCounts.size,
+        evidence: evidence.length, epochOrdinal,
         phase: phaseAt(performance.now()), timeline }; },
       stop() {
         stopped = true;
         clearInterval(pump);
         for (const item of queue) item.cancelled = true;
         queue.length = 0;
+        blockCounts.clear(); blockReleaseTimes.clear(); blockFirstAt.clear(); blockMaxHold.clear(); blockPhases.clear();
         return { stopped: true, pending: 0 };
       },
     });
@@ -228,7 +327,19 @@ async function installMainResponseRewrite(page, fixture, onError) {
       if (sha256(source) !== expected.sha256) throw new Error("src/main.js source hash changed; refusing in-memory rewrite");
       const occurrences = source.split(expected.constructor).length - 1;
       if (occurrences !== 1) throw new Error(`Expected exactly one SimClient constructor marker, found ${occurrences}`);
-      const replacement = "simClient = new SimClient(simServerUrl, { transport: getConfiguredSimTransport(), scheduleStreamFrame: globalThis.__LBH_FRAME_IMPAIRMENT__?.schedule });";
+      const replacement = `simClient = new SimClient(simServerUrl, { transport: getConfiguredSimTransport(), scheduleStreamFrame: globalThis.__LBH_FRAME_IMPAIRMENT__?.schedule });
+      globalThis.__LBH_CONSUMED_EVENTS__ = [];
+      const __lbhConsumeEvents = simClient.consumeEvents.bind(simClient);
+      simClient.consumeEvents = () => {
+        const values = __lbhConsumeEvents();
+        for (const value of values) {
+          if (globalThis.__LBH_CONSUMED_EVENTS__.length >= 10000) throw new Error("consumed-event evidence capacity exceeded");
+          globalThis.__LBH_CONSUMED_EVENTS__.push({ eventSeq: value.seq, eventType: value.type,
+            eventPlayerId: value.payload?.clientId,
+            actualMonoMs: performance.now(), phase: globalThis.__LBH_FRAME_IMPAIRMENT__?.status().phase });
+        }
+        return values;
+      };`;
       const rewritten = source.replace(expected.constructor, replacement);
       const headers = (event.responseHeaders || []).filter((header) => header.name.toLowerCase() !== "content-length");
       await page.session.send("Fetch.fulfillRequest", {
