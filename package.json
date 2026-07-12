@@ -54,6 +54,7 @@
     "test:multiplayer-impairment:t2a": "node tests/run-all.cjs --lane=multiplayer-impairment-transport --renderer=three --no-retries",
     "test:multiplayer-impairment:t2b": "node tests/run-all.cjs --lane=multiplayer-impairment-transport-hard --renderer=three --no-retries",
     "test:multiplayer-impairment:t2": "npm run test:multiplayer-impairment:t2a && npm run test:multiplayer-impairment:t2b",
+    "test:multiplayer-impairment:t2-8p": "node tests/run-all.cjs --lane=multiplayer-impairment-transport-8p --renderer=three --no-retries",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
     "test:agent-eval": "node tests/run-all.cjs --lane=agent-eval --renderer=three",
     "test:package": "node tests/desktop-package.cjs && node tests/release-package.cjs",

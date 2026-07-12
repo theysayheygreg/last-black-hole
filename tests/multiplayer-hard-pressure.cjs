@@ -9,11 +9,14 @@ const { execFileSync } = require("child_process");
 const { runRawHardPressureCohort, runAllReadingControl } = require("./network/raw-ws-hard-pressure-cohort.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
-const fixturePath = path.join(__dirname, "fixtures/network-impairment/phase2-transport-hard-v1.json");
+const fixtureName = process.env.LBH_PRESSURE_FIXTURE || "phase2-transport-hard-v1.json";
+if (path.basename(fixtureName) !== fixtureName) throw new Error("LBH_PRESSURE_FIXTURE must be a fixture basename");
+const fixturePath = path.join(__dirname, "fixtures/network-impairment", fixtureName);
 const fixtureRaw = fs.readFileSync(fixturePath, "utf8");
 const fixture = JSON.parse(fixtureRaw);
 const stamp = new Date().toISOString().replace(/[:.]/g, "");
-const runDir = path.join(__dirname, "screenshots", `multiplayer-transport-${stamp}-t2b-${crypto.randomBytes(3).toString("hex")}`);
+const artifactLabel = fixture.artifactLabel || "t2b";
+const runDir = path.join(__dirname, "screenshots", `multiplayer-transport-${stamp}-${artifactLabel}-${crypto.randomBytes(3).toString("hex")}`);
 fs.mkdirSync(runDir, { recursive: false });
 
 function freePort() {
@@ -81,7 +84,8 @@ async function main() {
   fs.writeFileSync(path.join(runDir, "manifest.json"), `${JSON.stringify({ schemaVersion: 1,
     generatedAt: new Date().toISOString(), commit, dirty, diagnosticOnly,
     fixtureHash: crypto.createHash("sha256").update(fixtureRaw).digest("hex"), scenarioId: fixture.scenarioId,
-    seed: fixture.seed, topology: { matches: 2, dedicatedAuthoritiesPerMatch: 1, rawClientsPerMatch: fixture.pilotCount },
+    evidenceClass: fixture.evidenceClass, seed: fixture.seed,
+    topology: { matches: 2, dedicatedAuthoritiesPerMatch: 1, rawClientsPerMatch: fixture.pilotCount },
     ports, queuePolicy: fixture.queuePolicy, stimulus: fixture.stimulus,
     claimBoundary: "Local Node raw-WebSocket hard-pressure PR smoke only; no packet, browser, WAN, WSS, hosted, or capacity claim",
     runtime: { node: process.version, platform: process.platform, arch: process.arch, osRelease: os.release() } }, null, 2)}\n`, { flag: "wx" });

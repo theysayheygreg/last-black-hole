@@ -9,11 +9,14 @@ const { execFileSync } = require("child_process");
 const { runRawSlowReaderCohort, runAllReadingControl } = require("./network/raw-ws-slow-reader-cohort.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
-const fixturePath = path.join(__dirname, "fixtures/network-impairment/phase2-transport-v1.json");
+const fixtureName = process.env.LBH_PRESSURE_FIXTURE || "phase2-transport-v1.json";
+if (path.basename(fixtureName) !== fixtureName) throw new Error("LBH_PRESSURE_FIXTURE must be a fixture basename");
+const fixturePath = path.join(__dirname, "fixtures/network-impairment", fixtureName);
 const fixtureRaw = fs.readFileSync(fixturePath, "utf8");
 const fixture = JSON.parse(fixtureRaw);
 const stamp = new Date().toISOString().replace(/[:.]/g, "");
-const runDir = path.join(__dirname, "screenshots", `multiplayer-transport-${stamp}-t2a-${crypto.randomBytes(3).toString("hex")}`);
+const artifactLabel = fixture.artifactLabel || "t2a";
+const runDir = path.join(__dirname, "screenshots", `multiplayer-transport-${stamp}-${artifactLabel}-${crypto.randomBytes(3).toString("hex")}`);
 fs.mkdirSync(runDir, { recursive: false });
 
 function freePort() {
@@ -84,10 +87,13 @@ async function main() {
   fs.writeFileSync(path.join(runDir, "cleanup.json"), `${JSON.stringify(cleanup, null, 2)}\n`, { flag: "wx" });
   const manifest = { schemaVersion: 1, generatedAt: new Date().toISOString(), commit, dirty, diagnosticOnly,
     fixtureHash: crypto.createHash("sha256").update(fixtureRaw).digest("hex"), scenarioId: fixture.scenarioId,
+    evidenceClass: fixture.evidenceClass,
     topology: { matches: 2, dedicatedAuthoritiesPerMatch: 1, rawClientsPerMatch: fixture.pilotCount },
     ports,
     queuePolicy: fixture.queuePolicy, stimulus: fixture.stimulus,
-    claimBoundary: "Local Node raw-WebSocket read-gate and exact adapter pressure only; no packet, TCP receive-window, WAN, TLS, hosted, or capacity claim",
+    claimBoundary: fixture.pilotCount === 8
+      ? "Local Node raw-WebSocket 8-player pressure PR smoke only; no packet, browser, TCP receive-window, WAN, WSS, hosted, or capacity claim"
+      : "Local Node raw-WebSocket read-gate and exact adapter pressure only; no packet, TCP receive-window, WAN, TLS, hosted, or capacity claim",
     runtime: { node: process.version, platform: process.platform, arch: process.arch, osRelease: os.release() } };
   fs.writeFileSync(path.join(runDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });
   fs.writeFileSync(path.join(runDir, "connection-map.json"), `${JSON.stringify({

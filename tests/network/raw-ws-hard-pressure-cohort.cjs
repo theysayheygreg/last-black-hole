@@ -71,7 +71,8 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
       LBH_PRESSURE_PRELOAD_CONFIG: preloadConfig,
       NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require=${preload}`.trim() } });
     const started = await request(port, "/session/start", { method: "POST", accounting, category: "setup", body: {
-      mapId: "shallows", requesterId: "t2b-pilot-0", requesterName: "T2B Pilot 0", maxPlayers: 4 } });
+      mapId: "shallows", requesterId: "t2b-pilot-0", requesterName: "T2B Pilot 0",
+      maxPlayers: fixture.pilotCount } });
     if (started.status !== 200) throw new Error(`T2b session start failed: ${JSON.stringify(started.body)}`);
     for (let index = 0; index < fixture.pilotCount; index += 1) {
       const before = new Set(Object.keys((await request(port, "/health", { accounting })).body
@@ -96,6 +97,10 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
       connectionMap.push({ pilotSlot: `pilot-${index}`, schedulerOrdinals: [Number(added[0])],
         connectionEpochs: [welcome.connectionEpoch], transitions: [{ kind: "admission", at: welcome._receivedAt }] });
     }
+    if (connectionMap.length !== fixture.pilotCount
+      || new Set(connectionMap.map((entry) => entry.schedulerOrdinals[0])).size !== fixture.pilotCount) {
+      throw new Error(`T2b match did not admit exactly ${fixture.pilotCount} distinct raw clients`);
+    }
 
     const admittedHealth = (await request(port, "/health", { accounting })).body;
     const authorityPid = admittedHealth.process.pid;
@@ -106,8 +111,13 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
       || adapterPolicy.pressure.policy.reliableQueueBytes !== fixture.queuePolicy.maxReliableBytes) {
       throw new Error("T2b fixture does not match production adapter pressure limits");
     }
-    oldImpaired = clients.at(-1);
-    const oldMap = connectionMap.at(-1);
+    const impairedIndex = connectionMap.findIndex((entry) => entry.pilotSlot === fixture.impairedPilot);
+    if (impairedIndex < 0 || impairedIndex !== fixture.pilotCount - 1) {
+      throw new Error(`fixture impaired pilot must be the final admitted identity: ${fixture.impairedPilot}`);
+    }
+    oldImpaired = clients[impairedIndex];
+    const oldMap = connectionMap[impairedIndex];
+    const impairedAuthority = authorities[impairedIndex];
     const oldOrdinal = oldMap.schedulerOrdinals[0];
     const oldWelcome = oldImpaired.frames.find((frame) => frame.type === "welcome");
     const authorityPong = await waitFor(() => readJsonl(pressureFile).find((event) =>
@@ -129,8 +139,8 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
     const issued = [];
     for (let index = 0; index < fixture.stimulus.count; index += 1) {
       const unequip = index % 2 === 0;
-      const response = await request(port, "/inventory/action", { method: "POST", authority: authorities.at(-1),
-        accounting, category: "controllerStimulus", body: command(authorities.at(-1), index + 1, unequip
+      const response = await request(port, "/inventory/action", { method: "POST", authority: impairedAuthority,
+        accounting, category: "controllerStimulus", body: command(impairedAuthority, index + 1, unequip
           ? { action: "unequip", equipSlot: 0 }
           : { action: "equipCargo", cargoSlot: 0, equipSlot: 0 }) });
       if (response.status !== 200) throw new Error(`T2b stimulus ${index + 1} failed`);
@@ -201,7 +211,7 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
     const resumeTicket = await request(port, "/multiplayer/ticket", { method: "POST", authority: oldWelcome,
       accounting, category: "setup", body: { kind: "resume" } });
     replacement = await openRawClient({ port, ticket: resumeTicket.body.ticket, kind: "resume", cursors: cursor,
-      pilotSlot: "pilot-3-epoch-2", record, maxFrames: fixture.evidence.maxRawFramesPerClient });
+      pilotSlot: fixture.replacementPilot, record, maxFrames: fixture.evidence.maxRawFramesPerClient });
     clients.push(replacement);
     const afterResume = Object.keys((await request(port, "/health", { accounting })).body
       .multiplayer.adapter.pressure.connections);
@@ -249,9 +259,11 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
     const finalHealth = (await request(port, "/health", { accounting })).body;
     events = readJsonl(pressureFile);
     const details = finalHealth.multiplayer.adapter.pressure.connections;
-    const healthy = connectionMap.slice(0, -1).map(({ schedulerOrdinals }) => ({
+    const healthy = connectionMap.filter((_, index) => index !== impairedIndex).map(({ schedulerOrdinals }) => ({
       schedulerConnectionId: schedulerOrdinals[0], ...details[String(schedulerOrdinals[0])] }));
-    if (healthy.some((entry) => entry.counts.highWaterCrossings || entry.counts.rebases
+    if (healthy.length !== fixture.pilotCount - 1
+      || healthy.some((entry) => entry.connectionEpoch !== 1
+      || entry.counts.highWaterCrossings || entry.counts.rebases
       || entry.counts.disconnects || entry.maximum.wsBufferedBytes >= fixture.queuePolicy.transportHighWaterBytes)) {
       throw new Error("T2b healthy-peer isolation failed");
     }
@@ -261,7 +273,9 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
     if (clients.slice(0, -2).some((client) => client.close || client.error) || replacement.close || replacement.error) {
       throw new Error("T2b healthy/replacement raw client error or close observed");
     }
-    if (accounting.setup !== 10 || accounting.controllerStimulus !== 8 || accounting.clientHotPath !== 0) {
+    const expectedSetupRequests = 2 + (fixture.pilotCount * 2);
+    if (accounting.setup !== expectedSetupRequests || accounting.controllerStimulus !== fixture.stimulus.count
+      || accounting.clientHotPath !== 0) {
       throw new Error(`T2b HTTP accounting mismatch: ${JSON.stringify(accounting)}`);
     }
     if (events.length > fixture.evidence.maxPressureEvents || readerEvents > fixture.evidence.maxRawReaderEvents
@@ -276,11 +290,11 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
     if (replayAccepted.length !== 8 || replayRetired.length !== 8) throw new Error("T2b replacement ledger cardinality failed");
     const readerLedger = readJsonl(readerFile);
     const replacementBaselineAcks = readerLedger.filter((event) => event.type === "baseline-ack"
-      && event.pilotSlot === "pilot-3-epoch-2");
+      && event.pilotSlot === fixture.replacementPilot);
     const replayDeliveryAcks = readerLedger.filter((event) => event.type === "delivery-ack"
-      && event.pilotSlot === "pilot-3-epoch-2" && stableEventSeqs.includes(event.eventSeq));
+      && event.pilotSlot === fixture.replacementPilot && stableEventSeqs.includes(event.eventSeq));
     const replayEventAcks = readerLedger.filter((event) => event.type === "event-ack"
-      && event.pilotSlot === "pilot-3-epoch-2" && stableEventSeqs.includes(event.eventSeq));
+      && event.pilotSlot === fixture.replacementPilot && stableEventSeqs.includes(event.eventSeq));
     if (replacementBaselineAcks.length !== 1 || replayDeliveryAcks.length !== 8 || replayEventAcks.length !== 8
       || stableEventSeqs.some((eventSeq) => replayDeliveryAcks.filter((event) => event.eventSeq === eventSeq).length !== 1
         || replayEventAcks.filter((event) => event.eventSeq === eventSeq).length !== 1)) {

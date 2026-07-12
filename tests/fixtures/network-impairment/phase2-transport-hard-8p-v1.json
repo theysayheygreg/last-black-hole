@@ -1,11 +1,12 @@
 {
   "schemaVersion": 1,
-  "scenarioId": "T2b-slow-reader-hard",
-  "seed": "0x0412510B",
-  "pilotCount": 4,
-  "impairedPilot": "pilot-3",
-  "replacementPilot": "pilot-3-epoch-2",
-  "evidenceClass": "local-pr-smoke",
+  "scenarioId": "T2b-8-slow-reader-hard",
+  "artifactLabel": "t2b-8p",
+  "seed": "0x0812510B",
+  "pilotCount": 8,
+  "impairedPilot": "pilot-7",
+  "replacementPilot": "pilot-7-epoch-2",
+  "evidenceClass": "local-raw-websocket-8p-pr-smoke",
   "controlDurationMs": 5000,
   "queuePolicy": {
     "maxBytes": 524288,
@@ -24,10 +25,10 @@
     "actions": ["unequip", "equipCargo", "unequip", "equipCargo", "unequip", "equipCargo", "unequip", "equipCargo"]
   },
   "evidence": {
-    "maxPressureEvents": 20000,
-    "maxRawReaderEvents": 2000,
+    "maxPressureEvents": 30000,
+    "maxRawReaderEvents": 4000,
     "maxRawFramesPerClient": 2000,
-    "maxStateLedgerEntries": 10000,
-    "maxReliableLedgerEntries": 1000
+    "maxStateLedgerEntries": 15000,
+    "maxReliableLedgerEntries": 1500
   }
 }

@@ -65,7 +65,7 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
       NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require=${preload}`.trim(),
     } });
     const started = await request(port, "/session/start", { method: "POST", accounting: httpAccounting, category: "setup", body: {
-      mapId: "shallows", requesterId: "t2a-pilot-0", requesterName: "T2A Pilot 0", maxPlayers: 4,
+      mapId: "shallows", requesterId: "t2a-pilot-0", requesterName: "T2A Pilot 0", maxPlayers: fixture.pilotCount,
     } });
     if (started.status !== 200) throw new Error(`session start failed: ${JSON.stringify(started.body)}`);
     for (let index = 0; index < fixture.pilotCount; index += 1) {
@@ -91,11 +91,21 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
       if (added.length !== 1) throw new Error(`admission did not add exactly one scheduler ordinal: ${JSON.stringify({ beforeKeys: [...beforeKeys], afterKeys })}`);
       connectionMap.push({ pilotSlot: `pilot-${index}`, schedulerConnectionId: Number(added[0]), connectionEpochs: [1] });
     }
+    if (connectionMap.length !== fixture.pilotCount
+      || new Set(connectionMap.map((entry) => entry.schedulerConnectionId)).size !== fixture.pilotCount) {
+      throw new Error(`pressure match did not admit exactly ${fixture.pilotCount} distinct raw clients`);
+    }
     healthAtAdmission = (await request(port, "/health", { accounting: httpAccounting })).body;
     const authorityPid = healthAtAdmission.process?.pid;
     if (!Number.isSafeInteger(authorityPid)) throw new Error("one dedicated match authority PID unavailable");
-    const impaired = clients.at(-1);
-    const ordinal = connectionMap.at(-1).schedulerConnectionId;
+    const impairedIndex = connectionMap.findIndex((entry) => entry.pilotSlot === fixture.impairedPilot);
+    if (impairedIndex < 0 || impairedIndex !== fixture.pilotCount - 1) {
+      throw new Error(`fixture impaired pilot must be the final admitted identity: ${fixture.impairedPilot}`);
+    }
+    const impaired = clients[impairedIndex];
+    const impairedMap = connectionMap[impairedIndex];
+    const impairedAuthority = authorities[impairedIndex];
+    const ordinal = impairedMap.schedulerConnectionId;
     const authorityPong = await waitFor(() => readJsonl(pressureFile).find((event) =>
       event.type === "heartbeat-pong" && event.schedulerConnectionId === ordinal),
     "authority-validated impaired heartbeat pong", 15000);
@@ -120,9 +130,9 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
     const issued = [];
     for (let index = 0; index < fixture.stimulus.count; index += 1) {
       const unequip = index % 2 === 0;
-      const result = await request(port, "/inventory/action", { method: "POST", authority: authorities.at(-1),
+      const result = await request(port, "/inventory/action", { method: "POST", authority: impairedAuthority,
         accounting: httpAccounting, category: "controllerStimulus",
-        body: command(authorities.at(-1), index + 1, unequip
+        body: command(impairedAuthority, index + 1, unequip
           ? { action: "unequip", equipSlot: 0 }
           : { action: "equipCargo", cargoSlot: 0, equipSlot: 0 }) });
       if (result.status !== 200) throw new Error(`stimulus ${index + 1} failed: ${JSON.stringify(result.body)}`);
@@ -251,13 +261,13 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
         cleanupTransitionsDuringAudit: cleanupDuringAudit.length },
       replayed: { provenance: "raw received delivery-id multiplicity plus rebase and epoch evidence",
         duplicateReceivedIds: replayedReliableIds, rebaseTransitionsDuringAudit: rebaseDuringAudit.length,
-        observedConnectionEpochs: connectionMap.at(-1).connectionEpochs },
+        observedConnectionEpochs: impairedMap.connectionEpochs },
     };
     if (reliableIdentityLedger.length !== 8
       || new Set(reliableIdentityLedger.map((entry) => entry.reliableId)).size !== 8
       || finalHealth.multiplayer.adapter.pressure.connections[String(ordinal)].current.reliableMessages !== 0
       || cleanupResetReliableIds.length !== 0 || replayedReliableIds.length !== 0
-      || rebaseDuringAudit.length !== 0 || connectionMap.at(-1).connectionEpochs.length !== 1) {
+      || rebaseDuringAudit.length !== 0 || impairedMap.connectionEpochs.length !== 1) {
       throw new Error("T2a reliable identity-set closure failed");
     }
     const coalesced = pressureEvents.filter((event) => event.type === "state-coalesced"
@@ -358,15 +368,19 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
       })}`);
     }
     const details = finalHealth.multiplayer.adapter.pressure.connections;
-    const healthy = connectionMap.slice(0, -1).map(({ schedulerConnectionId }) => ({
+    const healthy = connectionMap.filter((_, index) => index !== impairedIndex).map(({ schedulerConnectionId }) => ({
       schedulerConnectionId, ...details[String(schedulerConnectionId)],
     }));
-    if (healthy.some((entry) => entry.maximum.wsBufferedBytes >= fixture.queuePolicy.transportHighWaterBytes
+    if (healthy.length !== fixture.pilotCount - 1
+      || healthy.some((entry) => entry.connectionEpoch !== 1
+      || entry.maximum.wsBufferedBytes >= fixture.queuePolicy.transportHighWaterBytes
       || entry.counts.highWaterCrossings !== 0 || entry.counts.rebases !== 0 || entry.counts.disconnects !== 0)) {
       throw new Error("T2a healthy-peer pressure isolation failed");
     }
     if (clients.some((client) => client.error || client.close)) throw new Error("T2a raw client error/close observed");
-    if (httpAccounting.setup !== 9 || httpAccounting.controllerStimulus !== 8 || httpAccounting.clientHotPath !== 0) {
+    const expectedSetupRequests = 1 + (fixture.pilotCount * 2);
+    if (httpAccounting.setup !== expectedSetupRequests
+      || httpAccounting.controllerStimulus !== fixture.stimulus.count || httpAccounting.clientHotPath !== 0) {
       throw new Error(`T2a HTTP accounting mismatch: ${JSON.stringify(httpAccounting)}`);
     }
     const pressureCost = finalHealth.multiplayer.projection.accounting.costDistributions;
@@ -453,7 +467,8 @@ async function runAllReadingControl({ fixture, runDir, port }) {
       LBH_PRESSURE_PRELOAD_CONFIG: preloadConfig,
       NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require=${preload}`.trim() } });
     const started = await request(port, "/session/start", { method: "POST", accounting, category: "setup",
-      body: { mapId: "shallows", requesterId: "t2a-control-0", requesterName: "T2A Control 0", maxPlayers: 4 } });
+      body: { mapId: "shallows", requesterId: "t2a-control-0", requesterName: "T2A Control 0",
+        maxPlayers: fixture.pilotCount } });
     for (let index = 0; index < fixture.pilotCount; index += 1) {
       const beforeKeys = new Set(Object.keys((await request(port, "/health", { accounting })).body
         .multiplayer.adapter.pressure.connections));
@@ -472,6 +487,10 @@ async function runAllReadingControl({ fixture, runDir, port }) {
       const added = keys.filter((key) => !beforeKeys.has(key));
       if (added.length !== 1) throw new Error("control admission scheduler mapping was not exact");
       connectionMap.push({ pilotSlot: `pilot-${index}`, schedulerConnectionId: Number(added[0]), connectionEpochs: [1] });
+    }
+    if (connectionMap.length !== fixture.pilotCount
+      || new Set(connectionMap.map((entry) => entry.schedulerConnectionId)).size !== fixture.pilotCount) {
+      throw new Error(`control match did not admit exactly ${fixture.pilotCount} distinct raw clients`);
     }
     await waitFor(() => {
       const events = readJsonl(pressureFile).filter((event) => event.type === "heartbeat-pong");
