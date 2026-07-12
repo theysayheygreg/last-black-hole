@@ -376,6 +376,14 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       }
     }
   };
+  const validInventoryConsequenceAction = (seat) => {
+    const state = clients[seat].latestFrames.ownerState?.state;
+    const cargo = Array.isArray(state?.cargo) ? state.cargo : [];
+    const equipped = Array.isArray(state?.equipped) ? state.equipped : [];
+    if (equipped[0] && cargo.includes(null)) return "unequip";
+    if (cargo[0]) return "dropCargo";
+    throw new Error(`seat ${seat} lacks an owner-observed valid inventory consequence precondition`);
+  };
   const issueInventoryConsequence = async (seat, action, semanticId, { withhold = false } = {}) => {
     const beforeFrames = clients.map((client) => client.frames.length);
     if (withhold) {
@@ -386,7 +394,14 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       : { action, cargoSlot: 0, equipSlot: 0 };
     const response = await request(port, "/inventory/action", { method: "POST", authority: authorities[seat], accounting,
       body: command(authorities[seat], ++commandSeq[seat], body) });
-    if (response.status !== 200) throw new Error(`cycle inventory action ${semanticId} returned ${response.status}`);
+    if (response.status !== 200) {
+      const safeReasons = new Set(["No active session", "Player is not alive", "Invalid cargo slot",
+        "No cargo item in slot", "Invalid equip slot", "Cargo item is not equippable",
+        "No equipped item in slot", "Cargo full", "Invalid consumable slot", "No consumable in slot",
+        "Consumable slot has a pending use", "Unknown inventory action"]);
+      const reason = safeReasons.has(response.body?.error) ? response.body.error : "unclassified-authority-rejection";
+      throw new Error(`cycle inventory action ${semanticId} returned ${response.status} (${reason})`);
+    }
     const consequence = await waitFor(() => clients[seat].frames.slice(beforeFrames[seat]).find((frame) => frame.type === "event"
       && frame.eventType === "player.inventoryAction" && frame.payload?.action === action),
     `cycle consequence ${semanticId}`, 5000);
@@ -431,7 +446,8 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const old = clients[seat];
     const oldWelcome = old.latestFrames.welcome;
     const publicState = old.latestFrames.publicState;
-    const cycle = await issueInventoryConsequence(seat, "unequip", "cycle-reconnect-seat-4", { withhold: true });
+    const cycle = await issueInventoryConsequence(seat, validInventoryConsequenceAction(seat),
+      "cycle-reconnect-seat-4", { withhold: true });
     const beforeHealth = await getHealth(Math.round(performance.now() - monotonicStarted));
     const before = new Set(Object.keys(beforeHealth.raw.multiplayer.adapter.pressure.connections || {}));
     terminateRawClient(old);
@@ -485,7 +501,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const healthy = healthySnapshot(seat);
     const oldAuthority = authorities[seat];
     const departedClient = clients[seat];
-    const departed = await issueInventoryConsequence(seat, "unequip", "cycle-leave-seat-5");
+    const departed = await issueInventoryConsequence(seat, validInventoryConsequenceAction(seat), "cycle-leave-seat-5");
     const invalidatedTicket = await issueTicket(seat, "resume");
     const left = await request(port, "/leave", { method: "POST", authority: oldAuthority, accounting,
       body: command(oldAuthority, ++commandSeq[seat], { playerId: oldAuthority.playerId }) });
