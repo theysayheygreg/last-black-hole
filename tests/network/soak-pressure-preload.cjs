@@ -13,7 +13,14 @@ let installed = false;
 adapterModule.createSimWebSocketAdapter = function createSoakObservedAdapter(options) {
   if (installed) throw new Error("soak pressure observer supports exactly one authority");
   installed = true;
-  return original({ ...options, onPressureTransition() { return true; } });
+  let cleanupRecords = 0;
+  return original({ ...options, onPressureTransition(event) {
+    if (event.type === "connection-cleanup" && process.env.LBH_SOAK_PRESSURE_CLEANUP_FILE) {
+      if (++cleanupRecords > 32) throw new Error("soak pressure cleanup evidence exceeded 32 records");
+      fs.appendFileSync(process.env.LBH_SOAK_PRESSURE_CLEANUP_FILE, `${JSON.stringify(event)}\n`);
+    }
+    return true;
+  } });
 };
 
 const gcFile = process.env.LBH_SOAK_GC_FILE;

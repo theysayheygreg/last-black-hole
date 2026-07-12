@@ -131,9 +131,11 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   const gcFile = path.join(runDir, "forced-gc.jsonl");
   const diagnosticsCleanupFile = path.join(runDir, "diagnostics-cleanup.jsonl");
   const resourceFile = path.join(runDir, "authority-resources.jsonl");
+  const pressureCleanupFile = path.join(runDir, "pressure-cleanup.jsonl");
   fs.writeFileSync(gcFile, "", { flag: "wx" });
   fs.writeFileSync(diagnosticsCleanupFile, "", { flag: "wx" });
   fs.writeFileSync(resourceFile, "", { flag: "wx" });
+  fs.writeFileSync(pressureCleanupFile, "", { flag: "wx" });
   const readJsonl = (file) => fs.readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
   const clients = Array(8).fill(null);
   const allClients = [];
@@ -195,6 +197,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   const fencedClients = [];
   let heldEventTarget = null;
   let heldEventObserved = null;
+  let reconnectDrainEvidence = null;
   let maxScheduleLatenessMs = 0;
   let lastDiagnosticStatus = null;
   let authorityMonotonicOrigin = null;
@@ -290,11 +293,46 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   const reliableDrainComplete = ({ raw, safe }) => {
     const current = safe.adapter.pressureCurrent || {};
     const replay = raw.multiplayer?.adapter?.eventReplay || {};
+    const live = Object.entries(safe.adapter.pressureConnections || {});
+    const cleanup = readJsonl(pressureCleanupFile);
+    const oldFact = reconnectDrainEvidence ? eventAckFacts.get(reconnectDrainEvidence.oldAckKey) : null;
+    const successorFact = reconnectDrainEvidence ? eventAckFacts.get(reconnectDrainEvidence.successorAckKey) : null;
+    const exactNamedHold = !reconnectDrainEvidence || (reconnectDrainEvidence.oldEpoch + 1 === reconnectDrainEvidence.newEpoch
+      && reconnectDrainEvidence.oldEventSeq === reconnectDrainEvidence.successorEventSeq
+      && reconnectDrainEvidence.oldConsequenceHash === reconnectDrainEvidence.successorConsequenceHash
+      && oldFact?.decisions === 1 && oldFact.withheld === true && oldFact.deliveryAcks === 0 && oldFact.eventAcks === 0
+      && successorFact?.decisions === 1 && successorFact.withheld === false
+      && successorFact.deliveryAcks === 1 && successorFact.eventAcks === 1);
+    const exactPhysicalFacts = [...eventAckFacts.entries()].every(([key, fact]) => key === reconnectDrainEvidence?.oldAckKey
+      ? fact.decisions === 1 && fact.withheld === true && fact.deliveryAcks === 0 && fact.eventAcks === 0
+      : fact.decisions === 1 && fact.withheld === false && fact.deliveryAcks === 1 && fact.eventAcks === 1);
+    const liveReliability = live.every(([, entry]) => entry.current?.reliableMessages === 0
+      && entry.counts?.reliableQueued === entry.counts?.reliableWsSendAccepted
+      && entry.counts?.reliableQueued === entry.counts?.reliableAckRetired
+      && entry.counts?.reliableResetOnCleanup === 0);
+    const allCounts = [...live.map(([, entry]) => entry.counts || {}), ...cleanup.map((entry) => entry.pressure?.counts || {})];
+    const sums = allCounts.reduce((total, counts) => ({
+      queued: total.queued + (counts.reliableQueued || 0),
+      accepted: total.accepted + (counts.reliableWsSendAccepted || 0),
+      retired: total.retired + (counts.reliableAckRetired || 0),
+      reset: total.reset + (counts.reliableResetOnCleanup || 0),
+    }), { queued: 0, accepted: 0, retired: 0, reset: 0 });
+    const exactCleanupReset = !reconnectDrainEvidence || (sums.reset === 1
+      && cleanup.filter((entry) => (entry.pressure?.counts?.reliableResetOnCleanup || 0) > 0).length === 1
+      && cleanup.find((entry) => (entry.pressure?.counts?.reliableResetOnCleanup || 0) > 0)
+        ?.schedulerConnectionId === reconnectDrainEvidence.oldOrdinal
+      && live.every(([ordinal, entry]) => Number(ordinal) !== reconnectDrainEvidence.oldOrdinal
+        && entry.counts?.reliableResetOnCleanup === 0));
     return safe.adapter.queuedMessages === 0 && safe.adapter.queuedBytes === 0
       && safe.adapter.pendingScheduledSends === 0
       && Object.values(current).every((metric) => metric.total === 0)
       && replay.pendingEventFrames === 0 && replay.pendingEventBytes === 0
-      && replay.replayedEvents === replay.eventAcks;
+      && replay.replayedEvents >= replay.eventAcks
+      && replay.replayedEvents - replay.eventAcks === eventAckLedger.withheld
+      && replay.duplicatePendingEvents === 0 && replay.forcedRebases === 0
+      && exactNamedHold && exactPhysicalFacts && liveReliability
+      && sums.accepted === sums.queued && sums.queued === sums.retired + sums.reset
+      && exactCleanupReset;
   };
   const issueTicket = async (seat, kind) => {
     const response = await request(port, "/multiplayer/ticket", { method: "POST", authority: authorities[seat], accounting,
@@ -482,6 +520,19 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
         && frame.eventType === replay.eventType).length !== 1) {
       throw new Error("named consequence replay was not exact once per old/new physical epoch");
     }
+    const oldEvent = old.frames.find((frame) => frame.type === "event"
+      && frame.eventSeq === cycle.consequence.eventSeq && frame.eventType === cycle.consequence.eventType);
+    reconnectDrainEvidence = {
+      oldAckKey: `${old.pilotSlot}:${oldEvent.eventSeq}:${oldEvent.deliveryId}`,
+      successorAckKey: `${next.pilotSlot}:${replay.eventSeq}:${replay.deliveryId}`,
+      oldEpoch: oldWelcome.connectionEpoch,
+      newEpoch: welcome.connectionEpoch,
+      oldOrdinal: ordinals[seat].at(-2),
+      oldEventSeq: oldEvent.eventSeq,
+      successorEventSeq: replay.eventSeq,
+      oldConsequenceHash: digest(salt, `${seat}:${oldEvent.eventSeq}`),
+      successorConsequenceHash: digest(salt, `${seat}:${replay.eventSeq}`),
+    };
     heldEventTarget = null;
     heldEventObserved = null;
     files["reliable-ledger"]({ type: "cycle-replay-retired", seat, semanticHash: digest(salt, "cycle-reconnect-seat-4"),
@@ -674,6 +725,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       LBH_SOAK_GC_FILE: gcFile,
       LBH_SOAK_DIAGNOSTICS_CLEANUP_FILE: diagnosticsCleanupFile,
       LBH_SOAK_RESOURCE_FILE: resourceFile,
+      LBH_SOAK_PRESSURE_CLEANUP_FILE: pressureCleanupFile,
       NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require=${pressurePreload}`.trim() } });
     const start = await request(port, "/session/start", { method: "POST", accounting, body: {
       mapId: "shallows", requesterId: "soak-seat-0", requesterName: "Soak Seat 0", maxPlayers: 8 } });
