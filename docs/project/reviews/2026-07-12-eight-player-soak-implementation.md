@@ -30,7 +30,10 @@ and must never be reported as long-duration or leak evidence.
 Do not build another protocol client, admission path, or result oracle.
 
 - Use `tests/network/raw-ws-client.cjs` for authenticated stream clients and
-  the accepted per-identity receive/ACK ledgers.
+  the accepted per-identity receive/ACK ledgers. Add one default-immediate,
+  test-owned per-event ACK predicate for churn: only the named consequence may
+  withhold both its delivery ACK and event ACK. Log the held identity and fail
+  if any other ACK is withheld; the default client path stays immediate.
 - Extract or parameterize the cohort lifecycle used by
   `tests/network/raw-ws-slow-reader-cohort.cjs` and
   `tests/network/raw-ws-hard-pressure-cohort.cjs`; preserve its ordinal
@@ -129,8 +132,10 @@ run, not a mathematically paired performance sample on the same process.
 
 - `t=0..10m`: admit and align eight clients as above.
 - `t=10..80m`: execute fourteen five-minute cycles. Cycle `n` starts at
-  `t = 10m + n * 5m`; its target seat is `4 + (n mod 4)`, so the four rotating
-  seats are exercised evenly while seats 0--3 stay as continuous controls.
+  `t = 10m + n * 5m`; its target seat is `4 + (floor(n / 2) mod 4)`. Each seat
+  receives reconnect and leave/join before the sequence repeats; fourteen
+  cycles distribute the unavoidable remainder across the first three rotating
+  seats while seats 0--3 stay as continuous controls.
 - `t=80..90m`: hold the final eight clients stable, drain all reliable work,
   and prove the authority returns to the steady envelope before cleanup.
 
@@ -138,9 +143,10 @@ Even cycles exercise reconnect; odd cycles exercise physical leave/join:
 
 ### Even cycle `n`: same-membership reconnect
 
-1. At `cycle+0s`, issue a named reliable action. Continue reading but use the
-   raw client's existing test-owned event-ACK gate to withhold only the named
-   consequence's delivery ACK. Wait for authority acceptance and application
+1. At `cycle+0s`, issue the cycle's named reliable action instead of any
+   coincident background action. Continue reading but use the default-immediate
+   test-owned ACK predicate to withhold both delivery and event ACK only for
+   that named consequence. Wait for authority acceptance and application
    receipt; do not pause TCP or other ACK/input traffic.
 2. At `cycle+5s`, close only that client's stream abruptly. Record the old
    ordinal, socket hash, connection id/epoch, cursors, and pending identity.
@@ -170,6 +176,13 @@ Even cycles exercise reconnect; odd cycles exercise physical leave/join:
 Only one seat churns at a time. No artificial pause, proxy, lowered queue cap,
 or giant payload is used. Every non-target live client must preserve its socket,
 epoch, baseline count, private projection, and continuous input/ACK progress.
+The schedule compiler gives every coincident barrier a total order: cycle
+transition, cycle-owned action, admission/recovery, quiet checkpoint, then
+background action. A cycle-owned action replaces a background action at the
+same timestamp. During each churn cycle, the forced-GC checkpoint runs at
+`cycle+150s`, after recovery; issuance pauses, reliable work drains, GC/sample
+runs, then issuance resumes. All omissions and deferrals are part of the
+committed schedule hash.
 
 ## Measurements and slope method
 
@@ -182,12 +195,14 @@ RED.
 
 At declared quiet checkpoints, stop new action issuance, drain current reliable
 work, invoke `global.gc()` twice, wait two seconds, then sample heap. Checkpoints
-occur every 150 seconds in the 45-minute profile and every five minutes in the
-90-minute profile, yielding at least twelve post-warm-up points in each. Exclude
-the five seconds before and after each checkpoint from cadence, event-loop, GC,
-and CPU performance distributions, but include it in wall-time and correctness
-ledgers. Missing `global.gc`, a failed drain, or fewer than twelve valid points
-is RED.
+occur every 150 seconds in the 45-minute profile and at `cycle+150s` in each
+five-minute churn cycle, yielding at least twelve post-warm-up points in each.
+Tag and exclude the complete one-minute aggregate window containing a forced-GC
+checkpoint from cadence, event-loop, GC, and CPU performance gates; it still
+counts toward sampling coverage and wall-time/correctness ledgers. Every p99/max
+gate applies independently to each non-excluded minute; never compute a
+percentile of per-minute percentiles. Missing `global.gc`, a failed drain, or
+fewer than twelve valid points is RED.
 
 Use Theil-Sen bytes/minute across post-GC `heapUsed` points as the leak gate.
 Also report ordinary least-squares slope/R-squared as diagnostic, one-minute
@@ -204,7 +219,8 @@ Persist at least:
 - event-loop delay p50/p95/p99/max;
 - observed authority and projection Hz per minute; sim-tick and completed
   projection p50/p95/p99/max;
-- overload mode/transitions, scheduler lateness, missed/late tick counts;
+- overload mode and transitions; scheduler-lateness or missed-tick fields are
+  not claimed until the authority exposes a first-class source;
 - aggregate and per-ordinal application/reliable/replay/inbound/pending/
   scheduled queue current/max bytes and messages, high-water/policy facts;
 - tickets issued/redeemed/expired/invalidated/pending/retained;
@@ -237,7 +253,7 @@ capacity.
 | Isolation | non-target clients have uninterrupted input/ACK progress and no epoch/rebase change; owner-private markers never appear outside their owner |
 | Traffic | uncompressed application traffic is measured, not hidden; <=2.5 MB/s aggregate steady eight-player full-JSON regression ceiling and no client exceeds 2x cohort median outside its scheduled recovery window |
 | Recovery | each reconnect/replacement aligned by `cycle+20s`; client count returns to eight within 15 s; final ten-minute churn window satisfies the steady cadence/queue gates |
-| Cleanup | zero clients/connections/bound or closing states/queues/tickets, only the known pre-shutdown liveness timer, then zero timers after shutdown; every owned PID, port, handle, profile, and registry is gone |
+| Cleanup | zero clients/connections/bound or closing states/queues/tickets; before authority shutdown only the adapter liveness timer plus explicitly enumerated soak sampler resources may remain; after sampler and authority shutdown every owned timer, observer, histogram, PID, port, handle, profile, and registry is gone |
 
 The traffic ceiling reflects the current measured full-JSON loopback baseline
 (about 1.93 MB/s at eight), not the 64 KiB/s/player shipping target. Crossing
@@ -273,8 +289,10 @@ HTTP evidence must classify every call by method/path/status and reject unknown
 or debug routes. Bind listeners to loopback on OS-assigned/free verified ports;
 record actual ports and ownership. Cleanup is signal-safe and idempotent: stop
 issuance, settle active cycle work, close clients, collect final diagnostics,
-stop the authority, close helper/control listeners, verify ports reusable, and
-record stable PID disappearance. Cleanup failure overrides every other pass.
+stop the soak sampler timer, histogram, and GC observer and emit one final
+diagnostics-cleanup record, then stop the authority, close helper/control
+listeners, verify ports reusable, and record stable PID disappearance. Cleanup
+failure overrides every other pass.
 
 ## Interruption and continuation
 
@@ -290,10 +308,11 @@ cleanup aids, not resumable soak credit. Never overwrite an abandoned artifact.
 ## Atomic implementation and acceptance order
 
 1. **Diagnostics prerequisite** — opt-in event-loop/GC sampler, bounded health
-   schema, default-off and cleanup tests. Commit `L0: expose bounded soak
-   runtime diagnostics`.
+   schema, default-off and cleanup tests. Landed at `b7d262d` as
+   `L0: expose bounded soak runtime diagnostics`.
 2. **PR smoke** — parameterized eight-client soak cohort, deterministic
-   schedule compiler, ledgers, caps, abort/checkpoint, privacy and cleanup.
+   schedule compiler, default-immediate named-event ACK predicate, ledgers,
+   caps, abort/checkpoint, privacy and cleanup.
    Run the focused smoke twice with identical schedule hashes plus
    `npm run test:multiplayer-network`. Commit `Tests: add deterministic
    eight-player soak smoke`.
