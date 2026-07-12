@@ -719,6 +719,25 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       const health = await getHealth(fixture.wallTimeMs);
       return reliableDrainComplete(health) ? true : false;
     }, "final reliable ACK retirement", 5000);
+    if (normal && timeScale === 1) {
+      const finalMinute = fixture.wallTimeMs / 60000 - 1;
+      const deadline = performance.now() + 9000;
+      let covered = false;
+      while (!covered && performance.now() < deadline) {
+        const health = await getHealth(fixture.wallTimeMs);
+        const diagnostics = health.safe.soakDiagnostics;
+        const completed = diagnostics?.completedWindows || [];
+        covered = completed.some((window) => Math.max(0,
+          Math.floor((window.endedMonotonicMs - authorityMonotonicOrigin) / 60000) - 1) === finalMinute);
+        if (!covered && diagnostics?.currentWindow) {
+          const currentMinute = Math.floor((diagnostics.currentWindow.startedMonotonicMs - authorityMonotonicOrigin) / 60000);
+          covered = currentMinute === finalMinute && diagnostics.currentWindow.durationMs >= 57000
+            && diagnostics.currentWindow.sampleCount >= 57;
+        }
+        if (!covered) await sleep(1000);
+      }
+      if (!covered) throw new Error("final authority diagnostic minute did not reach 57 samples within 9s");
+    }
     const final = await getHealth(fixture.wallTimeMs);
     if (digest(salt, final.raw.session?.runId) !== authorityRunHash) throw new Error("authority run identity changed");
     const details = final.raw.multiplayer.adapter.pressure.connections || {};

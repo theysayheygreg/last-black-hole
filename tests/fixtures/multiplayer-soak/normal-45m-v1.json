@@ -39,6 +39,6 @@
   },
   "authorityResourceExpected": {
     "TCPServerWrap": 1,
-    "Timeout": 2
+    "Timeout": 1
   }
 }
