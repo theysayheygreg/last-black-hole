@@ -44,6 +44,15 @@
 - Defined seeded 4p/8p F0--F6 and T0--T4 scenarios, per-client latency/cadence/
   consequence/queue/memory gates, immutable decision tapes, replay/minimization
   artifacts, strict cleanup, and eight atomic implementation slices.
+- Implemented the first Phase 2 slice as a pure test-only seeded frame
+  scheduler. It provides portable 64-bit PRNG vectors, domain-separated streams,
+  integer virtual time, exact decision tapes, whole-frame omission/duplication,
+  bounded atomic reorder, hold/discard blackouts, explicit epoch fencing, and
+  hard queue/evidence/tape bounds without touching production runtime code.
+- Closed the scheduler's adversarial review findings around blackout timing,
+  reorder-block completion, replay validation, identity redaction, epoch
+  rollback/idempotence, evidence growth, and record/replay/terminal reset reuse.
+  The focused 7/7 proof and full nine-suite multiplayer-network lane pass.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

@@ -191,6 +191,19 @@ Singularity that:
 - The memo reserves supported RTT tier, slow-client UX, recovery presentation,
   prediction timing, and hosted-pilot spend/provider for Greg.
 
+### Phase 2 scheduler kernel — 2026-07-12 00:35 UTC
+
+- The pure scheduler kernel owns only new test modules plus manifest
+  registration; it has no runtime, adapter, client, dependency, or package
+  surface.
+- Independent red-team cycles closed epoch rollback/idempotence, blackout
+  boundary, reorder-block, tape-schema, secret-redaction, evidence-bound, and
+  reset-retention failures. Coordinator review added persisted record/replay
+  and terminal-reset reuse proofs.
+- Current gates: scheduler 7/7 and multiplayer-network 9/9 suites. Next slice
+  may inject the scheduler into the adapter factory only behind an explicit
+  test dependency; client injection remains a later disjoint owner.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`

@@ -59,6 +59,10 @@ input-ACK p95 ranged 7.6--18.3 ms, and exactly-once reconnect recovered in
 are local Shallows loopback measurements without compression, WAN impairment,
 TLS, relay, or hosted-edge overhead.
 
+Phase 2 has begun with a production-neutral deterministic scheduler kernel.
+The focused 7/7 suite and full nine-suite multiplayer-network lane pass; no
+adapter/client injection or impaired-browser claim exists yet.
+
 ## v0.3 Candidate
 
 **Source status:** green visual-production candidate.

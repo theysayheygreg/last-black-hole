@@ -117,6 +117,15 @@ Implementation order starts with the pure seeded scheduler kernel and decision
 tapes, then adapter/client injection, then a 4p F0/F1/F3/F6 browser lane. Proxy,
 CDP, netem, and the full 4p/8p matrix follow as separately reviewable slices.
 
+**Scheduler-kernel checkpoint — 2026-07-12:** the first slice is implemented
+under `tests/network/` and registered in static, full, and multiplayer-network
+lanes. Its focused proof covers portable seed vectors, independent derived
+streams, virtual time, immutable/fail-closed tapes, exact wire identity,
+bounded atomic reorder, blackout semantics, explicit epoch fencing, redacted
+evidence, hard memory caps, and reusable cleanup. No production source changed.
+The next exclusive-owner slice is adapter-side scheduler injection with the
+default immediate path preserved bit-for-bit.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

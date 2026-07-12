@@ -134,6 +134,12 @@ const SUITES = [
     slow: true,
   },
   {
+    name: "SeededFrameScheduler",
+    file: "seeded-frame-scheduler.cjs",
+    lanes: ["multiplayer-network", "static", "full"],
+    browser: false,
+  },
+  {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
     lanes: ["static", "full"],
