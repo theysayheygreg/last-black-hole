@@ -21,6 +21,60 @@ function frameData(event) {
   return String(value);
 }
 
+const DELIVERY_WINDOW_SIZE = 128;
+
+function refreshPlayableEvents(client) {
+  client.latestEvents = [...client._eventFrames.values()]
+    .filter((frame) => frame.deliveryId <= client._deliveryAckThrough)
+    .sort((a, b) => a.eventSeq - b.eventSeq);
+}
+
+function failDeliveryEpoch(client, reason) {
+  client._deliveryEpochFailed = true;
+  client.metrics.reconnectReason = reason;
+  client._eventFrames.clear();
+  client.latestEvents = [];
+  if (socketOpen(client._socket)) client._socket.close(4000, reason);
+  return { accepted: false, duplicate: false };
+}
+
+function receiveReliableDelivery(client, deliveryId) {
+  if (client._deliveryEpochFailed) return { accepted: false, duplicate: false };
+  const id = Number(deliveryId);
+  if (!Number.isSafeInteger(id) || id <= 0) return failDeliveryEpoch(client, 'invalid-delivery-id');
+  if (id <= client._deliveryAckThrough) {
+    if (client._deliveryAckThrough > 0) {
+      client._sendFrame({ type: 'ack', ackKind: 'delivery', deliveryId: client._deliveryAckThrough });
+    }
+    return { accepted: true, duplicate: true };
+  }
+  if (client._pendingDeliveryIds.has(id)) return { accepted: true, duplicate: true };
+  if (id - client._deliveryAckThrough > DELIVERY_WINDOW_SIZE
+      || client._pendingDeliveryIds.size >= DELIVERY_WINDOW_SIZE) {
+    return failDeliveryEpoch(client, 'delivery-window-overflow');
+  }
+  client._pendingDeliveryIds.add(id);
+  const before = client._deliveryAckThrough;
+  while (client._pendingDeliveryIds.delete(client._deliveryAckThrough + 1)) {
+    client._deliveryAckThrough += 1;
+  }
+  client.metrics.lastDeliveryAck = client._deliveryAckThrough;
+  if (client._deliveryAckThrough > before) {
+    client._sendFrame({ type: 'ack', ackKind: 'delivery', deliveryId: client._deliveryAckThrough });
+    refreshPlayableEvents(client);
+  }
+  return { accepted: true, duplicate: false };
+}
+
+export function _resetDeliveryEpoch() {
+  this._deliveryAckThrough = 0;
+  this._pendingDeliveryIds.clear();
+  this._deliveryEpochFailed = false;
+  this.metrics.lastDeliveryAck = 0;
+  this._eventFrames.clear();
+  this.latestEvents = [];
+}
+
 export async function _discoverProtocol() {
   if (this._protocol) return this._protocol;
   const protocol = await this._json('/protocol');
@@ -131,6 +185,7 @@ export async function _connectStream(kind = 'admission') {
 export function _handleStreamFrame(frame, generation) {
   if (generation !== this._socketGeneration) return;
   if (frame.type === 'welcome') {
+    this._resetDeliveryEpoch();
     this._adoptWelcome(frame);
     this._armHeartbeatWatchdog(frame.heartbeatIntervalMs, generation);
     return;
@@ -150,8 +205,7 @@ export function _handleStreamFrame(frame, generation) {
     this._pendingPublic.clear();
     this._pendingOwner.clear();
     if (frame.reason === 'event-gap' || frame.reason === 'run-changed') this.metrics.eventGapRecoveries += 1;
-    this._eventFrames.clear();
-    this.latestEvents = [];
+    this._resetDeliveryEpoch();
     this.eventCursor = frame.lastEventSeq;
     return;
   }
@@ -169,14 +223,18 @@ export function _handleStreamFrame(frame, generation) {
     return;
   }
   if (frame.type === 'event') {
-    if (frame.runId !== this.runId || frame.eventSeq <= this.eventCursor) {
-      this._sendFrame({ type: 'ack', ackKind: 'delivery', deliveryId: frame.deliveryId });
+    if (frame.runId !== this.runId) return;
+    const relevant = frame.eventSeq > this.eventCursor;
+    const newEvent = relevant && !this._eventFrames.has(frame.eventSeq);
+    if (newEvent && this._eventFrames.size >= 64) {
+      failDeliveryEpoch(this, 'event-window-overflow');
       return;
     }
-    if (this._eventFrames.size < 64 || this._eventFrames.has(frame.eventSeq)) this._eventFrames.set(frame.eventSeq, frame);
-    this.latestEvents = [...this._eventFrames.values()];
-    this.metrics.lastDeliveryAck = Math.max(this.metrics.lastDeliveryAck, frame.deliveryId);
-    this._sendFrame({ type: 'ack', ackKind: 'delivery', deliveryId: frame.deliveryId });
+    const delivery = receiveReliableDelivery(this, frame.deliveryId);
+    if (!delivery.accepted || delivery.duplicate || !relevant) return;
+    if (!newEvent) return;
+    this._eventFrames.set(frame.eventSeq, frame);
+    refreshPlayableEvents(this);
     return;
   }
   if (frame.type === 'ack' && frame.ackKind === 'input') {
@@ -186,11 +244,25 @@ export function _handleStreamFrame(frame, generation) {
     return;
   }
   if (frame.type === 'ack' && frame.ackKind === 'action') {
-    this.metrics.lastDeliveryAck = Math.max(this.metrics.lastDeliveryAck, frame.deliveryId);
-    this._sendFrame({ type: 'ack', ackKind: 'delivery', deliveryId: frame.deliveryId });
+    const settled = this._settledActionAcks.get(frame.actionId);
+    if (settled) {
+      if (settled.actionSeq !== frame.actionSeq || settled.commandSeq !== frame.commandSeq) {
+        failDeliveryEpoch(this, 'action-ack-identity-mismatch');
+        return;
+      }
+      receiveReliableDelivery(this, frame.deliveryId);
+      return;
+    }
     const pending = this._pendingActions.get(frame.actionId);
-    if (!pending || pending.frame.actionSeq !== frame.actionSeq || pending.frame.commandSeq !== frame.commandSeq) return;
+    if (!pending || pending.frame.actionSeq !== frame.actionSeq || pending.frame.commandSeq !== frame.commandSeq) {
+      failDeliveryEpoch(this, 'unknown-action-ack');
+      return;
+    }
+    const delivery = receiveReliableDelivery(this, frame.deliveryId);
+    if (!delivery.accepted || delivery.duplicate) return;
     this._pendingActions.delete(frame.actionId);
+    this._settledActionAcks.set(frame.actionId, { actionSeq: frame.actionSeq, commandSeq: frame.commandSeq });
+    while (this._settledActionAcks.size > 128) this._settledActionAcks.delete(this._settledActionAcks.keys().next().value);
     this.metrics.lastActionAck = Math.max(this.metrics.lastActionAck, frame.actionSeq);
     pending.resolve({ ...frame, actionKind: pending.frame.actionKind, payload: pending.frame.payload });
     return;
@@ -387,4 +459,6 @@ export async function _stopStream(reason) {
   if (ws && ws.readyState < 2) ws.close(1000, String(reason || 'closed').slice(0, 120));
   for (const pending of this._pendingActions.values()) pending.reject(new Error(`Sim stream stopped: ${reason}`));
   this._pendingActions.clear();
+  this._settledActionAcks.clear();
+  this._resetDeliveryEpoch();
 }

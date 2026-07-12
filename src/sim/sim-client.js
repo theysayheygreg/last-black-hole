@@ -47,7 +47,11 @@ export class SimClient {
     this._pendingPublic = new Map();
     this._pendingOwner = new Map();
     this._pendingActions = new Map();
+    this._settledActionAcks = new Map();
     this._eventFrames = new Map();
+    this._deliveryAckThrough = 0;
+    this._pendingDeliveryIds = new Set();
+    this._deliveryEpochFailed = false;
     this._rebase = null;
     this._latestOwnerActionSeq = 0;
     this._heartbeatTimer = null;
@@ -221,7 +225,9 @@ export class SimClient {
     this.lastPollAt = 0;
     this._pendingPublic.clear();
     this._pendingOwner.clear();
+    this._settledActionAcks.clear();
     this._eventFrames.clear();
+    this._resetDeliveryEpoch();
     this._rebase = null;
   }
 
@@ -315,9 +321,13 @@ export class SimClient {
       this.latestEvents = [];
       return events;
     }
-    const frames = [...this._eventFrames.values()].sort((a, b) => a.eventSeq - b.eventSeq);
-    this._eventFrames.clear();
-    this.latestEvents = [];
+    const frames = [...this._eventFrames.values()]
+      .filter((frame) => frame.deliveryId <= this._deliveryAckThrough)
+      .sort((a, b) => a.eventSeq - b.eventSeq);
+    for (const frame of frames) this._eventFrames.delete(frame.eventSeq);
+    this.latestEvents = [...this._eventFrames.values()]
+      .filter((frame) => frame.deliveryId <= this._deliveryAckThrough)
+      .sort((a, b) => a.eventSeq - b.eventSeq);
     if (frames.length > 0) {
       const eventSeq = frames.at(-1).eventSeq;
       this.eventCursor = Math.max(this.eventCursor, eventSeq);
@@ -462,6 +472,7 @@ export class SimClient {
   async _issueStreamTicket(...args) { return streamOps._issueStreamTicket.apply(this, args); }
   async _connectStream(...args) { return streamOps._connectStream.apply(this, args); }
   _handleStreamFrame(...args) { return streamOps._handleStreamFrame.apply(this, args); }
+  _resetDeliveryEpoch(...args) { return streamOps._resetDeliveryEpoch.apply(this, args); }
   _mergeFrame(...args) { return streamOps._mergeFrame.apply(this, args); }
   _trimFrameMaps(...args) { return streamOps._trimFrameMaps.apply(this, args); }
   _waitForStreamState(...args) { return streamOps._waitForStreamState.apply(this, args); }

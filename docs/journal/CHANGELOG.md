@@ -63,6 +63,11 @@
   eight-case adapter proof locks that boundary while exercising state
   half-pairs, frame omission, duplication, blackout, stale-epoch delivery, and
   reset cleanup.
+- Landed the client half of the reliable-impairment prerequisite: delivery ACKs
+  now advance only through a bounded contiguous per-epoch cursor, while action
+  settlement stays identity-idempotent and events remain hidden from gameplay
+  across delivery holes. Welcome, rebase, reset, stop, overflow, stale-run, and
+  mismatched-action cases fail closed without ACKing unretained work.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

@@ -142,7 +142,7 @@ accepted `rebase`, stream reset, and terminal stop.
 
 ## Atomic implementation order
 
-1. **Client contiguous ACK.** Land the bounded cursor/set while the server still
+1. **Client contiguous ACK — landed.** Land the bounded cursor/set while the server still
    sends reliable frames immediately and in order. Prove ACK-kind separation,
    duplicate idempotence, holes, overflow, reconnect, and same-socket rebase.
 2. **Queue attempt leases.** Change queue accounting without enabling reliable
@@ -158,6 +158,10 @@ accepted `rebase`, stream reset, and terminal stop.
 
 Each step is independently reviewable and keeps production/default delivery
 immediate. Do not combine this work with the browser cohort or TCP proxy lanes.
+
+Step 1 landed with a 128-ID delivery window, 64-event semantic buffer, and a
+bounded 128-entry settled-action receipt cache. Its focused stream suite now
+has 12 cases and the complete `multiplayer-network` lane remains green.
 
 ## Required adversaries
 

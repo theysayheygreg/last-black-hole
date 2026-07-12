@@ -73,6 +73,34 @@ function resumeSocketClass({ acceptedInputSeq, sent }) {
   };
 }
 
+function deliveryHarness(SimClient) {
+  const sent = [];
+  const closed = [];
+  const client = new SimClient(BASE_URL, { transport: "stream" });
+  client._socketGeneration = 1;
+  client._socket = {
+    readyState: 1,
+    send(raw) { sent.push(JSON.parse(raw)); },
+    close(code, reason) { this.readyState = 3; closed.push({ code, reason }); },
+  };
+  client.runId = "delivery-run";
+  return { client, sent, closed };
+}
+
+function eventFrame(deliveryId, eventSeq, runId = "delivery-run") {
+  return {
+    type: "event", deliveryId, eventSeq, runId, tick: eventSeq,
+    visibility: "public", eventType: `event.${eventSeq}`, payload: { eventSeq },
+  };
+}
+
+function actionAck(deliveryId, actionId = "action-a", actionSeq = 7, commandSeq = 9) {
+  return {
+    type: "ack", ackKind: "action", deliveryId, actionId, actionSeq, commandSeq,
+    status: "accepted", result: { ok: true },
+  };
+}
+
 async function main() {
   const { SimClient } = await import("../src/sim/sim-client.js");
   const runner = new TestRunner("SimClient stream transport");
@@ -80,6 +108,129 @@ async function main() {
   await startSimServer(PORT, { keepAlive: true, env: { LBH_SIM_WS_ENABLED: "true" } });
 
   try {
+    await runner.run("action settlement above a delivery hole is identity-idempotent and not cumulatively ACKed", async () => {
+      const harness = deliveryHarness(SimClient);
+      let settlements = 0;
+      harness.client._pendingActions.set("action-a", {
+        frame: { actionId: "action-a", actionSeq: 7, commandSeq: 9, actionKind: "pulse", payload: {} },
+        resolve() { settlements += 1; },
+        reject() {},
+      });
+
+      harness.client._handleStreamFrame(actionAck(2), 1);
+      assert(settlements === 1 && harness.client._deliveryAckThrough === 0,
+        "Action identity may settle above a hole, but delivery ACK must remain at zero");
+      assert(!harness.sent.some((frame) => frame.ackKind === "delivery"),
+        "Receiving delivery ID 2 before 1 must emit no cumulative delivery ACK");
+
+      harness.client._handleStreamFrame(actionAck(2), 1);
+      assert(settlements === 1 && harness.client._pendingDeliveryIds.size === 1,
+        "A duplicate action delivery above the hole must not re-settle or grow the window");
+
+      harness.client._handleStreamFrame(eventFrame(1, 1), 1);
+      const deliveryAcks = harness.sent.filter((frame) => frame.ackKind === "delivery");
+      assert(deliveryAcks.length === 1 && deliveryAcks[0].deliveryId === 2,
+        "Closing delivery ID 1 must advance through retained ID 2 with one ACK 2");
+      assert(harness.client.metrics.lastActionAck === 7 && harness.client.metrics.lastEventAck === 0,
+        "Semantic action and playback cursors must remain separate from delivery ACK");
+
+      harness.client._handleStreamFrame(actionAck(3), 1);
+      assert(settlements === 1 && harness.client._deliveryAckThrough === 3,
+        "A settled action replay under a fresh delivery ID must ACK transport without re-settling semantics");
+      harness.client._handleStreamFrame(actionAck(4, "action-a", 8, 9), 1);
+      assert(harness.closed.at(-1)?.reason === "action-ack-identity-mismatch"
+        && !harness.sent.some((frame) => frame.ackKind === "delivery" && frame.deliveryId === 4),
+      "A mismatched replay identity must fail closed without poisoning the delivery cursor");
+    });
+
+    await runner.run("out-of-order events stay hidden until delivery closes, then playback ACKs separately", async () => {
+      const harness = deliveryHarness(SimClient);
+      harness.client._handleStreamFrame(eventFrame(2, 2), 1);
+      harness.client._handleStreamFrame(eventFrame(2, 2), 1);
+      assert(harness.client.latestEvents.length === 0 && harness.client._eventFrames.size === 1,
+        "Delivery ID 2 and its duplicate must remain hidden and occupy one semantic event slot");
+
+      harness.client._handleStreamFrame(eventFrame(1, 1), 1);
+      assert(harness.client.latestEvents.map((frame) => frame.eventSeq).join(",") === "1,2",
+        "Closing the delivery hole must expose retained events in semantic order");
+      const delivered = harness.sent.filter((frame) => frame.ackKind === "delivery");
+      assert(delivered.length === 1 && delivered[0].deliveryId === 2,
+        "The event hole must produce one contiguous delivery ACK");
+
+      const events = harness.client.consumeEvents();
+      assert(events.map((event) => event.seq).join(",") === "1,2",
+        "Gameplay must consume each eligible event exactly once in event order");
+      const playback = harness.sent.filter((frame) => frame.ackKind === "event");
+      assert(playback.length === 1 && playback[0].eventSeq === 2
+        && harness.client.metrics.lastDeliveryAck === 2,
+      "Playback ACK must advance independently after gameplay consumes eligible events");
+
+      harness.client._handleStreamFrame(eventFrame(2, 2), 1);
+      assert(harness.client.consumeEvents().length === 0,
+        "A duplicate below the delivery and semantic cursors must never replay gameplay effects");
+    });
+
+    await runner.run("welcome, same-socket rebase, stream reset, and terminal stop fence delivery epochs", async () => {
+      const harness = deliveryHarness(SimClient);
+      harness.client._handleStreamFrame(eventFrame(2, 2), 1);
+      harness.client._handleStreamFrame({
+        type: "welcome", runId: "delivery-run", playerId: "player", membershipId: "membership",
+        connectionId: "connection-2", connectionEpoch: 2, commandCredential: "credential",
+        lastCommandSeq: 0, lastActionSeq: 0, lastInputSeq: 0, heartbeatIntervalMs: 10000,
+      }, 1);
+      clearTimeout(harness.client._heartbeatTimer);
+      assert(harness.client._deliveryAckThrough === 0 && harness.client._pendingDeliveryIds.size === 0
+        && harness.client._eventFrames.size === 0,
+      "An accepted reconnect welcome must discard old-epoch delivery and unplayed event state");
+
+      harness.client._handleStreamFrame(eventFrame(2, 2), 1);
+      harness.client._handleStreamFrame({
+        type: "rebase", runId: "delivery-run", snapshotId: 20, lastEventSeq: 10,
+        reason: "resume", tick: 20, simTime: 2, fieldRevision: 1,
+      }, 1);
+      assert(harness.client._deliveryAckThrough === 0 && harness.client._pendingDeliveryIds.size === 0
+        && harness.client._eventFrames.size === 0 && harness.client.eventCursor === 10,
+      "A same-socket rebase must start a clean delivery epoch and discard unplayed old work");
+      harness.client._handleStreamFrame(eventFrame(1, 11), 1);
+      assert(harness.client.latestEvents.length === 1 && harness.client.metrics.lastDeliveryAck === 1,
+        "The rebased epoch must accept a fresh reliable ID 1");
+
+      harness.client._resetStreamState("next-run");
+      assert(harness.client._deliveryAckThrough === 0 && harness.client._eventFrames.size === 0,
+        "A stream-state reset must clear delivery and unplayed event state");
+      harness.client._socket.readyState = 1;
+      harness.client._handleStreamFrame(eventFrame(2, 12, "next-run"), 1);
+      await harness.client._stopStream("terminal-test");
+      assert(harness.client._deliveryAckThrough === 0 && harness.client._pendingDeliveryIds.size === 0
+        && harness.client._eventFrames.size === 0,
+      "Terminal stop must clear the delivery window and old unplayed events");
+    });
+
+    await runner.run("delivery and semantic event windows fail closed before ACKing unretained frames", async () => {
+      const deliveryOverflow = deliveryHarness(SimClient);
+      deliveryOverflow.client._handleStreamFrame(eventFrame(129, 129), 1);
+      assert(deliveryOverflow.closed[0]?.reason === "delivery-window-overflow"
+        && deliveryOverflow.client.metrics.lastDeliveryAck === 0
+        && !deliveryOverflow.sent.some((frame) => frame.ackKind === "delivery"),
+      "A frame outside the bounded 128-ID delivery window must reconnect without an ACK");
+
+      const eventOverflow = deliveryHarness(SimClient);
+      for (let id = 2; id <= 65; id += 1) eventOverflow.client._handleStreamFrame(eventFrame(id, id), 1);
+      assert(eventOverflow.client._eventFrames.size === 64 && eventOverflow.sent.length === 0,
+        "Sixty-four held events may remain bounded above the first delivery hole");
+      eventOverflow.client._handleStreamFrame(eventFrame(66, 66), 1);
+      assert(eventOverflow.closed[0]?.reason === "event-window-overflow"
+        && !eventOverflow.sent.some((frame) => frame.ackKind === "delivery"),
+      "The sixty-fifth unplayed event must fail closed before retaining or ACKing its delivery");
+
+      const staleRun = deliveryHarness(SimClient);
+      staleRun.client._handleStreamFrame(eventFrame(2, 2, "old-run"), 1);
+      staleRun.client._handleStreamFrame(eventFrame(1, 1), 1);
+      assert(staleRun.client.metrics.lastDeliveryAck === 1
+        && !staleRun.sent.some((frame) => frame.ackKind === "delivery" && frame.deliveryId === 2),
+      "An old-run frame must not poison the current delivery epoch's contiguous cursor");
+    });
+
     await runner.run("stop cancels delayed ticket and pre-baseline admission without hanging", async () => {
       const delayed = new SimClient(BASE_URL, { transport: "stream", WebSocketImpl: WebSocket });
       delayed._protocol = { path: "/stream", wireVersion: "test", simProtocolVersion: "test" };
