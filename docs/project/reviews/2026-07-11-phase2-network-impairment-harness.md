@@ -342,6 +342,8 @@ Extract reusable journey observation only after contract tests exist.
    ID. Prove a held ID 1 plus released ID 2 cannot retire ID 1, then reopen
    reliable scheduling at the same complete-frame seam. Terminal frames remain
    immediate unless close gains an explicit scheduler-completion handshake.
+   The queue, client, and ordered-rebase contract is specified in
+   `2026-07-11-reliable-impairment-prerequisite.md`.
 3. **Client seam.** Inject the same interface around the test WebSocket
    implementation, then prove action identity, continuous-input independence,
    reconnect generation fencing, and event playback ACK behavior. Keep HTTP

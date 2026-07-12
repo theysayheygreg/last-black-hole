@@ -17,8 +17,9 @@ Terminal frames likewise cannot be delayed safely while the adapter closes the
 transport immediately afterward.
 
 **Where it landed:** `scripts/sim-ws-adapter.cjs`,
-`tests/multiplayer-ws-adapter-impairment.cjs`, and the
-`multiplayer-network` lane.
+`tests/multiplayer-ws-adapter-impairment.cjs`, the `multiplayer-network` lane,
+and the queue/client/barrier contract in
+`docs/project/reviews/2026-07-11-reliable-impairment-prerequisite.md`.
 
 **Door status:** Closed for reliable or terminal impairment through the first
 adapter seam. Open for a separate queue/client slice that adds physical-send
