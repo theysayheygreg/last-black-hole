@@ -19,11 +19,13 @@ function waitFor(check, label, timeoutMs = 10000) {
 }
 
 async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 10000,
+  maxReceivedFrames = Infinity, sampleStateEvery = 1, inspectFrame = null,
   kind = "admission", cursors = {}, shouldWithholdEventAck = null }) {
   const client = {
     pilotSlot,
     ws: new WebSocket(`ws://127.0.0.1:${port}/stream`, { perMessageDeflate: false }),
-    frames: [], rawBytes: 0, receiveCount: 0, close: null, error: null,
+    frames: [], latestFrames: {}, stateFrameCounts: { publicState: 0, ownerState: 0 },
+    rawBytes: 0, receiveCount: 0, close: null, error: null,
     lastHeartbeat: null, lastSnapshotAck: 0, paused: false, sentBytes: 0, sentFrames: 0,
   };
   const send = (frame) => sendRawClientFrame(client, frame);
@@ -32,14 +34,29 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
   client.ws.on("message", (raw) => {
     const text = raw.toString("utf8");
     const frame = JSON.parse(text);
-    if (client.frames.length >= maxFrames) {
-      client.error = `raw frame cap exceeded (${maxFrames})`;
+    client.receiveCount += 1;
+    if (client.receiveCount > maxReceivedFrames) {
+      client.error = `raw receive cap exceeded (${maxReceivedFrames})`;
+      client.ws.terminate();
+      return;
+    }
+    if (inspectFrame) {
+      try { inspectFrame({ frame, text, pilotSlot, client }); }
+      catch (error) { client.error = `raw frame inspector failed: ${error.message}`; client.ws.terminate(); return; }
+    }
+    const storedFrame = { ...frame, _receivedAt: Date.now(), _bytes: Buffer.byteLength(text) };
+    client.latestFrames[frame.type] = storedFrame;
+    const stateFrame = frame.type === "publicState" || frame.type === "ownerState";
+    if (stateFrame) client.stateFrameCounts[frame.type] += 1;
+    const retain = !stateFrame || client.stateFrameCounts[frame.type] === 1
+      || client.stateFrameCounts[frame.type] % sampleStateEvery === 0;
+    if (retain && client.frames.length >= maxFrames) {
+      client.error = `raw retained-frame cap exceeded (${maxFrames})`;
       client.ws.terminate();
       return;
     }
     client.rawBytes += Buffer.byteLength(text);
-    client.receiveCount += 1;
-    client.frames.push({ ...frame, _receivedAt: Date.now(), _bytes: Buffer.byteLength(text) });
+    if (retain) client.frames.push(storedFrame);
     record({ type: "frame", pilotSlot, frameType: frame.type, at: Date.now(), bytes: Buffer.byteLength(text),
       snapshotId: frame.snapshotId ?? null, eventSeq: frame.eventSeq ?? null, deliveryId: frame.deliveryId ?? null });
     if (frame.type === "heartbeat" && client.ws.readyState === WebSocket.OPEN) {
@@ -48,7 +65,7 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
       record({ type: "pong", pilotSlot, at: client.lastHeartbeat.pongAt });
     }
     if (frame.type === "ownerState" && client.lastSnapshotAck === 0) {
-      const rebase = [...client.frames].reverse().find((entry) => entry.type === "rebase");
+      const rebase = client.latestFrames.rebase;
       send({ type: "ack", ackKind: "baseline", snapshotId: frame.snapshotId,
         eventSeq: rebase?.lastEventSeq || 0 });
       record({ type: "baseline-ack", pilotSlot, at: Date.now(), snapshotId: frame.snapshotId,
@@ -77,10 +94,9 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
     simProtocolVersion: PROTOCOL_VERSION,
     [kind === "resume" ? "resumeTicket" : "admissionTicket"]: ticket,
     ...cursors });
-  await waitFor(() => client.frames.some((frame) => frame.type === "welcome") || client.close, `${pilotSlot} welcome`);
+  await waitFor(() => client.latestFrames.welcome || client.close, `${pilotSlot} welcome`);
   if (client.close) throw new Error(`${pilotSlot} closed before welcome: ${JSON.stringify(client.close)}`);
-  await waitFor(() => client.frames.some((frame) => frame.type === "publicState")
-    && client.frames.some((frame) => frame.type === "ownerState"), `${pilotSlot} baseline`);
+  await waitFor(() => client.latestFrames.publicState && client.latestFrames.ownerState, `${pilotSlot} baseline`);
   if (client.close) throw new Error(`${pilotSlot} closed during baseline: ${JSON.stringify(client.close)}`);
   return client;
 }

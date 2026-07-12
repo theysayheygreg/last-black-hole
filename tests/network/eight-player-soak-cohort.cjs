@@ -110,6 +110,42 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   const authorities = Array(8).fill(null);
   const incarnations = Array(8).fill(0);
   const markerHistory = Array.from({ length: 8 }, () => []);
+  const declaredMarkers = Array.from({ length: 8 }, (_, seat) => [
+    `soak-secret-${seat}-1`, ...(seat === 5 ? [`soak-secret-${seat}-2`] : []),
+  ]);
+  const privacyOracle = { inspectedFrames: 0, publicFrames: 0, ownerFrames: 0,
+    latest: Array(8).fill(null).map(() => ({ publicSeen: false, ownerSeen: false })),
+    violations: [], overflow: false };
+  const privacyViolation = (value) => {
+    if (privacyOracle.violations.length < 16) privacyOracle.violations.push(value);
+    else privacyOracle.overflow = true;
+  };
+  const inspectPrivacyFrame = (seat) => ({ frame, text }) => {
+    privacyOracle.inspectedFrames += 1;
+    const currentMarker = `soak-secret-${seat}-${incarnations[seat]}`;
+    const rivalMarkers = declaredMarkers.flatMap((markers, rival) => rival === seat ? [] : markers);
+    const oldOrFutureOwn = declaredMarkers[seat].filter((marker) => marker !== currentMarker);
+    if (frame.type === "publicState") {
+      privacyOracle.publicFrames += 1;
+      privacyOracle.latest[seat].publicSeen = true;
+      if (declaredMarkers.flat().some((marker) => text.includes(marker))) {
+        privacyViolation({ seat, frameType: frame.type, reason: "public-marker" });
+      }
+    } else if (frame.type === "ownerState") {
+      privacyOracle.ownerFrames += 1;
+      privacyOracle.latest[seat].ownerSeen = true;
+      privacyOracle.latest[seat].currentMarkerPresent = text.includes(currentMarker);
+      if (!text.includes(currentMarker)) privacyViolation({ seat, frameType: frame.type, reason: "owner-marker-missing" });
+      if (oldOrFutureOwn.some((marker) => text.includes(marker))) {
+        privacyViolation({ seat, frameType: frame.type, reason: "old-owner-marker" });
+      }
+      if (rivalMarkers.some((marker) => text.includes(marker))) {
+        privacyViolation({ seat, frameType: frame.type, reason: "rival-owner-marker" });
+      }
+    } else if (rivalMarkers.some((marker) => text.includes(marker))) {
+      privacyViolation({ seat, frameType: frame.type, reason: "rival-marker" });
+    }
+  };
   const ordinals = Array.from({ length: 8 }, () => []);
   const commandSeq = Array(8).fill(0);
   const actionSeq = Array(8).fill(0);
@@ -192,6 +228,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
         actionAcks: seatClients.reduce((sum, client) => sum + client.frames.filter((frame) => frame.type === "ack"
           && frame.ackKind === "action").length, 0) };
     });
+    if (clients.every(Boolean)) assertPrivateIsolation();
     healthSamples.push({ plannedElapsedMs: elapsedMs, actualElapsedMs, safe });
     files["authority-health"](safe);
     if (safe.soakDiagnostics) {
@@ -235,6 +272,8 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const ticket = await issueTicket(seat, "admission");
     clients[seat] = await openRawClient({ port, ticket, pilotSlot: `seat-${seat}`,
       record: clientRecord(seat), maxFrames: fixture.evidence.maxRawFramesPerClient,
+      maxReceivedFrames: fixture.evidence.maxRawReceiveFramesPerClient, sampleStateEvery: 50,
+      inspectFrame: inspectPrivacyFrame(seat),
       shouldWithholdEventAck({ frame }) {
         const matches = heldEventTarget?.seat === seat && frame.type === "event"
           && frame.eventType === heldEventTarget.eventType
@@ -244,7 +283,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       } });
     allClients.push(clients[seat]);
     await captureOrdinal(before, seat);
-    const welcome = clients[seat].frames.find((frame) => frame.type === "welcome");
+    const welcome = clients[seat].latestFrames.welcome;
     initialEpochs[seat] = welcome.connectionEpoch;
     commandSeq[seat] = welcome.lastCommandSeq;
     actionSeq[seat] = welcome.lastActionSeq;
@@ -255,26 +294,14 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     membershipCounts[replacement ? "replacementAdmissions" : "initialAdmissions"] += 1;
   };
   const assertPrivateIsolation = () => {
-    const currentMarkers = markerHistory.map((entries) => entries.at(-1));
-    const allMarkers = markerHistory.flat();
-    for (let seat = 0; seat < 8; seat += 1) {
-      const owner = [...clients[seat].frames].reverse().find((frame) => frame.type === "ownerState");
-      const ownerWire = JSON.stringify(owner);
-      if (!owner || !ownerWire.includes(currentMarkers[seat])
-        || markerHistory[seat].slice(0, -1).some((marker) => ownerWire.includes(marker))) {
-        throw new Error(`seat ${seat} owner marker lineage mismatch`);
-      }
-      const publicWire = JSON.stringify(clients[seat].frames.filter((frame) => frame.type === "publicState"));
-      if (allMarkers.some((marker) => publicWire.includes(marker))) throw new Error(`seat ${seat} public state leaked owner marker`);
-      const wire = JSON.stringify(clients[seat].frames);
-      if (markerHistory.some((markers, rival) => rival !== seat && markers.some((marker) => wire.includes(marker)))) {
-        throw new Error(`seat ${seat} received rival private marker`);
-      }
+    if (privacyOracle.overflow || privacyOracle.violations.length
+      || privacyOracle.latest.some((entry) => !entry.publicSeen || !entry.ownerSeen || !entry.currentMarkerPresent)) {
+      throw new Error(`incremental privacy oracle failed: ${JSON.stringify(privacyOracle)}`);
     }
   };
   const healthySnapshot = (targetSeat) => new Map(Array.from({ length: 8 }, (_, seat) => seat)
     .filter((seat) => seat !== targetSeat).map((seat) => [seat, {
-      ordinal: ordinals[seat].at(-1), epoch: clients[seat].frames.find((frame) => frame.type === "welcome").connectionEpoch,
+      ordinal: ordinals[seat].at(-1), epoch: clients[seat].latestFrames.welcome.connectionEpoch,
       rebases: clients[seat].frames.filter((frame) => frame.type === "rebase").length,
       baselines: clients[seat].frames.filter((frame) => frame.type === "ownerState").length,
       inputAcks: clients[seat].frames.filter((frame) => frame.type === "ack" && frame.ackKind === "input").length,
@@ -288,7 +315,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     await waitFor(() => [...before].every(([seat, prior]) => clients[seat].frames.filter((frame) => frame.type === "ack"
       && frame.ackKind === "input").length > prior.inputAcks), `seven-peer input progress around seat ${targetSeat}`, 5000);
     for (const [seat, prior] of before) {
-      const welcome = clients[seat].frames.find((frame) => frame.type === "welcome");
+      const welcome = clients[seat].latestFrames.welcome;
       if (ordinals[seat].at(-1) !== prior.ordinal || welcome.connectionEpoch !== prior.epoch
         || clients[seat].frames.filter((frame) => frame.type === "rebase").length !== prior.rebases) {
         throw new Error(`healthy seat ${seat} changed ordinal/epoch/rebase around seat ${targetSeat}`);
@@ -348,8 +375,8 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const barrierStarted = performance.now();
     const healthy = healthySnapshot(seat);
     const old = clients[seat];
-    const oldWelcome = old.frames.find((frame) => frame.type === "welcome");
-    const publicState = [...old.frames].reverse().find((frame) => frame.type === "publicState");
+    const oldWelcome = old.latestFrames.welcome;
+    const publicState = old.latestFrames.publicState;
     const cycle = await issueInventoryConsequence(seat, "unequip", "cycle-reconnect-seat-4", { withhold: true });
     const beforeHealth = await getHealth(Math.round(performance.now() - monotonicStarted));
     const before = new Set(Object.keys(beforeHealth.raw.multiplayer.adapter.pressure.connections || {}));
@@ -362,11 +389,13 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       cursors: { lastRunId: authorities[seat].runId, lastSnapshotId: publicState.snapshotId,
         lastEventSeq: publicState.lastEventSeq }, record: clientRecord(seat),
       maxFrames: fixture.evidence.maxRawFramesPerClient,
+      maxReceivedFrames: fixture.evidence.maxRawReceiveFramesPerClient, sampleStateEvery: 50,
+      inspectFrame: inspectPrivacyFrame(seat),
       shouldWithholdEventAck() { return false; } });
     allClients.push(next);
     clients[seat] = next;
     await captureOrdinal(before, seat);
-    const welcome = next.frames.find((frame) => frame.type === "welcome");
+    const welcome = next.latestFrames.welcome;
     authorities[seat] = welcome;
     commandSeq[seat] = welcome.lastCommandSeq;
     actionSeq[seat] = welcome.lastActionSeq;
@@ -415,7 +444,8 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     let invalidatedRejected = false;
     try {
       await openRawClient({ port, ticket: invalidatedTicket, kind: "resume", pilotSlot: `seat-${seat}-invalidated`,
-        record: clientRecord(seat), maxFrames: 32, shouldWithholdEventAck() { return false; } });
+        record: clientRecord(seat), maxFrames: 32, maxReceivedFrames: 32, sampleStateEvery: 50,
+        inspectFrame: inspectPrivacyFrame(seat), shouldWithholdEventAck() { return false; } });
     } catch { invalidatedRejected = true; }
     if (!invalidatedRejected) throw new Error("departed membership resume ticket redeemed after leave");
     membershipCounts.invalidatedTicketRejections += 1;
@@ -605,7 +635,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const details = final.raw.multiplayer.adapter.pressure.connections || {};
     for (let seat = 0; seat < 8; seat += 1) {
       const current = details[String(ordinals[seat].at(-1))];
-      const welcome = clients[seat].frames.find((frame) => frame.type === "welcome");
+      const welcome = clients[seat].latestFrames.welcome;
       const expectedEpoch = seat === 4 ? initialEpochs[seat] + 1 : initialEpochs[seat];
       if (!current || current.connectionEpoch !== expectedEpoch || welcome.connectionEpoch !== expectedEpoch) {
         throw new Error(`seat ${seat} final epoch/isolation mismatch`);
@@ -631,7 +661,8 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     if (fencedClients.some(({ client, framesAtFence }) => client.frames.length !== framesAtFence)) {
       throw new Error("fenced old epoch received application-visible frames after replacement");
     }
-    if (allClients.some((client) => client.error || client.frames.length > fixture.evidence.maxRawFramesPerClient)) {
+    if (allClients.some((client) => client.error || client.frames.length > fixture.evidence.maxRawFramesPerClient
+      || client.receiveCount > fixture.evidence.maxRawReceiveFramesPerClient)) {
       throw new Error("raw client error or immutable frame evidence cap exceeded");
     }
     const plannedStreamIds = new Set(schedule.events.filter((event) => event.kind === "action").map((event) => event.semanticId));
@@ -834,6 +865,13 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       numerator: { ...membershipCounts, authoritiesPerMatch: authorityRunHashes.size,
         distinctInitialOrdinals: new Set(ordinals.map((entries) => entries[0])).size },
       denominator: { seats: 8 }, threshold: "8 initial + 1 replacement, one logical authority", source: "membership-ledger.jsonl" },
+    privacy: { status: !privacyOracle.overflow && privacyOracle.violations.length === 0
+      && privacyOracle.latest.every((entry) => entry.publicSeen && entry.ownerSeen && entry.currentMarkerPresent) ? "PASS" : "FAIL",
+    numerator: { inspectedFrames: privacyOracle.inspectedFrames, publicFrames: privacyOracle.publicFrames,
+      ownerFrames: privacyOracle.ownerFrames, violations: privacyOracle.violations.length, overflow: privacyOracle.overflow,
+      alignedSeats: privacyOracle.latest.filter((entry) => entry.publicSeen && entry.ownerSeen && entry.currentMarkerPresent).length },
+    denominator: 8, threshold: "incremental all-frame marker isolation with eight latest aligned owner/public facts",
+    source: "bounds-and-privacy.json" },
     reliability: { status: actionOutcomes.size === 16
       && [...actionOutcomes.values()].filter((entry) => typeof entry.round === "number")
         .every((entry) => entry.receiptHash === entry.retryReceiptHash && entry.deliveryAckSent && entry.retryDeliveryAckSent)
@@ -865,7 +903,11 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   const passed = !failure && timeScale === 1 && Object.values(gates).every((gate) => gate.status !== "FAIL");
   return { passed, failure: failure || (timeScale !== 1 ? "accelerated diagnostic cannot pass" : null),
     authorityPid, authorityRunHash, actionCount: actionOutcomes.size, incarnations, ordinals,
-    httpAccounting: accounting, gates, cleanup, commit, dirty, timeScale };
+    httpAccounting: accounting, gates, cleanup, privacy: { inspectedFrames: privacyOracle.inspectedFrames,
+      publicFrames: privacyOracle.publicFrames, ownerFrames: privacyOracle.ownerFrames,
+      violations: privacyOracle.violations.length, overflow: privacyOracle.overflow,
+      alignedSeats: privacyOracle.latest.filter((entry) => entry.publicSeen && entry.ownerSeen && entry.currentMarkerPresent).length },
+    commit, dirty, timeScale };
 }
 
 module.exports = { runEightPlayerSoak, writeExclusive };

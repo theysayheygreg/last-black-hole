@@ -124,7 +124,7 @@ async function main() {
     jsonlCapBytes: fixture.evidence.maxJsonlBytes, jsonlRecordCap: fixture.evidence.maxJsonlRecords,
     stdoutStderrCapBytes: fixture.evidence.maxStdoutStderrBytes,
     forbiddenIdentityKeys: "absent", seededSecretMarkers: "absent", files: scanned,
-    httpClassification: result?.httpAccounting || {} };
+    httpClassification: result?.httpAccounting || {}, privacyOracle: result?.privacy || null };
   const projectedSize = () => bytesBeforeBounds
     + Buffer.byteLength(`${JSON.stringify(bounds, null, 2)}\n`)
     + Buffer.byteLength(`${JSON.stringify(terminal.error, null, 2)}\n`)

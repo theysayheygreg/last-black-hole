@@ -20,6 +20,7 @@
     "maxJsonlBytes": 16777216,
     "maxJsonlRecords": 25000,
     "maxRawFramesPerClient": 10000,
+    "maxRawReceiveFramesPerClient": 12000,
     "maxMembershipLedgerEntries": 64,
     "maxConnectionLedgerEntries": 32,
     "maxArtifactBytes": 33554432,
