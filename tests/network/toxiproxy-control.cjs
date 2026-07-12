@@ -143,6 +143,46 @@ function safeInteger(value, label, minimum, maximum) {
   return value;
 }
 
+function assertExactToxicDefinition(definition) {
+  if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+    throw new Error("Toxic definition must be an object");
+  }
+  if (definition.type === "latency") {
+    if (!exactAttributes(definition.attributes, {
+      latency: safeInteger(definition.attributes?.latency, "latency toxic latency", 0, 10_000),
+      jitter: safeInteger(definition.attributes?.jitter, "latency toxic jitter", 0, 10_000),
+    })) throw new Error("Latency toxic attributes must be exactly integer latency and jitter");
+    return;
+  }
+  if (definition.type === "bandwidth") {
+    if (!exactAttributes(definition.attributes, {
+      rate: safeInteger(definition.attributes?.rate, "bandwidth toxic rate", 1, 1_000_000),
+    })) throw new Error("Bandwidth toxic attributes must be exactly integer rate");
+    return;
+  }
+  if (definition.type === "timeout") {
+    if (!exactAttributes(definition.attributes, { timeout: 0 })) {
+      throw new Error("Timeout toxic attributes must be exactly integer timeout:0");
+    }
+    return;
+  }
+  throw new Error(`Unsupported toxic type: ${definition.type}`);
+}
+
+function exactJson(actual, expected) {
+  if (Array.isArray(actual) || Array.isArray(expected)) {
+    return Array.isArray(actual) && Array.isArray(expected) && actual.length === expected.length
+      && actual.every((value, index) => exactJson(value, expected[index]));
+  }
+  if (actual && expected && typeof actual === "object" && typeof expected === "object") {
+    const actualKeys = Object.keys(actual).sort();
+    const expectedKeys = Object.keys(expected).sort();
+    return actualKeys.length === expectedKeys.length
+      && actualKeys.every((key, index) => key === expectedKeys[index] && exactJson(actual[key], expected[key]));
+  }
+  return actual === expected;
+}
+
 class ManagedToxiproxy {
   constructor({ workDir, binary = null, requestTimeoutMs = REQUEST_TIMEOUT_MS } = {}) {
     this.tool = verifyCachedBinary();
@@ -357,7 +397,7 @@ class ManagedToxiproxy {
       if (!this.proxies.has(proxyName)) throw new Error(`Proxy ${proxyName} is not owned by this controller`);
       name = assertOwnedName(definition.name, "toxic name");
       if (!['upstream', 'downstream'].includes(definition.stream)) throw new Error(`Invalid toxic stream: ${definition.stream}`);
-      if (!['latency', 'bandwidth'].includes(definition.type)) throw new Error(`Unsupported toxic type: ${definition.type}`);
+      assertExactToxicDefinition(definition);
       if (!Number.isFinite(definition.toxicity) || definition.toxicity < 0 || definition.toxicity > 1) throw new Error("Toxic toxicity must be finite and in [0,1]");
     } catch (error) {
       this.captureFirstFailure(error, { operation: "validate-create-toxic", proxyName: String(proxyName).slice(0, 80), toxicName: String(definition?.name).slice(0, 80) });
@@ -375,6 +415,51 @@ class ManagedToxiproxy {
       return toxic;
     } catch (error) {
       this.captureFirstFailure(error, { operation: "validate-toxic", proxyName, toxicName: name });
+      throw error;
+    }
+  }
+
+  async updateProxyEnabled(name, enabled) {
+    try {
+      name = assertOwnedName(name, "proxy name");
+      if (!this.proxies.has(name)) throw new Error(`Proxy ${name} is not owned by this controller`);
+      if (typeof enabled !== "boolean") throw new Error(`Proxy enabled must be boolean, got ${enabled}`);
+    } catch (error) {
+      this.captureFirstFailure(error, { operation: "validate-update-proxy-enabled", proxyName: String(name).slice(0, 80) });
+      throw error;
+    }
+    const previous = this.proxies.get(name);
+    const expectedToxics = [...(this.toxics.get(name)?.values() || [])].map((toxic) => ({
+      attributes: toxic.attributes,
+      name: toxic.name,
+      stream: toxic.stream,
+      toxicity: toxic.toxicity,
+      type: toxic.type,
+    }));
+    const proxy = await this.request("PATCH", `/proxies/${name}`, { enabled });
+    // The PATCH may have mutated the daemon even when its response is malformed.
+    // Retain the requested identity and requested state so cleanup never trusts a
+    // returned name and later callers can fence the owned path conservatively.
+    this.proxies.set(name, {
+      ...previous,
+      apiName: name,
+      enabled,
+      returnedName: proxy?.name || null,
+      provisionalResponse: proxy,
+    });
+    this.record({ phase: "proxy-enabled-provisional", name, enabled, returnedName: proxy?.name || null });
+    try {
+      if (proxy?.name !== name || proxy?.listen !== previous.listen || proxy?.upstream !== previous.upstream
+        || proxy?.enabled !== enabled || !exactJson(proxy?.toxics, expectedToxics)) {
+        throw new Error(`Typed proxy PATCH changed fields other than enabled: ${JSON.stringify(proxy)}`);
+      }
+      const listener = parseAddress(proxy.listen, "updated proxy listener");
+      if (listener.port !== previous.listener.port) throw new Error(`Typed proxy PATCH changed listener port for ${name}`);
+      this.proxies.set(name, { ...proxy, apiName: name, listener });
+      this.record({ phase: "proxy-enabled-verified", name, enabled, listen: proxy.listen, upstream: proxy.upstream });
+      return this.proxies.get(name);
+    } catch (error) {
+      this.captureFirstFailure(error, { operation: "validate-update-proxy-enabled", proxyName: name, requestedEnabled: enabled });
       throw error;
     }
   }
