@@ -78,6 +78,12 @@
   an outbound-generation fence. Same-socket rebase, connection replacement,
   run rotation, cleanup, and shutdown now make every old delayed callback inert
   before reliable IDs restart at one. Reliable scheduling remains disabled.
+- Opened adapter-side seeded impairment for reliable complete frames after the
+  queue, client, and barrier prerequisites passed. Held/reordered IDs cannot ACK
+  across holes; omission re-arms only on a later sweep; duplicate releases stay
+  bounded and exactly-once; release-time high water re-arms without stranding;
+  and stale, invalid, or asynchronous scheduler work fails closed. This is
+  Layer A frame evidence, not TCP packet-loss or WAN proof.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

@@ -3,6 +3,7 @@
 
 const assert = require("assert");
 const http = require("http");
+const { WebSocket } = require("ws");
 const { createSimWebSocketAdapter } = require("../scripts/sim-ws-adapter.cjs");
 const { createSeededFrameScheduler } = require("./network/seeded-frame-scheduler.cjs");
 const {
@@ -76,7 +77,66 @@ function createSchedulerSeam(scheduler) {
   };
 }
 
-async function createHarness({ scheduleOutboundFrame } = {}) {
+function createControlledReliableSeam(plan) {
+  const pending = new Map();
+  const attempts = new Map();
+  const contexts = [];
+  function scheduleOutboundFrame(wire, context, deliver) {
+    contexts.push(context);
+    const decoded = JSON.parse(wire);
+    if (decoded.deliveryId === undefined) {
+      deliver();
+      return { accepted: true, deliveryCount: 1 };
+    }
+    const attempt = (attempts.get(decoded.deliveryId) || 0) + 1;
+    attempts.set(decoded.deliveryId, attempt);
+    const decision = plan(decoded, attempt);
+    const record = { decoded, deliver, cancelled: false, remaining: decision.copies };
+    if (decision.copies > 0) pending.set(decoded.deliveryId, record);
+    return {
+      accepted: decision.accepted !== false,
+      deliveryCount: decision.copies,
+      cancel() { record.cancelled = true; pending.delete(decoded.deliveryId); },
+    };
+  }
+  function release(deliveryId, copies) {
+    const record = pending.get(deliveryId);
+    assert(record && !record.cancelled, `missing held delivery ${deliveryId}`);
+    const count = copies ?? record.remaining;
+    for (let index = 0; index < count; index += 1) record.deliver();
+    record.remaining -= count;
+    if (record.remaining <= 0) pending.delete(deliveryId);
+  }
+  return { scheduleOutboundFrame, release, pending, attempts, contexts };
+}
+
+function attachContiguousDeliveryClient(client) {
+  const pendingIds = new Set();
+  const pendingEvents = new Map();
+  const settledActions = new Set();
+  const playableEvents = [];
+  let cursor = 0;
+  client.ws.on("message", (raw) => {
+    const incoming = JSON.parse(raw.toString());
+    if (!Number.isSafeInteger(incoming.deliveryId)) return;
+    if (incoming.deliveryId <= cursor || pendingIds.has(incoming.deliveryId)) return;
+    pendingIds.add(incoming.deliveryId);
+    if (incoming.type === "event") pendingEvents.set(incoming.deliveryId, incoming);
+    if (incoming.type === "ack" && incoming.ackKind === "action") settledActions.add(incoming.actionId);
+    const before = cursor;
+    while (pendingIds.delete(cursor + 1)) cursor += 1;
+    if (cursor === before) return;
+    for (const [deliveryId, event] of [...pendingEvents].sort((left, right) => left[0] - right[0])) {
+      if (deliveryId > cursor) continue;
+      playableEvents.push(event);
+      pendingEvents.delete(deliveryId);
+    }
+    client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: cursor }));
+  });
+  return { get cursor() { return cursor; }, settledActions, playableEvents };
+}
+
+async function createHarness({ scheduleOutboundFrame, sweepIntervalMs = 1_000, queueOptions } = {}) {
   const server = http.createServer((_request, response) => response.writeHead(404).end());
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const baseUrl = `ws://127.0.0.1:${server.address().port}`;
@@ -91,7 +151,8 @@ async function createHarness({ scheduleOutboundFrame } = {}) {
     server,
     runId: "run-impairment",
     heartbeatIntervalMs: 60_000,
-    sweepIntervalMs: 1_000,
+    sweepIntervalMs,
+    queueOptions,
     scheduleOutboundFrame,
     async redeemHello(wireFrame) {
       const claim = tickets.get(wireFrame.admissionTicket);
@@ -217,29 +278,187 @@ async function main() {
     }
   });
 
-  await test("bypasses scheduling for reliable delivery IDs and preserves cumulative ACK ordering", async () => {
-    const scheduler = createSeededFrameScheduler({ rootSeed: 11n,
-      rules: { "authority-to-client": { event: { delayMs: 25, reorderWindow: 1, duplicateRate: 1 } } } });
-    const seam = createSchedulerSeam(scheduler);
+  await test("holds ID 1, releases ID 2 first, then closes the delivery hole exactly once", async () => {
+    const seam = createControlledReliableSeam(() => ({ copies: 1 }));
     const harness = await createHarness({ scheduleOutboundFrame: seam.scheduleOutboundFrame });
     try {
-      const client = await admit(harness, seam, "ack", 1, 0);
+      const client = await admit(harness, null, "ack", 1, 0);
+      const delivery = attachContiguousDeliveryClient(client);
       const binding = harness.bindings.find((entry) => entry.name === "ack");
       const first = await harness.adapter.enqueueReliable(binding, { type: "event", runId: "run-impairment",
         eventSeq: 1, tick: 1, visibility: "owner", eventType: "test.first", payload: {} });
-      const second = await harness.adapter.enqueueReliable(binding, { type: "event", runId: "run-impairment",
-        eventSeq: 2, tick: 2, visibility: "owner", eventType: "test.second", payload: {} });
+      const second = await harness.adapter.enqueueReliable(binding, { type: "ack", ackKind: "action",
+        actionId: "action-two", actionSeq: 2, commandSeq: 2, status: "accepted", result: { pulsed: true } });
       assert(first.accepted && second.accepted);
-      const events = await waitFor(() => {
-        const value = client.messages.filter((message) => message.type === "event");
-        return value.length === 2 ? value : null;
-      }, { label: "immediate reliable events" });
-      assert.deepStrictEqual(events.map((event) => event.deliveryId), [1, 2]);
-      assert.strictEqual(seam.contexts.filter((context) => context.frameType === "event").length, 0,
-        "The impairment scheduler must never observe reliable delivery frames");
+      assert(seam.pending.has(1) && seam.pending.has(2));
+      seam.release(2);
+      await waitFor(() => delivery.settledActions.has("action-two"), { label: "out-of-order action settlement" });
+      assert.strictEqual(delivery.cursor, 0);
+      assert.strictEqual(harness.acks.filter((entry) => entry.ack.ackKind === "delivery").length, 0);
+      assert.strictEqual(delivery.playableEvents.length, 0);
       assert.strictEqual(harness.adapter.diagnostics().queuedMessages, 2);
-      client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: second.frame.deliveryId }));
+      seam.release(1);
+      await waitFor(() => harness.acks.some((entry) => entry.ack.ackKind === "delivery"
+        && entry.ack.deliveryId === 2), { label: "contiguous delivery ACK 2" });
       await waitFor(() => harness.adapter.diagnostics().queuedMessages === 0, { label: "delivery retention release" });
+      assert.strictEqual(delivery.cursor, 2);
+      assert.strictEqual(delivery.settledActions.size, 1);
+      assert.deepStrictEqual(delivery.playableEvents.map((event) => event.eventSeq), [1]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await test("re-arms an omitted ID 1 only on a later sweep while ID 2 remains independently releasable", async () => {
+    const seam = createControlledReliableSeam((decoded, attempt) => ({
+      copies: decoded.deliveryId === 1 && attempt === 1 ? 0 : 1,
+    }));
+    const harness = await createHarness({ scheduleOutboundFrame: seam.scheduleOutboundFrame, sweepIntervalMs: 20 });
+    try {
+      const client = await admit(harness, null, "omission", 1);
+      const delivery = attachContiguousDeliveryClient(client);
+      const binding = client.binding;
+      await harness.adapter.enqueueReliable(binding, { type: "event", runId: "run-impairment",
+        eventSeq: 1, tick: 1, visibility: "owner", eventType: "test.omitted", payload: {} });
+      assert.strictEqual(seam.attempts.get(1), 1, "Omission must not recursively retry in its originating flush");
+      await waitFor(() => seam.attempts.get(1) === 2 && seam.pending.has(1), { label: "later-sweep ID 1 retry" });
+      await harness.adapter.enqueueReliable(binding, { type: "event", runId: "run-impairment",
+        eventSeq: 2, tick: 2, visibility: "owner", eventType: "test.second", payload: {} });
+      assert(seam.pending.has(2));
+      seam.release(2);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.strictEqual(delivery.cursor, 0);
+      assert.strictEqual(harness.adapter.diagnostics().queuedMessages, 2);
+      seam.release(1);
+      await waitFor(() => delivery.cursor === 2 && harness.adapter.diagnostics().queuedMessages === 0, {
+        label: "omission recovery ACK",
+      });
+      assert.deepStrictEqual(delivery.playableEvents.map((event) => event.eventSeq), [1, 2]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await test("duplicates one leased reliable attempt into identical wires and one semantic consequence", async () => {
+    const seam = createControlledReliableSeam(() => ({ copies: 2 }));
+    const harness = await createHarness({ scheduleOutboundFrame: seam.scheduleOutboundFrame });
+    try {
+      const client = await admit(harness, null, "reliable-duplicate", 1);
+      const delivery = attachContiguousDeliveryClient(client);
+      const outcome = await harness.adapter.enqueueReliable(client.binding, { type: "event", runId: "run-impairment",
+        eventSeq: 1, tick: 1, visibility: "owner", eventType: "test.duplicate", payload: {} });
+      assert(outcome.accepted && seam.pending.has(1));
+      seam.release(1, 2);
+      await waitFor(() => delivery.cursor === 1 && harness.adapter.diagnostics().queuedMessages === 0, {
+        label: "duplicate delivery retirement",
+      });
+      const wires = client.rawMessages.filter((wire) => JSON.parse(wire).deliveryId === 1);
+      assert.strictEqual(wires.length, 2);
+      assert.strictEqual(wires[0], wires[1]);
+      assert.deepStrictEqual(delivery.playableEvents.map((event) => event.eventSeq), [1]);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await test("treats a duplicate callback after first-copy ACK retirement as benign stale work", async () => {
+    const seam = createControlledReliableSeam(() => ({ copies: 2 }));
+    const harness = await createHarness({ scheduleOutboundFrame: seam.scheduleOutboundFrame });
+    try {
+      const client = await admit(harness, null, "late-duplicate", 1);
+      const delivery = attachContiguousDeliveryClient(client);
+      await harness.adapter.enqueueReliable(client.binding, { type: "event", runId: "run-impairment",
+        eventSeq: 1, tick: 1, visibility: "owner", eventType: "test.late-duplicate", payload: {} });
+      seam.release(1, 1);
+      await waitFor(() => delivery.cursor === 1 && harness.adapter.diagnostics().queuedMessages === 0, {
+        label: "first-copy ACK retirement",
+      });
+      assert.strictEqual(seam.release(1, 1), undefined);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.strictEqual(harness.adapter.diagnostics().connections, 1);
+      assert.strictEqual(client.close.code, null);
+      assert.strictEqual(client.rawMessages.filter((wire) => JSON.parse(wire).deliveryId === 1).length, 1);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await test("re-arms a held release at transport high water without stranding the next leased attempt", async () => {
+    const seam = createControlledReliableSeam(() => ({ copies: 1 }));
+    const originalBufferedAmount = Object.getOwnPropertyDescriptor(WebSocket.prototype, "bufferedAmount");
+    let forcedBufferedAmount = 0;
+    Object.defineProperty(WebSocket.prototype, "bufferedAmount", {
+      configurable: true,
+      enumerable: originalBufferedAmount.enumerable,
+      get() { return forcedBufferedAmount; },
+    });
+    const harness = await createHarness({
+      scheduleOutboundFrame: seam.scheduleOutboundFrame,
+      sweepIntervalMs: 20,
+      queueOptions: { transportHighWaterBytes: 100, transportLowWaterBytes: 10 },
+    });
+    try {
+      const client = await admit(harness, null, "release-high-water", 1);
+      const delivery = attachContiguousDeliveryClient(client);
+      for (let eventSeq = 1; eventSeq <= 2; eventSeq += 1) {
+        await harness.adapter.enqueueReliable(client.binding, { type: "event", runId: "run-impairment",
+          eventSeq, tick: eventSeq, visibility: "owner", eventType: `test.high-water.${eventSeq}`, payload: {} });
+      }
+      assert(seam.pending.has(1) && seam.pending.has(2));
+      forcedBufferedAmount = 100;
+      seam.release(1);
+      assert.strictEqual(delivery.cursor, 0);
+      assert.strictEqual(harness.adapter.diagnostics().queuedMessages, 2);
+      forcedBufferedAmount = 0;
+      await waitFor(() => seam.attempts.get(1) === 2 && seam.pending.has(1), { label: "low-water retry" });
+      seam.release(1);
+      seam.release(2);
+      await waitFor(() => delivery.cursor === 2 && harness.adapter.diagnostics().queuedMessages === 0, {
+        label: "post-high-water retirement",
+      });
+      assert.deepStrictEqual(delivery.playableEvents.map((event) => event.eventSeq), [1, 2]);
+    } finally {
+      Object.defineProperty(WebSocket.prototype, "bufferedAmount", originalBufferedAmount);
+      await harness.close();
+    }
+  });
+
+  await test("fails the connection cleanly when the scheduler reports an invalid reliable copy count", async () => {
+    const harness = await createHarness({ scheduleOutboundFrame(wire, _context, deliver) {
+      if (JSON.parse(wire).deliveryId === undefined) {
+        deliver();
+        return { accepted: true, deliveryCount: 1 };
+      }
+      return { accepted: true, deliveryCount: 3 };
+    } });
+    try {
+      const client = await admit(harness, null, "invalid-count", 1);
+      await harness.adapter.enqueueReliable(client.binding, { type: "event", runId: "run-impairment",
+        eventSeq: 1, tick: 1, visibility: "owner", eventType: "test.invalid-count", payload: {} });
+      await waitFor(() => client.close.code !== null && harness.adapter.diagnostics().connections === 0, {
+        label: "invalid scheduler count cleanup",
+      });
+      assert.strictEqual(harness.adapter.diagnostics().queuedMessages, 0);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await test("fails closed when a scheduler returns an unsupported Promise outcome", async () => {
+    const harness = await createHarness({ scheduleOutboundFrame(wire, _context, deliver) {
+      if (JSON.parse(wire).deliveryId === undefined) {
+        deliver();
+        return { accepted: true, deliveryCount: 1 };
+      }
+      return Promise.reject(new Error("async scheduler failure"));
+    } });
+    try {
+      const client = await admit(harness, null, "promise-outcome", 1);
+      await harness.adapter.enqueueReliable(client.binding, { type: "event", runId: "run-impairment",
+        eventSeq: 1, tick: 1, visibility: "owner", eventType: "test.promise-outcome", payload: {} });
+      await waitFor(() => client.close.code !== null && harness.adapter.diagnostics().connections === 0, {
+        label: "Promise scheduler cleanup",
+      });
     } finally {
       await harness.close();
     }
@@ -319,12 +538,14 @@ async function main() {
   });
 
   await test("makes same-socket rebase an immediate barrier that cancels held old-epoch work", async () => {
-    let holdPublicState = false;
+    let holdReliable = false;
     const scheduledTypes = [];
+    const scheduledContexts = [];
     const held = [];
     const harness = await createHarness({ scheduleOutboundFrame(wire, context, deliver) {
       scheduledTypes.push(context.frameType);
-      if (holdPublicState && context.frameType === "publicState") {
+      scheduledContexts.push(context);
+      if (holdReliable && JSON.parse(wire).deliveryId !== undefined) {
         const record = { wire, context, deliver, cancelled: false };
         held.push(record);
         return { accepted: true, deliveryCount: 1, cancel() { record.cancelled = true; } };
@@ -338,8 +559,12 @@ async function main() {
       assert(!scheduledTypes.includes("welcome") && !scheduledTypes.includes("rebase"),
         "Delivery-epoch barriers must never enter the impairment scheduler");
 
-      holdPublicState = true;
-      await harness.adapter.projectNow();
+      holdReliable = true;
+      const oldReliable = await harness.adapter.enqueueReliable(binding, {
+        type: "event", runId: "run-impairment", eventSeq: 1, tick: 2,
+        visibility: "owner", eventType: "test.before-rebase", payload: {},
+      });
+      assert(oldReliable.accepted && oldReliable.frame.deliveryId === 1);
       assert.strictEqual(held.length, 1);
       const result = await harness.adapter.sendRebase(binding, {
         type: "rebase",
@@ -353,6 +578,7 @@ async function main() {
       assert.strictEqual(held[0].deliver(), false, "Cancelled old-generation callback must stay inert");
       assert.strictEqual(harness.adapter.diagnostics().pendingScheduledSends, 0);
 
+      holdReliable = false;
       const reliable = await harness.adapter.enqueueReliable(binding, {
         type: "event",
         runId: "run-impairment",
@@ -373,8 +599,11 @@ async function main() {
         ["event", 1],
       ]);
       assert.strictEqual(scheduledTypes.filter((type) => type === "rebase").length, 0);
-      assert.strictEqual(scheduledTypes.filter((type) => type === "event").length, 0,
-        "Reliable scheduling remains gated after the barrier lands");
+      assert.strictEqual(scheduledTypes.filter((type) => type === "event").length, 2,
+        "The held old epoch and delivered new epoch must be distinct scheduled attempts");
+      const eventContexts = scheduledContexts.filter((context) => context.frameType === "event");
+      assert(eventContexts[0].outboundGeneration < eventContexts[1].outboundGeneration,
+        "The new reliable attempt must belong to the post-barrier outbound generation");
     } finally {
       await harness.close();
     }

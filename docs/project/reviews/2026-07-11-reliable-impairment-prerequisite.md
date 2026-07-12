@@ -152,7 +152,7 @@ accepted `rebase`, stream reset, and terminal stop.
 3. **Adapter barrier and integration — landed.** Centralize outbound reset, make rebase
    an immediate ordered barrier, pass queue attempt tokens through the existing
    scheduler seam, and keep terminal frames immediate.
-4. **Reliable fault gate.** Remove the `deliveryId` bypass only after an
+4. **Reliable fault gate — landed.** Remove the `deliveryId` bypass only after an
    integration adversary holds ID 1, releases ID 2, observes no ACK eligibility,
    then releases ID 1 and proves exactly-once semantic outcome plus ACK 2.
 
@@ -176,6 +176,13 @@ generation, run, and connection epoch. Reliable frames still bypass scheduling,
 so the Step 4 gate must add per-release high-water handling without stranding a
 pre-leased batch before it may remove that bypass.
 
+Step 4 removed the adapter's reliable-frame bypass after proving held ID 1 /
+released ID 2 ordering, later-sweep omission retry, bounded byte-identical
+duplication, benign post-ACK late callbacks, release-time high-water recovery,
+invalid/thenable scheduler failure, and held-token rebase fencing. Injected
+scheduling drains one queue entry per pass to avoid pre-leased batch stranding;
+the default no-scheduler path retains its existing batch behavior.
+
 ## Required adversaries
 
 - action ACK ID 2 before event ID 1 settles the action once but emits no
@@ -198,8 +205,10 @@ pre-leased batch before it may remove that bypass.
 
 ## Exit gate
 
-Reliable impairment is open only when focused queue, client, and adapter suites
-all pass; the full `multiplayer-network` lane passes; diagnostics return to zero
-after cleanup; and the red-team can no longer construct a hole that the server
-retires or the client plays across. Frame omission remains the correct Layer A
-term. TCP packet loss remains a later netem claim.
+The adapter-side reliable impairment gate is open: focused queue, client, and
+adapter suites pass; the full `multiplayer-network` lane passes; diagnostics
+return to zero after cleanup; and the red-team can no longer construct a hole
+that the server retires or the client plays across. This enables the later F3
+application-frame cohort; it does not claim that browser matrix has run. Frame
+omission remains the correct Layer A term. TCP packet loss remains a later
+netem claim.

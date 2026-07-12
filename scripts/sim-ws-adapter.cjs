@@ -106,7 +106,7 @@ function createSimWebSocketAdapter(options = {}) {
     return state.queue.reset();
   }
 
-  function sendWireImmediate(state, wire, sendAttempt = null) {
+  function sendWireImmediate(state, wire, sendAttempt = null, { completeAttempt = true } = {}) {
     if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) {
       if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
       return false;
@@ -121,7 +121,7 @@ function createSimWebSocketAdapter(options = {}) {
       });
       if (sendAttempt) {
         if (!state.queue.recordPhysicalSend(sendAttempt)
-          || !state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 1 })) {
+          || (completeAttempt && !state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 1 }))) {
           terminate(state);
           return false;
         }
@@ -159,11 +159,11 @@ function createSimWebSocketAdapter(options = {}) {
   }
 
   function sendWire(state, wire, frame, sendAttempt = null) {
-    // Cumulative delivery ACKs assume reliable IDs reach the socket in issue
-    // order. Terminal frames must also retain their existing close semantics.
+    // Epoch barriers and terminal frames are physically ordered outside the
+    // impairment scheduler. Reliable attempts may be delayed only while their
+    // queue lease remains live; scheduling alone never makes them ACK-eligible.
     if (
       !scheduleOutboundFrame
-      || frame.deliveryId !== undefined
       || frame.type === "welcome"
       || frame.type === "rebase"
       || frame.type === "error"
@@ -171,14 +171,33 @@ function createSimWebSocketAdapter(options = {}) {
     ) {
       return sendWireImmediate(state, wire, sendAttempt);
     }
-    if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) return false;
+    if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) {
+      if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
+      return false;
+    }
     const context = outboundFrameContext(state, frame);
-    const token = { active: true, cancel: null, delivered: 0, deliveryCount: null };
+    const token = {
+      active: true,
+      cancel: null,
+      delivered: 0,
+      deliveryCount: null,
+      physicalCopies: 0,
+      sendAttempt,
+    };
     state.scheduledSends ??= new Set();
     state.scheduledSends.add(token);
     const settle = () => {
+      if (!token.active) return true;
+      if (token.sendAttempt
+        && !state.queue.completeSendAttempt(token.sendAttempt, { physicalCopies: token.physicalCopies })) {
+        token.active = false;
+        state.scheduledSends.delete(token);
+        terminate(state);
+        return false;
+      }
       token.active = false;
       state.scheduledSends.delete(token);
+      return true;
     };
     const deliver = () => {
       if (!token.active) return false;
@@ -196,21 +215,54 @@ function createSimWebSocketAdapter(options = {}) {
         && !state.abortController.signal.aborted
         && epochIsCurrent
         && (!state.closing || mayDeliverWhileClosing);
-      const sent = live ? sendWireImmediate(state, wire) : false;
-      if (token.deliveryCount !== null && token.delivered >= token.deliveryCount) settle();
+      let sent = false;
+      if (live) {
+        state.queue.observeTransportBufferedBytes(state.ws.bufferedAmount);
+        if (!state.queue.transportBackpressured) {
+          // The first copy can be received and cumulatively ACKed before an
+          // asynchronously delayed duplicate is released. Retirement makes
+          // that late copy stale, not a transport-integrity failure.
+          if (token.sendAttempt
+            && !state.queue.authorizePhysicalSend(token.sendAttempt)
+            && state.queue.status().lastAckedReliableId >= token.sendAttempt.reliableId) {
+            token.active = false;
+            state.scheduledSends.delete(token);
+            return false;
+          }
+          sent = sendWireImmediate(state, wire, token.sendAttempt, { completeAttempt: false });
+          if (sent && token.sendAttempt) token.physicalCopies += 1;
+        }
+      }
+      // A delayed release that finds a dead or backpressured socket ends this
+      // attempt now. Zero accepted copies re-arm it for a later sweep; a second
+      // callback from a duplicate decision is fenced by token.active.
+      if (!sent || (token.deliveryCount !== null && token.delivered >= token.deliveryCount)) settle();
       return sent;
     };
     try {
       const outcome = scheduleOutboundFrame(wire, context, deliver);
+      if (outcome && typeof outcome.then === "function") {
+        Promise.resolve(outcome).catch(() => {});
+        settle();
+        terminate(state);
+        return false;
+      }
       if (outcome === false || outcome?.accepted === false) {
         settle();
+        terminate(state);
         return false;
       }
       token.cancel = typeof outcome === "function" ? outcome
         : (typeof outcome?.cancel === "function" ? outcome.cancel : null);
-      token.deliveryCount = Number.isSafeInteger(outcome?.deliveryCount) && outcome.deliveryCount >= 0
-        ? outcome.deliveryCount
-        : 1;
+      token.deliveryCount = outcome?.deliveryCount === undefined ? 1 : outcome.deliveryCount;
+      if (!Number.isSafeInteger(token.deliveryCount)
+        || token.deliveryCount < 0
+        || token.deliveryCount > 2
+        || token.delivered > token.deliveryCount) {
+        settle();
+        terminate(state);
+        return false;
+      }
       if (token.deliveryCount === 0 || token.delivered >= token.deliveryCount) settle();
       return true;
     } catch {
@@ -301,7 +353,10 @@ function createSimWebSocketAdapter(options = {}) {
       if (status.backpressured) state.backpressuredSince ??= timestamp;
       else state.backpressuredSince = null;
       if (status.disconnectRequired) return queueOutcome(state, { action: "disconnect" });
-      const drained = state.queue.drain();
+      // Lease at most one queue entry per pass. A held reliable attempt must
+      // not strand later entries in a pre-leased batch; later enqueue/sweep
+      // passes can lease the next ready entry independently.
+      const drained = state.queue.drain(scheduleOutboundFrame ? { maxMessages: 1 } : {});
       if (drained.action === "pause") return;
       for (const message of drained.messages) {
         if (message.lane === "state") {
