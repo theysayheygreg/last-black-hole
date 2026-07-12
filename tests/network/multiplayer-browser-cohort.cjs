@@ -531,6 +531,7 @@ function clientLedger(pilot, ownerPlayerId) {
   const actions = new Map();
   const actionLatencies = [];
   const pulseEvents = [];
+  const deliveredEventCounts = new Map();
   const pairs = new Map();
   const alignedTimes = [];
   for (const event of events) {
@@ -556,6 +557,10 @@ function clientLedger(pilot, ownerPlayerId) {
         && action.semanticOutcome.commandSeq === event.commandSeq,
         `${pilot.slot} duplicate action ACK changed semantic status`);
     }
+    if (event.direction === "authority-to-client" && event.event === "application-delivered"
+      && event.frameClass === "event" && Number.isSafeInteger(event.eventSeq)) {
+      deliveredEventCounts.set(event.eventSeq, (deliveredEventCounts.get(event.eventSeq) || 0) + 1);
+    }
     if (active && event.direction === "authority-to-client" && event.event === "application-delivered"
       && (event.frameClass === "publicState" || event.frameClass === "ownerState") && event.snapshotId) {
       const pair = pairs.get(event.snapshotId) || {};
@@ -566,6 +571,19 @@ function clientLedger(pilot, ownerPlayerId) {
         alignedTimes.push(Math.max(pair.publicState, pair.ownerState));
       }
     }
+  }
+  const consumedEventCounts = new Map();
+  for (const event of pilot.consumedEvents) {
+    assert(Number.isSafeInteger(event.eventSeq), `${pilot.slot} consumed event lacked a safe event sequence`);
+    consumedEventCounts.set(event.eventSeq, (consumedEventCounts.get(event.eventSeq) || 0) + 1);
+  }
+  assert([...consumedEventCounts.values()].every((count) => count === 1),
+    `${pilot.slot} consumed a duplicate event sequence`);
+  const duplicateDeliveredEventSequences = [...deliveredEventCounts.entries()]
+    .filter(([, count]) => count > 1).map(([eventSeq]) => eventSeq);
+  for (const eventSeq of duplicateDeliveredEventSequences) {
+    assert(consumedEventCounts.get(eventSeq) === 1,
+      `${pilot.slot} duplicated delivered event ${eventSeq} was not consumed exactly once`);
   }
   for (const event of pilot.consumedEvents.filter((entry) =>
     entry.eventType === "player.pulse" && entry.eventPlayerId === ownerPlayerId)) {
@@ -602,6 +620,7 @@ function clientLedger(pilot, ownerPlayerId) {
       snapshotCadenceP95Ms: percentile(cadence, 0.95),
       reliableActions: actions.size,
       reliableConsequenceP95Ms: percentile(actionLatencies, 0.95),
+      duplicateDeliveredEventSequences: duplicateDeliveredEventSequences.length,
     },
   };
 }
@@ -874,6 +893,8 @@ async function runBrowserCohort(options) {
         const omittedInputs = impairment.faultClasses["pilot-3/client-to-authority/input"].omitted;
         assert(expectedInputTimeouts.length <= omittedInputs,
           `pilot-3 input timeout evidence did not correlate to ${omittedInputs} omissions`);
+        assert(summary.duplicateDeliveredEventSequences > 0,
+          "pilot-3 did not bind duplicated event delivery to exact-once gameplay consumption");
       }
       assert(resources.pilots[index].pageErrors.length === 0 && fatalConsoleErrors.length === 0
         && resources.pilots[index].rewriteErrors.length === 0 && resources.pilots[index].networkFailures.length === 0,
