@@ -395,3 +395,26 @@ diagnostics cleanup. Harness-only terminal-window and cleanup-inventory defects
 found during finalization were fixed through clean HEAD `86e31e3`, but those
 fixes do not convert or authorize rerunning the canonical evidence. A lifecycle
 decision and a traffic-budget decision must land first; churn-90m stays blocked.
+
+### Decisions after the failed run
+
+The lifecycle and traffic directions are now fixed, but they do not authorize
+an immediate rerun.
+
+- For normal-45m only, add a strict test/soak-diagnostics guarded seam that
+  suppresses the authored collapse terminal kill/endSession after normal
+  predicates and side effects. It must preserve ecology, hazards, ordinary
+  terminal outcomes, and `LBH_SIM_MAX_SIM_TIME=7200`. Post-collapse credit is
+  synthetic infrastructure longevity, not product-duration or balance proof.
+- Churn-90m changes to nine sequential natural product-length matches under one
+  stable process/control plane. Every match gets fresh session/run/authority
+  state, exactly one logical authority exists while it is active, and adjacent
+  authorities never overlap. This is process/control-plane churn evidence, not
+  90-minute single-match retention.
+- Historical 2.5 MiB/s smoke and decimal 2.5 MB/s canonical outcomes remain
+  immutable artifact facts. Future gates use per-class bytes/frame at valid
+  cadence plus <=64 KiB/s/player steady and <=80 KiB/s sensitivity. The failed
+  active minute was 308.4 KiB/s/player and 95.4% of state bytes were public.
+  Implement static-manifest extraction and recipient baseline/delta public
+  replication before restarting normal. Do not hide the debt with threshold
+  edits, compression, or collapse-diluted whole-run averages.

@@ -297,6 +297,15 @@ Singularity that:
   identity, retention, privacy, wall-time, and cleanup evidence otherwise
   passed. Run separate lifecycle-seam and traffic-budget decision lanes before
   restarting normal from zero. Keep churn blocked meanwhile.
+- Lifecycle decision: implement only a guarded test/diagnostics authored-
+  collapse suppression seam for the 45-minute infrastructure profile; redesign
+  churn as nine sequential natural matches under one process, with exactly one
+  non-overlapping logical authority per active match. Traffic decision: retain
+  historical 2.5 MB/MiB outcomes but replace future gates with per-class frame
+  size/cadence plus <=64 KiB/s/player (80 KiB sensitivity). The measured active
+  rate is 308.4 KiB/s/player, dominated by public state. Plan and implement
+  static-manifest plus public baseline/delta replication before any rerun,
+  hosted lane, or high-count expansion.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

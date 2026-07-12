@@ -235,6 +235,19 @@ RSS/GC/CPU/ELU/retention/topology/reliability, wall time, and clean PID/port/
 diagnostics teardown. Resolve lifecycle and traffic policy before a from-zero
 rerun; do not begin the 90-minute churn profile.
 
+**Post-failure direction:** the steady 45-minute infrastructure profile will
+use a strict test-only authored-collapse suppression seam, retaining the finite
+7,200-second match lifetime fence and labeling all post-collapse gameplay as
+synthetic longevity. The 90-minute churn profile will use nine sequential
+natural matches under one stable process/control plane, with one non-overlapping
+logical authority per active match. Neither profile may rerun yet: active
+minute-nine traffic was 308.4 KiB/s/player, 4.82x the 64 KiB/s product target.
+Future evidence replaces aggregate smoke ceilings with per-class bytes/frame,
+cadence, and per-player 64/80 KiB gates. Static-manifest extraction and public
+baseline/delta replication are the next critical architecture mechanism;
+binary, AOI, compression, hosted WSS, and high-count work remain later measured
+steps.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

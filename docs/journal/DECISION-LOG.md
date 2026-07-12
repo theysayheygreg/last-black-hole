@@ -1,5 +1,48 @@
 # Decision Log
 
+## 2026-07-12 — Long evidence separates infrastructure longevity from natural match lifecycle
+
+**Decision:** The 45-minute steady transport/memory profile may use a guarded,
+test-only authored-collapse suppression seam while retaining all ecology,
+hazards, replication, and the finite `LBH_SIM_MAX_SIM_TIME=7200` fence. The
+90-minute product-realism/churn profile instead runs nine sequential natural
+matches under one stable process/control plane. Each active match has exactly
+one logical authority; adjacent match authorities never overlap.
+
+**Why:** A natural LBH universe correctly collapses around ten minutes, so one
+unmodified 45-minute run cannot measure continuously active per-match queues,
+CPU, GC, or retained heap. Disabling/faking the product clock is unacceptable
+for gameplay evidence, while repeated natural matches can hide single-match
+retention. The split keeps Universe Is the Clock intact and labels synthetic
+post-collapse longevity honestly.
+
+**Door status:** Open only for a strict `NODE_ENV=test` plus soak-diagnostics
+guarded seam that suppresses authored terminal kill/endSession, never ordinary
+death/extraction, ecology, reset, terminal-all-players, or max lifetime. Closed
+for changing product duration, freezing/dilating the sim, treating one process
+as a fleet-wide authority, or crediting the preserved FAIL artifact as soak.
+
+## 2026-07-12 — Product traffic gates replace aggregate smoke ceilings
+
+**Decision:** Preserve the historical 2.5 MiB/s smoke and decimal 2.5 MB/s
+canonical outcomes exactly as recorded, but do not use either fixed aggregate
+number as the future architecture gate. Add per-class bytes/frame and cadence
+accounting, then gate steady traffic at <=64 KiB/s/player with <=80 KiB/s as a
+declared sensitivity. Implement content-addressed static manifests and
+recipient baseline/delta public replication before binary, AOI, or compression.
+
+**Why:** The canonical active minute measured 308.4 KiB/s/player, 4.82x target;
+about 99.93% was authority-to-client, and public state was 95.4% of state bytes.
+Owner-only work cannot close the gap, cadence-only full snapshots would damage
+feel, and compression would hide application debt. Baseline-dependent dirty
+entity/component deltas attack the measured dominant source while preserving
+one canonical authority and reliable consequences.
+
+**Door status:** Closed for reinterpreting the failed decimal gate as MiB,
+raising a ceiling to pass, using whole-run averages diluted by collapse, or
+advancing hosted/high-count claims before the supported 4–8 envelope meets its
+product budget. Binary, AOI, and compression remain measured follow-ups.
+
 ## 2026-07-12 — T2 splits drainable pressure from hard fencing
 
 **Decision:** Replace the single T2 slow-reader row with `T2a` drain-before-
