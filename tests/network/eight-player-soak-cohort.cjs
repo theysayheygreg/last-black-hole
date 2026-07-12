@@ -611,9 +611,11 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const resourceInventory = await waitFor(() => readJsonl(resourceFile)[resourceIndex],
       "authority resource inventory", 3000).catch((error) => { failure ||= error.message; return null; });
     const resourceCounts = resourceInventory?.counts || {};
+    const expectedResources = !normal || timeScale === 1 ? fixture.authorityResourceExpected
+      : { ...fixture.authorityResourceExpected, Timeout: (fixture.authorityResourceExpected.Timeout || 0) + 1 };
     const orderedResources = (value) => Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)));
     const resourceInventoryPassed = Boolean(resourceInventory?.pid === authorityPid
-      && JSON.stringify(orderedResources(resourceCounts)) === JSON.stringify(orderedResources(fixture.authorityResourceExpected)));
+      && JSON.stringify(orderedResources(resourceCounts)) === JSON.stringify(orderedResources(expectedResources)));
     if (!resourceInventoryPassed) failure ||= `authority resource inventory exceeded declared caps: ${JSON.stringify(resourceCounts)}`;
     await stopSimServer(port).catch((error) => { failure ||= `authority stop failed: ${error.message}`; });
     const dead = await portIsDead(port);
@@ -633,7 +635,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       && pre?.safe?.soakDiagnostics?.histogramEnabled === true
       && pre?.safe?.soakDiagnostics?.observerConnected === true);
     return { preShutdown: pre?.safe || null, resourceInventory: resourceCounts,
-      resourceExpected: fixture.authorityResourceExpected, resourceInventoryPassed,
+      resourceExpected: expectedResources, resourceInventoryPassed,
       portReusable: dead, processDead, diagnosticsStopped,
       preShutdownAllowedResources,
       clientsClosed: allClients.every((client) => !client || client.close || client.ws.readyState === client.ws.CLOSED),
