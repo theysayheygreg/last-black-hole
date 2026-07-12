@@ -198,11 +198,15 @@ work, invoke `global.gc()` twice, wait two seconds, then sample heap. Checkpoint
 occur every 150 seconds in the 45-minute profile and at `cycle+150s` in each
 five-minute churn cycle, yielding at least twelve post-warm-up points in each.
 Tag and exclude the complete one-minute aggregate window containing a forced-GC
-checkpoint from cadence, event-loop, GC, and CPU performance gates; it still
-counts toward sampling coverage and wall-time/correctness ledgers. Every p99/max
-gate applies independently to each non-excluded minute; never compute a
-percentile of per-minute percentiles. Missing `global.gc`, a failed drain, or
-fewer than twelve valid points is RED.
+checkpoint **and its immediately following minute** from cadence, event-loop,
+GC, and CPU performance gates; both still count toward sampling coverage and
+wall-time/correctness ledgers. The conservative second exclusion covers the
+accepted diagnostics limitation that a `PerformanceObserver` callback may
+assign a boundary-adjacent GC entry to the next current window. Schedule quiet
+checkpoints away from rollovers where possible, but do not rely on timing alone.
+Every p99/max gate applies independently to each non-excluded minute; never
+compute a percentile of per-minute percentiles. Missing `global.gc`, a failed
+drain, or fewer than twelve valid points is RED.
 
 Use Theil-Sen bytes/minute across post-GC `heapUsed` points as the leak gate.
 Also report ordinary least-squares slope/R-squared as diagnostic, one-minute
