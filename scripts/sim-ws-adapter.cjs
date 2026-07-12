@@ -12,6 +12,10 @@ const {
 } = require("./multiplayer-wire-protocol.cjs");
 const { DEFAULTS: SEND_QUEUE_DEFAULTS, createMultiplayerSendQueue } = require("./multiplayer-send-queue.cjs");
 const {
+  createReplicationAccounting,
+  summarizeWindow: summarizeReplicationWindow,
+} = require("./replication-accounting.cjs");
+const {
   DEFAULTS,
   publicError,
   consumeRateBucket,
@@ -46,6 +50,11 @@ function createSimWebSocketAdapter(options = {}) {
     sweepIntervalMs, queueOptions,
   } = config;
   const connections = new Set();
+  const replicationAccounting = config.replicationAccounting
+    ? (config.replicationAccountingFactory || createReplicationAccounting)({ now })
+    : null;
+  let replicationAccountingEpoch = 1;
+  let replicationPendingSendCallbacks = 0;
   const byBindingKey = new Map();
   const bindingKeys = new WeakMap();
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false, maxPayload: LIMITS.maxFrameBytes });
@@ -368,6 +377,21 @@ function createSimWebSocketAdapter(options = {}) {
     if (onPressureTransition) state.scheduledSendBytes = 0;
     state.outboundGeneration = (state.outboundGeneration || 0) + 1;
     const before = state.queue.status();
+    if (replicationAccounting && state.replicationStateFrames) {
+      for (const queued of state.replicationStateFrames.values()) {
+        if (!queued.sendInvoked) replicationAccounting.outbound(state, queued.frame, "policyDropped", queued.bytes);
+      }
+      state.replicationStateFrames.clear();
+      state.replicationQueuedStateFrames = null;
+    }
+    if (replicationAccounting && state.replicationReliableFrames) {
+      for (const retained of state.replicationReliableFrames.values()) {
+        if (!retained.transportAccepted && !retained.sendInvoked) {
+          replicationAccounting.outbound(state, retained.frame, "policyDropped", retained.bytes);
+        }
+      }
+      state.replicationReliableFrames.clear();
+    }
     const result = state.queue.reset();
     if (onPressureTransition && cause === "cleanup") {
       state.pressureCounts.reliableResetOnCleanup += before.reliableMessages;
@@ -384,16 +408,44 @@ function createSimWebSocketAdapter(options = {}) {
     if (sendAttempt && !state.queue.authorizePhysicalSend(sendAttempt)) return false;
     try {
       state.pendingSends += 1;
+      if (replicationAccounting) replicationPendingSendCallbacks += 1;
+      const accountingTimestamp = replicationAccounting ? now() : null;
+      const accountingEpoch = replicationAccountingEpoch;
+      if (replicationAccounting && sendAttempt) {
+        const retained = state.replicationReliableFrames?.get(sendAttempt.reliableId);
+        if (retained) retained.sendInvoked = true;
+      } else if (replicationAccounting && (frame?.type === "publicState" || frame?.type === "ownerState")) {
+        const queued = state.replicationStateFrames?.get(frame);
+        if (queued) queued.sendInvoked = true;
+      }
       if (onPressureTransition) state.pendingSendBytes += Buffer.byteLength(wire, "utf8");
       samplePressure(state);
       state.ws.send(wire, (error) => {
         state.pendingSends = Math.max(0, state.pendingSends - 1);
+        if (replicationAccounting) replicationPendingSendCallbacks = Math.max(0, replicationPendingSendCallbacks - 1);
         if (onPressureTransition) {
           state.pendingSendBytes = Math.max(0, state.pendingSendBytes - Buffer.byteLength(wire, "utf8"));
         }
         samplePressure(state);
         if (error) terminate(state);
-        else flush(state);
+        else {
+          if (replicationAccounting && accountingEpoch === replicationAccountingEpoch) {
+            replicationAccounting.accepted(
+              state, frame, Buffer.byteLength(wire, "utf8"), sendAttempt, accountingTimestamp,
+            );
+            if (sendAttempt) {
+              const retained = state.replicationReliableFrames?.get(sendAttempt.reliableId);
+              if (retained) retained.transportAccepted = true;
+            }
+            if (frame?.type === "publicState" || frame?.type === "ownerState") {
+              state.replicationStateFrames?.delete(frame);
+              if (state.replicationQueuedStateFrames?.[frame.type]?.frame === frame) delete state.replicationQueuedStateFrames[frame.type];
+              if (state.replicationQueuedStateFrames
+                && Object.keys(state.replicationQueuedStateFrames).length === 0) state.replicationQueuedStateFrames = null;
+            }
+          }
+          flush(state);
+        }
       });
       if (onPressureTransition && sendAttempt) {
         state.pressureCounts.reliableWsSendAccepted += 1;
@@ -420,6 +472,7 @@ function createSimWebSocketAdapter(options = {}) {
       return true;
     } catch {
       state.pendingSends = Math.max(0, state.pendingSends - 1);
+      if (replicationAccounting) replicationPendingSendCallbacks = Math.max(0, replicationPendingSendCallbacks - 1);
       if (onPressureTransition) {
         state.pendingSendBytes = Math.max(0, state.pendingSendBytes - Buffer.byteLength(wire, "utf8"));
       }
@@ -582,7 +635,11 @@ function createSimWebSocketAdapter(options = {}) {
   }
 
   function sendFrame(state, frame) {
-    return sendWire(state, encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }), frame);
+    const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
+    if (replicationAccounting) replicationAccounting.outbound(
+      state, frame, "offered", Buffer.byteLength(wire, "utf8"),
+    );
+    return sendWire(state, wire, frame);
   }
 
   function sendApplicationClose(state, code, reason, reconnectable, retryAfterMs, transportCode = code) {
@@ -615,6 +672,7 @@ function createSimWebSocketAdapter(options = {}) {
 
   function cleanup(state) {
     if (state.cleaned) return;
+    replicationAccounting?.cleanup(state);
     state.abortController.abort();
     clearTimeout(state.helloTimer);
     if (state.helloPending) {
@@ -711,6 +769,7 @@ function createSimWebSocketAdapter(options = {}) {
       const retainedFrame = frame?.deliveryId === undefined ? { ...frame, deliveryId: nextId } : frame;
       encodeWireFrame(retainedFrame, { direction: SERVER_TO_CLIENT });
       const wireBytes = Buffer.byteLength(JSON.stringify(retainedFrame), "utf8");
+      replicationAccounting?.outbound(state, retainedFrame, "offered", wireBytes);
       if (replayEvent && retainedFrame.type === "event") {
         const queueStatus = state.queue.status();
         if (
@@ -721,6 +780,15 @@ function createSimWebSocketAdapter(options = {}) {
       }
       if (onPressureTransition) state.pressureCounts.reliableOffered += 1;
       const result = state.queue.enqueueConsequence(retainedFrame, { reliableId: retainedFrame.deliveryId });
+      if (replicationAccounting && result.accepted) {
+        state.replicationReliableFrames.set(retainedFrame.deliveryId, {
+          frame: retainedFrame, bytes: wireBytes, transportAccepted: false, sendInvoked: false,
+        });
+      }
+      if (replicationAccounting && !result.accepted
+        && (result.action === "rebase" || result.action === "disconnect")) {
+        replicationAccounting.outbound(state, retainedFrame, "policyDropped", wireBytes);
+      }
       if (onPressureTransition && result.accepted) state.pressureCounts.reliableQueued += 1;
       samplePressure(state);
       if (result.accepted) emitPressureTransition(state, "reliable-queued", {
@@ -814,6 +882,7 @@ function createSimWebSocketAdapter(options = {}) {
     }
     if (!stateIsLive(state, expectedGeneration)) return;
     byBindingKey.set(bindingKey, state);
+    replicationAccounting?.bind(state);
     currentRunId = result.welcome.runId;
     resetOutbound(state);
     sendFrame(state, result.welcome);
@@ -881,6 +950,13 @@ function createSimWebSocketAdapter(options = {}) {
     if (frame.type === "ack") {
       if (frame.ackKind === "delivery") {
         const ackOutcome = state.queue.acknowledge(frame.deliveryId);
+        if (replicationAccounting && ackOutcome.removedMessages > 0) {
+          for (const [reliableId, retained] of state.replicationReliableFrames) {
+            if (reliableId > frame.deliveryId) continue;
+            replicationAccounting.outbound(state, retained.frame, "ackRetired", retained.bytes);
+            state.replicationReliableFrames.delete(reliableId);
+          }
+        }
         if (onPressureTransition) state.pressureCounts.reliableAckRetired += ackOutcome.removedMessages || 0;
         samplePressure(state);
         emitPressureTransition(state, "reliable-ack-retired", {
@@ -918,6 +994,7 @@ function createSimWebSocketAdapter(options = {}) {
     if (!stateIsLive(state)) return;
     if (isBinary) throw new WireProtocolError("binary-frame", "binary application frames are not supported", 4403);
     const frame = parseWireFrame(raw, { direction: CLIENT_TO_SERVER });
+    replicationAccounting?.inbound(state, frame, Buffer.byteLength(raw));
     if (!state.bound) {
       if (frame.type !== "hello") throw new WireProtocolError("hello-required", "first frame must be hello", 4401);
       await handleHello(state, frame);
@@ -938,6 +1015,11 @@ function createSimWebSocketAdapter(options = {}) {
     state.schedulerConnectionId = ++schedulerConnectionCounter;
     state.outboundGeneration = 0;
     state.scheduledSends = new Set();
+    if (replicationAccounting) {
+      state.replicationQueuedStateFrames = null;
+      state.replicationStateFrames = new Map();
+      state.replicationReliableFrames = new Map();
+    }
     if (onPressureTransition) {
       state.pendingSendBytes = 0;
       state.scheduledSendBytes = 0;
@@ -1086,10 +1168,33 @@ function createSimWebSocketAdapter(options = {}) {
         if (recoveryAccepted && Number.isSafeInteger(recovery?.scanThrough)) {
           state.binding.eventScanSeq = Math.max(state.binding.eventScanSeq || 0, recovery.scanThrough);
         }
+        const priorQueuedStateFrames = state.replicationQueuedStateFrames;
         const outcome = state.queue.enqueueState(publicFrame.snapshotId, {
           kind: "state-pair",
           frames: [publicFrame, ownerFrame],
         });
+        if (replicationAccounting) {
+          const publicBytes = Buffer.byteLength(JSON.stringify(publicFrame), "utf8");
+          const ownerBytes = Buffer.byteLength(JSON.stringify(ownerFrame), "utf8");
+          replicationAccounting.outbound(state, publicFrame, "offered", publicBytes);
+          replicationAccounting.outbound(state, ownerFrame, "offered", ownerBytes);
+          if (!outcome.accepted) {
+            replicationAccounting.outbound(state, publicFrame, "policyDropped", publicBytes);
+            replicationAccounting.outbound(state, ownerFrame, "policyDropped", ownerBytes);
+          } else if (outcome.action === "coalesced") {
+            for (const queued of Object.values(priorQueuedStateFrames || {})) {
+              replicationAccounting.outbound(state, queued.frame, "coalesced", queued.bytes);
+              state.replicationStateFrames.delete(queued.frame);
+            }
+          }
+          if (outcome.accepted) {
+            const publicRecord = { frame: publicFrame, bytes: publicBytes, sendInvoked: false };
+            const ownerRecord = { frame: ownerFrame, bytes: ownerBytes, sendInvoked: false };
+            state.replicationStateFrames.set(publicFrame, publicRecord);
+            state.replicationStateFrames.set(ownerFrame, ownerRecord);
+            state.replicationQueuedStateFrames = { publicState: publicRecord, ownerState: ownerRecord };
+          }
+        }
         if (onPressureTransition) state.pressureCounts.stateOffered += 1;
         emitPressureTransition(state, "state-offered", {
           snapshotId: publicFrame.snapshotId,
@@ -1224,6 +1329,8 @@ function createSimWebSocketAdapter(options = {}) {
         sendApplicationClose(state, 4003, "run changed", true);
       }
     }
+    replicationAccountingEpoch += 1;
+    replicationAccounting?.reset();
     return { runId: currentRunId, fenced };
   }
 
@@ -1323,6 +1430,7 @@ function createSimWebSocketAdapter(options = {}) {
         pendingEventBytes,
         ...eventReplayStats,
       }),
+      ...(replicationAccounting ? { replication: replicationAccounting.snapshot() } : {}),
     });
   }
 
@@ -1359,6 +1467,15 @@ function createSimWebSocketAdapter(options = {}) {
     bindingKeyFor,
     rotateRun,
     diagnostics,
+    replicationWindow(startAt, endAt, options = {}) {
+      if (!replicationAccounting) return null;
+      return summarizeReplicationWindow(replicationAccounting.snapshot(), {
+        startAt, endAt,
+        evidenceFinalized: options.evidenceFinalized === true && connections.size === 0,
+        expectedRecipients: options.expectedRecipients ?? null,
+        pendingSendCallbacks: replicationPendingSendCallbacks,
+      });
+    },
     shutdown,
   });
 }

@@ -95,6 +95,9 @@ function normalizeAdapterOptions(options) {
     onPressureTransition: typeof options.onPressureTransition === "function"
       ? options.onPressureTransition
       : null,
+    replicationAccounting: options.replicationAccounting === true,
+    replicationAccountingFactory: typeof options.replicationAccountingFactory === "function"
+      ? options.replicationAccountingFactory : null,
     now: typeof options.now === "function" ? options.now : Date.now,
     path: typeof options.path === "string" && options.path.startsWith("/") ? options.path : DEFAULTS.path,
     helloTimeoutMs: positiveInteger(options.helloTimeoutMs, DEFAULTS.helloTimeoutMs, "helloTimeoutMs"),

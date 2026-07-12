@@ -120,6 +120,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerReplicationAccounting",
+    file: "multiplayer-replication-accounting.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerWsAdapterImpairment",
     file: "multiplayer-ws-adapter-impairment.cjs",
     lanes: ["multiplayer-network", "full"],
