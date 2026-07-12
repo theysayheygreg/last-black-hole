@@ -53,6 +53,16 @@
   reorder-block completion, replay validation, identity redaction, epoch
   rollback/idempotence, evidence growth, and record/replay/terminal reset reuse.
   The focused 7/7 proof and full nine-suite multiplayer-network lane pass.
+- Added the first adapter-side impairment seam for complete non-reliable
+  authority-to-client frames. The default path remains immediate; scheduled
+  callbacks are connection-generation/epoch fenced, cancelled on cleanup, and
+  reported separately from physical WebSocket sends.
+- Kept reliable delivery frames and terminal error/close frames outside that
+  seam after red-team review found that the current cumulative delivery ACK
+  can retire an unseen lower ID if reliable frames are reordered. The new
+  eight-case adapter proof locks that boundary while exercising state
+  half-pairs, frame omission, duplication, blackout, stale-epoch delivery, and
+  reset cleanup.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

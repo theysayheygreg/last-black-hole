@@ -33,6 +33,9 @@ const ACTION_RELIABLE_BYTE_RESERVE = 32 * 1024;
 
 function createSimWebSocketAdapter(options = {}) {
   const config = normalizeAdapterOptions(options);
+  const scheduleOutboundFrame = typeof options.scheduleOutboundFrame === "function"
+    ? options.scheduleOutboundFrame
+    : null;
   const buildEventRecovery = typeof options.buildEventRecovery === "function"
     ? options.buildEventRecovery
     : async () => null;
@@ -51,6 +54,7 @@ function createSimWebSocketAdapter(options = {}) {
   let generation = 1;
   let currentRunId = config.runId;
   let heartbeatCounter = 0;
+  let schedulerConnectionCounter = 0;
   let pendingHello = 0;
   let rejectedConnections = 0;
   let rejectedPendingHello = 0;
@@ -92,7 +96,7 @@ function createSimWebSocketAdapter(options = {}) {
     }
   }
 
-  function sendWire(state, wire) {
+  function sendWireImmediate(state, wire) {
     if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) return false;
     try {
       state.pendingSends += 1;
@@ -109,8 +113,81 @@ function createSimWebSocketAdapter(options = {}) {
     }
   }
 
+  function outboundFrameContext(state, frame) {
+    const identity = state.identity || {};
+    const semanticId = frame.deliveryId
+      ?? frame.actionId
+      ?? frame.heartbeatId
+      ?? (frame.snapshotId === undefined ? undefined : `${frame.runId || currentRunId}:${frame.snapshotId}:${frame.type}`)
+      ?? (frame.eventSeq === undefined ? undefined : `${frame.runId || currentRunId}:${frame.eventSeq}:${frame.type}`);
+    return Object.freeze({
+      direction: "authority-to-client",
+      frameClass: frame.type,
+      frameType: frame.type,
+      semanticId,
+      runId: frame.runId || currentRunId,
+      playerId: identity.playerId || `pending-${state.schedulerConnectionId}`,
+      membershipId: identity.membershipId,
+      connectionEpoch: identity.connectionEpoch ?? state.generation,
+      connectionGeneration: state.generation,
+      signal: state.abortController.signal,
+    });
+  }
+
+  function sendWire(state, wire, frame) {
+    // Cumulative delivery ACKs assume reliable IDs reach the socket in issue
+    // order. Terminal frames must also retain their existing close semantics.
+    if (!scheduleOutboundFrame || frame.deliveryId !== undefined || frame.type === "error" || frame.type === "close") {
+      return sendWireImmediate(state, wire);
+    }
+    if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) return false;
+    const context = outboundFrameContext(state, frame);
+    const token = { active: true, cancel: null, delivered: 0, deliveryCount: null };
+    state.scheduledSends ??= new Set();
+    state.scheduledSends.add(token);
+    const settle = () => {
+      token.active = false;
+      state.scheduledSends.delete(token);
+    };
+    const deliver = () => {
+      if (!token.active) return false;
+      token.delivered += 1;
+      const epochIsCurrent = context.connectionEpoch === undefined
+        || state.identity?.connectionEpoch === context.connectionEpoch;
+      const mayDeliverWhileClosing = frame.type === "close";
+      const live = !closed
+        && generation === context.connectionGeneration
+        && state.generation === context.connectionGeneration
+        && !state.cleaned
+        && !state.abortController.signal.aborted
+        && epochIsCurrent
+        && (!state.closing || mayDeliverWhileClosing);
+      const sent = live ? sendWireImmediate(state, wire) : false;
+      if (token.deliveryCount !== null && token.delivered >= token.deliveryCount) settle();
+      return sent;
+    };
+    try {
+      const outcome = scheduleOutboundFrame(wire, context, deliver);
+      if (outcome === false || outcome?.accepted === false) {
+        settle();
+        return false;
+      }
+      token.cancel = typeof outcome === "function" ? outcome
+        : (typeof outcome?.cancel === "function" ? outcome.cancel : null);
+      token.deliveryCount = Number.isSafeInteger(outcome?.deliveryCount) && outcome.deliveryCount >= 0
+        ? outcome.deliveryCount
+        : 1;
+      if (token.deliveryCount === 0 || token.delivered >= token.deliveryCount) settle();
+      return true;
+    } catch {
+      settle();
+      terminate(state);
+      return false;
+    }
+  }
+
   function sendFrame(state, frame) {
-    return sendWire(state, encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }));
+    return sendWire(state, encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }), frame);
   }
 
   function sendApplicationClose(state, code, reason, reconnectable, retryAfterMs, transportCode = code) {
@@ -151,6 +228,11 @@ function createSimWebSocketAdapter(options = {}) {
     }
     connections.delete(state);
     if (state.bindingKey !== null && byBindingKey.get(state.bindingKey) === state) byBindingKey.delete(state.bindingKey);
+    for (const token of state.scheduledSends || []) {
+      token.active = false;
+      try { token.cancel?.(); } catch {}
+    }
+    state.scheduledSends?.clear();
     state.queue.reset();
   }
 
@@ -193,9 +275,9 @@ function createSimWebSocketAdapter(options = {}) {
         if (message.lane === "state") {
           for (const frame of message.envelope.frames) {
             const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
-            if (!sendWire(state, wire)) break;
+            if (!sendWire(state, wire, frame)) break;
           }
-        } else if (!sendWire(state, encodeWireFrame(message.envelope, { direction: SERVER_TO_CLIENT }))) {
+        } else if (!sendWire(state, encodeWireFrame(message.envelope, { direction: SERVER_TO_CLIENT }), message.envelope)) {
           break;
         }
       }
@@ -421,6 +503,7 @@ function createSimWebSocketAdapter(options = {}) {
       timestamp,
       heartbeatIntervalMs,
     });
+    state.schedulerConnectionId = ++schedulerConnectionCounter;
     pendingHello += 1;
     connections.add(state);
     state.helloTimer = setTimeout(() => {
@@ -727,8 +810,10 @@ function createSimWebSocketAdapter(options = {}) {
     const summary = summarizeConnections(connections);
     let pendingEventFrames = 0;
     let pendingEventBytes = 0;
+    let pendingScheduledSends = 0;
     for (const state of connections) pendingEventFrames += state.pendingEventSeqs?.size || 0;
     for (const state of connections) pendingEventBytes += state.pendingEventBytes || 0;
+    for (const state of connections) pendingScheduledSends += state.scheduledSends?.size || 0;
     return Object.freeze({
       path,
       closed,
@@ -736,6 +821,7 @@ function createSimWebSocketAdapter(options = {}) {
       connections: connections.size,
       ...summary,
       pendingInboundBytes: pendingInboundBytesTotal,
+      pendingScheduledSends,
       pendingHello,
       maxObservedPendingInbound,
       maxObservedPendingInboundBytes,

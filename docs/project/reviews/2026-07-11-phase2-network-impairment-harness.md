@@ -328,10 +328,20 @@ Extract reusable journey observation only after contract tests exist.
    `tests/fixtures/network-impairment/`, and a pure Node suite proving PRNG,
    distributions, window ordering, tapes, virtual time, and cleanup. No browser
    or runtime changes.
-2. **Adapter seam.** Add dependency-injected test send/receive scheduling to
-   the WebSocket adapter factory, defaulting to immediate delivery and absent
-   from production configuration. Extend isolated adapter tests for ACK,
-   replay, half-pair, old-epoch, blackout, and reset races.
+2. **Adapter seam.** Add dependency-injected test scheduling for complete
+   non-reliable authority-to-client frames, defaulting to immediate delivery
+   and absent from production configuration. Keep `deliveryId` frames and
+   terminal error/close frames immediate: the current drain-before-send queue
+   accounting and cumulative client delivery ACK cannot safely model reliable
+   reorder yet. Extend isolated adapter tests for default parity, the reliable
+   bypass boundary, half-pair, old-epoch, blackout, duplication, and reset
+   races.
+2a. **Reliable impairment prerequisite.** Before F3 can delay, omit, duplicate,
+   or reorder reliable consequences, record physical sends separately from
+   queue drain and make the client ACK only the highest contiguous delivery
+   ID. Prove a held ID 1 plus released ID 2 cannot retire ID 1, then reopen
+   reliable scheduling at the same complete-frame seam. Terminal frames remain
+   immediate unless close gains an explicit scheduler-completion handshake.
 3. **Client seam.** Inject the same interface around the test WebSocket
    implementation, then prove action identity, continuous-input independence,
    reconnect generation fencing, and event playback ACK behavior. Keep HTTP

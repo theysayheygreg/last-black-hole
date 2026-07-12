@@ -1,5 +1,29 @@
 # Decision Log
 
+## 2026-07-11 — Reliable delivery faults wait for contiguous ACK semantics
+
+**Decision:** The first authority-to-client impairment seam may schedule only
+complete non-reliable frames. Any frame carrying `deliveryId`, plus every
+terminal `error` or `close`, keeps the existing immediate transport path.
+Reliable delay, omission, duplication, and reorder remain deferred until the
+send queue records physical delivery correctly and the client ACKs only the
+highest contiguous delivery ID.
+
+**Why:** The current queue marks a reliable ID sent when it drains, before an
+injected delay physically reaches the socket. The client also ACKs a received
+delivery ID cumulatively. Releasing ID 2 before ID 1 could therefore retire an
+unseen consequence and turn a test harness into a source of false correctness.
+Terminal frames likewise cannot be delayed safely while the adapter closes the
+transport immediately afterward.
+
+**Where it landed:** `scripts/sim-ws-adapter.cjs`,
+`tests/multiplayer-ws-adapter-impairment.cjs`, and the
+`multiplayer-network` lane.
+
+**Door status:** Closed for reliable or terminal impairment through the first
+adapter seam. Open for a separate queue/client slice that adds physical-send
+accounting, contiguous delivery ACKs, and focused hole/replay regressions.
+
 ## 2026-07-11 — Phase 1 WebSocket is an I/O face on the match authority
 
 **Decision:** Phase 1 will pin a reviewed `ws` 8.x production dependency and
