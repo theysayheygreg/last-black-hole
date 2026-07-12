@@ -292,3 +292,18 @@ artifact limits, classified HTTP use, privacy, and teardown. Its claim remains
 local PR-smoke raw-WebSocket pressure only. T2b hard fence/reconnect/replay is
 the next code slice; T2c and packet/browser/WAN/WSS/hosted/capacity evidence
 remain separate.
+
+## T2b status — accepted
+
+T2b is independently accepted at `98498b9` plus ledger fix-forward `0955171`.
+Clean artifact `multiplayer-transport-2026-07-12T153314140Z-t2b-94c169`
+records continuous high-water entry, first timeout eligibility, and the first
+closing sweep on one exact old ordinal. That socket closes once with the
+shipping pressure policy and resumes as a distinct ordinal at connection epoch
+2 without replacing the match authority. Eight journal consequences first
+become visible on the replacement epoch, FIFO and exactly once. Exact baseline,
+delivery, event-ACK, retirement, cleanup-reset, normalized state, and reliable
+ledgers close the evidence; healthy peers, performance, HTTP classification,
+privacy, limits, and teardown pass. This is local raw-WebSocket hard-pressure
+PR smoke only. T2c, packet/browser/WAN/WSS/hosted/soak/capacity evidence remain
+separate.

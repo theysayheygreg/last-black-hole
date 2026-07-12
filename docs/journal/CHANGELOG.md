@@ -42,6 +42,14 @@
   evidence, privacy, and teardown all passed. This is local PR-smoke transport
   pressure evidence, not T2b fencing, packet, browser, WAN, WSS, or capacity
   proof.
+- Implemented and independently accepted T2b hard-pressure fencing at
+  `98498b9` plus evidence-ledger fix `0955171`. The exact impaired connection
+  remained above high water through the real timeout, closed once, and resumed
+  on a distinct socket and greater epoch. Eight consequences replayed FIFO and
+  settled exactly once with explicit baseline, delivery, event-ACK, cleanup-
+  reset, state, and reliable identity ledgers. Healthy peers and the one-per-
+  match authority remained stable. The claim is still local raw-WebSocket PR
+  smoke, not packet, browser, WAN, WSS, hosted, or scale evidence.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval

@@ -262,6 +262,14 @@ Singularity that:
   healthy peers, and closed every bounded evidence and cleanup gate. Dispatch
   T2b next as a fresh hard-pressure authority/admission; do not blend T2c,
   netem packet truth, browser ingress, WAN/WSS, hosted, or capacity claims.
+- T2b hard pressure is independently accepted at `98498b9` plus fix-forward
+  `0955171`, with clean artifact
+  `multiplayer-transport-2026-07-12T153314140Z-t2b-94c169`. One exact old
+  ordinal crossed the real timeout and fenced once; its replacement socket and
+  epoch replayed eight consequences FIFO/exactly once while healthy peers and
+  the one-per-match authority stayed stable. The combined T2a/T2b lane and
+  multiplayer-network regressions are green. Advance T2c or the next explicit
+  packet/hosted gate separately; do not broaden this local raw-WebSocket claim.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

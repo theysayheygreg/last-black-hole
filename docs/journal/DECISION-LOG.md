@@ -20,8 +20,8 @@ and bounded isolation without weakening production limits.
 giant frames, aggregate-only attribution, or mixing raw pressure with netem,
 WAN, WSS, TLS, hosted, or 24/48/96 capacity claims. The adapter prerequisite is
 accepted at `381f435` plus causal fix-forward `c09882d`. T2a is accepted through
-`3cfc9a8`; open next for T2b in a separate commit, while T2c remains a later
-Linux/browser corroboration lane.
+`3cfc9a8`; T2b is accepted at `98498b9` plus ledger fix-forward `0955171`.
+T2c remains a separate later Linux/browser corroboration lane.
 
 ## 2026-07-12 — F5 uses timeout drop plus a one-client proxy fence
 

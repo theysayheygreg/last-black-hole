@@ -179,6 +179,18 @@ smoke pressure evidence. The next bounded slice is T2b hard pressure with an
 isolated fence, reconnect/rebase, and exactly-once replay; T2c, packet truth,
 browser ingress, WAN, WSS, and capacity remain separate.
 
+**T2b checkpoint — 2026-07-12:** T2b is independently accepted at `98498b9`
+plus ledger fix-forward `0955171`. Clean artifact
+`multiplayer-transport-2026-07-12T153314140Z-t2b-94c169` proves the exact old
+ordinal stayed continuously pressured through timeout and one closing sweep,
+then resumed as a distinct socket at epoch 2 while the match authority PID and
+healthy epoch-1 peers stayed stable. Eight journal consequences first appeared
+on the replacement epoch, FIFO and exactly once, with exact baseline, delivery,
+event-ACK, retirement, cleanup-reset, state, and reliable ledgers. Combined
+T2a/T2b and all 11 multiplayer-network suites pass. This remains local raw-
+WebSocket PR smoke; T2c, Linux packet truth, browser ingress, WAN/WSS, hosted,
+soak, and capacity remain open separate gates.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.
