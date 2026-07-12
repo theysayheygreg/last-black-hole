@@ -23,6 +23,11 @@ dependency, ambiguous KiB/s labels, seeded-jitter claims, Toxiproxy packet-loss
 claims, or combining T1 with F5/T2/netem. Open for the pinned control-helper
 slice, then the four-browser T1 cohort.
 
+**Metrics clarification:** v2.12.0 received/sent proxy byte counters settle when
+the corresponding stream copy ends. T1 therefore gates finalized per-proxy,
+per-direction counters after browser close; it does not treat periodic values
+as live throughput, queue depth, or connection-drain evidence.
+
 ## 2026-07-12 — T0 proves a Chrome transport stall, not a reconnect
 
 **Decision:** The zero-dependency T0 browser lane uses

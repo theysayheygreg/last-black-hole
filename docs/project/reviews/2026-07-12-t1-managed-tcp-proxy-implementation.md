@@ -116,7 +116,8 @@ T1 PR-smoke gates are:
 - aligned snapshot cadence p95 at most 300 ms;
 - reliable consequence p95 at most 700 ms;
 - zero post-admission reconnects or rebases;
-- bidirectional proxy byte-counter growth for every named proxy;
+- finalized received/sent byte counters above the inactive baseline in both
+  directions for every named proxy after its browser socket closes;
 - zero direct browser WebSocket connection to the authority port;
 - no proxy timeout/reset, adapter high-water crossing, or queue-policy action;
 - authority remains `NORMAL`, exact-once/privacy ledgers pass, and no hot-path
@@ -181,8 +182,8 @@ activation is invalid.
 Cleanup order is evidence-bearing:
 
 1. stop stimulus and sampling, pause pages, and drain client work;
-2. remove toxics and capture final config/metrics;
-3. close browsers so listener connections drain;
+2. close browsers so the proxy's two stream-copy operations terminate;
+3. capture finalized config/metrics, then remove toxics;
 4. delete the four proxy objects;
 5. terminate the dedicated daemon with bounded `SIGTERM`, then `SIGKILL` only
    if required;
@@ -202,7 +203,8 @@ Add bounded, redacted artifacts:
 - `toxiproxy-commands.jsonl`;
 - `toxiproxy-config-before.json`, `toxiproxy-config-active.json`, and
   `toxiproxy-config-final.json`;
-- `toxiproxy-metrics.jsonl`, filtered by proxy name and direction;
+- `toxiproxy-metrics.jsonl`, preserving the exact received/sent family, proxy,
+  direction, listener, and upstream labels;
 - daemon stdout/stderr logs;
 - `t1-proxy-transport.json`; and
 - manifest entries for binary version/hash, one authority PID/port, the four
@@ -215,6 +217,13 @@ Toxiproxy's proxy metrics expose directional bytes, not an active-connection
 gauge, so byte stability or proxy deletion must not be labeled graceful
 connection drain. Hash gameplay identifiers; listener names and loopback ports
 are safe evidence.
+
+Toxiproxy v2.12.0 credits these counters when each link's `io.Copy` terminates,
+not as a reliable live mid-WebSocket gauge. Periodic samples remain diagnostic
+and may stay flat while a socket is open. T1's byte gate compares the inactive
+baseline with the finalized sample taken after browser close and before proxy
+deletion. It does not infer live bandwidth, queue depth, or connection drain
+from counter timing.
 
 ## Atomic implementation order
 
