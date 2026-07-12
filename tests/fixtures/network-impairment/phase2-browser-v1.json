@@ -6,7 +6,7 @@
     "constructor": "simClient = new SimClient(simServerUrl, { transport: getConfiguredSimTransport() });"
   },
   "decisionCapacity": {
-    "input": 512,
+    "input": 768,
     "action": 16,
     "ack": 512,
     "pong": 16,
@@ -36,6 +36,33 @@
         "inputAckP95Ms": 125,
         "snapshotCadenceP95Ms": 175,
         "reliableConsequenceP95Ms": 300,
+        "postAdmissionRebases": 0,
+        "postAdmissionReconnects": 0
+      }
+    },
+    "F1-regional": {
+      "profile": "pr-smoke",
+      "rootSeed": "0x0401A511",
+      "players": 4,
+      "warmupMs": 5000,
+      "activeMs": 30000,
+      "recoveryMs": 10000,
+      "impairPhases": ["active"],
+      "rules": {
+        "copies": 1,
+        "omitted": false,
+        "directions": {
+          "client-to-authority": { "delayMs": 35, "jitterMs": 10 },
+          "authority-to-client": { "delayMs": 55, "jitterMs": 20 }
+        }
+      },
+      "gates": {
+        "minimumInputAckSamplesPerPilot": 100,
+        "minimumAlignedPairSamplesPerPilot": 100,
+        "minimumReliableActionsPerPilot": 2,
+        "inputAckP95Ms": 250,
+        "snapshotCadenceP95Ms": 300,
+        "reliableConsequenceP95Ms": 700,
         "postAdmissionRebases": 0,
         "postAdmissionReconnects": 0
       }

@@ -12,16 +12,16 @@ const {
   sha256,
   writeCompiledDecisionBook,
 } = require("./network/browser-frame-impairment.cjs");
-const { runF0Cohort } = require("./network/multiplayer-browser-cohort.cjs");
+const { runBrowserCohort } = require("./network/multiplayer-browser-cohort.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const fixtureFile = path.join(__dirname, "fixtures/network-impairment/phase2-browser-v1.json");
 const fixtureRaw = fs.readFileSync(fixtureFile, "utf8");
 const fixture = JSON.parse(fixtureRaw);
 const scenarioId = process.env.LBH_IMPAIRMENT_SCENARIO || "F0-clean";
-if (scenarioId !== "F0-clean") throw new Error("Commit A supports only F0-clean");
 const scenario = fixture.scenarios[scenarioId];
-if (scenario.profile !== "pr-smoke") throw new Error("Commit A must run the pr-smoke profile");
+if (!scenario) throw new Error(`Unknown impairment scenario ${scenarioId}`);
+if (scenario.profile !== "pr-smoke") throw new Error("Browser impairment lane must run the pr-smoke profile");
 const htmlTarget = process.argv[2] || "index-a.html";
 const stamp = new Date().toISOString().replace(/[:.]/g, "");
 const nonce = crypto.randomBytes(3).toString("hex");
@@ -60,7 +60,7 @@ async function main() {
     : null;
   try {
     if (!failure) {
-      result = await runF0Cohort({ fixture, compiled, runDir, htmlTarget: htmlTarget.split("?")[0],
+      result = await runBrowserCohort({ fixture, compiled, scenarioId, runDir, htmlTarget: htmlTarget.split("?")[0],
         signal: controller.signal });
     }
   } catch (error) {
@@ -145,7 +145,7 @@ async function main() {
     console.error(failure);
     process.exitCode = 1;
   } else {
-    console.log("F0-clean 4-browser pr-smoke passed");
+    console.log(`${scenarioId} 4-browser pr-smoke passed`);
   }
 }
 

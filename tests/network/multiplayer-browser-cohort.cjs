@@ -280,6 +280,108 @@ function percentile(values, probability) {
   return sorted[Math.min(sorted.length - 1, Math.ceil(probability * sorted.length) - 1)];
 }
 
+function decisionProfile(scenario, pilots, serverEvidenceFile) {
+  const serverRecords = fs.readFileSync(serverEvidenceFile, "utf8").split("\n").filter(Boolean)
+    .map((line) => JSON.parse(line));
+  const allUpstream = pilots.flatMap((pilot) => pilot.evidence.filter((entry) =>
+    entry.direction === "client-to-authority"));
+  const allDownstream = serverRecords.filter((entry) => entry.direction === "authority-to-client");
+  const upstream = allUpstream.filter((entry) => entry.phase === "active");
+  const downstream = allDownstream.filter((entry) => entry.phase === "active");
+  const configured = (direction) => {
+    const rule = scenario.rules.directions?.[direction] || scenario.rules;
+    const base = Number(rule.delayMs || 0);
+    const jitter = Number(rule.jitterMs || 0);
+    return { min: base - jitter, max: base + jitter };
+  };
+  const validate = (records, direction) => {
+    const queued = records.filter((entry) => entry.event === "queued");
+    const released = records.filter((entry) => entry.event === "released");
+    const range = configured(direction);
+    assert(queued.length > 0 && released.length > 0, `${direction} produced no active decisions/releases`);
+    assert(!records.some((entry) => entry.event === "omitted"), `${direction} emitted an omission record`);
+    const keyFor = (entry) => [entry.pilotSlot, entry.phase, entry.direction, entry.connectionEpochOrdinal,
+      entry.frameClass, entry.streamOrdinal].join("|");
+    const queuedKeys = queued.map(keyFor);
+    const releasedKeys = released.map(keyFor);
+    assert(new Set(queuedKeys).size === queuedKeys.length, `${direction} queued duplicate decision keys`);
+    assert(new Set(releasedKeys).size === releasedKeys.length, `${direction} released duplicate decision keys`);
+    assert(queuedKeys.length === releasedKeys.length
+      && queuedKeys.every((key) => releasedKeys.includes(key)),
+    `${direction} queued/released decision sets differ: ${queued.length}/${released.length}`);
+    for (const entry of queued) {
+      assert(entry.decision?.delayMs >= range.min && entry.decision.delayMs <= range.max,
+        `${direction} delay ${entry.decision?.delayMs} escaped ${range.min}-${range.max}`);
+      assert(entry.decision.copies === 1 && entry.decision.omitted === false,
+        `${direction} introduced an F1 omission or duplicate`);
+      assert(!Object.prototype.hasOwnProperty.call(entry.decision, "overshootMs"),
+        "Timer overshoot entered the deterministic decision tape");
+    }
+    for (const entry of released) {
+      assert(Number.isFinite(entry.overshootMs) && entry.overshootMs >= 0,
+        `${direction} release omitted timer overshoot evidence`);
+      assert(entry.delivered === true, `${direction} release was not delivered exactly once`);
+    }
+    const releaseGroups = new Map();
+    for (const entry of released) {
+      const entries = releaseGroups.get(entry.pilotSlot) || [];
+      entries.push(entry);
+      releaseGroups.set(entry.pilotSlot, entries);
+    }
+    for (const [pilotSlot, entries] of releaseGroups) {
+      for (let index = 1; index < entries.length; index += 1) {
+        const prior = entries[index - 1];
+        const next = entries[index];
+        assert(prior.scheduledReleaseMonoMs < next.scheduledReleaseMonoMs
+          || (prior.scheduledReleaseMonoMs === next.scheduledReleaseMonoMs
+            && prior.enqueueOrdinal < next.enqueueOrdinal),
+        `${direction} release order reversed for ${pilotSlot}`);
+      }
+    }
+    return {
+      decisions: queued.length,
+      releases: released.length,
+      configuredDelayMs: { ...range,
+        observedMin: Math.min(...queued.map((entry) => entry.decision.delayMs)),
+        observedMax: Math.max(...queued.map((entry) => entry.decision.delayMs)) },
+      overshootMs: { p95: percentile(released.map((entry) => entry.overshootMs), 0.95),
+        max: Math.max(...released.map((entry) => entry.overshootMs)) },
+    };
+  };
+  const bypass = {};
+  for (const phase of ["warmup", "recovery"]) {
+    bypass[phase] = {};
+    for (const [direction, records] of [["client-to-authority", allUpstream],
+      ["authority-to-client", allDownstream]]) {
+      const queued = records.filter((entry) => entry.phase === phase && entry.event === "queued");
+      assert(queued.length > 0, `${direction} produced no ${phase} decisions`);
+      if (scenario.impairPhases && !scenario.impairPhases.includes(phase)) {
+        assert(queued.every((entry) => entry.decision?.delayMs === 0),
+          `${direction} impaired the ${phase} bypass phase`);
+      }
+      bypass[phase][direction] = queued.length;
+    }
+  }
+  for (const pilot of pilots) {
+    assert(upstream.some((entry) => entry.pilotSlot === pilot.slot && entry.event === "queued"),
+      `${pilot.slot} had no active upstream decisions`);
+    assert(downstream.some((entry) => entry.pilotSlot === pilot.slot && entry.event === "queued"),
+      `${pilot.slot} had no active downstream decisions`);
+  }
+  assert(!pilots.some((pilot) => pilot.evidence.some((entry) => entry.event === "omitted")),
+    "Browser scheduler emitted an omission");
+  assert(!serverRecords.some((entry) => entry.event === "omitted"), "Server preload emitted an omission");
+  assert(!pilots.some((pilot) => pilot.evidence.some((entry) => entry.event === "queued"
+    && entry.direction !== "client-to-authority")), "Browser scheduler impaired downstream twice");
+  assert(!serverRecords.some((entry) => entry.event === "queued"
+    && entry.direction !== "authority-to-client"), "Server preload impaired a non-downstream direction");
+  return {
+    upstream: validate(upstream, "client-to-authority"),
+    downstream: validate(downstream, "authority-to-client"),
+    bypass,
+  };
+}
+
 function clientLedger(pilot, ownerPlayerId) {
   const events = pilot.evidence;
   const inputs = new Map();
@@ -291,15 +393,15 @@ function clientLedger(pilot, ownerPlayerId) {
   const alignedTimes = [];
   for (const event of events) {
     if (event.phase !== "active") continue;
-    if (event.direction === "client-to-authority" && event.event === "released" && event.inputSeq) {
-      inputs.set(event.inputSeq, event.actualMonoMs);
+    if (event.direction === "client-to-authority" && event.event === "queued" && event.inputSeq) {
+      if (!inputs.has(event.inputSeq)) inputs.set(event.inputSeq, event.atMonoMs);
     }
     if (event.direction === "authority-to-client" && event.event === "application-delivered"
       && event.frameClass === "ack" && event.ackKind === "input" && event.inputSeq && inputs.has(event.inputSeq)) {
       inputLatencies.push(event.actualMonoMs - inputs.get(event.inputSeq));
     }
-    if (event.direction === "client-to-authority" && event.event === "released" && event.frameClass === "action") {
-      actions.set(event.actionId, { sentAt: event.actualMonoMs, outcomes: [] });
+    if (event.direction === "client-to-authority" && event.event === "queued" && event.frameClass === "action") {
+      if (!actions.has(event.actionId)) actions.set(event.actionId, { sentAt: event.atMonoMs, outcomes: [] });
     }
     if (event.direction === "authority-to-client" && event.event === "application-delivered"
       && event.frameClass === "ack" && event.ackKind === "action" && actions.has(event.actionId)) {
@@ -365,9 +467,10 @@ async function capture(pilot, runDir, label) {
   return { file: path.basename(file), sha256: sha256(bytes), bytes: bytes.length };
 }
 
-async function runF0Cohort(options) {
-  const { fixture, compiled, runDir, htmlTarget = "index-a.html", signal } = options;
-  const scenario = fixture.scenarios["F0-clean"];
+async function runBrowserCohort(options) {
+  const { fixture, compiled, scenarioId, runDir, htmlTarget = "index-a.html", signal } = options;
+  const scenario = fixture.scenarios[scenarioId];
+  const scenarioLabel = scenarioId.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const [staticPort, simPort] = await reserveDistinctPorts(2);
   let releaseLock = () => {};
   const controlFile = path.join(runDir, "control.json");
@@ -437,10 +540,10 @@ async function runF0Cohort(options) {
       return state?.players?.filter((player) => !player.isAI).length === 4;
     }, { timeout: 20000 })));
     const initial = await Promise.all(resources.pilots.map(journeyState));
-    assert(new Set(initial.map((state) => state.runId)).size === 1, "F0 cohort did not share one run");
-    assert(new Set(initial.map((state) => state.clientId)).size === 4, "F0 authority players were not unique");
-    assert(new Set(initial.map((state) => state.membershipId)).size === 4, "F0 memberships were not unique");
-    assert(new Set(initial.map((state) => state.owner?.profileId)).size === 4, "F0 profiles were not unique");
+    assert(new Set(initial.map((state) => state.runId)).size === 1, `${scenarioId} cohort did not share one run`);
+    assert(new Set(initial.map((state) => state.clientId)).size === 4, `${scenarioId} authority players were not unique`);
+    assert(new Set(initial.map((state) => state.membershipId)).size === 4, `${scenarioId} memberships were not unique`);
+    assert(new Set(initial.map((state) => state.owner?.profileId)).size === 4, `${scenarioId} profiles were not unique`);
     const slotMap = initial.map((state, index) => ({ pilotSlot: `pilot-${index}`,
       playerHash: hashId(state.clientId), membershipHash: hashId(state.membershipId),
       profileHash: hashId(state.owner?.profileId), connectionEpoch: state.connectionEpoch }));
@@ -475,29 +578,29 @@ async function runF0Cohort(options) {
           "Authority sample missing adapter pressure schema");
         assert(accounting?.costDistributions?.simTickMs && accounting.costDistributions.projectionReplicationMs,
           "Authority sample missing bounded cost quantiles");
-        assert(health.session?.overloadState === "NORMAL", `F0 authority left NORMAL: ${health.session?.overloadState}`);
+        assert(health.session?.overloadState === "NORMAL", `${scenarioId} authority left NORMAL: ${health.session?.overloadState}`);
         assert(accounting.costDistributions.simTickMs.count > 0
           && accounting.costDistributions.simTickMs.totalObserved > 0
           && accounting.costDistributions.projectionReplicationMs.count > 0,
         "Authority quantile distributions have no observations");
         const pressure = health.multiplayer.adapter.pressure;
         assert(pressure.maxima.wsBufferedBytes.worstConnection < pressure.policy.transportHighWaterBytes,
-          "F0 crossed WebSocket high water");
+          `${scenarioId} crossed WebSocket high water`);
         assert(pressure.maxima.queuedBytes.worstConnection <= pressure.policy.applicationQueueBytes
           && pressure.maxima.reliableBytes.worstConnection <= pressure.policy.reliableQueueBytes
           && pressure.maxima.replayEventBytes.worstConnection <= pressure.policy.replayEventBytes
           && pressure.maxima.pendingInboundBytes.worstConnection <= pressure.policy.inboundPendingBytes,
-        "F0 exceeded an adapter pressure policy bound");
+        `${scenarioId} exceeded an adapter pressure policy bound`);
         assert(pressure.policy.connectionsCrossedTransportHighWater === 0
           && pressure.policy.connectionsHitQueuePolicy === 0,
-        "F0 unexpectedly crossed a transport or queue policy");
+        `${scenarioId} unexpectedly crossed a transport or queue policy`);
         appendJsonl(authorityFile, { sampledAt, tick: health.tick, mode: health.session?.overloadState,
           process: health.process, pressure: health.multiplayer.adapter.pressure,
           costDistributions: accounting.costDistributions });
         await sleep(1000, signal);
       }
     })().catch((error) => { samplingError = error; sampling = false; });
-    const warmupCapture = await capture(resources.pilots[0], runDir, "f0-warmup-host");
+    const warmupCapture = await capture(resources.pilots[0], runDir, `${scenarioLabel}-warmup-host`);
     await sleep(Math.max(0, startWallMs - Date.now()) + scenario.warmupMs + 2000, signal);
     if (samplingError) throw samplingError;
     for (const pilot of resources.pilots) await tap(pilot.page, "KeyE", "e", 50);
@@ -514,8 +617,8 @@ async function runF0Cohort(options) {
       });
     }
     const screenshots = [warmupCapture,
-      await capture(resources.pilots[0], runDir, "f0-recovery-host"),
-      await capture(resources.pilots[3], runDir, "f0-recovery-pilot-3")];
+      await capture(resources.pilots[0], runDir, `${scenarioLabel}-recovery-host`),
+      await capture(resources.pilots[3], runDir, `${scenarioLabel}-recovery-pilot-3`)];
     sampling = false;
     await samplingTask;
     for (const pilot of resources.pilots) {
@@ -528,6 +631,7 @@ async function runF0Cohort(options) {
       ownerPlayerId: final[index].clientId, membershipId: final[index].membershipId,
     }));
     const ledgers = resources.pilots.map((pilot, index) => clientLedger(pilot, final[index].clientId));
+    const impairment = decisionProfile(scenario, resources.pilots, serverEvidenceFile);
     const eventsOracle = await (await fetch(`http://127.0.0.1:${simPort}/events?since=0`, {
       headers: { "x-lbh-test-oracle": "events" }, signal: AbortSignal.timeout(2000) })).json();
     const authorityPulseEvents = new Map();
@@ -587,6 +691,7 @@ async function runF0Cohort(options) {
     }
     return { startedAt, completedAt: Date.now(), staticPort, simPort, slotMap, timelines, screenshots,
       privacy, clientSummaries: ledgers.map((entry) => entry.summary), cdp: resources.pilots.map((pilot) => pilot.cdp),
+      impairment,
       pulseConsequences: final.map((state) => authorityPulseEvents.get(state.clientId)?.size || 0),
       processes: { staticPid: resources.staticServer.pid, simPid: lastHealth?.process?.pid || null,
         browserPids: resources.pilots.map((pilot) => pilot.browser.proc?.pid || null) },
@@ -661,8 +766,8 @@ async function runF0Cohort(options) {
     fs.writeFileSync(path.join(runDir, "cleanup.json"), `${JSON.stringify(cleanup, null, 2)}\n`, { flag: "wx" });
     releaseLock();
     assert(Object.entries(cleanup).every(([, value]) => value === true || value === 0),
-      `F0 cleanup failed: ${JSON.stringify(cleanup)}`);
+      `${scenarioId} cleanup failed: ${JSON.stringify(cleanup)}`);
   }
 }
 
-module.exports = { runF0Cohort, percentile };
+module.exports = { runBrowserCohort, percentile, decisionProfile };

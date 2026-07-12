@@ -104,6 +104,11 @@
   adapter seams without shipping an impairment flag; stable pilot-slot decision
   books, per-frame exact-once/privacy ledgers, redacted artifacts, screenshots,
   authority diagnostics, and process/profile/port cleanup are strict gates.
+- Added F1 regional application-frame delay to the four-browser smoke runner:
+  deterministic bounded-uniform 25–45 ms upstream and 35–75 ms downstream,
+  stable due-time/insertion-order release, queued-to-outcome latency accounting,
+  and separate timer-overshoot evidence. Warm-up and recovery remain clean, and
+  the claim still excludes TCP, WAN, TLS, and packet loss.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

@@ -52,6 +52,7 @@ function createServerSeam(config, book) {
   let timeline = null;
   let stopped = false;
   let lastControlMtime = -1;
+  let nextEnqueueOrdinal = 0;
   const evidence = [];
   const append = (entry) => {
     if (evidence.length >= 200000) throw new Error("sim impairment evidence capacity exceeded");
@@ -89,10 +90,12 @@ function createServerSeam(config, book) {
     if (stopped) return;
     readControl();
     const now = performance.now();
-    for (let index = queue.length - 1; index >= 0; index -= 1) {
-      const item = queue[index];
-      if (item.cancelled || item.releaseAtMs > now) continue;
-      queue.splice(index, 1);
+    queue.sort((left, right) => left.releaseAtMs - right.releaseAtMs
+      || left.enqueueOrdinal - right.enqueueOrdinal);
+    while (queue.length > 0) {
+      const item = queue[0];
+      if (!item.cancelled && item.releaseAtMs > now) break;
+      queue.shift();
       if (item.cancelled) continue;
       let delivered = false;
       for (let copy = 0; copy < item.decision.copies; copy += 1) delivered = item.deliver() !== false || delivered;
@@ -150,7 +153,9 @@ function createServerSeam(config, book) {
     if (!decision) throw new Error(`server compiled decision exhaustion: ${key}#${ordinal}`);
     ordinals.set(key, ordinal + 1);
     const item = { deliver, decision, cancelled: false, releaseAtMs: now + decision.delayMs,
-      record: { ...record, frameClass, streamOrdinal: ordinal, decision } };
+      enqueueOrdinal: nextEnqueueOrdinal++,
+      record: { ...record, frameClass, streamOrdinal: ordinal, decision,
+        scheduledReleaseMonoMs: now + decision.delayMs, enqueueOrdinal: nextEnqueueOrdinal - 1 } };
     append({ ...item.record, event: decision.omitted ? "omitted" : "queued" });
     if (!decision.omitted && decision.copies > 0) queue.push(item);
     if (decision.delayMs === 0) releaseDue();

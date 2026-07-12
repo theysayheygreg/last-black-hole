@@ -2,6 +2,9 @@
 
 const crypto = require("crypto");
 const fs = require("fs");
+const { createSplitMix64 } = require("./seeded-frame-scheduler.cjs");
+
+const UINT53 = Number(0x20_0000_0000_0000n);
 
 const PHASES = Object.freeze(["warmup", "active", "recovery"]);
 const DIRECTIONS = Object.freeze(["client-to-authority", "authority-to-client"]);
@@ -21,12 +24,23 @@ function compileDecisionBook(fixture, scenarioId) {
         for (const [frameClass, capacity] of Object.entries(fixture.decisionCapacity)) {
           const key = [fixture.scenarioVersion, scenarioId, `pilot-${pilot}`, phase, direction, frameClass, 1].join("|");
           derivedSeeds[key] = sha256(`${scenario.rootSeed}|${key}`).slice(0, 16);
-          streams[key] = Array.from({ length: capacity }, (_unused, streamOrdinal) => ({
-            streamOrdinal,
-            copies: scenario.rules.copies,
-            delayMs: scenario.rules.delayMs,
-            omitted: scenario.rules.omitted,
-          }));
+          const next64 = createSplitMix64(BigInt(`0x${derivedSeeds[key]}`));
+          const directionRule = scenario.rules.directions?.[direction] || scenario.rules;
+          const impaired = !scenario.impairPhases || scenario.impairPhases.includes(phase);
+          const baseDelayMs = impaired ? Number(directionRule.delayMs || 0) : 0;
+          const jitterMs = impaired ? Number(directionRule.jitterMs || 0) : 0;
+          streams[key] = Array.from({ length: capacity }, (_unused, streamOrdinal) => {
+            const draw = Number(next64() >> 11n) / UINT53;
+            const jitter = jitterMs === 0 ? 0 : Math.floor(draw * ((jitterMs * 2) + 1)) - jitterMs;
+            return {
+              streamOrdinal,
+              copies: scenario.rules.copies,
+              baseDelayMs,
+              jitterMs,
+              delayMs: baseDelayMs + jitter,
+              omitted: scenario.rules.omitted,
+            };
+          });
         }
       }
     }
@@ -68,6 +82,7 @@ function browserInitSource({ pilotSlot, decisionBook }) {
     let timeline = null;
     let stopped = false;
     let epochOrdinal = 1;
+    let nextEnqueueOrdinal = 0;
     const boundedPush = (entry) => {
       if (evidence.length >= 200000) throw new Error("browser impairment evidence capacity exceeded");
       evidence.push(entry);
@@ -103,10 +118,12 @@ function browserInitSource({ pilotSlot, decisionBook }) {
     const releaseDue = () => {
       if (stopped) return;
       const now = performance.now();
-      for (let index = queue.length - 1; index >= 0; index -= 1) {
-        const item = queue[index];
-        if (item.cancelled || item.releaseAtMs > now) continue;
-        queue.splice(index, 1);
+      queue.sort((left, right) => left.releaseAtMs - right.releaseAtMs
+        || left.enqueueOrdinal - right.enqueueOrdinal);
+      while (queue.length > 0) {
+        const item = queue[0];
+        if (!item.cancelled && item.releaseAtMs > now) break;
+        queue.shift();
         if (item.cancelled) continue;
         let delivered = false;
         for (let copy = 0; copy < item.decision.copies; copy += 1) delivered = item.deliver() !== false || delivered;
@@ -144,7 +161,9 @@ function browserInitSource({ pilotSlot, decisionBook }) {
       if (!decision) throw new Error("compiled decision exhaustion: " + key + "#" + ordinal);
       ordinals.set(key, ordinal + 1);
       const item = { deliver, decision, cancelled: false, releaseAtMs: now + decision.delayMs,
-        record: { ...record, frameClass, streamOrdinal: ordinal, decision } };
+        enqueueOrdinal: nextEnqueueOrdinal++,
+        record: { ...record, frameClass, streamOrdinal: ordinal, decision,
+          scheduledReleaseMonoMs: now + decision.delayMs, enqueueOrdinal: nextEnqueueOrdinal - 1 } };
       boundedPush({ ...item.record, event: decision.omitted ? "omitted" : "queued" });
       if (!decision.omitted && decision.copies > 0) queue.push(item);
       if (decision.delayMs === 0) releaseDue();

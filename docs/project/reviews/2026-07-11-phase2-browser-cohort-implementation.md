@@ -124,12 +124,17 @@ Acceptance requires one no-retry run from the committed clean HEAD plus a
 separate SIGTERM diagnostic after all four pilots are admitted. Dirty-tree runs
 remain explicitly diagnostic-only and cannot become immutable evidence.
 
-### Commit B: F1 regional frame delay
+### Commit B: F1 regional frame delay — implemented
 
 - upstream `U(35,10)` ms in browser;
 - downstream `U(55,20)` ms in server preload;
 - no omission or duplication;
 - verify configured decision ranges and report timer overshoot separately.
+
+As with F0, immutable acceptance requires a no-retry run from the committed
+clean HEAD. The PR profile measures from scheduler interception—not physical
+release—so the reported input and reliable-consequence latencies include the
+configured upstream application-frame delay.
 
 ### Commit C: F3 frame defense
 
