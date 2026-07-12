@@ -153,7 +153,7 @@ payload-only result. TLS/TCP/IP framing and retransmission are not included.
 | 8 | 125.82 KiB | 6.18 Mbit/s | 49.5 Mbit/s |
 | 24 | 158.32 KiB | 7.78 Mbit/s | 186.8 Mbit/s |
 | 48 | 194.23 KiB | 9.55 Mbit/s | 458.2 Mbit/s |
-| 96 | 265.62 KiB | 13.06 Mbit/s | 1,253.9 Mbit/s |
+| 96 | 265.62 KiB | 13.06 Mbit/s | 1,253.4 Mbit/s |
 
 The full-snapshot path is unacceptable well before 96. It also repeats private
 state to non-owners and serializes the same mostly static world over and over.
@@ -218,9 +218,11 @@ accepted constants are:
   baseline;
 - reliable semantic events never hide behind stale state;
 - 512 KiB application queue cap, including a 256 KiB reliable-event subset;
-- transport hysteresis at 256 KiB high-water and 64 KiB low-water;
-- at high-water, stop producing dependent deltas and schedule a fresh baseline;
-- disconnect after two seconds without baseline/reliable-event progress;
+- transport hysteresis at 256 KiB high-water and 64 KiB low-water pauses sends
+  and coalesces replaceable state until the transport drains below low-water;
+- rebase is an application-state enqueue decision made by the bounded app-queue
+  policy, not an automatic consequence of crossing transport high-water;
+- disconnect after two seconds continuously transport-backpressured;
 - a slow recipient must never delay the simulation writer or another socket;
 - expose current bytes, high-water bytes, coalesced frames, forced rebases,
   reliable-event age, and disconnect count per recipient.
@@ -274,21 +276,15 @@ because a dense pileup can make two runs with identical players and bodies
 cost radically different amounts. AI, field, and world terms use the number
 actually due on that multirate tick, not their match-wide totals.
 
-For orientation only, the earlier synthetic envelopes imply the following
-**modeled, not measured** writer critical paths:
-
-| Players | Representative writer p95 | Heavy writer p95 | 20 Hz verdict |
-|---:|---:|---:|---|
-| 24 | about 10 ms | about 21 ms | plausible; measure p99 |
-| 48 | about 15 ms | about 41 ms | engineered; heavy margin is poor |
-| 96 | about 24 ms | about 95 ms | R&D; heavy serial curve is infeasible |
-
-The 96-heavy result does not become feasible by reserving 8 or 12 vCPU. A
-single writer still has a 50 ms frame at 20 Hz. The writer term must fall, or
-pure work must move behind deterministic worker barriers while one writer
-retains commit ownership. A 30 Hz movement/contact clock is stricter: its
-33.3 ms frame requires a cheaper movement kernel and lower-rate AI/world/field
-jobs rather than multiplying a whole-tick curve by 30.
+The previous memo used the superseded player-only sensitivity curve
+`Heavy(P) = 8.0 + 0.350P + 0.0045P^2` ms at 20 Hz. It yields 83.07 ms at 96,
+which exceeds the 50 ms frame and remains useful only as a warning that heavy
+96 cannot be fixed by reserving 8 or 12 vCPU. It is not a fit to measurements
+and cannot predict a fixture whose bodies, candidates, contacts, events, AI,
+field, world, or GC differ. Do not assign new milliseconds until factorial
+fixtures fit the factorized coefficients. The writer term must fall, or pure
+work must move behind deterministic worker barriers while one writer retains
+commit ownership.
 
 Billable CPU and writer latency are separate forecasts:
 
@@ -338,18 +334,29 @@ Projection must query from a frozen end-of-tick view or packed component
 arrays. Ninety-six independent projections must not mutate Ballpark query
 counters or shared gameplay state in a way that changes the next tick.
 
-### Heap and state targets
+### Match memory model
 
 The measured 96-player low-activity process used 17.1 MiB V8 heap and 108.2 MiB
-RSS, but that does not include WebSocket objects, per-recipient baselines,
-binary dictionaries, high event volume, or a long soak. Use these host-level
-steady-state targets, with a separate 2x failure/GC margin in placement:
+RSS, but that does not include production socket state, projected baselines,
+binary dictionaries, high event volume, or a long soak. Account for them
+explicitly:
 
-| Weight | State/heap planning formula | 4 / 8 / 24 / 48 / 96 target |
-|---|---|---:|
-| Light | `64 MiB + 0.35 MiB*N` | 65 / 67 / 72 / 81 / 98 MiB |
-| Representative | `96 MiB + 1.0 MiB*N` | 100 / 104 / 120 / 144 / 192 MiB |
-| Heavy | `192 MiB + 3.0 MiB*N` | 204 / 216 / 264 / 336 / 480 MiB |
+```text
+M_match = M_world_runtime + M_shared_canonical_history
+        + sum_clients(M_socket + M_baseline + M_private
+                    + M_app_queue + M_transport_observed + M_inbound)
+```
+
+`M_app_queue` is capped at 512 KiB per client. Its 256 KiB reliable subset is
+included, not additive, so application caps alone total 48 MiB at 96 clients.
+The transport's 256 KiB high-water threshold adds another 24 MiB if every
+client is observed there, but that is an observed threshold, not a hard
+transport cap. Measure peaks above it, socket/runtime overhead, inbound
+buffers, baselines, private recovery state, shared history, and GC/RSS margin.
+
+The prior representative 96-player envelope of 192 MiB remains a **modeled
+placement envelope pending measurement**, not a result derived from the
+formula above.
 
 Do not retain 32 full projected baselines for every recipient. At 96 clients,
 32 copies of an 8 KiB projected frame is already 24 MiB of encoded payload,
@@ -398,11 +405,12 @@ gets a dedicated writer lane until noisy-neighbor evidence allows otherwise;
 a 96-player experiment gets a dedicated writer lane plus explicit worker
 capacity.
 
-Cloudflare Durable Objects are conceptually attractive as one object per match,
-but a 128 MiB object is a non-fit for the representative 96-player memory model:
-the planning target is 192 MiB before the required failure/GC margin. Durable
-Objects therefore remain a 4–8-player experiment, not a high-count placement
-claim. Provider limits do not substitute for this benchmark. Current official
+Cloudflare Durable Objects are conceptually attractive as one object per match.
+The existing modeled representative 96-player envelope is 192 MiB, so a
+128 MiB object is a non-fit **under that pending-measurement envelope**, not a
+derived memory fact. Durable Objects therefore remain a 4–8-player experiment,
+not a high-count placement claim. Provider limits do not substitute for this
+benchmark. Current official
 limits allow long active CPU windows per request/message and 32 MiB received
 WebSocket messages; the relevant unanswered question is sustained per-object
 CPU, timer regularity, egress cost, and isolation under the actual LBH loop
@@ -509,9 +517,9 @@ rate. The product target is a **modeled** 64 KiB/s average per client, or about
 50.3 Mbit/s of 96-player match payload before transport overhead. That target
 still needs recipient-specific deltas, strict queue bounds, and evidence.
 
-For simulation, the factorized planning envelope puts representative 96 near
-24 ms p95 and heavy 96 near 95 ms against a 50 ms/20 Hz frame. These are
-modeled orientations, not measurements. The honest boundary is unchanged:
+For simulation, no factorized coefficient fit exists yet. The superseded
+player-only heavy sensitivity reaches 83.07 ms at 96 against a 50 ms/20 Hz
+frame; it is a warning, not a forecast. The honest seat verdict is unchanged:
 24 is plausible, 48 is engineered, and 96 is R&D. Heavy 96 cannot be rescued
 by assigning 12 vCPU while its writer remains serial; writer work must fall or
 parallelize deterministically without creating a second gameplay writer.
