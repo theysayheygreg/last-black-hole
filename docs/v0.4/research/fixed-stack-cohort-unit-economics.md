@@ -275,7 +275,47 @@ first payout lands.
 
 Do not blend large-event economics into the 4–8-player cohort rate. The
 high-count model uses different authority shapes, AOI/serialization contracts,
-and product gates. Its current S1 Fly NA/EU forecast at 64 KiB/s/player is:
+occupancy, writer-lane reservations, and product gates. The 4.5-seat assumption
+above applies only to ordinary 4–8-player matchmaking. H24/H48/H96 must use
+their own observed occupancy and per-tier host fit.
+
+The product target is 64 KiB/s average/player. The larger rates below are
+explicit sensitivity envelopes, not alternate targets:
+
+| Downlink mode | GB/player-hour | 24-player GB/match-h | 48-player | 96-player | Fly $0.02/GB network $/player-h |
+|---:|---:|---:|---:|---:|---:|
+| 64 KiB/s product average | 0.23593 | 5.662 | 11.325 | 22.649 | $0.00472 |
+| 144 KiB/s representative | 0.53084 | 12.740 | 25.480 | 50.961 | $0.01062 |
+| 288 KiB/s heavy | 1.06168 | 25.480 | 50.961 | 101.922 | $0.02123 |
+
+The current full-JSON ceiling is not count independent. With the measured
+96-player 265.62 KiB source snapshot, naive 6 Hz fanout is a **modeled**
+564.009 GB/match-hour and $11.280/match-hour at Fly's $0.02/GB before framing,
+events, recovery, or retransmission. That replaces the old ~$2.28/match-hour
+shortcut.
+
+For fleet and cohort arithmetic, keep mode hours explicit:
+
+```text
+active_matches[r,m,t] = ceil(CCU[r,m,t] / mean_occupied_seats[r,m,t])
+required_slots[r,m,t] = ceil(active_matches[r,m,t] / target_slot_occupancy[r,m,t])
+
+host fit = min(writer lanes, mean CPU, RAM, egress, encode throughput,
+               packet/s, process caps, failure-domain policy)
+
+variable cost/copy
+  = sum(hours_per_copy[m,t]
+        * (fleet_compute_per_match_hour[r,m,t] / occupied_seats[r,m,t]
+           + network_GB_per_player_hour[m] * regional_egress_price[r]
+           + per_player_variable_services[r,m,t]))
+```
+
+This keeps per-copy variable service attached to mode hours and actual
+occupancy. Fixed stack, warm regional floor, loaded labor, and the long service
+tail remain separate calendar-time costs; do not smear them into a high-count
+player-hour and then also charge them in the cohort table.
+
+The current **modeled S1** Fly NA/EU forecast at 64 KiB/s/player is:
 
 | Seats in one match | S1 total/match-hour | Total/player-hour | 12 player-hours/copy if all play were in this tier |
 |---:|---:|---:|---:|
@@ -285,11 +325,27 @@ and product gates. Its current S1 Fly NA/EU forecast at 64 KiB/s/player is:
 
 That apparent flatness comes from full occupancy and proportional forecast
 resources; it is not proof that a 96-player sim costs the same to build or
-operate. For heavier simulation, raw compute before reserve and network rises
+operate. Occupancy alone moves the modeled S1 per-copy network-plus-compute
+cost as follows; it still excludes DB/auth/object/log allowances and fixed or
+labor costs:
+
+| Mode | Occupancy | Mean occupied seats | S1 compute + network $/player-h | 12 hours/copy in this mode |
+|---:|---:|---:|---:|---:|
+| H24 | 80% / 90% / 100% | 19.2 / 21.6 / 24.0 | $0.01031 / $0.00969 / $0.00919 | $0.124 / $0.116 / $0.110 |
+| H48 | 80% / 90% / 100% | 38.4 / 43.2 / 48.0 | $0.01031 / $0.00969 / $0.00919 | $0.124 / $0.116 / $0.110 |
+| H96 | 80% / 90% / 100% | 76.8 / 86.4 / 96.0 | $0.01031 / $0.00969 / $0.00919 | $0.124 / $0.116 / $0.110 |
+
+The equal rows are an artifact of proportional S1 forecast resources, not an
+empirical scaling result. Every H24/H48/H96 value remains modeled until the
+heavy runs land. Real vector packing will diverge when writer lanes, RAM,
+egress, packet rate, regional fragmentation, and discrete host shapes bind.
+
+For heavier simulation, mean billable compute before reserve and network rises
 from Railway's $0.0377/$0.0719/$0.1370 per match-hour for 24-player S1/S2/S3,
 to $0.1370/$0.2740/$0.5479 for 96-player S1/S2/S3. Cloud Run and Cloudflare
-Container forecasts are higher, and 96-player S3 requires a large dedicated
-host/custom shape. See
+Container forecasts are higher. These are invoice sensitivities, not tick
+feasibility: **96-player S3/Heavy96 is not feasible until the serial writer is
+fixed, and assigning more vCPU alone cannot make it feasible.** See
 [`high-player-count-hosting-cost-model.md`](high-player-count-hosting-cost-model.md)
 for the full vendor and network model.
 

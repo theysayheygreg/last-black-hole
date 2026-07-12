@@ -32,11 +32,13 @@ performance products: they require multi-core authority work, hard AOI limits,
 bounded AI/ecology, per-recipient serialization budgets, and their own feel and
 overload gates. Do not advertise those seat counts from spreadsheet evidence.
 
-At the 64 KiB/s target, a 96-player match emits about 22.65 GB/hour, 6.29
-MB/s, or 50.3 Mbit/s of state. At today's 1.08 MB/s full-JSON Shallows-style
-ceiling, it emits 373.25 GB/hour, 103.68 MB/s, or 829 Mbit/s before events,
-framing, retransmission, voice, or cross-region control traffic. The optimized
-case is affordable; the full-JSON case is both expensive and operationally
+At the canonical 64 KiB/s average target, a 96-player match emits about 22.65
+GB/hour, 6.29 MB/s, or 50.3 Mbit/s of state. The measured low-activity
+96-player source snapshot was 265.62 KiB; naively sending that full snapshot
+at 6 Hz to all 96 recipients is a **modeled** 564.01 GB/hour, 156.7 MB/s, or
+1.25 Gbit/s. At Fly's $0.02/GB that payload alone is about $11.28/match-hour,
+not the old count-independent ~$2.28 estimate. The target case is affordable;
+the measured-shape full-JSON fanout is both expensive and operationally
 reckless.
 
 ## Scope and definitions
@@ -77,10 +79,12 @@ GB/match-hour = GB/player-hour * occupied seats
 egress $/match-hour = GB/match-hour * regional $/GB
 
 safe packing = floor(min(
+  host isolated writer lanes / writer lanes per authority,
   host usable cores / p95 authority cores,
   host usable GiB / p95 authority GiB,
   host network budget / p95 authority network,
   host encode budget / p95 authority encode,
+  host packet budget / p95 authority packets,
   platform process/session cap
 ))
 
@@ -93,6 +97,32 @@ capacity factor = 1 / (1 - reserved fraction)
 total $/player-hour = (compute + egress + per-match services) / seats
                       + per-player services + shared monthly cost/player-hour
 ```
+
+Do not substitute mean CPU for the serial-writer term. Mean billable CPU sizes
+the reservation and invoice; writer p95/p99 decides whether one authority can
+commit a tick in time. More vCPU does not rescue an over-budget serial writer.
+
+For a mixed fleet, capacity is a regional, tiered vector rather than one global
+seat average:
+
+```text
+active_matches[region, mode, tier]
+  = ceil(CCU[region, mode, tier] / mean_occupied_seats[region, mode, tier])
+
+required_slots[region, mode, tier]
+  = ceil(active_matches[region, mode, tier] / target_slot_occupancy)
+
+host fit = min(writer-lane fit, CPU fit, RAM fit, egress fit,
+               encode fit, packet/s fit, process fit)
+
+fleet $/hour = sum(host_count[region, shape] * host_price[region, shape])
+                + sum(egress_GB[region] * egress_price[region])
+```
+
+Placement is vector packing across writer lanes, mean CPU, RAM, egress,
+encoding, packet rate, and failure domains. H24/H48/H96 therefore have their
+own observed occupancy and host shapes; they must not inherit the 4–8-player
+4.5-seat compute assumption.
 
 A fleet targeting 70% occupied capacity has a `1 / 0.70 = 1.43` capacity
 factor. Twenty, 30, and 40% reserve correspond to factors of 1.25, 1.43, and
@@ -116,16 +146,40 @@ host utilization.
 ### State egress by match size
 
 The target bands are recipient-specific JSON/binary deltas plus periodic
-rebases. The two full-JSON rows reproduce current v0.3 planning ceilings; they
-are not measured multi-client wire traffic.
+rebases. The full-snapshot row instead uses the measured population-specific
+source table and models naive fanout; it is not measured multi-client wire
+traffic.
 
 | Per-player downlink | GB/player-hour | 4 seats GB/match-h | 8 | 24 | 48 | 96 |
 |---:|---:|---:|---:|---:|---:|---:|
 | 32 KiB/s target-low | 0.118 | 0.472 | 0.944 | 2.831 | 5.662 | 11.325 |
-| 64 KiB/s target | 0.236 | 0.944 | 1.887 | 5.662 | 11.325 | 22.649 |
-| 96 KiB/s target-high | 0.354 | 1.416 | 2.831 | 8.493 | 16.987 | 33.974 |
-| 0.33 MB/s Deep Field full JSON | 1.188 | 4.752 | 9.504 | 28.512 | 57.024 | 114.048 |
-| 1.08 MB/s Shallows-style full JSON | 3.888 | 15.552 | 31.104 | 93.312 | 186.624 | 373.248 |
+| 64 KiB/s target | 0.23593 | 0.944 | 1.887 | 5.662 | 11.325 | 22.649 |
+| 144 KiB/s representative sensitivity | 0.53084 | 2.123 | 4.247 | 12.740 | 25.480 | 50.961 |
+| 288 KiB/s heavy sensitivity | 1.06168 | 4.247 | 8.493 | 25.480 | 50.961 | 101.922 |
+
+The canonical product target is 64 KiB/s average/player. The 144 KiB/s row is
+a representative sensitivity and 288 KiB/s is a heavy rejection envelope;
+neither is an acceptance target.
+
+### Measured-shape full-snapshot ceiling
+
+This corrects the old count-independent full-JSON estimate:
+
+```text
+modeled full fanout GB/h = snapshot_bytes(P) * snapshot_hz * P * 3600 / 1e9
+```
+
+| Players | Measured full snapshot | Source snapshot Hz | Modeled GB/match-h | Fly network $/match-h at $0.02/GB |
+|---:|---:|---:|---:|---:|
+| 4 | 116.80 KiB | 6 | 10.334 | $0.207 |
+| 8 | 125.82 KiB | 6 | 22.263 | $0.445 |
+| 24 | 158.32 KiB | 6 | 84.043 | $1.681 |
+| 48 | 194.23 KiB | 6 | 206.211 | $4.124 |
+| 96 | 265.62 KiB | 6 | 564.009 | $11.280 |
+
+Snapshot sizes are measured low-activity source evidence. Fanout bytes and
+dollars are modeled arithmetic; retransmission, framing, events, and recovery
+would make the wire total higher.
 
 At 15 state updates/s, the 64 KiB/s target averages about 4.27 KiB per update
 per recipient. A 96-seat authority produces 1,440 recipient updates/s. Its
@@ -135,9 +189,9 @@ aggregate output rates are:
 |---|---:|---:|---|
 | 32 KiB/s | 3.15 | 25.2 | aggressive AOI/delta target |
 | 64 KiB/s | 6.29 | 50.3 | planning target |
-| 96 KiB/s | 9.44 | 75.5 | target-high |
-| 0.33 MB/s | 31.68 | 253 | current Deep Field ceiling fanned out |
-| 1.08 MB/s | 103.68 | 829 | Shallows-style ceiling; reject |
+| 144 KiB/s | 14.16 | 113.2 | representative sensitivity |
+| 288 KiB/s | 28.31 | 226.5 | heavy rejection envelope |
+| measured 265.62 KiB snapshot at 6 Hz | 156.67 | 1,253 | modeled naive full fanout; reject |
 
 This is payload only. Add packet framing, TLS/TCP ACKs, retransmission,
 connection recovery, inputs, reliable events, and observability. Voice stays on
@@ -149,9 +203,8 @@ a separate path and budget.
 |---:|---:|---:|---:|---:|---:|
 | 32 KiB/s | $0.0024 | $0.0029 | $0.0059 | $0.0177 | $0 |
 | 64 KiB/s | $0.0047 | $0.0059 | $0.0118 | $0.0354 | $0 |
-| 96 KiB/s | $0.0071 | $0.0088 | $0.0177 | $0.0531 | $0 |
-| 0.33 MB/s | $0.0238 | $0.0297 | $0.0594 | $0.1782 | $0 |
-| 1.08 MB/s | $0.0778 | $0.0972 | $0.1944 | $0.5832 | $0 |
+| 144 KiB/s representative | $0.01062 | $0.01327 | $0.02654 | $0.07963 | $0 |
+| 288 KiB/s heavy | $0.02123 | $0.02654 | $0.05308 | $0.15925 | $0 |
 
 Cloudflare Containers include 1 TB/month in NA/EU before the marginal rate.
 Render includes bandwidth by workspace plan. The table intentionally uses
@@ -175,7 +228,8 @@ compression cores = aggregate pre-compression MB/s
 ```
 
 For illustration only, a measured 50 MB/s/core compression path would consume
-about 0.19 core at 9.44 MB/s and 2.07 cores at 103.68 MB/s. Those are arithmetic
+about 0.57 core at the 96-player 288 KiB/s sensitivity (28.31 MB/s) and 3.13
+cores for naive measured-shape full fanout (156.67 MB/s). Those are arithmetic
 examples, not Node, JSON, or LBH benchmarks. The benchmark must record encode
 CPU, compression CPU, allocation/GC, bytes before and after compression, and
 slow-recipient queue depth separately from world-tick time.
@@ -199,7 +253,7 @@ Ballpark/AOI should prevent whole-world pairwise scans. Any hot path that grows
 as `P^2`, `P * allBodies`, or `P * fullSnapshot` must be identified rather
 than averaged into a CPU number.
 
-### Planning envelopes, not measurements
+### Mean billable-resource envelopes, not feasibility measurements
 
 | Seats | S1 current-scale core (vCPU/GiB) | S2 dense/heavy (vCPU/GiB) | S3 stress world (vCPU/GiB) |
 |---:|---:|---:|---:|
@@ -207,7 +261,7 @@ than averaged into a CPU number.
 | 8 | 0.30 / 0.60 | 0.75 / 1.0 | 1.5 / 2.0 |
 | 24 | 0.75 / 1.25 | 1.5 / 2.25 | 3 / 4 |
 | 48 | 1.5 / 2.25 | 3 / 4 | 6 / 8 |
-| 96 | 3 / 4 | 6 / 8 | 12 / 16 |
+| 96 | 3 / 4 | 6 / 8 | 12 / 16 **(billing sensitivity only; serial writer infeasible)** |
 
 S1 assumes current coarse authority ideas, bounded AI/hazards, Ballpark
 broadphase, 15 Hz primary tick, and client-owned visual fluid. S2 represents
@@ -215,6 +269,12 @@ roughly 2–4x active ecology/contact/field work and more event churn. S3 is an
 8x-world stress envelope with broad action and interest churn. Network remains
 capped by AOI; if world size linearly increases per-player downlink, the design
 has failed before the vendor decision.
+
+These are mean billable CPU/RAM envelopes for invoice sensitivity. They do not
+establish writer feasibility. The corrected performance model's Heavy96 writer
+p95 is over budget; therefore 96/S3 is **not feasible until serial writer work
+is reduced or pure jobs move behind deterministic barriers**. Assigning more
+vCPU without fixing the writer does not change that verdict.
 
 These envelopes reserve no CPU for host OS, supervisor, TLS, logs, or burst.
 Packing calculations below expose only 70% of host CPU/RAM. A current
@@ -387,33 +447,33 @@ host; 24-seat pack three per 4/8 host; 48-seat pack three per 8/16 host; 96-seat
 pack three per 16/32 host. These are targets to falsify with p95 tick fairness,
 not safe production counts.
 
-| Seats | Forecast compute $/match-h incl reserve | Total $/match-h at 64 KiB/s | Total $/player-h | $/player-h at 1.08 MB/s full JSON |
+| Seats | Forecast compute $/match-h incl reserve | Total $/match-h at 64 KiB/s | Total $/player-h | Modeled measured-shape full-snapshot $/player-h |
 |---:|---:|---:|---:|---:|
-| 4 | $0.0403 | $0.0591 | $0.0148 | $0.0878 |
-| 8 | $0.0403 | $0.0780 | $0.0098 | $0.0828 |
-| 24 | $0.1073 | $0.2206 | $0.0092 | $0.0822 |
-| 48 | $0.2147 | $0.4412 | $0.0092 | $0.0822 |
-| 96 | $0.4294 | $0.8824 | $0.0092 | $0.0822 |
+| 4 | $0.0403 | $0.0591 | $0.0148 | $0.0618 |
+| 8 | $0.0403 | $0.0780 | $0.0098 | $0.0607 |
+| 24 | $0.1073 | $0.2206 | $0.0092 | $0.0745 |
+| 48 | $0.2147 | $0.4412 | $0.0092 | $0.0904 |
+| 96 | $0.4294 | $0.8824 | $0.0092 | $0.1220 |
 
 ### Railway resource-rate forecast
 
-| Seats | Forecast compute $/match-h incl reserve | Total $/match-h at 64 KiB/s | Total $/player-h | $/player-h at 1.08 MB/s full JSON |
+| Seats | Forecast compute $/match-h incl reserve | Total $/match-h at 64 KiB/s | Total $/player-h | Modeled measured-shape full-snapshot $/player-h |
 |---:|---:|---:|---:|---:|
-| 4 | $0.0157 | $0.0629 | $0.0157 | $0.1983 |
-| 8 | $0.0235 | $0.1179 | $0.0147 | $0.1973 |
-| 24 | $0.0539 | $0.3370 | $0.0140 | $0.1966 |
-| 48 | $0.1028 | $0.6691 | $0.0139 | $0.1965 |
-| 96 | $0.1959 | $1.3284 | $0.0138 | $0.1964 |
+| 4 | $0.0157 | $0.0629 | $0.0157 | $0.1331 |
+| 8 | $0.0235 | $0.1179 | $0.0147 | $0.1421 |
+| 24 | $0.0539 | $0.3370 | $0.0140 | $0.1773 |
+| 48 | $0.1028 | $0.6691 | $0.0139 | $0.2169 |
+| 96 | $0.1959 | $1.3284 | $0.0138 | $0.2958 |
 
 ### Render listed instances and marginal bandwidth
 
-| Seats | Smallest forecast-fitting listed instance | Compute $/match-h | Total $/match-h at 64 KiB/s | Total $/player-h | $/player-h at 1.08 MB/s |
+| Seats | Smallest forecast-fitting listed instance | Compute $/match-h | Total $/match-h at 64 KiB/s | Total $/player-h | Modeled measured-shape full-snapshot $/player-h |
 |---:|---|---:|---:|---:|---:|
-| 4 | Starter | $0.0096 | $0.1511 | $0.0378 | $0.5856 |
-| 8 | Standard | $0.0342 | $0.3174 | $0.0397 | $0.5875 |
-| 24 | Standard | $0.0342 | $0.8836 | $0.0368 | $0.5846 |
-| 48 | Pro | $0.1164 | $1.8151 | $0.0378 | $0.5856 |
-| 96 | Pro Plus | $0.2397 | $3.6371 | $0.0379 | $0.5857 |
+| 4 | Starter | $0.0096 | $0.1511 | $0.0378 | $0.3899 |
+| 8 | Standard | $0.0342 | $0.3174 | $0.0397 | $0.4217 |
+| 24 | Standard | $0.0342 | $0.8836 | $0.0368 | $0.5267 |
+| 48 | Pro | $0.1164 | $1.8151 | $0.0378 | $0.6468 |
+| 96 | Pro Plus | $0.2397 | $3.6371 | $0.0379 | $0.8838 |
 
 Included workspace bandwidth can reduce a tiny deployment's bill, but it does
 not change the marginal successful-game comparison.
@@ -457,7 +517,7 @@ an actual instance must round memory/CPU up to a published shape.
 | 48 S3 | 6/8 | $0.2740 | $0.4464 | ~$0.5050 | exceeds current CF Container vCPU shape |
 | 96 S1 | 3/4 | $0.1370 | $0.2232 | ~$0.2530 | multi-core job path needed |
 | 96 S2 | 6/8 | $0.2740 | $0.4464 | ~$0.5050 | exceeds current CF Container vCPU shape |
-| 96 S3 | 12/16 | $0.5479 | $0.8928 | ~$1.0090 | large dedicated host/custom quote |
+| 96 S3 | 12/16 | $0.5479 | $0.8928 | ~$1.0090 | **not feasible until serial writer is fixed; more vCPU alone cannot help** |
 
 Add `1.25–1.67x` fleet capacity factor, chosen regional fragmentation, egress,
 Worker/DO charges, storage, logs, and fixed services. Metered formulas do not
@@ -527,7 +587,8 @@ Candidate gates:
 - p95 tick work under 50% of the 15 Hz frame and p99 under 80% in normal mode;
 - no authority loses its gate because a neighboring packed match enters S3;
 - outbound queues remain bounded and stale state coalesces rather than grows;
-- target traffic stays at or below 64 KiB/s average and 96 KiB/s p95/player;
+- target traffic stays at or below 64 KiB/s average/player; report the 144
+  KiB/s representative and 288 KiB/s heavy sensitivities separately;
 - full rebase does not block current deltas or create multi-second GC/encode
   stalls;
 - overload reduces optional ecology, AI cadence, distant replication, and
@@ -545,7 +606,7 @@ Candidate gates:
    projection/encoding and likely parallel read-only sim jobs under one commit
    owner. Do not rely on shared CPU.
 4. **96 players:** treat as an R&D ceiling. Use a multi-core/high-memory host,
-   strict AOI, bounded sim tiers, and transport under 96 KiB/s/player. Full JSON
+   strict AOI, bounded sim tiers, and a 64 KiB/s average/player contract. Full JSON
    is disqualifying even where GameLift makes egress nominally free because the
    authority still pays CPU, GC, NIC, queueing, and latency.
 5. **Vendor choice:** choose from measured cost per accepted match-hour at the
