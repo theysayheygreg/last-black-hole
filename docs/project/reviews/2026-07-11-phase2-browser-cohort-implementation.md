@@ -171,7 +171,13 @@ timing. Recovered clients must finish on an open stream after a rotated epoch,
 aligned public/owner baseline, physical baseline ACK, new physical input, and
 covering input ACK. A deterministic regression separately locks the old-event
 ACK versus fresh replay race found during diagnostic F6 work. Immutable F6
-acceptance still requires a no-retry run from the committed clean HEAD.
+acceptance is
+`tests/screenshots/multiplayer-impairment-2026-07-12T081612179Z-f6-all-flap-4p-0406F1A9-be754c`
+from clean commit `6976a7f`. All four streams rotated from epoch one to two,
+recovered in 62--66 ms after a 4 ms hook-invocation skew, finished open on the
+stream transport, and passed exact consequence, privacy, pressure, and cleanup
+gates. Physical socket-close, TCP-reset, proxy, WAN, TLS, and hosted evidence
+remain pending.
 
 Canonical profiles retain the review's 15-second warm-up, declared active
 duration, and 15-second recovery. PR profiles use the same scenario version,
