@@ -529,6 +529,14 @@ const SUITES = [
     timeout: 240000,
   },
   {
+    name: "MultiplayerSlowReaderPressure",
+    file: "multiplayer-slow-reader-pressure.cjs",
+    lanes: ["multiplayer-impairment-transport"],
+    browser: false,
+    slow: true,
+    timeout: 60000,
+  },
+  {
     name: "Renderer",
     file: "renderer.cjs",
     lanes: ["visual", "full", "three"],
@@ -558,6 +566,7 @@ const LANES = [
   "multiplayer-network",
   "multiplayer-playable",
   "multiplayer-impairment-browser",
+  "multiplayer-impairment-transport",
   "visual",
   "playtest",
   "agent-eval",

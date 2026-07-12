@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "T2a-drainable-pressure",
+  "pilotCount": 4,
+  "impairedPilot": "pilot-3",
+  "port": 8862,
+  "queuePolicy": {
+    "maxBytes": 524288,
+    "maxReliableBytes": 262144,
+    "transportHighWaterBytes": 262144,
+    "transportLowWaterBytes": 65536,
+    "backpressureTimeoutMs": 2000
+  },
+  "readGateGuardMs": 250,
+  "resumeWithinMs": 1000,
+  "lowWaterWithinMs": 2000,
+  "stimulus": {
+    "count": 8,
+    "maxConsequenceBytes": 4096,
+    "maxBurstBytes": 32768,
+    "actions": ["unequip", "equipCargo", "unequip", "equipCargo", "unequip", "equipCargo", "unequip", "equipCargo"]
+  },
+  "evidence": {
+    "maxPressureEvents": 20000,
+    "maxRawReaderEvents": 2000,
+    "maxStateLedgerEntries": 10000,
+    "maxReliableLedgerEntries": 1000
+  }
+}
