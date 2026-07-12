@@ -106,13 +106,24 @@ export async function _connectStream(kind = 'admission') {
   this._streamState = 'open';
   if (kind === 'resume') {
     this.metrics.reconnectCount += 1;
-    if (this.lastSentInput && this.lastSentInput.inputSeq > this.metrics.lastInputAck) this._sendFrame({
-      type: 'input', inputSeq: this.lastSentInput.inputSeq,
-      moveX: this.lastSentInput.moveX, moveY: this.lastSentInput.moveY,
-      thrust: this.lastSentInput.thrust, brake: this.lastSentInput.brake,
-      slingshot: this.lastSentInput.slingshot, ability1: this.lastSentInput.ability1,
-      ability2: this.lastSentInput.ability2, clientTimeMs: Date.now(),
-    });
+    if (this.lastSentInput && this.lastSentInput.inputSeq > this.metrics.lastInputAck) {
+      // Continuous input is latest-wins rather than idempotent. The old socket
+      // can settle its final frame after the resume welcome captured a cursor,
+      // so replaying that exact sequence can race into a stale-input close.
+      // Re-issue the same physical intent above every observed cursor instead;
+      // reliable action frames below retain their original identities.
+      const inputSeq = Math.max(this.seq, this.lastSentInput.inputSeq, this.metrics.lastInputAck) + 1;
+      this.seq = inputSeq;
+      const resumedInput = {
+        type: 'input', inputSeq,
+        moveX: this.lastSentInput.moveX, moveY: this.lastSentInput.moveY,
+        thrust: this.lastSentInput.thrust, brake: this.lastSentInput.brake,
+        slingshot: this.lastSentInput.slingshot, ability1: this.lastSentInput.ability1,
+        ability2: this.lastSentInput.ability2, clientTimeMs: Date.now(),
+      };
+      this.lastSentInput = { ...resumedInput, seq: inputSeq, sentAt: this._nowMs() };
+      this._sendFrame(resumedInput);
+    }
     for (const pending of this._pendingActions.values()) this._sendFrame(pending.frame);
   }
 }
@@ -271,9 +282,9 @@ export function _settleInputAck(inputSeq, frame) {
     clearTimeout(pending.timer);
     this._inputAcks.delete(pendingSeq);
     this.metrics.lastInputAckRttMs = this._nowMs() - pending.sentAt;
-    this.pendingInputs = this.pendingInputs.filter((entry) => entry.seq > inputSeq);
     pending.resolve(frame);
   }
+  this.pendingInputs = this.pendingInputs.filter((entry) => entry.seq > inputSeq);
 }
 
 export function _queueAction(actionKind, payload) {

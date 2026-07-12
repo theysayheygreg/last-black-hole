@@ -159,6 +159,22 @@ Singularity that:
   movement, private inventory, reconnect, and leave/rejoin evidence. Do not call
   Phase 1 playable before that journey passes.
 
+### Local playable-browser closure — 2026-07-11 23:54 UTC
+
+- `npm run test:multiplayer-playable` passes the final combined 4p/4p/8p
+  journey with normal menus and physical action edges. The definitive ignored
+  evidence directory is `multiplayer-playable-2026-07-11T235418687Z`.
+- The journey closed four product defects: render-loop input flooding, resume
+  cursor/remint races, empty-preboot sessions masquerading as live matches, and
+  pause-menu exits leaving ghost memberships. Reliable action identity remains
+  stable while latest continuous intent remints above reconnect cursors.
+- Measured steady application traffic is 0.810--0.812 MB/s for four browsers
+  and 1.927 MB/s for eight, with authority `NORMAL` at 15/10 Hz and eight-client
+  projection-average p95 5.49 ms. These are uncompressed local Shallows rates.
+- Next bounded lane is Phase 2 impairment/failure proof: RTT, jitter, loss,
+  reorder, blackout, bandwidth caps, simultaneous reconnect, and WAN/TLS edge.
+  Greg hands-on and hosted/public readiness remain explicitly pending.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`

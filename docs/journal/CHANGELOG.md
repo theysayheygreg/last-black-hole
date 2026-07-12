@@ -12,12 +12,28 @@
   oracle. Stream mode now merges exact public/owner state lineage, keeps
   continuous input independent from reliable action settlement, retries stable
   action identities across reconnect, and uses separate delivery/playback ACKs.
-- Extracted stream lifecycle/recovery into a focused helper and added seven
+- Extracted stream lifecycle/recovery into a focused helper and added eight
   live regressions for admission cancellation, owner-private baseline merge,
   rejected one-shot settlement, inventory/event ACK behavior, reconnect
   rotation, clean leave, dead-socket bounded failure, and zero hot-path HTTP.
 - Generation-fenced pulse, extraction, and consumable intents in the browser
   loop so an older semantic ACK cannot erase a newer physical press.
+- Added the registered `multiplayer-playable` lane: four real browsers complete
+  the journey twice and eight once through normal menus, movement, salvage,
+  signal/actions, death, extraction, exact-once reconnect, physical leave, and
+  same-run rejoin, with private overlays, CDP traffic, 1280x800 evidence, and
+  process cleanup asserted.
+- Paced stream input at 20 Hz without delaying newly dispatchable reliable
+  actions. Resume now adopts authoritative input cursors and remints only the
+  latest continuous intent above reconnect races while retaining reliable
+  action identity.
+- Stopped treating the zero-human preboot cycle as a live match, enabling the
+  normal host URL to create a true eight-seat authority; fixed pause-menu exit
+  to send authoritative leave before title teardown instead of leaving a ghost
+  membership.
+- Measured steady uncompressed application traffic at 0.810--0.812 MB/s for
+  four browsers and 1.927 MB/s for eight while authority stayed `NORMAL` at
+  15/10 Hz. WAN, TLS, hosted soak, and Greg hands-on remain pending.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

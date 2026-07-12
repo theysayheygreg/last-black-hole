@@ -464,6 +464,7 @@ export function initTestAPI(getState) {
         sessionMapId: remoteControlState?.sessionMapId ?? null,
         sessionMapName: remoteControlState?.sessionMapName ?? null,
         sessionPlayerCount: remoteControlState?.sessionPlayerCount ?? 0,
+        sessionHumanPlayerCount: remoteControlState?.sessionHumanPlayerCount ?? 0,
         sessionHostClientId: remoteControlState?.hostClientId ?? null,
         sessionHostName: remoteControlState?.hostName ?? null,
         sessionIsHost: Boolean(remoteControlState?.isHost),
@@ -476,6 +477,50 @@ export function initTestAPI(getState) {
         lastRemoteInput: simClient?.lastSentInput ? { ...simClient.lastSentInput } : null,
         networkMetrics: simClient?.getMetrics ? simClient.getMetrics() : null,
       };
+    },
+
+    getMultiplayerJourneyState() {
+      const { simClient, remoteSnapshot, remoteControlState } = getState();
+      const players = Array.isArray(remoteSnapshot?.players) ? remoteSnapshot.players : [];
+      const owner = players.find((player) => player.clientId === simClient?.clientId) || null;
+      return clone({
+        clientId: simClient?.clientId || null,
+        membershipId: simClient?.membershipId || null,
+        connectionId: simClient?.connectionId || null,
+        connectionEpoch: simClient?.connectionEpoch ?? null,
+        runId: remoteSnapshot?.runId || remoteSnapshot?.session?.runId || null,
+        snapshotId: remoteSnapshot?.snapshotId ?? null,
+        tick: remoteSnapshot?.tick ?? null,
+        simTime: remoteSnapshot?.simTime ?? null,
+        lastEventSeq: remoteSnapshot?.lastEventSeq ?? null,
+        fieldRevision: remoteSnapshot?.fieldRevision ?? null,
+        session: remoteSnapshot?.session || null,
+        players,
+        owner,
+        control: remoteControlState || null,
+        transport: simClient?.getMetrics?.() || null,
+      });
+    },
+
+    interruptMultiplayerStreamForTest(message = null) {
+      const { simClient } = getState();
+      if (!simClient || simClient.transport !== 'stream' || !simClient._socket) return false;
+      if (message) void simClient.sendInput(message).catch(() => null);
+      const beforeClose = {
+        pendingActionCount: simClient._pendingActions?.size || 0,
+        pendingInputCount: simClient.pendingInputs?.length || 0,
+        lastDeliveryAck: simClient.metrics?.lastDeliveryAck || 0,
+        lastEventAck: simClient.metrics?.lastEventAck || 0,
+        connectionId: simClient.connectionId || null,
+        connectionEpoch: simClient.connectionEpoch || 0,
+      };
+      simClient._socket.close(4012, 'multiplayer journey reconnect');
+      return clone(beforeClose);
+    },
+
+    setHomeTabForTest(index) {
+      const { setHomeTabForTest } = getState();
+      return typeof setHomeTabForTest === 'function' ? setHomeTabForTest(index) : null;
     },
 
     getInhibitorState() {

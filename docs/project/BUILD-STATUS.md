@@ -23,11 +23,11 @@ independently reviewed, and registered in the multiplayer and authority harness
 lanes. HTTP remains the default diagnostic oracle; `simTransport=stream`
 explicitly selects the live stream path. Research/design is complete.
 
-**Playable status:** browser transport cutover is implemented but has not yet
-passed the natural four/eight-browser journey, so this is not a multiplayer
-playability claim. Real 1/4/8 WebSocket clients share one authority and pass
-identity/privacy/input/action/reset/shutdown truth, including event replay/gap
-recovery. Invite UI, WAN proof, and a natural multi-human journey remain.
+**Playable status:** local loopback browser multiplayer is now automation-green:
+four browsers completed the natural journey twice and eight completed it once.
+This is the first honest local playable milestone, not an internet/public-ready
+claim. Invite UI, WAN/TLS-edge proof, hosted soak, Greg's hands-on movement/art
+judgment, and physical-device validation remain.
 
 **Current evidence:** `npm run test:multiplayer-structure` and
 `npm run test:multiplayer-authority` pass. The Phase 1
@@ -48,6 +48,16 @@ merge lineage, continuous-input ACKs independent of semantic action settlement,
 reconnect credential rotation, bounded cancellation/leave behavior, distinct
 delivery/playback ACKs, and zero hot-path HTTP in stream mode. See
 `docs/v0.4/research/phase1-ws-runtime-baseline.md`.
+
+The definitive `npm run test:multiplayer-playable` report kept authority
+`NORMAL` at 15 Hz tick / 10 Hz projection. Steady uncompressed JSON application
+traffic measured 0.810--0.812 MB/s aggregate for four clients and 1.927 MB/s
+for eight (roughly 200--211 kB/s and 239--249 kB/s per browser respectively).
+The eight-client projection-average p95 was 5.49 ms, sim-tick p95 was 3.98 ms,
+input-ACK p95 ranged 7.6--18.3 ms, and exactly-once reconnect recovered in
+105 ms. All 4/4/8 Chrome processes and sim listeners shut down cleanly. These
+are local Shallows loopback measurements without compression, WAN impairment,
+TLS, relay, or hosted-edge overhead.
 
 ## v0.3 Candidate
 

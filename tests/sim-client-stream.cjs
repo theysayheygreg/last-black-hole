@@ -33,6 +33,46 @@ async function authoritySnapshot(client) {
   return response.json();
 }
 
+function resumeSocketClass({ acceptedInputSeq, sent }) {
+  return class ResumeSocket {
+    static OPEN = 1;
+    constructor() {
+      this.readyState = 0;
+      this.listeners = new Map();
+      queueMicrotask(() => { this.readyState = 1; this.emit("open", {}); });
+    }
+    addEventListener(type, callback) {
+      const listeners = this.listeners.get(type) || [];
+      listeners.push(callback);
+      this.listeners.set(type, listeners);
+    }
+    emit(type, event) { for (const callback of this.listeners.get(type) || []) callback(event); }
+    send(raw) {
+      const frame = JSON.parse(raw);
+      sent.push(frame);
+      if (frame.type !== "hello") return;
+      queueMicrotask(() => {
+        const common = { runId: "resume-run", snapshotId: 10, tick: 20, simTime: 2, lastEventSeq: 2, fieldRevision: 1 };
+        for (const incoming of [
+          {
+            type: "welcome", wireVersion: "test-wire", simProtocolVersion: "test-sim",
+            runId: "resume-run", playerId: "resume-player", membershipId: "resume-membership",
+            connectionId: "resume-connection", connectionEpoch: 2, commandCredential: "rotated",
+            lastCommandSeq: 4, lastActionSeq: 1, lastInputSeq: acceptedInputSeq, heartbeatIntervalMs: 10000,
+          },
+          { type: "rebase", ...common, reason: "resume" },
+          { type: "publicState", ...common, state: { ...common, session: { snapshotHz: 10 }, players: [{ clientId: "resume-player" }] } },
+          { type: "ownerState", ...common, membershipId: "resume-membership", playerId: "resume-player", lastActionSeq: 1, state: {} },
+        ]) this.emit("message", { data: JSON.stringify(incoming) });
+      });
+    }
+    close(code = 1000, reason = "closed") {
+      this.readyState = 3;
+      this.emit("close", { code, reason });
+    }
+  };
+}
+
 async function main() {
   const { SimClient } = await import("../src/sim/sim-client.js");
   const runner = new TestRunner("SimClient stream transport");
@@ -133,6 +173,50 @@ async function main() {
       const metrics = client.getMetrics();
       assert(metrics.hotPathHttpCount === 0 && metrics.hotPathHttpOccurred === false,
         `Stream mode issued hot-path HTTP requests: ${JSON.stringify(metrics)}`);
+    });
+
+    await runner.run("resume adopts the welcome input cursor before deciding what to resend", async () => {
+      async function connectWithLastInput(inputSeq) {
+        const sent = [];
+        const resumed = new SimClient(BASE_URL, {
+          transport: "stream",
+          WebSocketImpl: resumeSocketClass({ acceptedInputSeq: 7, sent }),
+        });
+        resumed._protocol = { path: "/stream", wireVersion: "test-wire", simProtocolVersion: "test-sim" };
+        resumed._issueStreamTicket = async () => ({ ticket: "resume-ticket" });
+        resumed.runId = "resume-run";
+        resumed.lastSnapshotId = 9;
+        resumed.eventCursor = 2;
+        resumed.metrics.lastInputAck = 6;
+        resumed.metrics.lastAcceptedSeq = 6;
+        resumed.lastSentInput = {
+          type: "input", inputSeq, moveX: 1, moveY: 0, thrust: 0, brake: 0,
+          slingshot: false, ability1: false, ability2: false,
+        };
+        resumed.seq = inputSeq;
+        resumed.pendingInputs = [{ seq: 7, sentAt: 1 }, ...(inputSeq > 7 ? [{ seq: inputSeq, sentAt: 2 }] : [])];
+        await resumed._connectStream("resume");
+        return { resumed, sent };
+      }
+
+      const accepted = await connectWithLastInput(7);
+      assert(accepted.resumed.metrics.lastInputAck === 7
+        && accepted.resumed.metrics.lastAcceptedSeq === 7
+        && accepted.resumed.pendingInputs.length === 0,
+      "Welcome must advance and prune through the authoritative input cursor");
+      assert(!accepted.sent.some((frame) => frame.type === "input"),
+        "Resume must not resend an input the welcome says authority accepted");
+      await accepted.resumed._stopStream("accepted-cursor-test");
+
+      const newer = await connectWithLastInput(8);
+      const resent = newer.sent.filter((frame) => frame.type === "input");
+      assert(resent.length === 1 && resent[0].inputSeq === 9 && newer.resumed.lastSentInput.inputSeq === 9
+        && newer.resumed.pendingInputs.length === 1,
+      "Resume must remint a genuinely newer continuous intent above the welcome cursor");
+      newer.resumed._handleStreamFrame({ type: "ack", ackKind: "input", inputSeq: 9 }, newer.resumed._socketGeneration);
+      assert(newer.resumed.pendingInputs.length === 0 && newer.resumed.metrics.lastInputAck === 9,
+        "Fresh resume ACK must cumulatively clear the older in-flight input state");
+      await newer.resumed._stopStream("newer-cursor-test");
     });
 
     await runner.run("leave closes stream and leaves bounded state", async () => {

@@ -66,8 +66,19 @@ remain in `high-player-count-performance-model.md` and
 `high-player-count-hosting-cost-model.md`. This baseline supplies a real
 low-count replication anchor; it does not replace their H24/H48/H96/X96 tests.
 
-## Remaining gates before playable multiplayer
+## Browser-playable result
 
-- cut SimClient and browser play over the stream transport;
-- run loss, jitter, reorder, slow-reader, WAN, TLS-edge, and hosted soak proof;
-- complete a natural four- and eight-human playable journey.
+The local browser gate now passes four clients twice and eight once over the
+stream transport. It covers normal menus, movement, reliable actions, private
+inventory, death, extraction, reconnect, physical leave/rejoin, screenshots,
+and cleanup. Steady all-live uncompressed application traffic measured
+0.810--0.812 MB/s at four and 1.927 MB/s at eight; the eight-client authority
+remained `NORMAL` at 15/10 Hz with 5.49 ms projection-average p95 and 3.98 ms
+sim-tick p95.
+
+## Remaining gates before internet multiplayer
+
+- run loss, jitter, reorder, slow-reader, simultaneous reconnect, WAN,
+  TLS-edge, and hosted soak proof;
+- add invite/session UX and Greg hands-on movement/art acceptance;
+- validate physical-device and public deployment paths.

@@ -261,8 +261,12 @@ export class SimClient {
     this.connectionEpoch = frame.connectionEpoch;
     this.commandSeq = Math.max(this.commandSeq, frame.lastCommandSeq);
     this.actionSeq = Math.max(this.actionSeq, frame.lastActionSeq);
+    const acceptedInputSeq = Math.max(0, Number(frame.lastInputSeq) || 0);
+    this.metrics.lastInputAck = Math.max(this.metrics.lastInputAck, acceptedInputSeq);
+    this.metrics.lastAcceptedSeq = Math.max(this.metrics.lastAcceptedSeq, acceptedInputSeq);
+    this.pendingInputs = this.pendingInputs.filter((entry) => entry.seq > acceptedInputSeq);
     for (const [inputSeq, pending] of this._inputAcks) {
-      if (inputSeq <= frame.lastInputSeq) this._settleInputAck(inputSeq, { type: 'ack', ackKind: 'input', inputSeq });
+      if (inputSeq <= acceptedInputSeq) this._settleInputAck(inputSeq, { type: 'ack', ackKind: 'input', inputSeq });
     }
   }
 

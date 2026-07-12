@@ -75,12 +75,20 @@ delivery from playback ACK, fences stale connection generations, bounds
 cancellation/leave, and performs no hot-path HTTP. Phase 1 still requires the
 natural four/eight-browser journey before any playable claim.
 
+**Playable-browser checkpoint — 2026-07-11:** the registered
+`multiplayer-playable` lane passes four browsers twice and eight once through
+normal host/join menus, held movement, salvage, pulse, consumable, slingshot,
+death, extraction, exact-once reconnect, physical pause-menu leave, and
+same-run rejoin. Owner privacy, zero hot-path HTTP, 1280x800 evidence, measured
+application bytes, and process cleanup are explicit gates. This closes the
+local Phase 1 playable slice; WAN and hosted truth move to Phase 2 and later.
+
 - [x] Add a persistent JSON WSS adapter with hello/version, membership binding,
   heartbeat, and bounded queues.
 - [x] Send owner-private state plus the complete public world; no AOI yet.
 - [x] Keep existing Shallows/Expanse/Deep Field sim clocks.
 - [x] Split latest-wins input from reliable idempotent actions.
-- [ ] Drive four, then eight clients through natural movement, salvage, signal,
+- [x] Drive four, then eight clients through natural movement, salvage, signal,
   death, and extraction.
 
 Gate:

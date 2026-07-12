@@ -164,6 +164,7 @@ const CLIENT_PERF_PROFILE = CLIENT_PERF_PROFILES.fixedGrid;
 const PERF_SMOOTHING = CLIENT_PERF_PROFILE.perfSmoothing;
 // Long enough to bridge polling jitter, short enough to stop if snapshots stall.
 const REMOTE_PRESENTATION_EXTRAPOLATE_LIMIT = CLIENT_PERF_PROFILE.remotePresentationExtrapolateLimit;
+const REMOTE_STREAM_INPUT_INTERVAL_MS = 50;
 const perfStats = {
   frameMs: 0,
   simMs: 0,
@@ -266,6 +267,7 @@ let fixtureShipCandidates = [];
 let remoteLastAckSeq = 0;
 let remoteLastEventSeq = 0;
 let remoteInputRequestInFlight = false;
+let remoteNextStreamInputAt = 0;
 let remoteActionSettlementInFlight = false;
 let remoteSnapshotRequestInFlight = false;
 let remoteInventoryRequestInFlight = false;
@@ -895,6 +897,11 @@ function getConfiguredSimTransport() {
   return new URL(window.location.href).searchParams.get('simTransport') === 'stream'
     ? 'stream'
     : 'http';
+}
+
+function getConfiguredSimMaxPlayers() {
+  const requested = Number(new URL(window.location.href).searchParams.get('simMaxPlayers'));
+  return requested === 8 ? 8 : 4;
 }
 
 // ---- Init ----
@@ -1719,7 +1726,16 @@ function loadRendererFixture(name) {
 
 /** Transition to title with glitch effect. */
 function transitionToTitle() {
-  triggerTransition(() => loadTitleScene());
+  if (!remoteAuthorityActive) {
+    triggerTransition(() => loadTitleScene());
+    return;
+  }
+  triggerTransition(() => {
+    void leaveRemoteSessionToHome().catch((err) => {
+      console.error('[LBH] remote pause exit failed:', err);
+      showWarning(`remote exit failed: ${err.message}`, 'rgba(255, 100, 80, 0.95)', 4000);
+    }).finally(() => loadTitleScene());
+  });
 }
 
 /**
@@ -1734,6 +1750,7 @@ function startGame(map, seed = null) {
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
+  remoteNextStreamInputAt = 0;
   remoteActionSettlementInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
@@ -1875,6 +1892,9 @@ function applyRemoteSnapshot(snapshot) {
     ok: true,
     session: snapshot.session ?? null,
     playerCount: Array.isArray(snapshot.players) ? snapshot.players.length : 0,
+    humanPlayerCount: Array.isArray(snapshot.players)
+      ? snapshot.players.filter((player) => !player.isAI).length
+      : 0,
     tick: snapshot.tick ?? null,
     simTime: snapshot.simTime ?? null,
   };
@@ -2007,7 +2027,7 @@ function updateRemoteShipPresentation(dt) {
 function currentRemoteControlState() {
   const selectedEntry = PLAYABLE_MAPS[mapSelectIndex] || PLAYABLE_MAPS[0] || null;
   const session = remoteSessionHealth?.session ?? null;
-  const hasLiveSession = session?.status === 'running';
+  const hasLiveSession = session?.status === 'running' && (remoteSessionHealth?.humanPlayerCount ?? 0) > 0;
   const liveEntry = hasLiveSession ? (getPlayableMapEntryById(session.mapId) || null) : null;
   const isHost = Boolean(hasLiveSession && simClient?.clientId && session?.hostClientId === simClient.clientId);
   return {
@@ -2019,6 +2039,7 @@ function currentRemoteControlState() {
     sessionMapId: liveEntry?.id ?? session?.mapId ?? null,
     sessionMapName: liveEntry?.name ?? session?.mapId ?? null,
     sessionPlayerCount: remoteSessionHealth?.playerCount ?? 0,
+    sessionHumanPlayerCount: remoteSessionHealth?.humanPlayerCount ?? 0,
     hostClientId: session?.hostClientId ?? null,
     hostName: session?.hostName ?? null,
     isHost,
@@ -2043,6 +2064,7 @@ async function refreshRemoteSessionHealth(force = false) {
       ok: true,
       session: health?.session ?? null,
       playerCount: health?.playerCount ?? 0,
+      humanPlayerCount: health?.idleState?.humanPlayerCount ?? 0,
       tick: health?.tick ?? null,
       simTime: health?.simTime ?? null,
     };
@@ -2663,7 +2685,9 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   }
 
   const health = await refreshRemoteSessionHealth(true);
-  const runningSession = health?.session?.status === 'running' ? health.session : null;
+  const runningSession = health?.session?.status === 'running' && (health?.humanPlayerCount ?? 0) > 0
+    ? health.session
+    : null;
   const isHost = Boolean(runningSession?.hostClientId && runningSession.hostClientId === simClient.clientId);
   if (forceReset && runningSession && !isHost) {
     throw new Error('Only the host can reset the live cycle');
@@ -2680,6 +2704,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
+  remoteNextStreamInputAt = 0;
   remoteActionSettlementInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
@@ -2717,7 +2742,7 @@ async function startRemoteGame(mapEntry, { forceReset = false } = {}) {
     await simClient.startSession({
       mapId: mapEntry.id,
       worldScale: mapEntry.map.worldScale,
-      maxPlayers: 4,
+      maxPlayers: getConfiguredSimMaxPlayers(),
       // Pass the previewed seed so the server's initial state matches
       // what we just showed the player on map select.
       seed: previewSeed,
@@ -2788,6 +2813,7 @@ async function leaveRemoteSessionToHome() {
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
+  remoteNextStreamInputAt = 0;
   remoteActionSettlementInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
@@ -2818,6 +2844,7 @@ async function restartRemoteSession() {
   remoteAuthorityActive = true;
   remotePlayers = [];
   remoteInputRequestInFlight = false;
+  remoteNextStreamInputAt = 0;
   remoteActionSettlementInFlight = false;
   remoteSnapshotRequestInFlight = false;
   remoteInventoryRequestInFlight = false;
@@ -3946,7 +3973,10 @@ function gameLoop(now) {
   }
 
   const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home' || gamePhase === 'mapSelect' || gamePhase === 'loading' || rendererFixtureActive;
-  const remoteVisualMode = remoteAuthorityActive && (gamePhase === 'playing' || gamePhase === 'dead');
+  // Authority ownership persists through escaped/dead/result transitions.
+  // If this falls back to local gameplay stepping after a remote outcome, the
+  // presentation begins advancing partially projected entities as local truth.
+  const remoteVisualMode = remoteAuthorityActive;
 
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
@@ -4350,7 +4380,15 @@ function gameLoop(now) {
           if (remotePendingSlingshotEdges.length > 8) remotePendingSlingshotEdges.shift();
         }
 
-        if (!remoteInputRequestInFlight) {
+        const streamHasDispatchableAction = simClient.transport === 'stream'
+          && !remoteActionSettlementInFlight && (
+          remotePendingPulse || remotePendingExtractConfirm || remotePendingConsumeSlot !== null
+          || remotePendingSlingshotEdges.length > 0
+        );
+        const streamInputDue = simClient.transport !== 'stream'
+          || performance.now() >= remoteNextStreamInputAt
+          || streamHasDispatchableAction;
+        if (!remoteInputRequestInFlight && streamInputDue) {
           const facing = inputManager.facing ?? ship.facing;
           const thrust = inventoryOpen ? 0 : inputManager.thrustIntensity;
           const brake = inventoryOpen ? 0 : inputManager.brakeIntensity;
@@ -4369,6 +4407,9 @@ function gameLoop(now) {
           );
           if (hasStreamActions) remoteActionSettlementInFlight = true;
           remoteInputRequestInFlight = true;
+          if (simClient.transport === 'stream') {
+            remoteNextStreamInputAt = performance.now() + REMOTE_STREAM_INPUT_INTERVAL_MS;
+          }
           void simClient.sendInput({
             // The scalar action fields decide whether thrust/brake happens;
             // the vector is pure intent, so brake-only packets still steer.
