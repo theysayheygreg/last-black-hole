@@ -92,6 +92,13 @@ function createServerSeam(config, book) {
     if (elapsed < book.phases.warmupMs + book.phases.activeMs + book.phases.recoveryMs) return "recovery";
     return "complete";
   };
+  const blackoutAt = (now, pilotSlot) => {
+    const rule = book.blackout;
+    if (!timeline || !rule || pilotSlot !== rule.pilotSlot
+      || !rule.directions.includes("authority-to-client")) return false;
+    const elapsed = now - timeline.startMonoMs;
+    return elapsed >= rule.startMs && elapsed < rule.endMs;
+  };
   const releaseDue = () => {
     if (stopped) return;
     readControl();
@@ -184,6 +191,11 @@ function createServerSeam(config, book) {
     const parsed = classify(wire, context);
     const record = { atMonoMs: now, side: "authority", pilotSlot, phase,
       direction: "authority-to-client", connectionEpochOrdinal, ...parsed };
+    if (blackoutAt(now, pilotSlot)) {
+      append({ ...record, event: "blackout-discard", blackout: "discard", copies: 0,
+        delivered: false, actualMonoMs: performance.now() });
+      return { accepted: true, deliveryCount: 0 };
+    }
     if (phase === "admission" || phase === "complete") {
       const delivered = deliver() !== false;
       append({ ...record, event: "immediate", actualMonoMs: performance.now(), delivered });

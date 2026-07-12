@@ -89,6 +89,7 @@ function compileDecisionBook(fixture, scenarioId) {
       activeMs: scenario.activeMs,
       recoveryMs: scenario.recoveryMs,
     },
+    ...(scenario.rules.blackout ? { blackout: scenario.rules.blackout } : {}),
     derivedSeeds,
     streams,
   };
@@ -157,6 +158,12 @@ function browserInitSource({ pilotSlot, decisionBook }) {
       if (elapsed < book.phases.warmupMs + book.phases.activeMs + book.phases.recoveryMs) return "recovery";
       return "complete";
     };
+    const blackoutAt = (now, direction) => {
+      const rule = book.blackout;
+      if (!timeline || !rule || pilotSlot !== rule.pilotSlot || !rule.directions.includes(direction)) return false;
+      const elapsed = now - timeline.startMonoMs;
+      return elapsed >= rule.startMs && elapsed < rule.endMs;
+    };
     const releaseDue = () => {
       if (stopped) return;
       const now = performance.now();
@@ -213,6 +220,11 @@ function browserInitSource({ pilotSlot, decisionBook }) {
       const phase = phaseAt(now);
       const record = { atMonoMs: now, pilotSlot, phase, direction, connectionEpochOrdinal: epochOrdinal,
         ...parsed };
+      if (blackoutAt(now, direction)) {
+        boundedPush({ ...record, event: "blackout-discard", blackout: "discard", copies: 0,
+          delivered: false, actualMonoMs: performance.now() });
+        return { accepted: true, deliveryCount: 0 };
+      }
       if (direction === "authority-to-client") {
         boundedPush({ ...record, event: "native-arrival" });
         const delivered = deliver() !== false;
@@ -332,6 +344,7 @@ async function installMainResponseRewrite(page, fixture, onError) {
       const occurrences = source.split(expected.constructor).length - 1;
       if (occurrences !== 1) throw new Error(`Expected exactly one SimClient constructor marker, found ${occurrences}`);
       const replacement = `simClient = new SimClient(simServerUrl, { transport: getConfiguredSimTransport(), scheduleStreamFrame: globalThis.__LBH_FRAME_IMPAIRMENT__?.schedule });
+      globalThis.__LBH_SIM_CLIENT_TEST__ = simClient;
       globalThis.__LBH_CONSUMED_EVENTS__ = [];
       const __lbhConsumeEvents = simClient.consumeEvents.bind(simClient);
       simClient.consumeEvents = () => {

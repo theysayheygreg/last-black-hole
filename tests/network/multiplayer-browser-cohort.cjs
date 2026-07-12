@@ -21,6 +21,7 @@ const {
 } = require("./browser-frame-impairment.cjs");
 const { createCdpBrowserTransport } = require("./cdp-browser-transport.cjs");
 const { createTcpProxyBrowserTransport } = require("./tcp-proxy-browser-transport.cjs");
+const { createTcpProxyBlackoutTransport } = require("./tcp-proxy-blackout-transport.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const TMP = path.join(ROOT, "tmp");
@@ -376,6 +377,65 @@ function isExpectedT0OfflineInputError(scenarioId, pilot, errorEvent) {
     && Number.isSafeInteger(errorEvent?.t0MatchedInputSeq);
 }
 
+function isExpectedF5BlackoutInputError(scenarioId, pilot, errorEvent) {
+  return scenarioId === "F5-one-client-blackout" && pilot.slot === "pilot-3"
+    && Number.isSafeInteger(errorEvent?.f5MatchedInputSeq);
+}
+
+function isExpectedF5FenceConsoleError(scenarioId, pilot, errorEvent, transportResult) {
+  const fence = transportResult?.fence;
+  return scenarioId === "F5-one-client-blackout" && pilot.slot === "pilot-3"
+    && String(errorEvent?.message) === "Failed to load resource: net::ERR_CONNECTION_REFUSED"
+    && Number.isFinite(fence?.disableDispatchWallMs) && Number.isFinite(fence?.recoveryObservedWallMs)
+    && errorEvent.atWallMs >= fence.disableDispatchWallMs - 100
+    && errorEvent.atWallMs <= fence.recoveryObservedWallMs + 100;
+}
+
+function bindF5InputTimeoutCausality(pilot, scenario, transportResult) {
+  const contract = scenario.transport;
+  const window = transportResult.exclusionWindow;
+  const attempts = pilot.evidence.filter((entry) => entry.direction === "client-to-authority"
+    && entry.frameClass === "input" && Number.isSafeInteger(entry.inputSeq)
+    && Number.isFinite(entry.actualMonoMs || entry.atMonoMs)
+    && ["blackout-discard", "copy-delivered"].includes(entry.event));
+  const acks = pilot.evidence.filter((entry) => entry.direction === "authority-to-client"
+    && entry.frameClass === "ack" && entry.ackKind === "input" && entry.event === "application-delivered"
+    && Number.isSafeInteger(entry.inputSeq) && Number.isFinite(entry.actualMonoMs));
+  const candidates = [];
+  for (const attempt of attempts) {
+    const sentMonoMs = attempt.actualMonoMs || attempt.atMonoMs;
+    if (sentMonoMs < window.startMonoMs || sentMonoMs > window.endMonoMs) continue;
+    const covering = acks.find((entry) => entry.inputSeq >= attempt.inputSeq
+      && entry.actualMonoMs >= sentMonoMs && entry.actualMonoMs < sentMonoMs + contract.inputAckTimeoutMs);
+    if (covering) continue;
+    candidates.push({ inputSeq: attempt.inputSeq, attemptMonoMs: sentMonoMs,
+      disposition: attempt.event === "blackout-discard" ? "layer-a-discard-copies-zero" : "physical-to-proxy",
+      copies: attempt.event === "blackout-discard" ? 0 : 1,
+      expectedWallMs: window.startWallMs + (sentMonoMs - window.startMonoMs) + contract.inputAckTimeoutMs });
+  }
+  const errors = pilot.consoleErrorEvents.filter((entry) =>
+    /^\[LBH\] remote input failed: Error: Timed out waiting for input ACK\n/.test(String(entry.message)));
+  const available = new Set(candidates.map((_, index) => index));
+  const matches = [];
+  for (const error of errors) {
+    let best = -1;
+    let deltaMs = Infinity;
+    for (const index of available) {
+      const delta = Math.abs(error.atWallMs - candidates[index].expectedWallMs);
+      if (delta < deltaMs) { best = index; deltaMs = delta; }
+    }
+    if (best < 0 || deltaMs > contract.timeoutMatchToleranceMs) continue;
+    available.delete(best);
+    error.f5MatchedInputSeq = candidates[best].inputSeq;
+    matches.push({ errorAtWallMs: error.atWallMs, deltaMs, ...candidates[best] });
+  }
+  return { inputAckTimeoutMs: contract.inputAckTimeoutMs,
+    timeoutMatchToleranceMs: contract.timeoutMatchToleranceMs, exclusionWindow: window,
+    candidates, matches, unmatchedCandidateInputSeqs: [...available].map((index) => candidates[index].inputSeq),
+    unmatchedErrorWallMs: errors.filter((entry) => !Number.isSafeInteger(entry.f5MatchedInputSeq))
+      .map((entry) => entry.atWallMs) };
+}
+
 function bindT0InputTimeoutCausality(pilot, scenario, transportResult) {
   const contract = scenario.transport.offlineWindow;
   const command = transportResult.commands.offline.shaping;
@@ -682,10 +742,36 @@ function decisionProfile(scenario, pilots, serverEvidenceFile, transportResult =
     && entry.direction !== "client-to-authority")), "Browser scheduler impaired downstream twice");
   assert(!serverRecords.some((entry) => entry.event === "queued"
     && entry.direction !== "authority-to-client"), "Server preload impaired a non-downstream direction");
+  let blackout = null;
+  if (scenario.rules.blackout) {
+    const rule = scenario.rules.blackout;
+    const upstreamDiscards = allUpstream.filter((entry) => entry.event === "blackout-discard");
+    const downstreamDiscards = allDownstream.filter((entry) => entry.event === "blackout-discard");
+    assert(upstreamDiscards.length > 0 && downstreamDiscards.length > 0,
+      "F5 did not exercise bidirectional Layer-A discard");
+    for (const [direction, records] of [["client-to-authority", upstreamDiscards],
+      ["authority-to-client", downstreamDiscards]]) {
+      assert(records.every((entry) => entry.pilotSlot === rule.pilotSlot && entry.direction === direction
+        && entry.blackout === "discard" && entry.copies === 0 && entry.delivered === false),
+      `F5 ${direction} discard identity/copy semantics changed`);
+      const timelineMono = direction === "client-to-authority"
+        ? pilots[3].evidence.find((entry) => entry.event === "timeline")?.startMonoMs
+        : serverTimeline?.startMonoMs;
+      assert(Number.isFinite(timelineMono) && records.every((entry) => entry.atMonoMs - timelineMono >= rule.startMs
+        && entry.atMonoMs - timelineMono < rule.endMs), `F5 ${direction} discard escaped declared window`);
+    }
+    assert(!allUpstream.some((entry) => entry.event === "blackout-discard" && entry.pilotSlot !== rule.pilotSlot)
+      && !allDownstream.some((entry) => entry.event === "blackout-discard" && entry.pilotSlot !== rule.pilotSlot),
+    "F5 Layer-A discard contaminated a healthy pilot");
+    blackout = { mode: rule.mode, pilotSlot: rule.pilotSlot, startMs: rule.startMs, endMs: rule.endMs,
+      upstreamDiscards: upstreamDiscards.length, downstreamDiscards: downstreamDiscards.length,
+      upstreamActionDiscards: upstreamDiscards.filter((entry) => entry.frameClass === "action").length };
+    assert(blackout.upstreamActionDiscards >= 1, "F5 named reliable action was not Layer-A discarded");
+  }
   return {
     upstream: validate(upstream, "client-to-authority"),
     downstream: validate(downstream, "authority-to-client"),
-    bypass,
+    bypass, blackout,
   };
 }
 
@@ -707,7 +793,8 @@ function clientLedger(pilot, ownerPlayerId, options = {}) {
   const alignedTimes = [];
   for (const event of events) {
     const active = event.phase === "active";
-    if (active && event.direction === "client-to-authority" && event.event === "queued" && event.inputSeq) {
+    if (active && event.direction === "client-to-authority"
+      && ["queued", "blackout-discard"].includes(event.event) && event.inputSeq) {
       if (!inputs.has(event.inputSeq)) inputs.set(event.inputSeq, event.atMonoMs);
     }
     if (event.direction === "authority-to-client" && event.event === "application-delivered"
@@ -722,7 +809,8 @@ function clientLedger(pilot, ownerPlayerId, options = {}) {
         inputs.delete(inputSeq);
       }
     }
-    if (active && event.direction === "client-to-authority" && event.event === "queued" && event.frameClass === "action") {
+    if (active && event.direction === "client-to-authority"
+      && ["queued", "blackout-discard"].includes(event.event) && event.frameClass === "action") {
       if (!actions.has(event.actionId)) actions.set(event.actionId,
         { sentAt: event.atMonoMs, outcomes: [], semanticOutcome: null });
     }
@@ -996,6 +1084,13 @@ async function runBrowserCohort(options) {
   let t1Finalized = null;
   let t1FinalDrain = null;
   let t1BrowsersClosed = false;
+  let f5Transport = null;
+  let f5CutTask = null;
+  let f5CutError = null;
+  let f5Result = null;
+  let f5Finalized = null;
+  let f5FinalDrain = null;
+  let f5BrowsersClosed = false;
   const t1ExclusionWindows = new Map();
   const observedAuthorityPids = new Set();
   const compiledDecisionFile = path.join(runDir, "compiled-decisions.json");
@@ -1013,7 +1108,8 @@ async function runBrowserCohort(options) {
       profileDirectories: resources.pilots.map((pilot) => pilot.browser.userDataDir),
       t1Proxy: t1Transport ? { stage: t1Transport.stage, tool: t1Transport.tool,
         mappings: t1Transport.mappings, claimBoundary: t1Transport.claimBoundary,
-        packetCapture: t1Transport.packetCapture } : null,
+        packetCapture: t1Transport.packetCapture } : (f5Transport ? { stage: f5Transport.stage,
+        tool: f5Transport.tool, mappings: f5Transport.mappings, claimBoundary: f5Transport.claimBoundary } : null),
       ...extra,
     };
     fs.writeFileSync(partialResultFile, `${JSON.stringify(value, null, 2)}\n`);
@@ -1049,9 +1145,17 @@ async function runBrowserCohort(options) {
         && t1Transport.mappings.every((entry) => entry.upstream === `127.0.0.1:${simPort}`),
       "T1 did not map four browser paths to one authority");
       writePartialResult("t1-listeners-ready");
+    } else if (scenario.transport?.kind === "managed-tcp-proxy-blackout") {
+      f5Transport = await createTcpProxyBlackoutTransport({ transport: scenario.transport,
+        simPort, runDir, signal });
+      assert(f5Transport.mappings.length === 4
+        && new Set(f5Transport.mappings.map((entry) => entry.upstream)).size === 1
+        && f5Transport.mappings.every((entry) => entry.upstream === `127.0.0.1:${simPort}`),
+      "F5 did not map four browser paths to one authority");
+      writePartialResult("f5-listeners-ready");
     }
     for (let index = 0; index < 4; index += 1) {
-      const assignedProxy = t1Transport?.mappings[index] || null;
+      const assignedProxy = t1Transport?.mappings[index] || f5Transport?.mappings[index] || null;
       resources.pilots.push(await launchPilot({ index, staticPort, simPort,
         simBaseUrl: assignedProxy ? `http://${assignedProxy.listen}` : null,
         assignedProxy, fixture, compiled, htmlTarget }));
@@ -1077,6 +1181,13 @@ async function runBrowserCohort(options) {
       lastHealth = admissionHealth;
       observedAuthorityPids.add(admissionHealth.process.pid);
       await t1Transport.markAdmitted({ simPid: admissionHealth.process.pid });
+    } else if (f5Transport) {
+      const admissionHealth = await (await fetch(`http://127.0.0.1:${simPort}/health`, {
+        headers: { "x-lbh-test-oracle": "authority" }, signal: AbortSignal.timeout(1000) })).json();
+      assert(Number.isSafeInteger(admissionHealth.process?.pid), "F5 admission health lacked one sim PID");
+      lastHealth = admissionHealth;
+      observedAuthorityPids.add(admissionHealth.process.pid);
+      await f5Transport.markAdmitted({ simPid: admissionHealth.process.pid });
     }
     writePartialResult("cohort-admitted", { slotMap });
     const startWallMs = Date.now() + 1500;
@@ -1099,6 +1210,37 @@ async function runBrowserCohort(options) {
         }
         return null;
       });
+    }
+    if (f5Transport) {
+      f5CutTask = f5Transport.beginCut({ startWallMs, pilot: resources.pilots[3], journeyState,
+        sampleAuthority: async () => {
+          const health = await (await fetch(`http://127.0.0.1:${simPort}/health`, {
+            headers: { "x-lbh-test-oracle": "authority" }, signal: AbortSignal.timeout(1000) })).json();
+          return { sampledWallMs: Date.now(), pid: health.process?.pid, runIdHash: hashId(health.runId),
+            tick: health.tick, mode: health.session?.overloadState,
+            connections: health.multiplayer?.adapter?.connections ?? null };
+        },
+        sendDuringBlackout: async () => {
+          const before = await journeyState(resources.pilots[3]);
+          const actionId = await resources.pilots[3].page.evaluate(() => {
+            window.__LBH_F5_DURING_BLACKOUT_ACTION__ = { requestedWallMs: Date.now(), settled: false };
+            const client = window.__LBH_SIM_CLIENT_TEST__;
+            const beforeIds = new Set(client._pendingActions.keys());
+            client._queueAction('pulse', { testLabel: 'f5-during-blackout-reliable' }).then((result) => {
+              window.__LBH_F5_DURING_BLACKOUT_ACTION__ = {
+                ...window.__LBH_F5_DURING_BLACKOUT_ACTION__, settled: true, result };
+            }).catch((error) => {
+              window.__LBH_F5_DURING_BLACKOUT_ACTION__ = {
+                ...window.__LBH_F5_DURING_BLACKOUT_ACTION__, settled: true, error: String(error?.message || error) };
+            });
+            return [...client._pendingActions.keys()].find((id) => !beforeIds.has(id)) || null;
+          });
+          await sleep(100, signal);
+          assert(typeof actionId === "string", "F5 failed to allocate the named reliable action identity");
+          return { requestedWallMs: Date.now(), pendingBefore: before.transport.pendingActionCount,
+            actionIdHash: hashId(actionId) };
+        },
+      }).catch((error) => { f5CutError = error; return null; });
     }
     f6CloseTask = scenario.closeSchedule
       ? runF6CloseSchedule({ pilots: resources.pilots, scenario, startWallMs, clientEvidenceFile, runDir, signal })
@@ -1135,10 +1277,10 @@ async function runBrowserCohort(options) {
           headers: { "x-lbh-test-oracle": "authority" }, signal: AbortSignal.timeout(1000) })).json();
         const accounting = health.multiplayer?.projection?.accounting;
         lastHealth = health;
-        if (t1Transport) {
-          assert(Number.isSafeInteger(health.process?.pid), "T1 authority sample lacked sim PID");
+        if (t1Transport || f5Transport) {
+          assert(Number.isSafeInteger(health.process?.pid), "proxy cohort authority sample lacked sim PID");
           observedAuthorityPids.add(health.process.pid);
-          assert(observedAuthorityPids.size === 1, "T1 authority PID changed within one run");
+          assert(observedAuthorityPids.size === 1, "proxy cohort authority PID changed within one run");
         }
         assert(health.multiplayer?.adapter?.pressure?.current && health.multiplayer?.adapter?.pressure?.maxima,
           "Authority sample missing adapter pressure schema");
@@ -1235,6 +1377,10 @@ async function runBrowserCohort(options) {
       t0Result = await t0Task;
       if (t0Error) throw t0Error;
     }
+    if (f5CutTask) {
+      f5Result = await f5CutTask;
+      if (f5CutError) throw f5CutError;
+    }
     const endWallMs = startWallMs + scenario.warmupMs + scenario.activeMs + scenario.recoveryMs;
     await sleep(Math.max(0, endWallMs - Date.now()), signal);
     if (samplingError) throw samplingError;
@@ -1258,7 +1404,7 @@ async function runBrowserCohort(options) {
       }, { timeout: scenario.transport.offlineWindow.finalDrainMs })));
       t0FinalDrain = { startedWallMs: drainStartedWallMs, completedWallMs: Date.now(),
         budgetMs: scenario.transport.offlineWindow.finalDrainMs };
-    } else if (scenario.transport?.kind === "managed-tcp-proxy") {
+    } else if (["managed-tcp-proxy", "managed-tcp-proxy-blackout"].includes(scenario.transport?.kind)) {
       const drainStartedWallMs = Date.now();
       for (const pilot of resources.pilots) await tap(pilot.page, "Escape", "Escape", 50);
       await Promise.all(resources.pilots.map((pilot) => waitFor(pilot.page, () =>
@@ -1267,8 +1413,10 @@ async function runBrowserCohort(options) {
         const state = window.__TEST_API?.getMultiplayerJourneyState?.();
         return state?.transport?.pendingInputCount === 0 && state?.transport?.pendingActionCount === 0;
       }, { timeout: scenario.transport.finalDrainMs })));
-      t1FinalDrain = { startedWallMs: drainStartedWallMs, completedWallMs: Date.now(),
+      const finalDrain = { startedWallMs: drainStartedWallMs, completedWallMs: Date.now(),
         budgetMs: scenario.transport.finalDrainMs };
+      if (f5Transport) f5FinalDrain = finalDrain;
+      else t1FinalDrain = finalDrain;
     }
     sampling = false;
     await samplingTask;
@@ -1290,6 +1438,7 @@ async function runBrowserCohort(options) {
           ? [t0Result.steadyStateExclusionWindow] : []),
         ...(t1Transport?.activation?.exclusionWindow ? [t1Transport.activation.exclusionWindow] : []),
         ...(t1ExclusionWindows.has(pilot.slot) ? [t1ExclusionWindows.get(pilot.slot)] : []),
+        ...(f5Result?.exclusionWindow?.pilotSlot === pilot.slot ? [f5Result.exclusionWindow] : []),
       ],
     }));
     const impairment = decisionProfile(scenario, resources.pilots, serverEvidenceFile, t0Result);
@@ -1305,6 +1454,21 @@ async function runBrowserCohort(options) {
     if (t0InputTimeoutCausality) {
       fs.writeFileSync(path.join(runDir, "t0-input-timeout-causality.json"),
         `${JSON.stringify(t0InputTimeoutCausality, null, 2)}\n`, { flag: "wx" });
+    }
+    const f5InputTimeoutCausality = scenario.transport?.kind === "managed-tcp-proxy-blackout"
+      ? bindF5InputTimeoutCausality(resources.pilots[3], scenario, f5Result) : null;
+    if (f5InputTimeoutCausality) {
+      fs.writeFileSync(path.join(runDir, "f5-input-timeout-causality.json"),
+        `${JSON.stringify(f5InputTimeoutCausality, null, 2)}\n`, { flag: "wx" });
+      assert(f5InputTimeoutCausality.matches.length > 0
+        && f5InputTimeoutCausality.unmatchedCandidateInputSeqs.length === 0
+        && f5InputTimeoutCausality.unmatchedErrorWallMs.length === 0,
+      "F5 input timeout causality was not exact and exhaustive");
+    }
+    if (f5Transport) {
+      fs.writeFileSync(path.join(runDir, "f5-cdp-all-lifecycle.json"), `${JSON.stringify(resources.pilots.map((pilot) => ({
+        pilotSlot: pilot.slot, lifecycle: pilot.cdp.lifecycle,
+      })), null, 2)}\n`, { flag: "wx" });
     }
     const eventsOracle = await (await fetch(`http://127.0.0.1:${simPort}/events?since=0`, {
       headers: { "x-lbh-test-oracle": "events" }, signal: AbortSignal.timeout(2000) })).json();
@@ -1328,22 +1492,32 @@ async function runBrowserCohort(options) {
           t0MatchedInputSeq: errorEvent.t0MatchedInputSeq,
           expectedFault: isExpectedF3InputTimeout(scenarioId, pilot, errorEvent.message)
             || isExpectedF6CloseInputError(scenarioId, pilot, errorEvent, f6CloseSchedule)
-            || isExpectedT0OfflineInputError(scenarioId, pilot, errorEvent) });
+            || isExpectedT0OfflineInputError(scenarioId, pilot, errorEvent)
+            || isExpectedF5BlackoutInputError(scenarioId, pilot, errorEvent)
+            || isExpectedF5FenceConsoleError(scenarioId, pilot, errorEvent, f5Result) });
       }
     }
     for (let index = 0; index < 4; index += 1) {
       const summary = ledgers[index].summary;
       const gates = scenario.gates;
+      const f5Impaired = scenario.transport?.kind === "managed-tcp-proxy-blackout" && index === 3;
+      const f5Healthy = scenario.transport?.kind === "managed-tcp-proxy-blackout" && index !== 3;
+      const inputGate = f5Impaired ? gates.impairedInputAckP95Ms
+        : (f5Healthy ? gates.healthyInputAckP95Ms : gates.inputAckP95Ms);
+      const cadenceGate = f5Impaired ? gates.impairedSnapshotCadenceP95Ms
+        : (f5Healthy ? gates.healthySnapshotCadenceP95Ms : gates.snapshotCadenceP95Ms);
+      const consequenceGate = f5Impaired ? gates.impairedReliableConsequenceP95Ms
+        : (f5Healthy ? gates.healthyReliableConsequenceP95Ms : gates.reliableConsequenceP95Ms);
       assert(summary.inputAckSamples >= gates.minimumInputAckSamplesPerPilot,
         `${resources.pilots[index].slot} input ACK sample floor ${summary.inputAckSamples}`);
       assert(summary.alignedPairSamples >= gates.minimumAlignedPairSamplesPerPilot,
         `${resources.pilots[index].slot} aligned-pair sample floor ${summary.alignedPairSamples}`);
       assert(summary.reliableActions >= gates.minimumReliableActionsPerPilot,
         `${resources.pilots[index].slot} reliable action floor ${summary.reliableActions}`);
-      assert(summary.inputAckP95Ms <= gates.inputAckP95Ms, `${resources.pilots[index].slot} input p95 ${summary.inputAckP95Ms}`);
-      assert(summary.snapshotCadenceP95Ms <= gates.snapshotCadenceP95Ms,
+      assert(summary.inputAckP95Ms <= inputGate, `${resources.pilots[index].slot} input p95 ${summary.inputAckP95Ms}`);
+      assert(summary.snapshotCadenceP95Ms <= cadenceGate,
         `${resources.pilots[index].slot} cadence p95 ${summary.snapshotCadenceP95Ms}`);
-      assert(summary.reliableConsequenceP95Ms <= gates.reliableConsequenceP95Ms,
+      assert(summary.reliableConsequenceP95Ms <= consequenceGate,
         `${resources.pilots[index].slot} reliable p95 ${summary.reliableConsequenceP95Ms}`);
       for (const [actionId, action] of ledgers[index].actions) {
         assert(action.semanticOutcome && new Set(action.outcomes.map((entry) => entry.status)).size === 1,
@@ -1414,10 +1588,54 @@ async function runBrowserCohort(options) {
           assert(final[index].transport.reconnectCount === gates.healthyPilotReconnects,
             `${resources.pilots[index].slot} healthy T0 pilot reconnected`);
         }
+      } else if (scenario.transport?.kind === "managed-tcp-proxy-blackout") {
+        assert(final[index].transport.activeTransport === "stream" && final[index].transport.streamState === "open",
+          `${resources.pilots[index].slot} did not finish F5 open`);
+        assert(final[index].transport.reconnectCount === (index === 3
+          ? gates.impairedPilotReconnects : gates.healthyPilotReconnects),
+        `${resources.pilots[index].slot} F5 reconnect count changed`);
+        assert(final[index].connectionEpoch === initial[index].connectionEpoch + (index === 3 ? 1 : 0),
+          `${resources.pilots[index].slot} F5 authority epoch changed incorrectly`);
+        const successfulSockets = resources.pilots[index].cdp.lifecycle.filter((entry) =>
+          entry.event === "handshake-response" && entry.status === 101);
+        assert(successfulSockets.length === (index === 3 ? 2 : 1),
+          `${resources.pilots[index].slot} F5 successful socket count changed`);
+        if (index === 3) {
+          const welcomeIndex = resources.pilots[index].privacyFrames.findIndex((frame) =>
+            frame.direction === "inbound" && frame.type === "welcome" && frame.reconnected === true
+              && frame.connectionEpoch === final[index].connectionEpoch);
+          assert(welcomeIndex >= 0, "pilot-3 F5 lacked reconnected greater-epoch welcome");
+          const finalEpochFrames = resources.pilots[index].privacyFrames.slice(welcomeIndex + 1);
+          const rebase = finalEpochFrames.find((frame) => frame.type === "rebase" && Number.isSafeInteger(frame.snapshotId));
+          assert(rebase && finalEpochFrames.some((frame) => frame.type === "publicState" && frame.snapshotId === rebase.snapshotId)
+            && finalEpochFrames.some((frame) => frame.type === "ownerState" && frame.snapshotId === rebase.snapshotId),
+          "pilot-3 F5 lacked rebase/aligned recovery baseline");
+          const baselineAck = resources.pilots[index].evidence.find((entry) =>
+            entry.direction === "client-to-authority" && entry.connectionEpochOrdinal === 2
+              && entry.frameClass === "ack" && entry.ackKind === "baseline" && entry.snapshotId === rebase.snapshotId
+              && entry.delivered === true && ["immediate", "copy-delivered"].includes(entry.event));
+          assert(baselineAck, "pilot-3 F5 lacked physical ordinal-two baseline ACK");
+          const freshInput = resources.pilots[index].evidence.find((entry) =>
+            entry.direction === "client-to-authority" && entry.connectionEpochOrdinal === 2
+              && entry.frameClass === "input" && entry.event === "copy-delivered" && entry.delivered === true
+              && entry.actualMonoMs >= baselineAck.actualMonoMs);
+          assert(freshInput && resources.pilots[index].evidence.some((entry) =>
+            entry.direction === "authority-to-client" && entry.connectionEpochOrdinal === 2
+              && entry.frameClass === "ack" && entry.ackKind === "input" && entry.event === "application-delivered"
+              && entry.inputSeq >= freshInput.inputSeq && entry.actualMonoMs >= freshInput.actualMonoMs),
+          "pilot-3 F5 lacked fresh physical input plus covering ACK");
+          assert(!resources.pilots[index].evidence.some((entry) => entry.connectionEpochOrdinal === 1
+            && entry.event === "application-delivered" && entry.actualMonoMs > f5Result.exclusionWindow.endMonoMs),
+          "pilot-3 F5 stale epoch mutated recovered application state");
+          const namedAction = [...ledgers[index].actions.entries()].find(([actionId]) =>
+            hashId(actionId) === f5Result.namedDuringBlackoutAction.actionIdHash)?.[1];
+          assert(namedAction?.semanticOutcome && new Set(namedAction.outcomes.map((entry) => entry.status)).size === 1,
+            "pilot-3 F5 named blackout action lost identity or stable semantic outcome");
+        }
       } else {
         assert(final[index].transport.reconnectCount === 0, `${resources.pilots[index].slot} unexpectedly reconnected`);
       }
-      if (scenario.rules.faults || ["cdp-websocket-smoke", "managed-tcp-proxy"].includes(scenario.transport?.kind)) {
+      if (scenario.rules.faults || ["cdp-websocket-smoke", "managed-tcp-proxy", "managed-tcp-proxy-blackout"].includes(scenario.transport?.kind)) {
         assert(final[index].transport.pendingInputCount === 0 && final[index].transport.pendingActionCount === 0,
           `${resources.pilots[index].slot} did not converge pending input/action work`);
       }
@@ -1438,7 +1656,9 @@ async function runBrowserCohort(options) {
       const fatalConsoleErrors = resources.pilots[index].consoleErrorEvents.filter((errorEvent) =>
         !isExpectedF3InputTimeout(scenarioId, resources.pilots[index], errorEvent.message)
         && !isExpectedF6CloseInputError(scenarioId, resources.pilots[index], errorEvent, f6CloseSchedule)
-        && !isExpectedT0OfflineInputError(scenarioId, resources.pilots[index], errorEvent));
+        && !isExpectedT0OfflineInputError(scenarioId, resources.pilots[index], errorEvent)
+        && !isExpectedF5BlackoutInputError(scenarioId, resources.pilots[index], errorEvent)
+        && !isExpectedF5FenceConsoleError(scenarioId, resources.pilots[index], errorEvent, f5Result));
       if (scenario.rules.faults && resources.pilots[index].slot === "pilot-3") {
         const omittedInputs = impairment.faultClasses["pilot-3/client-to-authority/input"].omitted;
         assert(expectedInputTimeouts.length <= omittedInputs,
@@ -1476,6 +1696,19 @@ async function runBrowserCohort(options) {
       }
       t1BrowsersClosed = true;
       t1Finalized = await t1Transport.finalizeAfterBrowserClose({ simPid: lastHealth?.process?.pid || null });
+    } else if (f5Transport) {
+      assert(observedAuthorityPids.size === 1 && observedAuthorityPids.has(lastHealth.process.pid),
+        "F5 did not retain exactly one sim authority PID");
+      for (const pilot of resources.pilots) {
+        const drained = await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.drain());
+        for (const event of drained) appendJsonl(clientEvidenceFile, sanitizeFrameEvidence(event));
+        resources.browserSchedulerStatuses.push(await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.status()));
+        await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.stop());
+        await pilot.rewriter?.close();
+        await closeBrowserBounded(pilot.browser);
+      }
+      f5BrowsersClosed = true;
+      f5Finalized = await f5Transport.finalizeAfterBrowserClose();
     }
     return { startedAt, completedAt: Date.now(), staticPort, simPort, slotMap, timelines, screenshots,
       privacy, clientSummaries: ledgers.map((entry) => entry.summary), cdp: resources.pilots.map((pilot) => pilot.cdp),
@@ -1484,12 +1717,19 @@ async function runBrowserCohort(options) {
       t0CdpTransport: t0Result,
       t0FinalDrain,
       t0InputTimeoutCausality,
+      f5InputTimeoutCausality,
       t1ProxyTransport: t1Transport ? { tool: t1Transport.tool, mappings: t1Transport.mappings,
         activation: t1Transport.activation, finalized: t1Finalized,
         browserStreams: resources.pilots.map((pilot) => ({ pilotSlot: pilot.slot,
           assignedListener: pilot.assignedProxy.listen, observedStreamEndpoints: pilot.streamUrls })),
         packetCapture: t1Transport.packetCapture, claimBoundary: t1Transport.claimBoundary } : null,
       t1FinalDrain,
+      f5ProxyTransport: f5Transport ? { tool: f5Transport.tool, mappings: f5Transport.mappings,
+        cut: f5Result, finalized: f5Finalized,
+        browserStreams: resources.pilots.map((pilot) => ({ pilotSlot: pilot.slot,
+          assignedListener: pilot.assignedProxy.listen, observedStreamEndpoints: pilot.streamUrls })),
+        claimBoundary: f5Transport.claimBoundary } : null,
+      f5FinalDrain,
       pulseConsequences: final.map((state) => authorityPulseEvents.get(state.clientId)?.size || 0),
       processes: { staticPid: resources.staticServer.pid, simPid: lastHealth?.process?.pid || null,
         browserPids: resources.pilots.map((pilot) => pilot.browser.proc?.pid || null) },
@@ -1499,6 +1739,8 @@ async function runBrowserCohort(options) {
         ? "PR-smoke CDP browser shaping/offline-gap evidence; no claim CDP caused an observed socket close/reconnect, and not TCP loss, netem, WAN, TLS, congestion, retransmission, or receive-window evidence"
         : scenario.transport?.kind === "managed-tcp-proxy"
           ? t1Transport.claimBoundary
+        : scenario.transport?.kind === "managed-tcp-proxy-blackout"
+          ? f5Transport.claimBoundary
         : "pr-smoke application-frame evidence; not canonical duration, memory slope, TCP, WAN, TLS, or packet loss" };
   } finally {
     sampling = false;
@@ -1508,7 +1750,7 @@ async function runBrowserCohort(options) {
     await t0Task?.catch(() => null);
     await t0Transport?.restore().catch(() => null);
     for (const pilot of resources.pilots) {
-      if (t1BrowsersClosed) continue;
+      if (t1BrowsersClosed || f5BrowsersClosed) continue;
       try {
         const drained = await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.drain());
         for (const event of drained) appendJsonl(clientEvidenceFile, sanitizeFrameEvidence(event));
@@ -1523,7 +1765,9 @@ async function runBrowserCohort(options) {
       catch {}
     }
     await t1ActivationTask?.catch(() => null);
+    await f5CutTask?.catch(() => null);
     const t1Cleanup = t1Transport ? await t1Transport.stop().catch(() => null) : null;
+    const f5Cleanup = f5Transport ? await f5Transport.stop().catch(() => null) : null;
     await stopSimServer(simPort).catch(() => null);
     const simLog = simLogFile(simPort);
     if (fs.existsSync(simLog)) copyRedactedSimLog(simLog, path.join(runDir, "sim.log"));
@@ -1581,6 +1825,12 @@ async function runBrowserCohort(options) {
       t1ControlPortClosed: t1Transport ? t1Cleanup?.controlPortClosed === true : true,
       t1ProxyPortsClosed: t1Transport ? t1Cleanup?.proxyPortsClosed === true : true,
       t1BrowsersClosedBeforeFinalMetrics: t1Transport ? t1BrowsersClosed === true : true,
+      f5ToxicsRemoved: f5Transport ? f5Cleanup?.toxicsRemoved === true : true,
+      f5ProxiesDeleted: f5Transport ? f5Cleanup?.proxiesDeleted === true : true,
+      f5DaemonStopped: f5Transport ? f5Cleanup?.daemonStopped === true : true,
+      f5ControlPortClosed: f5Transport ? f5Cleanup?.controlPortClosed === true : true,
+      f5ProxyPortsClosed: f5Transport ? f5Cleanup?.proxyPortsClosed === true : true,
+      f5BrowsersClosedBeforeFinalMetrics: f5Transport ? (!f5Finalized || f5BrowsersClosed === true) : true,
     };
     fs.writeFileSync(path.join(runDir, "cleanup.json"), `${JSON.stringify(cleanup, null, 2)}\n`, { flag: "wx" });
     releaseLock();

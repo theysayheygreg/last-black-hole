@@ -97,6 +97,8 @@ async function main() {
       ? "CDP browser shaping/offline-gap PR smoke only; no claim CDP caused an observed socket close/reconnect, and not canonical duration, memory slope, TCP loss, netem, WAN, TLS, congestion, retransmission, receive-window, or hosted evidence"
       : scenario.transport?.kind === "managed-tcp-proxy"
         ? "Configured fixed userspace TCP-stream proxy latency/rate and observed browser/gameplay outcomes only; not packet loss/reorder, throughput accuracy, congestion, retransmission, receive-window, WAN, WSS, TLS, hosted, live throughput, queue depth, or connection-drain evidence"
+      : scenario.transport?.kind === "managed-tcp-proxy-blackout"
+        ? "Configured userspace timeout-zero stream discard, one-listener disable/re-enable fence, and observed browser/gameplay outcomes only; not packet loss, synchronous RST, live byte-counter, WAN, WSS, TLS, congestion, retransmission, or hosted evidence"
       : "application-frame PR smoke only; not canonical duration, memory slope, TCP, packet loss, WAN, TLS, or hosted evidence",
     duration: { warmupMs: scenario.warmupMs, activeMs: scenario.activeMs, recoveryMs: scenario.recoveryMs },
     transport: scenario.transport || null,
@@ -125,7 +127,7 @@ async function main() {
       preloadInstalledForWrappedProcess: cleanup?.preloadInstalledForWrappedProcess ?? null,
       preloadAdapterWrappedOnce: cleanup?.preloadAdapterWrappedOnce ?? null,
     },
-    tcpProxy: reportResult?.t1ProxyTransport || reportResult?.partial?.t1Proxy || null,
+    tcpProxy: reportResult?.f5ProxyTransport || reportResult?.t1ProxyTransport || reportResult?.partial?.t1Proxy || null,
     receivedSignal,
   };
   fs.writeFileSync(path.join(runDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, { flag: "wx" });

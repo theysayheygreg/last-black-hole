@@ -198,6 +198,62 @@
         "postAdmissionReconnects": 0
       }
     },
+    "F5-one-client-blackout": {
+      "profile": "pr-smoke",
+      "rootSeed": "0x0405B1AC",
+      "players": 4,
+      "warmupMs": 5000,
+      "activeMs": 40000,
+      "recoveryMs": 15000,
+      "connectionEpochs": 2,
+      "decisionCapacity": {
+        "input": 4096,
+        "ack": 2048,
+        "publicState": 1024,
+        "ownerState": 1024,
+        "event": 128
+      },
+      "rules": {
+        "copies": 1,
+        "delayMs": 0,
+        "omitted": false,
+        "blackout": { "pilotSlot": "pilot-3", "directions": ["client-to-authority", "authority-to-client"],
+          "startMs": 20000, "endMs": 45000, "mode": "discard" }
+      },
+      "transport": {
+        "kind": "managed-tcp-proxy-blackout",
+        "durationProfile": "pr-smoke-5-40-15",
+        "pilotSlot": "pilot-3",
+        "activationAtMs": 20000,
+        "applicationDiscardEndMs": 45000,
+        "activationGuardMs": 250,
+        "minimumVerifiedDropMs": 25000,
+        "namedActionLeadMs": 3000,
+        "recoveryBudgetMs": 8000,
+        "inputAckTimeoutMs": 5000,
+        "timeoutMatchToleranceMs": 250,
+        "finalDrainMs": 6000,
+        "toxics": [
+          { "name": "upstream_timeout", "type": "timeout", "stream": "upstream", "toxicity": 0, "attributes": { "timeout": 0 } },
+          { "name": "downstream_timeout", "type": "timeout", "stream": "downstream", "toxicity": 0, "attributes": { "timeout": 0 } }
+        ]
+      },
+      "stimulus": { "inputIntervalMs": 100, "inputPilots": ["pilot-0", "pilot-1", "pilot-2", "pilot-3"] },
+      "gates": {
+        "minimumInputAckSamplesPerPilot": 100,
+        "minimumAlignedPairSamplesPerPilot": 100,
+        "minimumReliableActionsPerPilot": 2,
+        "healthyInputAckP95Ms": 250,
+        "healthySnapshotCadenceP95Ms": 300,
+        "healthyReliableConsequenceP95Ms": 700,
+        "impairedInputAckP95Ms": 800,
+        "impairedSnapshotCadenceP95Ms": 750,
+        "impairedReliableConsequenceP95Ms": 2500,
+        "postAdmissionRebases": 1,
+        "healthyPilotReconnects": 0,
+        "impairedPilotReconnects": 1
+      }
+    },
     "T0-cdp-smoke": {
       "profile": "pr-smoke",
       "rootSeed": "0x0410CD90",

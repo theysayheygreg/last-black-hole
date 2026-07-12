@@ -50,6 +50,7 @@
     "test:multiplayer-impairment:f6": "LBH_IMPAIRMENT_SCENARIO=F6-all-flap node tests/run-all.cjs --lane=multiplayer-impairment-browser --renderer=three --no-retries",
     "test:multiplayer-impairment:t0": "LBH_IMPAIRMENT_SCENARIO=T0-cdp-smoke node tests/run-all.cjs --lane=multiplayer-impairment-browser --renderer=three --no-retries",
     "test:multiplayer-impairment:t1": "LBH_IMPAIRMENT_SCENARIO=T1-cap-headroom node tests/run-all.cjs --lane=multiplayer-impairment-browser --renderer=three --no-retries",
+    "test:multiplayer-impairment:f5": "LBH_IMPAIRMENT_SCENARIO=F5-one-client-blackout node tests/run-all.cjs --lane=multiplayer-impairment-browser --renderer=three --no-retries",
     "test:playtest": "node tests/run-all.cjs --lane=playtest --renderer=three",
     "test:agent-eval": "node tests/run-all.cjs --lane=agent-eval --renderer=three",
     "test:package": "node tests/desktop-package.cjs && node tests/release-package.cjs",
