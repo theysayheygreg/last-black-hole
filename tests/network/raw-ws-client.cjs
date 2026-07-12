@@ -24,8 +24,9 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
     pilotSlot,
     ws: new WebSocket(`ws://127.0.0.1:${port}/stream`, { perMessageDeflate: false }),
     frames: [], rawBytes: 0, receiveCount: 0, close: null, error: null,
-    lastHeartbeat: null, lastSnapshotAck: 0, paused: false,
+    lastHeartbeat: null, lastSnapshotAck: 0, paused: false, sentBytes: 0, sentFrames: 0,
   };
+  const send = (frame) => sendRawClientFrame(client, frame);
   client.ws.on("error", (error) => { client.error = error.message; });
   client.ws.on("close", (code, reason) => { client.close = { code, reason: reason.toString("utf8"), at: Date.now() }; });
   client.ws.on("message", (raw) => {
@@ -42,14 +43,14 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
     record({ type: "frame", pilotSlot, frameType: frame.type, at: Date.now(), bytes: Buffer.byteLength(text),
       snapshotId: frame.snapshotId ?? null, eventSeq: frame.eventSeq ?? null, deliveryId: frame.deliveryId ?? null });
     if (frame.type === "heartbeat" && client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(JSON.stringify({ type: "pong", heartbeatId: frame.heartbeatId, clientTimeMs: Date.now() }));
+      send({ type: "pong", heartbeatId: frame.heartbeatId, clientTimeMs: Date.now() });
       client.lastHeartbeat = { heartbeatId: frame.heartbeatId, pongAt: Date.now() };
       record({ type: "pong", pilotSlot, at: client.lastHeartbeat.pongAt });
     }
     if (frame.type === "ownerState" && client.lastSnapshotAck === 0) {
       const rebase = [...client.frames].reverse().find((entry) => entry.type === "rebase");
-      client.ws.send(JSON.stringify({ type: "ack", ackKind: "baseline", snapshotId: frame.snapshotId,
-        eventSeq: rebase?.lastEventSeq || 0 }));
+      send({ type: "ack", ackKind: "baseline", snapshotId: frame.snapshotId,
+        eventSeq: rebase?.lastEventSeq || 0 });
       record({ type: "baseline-ack", pilotSlot, at: Date.now(), snapshotId: frame.snapshotId,
         eventSeq: rebase?.lastEventSeq || 0 });
       client.lastSnapshotAck = frame.snapshotId;
@@ -57,28 +58,38 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
     if (frame.type === "event") {
       const withheld = shouldWithholdEventAck
         ? shouldWithholdEventAck({ frame, pilotSlot, client }) === true : false;
-      record({ type: "event-ack-decision", pilotSlot, at: Date.now(), eventSeq: frame.eventSeq,
-        deliveryId: frame.deliveryId, withheld });
+      if (shouldWithholdEventAck) {
+        record({ type: "event-ack-decision", pilotSlot, at: Date.now(), eventSeq: frame.eventSeq,
+          deliveryId: frame.deliveryId, withheld });
+      }
       if (withheld) return;
-      client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: frame.deliveryId }));
+      send({ type: "ack", ackKind: "delivery", deliveryId: frame.deliveryId });
       record({ type: "delivery-ack", pilotSlot, at: Date.now(), deliveryId: frame.deliveryId,
         eventSeq: frame.eventSeq });
-      client.ws.send(JSON.stringify({ type: "ack", ackKind: "event", eventSeq: frame.eventSeq }));
+      send({ type: "ack", ackKind: "event", eventSeq: frame.eventSeq });
       record({ type: "event-ack", pilotSlot, at: Date.now(), deliveryId: frame.deliveryId,
         eventSeq: frame.eventSeq });
     }
   });
   await waitFor(() => client.ws.readyState === WebSocket.OPEN || client.error, `${pilotSlot} socket open`);
   if (client.error) throw new Error(`${pilotSlot} open error: ${client.error}`);
-  client.ws.send(JSON.stringify({ type: "hello", wireVersion: WIRE_PROTOCOL_VERSION,
+  send({ type: "hello", wireVersion: WIRE_PROTOCOL_VERSION,
     simProtocolVersion: PROTOCOL_VERSION,
     [kind === "resume" ? "resumeTicket" : "admissionTicket"]: ticket,
-    ...cursors }));
+    ...cursors });
   await waitFor(() => client.frames.some((frame) => frame.type === "welcome") || client.close, `${pilotSlot} welcome`);
+  if (client.close) throw new Error(`${pilotSlot} closed before welcome: ${JSON.stringify(client.close)}`);
   await waitFor(() => client.frames.some((frame) => frame.type === "publicState")
     && client.frames.some((frame) => frame.type === "ownerState"), `${pilotSlot} baseline`);
   if (client.close) throw new Error(`${pilotSlot} closed during baseline: ${JSON.stringify(client.close)}`);
   return client;
+}
+
+function sendRawClientFrame(client, frame) {
+  const wire = typeof frame === "string" ? frame : JSON.stringify(frame);
+  client.sentBytes += Buffer.byteLength(wire);
+  client.sentFrames += 1;
+  client.ws.send(wire);
 }
 
 async function pauseAfterAuthorityPong(client, authorityPong, guardMs, record) {
@@ -133,4 +144,4 @@ function terminateRawClient(client) {
   client.ws.terminate();
 }
 
-module.exports = { waitFor, openRawClient, pauseAfterAuthorityPong, resume, closeRawClient, terminateRawClient };
+module.exports = { waitFor, openRawClient, sendRawClientFrame, pauseAfterAuthorityPong, resume, closeRawClient, terminateRawClient };

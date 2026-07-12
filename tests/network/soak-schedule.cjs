@@ -30,8 +30,11 @@ function compileSoakSchedule(fixture) {
     schedule.push({ atMs, order: 40, kind: "health-sample" });
   }
   let round = 0;
+  const cycleActionTimes = new Set(fixture.barriers.filter((entry) => entry.kind === "reconnect" || entry.kind === "leave-join")
+    .map((entry) => entry.atMs));
   for (let atMs = fixture.warmupMs; atMs < fixture.warmupMs + fixture.measuredBodyMs;
     atMs += fixture.actionCadenceMs, round += 1) {
+    if (cycleActionTimes.has(atMs)) continue;
     const seat = round % 8;
     const anticipatedIncarnation = seat === 5 && atMs >= 240000 ? 2 : 1;
     schedule.push({ atMs, order: 60, kind: "action", round, seat: round % 8,

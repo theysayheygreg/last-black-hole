@@ -20,7 +20,13 @@
     "maxJsonlBytes": 16777216,
     "maxJsonlRecords": 25000,
     "maxRawFramesPerClient": 10000,
+    "maxMembershipLedgerEntries": 64,
+    "maxConnectionLedgerEntries": 32,
     "maxArtifactBytes": 33554432,
     "maxStdoutStderrBytes": 2097152
+  },
+  "authorityResourceExpected": {
+    "TCPServerWrap": 1,
+    "Timeout": 2
   }
 }

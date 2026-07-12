@@ -331,7 +331,7 @@ async function stepGameFrames(page, frames = 1, dt = 1 / 60) {
 }
 
 async function startSimServer(port = 8788, options = {}) {
-  registerProcessCleanup();
+  if (options.registerProcessCleanup !== false) registerProcessCleanup();
   try { await stopSimServer(port); } catch {}
   killStaleSimServerSync(port);
   fs.mkdirSync(TMP, { recursive: true });

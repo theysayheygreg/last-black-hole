@@ -10,7 +10,7 @@ const {
   parseWireFrame,
   encodeWireFrame,
 } = require("./multiplayer-wire-protocol.cjs");
-const { createMultiplayerSendQueue } = require("./multiplayer-send-queue.cjs");
+const { DEFAULTS: SEND_QUEUE_DEFAULTS, createMultiplayerSendQueue } = require("./multiplayer-send-queue.cjs");
 const {
   DEFAULTS,
   publicError,
@@ -85,9 +85,15 @@ function createSimWebSocketAdapter(options = {}) {
   const pressurePolicy = {
     transportHighWaterBytes: null,
     applicationQueueBytes: null,
+    applicationQueueMessages: queueOptions?.maxMessages ?? SEND_QUEUE_DEFAULTS.maxMessages,
     reliableQueueBytes: null,
+    reliableQueueMessages: queueOptions?.maxReliableMessages ?? SEND_QUEUE_DEFAULTS.maxReliableMessages,
     replayEventBytes: MAX_PENDING_REPLAY_BYTES,
+    replayEventMessages: MAX_PENDING_REPLAY_EVENTS,
     inboundPendingBytes: maxPendingInboundBytes,
+    inboundPendingMessages: maxPendingInbound,
+    pendingSendMessages: queueOptions?.maxMessages ?? SEND_QUEUE_DEFAULTS.maxMessages,
+    scheduledSendMessages: queueOptions?.maxMessages ?? SEND_QUEUE_DEFAULTS.maxMessages,
     connectionsCrossedTransportHighWater: 0,
     transportHighWaterCrossings: 0,
     connectionsHitQueuePolicy: 0,

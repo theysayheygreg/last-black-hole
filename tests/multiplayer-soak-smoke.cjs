@@ -34,6 +34,13 @@ function directoryBytes(directory) {
   return fs.readdirSync(directory).reduce((sum, name) => sum + fs.statSync(path.join(directory, name)).size, 0);
 }
 
+function sanitizeTerminalCause(value) {
+  return String(value || "")
+    .replace(/"(?:commandCredential|admissionTicket|resumeTicket|ticket|profileId|membershipId|playerId|connectionId|currentRunId|runId|equipped|inventory)"\s*:\s*(?:"[^"]*"|null|\[[^\]]*\]|\{[^}]*\})/g,
+      '"redacted":"[redacted]"')
+    .replace(/soak-secret-[\w-]+|Soak Rig \d+|Soak Seat \d+/g, "[redacted-marker]");
+}
+
 async function main() {
   let interruptedSignal = null;
   const interrupt = (signal) => { interruptedSignal ||= signal; };
@@ -63,37 +70,78 @@ async function main() {
       aborted: () => interruptedSignal });
     failure = result.failure;
   } else {
-    for (const name of ["authority-health", "runtime-windows", "client-ledger", "membership-ledger", "reliable-ledger"]) {
+    for (const name of ["authority-health", "runtime-windows", "client-ledger", "membership-ledger", "reliable-ledger",
+      "schedule-execution", "forced-gc", "diagnostics-cleanup", "authority-resources"]) {
       fs.writeFileSync(path.join(runDir, `${name}.jsonl`), "", { flag: "wx" });
     }
   }
-  const allowedHttp = /^(GET \/health|POST \/(?:session\/start|join|leave|multiplayer\/ticket)) \d{3}$/;
-  if (result && Object.keys(result.httpAccounting).some((key) => !allowedHttp.test(key))) failure ||= "unknown/debug HTTP route observed";
+  const terminalFailures = failure ? [sanitizeTerminalCause(failure)] : [];
+  const allowedHttp = /^(GET \/health|POST \/(?:session\/start|join|leave|multiplayer\/ticket|inventory\/action)) 200$/;
+  if (result && Object.keys(result.httpAccounting).some((key) => !allowedHttp.test(key))) {
+    terminalFailures.push("unknown, debug, or non-200 HTTP route observed");
+  }
+  const expectedHttp = { "POST /session/start 200": 1, "POST /join 200": 9,
+    "POST /multiplayer/ticket 200": 11, "POST /inventory/action 200": 2, "POST /leave 200": 9 };
+  if (result && Object.entries(expectedHttp).some(([key, count]) => result.httpAccounting[key] !== count)) {
+    terminalFailures.push(sanitizeTerminalCause(`HTTP cardinality mismatch: ${JSON.stringify(result.httpAccounting)}`));
+  }
   if (result) writeExclusive(path.join(runDir, "cleanup.json"), result.cleanup);
   else writeExclusive(path.join(runDir, "cleanup.json"), { passed: false, reason: "run not started" });
+  const logPath = path.join(ROOT, "tmp", `sim-server-${port}.log`);
+  const log = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+  const redactedLog = log.replace(/"(?:sessionId|runId|clientId|hostClientId|requesterId|profileId|playerId|membershipId|name)":(?:"[^"]*"|null)/g,
+    (match) => `"redactedIdentity":"${crypto.createHash("sha256").update(match).digest("hex")}"`);
+  const tail = Buffer.from(redactedLog).subarray(Math.max(0, Buffer.byteLength(redactedLog) - fixture.evidence.maxStdoutStderrBytes));
+  fs.writeFileSync(path.join(runDir, "stdout-tail.txt"), tail, { flag: "wx" });
+  fs.writeFileSync(path.join(runDir, "stderr-tail.txt"), "", { flag: "wx" });
   const forbidden = /"(?:commandCredential|admissionTicket|resumeTicket|ticket|profileId|membershipId|playerId|connectionId|currentRunId|runId|equipped|inventory)"\s*:/;
   const secretMarker = /soak-secret-|Soak Rig|Soak Seat/;
   const scanned = [];
-  for (const name of fs.readdirSync(runDir).filter((entry) => /\.jsonl?$/.test(entry))) {
+  for (const name of fs.readdirSync(runDir).filter((entry) => /\.(?:jsonl?|txt)$/.test(entry))) {
     const text = fs.readFileSync(path.join(runDir, name), "utf8");
     scanned.push({ name, bytes: Buffer.byteLength(text), records: name.endsWith(".jsonl") ? text.split("\n").filter(Boolean).length : 1 });
-    if (forbidden.test(text) || secretMarker.test(text)) failure ||= `privacy scan rejected ${name}`;
+    if (forbidden.test(text) || secretMarker.test(text)) terminalFailures.push(`privacy scan rejected ${name}`);
   }
-  const bytes = directoryBytes(runDir);
-  if (bytes > fixture.evidence.maxArtifactBytes) failure ||= `artifact directory exceeded ${fixture.evidence.maxArtifactBytes} bytes`;
-  const bounds = { passed: !failure, directoryBytes: bytes, directoryCapBytes: fixture.evidence.maxArtifactBytes,
+  const bytesBeforeBounds = directoryBytes(runDir);
+  const buildTerminal = () => {
+    failure = [...new Set(terminalFailures)].join("\n---\n") || null;
+    const status = failure ? (failure.includes("ABORTED_BY_SIG") ? "ABORTED" : "FAIL") : "PASS";
+    const summary = { status, passed: !failure && result?.passed === true,
+      failure, scheduleHash: schedule.scheduleHash, profile: fixture.profile,
+      actionCount: result?.actionCount || 0, gates: result?.gates || {},
+      limitations: ["NOT long-duration or leak evidence", "NOT packet/browser/WAN/WSS/TLS-edge/hosted evidence",
+        "Heap slope, RSS slope, GC duty, and long-window recovery are NOT_APPLICABLE_SHORT_RUN",
+        "Forced-GC checkpoint minute and following minute are excluded from short-run performance gates",
+        "Closed old/departed socket ACK writes are rejected locally; authority issued-only wrong-epoch retirement remains owned by accepted T2b"],
+      localProviderSpendUsd: 0 };
+    const error = { status: status === "PASS" ? "NONE" : status, firstCause: terminalFailures[0] || null,
+      allCauses: [...new Set(terminalFailures)] };
+    return { status, summary, error };
+  };
+  let terminal = buildTerminal();
+  const bounds = { passed: terminal.status === "PASS", directoryBytesBeforeTerminal: bytesBeforeBounds,
+    projectedFinalDirectoryBytes: 0, directoryCapBytes: fixture.evidence.maxArtifactBytes,
     jsonlCapBytes: fixture.evidence.maxJsonlBytes, jsonlRecordCap: fixture.evidence.maxJsonlRecords,
+    stdoutStderrCapBytes: fixture.evidence.maxStdoutStderrBytes,
     forbiddenIdentityKeys: "absent", seededSecretMarkers: "absent", files: scanned,
     httpClassification: result?.httpAccounting || {} };
+  const projectedSize = () => bytesBeforeBounds
+    + Buffer.byteLength(`${JSON.stringify(bounds, null, 2)}\n`)
+    + Buffer.byteLength(`${JSON.stringify(terminal.error, null, 2)}\n`)
+    + Buffer.byteLength(`${JSON.stringify(terminal.summary, null, 2)}\n`);
+  bounds.projectedFinalDirectoryBytes = projectedSize();
+  bounds.projectedFinalDirectoryBytes = projectedSize();
+  if (bounds.projectedFinalDirectoryBytes > fixture.evidence.maxArtifactBytes) {
+    terminalFailures.push(`artifact directory would exceed ${fixture.evidence.maxArtifactBytes} bytes`);
+    terminal = buildTerminal();
+    bounds.passed = false;
+    bounds.projectedFinalDirectoryBytes = projectedSize();
+  }
   writeExclusive(path.join(runDir, "bounds-and-privacy.json"), bounds);
-  const status = failure ? (failure.includes("ABORTED_BY_SIG") ? "ABORTED" : "FAIL") : "PASS";
-  writeExclusive(path.join(runDir, "summary.json"), { status, passed: !failure && result?.passed === true,
-    failure, scheduleHash: schedule.scheduleHash, profile: fixture.profile,
-    actionCount: result?.actionCount || 0, gates: result?.gates || {},
-    limitations: ["NOT long-duration or leak evidence", "NOT packet/browser/WAN/WSS/TLS-edge/hosted evidence",
-      "Heap slope, RSS slope, GC duty, and long-window recovery are NOT_APPLICABLE_SHORT_RUN",
-      "Forced-GC minute and following minute are excluded by schedule, but authority global.gc is not exposed in this PR smoke"],
-    localProviderSpendUsd: 0 });
+  writeExclusive(path.join(runDir, "error-or-abort.json"), terminal.error);
+  writeExclusive(path.join(runDir, "summary.json"), terminal.summary);
+  const finalBytes = directoryBytes(runDir);
+  if (finalBytes !== bounds.projectedFinalDirectoryBytes) throw new Error("terminal artifact size projection was not exact");
   console.log(`Eight-player soak smoke artifact: ${runDir}`);
   console.log(`Schedule hash: ${schedule.scheduleHash}`);
   if (failure || !result?.passed) { console.error(failure || "smoke did not pass"); process.exitCode = 1; }
