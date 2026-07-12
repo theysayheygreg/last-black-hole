@@ -18,7 +18,8 @@ function waitFor(check, label, timeoutMs = 10000) {
   });
 }
 
-async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 10000 }) {
+async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 10000,
+  kind = "admission", cursors = {} }) {
   const client = {
     pilotSlot,
     ws: new WebSocket(`ws://127.0.0.1:${port}/stream`, { perMessageDeflate: false }),
@@ -59,7 +60,9 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
   await waitFor(() => client.ws.readyState === WebSocket.OPEN || client.error, `${pilotSlot} socket open`);
   if (client.error) throw new Error(`${pilotSlot} open error: ${client.error}`);
   client.ws.send(JSON.stringify({ type: "hello", wireVersion: WIRE_PROTOCOL_VERSION,
-    simProtocolVersion: PROTOCOL_VERSION, admissionTicket: ticket }));
+    simProtocolVersion: PROTOCOL_VERSION,
+    [kind === "resume" ? "resumeTicket" : "admissionTicket"]: ticket,
+    ...cursors }));
   await waitFor(() => client.frames.some((frame) => frame.type === "welcome") || client.close, `${pilotSlot} welcome`);
   await waitFor(() => client.frames.some((frame) => frame.type === "publicState")
     && client.frames.some((frame) => frame.type === "ownerState"), `${pilotSlot} baseline`);
@@ -113,4 +116,10 @@ async function closeRawClient(client) {
   await waitFor(() => client.close, `${client.pilotSlot} close`, 1500).catch(() => client.ws.terminate());
 }
 
-module.exports = { waitFor, openRawClient, pauseAfterAuthorityPong, resume, closeRawClient };
+function terminateRawClient(client) {
+  if (!client || client.ws.readyState === WebSocket.CLOSED) return;
+  client.paused = false;
+  client.ws.terminate();
+}
+
+module.exports = { waitFor, openRawClient, pauseAfterAuthorityPong, resume, closeRawClient, terminateRawClient };

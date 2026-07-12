@@ -537,6 +537,14 @@ const SUITES = [
     timeout: 60000,
   },
   {
+    name: "MultiplayerHardPressure",
+    file: "multiplayer-hard-pressure.cjs",
+    lanes: ["multiplayer-impairment-transport-hard"],
+    browser: false,
+    slow: true,
+    timeout: 60000,
+  },
+  {
     name: "Renderer",
     file: "renderer.cjs",
     lanes: ["visual", "full", "three"],
@@ -567,6 +575,7 @@ const LANES = [
   "multiplayer-playable",
   "multiplayer-impairment-browser",
   "multiplayer-impairment-transport",
+  "multiplayer-impairment-transport-hard",
   "visual",
   "playtest",
   "agent-eval",
