@@ -29,10 +29,10 @@ The practical product recommendation is:
   spike and recipient-projection soak pass;
 - treat 48 as a separate capacity tier that needs a dedicated sim core plus a
   projection/network worker;
-- treat 96 as an experimental fleet-event tier. A representative workload is
-  plausible on a four-vCPU class host, but the heavy model does not fit one
-  20 Hz simulation writer without optimization, reduced cadence, or honest
-  time dilation;
+- treat 96 as an experimental fleet-event tier. Even a representative workload
+  needs a deliberately engineered writer and worker layout. The heavy serial
+  model is infeasible regardless of assigning 12 vCPU: writer work must fall or
+  move behind deterministic barriers before this tier can exist;
 - never solve 96 by allowing several gameplay writers to mutate one run.
 
 ## What is measured, what is modeled
@@ -162,23 +162,36 @@ capacity and correctness gates, not polish.
 
 ### Target transport budgets
 
-The following are wire-shape planning targets, including a 20% allowance for
-framing and ordinary overhead but not pathological loss. “Snapshot” means an
-average relevant delta; a larger keyframe is sent around once per second or on
-rebase.
+The product target is **64 KiB/s average downstream per connected player**, all
+application payload classes included. It is a target, not an achieved codec
+measurement. The old 144 KiB/s representative and 288 KiB/s heavy figures are
+retained only as sensitivity and rejection envelopes; neither is a product
+budget.
 
-| Sim weight | Modeled average delta | Delta Hz | Per-client downstream | Match egress: 4 / 8 / 24 / 48 / 96 |
-|---|---:|---:|---:|---:|
-| Light/current-shaped | 4 KiB | 10 | 0.393 Mbit/s | 1.6 / 3.1 / 9.4 / 18.9 / 37.7 Mbit/s |
-| Representative multiplayer | 8 KiB | 15 | 1.180 Mbit/s | 4.7 / 9.4 / 28.3 / 56.6 / 113.2 Mbit/s |
-| Heavy/high-activity | 16 KiB | 15 | 2.359 Mbit/s | 9.4 / 18.9 / 56.6 / 113.2 / 226.5 Mbit/s |
+```text
+client_downstream = delta_bytes * delta_hz
+                  + keyframe_bytes * keyframe_hz
+                  + event_bytes_per_second
+                  + reconnect_bytes * reconnects_per_second
 
-These are budgets, not claims that the codec already achieves them. A useful
-8 KiB representative frame might contain 12 nearby players, 48–80 dynamic
-bodies, compact component deltas, the recipient's exact private state, a field
-revision, and a small event batch. Static map data should be sent once by
-content hash. Exact cargo, equipment, consumables, hidden cooldowns, and exact
-signal for other players should not be projected.
+match_egress = sum(client_downstream) + shared_transport_overhead
+```
+
+Static manifests are outside the steady-state stream and are fetched once by
+content hash. Framing, TLS, ACKs, retransmission, and reconnect bursts must be
+measured separately rather than hidden in a frame-size constant.
+
+| Envelope | Meaning | Per-client | Match payload: 4 / 8 / 24 / 48 / 96 |
+|---|---|---:|---:|
+| Product average | acceptance target to prove | 64 KiB/s | 2.1 / 4.2 / 12.6 / 25.2 / 50.3 Mbit/s |
+| Representative sensitivity | planning stress, not achieved target | 144 KiB/s | 4.7 / 9.4 / 28.3 / 56.6 / 113.2 Mbit/s |
+| Heavy rejection | adverse envelope; normal operation here fails | 288 KiB/s | 9.4 / 18.9 / 56.6 / 113.2 / 226.5 Mbit/s |
+
+At the product target a 45-minute match carries about 0.66/1.32/3.96/7.91/
+15.82 GiB of downstream application payload at 4/8/24/48/96 players. These are
+**modeled** values. A useful delta might contain nearby transforms, compact
+component changes, owner-private state, a field revision, and a small event
+batch; its achieved size and rate remain benchmark outputs.
 
 Input is much smaller. At a modeled 128 wire bytes per input frame and 30 Hz:
 
@@ -198,23 +211,24 @@ and aggregation therefore apply to events as well as state deltas.
 
 ### Socket queue contract
 
-Each recipient needs an independent byte-counted send queue:
+Each recipient needs an independent byte-counted send queue. The currently
+accepted constants are:
 
 - latest movement/world delta replaces an older unsent delta with the same
   baseline;
 - reliable semantic events never hide behind stale state;
-- at 256 KiB queued, stop producing dependent deltas and schedule a fresh
-  baseline;
-- at 1 MiB queued or two seconds without baseline/event progress, disconnect
-  the slow client with a resumable reason;
+- 512 KiB application queue cap, including a 256 KiB reliable-event subset;
+- transport hysteresis at 256 KiB high-water and 64 KiB low-water;
+- at high-water, stop producing dependent deltas and schedule a fresh baseline;
+- disconnect after two seconds without baseline/reliable-event progress;
 - a slow recipient must never delay the simulation writer or another socket;
 - expose current bytes, high-water bytes, coalesced frames, forced rebases,
   reliable-event age, and disconnect count per recipient.
 
-The exact 256 KiB/1 MiB thresholds are targets to tune under emulation. The
-invariant is bounded bytes plus newest-useful-state coalescing. Unbounded
-socket buffering converts one poor connection into match memory growth and
-minutes-late consequences.
+These are accepted v0.4 control constants, subject to later evidence-backed
+revision. The invariant is bounded bytes plus newest-useful-state coalescing.
+Unbounded socket buffering converts one poor connection into match memory
+growth and minutes-late consequences.
 
 ## CPU model for one logical authority
 
@@ -235,57 +249,58 @@ fixtures rather than being generated by multiplying the existing map arrays;
 otherwise a benchmark can accidentally test allocation or spawn setup instead
 of steady-state gameplay.
 
-### Tick-cost formulas
+### Factorized simulation-size model
 
-Until the runtime exports per-system histograms, use these transparent p95
-planning curves in milliseconds:
+Player count alone is not a useful CPU predictor. Every forecast and benchmark
+must publish the independent terms below:
 
 ```text
-Light:          T(N) = 2.0 + 0.060N + 0.0006N^2, at 15 Hz
-Representative: T(N) = 3.5 + 0.160N + 0.0015N^2, at 20 Hz
-Heavy:          T(N) = 8.0 + 0.350N + 0.0045N^2, at 20 Hz
+writer_p95_ms = base
+              + player_cost(P)
+              + body_cost(bodies_updated)
+              + broadphase_cost(candidates)
+              + narrowphase_cost(contacts)
+              + consequence_cost(events)
+              + ai_cost(AI_agents_due)
+              + field_cost(field_tiles_due)
+              + world_cost(world_jobs_due)
+              + GC_pause_p95
 ```
 
-The intercept covers world/field/AI schedules amortized onto a simulation
-tick. The linear term covers inbox drain, per-player movement, forces,
-contacts, private state, and Ballpark synchronization. The quadratic term is a
-risk allowance for player-player or player-created-body contention and union
-relevance work. These coefficients are **modeled targets**, not regression
-fits to the short probe.
+This is the canonical model shape. Coefficients must come from per-system
+histograms on a named fixture and machine; they must not be inferred from the
+low-activity admission probe. Candidate and contact counts are explicit
+because a dense pileup can make two runs with identical players and bodies
+cost radically different amounts. AI, field, and world terms use the number
+actually due on that multirate tick, not their match-wide totals.
 
-Tick headroom is `tick_budget_ms / projected_p95_tick_ms`. Core utilization is
-`tick_ms * tick_hz / 10` percent of one core before networking/projection.
+For orientation only, the earlier synthetic envelopes imply the following
+**modeled, not measured** writer critical paths:
 
-| Humans | Light p95 / headroom / core | Representative p95 / headroom / core | Heavy p95 / headroom / core |
-|---:|---:|---:|---:|
-| 4 | 2.25 ms / 29.63x / 3.4% | 4.16 ms / 12.01x / 8.3% | 9.47 ms / 5.28x / 18.9% |
-| 8 | 2.52 ms / 26.47x / 3.8% | 4.88 ms / 10.25x / 9.8% | 11.09 ms / 4.51x / 22.2% |
-| 24 | 3.79 ms / 17.61x / 5.7% | 8.20 ms / 6.09x / 16.4% | 18.99 ms / 2.63x / 38.0% |
-| 48 | 6.26 ms / 10.65x / 9.4% | 14.64 ms / 3.42x / 29.3% | 35.17 ms / 1.42x / 70.3% |
-| 96 | 13.29 ms / 5.02x / 19.9% | 32.68 ms / 1.53x / 65.4% | **83.07 ms / 0.60x / 166.1%** |
+| Players | Representative writer p95 | Heavy writer p95 | 20 Hz verdict |
+|---:|---:|---:|---|
+| 24 | about 10 ms | about 21 ms | plausible; measure p99 |
+| 48 | about 15 ms | about 41 ms | engineered; heavy margin is poor |
+| 96 | about 24 ms | about 95 ms | R&D; heavy serial curve is infeasible |
 
-The companion architecture memo recommends falsifying a 30 Hz
-movement/contact microtick. Holding these same p95 costs at 30 Hz produces the
-following sensitivity result:
+The 96-heavy result does not become feasible by reserving 8 or 12 vCPU. A
+single writer still has a 50 ms frame at 20 Hz. The writer term must fall, or
+pure work must move behind deterministic worker barriers while one writer
+retains commit ownership. A 30 Hz movement/contact clock is stricter: its
+33.3 ms frame requires a cheaper movement kernel and lower-rate AI/world/field
+jobs rather than multiplying a whole-tick curve by 30.
 
-| Humans | Representative at 30 Hz | Heavy at 30 Hz |
-|---:|---:|---:|
-| 4 | 12.5% core / 8.01x headroom | 28.4% / 3.52x |
-| 8 | 14.6% / 6.83x | 33.3% / 3.01x |
-| 24 | 24.6% / 4.07x | 57.0% / 1.76x |
-| 48 | 43.9% / 2.28x | **105.5% / 0.95x** |
-| 96 | **98.0% / 1.02x** | **249.2% / 0.40x** |
+Billable CPU and writer latency are separate forecasts:
 
-Thus 30 Hz representative 96 is not a safe target on one writer using this
-curve: average scheduling, garbage collection, or one burst would miss. A
-30 Hz 96-player tier needs a cheaper movement-only kernel than the whole-tick
-curve, explicit lower-rate world systems, and measured p99 margin. Heavy 48
-also crosses the boundary at 30 Hz.
+```text
+mean_billable_cores = sum(mean_lane_cpu_ms * lane_hz) / 1000
+writer_gate         = p95/p99 wall time of the serial commit path
+```
 
-Representative 96 is possible on paper but has inadequate production margin
-if the same event loop also encodes and writes 96 streams. Heavy 96 is
-mathematically outside a 50 ms/20 Hz tick before transport work. More vCPUs do
-not make one JavaScript writer execute faster. The remedies, in order, are:
+Mean CPU sizes a reservation and bill. It cannot prove the p95/p99 writer gate;
+conversely, summing p95 subsystem times overstates ordinary billable CPU.
+Publish both, plus worker utilization and synchronization wait. The remedies
+for an over-budget writer, in order, are:
 
 1. reduce avoidable `N^2` work with spatial queries and bounded neighbor sets;
 2. stop rebuilding duplicate object graphs and full JSON snapshots;
@@ -302,18 +317,22 @@ transition to stay ordered
 
 ### Recipient projection and serialization CPU
 
-Model uncompressed projection/encoding cost per recipient frame as:
+Projection has shared work and recipient work; treating all of it as a single
+per-client constant either repeats shared scans or hides expensive privacy/AOI
+selection:
 
 ```text
-frame_cpu_ms = query_and_diff_ms + frame_bytes / 50 MiB_per_second * 1000
-projection_cores = frame_cpu_ms * delta_hz * recipients / 1000
+projection_cpu = shared_dirty_pack
+               + P * (recipient_select + private_merge + delta_encode)
+               + changed_bytes * compression_cpu_per_byte
+               + keyframe_bytes * keyframe_compression_cpu_per_byte
 ```
 
-At query/diff assumptions of 0.08/0.12/0.20 ms for light/representative/heavy,
-the 96-player results are approximately 0.15, 0.40, and 0.74 cores. This is a
-planning floor. Generic JSON construction, garbage collection, compression,
-TLS copies, and socket callbacks can multiply it. Measure binary encoding with
-and without compression; do not enable per-frame compression by instinct.
+Measure compression separately by codec, level, and payload class. Its ratio,
+CPU, allocation, and latency are outputs, not a free multiplier. Shared dirty
+packing may run once against the frozen committed frame; private merge and
+baseline selection remain per recipient. Report mean worker CPU for placement
+and p95/p99 completion time against the next writer barrier.
 
 Projection must query from a frozen end-of-tick view or packed component
 arrays. Ninety-six independent projections must not mutate Ballpark query
@@ -352,15 +371,38 @@ host OS fleet.
 | 8 | 1 vCPU, 512 MiB, 100 Mbit/s | 2 vCPU, 1 GiB, 250 Mbit/s | First production target |
 | 24 | 2 vCPU, 1 GiB, 250 Mbit/s | 2 vCPU, 2 GiB, 500 Mbit/s | Plausible large-crew tier |
 | 48 | 2 vCPU, 1 GiB, 500 Mbit/s | 4 vCPU, 2 GiB, 1 Gbit/s | Needs dedicated sim core and projection worker |
-| 96 | 4 vCPU, 2 GiB, 1 Gbit/s | 8 vCPU, 4 GiB, 2.5 Gbit/s **after optimization** | Representative plausible; heavy fails current 20 Hz curve |
+| 96 | 4 vCPU, 2 GiB, 1 Gbit/s | 8–12 vCPU, 4 GiB, 2.5 Gbit/s **only after writer optimization** | R&D; heavy serial writer remains infeasible |
 
 At 48–96, reserve one physical/core-equivalent lane for the simulation writer;
 do not pack it according to average host CPU alone. Use other cores for gateway,
 projection, encoding, compression, logging, and persistence. A logical match
 authority may span those workers while retaining exactly one gameplay writer.
 
+Host packing must take the minimum capacity across writer lanes, mean billable
+CPU, memory, egress, and packets per second—not vCPU alone:
+
+```text
+matches_per_host = min(writer_lanes,
+                       floor(cpu_budget / mean_match_cpu),
+                       floor(memory_budget / reserved_match_memory),
+                       floor(egress_budget / match_egress),
+                       floor(pps_budget / match_pps))
+```
+
+At 64 KiB/s and an illustrative 1,200-byte payload per packet, downstream is
+about 55 packets/client/s. Adding 30 input packets/client/s and 25% control/
+ACK margin yields roughly 2.5k/5.1k/10.2k aggregate PPS for 24/48/96-player
+matches before retransmission. These are **modeled sizing values**, not packet
+captures. Validate them on production TLS and gateway paths. A 48-player match
+gets a dedicated writer lane until noisy-neighbor evidence allows otherwise;
+a 96-player experiment gets a dedicated writer lane plus explicit worker
+capacity.
+
 Cloudflare Durable Objects are conceptually attractive as one object per match,
-but provider limits do not substitute for this benchmark. Current official
+but a 128 MiB object is a non-fit for the representative 96-player memory model:
+the planning target is 192 MiB before the required failure/GC margin. Durable
+Objects therefore remain a 4–8-player experiment, not a high-count placement
+claim. Provider limits do not substitute for this benchmark. Current official
 limits allow long active CPU windows per request/message and 32 MiB received
 WebSocket messages; the relevant unanswered question is sustained per-object
 CPU, timer regularity, egress cost, and isolation under the actual LBH loop
@@ -461,15 +503,15 @@ The number of concurrent matches scales the number of authorities; it does not
 change the single-writer rule inside a match.
 
 The current implementation's compute and memory are not the immediate blocker
-in a low-activity 96-client loopback probe. Full JSON fanout is: the measured
+in a low-activity 96-client loopback probe. Full JSON fanout is: the **measured**
 shape would exceed 1.25 Gbit/s payload egress at the base Deep Field snapshot
-rate. Recipient-specific binary deltas reduce the representative 96-player
-planning case to about 113 Mbit/s plus keyframes/events, but they add projection
-CPU and require strict queue bounds.
+rate. The product target is a **modeled** 64 KiB/s average per client, or about
+50.3 Mbit/s of 96-player match payload before transport overhead. That target
+still needs recipient-specific deltas, strict queue bounds, and evidence.
 
-For simulation, the representative planning curve fits 96 at 20 Hz with only
-1.53x p95 tick headroom before transport work; the heavy curve reaches 83 ms
-against a 50 ms budget and fails. That is the honest boundary: 24 looks
-comfortable, 48 is credible with isolation and offloaded projection, and 96 is
-a distinct engineered tier whose heavy case still needs evidence and likely
-optimization or time dilation.
+For simulation, the factorized planning envelope puts representative 96 near
+24 ms p95 and heavy 96 near 95 ms against a 50 ms/20 Hz frame. These are
+modeled orientations, not measurements. The honest boundary is unchanged:
+24 is plausible, 48 is engineered, and 96 is R&D. Heavy 96 cannot be rescued
+by assigning 12 vCPU while its writer remains serial; writer work must fall or
+parallelize deterministically without creating a second gameplay writer.

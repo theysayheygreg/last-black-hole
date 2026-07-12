@@ -99,13 +99,14 @@ numbers are falsification forecasts that define what must be measured.
 
 ### Three wire shapes
 
-The following forecasts use decimal MB/GB. They exclude TLS/WebSocket/IP
-overhead, retransmission, handshake, voice, logs, and control-plane traffic.
+The following rates use decimal MB/Mbit; the 45-minute payload column uses GiB.
+They exclude TLS/WebSocket/IP overhead, retransmission, handshake, voice, logs,
+and control-plane traffic.
 
-1. **Current full snapshot:** 107.88 KiB repeated at nominal Deep Field 6 Hz
-   to every recipient.
-2. **v0.4 compact target:** 65 KB/s/player from the existing architecture
-   envelope (15 Hz 3 KiB deltas, 1 Hz 16 KiB keyframe, inputs/events).
+1. **Current full snapshot:** the measured population-specific snapshot size
+   repeated at nominal Deep Field 6 Hz to every recipient.
+2. **v0.4 compact target:** 64 KiB/s/player average across deltas, keyframes,
+   events, and reconnect amortization. This is a product target, not measured.
 3. **Illustrative all-player transform lane:** 48 bytes per other player at
    20 Hz plus 20 KB/s/client for compact environment/events. This is not a
    codec promise; it exposes the quadratic egress term when every player is
@@ -113,11 +114,22 @@ overhead, retransmission, handshake, voice, logs, and control-plane traffic.
 
 | Players | Current full snapshot | Compact target | Compact 45-minute run | Illustrative global-player lane |
 |---:|---:|---:|---:|---:|
-| 24 | 15.9 MB/s / 127 Mb/s | 1.56 MB/s / 12.5 Mb/s | 4.21 GB | 1.01 MB/s |
-| 48 | 31.8 MB/s / 255 Mb/s | 3.12 MB/s / 25.0 Mb/s | 8.42 GB | 3.13 MB/s |
-| 96 | 63.6 MB/s / 509 Mb/s | 6.24 MB/s / 49.9 Mb/s | 16.85 GB | 10.68 MB/s |
+| 24 | 23.35 MB/s / 186.8 Mb/s | 1.57 MB/s / 12.6 Mb/s | 3.96 GiB | 1.01 MB/s |
+| 48 | 57.28 MB/s / 458.2 Mb/s | 3.15 MB/s / 25.2 Mb/s | 7.91 GiB | 3.13 MB/s |
+| 96 | 156.67 MB/s / 1,253.4 Mb/s | 6.29 MB/s / 50.3 Mb/s | 15.82 GiB | 10.68 MB/s |
 
-At nominal 6 Hz, the current full snapshot would move roughly 43, 86, and 172
+The two network shapes are calculated differently:
+
+```text
+current_full_fanout = snapshot_bytes(P) * snapshot_hz * P
+compact_client      = delta_bytes * delta_hz
+                    + keyframe_bytes * keyframe_hz
+                    + event_bytes_per_second
+                    + reconnect_bytes * reconnects_per_second
+compact_match       = sum(compact_client) + shared_transport_overhead
+```
+
+At nominal 6 Hz, the current full snapshot would move roughly 63, 155, and 423
 GB for a 45-minute 24/48/96-player match. The roadmap's observed 0.33 MB/s
 single-recipient estimate is lower because the measured authority was running
 below nominal cadence; it must not be multiplied into a capacity promise.
@@ -130,8 +142,8 @@ below nominal cadence; it must not be multiplied into a capacity promise.
 - Static map manifests and unchanged state must leave the hot stream.
 - Delta encoding and bounded send queues are mandatory for a hosted product.
 - A complete public player-transform lane can remain if game design requires
-  global awareness and the measured all-in rate stays below **80 KB/s/client
-  p95** and **2 MB/s/match p95**.
+  global awareness and the measured all-in average stays at or below **64
+  KiB/s/client**; 80 KiB/s is only a short-window p95 sensitivity ceiling.
 - AOI infrastructure should exist for world/AI/body families. It may remain a
   semantically conservative no-op for player silhouettes or globally relevant
   threats.
@@ -145,7 +157,8 @@ below nominal cadence; it must not be multiplied into a capacity promise.
   low-rate player dots.
 - Public player transforms may be global only at a lower far-lane rate and
   quantization. Nearby interaction state remains in the fast lane.
-- Target **<=80 KB/s/client p95**, **<=4 MB/s/match p95**, with a hard queue
+- Target **<=64 KiB/s/client average**, with 80 KiB/s only as a short-window
+  p95 sensitivity ceiling, and a hard queue
   policy that coalesces state, forces rebase, then disconnects a persistently
   slow client.
 
@@ -159,9 +172,17 @@ below nominal cadence; it must not be multiplied into a capacity promise.
 - Keep a near lane at 15–20 Hz, a middle lane at 5–10 Hz, and a far/global lane
   at 1–2 Hz or semantic-event-only. The exact radii are game-design inputs, not
   networking constants.
-- Target **<=64 KB/s/client p95** and **<=6.5 MB/s/match p95** in normal load.
+- Target **<=64 KiB/s/client average** and about **<=6 MiB/s/match average** in normal load.
   Treat **8 MB/s sustained** as a rejection threshold for the 96-player mode
   until unit economics explicitly approve more.
+
+Across all populations, use 64 KiB/s/player as the canonical average product
+target. Keep 144 KiB/s/player only as a representative sensitivity envelope
+and 288 KiB/s/player as a heavy rejection envelope; neither is an achieved
+codec rate or supported product budget. The accepted per-recipient queue
+contract is a 512 KiB application cap, a 256 KiB reliable-event subset,
+transport hysteresis at 256/64 KiB, and disconnect after two seconds without
+baseline/reliable-event progress.
 
 Epic's official Replication Graph documentation is relevant historical
 evidence: Fortnite's cited case starts with 100 clients and about 50,000
@@ -182,31 +203,50 @@ dirty quantized state once per tick, then cheap per-recipient selection.
 
 For a 30 Hz player/contact clock, one frame is 33.3 ms. The v0.4 hosted gate
 proposes p95 <=20 ms and p99 <=28 ms, leaving headroom for jitter and host
-contention. Two deliberately simple forecasts expose the risk:
+contention. Forecasts must use a factorized simulation-size model:
 
 ```text
-tick CPU ms = base + perPlayer * P + pairCost * P*(P-1)/2
+writer_p95 = base + f(P) + f(bodies_updated) + f(candidates) + f(contacts)
+             + f(events) + f(AI_due) + f(field_tiles_due)
+             + f(world_jobs_due) + GC_pause_p95
 
-bounded/lean: base 3 ms, perPlayer 0.08 ms, pairCost 0.002 ms
-heavy:        base 8 ms, perPlayer 0.20 ms, pairCost 0.006 ms
+mean_billable_cores = sum(mean_lane_cpu_ms * lane_hz) / 1000
 ```
 
-“Lean” assumes spatial candidate selection, cached/dirty state, bounded active
-bodies, coarse fields, and few expensive AI decisions. “Heavy” represents a
-larger active body set, denser player interaction, more AI/sensing, and more
-field/consequence work. These coefficients are planning assumptions, not
-benchmarks. The `reserved vCPU` column converts total CPU using
-`tickCpuMs * 30 / 1000 / 0.60`, reserving 40% headroom.
+The first line is the p95/p99 serial writer critical path. The second is mean
+CPU across writer and workers for reservation and billing. They are not
+interchangeable: summing p95 terms overstates mean billing, while a low mean
+does not make an over-budget serial tick fit. Every modeled row must publish
+players, bodies, broad-phase candidates, narrow-phase contacts, events, AI,
+field, world, and GC assumptions.
 
-| Players | Lean CPU/tick | Lean reserved vCPU | Heavy CPU/tick | Heavy reserved vCPU | Single-writer 30 Hz verdict |
-|---:|---:|---:|---:|---:|---|
-| 24 | 5.5 ms | 0.27 | 14.5 ms | 0.72 | Plausible in one process |
-| 48 | 9.1 ms | 0.45 | 24.4 ms | 1.22 | Heavy case misses 20 ms p95; optimize or offload projection/jobs |
-| 96 | 19.8 ms | 0.99 | 54.6 ms | 2.73 | Heavy case cannot run 30 Hz on one JS thread |
+Using the companion memo's synthetic envelopes only for orientation gives
+these **modeled, not measured** writer p95 values:
 
-The vCPU conversion is total compute demand, not critical-path latency. A
-54.6 ms tick still misses a 33.3 ms frame on one writer even if the machine has
-many idle cores. Parallelism only helps the part that is independent.
+| Players | Representative writer p95 | Heavy writer p95 | Seat verdict |
+|---:|---:|---:|---|
+| 24 | about 10 ms | about 21 ms | plausible |
+| 48 | about 15 ms | about 41 ms | engineered |
+| 96 | about 24 ms | about 95 ms | R&D |
+
+Heavy 96 is infeasible on the serial curve regardless of reserving 8 or 12
+vCPU. It becomes viable only when writer work falls or pure jobs parallelize
+behind deterministic barriers. Parallelism never permits a second component
+to commit gameplay state.
+
+Projection and compression are factorized rather than charged as one constant
+per client:
+
+```text
+projection_cpu = shared_dirty_pack
+               + P * (recipient_select + private_merge + delta_encode)
+               + changed_bytes * compression_cpu_per_byte
+               + keyframe_bytes * keyframe_compression_cpu_per_byte
+```
+
+Report shared and per-client terms separately, with mean CPU for billing and
+p95/p99 barrier completion for latency. Compression ratio, CPU, allocation,
+and delay are measured outputs for each payload class.
 
 ### Heavier simulation envelopes
 
@@ -269,7 +309,7 @@ rate is rejected.
 - Keep collision/consequence resolution and final reductions on the writer.
   Workers can return sorted candidate pairs, but ordering and application use
   canonical public-id/handle tie-breakers.
-- Dedicate at least 4 vCPU to the first `H96` benchmark and test 6/8 vCPU. This
+- Dedicate at least 4 vCPU to the first `H96` benchmark and test 6/8/12 vCPU. This
   is a benchmark allocation, not a hosting forecast; measured total CPU and
   parallel efficiency determine the production reservation.
 - If `H96` cannot hold p95 <=20 ms/p99 <=28 ms after removing quadratic scans,
@@ -277,6 +317,31 @@ rate is rejected.
   choose one of three honest product actions: lower the movement clock after a
   blind feel test, reduce active simulation density, or cap the mode below 96.
   Do not hide normal-load failure behind permanent TiDi.
+
+### Placement and packing
+
+Packing is bounded by writer lanes and packet work as well as aggregate vCPU:
+
+```text
+matches_per_host = min(writer_lanes,
+                       floor(cpu_budget / mean_match_cpu),
+                       floor(memory_budget / reserved_match_memory),
+                       floor(egress_budget / match_egress),
+                       floor(pps_budget / match_pps))
+```
+
+At the 64 KiB/s product target and an illustrative 1,200-byte payload per
+packet, downstream is about 55 packets/client/s. Adding 30 input packets per
+client per second and 25% control/ACK margin gives **modeled** aggregate loads
+of roughly 2.5k, 5.1k, and 10.2k PPS at 24, 48, and 96 players before loss or
+retransmission. Packet captures on the production TLS/gateway route replace
+these planning values. Forty-eight gets a reserved writer lane until packing
+tests prove p99 isolation; 96 gets a dedicated writer lane and explicit worker
+capacity.
+
+Cloudflare Durable Objects remain a 4–8-player experiment. A 128 MiB object is
+a non-fit for the representative 96-player planning footprint of 192 MiB
+before the required failure/GC margin, independent of its CPU behavior.
 
 ## Overload and TiDi policy
 
@@ -375,9 +440,9 @@ and worker-backed builds.
 | Gate | Architecture | Mandatory mechanisms | Reject or change direction when |
 |---|---|---|---|
 | 4–8 | one process, one writer | owner/public projection, bounded queues | normal tick misses product gate |
-| 24 | one isolated process, one writer | deltas, static manifest, multirate sim, spatial query cleanup, AOI-ready lanes | >80 KB/s/client, >2 MB/s/match, or `H24` p95 >20 ms after profiling |
-| 48 | one isolated match service; optional codec/job workers | AOI, dirty binary state, priorities, far lanes, process quota, overload ladder | normal TiDi, >4 MB/s, or serial hot path dominates after projection offload |
-| 96 | one logical authority, canonical writer plus fixed internal workers | all above, deterministic barriers, dedicated CPU allocation, worker fencing | serial p95 >8 ms, total CPU >40 ms/tick, p99 >28 ms, >6.5 MB/s normal, or feel requires unsustainable clock |
+| 24 | one isolated process, one writer | deltas, static manifest, multirate sim, spatial query cleanup, AOI-ready lanes | >64 KiB/s/client average, or `H24` p95 >20 ms after profiling |
+| 48 | one isolated match service; optional codec/job workers | AOI, dirty binary state, priorities, far lanes, process quota, overload ladder | >64 KiB/s/client average, normal TiDi, or serial hot path dominates after projection offload |
+| 96 | one logical authority, canonical writer plus fixed internal workers | all above, deterministic barriers, dedicated CPU allocation, worker fencing | serial p95 >8 ms, total CPU >40 ms/tick, p99 >28 ms, >64 KiB/s/client average, or feel requires unsustainable clock |
 | beyond 96 / much larger world | benchmark first | stable spatial independence and handoff proof | multi-writer prototype fails 2x-benefit and correctness gates |
 
 The product-safe conclusion is specific: **24 is still a conventional single
@@ -385,4 +450,3 @@ process; 48 is the point where isolation, AOI, and replication workers become
 operationally serious; 96 should be one logical authority implemented as a
 multi-threaded service with one canonical writer.** Physical multi-server
 sharding remains rejected until measured simulation—not ambition—forces it.
-
