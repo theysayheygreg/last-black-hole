@@ -157,12 +157,21 @@ duplicated delivered event sequences consumed exactly once, bounded shared
 reorder displacement of three, zero reconnects or pending work, and complete
 process, port, profile, registry, scheduler, privacy, and pressure cleanup.
 
-### Commit D: F6 Layer A close schedule
+### Commit D: F6 Layer A close schedule — implemented
 
 Invoke all four existing connection interruption hooks against one 100 ms
 barrier. Every pilot must reach a new connection epoch, aligned baseline, and
 new physically sent input ACK within ten seconds or an explicit terminal state.
 No client may remain half-open. Proxy reset corroboration remains pending.
+
+The PR-smoke implementation invokes the existing test interruption hook at
+25 seconds on four streams proven open immediately beforehand. The 100 ms gate
+measures browser hook-invocation skew, not physical socket-close or TCP-reset
+timing. Recovered clients must finish on an open stream after a rotated epoch,
+aligned public/owner baseline, physical baseline ACK, new physical input, and
+covering input ACK. A deterministic regression separately locks the old-event
+ACK versus fresh replay race found during diagnostic F6 work. Immutable F6
+acceptance still requires a no-retry run from the committed clean HEAD.
 
 Canonical profiles retain the review's 15-second warm-up, declared active
 duration, and 15-second recovery. PR profiles use the same scenario version,

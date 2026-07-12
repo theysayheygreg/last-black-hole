@@ -176,11 +176,16 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
   const browser = await launchBrowser({ viewport: { width: 1280, height: 800, deviceScaleFactor: 1 } });
   const page = await browser.newPage({ width: 1280, height: 800, deviceScaleFactor: 1 });
   const pilot = { index, slot: `pilot-${index}`, browser, page, pageErrors: [], consoleErrors: [],
+    consoleErrorEvents: [],
     rewriteErrors: [], networkFailures: [], privacyFrames: [], hotHttp: [], cdp: { inboundBytes: 0, outboundBytes: 0, inboundFrames: 0, outboundFrames: 0 },
     evidence: [], consumedEvents: [] };
   try {
   page.on("pageerror", (error) => pilot.pageErrors.push(error.message));
-  page.on("console", (message) => { if (message.type() === "error") pilot.consoleErrors.push(message.text()); });
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    pilot.consoleErrors.push(message.text());
+    pilot.consoleErrorEvents.push({ message: message.text(), atWallMs: Date.now() });
+  });
   await page.session.send("Page.addScriptToEvaluateOnNewDocument", {
     source: browserInitSource({ pilotSlot: pilot.slot, decisionBook: compiled.book }),
   });
@@ -195,12 +200,19 @@ async function launchPilot({ index, staticPort, simPort, fixture, compiled, html
     pilot.cdp.inboundBytes += Buffer.byteLength(wire);
     try {
       const frame = JSON.parse(wire);
-      if (["publicState", "ownerState", "rebase", "ack", "event"].includes(frame.type)) {
+      if (["welcome", "publicState", "ownerState", "rebase", "ack", "event", "error", "close"].includes(frame.type)) {
         if (pilot.privacyFrames.length >= 10000) throw new Error("bounded privacy-frame evidence exceeded");
         const serialized = frame.type === "publicState" ? JSON.stringify(frame.state) : "";
         pilot.privacyFrames.push({ direction: "inbound", timestamp, type: frame.type,
           playerId: frame.type === "ownerState" ? frame.playerId : undefined,
           membershipId: frame.type === "ownerState" ? frame.membershipId : undefined,
+          connectionEpoch: frame.type === "welcome" ? frame.connectionEpoch : undefined,
+          reconnected: frame.type === "welcome" ? frame.reconnected : undefined,
+          snapshotId: Number.isSafeInteger(frame.snapshotId) ? frame.snapshotId : undefined,
+          code: frame.type === "error" || frame.type === "close" ? frame.code : undefined,
+          fatal: frame.type === "error" ? frame.fatal : undefined,
+          retryable: frame.type === "error" ? frame.retryable : undefined,
+          reconnectable: frame.type === "close" ? frame.reconnectable : undefined,
           ackKind: frame.type === "ack" ? frame.ackKind : undefined,
           eventType: frame.type === "event" ? frame.eventType : undefined,
           privateLeaks: frame.type === "publicState"
@@ -283,6 +295,17 @@ function percentile(values, probability) {
 function isExpectedF3InputTimeout(scenarioId, pilot, error) {
   return scenarioId === "F3-frame-defense" && pilot.slot === "pilot-3"
     && /^\[LBH\] remote input failed: Error: Timed out waiting for input ACK\n/.test(String(error));
+}
+
+function isExpectedF6CloseInputError(scenarioId, pilot, errorEvent, f6CloseSchedule) {
+  if (scenarioId !== "F6-all-flap"
+    || !/^\[LBH\] remote input failed: Error: Sim stream is not connected\n/.test(String(errorEvent?.message))) return false;
+  const pilotIndex = Number(pilot.slot.split("-").at(-1));
+  const invocation = f6CloseSchedule?.invocations?.[pilotIndex];
+  const outcome = f6CloseSchedule?.outcomes?.[pilotIndex];
+  if (!invocation || !outcome) return false;
+  return errorEvent.atWallMs >= invocation.actualWallMs - 100
+    && errorEvent.atWallMs <= outcome.observedWallMs + 100;
 }
 
 function faultDecisionProfile(scenario, pilots, serverRecords) {
@@ -634,6 +657,132 @@ async function capture(pilot, runDir, label) {
   return { file: path.basename(file), sha256: sha256(bytes), bytes: bytes.length };
 }
 
+async function runF6CloseSchedule({ pilots, scenario, startWallMs, clientEvidenceFile, runDir, signal }) {
+  const schedule = scenario.closeSchedule;
+  assert(schedule && Number.isFinite(schedule.atMs) && schedule.atMs > scenario.warmupMs,
+    "F6 close schedule must begin after warm-up");
+  const scheduledWallMs = startWallMs + schedule.atMs;
+  const invocations = await Promise.all(pilots.map((pilot, index) => pilot.page.evaluate(async (options) => {
+    const delayMs = options.scheduledWallMs - Date.now();
+    if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    const before = window.__TEST_API.getMultiplayerJourneyState();
+    const schedulerEpochOrdinal = window.__LBH_FRAME_IMPAIRMENT__.rotateEpoch();
+    const actualWallMs = Date.now();
+    const actualMonoMs = performance.now();
+    const interrupted = window.__TEST_API.interruptMultiplayerStreamForTest();
+    return {
+      pilotSlot: options.pilotSlot,
+      scheduledWallMs: options.scheduledWallMs,
+      actualWallMs,
+      actualMonoMs,
+      schedulerEpochOrdinal,
+      beforeConnectionEpoch: before.connectionEpoch,
+      beforeSnapshotId: before.snapshotId,
+      beforeInputAck: before.transport.lastInputAck,
+      beforeReconnectCount: before.transport.reconnectCount,
+      beforeStreamState: before.transport.streamState,
+      pendingActionCount: interrupted?.pendingActionCount ?? null,
+      pendingInputCount: interrupted?.pendingInputCount ?? null,
+      hookAccepted: Boolean(interrupted),
+    };
+  }, { scheduledWallMs, index, pilotSlot: pilot.slot })));
+  const actualWalls = invocations.map((entry) => entry.actualWallMs);
+  const barrierSkewMs = Math.max(...actualWalls) - Math.min(...actualWalls);
+  const evidenceFile = path.join(runDir, "f6-close-schedule.json");
+  const writeEvidence = (stage, outcomes = null) => fs.writeFileSync(evidenceFile,
+    `${JSON.stringify({ stage, scheduledWallMs, barrierBudgetMs: schedule.barrierMs,
+      barrierSkewMs, invocations, outcomes }, null, 2)}\n`);
+  writeEvidence("hooks-invoked");
+  assert(invocations.every((entry) => entry.hookAccepted), "F6 interruption hook rejected a pilot");
+  assert(invocations.every((entry) => entry.beforeStreamState === "open"),
+    "F6 interruption hook did not begin from four open streams");
+  assert(invocations.every((entry) => entry.schedulerEpochOrdinal === 2),
+    "F6 browser scheduler did not rotate every pilot to epoch ordinal 2");
+  assert(barrierSkewMs <= schedule.barrierMs,
+    `F6 close barrier skew ${barrierSkewMs}ms exceeded ${schedule.barrierMs}ms`);
+  for (const entry of invocations) appendJsonl(clientEvidenceFile, { event: "layer-a-close",
+    pilotSlot: entry.pilotSlot, scheduledWallMs: entry.scheduledWallMs, actualWallMs: entry.actualWallMs,
+    actualMonoMs: entry.actualMonoMs, schedulerEpochOrdinal: entry.schedulerEpochOrdinal });
+
+  const outcomes = new Array(pilots.length).fill(null);
+  const deadline = Math.max(...actualWalls) + schedule.recoveryBudgetMs;
+  while (Date.now() <= deadline && outcomes.some((entry) => entry === null)) {
+    if (signal?.aborted) throw signal.reason || new Error("aborted");
+    for (let index = 0; index < pilots.length; index += 1) {
+      if (outcomes[index]) continue;
+      const state = await journeyState(pilots[index]);
+      const invocation = invocations[index];
+      const streamState = state?.transport?.streamState;
+      if (streamState === "failed") {
+        outcomes[index] = { outcome: "terminal", observedWallMs: Date.now(), streamState,
+          connectionEpoch: state.connectionEpoch, reconnectCount: state.transport.reconnectCount };
+        continue;
+      }
+      if (state?.transport?.activeTransport === "stream" && streamState === "open"
+        && state.connectionEpoch > invocation.beforeConnectionEpoch
+        && state.transport.reconnectCount === invocation.beforeReconnectCount + 1
+        && state.transport.lastInputAck > invocation.beforeInputAck
+        && Number.isSafeInteger(state.snapshotId)) {
+        outcomes[index] = { outcome: "recovered", observedWallMs: Date.now(), streamState,
+          connectionEpoch: state.connectionEpoch, reconnectCount: state.transport.reconnectCount,
+          snapshotId: state.snapshotId, inputAck: state.transport.lastInputAck };
+      }
+    }
+    if (outcomes.some((entry) => entry === null)) await sleep(50, signal);
+  }
+  writeEvidence("recovery-observed", outcomes);
+  assert(outcomes.every(Boolean), "F6 recovery budget expired with a half-open pilot");
+
+  for (let index = 0; index < pilots.length; index += 1) {
+    const pilot = pilots[index];
+    const drained = await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.drain());
+    pilot.evidence.push(...drained);
+    for (const event of drained) appendJsonl(clientEvidenceFile, sanitizeFrameEvidence(event));
+    const invocation = invocations[index];
+    const outcome = outcomes[index];
+    outcome.recoveryElapsedMs = outcome.observedWallMs - invocation.actualWallMs;
+    assert(outcome.recoveryElapsedMs <= schedule.recoveryBudgetMs,
+      `${pilot.slot} F6 recovery exceeded ${schedule.recoveryBudgetMs}ms`);
+    if (outcome.outcome === "terminal") continue;
+    const epochRecords = pilot.evidence.filter((entry) =>
+      entry.connectionEpochOrdinal === invocation.schedulerEpochOrdinal
+      && Number(entry.actualMonoMs) >= invocation.actualMonoMs);
+    const inboundFrames = pilot.privacyFrames.filter((entry) => entry.direction === "inbound");
+    const welcomeIndex = inboundFrames.findIndex((entry) => entry.type === "welcome"
+      && entry.connectionEpoch > invocation.beforeConnectionEpoch && entry.reconnected === true);
+    const welcome = inboundFrames[welcomeIndex];
+    assert(welcome, `${pilot.slot} F6 lacked a new-epoch welcome`);
+    const rebaseIndex = inboundFrames.findIndex((entry, frameIndex) => frameIndex > welcomeIndex
+      && entry.type === "rebase" && Number.isSafeInteger(entry.snapshotId));
+    const rebase = inboundFrames[rebaseIndex];
+    assert(rebase, `${pilot.slot} F6 lacked a new-epoch rebase`);
+    const baselinePublic = inboundFrames.find((entry, frameIndex) => frameIndex > rebaseIndex
+      && entry.type === "publicState" && entry.snapshotId === rebase.snapshotId);
+    const baselineOwner = inboundFrames.find((entry, frameIndex) => frameIndex > rebaseIndex
+      && entry.type === "ownerState" && entry.snapshotId === rebase.snapshotId);
+    assert(baselinePublic && baselineOwner, `${pilot.slot} F6 lacked an aligned public/owner baseline`);
+    const baselineAck = epochRecords.find((entry) => entry.direction === "client-to-authority"
+      && entry.event === "copy-delivered" && entry.frameClass === "ack" && entry.ackKind === "baseline"
+      && entry.snapshotId === rebase.snapshotId);
+    assert(baselineAck, `${pilot.slot} F6 lacked a physical baseline ACK`);
+    const physicalInput = epochRecords.find((entry) => entry.direction === "client-to-authority"
+      && entry.event === "copy-delivered" && entry.frameClass === "input"
+      && entry.inputSeq > invocation.beforeInputAck && entry.actualMonoMs >= baselineAck.actualMonoMs);
+    assert(physicalInput, `${pilot.slot} F6 lacked a new-epoch physical input send`);
+    const inputAck = epochRecords.find((entry) => entry.direction === "authority-to-client"
+      && entry.event === "application-delivered" && entry.frameClass === "ack" && entry.ackKind === "input"
+      && entry.inputSeq >= physicalInput.inputSeq && entry.actualMonoMs >= physicalInput.actualMonoMs);
+    assert(inputAck, `${pilot.slot} F6 lacked a covering input ACK`);
+    outcome.baselineSnapshotId = rebase.snapshotId;
+    outcome.physicalInputSeq = physicalInput.inputSeq;
+    outcome.coveringInputAck = inputAck.inputSeq;
+    outcome.newConnectionEpoch = welcome.connectionEpoch;
+  }
+  const result = { scheduledWallMs, barrierBudgetMs: schedule.barrierMs, barrierSkewMs, invocations, outcomes };
+  writeEvidence("complete", outcomes);
+  return result;
+}
+
 async function runBrowserCohort(options) {
   const { fixture, compiled, scenarioId, runDir, htmlTarget = "index-a.html", signal } = options;
   const scenario = fixture.scenarios[scenarioId];
@@ -658,6 +807,9 @@ async function runBrowserCohort(options) {
   let lastHealth = null;
   let expectedSlotMap = [];
   let cleanup = null;
+  let f6CloseSchedule = null;
+  let f6CloseTask = null;
+  let f6CloseError = null;
   const compiledDecisionFile = path.join(runDir, "compiled-decisions.json");
   const writePartialResult = (stage, extra = {}) => {
     const value = {
@@ -720,6 +872,10 @@ async function runBrowserCohort(options) {
     fs.writeFileSync(controlFile, `${JSON.stringify({ startWallMs })}\n`, { flag: "wx" });
     const timelines = await Promise.all(resources.pilots.map((pilot) => pilot.page.evaluate(
       (start) => window.__LBH_FRAME_IMPAIRMENT__.start(start), startWallMs)));
+    f6CloseTask = scenario.closeSchedule
+      ? runF6CloseSchedule({ pilots: resources.pilots, scenario, startWallMs, clientEvidenceFile, runDir, signal })
+        .catch((error) => { f6CloseError = error; return null; })
+      : null;
     if (scenario.stimulus?.inputIntervalMs) {
       await resources.pilots[3].page.evaluate((intervalMs) => {
         window.__LBH_F3_INPUT_STIMULUS__ = setInterval(() => {
@@ -804,6 +960,10 @@ async function runBrowserCohort(options) {
         window.__LBH_F3_INPUT_STIMULUS__ = null;
       });
     }
+    if (f6CloseTask) {
+      f6CloseSchedule = await f6CloseTask;
+      if (f6CloseError) throw f6CloseError;
+    }
     const endWallMs = startWallMs + scenario.warmupMs + scenario.activeMs + scenario.recoveryMs;
     await sleep(Math.max(0, endWallMs - Date.now()), signal);
     if (samplingError) throw samplingError;
@@ -844,10 +1004,14 @@ async function runBrowserCohort(options) {
       authorityPulseEvents.set(id, sequences);
     }
     for (const pilot of resources.pilots) {
-      for (const error of [...pilot.pageErrors, ...pilot.consoleErrors, ...pilot.rewriteErrors,
+      for (const error of [...pilot.pageErrors, ...pilot.rewriteErrors,
         ...pilot.networkFailures.map((entry) => `${entry.status} ${entry.url}`)]) {
-        appendJsonl(errorFile, { pilotSlot: pilot.slot, error,
-          expectedFault: isExpectedF3InputTimeout(scenarioId, pilot, error) });
+        appendJsonl(errorFile, { pilotSlot: pilot.slot, error, expectedFault: false });
+      }
+      for (const errorEvent of pilot.consoleErrorEvents) {
+        appendJsonl(errorFile, { pilotSlot: pilot.slot, error: errorEvent.message,
+          expectedFault: isExpectedF3InputTimeout(scenarioId, pilot, errorEvent.message)
+            || isExpectedF6CloseInputError(scenarioId, pilot, errorEvent, f6CloseSchedule) });
       }
     }
     for (let index = 0; index < 4; index += 1) {
@@ -868,7 +1032,24 @@ async function runBrowserCohort(options) {
         assert(action.semanticOutcome && new Set(action.outcomes.map((entry) => entry.status)).size === 1,
           `${resources.pilots[index].slot} action ${actionId} lacked one stable semantic outcome`);
       }
-      assert(final[index].transport.reconnectCount === 0, `${resources.pilots[index].slot} unexpectedly reconnected`);
+      if (scenario.closeSchedule) {
+        const outcome = f6CloseSchedule.outcomes[index];
+        const halfOpenStates = new Set(["connecting", "reconnecting", "disconnected"]);
+        assert(!halfOpenStates.has(final[index].transport.streamState),
+          `${resources.pilots[index].slot} remained half-open after F6`);
+        if (outcome.outcome === "recovered") {
+          assert(final[index].transport.activeTransport === "stream"
+            && final[index].transport.streamState === "open"
+            && final[index].transport.reconnectCount === gates.postAdmissionReconnects
+            && final[index].connectionEpoch === outcome.newConnectionEpoch,
+          `${resources.pilots[index].slot} F6 recovered stream/epoch/count diverged`);
+        } else {
+          assert(final[index].transport.streamState === "failed",
+            `${resources.pilots[index].slot} F6 terminal outcome was not explicit`);
+        }
+      } else {
+        assert(final[index].transport.reconnectCount === 0, `${resources.pilots[index].slot} unexpectedly reconnected`);
+      }
       if (scenario.rules.faults) {
         assert(final[index].transport.pendingInputCount === 0 && final[index].transport.pendingActionCount === 0,
           `${resources.pilots[index].slot} did not converge pending input/action work`);
@@ -887,14 +1068,21 @@ async function runBrowserCohort(options) {
       assert(resources.pilots[index].hotHttp.length === 0, `${resources.pilots[index].slot} used hot HTTP`);
       const expectedInputTimeouts = resources.pilots[index].consoleErrors.filter((error) =>
         isExpectedF3InputTimeout(scenarioId, resources.pilots[index], error));
-      const fatalConsoleErrors = resources.pilots[index].consoleErrors.filter((error) =>
-        !isExpectedF3InputTimeout(scenarioId, resources.pilots[index], error));
+      const fatalConsoleErrors = resources.pilots[index].consoleErrorEvents.filter((errorEvent) =>
+        !isExpectedF3InputTimeout(scenarioId, resources.pilots[index], errorEvent.message)
+        && !isExpectedF6CloseInputError(scenarioId, resources.pilots[index], errorEvent, f6CloseSchedule));
       if (scenario.rules.faults && resources.pilots[index].slot === "pilot-3") {
         const omittedInputs = impairment.faultClasses["pilot-3/client-to-authority/input"].omitted;
         assert(expectedInputTimeouts.length <= omittedInputs,
           `pilot-3 input timeout evidence did not correlate to ${omittedInputs} omissions`);
         assert(summary.duplicateDeliveredEventSequences > 0,
           "pilot-3 did not bind duplicated event delivery to exact-once gameplay consumption");
+      }
+      if (scenario.closeSchedule) {
+        const expectedCloseErrors = resources.pilots[index].consoleErrorEvents.filter((errorEvent) =>
+          isExpectedF6CloseInputError(scenarioId, resources.pilots[index], errorEvent, f6CloseSchedule));
+        assert(expectedCloseErrors.length <= 4,
+          `${resources.pilots[index].slot} emitted ${expectedCloseErrors.length} close-window input errors`);
       }
       assert(resources.pilots[index].pageErrors.length === 0 && fatalConsoleErrors.length === 0
         && resources.pilots[index].rewriteErrors.length === 0 && resources.pilots[index].networkFailures.length === 0,
@@ -910,6 +1098,7 @@ async function runBrowserCohort(options) {
     return { startedAt, completedAt: Date.now(), staticPort, simPort, slotMap, timelines, screenshots,
       privacy, clientSummaries: ledgers.map((entry) => entry.summary), cdp: resources.pilots.map((pilot) => pilot.cdp),
       impairment,
+      f6CloseSchedule,
       pulseConsequences: final.map((state) => authorityPulseEvents.get(state.clientId)?.size || 0),
       processes: { staticPid: resources.staticServer.pid, simPid: lastHealth?.process?.pid || null,
         browserPids: resources.pilots.map((pilot) => pilot.browser.proc?.pid || null) },
@@ -919,6 +1108,7 @@ async function runBrowserCohort(options) {
   } finally {
     sampling = false;
     await samplingTask?.catch(() => null);
+    await f6CloseTask?.catch(() => null);
     for (const pilot of resources.pilots) {
       try {
         const drained = await pilot.page.evaluate(() => window.__LBH_FRAME_IMPAIRMENT__.drain());

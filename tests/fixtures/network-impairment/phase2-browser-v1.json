@@ -115,6 +115,35 @@
         "postAdmissionRebases": 2,
         "postAdmissionReconnects": 0
       }
+    },
+    "F6-all-flap": {
+      "profile": "pr-smoke",
+      "rootSeed": "0x0406F1A9",
+      "players": 4,
+      "warmupMs": 5000,
+      "activeMs": 30000,
+      "recoveryMs": 10000,
+      "connectionEpochs": 2,
+      "closeSchedule": {
+        "atMs": 25000,
+        "barrierMs": 100,
+        "recoveryBudgetMs": 10000
+      },
+      "rules": {
+        "copies": 1,
+        "delayMs": 0,
+        "omitted": false
+      },
+      "gates": {
+        "minimumInputAckSamplesPerPilot": 100,
+        "minimumAlignedPairSamplesPerPilot": 100,
+        "minimumReliableActionsPerPilot": 2,
+        "inputAckP95Ms": 800,
+        "snapshotCadenceP95Ms": 750,
+        "reliableConsequenceP95Ms": 2500,
+        "postAdmissionRebases": 1,
+        "postAdmissionReconnects": 1
+      }
     }
   }
 }

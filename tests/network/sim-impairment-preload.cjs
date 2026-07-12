@@ -149,7 +149,7 @@ function createServerSeam(config, book) {
     if (!slots.has(identity)) {
       if (nextSlot >= 4) throw new Error("server impairment observed more than four stable pilots");
       const slot = `pilot-${nextSlot++}`;
-      slots.set(identity, slot);
+      slots.set(identity, { slot, firstConnectionEpoch: context.connectionEpoch });
       append({ event: "slot-map", pilotSlot: slot, runtimeIdentityHash: hash(identity) });
     }
     return slots.get(identity);
@@ -172,11 +172,18 @@ function createServerSeam(config, book) {
     if (stopped) return false;
     readControl();
     const now = performance.now();
-    const pilotSlot = slotFor(context);
+    const slot = slotFor(context);
+    const pilotSlot = slot.slot;
+    const connectionEpochOrdinal = Number.isSafeInteger(context.connectionEpoch)
+      && Number.isSafeInteger(slot.firstConnectionEpoch)
+      ? 1 + context.connectionEpoch - slot.firstConnectionEpoch : 1;
+    if (!Number.isSafeInteger(connectionEpochOrdinal) || connectionEpochOrdinal < 1) {
+      throw new Error(`invalid server connection epoch ordinal for ${pilotSlot}`);
+    }
     const phase = phaseAt(now);
     const parsed = classify(wire, context);
     const record = { atMonoMs: now, side: "authority", pilotSlot, phase,
-      direction: "authority-to-client", connectionEpochOrdinal: 1, ...parsed };
+      direction: "authority-to-client", connectionEpochOrdinal, ...parsed };
     if (phase === "admission" || phase === "complete") {
       const delivered = deliver() !== false;
       append({ ...record, event: "immediate", actualMonoMs: performance.now(), delivered });
@@ -185,12 +192,12 @@ function createServerSeam(config, book) {
     const requestedClass = parsed.frameClass === "ack" && parsed.ackKind
       ? `ack:${parsed.ackKind}` : parsed.frameClass;
     const exactKey = [book.scenarioVersion, book.scenarioId, pilotSlot, phase,
-      "authority-to-client", requestedClass, 1].join("|");
+      "authority-to-client", requestedClass, connectionEpochOrdinal].join("|");
     const baseKey = [book.scenarioVersion, book.scenarioId, pilotSlot, phase,
-      "authority-to-client", parsed.frameClass, 1].join("|");
+      "authority-to-client", parsed.frameClass, connectionEpochOrdinal].join("|");
     const decisionClass = book.streams[exactKey] ? requestedClass : (book.streams[baseKey] ? parsed.frameClass : "unknown");
     const key = [book.scenarioVersion, book.scenarioId, pilotSlot, phase,
-      "authority-to-client", decisionClass, 1].join("|");
+      "authority-to-client", decisionClass, connectionEpochOrdinal].join("|");
     const ordinal = ordinals.get(key) || 0;
     const compiledDecision = book.streams[key]?.[ordinal];
     if (!compiledDecision) throw new Error(`server compiled decision exhaustion: ${key}#${ordinal}`);

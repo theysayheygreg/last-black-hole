@@ -22,55 +22,58 @@ function compileDecisionBook(fixture, scenarioId) {
     for (const phase of PHASES) {
       for (const direction of DIRECTIONS) {
         const capacities = { ...fixture.decisionCapacity, ...(scenario.decisionCapacity || {}) };
-        for (const [frameClass, capacity] of Object.entries(capacities)) {
-          const key = [fixture.scenarioVersion, scenarioId, `pilot-${pilot}`, phase, direction, frameClass, 1].join("|");
-          derivedSeeds[key] = scenario.rules.faults
-            ? (BigInt(scenario.rootSeed) ^ crypto.createHash("sha256").update(key).digest().readBigUInt64BE(0))
-              .toString(16).padStart(16, "0")
-            : sha256(`${scenario.rootSeed}|${key}`).slice(0, 16);
-          const next64 = createSplitMix64(BigInt(`0x${derivedSeeds[key]}`));
-          const directionRule = scenario.rules.directions?.[direction] || scenario.rules;
-          const impaired = !scenario.impairPhases || scenario.impairPhases.includes(phase);
-          const baseDelayMs = impaired ? Number(directionRule.delayMs || 0) : 0;
-          const jitterMs = impaired ? Number(directionRule.jitterMs || 0) : 0;
-          streams[key] = Array.from({ length: capacity }, (_unused, streamOrdinal) => {
-            if (!scenario.rules.faults) {
-              const draw = Number(next64() >> 11n) / UINT53;
-              const jitter = jitterMs === 0 ? 0 : Math.floor(draw * ((jitterMs * 2) + 1)) - jitterMs;
+        for (let epochOrdinal = 1; epochOrdinal <= Number(scenario.connectionEpochs || 1); epochOrdinal += 1) {
+          for (const [frameClass, capacity] of Object.entries(capacities)) {
+            const key = [fixture.scenarioVersion, scenarioId, `pilot-${pilot}`, phase, direction,
+              frameClass, epochOrdinal].join("|");
+            derivedSeeds[key] = scenario.rules.faults
+              ? (BigInt(scenario.rootSeed) ^ crypto.createHash("sha256").update(key).digest().readBigUInt64BE(0))
+                .toString(16).padStart(16, "0")
+              : sha256(`${scenario.rootSeed}|${key}`).slice(0, 16);
+            const next64 = createSplitMix64(BigInt(`0x${derivedSeeds[key]}`));
+            const directionRule = scenario.rules.directions?.[direction] || scenario.rules;
+            const impaired = !scenario.impairPhases || scenario.impairPhases.includes(phase);
+            const baseDelayMs = impaired ? Number(directionRule.delayMs || 0) : 0;
+            const jitterMs = impaired ? Number(directionRule.jitterMs || 0) : 0;
+            streams[key] = Array.from({ length: capacity }, (_unused, streamOrdinal) => {
+              if (!scenario.rules.faults) {
+                const draw = Number(next64() >> 11n) / UINT53;
+                const jitter = jitterMs === 0 ? 0 : Math.floor(draw * ((jitterMs * 2) + 1)) - jitterMs;
+                return {
+                  streamOrdinal,
+                  copies: scenario.rules.copies,
+                  baseDelayMs,
+                  jitterMs,
+                  delayMs: baseDelayMs + jitter,
+                  omitted: scenario.rules.omitted,
+                };
+              }
+              const faultRule = impaired
+                ? (scenario.rules.faults?.[`pilot-${pilot}`]?.[direction]?.[frameClass] || {}) : {};
+              const jitterDraw = Number(next64() >> 11n) / UINT53;
+              const omitDraw = Number(next64() >> 11n) / UINT53;
+              const duplicateDraw = Number(next64() >> 11n) / UINT53;
+              const reorderDraw = Number(next64() >> 11n) / UINT53;
+              const jitter = jitterMs === 0 ? 0 : Math.floor(jitterDraw * ((jitterMs * 2) + 1)) - jitterMs;
+              const omitted = Boolean(scenario.rules.omitted) || omitDraw < Number(faultRule.omitRate || 0);
+              const copies = omitted ? 0
+                : (duplicateDraw < Number(faultRule.duplicateRate || 0) ? 2 : Number(scenario.rules.copies || 1));
+              const reorderWindow = Number(faultRule.reorderWindow || 0);
               return {
                 streamOrdinal,
-                copies: scenario.rules.copies,
+                copies,
                 baseDelayMs,
                 jitterMs,
                 delayMs: baseDelayMs + jitter,
-                omitted: scenario.rules.omitted,
+                omitted,
+                reorderWindow,
+                reorderGroup: reorderWindow === 0 ? null : (faultRule.reorderGroup || null),
+                maxBlockHoldMs: reorderWindow === 0 ? 0 : Number(faultRule.maxBlockHoldMs || 250),
+                reorderBlock: reorderWindow === 0 ? streamOrdinal : Math.floor(streamOrdinal / (reorderWindow + 1)),
+                reorderOffset: reorderWindow === 0 ? 0 : Math.floor(reorderDraw * (reorderWindow + 1)),
               };
-            }
-            const faultRule = impaired
-              ? (scenario.rules.faults?.[`pilot-${pilot}`]?.[direction]?.[frameClass] || {}) : {};
-            const jitterDraw = Number(next64() >> 11n) / UINT53;
-            const omitDraw = Number(next64() >> 11n) / UINT53;
-            const duplicateDraw = Number(next64() >> 11n) / UINT53;
-            const reorderDraw = Number(next64() >> 11n) / UINT53;
-            const jitter = jitterMs === 0 ? 0 : Math.floor(jitterDraw * ((jitterMs * 2) + 1)) - jitterMs;
-            const omitted = Boolean(scenario.rules.omitted) || omitDraw < Number(faultRule.omitRate || 0);
-            const copies = omitted ? 0
-              : (duplicateDraw < Number(faultRule.duplicateRate || 0) ? 2 : Number(scenario.rules.copies || 1));
-            const reorderWindow = Number(faultRule.reorderWindow || 0);
-            return {
-              streamOrdinal,
-              copies,
-              baseDelayMs,
-              jitterMs,
-              delayMs: baseDelayMs + jitter,
-              omitted,
-              reorderWindow,
-              reorderGroup: reorderWindow === 0 ? null : (faultRule.reorderGroup || null),
-              maxBlockHoldMs: reorderWindow === 0 ? 0 : Number(faultRule.maxBlockHoldMs || 250),
-              reorderBlock: reorderWindow === 0 ? streamOrdinal : Math.floor(streamOrdinal / (reorderWindow + 1)),
-              reorderOffset: reorderWindow === 0 ? 0 : Math.floor(reorderDraw * (reorderWindow + 1)),
-            };
-          });
+            });
+          }
         }
       }
     }
@@ -138,6 +141,7 @@ function browserInitSource({ pilotSlot, decisionBook }) {
           snapshotId: Number.isSafeInteger(frame.snapshotId) ? frame.snapshotId : undefined,
           eventType: typeof frame.eventType === "string" ? frame.eventType : undefined,
           eventPlayerId: typeof frame.payload?.clientId === "string" ? frame.payload.clientId : undefined,
+          connectionEpoch: Number.isSafeInteger(frame.connectionEpoch) ? frame.connectionEpoch : undefined,
           status: typeof frame.status === "string" ? frame.status : undefined,
           byteLength: new TextEncoder().encode(wire).byteLength,
         };

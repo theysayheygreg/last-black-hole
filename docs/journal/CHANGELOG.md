@@ -44,6 +44,11 @@
   A resumed client can no longer consume an unplayed old-epoch event during the
   replacement socket's pre-welcome window and send a future recovery cursor;
   the consumed cursor remains intact so authority replay resumes above it.
+- Implemented the F6 four-browser Layer A flap scenario. Four open stream
+  clients invoke the test interruption hook inside a 100 ms barrier, rotate
+  connection epochs, and must recover through a new welcome, aligned baseline,
+  physical baseline ACK, new physical input, and covering input ACK—or enter an
+  explicit terminal failure—with final stream state and teardown asserted.
 - Added a bounded Phase 2 delegation packet for a seeded two-layer network
   impairment harness, separating deterministic frame faults from later real
   WAN/TLS proof and preserving the one-authority-per-match contract.
