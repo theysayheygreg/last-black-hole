@@ -40,6 +40,10 @@
   proves physical fault activation, stable semantic outcomes, exact-once
   consumed consequences, convergence, privacy, pressure, and cleanup without
   claiming TCP loss or WAN behavior.
+- Fenced reliable event delivery state immediately when a stream socket closes.
+  A resumed client can no longer consume an unplayed old-epoch event during the
+  replacement socket's pre-welcome window and send a future recovery cursor;
+  the consumed cursor remains intact so authority replay resumes above it.
 - Added a bounded Phase 2 delegation packet for a seeded two-layer network
   impairment harness, separating deterministic frame faults from later real
   WAN/TLS proof and preserving the one-authority-per-match contract.

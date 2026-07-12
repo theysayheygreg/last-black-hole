@@ -607,6 +607,12 @@ export function _sendFrame(frame, generation = this._socketGeneration) {
 export function _handleSocketClose(event, generation) {
   if (generation !== this._socketGeneration || this._shuttingDown || this.transport !== 'stream') return;
   this._resetStreamFrameScheduler();
+  // Reliable delivery IDs and unconsumed events belong to one socket epoch.
+  // Drop them as soon as that epoch closes so gameplay cannot consume an old
+  // event during the next socket's pre-welcome window and ACK a cursor the new
+  // authority binding has not replayed yet. The consumed event cursor remains
+  // intact; the resume baseline replays everything above it.
+  this._resetDeliveryEpoch();
   clearTimeout(this._heartbeatTimer);
   this.activeTransport = 'http';
   this._streamState = 'disconnected';

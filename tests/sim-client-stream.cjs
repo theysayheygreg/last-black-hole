@@ -395,6 +395,34 @@ async function main() {
       "Terminal stop must clear the delivery window and old unplayed events");
     });
 
+    await runner.run("transport close fences old events before a fresh binding can receive their ACK", async () => {
+      const harness = deliveryHarness(SimClient);
+      harness.client.eventCursor = 39;
+      harness.client._handleStreamFrame(eventFrame(1, 40), 1);
+      assert(harness.client.latestEvents.length === 1,
+        "The fixture must retain one delivered but unconsumed old-epoch event");
+
+      let reconnectReason = null;
+      harness.client._scheduleReconnect = (reason) => { reconnectReason = reason; return null; };
+      harness.client._socket.readyState = 3;
+      harness.client._handleSocketClose({ code: 4000, reason: "fixture flap" }, 1);
+      assert(reconnectReason === "fixture flap"
+        && harness.client._eventFrames.size === 0
+        && harness.client.latestEvents.length === 0
+        && harness.client.eventCursor === 39,
+      "Closing the old transport must discard unconsumed delivery state without advancing the replay cursor");
+
+      const freshSent = [];
+      harness.client._socket = {
+        readyState: 1,
+        send(raw) { freshSent.push(JSON.parse(raw)); },
+        close() { this.readyState = 3; },
+      };
+      assert(harness.client.consumeEvents().length === 0
+        && !freshSent.some((frame) => frame.ackKind === "event"),
+      "The fresh socket's pre-welcome window must not emit an ACK for an old binding's event");
+    });
+
     await runner.run("delivery and semantic event windows fail closed before ACKing unretained frames", async () => {
       const deliveryOverflow = deliveryHarness(SimClient);
       deliveryOverflow.client._handleStreamFrame(eventFrame(129, 129), 1);
