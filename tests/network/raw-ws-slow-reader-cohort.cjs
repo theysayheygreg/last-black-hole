@@ -192,20 +192,32 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
       && event.schedulerConnectionId === ordinal && queuedEvents.some((queued) => queued.reliableId === event.reliableId)
       && event.removedCount > 0);
     const reliableIdentityLedger = queuedEvents.map((queued, index) => {
-      const accepted = reliableAccepted.find((event) => event.reliableId === queued.reliableId);
-      const retired = reliableRetired.find((event) => event.reliableId === queued.reliableId);
-      const received = inventoryEvents.find((event) => event.deliveryId === queued.reliableId);
-      const queuedIndex = pressureEvents.indexOf(queued);
+      const queuedMatches = pressureEvents.filter((event) => event.type === "reliable-queued"
+        && event.schedulerConnectionId === ordinal && event.reliableId === queued.reliableId);
+      const acceptedMatches = reliableAccepted.filter((event) => event.reliableId === queued.reliableId);
+      const retiredMatches = reliableRetired.filter((event) => event.reliableId === queued.reliableId);
+      const receivedMatches = inventoryEvents.filter((event) => event.deliveryId === queued.reliableId);
+      const accepted = acceptedMatches[0];
+      const retired = retiredMatches[0];
+      const received = receivedMatches[0];
+      const queuedIndex = pressureEvents.indexOf(queuedMatches[0]);
       const acceptedIndex = pressureEvents.indexOf(accepted);
       const retiredIndex = pressureEvents.indexOf(retired);
-      if (!accepted || !retired || !received || accepted.eventSeq !== queued.eventSeq
-        || acceptedIndex <= queuedIndex || accepted.timestamp < low.timestamp || retiredIndex <= acceptedIndex
+      const receivedIndex = impaired.frames.indexOf(received);
+      if (queuedMatches.length !== 1 || acceptedMatches.length !== 1 || receivedMatches.length !== 1
+        || retiredMatches.length !== 1 || accepted.eventSeq !== queued.eventSeq
+        || acceptedIndex <= queuedIndex || retiredIndex <= acceptedIndex || receivedIndex < 0
+        || queued.timestamp > accepted.timestamp || accepted.timestamp > received._receivedAt
+        || received._receivedAt > retired.timestamp || accepted.timestamp < low.timestamp
         || retired.cumulativeRetired < index + 1) {
-        throw new Error(`T2a reliable identity ${queued.reliableId} lacked ordered acceptance/retirement evidence`);
+        throw new Error(`T2a reliable identity ${queued.reliableId} lacked exact-one ordered lifecycle evidence`);
       }
       return {
         reliableId: queued.reliableId,
         eventSeq: queued.eventSeq,
+        exactCounts: { queued: 1, wsSendAccepted: 1, received: 1, ackRetired: 1 },
+        sourceIndices: { authorityQueued: queuedIndex, authorityAccepted: acceptedIndex,
+          rawReceived: receivedIndex, authorityRetired: retiredIndex },
         queued: { timestamp: queued.timestamp, byteLength: queued.byteLength,
           messages: queued.pressure.current.reliableMessages, bytes: queued.pressure.current.reliableBytes },
         wsSendAccepted: { timestamp: accepted.timestamp, eventSeq: accepted.eventSeq },
@@ -214,12 +226,38 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
           cumulativeRetired: retired.cumulativeRetired },
       };
     });
-    const cleanupResetReliableIds = [];
-    const replayedReliableIds = [];
+    const firstAuditedQueueAt = Math.min(...reliableIdentityLedger.map((entry) => entry.queued.timestamp));
+    const lastAuditedRetirementAt = Math.max(...reliableIdentityLedger.map((entry) => entry.ackRetired.timestamp));
+    const resetCountBefore = high.pressure.counts.reliableResetOnCleanup;
+    const resetCountAfter = finalHealth.multiplayer.adapter.pressure.connections[String(ordinal)]
+      .counts.reliableResetOnCleanup;
+    const cleanupDuringAudit = pressureEvents.filter((event) => event.type === "connection-cleanup"
+      && event.schedulerConnectionId === ordinal && event.timestamp >= firstAuditedQueueAt
+      && event.timestamp <= lastAuditedRetirementAt);
+    const cleanupResetReliableIds = resetCountAfter === resetCountBefore && cleanupDuringAudit.length === 0
+      ? [] : reliableIdentityLedger.map((entry) => entry.reliableId);
+    const receivedIdentityCounts = new Map();
+    for (const event of inventoryEvents) {
+      receivedIdentityCounts.set(event.deliveryId, (receivedIdentityCounts.get(event.deliveryId) || 0) + 1);
+    }
+    const rebaseDuringAudit = pressureEvents.filter((event) => event.type === "queue-policy"
+      && event.schedulerConnectionId === ordinal && event.action === "rebase"
+      && event.timestamp >= firstAuditedQueueAt && event.timestamp <= lastAuditedRetirementAt);
+    const replayedReliableIds = reliableIdentityLedger.filter((entry) =>
+      (receivedIdentityCounts.get(entry.reliableId) || 0) > 1).map((entry) => entry.reliableId);
+    const identitySetDerivation = {
+      cleanupReset: { provenance: "cumulative-reset-counter-delta plus connection-cleanup transitions in audited window",
+        counterBefore: resetCountBefore, counterAfter: resetCountAfter,
+        cleanupTransitionsDuringAudit: cleanupDuringAudit.length },
+      replayed: { provenance: "raw received delivery-id multiplicity plus rebase and epoch evidence",
+        duplicateReceivedIds: replayedReliableIds, rebaseTransitionsDuringAudit: rebaseDuringAudit.length,
+        observedConnectionEpochs: connectionMap.at(-1).connectionEpochs },
+    };
     if (reliableIdentityLedger.length !== 8
       || new Set(reliableIdentityLedger.map((entry) => entry.reliableId)).size !== 8
       || finalHealth.multiplayer.adapter.pressure.connections[String(ordinal)].current.reliableMessages !== 0
-      || cleanupResetReliableIds.length !== 0 || replayedReliableIds.length !== 0) {
+      || cleanupResetReliableIds.length !== 0 || replayedReliableIds.length !== 0
+      || rebaseDuringAudit.length !== 0 || connectionMap.at(-1).connectionEpochs.length !== 1) {
       throw new Error("T2a reliable identity-set closure failed");
     }
     const coalesced = pressureEvents.filter((event) => event.type === "state-coalesced"
@@ -244,6 +282,7 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
     const allReceivedStates = impaired.frames.filter((frame) => frame.type === "publicState" || frame.type === "ownerState");
     if (allReceivedStates.length % 2 !== 0) throw new Error("T2a received an incomplete state pair");
     const receivedStatePairLedger = [];
+    const receivedPairCounts = new Map();
     for (let index = 0; index < allReceivedStates.length; index += 2) {
       const publicFrame = allReceivedStates[index];
       const ownerFrame = allReceivedStates[index + 1];
@@ -261,6 +300,45 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
           publicBytes: publicFrame._bytes, ownerBytes: ownerFrame._bytes },
         wsSendAccepted: { publicAt: publicAccepted.timestamp, ownerAt: ownerAccepted.timestamp },
       });
+      receivedPairCounts.set(String(publicFrame.snapshotId),
+        (receivedPairCounts.get(String(publicFrame.snapshotId)) || 0) + 1);
+    }
+    const acceptedStateCounts = new Map();
+    for (const event of stateAccepted) {
+      const key = `${event.snapshotId}:${event.frameClass}`;
+      acceptedStateCounts.set(key, (acceptedStateCounts.get(key) || 0) + 1);
+    }
+    const receivedSnapshotIds = new Set(receivedStatePairLedger.map((entry) => entry.snapshotId));
+    const missingAcceptedForReceived = [];
+    const duplicateAcceptedForReceived = [];
+    const unexpectedAcceptedForReceived = [];
+    const extraAcceptedForReceived = [];
+    for (const snapshotId of receivedSnapshotIds) {
+      for (const frameClass of ["publicState", "ownerState"]) {
+        const key = `${snapshotId}:${frameClass}`;
+        const count = acceptedStateCounts.get(key) || 0;
+        if (count === 0) missingAcceptedForReceived.push(key);
+        if (count > 1) {
+          duplicateAcceptedForReceived.push({ key, count });
+          extraAcceptedForReceived.push({ key, extraCount: count - 1 });
+        }
+      }
+    }
+    for (const event of stateAccepted) {
+      if (receivedSnapshotIds.has(event.snapshotId)
+        && event.frameClass !== "publicState" && event.frameClass !== "ownerState") {
+        unexpectedAcceptedForReceived.push({ snapshotId: event.snapshotId, frameClass: event.frameClass });
+      }
+    }
+    const duplicateReceivedPairs = [...receivedPairCounts].filter(([, count]) => count > 1)
+      .map(([snapshotId, count]) => ({ snapshotId: Number(snapshotId), count }));
+    const acceptedNotYetReceivedTail = stateAccepted.filter((event) => !receivedSnapshotIds.has(event.snapshotId))
+      .map((event) => ({ snapshotId: event.snapshotId, frameClass: event.frameClass, timestamp: event.timestamp }));
+    if (missingAcceptedForReceived.length || duplicateAcceptedForReceived.length
+      || unexpectedAcceptedForReceived.length || extraAcceptedForReceived.length || duplicateReceivedPairs.length) {
+      throw new Error(`T2a state multiset coverage failed: ${JSON.stringify({ missingAcceptedForReceived,
+        duplicateAcceptedForReceived, unexpectedAcceptedForReceived, extraAcceptedForReceived,
+        duplicateReceivedPairs })}`);
     }
     if (pressureEvents.length > fixture.evidence.maxPressureEvents
       || receivedStatePairLedger.length + stateOffered.length + stateAccepted.length > fixture.evidence.maxStateLedgerEntries
@@ -304,7 +382,12 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
       wsSendAccepted: stateAccepted.map((event) => ({ snapshotId: event.snapshotId, frameClass: event.frameClass,
         timestamp: event.timestamp })),
       receivedPairs: receivedStatePairLedger,
-      assertions: { everyReceivedPairHasWsSendAcceptedPair: true, receivedPairCount: receivedStatePairLedger.length },
+      normalizedCoverage: { receivedPairCounts: Object.fromEntries(receivedPairCounts),
+        acceptedPairCounts: Object.fromEntries(acceptedStateCounts), missingAcceptedForReceived,
+        duplicateAcceptedForReceived, unexpectedAcceptedForReceived, extraAcceptedForReceived,
+        duplicateReceivedPairs, acceptedNotYetReceivedTail },
+      assertions: { everyReceivedPairHasExactlyOneWsSendAcceptedPair: true,
+        receivedPairCount: receivedStatePairLedger.length, acceptedTailExplicitlyPreserved: true },
     }, null, 2)}\n`, { flag: "wx" });
     fs.writeFileSync(path.join(runDir, "reliable-ledger.json"), `${JSON.stringify({ issued,
       highCounts: { offered: highCounts.reliableOffered, queued: highCounts.reliableQueued,
@@ -319,6 +402,7 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
       identities: reliableIdentityLedger,
       cleanupResetReliableIds,
       replayedReliableIds,
+      identitySetDerivation,
       assertions: { everyStimulatedIdQueuedAcceptedReceivedAndRetired: true,
         acceptedOnlyAfterResume: true, cleanupResetSetEmpty: true, replayedSetEmpty: true },
     }, null, 2)}\n`, { flag: "wx" });
