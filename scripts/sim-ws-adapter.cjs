@@ -96,6 +96,16 @@ function createSimWebSocketAdapter(options = {}) {
     }
   }
 
+  function resetOutbound(state) {
+    for (const token of [...(state.scheduledSends || [])]) {
+      token.active = false;
+      try { token.cancel?.(); } catch {}
+    }
+    state.scheduledSends?.clear();
+    state.outboundGeneration = (state.outboundGeneration || 0) + 1;
+    return state.queue.reset();
+  }
+
   function sendWireImmediate(state, wire, sendAttempt = null) {
     if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) {
       if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
@@ -142,15 +152,24 @@ function createSimWebSocketAdapter(options = {}) {
       membershipId: identity.membershipId,
       connectionEpoch: identity.connectionEpoch ?? state.generation,
       connectionGeneration: state.generation,
+      schedulerConnectionId: state.schedulerConnectionId,
+      outboundGeneration: state.outboundGeneration,
       signal: state.abortController.signal,
     });
   }
 
-  function sendWire(state, wire, frame) {
+  function sendWire(state, wire, frame, sendAttempt = null) {
     // Cumulative delivery ACKs assume reliable IDs reach the socket in issue
     // order. Terminal frames must also retain their existing close semantics.
-    if (!scheduleOutboundFrame || frame.deliveryId !== undefined || frame.type === "error" || frame.type === "close") {
-      return sendWireImmediate(state, wire);
+    if (
+      !scheduleOutboundFrame
+      || frame.deliveryId !== undefined
+      || frame.type === "welcome"
+      || frame.type === "rebase"
+      || frame.type === "error"
+      || frame.type === "close"
+    ) {
+      return sendWireImmediate(state, wire, sendAttempt);
     }
     if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) return false;
     const context = outboundFrameContext(state, frame);
@@ -170,6 +189,9 @@ function createSimWebSocketAdapter(options = {}) {
       const live = !closed
         && generation === context.connectionGeneration
         && state.generation === context.connectionGeneration
+        && state.schedulerConnectionId === context.schedulerConnectionId
+        && state.outboundGeneration === context.outboundGeneration
+        && (state.identity?.runId || currentRunId) === context.runId
         && !state.cleaned
         && !state.abortController.signal.aborted
         && epochIsCurrent
@@ -240,12 +262,7 @@ function createSimWebSocketAdapter(options = {}) {
     }
     connections.delete(state);
     if (state.bindingKey !== null && byBindingKey.get(state.bindingKey) === state) byBindingKey.delete(state.bindingKey);
-    for (const token of state.scheduledSends || []) {
-      token.active = false;
-      try { token.cancel?.(); } catch {}
-    }
-    state.scheduledSends?.clear();
-    state.queue.reset();
+    resetOutbound(state);
   }
 
   function terminate(state) {
@@ -262,8 +279,11 @@ function createSimWebSocketAdapter(options = {}) {
       const runId = rebaseWatermarks?.runId || binding?.runId || currentRunId;
       const snapshotId = Math.max(1, Number(rebaseWatermarks?.snapshotId || binding?.snapshotId) || 1);
       const lastEventSeq = Math.max(0, Number(rebaseWatermarks?.lastEventSeq ?? binding?.lastEventSeq) || 0);
+      resetOutbound(state);
+      state.pendingEventSeqs?.clear();
+      state.pendingEventBytes = 0;
+      state.lastEventAckSeq = lastEventSeq;
       sendFrame(state, { type: "rebase", runId, reason: "server-recovery", snapshotId, lastEventSeq });
-      state.queue.clearRebase();
       return;
     }
     if (outcome.action === "disconnect") {
@@ -289,9 +309,10 @@ function createSimWebSocketAdapter(options = {}) {
             const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
             if (!sendWire(state, wire, frame)) break;
           }
-        } else if (!sendWireImmediate(
+        } else if (!sendWire(
           state,
           encodeWireFrame(message.envelope, { direction: SERVER_TO_CLIENT }),
+          message.envelope,
           message.sendAttempt,
         )) {
           break;
@@ -404,7 +425,7 @@ function createSimWebSocketAdapter(options = {}) {
         sendApplicationClose(state, 4003, "connection superseded", true);
         return;
       }
-      prior.queue.reset();
+      resetOutbound(prior);
       prior.closing = true;
       sendApplicationClose(prior, 4003, "connection replaced", true);
     }
@@ -415,6 +436,7 @@ function createSimWebSocketAdapter(options = {}) {
     if (!stateIsLive(state, expectedGeneration)) return;
     byBindingKey.set(bindingKey, state);
     currentRunId = result.welcome.runId;
+    resetOutbound(state);
     sendFrame(state, result.welcome);
     sendFrame(state, result.rebase);
     sendFrame(state, baselinePublicFrame);
@@ -520,6 +542,8 @@ function createSimWebSocketAdapter(options = {}) {
       heartbeatIntervalMs,
     });
     state.schedulerConnectionId = ++schedulerConnectionCounter;
+    state.outboundGeneration = 0;
+    state.scheduledSends = new Set();
     pendingHello += 1;
     connections.add(state);
     state.helloTimer = setTimeout(() => {
@@ -623,7 +647,7 @@ function createSimWebSocketAdapter(options = {}) {
         }
         if (recovery?.rebase) {
           encodeWireFrame(recovery.rebase, { direction: SERVER_TO_CLIENT });
-          state.queue.reset();
+          resetOutbound(state);
           state.pendingEventSeqs.clear();
           state.pendingEventBytes = 0;
           state.lastEventAckSeq = recovery.rebase.lastEventSeq;
@@ -696,7 +720,7 @@ function createSimWebSocketAdapter(options = {}) {
       sendApplicationClose(state, 4003, "connection fenced", true);
       return { accepted: false, action: "disconnect", reason: "connection-fenced" };
     }
-    state.queue.reset();
+    resetOutbound(state);
     state.pendingEventSeqs.clear();
     state.pendingEventBytes = 0;
     state.lastEventAckSeq = Math.max(state.lastEventAckSeq, Number(frame.lastEventSeq) || 0);
@@ -732,7 +756,7 @@ function createSimWebSocketAdapter(options = {}) {
           }
         } else if (produced?.rebase) {
           encodeWireFrame(produced.rebase, { direction: SERVER_TO_CLIENT });
-          state.queue.reset();
+          resetOutbound(state);
           state.pendingEventSeqs.clear();
           state.pendingEventBytes = 0;
           state.lastEventAckSeq = Math.max(0, Number(produced.rebase.lastEventSeq) || 0);
@@ -765,7 +789,7 @@ function createSimWebSocketAdapter(options = {}) {
     currentRunId = nextRunId || null;
     let fenced = 0;
     for (const state of [...connections]) {
-      state.queue.reset();
+      resetOutbound(state);
       state.pendingEventSeqs?.clear();
       state.pendingEventBytes = 0;
       if (!state.closing) {

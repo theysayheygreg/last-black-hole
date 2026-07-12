@@ -173,8 +173,10 @@ async function createHarness({ scheduleOutboundFrame } = {}) {
 
 async function admit(harness, seam, name, epoch, releaseAt = 0) {
   const client = await harness.beginAdmission(name, epoch);
-  if (seam) seam.advanceTo(releaseAt, { flush: true });
   await waitFor(() => client.messages.some((message) => message.type === "welcome"), { label: `${name} welcome` });
+  if (seam) seam.advanceTo(releaseAt, { flush: true });
+  await waitFor(() => client.messages.some((message) => message.type === "publicState")
+    && client.messages.some((message) => message.type === "ownerState"), { label: `${name} baseline` });
   client.binding = harness.bindings.findLast((binding) => binding.name === name && binding.epoch === epoch);
   return client;
 }
@@ -314,6 +316,100 @@ async function main() {
     } finally {
       await harness.close();
     }
+  });
+
+  await test("makes same-socket rebase an immediate barrier that cancels held old-epoch work", async () => {
+    let holdPublicState = false;
+    const scheduledTypes = [];
+    const held = [];
+    const harness = await createHarness({ scheduleOutboundFrame(wire, context, deliver) {
+      scheduledTypes.push(context.frameType);
+      if (holdPublicState && context.frameType === "publicState") {
+        const record = { wire, context, deliver, cancelled: false };
+        held.push(record);
+        return { accepted: true, deliveryCount: 1, cancel() { record.cancelled = true; } };
+      }
+      deliver();
+      return { accepted: true, deliveryCount: 1 };
+    } });
+    try {
+      const client = await admit(harness, null, "same-socket-rebase", 1);
+      const binding = client.binding;
+      assert(!scheduledTypes.includes("welcome") && !scheduledTypes.includes("rebase"),
+        "Delivery-epoch barriers must never enter the impairment scheduler");
+
+      holdPublicState = true;
+      await harness.adapter.projectNow();
+      assert.strictEqual(held.length, 1);
+      const result = await harness.adapter.sendRebase(binding, {
+        type: "rebase",
+        runId: "run-impairment",
+        reason: "server-recovery",
+        snapshotId: 3,
+        lastEventSeq: 0,
+      });
+      assert.deepStrictEqual(result, { accepted: true, action: "sent" });
+      assert.strictEqual(held[0].cancelled, true);
+      assert.strictEqual(held[0].deliver(), false, "Cancelled old-generation callback must stay inert");
+      assert.strictEqual(harness.adapter.diagnostics().pendingScheduledSends, 0);
+
+      const reliable = await harness.adapter.enqueueReliable(binding, {
+        type: "event",
+        runId: "run-impairment",
+        eventSeq: 1,
+        tick: 3,
+        visibility: "owner",
+        eventType: "test.after-rebase",
+        payload: {},
+      });
+      assert(reliable.accepted && reliable.frame.deliveryId === 1,
+        "The new delivery epoch must restart reliable IDs at one");
+      await waitFor(() => client.messages.some((message) => message.type === "event"), {
+        label: "post-rebase reliable event",
+      });
+      const ordered = client.messages.filter((message) => message.type === "rebase" || message.type === "event").slice(-2);
+      assert.deepStrictEqual(ordered.map((message) => [message.type, message.deliveryId]), [
+        ["rebase", undefined],
+        ["event", 1],
+      ]);
+      assert.strictEqual(scheduledTypes.filter((type) => type === "rebase").length, 0);
+      assert.strictEqual(scheduledTypes.filter((type) => type === "event").length, 0,
+        "Reliable scheduling remains gated after the barrier lands");
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await test("fences held callbacks across run rotation and shutdown", async () => {
+    async function exercise(operation, label) {
+      let holdPublicState = false;
+      const held = [];
+      const harness = await createHarness({ scheduleOutboundFrame(_wire, context, deliver) {
+        if (holdPublicState && context.frameType === "publicState") {
+          const record = { deliver, cancelled: false };
+          held.push(record);
+          return { accepted: true, deliveryCount: 1, cancel() { record.cancelled = true; } };
+        }
+        deliver();
+        return { accepted: true, deliveryCount: 1 };
+      } });
+      try {
+        const client = await admit(harness, null, label, 1);
+        holdPublicState = true;
+        await harness.adapter.projectNow();
+        assert.strictEqual(held.length, 1);
+        await operation(harness.adapter);
+        assert.strictEqual(held[0].cancelled, true);
+        assert.strictEqual(held[0].deliver(), false);
+        assert.strictEqual(harness.adapter.diagnostics().pendingScheduledSends, 0);
+        client.ws.terminate();
+      } finally {
+        await harness.close();
+      }
+    }
+
+    await exercise((adapter) => adapter.rotateRun("run-rotated"), "rotation-fence");
+    await exercise((adapter) => adapter.shutdown(), "shutdown-fence");
   });
 
   await test("accounts for deterministic duplicate delivery of non-reliable complete frames", async () => {

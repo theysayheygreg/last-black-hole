@@ -73,6 +73,11 @@
   advances the hole-free sent watermark. Omission re-arms a fresh attempt,
   duplicate submissions remain capped at two physical copies of one retained
   entry, and replay/reset/terminal cleanup fences opaque stale tokens.
+- Made welcome/rebase physically ordered delivery-epoch barriers and
+  centralized every adapter queue reset behind scheduled-send cancellation plus
+  an outbound-generation fence. Same-socket rebase, connection replacement,
+  run rotation, cleanup, and shutdown now make every old delayed callback inert
+  before reliable IDs restart at one. Reliable scheduling remains disabled.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

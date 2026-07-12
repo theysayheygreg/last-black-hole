@@ -149,7 +149,7 @@ accepted `rebase`, stream reset, and terminal stop.
    scheduling. Prove drain is not sent, contiguous physical watermark behavior,
    omission re-arm, bounded duplicate copies, backpressure, error cleanup,
    replay, reset, and caps.
-3. **Adapter barrier and integration.** Centralize outbound reset, make rebase
+3. **Adapter barrier and integration — landed.** Centralize outbound reset, make rebase
    an immediate ordered barrier, pass queue attempt tokens through the existing
    scheduler seam, and keep terminal frames immediate.
 4. **Reliable fault gate.** Remove the `deliveryId` bypass only after an
@@ -165,10 +165,16 @@ has 12 cases and the complete `multiplayer-network` lane remains green.
 
 Step 2 landed with opaque queue-epoch attempt tokens, a contiguous physical
 send watermark, zero-copy re-arm, and a two-copy pre-send authorization cap.
-Reliable frames still bypass the scheduler. Step 3 must re-check high water at
+Reliable frames still bypass the scheduler. Step 4 must re-check high water at
 every delayed physical release and either lease one reliable entry at a time or
 zero-complete every unprocessed lease in a drained batch; otherwise a mid-batch
 pause can strand later leased entries.
+
+Step 3 landed the common outbound reset barrier and immediate welcome/rebase
+ordering. Adapter releases now also fence scheduler connection, outbound
+generation, run, and connection epoch. Reliable frames still bypass scheduling,
+so the Step 4 gate must add per-release high-water handling without stranding a
+pre-leased batch before it may remove that bypass.
 
 ## Required adversaries
 
