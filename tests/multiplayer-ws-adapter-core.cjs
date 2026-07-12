@@ -450,6 +450,19 @@ async function run() {
         await waitFor(() => nextFrame(client.messages, "welcome"), { label: `observer pilot ${index} welcome` });
         clients.push(client);
       }
+      await adapter.enqueueReliable(
+        bindings.get("pilot-3"),
+        eventFrame("run-pressure-observer", 1, "private-before-rebase"),
+      );
+      await waitFor(() => adapter.diagnostics().pressure.connections[4].current.reliableMessages === 1, {
+        label: "retained reliable before operational rebase",
+      });
+      const operationalRebase = await adapter.sendRebase(bindings.get("pilot-3"), {
+        type: "rebase", runId: "run-pressure-observer", reason: "event-gap", snapshotId: 2, lastEventSeq: 0,
+      });
+      assert(operationalRebase.accepted
+        && adapter.diagnostics().pressure.connections[4].counts.reliableResetOnCleanup === 0,
+      "An operational rebase must clear retained reliable work without counting a cleanup reset");
       pressureEnabled = true;
       await adapter.projectNow();
       await waitFor(() => events.some((event) => event.type === "transport-high-enter"
@@ -461,7 +474,7 @@ async function run() {
       pressureEnabled = true;
       await adapter.projectNow();
       await adapter.projectNow();
-      await adapter.enqueueReliable(bindings.get("pilot-3"), eventFrame("run-pressure-observer", 1, "private-event"));
+      await adapter.enqueueReliable(bindings.get("pilot-3"), eventFrame("run-pressure-observer", 2, "private-event"));
       await waitFor(() => clients[3].close.code !== null, { timeout: 1_000, label: "attributed timeout close" });
       await waitFor(() => adapter.diagnostics().connections === 3, { label: "pressured connection cleanup" });
 
@@ -484,19 +497,34 @@ async function run() {
       for (const type of ["transport-high-enter", "transport-low-exit", "state-coalesced", "queue-policy", "close-dispatched", "pressure-sweep", "connection-cleanup"]) {
         assert(pressuredEvents.some((event) => event.type === type), `Missing immutable ${type} transition`);
       }
-      const high = pressuredEvents.find((event) => event.type === "transport-high-enter");
+      const highEvents = pressuredEvents.filter((event) => event.type === "transport-high-enter");
+      const high = highEvents.at(-1);
+      const firstHighSweep = pressuredEvents.find((event) => event.type === "pressure-sweep"
+        && event.timestamp >= high.timestamp && event.pressure.transportHigh);
+      const low = pressuredEvents.find((event) => event.type === "transport-low-exit");
       const policy = pressuredEvents.find((event) => event.type === "queue-policy");
       const cleanup = pressuredEvents.find((event) => event.type === "connection-cleanup");
+      assert(high.bufferedBytes === high.pressure.current.wsBufferedBytes
+        && high.pressure.maximum.wsBufferedBytes >= high.bufferedBytes,
+      "A high transition must derive its threshold and nested current/maxima from one sample");
+      assert(high.pressure.backpressuredSince !== null
+        && firstHighSweep.pressure.backpressuredSince === high.pressure.backpressuredSince,
+      "The first high transition and pressured sweep must carry the same causal tB");
+      assert(low.bufferedBytes === low.pressure.current.wsBufferedBytes
+        && low.pressure.backpressuredSince === null,
+      "A low transition must carry one consistent sample and a cleared pressure start");
       assert(policy.action === "disconnect" && policy.reason === "backpressure-timeout",
         "The immutable policy event must preserve exact timeout attribution");
       assert(cleanup.pressure.counts.reliableResetOnCleanup === 1
         && cleanup.pressure.current.reliableMessages === 0,
       "Cleanup telemetry must attribute and zero the retained reliable reset");
+      assert(pressuredEvents.at(-1) === cleanup,
+        "Connection cleanup must be the final transition emitted for its scheduler ordinal");
       assert(Object.isFrozen(high) && Object.isFrozen(high.pressure) && Object.isFrozen(high.pressure.current)
         && Object.isFrozen(high.pressure.counts) && Object.isFrozen(high.pressure.counts.stateFramesWsSendAccepted),
       "Pressure events and nested telemetry must be immutable");
       const serialized = JSON.stringify({ events, diagnostics });
-      for (const secret of ["membership-private", "player-private", "connection-private", "credential-private", "ticket-private", "private-event"]) {
+      for (const secret of ["membership-private", "player-private", "connection-private", "credential-private", "ticket-private", "private-event", "private-before-rebase"]) {
         assert(!serialized.includes(secret), `Pressure telemetry leaked private identity marker ${secret}`);
       }
 
