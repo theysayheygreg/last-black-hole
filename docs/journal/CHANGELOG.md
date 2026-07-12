@@ -75,6 +75,15 @@
   bounded retention, 7,164 B/min post-GC heap slope, diagnostics, wall time,
   and physical cleanup. No retry is authorized until lifecycle semantics and
   the traffic budget are decided explicitly.
+- Implemented and independently accepted the guarded authored-collapse soak
+  seam at `82bae10` plus evidence fix `ca7fd8f`. The strict opt-in requires
+  test mode and soak diagnostics, suppresses only authored terminal kill/end
+  after normal predicates, retains the finite max-time fence and all other
+  lifecycle paths, and is absent from production health. Normal-soak artifacts
+  now label post-collapse time synthetic infrastructure longevity. Two clean
+  smoke regressions then exposed a deterministic inventory-action HTTP 409 at
+  the reconnect barrier; both cleaned up and remain non-credit failures pending
+  causal diagnosis.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval

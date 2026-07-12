@@ -418,3 +418,22 @@ an immediate rerun.
   Implement static-manifest extraction and recipient baseline/delta public
   replication before restarting normal. Do not hide the debt with threshold
   edits, compression, or collapse-diluted whole-run averages.
+
+### Guarded lifecycle seam status
+
+The normal-only seam is independently accepted at `82bae10` plus `ca7fd8f`.
+`LBH_SIM_TEST_DISABLE_AUTHORED_COLLAPSE=1` is strict and fails startup unless
+both test mode and soak diagnostics are enabled. It suppresses only authored
+terminal kill/end portions after normal predicates and side effects; generic
+and final-portal paths have real runtime tests. Ordinary death/extraction,
+terminal-all-players, reset, ecology, hazards, and `MATCH_MAX_SIM_TIME` remain
+active. Default health omits the synthetic lifecycle field entirely. Enabled
+normal artifacts explicitly say that post-collapse evidence is synthetic
+infrastructure longevity, never natural gameplay duration.
+
+Two clean PR-smoke attempts after the seam landed failed at approximately the
+two-minute reconnect barrier with inventory-action HTTP 409. Their cleanup
+passed and their artifacts remain non-credit failure evidence. The seam agent
+did not weaken HTTP classification or alter the action/reconnect lane. A
+separate causal comparison against the accepted `df6ea4b` smoke is required
+before any normal-45m rerun.

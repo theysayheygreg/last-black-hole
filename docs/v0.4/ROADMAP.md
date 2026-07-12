@@ -248,6 +248,17 @@ baseline/delta replication are the next critical architecture mechanism;
 binary, AOI, compression, hosted WSS, and high-count work remain later measured
 steps.
 
+**Synthetic steady-lifecycle seam — accepted:** `82bae10` plus `ca7fd8f`
+implements the strict test/diagnostics-only authored-collapse suppression used
+only by normal-45m infrastructure evidence. Generic collapse and final-portal
+terminal paths have real runtime proofs; default collapse, ordinary terminal
+paths, and the finite max-time fence remain intact. Focused lifecycle, sim-
+lifecycle, diagnostics, and multiplayer-network suites pass. Post-collapse
+time is explicitly synthetic and cannot support product-duration/gameplay
+claims. Two subsequent clean PR-smoke attempts failed deterministically on an
+inventory-action HTTP 409 at the reconnect barrier while still cleaning every
+resource; diagnose that regression before any canonical rerun.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

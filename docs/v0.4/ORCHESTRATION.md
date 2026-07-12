@@ -306,6 +306,14 @@ Singularity that:
   rate is 308.4 KiB/s/player, dominated by public state. Plan and implement
   static-manifest plus public baseline/delta replication before any rerun,
   hosted lane, or high-count expansion.
+- The guarded steady-soak lifecycle seam is accepted at `82bae10` plus
+  `ca7fd8f`; it is strictly default-off, test/diagnostics-authorized, finite-
+  lifetime, and synthetic-only after authored collapse. Do not treat it as a
+  product duration change. Two clean smoke attempts on the new HEAD hit the
+  same reconnect-barrier inventory-action HTTP 409 with clean teardown. Keep
+  normal-45m blocked while a separate causal regression audit compares those
+  failures with the accepted `df6ea4b` smoke. Delta implementation also remains
+  gated on independent review of `5694407`.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
