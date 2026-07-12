@@ -10,12 +10,20 @@ function socketOpen(socket) {
 }
 
 export class SimClient {
-  constructor(baseUrl, { transport = 'http', WebSocketImpl = globalThis.WebSocket, actionDrainTimeoutMs = 8000 } = {}) {
+  constructor(baseUrl, {
+    transport = 'http', WebSocketImpl = globalThis.WebSocket, actionDrainTimeoutMs = 8000,
+    scheduleStreamFrame = null,
+  } = {}) {
     this.baseUrl = String(baseUrl || '').replace(/\/+$/, '');
     this.transport = transport === 'stream' ? 'stream' : 'http';
     this.activeTransport = 'http';
     this.WebSocketImpl = WebSocketImpl;
     this.actionDrainTimeoutMs = Math.max(1, Number(actionDrainTimeoutMs) || 8000);
+    this._scheduleStreamFrameCallback = typeof scheduleStreamFrame === 'function'
+      ? scheduleStreamFrame
+      : (typeof scheduleStreamFrame?.schedule === 'function'
+          ? scheduleStreamFrame.schedule.bind(scheduleStreamFrame)
+          : null);
     this.clientId = randomId();
     this.seq = 0;
     this.commandSeq = 0;
@@ -59,6 +67,7 @@ export class SimClient {
     this._reconnectPromise = null;
     this._shuttingDown = false;
     this._closeDirective = null;
+    this._scheduledStreamFrames = new Set();
     this._hotPathHttpCount = 0;
     this.metrics = {
       lastInputAckRttMs: null,
@@ -79,6 +88,8 @@ export class SimClient {
       lastDeliveryAck: 0,
       lastEventAck: 0,
       hotPathHttpCount: 0,
+      pendingScheduledStreamFrames: 0,
+      scheduledStreamFrameFailures: 0,
     };
   }
 
@@ -217,6 +228,7 @@ export class SimClient {
   }
 
   _resetStreamState(runId = null) {
+    this._resetStreamFrameScheduler();
     this.latestSnapshot = null;
     this.latestEvents = [];
     this.runId = runId;
@@ -357,7 +369,8 @@ export class SimClient {
     if (!Number.isFinite(acceptedSeq)) return;
     const acknowledged = this.pendingInputs.filter((entry) => entry.seq <= acceptedSeq);
     if (acknowledged.length === 0) return;
-    this.metrics.lastInputToSnapshotMs = now - acknowledged.at(-1).sentAt;
+    const sentAt = acknowledged.at(-1).sentAt;
+    this.metrics.lastInputToSnapshotMs = sentAt == null ? null : now - sentAt;
     this.pendingInputs = this.pendingInputs.filter((entry) => entry.seq > acceptedSeq);
   }
 
@@ -382,7 +395,7 @@ export class SimClient {
     if (this.transport !== 'stream') return this._sendHttpInput(input);
     if (!socketOpen(this._socket)) await (this._reconnectPromise || Promise.reject(new Error('Sim stream is not connected')));
     this.seq += 1;
-    const sentAt = this._nowMs();
+    const queuedAt = this._nowMs();
     const continuous = {
       type: 'input', inputSeq: this.seq,
       moveX: input.moveX || 0, moveY: input.moveY || 0,
@@ -390,10 +403,10 @@ export class SimClient {
       slingshot: Boolean(input.slingshot), ability1: Boolean(input.ability1), ability2: Boolean(input.ability2),
       clientTimeMs: Date.now(),
     };
-    this.lastSentInput = { ...continuous, seq: this.seq, sentAt };
-    this.pendingInputs.push({ seq: this.seq, sentAt });
+    this.lastSentInput = { ...continuous, seq: this.seq, sentAt: null, queuedAt };
+    this.pendingInputs.push({ seq: this.seq, sentAt: null, queuedAt });
     if (this.pendingInputs.length > 32) this.pendingInputs.splice(0, this.pendingInputs.length - 32);
-    const inputAck = this._awaitInputAck(continuous.inputSeq, sentAt);
+    const inputAck = this._awaitInputAck(continuous.inputSeq, null);
     this._sendFrame(continuous);
     const edgeIds = Array.isArray(input.slingshotEdges) ? input.slingshotEdges.slice(0, 8) : [];
     const actions = edgeIds.map((edgeId) => this._queueAction('slingshotEdge', { edgeId }));
@@ -404,7 +417,7 @@ export class SimClient {
       const accepted = actionAcks.filter((entry) => entry.status === 'accepted');
       const acceptedEdges = accepted.filter((entry) => entry.actionKind === 'slingshotEdge').map((entry) => entry.payload.edgeId);
       const settledEdges = actionAcks.filter((entry) => entry.actionKind === 'slingshotEdge').map((entry) => entry.payload.edgeId);
-      if (edgeIds.length > 0) this._recordSlingshotAck(continuous, edgeIds, acceptedEdges, sentAt, {});
+      if (edgeIds.length > 0) this._recordSlingshotAck(continuous, edgeIds, acceptedEdges, queuedAt, {});
       return {
         actionAcks,
         acceptedSlingshotEdges: acceptedEdges,
@@ -472,6 +485,8 @@ export class SimClient {
   async _issueStreamTicket(...args) { return streamOps._issueStreamTicket.apply(this, args); }
   async _connectStream(...args) { return streamOps._connectStream.apply(this, args); }
   _handleStreamFrame(...args) { return streamOps._handleStreamFrame.apply(this, args); }
+  _resetStreamFrameScheduler(...args) { return streamOps._resetStreamFrameScheduler.apply(this, args); }
+  _scheduleEncodedStreamFrame(...args) { return streamOps._scheduleEncodedStreamFrame.apply(this, args); }
   _resetDeliveryEpoch(...args) { return streamOps._resetDeliveryEpoch.apply(this, args); }
   _mergeFrame(...args) { return streamOps._mergeFrame.apply(this, args); }
   _trimFrameMaps(...args) { return streamOps._trimFrameMaps.apply(this, args); }

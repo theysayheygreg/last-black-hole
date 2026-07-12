@@ -73,10 +73,10 @@ function resumeSocketClass({ acceptedInputSeq, sent }) {
   };
 }
 
-function deliveryHarness(SimClient) {
+function deliveryHarness(SimClient, scheduleStreamFrame = null) {
   const sent = [];
   const closed = [];
-  const client = new SimClient(BASE_URL, { transport: "stream" });
+  const client = new SimClient(BASE_URL, { transport: "stream", scheduleStreamFrame });
   client._socketGeneration = 1;
   client._socket = {
     readyState: 1,
@@ -85,6 +85,38 @@ function deliveryHarness(SimClient) {
   };
   client.runId = "delivery-run";
   return { client, sent, closed };
+}
+
+function controlledStreamScheduler(plan) {
+  const records = [];
+  function schedule(wire, metadata, deliver) {
+    const decision = plan(metadata, JSON.parse(wire)) || {};
+    const copies = decision.copies ?? 1;
+    const record = { wire, metadata, deliver, copies, cancelled: false };
+    records.push(record);
+    const immediateCopies = decision.hold ? 0 : copies;
+    for (let index = 0; index < immediateCopies; index += 1) deliver();
+    return {
+      accepted: decision.accepted !== false,
+      deliveryCount: copies,
+      cancel() { record.cancelled = true; },
+    };
+  }
+  function release(record, copies = record.copies) {
+    if (record.cancelled) return [];
+    const results = [];
+    for (let index = 0; index < copies; index += 1) results.push(record.deliver());
+    return results;
+  }
+  return { schedule, records, release };
+}
+
+function scheduleInbound(client, frame, generation = client._socketGeneration) {
+  const wire = JSON.stringify(frame);
+  return client._scheduleEncodedStreamFrame(wire, frame, "authority-to-client", generation, () => {
+    client._handleStreamFrame(JSON.parse(wire), generation);
+    return true;
+  });
 }
 
 function eventFrame(deliveryId, eventSeq, runId = "delivery-run") {
@@ -108,6 +140,163 @@ async function main() {
   await startSimServer(PORT, { keepAlive: true, env: { LBH_SIM_WS_ENABLED: "true" } });
 
   try {
+    await runner.run("client scheduler defaults to byte-identical immediate delivery with privacy-safe metadata", async () => {
+      const direct = deliveryHarness(SimClient);
+      const seam = controlledStreamScheduler(() => ({ copies: 1 }));
+      const injected = deliveryHarness(SimClient, seam);
+      const frame = {
+        type: "action", actionId: "stable-action", actionSeq: 1, commandSeq: 1,
+        actionKind: "pulse", payload: { privateMarker: "must-not-enter-metadata" },
+        commandCredential: "must-not-enter-metadata",
+      };
+      direct.client._sendFrame(frame);
+      injected.client._sendFrame(frame);
+      assert(direct.sent.length === 1 && injected.sent.length === 1
+        && JSON.stringify(direct.sent[0]) === JSON.stringify(injected.sent[0]),
+      "An immediate injected scheduler must preserve the default serialized frame exactly");
+      const metadata = seam.records[0].metadata;
+      assert(Object.isFrozen(metadata) && metadata.direction === "client-to-authority"
+        && metadata.frameType === "action" && metadata.semanticId === "stable-action",
+      "Scheduler metadata must be frozen and classify direction, frame, and stable identity");
+      assert(!("payload" in metadata) && !("commandCredential" in metadata)
+        && !("ticket" in metadata) && !JSON.stringify(metadata).includes("privateMarker"),
+      "Scheduler metadata must exclude payloads, credentials, and tickets");
+      assert(injected.client.getMetrics().pendingScheduledStreamFrames === 0,
+        "Immediate scheduling must leave no retained client token");
+    });
+
+    await runner.run("outbound scheduling preserves continuous input independence and stable reliable bytes", async () => {
+      const seam = controlledStreamScheduler((metadata) => ({
+        copies: metadata.frameType === "action" ? 2 : 1,
+        hold: metadata.frameType === "action",
+      }));
+      const harness = deliveryHarness(SimClient, seam);
+      const action = {
+        type: "action", actionId: "retry-action", actionSeq: 3, commandSeq: 4,
+        actionKind: "pulse", payload: {}, clientTimeMs: 10,
+      };
+      harness.client._sendFrame(action);
+      harness.client._sendFrame({
+        type: "input", inputSeq: 5, moveX: 1, moveY: 0, thrust: 0, brake: 0,
+        slingshot: false, ability1: false, ability2: false, clientTimeMs: 11,
+      });
+      assert(harness.sent.length === 1 && harness.sent[0].type === "input",
+        "A held reliable action must not block independent continuous input");
+      const held = seam.records.find((record) => record.metadata.frameType === "action");
+      seam.release(held);
+      const actionWires = harness.sent.filter((frame) => frame.type === "action");
+      assert(actionWires.length === 2
+        && JSON.stringify(actionWires[0]) === held.wire
+        && JSON.stringify(actionWires[1]) === held.wire,
+      "Outbound duplication must submit byte-identical copies with stable action identity");
+      assert(harness.client.getMetrics().pendingScheduledStreamFrames === 0,
+        "Completing both declared copies must retire the scheduler token");
+    });
+
+    await runner.run("inbound scheduling retains contiguous ACK, duplicate idempotence, and playback separation", async () => {
+      const seam = controlledStreamScheduler((metadata) => ({
+        copies: metadata.frameType === "ack" ? 2 : 1,
+        hold: metadata.frameType === "event",
+      }));
+      const harness = deliveryHarness(SimClient, seam);
+      let settlements = 0;
+      harness.client._pendingActions.set("scheduled-action", {
+        frame: { actionId: "scheduled-action", actionSeq: 2, commandSeq: 2, actionKind: "pulse", payload: {} },
+        resolve() { settlements += 1; }, reject() {},
+      });
+      scheduleInbound(harness.client, eventFrame(1, 1));
+      scheduleInbound(harness.client, actionAck(2, "scheduled-action", 2, 2));
+      assert(settlements === 1 && harness.client.metrics.lastDeliveryAck === 0
+        && harness.client.latestEvents.length === 0,
+      "Duplicated action settlement above a held event hole must settle once and emit no cumulative ACK");
+      const heldEvent = seam.records.find((record) => record.metadata.direction === "authority-to-client"
+        && record.metadata.frameType === "event");
+      seam.release(heldEvent);
+      assert(harness.client.metrics.lastDeliveryAck === 2 && harness.client.latestEvents.length === 1,
+        "Releasing the held event must close through the duplicated action and expose gameplay once");
+      assert(harness.client.metrics.lastEventAck === 0,
+        "Transport delivery must not advance playback ACK");
+      assert(harness.client.consumeEvents().length === 1 && harness.client.metrics.lastEventAck === 1,
+        "Gameplay consumption must independently advance the event ACK");
+    });
+
+    await runner.run("scheduler cleanup fences old sockets and rejects unsafe outcomes without leakage", async () => {
+      const heldSeam = controlledStreamScheduler(() => ({ copies: 1, hold: true }));
+      const harness = deliveryHarness(SimClient, heldSeam);
+      harness.client._sendFrame({ type: "pong", heartbeatId: 1, clientTimeMs: 1 });
+      const held = heldSeam.records[0];
+      assert(harness.client.getMetrics().pendingScheduledStreamFrames === 1,
+        "Held work must be visible in bounded diagnostics");
+      harness.client._resetStreamFrameScheduler();
+      harness.client._socketGeneration += 1;
+      const replacementSends = [];
+      harness.client._socket = { readyState: 1, send(raw) { replacementSends.push(raw); }, close() { this.readyState = 3; } };
+      assert(heldSeam.release(held).length === 0 && replacementSends.length === 0
+        && harness.client.getMetrics().pendingScheduledStreamFrames === 0,
+      "Cleanup must cancel held work and prevent an old-generation callback from reaching a replacement socket");
+
+      const unsafe = deliveryHarness(SimClient, () => Promise.resolve({ accepted: true, deliveryCount: 1 }));
+      unsafe.client._sendFrame({ type: "pong", heartbeatId: 2, clientTimeMs: 2 });
+      assert(unsafe.closed[0]?.reason === "stream-scheduler-async-outcome"
+        && unsafe.client.getMetrics().pendingScheduledStreamFrames === 0,
+      "Promise scheduler outcomes must fail closed and purge all client tokens");
+
+      let callback = null;
+      const overdeliver = deliveryHarness(SimClient, (_wire, _metadata, deliver) => {
+        callback = deliver;
+        deliver(); deliver();
+        return { accepted: true, deliveryCount: 2 };
+      });
+      overdeliver.client._sendFrame({ type: "pong", heartbeatId: 3, clientTimeMs: 3 });
+      callback();
+      assert(overdeliver.closed[0]?.reason === "stream-scheduler-extra-callback"
+        && overdeliver.sent.length === 2,
+      "A callback beyond the declared two-copy maximum must close before a third physical send");
+
+      let holdCurrent = false;
+      const staleSeam = controlledStreamScheduler(() => ({ copies: 1, hold: holdCurrent }));
+      const stale = deliveryHarness(SimClient, staleSeam);
+      stale.client._sendFrame({ type: "pong", heartbeatId: 4, clientTimeMs: 4 });
+      const completedOld = staleSeam.records[0];
+      stale.client._socketGeneration += 1;
+      stale.client._socket = { readyState: 1, send() {}, close() { this.readyState = 3; } };
+      holdCurrent = true;
+      stale.client._sendFrame({ type: "pong", heartbeatId: 5, clientTimeMs: 5 });
+      const currentHeld = staleSeam.records[1];
+      completedOld.deliver();
+      assert(!currentHeld.cancelled && stale.client.getMetrics().pendingScheduledStreamFrames === 1,
+        "A late extra callback from a completed old generation must not purge current connection work");
+      stale.client._resetStreamFrameScheduler();
+    });
+
+    await runner.run("same-run rebase fences downstream work without dropping held upstream intent", async () => {
+      const seam = controlledStreamScheduler(() => ({ copies: 1, hold: true }));
+      const harness = deliveryHarness(SimClient, seam);
+      const action = {
+        type: "action", actionId: "rebase-action", actionSeq: 4, commandSeq: 4,
+        actionKind: "pulse", payload: {}, clientTimeMs: 10,
+      };
+      harness.client._sendFrame(action);
+      scheduleInbound(harness.client, {
+        type: "publicState", runId: "delivery-run", snapshotId: 8, tick: 8, simTime: 0.8,
+        lastEventSeq: 0, fieldRevision: 1, state: { players: [] },
+      });
+      const heldAction = seam.records.find((record) => record.metadata.direction === "client-to-authority");
+      const heldState = seam.records.find((record) => record.metadata.direction === "authority-to-client");
+      scheduleInbound(harness.client, {
+        type: "rebase", runId: "delivery-run", snapshotId: 9, lastEventSeq: 0,
+        reason: "event-gap", tick: 9, simTime: 0.9, fieldRevision: 1,
+      });
+      assert(!heldAction.cancelled && heldState.cancelled
+        && harness.client.getMetrics().pendingScheduledStreamFrames === 1,
+      "A same-run rebase must preserve upstream action/input while canceling old downstream work");
+      seam.release(heldAction);
+      assert(harness.sent.some((frame) => frame.actionId === "rebase-action")
+        && seam.release(heldState).length === 0
+        && harness.client.getMetrics().pendingScheduledStreamFrames === 0,
+      "The preserved action must retain exact identity while canceled downstream state cannot release late");
+    });
+
     await runner.run("action settlement above a delivery hole is identity-idempotent and not cumulatively ACKed", async () => {
       const harness = deliveryHarness(SimClient);
       let settlements = 0;

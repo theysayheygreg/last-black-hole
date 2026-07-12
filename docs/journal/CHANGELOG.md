@@ -84,6 +84,12 @@
   bounded and exactly-once; release-time high water re-arms without stranding;
   and stale, invalid, or asynchronous scheduler work fails closed. This is
   Layer A frame evidence, not TCP packet-loss or WAN proof.
+- Added the matching optional client scheduling seam around complete encoded
+  stream frames in both directions. It preserves default immediate bytes,
+  measures input RTT from first physical send, keeps action identity independent
+  from delayed input, fences exact sockets/generations/runs/epochs, selectively
+  preserves same-run upstream intent across rebase, and bounds/cancels all
+  scheduled work without exposing credentials or payloads in metadata.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection
