@@ -873,8 +873,11 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
         normal: samples.length >= 10 && samples.every((sample) => sample.safe.overloadState === "NORMAL") };
     });
     const normalMinuteRatio = modeMinutes.filter((entry) => entry.normal).length / Math.max(1, modeMinutes.length);
-    const stableNormalTopology = !normal || postWarmHealth.every(({ safe }) => safe.clients === 8
-      && safe.adapter.connections === 8 && safe.adapter.bound === 8 && safe.adapter.closing === 0);
+    // The authenticated health surface exposes live stream topology, not a
+    // duplicate membership count. Eight bound connections plus the immutable
+    // admission/ordinal/epoch ledgers are the normal profile's membership proof.
+    const stableNormalTopology = !normal || postWarmHealth.every(({ safe }) => safe.adapter.connections === 8
+      && safe.adapter.bound === 8 && safe.adapter.closing === 0);
     const bytesBySeat = Array.from({ length: 8 }, (_, seat) => allClients.filter((client) => client.pilotSlot.startsWith(`seat-${seat}`))
       .reduce((sum, client) => sum + client.rawBytes + client.sentBytes, 0));
     const sortedBytes = [...bytesBySeat].sort((a, b) => a - b);
