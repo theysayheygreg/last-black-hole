@@ -307,3 +307,19 @@ ledgers close the evidence; healthy peers, performance, HTTP classification,
 privacy, limits, and teardown pass. This is local raw-WebSocket hard-pressure
 PR smoke only. T2c, packet/browser/WAN/WSS/hosted/soak/capacity evidence remain
 separate.
+
+## Eight-player status — accepted
+
+The product-maximum extension is independently accepted through `b6a2513` from
+clean artifacts `multiplayer-transport-2026-07-12T162402942Z-t2a-8p-9aee16`
+and `multiplayer-transport-2026-07-12T162436593Z-t2b-8p-aa8731`. Each control
+and pressure match admits eight distinct raw clients under one logical match
+authority. T2a drains only the exact impaired ordinal before timeout; T2b
+fences only that ordinal, resumes a distinct connection at exactly epoch +1,
+and replays eight consequences FIFO/exactly once after one aligned rebase and
+baseline. All seven healthy peers remain pressure-free, epoch-stable, and
+owner-private clean. State, reliable, delivery/event ACK, cap, performance,
+HTTP, privacy, artifact-bound, process, port, and teardown gates pass. A fresh
+independent focused rerun also passes. The result closes local raw-WebSocket
+pressure for the supported 4–8 envelope only; T2c and Linux packet/browser,
+WAN/WSS, hosted, soak, and high-count capacity evidence remain separate.

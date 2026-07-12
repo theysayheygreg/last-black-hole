@@ -191,6 +191,20 @@ T2a/T2b and all 11 multiplayer-network suites pass. This remains local raw-
 WebSocket PR smoke; T2c, Linux packet truth, browser ingress, WAN/WSS, hosted,
 soak, and capacity remain open separate gates.
 
+**Eight-player T2 checkpoint — 2026-07-12:** the product-maximum local pressure
+extension is independently accepted through `b6a2513`. Clean artifacts
+`multiplayer-transport-2026-07-12T162402942Z-t2a-8p-9aee16` and
+`multiplayer-transport-2026-07-12T162436593Z-t2b-8p-aa8731` each use one
+logical authority for their test match and eight distinct raw clients. T2a
+drains the exact impaired ordinal from 263,017 bytes to below low water in 706
+ms without policy or rebase; T2b fences only ordinal 8, resumes ordinal 9 at
+exactly epoch 2 under the same authority PID, and replays eight consequences
+FIFO/exactly once. Seven peers remain pressure-free, epoch-stable, and owner-
+private clean. Exact state/reliable/ACK/cap, performance, HTTP, privacy, and
+cleanup gates pass, as does a fresh independent rerun. The local raw-WebSocket
+4–8 pressure envelope is closed; Linux packet/browser T2c, WAN/WSS, hosted,
+soak, and 24/48/96 capacity remain separate open gates.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

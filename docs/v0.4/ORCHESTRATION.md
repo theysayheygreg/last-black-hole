@@ -270,6 +270,15 @@ Singularity that:
   the one-per-match authority stayed stable. The combined T2a/T2b lane and
   multiplayer-network regressions are green. Advance T2c or the next explicit
   packet/hosted gate separately; do not broaden this local raw-WebSocket claim.
+- The eight-player T2 extension is independently accepted through `b6a2513`.
+  Clean T2a-8 and T2b-8 artifacts plus a fresh reviewer rerun prove exact
+  impaired-connection pressure, seven-peer isolation, epoch/rebase/replay
+  identity, performance, caps, privacy, HTTP accounting, and full cleanup with
+  one logical authority per test match. This closes the locally executable 4–8
+  raw-WebSocket pressure envelope at zero provider cost. The next lane must be
+  selected explicitly among soak/churn on this substrate or prerequisite work
+  for Linux packet/browser T2c and hosted WSS; heavy 24/48/96 remains the
+  conditional scale track.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

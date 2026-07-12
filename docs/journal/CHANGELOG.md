@@ -50,6 +50,14 @@
   reset, state, and reliable identity ledgers. Healthy peers and the one-per-
   match authority remained stable. The claim is still local raw-WebSocket PR
   smoke, not packet, browser, WAN, WSS, hosted, or scale evidence.
+- Extended both T2 pressure cases to the supported eight-player maximum through
+  `b6a2513`. T2a isolates one drainable reader from seven healthy peers; T2b
+  fences and replaces only that reader while replaying eight consequences
+  exactly once. Exact epoch, rebase/baseline, owner-private isolation, queue,
+  ACK, cap, performance, HTTP, privacy, and teardown gates pass under one
+  logical authority per test match. This closes the local raw-WebSocket 4–8
+  pressure envelope at $0 provider spend, not Linux packet, browser, WAN/WSS,
+  hosted, soak, or 24/48/96 evidence.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval
