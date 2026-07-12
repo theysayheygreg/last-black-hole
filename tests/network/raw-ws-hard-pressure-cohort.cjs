@@ -229,7 +229,7 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
     oldMap.schedulerOrdinals.push(newOrdinal);
     oldMap.connectionEpochs.push(newWelcome.connectionEpoch);
     oldMap.transitions.push({ kind: "resume", at: newWelcome._receivedAt });
-    if (newOrdinal === oldOrdinal || newWelcome.connectionEpoch <= oldWelcome.connectionEpoch
+    if (newOrdinal === oldOrdinal || newWelcome.connectionEpoch !== oldWelcome.connectionEpoch + 1
       || newWelcome.reconnected !== true) throw new Error("T2b resume did not rotate socket ordinal and epoch");
     const order = ["welcome", "rebase", "publicState", "ownerState"].map((type) =>
       replacement.frames.findIndex((frame) => frame.type === type));
@@ -372,9 +372,17 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
         semanticConsumptionExactlyOnce: true, exactOneBaselineDeliveryAndEventAcks: true,
         cleanupResetIdentitySetMatchesCounter: true, allReplayAckRetired: true },
       evidenceCounts: { entries: reliableLedgerEntries, cap: fixture.evidence.maxReliableLedgerEntries } }, null, 2)}\n`, { flag: "wx" });
-    const resumeRebase = replacement.frames.find((frame) => frame.type === "rebase");
+    const resumeRebases = replacement.frames.filter((frame) => frame.type === "rebase");
+    const resumeRebase = resumeRebases[0];
     const resumeBaseline = replacement.frames.filter((frame) =>
       frame.type === "publicState" || frame.type === "ownerState").slice(0, 2);
+    if (resumeRebases.length !== 1 || resumeRebase.reason !== "resume"
+      || resumeBaseline.length !== 2 || resumeBaseline[0].type !== "publicState"
+      || resumeBaseline[1].type !== "ownerState"
+      || resumeRebase.snapshotId !== resumeBaseline[0].snapshotId
+      || resumeRebase.snapshotId !== resumeBaseline[1].snapshotId) {
+      throw new Error("T2b resume rebase and baseline were not exact-one and snapshot-aligned");
+    }
     fs.writeFileSync(path.join(runDir, "state-ledger.json"), `${JSON.stringify({ resumeOrder: order,
       cursor: { lastSnapshotId: cursor.lastSnapshotId, lastEventSeq: cursor.lastEventSeq },
       rebase: { reason: resumeRebase.reason, snapshotId: resumeRebase.snapshotId,

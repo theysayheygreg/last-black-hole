@@ -183,7 +183,7 @@ async function runRawSlowReaderCohort({ fixture, runDir, port }) {
     if (finalHealth.process.pid !== authorityPid) throw new Error("pressure authority PID changed");
     let pressureEvents = readJsonl(pressureFile);
     const policyEvents = pressureEvents.filter((event) => event.type === "queue-policy" || event.type === "close-dispatched");
-    if (low.bufferedBytes > fixture.queuePolicy.transportLowWaterBytes || low.timestamp >= tB + fixture.lowWaterWithinMs) {
+    if (low.bufferedBytes >= fixture.queuePolicy.transportLowWaterBytes || low.timestamp >= tB + fixture.lowWaterWithinMs) {
       throw new Error("T2a low-water event missed the production hysteresis/deadline gate");
     }
     if (policyEvents.length !== 0 || clients.some((client) => client.close)
