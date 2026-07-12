@@ -339,7 +339,7 @@ async function startSimServer(port = 8788, options = {}) {
   for (const file of [files.log, files.registry]) {
     try { fs.rmSync(file, { force: true }); } catch {}
   }
-  const args = [SIM_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
+  const args = [...(options.nodeArgs || []), SIM_SERVER_SCRIPT, "start", "--host", "127.0.0.1", "--port", String(port)];
   if (options.keepAlive) args.push("--keep-alive", "true");
   if (options.idleShutdownMs) args.push("--idle-shutdown-ms", String(options.idleShutdownMs));
   const defaultEnv = {

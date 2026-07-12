@@ -9,6 +9,27 @@ const { openRawClient, sendRawClientFrame, closeRawClient, terminateRawClient, w
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const digest = (salt, value) => crypto.createHash("sha256").update(`${salt}:${value}`).digest("hex");
+const median = (values) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+};
+const theilSen = (points) => median(points.flatMap((a, index) => points.slice(index + 1)
+  .map((b) => (b.value - a.value) / ((b.minute - a.minute) || 1))));
+const linearRegression = (points) => {
+  if (points.length < 2) return { slope: null, rSquared: null };
+  const meanX = points.reduce((sum, point) => sum + point.minute, 0) / points.length;
+  const meanY = points.reduce((sum, point) => sum + point.value, 0) / points.length;
+  const denominator = points.reduce((sum, point) => sum + (point.minute - meanX) ** 2, 0);
+  const slope = denominator ? points.reduce((sum, point) => sum
+    + (point.minute - meanX) * (point.value - meanY), 0) / denominator : 0;
+  const intercept = meanY - slope * meanX;
+  const total = points.reduce((sum, point) => sum + (point.value - meanY) ** 2, 0);
+  const residual = points.reduce((sum, point) => sum
+    + (point.value - (intercept + slope * point.minute)) ** 2, 0);
+  return { slope, rSquared: total ? 1 - residual / total : 1 };
+};
 
 function createBoundedJsonl(file, fixture) {
   fs.writeFileSync(file, "", { flag: "wx" });
@@ -62,6 +83,9 @@ function safeHealth(body, plannedElapsedMs, actualElapsedMs) {
     plannedElapsedMs, actualElapsedMs, pid: body.process?.pid ?? null, tick: body.tick ?? null, playerCount: body.playerCount ?? null,
     rss: body.process?.memory?.rss ?? body.process?.rss ?? null,
     heapUsed: body.process?.memory?.heapUsed ?? body.process?.heapUsed ?? null,
+    heapTotal: body.process?.memory?.heapTotal ?? null,
+    external: body.process?.memory?.external ?? null,
+    arrayBuffers: body.process?.memory?.arrayBuffers ?? null,
     overloadState: session.overloadState ?? null,
     clients: body.multiplayer?.memberships?.active ?? body.session?.players ?? null,
     adapter: { connections: adapter.connections, bound: adapter.bound, closing: adapter.closing,
@@ -71,6 +95,10 @@ function safeHealth(body, plannedElapsedMs, actualElapsedMs) {
       queuePolicyEvents: pressure.policy?.queuePolicyEvents,
       observerFailures: pressure.observer?.failures,
       pressureCurrent: pressure.current, pressureMaxima: pressure.maxima, pressureCountMaxima,
+      pressureConnections: Object.fromEntries(Object.entries(pressure.connections || {}).map(([ordinal, entry]) => [ordinal, {
+        connectionEpoch: entry.connectionEpoch, current: entry.current, maximum: entry.maximum,
+        counts: entry.counts,
+      }])),
       pressurePolicy: pressure.policy },
     tickets: { retained: tickets.retained, capacity: tickets.capacity, pending: tickets.counts?.pending,
       issued: tickets.counts?.issued, redeemed: tickets.counts?.redeemed },
@@ -94,6 +122,7 @@ async function portIsDead(port) {
 
 async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dirty, timeScale = 1,
   aborted = () => null }) {
+  const normal = fixture.profile === "normal-45m";
   const salt = crypto.randomBytes(32).toString("hex");
   const files = Object.fromEntries(["authority-health", "runtime-windows", "client-ledger", "membership-ledger", "reliable-ledger", "schedule-execution"]
     .map((name) => [name, createBoundedJsonl(path.join(runDir, `${name}.jsonl`), fixture)]));
@@ -111,7 +140,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   const incarnations = Array(8).fill(0);
   const markerHistory = Array.from({ length: 8 }, () => []);
   const declaredMarkers = Array.from({ length: 8 }, (_, seat) => [
-    `soak-secret-${seat}-1`, ...(seat === 5 ? [`soak-secret-${seat}-2`] : []),
+    `soak-secret-${seat}-1`, ...(!normal && seat === 5 ? [`soak-secret-${seat}-2`] : []),
   ]);
   const privacyOracle = { inspectedFrames: 0, publicFrames: 0, ownerFrames: 0,
     latest: Array(8).fill(null).map(() => ({ publicSeen: false, ownerSeen: false })),
@@ -157,6 +186,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   const healthSamples = [];
   const runtimeWindows = new Map();
   const recoveryLedger = [];
+  const forcedGcPoints = [];
   const cycleConsequenceEvidence = [];
   const membershipCounts = { initialAdmissions: 0, replacementAdmissions: 0, reconnects: 0, leaves: 0,
     invalidatedTicketRejections: 0, closedSocketAckWriteRejections: 0 };
@@ -166,6 +196,8 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   let heldEventObserved = null;
   let maxScheduleLatenessMs = 0;
   let lastDiagnosticStatus = null;
+  let authorityMonotonicOrigin = null;
+  const actualExcludedPerformanceMinutes = new Set();
   let measuredGates = {};
   const startedAt = Date.now();
   const monotonicStarted = performance.now();
@@ -223,6 +255,13 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       const seatClients = allClients.filter((client) => client.pilotSlot.startsWith(`seat-${seat}`));
       return { seat, receivedBytes: seatClients.reduce((sum, client) => sum + client.rawBytes, 0),
         sentBytes: seatClients.reduce((sum, client) => sum + client.sentBytes, 0),
+        receivedBytesByType: Object.fromEntries(["publicState", "ownerState", "event", "ack", "welcome", "rebase", "heartbeat"]
+          .map((type) => [type, seatClients.reduce((sum, client) => sum + (client.receivedBytesByType[type] || 0), 0)])),
+        sentBytesByType: Object.fromEntries(["input", "action", "ack", "pong", "hello"]
+          .map((type) => [type, seatClients.reduce((sum, client) => sum + (client.sentBytesByType[type] || 0), 0)])),
+        sentFramesByType: Object.fromEntries(["input", "action", "ack", "pong", "hello"]
+          .map((type) => [type, seatClients.reduce((sum, client) => sum + (client.sentFramesByType[type] || 0), 0)])),
+        authorityCounts: safe.adapter.pressureConnections?.[String(ordinals[seat].at(-1))]?.counts || {},
         inputAcks: seatClients.reduce((sum, client) => sum + client.frames.filter((frame) => frame.type === "ack"
           && frame.ackKind === "input").length, 0),
         actionAcks: seatClients.reduce((sum, client) => sum + client.frames.filter((frame) => frame.type === "ack"
@@ -233,14 +272,28 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     files["authority-health"](safe);
     if (safe.soakDiagnostics) {
       lastDiagnosticStatus = safe.soakDiagnostics;
+      const observedOrigin = safe.soakDiagnostics.monotonicMs - actualElapsedMs;
+      if (authorityMonotonicOrigin === null) authorityMonotonicOrigin = observedOrigin;
+      else if (Math.abs(observedOrigin - authorityMonotonicOrigin) > 250) {
+        throw new Error("authority/runner monotonic calibration drifted by more than 250ms");
+      }
       for (const window of safe.soakDiagnostics.completedWindows || []) {
         runtimeWindows.set(window.endedMonotonicMs, window);
       }
       files["runtime-windows"]({ elapsedMs, accounting: safe.soakDiagnostics.accounting,
         currentWindow: safe.soakDiagnostics.currentWindow, completedWindows: safe.soakDiagnostics.completedWindows });
     }
-    if (authorityPid !== null && safe.pid !== authorityPid) throw new Error("authority PID changed during smoke");
+    if (authorityPid !== null && safe.pid !== authorityPid) throw new Error("authority PID changed during soak");
     return { raw: response.body, safe };
+  };
+  const reliableDrainComplete = ({ raw, safe }) => {
+    const current = safe.adapter.pressureCurrent || {};
+    const replay = raw.multiplayer?.adapter?.eventReplay || {};
+    return safe.adapter.queuedMessages === 0 && safe.adapter.queuedBytes === 0
+      && safe.adapter.pendingScheduledSends === 0
+      && Object.values(current).every((metric) => metric.total === 0)
+      && replay.pendingEventFrames === 0 && replay.pendingEventBytes === 0
+      && replay.replayedEvents === replay.eventAcks;
   };
   const issueTicket = async (seat, kind) => {
     const response = await request(port, "/multiplayer/ticket", { method: "POST", authority: authorities[seat], accounting,
@@ -491,6 +544,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     ];
     const [actionKind, payload] = actionKinds[event.actionKindIndex];
     const actionId = event.semanticId;
+    const eventStarts = clients.map((entry) => entry.frames.length);
     const command = { type: "action", actionId, actionSeq: ++actionSeq[event.seat],
       commandSeq: ++commandSeq[event.seat], actionKind, payload, clientTimeMs: Date.now() };
     sendRawClientFrame(client, command);
@@ -505,11 +559,27 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     if (retry.status !== ack.status || JSON.stringify(retry.result) !== JSON.stringify(ack.result)) {
       throw new Error(`action ${actionId} retry changed its semantic receipt`);
     }
+    let consequence = null;
+    if (actionKind === "pulse" && ack.status === "accepted") {
+      consequence = await waitFor(() => clients[event.seat].frames.slice(eventStarts[event.seat]).find((frame) => frame.type === "event"
+        && frame.eventType === "player.pulse" && frame.payload?.clientId === `soak-seat-${event.seat}`),
+      `pulse consequence ${actionId}`, 5000);
+      await waitFor(() => clients.every((entry, seat) => entry.frames.slice(eventStarts[seat]).some((frame) => frame.type === "event"
+        && frame.eventSeq === consequence.eventSeq && frame.eventType === "player.pulse")),
+      `pulse consequence fanout ${actionId}`, 5000);
+      for (let seat = 0; seat < clients.length; seat += 1) {
+        const count = clients[seat].frames.slice(eventStarts[seat]).filter((frame) => frame.type === "event"
+          && frame.eventSeq === consequence.eventSeq && frame.eventType === "player.pulse").length;
+        if (count !== 1) throw new Error(`pulse consequence cardinality ${actionId} seat ${seat} was ${count}`);
+      }
+    }
     const outcome = { round: event.round, seat: event.seat, actionKind, status: ack.status,
       semanticHash: digest(salt, actionId), deliveryHash: digest(salt, `${event.seat}:${ack.deliveryId}`),
       retryDeliveryHash: digest(salt, `${event.seat}:${retry.deliveryId}`),
       receiptHash: digest(salt, JSON.stringify({ status: ack.status, result: ack.result })),
       retryReceiptHash: digest(salt, JSON.stringify({ status: retry.status, result: retry.result })),
+      consequenceCount: consequence ? 1 : 0,
+      consequenceHash: consequence ? digest(salt, `${actionId}:${consequence.eventSeq}`) : null,
       deliveryAckSent: true, retryDeliveryAckSent: true,
       elapsedMs: Math.round(performance.now() - monotonicStarted) };
     if (actionOutcomes.has(actionId)) throw new Error(`duplicate action outcome ${actionId}`);
@@ -576,7 +646,8 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   let cleanup;
   try {
     const pressurePreload = path.resolve(__dirname, "soak-pressure-preload.cjs");
-    await startSimServer(port, { keepAlive: true, registerProcessCleanup: false, env: { LBH_SIM_WS_ENABLED: "true",
+    await startSimServer(port, { keepAlive: true, registerProcessCleanup: false,
+      nodeArgs: ["--expose-gc"], env: { LBH_SIM_WS_ENABLED: "true",
       LBH_SOAK_DIAGNOSTICS: "1",
       LBH_SIM_MAX_SIM_TIME: "7200",
       ...(timeScale === 1 ? {} : { LBH_SIM_WS_TEST_TICKET_TTL_MS: "300" }),
@@ -622,7 +693,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       else if (event.kind === "forced-gc-checkpoint") {
         await waitFor(async () => {
           const health = await getHealth(event.atMs);
-          return health.safe.adapter.queuedMessages === 0 ? true : false;
+          return reliableDrainComplete(health) ? true : false;
         }, "forced-GC reliable drain", 5000);
         const beforeGc = readJsonl(gcFile).length;
         process.kill(authorityPid, "SIGUSR2");
@@ -634,12 +705,19 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
           postGcHeapUsed: postGc.safe.heapUsed,
           excludedPerformanceMinutes: schedule.excludedPerformanceMinutes });
         if (gc.pid !== authorityPid) throw new Error("forced GC ran outside the match authority");
+        const actualGcElapsedMs = gc.monotonicMs - authorityMonotonicOrigin;
+        const actualGcMinute = Math.floor(actualGcElapsedMs / 60000);
+        actualExcludedPerformanceMinutes.add(actualGcMinute);
+        actualExcludedPerformanceMinutes.add(actualGcMinute + 1);
+        forcedGcPoints.push({ minute: actualGcElapsedMs / 60000, plannedElapsedMs: event.atMs,
+          actualElapsedMs: actualGcElapsedMs,
+          heapUsed: postGc.safe.heapUsed, rss: postGc.safe.rss });
         lastBarrier = "forced-gc-checkpoint-complete";
       } else if (event.kind === "final-drain") lastBarrier = "final-drain";
     }
     await waitFor(async () => {
       const health = await getHealth(fixture.wallTimeMs);
-      return health.safe.adapter.queuedMessages === 0 ? true : false;
+      return reliableDrainComplete(health) ? true : false;
     }, "final reliable ACK retirement", 5000);
     const final = await getHealth(fixture.wallTimeMs);
     if (digest(salt, final.raw.session?.runId) !== authorityRunHash) throw new Error("authority run identity changed");
@@ -647,19 +725,24 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     for (let seat = 0; seat < 8; seat += 1) {
       const current = details[String(ordinals[seat].at(-1))];
       const welcome = clients[seat].latestFrames.welcome;
-      const expectedEpoch = seat === 4 ? initialEpochs[seat] + 1 : initialEpochs[seat];
+      const expectedEpoch = normal ? initialEpochs[seat]
+        : seat === 4 ? initialEpochs[seat] + 1 : initialEpochs[seat];
       if (!current || current.connectionEpoch !== expectedEpoch || welcome.connectionEpoch !== expectedEpoch) {
         throw new Error(`seat ${seat} final epoch/isolation mismatch`);
       }
-      if (seat !== 4 && ordinals[seat].length !== 1 && seat !== 5) throw new Error(`healthy seat ${seat} changed socket`);
-      if (current.counts?.highWaterCrossings || current.counts?.disconnects || current.counts?.rebases > (seat === 4 ? 1 : 0)) {
+      if ((normal || (seat !== 4 && seat !== 5)) && ordinals[seat].length !== 1) throw new Error(`healthy seat ${seat} changed socket`);
+      if (current.counts?.highWaterCrossings || current.counts?.disconnects
+        || current.counts?.rebases > (!normal && seat === 4 ? 1 : 0)) {
         throw new Error(`seat ${seat} violated pressure/isolation gate`);
       }
       const acks = clients[seat].frames.filter((frame) => frame.type === "ack" && frame.ackKind === "input");
       if (!acks.length) throw new Error(`seat ${seat} lacks input ACK progress`);
     }
-    if (actionOutcomes.size !== 16) throw new Error(`expected 16 reliable action outcomes, saw ${actionOutcomes.size}`);
-    if (eventAckLedger.withheld !== 1 || eventAckLedger.decisions - 1 !== eventAckLedger.deliveryAcks
+    const plannedActionCount = schedule.events.filter((event) => event.kind === "action").length;
+    const expectedOutcomeCount = plannedActionCount + (normal ? 0 : 2);
+    if (actionOutcomes.size !== expectedOutcomeCount) throw new Error(`expected ${expectedOutcomeCount} reliable action outcomes, saw ${actionOutcomes.size}`);
+    if (eventAckLedger.withheld !== (normal ? 0 : 1)
+      || eventAckLedger.decisions - (normal ? 0 : 1) !== eventAckLedger.deliveryAcks
       || eventAckLedger.deliveryAcks !== eventAckLedger.eventAcks) {
       throw new Error(`event dual-ACK ledger mismatch: ${JSON.stringify(eventAckLedger)}`);
     }
@@ -669,6 +752,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       sum + client.frames.filter((frame) => frame.type === "event").length, 0)) {
       throw new Error("per-event per-physical-client delivery/event ACK ledger was not exact");
     }
+    if (normal && fencedClients.length) throw new Error("normal soak fenced a client");
     if (fencedClients.some(({ client, framesAtFence }) => client.frames.length !== framesAtFence)) {
       throw new Error("fenced old epoch received application-visible frames after replacement");
     }
@@ -680,7 +764,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const actionAcks = allClients.flatMap((client) => client.frames.filter((frame) => frame.type === "ack" && frame.ackKind === "action"));
     const actionAckCounts = new Map();
     for (const ack of actionAcks) actionAckCounts.set(ack.actionId, (actionAckCounts.get(ack.actionId) || 0) + 1);
-    if (actionAcks.some((ack) => !plannedStreamIds.has(ack.actionId)) || plannedStreamIds.size !== 14
+    if (actionAcks.some((ack) => !plannedStreamIds.has(ack.actionId)) || plannedStreamIds.size !== plannedActionCount
       || [...plannedStreamIds].some((id) => actionAckCounts.get(id) !== 2)) {
       throw new Error("action ACK ledger contained unknown, missing, or duplicate receipts");
     }
@@ -691,6 +775,24 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       }
       const keys = events.map((event) => event.eventSeq);
       if (new Set(keys).size !== keys.length) throw new Error(`duplicate event consequence for ${client.pilotSlot}`);
+    }
+    if (normal) {
+      const acceptedPulseByActor = Array.from({ length: 8 }, (_, seat) => [...actionOutcomes.values()].filter((entry) =>
+        entry.seat === seat && entry.actionKind === "pulse" && entry.status === "accepted").length);
+      const canonicalPulseSets = Array.from({ length: 8 }, () => null);
+      for (const client of clients) {
+        for (let actor = 0; actor < 8; actor += 1) {
+          const pulses = client.frames.filter((frame) => frame.type === "event" && frame.eventType === "player.pulse"
+            && frame.payload?.clientId === `soak-seat-${actor}`);
+          const seqs = pulses.map((frame) => frame.eventSeq);
+          if (seqs.length !== acceptedPulseByActor[actor] || new Set(seqs).size !== seqs.length) {
+            throw new Error(`pulse action consequence total mismatch for actor ${actor} on ${client.pilotSlot}`);
+          }
+          const normalized = JSON.stringify([...seqs].sort((a, b) => a - b));
+          canonicalPulseSets[actor] ||= normalized;
+          if (canonicalPulseSets[actor] !== normalized) throw new Error(`pulse entitlement diverged for actor ${actor}`);
+        }
+      }
     }
     for (const evidence of cycleConsequenceEvidence) {
       for (const client of allClients) {
@@ -709,19 +811,33 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       + (lastDiagnosticStatus?.currentWindow?.sampleCount || 0);
     const coverageDenominator = timeScale === 1 ? fixture.wallTimeMs / 1000 : fixture.wallTimeMs * timeScale / 1000;
     const sampleCoverage = diagnosticSamples / coverageDenominator;
+    const warmupMinute = fixture.warmupMs / 60000;
+    const finalMinute = fixture.wallTimeMs / 60000;
+    const candidateMinutes = Array.from({ length: finalMinute - warmupMinute }, (_, index) => warmupMinute + index);
+    const excludedMinutes = normal && timeScale === 1 ? [...actualExcludedPerformanceMinutes].sort((a, b) => a - b)
+      : schedule.excludedPerformanceMinutes;
+    if (normal && timeScale === 1 && JSON.stringify(excludedMinutes) !== JSON.stringify(schedule.excludedPerformanceMinutes)) {
+      throw new Error(`actual forced-GC exclusion minutes drifted from schedule: ${JSON.stringify({ excludedMinutes,
+        scheduled: schedule.excludedPerformanceMinutes })}`);
+    }
+    const includedMinutes = candidateMinutes.filter((minute) => !excludedMinutes.includes(minute));
     const performanceWindows = windows.map((window) => ({ window,
-      minute: Math.max(0, Math.floor(window.endedMonotonicMs / 60000) - 1) })).filter(({ minute }) => {
-      return !schedule.excludedPerformanceMinutes.includes(minute) && minute >= 1;
+      minute: Math.max(0, Math.floor((window.endedMonotonicMs - authorityMonotonicOrigin) / 60000) - 1) })).filter(({ minute }) => {
+      return includedMinutes.includes(minute);
     });
     const currentDiagnosticWindow = lastDiagnosticStatus?.currentWindow;
     if (currentDiagnosticWindow?.durationMs >= 57000 && currentDiagnosticWindow.sampleCount >= 57) {
-      performanceWindows.push({ minute: 5, window: currentDiagnosticWindow });
+      const currentMinute = Math.floor((currentDiagnosticWindow.startedMonotonicMs - authorityMonotonicOrigin) / 60000);
+      performanceWindows.push({ minute: currentMinute, window: currentDiagnosticWindow });
     }
+    const uniqueWindowMinutes = new Set(performanceWindows.map((entry) => entry.minute));
+    if (uniqueWindowMinutes.size !== performanceWindows.length) throw new Error("duplicate authority diagnostic minute classification");
     const eventLoopMinutes = [...performanceWindows.map((entry) => entry.minute)].sort((a, b) => a - b);
-    const eventLoopPass = JSON.stringify(eventLoopMinutes) === JSON.stringify([1, 2, 5])
+    const expectedPerformanceMinutes = normal ? includedMinutes : [1, 2, 5];
+    const eventLoopPass = JSON.stringify(eventLoopMinutes) === JSON.stringify(expectedPerformanceMinutes)
       && performanceWindows.every(({ window }) => window.eventLoopDelay.p99Ms <= 50
         && window.eventLoopDelay.maxMs <= 250);
-    const minuteRates = [1, 2, 5].map((minute) => {
+    const minuteRates = expectedPerformanceMinutes.map((minute) => {
       const samples = healthSamples.filter((sample) => (timeScale === 1 ? sample.actualElapsedMs : sample.plannedElapsedMs) >= minute * 60000
         && (timeScale === 1 ? sample.actualElapsedMs : sample.plannedElapsedMs) <= (minute + 1) * 60000);
       const first = samples[0];
@@ -736,7 +852,7 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       && entry.projectionHz >= 9 && entry.tickHz >= 13.5);
     const includedCostSamples = healthSamples.filter((sample) => {
       const minute = Math.floor(sample.actualElapsedMs / 60000);
-      return minute >= 1 && !schedule.excludedPerformanceMinutes.includes(minute);
+      return expectedPerformanceMinutes.includes(minute);
     }).map((sample) => ({ actualElapsedMs: sample.actualElapsedMs,
       costs: sample.safe.projection?.accounting?.costDistributions || {} }));
     const durationPass = includedCostSamples.length >= 20 && includedCostSamples.every(({ costs }) =>
@@ -750,12 +866,21 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const postWarmHealth = healthSamples.filter((sample) => sample.actualElapsedMs >= fixture.warmupMs);
     const normalRatio = postWarmHealth.filter((sample) => sample.safe.overloadState === "NORMAL").length
       / Math.max(1, postWarmHealth.length);
+    const modeMinutes = candidateMinutes.map((minute) => {
+      const samples = healthSamples.filter((sample) => sample.actualElapsedMs >= minute * 60000
+        && sample.actualElapsedMs < (minute + 1) * 60000);
+      return { minute, sampleCount: samples.length,
+        normal: samples.length >= 10 && samples.every((sample) => sample.safe.overloadState === "NORMAL") };
+    });
+    const normalMinuteRatio = modeMinutes.filter((entry) => entry.normal).length / Math.max(1, modeMinutes.length);
+    const stableNormalTopology = !normal || postWarmHealth.every(({ safe }) => safe.clients === 8
+      && safe.adapter.connections === 8 && safe.adapter.bound === 8 && safe.adapter.closing === 0);
     const bytesBySeat = Array.from({ length: 8 }, (_, seat) => allClients.filter((client) => client.pilotSlot.startsWith(`seat-${seat}`))
       .reduce((sum, client) => sum + client.rawBytes + client.sentBytes, 0));
     const sortedBytes = [...bytesBySeat].sort((a, b) => a - b);
     const medianBytes = (sortedBytes[3] + sortedBytes[4]) / 2;
     const trafficBps = bytesBySeat.reduce((sum, bytes) => sum + bytes, 0) / (fixture.wallTimeMs / 1000);
-    const minuteTraffic = [1, 2, 5].map((minute) => {
+    const minuteTraffic = expectedPerformanceMinutes.map((minute) => {
       const samples = healthSamples.filter((sample) => sample.actualElapsedMs >= minute * 60000
         && sample.actualElapsedMs <= (minute + 1) * 60000);
       const first = samples[0]?.safe.trafficBySeat;
@@ -763,14 +888,32 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       const seconds = samples.length > 1 ? (samples.at(-1).actualElapsedMs - samples[0].actualElapsedMs) / 1000 : 0;
       const seatBytes = first && last ? last.map((entry, seat) =>
         entry.receivedBytes + entry.sentBytes - first[seat].receivedBytes - first[seat].sentBytes) : [];
+      const channelBySeat = first && last ? last.map((entry, seat) => ({ seat,
+        inputBytesSent: entry.sentBytesByType.input - first[seat].sentBytesByType.input,
+        actionBytesSent: entry.sentBytesByType.action - first[seat].sentBytesByType.action,
+        ackBytesSent: entry.sentBytesByType.ack - first[seat].sentBytesByType.ack,
+        stateBytesReceived: entry.receivedBytesByType.publicState + entry.receivedBytesByType.ownerState
+          - first[seat].receivedBytesByType.publicState - first[seat].receivedBytesByType.ownerState,
+        reliableBytesReceived: entry.receivedBytesByType.event + entry.receivedBytesByType.ack
+          - first[seat].receivedBytesByType.event - first[seat].receivedBytesByType.ack,
+        inputAcks: entry.inputAcks - first[seat].inputAcks,
+        actionAcks: entry.actionAcks - first[seat].actionAcks,
+        authorityReliableRetired: (entry.authorityCounts.reliableAckRetired || 0)
+          - (first[seat].authorityCounts.reliableAckRetired || 0),
+        authorityStateFramesAccepted: Object.values(entry.authorityCounts.stateFramesWsSendAccepted || {})
+          .reduce((sum, value) => sum + value, 0)
+          - Object.values(first[seat].authorityCounts.stateFramesWsSendAccepted || {}).reduce((sum, value) => sum + value, 0),
+      })) : [];
       const sorted = [...seatBytes].sort((a, b) => a - b);
       const median = sorted.length === 8 ? (sorted[3] + sorted[4]) / 2 : 0;
-      return { minute, seconds, seatBytes, median, skewRequired: minute !== 5, aggregateBytesPerSec: seconds > 0
+      return { minute, seconds, seatBytes, channelBySeat, median, skewRequired: normal || minute !== 5, aggregateBytesPerSec: seconds > 0
         ? seatBytes.reduce((sum, bytes) => sum + bytes, 0) / seconds : Infinity,
       ackProgress: first && last ? last.every((entry, seat) => entry.inputAcks > first[seat].inputAcks) : false };
     });
-    const trafficPass = trafficBps <= 2.5 * 1024 * 1024 && bytesBySeat.every((bytes) => bytes <= medianBytes * 2)
-      && minuteTraffic.every((entry) => entry.aggregateBytesPerSec <= 2.5 * 1024 * 1024 && entry.ackProgress
+    const trafficPass = trafficBps <= 2.5e6 && bytesBySeat.every((bytes) => bytes <= medianBytes * 2)
+      && minuteTraffic.every((entry) => entry.aggregateBytesPerSec <= 2.5e6 && entry.ackProgress
+        && entry.channelBySeat.every((seat) => seat.inputBytesSent > 0 && seat.stateBytesReceived > 0
+          && seat.inputAcks > 0 && seat.authorityStateFramesAccepted > 0)
         && (!entry.skewRequired || entry.seatBytes.every((bytes) => bytes <= entry.median * 2)));
     const rawActions = final.raw.multiplayer?.actions || {};
     const rawReplay = final.raw.multiplayer?.adapter?.eventReplay || {};
@@ -790,12 +933,37 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       { name: "harnessConnectionLedger", current: ordinals.reduce((sum, entries) => sum + entries.length, 0),
         capacity: fixture.evidence.maxConnectionLedgerEntries },
     ];
-    const retentionPass = retentionPairs.every(({ current, capacity }) => current <= capacity);
-    const actionAccountingPass = rawActions.adjudicated === 13 && rawActions.replays === 13
-      && rawActions.accepted + rawActions.rejected === 13 && rawActions.conflicts === 0 && rawActions.stale === 0
+    const retentionObservations = healthSamples.flatMap((sample) => {
+      const actions = sample.safe.retention.actions || {};
+      const replay = sample.safe.retention.adapterEventReplay || {};
+      return [
+        { elapsedMs: sample.actualElapsedMs, name: "eventJournal", current: sample.safe.retention.eventJournal?.retainedCount,
+          capacity: sample.safe.retention.eventJournal?.capacity },
+        { elapsedMs: sample.actualElapsedMs, name: "snapshotRing", current: sample.safe.retention.snapshotRing?.retainedCount,
+          capacity: sample.safe.retention.snapshotRing?.capacity },
+        { elapsedMs: sample.actualElapsedMs, name: "actionReceipts", current: actions.retained,
+          capacity: (actions.memberships || 0) * (actions.capacityPerMembership || 0) },
+        { elapsedMs: sample.actualElapsedMs, name: "eventReplayFrames", current: replay.pendingEventFrames,
+          capacity: (sample.safe.adapter.connections || 0) * (replay.maxPendingPerBinding || 0) },
+        { elapsedMs: sample.actualElapsedMs, name: "eventReplayBytes", current: replay.pendingEventBytes,
+          capacity: (sample.safe.adapter.connections || 0) * (replay.maxPendingBytesPerBinding || 0) },
+        { elapsedMs: sample.actualElapsedMs, name: "tickets", current: sample.safe.tickets.retained,
+          capacity: sample.safe.tickets.capacity },
+      ];
+    });
+    const retentionMaxima = Object.values(Object.groupBy(retentionObservations, (entry) => entry.name)).map((entries) => ({
+      name: entries[0].name, maximum: Math.max(...entries.map((entry) => entry.current)),
+      capacity: Math.min(...entries.map((entry) => entry.capacity)), samples: entries.length,
+    }));
+    const retentionPass = retentionPairs.every(({ current, capacity }) => current <= capacity)
+      && retentionObservations.every(({ current, capacity }) => Number.isFinite(current)
+        && Number.isFinite(capacity) && current <= capacity);
+    const authoritativeActions = plannedActionCount - (normal ? 0 : 1);
+    const actionAccountingPass = rawActions.adjudicated === authoritativeActions && rawActions.replays === authoritativeActions
+      && rawActions.accepted + rawActions.rejected === authoritativeActions && rawActions.conflicts === 0 && rawActions.stale === 0
       && rawActions.gaps === 0;
     const replayAccountingPass = rawReplay.pendingEventFrames === 0 && rawReplay.pendingEventBytes === 0
-      && rawReplay.replayedEvents - rawReplay.eventAcks === 1 && rawReplay.forcedRebases === 0
+      && rawReplay.replayedEvents - rawReplay.eventAcks === (normal ? 0 : 1) && rawReplay.forcedRebases === 0
       && rawReplay.duplicatePendingEvents === 0;
     const pressure = final.raw.multiplayer?.adapter?.pressure || {};
     const pressureBounds = [
@@ -824,51 +992,97 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
     const pressureBoundsPass = pressureBounds.every(({ current, capacity }) => Number.isFinite(current)
       && Number.isFinite(capacity) && current <= capacity)
       && Object.values(pressure.current || {}).every((metric) => metric.total === 0);
-    const recoveryPass = recoveryLedger.length === 2 && recoveryLedger.every((entry) => entry.durationMs <= 15000);
+    const recoveryPass = normal ? recoveryLedger.length === 0
+      : recoveryLedger.length === 2 && recoveryLedger.every((entry) => entry.durationMs <= 15000);
     const actualWallMs = performance.now() - monotonicStarted;
     const wallPass = timeScale !== 1 || (actualWallMs >= fixture.wallTimeMs && actualWallMs <= fixture.wallTimeMs + 10000
       && maxScheduleLatenessMs <= 5000);
+    const gcPass = performanceWindows.every(({ window }) => window.gc.durationTotalMs / Math.max(1, window.durationMs) <= 0.02
+      && window.gc.p99Ms <= 50 && window.gc.maxMs <= 250);
+    const fullGcBins = [0, 1, 2].map((bin) => performanceWindows.filter(({ minute }) => minute >= warmupMinute + bin * 10
+      && minute < warmupMinute + (bin + 1) * 10).reduce((sum, { window }) => sum + (window.gc.kindCounts?.[4] || 0), 0));
+    const fullGcStable = !(fullGcBins[0] < fullGcBins[1] && fullGcBins[1] < fullGcBins[2]);
+    const heapPoints = forcedGcPoints.filter((point) => point.actualElapsedMs >= fixture.warmupMs);
+    const heapSlope = theilSen(heapPoints.map((point) => ({ minute: point.minute, value: point.heapUsed })));
+    const heapOls = linearRegression(heapPoints.map((point) => ({ minute: point.minute, value: point.heapUsed })));
+    const rssOls = linearRegression(postWarmHealth.map((sample) => ({ minute: sample.actualElapsedMs / 60000,
+      value: sample.safe.rss })));
+    const firstFiveGcMedian = median(heapPoints.slice(0, 5).map((point) => point.heapUsed));
+    const lastFiveGcMedian = median(heapPoints.slice(-5).map((point) => point.heapUsed));
+    const firstMeasuredHeapMedian = median(postWarmHealth.filter((sample) => sample.actualElapsedMs < fixture.warmupMs + 300000)
+      .map((sample) => sample.safe.heapUsed));
+    const rawHeapPeak = Math.max(...postWarmHealth.map((sample) => sample.safe.heapUsed));
+    const rssBaseline = median(postWarmHealth.filter((sample) => sample.actualElapsedMs < fixture.warmupMs + 300000)
+      .map((sample) => sample.safe.rss));
+    const rssPeak = Math.max(...postWarmHealth.map((sample) => sample.safe.rss));
+    const heapPass = !normal || (heapPoints.length >= 12 && Number.isFinite(heapSlope) && heapSlope <= 1024 * 1024
+      && lastFiveGcMedian <= firstFiveGcMedian + 32 * 1024 * 1024
+      && rawHeapPeak <= firstMeasuredHeapMedian + 96 * 1024 * 1024);
+    const rssPass = !normal || rssPeak <= rssBaseline + 160 * 1024 * 1024;
+    const resourceMinutePass = performanceWindows.every(({ window }) => [window.cpu.userMicros.count,
+      window.cpu.systemMicros.count, window.eventLoopUtilization.utilization.count].every((value) => value >= 57));
     measuredGates = {
       sampleCoverage: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC"
         : sampleCoverage >= 0.95 ? "PASS" : "FAIL", numerator: diagnosticSamples,
         denominator: coverageDenominator, threshold: ">=95% one-Hz", source: "runtime-windows.jsonl" },
       cadence: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC"
-        : cadencePass ? "PASS" : "FAIL", numerator: minuteRates, denominator: 3,
+        : cadencePass ? "PASS" : "FAIL", numerator: minuteRates, denominator: expectedPerformanceMinutes.length,
         threshold: ">=90% configured tick/projection target in non-excluded minutes", source: "authority-health.jsonl" },
       runtimeDurations: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC"
         : durationPass ? "PASS" : "FAIL", numerator: includedCostSamples, denominator: includedCostSamples.length,
         threshold: "every included 5s rolling source stays within tick 10/20/100ms and projection 20/40/150ms p95/p99/max",
         source: "authority-health.jsonl" },
       diagnosticsIntegrity: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC"
-        : diagnosticsPass && normalRatio >= 0.99 ? "PASS" : "FAIL",
+        : diagnosticsPass && normalMinuteRatio >= 0.99 && stableNormalTopology ? "PASS" : "FAIL",
       numerator: { accounting: diagnosticAccounting, normalSamples: postWarmHealth.filter((sample) => sample.safe.overloadState === "NORMAL").length,
-        totalSamples: postWarmHealth.length, normalRatio }, denominator: postWarmHealth.length,
-      threshold: "zero diagnostic failures/misses/overflow and NORMAL >=99%", source: "runtime-windows.jsonl" },
+        totalSamples: postWarmHealth.length, pollNormalRatio: normalRatio, normalMinuteRatio, modeMinutes,
+        stableNormalTopology }, denominator: modeMinutes.length,
+      threshold: "zero diagnostic failures/misses/overflow, >=99% all-NORMAL one-minute samples, stable eight-client topology", source: "runtime-windows.jsonl" },
       eventLoop: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC"
-        : eventLoopPass && performanceWindows.length === 3 ? "PASS" : "FAIL",
+        : eventLoopPass && performanceWindows.length === expectedPerformanceMinutes.length ? "PASS" : "FAIL",
         numerator: performanceWindows.map(({ minute, window }) => ({ minute, ...window.eventLoopDelay,
           durationMs: window.durationMs, sampleCount: window.sampleCount })), denominator: performanceWindows.length,
         threshold: "each included minute p99<=50ms max<=250ms", source: "runtime-windows.jsonl" },
       traffic: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC"
         : trafficPass ? "PASS" : "FAIL", numerator: { aggregateBytesPerSec: trafficBps,
-        bytesBySeat, medianBytes, minuteTraffic },
-        denominator: 8, threshold: "both directions <=2.5MiB/s aggregate, per-minute ACK progress, <=2x cohort median outside recovery",
+        applicationBytesPerPlayerSecond: trafficBps / 8, bytesBySeat, medianBytes, minuteTraffic },
+        denominator: 8, threshold: "full-JSON regression debt: both directions <=2.5MB/s aggregate, per-minute ACK progress, <=2x cohort median outside recovery",
         source: "authority-health.jsonl" },
       retention: { status: retentionPass && pressureBoundsPass ? "PASS" : "FAIL",
-        numerator: { retained: retentionPairs, pressure: pressureBounds }, denominator: retentionPairs.length + pressureBounds.length,
+        numerator: { retained: retentionPairs, retainedMaxima: retentionMaxima, pressure: pressureBounds },
+        denominator: retentionObservations.length + pressureBounds.length,
         threshold: "all retained registries <= advertised capacity", source: "authority-health.jsonl" },
       authorityReliabilityAccounting: { status: actionAccountingPass && replayAccountingPass ? "PASS" : "FAIL",
-        numerator: { actions: rawActions, eventReplay: rawReplay }, denominator: { currentMembershipStreamActions: 13,
-          departedMembershipActionsProvenInHarnessLedger: 1, streamRetries: 14, intentionallyUnackedOldEpochEvents: 1 },
+        numerator: { actions: rawActions, eventReplay: rawReplay }, denominator: normal
+          ? { currentMembershipStreamActions: plannedActionCount, streamRetries: plannedActionCount, intentionallyUnackedOldEpochEvents: 0 }
+          : { currentMembershipStreamActions: 13, departedMembershipActionsProvenInHarnessLedger: 1,
+            streamRetries: 14, intentionallyUnackedOldEpochEvents: 1 },
         threshold: "exact current authority adjudication/retry counts plus one departed receipt and one reset old-epoch hold",
         source: "authority-health.jsonl" },
-      recovery: { status: recoveryPass ? "PASS" : "FAIL", numerator: recoveryLedger, denominator: 2,
-        threshold: "both barriers restore eight clients within 15s", source: "membership-ledger.jsonl" },
+      recovery: { status: recoveryPass ? "PASS" : "FAIL", numerator: recoveryLedger, denominator: normal ? 0 : 2,
+        threshold: normal ? "zero reconnect/replacement recovery events" : "both barriers restore eight clients within 15s", source: "membership-ledger.jsonl" },
+      heapSlope: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC" : heapPass ? "PASS" : "FAIL",
+        numerator: { points: heapPoints, theilSenBytesPerMinute: heapSlope, olsBytesPerMinute: heapOls.slope,
+          olsRSquared: heapOls.rSquared, postGcMinimum: Math.min(...heapPoints.map((point) => point.heapUsed)),
+          firstFiveGcMedian, lastFiveGcMedian, firstMeasuredHeapMedian, rawHeapPeak,
+          minuteMedians: performanceWindows.map(({ minute, window }) => ({ minute,
+            heapUsed: window.memory.heapUsed?.p50, rss: window.memory.rss?.p50 })) }, denominator: heapPoints.length,
+        threshold: ">=12 points; slope<=1MiB/min; endpoint<=+32MiB; peak<=+96MiB", source: "forced-gc.jsonl" },
+      rssPeak: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC" : rssPass ? "PASS" : "FAIL",
+        numerator: { baseline: rssBaseline, peak: rssPeak, olsBytesPerMinute: rssOls.slope,
+          olsRSquared: rssOls.rSquared }, denominator: postWarmHealth.length,
+        threshold: "peak<=first measured five-minute median+160MiB; slope diagnostic only", source: "authority-health.jsonl" },
+      gc: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC" : gcPass && fullGcStable ? "PASS" : "FAIL",
+        numerator: { fullGcBins, windows: performanceWindows.map(({ minute, window }) => ({ minute, gc: window.gc })) },
+        denominator: performanceWindows.length, threshold: "duty<=2%; p99<=50ms; max<=250ms; no three-bin full-GC increase", source: "runtime-windows.jsonl" },
+      cpuElu: { status: timeScale !== 1 ? "NOT_APPLICABLE_ACCELERATED_DIAGNOSTIC" : resourceMinutePass ? "PASS" : "FAIL",
+        numerator: performanceWindows.map(({ minute, window }) => ({ minute, cpu: window.cpu, elu: window.eventLoopUtilization })),
+        denominator: performanceWindows.length, threshold: ">=57 numeric CPU/ELU samples per included minute", source: "runtime-windows.jsonl" },
       wallTime: { status: wallPass ? "PASS" : "FAIL", numerator: { actualWallMs, maxScheduleLatenessMs }, denominator: fixture.wallTimeMs,
-        threshold: "declared six minutes, <=5s barrier lateness", source: "schedule.json" },
+        threshold: `declared ${fixture.wallTimeMs / 60000} minutes, <=5s barrier lateness`, source: "schedule.json" },
     };
     const failedMeasured = Object.entries(measuredGates).filter(([, gate]) => gate.status === "FAIL").map(([name]) => name);
-    if (failedMeasured.length) throw new Error(`smoke measured gates failed: ${failedMeasured.join(",")}`);
+    if (failedMeasured.length) throw new Error(`${fixture.profile} measured gates failed: ${failedMeasured.join(",")}`);
   } catch (error) {
     failure = error.stack || error.message;
   } finally {
@@ -876,13 +1090,16 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
   }
   const gates = {
     deterministicSchedule: { status: "PASS", numerator: schedule.scheduleHash, denominator: 1, threshold: "exact fixture hash", source: "schedule.json" },
-    topology: { status: membershipCounts.initialAdmissions === 8 && membershipCounts.replacementAdmissions === 1
-      && membershipCounts.reconnects === 1 && membershipCounts.leaves === 1
-      && membershipCounts.invalidatedTicketRejections === 1 && membershipCounts.closedSocketAckWriteRejections === 2
+    topology: { status: membershipCounts.initialAdmissions === 8
+      && membershipCounts.replacementAdmissions === (normal ? 0 : 1)
+      && membershipCounts.reconnects === (normal ? 0 : 1) && membershipCounts.leaves === (normal ? 0 : 1)
+      && membershipCounts.invalidatedTicketRejections === (normal ? 0 : 1)
+      && membershipCounts.closedSocketAckWriteRejections === (normal ? 0 : 2)
       && authorityRunHashes.size === 1 ? "PASS" : "FAIL",
       numerator: { ...membershipCounts, authoritiesPerMatch: authorityRunHashes.size,
         distinctInitialOrdinals: new Set(ordinals.map((entries) => entries[0])).size },
-      denominator: { seats: 8 }, threshold: "8 initial + 1 replacement, one logical authority", source: "membership-ledger.jsonl" },
+      denominator: { seats: 8 }, threshold: normal ? "8 initial, zero churn, one logical authority"
+        : "8 initial + 1 replacement, one logical authority", source: "membership-ledger.jsonl" },
     privacy: { status: !privacyOracle.overflow && privacyOracle.violations.length === 0
       && privacyOracle.latest.every((entry) => entry.publicSeen && entry.ownerSeen && entry.currentMarkerPresent) ? "PASS" : "FAIL",
     numerator: { inspectedFrames: privacyOracle.inspectedFrames, publicFrames: privacyOracle.publicFrames,
@@ -890,9 +1107,10 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       alignedSeats: privacyOracle.latest.filter((entry) => entry.publicSeen && entry.ownerSeen && entry.currentMarkerPresent).length },
     denominator: 8, threshold: "incremental all-frame marker isolation with eight latest aligned owner/public facts",
     source: "bounds-and-privacy.json" },
-    reliability: { status: actionOutcomes.size === 16
+    reliability: { status: actionOutcomes.size === schedule.events.filter((event) => event.kind === "action").length + (normal ? 0 : 2)
       && [...actionOutcomes.values()].filter((entry) => typeof entry.round === "number")
-        .every((entry) => entry.receiptHash === entry.retryReceiptHash && entry.deliveryAckSent && entry.retryDeliveryAckSent)
+        .every((entry) => entry.receiptHash === entry.retryReceiptHash && entry.deliveryAckSent && entry.retryDeliveryAckSent
+          && entry.consequenceCount <= 1 && (entry.status === "accepted" || entry.consequenceCount === 0))
       && [...actionOutcomes.values()].filter((entry) => typeof entry.round === "string")
         .every((entry) => entry.status === "accepted" && entry.consequenceHash) ? "PASS" : "FAIL",
     numerator: { total: actionOutcomes.size,
@@ -901,19 +1119,23 @@ async function runEightPlayerSoak({ fixture, schedule, runDir, port, commit, dir
       stableStreamRetries: [...actionOutcomes.values()].filter((entry) => typeof entry.round === "number"
         && entry.receiptHash === entry.retryReceiptHash).length,
       exactCycleConsequences: [...actionOutcomes.values()].filter((entry) => typeof entry.round === "string" && entry.consequenceHash).length },
-    denominator: { planned: 16, streamRetries: 14, cycleConsequences: 2 },
-    threshold: "every identity has one stable receipt; accepted cycle actions have exact entitled consequence and delivery retirement",
+    denominator: { planned: schedule.events.filter((event) => event.kind === "action").length + (normal ? 0 : 2),
+      streamRetries: schedule.events.filter((event) => event.kind === "action").length, cycleConsequences: normal ? 0 : 2 },
+    threshold: "every identity has one stable receipt; at most one correlated consequence; rejected identities have none; exact entitlement and retirement",
     source: "reliable-ledger.jsonl" },
-    eventAckLedger: { status: eventAckLedger.withheld === 1 && eventAckLedger.decisions - 1 === eventAckLedger.deliveryAcks
+    eventAckLedger: { status: eventAckLedger.withheld === (normal ? 0 : 1)
+      && eventAckLedger.decisions - (normal ? 0 : 1) === eventAckLedger.deliveryAcks
       && eventAckLedger.deliveryAcks === eventAckLedger.eventAcks
       && [...eventAckFacts.values()].every((fact) => fact.decisions === 1
         && fact.deliveryAcks === (fact.withheld ? 0 : 1) && fact.eventAcks === (fact.withheld ? 0 : 1)) ? "PASS" : "FAIL",
     numerator: { aggregate: eventAckLedger, identityFacts: eventAckFacts.size },
       denominator: eventAckLedger.decisions, threshold: "one named old-epoch hold, all other events immediate dual ACK", source: "client-ledger.jsonl" },
-    heapSlope: { status: "NOT_APPLICABLE_SHORT_RUN", numerator: 0, denominator: 0, threshold: "canonical only", source: "profile" },
-    rssSlope: { status: "NOT_APPLICABLE_SHORT_RUN", numerator: 0, denominator: 0, threshold: "diagnostic only", source: "profile" },
-    gcDuty: { status: "NOT_APPLICABLE_SHORT_RUN", numerator: 0, denominator: 0, threshold: "canonical only", source: "profile" },
-    longWindowRecovery: { status: "NOT_APPLICABLE_SHORT_RUN", numerator: 0, denominator: 0, threshold: "canonical only", source: "profile" },
+    ...(normal ? {} : {
+      heapSlope: { status: "NOT_APPLICABLE_SHORT_RUN", numerator: 0, denominator: 0, threshold: "canonical only", source: "profile" },
+      rssSlope: { status: "NOT_APPLICABLE_SHORT_RUN", numerator: 0, denominator: 0, threshold: "diagnostic only", source: "profile" },
+      gcDuty: { status: "NOT_APPLICABLE_SHORT_RUN", numerator: 0, denominator: 0, threshold: "canonical only", source: "profile" },
+      longWindowRecovery: { status: "NOT_APPLICABLE_SHORT_RUN", numerator: 0, denominator: 0, threshold: "canonical only", source: "profile" },
+    }),
     cleanup: { status: cleanup?.passed ? "PASS" : "FAIL", numerator: cleanup, denominator: 1,
       threshold: "owned process gone and port reusable", source: "cleanup.json" },
     ...measuredGates,

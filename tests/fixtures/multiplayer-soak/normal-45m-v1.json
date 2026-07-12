@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "scenarioVersion": "eight-player-soak-normal-45m-v1",
+  "profile": "normal-45m",
+  "rootSeed": "0x08A04E45",
+  "pilotCount": 8,
+  "wallTimeMs": 2700000,
+  "warmupMs": 300000,
+  "measuredBodyMs": 2100000,
+  "recoveryMs": 300000,
+  "inputCadenceMs": 1000,
+  "healthCadenceMs": 5000,
+  "actionCadenceMs": 15000,
+  "barriers": [
+    { "atMs": 450000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 600000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 750000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 900000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 1050000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 1200000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 1350000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 1500000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 1650000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 1800000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 1950000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 2100000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 2250000, "kind": "forced-gc-checkpoint" },
+    { "atMs": 2400000, "kind": "forced-gc-checkpoint" }
+  ],
+  "evidence": {
+    "maxJsonlBytes": 67108864,
+    "maxJsonlRecords": 100000,
+    "maxRawFramesPerClient": 60000,
+    "maxRawReceiveFramesPerClient": 70000,
+    "maxMembershipLedgerEntries": 64,
+    "maxConnectionLedgerEntries": 32,
+    "maxArtifactBytes": 134217728,
+    "maxStdoutStderrBytes": 2097152
+  },
+  "authorityResourceExpected": {
+    "TCPServerWrap": 1,
+    "Timeout": 2
+  }
+}

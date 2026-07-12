@@ -11,12 +11,14 @@ const { compileSoakSchedule } = require("./network/soak-schedule.cjs");
 const { runEightPlayerSoak, writeExclusive } = require("./network/eight-player-soak-cohort.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
-const fixturePath = path.join(__dirname, "fixtures/multiplayer-soak/pr-smoke-v1.json");
+const requestedProfile = process.env.LBH_SOAK_PROFILE || "pr-smoke";
+const fixtureName = requestedProfile === "normal-45m" ? "normal-45m-v1.json" : "pr-smoke-v1.json";
+const fixturePath = path.join(__dirname, "fixtures/multiplayer-soak", fixtureName);
 const fixtureRaw = fs.readFileSync(fixturePath, "utf8");
 const fixture = Object.freeze(JSON.parse(fixtureRaw));
 const schedule = compileSoakSchedule(fixture);
 const stamp = new Date().toISOString().replace(/[:.]/g, "");
-const runDir = path.join(__dirname, "screenshots", `multiplayer-soak-${stamp}-pr-smoke-${fixture.rootSeed.replace("0x", "")}-${schedule.scheduleHash.slice(0, 12)}`);
+const runDir = path.join(__dirname, "screenshots", `multiplayer-soak-${stamp}-${fixture.profile}-${fixture.rootSeed.replace("0x", "")}-${schedule.scheduleHash.slice(0, 12)}`);
 fs.mkdirSync(runDir, { recursive: false });
 
 async function freePort() {
@@ -50,18 +52,21 @@ async function main() {
   const dirty = execFileSync("git", ["status", "--porcelain"], { cwd: ROOT, encoding: "utf8" }).trim().length > 0;
   const allowDirty = process.env.LBH_SOAK_ALLOW_DIRTY === "1";
   const timeScale = Number(process.env.LBH_SOAK_TIME_SCALE || 1);
-  let failure = dirty && !allowDirty ? "PR-smoke evidence requires clean HEAD; LBH_SOAK_ALLOW_DIRTY=1 is diagnostic-only" : null;
+  let failure = dirty && !allowDirty ? `${fixture.profile} evidence requires clean HEAD; LBH_SOAK_ALLOW_DIRTY=1 is diagnostic-only` : null;
   if (!Number.isFinite(timeScale) || timeScale <= 0 || timeScale > 1) throw new Error("LBH_SOAK_TIME_SCALE must be in (0,1]");
   const port = await freePort();
   writeExclusive(path.join(runDir, "manifest.json"), {
-    schemaVersion: 1, profile: "pr-smoke", evidenceClass: "local-raw-websocket-eight-player-pr-smoke",
+    schemaVersion: 1, profile: fixture.profile, evidenceClass: fixture.profile === "normal-45m"
+      ? "local-raw-websocket-eight-player-normal-45m" : "local-raw-websocket-eight-player-pr-smoke",
     generatedAt: new Date().toISOString(), commit, dirty, diagnosticOnly: dirty || timeScale !== 1,
     fixtureHash: crypto.createHash("sha256").update(fixtureRaw).digest("hex"),
     scenarioVersion: fixture.scenarioVersion, rootSeed: fixture.rootSeed, scheduleHash: schedule.scheduleHash,
     topology: { matches: 1, logicalSingleWriterAuthoritiesPerMatch: 1, clients: 8 },
     runtime: { node: process.version, platform: process.platform, arch: process.arch, osRelease: os.release() },
     processOwnership: { authorityPort: port, loopbackOnly: true },
-    claimBoundary: "Six-minute local raw-WebSocket machinery smoke only; not long-duration, leak, WAN, packet, browser, WSS, TLS-edge, hosted, or 24/48/96 capacity evidence",
+    claimBoundary: fixture.profile === "normal-45m"
+      ? "45-minute local raw-WebSocket steady-match regression evidence; full-JSON traffic is regression debt, not product target; not WAN, packet, browser, WSS, TLS-edge, hosted, churn, or 24/48/96 capacity evidence"
+      : "Six-minute local raw-WebSocket machinery smoke only; not long-duration, leak, WAN, packet, browser, WSS, TLS-edge, hosted, or 24/48/96 capacity evidence",
   });
   writeExclusive(path.join(runDir, "schedule.json"), schedule);
   let result = null;
@@ -80,8 +85,11 @@ async function main() {
   if (result && Object.keys(result.httpAccounting).some((key) => !allowedHttp.test(key))) {
     terminalFailures.push("unknown, debug, or non-200 HTTP route observed");
   }
-  const expectedHttp = { "POST /session/start 200": 1, "POST /join 200": 9,
-    "POST /multiplayer/ticket 200": 11, "POST /inventory/action 200": 2, "POST /leave 200": 9 };
+  const expectedHttp = fixture.profile === "normal-45m"
+    ? { "POST /session/start 200": 1, "POST /join 200": 8,
+      "POST /multiplayer/ticket 200": 8, "POST /leave 200": 8 }
+    : { "POST /session/start 200": 1, "POST /join 200": 9,
+      "POST /multiplayer/ticket 200": 11, "POST /inventory/action 200": 2, "POST /leave 200": 9 };
   if (result && Object.entries(expectedHttp).some(([key, count]) => result.httpAccounting[key] !== count)) {
     terminalFailures.push(sanitizeTerminalCause(`HTTP cardinality mismatch: ${JSON.stringify(result.httpAccounting)}`));
   }
@@ -109,10 +117,14 @@ async function main() {
     const summary = { status, passed: !failure && result?.passed === true,
       failure, scheduleHash: schedule.scheduleHash, profile: fixture.profile,
       actionCount: result?.actionCount || 0, gates: result?.gates || {},
-      limitations: ["NOT long-duration or leak evidence", "NOT packet/browser/WAN/WSS/TLS-edge/hosted evidence",
-        "Heap slope, RSS slope, GC duty, and long-window recovery are NOT_APPLICABLE_SHORT_RUN",
-        "Forced-GC checkpoint minute and following minute are excluded from short-run performance gates",
-        "Closed old/departed socket ACK writes are rejected locally; authority issued-only wrong-epoch retirement remains owned by accepted T2b"],
+      limitations: fixture.profile === "normal-45m"
+        ? ["NOT packet/browser/WAN/WSS/TLS-edge/hosted/churn evidence",
+          "Full-JSON traffic is a measured regression ceiling and acknowledged product debt, not the 64KiB/s/player product target",
+          "Forced-GC checkpoint minute and following minute are excluded from performance gates"]
+        : ["NOT long-duration or leak evidence", "NOT packet/browser/WAN/WSS/TLS-edge/hosted evidence",
+          "Heap slope, RSS slope, GC duty, and long-window recovery are NOT_APPLICABLE_SHORT_RUN",
+          "Forced-GC checkpoint minute and following minute are excluded from short-run performance gates",
+          "Closed old/departed socket ACK writes are rejected locally; authority issued-only wrong-epoch retirement remains owned by accepted T2b"],
       localProviderSpendUsd: 0 };
     const error = { status: status === "PASS" ? "NONE" : status, firstCause: terminalFailures[0] || null,
       allCauses: [...new Set(terminalFailures)] };
@@ -136,6 +148,18 @@ async function main() {
     terminal = buildTerminal();
     bounds.passed = false;
     bounds.projectedFinalDirectoryBytes = projectedSize();
+    bounds.projectedFinalDirectoryBytes = projectedSize();
+  }
+  const terminalPrivacyText = JSON.stringify({ bounds, error: terminal.error, summary: terminal.summary });
+  if (forbidden.test(terminalPrivacyText) || secretMarker.test(terminalPrivacyText)) {
+    terminalFailures.push("privacy scan rejected prospective terminal artifacts");
+    terminal = buildTerminal();
+    bounds.passed = false;
+    bounds.projectedFinalDirectoryBytes = projectedSize();
+  }
+  const rebuiltTerminalPrivacyText = JSON.stringify({ bounds, error: terminal.error, summary: terminal.summary });
+  if (forbidden.test(rebuiltTerminalPrivacyText) || secretMarker.test(rebuiltTerminalPrivacyText)) {
+    throw new Error("terminal privacy sanitizer could not produce a safe forensic artifact");
   }
   writeExclusive(path.join(runDir, "bounds-and-privacy.json"), bounds);
   writeExclusive(path.join(runDir, "error-or-abort.json"), terminal.error);
@@ -145,7 +169,7 @@ async function main() {
   console.log(`Eight-player soak smoke artifact: ${runDir}`);
   console.log(`Schedule hash: ${schedule.scheduleHash}`);
   if (failure || !result?.passed) { console.error(failure || "smoke did not pass"); process.exitCode = 1; }
-  else console.log("Six-minute eight-player PR smoke passed");
+  else console.log(`${fixture.wallTimeMs / 60000}-minute eight-player ${fixture.profile} passed`);
 }
 
 main().catch((error) => { console.error(error.stack || error.message); process.exitCode = 1; });

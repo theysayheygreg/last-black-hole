@@ -146,6 +146,14 @@ const SUITES = [
     slow: true,
   },
   {
+    name: "MultiplayerSoakNormal45m",
+    file: "multiplayer-soak-normal.cjs",
+    lanes: ["multiplayer-soak-normal"],
+    browser: false,
+    slow: true,
+    timeout: 2800000,
+  },
+  {
     name: "SimClientStream",
     file: "sim-client-stream.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],

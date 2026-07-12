@@ -10,9 +10,11 @@ function stable(value) {
 }
 
 function compileSoakSchedule(fixture) {
-  if (fixture.profile !== "pr-smoke" || fixture.pilotCount !== 8 || fixture.wallTimeMs !== 360000
+  const durations = { "pr-smoke": 360000, "normal-45m": 2700000 };
+  if (!Object.hasOwn(durations, fixture.profile) || fixture.pilotCount !== 8
+    || fixture.wallTimeMs !== durations[fixture.profile]
     || fixture.warmupMs + fixture.measuredBodyMs + fixture.recoveryMs !== fixture.wallTimeMs) {
-    throw new Error("PR-smoke fixture duration/topology contract mismatch");
+    throw new Error(`${fixture.profile} fixture duration/topology contract mismatch`);
   }
   const rng = createSplitMix64(BigInt(fixture.rootSeed));
   const schedule = [];
@@ -36,11 +38,11 @@ function compileSoakSchedule(fixture) {
     atMs += fixture.actionCadenceMs, round += 1) {
     if (cycleActionTimes.has(atMs)) continue;
     const seat = round % 8;
-    const anticipatedIncarnation = seat === 5 && atMs >= 240000 ? 2 : 1;
+    const anticipatedIncarnation = fixture.profile === "pr-smoke" && seat === 5 && atMs >= 240000 ? 2 : 1;
     schedule.push({ atMs, order: 60, kind: "action", round, seat: round % 8,
       actionKindIndex: Math.floor(round / 8) % 5,
       anticipatedIncarnation,
-      semanticId: `smoke-${fixture.rootSeed}-round-${round}-seat-${seat}-inc-${anticipatedIncarnation}-kind-${Math.floor(round / 8) % 5}` });
+      semanticId: `${fixture.profile}-${fixture.rootSeed}-round-${round}-seat-${seat}-inc-${anticipatedIncarnation}-kind-${Math.floor(round / 8) % 5}` });
   }
   for (const barrier of fixture.barriers) {
     const order = barrier.kind === "forced-gc-checkpoint" ? 30 : 10;

@@ -42,6 +42,7 @@
     "test:multiplayer-network": "node tests/run-all.cjs --lane=multiplayer-network --renderer=three",
     "test:soak-runtime-diagnostics": "node tests/soak-runtime-diagnostics.cjs",
     "test:multiplayer-soak:smoke": "node tests/multiplayer-soak-smoke.cjs --no-retries",
+    "test:multiplayer-soak:normal": "node tests/multiplayer-soak-normal.cjs --no-retries",
     "test:toxiproxy-control": "node tests/toxiproxy-control.cjs",
     "test:tool:toxiproxy:verify": "node tests/network/provision-toxiproxy.cjs",
     "test:tool:toxiproxy:provision": "node tests/network/provision-toxiproxy.cjs --provision",

@@ -27,6 +27,7 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
     frames: [], latestFrames: {}, stateFrameCounts: { publicState: 0, ownerState: 0 },
     rawBytes: 0, receiveCount: 0, close: null, error: null,
     lastHeartbeat: null, lastSnapshotAck: 0, paused: false, sentBytes: 0, sentFrames: 0,
+    receivedBytesByType: {}, sentBytesByType: {}, receivedFramesByType: {}, sentFramesByType: {},
   };
   const send = (frame) => sendRawClientFrame(client, frame);
   client.ws.on("error", (error) => { client.error = error.message; });
@@ -56,6 +57,8 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
       return;
     }
     client.rawBytes += Buffer.byteLength(text);
+    client.receivedBytesByType[frame.type] = (client.receivedBytesByType[frame.type] || 0) + Buffer.byteLength(text);
+    client.receivedFramesByType[frame.type] = (client.receivedFramesByType[frame.type] || 0) + 1;
     if (retain) client.frames.push(storedFrame);
     record({ type: "frame", pilotSlot, frameType: frame.type, at: Date.now(), bytes: Buffer.byteLength(text),
       snapshotId: frame.snapshotId ?? null, eventSeq: frame.eventSeq ?? null, deliveryId: frame.deliveryId ?? null });
@@ -103,8 +106,11 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
 
 function sendRawClientFrame(client, frame) {
   const wire = typeof frame === "string" ? frame : JSON.stringify(frame);
+  const frameType = typeof frame === "string" ? "raw" : frame.type;
   client.sentBytes += Buffer.byteLength(wire);
   client.sentFrames += 1;
+  client.sentBytesByType[frameType] = (client.sentBytesByType[frameType] || 0) + Buffer.byteLength(wire);
+  client.sentFramesByType[frameType] = (client.sentFramesByType[frameType] || 0) + 1;
   client.ws.send(wire);
 }
 
