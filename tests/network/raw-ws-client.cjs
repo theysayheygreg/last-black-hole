@@ -18,49 +18,32 @@ function waitFor(check, label, timeoutMs = 10000) {
   });
 }
 
-async function openRawClient({ port, ticket, pilotSlot, record }) {
+async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 10000 }) {
   const client = {
     pilotSlot,
     ws: new WebSocket(`ws://127.0.0.1:${port}/stream`, { perMessageDeflate: false }),
     frames: [], rawBytes: 0, receiveCount: 0, close: null, error: null,
     lastHeartbeat: null, lastSnapshotAck: 0, paused: false,
-    pauseRequested: false, pauseCapture: null,
   };
   client.ws.on("error", (error) => { client.error = error.message; });
   client.ws.on("close", (code, reason) => { client.close = { code, reason: reason.toString("utf8"), at: Date.now() }; });
   client.ws.on("message", (raw) => {
     const text = raw.toString("utf8");
     const frame = JSON.parse(text);
+    if (client.frames.length >= maxFrames) {
+      client.error = `raw frame cap exceeded (${maxFrames})`;
+      client.ws.terminate();
+      return;
+    }
     client.rawBytes += Buffer.byteLength(text);
     client.receiveCount += 1;
     client.frames.push({ ...frame, _receivedAt: Date.now(), _bytes: Buffer.byteLength(text) });
     record({ type: "frame", pilotSlot, frameType: frame.type, at: Date.now(), bytes: Buffer.byteLength(text),
       snapshotId: frame.snapshotId ?? null, eventSeq: frame.eventSeq ?? null, deliveryId: frame.deliveryId ?? null });
     if (frame.type === "heartbeat" && client.ws.readyState === WebSocket.OPEN) {
-      if (client.pauseRequested && !client.paused) {
-        const socket = client.ws._socket;
-        socket.pause();
-        client.paused = true;
-        const settle = async () => {
-          let previous = socket.bytesRead;
-          let stableSince = Date.now();
-          const deadline = Date.now() + 2000;
-          while (Date.now() < deadline && Date.now() - stableSince < 300) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-            if (socket.bytesRead !== previous) { previous = socket.bytesRead; stableSince = Date.now(); }
-          }
-          client.ws.send(JSON.stringify({ type: "pong", heartbeatId: frame.heartbeatId, clientTimeMs: Date.now() }));
-          client.lastHeartbeat = { heartbeatId: frame.heartbeatId, pongAt: Date.now() };
-          client.pauseCapture = { bytesRead: socket.bytesRead, receiveCount: client.receiveCount, at: Date.now() };
-          record({ type: "pong", pilotSlot, at: client.lastHeartbeat.pongAt });
-          record({ type: "pause", pilotSlot, ...client.pauseCapture });
-        };
-        settle().catch((error) => { client.error = error.message; });
-      } else {
-        client.ws.send(JSON.stringify({ type: "pong", heartbeatId: frame.heartbeatId, clientTimeMs: Date.now() }));
-        client.lastHeartbeat = { heartbeatId: frame.heartbeatId, pongAt: Date.now() };
-        record({ type: "pong", pilotSlot, at: client.lastHeartbeat.pongAt });
-      }
+      client.ws.send(JSON.stringify({ type: "pong", heartbeatId: frame.heartbeatId, clientTimeMs: Date.now() }));
+      client.lastHeartbeat = { heartbeatId: frame.heartbeatId, pongAt: Date.now() };
+      record({ type: "pong", pilotSlot, at: client.lastHeartbeat.pongAt });
     }
     if (frame.type === "ownerState" && client.lastSnapshotAck === 0) {
       const rebase = [...client.frames].reverse().find((entry) => entry.type === "rebase");
@@ -84,19 +67,34 @@ async function openRawClient({ port, ticket, pilotSlot, record }) {
   return client;
 }
 
-async function pauseAfterPong(client, guardMs, record) {
+async function pauseAfterAuthorityPong(client, authorityPong, guardMs, record) {
   const socket = client.ws._socket;
   if (!socket || typeof socket.pause !== "function") throw new Error("Node ws private socket pause seam unavailable");
-  client.pauseRequested = true;
-  await waitFor(() => client.pauseCapture, `${client.pilotSlot} heartbeat pong and synchronous pause`, 15000);
-  const before = client.pauseCapture;
+  const pauseAt = Date.now();
+  if (pauseAt - authorityPong.timestamp > 250) throw new Error("read pause missed authority-pong +250ms bound");
+  socket.pause();
+  client.paused = true;
+  record({ type: "pause-dispatched", pilotSlot: client.pilotSlot, authorityPongAt: authorityPong.timestamp,
+    nextHeartbeatTimeoutEligibleAt: authorityPong.nextHeartbeatTimeoutEligibleAt, at: pauseAt,
+    bytesRead: socket.bytesRead, receiveCount: client.receiveCount, isPaused: socket.isPaused(),
+    readableFlowing: socket.readableFlowing });
+  let previousBytes = socket.bytesRead;
+  let stableSince = Date.now();
+  const settleDeadline = Date.now() + 5000;
+  while (Date.now() < settleDeadline && Date.now() - stableSince < 300) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    if (socket.bytesRead !== previousBytes) { previousBytes = socket.bytesRead; stableSince = Date.now(); }
+  }
+  if (Date.now() >= settleDeadline) throw new Error("paused socket did not settle into a stable read gate");
+  const before = { bytesRead: socket.bytesRead, receiveCount: client.receiveCount, at: Date.now() };
+  record({ type: "pause-guard-start", pilotSlot: client.pilotSlot, ...before });
   await new Promise((resolve) => setTimeout(resolve, guardMs));
   const after = { bytesRead: socket.bytesRead, receiveCount: client.receiveCount, at: Date.now(),
     isPaused: socket.isPaused(), readableFlowing: socket.readableFlowing };
   record({ type: "pause-guard", pilotSlot: client.pilotSlot, ...after });
   if (!after.isPaused || after.readableFlowing !== false || after.bytesRead !== before.bytesRead
-    || after.receiveCount !== before.receiveCount || before.at - client.lastHeartbeat.pongAt > 250) {
-    throw new Error(`read-gate guard failed: ${JSON.stringify({ before, after, pong: client.lastHeartbeat })}`);
+    || after.receiveCount !== before.receiveCount) {
+    throw new Error(`read-gate guard failed: ${JSON.stringify({ before, after, authorityPong })}`);
   }
   return { before, after };
 }
@@ -115,4 +113,4 @@ async function closeRawClient(client) {
   await waitFor(() => client.close, `${client.pilotSlot} close`, 1500).catch(() => client.ws.terminate());
 }
 
-module.exports = { waitFor, openRawClient, pauseAfterPong, resume, closeRawClient };
+module.exports = { waitFor, openRawClient, pauseAfterAuthorityPong, resume, closeRawClient };

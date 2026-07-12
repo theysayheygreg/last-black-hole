@@ -3,7 +3,8 @@
   "scenarioId": "T2a-drainable-pressure",
   "pilotCount": 4,
   "impairedPilot": "pilot-3",
-  "port": 8862,
+  "evidenceClass": "local-pr-smoke",
+  "controlDurationMs": 5000,
   "queuePolicy": {
     "maxBytes": 524288,
     "maxReliableBytes": 262144,
@@ -23,6 +24,7 @@
   "evidence": {
     "maxPressureEvents": 20000,
     "maxRawReaderEvents": 2000,
+    "maxRawFramesPerClient": 2000,
     "maxStateLedgerEntries": 10000,
     "maxReliableLedgerEntries": 1000
   }
