@@ -19,6 +19,13 @@
   metrics, malformed-response cleanup identity, first-failure evidence,
   child-process bounds, idempotent teardown, and closed ports. It deliberately
   makes no shaping/timing claim before the T1 browser cohort.
+- Implemented and accepted the four-browser T1 proxy PR smoke. Four independent
+  listeners fed one stable match authority; exact inactive chains activated
+  concurrently with settled failure rollback, 2.02 ms completion skew, no
+  browser bypass, 135.8--141.2 ms input-ACK p95, exact gameplay outcomes,
+  finalized per-path counters, zero pending work, and complete cleanup. The
+  result is TCP-stream headroom evidence, not canonical-duration, packet,
+  throughput-accuracy, slow-reader, WAN, TLS, or hosted proof.
 
 - Added the four-browser T0 CDP transport smoke with a post-admission aggregate
   35 ms / 64 KiB/s upload / 320 KiB/s download profile and a measured

@@ -140,6 +140,15 @@ blackout/reset follows only after T1 acceptance; T2 slow-reader proof still
 requires authority-side `bufferedAmount` pressure, and Linux receiver-ingress
 netem remains the packet-truth lane.
 
+**T1 checkpoint — 2026-07-12:** the managed four-browser proxy PR smoke is now
+accepted from clean commit `b15ea6a`. Four independently shaped listeners fed
+one stable authority, all client latency/consequence gates passed, and every
+tool/path/client/process cleanup fact closed. This remains 45-second local
+TCP-stream evidence, not canonical 90-second or packet/WAN/TLS proof. The next
+bounded slice is F5 one-client blackout plus forced transport rotation and
+authoritative reconnect proof; it must reuse the accepted controller without
+combining T2 slow-reader or netem behavior.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

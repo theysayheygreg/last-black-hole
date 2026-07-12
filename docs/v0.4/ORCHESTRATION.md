@@ -225,6 +225,21 @@ Singularity that:
   latency/rate headroom plus gameplay outcomes. F5 reset/blackout, T2
   slow-reader pressure, Linux packet truth, and hosted WSS remain separate.
 
+### T1 managed proxy acceptance — 2026-07-12 03:54 UTC
+
+- Tool control/provisioning landed at `b5b3d38`; browser integration landed at
+  `b15ea6a` after independent lifecycle and activation-race review.
+- Clean acceptance artifact
+  `multiplayer-impairment-2026-07-12T105231403Z-t1-cap-headroom-4p-0411CA90-5c34fd`
+  proves four independent proxy listeners into one sim authority, exact fixed
+  toxic configuration, 2.02 ms activation skew, all latency/consequence gates,
+  finalized per-path counters, zero pending work, and complete cleanup.
+- Claim boundary remains configured userspace TCP-stream headroom and gameplay
+  outcomes only. Canonical duration, packet truth, slow-reader pressure,
+  throughput accuracy, WAN/WSS/TLS, and hosted behavior remain pending.
+- Next bounded implementation is F5 one-client blackout/reset and recovery.
+  T2 and netem remain separate evidence lanes.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`

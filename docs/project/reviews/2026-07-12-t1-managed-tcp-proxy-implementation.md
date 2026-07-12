@@ -256,3 +256,28 @@ Provisioning is bounded by size, an absolute deadline, and the observed HTTPS
 host chain `github.com -> release-assets.githubusercontent.com`. The focused
 proof and all 11 multiplayer-network suites pass. This slice is explicitly a
 non-timing control/lifecycle proof; active latency/rate evidence remains T1.
+
+## Slice B status — implemented and accepted
+
+Commit `b15ea6a` adds the four-browser T1 PR-smoke cohort. Activation dispatch
+settles all 16 PATCH requests before success or rollback; its deterministic
+failure proof combines an immediate rejection with a delayed success, then
+verifies the complete inactive snapshot before reporting restoration.
+
+Immutable clean acceptance is
+`tests/screenshots/multiplayer-impairment-2026-07-12T105231403Z-t1-cap-headroom-4p-0411CA90-5c34fd`.
+One stable sim authority PID `49275` served four independent listeners, and
+each browser exposed exactly its assigned `/stream` endpoint with no direct
+authority connection. All 16 exact toxics activated with 2.02 ms
+response-completion skew. Per-client evidence retained 374--382 input samples,
+295 aligned pairs, and two reliable actions; input-ACK p95 was
+135.8--141.2 ms, cadence p95 137.9--139.3 ms, and consequence p95
+140.5--162.7 ms. All 16 finalized received/sent counter rows advanced after
+browser close, pending work drained in 620 ms, and browser/profile/proxy/tool/
+authority/static cleanup passed.
+
+This is clean committed-head 45-second PR-smoke evidence, not the canonical
+15/60/15 T1 duration. It proves configured userspace TCP-stream proxy
+latency/rate headroom and gameplay outcomes only. Throughput accuracy, packet
+behavior, congestion, retransmission, receive-window pressure, WAN, WSS, TLS,
+and hosted behavior remain unproved.
