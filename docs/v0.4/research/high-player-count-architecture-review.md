@@ -159,8 +159,9 @@ below nominal cadence; it must not be multiplied into a capacity promise.
   quantization. Nearby interaction state remains in the fast lane.
 - Target **<=64 KiB/s/client average**, with 80 KiB/s only as a short-window
   p95 sensitivity ceiling, and a hard queue
-  policy that coalesces state and may rebase on state enqueue; the transport
-  independently disconnects after two seconds continuously backpressured.
+  policy that coalesces state and may rebase on state enqueue; two seconds of
+  continuous transport high-water or application-cap pressure disconnects the
+  recipient.
 
 #### 96 players
 
@@ -182,9 +183,10 @@ and 288 KiB/s/player as a heavy rejection envelope; neither is an achieved
 codec rate or supported product budget. The accepted per-recipient queue
 contract is a 512 KiB application cap, a 256 KiB reliable-event subset,
 transport hysteresis at 256/64 KiB, and disconnect after two seconds
-continuously transport-backpressured. Transport high-water pauses sending and
-coalesces replaceable state until low-water; rebase is a separate state-enqueue
-decision made by the application-queue policy.
+continuously transport-backpressured or at the application cap. Transport
+high-water pauses sending and coalesces replaceable state until low-water;
+rebase is a separate state-enqueue decision made by the application-queue
+policy.
 
 Epic's official Replication Graph documentation is relevant historical
 evidence: Fortnite's cited case starts with 100 clients and about 50,000

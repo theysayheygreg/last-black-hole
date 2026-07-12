@@ -245,16 +245,19 @@ including a 256 KiB reliable-event subset. Transport backpressure uses
 256 KiB/64 KiB high/low hysteresis: high-water pauses sends and coalesces
 replaceable state until low-water. Rebase remains a separate application
 enqueue decision. Two seconds continuously transport-backpressured disconnects
-that recipient without delaying the writer or another socket.
+that recipient without delaying the writer or another socket. The general
+runtime timer also applies while the bounded application queue remains at its
+limit; T2 isolates and proves the transport-high cause specifically.
 
 The canonical product target is 64 KiB/s average/player across deltas,
 keyframes, events, and reconnect amortization. The 144 KiB/s representative
 row is sensitivity analysis and 288 KiB/s is a heavy rejection envelope;
 neither is an achieved codec rate or supported product budget.
 
-The current 107.88 KiB p95 full snapshot remains a recovery/debug baseline. At
-Deep Field cadence it is about 0.33 MB/s for one recipient; at 10 Hz it is
-about 1.08 MB/s. It must not become the public hot-loop protocol.
+The v0.3 107.88 KiB p95 full snapshot remains a recovery/debug baseline. At
+nominal Deep Field 6 Hz it is about 0.663 MB/s for one recipient, and at 10 Hz
+about 1.105 MB/s. The historical 0.33 MB/s observation ran below nominal
+cadence. None may become the public hot-loop protocol.
 
 ## Identity And Durable Data
 

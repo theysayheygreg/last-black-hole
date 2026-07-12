@@ -222,7 +222,8 @@ accepted constants are:
   and coalesces replaceable state until the transport drains below low-water;
 - rebase is an application-state enqueue decision made by the bounded app-queue
   policy, not an automatic consequence of crossing transport high-water;
-- disconnect after two seconds continuously transport-backpressured;
+- disconnect after two seconds continuously transport-backpressured or with
+  the bounded application queue remaining at its limit;
 - a slow recipient must never delay the simulation writer or another socket;
 - expose current bytes, high-water bytes, coalesced frames, forced rebases,
   reliable-event age, and disconnect count per recipient.

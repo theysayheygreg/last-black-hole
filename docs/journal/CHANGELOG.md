@@ -18,6 +18,11 @@
   plausible, 48 engineered, and 96 R&D. Every active match retains one logical
   authority and one canonical writer; fleet scale creates and packs one such
   authority for each concurrent match.
+- Fix-forward review corrected the nominal Deep Field full-snapshot rate,
+  documented that the general two-second policy covers continuous transport
+  or application-cap backpressure, and refreshed the completion audit to
+  distinguish implemented local multiplayer lanes from still-missing WAN,
+  WSS, packet, soak, hosted, human-play, and heavy-scale proof.
 
 - Replaced the contradictory single T2 slow-reader row with separate drainable
   and hard-pressure raw-WebSocket cases plus later Linux/browser ingress

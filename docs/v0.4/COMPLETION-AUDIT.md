@@ -415,32 +415,35 @@ Evidence:
 
 ### 13. Commit meaningful changes and verify them
 
-**Status: PROVEN for atomic documentation history and current regression
-harness; WEAK for multiplayer-specific verification.**
+**Status: PROVEN for atomic history and local automated multiplayer contracts;
+INCOMPLETE for hosted, human, soak, and scale verification.**
 
 Evidence:
 
-- Git history contains twelve named atomic documentation commits covering
-  program setup, vendor economics, identity, Ballpark authority, P2P, red team,
-  measurement, high-count architecture/performance/cost, integrated design,
-  and orchestration.
-- `node tests/run-all.cjs` was rerun from merge tip `11e54ec` during this audit
-  and exited 0 with every selected core suite passing.
-- The worktree contained only this audit file after that run.
+- Git history contains atomic design, implementation, fix-forward, independent
+  review, and evidence-acceptance commits for the multiplayer program.
+- Registered `multiplayer-structure`, `multiplayer-authority`,
+  `multiplayer-network`, and `multiplayer-playable` lanes now exercise wire
+  schema, identity/privacy/settlement, bounded queues, the WebSocket adapter and
+  runtime, four/eight-browser natural journeys, and authority parity.
+- Local Phase 2 evidence accepts F0/F1/F3/F6 application-frame cases, T0 Chrome
+  transport stall, T1 four-listener managed TCP-stream headroom, and F5
+  pilot-only blackout/fence/recovery. At `c09882d`, adapter core is 28/28 and
+  the full multiplayer-network regression is 11/11.
 
 Weakness:
 
-- The current core harness validates v0.3 product behavior and architectural
-  regressions; it does not validate the planned multiplayer transport,
-  recipient privacy, identity settlement, network faults, hosted cost, or
-  24/48/96 heavy envelopes.
-- `ROADMAP.md:265-272` correctly lists future `multiplayer-structure`,
-  `multiplayer-network`, `multiplayer-authority`, `multiplayer-soak`,
-  `multiplayer-playable`, and `multiplayer-hosting` lanes, none of which exists
-  as implemented proof yet.
+- All accepted transport/network evidence is local loopback or managed local
+  stream behavior. It does not prove public WSS/TLS, WAN routing, packet loss/
+  retransmission, hosted process placement, human feel, or production cost.
+- T2 raw slow-reader, Linux netem T3/T4, 45–90-minute churn/soak,
+  `multiplayer-hosting`, real four/eight-human play, and H24/H48/H96/X96 remain
+  open. The local browser lane is automated proof, not Greg's movement/taste
+  gate.
 
-Remaining action: add those lanes as each implementation phase lands and do
-not use the current v0.3 core pass to claim multiplayer correctness or capacity.
+Remaining action: finish the open pressure, packet, soak, hosted, human-play,
+and scale lanes without promoting local automated proof into internet or
+capacity claims.
 
 ## Completion Matrix
 
