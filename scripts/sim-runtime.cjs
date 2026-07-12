@@ -7263,6 +7263,24 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/debug/authored-collapse-test-state") {
+      if (!authoredCollapseTestLifecycle.enabled) {
+        sendJson(res, 404, { ok: false, error: "Test lifecycle is disabled" });
+        return;
+      }
+      const body = await readJson(req);
+      if (Number.isFinite(Number(body.simTime))) runtime.simTime = Math.max(0, Number(body.simTime));
+      if (body.exhaustPortalWaves === true) runtime.mapState.nextPortalWaveIndex = PORTAL_CONFIG.waves.length;
+      if (body.clearPortals === true) runtime.mapState.portals = [];
+      sendJson(res, 200, {
+        ok: true,
+        simTime: runtime.simTime,
+        nextPortalWaveIndex: runtime.mapState.nextPortalWaveIndex,
+        portalCount: runtime.mapState.portals.length,
+      });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/debug/scavenger-state") {
       const body = await readJson(req);
       const scavengerId = String(body.scavengerId || "").trim();

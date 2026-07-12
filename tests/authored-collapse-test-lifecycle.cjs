@@ -13,6 +13,8 @@ const ENABLED_PORT = 8811;
 const CAP_PORT = 8812;
 const DEFAULT_PORT = 8813;
 const REJECTED_PORT = 8814;
+const GENERIC_PORT = 8815;
+const FINAL_PORTAL_PORT = 8817;
 
 async function fetchJson(port, pathname) {
   const response = await fetch(`http://127.0.0.1:${port}${pathname}`);
@@ -26,6 +28,26 @@ async function postJson(port, pathname, body) {
     body: JSON.stringify(body),
   });
   return { status: response.status, body: await response.json() };
+}
+
+async function getAuthorized(port, pathname, authority) {
+  const response = await fetch(`http://127.0.0.1:${port}${pathname}`, { headers: {
+    "x-lbh-command-credential": authority.commandCredential,
+    "x-lbh-player-id": authority.playerId,
+    "x-lbh-run-id": authority.runId,
+  } });
+  return { status: response.status, body: await response.json() };
+}
+
+async function startHumanRun(port, clientId) {
+  const start = await postJson(port, "/session/start", {
+    mapId: "shallows", requesterId: clientId, requesterName: clientId,
+  });
+  const join = await postJson(port, "/join", {
+    runId: start.body.session.runId, clientId, name: clientId, joinTicket: start.body.joinTicket,
+  });
+  assert(join.status === 200, `${clientId} must join`);
+  return join.body.authority;
 }
 
 async function waitFor(port, predicate, timeoutMs = 5000) {
@@ -112,6 +134,66 @@ async function run() {
       "final-portal-missed collapse must use the lifecycle helper");
   });
 
+  await runner.run("generic authored collapse suppresses only terminal work after real predicates", async () => {
+    await startSimServer(GENERIC_PORT, { keepAlive: true, env: {
+      NODE_ENV: "test", LBH_SOAK_DIAGNOSTICS: "1", LBH_SIM_TEST_DISABLE_AUTHORED_COLLAPSE: "1",
+      LBH_SIM_MAX_SIM_TIME: "7200",
+    } });
+    try {
+      const authority = await startHumanRun(GENERIC_PORT, "generic-collapse-host");
+      const setup = await postJson(GENERIC_PORT, "/debug/authored-collapse-test-state", {
+        simTime: 61, exhaustPortalWaves: true, clearPortals: true,
+      });
+      assert(setup.status === 200 && setup.body.nextPortalWaveIndex === 5 && setup.body.portalCount === 0,
+        "generic collapse test must establish its real terminal predicates");
+      const latched = await waitFor(GENERIC_PORT, (body) => body.authoredCollapseTest?.count === 1);
+      assert(latched.authoredCollapseTest.firstReason === "collapse", "generic predicate must latch the generic reason");
+      assert(latched.session.status === "running", "generic seam must preserve the running infrastructure session");
+      const tick = latched.tick;
+      const snapshot = await getAuthorized(GENERIC_PORT, "/snapshot", authority);
+      const own = snapshot.body.players?.find((player) => player.clientId === "generic-collapse-host");
+      assert(own?.status === "alive", "generic seam must suppress player kill");
+      assert(!snapshot.body.recentEvents?.some((event) => event.type === "player.died" || event.type === "session.ended"),
+        "generic seam must not invent or emit terminal gameplay events");
+      const progressed = await waitFor(GENERIC_PORT, (body) => body.tick > tick);
+      assert(progressed.authoredCollapseTest.count === 1, "generic latch must remain bounded while ticks continue");
+    } finally {
+      await stopSimServer(GENERIC_PORT).catch(() => null);
+    }
+  });
+
+  await runner.run("final inhibitor portal expiry keeps expiry side effects but suppresses terminal work", async () => {
+    await startSimServer(FINAL_PORTAL_PORT, { keepAlive: true, env: {
+      NODE_ENV: "test", LBH_SOAK_DIAGNOSTICS: "1", LBH_SIM_TEST_DISABLE_AUTHORED_COLLAPSE: "1",
+      LBH_SIM_MAX_SIM_TIME: "7200",
+    } });
+    try {
+      const authority = await startHumanRun(FINAL_PORTAL_PORT, "final-portal-host");
+      const baseline = await fetchJson(FINAL_PORTAL_PORT, "/health");
+      const portal = await postJson(FINAL_PORTAL_PORT, "/debug/portal-state", {
+        portalId: "test-final-expiry", finalInhibitor: true, alive: true,
+        spawnTime: Math.max(0, baseline.body.simTime - 1), lifespan: 0.1,
+      });
+      assert(portal.status === 200, "final inhibitor portal fixture must be accepted");
+      const latched = await waitFor(FINAL_PORTAL_PORT, (body) => body.authoredCollapseTest?.count === 1);
+      assert(latched.authoredCollapseTest.firstReason === "inhibitor-final-portal-missed",
+        "final portal predicate must latch its exact reason");
+      assert(latched.session.status === "running", "final portal seam must preserve infrastructure runtime");
+      const snapshot = await getAuthorized(FINAL_PORTAL_PORT, "/snapshot", authority);
+      const expired = snapshot.body.world?.portals?.find((entry) => entry.id === "test-final-expiry");
+      const own = snapshot.body.players?.find((player) => player.clientId === "final-portal-host");
+      assert(expired?.alive === false && snapshot.body.inhibitor?.finalPortalExpired === true,
+        "normal portal expiry and inhibitor side effects must occur before suppression");
+      assert(own?.status === "alive", "final portal seam must suppress player kill");
+      assert(snapshot.body.recentEvents?.some((event) => event.type === "portal.expired"
+        && event.payload?.portalId === "test-final-expiry"), "normal portal.expired event must remain");
+      assert(!snapshot.body.recentEvents?.some((event) => event.type === "player.died" || event.type === "session.ended"),
+        "final portal seam must emit no terminal gameplay event");
+    } finally {
+      await stopSimServer(FINAL_PORTAL_PORT).catch(() => null);
+    }
+  });
+
   await runner.run("authorized runtime exposes test-only health and resets it per session", async () => {
     await startSimServer(ENABLED_PORT, { keepAlive: true, env: {
       NODE_ENV: "test", LBH_SOAK_DIAGNOSTICS: "1",
@@ -164,5 +246,7 @@ run().catch(async (error) => {
   await stopSimServer(CAP_PORT).catch(() => null);
   await stopSimServer(DEFAULT_PORT).catch(() => null);
   await stopSimServer(REJECTED_PORT).catch(() => null);
+  await stopSimServer(GENERIC_PORT).catch(() => null);
+  await stopSimServer(FINAL_PORTAL_PORT).catch(() => null);
   process.exit(1);
 });

@@ -57,15 +57,17 @@ async function main() {
   const port = await freePort();
   writeExclusive(path.join(runDir, "manifest.json"), {
     schemaVersion: 1, profile: fixture.profile, evidenceClass: fixture.profile === "normal-45m"
-      ? "local-raw-websocket-eight-player-normal-45m" : "local-raw-websocket-eight-player-pr-smoke",
-    generatedAt: new Date().toISOString(), commit, dirty, diagnosticOnly: dirty || timeScale !== 1,
+      ? "local-raw-websocket-eight-player-test-authorized-post-collapse-infrastructure-45m"
+      : "local-raw-websocket-eight-player-pr-smoke",
+    generatedAt: new Date().toISOString(), commit, dirty,
+    diagnosticOnly: dirty || timeScale !== 1 || fixture.profile === "normal-45m",
     fixtureHash: crypto.createHash("sha256").update(fixtureRaw).digest("hex"),
     scenarioVersion: fixture.scenarioVersion, rootSeed: fixture.rootSeed, scheduleHash: schedule.scheduleHash,
     topology: { matches: 1, logicalSingleWriterAuthoritiesPerMatch: 1, clients: 8 },
     runtime: { node: process.version, platform: process.platform, arch: process.arch, osRelease: os.release() },
     processOwnership: { authorityPort: port, loopbackOnly: true },
     claimBoundary: fixture.profile === "normal-45m"
-      ? "45-minute local raw-WebSocket steady-match regression evidence; full-JSON traffic is regression debt, not product target; not WAN, packet, browser, WSS, TLS-edge, hosted, churn, or 24/48/96 capacity evidence"
+      ? "45-minute test-authorized post-collapse synthetic infrastructure longevity only; authored gameplay collapse remains product truth and this is not natural match-duration evidence; full-JSON traffic is regression debt, not product target; not WAN, packet, browser, WSS, TLS-edge, hosted, churn, or 24/48/96 capacity evidence"
       : "Six-minute local raw-WebSocket machinery smoke only; not long-duration, leak, WAN, packet, browser, WSS, TLS-edge, hosted, or 24/48/96 capacity evidence",
   });
   writeExclusive(path.join(runDir, "schedule.json"), schedule);
@@ -118,7 +120,9 @@ async function main() {
       failure, scheduleHash: schedule.scheduleHash, profile: fixture.profile,
       actionCount: result?.actionCount || 0, gates: result?.gates || {},
       limitations: fixture.profile === "normal-45m"
-        ? ["NOT packet/browser/WAN/WSS/TLS-edge/hosted/churn evidence",
+        ? ["TEST-AUTHORIZED post-collapse synthetic infrastructure longevity; NOT natural gameplay or product match-duration evidence",
+          "Authored universe collapse remains enabled in product/default runtime and is only terminal-suppressed after its normal predicate in this harness",
+          "NOT packet/browser/WAN/WSS/TLS-edge/hosted/churn evidence",
           "Full-JSON traffic is a measured regression ceiling and acknowledged product debt, not the 64KiB/s/player product target",
           "Forced-GC checkpoint minute and following minute are excluded from performance gates"]
         : ["NOT long-duration or leak evidence", "NOT packet/browser/WAN/WSS/TLS-edge/hosted evidence",
