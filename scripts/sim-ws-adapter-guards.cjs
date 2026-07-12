@@ -92,6 +92,9 @@ function normalizeAdapterOptions(options) {
     buildOwnerState: requiredCallback(options.buildOwnerState, "buildOwnerState"),
     onPong: typeof options.onPong === "function" ? options.onPong : async () => {},
     onAck: typeof options.onAck === "function" ? options.onAck : async () => {},
+    onPressureTransition: typeof options.onPressureTransition === "function"
+      ? options.onPressureTransition
+      : null,
     now: typeof options.now === "function" ? options.now : Date.now,
     path: typeof options.path === "string" && options.path.startsWith("/") ? options.path : DEFAULTS.path,
     helloTimeoutMs: positiveInteger(options.helloTimeoutMs, DEFAULTS.helloTimeoutMs, "helloTimeoutMs"),

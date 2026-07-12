@@ -211,6 +211,8 @@ async function run() {
     const fresh = await createHarness();
     try {
       const diagnostics = fresh.adapter.diagnostics();
+      assert(!Object.hasOwn(diagnostics.pressure, "connections"),
+        "Per-live-connection pressure diagnostics must be absent by default");
       for (const metric of Object.values(diagnostics.pressure.maxima)) {
         assert(metric.total === 0 && metric.worstConnection === 0,
           "A new adapter must start with zero pressure maxima");
@@ -336,6 +338,185 @@ async function run() {
         "Queue-policy diagnostics must not expose connection identity");
     } finally {
       await policyHarness.close();
+    }
+  });
+
+  await runner.run("attributes pressure policy to one of four redacted live scheduler connections", async () => {
+    const originalBufferedAmount = Object.getOwnPropertyDescriptor(WebSocket.prototype, "bufferedAmount");
+    const serverSockets = new WeakMap();
+    let nextServerSocket = 0;
+    let pressureEnabled = false;
+    Object.defineProperty(WebSocket.prototype, "bufferedAmount", {
+      configurable: true,
+      enumerable: originalBufferedAmount.enumerable,
+      get() {
+        if (this._isServer !== true) return originalBufferedAmount.get.call(this);
+        if (!serverSockets.has(this)) serverSockets.set(this, nextServerSocket++);
+        return pressureEnabled && serverSockets.get(this) === 3 ? 300_000 : 0;
+      },
+    });
+    const server = http.createServer((_request, response) => response.writeHead(404).end());
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const baseUrl = `ws://127.0.0.1:${server.address().port}`;
+    const claims = new Map();
+    const bindings = new Map();
+    const events = [];
+    let observerThrowPending = true;
+    let snapshotId = 1;
+    const adapter = createSimWebSocketAdapter({
+      server,
+      runId: "run-pressure-observer",
+      heartbeatIntervalMs: 60_000,
+      backpressureTimeoutMs: 80,
+      sweepIntervalMs: 10,
+      closeGraceMs: 30,
+      onPressureTransition(event) {
+        events.push(event);
+        if (observerThrowPending && event.type === "pressure-sweep" && event.schedulerConnectionId === 4) {
+          observerThrowPending = false;
+          throw new Error("observer failure must be contained");
+        }
+        return true;
+      },
+      async redeemHello(frame) {
+        const name = claims.get(frame.admissionTicket);
+        if (!name) throw Object.assign(new Error("invalid ticket"), { publicCode: "admission-rejected", closeCode: 4401 });
+        claims.delete(frame.admissionTicket);
+        const binding = {
+          name,
+          runId: "run-pressure-observer",
+          membershipId: `membership-private-${name}`,
+          playerId: `player-private-${name}`,
+          current: true,
+          snapshotId: 1,
+          lastEventSeq: 0,
+        };
+        bindings.set(name, binding);
+        const publicState = {
+          type: "publicState", runId: binding.runId, snapshotId: 1, tick: 1, simTime: 0.1,
+          lastEventSeq: 0, fieldRevision: 1, overloadMode: "NORMAL", lastInputSeq: 0, lastActionSeq: 0,
+          manifestHash: "sha256:test", full: true, state: { bodies: [], despawns: [] },
+        };
+        return {
+          binding,
+          bindingKey: { runId: binding.runId, membershipId: binding.membershipId },
+          welcome: {
+            type: "welcome", wireVersion: WIRE_PROTOCOL_VERSION, simProtocolVersion: SIM_PROTOCOL_VERSION,
+            runId: binding.runId, membershipId: binding.membershipId, playerId: binding.playerId,
+            connectionId: `connection-private-${name}`, connectionEpoch: 1,
+            commandCredential: `credential-private-${name}`, lastCommandSeq: 0, nextCommandSeq: 1,
+            lastInputSeq: 0, lastActionSeq: 0, heartbeatIntervalMs: 60_000, reconnected: false,
+          },
+          rebase: { type: "rebase", runId: binding.runId, reason: "initial", snapshotId: 1, lastEventSeq: 0 },
+          baselineFrames: [publicState, {
+            type: "ownerState", runId: binding.runId, membershipId: binding.membershipId, playerId: binding.playerId,
+            snapshotId: 1, tick: 1, simTime: 0.1, lastEventSeq: 0, fieldRevision: 1,
+            overloadMode: "NORMAL", lastInputSeq: 0, lastActionSeq: 0, state: {},
+          }],
+        };
+      },
+      async revalidateBinding(binding) { return binding.current; },
+      async onInput(_binding, frame) { return { type: "ack", ackKind: "input", inputSeq: frame.inputSeq }; },
+      async onAction(_binding, frame) {
+        return { type: "ack", ackKind: "action", actionId: frame.actionId, actionSeq: frame.actionSeq,
+          commandSeq: frame.commandSeq, status: "accepted", result: {} };
+      },
+      async buildPublicState() {
+        snapshotId += 1;
+        return {
+          type: "publicState", runId: "run-pressure-observer", snapshotId, tick: snapshotId, simTime: snapshotId / 10,
+          lastEventSeq: 0, fieldRevision: 1, overloadMode: "NORMAL", lastInputSeq: 0, lastActionSeq: 0,
+          manifestHash: "sha256:test", full: true, state: { bodies: [], despawns: [] },
+        };
+      },
+      async buildOwnerState(binding, frame) {
+        return {
+          type: "ownerState", runId: frame.runId, membershipId: binding.membershipId, playerId: binding.playerId,
+          snapshotId: frame.snapshotId, tick: frame.tick, simTime: frame.simTime, lastEventSeq: frame.lastEventSeq,
+          fieldRevision: frame.fieldRevision, overloadMode: frame.overloadMode, lastInputSeq: 0, lastActionSeq: 0,
+          state: {},
+        };
+      },
+    });
+    const clients = [];
+    try {
+      assert(Object.keys(adapter.diagnostics().pressure.connections).length === 0,
+        "An enabled observer must start with an empty bounded live table");
+      for (let index = 0; index < 4; index += 1) {
+        const ticket = `ticket-private-${index}`;
+        claims.set(ticket, `pilot-${index}`);
+        const client = await openClient(`${baseUrl}/stream`);
+        client.ws.send(JSON.stringify(hello(ticket)));
+        await waitFor(() => nextFrame(client.messages, "welcome"), { label: `observer pilot ${index} welcome` });
+        clients.push(client);
+      }
+      pressureEnabled = true;
+      await adapter.projectNow();
+      await waitFor(() => events.some((event) => event.type === "transport-high-enter"
+        && event.schedulerConnectionId === 4), { label: "attributed first high-water transition" });
+      pressureEnabled = false;
+      await adapter.projectNow();
+      await waitFor(() => events.some((event) => event.type === "transport-low-exit"
+        && event.schedulerConnectionId === 4), { label: "attributed low-water transition" });
+      pressureEnabled = true;
+      await adapter.projectNow();
+      await adapter.projectNow();
+      await adapter.enqueueReliable(bindings.get("pilot-3"), eventFrame("run-pressure-observer", 1, "private-event"));
+      await waitFor(() => clients[3].close.code !== null, { timeout: 1_000, label: "attributed timeout close" });
+      await waitFor(() => adapter.diagnostics().connections === 3, { label: "pressured connection cleanup" });
+
+      const diagnostics = adapter.diagnostics();
+      assert(diagnostics.pressure.policy.queuePolicyReasons["disconnect:backpressure-timeout"] === 1
+        && diagnostics.pressure.policy.queuePolicyDisconnects === 1,
+      "The timeout must be counted once with its exact action and reason");
+      assert(diagnostics.pressure.observer.failures === 1 && diagnostics.pressure.observer.throws === 1,
+        "A throwing observer must be counted without changing authority behavior");
+      assert(Object.keys(diagnostics.pressure.connections).length === 3
+        && !Object.hasOwn(diagnostics.pressure.connections, "4"),
+      "The bounded live table must remove the cleaned pressured connection");
+      for (let index = 0; index < 3; index += 1) {
+        assert(clients[index].close.code === null, `Healthy pilot ${index} must remain connected`);
+        const detail = diagnostics.pressure.connections[String(index + 1)];
+        assert(detail.counts.highWaterCrossings === 0 && detail.counts.disconnects === 0,
+          `Healthy pilot ${index} must retain zero pressure-policy effects`);
+      }
+      const pressuredEvents = events.filter((event) => event.schedulerConnectionId === 4);
+      for (const type of ["transport-high-enter", "transport-low-exit", "state-coalesced", "queue-policy", "close-dispatched", "pressure-sweep", "connection-cleanup"]) {
+        assert(pressuredEvents.some((event) => event.type === type), `Missing immutable ${type} transition`);
+      }
+      const high = pressuredEvents.find((event) => event.type === "transport-high-enter");
+      const policy = pressuredEvents.find((event) => event.type === "queue-policy");
+      const cleanup = pressuredEvents.find((event) => event.type === "connection-cleanup");
+      assert(policy.action === "disconnect" && policy.reason === "backpressure-timeout",
+        "The immutable policy event must preserve exact timeout attribution");
+      assert(cleanup.pressure.counts.reliableResetOnCleanup === 1
+        && cleanup.pressure.current.reliableMessages === 0,
+      "Cleanup telemetry must attribute and zero the retained reliable reset");
+      assert(Object.isFrozen(high) && Object.isFrozen(high.pressure) && Object.isFrozen(high.pressure.current)
+        && Object.isFrozen(high.pressure.counts) && Object.isFrozen(high.pressure.counts.stateFramesWsSendAccepted),
+      "Pressure events and nested telemetry must be immutable");
+      const serialized = JSON.stringify({ events, diagnostics });
+      for (const secret of ["membership-private", "player-private", "connection-private", "credential-private", "ticket-private", "private-event"]) {
+        assert(!serialized.includes(secret), `Pressure telemetry leaked private identity marker ${secret}`);
+      }
+
+      const shutdown = await adapter.shutdown();
+      assert(shutdown.connections === 0 && shutdown.livenessTimers === 0,
+        "Graceful shutdown must remove every connection and liveness timer");
+      for (const metric of Object.values(shutdown.pressure.current)) {
+        assert(metric.total === 0 && metric.worstConnection === 0,
+          "Graceful shutdown must zero aggregate current pressure");
+      }
+      assert(Object.keys(shutdown.pressure.connections).length === 0,
+        "Graceful shutdown must zero detailed live pressure state");
+    } finally {
+      pressureEnabled = false;
+      for (const client of clients) {
+        if (client.ws.readyState !== WebSocket.CLOSED) client.ws.terminate();
+      }
+      Object.defineProperty(WebSocket.prototype, "bufferedAmount", originalBufferedAmount);
+      await adapter.shutdown();
+      await new Promise((resolve) => server.close(resolve));
     }
   });
 
