@@ -644,7 +644,8 @@ async function runF0Cohort(options) {
       browserSchedulersPending: resources.browserSchedulerStatuses.length === 4
         ? resources.browserSchedulerStatuses.reduce((sum, status) => sum + (status.queued || 0), 0) : -1,
       preloadTimelineObserved: serverRecords.some((entry) => entry.event === "timeline"),
-      preloadInstalledOnce: preloadInstalled.length === 1,
+      preloadInstalledForWrappedProcess: adapterWraps.length === 1
+        && preloadInstalled.some((entry) => entry.pid === adapterWraps[0].pid),
       preloadAdapterWrappedOnce: adapterWraps.length === 1,
       preloadStableSlotMaps: slotMaps.length === 4 && new Set(slotMaps.map((entry) => entry.pilotSlot)).size === 4,
       preloadSlotHashesMatch: expectedSlotMap.length === 4 && expectedSlotMap.every((expected) =>

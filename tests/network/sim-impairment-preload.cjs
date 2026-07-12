@@ -9,7 +9,7 @@ if (configFile) install(configFile);
 
 function install(file) {
   const config = JSON.parse(fs.readFileSync(file, "utf8"));
-  fs.appendFileSync(config.serverEvidenceFile, `${JSON.stringify({ event: "preload-installed" })}\n`);
+  fs.appendFileSync(config.serverEvidenceFile, `${JSON.stringify({ event: "preload-installed", pid: process.pid })}\n`);
   const compiled = JSON.parse(fs.readFileSync(config.compiledDecisionFile, "utf8"));
   const expectedHash = compiled.sha256;
   delete compiled.sha256;
@@ -24,7 +24,7 @@ function install(file) {
   adapterModule.createSimWebSocketAdapter = function createInstrumentedAdapter(options) {
     if (installed) throw new Error("sim impairment preload supports exactly one adapter");
     installed = true;
-    fs.appendFileSync(config.serverEvidenceFile, `${JSON.stringify({ event: "adapter-wrap" })}\n`);
+    fs.appendFileSync(config.serverEvidenceFile, `${JSON.stringify({ event: "adapter-wrap", pid: process.pid })}\n`);
     const seam = createServerSeam(config, compiled);
     const adapter = createAdapter({ ...options, scheduleOutboundFrame: seam.schedule });
     return Object.freeze({

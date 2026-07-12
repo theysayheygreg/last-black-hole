@@ -113,7 +113,7 @@ async function main() {
     profileDirectories: reportResult?.profileDirectories || reportResult?.partial?.profileDirectories || null,
     activation: {
       browser: reportResult?.activation || null,
-      preloadInstalledOnce: cleanup?.preloadInstalledOnce ?? null,
+      preloadInstalledForWrappedProcess: cleanup?.preloadInstalledForWrappedProcess ?? null,
       preloadAdapterWrappedOnce: cleanup?.preloadAdapterWrappedOnce ?? null,
     },
     receivedSignal,
