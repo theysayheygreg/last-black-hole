@@ -13,6 +13,13 @@ Phase 0 trust work were merely planned are superseded by this update. WSS,
 WAN failure/reconnect, hosted identity/fleet proof, heavy 24/48/96 measurement,
 and a playable four-to-eight-human internet match remain incomplete.
 
+**Scale-model correction — 2026-07-12:** the canonical forecast now uses one
+64 KiB/s average/player product target; 144/288 KiB/s are sensitivity/rejection
+rows. Full-snapshot fan-out is population-specific, CPU separates writer
+p95/p99 feasibility from mean billable packing, and memory/packing expose their
+component vectors. These corrections improve auditability but do not upgrade
+any 24/48/96 forecast to measured capacity.
+
 > Audited 2026-07-10 on `codex/v0.4-multiplayer-architecture` through committed
 > tip `11e54ec`, including the economics closure and latest v0.3 forward merge.
 > This audit compares the current repository and local automation
@@ -38,11 +45,11 @@ but the full user request is **not yet proven complete**.
 - The durable v0.4 prompt exists, but the actual active goal database still says
   v0.3. This is a direct metadata contradiction that already shapes automatic
   continuation context.
-- The 30-minute Codex heartbeat configuration exists and CodexBar returns the
-  live five-hour window, but no completed scheduled heartbeat execution was
-  found yet. Configuration is not scheduler-execution proof.
-- Most importantly, this branch contains research and planning only. Four to
-  eight people cannot yet play a multiplayer LBH match from this work.
+- The recurring heartbeat has since executed and continued work across reset
+  windows. That proves orchestration continuity, not multiplayer capacity.
+- The branch now contains trust and network-evidence implementation as well as
+  research. Four to eight people still cannot complete the intended hosted
+  multiplayer LBH match, so the ideal product outcome remains incomplete.
 
 The goal must remain active unless its scope is explicitly limited to the
 research/planning deliverable and the goal-metadata, integration, and
@@ -293,23 +300,26 @@ proof.**
 
 Evidence supporting the requested forecast:
 
-- `ARCHITECTURE.md:309-325` defines one logical authority at every count and
-  the one-writer plus deterministic-worker shape at 96.
-- `ARCHITECTURE.md:347-397` gives full-snapshot and compact fan-out, explicit
-  per-match gates, and light/representative/heavy network envelopes for
-  24/48/96.
-- `ARCHITECTURE.md:399-465` gives two explicit CPU functions, lean/heavy and
-  light/representative/heavy tables, body/AI/field benchmark envelopes, and
-  starting server shapes.
-- `high-player-count-hosting-cost-model.md:114-181` models state egress,
-  player-hour traffic cost, and serialization/compression CPU.
-- `high-player-count-hosting-cost-model.md:183-224` separates players, bodies,
-  Ballpark candidates, AI, fields, projection, and encoding and defines S1/S2/S3
-  compute/RAM envelopes.
-- `high-player-count-hosting-cost-model.md:390-465` gives named-stack match-hour
-  and heavier-sim compute sensitivity across 24/48/96.
+- `ARCHITECTURE.md` defines one logical authority at every count and the
+  one-writer plus deterministic-worker shape at 96; this is multiplied by
+  concurrent matches at the fleet layer.
+- The canonical network model uses 64 KiB/s/player average as its product
+  target, with 144 KiB/s representative sensitivity and 288 KiB/s heavy
+  rejection envelopes. None is an achieved codec measurement.
+- Population-specific 6 Hz full-snapshot fan-out reaches a modeled 564.009
+  GB/match-hour and about 1.253 Gbit/s at 96, exposing why full JSON is
+  rejected rather than smearing one snapshot size across all counts.
+- The CPU model now factorizes players, bodies, candidates, contacts, events,
+  AI, field, world work, and GC without inventing replacement milliseconds.
+  The legacy 83.07 ms Heavy96 result is explicitly superseded P-only
+  sensitivity, not a current forecast.
+- Writer p95/p99 is a lane-feasibility gate; mean billable CPU drives
+  reservation and packing. Memory exposes a component formula, including at
+  most 48 MiB of application queues and a separate 24 MiB all-clients-at-
+  high-water observation at 96. Host fit takes the minimum of writer lanes,
+  CPU, RAM, egress, encode, PPS, process, and failure-domain constraints.
 - The current synthetic diagnostic records 4/8/24/48/96 tick, snapshot, heap,
-  and Ballpark samples (`2026-07-10-high-player-count-synthetic-baseline.md:13-42`).
+  and Ballpark samples; 24 remains plausible, 48 engineered, and 96 R&D.
 
 Evidence preventing a measured-support claim:
 
@@ -359,9 +369,9 @@ Contradiction and weakness:
   branch.” Greg subsequently corrected the branch and work to v0.4. The
   repository and automation prompt say v0.4, but automatic goal continuation
   still injects the stale v0.3 text.
-- Repository evidence proves one intensive orchestration sequence, not yet
-  “regular” dispatch across multiple heartbeat cycles or a post-limit
-  continuation.
+- `ORCHESTRATION.md` now records repeated dispatch/integration cycles, a 90%
+  durable checkpoint, and automated post-reset continuation. The stale v0.3
+  goal metadata remains the only contradiction in this requirement.
 
 Remaining action: after the stale goal's own completion audit is satisfied,
 replace it with an exact v0.4 continuation goal on the same thread; do not mark
@@ -371,7 +381,7 @@ any new bounded lane plus coordinator integration commit.
 
 ### 11. Set heartbeats to check agents and continue orchestration
 
-**Status: WEAK. Configured, not yet observed firing.**
+**Status: PROVEN. Configured and observed recurring.**
 
 Evidence:
 
@@ -380,23 +390,15 @@ Evidence:
   the active target thread id.
 - Its prompt requires checking the goal, live subagents, branch, worktree,
   completed research, and next dispatch/integration action.
-- `ORCHESTRATION.md:69-96` documents expected behavior and the limit boundary.
-
-Missing proof:
-
-- At audit time the automation had just been created. No scheduler-generated
-  execution after its creation was found, so recurrence, target-thread resume,
-  live-agent checking, and post-reset continuation have not been observed.
-
-Remaining action: after the first due interval, capture the automation's run
-record and verify it targeted the correct thread, read the goal/agents/repo,
-and either advanced work or returned the documented no-op. Repeat once across
-an actual five-hour reset before claiming durable continuation.
+- `ORCHESTRATION.md` records repeated scheduled executions, useful work
+  advanced by those runs, and automated post-limit continuation. The
+  automation continues to target this thread and inspect CodexBar, goal,
+  agents, branch, and worktree before dispatch or integration.
 
 ### 12. Check CodexBar locally on GregBot, record limits/reset, and keep the goal
 going after a five-hour limit
 
-**Status: WEAK. Live query works; limit-crossing continuation is unproven.**
+**Status: PROVEN. Live query and reset-crossing continuation are recorded.**
 
 Evidence:
 
@@ -405,22 +407,11 @@ Evidence:
   audit time it reported a 300-minute primary window, `usedPercent = 38`, and
   `resetsAt = 2026-07-11T11:02:18Z`.
 - The automation prompt contains the 90% checkpoint behavior and resumes useful
-  work below 90%/after reset; `ORCHESTRATION.md:81-96` accurately says this does
-  not bypass a provider limit.
-
-Missing proof:
-
-- The current window is below the threshold, so no 90% checkpoint or exhausted
-  limit has occurred in this automation.
-- No execution after `resetsAt` yet proves that the target thread and active
-  goal resume successfully.
+  work below 90%/after reset. `ORCHESTRATION.md` records both the durable 90%
+  checkpoint and successful work in a fresh usage window.
 - An automation cannot execute while the provider refuses all turns; it can
   only retry on a later scheduled run. The docs state this correctly, so there
-  is no contradiction, only an unverified operational promise.
-
-Remaining action: preserve the active goal, observe one >=90% durable
-checkpoint and the first successful scheduled execution after a real reset,
-then record timestamps, thread id, branch/commit handoff, and work advanced.
+  is no claim that limits were bypassed.
 
 ### 13. Commit meaningful changes and verify them
 
@@ -468,13 +459,13 @@ not use the current v0.3 core pass to claim multiplayer correctness or capacity.
 | Explicit 1K–1M planning economics | PROVEN |
 | Production-verified 1K–1M economics | WEAK |
 | One logical authority per concurrent match | PROVEN |
-| 24/48/96 heavy network/server forecasts | PROVEN as model |
+| 24/48/96 heavy network/server forecasts | WEAK; auditable model, not measured |
 | 24/48/96 measured capacity and cost | INCOMPLETE |
 | Broad prompt and multi-agent orchestration | PROVEN for first program pass |
 | Active goal correctly names v0.4 | CONTRADICTED |
-| Recurring heartbeat execution | WEAK |
+| Recurring heartbeat execution | PROVEN |
 | CodexBar query and reset visibility | PROVEN |
-| Continuation across an actual five-hour limit | WEAK |
+| Continuation across an actual five-hour limit | PROVEN |
 | Atomic docs commits and current core regression pass | PROVEN |
 | Multiplayer-specific verification lanes | INCOMPLETE |
 
@@ -486,9 +477,7 @@ For the **research/planning program** to be completion-grade:
    model with measurements before presenting it as a production forecast.
 2. Replace the stale active v0.3 goal metadata with the exact v0.4 continuation
    goal without prematurely closing the broader v0.4 program.
-3. Observe and record at least one real heartbeat execution; preserve a later
-   reset-crossing continuation record.
-4. Decide whether “forecast” was the intended stopping point for 24/48/96. If
+3. Decide whether “forecast” was the intended stopping point for 24/48/96. If
    measured feasibility was intended, run the documented heavy benchmark
    matrix before closing.
 

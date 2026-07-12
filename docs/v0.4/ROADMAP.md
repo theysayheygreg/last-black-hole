@@ -218,7 +218,8 @@ Gate:
 
 - compacted expected delta <=3 KiB p50 and <=6 KiB p95;
 - projected keyframe <=32 KiB p95;
-- expected gameplay downlink <=80 KB/s/client;
+- gameplay downlink <=64 KiB/s/client average; short-window percentiles are
+  reported separately;
 - encode/decode/rebase and toroidal lifecycle stay deterministic;
 - every optimization reports before/after CPU, bytes, and complexity.
 
@@ -265,7 +266,7 @@ Gate:
 - chosen authority clock holds representative p95 below 50% and p99 below 70%
   of its frame budget; any later 30 Hz profile has its own <=20/28 ms gate;
 - no sustained tick debt >250 ms;
-- expected downlink <=80 KB/s/client;
+- expected downlink <=64 KiB/s/client average;
 - late join <=2 seconds p95 and reconnect <=3 seconds after socket open;
 - low-egress hosted-service target <=$0.015/player-hour, or the illustrative
   unit economics are revised from measured stack costs;
@@ -277,6 +278,12 @@ Gate:
 Goal: test future single-match scale without bloating the 4–8-player critical
 path or weakening one canonical writer.
 
+This is conditional research, not v0.4 scope expansion: the released product
+remains a 4–8-player experiment. Twenty-four is plausible, 48 engineered, and
+96 R&D until the measured gates below pass. Every active match still owns one
+logical authority; a fleet runs and packs as many independent authorities as
+there are concurrent matches.
+
 ### S24 — isolated conventional authority
 
 - Benchmark `H24`: 24 humans, 400 dynamic bodies, 48 expensive AI.
@@ -285,8 +292,8 @@ path or weakening one canonical writer.
 - Require deltas/static manifest and AOI-ready replication lanes.
 - Keep one process and one writer thread.
 
-Gate: normal mode, <=80 KB/s/client, <=2 MB/s/match, and chosen tick p95/p99
-inside product budget without TiDi.
+Gate: normal mode, <=64 KiB/s/client average, and chosen writer p95/p99 inside
+product budget without TiDi. Record mean billable CPU separately for packing.
 
 ### S48 — dedicated service and replication workers
 
@@ -295,22 +302,32 @@ inside product budget without TiDi.
 - Offload projection/encoding first; field/broad-phase/AI jobs only after traces
   justify deterministic worker contracts.
 
-Gate: normal mode without TiDi, <=4 MB/s/match, no serial writer regression,
-and no worker result applied after its tick barrier.
+Gate: normal mode without TiDi, <=64 KiB/s/client average, no serial writer
+regression, and no worker result applied after its tick barrier. Reserve one
+writer lane until noisy-neighbor p99 proves safe packing.
 
 ### S96 — one logical authority, internal parallelism
 
 - Benchmark `H96` and `X96`: 96 humans, 1,800/3,000 bodies, 192/384 expensive
   AI, tiled/disturbance-heavy fields.
 - Use one canonical writer plus a fixed worker pool inside one isolated match
-  service. Dedicate 4 vCPU first, then measure 6/8 vCPU.
+  service. Dedicate 4 vCPU first, then measure 6/8/12 vCPU while treating
+  writer p95/p99 as a separate feasibility gate.
 - Require near/mid/far replication lanes, binary quantization, shared public
   fragments, owner overlays, worker fencing, and deterministic reductions.
 
-Gate: serial writer <=8 ms p95, total CPU <=40 ms/tick p95, chosen clock <=20
-ms p95/28 ms p99, <=6.5 MB/s normal egress, and no normal-load TiDi. If it
-misses after algorithmic cleanup/internal parallelism, reduce clock/content or
-cap the mode; do not hide failure behind permanent dilation.
+Gate: serial writer <=8 ms p95, chosen clock <=20 ms p95/28 ms p99,
+<=64 KiB/s/client average (about 6 MiB/s/match average), measured mean
+billable CPU/RAM/egress/PPS within its placement vector, and no normal-load
+TiDi. If it misses after algorithmic cleanup/internal parallelism, reduce
+clock/content or cap the mode; do not hide failure behind permanent dilation.
+
+Every scale fixture reports players, bodies updated, broad-phase candidates,
+narrow-phase contacts, events, AI due, field tiles due, world jobs due, GC,
+writer p50/p95/p99, mean lane CPU, queue/transport memory, bytes, PPS, and
+packing isolation. Do not invent replacement milliseconds before factorial
+fixtures fit the factorized model. The legacy 83.07 ms Heavy96 player-only
+curve remains a superseded sensitivity, not a current forecast.
 
 Reopen multi-writer spatial sharding only after an optimized `H96` failure and
 a prototype proves stable spatial independence, correct handoff, and at least

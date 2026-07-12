@@ -7,6 +7,18 @@
 
 ## 2026-07-12 — v0.4 network impairment evidence
 
+- Reconciled the canonical 24/48/96 architecture and roadmap with the corrected
+  high-count research. The product target is now consistently 64 KiB/s average
+  per player; 144/288 KiB/s remain sensitivity/rejection rows, and measured-
+  shape full-snapshot fan-out is population-specific (about 564 GB/hour and
+  1.253 Gbit/s at 96). Server planning now separates writer p95/p99 feasibility
+  from mean billable CPU and uses auditable memory and vector-packing formulas
+  without presenting forecast coefficients as measurements.
+- Kept high-count work conditional on the 4–8-player v0.4 experiment: 24 is
+  plausible, 48 engineered, and 96 R&D. Every active match retains one logical
+  authority and one canonical writer; fleet scale creates and packs one such
+  authority for each concurrent match.
+
 - Replaced the contradictory single T2 slow-reader row with separate drainable
   and hard-pressure raw-WebSocket cases plus later Linux/browser ingress
   corroboration. The approved packet requires exact per-connection authority

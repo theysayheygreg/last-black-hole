@@ -228,17 +228,29 @@ below is a falsification envelope, not an implemented codec claim.
 | state delta | 3 KiB at 15 Hz |
 | projected keyframe | 16 KiB at 1 Hz |
 | events/control | 2 KB/s/client average |
-| total downlink | about 65 KB/s/client |
-| eight-client authority egress | about 520 KB/s |
-| 45-minute eight-player run | about 1.40 GB egress |
+| total downlink | 64 KiB/s/client average product target |
+| eight-client authority egress | about 4.2 Mbit/s payload |
+| 45-minute eight-player run | about 1.32 GiB payload |
 
 Prototype gates:
 
 - after compaction, expected delta <=3 KiB p50 and <=6 KiB p95;
 - after compaction, projected keyframe <=32 KiB p95;
-- expected gameplay downlink <=80 KB/s/client in the hosted spike;
+- gameplay downlink <=64 KiB/s/client average in the hosted spike;
 - no owner-private field outside its schema lane;
 - no unbounded socket or reliable-event queue.
+
+The accepted per-recipient queue contract is a 512 KiB application cap,
+including a 256 KiB reliable-event subset. Transport backpressure uses
+256 KiB/64 KiB high/low hysteresis: high-water pauses sends and coalesces
+replaceable state until low-water. Rebase remains a separate application
+enqueue decision. Two seconds continuously transport-backpressured disconnects
+that recipient without delaying the writer or another socket.
+
+The canonical product target is 64 KiB/s average/player across deltas,
+keyframes, events, and reconnect amortization. The 144 KiB/s representative
+row is sensitivity analysis and 288 KiB/s is a heavy rejection envelope;
+neither is an achieved codec rate or supported product budget.
 
 The current 107.88 KiB p95 full snapshot remains a recovery/debug baseline. At
 Deep Field cadence it is about 0.33 MB/s for one recipient; at 10 Hz it is
@@ -345,11 +357,11 @@ forecast:
 
 | Humans | Effective tick target | Input-loaded observed | Full snapshot | Process heap sample |
 |---:|---:|---:|---:|---:|
-| 4 | 8 Hz | 8.14 Hz | 112.53 KiB | 10.05 MiB |
-| 8 | 8 Hz | 7.99 Hz | 122.92 KiB | 14.61 MiB |
-| 24 | 8 Hz | 7.72 Hz | 152.18 KiB | 10.89 MiB |
-| 48 | 8 Hz | 7.95 Hz | 188.11 KiB | 12.41 MiB |
-| 96 | 8 Hz | 7.83 Hz | 261.25 KiB | 23.49 MiB |
+| 4 | 8 Hz | 7.97 Hz | 116.80 KiB | 11.64 MiB |
+| 8 | 8 Hz | 8.74 Hz | 125.82 KiB | 9.74 MiB |
+| 24 | 8 Hz | 8.32 Hz | 158.32 KiB | 11.34 MiB |
+| 48 | 8 Hz | 8.09 Hz | 194.23 KiB | 13.16 MiB |
+| 96 | 8 Hz | 8.10 Hz | 265.62 KiB | 17.10 MiB |
 
 All cases were `DILATED`. Current overload input counts AI pilots inside alive
 players but divides by the human admission cap, so the effective 8 Hz is partly
@@ -363,22 +375,22 @@ every human, fan-out would be:
 
 | Humans | Authority egress | Egress/hour | 45-minute match |
 |---:|---:|---:|---:|
-| 4 | 2.77 MB/s | 10.0 GB | 7.5 GB |
-| 8 | 6.04 MB/s | 21.8 GB | 16.3 GB |
-| 24 | 22.44 MB/s | 80.8 GB | 60.6 GB |
-| 48 | 55.48 MB/s | 199.7 GB | 149.8 GB |
-| 96 | 154.09 MB/s | 554.7 GB | 416.0 GB |
+| 4 | 2.87 MB/s | 10.33 GB | 7.75 GB |
+| 8 | 6.18 MB/s | 22.26 GB | 16.70 GB |
+| 24 | 23.35 MB/s | 84.04 GB | 63.03 GB |
+| 48 | 57.28 MB/s | 206.21 GB | 154.66 GB |
+| 96 | 156.67 MB/s / 1.253 Gbit/s | 564.01 GB | 423.01 GB |
 
 This is a deliberately naïve ceiling. It exposes a player-squared replication
 term: the full body grows with players and is then copied to every player.
 
-The compact design target keeps average downlink near 65 KB/s/client:
+The compact design target keeps average downlink at 64 KiB/s/client:
 
 | Humans | Compact authority egress | 45-minute match |
 |---:|---:|---:|
-| 24 | 1.56 MB/s | 4.21 GB |
-| 48 | 3.12 MB/s | 8.42 GB |
-| 96 | 6.24 MB/s | 16.85 GB |
+| 24 | 1.57 MB/s | 3.96 GiB |
+| 48 | 3.15 MB/s | 7.91 GiB |
+| 96 | 6.29 MB/s | 15.82 GiB |
 
 At 24, deltas and shared public encoding are mandatory. At 48, spatial AOI and
 multi-rate far lanes are mandatory. At 96, AOI, dirty-component masks, binary
@@ -386,69 +398,55 @@ quantization, priority accumulation, shared encoded public fragments, and
 owner-private overlays are mandatory. A full-rate all-player detail lane is
 rejected; global facts become low-rate summaries/events.
 
-Normal-mode egress gates:
-
-- 24: <=80 KB/s/client p95 and <=2 MB/s/match p95;
-- 48: <=80 KB/s/client p95 and <=4 MB/s/match p95;
-- 96: <=64 KB/s/client p95 and <=6.5 MB/s/match p95, with 8 MB/s sustained a
-rejection threshold until economics explicitly approve more.
+Normal-mode egress at every population must meet the canonical <=64 KiB/s per
+client average target. At 96 this is about 6 MiB/s match average; 8 MB/s
+sustained remains a rejection threshold until economics explicitly approve
+more. Short-window percentiles are reported separately rather than substituted
+for the average product budget.
 
 Heavier simulations need separate delta envelopes rather than pretending
 player count alone determines traffic:
 
-| Sim weight | Average delta assumption | Per-client downlink | Match egress at 24 / 48 / 96 |
-|---|---:|---:|---:|
-| light/current-shaped | 4 KiB at 10 Hz | 0.393 Mbit/s | 9.4 / 18.9 / 37.7 Mbit/s |
-| representative multiplayer | 8 KiB at 15 Hz | 1.180 Mbit/s | 28.3 / 56.6 / 113.2 Mbit/s |
-| heavy/high-activity | 16 KiB at 15 Hz | 2.359 Mbit/s | 56.6 / 113.2 / 226.5 Mbit/s |
+| Envelope | Meaning | Per-client | Match payload at 24 / 48 / 96 |
+|---|---|---:|---:|
+| product average | acceptance target to prove | 64 KiB/s | 12.6 / 25.2 / 50.3 Mbit/s |
+| representative sensitivity | planning stress, not achieved | 144 KiB/s | 28.3 / 56.6 / 113.2 Mbit/s |
+| heavy rejection | adverse normal-operation failure | 288 KiB/s | 56.6 / 113.2 / 226.5 Mbit/s |
 
-Those numbers include a 20% ordinary framing allowance but exclude voice,
-pathological loss, and reconnect storms. A representative 8 KiB frame assumes
-roughly twelve nearby players, 48–80 relevant world bodies, owner-private
-state, a field revision, and a small event batch. Heavy assumes denser nearby
-players/bodies and synchronized consequence bursts.
+These are application-payload models. TLS/WebSocket/IP framing, ACKs, loss,
+retransmission, voice, and reconnect bursts remain separately measured terms.
 
-### Server CPU forecast at a candidate 30 Hz clock
+### Server CPU forecast and writer feasibility
 
-These planning functions expose linear and quadratic risk; their coefficients
-are assumptions to replace with per-system traces:
+Simulation-size forecasts must expose the work that actually ran instead of
+using player count as a proxy:
 
 ```text
-lean tick ms  = 3 + 0.08P + 0.002 * P(P-1)/2
-heavy tick ms = 8 + 0.20P + 0.006 * P(P-1)/2
-reserved vCPU = tick ms * 30 / 1000 / 0.60
+writer_p95 = base + f(players) + f(bodies_updated) + f(candidates)
+             + f(contacts) + f(events) + f(AI_due) + f(field_tiles_due)
+             + f(world_jobs_due) + GC_pause_p95
+
+mean_billable_cores = sum(mean_lane_cpu_ms * lane_hz) / 1000
 ```
 
-| Humans | Lean ms/tick | Lean reserved vCPU | Heavy ms/tick | Heavy reserved vCPU | 30 Hz verdict |
-|---:|---:|---:|---:|---:|---|
-| 24 | 5.5 | 0.27 | 14.5 | 0.72 | plausible in one process |
-| 48 | 9.1 | 0.45 | 24.4 | 1.22 | heavy misses 20 ms p95 target |
-| 96 | 19.8 | 0.99 | 54.6 | 2.73 | heavy cannot meet 30 Hz on one JS writer |
+Writer p95/p99 is the serial feasibility gate. Mean billable CPU sizes the
+reservation, host packing, and invoice. A low mean cannot rescue an over-budget
+writer, and p95 wall time must never be divided into host cores. No factorial
+fixture has fitted the factorized coefficients, so this architecture assigns
+no invented replacement milliseconds.
 
-Total vCPU is not critical-path latency. A 54.6 ms writer tick still misses a
-33.3 ms frame on an eight-core machine. The 96-player target is therefore
-serial writer <=8 ms p95 and total CPU <=40 ms/tick p95, with deterministic
-parallel jobs bringing the critical path under 20 ms p95/28 ms p99. First
-benchmark allocation: dedicated 4 vCPU, then 6/8 vCPU.
+The legacy player-only sensitivity
+`Heavy(P) = 8.0 + 0.350P + 0.0045P^2` ms at 20 Hz yields 83.07 ms at 96. It is
+superseded and is retained only as a warning: it is not a measurement or a
+current Heavy96 forecast. Heavy 96 cannot be made feasible merely by assigning
+8 or 12 vCPU; writer work must fall or pure work must move behind deterministic
+barriers while one writer retains commit ownership. The honest seat verdicts
+remain 24 plausible, 48 engineered, and 96 R&D.
 
-A second workload model keeps each tier at its proposed starting clock and
-adds explicit world/activity weight:
-
-```text
-light at 15 Hz:          2.0 + 0.060P + 0.0006P^2
-representative at 20 Hz: 3.5 + 0.160P + 0.0015P^2
-heavy at 20 Hz:          8.0 + 0.350P + 0.0045P^2
-```
-
-| Humans | Light p95 | Representative p95 | Heavy p95 | Interpretation |
-|---:|---:|---:|---:|---|
-| 24 | 3.79 ms | 8.20 ms | 18.99 ms | comfortable modeled headroom |
-| 48 | 6.26 ms | 14.64 ms | 35.17 ms | heavy fits 20 Hz but leaves weak p99 margin |
-| 96 | 13.29 ms | 32.68 ms | 83.07 ms | representative plausible at 20 Hz; heavy fails 50 ms budget |
-
-At 30 Hz, representative 96 consumes a modeled 98% of one writer core and
-heavy 48 exceeds one writer core. Therefore high population does not inherit a
-30 Hz promise from 4–8; count, content weight, and feel are a profile choice.
+Projection/packing is also factorized: shared dirty packing, per-recipient
+selection/private merge/delta encoding, changed-byte compression, and keyframe
+compression are separate CPU and allocation terms. Report mean CPU for billing
+and p95/p99 barrier completion for latency.
 
 ### Heavier simulation envelopes
 
@@ -491,6 +489,29 @@ outbox work. Fleet packing uses the measured match profile: a host that safely
 packs forty light 4-player authorities may pack only one heavy 96-player
 authority.
 
+Memory placement is auditable rather than a per-player guess:
+
+```text
+M_match = M_world_runtime + M_shared_canonical_history
+        + sum_clients(M_socket + M_baseline + M_private
+                    + M_app_queue + M_transport_observed + M_inbound)
+```
+
+At 96, the 512 KiB application cap contributes at most 48 MiB; its 256 KiB
+reliable subset is included, not additive. Observing every transport at the
+256 KiB high-water threshold contributes another 24 MiB, but high-water is not
+a hard transport cap. Socket/runtime overhead, baselines, private recovery,
+inbound buffers, shared history, peaks above high-water, and GC/RSS margin all
+remain measured terms. The prior 192 MiB representative envelope remains a
+modeled placement envelope pending measurement.
+
+Host density is the minimum of isolated writer lanes, reserved mean-billable
+CPU, RAM, egress, encode throughput, packet rate, process caps, and
+failure-domain policy. At 64 KiB/s and an illustrative 1,200-byte payload,
+modeled aggregate traffic is roughly 2.5k/5.1k/10.2k PPS at 24/48/96 after
+inputs and 25% control/ACK margin. Capture production TLS/gateway traffic
+before treating those PPS values or any packing density as achieved.
+
 ### High-count hosting cost forecast
 
 At the 64 KiB/s target, state egress alone is 5.66/11.32/22.65 GB per
@@ -504,9 +525,10 @@ database/auth/logs/support/voice:
 | Railway resource-rate forecast | $0.3370 | $0.6691 | $1.3284 | $0.0138 |
 | Render listed instances + marginal bandwidth | $0.8836 | $1.8151 | $3.6371 | $0.0379 |
 
-The current 1.08 MB/s full-JSON ceiling changes the 96-player cost to about
-$0.0822/player-hour on the Fly scenario, $0.1964 on Railway, and $0.5857 on
-Render—before the CPU/GC/NIC risk of 829 Mbit/s payload fan-out.
+The population-specific measured-shape full-snapshot sensitivity changes the
+96-player cost to about $0.1220/player-hour on Fly, $0.2958 on Railway, and
+$0.8838 on Render. Its payload alone is modeled at 564.009 GB/match-hour and
+1.253 Gbit/s before framing, events, recovery, or retransmission.
 
 Heavier-sim compute before reserve and network:
 
@@ -516,16 +538,18 @@ Heavier-sim compute before reserve and network:
 | 48 S1 / S2 / S3 | 1.5/2.25; 3/4; 6/8 | $0.0719 / $0.1370 / $0.2740 | $0.1134 / $0.2232 / $0.4464 | ~$0.1293 / $0.2530 / $0.5050 |
 | 96 S1 / S2 / S3 | 3/4; 6/8; 12/16 | $0.1370 / $0.2740 / $0.5479 | $0.2232 / $0.4464 / $0.8928 | ~$0.2530 / $0.5050 / $1.0090 |
 
-These metered formulas do not prove dedicated CPU behavior or that one JS
-writer can consume multiple vCPUs. S2/S3 depend on deterministic worker
-offload. Add 1.25–1.67x capacity factor, regional fragmentation, egress,
-gateway/DO/Worker charges, fixed services, and support.
+These mean-billable compute sensitivities size invoices; they do not pass the
+writer p95/p99 gate. In particular, 96 S3/Heavy96 is infeasible until serial
+writer work falls or deterministic worker offload lands. Add 1.25–1.67x
+capacity factor, regional fragmentation, egress, gateway/DO/Worker charges,
+fixed services, and support.
 
 Cloudflare Durable Object billing arithmetic is much lower—about
 $0.0155/$0.0252/$0.0446 per active match-hour at 24/48/96 for duration plus
 15 Hz input requests after allowances—but runtime fit is entirely unproven.
-A single-threaded 128 MB billed object cannot be treated as a 96-player heavy
-authority because the price formula looks attractive.
+Durable Objects remain a 4–8-player experiment. A 128 MiB object is a 96-player
+non-fit only under the pending 192 MiB representative envelope; the auditable
+memory formula has not derived that total.
 
 ## Hosting Position
 
@@ -545,9 +569,13 @@ authority because the price formula looks attractive.
   externalized room state are a poor fit pending vendor confirmation and a
   stateful-run proof. Vercel remains usable for web/control surfaces.
 
-The base compact-delta experiment target is now $0.0143/player-hour, or about
+The base compact-delta 4–8 experiment target is now $0.0143/player-hour, or about
 $0.172 for a 12-hour buyer. That is a variable-service target, not the whole
-business. The calendar stack floors are modeled separately at $162/month for
+business and must not be blended with high-count event economics. High-count
+costs use their own mode hours, observed occupancy, authority shapes, and
+vector packing; the flat modeled S1 $0.0092/player-hour at full 24/48/96
+occupancy is an artifact of proportional forecast resources, not a scaling
+result. The calendar stack floors are modeled separately at $162/month for
 an owner-operated service, $803/month for a recommended production posture,
 and $20,300/month for a contracted scale posture. With explicit 3/12/40-hour
 cohorts, 12/36/84-month service terms, loaded operations labor, and a 45-day
