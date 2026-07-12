@@ -207,6 +207,18 @@ pending input/action work after the final drain, and full CDP/profile/process
 cleanup. This 500 ms gate is a harness-regression threshold, not a product or
 WAN SLO.
 
+Immutable T0 acceptance is
+`tests/screenshots/multiplayer-impairment-2026-07-12T093206432Z-t0-cdp-smoke-4p-0410CD90-f460af`
+from clean commit `ef604ef`. Chrome 150 held the original socket open through a
+4,999 ms configured offline interval with zero guarded inbound-frame, snapshot,
+or input-ACK progress, then delivered first progress in 89 ms. Steady-state
+input-ACK p95 was 121.0--138.8 ms across 325--409 samples per pilot. The two
+excluded pilot-3 recovery input samples measured 5,061.7 and 9,035.5 ms and
+matched their expected timeout errors within 2.9 and 9.6 ms. Two downstream
+releases were rejected under the declared pressure budget, all pages drained
+within 2,192 ms, every Chrome profile was restored, and every process, port,
+profile directory, and registry artifact passed cleanup.
+
 Canonical profiles retain the review's 15-second warm-up, declared active
 duration, and 15-second recovery. PR profiles use the same scenario version,
 seeds, and rules but shorter declared durations and must label every summary

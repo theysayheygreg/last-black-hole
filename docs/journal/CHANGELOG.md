@@ -22,6 +22,12 @@
   ACK settles every previously unmeasured physical input it covers exactly
   once. Shared F0, F1, F3, F6 and the full multiplayer-network lane remain
   green after the change.
+- Accepted the first clean committed-head T0 artifact at
+  `multiplayer-impairment-2026-07-12T093206432Z-t0-cdp-smoke-4p-0410CD90-f460af`:
+  the same socket resumed after 4,999 ms with first progress in 89 ms,
+  121.0--138.8 ms steady-state input-ACK p95, explicit 5.1/9.0 s recovery
+  samples, exact timeout matching, bounded pressure rejection, final drain,
+  and complete cleanup.
 
 ## 2026-07-11 — v0.4 Phase 0 multiplayer trust closure
 
