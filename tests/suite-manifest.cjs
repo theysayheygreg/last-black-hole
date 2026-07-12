@@ -146,6 +146,14 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "ToxiproxyControl",
+    file: "toxiproxy-control.cjs",
+    lanes: ["multiplayer-network", "full"],
+    browser: false,
+    slow: true,
+    timeout: 30000,
+  },
+  {
     name: "AudioToolkit",
     file: "audio-toolkit.cjs",
     lanes: ["static", "full"],
