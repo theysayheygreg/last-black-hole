@@ -126,6 +126,20 @@ evidence, hard memory caps, and reusable cleanup. No production source changed.
 The next exclusive-owner slice is adapter-side scheduler injection with the
 default immediate path preserved bit-for-bit.
 
+**Browser/transport checkpoint — 2026-07-12:** the application-frame path now
+has accepted F0/F1/F3/F6 four-browser evidence, including simultaneous
+four-client epoch rotation and recovery. T0 also has clean committed-head
+Chrome 150 evidence for fixed aggregate shaping plus a five-second offline
+stall. Chrome queued the open WebSocket and resumed that same socket, so T0 is
+not reconnect, packet-loss, TCP-pressure, WAN, or TLS proof. Its accepted
+artifact is
+`multiplayer-impairment-2026-07-12T093206432Z-t0-cdp-smoke-4p-0410CD90-f460af`.
+The next implementation slice is a managed T1 TCP-stream proxy cohort with one
+shared match authority and four independent per-browser listeners. F5
+blackout/reset follows only after T1 acceptance; T2 slow-reader proof still
+requires authority-side `bufferedAmount` pressure, and Linux receiver-ingress
+netem remains the packet-truth lane.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

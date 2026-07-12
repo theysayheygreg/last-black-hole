@@ -204,6 +204,27 @@ Singularity that:
   may inject the scheduler into the adapter factory only behind an explicit
   test dependency; client injection remains a later disjoint owner.
 
+### Phase 2 browser and Chrome transport checkpoint — 2026-07-12 02:35 UTC
+
+- The seeded four-browser F0/F1/F3/F6 path is implemented and accepted. F6
+  rotates all four connection epochs and proves welcome, aligned baseline,
+  physical baseline ACK, fresh physical input, and covering input ACK after
+  the interruption barrier. The production reconnect race fix is `e93ed42`;
+  clean F6 acceptance is recorded by `5cd65c6`.
+- The T0 Chrome transport smoke is implemented at `ef604ef` and accepted at
+  `3558906` from a clean no-retry run. Chrome 150 held the existing WebSocket
+  open across a 4,999 ms configured offline interval with zero guarded frame,
+  snapshot, or input-ACK progress, then resumed the same socket with first
+  progress in 89 ms. This is Chrome transport-stall evidence, not reconnect,
+  packet loss, receive-window pressure, WAN, or TLS evidence.
+- Shared-ledger regressions F0/F1/F3/F6 and the full multiplayer-network lane
+  are green after cumulative input-ACK latency accounting was corrected.
+- The next bounded lane is T1: one dedicated managed proxy daemon for the
+  harness run, four independent browser listeners, and one shared match
+  authority upstream. T1 must prove only configured TCP-stream proxy
+  latency/rate headroom plus gameplay outcomes. F5 reset/blackout, T2
+  slow-reader pressure, Linux packet truth, and hosted WSS remain separate.
+
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 
 - The prior five-hour window reset successfully after the durable `76d1dde`
