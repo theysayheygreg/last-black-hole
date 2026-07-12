@@ -68,6 +68,11 @@
   settlement stays identity-idempotent and events remain hidden from gameplay
   across delivery holes. Welcome, rebase, reset, stop, overflow, stale-run, and
   mismatched-action cases fail closed without ACKing unretained work.
+- Landed queue-owned reliable send-attempt leases. Draining no longer makes a
+  consequence ACK-eligible; only a non-throwing physical socket submission
+  advances the hole-free sent watermark. Omission re-arms a fresh attempt,
+  duplicate submissions remain capped at two physical copies of one retained
+  entry, and replay/reset/terminal cleanup fences opaque stale tokens.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

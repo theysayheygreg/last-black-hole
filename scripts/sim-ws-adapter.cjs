@@ -96,8 +96,12 @@ function createSimWebSocketAdapter(options = {}) {
     }
   }
 
-  function sendWireImmediate(state, wire) {
-    if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) return false;
+  function sendWireImmediate(state, wire, sendAttempt = null) {
+    if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) {
+      if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
+      return false;
+    }
+    if (sendAttempt && !state.queue.authorizePhysicalSend(sendAttempt)) return false;
     try {
       state.pendingSends += 1;
       state.ws.send(wire, (error) => {
@@ -105,9 +109,17 @@ function createSimWebSocketAdapter(options = {}) {
         if (error) terminate(state);
         else flush(state);
       });
+      if (sendAttempt) {
+        if (!state.queue.recordPhysicalSend(sendAttempt)
+          || !state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 1 })) {
+          terminate(state);
+          return false;
+        }
+      }
       return true;
     } catch {
       state.pendingSends = Math.max(0, state.pendingSends - 1);
+      if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
       terminate(state);
       return false;
     }
@@ -277,7 +289,11 @@ function createSimWebSocketAdapter(options = {}) {
             const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
             if (!sendWire(state, wire, frame)) break;
           }
-        } else if (!sendWire(state, encodeWireFrame(message.envelope, { direction: SERVER_TO_CLIENT }), message.envelope)) {
+        } else if (!sendWireImmediate(
+          state,
+          encodeWireFrame(message.envelope, { direction: SERVER_TO_CLIENT }),
+          message.sendAttempt,
+        )) {
           break;
         }
       }

@@ -8,6 +8,14 @@ function bytes(frame) {
   return Buffer.byteLength(JSON.stringify(frame), "utf8");
 }
 
+function physicallyAccept(queue, message, copies = 1) {
+  for (let copy = 0; copy < copies; copy += 1) {
+    assert.strictEqual(queue.authorizePhysicalSend(message.sendAttempt), true);
+    assert.strictEqual(queue.recordPhysicalSend(message.sendAttempt), true);
+  }
+  assert.strictEqual(queue.completeSendAttempt(message.sendAttempt, { physicalCopies: copies }), true);
+}
+
 function testStateCoalescingAndOrdering() {
   const queue = createMultiplayerSendQueue({ maxMessages: 8, maxBytes: 4096 });
   assert.deepStrictEqual(queue.enqueueState(10, { x: 1 }), {
@@ -46,10 +54,13 @@ function testReliableFifoAckAndReplay() {
     JSON.stringify({ kind: "death" }),
     JSON.stringify({ kind: "extract" }),
   ]);
+  for (const message of sent.messages) physicallyAccept(queue, message);
   assert.strictEqual(queue.drain().messages.length, 0, "sent reliable entries await ack without hot-loop resend");
 
   assert.strictEqual(queue.replayAfter(1).replayMessages, 2);
-  assert.deepStrictEqual(queue.drain().messages.map((message) => message.reliableId), [2, 3]);
+  const replayed = queue.drain();
+  assert.deepStrictEqual(replayed.messages.map((message) => message.reliableId), [2, 3]);
+  for (const message of replayed.messages) physicallyAccept(queue, message);
   const ack = queue.acknowledge(2);
   assert.strictEqual(ack.removedMessages, 2);
   assert.strictEqual(ack.removedBytes, first.byteLength + second.byteLength);
@@ -94,6 +105,7 @@ function testExplicitReliableIdsPreserveWire() {
   assert.strictEqual(drained.messages[0].reliableId, 50);
   assert.deepStrictEqual(drained.messages[0].envelope, frame);
   assert.strictEqual(drained.messages[0].wire, JSON.stringify(frame));
+  physicallyAccept(queue, drained.messages[0]);
 
   const automatic = queue.enqueueConsequence({ type: "event", deliveryId: 51 });
   assert.strictEqual(automatic.id, 51, "generic callers retain automatic monotonic allocation");
@@ -217,6 +229,87 @@ function testInvalidWatermarksDisconnectExplicitly() {
   assert.throws(() => createMultiplayerSendQueue().acknowledge(undefined), /ack id/);
 }
 
+function testAttemptLeasesAndContiguousPhysicalWatermark() {
+  const queue = createMultiplayerSendQueue();
+  queue.enqueueConsequence({ event: 1 });
+  queue.enqueueConsequence({ event: 2 });
+  const drained = queue.drain();
+  const [first, second] = drained.messages;
+
+  assert.strictEqual(queue.status().highestSentReliableId, 0, "drain must not make a frame ACK-eligible");
+  assert.strictEqual(queue.acknowledge(1).reason, "ack-beyond-sent-window");
+
+  const reordered = createMultiplayerSendQueue();
+  reordered.enqueueConsequence({ event: 1 });
+  reordered.enqueueConsequence({ event: 2 });
+  const [reorderedFirst, reorderedSecond] = reordered.drain().messages;
+  physicallyAccept(reordered, reorderedSecond);
+  assert.strictEqual(reordered.status().highestSentReliableId, 0, "ID 2 cannot advance across physical ID 1 hole");
+  physicallyAccept(reordered, reorderedFirst);
+  assert.strictEqual(reordered.status().highestSentReliableId, 2, "closing ID 1 hole advances across accepted ID 2");
+
+  assert.strictEqual(queue.authorizePhysicalSend(first.sendAttempt), false,
+    "terminal ACK rejection resets the queue epoch and invalidates leases");
+  assert.strictEqual(queue.authorizePhysicalSend(second.sendAttempt), false);
+}
+
+function testAttemptOmissionDuplicationReplayAndResetFencing() {
+  const queue = createMultiplayerSendQueue();
+  queue.enqueueConsequence({ event: 1 });
+  const omitted = queue.drain().messages[0];
+  assert.strictEqual(queue.completeSendAttempt(omitted.sendAttempt, { physicalCopies: 0 }), true);
+  const retried = queue.drain().messages[0];
+  assert.notStrictEqual(retried.sendAttempt, omitted.sendAttempt, "re-arm must lease a fresh opaque token");
+  assert.strictEqual(queue.authorizePhysicalSend(omitted.sendAttempt), false);
+  assert.strictEqual(queue.authorizePhysicalSend(retried.sendAttempt), true);
+  assert.strictEqual(queue.recordPhysicalSend(retried.sendAttempt), true);
+  assert.strictEqual(queue.authorizePhysicalSend(retried.sendAttempt), true);
+  assert.strictEqual(queue.recordPhysicalSend(retried.sendAttempt), true);
+  assert.strictEqual(queue.authorizePhysicalSend(retried.sendAttempt), false,
+    "a third copy must be rejected before any physical send");
+  assert.strictEqual(queue.completeSendAttempt(retried.sendAttempt, { physicalCopies: 2 }), true);
+  assert.strictEqual(queue.status().reliableMessages, 1, "duplicate physical copies retain one logical entry");
+
+  queue.enqueueConsequence({ event: 2 });
+  const replayLease = queue.drain().messages[0];
+  assert.strictEqual(queue.replayAfter(1).accepted, true);
+  assert.strictEqual(queue.authorizePhysicalSend(replayLease.sendAttempt), false,
+    "replay must fence the prior leased attempt");
+  const freshReplay = queue.drain().messages[0];
+  assert.strictEqual(freshReplay.reliableId, 2);
+  assert.strictEqual(queue.completeSendAttempt(freshReplay.sendAttempt, { physicalCopies: 0 }), true);
+
+  const resetLease = queue.drain().messages[0];
+  queue.reset();
+  assert.strictEqual(queue.authorizePhysicalSend(resetLease.sendAttempt), false, "reset must fence every prior queue epoch");
+  assert.strictEqual(queue.recordPhysicalSend(resetLease.sendAttempt), false);
+  assert.strictEqual(queue.completeSendAttempt(resetLease.sendAttempt, { physicalCopies: 0 }), false);
+
+  const pressured = createMultiplayerSendQueue({ transportHighWaterBytes: 100, transportLowWaterBytes: 25 });
+  pressured.enqueueConsequence({ event: 1 });
+  const pressuredLease = pressured.drain().messages[0];
+  pressured.observeTransportBufferedBytes(100);
+  assert.strictEqual(pressured.completeSendAttempt(pressuredLease.sendAttempt, { physicalCopies: 0 }), true);
+  assert.strictEqual(pressured.drain().action, "pause", "high water must accept no physical copy");
+  pressured.observeTransportBufferedBytes(25);
+  assert.strictEqual(pressured.drain().messages[0].reliableId, 1, "low water permits a fresh attempt");
+}
+
+function testLeasedEntriesStillConsumeCaps() {
+  const queue = createMultiplayerSendQueue({
+    maxMessages: 1,
+    maxBytes: 4096,
+    maxReliableMessages: 1,
+    maxReliableBytes: 4096,
+  });
+  queue.enqueueConsequence({ event: 1 });
+  const lease = queue.drain().messages[0];
+  assert.strictEqual(queue.status().queuedMessages, 1);
+  assert.strictEqual(queue.enqueueConsequence({ event: 2 }).reason, "reliable-retention-unsafe");
+  assert.strictEqual(queue.authorizePhysicalSend(lease.sendAttempt), false,
+    "terminal cap failure invalidates the leased token");
+}
+
 function main() {
   testStateCoalescingAndOrdering();
   testReliableFifoAckAndReplay();
@@ -226,6 +319,9 @@ function main() {
   testReplaceableFloodAndOversizeRebase();
   testBackpressureHysteresisAndReset();
   testInvalidWatermarksDisconnectExplicitly();
+  testAttemptLeasesAndContiguousPhysicalWatermark();
+  testAttemptOmissionDuplicationReplayAndResetFencing();
+  testLeasedEntriesStillConsumeCaps();
   console.log("multiplayer send queue: bounded state/reliable lanes, replay, backpressure, and reset passed");
 }
 

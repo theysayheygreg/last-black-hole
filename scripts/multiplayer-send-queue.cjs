@@ -163,7 +163,15 @@ class MultiplayerSendQueue {
     }
 
     this.nextReliableId += 1;
-    this.reliable.push({ ...candidate, needsSend: true });
+    this.reliable.push({
+      ...candidate,
+      everTransportAccepted: false,
+      attempt: "ready",
+      attemptId: null,
+      attemptToken: null,
+      attemptPhysicalCopies: 0,
+      physicalCopies: 0,
+    });
     this.reliableBytes = projectedReliableBytes;
     this._refreshBackpressure();
     return { accepted: true, action: "queued", id, byteLength: candidate.byteLength };
@@ -222,7 +230,10 @@ class MultiplayerSendQueue {
     let replayMessages = 0;
     for (const entry of this.reliable) {
       if (entry.reliableId > normalizedId) {
-        entry.needsSend = true;
+        entry.attempt = "ready";
+        entry.attemptId = null;
+        entry.attemptToken = null;
+        entry.attemptPhysicalCopies = 0;
         replayMessages += 1;
       }
     }
@@ -262,6 +273,7 @@ class MultiplayerSendQueue {
         envelope: entry.envelope,
         wire: entry.wire,
         byteLength: entry.byteLength,
+        sendAttempt: entry.attemptToken,
       }));
       bytes += entry.byteLength;
       return true;
@@ -269,18 +281,56 @@ class MultiplayerSendQueue {
 
     // Consequences have deterministic FIFO priority over replaceable state.
     for (const entry of this.reliable) {
-      if (!entry.needsSend) continue;
+      if (entry.attempt !== "ready") continue;
+      const attemptId = ++this.nextAttemptId;
+      const token = Object.freeze({
+        queueEpoch: this.queueEpoch,
+        reliableId: entry.reliableId,
+        attemptId,
+      });
+      entry.attempt = "leased";
+      entry.attemptId = attemptId;
+      entry.attemptToken = token;
+      entry.attemptPhysicalCopies = 0;
       if (!append(entry)) {
+        entry.attempt = "ready";
+        entry.attemptId = null;
+        entry.attemptToken = null;
         reliableBlocked = true;
         break;
       }
-      entry.needsSend = false;
-      this.highestSentReliableId = Math.max(this.highestSentReliableId, entry.reliableId);
     }
     if (!reliableBlocked && this.state && append(this.state)) this.state = null;
 
     this._refreshBackpressure();
     return { action: "send", messages, bytes };
+  }
+
+  authorizePhysicalSend(token) {
+    const entry = this._entryForLiveAttempt(token);
+    return entry !== null && entry.attemptPhysicalCopies < 2;
+  }
+
+  recordPhysicalSend(token) {
+    const entry = this._entryForLiveAttempt(token);
+    if (!entry || entry.attemptPhysicalCopies >= 2) return false;
+    entry.attemptPhysicalCopies += 1;
+    entry.physicalCopies = Math.min(2, entry.physicalCopies + 1);
+    entry.everTransportAccepted = true;
+    this._advancePhysicalWatermark();
+    return true;
+  }
+
+  completeSendAttempt(token, options = {}) {
+    const entry = this._entryForLiveAttempt(token);
+    if (!entry) return false;
+    const physicalCopies = nonNegativeInteger(options.physicalCopies, undefined, "physicalCopies");
+    if (physicalCopies > 2 || physicalCopies !== entry.attemptPhysicalCopies) return false;
+    entry.attempt = physicalCopies === 0 ? "ready" : "idle";
+    entry.attemptId = null;
+    entry.attemptToken = null;
+    entry.attemptPhysicalCopies = 0;
+    return true;
   }
 
   clearRebase() {
@@ -292,6 +342,8 @@ class MultiplayerSendQueue {
   }
 
   reset(options = {}) {
+    this.queueEpoch = (this.queueEpoch || 0) + 1;
+    this.nextAttemptId = 0;
     this.state = null;
     this.reliable = [];
     this.reliableBytes = 0;
@@ -337,6 +389,7 @@ class MultiplayerSendQueue {
   }
 
   _disconnect(reason) {
+    this._invalidateLeasedAttempts();
     this.terminal = Object.freeze({ reason, requiresRebase: true });
     this.backpressured = true;
   }
@@ -356,6 +409,40 @@ class MultiplayerSendQueue {
       || this.reliable.length >= this.limits.maxReliableMessages
       || this.reliableBytes >= this.limits.maxReliableBytes;
     this.backpressured = this.terminal !== null || this.transportBackpressured || queueAtLimit;
+  }
+
+  _entryForLiveAttempt(token) {
+    if (!token || typeof token !== "object" || token.queueEpoch !== this.queueEpoch) return null;
+    const entry = this.reliable.find((candidate) => candidate.reliableId === token.reliableId);
+    if (
+      !entry
+      || entry.attempt !== "leased"
+      || entry.attemptId !== token.attemptId
+      || entry.attemptToken !== token
+    ) return null;
+    return entry;
+  }
+
+  _advancePhysicalWatermark() {
+    let cursor = this.highestSentReliableId;
+    for (const entry of this.reliable) {
+      if (entry.reliableId <= cursor) continue;
+      if (entry.reliableId !== cursor + 1 || !entry.everTransportAccepted) break;
+      cursor = entry.reliableId;
+    }
+    this.highestSentReliableId = cursor;
+  }
+
+  _invalidateLeasedAttempts() {
+    this.queueEpoch += 1;
+    this.nextAttemptId = 0;
+    for (const entry of this.reliable) {
+      if (entry.attempt !== "leased") continue;
+      entry.attempt = "idle";
+      entry.attemptId = null;
+      entry.attemptToken = null;
+      entry.attemptPhysicalCopies = 0;
+    }
   }
 }
 

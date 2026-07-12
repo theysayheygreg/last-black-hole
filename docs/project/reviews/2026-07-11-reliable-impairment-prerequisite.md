@@ -145,7 +145,7 @@ accepted `rebase`, stream reset, and terminal stop.
 1. **Client contiguous ACK — landed.** Land the bounded cursor/set while the server still
    sends reliable frames immediately and in order. Prove ACK-kind separation,
    duplicate idempotence, holes, overflow, reconnect, and same-socket rebase.
-2. **Queue attempt leases.** Change queue accounting without enabling reliable
+2. **Queue attempt leases — landed.** Change queue accounting without enabling reliable
    scheduling. Prove drain is not sent, contiguous physical watermark behavior,
    omission re-arm, bounded duplicate copies, backpressure, error cleanup,
    replay, reset, and caps.
@@ -162,6 +162,13 @@ immediate. Do not combine this work with the browser cohort or TCP proxy lanes.
 Step 1 landed with a 128-ID delivery window, 64-event semantic buffer, and a
 bounded 128-entry settled-action receipt cache. Its focused stream suite now
 has 12 cases and the complete `multiplayer-network` lane remains green.
+
+Step 2 landed with opaque queue-epoch attempt tokens, a contiguous physical
+send watermark, zero-copy re-arm, and a two-copy pre-send authorization cap.
+Reliable frames still bypass the scheduler. Step 3 must re-check high water at
+every delayed physical release and either lease one reliable entry at a time or
+zero-complete every unprocessed lease in a drained batch; otherwise a mid-batch
+pause can strand later leased entries.
 
 ## Required adversaries
 
