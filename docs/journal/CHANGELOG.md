@@ -7,6 +7,12 @@
 
 ## 2026-07-12 — v0.4 network impairment evidence
 
+- Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
+  explicit disable/cleanup/re-enable connection fence. The 25-second interval
+  is measured from verified toxic activation; endpoint no-progress, not live
+  proxy counters, proves the outage. Healthy proxies remain untouched, and
+  recovery requires a distinct socket and greater authority epoch.
+
 - Froze the next T1 implementation packet around one pinned Toxiproxy v2.12.0
   daemon, four independent browser listeners, and one shared match authority.
   The fixture will record nearest representable decimal-kB/s rates alongside

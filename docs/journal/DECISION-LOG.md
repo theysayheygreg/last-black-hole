@@ -1,5 +1,26 @@
 # Decision Log
 
+## 2026-07-12 — F5 uses timeout drop plus a one-client proxy fence
+
+**Decision:** F5 will precreate inert bidirectional `timeout:0` toxics on pilot
+3's listener, activate them for at least 25 verified seconds alongside Layer A
+discard, then disable, clean, and re-enable only that proxy. Recovery requires
+a distinct WebSocket and greater authority connection epoch. Global `/reset`,
+dynamic `reset_peer`, and live proxy counters are not used as truth.
+
+**Why:** Pinned v2.12.0 timeout zero consumes and discards chunks without a
+release buffer. Disabling the one proxy fences its tracked connections, while
+global reset would mutate healthy paths. Dynamic reset-peer does not establish
+immediate RST semantics, and proxy counters settle only when link copies end;
+endpoint progress is the honest outage clock.
+
+**Where it landed:**
+`docs/project/reviews/2026-07-12-f5-one-client-blackout-implementation.md`.
+
+**Door status:** Closed for global proxy reset, synchronous-RST claims,
+shortening the verified 25-second drop, or combining F5 with T2/netem/hosted
+evidence. Open for the controller proof, then the isolated F5 cohort.
+
 ## 2026-07-12 — T1 uses four proxy paths into one match authority
 
 **Decision:** T1 will run one pinned Toxiproxy v2.12.0 daemon per harness run,

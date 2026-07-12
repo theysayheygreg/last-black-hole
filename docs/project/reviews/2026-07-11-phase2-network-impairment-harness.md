@@ -181,7 +181,7 @@ listed seeds; a seed replay must make the same decisions.
 | `F2-mixed` | A / 90 s | clients by `index % 4`: `(10±5)/(20±5)`, `(25±10)/(45±15)`, `(50±20)/(80±30)`, `(75±30)/(125±50)` ms up/down; bounded uniform | `0x0402B17E` | `0x0802B17E` |
 | `F3-frame-defense` | A / 90 s | last client only: omit 5% input, 20% action/delivery ACK, duplicate 10% event/action ACK, release window 3 for state/ACK; never mutate IDs | `0x0403AC11` | `0x0803AC11` |
 | `F4-frame-burst` | A / 90 s | last client, each direction: two seeded 750 ms omission bursts beginning in `[20,30]` and `[50,60]` s; latest input/state omitted, reliable retention untouched | `0x0404B057` | `0x0804B057` |
-| `F5-one-blackout` | A + proxy / 75 s | last client blackholed at t=20 s for 25 s, proxy then reset; held frames discarded; recovery begins at t=45 s | `0x0405B1AC` | `0x0805B1AC` |
+| `F5-one-blackout` | A + proxy / 75 s | last client gets bidirectional Layer A discard plus proxy `timeout:0` at t=20 s; after >=25 s verified proxy drop, only that proxy is disabled, cleaned, and re-enabled; recovery begins after verified re-enable | `0x0405B1AC` | `0x0805B1AC` |
 | `F6-all-flap` | A + proxy / 75 s | all physical connections reset in the same 100 ms barrier at t=25 s; proxy remains available for resume | `0x0406F1A9` | `0x0806F1A9` |
 | `T0-cdp-smoke` | CDP / 60 s | after baseline: each browser 35 ms fixed latency, 64 KiB/s upload, 320 KiB/s download; last browser offline t=25--30 s | `0x0410CD90` | `0x0810CD90` |
 | `T1-cap-headroom` | proxy / 90 s | each client: 64 KiB/s upstream, 320 KiB/s downstream, fixed 25 ms up and 45 ms down; no unseeded jitter in the strict gate | `0x0411CA90` | `0x0811CA90` |
@@ -254,6 +254,12 @@ After restoration, `F5` must recover within 8 seconds. `F6` must recover every
 client within 10 seconds at 4p and 15 seconds at 8p, or each must reach an
 explicit terminal failure within that budget. No client may remain in a
 half-open `connecting/reconnecting` state.
+
+F5's first four-browser PR smoke uses 5/40/15 seconds while retaining the full
+25-second verified proxy interval; canonical remains 15/45/15. “Reset” means a
+pilot-3-only proxy disable/cleanup/re-enable fence, never global `/reset` and
+never a synchronous TCP-RST claim. Live proxy byte counters are not its outage
+clock; endpoint no-progress plus exact active toxic state is.
 
 Global hard gates for every row:
 
