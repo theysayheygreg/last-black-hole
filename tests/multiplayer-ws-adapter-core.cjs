@@ -366,7 +366,7 @@ async function run() {
     const adapter = createSimWebSocketAdapter({
       server,
       runId: "run-pressure-observer",
-      heartbeatIntervalMs: 60_000,
+      heartbeatIntervalMs: 1_000,
       backpressureTimeoutMs: 80,
       sweepIntervalMs: 10,
       closeGraceMs: 30,
@@ -405,7 +405,7 @@ async function run() {
             runId: binding.runId, membershipId: binding.membershipId, playerId: binding.playerId,
             connectionId: `connection-private-${name}`, connectionEpoch: 1,
             commandCredential: `credential-private-${name}`, lastCommandSeq: 0, nextCommandSeq: 1,
-            lastInputSeq: 0, lastActionSeq: 0, heartbeatIntervalMs: 60_000, reconnected: false,
+            lastInputSeq: 0, lastActionSeq: 0, heartbeatIntervalMs: 1_000, reconnected: false,
           },
           rebase: { type: "rebase", runId: binding.runId, reason: "initial", snapshotId: 1, lastEventSeq: 0 },
           baselineFrames: [publicState, {
@@ -450,12 +450,35 @@ async function run() {
         await waitFor(() => nextFrame(client.messages, "welcome"), { label: `observer pilot ${index} welcome` });
         clients.push(client);
       }
+      for (const client of clients) {
+        const heartbeat = await waitFor(() => nextFrame(client.messages, "heartbeat"), {
+          timeout: 1_500, label: "observer heartbeat",
+        });
+        client.ws.send(JSON.stringify({ type: "pong", heartbeatId: heartbeat.heartbeatId, clientTimeMs: Date.now() }));
+      }
+      await waitFor(() => events.filter((event) => event.type === "heartbeat-pong").length === 4, {
+        label: "authority-validated heartbeat observer events",
+      });
       await adapter.enqueueReliable(
         bindings.get("pilot-3"),
         eventFrame("run-pressure-observer", 1, "private-before-rebase"),
       );
       await waitFor(() => adapter.diagnostics().pressure.connections[4].current.reliableMessages === 1, {
         label: "retained reliable before operational rebase",
+      });
+      const firstReliable = await waitFor(() => clients[3].messages.find((frame) => frame.type === "event"
+        && frame.eventSeq === 1), { label: "observer reliable before ACK" });
+      clients[3].ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: firstReliable.deliveryId }));
+      await waitFor(() => events.some((event) => event.type === "reliable-ack-retired"
+        && event.schedulerConnectionId === 4 && event.reliableId === firstReliable.deliveryId), {
+        label: "observer reliable retirement",
+      });
+      await adapter.enqueueReliable(
+        bindings.get("pilot-3"),
+        eventFrame("run-pressure-observer", 2, "private-before-rebase-retained"),
+      );
+      await waitFor(() => adapter.diagnostics().pressure.connections[4].current.reliableMessages === 1, {
+        label: "second retained reliable before operational rebase",
       });
       const operationalRebase = await adapter.sendRebase(bindings.get("pilot-3"), {
         type: "rebase", runId: "run-pressure-observer", reason: "event-gap", snapshotId: 2, lastEventSeq: 0,
@@ -474,7 +497,7 @@ async function run() {
       pressureEnabled = true;
       await adapter.projectNow();
       await adapter.projectNow();
-      await adapter.enqueueReliable(bindings.get("pilot-3"), eventFrame("run-pressure-observer", 2, "private-event"));
+      await adapter.enqueueReliable(bindings.get("pilot-3"), eventFrame("run-pressure-observer", 3, "private-event"));
       await waitFor(() => clients[3].close.code !== null, { timeout: 1_000, label: "attributed timeout close" });
       await waitFor(() => adapter.diagnostics().connections === 3, { label: "pressured connection cleanup" });
 
@@ -494,9 +517,32 @@ async function run() {
           `Healthy pilot ${index} must retain zero pressure-policy effects`);
       }
       const pressuredEvents = events.filter((event) => event.schedulerConnectionId === 4);
-      for (const type of ["transport-high-enter", "transport-low-exit", "state-coalesced", "queue-policy", "close-dispatched", "pressure-sweep", "connection-cleanup"]) {
+      for (const type of ["heartbeat-pong", "state-offered", "state-ws-send-accepted", "reliable-queued",
+        "reliable-ws-send-accepted", "reliable-ack-retired", "transport-high-enter", "transport-low-exit",
+        "state-coalesced", "queue-policy", "close-dispatched", "pressure-sweep", "connection-cleanup"]) {
         assert(pressuredEvents.some((event) => event.type === type), `Missing immutable ${type} transition`);
       }
+      const pong = pressuredEvents.find((event) => event.type === "heartbeat-pong");
+      assert(pong.nextHeartbeatTimeoutEligibleAt > pong.timestamp + 2_000,
+        "Validated pong telemetry must expose the next heartbeat timeout eligibility bound");
+      const offeredSnapshots = new Set(pressuredEvents.filter((event) => event.type === "state-offered")
+        .map((event) => event.snapshotId));
+      const stateAccepted = pressuredEvents.find((event) => event.type === "state-ws-send-accepted"
+        && offeredSnapshots.has(event.snapshotId));
+      const offered = pressuredEvents.find((event) => event.type === "state-offered"
+        && event.snapshotId === stateAccepted?.snapshotId);
+      assert(stateAccepted && stateAccepted.frameClass === "publicState"
+        && events.indexOf(offered) < events.indexOf(stateAccepted),
+      "State ledger transitions must order offer before physical send acceptance");
+      const reliableQueued = pressuredEvents.find((event) => event.type === "reliable-queued");
+      const reliableAccepted = pressuredEvents.find((event) => event.type === "reliable-ws-send-accepted"
+        && event.reliableId === reliableQueued.reliableId);
+      const reliableRetired = pressuredEvents.find((event) => event.type === "reliable-ack-retired"
+        && event.reliableId >= reliableQueued.reliableId);
+      assert(reliableAccepted && reliableRetired && Number.isSafeInteger(reliableQueued.reliableId)
+        && events.indexOf(reliableQueued) < events.indexOf(reliableAccepted)
+        && reliableRetired.removedCount > 0 && reliableRetired.cumulativeRetired > 0,
+      "Reliable ledger transitions must preserve queued, accepted, and cumulative retirement order");
       const highEvents = pressuredEvents.filter((event) => event.type === "transport-high-enter");
       const high = highEvents.at(-1);
       const firstHighSweep = pressuredEvents.find((event) => event.type === "pressure-sweep"

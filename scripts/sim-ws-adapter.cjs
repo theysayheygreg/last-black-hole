@@ -389,9 +389,19 @@ function createSimWebSocketAdapter(options = {}) {
         if (error) terminate(state);
         else flush(state);
       });
-      if (onPressureTransition && sendAttempt) state.pressureCounts.reliableWsSendAccepted += 1;
+      if (onPressureTransition && sendAttempt) {
+        state.pressureCounts.reliableWsSendAccepted += 1;
+        emitPressureTransition(state, "reliable-ws-send-accepted", {
+          reliableId: frame?.deliveryId ?? sendAttempt?.reliableId ?? null,
+          eventSeq: Number.isSafeInteger(frame?.eventSeq) ? frame.eventSeq : null,
+        });
+      }
       else if (onPressureTransition && (frame?.type === "publicState" || frame?.type === "ownerState")) {
         state.pressureCounts.stateFramesWsSendAccepted[frame.type] += 1;
+        emitPressureTransition(state, "state-ws-send-accepted", {
+          snapshotId: frame.snapshotId,
+          frameClass: frame.type,
+        });
       }
       if (sendAttempt) {
         if (!state.queue.recordPhysicalSend(sendAttempt)
@@ -707,6 +717,11 @@ function createSimWebSocketAdapter(options = {}) {
       const result = state.queue.enqueueConsequence(retainedFrame, { reliableId: retainedFrame.deliveryId });
       if (onPressureTransition && result.accepted) state.pressureCounts.reliableQueued += 1;
       samplePressure(state);
+      if (result.accepted) emitPressureTransition(state, "reliable-queued", {
+        reliableId: retainedFrame.deliveryId,
+        eventSeq: Number.isSafeInteger(retainedFrame.eventSeq) ? retainedFrame.eventSeq : null,
+        byteLength: result.byteLength,
+      });
       queueOutcome(state, result);
       if (result.accepted && replayEvent && retainedFrame.type === "event") {
         state.pendingEventSeqs.set(retainedFrame.eventSeq, result.byteLength);
@@ -850,6 +865,9 @@ function createSimWebSocketAdapter(options = {}) {
       }
       state.pendingHeartbeat = null;
       state.nextHeartbeatAt = now() + state.heartbeatIntervalMs;
+      emitPressureTransition(state, "heartbeat-pong", {
+        nextHeartbeatTimeoutEligibleAt: state.nextHeartbeatAt + state.heartbeatIntervalMs * 2,
+      });
       await onPong(state.binding, frame, callbackContext(state, "pong"));
       if (!stateIsLive(state, expectedGeneration)) return;
       return;
@@ -858,6 +876,12 @@ function createSimWebSocketAdapter(options = {}) {
       if (frame.ackKind === "delivery") {
         const ackOutcome = state.queue.acknowledge(frame.deliveryId);
         if (onPressureTransition) state.pressureCounts.reliableAckRetired += ackOutcome.removedMessages || 0;
+        samplePressure(state);
+        emitPressureTransition(state, "reliable-ack-retired", {
+          reliableId: frame.deliveryId,
+          removedCount: ackOutcome.removedMessages || 0,
+          cumulativeRetired: state.pressureCounts?.reliableAckRetired || 0,
+        });
         queueOutcome(state, ackOutcome);
       }
       samplePressure(state);
@@ -1061,6 +1085,10 @@ function createSimWebSocketAdapter(options = {}) {
           frames: [publicFrame, ownerFrame],
         });
         if (onPressureTransition) state.pressureCounts.stateOffered += 1;
+        emitPressureTransition(state, "state-offered", {
+          snapshotId: publicFrame.snapshotId,
+          queueAction: outcome.action,
+        });
         if (outcome.action === "coalesced") {
           if (onPressureTransition) state.pressureCounts.stateCoalesced += 1;
           emitPressureTransition(state, "state-coalesced", { snapshotId: publicFrame.snapshotId });
