@@ -50,11 +50,17 @@ async function openRawClient({ port, ticket, pilotSlot, record, maxFrames = 1000
       const rebase = [...client.frames].reverse().find((entry) => entry.type === "rebase");
       client.ws.send(JSON.stringify({ type: "ack", ackKind: "baseline", snapshotId: frame.snapshotId,
         eventSeq: rebase?.lastEventSeq || 0 }));
+      record({ type: "baseline-ack", pilotSlot, at: Date.now(), snapshotId: frame.snapshotId,
+        eventSeq: rebase?.lastEventSeq || 0 });
       client.lastSnapshotAck = frame.snapshotId;
     }
     if (frame.type === "event") {
       client.ws.send(JSON.stringify({ type: "ack", ackKind: "delivery", deliveryId: frame.deliveryId }));
+      record({ type: "delivery-ack", pilotSlot, at: Date.now(), deliveryId: frame.deliveryId,
+        eventSeq: frame.eventSeq });
       client.ws.send(JSON.stringify({ type: "ack", ackKind: "event", eventSeq: frame.eventSeq }));
+      record({ type: "event-ack", pilotSlot, at: Date.now(), deliveryId: frame.deliveryId,
+        eventSeq: frame.eventSeq });
     }
   });
   await waitFor(() => client.ws.readyState === WebSocket.OPEN || client.error, `${pilotSlot} socket open`);

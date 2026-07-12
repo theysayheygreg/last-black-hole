@@ -179,6 +179,16 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
       && event.reliableId <= highCounts.reliableQueued + fixture.stimulus.count);
     const oldAccepted = events.filter((event) => event.type === "reliable-ws-send-accepted"
       && event.schedulerConnectionId === oldOrdinal && oldQueued.some((queued) => queued.reliableId === event.reliableId));
+    const allOldQueued = events.filter((event) => event.type === "reliable-queued"
+      && event.schedulerConnectionId === oldOrdinal && event.timestamp <= cleanup.timestamp);
+    const allOldRetiredIds = new Set(events.filter((event) => event.type === "reliable-ack-retired"
+      && event.schedulerConnectionId === oldOrdinal && event.timestamp <= cleanup.timestamp && event.removedCount > 0)
+      .map((event) => event.reliableId));
+    const cleanupReset = allOldQueued.filter((event) => !allOldRetiredIds.has(event.reliableId));
+    if (cleanupReset.length !== cleanup.pressure.counts.reliableResetOnCleanup
+      || oldQueued.some((event) => !cleanupReset.some((reset) => reset.reliableId === event.reliableId))) {
+      throw new Error("T2b cleanup-reset identities did not close the cleanup counter exactly");
+    }
     if (oldQueued.length !== 8 || new Set(oldQueued.map((event) => event.reliableId)).size !== 8
       || oldAccepted.length !== 0 || oldQueued.some((event, index) => index &&
         (event.pressure.current.reliableMessages <= oldQueued[index - 1].pressure.current.reliableMessages
@@ -264,19 +274,83 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
     const replayRetired = events.filter((event) => event.type === "reliable-ack-retired"
       && event.schedulerConnectionId === newOrdinal && replayReliableIds.includes(event.reliableId) && event.removedCount > 0);
     if (replayAccepted.length !== 8 || replayRetired.length !== 8) throw new Error("T2b replacement ledger cardinality failed");
+    const readerLedger = readJsonl(readerFile);
+    const replacementBaselineAcks = readerLedger.filter((event) => event.type === "baseline-ack"
+      && event.pilotSlot === "pilot-3-epoch-2");
+    const replayDeliveryAcks = readerLedger.filter((event) => event.type === "delivery-ack"
+      && event.pilotSlot === "pilot-3-epoch-2" && stableEventSeqs.includes(event.eventSeq));
+    const replayEventAcks = readerLedger.filter((event) => event.type === "event-ack"
+      && event.pilotSlot === "pilot-3-epoch-2" && stableEventSeqs.includes(event.eventSeq));
+    if (replacementBaselineAcks.length !== 1 || replayDeliveryAcks.length !== 8 || replayEventAcks.length !== 8
+      || stableEventSeqs.some((eventSeq) => replayDeliveryAcks.filter((event) => event.eventSeq === eventSeq).length !== 1
+        || replayEventAcks.filter((event) => event.eventSeq === eventSeq).length !== 1)) {
+      throw new Error("T2b baseline/delivery/event ACK evidence was not exact-one");
+    }
+
+    const oldStateOffered = events.filter((event) => event.type === "state-offered"
+      && event.schedulerConnectionId === oldOrdinal && event.timestamp >= tB && event.timestamp <= cleanup.timestamp);
+    const oldStateCoalesced = events.filter((event) => event.type === "state-coalesced"
+      && event.schedulerConnectionId === oldOrdinal && event.timestamp >= tB && event.timestamp <= cleanup.timestamp);
+    const oldStateAccepted = events.filter((event) => event.type === "state-ws-send-accepted"
+      && event.schedulerConnectionId === oldOrdinal && event.timestamp >= tB && event.timestamp <= cleanup.timestamp);
+    const oldOfferedIds = new Set(oldStateOffered.map((event) => event.snapshotId));
+    const oldReceived = oldImpaired.frames.filter((frame) =>
+      (frame.type === "publicState" || frame.type === "ownerState") && oldOfferedIds.has(frame.snapshotId));
+    const replacementStateAccepted = events.filter((event) => event.type === "state-ws-send-accepted"
+      && event.schedulerConnectionId === newOrdinal);
+    const replacementStates = replacement.frames.filter((frame) =>
+      frame.type === "publicState" || frame.type === "ownerState");
+    if (replacementStates.length % 2 !== 0) throw new Error("T2b replacement received an incomplete state pair");
+    const replacementPairs = [];
+    for (let index = 0; index < replacementStates.length; index += 2) {
+      const publicFrame = replacementStates[index];
+      const ownerFrame = replacementStates[index + 1];
+      const publicAccepted = replacementStateAccepted.filter((event) =>
+        event.snapshotId === publicFrame.snapshotId && event.frameClass === "publicState");
+      const ownerAccepted = replacementStateAccepted.filter((event) =>
+        event.snapshotId === ownerFrame.snapshotId && event.frameClass === "ownerState");
+      if (publicFrame.type !== "publicState" || ownerFrame.type !== "ownerState"
+        || publicFrame.snapshotId !== ownerFrame.snapshotId
+        || publicAccepted.length !== 1 || ownerAccepted.length !== 1) {
+        throw new Error(`T2b replacement state pair ${publicFrame.snapshotId} lacked exact acceptance coverage`);
+      }
+      replacementPairs.push({ snapshotId: publicFrame.snapshotId,
+        received: { publicAt: publicFrame._receivedAt, ownerAt: ownerFrame._receivedAt },
+        wsSendAccepted: { publicAt: publicAccepted[0].timestamp, ownerAt: ownerAccepted[0].timestamp } });
+    }
+    const absentAlignedSnapshotIds = [...oldOfferedIds].filter((snapshotId) =>
+      !oldReceived.some((frame) => frame.snapshotId === snapshotId));
+    if (oldReceived.length !== 0 || absentAlignedSnapshotIds.length !== oldOfferedIds.size) {
+      throw new Error("T2b old socket gained application-visible high-window state");
+    }
+    const stateLedgerEntries = oldStateOffered.length + oldStateCoalesced.length + oldStateAccepted.length
+      + oldReceived.length + replacementStateAccepted.length + replacementPairs.length;
+    const reliableLedgerEntries = allOldQueued.length + cleanupReset.length + oldAccepted.length
+      + replayed.length + replayAccepted.length + replayRetired.length
+      + replayDeliveryAcks.length + replayEventAcks.length + replacementBaselineAcks.length;
+    if (stateLedgerEntries > fixture.evidence.maxStateLedgerEntries
+      || reliableLedgerEntries > fixture.evidence.maxReliableLedgerEntries) {
+      throw new Error("T2b state/reliable evidence cap exceeded");
+    }
 
     const pressureCost = finalHealth.multiplayer.projection.accounting.costDistributions;
     const performance = { simTickP95Ms: pressureCost.simTickMs.p95,
       projectionP95Ms: pressureCost.projectionReplicationMs.p95, rssBytes: finalHealth.process.memory.rss };
     fs.writeFileSync(path.join(runDir, "reliable-ledger.json"), `${JSON.stringify({ issued,
       oldEpoch: { ordinal: oldOrdinal, queued: oldQueued.map((event) => ({ reliableId: event.reliableId,
-        eventSeq: event.eventSeq, timestamp: event.timestamp, byteLength: event.byteLength })), wsSendAccepted: [] },
+        eventSeq: event.eventSeq, timestamp: event.timestamp, byteLength: event.byteLength })), wsSendAccepted: [],
+        cleanupReset: cleanupReset.map((event) => ({ reliableId: event.reliableId, eventSeq: event.eventSeq,
+          burstIdentity: oldQueued.some((burst) => burst.reliableId === event.reliableId) })) },
       replacementEpoch: { ordinal: newOrdinal, received: replayed.map((frame) => ({ deliveryId: frame.deliveryId,
         eventSeq: frame.eventSeq, action: frame.payload.action, receivedAt: frame._receivedAt })),
         wsSendAccepted: replayAccepted.map((event) => ({ reliableId: event.reliableId, timestamp: event.timestamp })),
+        baselineAck: replacementBaselineAcks[0], deliveryAcks: replayDeliveryAcks,
+        eventAcks: replayEventAcks,
         ackRetired: replayRetired.map((event) => ({ reliableId: event.reliableId, timestamp: event.timestamp })) },
       assertions: { eightOldQueuedZeroOldAccepted: true, stableIdentityReplayExactlyOnce: true,
-        semanticConsumptionExactlyOnce: true, allReplayAckRetired: true } }, null, 2)}\n`, { flag: "wx" });
+        semanticConsumptionExactlyOnce: true, exactOneBaselineDeliveryAndEventAcks: true,
+        cleanupResetIdentitySetMatchesCounter: true, allReplayAckRetired: true },
+      evidenceCounts: { entries: reliableLedgerEntries, cap: fixture.evidence.maxReliableLedgerEntries } }, null, 2)}\n`, { flag: "wx" });
     const resumeRebase = replacement.frames.find((frame) => frame.type === "rebase");
     const resumeBaseline = replacement.frames.filter((frame) =>
       frame.type === "publicState" || frame.type === "ownerState").slice(0, 2);
@@ -286,7 +360,20 @@ async function runRawHardPressureCohort({ fixture, runDir, port }) {
         lastEventSeq: resumeRebase.lastEventSeq },
       baseline: resumeBaseline.map((frame) => ({ type: frame.type, snapshotId: frame.snapshotId,
         lastEventSeq: frame.lastEventSeq, receivedAt: frame._receivedAt })),
-      assertions: { alignedBaselineBeforeReplay: true, coveringInputAck: true } }, null, 2)}\n`, { flag: "wx" });
+      oldEpochHighWindow: {
+        offered: oldStateOffered.map((event) => ({ snapshotId: event.snapshotId,
+          queueAction: event.queueAction, timestamp: event.timestamp })),
+        coalesced: oldStateCoalesced.map((event) => ({ snapshotId: event.snapshotId, timestamp: event.timestamp })),
+        wsSendAccepted: oldStateAccepted.map((event) => ({ snapshotId: event.snapshotId,
+          frameClass: event.frameClass, timestamp: event.timestamp })),
+        received: oldReceived.map((frame) => ({ snapshotId: frame.snapshotId, frameClass: frame.type,
+          receivedAt: frame._receivedAt })), absentAlignedSnapshotIds },
+      replacementEpoch: {
+        wsSendAccepted: replacementStateAccepted.map((event) => ({ snapshotId: event.snapshotId,
+          frameClass: event.frameClass, timestamp: event.timestamp })), receivedPairs: replacementPairs },
+      assertions: { alignedBaselineBeforeReplay: true, coveringInputAck: true,
+        oldHighWindowApplicationVisibilityAbsent: true, everyReplacementPairHasExactAcceptancePair: true },
+      evidenceCounts: { entries: stateLedgerEntries, cap: fixture.evidence.maxStateLedgerEntries } }, null, 2)}\n`, { flag: "wx" });
     fs.writeFileSync(path.join(runDir, "healthy-peers.json"), `${JSON.stringify(healthy, null, 2)}\n`, { flag: "wx" });
     fs.writeFileSync(path.join(runDir, "pressure-performance.json"), `${JSON.stringify(performance, null, 2)}\n`, { flag: "wx" });
     return { passed: true, authorityPid, tB, tD: policy.timestamp, tC: cleanup.timestamp,
