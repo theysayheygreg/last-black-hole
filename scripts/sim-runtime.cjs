@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { performance } = require("perf_hooks");
+const { BoundedQuantiles } = require("./bounded-quantiles.cjs");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
 const { loadPlayableMaps } = require("./shared-map-loader.cjs");
 const { createRNGStreams } = require("./rng-stream.cjs");
@@ -128,6 +129,7 @@ const MAX_LIVE_WRECKS = readNumber(process.env.LBH_SIM_MAX_LIVE_WRECKS, 64, 1);
 const IDLE_SESSION_TICK_HZ = 1;
 const DEFAULT_IDLE_SHUTDOWN_MS = 30000;
 const MULTIPLAYER_PENDING_REPLICATION_BUDGETS = 4;
+const MULTIPLAYER_COST_DISTRIBUTION_CAPACITY = 512;
 const EVENT_JOURNAL_CAPACITY = readNumber(process.env.LBH_SIM_EVENT_JOURNAL_CAPACITY, 256, 1);
 const MULTIPLAYER_PROJECTION_TEST_DELAY_MS = readNumber(
   process.env.LBH_SIM_WS_TEST_PROJECTION_DELAY_MS,
@@ -163,6 +165,8 @@ function createMultiplayerProjectionStats(runId = null) {
     lastReplicationCostConsumedMs: 0,
     lastSimTickCostMs: 0,
     lastCombinedSampledCostMs: 0,
+    simTickCostDistribution: new BoundedQuantiles(MULTIPLAYER_COST_DISTRIBUTION_CAPACITY),
+    projectionCostDistribution: new BoundedQuantiles(MULTIPLAYER_COST_DISTRIBUTION_CAPACITY),
   };
 }
 
@@ -5959,6 +5963,7 @@ function tickSim() {
     boundedForceUtilization(activePortalCount, runtime.session.maxPortalChecksPerPlayer)
   );
   const simTickCostMs = performance.now() - tickStart;
+  runtime.multiplayerProjection.simTickCostDistribution.observe(simTickCostMs);
   const replicationCostMs = consumePendingReplicationCost();
   const combinedSampledCostMs = simTickCostMs + replicationCostMs;
   runtime.multiplayerProjection.lastSimTickCostMs = simTickCostMs;
@@ -6498,6 +6503,7 @@ function replicationCostCapMs() {
 
 function recordCompletedProjectionCost(stats, durationMs) {
   const duration = Math.max(0, Number(durationMs) || 0);
+  stats.projectionCostDistribution.observe(duration);
   stats.projectionDurationSamples += 1;
   stats.projectionDurationLatestMs = duration;
   stats.projectionDurationTotalMs += duration;
@@ -6612,6 +6618,16 @@ function multiplayerDiagnostics() {
         lastReplicationCostConsumedMs: projection.lastReplicationCostConsumedMs,
         lastSimTickCostMs: projection.lastSimTickCostMs,
         lastCombinedSampledCostMs: projection.lastCombinedSampledCostMs,
+        costDistributions: {
+          window: {
+            type: "rolling-ring",
+            capacity: MULTIPLAYER_COST_DISTRIBUTION_CAPACITY,
+            quantile: "nearest-rank",
+            unit: "milliseconds",
+          },
+          simTickMs: projection.simTickCostDistribution.snapshot(),
+          projectionReplicationMs: projection.projectionCostDistribution.snapshot(),
+        },
       },
     },
   };

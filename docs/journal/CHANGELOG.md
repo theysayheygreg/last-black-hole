@@ -90,6 +90,10 @@
   from delayed input, fences exact sockets/generations/runs/epochs, selectively
   preserves same-run upstream intent across rebase, and bounds/cancels all
   scheduled work without exposing credentials or payloads in metadata.
+- Added bounded every-tick and every-projection cost distributions to authority
+  health diagnostics. A fixed 512-sample rolling ring reports nearest-rank p50,
+  p95, p99, max, retained count, and lineage total without adding hot-path sort
+  work or changing overload decisions; run reset starts a fresh distribution.
 
 - Began Phase 0 implementation with server-created membership and connection
   ids/epochs, credential rotation on reconnect, immediate stale-connection

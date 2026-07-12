@@ -12,6 +12,7 @@ const {
 } = require("./helpers.cjs");
 const { WIRE_PROTOCOL_VERSION } = require("../scripts/multiplayer-wire-protocol.cjs");
 const { PROTOCOL_VERSION } = require("../scripts/sim-protocol.cjs");
+const { BoundedQuantiles } = require("../scripts/bounded-quantiles.cjs");
 
 const DISABLED_PORT = 8840;
 const SECURITY_PORT = 8841;
@@ -751,6 +752,20 @@ function percentile(values, quantile) {
   return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * quantile))];
 }
 
+function assertCostDistribution(distribution, capacity, label) {
+  assert(Number.isSafeInteger(distribution.count)
+    && distribution.count > 0
+    && distribution.count <= capacity
+    && Number.isSafeInteger(distribution.totalObserved)
+    && distribution.totalObserved >= distribution.count,
+  `${label} count must be positive and bounded: ${JSON.stringify(distribution)}`);
+  assert(distribution.p50 >= 0
+    && distribution.p50 <= distribution.p95
+    && distribution.p95 <= distribution.p99
+    && distribution.p99 <= distribution.max,
+  `${label} quantiles must be finite, non-negative, and ordered: ${JSON.stringify(distribution)}`);
+}
+
 function commonSnapshotId(clients) {
   const sets = clients.map((client) => {
     const ownerIds = new Set(frames(client, "ownerState").map((entry) => entry.snapshotId));
@@ -1086,6 +1101,11 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       `Expected loaded Shallows projection near declared 10Hz target, got ${observedProjectionHz.toFixed(2)}; health=${JSON.stringify({ overloadStart: tickStart.body.session.overloadState, overloadEnd: tickEnd.body.session.overloadState, multiplayer: tickEnd.body.multiplayer })}`);
     assert(observedTickHz >= tickFloor && observedTickHz <= tickCeiling,
       `Expected loaded Shallows authority tick near declared 15Hz target, got ${observedTickHz.toFixed(2)}`);
+    const startCosts = tickStart.body.multiplayer.projection.accounting.costDistributions;
+    const endCosts = tickEnd.body.multiplayer.projection.accounting.costDistributions;
+    assert(endCosts.simTickMs.totalObserved > startCosts.simTickMs.totalObserved
+      && endCosts.projectionReplicationMs.totalObserved > startCosts.projectionReplicationMs.totalObserved,
+    `Every-tick and every-projection observation counts must grow with the live cadence: ${JSON.stringify({ startCosts, endCosts })}`);
 
     const actionClient = clients[0];
     actionClient.ws.send(JSON.stringify({
@@ -1170,6 +1190,13 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
         body: command(resumedWelcome, resumedWelcome.nextCommandSeq, { requesterId: resumedWelcome.playerId }),
       });
       assert(reset.status === 200 && reset.body.session.runId !== runId, "Expected WebSocket-authority reset");
+      const resetHealth = await request(port, "/health");
+      const resetCosts = resetHealth.body.multiplayer.projection.accounting.costDistributions;
+      assert(resetCosts.simTickMs.count === 0
+        && resetCosts.simTickMs.totalObserved === 0
+        && resetCosts.projectionReplicationMs.count === 0
+        && resetCosts.projectionReplicationMs.totalObserved === 0,
+      `A fresh run must start a new empty cost lineage: ${JSON.stringify(resetCosts)}`);
       await waitFor(() => resumed.close, "reset socket fence");
       assert(resumed.close.code === 4003, "Reset must close the resumed old-run socket");
       assert(!frames(resumed, "rebase").some((entry) => entry.runId === reset.body.session.runId),
@@ -1253,6 +1280,18 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
 
     const health = await request(port, "/health");
     const accounting = health.body.multiplayer.projection.accounting;
+    const costDistributions = accounting.costDistributions;
+    assert(costDistributions.window.type === "rolling-ring"
+      && costDistributions.window.capacity === 512
+      && costDistributions.window.quantile === "nearest-rank"
+      && costDistributions.window.unit === "milliseconds",
+    `Cost distribution window contract changed: ${JSON.stringify(costDistributions.window)}`);
+    assertCostDistribution(costDistributions.simTickMs, costDistributions.window.capacity, "sim tick cost");
+    assertCostDistribution(
+      costDistributions.projectionReplicationMs,
+      costDistributions.window.capacity,
+      "projection replication cost",
+    );
     assert(accounting.projectionDurationSamples > 0
       && accounting.projectionDurationLatestMs >= 0
       && accounting.projectionDurationAverageMs >= 0
@@ -1321,6 +1360,10 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
       lastSimTickCostMs: Number(accounting.lastSimTickCostMs.toFixed(3)),
       lastReplicationCostConsumedMs: Number(accounting.lastReplicationCostConsumedMs.toFixed(3)),
       lastCombinedSampledCostMs: Number(accounting.lastCombinedSampledCostMs.toFixed(3)),
+      simTickCostMsP95: Number(costDistributions.simTickMs.p95.toFixed(3)),
+      projectionReplicationCostMsP95: Number(costDistributions.projectionReplicationMs.p95.toFixed(3)),
+      simTickCostObservations: costDistributions.simTickMs.totalObserved,
+      projectionCostObservations: costDistributions.projectionReplicationMs.totalObserved,
       skippedProjectionBeats: health.body.multiplayer.projection.skippedBeats,
       projectionErrors: health.body.multiplayer.projection.errors,
       admissionErrors: health.body.multiplayer.projection.admissionErrors,
@@ -1343,6 +1386,19 @@ async function runCohort(count, { proveResumeAndReset = false, proveLiveShutdown
 async function run() {
   const runner = new TestRunner("MultiplayerWsRuntime");
   const measurements = [];
+
+  await runner.run("bounded runtime cost quantiles use a fixed nearest-rank rolling window", async () => {
+    const samples = new BoundedQuantiles(4);
+    for (const value of [1, 2, 3, 4, 5]) samples.observe(value);
+    const snapshot = samples.snapshot();
+    assert(snapshot.count === 4 && snapshot.totalObserved === 5,
+      `Rolling distribution must retain only its fixed capacity: ${JSON.stringify(snapshot)}`);
+    assert(snapshot.p50 === 3 && snapshot.p95 === 5 && snapshot.p99 === 5 && snapshot.max === 5,
+      `Nearest-rank quantiles must be deterministic over the retained window: ${JSON.stringify(snapshot)}`);
+    samples.reset();
+    assert(samples.snapshot().count === 0 && samples.snapshot().totalObserved === 0,
+      "Reset must start a fresh bounded distribution lineage");
+  });
 
   await runner.run("default-disabled runtime rejects stream promptly and reports disabled health", async () => {
     await startSimServer(DISABLED_PORT, { keepAlive: true });
