@@ -244,6 +244,13 @@ async function run() {
     assert.strictEqual(choice.operations.winnerSerializations, 4);
     assert.strictEqual(choice.operations.fullCandidateCompositions, 4);
     assert(choice.operations.componentSerializations > 0);
+    assert.strictEqual(choice.operations.expandedLaneSerializationReuses, choice.selections * 4,
+      "all four exact canonical lanes must be reused within each safe-base selection");
+    assert.strictEqual(choice.operations.expandedLaneSerializations, 0,
+      "expanded sizing must not serialize an already-proven lane again");
+    assert(choice.operations.expandedReusedLaneBytes > 0);
+    assert.strictEqual(choice.operations.expandedSerializedLaneBytes, 0);
+    assert(choice.operations.expandedBytesExamined > 0);
   });
 
   await runner.run("loss applies the next branch from a retained base and preserves despawn reincarnation ACK bases", () => {

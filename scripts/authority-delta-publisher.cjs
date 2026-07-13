@@ -31,6 +31,7 @@ const CODEC_PAIR_TIE_ORDER = Object.freeze([
   "public-delta+owner-delta",
 ]);
 const exactEncodedPublications = new WeakSet();
+const CANONICAL_COMPONENT_PROOF = Symbol("canonical-component-proof");
 const ACK_REJECT_REASON_CODES = new Set(["unknown-recipient", "identity-mismatch", "invalid-frame-id",
   "unknown-frame", "invalid-ack-schema", "lineage-mismatch", "unexpected-state-pair-ack", "unknown"]);
 const ACK_REJECT_RELATIONS = new Set(["duplicate", "stale", "future", "unknown", "pending-missing", "hash",
@@ -123,11 +124,26 @@ function serializedBytes(value, stageProfiler, recipientKey) {
   }), () => canonicalJsonBytes(value)).length;
 }
 
+// These proofs live only for one synchronous publish selection. The private
+// symbol and exact payload identity prevent callers from substituting a size
+// derived from another tick, recipient, or structurally-similar object.
+function serializedComponentProof(value, stageProfiler, recipientKey) {
+  const serialize = () => canonicalJson(value);
+  const text = stageProfiler
+    ? stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (encoded) => {
+        const bytes = Buffer.byteLength(encoded, "utf8");
+        return { recipientKey, outputBytes: bytes, serializedAllocationProxyBytes: bytes };
+      }, serialize)
+    : serialize();
+  return Object.freeze({ [CANONICAL_COMPONENT_PROOF]: true, payload: value,
+    text, bytes: Buffer.byteLength(text, "utf8") });
+}
+
 function wireDigest(wire) {
   return `sha256:${crypto.createHash("sha256").update(wire, "utf8").digest("hex")}`;
 }
 
-function exactCanonicalCandidateSizes(entries) {
+function exactCanonicalCandidateSizes(entries, componentProofs = null) {
   const first = entries[0].frame;
   const keys = Object.keys(first).sort((a, b) => {
     const left = Array.from(a, (character) => character.codePointAt(0));
@@ -141,7 +157,18 @@ function exactCanonicalCandidateSizes(entries) {
   const encodedPayload = (payload) => {
     let value = payloadCache.get(payload);
     if (value === undefined) {
-      value = canonicalJson(payload);
+      const proof = componentProofs?.get(payload);
+      if (proof !== undefined) {
+        if (proof?.[CANONICAL_COMPONENT_PROOF] !== true || proof.payload !== payload
+            || typeof proof.text !== "string" || !Number.isSafeInteger(proof.bytes)
+            || proof.bytes !== Buffer.byteLength(proof.text, "utf8")) {
+          fail("invalid-wire-size", "canonical component size proof is invalid");
+        }
+        value = Object.freeze({ text: proof.text, bytes: proof.bytes, reused: true });
+      } else {
+        const text = canonicalJson(payload);
+        value = Object.freeze({ text, bytes: Buffer.byteLength(text, "utf8"), reused: false });
+      }
       payloadCache.set(payload, value);
     }
     return value;
@@ -164,15 +191,26 @@ function exactCanonicalCandidateSizes(entries) {
     }
     let bytes = 2 + Math.max(0, keys.length - 1);
     for (const key of keys) {
-      const segment = key === "public" || key === "owner"
-        ? `${JSON.stringify(key)}:${encodedPayload(entry.frame[key])}` : sharedSegments.get(key);
-      bytes += Buffer.byteLength(segment, "utf8");
+      if (key === "public" || key === "owner") {
+        const payload = encodedPayload(entry.frame[key]);
+        bytes += Buffer.byteLength(JSON.stringify(key), "utf8") + 1 + payload.bytes;
+      } else bytes += Buffer.byteLength(sharedSegments.get(key), "utf8");
     }
     sizes.set(entry.kind, bytes);
   }
-  return Object.freeze({ sizes, componentSerializations: sharedSegments.size + payloadCache.size,
+  const reusedPayloads = [...payloadCache.keys()].filter((payload) => payloadCache.get(payload).reused);
+  const newPayloads = [...payloadCache.keys()].filter((payload) => !payloadCache.get(payload).reused);
+  return Object.freeze({ sizes,
+    componentSerializations: sharedSegments.size + newPayloads.length,
+    headerSerializations: sharedSegments.size,
+    laneSerializations: newPayloads.length,
+    laneSerializationReuses: reusedPayloads.length,
+    reusedLaneBytes: reusedPayloads.reduce((sum, payload) => sum + componentProofs.get(payload).bytes, 0),
+    serializedLaneBytes: newPayloads.reduce((sum, payload) => sum + payloadCache.get(payload).bytes, 0),
+    bytesExamined: [...sharedSegments.values()].reduce((sum, value) => sum + Buffer.byteLength(value, "utf8"), 0)
+      + [...payloadCache.values()].reduce((sum, value) => sum + value.bytes, 0),
     allocationProxyBytes: [...sharedSegments.values()].reduce((sum, value) => sum + Buffer.byteLength(value, "utf8"), 0)
-      + [...payloadCache.values()].reduce((sum, value) => sum + Buffer.byteLength(value, "utf8"), 0) });
+      + newPayloads.reduce((sum, payload) => sum + payloadCache.get(payload).bytes, 0) });
 }
 
 function percentile(values, fraction) {
@@ -250,14 +288,18 @@ function deltaPayload(base, current, { stageProfiler = null, recipientKey = null
     resultHash: built.delta.resultHash,
     delta: built.delta,
   });
-  const deltaBytes = serializedBytes(payload, stageProfiler, recipientKey);
+  const deltaCanonical = serializedComponentProof(payload, stageProfiler, recipientKey);
+  const deltaBytes = deltaCanonical.bytes;
   const keyframe = keyframePayload(current, { stageProfiler, recipientKey, lane,
     prepared, preparedContext, operationCounters });
-  const keyframeBytes = serializedBytes(keyframe, stageProfiler, recipientKey);
+  const keyframeCanonical = serializedComponentProof(keyframe, stageProfiler, recipientKey);
+  const keyframeBytes = keyframeCanonical.bytes;
   return Object.freeze({
     payload: deltaBytes < keyframeBytes ? payload : keyframe,
     deltaPayload: payload,
     keyframePayload: keyframe,
+    deltaCanonical,
+    keyframeCanonical,
     decision: deltaBytes < keyframeBytes ? "delta" : "delta-not-smaller",
     deltaBytes,
     keyframeBytes,
@@ -317,6 +359,12 @@ function createAuthorityDeltaPublisher(options = {}) {
     winnerSerializations: 0,
     bytesExamined: 0,
     allocationProxyBytes: 0,
+    expandedHeaderSerializations: 0,
+    expandedLaneSerializations: 0,
+    expandedLaneSerializationReuses: 0,
+    expandedReusedLaneBytes: 0,
+    expandedSerializedLaneBytes: 0,
+    expandedBytesExamined: 0,
     selectionMilliseconds: [],
     selectionSamplesDropped: 0,
   };
@@ -450,6 +498,12 @@ function createAuthorityDeltaPublisher(options = {}) {
     codecChoice.bytesExamined += selected.diagnostics.bytesExamined;
     codecChoice.allocationProxyBytes += selected.diagnostics.allocationProxyBytes
       + expanded.allocationProxyBytes;
+    codecChoice.expandedHeaderSerializations += expanded.headerSerializations;
+    codecChoice.expandedLaneSerializations += expanded.laneSerializations;
+    codecChoice.expandedLaneSerializationReuses += expanded.laneSerializationReuses;
+    codecChoice.expandedReusedLaneBytes += expanded.reusedLaneBytes;
+    codecChoice.expandedSerializedLaneBytes += expanded.serializedLaneBytes;
+    codecChoice.expandedBytesExamined += expanded.bytesExamined;
   }
 
   function stateFor(identity, create = true) {
@@ -645,7 +699,13 @@ function createAuthorityDeltaPublisher(options = {}) {
         codecChoice.maxEphemeralCandidates = Math.max(codecChoice.maxEphemeralCandidates, entries.length);
         const started = performance.now();
         try {
-          const expanded = exactCanonicalCandidateSizes(entries);
+          const canonicalProofs = new Map([
+            [publicDecision.keyframePayload, publicDecision.keyframeCanonical],
+            [publicDecision.deltaPayload, publicDecision.deltaCanonical],
+            [ownerDecision.keyframePayload, ownerDecision.keyframeCanonical],
+            [ownerDecision.deltaPayload, ownerDecision.deltaCanonical],
+          ]);
+          const expanded = exactCanonicalCandidateSizes(entries, canonicalProofs);
           for (const bytes of expanded.sizes.values()) {
             if (bytes > limits.maxPairBytes) fail("pair-too-large",
               `atomic state pair exceeds ${limits.maxPairBytes} bytes in expanded form`);
@@ -962,7 +1022,13 @@ function createAuthorityDeltaPublisher(options = {}) {
         fullCandidateCompositions: codecChoice.fullCandidateCompositions,
         winnerSerializations: codecChoice.winnerSerializations,
         bytesExamined: codecChoice.bytesExamined,
-        allocationProxyBytes: codecChoice.allocationProxyBytes }),
+        allocationProxyBytes: codecChoice.allocationProxyBytes,
+        expandedHeaderSerializations: codecChoice.expandedHeaderSerializations,
+        expandedLaneSerializations: codecChoice.expandedLaneSerializations,
+        expandedLaneSerializationReuses: codecChoice.expandedLaneSerializationReuses,
+        expandedReusedLaneBytes: codecChoice.expandedReusedLaneBytes,
+        expandedSerializedLaneBytes: codecChoice.expandedSerializedLaneBytes,
+        expandedBytesExamined: codecChoice.expandedBytesExamined }),
       fallbacks: Object.freeze(Object.fromEntries([...codecChoice.fallbacks].sort())),
       ephemeralCandidates: Object.freeze({ retainedAfterPublish: 0,
         maxPerPublish: codecChoice.maxEphemeralCandidates, configuredMaximum: CODEC_PAIR_TIE_ORDER.length }),
