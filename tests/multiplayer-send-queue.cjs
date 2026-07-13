@@ -39,6 +39,19 @@ function testStateCoalescingAndOrdering() {
   assert.strictEqual(queue.status().queuedBytes, 0);
 }
 
+function testEncodedStateByteOverrideDrivesEveryQueueBudget() {
+  const queue = createMultiplayerSendQueue({ maxMessages: 2, maxBytes: 100 });
+  const payload = { expandedEnvelope: "x".repeat(500) };
+  const queued = queue.enqueueState(1, payload, { byteLength: 40 });
+  assert.deepStrictEqual(queued, { accepted: true, action: "queued", byteLength: 40 });
+  assert.strictEqual(queue.status().queuedBytes, 40,
+    "Backpressure must use negotiated encoded bytes rather than expanded queue-envelope JSON");
+  const drained = queue.drain({ maxBytes: 40 });
+  assert.strictEqual(drained.bytes, 40);
+  assert.strictEqual(drained.messages[0].byteLength, 40,
+    "The exact encoded size must survive queue coalescing and drain for the flush invariant");
+}
+
 function testReliableFifoAckAndReplay() {
   const queue = createMultiplayerSendQueue({ maxMessages: 8, maxBytes: 4096 });
   const first = queue.enqueueConsequence({ kind: "loot" });
@@ -312,6 +325,7 @@ function testLeasedEntriesStillConsumeCaps() {
 
 function main() {
   testStateCoalescingAndOrdering();
+  testEncodedStateByteOverrideDrivesEveryQueueBudget();
   testReliableFifoAckAndReplay();
   testExplicitReliableIdsPreserveWire();
   testDeterministicPriorityAndDrainBudgets();

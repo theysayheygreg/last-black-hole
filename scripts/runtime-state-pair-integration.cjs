@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const { performance } = require("perf_hooks");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 const {
   normalizeView,
@@ -15,6 +16,11 @@ const {
   assertPublicFactsClassified,
   splitRuntimePublicEntity,
 } = require("./runtime-public-schema.cjs");
+const {
+  CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
+  codecContext: positionalCodecContext,
+  encodePositionalFrame,
+} = require("./state-pair-positional-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -231,6 +237,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   let shareabilityGeneration = stageProfiler?.generation?.() || 0;
   let shareability = { beats: 0, comparisons: 0, mismatches: 0, snapshotId: null, coreHash: null };
   const preparedCounters = { preparations: 0, canonicalizations: 0, hashes: 0 };
+  const positionalMeasure = { encodedCandidates: 0, encodedBytes: 0, encodeMilliseconds: 0 };
 
   function resetShareabilityIfNeeded() {
     const currentGeneration = stageProfiler?.generation?.() || 0;
@@ -282,6 +289,11 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         && (!ticketClaims.capabilities.includes(CAPABILITY)
           || !ticketClaims.capabilities.includes(MIXED_CAPABILITY))) {
       fail("capability-not-admitted", "runtime public components require mixed state-pair-v1");
+    }
+    if (ticketClaims.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+        && (!ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+          || !ticketClaims.capabilities.includes(MIXED_CAPABILITY))) {
+      fail("capability-not-admitted", "positional JSON requires sparse mixed state-pair-v1");
     }
     const admissionKey = key(identity);
     if (!admissions.has(admissionKey) && admissions.size >= maxAdmissions) fail("recipient-cap", "state-pair admission cap reached");
@@ -402,7 +414,19 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const publicProjection = publicView;
     return Object.freeze({ identity, publicView: publicProjection.view, ownerView: ownerProjection.view,
       publicPrepared: publicProjection.prepared, ownerPrepared: ownerProjection.prepared,
-      allowMixed: admission.capabilities.includes(MIXED_CAPABILITY) });
+      allowMixed: admission.capabilities.includes(MIXED_CAPABILITY),
+      ...(admission.capabilities.includes(POSITIONAL_CODEC_CAPABILITY) ? {
+        wireSize: (frame) => {
+          const started = performance.now();
+          const bytes = Buffer.byteLength(encodePositionalFrame(frame, positionalCodecContext({
+            ...identity, manifestHash: fixedManifestHash,
+          })), "utf8");
+          positionalMeasure.encodedCandidates += 1;
+          positionalMeasure.encodedBytes += bytes;
+          positionalMeasure.encodeMilliseconds += performance.now() - started;
+          return bytes;
+        },
+      } : {}) });
   }
 
   function publish(binding, publicFrame, ownerFrame) {
@@ -461,6 +485,17 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
           }),
         }),
       }),
+      positionalJson: Object.freeze({
+        capability: POSITIONAL_CODEC_CAPABILITY,
+        enabledAdmissions: [...admissions.values()].filter((entry) =>
+          entry.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)).length,
+        mutableSessionDictionaries: 0,
+        hashDomain: "semantic canonical projection",
+        ...positionalMeasure,
+        meanCandidateEncodeMs: positionalMeasure.encodedCandidates
+          ? positionalMeasure.encodeMilliseconds / positionalMeasure.encodedCandidates : null,
+        measurementScope: "authority lifetime including warmup; adapter codec counters reset with evidence windows",
+      }),
       publisher: publisher.diagnostics() });
   }
 
@@ -472,6 +507,7 @@ module.exports = {
   MIXED_CAPABILITY,
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   RUNTIME_PUBLIC_COMPONENT_SCHEMA,
+  POSITIONAL_CODEC_CAPABILITY,
   SOURCE_FIELD_CLASSIFICATION,
   VIEW_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,

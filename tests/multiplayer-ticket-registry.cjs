@@ -120,6 +120,29 @@ async function run() {
       manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
       authorityIncarnation: 1,
     }), "invalid-claim");
+    expectTicketError(() => registry.issueAdmission({
+      membershipId: "membership-a", playerId: "player-a", profileId: "profile-a",
+      wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
+        "state-pair-positional-json-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    }), "invalid-claim");
+  });
+
+  await runner.run("positional codec capability is immutable only with its full dependency chain", async () => {
+    const registry = createMultiplayerTicketRegistry({ runId: "run-a" });
+    const issued = registry.issueAdmission({
+      membershipId: "membership-positional", playerId: "player-positional", profileId: "profile-positional",
+      wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
+        "runtime-public-components-v1", "state-pair-positional-json-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    });
+    const redeemed = registry.redeem(issued.ticket, { kind: "admission", runId: "run-a" });
+    assert(redeemed.claims.capabilities.includes("state-pair-positional-json-v1"),
+      "Positional capability must survive opaque ticket redemption");
   });
 
   await runner.run("expiry is deterministic under an injected clock", async () => {

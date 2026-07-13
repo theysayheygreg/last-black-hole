@@ -340,7 +340,7 @@ function createAuthorityDeltaPublisher(options = {}) {
 
   function publish({ identity: rawIdentity, publicView: publicInput, ownerView: ownerInput,
     publicPrepared: suppliedPublicPrepared = null, ownerPrepared: suppliedOwnerPrepared = null,
-    dirtyHints = null, allowMixed = false }) {
+    dirtyHints = null, allowMixed = false, wireSize = null }) {
     const identity = normalizeIdentity(rawIdentity);
     const profile = { stageProfiler, recipientKey: identity.recipientId };
     const preparedPublic = prepareCurrent(identity, publicInput, suppliedPublicPrepared, "public");
@@ -431,14 +431,22 @@ function createAuthorityDeltaPublisher(options = {}) {
         }), () => rawBuildFrame(nextPublic, nextOwner))
       : rawBuildFrame(nextPublic, nextOwner);
     let frame = buildFrame(publicPayload, ownerPayload);
-    let bytes = serializedBytes(frame, stageProfiler, identity.recipientId);
+    if (wireSize !== null && typeof wireSize !== "function") fail("invalid-wire-size", "wireSize must be a function");
+    const measureWire = (candidate) => {
+      const measured = wireSize ? wireSize(candidate) : serializedBytes(candidate, stageProfiler, identity.recipientId);
+      if (!Number.isSafeInteger(measured) || measured < 1 || measured > MAX_WIRE_PAIR_BYTES) {
+        fail("invalid-wire-size", "wireSize returned an invalid encoded byte count");
+      }
+      return measured;
+    };
+    let bytes = measureWire(frame);
     const fullKeyframe = buildFrame(
       keyframePayload(publicView, { ...profile, lane: "public",
         prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters }),
       keyframePayload(ownerView, { ...profile, lane: "owner",
         prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters }),
     );
-    const fullKeyframeBytes = serializedBytes(fullKeyframe, stageProfiler, identity.recipientId);
+    const fullKeyframeBytes = measureWire(fullKeyframe);
     const candidateBytes = bytes;
     const choosePair = () => {
       if (allowMixed && (publicPayload.kind !== "keyframe" || ownerPayload.kind !== "keyframe")

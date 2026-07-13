@@ -11,11 +11,15 @@ const { performance } = require("perf_hooks");
 const { WebSocket } = require("ws");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
 const { createClientDeltaReceiver, MIXED_CAPABILITY,
-  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY } = require("../scripts/client-delta-receiver.cjs");
+  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY } = require("../scripts/client-delta-receiver.cjs");
 const { projectionHash } = require("../scripts/canonical-structural-delta.cjs");
 const { summarizeWindow } = require("../scripts/replication-accounting.cjs");
 const { WIRE_PROTOCOL_VERSION_V2, SIM_PROTOCOL_VERSION, SERVER_TO_CLIENT,
-  encodeWireFrame } = require("../scripts/multiplayer-wire-protocol.cjs");
+  encodeWireFrame, parseWireFrame } = require("../scripts/multiplayer-wire-protocol.cjs");
+const { codecContext: positionalCodecContext, POSITIONAL_CODEC_MANIFEST,
+  POSITIONAL_CODEC_MANIFEST_HASH } =
+  require("../scripts/state-pair-positional-codec.cjs");
+const { canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
 const { distribution, fixedWindowRates, eventBreakdown, aggregateChecksum,
   validateChecksums } = require("./network/state-pair-product-metrics.cjs");
 const { analyzeStatePairSample } = require("./network/state-pair-residual-attribution.cjs");
@@ -40,10 +44,12 @@ const MICRO_PROFILE = STAGE_PROFILE && process.argv.includes("--micro");
 const S6_BENCHMARK = process.argv.includes("--s6-benchmark");
 const S7_GATE = process.argv.includes("--s7");
 const S8_PROTOTYPE = process.argv.includes("--s8-prototype");
-const RESIDUAL_GATE = S7_GATE || S8_PROTOTYPE;
+const S9_PROTOTYPE = process.argv.includes("--s9-positional");
+const SPARSE_GATE = S8_PROTOTYPE || S9_PROTOTYPE;
+const RESIDUAL_GATE = S7_GATE || SPARSE_GATE;
 const ADMISSION_MODE = process.argv.includes("--admission");
 const S6_PREPARED = !["0", "false"].includes(String(process.env.LBH_S6_PREPARED ?? "true").toLowerCase());
-const GATE = S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
+const GATE = S9_PROTOTYPE ? "s9" : S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
 const MIXED_GATE = GATE !== "s3";
 const COMPARE_S3 = GATE === "s4";
 const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
@@ -59,7 +65,7 @@ const PROFILE = S6_BENCHMARK ? `diagnostic-${S6_PREPARED ? "prepared" : "legacy"
   : process.argv.includes("--review") ? "review" : "canonical";
 const S6_POPULATIONS = String(process.env.LBH_S6_POPULATIONS || "1,4,8").split(",")
   .map((value) => Number(value)).filter((value) => [1, 4, 8].includes(value));
-const POPULATIONS = S8_PROTOTYPE ? [1, 4, 8] : S6_BENCHMARK ? [...new Set(S6_POPULATIONS)]
+const POPULATIONS = SPARSE_GATE ? [1, 4, 8] : S6_BENCHMARK ? [...new Set(S6_POPULATIONS)]
   : MICRO_PROFILE || PROFILE === "review" ? [1, 8] : [1, 4, 8];
 const CHURN_POPULATIONS = RESIDUAL_GATE ? [1, 8] : POPULATIONS;
 const NORMAL_WARMUP_MS = S6_BENCHMARK ? 5_000 : MICRO_PROFILE ? 5_000 : STAGE_PROFILE ? 10_000 : PROFILE === "review" ? 5_000 : 60_000;
@@ -116,7 +122,7 @@ async function waitFor(check, label, timeoutMs = 8000) {
 }
 
 function send(client, frame) {
-  const wire = JSON.stringify(frame);
+  const wire = encodeWireFrame(frame, { ...(client.codecContext ? { positionalContext: client.codecContext } : {}) });
   // Close can race one final heartbeat/event callback. That frame belongs to
   // teardown and must not turn an otherwise clean, drained run into a harness
   // exception or be counted as accepted uplink traffic.
@@ -185,24 +191,29 @@ function hasMaterializedPublicEntity(client, category, sourceId) {
 async function openStatePairClient({ port, authority, label, reuseManifest = false, fault = {} }) {
   const requestedCapabilities = ["static-manifest-v1", "state-pair-v1",
     ...(MIXED_GATE ? [MIXED_CAPABILITY] : []),
-    ...(S8_PROTOTYPE ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY] : [])];
+    ...(SPARSE_GATE ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY] : []),
+    ...(S9_PROTOTYPE ? [POSITIONAL_CODEC_CAPABILITY] : [])];
   const issued = await request(port, "/multiplayer/ticket", { method: "POST", authority, body: {
     kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2],
     capabilities: requestedCapabilities,
   } });
   if (issued.status !== 200 || !issued.body.capabilities.includes("state-pair-v1")
       || (MIXED_GATE && !issued.body.capabilities.includes(MIXED_CAPABILITY))
-      || (S8_PROTOTYPE && !issued.body.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY))) {
+      || (SPARSE_GATE && !issued.body.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY))
+      || (S9_PROTOTYPE && !issued.body.capabilities.includes(POSITIONAL_CODEC_CAPABILITY))) {
     throw new Error(`${label} state-pair ticket failed: ${JSON.stringify(issued.body)}`);
   }
   const client = {
     label, authority, ticket: issued.body, fault, ws: new WebSocket(`ws://127.0.0.1:${port}/stream`,
       { perMessageDeflate: false }),
-    welcome: null, receiver: null, error: null, close: null, pairCount: 0, acceptedPairs: 0,
+    welcome: null, receiver: null, codecContext: null, error: null, close: null, pairCount: 0, acceptedPairs: 0,
     lastPairAt: null, lastStatePairAckSentFrameId: 0,
     inputSeq: 0, actionSeq: 0, commandSeq: 0, uplink: {}, downlink: {},
-    manifest: { reused: reuseManifest, servedBytes: 0, hash: issued.body.manifestHash },
-    clientWorkSamples: [], ackWorkSamples: [], faultLog: [], hashesVerified: 0,
+    manifest: { reused: reuseManifest, servedBytes: 0, hash: issued.body.manifestHash,
+      codecManifestHash: S9_PROTOTYPE ? POSITIONAL_CODEC_MANIFEST_HASH : null,
+      codecVerified: S9_PROTOTYPE ? reuseManifest : null,
+      codecVerificationSource: S9_PROTOTYPE && reuseManifest ? "local-static-manifest-cache" : null },
+    wireDecodeSamples: [], clientWorkSamples: [], ackWorkSamples: [], faultLog: [], hashesVerified: 0,
     legacyReconstructionVerified: 0, acceptedPairTimes: [],
     shape: { keyframes: 0, deltas: 0, creates: 0, updates: 0, despawns: 0, reincarnations: 0, rootOps: 0 },
     pairKinds: {},
@@ -214,7 +225,13 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
   client.ws.on("close", (code, reason) => { client.close = { code, reason: reason.toString("utf8"), at: Date.now() }; });
   client.ws.on("message", (raw) => {
     const text = raw.toString("utf8");
-    const frame = JSON.parse(text);
+    const positionalWire = text.startsWith("[");
+    const decodeStarted = positionalWire ? performance.now() : 0;
+    const frame = text.startsWith("[")
+      ? parseWireFrame(text, { direction: SERVER_TO_CLIENT, positionalContext: client.codecContext,
+          requirePositional: true })
+      : parseWireFrame(text, { direction: SERVER_TO_CLIENT });
+    if (positionalWire) client.wireDecodeSamples.push({ at: Date.now(), ms: performance.now() - decodeStarted });
     const key = frame.type === "ack" ? `ack:${frame.ackKind}` : frame.type;
     const row = client.downlink[key] ||= { frames: 0, bytes: 0 };
     row.frames += 1;
@@ -224,12 +241,22 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       client.inputSeq = frame.lastInputSeq;
       client.actionSeq = frame.lastActionSeq;
       client.commandSeq = frame.lastCommandSeq;
+      if (S9_PROTOTYPE) client.codecContext = positionalCodecContext({
+        matchId: frame.runId, sessionId: frame.connectionId,
+        authorityIncarnation: frame.authorityIncarnation, recipientId: frame.membershipId,
+        recipientIncarnation: frame.connectionEpoch, manifestHash: frame.manifestHash,
+        codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH,
+      });
       client.receiver = createClientDeltaReceiver({ context: {
         matchId: frame.runId, sessionId: frame.connectionId,
         authorityIncarnation: frame.authorityIncarnation, recipientId: frame.membershipId,
         recipientIncarnation: frame.connectionEpoch, manifestSchema: frame.manifestSchema,
         manifestHash: frame.manifestHash,
       }, capabilities: issued.body.capabilities });
+      return;
+    }
+    if (frame.type === "error") {
+      client.error = `${frame.code}:${frame.message}`;
       return;
     }
     if (frame.type === "heartbeat") {
@@ -277,7 +304,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       client.ws.terminate();
       return;
     }
-    if (S8_PROTOTYPE) {
+    if (SPARSE_GATE) {
       const legacy = outcome.state.legacyPublicState;
       const rows = outcome.state.legacyPublicEntities;
       const laneRows = (category) => rows.filter((row) => row.category === category)
@@ -304,7 +331,8 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     observeMaterializedLifecycle(client, outcome.state.public);
     if (client.attributionCapture.active && Date.now() >= client.attributionCapture.startAt
         && client.attributionCapture.rawFrames.length < client.attributionCapture.maxFrames) {
-      if (encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }) !== text) {
+      if (encodeWireFrame(frame, { direction: SERVER_TO_CLIENT,
+          ...(client.codecContext ? { positionalContext: client.codecContext } : {}) }) !== text) {
         client.error = "captured state-pair bytes differ from canonical wire encoding";
         client.ws.terminate();
         return;
@@ -334,12 +362,29 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       || `sha256:${crypto.createHash("sha256").update(fetched.bytes).digest("hex")}` !== issued.body.manifestHash) {
       throw new Error(`${label} manifest verification failed`);
     }
+    if (S9_PROTOTYPE) {
+      const sessionManifest = JSON.parse(fetched.bytes.toString("utf8"));
+      const codec = sessionManifest.publicContent?.statePairCodec;
+      const codecHash = codec?.manifest
+        ? `sha256:${crypto.createHash("sha256").update(canonicalJsonBytes(codec.manifest)).digest("hex")}` : null;
+      if (codec?.capability !== POSITIONAL_CODEC_CAPABILITY
+          || codec?.codecManifestHash !== POSITIONAL_CODEC_MANIFEST_HASH
+          || codecHash !== POSITIONAL_CODEC_MANIFEST_HASH
+          || !canonicalJsonBytes(codec.manifest).equals(canonicalJsonBytes(POSITIONAL_CODEC_MANIFEST))) {
+        throw new Error(`${label} positional codec manifest binding failed`);
+      }
+      client.manifest.codecVerified = true;
+      client.manifest.codecVerificationSource = "fetched-content-addressed-session-manifest";
+    }
     client.manifest.servedBytes = fetched.bytes.length;
   }
   send(client, { type: "manifestAck", manifestSchema: issued.body.manifestSchema,
     manifestHash: issued.body.manifestHash, manifestBytes: issued.body.manifestBytes,
     connectionEpoch: client.welcome.connectionEpoch });
-  await waitFor(() => client.acceptedPairs > 0 || client.error || client.close, `${label} first state pair`);
+  await waitFor(() => client.acceptedPairs > 0 || client.error || client.close, `${label} first state pair`).catch(async (error) => {
+    const health = await request(port, "/health/compact").catch(() => null);
+    throw new Error(`${error.message}; uplink=${JSON.stringify(client.uplink)}; health=${JSON.stringify(health?.body?.multiplayer?.statePair)}; projection=${JSON.stringify(health?.body?.multiplayer?.projection)}; adapter=${JSON.stringify({ manifestRequiredConnections: health?.body?.multiplayer?.adapter?.manifestRequiredConnections, statePair: health?.body?.multiplayer?.adapter?.statePair })}`);
+  });
   if (client.error || client.close) throw new Error(`${label} admission failed: ${client.error || JSON.stringify(client.close)}`);
   return client;
 }
@@ -360,6 +405,7 @@ function summarizeClients(clients) {
     lastAcceptedFrameId: client.receiver?.current()?.frameId || 0,
     lastStatePairAckSentFrameId: client.lastStatePairAckSentFrameId,
     manifest: client.manifest, uplinkSerialized: client.uplink, downlinkObserved: client.downlink,
+    wireDecodeMs: distribution(client.wireDecodeSamples.map((sample) => sample.ms)),
     clientApplyMs: distribution(client.clientWorkSamples.map((sample) => sample.ms)),
     ackSerializeSendMs: distribution(client.ackWorkSamples.map((sample) => sample.ms)),
     shape: client.shape, faults: client.faultLog, error: client.error, close: client.close,
@@ -795,7 +841,8 @@ async function runScenario({ population, scenario, runDir }) {
       NODE_ENV: "test", LBH_SIM_WS_ENABLED: "true", LBH_SIM_WS_JSON_V2: "true",
       LBH_SIM_WS_STATE_PAIR_V1: "true", LBH_SIM_WS_REPLICATION_ACCOUNTING: "1",
       LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE ? "true" : "false",
-      LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: S8_PROTOTYPE ? "true" : "false",
+      LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: SPARSE_GATE ? "true" : "false",
+      LBH_SIM_WS_POSITIONAL_JSON_V1: S9_PROTOTYPE ? "true" : "false",
       LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS: RESIDUAL_GATE ? "true" : "false",
       LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK && !S6_PREPARED ? "false" : "true",
       LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || RESIDUAL_GATE ? "1" : "0",
@@ -918,8 +965,16 @@ async function runScenario({ population, scenario, runDir }) {
     if (RESIDUAL_GATE && !churn) {
       const capture = clientsRef.current[0].attributionCapture;
       capture.active = false;
-      residualAttribution = analyzeStatePairSample(capture.rawFrames,
-        { maxFrames: ATTRIBUTION_SAMPLE_FRAMES });
+      residualAttribution = S9_PROTOTYPE ? {
+        schema: "lbh-state-pair-s9-positional-sample-v1",
+        sample: { capturedAcceptedFrames: capture.rawFrames.length,
+          encodedBytes: capture.rawFrames.reduce((sum, raw) => sum + Buffer.byteLength(raw, "utf8"), 0),
+          meanEncodedBytes: capture.rawFrames.length
+            ? capture.rawFrames.reduce((sum, raw) => sum + Buffer.byteLength(raw, "utf8"), 0) / capture.rawFrames.length : null,
+          deterministicDigest: `sha256:${crypto.createHash("sha256").update(capture.rawFrames.join("\n")).digest("hex")}` },
+        codec: POSITIONAL_CODEC_CAPABILITY,
+        privacy: { rawFramesRetained: false, ownerPrivateValuesEmitted: false },
+      } : analyzeStatePairSample(capture.rawFrames, { maxFrames: ATTRIBUTION_SAMPLE_FRAMES });
       capture.rawFrames.length = 0;
     }
     const endHealth = STAGE_PROFILE && !PROFILE_CONTROL ? await waitFor(async () => {
@@ -1130,7 +1185,7 @@ async function runScenario({ population, scenario, runDir }) {
         minimumReceiverAcceptedPairsPerSecond,
         authorityBoundary: "Application state-pair bytes accepted by ws.send callbacks; not proof of receiver acceptance.",
         receiverBoundary: "State pairs accepted and materialized by each test receiver inside the measured window." },
-      fieldFreshness: S8_PROTOTYPE
+      fieldFreshness: SPARSE_GATE
         ? endHealth.multiplayer.statePair.runtimePublicComponents.fieldFreshness : null,
       targetCadenceNormalization,
       residualAttribution,
@@ -1148,6 +1203,8 @@ async function runScenario({ population, scenario, runDir }) {
       performance: { machineLocal: true,
         authority: { ...deltaHealth(startHealth, endHealth),
           percentileScope: "bounded runtime rolling ring; reset after warmup by evidence-only endpoint" },
+        positionalWireDecodeMs: S9_PROTOTYPE ? distribution(allClients.flatMap((client) => client.wireDecodeSamples)
+          .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)) : null,
         clientApplyMs: distribution(allClients.flatMap((client) => client.clientWorkSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
         clientAckSerializeSendMs: distribution(allClients.flatMap((client) => client.ackWorkSamples)
@@ -1167,7 +1224,9 @@ async function runScenario({ population, scenario, runDir }) {
       faults: faultActions, clients: clientSummary, correctness, admission,
       diagnostics: { projectionErrors: endHealth.multiplayer.projection.errors - startHealth.multiplayer.projection.errors,
         skippedBeats: endHealth.multiplayer.projection.skippedBeats - startHealth.multiplayer.projection.skippedBeats,
-        statePair: endHealth.multiplayer.statePair, manifestTransfers: preStopHealth.multiplayer.manifestTransfers },
+        statePair: endHealth.multiplayer.statePair,
+        adapterStatePair: endHealth.multiplayer.adapter.statePair,
+        manifestTransfers: preStopHealth.multiplayer.manifestTransfers },
       limitations: ["Local macOS loopback only", "raw WebSocket without TLS", "one match at a time",
         "no hosted fleet, WSS, WAN, packet retransmission, compression, AOI, binary codec, or 24-96-client claim"],
     };
@@ -1217,7 +1276,7 @@ function validateArtifact(directory) {
         entry.scenario === "churn" && entry.population === population)) || aggregate.profile === "review",
     atomicKindAlignmentAbsent: !["s4", "s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.pairShape.productWindow.atomicKindAlignmentAbsent === true),
-    mixedPairsObserved: !["s4", "s7", "s8"].includes(aggregate.gate) || scenarioFiles
+    mixedPairsObserved: !["s4", "s7", "s8", "s9"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.pairShape.productWindow.publicDeltaOwnerKeyframe > 0),
     s3ComparisonsPresent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
@@ -1234,19 +1293,25 @@ function validateArtifact(directory) {
           && proof.beats === rawCalls && coreCalls === rawCalls * entry.population
           && proof.comparisons === rawCalls * (entry.population - 1);
       }),
-    s7PreparedProfilerBoundary: !["s7", "s8"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
+    s7PreparedProfilerBoundary: !["s7", "s8", "s9"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
       && aggregate.instrumentationEnabled === false && aggregate.eventLoopMonitorEnabled === true),
-    s7AckRejectAccountingConsistent: !["s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
+    s7AckRejectAccountingConsistent: !["s7", "s8", "s9"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
       const rejected = entry.pairShape.ackBaseProof.ackRejected;
       return Number.isSafeInteger(rejected) && rejected >= 0
         && entry.correctness.ackRejectsExactlyZero === (rejected === 0);
     }),
-    s7CadenceNormalizationPresent: !["s7", "s8"].includes(aggregate.gate) || scenarioFiles
+    s7CadenceNormalizationPresent: !["s7", "s8", "s9"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.targetCadenceNormalization?.configuredPublicationHz === TARGET_PUBLICATION_HZ
         && Number.isFinite(entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond)
         && Number.isFinite(entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond)),
-    s7AttributionReconciledAndPrivate: !["s7", "s8"].includes(aggregate.gate) || scenarioFiles
+    s7AttributionReconciledAndPrivate: aggregate.gate === "s9" ? scenarioFiles
+      .filter((entry) => entry.scenario === "normal")
+      .every((entry) => entry.residualAttribution?.codec === POSITIONAL_CODEC_CAPABILITY
+        && entry.residualAttribution?.sample?.capturedAcceptedFrames > 0
+        && entry.residualAttribution?.privacy?.rawFramesRetained === false
+        && entry.residualAttribution?.privacy?.ownerPrivateValuesEmitted === false)
+      : !["s7", "s8"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.residualAttribution?.exactLaneReconciliation?.passed === true
         && entry.residualAttribution?.publicDelta?.operationClassReconciliation?.passed === true
@@ -1254,24 +1319,30 @@ function validateArtifact(directory) {
         && entry.residualAttribution?.ownerKeyframe?.reconciliation?.passed === true
         && entry.residualAttribution?.privacy?.rawFramesRetained === false
         && entry.residualAttribution?.privacy?.ownerPrivateValuesEmitted === false),
-    s7ComparisonsPresent: !["s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s7ComparisonsPresent: !["s7", "s8", "s9"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.comparisonToS4?.compositeSha256 === S4_CANONICAL_SHA256
         && (entry.scenario !== "normal"
           || entry.comparisonToS6PreparedDiagnostic?.analysisSha256 === S6_ANALYSIS_SHA256)),
-    s8FieldFreshnessPresent: aggregate.gate !== "s8" || scenarioFiles.every((entry) =>
+    s8FieldFreshnessPresent: !["s8", "s9"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       Object.values(entry.fieldFreshness?.maximumConfiguredPublicationLagBeats || {})
         .length === 4
       && Object.values(entry.fieldFreshness.maximumConfiguredPublicationLagBeats)
         .every((value) => value === 0)),
+    s9CodecManifestBound: aggregate.gate !== "s9" || scenarioFiles.every((entry) =>
+      entry.clients.every((client) => client.manifest?.codecVerified === true
+        && client.manifest?.codecManifestHash === POSITIONAL_CODEC_MANIFEST_HASH)
+      && entry.diagnostics?.adapterStatePair?.positionalJson?.encodedFrames > 0
+      && entry.performance?.positionalWireDecodeMs?.count > 0),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
-    && (["s7", "s8"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
+    && (["s7", "s8", "s9"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
     && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
     && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent
     && invariants.stageProfilePresent && invariants.publicCoreShareabilityProved
     && invariants.s7PreparedProfilerBoundary && invariants.s7AckRejectAccountingConsistent
     && invariants.s7CadenceNormalizationPresent && invariants.s7AttributionReconciledAndPrivate
-    && invariants.s7ComparisonsPresent && invariants.s8FieldFreshnessPresent;
+    && invariants.s7ComparisonsPresent && invariants.s8FieldFreshnessPresent
+    && invariants.s9CodecManifestBound;
   return { passed: methodPassed, invariants, checksum,
     aggregateVerdict: aggregate.verdict };
 }
@@ -1302,7 +1373,7 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
     schemaVersion: RESIDUAL_GATE ? 3 : 2,
     gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
@@ -1314,7 +1385,8 @@ async function main() {
       attributionSampleFramesPerPopulation: RESIDUAL_GATE ? ATTRIBUTION_SAMPLE_FRAMES : 0,
       env: { LBH_SIM_WS_JSON_V2: true, LBH_SIM_WS_STATE_PAIR_V1: true,
         LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE,
-        LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: S8_PROTOTYPE,
+        LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: SPARSE_GATE,
+        LBH_SIM_WS_POSITIONAL_JSON_V1: S9_PROTOTYPE,
         LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS: RESIDUAL_GATE,
         LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK ? S6_PREPARED : true,
         LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || RESIDUAL_GATE,
@@ -1402,8 +1474,14 @@ async function main() {
       reconnectReuseObserved: results.filter((entry) => entry.scenario === "churn")
         .every((entry) => entry.faults.some((fault) => fault.name === "reconnect" && fault.manifestReused === true)) },
     failureAnalysis,
-    residualDecisionTable: RESIDUAL_GATE ? buildResidualDecisionTable(normalResults) : null,
+    residualDecisionTable: RESIDUAL_GATE && !S9_PROTOTYPE ? buildResidualDecisionTable(normalResults) : null,
     recommendation: STAGE_PROFILE ? "Diagnostic only: use stage attribution and the A/B control before selecting one narrow CPU optimization."
+      : S9_PROTOTYPE ? {
+        decision: "Treat this as a positional-JSON pre-gate only; admission still requires the canonical duration and every correctness/cadence/overload guard.",
+        targetMeanPairBytesAt10Hz: 6504,
+        s8SampledMeanPairBytes: { 1: 11973, 4: 13831, 8: 15949 },
+        defer: "Do not enable by default or expand to binary, compression, AOI, hosted WSS, WAN, or fleet claims.",
+      }
       : S8_PROTOTYPE ? {
         decision: "Do not admit runtime-public-components-v1 from this pre-gate. It preserves exact client-visible state and freshness, but component splitting alone does not close the S7 traffic gap.",
         nextEvidence: "Prototype one bounded compact public-entity envelope/schema encoding while preserving the same ticket-bound rollback and exact reconstruction tests, then rerun this gate.",

@@ -7,6 +7,7 @@ const TICKET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const TICKET_KINDS = new Set(["admission", "resume"]);
 const MAX_IDENTIFIER_LENGTH = 160;
 const ALLOWED_WIRE_VERSIONS = new Set(["lbh-multiplayer-json-v1", "lbh-multiplayer-json-v2"]);
+const POSITIONAL_CODEC_CAPABILITY = "state-pair-positional-json-v1";
 
 class MultiplayerTicketError extends Error {
   constructor(code, message) {
@@ -116,6 +117,11 @@ function createMultiplayerTicketRegistry({
         if (selected.capabilities.includes("runtime-public-components-v1")
             && !selected.capabilities.includes("state-pair-mixed-v1")) {
           fail("invalid-claim", "runtime-public-components-v1 requires state-pair-mixed-v1");
+        }
+        if (selected.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+            && (!selected.capabilities.includes("runtime-public-components-v1")
+              || !selected.capabilities.includes("state-pair-mixed-v1"))) {
+          fail("invalid-claim", `${POSITIONAL_CODEC_CAPABILITY} requires sparse mixed state-pair`);
         }
         selected.manifestSchema = identifier(claims.manifestSchema, "manifestSchema");
         selected.manifestHash = identifier(claims.manifestHash, "manifestHash");

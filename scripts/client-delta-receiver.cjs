@@ -25,6 +25,11 @@ const {
   reconstructLegacyPublicEntities,
   reconstructLegacyPublicState,
 } = require("./runtime-public-schema.cjs");
+const {
+  CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
+  POSITIONAL_CODEC_MANIFEST_HASH,
+  codecContext: positionalCodecContext,
+} = require("./state-pair-positional-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -41,6 +46,7 @@ const MODES = Object.freeze({
   STATE_PAIR: CAPABILITY,
   STATE_PAIR_MIXED: MIXED_CAPABILITY,
   STATE_PAIR_RUNTIME_COMPONENTS: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+  STATE_PAIR_POSITIONAL_JSON: POSITIONAL_CODEC_CAPABILITY,
 });
 const RECOVERY_REASONS = new Set([
   "reconnect", "match-changed", "session-changed", "authority-changed", "recipient-changed",
@@ -215,6 +221,12 @@ function selectClientReplicationMode({ wireVersion, capabilities = [] } = {}) {
   if (!Array.isArray(capabilities)) return MODES.V1;
   if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
       && capabilities.includes(MIXED_CAPABILITY)
+      && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+      && capabilities.includes(POSITIONAL_CODEC_CAPABILITY)) {
+    return MODES.STATE_PAIR_POSITIONAL_JSON;
+  }
+  if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
+      && capabilities.includes(MIXED_CAPABILITY)
       && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)) {
     return MODES.STATE_PAIR_RUNTIME_COMPONENTS;
   }
@@ -234,6 +246,9 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   const allowMixed = capabilities.includes(MIXED_CAPABILITY) && capabilities.includes(CAPABILITY);
   const materializeRuntimeComponents = allowMixed
     && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
+  const positional = materializeRuntimeComponents && capabilities.includes(POSITIONAL_CODEC_CAPABILITY);
+  let codecContext = positional ? positionalCodecContext({ ...context,
+    codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH }) : null;
   if (!Number.isSafeInteger(maxPairBytes) || maxPairBytes < 1024 || maxPairBytes > MAX_WIRE_PAIR_BYTES) {
     throw new RangeError(`maxPairBytes must be between 1024 and ${MAX_WIRE_PAIR_BYTES}`);
   }
@@ -365,7 +380,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     try {
       const bytes = wireBytes(raw);
       if (bytes > maxPairBytes) return reject("oversize-frame");
-      frame = parseWireFrame(raw, { direction: SERVER_TO_CLIENT });
+      frame = parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
+        ...(positional ? { positionalContext: codecContext, requirePositional: true } : {}) });
       scanForbiddenKeys(frame);
       if (frame.type !== "statePair"
           || (frame.pairSchema !== PAIR_SCHEMA && (!allowMixed || frame.pairSchema !== MIXED_PAIR_SCHEMA))) {
@@ -518,6 +534,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     else if (next.manifestSchema !== context.manifestSchema) recoveryReason = "schema-changed";
     else if (next.manifestHash !== context.manifestHash) recoveryReason = "manifest-changed";
     context = next;
+    if (positional) codecContext = positionalCodecContext({ ...context,
+      codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH });
     lastFrameId = 0;
     lastFingerprint = null;
     lastAck = null;
@@ -538,7 +556,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function diagnostics() {
     return deepFreeze({
       ...counters,
-      mode: materializeRuntimeComponents
+      mode: positional ? MODES.STATE_PAIR_POSITIONAL_JSON : materializeRuntimeComponents
         ? MODES.STATE_PAIR_RUNTIME_COMPONENTS
         : allowMixed ? MODES.STATE_PAIR_MIXED : MODES.STATE_PAIR,
       awaitingKeyframe,
@@ -560,6 +578,7 @@ module.exports = {
   CAPABILITY,
   MIXED_CAPABILITY,
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+  POSITIONAL_CODEC_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
   MODES,

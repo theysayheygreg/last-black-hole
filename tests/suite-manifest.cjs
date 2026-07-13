@@ -126,6 +126,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairPositionalCodec",
+    file: "state-pair-positional-codec.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ClientDeltaReceiver",
     file: "client-delta-receiver.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],

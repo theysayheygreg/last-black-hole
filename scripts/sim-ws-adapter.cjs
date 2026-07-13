@@ -29,6 +29,10 @@ const {
   enqueueBoundedInbound,
 } = require("./sim-ws-adapter-guards.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
+const {
+  CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
+  codecContext: positionalCodecContext,
+} = require("./state-pair-positional-codec.cjs");
 
 const MAX_PENDING_REPLAY_EVENTS = 32;
 const MAX_REPLAY_EVENTS_PER_PASS = 8;
@@ -101,6 +105,8 @@ function createSimWebSocketAdapter(options = {}) {
     duplicatePendingEvents: 0,
   };
   const statePairStats = { accepted: 0, rejected: 0, lastRejectReason: null };
+  const positionalCodecStats = { encodedFrames: 0, encodedBytes: 0, encodeMilliseconds: 0,
+    decodedFrames: 0, decodedBytes: 0, decodeMilliseconds: 0 };
   const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
   const ackRejectDiagnostics = {
     total: 0,
@@ -764,8 +770,34 @@ function createSimWebSocketAdapter(options = {}) {
     }
   }
 
+  function codecContextFor(state) {
+    if (!state?.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)) return null;
+    return positionalCodecContext({
+      matchId: state.identity?.runId,
+      sessionId: state.identity?.connectionId,
+      authorityIncarnation: state.binding?.authorityIncarnation,
+      recipientId: state.identity?.membershipId,
+      recipientIncarnation: state.identity?.connectionEpoch,
+      manifestHash: state.manifestHash,
+    });
+  }
+
+  function encodeForState(state, frame) {
+    const positionalContext = codecContextFor(state);
+    const measured = Boolean(positionalContext && frame?.type === "statePair");
+    const started = measured ? performance.now() : 0;
+    const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT,
+      ...(positionalContext ? { positionalContext } : {}) });
+    if (measured) {
+      positionalCodecStats.encodedFrames += 1;
+      positionalCodecStats.encodedBytes += Buffer.byteLength(wire, "utf8");
+      positionalCodecStats.encodeMilliseconds += performance.now() - started;
+    }
+    return wire;
+  }
+
   function sendFrame(state, frame) {
-    const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
+    const wire = encodeForState(state, frame);
     if (replicationAccounting) replicationAccounting.outbound(
       state, frame, "offered", Buffer.byteLength(wire, "utf8"),
     );
@@ -874,13 +906,20 @@ function createSimWebSocketAdapter(options = {}) {
                   recipientKey: profileRecipientKey(state),
                   outputBytes: Buffer.byteLength(serialized, "utf8"),
                   serializedAllocationProxyBytes: Buffer.byteLength(serialized, "utf8"),
-                }), () => encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }))
-              : encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
+                }), () => encodeForState(state, frame))
+              : encodeForState(state, frame);
+            if (state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)
+                && frame?.type === "statePair"
+                && message.envelope.frames.length === 1
+                && Buffer.byteLength(wire, "utf8") !== message.byteLength) {
+              throw new WireProtocolError("positional-queue-size-mismatch",
+                "queued positional byte accounting diverged from flush wire", 4403);
+            }
             if (!sendWire(state, wire, frame)) break;
           }
         } else if (!sendWire(
           state,
-          encodeWireFrame(message.envelope, { direction: SERVER_TO_CLIENT }),
+          encodeForState(state, message.envelope),
           message.envelope,
           message.sendAttempt,
         )) {
@@ -1253,7 +1292,16 @@ function createSimWebSocketAdapter(options = {}) {
   async function processInboundFrame(state, raw, isBinary) {
     if (!stateIsLive(state)) return;
     if (isBinary) throw new WireProtocolError("binary-frame", "binary application frames are not supported", 4403);
-    const frame = parseWireFrame(raw, { direction: CLIENT_TO_SERVER });
+    const positionalContext = codecContextFor(state);
+    const started = positionalContext ? performance.now() : 0;
+    const frame = parseWireFrame(raw, { direction: CLIENT_TO_SERVER,
+      ...(positionalContext ? { positionalContext, requirePositional: true } : {}) });
+    if (positionalContext && (frame.type === "statePairRecovery"
+        || (frame.type === "ack" && frame.ackKind === "statePair"))) {
+      positionalCodecStats.decodedFrames += 1;
+      positionalCodecStats.decodedBytes += Buffer.byteLength(raw);
+      positionalCodecStats.decodeMilliseconds += performance.now() - started;
+    }
     replicationAccounting?.inbound(state, frame, Buffer.byteLength(raw));
     if (!state.bound) {
       if (frame.type !== "hello") throw new WireProtocolError("hello-required", "first frame must be hello", 4401);
@@ -1582,14 +1630,15 @@ function createSimWebSocketAdapter(options = {}) {
     if (state.wireVersion !== "lbh-multiplayer-json-v2") {
       return { accepted: false, action: "ignore", reason: "state-pair-requires-v2" };
     }
+    let encodedWire;
     try {
       if (stageProfiler) {
-        stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (wire) => ({
+        encodedWire = stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (wire) => ({
           recipientKey: profileRecipientKey(state),
           outputBytes: Buffer.byteLength(wire, "utf8"),
           serializedAllocationProxyBytes: Buffer.byteLength(wire, "utf8"),
-        }), () => encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }));
-      } else encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
+        }), () => encodeForState(state, frame));
+      } else encodedWire = encodeForState(state, frame);
     } catch (error) {
       return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
     }
@@ -1626,7 +1675,9 @@ function createSimWebSocketAdapter(options = {}) {
     }
     const priorRecords = Object.values(state.replicationQueuedStateFrames || {});
     const queueSequence = frame.frameId + state.statePairQueueOffset;
-    const enqueue = () => state.queue.enqueueState(queueSequence, { kind: "state-pair", frames: [frame] });
+    const encodedBytes = Buffer.byteLength(encodedWire, "utf8");
+    const enqueue = () => state.queue.enqueueState(queueSequence, { kind: "state-pair", frames: [frame] },
+      { byteLength: encodedBytes });
     const outcome = stageProfiler
       ? stageProfiler.measureSync(STAGES.ADAPTER_ENQUEUE, {
           recipientKey: profileRecipientKey(state),
@@ -1635,7 +1686,7 @@ function createSimWebSocketAdapter(options = {}) {
       : enqueue();
     if (replicationAccounting) {
       const account = () => {
-        const bytes = Buffer.byteLength(JSON.stringify(frame), "utf8");
+        const bytes = encodedBytes;
         replicationAccounting.outbound(state, frame, "offered", bytes);
         if (!outcome.accepted) {
           const terminal = outcome.action === "rebase" || outcome.action === "disconnect"
@@ -1672,7 +1723,7 @@ function createSimWebSocketAdapter(options = {}) {
     if (!state) return { accepted: false, action: "ignore", reason: "binding-not-connected" };
     let wire;
     try {
-      wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
+      wire = encodeForState(state, frame);
     } catch (error) {
       return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
     }
@@ -1801,6 +1852,7 @@ function createSimWebSocketAdapter(options = {}) {
     ackRejectDiagnostics.recoveryAccepted = 0;
     ackRejectDiagnostics.recoveryRejected = 0;
     ackRejectDiagnostics.recoveryCooldownDrops = 0;
+    for (const key of Object.keys(positionalCodecStats)) positionalCodecStats[key] = 0;
     replicationAccounting?.reset();
     stageProfiler?.reset();
     return { runId: currentRunId, fenced };
@@ -1873,6 +1925,7 @@ function createSimWebSocketAdapter(options = {}) {
       closed,
       currentRunId,
       connections: connections.size,
+      manifestRequiredConnections: [...connections].filter((state) => Boolean(state.manifestRequired)).length,
       ...summary,
       pendingInboundBytes: pendingInboundBytesTotal,
       pendingScheduledSends,
@@ -1904,6 +1957,16 @@ function createSimWebSocketAdapter(options = {}) {
       }),
       statePair: Object.freeze({ ...statePairStats,
         modeConnections: [...connections].filter((state) => state.statePairMode).length,
+        positionalJson: Object.freeze({
+          capability: POSITIONAL_CODEC_CAPABILITY,
+          enabledConnections: [...connections].filter((state) =>
+            state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)).length,
+          ...positionalCodecStats,
+          meanEncodeMs: positionalCodecStats.encodedFrames
+            ? positionalCodecStats.encodeMilliseconds / positionalCodecStats.encodedFrames : null,
+          meanDecodeMs: positionalCodecStats.decodedFrames
+            ? positionalCodecStats.decodeMilliseconds / positionalCodecStats.decodedFrames : null,
+        }),
         ackRejectDiagnostics: ackRejectDiagnosticsEnabled
           ? Object.freeze({
               enabled: true,

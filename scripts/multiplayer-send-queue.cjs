@@ -79,7 +79,7 @@ class MultiplayerSendQueue {
     this.reset({ nextReliableId: options.nextReliableId });
   }
 
-  enqueueState(sequence, payload) {
+  enqueueState(sequence, payload, options = {}) {
     if (this.terminal) return this._terminalResult();
     if (this.rebaseRequired) {
       return { accepted: false, action: "rebase", reason: this.rebaseReason };
@@ -92,8 +92,13 @@ class MultiplayerSendQueue {
       return { accepted: false, action: "ignore", reason: "stale-state" };
     }
 
+    const serialized = serializeFrame(payload);
+    const byteLength = options.byteLength === undefined
+      ? serialized.byteLength
+      : positiveInteger(options.byteLength, undefined, "state encoded byteLength");
     const candidate = {
-      ...serializeFrame(payload),
+      ...serialized,
+      byteLength,
       lane: "state",
       stateSequence: normalizedSequence,
     };

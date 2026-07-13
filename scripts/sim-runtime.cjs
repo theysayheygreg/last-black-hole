@@ -105,8 +105,13 @@ const {
   CAPABILITY: STATE_PAIR_CAPABILITY,
   MIXED_CAPABILITY: STATE_PAIR_MIXED_CAPABILITY,
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+  POSITIONAL_CODEC_CAPABILITY,
   createRuntimeStatePairAuthority,
 } = require("./runtime-state-pair-integration.cjs");
+const {
+  POSITIONAL_CODEC_MANIFEST,
+  POSITIONAL_CODEC_MANIFEST_HASH,
+} = require("./state-pair-positional-codec.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -1014,6 +1019,8 @@ const MULTIPLAYER_STATE_PAIR_MIXED_V1_ENABLED = MULTIPLAYER_STATE_PAIR_V1_ENABLE
   && String(process.env.LBH_SIM_WS_STATE_PAIR_MIXED_V1 || "").trim() === "true";
 const MULTIPLAYER_RUNTIME_PUBLIC_COMPONENTS_ENABLED = MULTIPLAYER_STATE_PAIR_MIXED_V1_ENABLED
   && String(process.env.LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1 || "").trim() === "true";
+const MULTIPLAYER_POSITIONAL_JSON_ENABLED = MULTIPLAYER_RUNTIME_PUBLIC_COMPONENTS_ENABLED
+  && String(process.env.LBH_SIM_WS_POSITIONAL_JSON_V1 || "").trim() === "true";
 const MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED = String(
   process.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS || "",
 ).trim() === "true";
@@ -6195,6 +6202,13 @@ function currentSessionReplicationManifest() {
     publicContent: {
       bodySchema: BODY_SCHEMA_VERSION,
       simProtocol: SIM_PROTOCOL_VERSION,
+      ...(MULTIPLAYER_POSITIONAL_JSON_ENABLED ? {
+        statePairCodec: {
+          capability: POSITIONAL_CODEC_CAPABILITY,
+          codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH,
+          manifest: POSITIONAL_CODEC_MANIFEST,
+        },
+      } : {}),
     },
   });
   return sessionReplicationManifest;
@@ -7352,7 +7366,10 @@ const server = http.createServer(async (req, res) => {
             ? [STATE_PAIR_MIXED_CAPABILITY,
               ...(MULTIPLAYER_RUNTIME_PUBLIC_COMPONENTS_ENABLED
                 && body.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
-                ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY] : [])]
+                ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+                  ...(MULTIPLAYER_POSITIONAL_JSON_ENABLED
+                    && body.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+                    ? [POSITIONAL_CODEC_CAPABILITY] : [])] : [])]
             : [])] : [])].sort()
         : [];
       if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2

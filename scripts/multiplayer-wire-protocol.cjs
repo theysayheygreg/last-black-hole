@@ -4,6 +4,12 @@ const {
   STREAM_PATH,
 } = require("./multiplayer-protocol-constants.cjs");
 const { normalizeView, projectionHash } = require("./canonical-structural-delta.cjs");
+const {
+  CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
+  PositionalCodecError,
+  encodePositionalFrame,
+  decodePositionalFrame,
+} = require("./state-pair-positional-codec.cjs");
 
 const CLIENT_TO_SERVER = "client->server";
 const SERVER_TO_CLIENT = "server->client";
@@ -232,6 +238,11 @@ function validateHello(frame) {
         && !frame.capabilities.includes("state-pair-mixed-v1")) {
       fail("invalid-field", "runtime-public-components-v1 requires state-pair-mixed-v1");
     }
+    if (frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+        && (!frame.capabilities.includes("runtime-public-components-v1")
+          || !frame.capabilities.includes("state-pair-mixed-v1"))) {
+      fail("invalid-field", `${POSITIONAL_CODEC_CAPABILITY} requires sparse mixed state-pair`);
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
   }
@@ -271,6 +282,11 @@ function validateWelcome(frame) {
     if (frame.capabilities.includes("runtime-public-components-v1")
         && !frame.capabilities.includes("state-pair-mixed-v1")) {
       fail("invalid-field", "runtime-public-components-v1 requires state-pair-mixed-v1");
+    }
+    if (frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+        && (!frame.capabilities.includes("runtime-public-components-v1")
+          || !frame.capabilities.includes("state-pair-mixed-v1"))) {
+      fail("invalid-field", `${POSITIONAL_CODEC_CAPABILITY} requires sparse mixed state-pair`);
     }
     if (frame.authorityIncarnation !== undefined) {
       if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");
@@ -620,7 +636,11 @@ function byteLength(value) {
   }
 }
 
-function validateWireFrame(frame, { direction } = {}) {
+function frameByteLimit(type) {
+  return Math.min(LIMITS.maxFrameBytes, FRAME_BYTE_LIMITS[type] || LIMITS.maxFrameBytes);
+}
+
+function validateWireFrameSemantic(frame, { direction } = {}) {
   object(frame, "frame");
   requiredString(frame.type, "type", 64);
   const validator = VALIDATORS[frame.type];
@@ -633,8 +653,13 @@ function validateWireFrame(frame, { direction } = {}) {
     fail("invalid-direction", `${frame.type} is ${expectedDirection}`);
   }
   validator(frame, direction);
+  return frame;
+}
+
+function validateWireFrame(frame, options = {}) {
+  validateWireFrameSemantic(frame, options);
   const bytes = byteLength(frame);
-  const limit = Math.min(LIMITS.maxFrameBytes, FRAME_BYTE_LIMITS[frame.type]);
+  const limit = frameByteLimit(frame.type);
   if (bytes > limit) fail("frame-too-large", `${frame.type} frame is ${bytes} bytes; limit is ${limit}`, 4409);
   return frame;
 }
@@ -658,11 +683,45 @@ function parseWireFrame(raw, options = {}) {
   } catch {
     fail("invalid-json", "wire frame is not valid JSON");
   }
-  return validateWireFrame(frame, options);
+  const positional = Array.isArray(frame);
+  if (positional) {
+    if (!options.positionalContext) fail("unexpected-positional-frame", "positional frame was not negotiated", 4403);
+    try { frame = decodePositionalFrame(text, options.positionalContext); }
+    catch (error) {
+      if (error instanceof PositionalCodecError) fail(error.code, error.message, 4403);
+      throw error;
+    }
+  } else if (options.requirePositional
+      && (frame?.type === "statePair" || frame?.type === "statePairRecovery"
+        || (frame?.type === "ack" && frame?.ackKind === "statePair"))) {
+    fail("positional-frame-required", "negotiated state-pair transaction must use positional JSON", 4403);
+  }
+  if (positional && bytes > frameByteLimit(frame.type)) {
+    fail("frame-too-large", `${frame.type} positional frame is ${bytes} bytes; limit is ${frameByteLimit(frame.type)}`, 4409);
+  }
+  return positional ? validateWireFrameSemantic(frame, options) : validateWireFrame(frame, options);
 }
 
 function encodeWireFrame(frame, options = {}) {
-  validateWireFrame(frame, options);
+  const positional = options.positionalContext
+    && (frame.type === "statePair" || frame.type === "statePairRecovery"
+      || (frame.type === "ack" && frame.ackKind === "statePair"));
+  if (positional) validateWireFrameSemantic(frame, options);
+  else validateWireFrame(frame, options);
+  if (positional) {
+    try {
+      const wire = encodePositionalFrame(frame, options.positionalContext);
+      const bytes = Buffer.byteLength(wire, "utf8");
+      if (bytes > frameByteLimit(frame.type)) {
+        fail("frame-too-large", `${frame.type} positional frame is ${bytes} bytes; limit is ${frameByteLimit(frame.type)}`, 4409);
+      }
+      return wire;
+    }
+    catch (error) {
+      if (error instanceof PositionalCodecError) fail(error.code, error.message);
+      throw error;
+    }
+  }
   return JSON.stringify(frame);
 }
 
@@ -677,6 +736,7 @@ module.exports = {
   FRAME_DIRECTIONS,
   ACTION_KINDS: Object.freeze([...ACTION_KINDS]),
   ACK_KINDS: Object.freeze([...ACK_KINDS]),
+  POSITIONAL_CODEC_CAPABILITY,
   WireProtocolError,
   validateWireFrame,
   parseWireFrame,

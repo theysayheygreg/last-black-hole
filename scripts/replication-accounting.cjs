@@ -181,9 +181,10 @@ function summarizeWindow(snapshot, {
   const groups = {};
   const pairHalves = new Map();
   for (const event of selected) {
-    const key = `${event.direction}|${event.wireVersion}|${event.frameClass}|${event.projectionKind || "none"}`;
+    const baseKey = `${event.direction}|${event.wireVersion}|${event.frameClass}|${event.projectionKind || "none"}`;
+    const key = event.codec === "object-json" ? baseKey : `${baseKey}|${event.codec}`;
     const group = groups[key] ||= {
-      direction: event.direction, wireVersion: event.wireVersion, frameClass: event.frameClass,
+      direction: event.direction, wireVersion: event.wireVersion, codec: event.codec, frameClass: event.frameClass,
       projectionKind: event.projectionKind,
       offeredBytes: 0, offeredFrames: 0, acceptedBytes: 0, acceptedFrames: 0,
       coalescedBytes: 0, coalescedFrames: 0, policyDroppedBytes: 0, policyDroppedFrames: 0,
@@ -399,6 +400,10 @@ function createReplicationAccounting({
       connectionEpoch: Number.isSafeInteger(state.identity?.connectionEpoch) ? state.identity.connectionEpoch : 0,
       direction,
       wireVersion: state.binding?.wireVersion || frame?.wireVersion || WIRE_PROTOCOL_VERSION,
+      codec: state.capabilities?.includes("state-pair-positional-json-v1")
+        && (frame?.type === "statePair" || frame?.type === "statePairRecovery"
+          || (frame?.type === "ack" && frame?.ackKind === "statePair"))
+        ? "state-pair-positional-json-v1" : "object-json",
       frameClass: wireClass(frame), metric,
       bytes: Math.max(0, Number(bytes) || 0), frames,
       projectionBeat: frame?.type === "statePair" && Number.isSafeInteger(frame?.frameId)
