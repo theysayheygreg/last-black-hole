@@ -29,13 +29,15 @@ function fixedWindowRates(events, { startAt, endAt, windowMs, recipients, direct
     throw new TypeError("fixed window inputs are invalid");
   }
   const labels = [...recipients].sort();
-  const bucketCount = Math.ceil((endAt - startAt) / windowMs);
+  const bucketCount = Math.floor((endAt - startAt) / windowMs);
+  if (bucketCount < 1) throw new TypeError("fixed rate window has no complete bucket");
+  const scoredEndAt = startAt + bucketCount * windowMs;
   const byRecipient = Object.fromEntries(labels.map((label) => [label, Array(bucketCount).fill(0)]));
   const aggregate = Array(bucketCount).fill(0);
   for (const event of events) {
     if (event.metric !== "accepted" || event.direction !== direction
-      || event.timestamp < startAt || event.timestamp >= endAt || !byRecipient[event.recipient]) continue;
-    const index = Math.min(bucketCount - 1, Math.floor((event.timestamp - startAt) / windowMs));
+      || event.timestamp < startAt || event.timestamp >= scoredEndAt || !byRecipient[event.recipient]) continue;
+    const index = Math.floor((event.timestamp - startAt) / windowMs);
     byRecipient[event.recipient][index] += event.bytes;
     aggregate[index] += event.bytes;
   }
@@ -44,6 +46,9 @@ function fixedWindowRates(events, { startAt, endAt, windowMs, recipients, direct
     [label, distribution(bytes.map((value) => value / seconds))]));
   return {
     windowMs,
+    scoredStartAt: startAt,
+    scoredEndAt,
+    droppedPartialTailMs: endAt - scoredEndAt,
     direction,
     recipientBytesPerSecond: recipientRates,
     allRecipientWindowsBytesPerSecond: distribution(Object.values(byRecipient).flat().map((value) => value / seconds)),

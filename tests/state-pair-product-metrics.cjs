@@ -24,6 +24,16 @@ async function run() {
       "Recipient windows must not average away the burst");
     assert(result.aggregateBytesPerSecond.max === 800, "Aggregate burst must include simultaneous recipients");
   });
+  await runner.run("fixed windows exclude and label a partial tail bucket", () => {
+    const result = fixedWindowRates([
+      { timestamp: 100, recipient: "r1", direction: "authority->client", metric: "accepted", bytes: 100 },
+      { timestamp: 2200, recipient: "r1", direction: "authority->client", metric: "accepted", bytes: 900 },
+    ], { startAt: 0, endAt: 2500, windowMs: 1000, recipients: ["r1"] });
+    assert(result.recipientBytesPerSecond.r1.max === 100,
+      "Partial-tail traffic must not be divided by a full-window denominator");
+    assert(result.scoredEndAt === 2000 && result.droppedPartialTailMs === 500,
+      "Fixed-window metadata must expose the excluded partial tail");
+  });
   await runner.run("fixed means retain intended silent recipients and full-duration denominator", () => {
     const events = [
       { timestamp: 1500, recipient: "short", direction: "authority->client", metric: "accepted", bytes: 500 },

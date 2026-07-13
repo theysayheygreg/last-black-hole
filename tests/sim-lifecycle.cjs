@@ -94,6 +94,8 @@ async function run() {
     const { status, body } = await fetchJson(AUTO_PORT, "/health");
     assert(status === 200, `Expected /health 200, got ${status}`);
     assert(body.process?.pid > 0, "Expected sim health to expose process pid");
+    assert(Number.isSafeInteger(body.process?.sampledAtMs) && body.process.sampledAtMs > 0,
+      "Expected sim health to timestamp its process CPU sample");
     assert(body.process?.cpuUsage?.user >= 0 && body.process?.cpuUsage?.system >= 0,
       "Expected sim health to expose cumulative process CPU usage");
     assert(body.process?.memory?.rss > 0, "Expected sim health to expose memory usage");

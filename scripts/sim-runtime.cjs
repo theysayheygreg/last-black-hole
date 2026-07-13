@@ -7057,6 +7057,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && (req.url === "/health" || req.url === "/health/compact")) {
       const compactReplicationHealth = req.url === "/health/compact";
       const idleState = getIdleState();
+      const processSample = { sampledAtMs: Date.now(), cpuUsage: process.cpuUsage() };
       const health = {
         ok: true,
         protocolVersion: PROTOCOL_VERSION,
@@ -7082,7 +7083,7 @@ const server = http.createServer(async (req, res) => {
         process: {
           pid: process.pid,
           uptimeSec: Number(process.uptime().toFixed(3)),
-          cpuUsage: process.cpuUsage(),
+          ...processSample,
           memory: process.memoryUsage(),
         },
         idleState,
