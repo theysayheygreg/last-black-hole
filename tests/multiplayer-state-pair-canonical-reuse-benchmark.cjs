@@ -100,7 +100,8 @@ function run() {
     moduleRoot: path.relative(ROOT, MODULE_ROOT) || ".", iterations: ITERATIONS, warmup: WARMUP,
     execution: { runLabel: process.env.LBH_S15_RUN_LABEL || null,
       declaredOrder: Number(process.env.LBH_S15_RUN_ORDER || 0), sourceCommit, sourceTree,
-      testScriptCommit: git("rev-parse", "HEAD"), testScriptDirty: Boolean(git("status", "--short")),
+      testScriptCommit: git("rev-parse", "HEAD"),
+      trackedSourceDirty: Boolean(git("diff", "--name-only") || git("diff", "--cached", "--name-only")),
       sourceHashes: {
         authorityPublisher: fileSha(path.join(MODULE_ROOT, "scripts", "authority-delta-publisher.cjs")),
         positionalCodec: fileSha(path.join(MODULE_ROOT, "scripts", "state-pair-positional-codec.cjs")),
