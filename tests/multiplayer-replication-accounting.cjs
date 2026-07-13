@@ -5,6 +5,7 @@ const { TestRunner, assert } = require("./helpers.cjs");
 const { WebSocket } = require("ws");
 const {
   createReplicationAccounting,
+  frameShape,
   nearestRank,
   summarizeWindow,
   normalizeReconnect,
@@ -16,6 +17,43 @@ const {
 
 async function run() {
   const runner = new TestRunner("MultiplayerReplicationAccounting");
+
+  await runner.run("counts the concrete v1 public and owner replication schemas", async () => {
+    const world = Object.fromEntries(["wells", "stars", "wrecks", "planetoids", "portals", "scavengers", "fauna", "sentries"]
+      .map((key, index) => [key, [{ id: `${key}-${index}`, x: index, y: index + 1, type: key }]]));
+    world.nextPortalWaveIndex = 2;
+    const frame = { type: "publicState", full: true, state: {
+      type: "snapshot", protocolVersion: "2", session: { status: "running" }, tick: 10, simTime: 1,
+      fieldRevision: 2, serverTime: 100, lastEventSeq: 4, snapshotId: 3, baselineSnapshotId: null,
+      runId: "fixture-run", bodySchemaVersion: 1, snapshotSchemaVersion: 2,
+      players: [
+        { clientId: "p1", x: 1, y: 2, status: "alive" },
+        { clientId: "p2", x: 3, y: 4, status: "alive" },
+      ], world, inhibitor: { form: "dormant", wx: 0.5, wy: 0.5 }, despawns: ["gone-1", "gone-2"],
+    } };
+    const shape = frameShape(frame);
+    assert(shape.shapeSchema === "lbh-public-state-v1" && shape.shapeComplete
+      && shape.entityCount === 11 && shape.componentCount === 33 && shape.despawnCount === 2
+      && shape.otherEntityCount === 0 && shape.unknownStateKeys.length === 0 && shape.unknownWorldKeys.length === 0,
+    `Known v1 public shape must be exact and nonzero: ${JSON.stringify(shape)}`);
+    const owner = frameShape({ type: "ownerState", state: { playerId: "p1", cargo: [], signal: 0 } });
+    assert(owner.shapeSchema === "lbh-owner-state-v1" && owner.shapeComplete
+      && owner.entityCount === 1 && owner.componentCount === 2,
+    `Owner lane must expose one private projection and its components: ${JSON.stringify(owner)}`);
+    const unknown = frameShape({ ...frame, state: { ...frame.state, mysteryEntities: [{ id: "unknown" }] } });
+    assert(!unknown.shapeComplete && unknown.otherEntityCount === 1
+      && unknown.unknownStateKeys.includes("mysteryEntities"),
+    "Unknown public entity collections must be explicit and fail completeness instead of reading as zero");
+    const missing = frameShape({ ...frame, state: { ...frame.state, inhibitor: undefined } });
+    assert(!missing.shapeComplete && missing.unknownStateKeys.includes("<missing:inhibitor>"),
+      "Missing required public entity lanes must be attributed explicitly");
+    const invalidMembers = frameShape({ ...frame, state: { ...frame.state,
+      players: [...frame.state.players, null], world: { ...world, stars: [null] } } });
+    assert(!invalidMembers.shapeComplete
+      && invalidMembers.unknownStateKeys.includes("<invalid-member:players>")
+      && invalidMembers.unknownWorldKeys.includes("<invalid-member:stars>"),
+    "Malformed entity members must fail shape completeness with their exact collection names");
+  });
 
   await runner.run("uses exact nearest-rank and reconnect normalization without double counting", async () => {
     assert(nearestRank([90, 10, 30, 20], 0.5) === 20, "p50 must use ceil(p*N)-1 over sorted values");

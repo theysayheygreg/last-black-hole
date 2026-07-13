@@ -28,18 +28,97 @@ function nearestRank(values, percentile) {
   return sorted[Math.ceil(percentile * sorted.length) - 1];
 }
 
+const PUBLIC_WORLD_ENTITY_KEYS = Object.freeze([
+  "wells", "stars", "wrecks", "planetoids", "portals", "scavengers", "fauna", "sentries",
+]);
+const PUBLIC_STATE_KEYS = new Set([
+  "type", "protocolVersion", "session", "tick", "simTime", "fieldRevision", "serverTime",
+  "lastEventSeq", "players", "world", "inhibitor", "snapshotId", "baselineSnapshotId", "runId",
+  "bodySchemaVersion", "snapshotSchemaVersion", "despawns",
+]);
+const ENTITY_IDENTITY_KEYS = new Set(["id", "clientId", "playerId", "profileId", "instanceId"]);
+
+function isEntityObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function entityComponents(entity) {
+  if (!entity || typeof entity !== "object" || Array.isArray(entity)) return 0;
+  return Object.keys(entity).filter((key) => !ENTITY_IDENTITY_KEYS.has(key)).length;
+}
+
 function frameShape(frame) {
-  const bodies = Array.isArray(frame?.state?.bodies) ? frame.state.bodies : [];
-  return Object.freeze({
-    projectionKind: frame?.type === "publicState" || frame?.type === "ownerState"
-      ? (frame.full === true ? "keyframe" : frame.delta === true ? "delta" : "state")
-      : null,
+  const projectionKind = frame?.type === "publicState" || frame?.type === "ownerState"
+    ? (frame.full === true ? "keyframe" : frame.delta === true ? "delta" : "state") : null;
+  const base = {
+    projectionKind,
     streamKind: frame?.type === "manifest" ? "manifest" : "matchStream",
-    entityCount: bodies.length,
-    componentCount: bodies.reduce((sum, body) => sum + Math.max(0, Object.keys(body || {}).length - 1), 0)
-      + ((frame?.type === "ownerState" && frame.state && typeof frame.state === "object")
-        ? Object.keys(frame.state).length : 0),
-    despawnCount: Array.isArray(frame?.state?.despawns) ? frame.state.despawns.length : 0,
+    shapeSchema: "not-applicable",
+    shapeComplete: true,
+    entityCount: 0,
+    componentCount: 0,
+    despawnCount: 0,
+    otherEntityCount: 0,
+    unknownStateKeys: Object.freeze([]),
+    unknownWorldKeys: Object.freeze([]),
+  };
+  if (frame?.type === "ownerState") {
+    const state = frame.state;
+    const complete = Boolean(state && typeof state === "object" && !Array.isArray(state));
+    return Object.freeze({ ...base, shapeSchema: "lbh-owner-state-v1", shapeComplete: complete,
+      entityCount: complete ? 1 : 0, componentCount: complete ? entityComponents(state) : 0,
+      unknownStateKeys: complete ? Object.freeze([]) : Object.freeze(["<invalid:owner-state>"]) });
+  }
+  if (frame?.type !== "publicState") return Object.freeze(base);
+  const state = frame.state;
+  if (!state || typeof state !== "object" || Array.isArray(state)) {
+    return Object.freeze({ ...base, shapeSchema: "lbh-public-state-v1", shapeComplete: false,
+      unknownStateKeys: Object.freeze(["<invalid-state>"]) });
+  }
+  const unknownStateKeys = Object.keys(state).filter((key) => !PUBLIC_STATE_KEYS.has(key)).sort();
+  const world = state.world;
+  const worldObject = isEntityObject(world);
+  const unknownWorldKeys = worldObject
+    ? Object.keys(world).filter((key) => !PUBLIC_WORLD_ENTITY_KEYS.includes(key)
+      && key !== "nextPortalWaveIndex").sort() : ["<invalid-world>"];
+  const players = Array.isArray(state.players) ? state.players.filter(isEntityObject) : [];
+  const knownCollections = worldObject
+    ? PUBLIC_WORLD_ENTITY_KEYS.map((key) => Array.isArray(world[key]) ? world[key].filter(isEntityObject) : []) : [];
+  const stateShapeIssues = [
+    ...(state.players === undefined ? ["<missing:players>"]
+      : !Array.isArray(state.players) ? ["<invalid:players>"]
+        : state.players.some((value) => !isEntityObject(value)) ? ["<invalid-member:players>"] : []),
+    ...(state.world === undefined ? ["<missing:world>"] : !worldObject ? ["<invalid:world>"] : []),
+    ...(state.inhibitor === undefined ? ["<missing:inhibitor>"]
+      : !isEntityObject(state.inhibitor) ? ["<invalid:inhibitor>"] : []),
+  ];
+  const worldShapeIssues = worldObject ? PUBLIC_WORLD_ENTITY_KEYS.flatMap((key) =>
+    world[key] === undefined ? [`<missing:${key}>`]
+      : !Array.isArray(world[key]) ? [`<invalid:${key}>`]
+        : world[key].some((value) => !isEntityObject(value)) ? [`<invalid-member:${key}>`] : [])
+    : PUBLIC_WORLD_ENTITY_KEYS.map((key) => `<missing:${key}>`);
+  const knownEntities = [...players, ...knownCollections.flat()];
+  const inhibitor = isEntityObject(state.inhibitor) ? state.inhibitor : null;
+  if (inhibitor) knownEntities.push(inhibitor);
+  const unknownValues = [
+    ...unknownStateKeys.map((key) => state[key]),
+    ...(worldObject ? unknownWorldKeys.map((key) => world[key]) : []),
+  ];
+  const otherEntities = unknownValues.flatMap((value) => Array.isArray(value)
+    ? value : value && typeof value === "object" ? [value] : []);
+  const stateDespawns = Array.isArray(state.despawns) ? state.despawns : [];
+  const frameDespawns = Array.isArray(frame.despawns) ? frame.despawns : [];
+  return Object.freeze({
+    ...base,
+    shapeSchema: "lbh-public-state-v1",
+    shapeComplete: unknownStateKeys.length === 0 && unknownWorldKeys.length === 0
+      && stateShapeIssues.length === 0 && worldShapeIssues.length === 0,
+    entityCount: knownEntities.length,
+    componentCount: knownEntities.reduce((sum, entity) => sum + entityComponents(entity), 0),
+    despawnCount: stateDespawns.length + frameDespawns.length,
+    otherEntityCount: otherEntities.length,
+    unknownStateKeys: Object.freeze([...unknownStateKeys, ...stateShapeIssues]),
+    unknownWorldKeys: Object.freeze([...unknownWorldKeys, ...worldShapeIssues]),
   });
 }
 

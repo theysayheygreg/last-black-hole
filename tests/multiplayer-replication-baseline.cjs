@@ -79,18 +79,28 @@ function shapeSummary(events, startAt, endAt) {
   const result = {};
   for (const event of selected) {
     const key = `${event.direction}|${event.frameClass}`;
-    const row = result[key] ||= { frames: 0, bytes: 0, entityCounts: [], componentCounts: [], despawnCounts: [] };
+    const row = result[key] ||= { frames: 0, bytes: 0, entityCounts: [], componentCounts: [], despawnCounts: [],
+      shapeSchemas: new Set(), incompleteShapeFrames: 0, otherEntityCounts: [],
+      unknownStateKeys: new Set(), unknownWorldKeys: new Set() };
     row.frames += event.frames;
     row.bytes += event.bytes;
     row.entityCounts.push(event.entityCount);
     row.componentCounts.push(event.componentCount);
     row.despawnCounts.push(event.despawnCount);
+    row.shapeSchemas.add(event.shapeSchema);
+    if (event.shapeComplete !== true) row.incompleteShapeFrames += 1;
+    row.otherEntityCounts.push(event.otherEntityCount);
+    for (const key of event.unknownStateKeys || []) row.unknownStateKeys.add(key);
+    for (const key of event.unknownWorldKeys || []) row.unknownWorldKeys.add(key);
   }
   return Object.fromEntries(Object.entries(result).map(([key, row]) => [key, {
     frames: row.frames, bytes: row.bytes,
     entityCount: { p50: percentile(row.entityCounts, 0.5), p95: percentile(row.entityCounts, 0.95), max: Math.max(...row.entityCounts) },
     componentCount: { p50: percentile(row.componentCounts, 0.5), p95: percentile(row.componentCounts, 0.95), max: Math.max(...row.componentCounts) },
     despawnCount: { p50: percentile(row.despawnCounts, 0.5), p95: percentile(row.despawnCounts, 0.95), max: Math.max(...row.despawnCounts) },
+    shapeSchemas: [...row.shapeSchemas].sort(), incompleteShapeFrames: row.incompleteShapeFrames,
+    otherEntityCountMax: Math.max(...row.otherEntityCounts),
+    unknownStateKeys: [...row.unknownStateKeys].sort(), unknownWorldKeys: [...row.unknownWorldKeys].sort(),
   }]));
 }
 
@@ -220,6 +230,15 @@ async function runPopulation(population, runDir, commit) {
       throw new Error(`exact recipient coverage failed: ${JSON.stringify(coverage)}`);
     }
     const selected = snapshot.events.filter((event) => event.timestamp >= startAt && event.timestamp < endAt);
+    const stateShapeEvents = selected.filter((event) => event.metric === "accepted"
+      && event.direction === "authority->client"
+      && (event.frameClass === "publicState" || event.frameClass === "ownerState"));
+    if (!stateShapeEvents.length || stateShapeEvents.some((event) => event.shapeComplete !== true
+      || event.unknownStateKeys.length > 0 || event.unknownWorldKeys.length > 0)
+      || !stateShapeEvents.some((event) => event.frameClass === "publicState" && event.entityCount > 1
+        && event.componentCount > 0)) {
+      throw new Error("v1 replication shape completeness/nonzero gate failed");
+    }
     const publicFrames = selected.filter((event) => event.metric === "accepted" && event.frameClass === "publicState").length;
     const ownerFrames = selected.filter((event) => event.metric === "accepted" && event.frameClass === "ownerState").length;
     if (publicFrames !== ownerFrames || publicFrames !== summary.completePairBytes.count) {
