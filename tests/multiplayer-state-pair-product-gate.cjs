@@ -481,7 +481,7 @@ async function runScenario({ population, scenario, runDir }) {
         if (left.status !== 200) throw new Error(`leave failed: ${JSON.stringify(left.body)}`);
         const authorityAbsence = await waitFor(async () => {
           const health = await request(port, "/health/compact");
-          return health.body.playerCount === population - 1;
+          return health.body.ballpark?.playerCount === population - 1;
         }, `${scenario}/${population} authority leave`);
         const absenceObserved = observers.length === 0 || await waitFor(() =>
           observers.every((client) => !hasMaterializedPublicEntity(client, "player", sourceId)),
@@ -668,6 +668,9 @@ async function runScenario({ population, scenario, runDir }) {
     return result;
   } finally {
     for (const client of clientsRef.current) await closeClient(client).catch(() => {});
+    if (preStopHealth === null) {
+      preStopHealth = await request(port, "/health").then((response) => response.body).catch(() => null);
+    }
     await stopSimServer(port).catch(() => {});
     const portDead = await new Promise((resolve) => {
       const socket = net.connect({ host: "127.0.0.1", port }, () => { socket.destroy(); resolve(false); });

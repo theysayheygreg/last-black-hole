@@ -7036,7 +7036,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/debug/multiplayer/evidence-reset") {
-      if (!REPLICATION_ACCOUNTING_CAPTURE_GUARD) {
+      if (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE
+        || !REPLICATION_ACCOUNTING_CAPTURE_GUARD) {
         sendJson(res, 404, { ok: false, error: "Not found" });
         return;
       }
