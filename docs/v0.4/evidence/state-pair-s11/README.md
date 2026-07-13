@@ -47,3 +47,15 @@ serialized as `null`. Normal product evidence must instead divide every
 intended client's accepted bytes by the full fixed window, retain explicit
 zero rows in every fixed-window distribution, and mark 10 Hz normalization
 unavailable (and therefore failed) when no measured pair-size sample exists.
+
+`canonical/` is the accepted full-duration S11 admission artifact from clean
+`4eee268`, composite SHA-256
+`983eae7457b61e77c7477669c7f9e1116172261dc286cf08b840b183cd48a4ca`.
+External validation exits `0`; admission exits `2` because the method-valid
+artifact rejects product promotion. It contains normal 1/4/8 at 60-second
+warmup plus 300-second measurement and churn 1/8 at 20 plus 90 seconds, with
+the S5 stage profiler disabled. Every normal mean and fixed-window histogram
+contains the full intended client set, including explicit zero rates; client
+identity is proven from full-capture exact tuples while every scored byte,
+cadence, correctness, CPU, and memory value remains measurement-window-only.
+Use only this directory for the S11 product decision.
