@@ -1,6 +1,6 @@
 # Build Status
 
-> Document revision: v0.3. Updated 2026-07-10. This file answers “what can I
+> Document revision: v0.4. Updated 2026-07-13. This file answers “what can I
 > play?” separately for the public/demo line and the next-version branch.
 
 ## Two Build Lines
@@ -58,6 +58,20 @@ input-ACK p95 ranged 7.6--18.3 ms, and exactly-once reconnect recovered in
 105 ms. All 4/4/8 Chrome processes and sim listeners shut down cleanly. These
 are local Shallows loopback measurements without compression, WAN impairment,
 TLS, relay, or hosted-edge overhead.
+
+The S11 converged positional admission gate is method-valid but product-red.
+Canonical SHA-256
+`983eae7457b61e77c7477669c7f9e1116172261dc286cf08b840b183cd48a4ca`
+passes its external checksum/method validator and rejects admission. One client
+passes. Four clients remain correctness-clean but deliver only 6.577 Hz,
+become `DEGRADED`, and exceed the normalized 10 Hz mean budget. Eight clients
+include a 0 Hz receiver, exceed burst and normalized traffic budgets, miss the
+projection clock, become `DILATED`, and fail closed-world ACK terminal
+conservation; churn-eight also fails convergence/lifecycle. Ledger high water
+stays below 8 MiB/client and cleanup drains. This is local loopback decision
+evidence, not WAN/WSS/hosted readiness. The next bounded lane is additional
+positional schema cleanup before binary, compression, or cadence policy; AOI
+remains deferred.
 
 Phase 2 has begun with a production-neutral deterministic scheduler kernel.
 The focused 7/7 suite and full nine-suite multiplayer-network lane pass; no

@@ -416,6 +416,37 @@ contract, enable compression, or begin hosted/fleet work to bypass this gate.
 Independent 1/8 review upholds the decision, and all 25 multiplayer-network
 suites pass.
 
+**S11 converged positional admission gate — rejected:** canonical artifact
+`docs/v0.4/evidence/state-pair-s11/canonical` binds clean `4eee268` and
+composite SHA-256
+`983eae7457b61e77c7477669c7f9e1116172261dc286cf08b840b183cd48a4ca`.
+It runs the prepared sparse positional codec plus bounded 8 MiB/client ledger,
+with the S5 profiler off, for normal 1/4/8 (60 s warmup + 300 s measurement)
+and churn 1/8 (20 + 90 s). External method/checksum validation exits 0 and
+product admission exits 2. S7/S8/S9/S10 comparison inputs are checksum-bound.
+
+Normal one passes at 9.787 Hz receiver cadence, 61,344 B/s mean, 65,135 B/s
+one-second p95, and 62,669/66,541 B/s normalized 10 Hz mean/p95 while remaining
+`NORMAL`. Normal four preserves exact hashes, privacy, ACK bases, zero recovery
+and base misses, bounded ledger, and cleanup, but runs only 6.577 Hz, becomes
+`DEGRADED`, and normalizes to 72,211 B/s mean. Normal eight is not saved by its
+62,990 B/s fixed-window mean: one client receives 0 Hz, one-second p95 is
+118,541 B/s, normalized mean/p95 is 228,443/279,634 B/s, projection/publish
+p95 is 103.33 ms, overload is `DILATED`, and terminal-gap/closed-world ACK
+correctness fails. Churn one passes; churn eight is `DILATED` and fails fault
+convergence plus replacement lifecycle observation. Every ledger high-water
+remains below 8 MiB and every teardown drains to zero.
+
+The decision stays population-separated. One-client traffic needs no further
+pair reduction. At four clients the measured worst pair is 7,171 B versus an
+exact 6,504 B budget, a 667 B/pair or 6,675 B/s remaining gap, while cadence
+and overload are separate failures. At eight, the worst sampled pair is
+22,844 B and the lane is primarily a CPU/cadence/correctness failure, not a
+license to count collapse as bandwidth savings. Rank the next bounded slices:
+(1) additional positional schema cleanup, (2) binary codec, (3) compression,
+(4) an explicit field-age/cadence policy only as a product decision. AOI stays
+deferred until distance/visibility evidence justifies its lifecycle risk.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

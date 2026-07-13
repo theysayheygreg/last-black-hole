@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-07-13 — v0.4 S11 converged positional admission decision
+
+- Added the full canonical S11 gate for prepared sparse positional state pairs
+  with bounded 8 MiB/client base ledgers. The clean `4eee268` artifact runs
+  normal 1/4/8 for 60 + 300 seconds and churn 1/8 for 20 + 90 seconds with the
+  S5 profiler off, exact application bytes, separate modeled WS/TLS/TCP/IP,
+  per-client configured/offered/accepted/receiver cadence, CPU distributions,
+  byte classes, ACK/correctness/lifecycle proof, memory slopes, ledger high
+  water/cleanup, and exact S7-S10 checksum bindings.
+- Hardened the method through preserved negative attempts: replaced seat-order
+  attribution with unique exact-tuple mapping, allowed warmup identity proof to
+  retain a measured zero, scored disconnected clients over the full fixed
+  window with explicit zero histogram rows, failed unavailable 10 Hz
+  normalization closed, and retained churn admission/manifest failures long
+  enough to produce cleanup and product verdict evidence.
+- Accepted the method and rejected product promotion. One client passes at
+  9.787 Hz and 61,344 B/s. Four clients remain correctness-clean but fall to
+  6.577 Hz, `DEGRADED`, and 72,211 B/s normalized at 10 Hz. Eight clients reach
+  a 0 Hz receiver, 118,541 B/s one-second p95, 228,443/279,634 B/s normalized
+  mean/p95, 103.33 ms projection/publish p95, `DILATED`, and closed-world ACK
+  terminal-gap failure. Churn one passes; churn eight fails convergence and
+  replacement lifecycle under `DILATED` load. All receiver ledgers stay below
+  8 MiB and clean to zero.
+- Recorded canonical composite SHA-256
+  `983eae7457b61e77c7477669c7f9e1116172261dc286cf08b840b183cd48a4ca`.
+  External validation exits `0`; admission exits `2`. The next order is
+  additional positional schema cleanup, binary codec, compression, then an
+  explicit cadence-policy decision. AOI remains deferred.
+
 ## 2026-07-13 — v0.4 S7 product gate and residual decision
 
 - Preserved the clean post-S6 S7 canonical product gate at `0b0becf`. Exact

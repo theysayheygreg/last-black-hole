@@ -2824,3 +2824,31 @@ bounded payload prototype, prove exact authority/client equivalence and
 recovery, then rerun the unchanged S7 gate.
 **Door status:** Closed for cadence-cap, codec-first, and AOI-first. Open for the
 bounded schema/field-cadence prototype and the independent ACK-reason diagnostic.
+
+### Q: What follows the converged positional S11 admission gate?
+
+| Date | Event |
+|------|-------|
+| Jul 13 | Canonical S11 binds prepared sparse positional JSON, bounded 8 MiB/client ledgers, exact normal 1/4/8 and churn 1/8 windows, and checksummed S7-S10 comparisons. Validation passes; product admission rejects. |
+| Jul 13 | One client passes. Four clients are correctness-clean but deliver 6.577 Hz, normalize to 72,211 B/s, and become `DEGRADED`. Eight clients include a 0 Hz receiver, exceed burst/normalized traffic, miss the projection clock, become `DILATED`, and fail closed-world ACK terminal conservation. |
+| Jul 13 | Decision: continue positional schema cleanup first. Binary remains second, compression third, and cadence fourth as an explicit product/field-age policy rather than optimization credit. AOI remains deferred. |
+
+**Options:**
+1. **Additional positional schema cleanup** (chosen) — attacks the measured
+   envelope without changing authority, privacy, reconstruction, or transport
+   semantics.
+2. **Binary codec** — potentially broader structural savings, with higher
+   protocol/versioning/debug cost and a new equivalence burden.
+3. **Compression** — defer behind uncompressed cleanup because eight-client
+   CPU and tail latency already fail.
+4. **Deliberate cadence policy** — only after defining field age and latency;
+   overload collapse receives no admission credit.
+5. **AOI** — defer until representative visibility/distance evidence proves
+   safe omission and lifecycle behavior.
+
+**Where it landed:** Option 1. Close the remaining four-client 667 B/pair gap
+without conflating it with eight-client CPU/cadence failures, then rerun the
+same admission gate.
+**Door status:** Closed for current product admission, implicit cadence
+reduction, compression-first, and AOI-first. Open for one bounded positional
+schema cleanup prototype with unchanged correctness and recovery contracts.
