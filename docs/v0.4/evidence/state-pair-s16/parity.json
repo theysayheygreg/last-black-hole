@@ -1,0 +1,20 @@
+{
+  "schema": "lbh-s16-binary-parity-proof-v1",
+  "implementationCommit": "51618994215e056cd47c24fcb5c13d9ad12778a0",
+  "command": "node tests/state-pair-binary-codec.cjs",
+  "result": "9 passed, 0 failed",
+  "sourceSha256": "50487f6e803a3192eacff0110600c35baef5a6cffb43a9d162b3b197a1bf1a48",
+  "binaryCodecSha256": "9e29109d43bd5483bafe229e1cf436cddb8bb1c397a016352098ac0b3964c4b4",
+  "exactTransactionFrames": 24,
+  "deterministicValueCases": 519,
+  "craftedMalformedCases": 28,
+  "deterministicMutatedFrames": 1000,
+  "minimumRejectedMutations": 950,
+  "proofs": [
+    "binary and positional decode to identical statePair semantics",
+    "ACK lineage is accepted through the binary path",
+    "JSON positional fallback is complete when the connection/session is negotiated without binary",
+    "cross-codec state-pair traffic fails closed",
+    "accepted fuzz mutations cannot change semantics"
+  ]
+}

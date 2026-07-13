@@ -1,0 +1,22 @@
+{
+  "schema": "lbh-s16-binary-state-pair-manifest-v1",
+  "baselineSha256": "c2df9114ce2cfd7ab29ff613b214498b214cebd7df71d1e0c74750b974f6e266",
+  "candidateSha256": "458da816f61b5d79d6ca75ed4a7efecdf82b76fb7a288c47f9272889779386f2",
+  "s15TopLevelSha256": "66c2c751c80f2f0e94c4103eff01352b1e241ce9690fff58c9331a354ec23bf8",
+  "analysisSha256": "df35f959b4c6e1322d5dbc79abffff2f51491a6bd978afd4b1131afce74aa7df",
+  "benchmarkSha256": "7f33897366aeb1c56f09960249ed2959390c723b81bb09b3d31b5000962f7b8d",
+  "paritySha256": "5faf6596049740fef363851cbfa6197990c3c9ca015d349b1293f559045312be",
+  "implementationCommit": "51618994215e056cd47c24fcb5c13d9ad12778a0",
+  "productDecision": {
+    "replacement": "reject",
+    "admittedPopulations": [
+      1
+    ],
+    "rejectedPopulations": [
+      4,
+      8
+    ],
+    "statement": "The generic lossless binary codec reduces measured process wire traffic by 30-35%, but it regresses authority projection/publish p95 by 4-19%, raises authority CPU by 1-5%, and does not improve receiver cadence. Its representative codec-only workload is also 3.5% larger and 3.3x slower to encode than positional JSON. Keep S15 positional JSON as the release default; retain S16 only as an opt-in bounded prototype.",
+    "nextLane": "Profile and remove repeated authority-side candidate construction/materialization before attempting another wire codec. Preserve S15 selection and positional JSON wire truth while proving lower projection/publish cost at 1/4/8."
+  }
+}

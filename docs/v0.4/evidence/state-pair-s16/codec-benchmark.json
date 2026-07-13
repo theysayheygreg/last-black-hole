@@ -1,0 +1,86 @@
+{
+  "schema": "lbh-s16-codec-microbenchmark-v1",
+  "config": {
+    "frames": 120,
+    "iterations": 20,
+    "warmup": 3,
+    "workload": "48 public motion updates plus one owner keyframe after the initial keyframe; representative public-delta+owner-keyframe statePair"
+  },
+  "positional": {
+    "label": "s15-positional-json",
+    "order": "counterbalanced-interleaved-a/b-b/a",
+    "frames": 120,
+    "iterations": 20,
+    "operations": {
+      "authorityEncodes": 2400,
+      "clientDecodes": 2400,
+      "materializedFullFrames": 2400
+    },
+    "authorityEncodeMs": {
+      "count": 2400,
+      "mean": 0.06577183333333472,
+      "p50": 0.06154100000003382,
+      "p95": 0.07291599999996379,
+      "p99": 0.17049999999994725
+    },
+    "clientDecodeMs": {
+      "count": 2400,
+      "mean": 0.06940571291666617,
+      "p50": 0.06579200000010132,
+      "p95": 0.07779200000004494,
+      "p99": 0.17666600000001154
+    },
+    "wireBytes": {
+      "count": 120,
+      "mean": 4898.841666666666,
+      "p50": 4881,
+      "p95": 5072,
+      "p99": 5072
+    },
+    "allocationProxyBytes": 11757220
+  },
+  "binary": {
+    "label": "s16-binary",
+    "order": "counterbalanced-interleaved-a/b-b/a",
+    "frames": 120,
+    "iterations": 20,
+    "operations": {
+      "authorityEncodes": 2400,
+      "clientDecodes": 2400,
+      "materializedFullFrames": 2400
+    },
+    "authorityEncodeMs": {
+      "count": 2400,
+      "mean": 0.21499693291666627,
+      "p50": 0.19816600000001472,
+      "p95": 0.29358400000000984,
+      "p99": 0.48499999999989996
+    },
+    "clientDecodeMs": {
+      "count": 2400,
+      "mean": 0.08126119375000145,
+      "p50": 0.07429200000001401,
+      "p95": 0.13029200000005403,
+      "p99": 0.21741599999995742
+    },
+    "wireBytes": {
+      "count": 120,
+      "mean": 5068.658333333334,
+      "p50": 5096,
+      "p95": 5131,
+      "p99": 5131
+    },
+    "allocationProxyBytes": 12164780
+  },
+  "comparison": {
+    "meanWireReductionFraction": -0.03466465712132649,
+    "authorityEncodeMeanRatioBinaryOverJson": 3.2688298625804117,
+    "clientDecodeMeanRatioBinaryOverJson": 1.1708141928830826,
+    "allocationProxyReductionFraction": -0.03466465712132627
+  },
+  "limitations": [
+    "Machine-local synthetic codec-only benchmark",
+    "A/B order and frame direction are counterbalanced per iteration",
+    "Does not include projection, delta construction, selection, socket, or ACK apply"
+  ]
+}

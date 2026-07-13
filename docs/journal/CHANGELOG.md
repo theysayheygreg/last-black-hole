@@ -5,6 +5,24 @@
 
 ---
 
+## 2026-07-13 — v0.4 S16 lossless binary state-pair bakeoff
+
+- Added an opt-in, versioned, strictly bounded WebSocket binary codec for the
+  exact S15 positional state-pair semantics. Exact immutable bytes survive the
+  send queue/retransmit path without base64; ACK/recovery use binary framing;
+  positional JSON remains the required fallback and oracle.
+- Added 9/9 focused proof with 24 exact transactions, 519 deterministic value
+  cases, 28 crafted malformed frames, 1,000 mutations, cross-codec rejection,
+  deterministic bytes, and queue immutability, plus a 2,400-operation-per-side
+  codec microbenchmark.
+- Captured clean fixed-window one-authority-per-match 1/4/8 evidence. Binary
+  reduces actual mean traffic 26--33%, but worsens projection/publish p95 6--8%,
+  raises authority CPU, and lowers cadence. Only one player passes; four/eight
+  remain `DILATED`.
+- Rejected binary as the release default and kept S15 positional JSON. The next
+  lane is authority candidate-construction/materialization profiling, not
+  hosted, heavy-sim, compression, cadence-policy, or 24/48/96 work.
+
 ## 2026-07-13 — v0.4 S15 canonical lane-size reuse
 
 - Reused exact canonical lane texts and UTF-8 counts from delta/keyframe

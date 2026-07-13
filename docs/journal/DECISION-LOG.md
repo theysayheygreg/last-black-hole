@@ -2917,3 +2917,31 @@ promotion; positional JSON remains the exact oracle and fallback.
 **Door status:** Closed for S15 as 4/8 admission and for more unmeasured
 positional shaving. Open only for the bounded binary codec prototype with
 unchanged authority, ACK, recovery, privacy, cadence, and admission policy.
+
+### Q: Does S16 binary state-pair transport replace positional JSON or admit four/eight?
+
+| Date | Event |
+|------|-------|
+| Jul 13 | S16 adds a versioned, strictly bounded, no-base64 binary message for exact S15 positional semantics with JSON fallback; 24 transactions, 519 value cases, 28 malformed frames, and 1,000 mutations pass. |
+| Jul 13 | At 1/4/8, actual worst-recipient mean traffic falls 30.6/31.4/34.7%, but projection/publish p95 rises 3.8/19.4/7.4%, authority CPU rises, and receiver cadence does not improve at 9.85/5.20/3.10 Hz. |
+| Jul 13 | Decision: reject binary as the release default, keep S15 positional JSON, reject 4/8 admission, and next profile/remove repeated authority candidate construction/materialization without changing wire truth. |
+
+**Options:**
+1. **Promote generic binary now** — rejected because wire savings worsen the
+   authority clock already blocking four/eight.
+2. **Tune cadence or credit lower observed traffic** — rejected because
+   collapsed cadence cannot earn bandwidth credit.
+3. **Profile authority candidate construction/materialization** (chosen) —
+   preserve S15 selection and positional output while attacking the dominant
+   projection/publish cost.
+4. **Hosted, heavy-sim, compression, or 24/48/96 work** — remains premature.
+
+**Where it landed:** Option 3. Binary stays opt-in prototype evidence, not a
+release capability. One logical gameplay authority remains scoped to one
+match/group and scales horizontally across concurrent matches; there is no
+global gameplay writer.
+
+**Door status:** Closed for S16 promotion and 4/8 admission. Open only for the
+bounded authority construction/materialization profiling lane with unchanged
+authority, semantics, selected kind, JSON wire, ACK, recovery, privacy,
+cadence, and admission policy.

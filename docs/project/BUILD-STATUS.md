@@ -73,6 +73,16 @@ evidence, not WAN/WSS/hosted readiness. The next bounded lane is additional
 positional schema cleanup before binary, compression, or cadence policy; AOI
 remains deferred.
 
+The later S16 lossless binary state-pair prototype is complete and rejected as
+the release default. It preserves one sole gameplay authority per match/group,
+exact S15 keyframe/delta selection, JSON fallback, ACK/recovery, privacy, and
+admission rules. Measured 1/4/8 wire traffic improves 26--33%, but authority
+projection/publish p95 regresses 6--8%, CPU rises, and cadence falls to
+9.85/5.20/3.10 Hz. Only one player passes; four/eight remain `DILATED`. Keep
+S15 positional JSON as current truth. See
+`docs/v0.4/MULTIPLAYER-STATE-PAIR-S16-BINARY-CODEC.md` and immutable evidence
+under `docs/v0.4/evidence/state-pair-s16/`.
+
 Phase 2 has begun with a production-neutral deterministic scheduler kernel.
 The focused 7/7 suite and full nine-suite multiplayer-network lane pass; no
 adapter/client injection or impaired-browser claim exists yet.

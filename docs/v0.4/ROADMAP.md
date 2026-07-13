@@ -549,6 +549,34 @@ retaining JSON fallback and every authority/ACK/recovery/privacy/admission
 contract. Compression, deliberate cadence policy, hosted costs, and 24/48/96
 remain closed.
 
+**S16 lossless binary codec — prototype complete, release default rejected:**
+`state-pair-binary-v1` transports the exact S15 positional semantics in a
+versioned WebSocket binary message with strict manifest/tag/length/type/bounds
+validation. It uses no base64, retains immutable exact bytes through send queue
+and retransmit, carries binary ACK/recovery, and requires positional JSON as the
+negotiated fallback and semantic oracle. The selected S15 keyframe/delta kind,
+authority, privacy, recovery, limits, cadence, and admission rules do not
+change. Focused proof covers 24 exact transactions, 519 deterministic value
+cases, 28 crafted malformed frames, and 1,000 deterministic mutations.
+
+Against sealed S15, S16 reduces actual worst-recipient mean traffic by
+30.6/31.4/34.7% at 1/4/8 and brings normalized 10 Hz mean/p95 below the 64/80
+KiB/s gates at every population. It is not an admission win. Receiver cadence
+moves from 9.85/5.35/3.25 to 9.85/5.20/3.10 Hz, projection/publish p95 from
+26.26/103.43/224.80 to 27.26/123.54/241.39 ms, and authority CPU from
+27.18/59.24/78.19% to 28.41/60.47/79.27% of one core. Four and eight remain
+`DILATED`; only one passes. A 2,400-operation-per-side codec microbenchmark is
+also 3.5% larger and 3.3x slower to encode on its representative synthetic
+fixture.
+
+Keep positional JSON as the release default and retain binary only as an
+opt-in prototype. The next single lane is authority-side profiling and removal
+of repeated candidate construction/materialization while preserving S15
+selection and positional wire truth. Evidence and the full decision are in
+`docs/v0.4/evidence/state-pair-s16/` and
+`docs/v0.4/MULTIPLAYER-STATE-PAIR-S16-BINARY-CODEC.md`. Hosted, compression,
+cadence-policy, heavy-sim, and 24/48/96 work remain closed.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

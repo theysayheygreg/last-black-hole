@@ -1,0 +1,440 @@
+{
+  "schema": "lbh-s16-binary-state-pair-analysis-v1",
+  "authorityBoundary": "One logical authority process is the sole gameplay writer for one match/group. Deployment multiplies this boundary horizontally across concurrent matches; there is no single global authority.",
+  "baselineBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s15/candidate-process-r2",
+    "compositeSha256": "c2df9114ce2cfd7ab29ff613b214498b214cebd7df71d1e0c74750b974f6e266",
+    "implementationCommit": "3604048e8685b88259905d8a39bd43664a3c31fc",
+    "sealedS15Commit": "06ff295"
+  },
+  "candidateBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s16/candidate-process",
+    "compositeSha256": "458da816f61b5d79d6ca75ed4a7efecdf82b76fb7a288c47f9272889779386f2",
+    "implementationCommit": "51618994215e056cd47c24fcb5c13d9ad12778a0",
+    "evidenceCommit": null
+  },
+  "s15TopLevelBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s15",
+    "compositeSha256": "66c2c751c80f2f0e94c4103eff01352b1e241ce9690fff58c9331a354ec23bf8"
+  },
+  "parity": {
+    "schema": "lbh-s16-binary-parity-proof-v1",
+    "implementationCommit": "51618994215e056cd47c24fcb5c13d9ad12778a0",
+    "command": "node tests/state-pair-binary-codec.cjs",
+    "result": "9 passed, 0 failed",
+    "sourceSha256": "50487f6e803a3192eacff0110600c35baef5a6cffb43a9d162b3b197a1bf1a48",
+    "binaryCodecSha256": "9e29109d43bd5483bafe229e1cf436cddb8bb1c397a016352098ac0b3964c4b4",
+    "exactTransactionFrames": 24,
+    "deterministicValueCases": 519,
+    "craftedMalformedCases": 28,
+    "deterministicMutatedFrames": 1000,
+    "minimumRejectedMutations": 950,
+    "proofs": [
+      "binary and positional decode to identical statePair semantics",
+      "ACK lineage is accepted through the binary path",
+      "JSON positional fallback is complete when the connection/session is negotiated without binary",
+      "cross-codec state-pair traffic fails closed",
+      "accepted fuzz mutations cannot change semantics"
+    ]
+  },
+  "codecMicrobenchmark": {
+    "schema": "lbh-s16-codec-microbenchmark-v1",
+    "config": {
+      "frames": 120,
+      "iterations": 20,
+      "warmup": 3,
+      "workload": "48 public motion updates plus one owner keyframe after the initial keyframe; representative public-delta+owner-keyframe statePair"
+    },
+    "positional": {
+      "label": "s15-positional-json",
+      "order": "counterbalanced-interleaved-a/b-b/a",
+      "frames": 120,
+      "iterations": 20,
+      "operations": {
+        "authorityEncodes": 2400,
+        "clientDecodes": 2400,
+        "materializedFullFrames": 2400
+      },
+      "authorityEncodeMs": {
+        "count": 2400,
+        "mean": 0.06577183333333472,
+        "p50": 0.06154100000003382,
+        "p95": 0.07291599999996379,
+        "p99": 0.17049999999994725
+      },
+      "clientDecodeMs": {
+        "count": 2400,
+        "mean": 0.06940571291666617,
+        "p50": 0.06579200000010132,
+        "p95": 0.07779200000004494,
+        "p99": 0.17666600000001154
+      },
+      "wireBytes": {
+        "count": 120,
+        "mean": 4898.841666666666,
+        "p50": 4881,
+        "p95": 5072,
+        "p99": 5072
+      },
+      "allocationProxyBytes": 11757220
+    },
+    "binary": {
+      "label": "s16-binary",
+      "order": "counterbalanced-interleaved-a/b-b/a",
+      "frames": 120,
+      "iterations": 20,
+      "operations": {
+        "authorityEncodes": 2400,
+        "clientDecodes": 2400,
+        "materializedFullFrames": 2400
+      },
+      "authorityEncodeMs": {
+        "count": 2400,
+        "mean": 0.21499693291666627,
+        "p50": 0.19816600000001472,
+        "p95": 0.29358400000000984,
+        "p99": 0.48499999999989996
+      },
+      "clientDecodeMs": {
+        "count": 2400,
+        "mean": 0.08126119375000145,
+        "p50": 0.07429200000001401,
+        "p95": 0.13029200000005403,
+        "p99": 0.21741599999995742
+      },
+      "wireBytes": {
+        "count": 120,
+        "mean": 5068.658333333334,
+        "p50": 5096,
+        "p95": 5131,
+        "p99": 5131
+      },
+      "allocationProxyBytes": 12164780
+    },
+    "comparison": {
+      "meanWireReductionFraction": -0.03466465712132649,
+      "authorityEncodeMeanRatioBinaryOverJson": 3.2688298625804117,
+      "clientDecodeMeanRatioBinaryOverJson": 1.1708141928830826,
+      "allocationProxyReductionFraction": -0.03466465712132627
+    },
+    "limitations": [
+      "Machine-local synthetic codec-only benchmark",
+      "A/B order and frame direction are counterbalanced per iteration",
+      "Does not include projection, delta construction, selection, socket, or ACK apply"
+    ]
+  },
+  "baseline": [
+    {
+      "population": 1,
+      "commit": "3604048e8685b88259905d8a39bd43664a3c31fc",
+      "codec": "state-pair-positional-v1",
+      "cadence": {
+        "authorityMinimumHz": 9.85,
+        "receiverMinimumHz": 9.85
+      },
+      "projectionAndPublishMs": {
+        "count": 204,
+        "totalObserved": 204,
+        "p50": 23.74366700000064,
+        "p95": 26.26458300000013,
+        "p99": 26.684916000000158,
+        "max": 27.60895800000071
+      },
+      "authorityCpuOneCoreFraction": 0.27178977546497063,
+      "client": {
+        "worstDecodeP95Ms": 0.6657500000001164,
+        "worstApplyP95Ms": 19.05645899999945
+      },
+      "overloadMode": "NORMAL",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 59486.4,
+        "actualOneSecondP95BytesPerSecond": 61311,
+        "normalized10HzWorstMeanBytesPerSecond": 60384.922081218276,
+        "normalized10HzOneSecondP95BytesPerSecond": 62235.07614213198
+      },
+      "binaryReuse": null,
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": true,
+        "authorityClockPass": true,
+        "normalModePass": true,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": true,
+        "normalizedP95Pass": true
+      }
+    },
+    {
+      "population": 4,
+      "commit": "3604048e8685b88259905d8a39bd43664a3c31fc",
+      "codec": "state-pair-positional-v1",
+      "cadence": {
+        "authorityMinimumHz": 5.35,
+        "receiverMinimumHz": 5.35
+      },
+      "projectionAndPublishMs": {
+        "count": 112,
+        "totalObserved": 112,
+        "p50": 100.56124999999884,
+        "p95": 103.42762500000026,
+        "p99": 103.7740419999991,
+        "max": 104.72933300000022
+      },
+      "authorityCpuOneCoreFraction": 0.5924386801541426,
+      "client": {
+        "worstDecodeP95Ms": 0.7165410000015981,
+        "worstApplyP95Ms": 20.754041000000143
+      },
+      "overloadMode": "DILATED",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 36080.05,
+        "actualOneSecondP95BytesPerSecond": 40183,
+        "normalized10HzWorstMeanBytesPerSecond": 67019.15093457945,
+        "normalized10HzOneSecondP95BytesPerSecond": 74699.90654205608
+      },
+      "binaryReuse": null,
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": false,
+        "authorityClockPass": false,
+        "normalModePass": false,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": false,
+        "normalizedP95Pass": true
+      }
+    },
+    {
+      "population": 8,
+      "commit": "3604048e8685b88259905d8a39bd43664a3c31fc",
+      "codec": "state-pair-positional-v1",
+      "cadence": {
+        "authorityMinimumHz": 3.25,
+        "receiverMinimumHz": 3.25
+      },
+      "projectionAndPublishMs": {
+        "count": 68,
+        "totalObserved": 68,
+        "p50": 220.53175000000192,
+        "p95": 224.79566599999816,
+        "p99": 227.0177909999984,
+        "max": 227.0177909999984
+      },
+      "authorityCpuOneCoreFraction": 0.7818627610653381,
+      "client": {
+        "worstDecodeP95Ms": 0.8338750000002619,
+        "worstApplyP95Ms": 23.471000000001368
+      },
+      "overloadMode": "DILATED",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 25506.45,
+        "actualOneSecondP95BytesPerSecond": 32115,
+        "normalized10HzWorstMeanBytesPerSecond": 77482.07307692309,
+        "normalized10HzOneSecondP95BytesPerSecond": 97032.09090909091
+      },
+      "binaryReuse": null,
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": false,
+        "authorityClockPass": false,
+        "normalModePass": false,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": false,
+        "normalizedP95Pass": false
+      }
+    }
+  ],
+  "candidate": [
+    {
+      "population": 1,
+      "commit": "51618994215e056cd47c24fcb5c13d9ad12778a0",
+      "codec": "state-pair-binary-v1",
+      "cadence": {
+        "authorityMinimumHz": 9.85,
+        "receiverMinimumHz": 9.85
+      },
+      "projectionAndPublishMs": {
+        "count": 204,
+        "totalObserved": 204,
+        "p50": 24.441874999999527,
+        "p95": 27.26229200000307,
+        "p99": 49.24329099999886,
+        "max": 60.4898749999993
+      },
+      "authorityCpuOneCoreFraction": 0.2841226751469596,
+      "client": {
+        "worstDecodeP95Ms": 0.6959589999996751,
+        "worstApplyP95Ms": 19.16162500000064
+      },
+      "overloadMode": "NORMAL",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 41312.6,
+        "actualOneSecondP95BytesPerSecond": 42457,
+        "normalized10HzWorstMeanBytesPerSecond": 41934.36370558375,
+        "normalized10HzOneSecondP95BytesPerSecond": 43096.54822335025
+      },
+      "binaryReuse": {
+        "reusedEncodedFrames": 262,
+        "reusedEncodedBytes": 1085524,
+        "decodedFrames": 262
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": true,
+        "authorityClockPass": true,
+        "normalModePass": true,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": true,
+        "normalizedP95Pass": true
+      }
+    },
+    {
+      "population": 4,
+      "commit": "51618994215e056cd47c24fcb5c13d9ad12778a0",
+      "codec": "state-pair-binary-v1",
+      "cadence": {
+        "authorityMinimumHz": 5.2,
+        "receiverMinimumHz": 5.2
+      },
+      "projectionAndPublishMs": {
+        "count": 108,
+        "totalObserved": 108,
+        "p50": 105.08650000000125,
+        "p95": 123.535167,
+        "p99": 132.98741599999994,
+        "max": 137.82987500000309
+      },
+      "authorityCpuOneCoreFraction": 0.6047492652372922,
+      "client": {
+        "worstDecodeP95Ms": 1.0334160000002157,
+        "worstApplyP95Ms": 21.048666999999114
+      },
+      "overloadMode": "DILATED",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 24738.7,
+        "actualOneSecondP95BytesPerSecond": 27835,
+        "normalized10HzWorstMeanBytesPerSecond": 47130.330769230764,
+        "normalized10HzOneSecondP95BytesPerSecond": 53051.61538461538
+      },
+      "binaryReuse": {
+        "reusedEncodedFrames": 572,
+        "reusedEncodedBytes": 2605933,
+        "decodedFrames": 572
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": false,
+        "authorityClockPass": false,
+        "normalModePass": false,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": true,
+        "normalizedP95Pass": true
+      }
+    },
+    {
+      "population": 8,
+      "commit": "51618994215e056cd47c24fcb5c13d9ad12778a0",
+      "codec": "state-pair-binary-v1",
+      "cadence": {
+        "authorityMinimumHz": 3.1,
+        "receiverMinimumHz": 3.1
+      },
+      "projectionAndPublishMs": {
+        "count": 65,
+        "totalObserved": 65,
+        "p50": 236.0889590000006,
+        "p95": 241.3937909999986,
+        "p99": 245.1778749999994,
+        "max": 245.1778749999994
+      },
+      "authorityCpuOneCoreFraction": 0.7926750668193967,
+      "client": {
+        "worstDecodeP95Ms": 0.8195420000010927,
+        "worstApplyP95Ms": 23.57758300000205
+      },
+      "overloadMode": "DILATED",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 16658.4,
+        "actualOneSecondP95BytesPerSecond": 20755,
+        "normalized10HzWorstMeanBytesPerSecond": 52665.827419354835,
+        "normalized10HzOneSecondP95BytesPerSecond": 64969.03174603175
+      },
+      "binaryReuse": {
+        "reusedEncodedFrames": 728,
+        "reusedEncodedBytes": 3802654,
+        "decodedFrames": 728
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": false,
+        "authorityClockPass": false,
+        "normalModePass": false,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": true,
+        "normalizedP95Pass": true
+      }
+    }
+  ],
+  "comparison": [
+    {
+      "population": 1,
+      "actualWorstMeanWireReductionFraction": 0.3055118480862853,
+      "actualP95WireReductionFraction": 0.307514149173884,
+      "projectionP95ChangeFraction": 0.037986858576926075,
+      "authorityCpuChangeFraction": 0.04537661382180458,
+      "receiverCadenceChangeHz": 0
+    },
+    {
+      "population": 4,
+      "actualWorstMeanWireReductionFraction": 0.3143385333446046,
+      "actualP95WireReductionFraction": 0.30729412935818634,
+      "projectionP95ChangeFraction": 0.1944117154386915,
+      "authorityCpuChangeFraction": 0.02077950933242012,
+      "receiverCadenceChangeHz": -0.14999999999999947
+    },
+    {
+      "population": 8,
+      "actualWorstMeanWireReductionFraction": 0.34689460901066194,
+      "actualP95WireReductionFraction": 0.3537287871711039,
+      "projectionP95ChangeFraction": 0.07383649914318435,
+      "authorityCpuChangeFraction": 0.013828904882649873,
+      "receiverCadenceChangeHz": -0.1499999999999999
+    }
+  ],
+  "productDecision": {
+    "replacement": "reject",
+    "admittedPopulations": [
+      1
+    ],
+    "rejectedPopulations": [
+      4,
+      8
+    ],
+    "statement": "The generic lossless binary codec reduces measured process wire traffic by 30-35%, but it regresses authority projection/publish p95 by 4-19%, raises authority CPU by 1-5%, and does not improve receiver cadence. Its representative codec-only workload is also 3.5% larger and 3.3x slower to encode than positional JSON. Keep S15 positional JSON as the release default; retain S16 only as an opt-in bounded prototype.",
+    "nextLane": "Profile and remove repeated authority-side candidate construction/materialization before attempting another wire codec. Preserve S15 selection and positional JSON wire truth while proving lower projection/publish cost at 1/4/8."
+  },
+  "limitations": [
+    "machine-local loopback",
+    "single 20-second candidate window per population",
+    "codec microbenchmark is machine-local and synthetic",
+    "no hosted/WAN/TLS/fleet claim",
+    "no 24/48/96 extrapolation",
+    "normalized traffic is counterfactual and cannot replace cadence admission"
+  ]
+}
