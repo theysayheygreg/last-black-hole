@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const { TestRunner } = require("./helpers.cjs");
 const { createRuntimeStatePairAuthority } = require("../scripts/runtime-state-pair-integration.cjs");
 const { createClientDeltaReceiver } = require("../scripts/client-delta-receiver.cjs");
+const { selectedStatePairCodecCapability } = require("../scripts/sim-ws-adapter.cjs");
 const {
   CLIENT_TO_SERVER, SERVER_TO_CLIENT, encodeWireFrame, parseWireFrame,
 } = require("../scripts/multiplayer-wire-protocol.cjs");
@@ -310,6 +311,16 @@ async function run() {
     const secondRetransmit = authority.retransmit(id, published.frame.frameId);
     assert(secondRetransmit.encodedWire.equals(expected));
     assert.deepStrictEqual(decodeBinaryFrame(secondRetransmit.encodedWire, bctx(id)), published.frame);
+  });
+
+  await runner.run("bound binary sessions reject positional exact publications instead of mixed framing", () => {
+    assert.strictEqual(selectedStatePairCodecCapability(BINARY_CAPABILITIES), BINARY_CAPABILITY);
+    assert.strictEqual(selectedStatePairCodecCapability(BASE_CAPABILITIES), POSITIONAL_CAPABILITY);
+    const exactCapability = (wire) => Buffer.isBuffer(wire) ? BINARY_CAPABILITY : POSITIONAL_CAPABILITY;
+    assert.strictEqual(exactCapability(Buffer.from([1])) === selectedStatePairCodecCapability(BINARY_CAPABILITIES), true);
+    assert.strictEqual(exactCapability("[]") === selectedStatePairCodecCapability(BINARY_CAPABILITIES), false);
+    assert.strictEqual(exactCapability("[]") === selectedStatePairCodecCapability(BASE_CAPABILITIES), true);
+    assert.strictEqual(exactCapability(Buffer.from([1])) === selectedStatePairCodecCapability(BASE_CAPABILITIES), false);
   });
 
   runner.summary();

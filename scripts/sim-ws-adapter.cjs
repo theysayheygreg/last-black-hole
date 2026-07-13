@@ -50,6 +50,12 @@ const ACK_REJECT_REASON_CODES = new Set(["unknown-recipient", "identity-mismatch
 const ACK_REJECT_RELATIONS = new Set(["duplicate", "stale", "future", "unknown", "pending-missing", "hash",
   "binding", "recovery-race"]);
 
+function selectedStatePairCodecCapability(capabilities) {
+  if (capabilities?.includes(BINARY_CODEC_CAPABILITY)) return BINARY_CODEC_CAPABILITY;
+  if (capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)) return POSITIONAL_CODEC_CAPABILITY;
+  return null;
+}
+
 function replicationStateFrameKey(frame) {
   if (frame?.type === "statePair" && Number.isSafeInteger(frame.frameId)) return `statePair:${frame.frameId}`;
   if ((frame?.type === "publicState" || frame?.type === "ownerState")
@@ -1670,9 +1676,10 @@ function createSimWebSocketAdapter(options = {}) {
       if (isExactEncodedPublication(publication)) {
         const exactCapability = Buffer.isBuffer(publication.encodedWire)
           ? BINARY_CODEC_CAPABILITY : POSITIONAL_CODEC_CAPABILITY;
-        if (!state.capabilities?.includes(exactCapability)) {
+        const activeCapability = selectedStatePairCodecCapability(state.capabilities);
+        if (exactCapability !== activeCapability) {
           throw new WireProtocolError("codec-capability-required",
-            "exact state-pair publication requires its negotiated codec capability", 4403);
+            "exact state-pair publication must match the active negotiated codec", 4403);
         }
         encodedWire = publication.encodedWire;
         const encodedBytes = Buffer.byteLength(encodedWire);
@@ -1784,9 +1791,10 @@ function createSimWebSocketAdapter(options = {}) {
       if (isExactEncodedPublication(publication)) {
         const exactCapability = Buffer.isBuffer(publication.encodedWire)
           ? BINARY_CODEC_CAPABILITY : POSITIONAL_CODEC_CAPABILITY;
-        if (!state.capabilities?.includes(exactCapability)) {
+        const activeCapability = selectedStatePairCodecCapability(state.capabilities);
+        if (exactCapability !== activeCapability) {
           throw new WireProtocolError("codec-capability-required",
-            "exact state-pair publication requires its negotiated codec capability", 4403);
+            "exact state-pair publication must match the active negotiated codec", 4403);
         }
         wire = publication.encodedWire;
         const bytes = Buffer.byteLength(wire);
@@ -2127,5 +2135,6 @@ function createSimWebSocketAdapter(options = {}) {
 
 module.exports = {
   DEFAULTS,
+  selectedStatePairCodecCapability,
   createSimWebSocketAdapter,
 };
