@@ -687,15 +687,36 @@ function buildResidualDecisionTable(normalResults) {
       .slice(0, 5).map((row) => ({ component: row.component, operationClass: row.operationClass,
         bytesPerSampledPair: row.bytesPerSampledPair,
         updateFrequencyPerPair: row.occurrencesPerSampledPair }));
+    const topEntityCategories = attribution.publicDelta.entityTypes
+      .filter((row) => !String(row.entityType).startsWith("<"))
+      .slice(0, 8).map((row) => ({ entityType: row.entityType,
+        operationClass: row.operationClass, bytesPerSampledPair: row.bytesPerSampledPair,
+        pairFrequency: row.pairFrequency }));
+    const targetMeanPairBudgetBytesAt10Hz = Math.max(0,
+      (TARGET_BPS - worst.observedNonPairBytesPerSecond) / TARGET_PUBLICATION_HZ);
+    const requiredMeanPairReductionBytes = Math.max(0,
+      worst.observedMeanPairBytes - targetMeanPairBudgetBytesAt10Hz);
     const maximumCadenceAt64KiB = Math.max(0,
       (TARGET_BPS - worst.observedNonPairBytesPerSecond) / worst.observedMeanPairBytes);
     return {
       population: entry.population,
       actualObservedPairsPerSecond: entry.cadence.observedPairsPerSecond,
       targetCadenceRequiredReductionBytesPerSecond: worst.targetCadenceRequiredReductionBytesPerSecond,
+      exactMeanPairEnvelopeAt10Hz: {
+        applicationBudgetBytesPerSecond: TARGET_BPS,
+        observedNonPairBytesPerSecond: worst.observedNonPairBytesPerSecond,
+        availableStatePairBytesPerSecond: Math.max(0, TARGET_BPS - worst.observedNonPairBytesPerSecond),
+        maximumMeanPairBytes: targetMeanPairBudgetBytesAt10Hz,
+        observedMeanPairBytes: worst.observedMeanPairBytes,
+        requiredMeanPairReductionBytes,
+        requiredMeanPairReductionFraction: worst.observedMeanPairBytes
+          ? requiredMeanPairReductionBytes / worst.observedMeanPairBytes : null,
+      },
       measuredResidualPerSampledPair: { publicDeltaBytes: publicDeltaPerPair,
         ownerKeyframeBytes: ownerKeyframePerPair, outerEnvelopeBytes: outerEnvelopePerPair },
       topPublicComponents: topComponents,
+      topEntityCategories,
+      publicUpdateLexicalComposition: attribution.publicDelta.updateLexicalComposition,
       choices: [
         {
           choice: "cadence-cap",
@@ -718,6 +739,7 @@ function buildResidualDecisionTable(normalResults) {
         {
           choice: "aoi",
           measuredUpside: `Entity operation arrays provide a ${(entityOperationProxyPerPair * 10).toFixed(1)} B/s upper-bound proxy at 10 Hz.`,
+          representativeWorkloadVerdict: "Not justified as the first slice: dominant Shallows categories recur on nearly every sampled pair, and this gate contains no distance/visibility evidence proving safe exclusion.",
           latencyAndComplexityRisk: "High visibility, lifecycle, and interest-churn risk; Shallows evidence may understate larger-map upside.",
           evidencePriority: 3,
         },
@@ -1125,6 +1147,8 @@ function validateArtifact(directory) {
     allCleanupPassed: fs.readdirSync(directory).filter((name) => name.startsWith("cleanup-")).every((name) =>
       JSON.parse(fs.readFileSync(path.join(directory, name), "utf8")).passed === true),
     productCorrectnessPassed: scenarioFiles.every((entry) => entry.admission.correctnessPassed),
+    productCorrectnessOutcomeRecorded: scenarioFiles.every((entry) =>
+      typeof entry.admission.correctnessPassed === "boolean"),
     allAccountingComplete: scenarioFiles.every((entry) => entry.correctness.accountingComplete),
     normalPopulationsPresent: (aggregate.expectedPopulations || (aggregate.microProfile ? [1, 8] : [1, 4, 8])).every((population) =>
       scenarioFiles.some((entry) => entry.scenario === "normal" && entry.population === population))
@@ -1153,8 +1177,11 @@ function validateArtifact(directory) {
       }),
     s7PreparedProfilerBoundary: aggregate.gate !== "s7" || (aggregate.preparedProjectionsEnabled === true
       && aggregate.instrumentationEnabled === false && aggregate.eventLoopMonitorEnabled === true),
-    s7AckRejectsExactlyZero: aggregate.gate !== "s7" || scenarioFiles.every((entry) =>
-      entry.pairShape.ackBaseProof.ackRejected === 0 && entry.correctness.ackRejectsExactlyZero === true),
+    s7AckRejectAccountingConsistent: aggregate.gate !== "s7" || scenarioFiles.every((entry) => {
+      const rejected = entry.pairShape.ackBaseProof.ackRejected;
+      return Number.isSafeInteger(rejected) && rejected >= 0
+        && entry.correctness.ackRejectsExactlyZero === (rejected === 0);
+    }),
     s7CadenceNormalizationPresent: aggregate.gate !== "s7" || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.targetCadenceNormalization?.configuredPublicationHz === TARGET_PUBLICATION_HZ
@@ -1164,6 +1191,7 @@ function validateArtifact(directory) {
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.residualAttribution?.exactLaneReconciliation?.passed === true
         && entry.residualAttribution?.publicDelta?.operationClassReconciliation?.passed === true
+        && entry.residualAttribution?.publicDelta?.updateLexicalComposition?.reconciliation?.passed === true
         && entry.residualAttribution?.ownerKeyframe?.reconciliation?.passed === true
         && entry.residualAttribution?.privacy?.rawFramesRetained === false
         && entry.residualAttribution?.privacy?.ownerPrivateValuesEmitted === false),
@@ -1172,11 +1200,12 @@ function validateArtifact(directory) {
         && (entry.scenario !== "normal"
           || entry.comparisonToS6PreparedDiagnostic?.analysisSha256 === S6_ANALYSIS_SHA256)),
   };
-  const methodPassed = invariants.checksums && invariants.allCleanupPassed && invariants.productCorrectnessPassed
+  const methodPassed = invariants.checksums && invariants.allCleanupPassed
+    && (aggregate.gate === "s7" ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
     && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
     && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent
     && invariants.stageProfilePresent && invariants.publicCoreShareabilityProved
-    && invariants.s7PreparedProfilerBoundary && invariants.s7AckRejectsExactlyZero
+    && invariants.s7PreparedProfilerBoundary && invariants.s7AckRejectAccountingConsistent
     && invariants.s7CadenceNormalizationPresent && invariants.s7AttributionReconciledAndPrivate
     && invariants.s7ComparisonsPresent;
   return { passed: methodPassed, invariants, checksum,

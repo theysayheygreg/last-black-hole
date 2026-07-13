@@ -64,6 +64,22 @@ function addComposition(target, source) {
   for (const key of Object.keys(target)) target[key] += source[key];
 }
 
+function emptyComposition() {
+  return {
+    totalBytes: 0,
+    identifierAndKeyBytes: 0,
+    stringPayloadBytes: 0,
+    numericPayloadBytes: 0,
+    booleanAndNullPayloadBytes: 0,
+    delimiterBytes: 0,
+  };
+}
+
+function subtractComposition(total, parts) {
+  return Object.fromEntries(Object.keys(total).map((key) => [key,
+    total[key] - parts.reduce((sum, part) => sum + part[key], 0)]));
+}
+
 function createRows() {
   return new Map();
 }
@@ -120,10 +136,11 @@ function analyzeStatePairSample(rawFrames, { maxFrames = 512 } = {}) {
   const entityRows = createRows();
   const componentRows = createRows();
   const ownerRows = createRows();
-  const publicTokens = tokenComposition([]);
-  const ownerTokens = tokenComposition([]);
-  for (const key of Object.keys(publicTokens)) publicTokens[key] = 0;
-  for (const key of Object.keys(ownerTokens)) ownerTokens[key] = 0;
+  const publicTokens = emptyComposition();
+  const ownerTokens = emptyComposition();
+  const operationTokens = Object.fromEntries(["rootOps", "creates", "updates", "despawns"]
+    .map((key) => [key, emptyComposition()]));
+  const updateComponentTokens = emptyComposition();
 
   selected.forEach((raw, pairIndex) => {
     if (typeof raw !== "string") throw new TypeError("captured state pair must be an encoded JSON string");
@@ -156,6 +173,7 @@ function analyzeStatePairSample(rawFrames, { maxFrames = 512 } = {}) {
       for (const operationClass of classes) {
         const bytes = jsonBytes(delta[operationClass]);
         classified += bytes;
+        addComposition(operationTokens[operationClass], tokenComposition(delta[operationClass]));
         observe(operationRows, operationClass, bytes, pairIndex, { operationClass });
       }
       observe(operationRows, "unchangedProtocolOverhead", nextPublicBytes - classified, pairIndex,
@@ -192,6 +210,10 @@ function analyzeStatePairSample(rawFrames, { maxFrames = 512 } = {}) {
             const safe = safeName(name, "<other-component>");
             const bytes = jsonBytes(component);
             componentBytes += bytes;
+            if (operationClass === "updates") {
+              const composition = tokenComposition(component);
+              addComposition(updateComponentTokens, composition);
+            }
             observe(componentRows, `${operationClass}:${safe}`, bytes, pairIndex,
               { operationClass, component: safe });
           }
@@ -225,6 +247,10 @@ function analyzeStatePairSample(rawFrames, { maxFrames = 512 } = {}) {
   const encodedPairBytes = pairBytes.reduce((sum, value) => sum + value, 0);
   const operationClassBytes = [...operationRows.values()].reduce((sum, row) => sum + row.bytes, 0);
   const ownerClassifiedBytes = [...ownerRows.values()].reduce((sum, row) => sum + row.bytes, 0);
+  const unchangedProtocolTokens = subtractComposition(publicTokens, Object.values(operationTokens));
+  const updateEnvelopeTokens = subtractComposition(operationTokens.updates, [updateComponentTokens]);
+  const updateTokenReconciliation = Object.fromEntries(Object.keys(updateComponentTokens).map((key) => [key,
+    updateComponentTokens[key] + updateEnvelopeTokens[key]]));
   const safeResult = {
     schema: "lbh-state-pair-residual-attribution-v1",
     sample: {
@@ -262,6 +288,18 @@ function analyzeStatePairSample(rawFrames, { maxFrames = 512 } = {}) {
       components: finalizeRows(componentRows,
         [...componentRows.values()].reduce((sum, row) => sum + row.bytes, 0), selected.length),
       tokenComposition: publicTokens,
+      tokenCompositionByOperationClass: { ...operationTokens,
+        unchangedProtocolOverhead: unchangedProtocolTokens },
+      updateLexicalComposition: {
+        componentPayloads: updateComponentTokens,
+        entityEnvelopes: updateEnvelopeTokens,
+        reconciliation: {
+          recombined: updateTokenReconciliation,
+          expected: operationTokens.updates,
+          passed: Object.keys(updateTokenReconciliation).every((key) =>
+            updateTokenReconciliation[key] === operationTokens.updates[key]),
+        },
+      },
       classificationNote: "Operation classes are exact additive. Root, entity-type, and component tables are overlapping drill-down views; JSON array/object delimiter overhead is explicit.",
     },
     ownerKeyframe: {

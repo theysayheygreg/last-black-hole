@@ -82,6 +82,9 @@ test("public attribution exposes operation, root, entity, component, and token v
   assert(result.publicDelta.components.some((row) => row.component === "motion"));
   assert(result.publicDelta.tokenComposition.numericPayloadBytes > 0);
   assert(result.publicDelta.tokenComposition.identifierAndKeyBytes > 0);
+  assert.strictEqual(result.publicDelta.updateLexicalComposition.reconciliation.passed, true);
+  assert(result.publicDelta.updateLexicalComposition.componentPayloads.numericPayloadBytes > 0);
+  assert(result.publicDelta.updateLexicalComposition.entityEnvelopes.identifierAndKeyBytes > 0);
 });
 
 test("token composition is exact including delimiter overhead", () => {
