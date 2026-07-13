@@ -1065,8 +1065,16 @@ async function runScenario({ population, scenario, runDir, commit }) {
           runId: old.authority.runId, clientId: old.authority.playerId, name: old.label,
         } });
         if (rejoined.status !== 200) throw new Error(`reconnect failed: ${JSON.stringify(rejoined.body)}`);
-        const replacement = await openStatePairClient({ port, authority: rejoined.body.authority,
-          label: `${old.label}-reconnect`, reuseManifest: true });
+        let replacement;
+        try {
+          replacement = await openStatePairClient({ port, authority: rejoined.body.authority,
+            label: `${old.label}-reconnect`, reuseManifest: true });
+        } catch (error) {
+          ref.current.splice(0, 1);
+          return { target: old.label, oldEpoch: old.welcome.connectionEpoch,
+            reconnectFailed: true, failure: String(error.message).slice(0, 240),
+            manifestReused: true };
+        }
         ref.current[0] = replacement;
         allClients.push(replacement);
         return { target: old.label, oldEpoch: old.welcome.connectionEpoch,
@@ -1275,7 +1283,8 @@ async function runScenario({ population, scenario, runDir, commit }) {
           === publisher.ackRejectDiagnostics.total
         && endHealth.multiplayer.adapter.statePair.ackRejectDiagnostics.total
           === publisher.ackRejectDiagnostics.total,
-      faultConvergence: !churn || clientSummary.every((client) => {
+      faultConvergence: !churn || (faultActions.every((action) => action.reconnectFailed !== true)
+        && clientSummary.every((client) => {
         const loss = client.faults.find((fault) => fault.type === "frame-loss");
         const ackLoss = client.faults.find((fault) => fault.type === "ack-loss");
         if (loss && (LEDGER_GATE
@@ -1283,8 +1292,8 @@ async function runScenario({ population, scenario, runDir, commit }) {
           : !client.faults.some((fault) => fault.type === "recovery"))) return false;
         if (ackLoss && !(client.lastAcceptedFrameId > ackLoss.frameId
           && client.lastStatePairAckSentFrameId > ackLoss.frameId)) return false;
-        return true;
-      }),
+          return true;
+        })),
       noUnexpectedNormalRecovery: churn || allClients.every((client) => !client.faultLog.some((fault) =>
         fault.type === "recovery" && fault.at >= startAt && fault.at < endAt)),
       lifecycleObserved: !churn || (observedLifecycle.componentChanges > 0
@@ -1730,13 +1739,14 @@ function s11ScenarioIntegrity(entry) {
       cadence.authorityOfferedPairCountsByClient[label]
         === cadence.authorityAcceptedPairCountsByClient[label]),
     ackRejectHistogramsReconciled: ackHistogramArithmetic,
-    faultConvergence: normal || entry.clients.every((client) => {
+    faultConvergence: normal || (entry.faults.every((fault) => fault.reconnectFailed !== true)
+      && entry.clients.every((client) => {
       const loss = client.faults.find((fault) => fault.type === "frame-loss");
       const ackLoss = client.faults.find((fault) => fault.type === "ack-loss");
       return (!loss || client.lastAcceptedFrameId > loss.frameId)
         && (!ackLoss || (client.lastAcceptedFrameId > ackLoss.frameId
           && client.lastStatePairAckSentFrameId > ackLoss.frameId));
-    }),
+      })),
     noUnexpectedNormalRecovery: !normal || entry.clients.every((client) =>
       !client.faults.some((fault) => fault.type === "recovery"
         && fault.at >= entry.window.startAt && fault.at < entry.window.endAt)),
@@ -2101,7 +2111,8 @@ async function main() {
     manifestIdentity: { hashes: results.map((entry) => entry.diagnostics.statePair.manifestHash),
       changedAcrossFreshMatches: new Set(results.map((entry) => entry.diagnostics.statePair.manifestHash)).size > 1,
       reconnectReuseObserved: results.filter((entry) => entry.scenario === "churn")
-        .every((entry) => entry.faults.some((fault) => fault.name === "reconnect" && fault.manifestReused === true)) },
+        .every((entry) => entry.faults.some((fault) => fault.name === "reconnect"
+          && fault.reconnectFailed !== true && fault.manifestReused === true)) },
     failureAnalysis,
     residualDecisionTable: RESIDUAL_GATE && !POSITIONAL_GATE ? buildResidualDecisionTable(normalResults) : null,
     admissionDecision: S11_GATE ? buildS11AdmissionDecision(normalResults) : null,
