@@ -97,12 +97,14 @@ function git(...args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 }
 
-function s11ComparisonEvidence() {
-  if (!S11_GATE) return null;
+function s11ComparisonEvidence(enabled = S11_GATE) {
+  if (!enabled) return null;
   return Object.fromEntries(Object.entries(S11_COMPARISON_EVIDENCE).map(([gate, evidence]) => {
     const checksums = JSON.parse(fs.readFileSync(path.join(evidence.path, "checksums.json"), "utf8"));
-    if (checksums.sha256 !== evidence.compositeSha256) {
-      throw new Error(`${gate.toUpperCase()} comparison evidence hash mismatch: ${checksums.sha256}`);
+    const verified = validateChecksums(evidence.path);
+    if (!verified.passed || checksums.sha256 !== evidence.compositeSha256
+        || verified.actualAggregateSha256 !== evidence.compositeSha256) {
+      throw new Error(`${gate.toUpperCase()} comparison evidence hash mismatch: ${JSON.stringify(verified)}`);
     }
     return [gate, { path: path.relative(ROOT, evidence.path),
       compositeSha256: evidence.compositeSha256 }];
@@ -484,6 +486,20 @@ function memorySummary(samples) {
     first: rows[0], last: rows.at(-1) };
 }
 
+function codecIntervalDistribution(samples, field, countKey) {
+  const rows = [];
+  for (let index = 1; index < samples.length; index += 1) {
+    const before = samples[index - 1][field];
+    const after = samples[index][field];
+    if (!before || !after) continue;
+    const calls = after[countKey] - before[countKey];
+    const milliseconds = after.encodeMilliseconds - before.encodeMilliseconds;
+    if (calls > 0 && milliseconds >= 0) rows.push(milliseconds / calls);
+  }
+  return { ...distribution(rows),
+    scope: "Distribution of per-frame mean encode milliseconds across consecutive one-second evidence samples; not an individual-call latency distribution." };
+}
+
 function deltaHealth(before, after) {
   const left = before.multiplayer.projection.accounting;
   const right = after.multiplayer.projection.accounting;
@@ -670,9 +686,11 @@ async function runWorkload(clientsRef, durationMs, { port, memorySamples, churn 
       const health = await request(port, "/health/compact");
       memorySamples.push({ at: Date.now(), memory: health.body.process.memory,
         publisher: health.body.multiplayer.statePair.publisher,
+        publisherCodec: health.body.multiplayer.statePair.positionalJson,
         adapter: { queuedBytes: health.body.multiplayer.adapter.queuedBytes,
           pendingScheduledSends: health.body.multiplayer.adapter.pendingScheduledSends,
-          connections: health.body.multiplayer.adapter.connections } });
+          connections: health.body.multiplayer.adapter.connections },
+        adapterCodec: health.body.multiplayer.adapter.statePair.positionalJson });
       lastMemorySecond = second;
     }
   }
@@ -1173,6 +1191,19 @@ async function runScenario({ population, scenario, runDir, commit }) {
         proved: client.lastAcceptedFrameId > 0 && client.lastStatePairAckSentFrameId > 0
           && authorityAcceptedAckFrames > 0 }];
     }));
+    const closedWorldAuthorityAdvancement = {
+      intendedClientLabels: clientSummary.map((client) => client.label),
+      authorityDistinctRecipientsAdvanced: publisher.ackRecipientsWithBaseAdvance,
+      authorityBaseAdvances: publisher.ackBaseAdvances,
+      exactNormalRecipientSet: churn ? null
+        : publisher.ackRecipientsWithBaseAdvance === clientSummary.length,
+      everyClientEmittedAcceptedStatePairAck: Object.values(perClientAckBaseAdvancement)
+        .every((proof) => proof.proved),
+    };
+    closedWorldAuthorityAdvancement.proved = publisher.ackBaseAdvances > 0
+      && publisher.ackRecipientsWithBaseAdvance >= clientSummary.length
+      && (churn || (closedWorldAuthorityAdvancement.exactNormalRecipientSet
+        && closedWorldAuthorityAdvancement.everyClientEmittedAcceptedStatePairAck));
     const correctness = {
       mixedCapabilityNegotiated: !MIXED_GATE || clientSummary.every((client) =>
         client.capabilities.includes(MIXED_CAPABILITY)),
@@ -1183,8 +1214,7 @@ async function runScenario({ population, scenario, runDir, commit }) {
         client.legacyReconstructionVerified === client.acceptedPairs),
       noClientErrors: clientSummary.every((client) => client.error === null),
       publisherDrained: publisher.recipients === 0 && publisher.pendingPairs === 0 && publisher.retainedBytes === 0,
-      statePairAcksConverged: publisher.ackRecipientsWithBaseAdvance >= clientSummary.length
-        && (churn || Object.values(perClientAckBaseAdvancement).every((proof) => proof.proved)),
+      statePairAcksConverged: closedWorldAuthorityAdvancement.proved,
       ackRejectsExactlyZero: publisher.ackRejected === 0,
       receiverBasesStayedApplicable: receiverBaseMismatchCount === 0,
       receiverRecoveryRequestsExactlyExpected: churn || receiverRecoveryRequestCount === 0,
@@ -1404,6 +1434,7 @@ async function runScenario({ population, scenario, runDir, commit }) {
           recipientsWithAckedBaseBeforeCleanup: livePublisher.recipientsWithAckedBase,
           maxAckedFrameIdBeforeCleanup: livePublisher.maxAckedFrameId,
           perClient: perClientAckBaseAdvancement,
+          closedWorldAuthorityAdvancement,
           candidateAverageBytes: livePublisher.candidateAverageBytes,
           counterScope: "scenario lifetime including warmup; live base fields are pre-cleanup" },
         acceptedStatePairFrameBytes: pairGroup.map((row) => ({ kind: row.projectionKind,
@@ -1483,12 +1514,19 @@ async function runScenario({ population, scenario, runDir, commit }) {
         codec: POSITIONAL_GATE ? {
           publisherCandidateEncodeAggregate: endHealth.multiplayer.statePair.positionalJson,
           adapterEncodeAggregate: endHealth.multiplayer.adapter.statePair.positionalJson,
+          publisherCandidateEncodeMsPerFrameByInterval: codecIntervalDistribution(memorySamples
+            .filter((sample) => sample.at >= startAt && sample.at < endAt),
+          "publisherCodec", "encodedCandidates"),
+          adapterEncodeMsPerFrameByInterval: codecIntervalDistribution(memorySamples
+            .filter((sample) => sample.at >= startAt && sample.at < endAt),
+          "adapterCodec", "encodedFrames"),
           clientWireDecodeMs: distribution(allClients.flatMap((client) => client.wireDecodeSamples)
             .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
-          boundary: "Authority codec counters expose exact calls/bytes/total/mean; client decode is a bounded p50/p95/p99/max distribution. Stage profiler remains OFF for the product gate.",
+          boundary: "Authority codec aggregates expose exact calls/bytes/total/mean; bounded p50/p95/p99/max rows distribute per-frame means across consecutive one-second samples. Client decode is an individual-frame distribution. Stage profiler remains OFF.",
         } : null,
         clientApplyMs: distribution(allClients.flatMap((client) => client.clientWorkSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
+        clientApplyBoundary: "ClientDeltaReceiver.receive over positional text: positional decode, validate, materialize, hash/ACK construction, and apply; not render CPU.",
         clientAckSerializeSendMs: distribution(allClients.flatMap((client) => client.ackWorkSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
         eventLoopLag: endHealth.multiplayer.projection.benchmarkEventLoopDelay
@@ -1571,10 +1609,13 @@ function s11ScenarioIntegrity(entry) {
   }));
   const receiverRates = Object.values(cadence.receiverAcceptedPairsPerSecond || {});
   const minimumReceiverRate = normal ? Math.min(...receiverRates) : null;
-  const cadenceTracking = normal && labels.every((label) => Math.abs(
+  const cadenceTolerancesRecomputed = !normal || (sameKeys(cadence.receiverCadenceToleranceHzByClient, labels)
+    && labels.every((label) => cadence.receiverCadenceToleranceHzByClient[label]
+      === Math.max(1, cadence.authorityAcceptedPairsPerSecondByClient[label] * 0.10)));
+  const cadenceTracking = normal && cadenceTolerancesRecomputed && labels.every((label) => Math.abs(
     cadence.receiverAcceptedPairsPerSecond[label]
       - cadence.authorityAcceptedPairsPerSecondByClient[label])
-      <= cadence.receiverCadenceToleranceHzByClient[label]);
+      <= Math.max(1, cadence.authorityAcceptedPairsPerSecondByClient[label] * 0.10));
   const ledgerArithmetic = entry.clients.every((client) => {
     const diagnostics = client.receiverDiagnostics;
     const cleanup = client.receiverCleanupDiagnostics;
@@ -1591,6 +1632,18 @@ function s11ScenarioIntegrity(entry) {
       && cleanup?.closed === true && cleanup.retainedPairHistory === 0
       && cleanup.ledger?.entries === 0 && cleanup.ledger?.bytes === 0;
   });
+  const codec = entry.performance.codec;
+  const codecEvidence = !normal || (codec?.publisherCandidateEncodeAggregate?.encodedCandidates > 0
+    && codec.publisherCandidateEncodeAggregate.encodeMilliseconds >= 0
+    && codec.adapterEncodeAggregate?.encodedFrames > 0
+    && codec.adapterEncodeAggregate.encodeMilliseconds >= 0
+    && codec.publisherCandidateEncodeMsPerFrameByInterval?.count > 0
+    && codec.adapterEncodeMsPerFrameByInterval?.count > 0
+    && codec.clientWireDecodeMs?.count > 0
+    && entry.performance.clientApplyMs?.count > 0
+    && entry.performance.clientAckSerializeSendMs?.count > 0
+    && entry.performance.eventLoopLag?.p95Ms >= 0
+    && entry.performance.authorityStageProfile === null);
   const ackProofs = entry.pairShape.ackBaseProof.perClient;
   const ackProofArithmetic = sameKeys(ackProofs, labels) && labels.every((label) => {
     const proof = ackProofs[label];
@@ -1599,6 +1652,14 @@ function s11ScenarioIntegrity(entry) {
     return proof.proved === expected;
   });
   const publisher = entry.diagnostics.statePair.publisher;
+  const closedWorldAck = entry.pairShape.ackBaseProof.closedWorldAuthorityAdvancement;
+  const closedWorldAckArithmetic = JSON.stringify(closedWorldAck.intendedClientLabels) === JSON.stringify(labels)
+    && closedWorldAck.authorityDistinctRecipientsAdvanced === publisher.ackRecipientsWithBaseAdvance
+    && closedWorldAck.authorityBaseAdvances === publisher.ackBaseAdvances
+    && closedWorldAck.exactNormalRecipientSet === (normal
+      ? publisher.ackRecipientsWithBaseAdvance === entry.population : null)
+    && closedWorldAck.everyClientEmittedAcceptedStatePairAck
+      === Object.values(ackProofs).every((proof) => proof.proved);
   const ackConvergedExpected = publisher.ackBaseAdvances > 0
     && (normal ? publisher.ackRecipientsWithBaseAdvance === entry.population
       && Object.values(ackProofs).every((proof) => proof.proved)
@@ -1704,7 +1765,9 @@ function s11ScenarioIntegrity(entry) {
       && expectedAdmission.steadyOneSecondP95AtOrBelow80KiB
       && expectedAdmission.targetCadenceMeanAtOrBelow64KiB
       && expectedAdmission.targetCadenceOneSecondP95AtOrBelow80KiB));
-  return cadenceArithmetic && ledgerArithmetic && ackProofArithmetic && ackHistogramArithmetic
+  return cadenceArithmetic && cadenceTolerancesRecomputed && ledgerArithmetic && codecEvidence
+    && ackProofArithmetic && closedWorldAckArithmetic
+    && closedWorldAck.proved === ackConvergedExpected && ackHistogramArithmetic
     && correctnessFieldsRecomputed
     && entry.correctness.statePairAcksConverged === ackConvergedExpected
     && storedCorrectness && expectedCorrectness === entry.admission.correctnessPassed
@@ -1864,7 +1927,7 @@ function validateArtifact(directory) {
         ? (run.profile === "review" ? 20 : 300) : (run.profile === "review" ? 30 : 90))
       && s11ScenarioIntegrity(entry)),
     s11ComparisonBindings: !isS11 || (() => {
-      const expected = s11ComparisonEvidence();
+      const expected = s11ComparisonEvidence(true);
       return JSON.stringify(run.s11ComparisonEvidence) === JSON.stringify(expected)
         && JSON.stringify(aggregate.s11ComparisonEvidence) === JSON.stringify(expected)
         && scenarioFiles.every((entry) => JSON.stringify(entry.comparisonEvidence) === JSON.stringify(expected));
