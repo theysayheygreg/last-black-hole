@@ -1,0 +1,11 @@
+{
+  "at": "2026-07-13T18:28:50.763Z",
+  "message": "accounting recipient mapping expected 8 ordinals, observed 6",
+  "stack": [
+    "Error: accounting recipient mapping expected 8 ordinals, observed 6",
+    "    at mapClientsToAccountingRecipients (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:763:11)",
+    "    at runScenario (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:1241:9)",
+    "    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+    "    at async main (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:2144:56)"
+  ]
+}

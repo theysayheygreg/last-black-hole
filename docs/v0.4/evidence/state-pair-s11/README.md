@@ -22,3 +22,15 @@ assumptions: normal scenarios now require a unique maximum-weight one-to-one
 mapping over each client's accepted `(frameId, exact wire bytes)` tuples and
 the accounting recipient tuples. Ambiguous or zero-proof mappings invalidate
 the method.
+
+`rejected-zero-cadence-map/` preserves the clean `e07e228` full-duration
+attempt that completed normal-1, normal-4, and the full normal-8 window before
+the mapper rejected normal-8 with `expected 8 ordinals, observed 6`. This was
+not an accounting-capacity failure: two clients had no accepted state-pair
+events inside the measured window, which is itself product-relevant cadence
+collapse. Requiring an in-window accepted tuple therefore made the method
+incapable of recording the zero it needed to reject. The follow-up maps client
+identity from the full capture, including warmup, while all cadence, traffic,
+and correctness statistics remain bounded to the canonical measurement
+window. Missing measured events are retained as zero and receive no admission
+credit.
