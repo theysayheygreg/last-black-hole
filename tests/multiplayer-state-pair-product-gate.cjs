@@ -514,6 +514,7 @@ async function runScenario({ population, scenario, runDir }) {
       return sum;
     }, { creates: 0, despawns: 0, reincarnations: 0, componentChanges: 0 });
     const publisher = preStopHealth.multiplayer.statePair.publisher;
+    const livePublisher = endHealth.multiplayer.statePair.publisher;
     const correctness = {
       allClientHashesMatched: clientSummary.every((client) => client.hashesVerified === client.acceptedPairs),
       noClientErrors: clientSummary.every((client) => client.error === null),
@@ -585,9 +586,9 @@ async function runScenario({ population, scenario, runDir }) {
         keyframeCauseAttribution: publisher.keyframeReasons,
         ackBaseProof: { ackAccepted: publisher.ackAccepted, ackRejected: publisher.ackRejected,
           ackBaseAdvances: publisher.ackBaseAdvances,
-          recipientsWithAckedBaseBeforeCleanup: endHealth.multiplayer.statePair.publisher.recipientsWithAckedBase,
-          maxAckedFrameId: publisher.maxAckedFrameId,
-          candidateAverageBytes: publisher.candidateAverageBytes },
+          recipientsWithAckedBaseBeforeCleanup: livePublisher.recipientsWithAckedBase,
+          maxAckedFrameIdBeforeCleanup: livePublisher.maxAckedFrameId,
+          candidateAverageBytes: livePublisher.candidateAverageBytes },
         acceptedStatePairFrameBytes: pairGroup.map((row) => ({ kind: row.projectionKind,
         frames: row.frames, bytes: row.bytes, frameBytes: row.frameBytes })),
         productWindow: { keyframes: productKeyframes, deltas: productDeltas,
