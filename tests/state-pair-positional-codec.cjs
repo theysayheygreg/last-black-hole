@@ -35,7 +35,7 @@ function claims(id) {
     manifestHash: id.manifestHash, authorityIncarnation: id.authorityIncarnation };
 }
 
-function sourceFrames(id, beat, { player = true, x = beat / 10, secret = "owner-secret" } = {}) {
+function sourceFrames(id, beat, { player = true, x = beat / 10, secret = "owner-secret", cargoItems = 0 } = {}) {
   const state = {
     type: "snapshot", protocolVersion: "lbh-sim-v1", bodySchemaVersion: 1, snapshotSchemaVersion: 2,
     runId: id.runId, baselineSnapshotId: beat, snapshotId: beat, tick: beat * 6, simTime: beat / 10,
@@ -62,7 +62,8 @@ function sourceFrames(id, beat, { player = true, x = beat / 10, secret = "owner-
     ownerFrame: { type: "ownerState", runId: id.runId, membershipId: id.membershipId, playerId: id.playerId,
       snapshotId: beat, tick: beat * 6, simTime: beat / 10, lastEventSeq: beat, fieldRevision: beat,
       overloadMode: "NORMAL", lastInputSeq: beat, lastActionSeq: beat,
-      state: { profileId: secret, rigLevels: [1, 0, 0], cargo: [], cargoCount: 0,
+      state: { profileId: secret, rigLevels: [1, 0, 0],
+        cargo: Array.from({ length: cargoItems }, (_, index) => `stable-cargo-${index}`), cargoCount: cargoItems,
         effectState: { shieldCharges: 0, timeSlowRemaining: 0, pulseCooldownRemaining: 0,
           hullGraceRemaining: 0 }, signal: { level: 0, zone: "ghost", prevZone: "ghost" } } },
   };
@@ -112,10 +113,22 @@ async function run() {
       manifestHash: id.manifestHash, publisherOptions: { preparedProjections: true } });
     authority.admit(id, claims(id));
     const client = receiver(id);
+    const semanticId = binding({ capabilities: CAPABILITIES.filter((value) => value !== POSITIONAL_CAPABILITY) });
+    const semanticAuthority = createRuntimeStatePairAuthority({ matchId: semanticId.runId,
+      authorityIncarnation: semanticId.authorityIncarnation, manifestSchema: semanticId.manifestSchema,
+      manifestHash: semanticId.manifestHash, publisherOptions: { preparedProjections: true } });
+    semanticAuthority.admit(semanticId, claims(semanticId));
+    const semanticClient = receiver(semanticId);
     const transcript = [];
+    const kinds = [];
+    let ownerDeltaBeat = null;
     for (let beat = 1; beat <= 4; beat += 1) {
-      const produced = publish(authority, id, beat, { x: beat < 3 ? 0.1 : beat / 10 });
+      const produced = publish(authority, id, beat, { x: beat < 3 ? 0.1 : beat / 10, cargoItems: 4 });
       const wire = encodeWireFrame(produced.frame, { direction: SERVER_TO_CLIENT, positionalContext: context(id) });
+      assert.strictEqual(produced.encodedWire, wire, "publisher must retain the exact selected positional bytes");
+      assert.strictEqual(produced.bytes, Buffer.byteLength(wire, "utf8"));
+      assert.strictEqual(produced.encodedDigest,
+        `sha256:${crypto.createHash("sha256").update(wire, "utf8").digest("hex")}`);
       assert.strictEqual(wire, encodeWireFrame(produced.frame,
         { direction: SERVER_TO_CLIENT, positionalContext: context(id) }));
       assert(wire.startsWith("["));
@@ -131,12 +144,29 @@ async function run() {
       const ackWire = encodeWireFrame(accepted.ack, { direction: CLIENT_TO_SERVER, positionalContext: context(id) });
       const ack = parseWireFrame(ackWire, { direction: CLIENT_TO_SERVER, positionalContext: context(id), requirePositional: true });
       assert.strictEqual(authority.acknowledge(id, ack).accepted, true);
+      const semanticProduced = publish(semanticAuthority, semanticId, beat,
+        { x: beat < 3 ? 0.1 : beat / 10, cargoItems: 4 });
+      const semanticAccepted = semanticClient.receive(encodeWireFrame(semanticProduced.frame,
+        { direction: SERVER_TO_CLIENT }));
+      assert.strictEqual(semanticAccepted.accepted, true);
+      assert.strictEqual(projectionHash(semanticAccepted.state.public), projectionHash(accepted.state.public));
+      assert.strictEqual(projectionHash(semanticAccepted.state.owner), projectionHash(accepted.state.owner));
+      assert.strictEqual(semanticAuthority.acknowledge(semanticId, semanticAccepted.ack).accepted, true);
+      if (produced.priorSemanticProjectionKind === "public-delta+owner-keyframe"
+          && produced.projectionKind === "delta") ownerDeltaBeat = beat;
+      kinds.push([beat, produced.priorSemanticProjectionKind, produced.projectionKind, produced.bytes]);
       transcript.push(wire);
     }
     const digest = crypto.createHash("sha256").update(transcript.join("\n")).digest("hex");
     assert.match(digest, /^[0-9a-f]{64}$/);
     assert(client.current().legacyPublicState.players.length === 1);
     assert(!JSON.stringify(client.current().public).includes("owner-secret"), "public lane leaked owner-private state");
+    assert(ownerDeltaBeat !== null,
+      `actual positional bytes must select owner delta on a beat where expanded semantic sizing chose owner keyframe: ${JSON.stringify(kinds)}`);
+    const choice = authority.diagnostics().publisher.codecPairChoice;
+    assert(choice.bytesSavedVsPriorSemanticChoice > 0);
+    assert.strictEqual(choice.ephemeralCandidates.maxPerPublish, 4);
+    assert.strictEqual(choice.ephemeralCandidates.retainedAfterPublish, 0);
   });
 
   await runner.run("loss applies the next branch from a retained base and preserves despawn reincarnation ACK bases", () => {
@@ -163,6 +193,24 @@ async function run() {
     assert.strictEqual(reincarnated.accepted, true);
     assert(reincarnated.state.public.entities.find((entity) => entity.category === "player").incarnation > 1);
     assert.strictEqual(authority.diagnostics().publisher.ackRejectDiagnostics.total, 0);
+  });
+
+  await runner.run("owner keyframe remains the exact positional winner when its delta overhead is larger", () => {
+    const id = binding();
+    const authority = createRuntimeStatePairAuthority({ matchId: id.runId,
+      authorityIncarnation: id.authorityIncarnation, manifestSchema: id.manifestSchema,
+      manifestHash: id.manifestHash, publisherOptions: { preparedProjections: true } });
+    authority.admit(id, claims(id));
+    const client = receiver(id);
+    const first = publish(authority, id, 1, { cargoItems: 0 });
+    const acceptedFirst = client.receive(first.encodedWire);
+    assert(acceptedFirst.accepted && authority.acknowledge(id, acceptedFirst.ack).accepted);
+    const second = publish(authority, id, 2, { cargoItems: 0, x: 0.2 });
+    assert.strictEqual(second.projectionKind, "public-delta+owner-keyframe");
+    const acceptedSecond = client.receive(second.encodedWire);
+    assert.strictEqual(acceptedSecond.accepted, true);
+    assert.strictEqual(projectionHash(acceptedSecond.state.public), second.frame.public.resultHash);
+    assert.strictEqual(projectionHash(acceptedSecond.state.owner), second.frame.owner.resultHash);
   });
 
   await runner.run("decoder rejects alternate JSON forms holes tags lengths numbers and cross-context replay", () => {

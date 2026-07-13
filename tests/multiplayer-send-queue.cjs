@@ -52,6 +52,21 @@ function testEncodedStateByteOverrideDrivesEveryQueueBudget() {
     "The exact encoded size must survive queue coalescing and drain for the flush invariant");
 }
 
+function testExactStateWireHasBoundedSidecarRetention() {
+  const queue = createMultiplayerSendQueue({ maxMessages: 2, maxBytes: 128 });
+  const exactWire = "[1,2,3]";
+  const result = queue.enqueueState(1, { frames: [{ payload: "expanded" }] }, {
+    byteLength: Buffer.byteLength(exactWire, "utf8"), exactWire,
+  });
+  assert.strictEqual(result.accepted, true);
+  assert.strictEqual(queue.status().queuedBytes, Buffer.byteLength(exactWire, "utf8"));
+  assert(queue.status().queuedRetainedBytes > queue.status().queuedBytes,
+    "retention budget includes immutable expanded snapshot plus exact wire");
+  const message = queue.drain().messages[0];
+  assert.strictEqual(message.exactWire, true);
+  assert.strictEqual(message.wire, exactWire);
+}
+
 function testReliableFifoAckAndReplay() {
   const queue = createMultiplayerSendQueue({ maxMessages: 8, maxBytes: 4096 });
   const first = queue.enqueueConsequence({ kind: "loot" });
@@ -326,6 +341,7 @@ function testLeasedEntriesStillConsumeCaps() {
 function main() {
   testStateCoalescingAndOrdering();
   testEncodedStateByteOverrideDrivesEveryQueueBudget();
+  testExactStateWireHasBoundedSidecarRetention();
   testReliableFifoAckAndReplay();
   testExplicitReliableIdsPreserveWire();
   testDeterministicPriorityAndDrainBudgets();

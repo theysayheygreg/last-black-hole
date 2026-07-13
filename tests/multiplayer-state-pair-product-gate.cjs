@@ -46,14 +46,15 @@ const S8_PROTOTYPE = process.argv.includes("--s8-prototype");
 const S9_PROTOTYPE = process.argv.includes("--s9-positional");
 const S10_PROTOTYPE = process.argv.includes("--s10-ledger");
 const S11_GATE = process.argv.includes("--s11-admission");
-const LEDGER_GATE = S10_PROTOTYPE || S11_GATE;
+const S12_PRE_GATE = process.argv.includes("--s12-codec-aware");
+const LEDGER_GATE = S10_PROTOTYPE || S11_GATE || S12_PRE_GATE;
 const POSITIONAL_GATE = S9_PROTOTYPE || LEDGER_GATE;
 const SPARSE_GATE = S8_PROTOTYPE || POSITIONAL_GATE;
 const RESIDUAL_GATE = S7_GATE || SPARSE_GATE;
 const ADMISSION_MODE = process.argv.includes("--admission");
 const NORMAL_ONLY = process.argv.includes("--normal-only");
 const S6_PREPARED = !["0", "false"].includes(String(process.env.LBH_S6_PREPARED ?? "true").toLowerCase());
-const GATE = S11_GATE ? "s11" : S10_PROTOTYPE ? "s10" : S9_PROTOTYPE ? "s9" : S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
+const GATE = S12_PRE_GATE ? "s12" : S11_GATE ? "s11" : S10_PROTOTYPE ? "s10" : S9_PROTOTYPE ? "s9" : S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
 const MIXED_GATE = GATE !== "s3";
 const COMPARE_S3 = GATE === "s4";
 const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
@@ -96,7 +97,7 @@ function git(...args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
 }
 
-function s11ComparisonEvidence(enabled = S11_GATE) {
+function s11ComparisonEvidence(enabled = S11_GATE || S12_PRE_GATE) {
   if (!enabled) return null;
   return Object.fromEntries(Object.entries(S11_COMPARISON_EVIDENCE).map(([gate, evidence]) => {
     const checksums = JSON.parse(fs.readFileSync(path.join(evidence.path, "checksums.json"), "utf8"));
@@ -1930,7 +1931,7 @@ function validateArtifact(directory) {
         entry.scenario === "churn" && entry.population === population)) || (!isS11 && aggregate.profile === "review"),
     atomicKindAlignmentAbsent: !["s4", "s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.pairShape.productWindow.atomicKindAlignmentAbsent === true),
-    mixedPairsObserved: !["s4", "s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles
+    mixedPairsObserved: !["s4", "s7", "s8", "s9", "s10", "s11", "s12"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.pairShape.productWindow.publicDeltaOwnerKeyframe > 0),
     s3ComparisonsPresent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
@@ -1947,26 +1948,26 @@ function validateArtifact(directory) {
           && proof.beats === rawCalls && coreCalls === rawCalls * entry.population
           && proof.comparisons === rawCalls * (entry.population - 1);
       }),
-    s7PreparedProfilerBoundary: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
+    s7PreparedProfilerBoundary: !["s7", "s8", "s9", "s10", "s11", "s12"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
       && aggregate.instrumentationEnabled === false && aggregate.eventLoopMonitorEnabled === true),
-    s7AckRejectAccountingConsistent: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
+    s7AckRejectAccountingConsistent: !["s7", "s8", "s9", "s10", "s11", "s12"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
       const rejected = entry.pairShape.ackBaseProof.ackRejected;
       return Number.isSafeInteger(rejected) && rejected >= 0
         && entry.correctness.ackRejectsExactlyZero === (rejected === 0);
     }),
-    s7CadenceNormalizationPresent: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles
+    s7CadenceNormalizationPresent: !["s7", "s8", "s9", "s10", "s11", "s12"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.targetCadenceNormalization?.configuredPublicationHz === TARGET_PUBLICATION_HZ
         && (entry.targetCadenceNormalization?.completeForAllRecipients === true
           ? Number.isFinite(entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond)
             && Number.isFinite(entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond)
-          : aggregate.gate === "s11"
+          : ["s11", "s12"].includes(aggregate.gate)
             && entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond === null
             && entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond === null
             && entry.targetCadenceNormalization?.unavailableRecipients?.length > 0
             && entry.targetCadenceNormalization.unavailableRecipients.every((recipient) =>
               entry.targetCadenceNormalization.perRecipient?.[recipient]?.measurementAvailable === false))),
-    s7AttributionReconciledAndPrivate: ["s9", "s10", "s11"].includes(aggregate.gate) ? scenarioFiles
+    s7AttributionReconciledAndPrivate: ["s9", "s10", "s11", "s12"].includes(aggregate.gate) ? scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.residualAttribution?.codec === POSITIONAL_CODEC_CAPABILITY
         && entry.residualAttribution?.sample?.capturedAcceptedFrames > 0
@@ -1980,19 +1981,20 @@ function validateArtifact(directory) {
         && entry.residualAttribution?.ownerKeyframe?.reconciliation?.passed === true
         && entry.residualAttribution?.privacy?.rawFramesRetained === false
         && entry.residualAttribution?.privacy?.ownerPrivateValuesEmitted === false),
-    s7ComparisonsPresent: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s7ComparisonsPresent: !["s7", "s8", "s9", "s10", "s11", "s12"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.comparisonToS4?.compositeSha256 === S4_CANONICAL_SHA256
         && (entry.scenario !== "normal"
           || entry.comparisonToS6PreparedDiagnostic?.analysisSha256 === S6_ANALYSIS_SHA256)),
-    s8FieldFreshnessPresent: !["s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s8FieldFreshnessPresent: !["s8", "s9", "s10", "s11", "s12"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       Object.values(entry.fieldFreshness?.maximumConfiguredPublicationLagBeats || {})
         .length === 4
       && Object.values(entry.fieldFreshness.maximumConfiguredPublicationLagBeats)
         .every((value) => value === 0)),
-    s9CodecManifestBound: !["s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s9CodecManifestBound: !["s9", "s10", "s11", "s12"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.clients.every((client) => client.manifest?.codecVerified === true
         && client.manifest?.codecManifestHash === POSITIONAL_CODEC_MANIFEST_HASH)
-      && entry.diagnostics?.adapterStatePair?.positionalJson?.encodedFrames > 0
+      && (entry.diagnostics?.adapterStatePair?.positionalJson?.encodedFrames || 0)
+        + (entry.diagnostics?.adapterStatePair?.positionalJson?.reusedEncodedFrames || 0) > 0
       && entry.performance?.positionalWireDecodeMs?.count > 0),
     s10LedgerEvidence: aggregate.gate !== "s10" || scenarioFiles.every((entry) =>
       entry.clients.every((client) => client.receiverDiagnostics?.ledger
@@ -2021,6 +2023,26 @@ function validateArtifact(directory) {
             return Number.isFinite(authorityRate) && Number.isFinite(receiverRate)
               && Number.isFinite(tolerance) && Math.abs(receiverRate - authorityRate) <= tolerance;
           })))),
+    s12CodecAwareEvidence: aggregate.gate !== "s12" || scenarioFiles.every((entry) => {
+      const choice = entry.diagnostics?.statePair?.publisher?.codecPairChoice;
+      const adapter = entry.diagnostics?.adapterStatePair?.positionalJson;
+      const chosen = Object.values(choice?.combinationsChosen || {}).reduce((sum, value) => sum + value, 0);
+      return JSON.stringify(choice?.tieOrder) === JSON.stringify([
+        "public-keyframe+owner-keyframe", "public-keyframe+owner-delta",
+        "public-delta+owner-keyframe", "public-delta+owner-delta",
+      ])
+        && choice?.selections > 0 && chosen === choice.selections
+        && choice.combinationsEvaluated >= choice.selections * 4
+        && choice.ephemeralCandidates?.retainedAfterPublish === 0
+        && choice.ephemeralCandidates?.maxPerPublish <= 4
+        && choice.encodeMilliseconds?.p95 >= 0
+        && adapter?.reusedEncodedFrames > 0
+        && adapter.reusedDigestVerified === adapter.reusedEncodedFrames
+        && entry.correctness.accountingComplete === true
+        && entry.clients.every((client) => client.receiverDiagnostics?.ledger
+          && client.receiverDiagnostics.ledger.bytes <= client.receiverDiagnostics.limits.maxRetainedBytes
+          && client.receiverCleanupDiagnostics?.ledger?.bytes === 0);
+    }),
     s11RunContract: !isS11 || (run.schemaVersion === 4 && aggregate.schemaVersion === 4
       && run.gate === "s11" && run.profile === aggregate.profile && run.commit === aggregate.commit
       && run.dirty === false && aggregate.preparedProjectionsEnabled === true
@@ -2066,14 +2088,14 @@ function validateArtifact(directory) {
         entry.admission.convergenceOnlyPassed === true)),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
-    && (["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
+    && (["s7", "s8", "s9", "s10", "s11", "s12"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
     && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
     && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent
     && invariants.stageProfilePresent && invariants.publicCoreShareabilityProved
     && invariants.s7PreparedProfilerBoundary && invariants.s7AckRejectAccountingConsistent
     && invariants.s7CadenceNormalizationPresent && invariants.s7AttributionReconciledAndPrivate
     && invariants.s7ComparisonsPresent && invariants.s8FieldFreshnessPresent
-    && invariants.s9CodecManifestBound && invariants.s10LedgerEvidence
+    && invariants.s9CodecManifestBound && invariants.s10LedgerEvidence && invariants.s12CodecAwareEvidence
     && invariants.s11RunContract && invariants.s11ScenarioSetExact
     && invariants.s11ScenarioContract && invariants.s11ComparisonBindings
     && invariants.s11AggregateVerdictRecomputed;
@@ -2107,7 +2129,7 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S11_GATE ? " --s11-admission" : S10_PROTOTYPE ? " --s10-ledger" : S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${NORMAL_ONLY ? " --normal-only" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S12_PRE_GATE ? " --s12-codec-aware" : S11_GATE ? " --s11-admission" : S10_PROTOTYPE ? " --s10-ledger" : S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${NORMAL_ONLY ? " --normal-only" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
     schemaVersion: S11_GATE ? 4 : RESIDUAL_GATE ? 3 : 2,
     gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,

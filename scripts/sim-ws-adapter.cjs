@@ -29,6 +29,7 @@ const {
   enqueueBoundedInbound,
 } = require("./sim-ws-adapter-guards.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
+const { isExactEncodedPublication } = require("./authority-delta-publisher.cjs");
 const {
   CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
   codecContext: positionalCodecContext,
@@ -106,6 +107,7 @@ function createSimWebSocketAdapter(options = {}) {
   };
   const statePairStats = { accepted: 0, rejected: 0, lastRejectReason: null };
   const positionalCodecStats = { encodedFrames: 0, encodedBytes: 0, encodeMilliseconds: 0,
+    reusedEncodedFrames: 0, reusedEncodedBytes: 0, reusedDigestVerified: 0,
     decodedFrames: 0, decodedBytes: 0, decodeMilliseconds: 0 };
   const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
   const ackRejectDiagnostics = {
@@ -900,14 +902,16 @@ function createSimWebSocketAdapter(options = {}) {
       if (drained.action === "pause") return;
       for (const message of drained.messages) {
         if (message.lane === "state") {
-          for (const frame of message.envelope.frames) {
-            const wire = stageProfiler && frame?.type === "statePair"
+          for (let index = 0; index < message.envelope.frames.length; index += 1) {
+            const frame = message.envelope.frames[index];
+            const retainedWire = message.exactWire && index === 0 ? message.wire : null;
+            const wire = retainedWire || (stageProfiler && frame?.type === "statePair"
               ? stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (serialized) => ({
                   recipientKey: profileRecipientKey(state),
                   outputBytes: Buffer.byteLength(serialized, "utf8"),
                   serializedAllocationProxyBytes: Buffer.byteLength(serialized, "utf8"),
                 }), () => encodeForState(state, frame))
-              : encodeForState(state, frame);
+              : encodeForState(state, frame));
             if (state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)
                 && frame?.type === "statePair"
                 && message.envelope.frames.length === 1
@@ -1587,7 +1591,7 @@ function createSimWebSocketAdapter(options = {}) {
           skipped += 1;
           continue;
         }
-        const outcome = await publishStatePair(state.binding, pair.frame || pair);
+        const outcome = await publishStatePair(state.binding, pair);
         if (outcome.accepted) {
           statePairStats.accepted += 1;
           projected += 1;
@@ -1623,16 +1627,32 @@ function createSimWebSocketAdapter(options = {}) {
     return enqueueReliableState(state, frame);
   }
 
-  async function publishStatePair(binding, frame) {
+  async function publishStatePair(binding, publication) {
     const key = bindingKeyFor(binding);
     const state = key ? byBindingKey.get(key) : null;
     if (!state) return { accepted: false, action: "ignore", reason: "binding-not-connected" };
     if (state.wireVersion !== "lbh-multiplayer-json-v2") {
       return { accepted: false, action: "ignore", reason: "state-pair-requires-v2" };
     }
+    const frame = publication?.frame || publication;
     let encodedWire;
     try {
-      if (stageProfiler) {
+      if (isExactEncodedPublication(publication)) {
+        if (!state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)) {
+          throw new WireProtocolError("positional-capability-required",
+            "exact positional publication requires negotiated capability", 4403);
+        }
+        encodedWire = publication.encodedWire;
+        const encodedBytes = Buffer.byteLength(encodedWire, "utf8");
+        const digest = `sha256:${crypto.createHash("sha256").update(encodedWire, "utf8").digest("hex")}`;
+        if (encodedBytes !== publication.bytes || digest !== publication.encodedDigest) {
+          throw new WireProtocolError("positional-publication-mismatch",
+            "publisher-selected positional wire failed byte/digest verification", 4403);
+        }
+        positionalCodecStats.reusedEncodedFrames += 1;
+        positionalCodecStats.reusedEncodedBytes += encodedBytes;
+        positionalCodecStats.reusedDigestVerified += 1;
+      } else if (stageProfiler) {
         encodedWire = stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (wire) => ({
           recipientKey: profileRecipientKey(state),
           outputBytes: Buffer.byteLength(wire, "utf8"),
@@ -1676,8 +1696,12 @@ function createSimWebSocketAdapter(options = {}) {
     const priorRecords = Object.values(state.replicationQueuedStateFrames || {});
     const queueSequence = frame.frameId + state.statePairQueueOffset;
     const encodedBytes = Buffer.byteLength(encodedWire, "utf8");
-    const enqueue = () => state.queue.enqueueState(queueSequence, { kind: "state-pair", frames: [frame] },
-      { byteLength: encodedBytes });
+    const enqueue = () => state.queue.enqueueState(
+      queueSequence,
+      { kind: "state-pair", frames: [frame] },
+      { byteLength: encodedBytes,
+        ...(isExactEncodedPublication(publication) ? { exactWire: encodedWire } : {}) },
+    );
     const outcome = stageProfiler
       ? stageProfiler.measureSync(STAGES.ADAPTER_ENQUEUE, {
           recipientKey: profileRecipientKey(state),
@@ -1717,13 +1741,29 @@ function createSimWebSocketAdapter(options = {}) {
     return outcome;
   }
 
-  async function retransmitStatePair(binding, frame) {
+  async function retransmitStatePair(binding, publication) {
     const key = bindingKeyFor(binding);
     const state = key ? byBindingKey.get(key) : null;
     if (!state) return { accepted: false, action: "ignore", reason: "binding-not-connected" };
+    const frame = publication?.frame || publication;
     let wire;
     try {
-      wire = encodeForState(state, frame);
+      if (isExactEncodedPublication(publication)) {
+        if (!state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)) {
+          throw new WireProtocolError("positional-capability-required",
+            "exact positional publication requires negotiated capability", 4403);
+        }
+        wire = publication.encodedWire;
+        const bytes = Buffer.byteLength(wire, "utf8");
+        const digest = `sha256:${crypto.createHash("sha256").update(wire, "utf8").digest("hex")}`;
+        if (bytes !== publication.bytes || digest !== publication.encodedDigest) {
+          throw new WireProtocolError("positional-publication-mismatch",
+            "publisher-selected positional wire failed byte/digest verification", 4403);
+        }
+        positionalCodecStats.reusedEncodedFrames += 1;
+        positionalCodecStats.reusedEncodedBytes += bytes;
+        positionalCodecStats.reusedDigestVerified += 1;
+      } else wire = encodeForState(state, frame);
     } catch (error) {
       return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
     }

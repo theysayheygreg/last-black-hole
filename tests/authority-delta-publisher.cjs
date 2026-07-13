@@ -9,6 +9,7 @@ const {
   ACK_SCHEMA,
   MIXED_PAIR_SCHEMA,
   MIXED_ACK_SCHEMA,
+  CODEC_PAIR_TIE_ORDER,
   createAuthorityDeltaPublisher,
 } = require("../scripts/authority-delta-publisher.cjs");
 const {
@@ -182,6 +183,41 @@ async function run() {
       encodeWireFrame(published.frame, { direction: SERVER_TO_CLIENT });
       assert.strictEqual(publisher.acknowledge(identity(), ackFor(published.frame)).accepted, true);
     }
+  });
+
+  await runner.run("codec-aware selection evaluates every safe pair once and uses stable safety-first ties", async () => {
+    const publisher = createAuthorityDeltaPublisher();
+    const wireSize = () => 3;
+    const first = publisher.publish({ ...largePairInputs(1), allowMixed: true, wireSize });
+    assert.strictEqual(first.projectionKind, "keyframe", "no-base recovery must bypass byte optimization");
+    assert.strictEqual(publisher.acknowledge(identity(), ackFor(first.frame)).accepted, true);
+    const second = publisher.publish({ ...largePairInputs(2), allowMixed: true, wireSize });
+    assert.strictEqual(second.projectionKind, "keyframe", "full keyframe must win an exact four-way tie");
+    assert.deepStrictEqual(CODEC_PAIR_TIE_ORDER, ["public-keyframe+owner-keyframe",
+      "public-keyframe+owner-delta", "public-delta+owner-keyframe", "public-delta+owner-delta"]);
+    const metrics = publisher.diagnostics().codecPairChoice;
+    assert.strictEqual(metrics.combinationsEvaluated, 5, "initial keyframe plus four safe-base candidates encode once each");
+    assert.strictEqual(metrics.combinationsChosen["public-keyframe+owner-keyframe"], 1);
+    assert.strictEqual(metrics.ephemeralCandidates.maxPerPublish, 4);
+    assert.strictEqual(metrics.ephemeralCandidates.retainedAfterPublish, 0);
+  });
+
+  await runner.run("codec candidate failure falls back atomically", async () => {
+    const publisher = createAuthorityDeltaPublisher();
+    const exact = (frame) => Buffer.byteLength(JSON.stringify(frame), "utf8");
+    const first = publisher.publish({ ...largePairInputs(1), allowMixed: true, wireSize: exact });
+    assert.strictEqual(publisher.acknowledge(identity(), ackFor(first.frame)).accepted, true);
+    const recovered = publisher.publish({ ...largePairInputs(2), allowMixed: true,
+      wireSize: (frame) => {
+        if (frame.public.kind === "delta" && frame.owner.kind === "delta") {
+          const error = new Error("synthetic candidate limit");
+          error.code = "frame-too-large";
+          throw error;
+        }
+        return Buffer.byteLength(JSON.stringify(frame), "utf8");
+      } });
+    assert.strictEqual(recovered.projectionKind, "keyframe");
+    assert.strictEqual(publisher.diagnostics().codecPairChoice.fallbacks["candidate-invalid:frame-too-large"], 1);
   });
 
   await runner.run("mixed ACK binds both lane kinds and cursors before advancing either base", async () => {

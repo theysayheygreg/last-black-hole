@@ -27,14 +27,19 @@ function nonNegativeInteger(value, fallback, name) {
   return parsed;
 }
 
-function serializeFrame(frame) {
-  const wire = JSON.stringify(frame);
-  if (wire === undefined) throw new TypeError("message must be JSON serializable");
-  const snapshot = deepFreezeJson(JSON.parse(wire));
+function serializeFrame(frame, exactWire = null) {
+  const expandedWire = JSON.stringify(frame);
+  if (expandedWire === undefined) throw new TypeError("message must be JSON serializable");
+  if (exactWire !== null && typeof exactWire !== "string") throw new TypeError("exactWire must be a string");
+  const snapshot = deepFreezeJson(JSON.parse(expandedWire));
+  const wire = exactWire === null ? expandedWire : exactWire;
+  const byteLength = Buffer.byteLength(wire, "utf8");
   return Object.freeze({
     envelope: snapshot,
     wire,
-    byteLength: Buffer.byteLength(wire, "utf8"),
+    byteLength,
+    retainedByteLength: exactWire === null ? byteLength : byteLength + Buffer.byteLength(expandedWire, "utf8"),
+    exactWire: exactWire !== null,
   });
 }
 
@@ -92,18 +97,19 @@ class MultiplayerSendQueue {
       return { accepted: false, action: "ignore", reason: "stale-state" };
     }
 
-    const serialized = serializeFrame(payload);
+    const serialized = serializeFrame(payload, options.exactWire ?? null);
     const byteLength = options.byteLength === undefined
       ? serialized.byteLength
       : positiveInteger(options.byteLength, undefined, "state encoded byteLength");
     const candidate = {
       ...serialized,
       byteLength,
+      retainedByteLength: options.exactWire === undefined ? byteLength : serialized.retainedByteLength,
       lane: "state",
       stateSequence: normalizedSequence,
     };
-    const replacedBytes = this.state ? this.state.byteLength : 0;
-    const projectedBytes = this.queuedBytes - replacedBytes + candidate.byteLength;
+    const replacedBytes = this.state ? this.state.retainedByteLength : 0;
+    const projectedBytes = this.queuedRetainedBytes - replacedBytes + candidate.retainedByteLength;
     const projectedMessages = this.queuedMessages - (this.state ? 1 : 0) + 1;
 
     if (projectedBytes > this.limits.maxBytes || projectedMessages > this.limits.maxMessages) {
@@ -278,6 +284,7 @@ class MultiplayerSendQueue {
         envelope: entry.envelope,
         wire: entry.wire,
         byteLength: entry.byteLength,
+        exactWire: entry.exactWire,
         sendAttempt: entry.attemptToken,
       }));
       bytes += entry.byteLength;
@@ -373,12 +380,18 @@ class MultiplayerSendQueue {
     return this.reliableBytes + (this.state ? this.state.byteLength : 0);
   }
 
+  get queuedRetainedBytes() {
+    return this.reliable.reduce((sum, entry) => sum + entry.retainedByteLength, 0)
+      + (this.state ? this.state.retainedByteLength : 0);
+  }
+
   status() {
     return Object.freeze({
       action: this.terminal ? "disconnect" : this.rebaseRequired ? "rebase" : this.backpressured ? "pause" : "ready",
       reason: this.terminal?.reason || this.rebaseReason || (this.backpressured ? "backpressure" : null),
       queuedMessages: this.queuedMessages,
       queuedBytes: this.queuedBytes,
+      queuedRetainedBytes: this.queuedRetainedBytes,
       reliableMessages: this.reliable.length,
       reliableBytes: this.reliableBytes,
       pendingState: this.state !== null,
@@ -410,7 +423,7 @@ class MultiplayerSendQueue {
 
   _refreshBackpressure() {
     const queueAtLimit = this.queuedMessages >= this.limits.maxMessages
-      || this.queuedBytes >= this.limits.maxBytes
+      || this.queuedRetainedBytes >= this.limits.maxBytes
       || this.reliable.length >= this.limits.maxReliableMessages
       || this.reliableBytes >= this.limits.maxReliableBytes;
     this.backpressured = this.terminal !== null || this.transportBackpressured || queueAtLimit;

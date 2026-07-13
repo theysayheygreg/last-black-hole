@@ -11,6 +11,8 @@ const {
   decodePositionalFrame,
 } = require("./state-pair-positional-codec.cjs");
 
+const trustedStatePairWireEncoders = new WeakSet();
+
 const CLIENT_TO_SERVER = "client->server";
 const SERVER_TO_CLIENT = "server->client";
 const WIRE_PROTOCOL_VERSION_V2 = "lbh-multiplayer-json-v2";
@@ -725,6 +727,26 @@ function encodeWireFrame(frame, options = {}) {
   return JSON.stringify(frame);
 }
 
+function createStatePairWireEncoder(positionalContext, observe = null) {
+  if (!positionalContext || typeof positionalContext !== "object" || Array.isArray(positionalContext)) {
+    throw new TypeError("positionalContext is required for a trusted state-pair encoder");
+  }
+  const context = Object.freeze({ ...positionalContext });
+  if (observe !== null && typeof observe !== "function") throw new TypeError("observe must be a function");
+  const encoder = (frame) => {
+    const started = performance.now();
+    const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT, positionalContext: context });
+    observe?.(wire, performance.now() - started);
+    return wire;
+  };
+  trustedStatePairWireEncoders.add(encoder);
+  return encoder;
+}
+
+function isTrustedStatePairWireEncoder(value) {
+  return typeof value === "function" && trustedStatePairWireEncoders.has(value);
+}
+
 module.exports = {
   WIRE_PROTOCOL_VERSION,
   WIRE_PROTOCOL_VERSION_V2,
@@ -741,4 +763,6 @@ module.exports = {
   validateWireFrame,
   parseWireFrame,
   encodeWireFrame,
+  createStatePairWireEncoder,
+  isTrustedStatePairWireEncoder,
 };

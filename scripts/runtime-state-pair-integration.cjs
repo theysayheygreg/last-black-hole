@@ -1,7 +1,6 @@
 "use strict";
 
 const crypto = require("crypto");
-const { performance } = require("perf_hooks");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 const {
   normalizeView,
@@ -10,6 +9,7 @@ const {
 } = require("./canonical-structural-delta.cjs");
 const { createAuthorityDeltaPublisher } = require("./authority-delta-publisher.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
+const { createStatePairWireEncoder } = require("./multiplayer-wire-protocol.cjs");
 const {
   CAPABILITY: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   COMPONENT_SCHEMA: RUNTIME_PUBLIC_COMPONENT_SCHEMA,
@@ -19,7 +19,6 @@ const {
 const {
   CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
   codecContext: positionalCodecContext,
-  encodePositionalFrame,
 } = require("./state-pair-positional-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
@@ -412,21 +411,19 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         }), buildOwnerView)
       : buildOwnerView();
     const publicProjection = publicView;
+    const positionalEncoder = admission.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+      ? createStatePairWireEncoder(
+          positionalCodecContext({ ...identity, manifestHash: fixedManifestHash }),
+          (wire, milliseconds) => {
+            positionalMeasure.encodedCandidates += 1;
+            positionalMeasure.encodedBytes += Buffer.byteLength(wire, "utf8");
+            positionalMeasure.encodeMilliseconds += milliseconds;
+          },
+        ) : null;
     return Object.freeze({ identity, publicView: publicProjection.view, ownerView: ownerProjection.view,
       publicPrepared: publicProjection.prepared, ownerPrepared: ownerProjection.prepared,
       allowMixed: admission.capabilities.includes(MIXED_CAPABILITY),
-      ...(admission.capabilities.includes(POSITIONAL_CODEC_CAPABILITY) ? {
-        wireSize: (frame) => {
-          const started = performance.now();
-          const bytes = Buffer.byteLength(encodePositionalFrame(frame, positionalCodecContext({
-            ...identity, manifestHash: fixedManifestHash,
-          })), "utf8");
-          positionalMeasure.encodedCandidates += 1;
-          positionalMeasure.encodedBytes += bytes;
-          positionalMeasure.encodeMilliseconds += performance.now() - started;
-          return bytes;
-        },
-      } : {}) });
+      ...(positionalEncoder ? { encodeWire: positionalEncoder } : {}) });
   }
 
   function publish(binding, publicFrame, ownerFrame) {
