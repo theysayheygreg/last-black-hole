@@ -23,6 +23,7 @@ const {
 const {
   CAPABILITY: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   reconstructLegacyPublicEntities,
+  reconstructLegacyPublicState,
 } = require("./runtime-public-schema.cjs");
 
 const CAPABILITY = "state-pair-v1";
@@ -132,7 +133,7 @@ function emptyContinuity() {
   return deepFreeze({ entities: {}, retired: {} });
 }
 
-function advanceContinuity(view, prior = emptyContinuity()) {
+function advanceContinuity(view, prior = emptyContinuity(), { allowUnseenRevisionHistory = false } = {}) {
   const entities = {};
   const retired = { ...prior.retired };
   let componentCount = 0;
@@ -165,7 +166,8 @@ function advanceContinuity(view, prior = emptyContinuity()) {
         && (!fence.present || valueHash !== fence.valueHash)) {
         fail("lineage-mismatch", `keyframe component ${id}.${name} changed without revision`);
       }
-      if (fence?.present && component.revision > fence.revision && valueHash === fence.valueHash) {
+      if (fence?.present && component.revision > fence.revision && valueHash === fence.valueHash
+          && !allowUnseenRevisionHistory) {
         fail("lineage-mismatch", `keyframe component ${id}.${name} revision changed without value change`);
       }
       components[name] = { revision: component.revision, valueHash, present: true };
@@ -398,13 +400,24 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       assertMaterializedLineage("public", nextPublic.view, frame);
       assertMaterializedLineage("owner", nextOwner.view, frame);
       validateOwnerProjection(nextOwner.view);
-      const nextPublicContinuity = advanceContinuity(nextPublic.view, publicContinuity);
-      const nextOwnerContinuity = advanceContinuity(nextOwner.view, ownerContinuity);
+      // A recovery keyframe may legitimately summarize value transitions that
+      // occurred in coalesced frames. Sparse deltas still reject revision-only
+      // updates; only the explicitly requested full rebase may advance an
+      // unseen revision while restoring the same current value.
+      const recoveryKeyframe = awaitingKeyframe
+        && frame.public.kind === "keyframe" && frame.owner.kind === "keyframe";
+      const nextPublicContinuity = advanceContinuity(nextPublic.view, publicContinuity,
+        { allowUnseenRevisionHistory: recoveryKeyframe });
+      const nextOwnerContinuity = advanceContinuity(nextOwner.view, ownerContinuity,
+        { allowUnseenRevisionHistory: recoveryKeyframe });
       // Reconstruction happens before any receiver state is published. A
       // missing/unknown component therefore rejects the entire pair rather
       // than exposing an intermediate half-materialized entity.
       const legacyPublicEntities = materializeRuntimeComponents
         ? reconstructLegacyPublicEntities(nextPublic.view)
+        : null;
+      const legacyPublicState = materializeRuntimeComponents
+        ? reconstructLegacyPublicState(nextPublic.view)
         : null;
       const pair = deepFreeze({
         matchId: frame.matchId,
@@ -426,6 +439,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         public: nextPublic.view,
         owner: nextOwner.view,
         ...(legacyPublicEntities ? { legacyPublicEntities } : {}),
+        ...(legacyPublicState ? { legacyPublicState } : {}),
       });
       const ack = deepFreeze({
         type: "ack",

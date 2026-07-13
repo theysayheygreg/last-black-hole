@@ -1792,6 +1792,15 @@ function createSimWebSocketAdapter(options = {}) {
       }
     }
     replicationAccountingEpoch += 1;
+    ackRejectDiagnostics.total = 0;
+    ackRejectDiagnostics.byReason.clear();
+    ackRejectDiagnostics.byRelation.clear();
+    ackRejectDiagnostics.orderTransitions.clear();
+    ackRejectDiagnostics.lastRelation = null;
+    ackRejectDiagnostics.recoveryRequests = 0;
+    ackRejectDiagnostics.recoveryAccepted = 0;
+    ackRejectDiagnostics.recoveryRejected = 0;
+    ackRejectDiagnostics.recoveryCooldownDrops = 0;
     replicationAccounting?.reset();
     stageProfiler?.reset();
     return { runId: currentRunId, fenced };
@@ -1908,6 +1917,7 @@ function createSimWebSocketAdapter(options = {}) {
               recoveryCooldownDrops: ackRejectDiagnostics.recoveryCooldownDrops,
               boundedReasonCodes: ACK_REJECT_REASON_CODES.size,
               boundedRelations: ACK_REJECT_RELATIONS.size,
+              orderScope: "global arrival order within the current run; not per-recipient causal order",
             })
           : Object.freeze({ enabled: false }) }),
       ...(stageProfiler ? { authorityStageProfile: stageProfiler.snapshot() } : {}),

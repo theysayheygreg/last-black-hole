@@ -224,7 +224,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     ? publisherOptions.maxRecipients : 128;
   // Legacy and split recipients may coexist during rollback. Component-name
   // histories cannot share one revision tracker without cross-schema churn.
-  const publicTrackers = Object.freeze({ legacy: createRevisionTracker(), split: createRevisionTracker() });
+  const legacyPublicTracker = createRevisionTracker();
+  const splitPublicTrackers = new Map();
   const ownerTrackers = new Map();
   const admissions = new Map();
   let shareabilityGeneration = stageProfiler?.generation?.() || 0;
@@ -284,10 +285,15 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     }
     const admissionKey = key(identity);
     if (!admissions.has(admissionKey) && admissions.size >= maxAdmissions) fail("recipient-cap", "state-pair admission cap reached");
+    const needsOwnerTracker = !ownerTrackers.has(identity.recipientId);
+    if (needsOwnerTracker && ownerTrackers.size >= maxAdmissions) {
+      fail("recipient-cap", "state-pair recipient history cap reached");
+    }
+    if (needsOwnerTracker) ownerTrackers.set(identity.recipientId, createRevisionTracker());
     admissions.set(admissionKey, Object.freeze({ identity, capabilities: Object.freeze([...ticketClaims.capabilities]) }));
-    if (!ownerTrackers.has(identity.recipientId)) {
-      if (ownerTrackers.size >= maxAdmissions) fail("recipient-cap", "state-pair recipient history cap reached");
-      ownerTrackers.set(identity.recipientId, createRevisionTracker());
+    if (ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+        && !splitPublicTrackers.has(admissionKey)) {
+      splitPublicTrackers.set(admissionKey, createRevisionTracker());
     }
     return identity;
   }
@@ -351,10 +357,11 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       preparedCounters.hashes += 1;
       return Object.freeze({ view: preparedProjectionView(prepared, preparedContext), prepared });
     };
+    const publicTracker = splitRuntimePublic ? splitPublicTrackers.get(key(identity)) : legacyPublicTracker;
+    if (!publicTracker) fail("capability-not-admitted", "split public history is unavailable for this admission");
     const buildPublicCore = () => ({
       world: { publicFacts: publicFacts(publicFrame.state, splitRuntimePublic) },
-      entities: publicTrackers[splitRuntimePublic ? "split" : "legacy"]
-        .project(collectPublicEntities(publicFrame, splitRuntimePublic)),
+      entities: publicTracker.project(collectPublicEntities(publicFrame, splitRuntimePublic)),
     });
     const publicCore = stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
@@ -415,7 +422,11 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     let identity;
     try { identity = context(binding); } catch { return false; }
     admissions.delete(key(identity));
+    splitPublicTrackers.delete(key(identity));
     publisher.disconnect(identity);
+    if (![...admissions.values()].some((entry) => entry.identity.recipientId === identity.recipientId)) {
+      ownerTrackers.delete(identity.recipientId);
+    }
     return true;
   }
 
@@ -438,10 +449,11 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         schema: RUNTIME_PUBLIC_COMPONENT_SCHEMA,
         enabledAdmissions: [...admissions.values()].filter((entry) =>
           entry.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)).length,
-        cadence: Object.freeze({ motionHz: 10, otherGroups: "on-change", lowerCadenceTimers: 0 }),
+        trackedRecipientHistories: splitPublicTrackers.size,
+        configuredCadence: Object.freeze({ motionTargetHz: 10, otherGroups: "on-change", lowerCadenceTimers: 0 }),
         fieldFreshness: Object.freeze({
           measurement: "Every group is projected from the same authoritative snapshot; unchanged groups retain their prior revision.",
-          maximumObservedAgePublishedBeats: Object.freeze({
+          maximumConfiguredPublicationLagBeats: Object.freeze({
             runtimeMotion: 0,
             runtimeGameplay: 0,
             runtimeIdentity: 0,

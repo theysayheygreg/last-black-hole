@@ -203,6 +203,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     inputSeq: 0, actionSeq: 0, commandSeq: 0, uplink: {}, downlink: {},
     manifest: { reused: reuseManifest, servedBytes: 0, hash: issued.body.manifestHash },
     clientWorkSamples: [], ackWorkSamples: [], faultLog: [], hashesVerified: 0,
+    legacyReconstructionVerified: 0, acceptedPairTimes: [],
     shape: { keyframes: 0, deltas: 0, creates: 0, updates: 0, despawns: 0, reincarnations: 0, rootOps: 0 },
     pairKinds: {},
     attributionCapture: { active: false, startAt: null, maxFrames: ATTRIBUTION_SAMPLE_FRAMES, rawFrames: [] },
@@ -261,6 +262,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       return;
     }
     client.acceptedPairs += 1;
+    client.acceptedPairTimes.push(Date.now());
     if (projectionHash(outcome.state.public) !== outcome.ack.publicHash
       || projectionHash(outcome.state.owner) !== outcome.ack.ownerHash
       || frame.public.resultHash !== outcome.ack.publicHash || frame.owner.resultHash !== outcome.ack.ownerHash) {
@@ -274,6 +276,29 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       client.error = "cross-match or cross-recipient projection leakage";
       client.ws.terminate();
       return;
+    }
+    if (S8_PROTOTYPE) {
+      const legacy = outcome.state.legacyPublicState;
+      const rows = outcome.state.legacyPublicEntities;
+      const laneRows = (category) => rows.filter((row) => row.category === category)
+        .sort((a, b) => a.index - b.index).map((row) => row.value);
+      const exactShape = legacy && Array.isArray(rows)
+        && JSON.stringify(legacy.players) === JSON.stringify(laneRows("player"))
+        && JSON.stringify(legacy.world?.wells) === JSON.stringify(laneRows("well"))
+        && JSON.stringify(legacy.world?.stars) === JSON.stringify(laneRows("star"))
+        && JSON.stringify(legacy.world?.wrecks) === JSON.stringify(laneRows("wreck"))
+        && JSON.stringify(legacy.world?.planetoids) === JSON.stringify(laneRows("planetoid"))
+        && JSON.stringify(legacy.world?.portals) === JSON.stringify(laneRows("portal"))
+        && JSON.stringify(legacy.world?.scavengers) === JSON.stringify(laneRows("scavenger"))
+        && JSON.stringify(legacy.world?.fauna) === JSON.stringify(laneRows("fauna"))
+        && JSON.stringify(legacy.world?.sentries) === JSON.stringify(laneRows("sentry"))
+        && JSON.stringify(legacy.inhibitor) === JSON.stringify(laneRows("inhibitor")[0]);
+      if (!exactShape) {
+        client.error = "split components did not reconstruct the exact legacy public-state shape";
+        client.ws.terminate();
+        return;
+      }
+      client.legacyReconstructionVerified += 1;
     }
     client.hashesVerified += 1;
     observeMaterializedLifecycle(client, outcome.state.public);
@@ -331,6 +356,7 @@ function summarizeClients(clients) {
     label: client.label, membershipId: client.welcome.membershipId, connectionEpoch: client.welcome.connectionEpoch,
     capabilities: client.ticket.capabilities,
     acceptedPairs: client.acceptedPairs, hashesVerified: client.hashesVerified,
+    legacyReconstructionVerified: client.legacyReconstructionVerified,
     lastAcceptedFrameId: client.receiver?.current()?.frameId || 0,
     lastStatePairAckSentFrameId: client.lastStatePairAckSentFrameId,
     manifest: client.manifest, uplinkSerialized: client.uplink, downlinkObserved: client.downlink,
@@ -405,7 +431,7 @@ function compareScenarioToS3(result) {
         result.exactTraffic.oneSecondP99DownlinkBytesPerSecond,
         s3.exactTraffic.windows["1s"].allRecipientWindowsBytesPerSecond.p99),
     },
-    pairCadencePerRecipient: numericComparison(result.cadence.observedPairsPerSecond,
+    pairCadencePerRecipient: numericComparison(result.cadence.authorityAcceptedPairsPerSecond,
       s3.cadence.observedPairsPerSecond),
     pairKinds: {
       s3: s3.pairShape.productWindow.pairKindCounts || {
@@ -460,7 +486,7 @@ function compareScenarioToS4(result) {
         result.exactTraffic.oneSecondP99DownlinkBytesPerSecond,
         s4.exactTraffic.oneSecondP99DownlinkBytesPerSecond),
     },
-    pairCadencePerRecipient: compareNumber(result.cadence.observedPairsPerSecond,
+    pairCadencePerRecipient: compareNumber(result.cadence.authorityAcceptedPairsPerSecond,
       s4.cadence.observedPairsPerSecond),
     pairKinds: { s4: s4.pairShape.productWindow.pairKindCounts,
       s7: result.pairShape.productWindow.pairKindCounts },
@@ -501,7 +527,7 @@ function compareScenarioToS6(result) {
       oneSecondP95DownlinkBytesPerSecond: compareNumber(
         result.exactTraffic.oneSecondP95DownlinkBytesPerSecond, prepared.downlinkOneSecondP95Bps),
     },
-    pairCadencePerRecipient: compareNumber(result.cadence.observedPairsPerSecond, prepared.publicationHz),
+    pairCadencePerRecipient: compareNumber(result.cadence.authorityAcceptedPairsPerSecond, prepared.publicationHz),
     authority: {
       projectionMeanMs: compareNumber(projectionMean, prepared.projectionMeanMs),
       projectionP95Ms: compareNumber(result.performance.authority.projectionAndPublishMs.p95,
@@ -705,7 +731,7 @@ function buildResidualDecisionTable(normalResults) {
       (TARGET_BPS - worst.observedNonPairBytesPerSecond) / worst.observedMeanPairBytes);
     return {
       population: entry.population,
-      actualObservedPairsPerSecond: entry.cadence.observedPairsPerSecond,
+      actualAuthorityAcceptedPairsPerSecond: entry.cadence.authorityAcceptedPairsPerSecond,
       targetCadenceRequiredReductionBytesPerSecond: worst.targetCadenceRequiredReductionBytesPerSecond,
       exactMeanPairEnvelopeAt10Hz: {
         applicationBudgetBytesPerSecond: TARGET_BPS,
@@ -949,6 +975,8 @@ async function runScenario({ population, scenario, runDir }) {
       allClientHashesMatched: clientSummary.every((client) => client.hashesVerified === client.acceptedPairs),
       ownerPrivacyAndAtomicObservationVerified: clientSummary.every((client) =>
         client.hashesVerified === client.acceptedPairs && client.error === null),
+      legacyPublicStateShapeInternallyConsistent: !S8_PROTOTYPE || clientSummary.every((client) =>
+        client.legacyReconstructionVerified === client.acceptedPairs),
       noClientErrors: clientSummary.every((client) => client.error === null),
       publisherDrained: publisher.recipients === 0 && publisher.pendingPairs === 0 && publisher.retainedBytes === 0,
       statePairAcksConverged: publisher.ackAccepted > 0,
@@ -962,15 +990,22 @@ async function runScenario({ population, scenario, runDir }) {
           && client.lastStatePairAckSentFrameId > ackLoss.frameId)) return false;
         return true;
       }),
+      noUnexpectedNormalRecovery: churn || allClients.every((client) => !client.faultLog.some((fault) =>
+        fault.type === "recovery" && fault.at >= startAt && fault.at < endAt)),
       lifecycleObserved: !churn || (observedLifecycle.componentChanges > 0
         && faultActions.some((entry) => entry.name === "leave"
           && entry.oldMembership !== entry.replacementMembership
           && entry.presenceBeforeLeave && entry.authorityAbsenceObserved
           && entry.clientAbsenceObserved && entry.clientReplacementObserved)),
     };
-    const observedPairsPerSecond = selected.filter((event) => event.direction === "authority->client"
+    const authorityAcceptedPairsPerSecond = selected.filter((event) => event.direction === "authority->client"
       && event.frameClass === "statePair" && event.metric === "accepted").length
       / population / ((endAt - startAt) / 1000);
+    const receiverAcceptedPairsPerSecond = Object.fromEntries(allClients.map((client) => [client.label,
+      client.acceptedPairTimes.filter((at) => at >= startAt && at < endAt).length
+        / ((endAt - startAt) / 1000)]));
+    const minimumReceiverAcceptedPairsPerSecond = churn ? null
+      : Math.min(...Object.values(receiverAcceptedPairsPerSecond));
     const admission = {
       steadyMeanAtOrBelow64KiB: churn ? null : meanWorst <= TARGET_BPS,
       steadyOneSecondP95AtOrBelow80KiB: churn ? null : p95OneSecond <= SENSITIVITY_BPS,
@@ -978,8 +1013,8 @@ async function runScenario({ population, scenario, runDir }) {
         : targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond <= TARGET_BPS,
       targetCadenceOneSecondP95AtOrBelow80KiB: churn || !RESIDUAL_GATE ? null
         : targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS,
-      observedCadenceAtLeast90PercentOfConfigured: churn || !RESIDUAL_GATE ? null
-        : observedPairsPerSecond >= MIN_HEALTHY_PUBLICATION_HZ,
+      receiverAcceptedCadenceAtLeast90PercentOfConfigured: churn || !RESIDUAL_GATE ? null
+        : minimumReceiverAcceptedPairsPerSecond >= MIN_HEALTHY_PUBLICATION_HZ,
       correctnessPassed: Object.values(correctness).every(Boolean),
       authorityWithinExistingClockBudget: endHealth.multiplayer.projection.accounting.costDistributions.simTickMs.p95
         <= (1000 / endHealth.session.tickHz)
@@ -1090,11 +1125,26 @@ async function runScenario({ population, scenario, runDir }) {
       cadence: { authorityTickHz: endHealth.session.tickHz, publicationHz: endHealth.session.snapshotHz,
         configuredPublicationHz: TARGET_PUBLICATION_HZ,
         minimumHealthyObservedPublicationHz: MIN_HEALTHY_PUBLICATION_HZ,
-        observedPairsPerSecond },
+        authorityAcceptedPairsPerSecond,
+        receiverAcceptedPairsPerSecond,
+        minimumReceiverAcceptedPairsPerSecond,
+        authorityBoundary: "Application state-pair bytes accepted by ws.send callbacks; not proof of receiver acceptance.",
+        receiverBoundary: "State pairs accepted and materialized by each test receiver inside the measured window." },
       fieldFreshness: S8_PROTOTYPE
         ? endHealth.multiplayer.statePair.runtimePublicComponents.fieldFreshness : null,
       targetCadenceNormalization,
       residualAttribution,
+      recoveryAnalysis: (() => {
+        const recoveries = allClients.flatMap((client) => client.faultLog)
+          .filter((fault) => fault.type === "recovery" && fault.at >= startAt && fault.at < endAt);
+        return {
+          clientRecoveryRequests: recoveries.length,
+          byReason: Object.fromEntries([...new Set(recoveries.map((fault) => fault.reason))].sort()
+            .map((reason) => [reason, recoveries.filter((fault) => fault.reason === reason).length])),
+          publisherKeyframeReasons: publisher.keyframeReasons,
+          interpretation: "Unexpected recovery in a normal window fails correctness. Churn results must be read with the injected fault log; retries never satisfy cadence or admission.",
+        };
+      })(),
       performance: { machineLocal: true,
         authority: { ...deltaHealth(startHealth, endHealth),
           percentileScope: "bounded runtime rolling ring; reset after warmup by evidence-only endpoint" },
@@ -1209,9 +1259,9 @@ function validateArtifact(directory) {
         && (entry.scenario !== "normal"
           || entry.comparisonToS6PreparedDiagnostic?.analysisSha256 === S6_ANALYSIS_SHA256)),
     s8FieldFreshnessPresent: aggregate.gate !== "s8" || scenarioFiles.every((entry) =>
-      Object.values(entry.fieldFreshness?.maximumObservedAgePublishedBeats || {})
+      Object.values(entry.fieldFreshness?.maximumConfiguredPublicationLagBeats || {})
         .length === 4
-      && Object.values(entry.fieldFreshness.maximumObservedAgePublishedBeats)
+      && Object.values(entry.fieldFreshness.maximumConfiguredPublicationLagBeats)
         .every((value) => value === 0)),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed

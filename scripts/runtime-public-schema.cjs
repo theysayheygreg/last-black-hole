@@ -109,7 +109,7 @@ const PUBLIC_FACT_CLASSIFICATION = Object.freeze({
 });
 
 const SLINGSHOT_KEYS = new Set(["engaged", "anchorId", "anchorType", "anchorWX", "anchorWY", "anchorRange", "orbitDir"]);
-const PATH_DATA_KEYS = new Set(["wellIndex", "wellA", "wellB", "semiA", "semiB", "tilt", "speed"]);
+const PATH_DATA_KEYS = new Set(["wellIndex", "wellA", "wellB", "semiA", "semiB", "tilt", "speed", "heading", "maxAge"]);
 const LOOT_KEYS = new Set(["id", "name", "tier", "affinity", "coefficients", "value", "special", "effect",
   "amount", "catalogId", "category", "subcategory", "baseValue", "effectDesc", "useEffect", "useDesc", "charges",
   "instanceId"]);
@@ -194,7 +194,16 @@ function reconstructRuntimePublicEntity(entity) {
   if (!plainObject(entity) || !plainObject(entity.components)) fail("invalid-materialized-entity", "materialized entity is invalid");
   const classification = ENTITY_FIELD_CLASSIFICATION[entity.category];
   if (!classification) fail("unknown-source-category", `${entity.category} is not classified`);
-  if (entity.components.runtimePublic) fail("legacy-component-in-split-view", "split view contains runtimePublic");
+  const allowedComponents = new Set([...Object.values(COMPONENTS), "runtimeOrder"]);
+  for (const name of Object.keys(entity.components)) {
+    if (!allowedComponents.has(name)) fail("unknown-runtime-component", `${entity.category}.${name} is not part of the split schema`);
+  }
+  const order = entity.components.runtimeOrder;
+  if (!plainObject(order) || !plainObject(order.value)
+      || Object.keys(order.value).length !== 1 || !Number.isSafeInteger(order.value.index)
+      || order.value.index < 0) {
+    fail("missing-runtime-order", `${entity.category}.runtimeOrder must contain one non-negative index`);
+  }
   if (!Object.values(COMPONENTS).some((name) => entity.components[name])) {
     fail("missing-runtime-components", `${entity.category} has no classified runtime component`);
   }
@@ -221,6 +230,27 @@ function reconstructLegacyPublicEntities(view) {
   })).sort((a, b) => a.category.localeCompare(b.category) || a.index - b.index || a.sourceId.localeCompare(b.sourceId)));
 }
 
+function reconstructLegacyPublicState(view) {
+  if (!plainObject(view?.world) || !plainObject(view.world.publicFacts)) {
+    fail("invalid-materialized-view", "materialized public facts are missing");
+  }
+  const rows = reconstructLegacyPublicEntities(view);
+  const output = JSON.parse(canonicalJson(view.world.publicFacts));
+  const lanes = Object.freeze({ well: "wells", star: "stars", wreck: "wrecks", planetoid: "planetoids",
+    portal: "portals", scavenger: "scavengers", fauna: "fauna", sentry: "sentries" });
+  output.players = rows.filter((row) => row.category === "player")
+    .sort((a, b) => a.index - b.index).map((row) => row.value);
+  output.world = plainObject(output.world) ? output.world : {};
+  for (const [category, lane] of Object.entries(lanes)) {
+    output.world[lane] = rows.filter((row) => row.category === category)
+      .sort((a, b) => a.index - b.index).map((row) => row.value);
+  }
+  const inhibitors = rows.filter((row) => row.category === "inhibitor");
+  if (inhibitors.length > 1) fail("invalid-materialized-view", "materialized view contains multiple inhibitors");
+  if (inhibitors.length === 1) output.inhibitor = inhibitors[0].value;
+  return Object.freeze(JSON.parse(canonicalJson(output)));
+}
+
 module.exports = {
   CAPABILITY,
   COMPONENT_SCHEMA,
@@ -232,4 +262,5 @@ module.exports = {
   splitRuntimePublicEntity,
   reconstructRuntimePublicEntity,
   reconstructLegacyPublicEntities,
+  reconstructLegacyPublicState,
 };

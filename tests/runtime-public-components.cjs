@@ -10,6 +10,7 @@ const {
   PUBLIC_FACT_CLASSIFICATION,
   splitRuntimePublicEntity,
   reconstructRuntimePublicEntity,
+  reconstructLegacyPublicState,
 } = require("../scripts/runtime-public-schema.cjs");
 const {
   CAPABILITY,
@@ -55,9 +56,9 @@ const EXAMPLES = Object.freeze({
     finalPortalExpired: false, gravityBonus: 0, localTime: 0, formTimes: [null, null, null, null] },
 });
 
-function binding() {
-  return { runId: "match-s8", connectionId: "session-s8", membershipId: "member-s8", playerId: "p1",
-    connectionEpoch: 1, wireVersion: "lbh-multiplayer-json-v2",
+function binding({ membershipId = "member-s8", connectionEpoch = 1 } = {}) {
+  return { runId: "match-s8", connectionId: "session-s8", membershipId, playerId: "p1",
+    connectionEpoch, wireVersion: "lbh-multiplayer-json-v2",
     capabilities: [CAPABILITY, MIXED_CAPABILITY, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, "static-manifest-v1"].sort(),
     manifestSchema: MANIFEST_SCHEMA, manifestHash: MANIFEST_HASH, authorityIncarnation: 3 };
 }
@@ -116,7 +117,8 @@ async function run() {
         `${category} example contains an unclassified field`);
       const components = splitRuntimePublicEntity(category, EXAMPLES[category]);
       const reconstructed = reconstructRuntimePublicEntity({ category, components: Object.fromEntries(
-        Object.entries(components).map(([name, value]) => [name, { revision: 1, value }])) });
+        [...Object.entries(components).map(([name, value]) => [name, { revision: 1, value }]),
+          ["runtimeOrder", { revision: 1, value: { index: 0 } }]]) });
       assert.deepStrictEqual(reconstructed, JSON.parse(JSON.stringify(EXAMPLES[category])));
     }
     assert(PUBLIC_FACT_CLASSIFICATION.staticSession.includes("seed")
@@ -125,8 +127,16 @@ async function run() {
       const lifecycleExample = { ...example, sourceId: `${category}-source`, incarnation: 2 };
       const components = splitRuntimePublicEntity(category, lifecycleExample);
       const reconstructed = reconstructRuntimePublicEntity({ category, components: Object.fromEntries(
-        Object.entries(components).map(([name, value]) => [name, { revision: 1, value }])) });
+        [...Object.entries(components).map(([name, value]) => [name, { revision: 1, value }]),
+          ["runtimeOrder", { revision: 1, value: { index: 0 } }]]) });
       assert.deepStrictEqual(reconstructed, lifecycleExample, `${category} lifecycle identity did not round-trip`);
+    }
+    for (const pathData of [
+      { wellIndex: 0, semiA: 0.3, semiB: 0.2, tilt: 1, speed: 0.2 },
+      { wellA: 0, wellB: 1, speed: 0.2 },
+      { heading: 1.5, speed: 0.2, maxAge: 30 },
+    ]) {
+      assert.doesNotThrow(() => splitRuntimePublicEntity("planetoid", { ...EXAMPLES.planetoid, pathData }));
     }
   });
 
@@ -138,9 +148,18 @@ async function run() {
     (error) => error.code === "unknown-source-field");
     assert.throws(() => splitRuntimePublicEntity("new-category", { id: "x" }),
       (error) => error.code === "unknown-source-category");
+    const playerIdentity = splitRuntimePublicEntity("player", EXAMPLES.player).runtimeIdentity;
+    assert.throws(() => reconstructRuntimePublicEntity({ category: "player", components: {
+      runtimeIdentity: { revision: 1, value: playerIdentity },
+      runtimeOrder: { revision: 1, value: { index: 0 } },
+      appearance: { revision: 1, value: { visible: true } },
+    } }), (error) => error.code === "unknown-runtime-component");
+    assert.throws(() => reconstructRuntimePublicEntity({ category: "player", components: {
+      runtimeIdentity: { revision: 1, value: playerIdentity },
+    } }), (error) => error.code === "missing-runtime-order");
   });
 
-  await runner.run("ticket-bound split schema publishes 10 Hz motion-only deltas and atomically reconstructs legacy values", () => {
+  await runner.run("ticket-bound split schema keeps the configured motion target and atomically reconstructs legacy values", () => {
     const id = binding();
     const authority = createRuntimeStatePairAuthority({ matchId: id.runId, authorityIncarnation: 3,
       manifestSchema: MANIFEST_SCHEMA, manifestHash: MANIFEST_HASH,
@@ -153,6 +172,8 @@ async function run() {
     assert(acceptedFirst.accepted && authority.acknowledge(id, acceptedFirst.ack).accepted);
     const byCategory = new Map(acceptedFirst.state.legacyPublicEntities.map((entry) => [entry.category, entry.value]));
     for (const [category, value] of Object.entries(firstSource.examples)) assert.deepStrictEqual(byCategory.get(category), value);
+    assert.deepStrictEqual(acceptedFirst.state.legacyPublicState, firstSource.publicFrame.state);
+    assert.deepStrictEqual(reconstructLegacyPublicState(acceptedFirst.state.public), firstSource.publicFrame.state);
     assert(!JSON.stringify(acceptedFirst.state.public).includes("private"));
 
     const secondSource = frames(id, 2, (examples) => { examples.player.wx = 1.25; examples.player.vx = 0.25; });
@@ -165,10 +186,11 @@ async function run() {
     const acceptedSecond = client.receive(encodeWireFrame(second.frame, { direction: SERVER_TO_CLIENT }));
     assert(acceptedSecond.accepted && acceptedSecond.state.legacyPublicEntities
       .find((entry) => entry.category === "player").value.wx === 1.25);
+    assert.deepStrictEqual(acceptedSecond.state.legacyPublicState, secondSource.publicFrame.state);
     assert(authority.acknowledge(id, acceptedSecond.ack).accepted);
     const diagnostics = authority.diagnostics();
-    assert.deepStrictEqual(diagnostics.runtimePublicComponents.cadence,
-      { motionHz: 10, otherGroups: "on-change", lowerCadenceTimers: 0 });
+    assert.deepStrictEqual(diagnostics.runtimePublicComponents.configuredCadence,
+      { motionTargetHz: 10, otherGroups: "on-change", lowerCadenceTimers: 0 });
     assert.strictEqual(diagnostics.publisher.ackRejectDiagnostics.total, 0);
 
     authority.recover(id);
@@ -178,8 +200,113 @@ async function run() {
     const acceptedRecovery = client.receive(encodeWireFrame(recovery.frame, { direction: SERVER_TO_CLIENT }));
     assert(acceptedRecovery.accepted && acceptedRecovery.state.legacyPublicEntities
       .find((entry) => entry.category === "player").value.wx === 1.5);
+    assert.deepStrictEqual(acceptedRecovery.state.legacyPublicState, thirdSource.publicFrame.state);
     authority.disconnect(id);
     assert.strictEqual(authority.diagnostics().publisher.recipients, 0);
+  });
+
+  await runner.run("bounded admission churn cleans owner history atomically", () => {
+    const authority = createRuntimeStatePairAuthority({ matchId: "match-s8", authorityIncarnation: 3,
+      manifestSchema: MANIFEST_SCHEMA, manifestHash: MANIFEST_HASH,
+      publisherOptions: { maxRecipients: 2 } });
+    for (let index = 0; index < 6; index += 1) {
+      const id = binding({ membershipId: `member-${index}`, connectionEpoch: index + 1 });
+      authority.admit(id, claims(id));
+      assert.strictEqual(authority.disconnect(id), true);
+      assert.strictEqual(authority.diagnostics().admissions, 0);
+    }
+    assert.strictEqual(authority.diagnostics().publisher.recipients, 0);
+  });
+
+  await runner.run("coalesced change-return converges through one recovery keyframe without a revision-only delta", () => {
+    const id = binding();
+    const authority = createRuntimeStatePairAuthority({ matchId: id.runId, authorityIncarnation: 3,
+      manifestSchema: MANIFEST_SCHEMA, manifestHash: MANIFEST_HASH });
+    authority.admit(id, claims(id));
+    const client = receiver(id);
+    const firstSource = frames(id, 1);
+    const first = authority.publish(id, firstSource.publicFrame, firstSource.ownerFrame);
+    const firstAccepted = client.receive(encodeWireFrame(first.frame, { direction: SERVER_TO_CLIENT }));
+    assert(firstAccepted.accepted && authority.acknowledge(id, firstAccepted.ack).accepted);
+
+    const changedSource = frames(id, 2, (examples) => { examples.player.status = "disabled"; });
+    authority.publish(id, changedSource.publicFrame, changedSource.ownerFrame);
+
+    const returnedSource = frames(id, 3);
+    const returned = authority.publish(id, returnedSource.publicFrame, returnedSource.ownerFrame);
+    assert.strictEqual(returned.frame.public.kind, "keyframe");
+    const gap = client.receive(encodeWireFrame(returned.frame, { direction: SERVER_TO_CLIENT }));
+    assert(!gap.accepted && gap.reason === "frame-gap");
+    authority.recover(id);
+    const recoverySource = frames(id, 4);
+    const recovery = authority.publish(id, recoverySource.publicFrame, recoverySource.ownerFrame);
+    assert(recovery.frame.public.kind === "keyframe" && recovery.frame.owner.kind === "keyframe");
+    const returnedAccepted = client.receive(encodeWireFrame(recovery.frame, { direction: SERVER_TO_CLIENT }));
+    assert(returnedAccepted.accepted && authority.acknowledge(id, returnedAccepted.ack).accepted);
+    assert.deepStrictEqual(returnedAccepted.state.legacyPublicState, recoverySource.publicFrame.state);
+    assert.strictEqual(authority.diagnostics().publisher.keyframeReasons["semantic-fallback:revision-without-change"], 1);
+    authority.disconnect(id);
+  });
+
+  await runner.run("recipient scheduling skew cannot advance another recipient component revision", () => {
+    const authority = createRuntimeStatePairAuthority({ matchId: "match-s8", authorityIncarnation: 3,
+      manifestSchema: MANIFEST_SCHEMA, manifestHash: MANIFEST_HASH,
+      publisherOptions: { maxRecipients: 2 } });
+    const a = binding({ membershipId: "member-a", connectionEpoch: 1 });
+    const b = binding({ membershipId: "member-b", connectionEpoch: 1 });
+    authority.admit(a, claims(a));
+    authority.admit(b, claims(b));
+    const aClient = receiver(a);
+    const bClient = receiver(b);
+    for (const [id, client] of [[a, aClient], [b, bClient]]) {
+      const source = frames(id, 1);
+      const published = authority.publish(id, source.publicFrame, source.ownerFrame);
+      const accepted = client.receive(encodeWireFrame(published.frame, { direction: SERVER_TO_CLIENT }));
+      assert(accepted.accepted && authority.acknowledge(id, accepted.ack).accepted);
+    }
+    const advancedA = frames(a, 2, (examples) => { examples.player.wx = 2; });
+    const aPair = authority.publish(a, advancedA.publicFrame, advancedA.ownerFrame);
+    const aAccepted = aClient.receive(encodeWireFrame(aPair.frame, { direction: SERVER_TO_CLIENT }));
+    assert(aAccepted.accepted && authority.acknowledge(a, aAccepted.ack).accepted);
+    const laggedB = frames(b, 2);
+    const bPair = authority.publish(b, laggedB.publicFrame, laggedB.ownerFrame);
+    const bAccepted = bClient.receive(encodeWireFrame(bPair.frame, { direction: SERVER_TO_CLIENT }));
+    assert(bAccepted.accepted && authority.acknowledge(b, bAccepted.ack).accepted);
+    assert(!authority.diagnostics().publisher.keyframeReasons["semantic-fallback:revision-without-change"]);
+    authority.disconnect(a);
+    authority.disconnect(b);
+    assert.strictEqual(authority.diagnostics().runtimePublicComponents.trackedRecipientHistories, 0);
+  });
+
+  await runner.run("sustained four and eight recipient streams retain exact sparse recomposition without recovery", () => {
+    for (const population of [4, 8]) {
+      const authority = createRuntimeStatePairAuthority({ matchId: "match-s8", authorityIncarnation: 3,
+        manifestSchema: MANIFEST_SCHEMA, manifestHash: MANIFEST_HASH,
+        publisherOptions: { maxRecipients: 8, ackRejectDiagnostics: true } });
+      const clients = [];
+      for (let index = 0; index < population; index += 1) {
+        const id = binding({ membershipId: `member-${index}`, connectionEpoch: index + 1 });
+        authority.admit(id, claims(id));
+        clients.push({ id, receiver: receiver(id) });
+      }
+      for (let beat = 1; beat <= 30; beat += 1) {
+        for (const client of clients) {
+          const source = frames(client.id, beat, (examples) => {
+            examples.player.wx = 1 + beat / 100;
+            examples.fauna.phase = beat % 6;
+            if (beat % 5 === 0) examples.player.status = "disabled";
+          });
+          const published = authority.publish(client.id, source.publicFrame, source.ownerFrame);
+          const accepted = client.receiver.receive(encodeWireFrame(published.frame, { direction: SERVER_TO_CLIENT }));
+          assert(accepted.accepted, `${population} recipients beat ${beat} requested unexpected recovery`);
+          assert.deepStrictEqual(accepted.state.legacyPublicState, source.publicFrame.state);
+          assert(authority.acknowledge(client.id, accepted.ack).accepted);
+        }
+      }
+      assert.strictEqual(authority.diagnostics().publisher.ackRejectDiagnostics.total, 0);
+      for (const client of clients) authority.disconnect(client.id);
+      assert.strictEqual(authority.diagnostics().publisher.recipients, 0);
+    }
   });
 
   process.exit(runner.summary() ? 0 : 1);

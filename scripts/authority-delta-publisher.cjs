@@ -609,6 +609,7 @@ function createAuthorityDeltaPublisher(options = {}) {
             orderTransitions: Object.freeze(Object.fromEntries([...ackRejectDiagnostics.orderTransitions].sort())),
             boundedReasonCodes: 8,
             boundedRelations: 8,
+            orderScope: "global arrival order within one match authority lifetime; not per-recipient causal order",
           })
         : Object.freeze({ enabled: false }),
       preparedProjections: Object.freeze({ enabled: preparedProjectionsEnabled, ...operationCounters,
