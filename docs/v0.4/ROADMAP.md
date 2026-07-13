@@ -453,6 +453,48 @@ external validation exits 0 and admission exits 2 with no P1/P2 discrepancy.
 The full 28-suite `multiplayer-network` lane also passes once with retries
 disabled.
 
+**S12 codec-aware candidate gate — rejected:** clean pre-gate artifact
+`docs/v0.4/evidence/state-pair-s12/pre-gate` binds `223631e` and composite
+SHA-256 `00c6377fcf68b76dfac429054a35a0a9c55c7d93d8e043df7166a4eab5429845`.
+The publisher evaluates all four safe public/owner keyframe/delta combinations
+by exact positional wire size and reuses the chosen encoded frame. Every
+representative accepted pair still chooses `public-delta+owner-keyframe`, so
+the additional serializations recover no bytes and add authority work. Exact
+correctness and convergence pass; four and eight players
+still fail clock, cadence, and overload admission.
+
+**S13 receiver-process attribution — authority boundary remains limiting:**
+`docs/v0.4/evidence/state-pair-s13/` contains two fixed-seed, 20-second,
+order-counterbalanced machine-local review pairs. Both topologies keep one
+separate authority process for one match. The control runs all receivers in
+the coordinator process; the treatment gives each receiver its own process.
+At 1/4/8 players the control authority minima are 9.75–9.80 / 4.90–5.05 /
+2.90–2.95 Hz, while receiver-isolated authority minima are 9.80 / 5.00–5.05 /
+2.90–2.95 Hz. Paired isolation deltas are +0.10/0.00 Hz at four and
++0.05/-0.05 Hz at eight. Four and eight remain `DILATED`; projection/publish
+p95 is 116.64–144.70 ms and 258.78–268.99 ms respectively, already beyond the
+100 ms configured-10-Hz budget. Receiver/coordinator event-loop co-location is
+therefore not the primary cause of this experiment's authority-accepted
+cadence collapse.
+
+All four artifacts bind clean `3f95da8`, seed `1403105358`, exact 200-input /
+one-action schedules, complete one-second buckets with zero partial tail, and
+zero cumulative high-water or queue-policy transitions. Composite SHA-256s
+are `2e98ad29f8258b0ef92142192b564c3347196b34ba0be3b5b1c1d30a8e1f243a`
+(A control), `6aad9eb2cedcd37c4d42dbba980241c7bbbc80bbccef0c9888ba7a74abe85dee`
+(A isolated), `395df97d78fb9cbd8a6e07b13b56ba438b4d0be92d3a82514fe6a4be39870fd1`
+(B isolated), and `0d48ba4a14171584f4311ac531bdbd1fd5acfb0d8c6f9f3ceba6584a7615def8`
+(B control). Validator hardening at `c6a59d6` adds exact S12 run/file/scenario
+contracts plus stored cadence/admission semantic recomputation. Independent
+review finds no remaining P1/P2 after the topology wording correction.
+
+Observed isolated authority CPU is 29.72–29.79%, 61.72–61.97%, and
+80.05–80.45% of one core at the observed 1/4/8 cadence, measured over each
+recorded 20.755–20.979 second health-sample envelope. It is not a configured-
+10-Hz or fleet-packing cost. The next bounded lane is an exact composed-size
+selector that preserves the S12 winner but serializes it once. S13 does not
+admit hosted, concurrent-match, fleet, WAN, or 24/48/96 forecasts.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

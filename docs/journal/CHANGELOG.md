@@ -5,6 +5,32 @@
 
 ---
 
+## 2026-07-13 — v0.4 S12/S13 authority clock attribution
+
+- Rejected S12's exact-wire four-candidate selector as a product optimization.
+  It preserves correctness and chooses the smallest safe pair, but the
+  representative workload always selects the existing public-delta plus owner-
+  keyframe shape. The four full candidate serializations save no bytes and
+  leave 4/8-player clock, cadence, and overload admission closed.
+- Added S13's order-counterbalanced receiver-process attribution at clean
+  `3f95da8`. Both topologies retain one separate authority process per match;
+  the treatment moves each receiver out of the shared coordinator process and
+  into its own Node process. Four-player authority cadence changes by only
+  +0.10/0.00 Hz across the two pairs; eight changes by +0.05/-0.05 Hz. Four and
+  eight remain `DILATED`, with projection/publish p95 already beyond the 100 ms
+  configured-10-Hz budget.
+- Hardened CPU evidence to use atomic process timestamp/counter samples, made
+  workloads exact at 200 inputs plus one action per client, excluded partial
+  fixed-window tails, retained cumulative pressure-policy deltas, and expanded
+  semantic artifact validation. Validator fix `c6a59d6` closes the remaining
+  S12 run/file/scenario/aggregate contract gap; independent review reports no
+  remaining P1/P2.
+- Preserved four immutable composites under
+  `docs/v0.4/evidence/state-pair-s13/`. This is machine-local one-match
+  attribution, not a configured-10-Hz CPU curve or hosted/concurrent-match/
+  24/48/96 forecast. The next bounded lane is serialize-the-winner-once exact
+  composed-size selection.
+
 ## 2026-07-13 — v0.4 S11 converged positional admission decision
 
 - Added the full canonical S11 gate for prepared sparse positional state pairs

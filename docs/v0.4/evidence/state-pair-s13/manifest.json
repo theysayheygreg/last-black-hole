@@ -1,0 +1,58 @@
+{
+  "schema": "lbh-s13-paired-attribution-manifest-v1",
+  "commit": "3f95da88773729ac807f97142069906fc2ed8c0a",
+  "dirty": false,
+  "seed": 1403105358,
+  "s12Binding": {
+    "path": "docs/v0.4/evidence/state-pair-s12/pre-gate",
+    "compositeSha256": "00c6377fcf68b76dfac429054a35a0a9c55c7d93d8e043df7166a4eab5429845"
+  },
+  "commonContract": {
+    "populations": [1, 4, 8],
+    "warmupMs": 5000,
+    "measurementMs": 20000,
+    "inputHz": 10,
+    "plannedInputStepsPerClient": 200,
+    "plannedActionStepsPerClient": 1,
+    "configuredPublicationHz": 10,
+    "matchesPerAuthorityProcess": 1,
+    "authoritiesPerMatch": 1
+  },
+  "rounds": [
+    {
+      "round": "a",
+      "order": ["colocated", "isolated"],
+      "artifacts": {
+        "colocated": {
+          "path": "round-a/colocated",
+          "compositeSha256": "2e98ad29f8258b0ef92142192b564c3347196b34ba0be3b5b1c1d30a8e1f243a"
+        },
+        "isolated": {
+          "path": "round-a/isolated",
+          "compositeSha256": "6aad9eb2cedcd37c4d42dbba980241c7bbbc80bbccef0c9888ba7a74abe85dee"
+        }
+      }
+    },
+    {
+      "round": "b",
+      "order": ["isolated", "colocated"],
+      "artifacts": {
+        "isolated": {
+          "path": "round-b/isolated",
+          "compositeSha256": "395df97d78fb9cbd8a6e07b13b56ba438b4d0be92d3a82514fe6a4be39870fd1"
+        },
+        "colocated": {
+          "path": "round-b/colocated",
+          "compositeSha256": "0d48ba4a14171584f4311ac531bdbd1fd5acfb0d8c6f9f3ceba6584a7615def8"
+        }
+      }
+    }
+  ],
+  "boundaries": {
+    "colocated": "One authority process plus all receivers in the coordinator process/event loop.",
+    "isolated": "One authority process, one coordinator process, and one receiver process per client.",
+    "networkBytes": "Exact UTF-8 application bytes accepted by authority ws.send callbacks; excludes WebSocket, TCP/IP, TLS/WSS, WAN, compression, and retransmission overhead.",
+    "authorityCpu": "Cumulative authority process CPU divided by its exact recorded 20.755-20.979 second health-sample timestamp delta; includes health polling and test-only replication accounting.",
+    "decision": "Machine-local one-match attribution only; not a hosted fleet, concurrent-match, 10 Hz capacity, or 24/48/96-client forecast."
+  }
+}

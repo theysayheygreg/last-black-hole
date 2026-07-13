@@ -2852,3 +2852,30 @@ same admission gate.
 **Door status:** Closed for current product admission, implicit cadence
 reduction, compression-first, and AOI-first. Open for one bounded positional
 schema cleanup prototype with unchanged correctness and recovery contracts.
+
+### Q: What does S13 establish about the S12 cadence collapse?
+
+| Date | Event |
+|------|-------|
+| Jul 13 | S12 evaluates and serializes all four safe public/owner lane combinations, but every representative pair still chooses public delta plus owner keyframe and 4/8-player cadence collapses. |
+| Jul 13 | S13 runs two fixed-seed, order-counterbalanced machine-local pairs. Both use one separate authority process for one match; only receiver placement changes from one shared coordinator process to one process per receiver. |
+| Jul 13 | Decision: receiver/coordinator event-loop co-location is not the primary cause. Per-receiver process isolation changes four-player authority cadence by +0.10/0.00 Hz and eight-player cadence by +0.05/-0.05 Hz; all 4/8 runs remain `DILATED`. |
+| Jul 13 | Next slice: preserve the exact S12 winner but avoid four full candidate serializations. Do not infer configured-10-Hz, concurrent-match, hosted, or 24/48/96 capacity from throttled-cadence CPU. |
+
+**Options:**
+1. **Move each receiver into its own process and call the problem solved** —
+   rejected by the paired evidence; authority cadence does not materially
+   recover.
+2. **Remove repeated candidate serialization at the authority boundary**
+   (chosen) — attacks the measured projection/publish bottleneck while keeping
+   the exact pair winner and protocol semantics.
+3. **Forecast larger matches or fleet packing now** — rejected until one
+   authority can sustain the target cadence and heavier sim sizes are measured
+   directly.
+
+**Where it landed:** Option 2. The S13 result attributes this experiment's
+collapse to work at or inside the instrumented authority boundary, not to the
+receivers sharing the coordinator event loop.
+**Door status:** Closed for receiver-placement as the primary fix and for
+high-count/hosted extrapolation. Open for serialize-the-winner-once authority
+work with unchanged correctness, privacy, recovery, and exact-wire choice.
