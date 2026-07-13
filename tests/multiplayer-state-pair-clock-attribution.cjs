@@ -257,7 +257,7 @@ async function runScenario(population, runDir, commit) {
         accountingBoundary: "Exact UTF-8 application bytes accepted by authority ws.send callbacks; excludes WebSocket/TCP/TLS/WAN overhead." },
       performance: {
         authority: { cpuUsage: cpuDelta(startHealth.process.cpuUsage, endHealth.process.cpuUsage,
-          endAt - startAt), eventLoopDelay: endHealth.multiplayer.projection.benchmarkEventLoopDelay,
+          rawEndAt - rawStartAt), eventLoopDelay: endHealth.multiplayer.projection.benchmarkEventLoopDelay,
           simTickMs: endHealth.multiplayer.projection.accounting.costDistributions.simTickMs,
           projectionAndPublishMs: endHealth.multiplayer.projection.accounting.costDistributions.projectionReplicationMs },
         clients: clients.map((client) => ({ label: client.label, pid: client.pid,
