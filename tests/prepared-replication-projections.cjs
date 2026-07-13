@@ -2,6 +2,7 @@
 "use strict";
 
 const assert = require("assert");
+const crypto = require("crypto");
 const { TestRunner } = require("./helpers.cjs");
 const {
   prepareProjection,
@@ -92,6 +93,7 @@ async function run() {
       maxPendingPairsPerRecipient: 2, maxRetainedBytesPerRecipient: 512 * 1024 });
     let legacyClient = receiver();
     let preparedClient = receiver();
+    const equivalenceTranscript = [];
     const compare = (pairInputs, { acknowledge = true, receive = true } = {}) => {
       const left = legacy.publish(pairInputs);
       const right = prepared.publish(pairInputs);
@@ -99,6 +101,7 @@ async function run() {
       const rightWire = encodeWireFrame(right.frame, { direction: SERVER_TO_CLIENT });
       assert.strictEqual(rightWire, leftWire, "prepared path changed encoded wire bytes");
       assert.deepStrictEqual(right.frame, left.frame, "prepared path changed canonical frame data");
+      equivalenceTranscript.push(leftWire);
       if (receive) {
         const leftResult = legacyClient.receive(leftWire);
         const rightResult = preparedClient.receive(rightWire);
@@ -148,6 +151,8 @@ async function run() {
     assert.strictEqual(afterDisconnect.recipients, 0);
     assert.strictEqual(afterDisconnect.preparedProjections.pendingReferences, 0);
     assert.strictEqual(afterDisconnect.preparedProjections.ackedReferences, 0);
+    const digest = crypto.createHash("sha256").update(equivalenceTranscript.join("\n")).digest("hex");
+    console.log(`  exact prepared/off equivalence frames=${equivalenceTranscript.length} sha256=${digest}`);
   });
 
   await runner.run("opaque prepared values reject forgery mutation and cross-context reuse", async () => {
@@ -199,6 +204,19 @@ async function run() {
     assert(right.hashes < left.hashes, JSON.stringify({ left, right }));
     assert.strictEqual(right.preparedDiffs, right.diffs);
     assert.strictEqual(left.preparedDiffs, 0);
+  });
+
+  await runner.run("prepared and legacy malformed-input defenses reject with the same structured codes", async () => {
+    for (const preparedProjections of [false, true]) {
+      const publisher = createAuthorityDeltaPublisher({ preparedProjections });
+      assert.throws(() => publisher.publish({ ...inputs(1), publicView: null }),
+        (error) => error?.code === "unknown-schema");
+      const negativeZero = inputs(1);
+      negativeZero.publicView.tick = -0;
+      negativeZero.ownerView.tick = -0;
+      assert.throws(() => publisher.publish(negativeZero),
+        (error) => error?.code === "invalid-view");
+    }
   });
 
   if (!runner.summary()) process.exitCode = 1;

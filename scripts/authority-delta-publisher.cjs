@@ -232,6 +232,11 @@ function createAuthorityDeltaPublisher(options = {}) {
   }
 
   function prepareCurrent(identity, input, supplied, lane) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      // Preserve the canonical validator's structured fail-closed error instead
+      // of dereferencing malformed source input while building cache identity.
+      normalizeView(input);
+    }
     if (!preparedProjectionsEnabled) {
       operationCounters.canonicalizations += 1;
       return Object.freeze({ view: normalizeView(input), prepared: null, context: null });

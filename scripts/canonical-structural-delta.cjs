@@ -262,7 +262,9 @@ function normalizeViewDetails(input) {
     if (typeof input[field] !== "string" || !input[field]) fail("invalid-view", `${field} is required`);
   }
   for (const field of ["authorityEpoch", "connectionEpoch", "ballparkEpoch", "tick", "eventWatermark", "fieldRevision"]) {
-    if (!Number.isSafeInteger(input[field]) || input[field] < 0) fail("invalid-view", `${field} must be a non-negative safe integer`);
+    if (!Number.isSafeInteger(input[field]) || input[field] < 0 || Object.is(input[field], -0)) {
+      fail("invalid-view", `${field} must be a non-negative safe integer`);
+    }
   }
   if (typeof input.simTime !== "number" || !Number.isFinite(input.simTime)) fail("invalid-view", "simTime must be finite");
   if (!isPlainObject(input.world)) fail("invalid-view", "world must be an object");
