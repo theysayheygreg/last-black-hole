@@ -31,6 +31,9 @@ const MIN_HEALTHY_PUBLICATION_HZ = TARGET_PUBLICATION_HZ * 0.90;
 const ATTRIBUTION_SAMPLE_FRAMES = 512;
 const TARGET_BPS = 64 * 1024;
 const SENSITIVITY_BPS = 80 * 1024;
+const PRESSURE_POLICY_COUNTERS = ["connectionsCrossedTransportHighWater",
+  "transportHighWaterCrossings", "connectionsHitQueuePolicy", "queuePolicyLimitCrossings",
+  "queuePolicyEvents", "queuePolicyRebases", "queuePolicyDisconnects"];
 const S0 = Object.freeze({
   1: { downlinkBps: 274607, pairP50: 28501, pairP95: 30578 },
   4: { downlinkBps: 255652, pairP50: 26817, pairP95: 28790 },
@@ -518,6 +521,15 @@ function deltaHealth(before, after) {
   };
 }
 
+function adapterPressureDelta(before, after) {
+  const start = before.multiplayer.adapter.pressure;
+  const end = after.multiplayer.adapter.pressure;
+  const policyDelta = Object.fromEntries(PRESSURE_POLICY_COUNTERS.map((key) =>
+    [key, (end.policy[key] || 0) - (start.policy[key] || 0)]));
+  return { start, end, policyDelta,
+    noHighWaterOrQueuePolicyTransition: Object.values(policyDelta).every((value) => value === 0) };
+}
+
 function numericComparison(s4, s3) {
   if (!Number.isFinite(s4) || !Number.isFinite(s3)) return { s3, s4, delta: null, changeFraction: null };
   return { s3, s4, delta: s4 - s3, changeFraction: s3 === 0 ? null : (s4 - s3) / s3 };
@@ -666,16 +678,20 @@ async function runWorkload(clientsRef, durationMs, { port, memorySamples, churn 
   const plannedInputSteps = Math.floor(durationMs / intervalMs);
   let nextStep = 0;
   let submittedInputSteps = 0;
+  let submittedActionSteps = 0;
   let skippedInputSteps = 0;
+  let lateInputSteps = 0;
   let lastMemorySecond = -1;
   while (nextStep < plannedInputSteps) {
     const target = started + nextStep * intervalMs;
-    const delay = target - performance.now();
-    if (delay > 0) await sleep(delay);
+    let delay = target - performance.now();
+    while (delay > 0) {
+      await sleep(delay);
+      delay = target - performance.now();
+    }
     const elapsed = performance.now() - started;
-    if (elapsed >= durationMs) break;
-    const step = Math.min(plannedInputSteps - 1, Math.floor(elapsed / intervalMs));
-    if (step > nextStep) skippedInputSteps += step - nextStep;
+    const step = nextStep;
+    if (performance.now() - target >= intervalMs) lateInputSteps += 1;
     await churn?.(elapsed, clientsRef);
     const clients = clientsRef.current.filter((client) => client.ws.readyState === WebSocket.OPEN && !client.error);
     for (let seat = 0; seat < clients.length; seat += 1) {
@@ -692,6 +708,7 @@ async function runWorkload(clientsRef, durationMs, { port, memorySamples, churn 
           actionSeq: ++client.actionSeq, commandSeq: ++client.commandSeq,
           actionKind: "pulse", payload: {}, clientTimeMs: Date.now() });
       }
+      submittedActionSteps += 1;
     }
     const second = Math.floor(elapsed / 1000);
     if (second !== lastMemorySecond) {
@@ -706,13 +723,14 @@ async function runWorkload(clientsRef, durationMs, { port, memorySamples, churn 
       lastMemorySecond = second;
     }
     submittedInputSteps += 1;
-    nextStep = step + 1;
+    nextStep += 1;
   }
   const remaining = started + durationMs - performance.now();
   if (remaining > 0) await sleep(remaining);
   return { wallStartedAt, wallEndedAt: Date.now(), requestedDurationMs: durationMs,
     actualDurationMs: performance.now() - started, plannedInputSteps, submittedInputSteps,
-    skippedInputSteps };
+    plannedActionSteps: Math.floor((plannedInputSteps - 1) / (15 * INPUT_HZ)),
+    submittedActionSteps, skippedInputSteps, lateInputSteps };
 }
 
 async function setupPopulation(port, population, scenarioName) {
@@ -1225,6 +1243,7 @@ async function runScenario({ population, scenario, runDir, commit }) {
         && proof.mismatches === 0 ? body : false;
     }, `${scenario}/${population} complete stage-profile beats`, 5000)
       : (await request(port, "/health/compact")).body;
+    const adapterPressure = adapterPressureDelta(startHealth, endHealth);
     for (const client of clientsRef.current) await closeClient(client);
     await waitFor(async () => {
       const health = (await request(port, "/health/compact")).body;
@@ -1332,6 +1351,8 @@ async function runScenario({ population, scenario, runDir, commit }) {
           diagnostics.closed === true && diagnostics.ledger.entries === 0 && diagnostics.ledger.bytes === 0
           && (!S11_GATE || diagnostics.retainedPairHistory === 0)),
       accountingComplete: accounting.overflow === 0 && accounting.evidenceFailure === null,
+      noHighWaterOrQueuePolicyTransition: churn
+        || adapterPressure.noHighWaterOrQueuePolicyTransition,
       projectionErrorsExactlyZero: endHealth.multiplayer.projection.errors
         - startHealth.multiplayer.projection.errors === 0,
       noNormalStatePairRetransmits: churn || selected.every((event) => !(event.direction === "authority->client"
@@ -1639,7 +1660,8 @@ async function runScenario({ population, scenario, runDir, commit }) {
         boundedState: { publisherAfterCleanup: publisher,
           maxPublisherPendingPairs: Math.max(...memorySamples.map((sample) => sample.publisher.pendingPairs)),
           maxPublisherRetainedBytes: Math.max(...memorySamples.map((sample) => sample.publisher.retainedBytes)),
-          maxAdapterQueuedBytes: Math.max(...memorySamples.map((sample) => sample.adapter.queuedBytes)) } },
+          maxAdapterQueuedBytes: Math.max(...memorySamples.map((sample) => sample.adapter.queuedBytes)),
+          adapterPressure } },
       faults: faultActions, clients: clientSummary, correctness, admission,
       diagnostics: { projectionErrors: endHealth.multiplayer.projection.errors - startHealth.multiplayer.projection.errors,
         skippedBeats: endHealth.multiplayer.projection.skippedBeats - startHealth.multiplayer.projection.skippedBeats,
@@ -2026,6 +2048,9 @@ function validateArtifact(directory) {
     s12CodecAwareEvidence: aggregate.gate !== "s12" || scenarioFiles.every((entry) => {
       const choice = entry.diagnostics?.statePair?.publisher?.codecPairChoice;
       const adapter = entry.diagnostics?.adapterStatePair?.positionalJson;
+      const pressure = entry.performance?.boundedState?.adapterPressure;
+      const pressureDeltaRecomputed = pressure && Object.fromEntries(PRESSURE_POLICY_COUNTERS.map((key) =>
+        [key, (pressure.end.policy[key] || 0) - (pressure.start.policy[key] || 0)]));
       const chosen = Object.values(choice?.combinationsChosen || {}).reduce((sum, value) => sum + value, 0);
       return JSON.stringify(choice?.tieOrder) === JSON.stringify([
         "public-keyframe+owner-keyframe", "public-keyframe+owner-delta",
@@ -2038,6 +2063,12 @@ function validateArtifact(directory) {
         && choice.encodeMilliseconds?.p95 >= 0
         && adapter?.reusedEncodedFrames > 0
         && adapter.reusedDigestVerified === adapter.reusedEncodedFrames
+        && entry.window?.workload?.submittedInputSteps === entry.window?.workload?.plannedInputSteps
+        && entry.window?.workload?.submittedActionSteps === entry.window?.workload?.plannedActionSteps
+        && entry.window?.workload?.skippedInputSteps === 0
+        && JSON.stringify(pressureDeltaRecomputed) === JSON.stringify(pressure?.policyDelta)
+        && pressure?.noHighWaterOrQueuePolicyTransition === true
+        && entry.correctness.noHighWaterOrQueuePolicyTransition === true
         && entry.correctness.accountingComplete === true
         && entry.clients.every((client) => client.receiverDiagnostics?.ledger
           && client.receiverDiagnostics.ledger.bytes <= client.receiverDiagnostics.limits.maxRetainedBytes

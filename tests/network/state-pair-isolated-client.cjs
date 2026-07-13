@@ -22,7 +22,9 @@ const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
 
 let state = null;
-let inputTimer = null;
+let inputTimers = [];
+let workload = null;
+let measurementStartTimer = null;
 let measuring = false;
 let measurement = null;
 
@@ -78,16 +80,21 @@ function send(frame) {
   return true;
 }
 
-function resetMeasurement() {
-  eventLoop.reset();
-  measurement = {
-    startedAt: Date.now(), cpuStart: process.cpuUsage(), acceptedEvents: [],
+function resetMeasurement(startAt) {
+  if (measurementStartTimer) clearTimeout(measurementStartTimer);
+  measuring = false;
+  measurement = { scheduledStartAt: startAt, acceptedEvents: [],
     decodeMs: [], applyMs: [], ackMs: [], uplinkFrames: 0, uplinkBytes: 0,
     maxBufferedAmount: Number(state?.ws?.bufferedAmount) || 0,
     inputSteps: 0, errors: [],
   };
-  measuring = true;
-  return measurement.startedAt;
+  measurementStartTimer = setTimeout(() => {
+    eventLoop.reset();
+    measurement.startedAt = Date.now();
+    measurement.cpuStart = process.cpuUsage();
+    measuring = true;
+  }, Math.max(0, startAt - Date.now()));
+  return startAt;
 }
 
 function eventLoopSnapshot() {
@@ -100,6 +107,7 @@ function eventLoopSnapshot() {
 
 function stopMeasurement() {
   measuring = false;
+  if (!measurement?.cpuStart) throw new Error("measurement did not start");
   const endedAt = Date.now();
   const cpu = process.cpuUsage(measurement.cpuStart);
   const wallUs = Math.max(1, (endedAt - measurement.startedAt) * 1000);
@@ -121,10 +129,26 @@ function stopMeasurement() {
   };
 }
 
-function startInputs() {
-  if (inputTimer) return;
-  let step = 0;
-  inputTimer = setInterval(() => {
+function stopInputs() {
+  for (const timer of inputTimers) clearTimeout(timer);
+  inputTimers = [];
+  const summary = workload;
+  if (summary) {
+    summary.finalInputSeq = state?.inputSeq ?? null;
+    summary.inputSequenceAdvance = Number.isSafeInteger(summary.finalInputSeq)
+      ? summary.finalInputSeq - summary.lastInputSeq : null;
+  }
+  workload = null;
+  return summary;
+}
+
+function startInputs({ startAt, durationMs, phase }) {
+  stopInputs();
+  const plannedInputSteps = Math.floor(durationMs / (1000 / INPUT_HZ));
+  workload = { phase, startAt, durationMs, plannedInputSteps, submittedInputSteps: 0,
+    submittedActionSteps: 0, lastInputSeq: state.inputSeq };
+  for (let step = 0; step < plannedInputSteps; step += 1) {
+    const timer = setTimeout(() => {
     if (!state || state.ws.readyState !== WebSocket.OPEN) return;
     const phase = ((step + state.seat * 7) % 64) / 64 * Math.PI * 2;
     send({ type: "input", inputSeq: ++state.inputSeq,
@@ -135,10 +159,14 @@ function startInputs() {
       send({ type: "action", actionId: `${state.label}-pulse-${step}`,
         actionSeq: ++state.actionSeq, commandSeq: ++state.commandSeq,
         actionKind: "pulse", payload: {}, clientTimeMs: Date.now() });
+      workload.submittedActionSteps += 1;
     }
     if (measuring) measurement.inputSteps += 1;
-    step += 1;
-  }, 1000 / INPUT_HZ);
+      workload.submittedInputSteps += 1;
+    }, Math.max(0, startAt + step * (1000 / INPUT_HZ) - Date.now()));
+    inputTimers.push(timer);
+  }
+  return { phase, startAt, durationMs, plannedInputSteps };
 }
 
 async function initialize(config) {
@@ -262,14 +290,13 @@ async function initialize(config) {
   await waitFor(() => state.acceptedPairs > 0 || state.error || state.close,
     `${state.label} first state pair`);
   if (state.error || state.close) throw new Error(state.error || JSON.stringify(state.close));
-  startInputs();
   return { label: state.label, pid: process.pid, membershipId: state.welcome.membershipId,
     connectionEpoch: state.welcome.connectionEpoch, acceptedPairs: state.acceptedPairs };
 }
 
 async function shutdown() {
-  if (inputTimer) clearInterval(inputTimer);
-  inputTimer = null;
+  stopInputs();
+  if (measurementStartTimer) clearTimeout(measurementStartTimer);
   if (state?.ws && state.ws.readyState !== WebSocket.CLOSED) {
     state.ws.close(1000, "attribution complete");
     await waitFor(() => state.close, `${state.label} close`, 1500)
@@ -284,8 +311,10 @@ process.on("message", async (message) => {
   const { requestId, command } = message || {};
   try {
     if (command === "init") reply(requestId, await initialize(message.config));
-    else if (command === "measure-start") reply(requestId, { startedAt: resetMeasurement() });
+    else if (command === "measure-start") reply(requestId, { scheduledStartAt: resetMeasurement(message.startAt) });
     else if (command === "measure-stop") reply(requestId, stopMeasurement());
+    else if (command === "workload-start") reply(requestId, startInputs(message.workload));
+    else if (command === "workload-stop") reply(requestId, stopInputs());
     else if (command === "shutdown") {
       reply(requestId, await shutdown());
       setImmediate(() => process.exit(0));
