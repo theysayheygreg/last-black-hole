@@ -450,3 +450,12 @@ old-epoch ACK necessarily creates one extra replay attempt; all current queue
 and pending metrics were zero and the identity ledger was closed. Preserve the
 failure and replace the equality with pending/retained plus identity-level
 drain truth before one from-zero rerun.
+
+`107ea36` implements the exact drain conjunction: every live queue/pending
+metric is zero; replay attempt minus unique event-ACK count equals the one
+deliberately withheld old-epoch fact; its successor replay has the same
+consequence identity and dual ACK retirement; and queued equals retired plus
+the one causal old-epoch cleanup reset across incarnations. The one authorized
+clean rerun then passed every non-traffic gate and failed minute-five traffic at
+2,570,550 B/s. This is the known public full-JSON debt. Preserve the artifact
+and do not rerun smoke until replication changes.

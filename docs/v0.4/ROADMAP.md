@@ -279,6 +279,23 @@ deliberate old-epoch hold, even though pending/reliable queues and exact
 identity retirement are closed. Preserve that failure and fix the drain oracle
 before another smoke or normal run.
 
+`107ea36` closes that drain oracle with exact cross-incarnation conservation.
+Its one authorized clean rerun passed drain, topology, replay, ACK, privacy,
+HTTP, bounds, and cleanup, then failed only traffic: minute five measured
+2,570,550 B/s aggregate full JSON. Preserve the failure and do not rerun smoke
+until replication architecture changes the measured debt.
+
+**S0 directional accounting — accepted:** `69b835f` plus independent fix-
+forward `5d1e36f` provides bounded, default-off, identity-safe accounting for
+direction, wire class, projection kind, stable recipient, encoded accepted
+bytes, frame percentiles, cadence, terminal outcomes, retransmits, and ACK
+retirement. Reconnect pending ordinals canonicalize to stable recipients;
+retention and overflow fail closed; callbacks are fenced by run, connection,
+and outbound epoch. Focused accounting is 17/17, adapter core 28/28, and all 15
+multiplayer-network suites pass. The first two capture attempts remain non-
+credit failures from the pre-fix ledger. Fresh 1/4/8 full-JSON capture is the
+active evidence lane; it cannot claim delta or 64 KiB acceptance.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

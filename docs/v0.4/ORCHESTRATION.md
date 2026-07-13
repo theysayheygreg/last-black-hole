@@ -321,6 +321,13 @@ Singularity that:
   equality between physical replay attempts and unique event ACKs. Fix that
   drain oracle from pending queues plus exact identity closure, then rerun once
   from zero. Keep canonical normal/churn blocked throughout.
+- The drain correction landed at `107ea36`; its one clean smoke rerun now fails
+  only the known full-JSON traffic ceiling, so stop repeating smoke until the
+  replication mechanism changes. S0 accounting is independently accepted at
+  `5d1e36f` after reconnect attribution, bounds, retransmit, class, terminal-
+  conservation, retirement, and epoch-fence fixes. Resume fresh 1/4/8 capture
+  from zero; preserve `62aab51`/`f19f4c4` capture failures as non-credit and do
+  not infer baseline rates from them.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

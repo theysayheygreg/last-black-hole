@@ -564,3 +564,16 @@ acceptance. Binary, compression, and AOI remain ordered, measured follow-ups;
 none is pre-authorized by this packet. No local loopback result supports WAN,
 WSS/TLS edge, hosted cost, Linux packet behavior, concurrent-match packing, or
 24/48/96-client claims.
+
+## S0 status — accepted, capture pending
+
+Directional accounting landed at `69b835f` and independent fix-forward
+`5d1e36f`. The default-off ledger now attributes reconnect traffic to stable
+recipients, bounds every retained set/interval/event collection, recognizes
+reliable retransmission across connection epochs, separates projection kind,
+records every offered terminal outcome and identity-bearing ACK retirement,
+and fences callbacks by run, connection, and outbound epoch. Focused accounting
+passes 17/17, adapter core 28/28, and the full multiplayer-network lane 15/15.
+Two pre-fix capture artifacts are preserved as non-credit failures; fresh
+clean 1/4/8 v1 full-JSON capture is required before S1 and cannot claim delta
+or 64 KiB/s acceptance.

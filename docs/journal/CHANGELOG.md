@@ -96,6 +96,19 @@
   unique event ACKs by the one deliberately withheld old-epoch ACK, although
   all actual queues and the identity ledger were closed. The artifact remains
   a cleanly torn-down non-credit failure; no automatic retry occurred.
+- Fixed the cross-epoch soak drain oracle at `107ea36`. One from-zero smoke
+  proved exact physical-attempt versus logical-retirement conservation and then
+  failed only the known traffic debt: minute five reached 2,570,550 B/s. All
+  topology, replay, ACK, privacy, bounds, HTTP, and cleanup gates passed; the
+  traffic failure remains immutable and no threshold was weakened.
+- Implemented S0 directional replication accounting at `69b835f` and closed
+  independent exactness findings at `5d1e36f`. The opt-in ledger now binds
+  reconnect traffic to stable recipients, bounds every retained collection,
+  detects retransmits across epochs, separates projection kinds, conserves all
+  offered terminal outcomes, records identity-bearing ACK retirement, and
+  fences stale callbacks by run/connection/outbound epoch. Earlier capture
+  artifacts are preserved non-credit failures; fresh 1/4/8 capture restarts on
+  the accepted ledger.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval
