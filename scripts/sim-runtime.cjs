@@ -7082,6 +7082,7 @@ const server = http.createServer(async (req, res) => {
         process: {
           pid: process.pid,
           uptimeSec: Number(process.uptime().toFixed(3)),
+          cpuUsage: process.cpuUsage(),
           memory: process.memoryUsage(),
         },
         idleState,
