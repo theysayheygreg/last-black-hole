@@ -15,6 +15,11 @@ const MAX_DEPTH = 32;
 const MAX_NODES = 100000;
 const MAX_RETAINED_IDENTITIES = 8192;
 const MAX_RETAINED_IDENTITY_BYTES = 512 * 1024;
+const PREPARED_CONTEXT_KEYS = Object.freeze([
+  "schema", "manifestHash", "matchId", "sessionId", "authorityIncarnation",
+  "recipientId", "recipientIncarnation", "lane", "statePairId", "snapshotId", "tick",
+]);
+const preparedProjections = new WeakMap();
 
 // S1 owns these immutable facts. S2 projections may refer to the manifest hash,
 // but must not repeat the extracted definitions.
@@ -61,6 +66,10 @@ function assertExactKeys(value, allowed, path) {
 
 function sha256(value) {
   return `sha256:${crypto.createHash("sha256").update(canonicalJsonBytes(value)).digest("hex")}`;
+}
+
+function sha256Bytes(bytes) {
+  return `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`;
 }
 
 function utf8IdentityPart(value, label) {
@@ -241,7 +250,7 @@ function normalizeEntity(entity, lane, index) {
   return normalized;
 }
 
-function normalizeView(input) {
+function normalizeViewDetails(input) {
   if (!isPlainObject(input) || input.schema !== VIEW_SCHEMA) fail("unknown-schema", `expected ${VIEW_SCHEMA}`);
   countTree(input);
   for (const key of STATIC_MANIFEST_EXTRACTED_ROOT_KEYS) {
@@ -274,9 +283,74 @@ function normalizeView(input) {
     fieldRevision: input.fieldRevision, overloadMode: input.overloadMode ?? null,
     world: cloneCanonical(input.world), entities,
   };
-  const bytes = canonicalJsonBytes(view).length;
-  if (bytes > MAX_VIEW_BYTES) fail("projection-too-large", `projection exceeds ${MAX_VIEW_BYTES} bytes`);
-  return deepFreeze(view);
+  const canonicalBytes = canonicalJsonBytes(view);
+  if (canonicalBytes.length > MAX_VIEW_BYTES) fail("projection-too-large", `projection exceeds ${MAX_VIEW_BYTES} bytes`);
+  return Object.freeze({ view: deepFreeze(view), canonicalBytes });
+}
+
+function normalizeView(input) {
+  return normalizeViewDetails(input).view;
+}
+
+function normalizePreparedContext(input, view) {
+  if (!isPlainObject(input)) fail("invalid-prepared-context", "prepared projection context is required");
+  assertExactKeys(input, new Set(PREPARED_CONTEXT_KEYS), "$preparedContext");
+  const context = {};
+  for (const key of PREPARED_CONTEXT_KEYS) context[key] = input[key];
+  for (const key of ["schema", "manifestHash", "matchId", "sessionId", "recipientId", "lane", "statePairId", "snapshotId"]) {
+    if (typeof context[key] !== "string" || !context[key] || context[key] !== context[key].normalize("NFC")) {
+      fail("invalid-prepared-context", `${key} is invalid`);
+    }
+  }
+  for (const key of ["authorityIncarnation", "recipientIncarnation", "tick"]) {
+    if (!Number.isSafeInteger(context[key]) || context[key] < 0 || Object.is(context[key], -0)) {
+      fail("invalid-prepared-context", `${key} is invalid`);
+    }
+  }
+  if (context.schema !== view.schema || context.manifestHash !== view.manifestHash
+      || context.matchId !== view.runId || context.authorityIncarnation !== view.authorityEpoch
+      || context.recipientIncarnation !== view.connectionEpoch || context.lane !== view.lane
+      || context.statePairId !== view.statePairId || context.snapshotId !== view.snapshotId
+      || context.tick !== view.tick) {
+    fail("prepared-context-mismatch", "prepared projection context does not match the normalized view");
+  }
+  return Object.freeze(context);
+}
+
+function samePreparedContext(actual, expected) {
+  return PREPARED_CONTEXT_KEYS.every((key) => actual[key] === expected[key]);
+}
+
+function prepareProjection(input, rawContext) {
+  const normalized = normalizeViewDetails(input);
+  const context = normalizePreparedContext(rawContext, normalized.view);
+  const token = Object.freeze(Object.create(null));
+  preparedProjections.set(token, Object.freeze({
+    context,
+    view: normalized.view,
+    canonicalBytes: normalized.canonicalBytes,
+    hash: sha256Bytes(normalized.canonicalBytes),
+    entityIndex: indexEntities(normalized.view.entities),
+  }));
+  return token;
+}
+
+function preparedDetails(token, rawExpectedContext) {
+  const details = token && typeof token === "object" ? preparedProjections.get(token) : null;
+  if (!details) fail("invalid-prepared-projection", "projection was not prepared by this authority module");
+  const expected = normalizePreparedContext(rawExpectedContext, details.view);
+  if (!samePreparedContext(details.context, expected)) {
+    fail("prepared-context-mismatch", "prepared projection cannot be reused outside its bound authority context");
+  }
+  return details;
+}
+
+function preparedProjectionView(token, expectedContext) {
+  return preparedDetails(token, expectedContext).view;
+}
+
+function preparedProjectionHash(token, expectedContext) {
+  return preparedDetails(token, expectedContext).hash;
 }
 
 function equalCanonical(a, b) {
@@ -312,29 +386,28 @@ function indexEntities(entities) {
   return new Map(entities.map((entity) => [entity.publicEntityId, entity]));
 }
 
-function createStructuralDelta(baseInput, currentInput, { expectedBaseHash = null, dirtyHints = null, retainedIncarnations = null } = {}) {
-  const base = normalizeView(baseInput);
-  const current = normalizeView(currentInput);
+function createStructuralDeltaNormalized(base, current, { expectedBaseHash = null, dirtyHints = null,
+  retainedIncarnations = null, baseHash = null, currentHash = null, before = null, after = null } = {}) {
   if (base.lane !== current.lane || base.runId !== current.runId || base.authorityEpoch !== current.authorityEpoch
     || base.connectionEpoch !== current.connectionEpoch || base.manifestHash !== current.manifestHash) fail("base-mismatch", "base lineage does not match current projection");
   if (base.ballparkEpoch !== current.ballparkEpoch) fail("base-mismatch", "ballpark epoch requires a keyframe");
   if (current.tick < base.tick || current.simTime < base.simTime || current.eventWatermark < base.eventWatermark) fail("invalid-order", "current projection lineage regressed");
   if (current.fieldRevision < base.fieldRevision) fail("field-revision-regression", "field revision regressed");
-  const baseHash = sha256(base);
-  if (expectedBaseHash !== null && expectedBaseHash !== baseHash) fail("base-hash-mismatch", "expected base hash does not match materialized base");
-  const currentHash = sha256(current);
-  if (currentHash !== baseHash && (current.snapshotId === base.snapshotId || current.statePairId === base.statePairId)) {
+  const verifiedBaseHash = baseHash || sha256(base);
+  if (expectedBaseHash !== null && expectedBaseHash !== verifiedBaseHash) fail("base-hash-mismatch", "expected base hash does not match materialized base");
+  const verifiedCurrentHash = currentHash || sha256(current);
+  if (verifiedCurrentHash !== verifiedBaseHash && (current.snapshotId === base.snapshotId || current.statePairId === base.statePairId)) {
     fail("invalid-cursor-advance", "changed projection requires new snapshotId and statePairId");
   }
-  const before = indexEntities(base.entities);
-  const after = indexEntities(current.entities);
+  const beforeEntities = before || indexEntities(base.entities);
+  const afterEntities = after || indexEntities(current.entities);
   const retained = normalizeRetired(retainedIncarnations);
   const creates = [];
   const updates = [];
   const despawns = [];
-  for (const id of [...new Set([...before.keys(), ...after.keys()])].sort(compareCodePoints)) {
-    const oldEntity = before.get(id);
-    const newEntity = after.get(id);
+  for (const id of [...new Set([...beforeEntities.keys(), ...afterEntities.keys()])].sort(compareCodePoints)) {
+    const oldEntity = beforeEntities.get(id);
+    const newEntity = afterEntities.get(id);
     if (!newEntity) {
       if (oldEntity.lifecycleRevision === Number.MAX_SAFE_INTEGER) fail("revision-overflow", `${id} lifecycle revision cannot advance`);
       despawns.push({ publicEntityId: id, incarnation: oldEntity.incarnation,
@@ -380,7 +453,7 @@ function createStructuralDelta(baseInput, currentInput, { expectedBaseHash = nul
     connectionEpoch: current.connectionEpoch, ballparkEpoch: current.ballparkEpoch,
     manifestHash: current.manifestHash, baseSnapshotId: base.snapshotId, snapshotId: current.snapshotId,
     statePairId: current.statePairId,
-    baseHash, resultHash: currentHash, rootOps, creates, updates, despawns,
+    baseHash: verifiedBaseHash, resultHash: verifiedCurrentHash, rootOps, creates, updates, despawns,
   };
   countTree(delta);
   const deltaBytes = canonicalJsonBytes(delta).length;
@@ -388,6 +461,25 @@ function createStructuralDelta(baseInput, currentInput, { expectedBaseHash = nul
   return Object.freeze({ delta: deepFreeze(cloneCanonical(delta)), deltaBytes, resultView: current,
     diagnostics: Object.freeze({ dirtyHintsObserved: dirtyHints == null ? 0 : Array.isArray(dirtyHints) ? dirtyHints.length : 1,
       dirtyHintsUsedForCorrectness: false }) });
+}
+
+function createStructuralDelta(baseInput, currentInput, options = {}) {
+  return createStructuralDeltaNormalized(normalizeView(baseInput), normalizeView(currentInput), options);
+}
+
+function createPreparedStructuralDelta(baseToken, currentToken, { baseContext, currentContext,
+  expectedBaseHash = null, dirtyHints = null, retainedIncarnations = null } = {}) {
+  const base = preparedDetails(baseToken, baseContext);
+  const current = preparedDetails(currentToken, currentContext);
+  return createStructuralDeltaNormalized(base.view, current.view, {
+    expectedBaseHash,
+    dirtyHints,
+    retainedIncarnations,
+    baseHash: base.hash,
+    currentHash: current.hash,
+    before: base.entityIndex,
+    after: current.entityIndex,
+  });
 }
 
 function assertSortedUnique(items, key, label) {
@@ -525,5 +617,6 @@ module.exports = {
   MAX_VIEW_BYTES, MAX_DELTA_BYTES, MAX_ENTITIES, MAX_COMPONENTS_PER_ENTITY, MAX_OPERATIONS,
   MAX_RETAINED_IDENTITIES, MAX_RETAINED_IDENTITY_BYTES,
   StructuralDeltaError, publicEntityId, normalizeView, projectionHash: (view) => sha256(normalizeView(view)),
+  prepareProjection, preparedProjectionView, preparedProjectionHash, createPreparedStructuralDelta,
   createStructuralDelta, applyStructuralDelta,
 };

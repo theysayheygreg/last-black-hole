@@ -120,6 +120,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "PreparedReplicationProjections",
+    file: "prepared-replication-projections.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ClientDeltaReceiver",
     file: "client-delta-receiver.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],

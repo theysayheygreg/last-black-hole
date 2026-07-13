@@ -2,7 +2,11 @@
 
 const crypto = require("crypto");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
-const { normalizeView } = require("./canonical-structural-delta.cjs");
+const {
+  normalizeView,
+  prepareProjection,
+  preparedProjectionView,
+} = require("./canonical-structural-delta.cjs");
 const { createAuthorityDeltaPublisher } = require("./authority-delta-publisher.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
 
@@ -203,6 +207,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   const fixedBallparkEpoch = positiveInteger(ballparkEpoch, "ballparkEpoch");
   const fixedManifestSchema = requiredString(manifestSchema, "manifestSchema");
   const fixedManifestHash = requiredString(manifestHash, "manifestHash");
+  const preparedProjectionsEnabled = publisherOptions.preparedProjections !== false;
   const publisher = createAuthorityDeltaPublisher({ ...publisherOptions, stageProfiler });
   const maxAdmissions = Number.isSafeInteger(publisherOptions.maxRecipients)
     ? publisherOptions.maxRecipients : 128;
@@ -211,6 +216,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   const admissions = new Map();
   let shareabilityGeneration = stageProfiler?.generation?.() || 0;
   let shareability = { beats: 0, comparisons: 0, mismatches: 0, snapshotId: null, coreHash: null };
+  const preparedCounters = { preparations: 0, canonicalizations: 0, hashes: 0 };
 
   function resetShareabilityIfNeeded() {
     const currentGeneration = stageProfiler?.generation?.() || 0;
@@ -301,6 +307,30 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       fieldRevision: Math.max(0, Number(publicFrame.fieldRevision) || 0), overloadMode: publicFrame.overloadMode,
     };
     const profile = { recipientKey: identity.recipientId, inputBytes: sourceBytes };
+    const finalizeView = (input, lane) => {
+      if (!preparedProjectionsEnabled) {
+        preparedCounters.canonicalizations += 1;
+        return Object.freeze({ view: normalizeView(input), prepared: null });
+      }
+      const preparedContext = Object.freeze({
+        schema: input.schema,
+        manifestHash: input.manifestHash,
+        matchId: identity.matchId,
+        sessionId: identity.sessionId,
+        authorityIncarnation: identity.authorityIncarnation,
+        recipientId: identity.recipientId,
+        recipientIncarnation: identity.recipientIncarnation,
+        lane,
+        statePairId: input.statePairId,
+        snapshotId: input.snapshotId,
+        tick: input.tick,
+      });
+      const prepared = prepareProjection(input, preparedContext);
+      preparedCounters.preparations += 1;
+      preparedCounters.canonicalizations += 1;
+      preparedCounters.hashes += 1;
+      return Object.freeze({ view: preparedProjectionView(prepared, preparedContext), prepared });
+    };
     const buildPublicCore = () => ({
       world: { publicFacts: publicFacts(publicFrame.state) },
       entities: publicTracker.project(collectPublicEntities(publicFrame)),
@@ -315,34 +345,36 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       : buildPublicCore();
     observePublicCore(publicFrame.snapshotId, publicCore);
     const publicView = stageProfiler
-      ? stageProfiler.measureSync(STAGES.PUBLIC_PROJECTION, (view) => ({
+      ? stageProfiler.measureSync(STAGES.PUBLIC_PROJECTION, (value) => ({
           ...profile,
-          outputBytes: canonicalJsonBytes(view).length,
-          entities: view.entities.length,
-          components: view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
-        }), () => normalizeView({ ...shared, lane: "public", ...publicCore }))
-      : normalizeView({ ...shared, lane: "public", ...publicCore });
+          outputBytes: canonicalJsonBytes(value.view).length,
+          entities: value.view.entities.length,
+          components: value.view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
+        }), () => finalizeView({ ...shared, lane: "public", ...publicCore }, "public"))
+      : finalizeView({ ...shared, lane: "public", ...publicCore }, "public");
     const buildOwnerView = () => {
       const ownerValue = clone(ownerFrame.state || {});
       const ownerTracker = ownerTrackers.get(identity.recipientId);
-      return normalizeView({ ...shared, lane: "owner", world: {}, entities: ownerTracker.project([{
+      return finalizeView({ ...shared, lane: "owner", world: {}, entities: ownerTracker.project([{
         category: "owner", sourceId: identity.recipientId, components: {
           ownerState: ownerValue,
           transient: { lastInputSeq: ownerFrame.lastInputSeq || 0, lastActionSeq: ownerFrame.lastActionSeq || 0 },
         },
-      }]) });
+      }]) }, "owner");
     };
-    const ownerView = stageProfiler
-      ? stageProfiler.measureSync(STAGES.OWNER_PROJECTION, (view) => ({
+    const ownerProjection = stageProfiler
+      ? stageProfiler.measureSync(STAGES.OWNER_PROJECTION, (value) => ({
           recipientKey: identity.recipientId,
           inputBytes: canonicalJsonBytes(ownerFrame).length,
-          outputBytes: canonicalJsonBytes(view).length,
-          entities: view.entities.length,
-          components: view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
+          outputBytes: canonicalJsonBytes(value.view).length,
+          entities: value.view.entities.length,
+          components: value.view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
         }), buildOwnerView)
       : buildOwnerView();
+    const publicProjection = publicView;
     const admission = admissions.get(key(identity));
-    return Object.freeze({ identity, publicView, ownerView,
+    return Object.freeze({ identity, publicView: publicProjection.view, ownerView: ownerProjection.view,
+      publicPrepared: publicProjection.prepared, ownerPrepared: ownerProjection.prepared,
       allowMixed: admission.capabilities.includes(MIXED_CAPABILITY) });
   }
 
@@ -380,6 +412,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         recipientSpecificPublicationWork: Object.freeze(["ACK base", "public delta", "owner projection",
           "owner hash", "owner delta", "pair choice", "pair envelope", "adapter queue", "socket send"]),
       }) } : {}),
+      preparedProjections: Object.freeze({ enabled: preparedProjectionsEnabled, ...preparedCounters }),
       publisher: publisher.diagnostics() });
   }
 

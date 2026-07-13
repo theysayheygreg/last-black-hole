@@ -3,6 +3,10 @@
 const {
   normalizeView,
   projectionHash,
+  prepareProjection,
+  preparedProjectionView,
+  preparedProjectionHash,
+  createPreparedStructuralDelta,
   createStructuralDelta,
 } = require("./canonical-structural-delta.cjs");
 const { canonicalJsonBytes } = require("./session-replication-manifest.cjs");
@@ -95,8 +99,20 @@ function serializedBytes(value, stageProfiler, recipientKey) {
   }), () => canonicalJsonBytes(value)).length;
 }
 
-function keyframePayload(view, { stageProfiler = null, recipientKey = null, lane } = {}) {
+function keyframePayload(view, { stageProfiler = null, recipientKey = null, lane,
+  prepared = null, preparedContext = null, operationCounters = null } = {}) {
   const stage = lane === "owner" ? STAGES.OWNER_CANONICAL_HASH : STAGES.PUBLIC_CANONICAL_HASH;
+  const computeHash = () => {
+    if (prepared) {
+      if (operationCounters) operationCounters.preparedHashHits += 1;
+      return preparedProjectionHash(prepared, preparedContext);
+    }
+    if (operationCounters) {
+      operationCounters.canonicalizations += 1;
+      operationCounters.hashes += 1;
+    }
+    return projectionHash(view);
+  };
   const resultHash = stageProfiler
     ? stageProfiler.measureSync(stage, (hashValue) => ({
         recipientKey,
@@ -105,8 +121,8 @@ function keyframePayload(view, { stageProfiler = null, recipientKey = null, lane
         serializedAllocationProxyBytes: Buffer.byteLength(hashValue || "", "utf8"),
         entities: view.entities.length,
         components: view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
-      }), () => projectionHash(view))
-    : projectionHash(view);
+      }), computeHash)
+    : computeHash();
   return Object.freeze({
     kind: "keyframe",
     schema: view.schema,
@@ -115,8 +131,25 @@ function keyframePayload(view, { stageProfiler = null, recipientKey = null, lane
   });
 }
 
-function deltaPayload(base, current, { stageProfiler = null, recipientKey = null, lane } = {}) {
+function deltaPayload(base, current, { stageProfiler = null, recipientKey = null, lane,
+  prepared = null, preparedContext = null, operationCounters = null } = {}) {
   const stage = lane === "owner" ? STAGES.OWNER_DELTA_CANDIDATE : STAGES.PUBLIC_DELTA_CANDIDATE;
+  const buildDelta = () => {
+    if (operationCounters) operationCounters.diffs += 1;
+    if (base.prepared && prepared) {
+      if (operationCounters) operationCounters.preparedDiffs += 1;
+      return createPreparedStructuralDelta(base.prepared, prepared, {
+        baseContext: base.context,
+        currentContext: preparedContext,
+        expectedBaseHash: base.hash,
+      });
+    }
+    if (operationCounters) {
+      operationCounters.canonicalizations += 2;
+      operationCounters.hashes += 2;
+    }
+    return createStructuralDelta(base.view, current, { expectedBaseHash: base.hash });
+  };
   const built = stageProfiler
     ? stageProfiler.measureSync(stage, (result) => ({
         recipientKey,
@@ -125,8 +158,8 @@ function deltaPayload(base, current, { stageProfiler = null, recipientKey = null
         serializedAllocationProxyBytes: result?.deltaBytes || 0,
         entities: current.entities.length,
         components: current.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
-      }), () => createStructuralDelta(base.view, current, { expectedBaseHash: base.hash }))
-    : createStructuralDelta(base.view, current, { expectedBaseHash: base.hash });
+      }), buildDelta)
+    : buildDelta();
   const payload = Object.freeze({
     kind: "delta",
     schema: built.delta.schema,
@@ -136,7 +169,8 @@ function deltaPayload(base, current, { stageProfiler = null, recipientKey = null
     delta: built.delta,
   });
   const deltaBytes = serializedBytes(payload, stageProfiler, recipientKey);
-  const keyframe = keyframePayload(current, { stageProfiler, recipientKey, lane });
+  const keyframe = keyframePayload(current, { stageProfiler, recipientKey, lane,
+    prepared, preparedContext, operationCounters });
   const keyframeBytes = serializedBytes(keyframe, stageProfiler, recipientKey);
   return Object.freeze({
     payload: deltaBytes < keyframeBytes ? payload : keyframe,
@@ -152,6 +186,7 @@ function pairProjectionKind(publicKind, ownerKind) {
 
 function createAuthorityDeltaPublisher(options = {}) {
   const stageProfiler = options.stageProfiler || null;
+  const preparedProjectionsEnabled = options.preparedProjections !== false;
   const limits = Object.freeze({
     maxRecipients: positiveInteger(options.maxRecipients, DEFAULTS.maxRecipients, "maxRecipients"),
     maxPendingPairsPerRecipient: positiveInteger(options.maxPendingPairsPerRecipient,
@@ -175,6 +210,46 @@ function createAuthorityDeltaPublisher(options = {}) {
     publicDeltaBytes: 0, publicKeyframeBytes: 0,
     ownerDeltaBytes: 0, ownerKeyframeBytes: 0,
   };
+  const operationCounters = {
+    canonicalizations: 0, hashes: 0, diffs: 0, preparations: 0,
+    preparedHashHits: 0, preparedDiffs: 0, suppliedPreparedHits: 0,
+  };
+
+  function preparationContext(identity, view, lane) {
+    return Object.freeze({
+      schema: view.schema,
+      manifestHash: view.manifestHash,
+      matchId: identity.matchId,
+      sessionId: identity.sessionId,
+      authorityIncarnation: identity.authorityIncarnation,
+      recipientId: identity.recipientId,
+      recipientIncarnation: identity.recipientIncarnation,
+      lane,
+      statePairId: view.statePairId,
+      snapshotId: view.snapshotId,
+      tick: view.tick,
+    });
+  }
+
+  function prepareCurrent(identity, input, supplied, lane) {
+    if (!preparedProjectionsEnabled) {
+      operationCounters.canonicalizations += 1;
+      return Object.freeze({ view: normalizeView(input), prepared: null, context: null });
+    }
+    const context = preparationContext(identity, input, lane);
+    const prepared = supplied || prepareProjection(input, context);
+    if (supplied) operationCounters.suppliedPreparedHits += 1;
+    else {
+      operationCounters.preparations += 1;
+      operationCounters.canonicalizations += 1;
+      operationCounters.hashes += 1;
+    }
+    const view = preparedProjectionView(prepared, context);
+    if (supplied && view !== input) {
+      fail("prepared-input-mismatch", "supplied prepared projection must serve its exact normalized view");
+    }
+    return Object.freeze({ view, prepared, context });
+  }
 
   function countReason(reason) {
     const normalized = String(reason || "unknown-keyframe-reason").slice(0, 160);
@@ -213,11 +288,14 @@ function createAuthorityDeltaPublisher(options = {}) {
   }
 
   function publish({ identity: rawIdentity, publicView: publicInput, ownerView: ownerInput,
+    publicPrepared: suppliedPublicPrepared = null, ownerPrepared: suppliedOwnerPrepared = null,
     dirtyHints = null, allowMixed = false }) {
     const identity = normalizeIdentity(rawIdentity);
     const profile = { stageProfiler, recipientKey: identity.recipientId };
-    const publicView = normalizeView(publicInput);
-    const ownerView = normalizeView(ownerInput);
+    const preparedPublic = prepareCurrent(identity, publicInput, suppliedPublicPrepared, "public");
+    const preparedOwner = prepareCurrent(identity, ownerInput, suppliedOwnerPrepared, "owner");
+    const { view: publicView } = preparedPublic;
+    const { view: ownerView } = preparedOwner;
     assertProjectionPair(identity, publicView, ownerView);
     const state = stateFor(identity);
     const lineageChanged = state.acked && (
@@ -235,12 +313,16 @@ function createAuthorityDeltaPublisher(options = {}) {
     let ownerDecision = null;
     try {
       if (state.forceKeyframe || !state.acked) {
-        publicPayload = keyframePayload(publicView, { ...profile, lane: "public" });
-        ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner" });
+        publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
+          prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
+        ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner",
+          prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
         keyframeReason = state.forceReason || "missing-acked-base";
       } else {
-        publicDecision = deltaPayload(state.acked.public, publicView, { ...profile, lane: "public" });
-        ownerDecision = deltaPayload(state.acked.owner, ownerView, { ...profile, lane: "owner" });
+        publicDecision = deltaPayload(state.acked.public, publicView, { ...profile, lane: "public",
+          prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
+        ownerDecision = deltaPayload(state.acked.owner, ownerView, { ...profile, lane: "owner",
+          prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
         observeCandidate("public", publicDecision);
         observeCandidate("owner", ownerDecision);
         publicPayload = publicDecision.payload;
@@ -252,15 +334,19 @@ function createAuthorityDeltaPublisher(options = {}) {
     } catch (error) {
       const code = String(error?.code || error?.name || "unknown").slice(0, 96);
       forceRebase(state, `semantic-fallback:${code}`);
-      publicPayload = keyframePayload(publicView, { ...profile, lane: "public" });
-      ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner" });
+      publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
+        prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
+      ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner",
+        prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
       keyframeReason = state.forceReason;
     }
     // Legacy state-pair-v1 recipients retain the original same-kind contract.
     if (!allowMixed && publicPayload.kind !== ownerPayload.kind) {
       keyframeReason = `atomic-kind-alignment:public-${publicDecision?.decision || publicPayload.kind}+owner-${ownerDecision?.decision || ownerPayload.kind}`;
-      publicPayload = keyframePayload(publicView, { ...profile, lane: "public" });
-      ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner" });
+      publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
+        prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
+      ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner",
+        prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
     }
     const frameId = state.nextFrameId;
     const pairSchema = allowMixed ? MIXED_PAIR_SCHEMA : PAIR_SCHEMA;
@@ -296,8 +382,10 @@ function createAuthorityDeltaPublisher(options = {}) {
     let frame = buildFrame(publicPayload, ownerPayload);
     let bytes = serializedBytes(frame, stageProfiler, identity.recipientId);
     const fullKeyframe = buildFrame(
-      keyframePayload(publicView, { ...profile, lane: "public" }),
-      keyframePayload(ownerView, { ...profile, lane: "owner" }),
+      keyframePayload(publicView, { ...profile, lane: "public",
+        prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters }),
+      keyframePayload(ownerView, { ...profile, lane: "owner",
+        prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters }),
     );
     const fullKeyframeBytes = serializedBytes(fullKeyframe, stageProfiler, identity.recipientId);
     const candidateBytes = bytes;
@@ -325,8 +413,10 @@ function createAuthorityDeltaPublisher(options = {}) {
     const record = Object.freeze({
       frame,
       bytes,
-      public: Object.freeze({ view: publicView, hash: publicPayload.resultHash }),
-      owner: Object.freeze({ view: ownerView, hash: ownerPayload.resultHash }),
+      public: Object.freeze({ view: publicView, hash: publicPayload.resultHash,
+        prepared: preparedPublic.prepared, context: preparedPublic.context }),
+      owner: Object.freeze({ view: ownerView, hash: ownerPayload.resultHash,
+        prepared: preparedOwner.prepared, context: preparedOwner.context }),
     });
     state.pending.set(frame.frameId, record);
     state.retainedBytes += bytes;
@@ -426,9 +516,17 @@ function createAuthorityDeltaPublisher(options = {}) {
   function diagnostics() {
     let pendingPairs = 0;
     let retainedBytes = 0;
+    let preparedPendingReferences = 0;
+    let preparedAckedReferences = 0;
     for (const state of recipients.values()) {
       pendingPairs += state.pending.size;
       retainedBytes += state.retainedBytes;
+      for (const record of state.pending.values()) {
+        if (record.public.prepared) preparedPendingReferences += 1;
+        if (record.owner.prepared) preparedPendingReferences += 1;
+      }
+      if (state.acked?.public.prepared) preparedAckedReferences += 1;
+      if (state.acked?.owner.prepared) preparedAckedReferences += 1;
     }
     let recipientsWithAckedBase = 0;
     let maxAckedFrameId = 0;
@@ -447,7 +545,11 @@ function createAuthorityDeltaPublisher(options = {}) {
     return Object.freeze({ recipients: recipients.size, pendingPairs, retainedBytes, ...counters,
       recipientsWithAckedBase, maxAckedFrameId,
       keyframeReasons: Object.freeze(Object.fromEntries([...keyframeReasons].sort(([a], [b]) => a.localeCompare(b)))),
-      candidateAverageBytes: candidateAverages, limits });
+      candidateAverageBytes: candidateAverages, limits,
+      preparedProjections: Object.freeze({ enabled: preparedProjectionsEnabled, ...operationCounters,
+        pendingReferences: preparedPendingReferences, ackedReferences: preparedAckedReferences,
+        maxPendingReferences: limits.maxRecipients * limits.maxPendingPairsPerRecipient * 2,
+        maxAckedReferences: limits.maxRecipients * 2 }) });
   }
 
   return Object.freeze({ publish, acknowledge, retransmit, rebase, disconnect, diagnostics });

@@ -4,7 +4,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { performance } = require("perf_hooks");
+const { performance, monitorEventLoopDelay } = require("perf_hooks");
 const { BoundedQuantiles } = require("./bounded-quantiles.cjs");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
 const { loadPlayableMaps } = require("./shared-map-loader.cjs");
@@ -223,6 +223,11 @@ if (REPLICATION_ACCOUNTING_CAPTURE
   throw new Error("LBH_SIM_WS_REPLICATION_ACCOUNTING requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
 }
 const AUTHORITY_STAGE_PROFILE_CAPTURE = readStrictTestFlag("LBH_SIM_WS_STAGE_PROFILE");
+const REPLICATION_BENCH_EVENT_LOOP_CAPTURE = readStrictTestFlag("LBH_SIM_WS_BENCH_EVENT_LOOP");
+if (REPLICATION_BENCH_EVENT_LOOP_CAPTURE
+  && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
+  throw new Error("LBH_SIM_WS_BENCH_EVENT_LOOP requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
+}
 if (AUTHORITY_STAGE_PROFILE_CAPTURE
   && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
   throw new Error("LBH_SIM_WS_STAGE_PROFILE requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
@@ -233,6 +238,18 @@ if (AUTHORITY_STAGE_PROFILE_CAPTURE && !REPLICATION_ACCOUNTING_CAPTURE) {
 const authorityStageProfiler = AUTHORITY_STAGE_PROFILE_CAPTURE
   ? createAuthorityStageProfiler({ sampleCapacity: 512, maxRecipients: 16 })
   : null;
+const replicationBenchEventLoop = REPLICATION_BENCH_EVENT_LOOP_CAPTURE
+  ? monitorEventLoopDelay({ resolution: 20 }) : null;
+replicationBenchEventLoop?.enable();
+
+function replicationBenchEventLoopSnapshot() {
+  if (!replicationBenchEventLoop || replicationBenchEventLoop.max === 0) return null;
+  const ms = (value) => Number.isFinite(value) ? value / 1e6 : null;
+  return Object.freeze({ unit: "milliseconds", minMs: ms(replicationBenchEventLoop.min),
+    meanMs: ms(replicationBenchEventLoop.mean), p50Ms: ms(replicationBenchEventLoop.percentile(50)),
+    p95Ms: ms(replicationBenchEventLoop.percentile(95)), p99Ms: ms(replicationBenchEventLoop.percentile(99)),
+    maxMs: ms(replicationBenchEventLoop.max) });
+}
 
 // Wrappers around seeded-generation.js that route through runtime streams.
 // All init-time loot rolls flow through runtime.session.rng, which is
@@ -994,6 +1011,9 @@ const MULTIPLAYER_JSON_V2_ENABLED = String(process.env.LBH_SIM_WS_JSON_V2 || "")
 const MULTIPLAYER_STATE_PAIR_V1_ENABLED = String(process.env.LBH_SIM_WS_STATE_PAIR_V1 || "").trim() === "true";
 const MULTIPLAYER_STATE_PAIR_MIXED_V1_ENABLED = MULTIPLAYER_STATE_PAIR_V1_ENABLED
   && String(process.env.LBH_SIM_WS_STATE_PAIR_MIXED_V1 || "").trim() === "true";
+const MULTIPLAYER_PREPARED_PROJECTIONS_ENABLED = !["0", "false"].includes(
+  String(process.env.LBH_SIM_WS_PREPARED_PROJECTIONS ?? "true").trim().toLowerCase(),
+);
 const MULTIPLAYER_HEARTBEAT_INTERVAL_MS = 10_000;
 const MULTIPLAYER_TICKET_TTL_MS = process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS
   ? Math.max(1, Math.floor(Number(process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS) || 30_000))
@@ -6127,7 +6147,7 @@ function rotateMultiplayerRun(runId) {
         ballparkEpoch: 1,
         manifestSchema: currentSessionReplicationManifest().manifestSchema,
       manifestHash: currentSessionReplicationManifest().manifestHash,
-      publisherOptions: { maxRecipients: 16 },
+      publisherOptions: { maxRecipients: 16, preparedProjections: MULTIPLAYER_PREPARED_PROJECTIONS_ENABLED },
       stageProfiler: authorityStageProfiler,
       })
     : null;
@@ -6854,6 +6874,7 @@ function multiplayerDiagnostics({ includeReplication = true } = {}) {
       lastProjectedAt: projection.lastProjectedAt,
       maxQueuedBytes: projection.maxQueuedBytes,
       maxPendingInboundBytes: projection.maxPendingInboundBytes,
+      benchmarkEventLoopDelay: replicationBenchEventLoopSnapshot(),
       accounting: {
         projectionDurationSamples: projection.projectionDurationSamples,
         projectionDurationLatestMs: projection.projectionDurationLatestMs,
@@ -7060,6 +7081,7 @@ const server = http.createServer(async (req, res) => {
       runtime.multiplayerProjection.simTickCostDistribution.reset();
       runtime.multiplayerProjection.projectionCostDistribution.reset();
       authorityStageProfiler?.reset();
+      replicationBenchEventLoop?.reset();
       sendJson(res, 200, { ok: true,
         generation: runtime.multiplayerProjection.generation,
         scope: "bounded multiplayer cost percentile rings" });
@@ -7761,6 +7783,7 @@ function shutdown() {
   ]).then(async () => {
     if (multiplayerAdapter) await multiplayerAdapter.shutdown();
     authorityStageProfiler?.stop();
+    replicationBenchEventLoop?.disable();
     await new Promise((resolve) => server.close(resolve));
     cleanupFiles(PID_FILE, META_FILE);
     process.exit(0);

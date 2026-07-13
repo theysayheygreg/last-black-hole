@@ -31,18 +31,23 @@ const S1_STATIC_PAIR_SAVINGS_BYTES = 953;
 const STAGE_PROFILE = process.argv.includes("--s5-profile");
 const PROFILE_CONTROL = STAGE_PROFILE && process.argv.includes("--profile-control");
 const MICRO_PROFILE = STAGE_PROFILE && process.argv.includes("--micro");
-const GATE = STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
+const S6_BENCHMARK = process.argv.includes("--s6-benchmark");
+const S6_PREPARED = !["0", "false"].includes(String(process.env.LBH_S6_PREPARED ?? "true").toLowerCase());
+const GATE = S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
 const MIXED_GATE = GATE !== "s3";
 const COMPARE_S3 = GATE === "s4";
 const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
 const S3_CANONICAL_DIR = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s3",
   "multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4");
-const PROFILE = STAGE_PROFILE
+const PROFILE = S6_BENCHMARK ? `diagnostic-${S6_PREPARED ? "prepared" : "legacy"}` : STAGE_PROFILE
   ? `diagnostic-${MICRO_PROFILE ? "micro-" : ""}${PROFILE_CONTROL ? "control" : "instrumented"}`
   : process.argv.includes("--review") ? "review" : "canonical";
-const POPULATIONS = MICRO_PROFILE || PROFILE === "review" ? [1, 8] : [1, 4, 8];
-const NORMAL_WARMUP_MS = MICRO_PROFILE ? 5_000 : STAGE_PROFILE ? 10_000 : PROFILE === "review" ? 5_000 : 60_000;
-const NORMAL_WINDOW_MS = MICRO_PROFILE ? 15_000 : STAGE_PROFILE ? 30_000 : PROFILE === "review" ? 20_000 : 300_000;
+const S6_POPULATIONS = String(process.env.LBH_S6_POPULATIONS || "1,4,8").split(",")
+  .map((value) => Number(value)).filter((value) => [1, 4, 8].includes(value));
+const POPULATIONS = S6_BENCHMARK ? [...new Set(S6_POPULATIONS)]
+  : MICRO_PROFILE || PROFILE === "review" ? [1, 8] : [1, 4, 8];
+const NORMAL_WARMUP_MS = S6_BENCHMARK ? 5_000 : MICRO_PROFILE ? 5_000 : STAGE_PROFILE ? 10_000 : PROFILE === "review" ? 5_000 : 60_000;
+const NORMAL_WINDOW_MS = S6_BENCHMARK ? 15_000 : MICRO_PROFILE ? 15_000 : STAGE_PROFILE ? 30_000 : PROFILE === "review" ? 20_000 : 300_000;
 const CHURN_WARMUP_MS = PROFILE === "review" ? 5_000 : 20_000;
 const CHURN_WINDOW_MS = PROFILE === "review" ? 30_000 : 90_000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -485,6 +490,8 @@ async function runScenario({ population, scenario, runDir }) {
       NODE_ENV: "test", LBH_SIM_WS_ENABLED: "true", LBH_SIM_WS_JSON_V2: "true",
       LBH_SIM_WS_STATE_PAIR_V1: "true", LBH_SIM_WS_REPLICATION_ACCOUNTING: "1",
       LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE ? "true" : "false",
+      LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK && !S6_PREPARED ? "false" : "true",
+      LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK ? "1" : "0",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
       LBH_SIM_WS_STAGE_PROFILE: STAGE_PROFILE && !PROFILE_CONTROL ? "1" : "0",
     } });
@@ -760,7 +767,8 @@ async function runScenario({ population, scenario, runDir }) {
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
         clientAckSerializeSendMs: distribution(allClients.flatMap((client) => client.ackWorkSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
-        eventLoopLag: endHealth.multiplayer.adapter.authorityStageProfile?.eventLoopDelay
+        eventLoopLag: endHealth.multiplayer.projection.benchmarkEventLoopDelay
+          || endHealth.multiplayer.adapter.authorityStageProfile?.eventLoopDelay
           || { available: false, reason: PROFILE_CONTROL
             ? "Instrumentation-off A/B control intentionally has no event-loop-delay monitor."
             : "Runtime stage profiler was not enabled." },
@@ -809,10 +817,10 @@ function validateArtifact(directory) {
       JSON.parse(fs.readFileSync(path.join(directory, name), "utf8")).passed === true),
     productCorrectnessPassed: scenarioFiles.every((entry) => entry.admission.correctnessPassed),
     allAccountingComplete: scenarioFiles.every((entry) => entry.correctness.accountingComplete),
-    normalPopulationsPresent: (aggregate.microProfile ? [1, 8] : [1, 4, 8]).every((population) =>
+    normalPopulationsPresent: (aggregate.expectedPopulations || (aggregate.microProfile ? [1, 8] : [1, 4, 8])).every((population) =>
       scenarioFiles.some((entry) => entry.scenario === "normal" && entry.population === population))
       || aggregate.profile === "review",
-    churnPopulationsPresent: aggregate.gate === "s5" || [1, 4, 8].every((population) => scenarioFiles.some((entry) =>
+    churnPopulationsPresent: ["s5", "s6"].includes(aggregate.gate) || [1, 4, 8].every((population) => scenarioFiles.some((entry) =>
       entry.scenario === "churn" && entry.population === population)) || aggregate.profile === "review",
     atomicKindAlignmentAbsent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
       entry.pairShape.productWindow.atomicKindAlignmentAbsent === true),
@@ -868,7 +876,7 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
     schemaVersion: 2, gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
     config: { populations: POPULATIONS, normalWarmupMs: NORMAL_WARMUP_MS, normalWindowMs: NORMAL_WINDOW_MS,
@@ -876,6 +884,8 @@ async function main() {
       targetBytesPerSecondPerPlayer: TARGET_BPS, sensitivityBytesPerSecondPerPlayer: SENSITIVITY_BPS,
       env: { LBH_SIM_WS_JSON_V2: true, LBH_SIM_WS_STATE_PAIR_V1: true,
         LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE,
+        LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK ? S6_PREPARED : true,
+        LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK,
         LBH_SIM_WS_REPLICATION_ACCOUNTING: true, LBH_REPLICATION_BASELINE_CAPTURE: true,
         LBH_SIM_WS_STAGE_PROFILE: STAGE_PROFILE && !PROFILE_CONTROL } },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
@@ -888,7 +898,7 @@ async function main() {
   const results = [];
   try {
     for (const population of POPULATIONS) results.push(await runScenario({ population, scenario: "normal", runDir }));
-    if (!STAGE_PROFILE) {
+    if (!STAGE_PROFILE && !S6_BENCHMARK) {
       for (const population of POPULATIONS) results.push(await runScenario({ population, scenario: "churn", runDir }));
     }
   } catch (error) {
@@ -923,7 +933,8 @@ async function main() {
   });
   const aggregate = { schemaVersion: MIXED_GATE ? 2 : 1, gate: GATE,
     profile: PROFILE, microProfile: MICRO_PROFILE, instrumentationEnabled: STAGE_PROFILE && !PROFILE_CONTROL,
-    commit, seed: SEED, command, verdict,
+    commit, seed: SEED, command, verdict, expectedPopulations: POPULATIONS,
+    preparedProjectionsEnabled: S6_BENCHMARK ? S6_PREPARED : null,
     scenarios: results.map((entry) => ({ file: `${entry.scenario}-${entry.population}.json`,
       scenario: entry.scenario, population: entry.population,
       worstRecipientMeanDownlinkBytesPerSecond: entry.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond,
