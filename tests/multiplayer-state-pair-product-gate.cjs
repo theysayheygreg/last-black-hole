@@ -50,6 +50,7 @@ const POSITIONAL_GATE = S9_PROTOTYPE || S10_PROTOTYPE;
 const SPARSE_GATE = S8_PROTOTYPE || POSITIONAL_GATE;
 const RESIDUAL_GATE = S7_GATE || SPARSE_GATE;
 const ADMISSION_MODE = process.argv.includes("--admission");
+const NORMAL_ONLY = process.argv.includes("--normal-only");
 const S6_PREPARED = !["0", "false"].includes(String(process.env.LBH_S6_PREPARED ?? "true").toLowerCase());
 const GATE = S10_PROTOTYPE ? "s10" : S9_PROTOTYPE ? "s9" : S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
 const MIXED_GATE = GATE !== "s3";
@@ -1457,7 +1458,7 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S10_PROTOTYPE ? " --s10-ledger" : S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S10_PROTOTYPE ? " --s10-ledger" : S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${NORMAL_ONLY ? " --normal-only" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
     schemaVersion: RESIDUAL_GATE ? 3 : 2,
     gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
@@ -1490,7 +1491,7 @@ async function main() {
   const results = [];
   try {
     for (const population of POPULATIONS) results.push(await runScenario({ population, scenario: "normal", runDir }));
-    if (!STAGE_PROFILE && !S6_BENCHMARK) {
+    if (!NORMAL_ONLY && !STAGE_PROFILE && !S6_BENCHMARK) {
       for (const population of CHURN_POPULATIONS) results.push(await runScenario({ population, scenario: "churn", runDir }));
     }
   } catch (error) {
@@ -1536,7 +1537,7 @@ async function main() {
     profile: PROFILE, microProfile: MICRO_PROFILE, instrumentationEnabled: STAGE_PROFILE && !PROFILE_CONTROL,
     eventLoopMonitorEnabled: S6_BENCHMARK || RESIDUAL_GATE,
     commit, seed: SEED, command, verdict, expectedPopulations: POPULATIONS,
-    expectedChurnPopulations: !STAGE_PROFILE && !S6_BENCHMARK ? CHURN_POPULATIONS : [],
+    expectedChurnPopulations: !NORMAL_ONLY && !STAGE_PROFILE && !S6_BENCHMARK ? CHURN_POPULATIONS : [],
     preparedProjectionsEnabled: RESIDUAL_GATE ? true : S6_BENCHMARK ? S6_PREPARED : null,
     scenarios: results.map((entry) => ({ file: `${entry.scenario}-${entry.population}.json`,
       scenario: entry.scenario, population: entry.population,
