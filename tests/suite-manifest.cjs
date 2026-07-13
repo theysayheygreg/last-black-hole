@@ -139,6 +139,12 @@ const SUITES = [
     slow: true,
   },
   {
+    name: "StatePairProductMetrics",
+    file: "state-pair-product-metrics.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerSendQueue",
     file: "multiplayer-send-queue.cjs",
     lanes: ["multiplayer-network", "static", "full"],
