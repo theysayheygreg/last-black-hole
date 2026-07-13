@@ -218,7 +218,7 @@ async function run() {
     assert.strictEqual(authority.diagnostics().publisher.recipients, 0);
   });
 
-  await runner.run("coalesced change-return converges through one recovery keyframe without a revision-only delta", () => {
+  await runner.run("coalesced change-return keyframe converges without unnecessary recovery", () => {
     const id = binding();
     const authority = createRuntimeStatePairAuthority({ matchId: id.runId, authorityIncarnation: 3,
       manifestSchema: MANIFEST_SCHEMA, manifestHash: MANIFEST_HASH });
@@ -235,15 +235,10 @@ async function run() {
     const returnedSource = frames(id, 3);
     const returned = authority.publish(id, returnedSource.publicFrame, returnedSource.ownerFrame);
     assert.strictEqual(returned.frame.public.kind, "keyframe");
-    const gap = client.receive(encodeWireFrame(returned.frame, { direction: SERVER_TO_CLIENT }));
-    assert(!gap.accepted && gap.reason === "frame-gap");
-    authority.recover(id);
-    const recoverySource = frames(id, 4);
-    const recovery = authority.publish(id, recoverySource.publicFrame, recoverySource.ownerFrame);
-    assert(recovery.frame.public.kind === "keyframe" && recovery.frame.owner.kind === "keyframe");
-    const returnedAccepted = client.receive(encodeWireFrame(recovery.frame, { direction: SERVER_TO_CLIENT }));
+    const returnedAccepted = client.receive(encodeWireFrame(returned.frame, { direction: SERVER_TO_CLIENT }));
     assert(returnedAccepted.accepted && authority.acknowledge(id, returnedAccepted.ack).accepted);
-    assert.deepStrictEqual(returnedAccepted.state.legacyPublicState, recoverySource.publicFrame.state);
+    assert.deepStrictEqual(returnedAccepted.state.legacyPublicState, returnedSource.publicFrame.state);
+    assert.strictEqual(client.diagnostics().recoveryRequests, 0);
     assert.strictEqual(authority.diagnostics().publisher.keyframeReasons["semantic-fallback:revision-without-change"], 1);
     authority.disconnect(id);
   });

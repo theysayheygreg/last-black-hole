@@ -237,14 +237,15 @@ async function run() {
     assert.strictEqual(replay.bytes, first.bytes);
   });
 
-  await runner.run("duplicate stale forged and cross-recipient ACKs fail closed and force keyframes", async () => {
+  await runner.run("duplicate and stale cumulative ACKs are idempotent while forged and cross-recipient ACKs fail closed", async () => {
     const publisher = createAuthorityDeltaPublisher();
     const first = publisher.publish(pairInputs(1));
     assert.strictEqual(publisher.acknowledge(identity(), ackFor(first.frame)).accepted, true);
-    assert.strictEqual(publisher.acknowledge(identity(), ackFor(first.frame)).accepted, false, "duplicate ACK must fail closed");
+    assert.strictEqual(publisher.acknowledge(identity(), ackFor(first.frame)).duplicate, true,
+      "exact duplicate ACK must be an idempotent no-op");
     const afterDuplicate = publisher.publish(pairInputs(2));
-    assert.strictEqual(afterDuplicate.frame.public.kind, "keyframe");
-    assert.strictEqual(publisher.diagnostics().keyframeReasons["ack-rejected:unknown-frame"], 1);
+    assert.strictEqual(publisher.diagnostics().keyframeReasons["ack-rejected:unknown-frame"], undefined,
+      "duplicate ACK must not force a recovery keyframe");
     assert.strictEqual(publisher.acknowledge(identity(), ackFor(afterDuplicate.frame, { publicHash: "sha256:forged" })).accepted, false);
     const other = identity({ recipientId: "member-b" });
     assert.strictEqual(publisher.acknowledge(other, ackFor(afterDuplicate.frame)).accepted, false);
@@ -259,9 +260,13 @@ async function run() {
     const second = publisher.publish(pairInputs(2));
     const third = publisher.publish(pairInputs(3));
     assert.strictEqual(publisher.acknowledge(identity(), ackFor(third.frame)).accepted, true);
-    assert.strictEqual(publisher.acknowledge(identity(), ackFor(second.frame)).accepted, false);
+    const stale = publisher.acknowledge(identity(), ackFor(second.frame));
+    assert.strictEqual(stale.accepted, true);
+    assert.strictEqual(stale.validated, false);
     const next = publisher.publish(pairInputs(4));
-    assert.strictEqual(next.frame.public.kind, "keyframe", "stale ACK rejection must rebase rather than roll back");
+    assert.strictEqual(next.frame.public.kind, third.frame.public.kind,
+      "stale cumulative ACK cannot change selection from the newer ACK base");
+    assert.strictEqual(publisher.diagnostics().maxAckedFrameId, third.frame.frameId);
   });
 
   await runner.run("bounded ACK rejection diagnostics classify every coarse ordering relation", async () => {
@@ -304,9 +309,11 @@ async function run() {
     const diagnostics = publisher.diagnostics().ackRejectDiagnostics;
     assert.strictEqual(diagnostics.enabled, true);
     assert.deepStrictEqual(Object.keys(diagnostics.byRelation).sort(),
-      ["binding", "duplicate", "future", "hash", "pending-missing", "recovery-race", "stale", "unknown"]);
-    assert.strictEqual(diagnostics.total, 8);
-    assert.strictEqual(diagnostics.byReason["unknown-frame"], 5);
+      ["binding", "future", "hash", "pending-missing", "recovery-race", "unknown"]);
+    assert.strictEqual(diagnostics.total, 6);
+    assert.strictEqual(diagnostics.byReason["unknown-frame"], 3);
+    assert.strictEqual(publisher.diagnostics().ackDuplicates, 1);
+    assert.strictEqual(publisher.diagnostics().ackIgnoredStale, 1);
     assert(Object.keys(diagnostics.orderTransitions).length <= 64
       && !JSON.stringify(diagnostics).includes("member-"),
     "ACK diagnostic must remain bounded and identity-free");

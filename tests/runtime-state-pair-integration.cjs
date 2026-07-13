@@ -259,7 +259,7 @@ async function run() {
     }
   });
 
-  await runner.run("coalesced frame gaps converge on the latest recovery keyframe", async () => {
+  await runner.run("sustained send coalescing converges on the latest independently materializable pair", async () => {
     const id = binding("mixed-pressure", {
       capabilities: [CAPABILITY, MIXED_CAPABILITY, "static-manifest-v1"].sort(),
     });
@@ -278,23 +278,11 @@ async function run() {
       assert.strictEqual(queue.status().queuedMessages, 1, "replaceable transport state must remain bounded");
     }
     assert(server.diagnostics().publisher.pendingPairs <= 8, "ACK-delayed authority history must remain bounded");
-    const rejected = client.receive(wire(queue.drain().messages[0].envelope));
-    assert(!rejected.accepted && rejected.recovery.reason === "frame-gap");
-    server.recover(id);
-    let coalescedRecovery;
-    for (let beat = 34; beat <= 65; beat += 1) {
-      coalescedRecovery = server.publish(id, ...Object.values(sourceFrames(id, beat)));
-      assert.strictEqual(coalescedRecovery.projectionKind, "keyframe",
-        "without an ACK every recovery candidate must remain independently materializable");
-      const outcome = queue.enqueueState(coalescedRecovery.frame.frameId, coalescedRecovery.frame);
-      assert.strictEqual(outcome.action, beat === 34 ? "queued" : "coalesced");
-      assert.strictEqual(queue.status().queuedMessages, 1);
-    }
-    assert(server.diagnostics().publisher.pendingPairs <= 8, "recovery history must remain bounded under sustained pressure");
     const converged = client.receive(wire(queue.drain().messages[0].envelope));
-    assert(converged.accepted, "latest coalesced recovery keyframe must converge without an intermediate frame");
+    assert(converged.accepted, "latest coalesced pair must converge without an intermediate frame");
     assert(server.acknowledge(id, converged.ack).accepted);
-    const resumed = server.publish(id, ...Object.values(sourceFrames(id, 66)));
+    assert.strictEqual(client.diagnostics().recoveryRequests, 0);
+    const resumed = server.publish(id, ...Object.values(sourceFrames(id, 34)));
     assert.strictEqual(resumed.projectionKind, "delta");
     assert(client.receive(wire(resumed.frame)).accepted, "recovered stream must resume delta progression");
   });

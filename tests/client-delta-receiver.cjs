@@ -189,7 +189,7 @@ async function run() {
     assert.strictEqual(rejected.accepted, false);
     assert.strictEqual(Object.hasOwn(rejected, "ack"), false);
     assert.strictEqual(observed.length, 2, "failed owner lane must not expose the valid public delta");
-    assert.strictEqual(receiver.current(), null);
+    assert.strictEqual(receiver.current(), accepted.state, "forged lane must not erase the last safe visible pair");
   });
 
   await runner.run("ACK loss, retransmit, and exact duplicate delivery are idempotent", async () => {
@@ -212,13 +212,14 @@ async function run() {
     const receiver = createClientDeltaReceiver({ context: context() });
     const first = createAuthorityDeltaPublisher().publish(inputs(1));
     assert.strictEqual(receiver.receive(wire(first.frame)).accepted, true);
-    assert.strictEqual(receiver.receive("{malformed").accepted, false, "malformed input must discard the active base");
+    const safe = receiver.current();
+    assert.strictEqual(receiver.receive("{malformed").accepted, false, "malformed input must fail closed");
     const changed = createAuthorityDeltaPublisher().publish(inputs(2));
     assert.strictEqual(changed.frame.frameId, first.frame.frameId);
     const result = receiver.receive(wire(changed.frame));
     assert.strictEqual(result.accepted, false);
     assert.strictEqual(result.reason, "duplicate-mismatch");
-    assert.strictEqual(receiver.current(), null);
+    assert.strictEqual(receiver.current(), safe, "duplicate mutation must retain the last safe visible reference");
   });
 
   await runner.run("delta headers cannot forge cursors omitted from structural root operations", async () => {
@@ -240,7 +241,7 @@ async function run() {
     const result = receiver.receive(wire(forged));
     assert.strictEqual(result.accepted, false);
     assert.strictEqual(result.reason, "lineage-mismatch");
-    assert.strictEqual(receiver.current(), null);
+    assert.strictEqual(receiver.current().frameId, 1, "forged cursors must not erase visible state");
   });
 
   await runner.run("fallback keyframes cannot regress entity lifecycle or component revisions", async () => {
@@ -273,31 +274,38 @@ async function run() {
     assert.strictEqual(accepted.state.ballparkEpoch, 5);
   });
 
-  await runner.run("reorder and frame gaps discard bases and recover only on an atomic keyframe", async () => {
+  await runner.run("reordered branches apply from their exact retained base without visible rollback", async () => {
     const authority = createAuthorityDeltaPublisher();
-    const receiver = createClientDeltaReceiver({ context: context() });
-    accept(authority, receiver, authority.publish(inputs(1)));
-    const second = authority.publish(inputs(2));
-    const third = authority.publish(inputs(3));
-    const gap = receiver.receive(wire(third.frame));
-    assert.strictEqual(gap.accepted, false);
-    assert.strictEqual(gap.reason, "frame-gap");
-    assert.strictEqual(gap.recovery.recoverySchema, RECOVERY_SCHEMA);
-    assert.strictEqual(receiver.current(), null);
-    assert.strictEqual(receiver.receive(wire(second.frame)).accepted, false, "delta cannot apply after gap reset");
-    authority.rebase(identity());
-    const recovered = authority.publish(inputs(4));
-    assert.strictEqual(recovered.projectionKind, "keyframe");
-    assert.strictEqual(receiver.receive(wire(recovered.frame)).accepted, true);
+    const receiver = createClientDeltaReceiver({ context: context(),
+      capabilities: ["state-pair-v1", MIXED_CAPABILITY] });
+    const large = (beat) => inputs(beat, identity(), {
+      public: { padding: "p".repeat(8 * 1024) }, owner: { padding: "o".repeat(8 * 1024),
+        entities: [{ ...ownerEntity(identity(), beat), components: {
+          ...ownerEntity(identity(), beat).components,
+          inventory: component(beat, { cargo: [`ore-${beat}`] }),
+        } }] },
+    });
+    accept(authority, receiver, authority.publish(large(1)));
+    const second = authority.publish({ ...large(2), allowMixed: true });
+    const third = authority.publish({ ...large(3), allowMixed: true });
+    assert(second.frame.public.kind === "delta" && third.frame.public.kind === "delta");
+    const later = receiver.receive(wire(third.frame));
+    assert.strictEqual(later.accepted, true, JSON.stringify(later));
+    assert.strictEqual(later.state.frameId, 3);
+    const stale = receiver.receive(wire(second.frame));
+    assert.strictEqual(stale.accepted, true, JSON.stringify(stale));
+    assert.strictEqual(stale.stale, true);
+    assert.strictEqual(receiver.current(), later.state, "stale branch cannot replace the visible head");
+    assert.strictEqual(receiver.diagnostics().recoveryRequests, 0);
   });
 
-  await runner.run("an initial keyframe with a future frame id is a gap, not an admission shortcut", async () => {
+  await runner.run("an initial coalesced keyframe may start after frame one", async () => {
     const receiver = createClientDeltaReceiver({ context: context() });
     const future = structuredClone(createAuthorityDeltaPublisher().publish(inputs(1)).frame);
     future.frameId = 4;
     const result = receiver.receive(wire(future));
-    assert.strictEqual(result.accepted, false);
-    assert.strictEqual(result.reason, "frame-gap");
+    assert.strictEqual(result.accepted, true);
+    assert.strictEqual(result.state.frameId, 4);
   });
 
   await runner.run("a forged owner hash cannot expose a half-applied public beat or emit an ACK", async () => {
@@ -312,7 +320,7 @@ async function run() {
     const rejected = receiver.receive(JSON.stringify(forged));
     assert.strictEqual(rejected.accepted, false);
     assert.strictEqual(observed.length, 1, "failed owner lane must not expose the valid public lane");
-    assert.strictEqual(receiver.current(), null);
+    assert.strictEqual(receiver.current().frameId, 1, "forged owner hash must retain the complete safe pair");
     assert.strictEqual(Object.hasOwn(rejected, "ack"), false);
   });
 
@@ -472,7 +480,7 @@ async function run() {
     const rejected = boundedReceiver.receive(wire(oversize.frame));
     assert.strictEqual(rejected.accepted, false);
     assert.strictEqual(rejected.reason, "oversize-frame");
-    assert.strictEqual(boundedReceiver.diagnostics().retainedPairHistory <= 1, true);
+    assert.strictEqual(boundedReceiver.diagnostics().retainedPairHistory <= 12, true);
   });
 
   await runner.run("v1 and static-manifest-only negotiation remain unchanged and opt-in", async () => {
@@ -510,7 +518,9 @@ async function run() {
       assert.strictEqual(authority.acknowledge(identity(), result.ack).accepted, true);
     }
     const diagnostics = receiver.diagnostics();
-    assert.strictEqual(diagnostics.retainedPairHistory, 1);
+    assert.strictEqual(diagnostics.retainedPairHistory, diagnostics.limits.maxRetainedPairHistory);
+    assert(diagnostics.ledger.bytes <= diagnostics.limits.maxRetainedBytes
+      && diagnostics.ledger.highWaterBytes <= diagnostics.limits.maxRetainedBytes);
     assert.strictEqual(diagnostics.hasPublicBase, true);
     assert.strictEqual(diagnostics.hasOwnerBase, true);
     console.log(`  receiver mean apply=${(Number(totalNs) / 100 / 1e6).toFixed(3)}ms mean wire=${Math.round(totalBytes / 100)}B`);

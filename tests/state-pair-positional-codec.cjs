@@ -139,7 +139,7 @@ async function run() {
     assert(!JSON.stringify(client.current().public).includes("owner-secret"), "public lane leaked owner-private state");
   });
 
-  await runner.run("loss recovery despawn and reincarnation keep atomic observer and ACK bases", () => {
+  await runner.run("loss applies the next branch from a retained base and preserves despawn reincarnation ACK bases", () => {
     const id = binding();
     const authority = createRuntimeStatePairAuthority({ matchId: id.runId,
       authorityIncarnation: id.authorityIncarnation, manifestSchema: id.manifestSchema,
@@ -151,16 +151,14 @@ async function run() {
     const first = accept(publish(authority, id, 1));
     authority.acknowledge(id, first.ack);
     publish(authority, id, 2, { x: 0.2 }); // deterministically lost before receiver admission
-    const gap = accept(publish(authority, id, 3, { x: 0.3 }));
-    assert.strictEqual(gap.accepted, false);
-    const recoveryWire = encodeWireFrame(gap.recovery, { direction: CLIENT_TO_SERVER, positionalContext: context(id) });
-    assert.strictEqual(parseWireFrame(recoveryWire,
-      { direction: CLIENT_TO_SERVER, positionalContext: context(id), requirePositional: true }).reason, "frame-gap");
-    authority.recover(id);
-    const recovered = accept(publish(authority, id, 4, { player: false }));
-    assert.strictEqual(recovered.accepted, true);
-    assert.strictEqual(recovered.state.legacyPublicState.players.length, 0);
-    authority.acknowledge(id, recovered.ack);
+    const lagged = accept(publish(authority, id, 3, { x: 0.3 }));
+    assert.strictEqual(lagged.accepted, true);
+    assert.strictEqual(client.diagnostics().recoveryRequests, 0);
+    authority.acknowledge(id, lagged.ack);
+    const despawned = accept(publish(authority, id, 4, { player: false }));
+    assert.strictEqual(despawned.accepted, true);
+    assert.strictEqual(despawned.state.legacyPublicState.players.length, 0);
+    authority.acknowledge(id, despawned.ack);
     const reincarnated = accept(publish(authority, id, 5, { player: true, x: 0.5 }));
     assert.strictEqual(reincarnated.accepted, true);
     assert(reincarnated.state.public.entities.find((entity) => entity.category === "player").incarnation > 1);

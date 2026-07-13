@@ -182,14 +182,10 @@ async function run() {
       const droppedIndex = nextIndex;
       await waitFor(() => rawPairs.length > droppedIndex + 1, "dropped runtime frame gap");
       const gap = client.receive(rawPairs[droppedIndex + 1]);
-      assert(!gap.accepted && gap.recovery?.reason === "frame-gap", "Dropped pair must request keyframe recovery");
-      ws.send(JSON.stringify(gap.recovery));
-      const beforeRecovery = rawPairs.length;
-      await waitFor(() => rawPairs.length > beforeRecovery
-        && JSON.parse(rawPairs[rawPairs.length - 1]).public.kind === "keyframe"
-        && JSON.parse(rawPairs[rawPairs.length - 1]).owner.kind === "keyframe", "recovery keyframes");
-      const recovered = client.receive(rawPairs[rawPairs.length - 1]);
-      assert(recovered.accepted, `Recovery keyframe failed: ${JSON.stringify(recovered)}`);
+      assert(gap.accepted, `Dropped pair successor must apply from its retained advertised base: ${JSON.stringify(gap)}`);
+      ws.send(JSON.stringify(gap.ack));
+      assert(client.diagnostics().recoveryRequests === 0,
+        "one dropped pair with a retained ACK base must not request recovery");
 
       const health = (await request("/health")).body;
       assert(health.multiplayer.statePair.authorityIncarnation === welcome.authorityIncarnation

@@ -40,6 +40,15 @@ const FORBIDDEN_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 const MAX_CONTINUITY_ENTITIES = 8192;
 const MAX_CONTINUITY_COMPONENTS = 16384;
 const MAX_CONTINUITY_BYTES = 1024 * 1024;
+const DEFAULT_BASE_LEDGER_LIMITS = Object.freeze({
+  // The authority retains at most eight pending pairs. Four additional slots
+  // cover reordered delivery around ACK delay without turning wire history
+  // into an unbounded client cache.
+  maxEntries: 12,
+  maxBytes: 8 * 1024 * 1024,
+  maxAgeMs: 15 * 1000,
+  minRecoveryIntervalMs: 250,
+});
 const MODES = Object.freeze({
   V1: "v1",
   STATIC_MANIFEST: "static-manifest-v1",
@@ -238,7 +247,8 @@ function selectClientReplicationMode({ wireVersion, capabilities = [] } = {}) {
 }
 
 function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABILITY],
-  maxPairBytes = MAX_WIRE_PAIR_BYTES, onState = null, onRecovery = null } = {}) {
+  maxPairBytes = MAX_WIRE_PAIR_BYTES, onState = null, onRecovery = null,
+  baseLedgerLimits = {}, now = Date.now } = {}) {
   let context = normalizeContext(rawContext);
   if (!Array.isArray(capabilities) || capabilities.some((value) => typeof value !== "string")) {
     throw new TypeError("capabilities must be a string array");
@@ -254,25 +264,103 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   }
   if (onState !== null && typeof onState !== "function") throw new TypeError("onState must be a function");
   if (onRecovery !== null && typeof onRecovery !== "function") throw new TypeError("onRecovery must be a function");
+  if (typeof now !== "function") throw new TypeError("now must be a function");
+  const ledgerLimits = Object.freeze(Object.fromEntries(Object.entries(DEFAULT_BASE_LEDGER_LIMITS)
+    .map(([key, fallback]) => {
+      const value = baseLedgerLimits[key] === undefined ? fallback : Number(baseLedgerLimits[key]);
+      if (!Number.isSafeInteger(value) || value < 1) throw new RangeError(`${key} must be a positive safe integer`);
+      return [key, value];
+    })));
 
-  let publicBase = null;
-  let ownerBase = null;
-  let publicRetired = Object.freeze({});
-  let ownerRetired = Object.freeze({});
+  function codecBinding() {
+    return positional
+      ? `${POSITIONAL_CODEC_CAPABILITY}:${POSITIONAL_CODEC_MANIFEST_HASH}`
+      : materializeRuntimeComponents ? RUNTIME_PUBLIC_COMPONENTS_CAPABILITY
+        : allowMixed ? MIXED_CAPABILITY : CAPABILITY;
+  }
+
+  function bindingKey() {
+    return [context.matchId, context.sessionId, context.authorityIncarnation, context.recipientId,
+      context.recipientIncarnation, context.manifestSchema, context.manifestHash, codecBinding()]
+      .map((part) => `${String(part).length}:${part}`).join("");
+  }
+
   let currentPair = null;
   let lastAcceptedPair = null;
-  let publicContinuity = emptyContinuity();
-  let ownerContinuity = emptyContinuity();
+  let visiblePublicContinuity = emptyContinuity();
+  let visibleOwnerContinuity = emptyContinuity();
   let lastFrameId = 0;
-  let lastFingerprint = null;
+  let lastVisibleFingerprint = null;
   let lastAck = null;
-  let awaitingKeyframe = true;
-  let recoveryRequested = false;
+  let admitted = false;
+  let closed = false;
+  let recoveryEpisode = null;
   let lastRecovery = null;
+  let lastRecoveryAt = Number.NEGATIVE_INFINITY;
+  let ledgerBytes = 0;
+  let ledgerHighWaterBytes = 0;
+  const ledger = new Map();
+  const publicIndex = new Map();
+  const ownerIndex = new Map();
+  const snapshotIndex = new Map();
+  const statePairIndex = new Map();
+  const rejectionReasons = new Map();
+  const recoveryReasons = new Map();
+  const evictionReasons = new Map();
   const counters = {
     accepted: 0, keyframes: 0, deltas: 0, mixed: 0, duplicates: 0, rejected: 0,
-    recoveryRequests: 0, observerFailures: 0,
+    staleAccepted: 0, published: 0, recoveryRequests: 0, recoveryEpisodes: 0,
+    recoveryCoalesced: 0, recoveryRateLimited: 0, recoveryConvergences: 0,
+    observerFailures: 0, ledgerHits: 0, ledgerMisses: 0, ledgerEvictions: 0,
   };
+
+  function count(map, key) {
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+
+  function laneKey(snapshotId, hash) {
+    return `${snapshotId.length}:${snapshotId}${hash.length}:${hash}`;
+  }
+
+  function rebuildIndexes() {
+    publicIndex.clear();
+    ownerIndex.clear();
+    snapshotIndex.clear();
+    statePairIndex.clear();
+    for (const entry of ledger.values()) {
+      publicIndex.set(laneKey(entry.snapshotId, entry.publicBase.hash), entry.frameId);
+      ownerIndex.set(laneKey(entry.snapshotId, entry.ownerBase.hash), entry.frameId);
+      snapshotIndex.set(entry.snapshotId, entry.frameId);
+      statePairIndex.set(entry.statePairId, entry.frameId);
+    }
+  }
+
+  function evict(frameId, reason) {
+    const entry = ledger.get(frameId);
+    if (!entry) return;
+    ledger.delete(frameId);
+    ledgerBytes -= entry.bytes;
+    counters.ledgerEvictions += 1;
+    count(evictionReasons, reason);
+  }
+
+  function enforceLedgerBounds(wallMs = now()) {
+    for (const [frameId, entry] of ledger) {
+      if (wallMs - entry.materializedAtMs > ledgerLimits.maxAgeMs) evict(frameId, "age");
+    }
+    while (ledger.size > ledgerLimits.maxEntries || ledgerBytes > ledgerLimits.maxBytes) {
+      const candidates = [...ledger.keys()].filter((frameId) => frameId !== lastFrameId);
+      const oldestFrameId = Math.min(...(candidates.length ? candidates : ledger.keys()));
+      evict(oldestFrameId, ledger.size > ledgerLimits.maxEntries ? "frame-count" : "bytes");
+    }
+    rebuildIndexes();
+  }
+
+  function clearLedger() {
+    ledger.clear();
+    ledgerBytes = 0;
+    rebuildIndexes();
+  }
 
   function makeRecovery(reason, acceptedCursor = lastAcceptedPair) {
     const normalizedReason = normalizeRecoveryReason(reason);
@@ -293,29 +381,48 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     });
     if (canonicalJsonBytes(request).length > 2048) fail("invalid-context", "recovery request exceeds bounded size");
     lastRecovery = request;
+    lastRecoveryAt = now();
     counters.recoveryRequests += 1;
+    count(recoveryReasons, normalizedReason);
     try { onRecovery?.(request); } catch { counters.observerFailures += 1; }
     return request;
   }
 
-  function discardUnsafeBases(reason, acceptedCursor = lastAcceptedPair) {
-    publicBase = null;
-    ownerBase = null;
-    currentPair = null;
-    // Once either lane is unsafe, the old ACK cannot be replayed: the authority
-    // would keep publishing deltas against a base the client erased. The
-    // fingerprint and trusted one-pair fence remain so the same frame id cannot
-    // change bytes or regress lifecycle history during keyframe recovery.
-    lastAck = null;
-    awaitingKeyframe = true;
-    recoveryRequested = true;
-    return makeRecovery(reason, acceptedCursor);
+  function requestRecovery(reason) {
+    if (!recoveryEpisode) {
+      recoveryEpisode = { binding: bindingKey(), reason: normalizeRecoveryReason(reason), requested: false };
+      counters.recoveryEpisodes += 1;
+    } else {
+      counters.recoveryCoalesced += 1;
+    }
+    if (recoveryEpisode.requested) return null;
+    if (now() - lastRecoveryAt < ledgerLimits.minRecoveryIntervalMs) {
+      counters.recoveryRateLimited += 1;
+      return null;
+    }
+    recoveryEpisode.requested = true;
+    return makeRecovery(recoveryEpisode.reason);
   }
 
-  function reject(reason) {
+  function beginExplicitRecovery(reason) {
+    const normalizedReason = normalizeRecoveryReason(reason);
+    if (recoveryEpisode?.binding === bindingKey() && recoveryEpisode.requested
+        && recoveryEpisode.reason === normalizedReason) {
+      counters.recoveryCoalesced += 1;
+      return null;
+    }
+    recoveryEpisode = { binding: bindingKey(), reason: normalizedReason, requested: true };
+    counters.recoveryEpisodes += 1;
+    return makeRecovery(normalizedReason);
+  }
+
+  function reject(reason, { recoverable = false } = {}) {
+    const normalizedReason = normalizeRecoveryReason(reason);
     counters.rejected += 1;
-    return Object.freeze({ accepted: false, duplicate: false, reason: normalizeRecoveryReason(reason),
-      recovery: discardUnsafeBases(reason) });
+    count(rejectionReasons, normalizedReason);
+    const recovery = recoverable ? requestRecovery(normalizedReason) : null;
+    return Object.freeze({ accepted: false, duplicate: false, reason: normalizedReason,
+      ...(recovery ? { recovery } : {}) });
   }
 
   function validateOwnerProjection(view) {
@@ -324,34 +431,54 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     }
   }
 
-  function materializeLane(lane, payload, base, retired) {
+  function resolveBase(lane, payload) {
+    const index = lane === "public" ? publicIndex : ownerIndex;
+    const frameId = index.get(laneKey(payload.baseSnapshotId, payload.baseHash));
+    if (frameId === undefined) {
+      counters.ledgerMisses += 1;
+      const snapshotKnown = snapshotIndex.has(payload.baseSnapshotId);
+      fail(snapshotKnown ? "base-mismatch" : "missing-base",
+        `${lane} delta named no exact retained atomic base`);
+    }
+    const entry = ledger.get(frameId);
+    if (!entry || entry.binding !== bindingKey()) fail("identity-mismatch", `${lane} base binding changed`);
+    counters.ledgerHits += 1;
+    return entry;
+  }
+
+  function materializeLane(lane, payload, baseEntry) {
     if (payload.kind === "keyframe") {
       const view = normalizeView(payload.projection);
       if (projectionHash(view) !== payload.resultHash) fail("hash-mismatch", `${lane} keyframe hash mismatch`);
-      return Object.freeze({ view, hash: payload.resultHash, retired });
+      return Object.freeze({ view, hash: payload.resultHash, baseEntry: null });
     }
-    if (!base) fail("missing-base", `${lane} delta has no materialized base`);
+    const base = lane === "public" ? baseEntry.publicBase : baseEntry.ownerBase;
+    const continuity = lane === "public" ? baseEntry.publicContinuity : baseEntry.ownerContinuity;
     if (payload.baseSnapshotId !== base.view.snapshotId || payload.baseHash !== base.hash) {
-      fail("base-mismatch", `${lane} delta base does not match materialized state`);
+      fail("base-mismatch", `${lane} delta base changed after selection`);
     }
     const applied = applyStructuralDelta(base.view, payload.delta, {
       expectedResultHash: payload.resultHash,
-      retainedIncarnations: retired,
+      retainedIncarnations: continuity.retired,
     });
-    return Object.freeze({ view: applied.view, hash: applied.resultHash, retired: applied.retainedIncarnations });
+    return Object.freeze({ view: applied.view, hash: applied.resultHash, baseEntry });
   }
 
-  function assertRelativeLineage(frame) {
-    if (!lastAcceptedPair) return;
-    if (frame.tick < lastAcceptedPair.tick || frame.simTime < lastAcceptedPair.simTime
-      || frame.eventWatermark < lastAcceptedPair.eventWatermark
-      || frame.fieldRevision < lastAcceptedPair.fieldRevision
-      || frame.ballparkEpoch < lastAcceptedPair.ballparkEpoch) {
-      fail("lineage-mismatch", "state-pair lineage regressed");
+  function assertRelativeLineage(frame, baseEntries) {
+    for (const base of baseEntries) {
+      if (frame.frameId <= base.frameId || frame.tick < base.tick || frame.simTime < base.simTime
+        || frame.eventWatermark < base.eventWatermark || frame.fieldRevision < base.fieldRevision
+        || frame.ballparkEpoch < base.ballparkEpoch) {
+        fail("lineage-mismatch", "state-pair lineage regressed from its advertised base");
+      }
     }
-    if (frame.statePairId === lastAcceptedPair.statePairId || frame.snapshotId === lastAcceptedPair.snapshotId) {
-      fail("lineage-mismatch", "new state pair reused an accepted cursor");
-    }
+  }
+
+  function shouldPublish(frame) {
+    if (!currentPair) return true;
+    return frame.frameId > currentPair.frameId && frame.tick >= currentPair.tick
+      && frame.simTime >= currentPair.simTime && frame.eventWatermark >= currentPair.eventWatermark
+      && frame.fieldRevision >= currentPair.fieldRevision && frame.ballparkEpoch >= currentPair.ballparkEpoch;
   }
 
   function assertMaterializedLineage(lane, view, frame) {
@@ -378,6 +505,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function receive(raw) {
     let frame;
     try {
+      if (closed) fail("invalid-context", "receiver is torn down");
+      enforceLedgerBounds();
       const bytes = wireBytes(raw);
       if (bytes > maxPairBytes) return reject("oversize-frame");
       frame = parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
@@ -394,25 +523,42 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       }
 
       const fingerprint = frameFingerprint(frame);
-      if (frame.frameId === lastFrameId && lastFingerprint && fingerprint !== lastFingerprint) {
+      const retainedDuplicate = ledger.get(frame.frameId);
+      if (frame.frameId === lastFrameId && lastVisibleFingerprint
+          && fingerprint !== lastVisibleFingerprint) {
+        fail("duplicate-mismatch", "visible frame id changed bytes after ledger eviction");
+      }
+      if (retainedDuplicate && fingerprint !== retainedDuplicate.fingerprint) {
         fail("duplicate-mismatch", "duplicate frame id changed bytes");
       }
-      if (frame.frameId === lastFrameId && lastAck) {
+      if (retainedDuplicate) {
         counters.duplicates += 1;
-        return Object.freeze({ accepted: true, duplicate: true, ack: lastAck, state: currentPair });
+        return Object.freeze({ accepted: true, duplicate: true, published: false,
+          ack: lastAck, state: currentPair });
       }
-      if (frame.frameId < lastFrameId) fail("stale-frame", "state-pair frame is stale");
-      if (lastFrameId === 0 && !recoveryRequested && frame.frameId !== 1) fail("frame-gap", "initial state-pair frame must start at one");
-      if (!awaitingKeyframe && frame.frameId !== lastFrameId + 1) fail("frame-gap", "state-pair frame gap detected");
-      if (awaitingKeyframe && (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe")) {
-        fail("missing-base", "recovery requires keyframes for both atomic lanes");
+      if (!admitted && (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe")) {
+        fail("missing-base", "admission or explicit rebase requires both atomic keyframes");
       }
-      if (frame.frameId !== lastFrameId) assertRelativeLineage(frame);
+      if (!admitted && currentPair && frame.frameId <= lastFrameId) {
+        fail("stale-frame", "explicit rebase fences frames at or below the retained presentation cursor");
+      }
+      if (recoveryEpisode?.requested
+          && (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe")) {
+        fail("missing-base", "an outstanding recovery request fences dependent deltas until an atomic keyframe");
+      }
+
+      const publicBaseEntry = frame.public.kind === "delta" ? resolveBase("public", frame.public) : null;
+      const ownerBaseEntry = frame.owner.kind === "delta" ? resolveBase("owner", frame.owner) : null;
+      if (publicBaseEntry && ownerBaseEntry && publicBaseEntry !== ownerBaseEntry) {
+        fail("base-mismatch", "public and owner deltas name different atomic base pairs");
+      }
+      const baseEntries = [...new Set([publicBaseEntry, ownerBaseEntry].filter(Boolean))];
+      assertRelativeLineage(frame, baseEntries);
 
       // Both lanes are materialized into locals. No observable receiver state
       // changes until the complete pair and both hashes have passed.
-      const nextPublic = materializeLane("public", frame.public, publicBase, publicRetired);
-      const nextOwner = materializeLane("owner", frame.owner, ownerBase, ownerRetired);
+      const nextPublic = materializeLane("public", frame.public, publicBaseEntry);
+      const nextOwner = materializeLane("owner", frame.owner, ownerBaseEntry);
       assertMaterializedLineage("public", nextPublic.view, frame);
       assertMaterializedLineage("owner", nextOwner.view, frame);
       validateOwnerProjection(nextOwner.view);
@@ -420,12 +566,26 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       // occurred in coalesced frames. Sparse deltas still reject revision-only
       // updates; only the explicitly requested full rebase may advance an
       // unseen revision while restoring the same current value.
-      const recoveryKeyframe = awaitingKeyframe
+      const recoveryKeyframe = (!admitted || recoveryEpisode)
         && frame.public.kind === "keyframe" && frame.owner.kind === "keyframe";
-      const nextPublicContinuity = advanceContinuity(nextPublic.view, publicContinuity,
-        { allowUnseenRevisionHistory: recoveryKeyframe });
-      const nextOwnerContinuity = advanceContinuity(nextOwner.view, ownerContinuity,
-        { allowUnseenRevisionHistory: recoveryKeyframe });
+      const unseenBranchHistory = baseEntries.some((entry) => frame.frameId > entry.frameId + 1)
+        || (currentPair && frame.frameId > currentPair.frameId + 1);
+      const publish = shouldPublish(frame);
+      const branchPublicContinuity = publicBaseEntry?.publicContinuity
+        || (!publish && currentPair ? emptyContinuity() : visiblePublicContinuity);
+      const branchOwnerContinuity = ownerBaseEntry?.ownerContinuity
+        || (!publish && currentPair ? emptyContinuity() : visibleOwnerContinuity);
+      let nextPublicContinuity = advanceContinuity(nextPublic.view, branchPublicContinuity,
+        { allowUnseenRevisionHistory: recoveryKeyframe || unseenBranchHistory });
+      let nextOwnerContinuity = advanceContinuity(nextOwner.view, branchOwnerContinuity,
+        { allowUnseenRevisionHistory: recoveryKeyframe || unseenBranchHistory });
+      if (publish && currentPair && (publicBaseEntry?.frameId !== currentPair.frameId
+          || ownerBaseEntry?.frameId !== currentPair.frameId)) {
+        nextPublicContinuity = advanceContinuity(nextPublic.view, visiblePublicContinuity,
+          { allowUnseenRevisionHistory: true });
+        nextOwnerContinuity = advanceContinuity(nextOwner.view, visibleOwnerContinuity,
+          { allowUnseenRevisionHistory: true });
+      }
       // Reconstruction happens before any receiver state is published. A
       // missing/unknown component therefore rejects the entire pair rather
       // than exposing an intermediate half-materialized entity.
@@ -487,27 +647,64 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         } : {}),
       });
 
-      publicBase = Object.freeze({ view: nextPublic.view, hash: nextPublic.hash });
-      ownerBase = Object.freeze({ view: nextOwner.view, hash: nextOwner.hash });
-      publicContinuity = nextPublicContinuity;
-      ownerContinuity = nextOwnerContinuity;
-      publicRetired = nextPublicContinuity.retired;
-      ownerRetired = nextOwnerContinuity.retired;
-      currentPair = pair;
-      lastAcceptedPair = pair;
-      lastFrameId = frame.frameId;
-      lastFingerprint = fingerprint;
-      lastAck = ack;
-      awaitingKeyframe = false;
-      recoveryRequested = false;
-      lastRecovery = null;
+      const materializedAtMs = now();
+      const entryShape = {
+        binding: bindingKey(), frameId: frame.frameId, statePairId: frame.statePairId,
+        snapshotId: frame.snapshotId, tick: frame.tick, simTime: frame.simTime,
+        eventWatermark: frame.eventWatermark, fieldRevision: frame.fieldRevision,
+        ballparkEpoch: frame.ballparkEpoch, fingerprint,
+        publicBase: { view: nextPublic.view, hash: nextPublic.hash },
+        ownerBase: { view: nextOwner.view, hash: nextOwner.hash },
+        publicContinuity: nextPublicContinuity, ownerContinuity: nextOwnerContinuity,
+      };
+      const entryBytes = canonicalJsonBytes(entryShape).length;
+      if (entryBytes > ledgerLimits.maxBytes) fail("oversize-frame", "materialized base exceeds ledger byte bound");
+      if (snapshotIndex.has(frame.snapshotId) || statePairIndex.has(frame.statePairId)
+          || (currentPair && (frame.snapshotId === currentPair.snapshotId
+            || frame.statePairId === currentPair.statePairId))) {
+        fail("lineage-mismatch", "new frame reused a retained snapshot or state-pair cursor");
+      }
+      const entry = deepFreeze({ ...entryShape, materializedAtMs, bytes: entryBytes });
+      while (ledger.size >= ledgerLimits.maxEntries
+          || ledgerBytes + entry.bytes > ledgerLimits.maxBytes) {
+        const candidates = [...ledger.keys()].filter((frameId) => frameId !== lastFrameId);
+        const oldestFrameId = Math.min(...(candidates.length ? candidates : ledger.keys()));
+        evict(oldestFrameId, ledger.size >= ledgerLimits.maxEntries ? "frame-count" : "bytes");
+      }
+      rebuildIndexes();
+      ledger.set(entry.frameId, entry);
+      ledgerBytes += entry.bytes;
+      ledgerHighWaterBytes = Math.max(ledgerHighWaterBytes, ledgerBytes);
+      enforceLedgerBounds(materializedAtMs);
+
+      if (publish) {
+        currentPair = pair;
+        lastAcceptedPair = pair;
+        lastFrameId = frame.frameId;
+        lastVisibleFingerprint = fingerprint;
+        lastAck = ack;
+        visiblePublicContinuity = nextPublicContinuity;
+        visibleOwnerContinuity = nextOwnerContinuity;
+        admitted = true;
+        if (recoveryEpisode) counters.recoveryConvergences += 1;
+        recoveryEpisode = null;
+        lastRecovery = null;
+        counters.published += 1;
+      } else {
+        counters.staleAccepted += 1;
+      }
       counters.accepted += 1;
       counters[frame.public.kind === frame.owner.kind
         ? frame.public.kind === "keyframe" ? "keyframes" : "deltas" : "mixed"] += 1;
-      try { onState?.(pair); } catch { counters.observerFailures += 1; }
-      return Object.freeze({ accepted: true, duplicate: false, ack, state: pair });
+      if (publish) {
+        try { onState?.(pair); } catch { counters.observerFailures += 1; }
+      }
+      return Object.freeze({ accepted: true, duplicate: false, stale: !publish,
+        published: publish, ack: publish ? ack : lastAck, state: publish ? pair : currentPair });
     } catch (error) {
-      return reject(error?.code || "malformed-frame");
+      const reason = error?.code === "invalid-field" && /negative zero|-0/i.test(String(error.message || ""))
+        ? "lineage-mismatch" : normalizeRecoveryReason(error?.code || "malformed-frame");
+      return reject(reason, { recoverable: reason === "missing-base" });
     }
   }
 
@@ -518,15 +715,13 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     } catch (error) {
       if (typeof rawNextContext?.manifestSchema === "string"
         && rawNextContext.manifestSchema !== DEFAULT_MANIFEST_SCHEMA) {
-        return discardUnsafeBases("schema-changed", null);
+        clearLedger();
+        admitted = false;
+        return beginExplicitRecovery("schema-changed");
       }
       throw error;
     }
     let recoveryReason = reason;
-    const identityChanged = next.matchId !== context.matchId || next.sessionId !== context.sessionId
-      || next.authorityIncarnation !== context.authorityIncarnation
-      || next.recipientId !== context.recipientId || next.recipientIncarnation !== context.recipientIncarnation
-      || next.manifestSchema !== context.manifestSchema || next.manifestHash !== context.manifestHash;
     if (next.matchId !== context.matchId) recoveryReason = "match-changed";
     else if (next.sessionId !== context.sessionId) recoveryReason = "session-changed";
     else if (next.authorityIncarnation !== context.authorityIncarnation) recoveryReason = "authority-changed";
@@ -537,16 +732,36 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     if (positional) codecContext = positionalCodecContext({ ...context,
       codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH });
     lastFrameId = 0;
-    lastFingerprint = null;
+    lastVisibleFingerprint = null;
     lastAck = null;
-    if (identityChanged) {
-      lastAcceptedPair = null;
-      publicContinuity = emptyContinuity();
-      ownerContinuity = emptyContinuity();
-      publicRetired = Object.freeze({});
-      ownerRetired = Object.freeze({});
-    }
-    return discardUnsafeBases(recoveryReason, null);
+    clearLedger();
+    admitted = false;
+    lastAcceptedPair = null;
+    currentPair = null;
+    visiblePublicContinuity = emptyContinuity();
+    visibleOwnerContinuity = emptyContinuity();
+    return beginExplicitRecovery(recoveryReason);
+  }
+
+  function rebase(reason = "reconnect") {
+    clearLedger();
+    admitted = false;
+    lastAck = null;
+    return beginExplicitRecovery(reason);
+  }
+
+  function teardown() {
+    clearLedger();
+    admitted = false;
+    recoveryEpisode = null;
+    currentPair = null;
+    lastAcceptedPair = null;
+    lastAck = null;
+    lastFrameId = 0;
+    lastVisibleFingerprint = null;
+    visiblePublicContinuity = emptyContinuity();
+    visibleOwnerContinuity = emptyContinuity();
+    closed = true;
   }
 
   function current() {
@@ -559,19 +774,32 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       mode: positional ? MODES.STATE_PAIR_POSITIONAL_JSON : materializeRuntimeComponents
         ? MODES.STATE_PAIR_RUNTIME_COMPONENTS
         : allowMixed ? MODES.STATE_PAIR_MIXED : MODES.STATE_PAIR,
-      awaitingKeyframe,
-      hasPublicBase: Boolean(publicBase),
-      hasOwnerBase: Boolean(ownerBase),
+      awaitingKeyframe: !admitted,
+      hasPublicBase: ledger.size > 0,
+      hasOwnerBase: ledger.size > 0,
       lastFrameId,
-      retainedPublicIdentities: Object.keys(publicRetired).length,
-      retainedOwnerIdentities: Object.keys(ownerRetired).length,
-      retainedPairHistory: lastFingerprint ? 1 : 0,
+      retainedPublicIdentities: Object.keys(visiblePublicContinuity.retired).length,
+      retainedOwnerIdentities: Object.keys(visibleOwnerContinuity.retired).length,
+      retainedPairHistory: ledger.size,
+      ledger: {
+        entries: ledger.size, bytes: ledgerBytes, highWaterBytes: ledgerHighWaterBytes,
+        hits: counters.ledgerHits, misses: counters.ledgerMisses, evictions: counters.ledgerEvictions,
+        evictionReasons: Object.fromEntries([...evictionReasons].sort()),
+      },
+      rejectionReasons: Object.fromEntries([...rejectionReasons].sort()),
+      recoveryReasons: Object.fromEntries([...recoveryReasons].sort()),
+      recoveryOutstanding: Boolean(recoveryEpisode?.requested),
+      recoveryEpisode: recoveryEpisode ? { reason: recoveryEpisode.reason,
+        requested: recoveryEpisode.requested } : null,
       lastRecovery,
-      limits: { maxPairBytes, maxRetainedPairHistory: 1 },
+      closed,
+      limits: { maxPairBytes, maxRetainedPairHistory: ledgerLimits.maxEntries,
+        maxRetainedBytes: ledgerLimits.maxBytes, maxRetainedAgeMs: ledgerLimits.maxAgeMs,
+        minRecoveryIntervalMs: ledgerLimits.minRecoveryIntervalMs },
     });
   }
 
-  return Object.freeze({ receive, reconnect, current, diagnostics });
+  return Object.freeze({ receive, reconnect, rebase, teardown, current, diagnostics });
 }
 
 module.exports = {
@@ -581,6 +809,7 @@ module.exports = {
   POSITIONAL_CODEC_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
+  DEFAULT_BASE_LEDGER_LIMITS,
   MODES,
   ClientDeltaError,
   selectClientReplicationMode,

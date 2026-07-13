@@ -45,11 +45,13 @@ const S6_BENCHMARK = process.argv.includes("--s6-benchmark");
 const S7_GATE = process.argv.includes("--s7");
 const S8_PROTOTYPE = process.argv.includes("--s8-prototype");
 const S9_PROTOTYPE = process.argv.includes("--s9-positional");
-const SPARSE_GATE = S8_PROTOTYPE || S9_PROTOTYPE;
+const S10_PROTOTYPE = process.argv.includes("--s10-ledger");
+const POSITIONAL_GATE = S9_PROTOTYPE || S10_PROTOTYPE;
+const SPARSE_GATE = S8_PROTOTYPE || POSITIONAL_GATE;
 const RESIDUAL_GATE = S7_GATE || SPARSE_GATE;
 const ADMISSION_MODE = process.argv.includes("--admission");
 const S6_PREPARED = !["0", "false"].includes(String(process.env.LBH_S6_PREPARED ?? "true").toLowerCase());
-const GATE = S9_PROTOTYPE ? "s9" : S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
+const GATE = S10_PROTOTYPE ? "s10" : S9_PROTOTYPE ? "s9" : S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
 const MIXED_GATE = GATE !== "s3";
 const COMPARE_S3 = GATE === "s4";
 const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
@@ -192,7 +194,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
   const requestedCapabilities = ["static-manifest-v1", "state-pair-v1",
     ...(MIXED_GATE ? [MIXED_CAPABILITY] : []),
     ...(SPARSE_GATE ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY] : []),
-    ...(S9_PROTOTYPE ? [POSITIONAL_CODEC_CAPABILITY] : [])];
+    ...(POSITIONAL_GATE ? [POSITIONAL_CODEC_CAPABILITY] : [])];
   const issued = await request(port, "/multiplayer/ticket", { method: "POST", authority, body: {
     kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2],
     capabilities: requestedCapabilities,
@@ -200,19 +202,21 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
   if (issued.status !== 200 || !issued.body.capabilities.includes("state-pair-v1")
       || (MIXED_GATE && !issued.body.capabilities.includes(MIXED_CAPABILITY))
       || (SPARSE_GATE && !issued.body.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY))
-      || (S9_PROTOTYPE && !issued.body.capabilities.includes(POSITIONAL_CODEC_CAPABILITY))) {
+      || (POSITIONAL_GATE && !issued.body.capabilities.includes(POSITIONAL_CODEC_CAPABILITY))) {
     throw new Error(`${label} state-pair ticket failed: ${JSON.stringify(issued.body)}`);
   }
   const client = {
     label, authority, ticket: issued.body, fault, ws: new WebSocket(`ws://127.0.0.1:${port}/stream`,
       { perMessageDeflate: false }),
-    welcome: null, receiver: null, codecContext: null, error: null, close: null, pairCount: 0, acceptedPairs: 0,
+    welcome: null, receiver: null, codecContext: null, error: null, close: null, pairCount: 0,
+    acceptedPairs: 0, validatedPairs: 0, staleOrDuplicatePairs: 0,
+    receiverFinalDiagnostics: null, receiverCleanupDiagnostics: null, lastVisibleFrameId: 0,
     lastPairAt: null, lastStatePairAckSentFrameId: 0,
     inputSeq: 0, actionSeq: 0, commandSeq: 0, uplink: {}, downlink: {},
     manifest: { reused: reuseManifest, servedBytes: 0, hash: issued.body.manifestHash,
-      codecManifestHash: S9_PROTOTYPE ? POSITIONAL_CODEC_MANIFEST_HASH : null,
-      codecVerified: S9_PROTOTYPE ? reuseManifest : null,
-      codecVerificationSource: S9_PROTOTYPE && reuseManifest ? "local-static-manifest-cache" : null },
+      codecManifestHash: POSITIONAL_GATE ? POSITIONAL_CODEC_MANIFEST_HASH : null,
+      codecVerified: POSITIONAL_GATE ? reuseManifest : null,
+      codecVerificationSource: POSITIONAL_GATE && reuseManifest ? "local-static-manifest-cache" : null },
     wireDecodeSamples: [], clientWorkSamples: [], ackWorkSamples: [], faultLog: [], hashesVerified: 0,
     legacyReconstructionVerified: 0, acceptedPairTimes: [],
     shape: { keyframes: 0, deltas: 0, creates: 0, updates: 0, despawns: 0, reincarnations: 0, rootOps: 0 },
@@ -241,7 +245,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       client.inputSeq = frame.lastInputSeq;
       client.actionSeq = frame.lastActionSeq;
       client.commandSeq = frame.lastCommandSeq;
-      if (S9_PROTOTYPE) client.codecContext = positionalCodecContext({
+      if (POSITIONAL_GATE) client.codecContext = positionalCodecContext({
         matchId: frame.runId, sessionId: frame.connectionId,
         authorityIncarnation: frame.authorityIncarnation, recipientId: frame.membershipId,
         recipientIncarnation: frame.connectionEpoch, manifestHash: frame.manifestHash,
@@ -284,19 +288,30 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     const outcome = client.receiver.receive(text);
     client.clientWorkSamples.push({ at: Date.now(), ms: performance.now() - started });
     if (!outcome.accepted) {
-      client.faultLog.push({ type: "recovery", reason: outcome.reason, afterFrameId: frame.frameId, at: Date.now() });
-      send(client, outcome.recovery);
+      client.faultLog.push({ type: outcome.recovery ? "recovery" : "rejection",
+        reason: outcome.reason, afterFrameId: frame.frameId, at: Date.now() });
+      if (outcome.recovery) send(client, outcome.recovery);
       return;
     }
-    client.acceptedPairs += 1;
-    client.acceptedPairTimes.push(Date.now());
+    client.validatedPairs += 1;
     if (projectionHash(outcome.state.public) !== outcome.ack.publicHash
       || projectionHash(outcome.state.owner) !== outcome.ack.ownerHash
-      || frame.public.resultHash !== outcome.ack.publicHash || frame.owner.resultHash !== outcome.ack.ownerHash) {
+      || (outcome.published !== false
+        && (frame.public.resultHash !== outcome.ack.publicHash || frame.owner.resultHash !== outcome.ack.ownerHash))) {
       client.error = "materialized authority/client projection hash mismatch";
       client.ws.terminate();
       return;
     }
+    if (outcome.published === false) {
+      client.staleOrDuplicatePairs += 1;
+      const ackStarted = performance.now();
+      if (send(client, outcome.ack)) client.lastStatePairAckSentFrameId = outcome.ack.frameId;
+      client.ackWorkSamples.push({ at: Date.now(), ms: performance.now() - ackStarted });
+      return;
+    }
+    client.acceptedPairs += 1;
+    client.acceptedPairTimes.push(Date.now());
+    client.lastVisibleFrameId = outcome.state.frameId;
     if (outcome.state.matchId !== client.welcome.runId
       || outcome.state.recipientId !== client.welcome.membershipId
       || outcome.state.owner.entities.some((entity) => entity.sourceId !== client.welcome.membershipId)) {
@@ -328,7 +343,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       client.legacyReconstructionVerified += 1;
     }
     client.hashesVerified += 1;
-    observeMaterializedLifecycle(client, outcome.state.public);
+    if (outcome.published !== false) observeMaterializedLifecycle(client, outcome.state.public);
     if (client.attributionCapture.active && Date.now() >= client.attributionCapture.startAt
         && client.attributionCapture.rawFrames.length < client.attributionCapture.maxFrames) {
       if (encodeWireFrame(frame, { direction: SERVER_TO_CLIENT,
@@ -344,7 +359,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       return;
     }
     const ackStarted = performance.now();
-    if (send(client, outcome.ack)) client.lastStatePairAckSentFrameId = frame.frameId;
+    if (send(client, outcome.ack)) client.lastStatePairAckSentFrameId = outcome.ack.frameId;
     client.ackWorkSamples.push({ at: Date.now(), ms: performance.now() - ackStarted });
   });
   await new Promise((resolve, reject) => { client.ws.once("open", resolve); client.ws.once("error", reject); });
@@ -362,7 +377,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       || `sha256:${crypto.createHash("sha256").update(fetched.bytes).digest("hex")}` !== issued.body.manifestHash) {
       throw new Error(`${label} manifest verification failed`);
     }
-    if (S9_PROTOTYPE) {
+    if (POSITIONAL_GATE) {
       const sessionManifest = JSON.parse(fetched.bytes.toString("utf8"));
       const codec = sessionManifest.publicContent?.statePairCodec;
       const codecHash = codec?.manifest
@@ -394,15 +409,20 @@ async function closeClient(client) {
   client.ws._socket?.resume();
   client.ws.close(1000, "gate complete");
   await waitFor(() => client.close, `${client.label} close`, 1500).catch(() => client.ws.terminate());
+  client.receiverFinalDiagnostics = client.receiver?.diagnostics() || null;
+  client.lastVisibleFrameId = client.receiver?.current()?.frameId || client.lastVisibleFrameId;
+  client.receiver?.teardown();
+  client.receiverCleanupDiagnostics = client.receiver?.diagnostics() || null;
 }
 
 function summarizeClients(clients) {
   return clients.map((client) => ({
     label: client.label, membershipId: client.welcome.membershipId, connectionEpoch: client.welcome.connectionEpoch,
     capabilities: client.ticket.capabilities,
-    acceptedPairs: client.acceptedPairs, hashesVerified: client.hashesVerified,
+    acceptedPairs: client.acceptedPairs, validatedPairs: client.validatedPairs,
+    staleOrDuplicatePairs: client.staleOrDuplicatePairs, hashesVerified: client.hashesVerified,
     legacyReconstructionVerified: client.legacyReconstructionVerified,
-    lastAcceptedFrameId: client.receiver?.current()?.frameId || 0,
+    lastAcceptedFrameId: client.lastVisibleFrameId,
     lastStatePairAckSentFrameId: client.lastStatePairAckSentFrameId,
     manifest: client.manifest, uplinkSerialized: client.uplink, downlinkObserved: client.downlink,
     wireDecodeMs: distribution(client.wireDecodeSamples.map((sample) => sample.ms)),
@@ -411,6 +431,8 @@ function summarizeClients(clients) {
     shape: client.shape, faults: client.faultLog, error: client.error, close: client.close,
     pairKinds: client.pairKinds,
     observedLifecycle: client.observedLifecycle,
+    receiverDiagnostics: client.receiverFinalDiagnostics,
+    receiverCleanupDiagnostics: client.receiverCleanupDiagnostics,
   }));
 }
 
@@ -842,7 +864,7 @@ async function runScenario({ population, scenario, runDir }) {
       LBH_SIM_WS_STATE_PAIR_V1: "true", LBH_SIM_WS_REPLICATION_ACCOUNTING: "1",
       LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE ? "true" : "false",
       LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: SPARSE_GATE ? "true" : "false",
-      LBH_SIM_WS_POSITIONAL_JSON_V1: S9_PROTOTYPE ? "true" : "false",
+      LBH_SIM_WS_POSITIONAL_JSON_V1: POSITIONAL_GATE ? "true" : "false",
       LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS: RESIDUAL_GATE ? "true" : "false",
       LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK && !S6_PREPARED ? "false" : "true",
       LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || RESIDUAL_GATE ? "1" : "0",
@@ -965,8 +987,8 @@ async function runScenario({ population, scenario, runDir }) {
     if (RESIDUAL_GATE && !churn) {
       const capture = clientsRef.current[0].attributionCapture;
       capture.active = false;
-      residualAttribution = S9_PROTOTYPE ? {
-        schema: "lbh-state-pair-s9-positional-sample-v1",
+      residualAttribution = POSITIONAL_GATE ? {
+        schema: `lbh-state-pair-${GATE}-positional-sample-v1`,
         sample: { capturedAcceptedFrames: capture.rawFrames.length,
           encodedBytes: capture.rawFrames.reduce((sum, raw) => sum + Buffer.byteLength(raw, "utf8"), 0),
           meanEncodedBytes: capture.rawFrames.length
@@ -1024,23 +1046,44 @@ async function runScenario({ population, scenario, runDir }) {
     }, { creates: 0, despawns: 0, reincarnations: 0, componentChanges: 0 });
     const publisher = preStopHealth.multiplayer.statePair.publisher;
     const livePublisher = endHealth.multiplayer.statePair.publisher;
+    const receiverDiagnostics = clientSummary.map((client) => client.receiverDiagnostics).filter(Boolean);
+    const receiverCleanupDiagnostics = clientSummary.map((client) => client.receiverCleanupDiagnostics).filter(Boolean);
+    const receiverBaseMismatchCount = receiverDiagnostics.reduce((sum, diagnostics) => sum
+      + (diagnostics.rejectionReasons?.["base-mismatch"] || 0)
+      + (diagnostics.rejectionReasons?.["missing-base"] || 0), 0);
+    const receiverRecoveryRequestCount = receiverDiagnostics.reduce((sum, diagnostics) =>
+      sum + diagnostics.recoveryRequests, 0);
+    const receiverRejectedCount = receiverDiagnostics.reduce((sum, diagnostics) =>
+      sum + diagnostics.rejected, 0);
     const correctness = {
       mixedCapabilityNegotiated: !MIXED_GATE || clientSummary.every((client) =>
         client.capabilities.includes(MIXED_CAPABILITY)),
       allClientHashesMatched: clientSummary.every((client) => client.hashesVerified === client.acceptedPairs),
       ownerPrivacyAndAtomicObservationVerified: clientSummary.every((client) =>
         client.hashesVerified === client.acceptedPairs && client.error === null),
-      legacyPublicStateShapeInternallyConsistent: !S8_PROTOTYPE || clientSummary.every((client) =>
+      legacyPublicStateShapeInternallyConsistent: !SPARSE_GATE || clientSummary.every((client) =>
         client.legacyReconstructionVerified === client.acceptedPairs),
       noClientErrors: clientSummary.every((client) => client.error === null),
       publisherDrained: publisher.recipients === 0 && publisher.pendingPairs === 0 && publisher.retainedBytes === 0,
       statePairAcksConverged: publisher.ackAccepted > 0,
       ackRejectsExactlyZero: publisher.ackRejected === 0,
+      receiverBasesStayedApplicable: receiverBaseMismatchCount === 0,
+      receiverRecoveryRequestsExactlyExpected: churn || receiverRecoveryRequestCount === 0,
+      receiverRejectionsExactlyZeroInNormal: churn || receiverRejectedCount === 0,
+      receiverLedgerStayedBounded: receiverDiagnostics.every((diagnostics) =>
+        diagnostics.ledger.entries <= diagnostics.limits.maxRetainedPairHistory
+        && diagnostics.ledger.bytes <= diagnostics.limits.maxRetainedBytes
+        && diagnostics.ledger.highWaterBytes <= diagnostics.limits.maxRetainedBytes),
+      receiverLedgerCleanedUp: receiverCleanupDiagnostics.length === clientSummary.length
+        && receiverCleanupDiagnostics.every((diagnostics) =>
+          diagnostics.closed === true && diagnostics.ledger.entries === 0 && diagnostics.ledger.bytes === 0),
       accountingComplete: accounting.overflow === 0 && accounting.evidenceFailure === null,
       faultConvergence: !churn || clientSummary.every((client) => {
         const loss = client.faults.find((fault) => fault.type === "frame-loss");
         const ackLoss = client.faults.find((fault) => fault.type === "ack-loss");
-        if (loss && !client.faults.some((fault) => fault.type === "recovery")) return false;
+        if (loss && (S10_PROTOTYPE
+          ? !(client.lastAcceptedFrameId > loss.frameId)
+          : !client.faults.some((fault) => fault.type === "recovery"))) return false;
         if (ackLoss && !(client.lastAcceptedFrameId > ackLoss.frameId
           && client.lastStatePairAckSentFrameId > ackLoss.frameId)) return false;
         return true;
@@ -1061,6 +1104,9 @@ async function runScenario({ population, scenario, runDir }) {
         / ((endAt - startAt) / 1000)]));
     const minimumReceiverAcceptedPairsPerSecond = churn ? null
       : Math.min(...Object.values(receiverAcceptedPairsPerSecond));
+    const receiverCadenceToleranceHz = Math.max(0.5, authorityAcceptedPairsPerSecond * 0.05);
+    const receiverCadenceTracksAuthority = churn ? null : Object.values(receiverAcceptedPairsPerSecond)
+      .every((rate) => Math.abs(rate - authorityAcceptedPairsPerSecond) <= receiverCadenceToleranceHz);
     const admission = {
       steadyMeanAtOrBelow64KiB: churn ? null : meanWorst <= TARGET_BPS,
       steadyOneSecondP95AtOrBelow80KiB: churn ? null : p95OneSecond <= SENSITIVITY_BPS,
@@ -1070,6 +1116,9 @@ async function runScenario({ population, scenario, runDir }) {
         : targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS,
       receiverAcceptedCadenceAtLeast90PercentOfConfigured: churn || !RESIDUAL_GATE ? null
         : minimumReceiverAcceptedPairsPerSecond >= MIN_HEALTHY_PUBLICATION_HZ,
+      receiverCadenceTracksAuthorityWithinTolerance: !S10_PROTOTYPE || churn ? null
+        : receiverCadenceTracksAuthority,
+      receiverCadenceToleranceHz: !S10_PROTOTYPE || churn ? null : receiverCadenceToleranceHz,
       correctnessPassed: Object.values(correctness).every(Boolean),
       authorityWithinExistingClockBudget: endHealth.multiplayer.projection.accounting.costDistributions.simTickMs.p95
         <= (1000 / endHealth.session.tickHz)
@@ -1077,7 +1126,12 @@ async function runScenario({ population, scenario, runDir }) {
         <= (1000 / (RESIDUAL_GATE ? TARGET_PUBLICATION_HZ : endHealth.session.snapshotHz)),
       overloadStayedNormal: endHealth.session.overloadState === "NORMAL",
     };
-    admission.passed = Object.values(admission).filter((value) => value !== null).every(Boolean);
+    admission.passed = S10_PROTOTYPE
+      ? admission.correctnessPassed
+        && (churn || (admission.receiverCadenceTracksAuthorityWithinTolerance === true
+          && admission.receiverAcceptedCadenceAtLeast90PercentOfConfigured === true))
+      : Object.entries(admission).filter(([key, value]) => value !== null
+        && key !== "receiverCadenceToleranceHz").every(([, value]) => Boolean(value));
     const breakdown = eventBreakdown(accounting.events, startAt, endAt);
     const pairGroup = Object.values(breakdown)
       .filter((row) => row.direction === "authority->client" && row.frameClass === "statePair" && row.metric === "accepted");
@@ -1203,7 +1257,7 @@ async function runScenario({ population, scenario, runDir }) {
       performance: { machineLocal: true,
         authority: { ...deltaHealth(startHealth, endHealth),
           percentileScope: "bounded runtime rolling ring; reset after warmup by evidence-only endpoint" },
-        positionalWireDecodeMs: S9_PROTOTYPE ? distribution(allClients.flatMap((client) => client.wireDecodeSamples)
+        positionalWireDecodeMs: POSITIONAL_GATE ? distribution(allClients.flatMap((client) => client.wireDecodeSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)) : null,
         clientApplyMs: distribution(allClients.flatMap((client) => client.clientWorkSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
@@ -1276,7 +1330,7 @@ function validateArtifact(directory) {
         entry.scenario === "churn" && entry.population === population)) || aggregate.profile === "review",
     atomicKindAlignmentAbsent: !["s4", "s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.pairShape.productWindow.atomicKindAlignmentAbsent === true),
-    mixedPairsObserved: !["s4", "s7", "s8", "s9"].includes(aggregate.gate) || scenarioFiles
+    mixedPairsObserved: !["s4", "s7", "s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.pairShape.productWindow.publicDeltaOwnerKeyframe > 0),
     s3ComparisonsPresent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
@@ -1293,19 +1347,19 @@ function validateArtifact(directory) {
           && proof.beats === rawCalls && coreCalls === rawCalls * entry.population
           && proof.comparisons === rawCalls * (entry.population - 1);
       }),
-    s7PreparedProfilerBoundary: !["s7", "s8", "s9"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
+    s7PreparedProfilerBoundary: !["s7", "s8", "s9", "s10"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
       && aggregate.instrumentationEnabled === false && aggregate.eventLoopMonitorEnabled === true),
-    s7AckRejectAccountingConsistent: !["s7", "s8", "s9"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
+    s7AckRejectAccountingConsistent: !["s7", "s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
       const rejected = entry.pairShape.ackBaseProof.ackRejected;
       return Number.isSafeInteger(rejected) && rejected >= 0
         && entry.correctness.ackRejectsExactlyZero === (rejected === 0);
     }),
-    s7CadenceNormalizationPresent: !["s7", "s8", "s9"].includes(aggregate.gate) || scenarioFiles
+    s7CadenceNormalizationPresent: !["s7", "s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.targetCadenceNormalization?.configuredPublicationHz === TARGET_PUBLICATION_HZ
         && Number.isFinite(entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond)
         && Number.isFinite(entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond)),
-    s7AttributionReconciledAndPrivate: aggregate.gate === "s9" ? scenarioFiles
+    s7AttributionReconciledAndPrivate: ["s9", "s10"].includes(aggregate.gate) ? scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.residualAttribution?.codec === POSITIONAL_CODEC_CAPABILITY
         && entry.residualAttribution?.sample?.capturedAcceptedFrames > 0
@@ -1319,30 +1373,40 @@ function validateArtifact(directory) {
         && entry.residualAttribution?.ownerKeyframe?.reconciliation?.passed === true
         && entry.residualAttribution?.privacy?.rawFramesRetained === false
         && entry.residualAttribution?.privacy?.ownerPrivateValuesEmitted === false),
-    s7ComparisonsPresent: !["s7", "s8", "s9"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s7ComparisonsPresent: !["s7", "s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.comparisonToS4?.compositeSha256 === S4_CANONICAL_SHA256
         && (entry.scenario !== "normal"
           || entry.comparisonToS6PreparedDiagnostic?.analysisSha256 === S6_ANALYSIS_SHA256)),
-    s8FieldFreshnessPresent: !["s8", "s9"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s8FieldFreshnessPresent: !["s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       Object.values(entry.fieldFreshness?.maximumConfiguredPublicationLagBeats || {})
         .length === 4
       && Object.values(entry.fieldFreshness.maximumConfiguredPublicationLagBeats)
         .every((value) => value === 0)),
-    s9CodecManifestBound: aggregate.gate !== "s9" || scenarioFiles.every((entry) =>
+    s9CodecManifestBound: !["s9", "s10"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.clients.every((client) => client.manifest?.codecVerified === true
         && client.manifest?.codecManifestHash === POSITIONAL_CODEC_MANIFEST_HASH)
       && entry.diagnostics?.adapterStatePair?.positionalJson?.encodedFrames > 0
       && entry.performance?.positionalWireDecodeMs?.count > 0),
+    s10LedgerEvidence: aggregate.gate !== "s10" || scenarioFiles.every((entry) =>
+      entry.clients.every((client) => client.receiverDiagnostics?.ledger
+        && client.receiverDiagnostics.ledger.entries <= client.receiverDiagnostics.limits.maxRetainedPairHistory
+        && client.receiverDiagnostics.ledger.bytes <= client.receiverDiagnostics.limits.maxRetainedBytes
+        && client.receiverCleanupDiagnostics?.closed === true
+        && client.receiverCleanupDiagnostics?.ledger?.entries === 0)
+      && entry.correctness.receiverBasesStayedApplicable === true
+      && entry.correctness.ackRejectsExactlyZero === true
+      && (entry.scenario !== "normal"
+        || entry.admission.receiverCadenceTracksAuthorityWithinTolerance === true)),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
-    && (["s7", "s8", "s9"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
+    && (["s7", "s8", "s9", "s10"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
     && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
     && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent
     && invariants.stageProfilePresent && invariants.publicCoreShareabilityProved
     && invariants.s7PreparedProfilerBoundary && invariants.s7AckRejectAccountingConsistent
     && invariants.s7CadenceNormalizationPresent && invariants.s7AttributionReconciledAndPrivate
     && invariants.s7ComparisonsPresent && invariants.s8FieldFreshnessPresent
-    && invariants.s9CodecManifestBound;
+    && invariants.s9CodecManifestBound && invariants.s10LedgerEvidence;
   return { passed: methodPassed, invariants, checksum,
     aggregateVerdict: aggregate.verdict };
 }
@@ -1373,7 +1437,7 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S10_PROTOTYPE ? " --s10-ledger" : S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
     schemaVersion: RESIDUAL_GATE ? 3 : 2,
     gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
@@ -1386,7 +1450,7 @@ async function main() {
       env: { LBH_SIM_WS_JSON_V2: true, LBH_SIM_WS_STATE_PAIR_V1: true,
         LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE,
         LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: SPARSE_GATE,
-        LBH_SIM_WS_POSITIONAL_JSON_V1: S9_PROTOTYPE,
+        LBH_SIM_WS_POSITIONAL_JSON_V1: POSITIONAL_GATE,
         LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS: RESIDUAL_GATE,
         LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK ? S6_PREPARED : true,
         LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || RESIDUAL_GATE,
@@ -1474,8 +1538,13 @@ async function main() {
       reconnectReuseObserved: results.filter((entry) => entry.scenario === "churn")
         .every((entry) => entry.faults.some((fault) => fault.name === "reconnect" && fault.manifestReused === true)) },
     failureAnalysis,
-    residualDecisionTable: RESIDUAL_GATE && !S9_PROTOTYPE ? buildResidualDecisionTable(normalResults) : null,
+    residualDecisionTable: RESIDUAL_GATE && !POSITIONAL_GATE ? buildResidualDecisionTable(normalResults) : null,
     recommendation: STAGE_PROFILE ? "Diagnostic only: use stage attribution and the A/B control before selecting one narrow CPU optimization."
+      : S10_PROTOTYPE ? {
+        decision: "Judge S10 only on bounded base convergence, edge-triggered recovery, exact ACK behavior, and receiver cadence tracking authority.",
+        bandwidthBoundary: "Positional pair bytes and 10 Hz normalization remain reported but do not admit or reject this client-ledger slice.",
+        defer: "Do not enable experimental capabilities by default or expand to binary, compression, AOI, hosted WSS, WAN, or fleet claims.",
+      }
       : S9_PROTOTYPE ? {
         decision: "Treat this as a positional-JSON pre-gate only; admission still requires the canonical duration and every correctness/cadence/overload guard.",
         targetMeanPairBytesAt10Hz: 6504,

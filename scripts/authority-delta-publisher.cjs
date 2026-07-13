@@ -208,7 +208,7 @@ function createAuthorityDeltaPublisher(options = {}) {
   }
   const recipients = new Map();
   const counters = { keyframes: 0, deltas: 0, mixed: 0, retransmits: 0, ackAccepted: 0, ackRejected: 0,
-    ackBaseAdvances: 0, forcedRebases: 0 };
+    ackBaseAdvances: 0, ackDuplicates: 0, ackIgnoredStale: 0, forcedRebases: 0 };
   const keyframeReasons = new Map();
   const candidates = {
     comparisons: 0,
@@ -518,7 +518,27 @@ function createAuthorityDeltaPublisher(options = {}) {
     if (!state || !ack || typeof ack !== "object" || Array.isArray(ack)) return reject("unknown-recipient");
     if (!sameIdentity(identity, ack)) return reject("identity-mismatch");
     if (!Number.isSafeInteger(ack.frameId) || ack.frameId < 1) return reject("invalid-frame-id");
-    const record = state.pending.get(ack.frameId);
+    if (state.acked && ack.frameId < state.acked.frameId) {
+      // ACKs are cumulative. A delayed older ACK for the same exact binding
+      // cannot move the authority base backward and is therefore an
+      // idempotent no-op rather than a recovery-triggering protocol error.
+      const staleMixed = ack.ackSchema === MIXED_ACK_SCHEMA;
+      const staleKeys = new Set(["type", "ackKind", "ackSchema", "matchId", "sessionId",
+        "authorityIncarnation", "recipientId", "recipientIncarnation", "frameId", "statePairId",
+        "snapshotId", "publicHash", "ownerHash", ...(staleMixed ? ["pairSchema", "tick", "simTime",
+          "eventWatermark", "fieldRevision", "overloadMode", "ballparkEpoch", "manifestHash",
+          "publicKind", "ownerKind", "publicBaseSnapshotId", "ownerBaseSnapshotId"] : [])]);
+      if (Object.keys(ack).some((key) => !staleKeys.has(key))
+          || [...staleKeys].some((key) => !Object.hasOwn(ack, key))
+          || ack.type !== "ack" || ack.ackKind !== "statePair"
+          || (ack.ackSchema !== ACK_SCHEMA && ack.ackSchema !== MIXED_ACK_SCHEMA)) {
+        return reject("invalid-ack-schema");
+      }
+      counters.ackIgnoredStale += 1;
+      return Object.freeze({ accepted: true, validated: false, frameId: state.acked.frameId, stale: true });
+    }
+    const ackedDuplicate = state.acked && ack.frameId === state.acked.frameId;
+    const record = ackedDuplicate ? state.acked.record : state.pending.get(ack.frameId);
     if (!record) return reject("unknown-frame");
     const mixed = record.frame.pairSchema === MIXED_PAIR_SCHEMA;
     const ackKeys = new Set(["type", "ackKind", "ackSchema", "matchId", "sessionId", "authorityIncarnation",
@@ -541,7 +561,12 @@ function createAuthorityDeltaPublisher(options = {}) {
       || ack.fieldRevision !== record.frame.fieldRevision || ack.overloadMode !== record.frame.overloadMode
       || ack.ballparkEpoch !== record.frame.ballparkEpoch
       || ack.manifestHash !== record.frame.manifestHash)) return reject("lineage-mismatch");
-    state.acked = Object.freeze({ public: record.public, owner: record.owner, frameId: ack.frameId });
+    if (ackedDuplicate) {
+      counters.ackAccepted += 1;
+      counters.ackDuplicates += 1;
+      return Object.freeze({ accepted: true, frameId: ack.frameId, duplicate: true });
+    }
+    state.acked = Object.freeze({ public: record.public, owner: record.owner, frameId: ack.frameId, record });
     for (const [frameId, pending] of state.pending) {
       if (frameId > ack.frameId) continue;
       state.pending.delete(frameId);

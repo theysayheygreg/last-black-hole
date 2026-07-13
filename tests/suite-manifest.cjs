@@ -138,6 +138,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "ClientBaseLedger",
+    file: "client-base-ledger.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "RuntimeStatePairIntegration",
     file: "runtime-state-pair-integration.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
