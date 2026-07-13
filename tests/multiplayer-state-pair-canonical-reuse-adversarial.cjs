@@ -78,11 +78,13 @@ function run() {
     assert.strictEqual(positional.chosen.kind, expected.kind);
     assert.strictEqual(positional.chosen.wire, expected.wire);
     assert.deepStrictEqual(decodePositionalFrame(positional.chosen.wire, context), positional.chosen.frame);
-    for (const bytes of Object.values(oracleExpanded)) {
-      assert.strictEqual(bytes > bytes - 1, true);
-      assert.strictEqual(bytes > bytes, false);
-      boundaryChecks += 2;
-    }
+    const boundary = Math.max(...Object.values(oracleExpanded));
+    const acceptedBoundary = testExactCanonicalCandidateSizesWithReuse(entries, boundary);
+    const rejectedBoundary = testExactCanonicalCandidateSizesWithReuse(entries, boundary - 1);
+    assert.strictEqual(acceptedBoundary.limit.accepted, true);
+    assert.strictEqual(rejectedBoundary.limit.accepted, false);
+    assert(rejectedBoundary.limit.oversizeKinds.length > 0);
+    boundaryChecks += 2;
     transcript.push({ expanded: oracleExpanded, positional: positional.candidates,
       chosen: positional.chosen.kind, wireDigest: crypto.createHash("sha256")
         .update(positional.chosen.wire, "utf8").digest("hex"), diagnostics: reused.diagnostics });

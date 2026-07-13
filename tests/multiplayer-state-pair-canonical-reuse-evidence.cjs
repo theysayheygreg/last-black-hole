@@ -114,23 +114,33 @@ function selectorAnalysis() {
     candidateCommit, candidateTree: git("rev-parse", `${candidateCommit}^{tree}`),
     baselineAuthoritySha: gitFileSha(baselineCommit, "scripts/authority-delta-publisher.cjs"),
     candidateAuthoritySha: gitFileSha(candidateCommit, "scripts/authority-delta-publisher.cjs"),
+    baselinePositionalSha: gitFileSha(baselineCommit, "scripts/state-pair-positional-codec.cjs"),
+    candidatePositionalSha: gitFileSha(candidateCommit, "scripts/state-pair-positional-codec.cjs"),
+    baselineWireProtocolSha: gitFileSha(baselineCommit, "scripts/multiplayer-wire-protocol.cjs"),
+    candidateWireProtocolSha: gitFileSha(candidateCommit, "scripts/multiplayer-wire-protocol.cjs"),
+    testScriptCommit: git("rev-parse", "5345d21"),
     benchmarkSha: sha(path.join(ROOT, "tests", "multiplayer-state-pair-canonical-reuse-benchmark.cjs")),
   };
   assert.deepStrictEqual(ordered.map((row) => row.execution.declaredOrder), [1, 2, 3, 4]);
   assert.deepStrictEqual(ordered.map((row) => row.execution.runLabel),
     ["round-a-baseline", "round-a-candidate", "round-b-candidate", "round-b-baseline"]);
   assert(ordered.every((row) => row.execution.trackedSourceDirty === false
+    && git("rev-parse", row.execution.testScriptCommit) === expected.testScriptCommit
     && row.execution.sourceHashes.benchmarkScript === expected.benchmarkSha));
   assert(baseline.every((row) => git("rev-parse", row.execution.sourceCommit) === baselineCommit
     && row.execution.sourceTree === expected.baselineTree
-    && row.execution.sourceHashes.authorityPublisher === expected.baselineAuthoritySha));
+    && row.execution.sourceHashes.authorityPublisher === expected.baselineAuthoritySha
+    && row.execution.sourceHashes.positionalCodec === expected.baselinePositionalSha
+    && row.execution.sourceHashes.wireProtocol === expected.baselineWireProtocolSha));
   assert(candidate.every((row) => git("rev-parse", row.execution.sourceCommit) === candidateCommit
     && row.execution.sourceTree === expected.candidateTree
-    && row.execution.sourceHashes.authorityPublisher === expected.candidateAuthoritySha));
-  const adversarial = read(path.join(EVIDENCE, "selector", "adversarial-r2.json"));
+    && row.execution.sourceHashes.authorityPublisher === expected.candidateAuthoritySha
+    && row.execution.sourceHashes.positionalCodec === expected.candidatePositionalSha
+    && row.execution.sourceHashes.wireProtocol === expected.candidateWireProtocolSha));
+  const adversarial = read(path.join(EVIDENCE, "selector", "adversarial-r3.json"));
   assert(adversarial.candidateComparisons === 320 && adversarial.exactExpandedComparisons === 320
     && adversarial.exactPositionalComparisons === 320 && adversarial.mismatches === 0
-    && adversarial.boundaryChecks === 640 && adversarial.invalidCanonicalCases.length === 4);
+    && adversarial.boundaryChecks === 160 && adversarial.invalidCanonicalCases.length === 4);
   const mean = (group, pathFn) => group.reduce((sum, row) => sum + pathFn(row), 0) / group.length;
   return { orderCounterbalanced: true, iterationsPerRun: 1000,
     parityComparisons: 1000, adversarialProofReuseComparisons: adversarial.candidateComparisons,
@@ -181,8 +191,9 @@ function build() {
       "microbenchmark timing is order-counterbalanced but machine-local", "no hosted/WAN/TLS/fleet claim",
       "no 24/48/96 extrapolation", "normalized traffic is counterfactual and cannot replace cadence admission"] };
   fs.writeFileSync(path.join(EVIDENCE, "analysis.json"), `${JSON.stringify(analysis, null, 2)}\n`, { flag: "wx" });
-  const selectorFiles = fs.readdirSync(path.join(EVIDENCE, "selector"))
-    .filter((name) => name.endsWith("-r2.json")).sort().map((name) => ({ name,
+  const selectedNames = [...["round-a-baseline", "round-a-candidate", "round-b-candidate", "round-b-baseline"]
+    .map((name) => `${name}-r2.json`), "adversarial-r3.json"];
+  const selectorFiles = selectedNames.sort().map((name) => ({ name,
     sha256: sha(path.join(EVIDENCE, "selector", name)) }));
   const manifest = { schema: "lbh-s15-canonical-lane-reuse-manifest-v1",
     baselineSha256: BASELINE_SHA, candidateSha256: CANDIDATE_SHA, s14TopLevelSha256: S14_TOP_LEVEL_SHA,

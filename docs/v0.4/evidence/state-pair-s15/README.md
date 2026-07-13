@@ -47,7 +47,7 @@ ACK, recovery, privacy, and admission policy. Hosted costs and 24/48/96 remain
 closed.
 
 The top-level artifact composite is
-`c84759a5de422ff5cddba4fb71095d133120cbcd034f5c8fe5c85c2907c356fe`.
+`66c2c751c80f2f0e94c4103eff01352b1e241ce9690fff58c9331a354ec23bf8`.
 
 ## Validation
 

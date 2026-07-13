@@ -3,11 +3,11 @@
   "baselineSha256": "c5259ec1cbeb3de2d0683031af7c2e7ae2f54c26d34f647906d880158d38ecdd",
   "candidateSha256": "c2df9114ce2cfd7ab29ff613b214498b214cebd7df71d1e0c74750b974f6e266",
   "s14TopLevelSha256": "055de7c637163bb25e50dd36993f1e16075d2fa4abeb4be7216aafd95a6bfc4f",
-  "analysisSha256": "6ff2c6e14ea731a4195a0b917c283c04e4e3c6a5763dbfa17b6380c855b6d34d",
+  "analysisSha256": "cc1d2ab9cf213e8e744cae295b8976c784912fe6b8a457242060506e764286d6",
   "selectorFiles": [
     {
-      "name": "adversarial-r2.json",
-      "sha256": "554a14c8f20a8082c6f37aa8e33f7cc6e22a58ca6c70e87e9d595f3f9ad99f5d"
+      "name": "adversarial-r3.json",
+      "sha256": "ffd4be3140719e0b6a2af78d66c55571b78603c5144c7416fd87f6e1547eb23b"
     },
     {
       "name": "round-a-baseline-r2.json",

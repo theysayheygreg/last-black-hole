@@ -1061,7 +1061,7 @@ function createAuthorityDeltaPublisher(options = {}) {
 // Test-only same-operation oracle for the private proof path. It deliberately
 // creates fresh proofs and consumes them immediately; callers cannot provide,
 // retain, or replay a proof token.
-function testExactCanonicalCandidateSizesWithReuse(entries) {
+function testExactCanonicalCandidateSizesWithReuse(entries, maxPairBytes = null) {
   const proofs = new Map();
   for (const entry of entries) {
     for (const lane of ["public", "owner"]) {
@@ -1070,7 +1070,11 @@ function testExactCanonicalCandidateSizesWithReuse(entries) {
     }
   }
   const exact = exactCanonicalCandidateSizes(entries, proofs);
+  const oversize = maxPairBytes === null ? [] : [...exact.sizes]
+    .filter(([, bytes]) => bytes > maxPairBytes).map(([kind]) => kind);
   return Object.freeze({ sizes: Object.freeze(Object.fromEntries(exact.sizes)),
+    limit: Object.freeze({ maxPairBytes, accepted: maxPairBytes === null || oversize.length === 0,
+      oversizeKinds: Object.freeze(oversize) }),
     diagnostics: Object.freeze({ componentSerializations: exact.componentSerializations,
       headerSerializations: exact.headerSerializations, laneSerializations: exact.laneSerializations,
       laneSerializationReuses: exact.laneSerializationReuses, reusedLaneBytes: exact.reusedLaneBytes,

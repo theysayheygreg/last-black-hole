@@ -28,7 +28,7 @@
       "exactExpandedComparisons": 320,
       "exactPositionalComparisons": 320,
       "semanticDecodes": 80,
-      "boundaryChecks": 640,
+      "boundaryChecks": 160,
       "invalidCanonicalCases": [
         {
           "value": "undefined",
@@ -118,6 +118,11 @@
         "candidateTree": "ef9b90b46bb075cb466075a6a8b0fe768f50ffb9",
         "baselineAuthoritySha": "fb6c28f617ea6c5d9a08fc0aa2af9a8d0ef47101d0531267c8be1953b372d274",
         "candidateAuthoritySha": "e82bf499ccb6817bebef178ff2f0b58b9ea46201b44e6e2ee5bbec20ae58883f",
+        "baselinePositionalSha": "5d476721e40f35d9473ffea00ce78d9c5721e34b88f68d75bd898a14922a024c",
+        "candidatePositionalSha": "5d476721e40f35d9473ffea00ce78d9c5721e34b88f68d75bd898a14922a024c",
+        "baselineWireProtocolSha": "d352b84dc87d672bd50d85b5e739071e55db5a70cda911b43182f05f638c1de2",
+        "candidateWireProtocolSha": "d352b84dc87d672bd50d85b5e739071e55db5a70cda911b43182f05f638c1de2",
+        "testScriptCommit": "5345d21c51293883edb060d03de2123df3c7b47e",
         "benchmarkSha": "5404a60b3978c681d366b50f2f32315a5c762a76564088d0a1eeb13a3fdff72a"
       }
     },

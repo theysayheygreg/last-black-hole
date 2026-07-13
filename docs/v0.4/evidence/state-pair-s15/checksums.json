@@ -1,21 +1,21 @@
 {
   "algorithm": "sha256(path NUL sha256 LF, sorted by path)",
-  "sha256": "c84759a5de422ff5cddba4fb71095d133120cbcd034f5c8fe5c85c2907c356fe",
+  "sha256": "66c2c751c80f2f0e94c4103eff01352b1e241ce9690fff58c9331a354ec23bf8",
   "files": [
     {
       "path": "analysis.json",
-      "bytes": 18088,
-      "sha256": "6ff2c6e14ea731a4195a0b917c283c04e4e3c6a5763dbfa17b6380c855b6d34d"
+      "bytes": 18570,
+      "sha256": "cc1d2ab9cf213e8e744cae295b8976c784912fe6b8a457242060506e764286d6"
     },
     {
       "path": "manifest.json",
       "bytes": 1704,
-      "sha256": "d6d6335491e84ef82e5baa51bdf9e6dba643e17c750fe3c2043723622c8487c1"
+      "sha256": "2f06b60c1304d9d98779100d3e72daadeb4e3c2dcecc194cb87c0aa6e7ae7bf2"
     },
     {
-      "path": "selector/adversarial-r2.json",
+      "path": "selector/adversarial-r3.json",
       "bytes": 822,
-      "sha256": "554a14c8f20a8082c6f37aa8e33f7cc6e22a58ca6c70e87e9d595f3f9ad99f5d"
+      "sha256": "ffd4be3140719e0b6a2af78d66c55571b78603c5144c7416fd87f6e1547eb23b"
     },
     {
       "path": "selector/round-a-baseline-r2.json",
