@@ -1,0 +1,10 @@
+{
+  "scenario": "normal",
+  "population": 4,
+  "port": 62469,
+  "authorityPid": 58182,
+  "preStopConnections": 0,
+  "portDead": true,
+  "pidDead": true,
+  "passed": true
+}

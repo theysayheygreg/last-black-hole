@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 2,
+  "gate": "s4",
+  "generatedAt": "2026-07-13T07:49:27.228Z",
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s4",
+  "profile": "canonical",
+  "commit": "a052787cdd33918c5b7555df76bd6f76ea77f9be",
+  "dirty": false,
+  "seed": 1403105358,
+  "config": {
+    "populations": [
+      1,
+      4,
+      8
+    ],
+    "normalWarmupMs": 60000,
+    "normalWindowMs": 300000,
+    "churnWarmupMs": 20000,
+    "churnWindowMs": 90000,
+    "inputHz": 10,
+    "targetBytesPerSecondPerPlayer": 65536,
+    "sensitivityBytesPerSecondPerPlayer": 81920,
+    "env": {
+      "LBH_SIM_WS_JSON_V2": true,
+      "LBH_SIM_WS_STATE_PAIR_V1": true,
+      "LBH_SIM_WS_STATE_PAIR_MIXED_V1": true,
+      "LBH_SIM_WS_REPLICATION_ACCOUNTING": true,
+      "LBH_REPLICATION_BASELINE_CAPTURE": true
+    }
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 34359738368,
+    "node": "v22.22.3",
+    "v8": "12.4.254.21-node.56"
+  },
+  "claimBoundary": "Machine-local opt-in state-pair-mixed-v1 application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence.",
+  "s3CanonicalEvidence": {
+    "path": "docs/v0.4/evidence/state-pair-s3/multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4",
+    "compositeSha256": "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90"
+  }
+}
