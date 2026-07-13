@@ -109,6 +109,13 @@
   fences stale callbacks by run/connection/outbound epoch. Earlier capture
   artifacts are preserved non-credit failures; fresh 1/4/8 capture restarts on
   the accepted ledger.
+- Preserved the first post-fix 1/4/8 capture as partial, rejected evidence. Its
+  exact directional bytes, cadence, CPU, projection, reliable retirement,
+  privacy, and cleanup are valid: downlink measured 267.6/254.9/240.5 KiB/s per
+  player, 4.18x/3.98x/3.76x the product target, with public state about 92.5%
+  of downlink. Shape counts are invalid because S0 inspected nonexistent
+  generic `bodies` instead of v1 `players` and `world.*`; one schema-aware fix
+  and one from-zero capture are authorized.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval

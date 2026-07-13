@@ -577,3 +577,15 @@ passes 17/17, adapter core 28/28, and the full multiplayer-network lane 15/15.
 Two pre-fix capture artifacts are preserved as non-credit failures; fresh
 clean 1/4/8 v1 full-JSON capture is required before S1 and cannot claim delta
 or 64 KiB/s acceptance.
+
+The first post-fix capture
+`multiplayer-replication-s0-2026-07-13T011131689Z-5d1e36f` remains rejected as
+complete S0 evidence: frame-shape accounting read `state.bodies`, but real v1
+public entities live in `state.players` and `state.world.*`, so its entity,
+component, and despawn zeroes are false. The directional subset is valid and
+preserved. At 1/4/8, authority-to-client downlink measured
+273,998/260,997/246,312 B/s/player, uplink 1,722/1,765/1,822 B/s/player, and
+public state 92.5–92.6% of downlink. Pair cadence was about 9.72 Hz; projection
+p95 context was 4.67/7.65/12.24 ms; reliable retirement and cleanup were exact.
+Add schema-aware nonzero v1 shape goldens and run once from zero before calling
+S0 capture complete.

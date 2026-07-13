@@ -328,6 +328,13 @@ Singularity that:
   conservation, retirement, and epoch-fence fixes. Resume fresh 1/4/8 capture
   from zero; preserve `62aab51`/`f19f4c4` capture failures as non-credit and do
   not infer baseline rates from them.
+- A clean post-fix 1/4/8 capture produced valid directional/performance rates
+  but failed complete shape accounting because S0 inspected a nonexistent
+  generic body list. Preserve artifact `...T011131689Z-5d1e36f` as partial
+  evidence: the 1/4/8 downlinks are 4.18x/3.98x/3.76x target and public state is
+  about 92.5% of downlink, while shape counts are invalid. Authorize only a
+  schema-aware v1 frame-shape fix with nonzero goldens and one new clean run;
+  no repeated captures or delta claims yet.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

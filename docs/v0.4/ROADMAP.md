@@ -296,6 +296,19 @@ multiplayer-network suites pass. The first two capture attempts remain non-
 credit failures from the pre-fix ledger. Fresh 1/4/8 full-JSON capture is the
 active evidence lane; it cannot claim delta or 64 KiB acceptance.
 
+The first post-fix capture artifact,
+`multiplayer-replication-s0-2026-07-13T011131689Z-5d1e36f`, is rejected for
+complete S0 shape evidence but retains a valid measured subset. Exact 300-second
+downlink was 273,998/260,997/246,312 B/s/player at 1/4/8 (4.18x/3.98x/3.76x
+target); uplink was 1,722/1,765/1,822 B/s/player; public state was 92.5–92.6%
+of downlink; complete-pair cadence was 9.717–9.727 Hz; projection p95 context
+was 4.67/7.65/12.24 ms; and reliable acceptance/retirement, privacy, bounds,
+hashes, PID/port, and cleanup all closed. Entity/component/despawn counts are
+invalid because the frame-shape helper read nonexistent `state.bodies` rather
+than v1 `state.players` and `state.world.*`. Fix that schema with nonzero golden
+fixtures, then run exactly one new clean capture. Do not present the partial
+artifact as complete S0 or delta acceptance.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.
