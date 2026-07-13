@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-13T06:57:37.102Z",
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --review",
+  "profile": "review",
+  "commit": "b1e05af348ad410f4b0f40b4cdcdd3a6741071b9",
+  "dirty": false,
+  "seed": 1403105358,
+  "config": {
+    "populations": [
+      1,
+      8
+    ],
+    "normalWarmupMs": 5000,
+    "normalWindowMs": 20000,
+    "churnWarmupMs": 5000,
+    "churnWindowMs": 30000,
+    "inputHz": 10,
+    "targetBytesPerSecondPerPlayer": 65536,
+    "sensitivityBytesPerSecondPerPlayer": 81920,
+    "env": {
+      "LBH_SIM_WS_JSON_V2": true,
+      "LBH_SIM_WS_STATE_PAIR_V1": true,
+      "LBH_SIM_WS_REPLICATION_ACCOUNTING": true,
+      "LBH_REPLICATION_BASELINE_CAPTURE": true
+    }
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 34359738368,
+    "node": "v22.22.3",
+    "v8": "12.4.254.21-node.56"
+  },
+  "claimBoundary": "Machine-local opt-in state-pair-v1 application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence."
+}

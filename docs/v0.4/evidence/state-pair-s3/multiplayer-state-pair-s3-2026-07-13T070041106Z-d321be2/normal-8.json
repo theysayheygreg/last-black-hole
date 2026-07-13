@@ -1,0 +1,2032 @@
+{
+  "schemaVersion": 1,
+  "scenario": "normal",
+  "population": 8,
+  "seed": 1403105358,
+  "profile": "review",
+  "topology": {
+    "matches": 1,
+    "dedicatedLogicalAuthorities": 1,
+    "simultaneousRecipients": 8,
+    "note": "One authoritative sim instance for one match; not a concurrent-match fleet-capacity result."
+  },
+  "window": {
+    "startAt": 1783926074779,
+    "endAt": 1783926094779,
+    "durationSeconds": 20,
+    "warmupSeconds": 5,
+    "workload": {
+      "wallStartedAt": 1783926074779,
+      "wallEndedAt": 1783926094780,
+      "requestedDurationMs": 20000,
+      "actualDurationMs": 20001.190125,
+      "inputSteps": 200
+    }
+  },
+  "accountingBoundary": {
+    "downstreamVerdict": "Exact UTF-8 JSON application bytes accepted by ws.send callback per recipient.",
+    "upstream": "Exact UTF-8 JSON application bytes accepted by the authority plus client serialized class ledger.",
+    "manifest": "Exact served canonical manifest bytes, reported separately from steady stream.",
+    "excluded": [
+      "WebSocket framing",
+      "TCP/IP",
+      "TLS/WSS",
+      "WAN",
+      "compression",
+      "hosted ingress/egress"
+    ]
+  },
+  "exactTraffic": {
+    "perRecipientMeanDownlinkBytesPerSecond": {
+      "recipient-1": 86440.75,
+      "recipient-2": 85529.85,
+      "recipient-3": 85529.8,
+      "recipient-4": 85529.75,
+      "recipient-5": 85529.8,
+      "recipient-6": 83679.95,
+      "recipient-7": 83680,
+      "recipient-8": 83680
+    },
+    "worstRecipientMeanDownlinkBytesPerSecond": 86440.75,
+    "oneSecondP95DownlinkBytesPerSecond": 111843,
+    "acceptedBreakdown": {
+      "authority->client|ack|none|accepted": {
+        "direction": "authority->client",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 1592,
+        "bytes": 75360,
+        "frameBytes": {
+          "count": 1592,
+          "p50": 47,
+          "p95": 47,
+          "p99": 47,
+          "max": 163,
+          "mean": 47.336683417085425
+        }
+      },
+      "authority->client|ack|none|ackRetired": {
+        "direction": "authority->client",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "ackRetired",
+        "frames": 8,
+        "bytes": 1304,
+        "frameBytes": {
+          "count": 8,
+          "p50": 163,
+          "p95": 163,
+          "p99": 163,
+          "max": 163,
+          "mean": 163
+        }
+      },
+      "authority->client|ack|none|offered": {
+        "direction": "authority->client",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "offered",
+        "frames": 1592,
+        "bytes": 75360,
+        "frameBytes": {
+          "count": 1592,
+          "p50": 47,
+          "p95": 47,
+          "p99": 47,
+          "max": 163,
+          "mean": 47.336683417085425
+        }
+      },
+      "authority->client|control|none|accepted": {
+        "direction": "authority->client",
+        "frameClass": "control",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 16,
+        "bytes": 1271,
+        "frameBytes": {
+          "count": 16,
+          "p50": 79,
+          "p95": 80,
+          "p99": 80,
+          "max": 80,
+          "mean": 79.4375
+        }
+      },
+      "authority->client|control|none|offered": {
+        "direction": "authority->client",
+        "frameClass": "control",
+        "projectionKind": null,
+        "metric": "offered",
+        "frames": 16,
+        "bytes": 1271,
+        "frameBytes": {
+          "count": 16,
+          "p50": 79,
+          "p95": 80,
+          "p99": 80,
+          "max": 80,
+          "mean": 79.4375
+        }
+      },
+      "authority->client|statePair|keyframe|accepted": {
+        "direction": "authority->client",
+        "frameClass": "statePair",
+        "projectionKind": "keyframe",
+        "metric": "accepted",
+        "frames": 365,
+        "bytes": 13515367,
+        "frameBytes": {
+          "count": 365,
+          "p50": 36948,
+          "p95": 37391,
+          "p99": 37444,
+          "max": 37457,
+          "mean": 37028.40273972603
+        }
+      },
+      "authority->client|statePair|keyframe|offered": {
+        "direction": "authority->client",
+        "frameClass": "statePair",
+        "projectionKind": "keyframe",
+        "metric": "offered",
+        "frames": 365,
+        "bytes": 13515367,
+        "frameBytes": {
+          "count": 365,
+          "p50": 36948,
+          "p95": 37391,
+          "p99": 37444,
+          "max": 37457,
+          "mean": 37028.40273972603
+        }
+      },
+      "client->authority|ack|none|accepted": {
+        "direction": "client->authority",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 368,
+        "bytes": 196960,
+        "frameBytes": {
+          "count": 368,
+          "p50": 546,
+          "p95": 546,
+          "p99": 546,
+          "max": 546,
+          "mean": 535.2173913043479
+        }
+      },
+      "client->authority|action|none|accepted": {
+        "direction": "client->authority",
+        "frameClass": "action",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 8,
+        "bytes": 1184,
+        "frameBytes": {
+          "count": 8,
+          "p50": 148,
+          "p95": 148,
+          "p99": 148,
+          "max": 148,
+          "mean": 148
+        }
+      },
+      "client->authority|control|none|accepted": {
+        "direction": "client->authority",
+        "frameClass": "control",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 16,
+        "bytes": 1191,
+        "frameBytes": {
+          "count": 16,
+          "p50": 74,
+          "p95": 75,
+          "p99": 75,
+          "max": 75,
+          "mean": 74.4375
+        }
+      },
+      "client->authority|input|none|accepted": {
+        "direction": "client->authority",
+        "frameClass": "input",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 1584,
+        "bytes": 263097,
+        "frameBytes": {
+          "count": 1584,
+          "p50": 167,
+          "p95": 169,
+          "p99": 169,
+          "max": 169,
+          "mean": 166.0965909090909
+        }
+      }
+    },
+    "windows": {
+      "1s": {
+        "windowMs": 1000,
+        "direction": "authority->client",
+        "recipientBytesPerSecond": {
+          "recipient-1": {
+            "count": 20,
+            "p50": 75328,
+            "p95": 112628,
+            "p99": 112693,
+            "max": 112693,
+            "mean": 86440.75
+          },
+          "recipient-2": {
+            "count": 20,
+            "p50": 74449,
+            "p95": 111507,
+            "p99": 112290,
+            "max": 112290,
+            "mean": 85529.85
+          },
+          "recipient-3": {
+            "count": 20,
+            "p50": 74449,
+            "p95": 111508,
+            "p99": 112290,
+            "max": 112290,
+            "mean": 85529.8
+          },
+          "recipient-4": {
+            "count": 20,
+            "p50": 74449,
+            "p95": 111508,
+            "p99": 111842,
+            "max": 111842,
+            "mean": 85529.75
+          },
+          "recipient-5": {
+            "count": 20,
+            "p50": 74527,
+            "p95": 111413,
+            "p99": 111843,
+            "max": 111843,
+            "mean": 85529.8
+          },
+          "recipient-6": {
+            "count": 20,
+            "p50": 74418,
+            "p95": 111329,
+            "p99": 111842,
+            "max": 111842,
+            "mean": 83679.95
+          },
+          "recipient-7": {
+            "count": 20,
+            "p50": 74449,
+            "p95": 111326,
+            "p99": 111330,
+            "max": 111330,
+            "mean": 83680
+          },
+          "recipient-8": {
+            "count": 20,
+            "p50": 74367,
+            "p95": 111375,
+            "p99": 111541,
+            "max": 111541,
+            "mean": 83680
+          }
+        },
+        "allRecipientWindowsBytesPerSecond": {
+          "count": 160,
+          "p50": 74557,
+          "p95": 111843,
+          "p99": 112628,
+          "max": 112693,
+          "mean": 84949.9875
+        },
+        "aggregateBytesPerSecond": {
+          "count": 20,
+          "p50": 704843,
+          "p95": 709622,
+          "p99": 711886,
+          "max": 711886,
+          "mean": 679599.9
+        }
+      },
+      "5s": {
+        "windowMs": 5000,
+        "direction": "authority->client",
+        "recipientBytesPerSecond": {
+          "recipient-1": {
+            "count": 4,
+            "p50": 82841.6,
+            "p95": 90226.2,
+            "p99": 90226.2,
+            "max": 90226.2,
+            "mean": 86440.75
+          },
+          "recipient-2": {
+            "count": 4,
+            "p50": 82098.2,
+            "p95": 89232,
+            "p99": 89232,
+            "max": 89232,
+            "mean": 85529.85
+          },
+          "recipient-3": {
+            "count": 4,
+            "p50": 82098,
+            "p95": 89232,
+            "p99": 89232,
+            "max": 89232,
+            "mean": 85529.8
+          },
+          "recipient-4": {
+            "count": 4,
+            "p50": 82098,
+            "p95": 89232.2,
+            "p99": 89232.2,
+            "max": 89232.2,
+            "mean": 85529.75
+          },
+          "recipient-5": {
+            "count": 4,
+            "p50": 82098,
+            "p95": 89232.2,
+            "p99": 89232.2,
+            "max": 89232.2,
+            "mean": 85529.8
+          },
+          "recipient-6": {
+            "count": 4,
+            "p50": 81849.2,
+            "p95": 89047,
+            "p99": 89047,
+            "max": 89047,
+            "mean": 83679.95
+          },
+          "recipient-7": {
+            "count": 4,
+            "p50": 81849.2,
+            "p95": 89105.4,
+            "p99": 89105.4,
+            "max": 89105.4,
+            "mean": 83680
+          },
+          "recipient-8": {
+            "count": 4,
+            "p50": 81849.4,
+            "p95": 89105.4,
+            "p99": 89105.4,
+            "max": 89105.4,
+            "mean": 83680
+          }
+        },
+        "allRecipientWindowsBytesPerSecond": {
+          "count": 32,
+          "p50": 82098,
+          "p95": 90031.8,
+          "p99": 90226.2,
+          "max": 90226.2,
+          "mean": 84949.9875
+        },
+        "aggregateBytesPerSecond": {
+          "count": 4,
+          "p50": 677128.2,
+          "p95": 691235.6,
+          "p99": 691235.6,
+          "max": 691235.6,
+          "mean": 679599.9
+        }
+      },
+      "10s": {
+        "windowMs": 10000,
+        "direction": "authority->client",
+        "recipientBytesPerSecond": {
+          "recipient-1": {
+            "count": 2,
+            "p50": 86347.6,
+            "p95": 86533.9,
+            "p99": 86533.9,
+            "max": 86533.9,
+            "mean": 86440.75
+          },
+          "recipient-2": {
+            "count": 2,
+            "p50": 85486.7,
+            "p95": 85573,
+            "p99": 85573,
+            "max": 85573,
+            "mean": 85529.85
+          },
+          "recipient-3": {
+            "count": 2,
+            "p50": 85486.8,
+            "p95": 85572.8,
+            "p99": 85572.8,
+            "max": 85572.8,
+            "mean": 85529.8
+          },
+          "recipient-4": {
+            "count": 2,
+            "p50": 85486.7,
+            "p95": 85572.8,
+            "p99": 85572.8,
+            "max": 85572.8,
+            "mean": 85529.75
+          },
+          "recipient-5": {
+            "count": 2,
+            "p50": 85486.8,
+            "p95": 85572.8,
+            "p99": 85572.8,
+            "max": 85572.8,
+            "mean": 85529.8
+          },
+          "recipient-6": {
+            "count": 2,
+            "p50": 81787.4,
+            "p95": 85572.5,
+            "p99": 85572.5,
+            "max": 85572.5,
+            "mean": 83679.95
+          },
+          "recipient-7": {
+            "count": 2,
+            "p50": 81882.7,
+            "p95": 85477.3,
+            "p99": 85477.3,
+            "max": 85477.3,
+            "mean": 83680
+          },
+          "recipient-8": {
+            "count": 2,
+            "p50": 81882.6,
+            "p95": 85477.4,
+            "p99": 85477.4,
+            "max": 85477.4,
+            "mean": 83680
+          }
+        },
+        "allRecipientWindowsBytesPerSecond": {
+          "count": 16,
+          "p50": 85486.8,
+          "p95": 86533.9,
+          "p99": 86533.9,
+          "max": 86533.9,
+          "mean": 84949.9875
+        },
+        "aggregateBytesPerSecond": {
+          "count": 2,
+          "p50": 677976.8,
+          "p95": 681223,
+          "p99": 681223,
+          "max": 681223,
+          "mean": 679599.9
+        }
+      }
+    },
+    "explicitCounts": {
+      "recoveryRequestsSerialized": 0,
+      "recoveryRequestSerializedBytes": 0,
+      "recoveryIngressAccountingClass": "control",
+      "retransmittedStatePairs": 0,
+      "acceptedStatePairAcks": 368,
+      "reliableAccepted": 8,
+      "reliableAckRetired": 8
+    },
+    "manifestServedBytes": 19768,
+    "clientSerializedUplink": [
+      {
+        "label": "normal-8-seat-0",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 354
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 71,
+            "bytes": 38749
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41452
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 148
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-8-seat-1",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 354
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 69,
+            "bytes": 37661
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41485
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 149
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-8-seat-2",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 354
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 67,
+            "bytes": 36573
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41486
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 149
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-8-seat-3",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 354
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 65,
+            "bytes": 35481
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41495
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 149
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-8-seat-4",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 354
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 64,
+            "bytes": 34935
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41479
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 149
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-8-seat-5",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 354
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 63,
+            "bytes": 34389
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41490
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 149
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-8-seat-6",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 354
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 61,
+            "bytes": 33297
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41470
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 149
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-8-seat-7",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 354
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 61,
+            "bytes": 33297
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41474
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 149
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      }
+    ]
+  },
+  "pairShape": {
+    "keyframes": 966,
+    "deltas": 80,
+    "creates": 28,
+    "updates": 1272,
+    "despawns": 0,
+    "reincarnations": 0,
+    "rootOps": 944,
+    "observedMaterializedLifecycle": {
+      "creates": 408,
+      "despawns": 0,
+      "reincarnations": 0,
+      "componentChanges": 16471
+    },
+    "keyframeCauseAttribution": {
+      "atomic-kind-alignment:public-delta+owner-delta-not-smaller": 471,
+      "initial-no-acked-base": 8,
+      "missing-acked-base": 4
+    },
+    "keyframeCauseAttributionScope": "scenario lifetime including warmup",
+    "ackBaseProof": {
+      "ackAccepted": 521,
+      "ackRejected": 0,
+      "ackBaseAdvances": 521,
+      "recipientsWithAckedBaseBeforeCleanup": 8,
+      "maxAckedFrameIdBeforeCleanup": 71,
+      "candidateAverageBytes": {
+        "comparisons": 504,
+        "publicDeltaBytes": 19281.859126984127,
+        "publicKeyframeBytes": 34670.031746031746,
+        "ownerDeltaBytes": 2024.013888888889,
+        "ownerKeyframeBytes": 1711.6805555555557
+      },
+      "counterScope": "scenario lifetime including warmup; live base fields are pre-cleanup"
+    },
+    "acceptedStatePairFrameBytes": [
+      {
+        "kind": "keyframe",
+        "frames": 365,
+        "bytes": 13515367,
+        "frameBytes": {
+          "count": 365,
+          "p50": 36948,
+          "p95": 37391,
+          "p99": 37444,
+          "max": 37457,
+          "mean": 37028.40273972603
+        }
+      }
+    ],
+    "productWindow": {
+      "keyframes": 365,
+      "deltas": 0,
+      "keyframesPerAcceptedPair": 1,
+      "keyframesPerSecondPerRecipient": 2.28125
+    },
+    "comparison": {
+      "acceptedS0FullJson": {
+        "downlinkBps": 241892,
+        "pairP50": 25237,
+        "pairP95": 26889
+      },
+      "s1StaticManifestApproximatePairP50": 24284,
+      "observedPairBytes": {
+        "count": 365,
+        "p50": 36948,
+        "p95": 37391,
+        "p99": 37444,
+        "max": 37457,
+        "mean": 37028.40273972603
+      },
+      "savingsVsS0PairP50": -0.46404089234061097,
+      "savingsVsS1ApproxPairP50": -0.5214956349859989
+    }
+  },
+  "cadence": {
+    "authorityTickHz": 12,
+    "publicationHz": 6,
+    "observedPairsPerSecond": 2.28125
+  },
+  "performance": {
+    "machineLocal": true,
+    "authority": {
+      "simTickMs": {
+        "count": 92,
+        "totalObserved": 92,
+        "p50": 0.7802089999986492,
+        "p95": 1.1711670000004233,
+        "p99": 2.178749999999127,
+        "max": 2.178749999999127
+      },
+      "projectionAndPublishMs": {
+        "count": 46,
+        "totalObserved": 46,
+        "p50": 353.24858400000085,
+        "p95": 358.5071250000001,
+        "p99": 364.1814169999998,
+        "max": 364.1814169999998
+      },
+      "projectionSamples": 46,
+      "projectionTotalMs": 16143.31704600001,
+      "replicationCostConsumedMs": 12266.666666666657,
+      "replicationCostOverflowMs": 3876.6503793333445,
+      "percentileScope": "bounded runtime rolling ring; reset after warmup by evidence-only endpoint"
+    },
+    "clientApplyMs": {
+      "count": 365,
+      "p50": 14.689542000000074,
+      "p95": 15.236833000002662,
+      "p99": 16.58320900000399,
+      "max": 17.165374999996857,
+      "mean": 14.767324789040996
+    },
+    "clientAckSerializeSendMs": {
+      "count": 365,
+      "p50": 0.04291699999885168,
+      "p95": 0.05608400000346592,
+      "p99": 0.06120799999916926,
+      "max": 0.06524999999965075,
+      "mean": 0.04307544657524774
+    },
+    "eventLoopLag": {
+      "available": false,
+      "reason": "Runtime does not expose event-loop-delay telemetry; no threshold invented."
+    },
+    "memory": {
+      "samples": 20,
+      "rssBytes": {
+        "count": 20,
+        "p50": 130203648,
+        "p95": 138084352,
+        "p99": 138248192,
+        "max": 138248192,
+        "mean": 132200038.4
+      },
+      "heapUsedBytes": {
+        "count": 20,
+        "p50": 34963256,
+        "p95": 49853176,
+        "p99": 50048384,
+        "max": 50048384,
+        "mean": 35284130
+      },
+      "externalBytes": {
+        "count": 20,
+        "p50": 2647896,
+        "p95": 2922179,
+        "p99": 2967288,
+        "max": 2967288,
+        "mean": 2625094.55
+      },
+      "slopeBytesPerSecond": {
+        "rss": 417183.026159376,
+        "heapUsed": 1234440.0185128127
+      },
+      "first": {
+        "rss": 130170880,
+        "heapTotal": 61849600,
+        "heapUsed": 19844504,
+        "external": 2241579,
+        "arrayBuffers": 49773
+      },
+      "last": {
+        "rss": 138248192,
+        "heapTotal": 77578240,
+        "heapUsed": 50048384,
+        "external": 2712542,
+        "arrayBuffers": 524924
+      }
+    },
+    "boundedState": {
+      "publisherAfterCleanup": {
+        "recipients": 0,
+        "pendingPairs": 0,
+        "retainedBytes": 0,
+        "keyframes": 483,
+        "deltas": 40,
+        "retransmits": 0,
+        "ackAccepted": 521,
+        "ackRejected": 0,
+        "ackBaseAdvances": 521,
+        "forcedRebases": 0,
+        "recipientsWithAckedBase": 0,
+        "maxAckedFrameId": 0,
+        "keyframeReasons": {
+          "atomic-kind-alignment:public-delta+owner-delta-not-smaller": 471,
+          "initial-no-acked-base": 8,
+          "missing-acked-base": 4
+        },
+        "candidateAverageBytes": {
+          "comparisons": 511,
+          "publicDeltaBytes": 19321.33268101761,
+          "publicKeyframeBytes": 34670.463796477496,
+          "ownerDeltaBytes": 2024.9549902152642,
+          "ownerKeyframeBytes": 1711.4990215264188
+        },
+        "limits": {
+          "maxRecipients": 16,
+          "maxPendingPairsPerRecipient": 8,
+          "maxRetainedBytesPerRecipient": 2097152,
+          "maxPairBytes": 262144
+        }
+      },
+      "maxPublisherPendingPairs": 1,
+      "maxPublisherRetainedBytes": 37305,
+      "maxAdapterQueuedBytes": 1304
+    }
+  },
+  "faults": [],
+  "clients": [
+    {
+      "label": "normal-8-seat-0",
+      "membershipId": "membership-0368bcba-c5c2-488e-aea8-b583090da743",
+      "connectionEpoch": 1,
+      "acceptedPairs": 71,
+      "hashesVerified": 71,
+      "lastAcceptedFrameId": 71,
+      "lastStatePairAckSentFrameId": 71,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 354
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 71,
+          "bytes": 38749
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41452
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 148
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 852
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 115
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 14489
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1019
+        },
+        "statePair": {
+          "frames": 71,
+          "bytes": 2441855
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 158
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 71,
+        "p50": 14.99583399999392,
+        "p95": 15.697709000000032,
+        "p99": 18.352999999999156,
+        "max": 18.352999999999156,
+        "mean": 14.906352774647734
+      },
+      "ackSerializeSendMs": {
+        "count": 71,
+        "p50": 0.047374999994644895,
+        "p95": 0.06149999999979627,
+        "p99": 0.07004199999937555,
+        "max": 0.07004199999937555,
+        "mean": 0.04785149295778058
+      },
+      "shape": {
+        "keyframes": 118,
+        "deltas": 24,
+        "creates": 7,
+        "updates": 348,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 245
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783926094903
+      },
+      "observedLifecycle": {
+        "creates": 51,
+        "despawns": 0,
+        "reincarnations": 0,
+        "componentChanges": 2206
+      }
+    },
+    {
+      "label": "normal-8-seat-1",
+      "membershipId": "membership-ed160bff-282e-40b3-b56b-d2d06c96a3ed",
+      "connectionEpoch": 1,
+      "acceptedPairs": 69,
+      "hashesVerified": 69,
+      "lastAcceptedFrameId": 69,
+      "lastStatePairAckSentFrameId": 69,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 354
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 69,
+          "bytes": 37661
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41485
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 149
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 852
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 115
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 20654
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1037
+        },
+        "statePair": {
+          "frames": 69,
+          "bytes": 2410799
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 159
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 69,
+        "p50": 14.694124999994528,
+        "p95": 15.479458000001614,
+        "p99": 16.595666999997775,
+        "max": 16.595666999997775,
+        "mean": 14.689295913043653
+      },
+      "ackSerializeSendMs": {
+        "count": 69,
+        "p50": 0.04399999999805004,
+        "p95": 0.06029099999796017,
+        "p99": 0.08579200000167475,
+        "max": 0.08579200000167475,
+        "mean": 0.046164246376249954
+      },
+      "shape": {
+        "keyframes": 120,
+        "deltas": 18,
+        "creates": 6,
+        "updates": 279,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 205
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783926094925
+      },
+      "observedLifecycle": {
+        "creates": 51,
+        "despawns": 0,
+        "reincarnations": 0,
+        "componentChanges": 2153
+      }
+    },
+    {
+      "label": "normal-8-seat-2",
+      "membershipId": "membership-86842352-30de-473c-8cce-03761c601098",
+      "connectionEpoch": 1,
+      "acceptedPairs": 67,
+      "hashesVerified": 67,
+      "lastAcceptedFrameId": 67,
+      "lastStatePairAckSentFrameId": 67,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 354
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 67,
+          "bytes": 36573
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41486
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 149
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 852
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 116
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 21055
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1037
+        },
+        "statePair": {
+          "frames": 67,
+          "bytes": 2375228
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 159
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 67,
+        "p50": 14.69237499999872,
+        "p95": 15.040124999999534,
+        "p99": 19.244332999998733,
+        "max": 19.244332999998733,
+        "mean": 14.701429134328396
+      },
+      "ackSerializeSendMs": {
+        "count": 67,
+        "p50": 0.043958999995084014,
+        "p95": 0.05708299999969313,
+        "p99": 0.06650000000081491,
+        "max": 0.06650000000081491,
+        "mean": 0.04469713432789926
+      },
+      "shape": {
+        "keyframes": 120,
+        "deltas": 14,
+        "creates": 5,
+        "updates": 225,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 176
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783926094947
+      },
+      "observedLifecycle": {
+        "creates": 51,
+        "despawns": 0,
+        "reincarnations": 0,
+        "componentChanges": 2105
+      }
+    },
+    {
+      "label": "normal-8-seat-3",
+      "membershipId": "membership-b179bbd3-2c3c-44c7-b089-0006b4df470b",
+      "connectionEpoch": 1,
+      "acceptedPairs": 66,
+      "hashesVerified": 66,
+      "lastAcceptedFrameId": 66,
+      "lastStatePairAckSentFrameId": 65,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 354
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 65,
+          "bytes": 35481
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41495
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 149
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 852
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 116
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 21384
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1038
+        },
+        "statePair": {
+          "frames": 66,
+          "bytes": 2375505
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 159
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 66,
+        "p50": 14.667291000005207,
+        "p95": 15.32258400000137,
+        "p99": 16.648832999999286,
+        "max": 16.648832999999286,
+        "mean": 14.685894621212025
+      },
+      "ackSerializeSendMs": {
+        "count": 66,
+        "p50": 0.04341700000077253,
+        "p95": 0.057084000000031665,
+        "p99": 0.06524999999965075,
+        "max": 0.06524999999965075,
+        "mean": 0.04339843939338938
+      },
+      "shape": {
+        "keyframes": 122,
+        "deltas": 10,
+        "creates": 4,
+        "updates": 169,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 144
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783926095210
+      },
+      "observedLifecycle": {
+        "creates": 51,
+        "despawns": 0,
+        "reincarnations": 0,
+        "componentChanges": 2092
+      }
+    },
+    {
+      "label": "normal-8-seat-4",
+      "membershipId": "membership-a9d73698-b636-4155-926d-1913b0d50ae5",
+      "connectionEpoch": 1,
+      "acceptedPairs": 64,
+      "hashesVerified": 64,
+      "lastAcceptedFrameId": 64,
+      "lastStatePairAckSentFrameId": 64,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 354
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 64,
+          "bytes": 34935
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41479
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 149
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 852
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 116
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 21728
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1041
+        },
+        "statePair": {
+          "frames": 64,
+          "bytes": 2315225
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 159
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 64,
+        "p50": 14.653333000002021,
+        "p95": 15.11012500000652,
+        "p99": 15.300500000001193,
+        "max": 15.300500000001193,
+        "mean": 14.654859999999928
+      },
+      "ackSerializeSendMs": {
+        "count": 64,
+        "p50": 0.04166599999734899,
+        "p95": 0.05133399999613175,
+        "p99": 0.06383400000049733,
+        "max": 0.06383400000049733,
+        "mean": 0.042611312500355325
+      },
+      "shape": {
+        "keyframes": 120,
+        "deltas": 8,
+        "creates": 3,
+        "updates": 134,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 104
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783926095232
+      },
+      "observedLifecycle": {
+        "creates": 51,
+        "despawns": 0,
+        "reincarnations": 0,
+        "componentChanges": 2034
+      }
+    },
+    {
+      "label": "normal-8-seat-5",
+      "membershipId": "membership-288b9283-793d-42f2-8da4-ab53cf7d8875",
+      "connectionEpoch": 1,
+      "acceptedPairs": 63,
+      "hashesVerified": 63,
+      "lastAcceptedFrameId": 63,
+      "lastStatePairAckSentFrameId": 63,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 354
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 63,
+          "bytes": 34389
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41490
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 149
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 852
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 116
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 22200
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1041
+        },
+        "statePair": {
+          "frames": 63,
+          "bytes": 2312861
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 159
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 63,
+        "p50": 14.717334000000847,
+        "p95": 15.06787500000064,
+        "p99": 15.428250000000844,
+        "max": 15.428250000000844,
+        "mean": 14.700742809523598
+      },
+      "ackSerializeSendMs": {
+        "count": 63,
+        "p50": 0.043832999996084254,
+        "p95": 0.05770900000061374,
+        "p99": 0.06120799999916926,
+        "max": 0.06120799999916926,
+        "mean": 0.0438175238093194
+      },
+      "shape": {
+        "keyframes": 122,
+        "deltas": 4,
+        "creates": 2,
+        "updates": 78,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 54
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783926095254
+      },
+      "observedLifecycle": {
+        "creates": 51,
+        "despawns": 0,
+        "reincarnations": 0,
+        "componentChanges": 1998
+      }
+    },
+    {
+      "label": "normal-8-seat-6",
+      "membershipId": "membership-3e0ab6ee-3eb6-4525-84e2-7dec6ecaf68d",
+      "connectionEpoch": 1,
+      "acceptedPairs": 62,
+      "hashesVerified": 62,
+      "lastAcceptedFrameId": 62,
+      "lastStatePairAckSentFrameId": 61,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 354
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 61,
+          "bytes": 33297
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41470
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 149
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 852
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 117
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 22453
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1026
+        },
+        "statePair": {
+          "frames": 62,
+          "bytes": 2285634
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 159
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 62,
+        "p50": 14.682125000002998,
+        "p95": 15.032583000000159,
+        "p99": 15.359667000000627,
+        "max": 15.359667000000627,
+        "mean": 14.702617516129036
+      },
+      "ackSerializeSendMs": {
+        "count": 62,
+        "p50": 0.04320900000311667,
+        "p95": 0.05345799999486189,
+        "p99": 0.0602500000022701,
+        "max": 0.0602500000022701,
+        "mean": 0.04311285483867499
+      },
+      "shape": {
+        "keyframes": 122,
+        "deltas": 2,
+        "creates": 1,
+        "updates": 39,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 16
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783926095383
+      },
+      "observedLifecycle": {
+        "creates": 51,
+        "despawns": 0,
+        "reincarnations": 0,
+        "componentChanges": 1961
+      }
+    },
+    {
+      "label": "normal-8-seat-7",
+      "membershipId": "membership-cf29eb37-7891-46e3-9565-150b61aea233",
+      "connectionEpoch": 1,
+      "acceptedPairs": 61,
+      "hashesVerified": 61,
+      "lastAcceptedFrameId": 61,
+      "lastStatePairAckSentFrameId": 61,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 354
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 61,
+          "bytes": 33297
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41474
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 149
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 852
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 117
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 22942
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1028
+        },
+        "statePair": {
+          "frames": 61,
+          "bytes": 2259562
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 159
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 61,
+        "p50": 14.752124999999069,
+        "p95": 16.611917000001995,
+        "p99": 17.528917000003275,
+        "max": 17.528917000003275,
+        "mean": 15.080294442622693
+      },
+      "ackSerializeSendMs": {
+        "count": 61,
+        "p50": 0.040750000000116415,
+        "p95": 0.05658400000174879,
+        "p99": 0.059583000002021436,
+        "max": 0.059583000002021436,
+        "mean": 0.04148154098375464
+      },
+      "shape": {
+        "keyframes": 122,
+        "deltas": 0,
+        "creates": 0,
+        "updates": 0,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 0
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783926095405
+      },
+      "observedLifecycle": {
+        "creates": 51,
+        "despawns": 0,
+        "reincarnations": 0,
+        "componentChanges": 1922
+      }
+    }
+  ],
+  "correctness": {
+    "allClientHashesMatched": true,
+    "noClientErrors": true,
+    "publisherDrained": true,
+    "statePairAcksConverged": true,
+    "unexpectedAckRejects": true,
+    "accountingComplete": true,
+    "faultConvergence": true,
+    "lifecycleObserved": true
+  },
+  "admission": {
+    "steadyMeanAtOrBelow64KiB": false,
+    "steadyOneSecondP95AtOrBelow80KiB": false,
+    "correctnessPassed": true,
+    "authorityWithinExistingClockBudget": false,
+    "overloadStayedNormal": false,
+    "passed": false
+  },
+  "diagnostics": {
+    "projectionErrors": 0,
+    "skippedBeats": 0,
+    "statePair": {
+      "matchId": "70ae55b8-6309-42f2-a47b-7951cf715126",
+      "authorityIncarnation": 3,
+      "manifestSchema": "lbh-session-replication-manifest-v1",
+      "manifestHash": "sha256:9f4269fa922ac04f3ce8d99f02e60fb43b86ee6a05be06c8d4bcfc2f5d4c3308",
+      "admissions": 8,
+      "publisher": {
+        "recipients": 8,
+        "pendingPairs": 1,
+        "retainedBytes": 36994,
+        "keyframes": 476,
+        "deltas": 40,
+        "retransmits": 0,
+        "ackAccepted": 515,
+        "ackRejected": 0,
+        "ackBaseAdvances": 515,
+        "forcedRebases": 0,
+        "recipientsWithAckedBase": 8,
+        "maxAckedFrameId": 71,
+        "keyframeReasons": {
+          "atomic-kind-alignment:public-delta+owner-delta-not-smaller": 464,
+          "initial-no-acked-base": 8,
+          "missing-acked-base": 4
+        },
+        "candidateAverageBytes": {
+          "comparisons": 504,
+          "publicDeltaBytes": 19281.859126984127,
+          "publicKeyframeBytes": 34670.031746031746,
+          "ownerDeltaBytes": 2024.013888888889,
+          "ownerKeyframeBytes": 1711.6805555555557
+        },
+        "limits": {
+          "maxRecipients": 16,
+          "maxPendingPairsPerRecipient": 8,
+          "maxRetainedBytesPerRecipient": 2097152,
+          "maxPairBytes": 262144
+        }
+      }
+    },
+    "manifestTransfers": {
+      "direction": "authority->client",
+      "frameClass": "manifest",
+      "servedBytes": 19768,
+      "servedFetches": 8,
+      "rejectedFetches": 0,
+      "recipients": [
+        {
+          "recipient": "TyGhzCJTLJaOudQT",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "jxXBbLOelbtzS_35",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "g2QRzVlDV9TUCIG1",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "CS3rhY09SjeTzILL",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "S9RoNsTuwr7LQG0Q",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "wiadGDnBo9UNqneT",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "qJ22SJzAdAM4y4c8",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "4W19dSO6q7k-vZhj",
+          "fetches": 1,
+          "bytes": 2471
+        }
+      ],
+      "recipientCapacity": 16,
+      "registry": {
+        "retained": 0,
+        "verified": 0,
+        "cachedBindings": 8,
+        "retries": 0,
+        "ttlMs": 10000,
+        "cacheTtlMs": 21600000,
+        "capacity": 64
+      }
+    }
+  },
+  "limitations": [
+    "Local macOS loopback only",
+    "raw WebSocket without TLS",
+    "one match at a time",
+    "no hosted fleet, WSS, WAN, packet retransmission, compression, AOI, binary codec, or 24-96-client claim"
+  ]
+}

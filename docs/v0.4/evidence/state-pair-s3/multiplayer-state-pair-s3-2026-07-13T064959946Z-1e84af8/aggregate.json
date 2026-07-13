@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "profile": "review",
+  "commit": "1e84af80ce10171325ef7a37640b72c70333c1f8",
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --review",
+  "verdict": {
+    "passed": false,
+    "normal": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    "churn": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": true
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "file": "normal-1.json",
+      "scenario": "normal",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 286451.1,
+      "oneSecondP95DownlinkBytesPerSecond": 306403,
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-8.json",
+      "scenario": "normal",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 85812.8,
+      "oneSecondP95DownlinkBytesPerSecond": 111331,
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    {
+      "file": "churn-1.json",
+      "scenario": "churn",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 211121.43333333332,
+      "oneSecondP95DownlinkBytesPerSecond": 305849,
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": true
+      }
+    },
+    {
+      "file": "churn-8.json",
+      "scenario": "churn",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 85872.2,
+      "oneSecondP95DownlinkBytesPerSecond": 111225,
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  ],
+  "manifestIdentity": {
+    "hashes": [
+      "sha256:8d7799affcf62f62730e01289d795d22751f5497bfbae623658dc41da5deea8a",
+      "sha256:12709e16775280d1be9339b84714ea583cb845f96f2ac11cbe36ea520cf5bec1",
+      "sha256:e26c9ed2ba37fb2757db8f83e42ca55c1bd93746b6c6636b47b78c6879226b2a",
+      "sha256:4ff1e802d9412846f79d957cfb99e50db91269ed56cc4edfd82f851c44e28814"
+    ],
+    "changedAcrossFreshMatches": true,
+    "reconnectReuseObserved": true
+  },
+  "failureAnalysis": [
+    {
+      "population": 1,
+      "requiredDownlinkReductionBytesPerSecond": 220915.09999999998,
+      "requiredDownlinkReductionFraction": 0.7712140047638149,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "keyframe",
+          "bytes": 5719350,
+          "fraction": 0.9983117537338834
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 9514,
+          "fraction": 0.0016606673879066968
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 158,
+          "fraction": 0.000027578878209928325
+        }
+      ]
+    },
+    {
+      "population": 8,
+      "requiredDownlinkReductionBytesPerSecond": 20276.800000000003,
+      "requiredDownlinkReductionFraction": 0.23629108944120225,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "keyframe",
+          "bytes": 13388881,
+          "fraction": 0.9943090912547551
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 75360,
+          "fraction": 0.005596519463946116
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 1271,
+          "fraction": 0.00009438928129877275
+        }
+      ]
+    }
+  ],
+  "recommendation": {
+    "nextSlice": "Test mixed public-delta/owner-keyframe lane kinds inside one atomically applied statePair before any broader codec or AOI work; the gate now attributes the dominant fallback and records both candidates.",
+    "quantifiedTarget": "The next slice must recover the per-population required reductions in failureAnalysis; do not substitute aggregate averages.",
+    "boundedPotentialReference": "The existing focused runtime loopback measured 31,993-byte keyframe versus 11,696-byte valid delta (63.4% smaller), but that is a non-representative upper-bound clue, not a product forecast.",
+    "second": "Reduce exhaustive runtimePublic component replacement only after candidate evidence identifies the repeated fields; preserve canonical projection completeness.",
+    "defer": "Binary, AOI, compression, hosted WSS, and fleet packing remain out of scope until structural JSON passes or a measured residual justifies them."
+  }
+}

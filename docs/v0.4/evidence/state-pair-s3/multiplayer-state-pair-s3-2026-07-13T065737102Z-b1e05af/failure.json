@@ -1,0 +1,14 @@
+{
+  "at": "2026-07-13T06:59:07.157Z",
+  "message": "Timed out waiting for churn/1 authority leave",
+  "stack": [
+    "Error: Timed out waiting for churn/1 authority leave",
+    "    at waitFor (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:83:9)",
+    "    at async /Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:482:34",
+    "    at async once (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:431:24)",
+    "    at async churnSchedule (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:468:7)",
+    "    at async runWorkload (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:334:5)",
+    "    at async runScenario (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:516:22)",
+    "    at async main (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:738:56)"
+  ]
+}
