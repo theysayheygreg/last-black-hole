@@ -9,6 +9,8 @@ const { canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 
 const PAIR_SCHEMA = "lbh-authority-state-pair-v1";
 const ACK_SCHEMA = "lbh-authority-state-pair-ack-v1";
+const MIXED_PAIR_SCHEMA = "lbh-authority-state-pair-mixed-v1";
+const MIXED_ACK_SCHEMA = "lbh-authority-state-pair-mixed-ack-v1";
 const MAX_WIRE_PAIR_BYTES = 256 * 1024;
 const DEFAULTS = Object.freeze({
   maxRecipients: 128,
@@ -113,6 +115,10 @@ function deltaPayload(base, current) {
   });
 }
 
+function pairProjectionKind(publicKind, ownerKind) {
+  return publicKind === ownerKind ? publicKind : `public-${publicKind}+owner-${ownerKind}`;
+}
+
 function createAuthorityDeltaPublisher(options = {}) {
   const limits = Object.freeze({
     maxRecipients: positiveInteger(options.maxRecipients, DEFAULTS.maxRecipients, "maxRecipients"),
@@ -129,7 +135,7 @@ function createAuthorityDeltaPublisher(options = {}) {
     throw new RangeError(`maxPairBytes cannot exceed the ${MAX_WIRE_PAIR_BYTES}-byte wire frame limit`);
   }
   const recipients = new Map();
-  const counters = { keyframes: 0, deltas: 0, retransmits: 0, ackAccepted: 0, ackRejected: 0,
+  const counters = { keyframes: 0, deltas: 0, mixed: 0, retransmits: 0, ackAccepted: 0, ackRejected: 0,
     ackBaseAdvances: 0, forcedRebases: 0 };
   const keyframeReasons = new Map();
   const candidates = {
@@ -174,7 +180,8 @@ function createAuthorityDeltaPublisher(options = {}) {
     counters.forcedRebases += 1;
   }
 
-  function publish({ identity: rawIdentity, publicView: publicInput, ownerView: ownerInput, dirtyHints = null }) {
+  function publish({ identity: rawIdentity, publicView: publicInput, ownerView: ownerInput,
+    dirtyHints = null, allowMixed = false }) {
     const identity = normalizeIdentity(rawIdentity);
     const publicView = normalizeView(publicInput);
     const ownerView = normalizeView(ownerInput);
@@ -216,21 +223,23 @@ function createAuthorityDeltaPublisher(options = {}) {
       ownerPayload = keyframePayload(ownerView);
       keyframeReason = state.forceReason;
     }
-    // A pair is one transaction. If either lane cannot delta safely, both lanes rebase.
-    if (publicPayload.kind !== ownerPayload.kind) {
+    // Legacy state-pair-v1 recipients retain the original same-kind contract.
+    if (!allowMixed && publicPayload.kind !== ownerPayload.kind) {
       keyframeReason = `atomic-kind-alignment:public-${publicDecision?.decision || publicPayload.kind}+owner-${ownerDecision?.decision || ownerPayload.kind}`;
       publicPayload = keyframePayload(publicView);
       ownerPayload = keyframePayload(ownerView);
     }
-    const frame = Object.freeze({
+    const frameId = state.nextFrameId;
+    const pairSchema = allowMixed ? MIXED_PAIR_SCHEMA : PAIR_SCHEMA;
+    const buildFrame = (nextPublic, nextOwner) => Object.freeze({
       type: "statePair",
-      pairSchema: PAIR_SCHEMA,
+      pairSchema,
       matchId: identity.matchId,
       sessionId: identity.sessionId,
       authorityIncarnation: identity.authorityIncarnation,
       recipientId: identity.recipientId,
       recipientIncarnation: identity.recipientIncarnation,
-      frameId: state.nextFrameId++,
+      frameId,
       statePairId: publicView.statePairId,
       snapshotId: publicView.snapshotId,
       tick: publicView.tick,
@@ -240,14 +249,26 @@ function createAuthorityDeltaPublisher(options = {}) {
       overloadMode: publicView.overloadMode,
       ballparkEpoch: publicView.ballparkEpoch,
       manifestHash: publicView.manifestHash,
-      public: publicPayload,
-      owner: ownerPayload,
+      public: nextPublic,
+      owner: nextOwner,
     });
-    const bytes = canonicalJsonBytes(frame).length;
+    let frame = buildFrame(publicPayload, ownerPayload);
+    let bytes = canonicalJsonBytes(frame).length;
+    const fullKeyframe = buildFrame(keyframePayload(publicView), keyframePayload(ownerView));
+    const fullKeyframeBytes = canonicalJsonBytes(fullKeyframe).length;
+    if (allowMixed && (publicPayload.kind !== "keyframe" || ownerPayload.kind !== "keyframe")
+        && (bytes >= fullKeyframeBytes || bytes > limits.maxPairBytes)) {
+      keyframeReason = bytes >= fullKeyframeBytes ? "pair-not-smaller" : "pair-limit-fallback";
+      publicPayload = fullKeyframe.public;
+      ownerPayload = fullKeyframe.owner;
+      frame = fullKeyframe;
+      bytes = fullKeyframeBytes;
+    }
     if (bytes > limits.maxPairBytes) {
       forceRebase(state);
       fail("pair-too-large", `atomic state pair exceeds ${limits.maxPairBytes} bytes`);
     }
+    state.nextFrameId += 1;
     const record = Object.freeze({
       frame,
       bytes,
@@ -258,8 +279,12 @@ function createAuthorityDeltaPublisher(options = {}) {
     state.retainedBytes += bytes;
     state.forceKeyframe = false;
     state.forceReason = null;
-    counters[publicPayload.kind === "delta" ? "deltas" : "keyframes"] += 1;
-    if (publicPayload.kind === "keyframe") countReason(keyframeReason);
+    const laneKinds = pairProjectionKind(publicPayload.kind, ownerPayload.kind);
+    const counter = publicPayload.kind === "delta" && ownerPayload.kind === "delta"
+      ? "deltas" : publicPayload.kind === "keyframe" && ownerPayload.kind === "keyframe"
+        ? "keyframes" : "mixed";
+    counters[counter] += 1;
+    if (publicPayload.kind === "keyframe" && ownerPayload.kind === "keyframe") countReason(keyframeReason);
     while (state.pending.size > limits.maxPendingPairsPerRecipient
       || state.retainedBytes > limits.maxRetainedBytesPerRecipient) {
       const oldestId = state.pending.keys().next().value;
@@ -269,7 +294,9 @@ function createAuthorityDeltaPublisher(options = {}) {
       state.forceKeyframe = true;
       state.forceReason = "retention-evicted-acked-base-unsafe";
     }
-    return Object.freeze({ frame, bytes, projectionKind: publicPayload.kind });
+    return Object.freeze({ frame, bytes,
+      projectionKind: publicPayload.kind === ownerPayload.kind ? publicPayload.kind : laneKinds,
+      publicKind: publicPayload.kind, ownerKind: ownerPayload.kind, fullKeyframeBytes });
   }
 
   function acknowledge(rawIdentity, ack) {
@@ -284,16 +311,31 @@ function createAuthorityDeltaPublisher(options = {}) {
       return Object.freeze({ accepted: false, reason });
     };
     if (!state || !ack || typeof ack !== "object" || Array.isArray(ack)) return reject("unknown-recipient");
-    const ackKeys = new Set(["type", "ackKind", "ackSchema", "matchId", "sessionId", "authorityIncarnation",
-      "recipientId", "recipientIncarnation", "frameId", "statePairId", "snapshotId", "publicHash", "ownerHash"]);
-    if (Object.keys(ack).some((key) => !ackKeys.has(key)) || ack.type !== "ack"
-      || ack.ackKind !== "statePair" || ack.ackSchema !== ACK_SCHEMA) return reject("invalid-ack-schema");
     if (!sameIdentity(identity, ack)) return reject("identity-mismatch");
     if (!Number.isSafeInteger(ack.frameId) || ack.frameId < 1) return reject("invalid-frame-id");
     const record = state.pending.get(ack.frameId);
     if (!record) return reject("unknown-frame");
+    const mixed = record.frame.pairSchema === MIXED_PAIR_SCHEMA;
+    const ackKeys = new Set(["type", "ackKind", "ackSchema", "matchId", "sessionId", "authorityIncarnation",
+      "recipientId", "recipientIncarnation", "frameId", "statePairId", "snapshotId", "publicHash", "ownerHash",
+      ...(mixed ? ["pairSchema", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode",
+        "ballparkEpoch", "manifestHash", "publicKind", "ownerKind", "publicBaseSnapshotId", "ownerBaseSnapshotId"] : [])]);
+    if (Object.keys(ack).some((key) => !ackKeys.has(key)) || ack.type !== "ack"
+      || ack.ackKind !== "statePair" || ack.ackSchema !== (mixed ? MIXED_ACK_SCHEMA : ACK_SCHEMA)) return reject("invalid-ack-schema");
     if (ack.statePairId !== record.frame.statePairId || ack.snapshotId !== record.frame.snapshotId
       || ack.publicHash !== record.public.hash || ack.ownerHash !== record.owner.hash) return reject("lineage-mismatch");
+    if (mixed && ["authorityIncarnation", "recipientIncarnation", "frameId", "tick", "simTime",
+      "eventWatermark", "fieldRevision", "ballparkEpoch"].some((key) => Object.is(ack[key], -0))) {
+      return reject("lineage-mismatch");
+    }
+    if (mixed && (ack.publicKind !== record.frame.public.kind || ack.ownerKind !== record.frame.owner.kind
+      || ack.publicBaseSnapshotId !== (record.frame.public.baseSnapshotId || null)
+      || ack.ownerBaseSnapshotId !== (record.frame.owner.baseSnapshotId || null)
+      || ack.pairSchema !== record.frame.pairSchema || ack.tick !== record.frame.tick
+      || ack.simTime !== record.frame.simTime || ack.eventWatermark !== record.frame.eventWatermark
+      || ack.fieldRevision !== record.frame.fieldRevision || ack.overloadMode !== record.frame.overloadMode
+      || ack.ballparkEpoch !== record.frame.ballparkEpoch
+      || ack.manifestHash !== record.frame.manifestHash)) return reject("lineage-mismatch");
     state.acked = Object.freeze({ public: record.public, owner: record.owner, frameId: ack.frameId });
     for (const [frameId, pending] of state.pending) {
       if (frameId > ack.frameId) continue;
@@ -312,7 +354,9 @@ function createAuthorityDeltaPublisher(options = {}) {
     const record = stateFor(identity, false)?.pending.get(frameId);
     if (!record) return null;
     counters.retransmits += 1;
-    return Object.freeze({ frame: record.frame, bytes: record.bytes, projectionKind: record.frame.public.kind });
+    return Object.freeze({ frame: record.frame, bytes: record.bytes,
+      projectionKind: record.frame.public.kind === record.frame.owner.kind
+        ? record.frame.public.kind : pairProjectionKind(record.frame.public.kind, record.frame.owner.kind) });
   }
 
   function rebase(rawIdentity) {
@@ -359,6 +403,8 @@ function createAuthorityDeltaPublisher(options = {}) {
 module.exports = {
   PAIR_SCHEMA,
   ACK_SCHEMA,
+  MIXED_PAIR_SCHEMA,
+  MIXED_ACK_SCHEMA,
   MAX_WIRE_PAIR_BYTES,
   DEFAULTS,
   AuthorityDeltaError,

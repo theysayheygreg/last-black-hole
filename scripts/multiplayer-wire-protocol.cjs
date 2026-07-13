@@ -225,6 +225,9 @@ function validateHello(frame) {
     }
     frame.capabilities.forEach((value, index) => requiredString(value, `capabilities[${index}]`));
     if (!frame.capabilities.includes("static-manifest-v1")) fail("invalid-field", "v2 requires static-manifest-v1");
+    if (frame.capabilities.includes("state-pair-mixed-v1") && !frame.capabilities.includes("state-pair-v1")) {
+      fail("invalid-field", "state-pair-mixed-v1 requires state-pair-v1");
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
   }
@@ -258,6 +261,9 @@ function validateWelcome(frame) {
     }
     frame.capabilities.forEach((value, index) => requiredString(value, `capabilities[${index}]`));
     if (!frame.capabilities.includes("static-manifest-v1")) fail("invalid-field", "v2 requires static-manifest-v1");
+    if (frame.capabilities.includes("state-pair-mixed-v1") && !frame.capabilities.includes("state-pair-v1")) {
+      fail("invalid-field", "state-pair-mixed-v1 requires state-pair-v1");
+    }
     if (frame.authorityIncarnation !== undefined) {
       if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");
       integer(frame.authorityIncarnation, "authorityIncarnation", { min: 1 });
@@ -380,15 +386,40 @@ function validateAck(frame, direction) {
   exactKeys(frame, new Set([
     "type", "ackKind", "deliveryId", "snapshotId", "eventSeq", "inputSeq", "actionId", "actionSeq", "commandSeq", "status", "result",
     "ackSchema", "matchId", "sessionId", "authorityIncarnation", "recipientId", "recipientIncarnation", "frameId", "statePairId", "publicHash", "ownerHash",
+    "pairSchema", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode", "ballparkEpoch", "manifestHash",
+    "publicKind", "ownerKind", "publicBaseSnapshotId", "ownerBaseSnapshotId",
   ]));
   requiredString(frame.ackKind, "ackKind");
   if (!ACK_KINDS.has(frame.ackKind)) fail("invalid-ack-kind", `unsupported ackKind ${frame.ackKind}`);
   if (frame.ackKind === "statePair") {
     if (direction && direction !== CLIENT_TO_SERVER) fail("invalid-direction", "statePair ack is client->server");
+    const mixed = frame.ackSchema === "lbh-authority-state-pair-mixed-ack-v1";
     exactKeys(frame, new Set(["type", "ackKind", "ackSchema", "matchId", "sessionId", "authorityIncarnation",
-      "recipientId", "recipientIncarnation", "frameId", "statePairId", "snapshotId", "publicHash", "ownerHash"]), "statePair ack");
+      "recipientId", "recipientIncarnation", "frameId", "statePairId", "snapshotId", "publicHash", "ownerHash",
+      ...(mixed ? ["pairSchema", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode",
+        "ballparkEpoch", "manifestHash", "publicKind", "ownerKind", "publicBaseSnapshotId", "ownerBaseSnapshotId"] : [])]), "statePair ack");
     for (const key of ["ackSchema", "matchId", "sessionId", "recipientId", "statePairId", "snapshotId", "publicHash", "ownerHash"]) requiredString(frame[key], key);
-    if (frame.ackSchema !== "lbh-authority-state-pair-ack-v1") fail("invalid-field", "unsupported statePair ACK schema");
+    if (frame.ackSchema !== "lbh-authority-state-pair-ack-v1" && !mixed) fail("invalid-field", "unsupported statePair ACK schema");
+    if (mixed) {
+      for (const key of ["pairSchema", "overloadMode", "manifestHash"]) requiredString(frame[key], key);
+      if (frame.pairSchema !== "lbh-authority-state-pair-mixed-v1") fail("invalid-field", "mixed ACK pairSchema is unsupported");
+      integer(frame.tick, "tick");
+      finiteNumber(frame.simTime, "simTime", { min: 0 });
+      for (const key of ["eventWatermark", "fieldRevision", "ballparkEpoch"]) integer(frame[key], key);
+      for (const key of ["authorityIncarnation", "recipientIncarnation", "frameId", "tick", "simTime",
+        "eventWatermark", "fieldRevision", "ballparkEpoch"]) {
+        if (Object.is(frame[key], -0)) fail("invalid-field", `${key} cannot be negative zero`);
+      }
+      if (!OVERLOAD_MODES.has(frame.overloadMode)) fail("invalid-overload-mode", `unsupported overloadMode ${frame.overloadMode}`);
+      for (const lane of ["public", "owner"]) {
+        if (frame[`${lane}Kind`] !== "keyframe" && frame[`${lane}Kind`] !== "delta") {
+          fail("invalid-field", `${lane}Kind must be keyframe or delta`);
+        }
+        const base = frame[`${lane}BaseSnapshotId`];
+        if (frame[`${lane}Kind`] === "delta") requiredString(base, `${lane}BaseSnapshotId`);
+        else if (base !== null) fail("invalid-field", `${lane}BaseSnapshotId must be null for a keyframe`);
+      }
+    }
     integer(frame.authorityIncarnation, "authorityIncarnation", { min: 1 });
     integer(frame.recipientIncarnation, "recipientIncarnation", { min: 1 });
     integer(frame.frameId, "frameId", { min: 1 });
@@ -426,7 +457,8 @@ function validateStatePair(frame) {
     "recipientIncarnation", "frameId", "statePairId", "snapshotId", "tick", "simTime", "eventWatermark",
     "fieldRevision", "overloadMode", "ballparkEpoch", "manifestHash", "public", "owner"]));
   for (const key of ["pairSchema", "matchId", "sessionId", "recipientId", "statePairId", "snapshotId", "manifestHash"]) requiredString(frame[key], key);
-  if (frame.pairSchema !== "lbh-authority-state-pair-v1") fail("invalid-field", "unsupported statePair schema");
+  const mixed = frame.pairSchema === "lbh-authority-state-pair-mixed-v1";
+  if (frame.pairSchema !== "lbh-authority-state-pair-v1" && !mixed) fail("invalid-field", "unsupported statePair schema");
   for (const key of ["authorityIncarnation", "recipientIncarnation", "frameId"]) integer(frame[key], key, { min: 1 });
   integer(frame.tick, "tick");
   finiteNumber(frame.simTime, "simTime", { min: 0 });
@@ -487,8 +519,8 @@ function validateStatePair(frame) {
       deltaCursors[lane] = cursors;
     }
   }
-  if (frame.public.kind !== frame.owner.kind) fail("invalid-field", "statePair lanes must use the same transaction kind");
-  if (frame.public.kind === "delta") {
+  if (!mixed && frame.public.kind !== frame.owner.kind) fail("invalid-field", "statePair-v1 lanes must use the same transaction kind");
+  if (frame.public.kind === "delta" && frame.owner.kind === "delta") {
     for (const key of ["statePairId", "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode"]) {
       if (Object.hasOwn(deltaCursors.public, key) !== Object.hasOwn(deltaCursors.owner, key)
         || (Object.hasOwn(deltaCursors.public, key) && deltaCursors.public[key] !== deltaCursors.owner[key])) {

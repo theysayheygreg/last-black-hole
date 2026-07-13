@@ -36,6 +36,13 @@ const ACTION_RELIABLE_MESSAGE_RESERVE = 16;
 const ACTION_RELIABLE_BYTE_RESERVE = 32 * 1024;
 const STATE_PAIR_RECOVERY_COOLDOWN_MS = 1000;
 
+function replicationStateFrameKey(frame) {
+  if (frame?.type === "statePair" && Number.isSafeInteger(frame.frameId)) return `statePair:${frame.frameId}`;
+  if ((frame?.type === "publicState" || frame?.type === "ownerState")
+      && Number.isSafeInteger(frame.snapshotId)) return `${frame.type}:${frame.snapshotId}`;
+  return null;
+}
+
 function createSimWebSocketAdapter(options = {}) {
   const config = normalizeAdapterOptions(options);
   const scheduleOutboundFrame = typeof options.scheduleOutboundFrame === "function"
@@ -416,9 +423,10 @@ function createSimWebSocketAdapter(options = {}) {
     if (!replicationAccounting) return;
     replicationAccounting.outbound(state, frame, metric, Buffer.byteLength(wire, "utf8"), { timestamp });
     if (mutateTracking && (frame?.type === "publicState" || frame?.type === "ownerState" || frame?.type === "statePair")) {
-      state.replicationStateFrames?.delete(frame);
+      const stateFrameKey = replicationStateFrameKey(frame);
+      if (stateFrameKey) state.replicationStateFrames?.delete(stateFrameKey);
       const trackingKey = frame.type === "statePair" ? "statePair" : frame.type;
-      if (state.replicationQueuedStateFrames?.[trackingKey]?.frame === frame) {
+      if (state.replicationQueuedStateFrames?.[trackingKey]?.trackingKey === stateFrameKey) {
         delete state.replicationQueuedStateFrames[trackingKey];
         if (Object.keys(state.replicationQueuedStateFrames).length === 0) state.replicationQueuedStateFrames = null;
       }
@@ -448,7 +456,7 @@ function createSimWebSocketAdapter(options = {}) {
         const retained = state.replicationReliableFrames?.get(sendAttempt.reliableId);
         if (retained) retained.sendInvoked = true;
       } else if (replicationAccounting && (frame?.type === "publicState" || frame?.type === "ownerState" || frame?.type === "statePair")) {
-        const queued = state.replicationStateFrames?.get(frame);
+        const queued = state.replicationStateFrames?.get(replicationStateFrameKey(frame));
         if (queued) queued.sendInvoked = true;
       }
       if (onPressureTransition) state.pendingSendBytes += Buffer.byteLength(wire, "utf8");
@@ -485,9 +493,12 @@ function createSimWebSocketAdapter(options = {}) {
               if (retained) retained.transportAccepted = true;
             }
             if (frame?.type === "publicState" || frame?.type === "ownerState" || frame?.type === "statePair") {
-              state.replicationStateFrames?.delete(frame);
+              const stateFrameKey = replicationStateFrameKey(frame);
+              if (stateFrameKey) state.replicationStateFrames?.delete(stateFrameKey);
               const trackingKey = frame.type === "statePair" ? "statePair" : frame.type;
-              if (state.replicationQueuedStateFrames?.[trackingKey]?.frame === frame) delete state.replicationQueuedStateFrames[trackingKey];
+              if (state.replicationQueuedStateFrames?.[trackingKey]?.trackingKey === stateFrameKey) {
+                delete state.replicationQueuedStateFrames[trackingKey];
+              }
               if (state.replicationQueuedStateFrames
                 && Object.keys(state.replicationQueuedStateFrames).length === 0) state.replicationQueuedStateFrames = null;
             }
@@ -1110,6 +1121,8 @@ function createSimWebSocketAdapter(options = {}) {
     if (frame.type === "ack") {
       if (frame.ackKind === "statePair") {
         const validStatePairAck = state.statePairMode && state.capabilities?.includes("state-pair-v1")
+          && (frame.ackSchema !== "lbh-authority-state-pair-mixed-ack-v1"
+            || state.capabilities.includes("state-pair-mixed-v1"))
           && frame.matchId === state.identity.runId && frame.sessionId === state.identity.connectionId
           && frame.recipientId === state.identity.membershipId
           && frame.recipientIncarnation === state.identity.connectionEpoch
@@ -1371,14 +1384,16 @@ function createSimWebSocketAdapter(options = {}) {
           } else if (outcome.action === "coalesced") {
             for (const queued of Object.values(priorQueuedStateFrames || {})) {
               replicationAccounting.outbound(state, queued.frame, "coalesced", queued.bytes);
-              state.replicationStateFrames.delete(queued.frame);
+              state.replicationStateFrames.delete(queued.trackingKey);
             }
           }
           if (outcome.accepted) {
-            const publicRecord = { frame: publicFrame, bytes: publicBytes, sendInvoked: false };
-            const ownerRecord = { frame: ownerFrame, bytes: ownerBytes, sendInvoked: false };
-            state.replicationStateFrames.set(publicFrame, publicRecord);
-            state.replicationStateFrames.set(ownerFrame, ownerRecord);
+            const publicRecord = { frame: recipientPublicFrame, bytes: publicBytes, sendInvoked: false,
+              trackingKey: replicationStateFrameKey(recipientPublicFrame) };
+            const ownerRecord = { frame: ownerFrame, bytes: ownerBytes, sendInvoked: false,
+              trackingKey: replicationStateFrameKey(ownerFrame) };
+            state.replicationStateFrames.set(publicRecord.trackingKey, publicRecord);
+            state.replicationStateFrames.set(ownerRecord.trackingKey, ownerRecord);
             state.replicationQueuedStateFrames = { publicState: publicRecord, ownerState: ownerRecord };
           }
         }
@@ -1486,6 +1501,10 @@ function createSimWebSocketAdapter(options = {}) {
     if (!state.capabilities?.includes("state-pair-v1")) {
       return { accepted: false, action: "reject", reason: "state-pair-capability-required" };
     }
+    if (frame.pairSchema === "lbh-authority-state-pair-mixed-v1"
+        && !state.capabilities.includes("state-pair-mixed-v1")) {
+      return { accepted: false, action: "reject", reason: "state-pair-mixed-capability-required" };
+    }
     if (frame.matchId !== state.identity.runId || frame.sessionId !== state.identity.connectionId
       || frame.recipientId !== state.identity.membershipId
       || frame.recipientIncarnation !== state.identity.connectionEpoch
@@ -1524,11 +1543,11 @@ function createSimWebSocketAdapter(options = {}) {
         if (outcome.action === "coalesced") {
           for (const prior of priorRecords) {
             replicationAccounting.outbound(state, prior.frame, "coalesced", prior.bytes);
-            state.replicationStateFrames?.delete(prior.frame);
+            state.replicationStateFrames?.delete(prior.trackingKey);
           }
         }
-        const record = { frame, bytes, sendInvoked: false };
-        state.replicationStateFrames?.set(frame, record);
+        const record = { frame, bytes, sendInvoked: false, trackingKey: replicationStateFrameKey(frame) };
+        state.replicationStateFrames?.set(record.trackingKey, record);
         state.replicationQueuedStateFrames = { statePair: record };
       }
     }
@@ -1551,6 +1570,8 @@ function createSimWebSocketAdapter(options = {}) {
     }
     if (state.wireVersion !== "lbh-multiplayer-json-v2" || !state.statePairMode
       || !state.capabilities?.includes("state-pair-v1") || frame.matchId !== state.identity.runId
+      || (frame.pairSchema === "lbh-authority-state-pair-mixed-v1"
+        && !state.capabilities.includes("state-pair-mixed-v1"))
       || frame.sessionId !== state.identity.connectionId || frame.recipientId !== state.identity.membershipId
       || frame.recipientIncarnation !== state.identity.connectionEpoch
       || frame.manifestHash !== state.binding?.manifestHash
@@ -1560,7 +1581,9 @@ function createSimWebSocketAdapter(options = {}) {
     if (!(await isBindingCurrent(state, "private-state-pair-retransmit"))) {
       return { accepted: false, action: "ignore", reason: "connection-not-live" };
     }
-    replicationAccounting?.outbound(state, frame, "retransmitted", Buffer.byteLength(wire, "utf8"));
+    const retransmitBytes = Buffer.byteLength(wire, "utf8");
+    replicationAccounting?.outbound(state, frame, "offered", retransmitBytes);
+    replicationAccounting?.outbound(state, frame, "retransmitted", retransmitBytes);
     const accepted = sendWire(state, wire, frame);
     return accepted
       ? { accepted: true, action: "retransmitted" }

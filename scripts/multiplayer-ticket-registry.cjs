@@ -109,6 +109,10 @@ function createMultiplayerTicketRegistry({
       if (new Set(capabilities).size !== capabilities.length) fail("invalid-claim", "capabilities must be unique");
       selected.capabilities = Object.freeze([...capabilities].sort());
       if (selected.wireVersion === "lbh-multiplayer-json-v2") {
+        if (selected.capabilities.includes("state-pair-mixed-v1")
+            && !selected.capabilities.includes("state-pair-v1")) {
+          fail("invalid-claim", "state-pair-mixed-v1 requires state-pair-v1");
+        }
         selected.manifestSchema = identifier(claims.manifestSchema, "manifestSchema");
         selected.manifestHash = identifier(claims.manifestHash, "manifestHash");
         const wantsStatePair = selected.capabilities.includes("state-pair-v1");

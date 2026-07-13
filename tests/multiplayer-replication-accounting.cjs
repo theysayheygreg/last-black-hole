@@ -78,6 +78,26 @@ async function run() {
       "A directional capture must reconcile to its legacy combined row without inventing a split");
   });
 
+  await runner.run("classifies mixed atomic lane kinds honestly", async () => {
+    const mixed = frameShape({
+      type: "statePair",
+      pairSchema: "lbh-authority-state-pair-mixed-v1",
+      public: { kind: "delta" },
+      owner: { kind: "keyframe" },
+    });
+    assert(mixed.shapeComplete, "recognized mixed lanes remain one complete atomic shape");
+    assert(mixed.projectionKind === "public-delta+owner-keyframe"
+      && mixed.publicProjectionKind === "delta" && mixed.ownerProjectionKind === "keyframe",
+    `mixed lane accounting must preserve both kinds: ${JSON.stringify(mixed)}`);
+    const inverse = frameShape({
+      type: "statePair",
+      pairSchema: "lbh-authority-state-pair-mixed-v1",
+      public: { kind: "keyframe" },
+      owner: { kind: "delta" },
+    });
+    assert(inverse.projectionKind === "public-keyframe+owner-delta" && inverse.shapeComplete);
+  });
+
   await runner.run("keeps exact direction, class, recipient, active-time, percentile, and reset ledgers", async () => {
     let timestamp = 1000;
     const accounting = createReplicationAccounting({ now: () => timestamp, maxEvents: 100 });

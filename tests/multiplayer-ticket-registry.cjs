@@ -104,6 +104,17 @@ async function run() {
     }), "invalid-claim");
   });
 
+  await runner.run("mixed state-pair capability cannot be ticketed without the base protocol", async () => {
+    const registry = createMultiplayerTicketRegistry({ runId: "run-a" });
+    expectTicketError(() => registry.issueAdmission({
+      membershipId: "membership-a", playerId: "player-a", profileId: "profile-a",
+      wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1", "state-pair-mixed-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    }), "invalid-claim");
+  });
+
   await runner.run("expiry is deterministic under an injected clock", async () => {
     let clock = 10_000;
     const registry = createMultiplayerTicketRegistry({ runId: "run-a", now: () => clock });

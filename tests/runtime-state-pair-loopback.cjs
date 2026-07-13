@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const { WebSocket } = require("ws");
 const { TestRunner, assert, startSimServer, stopSimServer } = require("./helpers.cjs");
 const { createClientDeltaReceiver } = require("../scripts/client-delta-receiver.cjs");
+const { projectionHash } = require("../scripts/canonical-structural-delta.cjs");
 const { WIRE_PROTOCOL_VERSION_V2, SIM_PROTOCOL_VERSION } = require("../scripts/multiplayer-wire-protocol.cjs");
 
 const PORT = 8906;
@@ -37,6 +38,7 @@ async function run() {
   const runner = new TestRunner("RuntimeStatePairLoopback");
   await startSimServer(PORT, { keepAlive: true, env: {
     LBH_SIM_WS_ENABLED: "true", LBH_SIM_WS_JSON_V2: "true", LBH_SIM_WS_STATE_PAIR_V1: "true",
+    LBH_SIM_WS_STATE_PAIR_MIXED_V1: "true",
   } });
   let ws = null;
   try {
@@ -50,11 +52,19 @@ async function run() {
     const authority = joined.body.authority;
 
     await runner.run("opt-in runtime binds ticket manifest authority and drives recovery end to end", async () => {
-      const issued = await request("/multiplayer/ticket", { method: "POST", authority, body: {
+      const legacyStatePairTicket = await request("/multiplayer/ticket", { method: "POST", authority, body: {
         kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2],
         capabilities: ["static-manifest-v1", "state-pair-v1"],
       } });
-      assert(issued.status === 200 && issued.body.capabilities.includes("state-pair-v1"), "Runtime must explicitly select state-pair");
+      assert(legacyStatePairTicket.status === 200
+        && !legacyStatePairTicket.body.capabilities.includes("state-pair-mixed-v1"),
+      "state-pair-v1 tickets must not be upgraded to mixed lanes without an explicit request");
+      const issued = await request("/multiplayer/ticket", { method: "POST", authority, body: {
+        kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2],
+        capabilities: ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1"],
+      } });
+      assert(issued.status === 200 && issued.body.capabilities.includes("state-pair-mixed-v1"),
+        "Runtime must ticket-bind the separately negotiated mixed state-pair capability");
       assert(Number.isSafeInteger(issued.body.authorityIncarnation), "Ticket response must bind the per-match authority incarnation");
       const frames = [];
       const rawPairs = [];
@@ -99,22 +109,66 @@ async function run() {
         authorityIncarnation: welcome.authorityIncarnation, recipientId: welcome.membershipId,
         recipientIncarnation: welcome.connectionEpoch, manifestSchema: welcome.manifestSchema,
         manifestHash: welcome.manifestHash,
-      } });
+      }, capabilities: welcome.capabilities });
+      const keyframeStarted = process.hrtime.bigint();
       const first = client.receive(rawPairs[0]);
+      const keyframeApplyMs = Number(process.hrtime.bigint() - keyframeStarted) / 1e6;
       assert(first.accepted && rawPairs[0].includes('"kind":"keyframe"'), "First runtime pair must materialize atomically");
       ws.send(JSON.stringify(first.ack));
       let nextIndex = 1;
-      let deltaIndex = -1;
-      for (let attempt = 0; attempt < 4 && deltaIndex < 0; attempt += 1) {
+      let mixedIndex = -1;
+      let mixedApplyMs = null;
+      let mixedFullPairBytes = null;
+      let inputSeq = welcome.lastInputSeq;
+      for (let attempt = 0; attempt < 80 && mixedIndex < 0; attempt += 1) {
+        inputSeq += 1;
+        ws.send(JSON.stringify({
+          type: "input", inputSeq, moveX: attempt % 2 ? 0.75 : -0.75, moveY: 0.25,
+          thrust: 1, brake: 0, slingshot: false, ability1: false, ability2: false,
+          clientTimeMs: Date.now(),
+        }));
         await waitFor(() => rawPairs.length > nextIndex, "state-pair delta candidate");
         const parsed = JSON.parse(rawPairs[nextIndex]);
+        const applyStarted = process.hrtime.bigint();
         const received = client.receive(rawPairs[nextIndex]);
-        assert(received.accepted, `Runtime pair failed: ${JSON.stringify(received)}`);
+        const applyMs = Number(process.hrtime.bigint() - applyStarted) / 1e6;
+        if (!received.accepted) {
+          assert(received.recovery, `Runtime rejection must request bounded recovery: ${JSON.stringify(received)}`);
+          ws.send(JSON.stringify(received.recovery));
+          const recoveryStart = rawPairs.length;
+          await waitFor(() => rawPairs.length > recoveryStart
+            && JSON.parse(rawPairs[rawPairs.length - 1]).public.kind === "keyframe"
+            && JSON.parse(rawPairs[rawPairs.length - 1]).owner.kind === "keyframe", "loop recovery keyframes");
+          const recoveryIndex = rawPairs.length - 1;
+          const recoveredDuringSearch = client.receive(rawPairs[recoveryIndex]);
+          assert(recoveredDuringSearch.accepted,
+            `Runtime recovery pair failed: ${JSON.stringify(recoveredDuringSearch)}`);
+          ws.send(JSON.stringify(recoveredDuringSearch.ack));
+          nextIndex = recoveryIndex + 1;
+          continue;
+        }
         ws.send(JSON.stringify(received.ack));
-        if (parsed.public.kind === "delta") deltaIndex = nextIndex;
+        if (parsed.public.kind === "delta" && parsed.owner.kind === "keyframe") {
+          mixedIndex = nextIndex;
+          mixedApplyMs = applyMs;
+          const fullPair = {
+            ...parsed,
+            public: { kind: "keyframe", schema: received.state.public.schema,
+              resultHash: projectionHash(received.state.public), projection: received.state.public },
+            owner: { kind: "keyframe", schema: received.state.owner.schema,
+              resultHash: projectionHash(received.state.owner), projection: received.state.owner },
+          };
+          mixedFullPairBytes = Buffer.byteLength(JSON.stringify(fullPair), "utf8");
+        }
         nextIndex += 1;
       }
-      assert(deltaIndex >= 0, "ACK-based runtime stream must advance to a delta");
+      assert(mixedIndex >= 0,
+        `ACK-based runtime stream must reach public-delta + owner-keyframe; got ${rawPairs.map((raw) => {
+          const frame = JSON.parse(raw);
+          return `${frame.public.kind}+${frame.owner.kind}`;
+        }).join(",")}`);
+      assert(Buffer.byteLength(rawPairs[mixedIndex]) < mixedFullPairBytes,
+        "winning mixed pair must be smaller than the exact same-beat full pair");
       const droppedIndex = nextIndex;
       await waitFor(() => rawPairs.length > droppedIndex + 1, "dropped runtime frame gap");
       const gap = client.receive(rawPairs[droppedIndex + 1]);
@@ -122,7 +176,8 @@ async function run() {
       ws.send(JSON.stringify(gap.recovery));
       const beforeRecovery = rawPairs.length;
       await waitFor(() => rawPairs.length > beforeRecovery
-        && JSON.parse(rawPairs[rawPairs.length - 1]).public.kind === "keyframe", "recovery keyframe");
+        && JSON.parse(rawPairs[rawPairs.length - 1]).public.kind === "keyframe"
+        && JSON.parse(rawPairs[rawPairs.length - 1]).owner.kind === "keyframe", "recovery keyframes");
       const recovered = client.receive(rawPairs[rawPairs.length - 1]);
       assert(recovered.accepted, `Recovery keyframe failed: ${JSON.stringify(recovered)}`);
 
@@ -131,7 +186,11 @@ async function run() {
         && health.multiplayer.statePair.publisher.recipients === 1,
       "Health must expose bounded per-match authority diagnostics without ticket secrets");
       assert(!JSON.stringify(health.multiplayer.statePair).includes(issued.body.ticket), "Diagnostics must not expose ticket material");
-      console.log(`  pre-gate runtime pair bytes keyframe=${Buffer.byteLength(rawPairs[0])} delta=${Buffer.byteLength(rawPairs[deltaIndex])}`);
+      assert(!Object.keys(health.multiplayer.statePair.publisher.keyframeReasons)
+        .some((reason) => reason.startsWith("atomic-kind-alignment:")),
+      "mixed capability must remove the measured same-kind alignment fallback");
+      console.log(`  S4 pre-gate same-beat bytes full=${mixedFullPairBytes} mixed=${Buffer.byteLength(rawPairs[mixedIndex])}`
+        + ` clientApplyMs keyframe=${keyframeApplyMs.toFixed(3)} mixed=${mixedApplyMs.toFixed(3)}`);
     });
   } finally {
     if (ws?.readyState === WebSocket.OPEN) ws.close();

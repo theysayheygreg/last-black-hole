@@ -11,6 +11,7 @@ const { createClientDeltaReceiver } = require("../scripts/client-delta-receiver.
 const { encodeWireFrame, SERVER_TO_CLIENT } = require("../scripts/multiplayer-wire-protocol.cjs");
 const {
   CAPABILITY,
+  MIXED_CAPABILITY,
   SOURCE_FIELD_CLASSIFICATION,
   RuntimeStatePairError,
   createRuntimeStatePairAuthority,
@@ -124,7 +125,7 @@ function receiver(id) {
     matchId: id.runId, sessionId: id.connectionId, authorityIncarnation: id.authorityIncarnation,
     recipientId: id.membershipId, recipientIncarnation: id.connectionEpoch,
     manifestSchema: id.manifestSchema, manifestHash: id.manifestHash,
-  } });
+  }, capabilities: id.capabilities });
 }
 
 function wire(frame) {
@@ -259,7 +260,9 @@ async function run() {
   });
 
   await runner.run("coalesced frame gaps converge on the latest recovery keyframe", async () => {
-    const id = binding();
+    const id = binding("mixed-pressure", {
+      capabilities: [CAPABILITY, MIXED_CAPABILITY, "static-manifest-v1"].sort(),
+    });
     const server = authority();
     server.admit(id, claims(id));
     const client = receiver(id);

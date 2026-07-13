@@ -16,10 +16,13 @@ const {
 const {
   PAIR_SCHEMA,
   ACK_SCHEMA,
+  MIXED_PAIR_SCHEMA,
+  MIXED_ACK_SCHEMA,
   MAX_WIRE_PAIR_BYTES,
 } = require("./authority-delta-publisher.cjs");
 
 const CAPABILITY = "state-pair-v1";
+const MIXED_CAPABILITY = "state-pair-mixed-v1";
 const STATIC_MANIFEST_CAPABILITY = "static-manifest-v1";
 const RECOVERY_SCHEMA = "lbh-client-state-pair-recovery-v1";
 const DEFAULT_MANIFEST_SCHEMA = "lbh-session-replication-manifest-v1";
@@ -31,6 +34,7 @@ const MODES = Object.freeze({
   V1: "v1",
   STATIC_MANIFEST: "static-manifest-v1",
   STATE_PAIR: CAPABILITY,
+  STATE_PAIR_MIXED: MIXED_CAPABILITY,
 });
 const RECOVERY_REASONS = new Set([
   "reconnect", "match-changed", "session-changed", "authority-changed", "recipient-changed",
@@ -202,14 +206,20 @@ function normalizeRecoveryReason(reason) {
 function selectClientReplicationMode({ wireVersion, capabilities = [] } = {}) {
   if (wireVersion !== "lbh-multiplayer-json-v2") return MODES.V1;
   if (!Array.isArray(capabilities)) return MODES.V1;
+  if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
+      && capabilities.includes(MIXED_CAPABILITY)) return MODES.STATE_PAIR_MIXED;
   if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)) return MODES.STATE_PAIR;
   if (capabilities.includes(STATIC_MANIFEST_CAPABILITY)) return MODES.STATIC_MANIFEST;
   return MODES.V1;
 }
 
-function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIRE_PAIR_BYTES,
-  onState = null, onRecovery = null } = {}) {
+function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABILITY],
+  maxPairBytes = MAX_WIRE_PAIR_BYTES, onState = null, onRecovery = null } = {}) {
   let context = normalizeContext(rawContext);
+  if (!Array.isArray(capabilities) || capabilities.some((value) => typeof value !== "string")) {
+    throw new TypeError("capabilities must be a string array");
+  }
+  const allowMixed = capabilities.includes(MIXED_CAPABILITY) && capabilities.includes(CAPABILITY);
   if (!Number.isSafeInteger(maxPairBytes) || maxPairBytes < 1024 || maxPairBytes > MAX_WIRE_PAIR_BYTES) {
     throw new RangeError(`maxPairBytes must be between 1024 and ${MAX_WIRE_PAIR_BYTES}`);
   }
@@ -231,7 +241,7 @@ function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIR
   let recoveryRequested = false;
   let lastRecovery = null;
   const counters = {
-    accepted: 0, keyframes: 0, deltas: 0, duplicates: 0, rejected: 0,
+    accepted: 0, keyframes: 0, deltas: 0, mixed: 0, duplicates: 0, rejected: 0,
     recoveryRequests: 0, observerFailures: 0,
   };
 
@@ -343,7 +353,10 @@ function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIR
       if (bytes > maxPairBytes) return reject("oversize-frame");
       frame = parseWireFrame(raw, { direction: SERVER_TO_CLIENT });
       scanForbiddenKeys(frame);
-      if (frame.type !== "statePair" || frame.pairSchema !== PAIR_SCHEMA) fail("malformed-frame", "expected a statePair frame");
+      if (frame.type !== "statePair"
+          || (frame.pairSchema !== PAIR_SCHEMA && (!allowMixed || frame.pairSchema !== MIXED_PAIR_SCHEMA))) {
+        fail("malformed-frame", "expected a negotiated statePair frame");
+      }
       if (!sameContextIdentity(context, frame)) fail("identity-mismatch", "state-pair identity does not match receiver");
       if (frame.manifestHash !== context.manifestHash) fail("manifest-mismatch", "state-pair manifest does not match receiver");
       for (const field of ["tick", "simTime", "eventWatermark", "fieldRevision", "ballparkEpoch"]) {
@@ -361,7 +374,9 @@ function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIR
       if (frame.frameId < lastFrameId) fail("stale-frame", "state-pair frame is stale");
       if (lastFrameId === 0 && !recoveryRequested && frame.frameId !== 1) fail("frame-gap", "initial state-pair frame must start at one");
       if (!awaitingKeyframe && frame.frameId !== lastFrameId + 1) fail("frame-gap", "state-pair frame gap detected");
-      if (awaitingKeyframe && frame.public.kind !== "keyframe") fail("missing-base", "recovery requires an atomic keyframe");
+      if (awaitingKeyframe && (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe")) {
+        fail("missing-base", "recovery requires keyframes for both atomic lanes");
+      }
       if (frame.frameId !== lastFrameId) assertRelativeLineage(frame);
 
       // Both lanes are materialized into locals. No observable receiver state
@@ -396,7 +411,7 @@ function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIR
       const ack = deepFreeze({
         type: "ack",
         ackKind: "statePair",
-        ackSchema: ACK_SCHEMA,
+        ackSchema: frame.pairSchema === MIXED_PAIR_SCHEMA ? MIXED_ACK_SCHEMA : ACK_SCHEMA,
         matchId: frame.matchId,
         sessionId: frame.sessionId,
         authorityIncarnation: frame.authorityIncarnation,
@@ -407,6 +422,20 @@ function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIR
         snapshotId: frame.snapshotId,
         publicHash: nextPublic.hash,
         ownerHash: nextOwner.hash,
+        ...(frame.pairSchema === MIXED_PAIR_SCHEMA ? {
+          pairSchema: frame.pairSchema,
+          tick: frame.tick,
+          simTime: frame.simTime,
+          eventWatermark: frame.eventWatermark,
+          fieldRevision: frame.fieldRevision,
+          overloadMode: frame.overloadMode,
+          ballparkEpoch: frame.ballparkEpoch,
+          manifestHash: frame.manifestHash,
+          publicKind: frame.public.kind,
+          ownerKind: frame.owner.kind,
+          publicBaseSnapshotId: frame.public.baseSnapshotId || null,
+          ownerBaseSnapshotId: frame.owner.baseSnapshotId || null,
+        } : {}),
       });
 
       publicBase = Object.freeze({ view: nextPublic.view, hash: nextPublic.hash });
@@ -424,7 +453,8 @@ function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIR
       recoveryRequested = false;
       lastRecovery = null;
       counters.accepted += 1;
-      counters[frame.public.kind === "keyframe" ? "keyframes" : "deltas"] += 1;
+      counters[frame.public.kind === frame.owner.kind
+        ? frame.public.kind === "keyframe" ? "keyframes" : "deltas" : "mixed"] += 1;
       try { onState?.(pair); } catch { counters.observerFailures += 1; }
       return Object.freeze({ accepted: true, duplicate: false, ack, state: pair });
     } catch (error) {
@@ -475,7 +505,7 @@ function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIR
   function diagnostics() {
     return deepFreeze({
       ...counters,
-      mode: MODES.STATE_PAIR,
+      mode: allowMixed ? MODES.STATE_PAIR_MIXED : MODES.STATE_PAIR,
       awaitingKeyframe,
       hasPublicBase: Boolean(publicBase),
       hasOwnerBase: Boolean(ownerBase),
@@ -493,6 +523,7 @@ function createClientDeltaReceiver({ context: rawContext, maxPairBytes = MAX_WIR
 
 module.exports = {
   CAPABILITY,
+  MIXED_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
   MODES,

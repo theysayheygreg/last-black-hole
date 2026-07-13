@@ -141,6 +141,9 @@ async function run() {
     expectProtocolError(() => validateWireFrame({ ...welcome, fetchPath: "/multiplayer/manifest/abc?cap=secret" }), "invalid-field");
     expectProtocolError(() => validateWireFrame({ ...hello, capabilities: [] }), "invalid-field");
     expectProtocolError(() => validateWireFrame({
+      ...hello, capabilities: ["static-manifest-v1", "state-pair-mixed-v1"],
+    }), "invalid-field");
+    expectProtocolError(() => validateWireFrame({
       type: "manifestAck", manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
       manifestBytes: welcome.manifestBytes, connectionEpoch: 1,
     }, { direction: SERVER_TO_CLIENT }), "invalid-direction");

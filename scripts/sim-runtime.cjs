@@ -102,6 +102,7 @@ const {
 } = require("./session-replication-manifest.cjs");
 const {
   CAPABILITY: STATE_PAIR_CAPABILITY,
+  MIXED_CAPABILITY: STATE_PAIR_MIXED_CAPABILITY,
   createRuntimeStatePairAuthority,
 } = require("./runtime-state-pair-integration.cjs");
 
@@ -979,6 +980,8 @@ const KEEP_ALIVE = String(args["keep-alive"] || process.env.LBH_SIM_KEEP_ALIVE |
 const MULTIPLAYER_WS_ENABLED = String(process.env.LBH_SIM_WS_ENABLED || "").trim() === "true";
 const MULTIPLAYER_JSON_V2_ENABLED = String(process.env.LBH_SIM_WS_JSON_V2 || "").trim() === "true";
 const MULTIPLAYER_STATE_PAIR_V1_ENABLED = String(process.env.LBH_SIM_WS_STATE_PAIR_V1 || "").trim() === "true";
+const MULTIPLAYER_STATE_PAIR_MIXED_V1_ENABLED = MULTIPLAYER_STATE_PAIR_V1_ENABLED
+  && String(process.env.LBH_SIM_WS_STATE_PAIR_MIXED_V1 || "").trim() === "true";
 const MULTIPLAYER_HEARTBEAT_INTERVAL_MS = 10_000;
 const MULTIPLAYER_TICKET_TTL_MS = process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS
   ? Math.max(1, Math.floor(Number(process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS) || 30_000))
@@ -7299,7 +7302,9 @@ const server = http.createServer(async (req, res) => {
       const selectedCapabilities = selectedWireVersion === WIRE_PROTOCOL_VERSION_V2
         ? ["static-manifest-v1", ...(MULTIPLAYER_STATE_PAIR_V1_ENABLED
           && Array.isArray(body.capabilities) && body.capabilities.includes(STATE_PAIR_CAPABILITY)
-          ? [STATE_PAIR_CAPABILITY] : [])].sort()
+          ? [STATE_PAIR_CAPABILITY, ...(MULTIPLAYER_STATE_PAIR_MIXED_V1_ENABLED
+            && body.capabilities.includes(STATE_PAIR_MIXED_CAPABILITY)
+            ? [STATE_PAIR_MIXED_CAPABILITY] : [])] : [])].sort()
         : [];
       if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2
           && (!Array.isArray(body.capabilities) || body.capabilities.length > 16

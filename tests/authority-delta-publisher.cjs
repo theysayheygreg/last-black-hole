@@ -7,6 +7,8 @@ const { applyStructuralDelta } = require("../scripts/canonical-structural-delta.
 const {
   PAIR_SCHEMA,
   ACK_SCHEMA,
+  MIXED_PAIR_SCHEMA,
+  MIXED_ACK_SCHEMA,
   createAuthorityDeltaPublisher,
 } = require("../scripts/authority-delta-publisher.cjs");
 const {
@@ -85,10 +87,11 @@ function largePairInputs(beat, id = identity(), overrides = {}) {
 }
 
 function ackFor(frame, overrides = {}) {
+  const mixed = frame.pairSchema === MIXED_PAIR_SCHEMA;
   return {
     type: "ack",
     ackKind: "statePair",
-    ackSchema: ACK_SCHEMA,
+    ackSchema: mixed ? MIXED_ACK_SCHEMA : ACK_SCHEMA,
     matchId: frame.matchId,
     sessionId: frame.sessionId,
     authorityIncarnation: frame.authorityIncarnation,
@@ -99,6 +102,20 @@ function ackFor(frame, overrides = {}) {
     snapshotId: frame.snapshotId,
     publicHash: frame.public.resultHash,
     ownerHash: frame.owner.resultHash,
+    ...(mixed ? {
+      pairSchema: frame.pairSchema,
+      tick: frame.tick,
+      simTime: frame.simTime,
+      eventWatermark: frame.eventWatermark,
+      fieldRevision: frame.fieldRevision,
+      overloadMode: frame.overloadMode,
+      ballparkEpoch: frame.ballparkEpoch,
+      manifestHash: frame.manifestHash,
+      publicKind: frame.public.kind,
+      ownerKind: frame.owner.kind,
+      publicBaseSnapshotId: frame.public.baseSnapshotId || null,
+      ownerBaseSnapshotId: frame.owner.baseSnapshotId || null,
+    } : {}),
     ...overrides,
   };
 }
@@ -139,6 +156,57 @@ async function run() {
       && diagnostics.candidateAverageBytes.ownerKeyframeBytes > 0,
     "Diagnostics must attribute bounded candidate size evidence after a real ACK base advance");
     console.log(`  synthetic pair bytes keyframe=${first.bytes} delta=${second.bytes} saved=${first.bytes - second.bytes}`);
+  });
+
+  await runner.run("ticket-selected mixed schema supports all four lane-kind combinations", async () => {
+    const scenarios = [
+      { expected: ["keyframe", "keyframe"], base: null, current: pairInputs(1) },
+      { expected: ["delta", "delta"], base: largePairInputs(1), current: largePairInputs(2) },
+      { expected: ["delta", "keyframe"],
+        base: largePairInputs(1, identity(), { owner: { padding: "" } }),
+        current: largePairInputs(2, identity(), { owner: { padding: "" } }) },
+      { expected: ["keyframe", "delta"],
+        base: largePairInputs(1, identity(), { public: { padding: "" } }),
+        current: largePairInputs(2, identity(), { public: { padding: "" } }) },
+    ];
+    for (const scenario of scenarios) {
+      const publisher = createAuthorityDeltaPublisher();
+      if (scenario.base) {
+        const base = publisher.publish({ ...scenario.base, allowMixed: true });
+        assert.strictEqual(base.frame.pairSchema, MIXED_PAIR_SCHEMA);
+        assert.strictEqual(publisher.acknowledge(identity(), ackFor(base.frame)).accepted, true);
+      }
+      const published = publisher.publish({ ...scenario.current, allowMixed: true });
+      assert.deepStrictEqual([published.frame.public.kind, published.frame.owner.kind], scenario.expected);
+      assert(published.bytes <= published.fullKeyframeBytes, "selected pair must never exceed the exact full-pair encoding");
+      encodeWireFrame(published.frame, { direction: SERVER_TO_CLIENT });
+      assert.strictEqual(publisher.acknowledge(identity(), ackFor(published.frame)).accepted, true);
+    }
+  });
+
+  await runner.run("mixed ACK binds both lane kinds and cursors before advancing either base", async () => {
+    const publisher = createAuthorityDeltaPublisher();
+    const baseInputs = largePairInputs(1, identity(), { owner: { padding: "" } });
+    const first = publisher.publish({ ...baseInputs, allowMixed: true });
+    assert.strictEqual(publisher.acknowledge(identity(), ackFor(first.frame)).accepted, true);
+    const mixed = publisher.publish({
+      ...largePairInputs(2, identity(), { owner: { padding: "" } }), allowMixed: true,
+    });
+    assert.deepStrictEqual([mixed.frame.public.kind, mixed.frame.owner.kind], ["delta", "keyframe"]);
+    assert(mixed.bytes < mixed.fullKeyframeBytes, "winning mixed pair must be smaller than the same-beat full pair");
+    const forged = ackFor(mixed.frame, { ownerKind: "delta" });
+    assert.strictEqual(publisher.acknowledge(identity(), forged).accepted, false);
+    const rebased = publisher.publish({
+      ...largePairInputs(3, identity(), { owner: { padding: "" } }), allowMixed: true,
+    });
+    assert.deepStrictEqual([rebased.frame.public.kind, rebased.frame.owner.kind], ["keyframe", "keyframe"]);
+
+    const zeroPublisher = createAuthorityDeltaPublisher();
+    const zero = zeroPublisher.publish({ ...pairInputs(0), allowMixed: true });
+    const negativeZeroAck = ackFor(zero.frame, { simTime: -0 });
+    expectCode(() => encodeWireFrame(negativeZeroAck, { direction: CLIENT_TO_SERVER }), "invalid-field");
+    assert.strictEqual(zeroPublisher.acknowledge(identity(), negativeZeroAck).accepted, false,
+      "direct publisher use must reject negative-zero mixed ACK lineage too");
   });
 
   await runner.run("no-op entity sets remain deterministic and do not trust dirty hints", async () => {
@@ -327,6 +395,12 @@ async function run() {
         { label: "state pair retransmission" });
       client.ws.send(encodeWireFrame(ackFor(pair.frame), { direction: CLIENT_TO_SERVER }));
       await waitFor(() => harness.acks.some((entry) => entry.frame.ackKind === "statePair"), { label: "state pair ACK" });
+      await harness.adapter.sendRebase(binding, {
+        type: "rebase", runId: "run-a", reason: "baseline-missed", snapshotId: 2, lastEventSeq: 0,
+      });
+      assert(!harness.adapter.diagnostics().replication.events.some((event) =>
+        event.frameClass === "statePair" && event.metric === "policyDropped"),
+      "accepted queue-cloned statePair records must retire before a later outbound reset");
       const forged = { ...pair.frame, sessionId: "connection-other", frameId: pair.frame.frameId + 1 };
       const rejected = await harness.adapter.publishStatePair(binding, forged);
       assert.deepStrictEqual({ accepted: rejected.accepted, reason: rejected.reason },
@@ -341,6 +415,10 @@ async function run() {
       const window = harness.adapter.replicationWindow(accounting.captureStartedAt, accounting.capturedThroughAt + 1);
       assert.strictEqual(window.completePairBytes.count, 1, "retransmission must not double-count the atomic projection beat");
       assert.strictEqual(Object.values(window.recipients)[0].completeProjectionBeats, 1);
+      const statePairGroup = Object.values(window.groups).find((group) => group.frameClass === "statePair");
+      assert(statePairGroup.conservationBalanced && statePairGroup.offeredFrames === 2
+        && statePairGroup.acceptedFrames === 2 && statePairGroup.retransmittedFrames === 1,
+      `explicit statePair retransmission must conserve its own offer and accepted copy: ${JSON.stringify(statePairGroup)}`);
     } finally {
       await harness.close();
     }

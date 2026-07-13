@@ -6,6 +6,7 @@ const { normalizeView } = require("./canonical-structural-delta.cjs");
 const { createAuthorityDeltaPublisher } = require("./authority-delta-publisher.cjs");
 
 const CAPABILITY = "state-pair-v1";
+const MIXED_CAPABILITY = "state-pair-mixed-v1";
 const VIEW_SCHEMA = "lbh-canonical-projection-v1";
 const DEFAULT_MANIFEST_SCHEMA = "lbh-session-replication-manifest-v1";
 const MAX_SOURCE_ENTITIES = 4096;
@@ -229,6 +230,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         || canonicalJson(ticketClaims.capabilities) !== canonicalJson(binding.capabilities || [])) {
       fail("capability-not-admitted", "state-pair capability is not ticket-bound");
     }
+    if (ticketClaims.capabilities.includes(MIXED_CAPABILITY)
+        && !ticketClaims.capabilities.includes(CAPABILITY)) {
+      fail("capability-not-admitted", "mixed state-pair capability requires state-pair-v1");
+    }
     const admissionKey = key(identity);
     if (!admissions.has(admissionKey) && admissions.size >= maxAdmissions) fail("recipient-cap", "state-pair admission cap reached");
     admissions.set(admissionKey, Object.freeze({ identity, capabilities: Object.freeze([...ticketClaims.capabilities]) }));
@@ -281,7 +286,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         transient: { lastInputSeq: ownerFrame.lastInputSeq || 0, lastActionSeq: ownerFrame.lastActionSeq || 0 },
       },
     }]) });
-    return Object.freeze({ identity, publicView, ownerView });
+    const admission = admissions.get(key(identity));
+    return Object.freeze({ identity, publicView, ownerView,
+      allowMixed: admission.capabilities.includes(MIXED_CAPABILITY) });
   }
 
   function publish(binding, publicFrame, ownerFrame) {
@@ -316,6 +323,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
 
 module.exports = {
   CAPABILITY,
+  MIXED_CAPABILITY,
   SOURCE_FIELD_CLASSIFICATION,
   VIEW_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,

@@ -50,11 +50,16 @@ function entityComponents(entity) {
 
 function frameShape(frame) {
   if (frame?.type === "statePair") {
+    const publicKind = frame.public?.kind || null;
+    const ownerKind = frame.owner?.kind || null;
+    const validKinds = [publicKind, ownerKind].every((kind) => kind === "keyframe" || kind === "delta");
     return Object.freeze({
-      projectionKind: frame.public?.kind || null,
+      projectionKind: publicKind === ownerKind ? publicKind : `public-${publicKind}+owner-${ownerKind}`,
+      publicProjectionKind: publicKind,
+      ownerProjectionKind: ownerKind,
       streamKind: "matchStream",
       shapeSchema: frame.pairSchema || "unknown-state-pair",
-      shapeComplete: Boolean(frame.public && frame.owner && frame.public.kind === frame.owner.kind),
+      shapeComplete: Boolean(frame.public && frame.owner && validKinds),
       entityCount: 0, componentCount: 0, despawnCount: 0, otherEntityCount: 0,
       unknownStateKeys: Object.freeze([]), unknownWorldKeys: Object.freeze([]),
     });
@@ -63,6 +68,8 @@ function frameShape(frame) {
     ? (frame.full === true ? "keyframe" : frame.delta === true ? "delta" : "state") : null;
   const base = {
     projectionKind,
+    publicProjectionKind: frame?.type === "publicState" ? projectionKind : null,
+    ownerProjectionKind: frame?.type === "ownerState" ? projectionKind : null,
     streamKind: frame?.type === "manifest" ? "manifest" : "matchStream",
     shapeSchema: "not-applicable",
     shapeComplete: true,

@@ -16,6 +16,7 @@ const {
 const { createHarness, openClient, waitFor, nextFrame } = require("./multiplayer-ws-adapter-fixture.cjs");
 const {
   MODES,
+  MIXED_CAPABILITY,
   RECOVERY_SCHEMA,
   selectClientReplicationMode,
   createClientDeltaReceiver,
@@ -141,6 +142,53 @@ async function run() {
     assert.strictEqual(acceptedSecond.ack.ownerHash, second.frame.owner.resultHash);
     assert(Object.isFrozen(receiver.current()) && Object.isFrozen(receiver.current().owner), "published pair must be immutable");
     assert.notStrictEqual(receiver.current().public, receiver.current().owner, "lane bases must be independent objects");
+  });
+
+  await runner.run("mixed public delta and owner keyframe publish once and ACK both lanes", async () => {
+    const observed = [];
+    const authority = createAuthorityDeltaPublisher();
+    const receiver = createClientDeltaReceiver({
+      context: context(),
+      capabilities: ["state-pair-v1", MIXED_CAPABILITY],
+      onState(pair) {
+        assert(pair.public && pair.owner, "observer may only receive a complete committed pair");
+        observed.push(pair);
+      },
+    });
+    const baseInputs = inputs(1, identity(), { owner: { padding: "" } });
+    const first = authority.publish({ ...baseInputs, allowMixed: true });
+    accept(authority, receiver, first);
+    const mixed = authority.publish({
+      ...inputs(2, identity(), { owner: { padding: "" } }), allowMixed: true,
+    });
+    assert.deepStrictEqual([mixed.frame.public.kind, mixed.frame.owner.kind], ["delta", "keyframe"]);
+    const accepted = accept(authority, receiver, mixed);
+    assert.strictEqual(observed.length, 2);
+    assert.strictEqual(accepted.ack.publicKind, "delta");
+    assert.strictEqual(accepted.ack.ownerKind, "keyframe");
+    assert.strictEqual(accepted.ack.publicBaseSnapshotId, first.frame.snapshotId);
+    assert.strictEqual(accepted.ack.ownerBaseSnapshotId, null);
+    assert.strictEqual(receiver.diagnostics().mixed, 1);
+    const legacyReceiver = createClientDeltaReceiver({ context: context() });
+    assert.strictEqual(legacyReceiver.receive(wire(mixed.frame)).accepted, false,
+      "state-pair-v1 receiver must reject a mixed schema it did not negotiate");
+    const boundedMixedReceiver = createClientDeltaReceiver({
+      context: context(), capabilities: ["state-pair-v1", MIXED_CAPABILITY], maxPairBytes: 1024,
+    });
+    const oversizeMixed = boundedMixedReceiver.receive(wire(mixed.frame));
+    assert.strictEqual(oversizeMixed.accepted, false);
+    assert.strictEqual(oversizeMixed.reason, "oversize-frame");
+
+    const forged = authority.publish({
+      ...inputs(3, identity(), { owner: { padding: "" } }), allowMixed: true,
+    });
+    const corrupt = structuredClone(forged.frame);
+    corrupt.owner.resultHash = `sha256:${"0".repeat(64)}`;
+    const rejected = receiver.receive(JSON.stringify(corrupt));
+    assert.strictEqual(rejected.accepted, false);
+    assert.strictEqual(Object.hasOwn(rejected, "ack"), false);
+    assert.strictEqual(observed.length, 2, "failed owner lane must not expose the valid public delta");
+    assert.strictEqual(receiver.current(), null);
   });
 
   await runner.run("ACK loss, retransmit, and exact duplicate delivery are idempotent", async () => {
@@ -434,6 +482,10 @@ async function run() {
     assert.strictEqual(selectClientReplicationMode({
       wireVersion: "lbh-multiplayer-json-v2", capabilities: ["static-manifest-v1", "state-pair-v1"],
     }), MODES.STATE_PAIR);
+    assert.strictEqual(selectClientReplicationMode({
+      wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY],
+    }), MODES.STATE_PAIR_MIXED);
   });
 
   await runner.run("representative apply cost and retained memory diagnostics stay bounded", async () => {
