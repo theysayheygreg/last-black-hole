@@ -403,6 +403,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     });
     if (fetched.status !== 200 || fetched.bytes.length !== issued.body.manifestBytes
       || `sha256:${crypto.createHash("sha256").update(fetched.bytes).digest("hex")}` !== issued.body.manifestHash) {
+      client.ws.terminate();
       throw new Error(`${label} manifest verification failed`);
     }
     if (POSITIONAL_GATE) {
@@ -414,6 +415,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
           || codec?.codecManifestHash !== POSITIONAL_CODEC_MANIFEST_HASH
           || codecHash !== POSITIONAL_CODEC_MANIFEST_HASH
           || !canonicalJsonBytes(codec.manifest).equals(canonicalJsonBytes(POSITIONAL_CODEC_MANIFEST))) {
+        client.ws.terminate();
         throw new Error(`${label} positional codec manifest binding failed`);
       }
       client.manifest.codecVerified = true;
@@ -1155,8 +1157,20 @@ async function runScenario({ population, scenario, runDir, commit }) {
           runId: old.authority.runId, clientId: old.authority.playerId, name: old.label,
         } });
         if (rejoined.status !== 200) throw new Error(`reincarnation join failed: ${JSON.stringify(rejoined.body)}`);
-        const replacement = await openStatePairClient({ port, authority: rejoined.body.authority,
-          label: `${old.label}-reincarnated` });
+        let replacement;
+        try {
+          replacement = await openStatePairClient({ port, authority: rejoined.body.authority,
+            label: `${old.label}-reincarnated` });
+        } catch (error) {
+          ref.current.splice(index, 1);
+          return { target: old.label,
+            reconnectFailed: true, reincarnationFailed: true,
+            failure: String(error.message).slice(0, 240),
+            presenceBeforeLeave: Boolean(presenceBeforeLeave),
+            authorityAbsenceObserved: Boolean(authorityAbsence),
+            clientAbsenceObserved: Boolean(absenceObserved),
+            clientReplacementObserved: false };
+        }
         ref.current[index] = replacement;
         allClients.push(replacement);
         const replacementObserved = await waitFor(() => [...observers, replacement]
