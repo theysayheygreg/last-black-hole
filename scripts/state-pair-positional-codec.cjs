@@ -474,7 +474,10 @@ function composeStatePairCandidates(entries, context, tieOrder) {
   };
   const sized = entries.map((entry) => {
     const header = statePairHeader(entry.frame, context);
-    if (JSON.stringify(header) !== headerText) fail("identity-mismatch", "candidate statePair headers differ");
+    if (header.length !== firstHeader.length
+        || header.some((value, index) => value !== firstHeader[index])) {
+      fail("identity-mismatch", "candidate statePair headers differ");
+    }
     const publicLane = laneText(entry.frame.public, "public");
     const ownerLane = laneText(entry.frame.owner, "owner");
     const bytes = prefixBytes + 1 + publicLane.bytes + 1 + ownerLane.bytes + 1;

@@ -163,6 +163,17 @@ async function run() {
       assert.deepStrictEqual(decodePositionalFrame(selected.chosen.wire, ctx), selected.chosen.frame);
       assert.strictEqual(crypto.createHash("sha256").update(selected.chosen.wire).digest("hex"),
         crypto.createHash("sha256").update(expected.wire).digest("hex"));
+      if (index === 0) {
+        const tied = composeStatePairCandidates(CODEC_PAIR_TIE_ORDER.map((kind) => ({ kind,
+          frame: entries[0].frame })), ctx, CODEC_PAIR_TIE_ORDER);
+        assert.strictEqual(tied.chosen.kind, CODEC_PAIR_TIE_ORDER[0],
+          "exact composed-size ties must preserve the safety-first order");
+        const oversizedFrame = JSON.parse(JSON.stringify(entries[0].frame));
+        oversizedFrame.public.projection.world.publicFacts.formTimes = Array.from({ length: 400 },
+          () => "x".repeat(1000));
+        assert.throws(() => composeStatePairCandidates(CODEC_PAIR_TIE_ORDER.map((kind) => ({ kind,
+          frame: oversizedFrame })), ctx, CODEC_PAIR_TIE_ORDER), (error) => error?.code === "frame-too-large");
+      }
       parityCases += entries.length;
     }
     assert.strictEqual(parityCases, 320);

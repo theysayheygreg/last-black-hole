@@ -9,7 +9,7 @@ const { performance } = require("perf_hooks");
 const { publicEntityId } = require("../scripts/canonical-structural-delta.cjs");
 const { CODEC_PAIR_TIE_ORDER } = require("../scripts/authority-delta-publisher.cjs");
 const { POSITIONAL_CODEC_MANIFEST_HASH, codecContext, encodePositionalFrame,
-  composeStatePairCandidates } = require("../scripts/state-pair-positional-codec.cjs");
+  decodePositionalFrame, composeStatePairCandidates } = require("../scripts/state-pair-positional-codec.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ITERATIONS = Number(process.env.LBH_S14_SELECTOR_ITERATIONS || 1000);
@@ -78,7 +78,38 @@ function brute(entries, context) {
     allocationProxyBytes: candidates.reduce((sum, entry) => sum + entry.bytes, 0), fullCandidateCompositions: 4 };
 }
 
+function adversarialParity() {
+  const markers = ["plain-ascii", "caf\u00e9-\ud83d\ude80-\u6f22\u5b57", "quote-\"-slash-\\-controls-\n\t\u0000",
+    "x".repeat(8192), "\ud83d\ude80".repeat(2048)];
+  const transcript = [];
+  let candidateWires = 0;
+  for (let index = 0; index < 80; index += 1) {
+    const sample = inputs(index);
+    const marker = markers[index % markers.length];
+    for (const entry of sample.entries) {
+      if (entry.frame.owner.kind === "keyframe") {
+        entry.frame.owner.projection.entities[0].components.ownerState.value.profileId = marker;
+      } else {
+        entry.frame.owner.delta.updates[0].components.ownerState.value.profileId = marker;
+      }
+    }
+    const before = brute(sample.entries, sample.context);
+    const after = composeStatePairCandidates(sample.entries, sample.context, CODEC_PAIR_TIE_ORDER);
+    assert.deepStrictEqual(after.candidates.map(({ kind, bytes }) => ({ kind, bytes })),
+      sample.entries.map((entry) => ({ kind: entry.kind,
+        bytes: Buffer.byteLength(encodePositionalFrame(entry.frame, sample.context), "utf8") })));
+    assert.strictEqual(after.chosen.kind, before.chosen.kind);
+    assert.strictEqual(after.chosen.wire, before.chosen.wire);
+    assert.deepStrictEqual(decodePositionalFrame(after.chosen.wire, sample.context), after.chosen.frame);
+    transcript.push(after.chosen.wire);
+    candidateWires += sample.entries.length;
+  }
+  return { cases: 80, candidateWires, mismatches: 0,
+    transcriptSha256: crypto.createHash("sha256").update(transcript.join("\n")).digest("hex") };
+}
+
 function run() {
+  const adversarial = adversarialParity();
   for (let index = 0; index < WARMUP; index += 1) {
     const sample = inputs(index);
     brute(sample.entries, sample.context);
@@ -91,12 +122,23 @@ function run() {
   const transcript = [];
   for (let index = WARMUP; index < WARMUP + ITERATIONS; index += 1) {
     const sample = inputs(index);
-    let started = performance.now();
-    const before = brute(sample.entries, sample.context);
-    rows.bruteForce.push(performance.now() - started);
-    started = performance.now();
-    const after = composeStatePairCandidates(sample.entries, sample.context, CODEC_PAIR_TIE_ORDER);
-    rows.composed.push(performance.now() - started);
+    let before;
+    let after;
+    if (index % 2 === 0) {
+      let started = performance.now();
+      before = brute(sample.entries, sample.context);
+      rows.bruteForce.push(performance.now() - started);
+      started = performance.now();
+      after = composeStatePairCandidates(sample.entries, sample.context, CODEC_PAIR_TIE_ORDER);
+      rows.composed.push(performance.now() - started);
+    } else {
+      let started = performance.now();
+      after = composeStatePairCandidates(sample.entries, sample.context, CODEC_PAIR_TIE_ORDER);
+      rows.composed.push(performance.now() - started);
+      started = performance.now();
+      before = brute(sample.entries, sample.context);
+      rows.bruteForce.push(performance.now() - started);
+    }
     assert.strictEqual(after.chosen.kind, before.chosen.kind);
     assert.strictEqual(after.chosen.wire, before.chosen.wire);
     Object.assign(operations.bruteForce, {
@@ -121,6 +163,7 @@ function run() {
       allocationProxyReductionFraction: 1 - operations.composed.allocationProxyBytes / operations.bruteForce.allocationProxyBytes },
     parity: { winnerCount: ITERATIONS, mismatches: 0,
       transcriptSha256: crypto.createHash("sha256").update(transcript.join("\n")).digest("hex") } };
+  result.adversarialParity = adversarial;
   const output = process.env.LBH_S14_SELECTOR_OUTPUT;
   if (output) fs.writeFileSync(path.resolve(ROOT, output), `${JSON.stringify(result, null, 2)}\n`, { flag: "wx" });
   console.log(JSON.stringify(result, null, 2));
