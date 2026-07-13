@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 4,
+  "gate": "s11",
+  "generatedAt": "2026-07-13T23:53:00.282Z",
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s11-admission --micro --normal-only",
+  "profile": "diagnostic-micro-instrumented",
+  "commit": "053f6c354e69add63de829dd02db69268afaceca",
+  "dirty": false,
+  "seed": 1403105358,
+  "config": {
+    "populations": [
+      1,
+      4,
+      8
+    ],
+    "normalWarmupMs": 5000,
+    "normalWindowMs": 15000,
+    "churnWarmupMs": 20000,
+    "churnWindowMs": 90000,
+    "inputHz": 10,
+    "targetBytesPerSecondPerPlayer": 65536,
+    "sensitivityBytesPerSecondPerPlayer": 81920,
+    "targetPublicationHz": 10,
+    "minimumHealthyObservedPublicationHz": 9,
+    "attributionSampleFramesPerPopulation": 512,
+    "env": {
+      "NODE_ENV": "test",
+      "LBH_SIM_WS_ENABLED": true,
+      "LBH_SIM_WS_JSON_V2": true,
+      "LBH_SIM_WS_STATE_PAIR_V1": true,
+      "LBH_SIM_WS_STATE_PAIR_MIXED_V1": true,
+      "LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1": true,
+      "LBH_SIM_WS_POSITIONAL_JSON_V1": true,
+      "LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS": true,
+      "LBH_SIM_WS_PREPARED_PROJECTIONS": true,
+      "LBH_SIM_WS_BENCH_EVENT_LOOP": true,
+      "LBH_SIM_WS_REPLICATION_ACCOUNTING": true,
+      "LBH_REPLICATION_BASELINE_CAPTURE": true,
+      "LBH_SIM_MAX_SIM_TIME": 7200,
+      "LBH_SIM_WS_STAGE_PROFILE": true
+    }
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 34359738368,
+    "node": "v22.22.3",
+    "v8": "12.4.254.21-node.56"
+  },
+  "claimBoundary": "Machine-local opt-in state-pair-mixed-v1 application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence.",
+  "s3CanonicalEvidence": null,
+  "s4CanonicalEvidence": {
+    "path": "docs/v0.4/evidence/state-pair-s4/multiplayer-state-pair-s4-2026-07-13T074927227Z-a052787",
+    "compositeSha256": "50f7e0f59bd6368ee7f8b1e84e30129eb948e422ee0d619bfea186a9386b3a92"
+  },
+  "s6PreparedDiagnosticEvidence": {
+    "path": "docs/v0.4/evidence/state-pair-s6/analysis.json",
+    "analysisSha256": "32f97d424f929b37a6da624a578fd379261ad030d3965db34d5cd0452219b1c6"
+  },
+  "s11ComparisonEvidence": {
+    "s7": {
+      "path": "docs/v0.4/evidence/state-pair-s7/canonical",
+      "compositeSha256": "e4f16209f70791c8b15dc6b913b99c6fc170c2a4f4491c9da654ab814ef4d068"
+    },
+    "s8": {
+      "path": "docs/v0.4/evidence/state-pair-s8/final",
+      "compositeSha256": "c13db936bebd443ca5befa7906c5226a282d153f3969555f1659a5c47dc86707"
+    },
+    "s9": {
+      "path": "docs/v0.4/evidence/state-pair-s9/pre-gate",
+      "compositeSha256": "34a0de4e4a611bfe5ce298f0a4fc0d6a4d3011c7e08173dbcba35c14dee40d1b"
+    },
+    "s10": {
+      "path": "docs/v0.4/evidence/state-pair-s10/pre-gate",
+      "compositeSha256": "8f38e88f63bd753c8def9a100a2554d7e16acd29e0aa0077295c27233fb1a43d"
+    }
+  }
+}

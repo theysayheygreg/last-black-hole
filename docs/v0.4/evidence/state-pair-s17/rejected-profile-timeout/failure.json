@@ -1,0 +1,10 @@
+{
+  "at": "2026-07-13T23:54:10.121Z",
+  "message": "Timed out waiting for normal/8 complete stage-profile beats",
+  "stack": [
+    "Error: Timed out waiting for normal/8 complete stage-profile beats",
+    "    at waitFor (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:153:9)",
+    "    at async runScenario (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:1235:59)",
+    "    at async main (/Users/theysayheygreg/clawd/projects/last-black-hole/tests/multiplayer-state-pair-product-gate.cjs:2256:56)"
+  ]
+}
