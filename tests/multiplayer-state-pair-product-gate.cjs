@@ -1768,10 +1768,12 @@ function s11ScenarioIntegrity(entry) {
   const codec = entry.performance.codec;
   const codecEvidence = !normal || (codec?.publisherCandidateEncodeAggregate?.encodedCandidates > 0
     && codec.publisherCandidateEncodeAggregate.encodeMilliseconds >= 0
-    && codec.adapterEncodeAggregate?.encodedFrames > 0
+    && (codec.adapterEncodeAggregate?.encodedFrames > 0
+      || (entry.gate === "s12" && codec.adapterEncodeAggregate?.reusedEncodedFrames > 0))
     && codec.adapterEncodeAggregate.encodeMilliseconds >= 0
     && codec.publisherCandidateEncodeMsPerFrameByInterval?.count > 0
-    && codec.adapterEncodeMsPerFrameByInterval?.count > 0
+    && (codec.adapterEncodeMsPerFrameByInterval?.count > 0
+      || (entry.gate === "s12" && codec.adapterEncodeAggregate?.reusedEncodedFrames > 0))
     && codec.clientWireDecodeMs?.count > 0
     && entry.performance.clientApplyMs?.count > 0
     && entry.performance.clientAckSerializeSendMs?.count > 0
@@ -1927,6 +1929,7 @@ function validateArtifact(directory) {
   const aggregate = JSON.parse(fs.readFileSync(path.join(directory, "aggregate.json"), "utf8"));
   const scenarioFiles = aggregate.scenarios.map((entry) => JSON.parse(fs.readFileSync(path.join(directory, entry.file), "utf8")));
   const isS11 = aggregate.gate === "s11";
+  const isS12 = aggregate.gate === "s12";
   const s11ExpectedNormal = run.profile === "review" ? [1, 8] : [1, 4, 8];
   const s11ExpectedChurn = [1, 8];
   const s11ExpectedScenarios = [...s11ExpectedNormal.map((population) => `normal-${population}`),
@@ -1937,6 +1940,23 @@ function validateArtifact(directory) {
   const expectedCleanupFiles = s11ExpectedScenarios.map((key) => `cleanup-${key}.json`).sort();
   const s11RecomputedProductVerdict = isS11
     ? scenarioFiles.every((entry) => entry.admission.productAdmissionPassed === true) : null;
+  const s12ExpectedScenarios = ["normal-1", "normal-4", "normal-8"];
+  const s12ExpectedFiles = ["aggregate.json", "checksums.json", "run.json",
+    ...s12ExpectedScenarios.flatMap((key) => [`${key}.json`, `cleanup-${key}.json`])].sort();
+  const actualJsonFiles = fs.readdirSync(directory).filter((name) => name.endsWith(".json")).sort();
+  const s12AggregateRowsMatch = !isS12 || aggregate.scenarios.every((summary, index) => {
+    const scenario = scenarioFiles[index];
+    return summary.file === `${scenario.scenario}-${scenario.population}.json`
+      && summary.scenario === scenario.scenario && summary.population === scenario.population
+      && summary.worstRecipientMeanDownlinkBytesPerSecond
+        === scenario.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond
+      && summary.oneSecondP95DownlinkBytesPerSecond
+        === scenario.exactTraffic.oneSecondP95DownlinkBytesPerSecond
+      && summary.oneSecondP99DownlinkBytesPerSecond
+        === scenario.exactTraffic.oneSecondP99DownlinkBytesPerSecond
+      && JSON.stringify(summary.pairKindCounts) === JSON.stringify(scenario.pairShape.productWindow.pairKindCounts)
+      && JSON.stringify(summary.admission) === JSON.stringify(scenario.admission);
+  });
   const invariants = {
     checksums: checksum.passed,
     allCleanupPassed: fs.readdirSync(directory).filter((name) => name.startsWith("cleanup-")).every((name) =>
@@ -2074,6 +2094,42 @@ function validateArtifact(directory) {
           && client.receiverDiagnostics.ledger.bytes <= client.receiverDiagnostics.limits.maxRetainedBytes
           && client.receiverCleanupDiagnostics?.ledger?.bytes === 0);
     }),
+    s12RunContract: !isS12 || (run.schemaVersion === 3 && aggregate.schemaVersion === 3
+      && run.gate === "s12" && aggregate.gate === "s12"
+      && run.profile === "review" && aggregate.profile === run.profile
+      && run.commit === aggregate.commit && run.seed === SEED && aggregate.seed === run.seed
+      && run.dirty === false
+      && run.command.includes("--s12-codec-aware") && run.command.includes("--review")
+      && run.command.includes("--normal-only")
+      && JSON.stringify(run.config.populations) === JSON.stringify([1, 4, 8])
+      && run.config.normalWarmupMs === 5_000 && run.config.normalWindowMs === 20_000
+      && run.config.inputHz === INPUT_HZ && run.config.targetPublicationHz === TARGET_PUBLICATION_HZ
+      && run.config.env.NODE_ENV === "test" && run.config.env.LBH_SIM_WS_ENABLED === true
+      && run.config.env.LBH_SIM_WS_JSON_V2 === true && run.config.env.LBH_SIM_WS_STATE_PAIR_V1 === true
+      && run.config.env.LBH_SIM_WS_STATE_PAIR_MIXED_V1 === true
+      && run.config.env.LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1 === true
+      && run.config.env.LBH_SIM_WS_POSITIONAL_JSON_V1 === true
+      && run.config.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS === true
+      && run.config.env.LBH_SIM_WS_PREPARED_PROJECTIONS === true
+      && run.config.env.LBH_SIM_WS_REPLICATION_ACCOUNTING === true
+      && run.config.env.LBH_REPLICATION_BASELINE_CAPTURE === true
+      && run.config.env.LBH_SIM_WS_BENCH_EVENT_LOOP === true
+      && run.config.env.LBH_SIM_WS_STAGE_PROFILE === false),
+    s12ExactFileAndScenarioSet: !isS12 || (
+      JSON.stringify(actualJsonFiles) === JSON.stringify(s12ExpectedFiles)
+      && JSON.stringify(actualScenarioKeys) === JSON.stringify(s12ExpectedScenarios)
+      && JSON.stringify(cleanupFiles) === JSON.stringify(s12ExpectedScenarios
+        .map((key) => `cleanup-${key}.json`).sort())),
+    s12ScenarioSemantics: !isS12 || scenarioFiles.every((entry) => entry.schemaVersion === 3
+      && entry.gate === "s12" && entry.profile === run.profile && entry.commit === run.commit
+      && entry.seed === run.seed && entry.window.warmupSeconds === 5
+      && entry.window.durationSeconds === 20 && s11ScenarioIntegrity(entry)),
+    s12AggregateSemantics: !isS12 || (s12AggregateRowsMatch
+      && aggregate.verdict.convergenceOnlyPassed === scenarioFiles.every((entry) =>
+        entry.admission.convergenceOnlyPassed === true)
+      && aggregate.verdict.productAdmissionPassed === scenarioFiles.every((entry) =>
+        entry.admission.productAdmissionPassed === true)
+      && aggregate.verdict.passed === aggregate.verdict.productAdmissionPassed),
     s11RunContract: !isS11 || (run.schemaVersion === 4 && aggregate.schemaVersion === 4
       && run.gate === "s11" && run.profile === aggregate.profile && run.commit === aggregate.commit
       && run.dirty === false && aggregate.preparedProjectionsEnabled === true
@@ -2127,6 +2183,8 @@ function validateArtifact(directory) {
     && invariants.s7CadenceNormalizationPresent && invariants.s7AttributionReconciledAndPrivate
     && invariants.s7ComparisonsPresent && invariants.s8FieldFreshnessPresent
     && invariants.s9CodecManifestBound && invariants.s10LedgerEvidence && invariants.s12CodecAwareEvidence
+    && invariants.s12RunContract && invariants.s12ExactFileAndScenarioSet
+    && invariants.s12ScenarioSemantics && invariants.s12AggregateSemantics
     && invariants.s11RunContract && invariants.s11ScenarioSetExact
     && invariants.s11ScenarioContract && invariants.s11ComparisonBindings
     && invariants.s11AggregateVerdictRecomputed;
