@@ -446,6 +446,12 @@ license to count collapse as bandwidth savings. Rank the next bounded slices:
 (1) additional positional schema cleanup, (2) binary codec, (3) compression,
 (4) an explicit field-age/cadence policy only as a product decision. AOI stays
 deferred until distance/visibility evidence justifies its lifecycle risk.
+An independent clean 1/8 normal+churn review at frozen `d03b1e7` produced
+composite SHA-256
+`ad9b31ee42b5791985cfa85d7620e2a3fd7f6a220405120de8c1d13f4c9bc0ee`;
+external validation exits 0 and admission exits 2 with no P1/P2 discrepancy.
+The full 28-suite `multiplayer-network` lane also passes once with retries
+disabled.
 
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 

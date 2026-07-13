@@ -33,6 +33,11 @@
   External validation exits `0`; admission exits `2`. The next order is
   additional positional schema cleanup, binary codec, compression, then an
   explicit cadence-policy decision. AOI remains deferred.
+- Independent audit at frozen `d03b1e7` found no P1/P2 discrepancy. Its sole
+  actual clean 1/8 normal+churn review produced SHA-256
+  `ad9b31ee42b5791985cfa85d7620e2a3fd7f6a220405120de8c1d13f4c9bc0ee`,
+  validated with exit `0`, and rejected admission with exit `2`. The full
+  28-suite multiplayer-network lane then passed once with retries disabled.
 
 ## 2026-07-13 — v0.4 S7 product gate and residual decision
 
