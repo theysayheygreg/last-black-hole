@@ -114,6 +114,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AuthorityDeltaPublisher",
+    file: "authority-delta-publisher.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerSendQueue",
     file: "multiplayer-send-queue.cjs",
     lanes: ["multiplayer-network", "static", "full"],

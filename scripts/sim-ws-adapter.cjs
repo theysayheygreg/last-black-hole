@@ -413,10 +413,11 @@ function createSimWebSocketAdapter(options = {}) {
   ) {
     if (!replicationAccounting) return;
     replicationAccounting.outbound(state, frame, metric, Buffer.byteLength(wire, "utf8"), { timestamp });
-    if (mutateTracking && (frame?.type === "publicState" || frame?.type === "ownerState")) {
+    if (mutateTracking && (frame?.type === "publicState" || frame?.type === "ownerState" || frame?.type === "statePair")) {
       state.replicationStateFrames?.delete(frame);
-      if (state.replicationQueuedStateFrames?.[frame.type]?.frame === frame) {
-        delete state.replicationQueuedStateFrames[frame.type];
+      const trackingKey = frame.type === "statePair" ? "statePair" : frame.type;
+      if (state.replicationQueuedStateFrames?.[trackingKey]?.frame === frame) {
+        delete state.replicationQueuedStateFrames[trackingKey];
         if (Object.keys(state.replicationQueuedStateFrames).length === 0) state.replicationQueuedStateFrames = null;
       }
     }
@@ -444,7 +445,7 @@ function createSimWebSocketAdapter(options = {}) {
       if (replicationAccounting && sendAttempt) {
         const retained = state.replicationReliableFrames?.get(sendAttempt.reliableId);
         if (retained) retained.sendInvoked = true;
-      } else if (replicationAccounting && (frame?.type === "publicState" || frame?.type === "ownerState")) {
+      } else if (replicationAccounting && (frame?.type === "publicState" || frame?.type === "ownerState" || frame?.type === "statePair")) {
         const queued = state.replicationStateFrames?.get(frame);
         if (queued) queued.sendInvoked = true;
       }
@@ -481,9 +482,10 @@ function createSimWebSocketAdapter(options = {}) {
               const retained = state.replicationReliableFrames?.get(sendAttempt.reliableId);
               if (retained) retained.transportAccepted = true;
             }
-            if (frame?.type === "publicState" || frame?.type === "ownerState") {
+            if (frame?.type === "publicState" || frame?.type === "ownerState" || frame?.type === "statePair") {
               state.replicationStateFrames?.delete(frame);
-              if (state.replicationQueuedStateFrames?.[frame.type]?.frame === frame) delete state.replicationQueuedStateFrames[frame.type];
+              const trackingKey = frame.type === "statePair" ? "statePair" : frame.type;
+              if (state.replicationQueuedStateFrames?.[trackingKey]?.frame === frame) delete state.replicationQueuedStateFrames[trackingKey];
               if (state.replicationQueuedStateFrames
                 && Object.keys(state.replicationQueuedStateFrames).length === 0) state.replicationQueuedStateFrames = null;
             }
@@ -917,6 +919,8 @@ function createSimWebSocketAdapter(options = {}) {
     encodeWireFrame(baselineOwnerFrame, { direction: SERVER_TO_CLIENT });
     assertOwnerProjection(baselineOwnerFrame, baselinePublicFrame, identity);
     state.binding = result.binding;
+    state.wireVersion = result.welcome.wireVersion;
+    state.capabilities = Object.freeze([...(result.welcome.capabilities || [])]);
     state.bindingKey = bindingKey;
     state.identity = identity;
     if (typeof state.binding === "object" && state.binding !== null) bindingKeys.set(state.binding, bindingKey);
@@ -1075,6 +1079,17 @@ function createSimWebSocketAdapter(options = {}) {
       return;
     }
     if (frame.type === "ack") {
+      if (frame.ackKind === "statePair") {
+        const validStatePairAck = state.statePairMode && state.capabilities?.includes("state-pair-v1")
+          && frame.matchId === state.identity.runId && frame.sessionId === state.identity.connectionId
+          && frame.recipientId === state.identity.membershipId
+          && frame.recipientIncarnation === state.identity.connectionEpoch
+          && Number.isSafeInteger(state.binding?.authorityIncarnation)
+          && frame.authorityIncarnation === state.binding.authorityIncarnation;
+        if (!validStatePairAck) {
+          throw new WireProtocolError("unexpected-state-pair-ack", "statePair ACK is not valid for this binding", 4401);
+        }
+      }
       if (frame.ackKind === "delivery") {
         const ackOutcome = state.queue.acknowledge(frame.deliveryId);
         if (replicationAccounting && ackOutcome.removedMessages > 0) {
@@ -1207,7 +1222,8 @@ function createSimWebSocketAdapter(options = {}) {
 
   async function projectNow(context = {}) {
     if (closed) return { projected: 0, skipped: connections.size };
-    const candidates = [...connections].filter((state) => state.bound && !state.manifestRequired && !state.closing && !state.cleaned);
+    const candidates = [...connections].filter((state) => state.bound && !state.manifestRequired
+      && !state.capabilities?.includes("state-pair-v1") && !state.statePairMode && !state.closing && !state.cleaned);
     if (candidates.length === 0) return { projected: 0, skipped: connections.size };
     const expectedGeneration = generation;
     let publicFrame;
@@ -1374,6 +1390,102 @@ function createSimWebSocketAdapter(options = {}) {
       return { accepted: false, action: "disconnect", reason: "connection-fenced" };
     }
     return enqueueReliableState(state, frame);
+  }
+
+  async function publishStatePair(binding, frame) {
+    const key = bindingKeyFor(binding);
+    const state = key ? byBindingKey.get(key) : null;
+    if (!state) return { accepted: false, action: "ignore", reason: "binding-not-connected" };
+    if (state.wireVersion !== "lbh-multiplayer-json-v2") {
+      return { accepted: false, action: "ignore", reason: "state-pair-requires-v2" };
+    }
+    try {
+      encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
+    } catch (error) {
+      return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
+    }
+    if (!state.capabilities?.includes("state-pair-v1")) {
+      return { accepted: false, action: "reject", reason: "state-pair-capability-required" };
+    }
+    if (frame.matchId !== state.identity.runId || frame.sessionId !== state.identity.connectionId
+      || frame.recipientId !== state.identity.membershipId
+      || frame.recipientIncarnation !== state.identity.connectionEpoch
+      || frame.manifestHash !== state.binding?.manifestHash
+      || !Number.isSafeInteger(state.binding?.authorityIncarnation)
+      || frame.authorityIncarnation !== state.binding.authorityIncarnation) {
+      return { accepted: false, action: "reject", reason: "state-pair-identity-mismatch" };
+    }
+    if (!(await isBindingCurrent(state, "private-state-pair-send"))) {
+      if (!stateIsLive(state)) return { accepted: false, action: "ignore", reason: "connection-not-live" };
+      state.closing = true;
+      sendApplicationClose(state, 4003, "connection fenced", true);
+      return { accepted: false, action: "disconnect", reason: "connection-fenced" };
+    }
+    if (!state.statePairMode) {
+      if (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe") {
+        return { accepted: false, action: "reject", reason: "state-pair-keyframe-required" };
+      }
+      state.statePairMode = true;
+      state.statePairQueueOffset = Math.max(0, state.queue.status().lastStateSequence + 1 - frame.frameId);
+      state.lastStatePairFrameId = 0;
+    } else if (frame.frameId <= state.lastStatePairFrameId) {
+      return { accepted: false, action: "reject", reason: "stale-state-pair" };
+    }
+    const priorRecords = Object.values(state.replicationQueuedStateFrames || {});
+    const queueSequence = frame.frameId + state.statePairQueueOffset;
+    const outcome = state.queue.enqueueState(queueSequence, { kind: "state-pair", frames: [frame] });
+    if (replicationAccounting) {
+      const bytes = Buffer.byteLength(JSON.stringify(frame), "utf8");
+      replicationAccounting.outbound(state, frame, "offered", bytes);
+      if (!outcome.accepted) {
+        const terminal = outcome.action === "rebase" || outcome.action === "disconnect"
+          ? "policyDropped" : "otherTerminal";
+        replicationAccounting.outbound(state, frame, terminal, bytes);
+      } else {
+        if (outcome.action === "coalesced") {
+          for (const prior of priorRecords) {
+            replicationAccounting.outbound(state, prior.frame, "coalesced", prior.bytes);
+            state.replicationStateFrames?.delete(prior.frame);
+          }
+        }
+        const record = { frame, bytes, sendInvoked: false };
+        state.replicationStateFrames?.set(frame, record);
+        state.replicationQueuedStateFrames = { statePair: record };
+      }
+    }
+    samplePressure(state);
+    queueOutcome(state, outcome, frame);
+    flush(state);
+    if (outcome.accepted) state.lastStatePairFrameId = frame.frameId;
+    return outcome;
+  }
+
+  async function retransmitStatePair(binding, frame) {
+    const key = bindingKeyFor(binding);
+    const state = key ? byBindingKey.get(key) : null;
+    if (!state) return { accepted: false, action: "ignore", reason: "binding-not-connected" };
+    let wire;
+    try {
+      wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
+    } catch (error) {
+      return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
+    }
+    if (state.wireVersion !== "lbh-multiplayer-json-v2" || !state.statePairMode
+      || !state.capabilities?.includes("state-pair-v1") || frame.matchId !== state.identity.runId
+      || frame.sessionId !== state.identity.connectionId || frame.recipientId !== state.identity.membershipId
+      || frame.recipientIncarnation !== state.identity.connectionEpoch
+      || frame.manifestHash !== state.binding?.manifestHash
+      || frame.authorityIncarnation !== state.binding?.authorityIncarnation) {
+      return { accepted: false, action: "reject", reason: "state-pair-identity-mismatch" };
+    }
+    if (!(await isBindingCurrent(state, "private-state-pair-retransmit"))) {
+      return { accepted: false, action: "ignore", reason: "connection-not-live" };
+    }
+    replicationAccounting?.outbound(state, frame, "retransmitted", Buffer.byteLength(wire, "utf8"));
+    const accepted = sendWire(state, wire, frame);
+    return accepted
+      ? { accepted: true, action: "retransmitted" }
+      : { accepted: false, action: "disconnect", reason: "send-failed" };
   }
 
   async function sendRebase(binding, frame) {
@@ -1601,6 +1713,8 @@ function createSimWebSocketAdapter(options = {}) {
     project: projectNow,
     projectNow,
     enqueueReliable,
+    publishStatePair,
+    retransmitStatePair,
     rebase: sendRebase,
     sendRebase,
     broadcastReliable,

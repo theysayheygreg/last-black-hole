@@ -18,6 +18,7 @@ function wireClass(frame) {
     case "input": return "input";
     case "action": return "action";
     case "ack": return "ack";
+    case "statePair": return "statePair";
     default: return "control";
   }
 }
@@ -48,6 +49,16 @@ function entityComponents(entity) {
 }
 
 function frameShape(frame) {
+  if (frame?.type === "statePair") {
+    return Object.freeze({
+      projectionKind: frame.public?.kind || null,
+      streamKind: "matchStream",
+      shapeSchema: frame.pairSchema || "unknown-state-pair",
+      shapeComplete: Boolean(frame.public && frame.owner && frame.public.kind === frame.owner.kind),
+      entityCount: 0, componentCount: 0, despawnCount: 0, otherEntityCount: 0,
+      unknownStateKeys: Object.freeze([]), unknownWorldKeys: Object.freeze([]),
+    });
+  }
   const projectionKind = frame?.type === "publicState" || frame?.type === "ownerState"
     ? (frame.full === true ? "keyframe" : frame.delta === true ? "delta" : "state") : null;
   const base = {
@@ -202,6 +213,17 @@ function summarizeWindow(snapshot, {
           pair.ownerState ??= event.bytes;
         }
         pairHalves.set(pairKey, pair);
+      } else if (event.direction === DOWNLINK && event.projectionBeat !== null
+        && event.frameClass === "statePair") {
+        const pairKey = `${event.runGeneration}|${event.recipient}|${event.connectionEpoch}|${event.projectionBeat}`;
+        const pair = pairHalves.get(pairKey) || {
+          publicState: null, ownerState: null, publicProjectionKind: null, publicCopies: 0, ownerCopies: 0,
+          atomicStatePair: null, atomicCopies: 0,
+        };
+        pair.atomicCopies += 1;
+        pair.atomicStatePair ??= event.bytes;
+        pair.publicProjectionKind ??= event.projectionKind;
+        pairHalves.set(pairKey, pair);
       }
     }
   }
@@ -223,8 +245,11 @@ function summarizeWindow(snapshot, {
   const pairBytes = [];
   const pairCounts = {};
   for (const [key, pair] of pairHalves) {
-    if (pair.publicState === null || pair.ownerState === null) continue;
-    pairBytes.push(pair.publicState + pair.ownerState);
+    const bytes = pair.atomicStatePair ?? (
+      pair.publicState !== null && pair.ownerState !== null ? pair.publicState + pair.ownerState : null
+    );
+    if (bytes === null) continue;
+    pairBytes.push(bytes);
     const parts = key.split("|");
     const recipient = parts[1];
     pairCounts[recipient] = (pairCounts[recipient] || 0) + 1;
@@ -369,7 +394,8 @@ function createReplicationAccounting({
       wireVersion: state.binding?.wireVersion || frame?.wireVersion || WIRE_PROTOCOL_VERSION,
       frameClass: wireClass(frame), metric,
       bytes: Math.max(0, Number(bytes) || 0), frames,
-      projectionBeat: Number.isSafeInteger(frame?.snapshotId) ? frame.snapshotId : null,
+      projectionBeat: frame?.type === "statePair" && Number.isSafeInteger(frame?.frameId)
+        ? frame.frameId : Number.isSafeInteger(frame?.snapshotId) ? frame.snapshotId : null,
       reliableId: Number.isSafeInteger(reliableId) ? reliableId : null,
       ...shape,
     }));

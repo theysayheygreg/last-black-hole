@@ -3,6 +3,7 @@ const {
   WIRE_PROTOCOL_VERSION,
   STREAM_PATH,
 } = require("./multiplayer-protocol-constants.cjs");
+const { normalizeView, projectionHash } = require("./canonical-structural-delta.cjs");
 
 const CLIENT_TO_SERVER = "client->server";
 const SERVER_TO_CLIENT = "server->client";
@@ -44,6 +45,7 @@ const FRAME_DIRECTIONS = Object.freeze({
   error: SERVER_TO_CLIENT,
   close: SERVER_TO_CLIENT,
   manifestAck: CLIENT_TO_SERVER,
+  statePair: SERVER_TO_CLIENT,
 });
 
 const FRAME_BYTE_LIMITS = Object.freeze({
@@ -61,6 +63,7 @@ const FRAME_BYTE_LIMITS = Object.freeze({
   error: LIMITS.maxControlBytes,
   close: LIMITS.maxControlBytes,
   manifestAck: LIMITS.maxControlBytes,
+  statePair: LIMITS.maxFrameBytes,
 });
 
 const ACTION_KINDS = new Set([
@@ -70,7 +73,7 @@ const ACTION_KINDS = new Set([
   "consume",
   "inventory",
 ]);
-const ACK_KINDS = new Set(["baseline", "event", "delivery", "input", "action"]);
+const ACK_KINDS = new Set(["baseline", "event", "delivery", "input", "action", "statePair"]);
 const OVERLOAD_MODES = new Set([
   "NORMAL",
   "THROTTLED",
@@ -361,10 +364,20 @@ function validateEvent(frame) {
 function validateAck(frame, direction) {
   exactKeys(frame, new Set([
     "type", "ackKind", "deliveryId", "snapshotId", "eventSeq", "inputSeq", "actionId", "actionSeq", "commandSeq", "status", "result",
+    "ackSchema", "matchId", "sessionId", "authorityIncarnation", "recipientId", "recipientIncarnation", "frameId", "statePairId", "publicHash", "ownerHash",
   ]));
   requiredString(frame.ackKind, "ackKind");
   if (!ACK_KINDS.has(frame.ackKind)) fail("invalid-ack-kind", `unsupported ackKind ${frame.ackKind}`);
-  if (frame.ackKind === "baseline") {
+  if (frame.ackKind === "statePair") {
+    if (direction && direction !== CLIENT_TO_SERVER) fail("invalid-direction", "statePair ack is client->server");
+    exactKeys(frame, new Set(["type", "ackKind", "ackSchema", "matchId", "sessionId", "authorityIncarnation",
+      "recipientId", "recipientIncarnation", "frameId", "statePairId", "snapshotId", "publicHash", "ownerHash"]), "statePair ack");
+    for (const key of ["ackSchema", "matchId", "sessionId", "recipientId", "statePairId", "snapshotId", "publicHash", "ownerHash"]) requiredString(frame[key], key);
+    if (frame.ackSchema !== "lbh-authority-state-pair-ack-v1") fail("invalid-field", "unsupported statePair ACK schema");
+    integer(frame.authorityIncarnation, "authorityIncarnation", { min: 1 });
+    integer(frame.recipientIncarnation, "recipientIncarnation", { min: 1 });
+    integer(frame.frameId, "frameId", { min: 1 });
+  } else if (frame.ackKind === "baseline") {
     if (direction && direction !== CLIENT_TO_SERVER) fail("invalid-direction", "baseline ack is client->server");
     exactKeys(frame, new Set(["type", "ackKind", "snapshotId", "eventSeq"]), "baseline ack");
     integer(frame.snapshotId, "snapshotId", { min: 1 });
@@ -390,6 +403,83 @@ function validateAck(frame, direction) {
     integer(frame.commandSeq, "commandSeq", { min: 1 });
     if (frame.status !== "accepted" && frame.status !== "rejected") fail("invalid-action-status", "action ack status must be accepted or rejected");
     if (frame.result !== undefined) jsonValue(frame.result, "result");
+  }
+}
+
+function validateStatePair(frame) {
+  exactKeys(frame, new Set(["type", "pairSchema", "matchId", "sessionId", "authorityIncarnation", "recipientId",
+    "recipientIncarnation", "frameId", "statePairId", "snapshotId", "tick", "simTime", "eventWatermark",
+    "fieldRevision", "overloadMode", "ballparkEpoch", "manifestHash", "public", "owner"]));
+  for (const key of ["pairSchema", "matchId", "sessionId", "recipientId", "statePairId", "snapshotId", "manifestHash"]) requiredString(frame[key], key);
+  if (frame.pairSchema !== "lbh-authority-state-pair-v1") fail("invalid-field", "unsupported statePair schema");
+  for (const key of ["authorityIncarnation", "recipientIncarnation", "frameId"]) integer(frame[key], key, { min: 1 });
+  integer(frame.tick, "tick");
+  finiteNumber(frame.simTime, "simTime", { min: 0 });
+  for (const key of ["eventWatermark", "fieldRevision", "ballparkEpoch"]) integer(frame[key], key);
+  requiredString(frame.overloadMode, "overloadMode");
+  if (!OVERLOAD_MODES.has(frame.overloadMode)) fail("invalid-overload-mode", `unsupported overloadMode ${frame.overloadMode}`);
+  const deltaCursors = {};
+  for (const lane of ["public", "owner"]) {
+    const payload = object(frame[lane], lane);
+    const allowed = payload.kind === "keyframe"
+      ? new Set(["kind", "schema", "resultHash", "projection"])
+      : new Set(["kind", "schema", "baseSnapshotId", "baseHash", "resultHash", "delta"]);
+    exactKeys(payload, allowed, lane);
+    if (payload.kind !== "keyframe" && payload.kind !== "delta") fail("invalid-field", `${lane}.kind must be keyframe or delta`);
+    for (const key of ["schema", "resultHash"]) requiredString(payload[key], `${lane}.${key}`);
+    if (payload.kind === "keyframe") {
+      if (payload.schema !== "lbh-canonical-projection-v1") fail("invalid-field", `${lane} keyframe schema is unsupported`);
+      object(payload.projection, `${lane}.projection`);
+      jsonValue(payload.projection, `${lane}.projection`);
+      let normalized;
+      try { normalized = normalizeView(payload.projection); } catch { fail("invalid-field", `${lane} keyframe projection is invalid`); }
+      if (projectionHash(normalized) !== payload.resultHash) fail("invalid-field", `${lane} keyframe hash is invalid`);
+      if (normalized.lane !== lane || normalized.runId !== frame.matchId
+        || normalized.authorityEpoch !== frame.authorityIncarnation
+        || normalized.connectionEpoch !== frame.recipientIncarnation || normalized.ballparkEpoch !== frame.ballparkEpoch
+        || normalized.statePairId !== frame.statePairId || normalized.snapshotId !== frame.snapshotId
+        || normalized.tick !== frame.tick || normalized.simTime !== frame.simTime
+        || normalized.eventWatermark !== frame.eventWatermark || normalized.fieldRevision !== frame.fieldRevision
+        || normalized.overloadMode !== frame.overloadMode || normalized.manifestHash !== frame.manifestHash) {
+        fail("invalid-field", `${lane} keyframe lineage does not match statePair header`);
+      }
+    } else {
+      if (payload.schema !== "lbh-canonical-structural-delta-v1") fail("invalid-field", `${lane} delta schema is unsupported`);
+      requiredString(payload.baseSnapshotId, `${lane}.baseSnapshotId`);
+      requiredString(payload.baseHash, `${lane}.baseHash`);
+      object(payload.delta, `${lane}.delta`);
+      jsonValue(payload.delta, `${lane}.delta`);
+      if (payload.delta.lane !== lane || payload.delta.runId !== frame.matchId
+        || payload.delta.authorityEpoch !== frame.authorityIncarnation
+        || payload.delta.connectionEpoch !== frame.recipientIncarnation || payload.delta.ballparkEpoch !== frame.ballparkEpoch
+        || payload.delta.statePairId !== frame.statePairId || payload.delta.snapshotId !== frame.snapshotId
+        || payload.delta.manifestHash !== frame.manifestHash || payload.delta.baseSnapshotId !== payload.baseSnapshotId
+        || payload.delta.baseHash !== payload.baseHash || payload.delta.resultHash !== payload.resultHash) {
+        fail("invalid-field", `${lane} delta lineage does not match statePair header`);
+      }
+      const cursors = {};
+      for (const operation of payload.delta.rootOps || []) {
+        if (operation?.op === "set" && Array.isArray(operation.path) && operation.path.length === 1) {
+          cursors[operation.path[0]] = operation.value;
+        }
+      }
+      for (const key of ["statePairId", "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode"]) {
+        if (Object.hasOwn(cursors, key) && cursors[key] !== frame[key]) fail("invalid-field", `${lane} delta ${key} disagrees with statePair header`);
+      }
+      for (const key of ["statePairId", "snapshotId"]) {
+        if (!Object.hasOwn(cursors, key)) fail("invalid-field", `${lane} delta must declare ${key} cursor`);
+      }
+      deltaCursors[lane] = cursors;
+    }
+  }
+  if (frame.public.kind !== frame.owner.kind) fail("invalid-field", "statePair lanes must use the same transaction kind");
+  if (frame.public.kind === "delta") {
+    for (const key of ["statePairId", "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode"]) {
+      if (Object.hasOwn(deltaCursors.public, key) !== Object.hasOwn(deltaCursors.owner, key)
+        || (Object.hasOwn(deltaCursors.public, key) && deltaCursors.public[key] !== deltaCursors.owner[key])) {
+        fail("invalid-field", `public and owner delta ${key} cursors are not atomic`);
+      }
+    }
   }
 }
 
@@ -440,6 +530,7 @@ const VALIDATORS = Object.freeze({
   error: validateErrorFrame,
   close: validateClose,
   manifestAck: validateManifestAck,
+  statePair: validateStatePair,
 });
 
 function byteLength(value) {
