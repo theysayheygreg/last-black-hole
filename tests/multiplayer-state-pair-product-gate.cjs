@@ -707,7 +707,6 @@ async function setupPopulation(port, population, scenarioName) {
   } });
   if (started.status !== 200) throw new Error(`session start failed: ${JSON.stringify(started.body)}`);
   const authorities = [];
-  const clients = [];
   for (let seat = 0; seat < population; seat += 1) {
     const joined = await request(port, "/join", { method: "POST", body: {
       runId: started.body.session.runId, clientId: `${scenarioName}-seat-${seat}`,
@@ -715,9 +714,12 @@ async function setupPopulation(port, population, scenarioName) {
     } });
     if (joined.status !== 200) throw new Error(`join ${seat} failed: ${JSON.stringify(joined.body)}`);
     authorities.push(joined.body.authority);
-    clients.push(await openStatePairClient({ port, authority: joined.body.authority,
-      label: `${scenarioName}-seat-${seat}` }));
   }
+  // Complete the cohort's hello handshake before established recipients can
+  // starve later seats with positional publication work. Sequential opening
+  // measures setup-order saturation, not the admitted 1/4/8 product window.
+  const clients = await Promise.all(authorities.map((authority, seat) => openStatePairClient({ port, authority,
+    label: `${scenarioName}-seat-${seat}` })));
   return { started, authorities, clients };
 }
 
