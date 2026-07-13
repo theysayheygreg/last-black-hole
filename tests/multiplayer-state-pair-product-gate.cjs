@@ -245,7 +245,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       codecVerified: POSITIONAL_GATE ? reuseManifest : null,
       codecVerificationSource: POSITIONAL_GATE && reuseManifest ? "local-static-manifest-cache" : null },
     wireDecodeSamples: [], clientWorkSamples: [], ackWorkSamples: [], faultLog: [], hashesVerified: 0,
-    legacyReconstructionVerified: 0, acceptedPairTimes: [],
+    legacyReconstructionVerified: 0, acceptedPairEvents: [],
     shape: { keyframes: 0, deltas: 0, creates: 0, updates: 0, despawns: 0, reincarnations: 0, rootOps: 0 },
     pairKinds: {},
     attributionCapture: { active: false, startAt: null, maxFrames: ATTRIBUTION_SAMPLE_FRAMES, rawFrames: [] },
@@ -337,7 +337,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       return;
     }
     client.acceptedPairs += 1;
-    client.acceptedPairTimes.push(Date.now());
+    client.acceptedPairEvents.push({ at: Date.now(), frameId: outcome.state.frameId });
     client.lastVisibleFrameId = outcome.state.frameId;
     if (outcome.state.matchId !== client.welcome.runId
       || outcome.state.recipientId !== client.welcome.membershipId
@@ -1317,8 +1317,14 @@ async function runScenario({ population, scenario, runDir, commit }) {
       selected.filter((event) => event.recipientOrdinal === index + 1
         && event.direction === "authority->client" && event.frameClass === "statePair"
         && event.metric === "accepted").length]));
-    const receiverAcceptedPairCountsByClient = Object.fromEntries(allClients.map((client) => [client.label,
-      client.acceptedPairTimes.filter((at) => at >= startAt && at < endAt).length]));
+    const receiverAcceptedPairCountsByClient = Object.fromEntries(allClients.map((client, index) => {
+      const authorityAcceptedFrameIds = new Set(selected.filter((event) => event.recipientOrdinal === index + 1
+        && event.direction === "authority->client" && event.frameClass === "statePair"
+        && event.metric === "accepted" && Number.isSafeInteger(event.projectionBeat))
+        .map((event) => event.projectionBeat));
+      return [client.label, client.acceptedPairEvents.filter((event) => event.at >= startAt && event.at < endAt
+        && authorityAcceptedFrameIds.has(event.frameId)).length];
+    }));
     const authorityAcceptedPairsPerSecondByClient = Object.fromEntries(Object.entries(
       authorityAcceptedPairCountsByClient).map(([label, count]) => [label, count / windowSeconds]));
     const authorityOfferedPairsPerSecondByClient = Object.fromEntries(Object.entries(
@@ -1676,7 +1682,7 @@ function s11ScenarioIntegrity(entry) {
       && proof.authorityAcceptedAckFrames > 0;
     return proof.proved === expected;
   });
-  const publisher = entry.diagnostics.statePair.publisher;
+  const publisher = entry.performance.boundedState.publisherAfterCleanup;
   const closedWorldAck = entry.pairShape.ackBaseProof.closedWorldAuthorityAdvancement;
   const closedWorldAckArithmetic = JSON.stringify(closedWorldAck.intendedClientLabels) === JSON.stringify(labels)
     && closedWorldAck.authorityDistinctRecipientsAdvanced === publisher.ackRecipientsWithBaseAdvance
@@ -1791,16 +1797,24 @@ function s11ScenarioIntegrity(entry) {
       && expectedAdmission.steadyOneSecondP95AtOrBelow80KiB
       && expectedAdmission.targetCadenceMeanAtOrBelow64KiB
       && expectedAdmission.targetCadenceOneSecondP95AtOrBelow80KiB));
-  return cadenceArithmetic && cadenceTolerancesRecomputed && ledgerArithmetic && codecEvidence
-    && ackProofArithmetic && closedWorldAckArithmetic
-    && closedWorldAck.proved === ackConvergedExpected && ackHistogramArithmetic
-    && correctnessFieldsRecomputed
-    && entry.correctness.statePairAcksConverged === ackConvergedExpected
-    && storedCorrectness && expectedCorrectness === entry.admission.correctnessPassed
-    && admissionInputsMatch && entry.admission.convergenceOnlyPassed === convergence
-    && entry.admission.productAdmissionPassed === product && entry.admission.passed === product
-    && (!normal || (entry.residualAttribution?.privacy?.rawFrameDigestRetained === false
-      && entry.residualAttribution?.sample?.deterministicDigest === undefined));
+  const details = {
+    cadenceArithmetic, cadenceTolerancesRecomputed, ledgerArithmetic, codecEvidence,
+    ackProofArithmetic, closedWorldAckArithmetic,
+    closedWorldAckVerdict: closedWorldAck.proved === ackConvergedExpected,
+    ackHistogramArithmetic, correctnessFieldsRecomputed,
+    storedAckConvergence: entry.correctness.statePairAcksConverged === ackConvergedExpected,
+    storedCorrectness,
+    expectedCorrectness: expectedCorrectness === entry.admission.correctnessPassed,
+    admissionInputsMatch,
+    convergence: entry.admission.convergenceOnlyPassed === convergence,
+    product: entry.admission.productAdmissionPassed === product && entry.admission.passed === product,
+    privacy: !normal || (entry.residualAttribution?.privacy?.rawFrameDigestRetained === false
+      && entry.residualAttribution?.sample?.deterministicDigest === undefined),
+  };
+  if (process.env.LBH_S11_DEBUG_INTEGRITY === "1") {
+    console.error(`S11 integrity ${entry.scenario}-${entry.population}: ${JSON.stringify(details)}`);
+  }
+  return Object.values(details).every(Boolean);
 }
 
 function validateArtifact(directory) {
