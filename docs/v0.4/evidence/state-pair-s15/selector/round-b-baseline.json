@@ -1,0 +1,43 @@
+{
+  "schema": "lbh-s15-canonical-reuse-benchmark-run-v1",
+  "moduleRoot": "tmp/s15-baseline-a0c950e",
+  "iterations": 1000,
+  "warmup": 100,
+  "workload": {
+    "publicEntities": 48,
+    "ownerEntities": 1,
+    "candidatesPerSelection": 4
+  },
+  "publishMilliseconds": {
+    "count": 1000,
+    "mean": 7.796856644999995,
+    "p50": 7.646292000000358,
+    "p95": 7.882916000000023,
+    "p99": 14.003583000000162,
+    "max": 20.848541999999725
+  },
+  "selectionMilliseconds": {
+    "count": 1100,
+    "p50": 4.847542000000431,
+    "p95": 5.077166999999918,
+    "p99": 9.380040999999892,
+    "max": 14.404708000000028,
+    "samplesDropped": 0,
+    "sampleLimit": 2048
+  },
+  "operations": {
+    "componentSerializations": 28600,
+    "fullCandidateCompositions": 1101,
+    "winnerSerializations": 1101,
+    "bytesExamined": 18433641,
+    "allocationProxyBytes": 38916699
+  },
+  "selections": 1100,
+  "fallbackCounts": {
+    "missing-exact-acked-base": 1
+  },
+  "transcriptSha256": "b2795f615f1b0b91588690748106e287db51390defb35e149829b1e400cbe82f",
+  "selectionTranscriptSha256": "c022d7c51f3394cf651625310650982179c5da99873044b67e03244bdab65eeb",
+  "parityComparisons": 1000,
+  "decodedSemanticComparisons": 1000
+}

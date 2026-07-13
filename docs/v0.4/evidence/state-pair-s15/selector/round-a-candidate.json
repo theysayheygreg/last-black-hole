@@ -1,0 +1,49 @@
+{
+  "schema": "lbh-s15-canonical-reuse-benchmark-run-v1",
+  "moduleRoot": ".",
+  "iterations": 1000,
+  "warmup": 100,
+  "workload": {
+    "publicEntities": 48,
+    "ownerEntities": 1,
+    "candidatesPerSelection": 4
+  },
+  "publishMilliseconds": {
+    "count": 1000,
+    "mean": 8.101852237999964,
+    "p50": 7.951125000000502,
+    "p95": 8.222583000000213,
+    "p99": 14.665750000000116,
+    "max": 19.842875000000276
+  },
+  "selectionMilliseconds": {
+    "count": 1100,
+    "p50": 4.684291999999914,
+    "p95": 4.945249999999987,
+    "p99": 9.43145800000002,
+    "max": 12.777332999999999,
+    "samplesDropped": 0,
+    "sampleLimit": 2048
+  },
+  "operations": {
+    "componentSerializations": 24200,
+    "fullCandidateCompositions": 1101,
+    "winnerSerializations": 1101,
+    "bytesExamined": 18433641,
+    "allocationProxyBytes": 13836499,
+    "expandedHeaderSerializations": 18700,
+    "expandedLaneSerializations": 0,
+    "expandedLaneSerializationReuses": 4400,
+    "expandedReusedLaneBytes": 25080200,
+    "expandedSerializedLaneBytes": 0,
+    "expandedBytesExamined": 25595684
+  },
+  "selections": 1100,
+  "fallbackCounts": {
+    "missing-exact-acked-base": 1
+  },
+  "transcriptSha256": "b2795f615f1b0b91588690748106e287db51390defb35e149829b1e400cbe82f",
+  "selectionTranscriptSha256": "c022d7c51f3394cf651625310650982179c5da99873044b67e03244bdab65eeb",
+  "parityComparisons": 1000,
+  "decodedSemanticComparisons": 1000
+}
