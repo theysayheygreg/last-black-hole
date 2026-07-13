@@ -93,7 +93,8 @@ function run() {
         produced.encodedDigest]);
     }
   }
-  const choice = publisher.diagnostics().codecPairChoice;
+  const diagnostics = publisher.diagnostics();
+  const choice = diagnostics.codecPairChoice;
   const sourceCommit = process.env.LBH_S15_SOURCE_COMMIT || git("rev-parse", "HEAD");
   const sourceTree = process.env.LBH_S15_SOURCE_TREE || git("rev-parse", `${sourceCommit}^{tree}`);
   const result = { schema: "lbh-s15-canonical-reuse-benchmark-run-v1",
@@ -110,7 +111,8 @@ function run() {
       } },
     workload: { publicEntities: 48, ownerEntities: 1, candidatesPerSelection: 4 },
     publishMilliseconds: distribution(samples), selectionMilliseconds: choice.selectionMilliseconds,
-    operations: choice.operations, selections: choice.selections,
+    operations: choice.operations, preparedProjectionOperations: diagnostics.preparedProjections,
+    selections: choice.selections,
     fallbackCounts: choice.fallbacks,
     transcriptSha256: crypto.createHash("sha256").update(transcript.join("\n")).digest("hex"),
     selectionTranscriptSha256: crypto.createHash("sha256").update(JSON.stringify(selections)).digest("hex"),
