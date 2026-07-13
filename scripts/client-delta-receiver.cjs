@@ -20,6 +20,10 @@ const {
   MIXED_ACK_SCHEMA,
   MAX_WIRE_PAIR_BYTES,
 } = require("./authority-delta-publisher.cjs");
+const {
+  CAPABILITY: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+  reconstructLegacyPublicEntities,
+} = require("./runtime-public-schema.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -35,6 +39,7 @@ const MODES = Object.freeze({
   STATIC_MANIFEST: "static-manifest-v1",
   STATE_PAIR: CAPABILITY,
   STATE_PAIR_MIXED: MIXED_CAPABILITY,
+  STATE_PAIR_RUNTIME_COMPONENTS: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
 });
 const RECOVERY_REASONS = new Set([
   "reconnect", "match-changed", "session-changed", "authority-changed", "recipient-changed",
@@ -207,6 +212,11 @@ function selectClientReplicationMode({ wireVersion, capabilities = [] } = {}) {
   if (wireVersion !== "lbh-multiplayer-json-v2") return MODES.V1;
   if (!Array.isArray(capabilities)) return MODES.V1;
   if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
+      && capabilities.includes(MIXED_CAPABILITY)
+      && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)) {
+    return MODES.STATE_PAIR_RUNTIME_COMPONENTS;
+  }
+  if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
       && capabilities.includes(MIXED_CAPABILITY)) return MODES.STATE_PAIR_MIXED;
   if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)) return MODES.STATE_PAIR;
   if (capabilities.includes(STATIC_MANIFEST_CAPABILITY)) return MODES.STATIC_MANIFEST;
@@ -220,6 +230,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     throw new TypeError("capabilities must be a string array");
   }
   const allowMixed = capabilities.includes(MIXED_CAPABILITY) && capabilities.includes(CAPABILITY);
+  const materializeRuntimeComponents = allowMixed
+    && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
   if (!Number.isSafeInteger(maxPairBytes) || maxPairBytes < 1024 || maxPairBytes > MAX_WIRE_PAIR_BYTES) {
     throw new RangeError(`maxPairBytes must be between 1024 and ${MAX_WIRE_PAIR_BYTES}`);
   }
@@ -388,6 +400,12 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       validateOwnerProjection(nextOwner.view);
       const nextPublicContinuity = advanceContinuity(nextPublic.view, publicContinuity);
       const nextOwnerContinuity = advanceContinuity(nextOwner.view, ownerContinuity);
+      // Reconstruction happens before any receiver state is published. A
+      // missing/unknown component therefore rejects the entire pair rather
+      // than exposing an intermediate half-materialized entity.
+      const legacyPublicEntities = materializeRuntimeComponents
+        ? reconstructLegacyPublicEntities(nextPublic.view)
+        : null;
       const pair = deepFreeze({
         matchId: frame.matchId,
         sessionId: frame.sessionId,
@@ -407,6 +425,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         ballparkEpoch: frame.ballparkEpoch,
         public: nextPublic.view,
         owner: nextOwner.view,
+        ...(legacyPublicEntities ? { legacyPublicEntities } : {}),
       });
       const ack = deepFreeze({
         type: "ack",
@@ -505,7 +524,9 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function diagnostics() {
     return deepFreeze({
       ...counters,
-      mode: allowMixed ? MODES.STATE_PAIR_MIXED : MODES.STATE_PAIR,
+      mode: materializeRuntimeComponents
+        ? MODES.STATE_PAIR_RUNTIME_COMPONENTS
+        : allowMixed ? MODES.STATE_PAIR_MIXED : MODES.STATE_PAIR,
       awaitingKeyframe,
       hasPublicBase: Boolean(publicBase),
       hasOwnerBase: Boolean(ownerBase),
@@ -524,6 +545,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
 module.exports = {
   CAPABILITY,
   MIXED_CAPABILITY,
+  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
   MODES,

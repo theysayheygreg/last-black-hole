@@ -4,7 +4,7 @@
 const crypto = require("crypto");
 const { WebSocket } = require("ws");
 const { TestRunner, assert, startSimServer, stopSimServer } = require("./helpers.cjs");
-const { createClientDeltaReceiver } = require("../scripts/client-delta-receiver.cjs");
+const { createClientDeltaReceiver, RUNTIME_PUBLIC_COMPONENTS_CAPABILITY } = require("../scripts/client-delta-receiver.cjs");
 const { projectionHash } = require("../scripts/canonical-structural-delta.cjs");
 const { WIRE_PROTOCOL_VERSION_V2, SIM_PROTOCOL_VERSION } = require("../scripts/multiplayer-wire-protocol.cjs");
 
@@ -39,6 +39,8 @@ async function run() {
   await startSimServer(PORT, { keepAlive: true, env: {
     LBH_SIM_WS_ENABLED: "true", LBH_SIM_WS_JSON_V2: "true", LBH_SIM_WS_STATE_PAIR_V1: "true",
     LBH_SIM_WS_STATE_PAIR_MIXED_V1: "true",
+    LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: "true",
+    LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS: "true",
   } });
   let ws = null;
   try {
@@ -57,14 +59,18 @@ async function run() {
         capabilities: ["static-manifest-v1", "state-pair-v1"],
       } });
       assert(legacyStatePairTicket.status === 200
-        && !legacyStatePairTicket.body.capabilities.includes("state-pair-mixed-v1"),
+        && !legacyStatePairTicket.body.capabilities.includes("state-pair-mixed-v1")
+        && !legacyStatePairTicket.body.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY),
       "state-pair-v1 tickets must not be upgraded to mixed lanes without an explicit request");
       const issued = await request("/multiplayer/ticket", { method: "POST", authority, body: {
         kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2],
-        capabilities: ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1"],
+        capabilities: ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
+          RUNTIME_PUBLIC_COMPONENTS_CAPABILITY],
       } });
       assert(issued.status === 200 && issued.body.capabilities.includes("state-pair-mixed-v1"),
         "Runtime must ticket-bind the separately negotiated mixed state-pair capability");
+      assert(issued.body.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY),
+        "Runtime must ticket-bind the separately gated runtime component capability");
       assert(Number.isSafeInteger(issued.body.authorityIncarnation), "Ticket response must bind the per-match authority incarnation");
       const frames = [];
       const rawPairs = [];
@@ -114,6 +120,10 @@ async function run() {
       const first = client.receive(rawPairs[0]);
       const keyframeApplyMs = Number(process.hrtime.bigint() - keyframeStarted) / 1e6;
       assert(first.accepted && rawPairs[0].includes('"kind":"keyframe"'), "First runtime pair must materialize atomically");
+      assert(first.state.legacyPublicEntities.length === first.state.public.entities.length
+        && first.state.legacyPublicEntities.every((entry) => !Object.keys(entry.value)
+          .some((key) => /cargo|inventory|credential|private/i.test(key))),
+      "Split runtime components must atomically reconstruct every legacy-visible public entity without private fields");
       ws.send(JSON.stringify(first.ack));
       let nextIndex = 1;
       let mixedIndex = -1;
@@ -189,6 +199,10 @@ async function run() {
       assert(!Object.keys(health.multiplayer.statePair.publisher.keyframeReasons)
         .some((reason) => reason.startsWith("atomic-kind-alignment:")),
       "mixed capability must remove the measured same-kind alignment fallback");
+      assert(health.multiplayer.statePair.runtimePublicComponents.enabledAdmissions === 1
+        && health.multiplayer.statePair.publisher.ackRejectDiagnostics.total === 0
+        && health.multiplayer.adapter.statePair.ackRejectDiagnostics.total === 0,
+      "Normal loopback must expose the opt-in schema and exact-zero bounded ACK rejects");
       console.log(`  S4 pre-gate same-beat bytes full=${mixedFullPairBytes} mixed=${Buffer.byteLength(rawPairs[mixedIndex])}`
         + ` clientApplyMs keyframe=${keyframeApplyMs.toFixed(3)} mixed=${mixedApplyMs.toFixed(3)}`);
     });

@@ -104,6 +104,7 @@ const {
 const {
   CAPABILITY: STATE_PAIR_CAPABILITY,
   MIXED_CAPABILITY: STATE_PAIR_MIXED_CAPABILITY,
+  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   createRuntimeStatePairAuthority,
 } = require("./runtime-state-pair-integration.cjs");
 
@@ -1011,6 +1012,11 @@ const MULTIPLAYER_JSON_V2_ENABLED = String(process.env.LBH_SIM_WS_JSON_V2 || "")
 const MULTIPLAYER_STATE_PAIR_V1_ENABLED = String(process.env.LBH_SIM_WS_STATE_PAIR_V1 || "").trim() === "true";
 const MULTIPLAYER_STATE_PAIR_MIXED_V1_ENABLED = MULTIPLAYER_STATE_PAIR_V1_ENABLED
   && String(process.env.LBH_SIM_WS_STATE_PAIR_MIXED_V1 || "").trim() === "true";
+const MULTIPLAYER_RUNTIME_PUBLIC_COMPONENTS_ENABLED = MULTIPLAYER_STATE_PAIR_MIXED_V1_ENABLED
+  && String(process.env.LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1 || "").trim() === "true";
+const MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED = String(
+  process.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS || "",
+).trim() === "true";
 const MULTIPLAYER_PREPARED_PROJECTIONS_ENABLED = !["0", "false"].includes(
   String(process.env.LBH_SIM_WS_PREPARED_PROJECTIONS ?? "true").trim().toLowerCase(),
 );
@@ -6147,7 +6153,11 @@ function rotateMultiplayerRun(runId) {
         ballparkEpoch: 1,
         manifestSchema: currentSessionReplicationManifest().manifestSchema,
       manifestHash: currentSessionReplicationManifest().manifestHash,
-      publisherOptions: { maxRecipients: 16, preparedProjections: MULTIPLAYER_PREPARED_PROJECTIONS_ENABLED },
+      publisherOptions: {
+        maxRecipients: 16,
+        preparedProjections: MULTIPLAYER_PREPARED_PROJECTIONS_ENABLED,
+        ackRejectDiagnostics: MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED,
+      },
       stageProfiler: authorityStageProfiler,
       })
     : null;
@@ -6655,7 +6665,6 @@ function buildRuntimeStatePair(binding, publicFrame, ownerFrame) {
 function acknowledgeRuntimeMultiplayer(binding, frame) {
   if (frame.ackKind === "statePair") {
     const result = runtimeStatePairAuthority?.acknowledge(binding, frame);
-    if (!result?.accepted) throw streamCommandFailure("state-pair-ack-rejected");
     return result;
   }
   return acknowledgeMultiplayerCursor(binding, frame);
@@ -7340,7 +7349,11 @@ const server = http.createServer(async (req, res) => {
           && Array.isArray(body.capabilities) && body.capabilities.includes(STATE_PAIR_CAPABILITY)
           ? [STATE_PAIR_CAPABILITY, ...(MULTIPLAYER_STATE_PAIR_MIXED_V1_ENABLED
             && body.capabilities.includes(STATE_PAIR_MIXED_CAPABILITY)
-            ? [STATE_PAIR_MIXED_CAPABILITY] : [])] : [])].sort()
+            ? [STATE_PAIR_MIXED_CAPABILITY,
+              ...(MULTIPLAYER_RUNTIME_PUBLIC_COMPONENTS_ENABLED
+                && body.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+                ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY] : [])]
+            : [])] : [])].sort()
         : [];
       if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2
           && (!Array.isArray(body.capabilities) || body.capabilities.length > 16
@@ -7757,6 +7770,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     buildEventRecovery: buildMultiplayerEventRecovery,
     onAck: acknowledgeRuntimeMultiplayer,
     onStatePairRecovery: recoverRuntimeStatePair,
+    ackRejectDiagnostics: MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED,
   });
 }
 

@@ -169,6 +169,7 @@ async function createHarness(options = {}) {
     queueOptions: options.queueOptions,
     replicationAccounting: options.replicationAccounting,
     replicationAccountingFactory: options.replicationAccountingFactory,
+    ackRejectDiagnostics: options.ackRejectDiagnostics,
     async redeemHello(frame, context) {
       redemptionCount += 1;
       callbackContexts.push(context);
@@ -281,6 +282,7 @@ async function createHarness(options = {}) {
     async onAck(binding, frame, context) {
       callbackContexts.push(context);
       acks.push({ binding, frame });
+      return options.onAck ? options.onAck(binding, frame, context) : undefined;
     },
     async onStatePairRecovery(binding, frame, context) {
       callbackContexts.push(context);

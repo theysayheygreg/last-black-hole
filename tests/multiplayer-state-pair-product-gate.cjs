@@ -10,7 +10,8 @@ const { execFileSync } = require("child_process");
 const { performance } = require("perf_hooks");
 const { WebSocket } = require("ws");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
-const { createClientDeltaReceiver, MIXED_CAPABILITY } = require("../scripts/client-delta-receiver.cjs");
+const { createClientDeltaReceiver, MIXED_CAPABILITY,
+  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY } = require("../scripts/client-delta-receiver.cjs");
 const { projectionHash } = require("../scripts/canonical-structural-delta.cjs");
 const { summarizeWindow } = require("../scripts/replication-accounting.cjs");
 const { WIRE_PROTOCOL_VERSION_V2, SIM_PROTOCOL_VERSION, SERVER_TO_CLIENT,
@@ -38,9 +39,11 @@ const PROFILE_CONTROL = STAGE_PROFILE && process.argv.includes("--profile-contro
 const MICRO_PROFILE = STAGE_PROFILE && process.argv.includes("--micro");
 const S6_BENCHMARK = process.argv.includes("--s6-benchmark");
 const S7_GATE = process.argv.includes("--s7");
+const S8_PROTOTYPE = process.argv.includes("--s8-prototype");
+const RESIDUAL_GATE = S7_GATE || S8_PROTOTYPE;
 const ADMISSION_MODE = process.argv.includes("--admission");
 const S6_PREPARED = !["0", "false"].includes(String(process.env.LBH_S6_PREPARED ?? "true").toLowerCase());
-const GATE = S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
+const GATE = S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
 const MIXED_GATE = GATE !== "s3";
 const COMPARE_S3 = GATE === "s4";
 const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
@@ -56,9 +59,9 @@ const PROFILE = S6_BENCHMARK ? `diagnostic-${S6_PREPARED ? "prepared" : "legacy"
   : process.argv.includes("--review") ? "review" : "canonical";
 const S6_POPULATIONS = String(process.env.LBH_S6_POPULATIONS || "1,4,8").split(",")
   .map((value) => Number(value)).filter((value) => [1, 4, 8].includes(value));
-const POPULATIONS = S6_BENCHMARK ? [...new Set(S6_POPULATIONS)]
+const POPULATIONS = S8_PROTOTYPE ? [1, 4, 8] : S6_BENCHMARK ? [...new Set(S6_POPULATIONS)]
   : MICRO_PROFILE || PROFILE === "review" ? [1, 8] : [1, 4, 8];
-const CHURN_POPULATIONS = S7_GATE ? [1, 8] : POPULATIONS;
+const CHURN_POPULATIONS = RESIDUAL_GATE ? [1, 8] : POPULATIONS;
 const NORMAL_WARMUP_MS = S6_BENCHMARK ? 5_000 : MICRO_PROFILE ? 5_000 : STAGE_PROFILE ? 10_000 : PROFILE === "review" ? 5_000 : 60_000;
 const NORMAL_WINDOW_MS = S6_BENCHMARK ? 15_000 : MICRO_PROFILE ? 15_000 : STAGE_PROFILE ? 30_000 : PROFILE === "review" ? 20_000 : 300_000;
 const CHURN_WARMUP_MS = PROFILE === "review" ? 5_000 : 20_000;
@@ -181,13 +184,15 @@ function hasMaterializedPublicEntity(client, category, sourceId) {
 
 async function openStatePairClient({ port, authority, label, reuseManifest = false, fault = {} }) {
   const requestedCapabilities = ["static-manifest-v1", "state-pair-v1",
-    ...(MIXED_GATE ? [MIXED_CAPABILITY] : [])];
+    ...(MIXED_GATE ? [MIXED_CAPABILITY] : []),
+    ...(S8_PROTOTYPE ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY] : [])];
   const issued = await request(port, "/multiplayer/ticket", { method: "POST", authority, body: {
     kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2],
     capabilities: requestedCapabilities,
   } });
   if (issued.status !== 200 || !issued.body.capabilities.includes("state-pair-v1")
-      || (MIXED_GATE && !issued.body.capabilities.includes(MIXED_CAPABILITY))) {
+      || (MIXED_GATE && !issued.body.capabilities.includes(MIXED_CAPABILITY))
+      || (S8_PROTOTYPE && !issued.body.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY))) {
     throw new Error(`${label} state-pair ticket failed: ${JSON.stringify(issued.body)}`);
   }
   const client = {
@@ -764,8 +769,10 @@ async function runScenario({ population, scenario, runDir }) {
       NODE_ENV: "test", LBH_SIM_WS_ENABLED: "true", LBH_SIM_WS_JSON_V2: "true",
       LBH_SIM_WS_STATE_PAIR_V1: "true", LBH_SIM_WS_REPLICATION_ACCOUNTING: "1",
       LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE ? "true" : "false",
+      LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: S8_PROTOTYPE ? "true" : "false",
+      LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS: RESIDUAL_GATE ? "true" : "false",
       LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK && !S6_PREPARED ? "false" : "true",
-      LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || S7_GATE ? "1" : "0",
+      LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || RESIDUAL_GATE ? "1" : "0",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
       LBH_SIM_WS_STAGE_PROFILE: STAGE_PROFILE && !PROFILE_CONTROL ? "1" : "0",
     } });
@@ -781,7 +788,7 @@ async function runScenario({ population, scenario, runDir }) {
     }
     const startHealth = (await request(port, "/health/compact")).body;
     const startAt = Date.now();
-    if (S7_GATE && !churn) {
+    if (RESIDUAL_GATE && !churn) {
       clientsRef.current[0].attributionCapture.startAt = startAt;
       clientsRef.current[0].attributionCapture.active = true;
     }
@@ -882,7 +889,7 @@ async function runScenario({ population, scenario, runDir }) {
       { port, memorySamples, churn: churnSchedule });
     const endAt = startAt + (churn ? CHURN_WINDOW_MS : NORMAL_WINDOW_MS);
     let residualAttribution = null;
-    if (S7_GATE && !churn) {
+    if (RESIDUAL_GATE && !churn) {
       const capture = clientsRef.current[0].attributionCapture;
       capture.active = false;
       residualAttribution = analyzeStatePairSample(capture.rawFrames,
@@ -923,7 +930,7 @@ async function runScenario({ population, scenario, runDir }) {
     const meanWorst = Math.max(...Object.values(perRecipientMean));
     const p95OneSecond = windows["1s"].allRecipientWindowsBytesPerSecond.p95;
     const p99OneSecond = windows["1s"].allRecipientWindowsBytesPerSecond.p99;
-    const targetCadenceNormalization = S7_GATE && !churn
+    const targetCadenceNormalization = RESIDUAL_GATE && !churn
       ? normalizeTrafficAtTargetCadence(accounting.events, { startAt, endAt, recipients }) : null;
     const clientSummary = summarizeClients(allClients);
     const shape = clientSummary.reduce((sum, client) => {
@@ -967,17 +974,17 @@ async function runScenario({ population, scenario, runDir }) {
     const admission = {
       steadyMeanAtOrBelow64KiB: churn ? null : meanWorst <= TARGET_BPS,
       steadyOneSecondP95AtOrBelow80KiB: churn ? null : p95OneSecond <= SENSITIVITY_BPS,
-      targetCadenceMeanAtOrBelow64KiB: churn || !S7_GATE ? null
+      targetCadenceMeanAtOrBelow64KiB: churn || !RESIDUAL_GATE ? null
         : targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond <= TARGET_BPS,
-      targetCadenceOneSecondP95AtOrBelow80KiB: churn || !S7_GATE ? null
+      targetCadenceOneSecondP95AtOrBelow80KiB: churn || !RESIDUAL_GATE ? null
         : targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS,
-      observedCadenceAtLeast90PercentOfConfigured: churn || !S7_GATE ? null
+      observedCadenceAtLeast90PercentOfConfigured: churn || !RESIDUAL_GATE ? null
         : observedPairsPerSecond >= MIN_HEALTHY_PUBLICATION_HZ,
       correctnessPassed: Object.values(correctness).every(Boolean),
       authorityWithinExistingClockBudget: endHealth.multiplayer.projection.accounting.costDistributions.simTickMs.p95
         <= (1000 / endHealth.session.tickHz)
         && endHealth.multiplayer.projection.accounting.costDistributions.projectionReplicationMs.p95
-        <= (1000 / (S7_GATE ? TARGET_PUBLICATION_HZ : endHealth.session.snapshotHz)),
+        <= (1000 / (RESIDUAL_GATE ? TARGET_PUBLICATION_HZ : endHealth.session.snapshotHz)),
       overloadStayedNormal: endHealth.session.overloadState === "NORMAL",
     };
     admission.passed = Object.values(admission).filter((value) => value !== null).every(Boolean);
@@ -1025,7 +1032,7 @@ async function runScenario({ population, scenario, runDir }) {
         bytes: clientSummary.reduce((sum, client) => sum + client.manifest.servedBytes, 0) },
     };
     const result = {
-      schemaVersion: S7_GATE ? 3 : MIXED_GATE ? 2 : 1,
+      schemaVersion: RESIDUAL_GATE ? 3 : MIXED_GATE ? 2 : 1,
       gate: GATE, scenario, population, seed: SEED, profile: PROFILE,
       topology: { matches: 1, dedicatedLogicalAuthorities: 1, simultaneousRecipients: population,
         note: "One authoritative sim instance for one match; not a concurrent-match fleet-capacity result." },
@@ -1084,6 +1091,8 @@ async function runScenario({ population, scenario, runDir }) {
         configuredPublicationHz: TARGET_PUBLICATION_HZ,
         minimumHealthyObservedPublicationHz: MIN_HEALTHY_PUBLICATION_HZ,
         observedPairsPerSecond },
+      fieldFreshness: S8_PROTOTYPE
+        ? endHealth.multiplayer.statePair.runtimePublicComponents.fieldFreshness : null,
       targetCadenceNormalization,
       residualAttribution,
       performance: { machineLocal: true,
@@ -1113,7 +1122,7 @@ async function runScenario({ population, scenario, runDir }) {
         "no hosted fleet, WSS, WAN, packet retransmission, compression, AOI, binary codec, or 24-96-client claim"],
     };
     if (COMPARE_S3) result.comparisonToS3 = compareScenarioToS3(result);
-    if (S7_GATE) {
+    if (RESIDUAL_GATE) {
       result.comparisonToS4 = compareScenarioToS4(result);
       result.comparisonToS6PreparedDiagnostic = compareScenarioToS6(result);
     }
@@ -1156,9 +1165,9 @@ function validateArtifact(directory) {
     churnPopulationsPresent: ["s5", "s6"].includes(aggregate.gate)
       || (aggregate.expectedChurnPopulations || [1, 4, 8]).every((population) => scenarioFiles.some((entry) =>
         entry.scenario === "churn" && entry.population === population)) || aggregate.profile === "review",
-    atomicKindAlignmentAbsent: !["s4", "s7"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    atomicKindAlignmentAbsent: !["s4", "s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.pairShape.productWindow.atomicKindAlignmentAbsent === true),
-    mixedPairsObserved: !["s4", "s7"].includes(aggregate.gate) || scenarioFiles
+    mixedPairsObserved: !["s4", "s7", "s8"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.pairShape.productWindow.publicDeltaOwnerKeyframe > 0),
     s3ComparisonsPresent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
@@ -1175,19 +1184,19 @@ function validateArtifact(directory) {
           && proof.beats === rawCalls && coreCalls === rawCalls * entry.population
           && proof.comparisons === rawCalls * (entry.population - 1);
       }),
-    s7PreparedProfilerBoundary: aggregate.gate !== "s7" || (aggregate.preparedProjectionsEnabled === true
+    s7PreparedProfilerBoundary: !["s7", "s8"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
       && aggregate.instrumentationEnabled === false && aggregate.eventLoopMonitorEnabled === true),
-    s7AckRejectAccountingConsistent: aggregate.gate !== "s7" || scenarioFiles.every((entry) => {
+    s7AckRejectAccountingConsistent: !["s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
       const rejected = entry.pairShape.ackBaseProof.ackRejected;
       return Number.isSafeInteger(rejected) && rejected >= 0
         && entry.correctness.ackRejectsExactlyZero === (rejected === 0);
     }),
-    s7CadenceNormalizationPresent: aggregate.gate !== "s7" || scenarioFiles
+    s7CadenceNormalizationPresent: !["s7", "s8"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.targetCadenceNormalization?.configuredPublicationHz === TARGET_PUBLICATION_HZ
         && Number.isFinite(entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond)
         && Number.isFinite(entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond)),
-    s7AttributionReconciledAndPrivate: aggregate.gate !== "s7" || scenarioFiles
+    s7AttributionReconciledAndPrivate: !["s7", "s8"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.residualAttribution?.exactLaneReconciliation?.passed === true
         && entry.residualAttribution?.publicDelta?.operationClassReconciliation?.passed === true
@@ -1195,19 +1204,24 @@ function validateArtifact(directory) {
         && entry.residualAttribution?.ownerKeyframe?.reconciliation?.passed === true
         && entry.residualAttribution?.privacy?.rawFramesRetained === false
         && entry.residualAttribution?.privacy?.ownerPrivateValuesEmitted === false),
-    s7ComparisonsPresent: aggregate.gate !== "s7" || scenarioFiles.every((entry) =>
+    s7ComparisonsPresent: !["s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.comparisonToS4?.compositeSha256 === S4_CANONICAL_SHA256
         && (entry.scenario !== "normal"
           || entry.comparisonToS6PreparedDiagnostic?.analysisSha256 === S6_ANALYSIS_SHA256)),
+    s8FieldFreshnessPresent: aggregate.gate !== "s8" || scenarioFiles.every((entry) =>
+      Object.values(entry.fieldFreshness?.maximumObservedAgePublishedBeats || {})
+        .length === 4
+      && Object.values(entry.fieldFreshness.maximumObservedAgePublishedBeats)
+        .every((value) => value === 0)),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
-    && (aggregate.gate === "s7" ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
+    && (["s7", "s8"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
     && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
     && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent
     && invariants.stageProfilePresent && invariants.publicCoreShareabilityProved
     && invariants.s7PreparedProfilerBoundary && invariants.s7AckRejectAccountingConsistent
     && invariants.s7CadenceNormalizationPresent && invariants.s7AttributionReconciledAndPrivate
-    && invariants.s7ComparisonsPresent;
+    && invariants.s7ComparisonsPresent && invariants.s8FieldFreshnessPresent;
   return { passed: methodPassed, invariants, checksum,
     aggregateVerdict: aggregate.verdict };
 }
@@ -1238,20 +1252,22 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
-    schemaVersion: S7_GATE ? 3 : 2,
+    schemaVersion: RESIDUAL_GATE ? 3 : 2,
     gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
     config: { populations: POPULATIONS, normalWarmupMs: NORMAL_WARMUP_MS, normalWindowMs: NORMAL_WINDOW_MS,
       churnWarmupMs: CHURN_WARMUP_MS, churnWindowMs: CHURN_WINDOW_MS, inputHz: INPUT_HZ,
       targetBytesPerSecondPerPlayer: TARGET_BPS, sensitivityBytesPerSecondPerPlayer: SENSITIVITY_BPS,
       targetPublicationHz: TARGET_PUBLICATION_HZ,
       minimumHealthyObservedPublicationHz: MIN_HEALTHY_PUBLICATION_HZ,
-      attributionSampleFramesPerPopulation: S7_GATE ? ATTRIBUTION_SAMPLE_FRAMES : 0,
+      attributionSampleFramesPerPopulation: RESIDUAL_GATE ? ATTRIBUTION_SAMPLE_FRAMES : 0,
       env: { LBH_SIM_WS_JSON_V2: true, LBH_SIM_WS_STATE_PAIR_V1: true,
         LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE,
+        LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: S8_PROTOTYPE,
+        LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS: RESIDUAL_GATE,
         LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK ? S6_PREPARED : true,
-        LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || S7_GATE,
+        LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || RESIDUAL_GATE,
         LBH_SIM_WS_REPLICATION_ACCOUNTING: true, LBH_REPLICATION_BASELINE_CAPTURE: true,
         LBH_SIM_WS_STAGE_PROFILE: STAGE_PROFILE && !PROFILE_CONTROL } },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
@@ -1260,9 +1276,9 @@ async function main() {
     claimBoundary: `Machine-local opt-in ${MIXED_GATE ? "state-pair-mixed-v1" : "state-pair-v1"} application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence.`,
     s3CanonicalEvidence: COMPARE_S3 ? { path: path.relative(ROOT, S3_CANONICAL_DIR),
       compositeSha256: S3_CANONICAL_SHA256 } : null,
-    s4CanonicalEvidence: S7_GATE ? { path: path.relative(ROOT, S4_CANONICAL_DIR),
+    s4CanonicalEvidence: RESIDUAL_GATE ? { path: path.relative(ROOT, S4_CANONICAL_DIR),
       compositeSha256: S4_CANONICAL_SHA256 } : null,
-    s6PreparedDiagnosticEvidence: S7_GATE ? { path: path.relative(ROOT, S6_ANALYSIS_PATH),
+    s6PreparedDiagnosticEvidence: RESIDUAL_GATE ? { path: path.relative(ROOT, S6_ANALYSIS_PATH),
       analysisSha256: S6_ANALYSIS_SHA256 } : null,
   });
   const results = [];
@@ -1306,12 +1322,12 @@ async function main() {
       })),
     };
   });
-  const aggregate = { schemaVersion: S7_GATE ? 3 : MIXED_GATE ? 2 : 1, gate: GATE,
+  const aggregate = { schemaVersion: RESIDUAL_GATE ? 3 : MIXED_GATE ? 2 : 1, gate: GATE,
     profile: PROFILE, microProfile: MICRO_PROFILE, instrumentationEnabled: STAGE_PROFILE && !PROFILE_CONTROL,
-    eventLoopMonitorEnabled: S6_BENCHMARK || S7_GATE,
+    eventLoopMonitorEnabled: S6_BENCHMARK || RESIDUAL_GATE,
     commit, seed: SEED, command, verdict, expectedPopulations: POPULATIONS,
     expectedChurnPopulations: !STAGE_PROFILE && !S6_BENCHMARK ? CHURN_POPULATIONS : [],
-    preparedProjectionsEnabled: S7_GATE ? true : S6_BENCHMARK ? S6_PREPARED : null,
+    preparedProjectionsEnabled: RESIDUAL_GATE ? true : S6_BENCHMARK ? S6_PREPARED : null,
     scenarios: results.map((entry) => ({ file: `${entry.scenario}-${entry.population}.json`,
       scenario: entry.scenario, population: entry.population,
       worstRecipientMeanDownlinkBytesPerSecond: entry.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond,
@@ -1336,9 +1352,15 @@ async function main() {
       reconnectReuseObserved: results.filter((entry) => entry.scenario === "churn")
         .every((entry) => entry.faults.some((fault) => fault.name === "reconnect" && fault.manifestReused === true)) },
     failureAnalysis,
-    residualDecisionTable: S7_GATE ? buildResidualDecisionTable(normalResults) : null,
+    residualDecisionTable: RESIDUAL_GATE ? buildResidualDecisionTable(normalResults) : null,
     recommendation: STAGE_PROFILE ? "Diagnostic only: use stage attribution and the A/B control before selecting one narrow CPU optimization."
-      : S7_GATE ? {
+      : S8_PROTOTYPE ? {
+        decision: "Do not admit runtime-public-components-v1 from this pre-gate. It preserves exact client-visible state and freshness, but component splitting alone does not close the S7 traffic gap.",
+        nextEvidence: "Prototype one bounded compact public-entity envelope/schema encoding while preserving the same ticket-bound rollback and exact reconstruction tests, then rerun this gate.",
+        optionalFollowup: "Only if the compact-envelope result still misses narrowly, measure one explicitly bounded presentation cadence class with a non-zero field-age contract.",
+        defer: "Do not enable the capability by default or add binary, compression, AOI, hosted WSS, WAN, or fleet claims from this local result.",
+      }
+      : RESIDUAL_GATE ? {
         first: "Use the privacy-safe residual table to prototype schema cleanup and explicit field cadence before selecting a codec or AOI change.",
         admission: "Do not admit from target-cadence normalization alone; require actual >=9 Hz cadence, NORMAL overload, exact application thresholds, and the normalized guard.",
         nextEvidence: "Prototype one bounded payload change, prove exact authority/client equivalence, then rerun this same canonical gate.",

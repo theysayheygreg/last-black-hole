@@ -228,6 +228,10 @@ function validateHello(frame) {
     if (frame.capabilities.includes("state-pair-mixed-v1") && !frame.capabilities.includes("state-pair-v1")) {
       fail("invalid-field", "state-pair-mixed-v1 requires state-pair-v1");
     }
+    if (frame.capabilities.includes("runtime-public-components-v1")
+        && !frame.capabilities.includes("state-pair-mixed-v1")) {
+      fail("invalid-field", "runtime-public-components-v1 requires state-pair-mixed-v1");
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
   }
@@ -263,6 +267,10 @@ function validateWelcome(frame) {
     if (!frame.capabilities.includes("static-manifest-v1")) fail("invalid-field", "v2 requires static-manifest-v1");
     if (frame.capabilities.includes("state-pair-mixed-v1") && !frame.capabilities.includes("state-pair-v1")) {
       fail("invalid-field", "state-pair-mixed-v1 requires state-pair-v1");
+    }
+    if (frame.capabilities.includes("runtime-public-components-v1")
+        && !frame.capabilities.includes("state-pair-mixed-v1")) {
+      fail("invalid-field", "runtime-public-components-v1 requires state-pair-mixed-v1");
     }
     if (frame.authorityIncarnation !== undefined) {
       if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");

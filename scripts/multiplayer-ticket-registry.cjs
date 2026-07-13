@@ -113,6 +113,10 @@ function createMultiplayerTicketRegistry({
             && !selected.capabilities.includes("state-pair-v1")) {
           fail("invalid-claim", "state-pair-mixed-v1 requires state-pair-v1");
         }
+        if (selected.capabilities.includes("runtime-public-components-v1")
+            && !selected.capabilities.includes("state-pair-mixed-v1")) {
+          fail("invalid-claim", "runtime-public-components-v1 requires state-pair-mixed-v1");
+        }
         selected.manifestSchema = identifier(claims.manifestSchema, "manifestSchema");
         selected.manifestHash = identifier(claims.manifestHash, "manifestHash");
         const wantsStatePair = selected.capabilities.includes("state-pair-v1");

@@ -144,6 +144,9 @@ async function run() {
       ...hello, capabilities: ["static-manifest-v1", "state-pair-mixed-v1"],
     }), "invalid-field");
     expectProtocolError(() => validateWireFrame({
+      ...hello, capabilities: ["static-manifest-v1", "state-pair-v1", "runtime-public-components-v1"],
+    }), "invalid-field");
+    expectProtocolError(() => validateWireFrame({
       type: "manifestAck", manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
       manifestBytes: welcome.manifestBytes, connectionEpoch: 1,
     }, { direction: SERVER_TO_CLIENT }), "invalid-direction");

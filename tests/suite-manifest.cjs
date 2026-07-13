@@ -138,6 +138,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "RuntimePublicComponents",
+    file: "runtime-public-components.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "RuntimeStatePairLoopback",
     file: "runtime-state-pair-loopback.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],

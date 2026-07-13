@@ -264,6 +264,54 @@ async function run() {
     assert.strictEqual(next.frame.public.kind, "keyframe", "stale ACK rejection must rebase rather than roll back");
   });
 
+  await runner.run("bounded ACK rejection diagnostics classify every coarse ordering relation", async () => {
+    const publisher = createAuthorityDeltaPublisher({ ackRejectDiagnostics: true, maxRecipients: 16 });
+    const id = (name) => identity({ sessionId: `session-${name}`, recipientId: `member-${name}` });
+    const publish = (name, beat) => publisher.publish(pairInputs(beat, id(name)));
+
+    const bindingFrame = publish("binding", 1).frame;
+    publisher.acknowledge(id("missing"), ackFor(bindingFrame, {
+      sessionId: "session-missing", recipientId: "member-missing",
+    }));
+
+    const future = publish("future", 1).frame;
+    publisher.acknowledge(id("future"), ackFor(future, { frameId: future.frameId + 1 }));
+
+    const pendingFrames = [];
+    for (let beat = 1; beat <= 9; beat += 1) pendingFrames.push(publish("pending", beat).frame);
+    publisher.acknowledge(id("pending"), ackFor(pendingFrames[0]));
+
+    const hashFrame = publish("hash", 1).frame;
+    publisher.acknowledge(id("hash"), ackFor(hashFrame, { publicHash: "sha256:wrong" }));
+
+    const duplicate = publish("duplicate", 1).frame;
+    assert(publisher.acknowledge(id("duplicate"), ackFor(duplicate)).accepted);
+    publisher.acknowledge(id("duplicate"), ackFor(duplicate));
+
+    const staleOne = publish("stale", 1).frame;
+    assert(publisher.acknowledge(id("stale"), ackFor(staleOne)).accepted);
+    const staleTwo = publish("stale", 2).frame;
+    assert(publisher.acknowledge(id("stale"), ackFor(staleTwo)).accepted);
+    publisher.acknowledge(id("stale"), ackFor(staleOne));
+
+    const recovery = publish("recovery", 1).frame;
+    publisher.rebase(id("recovery"));
+    publisher.acknowledge(id("recovery"), ackFor(recovery));
+
+    const unknown = publish("unknown", 1).frame;
+    publisher.acknowledge(id("unknown"), ackFor(unknown, { ackSchema: "unknown-schema" }));
+
+    const diagnostics = publisher.diagnostics().ackRejectDiagnostics;
+    assert.strictEqual(diagnostics.enabled, true);
+    assert.deepStrictEqual(Object.keys(diagnostics.byRelation).sort(),
+      ["binding", "duplicate", "future", "hash", "pending-missing", "recovery-race", "stale", "unknown"]);
+    assert.strictEqual(diagnostics.total, 8);
+    assert.strictEqual(diagnostics.byReason["unknown-frame"], 5);
+    assert(Object.keys(diagnostics.orderTransitions).length <= 64
+      && !JSON.stringify(diagnostics).includes("member-"),
+    "ACK diagnostic must remain bounded and identity-free");
+  });
+
   await runner.run("despawn and reincarnation preserve lifecycle semantics", async () => {
     const publisher = createAuthorityDeltaPublisher();
     const first = publisher.publish(pairInputs(1));
@@ -419,6 +467,68 @@ async function run() {
       assert(statePairGroup.conservationBalanced && statePairGroup.offeredFrames === 2
         && statePairGroup.acceptedFrames === 2 && statePairGroup.retransmittedFrames === 1,
       `explicit statePair retransmission must conserve its own offer and accepted copy: ${JSON.stringify(statePairGroup)}`);
+    } finally {
+      await harness.close();
+    }
+  });
+
+  await runner.run("WebSocket boundary aggregates recovery ordering and publisher ACK reject relations", async () => {
+    const manifest = { manifestSchema: "lbh-session-replication-manifest-v1",
+      manifestHash: "sha256:test", manifestBytes: 42 };
+    const harness = await createHarness({
+      ackRejectDiagnostics: true,
+      onAck(_binding, frame) {
+        if (frame.ackKind === "statePair") {
+          return { accepted: false, reason: "unknown-frame", diagnostic: { relation: "recovery-race" } };
+        }
+        return { accepted: true };
+      },
+      afterRedeem(result) {
+        result.welcome.wireVersion = WIRE_PROTOCOL_VERSION_V2;
+        result.welcome.capabilities = ["static-manifest-v1", "state-pair-v1"];
+        result.welcome.manifestSchema = manifest.manifestSchema;
+        result.welcome.manifestHash = manifest.manifestHash;
+        result.welcome.manifestBytes = manifest.manifestBytes;
+        result.welcome.fetchPath = "/multiplayer/manifest/test";
+        result.binding.wireVersion = WIRE_PROTOCOL_VERSION_V2;
+        result.binding.authorityIncarnation = 1;
+        result.binding.manifestHash = manifest.manifestHash;
+        result.binding.manifestSchema = manifest.manifestSchema;
+      },
+    });
+    try {
+      const ticket = harness.issueTicket("ack-diagnostic");
+      const client = await openClient(`${harness.baseUrl}/stream`);
+      client.ws.send(JSON.stringify({
+        type: "hello", wireVersion: WIRE_PROTOCOL_VERSION_V2, simProtocolVersion: SIM_PROTOCOL_VERSION,
+        admissionTicket: ticket, capabilities: ["static-manifest-v1", "state-pair-v1"],
+        manifestSchema: manifest.manifestSchema, manifestHash: manifest.manifestHash,
+      }));
+      await waitFor(() => nextFrame(client.messages, "welcome"), { label: "diagnostic welcome" });
+      const binding = harness.bindings.find((entry) => entry.name === "ack-diagnostic");
+      const id = identity({ matchId: "run-a", sessionId: "connection-ack-diagnostic",
+        recipientId: "membership-ack-diagnostic" });
+      const pair = createAuthorityDeltaPublisher().publish(pairInputs(1, id, {
+        public: { manifestHash: manifest.manifestHash }, owner: { manifestHash: manifest.manifestHash },
+      }));
+      assert((await harness.adapter.publishStatePair(binding, pair.frame)).accepted);
+      await waitFor(() => nextFrame(client.messages, "statePair"), { label: "diagnostic state pair" });
+      client.ws.send(JSON.stringify({
+        type: "statePairRecovery", recoverySchema: "lbh-client-state-pair-recovery-v1", reason: "frame-gap",
+        matchId: "run-a", sessionId: "connection-ack-diagnostic", authorityIncarnation: 1,
+        recipientId: "membership-ack-diagnostic", recipientIncarnation: 1,
+        manifestSchema: manifest.manifestSchema, manifestHash: manifest.manifestHash,
+        lastAcceptedFrameId: 0, lastAcceptedStatePairId: null, lastAcceptedSnapshotId: null,
+      }));
+      await waitFor(() => harness.statePairRecoveries.length === 1, { label: "diagnostic recovery" });
+      client.ws.send(encodeWireFrame(ackFor(pair.frame), { direction: CLIENT_TO_SERVER }));
+      await waitFor(() => client.close.code !== null, { label: "diagnostic ACK reject close" });
+      const diagnostics = harness.adapter.diagnostics().statePair.ackRejectDiagnostics;
+      assert.deepStrictEqual({ total: diagnostics.total, reason: diagnostics.byReason["unknown-frame"],
+        relation: diagnostics.byRelation["recovery-race"], recoveryAccepted: diagnostics.recoveryAccepted },
+      { total: 1, reason: 1, relation: 1, recoveryAccepted: 1 });
+      assert(!JSON.stringify(diagnostics).includes("membership-ack-diagnostic"),
+        "WS diagnostic leaked a raw binding identity");
     } finally {
       await harness.close();
     }

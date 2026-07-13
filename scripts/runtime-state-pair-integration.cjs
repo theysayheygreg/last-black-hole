@@ -9,6 +9,12 @@ const {
 } = require("./canonical-structural-delta.cjs");
 const { createAuthorityDeltaPublisher } = require("./authority-delta-publisher.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
+const {
+  CAPABILITY: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+  COMPONENT_SCHEMA: RUNTIME_PUBLIC_COMPONENT_SCHEMA,
+  assertPublicFactsClassified,
+  splitRuntimePublicEntity,
+} = require("./runtime-public-schema.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -95,11 +101,15 @@ function sourceId(entity, fallback) {
   return requiredString(String(value || ""), "sourceId");
 }
 
-function publicComponents(entity, index) {
-  return { runtimePublic: clone(entity), runtimeOrder: { index } };
+function publicComponents(category, entity, index, splitRuntimePublic) {
+  return {
+    ...(splitRuntimePublic ? splitRuntimePublicEntity(category, entity) : { runtimePublic: clone(entity) }),
+    runtimeOrder: { index },
+  };
 }
 
-function publicFacts(state) {
+function publicFacts(state, splitRuntimePublic = false) {
+  if (splitRuntimePublic) assertPublicFactsClassified(state);
   const facts = clone(state);
   delete facts.players;
   delete facts.inhibitor;
@@ -111,7 +121,7 @@ function publicFacts(state) {
   return facts;
 }
 
-function collectPublicEntities(publicFrame) {
+function collectPublicEntities(publicFrame, splitRuntimePublic = false) {
   const state = publicFrame?.state;
   if (!state || typeof state !== "object" || Array.isArray(state)) fail("invalid-source", "public state is required");
   const entities = [];
@@ -121,7 +131,8 @@ function collectPublicEntities(publicFrame) {
       const value = values[index];
       if (!value || typeof value !== "object" || Array.isArray(value)) fail("invalid-source", `${category} entry is invalid`);
       entities.push({ category, sourceId: sourceId(value, `${category}-${index}`),
-        explicitIncarnation: value.incarnation, components: publicComponents(value, index) });
+        explicitIncarnation: value.incarnation,
+        components: publicComponents(category, value, index, splitRuntimePublic) });
       if (entities.length > MAX_SOURCE_ENTITIES) fail("projection-too-large", "public entity source exceeds cap");
     }
   };
@@ -133,7 +144,7 @@ function collectPublicEntities(publicFrame) {
   }
   if (state.inhibitor && typeof state.inhibitor === "object") {
     entities.push({ category: "inhibitor", sourceId: "inhibitor", explicitIncarnation: state.inhibitor.incarnation,
-      components: publicComponents(state.inhibitor, 0) });
+      components: publicComponents("inhibitor", state.inhibitor, 0, splitRuntimePublic) });
   }
   return entities;
 }
@@ -211,7 +222,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   const publisher = createAuthorityDeltaPublisher({ ...publisherOptions, stageProfiler });
   const maxAdmissions = Number.isSafeInteger(publisherOptions.maxRecipients)
     ? publisherOptions.maxRecipients : 128;
-  const publicTracker = createRevisionTracker();
+  // Legacy and split recipients may coexist during rollback. Component-name
+  // histories cannot share one revision tracker without cross-schema churn.
+  const publicTrackers = Object.freeze({ legacy: createRevisionTracker(), split: createRevisionTracker() });
   const ownerTrackers = new Map();
   const admissions = new Map();
   let shareabilityGeneration = stageProfiler?.generation?.() || 0;
@@ -264,6 +277,11 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         && !ticketClaims.capabilities.includes(CAPABILITY)) {
       fail("capability-not-admitted", "mixed state-pair capability requires state-pair-v1");
     }
+    if (ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+        && (!ticketClaims.capabilities.includes(CAPABILITY)
+          || !ticketClaims.capabilities.includes(MIXED_CAPABILITY))) {
+      fail("capability-not-admitted", "runtime public components require mixed state-pair-v1");
+    }
     const admissionKey = key(identity);
     if (!admissions.has(admissionKey) && admissions.size >= maxAdmissions) fail("recipient-cap", "state-pair admission cap reached");
     admissions.set(admissionKey, Object.freeze({ identity, capabilities: Object.freeze([...ticketClaims.capabilities]) }));
@@ -298,6 +316,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       fail("projection-too-large", "authoritative source exceeds bounded projection input");
     }
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
+    const admission = admissions.get(key(identity));
+    const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
     const shared = {
       schema: VIEW_SCHEMA, runId: fixedMatchId, authorityEpoch: fixedAuthorityIncarnation,
       connectionEpoch: identity.recipientIncarnation, ballparkEpoch: fixedBallparkEpoch,
@@ -332,8 +352,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       return Object.freeze({ view: preparedProjectionView(prepared, preparedContext), prepared });
     };
     const buildPublicCore = () => ({
-      world: { publicFacts: publicFacts(publicFrame.state) },
-      entities: publicTracker.project(collectPublicEntities(publicFrame)),
+      world: { publicFacts: publicFacts(publicFrame.state, splitRuntimePublic) },
+      entities: publicTrackers[splitRuntimePublic ? "split" : "legacy"]
+        .project(collectPublicEntities(publicFrame, splitRuntimePublic)),
     });
     const publicCore = stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
@@ -372,7 +393,6 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         }), buildOwnerView)
       : buildOwnerView();
     const publicProjection = publicView;
-    const admission = admissions.get(key(identity));
     return Object.freeze({ identity, publicView: publicProjection.view, ownerView: ownerProjection.view,
       publicPrepared: publicProjection.prepared, ownerPrepared: ownerProjection.prepared,
       allowMixed: admission.capabilities.includes(MIXED_CAPABILITY) });
@@ -413,6 +433,22 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
           "owner hash", "owner delta", "pair choice", "pair envelope", "adapter queue", "socket send"]),
       }) } : {}),
       preparedProjections: Object.freeze({ enabled: preparedProjectionsEnabled, ...preparedCounters }),
+      runtimePublicComponents: Object.freeze({
+        capability: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+        schema: RUNTIME_PUBLIC_COMPONENT_SCHEMA,
+        enabledAdmissions: [...admissions.values()].filter((entry) =>
+          entry.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)).length,
+        cadence: Object.freeze({ motionHz: 10, otherGroups: "on-change", lowerCadenceTimers: 0 }),
+        fieldFreshness: Object.freeze({
+          measurement: "Every group is projected from the same authoritative snapshot; unchanged groups retain their prior revision.",
+          maximumObservedAgePublishedBeats: Object.freeze({
+            runtimeMotion: 0,
+            runtimeGameplay: 0,
+            runtimeIdentity: 0,
+            runtimePresentation: 0,
+          }),
+        }),
+      }),
       publisher: publisher.diagnostics() });
   }
 
@@ -422,6 +458,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
 module.exports = {
   CAPABILITY,
   MIXED_CAPABILITY,
+  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
+  RUNTIME_PUBLIC_COMPONENT_SCHEMA,
   SOURCE_FIELD_CLASSIFICATION,
   VIEW_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,

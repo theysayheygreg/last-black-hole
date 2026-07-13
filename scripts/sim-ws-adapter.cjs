@@ -36,6 +36,10 @@ const MAX_PENDING_REPLAY_BYTES = 64 * 1024;
 const ACTION_RELIABLE_MESSAGE_RESERVE = 16;
 const ACTION_RELIABLE_BYTE_RESERVE = 32 * 1024;
 const STATE_PAIR_RECOVERY_COOLDOWN_MS = 1000;
+const ACK_REJECT_REASON_CODES = new Set(["unknown-recipient", "identity-mismatch", "invalid-frame-id",
+  "unknown-frame", "invalid-ack-schema", "lineage-mismatch", "unexpected-state-pair-ack", "unknown"]);
+const ACK_REJECT_RELATIONS = new Set(["duplicate", "stale", "future", "unknown", "pending-missing", "hash",
+  "binding", "recovery-race"]);
 
 function replicationStateFrameKey(frame) {
   if (frame?.type === "statePair" && Number.isSafeInteger(frame.frameId)) return `statePair:${frame.frameId}`;
@@ -97,6 +101,34 @@ function createSimWebSocketAdapter(options = {}) {
     duplicatePendingEvents: 0,
   };
   const statePairStats = { accepted: 0, rejected: 0, lastRejectReason: null };
+  const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
+  const ackRejectDiagnostics = {
+    total: 0,
+    byReason: new Map(),
+    byRelation: new Map(),
+    orderTransitions: new Map(),
+    lastRelation: null,
+    recoveryRequests: 0,
+    recoveryAccepted: 0,
+    recoveryRejected: 0,
+    recoveryCooldownDrops: 0,
+  };
+
+  function observeAckReject(reason, relation = "unknown") {
+    if (!ackRejectDiagnosticsEnabled) return;
+    const boundedReason = ACK_REJECT_REASON_CODES.has(reason) ? reason : "unknown";
+    const boundedRelation = ACK_REJECT_RELATIONS.has(relation) ? relation : "unknown";
+    ackRejectDiagnostics.total += 1;
+    ackRejectDiagnostics.byReason.set(boundedReason, (ackRejectDiagnostics.byReason.get(boundedReason) || 0) + 1);
+    ackRejectDiagnostics.byRelation.set(boundedRelation,
+      (ackRejectDiagnostics.byRelation.get(boundedRelation) || 0) + 1);
+    if (ackRejectDiagnostics.lastRelation !== null) {
+      const transition = `${ackRejectDiagnostics.lastRelation}->${boundedRelation}`;
+      ackRejectDiagnostics.orderTransitions.set(transition,
+        (ackRejectDiagnostics.orderTransitions.get(transition) || 0) + 1);
+    }
+    ackRejectDiagnostics.lastRelation = boundedRelation;
+  }
   const pressureMetricNames = Object.freeze([
     "wsBufferedBytes",
     "queuedBytes",
@@ -1123,6 +1155,7 @@ function createSimWebSocketAdapter(options = {}) {
       return;
     }
     if (frame.type === "statePairRecovery") {
+      if (ackRejectDiagnosticsEnabled) ackRejectDiagnostics.recoveryRequests += 1;
       const validRecovery = state.statePairMode && state.capabilities?.includes("state-pair-v1")
         && frame.matchId === state.identity.runId && frame.sessionId === state.identity.connectionId
         && frame.recipientId === state.identity.membershipId
@@ -1131,6 +1164,7 @@ function createSimWebSocketAdapter(options = {}) {
         && frame.authorityIncarnation === state.binding.authorityIncarnation
         && frame.manifestSchema === state.manifestSchema && frame.manifestHash === state.manifestHash;
       if (!validRecovery) {
+        if (ackRejectDiagnosticsEnabled) ackRejectDiagnostics.recoveryRejected += 1;
         throw new WireProtocolError("unexpected-state-pair-recovery", "statePair recovery is not valid for this binding", 4401);
       }
       if (!(await isBindingCurrent(state, "state-pair-recovery"))) {
@@ -1139,9 +1173,16 @@ function createSimWebSocketAdapter(options = {}) {
       }
       const recoveryAt = now();
       if (Number.isFinite(state.lastStatePairRecoveryAt)
-        && recoveryAt - state.lastStatePairRecoveryAt < STATE_PAIR_RECOVERY_COOLDOWN_MS) return;
+        && recoveryAt - state.lastStatePairRecoveryAt < STATE_PAIR_RECOVERY_COOLDOWN_MS) {
+        if (ackRejectDiagnosticsEnabled) ackRejectDiagnostics.recoveryCooldownDrops += 1;
+        return;
+      }
       const accepted = await onStatePairRecovery(state.binding, frame, callbackContext(state, "state-pair-recovery"));
-      if (accepted === false) throw new WireProtocolError("state-pair-recovery-rejected", "statePair recovery was rejected", 4401);
+      if (accepted === false) {
+        if (ackRejectDiagnosticsEnabled) ackRejectDiagnostics.recoveryRejected += 1;
+        throw new WireProtocolError("state-pair-recovery-rejected", "statePair recovery was rejected", 4401);
+      }
+      if (ackRejectDiagnosticsEnabled) ackRejectDiagnostics.recoveryAccepted += 1;
       if (!stateIsLive(state, expectedGeneration)) return;
       state.lastStatePairRecoveryAt = recoveryAt;
       resetOutbound(state);
@@ -1158,6 +1199,7 @@ function createSimWebSocketAdapter(options = {}) {
           && Number.isSafeInteger(state.binding?.authorityIncarnation)
           && frame.authorityIncarnation === state.binding.authorityIncarnation;
         if (!validStatePairAck) {
+          observeAckReject("unexpected-state-pair-ack", "binding");
           throw new WireProtocolError("unexpected-state-pair-ack", "statePair ACK is not valid for this binding", 4401);
         }
       }
@@ -1182,7 +1224,11 @@ function createSimWebSocketAdapter(options = {}) {
       }
       samplePressure(state);
       if (!stateIsLive(state, expectedGeneration)) return;
-      await onAck(state.binding, frame, callbackContext(state, "ack"));
+      const ackResult = await onAck(state.binding, frame, callbackContext(state, "ack"));
+      if (frame.ackKind === "statePair" && ackResult?.accepted === false) {
+        observeAckReject(ackResult.reason, ackResult.diagnostic?.relation);
+        throw new WireProtocolError("state-pair-ack-rejected", "statePair ACK was rejected", 4401);
+      }
       if (!stateIsLive(state, expectedGeneration)) return;
       if (frame.ackKind === "event" || frame.ackKind === "baseline") {
         const eventSeq = frame.eventSeq;
@@ -1848,7 +1894,22 @@ function createSimWebSocketAdapter(options = {}) {
         ...eventReplayStats,
       }),
       statePair: Object.freeze({ ...statePairStats,
-        modeConnections: [...connections].filter((state) => state.statePairMode).length }),
+        modeConnections: [...connections].filter((state) => state.statePairMode).length,
+        ackRejectDiagnostics: ackRejectDiagnosticsEnabled
+          ? Object.freeze({
+              enabled: true,
+              total: ackRejectDiagnostics.total,
+              byReason: Object.freeze(Object.fromEntries([...ackRejectDiagnostics.byReason].sort())),
+              byRelation: Object.freeze(Object.fromEntries([...ackRejectDiagnostics.byRelation].sort())),
+              orderTransitions: Object.freeze(Object.fromEntries([...ackRejectDiagnostics.orderTransitions].sort())),
+              recoveryRequests: ackRejectDiagnostics.recoveryRequests,
+              recoveryAccepted: ackRejectDiagnostics.recoveryAccepted,
+              recoveryRejected: ackRejectDiagnostics.recoveryRejected,
+              recoveryCooldownDrops: ackRejectDiagnostics.recoveryCooldownDrops,
+              boundedReasonCodes: ACK_REJECT_REASON_CODES.size,
+              boundedRelations: ACK_REJECT_RELATIONS.size,
+            })
+          : Object.freeze({ enabled: false }) }),
       ...(stageProfiler ? { authorityStageProfile: stageProfiler.snapshot() } : {}),
       ...(replicationAccounting && includeReplication
         ? { replication: replicationAccounting.snapshot() }

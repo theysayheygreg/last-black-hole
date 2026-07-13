@@ -36,7 +36,7 @@ const NESTED_STATIC_KEY_PATTERN = /^(manifest|staticManifest|mapBounds|staticAnc
 const VIEW_KEYS = new Set(["schema", "lane", "runId", "authorityEpoch", "connectionEpoch", "ballparkEpoch", "manifestHash", "statePairId", "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode", "world", "entities"]);
 const DELTA_KEYS = new Set(["schema", "lane", "runId", "authorityEpoch", "connectionEpoch", "ballparkEpoch", "manifestHash", "statePairId", "baseSnapshotId", "snapshotId", "baseHash", "resultHash", "rootOps", "creates", "updates", "despawns"]);
 const ROOT_MUTABLE_KEYS = new Set(["statePairId", "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode", "world"]);
-const PUBLIC_COMPONENT_SCHEMA = new Set(["transform", "motion", "appearance", "lifecycle", "publicState", "runtimePublic", "runtimeOrder", "lootPublic", "playerPublic", "worldEntity", "signalPublic", "statusPublic", "portalPublic", "fieldPublic", "inhibitorPublic", "scavengerPublic", "faunaPublic", "sentryPublic"]);
+const PUBLIC_COMPONENT_SCHEMA = new Set(["transform", "motion", "appearance", "lifecycle", "publicState", "runtimePublic", "runtimeMotion", "runtimeGameplay", "runtimeIdentity", "runtimePresentation", "runtimeOrder", "lootPublic", "playerPublic", "worldEntity", "signalPublic", "statusPublic", "portalPublic", "fieldPublic", "inhibitorPublic", "scavengerPublic", "faunaPublic", "sentryPublic"]);
 const OWNER_COMPONENT_SCHEMA = new Set(["inventory", "equipment", "consumables", "deltaV", "loadout", "ownerState", "cooldowns", "signal", "portalConfirmation", "transient"]);
 const PUBLIC_COMPONENT_VALUE_KEYS = new Set(["x", "y", "z", "wx", "wy", "vx", "vy", "vz", "heading", "rotation", "radius", "scale", "kind", "type", "variant", "color", "visible", "active", "state", "reason", "hull", "status", "tier", "valueBand", "claimed", "signalBand", "id", "sourceId"]);
 const PUBLIC_WORLD_KEYS = new Set(["toroidalBounds", "currents", "phase", "field", "overload", "global", "publicFacts"]);
@@ -227,7 +227,9 @@ function normalizeEntity(entity, lane, index) {
     if (!componentSchema.has(name)) fail("unknown-component-schema", `${path}.components.${name} is not declared for ${lane}`);
     components[name] = normalizeComponent(name, entity.components[name], `${path}.components`);
     if (lane === "public") {
-      if (name === "runtimePublic") scanRuntimePublicPrivacy(components[name].value, `${path}.components.${name}.value`, entity.category);
+      if (["runtimePublic", "runtimeMotion", "runtimeGameplay", "runtimeIdentity", "runtimePresentation"].includes(name)) {
+        scanRuntimePublicPrivacy(components[name].value, `${path}.components.${name}.value`, entity.category);
+      }
       else if (name === "runtimeOrder") {
         const order = components[name].value;
         if (!isPlainObject(order) || Object.keys(order).length !== 1
@@ -243,7 +245,9 @@ function normalizeEntity(entity, lane, index) {
   scanStaticRepeats(normalized, path);
   if (lane === "public") {
     for (const [name, component] of Object.entries(normalized.components)) {
-      if (name === "runtimePublic") scanRuntimePublicPrivacy(component.value, `${path}.components.${name}.value`, entity.category);
+      if (["runtimePublic", "runtimeMotion", "runtimeGameplay", "runtimeIdentity", "runtimePresentation"].includes(name)) {
+        scanRuntimePublicPrivacy(component.value, `${path}.components.${name}.value`, entity.category);
+      }
       else scanPublicPrivacy(component, `${path}.components.${name}`);
     }
   }

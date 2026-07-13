@@ -17,6 +17,10 @@ const ACK_SCHEMA = "lbh-authority-state-pair-ack-v1";
 const MIXED_PAIR_SCHEMA = "lbh-authority-state-pair-mixed-v1";
 const MIXED_ACK_SCHEMA = "lbh-authority-state-pair-mixed-ack-v1";
 const MAX_WIRE_PAIR_BYTES = 256 * 1024;
+const ACK_REJECT_REASON_CODES = new Set(["unknown-recipient", "identity-mismatch", "invalid-frame-id",
+  "unknown-frame", "invalid-ack-schema", "lineage-mismatch", "unexpected-state-pair-ack", "unknown"]);
+const ACK_REJECT_RELATIONS = new Set(["duplicate", "stale", "future", "unknown", "pending-missing", "hash",
+  "binding", "recovery-race"]);
 const DEFAULTS = Object.freeze({
   maxRecipients: 128,
   maxPendingPairsPerRecipient: 8,
@@ -187,6 +191,7 @@ function pairProjectionKind(publicKind, ownerKind) {
 function createAuthorityDeltaPublisher(options = {}) {
   const stageProfiler = options.stageProfiler || null;
   const preparedProjectionsEnabled = options.preparedProjections !== false;
+  const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
   const limits = Object.freeze({
     maxRecipients: positiveInteger(options.maxRecipients, DEFAULTS.maxRecipients, "maxRecipients"),
     maxPendingPairsPerRecipient: positiveInteger(options.maxPendingPairsPerRecipient,
@@ -214,6 +219,47 @@ function createAuthorityDeltaPublisher(options = {}) {
     canonicalizations: 0, hashes: 0, diffs: 0, preparations: 0,
     preparedHashHits: 0, preparedDiffs: 0, suppliedPreparedHits: 0,
   };
+  const ackRejectDiagnostics = {
+    total: 0,
+    byReason: new Map(),
+    byRelation: new Map(),
+    orderTransitions: new Map(),
+    lastRelation: null,
+  };
+
+  function classifyAckReject(reason, state, ack) {
+    if (reason === "unknown-recipient" || reason === "identity-mismatch") return "binding";
+    if (reason === "invalid-ack-schema" || reason === "invalid-frame-id") return "unknown";
+    if (reason === "lineage-mismatch") {
+      const record = state && Number.isSafeInteger(ack?.frameId) ? state.pending.get(ack.frameId) : null;
+      if (record && (ack.publicHash !== record.public.hash || ack.ownerHash !== record.owner.hash)) return "hash";
+      return "unknown";
+    }
+    if (!state || !Number.isSafeInteger(ack?.frameId)) return "unknown";
+    if (state.acked && ack.frameId === state.acked.frameId) return "duplicate";
+    if (state.acked && ack.frameId < state.acked.frameId) return "stale";
+    if (ack.frameId >= state.nextFrameId) return "future";
+    if (state.forceKeyframe && /recovery|rebase|lineage-changed/.test(String(state.forceReason || ""))) {
+      return "recovery-race";
+    }
+    return "pending-missing";
+  }
+
+  function observeAckReject(reason, relation) {
+    if (!ackRejectDiagnosticsEnabled) return;
+    const boundedReason = ACK_REJECT_REASON_CODES.has(reason) ? reason : "unknown";
+    const boundedRelation = ACK_REJECT_RELATIONS.has(relation) ? relation : "unknown";
+    ackRejectDiagnostics.total += 1;
+    ackRejectDiagnostics.byReason.set(boundedReason, (ackRejectDiagnostics.byReason.get(boundedReason) || 0) + 1);
+    ackRejectDiagnostics.byRelation.set(boundedRelation,
+      (ackRejectDiagnostics.byRelation.get(boundedRelation) || 0) + 1);
+    if (ackRejectDiagnostics.lastRelation !== null) {
+      const transition = `${ackRejectDiagnostics.lastRelation}->${boundedRelation}`;
+      ackRejectDiagnostics.orderTransitions.set(transition,
+        (ackRejectDiagnostics.orderTransitions.get(transition) || 0) + 1);
+    }
+    ackRejectDiagnostics.lastRelation = boundedRelation;
+  }
 
   function preparationContext(identity, view, lane) {
     return Object.freeze({
@@ -452,11 +498,14 @@ function createAuthorityDeltaPublisher(options = {}) {
     const state = stateFor(identity, false);
     const reject = (reason) => {
       counters.ackRejected += 1;
+      const relation = classifyAckReject(reason, state, ack);
+      observeAckReject(reason, relation);
       if (state) {
         state.forceKeyframe = true;
         state.forceReason = `ack-rejected:${reason}`;
       }
-      return Object.freeze({ accepted: false, reason });
+      return Object.freeze({ accepted: false, reason,
+        ...(ackRejectDiagnosticsEnabled ? { diagnostic: Object.freeze({ relation }) } : {}) });
     };
     if (!state || !ack || typeof ack !== "object" || Array.isArray(ack)) return reject("unknown-recipient");
     if (!sameIdentity(identity, ack)) return reject("identity-mismatch");
@@ -551,6 +600,17 @@ function createAuthorityDeltaPublisher(options = {}) {
       recipientsWithAckedBase, maxAckedFrameId,
       keyframeReasons: Object.freeze(Object.fromEntries([...keyframeReasons].sort(([a], [b]) => a.localeCompare(b)))),
       candidateAverageBytes: candidateAverages, limits,
+      ackRejectDiagnostics: ackRejectDiagnosticsEnabled
+        ? Object.freeze({
+            enabled: true,
+            total: ackRejectDiagnostics.total,
+            byReason: Object.freeze(Object.fromEntries([...ackRejectDiagnostics.byReason].sort())),
+            byRelation: Object.freeze(Object.fromEntries([...ackRejectDiagnostics.byRelation].sort())),
+            orderTransitions: Object.freeze(Object.fromEntries([...ackRejectDiagnostics.orderTransitions].sort())),
+            boundedReasonCodes: 8,
+            boundedRelations: 8,
+          })
+        : Object.freeze({ enabled: false }),
       preparedProjections: Object.freeze({ enabled: preparedProjectionsEnabled, ...operationCounters,
         pendingReferences: preparedPendingReferences, ackedReferences: preparedAckedReferences,
         maxPendingReferences: limits.maxRecipients * limits.maxPendingPairsPerRecipient * 2,

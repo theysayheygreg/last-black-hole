@@ -17,6 +17,7 @@ const { createHarness, openClient, waitFor, nextFrame } = require("./multiplayer
 const {
   MODES,
   MIXED_CAPABILITY,
+  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   RECOVERY_SCHEMA,
   selectClientReplicationMode,
   createClientDeltaReceiver,
@@ -486,6 +487,11 @@ async function run() {
       wireVersion: "lbh-multiplayer-json-v2",
       capabilities: ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY],
     }), MODES.STATE_PAIR_MIXED);
+    assert.strictEqual(selectClientReplicationMode({
+      wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY,
+        RUNTIME_PUBLIC_COMPONENTS_CAPABILITY],
+    }), MODES.STATE_PAIR_RUNTIME_COMPONENTS);
   });
 
   await runner.run("representative apply cost and retained memory diagnostics stay bounded", async () => {
