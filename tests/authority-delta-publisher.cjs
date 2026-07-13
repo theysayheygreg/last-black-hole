@@ -319,6 +319,8 @@ async function run() {
     assert.strictEqual(diagnostics.byReason["unknown-frame"], 1);
     assert.strictEqual(publisher.diagnostics().ackDuplicates, 1);
     assert.strictEqual(publisher.diagnostics().ackIgnoredStale, 3);
+    assert.strictEqual(publisher.diagnostics().ackRecipientsWithBaseAdvance, 2,
+      "duplicate, stale, retired, and rejected ACKs cannot inflate distinct base convergence");
     assert(publisher.diagnostics().retiredAckProofs
       <= publisher.diagnostics().limits.maxRetiredAckProofsPerRecipient * publisher.diagnostics().recipients);
     assert(Object.keys(diagnostics.orderTransitions).length <= 64

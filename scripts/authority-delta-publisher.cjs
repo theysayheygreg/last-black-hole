@@ -213,7 +213,8 @@ function createAuthorityDeltaPublisher(options = {}) {
   }
   const recipients = new Map();
   const counters = { keyframes: 0, deltas: 0, mixed: 0, retransmits: 0, ackAccepted: 0, ackRejected: 0,
-    ackBaseAdvances: 0, ackDuplicates: 0, ackIgnoredStale: 0, forcedRebases: 0 };
+    ackBaseAdvances: 0, ackRecipientsWithBaseAdvance: 0,
+    ackDuplicates: 0, ackIgnoredStale: 0, forcedRebases: 0 };
   const keyframeReasons = new Map();
   const candidates = {
     comparisons: 0,
@@ -325,6 +326,7 @@ function createAuthorityDeltaPublisher(options = {}) {
     if (!state && create) {
       if (recipients.size >= limits.maxRecipients) fail("recipient-cap", "authority recipient cap reached");
       state = { identity, nextFrameId: 1, acked: null, pending: new Map(), retiredAcks: new Map(), retainedBytes: 0,
+        hasBaseAdvanced: false,
         forceKeyframe: true, forceReason: "initial-no-acked-base" };
       recipients.set(key, state);
     }
@@ -614,6 +616,10 @@ function createAuthorityDeltaPublisher(options = {}) {
     state.forceReason = null;
     counters.ackAccepted += 1;
     counters.ackBaseAdvances += 1;
+    if (!state.hasBaseAdvanced) {
+      state.hasBaseAdvanced = true;
+      counters.ackRecipientsWithBaseAdvance += 1;
+    }
     return Object.freeze({ accepted: true, frameId: ack.frameId });
   }
 

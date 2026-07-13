@@ -1070,7 +1070,7 @@ async function runScenario({ population, scenario, runDir }) {
         client.legacyReconstructionVerified === client.acceptedPairs),
       noClientErrors: clientSummary.every((client) => client.error === null),
       publisherDrained: publisher.recipients === 0 && publisher.pendingPairs === 0 && publisher.retainedBytes === 0,
-      statePairAcksConverged: publisher.ackBaseAdvances >= clientSummary.length,
+      statePairAcksConverged: publisher.ackRecipientsWithBaseAdvance >= clientSummary.length,
       ackRejectsExactlyZero: publisher.ackRejected === 0,
       receiverBasesStayedApplicable: receiverBaseMismatchCount === 0,
       receiverRecoveryRequestsExactlyExpected: churn || receiverRecoveryRequestCount === 0,
@@ -1143,6 +1143,7 @@ async function runScenario({ population, scenario, runDir }) {
         && (churn || admission.receiverCadenceTracksAuthorityWithinTolerance === true);
     admission.productAdmissionPassed = !S10_PROTOTYPE ? null
       : admission.convergenceOnlyPassed
+        && (churn || admission.receiverAcceptedCadenceAtLeast90PercentOfConfigured === true)
         && admission.authorityWithinExistingClockBudget === true
         && admission.overloadStayedNormal === true
         && (churn || (admission.steadyMeanAtOrBelow64KiB === true
@@ -1420,6 +1421,7 @@ function validateArtifact(directory) {
       && entry.correctness.receiverBasesStayedApplicable === true
       && entry.correctness.ackRejectsExactlyZero === true
       && entry.correctness.statePairAcksConverged === true
+      && entry.diagnostics.statePair.publisher.ackRecipientsWithBaseAdvance >= entry.clients.length
       && typeof entry.admission.convergenceOnlyPassed === "boolean"
       && typeof entry.admission.productAdmissionPassed === "boolean"
       && typeof entry.admission.authorityWithinExistingClockBudget === "boolean"
@@ -1427,6 +1429,8 @@ function validateArtifact(directory) {
       && (entry.scenario !== "normal"
         || (entry.admission.receiverCadenceTracksAuthorityWithinTolerance === true
           && entry.admission.convergenceOnlyPassed === true
+          && (entry.admission.productAdmissionPassed !== true
+            || entry.admission.receiverAcceptedCadenceAtLeast90PercentOfConfigured === true)
           && entry.clients.every((client) => {
             const authorityRate = entry.cadence.authorityAcceptedPairsPerSecondByClient?.[client.label];
             const receiverRate = entry.cadence.receiverAcceptedPairsPerSecond?.[client.label];
