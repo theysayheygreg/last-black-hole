@@ -2,7 +2,7 @@
 "use strict";
 
 const { TestRunner, assert } = require("./helpers.cjs");
-const { distribution, fixedWindowRates,
+const { distribution, fixedWindowRates, fixedWindowMeanAcceptedRates,
   mapClientsToAccountingRecipients } = require("./network/state-pair-product-metrics.cjs");
 
 async function run() {
@@ -23,6 +23,15 @@ async function run() {
     assert(result.recipientBytesPerSecond.r1.p50 === 100 && result.recipientBytesPerSecond.r1.max === 300,
       "Recipient windows must not average away the burst");
     assert(result.aggregateBytesPerSecond.max === 800, "Aggregate burst must include simultaneous recipients");
+  });
+  await runner.run("fixed means retain intended silent recipients and full-duration denominator", () => {
+    const events = [
+      { timestamp: 1500, recipient: "short", direction: "authority->client", metric: "accepted", bytes: 500 },
+    ];
+    const means = fixedWindowMeanAcceptedRates(events,
+      { startAt: 1000, endAt: 3000, recipients: ["short", "silent"] });
+    assert(means.short === 250, "Accepted bytes must divide by the full fixed window");
+    assert(means.silent === 0, "An intended silent recipient must remain an explicit zero");
   });
   await runner.run("recipient mapping preserves measured zero cadence from warmup identity proof", () => {
     const clients = [

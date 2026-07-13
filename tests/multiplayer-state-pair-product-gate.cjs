@@ -13,14 +13,13 @@ const { startSimServer, stopSimServer } = require("./helpers.cjs");
 const { createClientDeltaReceiver, MIXED_CAPABILITY,
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY } = require("../scripts/client-delta-receiver.cjs");
 const { projectionHash } = require("../scripts/canonical-structural-delta.cjs");
-const { summarizeWindow } = require("../scripts/replication-accounting.cjs");
 const { WIRE_PROTOCOL_VERSION_V2, SIM_PROTOCOL_VERSION, SERVER_TO_CLIENT,
   encodeWireFrame, parseWireFrame } = require("../scripts/multiplayer-wire-protocol.cjs");
 const { codecContext: positionalCodecContext, POSITIONAL_CODEC_MANIFEST,
   POSITIONAL_CODEC_MANIFEST_HASH } =
   require("../scripts/state-pair-positional-codec.cjs");
 const { canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
-const { distribution, fixedWindowRates, eventBreakdown, aggregateChecksum,
+const { distribution, fixedWindowRates, fixedWindowMeanAcceptedRates, eventBreakdown, aggregateChecksum,
   mapClientsToAccountingRecipients, validateChecksums } = require("./network/state-pair-product-metrics.cjs");
 const { analyzeStatePairSample } = require("./network/state-pair-residual-attribution.cjs");
 
@@ -779,7 +778,28 @@ function normalizeTrafficAtTargetCadence(events, { startAt, endAt, recipients })
     const pairs = accepted.filter((event) => event.frameClass === "statePair");
     const nonPairs = accepted.filter((event) => event.frameClass !== "statePair");
     const observedPairsPerSecond = pairs.length / seconds;
-    if (!(observedPairsPerSecond > 0)) throw new Error(`target-cadence model has no accepted pairs for ${recipient}`);
+    if (!(observedPairsPerSecond > 0)) {
+      const nonPairBytes = nonPairs.reduce((sum, event) => sum + event.bytes, 0);
+      const actualTransport = { applicationBytes: 0, webSocketBytes: 0, tls13Bytes: 0,
+        ipv4TcpBytes: 0, modeledTotalBytes: 0 };
+      for (const event of nonPairs) addTransport(actualTransport, modeledTransport(event.bytes));
+      perRecipient[recipient] = {
+        measurementAvailable: false,
+        unavailableReason: "No accepted state pair landed inside the fixed measurement window; 10 Hz pair-size normalization is undefined and receives no admission credit.",
+        observedPairsPerSecond: 0,
+        targetPairsPerSecond: TARGET_PUBLICATION_HZ,
+        pairScale: null,
+        observedMeanPairBytes: null,
+        observedNonPairBytesPerSecond: nonPairBytes / seconds,
+        actualApplicationBytesPerSecond: nonPairBytes / seconds,
+        targetCadenceApplicationBytesPerSecond: null,
+        targetCadenceRequiredReductionBytesPerSecond: null,
+        actualModeledTransportBytesPerSecond: Object.fromEntries(Object.entries(actualTransport)
+          .map(([key, value]) => [key, value / seconds])),
+        targetCadenceModeledTransportBytesPerSecond: null,
+      };
+      continue;
+    }
     const pairScale = TARGET_PUBLICATION_HZ / observedPairsPerSecond;
     const actualTransport = { applicationBytes: 0, webSocketBytes: 0, tls13Bytes: 0,
       ipv4TcpBytes: 0, modeledTotalBytes: 0 };
@@ -801,6 +821,7 @@ function normalizeTrafficAtTargetCadence(events, { startAt, endAt, recipients })
     const recipientBuckets = buckets.map((bucket) => bucket.pairBytes * pairScale + bucket.nonPairBytes);
     normalizedBuckets.push(...recipientBuckets);
     perRecipient[recipient] = {
+      measurementAvailable: true,
       observedPairsPerSecond,
       targetPairsPerSecond: TARGET_PUBLICATION_HZ,
       pairScale,
@@ -816,17 +837,22 @@ function normalizeTrafficAtTargetCadence(events, { startAt, endAt, recipients })
         .map(([key, value]) => [key, value / seconds])),
     };
   }
-  const normalizedMeans = Object.values(perRecipient).map((row) => row.targetCadenceApplicationBytesPerSecond);
+  const completeForAllRecipients = Object.values(perRecipient).every((row) => row.measurementAvailable === true);
+  const normalizedMeans = Object.values(perRecipient).filter((row) => row.measurementAvailable)
+    .map((row) => row.targetCadenceApplicationBytesPerSecond);
   const normalizedWindowDistribution = distribution(normalizedBuckets);
   return {
     method: "Hold each recipient's observed accepted pair-size mix constant; scale state-pair bytes from observed cadence to configured 10 Hz; leave observed non-state bytes unchanged.",
     admissionUse: "Counterfactual guard only. A true admission also requires observed cadence >=90% of configured cadence and NORMAL overload.",
     configuredPublicationHz: TARGET_PUBLICATION_HZ,
     minimumHealthyObservedPublicationHz: MIN_HEALTHY_PUBLICATION_HZ,
+    completeForAllRecipients,
+    unavailableRecipients: Object.entries(perRecipient).filter(([, row]) => !row.measurementAvailable)
+      .map(([recipient]) => recipient),
     perRecipient,
-    worstRecipientMeanDownlinkBytesPerSecond: Math.max(...normalizedMeans),
-    oneSecondP95DownlinkBytesPerSecond: normalizedWindowDistribution.p95,
-    oneSecondP99DownlinkBytesPerSecond: normalizedWindowDistribution.p99,
+    worstRecipientMeanDownlinkBytesPerSecond: completeForAllRecipients ? Math.max(...normalizedMeans) : null,
+    oneSecondP95DownlinkBytesPerSecond: completeForAllRecipients ? normalizedWindowDistribution.p95 : null,
+    oneSecondP99DownlinkBytesPerSecond: completeForAllRecipients ? normalizedWindowDistribution.p99 : null,
     modeledTransportBoundary: {
       application: "Measured compact JSON application payload.",
       webSocket: "Modeled unmasked server frame header: 2, 4, or 10 bytes by payload length.",
@@ -839,7 +865,8 @@ function normalizeTrafficAtTargetCadence(events, { startAt, endAt, recipients })
 
 function buildResidualDecisionTable(normalResults) {
   return normalResults.map((entry) => {
-    const normalizationRows = Object.values(entry.targetCadenceNormalization.perRecipient);
+    const normalizationRows = Object.values(entry.targetCadenceNormalization.perRecipient)
+      .filter((row) => row.measurementAvailable !== false);
     const worst = normalizationRows.sort((left, right) =>
       right.targetCadenceApplicationBytesPerSecond - left.targetCadenceApplicationBytesPerSecond)[0];
     const attribution = entry.residualAttribution;
@@ -925,7 +952,10 @@ function buildResidualDecisionTable(normalResults) {
 
 function buildS11AdmissionDecision(normalResults) {
   const populations = normalResults.map((entry) => {
-    const worst = Object.entries(entry.targetCadenceNormalization.perRecipient)
+    const normalizationEntries = Object.entries(entry.targetCadenceNormalization.perRecipient);
+    const unavailableRecipients = normalizationEntries.filter(([, row]) => row.measurementAvailable === false)
+      .map(([recipient]) => recipient);
+    const worst = normalizationEntries.filter(([, row]) => row.measurementAvailable !== false)
       .sort(([, left], [, right]) => right.targetCadenceApplicationBytesPerSecond
         - left.targetCadenceApplicationBytesPerSecond)[0];
     if (!worst) return { population: entry.population, measurementAvailable: false,
@@ -943,6 +973,8 @@ function buildS11AdmissionDecision(normalResults) {
     return {
       population: entry.population,
       measurementAvailable: true,
+      normalizationCompleteForAllClients: entry.targetCadenceNormalization.completeForAllRecipients,
+      normalizationUnavailableRecipients: unavailableRecipients,
       worstRecipient: recipient,
       worstClient,
       trafficVerdict: {
@@ -1189,17 +1221,11 @@ async function runScenario({ population, scenario, runDir, commit }) {
     const selected = accounting.events.filter((event) => event.timestamp >= startAt && event.timestamp < endAt);
     const accountingRecipientMapping = churn ? null
       : mapClientsToAccountingRecipients(allClients, accounting.events, startAt, endAt);
-    const recipients = [...new Set(selected.map((event) => event.recipient))].sort();
+    const recipients = (churn ? [...new Set(selected.map((event) => event.recipient))]
+      : Object.values(accountingRecipientMapping.byClient).map((mapping) => mapping.recipient)).sort();
     const windows = scenarioWindows(accounting.events, startAt, endAt, recipients, churn);
-    const normalSummary = churn ? null : summarizeWindow(accounting, { startAt, endAt,
-      evidenceFinalized: true, expectedRecipients: population, pendingSendCallbacks: 0 });
-    const perRecipientMean = churn ? Object.fromEntries(recipients.map((recipient) => {
-      const downlink = selected.filter((event) => event.recipient === recipient
-        && event.metric === "accepted" && event.direction === "authority->client")
-        .reduce((sum, event) => sum + event.bytes, 0);
-      return [recipient, downlink / ((endAt - startAt) / 1000)];
-    })) : Object.fromEntries(Object.entries(normalSummary.recipients)
-      .map(([recipient, row]) => [recipient, row.downlinkAcceptedBytesPerSecond]));
+    const perRecipientMean = fixedWindowMeanAcceptedRates(selected,
+      { startAt, endAt, recipients });
     const meanWorst = Math.max(...Object.values(perRecipientMean));
     const p95OneSecond = windows["1s"].allRecipientWindowsBytesPerSecond.p95;
     const p99OneSecond = windows["1s"].allRecipientWindowsBytesPerSecond.p99;
@@ -1372,9 +1398,11 @@ async function runScenario({ population, scenario, runDir, commit }) {
       steadyMeanAtOrBelow64KiB: churn ? null : meanWorst <= TARGET_BPS,
       steadyOneSecondP95AtOrBelow80KiB: churn ? null : p95OneSecond <= SENSITIVITY_BPS,
       targetCadenceMeanAtOrBelow64KiB: churn || !RESIDUAL_GATE ? null
-        : targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond <= TARGET_BPS,
+        : targetCadenceNormalization.completeForAllRecipients
+          && targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond <= TARGET_BPS,
       targetCadenceOneSecondP95AtOrBelow80KiB: churn || !RESIDUAL_GATE ? null
-        : targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS,
+        : targetCadenceNormalization.completeForAllRecipients
+          && targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS,
       receiverAcceptedCadenceAtLeast90PercentOfConfigured: churn || !RESIDUAL_GATE ? null
         : minimumReceiverAcceptedPairsPerSecond >= MIN_HEALTHY_PUBLICATION_HZ,
       receiverCadenceTracksAuthorityWithinTolerance: !LEDGER_GATE || churn ? null
@@ -1810,9 +1838,11 @@ function s11ScenarioIntegrity(entry) {
     steadyOneSecondP95AtOrBelow80KiB: normal
       ? entry.exactTraffic.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS : null,
     targetCadenceMeanAtOrBelow64KiB: normal
-      ? entry.targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond <= TARGET_BPS : null,
+      ? entry.targetCadenceNormalization.completeForAllRecipients
+        && entry.targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond <= TARGET_BPS : null,
     targetCadenceOneSecondP95AtOrBelow80KiB: normal
-      ? entry.targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS : null,
+      ? entry.targetCadenceNormalization.completeForAllRecipients
+        && entry.targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS : null,
     receiverAcceptedCadenceAtLeast90PercentOfConfigured: normal
       ? minimumReceiverRate >= MIN_HEALTHY_PUBLICATION_HZ : null,
     receiverCadenceTracksAuthorityWithinTolerance: normal ? cadenceTracking : null,
@@ -1913,8 +1943,15 @@ function validateArtifact(directory) {
     s7CadenceNormalizationPresent: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.targetCadenceNormalization?.configuredPublicationHz === TARGET_PUBLICATION_HZ
-        && Number.isFinite(entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond)
-        && Number.isFinite(entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond)),
+        && (entry.targetCadenceNormalization?.completeForAllRecipients === true
+          ? Number.isFinite(entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond)
+            && Number.isFinite(entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond)
+          : aggregate.gate === "s11"
+            && entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond === null
+            && entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond === null
+            && entry.targetCadenceNormalization?.unavailableRecipients?.length > 0
+            && entry.targetCadenceNormalization.unavailableRecipients.every((recipient) =>
+              entry.targetCadenceNormalization.perRecipient?.[recipient]?.measurementAvailable === false))),
     s7AttributionReconciledAndPrivate: ["s9", "s10", "s11"].includes(aggregate.gate) ? scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.residualAttribution?.codec === POSITIONAL_CODEC_CAPABILITY
@@ -2124,8 +2161,10 @@ async function main() {
       requiredDownlinkReductionFraction: Math.max(0,
         1 - TARGET_BPS / entry.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond),
       targetCadenceRequiredDownlinkReductionBytesPerSecond: entry.targetCadenceNormalization
+        ?.completeForAllRecipients
         ? Math.max(0, entry.targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond - TARGET_BPS) : null,
       targetCadenceRequiredDownlinkReductionFraction: entry.targetCadenceNormalization
+        ?.completeForAllRecipients
         ? Math.max(0, 1 - TARGET_BPS
           / entry.targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond) : null,
       dominantAcceptedDownlink: acceptedDownlink.slice(0, 5).map((row) => ({

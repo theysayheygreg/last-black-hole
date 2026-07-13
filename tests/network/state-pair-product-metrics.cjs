@@ -51,6 +51,16 @@ function fixedWindowRates(events, { startAt, endAt, windowMs, recipients, direct
   };
 }
 
+function fixedWindowMeanAcceptedRates(events, { startAt, endAt, recipients,
+  direction = "authority->client" }) {
+  if (!(endAt > startAt)) throw new TypeError("fixed mean window inputs are invalid");
+  const seconds = (endAt - startAt) / 1000;
+  return Object.fromEntries([...recipients].sort().map((recipient) => [recipient, events
+    .filter((event) => event.timestamp >= startAt && event.timestamp < endAt
+      && event.recipient === recipient && event.direction === direction && event.metric === "accepted")
+    .reduce((sum, event) => sum + event.bytes, 0) / seconds]));
+}
+
 function eventBreakdown(events, startAt, endAt) {
   const result = {};
   for (const event of events) {
@@ -160,5 +170,5 @@ function validateChecksums(directory, checksumFile = "checksums.json") {
     expectedAggregateSha256: recorded.sha256, actualAggregateSha256: actual.sha256, mismatches };
 }
 
-module.exports = { nearestRank, distribution, fixedWindowRates, eventBreakdown,
+module.exports = { nearestRank, distribution, fixedWindowRates, fixedWindowMeanAcceptedRates, eventBreakdown,
   mapClientsToAccountingRecipients, aggregateChecksum, validateChecksums };
