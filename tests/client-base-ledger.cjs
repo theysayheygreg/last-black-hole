@@ -77,7 +77,8 @@ async function run() {
       const diagnostics = receiver.diagnostics();
       assert.strictEqual(diagnostics.recoveryRequests, 0);
       assert.strictEqual(diagnostics.rejected, 0);
-      assert(diagnostics.ledgerHits >= 23 && diagnostics.ledger.entries <= 12);
+      assert(diagnostics.ledgerHits >= 23
+        && diagnostics.ledger.entries <= diagnostics.limits.maxRetainedPairHistory);
       assert.strictEqual(receiver.current().frameId, 24);
     }
     assert.strictEqual(authority.diagnostics().ackRejectDiagnostics.total, 0);

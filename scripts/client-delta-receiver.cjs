@@ -41,12 +41,13 @@ const MAX_CONTINUITY_ENTITIES = 8192;
 const MAX_CONTINUITY_COMPONENTS = 16384;
 const MAX_CONTINUITY_BYTES = 1024 * 1024;
 const DEFAULT_BASE_LEDGER_LIMITS = Object.freeze({
-  // The authority retains at most eight pending pairs. Four additional slots
-  // cover reordered delivery around ACK delay without turning wire history
-  // into an unbounded client cache.
-  maxEntries: 12,
+  // Count is secondary to the hard byte ceiling: high-recipient local
+  // overload can stretch authority/ACK delivery far beyond a dozen beats.
+  // Sixty-four exact materialized bases preserve those branches while the
+  // eight-MiB and age guards keep the cache finite.
+  maxEntries: 64,
   maxBytes: 8 * 1024 * 1024,
-  maxAgeMs: 15 * 1000,
+  maxAgeMs: 60 * 1000,
   minRecoveryIntervalMs: 250,
 });
 const MODES = Object.freeze({

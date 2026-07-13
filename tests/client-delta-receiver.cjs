@@ -480,7 +480,7 @@ async function run() {
     const rejected = boundedReceiver.receive(wire(oversize.frame));
     assert.strictEqual(rejected.accepted, false);
     assert.strictEqual(rejected.reason, "oversize-frame");
-    assert.strictEqual(boundedReceiver.diagnostics().retainedPairHistory <= 12, true);
+    assert.strictEqual(boundedReceiver.diagnostics().retainedPairHistory <= 64, true);
   });
 
   await runner.run("v1 and static-manifest-only negotiation remain unchanged and opt-in", async () => {
