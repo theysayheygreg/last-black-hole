@@ -1,0 +1,30 @@
+{
+  "schema": "lbh-s13-isolated-client-run-v1",
+  "commit": "effe42686e124cc2c90ae5b88852474057e20fd5",
+  "dirty": false,
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-clock-attribution.cjs",
+  "config": {
+    "populations": [
+      1,
+      4,
+      8
+    ],
+    "warmupMs": 5000,
+    "windowMs": 20000,
+    "binary": false
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "node": "v22.22.3"
+  },
+  "s12Binding": {
+    "path": "docs/v0.4/evidence/state-pair-s12/pre-gate",
+    "compositeSha256": "00c6377fcf68b76dfac429054a35a0a9c55c7d93d8e043df7166a4eab5429845"
+  }
+}
