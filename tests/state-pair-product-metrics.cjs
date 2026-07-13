@@ -2,7 +2,8 @@
 "use strict";
 
 const { TestRunner, assert } = require("./helpers.cjs");
-const { distribution, fixedWindowRates } = require("./network/state-pair-product-metrics.cjs");
+const { distribution, fixedWindowRates,
+  mapClientsToAccountingRecipients } = require("./network/state-pair-product-metrics.cjs");
 
 async function run() {
   const runner = new TestRunner("StatePairProductMetrics");
@@ -22,6 +23,30 @@ async function run() {
     assert(result.recipientBytesPerSecond.r1.p50 === 100 && result.recipientBytesPerSecond.r1.max === 300,
       "Recipient windows must not average away the burst");
     assert(result.aggregateBytesPerSecond.max === 800, "Aggregate burst must include simultaneous recipients");
+  });
+  await runner.run("recipient mapping preserves measured zero cadence from warmup identity proof", () => {
+    const clients = [
+      { label: "seat-a", acceptedPairEvents: [
+        { at: 50, frameId: 1, bytes: 101 },
+        { at: 150, frameId: 2, bytes: 102 },
+      ] },
+      { label: "seat-b", acceptedPairEvents: [{ at: 50, frameId: 1, bytes: 201 }] },
+    ];
+    const events = [
+      { timestamp: 50, recipientOrdinal: 7, projectionBeat: 1, bytes: 201,
+        direction: "authority->client", frameClass: "statePair", metric: "accepted" },
+      { timestamp: 50, recipientOrdinal: 3, projectionBeat: 1, bytes: 101,
+        direction: "authority->client", frameClass: "statePair", metric: "accepted" },
+      { timestamp: 150, recipientOrdinal: 3, projectionBeat: 2, bytes: 102,
+        direction: "authority->client", frameClass: "statePair", metric: "accepted" },
+    ];
+    const mapping = mapClientsToAccountingRecipients(clients, events, 100, 200);
+    assert(mapping.byClient["seat-a"].recipientOrdinal === 3
+      && mapping.byClient["seat-a"].measurementTupleMatches === 1,
+    "Measured client must retain its exact tuple proof");
+    assert(mapping.byClient["seat-b"].recipientOrdinal === 7
+      && mapping.byClient["seat-b"].measurementTupleMatches === 0,
+    "Warmup identity must map the client without inventing measured cadence");
   });
   process.exit(runner.summary() ? 0 : 1);
 }

@@ -69,6 +69,74 @@ function eventBreakdown(events, startAt, endAt) {
   }));
 }
 
+function mapClientsToAccountingRecipients(clients, events, startAt, endAt) {
+  // Identity proof must survive a product-relevant zero-cadence window. Use
+  // accepted tuples from the complete capture (setup + warmup + measurement)
+  // to establish the one-to-one client mapping, then report measurement-only
+  // matches separately. Scored traffic and cadence use a separately bounded
+  // measurement event set at the caller.
+  const authorityRows = events.filter((event) => event.direction === "authority->client"
+    && event.frameClass === "statePair" && event.metric === "accepted"
+    && Number.isSafeInteger(event.recipientOrdinal) && Number.isSafeInteger(event.projectionBeat));
+  const recipients = [...new Set(authorityRows.map((event) => event.recipientOrdinal))].sort((a, b) => a - b);
+  if (recipients.length !== clients.length) {
+    throw new Error(`accounting recipient mapping expected ${clients.length} ordinals, observed ${recipients.length}`);
+  }
+  const authorityTuples = new Map(recipients.map((ordinal) => [ordinal, new Set(authorityRows
+    .filter((event) => event.recipientOrdinal === ordinal)
+    .map((event) => `${event.projectionBeat}:${event.bytes}`))]));
+  const clientTuples = new Map(clients.map((client) => [client.label, new Set(client.acceptedPairEvents
+    .map((event) => `${event.frameId}:${event.bytes}`))]));
+  const measurementAuthorityTuples = new Map(recipients.map((ordinal) => [ordinal, new Set(authorityRows
+    .filter((event) => event.recipientOrdinal === ordinal
+      && event.timestamp >= startAt && event.timestamp < endAt)
+    .map((event) => `${event.projectionBeat}:${event.bytes}`))]));
+  const measurementClientTuples = new Map(clients.map((client) => [client.label, new Set(client.acceptedPairEvents
+    .filter((event) => event.at >= startAt && event.at < endAt)
+    .map((event) => `${event.frameId}:${event.bytes}`))]));
+  const scores = clients.map((client) => recipients.map((ordinal) => {
+    const authority = authorityTuples.get(ordinal);
+    return [...clientTuples.get(client.label)].reduce((sum, tuple) => sum + (authority.has(tuple) ? 1 : 0), 0);
+  }));
+  let bestScore = -1;
+  let bestAssignments = [];
+  const visit = (clientIndex, available, assignment, score) => {
+    if (clientIndex === clients.length) {
+      if (score > bestScore) { bestScore = score; bestAssignments = [assignment.slice()]; }
+      else if (score === bestScore && bestAssignments.length < 2) bestAssignments.push(assignment.slice());
+      return;
+    }
+    for (const ordinal of available) {
+      assignment.push(ordinal);
+      visit(clientIndex + 1, available.filter((candidate) => candidate !== ordinal), assignment,
+        score + scores[clientIndex][recipients.indexOf(ordinal)]);
+      assignment.pop();
+    }
+  };
+  visit(0, recipients, [], 0);
+  if (bestAssignments.length !== 1) {
+    throw new Error(`accounting recipient mapping is ambiguous at score ${bestScore}`);
+  }
+  const assignment = bestAssignments[0];
+  const byClient = Object.fromEntries(clients.map((client, index) => {
+    const ordinal = assignment[index];
+    const tupleMatches = scores[index][recipients.indexOf(ordinal)];
+    if (tupleMatches <= 0) throw new Error(`accounting recipient mapping has no tuple proof for ${client.label}`);
+    const measurementTupleMatches = [...measurementClientTuples.get(client.label)]
+      .filter((tuple) => measurementAuthorityTuples.get(ordinal).has(tuple)).length;
+    return [client.label, { recipientOrdinal: ordinal, recipient: `recipient-${ordinal}`,
+      tupleMatches, measurementTupleMatches,
+      clientTuples: clientTuples.get(client.label).size,
+      authorityTuples: authorityTuples.get(ordinal).size,
+      measurementClientTuples: measurementClientTuples.get(client.label).size,
+      measurementAuthorityTuples: measurementAuthorityTuples.get(ordinal).size }];
+  }));
+  return { method: "Unique maximum-weight one-to-one assignment over accepted frameId:exactWireBytes tuples in the full capture; scored metrics remain measurement-window-only so zero-cadence clients receive no credit.",
+    identityProofScope: "full capture including setup and warmup",
+    scoringScope: "measurement window only",
+    uniqueOptimal: true, totalTupleMatches: bestScore, byClient };
+}
+
 function aggregateChecksum(directory, files) {
   const hash = crypto.createHash("sha256");
   const entries = [];
@@ -92,4 +160,5 @@ function validateChecksums(directory, checksumFile = "checksums.json") {
     expectedAggregateSha256: recorded.sha256, actualAggregateSha256: actual.sha256, mismatches };
 }
 
-module.exports = { nearestRank, distribution, fixedWindowRates, eventBreakdown, aggregateChecksum, validateChecksums };
+module.exports = { nearestRank, distribution, fixedWindowRates, eventBreakdown,
+  mapClientsToAccountingRecipients, aggregateChecksum, validateChecksums };

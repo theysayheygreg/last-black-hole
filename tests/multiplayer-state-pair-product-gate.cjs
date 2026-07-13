@@ -21,7 +21,7 @@ const { codecContext: positionalCodecContext, POSITIONAL_CODEC_MANIFEST,
   require("../scripts/state-pair-positional-codec.cjs");
 const { canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
 const { distribution, fixedWindowRates, eventBreakdown, aggregateChecksum,
-  validateChecksums } = require("./network/state-pair-product-metrics.cjs");
+  mapClientsToAccountingRecipients, validateChecksums } = require("./network/state-pair-product-metrics.cjs");
 const { analyzeStatePairSample } = require("./network/state-pair-residual-attribution.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -754,56 +754,6 @@ function scenarioWindows(events, startAt, endAt, recipients, churn) {
       { startAt, endAt, windowMs: width, recipients })]));
 }
 
-function mapClientsToAccountingRecipients(clients, selected, startAt, endAt) {
-  const authorityRows = selected.filter((event) => event.direction === "authority->client"
-    && event.frameClass === "statePair" && event.metric === "accepted"
-    && Number.isSafeInteger(event.recipientOrdinal) && Number.isSafeInteger(event.projectionBeat));
-  const recipients = [...new Set(authorityRows.map((event) => event.recipientOrdinal))].sort((a, b) => a - b);
-  if (recipients.length !== clients.length) {
-    throw new Error(`accounting recipient mapping expected ${clients.length} ordinals, observed ${recipients.length}`);
-  }
-  const authorityTuples = new Map(recipients.map((ordinal) => [ordinal, new Set(authorityRows
-    .filter((event) => event.recipientOrdinal === ordinal)
-    .map((event) => `${event.projectionBeat}:${event.bytes}`))]));
-  const clientTuples = new Map(clients.map((client) => [client.label, new Set(client.acceptedPairEvents
-    .filter((event) => event.at >= startAt && event.at < endAt)
-    .map((event) => `${event.frameId}:${event.bytes}`))]));
-  const scores = clients.map((client) => recipients.map((ordinal) => {
-    const authority = authorityTuples.get(ordinal);
-    return [...clientTuples.get(client.label)].reduce((sum, tuple) => sum + (authority.has(tuple) ? 1 : 0), 0);
-  }));
-  let bestScore = -1;
-  let bestAssignments = [];
-  const visit = (clientIndex, available, assignment, score) => {
-    if (clientIndex === clients.length) {
-      if (score > bestScore) { bestScore = score; bestAssignments = [assignment.slice()]; }
-      else if (score === bestScore && bestAssignments.length < 2) bestAssignments.push(assignment.slice());
-      return;
-    }
-    for (const ordinal of available) {
-      assignment.push(ordinal);
-      visit(clientIndex + 1, available.filter((candidate) => candidate !== ordinal), assignment,
-        score + scores[clientIndex][recipients.indexOf(ordinal)]);
-      assignment.pop();
-    }
-  };
-  visit(0, recipients, [], 0);
-  if (bestAssignments.length !== 1) {
-    throw new Error(`accounting recipient mapping is ambiguous at score ${bestScore}`);
-  }
-  const assignment = bestAssignments[0];
-  const byClient = Object.fromEntries(clients.map((client, index) => {
-    const ordinal = assignment[index];
-    const tupleMatches = scores[index][recipients.indexOf(ordinal)];
-    if (tupleMatches <= 0) throw new Error(`accounting recipient mapping has no tuple proof for ${client.label}`);
-    return [client.label, { recipientOrdinal: ordinal, recipient: `recipient-${ordinal}`,
-      tupleMatches, clientTuples: clientTuples.get(client.label).size,
-      authorityTuples: authorityTuples.get(ordinal).size }];
-  }));
-  return { method: "Unique maximum-weight one-to-one assignment over accepted frameId:exactWireBytes tuples inside the evidence window.",
-    uniqueOptimal: true, totalTupleMatches: bestScore, byClient };
-}
-
 function modeledTransport(payloadBytes) {
   const webSocketBytes = payloadBytes < 126 ? 2 : payloadBytes <= 0xffff ? 4 : 10;
   const tlsRecords = Math.max(1, Math.ceil((payloadBytes + webSocketBytes) / 16_384));
@@ -1238,7 +1188,7 @@ async function runScenario({ population, scenario, runDir, commit }) {
     const accounting = preStopHealth.multiplayer.adapter.replication;
     const selected = accounting.events.filter((event) => event.timestamp >= startAt && event.timestamp < endAt);
     const accountingRecipientMapping = churn ? null
-      : mapClientsToAccountingRecipients(allClients, selected, startAt, endAt);
+      : mapClientsToAccountingRecipients(allClients, accounting.events, startAt, endAt);
     const recipients = [...new Set(selected.map((event) => event.recipient))].sort();
     const windows = scenarioWindows(accounting.events, startAt, endAt, recipients, churn);
     const normalSummary = churn ? null : summarizeWindow(accounting, { startAt, endAt,
