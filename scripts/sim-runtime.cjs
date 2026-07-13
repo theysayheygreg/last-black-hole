@@ -6115,7 +6115,7 @@ function recordManifestTransfer(record, bytes) {
   let recipient = crypto.createHmac("sha256", manifestTransferStats.salt)
     .update(record.membershipId).digest("base64url").slice(0, 16);
   if (!manifestTransferStats.recipients.has(recipient)
-      && manifestTransferStats.recipients.size >= MANIFEST_TRANSFER_RECIPIENT_CAP) recipient = "overflow";
+      && manifestTransferStats.recipients.size >= MANIFEST_TRANSFER_RECIPIENT_CAP - 1) recipient = "overflow";
   const row = manifestTransferStats.recipients.get(recipient) || { fetches: 0, bytes: 0 };
   row.fetches += 1;
   row.bytes += bytes;

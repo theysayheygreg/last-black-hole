@@ -120,6 +120,9 @@ async function run() {
       const transfers = health.multiplayer.manifestTransfers;
       assert(transfers.servedFetches === 1 && transfers.servedBytes === ticket.manifestBytes && transfers.rejectedFetches === 3,
         `Cold manifest accounting must count only successful served bytes separately: ${JSON.stringify(transfers)}`);
+      assert(transfers.direction === "authority->client" && transfers.frameClass === "manifest"
+        && transfers.recipients.length <= transfers.recipientCapacity,
+      "Manifest accounting must remain explicitly classified and recipient-cap bounded");
       assert(!JSON.stringify(transfers).includes(authorityB.membershipId), "Manifest transfer attribution must anonymize membership identity");
 
       const welcome = admittedWelcome;

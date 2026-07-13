@@ -296,6 +296,7 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
   const requireWithinDeadline = () => {
     if (deadlineController.signal.aborted || performance.now() >= deadline) throw new Error('Manifest verification timeout');
   };
+  try {
   const cacheKey = `${welcome.manifestSchema}:${welcome.manifestHash}`;
   let acceptedText = this._manifestCache.get(cacheKey) || null;
   let accepted = acceptedText === null ? null : new TextEncoder().encode(acceptedText);
@@ -383,8 +384,10 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
     type: 'manifestAck', manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
     manifestBytes: welcome.manifestBytes, connectionEpoch: welcome.connectionEpoch,
   }, generation);
-  clearTimeout(deadlineTimer);
   return accepted;
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
 }
 
 function hydrateManifestStaticState(client, state, manifestHash) {

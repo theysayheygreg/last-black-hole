@@ -106,6 +106,18 @@ async function run() {
   await runner.run("one total client deadline aborts a hanging retry and cannot emit a late ACK", async () => {
     const { _verifySessionManifest } = await import(pathToFileURL(path.resolve(__dirname, "../src/sim/sim-stream-transport.js")));
     const originalFetch = global.fetch;
+    const originalSetTimeout = global.setTimeout;
+    const originalClearTimeout = global.clearTimeout;
+    const ownedTimers = new Set();
+    global.setTimeout = (fn, ms, ...args) => {
+      const id = originalSetTimeout(fn, ms, ...args);
+      ownedTimers.add(id);
+      return id;
+    };
+    global.clearTimeout = (id) => {
+      ownedTimers.delete(id);
+      return originalClearTimeout(id);
+    };
     let retryAborted = false;
     let sends = 0;
     global.fetch = async () => ({ ok: false, status: 503 });
@@ -133,7 +145,10 @@ async function run() {
       await _verifySessionManifest.call(fake, welcome, { manifestCapability: "cap" }, 1);
     } catch { rejected = true; }
     global.fetch = originalFetch;
-    assert(rejected && retryAborted && sends === 0, "Deadline must abort the retry promise and forbid a late manifest ACK");
+    global.setTimeout = originalSetTimeout;
+    global.clearTimeout = originalClearTimeout;
+    assert(rejected && retryAborted && sends === 0 && ownedTimers.size === 0,
+      "Deadline must abort the retry, clear its timer, and forbid a late manifest ACK");
   });
 
   process.exit(runner.summary() ? 0 : 1);
