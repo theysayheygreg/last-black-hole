@@ -151,6 +151,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairResidualAttribution",
+    file: "state-pair-residual-attribution.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "AuthorityStageProfiler",
     file: "authority-stage-profiler.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
