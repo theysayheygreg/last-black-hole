@@ -111,6 +111,90 @@ async function run() {
     assert(Object.isFrozen(visible) && Object.isFrozen(visible.public));
   });
 
+  await runner.run("public and owner lanes cannot splice two different retained atomic bases", () => {
+    const id = identity(25);
+    const currentBasePublisher = createAuthorityDeltaPublisher();
+    const oldBasePublisher = createAuthorityDeltaPublisher();
+    const receiver = createReceiver(id);
+    const first = currentBasePublisher.publish(inputs(id, 1));
+    const admitted = receiver.receive(wire(first.frame));
+    assert(currentBasePublisher.acknowledge(id, admitted.ack).accepted);
+    assert(oldBasePublisher.acknowledge(id, admitted.ack).accepted === false,
+      "the independent publisher must first publish its identical admission frame");
+    const oldFirst = oldBasePublisher.publish(inputs(id, 1));
+    assert(oldBasePublisher.acknowledge(id, admitted.ack).accepted);
+    assert.deepStrictEqual(oldFirst.frame, first.frame);
+    const second = currentBasePublisher.publish(inputs(id, 2));
+    const acceptedSecond = receiver.receive(wire(second.frame));
+    assert(acceptedSecond.accepted);
+    assert(currentBasePublisher.acknowledge(id, acceptedSecond.ack).accepted);
+    oldBasePublisher.publish(inputs(id, 2));
+    const fromSecond = currentBasePublisher.publish(inputs(id, 3)).frame;
+    const fromFirst = oldBasePublisher.publish(inputs(id, 3)).frame;
+    assert.notStrictEqual(fromSecond.public.baseSnapshotId, fromFirst.owner.baseSnapshotId);
+    const spliced = structuredClone(fromSecond);
+    spliced.owner = structuredClone(fromFirst.owner);
+    const safe = receiver.current();
+    const rejected = receiver.receive(wire(spliced));
+    assert.strictEqual(rejected.accepted, false);
+    assert.strictEqual(rejected.reason, "base-mismatch");
+    assert.strictEqual(Object.hasOwn(rejected, "recovery"), false);
+    assert.strictEqual(receiver.current(), safe);
+  });
+
+  await runner.run("stale despawn and reincarnation branches cannot poison the visible lifecycle head", () => {
+    const id = identity(27);
+    const visiblePublisher = createAuthorityDeltaPublisher();
+    const stalePublisher = createAuthorityDeltaPublisher();
+    const receiver = createReceiver(id);
+    const first = visiblePublisher.publish(inputs(id, 1));
+    const admitted = receiver.receive(wire(first.frame));
+    assert(visiblePublisher.acknowledge(id, admitted.ack).accepted);
+    const staleFirst = stalePublisher.publish(inputs(id, 1));
+    assert.deepStrictEqual(staleFirst.frame, first.frame);
+    assert(stalePublisher.acknowledge(id, admitted.ack).accepted);
+
+    const despawnView = view(id, 2, "public", { entities: [] });
+    const despawn = visiblePublisher.publish({ ...inputs(id, 2), publicView: despawnView });
+    const acceptedDespawn = receiver.receive(wire(despawn.frame));
+    assert(acceptedDespawn.accepted && acceptedDespawn.published);
+    assert(visiblePublisher.acknowledge(id, acceptedDespawn.ack).accepted);
+    visiblePublisher.publish(inputs(id, 3));
+    visiblePublisher.publish(inputs(id, 4));
+    visiblePublisher.publish(inputs(id, 5));
+    const reincarnatedView = view(id, 6, "public", { entities: [{ category: "player",
+      sourceId: "seat-1", incarnation: 2, lifecycleRevision: 6,
+      components: { transform: component(6, { x: 6, y: 2 }),
+        publicState: component(6, { active: true, hull: "hull-6" }) } }] });
+    const newest = visiblePublisher.publish({ ...inputs(id, 6), publicView: reincarnatedView });
+    const acceptedNewest = receiver.receive(wire(newest.frame));
+    assert(acceptedNewest.accepted && acceptedNewest.published);
+    const visible = receiver.current();
+
+    stalePublisher.publish(inputs(id, 2));
+    const staleDespawn = stalePublisher.publish({ ...inputs(id, 3),
+      publicView: view(id, 3, "public", { entities: [] }) });
+    const staleReincarnation = stalePublisher.publish({ ...inputs(id, 4),
+      publicView: view(id, 4, "public", { entities: [{ category: "player",
+        sourceId: "seat-1", incarnation: 2, lifecycleRevision: 4,
+        components: { transform: component(4, { x: 4, y: 2 }),
+          publicState: component(4, { active: true, hull: "stale-hull" }) } }] }) });
+    const acceptedStaleDespawn = receiver.receive(wire(staleDespawn.frame));
+    const acceptedStaleReincarnation = receiver.receive(wire(staleReincarnation.frame));
+    assert(acceptedStaleDespawn.accepted && acceptedStaleDespawn.stale);
+    assert(acceptedStaleReincarnation.accepted && acceptedStaleReincarnation.stale);
+    assert.strictEqual(receiver.current(), visible);
+    assert(visiblePublisher.acknowledge(id, acceptedNewest.ack).accepted);
+    const after = visiblePublisher.publish({ ...inputs(id, 7), publicView: view(id, 7, "public", {
+      entities: [{ category: "player", sourceId: "seat-1", incarnation: 2, lifecycleRevision: 7,
+        components: { transform: component(7, { x: 7, y: 2 }),
+          publicState: component(7, { active: false, hull: "hull-7" }) } }],
+    }) });
+    const acceptedAfter = receiver.receive(wire(after.frame));
+    assert(acceptedAfter.accepted && acceptedAfter.published);
+    assert.strictEqual(receiver.current().frameId, 7);
+  });
+
   await runner.run("count eviction opens one recovery edge and fences racing deltas until keyframe convergence", () => {
     const id = identity(30);
     const authority = createAuthorityDeltaPublisher({ ackRejectDiagnostics: true });

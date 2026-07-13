@@ -270,7 +270,8 @@ async function run() {
   });
 
   await runner.run("bounded ACK rejection diagnostics classify every coarse ordering relation", async () => {
-    const publisher = createAuthorityDeltaPublisher({ ackRejectDiagnostics: true, maxRecipients: 16 });
+    const publisher = createAuthorityDeltaPublisher({ ackRejectDiagnostics: true, maxRecipients: 16,
+      maxPendingPairsPerRecipient: 8 });
     const id = (name) => identity({ sessionId: `session-${name}`, recipientId: `member-${name}` });
     const publish = (name, beat) => publisher.publish(pairInputs(beat, id(name)));
 

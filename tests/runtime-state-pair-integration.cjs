@@ -277,7 +277,7 @@ async function run() {
       assert.strictEqual(outcome.action, beat === 2 ? "queued" : "coalesced");
       assert.strictEqual(queue.status().queuedMessages, 1, "replaceable transport state must remain bounded");
     }
-    assert(server.diagnostics().publisher.pendingPairs <= 8, "ACK-delayed authority history must remain bounded");
+    assert(server.diagnostics().publisher.pendingPairs <= 12, "ACK-delayed authority history must remain bounded");
     const converged = client.receive(wire(queue.drain().messages[0].envelope));
     assert(converged.accepted, "latest coalesced pair must converge without an intermediate frame");
     assert(server.acknowledge(id, converged.ack).accepted);

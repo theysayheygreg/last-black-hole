@@ -23,7 +23,9 @@ const ACK_REJECT_RELATIONS = new Set(["duplicate", "stale", "future", "unknown",
   "binding", "recovery-race"]);
 const DEFAULTS = Object.freeze({
   maxRecipients: 128,
-  maxPendingPairsPerRecipient: 8,
+  // Match the client base ledger so an ACK delayed by the eight-seat local
+  // apply loop can still be authenticated before either side evicts its base.
+  maxPendingPairsPerRecipient: 12,
   maxRetainedBytesPerRecipient: 2 * 1024 * 1024,
   maxPairBytes: 256 * 1024,
 });

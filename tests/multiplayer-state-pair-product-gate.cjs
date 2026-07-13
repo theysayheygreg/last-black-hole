@@ -405,14 +405,18 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
 }
 
 async function closeClient(client) {
-  if (!client || client.ws.readyState === WebSocket.CLOSED) return;
-  client.ws._socket?.resume();
-  client.ws.close(1000, "gate complete");
-  await waitFor(() => client.close, `${client.label} close`, 1500).catch(() => client.ws.terminate());
-  client.receiverFinalDiagnostics = client.receiver?.diagnostics() || null;
-  client.lastVisibleFrameId = client.receiver?.current()?.frameId || client.lastVisibleFrameId;
-  client.receiver?.teardown();
-  client.receiverCleanupDiagnostics = client.receiver?.diagnostics() || null;
+  if (!client) return;
+  if (client.ws.readyState !== WebSocket.CLOSED) {
+    client.ws._socket?.resume();
+    client.ws.close(1000, "gate complete");
+    await waitFor(() => client.close, `${client.label} close`, 1500).catch(() => client.ws.terminate());
+  }
+  if (!client.receiverCleanupDiagnostics) {
+    client.receiverFinalDiagnostics = client.receiver?.diagnostics() || null;
+    client.lastVisibleFrameId = client.receiver?.current()?.frameId || client.lastVisibleFrameId;
+    client.receiver?.teardown();
+    client.receiverCleanupDiagnostics = client.receiver?.diagnostics() || null;
+  }
 }
 
 function summarizeClients(clients) {
@@ -1126,10 +1130,20 @@ async function runScenario({ population, scenario, runDir }) {
         <= (1000 / (RESIDUAL_GATE ? TARGET_PUBLICATION_HZ : endHealth.session.snapshotHz)),
       overloadStayedNormal: endHealth.session.overloadState === "NORMAL",
     };
-    admission.passed = S10_PROTOTYPE
-      ? admission.correctnessPassed
+    admission.convergenceOnlyPassed = !S10_PROTOTYPE ? null
+      : admission.correctnessPassed
         && (churn || (admission.receiverCadenceTracksAuthorityWithinTolerance === true
-          && admission.receiverAcceptedCadenceAtLeast90PercentOfConfigured === true))
+          && admission.receiverAcceptedCadenceAtLeast90PercentOfConfigured === true));
+    admission.productAdmissionPassed = !S10_PROTOTYPE ? null
+      : admission.convergenceOnlyPassed
+        && admission.authorityWithinExistingClockBudget === true
+        && admission.overloadStayedNormal === true
+        && (churn || (admission.steadyMeanAtOrBelow64KiB === true
+          && admission.steadyOneSecondP95AtOrBelow80KiB === true
+          && admission.targetCadenceMeanAtOrBelow64KiB === true
+          && admission.targetCadenceOneSecondP95AtOrBelow80KiB === true));
+    admission.passed = S10_PROTOTYPE
+      ? admission.productAdmissionPassed
       : Object.entries(admission).filter(([key, value]) => value !== null
         && key !== "receiverCadenceToleranceHz").every(([, value]) => Boolean(value));
     const breakdown = eventBreakdown(accounting.events, startAt, endAt);
@@ -1395,8 +1409,13 @@ function validateArtifact(directory) {
         && client.receiverCleanupDiagnostics?.ledger?.entries === 0)
       && entry.correctness.receiverBasesStayedApplicable === true
       && entry.correctness.ackRejectsExactlyZero === true
+      && typeof entry.admission.convergenceOnlyPassed === "boolean"
+      && typeof entry.admission.productAdmissionPassed === "boolean"
+      && typeof entry.admission.authorityWithinExistingClockBudget === "boolean"
+      && typeof entry.admission.overloadStayedNormal === "boolean"
       && (entry.scenario !== "normal"
-        || entry.admission.receiverCadenceTracksAuthorityWithinTolerance === true)),
+        || (entry.admission.receiverCadenceTracksAuthorityWithinTolerance === true
+          && entry.admission.convergenceOnlyPassed === true))),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
     && (["s7", "s8", "s9", "s10"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
@@ -1480,6 +1499,9 @@ async function main() {
   }
   const verdict = {
     passed: results.every((entry) => entry.admission.passed),
+    productAdmissionPassed: results.every((entry) => entry.admission.productAdmissionPassed === true),
+    convergenceOnlyPassed: !S10_PROTOTYPE ? null
+      : results.every((entry) => entry.admission.convergenceOnlyPassed === true),
     normal: Object.fromEntries(results.filter((entry) => entry.scenario === "normal")
       .map((entry) => [entry.population, entry.admission])),
     churn: Object.fromEntries(results.filter((entry) => entry.scenario === "churn")
@@ -1541,8 +1563,8 @@ async function main() {
     residualDecisionTable: RESIDUAL_GATE && !POSITIONAL_GATE ? buildResidualDecisionTable(normalResults) : null,
     recommendation: STAGE_PROFILE ? "Diagnostic only: use stage attribution and the A/B control before selecting one narrow CPU optimization."
       : S10_PROTOTYPE ? {
-        decision: "Judge S10 only on bounded base convergence, edge-triggered recovery, exact ACK behavior, and receiver cadence tracking authority.",
-        bandwidthBoundary: "Positional pair bytes and 10 Hz normalization remain reported but do not admit or reject this client-ledger slice.",
+        decision: "Report bounded-base convergence separately from product admission. Convergence requires edge-triggered recovery, exact ACK behavior, and receiver cadence tracking authority; product admission additionally keeps the existing clock, NORMAL overload, and traffic gates.",
+        bandwidthBoundary: "A convergence-only pass does not admit the product when positional traffic, authority clock, or overload guards fail.",
         defer: "Do not enable experimental capabilities by default or expand to binary, compression, AOI, hosted WSS, WAN, or fleet claims.",
       }
       : S9_PROTOTYPE ? {
