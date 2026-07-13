@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 3,
+  "gate": "s10",
+  "profile": "review",
+  "microProfile": false,
+  "instrumentationEnabled": false,
+  "eventLoopMonitorEnabled": true,
+  "commit": "02c105c68f4190781eda3b90128d91b0594b589e",
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s10-ledger --review --normal-only",
+  "verdict": {
+    "passed": false,
+    "productAdmissionPassed": false,
+    "convergenceOnlyPassed": false,
+    "normal": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": true,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": true,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": true,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 0.5,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": true,
+        "passed": true
+      },
+      "4": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": true,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": true,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 0.5,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": false,
+        "passed": false
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 0.5,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": false,
+        "productAdmissionPassed": false,
+        "passed": false
+      }
+    },
+    "churn": {}
+  },
+  "expectedPopulations": [
+    1,
+    4,
+    8
+  ],
+  "expectedChurnPopulations": [],
+  "preparedProjectionsEnabled": true,
+  "scenarios": [
+    {
+      "file": "normal-1.json",
+      "scenario": "normal",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 54393.15,
+      "oneSecondP95DownlinkBytesPerSecond": 57554,
+      "oneSecondP99DownlinkBytesPerSecond": 57755,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 194
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": true,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": true,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": true,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 0.5,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": true,
+        "passed": true
+      }
+    },
+    {
+      "file": "normal-4.json",
+      "scenario": "normal",
+      "population": 4,
+      "worstRecipientMeanDownlinkBytesPerSecond": 72274.05,
+      "oneSecondP95DownlinkBytesPerSecond": 75300,
+      "oneSecondP99DownlinkBytesPerSecond": 76885,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 785
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": true,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": true,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 0.5,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": false,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-8.json",
+      "scenario": "normal",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 41596.66834931853,
+      "oneSecondP95DownlinkBytesPerSecond": 41157,
+      "oneSecondP99DownlinkBytesPerSecond": 44085,
+      "pairKindCounts": {
+        "public-delta+owner-delta": 64,
+        "public-delta+owner-keyframe": 50
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 0.5,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": false,
+        "productAdmissionPassed": false,
+        "passed": false
+      }
+    }
+  ],
+  "s3CanonicalEvidence": null,
+  "optimizationProof": {
+    "atomicKindAlignmentCauses": 0,
+    "publicDeltaOwnerKeyframeProductPairs": 1029,
+    "allNormalPopulationsObservedMixed": true
+  },
+  "manifestIdentity": {
+    "hashes": [
+      "sha256:a6b828f2f700d4a5071f741fccfc828599267e9d95d3d2f3a55f1992ae3801bb",
+      "sha256:065864c798623b2ceb3f46ff32578cf53fbc694b93302a7dbebebd843263340d",
+      "sha256:1ff5e0049dda788d2a68d8f9541f64d4f4b3ebb920b02a3bc6b703ae85072b60"
+    ],
+    "changedAcrossFreshMatches": true,
+    "reconnectReuseObserved": true
+  },
+  "failureAnalysis": [
+    {
+      "population": 1,
+      "requiredDownlinkReductionBytesPerSecond": 0,
+      "requiredDownlinkReductionFraction": 0,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 0,
+      "targetCadenceRequiredDownlinkReductionFraction": 0,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 1078191,
+          "fraction": 0.9911091745927566
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 9514,
+          "fraction": 0.008745586530656893
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 158,
+          "fraction": 0.00014523887658648193
+        }
+      ]
+    },
+    {
+      "population": 4,
+      "requiredDownlinkReductionBytesPerSecond": 6738.050000000003,
+      "requiredDownlinkReductionFraction": 0.09322917423335209,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 8005.04897959184,
+      "targetCadenceRequiredDownlinkReductionFraction": 0.10885143862733448,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 5472798,
+          "fraction": 0.9929804774973573
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 38056,
+          "fraction": 0.0069048528835961845
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 632,
+          "fraction": 0.00011466961904647857
+        }
+      ]
+    },
+    {
+      "population": 8,
+      "requiredDownlinkReductionBytesPerSecond": 0,
+      "requiredDownlinkReductionFraction": 0,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 5815.1891304347955,
+      "targetCadenceRequiredDownlinkReductionFraction": 0.08150094204883174,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "delta",
+          "bytes": 429116,
+          "fraction": 0.5470076318167854
+        },
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 351418,
+          "fraction": 0.4479635528803193
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 3450,
+          "fraction": 0.004397823268691705
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 495,
+          "fraction": 0.0006309920342035925
+        }
+      ]
+    }
+  ],
+  "residualDecisionTable": null,
+  "recommendation": {
+    "decision": "Report bounded-base convergence separately from product admission. Convergence requires edge-triggered recovery, exact ACK behavior, and receiver cadence tracking authority; product admission additionally keeps the existing clock, NORMAL overload, and traffic gates.",
+    "bandwidthBoundary": "A convergence-only pass does not admit the product when positional traffic, authority clock, or overload guards fail.",
+    "defer": "Do not enable experimental capabilities by default or expand to binary, compression, AOI, hosted WSS, WAN, or fleet claims."
+  }
+}
