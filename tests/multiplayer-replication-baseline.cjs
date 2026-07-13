@@ -156,12 +156,15 @@ async function runPopulation(population, runDir, commit) {
   const actionSeq = Array(population).fill(0);
   const commandSeq = Array(population).fill(0);
   let authorityPid = null;
+  let preStopConnections = null;
   let cleanup = null;
   try {
     await startSimServer(port, { keepAlive: true, registerProcessCleanup: false, env: {
       NODE_ENV: "test", LBH_SIM_WS_ENABLED: "true", LBH_SIM_WS_REPLICATION_ACCOUNTING: "1",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
     } });
+    authorityPid = Number(fs.readFileSync(path.join(ROOT, "tmp", `sim-server-${port}.pid`), "utf8").trim());
+    if (!Number.isSafeInteger(authorityPid)) throw new Error("authority PID file was not exact");
     const started = await request(port, "/session/start", { method: "POST", accounting: httpAccounting, body: {
       mapId: "shallows", requesterId: `s0-seat-0`, requesterName: "S0 Seat 0",
       maxPlayers: population, seed: SEED,
@@ -184,7 +187,7 @@ async function runPopulation(population, runDir, commit) {
       commandSeq[seat] = clients[seat].latestFrames.welcome.lastCommandSeq;
     }
     const admitted = await request(port, "/health", { accounting: httpAccounting });
-    authorityPid = admitted.body.process.pid;
+    if (admitted.body.process.pid !== authorityPid) throw new Error("authority PID changed before admission completed");
     if (!admitted.body.multiplayer.adapter.replication) throw new Error("opt-in accounting ledger is absent");
     await waitFor(async () => {
       const health = await request(port, "/health", { accounting: httpAccounting });
@@ -205,6 +208,7 @@ async function runPopulation(population, runDir, commit) {
       return adapter.connections === 0 && adapter.pendingScheduledSends === 0 ? health : false;
     }, "final accounting cleanup", 5000);
     const finalHealth = await request(port, "/health", { accounting: httpAccounting });
+    preStopConnections = finalHealth.body.multiplayer.adapter.connections;
     const snapshot = finalHealth.body.multiplayer.adapter.replication;
     const summary = summarizeWindow(snapshot, { startAt, endAt, evidenceFinalized: true,
       expectedRecipients: population, pendingSendCallbacks: 0 });
@@ -276,7 +280,7 @@ async function runPopulation(population, runDir, commit) {
     };
     writeExclusive(path.join(runDir, `population-${population}.json`), evidence);
     cleanup = { clientsClosed: clients.every((client) => client.close), pidStable: evidence.authority.pidStable,
-      port, authorityPid, preStopConnections: finalHealth.body.multiplayer.adapter.connections };
+      port, authorityPid, preStopConnections };
     return evidence;
   } finally {
     for (const client of clients) await closeRawClient(client).catch(() => {});
@@ -289,8 +293,13 @@ async function runPopulation(population, runDir, commit) {
     if (authorityPid !== null) {
       try { process.kill(authorityPid, 0); } catch { pidDead = true; }
     }
-    const passed = portDead && pidDead && (cleanup?.clientsClosed ?? false) && cleanup?.preStopConnections === 0;
-    writeExclusive(path.join(runDir, `cleanup-${population}.json`), { ...(cleanup || {}), portDead, pidDead, passed });
+    const clientsClosed = clients.every((client) => client.close || client.ws.readyState === client.ws.CLOSED);
+    const passed = portDead && pidDead && clientsClosed
+      && (preStopConnections === null || preStopConnections === 0);
+    writeExclusive(path.join(runDir, `cleanup-${population}.json`), {
+      ...(cleanup || {}), preStopConnections, clientsClosed, portDead, pidDead, passed,
+      scenarioReachedFinalDrain: preStopConnections !== null,
+    });
     if (!passed) throw new Error(`population ${population} cleanup failed`);
   }
 }
