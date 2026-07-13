@@ -30,9 +30,11 @@ function nonNegativeInteger(value, fallback, name) {
 function serializeFrame(frame, exactWire = null) {
   const expandedWire = JSON.stringify(frame);
   if (expandedWire === undefined) throw new TypeError("message must be JSON serializable");
-  if (exactWire !== null && typeof exactWire !== "string") throw new TypeError("exactWire must be a string");
+  if (exactWire !== null && typeof exactWire !== "string" && !Buffer.isBuffer(exactWire)) {
+    throw new TypeError("exactWire must be a string or Buffer");
+  }
   const snapshot = deepFreezeJson(JSON.parse(expandedWire));
-  const wire = exactWire === null ? expandedWire : exactWire;
+  const wire = exactWire === null ? expandedWire : Buffer.isBuffer(exactWire) ? Buffer.from(exactWire) : exactWire;
   const byteLength = Buffer.byteLength(wire, "utf8");
   return Object.freeze({
     envelope: snapshot,

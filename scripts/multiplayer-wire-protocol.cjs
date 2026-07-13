@@ -11,6 +11,14 @@ const {
   decodePositionalFrame,
   composeStatePairCandidates,
 } = require("./state-pair-positional-codec.cjs");
+const {
+  CAPABILITY: BINARY_CODEC_CAPABILITY,
+  BINARY_CODEC_MANIFEST_HASH,
+  BinaryCodecError,
+  encodeBinaryFrame,
+  decodeBinaryFrame,
+  composeBinaryStatePairCandidates,
+} = require("./state-pair-binary-codec.cjs");
 
 const trustedStatePairWireEncoders = new WeakSet();
 const trustedStatePairCandidateSelectors = new WeakMap();
@@ -247,6 +255,12 @@ function validateHello(frame) {
           || !frame.capabilities.includes("state-pair-mixed-v1"))) {
       fail("invalid-field", `${POSITIONAL_CODEC_CAPABILITY} requires sparse mixed state-pair`);
     }
+    if (frame.capabilities.includes(BINARY_CODEC_CAPABILITY)
+        && (!frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+          || !frame.capabilities.includes("runtime-public-components-v1")
+          || !frame.capabilities.includes("state-pair-mixed-v1"))) {
+      fail("invalid-field", `${BINARY_CODEC_CAPABILITY} requires positional sparse mixed state-pair fallback`);
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
   }
@@ -291,6 +305,12 @@ function validateWelcome(frame) {
         && (!frame.capabilities.includes("runtime-public-components-v1")
           || !frame.capabilities.includes("state-pair-mixed-v1"))) {
       fail("invalid-field", `${POSITIONAL_CODEC_CAPABILITY} requires sparse mixed state-pair`);
+    }
+    if (frame.capabilities.includes(BINARY_CODEC_CAPABILITY)
+        && (!frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+          || !frame.capabilities.includes("runtime-public-components-v1")
+          || !frame.capabilities.includes("state-pair-mixed-v1"))) {
+      fail("invalid-field", `${BINARY_CODEC_CAPABILITY} requires positional sparse mixed state-pair fallback`);
     }
     if (frame.authorityIncarnation !== undefined) {
       if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");
@@ -669,6 +689,20 @@ function validateWireFrame(frame, options = {}) {
 }
 
 function parseWireFrame(raw, options = {}) {
+  if (options.binary === true) {
+    if (!options.binaryContext) fail("unexpected-binary-frame", "binary frame was not negotiated", 4403);
+    let frame;
+    try { frame = decodeBinaryFrame(raw, options.binaryContext); }
+    catch (error) {
+      if (error instanceof BinaryCodecError) fail(error.code, error.message, 4403);
+      throw error;
+    }
+    const bytes = Buffer.isBuffer(raw) || raw instanceof Uint8Array ? raw.byteLength : 0;
+    if (bytes > frameByteLimit(frame.type)) {
+      fail("frame-too-large", `${frame.type} binary frame is ${bytes} bytes; limit is ${frameByteLimit(frame.type)}`, 4409);
+    }
+    return validateWireFrameSemantic(frame, options);
+  }
   let text;
   if (typeof raw === "string") text = raw;
   else if (Buffer.isBuffer(raw) || raw instanceof Uint8Array) {
@@ -700,6 +734,11 @@ function parseWireFrame(raw, options = {}) {
         || (frame?.type === "ack" && frame?.ackKind === "statePair"))) {
     fail("positional-frame-required", "negotiated state-pair transaction must use positional JSON", 4403);
   }
+  if (options.requireBinary
+      && (frame?.type === "statePair" || frame?.type === "statePairRecovery"
+        || (frame?.type === "ack" && frame?.ackKind === "statePair"))) {
+    fail("binary-frame-required", "negotiated state-pair transaction must use binary framing", 4403);
+  }
   if (positional && bytes > frameByteLimit(frame.type)) {
     fail("frame-too-large", `${frame.type} positional frame is ${bytes} bytes; limit is ${frameByteLimit(frame.type)}`, 4409);
   }
@@ -707,11 +746,26 @@ function parseWireFrame(raw, options = {}) {
 }
 
 function encodeWireFrame(frame, options = {}) {
+  const binary = options.binaryContext
+    && (frame.type === "statePair" || frame.type === "statePairRecovery"
+      || (frame.type === "ack" && frame.ackKind === "statePair"));
   const positional = options.positionalContext
     && (frame.type === "statePair" || frame.type === "statePairRecovery"
       || (frame.type === "ack" && frame.ackKind === "statePair"));
-  if (positional) validateWireFrameSemantic(frame, options);
+  if (binary || positional) validateWireFrameSemantic(frame, options);
   else validateWireFrame(frame, options);
+  if (binary) {
+    try {
+      const wire = encodeBinaryFrame(frame, options.binaryContext);
+      if (wire.length > frameByteLimit(frame.type)) {
+        fail("frame-too-large", `${frame.type} binary frame is ${wire.length} bytes; limit is ${frameByteLimit(frame.type)}`, 4409);
+      }
+      return wire;
+    } catch (error) {
+      if (error instanceof BinaryCodecError) fail(error.code, error.message);
+      throw error;
+    }
+  }
   if (positional) {
     try {
       const wire = encodePositionalFrame(frame, options.positionalContext);
@@ -729,15 +783,17 @@ function encodeWireFrame(frame, options = {}) {
   return JSON.stringify(frame);
 }
 
-function createStatePairWireEncoder(positionalContext, observe = null) {
-  if (!positionalContext || typeof positionalContext !== "object" || Array.isArray(positionalContext)) {
-    throw new TypeError("positionalContext is required for a trusted state-pair encoder");
+function createStatePairWireEncoder(codecContext, observe = null) {
+  if (!codecContext || typeof codecContext !== "object" || Array.isArray(codecContext)) {
+    throw new TypeError("codecContext is required for a trusted state-pair encoder");
   }
-  const context = Object.freeze({ ...positionalContext });
+  const context = Object.freeze({ ...codecContext });
+  const binary = context.codecManifestHash === BINARY_CODEC_MANIFEST_HASH;
   if (observe !== null && typeof observe !== "function") throw new TypeError("observe must be a function");
   const encoder = (frame) => {
     const started = performance.now();
-    const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT, positionalContext: context });
+    const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT,
+      ...(binary ? { binaryContext: context } : { positionalContext: context }) });
     observe?.(wire, performance.now() - started);
     return wire;
   };
@@ -745,10 +801,12 @@ function createStatePairWireEncoder(positionalContext, observe = null) {
   trustedStatePairCandidateSelectors.set(encoder, (entries, tieOrder) => {
     const started = performance.now();
     for (const entry of entries) {
-      validateWireFrameSemantic(entry.frame, { direction: SERVER_TO_CLIENT, positionalContext: context });
+      validateWireFrameSemantic(entry.frame, { direction: SERVER_TO_CLIENT });
     }
     try {
-      const selected = composeStatePairCandidates(entries, context, tieOrder);
+      const selected = binary
+        ? composeBinaryStatePairCandidates(entries, context, tieOrder)
+        : composeStatePairCandidates(entries, context, tieOrder);
       observe?.(selected.chosen.wire, performance.now() - started);
       return selected;
     } catch (error) {
@@ -785,6 +843,7 @@ module.exports = {
   ACTION_KINDS: Object.freeze([...ACTION_KINDS]),
   ACK_KINDS: Object.freeze([...ACK_KINDS]),
   POSITIONAL_CODEC_CAPABILITY,
+  BINARY_CODEC_CAPABILITY,
   WireProtocolError,
   validateWireFrame,
   parseWireFrame,

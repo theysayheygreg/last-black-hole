@@ -19,6 +19,9 @@ const WARMUP_MS = Number(process.env.LBH_S13_WARMUP_MS || 5_000);
 const WINDOW_MS = Number(process.env.LBH_S13_WINDOW_MS || 20_000);
 const S12_ARTIFACT = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s12", "pre-gate");
 const S12_SHA256 = "00c6377fcf68b76dfac429054a35a0a9c55c7d93d8e043df7166a4eab5429845";
+const S15_ARTIFACT = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s15");
+const S15_SHA256 = "66c2c751c80f2f0e94c4103eff01352b1e241ce9690fff58c9331a354ec23bf8";
+const S16_BINARY = String(process.env.LBH_S16_BINARY || "").trim() === "1";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function git(...args) {
@@ -121,7 +124,7 @@ async function setupPopulation(port, population) {
     const child = spawnClient();
     children.push(child);
     admissions.push(await child.call("init", { config: { port, authority: authorities[seat], seat,
-      label: `s13-${population}-seat-${seat}` } }, 30_000));
+      label: `${S16_BINARY ? "s16" : "s13"}-${population}-seat-${seat}`, binary: S16_BINARY } }, 30_000));
   }
   return { started, authorities, children, admissions };
 }
@@ -174,6 +177,7 @@ async function runScenario(population, runDir, commit) {
       LBH_SIM_WS_STATE_PAIR_MIXED_V1: "true",
       LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: "true",
       LBH_SIM_WS_POSITIONAL_JSON_V1: "true", LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS: "true",
+      LBH_SIM_WS_STATE_PAIR_BINARY_V1: S16_BINARY ? "true" : "false",
       LBH_SIM_WS_PREPARED_PROJECTIONS: "true", LBH_SIM_WS_BENCH_EVENT_LOOP: "1",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
       LBH_SIM_WS_STAGE_PROFILE: "0",
@@ -271,7 +275,8 @@ async function runScenario(population, runDir, commit) {
     };
     correctness.passed = Object.values(correctness).every(Boolean);
     const result = {
-      schema: "lbh-s13-isolated-client-attribution-v1", commit, population,
+      schema: S16_BINARY ? "lbh-s16-binary-candidate-v1" : "lbh-s13-isolated-client-attribution-v1",
+      commit, population, codec: S16_BINARY ? "state-pair-binary-v1" : "state-pair-positional-json-v1",
       topology: { matches: 1, dedicatedLogicalAuthorities: 1, authorityPid,
         coordinatorPid: process.pid, isolatedClientProcesses: clients.map((client) => client.pid),
         simultaneousRecipients: population,
@@ -291,7 +296,7 @@ async function runScenario(population, runDir, commit) {
         oneSecondAllRecipientBytesPerSecond: windows.allRecipientWindowsBytesPerSecond,
         fixedWindowMetadata: { scoredStartAt: windows.scoredStartAt,
           scoredEndAt: windows.scoredEndAt, droppedPartialTailMs: windows.droppedPartialTailMs },
-        accountingBoundary: "Exact UTF-8 application bytes accepted by authority ws.send callbacks; excludes WebSocket/TCP/TLS/WAN overhead." },
+        accountingBoundary: "Exact application payload bytes accepted by authority ws.send callbacks; excludes WebSocket/TCP/TLS/WAN overhead." },
       performance: {
         authority: { cpuUsage: cpuDelta(startHealth.process, endHealth.process),
           cpuBoundary: "Exact cumulative authority process CPU delta divided by the same two health-sample timestamps; includes health polling and test-only replication accounting overhead.",
@@ -311,13 +316,14 @@ async function runScenario(population, runDir, commit) {
         statePair: endHealth.multiplayer.statePair.publisher,
         adapter: endHealth.multiplayer.adapter.statePair },
       processBoundary: {
-        authority: "sim tick, overload controller, public/owner projection, four codec-candidate encodes per admitted recipient, pair selection, queueing, publish callbacks, ACK ingestion",
+        authority: "sim tick, overload controller, public/owner projection, codec-candidate work per admitted recipient, pair selection, queueing, publish callbacks, ACK ingestion",
         isolatedClient: "wire parse/decode, receiver validation/materialization, semantic hash/ACK construction, input/action serialization, ACK serialization/send",
         coordinator: "session setup, health polling, wall-clock windowing, immutable evidence assembly only; no state-pair decode/apply/ACK",
       },
       accountingEvidence: selected, healthSamples, clients, correctness,
       limitations: ["Machine-local macOS loopback", "Raw WebSocket without TLS", "One match at a time",
-        "No fleet packing, WAN, hosted WSS, binary, compression, AOI, or 24/48/96-client claim"],
+        `Codec ${S16_BINARY ? "binary-v1 with positional JSON fallback" : "positional JSON v1"}`,
+        "No fleet packing, WAN, hosted WSS, compression, AOI, or 24/48/96-client claim"],
     };
     writeExclusive(path.join(runDir, `normal-${population}.json`), result);
     return result;
@@ -355,6 +361,7 @@ function validateArtifact(directory) {
     ...POPULATIONS.flatMap((population) => [`cleanup-normal-${population}.json`, `normal-${population}.json`])].sort();
   const actualFiles = fs.readdirSync(directory).filter((file) => file.endsWith(".json")).sort();
   const s12 = validateChecksums(S12_ARTIFACT);
+  const s15 = S16_BINARY ? validateChecksums(S15_ARTIFACT) : null;
   const semantic = scenarios.map((entry) => {
     const seconds = entry.window.durationSeconds;
     const labels = entry.clients.map((client) => client.label);
@@ -388,8 +395,12 @@ function validateArtifact(directory) {
     const processIds = [entry.topology.authorityPid, entry.topology.coordinatorPid,
       ...entry.topology.isolatedClientProcesses];
     return {
-      schemaCommit: entry.schema === "lbh-s13-isolated-client-attribution-v1"
+      schemaCommit: entry.schema === (run.config.binary
+        ? "lbh-s16-binary-candidate-v1" : "lbh-s13-isolated-client-attribution-v1")
         && entry.commit === run.commit,
+      codecContract: entry.codec === (run.config.binary
+        ? "state-pair-binary-v1" : "state-pair-positional-json-v1")
+        && entry.clients.every((client) => client.receiver.mode === entry.codec),
       exactProcessIsolation: new Set(processIds).size === processIds.length
         && entry.topology.isolatedClientProcesses.length === entry.population,
       exactWindow: entry.window.endAt - entry.window.startAt === run.config.windowMs
@@ -426,10 +437,12 @@ function validateArtifact(directory) {
   const invariants = {
     checksums: checksums.passed,
     exactFileSet: JSON.stringify(actualFiles) === JSON.stringify(expectedFiles),
-    runContract: run.schema === "lbh-s13-isolated-client-run-v1" && run.dirty === false
+    runContract: run.schema === (run.config.binary
+      ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1") && run.dirty === false
       && JSON.stringify(run.config.populations) === JSON.stringify(POPULATIONS)
       && run.config.warmupMs === WARMUP_MS && run.config.windowMs === WINDOW_MS,
-    aggregateContract: aggregate.schema === "lbh-s13-isolated-client-aggregate-v1"
+    aggregateContract: aggregate.schema === (run.config.binary
+      ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1")
       && aggregate.commit === run.commit && aggregate.scenarios.length === POPULATIONS.length,
     exactPopulations: JSON.stringify(scenarios.map((entry) => entry.population)) === JSON.stringify(POPULATIONS),
     semanticRecomputation: semantic.every((checks) => Object.values(checks).every(Boolean)),
@@ -445,6 +458,9 @@ function validateArtifact(directory) {
     s12Binding: s12.passed && s12.actualAggregateSha256 === S12_SHA256
       && run.s12Binding.compositeSha256 === S12_SHA256
       && aggregate.s12Binding.compositeSha256 === S12_SHA256,
+    s15Binding: !run.config.binary || (s15?.passed && s15.actualAggregateSha256 === S15_SHA256
+      && run.s15Binding?.compositeSha256 === S15_SHA256
+      && aggregate.s15Binding?.compositeSha256 === S15_SHA256),
   };
   return { passed: Object.values(invariants).every(Boolean), invariants, semantic, checksums };
 }
@@ -460,25 +476,34 @@ async function main() {
   if (!s12.passed || s12.actualAggregateSha256 !== S12_SHA256) {
     throw new Error(`S12 artifact binding failed: ${JSON.stringify(s12)}`);
   }
+  const s15 = S16_BINARY ? validateChecksums(S15_ARTIFACT) : null;
+  if (S16_BINARY && (!s15.passed || s15.actualAggregateSha256 !== S15_SHA256)) {
+    throw new Error(`S15 artifact binding failed: ${JSON.stringify(s15)}`);
+  }
   const commit = git("rev-parse", "HEAD");
   const dirty = Boolean(git("status", "--porcelain"));
-  if (dirty && process.env.LBH_S13_ALLOW_DIRTY !== "1") throw new Error("S13 evidence requires clean HEAD");
-  const runDir = path.resolve(process.env.LBH_S13_OUTPUT_DIR || path.join(__dirname, "screenshots",
-    `multiplayer-state-pair-s13-${new Date().toISOString().replace(/[:.]/g, "")}-${commit.slice(0, 7)}`));
+  if (dirty && process.env.LBH_S13_ALLOW_DIRTY !== "1" && process.env.LBH_S16_ALLOW_DIRTY !== "1") {
+    throw new Error(`${S16_BINARY ? "S16" : "S13"} evidence requires clean HEAD`);
+  }
+  const runDir = path.resolve((S16_BINARY ? process.env.LBH_S16_OUTPUT_DIR : process.env.LBH_S13_OUTPUT_DIR)
+    || path.join(__dirname, "screenshots",
+      `multiplayer-state-pair-${S16_BINARY ? "s16" : "s13"}-${new Date().toISOString().replace(/[:.]/g, "")}-${commit.slice(0, 7)}`));
   fs.mkdirSync(runDir, { recursive: false });
   writeExclusive(path.join(runDir, "run.json"), {
-    schema: "lbh-s13-isolated-client-run-v1", commit, dirty, seed: SEED,
-    command: "node tests/multiplayer-state-pair-clock-attribution.cjs",
-    config: { populations: POPULATIONS, warmupMs: WARMUP_MS, windowMs: WINDOW_MS },
+    schema: S16_BINARY ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1", commit, dirty, seed: SEED,
+    command: `${S16_BINARY ? "LBH_S16_BINARY=1 " : ""}node tests/multiplayer-state-pair-clock-attribution.cjs`,
+    config: { populations: POPULATIONS, warmupMs: WARMUP_MS, windowMs: WINDOW_MS, binary: S16_BINARY },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
       cpu: os.cpus()[0]?.model || null, logicalCpuCount: os.cpus().length, node: process.version },
     s12Binding: { path: path.relative(ROOT, S12_ARTIFACT), compositeSha256: S12_SHA256 },
+    ...(S16_BINARY ? { s15Binding: { path: path.relative(ROOT, S15_ARTIFACT), compositeSha256: S15_SHA256 } } : {}),
   });
   const scenarios = [];
   for (const population of POPULATIONS) scenarios.push(await runScenario(population, runDir, commit));
   const aggregate = {
-    schema: "lbh-s13-isolated-client-aggregate-v1", commit,
+    schema: S16_BINARY ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1", commit,
     s12Binding: { path: path.relative(ROOT, S12_ARTIFACT), compositeSha256: S12_SHA256 },
+    ...(S16_BINARY ? { s15Binding: { path: path.relative(ROOT, S15_ARTIFACT), compositeSha256: S15_SHA256 } } : {}),
     scenarios: scenarios.map((entry) => ({ population: entry.population,
       authorityMinHz: entry.cadence.minimumAuthorityAcceptedPairsPerSecond,
       receiverMinHz: entry.cadence.minimumReceiverAcceptedPairsPerSecond,
@@ -494,7 +519,7 @@ async function main() {
   const files = fs.readdirSync(runDir).filter((file) => file.endsWith(".json") && file !== "checksums.json");
   writeExclusive(path.join(runDir, "checksums.json"), aggregateChecksum(runDir, files));
   const validation = validateArtifact(runDir);
-  console.log(`S13 isolated-client artifact: ${runDir}`);
+  console.log(`${S16_BINARY ? "S16 binary" : "S13 isolated-client"} artifact: ${runDir}`);
   console.log(`Aggregate SHA-256: ${validation.checksums.actualAggregateSha256}`);
   console.log(`Validation: ${validation.passed ? "PASS" : "FAIL"}`);
   process.exit(validation.passed ? 0 : 1);

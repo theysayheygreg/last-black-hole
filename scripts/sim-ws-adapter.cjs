@@ -34,6 +34,10 @@ const {
   CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
   codecContext: positionalCodecContext,
 } = require("./state-pair-positional-codec.cjs");
+const {
+  CAPABILITY: BINARY_CODEC_CAPABILITY,
+  codecContext: binaryCodecContext,
+} = require("./state-pair-binary-codec.cjs");
 
 const MAX_PENDING_REPLAY_EVENTS = 32;
 const MAX_REPLAY_EVENTS_PER_PASS = 8;
@@ -107,6 +111,9 @@ function createSimWebSocketAdapter(options = {}) {
   };
   const statePairStats = { accepted: 0, rejected: 0, lastRejectReason: null };
   const positionalCodecStats = { encodedFrames: 0, encodedBytes: 0, encodeMilliseconds: 0,
+    reusedEncodedFrames: 0, reusedEncodedBytes: 0, reusedDigestVerified: 0,
+    decodedFrames: 0, decodedBytes: 0, decodeMilliseconds: 0 };
+  const binaryCodecStats = { encodedFrames: 0, encodedBytes: 0, encodeMilliseconds: 0,
     reusedEncodedFrames: 0, reusedEncodedBytes: 0, reusedDigestVerified: 0,
     decodedFrames: 0, decodedBytes: 0, decodeMilliseconds: 0 };
   const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
@@ -784,16 +791,30 @@ function createSimWebSocketAdapter(options = {}) {
     });
   }
 
+  function binaryContextFor(state) {
+    if (!state?.capabilities?.includes(BINARY_CODEC_CAPABILITY)) return null;
+    return binaryCodecContext({
+      matchId: state.identity?.runId,
+      sessionId: state.identity?.connectionId,
+      authorityIncarnation: state.binding?.authorityIncarnation,
+      recipientId: state.identity?.membershipId,
+      recipientIncarnation: state.identity?.connectionEpoch,
+      manifestHash: state.manifestHash,
+    });
+  }
+
   function encodeForState(state, frame) {
+    const binaryContext = binaryContextFor(state);
     const positionalContext = codecContextFor(state);
-    const measured = Boolean(positionalContext && frame?.type === "statePair");
+    const measured = Boolean((binaryContext || positionalContext) && frame?.type === "statePair");
     const started = measured ? performance.now() : 0;
     const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT,
-      ...(positionalContext ? { positionalContext } : {}) });
+      ...(binaryContext ? { binaryContext } : positionalContext ? { positionalContext } : {}) });
     if (measured) {
-      positionalCodecStats.encodedFrames += 1;
-      positionalCodecStats.encodedBytes += Buffer.byteLength(wire, "utf8");
-      positionalCodecStats.encodeMilliseconds += performance.now() - started;
+      const stats = binaryContext ? binaryCodecStats : positionalCodecStats;
+      stats.encodedFrames += 1;
+      stats.encodedBytes += Buffer.byteLength(wire);
+      stats.encodeMilliseconds += performance.now() - started;
     }
     return wire;
   }
@@ -912,12 +933,13 @@ function createSimWebSocketAdapter(options = {}) {
                   serializedAllocationProxyBytes: Buffer.byteLength(serialized, "utf8"),
                 }), () => encodeForState(state, frame))
               : encodeForState(state, frame));
-            if (state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)
+            if ((state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)
+                  || state.capabilities?.includes(BINARY_CODEC_CAPABILITY))
                 && frame?.type === "statePair"
                 && message.envelope.frames.length === 1
                 && Buffer.byteLength(wire, "utf8") !== message.byteLength) {
-              throw new WireProtocolError("positional-queue-size-mismatch",
-                "queued positional byte accounting diverged from flush wire", 4403);
+              throw new WireProtocolError("codec-queue-size-mismatch",
+                "queued state-pair byte accounting diverged from flush wire", 4403);
             }
             if (!sendWire(state, wire, frame)) break;
           }
@@ -1295,12 +1317,20 @@ function createSimWebSocketAdapter(options = {}) {
 
   async function processInboundFrame(state, raw, isBinary) {
     if (!stateIsLive(state)) return;
-    if (isBinary) throw new WireProtocolError("binary-frame", "binary application frames are not supported", 4403);
+    const binaryContext = binaryContextFor(state);
+    if (isBinary && !binaryContext) throw new WireProtocolError("binary-frame", "binary application frames were not negotiated", 4403);
     const positionalContext = codecContextFor(state);
-    const started = positionalContext ? performance.now() : 0;
+    const started = binaryContext || positionalContext ? performance.now() : 0;
     const frame = parseWireFrame(raw, { direction: CLIENT_TO_SERVER,
-      ...(positionalContext ? { positionalContext, requirePositional: true } : {}) });
-    if (positionalContext && (frame.type === "statePairRecovery"
+      ...(isBinary ? { binary: true, binaryContext }
+        : binaryContext ? { requireBinary: true }
+          : positionalContext ? { positionalContext, requirePositional: true } : {}) });
+    if (binaryContext && isBinary && (frame.type === "statePairRecovery"
+        || (frame.type === "ack" && frame.ackKind === "statePair"))) {
+      binaryCodecStats.decodedFrames += 1;
+      binaryCodecStats.decodedBytes += Buffer.byteLength(raw);
+      binaryCodecStats.decodeMilliseconds += performance.now() - started;
+    } else if (positionalContext && (frame.type === "statePairRecovery"
         || (frame.type === "ack" && frame.ackKind === "statePair"))) {
       positionalCodecStats.decodedFrames += 1;
       positionalCodecStats.decodedBytes += Buffer.byteLength(raw);
@@ -1638,20 +1668,23 @@ function createSimWebSocketAdapter(options = {}) {
     let encodedWire;
     try {
       if (isExactEncodedPublication(publication)) {
-        if (!state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)) {
-          throw new WireProtocolError("positional-capability-required",
-            "exact positional publication requires negotiated capability", 4403);
+        const exactCapability = Buffer.isBuffer(publication.encodedWire)
+          ? BINARY_CODEC_CAPABILITY : POSITIONAL_CODEC_CAPABILITY;
+        if (!state.capabilities?.includes(exactCapability)) {
+          throw new WireProtocolError("codec-capability-required",
+            "exact state-pair publication requires its negotiated codec capability", 4403);
         }
         encodedWire = publication.encodedWire;
-        const encodedBytes = Buffer.byteLength(encodedWire, "utf8");
-        const digest = `sha256:${crypto.createHash("sha256").update(encodedWire, "utf8").digest("hex")}`;
+        const encodedBytes = Buffer.byteLength(encodedWire);
+        const digest = `sha256:${crypto.createHash("sha256").update(encodedWire).digest("hex")}`;
         if (encodedBytes !== publication.bytes || digest !== publication.encodedDigest) {
-          throw new WireProtocolError("positional-publication-mismatch",
-            "publisher-selected positional wire failed byte/digest verification", 4403);
+          throw new WireProtocolError("codec-publication-mismatch",
+            "publisher-selected state-pair wire failed byte/digest verification", 4403);
         }
-        positionalCodecStats.reusedEncodedFrames += 1;
-        positionalCodecStats.reusedEncodedBytes += encodedBytes;
-        positionalCodecStats.reusedDigestVerified += 1;
+        const stats = exactCapability === BINARY_CODEC_CAPABILITY ? binaryCodecStats : positionalCodecStats;
+        stats.reusedEncodedFrames += 1;
+        stats.reusedEncodedBytes += encodedBytes;
+        stats.reusedDigestVerified += 1;
       } else if (stageProfiler) {
         encodedWire = stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (wire) => ({
           recipientKey: profileRecipientKey(state),
@@ -1749,20 +1782,23 @@ function createSimWebSocketAdapter(options = {}) {
     let wire;
     try {
       if (isExactEncodedPublication(publication)) {
-        if (!state.capabilities?.includes(POSITIONAL_CODEC_CAPABILITY)) {
-          throw new WireProtocolError("positional-capability-required",
-            "exact positional publication requires negotiated capability", 4403);
+        const exactCapability = Buffer.isBuffer(publication.encodedWire)
+          ? BINARY_CODEC_CAPABILITY : POSITIONAL_CODEC_CAPABILITY;
+        if (!state.capabilities?.includes(exactCapability)) {
+          throw new WireProtocolError("codec-capability-required",
+            "exact state-pair publication requires its negotiated codec capability", 4403);
         }
         wire = publication.encodedWire;
-        const bytes = Buffer.byteLength(wire, "utf8");
-        const digest = `sha256:${crypto.createHash("sha256").update(wire, "utf8").digest("hex")}`;
+        const bytes = Buffer.byteLength(wire);
+        const digest = `sha256:${crypto.createHash("sha256").update(wire).digest("hex")}`;
         if (bytes !== publication.bytes || digest !== publication.encodedDigest) {
-          throw new WireProtocolError("positional-publication-mismatch",
-            "publisher-selected positional wire failed byte/digest verification", 4403);
+          throw new WireProtocolError("codec-publication-mismatch",
+            "publisher-selected state-pair wire failed byte/digest verification", 4403);
         }
-        positionalCodecStats.reusedEncodedFrames += 1;
-        positionalCodecStats.reusedEncodedBytes += bytes;
-        positionalCodecStats.reusedDigestVerified += 1;
+        const stats = exactCapability === BINARY_CODEC_CAPABILITY ? binaryCodecStats : positionalCodecStats;
+        stats.reusedEncodedFrames += 1;
+        stats.reusedEncodedBytes += bytes;
+        stats.reusedDigestVerified += 1;
       } else wire = encodeForState(state, frame);
     } catch (error) {
       return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
@@ -1893,6 +1929,7 @@ function createSimWebSocketAdapter(options = {}) {
     ackRejectDiagnostics.recoveryRejected = 0;
     ackRejectDiagnostics.recoveryCooldownDrops = 0;
     for (const key of Object.keys(positionalCodecStats)) positionalCodecStats[key] = 0;
+    for (const key of Object.keys(binaryCodecStats)) binaryCodecStats[key] = 0;
     replicationAccounting?.reset();
     stageProfiler?.reset();
     return { runId: currentRunId, fenced };
@@ -2006,6 +2043,16 @@ function createSimWebSocketAdapter(options = {}) {
             ? positionalCodecStats.encodeMilliseconds / positionalCodecStats.encodedFrames : null,
           meanDecodeMs: positionalCodecStats.decodedFrames
             ? positionalCodecStats.decodeMilliseconds / positionalCodecStats.decodedFrames : null,
+        }),
+        binary: Object.freeze({
+          capability: BINARY_CODEC_CAPABILITY,
+          enabledConnections: [...connections].filter((state) =>
+            state.capabilities?.includes(BINARY_CODEC_CAPABILITY)).length,
+          ...binaryCodecStats,
+          meanEncodeMs: binaryCodecStats.encodedFrames
+            ? binaryCodecStats.encodeMilliseconds / binaryCodecStats.encodedFrames : null,
+          meanDecodeMs: binaryCodecStats.decodedFrames
+            ? binaryCodecStats.decodeMilliseconds / binaryCodecStats.decodedFrames : null,
         }),
         ackRejectDiagnostics: ackRejectDiagnosticsEnabled
           ? Object.freeze({

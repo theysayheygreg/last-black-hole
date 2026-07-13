@@ -20,6 +20,10 @@ const {
   CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
   codecContext: positionalCodecContext,
 } = require("./state-pair-positional-codec.cjs");
+const {
+  CAPABILITY: BINARY_CODEC_CAPABILITY,
+  codecContext: binaryCodecContext,
+} = require("./state-pair-binary-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -294,6 +298,12 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
           || !ticketClaims.capabilities.includes(MIXED_CAPABILITY))) {
       fail("capability-not-admitted", "positional JSON requires sparse mixed state-pair-v1");
     }
+    if (ticketClaims.capabilities.includes(BINARY_CODEC_CAPABILITY)
+        && (!ticketClaims.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+          || !ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+          || !ticketClaims.capabilities.includes(MIXED_CAPABILITY))) {
+      fail("capability-not-admitted", "binary state-pair requires positional JSON fallback and sparse mixed state-pair-v1");
+    }
     const admissionKey = key(identity);
     if (!admissions.has(admissionKey) && admissions.size >= maxAdmissions) fail("recipient-cap", "state-pair admission cap reached");
     const needsOwnerTracker = !ownerTrackers.has(identity.recipientId);
@@ -411,12 +421,15 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         }), buildOwnerView)
       : buildOwnerView();
     const publicProjection = publicView;
+    const binary = admission.capabilities.includes(BINARY_CODEC_CAPABILITY);
     const positionalEncoder = admission.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
       ? createStatePairWireEncoder(
-          positionalCodecContext({ ...identity, manifestHash: fixedManifestHash }),
+          binary
+            ? binaryCodecContext({ ...identity, manifestHash: fixedManifestHash })
+            : positionalCodecContext({ ...identity, manifestHash: fixedManifestHash }),
           (wire, milliseconds) => {
             positionalMeasure.encodedCandidates += 1;
-            positionalMeasure.encodedBytes += Buffer.byteLength(wire, "utf8");
+            positionalMeasure.encodedBytes += Buffer.byteLength(wire);
             positionalMeasure.encodeMilliseconds += milliseconds;
           },
         ) : null;
@@ -493,6 +506,13 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
           ? positionalMeasure.encodeMilliseconds / positionalMeasure.encodedCandidates : null,
         measurementScope: "authority lifetime including warmup; adapter codec counters reset with evidence windows",
       }),
+      binary: Object.freeze({
+        capability: BINARY_CODEC_CAPABILITY,
+        enabledAdmissions: [...admissions.values()].filter((entry) =>
+          entry.capabilities.includes(BINARY_CODEC_CAPABILITY)).length,
+        positionalJsonFallbackRequired: true,
+        lossyQuantization: false,
+      }),
       publisher: publisher.diagnostics() });
   }
 
@@ -505,6 +525,7 @@ module.exports = {
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   RUNTIME_PUBLIC_COMPONENT_SCHEMA,
   POSITIONAL_CODEC_CAPABILITY,
+  BINARY_CODEC_CAPABILITY,
   SOURCE_FIELD_CLASSIFICATION,
   VIEW_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,

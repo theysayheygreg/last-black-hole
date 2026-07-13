@@ -30,6 +30,11 @@ const {
   POSITIONAL_CODEC_MANIFEST_HASH,
   codecContext: positionalCodecContext,
 } = require("./state-pair-positional-codec.cjs");
+const {
+  CAPABILITY: BINARY_CODEC_CAPABILITY,
+  BINARY_CODEC_MANIFEST_HASH,
+  codecContext: binaryCodecContext,
+} = require("./state-pair-binary-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -57,6 +62,7 @@ const MODES = Object.freeze({
   STATE_PAIR_MIXED: MIXED_CAPABILITY,
   STATE_PAIR_RUNTIME_COMPONENTS: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   STATE_PAIR_POSITIONAL_JSON: POSITIONAL_CODEC_CAPABILITY,
+  STATE_PAIR_BINARY: BINARY_CODEC_CAPABILITY,
 });
 const RECOVERY_REASONS = new Set([
   "reconnect", "match-changed", "session-changed", "authority-changed", "recipient-changed",
@@ -232,6 +238,13 @@ function selectClientReplicationMode({ wireVersion, capabilities = [] } = {}) {
   if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
       && capabilities.includes(MIXED_CAPABILITY)
       && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+      && capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+      && capabilities.includes(BINARY_CODEC_CAPABILITY)) {
+    return MODES.STATE_PAIR_BINARY;
+  }
+  if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
+      && capabilities.includes(MIXED_CAPABILITY)
+      && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
       && capabilities.includes(POSITIONAL_CODEC_CAPABILITY)) {
     return MODES.STATE_PAIR_POSITIONAL_JSON;
   }
@@ -258,8 +271,11 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   const materializeRuntimeComponents = allowMixed
     && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
   const positional = materializeRuntimeComponents && capabilities.includes(POSITIONAL_CODEC_CAPABILITY);
+  const binary = positional && capabilities.includes(BINARY_CODEC_CAPABILITY);
   let codecContext = positional ? positionalCodecContext({ ...context,
     codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH }) : null;
+  let binaryContext = binary ? binaryCodecContext({ ...context,
+    codecManifestHash: BINARY_CODEC_MANIFEST_HASH }) : null;
   if (!Number.isSafeInteger(maxPairBytes) || maxPairBytes < 1024 || maxPairBytes > MAX_WIRE_PAIR_BYTES) {
     throw new RangeError(`maxPairBytes must be between 1024 and ${MAX_WIRE_PAIR_BYTES}`);
   }
@@ -274,7 +290,9 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     })));
 
   function codecBinding() {
-    return positional
+    return binary
+      ? `${BINARY_CODEC_CAPABILITY}:${BINARY_CODEC_MANIFEST_HASH}`
+      : positional
       ? `${POSITIONAL_CODEC_CAPABILITY}:${POSITIONAL_CODEC_MANIFEST_HASH}`
       : materializeRuntimeComponents ? RUNTIME_PUBLIC_COMPONENTS_CAPABILITY
         : allowMixed ? MIXED_CAPABILITY : CAPABILITY;
@@ -511,7 +529,10 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       const bytes = wireBytes(raw);
       if (bytes > maxPairBytes) return reject("oversize-frame");
       frame = parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
-        ...(positional ? { positionalContext: codecContext, requirePositional: true } : {}) });
+        ...(binary ? (typeof raw !== "string"
+          ? { binary: true, binaryContext }
+          : { requireBinary: true })
+          : positional ? { positionalContext: codecContext, requirePositional: true } : {}) });
       scanForbiddenKeys(frame);
       if (frame.type !== "statePair"
           || (frame.pairSchema !== PAIR_SCHEMA && (!allowMixed || frame.pairSchema !== MIXED_PAIR_SCHEMA))) {
@@ -732,6 +753,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     context = next;
     if (positional) codecContext = positionalCodecContext({ ...context,
       codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH });
+    if (binary) binaryContext = binaryCodecContext({ ...context,
+      codecManifestHash: BINARY_CODEC_MANIFEST_HASH });
     lastFrameId = 0;
     lastVisibleFingerprint = null;
     lastAck = null;
@@ -772,7 +795,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function diagnostics() {
     return deepFreeze({
       ...counters,
-      mode: positional ? MODES.STATE_PAIR_POSITIONAL_JSON : materializeRuntimeComponents
+      mode: binary ? MODES.STATE_PAIR_BINARY : positional ? MODES.STATE_PAIR_POSITIONAL_JSON : materializeRuntimeComponents
         ? MODES.STATE_PAIR_RUNTIME_COMPONENTS
         : allowMixed ? MODES.STATE_PAIR_MIXED : MODES.STATE_PAIR,
       awaitingKeyframe: !admitted,
@@ -808,6 +831,7 @@ module.exports = {
   MIXED_CAPABILITY,
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   POSITIONAL_CODEC_CAPABILITY,
+  BINARY_CODEC_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
   DEFAULT_BASE_LEDGER_LIMITS,

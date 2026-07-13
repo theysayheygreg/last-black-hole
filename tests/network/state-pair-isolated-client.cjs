@@ -12,12 +12,18 @@ const { WIRE_PROTOCOL_VERSION_V2, SIM_PROTOCOL_VERSION, SERVER_TO_CLIENT,
   encodeWireFrame, parseWireFrame } = require("../../scripts/multiplayer-wire-protocol.cjs");
 const { codecContext: positionalCodecContext, POSITIONAL_CODEC_MANIFEST,
   POSITIONAL_CODEC_MANIFEST_HASH } = require("../../scripts/state-pair-positional-codec.cjs");
+const { CAPABILITY: BINARY_CODEC_CAPABILITY, codecContext: binaryCodecContext,
+  BINARY_CODEC_MANIFEST, BINARY_CODEC_MANIFEST_HASH } =
+  require("../../scripts/state-pair-binary-codec.cjs");
 const { canonicalJsonBytes } = require("../../scripts/session-replication-manifest.cjs");
 const { distribution } = require("./state-pair-product-metrics.cjs");
 
 const INPUT_HZ = 10;
-const capabilities = ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY,
-  RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY];
+function requestedCapabilities(binary) {
+  return ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY,
+    RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY,
+    ...(binary ? [BINARY_CODEC_CAPABILITY] : [])];
+}
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
 
@@ -68,12 +74,15 @@ function waitFor(check, label, timeoutMs = 12_000) {
 
 function send(frame) {
   if (!state || state.ws.readyState !== WebSocket.OPEN) return false;
-  const wire = encodeWireFrame(frame, state.codecContext
-    ? { positionalContext: state.codecContext } : undefined);
+  const binaryTransaction = state.binaryContext
+    && (frame.type === "statePairRecovery" || (frame.type === "ack" && frame.ackKind === "statePair"));
+  const wire = encodeWireFrame(frame, binaryTransaction
+    ? { binaryContext: state.binaryContext }
+    : state.codecContext ? { positionalContext: state.codecContext } : undefined);
   state.ws.send(wire);
   if (measuring) {
     measurement.uplinkFrames += 1;
-    measurement.uplinkBytes += Buffer.byteLength(wire, "utf8");
+    measurement.uplinkBytes += Buffer.byteLength(wire);
     measurement.maxBufferedAmount = Math.max(measurement.maxBufferedAmount,
       Number(state.ws.bufferedAmount) || 0);
   }
@@ -170,6 +179,7 @@ function startInputs({ startAt, durationMs, phase }) {
 }
 
 async function initialize(config) {
+  const capabilities = requestedCapabilities(config.binary === true);
   const issued = await request(config.port, "/multiplayer/ticket", {
     method: "POST", authority: config.authority, body: {
       kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2], capabilities,
@@ -181,7 +191,7 @@ async function initialize(config) {
   }
   state = {
     ...config, ticket: issued.body, ws: new WebSocket(`ws://127.0.0.1:${config.port}/stream`,
-      { perMessageDeflate: false }), codecContext: null, receiver: null, welcome: null,
+      { perMessageDeflate: false }), codecContext: null, binaryContext: null, receiver: null, welcome: null,
     inputSeq: 0, actionSeq: 0, commandSeq: 0, acceptedPairs: 0,
     acceptedPairEvents: [], error: null, close: null,
   };
@@ -189,15 +199,18 @@ async function initialize(config) {
   state.ws.on("close", (code, reason) => {
     state.close = { code, reason: reason.toString("utf8"), at: Date.now() };
   });
-  state.ws.on("message", (raw) => {
+  state.ws.on("message", (raw, isBinary) => {
     try {
-      const text = raw.toString("utf8");
+      const text = isBinary ? null : raw.toString("utf8");
       const decodeStarted = performance.now();
-      const frame = text.startsWith("[")
+      const frame = isBinary
+        ? parseWireFrame(raw, { direction: SERVER_TO_CLIENT, binary: true,
+            binaryContext: state.binaryContext })
+        : text.startsWith("[")
         ? parseWireFrame(text, { direction: SERVER_TO_CLIENT,
             positionalContext: state.codecContext, requirePositional: true })
         : parseWireFrame(text, { direction: SERVER_TO_CLIENT });
-      if (measuring && text.startsWith("[")) measurement.decodeMs.push(performance.now() - decodeStarted);
+      if (measuring && (isBinary || text.startsWith("["))) measurement.decodeMs.push(performance.now() - decodeStarted);
       if (frame.type === "welcome") {
         state.welcome = frame;
         state.inputSeq = frame.lastInputSeq;
@@ -208,6 +221,12 @@ async function initialize(config) {
           authorityIncarnation: frame.authorityIncarnation, recipientId: frame.membershipId,
           recipientIncarnation: frame.connectionEpoch, manifestHash: frame.manifestHash,
           codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH,
+        });
+        if (config.binary === true) state.binaryContext = binaryCodecContext({
+          matchId: frame.runId, sessionId: frame.connectionId,
+          authorityIncarnation: frame.authorityIncarnation, recipientId: frame.membershipId,
+          recipientIncarnation: frame.connectionEpoch, manifestHash: frame.manifestHash,
+          codecManifestHash: BINARY_CODEC_MANIFEST_HASH,
         });
         state.receiver = createClientDeltaReceiver({ context: {
           matchId: frame.runId, sessionId: frame.connectionId,
@@ -233,7 +252,7 @@ async function initialize(config) {
       if (frame.type === "error") throw new Error(`${frame.code}:${frame.message}`);
       if (frame.type !== "statePair") return;
       const applyStarted = performance.now();
-      const outcome = state.receiver.receive(text);
+      const outcome = state.receiver.receive(isBinary ? raw : text);
       if (measuring) measurement.applyMs.push(performance.now() - applyStarted);
       if (!outcome.accepted) {
         if (outcome.recovery) send(outcome.recovery);
@@ -247,7 +266,7 @@ async function initialize(config) {
       if (outcome.published !== false) {
         state.acceptedPairs += 1;
         const event = { at: Date.now(), frameId: outcome.state.frameId,
-          bytes: Buffer.byteLength(text, "utf8") };
+          bytes: Buffer.byteLength(isBinary ? raw : text) };
         state.acceptedPairEvents.push(event);
         if (measuring) measurement.acceptedEvents.push(event);
       }
@@ -283,6 +302,17 @@ async function initialize(config) {
       || codecHash !== POSITIONAL_CODEC_MANIFEST_HASH
       || !canonicalJsonBytes(codec.manifest).equals(canonicalJsonBytes(POSITIONAL_CODEC_MANIFEST))) {
     throw new Error("content-addressed positional codec manifest verification failed");
+  }
+  if (config.binary === true) {
+    const binaryCodec = sessionManifest.publicContent?.statePairBinaryCodec;
+    const binaryHash = binaryCodec?.manifest
+      ? `sha256:${crypto.createHash("sha256").update(canonicalJsonBytes(binaryCodec.manifest)).digest("hex")}` : null;
+    if (binaryCodec?.capability !== BINARY_CODEC_CAPABILITY
+        || binaryCodec?.codecManifestHash !== BINARY_CODEC_MANIFEST_HASH
+        || binaryHash !== BINARY_CODEC_MANIFEST_HASH
+        || !canonicalJsonBytes(binaryCodec.manifest).equals(canonicalJsonBytes(BINARY_CODEC_MANIFEST))) {
+      throw new Error("content-addressed binary codec manifest verification failed");
+    }
   }
   send({ type: "manifestAck", manifestSchema: issued.body.manifestSchema,
     manifestHash: issued.body.manifestHash, manifestBytes: issued.body.manifestBytes,

@@ -419,7 +419,7 @@ function assertContext(frame, context) {
   }
 }
 
-function encodeStatePair(frame, context) {
+function encodeStatePairValue(frame, context) {
   assertContext(frame, context);
   const encoded = [PAIR_TAG, CODEC_VERSION, POSITIONAL_CODEC_MANIFEST_HASH,
     frame.pairSchema === "lbh-authority-state-pair-mixed-v1" ? 1 : frame.pairSchema === "lbh-authority-state-pair-v1" ? 0 : -1,
@@ -431,7 +431,11 @@ function encodeStatePair(frame, context) {
     integer(frame.ballparkEpoch, "ballparkEpoch"), string(frame.manifestHash, "manifestHash"),
     encodeLane(frame.public, "public"), encodeLane(frame.owner, "owner")];
   if (encoded[3] < 0) fail("unknown-schema", "statePair schema is unsupported");
-  const wire = JSON.stringify(encoded);
+  return encoded;
+}
+
+function encodeStatePair(frame, context) {
+  const wire = JSON.stringify(encodeStatePairValue(frame, context));
   if (Buffer.byteLength(wire, "utf8") > MAX_CODEC_BYTES) fail("frame-too-large", "positional statePair exceeds codec limit");
   return wire;
 }
@@ -519,7 +523,7 @@ function decodeStatePair(encoded, context) {
   return frame;
 }
 
-function encodeAck(frame, context) {
+function encodeAckValue(frame, context) {
   assertContext(frame, context);
   if (frame.ackKind !== "statePair" || frame.ackSchema !== "lbh-authority-state-pair-mixed-ack-v1") {
     fail("unknown-schema", "positional codec only covers mixed statePair ACKs");
@@ -536,7 +540,11 @@ function encodeAck(frame, context) {
     string(frame.publicBaseSnapshotId, "publicBaseSnapshotId", { allowNull: true }),
     string(frame.ownerBaseSnapshotId, "ownerBaseSnapshotId", { allowNull: true })];
   if (encoded[20] < 0 || encoded[21] < 0) fail("unknown-tag", "ACK lane kind is invalid");
-  return JSON.stringify(encoded);
+  return encoded;
+}
+
+function encodeAck(frame, context) {
+  return JSON.stringify(encodeAckValue(frame, context));
 }
 
 function decodeAck(encoded, context) {
@@ -562,16 +570,20 @@ function decodeAck(encoded, context) {
   return frame;
 }
 
-function encodeRecovery(frame, context) {
+function encodeRecoveryValue(frame, context) {
   assertContext(frame, context);
-  return JSON.stringify([RECOVERY_TAG, CODEC_VERSION, POSITIONAL_CODEC_MANIFEST_HASH,
+  return [RECOVERY_TAG, CODEC_VERSION, POSITIONAL_CODEC_MANIFEST_HASH,
     tagOf(RECOVERY_TAGS, frame.reason, "recovery reason"), string(frame.matchId, "matchId"),
     string(frame.sessionId, "sessionId"), integer(frame.authorityIncarnation, "authorityIncarnation", 1),
     string(frame.recipientId, "recipientId"), integer(frame.recipientIncarnation, "recipientIncarnation", 1),
     string(frame.manifestSchema, "manifestSchema"), string(frame.manifestHash, "manifestHash"),
     integer(frame.lastAcceptedFrameId, "lastAcceptedFrameId"),
     string(frame.lastAcceptedStatePairId, "lastAcceptedStatePairId", { allowNull: true }),
-    string(frame.lastAcceptedSnapshotId, "lastAcceptedSnapshotId", { allowNull: true })]);
+    string(frame.lastAcceptedSnapshotId, "lastAcceptedSnapshotId", { allowNull: true })];
+}
+
+function encodeRecovery(frame, context) {
+  return JSON.stringify(encodeRecoveryValue(frame, context));
 }
 
 function decodeRecovery(encoded, context) {
@@ -598,6 +610,21 @@ function encodePositionalFrame(frame, context) {
   fail("unsupported-frame", "frame is not covered by the positional state-pair codec");
 }
 
+function encodePositionalValueFrame(frame, context) {
+  if (frame?.type === "statePair") return encodeStatePairValue(frame, context);
+  if (frame?.type === "ack" && frame.ackKind === "statePair") return encodeAckValue(frame, context);
+  if (frame?.type === "statePairRecovery") return encodeRecoveryValue(frame, context);
+  fail("unsupported-frame", "frame is not covered by the positional state-pair codec");
+}
+
+function decodePositionalValueFrame(encoded, context) {
+  if (!Array.isArray(encoded)) fail("invalid-layout", "positional frame must be an array");
+  if (encoded[0] === PAIR_TAG) return decodeStatePair(encoded, context);
+  if (encoded[0] === ACK_TAG) return decodeAck(encoded, context);
+  if (encoded[0] === RECOVERY_TAG) return decodeRecovery(encoded, context);
+  fail("unknown-tag", "positional frame tag is unknown");
+}
+
 function decodePositionalFrame(raw, context) {
   const text = typeof raw === "string" ? raw : Buffer.isBuffer(raw) || raw instanceof Uint8Array
     ? new TextDecoder("utf-8", { fatal: true }).decode(raw) : fail("invalid-encoding", "wire must be UTF-8 JSON text");
@@ -608,10 +635,7 @@ function decodePositionalFrame(raw, context) {
   // This byte equality is the malleability fence: whitespace, alternate number
   // spellings, escaped string aliases, and negative zero are not admitted.
   if (JSON.stringify(encoded) !== text) fail("noncanonical-json", "positional frame is not canonical compact JSON");
-  if (encoded[0] === PAIR_TAG) return decodeStatePair(encoded, context);
-  if (encoded[0] === ACK_TAG) return decodeAck(encoded, context);
-  if (encoded[0] === RECOVERY_TAG) return decodeRecovery(encoded, context);
-  fail("unknown-tag", "positional frame tag is unknown");
+  return decodePositionalValueFrame(encoded, context);
 }
 
 function codecContext(input = {}) {
@@ -624,5 +648,5 @@ function codecContext(input = {}) {
 module.exports = {
   CAPABILITY, CODEC_SCHEMA, CODEC_VERSION, POSITIONAL_CODEC_MANIFEST, POSITIONAL_CODEC_MANIFEST_HASH,
   MAX_CODEC_BYTES, PositionalCodecError, codecContext, encodePositionalFrame, decodePositionalFrame,
-  composeStatePairCandidates,
+  encodePositionalValueFrame, decodePositionalValueFrame, composeStatePairCandidates,
 };

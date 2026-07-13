@@ -132,6 +132,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairBinaryCodec",
+    file: "state-pair-binary-codec.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "StatePairSingleSerializationBenchmark",
     file: "multiplayer-state-pair-single-serialization-benchmark.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],

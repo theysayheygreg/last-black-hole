@@ -106,12 +106,17 @@ const {
   MIXED_CAPABILITY: STATE_PAIR_MIXED_CAPABILITY,
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   POSITIONAL_CODEC_CAPABILITY,
+  BINARY_CODEC_CAPABILITY,
   createRuntimeStatePairAuthority,
 } = require("./runtime-state-pair-integration.cjs");
 const {
   POSITIONAL_CODEC_MANIFEST,
   POSITIONAL_CODEC_MANIFEST_HASH,
 } = require("./state-pair-positional-codec.cjs");
+const {
+  BINARY_CODEC_MANIFEST,
+  BINARY_CODEC_MANIFEST_HASH,
+} = require("./state-pair-binary-codec.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -1021,6 +1026,8 @@ const MULTIPLAYER_RUNTIME_PUBLIC_COMPONENTS_ENABLED = MULTIPLAYER_STATE_PAIR_MIX
   && String(process.env.LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1 || "").trim() === "true";
 const MULTIPLAYER_POSITIONAL_JSON_ENABLED = MULTIPLAYER_RUNTIME_PUBLIC_COMPONENTS_ENABLED
   && String(process.env.LBH_SIM_WS_POSITIONAL_JSON_V1 || "").trim() === "true";
+const MULTIPLAYER_BINARY_STATE_PAIR_ENABLED = MULTIPLAYER_POSITIONAL_JSON_ENABLED
+  && String(process.env.LBH_SIM_WS_STATE_PAIR_BINARY_V1 || "").trim() === "true";
 const MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED = String(
   process.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS || "",
 ).trim() === "true";
@@ -6208,6 +6215,13 @@ function currentSessionReplicationManifest() {
           codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH,
           manifest: POSITIONAL_CODEC_MANIFEST,
         },
+        ...(MULTIPLAYER_BINARY_STATE_PAIR_ENABLED ? {
+          statePairBinaryCodec: {
+            capability: BINARY_CODEC_CAPABILITY,
+            codecManifestHash: BINARY_CODEC_MANIFEST_HASH,
+            manifest: BINARY_CODEC_MANIFEST,
+          },
+        } : {}),
       } : {}),
     },
   });
@@ -7371,7 +7385,10 @@ const server = http.createServer(async (req, res) => {
                 ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
                   ...(MULTIPLAYER_POSITIONAL_JSON_ENABLED
                     && body.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
-                    ? [POSITIONAL_CODEC_CAPABILITY] : [])] : [])]
+                    ? [POSITIONAL_CODEC_CAPABILITY,
+                      ...(MULTIPLAYER_BINARY_STATE_PAIR_ENABLED
+                        && body.capabilities.includes(BINARY_CODEC_CAPABILITY)
+                        ? [BINARY_CODEC_CAPABILITY] : [])] : [])] : [])]
             : [])] : [])].sort()
         : [];
       if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2

@@ -662,8 +662,8 @@ function createAuthorityDeltaPublisher(options = {}) {
       }
       const started = performance.now();
       const encodedWire = encodeWire ? encodeWire(candidate) : null;
-      if (encodedWire !== null && typeof encodedWire !== "string") {
-        fail("invalid-wire-encoder", "encodeWire must return canonical UTF-8 text");
+      if (encodedWire !== null && typeof encodedWire !== "string" && !Buffer.isBuffer(encodedWire)) {
+        fail("invalid-wire-encoder", "encodeWire must return canonical UTF-8 text or exact binary bytes");
       }
       const measured = encodedWire !== null ? Buffer.byteLength(encodedWire, "utf8")
         : wireSize ? wireSize(candidate) : serializedBytes(candidate, stageProfiler, identity.recipientId);

@@ -65,6 +65,19 @@ function testExactStateWireHasBoundedSidecarRetention() {
   const message = queue.drain().messages[0];
   assert.strictEqual(message.exactWire, true);
   assert.strictEqual(message.wire, exactWire);
+
+  const binaryQueue = createMultiplayerSendQueue({ maxMessages: 2, maxBytes: 128 });
+  const binaryWire = Buffer.from([0x4c, 0x42, 0x53, 0x50, 0x01]);
+  const binaryResult = binaryQueue.enqueueState(1, { frames: [{ payload: "binary" }] }, {
+    byteLength: binaryWire.length, exactWire: binaryWire,
+  });
+  assert.strictEqual(binaryResult.accepted, true);
+  binaryWire[0] = 0;
+  const binaryMessage = binaryQueue.drain().messages[0];
+  assert(Buffer.isBuffer(binaryMessage.wire));
+  assert.deepStrictEqual([...binaryMessage.wire], [0x4c, 0x42, 0x53, 0x50, 0x01],
+    "queue must retain an immutable copy of exact binary bytes");
+  assert.strictEqual(binaryMessage.byteLength, 5);
 }
 
 function testReliableFifoAckAndReplay() {
