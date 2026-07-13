@@ -467,7 +467,8 @@ async function runScenario({ population, scenario, runDir }) {
           label: `${old.label}-reincarnated` });
         ref.current[index] = replacement;
         allClients.push(replacement);
-        return { target: old.label, replacementMembership: replacement.welcome.membershipId };
+        return { target: old.label, oldMembership: old.welcome.membershipId,
+          replacementMembership: replacement.welcome.membershipId };
       });
       await once("mutate", async () => {
         const target = ref.current[Math.min(2, ref.current.length - 1)];
@@ -529,8 +530,11 @@ async function runScenario({ population, scenario, runDir }) {
         if (ackLoss && !(client.lastAcceptedFrameId > ackLoss.frameId)) return false;
         return true;
       }),
-      lifecycleObserved: !churn || (observedLifecycle.reincarnations > 0
-        && observedLifecycle.componentChanges > 0 && faultActions.some((entry) => entry.name === "leave")),
+      lifecycleObserved: !churn || (observedLifecycle.despawns > 0
+        && observedLifecycle.creates > 0
+        && observedLifecycle.componentChanges > 0
+        && faultActions.some((entry) => entry.name === "leave"
+          && entry.oldMembership !== entry.replacementMembership)),
     };
     const admission = {
       steadyMeanAtOrBelow64KiB: churn ? null : meanWorst <= TARGET_BPS,
@@ -733,7 +737,7 @@ async function main() {
     failureAnalysis,
     recommendation: verdict.passed ? "Advance only to separately measured WAN/WSS and longer soak gates."
       : {
-        nextSlice: "Add default-off per-lane candidate-size/fallback-reason evidence, then test atomic mixed public/owner payload kinds before any broader codec or AOI work.",
+        nextSlice: "Test mixed public-delta/owner-keyframe lane kinds inside one atomically applied statePair before any broader codec or AOI work; the gate now attributes the dominant fallback and records both candidates.",
         quantifiedTarget: "The next slice must recover the per-population required reductions in failureAnalysis; do not substitute aggregate averages.",
         boundedPotentialReference: "The existing focused runtime loopback measured 31,993-byte keyframe versus 11,696-byte valid delta (63.4% smaller), but that is a non-representative upper-bound clue, not a product forecast.",
         second: "Reduce exhaustive runtimePublic component replacement only after candidate evidence identifies the repeated fields; preserve canonical projection completeness.",
