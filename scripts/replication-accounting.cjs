@@ -84,12 +84,15 @@ function summarizeWindow(snapshot, {
   const groups = {};
   const pairHalves = new Map();
   for (const event of selected) {
-    const key = `${event.direction}|${event.wireVersion}|${event.frameClass}`;
+    const key = `${event.direction}|${event.wireVersion}|${event.frameClass}|${event.projectionKind || "none"}`;
     const group = groups[key] ||= {
       direction: event.direction, wireVersion: event.wireVersion, frameClass: event.frameClass,
+      projectionKind: event.projectionKind,
       offeredBytes: 0, offeredFrames: 0, acceptedBytes: 0, acceptedFrames: 0,
       coalescedBytes: 0, coalescedFrames: 0, policyDroppedBytes: 0, policyDroppedFrames: 0,
       retransmittedBytes: 0, retransmittedFrames: 0, ackRetiredBytes: 0, ackRetiredFrames: 0,
+      unofferedRetransmittedBytes: 0, unofferedRetransmittedFrames: 0,
+      sendFailedBytes: 0, sendFailedFrames: 0, otherTerminalBytes: 0, otherTerminalFrames: 0,
       acceptedFrameBytes: [],
     };
     const prefix = event.metric;
@@ -127,6 +130,16 @@ function summarizeWindow(snapshot, {
     group.p50AcceptedFrameBytes = nearestRank(group.acceptedFrameBytes, 0.5);
     group.p95AcceptedFrameBytes = nearestRank(group.acceptedFrameBytes, 0.95);
     delete group.acceptedFrameBytes;
+    if (group.direction === DOWNLINK) {
+      group.primaryAcceptedBytes = group.acceptedBytes - group.unofferedRetransmittedBytes;
+      group.primaryAcceptedFrames = group.acceptedFrames - group.unofferedRetransmittedFrames;
+      group.terminalBytes = group.primaryAcceptedBytes + group.coalescedBytes + group.policyDroppedBytes
+        + group.sendFailedBytes + group.otherTerminalBytes;
+      group.terminalFrames = group.primaryAcceptedFrames + group.coalescedFrames + group.policyDroppedFrames
+        + group.sendFailedFrames + group.otherTerminalFrames;
+      group.conservationBalanced = group.offeredBytes === group.terminalBytes
+        && group.offeredFrames === group.terminalFrames;
+    }
   }
   const pairBytes = [];
   const pairCounts = {};
@@ -159,7 +172,7 @@ function summarizeWindow(snapshot, {
     && Object.keys(recipients).length === expectedRecipients;
   const activeCoverageComplete = Object.values(recipients).length > 0
     && Object.values(recipients).every((row) => row.activeSeconds >= (endAt - startAt) / 1000 * 0.9);
-  const completeEvidenceWindow = snapshot.overflow === 0
+  const completeEvidenceWindow = snapshot.overflow === 0 && snapshot.evidenceFailure === null
     && startAt >= snapshot.captureStartedAt && endAt <= snapshot.capturedThroughAt
     && evidenceFinalized && intervalsFinalized && recipientCardinalityMatches && activeCoverageComplete
     && pendingSendCallbacks === 0;
@@ -172,6 +185,7 @@ function summarizeWindow(snapshot, {
     recipients: Object.freeze(recipients), aggregate: Object.freeze(aggregate), groups: Object.freeze(groups),
     completePairBytes: Object.freeze({ count: pairBytes.length, p50: nearestRank(pairBytes, 0.5), p95: nearestRank(pairBytes, 0.95) }),
     overflow: snapshot.overflow,
+    evidenceFailure: snapshot.evidenceFailure,
   });
 }
 
@@ -206,37 +220,70 @@ function normalizeReconnect({ nonRecoveryAcceptedDownlinkBytes, nonRecoveryConne
   });
 }
 
-function createReplicationAccounting({ now = Date.now, maxEvents = MAX_EVENTS } = {}) {
+function createReplicationAccounting({
+  now = Date.now,
+  maxEvents = MAX_EVENTS,
+  maxOrdinalIdentities = 4096,
+  maxIntervalsPerRecipient = 2048,
+  maxAcceptedReliable = 16384,
+} = {}) {
   let salt = crypto.randomBytes(32);
   const ordinals = new Map();
+  const identitiesByLabel = new Map();
+  const aliases = new Map();
   const intervals = new Map();
   const events = [];
-  const acceptedReliable = new Set();
+  const acceptedReliable = new Map();
   let nextOrdinal = 0;
   let overflow = 0;
+  let evidenceFailure = null;
   let runGeneration = 1;
   let captureStartedAt = now();
 
+  function failEvidence(reason) {
+    if (!evidenceFailure) evidenceFailure = Object.freeze({ reason, timestamp: now() });
+    overflow = 1;
+  }
+
+  function canonicalLabel(label) {
+    let current = label;
+    const seen = new Set();
+    while (aliases.has(current) && !seen.has(current)) {
+      seen.add(current);
+      current = aliases.get(current);
+    }
+    return current;
+  }
+
   function recipient(bindingKey, schedulerConnectionId) {
+    if (evidenceFailure) return null;
     const stable = bindingKey || `pending:${schedulerConnectionId}`;
     let entry = ordinals.get(stable);
     if (!entry) {
+      if (nextOrdinal >= maxOrdinalIdentities) {
+        failEvidence("recipient-capacity-exceeded");
+        return null;
+      }
       entry = Object.freeze({
         label: `recipient-${++nextOrdinal}`,
         digest: crypto.createHmac("sha256", salt).update(stable).digest("base64url").slice(0, 16),
       });
       ordinals.set(stable, entry);
+      identitiesByLabel.set(entry.label, entry);
     }
     return entry;
   }
 
   function push(state, frame, direction, metric, bytes, { frames = 1, reliableId = null, timestamp = now() } = {}) {
-    if (events.length >= maxEvents) { overflow += 1; return; }
+    if (evidenceFailure) return;
+    if (events.length >= maxEvents) { failEvidence("event-capacity-exceeded"); return; }
     const identity = recipient(state.bindingKey, state.schedulerConnectionId);
+    if (!identity) return;
+    const canonical = identitiesByLabel.get(canonicalLabel(identity.label)) || identity;
     const shape = frameShape(frame);
     events.push(Object.freeze({
-      timestamp, recipient: identity.label, recipientDigest: identity.digest,
-      recipientOrdinal: Number(identity.label.slice("recipient-".length)),
+      timestamp, recipient: canonical.label, recipientDigest: canonical.digest,
+      recipientOrdinal: Number(canonical.label.slice("recipient-".length)),
       runGeneration,
       connectionEpoch: Number.isSafeInteger(state.identity?.connectionEpoch) ? state.identity.connectionEpoch : 0,
       direction, wireVersion: WIRE_PROTOCOL_VERSION, frameClass: wireClass(frame), metric,
@@ -249,47 +296,97 @@ function createReplicationAccounting({ now = Date.now, maxEvents = MAX_EVENTS } 
 
   return Object.freeze({
     bind(state) {
+      if (evidenceFailure) return;
       const pendingKey = `pending:${state.schedulerConnectionId}`;
       const stableKey = state.bindingKey;
       const pendingIdentity = ordinals.get(pendingKey);
-      if (pendingIdentity && stableKey && !ordinals.has(stableKey)) ordinals.set(stableKey, pendingIdentity);
+      const stableIdentity = stableKey ? ordinals.get(stableKey) : null;
+      if (pendingIdentity && stableIdentity && pendingIdentity !== stableIdentity) {
+        aliases.set(pendingIdentity.label, stableIdentity.label);
+      } else if (pendingIdentity && stableKey && !stableIdentity) {
+        ordinals.set(stableKey, pendingIdentity);
+      }
       const identity = recipient(stableKey, state.schedulerConnectionId);
-      const list = intervals.get(identity.label) || [];
+      if (!identity) return;
+      const label = canonicalLabel(identity.label);
+      const list = intervals.get(label) || [];
+      if (list.length >= maxIntervalsPerRecipient) {
+        failEvidence("interval-capacity-exceeded");
+        return;
+      }
       const interval = { startAt: now(), endAt: null };
       list.push(interval);
-      intervals.set(identity.label, list);
-      state.replicationRecipient = identity.label;
+      intervals.set(label, list);
+      state.replicationRecipient = label;
       state.replicationInterval = interval;
     },
     cleanup(state) {
+      if (evidenceFailure) return;
       const active = state.replicationInterval;
       if (active && active.endAt === null) active.endAt = now();
       state.replicationInterval = null;
     },
-    outbound(state, frame, metric, bytes, options) { push(state, frame, DOWNLINK, metric, bytes, options); },
+    outbound(state, frame, metric, bytes, options) {
+      if (metric === "offered" && Number.isSafeInteger(frame?.deliveryId) && !evidenceFailure) {
+        const key = `${runGeneration}|${canonicalLabel(state.replicationRecipient)}|${frame.deliveryId}`;
+        let fact = acceptedReliable.get(key);
+        if (!fact) {
+          if (acceptedReliable.size >= maxAcceptedReliable) {
+            failEvidence("reliable-capacity-exceeded");
+            return;
+          }
+          fact = { offers: 0, accepts: 0 };
+          acceptedReliable.set(key, fact);
+        }
+        fact.offers += 1;
+      }
+      push(state, frame, DOWNLINK, metric, bytes, options);
+    },
     inbound(state, frame, bytes) { push(state, frame, UPLINK, "accepted", bytes); },
     accepted(state, frame, bytes, sendAttempt, timestamp) {
       push(state, frame, DOWNLINK, "accepted", bytes, { reliableId: sendAttempt?.reliableId, timestamp });
-      if (sendAttempt) {
-        const epoch = Number.isSafeInteger(state.identity?.connectionEpoch) ? state.identity.connectionEpoch : 0;
-        const key = `${runGeneration}|${state.replicationRecipient}|${epoch}|${sendAttempt.reliableId}`;
-        if (acceptedReliable.has(key)) push(state, frame, DOWNLINK, "retransmitted", bytes,
+      if (sendAttempt && !evidenceFailure) {
+        const key = `${runGeneration}|${canonicalLabel(state.replicationRecipient)}|${sendAttempt.reliableId}`;
+        let fact = acceptedReliable.get(key);
+        if (!fact) {
+          if (acceptedReliable.size >= maxAcceptedReliable) {
+            failEvidence("reliable-capacity-exceeded");
+            return;
+          }
+          fact = { offers: 0, accepts: 0 };
+          acceptedReliable.set(key, fact);
+        }
+        fact.accepts += 1;
+        if (fact.accepts > 1) push(state, frame, DOWNLINK, "retransmitted", bytes,
           { reliableId: sendAttempt.reliableId, timestamp });
-        else acceptedReliable.add(key);
+        if (fact.accepts > fact.offers) push(state, frame, DOWNLINK, "unofferedRetransmitted", bytes,
+          { reliableId: sendAttempt.reliableId, timestamp });
       }
     },
+    retire(state, reliableId) {
+      if (evidenceFailure) return;
+      if (!Number.isSafeInteger(reliableId) || reliableId <= 0) return;
+      acceptedReliable.delete(`${runGeneration}|${canonicalLabel(state.replicationRecipient)}|${reliableId}`);
+    },
     reset() {
-      ordinals.clear(); intervals.clear(); events.length = 0; acceptedReliable.clear(); nextOrdinal = 0; overflow = 0;
+      ordinals.clear(); identitiesByLabel.clear(); aliases.clear(); intervals.clear(); events.length = 0;
+      acceptedReliable.clear(); nextOrdinal = 0; overflow = 0; evidenceFailure = null;
       salt = crypto.randomBytes(32);
       runGeneration += 1;
       captureStartedAt = now();
     },
     snapshot() {
       return Object.freeze({
-        enabled: true, overflow,
+        enabled: true, overflow, evidenceFailure,
         captureStartedAt,
         capturedThroughAt: now(),
-        events: Object.freeze([...events]),
+        events: Object.freeze(events.map((event) => {
+          const label = canonicalLabel(event.recipient);
+          const identity = identitiesByLabel.get(label);
+          return Object.freeze({ ...event, recipient: label,
+            recipientDigest: identity?.digest || event.recipientDigest,
+            recipientOrdinal: Number(label.slice("recipient-".length)) });
+        })),
         intervals: Object.freeze(Object.fromEntries([...intervals].map(([key, value]) => [key,
           Object.freeze(value.map((interval) => Object.freeze({ ...interval })))]))),
       });

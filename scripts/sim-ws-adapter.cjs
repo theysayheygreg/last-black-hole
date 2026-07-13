@@ -400,8 +400,24 @@ function createSimWebSocketAdapter(options = {}) {
     return result;
   }
 
+  function recordSendTerminal(
+    state, frame, metric, wire, timestamp = now(), sendAttempt = null, { mutateTracking = true } = {},
+  ) {
+    if (!replicationAccounting) return;
+    replicationAccounting.outbound(state, frame, metric, Buffer.byteLength(wire, "utf8"), { timestamp });
+    if (mutateTracking && (frame?.type === "publicState" || frame?.type === "ownerState")) {
+      state.replicationStateFrames?.delete(frame);
+      if (state.replicationQueuedStateFrames?.[frame.type]?.frame === frame) {
+        delete state.replicationQueuedStateFrames[frame.type];
+        if (Object.keys(state.replicationQueuedStateFrames).length === 0) state.replicationQueuedStateFrames = null;
+      }
+    }
+    if (mutateTracking && sendAttempt) state.replicationReliableFrames?.delete(sendAttempt.reliableId);
+  }
+
   function sendWireImmediate(state, wire, frame, sendAttempt = null, { completeAttempt = true } = {}) {
     if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) {
+      recordSendTerminal(state, frame, "sendFailed", wire, now(), sendAttempt);
       if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
       return false;
     }
@@ -411,6 +427,12 @@ function createSimWebSocketAdapter(options = {}) {
       if (replicationAccounting) replicationPendingSendCallbacks += 1;
       const accountingTimestamp = replicationAccounting ? now() : null;
       const accountingEpoch = replicationAccountingEpoch;
+      const callbackFence = replicationAccounting ? Object.freeze({
+        generation: state.generation,
+        schedulerConnectionId: state.schedulerConnectionId,
+        connectionEpoch: state.identity?.connectionEpoch ?? null,
+        outboundGeneration: state.outboundGeneration,
+      }) : null;
       if (replicationAccounting && sendAttempt) {
         const retained = state.replicationReliableFrames?.get(sendAttempt.reliableId);
         if (retained) retained.sendInvoked = true;
@@ -427,9 +449,23 @@ function createSimWebSocketAdapter(options = {}) {
           state.pendingSendBytes = Math.max(0, state.pendingSendBytes - Buffer.byteLength(wire, "utf8"));
         }
         samplePressure(state);
-        if (error) terminate(state);
-        else {
+        const callbackIsCurrent = !callbackFence || (
+          state.generation === callbackFence.generation
+          && state.schedulerConnectionId === callbackFence.schedulerConnectionId
+          && (state.identity?.connectionEpoch ?? null) === callbackFence.connectionEpoch
+          && state.outboundGeneration === callbackFence.outboundGeneration
+          && !state.cleaned
+        );
+        if (error) {
           if (replicationAccounting && accountingEpoch === replicationAccountingEpoch) {
+            recordSendTerminal(state, frame, "sendFailed", wire, accountingTimestamp, sendAttempt, {
+              mutateTracking: callbackIsCurrent,
+            });
+          }
+          if (callbackIsCurrent) terminate(state);
+        }
+        else {
+          if (replicationAccounting && accountingEpoch === replicationAccountingEpoch && callbackIsCurrent) {
             replicationAccounting.accepted(
               state, frame, Buffer.byteLength(wire, "utf8"), sendAttempt, accountingTimestamp,
             );
@@ -443,6 +479,10 @@ function createSimWebSocketAdapter(options = {}) {
               if (state.replicationQueuedStateFrames
                 && Object.keys(state.replicationQueuedStateFrames).length === 0) state.replicationQueuedStateFrames = null;
             }
+          } else if (replicationAccounting && accountingEpoch === replicationAccountingEpoch) {
+            recordSendTerminal(state, frame, "otherTerminal", wire, accountingTimestamp, sendAttempt, {
+              mutateTracking: false,
+            });
           }
           flush(state);
         }
@@ -477,6 +517,7 @@ function createSimWebSocketAdapter(options = {}) {
         state.pendingSendBytes = Math.max(0, state.pendingSendBytes - Buffer.byteLength(wire, "utf8"));
       }
       samplePressure(state);
+      recordSendTerminal(state, frame, "sendFailed", wire, accountingTimestamp ?? now(), sendAttempt);
       if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
       terminate(state);
       return false;
@@ -520,6 +561,7 @@ function createSimWebSocketAdapter(options = {}) {
       return sendWireImmediate(state, wire, frame, sendAttempt);
     }
     if (state.cleaned || state.ws.readyState !== WebSocket.OPEN) {
+      recordSendTerminal(state, frame, "sendFailed", wire, now(), sendAttempt);
       if (sendAttempt) state.queue.completeSendAttempt(sendAttempt, { physicalCopies: 0 });
       return false;
     }
@@ -599,6 +641,7 @@ function createSimWebSocketAdapter(options = {}) {
       // attempt now. Zero accepted copies re-arm it for a later sweep; a second
       // callback from a duplicate decision is fenced by token.active.
       if (!sent || (token.deliveryCount !== null && token.delivered >= token.deliveryCount)) settle();
+      if (!sent && !token.sendAttempt) recordSendTerminal(state, frame, "policyDropped", wire);
       return sent;
     };
     try {
@@ -606,11 +649,13 @@ function createSimWebSocketAdapter(options = {}) {
       if (outcome && typeof outcome.then === "function") {
         Promise.resolve(outcome).catch(() => {});
         settle();
+        recordSendTerminal(state, frame, "sendFailed", wire, now(), token.sendAttempt);
         terminate(state);
         return false;
       }
       if (outcome === false || outcome?.accepted === false) {
         settle();
+        recordSendTerminal(state, frame, "sendFailed", wire, now(), token.sendAttempt);
         terminate(state);
         return false;
       }
@@ -622,13 +667,20 @@ function createSimWebSocketAdapter(options = {}) {
         || token.deliveryCount > 2
         || token.delivered > token.deliveryCount) {
         settle();
+        recordSendTerminal(state, frame, "sendFailed", wire, now(), token.sendAttempt);
         terminate(state);
         return false;
       }
-      if (token.deliveryCount === 0 || token.delivered >= token.deliveryCount) settle();
+      if (token.deliveryCount === 0 || token.delivered >= token.deliveryCount) {
+        settle();
+        if (token.deliveryCount === 0 && !token.sendAttempt) {
+          recordSendTerminal(state, frame, "policyDropped", wire);
+        }
+      }
       return true;
     } catch {
       settle();
+      recordSendTerminal(state, frame, "sendFailed", wire, now(), token.sendAttempt);
       terminate(state);
       return false;
     }
@@ -776,7 +828,10 @@ function createSimWebSocketAdapter(options = {}) {
           state.pendingEventBytes + wireBytes > MAX_PENDING_REPLAY_BYTES
           || queueStatus.reliableMessages >= state.queue.limits.maxReliableMessages - ACTION_RELIABLE_MESSAGE_RESERVE
           || queueStatus.reliableBytes + wireBytes > state.queue.limits.maxReliableBytes - ACTION_RELIABLE_BYTE_RESERVE
-        ) return { accepted: false, action: "ignore", reason: "event-replay-budget-full" };
+        ) {
+          replicationAccounting?.outbound(state, retainedFrame, "otherTerminal", wireBytes);
+          return { accepted: false, action: "ignore", reason: "event-replay-budget-full" };
+        }
       }
       if (onPressureTransition) state.pressureCounts.reliableOffered += 1;
       const result = state.queue.enqueueConsequence(retainedFrame, { reliableId: retainedFrame.deliveryId });
@@ -788,6 +843,8 @@ function createSimWebSocketAdapter(options = {}) {
       if (replicationAccounting && !result.accepted
         && (result.action === "rebase" || result.action === "disconnect")) {
         replicationAccounting.outbound(state, retainedFrame, "policyDropped", wireBytes);
+      } else if (replicationAccounting && !result.accepted) {
+        replicationAccounting.outbound(state, retainedFrame, "otherTerminal", wireBytes);
       }
       if (onPressureTransition && result.accepted) state.pressureCounts.reliableQueued += 1;
       samplePressure(state);
@@ -953,7 +1010,8 @@ function createSimWebSocketAdapter(options = {}) {
         if (replicationAccounting && ackOutcome.removedMessages > 0) {
           for (const [reliableId, retained] of state.replicationReliableFrames) {
             if (reliableId > frame.deliveryId) continue;
-            replicationAccounting.outbound(state, retained.frame, "ackRetired", retained.bytes);
+            replicationAccounting.outbound(state, retained.frame, "ackRetired", retained.bytes, { reliableId });
+            replicationAccounting.retire(state, reliableId);
             state.replicationReliableFrames.delete(reliableId);
           }
         }
@@ -1179,8 +1237,10 @@ function createSimWebSocketAdapter(options = {}) {
           replicationAccounting.outbound(state, publicFrame, "offered", publicBytes);
           replicationAccounting.outbound(state, ownerFrame, "offered", ownerBytes);
           if (!outcome.accepted) {
-            replicationAccounting.outbound(state, publicFrame, "policyDropped", publicBytes);
-            replicationAccounting.outbound(state, ownerFrame, "policyDropped", ownerBytes);
+            const terminalMetric = outcome.action === "rebase" || outcome.action === "disconnect"
+              ? "policyDropped" : "otherTerminal";
+            replicationAccounting.outbound(state, publicFrame, terminalMetric, publicBytes);
+            replicationAccounting.outbound(state, ownerFrame, terminalMetric, ownerBytes);
           } else if (outcome.action === "coalesced") {
             for (const queued of Object.values(priorQueuedStateFrames || {})) {
               replicationAccounting.outbound(state, queued.frame, "coalesced", queued.bytes);
