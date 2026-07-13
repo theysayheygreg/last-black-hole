@@ -126,6 +126,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerReplicationCaptureWiring",
+    file: "multiplayer-replication-capture-wiring.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerWsAdapterImpairment",
     file: "multiplayer-ws-adapter-impairment.cjs",
     lanes: ["multiplayer-network", "full"],

@@ -198,6 +198,20 @@ function readNumber(value, fallback, min = -Infinity) {
   return Math.max(min, parsed);
 }
 
+function readStrictTestFlag(name) {
+  const value = process.env[name];
+  if (value === undefined || value === "0") return false;
+  if (value === "1") return true;
+  throw new Error(`${name} must be exactly 0 or 1`);
+}
+
+const REPLICATION_ACCOUNTING_CAPTURE = readStrictTestFlag("LBH_SIM_WS_REPLICATION_ACCOUNTING");
+const REPLICATION_ACCOUNTING_CAPTURE_GUARD = readStrictTestFlag("LBH_REPLICATION_BASELINE_CAPTURE");
+if (REPLICATION_ACCOUNTING_CAPTURE
+  && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
+  throw new Error("LBH_SIM_WS_REPLICATION_ACCOUNTING requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
+}
+
 // Wrappers around seeded-generation.js that route through runtime streams.
 // All init-time loot rolls flow through runtime.session.rng, which is
 // seeded from runtime.session.seed. Same seed → same initial loot.
@@ -7325,6 +7339,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     maxConnections: 16,
     maxPendingHello: 8,
     runId: null,
+    replicationAccounting: REPLICATION_ACCOUNTING_CAPTURE,
     redeemHello: redeemMultiplayerHello,
     revalidateBinding: revalidateMultiplayerBinding,
     onInput: (binding, frame) => executeStreamInput(binding, frame),
