@@ -1406,7 +1406,8 @@ function validateArtifact(directory) {
         && client.receiverDiagnostics.ledger.entries <= client.receiverDiagnostics.limits.maxRetainedPairHistory
         && client.receiverDiagnostics.ledger.bytes <= client.receiverDiagnostics.limits.maxRetainedBytes
         && client.receiverCleanupDiagnostics?.closed === true
-        && client.receiverCleanupDiagnostics?.ledger?.entries === 0)
+        && client.receiverCleanupDiagnostics?.ledger?.entries === 0
+        && client.receiverCleanupDiagnostics?.ledger?.bytes === 0)
       && entry.correctness.receiverBasesStayedApplicable === true
       && entry.correctness.ackRejectsExactlyZero === true
       && typeof entry.admission.convergenceOnlyPassed === "boolean"
@@ -1499,7 +1500,8 @@ async function main() {
   }
   const verdict = {
     passed: results.every((entry) => entry.admission.passed),
-    productAdmissionPassed: results.every((entry) => entry.admission.productAdmissionPassed === true),
+    productAdmissionPassed: !S10_PROTOTYPE ? null
+      : results.every((entry) => entry.admission.productAdmissionPassed === true),
     convergenceOnlyPassed: !S10_PROTOTYPE ? null
       : results.every((entry) => entry.admission.convergenceOnlyPassed === true),
     normal: Object.fromEntries(results.filter((entry) => entry.scenario === "normal")

@@ -233,7 +233,8 @@ function createAuthorityDeltaPublisher(options = {}) {
     if (reason === "unknown-recipient" || reason === "identity-mismatch") return "binding";
     if (reason === "invalid-ack-schema" || reason === "invalid-frame-id") return "unknown";
     if (reason === "lineage-mismatch") {
-      const record = state && Number.isSafeInteger(ack?.frameId) ? state.pending.get(ack.frameId) : null;
+      const record = state && Number.isSafeInteger(ack?.frameId)
+        ? state.pending.get(ack.frameId) || state.retiredAcks.get(ack.frameId) : null;
       if (record && (ack.publicHash !== record.public.hash || ack.ownerHash !== record.owner.hash)) return "hash";
       return "unknown";
     }
@@ -320,14 +321,37 @@ function createAuthorityDeltaPublisher(options = {}) {
     let state = recipients.get(key);
     if (!state && create) {
       if (recipients.size >= limits.maxRecipients) fail("recipient-cap", "authority recipient cap reached");
-      state = { identity, nextFrameId: 1, acked: null, pending: new Map(), retainedBytes: 0,
+      state = { identity, nextFrameId: 1, acked: null, pending: new Map(), retiredAcks: new Map(), retainedBytes: 0,
         forceKeyframe: true, forceReason: "initial-no-acked-base" };
       recipients.set(key, state);
     }
     return state;
   }
 
+  function ackProof(record) {
+    const frame = record.frame;
+    return Object.freeze({
+      frame: Object.freeze({ statePairId: frame.statePairId, snapshotId: frame.snapshotId,
+        pairSchema: frame.pairSchema, tick: frame.tick, simTime: frame.simTime,
+        eventWatermark: frame.eventWatermark, fieldRevision: frame.fieldRevision,
+        overloadMode: frame.overloadMode, ballparkEpoch: frame.ballparkEpoch,
+        manifestHash: frame.manifestHash,
+        public: Object.freeze({ kind: frame.public.kind, baseSnapshotId: frame.public.baseSnapshotId }),
+        owner: Object.freeze({ kind: frame.owner.kind, baseSnapshotId: frame.owner.baseSnapshotId }) }),
+      public: Object.freeze({ hash: record.public.hash }),
+      owner: Object.freeze({ hash: record.owner.hash }),
+    });
+  }
+
+  function retireAckProof(state, frameId, record) {
+    state.retiredAcks.set(frameId, ackProof(record));
+    while (state.retiredAcks.size > limits.maxPendingPairsPerRecipient) {
+      state.retiredAcks.delete(state.retiredAcks.keys().next().value);
+    }
+  }
+
   function clearPending(state) {
+    for (const [frameId, record] of state.pending) retireAckProof(state, frameId, record);
     state.pending.clear();
     state.retainedBytes = 0;
   }
@@ -493,6 +517,7 @@ function createAuthorityDeltaPublisher(options = {}) {
       || state.retainedBytes > limits.maxRetainedBytesPerRecipient) {
       const oldestId = state.pending.keys().next().value;
       const oldest = state.pending.get(oldestId);
+      retireAckProof(state, oldestId, oldest);
       state.pending.delete(oldestId);
       state.retainedBytes -= oldest.bytes;
       state.forceKeyframe = true;
@@ -540,7 +565,9 @@ function createAuthorityDeltaPublisher(options = {}) {
       return Object.freeze({ accepted: true, validated: false, frameId: state.acked.frameId, stale: true });
     }
     const ackedDuplicate = state.acked && ack.frameId === state.acked.frameId;
-    const record = ackedDuplicate ? state.acked.record : state.pending.get(ack.frameId);
+    const retired = !ackedDuplicate && !state.pending.has(ack.frameId)
+      ? state.retiredAcks.get(ack.frameId) : null;
+    const record = ackedDuplicate ? state.acked.record : state.pending.get(ack.frameId) || retired;
     if (!record) return reject("unknown-frame");
     const mixed = record.frame.pairSchema === MIXED_PAIR_SCHEMA;
     const ackKeys = new Set(["type", "ackKind", "ackSchema", "matchId", "sessionId", "authorityIncarnation",
@@ -563,6 +590,12 @@ function createAuthorityDeltaPublisher(options = {}) {
       || ack.fieldRevision !== record.frame.fieldRevision || ack.overloadMode !== record.frame.overloadMode
       || ack.ballparkEpoch !== record.frame.ballparkEpoch
       || ack.manifestHash !== record.frame.manifestHash)) return reject("lineage-mismatch");
+    if (retired) {
+      counters.ackAccepted += 1;
+      counters.ackIgnoredStale += 1;
+      return Object.freeze({ accepted: true, validated: true, frameId: ack.frameId,
+        stale: true, retired: true });
+    }
     if (ackedDuplicate) {
       counters.ackAccepted += 1;
       counters.ackDuplicates += 1;
@@ -607,9 +640,11 @@ function createAuthorityDeltaPublisher(options = {}) {
     let retainedBytes = 0;
     let preparedPendingReferences = 0;
     let preparedAckedReferences = 0;
+    let retiredAckProofs = 0;
     for (const state of recipients.values()) {
       pendingPairs += state.pending.size;
       retainedBytes += state.retainedBytes;
+      retiredAckProofs += state.retiredAcks.size;
       for (const record of state.pending.values()) {
         if (record.public.prepared) preparedPendingReferences += 1;
         if (record.owner.prepared) preparedPendingReferences += 1;
@@ -631,7 +666,7 @@ function createAuthorityDeltaPublisher(options = {}) {
       ownerDeltaBytes: candidates.comparisons ? candidates.ownerDeltaBytes / candidates.comparisons : null,
       ownerKeyframeBytes: candidates.comparisons ? candidates.ownerKeyframeBytes / candidates.comparisons : null,
     });
-    return Object.freeze({ recipients: recipients.size, pendingPairs, retainedBytes, ...counters,
+    return Object.freeze({ recipients: recipients.size, pendingPairs, retainedBytes, retiredAckProofs, ...counters,
       recipientsWithAckedBase, maxAckedFrameId,
       keyframeReasons: Object.freeze(Object.fromEntries([...keyframeReasons].sort(([a], [b]) => a.localeCompare(b)))),
       candidateAverageBytes: candidateAverages, limits,

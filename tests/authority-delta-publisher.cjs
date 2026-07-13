@@ -269,7 +269,7 @@ async function run() {
     assert.strictEqual(publisher.diagnostics().maxAckedFrameId, third.frame.frameId);
   });
 
-  await runner.run("bounded ACK rejection diagnostics classify every coarse ordering relation", async () => {
+  await runner.run("bounded ACK diagnostics classify rejects while exact retired ACKs are no-ops", async () => {
     const publisher = createAuthorityDeltaPublisher({ ackRejectDiagnostics: true, maxRecipients: 16,
       maxPendingPairsPerRecipient: 8 });
     const id = (name) => identity({ sessionId: `session-${name}`, recipientId: `member-${name}` });
@@ -285,7 +285,9 @@ async function run() {
 
     const pendingFrames = [];
     for (let beat = 1; beat <= 9; beat += 1) pendingFrames.push(publish("pending", beat).frame);
-    publisher.acknowledge(id("pending"), ackFor(pendingFrames[0]));
+    const retiredPending = publisher.acknowledge(id("pending"), ackFor(pendingFrames[0]));
+    assert(retiredPending.accepted && retiredPending.validated && retiredPending.retired,
+      "an exact ACK racing bounded pending eviction must not hard-fail the client");
 
     const hashFrame = publish("hash", 1).frame;
     publisher.acknowledge(id("hash"), ackFor(hashFrame, { publicHash: "sha256:wrong" }));
@@ -302,7 +304,9 @@ async function run() {
 
     const recovery = publish("recovery", 1).frame;
     publisher.rebase(id("recovery"));
-    publisher.acknowledge(id("recovery"), ackFor(recovery));
+    const recoveryRace = publisher.acknowledge(id("recovery"), ackFor(recovery));
+    assert(recoveryRace.accepted && recoveryRace.validated && recoveryRace.retired,
+      "an exact ACK racing a rebase must be an authenticated no-op");
 
     const unknown = publish("unknown", 1).frame;
     publisher.acknowledge(id("unknown"), ackFor(unknown, { ackSchema: "unknown-schema" }));
@@ -310,11 +314,11 @@ async function run() {
     const diagnostics = publisher.diagnostics().ackRejectDiagnostics;
     assert.strictEqual(diagnostics.enabled, true);
     assert.deepStrictEqual(Object.keys(diagnostics.byRelation).sort(),
-      ["binding", "future", "hash", "pending-missing", "recovery-race", "unknown"]);
-    assert.strictEqual(diagnostics.total, 6);
-    assert.strictEqual(diagnostics.byReason["unknown-frame"], 3);
+      ["binding", "future", "hash", "unknown"]);
+    assert.strictEqual(diagnostics.total, 4);
+    assert.strictEqual(diagnostics.byReason["unknown-frame"], 1);
     assert.strictEqual(publisher.diagnostics().ackDuplicates, 1);
-    assert.strictEqual(publisher.diagnostics().ackIgnoredStale, 1);
+    assert.strictEqual(publisher.diagnostics().ackIgnoredStale, 3);
     assert(Object.keys(diagnostics.orderTransitions).length <= 64
       && !JSON.stringify(diagnostics).includes("member-"),
     "ACK diagnostic must remain bounded and identity-free");

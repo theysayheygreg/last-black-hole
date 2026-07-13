@@ -184,6 +184,17 @@ async function run() {
     assert(acceptedStaleDespawn.accepted && acceptedStaleDespawn.stale);
     assert(acceptedStaleReincarnation.accepted && acceptedStaleReincarnation.stale);
     assert.strictEqual(receiver.current(), visible);
+    stalePublisher.publish(inputs(id, 5));
+    stalePublisher.publish(inputs(id, 6));
+    const regressionBridge = stalePublisher.publish({ ...inputs(id, 7),
+      publicView: view(id, 7, "public", { entities: [{ category: "player",
+        sourceId: "seat-1", incarnation: 1, lifecycleRevision: 7,
+        components: { transform: component(7, { x: 7, y: 2 }),
+          publicState: component(7, { active: false, hull: "regressed-incarnation" }) } }] }) });
+    const rejectedBridge = receiver.receive(wire(regressionBridge.frame));
+    assert.strictEqual(rejectedBridge.accepted, false);
+    assert.strictEqual(rejectedBridge.reason, "lineage-mismatch");
+    assert.strictEqual(receiver.current(), visible);
     assert(visiblePublisher.acknowledge(id, acceptedNewest.ack).accepted);
     const after = visiblePublisher.publish({ ...inputs(id, 7), publicView: view(id, 7, "public", {
       entities: [{ category: "player", sourceId: "seat-1", incarnation: 2, lifecycleRevision: 7,
