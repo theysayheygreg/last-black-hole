@@ -157,7 +157,7 @@ async function run() {
   await runner.run("lossless number/string edges and deterministic randomized values round-trip", () => {
     const { id, authority, client } = createAuthorityAndClient();
     const strings = ["", "ascii", "café-🚀-漢字", "quote-\"-slash-\\-controls-\n\t\u0000",
-      "x".repeat(8192), "🚀".repeat(2048)];
+      "x".repeat(8192), "🚀".repeat(2048), "lone-high-\ud800", "lone-low-\udfff", "paired-🚀-\ud800"];
     const numbers = [0, 1, -1, Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER, 0.1, -0.1,
       Number.MIN_VALUE, Number.MAX_VALUE, 9007199254740992];
     let cases = 0;
@@ -193,7 +193,7 @@ async function run() {
       assert.strictEqual(outcome.accepted, true);
       assert.strictEqual(authority.acknowledge(id, outcome.ack).accepted, true);
     }
-    assert.strictEqual(cases, 516);
+    assert.strictEqual(cases, 519);
     const validSource = sourceFrames(id, ++cases, "invalid-number-source");
     const validFrame = authority.publish(id, validSource.publicFrame, validSource.ownerFrame).frame;
     for (const invalid of [-0, NaN, Infinity, -Infinity]) {
@@ -296,6 +296,20 @@ async function run() {
     assert(first.equals(second));
     assert.strictEqual(crypto.createHash("sha256").update(first).digest("hex"),
       crypto.createHash("sha256").update(second).digest("hex"));
+  });
+
+  await runner.run("publisher retention is isolated from publication and retransmit buffer mutation", () => {
+    const { id, authority } = createAuthorityAndClient();
+    const source = sourceFrames(id, 1);
+    const published = authority.publish(id, source.publicFrame, source.ownerFrame);
+    const expected = Buffer.from(published.encodedWire);
+    published.encodedWire[0] ^= 0xff;
+    const firstRetransmit = authority.retransmit(id, published.frame.frameId);
+    assert(firstRetransmit.encodedWire.equals(expected));
+    firstRetransmit.encodedWire[1] ^= 0xff;
+    const secondRetransmit = authority.retransmit(id, published.frame.frameId);
+    assert(secondRetransmit.encodedWire.equals(expected));
+    assert.deepStrictEqual(decodeBinaryFrame(secondRetransmit.encodedWire, bctx(id)), published.frame);
   });
 
   runner.summary();

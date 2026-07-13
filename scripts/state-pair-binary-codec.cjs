@@ -31,6 +31,7 @@ const TYPES = Object.freeze({
   float64: 5,
   utf8: 6,
   array: 7,
+  utf16be: 8,
 });
 
 const BINARY_CODEC_MANIFEST = Object.freeze({
@@ -45,7 +46,7 @@ const BINARY_CODEC_MANIFEST = Object.freeze({
     valueTypes: TYPES,
     integerEncoding: "canonical-unsigned-varint; negative tag plus magnitude",
     otherNumberEncoding: "ieee754-float64-be; finite; negative-zero-rejected",
-    stringEncoding: "strict-utf8-length-prefixed",
+    stringEncoding: "strict-utf8-length-prefixed; exact-utf16be fallback for lone surrogates",
   }),
   semanticHashes: "lbh-canonical-projection-v1",
   limits: Object.freeze({ maxBytes: MAX_CODEC_BYTES, maxDepth: MAX_DEPTH, maxNodes: MAX_NODES,
@@ -101,6 +102,48 @@ function varuint(value) {
   return Buffer.from(bytes);
 }
 
+function hasLoneSurrogate(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const unit = value.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) { index += 1; continue; }
+      return true;
+    }
+    if (unit >= 0xdc00 && unit <= 0xdfff) return true;
+  }
+  return false;
+}
+
+function encodeString(value) {
+  if (!hasLoneSurrogate(value)) return { type: TYPES.utf8, bytes: Buffer.from(value, "utf8") };
+  const bytes = Buffer.allocUnsafe(value.length * 2);
+  for (let index = 0; index < value.length; index += 1) bytes.writeUInt16BE(value.charCodeAt(index), index * 2);
+  return { type: TYPES.utf16be, bytes };
+}
+
+function measureValue(value, state, depth = 0) {
+  countNode(state, depth);
+  if (value === null || value === false || value === true) return 1;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || Object.is(value, -0)) fail("invalid-number", "binary number is invalid");
+    return Number.isSafeInteger(value) ? 1 + varuint(value >= 0 ? value : -value).length : 9;
+  }
+  if (typeof value === "string") {
+    const { bytes } = encodeString(value);
+    if (bytes.length > MAX_STRING_BYTES) fail("string-too-large", "binary string exceeds codec limit");
+    return 1 + varuint(bytes.length).length + bytes.length;
+  }
+  if (!Array.isArray(value)) fail("invalid-type", "binary payload only admits positional arrays and scalar JSON values");
+  if (value.length > MAX_ARRAY_ITEMS) fail("collection-too-large", "binary array exceeds codec limit");
+  let bytes = 1 + varuint(value.length).length;
+  for (let index = 0; index < value.length; index += 1) {
+    if (!Object.hasOwn(value, index)) fail("sparse-array", "binary array contains a sparse hole");
+    bytes += measureValue(value[index], state, depth + 1);
+  }
+  return bytes;
+}
+
 function encodeValue(value, chunks, state, depth = 0) {
   countNode(state, depth);
   if (value === null) { chunks.push(Buffer.from([TYPES.null])); return; }
@@ -120,9 +163,9 @@ function encodeValue(value, chunks, state, depth = 0) {
     return;
   }
   if (typeof value === "string") {
-    const bytes = Buffer.from(value, "utf8");
+    const { type, bytes } = encodeString(value);
     if (bytes.length > MAX_STRING_BYTES) fail("string-too-large", "binary string exceeds codec limit");
-    chunks.push(Buffer.from([TYPES.utf8]), varuint(bytes.length), bytes);
+    chunks.push(Buffer.from([type]), varuint(bytes.length), bytes);
     return;
   }
   if (!Array.isArray(value)) fail("invalid-type", "binary payload only admits positional arrays and scalar JSON values");
@@ -200,6 +243,19 @@ function decodeValue(state, depth = 0) {
     if (!Buffer.from(value, "utf8").equals(bytes)) fail("noncanonical-utf8", "binary string UTF-8 is not canonical");
     return value;
   }
+  if (type === TYPES.utf16be) {
+    const length = readVaruint(state, "UTF-16 string length").value;
+    if (length > MAX_STRING_BYTES) fail("string-too-large", "binary string exceeds codec limit");
+    if (length % 2 !== 0) fail("invalid-utf16", "UTF-16 string byte length must be even");
+    if (length > state.end - state.offset) fail("truncated-frame", "binary UTF-16 string is truncated");
+    let value = "";
+    for (let offset = state.offset; offset < state.offset + length; offset += 2) {
+      value += String.fromCharCode(state.buffer.readUInt16BE(offset));
+    }
+    state.offset += length;
+    if (!hasLoneSurrogate(value)) fail("noncanonical-utf16", "well-formed Unicode must use UTF-8");
+    return value;
+  }
   if (type === TYPES.array) {
     const count = readVaruint(state, "array length").value;
     if (count > MAX_ARRAY_ITEMS) fail("collection-too-large", "binary array exceeds codec limit");
@@ -214,6 +270,11 @@ function decodeValue(state, depth = 0) {
 function encodeBinaryFrame(frame, context) {
   const encoded = encodePositionalValueFrame(frame, positionalContext(context));
   return encodeBinaryValue(encoded, encoded[0]);
+}
+
+function binaryFrameByteLength(frame, context) {
+  const encoded = encodePositionalValueFrame(frame, positionalContext(context));
+  return HEADER_BYTES + measureValue(encoded, { nodes: 0 });
 }
 
 function decodeBinaryFrame(raw, context) {
@@ -248,20 +309,19 @@ function composeBinaryStatePairCandidates(entries, context, tieOrder) {
   // only a transport representation change; changing public/owner base choice
   // would confound ACK/recovery parity and the admission comparison.
   const positional = composeStatePairCandidates(entries, positionalContext(context), tieOrder);
-  const binaryCandidates = entries.map((entry) => {
-    const wire = encodeBinaryFrame(entry.frame, context);
-    return Object.freeze({ kind: entry.kind, bytes: wire.length, wire });
-  });
-  const wire = binaryCandidates.find((entry) => entry.kind === positional.chosen.kind).wire;
+  const binaryCandidates = entries.map((entry) => Object.freeze({ kind: entry.kind,
+    bytes: binaryFrameByteLength(entry.frame, context) }));
+  const wire = encodeBinaryFrame(positional.chosen.frame, context);
   return Object.freeze({
     chosen: Object.freeze({ kind: positional.chosen.kind, frame: positional.chosen.frame,
       bytes: wire.length, wire }),
     candidates: Object.freeze(binaryCandidates.map((entry) => Object.freeze({ kind: entry.kind, bytes: entry.bytes }))),
     diagnostics: Object.freeze({ ...positional.diagnostics,
-      binaryCandidateEncodes: binaryCandidates.length, binaryWinnerEncodes: 0, binaryBytes: wire.length,
+      binaryCandidateEncodes: 0, binaryCandidateSizePasses: binaryCandidates.length,
+      binaryWinnerEncodes: 1, binaryBytes: wire.length,
       positionalOracleBytes: positional.chosen.bytes,
       allocationProxyBytes: positional.diagnostics.allocationProxyBytes
-        + binaryCandidates.reduce((sum, entry) => sum + entry.bytes, 0) }),
+        + wire.length }),
   });
 }
 
@@ -284,6 +344,7 @@ module.exports = {
   BinaryCodecError,
   codecContext,
   encodeBinaryFrame,
+  binaryFrameByteLength,
   decodeBinaryFrame,
   composeBinaryStatePairCandidates,
 };

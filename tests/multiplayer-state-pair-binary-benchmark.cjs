@@ -94,44 +94,47 @@ function frame(index, context) {
   return { ...header, public: publicLane, owner: keyframe("owner") };
 }
 
-function measure(label, frames, encode, decode, order) {
-  const encodeMs = [];
-  const decodeMs = [];
-  const wires = [];
-  let encodedBytes = 0;
-  for (let warmup = 0; warmup < WARMUP; warmup += 1) {
-    for (const value of frames) decode(encode(value));
-  }
-  for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
-    const sequence = order === "reverse" ? [...frames].reverse() : frames;
-    for (const value of sequence) {
-      const encodeStarted = performance.now();
-      const wire = encode(value);
-      encodeMs.push(performance.now() - encodeStarted);
-      const decodeStarted = performance.now();
-      decode(wire);
-      decodeMs.push(performance.now() - decodeStarted);
-      const bytes = Buffer.byteLength(wire);
-      encodedBytes += bytes;
-      if (wires.length < frames.length) wires.push(bytes);
-    }
-  }
-  return { label, order, frames: frames.length, iterations: ITERATIONS,
+function finish(label, frames, measurements) {
+  return { label, order: "counterbalanced-interleaved-a/b-b/a", frames: frames.length, iterations: ITERATIONS,
     operations: { authorityEncodes: frames.length * ITERATIONS, clientDecodes: frames.length * ITERATIONS,
       materializedFullFrames: frames.length * ITERATIONS },
-    authorityEncodeMs: stats(encodeMs), clientDecodeMs: stats(decodeMs),
-    wireBytes: stats(wires), allocationProxyBytes: encodedBytes };
+    authorityEncodeMs: stats(measurements.encodeMs), clientDecodeMs: stats(measurements.decodeMs),
+    wireBytes: stats(measurements.wires), allocationProxyBytes: measurements.encodedBytes };
 }
 
 function run() {
   const context = contexts();
   const frames = Array.from({ length: FRAMES }, (_, index) => frame(index, context.positional));
-  const positional = measure("s15-positional-json", frames,
-    (value) => encodePositionalFrame(value, context.positional),
-    (wire) => decodePositionalFrame(wire, context.positional), "forward");
-  const binary = measure("s16-binary", frames,
-    (value) => encodeBinaryFrame(value, context.binary),
-    (wire) => decodeBinaryFrame(wire, context.binary), "reverse");
+  const codecs = {
+    positional: { encode: (value) => encodePositionalFrame(value, context.positional),
+      decode: (wire) => decodePositionalFrame(wire, context.positional),
+      measured: { encodeMs: [], decodeMs: [], wires: [], encodedBytes: 0 } },
+    binary: { encode: (value) => encodeBinaryFrame(value, context.binary),
+      decode: (wire) => decodeBinaryFrame(wire, context.binary),
+      measured: { encodeMs: [], decodeMs: [], wires: [], encodedBytes: 0 } },
+  };
+  const execute = (codec, value, measured) => {
+    const encodeStarted = performance.now();
+    const wire = codec.encode(value);
+    measured.encodeMs.push(performance.now() - encodeStarted);
+    const decodeStarted = performance.now();
+    codec.decode(wire);
+    measured.decodeMs.push(performance.now() - decodeStarted);
+    const bytes = Buffer.byteLength(wire);
+    measured.encodedBytes += bytes;
+    if (measured.wires.length < frames.length) measured.wires.push(bytes);
+  };
+  for (let warmup = 0; warmup < WARMUP; warmup += 1) {
+    const order = warmup % 2 === 0 ? [codecs.positional, codecs.binary] : [codecs.binary, codecs.positional];
+    for (const value of frames) for (const codec of order) codec.decode(codec.encode(value));
+  }
+  for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
+    const sequence = iteration % 2 === 0 ? frames : [...frames].reverse();
+    const order = iteration % 2 === 0 ? [codecs.positional, codecs.binary] : [codecs.binary, codecs.positional];
+    for (const value of sequence) for (const codec of order) execute(codec, value, codec.measured);
+  }
+  const positional = finish("s15-positional-json", frames, codecs.positional.measured);
+  const binary = finish("s16-binary", frames, codecs.binary.measured);
   const result = { schema: "lbh-s16-codec-microbenchmark-v1",
     config: { frames: FRAMES, iterations: ITERATIONS, warmup: WARMUP,
       workload: "48 public motion updates plus one owner keyframe after the initial keyframe; representative public-delta+owner-keyframe statePair" },
@@ -142,7 +145,8 @@ function run() {
       clientDecodeMeanRatioBinaryOverJson: binary.clientDecodeMs.mean / positional.clientDecodeMs.mean,
       allocationProxyReductionFraction: 1 - binary.allocationProxyBytes / positional.allocationProxyBytes,
     },
-    limitations: ["Machine-local synthetic codec-only benchmark", "Does not include projection, delta construction, selection, socket, or ACK apply"],
+    limitations: ["Machine-local synthetic codec-only benchmark", "A/B order and frame direction are counterbalanced per iteration",
+      "Does not include projection, delta construction, selection, socket, or ACK apply"],
   };
   const output = process.env.LBH_S16_BENCH_OUTPUT;
   if (output) fs.writeFileSync(path.resolve(ROOT, output), `${JSON.stringify(result, null, 2)}\n`, { flag: "wx" });

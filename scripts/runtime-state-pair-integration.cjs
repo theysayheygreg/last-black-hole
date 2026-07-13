@@ -452,6 +452,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     return true;
   }
 
+  function retransmit(binding, frameId) {
+    return publisher.retransmit(requireAdmission(binding), frameId);
+  }
+
   function disconnect(binding) {
     let identity;
     try { identity = context(binding); } catch { return false; }
@@ -516,7 +520,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       publisher: publisher.diagnostics() });
   }
 
-  return Object.freeze({ admit, publish, acknowledge, recover, disconnect, diagnostics });
+  return Object.freeze({ admit, publish, acknowledge, retransmit, recover, disconnect, diagnostics });
 }
 
 module.exports = {

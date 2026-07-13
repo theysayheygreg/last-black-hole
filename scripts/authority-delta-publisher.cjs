@@ -95,6 +95,10 @@ function recipientKey(identity) {
     identity.recipientId, identity.recipientIncarnation].map((part) => `${String(part).length}:${part}`).join("");
 }
 
+function privateWireCopy(wire) {
+  return Buffer.isBuffer(wire) ? Buffer.from(wire) : wire;
+}
+
 function sameIdentity(a, b) {
   return a.matchId === b.matchId && a.sessionId === b.sessionId
     && a.authorityIncarnation === b.authorityIncarnation
@@ -810,10 +814,11 @@ function createAuthorityDeltaPublisher(options = {}) {
       fail("pair-too-large", `atomic state pair exceeds ${limits.maxPairBytes} bytes`);
     }
     state.nextFrameId += 1;
+    const retainedWire = privateWireCopy(chosen.encodedWire);
     const record = Object.freeze({
       frame,
       bytes,
-      encodedWire: chosen.encodedWire,
+      encodedWire: retainedWire,
       encodedDigest: chosen.encodedDigest,
       public: Object.freeze({ view: publicView, hash: publicPayload.resultHash,
         prepared: preparedPublic.prepared, context: preparedPublic.context }),
@@ -841,7 +846,7 @@ function createAuthorityDeltaPublisher(options = {}) {
       state.forceReason = "retention-evicted-acked-base-unsafe";
     }
     const published = Object.freeze({ frame, bytes,
-      ...(chosen.encodedWire !== null ? { encodedWire: chosen.encodedWire,
+      ...(chosen.encodedWire !== null ? { encodedWire: privateWireCopy(retainedWire),
         encodedDigest: chosen.encodedDigest, expandedBytes: chosen.expandedBytes } : {}),
       priorSemanticProjectionKind,
       projectionKind: publicPayload.kind === ownerPayload.kind ? publicPayload.kind : laneKinds,
@@ -946,7 +951,7 @@ function createAuthorityDeltaPublisher(options = {}) {
     if (!record) return null;
     counters.retransmits += 1;
     const published = Object.freeze({ frame: record.frame, bytes: record.bytes,
-      ...(record.encodedWire !== null ? { encodedWire: record.encodedWire,
+      ...(record.encodedWire !== null ? { encodedWire: privateWireCopy(record.encodedWire),
         encodedDigest: record.encodedDigest } : {}),
       projectionKind: record.frame.public.kind === record.frame.owner.kind
         ? record.frame.public.kind : pairProjectionKind(record.frame.public.kind, record.frame.owner.kind) });
