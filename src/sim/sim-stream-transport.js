@@ -289,6 +289,13 @@ async function readBoundedResponseBytes(response, maxBytes) {
 export async function _verifySessionManifest(welcome, ticket, generation) {
   if (welcome.wireVersion !== 'lbh-multiplayer-json-v2') return null;
   if (generation !== this._socketGeneration) throw new Error('Manifest verification superseded');
+  const admissionBudgetMs = Number(this._manifestAdmissionTimeoutMs) || 9_500;
+  const deadline = performance.now() + admissionBudgetMs;
+  const deadlineController = new AbortController();
+  const deadlineTimer = setTimeout(() => deadlineController.abort(), admissionBudgetMs);
+  const requireWithinDeadline = () => {
+    if (deadlineController.signal.aborted || performance.now() >= deadline) throw new Error('Manifest verification timeout');
+  };
   const cacheKey = `${welcome.manifestSchema}:${welcome.manifestHash}`;
   let acceptedText = this._manifestCache.get(cacheKey) || null;
   let accepted = acceptedText === null ? null : new TextEncoder().encode(acceptedText);
@@ -296,6 +303,7 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
     const cachedHash = accepted.byteLength === welcome.manifestBytes
       ? `sha256:${await sha256Hex(accepted)}`
       : null;
+    requireWithinDeadline();
     if (cachedHash !== welcome.manifestHash) {
       this._manifestCache.delete(cacheKey);
       accepted = null;
@@ -307,15 +315,12 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
     const base = new URL(`${this.baseUrl}/`);
     if (fetchUrl.origin !== base.origin || fetchUrl.search || fetchUrl.hash) throw new Error('Manifest fetch origin/path rejected');
     let capability = ticket.manifestCapability;
-    const deadline = performance.now() + 9_500;
     let lastError = null;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       if (!capability || performance.now() >= deadline) break;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), Math.max(1, deadline - performance.now()));
       try {
         const response = await fetch(fetchUrl, {
-          method: 'GET', signal: controller.signal,
+          method: 'GET', signal: deadlineController.signal,
           headers: { authorization: `Bearer ${capability}` },
           credentials: 'same-origin', cache: 'no-store', redirect: 'error',
         });
@@ -323,13 +328,13 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
         const declared = Number(response.headers.get('content-length'));
         if (Number.isFinite(declared) && declared > 1024 * 1024) throw new Error('Manifest response is oversized');
         const bytes = await readBoundedResponseBytes(response, 1024 * 1024);
+        requireWithinDeadline();
         if (bytes.byteLength > 1024 * 1024 || bytes.byteLength !== welcome.manifestBytes) throw new Error('Manifest byte count mismatch');
         const hash = `sha256:${await sha256Hex(bytes)}`;
+        requireWithinDeadline();
         if (hash !== welcome.manifestHash) throw new Error('Manifest hash mismatch');
         accepted = bytes;
         acceptedText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-        this._manifestCache.clear();
-        this._manifestCache.set(cacheKey, acceptedText);
         break;
       } catch (error) {
         lastError = error;
@@ -337,20 +342,20 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
           try {
             const retry = await this._json('/multiplayer/manifest/retry', {
               method: 'POST',
+              signal: deadlineController.signal,
               body: JSON.stringify({
                 manifestSchema: welcome.manifestSchema,
                 manifestHash: welcome.manifestHash,
                 connectionEpoch: welcome.connectionEpoch,
               }),
             });
+            requireWithinDeadline();
             capability = retry.manifestCapability;
           } catch (retryError) {
             lastError = retryError;
             capability = null;
           }
         }
-      } finally {
-        clearTimeout(timer);
       }
     }
     if (!accepted) throw lastError || new Error('Manifest fetch capability unavailable');
@@ -359,6 +364,7 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
     throw new Error('Manifest ACK epoch changed');
   }
   const parsedManifest = JSON.parse(acceptedText ?? new TextDecoder('utf-8', { fatal: true }).decode(accepted));
+  requireWithinDeadline();
   if (parsedManifest.manifestSchema !== welcome.manifestSchema || parsedManifest.runId !== welcome.runId) {
     throw new Error('Manifest embedded identity mismatch');
   }
@@ -368,11 +374,16 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
     return Object.freeze(value);
   };
   this._acceptedManifest = freezeManifest(parsedManifest);
+  requireWithinDeadline();
   this._acceptedManifestHash = welcome.manifestHash;
+  this._manifestCache.clear();
+  this._manifestCache.set(cacheKey, acceptedText ?? new TextDecoder('utf-8', { fatal: true }).decode(accepted));
+  requireWithinDeadline();
   this._sendFrame({
     type: 'manifestAck', manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
     manifestBytes: welcome.manifestBytes, connectionEpoch: welcome.connectionEpoch,
   }, generation);
+  clearTimeout(deadlineTimer);
   return accepted;
 }
 

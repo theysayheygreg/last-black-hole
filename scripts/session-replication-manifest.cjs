@@ -134,6 +134,7 @@ function createManifestFetchRegistry({
     const retryKey = proofKey({ runId, membershipId, manifestSchema, manifestHash, connectionEpoch });
     if (retry) {
       if (retries.has(retryKey)) fail("retry-exhausted", "manifest fetch retry is already issued");
+      if (retries.size >= capacity) fail("retry-capacity", "manifest fetch retry capacity is exhausted");
       retries.set(retryKey, issuedAt + ttlMs);
     }
     const tokenBytes = randomBytes(FETCH_CAPABILITY_BYTES);

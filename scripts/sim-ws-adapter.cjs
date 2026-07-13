@@ -50,6 +50,7 @@ function createSimWebSocketAdapter(options = {}) {
     ? options.verifyManifestAck
     : async () => true;
   const onBindingClosed = typeof options.onBindingClosed === "function" ? options.onBindingClosed : null;
+  const onBindingOpened = typeof options.onBindingOpened === "function" ? options.onBindingOpened : null;
   const {
     server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
     onPong, onAck, onPressureTransition, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
@@ -952,6 +953,8 @@ function createSimWebSocketAdapter(options = {}) {
     }
     if (!stateIsLive(state, expectedGeneration)) return;
     byBindingKey.set(bindingKey, state);
+    if (onBindingOpened) await onBindingOpened(state.binding, callbackContext(state, "binding-opened"));
+    if (!stateIsLive(state, expectedGeneration)) return;
     replicationAccounting?.bind(state);
     currentRunId = result.welcome.runId;
     resetOutbound(state);

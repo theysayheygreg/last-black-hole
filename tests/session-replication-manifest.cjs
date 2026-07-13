@@ -1,4 +1,6 @@
 const crypto = require("crypto");
+const path = require("path");
+const { pathToFileURL } = require("url");
 const { TestRunner, assert } = require("./helpers.cjs");
 const {
   MAX_MANIFEST_BYTES,
@@ -99,6 +101,39 @@ async function run() {
     const diagnostics = registry.diagnostics();
     assert(diagnostics.verified === 0 && diagnostics.cachedBindings === 0 && diagnostics.retries === 0 && diagnostics.retained === 0,
       `All retained classes must prune deterministically: ${JSON.stringify(diagnostics)}`);
+  });
+
+  await runner.run("one total client deadline aborts a hanging retry and cannot emit a late ACK", async () => {
+    const { _verifySessionManifest } = await import(pathToFileURL(path.resolve(__dirname, "../src/sim/sim-stream-transport.js")));
+    const originalFetch = global.fetch;
+    let retryAborted = false;
+    let sends = 0;
+    global.fetch = async () => ({ ok: false, status: 503 });
+    const fake = {
+      _socketGeneration: 1,
+      _manifestAdmissionTimeoutMs: 30,
+      _manifestCache: new Map(),
+      baseUrl: "http://127.0.0.1:1",
+      connectionEpoch: 1,
+      _sendFrame() { sends += 1; },
+      _json(_path, options) {
+        return new Promise((_resolve, reject) => options.signal.addEventListener("abort", () => {
+          retryAborted = true;
+          reject(new Error("aborted"));
+        }, { once: true }));
+      },
+    };
+    const welcome = {
+      wireVersion: "lbh-multiplayer-json-v2", runId: "run", connectionEpoch: 1,
+      manifestSchema: "schema", manifestHash: "sha256:deadbeef", manifestBytes: 1,
+      fetchPath: "/multiplayer/manifest/deadbeef",
+    };
+    let rejected = false;
+    try {
+      await _verifySessionManifest.call(fake, welcome, { manifestCapability: "cap" }, 1);
+    } catch { rejected = true; }
+    global.fetch = originalFetch;
+    assert(rejected && retryAborted && sends === 0, "Deadline must abort the retry promise and forbid a late manifest ACK");
   });
 
   process.exit(runner.summary() ? 0 : 1);

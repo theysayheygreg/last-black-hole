@@ -1099,6 +1099,7 @@ let terminalShutdownHandle = null;
 let multiplayerTicketRegistry = null;
 const manifestFetchRegistry = createManifestFetchRegistry();
 let sessionReplicationManifest = null;
+const MANIFEST_TRANSFER_RECIPIENT_CAP = 16;
 let manifestTransferStats = { servedBytes: 0, servedFetches: 0, rejectedFetches: 0, recipients: new Map(), salt: crypto.randomBytes(32) };
 const manifestAdmissions = new Set();
 const manifestAdmissionKey = ({ runId, membershipId, manifestSchema, manifestHash, connectionEpoch }) =>
@@ -6111,8 +6112,10 @@ function currentAuthorityForManifestRecord(record) {
 }
 
 function recordManifestTransfer(record, bytes) {
-  const recipient = crypto.createHmac("sha256", manifestTransferStats.salt)
+  let recipient = crypto.createHmac("sha256", manifestTransferStats.salt)
     .update(record.membershipId).digest("base64url").slice(0, 16);
+  if (!manifestTransferStats.recipients.has(recipient)
+      && manifestTransferStats.recipients.size >= MANIFEST_TRANSFER_RECIPIENT_CAP) recipient = "overflow";
   const row = manifestTransferStats.recipients.get(recipient) || { fetches: 0, bytes: 0 };
   row.fetches += 1;
   row.bytes += bytes;
@@ -6264,19 +6267,6 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
       ? "event-gap"
       : kind === "resume" ? "resume" : "initial";
   const manifest = selectedWireVersion === WIRE_PROTOCOL_VERSION_V2 ? currentSessionReplicationManifest() : null;
-  if (manifest) {
-    for (const key of manifestAdmissions) {
-      const [runId, membershipId] = JSON.parse(key);
-      if (runId === binding.runId && membershipId === binding.membershipId) manifestAdmissions.delete(key);
-    }
-    manifestAdmissions.add(manifestAdmissionKey({
-      runId: binding.runId,
-      membershipId: binding.membershipId,
-      manifestSchema: manifest.manifestSchema,
-      manifestHash: manifest.manifestHash,
-      connectionEpoch: binding.connectionEpoch,
-    }));
-  }
   return {
     binding,
     bindingKey: { runId: binding.runId, membershipId: binding.membershipId },
@@ -6592,6 +6582,21 @@ function closeSessionManifestAdmission(binding) {
   }));
 }
 
+function openSessionManifestAdmission(binding) {
+  if (!binding?.manifestHash) return;
+  for (const key of manifestAdmissions) {
+    const [runId, membershipId] = JSON.parse(key);
+    if (runId === binding.runId && membershipId === binding.membershipId) manifestAdmissions.delete(key);
+  }
+  manifestAdmissions.add(manifestAdmissionKey({
+    runId: binding.runId,
+    membershipId: binding.membershipId,
+    manifestSchema: binding.manifestSchema,
+    manifestHash: binding.manifestHash,
+    connectionEpoch: binding.connectionEpoch,
+  }));
+}
+
 function buildPublicMultiplayerState() {
   const snapshot = snapshotBody({ force: true });
   if (!snapshot.runId || !Number.isSafeInteger(snapshot.snapshotId) || snapshot.snapshotId < 1) {
@@ -6761,10 +6766,13 @@ function multiplayerDiagnostics() {
       ? multiplayerTicketRegistry.diagnostics()
       : null,
     manifestTransfers: MULTIPLAYER_WS_ENABLED ? {
+      direction: "authority->client",
+      frameClass: "manifest",
       servedBytes: manifestTransferStats.servedBytes,
       servedFetches: manifestTransferStats.servedFetches,
       rejectedFetches: manifestTransferStats.rejectedFetches,
       recipients: [...manifestTransferStats.recipients.entries()].map(([recipient, row]) => ({ recipient, ...row })),
+      recipientCapacity: MANIFEST_TRANSFER_RECIPIENT_CAP,
       registry: manifestFetchRegistry.diagnostics(),
     } : null,
     actions: multiplayerActionDiagnostics(),
@@ -7126,7 +7134,12 @@ const server = http.createServer(async (req, res) => {
       res.setHeader("Content-Length", String(manifest.manifestBytes));
       res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
       res.setHeader("X-Content-Type-Options", "nosniff");
-      recordManifestTransfer(fetchRecord, manifest.manifestBytes);
+      let transferRecorded = false;
+      res.once("finish", () => {
+        if (transferRecorded) return;
+        transferRecorded = true;
+        recordManifestTransfer(fetchRecord, manifest.manifestBytes);
+      });
       res.end(manifest.bytes);
       return;
     }
@@ -7611,6 +7624,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     buildPublicState: buildPublicMultiplayerStateForAdapter,
     projectPublicStateForBinding: projectV2StaticManifestState,
     verifyManifestAck: verifySessionManifestAck,
+    onBindingOpened: openSessionManifestAdmission,
     onBindingClosed: closeSessionManifestAdmission,
     buildOwnerState: buildOwnerMultiplayerState,
     buildEventRecovery: buildMultiplayerEventRecovery,
