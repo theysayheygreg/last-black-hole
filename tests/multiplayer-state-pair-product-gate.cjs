@@ -338,7 +338,8 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       return;
     }
     client.acceptedPairs += 1;
-    client.acceptedPairEvents.push({ at: Date.now(), frameId: outcome.state.frameId });
+    client.acceptedPairEvents.push({ at: Date.now(), frameId: outcome.state.frameId,
+      bytes: Buffer.byteLength(text, "utf8") });
     client.lastVisibleFrameId = outcome.state.frameId;
     if (outcome.state.matchId !== client.welcome.runId
       || outcome.state.recipientId !== client.welcome.membershipId
@@ -753,6 +754,56 @@ function scenarioWindows(events, startAt, endAt, recipients, churn) {
       { startAt, endAt, windowMs: width, recipients })]));
 }
 
+function mapClientsToAccountingRecipients(clients, selected, startAt, endAt) {
+  const authorityRows = selected.filter((event) => event.direction === "authority->client"
+    && event.frameClass === "statePair" && event.metric === "accepted"
+    && Number.isSafeInteger(event.recipientOrdinal) && Number.isSafeInteger(event.projectionBeat));
+  const recipients = [...new Set(authorityRows.map((event) => event.recipientOrdinal))].sort((a, b) => a - b);
+  if (recipients.length !== clients.length) {
+    throw new Error(`accounting recipient mapping expected ${clients.length} ordinals, observed ${recipients.length}`);
+  }
+  const authorityTuples = new Map(recipients.map((ordinal) => [ordinal, new Set(authorityRows
+    .filter((event) => event.recipientOrdinal === ordinal)
+    .map((event) => `${event.projectionBeat}:${event.bytes}`))]));
+  const clientTuples = new Map(clients.map((client) => [client.label, new Set(client.acceptedPairEvents
+    .filter((event) => event.at >= startAt && event.at < endAt)
+    .map((event) => `${event.frameId}:${event.bytes}`))]));
+  const scores = clients.map((client) => recipients.map((ordinal) => {
+    const authority = authorityTuples.get(ordinal);
+    return [...clientTuples.get(client.label)].reduce((sum, tuple) => sum + (authority.has(tuple) ? 1 : 0), 0);
+  }));
+  let bestScore = -1;
+  let bestAssignments = [];
+  const visit = (clientIndex, available, assignment, score) => {
+    if (clientIndex === clients.length) {
+      if (score > bestScore) { bestScore = score; bestAssignments = [assignment.slice()]; }
+      else if (score === bestScore && bestAssignments.length < 2) bestAssignments.push(assignment.slice());
+      return;
+    }
+    for (const ordinal of available) {
+      assignment.push(ordinal);
+      visit(clientIndex + 1, available.filter((candidate) => candidate !== ordinal), assignment,
+        score + scores[clientIndex][recipients.indexOf(ordinal)]);
+      assignment.pop();
+    }
+  };
+  visit(0, recipients, [], 0);
+  if (bestAssignments.length !== 1) {
+    throw new Error(`accounting recipient mapping is ambiguous at score ${bestScore}`);
+  }
+  const assignment = bestAssignments[0];
+  const byClient = Object.fromEntries(clients.map((client, index) => {
+    const ordinal = assignment[index];
+    const tupleMatches = scores[index][recipients.indexOf(ordinal)];
+    if (tupleMatches <= 0) throw new Error(`accounting recipient mapping has no tuple proof for ${client.label}`);
+    return [client.label, { recipientOrdinal: ordinal, recipient: `recipient-${ordinal}`,
+      tupleMatches, clientTuples: clientTuples.get(client.label).size,
+      authorityTuples: authorityTuples.get(ordinal).size }];
+  }));
+  return { method: "Unique maximum-weight one-to-one assignment over accepted frameId:exactWireBytes tuples inside the evidence window.",
+    uniqueOptimal: true, totalTupleMatches: bestScore, byClient };
+}
+
 function modeledTransport(payloadBytes) {
   const webSocketBytes = payloadBytes < 126 ? 2 : payloadBytes <= 0xffff ? 4 : 10;
   const tlsRecords = Math.max(1, Math.ceil((payloadBytes + webSocketBytes) / 16_384));
@@ -931,6 +982,9 @@ function buildS11AdmissionDecision(normalResults) {
       productAdmissionPassed: false,
       reason: "No accepted recipient traffic landed inside the exact wall-clock measurement window; artifact method validation must reject this scenario." };
     const [recipient, row] = worst;
+    const worstClient = Object.entries(entry.cadence.accountingRecipientMapping.byClient)
+      .find(([, mapping]) => mapping.recipient === recipient)?.[0];
+    if (!worstClient) throw new Error(`S11 decision cannot map ${recipient} back to a client seat`);
     const observedPair = row.observedMeanPairBytes;
     const exactBudget = Math.max(0, (TARGET_BPS - row.observedNonPairBytesPerSecond)
       / TARGET_PUBLICATION_HZ);
@@ -940,6 +994,7 @@ function buildS11AdmissionDecision(normalResults) {
       population: entry.population,
       measurementAvailable: true,
       worstRecipient: recipient,
+      worstClient,
       trafficVerdict: {
         actualMeanPassed: entry.admission.steadyMeanAtOrBelow64KiB,
         actualOneSecondP95Passed: entry.admission.steadyOneSecondP95AtOrBelow80KiB,
@@ -948,9 +1003,9 @@ function buildS11AdmissionDecision(normalResults) {
       },
       cadenceVerdict: {
         configuredHz: TARGET_PUBLICATION_HZ,
-        authorityOfferedHz: entry.cadence.authorityOfferedPairsPerSecondByClient[recipient],
-        authorityAcceptedHz: entry.cadence.authorityAcceptedPairsPerSecondByClient[recipient],
-        receiverAcceptedHz: entry.cadence.receiverAcceptedPairsPerSecond[recipient],
+        authorityOfferedHz: entry.cadence.authorityOfferedPairsPerSecondByClient[worstClient],
+        authorityAcceptedHz: entry.cadence.authorityAcceptedPairsPerSecondByClient[worstClient],
+        receiverAcceptedHz: entry.cadence.receiverAcceptedPairsPerSecond[worstClient],
         everyClientAtLeast9Hz: entry.admission.receiverAcceptedCadenceAtLeast90PercentOfConfigured,
       },
       exactRemainingPairReductionAt10Hz: {
@@ -1182,6 +1237,8 @@ async function runScenario({ population, scenario, runDir, commit }) {
     preStopHealth = (await request(port, "/health")).body;
     const accounting = preStopHealth.multiplayer.adapter.replication;
     const selected = accounting.events.filter((event) => event.timestamp >= startAt && event.timestamp < endAt);
+    const accountingRecipientMapping = churn ? null
+      : mapClientsToAccountingRecipients(allClients, selected, startAt, endAt);
     const recipients = [...new Set(selected.map((event) => event.recipient))].sort();
     const windows = scenarioWindows(accounting.events, startAt, endAt, recipients, churn);
     const normalSummary = churn ? null : summarizeWindow(accounting, { startAt, endAt,
@@ -1219,7 +1276,8 @@ async function runScenario({ population, scenario, runDir, commit }) {
     const receiverRejectedCount = receiverDiagnostics.reduce((sum, diagnostics) =>
       sum + diagnostics.rejected, 0);
     const perClientAckBaseAdvancement = Object.fromEntries(clientSummary.map((client, index) => {
-      const authorityAcceptedAckFrames = selected.filter((event) => event.recipientOrdinal === index + 1
+      const recipientOrdinal = accountingRecipientMapping?.byClient?.[client.label]?.recipientOrdinal || index + 1;
+      const authorityAcceptedAckFrames = selected.filter((event) => event.recipientOrdinal === recipientOrdinal
         && event.direction === "client->authority" && event.frameClass === "ack"
         && event.metric === "accepted").length;
       return [client.label, { lastAcceptedFrameId: client.lastAcceptedFrameId,
@@ -1323,15 +1381,18 @@ async function runScenario({ population, scenario, runDir, commit }) {
       / population / ((endAt - startAt) / 1000);
     const windowSeconds = (endAt - startAt) / 1000;
     const authorityOfferedPairCountsByClient = Object.fromEntries(allClients.map((client, index) => [client.label,
-      selected.filter((event) => event.recipientOrdinal === index + 1
+      selected.filter((event) => event.recipientOrdinal
+          === (accountingRecipientMapping?.byClient?.[client.label]?.recipientOrdinal || index + 1)
         && event.direction === "authority->client" && event.frameClass === "statePair"
         && event.metric === "offered").length]));
     const authorityAcceptedPairCountsByClient = Object.fromEntries(allClients.map((client, index) => [client.label,
-      selected.filter((event) => event.recipientOrdinal === index + 1
+      selected.filter((event) => event.recipientOrdinal
+          === (accountingRecipientMapping?.byClient?.[client.label]?.recipientOrdinal || index + 1)
         && event.direction === "authority->client" && event.frameClass === "statePair"
         && event.metric === "accepted").length]));
     const receiverAcceptedPairCountsByClient = Object.fromEntries(allClients.map((client, index) => {
-      const authorityAcceptedFrameIds = new Set(selected.filter((event) => event.recipientOrdinal === index + 1
+      const authorityAcceptedFrameIds = new Set(selected.filter((event) => event.recipientOrdinal
+          === (accountingRecipientMapping?.byClient?.[client.label]?.recipientOrdinal || index + 1)
         && event.direction === "authority->client" && event.frameClass === "statePair"
         && event.metric === "accepted" && Number.isSafeInteger(event.projectionBeat))
         .map((event) => event.projectionBeat));
@@ -1511,6 +1572,7 @@ async function runScenario({ population, scenario, runDir, commit }) {
         receiverAcceptedPairsPerSecond,
         receiverCadenceToleranceHzByClient,
         minimumReceiverAcceptedPairsPerSecond,
+        accountingRecipientMapping,
         authorityBoundary: "Application state-pair bytes accepted by ws.send callbacks; not proof of receiver acceptance.",
         receiverBoundary: "State pairs accepted and materialized by each test receiver inside the measured window." },
       fieldFreshness: SPARSE_GATE
@@ -1641,6 +1703,18 @@ function s11ScenarioIntegrity(entry) {
   const rateMaps = [cadence.authorityOfferedPairsPerSecondByClient,
     cadence.authorityAcceptedPairsPerSecondByClient, cadence.receiverAcceptedPairsPerSecond];
   const cadenceKeysExact = [...countMaps, ...rateMaps].every((record) => sameKeys(record, labels));
+  const recipientMapping = cadence.accountingRecipientMapping;
+  const recipientMappingArithmetic = !normal || (recipientMapping?.uniqueOptimal === true
+    && sameKeys(recipientMapping.byClient, labels)
+    && new Set(Object.values(recipientMapping.byClient).map((mapping) => mapping.recipientOrdinal)).size
+      === labels.length
+    && Object.entries(recipientMapping.byClient).every(([, mapping]) =>
+      Number.isSafeInteger(mapping.recipientOrdinal) && mapping.recipientOrdinal > 0
+      && mapping.recipient === `recipient-${mapping.recipientOrdinal}`
+      && Number.isSafeInteger(mapping.tupleMatches) && mapping.tupleMatches > 0
+      && mapping.tupleMatches <= mapping.clientTuples && mapping.tupleMatches <= mapping.authorityTuples)
+    && sumValues(Object.fromEntries(Object.entries(recipientMapping.byClient)
+      .map(([label, mapping]) => [label, mapping.tupleMatches]))) === recipientMapping.totalTupleMatches);
   const cadenceArithmetic = !normal || (cadenceKeysExact && labels.every((label) => {
     const offered = cadence.authorityOfferedPairCountsByClient[label];
     const accepted = cadence.authorityAcceptedPairCountsByClient[label];
@@ -1811,7 +1885,7 @@ function s11ScenarioIntegrity(entry) {
       && expectedAdmission.targetCadenceMeanAtOrBelow64KiB
       && expectedAdmission.targetCadenceOneSecondP95AtOrBelow80KiB));
   const details = {
-    cadenceArithmetic, cadenceTolerancesRecomputed, ledgerArithmetic, codecEvidence,
+    recipientMappingArithmetic, cadenceArithmetic, cadenceTolerancesRecomputed, ledgerArithmetic, codecEvidence,
     ackProofArithmetic, closedWorldAckArithmetic,
     closedWorldAckVerdict: closedWorldAck.proved === ackConvergedExpected,
     ackHistogramArithmetic, correctnessFieldsRecomputed,
