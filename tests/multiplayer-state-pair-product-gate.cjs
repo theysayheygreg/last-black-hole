@@ -115,6 +115,8 @@ function scanPairShape(client, frame) {
 
 function observeMaterializedLifecycle(client, publicView) {
   const current = new Map(publicView.entities.map((entity) => [entity.publicEntityId, {
+    category: entity.category,
+    sourceId: entity.sourceId,
     incarnation: entity.incarnation,
     hash: crypto.createHash("sha256").update(JSON.stringify(entity.components)).digest("hex"),
   }]));
@@ -140,6 +142,12 @@ function observeMaterializedLifecycle(client, publicView) {
   client.materializedEntities = current;
 }
 
+function hasMaterializedPublicEntity(client, category, sourceId) {
+  if (!(client.materializedEntities instanceof Map)) return false;
+  return [...client.materializedEntities.values()].some((entity) =>
+    entity.category === category && entity.sourceId === sourceId);
+}
+
 async function openStatePairClient({ port, authority, label, reuseManifest = false, fault = {} }) {
   const issued = await request(port, "/multiplayer/ticket", { method: "POST", authority, body: {
     kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2],
@@ -152,7 +160,8 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     label, authority, ticket: issued.body, fault, ws: new WebSocket(`ws://127.0.0.1:${port}/stream`,
       { perMessageDeflate: false }),
     welcome: null, receiver: null, error: null, close: null, pairCount: 0, acceptedPairs: 0,
-    lastPairAt: null, inputSeq: 0, actionSeq: 0, commandSeq: 0, uplink: {}, downlink: {},
+    lastPairAt: null, lastStatePairAckSentFrameId: 0,
+    inputSeq: 0, actionSeq: 0, commandSeq: 0, uplink: {}, downlink: {},
     manifest: { reused: reuseManifest, servedBytes: 0, hash: issued.body.manifestHash },
     clientWorkSamples: [], ackWorkSamples: [], faultLog: [], hashesVerified: 0,
     shape: { keyframes: 0, deltas: 0, creates: 0, updates: 0, despawns: 0, reincarnations: 0, rootOps: 0 },
@@ -232,7 +241,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
       return;
     }
     const ackStarted = performance.now();
-    send(client, outcome.ack);
+    if (send(client, outcome.ack)) client.lastStatePairAckSentFrameId = frame.frameId;
     client.ackWorkSamples.push({ at: Date.now(), ms: performance.now() - ackStarted });
   });
   await new Promise((resolve, reject) => { client.ws.once("open", resolve); client.ws.once("error", reject); });
@@ -272,6 +281,7 @@ function summarizeClients(clients) {
     label: client.label, membershipId: client.welcome.membershipId, connectionEpoch: client.welcome.connectionEpoch,
     acceptedPairs: client.acceptedPairs, hashesVerified: client.hashesVerified,
     lastAcceptedFrameId: client.receiver?.current()?.frameId || 0,
+    lastStatePairAckSentFrameId: client.lastStatePairAckSentFrameId,
     manifest: client.manifest, uplinkSerialized: client.uplink, downlinkObserved: client.downlink,
     clientApplyMs: distribution(client.clientWorkSamples.map((sample) => sample.ms)),
     ackSerializeSendMs: distribution(client.ackWorkSamples.map((sample) => sample.ms)),
@@ -404,6 +414,10 @@ async function runScenario({ population, scenario, runDir }) {
     allClients.push(...setup.clients);
     const warmupMs = churn ? CHURN_WARMUP_MS : NORMAL_WARMUP_MS;
     await runWorkload(clientsRef, warmupMs, { port, memorySamples });
+    const resetEvidence = await request(port, "/debug/multiplayer/evidence-reset", { method: "POST" });
+    if (resetEvidence.status !== 200) {
+      throw new Error(`performance evidence reset failed: ${JSON.stringify(resetEvidence.body)}`);
+    }
     const startHealth = (await request(port, "/health/compact")).body;
     const startAt = Date.now();
     const applied = new Set();
@@ -454,11 +468,24 @@ async function runScenario({ population, scenario, runDir }) {
       await once("leave", async () => {
         const index = ref.current.length - 1;
         const old = ref.current[index];
+        const sourceId = old.authority.playerId;
+        const observers = ref.current.filter((client) => client !== old
+          && client.ws.readyState === WebSocket.OPEN && !client.error);
+        const presenceBeforeLeave = observers.length === 0 || await waitFor(() =>
+          observers.every((client) => hasMaterializedPublicEntity(client, "player", sourceId)),
+        `${scenario}/${population} departing player presence`);
         await closeClient(old);
         const left = await request(port, "/leave", { method: "POST", authority: old.authority, body: {
           runId: old.authority.runId, playerId: old.authority.playerId, commandSeq: old.commandSeq + 1,
         } });
         if (left.status !== 200) throw new Error(`leave failed: ${JSON.stringify(left.body)}`);
+        const authorityAbsence = await waitFor(async () => {
+          const health = await request(port, "/health/compact");
+          return health.body.playerCount === population - 1;
+        }, `${scenario}/${population} authority leave`);
+        const absenceObserved = observers.length === 0 || await waitFor(() =>
+          observers.every((client) => !hasMaterializedPublicEntity(client, "player", sourceId)),
+        `${scenario}/${population} departing player despawn`);
         const rejoined = await request(port, "/join", { method: "POST", body: {
           runId: old.authority.runId, clientId: old.authority.playerId, name: old.label,
         } });
@@ -467,8 +494,15 @@ async function runScenario({ population, scenario, runDir }) {
           label: `${old.label}-reincarnated` });
         ref.current[index] = replacement;
         allClients.push(replacement);
+        const replacementObserved = await waitFor(() => [...observers, replacement]
+          .every((client) => hasMaterializedPublicEntity(client, "player", sourceId)),
+        `${scenario}/${population} replacement player create`);
         return { target: old.label, oldMembership: old.welcome.membershipId,
-          replacementMembership: replacement.welcome.membershipId };
+          replacementMembership: replacement.welcome.membershipId,
+          observerCount: observers.length, presenceBeforeLeave: Boolean(presenceBeforeLeave),
+          authorityAbsenceObserved: Boolean(authorityAbsence),
+          clientAbsenceObserved: Boolean(absenceObserved),
+          clientReplacementObserved: Boolean(replacementObserved) };
       });
       await once("mutate", async () => {
         const target = ref.current[Math.min(2, ref.current.length - 1)];
@@ -527,14 +561,15 @@ async function runScenario({ population, scenario, runDir }) {
         const loss = client.faults.find((fault) => fault.type === "frame-loss");
         const ackLoss = client.faults.find((fault) => fault.type === "ack-loss");
         if (loss && !client.faults.some((fault) => fault.type === "recovery")) return false;
-        if (ackLoss && !(client.lastAcceptedFrameId > ackLoss.frameId)) return false;
+        if (ackLoss && !(client.lastAcceptedFrameId > ackLoss.frameId
+          && client.lastStatePairAckSentFrameId > ackLoss.frameId)) return false;
         return true;
       }),
-      lifecycleObserved: !churn || (observedLifecycle.despawns > 0
-        && observedLifecycle.creates > 0
-        && observedLifecycle.componentChanges > 0
+      lifecycleObserved: !churn || (observedLifecycle.componentChanges > 0
         && faultActions.some((entry) => entry.name === "leave"
-          && entry.oldMembership !== entry.replacementMembership)),
+          && entry.oldMembership !== entry.replacementMembership
+          && entry.presenceBeforeLeave && entry.authorityAbsenceObserved
+          && entry.clientAbsenceObserved && entry.clientReplacementObserved)),
     };
     const admission = {
       steadyMeanAtOrBelow64KiB: churn ? null : meanWorst <= TARGET_BPS,
@@ -573,8 +608,11 @@ async function runScenario({ population, scenario, runDir }) {
         worstRecipientMeanDownlinkBytesPerSecond: meanWorst, oneSecondP95DownlinkBytesPerSecond: p95OneSecond,
         acceptedBreakdown: breakdown, windows,
         explicitCounts: {
-          recoveryRequestsAccepted: selected.filter((event) => event.direction === "client->authority"
-            && event.frameClass === "statePairRecovery" && event.metric === "accepted").length,
+          recoveryRequestsSerialized: clientSummary.reduce((sum, client) =>
+            sum + (client.uplinkSerialized.statePairRecovery?.frames || 0), 0),
+          recoveryRequestSerializedBytes: clientSummary.reduce((sum, client) =>
+            sum + (client.uplinkSerialized.statePairRecovery?.bytes || 0), 0),
+          recoveryIngressAccountingClass: "control",
           retransmittedStatePairs: selected.filter((event) => event.direction === "authority->client"
             && event.frameClass === "statePair" && event.metric === "retransmitted").length,
           acceptedStatePairAcks: selected.filter((event) => event.direction === "client->authority"
@@ -588,11 +626,13 @@ async function runScenario({ population, scenario, runDir }) {
         clientSerializedUplink: clientSummary.map((client) => ({ label: client.label, classes: client.uplinkSerialized })) },
       pairShape: { ...shape, observedMaterializedLifecycle: observedLifecycle,
         keyframeCauseAttribution: publisher.keyframeReasons,
+        keyframeCauseAttributionScope: "scenario lifetime including warmup",
         ackBaseProof: { ackAccepted: publisher.ackAccepted, ackRejected: publisher.ackRejected,
           ackBaseAdvances: publisher.ackBaseAdvances,
           recipientsWithAckedBaseBeforeCleanup: livePublisher.recipientsWithAckedBase,
           maxAckedFrameIdBeforeCleanup: livePublisher.maxAckedFrameId,
-          candidateAverageBytes: livePublisher.candidateAverageBytes },
+          candidateAverageBytes: livePublisher.candidateAverageBytes,
+          counterScope: "scenario lifetime including warmup; live base fields are pre-cleanup" },
         acceptedStatePairFrameBytes: pairGroup.map((row) => ({ kind: row.projectionKind,
         frames: row.frames, bytes: row.bytes, frameBytes: row.frameBytes })),
         productWindow: { keyframes: productKeyframes, deltas: productDeltas,
@@ -604,7 +644,9 @@ async function runScenario({ population, scenario, runDir }) {
           savingsVsS1ApproxPairP50: 1 - pairStats.p50 / (S0[population].pairP50 - S1_STATIC_PAIR_SAVINGS_BYTES) } },
       cadence: { authorityTickHz: endHealth.session.tickHz, publicationHz: endHealth.session.snapshotHz,
         observedPairsPerSecond: pairFrameBytes.length / population / ((endAt - startAt) / 1000) },
-      performance: { machineLocal: true, authority: deltaHealth(startHealth, endHealth),
+      performance: { machineLocal: true,
+        authority: { ...deltaHealth(startHealth, endHealth),
+          percentileScope: "bounded runtime rolling ring; reset after warmup by evidence-only endpoint" },
         clientApplyMs: distribution(allClients.flatMap((client) => client.clientWorkSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
         clientAckSerializeSendMs: distribution(allClients.flatMap((client) => client.ackWorkSamples)

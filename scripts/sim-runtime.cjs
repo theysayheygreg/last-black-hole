@@ -7035,6 +7035,19 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/debug/multiplayer/evidence-reset") {
+      if (!REPLICATION_ACCOUNTING_CAPTURE_GUARD) {
+        sendJson(res, 404, { ok: false, error: "Not found" });
+        return;
+      }
+      runtime.multiplayerProjection.simTickCostDistribution.reset();
+      runtime.multiplayerProjection.projectionCostDistribution.reset();
+      sendJson(res, 200, { ok: true,
+        generation: runtime.multiplayerProjection.generation,
+        scope: "bounded multiplayer cost percentile rings" });
+      return;
+    }
+
     if (req.method === "GET" && req.url === "/debug/ballpark") {
       sendJson(res, 200, {
         ok: true,
