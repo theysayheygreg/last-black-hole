@@ -81,12 +81,13 @@ async function run() {
       fetchPath: "/multiplayer/manifest/abc",
     };
     const harness = await createHarness({
+      sweepIntervalMs: 50,
       afterRedeem(result) {
         result.welcome.wireVersion = WIRE_PROTOCOL_VERSION_V2;
         result.welcome.capabilities = ["static-manifest-v1"];
         Object.assign(result.welcome, manifest);
         result.manifestRequired = true;
-        result.manifestTimeoutMs = 150;
+        result.manifestTimeoutMs = result.binding.name === "manifest-timeout" ? 150 : 2_500;
       },
     });
     try {
@@ -122,6 +123,14 @@ async function run() {
       await waitFor(() => timedOut.close.code !== null, { timeout: 500, label: "manifest verification timeout" });
       assert(!nextFrame(timedOut.messages, "rebase") && !nextFrame(timedOut.messages, "ownerState"),
         "Manifest timeout must cleanly close without baseline or private state");
+
+      const pongTicket = harness.issueTicket("manifest-pong");
+      const pong = await openClient(`${harness.baseUrl}/stream`);
+      pong.ws.send(JSON.stringify(hello(pongTicket)));
+      const heartbeat = await waitFor(() => nextFrame(pong.messages, "heartbeat"), { timeout: 1_500, label: "manifest heartbeat" });
+      pong.ws.send(JSON.stringify({ type: "pong", heartbeatId: `${heartbeat.heartbeatId}-wrong`, clientTimeMs: Date.now() }));
+      await waitFor(() => pong.close.code !== null, { label: "manifest wrong pong close" });
+      assert(!nextFrame(pong.messages, "ownerState"), "Wrong manifest-gate pong must fail exact correlation without releasing private state");
     } finally {
       await harness.close();
     }

@@ -46,6 +46,9 @@ function canonicalJson(value, path = "$", seen = new Set()) {
   seen.add(value);
   let encoded;
   if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index += 1) {
+      if (!Object.hasOwn(value, index)) fail("sparse-array", `${path} must not contain holes`);
+    }
     encoded = `[${value.map((entry, index) => canonicalJson(entry, `${path}[${index}]`, seen)).join(",")}]`;
   } else {
     const prototype = Object.getPrototypeOf(value);
@@ -107,29 +110,39 @@ function createSessionReplicationManifest({ runId, map, publicContent = {}, sche
 
 function createManifestFetchRegistry({
   now = Date.now, randomBytes = crypto.randomBytes, ttlMs = DEFAULT_FETCH_TTL_MS,
-  capacity = DEFAULT_FETCH_CAPACITY,
+  capacity = DEFAULT_FETCH_CAPACITY, cacheTtlMs = 6 * 60 * 60 * 1000,
 } = {}) {
   const records = new Map();
-  const proofs = new Set();
-  const acceptedCaches = new Set();
+  const proofs = new Map();
+  const acceptedCaches = new Map();
+  const retries = new Map();
   const digest = (token) => crypto.createHash("sha256").update(token, "utf8").digest("hex");
-  const proofKey = ({ runId, membershipId, manifestHash, connectionEpoch }) =>
-    JSON.stringify([runId, membershipId, manifestHash, connectionEpoch]);
-  const cacheKey = ({ runId, membershipId, manifestHash }) => JSON.stringify([runId, membershipId, manifestHash]);
+  const proofKey = ({ runId, membershipId, manifestSchema, manifestHash, connectionEpoch }) =>
+    JSON.stringify([runId, membershipId, manifestSchema, manifestHash, connectionEpoch]);
+  const cacheKey = ({ runId, membershipId, manifestSchema, manifestHash }) =>
+    JSON.stringify([runId, membershipId, manifestSchema, manifestHash]);
   function pruneExpired(at = now()) {
     for (const [key, record] of records) if (at >= record.expiresAt) records.delete(key);
+    for (const [key, expiresAt] of proofs) if (at >= expiresAt) proofs.delete(key);
+    for (const [key, expiresAt] of acceptedCaches) if (at >= expiresAt) acceptedCaches.delete(key);
+    for (const [key, expiresAt] of retries) if (at >= expiresAt) retries.delete(key);
   }
-  function issue({ runId, membershipId, manifestHash, connectionEpoch = null }) {
+  function issue({ runId, membershipId, manifestSchema, manifestHash, connectionEpoch = null }, { retry = false } = {}) {
     const issuedAt = now();
     pruneExpired(issuedAt);
     if (records.size >= capacity) fail("capability-capacity", "manifest fetch capability capacity is exhausted");
+    const retryKey = proofKey({ runId, membershipId, manifestSchema, manifestHash, connectionEpoch });
+    if (retry) {
+      if (retries.has(retryKey)) fail("retry-exhausted", "manifest fetch retry is already issued");
+      retries.set(retryKey, issuedAt + ttlMs);
+    }
     const tokenBytes = randomBytes(FETCH_CAPABILITY_BYTES);
     if (!Buffer.isBuffer(tokenBytes) || tokenBytes.length !== FETCH_CAPABILITY_BYTES) fail("capability-generation", "randomBytes returned an invalid capability");
     const token = tokenBytes.toString("base64url");
-    records.set(digest(token), { runId, membershipId, manifestHash, connectionEpoch, expiresAt: issuedAt + ttlMs, used: false });
+    records.set(digest(token), { runId, membershipId, manifestSchema, manifestHash, connectionEpoch, expiresAt: issuedAt + ttlMs, used: false });
     return Object.freeze({ capability: token, expiresAt: issuedAt + ttlMs });
   }
-  function redeem(token, expected) {
+  function redeem(token, expected, { validate = null } = {}) {
     if (typeof token !== "string" || !FETCH_CAPABILITY_PATTERN.test(token)) fail("invalid-capability", "manifest capability is malformed");
     const key = digest(token);
     const record = records.get(key);
@@ -137,19 +150,25 @@ function createManifestFetchRegistry({
       records.delete(key);
       fail("invalid-capability", "manifest capability is unknown, used, or expired");
     }
-    for (const field of ["runId", "membershipId", "manifestHash"]) {
+    for (const field of ["runId", "membershipId", "manifestSchema", "manifestHash", "connectionEpoch"]) {
       if (expected[field] !== undefined && record[field] !== expected[field]) fail("capability-mismatch", `manifest capability ${field} mismatch`);
     }
+    if (validate && validate(Object.freeze({ ...record })) !== true) fail("capability-mismatch", "manifest capability is not current");
     record.used = true;
     records.delete(key);
-    if (proofs.size >= capacity && !proofs.has(proofKey(record))) fail("proof-capacity", "manifest proof capacity is exhausted");
-    proofs.add(proofKey(record));
+    const verifiedKey = proofKey(record);
+    if (proofs.size >= capacity && !proofs.has(verifiedKey)) fail("proof-capacity", "manifest proof capacity is exhausted");
+    proofs.set(verifiedKey, record.expiresAt);
     return Object.freeze({ ...record });
   }
   function consumeProof(expected) {
+    const at = now();
+    pruneExpired(at);
     const key = proofKey(expected);
     if (proofs.delete(key)) {
-      acceptedCaches.add(cacheKey(expected));
+      const cache = cacheKey(expected);
+      if (acceptedCaches.size >= capacity && !acceptedCaches.has(cache)) fail("cache-capacity", "manifest cache proof capacity is exhausted");
+      acceptedCaches.set(cache, at + cacheTtlMs);
       return true;
     }
     if (!acceptedCaches.has(cacheKey(expected))) fail("manifest-not-fetched", "manifest fetch proof is missing");
@@ -160,11 +179,15 @@ function createManifestFetchRegistry({
     records.clear();
     proofs.clear();
     acceptedCaches.clear();
+    retries.clear();
     return count;
   }
   return Object.freeze({
     issue, redeem, consumeProof, reset,
-    diagnostics: () => Object.freeze({ retained: records.size, verified: proofs.size, cachedBindings: acceptedCaches.size, ttlMs, capacity }),
+    diagnostics: () => {
+      pruneExpired();
+      return Object.freeze({ retained: records.size, verified: proofs.size, cachedBindings: acceptedCaches.size, retries: retries.size, ttlMs, cacheTtlMs, capacity });
+    },
   });
 }
 

@@ -89,29 +89,40 @@ async function run() {
         body: { kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2, WIRE_PROTOCOL_VERSION], capabilities: ["static-manifest-v1"] },
       });
       const ticket = JSON.parse(issued.bytes);
-      assert(ticket.wireVersion === WIRE_PROTOCOL_VERSION_V2 && ticket.manifestCapabilities.length === 2, "Server must select and bind v2 plus two bounded fetch attempts");
+      assert(ticket.wireVersion === WIRE_PROTOCOL_VERSION_V2 && ticket.manifestCapability, "Server must select and bind v2 plus one initial fetch capability");
       assert(!ticket.fetchPath.includes("?") && !JSON.stringify(ticket).includes(`${ticket.fetchPath}?`), "Fetch URL must contain no capability");
+      const premature = await request(ticket.fetchPath, { headers: { authorization: `Bearer ${ticket.manifestCapability}` } });
+      assert(premature.response.status === 401, "Capability must not redeem before its exact live admission epoch");
       const client = await open(ticket); clients.push(client);
+      const admittedWelcome = client.frames.find((frame) => frame.type === "welcome");
       await new Promise((resolve) => setTimeout(resolve, 50));
       assert(!client.frames.some((frame) => ["rebase", "publicState", "ownerState", "event"].includes(frame.type)), "MANIFEST_REQUIRED must emit no gameplay/private frames");
 
       const unauthenticated = await request(ticket.fetchPath);
       assert(unauthenticated.response.status === 401, "Missing fetch capability must fail closed");
-      const query = await request(`${ticket.fetchPath}?cap=${ticket.manifestCapabilities[0]}`);
+      const query = await request(`${ticket.fetchPath}?cap=${ticket.manifestCapability}`);
       assert(query.response.status === 404, "Capability in URL must not be accepted");
-      const first = await request(ticket.fetchPath, { headers: { authorization: `Bearer ${ticket.manifestCapabilities[0]}` } });
-      assert(first.response.status === 200 && first.bytes.length === ticket.manifestBytes, "Authenticated fetch must return exact advertised bytes");
+      const retryIssued = await request("/multiplayer/manifest/retry", {
+        method: "POST", authority: authorityB,
+        body: { manifestSchema: ticket.manifestSchema, manifestHash: ticket.manifestHash, connectionEpoch: admittedWelcome.connectionEpoch },
+      });
+      const retryCapability = JSON.parse(retryIssued.bytes).manifestCapability;
+      const first = await request(ticket.fetchPath, { headers: { authorization: `Bearer ${retryCapability}` } });
+      assert(first.response.status === 200 && first.bytes.length === ticket.manifestBytes, "Fresh retry fetch must return exact advertised bytes");
       assert(`sha256:${crypto.createHash("sha256").update(first.bytes).digest("hex")}` === ticket.manifestHash, "Served-byte hash must match advertisement");
-      const second = await request(ticket.fetchPath, { headers: { authorization: `Bearer ${ticket.manifestCapabilities[1]}` } });
-      assert(second.bytes.equals(first.bytes), "Retry/cache fetch must be byte-identical");
       const manifestText = first.bytes.toString("utf8");
-      for (const secret of [authorityB.commandCredential, authorityB.membershipId, authorityB.playerId, ticket.ticket, ...ticket.manifestCapabilities]) {
+      for (const secret of [authorityB.commandCredential, authorityB.membershipId, authorityB.playerId, ticket.ticket, ticket.manifestCapability, retryCapability]) {
         assert(!manifestText.includes(secret), `Public manifest leaked private marker ${secret}`);
       }
-      const replay = await request(ticket.fetchPath, { headers: { authorization: `Bearer ${ticket.manifestCapabilities[0]}` } });
+      const replay = await request(ticket.fetchPath, { headers: { authorization: `Bearer ${retryCapability}` } });
       assert(replay.response.status === 401, "Fetch capability must be one-use");
+      const health = JSON.parse((await request("/health")).bytes);
+      const transfers = health.multiplayer.manifestTransfers;
+      assert(transfers.servedFetches === 1 && transfers.servedBytes === ticket.manifestBytes && transfers.rejectedFetches === 3,
+        `Cold manifest accounting must count only successful served bytes separately: ${JSON.stringify(transfers)}`);
+      assert(!JSON.stringify(transfers).includes(authorityB.membershipId), "Manifest transfer attribution must anonymize membership identity");
 
-      const welcome = client.frames.find((frame) => frame.type === "welcome");
+      const welcome = admittedWelcome;
       client.ws.send(JSON.stringify({
         type: "manifestAck", manifestSchema: ticket.manifestSchema, manifestHash: ticket.manifestHash,
         manifestBytes: ticket.manifestBytes, connectionEpoch: welcome.connectionEpoch,
@@ -145,6 +156,8 @@ async function run() {
       }));
       await waitFor(() => client.close, "unproved ACK close");
       assert(!client.frames.some((frame) => frame.type === "ownerState"), "Unproved ACK must not release private baseline");
+      const staleFetch = await request(ticket.fetchPath, { headers: { authorization: `Bearer ${ticket.manifestCapability}` } });
+      assert(staleFetch.response.status === 401, "Closed admission must invalidate capability use for its old connection epoch");
     });
 
     await runner.run("SimClient verifies, hydrates, caches, and reconnects v2 while v1 remains live", async () => {
@@ -157,7 +170,9 @@ async function run() {
       simClient.runId = session.runId;
       await simClient.join({ name: "Manifest SimClient" });
       assert(simClient.latestSnapshot?.world?.wells?.[0]?.orbitalDir !== undefined, "Client must hydrate omitted static fields before publishing gameplay state");
-      assert(simClient._manifestCache.size === 1 && simClient._acceptedManifestHash, "Client must retain exactly one accepted byte cache entry");
+      assert(simClient._manifestCache.size === 1 && typeof [...simClient._manifestCache.values()][0] === "string"
+        && Object.isFrozen(simClient._acceptedManifest) && Object.isFrozen(simClient._acceptedManifest.map.wells),
+      "Client must retain exactly one immutable accepted cache entry and parsed manifest");
       const priorEpoch = simClient.connectionEpoch;
       await simClient._connectStream("resume");
       assert(simClient.connectionEpoch === priorEpoch + 1, "Resume must rotate the connection epoch");

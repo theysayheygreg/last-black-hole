@@ -290,7 +290,8 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
   if (welcome.wireVersion !== 'lbh-multiplayer-json-v2') return null;
   if (generation !== this._socketGeneration) throw new Error('Manifest verification superseded');
   const cacheKey = `${welcome.manifestSchema}:${welcome.manifestHash}`;
-  let accepted = this._manifestCache.get(cacheKey) || null;
+  let acceptedText = this._manifestCache.get(cacheKey) || null;
+  let accepted = acceptedText === null ? null : new TextEncoder().encode(acceptedText);
   if (accepted) {
     const cachedHash = accepted.byteLength === welcome.manifestBytes
       ? `sha256:${await sha256Hex(accepted)}`
@@ -298,23 +299,24 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
     if (cachedHash !== welcome.manifestHash) {
       this._manifestCache.delete(cacheKey);
       accepted = null;
+      acceptedText = null;
     }
   }
   if (!accepted) {
     const fetchUrl = new URL(welcome.fetchPath, `${this.baseUrl}/`);
     const base = new URL(`${this.baseUrl}/`);
     if (fetchUrl.origin !== base.origin || fetchUrl.search || fetchUrl.hash) throw new Error('Manifest fetch origin/path rejected');
-    const capabilities = Array.isArray(ticket.manifestCapabilities)
-      ? ticket.manifestCapabilities
-      : [ticket.manifestCapability].filter(Boolean);
+    let capability = ticket.manifestCapability;
+    const deadline = performance.now() + 9_500;
     let lastError = null;
-    for (let attempt = 0; attempt < Math.min(2, capabilities.length); attempt += 1) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!capability || performance.now() >= deadline) break;
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10_000);
+      const timer = setTimeout(() => controller.abort(), Math.max(1, deadline - performance.now()));
       try {
         const response = await fetch(fetchUrl, {
           method: 'GET', signal: controller.signal,
-          headers: { authorization: `Bearer ${capabilities[attempt]}` },
+          headers: { authorization: `Bearer ${capability}` },
           credentials: 'same-origin', cache: 'no-store', redirect: 'error',
         });
         if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
@@ -325,10 +327,28 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
         const hash = `sha256:${await sha256Hex(bytes)}`;
         if (hash !== welcome.manifestHash) throw new Error('Manifest hash mismatch');
         accepted = bytes;
-        this._manifestCache.set(cacheKey, bytes);
+        acceptedText = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        this._manifestCache.clear();
+        this._manifestCache.set(cacheKey, acceptedText);
         break;
       } catch (error) {
         lastError = error;
+        if (attempt === 0 && performance.now() < deadline) {
+          try {
+            const retry = await this._json('/multiplayer/manifest/retry', {
+              method: 'POST',
+              body: JSON.stringify({
+                manifestSchema: welcome.manifestSchema,
+                manifestHash: welcome.manifestHash,
+                connectionEpoch: welcome.connectionEpoch,
+              }),
+            });
+            capability = retry.manifestCapability;
+          } catch (retryError) {
+            lastError = retryError;
+            capability = null;
+          }
+        }
       } finally {
         clearTimeout(timer);
       }
@@ -338,7 +358,16 @@ export async function _verifySessionManifest(welcome, ticket, generation) {
   if (generation !== this._socketGeneration || welcome.connectionEpoch !== this.connectionEpoch) {
     throw new Error('Manifest ACK epoch changed');
   }
-  this._acceptedManifest = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(accepted));
+  const parsedManifest = JSON.parse(acceptedText ?? new TextDecoder('utf-8', { fatal: true }).decode(accepted));
+  if (parsedManifest.manifestSchema !== welcome.manifestSchema || parsedManifest.runId !== welcome.runId) {
+    throw new Error('Manifest embedded identity mismatch');
+  }
+  const freezeManifest = (value) => {
+    if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+    for (const child of Object.values(value)) freezeManifest(child);
+    return Object.freeze(value);
+  };
+  this._acceptedManifest = freezeManifest(parsedManifest);
   this._acceptedManifestHash = welcome.manifestHash;
   this._sendFrame({
     type: 'manifestAck', manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
@@ -446,8 +475,11 @@ export async function _connectStream(kind = 'admission') {
       this._handleSocketClose(event, generation);
     });
     timer = setTimeout(() => {
-      if (generation === this._socketGeneration) finish(reject, new Error('Timed out waiting for sim stream baseline'));
-    }, 5000);
+      if (generation === this._socketGeneration) {
+        if (socketOpen(ws)) ws.close(4000, 'baseline-timeout');
+        finish(reject, new Error('Timed out waiting for sim stream baseline'));
+      }
+    }, selectedWireVersion === 'lbh-multiplayer-json-v2' ? 10_500 : 5_000);
     timer.unref?.();
   });
   this.activeTransport = 'stream';

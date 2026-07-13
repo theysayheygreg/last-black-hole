@@ -49,6 +49,7 @@ function createSimWebSocketAdapter(options = {}) {
   const verifyManifestAck = typeof options.verifyManifestAck === "function"
     ? options.verifyManifestAck
     : async () => true;
+  const onBindingClosed = typeof options.onBindingClosed === "function" ? options.onBindingClosed : null;
   const {
     server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
     onPong, onAck, onPressureTransition, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
@@ -741,6 +742,9 @@ function createSimWebSocketAdapter(options = {}) {
       pendingHello = Math.max(0, pendingHello - 1);
     }
     if (state.bindingKey !== null && byBindingKey.get(state.bindingKey) === state) byBindingKey.delete(state.bindingKey);
+    if (state.binding && onBindingClosed) {
+      try { onBindingClosed(state.binding); } catch {}
+    }
     resetOutbound(state, { cause: "cleanup" });
     state.cleaned = true;
     emitPressureTransition(state, "connection-cleanup");
@@ -992,9 +996,21 @@ function createSimWebSocketAdapter(options = {}) {
       state.closing = true;
       return sendApplicationClose(state, 4003, "connection fenced", true);
     }
+    const acceptPong = async () => {
+      if (frame.heartbeatId !== state.pendingHeartbeat?.id) {
+        throw new WireProtocolError("invalid-pong", "pong does not match the active heartbeat", 4400);
+      }
+      state.pendingHeartbeat = null;
+      state.nextHeartbeatAt = now() + state.heartbeatIntervalMs;
+      emitPressureTransition(state, "heartbeat-pong", {
+        nextHeartbeatTimeoutEligibleAt: state.nextHeartbeatAt + state.heartbeatIntervalMs * 2,
+      });
+      await onPong(state.binding, frame, callbackContext(state, "pong"));
+      return stateIsLive(state, expectedGeneration);
+    };
     if (state.manifestRequired) {
       if (frame.type === "pong") {
-        await onPong(state.binding, frame, callbackContext(state, "pong"));
+        await acceptPong();
         return;
       }
       if (frame.type !== "manifestAck") {
@@ -1052,16 +1068,7 @@ function createSimWebSocketAdapter(options = {}) {
       return;
     }
     if (frame.type === "pong") {
-      if (frame.heartbeatId !== state.pendingHeartbeat?.id) {
-        throw new WireProtocolError("invalid-pong", "pong does not match the active heartbeat", 4400);
-      }
-      state.pendingHeartbeat = null;
-      state.nextHeartbeatAt = now() + state.heartbeatIntervalMs;
-      emitPressureTransition(state, "heartbeat-pong", {
-        nextHeartbeatTimeoutEligibleAt: state.nextHeartbeatAt + state.heartbeatIntervalMs * 2,
-      });
-      await onPong(state.binding, frame, callbackContext(state, "pong"));
-      if (!stateIsLive(state, expectedGeneration)) return;
+      await acceptPong();
       return;
     }
     if (frame.type === "ack") {

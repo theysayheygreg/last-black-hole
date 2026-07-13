@@ -31,6 +31,8 @@ async function run() {
     expectError(() => canonicalJsonBytes({ value: NaN }), "non-finite-number");
     expectError(() => canonicalJsonBytes({ value: Infinity }), "non-finite-number");
     expectError(() => canonicalJsonBytes({ value: "e\u0301" }), "non-nfc-string");
+    expectError(() => canonicalJsonBytes({ value: Array(2) }), "sparse-array");
+    expectError(() => canonicalJsonBytes({ "e\u0301": true }), "non-nfc-key");
   });
 
   await runner.run("manifest hash addresses exact immutable served bytes and cache copies are byte-equal", async () => {
@@ -76,6 +78,27 @@ async function run() {
     registry.issue(expected);
     assert(registry.reset() >= 1 && registry.diagnostics().retained === 0, "Reset must clear capabilities");
     assert(!JSON.stringify(registry.diagnostics()).includes("member-a"), "Diagnostics must not expose binding or capability");
+  });
+
+  await runner.run("proofs, retries, and accepted cache bindings are TTL- and capacity-bounded", async () => {
+    let clock = 0;
+    let seed = 10;
+    const registry = createManifestFetchRegistry({
+      now: () => clock, capacity: 2, ttlMs: 10, cacheTtlMs: 20,
+      randomBytes: (size) => Buffer.alloc(size, seed++),
+    });
+    const expected = { runId: "run", membershipId: "member", manifestSchema: "schema", manifestHash: "sha256:a", connectionEpoch: 1 };
+    const initial = registry.issue(expected);
+    registry.redeem(initial.capability, expected);
+    assert(registry.diagnostics().verified === 1, "Fetch must retain one bounded short-lived proof");
+    registry.consumeProof(expected);
+    assert(registry.diagnostics().cachedBindings === 1, "ACK must promote proof to a bounded cache binding");
+    registry.issue(expected, { retry: true });
+    expectError(() => registry.issue(expected, { retry: true }), "retry-exhausted");
+    clock = 21;
+    const diagnostics = registry.diagnostics();
+    assert(diagnostics.verified === 0 && diagnostics.cachedBindings === 0 && diagnostics.retries === 0 && diagnostics.retained === 0,
+      `All retained classes must prune deterministically: ${JSON.stringify(diagnostics)}`);
   });
 
   process.exit(runner.summary() ? 0 : 1);

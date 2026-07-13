@@ -1099,6 +1099,10 @@ let terminalShutdownHandle = null;
 let multiplayerTicketRegistry = null;
 const manifestFetchRegistry = createManifestFetchRegistry();
 let sessionReplicationManifest = null;
+let manifestTransferStats = { servedBytes: 0, servedFetches: 0, rejectedFetches: 0, recipients: new Map(), salt: crypto.randomBytes(32) };
+const manifestAdmissions = new Set();
+const manifestAdmissionKey = ({ runId, membershipId, manifestSchema, manifestHash, connectionEpoch }) =>
+  JSON.stringify([runId, membershipId, manifestSchema, manifestHash, connectionEpoch]);
 let multiplayerAdapter = null;
 let multiplayerProjectionTask = null;
 let shutdownPromise = null;
@@ -6082,7 +6086,9 @@ function writeFiles() {
 
 function rotateMultiplayerRun(runId) {
   manifestFetchRegistry.reset();
+  manifestAdmissions.clear();
   sessionReplicationManifest = null;
+  manifestTransferStats = { servedBytes: 0, servedFetches: 0, rejectedFetches: 0, recipients: new Map(), salt: crypto.randomBytes(32) };
   if (multiplayerTicketRegistry) multiplayerTicketRegistry.rotateRun(runId);
   else {
     multiplayerTicketRegistry = createMultiplayerTicketRegistry({
@@ -6092,6 +6098,27 @@ function rotateMultiplayerRun(runId) {
     });
   }
   if (multiplayerAdapter) multiplayerAdapter.rotateRun(runId);
+}
+
+function currentAuthorityForManifestRecord(record) {
+  for (const authority of runtime.playerAuthorities.values()) {
+    if (authority.runId === record.runId
+        && authority.membershipId === record.membershipId
+        && authority.connectionEpoch === record.connectionEpoch
+        && manifestAdmissions.has(manifestAdmissionKey(record))) return authority;
+  }
+  return null;
+}
+
+function recordManifestTransfer(record, bytes) {
+  const recipient = crypto.createHmac("sha256", manifestTransferStats.salt)
+    .update(record.membershipId).digest("base64url").slice(0, 16);
+  const row = manifestTransferStats.recipients.get(recipient) || { fetches: 0, bytes: 0 };
+  row.fetches += 1;
+  row.bytes += bytes;
+  manifestTransferStats.recipients.set(recipient, row);
+  manifestTransferStats.servedFetches += 1;
+  manifestTransferStats.servedBytes += bytes;
 }
 
 function currentSessionReplicationManifest() {
@@ -6227,6 +6254,7 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
     wireVersion: selectedWireVersion,
     capabilities: claims.capabilities || [],
     manifestHash: claims.manifestHash || null,
+    manifestSchema: claims.manifestSchema || null,
   };
   const publicFrame = projectV2StaticManifestState(binding, buildPublicMultiplayerState());
   const ownerFrame = buildOwnerMultiplayerState(binding, publicFrame);
@@ -6236,6 +6264,19 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
       ? "event-gap"
       : kind === "resume" ? "resume" : "initial";
   const manifest = selectedWireVersion === WIRE_PROTOCOL_VERSION_V2 ? currentSessionReplicationManifest() : null;
+  if (manifest) {
+    for (const key of manifestAdmissions) {
+      const [runId, membershipId] = JSON.parse(key);
+      if (runId === binding.runId && membershipId === binding.membershipId) manifestAdmissions.delete(key);
+    }
+    manifestAdmissions.add(manifestAdmissionKey({
+      runId: binding.runId,
+      membershipId: binding.membershipId,
+      manifestSchema: manifest.manifestSchema,
+      manifestHash: manifest.manifestHash,
+      connectionEpoch: binding.connectionEpoch,
+    }));
+  }
   return {
     binding,
     bindingKey: { runId: binding.runId, membershipId: binding.membershipId },
@@ -6531,12 +6572,24 @@ function verifySessionManifestAck(binding, frame) {
     return manifestFetchRegistry.consumeProof({
       runId: binding.runId,
       membershipId: binding.membershipId,
+      manifestSchema: frame.manifestSchema,
       manifestHash: frame.manifestHash,
       connectionEpoch: frame.connectionEpoch,
     });
   } catch {
     return false;
   }
+}
+
+function closeSessionManifestAdmission(binding) {
+  if (!binding?.manifestHash) return;
+  manifestAdmissions.delete(manifestAdmissionKey({
+    runId: binding.runId,
+    membershipId: binding.membershipId,
+    manifestSchema: binding.manifestSchema,
+    manifestHash: binding.manifestHash,
+    connectionEpoch: binding.connectionEpoch,
+  }));
 }
 
 function buildPublicMultiplayerState() {
@@ -6707,6 +6760,13 @@ function multiplayerDiagnostics() {
     tickets: MULTIPLAYER_WS_ENABLED && multiplayerTicketRegistry
       ? multiplayerTicketRegistry.diagnostics()
       : null,
+    manifestTransfers: MULTIPLAYER_WS_ENABLED ? {
+      servedBytes: manifestTransferStats.servedBytes,
+      servedFetches: manifestTransferStats.servedFetches,
+      rejectedFetches: manifestTransferStats.rejectedFetches,
+      recipients: [...manifestTransferStats.recipients.entries()].map(([recipient, row]) => ({ recipient, ...row })),
+      registry: manifestFetchRegistry.diagnostics(),
+    } : null,
     actions: multiplayerActionDiagnostics(),
     projection: {
       inFlight: Boolean(multiplayerProjectionTask),
@@ -7049,12 +7109,15 @@ const server = http.createServer(async (req, res) => {
       }
       const authorization = String(req.headers.authorization || "");
       const capability = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+      let fetchRecord;
       try {
-        manifestFetchRegistry.redeem(capability, {
+        fetchRecord = manifestFetchRegistry.redeem(capability, {
           runId: runtime.session.runId,
+          manifestSchema: manifest.manifestSchema,
           manifestHash: manifest.manifestHash,
-        });
+        }, { validate: (record) => Boolean(currentAuthorityForManifestRecord(record)) });
       } catch {
+        manifestTransferStats.rejectedFetches += 1;
         sendJson(res, 401, { ok: false, code: "manifest-unauthorized", error: "Manifest fetch rejected" });
         return;
       }
@@ -7063,7 +7126,46 @@ const server = http.createServer(async (req, res) => {
       res.setHeader("Content-Length", String(manifest.manifestBytes));
       res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
       res.setHeader("X-Content-Type-Options", "nosniff");
+      recordManifestTransfer(fetchRecord, manifest.manifestBytes);
       res.end(manifest.bytes);
+      return;
+    }
+
+    if (MULTIPLAYER_WS_ENABLED && req.method === "POST" && req.url === "/multiplayer/manifest/retry") {
+      const body = await readJson(req);
+      const allowed = new Set(["manifestSchema", "manifestHash", "connectionEpoch"]);
+      if (Object.keys(body).some((key) => !allowed.has(key))) {
+        sendJson(res, 400, { ok: false, code: "invalid-manifest-retry", error: "Manifest retry rejected" });
+        return;
+      }
+      const auth = authorizePlayerRequest(req, { runId: runtime.session.runId }, { requireCommandSeq: false });
+      const manifest = currentSessionReplicationManifest();
+      if (!auth.ok
+          || body.manifestSchema !== manifest.manifestSchema
+          || body.manifestHash !== manifest.manifestHash
+          || body.connectionEpoch !== auth.authority?.connectionEpoch
+          || !manifestAdmissions.has(manifestAdmissionKey({
+            runId: runtime.session.runId,
+            membershipId: auth.authority?.membershipId,
+            manifestSchema: body.manifestSchema,
+            manifestHash: body.manifestHash,
+            connectionEpoch: body.connectionEpoch,
+          }))) {
+        sendJson(res, 401, { ok: false, code: "manifest-retry-unauthorized", error: "Manifest retry rejected" });
+        return;
+      }
+      try {
+        const issued = manifestFetchRegistry.issue({
+          runId: runtime.session.runId,
+          membershipId: auth.authority.membershipId,
+          manifestSchema: manifest.manifestSchema,
+          manifestHash: manifest.manifestHash,
+          connectionEpoch: auth.authority.connectionEpoch,
+        }, { retry: true });
+        sendJson(res, 200, { ok: true, manifestCapability: issued.capability, expiresAt: issued.expiresAt });
+      } catch {
+        sendJson(res, 409, { ok: false, code: "manifest-retry-exhausted", error: "Manifest retry rejected" });
+      }
       return;
     }
 
@@ -7140,14 +7242,15 @@ const server = http.createServer(async (req, res) => {
         const issued = kind === "resume"
           ? multiplayerTicketRegistry.issueResume(claims)
           : multiplayerTicketRegistry.issueAdmission(claims);
-        let manifestCapabilities;
+        let manifestCapability;
         if (manifest) {
-          manifestCapabilities = [0, 1].map(() => manifestFetchRegistry.issue({
+          manifestCapability = manifestFetchRegistry.issue({
             runId: runtime.session.runId,
             membershipId: auth.authority.membershipId,
+            manifestSchema: manifest.manifestSchema,
             manifestHash: manifest.manifestHash,
             connectionEpoch: kind === "resume" ? auth.authority.connectionEpoch + 1 : auth.authority.connectionEpoch,
-          }).capability);
+          }).capability;
         }
         sendJson(res, 200, {
           ok: true, ...issued,
@@ -7158,7 +7261,7 @@ const server = http.createServer(async (req, res) => {
             manifestHash: manifest.manifestHash,
             manifestBytes: manifest.manifestBytes,
             fetchPath: manifest.fetchPath,
-            manifestCapabilities,
+            manifestCapability,
           } : {}),
         });
       } catch (error) {
@@ -7508,6 +7611,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     buildPublicState: buildPublicMultiplayerStateForAdapter,
     projectPublicStateForBinding: projectV2StaticManifestState,
     verifyManifestAck: verifySessionManifestAck,
+    onBindingClosed: closeSessionManifestAdmission,
     buildOwnerState: buildOwnerMultiplayerState,
     buildEventRecovery: buildMultiplayerEventRecovery,
     onAck: acknowledgeMultiplayerCursor,
