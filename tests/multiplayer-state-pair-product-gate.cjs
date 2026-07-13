@@ -1104,14 +1104,21 @@ async function runScenario({ population, scenario, runDir }) {
     const authorityAcceptedPairsPerSecond = selected.filter((event) => event.direction === "authority->client"
       && event.frameClass === "statePair" && event.metric === "accepted").length
       / population / ((endAt - startAt) / 1000);
+    const authorityAcceptedPairsPerSecondByClient = Object.fromEntries(allClients.map((client, index) => [client.label,
+      selected.filter((event) => event.recipientOrdinal === index + 1
+        && event.direction === "authority->client" && event.frameClass === "statePair"
+        && event.metric === "accepted").length / ((endAt - startAt) / 1000)]));
     const receiverAcceptedPairsPerSecond = Object.fromEntries(allClients.map((client) => [client.label,
       client.acceptedPairTimes.filter((at) => at >= startAt && at < endAt).length
         / ((endAt - startAt) / 1000)]));
     const minimumReceiverAcceptedPairsPerSecond = churn ? null
       : Math.min(...Object.values(receiverAcceptedPairsPerSecond));
-    const receiverCadenceToleranceHz = Math.max(0.5, authorityAcceptedPairsPerSecond * 0.05);
-    const receiverCadenceTracksAuthority = churn ? null : Object.values(receiverAcceptedPairsPerSecond)
-      .every((rate) => Math.abs(rate - authorityAcceptedPairsPerSecond) <= receiverCadenceToleranceHz);
+    const receiverCadenceToleranceHzByClient = Object.fromEntries(Object.entries(
+      authorityAcceptedPairsPerSecondByClient).map(([label, rate]) => [label, Math.max(0.5, rate * 0.05)]));
+    const receiverCadenceToleranceHz = Math.max(...Object.values(receiverCadenceToleranceHzByClient));
+    const receiverCadenceTracksAuthority = churn ? null : Object.entries(receiverAcceptedPairsPerSecond)
+      .every(([label, rate]) => Math.abs(rate - authorityAcceptedPairsPerSecondByClient[label])
+        <= receiverCadenceToleranceHzByClient[label]);
     const admission = {
       steadyMeanAtOrBelow64KiB: churn ? null : meanWorst <= TARGET_BPS,
       steadyOneSecondP95AtOrBelow80KiB: churn ? null : p95OneSecond <= SENSITIVITY_BPS,
@@ -1249,7 +1256,9 @@ async function runScenario({ population, scenario, runDir }) {
         configuredPublicationHz: TARGET_PUBLICATION_HZ,
         minimumHealthyObservedPublicationHz: MIN_HEALTHY_PUBLICATION_HZ,
         authorityAcceptedPairsPerSecond,
+        authorityAcceptedPairsPerSecondByClient,
         receiverAcceptedPairsPerSecond,
+        receiverCadenceToleranceHzByClient,
         minimumReceiverAcceptedPairsPerSecond,
         authorityBoundary: "Application state-pair bytes accepted by ws.send callbacks; not proof of receiver acceptance.",
         receiverBoundary: "State pairs accepted and materialized by each test receiver inside the measured window." },
@@ -1417,7 +1426,14 @@ function validateArtifact(directory) {
       && typeof entry.admission.overloadStayedNormal === "boolean"
       && (entry.scenario !== "normal"
         || (entry.admission.receiverCadenceTracksAuthorityWithinTolerance === true
-          && entry.admission.convergenceOnlyPassed === true))),
+          && entry.admission.convergenceOnlyPassed === true
+          && entry.clients.every((client) => {
+            const authorityRate = entry.cadence.authorityAcceptedPairsPerSecondByClient?.[client.label];
+            const receiverRate = entry.cadence.receiverAcceptedPairsPerSecond?.[client.label];
+            const tolerance = entry.cadence.receiverCadenceToleranceHzByClient?.[client.label];
+            return Number.isFinite(authorityRate) && Number.isFinite(receiverRate)
+              && Number.isFinite(tolerance) && Math.abs(receiverRate - authorityRate) <= tolerance;
+          })))),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
     && (["s7", "s8", "s9", "s10"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
