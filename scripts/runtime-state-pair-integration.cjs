@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 const { normalizeView } = require("./canonical-structural-delta.cjs");
 const { createAuthorityDeltaPublisher } = require("./authority-delta-publisher.cjs");
+const { STAGES } = require("./authority-stage-profiler.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -193,7 +194,7 @@ function pairIdentity(binding, authorityIncarnation) {
 }
 
 function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballparkEpoch = 1,
-  manifestSchema = DEFAULT_MANIFEST_SCHEMA, manifestHash, publisherOptions = {} } = {}) {
+  manifestSchema = DEFAULT_MANIFEST_SCHEMA, manifestHash, publisherOptions = {}, stageProfiler = null } = {}) {
   // This object belongs to one active match/group and its one dedicated
   // authoritative sim instance. A fleet owns many isolated objects like this;
   // it never shares one global gameplay authority or mutable delta history.
@@ -202,12 +203,35 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   const fixedBallparkEpoch = positiveInteger(ballparkEpoch, "ballparkEpoch");
   const fixedManifestSchema = requiredString(manifestSchema, "manifestSchema");
   const fixedManifestHash = requiredString(manifestHash, "manifestHash");
-  const publisher = createAuthorityDeltaPublisher(publisherOptions);
+  const publisher = createAuthorityDeltaPublisher({ ...publisherOptions, stageProfiler });
   const maxAdmissions = Number.isSafeInteger(publisherOptions.maxRecipients)
     ? publisherOptions.maxRecipients : 128;
   const publicTracker = createRevisionTracker();
   const ownerTrackers = new Map();
   const admissions = new Map();
+  let shareabilityGeneration = stageProfiler?.generation?.() || 0;
+  let shareability = { beats: 0, comparisons: 0, mismatches: 0, snapshotId: null, coreHash: null };
+
+  function resetShareabilityIfNeeded() {
+    const currentGeneration = stageProfiler?.generation?.() || 0;
+    if (currentGeneration === shareabilityGeneration) return;
+    shareabilityGeneration = currentGeneration;
+    shareability = { beats: 0, comparisons: 0, mismatches: 0, snapshotId: null, coreHash: null };
+  }
+
+  function observePublicCore(snapshotId, value) {
+    if (!stageProfiler) return;
+    resetShareabilityIfNeeded();
+    const valueHash = hash(value);
+    if (shareability.snapshotId !== snapshotId) {
+      shareability.snapshotId = snapshotId;
+      shareability.coreHash = valueHash;
+      shareability.beats += 1;
+    } else {
+      shareability.comparisons += 1;
+      if (shareability.coreHash !== valueHash) shareability.mismatches += 1;
+    }
+  }
 
   function key(identity) {
     return canonicalJson([identity.matchId, identity.sessionId, identity.authorityIncarnation,
@@ -263,7 +287,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         || ownerFrame.membershipId !== identity.recipientId || ownerFrame.playerId !== binding.playerId) {
       fail("non-atomic-source", "public and owner frames must be one authoritative match tick");
     }
-    if (canonicalJsonBytes({ publicFrame, ownerFrame }).length > MAX_SOURCE_BYTES) {
+    const sourceBytes = canonicalJsonBytes({ publicFrame, ownerFrame }).length;
+    if (sourceBytes > MAX_SOURCE_BYTES) {
       fail("projection-too-large", "authoritative source exceeds bounded projection input");
     }
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
@@ -275,17 +300,47 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       simTime: finite(publicFrame.simTime), eventWatermark: Math.max(0, Number(publicFrame.lastEventSeq) || 0),
       fieldRevision: Math.max(0, Number(publicFrame.fieldRevision) || 0), overloadMode: publicFrame.overloadMode,
     };
-    const publicView = normalizeView({ ...shared, lane: "public",
+    const profile = { recipientKey: identity.recipientId, inputBytes: sourceBytes };
+    const buildPublicCore = () => ({
       world: { publicFacts: publicFacts(publicFrame.state) },
-      entities: publicTracker.project(collectPublicEntities(publicFrame)) });
-    const ownerValue = clone(ownerFrame.state || {});
-    const ownerTracker = ownerTrackers.get(identity.recipientId);
-    const ownerView = normalizeView({ ...shared, lane: "owner", world: {}, entities: ownerTracker.project([{
-      category: "owner", sourceId: identity.recipientId, components: {
-        ownerState: ownerValue,
-        transient: { lastInputSeq: ownerFrame.lastInputSeq || 0, lastActionSeq: ownerFrame.lastActionSeq || 0 },
-      },
-    }]) });
+      entities: publicTracker.project(collectPublicEntities(publicFrame)),
+    });
+    const publicCore = stageProfiler
+      ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
+          ...profile,
+          outputBytes: canonicalJsonBytes(value).length,
+          entities: value.entities.length,
+          components: value.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
+        }), buildPublicCore)
+      : buildPublicCore();
+    observePublicCore(publicFrame.snapshotId, publicCore);
+    const publicView = stageProfiler
+      ? stageProfiler.measureSync(STAGES.PUBLIC_PROJECTION, (view) => ({
+          ...profile,
+          outputBytes: canonicalJsonBytes(view).length,
+          entities: view.entities.length,
+          components: view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
+        }), () => normalizeView({ ...shared, lane: "public", ...publicCore }))
+      : normalizeView({ ...shared, lane: "public", ...publicCore });
+    const buildOwnerView = () => {
+      const ownerValue = clone(ownerFrame.state || {});
+      const ownerTracker = ownerTrackers.get(identity.recipientId);
+      return normalizeView({ ...shared, lane: "owner", world: {}, entities: ownerTracker.project([{
+        category: "owner", sourceId: identity.recipientId, components: {
+          ownerState: ownerValue,
+          transient: { lastInputSeq: ownerFrame.lastInputSeq || 0, lastActionSeq: ownerFrame.lastActionSeq || 0 },
+        },
+      }]) });
+    };
+    const ownerView = stageProfiler
+      ? stageProfiler.measureSync(STAGES.OWNER_PROJECTION, (view) => ({
+          recipientKey: identity.recipientId,
+          inputBytes: canonicalJsonBytes(ownerFrame).length,
+          outputBytes: canonicalJsonBytes(view).length,
+          entities: view.entities.length,
+          components: view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
+        }), buildOwnerView)
+      : buildOwnerView();
     const admission = admissions.get(key(identity));
     return Object.freeze({ identity, publicView, ownerView,
       allowMixed: admission.capabilities.includes(MIXED_CAPABILITY) });
@@ -315,6 +370,14 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   function diagnostics() {
     return Object.freeze({ matchId: fixedMatchId, authorityIncarnation: fixedAuthorityIncarnation,
       manifestSchema: fixedManifestSchema, manifestHash: fixedManifestHash, admissions: admissions.size,
+      ...(stageProfiler ? { profileShareability: Object.freeze({
+        publicCore: Object.freeze({ beats: shareability.beats, comparisons: shareability.comparisons,
+          mismatches: shareability.mismatches, sameWithinEveryObservedBeat: shareability.mismatches === 0 }),
+        wholeCanonicalPublicViewReusable: false,
+        recipientSpecificCanonicalFields: Object.freeze(["connectionEpoch", "statePairId"]),
+        recipientSpecificPublicationWork: Object.freeze(["ACK base", "public delta", "owner projection",
+          "owner hash", "owner delta", "pair choice", "pair envelope", "adapter queue", "socket send"]),
+      }) } : {}),
       publisher: publisher.diagnostics() });
   }
 

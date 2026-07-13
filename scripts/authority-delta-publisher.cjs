@@ -6,6 +6,7 @@ const {
   createStructuralDelta,
 } = require("./canonical-structural-delta.cjs");
 const { canonicalJsonBytes } = require("./session-replication-manifest.cjs");
+const { STAGES } = require("./authority-stage-profiler.cjs");
 
 const PAIR_SCHEMA = "lbh-authority-state-pair-v1";
 const ACK_SCHEMA = "lbh-authority-state-pair-ack-v1";
@@ -85,17 +86,47 @@ function assertProjectionPair(identity, publicView, ownerView) {
   }
 }
 
-function keyframePayload(view) {
+function serializedBytes(value, stageProfiler, recipientKey) {
+  if (!stageProfiler) return canonicalJsonBytes(value).length;
+  return stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (bytes) => ({
+    recipientKey,
+    outputBytes: bytes.length,
+    allocatedBytes: bytes.length,
+  }), () => canonicalJsonBytes(value)).length;
+}
+
+function keyframePayload(view, { stageProfiler = null, recipientKey = null, lane } = {}) {
+  const stage = lane === "owner" ? STAGES.OWNER_CANONICAL_HASH : STAGES.PUBLIC_CANONICAL_HASH;
+  const resultHash = stageProfiler
+    ? stageProfiler.measureSync(stage, (hashValue) => ({
+        recipientKey,
+        inputBytes: canonicalJsonBytes(view).length,
+        outputBytes: Buffer.byteLength(hashValue || "", "utf8"),
+        allocatedBytes: Buffer.byteLength(hashValue || "", "utf8"),
+        entities: view.entities.length,
+        components: view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
+      }), () => projectionHash(view))
+    : projectionHash(view);
   return Object.freeze({
     kind: "keyframe",
     schema: view.schema,
-    resultHash: projectionHash(view),
+    resultHash,
     projection: view,
   });
 }
 
-function deltaPayload(base, current) {
-  const built = createStructuralDelta(base.view, current, { expectedBaseHash: base.hash });
+function deltaPayload(base, current, { stageProfiler = null, recipientKey = null, lane } = {}) {
+  const stage = lane === "owner" ? STAGES.OWNER_DELTA_CANDIDATE : STAGES.PUBLIC_DELTA_CANDIDATE;
+  const built = stageProfiler
+    ? stageProfiler.measureSync(stage, (result) => ({
+        recipientKey,
+        inputBytes: canonicalJsonBytes({ base: base.view, current }).length,
+        outputBytes: result?.deltaBytes || 0,
+        allocatedBytes: result?.deltaBytes || 0,
+        entities: current.entities.length,
+        components: current.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
+      }), () => createStructuralDelta(base.view, current, { expectedBaseHash: base.hash }))
+    : createStructuralDelta(base.view, current, { expectedBaseHash: base.hash });
   const payload = Object.freeze({
     kind: "delta",
     schema: built.delta.schema,
@@ -104,9 +135,9 @@ function deltaPayload(base, current) {
     resultHash: built.delta.resultHash,
     delta: built.delta,
   });
-  const deltaBytes = canonicalJsonBytes(payload).length;
-  const keyframe = keyframePayload(current);
-  const keyframeBytes = canonicalJsonBytes(keyframe).length;
+  const deltaBytes = serializedBytes(payload, stageProfiler, recipientKey);
+  const keyframe = keyframePayload(current, { stageProfiler, recipientKey, lane });
+  const keyframeBytes = serializedBytes(keyframe, stageProfiler, recipientKey);
   return Object.freeze({
     payload: deltaBytes < keyframeBytes ? payload : keyframe,
     decision: deltaBytes < keyframeBytes ? "delta" : "delta-not-smaller",
@@ -120,6 +151,7 @@ function pairProjectionKind(publicKind, ownerKind) {
 }
 
 function createAuthorityDeltaPublisher(options = {}) {
+  const stageProfiler = options.stageProfiler || null;
   const limits = Object.freeze({
     maxRecipients: positiveInteger(options.maxRecipients, DEFAULTS.maxRecipients, "maxRecipients"),
     maxPendingPairsPerRecipient: positiveInteger(options.maxPendingPairsPerRecipient,
@@ -183,6 +215,7 @@ function createAuthorityDeltaPublisher(options = {}) {
   function publish({ identity: rawIdentity, publicView: publicInput, ownerView: ownerInput,
     dirtyHints = null, allowMixed = false }) {
     const identity = normalizeIdentity(rawIdentity);
+    const profile = { stageProfiler, recipientKey: identity.recipientId };
     const publicView = normalizeView(publicInput);
     const ownerView = normalizeView(ownerInput);
     assertProjectionPair(identity, publicView, ownerView);
@@ -202,12 +235,12 @@ function createAuthorityDeltaPublisher(options = {}) {
     let ownerDecision = null;
     try {
       if (state.forceKeyframe || !state.acked) {
-        publicPayload = keyframePayload(publicView);
-        ownerPayload = keyframePayload(ownerView);
+        publicPayload = keyframePayload(publicView, { ...profile, lane: "public" });
+        ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner" });
         keyframeReason = state.forceReason || "missing-acked-base";
       } else {
-        publicDecision = deltaPayload(state.acked.public, publicView, dirtyHints);
-        ownerDecision = deltaPayload(state.acked.owner, ownerView, dirtyHints);
+        publicDecision = deltaPayload(state.acked.public, publicView, { ...profile, lane: "public" });
+        ownerDecision = deltaPayload(state.acked.owner, ownerView, { ...profile, lane: "owner" });
         observeCandidate("public", publicDecision);
         observeCandidate("owner", ownerDecision);
         publicPayload = publicDecision.payload;
@@ -219,19 +252,19 @@ function createAuthorityDeltaPublisher(options = {}) {
     } catch (error) {
       const code = String(error?.code || error?.name || "unknown").slice(0, 96);
       forceRebase(state, `semantic-fallback:${code}`);
-      publicPayload = keyframePayload(publicView);
-      ownerPayload = keyframePayload(ownerView);
+      publicPayload = keyframePayload(publicView, { ...profile, lane: "public" });
+      ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner" });
       keyframeReason = state.forceReason;
     }
     // Legacy state-pair-v1 recipients retain the original same-kind contract.
     if (!allowMixed && publicPayload.kind !== ownerPayload.kind) {
       keyframeReason = `atomic-kind-alignment:public-${publicDecision?.decision || publicPayload.kind}+owner-${ownerDecision?.decision || ownerPayload.kind}`;
-      publicPayload = keyframePayload(publicView);
-      ownerPayload = keyframePayload(ownerView);
+      publicPayload = keyframePayload(publicView, { ...profile, lane: "public" });
+      ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner" });
     }
     const frameId = state.nextFrameId;
     const pairSchema = allowMixed ? MIXED_PAIR_SCHEMA : PAIR_SCHEMA;
-    const buildFrame = (nextPublic, nextOwner) => Object.freeze({
+    const rawBuildFrame = (nextPublic, nextOwner) => Object.freeze({
       type: "statePair",
       pairSchema,
       matchId: identity.matchId,
@@ -252,18 +285,38 @@ function createAuthorityDeltaPublisher(options = {}) {
       public: nextPublic,
       owner: nextOwner,
     });
+    const buildFrame = (nextPublic, nextOwner) => stageProfiler
+      ? stageProfiler.measureSync(STAGES.PAIR_ENVELOPE, (builtFrame) => ({
+          recipientKey: identity.recipientId,
+          inputBytes: canonicalJsonBytes({ public: nextPublic, owner: nextOwner }).length,
+          outputBytes: canonicalJsonBytes(builtFrame).length,
+          allocatedBytes: canonicalJsonBytes(builtFrame).length,
+        }), () => rawBuildFrame(nextPublic, nextOwner))
+      : rawBuildFrame(nextPublic, nextOwner);
     let frame = buildFrame(publicPayload, ownerPayload);
-    let bytes = canonicalJsonBytes(frame).length;
-    const fullKeyframe = buildFrame(keyframePayload(publicView), keyframePayload(ownerView));
-    const fullKeyframeBytes = canonicalJsonBytes(fullKeyframe).length;
-    if (allowMixed && (publicPayload.kind !== "keyframe" || ownerPayload.kind !== "keyframe")
-        && (bytes >= fullKeyframeBytes || bytes > limits.maxPairBytes)) {
-      keyframeReason = bytes >= fullKeyframeBytes ? "pair-not-smaller" : "pair-limit-fallback";
-      publicPayload = fullKeyframe.public;
-      ownerPayload = fullKeyframe.owner;
-      frame = fullKeyframe;
-      bytes = fullKeyframeBytes;
-    }
+    let bytes = serializedBytes(frame, stageProfiler, identity.recipientId);
+    const fullKeyframe = buildFrame(
+      keyframePayload(publicView, { ...profile, lane: "public" }),
+      keyframePayload(ownerView, { ...profile, lane: "owner" }),
+    );
+    const fullKeyframeBytes = serializedBytes(fullKeyframe, stageProfiler, identity.recipientId);
+    const candidateBytes = bytes;
+    const choosePair = () => {
+      if (allowMixed && (publicPayload.kind !== "keyframe" || ownerPayload.kind !== "keyframe")
+          && (bytes >= fullKeyframeBytes || bytes > limits.maxPairBytes)) {
+        keyframeReason = bytes >= fullKeyframeBytes ? "pair-not-smaller" : "pair-limit-fallback";
+        publicPayload = fullKeyframe.public;
+        ownerPayload = fullKeyframe.owner;
+        frame = fullKeyframe;
+        bytes = fullKeyframeBytes;
+      }
+    };
+    if (stageProfiler) stageProfiler.measureSync(STAGES.PAIR_CHOICE, () => ({
+      recipientKey: identity.recipientId,
+      inputBytes: candidateBytes + fullKeyframeBytes,
+      outputBytes: bytes,
+    }), choosePair);
+    else choosePair();
     if (bytes > limits.maxPairBytes) {
       forceRebase(state);
       fail("pair-too-large", `atomic state pair exceeds ${limits.maxPairBytes} bytes`);

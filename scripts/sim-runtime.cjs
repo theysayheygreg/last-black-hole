@@ -87,6 +87,7 @@ const { createSimEventJournal } = require("./sim-event-journal.cjs");
 const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 const { createAuthoredCollapseTestLifecycle } = require("./authored-collapse-test-lifecycle.cjs");
 const { createSimWebSocketAdapter } = require("./sim-ws-adapter.cjs");
+const { STAGES, createAuthorityStageProfiler } = require("./authority-stage-profiler.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
   WIRE_PROTOCOL_VERSION_V2,
@@ -221,6 +222,14 @@ if (REPLICATION_ACCOUNTING_CAPTURE
   && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
   throw new Error("LBH_SIM_WS_REPLICATION_ACCOUNTING requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
 }
+const AUTHORITY_STAGE_PROFILE_CAPTURE = readStrictTestFlag("LBH_SIM_WS_STAGE_PROFILE");
+if (AUTHORITY_STAGE_PROFILE_CAPTURE
+  && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
+  throw new Error("LBH_SIM_WS_STAGE_PROFILE requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
+}
+const authorityStageProfiler = AUTHORITY_STAGE_PROFILE_CAPTURE
+  ? createAuthorityStageProfiler({ sampleCapacity: 512, maxRecipients: 16 })
+  : null;
 
 // Wrappers around seeded-generation.js that route through runtime streams.
 // All init-time loot rolls flow through runtime.session.rng, which is
@@ -6114,8 +6123,9 @@ function rotateMultiplayerRun(runId) {
         authorityIncarnation: runtime.multiplayerProjection.generation,
         ballparkEpoch: 1,
         manifestSchema: currentSessionReplicationManifest().manifestSchema,
-        manifestHash: currentSessionReplicationManifest().manifestHash,
-        publisherOptions: { maxRecipients: 16 },
+      manifestHash: currentSessionReplicationManifest().manifestHash,
+      publisherOptions: { maxRecipients: 16 },
+      stageProfiler: authorityStageProfiler,
       })
     : null;
 }
@@ -7046,6 +7056,7 @@ const server = http.createServer(async (req, res) => {
       }
       runtime.multiplayerProjection.simTickCostDistribution.reset();
       runtime.multiplayerProjection.projectionCostDistribution.reset();
+      authorityStageProfiler?.reset();
       sendJson(res, 200, { ok: true,
         generation: runtime.multiplayerProjection.generation,
         scope: "bounded multiplayer cost percentile rings" });
@@ -7677,7 +7688,16 @@ const server = http.createServer(async (req, res) => {
 });
 
 async function buildPublicMultiplayerStateForAdapter(...args) {
-  const frame = buildPublicMultiplayerState(...args);
+  const frame = authorityStageProfiler
+    ? authorityStageProfiler.measureSync(STAGES.RAW_SNAPSHOT_BUILD, (value) => ({
+        outputBytes: Buffer.byteLength(JSON.stringify(value), "utf8"),
+        allocatedBytes: Buffer.byteLength(JSON.stringify(value), "utf8"),
+        entities: (value.state?.players?.length || 0)
+          + ["wells", "stars", "wrecks", "planetoids", "portals", "scavengers", "fauna", "sentries"]
+            .reduce((sum, lane) => sum + (value.state?.world?.[lane]?.length || 0), 0)
+          + (value.state?.inhibitor ? 1 : 0),
+      }), () => buildPublicMultiplayerState(...args))
+    : buildPublicMultiplayerState(...args);
   if (MULTIPLAYER_PROJECTION_TEST_DELAY_MS > 0) {
     // Test-only suspension occurs inside projectNow's awaited builder so reset
     // can rotate the adapter while an old-lineage projection is genuinely live.
@@ -7697,6 +7717,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     maxPendingHello: 8,
     runId: null,
     replicationAccounting: REPLICATION_ACCOUNTING_CAPTURE,
+    stageProfiler: authorityStageProfiler,
     redeemHello: redeemMultiplayerHello,
     revalidateBinding: revalidateMultiplayerBinding,
     onInput: (binding, frame) => executeStreamInput(binding, frame),
@@ -7736,6 +7757,7 @@ function shutdown() {
     new Promise((resolve) => setTimeout(resolve, 1200)),
   ]).then(async () => {
     if (multiplayerAdapter) await multiplayerAdapter.shutdown();
+    authorityStageProfiler?.stop();
     await new Promise((resolve) => server.close(resolve));
     cleanupFiles(PID_FILE, META_FILE);
     process.exit(0);

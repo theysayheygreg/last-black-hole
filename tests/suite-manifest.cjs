@@ -145,6 +145,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "AuthorityStageProfiler",
+    file: "authority-stage-profiler.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerSendQueue",
     file: "multiplayer-send-queue.cjs",
     lanes: ["multiplayer-network", "static", "full"],

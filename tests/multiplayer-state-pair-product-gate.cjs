@@ -28,15 +28,19 @@ const S0 = Object.freeze({
   8: { downlinkBps: 241892, pairP50: 25237, pairP95: 26889 },
 });
 const S1_STATIC_PAIR_SAVINGS_BYTES = 953;
-const GATE = process.argv.includes("--s4") ? "s4" : "s3";
-const MIXED_GATE = GATE === "s4";
+const STAGE_PROFILE = process.argv.includes("--s5-profile");
+const PROFILE_CONTROL = STAGE_PROFILE && process.argv.includes("--profile-control");
+const GATE = STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
+const MIXED_GATE = GATE !== "s3";
+const COMPARE_S3 = GATE === "s4";
 const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
 const S3_CANONICAL_DIR = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s3",
   "multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4");
-const PROFILE = process.argv.includes("--review") ? "review" : "canonical";
+const PROFILE = STAGE_PROFILE ? (PROFILE_CONTROL ? "diagnostic-control" : "diagnostic-instrumented")
+  : process.argv.includes("--review") ? "review" : "canonical";
 const POPULATIONS = PROFILE === "review" ? [1, 8] : [1, 4, 8];
-const NORMAL_WARMUP_MS = PROFILE === "review" ? 5_000 : 60_000;
-const NORMAL_WINDOW_MS = PROFILE === "review" ? 20_000 : 300_000;
+const NORMAL_WARMUP_MS = STAGE_PROFILE ? 10_000 : PROFILE === "review" ? 5_000 : 60_000;
+const NORMAL_WINDOW_MS = STAGE_PROFILE ? 30_000 : PROFILE === "review" ? 20_000 : 300_000;
 const CHURN_WARMUP_MS = PROFILE === "review" ? 5_000 : 20_000;
 const CHURN_WINDOW_MS = PROFILE === "review" ? 30_000 : 90_000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -480,6 +484,7 @@ async function runScenario({ population, scenario, runDir }) {
       LBH_SIM_WS_STATE_PAIR_V1: "true", LBH_SIM_WS_REPLICATION_ACCOUNTING: "1",
       LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE ? "true" : "false",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
+      LBH_SIM_WS_STAGE_PROFILE: STAGE_PROFILE && !PROFILE_CONTROL ? "1" : "0",
     } });
     authorityPid = Number(fs.readFileSync(path.join(ROOT, "tmp", `sim-server-${port}.pid`), "utf8").trim());
     const setup = await setupPopulation(port, population, `${scenario}-${population}`);
@@ -633,7 +638,7 @@ async function runScenario({ population, scenario, runDir }) {
       noClientErrors: clientSummary.every((client) => client.error === null),
       publisherDrained: publisher.recipients === 0 && publisher.pendingPairs === 0 && publisher.retainedBytes === 0,
       statePairAcksConverged: publisher.ackAccepted > 0,
-      unexpectedAckRejects: churn || publisher.ackRejected === 0,
+      unexpectedAckRejects: STAGE_PROFILE ? publisher.ackRejected === 0 : churn || publisher.ackRejected === 0,
       accountingComplete: accounting.overflow === 0 && accounting.evidenceFailure === null,
       faultConvergence: !churn || clientSummary.every((client) => {
         const loss = client.faults.find((fault) => fault.type === "frame-loss");
@@ -743,7 +748,11 @@ async function runScenario({ population, scenario, runDir }) {
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
         clientAckSerializeSendMs: distribution(allClients.flatMap((client) => client.ackWorkSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
-        eventLoopLag: { available: false, reason: "Runtime does not expose event-loop-delay telemetry; no threshold invented." },
+        eventLoopLag: endHealth.multiplayer.adapter.authorityStageProfile?.eventLoopDelay
+          || { available: false, reason: PROFILE_CONTROL
+            ? "Instrumentation-off A/B control intentionally has no event-loop-delay monitor."
+            : "Runtime stage profiler was not enabled." },
+        authorityStageProfile: endHealth.multiplayer.adapter.authorityStageProfile || null,
         memory: memorySummary(memorySamples.filter((sample) => sample.at >= startAt && sample.at < endAt)),
         boundedState: { publisherAfterCleanup: publisher,
           maxPublisherPendingPairs: Math.max(...memorySamples.map((sample) => sample.publisher.pendingPairs)),
@@ -756,7 +765,7 @@ async function runScenario({ population, scenario, runDir }) {
       limitations: ["Local macOS loopback only", "raw WebSocket without TLS", "one match at a time",
         "no hosted fleet, WSS, WAN, packet retransmission, compression, AOI, binary codec, or 24-96-client claim"],
     };
-    if (MIXED_GATE) result.comparisonToS3 = compareScenarioToS3(result);
+    if (COMPARE_S3) result.comparisonToS3 = compareScenarioToS3(result);
     writeExclusive(path.join(runDir, `${scenario}-${population}.json`), result);
     return result;
   } finally {
@@ -790,7 +799,7 @@ function validateArtifact(directory) {
     allAccountingComplete: scenarioFiles.every((entry) => entry.correctness.accountingComplete),
     normalPopulationsPresent: [1, 4, 8].every((population) => scenarioFiles.some((entry) =>
       entry.scenario === "normal" && entry.population === population)) || aggregate.profile === "review",
-    churnPopulationsPresent: [1, 4, 8].every((population) => scenarioFiles.some((entry) =>
+    churnPopulationsPresent: aggregate.gate === "s5" || [1, 4, 8].every((population) => scenarioFiles.some((entry) =>
       entry.scenario === "churn" && entry.population === population)) || aggregate.profile === "review",
     atomicKindAlignmentAbsent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
       entry.pairShape.productWindow.atomicKindAlignmentAbsent === true),
@@ -799,10 +808,19 @@ function validateArtifact(directory) {
       .every((entry) => entry.pairShape.productWindow.publicDeltaOwnerKeyframe > 0),
     s3ComparisonsPresent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
       entry.comparisonToS3?.compositeSha256 === S3_CANONICAL_SHA256),
+    stageProfilePresent: aggregate.gate !== "s5" || aggregate.instrumentationEnabled === false
+      || scenarioFiles.every((entry) => entry.performance.authorityStageProfile?.enabled === true),
+    publicCoreShareabilityProved: aggregate.gate !== "s5" || aggregate.instrumentationEnabled === false
+      || scenarioFiles.every((entry) => {
+        const proof = entry.diagnostics.statePair.profileShareability?.publicCore;
+        return proof?.sameWithinEveryObservedBeat === true && proof.mismatches === 0
+          && (entry.population === 1 || proof.comparisons > 0);
+      }),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
     && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
-    && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent;
+    && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent
+    && invariants.stageProfilePresent && invariants.publicCoreShareabilityProved;
   return { passed: methodPassed, invariants, checksum,
     aggregateVerdict: aggregate.verdict };
 }
@@ -815,6 +833,14 @@ async function main() {
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.passed ? 0 : 1);
   }
+  const admissionIndex = process.argv.indexOf("--admission-artifact");
+  if (admissionIndex >= 0) {
+    const directory = path.resolve(process.argv[admissionIndex + 1]);
+    const result = validateArtifact(directory);
+    const admitted = result.passed && result.aggregateVerdict?.passed === true;
+    console.log(JSON.stringify({ ...result, admitted }, null, 2));
+    process.exit(admitted ? 0 : 2);
+  }
   const commit = git("rev-parse", "HEAD");
   const dirty = Boolean(git("status", "--porcelain"));
   const allowDirty = process.env[`LBH_${GATE.toUpperCase()}_ALLOW_DIRTY`] === "1";
@@ -825,7 +851,7 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${MIXED_GATE ? " --s4" : ""}${PROFILE === "review" ? " --review" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
     schemaVersion: 2, gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
     config: { populations: POPULATIONS, normalWarmupMs: NORMAL_WARMUP_MS, normalWindowMs: NORMAL_WINDOW_MS,
@@ -833,18 +859,21 @@ async function main() {
       targetBytesPerSecondPerPlayer: TARGET_BPS, sensitivityBytesPerSecondPerPlayer: SENSITIVITY_BPS,
       env: { LBH_SIM_WS_JSON_V2: true, LBH_SIM_WS_STATE_PAIR_V1: true,
         LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE,
-        LBH_SIM_WS_REPLICATION_ACCOUNTING: true, LBH_REPLICATION_BASELINE_CAPTURE: true } },
+        LBH_SIM_WS_REPLICATION_ACCOUNTING: true, LBH_REPLICATION_BASELINE_CAPTURE: true,
+        LBH_SIM_WS_STAGE_PROFILE: STAGE_PROFILE && !PROFILE_CONTROL } },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
       cpu: os.cpus()[0]?.model || null, logicalCpuCount: os.cpus().length, totalMemoryBytes: os.totalmem(),
       node: process.version, v8: process.versions.v8 },
     claimBoundary: `Machine-local opt-in ${MIXED_GATE ? "state-pair-mixed-v1" : "state-pair-v1"} application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence.`,
-    s3CanonicalEvidence: MIXED_GATE ? { path: path.relative(ROOT, S3_CANONICAL_DIR),
+    s3CanonicalEvidence: COMPARE_S3 ? { path: path.relative(ROOT, S3_CANONICAL_DIR),
       compositeSha256: S3_CANONICAL_SHA256 } : null,
   });
   const results = [];
   try {
     for (const population of POPULATIONS) results.push(await runScenario({ population, scenario: "normal", runDir }));
-    for (const population of POPULATIONS) results.push(await runScenario({ population, scenario: "churn", runDir }));
+    if (!STAGE_PROFILE) {
+      for (const population of POPULATIONS) results.push(await runScenario({ population, scenario: "churn", runDir }));
+    }
   } catch (error) {
     writeExclusive(path.join(runDir, "failure.json"), { at: new Date().toISOString(), message: error.message,
       stack: String(error.stack || "").split("\n").slice(0, 20) });
@@ -876,7 +905,8 @@ async function main() {
     };
   });
   const aggregate = { schemaVersion: MIXED_GATE ? 2 : 1, gate: GATE,
-    profile: PROFILE, commit, seed: SEED, command, verdict,
+    profile: PROFILE, instrumentationEnabled: STAGE_PROFILE && !PROFILE_CONTROL,
+    commit, seed: SEED, command, verdict,
     scenarios: results.map((entry) => ({ file: `${entry.scenario}-${entry.population}.json`,
       scenario: entry.scenario, population: entry.population,
       worstRecipientMeanDownlinkBytesPerSecond: entry.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond,
@@ -884,7 +914,7 @@ async function main() {
       oneSecondP99DownlinkBytesPerSecond: entry.exactTraffic.oneSecondP99DownlinkBytesPerSecond,
       pairKindCounts: entry.pairShape.productWindow.pairKindCounts,
       admission: entry.admission })),
-    s3CanonicalEvidence: MIXED_GATE ? { path: path.relative(ROOT, S3_CANONICAL_DIR),
+    s3CanonicalEvidence: COMPARE_S3 ? { path: path.relative(ROOT, S3_CANONICAL_DIR),
       compositeSha256: S3_CANONICAL_SHA256,
       comparisons: Object.fromEntries(results.map((entry) =>
         [`${entry.scenario}-${entry.population}`, entry.comparisonToS3])) } : null,
@@ -901,7 +931,8 @@ async function main() {
       reconnectReuseObserved: results.filter((entry) => entry.scenario === "churn")
         .every((entry) => entry.faults.some((fault) => fault.name === "reconnect" && fault.manifestReused === true)) },
     failureAnalysis,
-    recommendation: verdict.passed ? "S4 structural JSON traffic and CPU pass; advance only to separately measured WAN/WSS and longer soak gates."
+    recommendation: STAGE_PROFILE ? "Diagnostic only: use stage attribution and the A/B control before selecting one narrow CPU optimization."
+      : verdict.passed ? "S4 structural JSON traffic and CPU pass; advance only to separately measured WAN/WSS and longer soak gates."
       : {
         nextSlice: "Diagnose the dominant accepted statePair bytes and projection/publish cost at each failing population; reduce repeated runtimePublic structure only if the product evidence identifies it as the next narrow cause.",
         quantifiedTarget: "Recover each population's exact required reduction in failureAnalysis; do not substitute aggregate averages or modeled transport overhead.",
