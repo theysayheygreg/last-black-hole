@@ -54,6 +54,6 @@ The top-level artifact composite is
 ```sh
 node tests/multiplayer-state-pair-canonical-reuse-evidence.cjs
 node tests/multiplayer-state-pair-clock-attribution.cjs --validate-artifact \
-  docs/v0.4/evidence/state-pair-s15/candidate-process
+  docs/v0.4/evidence/state-pair-s15/candidate-process-r2
 node tests/run-all.cjs --lane=multiplayer-network --no-retries
 ```
