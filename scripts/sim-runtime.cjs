@@ -100,6 +100,10 @@ const {
   createSessionReplicationManifest,
   createManifestFetchRegistry,
 } = require("./session-replication-manifest.cjs");
+const {
+  CAPABILITY: STATE_PAIR_CAPABILITY,
+  createRuntimeStatePairAuthority,
+} = require("./runtime-state-pair-integration.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -974,6 +978,7 @@ const CONTROL_PLANE_URL = String(args["control-plane-url"] || process.env.LBH_CO
 const KEEP_ALIVE = String(args["keep-alive"] || process.env.LBH_SIM_KEEP_ALIVE || "").trim() === "true";
 const MULTIPLAYER_WS_ENABLED = String(process.env.LBH_SIM_WS_ENABLED || "").trim() === "true";
 const MULTIPLAYER_JSON_V2_ENABLED = String(process.env.LBH_SIM_WS_JSON_V2 || "").trim() === "true";
+const MULTIPLAYER_STATE_PAIR_V1_ENABLED = String(process.env.LBH_SIM_WS_STATE_PAIR_V1 || "").trim() === "true";
 const MULTIPLAYER_HEARTBEAT_INTERVAL_MS = 10_000;
 const MULTIPLAYER_TICKET_TTL_MS = process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS
   ? Math.max(1, Math.floor(Number(process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS) || 30_000))
@@ -1105,6 +1110,7 @@ const manifestAdmissions = new Set();
 const manifestAdmissionKey = ({ runId, membershipId, manifestSchema, manifestHash, connectionEpoch }) =>
   JSON.stringify([runId, membershipId, manifestSchema, manifestHash, connectionEpoch]);
 let multiplayerAdapter = null;
+let runtimeStatePairAuthority = null;
 let multiplayerProjectionTask = null;
 let shutdownPromise = null;
 const soakRuntimeDiagnostics = process.env.LBH_SOAK_DIAGNOSTICS === "1"
@@ -6099,6 +6105,16 @@ function rotateMultiplayerRun(runId) {
     });
   }
   if (multiplayerAdapter) multiplayerAdapter.rotateRun(runId);
+  runtimeStatePairAuthority = MULTIPLAYER_STATE_PAIR_V1_ENABLED
+    ? createRuntimeStatePairAuthority({
+        matchId: runId,
+        authorityIncarnation: runtime.multiplayerProjection.generation,
+        ballparkEpoch: 1,
+        manifestSchema: currentSessionReplicationManifest().manifestSchema,
+        manifestHash: currentSessionReplicationManifest().manifestHash,
+        publisherOptions: { maxRecipients: 16 },
+      })
+    : null;
 }
 
 function currentAuthorityForManifestRecord(record) {
@@ -6258,7 +6274,11 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
     capabilities: claims.capabilities || [],
     manifestHash: claims.manifestHash || null,
     manifestSchema: claims.manifestSchema || null,
+    authorityIncarnation: claims.authorityIncarnation || null,
   };
+  if (claims.capabilities?.includes(STATE_PAIR_CAPABILITY)) {
+    runtimeStatePairAuthority?.admit(binding, claims);
+  }
   const publicFrame = projectV2StaticManifestState(binding, buildPublicMultiplayerState());
   const ownerFrame = buildOwnerMultiplayerState(binding, publicFrame);
   const rebaseReason = cursorRunChanged
@@ -6292,6 +6312,8 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
         manifestHash: manifest.manifestHash,
         manifestBytes: manifest.manifestBytes,
         fetchPath: manifest.fetchPath,
+        ...(claims.capabilities.includes(STATE_PAIR_CAPABILITY)
+          ? { authorityIncarnation: claims.authorityIncarnation } : {}),
       } : {}),
     },
     rebase: {
@@ -6582,6 +6604,32 @@ function closeSessionManifestAdmission(binding) {
   }));
 }
 
+function closeMultiplayerBinding(binding) {
+  closeSessionManifestAdmission(binding);
+  runtimeStatePairAuthority?.disconnect(binding);
+}
+
+function buildRuntimeStatePair(binding, publicFrame, ownerFrame) {
+  if (!runtimeStatePairAuthority || !binding.capabilities?.includes(STATE_PAIR_CAPABILITY)) {
+    throw streamCommandFailure("state-pair-not-admitted");
+  }
+  return runtimeStatePairAuthority.publish(binding, publicFrame, ownerFrame);
+}
+
+function acknowledgeRuntimeMultiplayer(binding, frame) {
+  if (frame.ackKind === "statePair") {
+    const result = runtimeStatePairAuthority?.acknowledge(binding, frame);
+    if (!result?.accepted) throw streamCommandFailure("state-pair-ack-rejected");
+    return result;
+  }
+  return acknowledgeMultiplayerCursor(binding, frame);
+}
+
+function recoverRuntimeStatePair(binding) {
+  if (!runtimeStatePairAuthority) throw streamCommandFailure("state-pair-not-admitted");
+  return runtimeStatePairAuthority.recover(binding);
+}
+
 function openSessionManifestAdmission(binding) {
   if (!binding?.manifestHash) return;
   for (const key of manifestAdmissions) {
@@ -6775,6 +6823,9 @@ function multiplayerDiagnostics() {
       recipientCapacity: MANIFEST_TRANSFER_RECIPIENT_CAP,
       registry: manifestFetchRegistry.diagnostics(),
     } : null,
+    statePair: runtimeStatePairAuthority ? runtimeStatePairAuthority.diagnostics() : {
+      enabled: false,
+    },
     actions: multiplayerActionDiagnostics(),
     projection: {
       inFlight: Boolean(multiplayerProjectionTask),
@@ -7231,10 +7282,15 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const selectedCapabilities = selectedWireVersion === WIRE_PROTOCOL_VERSION_V2
-        ? ["static-manifest-v1"]
+        ? ["static-manifest-v1", ...(MULTIPLAYER_STATE_PAIR_V1_ENABLED
+          && Array.isArray(body.capabilities) && body.capabilities.includes(STATE_PAIR_CAPABILITY)
+          ? [STATE_PAIR_CAPABILITY] : [])].sort()
         : [];
       if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2
-          && (!Array.isArray(body.capabilities) || !body.capabilities.includes("static-manifest-v1"))) {
+          && (!Array.isArray(body.capabilities) || body.capabilities.length > 16
+            || new Set(body.capabilities).size !== body.capabilities.length
+            || body.capabilities.some((value) => typeof value !== "string" || value.length > 160)
+            || !body.capabilities.includes("static-manifest-v1"))) {
         sendJson(res, 400, { ok: false, code: "missing-wire-capability", error: "Required wire capability is unavailable" });
         return;
       }
@@ -7246,6 +7302,8 @@ const server = http.createServer(async (req, res) => {
         wireVersion: selectedWireVersion,
         capabilities: selectedCapabilities,
         ...(manifest ? { manifestSchema: manifest.manifestSchema, manifestHash: manifest.manifestHash } : {}),
+        ...(selectedCapabilities.includes(STATE_PAIR_CAPABILITY)
+          ? { authorityIncarnation: runtime.multiplayerProjection.generation } : {}),
       };
       if (kind === "resume") {
         claims.connectionId = auth.authority.connectionId;
@@ -7275,6 +7333,8 @@ const server = http.createServer(async (req, res) => {
             manifestBytes: manifest.manifestBytes,
             fetchPath: manifest.fetchPath,
             manifestCapability,
+            ...(selectedCapabilities.includes(STATE_PAIR_CAPABILITY)
+              ? { authorityIncarnation: runtime.multiplayerProjection.generation } : {}),
           } : {}),
         });
       } catch (error) {
@@ -7625,10 +7685,12 @@ if (MULTIPLAYER_WS_ENABLED) {
     projectPublicStateForBinding: projectV2StaticManifestState,
     verifyManifestAck: verifySessionManifestAck,
     onBindingOpened: openSessionManifestAdmission,
-    onBindingClosed: closeSessionManifestAdmission,
+    onBindingClosed: closeMultiplayerBinding,
     buildOwnerState: buildOwnerMultiplayerState,
+    buildStatePair: MULTIPLAYER_STATE_PAIR_V1_ENABLED ? buildRuntimeStatePair : null,
     buildEventRecovery: buildMultiplayerEventRecovery,
-    onAck: acknowledgeMultiplayerCursor,
+    onAck: acknowledgeRuntimeMultiplayer,
+    onStatePairRecovery: recoverRuntimeStatePair,
   });
 }
 

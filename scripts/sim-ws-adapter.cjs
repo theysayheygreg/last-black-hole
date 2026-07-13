@@ -54,7 +54,7 @@ function createSimWebSocketAdapter(options = {}) {
   const onBindingOpened = typeof options.onBindingOpened === "function" ? options.onBindingOpened : null;
   const {
     server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
-    onPong, onAck, onStatePairRecovery, onPressureTransition, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
+    onPong, onAck, onStatePairRecovery, onPressureTransition, buildStatePair, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
     maxConnections, maxPendingHello, maxPendingInbound, maxPendingInboundBytes, maxPendingInboundBytesTotal,
     sweepIntervalMs, queueOptions,
   } = config;
@@ -86,6 +86,7 @@ function createSimWebSocketAdapter(options = {}) {
     forcedRebases: 0,
     duplicatePendingEvents: 0,
   };
+  const statePairStats = { accepted: 0, rejected: 0, lastRejectReason: null };
   const pressureMetricNames = Object.freeze([
     "wsBufferedBytes",
     "queuedBytes",
@@ -1252,7 +1253,9 @@ function createSimWebSocketAdapter(options = {}) {
     if (closed) return { projected: 0, skipped: connections.size };
     const candidates = [...connections].filter((state) => state.bound && !state.manifestRequired
       && !state.capabilities?.includes("state-pair-v1") && !state.statePairMode && !state.closing && !state.cleaned);
-    if (candidates.length === 0) return { projected: 0, skipped: connections.size };
+    const statePairCandidates = buildStatePair ? [...connections].filter((state) => state.bound && !state.manifestRequired
+      && state.capabilities?.includes("state-pair-v1") && !state.closing && !state.cleaned) : [];
+    if (candidates.length === 0 && statePairCandidates.length === 0) return { projected: 0, skipped: connections.size };
     const expectedGeneration = generation;
     let publicFrame;
     try {
@@ -1269,7 +1272,7 @@ function createSimWebSocketAdapter(options = {}) {
       return { projected: 0, skipped: connections.size, error: safe.code };
     }
     let projected = 0;
-    let skipped = Math.max(0, connections.size - candidates.length);
+    let skipped = Math.max(0, connections.size - candidates.length - statePairCandidates.length);
     for (const state of candidates) {
       if (!(await isBindingCurrent(state, "private-project"))) {
         skipped += 1;
@@ -1393,6 +1396,54 @@ function createSimWebSocketAdapter(options = {}) {
         flush(state);
         if (outcome.accepted) projected += 1;
         else skipped += 1;
+      } catch (error) {
+        skipped += 1;
+        failConnection(state, error, { fatal: error?.fatal === true });
+      }
+    }
+    for (const state of statePairCandidates) {
+      try {
+        if (!(await isBindingCurrent(state, "private-state-pair-project"))) {
+          skipped += 1;
+          if (stateIsLive(state)) {
+            state.closing = true;
+            sendApplicationClose(state, 4003, "connection fenced", true);
+          }
+          continue;
+        }
+        const recipientPublicFrame = state.binding?.manifestHash
+          ? await projectPublicStateForBinding(
+              state.binding,
+              publicFrame,
+              callbackContext(state, "state-pair-public-recipient-project"),
+            )
+          : publicFrame;
+        const ownerFrame = await buildOwnerState(
+          state.binding,
+          recipientPublicFrame,
+          context,
+          callbackContext(state, "state-pair-owner-project"),
+        );
+        const pair = await buildStatePair(
+          state.binding,
+          recipientPublicFrame,
+          ownerFrame,
+          context,
+          callbackContext(state, "state-pair-project"),
+        );
+        if (!stateIsLive(state)) {
+          skipped += 1;
+          continue;
+        }
+        const outcome = await publishStatePair(state.binding, pair.frame || pair);
+        if (outcome.accepted) {
+          statePairStats.accepted += 1;
+          projected += 1;
+        } else {
+          statePairStats.rejected += 1;
+          statePairStats.lastRejectReason = String(outcome.reason || outcome.action || "unknown").slice(0, 96);
+          skipped += 1;
+        }
       } catch (error) {
         skipped += 1;
         failConnection(state, error, { fatal: error?.fatal === true });
@@ -1710,6 +1761,8 @@ function createSimWebSocketAdapter(options = {}) {
         pendingEventBytes,
         ...eventReplayStats,
       }),
+      statePair: Object.freeze({ ...statePairStats,
+        modeConnections: [...connections].filter((state) => state.statePairMode).length }),
       ...(replicationAccounting ? { replication: replicationAccounting.snapshot() } : {}),
     });
   }

@@ -21,15 +21,27 @@ const MAX_RETAINED_IDENTITY_BYTES = 512 * 1024;
 const STATIC_MANIFEST_EXTRACTED_ROOT_KEYS = Object.freeze([
   "manifest", "staticManifest", "mapBounds", "staticAnchors", "publicContent",
 ]);
-const PUBLIC_PRIVATE_KEY_PATTERN = /(cargo|inventory|equipment|equipped|consumable|delta.?v|loadout|cooldown|private|credential|portal.?confirmation|secret)/i;
+const PUBLIC_PRIVATE_KEY_PATTERN = /(cargo|inventory|equipment|equipped|consumable|delta.?v|loadout|cooldown|private|credential|portal.?confirmation|secret|profile|rigLevels|abilityState|activeEffects|effectState|controlDebuff|commandCredential|ticket|password|authToken)/i;
+// S2d's runtimePublic component is sourced exclusively from the existing S1
+// public projection. Public gameplay entities legitimately contain cooldown
+// fields, so retain the stronger legacy-component denylist above while using a
+// dedicated owner-secret denylist for the lossless S1 compatibility lane.
+const RUNTIME_PUBLIC_PRIVATE_KEY_PATTERN = /(cargo|inventory|equipment|equipped|consumable|delta.?v|loadout|cooldown|private|credential|portal.?(confirmation|interaction)|secret|profile|rigLevels|abilityState|activeEffects|effectState|controlDebuff|ticket|password|authToken)/i;
 const NESTED_STATIC_KEY_PATTERN = /^(manifest|staticManifest|mapBounds|staticAnchors|publicContent|visualDescriptors|stableSourceIds)$/;
 const VIEW_KEYS = new Set(["schema", "lane", "runId", "authorityEpoch", "connectionEpoch", "ballparkEpoch", "manifestHash", "statePairId", "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode", "world", "entities"]);
 const DELTA_KEYS = new Set(["schema", "lane", "runId", "authorityEpoch", "connectionEpoch", "ballparkEpoch", "manifestHash", "statePairId", "baseSnapshotId", "snapshotId", "baseHash", "resultHash", "rootOps", "creates", "updates", "despawns"]);
 const ROOT_MUTABLE_KEYS = new Set(["statePairId", "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode", "world"]);
-const PUBLIC_COMPONENT_SCHEMA = new Set(["transform", "motion", "appearance", "lifecycle", "publicState", "lootPublic", "playerPublic", "worldEntity", "signalPublic", "statusPublic", "portalPublic", "fieldPublic", "inhibitorPublic", "scavengerPublic", "faunaPublic", "sentryPublic"]);
+const PUBLIC_COMPONENT_SCHEMA = new Set(["transform", "motion", "appearance", "lifecycle", "publicState", "runtimePublic", "runtimeOrder", "lootPublic", "playerPublic", "worldEntity", "signalPublic", "statusPublic", "portalPublic", "fieldPublic", "inhibitorPublic", "scavengerPublic", "faunaPublic", "sentryPublic"]);
 const OWNER_COMPONENT_SCHEMA = new Set(["inventory", "equipment", "consumables", "deltaV", "loadout", "ownerState", "cooldowns", "signal", "portalConfirmation", "transient"]);
 const PUBLIC_COMPONENT_VALUE_KEYS = new Set(["x", "y", "z", "wx", "wy", "vx", "vy", "vz", "heading", "rotation", "radius", "scale", "kind", "type", "variant", "color", "visible", "active", "state", "reason", "hull", "status", "tier", "valueBand", "claimed", "signalBand", "id", "sourceId"]);
 const PUBLIC_WORLD_KEYS = new Set(["toroidalBounds", "currents", "phase", "field", "overload", "global", "publicFacts"]);
+const PUBLIC_WRECK_LOOT_COEFFICIENT_KEYS = new Set([
+  "cargoSlots", "controlDebuffResist", "deltaVBurnMult", "deltaVCapacityMult", "deltaVRegenMult", "pulseCooldownScale",
+]);
+const PUBLIC_SESSION_PROFILE_VALUES = Object.freeze({
+  simScaleProfile: new Set(["small", "medium", "large"]),
+  clientPerfProfile: new Set(["fixedGrid"]),
+});
 
 class StructuralDeltaError extends Error {
   constructor(code, message) {
@@ -96,6 +108,41 @@ function scanPublicPrivacy(value, path = "$") {
   }
 }
 
+function samePath(actual, expected) {
+  return actual.length === expected.length && actual.every((part, index) => part === expected[index]);
+}
+
+function runtimePublicKeyAllowed(key, value, scope, relativePath) {
+  if (scope === "publicFacts" && samePath(relativePath, ["session"]) && PUBLIC_SESSION_PROFILE_VALUES[key]) {
+    return typeof value === "string" && PUBLIC_SESSION_PROFILE_VALUES[key].has(value);
+  }
+  if (scope !== "wreck") return false;
+  if (key === "pickupCooldown" && relativePath.length === 0) {
+    return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 60;
+  }
+  const coefficientPath = relativePath.length === 3 && relativePath[0] === "loot"
+    && Number.isSafeInteger(relativePath[1]) && relativePath[1] >= 0 && relativePath[2] === "coefficients";
+  if (!coefficientPath || !PUBLIC_WRECK_LOOT_COEFFICIENT_KEYS.has(key)
+      || typeof value !== "number" || !Number.isFinite(value)) return false;
+  return key === "cargoSlots"
+    ? Number.isSafeInteger(value) && value >= 0 && value <= 16
+    : value >= 0 && value <= 4;
+}
+
+function scanRuntimePublicPrivacy(value, path = "$", scope = null, relativePath = []) {
+  if (Array.isArray(value)) return value.forEach((entry, index) => scanRuntimePublicPrivacy(
+    entry, `${path}[${index}]`, scope, [...relativePath, index],
+  ));
+  if (!isPlainObject(value)) return;
+  for (const [key, child] of Object.entries(value)) {
+    if (RUNTIME_PUBLIC_PRIVATE_KEY_PATTERN.test(key)
+        && !runtimePublicKeyAllowed(key, child, scope, relativePath)) {
+      fail("public-private-field", `${path}.${key} is owner-private`);
+    }
+    scanRuntimePublicPrivacy(child, `${path}.${key}`, scope, [...relativePath, key]);
+  }
+}
+
 function validatePublicLeaf(value, path) {
   if (value === null || ["string", "boolean", "number"].includes(typeof value)) return;
   if (Array.isArray(value)) return value.forEach((entry, index) => validatePublicLeaf(entry, `${path}[${index}]`));
@@ -113,7 +160,10 @@ function validatePublicComponentValue(value, path) {
 function validatePublicWorld(world) {
   for (const [key, child] of Object.entries(world)) {
     if (!PUBLIC_WORLD_KEYS.has(key)) fail("unknown-public-value-schema", `$.world.${key} is not declared public world state`);
-    validatePublicLeaf(child, `$.world.${key}`);
+    if (key === "publicFacts") {
+      scanRuntimePublicPrivacy(child, `$.world.${key}`, "publicFacts");
+      scanStaticRepeats(child, `$.world.${key}`);
+    } else validatePublicLeaf(child, `$.world.${key}`);
   }
 }
 
@@ -167,12 +217,27 @@ function normalizeEntity(entity, lane, index) {
   for (const name of names) {
     if (!componentSchema.has(name)) fail("unknown-component-schema", `${path}.components.${name} is not declared for ${lane}`);
     components[name] = normalizeComponent(name, entity.components[name], `${path}.components`);
-    if (lane === "public") validatePublicComponentValue(components[name].value, `${path}.components.${name}.value`);
+    if (lane === "public") {
+      if (name === "runtimePublic") scanRuntimePublicPrivacy(components[name].value, `${path}.components.${name}.value`, entity.category);
+      else if (name === "runtimeOrder") {
+        const order = components[name].value;
+        if (!isPlainObject(order) || Object.keys(order).length !== 1
+            || !Number.isSafeInteger(order.index) || order.index < 0) {
+          fail("unknown-public-value-schema", `${path}.components.${name}.value requires a non-negative index`);
+        }
+      }
+      else validatePublicComponentValue(components[name].value, `${path}.components.${name}.value`);
+    }
   }
   const normalized = { publicEntityId: id, category: entity.category, sourceId: entity.sourceId,
     incarnation: entity.incarnation, lifecycleRevision: entity.lifecycleRevision, components };
   scanStaticRepeats(normalized, path);
-  if (lane === "public") scanPublicPrivacy(normalized, path);
+  if (lane === "public") {
+    for (const [name, component] of Object.entries(normalized.components)) {
+      if (name === "runtimePublic") scanRuntimePublicPrivacy(component.value, `${path}.components.${name}.value`, entity.category);
+      else scanPublicPrivacy(component, `${path}.components.${name}`);
+    }
+  }
   return normalized;
 }
 
@@ -209,7 +274,6 @@ function normalizeView(input) {
     fieldRevision: input.fieldRevision, overloadMode: input.overloadMode ?? null,
     world: cloneCanonical(input.world), entities,
   };
-  if (input.lane === "public") scanPublicPrivacy(view);
   const bytes = canonicalJsonBytes(view).length;
   if (bytes > MAX_VIEW_BYTES) fail("projection-too-large", `projection exceeds ${MAX_VIEW_BYTES} bytes`);
   return deepFreeze(view);

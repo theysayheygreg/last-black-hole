@@ -87,7 +87,7 @@ function createMultiplayerTicketRegistry({
     }
     const allowed = new Set([
       "membershipId", "playerId", "profileId", "wireVersion", "capabilities",
-      "manifestSchema", "manifestHash",
+      "manifestSchema", "manifestHash", "authorityIncarnation",
     ]);
     if (kind === "resume") {
       allowed.add("connectionId");
@@ -111,10 +111,15 @@ function createMultiplayerTicketRegistry({
       if (selected.wireVersion === "lbh-multiplayer-json-v2") {
         selected.manifestSchema = identifier(claims.manifestSchema, "manifestSchema");
         selected.manifestHash = identifier(claims.manifestHash, "manifestHash");
-      } else if (claims.manifestSchema !== undefined || claims.manifestHash !== undefined) {
+        const wantsStatePair = selected.capabilities.includes("state-pair-v1");
+        if (wantsStatePair) selected.authorityIncarnation = positiveInteger(claims.authorityIncarnation, "authorityIncarnation");
+        else if (claims.authorityIncarnation !== undefined) fail("invalid-claim", "authorityIncarnation requires state-pair-v1");
+      } else if (claims.manifestSchema !== undefined || claims.manifestHash !== undefined
+          || claims.authorityIncarnation !== undefined) {
         fail("invalid-claim", "v1 tickets cannot carry a manifest binding");
       }
-    } else if (claims.capabilities !== undefined || claims.manifestSchema !== undefined || claims.manifestHash !== undefined) {
+    } else if (claims.capabilities !== undefined || claims.manifestSchema !== undefined || claims.manifestHash !== undefined
+        || claims.authorityIncarnation !== undefined) {
       fail("invalid-claim", "wireVersion is required for protocol claims");
     }
     return selected;

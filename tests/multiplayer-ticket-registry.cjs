@@ -80,6 +80,30 @@ async function run() {
     }), "invalid-claim");
   });
 
+  await runner.run("state-pair capability binds the authority incarnation into the opaque ticket", async () => {
+    const registry = createMultiplayerTicketRegistry({ runId: "run-a", now: () => 2_750 });
+    const issued = registry.issueAdmission({
+      ...claims("pair"), wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1", "state-pair-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:pair",
+      authorityIncarnation: 9,
+    });
+    const redeemed = registry.redeem(issued.ticket, { kind: "admission", runId: "run-a" });
+    assert(redeemed.claims.authorityIncarnation === 9, "Authority incarnation must survive redemption");
+    assert(JSON.stringify(redeemed.claims.capabilities) === JSON.stringify(["state-pair-v1", "static-manifest-v1"]),
+      "Capabilities must be deterministic and ticket-bound");
+    expectTicketError(() => registry.issueAdmission({
+      ...claims("missing-incarnation"), wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1", "state-pair-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:pair",
+    }), "invalid-claim");
+    expectTicketError(() => registry.issueAdmission({
+      ...claims("smuggled-incarnation"), wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1"], manifestSchema: "lbh-session-replication-manifest-v1",
+      manifestHash: "sha256:pair", authorityIncarnation: 9,
+    }), "invalid-claim");
+  });
+
   await runner.run("expiry is deterministic under an injected clock", async () => {
     let clock = 10_000;
     const registry = createMultiplayerTicketRegistry({ runId: "run-a", now: () => clock });

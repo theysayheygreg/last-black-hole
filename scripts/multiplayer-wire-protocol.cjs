@@ -24,6 +24,9 @@ const LIMITS = Object.freeze({
   maxErrorMessageLength: 512,
   maxPayloadStringLength: 8192,
   maxPayloadDepth: 8,
+  // Canonical state-pair envelopes add structural wrappers around the same
+  // bounded public/owner JSON, so they receive a separate finite depth budget.
+  maxStatePairPayloadDepth: 16,
   maxObjectKeys: 128,
   maxArrayItems: 2048,
   maxPublicBodies: 2048,
@@ -158,8 +161,8 @@ function boolean(value, label) {
   return value;
 }
 
-function jsonValue(value, label, depth = 0) {
-  if (depth > LIMITS.maxPayloadDepth) fail("payload-too-deep", `${label} exceeds the payload depth limit`);
+function jsonValue(value, label, depth = 0, maxDepth = LIMITS.maxPayloadDepth) {
+  if (depth > maxDepth) fail("payload-too-deep", `${label} exceeds the payload depth limit`);
   if (value === null || typeof value === "boolean") return;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) fail("invalid-payload", `${label} contains a non-finite number`);
@@ -171,7 +174,7 @@ function jsonValue(value, label, depth = 0) {
   }
   if (Array.isArray(value)) {
     if (value.length > LIMITS.maxArrayItems) fail("payload-array-too-large", `${label} exceeds the array item limit`);
-    value.forEach((entry, index) => jsonValue(entry, `${label}[${index}]`, depth + 1));
+    value.forEach((entry, index) => jsonValue(entry, `${label}[${index}]`, depth + 1, maxDepth));
     return;
   }
   if (!isPlainObject(value)) fail("invalid-payload", `${label} must contain JSON values only`);
@@ -179,7 +182,7 @@ function jsonValue(value, label, depth = 0) {
   if (keys.length > LIMITS.maxObjectKeys) fail("payload-object-too-large", `${label} exceeds the object key limit`);
   for (const key of keys) {
     if (key.length === 0 || key.length > LIMITS.maxIdentifierLength) fail("invalid-payload-key", `${label} contains an invalid key`);
-    jsonValue(value[key], `${label}.${key}`, depth + 1);
+    jsonValue(value[key], `${label}.${key}`, depth + 1, maxDepth);
   }
 }
 
@@ -235,7 +238,7 @@ function validateWelcome(frame) {
     "heartbeatIntervalMs", "reconnected",
   ]);
   if (frame.wireVersion === WIRE_PROTOCOL_VERSION_V2) {
-    for (const key of ["capabilities", "manifestSchema", "manifestHash", "manifestBytes", "fetchPath"]) allowed.add(key);
+    for (const key of ["capabilities", "manifestSchema", "manifestHash", "manifestBytes", "fetchPath", "authorityIncarnation"]) allowed.add(key);
   }
   exactKeys(frame, allowed);
   if (frame.simProtocolVersion !== SIM_PROTOCOL_VERSION) fail("unsupported-sim-version", `simProtocolVersion must be ${SIM_PROTOCOL_VERSION}`, 4406);
@@ -255,6 +258,10 @@ function validateWelcome(frame) {
     }
     frame.capabilities.forEach((value, index) => requiredString(value, `capabilities[${index}]`));
     if (!frame.capabilities.includes("static-manifest-v1")) fail("invalid-field", "v2 requires static-manifest-v1");
+    if (frame.authorityIncarnation !== undefined) {
+      if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");
+      integer(frame.authorityIncarnation, "authorityIncarnation", { min: 1 });
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
     integer(frame.manifestBytes, "manifestBytes", { min: 1, max: 1024 * 1024 });
@@ -438,7 +445,7 @@ function validateStatePair(frame) {
     if (payload.kind === "keyframe") {
       if (payload.schema !== "lbh-canonical-projection-v1") fail("invalid-field", `${lane} keyframe schema is unsupported`);
       object(payload.projection, `${lane}.projection`);
-      jsonValue(payload.projection, `${lane}.projection`);
+      jsonValue(payload.projection, `${lane}.projection`, 0, LIMITS.maxStatePairPayloadDepth);
       let normalized;
       try { normalized = normalizeView(payload.projection); } catch { fail("invalid-field", `${lane} keyframe projection is invalid`); }
       if (projectionHash(normalized) !== payload.resultHash) fail("invalid-field", `${lane} keyframe hash is invalid`);
@@ -456,7 +463,7 @@ function validateStatePair(frame) {
       requiredString(payload.baseSnapshotId, `${lane}.baseSnapshotId`);
       requiredString(payload.baseHash, `${lane}.baseHash`);
       object(payload.delta, `${lane}.delta`);
-      jsonValue(payload.delta, `${lane}.delta`);
+      jsonValue(payload.delta, `${lane}.delta`, 0, LIMITS.maxStatePairPayloadDepth);
       if (payload.delta.lane !== lane || payload.delta.runId !== frame.matchId
         || payload.delta.authorityEpoch !== frame.authorityIncarnation
         || payload.delta.connectionEpoch !== frame.recipientIncarnation || payload.delta.ballparkEpoch !== frame.ballparkEpoch

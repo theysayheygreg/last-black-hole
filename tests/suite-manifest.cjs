@@ -126,6 +126,19 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "RuntimeStatePairIntegration",
+    file: "runtime-state-pair-integration.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "RuntimeStatePairLoopback",
+    file: "runtime-state-pair-loopback.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+    slow: true,
+  },
+  {
     name: "MultiplayerSendQueue",
     file: "multiplayer-send-queue.cjs",
     lanes: ["multiplayer-network", "static", "full"],
