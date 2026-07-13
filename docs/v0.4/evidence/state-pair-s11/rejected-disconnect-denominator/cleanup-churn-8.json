@@ -1,0 +1,10 @@
+{
+  "scenario": "churn",
+  "population": 8,
+  "port": 52351,
+  "authorityPid": 95928,
+  "preStopConnections": 0,
+  "portDead": true,
+  "pidDead": true,
+  "passed": true
+}

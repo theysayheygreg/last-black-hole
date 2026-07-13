@@ -34,3 +34,16 @@ identity from the full capture, including warmup, while all cadence, traffic,
 and correctness statistics remain bounded to the canonical measurement
 window. Missing measured events are retained as zero and receive no admission
 credit.
+
+`rejected-disconnect-denominator/` preserves the next clean `ed3ea22`
+full-duration attempt (aggregate SHA
+`d98cd43cf28d989d29ad390b4a94f03b96da78f8642e509a0b5228766be49cb7`).
+It completed all five scenarios and validated, and it proved the prior
+zero-cadence fix by mapping normal-8 seat 7 from warmup with zero measured
+tuples. It is still not canonical: exact normal traffic means inherited the
+generic active-interval denominator, so clients that disconnected under load
+were divided by only their surviving interval and a fully silent recipient
+serialized as `null`. Normal product evidence must instead divide every
+intended client's accepted bytes by the full fixed window, retain explicit
+zero rows in every fixed-window distribution, and mark 10 Hz normalization
+unavailable (and therefore failed) when no measured pair-size sample exists.

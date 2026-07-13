@@ -1,0 +1,587 @@
+{
+  "schemaVersion": 4,
+  "gate": "s11",
+  "profile": "canonical",
+  "microProfile": false,
+  "instrumentationEnabled": false,
+  "eventLoopMonitorEnabled": true,
+  "commit": "ed3ea229d7745085a306956350dded0b7cc9f197",
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s11-admission --admission",
+  "verdict": {
+    "passed": false,
+    "productAdmissionPassed": false,
+    "convergenceOnlyPassed": false,
+    "normal": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": true,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": true,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": true,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 1,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": true,
+        "passed": true
+      },
+      "4": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": true,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 1,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": false,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": false,
+        "passed": false
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 1,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "convergenceOnlyPassed": false,
+        "productAdmissionPassed": false,
+        "passed": false
+      }
+    },
+    "churn": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "targetCadenceMeanAtOrBelow64KiB": null,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": null,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": null,
+        "receiverCadenceTracksAuthorityWithinTolerance": null,
+        "receiverCadenceToleranceHz": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": true,
+        "passed": true
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "targetCadenceMeanAtOrBelow64KiB": null,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": null,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": null,
+        "receiverCadenceTracksAuthorityWithinTolerance": null,
+        "receiverCadenceToleranceHz": null,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "convergenceOnlyPassed": false,
+        "productAdmissionPassed": false,
+        "passed": false
+      }
+    }
+  },
+  "expectedPopulations": [
+    1,
+    4,
+    8
+  ],
+  "expectedChurnPopulations": [
+    1,
+    8
+  ],
+  "preparedProjectionsEnabled": true,
+  "scenarios": [
+    {
+      "file": "normal-1.json",
+      "scenario": "normal",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 61891.94666666666,
+      "oneSecondP95DownlinkBytesPerSecond": 66568,
+      "oneSecondP99DownlinkBytesPerSecond": 68388,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 2933
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": true,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": true,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": true,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 1,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": true,
+        "passed": true
+      }
+    },
+    {
+      "file": "normal-4.json",
+      "scenario": "normal",
+      "population": 4,
+      "worstRecipientMeanDownlinkBytesPerSecond": 45773.65,
+      "oneSecondP95DownlinkBytesPerSecond": 51074,
+      "oneSecondP99DownlinkBytesPerSecond": 52707,
+      "pairKindCounts": {
+        "public-delta+owner-delta": 41,
+        "public-delta+owner-keyframe": 7755
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": true,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 1,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": false,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": false,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-8.json",
+      "scenario": "normal",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 99696.46333333333,
+      "oneSecondP95DownlinkBytesPerSecond": 150445,
+      "oneSecondP99DownlinkBytesPerSecond": 155946,
+      "pairKindCounts": {
+        "public-delta+owner-delta": 1815,
+        "public-keyframe+owner-keyframe": 4527,
+        "public-delta+owner-keyframe": 729
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "receiverCadenceTracksAuthorityWithinTolerance": true,
+        "receiverCadenceToleranceHz": 1,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "convergenceOnlyPassed": false,
+        "productAdmissionPassed": false,
+        "passed": false
+      }
+    },
+    {
+      "file": "churn-1.json",
+      "scenario": "churn",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 37865.5,
+      "oneSecondP95DownlinkBytesPerSecond": 69767,
+      "oneSecondP99DownlinkBytesPerSecond": 98487,
+      "pairKindCounts": {
+        "public-keyframe+owner-keyframe": 2,
+        "public-delta+owner-keyframe": 873
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "targetCadenceMeanAtOrBelow64KiB": null,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": null,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": null,
+        "receiverCadenceTracksAuthorityWithinTolerance": null,
+        "receiverCadenceToleranceHz": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "convergenceOnlyPassed": true,
+        "productAdmissionPassed": true,
+        "passed": true
+      }
+    },
+    {
+      "file": "churn-8.json",
+      "scenario": "churn",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 69178.93333333333,
+      "oneSecondP95DownlinkBytesPerSecond": 94377,
+      "oneSecondP99DownlinkBytesPerSecond": 95969,
+      "pairKindCounts": {
+        "public-delta+owner-delta": 711,
+        "public-keyframe+owner-keyframe": 1792,
+        "public-delta+owner-keyframe": 284
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "targetCadenceMeanAtOrBelow64KiB": null,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": null,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": null,
+        "receiverCadenceTracksAuthorityWithinTolerance": null,
+        "receiverCadenceToleranceHz": null,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "convergenceOnlyPassed": false,
+        "productAdmissionPassed": false,
+        "passed": false
+      }
+    }
+  ],
+  "s3CanonicalEvidence": null,
+  "optimizationProof": {
+    "atomicKindAlignmentCauses": 0,
+    "publicDeltaOwnerKeyframeProductPairs": 12574,
+    "allNormalPopulationsObservedMixed": true
+  },
+  "manifestIdentity": {
+    "hashes": [
+      "sha256:0a41d6b393e9b5b191dbed13fe9451acac5e09980e9093e2e614df92e65fa4e8",
+      "sha256:0c4f3a5870ab56a9a1ab13f41fea8823bf59aedf18692a93bb1ca63fce3fce57",
+      "sha256:9056489854df9480be75324207858fff0e81f17b4534f95a9ee41009d6c4f7ca",
+      "sha256:ce69596d1862ccaa5d43f465b7bba9c4431e7e03f24f5e52443a83177adab4fd",
+      "sha256:3cfdfd3a5acceef36eb175dced6dd9632d2d7879454abd880140633573c2a7ec"
+    ],
+    "changedAcrossFreshMatches": true,
+    "reconnectReuseObserved": false
+  },
+  "failureAnalysis": [
+    {
+      "population": 1,
+      "requiredDownlinkReductionBytesPerSecond": 0,
+      "requiredDownlinkReductionFraction": 0,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 0,
+      "targetCadenceRequiredDownlinkReductionFraction": 0,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 18403033,
+          "fraction": 0.9911377269115895
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 162155,
+          "fraction": 0.008733230990095427
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 2396,
+          "fraction": 0.00012904209831499886
+        }
+      ]
+    },
+    {
+      "population": 4,
+      "requiredDownlinkReductionBytesPerSecond": 0,
+      "requiredDownlinkReductionFraction": 0,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 4656.685019668206,
+      "targetCadenceRequiredDownlinkReductionFraction": 0.06634145735219255,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 52111313,
+          "fraction": 0.9843237128865618
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 579156,
+          "fraction": 0.010939601238996408
+        },
+        {
+          "frameClass": "statePair",
+          "projectionKind": "delta",
+          "bytes": 241367,
+          "fraction": 0.004559149404051492
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 9399,
+          "fraction": 0.0001775364703902355
+        }
+      ]
+    },
+    {
+      "population": 8,
+      "requiredDownlinkReductionBytesPerSecond": 34160.46333333333,
+      "requiredDownlinkReductionFraction": 0.3426446855904852,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 157220.60412698414,
+      "targetCadenceRequiredDownlinkReductionFraction": 0.705795479075266,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "keyframe",
+          "bytes": 125209169,
+          "fraction": 0.8739244100971081
+        },
+        {
+          "frameClass": "statePair",
+          "projectionKind": "delta",
+          "bytes": 12595260,
+          "fraction": 0.08791133471638728
+        },
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 5455130,
+          "fraction": 0.03807525683085587
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 9623,
+          "fraction": 0.0000671658047532004
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 3128,
+          "fraction": 0.00002183255089556384
+        }
+      ]
+    }
+  ],
+  "residualDecisionTable": null,
+  "admissionDecision": {
+    "target": "Approximately 6,504 application bytes per accepted pair at 10 Hz, adjusted exactly per recipient for measured non-pair traffic.",
+    "populations": [
+      {
+        "population": 1,
+        "measurementAvailable": true,
+        "worstRecipient": "recipient-1",
+        "worstClient": "normal-1-seat-0",
+        "trafficVerdict": {
+          "actualMeanPassed": true,
+          "actualOneSecondP95Passed": true,
+          "normalized10HzMeanPassed": true,
+          "normalized10HzOneSecondP95Passed": true
+        },
+        "cadenceVerdict": {
+          "configuredHz": 10,
+          "authorityOfferedHz": 9.776666666666667,
+          "authorityAcceptedHz": 9.776666666666667,
+          "receiverAcceptedHz": 9.776666666666667,
+          "everyClientAtLeast9Hz": true
+        },
+        "exactRemainingPairReductionAt10Hz": {
+          "referenceTargetBytes": 6504,
+          "exactBudgetBytesForThisRecipient": 6498.749666666667,
+          "observedMeanPairBytes": 6274.4742584384585,
+          "bytesPerPairToReferenceTarget": 0,
+          "bytesPerPairToExactBudget": 0,
+          "bytesPerSecondTo64KiB": 0
+        },
+        "cpuAndClockVerdict": {
+          "simTickP95Ms": 0.48362499999348074,
+          "simTickBudgetMs": 66.66666666666667,
+          "simTickMarginMs": 66.18304166667319,
+          "projectionAndPublishP95Ms": 21.910582999989856,
+          "projectionAndPublishBudgetMs": 100,
+          "projectionAndPublishMarginMs": 78.08941700001014,
+          "authorityWithinExistingClockBudget": true,
+          "overloadStayedNormal": true
+        },
+        "productAdmissionPassed": true
+      },
+      {
+        "population": 4,
+        "measurementAvailable": true,
+        "worstRecipient": "recipient-2",
+        "worstClient": "normal-4-seat-1",
+        "trafficVerdict": {
+          "actualMeanPassed": true,
+          "actualOneSecondP95Passed": true,
+          "normalized10HzMeanPassed": false,
+          "normalized10HzOneSecondP95Passed": true
+        },
+        "cadenceVerdict": {
+          "configuredHz": 10,
+          "authorityOfferedHz": 6.496666666666667,
+          "authorityAcceptedHz": 6.496666666666667,
+          "receiverAcceptedHz": 6.496666666666667,
+          "everyClientAtLeast9Hz": false
+        },
+        "exactRemainingPairReductionAt10Hz": {
+          "referenceTargetBytes": 6504,
+          "exactBudgetBytesForThisRecipient": 6504.560333333333,
+          "observedMeanPairBytes": 6970.228835300154,
+          "bytesPerPairToReferenceTarget": 466.22883530015406,
+          "bytesPerPairToExactBudget": 465.66850196682117,
+          "bytesPerSecondTo64KiB": 4656.685019668206
+        },
+        "cpuAndClockVerdict": {
+          "simTickP95Ms": 0.5398750000167638,
+          "simTickBudgetMs": 66.66666666666667,
+          "simTickMarginMs": 66.12679166664991,
+          "projectionAndPublishP95Ms": 82.48812499997439,
+          "projectionAndPublishBudgetMs": 100,
+          "projectionAndPublishMarginMs": 17.51187500002561,
+          "authorityWithinExistingClockBudget": true,
+          "overloadStayedNormal": false
+        },
+        "productAdmissionPassed": false
+      },
+      {
+        "population": 8,
+        "measurementAvailable": true,
+        "worstRecipient": "recipient-3",
+        "worstClient": "normal-8-seat-2",
+        "trafficVerdict": {
+          "actualMeanPassed": false,
+          "actualOneSecondP95Passed": false,
+          "normalized10HzMeanPassed": false,
+          "normalized10HzOneSecondP95Passed": false
+        },
+        "cadenceVerdict": {
+          "configuredHz": 10,
+          "authorityOfferedHz": 0.45666666666666667,
+          "authorityAcceptedHz": 0.42,
+          "receiverAcceptedHz": 0.30666666666666664,
+          "everyClientAtLeast9Hz": false
+        },
+        "exactRemainingPairReductionAt10Hz": {
+          "referenceTargetBytes": 6504,
+          "exactBudgetBytesForThisRecipient": 6553.471333333333,
+          "observedMeanPairBytes": 22275.531746031746,
+          "bytesPerPairToReferenceTarget": 15771.531746031746,
+          "bytesPerPairToExactBudget": 15722.060412698413,
+          "bytesPerSecondTo64KiB": 157220.60412698414
+        },
+        "cpuAndClockVerdict": {
+          "simTickP95Ms": 0.659624999971129,
+          "simTickBudgetMs": 83.33333333333333,
+          "simTickMarginMs": 82.6737083333622,
+          "projectionAndPublishP95Ms": 142.59883299999638,
+          "projectionAndPublishBudgetMs": 100,
+          "projectionAndPublishMarginMs": -42.598832999996375,
+          "authorityWithinExistingClockBudget": false,
+          "overloadStayedNormal": false
+        },
+        "productAdmissionPassed": false
+      }
+    ],
+    "separatedVerdicts": {
+      "oneAndFourClientTraffic": [
+        {
+          "population": 1,
+          "trafficVerdict": {
+            "actualMeanPassed": true,
+            "actualOneSecondP95Passed": true,
+            "normalized10HzMeanPassed": true,
+            "normalized10HzOneSecondP95Passed": true
+          },
+          "exactRemainingPairReductionAt10Hz": {
+            "referenceTargetBytes": 6504,
+            "exactBudgetBytesForThisRecipient": 6498.749666666667,
+            "observedMeanPairBytes": 6274.4742584384585,
+            "bytesPerPairToReferenceTarget": 0,
+            "bytesPerPairToExactBudget": 0,
+            "bytesPerSecondTo64KiB": 0
+          }
+        },
+        {
+          "population": 4,
+          "trafficVerdict": {
+            "actualMeanPassed": true,
+            "actualOneSecondP95Passed": true,
+            "normalized10HzMeanPassed": false,
+            "normalized10HzOneSecondP95Passed": true
+          },
+          "exactRemainingPairReductionAt10Hz": {
+            "referenceTargetBytes": 6504,
+            "exactBudgetBytesForThisRecipient": 6504.560333333333,
+            "observedMeanPairBytes": 6970.228835300154,
+            "bytesPerPairToReferenceTarget": 466.22883530015406,
+            "bytesPerPairToExactBudget": 465.66850196682117,
+            "bytesPerSecondTo64KiB": 4656.685019668206
+          }
+        }
+      ],
+      "eightClientCpuAndCadence": {
+        "cpuAndClockVerdict": {
+          "simTickP95Ms": 0.659624999971129,
+          "simTickBudgetMs": 83.33333333333333,
+          "simTickMarginMs": 82.6737083333622,
+          "projectionAndPublishP95Ms": 142.59883299999638,
+          "projectionAndPublishBudgetMs": 100,
+          "projectionAndPublishMarginMs": -42.598832999996375,
+          "authorityWithinExistingClockBudget": false,
+          "overloadStayedNormal": false
+        },
+        "cadenceVerdict": {
+          "configuredHz": 10,
+          "authorityOfferedHz": 0.45666666666666667,
+          "authorityAcceptedHz": 0.42,
+          "receiverAcceptedHz": 0.30666666666666664,
+          "everyClientAtLeast9Hz": false
+        }
+      }
+    },
+    "rankedNextSlices": [
+      {
+        "rank": 1,
+        "lane": "additional-positional-schema-cleanup",
+        "reason": "Preserves the current JSON, exact reconstruction, privacy, and cadence contracts while attacking the measured pair envelope directly."
+      },
+      {
+        "rank": 2,
+        "lane": "binary-codec",
+        "reason": "Potentially larger structural reduction, but adds protocol/versioning/debug costs and still requires exact equivalence evidence."
+      },
+      {
+        "rank": 3,
+        "lane": "compression",
+        "reason": "Measure only after the remaining uncompressed envelope is explicit; adds CPU and tail-latency pressure to the failing 8-client lane."
+      },
+      {
+        "rank": 4,
+        "lane": "deliberate-cadence-policy",
+        "reason": "A product-policy choice, not optimization credit; it must define field age and latency rather than inherit overload collapse."
+      }
+    ],
+    "deferred": {
+      "lane": "aoi",
+      "reason": "No distance/visibility evidence in this gate justifies lifecycle or interest-churn risk."
+    }
+  },
+  "s11ComparisonEvidence": {
+    "s7": {
+      "path": "docs/v0.4/evidence/state-pair-s7/canonical",
+      "compositeSha256": "e4f16209f70791c8b15dc6b913b99c6fc170c2a4f4491c9da654ab814ef4d068"
+    },
+    "s8": {
+      "path": "docs/v0.4/evidence/state-pair-s8/final",
+      "compositeSha256": "c13db936bebd443ca5befa7906c5226a282d153f3969555f1659a5c47dc86707"
+    },
+    "s9": {
+      "path": "docs/v0.4/evidence/state-pair-s9/pre-gate",
+      "compositeSha256": "34a0de4e4a611bfe5ce298f0a4fc0d6a4d3011c7e08173dbcba35c14dee40d1b"
+    },
+    "s10": {
+      "path": "docs/v0.4/evidence/state-pair-s10/pre-gate",
+      "compositeSha256": "8f38e88f63bd753c8def9a100a2554d7e16acd29e0aa0077295c27233fb1a43d"
+    }
+  },
+  "recommendation": {
+    "decision": "Apply the unchanged product thresholds to the full prepared+sparse+positional+bounded-ledger path. Report traffic at 1/4 separately from CPU/cadence at 8 and never credit overload-induced cadence collapse.",
+    "nextEvidence": "Use admissionDecision to select the smallest measured next slice; keep binary, compression, and cadence policy separate decisions and leave AOI deferred.",
+    "defer": "Do not enable experimental capabilities by default or claim hosted WSS, WAN, fleet, compression, binary, or AOI evidence from this local gate."
+  }
+}
