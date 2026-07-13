@@ -343,6 +343,13 @@ Singularity that:
   canonical served-byte-hashed static manifest, authenticated admission pause,
   ACK/timeout/cap/failure semantics, and exact v1 rollback. Do not combine S2
   deltas or reinterpret S0 as product-budget acceptance.
+- S1 is independently accepted at final `41b9834` after proof/cache bounds,
+  coherent retry/deadline semantics, immutable client cache, canonical JSON,
+  heartbeat correlation, cold-byte accounting, live membership/epoch binding,
+  and final timer/recipient cleanup fixes. Preserve v1 as default. Treat the
+  measured ~953-byte (~6.4%) sampled public-frame saving as scaffolding evidence
+  only. Dispatch S2 structural JSON delta semantics next; do not combine binary,
+  AOI, compression, hosted work, or a 64 KiB acceptance claim.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

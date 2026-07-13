@@ -123,6 +123,14 @@
   projection p95 12.39 ms, and reliable retirement 3,481/3,481. Shape, hashes,
   cadence, privacy, bounds, PID/port, and cleanup all passed. This is the v1
   full-JSON baseline, not delta or product-budget acceptance.
+- Implemented and independently accepted S1 static-manifest admission through
+  `41b9834`. V2 tickets bind the exact served-byte hash and live membership/
+  epoch; admission pauses before rebase/baseline/private state until an
+  authenticated bounded manifest proof succeeds. Proofs, caches, timers,
+  retries, heartbeat correlation, cold HTTP-byte accounting, and cleanup are
+  bounded; v1 remains default and byte-compatible. A fresh sample moved 2,471
+  cold bytes once and saved about 953 bytes/public frame (~6.4%). This accepts
+  S1 scaffolding only, not delta or the 64 KiB/s product target.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval

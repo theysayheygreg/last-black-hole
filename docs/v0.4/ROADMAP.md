@@ -323,6 +323,20 @@ privacy, bounds, and cleanup pass. This accepts only the local-loopback v1
 baseline. S1 static manifest admission is next; no delta, product-budget, WAN,
 hosted, or capacity claim is closed.
 
+**S1 static manifest — accepted:** implementation `264e496` plus hardening
+`9a80149`, `2162863`, and `41b9834` closes content-addressed admission. V2
+capabilities are registry-bound to negotiated version, manifest hash, current
+membership, and connection epoch. The socket remains `MANIFEST_REQUIRED` and
+emits no rebase, baseline, event, or private projection until authenticated
+same-origin fetch and proof finish within one coherent bounded deadline. Proofs
+and client/server caches expire and cap; canonical JSON rejects sparse arrays;
+heartbeat, late completion, reset, reconnect, mixed v1/v2, and explicit v1
+rollback are tested. Cold successful manifest bytes are counted separately in
+S0. All 17 multiplayer-network suites pass. The fresh sample used a 2,471-byte
+manifest and reduced public frames from 14,939 to 13,986 bytes (953 bytes,
+~6.4%, tick-dependent). This is S1 only; S2 structural JSON deltas are now the
+active slice, and no product-budget/hosted/high-count claim closes here.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

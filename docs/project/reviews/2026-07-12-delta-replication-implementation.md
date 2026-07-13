@@ -601,3 +601,21 @@ contains 62/65 entities and 704/735 components p50/p95; owner remains exactly
 one entity and 18 components. Reliable retirement, CPU/projection timing,
 hashes, privacy, and cleanup close. S0 is complete only as the local v1 full-
 JSON baseline; it remains 3.69x target at eight. Proceed to S1, not S2.
+
+## S1 status — accepted
+
+S1 is independently accepted at `41b9834` through implementation `264e496`
+and fix-forwards `9a80149`, `2162863`, and `41b9834`. The exact served manifest
+is canonical, content-addressed, bounded, and authenticated without credentials
+in URLs or logs. V2 ticket claims bind wire version, hash, membership, and live
+connection epoch; `MANIFEST_REQUIRED` permits no baseline/private/event stream
+before proof. Server proofs and accepted caches expire/cap, the client cache is
+small and immutable, sparse canonical arrays fail, deadlines/retries/cancel are
+coherent, pongs remain correlated, and cold successful HTTP bytes enter S0
+separately. Mixed v1/v2 and v1 rollback pass, as do all 17 network suites.
+
+A fresh sample served a 2,471-byte cold manifest and reduced a public v2 frame
+from 14,939 to 13,986 bytes, saving 953 bytes (~6.4%, tick-dependent). That
+validates extraction but cannot approach the product budget alone. S2 may now
+implement canonical per-recipient structural JSON deltas. No delta, 64 KiB/s,
+WAN/WSS, soak, hosted, packing, or high-count claim is accepted by S1.
