@@ -19,6 +19,7 @@ const {
   encodePositionalFrame,
   decodePositionalFrame,
   composeStatePairCandidates,
+  composeStatePairLaneCandidates,
 } = require("../scripts/state-pair-positional-codec.cjs");
 const { canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
 const { CODEC_PAIR_TIE_ORDER } = require("../scripts/authority-delta-publisher.cjs");
@@ -154,12 +155,20 @@ async function run() {
         return { ...entry, wire, bytes: Buffer.byteLength(wire, "utf8") };
       });
       const selected = composeStatePairCandidates(entries, ctx, CODEC_PAIR_TIE_ORDER);
+      const lazy = composeStatePairLaneCandidates(header, lanes, ctx, CODEC_PAIR_TIE_ORDER);
       assert.deepStrictEqual(selected.candidates.map(({ kind, bytes }) => ({ kind, bytes })),
         oracle.map(({ kind, bytes }) => ({ kind, bytes })));
+      assert.deepStrictEqual(lazy.candidates, selected.candidates,
+        "lazy descriptors must preserve the full exact four-candidate size transcript");
       const expected = [...oracle].sort((a, b) => a.bytes - b.bytes
         || CODEC_PAIR_TIE_ORDER.indexOf(a.kind) - CODEC_PAIR_TIE_ORDER.indexOf(b.kind))[0];
       assert.strictEqual(selected.chosen.kind, expected.kind);
       assert.strictEqual(selected.chosen.wire, expected.wire);
+      assert.strictEqual(lazy.chosen.kind, expected.kind);
+      assert.strictEqual(lazy.chosen.wire, expected.wire);
+      assert.strictEqual(lazy.diagnostics.outerCandidateFrames, 1);
+      assert.strictEqual(lazy.diagnostics.outerCandidateDescriptors, 4);
+      assert.strictEqual(lazy.diagnostics.lanePayloadsBuilt, 4);
       assert.deepStrictEqual(decodePositionalFrame(selected.chosen.wire, ctx), selected.chosen.frame);
       assert.strictEqual(crypto.createHash("sha256").update(selected.chosen.wire).digest("hex"),
         crypto.createHash("sha256").update(expected.wire).digest("hex"));
@@ -197,6 +206,8 @@ async function run() {
     let ownerDeltaBeat = null;
     for (let beat = 1; beat <= 4; beat += 1) {
       const produced = publish(authority, id, beat, { x: beat < 3 ? 0.1 : beat / 10, cargoItems: 4 });
+      assert(Object.isFrozen(produced.frame) && Object.isFrozen(produced.frame.public)
+        && Object.isFrozen(produced.frame.owner), "published lazy winner and lane bindings must be immutable");
       const wire = encodeWireFrame(produced.frame, { direction: SERVER_TO_CLIENT, positionalContext: context(id) });
       assert.strictEqual(produced.encodedWire, wire, "publisher must retain the exact selected positional bytes");
       assert.strictEqual(produced.bytes, Buffer.byteLength(wire, "utf8"));
@@ -251,6 +262,13 @@ async function run() {
     assert(choice.operations.expandedReusedLaneBytes > 0);
     assert.strictEqual(choice.operations.expandedSerializedLaneBytes, 0);
     assert(choice.operations.expandedBytesExamined > 0);
+    assert.strictEqual(choice.operations.outerCandidateDescriptors, choice.selections * 4);
+    assert.strictEqual(choice.operations.outerCandidateFrames, choice.selections,
+      "safe-base selection must materialize only its chosen complete frame");
+    assert.strictEqual(choice.operations.chosenFrameMaterializations, choice.selections);
+    assert.strictEqual(choice.operations.lanePayloadsBuilt, choice.selections * 4);
+    assert.strictEqual(choice.operations.lanePayloadReferenceReuses, choice.selections * 4);
+    assert.strictEqual(choice.operations.sizeProofOperations, choice.selections * 8);
   });
 
   await runner.run("loss applies the next branch from a retained base and preserves despawn reincarnation ACK bases", () => {

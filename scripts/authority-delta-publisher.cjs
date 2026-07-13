@@ -14,7 +14,8 @@ const {
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
 const { isTrustedStatePairWireEncoder, hasTrustedStatePairCandidateSelector,
-  selectTrustedStatePairWireCandidate } = require("./multiplayer-wire-protocol.cjs");
+  selectTrustedStatePairWireCandidate, hasTrustedStatePairLazyCandidateSelector,
+  selectTrustedStatePairWireLaneCandidate } = require("./multiplayer-wire-protocol.cjs");
 
 const PAIR_SCHEMA = "lbh-authority-state-pair-v1";
 const ACK_SCHEMA = "lbh-authority-state-pair-ack-v1";
@@ -217,6 +218,63 @@ function exactCanonicalCandidateSizes(entries, componentProofs = null) {
       + newPayloads.reduce((sum, payload) => sum + payloadCache.get(payload).bytes, 0) });
 }
 
+function exactCanonicalLaneCandidateSizes(header, lanes, componentProofs) {
+  const frameShape = { ...header, public: null, owner: null };
+  const keys = Object.keys(frameShape).sort((a, b) => {
+    const left = Array.from(a, (character) => character.codePointAt(0));
+    const right = Array.from(b, (character) => character.codePointAt(0));
+    for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
+      if (left[index] !== right[index]) return left[index] - right[index];
+    }
+    return left.length - right.length;
+  });
+  const sharedSegments = new Map();
+  for (const key of keys) {
+    if (key === "public" || key === "owner") continue;
+    sharedSegments.set(key, `${JSON.stringify(key)}:${canonicalJson(header[key])}`);
+  }
+  const payloads = new Map();
+  for (const lane of ["public", "owner"]) {
+    for (const kind of ["keyframe", "delta"]) {
+      const payload = lanes?.[lane]?.[kind];
+      const proof = componentProofs?.get(payload);
+      if (!payload || proof?.[CANONICAL_COMPONENT_PROOF] !== true || proof.payload !== payload
+          || typeof proof.text !== "string" || !Number.isSafeInteger(proof.bytes)
+          || proof.bytes !== Buffer.byteLength(proof.text, "utf8")) {
+        fail("invalid-wire-size", "canonical component size proof is invalid");
+      }
+      payloads.set(payload, proof);
+    }
+  }
+  const headerBytes = [...sharedSegments.values()]
+    .reduce((sum, value) => sum + Buffer.byteLength(value, "utf8"), 0);
+  const sizes = new Map();
+  for (const kind of CODEC_PAIR_TIE_ORDER) {
+    const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
+    let bytes = 2 + Math.max(0, keys.length - 1) + headerBytes;
+    for (const lane of ["public", "owner"]) {
+      const payload = lanes[lane][lane === "public" ? publicKind : ownerKind];
+      bytes += Buffer.byteLength(JSON.stringify(lane), "utf8") + 1 + payloads.get(payload).bytes;
+    }
+    sizes.set(kind, bytes);
+  }
+  const reusedLaneBytes = [...payloads.values()].reduce((sum, proof) => sum + proof.bytes, 0);
+  return Object.freeze({ sizes,
+    componentSerializations: sharedSegments.size,
+    headerSerializations: sharedSegments.size,
+    laneSerializations: 0,
+    laneSerializationReuses: payloads.size,
+    reusedLaneBytes,
+    serializedLaneBytes: 0,
+    bytesExamined: headerBytes + reusedLaneBytes,
+    allocationProxyBytes: headerBytes,
+    outerCandidateDescriptors: CODEC_PAIR_TIE_ORDER.length,
+    outerCandidateFrames: 0,
+    lanePayloadsBuilt: payloads.size,
+    lanePayloadReferenceReuses: CODEC_PAIR_TIE_ORDER.length * 2 - payloads.size,
+  });
+}
+
 function percentile(values, fraction) {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -369,6 +427,12 @@ function createAuthorityDeltaPublisher(options = {}) {
     expandedReusedLaneBytes: 0,
     expandedSerializedLaneBytes: 0,
     expandedBytesExamined: 0,
+    outerCandidateDescriptors: 0,
+    outerCandidateFrames: 0,
+    lanePayloadsBuilt: 0,
+    lanePayloadReferenceReuses: 0,
+    sizeProofOperations: 0,
+    chosenFrameMaterializations: 0,
     selectionMilliseconds: [],
     selectionSamplesDropped: 0,
   };
@@ -508,6 +572,12 @@ function createAuthorityDeltaPublisher(options = {}) {
     codecChoice.expandedReusedLaneBytes += expanded.reusedLaneBytes;
     codecChoice.expandedSerializedLaneBytes += expanded.serializedLaneBytes;
     codecChoice.expandedBytesExamined += expanded.bytesExamined;
+    codecChoice.outerCandidateDescriptors += selected.diagnostics.outerCandidateDescriptors || 0;
+    codecChoice.outerCandidateFrames += selected.diagnostics.outerCandidateFrames || 0;
+    codecChoice.lanePayloadsBuilt += selected.diagnostics.lanePayloadsBuilt || 0;
+    codecChoice.lanePayloadReferenceReuses += selected.diagnostics.lanePayloadReferenceReuses || 0;
+    codecChoice.sizeProofOperations += selected.candidates.length + expanded.sizes.size;
+    codecChoice.chosenFrameMaterializations += selected.diagnostics.outerCandidateFrames || 0;
   }
 
   function stateFor(identity, create = true) {
@@ -622,7 +692,7 @@ function createAuthorityDeltaPublisher(options = {}) {
     }
     const frameId = state.nextFrameId;
     const pairSchema = allowMixed ? MIXED_PAIR_SCHEMA : PAIR_SCHEMA;
-    const rawBuildFrame = (nextPublic, nextOwner) => Object.freeze({
+    const frameHeader = Object.freeze({
       type: "statePair",
       pairSchema,
       matchId: identity.matchId,
@@ -640,6 +710,9 @@ function createAuthorityDeltaPublisher(options = {}) {
       overloadMode: publicView.overloadMode,
       ballparkEpoch: publicView.ballparkEpoch,
       manifestHash: publicView.manifestHash,
+    });
+    const rawBuildFrame = (nextPublic, nextOwner) => Object.freeze({
+      ...frameHeader,
       public: nextPublic,
       owner: nextOwner,
     });
@@ -653,7 +726,7 @@ function createAuthorityDeltaPublisher(options = {}) {
       : rawBuildFrame(nextPublic, nextOwner);
     const priorSemanticProjectionKind = pairProjectionKind(publicPayload.kind, ownerPayload.kind);
     const priorSemanticCombinationKind = pairCombinationKind(publicPayload.kind, ownerPayload.kind);
-    let frame = buildFrame(publicPayload, ownerPayload);
+    let frame = null;
     if (wireSize !== null && typeof wireSize !== "function") fail("invalid-wire-size", "wireSize must be a function");
     if (encodeWire !== null && typeof encodeWire !== "function") fail("invalid-wire-encoder", "encodeWire must be a function");
     if (encodeWire && !isTrustedStatePairWireEncoder(encodeWire)) {
@@ -678,12 +751,14 @@ function createAuthorityDeltaPublisher(options = {}) {
       return Object.freeze({ frame: candidate, kind, bytes: measured, expandedBytes,
         encodedWire, encodedDigest: encodedWire === null ? null : wireDigest(encodedWire) });
     };
-    const fullKeyframe = buildFrame(
-      keyframePayload(publicView, { ...profile, lane: "public",
-        prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters }),
-      keyframePayload(ownerView, { ...profile, lane: "owner",
-        prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters }),
-    );
+    const fullPublicKeyframe = publicDecision?.keyframePayload
+      || (publicPayload.kind === "keyframe" ? publicPayload : keyframePayload(publicView, { ...profile, lane: "public",
+        prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters }));
+    const fullOwnerKeyframe = ownerDecision?.keyframePayload
+      || (ownerPayload.kind === "keyframe" ? ownerPayload : keyframePayload(ownerView, { ...profile, lane: "owner",
+        prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters }));
+    let fullKeyframe = null;
+    const getFullKeyframe = () => fullKeyframe || (fullKeyframe = buildFrame(fullPublicKeyframe, fullOwnerKeyframe));
     const fullKind = pairCombinationKind("keyframe", "keyframe");
     let chosen = null;
     const exactSafeBase = Boolean((encodeWire || wireSize) && allowMixed && state.acked && !state.forceKeyframe
@@ -691,16 +766,13 @@ function createAuthorityDeltaPublisher(options = {}) {
     let fullKeyframeBytes = null;
     const choosePair = () => {
       const composedExact = exactSafeBase && encodeWire && hasTrustedStatePairCandidateSelector(encodeWire);
+      const lazyComposedExact = composedExact && hasTrustedStatePairLazyCandidateSelector(encodeWire);
       if (composedExact) {
         const lanes = {
           public: { keyframe: publicDecision.keyframePayload, delta: publicDecision.deltaPayload },
           owner: { keyframe: ownerDecision.keyframePayload, delta: ownerDecision.deltaPayload },
         };
-        const entries = CODEC_PAIR_TIE_ORDER.map((kind) => {
-          const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
-          return Object.freeze({ kind, frame: buildFrame(lanes.public[publicKind], lanes.owner[ownerKind]) });
-        });
-        codecChoice.maxEphemeralCandidates = Math.max(codecChoice.maxEphemeralCandidates, entries.length);
+        codecChoice.maxEphemeralCandidates = Math.max(codecChoice.maxEphemeralCandidates, CODEC_PAIR_TIE_ORDER.length);
         const started = performance.now();
         try {
           const canonicalProofs = new Map([
@@ -709,12 +781,20 @@ function createAuthorityDeltaPublisher(options = {}) {
             [ownerDecision.keyframePayload, ownerDecision.keyframeCanonical],
             [ownerDecision.deltaPayload, ownerDecision.deltaCanonical],
           ]);
-          const expanded = exactCanonicalCandidateSizes(entries, canonicalProofs);
+          const entries = lazyComposedExact ? null : CODEC_PAIR_TIE_ORDER.map((kind) => {
+            const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
+            return Object.freeze({ kind, frame: buildFrame(lanes.public[publicKind], lanes.owner[ownerKind]) });
+          });
+          const expanded = lazyComposedExact
+            ? exactCanonicalLaneCandidateSizes(frameHeader, lanes, canonicalProofs)
+            : exactCanonicalCandidateSizes(entries, canonicalProofs);
           for (const bytes of expanded.sizes.values()) {
             if (bytes > limits.maxPairBytes) fail("pair-too-large",
               `atomic state pair exceeds ${limits.maxPairBytes} bytes in expanded form`);
           }
-          const selected = selectTrustedStatePairWireCandidate(encodeWire, entries, CODEC_PAIR_TIE_ORDER);
+          const selected = lazyComposedExact
+            ? selectTrustedStatePairWireLaneCandidate(encodeWire, frameHeader, lanes, CODEC_PAIR_TIE_ORDER)
+            : selectTrustedStatePairWireCandidate(encodeWire, entries, CODEC_PAIR_TIE_ORDER);
           observeExactSelection(selected, expanded);
           const selectedExpandedBytes = expanded.sizes.get(selected.chosen.kind);
           chosen = Object.freeze({ frame: selected.chosen.frame, kind: selected.chosen.kind,
@@ -731,7 +811,7 @@ function createAuthorityDeltaPublisher(options = {}) {
         } catch (error) {
           countCodecFallback(`candidate-invalid:${String(error.code || error.name || "unknown")}`);
           keyframeReason = `codec-candidate-invalid:${String(error.code || error.name || "unknown")}`;
-          chosen = measureWire(fullKeyframe, fullKind);
+          chosen = measureWire(getFullKeyframe(), fullKind);
           fullKeyframeBytes = chosen.bytes;
         }
         const elapsed = performance.now() - started;
@@ -740,7 +820,7 @@ function createAuthorityDeltaPublisher(options = {}) {
         } else codecChoice.selectionSamplesDropped += 1;
       } else {
         let fullMeasured;
-        try { fullMeasured = measureWire(fullKeyframe, fullKind); }
+        try { fullMeasured = measureWire(getFullKeyframe(), fullKind); }
         catch (error) {
           forceRebase(state, `wire-fallback:${String(error?.code || error?.name || "unknown").slice(0, 64)}`);
           throw error;
@@ -784,7 +864,8 @@ function createAuthorityDeltaPublisher(options = {}) {
         if (encodeWire) countCodecFallback(state.acked ? "recovery-precedence" : "missing-exact-acked-base");
         let semanticMeasured;
         const semanticKind = priorSemanticCombinationKind;
-        try { semanticMeasured = semanticKind === fullKind ? fullMeasured : measureWire(frame, semanticKind); }
+        try { semanticMeasured = semanticKind === fullKind ? fullMeasured
+          : measureWire(buildFrame(publicPayload, ownerPayload), semanticKind); }
         catch (error) {
           countCodecFallback(`semantic-invalid:${String(error?.code || error?.name || "unknown")}`);
           semanticMeasured = fullMeasured;
@@ -1033,7 +1114,13 @@ function createAuthorityDeltaPublisher(options = {}) {
         expandedLaneSerializationReuses: codecChoice.expandedLaneSerializationReuses,
         expandedReusedLaneBytes: codecChoice.expandedReusedLaneBytes,
         expandedSerializedLaneBytes: codecChoice.expandedSerializedLaneBytes,
-        expandedBytesExamined: codecChoice.expandedBytesExamined }),
+        expandedBytesExamined: codecChoice.expandedBytesExamined,
+        outerCandidateDescriptors: codecChoice.outerCandidateDescriptors,
+        outerCandidateFrames: codecChoice.outerCandidateFrames,
+        lanePayloadsBuilt: codecChoice.lanePayloadsBuilt,
+        lanePayloadReferenceReuses: codecChoice.lanePayloadReferenceReuses,
+        sizeProofOperations: codecChoice.sizeProofOperations,
+        chosenFrameMaterializations: codecChoice.chosenFrameMaterializations }),
       fallbacks: Object.freeze(Object.fromEntries([...codecChoice.fallbacks].sort())),
       ephemeralCandidates: Object.freeze({ retainedAfterPublish: 0,
         maxPerPublish: codecChoice.maxEphemeralCandidates, configuredMaximum: CODEC_PAIR_TIE_ORDER.length }),

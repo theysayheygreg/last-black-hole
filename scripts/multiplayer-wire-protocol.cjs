@@ -10,6 +10,7 @@ const {
   encodePositionalFrame,
   decodePositionalFrame,
   composeStatePairCandidates,
+  composeStatePairLaneCandidates,
 } = require("./state-pair-positional-codec.cjs");
 const {
   CAPABILITY: BINARY_CODEC_CAPABILITY,
@@ -22,6 +23,7 @@ const {
 
 const trustedStatePairWireEncoders = new WeakSet();
 const trustedStatePairCandidateSelectors = new WeakMap();
+const trustedStatePairLazyCandidateSelectors = new WeakMap();
 
 const CLIENT_TO_SERVER = "client->server";
 const SERVER_TO_CLIENT = "server->client";
@@ -500,10 +502,12 @@ function validateAck(frame, direction) {
   }
 }
 
-function validateStatePair(frame) {
-  exactKeys(frame, new Set(["type", "pairSchema", "matchId", "sessionId", "authorityIncarnation", "recipientId",
-    "recipientIncarnation", "frameId", "statePairId", "snapshotId", "tick", "simTime", "eventWatermark",
-    "fieldRevision", "overloadMode", "ballparkEpoch", "manifestHash", "public", "owner"]));
+const STATE_PAIR_HEADER_KEYS = Object.freeze(["type", "pairSchema", "matchId", "sessionId", "authorityIncarnation",
+  "recipientId", "recipientIncarnation", "frameId", "statePairId", "snapshotId", "tick", "simTime",
+  "eventWatermark", "fieldRevision", "overloadMode", "ballparkEpoch", "manifestHash"]);
+
+function validateStatePairHeader(frame, { lanes = true } = {}) {
+  exactKeys(frame, new Set([...STATE_PAIR_HEADER_KEYS, ...(lanes ? ["public", "owner"] : [])]));
   for (const key of ["pairSchema", "matchId", "sessionId", "recipientId", "statePairId", "snapshotId", "manifestHash"]) requiredString(frame[key], key);
   const mixed = frame.pairSchema === "lbh-authority-state-pair-mixed-v1";
   if (frame.pairSchema !== "lbh-authority-state-pair-v1" && !mixed) fail("invalid-field", "unsupported statePair schema");
@@ -513,16 +517,18 @@ function validateStatePair(frame) {
   for (const key of ["eventWatermark", "fieldRevision", "ballparkEpoch"]) integer(frame[key], key);
   requiredString(frame.overloadMode, "overloadMode");
   if (!OVERLOAD_MODES.has(frame.overloadMode)) fail("invalid-overload-mode", `unsupported overloadMode ${frame.overloadMode}`);
-  const deltaCursors = {};
-  for (const lane of ["public", "owner"]) {
-    const payload = object(frame[lane], lane);
-    const allowed = payload.kind === "keyframe"
-      ? new Set(["kind", "schema", "resultHash", "projection"])
-      : new Set(["kind", "schema", "baseSnapshotId", "baseHash", "resultHash", "delta"]);
-    exactKeys(payload, allowed, lane);
-    if (payload.kind !== "keyframe" && payload.kind !== "delta") fail("invalid-field", `${lane}.kind must be keyframe or delta`);
-    for (const key of ["schema", "resultHash"]) requiredString(payload[key], `${lane}.${key}`);
-    if (payload.kind === "keyframe") {
+  return mixed;
+}
+
+function validateStatePairLane(frame, lane, input) {
+  const payload = object(input, lane);
+  const allowed = payload.kind === "keyframe"
+    ? new Set(["kind", "schema", "resultHash", "projection"])
+    : new Set(["kind", "schema", "baseSnapshotId", "baseHash", "resultHash", "delta"]);
+  exactKeys(payload, allowed, lane);
+  if (payload.kind !== "keyframe" && payload.kind !== "delta") fail("invalid-field", `${lane}.kind must be keyframe or delta`);
+  for (const key of ["schema", "resultHash"]) requiredString(payload[key], `${lane}.${key}`);
+  if (payload.kind === "keyframe") {
       if (payload.schema !== "lbh-canonical-projection-v1") fail("invalid-field", `${lane} keyframe schema is unsupported`);
       object(payload.projection, `${lane}.projection`);
       jsonValue(payload.projection, `${lane}.projection`, 0, LIMITS.maxStatePairPayloadDepth);
@@ -538,7 +544,7 @@ function validateStatePair(frame) {
         || normalized.overloadMode !== frame.overloadMode || normalized.manifestHash !== frame.manifestHash) {
         fail("invalid-field", `${lane} keyframe lineage does not match statePair header`);
       }
-    } else {
+  } else {
       if (payload.schema !== "lbh-canonical-structural-delta-v1") fail("invalid-field", `${lane} delta schema is unsupported`);
       requiredString(payload.baseSnapshotId, `${lane}.baseSnapshotId`);
       requiredString(payload.baseHash, `${lane}.baseHash`);
@@ -564,17 +570,53 @@ function validateStatePair(frame) {
       for (const key of ["statePairId", "snapshotId"]) {
         if (!Object.hasOwn(cursors, key)) fail("invalid-field", `${lane} delta must declare ${key} cursor`);
       }
-      deltaCursors[lane] = cursors;
-    }
+    return cursors;
   }
-  if (!mixed && frame.public.kind !== frame.owner.kind) fail("invalid-field", "statePair-v1 lanes must use the same transaction kind");
-  if (frame.public.kind === "delta" && frame.owner.kind === "delta") {
+  return null;
+}
+
+function validateStatePairLaneRelation(frame, mixed, publicPayload, ownerPayload, publicCursors, ownerCursors) {
+  if (!mixed && publicPayload.kind !== ownerPayload.kind) fail("invalid-field", "statePair-v1 lanes must use the same transaction kind");
+  if (publicPayload.kind === "delta" && ownerPayload.kind === "delta") {
     for (const key of ["statePairId", "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode"]) {
-      if (Object.hasOwn(deltaCursors.public, key) !== Object.hasOwn(deltaCursors.owner, key)
-        || (Object.hasOwn(deltaCursors.public, key) && deltaCursors.public[key] !== deltaCursors.owner[key])) {
+      if (Object.hasOwn(publicCursors, key) !== Object.hasOwn(ownerCursors, key)
+        || (Object.hasOwn(publicCursors, key) && publicCursors[key] !== ownerCursors[key])) {
         fail("invalid-field", `public and owner delta ${key} cursors are not atomic`);
       }
     }
+  }
+}
+
+function validateStatePair(frame) {
+  const mixed = validateStatePairHeader(frame);
+  const publicCursors = validateStatePairLane(frame, "public", frame.public);
+  const ownerCursors = validateStatePairLane(frame, "owner", frame.owner);
+  validateStatePairLaneRelation(frame, mixed, frame.public, frame.owner, publicCursors, ownerCursors);
+}
+
+function validateStatePairLaneCandidates(header, lanes, tieOrder) {
+  const mixed = validateStatePairHeader(header, { lanes: false });
+  if (!lanes?.public?.keyframe || !lanes?.public?.delta
+      || !lanes?.owner?.keyframe || !lanes?.owner?.delta) {
+    fail("invalid-field", "statePair lane candidate set is incomplete");
+  }
+  const cursors = {
+    public: {
+      keyframe: validateStatePairLane(header, "public", lanes.public.keyframe),
+      delta: validateStatePairLane(header, "public", lanes.public.delta),
+    },
+    owner: {
+      keyframe: validateStatePairLane(header, "owner", lanes.owner.keyframe),
+      delta: validateStatePairLane(header, "owner", lanes.owner.delta),
+    },
+  };
+  for (const kind of tieOrder) {
+    const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
+    const publicPayload = lanes.public[publicKind];
+    const ownerPayload = lanes.owner[ownerKind];
+    if (!publicPayload || !ownerPayload) fail("invalid-field", "statePair candidate tie order is unsupported");
+    validateStatePairLaneRelation(header, mixed, publicPayload, ownerPayload,
+      cursors.public[publicKind], cursors.owner[ownerKind]);
   }
 }
 
@@ -814,6 +856,20 @@ function createStatePairWireEncoder(codecContext, observe = null) {
       throw error;
     }
   });
+  if (!binary) {
+    trustedStatePairLazyCandidateSelectors.set(encoder, (header, lanes, tieOrder) => {
+      const started = performance.now();
+      validateStatePairLaneCandidates(header, lanes, tieOrder);
+      try {
+        const selected = composeStatePairLaneCandidates(header, lanes, context, tieOrder);
+        observe?.(selected.chosen.wire, performance.now() - started);
+        return selected;
+      } catch (error) {
+        if (error instanceof PositionalCodecError) fail(error.code, error.message);
+        throw error;
+      }
+    });
+  }
   return encoder;
 }
 
@@ -829,6 +885,16 @@ function selectTrustedStatePairWireCandidate(encoder, entries, tieOrder) {
 
 function hasTrustedStatePairCandidateSelector(encoder) {
   return trustedStatePairCandidateSelectors.has(encoder);
+}
+
+function selectTrustedStatePairWireLaneCandidate(encoder, header, lanes, tieOrder) {
+  const selector = trustedStatePairLazyCandidateSelectors.get(encoder);
+  if (!selector) throw new TypeError("encoder does not expose trusted lazy candidate composition");
+  return selector(header, lanes, tieOrder);
+}
+
+function hasTrustedStatePairLazyCandidateSelector(encoder) {
+  return trustedStatePairLazyCandidateSelectors.has(encoder);
 }
 
 module.exports = {
@@ -851,5 +917,7 @@ module.exports = {
   createStatePairWireEncoder,
   selectTrustedStatePairWireCandidate,
   hasTrustedStatePairCandidateSelector,
+  selectTrustedStatePairWireLaneCandidate,
+  hasTrustedStatePairLazyCandidateSelector,
   isTrustedStatePairWireEncoder,
 };

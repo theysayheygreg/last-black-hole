@@ -503,6 +503,59 @@ function composeStatePairCandidates(entries, context, tieOrder) {
         + [...laneCache.values()].reduce((sum, entry) => sum + entry.bytes, 0) + bytes }) });
 }
 
+// S17 release-default selector. The publisher already owns the four immutable
+// lane payloads, so carry those references as descriptors until exact sizing
+// has selected a winner. This avoids constructing four complete outer frames;
+// only the chosen statePair is materialized.
+function composeStatePairLaneCandidates(header, lanes, context, tieOrder) {
+  if (!header || typeof header !== "object" || Array.isArray(header)
+      || !lanes?.public?.keyframe || !lanes?.public?.delta
+      || !lanes?.owner?.keyframe || !lanes?.owner?.delta
+      || !Array.isArray(tieOrder) || tieOrder.length === 0) {
+    throw new TypeError("statePair header, lane candidates, and tie order are required");
+  }
+  const encodedHeader = statePairHeader(header, context);
+  const headerText = JSON.stringify(encodedHeader);
+  const prefix = headerText.slice(0, -1);
+  const prefixBytes = Buffer.byteLength(prefix, "utf8");
+  const laneCache = new Map();
+  const laneText = (payload, label) => {
+    let cached = laneCache.get(payload);
+    if (cached) return cached;
+    const text = JSON.stringify(encodeLane(payload, label));
+    cached = Object.freeze({ text, bytes: Buffer.byteLength(text, "utf8") });
+    laneCache.set(payload, cached);
+    return cached;
+  };
+  const descriptors = tieOrder.map((kind) => {
+    const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
+    const publicPayload = lanes.public[publicKind];
+    const ownerPayload = lanes.owner[ownerKind];
+    if (!publicPayload || !ownerPayload) fail("invalid-layout", "statePair candidate kind is unsupported");
+    const publicLane = laneText(publicPayload, "public");
+    const ownerLane = laneText(ownerPayload, "owner");
+    const bytes = prefixBytes + 1 + publicLane.bytes + 1 + ownerLane.bytes + 1;
+    if (bytes > MAX_CODEC_BYTES) fail("frame-too-large", "positional statePair exceeds codec limit");
+    return Object.freeze({ kind, publicPayload, ownerPayload, publicLane, ownerLane, bytes });
+  });
+  const rank = new Map(tieOrder.map((kind, index) => [kind, index]));
+  const chosen = [...descriptors].sort((a, b) => a.bytes - b.bytes
+    || (rank.get(a.kind) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.kind) ?? Number.MAX_SAFE_INTEGER))[0];
+  const wire = `${prefix},${chosen.publicLane.text},${chosen.ownerLane.text}]`;
+  const bytes = Buffer.byteLength(wire, "utf8");
+  if (bytes !== chosen.bytes) fail("internal-size-mismatch", "composed positional statePair size disagrees with exact sizing");
+  const frame = Object.freeze({ ...header, public: chosen.publicPayload, owner: chosen.ownerPayload });
+  return Object.freeze({ chosen: Object.freeze({ kind: chosen.kind, frame, bytes, wire }),
+    candidates: Object.freeze(descriptors.map((entry) => Object.freeze({ kind: entry.kind, bytes: entry.bytes }))),
+    diagnostics: Object.freeze({ headerSerializations: 1, laneSerializations: laneCache.size,
+      componentSerializations: 1 + laneCache.size, fullCandidateCompositions: 1, winnerSerializations: 1,
+      outerCandidateDescriptors: descriptors.length, outerCandidateFrames: 1,
+      lanePayloadsBuilt: laneCache.size, lanePayloadReferenceReuses: descriptors.length * 2 - laneCache.size,
+      bytesExamined: descriptors.reduce((sum, entry) => sum + entry.bytes, 0),
+      allocationProxyBytes: Buffer.byteLength(headerText, "utf8")
+        + [...laneCache.values()].reduce((sum, entry) => sum + entry.bytes, 0) + bytes }) });
+}
+
 function decodeStatePair(encoded, context) {
   exactArray(encoded, 21, "statePair");
   if (encoded[0] !== PAIR_TAG || encoded[1] !== CODEC_VERSION
@@ -649,4 +702,5 @@ module.exports = {
   CAPABILITY, CODEC_SCHEMA, CODEC_VERSION, POSITIONAL_CODEC_MANIFEST, POSITIONAL_CODEC_MANIFEST_HASH,
   MAX_CODEC_BYTES, PositionalCodecError, codecContext, encodePositionalFrame, decodePositionalFrame,
   encodePositionalValueFrame, decodePositionalValueFrame, composeStatePairCandidates,
+  composeStatePairLaneCandidates,
 };
