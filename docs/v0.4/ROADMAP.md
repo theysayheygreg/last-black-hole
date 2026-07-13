@@ -393,6 +393,29 @@ Gate:
 - encode/decode/rebase and toroidal lifecycle stay deterministic;
 - every optimization reports before/after CPU, bytes, and complexity.
 
+**S7 post-S6 product gate — rejected, next slice selected:** clean canonical
+artifact `docs/v0.4/evidence/state-pair-s7/canonical` binds composite SHA-256
+`e4f16209f70791c8b15dc6b913b99c6fc170c2a4f4491c9da654ab814ef4d068`.
+Prepared projections remain enabled. Actual 1/4/8 means are 141,755 / 132,648 /
+80,499 B/s at 9.79 / 7.24 / 4.22 Hz; target-cadence means are 144,785 /
+183,030 / 189,924 B/s. The exact mean-pair envelope after non-state traffic is
+about 6.50 KB at 10 Hz, requiring 54.9% / 64.4% / 65.7% reduction from observed
+pair means. Four and eight recipients leave `NORMAL`; eight also misses the
+clock budget. Canonical one-player correctness fails one unclassified ACK
+reject; preserve exact-zero admission and add bounded publisher/adapter reject-
+reason ordering diagnostics before assigning root cause.
+
+The next bounded implementation packet is schema cleanup plus explicit field
+cadence for the dominant high-frequency `runtimePublic` payload. It must prove
+authority/client equivalence, stale-field and recovery semantics, then rerun S7
+unchanged. Compact binary encoding remains second because the measured lexical
+bytes are a ceiling rather than a savings forecast. AOI is not first because
+dominant Shallows categories recur on nearly every sampled pair and no
+distance/visibility workload proves safe exclusion. Do not lower the 10 Hz
+contract, enable compression, or begin hosted/fleet work to bypass this gate.
+Independent 1/8 review upholds the decision, and all 25 multiplayer-network
+suites pass.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

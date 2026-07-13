@@ -5,6 +5,36 @@
 
 ---
 
+## 2026-07-13 — v0.4 S7 product gate and residual decision
+
+- Preserved the clean post-S6 S7 canonical product gate at `0b0becf`. Exact
+  accepted application traffic still rejects admission: 1/4/8 normal means
+  were 141,755 / 132,648 / 80,499 B/s at 9.79 / 7.24 / 4.22 Hz; holding the
+  observed pair-size mix at configured 10 Hz yields 144,785 / 183,030 /
+  189,924 B/s. Four and eight recipients leave `NORMAL`, and eight misses the
+  authority clock budget.
+- Added bounded privacy-safe residual attribution. The 64 KiB/s mean guard
+  permits only about 6.50 KB per state pair at 10 Hz after measured non-state
+  traffic, versus 14.43 / 18.25 / 18.94 KB observed. High-frequency
+  `runtimePublic` updates dominate; update payload and entity-envelope lexical
+  views reconcile exactly without persisting raw frames, identifiers, or owner
+  values.
+- Separated valid product rejection from invalid evidence: validation exits
+  `0`, checksum/method failure exits `1`, and explicit product rejection exits
+  `2`. The canonical composite SHA-256 is
+  `e4f16209f70791c8b15dc6b913b99c6fc170c2a4f4491c9da654ab814ef4d068`.
+  A clean independent 1/8 review reproduced the result with composite SHA-256
+  `023acc4dd693ef27ee8a2cd01abaa5decad263b4505a4b97e78148148c13c1d6`.
+- Kept the canonical one-player ACK reject as a correctness failure. Current
+  evidence does not retain its reject reason or frame, so publisher/adapter
+  recovery-ACK diagnostics must classify it before assigning a liveness root
+  cause; admission remains exact-zero in the meantime.
+- Chose one bounded schema-cleanup plus explicit field-cadence prototype as the
+  next replication slice. Codec savings remain an upper-bound proxy, AOI lacks
+  representative distance/visibility proof, and lowering the configured 10 Hz
+  cadence is not an acceptable budget shortcut. All 25 multiplayer-network
+  suites pass.
+
 ## 2026-07-12 — v0.4 network impairment evidence
 
 - Reconciled the canonical 24/48/96 architecture and roadmap with the corrected

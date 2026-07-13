@@ -2796,3 +2796,31 @@ Black holes must read in the scene-shaping layer before ASCII quantization. "Den
 
 **Where it landed:** Option 2. Wreck pickup and portal extraction are now the first two Ballpark-backed consequence adapters. Death/contact remain the next high-risk migration family.
 **Door status:** Open — continue one family at a time with parity/outcome tests before replacing old inline helpers.
+
+
+## v0.4 Replication Compaction Follow-Through
+
+### Q: Which bounded replication slice follows S7 residual attribution?
+
+| Date | Event |
+|------|-------|
+| Jul 13 | Clean post-S6 canonical evidence rejects product admission at every normal 1/4/8 population. The 64 KiB/s mean guard leaves about 6.50 KB per pair at 10 Hz after non-state traffic, versus 14.43/18.25/18.94 KB observed. |
+| Jul 13 | Privacy-safe attribution identifies high-frequency `runtimePublic` updates as the dominant public payload. Four/eight cadence and overload also fail, so recovered short-run CPU is not treated as a complete product result. |
+| Jul 13 | Decision: prototype schema cleanup plus explicit field cadence first, preserving authority, exact materialization, stale-field semantics, and recovery. Do not lower 10 Hz, and do not select codec or AOI from upper-bound byte proxies alone. |
+| Jul 13 | Canonical normal-one records one rejected ACK. Exact cause is not persisted, so exact-zero admission remains closed and publisher/adapter rejection-reason ordering diagnostics become a separate prerequisite before root-cause classification. |
+
+**Options:**
+1. **Lower publication cadence** — can reduce bytes, but violates the configured
+   movement contract and may enlarge deltas.
+2. **Schema cleanup plus explicit field cadence** (chosen) — removes or slows
+   semantically unnecessary high-frequency fields before changing transport.
+3. **Compact binary codec** — plausible later, but current lexical totals are a
+   maximum opportunity rather than a measured implementation saving.
+4. **Spatial AOI** — defer until a representative distance/visibility workload
+   proves categories can be omitted safely.
+
+**Where it landed:** Option 2. Preserve S6 prepared projections, implement one
+bounded payload prototype, prove exact authority/client equivalence and
+recovery, then rerun the unchanged S7 gate.
+**Door status:** Closed for cadence-cap, codec-first, and AOI-first. Open for the
+bounded schema/field-cadence prototype and the independent ACK-reason diagnostic.

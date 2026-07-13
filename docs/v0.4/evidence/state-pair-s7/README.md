@@ -104,6 +104,14 @@ The immutable canonical artifact is `canonical/`. Its composite SHA-256 is:
 
 `e4f16209f70791c8b15dc6b913b99c6fc170c2a4f4491c9da654ab814ef4d068`
 
+The clean independent 1/8 artifact is `review/`, composite SHA-256:
+
+`023acc4dd693ef27ee8a2cd01abaa5decad263b4505a4b97e78148148c13c1d6`
+
+Its verdict and the canonical ACK diagnostic gap are recorded in
+`INDEPENDENT-REVIEW.md`. The final `multiplayer-network` regression passes all
+25 selected suites.
+
 `--validate-artifact` exits `0`; `--admission-artifact` exits `2`. Method
 validation proves checksums, cleanup, complete accounting, required scenarios,
 prepared/profiler boundaries, raw ACK-counter consistency, target normalization,
