@@ -657,13 +657,20 @@ function compareScenarioToS6(result) {
 async function runWorkload(clientsRef, durationMs, { port, memorySamples, churn = null }) {
   const started = performance.now();
   const wallStartedAt = Date.now();
-  const steps = Math.floor(durationMs / (1000 / INPUT_HZ));
+  const intervalMs = 1000 / INPUT_HZ;
+  const plannedInputSteps = Math.floor(durationMs / intervalMs);
+  let nextStep = 0;
+  let submittedInputSteps = 0;
+  let skippedInputSteps = 0;
   let lastMemorySecond = -1;
-  for (let step = 0; step < steps; step += 1) {
-    const target = started + step * (1000 / INPUT_HZ);
+  while (nextStep < plannedInputSteps) {
+    const target = started + nextStep * intervalMs;
     const delay = target - performance.now();
     if (delay > 0) await sleep(delay);
     const elapsed = performance.now() - started;
+    if (elapsed >= durationMs) break;
+    const step = Math.min(plannedInputSteps - 1, Math.floor(elapsed / intervalMs));
+    if (step > nextStep) skippedInputSteps += step - nextStep;
     await churn?.(elapsed, clientsRef);
     const clients = clientsRef.current.filter((client) => client.ws.readyState === WebSocket.OPEN && !client.error);
     for (let seat = 0; seat < clients.length; seat += 1) {
@@ -693,11 +700,14 @@ async function runWorkload(clientsRef, durationMs, { port, memorySamples, churn 
         adapterCodec: health.body.multiplayer.adapter.statePair.positionalJson });
       lastMemorySecond = second;
     }
+    submittedInputSteps += 1;
+    nextStep = step + 1;
   }
   const remaining = started + durationMs - performance.now();
   if (remaining > 0) await sleep(remaining);
   return { wallStartedAt, wallEndedAt: Date.now(), requestedDurationMs: durationMs,
-    actualDurationMs: performance.now() - started, inputSteps: steps };
+    actualDurationMs: performance.now() - started, plannedInputSteps, submittedInputSteps,
+    skippedInputSteps };
 }
 
 async function setupPopulation(port, population, scenarioName) {
@@ -904,6 +914,9 @@ function buildS11AdmissionDecision(normalResults) {
     const worst = Object.entries(entry.targetCadenceNormalization.perRecipient)
       .sort(([, left], [, right]) => right.targetCadenceApplicationBytesPerSecond
         - left.targetCadenceApplicationBytesPerSecond)[0];
+    if (!worst) return { population: entry.population, measurementAvailable: false,
+      productAdmissionPassed: false,
+      reason: "No accepted recipient traffic landed inside the exact wall-clock measurement window; artifact method validation must reject this scenario." };
     const [recipient, row] = worst;
     const observedPair = row.observedMeanPairBytes;
     const exactBudget = Math.max(0, (TARGET_BPS - row.observedNonPairBytesPerSecond)
@@ -912,6 +925,7 @@ function buildS11AdmissionDecision(normalResults) {
     const publishBudgetMs = 1000 / TARGET_PUBLICATION_HZ;
     return {
       population: entry.population,
+      measurementAvailable: true,
       worstRecipient: recipient,
       trafficVerdict: {
         actualMeanPassed: entry.admission.steadyMeanAtOrBelow64KiB,
@@ -953,10 +967,10 @@ function buildS11AdmissionDecision(normalResults) {
     target: "Approximately 6,504 application bytes per accepted pair at 10 Hz, adjusted exactly per recipient for measured non-pair traffic.",
     populations,
     separatedVerdicts: {
-      oneAndFourClientTraffic: [1, 4].filter((population) => byPopulation[population])
+      oneAndFourClientTraffic: [1, 4].filter((population) => byPopulation[population]?.measurementAvailable)
         .map((population) => ({ population, trafficVerdict: byPopulation[population].trafficVerdict,
           exactRemainingPairReductionAt10Hz: byPopulation[population].exactRemainingPairReductionAt10Hz })),
-      eightClientCpuAndCadence: byPopulation[8] ? {
+      eightClientCpuAndCadence: byPopulation[8]?.measurementAvailable ? {
         cpuAndClockVerdict: byPopulation[8].cpuAndClockVerdict,
         cadenceVerdict: byPopulation[8].cadenceVerdict,
       } : null,
