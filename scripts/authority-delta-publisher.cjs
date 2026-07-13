@@ -26,7 +26,10 @@ const DEFAULTS = Object.freeze({
   // Match the client base ledger so an ACK delayed by the eight-seat local
   // apply loop can still be authenticated before either side evicts its base.
   maxPendingPairsPerRecipient: 12,
-  maxRetiredAckProofsPerRecipient: 64,
+  // Proofs are hash/lineage envelopes only (never projections or wire bytes).
+  // A 256-entry cap covers prolonged eight-seat event-loop backpressure while
+  // remaining a small, deterministic authority-side bound.
+  maxRetiredAckProofsPerRecipient: 256,
   maxRetainedBytesPerRecipient: 2 * 1024 * 1024,
   maxPairBytes: 256 * 1024,
 });
