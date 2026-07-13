@@ -481,7 +481,7 @@ async function runScenario({ population, scenario, runDir }) {
         if (left.status !== 200) throw new Error(`leave failed: ${JSON.stringify(left.body)}`);
         const authorityAbsence = await waitFor(async () => {
           const health = await request(port, "/health/compact");
-          return health.body.ballpark?.playerCount === population - 1;
+          return health.body.idleState?.activeHumanPlayerCount === population - 1;
         }, `${scenario}/${population} authority leave`);
         const absenceObserved = observers.length === 0 || await waitFor(() =>
           observers.every((client) => !hasMaterializedPublicEntity(client, "player", sourceId)),
