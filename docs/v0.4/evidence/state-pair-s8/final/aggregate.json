@@ -1,0 +1,813 @@
+{
+  "schemaVersion": 3,
+  "gate": "s8",
+  "profile": "review",
+  "microProfile": false,
+  "instrumentationEnabled": false,
+  "eventLoopMonitorEnabled": true,
+  "commit": "1065d1de443b6124cc0425189e8abec3d4e3713f",
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s8-prototype --review",
+  "verdict": {
+    "passed": false,
+    "normal": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": true,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      },
+      "4": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    "churn": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "targetCadenceMeanAtOrBelow64KiB": null,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": null,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": true
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "targetCadenceMeanAtOrBelow64KiB": null,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": null,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  },
+  "expectedPopulations": [
+    1,
+    4,
+    8
+  ],
+  "expectedChurnPopulations": [
+    1,
+    8
+  ],
+  "preparedProjectionsEnabled": true,
+  "scenarios": [
+    {
+      "file": "normal-1.json",
+      "scenario": "normal",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 117221.5,
+      "oneSecondP95DownlinkBytesPerSecond": 122128,
+      "oneSecondP99DownlinkBytesPerSecond": 122435,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 195
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": true,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-4.json",
+      "scenario": "normal",
+      "population": 4,
+      "worstRecipientMeanDownlinkBytesPerSecond": 195045.7,
+      "oneSecondP95DownlinkBytesPerSecond": 201925,
+      "oneSecondP99DownlinkBytesPerSecond": 207201,
+      "pairKindCounts": {
+        "public-keyframe+owner-keyframe": 78,
+        "public-delta+owner-keyframe": 698
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "correctnessPassed": false,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-8.json",
+      "scenario": "normal",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 74817.55,
+      "oneSecondP95DownlinkBytesPerSecond": 82216,
+      "oneSecondP99DownlinkBytesPerSecond": 83819,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 743
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "targetCadenceMeanAtOrBelow64KiB": false,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    {
+      "file": "churn-1.json",
+      "scenario": "churn",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 92030.26666666666,
+      "oneSecondP95DownlinkBytesPerSecond": 143441,
+      "oneSecondP99DownlinkBytesPerSecond": 151377,
+      "pairKindCounts": {
+        "public-keyframe+owner-keyframe": 5,
+        "public-delta+owner-keyframe": 286
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "targetCadenceMeanAtOrBelow64KiB": null,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": null,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": true
+      }
+    },
+    {
+      "file": "churn-8.json",
+      "scenario": "churn",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 74856.53333333334,
+      "oneSecondP95DownlinkBytesPerSecond": 82850,
+      "oneSecondP99DownlinkBytesPerSecond": 94229,
+      "pairKindCounts": {
+        "public-keyframe+owner-keyframe": 5,
+        "public-delta+owner-keyframe": 1097
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "targetCadenceMeanAtOrBelow64KiB": null,
+        "targetCadenceOneSecondP95AtOrBelow80KiB": null,
+        "receiverAcceptedCadenceAtLeast90PercentOfConfigured": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  ],
+  "s3CanonicalEvidence": null,
+  "optimizationProof": {
+    "atomicKindAlignmentCauses": 0,
+    "publicDeltaOwnerKeyframeProductPairs": 3019,
+    "allNormalPopulationsObservedMixed": true
+  },
+  "manifestIdentity": {
+    "hashes": [
+      "sha256:add68d070fdba0ba6cb9d81e1d3567a72af24ec14e0ad11195bbf9126bc9221f",
+      "sha256:f8a0d028dc75069810fbd821f1aba63c0d0756119648c724c9d517f8eeb6158b",
+      "sha256:874a3bb583c39c8f9669e301108e066ace0961f0fa52283314e6bdc7fae84ee1",
+      "sha256:223e20426a64173a58e5cff9032a8e36427d8a2dd6092a8423a295f3495a93d0",
+      "sha256:617dd1a4d6fbc0d703b0bbd954b92a8cb58963a324ac7ab67427f42fefd9fc98"
+    ],
+    "changedAcrossFreshMatches": true,
+    "reconnectReuseObserved": true
+  },
+  "failureAnalysis": [
+    {
+      "population": 1,
+      "requiredDownlinkReductionBytesPerSecond": 51685.5,
+      "requiredDownlinkReductionFraction": 0.44092167392500525,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 54678.779487179476,
+      "targetCadenceRequiredDownlinkReductionFraction": 0.45484240557136146,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 2334758,
+          "fraction": 0.9958744769517537
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 9514,
+          "fraction": 0.004058129268095016
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 158,
+          "fraction": 0.00006739378015125212
+        }
+      ]
+    },
+    {
+      "population": 4,
+      "requiredDownlinkReductionBytesPerSecond": 129509.70000000001,
+      "requiredDownlinkReductionFraction": 0.6639966941080988,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 135527.30103092786,
+      "targetCadenceRequiredDownlinkReductionFraction": 0.6740528994402656,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 10151322,
+          "fraction": 0.7792592351495795
+        },
+        {
+          "frameClass": "statePair",
+          "projectionKind": "keyframe",
+          "bytes": 2837531,
+          "fraction": 0.21782111106053195
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 37402,
+          "fraction": 0.0028711387455805826
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 632,
+          "fraction": 0.000048515044307976266
+        }
+      ]
+    },
+    {
+      "population": 8,
+      "requiredDownlinkReductionBytesPerSecond": 9281.550000000003,
+      "requiredDownlinkReductionFraction": 0.12405578637632486,
+      "targetCadenceRequiredDownlinkReductionBytesPerSecond": 94808.20322580644,
+      "targetCadenceRequiredDownlinkReductionFraction": 0.5912792687135173,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 11617769,
+          "fraction": 0.9934152650721998
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 75736,
+          "fraction": 0.00647605392356382
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 1271,
+          "fraction": 0.00010868100423642146
+        }
+      ]
+    }
+  ],
+  "residualDecisionTable": [
+    {
+      "population": 1,
+      "actualAuthorityAcceptedPairsPerSecond": 9.75,
+      "targetCadenceRequiredReductionBytesPerSecond": 54678.779487179476,
+      "exactMeanPairEnvelopeAt10Hz": {
+        "applicationBudgetBytesPerSecond": 65536,
+        "observedNonPairBytesPerSecond": 483.6,
+        "availableStatePairBytesPerSecond": 65052.4,
+        "maximumMeanPairBytes": 6505.24,
+        "observedMeanPairBytes": 11973.117948717949,
+        "requiredMeanPairReductionBytes": 5467.877948717949,
+        "requiredMeanPairReductionFraction": 0.45667953595190597
+      },
+      "measuredResidualPerSampledPair": {
+        "publicDeltaBytes": 9698.446153846155,
+        "ownerKeyframeBytes": 1685.4615384615386,
+        "outerEnvelopeBytes": 589.2102564102564
+      },
+      "topPublicComponents": [
+        {
+          "component": "runtimeMotion",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 3073.1384615384613,
+          "updateFrequencyPerPair": 20.83076923076923
+        },
+        {
+          "component": "runtimePresentation",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1473.6410256410256,
+          "updateFrequencyPerPair": 11
+        },
+        {
+          "component": "runtimeGameplay",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 880.7076923076924,
+          "updateFrequencyPerPair": 4.943589743589744
+        },
+        {
+          "component": "runtimeMotion",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 1.9435897435897436,
+          "updateFrequencyPerPair": 0.015384615384615385
+        },
+        {
+          "component": "runtimeGameplay",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 1.4102564102564104,
+          "updateFrequencyPerPair": 0.015384615384615385
+        }
+      ],
+      "topEntityCategories": [
+        {
+          "entityType": "sentry",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 3872.6923076923076,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "player",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1468.179487179487,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "scavenger",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1063.123076923077,
+          "pairFrequency": 0.8974358974358975
+        },
+        {
+          "entityType": "wreck",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 754.6051282051282,
+          "pairFrequency": 0.5076923076923077
+        },
+        {
+          "entityType": "planetoid",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 498.3538461538462,
+          "pairFrequency": 0.5025641025641026
+        },
+        {
+          "entityType": "inhibitor",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 448.0923076923077,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "fauna",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 204.4,
+          "pairFrequency": 0.5641025641025641
+        },
+        {
+          "entityType": "fauna",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 9.271794871794873,
+          "pairFrequency": 0.015384615384615385
+        }
+      ],
+      "publicUpdateLexicalComposition": {
+        "componentPayloads": {
+          "totalBytes": 1058360,
+          "identifierAndKeyBytes": 487822,
+          "stringPayloadBytes": 6073,
+          "numericPayloadBytes": 411773,
+          "booleanAndNullPayloadBytes": 28753,
+          "delimiterBytes": 123939
+        },
+        "entityEnvelopes": {
+          "totalBytes": 567688,
+          "identifierAndKeyBytes": 378023,
+          "stringPayloadBytes": 112918,
+          "numericPayloadBytes": 15339,
+          "booleanAndNullPayloadBytes": 0,
+          "delimiterBytes": 61408
+        },
+        "reconciliation": {
+          "recombined": {
+            "totalBytes": 1626048,
+            "identifierAndKeyBytes": 865845,
+            "stringPayloadBytes": 118991,
+            "numericPayloadBytes": 427112,
+            "booleanAndNullPayloadBytes": 28753,
+            "delimiterBytes": 185347
+          },
+          "expected": {
+            "totalBytes": 1626048,
+            "identifierAndKeyBytes": 865845,
+            "stringPayloadBytes": 118991,
+            "numericPayloadBytes": 427112,
+            "booleanAndNullPayloadBytes": 28753,
+            "delimiterBytes": 185347
+          },
+          "passed": true
+        }
+      },
+      "choices": [
+        {
+          "choice": "cadence-cap",
+          "measuredUpside": "A cap near 5.43 Hz would reach the 64 KiB/s mean only if observed pair size stayed constant.",
+          "latencyAndComplexityRisk": "High product-latency risk; conflicts with the configured 10 Hz contract and can enlarge deltas.",
+          "evidencePriority": 4
+        },
+        {
+          "choice": "schema-cleanup-field-cadence",
+          "measuredUpside": "Public delta is 9698.4 B/sample pair at a 10 Hz ceiling of 96984.5 B/s; target the listed high-frequency components first.",
+          "latencyAndComplexityRisk": "Low-to-medium if fields remain authoritative and cadence classes are explicit; stale-field semantics need proof.",
+          "evidencePriority": 1
+        },
+        {
+          "choice": "compact-binary-codec",
+          "measuredUpside": "Identifiers, string tokens, and JSON delimiters provide a 72988.6 B/s structural ceiling at 10 Hz, not a predicted saving.",
+          "latencyAndComplexityRisk": "Medium-to-high protocol/versioning/debuggability cost; requires exact equivalence and fallback proof.",
+          "evidencePriority": 2
+        },
+        {
+          "choice": "aoi",
+          "measuredUpside": "Entity operation arrays provide a 83525.8 B/s upper-bound proxy at 10 Hz.",
+          "representativeWorkloadVerdict": "Not justified as the first slice: dominant Shallows categories recur on nearly every sampled pair, and this gate contains no distance/visibility evidence proving safe exclusion.",
+          "latencyAndComplexityRisk": "High visibility, lifecycle, and interest-churn risk; Shallows evidence may understate larger-map upside.",
+          "evidencePriority": 3
+        }
+      ],
+      "supportedFirst": "schema-cleanup-field-cadence",
+      "caveat": "Upsides are measured byte ceilings or hold-size counterfactuals, not implementation forecasts; prototype the first choice before promotion."
+    },
+    {
+      "population": 4,
+      "actualAuthorityAcceptedPairsPerSecond": 9.7,
+      "targetCadenceRequiredReductionBytesPerSecond": 135527.30103092786,
+      "exactMeanPairEnvelopeAt10Hz": {
+        "applicationBudgetBytesPerSecond": 65536,
+        "observedNonPairBytesPerSecond": 476.6,
+        "availableStatePairBytesPerSecond": 65059.4,
+        "maximumMeanPairBytes": 6505.9400000000005,
+        "observedMeanPairBytes": 20058.670103092783,
+        "requiredMeanPairReductionBytes": 13552.730103092783,
+        "requiredMeanPairReductionFraction": 0.675654469286233
+      },
+      "measuredResidualPerSampledPair": {
+        "publicDeltaBytes": 11310.103092783505,
+        "ownerKeyframeBytes": 1930.6030927835052,
+        "outerEnvelopeBytes": 589.840206185567
+      },
+      "topPublicComponents": [
+        {
+          "component": "runtimeMotion",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 3913.7525773195875,
+          "updateFrequencyPerPair": 24.18041237113402
+        },
+        {
+          "component": "runtimePresentation",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1474.0721649484535,
+          "updateFrequencyPerPair": 11
+        },
+        {
+          "component": "runtimeGameplay",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1131.2731958762886,
+          "updateFrequencyPerPair": 5.902061855670103
+        },
+        {
+          "component": "runtimeMotion",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 1.9536082474226804,
+          "updateFrequencyPerPair": 0.015463917525773196
+        },
+        {
+          "component": "runtimeGameplay",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 1.4175257731958764,
+          "updateFrequencyPerPair": 0.015463917525773196
+        }
+      ],
+      "topEntityCategories": [
+        {
+          "entityType": "sentry",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 3873.541237113402,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "player",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 2572.237113402062,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "scavenger",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1603.2938144329896,
+          "pairFrequency": 0.9020618556701031
+        },
+        {
+          "entityType": "wreck",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 595.4587628865979,
+          "pairFrequency": 0.5103092783505154
+        },
+        {
+          "entityType": "planetoid",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 495.9020618556701,
+          "pairFrequency": 0.5
+        },
+        {
+          "entityType": "inhibitor",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 449.54639175257734,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "fauna",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 223.51546391752578,
+          "pairFrequency": 0.5927835051546392
+        },
+        {
+          "entityType": "fauna",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 9.31958762886598,
+          "pairFrequency": 0.015463917525773196
+        }
+      ],
+      "publicUpdateLexicalComposition": {
+        "componentPayloads": {
+          "totalBytes": 1264705,
+          "identifierAndKeyBytes": 593598,
+          "stringPayloadBytes": 6391,
+          "numericPayloadBytes": 472115,
+          "booleanAndNullPayloadBytes": 43695,
+          "delimiterBytes": 148906
+        },
+        "entityEnvelopes": {
+          "totalBytes": 645254,
+          "identifierAndKeyBytes": 427924,
+          "stringPayloadBytes": 129542,
+          "numericPayloadBytes": 17886,
+          "booleanAndNullPayloadBytes": 0,
+          "delimiterBytes": 69902
+        },
+        "reconciliation": {
+          "recombined": {
+            "totalBytes": 1909959,
+            "identifierAndKeyBytes": 1021522,
+            "stringPayloadBytes": 135933,
+            "numericPayloadBytes": 490001,
+            "booleanAndNullPayloadBytes": 43695,
+            "delimiterBytes": 218808
+          },
+          "expected": {
+            "totalBytes": 1909959,
+            "identifierAndKeyBytes": 1021522,
+            "stringPayloadBytes": 135933,
+            "numericPayloadBytes": 490001,
+            "booleanAndNullPayloadBytes": 43695,
+            "delimiterBytes": 218808
+          },
+          "passed": true
+        }
+      },
+      "choices": [
+        {
+          "choice": "cadence-cap",
+          "measuredUpside": "A cap near 3.24 Hz would reach the 64 KiB/s mean only if observed pair size stayed constant.",
+          "latencyAndComplexityRisk": "High product-latency risk; conflicts with the configured 10 Hz contract and can enlarge deltas.",
+          "evidencePriority": 4
+        },
+        {
+          "choice": "schema-cleanup-field-cadence",
+          "measuredUpside": "Public delta is 11310.1 B/sample pair at a 10 Hz ceiling of 113101.0 B/s; target the listed high-frequency components first.",
+          "latencyAndComplexityRisk": "Low-to-medium if fields remain authoritative and cadence classes are explicit; stale-field semantics need proof.",
+          "evidencePriority": 1
+        },
+        {
+          "choice": "compact-binary-codec",
+          "measuredUpside": "Identifiers, string tokens, and JSON delimiters provide a 84786.9 B/s structural ceiling at 10 Hz, not a predicted saving.",
+          "latencyAndComplexityRisk": "Medium-to-high protocol/versioning/debuggability cost; requires exact equivalence and fallback proof.",
+          "evidencePriority": 2
+        },
+        {
+          "choice": "aoi",
+          "measuredUpside": "Entity operation arrays provide a 98590.7 B/s upper-bound proxy at 10 Hz.",
+          "representativeWorkloadVerdict": "Not justified as the first slice: dominant Shallows categories recur on nearly every sampled pair, and this gate contains no distance/visibility evidence proving safe exclusion.",
+          "latencyAndComplexityRisk": "High visibility, lifecycle, and interest-churn risk; Shallows evidence may understate larger-map upside.",
+          "evidencePriority": 3
+        }
+      ],
+      "supportedFirst": "schema-cleanup-field-cadence",
+      "caveat": "Upsides are measured byte ceilings or hold-size counterfactuals, not implementation forecasts; prototype the first choice before promotion."
+    },
+    {
+      "population": 8,
+      "actualAuthorityAcceptedPairsPerSecond": 4.64375,
+      "targetCadenceRequiredReductionBytesPerSecond": 94808.20322580644,
+      "exactMeanPairEnvelopeAt10Hz": {
+        "applicationBudgetBytesPerSecond": 65536,
+        "observedNonPairBytesPerSecond": 481.3,
+        "availableStatePairBytesPerSecond": 65054.7,
+        "maximumMeanPairBytes": 6505.469999999999,
+        "observedMeanPairBytes": 15986.290322580646,
+        "requiredMeanPairReductionBytes": 9480.820322580646,
+        "requiredMeanPairReductionFraction": 0.5930594360086768
+      },
+      "measuredResidualPerSampledPair": {
+        "publicDeltaBytes": 13233.10752688172,
+        "ownerKeyframeBytes": 2126.2903225806454,
+        "outerEnvelopeBytes": 589.4731182795699
+      },
+      "topPublicComponents": [
+        {
+          "component": "runtimeMotion",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 5180.784946236559,
+          "updateFrequencyPerPair": 30.225806451612904
+        },
+        {
+          "component": "runtimePresentation",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1469.2043010752689,
+          "updateFrequencyPerPair": 11
+        },
+        {
+          "component": "runtimeGameplay",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1114.6021505376343,
+          "updateFrequencyPerPair": 5.741935483870968
+        },
+        {
+          "component": "runtimeMotion",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 1.3763440860215055,
+          "updateFrequencyPerPair": 0.010752688172043012
+        },
+        {
+          "component": "runtimeGameplay",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 0.978494623655914,
+          "updateFrequencyPerPair": 0.010752688172043012
+        }
+      ],
+      "topEntityCategories": [
+        {
+          "entityType": "player",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 4033.1612903225805,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "sentry",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 3860.3978494623657,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "scavenger",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1600.8387096774193,
+          "pairFrequency": 0.5483870967741935
+        },
+        {
+          "entityType": "wreck",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 1106.5806451612902,
+          "pairFrequency": 0.5913978494623656
+        },
+        {
+          "entityType": "planetoid",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 541.6344086021505,
+          "pairFrequency": 0.5483870967741935
+        },
+        {
+          "entityType": "inhibitor",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 488.23655913978496,
+          "pairFrequency": 1
+        },
+        {
+          "entityType": "fauna",
+          "operationClass": "updates",
+          "bytesPerSampledPair": 99.11827956989248,
+          "pairFrequency": 0.27956989247311825
+        },
+        {
+          "entityType": "fauna",
+          "operationClass": "creates",
+          "bytesPerSampledPair": 6.494623655913978,
+          "pairFrequency": 0.010752688172043012
+        }
+      ],
+      "publicUpdateLexicalComposition": {
+        "componentPayloads": {
+          "totalBytes": 722107,
+          "identifierAndKeyBytes": 335846,
+          "stringPayloadBytes": 3779,
+          "numericPayloadBytes": 268010,
+          "booleanAndNullPayloadBytes": 28715,
+          "delimiterBytes": 85757
+        },
+        "entityEnvelopes": {
+          "totalBytes": 372292,
+          "identifierAndKeyBytes": 245946,
+          "stringPayloadBytes": 76439,
+          "numericPayloadBytes": 9321,
+          "booleanAndNullPayloadBytes": 0,
+          "delimiterBytes": 40586
+        },
+        "reconciliation": {
+          "recombined": {
+            "totalBytes": 1094399,
+            "identifierAndKeyBytes": 581792,
+            "stringPayloadBytes": 80218,
+            "numericPayloadBytes": 277331,
+            "booleanAndNullPayloadBytes": 28715,
+            "delimiterBytes": 126343
+          },
+          "expected": {
+            "totalBytes": 1094399,
+            "identifierAndKeyBytes": 581792,
+            "stringPayloadBytes": 80218,
+            "numericPayloadBytes": 277331,
+            "booleanAndNullPayloadBytes": 28715,
+            "delimiterBytes": 126343
+          },
+          "passed": true
+        }
+      },
+      "choices": [
+        {
+          "choice": "cadence-cap",
+          "measuredUpside": "A cap near 4.07 Hz would reach the 64 KiB/s mean only if observed pair size stayed constant.",
+          "latencyAndComplexityRisk": "High product-latency risk; conflicts with the configured 10 Hz contract and can enlarge deltas.",
+          "evidencePriority": 4
+        },
+        {
+          "choice": "schema-cleanup-field-cadence",
+          "measuredUpside": "Public delta is 13233.1 B/sample pair at a 10 Hz ceiling of 132331.1 B/s; target the listed high-frequency components first.",
+          "latencyAndComplexityRisk": "Low-to-medium if fields remain authoritative and cadence classes are explicit; stale-field semantics need proof.",
+          "evidencePriority": 1
+        },
+        {
+          "choice": "compact-binary-codec",
+          "measuredUpside": "Identifiers, string tokens, and JSON delimiters provide a 98636.8 B/s structural ceiling at 10 Hz, not a predicted saving.",
+          "latencyAndComplexityRisk": "Medium-to-high protocol/versioning/debuggability cost; requires exact equivalence and fallback proof.",
+          "evidencePriority": 2
+        },
+        {
+          "choice": "aoi",
+          "measuredUpside": "Entity operation arrays provide a 117794.8 B/s upper-bound proxy at 10 Hz.",
+          "representativeWorkloadVerdict": "Not justified as the first slice: dominant Shallows categories recur on nearly every sampled pair, and this gate contains no distance/visibility evidence proving safe exclusion.",
+          "latencyAndComplexityRisk": "High visibility, lifecycle, and interest-churn risk; Shallows evidence may understate larger-map upside.",
+          "evidencePriority": 3
+        }
+      ],
+      "supportedFirst": "schema-cleanup-field-cadence",
+      "caveat": "Upsides are measured byte ceilings or hold-size counterfactuals, not implementation forecasts; prototype the first choice before promotion."
+    }
+  ],
+  "recommendation": {
+    "decision": "Do not admit runtime-public-components-v1 from this pre-gate. It preserves exact client-visible state and freshness, but component splitting alone does not close the S7 traffic gap.",
+    "nextEvidence": "Prototype one bounded compact public-entity envelope/schema encoding while preserving the same ticket-bound rollback and exact reconstruction tests, then rerun this gate.",
+    "optionalFollowup": "Only if the compact-envelope result still misses narrowly, measure one explicitly bounded presentation cadence class with a non-zero field-age contract.",
+    "defer": "Do not enable the capability by default or add binary, compression, AOI, hosted WSS, WAN, or fleet claims from this local result."
+  }
+}

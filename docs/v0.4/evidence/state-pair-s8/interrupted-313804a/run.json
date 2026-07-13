@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 3,
+  "gate": "s8",
+  "generatedAt": "2026-07-13T12:39:46.180Z",
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s8-prototype --review",
+  "profile": "review",
+  "commit": "313804a6ee1059002be6c455a7391edb377790a6",
+  "dirty": false,
+  "seed": 1403105358,
+  "config": {
+    "populations": [
+      1,
+      4,
+      8
+    ],
+    "normalWarmupMs": 5000,
+    "normalWindowMs": 20000,
+    "churnWarmupMs": 5000,
+    "churnWindowMs": 30000,
+    "inputHz": 10,
+    "targetBytesPerSecondPerPlayer": 65536,
+    "sensitivityBytesPerSecondPerPlayer": 81920,
+    "targetPublicationHz": 10,
+    "minimumHealthyObservedPublicationHz": 9,
+    "attributionSampleFramesPerPopulation": 512,
+    "env": {
+      "LBH_SIM_WS_JSON_V2": true,
+      "LBH_SIM_WS_STATE_PAIR_V1": true,
+      "LBH_SIM_WS_STATE_PAIR_MIXED_V1": true,
+      "LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1": true,
+      "LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS": true,
+      "LBH_SIM_WS_PREPARED_PROJECTIONS": true,
+      "LBH_SIM_WS_BENCH_EVENT_LOOP": true,
+      "LBH_SIM_WS_REPLICATION_ACCOUNTING": true,
+      "LBH_REPLICATION_BASELINE_CAPTURE": true,
+      "LBH_SIM_WS_STAGE_PROFILE": false
+    }
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 34359738368,
+    "node": "v22.22.3",
+    "v8": "12.4.254.21-node.56"
+  },
+  "claimBoundary": "Machine-local opt-in state-pair-mixed-v1 application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence.",
+  "s3CanonicalEvidence": null,
+  "s4CanonicalEvidence": {
+    "path": "docs/v0.4/evidence/state-pair-s4/multiplayer-state-pair-s4-2026-07-13T074927227Z-a052787",
+    "compositeSha256": "50f7e0f59bd6368ee7f8b1e84e30129eb948e422ee0d619bfea186a9386b3a92"
+  },
+  "s6PreparedDiagnosticEvidence": {
+    "path": "docs/v0.4/evidence/state-pair-s6/analysis.json",
+    "analysisSha256": "32f97d424f929b37a6da624a578fd379261ad030d3965db34d5cd0452219b1c6"
+  }
+}

@@ -1,0 +1,4499 @@
+{
+  "schemaVersion": 3,
+  "gate": "s8",
+  "scenario": "normal",
+  "population": 4,
+  "seed": 1403105358,
+  "profile": "review",
+  "topology": {
+    "matches": 1,
+    "dedicatedLogicalAuthorities": 1,
+    "simultaneousRecipients": 4,
+    "note": "One authoritative sim instance for one match; not a concurrent-match fleet-capacity result."
+  },
+  "window": {
+    "startAt": 1783946418376,
+    "endAt": 1783946438376,
+    "durationSeconds": 20,
+    "warmupSeconds": 5,
+    "workload": {
+      "wallStartedAt": 1783946418376,
+      "wallEndedAt": 1783946438385,
+      "requestedDurationMs": 20000,
+      "actualDurationMs": 20008.912166000002,
+      "inputSteps": 200
+    }
+  },
+  "accountingBoundary": {
+    "downstreamVerdict": "Exact UTF-8 JSON application bytes accepted by ws.send callback per recipient.",
+    "upstream": "Exact UTF-8 JSON application bytes accepted by the authority plus client serialized class ledger.",
+    "manifest": "Exact served canonical manifest bytes, reported separately from steady stream.",
+    "excluded": [
+      "WebSocket framing",
+      "TCP/IP",
+      "TLS/WSS",
+      "WAN",
+      "compression",
+      "hosted ingress/egress"
+    ]
+  },
+  "exactTraffic": {
+    "perRecipientMeanDownlinkBytesPerSecond": {
+      "recipient-1": 127457.75,
+      "recipient-2": 127463.4,
+      "recipient-3": 179588.5,
+      "recipient-4": 188706.85
+    },
+    "worstRecipientMeanDownlinkBytesPerSecond": 188706.85,
+    "oneSecondP95DownlinkBytesPerSecond": 207524,
+    "oneSecondP99DownlinkBytesPerSecond": 214319,
+    "acceptedBreakdown": {
+      "authority->client|ack|none|accepted": {
+        "direction": "authority->client",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 788,
+        "bytes": 37309,
+        "frameBytes": {
+          "count": 788,
+          "p50": 47,
+          "p95": 47,
+          "p99": 47,
+          "max": 163,
+          "mean": 47.34644670050761
+        }
+      },
+      "authority->client|ack|none|ackRetired": {
+        "direction": "authority->client",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "ackRetired",
+        "frames": 4,
+        "bytes": 652,
+        "frameBytes": {
+          "count": 4,
+          "p50": 163,
+          "p95": 163,
+          "p99": 163,
+          "max": 163,
+          "mean": 163
+        }
+      },
+      "authority->client|ack|none|offered": {
+        "direction": "authority->client",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "offered",
+        "frames": 804,
+        "bytes": 38056,
+        "frameBytes": {
+          "count": 804,
+          "p50": 47,
+          "p95": 47,
+          "p99": 47,
+          "max": 163,
+          "mean": 47.333333333333336
+        }
+      },
+      "authority->client|ack|none|otherTerminal": {
+        "direction": "authority->client",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "otherTerminal",
+        "frames": 16,
+        "bytes": 747,
+        "frameBytes": {
+          "count": 16,
+          "p50": 47,
+          "p95": 47,
+          "p99": 47,
+          "max": 47,
+          "mean": 46.6875
+        }
+      },
+      "authority->client|control|none|accepted": {
+        "direction": "authority->client",
+        "frameClass": "control",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 8,
+        "bytes": 632,
+        "frameBytes": {
+          "count": 8,
+          "p50": 79,
+          "p95": 79,
+          "p99": 79,
+          "max": 79,
+          "mean": 79
+        }
+      },
+      "authority->client|control|none|offered": {
+        "direction": "authority->client",
+        "frameClass": "control",
+        "projectionKind": null,
+        "metric": "offered",
+        "frames": 8,
+        "bytes": 632,
+        "frameBytes": {
+          "count": 8,
+          "p50": 79,
+          "p95": 79,
+          "p99": 79,
+          "max": 79,
+          "mean": 79
+        }
+      },
+      "authority->client|statePair|keyframe|accepted": {
+        "direction": "authority->client",
+        "frameClass": "statePair",
+        "projectionKind": "keyframe",
+        "metric": "accepted",
+        "frames": 73,
+        "bytes": 2663546,
+        "frameBytes": {
+          "count": 73,
+          "p50": 36252,
+          "p95": 38003,
+          "p99": 38088,
+          "max": 38088,
+          "mean": 36486.931506849316
+        }
+      },
+      "authority->client|statePair|keyframe|offered": {
+        "direction": "authority->client",
+        "frameClass": "statePair",
+        "projectionKind": "keyframe",
+        "metric": "offered",
+        "frames": 73,
+        "bytes": 2663546,
+        "frameBytes": {
+          "count": 73,
+          "p50": 36252,
+          "p95": 38003,
+          "p99": 38088,
+          "max": 38088,
+          "mean": 36486.931506849316
+        }
+      },
+      "authority->client|statePair|public-delta+owner-keyframe|accepted": {
+        "direction": "authority->client",
+        "frameClass": "statePair",
+        "projectionKind": "public-delta+owner-keyframe",
+        "metric": "accepted",
+        "frames": 679,
+        "bytes": 9762843,
+        "frameBytes": {
+          "count": 679,
+          "p50": 14820,
+          "p95": 16024,
+          "p99": 16621,
+          "max": 16811,
+          "mean": 14378.266568483063
+        }
+      },
+      "authority->client|statePair|public-delta+owner-keyframe|offered": {
+        "direction": "authority->client",
+        "frameClass": "statePair",
+        "projectionKind": "public-delta+owner-keyframe",
+        "metric": "offered",
+        "frames": 679,
+        "bytes": 9762843,
+        "frameBytes": {
+          "count": 679,
+          "p50": 14820,
+          "p95": 16024,
+          "p99": 16621,
+          "max": 16811,
+          "mean": 14378.266568483063
+        }
+      },
+      "client->authority|ack|none|accepted": {
+        "direction": "client->authority",
+        "frameClass": "ack",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 503,
+        "bytes": 459078,
+        "frameBytes": {
+          "count": 503,
+          "p50": 921,
+          "p95": 922,
+          "p99": 922,
+          "max": 922,
+          "mean": 912.6799204771372
+        }
+      },
+      "client->authority|action|none|accepted": {
+        "direction": "client->authority",
+        "frameClass": "action",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 4,
+        "bytes": 592,
+        "frameBytes": {
+          "count": 4,
+          "p50": 148,
+          "p95": 148,
+          "p99": 148,
+          "max": 148,
+          "mean": 148
+        }
+      },
+      "client->authority|control|none|accepted": {
+        "direction": "client->authority",
+        "frameClass": "control",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 260,
+        "bytes": 146395,
+        "frameBytes": {
+          "count": 260,
+          "p50": 579,
+          "p95": 580,
+          "p99": 583,
+          "max": 583,
+          "mean": 563.0576923076923
+        }
+      },
+      "client->authority|input|none|accepted": {
+        "direction": "client->authority",
+        "frameClass": "input",
+        "projectionKind": null,
+        "metric": "accepted",
+        "frames": 800,
+        "bytes": 132861,
+        "frameBytes": {
+          "count": 800,
+          "p50": 167,
+          "p95": 168,
+          "p99": 169,
+          "max": 169,
+          "mean": 166.07625
+        }
+      }
+    },
+    "windows": {
+      "1s": {
+        "windowMs": 1000,
+        "direction": "authority->client",
+        "recipientBytesPerSecond": {
+          "recipient-1": {
+            "count": 20,
+            "p50": 125687,
+            "p95": 137458,
+            "p99": 137772,
+            "max": 137772,
+            "mean": 127457.75
+          },
+          "recipient-2": {
+            "count": 20,
+            "p50": 125684,
+            "p95": 137459,
+            "p99": 137805,
+            "max": 137805,
+            "mean": 127463.4
+          },
+          "recipient-3": {
+            "count": 20,
+            "p50": 174655,
+            "p95": 214207,
+            "p99": 214319,
+            "max": 214319,
+            "mean": 179588.5
+          },
+          "recipient-4": {
+            "count": 20,
+            "p50": 187708,
+            "p95": 200986,
+            "p99": 207524,
+            "max": 207524,
+            "mean": 188706.85
+          }
+        },
+        "allRecipientWindowsBytesPerSecond": {
+          "count": 80,
+          "p50": 137772,
+          "p95": 207524,
+          "p99": 214319,
+          "max": 214319,
+          "mean": 155804.125
+        },
+        "aggregateBytesPerSecond": {
+          "count": 20,
+          "p50": 625803,
+          "p95": 668136,
+          "p99": 670639,
+          "max": 670639,
+          "mean": 623216.5
+        }
+      },
+      "5s": {
+        "windowMs": 5000,
+        "direction": "authority->client",
+        "recipientBytesPerSecond": {
+          "recipient-1": {
+            "count": 4,
+            "p50": 125451.2,
+            "p95": 131152,
+            "p99": 131152,
+            "max": 131152,
+            "mean": 127457.75
+          },
+          "recipient-2": {
+            "count": 4,
+            "p50": 125458,
+            "p95": 131161.6,
+            "p99": 131161.6,
+            "max": 131161.6,
+            "mean": 127463.4
+          },
+          "recipient-3": {
+            "count": 4,
+            "p50": 175183.8,
+            "p95": 191795.2,
+            "p99": 191795.2,
+            "max": 191795.2,
+            "mean": 179588.49999999997
+          },
+          "recipient-4": {
+            "count": 4,
+            "p50": 189293.4,
+            "p95": 196347.6,
+            "p99": 196347.6,
+            "max": 196347.6,
+            "mean": 188706.85
+          }
+        },
+        "allRecipientWindowsBytesPerSecond": {
+          "count": 16,
+          "p50": 131161.6,
+          "p95": 196347.6,
+          "p99": 196347.6,
+          "max": 196347.6,
+          "mean": 155804.125
+        },
+        "aggregateBytesPerSecond": {
+          "count": 4,
+          "p50": 616827.6,
+          "p95": 643026.8,
+          "p99": 643026.8,
+          "max": 643026.8,
+          "mean": 623216.5
+        }
+      },
+      "10s": {
+        "windowMs": 10000,
+        "direction": "authority->client",
+        "recipientBytesPerSecond": {
+          "recipient-1": {
+            "count": 2,
+            "p50": 124735,
+            "p95": 130180.5,
+            "p99": 130180.5,
+            "max": 130180.5,
+            "mean": 127457.75
+          },
+          "recipient-2": {
+            "count": 2,
+            "p50": 124742,
+            "p95": 130184.8,
+            "p99": 130184.8,
+            "max": 130184.8,
+            "mean": 127463.4
+          },
+          "recipient-3": {
+            "count": 2,
+            "p50": 171096.6,
+            "p95": 188080.4,
+            "p99": 188080.4,
+            "max": 188080.4,
+            "mean": 179588.5
+          },
+          "recipient-4": {
+            "count": 2,
+            "p50": 184593.2,
+            "p95": 192820.5,
+            "p99": 192820.5,
+            "max": 192820.5,
+            "mean": 188706.85
+          }
+        },
+        "allRecipientWindowsBytesPerSecond": {
+          "count": 8,
+          "p50": 130184.8,
+          "p95": 192820.5,
+          "p99": 192820.5,
+          "max": 192820.5,
+          "mean": 155804.125
+        },
+        "aggregateBytesPerSecond": {
+          "count": 2,
+          "p50": 605166.8,
+          "p95": 641266.2,
+          "p99": 641266.2,
+          "max": 641266.2,
+          "mean": 623216.5
+        }
+      }
+    },
+    "explicitCounts": {
+      "recoveryRequestsSerialized": 314,
+      "recoveryRequestSerializedBytes": 181526,
+      "recoveryIngressAccountingClass": "control",
+      "retransmittedStatePairs": 0,
+      "acceptedStatePairAcks": 503,
+      "reliableAccepted": 4,
+      "reliableAckRetired": 4,
+      "exactClassTotals": {
+        "fullKeyframeStatePairs": {
+          "frames": 73,
+          "bytes": 2663546
+        },
+        "mixedStatePairs": {
+          "frames": 679,
+          "bytes": 9762843
+        },
+        "retransmittedStatePairs": {
+          "frames": 0,
+          "bytes": 0
+        },
+        "authorityControlAccepted": {
+          "frames": 8,
+          "bytes": 632
+        },
+        "authorityAcksAccepted": {
+          "frames": 788,
+          "bytes": 37309
+        },
+        "clientStatePairAcksAccepted": {
+          "frames": 503,
+          "bytes": 459078
+        },
+        "clientControlAccepted": {
+          "frames": 260,
+          "bytes": 146395
+        },
+        "manifestsServed": {
+          "frames": 4,
+          "bytes": 9884
+        }
+      }
+    },
+    "manifestServedBytes": 9884,
+    "clientSerializedUplink": [
+      {
+        "label": "normal-4-seat-0",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 407
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 244,
+            "bytes": 224253
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41452
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 148
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-4-seat-1",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 407
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 241,
+            "bytes": 221499
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41485
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 148
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          },
+          "statePairRecovery": {
+            "frames": 1,
+            "bytes": 580
+          }
+        }
+      },
+      {
+        "label": "normal-4-seat-2",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 407
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 90,
+            "bytes": 82460
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41486
+          },
+          "statePairRecovery": {
+            "frames": 150,
+            "bytes": 86737
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 148
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      },
+      {
+        "label": "normal-4-seat-3",
+        "classes": {
+          "hello": {
+            "frames": 1,
+            "bytes": 407
+          },
+          "manifestAck": {
+            "frames": 1,
+            "bytes": 207
+          },
+          "ack:statePair": {
+            "frames": 75,
+            "bytes": 68592
+          },
+          "input": {
+            "frames": 250,
+            "bytes": 41495
+          },
+          "statePairRecovery": {
+            "frames": 163,
+            "bytes": 94209
+          },
+          "pong": {
+            "frames": 2,
+            "bytes": 148
+          },
+          "action": {
+            "frames": 1,
+            "bytes": 148
+          },
+          "ack:delivery": {
+            "frames": 1,
+            "bytes": 50
+          }
+        }
+      }
+    ]
+  },
+  "pairShape": {
+    "keyframes": 1046,
+    "deltas": 882,
+    "creates": 23,
+    "updates": 23287,
+    "despawns": 5,
+    "reincarnations": 0,
+    "rootOps": 8220,
+    "observedMaterializedLifecycle": {
+      "creates": 191,
+      "despawns": 4,
+      "reincarnations": 0,
+      "componentChanges": 16490
+    },
+    "keyframeCauseAttribution": {
+      "client-recovery-request": 48,
+      "initial-no-acked-base": 4,
+      "missing-acked-base": 42,
+      "semantic-fallback:revision-without-change": 1
+    },
+    "keyframeCauseAttributionScope": "scenario lifetime including warmup",
+    "ackBaseProof": {
+      "ackAccepted": 650,
+      "ackRejected": 0,
+      "ackBaseAdvances": 650,
+      "recipientsWithAckedBaseBeforeCleanup": 3,
+      "maxAckedFrameIdBeforeCleanup": 244,
+      "candidateAverageBytes": {
+        "comparisons": 869,
+        "publicDeltaBytes": 11838.162255466053,
+        "publicKeyframeBytes": 33918.25086306099,
+        "ownerDeltaBytes": 2312.771001150748,
+        "ownerKeyframeBytes": 1940.765247410817
+      },
+      "counterScope": "scenario lifetime including warmup; live base fields are pre-cleanup"
+    },
+    "acceptedStatePairFrameBytes": [
+      {
+        "kind": "keyframe",
+        "frames": 73,
+        "bytes": 2663546,
+        "frameBytes": {
+          "count": 73,
+          "p50": 36252,
+          "p95": 38003,
+          "p99": 38088,
+          "max": 38088,
+          "mean": 36486.931506849316
+        }
+      },
+      {
+        "kind": "public-delta+owner-keyframe",
+        "frames": 679,
+        "bytes": 9762843,
+        "frameBytes": {
+          "count": 679,
+          "p50": 14820,
+          "p95": 16024,
+          "p99": 16621,
+          "max": 16811,
+          "mean": 14378.266568483063
+        }
+      }
+    ],
+    "productWindow": {
+      "keyframes": 73,
+      "deltas": 0,
+      "mixed": 679,
+      "publicDeltaOwnerKeyframe": 679,
+      "pairKindCounts": {
+        "public-keyframe+owner-keyframe": 73,
+        "public-delta+owner-keyframe": 679
+      },
+      "atomicKindAlignmentCauses": 0,
+      "atomicKindAlignmentAbsent": true,
+      "keyframesPerAcceptedPair": 0.09707446808510638,
+      "keyframesPerSecondPerRecipient": 0.9125
+    },
+    "comparison": {
+      "acceptedS0FullJson": {
+        "downlinkBps": 255652,
+        "pairP50": 26817,
+        "pairP95": 28790
+      },
+      "s1StaticManifestApproximatePairP50": 25864,
+      "observedPairBytes": {
+        "count": 752,
+        "p50": 14984,
+        "p95": 36251,
+        "p99": 37414,
+        "max": 38088,
+        "mean": 16524.45345744681
+      },
+      "savingsVsS0PairP50": 0.4412499533877764,
+      "savingsVsS1ApproxPairP50": 0.4206619239096814
+    }
+  },
+  "cadence": {
+    "authorityTickHz": 15,
+    "publicationHz": 10,
+    "configuredPublicationHz": 10,
+    "minimumHealthyObservedPublicationHz": 9,
+    "observedPairsPerSecond": 9.4
+  },
+  "fieldFreshness": {
+    "measurement": "Every group is projected from the same authoritative snapshot; unchanged groups retain their prior revision.",
+    "maximumObservedAgePublishedBeats": {
+      "runtimeMotion": 0,
+      "runtimeGameplay": 0,
+      "runtimeIdentity": 0,
+      "runtimePresentation": 0
+    }
+  },
+  "targetCadenceNormalization": {
+    "method": "Hold each recipient's observed accepted pair-size mix constant; scale state-pair bytes from observed cadence to configured 10 Hz; leave observed non-state bytes unchanged.",
+    "admissionUse": "Counterfactual guard only. A true admission also requires observed cadence >=90% of configured cadence and NORMAL overload.",
+    "configuredPublicationHz": 10,
+    "minimumHealthyObservedPublicationHz": 9,
+    "perRecipient": {
+      "recipient-1": {
+        "observedPairsPerSecond": 9.4,
+        "targetPairsPerSecond": 10,
+        "pairScale": 1.0638297872340425,
+        "observedMeanPairBytes": 13507.88829787234,
+        "observedNonPairBytesPerSecond": 483.6,
+        "actualApplicationBytesPerSecond": 127457.75,
+        "targetCadenceApplicationBytesPerSecond": 135562.48297872342,
+        "targetCadenceRequiredReductionBytesPerSecond": 70026.48297872342,
+        "actualModeledTransportBytesPerSecond": {
+          "applicationBytes": 127457.75,
+          "webSocketBytes": 58,
+          "tls13Bytes": 430.1,
+          "ipv4TcpBytes": 4054,
+          "modeledTotalBytes": 131999.85
+        },
+        "targetCadenceModeledTransportBytesPerSecond": {
+          "applicationBytes": 135562.4829787233,
+          "webSocketBytes": 60.400000000000276,
+          "tls13Bytes": 443.30000000000126,
+          "ipv4TcpBytes": 4286.851063829783,
+          "modeledTotalBytes": 140353.03404255322
+        }
+      },
+      "recipient-2": {
+        "observedPairsPerSecond": 9.4,
+        "targetPairsPerSecond": 10,
+        "pairScale": 1.0638297872340425,
+        "observedMeanPairBytes": 13508.489361702128,
+        "observedNonPairBytesPerSecond": 483.6,
+        "actualApplicationBytesPerSecond": 127463.4,
+        "targetCadenceApplicationBytesPerSecond": 135568.49361702127,
+        "targetCadenceRequiredReductionBytesPerSecond": 70032.49361702127,
+        "actualModeledTransportBytesPerSecond": {
+          "applicationBytes": 127463.4,
+          "webSocketBytes": 58,
+          "tls13Bytes": 430.1,
+          "ipv4TcpBytes": 4056,
+          "modeledTotalBytes": 132007.5
+        },
+        "targetCadenceModeledTransportBytesPerSecond": {
+          "applicationBytes": 135568.49361702113,
+          "webSocketBytes": 60.400000000000276,
+          "tls13Bytes": 443.30000000000126,
+          "ipv4TcpBytes": 4288.978723404251,
+          "modeledTotalBytes": 140361.1723404256
+        }
+      },
+      "recipient-3": {
+        "observedPairsPerSecond": 9.4,
+        "targetPairsPerSecond": 10,
+        "pairScale": 1.0638297872340425,
+        "observedMeanPairBytes": 19056.936170212764,
+        "observedNonPairBytesPerSecond": 453.3,
+        "actualApplicationBytesPerSecond": 179588.5,
+        "targetCadenceApplicationBytesPerSecond": 191022.66170212766,
+        "targetCadenceRequiredReductionBytesPerSecond": 125486.66170212766,
+        "actualModeledTransportBytesPerSecond": {
+          "applicationBytes": 179588.5,
+          "webSocketBytes": 56.7,
+          "tls13Bytes": 495,
+          "ipv4TcpBytes": 5492,
+          "modeledTotalBytes": 185632.2
+        },
+        "targetCadenceModeledTransportBytesPerSecond": {
+          "applicationBytes": 191022.6617021277,
+          "webSocketBytes": 59.10000000000027,
+          "tls13Bytes": 513.255319148937,
+          "ipv4TcpBytes": 5818.297872340416,
+          "modeledTotalBytes": 197413.314893617
+        }
+      },
+      "recipient-4": {
+        "observedPairsPerSecond": 9.4,
+        "targetPairsPerSecond": 10,
+        "pairScale": 1.0638297872340425,
+        "observedMeanPairBytes": 20024.5,
+        "observedNonPairBytesPerSecond": 476.55,
+        "actualApplicationBytesPerSecond": 188706.85,
+        "targetCadenceApplicationBytesPerSecond": 200721.55,
+        "targetCadenceRequiredReductionBytesPerSecond": 135185.55,
+        "actualModeledTransportBytesPerSecond": {
+          "applicationBytes": 188706.85,
+          "webSocketBytes": 57.7,
+          "tls13Bytes": 520.3,
+          "ipv4TcpBytes": 5700,
+          "modeledTotalBytes": 194984.85
+        },
+        "targetCadenceModeledTransportBytesPerSecond": {
+          "applicationBytes": 200721.5500000001,
+          "webSocketBytes": 60.10000000000027,
+          "tls13Bytes": 539.4680851063837,
+          "ipv4TcpBytes": 6038.297872340414,
+          "modeledTotalBytes": 207359.41595744682
+        }
+      }
+    },
+    "worstRecipientMeanDownlinkBytesPerSecond": 200721.55,
+    "oneSecondP95DownlinkBytesPerSecond": 220740.8510638298,
+    "oneSecondP99DownlinkBytesPerSecond": 227968.93617021275,
+    "modeledTransportBoundary": {
+      "application": "Measured compact JSON application payload.",
+      "webSocket": "Modeled unmasked server frame header: 2, 4, or 10 bytes by payload length.",
+      "tls13": "Modeled 22 bytes per TLS 1.3 record with a 16,384-byte plaintext cap and one WebSocket frame per record sequence.",
+      "ipv4Tcp": "Modeled 40-byte IPv4+TCP headers per 1,460-byte TCP payload segment; excludes options, ACK-only packets, loss, and retransmit.",
+      "notAdmissionEvidence": true
+    }
+  },
+  "residualAttribution": {
+    "schema": "lbh-state-pair-residual-attribution-v1",
+    "sample": {
+      "boundedMaxFrames": 512,
+      "capturedAcceptedFrames": 188,
+      "pairKinds": {
+        "public-delta+owner-keyframe": 188
+      },
+      "encodedPairBytes": 2539483,
+      "pairBytes": {
+        "mean": 13507.88829787234,
+        "min": 10502,
+        "max": 16082
+      }
+    },
+    "exactLaneReconciliation": {
+      "encodedPairBytes": 2539483,
+      "publicBytes": 2113568,
+      "ownerBytes": 315056,
+      "outerEnvelopeBytes": 110859,
+      "reconciledBytes": 2539483,
+      "passed": true
+    },
+    "publicDelta": {
+      "bytes": 2113568,
+      "publicKeyframeBytes": 0,
+      "operationClasses": [
+        {
+          "key": "updates",
+          "bytes": 1837972,
+          "occurrences": 188,
+          "operationClass": "updates",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 9776.446808510638,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.8696062771578676,
+          "cumulativePercent": 0.8696062771578676
+        },
+        {
+          "key": "unchangedProtocolOverhead",
+          "bytes": 156454,
+          "occurrences": 188,
+          "operationClass": "unchangedProtocolOverhead",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 832.2021276595744,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.07402364153885752,
+          "cumulativePercent": 0.9436299186967252
+        },
+        {
+          "key": "rootOps",
+          "bytes": 116465,
+          "occurrences": 188,
+          "operationClass": "rootOps",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 619.4946808510638,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.055103502702539026,
+          "cumulativePercent": 0.9987334213992641
+        },
+        {
+          "key": "creates",
+          "bytes": 2184,
+          "occurrences": 188,
+          "operationClass": "creates",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 11.617021276595745,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.0010333237444927251,
+          "cumulativePercent": 0.999766745143757
+        },
+        {
+          "key": "despawns",
+          "bytes": 493,
+          "occurrences": 188,
+          "operationClass": "despawns",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 2.622340425531915,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.00023325485624309226,
+          "cumulativePercent": 1
+        }
+      ],
+      "operationClassReconciliation": {
+        "classifiedBytes": 2113568,
+        "expectedBytes": 2113568,
+        "passed": true
+      },
+      "rootFields": [
+        {
+          "key": "world",
+          "bytes": 74034,
+          "occurrences": 961,
+          "rootField": "world",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 393.79787234042556,
+          "occurrencesPerSampledPair": 5.111702127659575,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.6356759541493152,
+          "cumulativePercent": 0.6356759541493152
+        },
+        {
+          "key": "simTime",
+          "bytes": 10802,
+          "occurrences": 188,
+          "rootField": "simTime",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 57.45744680851064,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.09274889451766626,
+          "cumulativePercent": 0.7284248486669815
+        },
+        {
+          "key": "snapshotId",
+          "bytes": 10679,
+          "occurrences": 188,
+          "rootField": "snapshotId",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 56.8031914893617,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.09169278323959988,
+          "cumulativePercent": 0.8201176319065814
+        },
+        {
+          "key": "statePairId",
+          "bytes": 10491,
+          "occurrences": 188,
+          "rootField": "statePairId",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 55.8031914893617,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.09007856437556347,
+          "cumulativePercent": 0.9101961962821449
+        },
+        {
+          "key": "tick",
+          "bytes": 7508,
+          "occurrences": 188,
+          "rootField": "tick",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 39.93617021276596,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.06446571931481561,
+          "cumulativePercent": 0.9746619155969605
+        },
+        {
+          "key": "<array-overhead>",
+          "bytes": 1922,
+          "occurrences": 188,
+          "rootField": "<array-overhead>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 10.22340425531915,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.016502812003606232,
+          "cumulativePercent": 0.9911647276005667
+        },
+        {
+          "key": "eventWatermark",
+          "bytes": 1029,
+          "occurrences": 21,
+          "rootField": "eventWatermark",
+          "pairsObserved": 21,
+          "bytesPerSampledPair": 5.473404255319149,
+          "occurrencesPerSampledPair": 0.11170212765957446,
+          "pairFrequency": 0.11170212765957446,
+          "percentOfTotal": 0.008835272399433306,
+          "cumulativePercent": 1
+        }
+      ],
+      "entityTypes": [
+        {
+          "key": "updates:sentry",
+          "bytes": 732275,
+          "occurrences": 1880,
+          "operationClass": "updates",
+          "entityType": "sentry",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 3895.0797872340427,
+          "occurrencesPerSampledPair": 10,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.39783522007726624,
+          "cumulativePercent": 0.39783522007726624
+        },
+        {
+          "key": "updates:player",
+          "bytes": 483646,
+          "occurrences": 1316,
+          "operationClass": "updates",
+          "entityType": "player",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 2572.5851063829787,
+          "occurrencesPerSampledPair": 7,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.26275840749648627,
+          "cumulativePercent": 0.6605936275737525
+        },
+        {
+          "key": "updates:scavenger",
+          "bytes": 302176,
+          "occurrences": 510,
+          "operationClass": "updates",
+          "entityType": "scavenger",
+          "pairsObserved": 170,
+          "bytesPerSampledPair": 1607.3191489361702,
+          "occurrencesPerSampledPair": 2.7127659574468086,
+          "pairFrequency": 0.9042553191489362,
+          "percentOfTotal": 0.1641681819836373,
+          "cumulativePercent": 0.8247618095573898
+        },
+        {
+          "key": "updates:wreck",
+          "bytes": 96392,
+          "occurrences": 371,
+          "operationClass": "updates",
+          "entityType": "wreck",
+          "pairsObserved": 96,
+          "bytesPerSampledPair": 512.7234042553191,
+          "occurrencesPerSampledPair": 1.9734042553191489,
+          "pairFrequency": 0.5106382978723404,
+          "percentOfTotal": 0.05236848524623652,
+          "cumulativePercent": 0.8771302948036264
+        },
+        {
+          "key": "updates:planetoid",
+          "bytes": 93205,
+          "occurrences": 282,
+          "operationClass": "updates",
+          "entityType": "planetoid",
+          "pairsObserved": 94,
+          "bytesPerSampledPair": 495.77127659574467,
+          "occurrencesPerSampledPair": 1.5,
+          "pairFrequency": 0.5,
+          "percentOfTotal": 0.05063703074296077,
+          "cumulativePercent": 0.9277673255465871
+        },
+        {
+          "key": "updates:inhibitor",
+          "bytes": 86609,
+          "occurrences": 188,
+          "operationClass": "updates",
+          "entityType": "inhibitor",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 460.68617021276594,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.04705351210361128,
+          "cumulativePercent": 0.9748208376501983
+        },
+        {
+          "key": "updates:fauna",
+          "bytes": 37764,
+          "occurrences": 107,
+          "operationClass": "updates",
+          "entityType": "fauna",
+          "pairsObserved": 107,
+          "bytesPerSampledPair": 200.87234042553192,
+          "occurrencesPerSampledPair": 0.5691489361702128,
+          "pairFrequency": 0.5691489361702128,
+          "percentOfTotal": 0.02051667645488086,
+          "cumulativePercent": 0.9953375141050792
+        },
+        {
+          "key": "updates:<array-overhead>",
+          "bytes": 4846,
+          "occurrences": 188,
+          "operationClass": "updates",
+          "entityType": "<array-overhead>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 25.77659574468085,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.0026327670294553716,
+          "cumulativePercent": 0.9979702811345346
+        },
+        {
+          "key": "creates:fauna",
+          "bytes": 1808,
+          "occurrences": 3,
+          "operationClass": "creates",
+          "entityType": "fauna",
+          "pairsObserved": 3,
+          "bytesPerSampledPair": 9.617021276595745,
+          "occurrencesPerSampledPair": 0.015957446808510637,
+          "pairFrequency": 0.015957446808510637,
+          "percentOfTotal": 0.000982262234679181,
+          "cumulativePercent": 0.9989525433692138
+        },
+        {
+          "key": "updates:well",
+          "bytes": 1059,
+          "occurrences": 4,
+          "operationClass": "updates",
+          "entityType": "well",
+          "pairsObserved": 4,
+          "bytesPerSampledPair": 5.632978723404255,
+          "occurrencesPerSampledPair": 0.02127659574468085,
+          "pairFrequency": 0.02127659574468085,
+          "percentOfTotal": 0.0005753405456444983,
+          "cumulativePercent": 0.9995278839148583
+        },
+        {
+          "key": "creates:<array-overhead>",
+          "bytes": 376,
+          "occurrences": 188,
+          "operationClass": "creates",
+          "entityType": "<array-overhead>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 2,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.00020427577446867926,
+          "cumulativePercent": 0.9997321596893269
+        },
+        {
+          "key": "despawns:<array-overhead>",
+          "bytes": 376,
+          "occurrences": 188,
+          "operationClass": "despawns",
+          "entityType": "<array-overhead>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 2,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.00020427577446867926,
+          "cumulativePercent": 0.9999364354637956
+        },
+        {
+          "key": "despawns:fauna",
+          "bytes": 117,
+          "occurrences": 1,
+          "operationClass": "despawns",
+          "entityType": "fauna",
+          "pairsObserved": 1,
+          "bytesPerSampledPair": 0.6223404255319149,
+          "occurrencesPerSampledPair": 0.005319148936170213,
+          "pairFrequency": 0.005319148936170213,
+          "percentOfTotal": 0.00006356453620434966,
+          "cumulativePercent": 1
+        }
+      ],
+      "components": [
+        {
+          "key": "updates:runtimeMotion",
+          "bytes": 732286,
+          "occurrences": 4473,
+          "operationClass": "updates",
+          "component": "runtimeMotion",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 3895.1382978723404,
+          "occurrencesPerSampledPair": 23.79255319148936,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.3978411962302427,
+          "cumulativePercent": 0.3978411962302427
+        },
+        {
+          "key": "updates:<entity-envelope>",
+          "bytes": 611502,
+          "occurrences": 4658,
+          "operationClass": "updates",
+          "component": "<entity-envelope>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 3252.6702127659573,
+          "occurrencesPerSampledPair": 24.77659574468085,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.33222086340198487,
+          "cumulativePercent": 0.7300620596322276
+        },
+        {
+          "key": "updates:runtimePresentation",
+          "bytes": 272957,
+          "occurrences": 2038,
+          "operationClass": "updates",
+          "component": "runtimePresentation",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 1451.8989361702127,
+          "occurrencesPerSampledPair": 10.840425531914894,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.14829388981821087,
+          "cumulativePercent": 0.8783559494504384
+        },
+        {
+          "key": "updates:runtimeGameplay",
+          "bytes": 216381,
+          "occurrences": 1131,
+          "operationClass": "updates",
+          "component": "runtimeGameplay",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 1150.962765957447,
+          "occurrencesPerSampledPair": 6.01595744680851,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.11755690520028533,
+          "cumulativePercent": 0.9959128546507238
+        },
+        {
+          "key": "updates:<array-overhead>",
+          "bytes": 4846,
+          "occurrences": 188,
+          "operationClass": "updates",
+          "component": "<array-overhead>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 25.77659574468085,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.0026327670294553716,
+          "cumulativePercent": 0.9985456216801791
+        },
+        {
+          "key": "creates:<entity-envelope>",
+          "bytes": 717,
+          "occurrences": 3,
+          "operationClass": "creates",
+          "component": "<entity-envelope>",
+          "pairsObserved": 3,
+          "bytesPerSampledPair": 3.8138297872340425,
+          "occurrencesPerSampledPair": 0.015957446808510637,
+          "pairFrequency": 0.015957446808510637,
+          "percentOfTotal": 0.00038953651673947614,
+          "cumulativePercent": 0.9989351581969186
+        },
+        {
+          "key": "creates:runtimeMotion",
+          "bytes": 379,
+          "occurrences": 3,
+          "operationClass": "creates",
+          "component": "runtimeMotion",
+          "pairsObserved": 3,
+          "bytesPerSampledPair": 2.015957446808511,
+          "occurrencesPerSampledPair": 0.015957446808510637,
+          "pairFrequency": 0.015957446808510637,
+          "percentOfTotal": 0.00020590563437135489,
+          "cumulativePercent": 0.99914106383129
+        },
+        {
+          "key": "creates:<array-overhead>",
+          "bytes": 376,
+          "occurrences": 188,
+          "operationClass": "creates",
+          "component": "<array-overhead>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 2,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.00020427577446867926,
+          "cumulativePercent": 0.9993453396057587
+        },
+        {
+          "key": "despawns:<array-overhead>",
+          "bytes": 376,
+          "occurrences": 188,
+          "operationClass": "despawns",
+          "component": "<array-overhead>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 2,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.00020427577446867926,
+          "cumulativePercent": 0.9995496153802274
+        },
+        {
+          "key": "creates:runtimeGameplay",
+          "bytes": 275,
+          "occurrences": 3,
+          "operationClass": "creates",
+          "component": "runtimeGameplay",
+          "pairsObserved": 3,
+          "bytesPerSampledPair": 1.4627659574468086,
+          "occurrencesPerSampledPair": 0.015957446808510637,
+          "pairFrequency": 0.015957446808510637,
+          "percentOfTotal": 0.00014940382441193297,
+          "cumulativePercent": 0.9996990192046392
+        },
+        {
+          "key": "creates:runtimeIdentity",
+          "bytes": 183,
+          "occurrences": 3,
+          "operationClass": "creates",
+          "component": "runtimeIdentity",
+          "pairsObserved": 3,
+          "bytesPerSampledPair": 0.973404255319149,
+          "occurrencesPerSampledPair": 0.015957446808510637,
+          "pairFrequency": 0.015957446808510637,
+          "percentOfTotal": 0.00009942145406321358,
+          "cumulativePercent": 0.9997984406587025
+        },
+        {
+          "key": "creates:runtimePresentation",
+          "bytes": 152,
+          "occurrences": 3,
+          "operationClass": "creates",
+          "component": "runtimePresentation",
+          "pairsObserved": 3,
+          "bytesPerSampledPair": 0.8085106382978723,
+          "occurrencesPerSampledPair": 0.015957446808510637,
+          "pairFrequency": 0.015957446808510637,
+          "percentOfTotal": 0.00008257956840223204,
+          "cumulativePercent": 0.9998810202271047
+        },
+        {
+          "key": "despawns:<entity-envelope>",
+          "bytes": 117,
+          "occurrences": 1,
+          "operationClass": "despawns",
+          "component": "<despawn-record>",
+          "pairsObserved": 1,
+          "bytesPerSampledPair": 0.6223404255319149,
+          "occurrencesPerSampledPair": 0.005319148936170213,
+          "pairFrequency": 0.005319148936170213,
+          "percentOfTotal": 0.00006356453620434966,
+          "cumulativePercent": 0.999944584763309
+        },
+        {
+          "key": "creates:runtimeOrder",
+          "bytes": 102,
+          "occurrences": 3,
+          "operationClass": "creates",
+          "component": "runtimeOrder",
+          "pairsObserved": 3,
+          "bytesPerSampledPair": 0.5425531914893617,
+          "occurrencesPerSampledPair": 0.015957446808510637,
+          "pairFrequency": 0.015957446808510637,
+          "percentOfTotal": 0.0000554152366909715,
+          "cumulativePercent": 1
+        }
+      ],
+      "tokenComposition": {
+        "totalBytes": 2113568,
+        "identifierAndKeyBytes": 1057866,
+        "stringPayloadBytes": 286077,
+        "numericPayloadBytes": 487811,
+        "booleanAndNullPayloadBytes": 42461,
+        "delimiterBytes": 239353
+      },
+      "tokenCompositionByOperationClass": {
+        "rootOps": {
+          "totalBytes": 116465,
+          "identifierAndKeyBytes": 29478,
+          "stringPayloadBytes": 53262,
+          "numericPayloadBytes": 14087,
+          "booleanAndNullPayloadBytes": 0,
+          "delimiterBytes": 19638
+        },
+        "creates": {
+          "totalBytes": 2184,
+          "identifierAndKeyBytes": 933,
+          "stringPayloadBytes": 216,
+          "numericPayloadBytes": 419,
+          "booleanAndNullPayloadBytes": 12,
+          "delimiterBytes": 604
+        },
+        "updates": {
+          "totalBytes": 1837972,
+          "identifierAndKeyBytes": 981903,
+          "stringPayloadBytes": 130804,
+          "numericPayloadBytes": 472738,
+          "booleanAndNullPayloadBytes": 42449,
+          "delimiterBytes": 210078
+        },
+        "despawns": {
+          "totalBytes": 493,
+          "identifierAndKeyBytes": 56,
+          "stringPayloadBytes": 49,
+          "numericPayloadBytes": 3,
+          "booleanAndNullPayloadBytes": 0,
+          "delimiterBytes": 385
+        },
+        "unchangedProtocolOverhead": {
+          "totalBytes": 156454,
+          "identifierAndKeyBytes": 45496,
+          "stringPayloadBytes": 101746,
+          "numericPayloadBytes": 564,
+          "booleanAndNullPayloadBytes": 0,
+          "delimiterBytes": 8648
+        }
+      },
+      "updateLexicalComposition": {
+        "componentPayloads": {
+          "totalBytes": 1221624,
+          "identifierAndKeyBytes": 573303,
+          "stringPayloadBytes": 6758,
+          "numericPayloadBytes": 455746,
+          "booleanAndNullPayloadBytes": 42449,
+          "delimiterBytes": 143368
+        },
+        "entityEnvelopes": {
+          "totalBytes": 616348,
+          "identifierAndKeyBytes": 408600,
+          "stringPayloadBytes": 124046,
+          "numericPayloadBytes": 16992,
+          "booleanAndNullPayloadBytes": 0,
+          "delimiterBytes": 66710
+        },
+        "reconciliation": {
+          "recombined": {
+            "totalBytes": 1837972,
+            "identifierAndKeyBytes": 981903,
+            "stringPayloadBytes": 130804,
+            "numericPayloadBytes": 472738,
+            "booleanAndNullPayloadBytes": 42449,
+            "delimiterBytes": 210078
+          },
+          "expected": {
+            "totalBytes": 1837972,
+            "identifierAndKeyBytes": 981903,
+            "stringPayloadBytes": 130804,
+            "numericPayloadBytes": 472738,
+            "booleanAndNullPayloadBytes": 42449,
+            "delimiterBytes": 210078
+          },
+          "passed": true
+        }
+      },
+      "classificationNote": "Operation classes are exact additive. Root, entity-type, and component tables are overlapping drill-down views; JSON array/object delimiter overhead is explicit."
+    },
+    "ownerKeyframe": {
+      "bytes": 315056,
+      "ownerDeltaBytes": 0,
+      "publicSafeComponents": [
+        {
+          "key": "<owner-envelope-and-lineage>",
+          "bytes": 155596,
+          "occurrences": 188,
+          "component": "<owner-envelope-and-lineage>",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 827.6382978723404,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.49386775684322787,
+          "cumulativePercent": 0.49386775684322787
+        },
+        {
+          "key": "ownerState",
+          "bytes": 147723,
+          "occurrences": 188,
+          "component": "ownerState",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 785.7606382978723,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.4688785485754913,
+          "cumulativePercent": 0.9627463054187192
+        },
+        {
+          "key": "transient",
+          "bytes": 11737,
+          "occurrences": 188,
+          "component": "transient",
+          "pairsObserved": 188,
+          "bytesPerSampledPair": 62.430851063829785,
+          "occurrencesPerSampledPair": 1,
+          "pairFrequency": 1,
+          "percentOfTotal": 0.03725369458128079,
+          "cumulativePercent": 1
+        }
+      ],
+      "reconciliation": {
+        "classifiedBytes": 315056,
+        "expectedBytes": 315056,
+        "passed": true
+      },
+      "tokenComposition": {
+        "totalBytes": 315056,
+        "identifierAndKeyBytes": 170892,
+        "stringPayloadBytes": 80954,
+        "numericPayloadBytes": 20188,
+        "booleanAndNullPayloadBytes": 9370,
+        "delimiterBytes": 33652
+      }
+    },
+    "privacy": {
+      "rawFramesRetained": false,
+      "ownerPrivateValuesEmitted": false,
+      "ownerComponentNamesAllowlisted": [
+        "ownerState",
+        "transient"
+      ],
+      "identifiersAggregatedBySerializedLengthOnly": true
+    },
+    "safeAggregateSha256": "e9093128f13907ca457945291970ccd95f2bf4ab2b25dcf19a6a9ce5ed1ab698"
+  },
+  "performance": {
+    "machineLocal": true,
+    "authority": {
+      "simTickMs": {
+        "count": 284,
+        "totalObserved": 284,
+        "p50": 0.655125000001135,
+        "p95": 0.9054159999996045,
+        "p99": 1.179083000000901,
+        "max": 1.4580000000005384
+      },
+      "projectionAndPublishMs": {
+        "count": 190,
+        "totalObserved": 190,
+        "p50": 69.03354099999888,
+        "p95": 84.08470800000214,
+        "p99": 103.52166699999907,
+        "max": 104.59350000000086
+      },
+      "projectionSamples": 190,
+      "projectionTotalMs": 13491.072416000006,
+      "replicationCostConsumedMs": 13427.335999000006,
+      "replicationCostOverflowMs": 0,
+      "percentileScope": "bounded runtime rolling ring; reset after warmup by evidence-only endpoint"
+    },
+    "clientApplyMs": {
+      "count": 751,
+      "p50": 13.23845799999981,
+      "p95": 15.412374999999884,
+      "p99": 20.708208999996714,
+      "max": 34.58887500000128,
+      "mean": 9.802138587216943
+    },
+    "clientAckSerializeSendMs": {
+      "count": 499,
+      "p50": 0.03287500000442378,
+      "p95": 0.049458000001322944,
+      "p99": 0.08449999999720603,
+      "max": 0.11233300000458257,
+      "mean": 0.03454212825648963
+    },
+    "eventLoopLag": {
+      "unit": "milliseconds",
+      "minMs": 0.415232,
+      "meanMs": 42.506726021141645,
+      "p50Ms": 22.052863,
+      "p95Ms": 81.264639,
+      "p99Ms": 99.942399,
+      "maxMs": 160.169983
+    },
+    "authorityStageProfile": null,
+    "memory": {
+      "samples": 20,
+      "rssBytes": {
+        "count": 20,
+        "p50": 133332992,
+        "p95": 134152192,
+        "p99": 134152192,
+        "max": 134152192,
+        "mean": 132587520
+      },
+      "heapUsedBytes": {
+        "count": 20,
+        "p50": 23696480,
+        "p95": 33635200,
+        "p99": 35401048,
+        "max": 35401048,
+        "mean": 24897312.4
+      },
+      "externalBytes": {
+        "count": 20,
+        "p50": 3930375,
+        "p95": 4452231,
+        "p99": 4462162,
+        "max": 4462162,
+        "mean": 3719828.35
+      },
+      "slopeBytesPerSecond": {
+        "rss": 232019.30551802894,
+        "heapUsed": 314344.5731866739
+      },
+      "first": {
+        "rss": 130908160,
+        "heapTotal": 56344576,
+        "heapUsed": 26705736,
+        "external": 2862656,
+        "arrayBuffers": 670850
+      },
+      "last": {
+        "rss": 134152192,
+        "heapTotal": 59228160,
+        "heapUsed": 33635200,
+        "external": 4192607,
+        "arrayBuffers": 2004989
+      },
+      "ledgerLimitation": "Authority process memory includes the guarded replication-accounting ledger and cannot isolate product-only retention."
+    },
+    "boundedState": {
+      "publisherAfterCleanup": {
+        "recipients": 0,
+        "pendingPairs": 0,
+        "retainedBytes": 0,
+        "keyframes": 95,
+        "deltas": 13,
+        "mixed": 856,
+        "retransmits": 0,
+        "ackAccepted": 650,
+        "ackRejected": 0,
+        "ackBaseAdvances": 650,
+        "forcedRebases": 50,
+        "recipientsWithAckedBase": 0,
+        "maxAckedFrameId": 0,
+        "keyframeReasons": {
+          "client-recovery-request": 48,
+          "initial-no-acked-base": 4,
+          "missing-acked-base": 42,
+          "semantic-fallback:revision-without-change": 1
+        },
+        "candidateAverageBytes": {
+          "comparisons": 869,
+          "publicDeltaBytes": 11838.162255466053,
+          "publicKeyframeBytes": 33918.25086306099,
+          "ownerDeltaBytes": 2312.771001150748,
+          "ownerKeyframeBytes": 1940.765247410817
+        },
+        "limits": {
+          "maxRecipients": 16,
+          "maxPendingPairsPerRecipient": 8,
+          "maxRetainedBytesPerRecipient": 2097152,
+          "maxPairBytes": 262144
+        },
+        "ackRejectDiagnostics": {
+          "enabled": true,
+          "total": 0,
+          "byReason": {},
+          "byRelation": {},
+          "orderTransitions": {},
+          "boundedReasonCodes": 8,
+          "boundedRelations": 8
+        },
+        "preparedProjections": {
+          "enabled": true,
+          "canonicalizations": 0,
+          "hashes": 0,
+          "diffs": 1739,
+          "preparations": 0,
+          "preparedHashHits": 3856,
+          "preparedDiffs": 1739,
+          "suppliedPreparedHits": 1928,
+          "pendingReferences": 0,
+          "ackedReferences": 0,
+          "maxPendingReferences": 256,
+          "maxAckedReferences": 32
+        }
+      },
+      "maxPublisherPendingPairs": 10,
+      "maxPublisherRetainedBytes": 156022,
+      "maxAdapterQueuedBytes": 0
+    }
+  },
+  "faults": [],
+  "clients": [
+    {
+      "label": "normal-4-seat-0",
+      "membershipId": "membership-0567688c-e821-43a0-ba6d-313338872be7",
+      "connectionEpoch": 1,
+      "capabilities": [
+        "runtime-public-components-v1",
+        "state-pair-mixed-v1",
+        "state-pair-v1",
+        "static-manifest-v1"
+      ],
+      "acceptedPairs": 244,
+      "hashesVerified": 244,
+      "lastAcceptedFrameId": 244,
+      "lastStatePairAckSentFrameId": 244,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:979640c13f495652b142782341d759d3258fa1027a82a37f70cdbc62a814f114"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 407
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 244,
+          "bytes": 224253
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41452
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 148
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 905
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 115
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 13494
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1019
+        },
+        "statePair": {
+          "frames": 244,
+          "bytes": 3317503
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 158
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 244,
+        "p50": 13.790166999999201,
+        "p95": 15.154749999997875,
+        "p99": 21.649874999999156,
+        "max": 25.65779200000179,
+        "mean": 14.003654040983598
+      },
+      "ackSerializeSendMs": {
+        "count": 244,
+        "p50": 0.03374999999869033,
+        "p95": 0.04904200000237324,
+        "p99": 0.06862499999988358,
+        "max": 0.11233300000458257,
+        "mean": 0.035610299180439516
+      },
+      "shape": {
+        "keyframes": 238,
+        "deltas": 250,
+        "creates": 6,
+        "updates": 6079,
+        "despawns": 1,
+        "reincarnations": 0,
+        "rootOps": 2273
+      },
+      "faults": [],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783946438568
+      },
+      "pairKinds": {
+        "public-keyframe+owner-keyframe": 1,
+        "public-delta+owner-delta": 7,
+        "public-delta+owner-keyframe": 236
+      },
+      "observedLifecycle": {
+        "creates": 48,
+        "despawns": 1,
+        "reincarnations": 0,
+        "componentChanges": 6079
+      }
+    },
+    {
+      "label": "normal-4-seat-1",
+      "membershipId": "membership-ff8e2dc1-19f3-4b1e-8cf4-74dd74f70497",
+      "connectionEpoch": 1,
+      "capabilities": [
+        "runtime-public-components-v1",
+        "state-pair-mixed-v1",
+        "state-pair-v1",
+        "static-manifest-v1"
+      ],
+      "acceptedPairs": 241,
+      "hashesVerified": 241,
+      "lastAcceptedFrameId": 0,
+      "lastStatePairAckSentFrameId": 241,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:979640c13f495652b142782341d759d3258fa1027a82a37f70cdbc62a814f114"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 407
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 241,
+          "bytes": 221499
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41485
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 148
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        },
+        "statePairRecovery": {
+          "frames": 1,
+          "bytes": 580
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 905
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 115
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 19548
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1037
+        },
+        "statePair": {
+          "frames": 242,
+          "bytes": 3323589
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 158
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 242,
+        "p50": 13.464458000002196,
+        "p95": 14.789583000001585,
+        "p99": 28.077665999997407,
+        "max": 34.58887500000128,
+        "mean": 13.861601909090668
+      },
+      "ackSerializeSendMs": {
+        "count": 241,
+        "p50": 0.03354099999705795,
+        "p95": 0.0485000000007858,
+        "p99": 0.06599999999889405,
+        "max": 0.09687500000291038,
+        "mean": 0.03537875933601814
+      },
+      "shape": {
+        "keyframes": 240,
+        "deltas": 244,
+        "creates": 5,
+        "updates": 6022,
+        "despawns": 1,
+        "reincarnations": 0,
+        "rootOps": 2233
+      },
+      "faults": [
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 242,
+          "at": 1783946438541
+        }
+      ],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783946438589
+      },
+      "pairKinds": {
+        "public-keyframe+owner-keyframe": 2,
+        "public-delta+owner-delta": 4,
+        "public-delta+owner-keyframe": 236
+      },
+      "observedLifecycle": {
+        "creates": 48,
+        "despawns": 1,
+        "reincarnations": 0,
+        "componentChanges": 6010
+      }
+    },
+    {
+      "label": "normal-4-seat-2",
+      "membershipId": "membership-6edb9131-cbcd-4264-8dc7-bdd095738ba2",
+      "connectionEpoch": 1,
+      "capabilities": [
+        "runtime-public-components-v1",
+        "state-pair-mixed-v1",
+        "state-pair-v1",
+        "static-manifest-v1"
+      ],
+      "acceptedPairs": 90,
+      "hashesVerified": 90,
+      "lastAcceptedFrameId": 0,
+      "lastStatePairAckSentFrameId": 235,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:979640c13f495652b142782341d759d3258fa1027a82a37f70cdbc62a814f114"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 407
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 90,
+          "bytes": 82460
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41486
+        },
+        "statePairRecovery": {
+          "frames": 150,
+          "bytes": 86737
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 148
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 905
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 116
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 19931
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1038
+        },
+        "statePair": {
+          "frames": 240,
+          "bytes": 4522088
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 158
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 240,
+        "p50": 1.0207919999957085,
+        "p95": 15.615958000002138,
+        "p99": 22.90587500000038,
+        "max": 30.01966700000048,
+        "mean": 6.5801005458334965
+      },
+      "ackSerializeSendMs": {
+        "count": 90,
+        "p50": 0.03400000000692671,
+        "p95": 0.05962499999805004,
+        "p99": 0.08520800000042072,
+        "max": 0.08520800000042072,
+        "mean": 0.035439733333259935
+      },
+      "shape": {
+        "keyframes": 280,
+        "deltas": 200,
+        "creates": 12,
+        "updates": 5668,
+        "despawns": 0,
+        "reincarnations": 0,
+        "rootOps": 1888
+      },
+      "faults": [
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 6,
+          "at": 1783946413581
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 10,
+          "at": 1783946414026
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 11,
+          "at": 1783946414192
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 12,
+          "at": 1783946414275
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 13,
+          "at": 1783946414415
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 14,
+          "at": 1783946414484
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 15,
+          "at": 1783946414623
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 20,
+          "at": 1783946415142
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 21,
+          "at": 1783946415273
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 22,
+          "at": 1783946415341
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 23,
+          "at": 1783946415482
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 24,
+          "at": 1783946415550
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 25,
+          "at": 1783946415690
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 30,
+          "at": 1783946416205
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 31,
+          "at": 1783946416346
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 32,
+          "at": 1783946416426
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 33,
+          "at": 1783946416575
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 34,
+          "at": 1783946416635
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 35,
+          "at": 1783946416774
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 40,
+          "at": 1783946417287
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 41,
+          "at": 1783946417428
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 42,
+          "at": 1783946417495
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 43,
+          "at": 1783946417633
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 44,
+          "at": 1783946417701
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 45,
+          "at": 1783946417840
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 48,
+          "at": 1783946418135
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 49,
+          "at": 1783946418280
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 50,
+          "at": 1783946418358
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 51,
+          "at": 1783946418498
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 52,
+          "at": 1783946418564
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 53,
+          "at": 1783946418704
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 54,
+          "at": 1783946418769
+        },
+        {
+          "type": "recovery",
+          "reason": "lineage-mismatch",
+          "afterFrameId": 55,
+          "at": 1783946418929
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 60,
+          "at": 1783946419434
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 61,
+          "at": 1783946419567
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 62,
+          "at": 1783946419634
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 63,
+          "at": 1783946419775
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 64,
+          "at": 1783946419842
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 65,
+          "at": 1783946419982
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 70,
+          "at": 1783946420485
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 71,
+          "at": 1783946420623
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 72,
+          "at": 1783946420689
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 73,
+          "at": 1783946420828
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 74,
+          "at": 1783946420895
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 75,
+          "at": 1783946421033
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 80,
+          "at": 1783946421592
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 81,
+          "at": 1783946421730
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 82,
+          "at": 1783946421799
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 83,
+          "at": 1783946421937
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 84,
+          "at": 1783946422036
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 90,
+          "at": 1783946422752
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 91,
+          "at": 1783946422900
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 92,
+          "at": 1783946422968
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 93,
+          "at": 1783946423106
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 96,
+          "at": 1783946423417
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 97,
+          "at": 1783946423558
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 98,
+          "at": 1783946423634
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 99,
+          "at": 1783946423780
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 100,
+          "at": 1783946423879
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 101,
+          "at": 1783946424019
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 102,
+          "at": 1783946424088
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 103,
+          "at": 1783946424224
+        },
+        {
+          "type": "recovery",
+          "reason": "lineage-mismatch",
+          "afterFrameId": 104,
+          "at": 1783946424311
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 110,
+          "at": 1783946424966
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 111,
+          "at": 1783946425101
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 112,
+          "at": 1783946425168
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 113,
+          "at": 1783946425306
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 116,
+          "at": 1783946425590
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 117,
+          "at": 1783946425728
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 118,
+          "at": 1783946425805
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 119,
+          "at": 1783946425949
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 120,
+          "at": 1783946426017
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 121,
+          "at": 1783946426153
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 122,
+          "at": 1783946426220
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 123,
+          "at": 1783946426356
+        },
+        {
+          "type": "recovery",
+          "reason": "lineage-mismatch",
+          "afterFrameId": 124,
+          "at": 1783946426441
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 130,
+          "at": 1783946427074
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 131,
+          "at": 1783946427209
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 132,
+          "at": 1783946427277
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 133,
+          "at": 1783946427414
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 136,
+          "at": 1783946427700
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 137,
+          "at": 1783946427838
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 138,
+          "at": 1783946427913
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 139,
+          "at": 1783946428053
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 140,
+          "at": 1783946428117
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 141,
+          "at": 1783946428255
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 142,
+          "at": 1783946428319
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 143,
+          "at": 1783946428459
+        },
+        {
+          "type": "recovery",
+          "reason": "lineage-mismatch",
+          "afterFrameId": 144,
+          "at": 1783946428553
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 150,
+          "at": 1783946429169
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 151,
+          "at": 1783946429307
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 152,
+          "at": 1783946429370
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 153,
+          "at": 1783946429509
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 156,
+          "at": 1783946429791
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 157,
+          "at": 1783946429931
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 158,
+          "at": 1783946430006
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 159,
+          "at": 1783946430147
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 160,
+          "at": 1783946430212
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 161,
+          "at": 1783946430350
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 162,
+          "at": 1783946430417
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 163,
+          "at": 1783946430553
+        },
+        {
+          "type": "recovery",
+          "reason": "lineage-mismatch",
+          "afterFrameId": 164,
+          "at": 1783946430647
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 170,
+          "at": 1783946431275
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 171,
+          "at": 1783946431411
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 172,
+          "at": 1783946431474
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 173,
+          "at": 1783946431612
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 176,
+          "at": 1783946431899
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 177,
+          "at": 1783946432039
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 178,
+          "at": 1783946432114
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 179,
+          "at": 1783946432254
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 180,
+          "at": 1783946432320
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 181,
+          "at": 1783946432457
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 182,
+          "at": 1783946432520
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 183,
+          "at": 1783946432660
+        },
+        {
+          "type": "recovery",
+          "reason": "lineage-mismatch",
+          "afterFrameId": 184,
+          "at": 1783946432743
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 190,
+          "at": 1783946433363
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 191,
+          "at": 1783946433500
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 192,
+          "at": 1783946433564
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 193,
+          "at": 1783946433703
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 196,
+          "at": 1783946433974
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 197,
+          "at": 1783946434112
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 198,
+          "at": 1783946434186
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 199,
+          "at": 1783946434326
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 200,
+          "at": 1783946434390
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 201,
+          "at": 1783946434529
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 202,
+          "at": 1783946434594
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 203,
+          "at": 1783946434730
+        },
+        {
+          "type": "recovery",
+          "reason": "lineage-mismatch",
+          "afterFrameId": 204,
+          "at": 1783946434814
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 210,
+          "at": 1783946435435
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 211,
+          "at": 1783946435571
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 212,
+          "at": 1783946435634
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 213,
+          "at": 1783946435773
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 216,
+          "at": 1783946436045
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 217,
+          "at": 1783946436184
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 218,
+          "at": 1783946436257
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 219,
+          "at": 1783946436398
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 220,
+          "at": 1783946436462
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 221,
+          "at": 1783946436602
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 222,
+          "at": 1783946436676
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 223,
+          "at": 1783946436813
+        },
+        {
+          "type": "recovery",
+          "reason": "lineage-mismatch",
+          "afterFrameId": 224,
+          "at": 1783946436896
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 230,
+          "at": 1783946437518
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 231,
+          "at": 1783946437654
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 232,
+          "at": 1783946437728
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 233,
+          "at": 1783946437866
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 236,
+          "at": 1783946438135
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 237,
+          "at": 1783946438273
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 238,
+          "at": 1783946438347
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 239,
+          "at": 1783946438506
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 240,
+          "at": 1783946438551
+        }
+      ],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783946438612
+      },
+      "pairKinds": {
+        "public-keyframe+owner-keyframe": 42,
+        "public-delta+owner-delta": 2,
+        "public-delta+owner-keyframe": 196
+      },
+      "observedLifecycle": {
+        "creates": 47,
+        "despawns": 1,
+        "reincarnations": 0,
+        "componentChanges": 2421
+      }
+    },
+    {
+      "label": "normal-4-seat-3",
+      "membershipId": "membership-76bf819f-22a4-43f2-a418-337589357622",
+      "connectionEpoch": 1,
+      "capabilities": [
+        "runtime-public-components-v1",
+        "state-pair-mixed-v1",
+        "state-pair-v1",
+        "static-manifest-v1"
+      ],
+      "acceptedPairs": 75,
+      "hashesVerified": 75,
+      "lastAcceptedFrameId": 0,
+      "lastStatePairAckSentFrameId": 237,
+      "manifest": {
+        "reused": false,
+        "servedBytes": 2471,
+        "hash": "sha256:979640c13f495652b142782341d759d3258fa1027a82a37f70cdbc62a814f114"
+      },
+      "uplinkSerialized": {
+        "hello": {
+          "frames": 1,
+          "bytes": 407
+        },
+        "manifestAck": {
+          "frames": 1,
+          "bytes": 207
+        },
+        "ack:statePair": {
+          "frames": 75,
+          "bytes": 68592
+        },
+        "input": {
+          "frames": 250,
+          "bytes": 41495
+        },
+        "statePairRecovery": {
+          "frames": 163,
+          "bytes": 94209
+        },
+        "pong": {
+          "frames": 2,
+          "bytes": 148
+        },
+        "action": {
+          "frames": 1,
+          "bytes": 148
+        },
+        "ack:delivery": {
+          "frames": 1,
+          "bytes": 50
+        }
+      },
+      "downlinkObserved": {
+        "welcome": {
+          "frames": 1,
+          "bytes": 905
+        },
+        "rebase": {
+          "frames": 1,
+          "bytes": 116
+        },
+        "publicState": {
+          "frames": 1,
+          "bytes": 20295
+        },
+        "ownerState": {
+          "frames": 1,
+          "bytes": 1038
+        },
+        "statePair": {
+          "frames": 238,
+          "bytes": 4803194
+        },
+        "ack:input": {
+          "frames": 250,
+          "bytes": 11642
+        },
+        "heartbeat": {
+          "frames": 2,
+          "bytes": 158
+        },
+        "ack:action": {
+          "frames": 1,
+          "bytes": 163
+        }
+      },
+      "clientApplyMs": {
+        "count": 238,
+        "p50": 1.0932919999977457,
+        "p95": 15.776708000004874,
+        "p99": 16.392707999999402,
+        "max": 25.033375000006345,
+        "mean": 5.493441689075553
+      },
+      "ackSerializeSendMs": {
+        "count": 75,
+        "p50": 0.036458000002312474,
+        "p95": 0.05879199999617413,
+        "p99": 0.0940409999966505,
+        "max": 0.0940409999966505,
+        "mean": 0.03842445333318513
+      },
+      "shape": {
+        "keyframes": 288,
+        "deltas": 188,
+        "creates": 0,
+        "updates": 5518,
+        "despawns": 3,
+        "reincarnations": 0,
+        "rootOps": 1826
+      },
+      "faults": [
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 4,
+          "at": 1783946413597
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 8,
+          "at": 1783946414042
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 9,
+          "at": 1783946414217
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 10,
+          "at": 1783946414291
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 11,
+          "at": 1783946414430
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 12,
+          "at": 1783946414500
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 13,
+          "at": 1783946414637
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 14,
+          "at": 1783946414717
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 18,
+          "at": 1783946415148
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 19,
+          "at": 1783946415288
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 20,
+          "at": 1783946415356
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 21,
+          "at": 1783946415497
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 22,
+          "at": 1783946415566
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 23,
+          "at": 1783946415705
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 24,
+          "at": 1783946415784
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 28,
+          "at": 1783946416220
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 29,
+          "at": 1783946416361
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 30,
+          "at": 1783946416442
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 31,
+          "at": 1783946416583
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 32,
+          "at": 1783946416650
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 33,
+          "at": 1783946416789
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 34,
+          "at": 1783946416871
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 38,
+          "at": 1783946417303
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 39,
+          "at": 1783946417443
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 40,
+          "at": 1783946417510
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 41,
+          "at": 1783946417649
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 42,
+          "at": 1783946417716
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 43,
+          "at": 1783946417855
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 44,
+          "at": 1783946417933
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 48,
+          "at": 1783946418374
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 49,
+          "at": 1783946418512
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 50,
+          "at": 1783946418579
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 51,
+          "at": 1783946418718
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 52,
+          "at": 1783946418785
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 53,
+          "at": 1783946418933
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 54,
+          "at": 1783946419011
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 58,
+          "at": 1783946419442
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 59,
+          "at": 1783946419581
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 60,
+          "at": 1783946419649
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 61,
+          "at": 1783946419790
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 62,
+          "at": 1783946419857
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 63,
+          "at": 1783946419996
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 64,
+          "at": 1783946420074
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 68,
+          "at": 1783946420500
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 69,
+          "at": 1783946420638
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 70,
+          "at": 1783946420705
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 71,
+          "at": 1783946420844
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 72,
+          "at": 1783946420910
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 73,
+          "at": 1783946421048
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 74,
+          "at": 1783946421124
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 78,
+          "at": 1783946421601
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 79,
+          "at": 1783946421745
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 80,
+          "at": 1783946421814
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 81,
+          "at": 1783946421953
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 82,
+          "at": 1783946422052
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 83,
+          "at": 1783946422200
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 84,
+          "at": 1783946422277
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 88,
+          "at": 1783946422764
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 89,
+          "at": 1783946422915
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 90,
+          "at": 1783946422983
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 91,
+          "at": 1783946423121
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 92,
+          "at": 1783946423230
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 93,
+          "at": 1783946423368
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 94,
+          "at": 1783946423432
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 98,
+          "at": 1783946423897
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 99,
+          "at": 1783946424034
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 100,
+          "at": 1783946424103
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 101,
+          "at": 1783946424240
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 102,
+          "at": 1783946424316
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 103,
+          "at": 1783946424464
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 104,
+          "at": 1783946424553
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 108,
+          "at": 1783946424980
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 109,
+          "at": 1783946425116
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 110,
+          "at": 1783946425184
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 111,
+          "at": 1783946425321
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 112,
+          "at": 1783946425400
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 113,
+          "at": 1783946425538
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 114,
+          "at": 1783946425606
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 118,
+          "at": 1783946426034
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 119,
+          "at": 1783946426168
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 120,
+          "at": 1783946426236
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 121,
+          "at": 1783946426371
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 122,
+          "at": 1783946426446
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 123,
+          "at": 1783946426591
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 124,
+          "at": 1783946426668
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 128,
+          "at": 1783946427088
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 129,
+          "at": 1783946427224
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 130,
+          "at": 1783946427292
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 131,
+          "at": 1783946427429
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 132,
+          "at": 1783946427516
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 133,
+          "at": 1783946427652
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 134,
+          "at": 1783946427715
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 138,
+          "at": 1783946428131
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 139,
+          "at": 1783946428269
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 140,
+          "at": 1783946428333
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 141,
+          "at": 1783946428474
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 142,
+          "at": 1783946428557
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 143,
+          "at": 1783946428701
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 144,
+          "at": 1783946428773
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 148,
+          "at": 1783946429184
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 149,
+          "at": 1783946429321
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 150,
+          "at": 1783946429384
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 151,
+          "at": 1783946429523
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 152,
+          "at": 1783946429609
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 153,
+          "at": 1783946429744
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 154,
+          "at": 1783946429806
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 158,
+          "at": 1783946430226
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 159,
+          "at": 1783946430365
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 160,
+          "at": 1783946430431
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 161,
+          "at": 1783946430567
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 162,
+          "at": 1783946430652
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 163,
+          "at": 1783946430801
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 164,
+          "at": 1783946430873
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 168,
+          "at": 1783946431288
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 169,
+          "at": 1783946431424
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 170,
+          "at": 1783946431489
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 171,
+          "at": 1783946431627
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 172,
+          "at": 1783946431714
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 173,
+          "at": 1783946431851
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 174,
+          "at": 1783946431914
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 178,
+          "at": 1783946432334
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 179,
+          "at": 1783946432471
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 180,
+          "at": 1783946432535
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 181,
+          "at": 1783946432675
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 182,
+          "at": 1783946432748
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 183,
+          "at": 1783946432892
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 184,
+          "at": 1783946432965
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 188,
+          "at": 1783946433377
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 189,
+          "at": 1783946433515
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 190,
+          "at": 1783946433579
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 191,
+          "at": 1783946433718
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 192,
+          "at": 1783946433792
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 193,
+          "at": 1783946433927
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 194,
+          "at": 1783946433989
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 198,
+          "at": 1783946434405
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 199,
+          "at": 1783946434543
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 200,
+          "at": 1783946434609
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 201,
+          "at": 1783946434744
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 202,
+          "at": 1783946434818
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 203,
+          "at": 1783946434964
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 204,
+          "at": 1783946435035
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 208,
+          "at": 1783946435446
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 209,
+          "at": 1783946435585
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 210,
+          "at": 1783946435649
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 211,
+          "at": 1783946435788
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 212,
+          "at": 1783946435862
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 213,
+          "at": 1783946435998
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 214,
+          "at": 1783946436060
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 218,
+          "at": 1783946436476
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 219,
+          "at": 1783946436617
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 220,
+          "at": 1783946436693
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 221,
+          "at": 1783946436828
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 222,
+          "at": 1783946436900
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 223,
+          "at": 1783946437044
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 224,
+          "at": 1783946437117
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 228,
+          "at": 1783946437529
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 229,
+          "at": 1783946437668
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 230,
+          "at": 1783946437744
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 231,
+          "at": 1783946437879
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 232,
+          "at": 1783946437953
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 233,
+          "at": 1783946438088
+        },
+        {
+          "type": "recovery",
+          "reason": "missing-base",
+          "afterFrameId": 234,
+          "at": 1783946438149
+        },
+        {
+          "type": "recovery",
+          "reason": "base-mismatch",
+          "afterFrameId": 238,
+          "at": 1783946438567
+        }
+      ],
+      "error": null,
+      "close": {
+        "code": 1000,
+        "reason": "gate complete",
+        "at": 1783946438632
+      },
+      "pairKinds": {
+        "public-keyframe+owner-keyframe": 50,
+        "public-delta+owner-keyframe": 188
+      },
+      "observedLifecycle": {
+        "creates": 48,
+        "despawns": 1,
+        "reincarnations": 0,
+        "componentChanges": 1980
+      }
+    }
+  ],
+  "correctness": {
+    "mixedCapabilityNegotiated": true,
+    "allClientHashesMatched": true,
+    "ownerPrivacyAndAtomicObservationVerified": true,
+    "noClientErrors": true,
+    "publisherDrained": true,
+    "statePairAcksConverged": true,
+    "ackRejectsExactlyZero": true,
+    "accountingComplete": true,
+    "faultConvergence": true,
+    "lifecycleObserved": true
+  },
+  "admission": {
+    "steadyMeanAtOrBelow64KiB": false,
+    "steadyOneSecondP95AtOrBelow80KiB": false,
+    "targetCadenceMeanAtOrBelow64KiB": false,
+    "targetCadenceOneSecondP95AtOrBelow80KiB": false,
+    "observedCadenceAtLeast90PercentOfConfigured": true,
+    "correctnessPassed": true,
+    "authorityWithinExistingClockBudget": true,
+    "overloadStayedNormal": true,
+    "passed": false
+  },
+  "diagnostics": {
+    "projectionErrors": 0,
+    "skippedBeats": 0,
+    "statePair": {
+      "matchId": "08e96dcf-05a8-48d0-8a63-ef000c319f6a",
+      "authorityIncarnation": 3,
+      "manifestSchema": "lbh-session-replication-manifest-v1",
+      "manifestHash": "sha256:979640c13f495652b142782341d759d3258fa1027a82a37f70cdbc62a814f114",
+      "admissions": 4,
+      "preparedProjections": {
+        "enabled": true,
+        "preparations": 1928,
+        "canonicalizations": 1928,
+        "hashes": 1928
+      },
+      "runtimePublicComponents": {
+        "capability": "runtime-public-components-v1",
+        "schema": "lbh-runtime-public-components-v1",
+        "enabledAdmissions": 4,
+        "cadence": {
+          "motionHz": 10,
+          "otherGroups": "on-change",
+          "lowerCadenceTimers": 0
+        },
+        "fieldFreshness": {
+          "measurement": "Every group is projected from the same authoritative snapshot; unchanged groups retain their prior revision.",
+          "maximumObservedAgePublishedBeats": {
+            "runtimeMotion": 0,
+            "runtimeGameplay": 0,
+            "runtimeIdentity": 0,
+            "runtimePresentation": 0
+          }
+        }
+      },
+      "publisher": {
+        "recipients": 4,
+        "pendingPairs": 6,
+        "retainedBytes": 92962,
+        "keyframes": 95,
+        "deltas": 13,
+        "mixed": 856,
+        "retransmits": 0,
+        "ackAccepted": 650,
+        "ackRejected": 0,
+        "ackBaseAdvances": 650,
+        "forcedRebases": 50,
+        "recipientsWithAckedBase": 3,
+        "maxAckedFrameId": 244,
+        "keyframeReasons": {
+          "client-recovery-request": 48,
+          "initial-no-acked-base": 4,
+          "missing-acked-base": 42,
+          "semantic-fallback:revision-without-change": 1
+        },
+        "candidateAverageBytes": {
+          "comparisons": 869,
+          "publicDeltaBytes": 11838.162255466053,
+          "publicKeyframeBytes": 33918.25086306099,
+          "ownerDeltaBytes": 2312.771001150748,
+          "ownerKeyframeBytes": 1940.765247410817
+        },
+        "limits": {
+          "maxRecipients": 16,
+          "maxPendingPairsPerRecipient": 8,
+          "maxRetainedBytesPerRecipient": 2097152,
+          "maxPairBytes": 262144
+        },
+        "ackRejectDiagnostics": {
+          "enabled": true,
+          "total": 0,
+          "byReason": {},
+          "byRelation": {},
+          "orderTransitions": {},
+          "boundedReasonCodes": 8,
+          "boundedRelations": 8
+        },
+        "preparedProjections": {
+          "enabled": true,
+          "canonicalizations": 0,
+          "hashes": 0,
+          "diffs": 1739,
+          "preparations": 0,
+          "preparedHashHits": 3856,
+          "preparedDiffs": 1739,
+          "suppliedPreparedHits": 1928,
+          "pendingReferences": 12,
+          "ackedReferences": 6,
+          "maxPendingReferences": 256,
+          "maxAckedReferences": 32
+        }
+      }
+    },
+    "manifestTransfers": {
+      "direction": "authority->client",
+      "frameClass": "manifest",
+      "servedBytes": 9884,
+      "servedFetches": 4,
+      "rejectedFetches": 0,
+      "recipients": [
+        {
+          "recipient": "dd8hFamTGaJS-io-",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "jkjr6tQaIRCdCvmP",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "e_TGAPd7hOS46hy3",
+          "fetches": 1,
+          "bytes": 2471
+        },
+        {
+          "recipient": "JoDmUH2l2DjwzxIY",
+          "fetches": 1,
+          "bytes": 2471
+        }
+      ],
+      "recipientCapacity": 16,
+      "registry": {
+        "retained": 0,
+        "verified": 0,
+        "cachedBindings": 4,
+        "retries": 0,
+        "ttlMs": 10000,
+        "cacheTtlMs": 21600000,
+        "capacity": 64
+      }
+    }
+  },
+  "limitations": [
+    "Local macOS loopback only",
+    "raw WebSocket without TLS",
+    "one match at a time",
+    "no hosted fleet, WSS, WAN, packet retransmission, compression, AOI, binary codec, or 24-96-client claim"
+  ],
+  "comparisonToS4": {
+    "artifact": "docs/v0.4/evidence/state-pair-s4/multiplayer-state-pair-s4-2026-07-13T074927227Z-a052787",
+    "compositeSha256": "50f7e0f59bd6368ee7f8b1e84e30129eb948e422ee0d619bfea186a9386b3a92",
+    "exactTraffic": {
+      "worstRecipientMeanDownlinkBytesPerSecond": {
+        "s4": 73664.48333333334,
+        "s7": 188706.85,
+        "delta": 115042.36666666667,
+        "changeFraction": 1.5617073718700711
+      },
+      "oneSecondP95DownlinkBytesPerSecond": {
+        "s4": 89049,
+        "s7": 207524,
+        "delta": 118475,
+        "changeFraction": 1.3304472818335973
+      },
+      "oneSecondP99DownlinkBytesPerSecond": {
+        "s4": 100446,
+        "s7": 214319,
+        "delta": 113873,
+        "changeFraction": 1.1336738147860541
+      }
+    },
+    "pairCadencePerRecipient": {
+      "s4": 4.319166666666667,
+      "s7": 9.4,
+      "delta": 5.0808333333333335,
+      "changeFraction": 1.1763457457071194
+    },
+    "pairKinds": {
+      "s4": {
+        "public-delta+owner-keyframe": 5183
+      },
+      "s7": {
+        "public-keyframe+owner-keyframe": 73,
+        "public-delta+owner-keyframe": 679
+      }
+    },
+    "pairBytes": {
+      "p50": {
+        "s4": 15607,
+        "s7": 14984,
+        "delta": -623,
+        "changeFraction": -0.03991798551931825
+      },
+      "p95": {
+        "s4": 20725,
+        "s7": 36251,
+        "delta": 15526,
+        "changeFraction": 0.7491435464414958
+      },
+      "p99": {
+        "s4": 23671,
+        "s7": 37414,
+        "delta": 13743,
+        "changeFraction": 0.580583836762283
+      },
+      "max": {
+        "s4": 24694,
+        "s7": 38088,
+        "delta": 13394,
+        "changeFraction": 0.5423989633109257
+      }
+    },
+    "authority": {
+      "simTickMs": {
+        "p50": {
+          "s4": 0.4435410000151023,
+          "s7": 0.655125000001135,
+          "delta": 0.21158399998603272,
+          "changeFraction": 0.4770336901860897
+        },
+        "p95": {
+          "s4": 0.5807499999646097,
+          "s7": 0.9054159999996045,
+          "delta": 0.3246660000349948,
+          "changeFraction": 0.5590460612221775
+        },
+        "p99": {
+          "s4": 0.8106249999837019,
+          "s7": 1.179083000000901,
+          "delta": 0.3684580000171991,
+          "changeFraction": 0.4545356977944267
+        },
+        "max": {
+          "s4": 3.6820000000298023,
+          "s7": 1.4580000000005384,
+          "delta": -2.224000000029264,
+          "changeFraction": -0.6040195545929556
+        }
+      },
+      "projectionAndPublishMs": {
+        "p50": {
+          "s4": 154.84879200000432,
+          "s7": 69.03354099999888,
+          "delta": -85.81525100000545,
+          "changeFraction": -0.5541874101284758
+        },
+        "p95": {
+          "s4": 170.11070799996378,
+          "s7": 84.08470800000214,
+          "delta": -86.02599999996164,
+          "changeFraction": -0.5057059664931849
+        },
+        "p99": {
+          "s4": 185.6995829999796,
+          "s7": 103.52166699999907,
+          "delta": -82.17791599998054,
+          "changeFraction": -0.4425315053076321
+        },
+        "max": {
+          "s4": 338.94954199995846,
+          "s7": 104.59350000000086,
+          "delta": -234.3560419999576,
+          "changeFraction": -0.6914186713961877
+        }
+      }
+    },
+    "client": {
+      "applyMs": {
+        "p50": {
+          "s4": 15.274833999981638,
+          "s7": 13.23845799999981,
+          "delta": -2.0363759999818285,
+          "changeFraction": -0.1333157532176308
+        },
+        "p95": {
+          "s4": 16.955707999994047,
+          "s7": 15.412374999999884,
+          "delta": -1.5433329999941634,
+          "changeFraction": -0.09102144245434665
+        },
+        "p99": {
+          "s4": 18.5922080000164,
+          "s7": 20.708208999996714,
+          "delta": 2.116000999980315,
+          "changeFraction": 0.1138111729375257
+        },
+        "max": {
+          "s4": 37.397207999951206,
+          "s7": 34.58887500000128,
+          "delta": -2.8083329999499256,
+          "changeFraction": -0.07509472364764744
+        }
+      }
+    },
+    "memorySlopeBytesPerSecond": {
+      "rss": {
+        "s4": 78888.61049027105,
+        "s7": 232019.30551802894,
+        "delta": 153130.6950277579,
+        "changeFraction": 1.9411001673890906
+      },
+      "heapUsed": {
+        "s4": 68525.2558021276,
+        "s7": 314344.5731866739,
+        "delta": 245819.31738454633,
+        "changeFraction": 3.5872805509018475
+      }
+    },
+    "correctness": {
+      "s4": true,
+      "s7": true
+    }
+  },
+  "comparisonToS6PreparedDiagnostic": {
+    "artifact": "docs/v0.4/evidence/state-pair-s6/analysis.json",
+    "analysisSha256": "32f97d424f929b37a6da624a578fd379261ad030d3965db34d5cd0452219b1c6",
+    "method": "S6 alternating short paired diagnostic aggregate; not a five-minute canonical product run.",
+    "exactTraffic": {
+      "worstRecipientMeanDownlinkBytesPerSecond": {
+        "s6PreparedDiagnostic": 215334.73333333334,
+        "s7": 188706.85,
+        "delta": -26627.88333333333,
+        "changeFraction": -0.12365809695974112
+      },
+      "oneSecondP95DownlinkBytesPerSecond": {
+        "s6PreparedDiagnostic": 225014,
+        "s7": 207524,
+        "delta": -17490,
+        "changeFraction": -0.07772849689352662
+      }
+    },
+    "pairCadencePerRecipient": {
+      "s6PreparedDiagnostic": 9.733333333333333,
+      "s7": 9.4,
+      "delta": -0.33333333333333215,
+      "changeFraction": -0.034246575342465634
+    },
+    "authority": {
+      "projectionMeanMs": {
+        "s6PreparedDiagnostic": 60.18731761643815,
+        "s7": 71.00564429473688,
+        "delta": 10.818326678298732,
+        "changeFraction": 0.17974429010513118
+      },
+      "projectionP95Ms": {
+        "s6PreparedDiagnostic": 66.96704200000022,
+        "s7": 84.08470800000214,
+        "delta": 17.11766600000192,
+        "changeFraction": 0.25561329108730624
+      },
+      "projectionP99Ms": {
+        "s6PreparedDiagnostic": 74.58550000000014,
+        "s7": 103.52166699999907,
+        "delta": 28.93616699999893,
+        "changeFraction": 0.38795968385274454
+      },
+      "simTickP95Ms": {
+        "s6PreparedDiagnostic": 0.7597499999992579,
+        "s7": 0.9054159999996045,
+        "delta": 0.14566600000034668,
+        "changeFraction": 0.19172885817767552
+      }
+    },
+    "eventLoopP95Ms": {
+      "s6PreparedDiagnostic": 79.626239,
+      "s7": 81.264639,
+      "delta": 1.6384000000000043,
+      "changeFraction": 0.020576131945651787
+    }
+  }
+}
