@@ -43,6 +43,12 @@ function createSimWebSocketAdapter(options = {}) {
   const buildEventRecovery = typeof options.buildEventRecovery === "function"
     ? options.buildEventRecovery
     : async () => null;
+  const projectPublicStateForBinding = typeof options.projectPublicStateForBinding === "function"
+    ? options.projectPublicStateForBinding
+    : (_binding, frame) => frame;
+  const verifyManifestAck = typeof options.verifyManifestAck === "function"
+    ? options.verifyManifestAck
+    : async () => true;
   const {
     server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
     onPong, onAck, onPressureTransition, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
@@ -727,6 +733,9 @@ function createSimWebSocketAdapter(options = {}) {
     replicationAccounting?.cleanup(state);
     state.abortController.abort();
     clearTimeout(state.helloTimer);
+    clearTimeout(state.manifestTimer);
+    state.manifestRequired = null;
+    state.releaseManifestAdmission = null;
     if (state.helloPending) {
       state.helloPending = false;
       pendingHello = Math.max(0, pendingHello - 1);
@@ -878,11 +887,11 @@ function createSimWebSocketAdapter(options = {}) {
     const expectedGeneration = state.generation;
     const result = await redeemHello(frame, callbackContext(state, "redeem-hello"));
     if (!stateIsLive(state, expectedGeneration)) return;
-    if (!result || typeof result !== "object" || !result.binding || !result.welcome || !result.rebase) {
+    if (!result || typeof result !== "object" || !result.binding || !result.welcome || (!result.rebase && !result.manifestRequired)) {
       throw Object.assign(new Error("invalid hello redemption"), { publicCode: "admission-rejected", closeCode: 4401 });
     }
     encodeWireFrame(result.welcome, { direction: SERVER_TO_CLIENT });
-    encodeWireFrame(result.rebase, { direction: SERVER_TO_CLIENT });
+    if (result.rebase) encodeWireFrame(result.rebase, { direction: SERVER_TO_CLIENT });
     const identity = Object.freeze({
       runId: result.welcome.runId,
       membershipId: result.welcome.membershipId,
@@ -943,16 +952,36 @@ function createSimWebSocketAdapter(options = {}) {
     currentRunId = result.welcome.runId;
     resetOutbound(state);
     sendFrame(state, result.welcome);
-    sendFrame(state, result.rebase);
-    sendFrame(state, baselinePublicFrame);
-    sendFrame(state, baselineOwnerFrame);
-    if (Array.isArray(result.reliableEvents)) {
+    const releaseAdmission = () => {
+      if (!stateIsLive(state) || state.closing) return;
+      sendFrame(state, result.rebase);
+      sendFrame(state, baselinePublicFrame);
+      sendFrame(state, baselineOwnerFrame);
+      if (!Array.isArray(result.reliableEvents)) return;
       let enqueued = 0;
       for (const event of result.reliableEvents) {
         if (enqueued >= MAX_REPLAY_EVENTS_PER_PASS) break;
         const outcome = enqueueReliableState(state, event, { replayEvent: true });
         if (outcome.accepted) enqueued += 1;
       }
+    };
+    if (result.manifestRequired) {
+      state.manifestRequired = Object.freeze({
+        manifestSchema: result.welcome.manifestSchema,
+        manifestHash: result.welcome.manifestHash,
+        manifestBytes: result.welcome.manifestBytes,
+        connectionEpoch: result.welcome.connectionEpoch,
+      });
+      state.releaseManifestAdmission = releaseAdmission;
+      state.manifestTimer = setTimeout(() => {
+        if (state.manifestRequired && stateIsLive(state)) {
+          state.closing = true;
+          sendApplicationClose(state, 4408, "manifest verification timeout", false);
+        }
+      }, Number(result.manifestTimeoutMs) || 10_000);
+      state.manifestTimer.unref?.();
+    } else {
+      releaseAdmission();
     }
   }
 
@@ -962,6 +991,37 @@ function createSimWebSocketAdapter(options = {}) {
       if (!stateIsLive(state, expectedGeneration)) return;
       state.closing = true;
       return sendApplicationClose(state, 4003, "connection fenced", true);
+    }
+    if (state.manifestRequired) {
+      if (frame.type === "pong") {
+        await onPong(state.binding, frame, callbackContext(state, "pong"));
+        return;
+      }
+      if (frame.type !== "manifestAck") {
+        state.closing = true;
+        return sendApplicationClose(state, 4401, "manifest verification required", false);
+      }
+      const required = state.manifestRequired;
+      if (frame.manifestSchema !== required.manifestSchema
+          || frame.manifestHash !== required.manifestHash
+          || frame.manifestBytes !== required.manifestBytes
+          || frame.connectionEpoch !== required.connectionEpoch) {
+        state.closing = true;
+        return sendApplicationClose(state, 4401, "manifest verification failed", false);
+      }
+      const proofAccepted = await verifyManifestAck(state.binding, frame, callbackContext(state, "manifest-ack"));
+      if (!proofAccepted || !stateIsLive(state, expectedGeneration)) {
+        if (!stateIsLive(state, expectedGeneration)) return;
+        state.closing = true;
+        return sendApplicationClose(state, 4401, "manifest verification failed", false);
+      }
+      clearTimeout(state.manifestTimer);
+      state.manifestTimer = null;
+      state.manifestRequired = null;
+      const release = state.releaseManifestAdmission;
+      state.releaseManifestAdmission = null;
+      release?.();
+      return;
     }
     if (frame.type === "input") {
       if (!consumeRateBucket(state.inputBucket, now())) {
@@ -1137,7 +1197,7 @@ function createSimWebSocketAdapter(options = {}) {
 
   async function projectNow(context = {}) {
     if (closed) return { projected: 0, skipped: connections.size };
-    const candidates = [...connections].filter((state) => state.bound && !state.closing && !state.cleaned);
+    const candidates = [...connections].filter((state) => state.bound && !state.manifestRequired && !state.closing && !state.cleaned);
     if (candidates.length === 0) return { projected: 0, skipped: connections.size };
     const expectedGeneration = generation;
     let publicFrame;
@@ -1165,9 +1225,19 @@ function createSimWebSocketAdapter(options = {}) {
         continue;
       }
       try {
+        const recipientPublicFrame = state.binding?.manifestHash
+          ? await projectPublicStateForBinding(
+              state.binding,
+              publicFrame,
+              callbackContext(state, "public-recipient-project"),
+            )
+          : publicFrame;
+        if (recipientPublicFrame !== publicFrame) {
+          encodeWireFrame(recipientPublicFrame, { direction: SERVER_TO_CLIENT });
+        }
         const ownerFrame = await buildOwnerState(
           state.binding,
-          publicFrame,
+          recipientPublicFrame,
           context,
           callbackContext(state, "owner-project"),
         );
@@ -1176,10 +1246,10 @@ function createSimWebSocketAdapter(options = {}) {
           continue;
         }
         encodeWireFrame(ownerFrame, { direction: SERVER_TO_CLIENT });
-        assertOwnerProjection(ownerFrame, publicFrame, state.identity);
+        assertOwnerProjection(ownerFrame, recipientPublicFrame, state.identity);
         const recovery = await buildEventRecovery(
           state.binding,
-          publicFrame,
+          recipientPublicFrame,
           ownerFrame,
           Object.freeze({
             maxEvents: Math.min(
@@ -1209,7 +1279,7 @@ function createSimWebSocketAdapter(options = {}) {
           state.lastEventAckSeq = recovery.rebase.lastEventSeq;
           eventReplayStats.forcedRebases += 1;
           sendFrame(state, recovery.rebase);
-          sendFrame(state, publicFrame);
+          sendFrame(state, recipientPublicFrame);
           sendFrame(state, ownerFrame);
           projected += 1;
           continue;
@@ -1227,19 +1297,19 @@ function createSimWebSocketAdapter(options = {}) {
           state.binding.eventScanSeq = Math.max(state.binding.eventScanSeq || 0, recovery.scanThrough);
         }
         const priorQueuedStateFrames = state.replicationQueuedStateFrames;
-        const outcome = state.queue.enqueueState(publicFrame.snapshotId, {
+        const outcome = state.queue.enqueueState(recipientPublicFrame.snapshotId, {
           kind: "state-pair",
-          frames: [publicFrame, ownerFrame],
+          frames: [recipientPublicFrame, ownerFrame],
         });
         if (replicationAccounting) {
-          const publicBytes = Buffer.byteLength(JSON.stringify(publicFrame), "utf8");
+          const publicBytes = Buffer.byteLength(JSON.stringify(recipientPublicFrame), "utf8");
           const ownerBytes = Buffer.byteLength(JSON.stringify(ownerFrame), "utf8");
-          replicationAccounting.outbound(state, publicFrame, "offered", publicBytes);
+          replicationAccounting.outbound(state, recipientPublicFrame, "offered", publicBytes);
           replicationAccounting.outbound(state, ownerFrame, "offered", ownerBytes);
           if (!outcome.accepted) {
             const terminalMetric = outcome.action === "rebase" || outcome.action === "disconnect"
               ? "policyDropped" : "otherTerminal";
-            replicationAccounting.outbound(state, publicFrame, terminalMetric, publicBytes);
+            replicationAccounting.outbound(state, recipientPublicFrame, terminalMetric, publicBytes);
             replicationAccounting.outbound(state, ownerFrame, terminalMetric, ownerBytes);
           } else if (outcome.action === "coalesced") {
             for (const queued of Object.values(priorQueuedStateFrames || {})) {

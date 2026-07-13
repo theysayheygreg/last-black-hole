@@ -108,6 +108,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SessionReplicationManifest",
+    file: "session-replication-manifest.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "static", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerSendQueue",
     file: "multiplayer-send-queue.cjs",
     lanes: ["multiplayer-network", "static", "full"],
@@ -140,6 +146,13 @@ const SUITES = [
   {
     name: "MultiplayerWsRuntime",
     file: "multiplayer-ws-runtime.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+    slow: true,
+  },
+  {
+    name: "MultiplayerSessionManifestRuntime",
+    file: "multiplayer-session-manifest-runtime.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
     browser: false,
     slow: true,

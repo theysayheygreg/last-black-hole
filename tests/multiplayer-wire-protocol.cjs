@@ -1,6 +1,7 @@
 const { TestRunner, assert } = require("./helpers.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
+  WIRE_PROTOCOL_VERSION_V2,
   STREAM_PATH,
   SIM_PROTOCOL_VERSION,
   CLIENT_TO_SERVER,
@@ -114,6 +115,35 @@ async function run() {
       () => validateWireFrame({ type: "heartbeat", heartbeatId: "hb-1", serverTimeMs: 1234 }, { direction: CLIENT_TO_SERVER }),
       "invalid-direction",
     );
+  });
+
+  await runner.run("v2 manifest negotiation is exact and cannot alter v1 shapes", async () => {
+    const hello = {
+      type: "hello", wireVersion: WIRE_PROTOCOL_VERSION_V2, simProtocolVersion: SIM_PROTOCOL_VERSION,
+      admissionTicket: "ticket-v2", capabilities: ["static-manifest-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:abc",
+    };
+    validateWireFrame(hello, { direction: CLIENT_TO_SERVER });
+    const welcome = {
+      type: "welcome", wireVersion: WIRE_PROTOCOL_VERSION_V2, simProtocolVersion: SIM_PROTOCOL_VERSION,
+      runId: "run-a", membershipId: "member-a", playerId: "pilot-a", connectionId: "connection-a",
+      connectionEpoch: 1, commandCredential: "secret", lastCommandSeq: 0, nextCommandSeq: 1,
+      lastInputSeq: 0, lastActionSeq: 0, heartbeatIntervalMs: 1000, reconnected: false,
+      capabilities: ["static-manifest-v1"], manifestSchema: "lbh-session-replication-manifest-v1",
+      manifestHash: "sha256:abc", manifestBytes: 100, fetchPath: "/multiplayer/manifest/abc",
+    };
+    validateWireFrame(welcome, { direction: SERVER_TO_CLIENT });
+    validateWireFrame({
+      type: "manifestAck", manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
+      manifestBytes: welcome.manifestBytes, connectionEpoch: 1,
+    }, { direction: CLIENT_TO_SERVER });
+    expectProtocolError(() => validateWireFrame({ ...hello, wireVersion: WIRE_PROTOCOL_VERSION }), "unknown-field");
+    expectProtocolError(() => validateWireFrame({ ...welcome, fetchPath: "/multiplayer/manifest/abc?cap=secret" }), "invalid-field");
+    expectProtocolError(() => validateWireFrame({ ...hello, capabilities: [] }), "invalid-field");
+    expectProtocolError(() => validateWireFrame({
+      type: "manifestAck", manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
+      manifestBytes: welcome.manifestBytes, connectionEpoch: 1,
+    }, { direction: SERVER_TO_CLIENT }), "invalid-direction");
   });
 
   await runner.run("latest input is bounded continuous state with no command or one-shot lane", async () => {

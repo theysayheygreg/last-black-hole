@@ -244,7 +244,119 @@ export async function _discoverProtocol() {
 }
 
 export async function _issueStreamTicket(kind) {
-  return this._json('/multiplayer/ticket', { method: 'POST', body: JSON.stringify({ kind }) });
+  const body = { kind };
+  if (this.supportedWireVersions) {
+    body.supportedVersions = this.supportedWireVersions;
+    body.capabilities = ['static-manifest-v1'];
+  }
+  return this._json('/multiplayer/ticket', { method: 'POST', body: JSON.stringify(body) });
+}
+
+async function sha256Hex(bytes) {
+  if (!globalThis.crypto?.subtle) throw new Error('SHA-256 is unavailable');
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function readBoundedResponseBytes(response, maxBytes) {
+  if (!response.body?.getReader) {
+    const fallback = new Uint8Array(await response.arrayBuffer());
+    if (fallback.byteLength > maxBytes) throw new Error('Manifest response is oversized');
+    return fallback;
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => {});
+      throw new Error('Manifest response is oversized');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+export async function _verifySessionManifest(welcome, ticket, generation) {
+  if (welcome.wireVersion !== 'lbh-multiplayer-json-v2') return null;
+  if (generation !== this._socketGeneration) throw new Error('Manifest verification superseded');
+  const cacheKey = `${welcome.manifestSchema}:${welcome.manifestHash}`;
+  let accepted = this._manifestCache.get(cacheKey) || null;
+  if (accepted) {
+    const cachedHash = accepted.byteLength === welcome.manifestBytes
+      ? `sha256:${await sha256Hex(accepted)}`
+      : null;
+    if (cachedHash !== welcome.manifestHash) {
+      this._manifestCache.delete(cacheKey);
+      accepted = null;
+    }
+  }
+  if (!accepted) {
+    const fetchUrl = new URL(welcome.fetchPath, `${this.baseUrl}/`);
+    const base = new URL(`${this.baseUrl}/`);
+    if (fetchUrl.origin !== base.origin || fetchUrl.search || fetchUrl.hash) throw new Error('Manifest fetch origin/path rejected');
+    const capabilities = Array.isArray(ticket.manifestCapabilities)
+      ? ticket.manifestCapabilities
+      : [ticket.manifestCapability].filter(Boolean);
+    let lastError = null;
+    for (let attempt = 0; attempt < Math.min(2, capabilities.length); attempt += 1) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10_000);
+      try {
+        const response = await fetch(fetchUrl, {
+          method: 'GET', signal: controller.signal,
+          headers: { authorization: `Bearer ${capabilities[attempt]}` },
+          credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+        });
+        if (!response.ok) throw new Error(`Manifest HTTP ${response.status}`);
+        const declared = Number(response.headers.get('content-length'));
+        if (Number.isFinite(declared) && declared > 1024 * 1024) throw new Error('Manifest response is oversized');
+        const bytes = await readBoundedResponseBytes(response, 1024 * 1024);
+        if (bytes.byteLength > 1024 * 1024 || bytes.byteLength !== welcome.manifestBytes) throw new Error('Manifest byte count mismatch');
+        const hash = `sha256:${await sha256Hex(bytes)}`;
+        if (hash !== welcome.manifestHash) throw new Error('Manifest hash mismatch');
+        accepted = bytes;
+        this._manifestCache.set(cacheKey, bytes);
+        break;
+      } catch (error) {
+        lastError = error;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    if (!accepted) throw lastError || new Error('Manifest fetch capability unavailable');
+  }
+  if (generation !== this._socketGeneration || welcome.connectionEpoch !== this.connectionEpoch) {
+    throw new Error('Manifest ACK epoch changed');
+  }
+  this._acceptedManifest = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(accepted));
+  this._acceptedManifestHash = welcome.manifestHash;
+  this._sendFrame({
+    type: 'manifestAck', manifestSchema: welcome.manifestSchema, manifestHash: welcome.manifestHash,
+    manifestBytes: welcome.manifestBytes, connectionEpoch: welcome.connectionEpoch,
+  }, generation);
+  return accepted;
+}
+
+function hydrateManifestStaticState(client, state, manifestHash) {
+  const manifest = client._acceptedManifest;
+  if (!manifestHash || !manifest || manifestHash !== client._acceptedManifestHash) return state;
+  if (!state?.world || !manifest.map) return state;
+  const world = { ...state.world };
+  for (const lane of ['wells', 'stars', 'wrecks', 'planetoids']) {
+    const definitions = new Map((manifest.map[lane] || []).map((entity) => [entity.id, entity]));
+    world[lane] = (world[lane] || []).map((entity) => ({ ...(definitions.get(entity.id) || {}), ...entity }));
+  }
+  return { ...state, world };
 }
 
 export async function _connectStream(kind = 'admission') {
@@ -270,8 +382,14 @@ export async function _connectStream(kind = 'admission') {
   this._streamState = kind === 'resume' ? 'reconnecting' : 'connecting';
   this._closeDirective = null;
   const baselineVersion = this._streamVersion;
+  const selectedWireVersion = ticket.wireVersion || protocol.wireVersion;
   const hello = {
-    type: 'hello', wireVersion: protocol.wireVersion, simProtocolVersion: protocol.simProtocolVersion,
+    type: 'hello', wireVersion: selectedWireVersion, simProtocolVersion: protocol.simProtocolVersion,
+    ...(selectedWireVersion === 'lbh-multiplayer-json-v2' ? {
+      capabilities: ticket.capabilities,
+      manifestSchema: ticket.manifestSchema,
+      manifestHash: ticket.manifestHash,
+    } : {}),
     ...(kind === 'resume' ? {
       resumeTicket: ticket.ticket,
       ...(this.runId && this.lastSnapshotId > 0 ? { lastRunId: this.runId, lastSnapshotId: this.lastSnapshotId, lastEventSeq: this.eventCursor } : {}),
@@ -304,6 +422,13 @@ export async function _connectStream(kind = 'admission') {
         this._scheduleEncodedStreamFrame(wire, classification, 'authority-to-client', generation, () => {
           const frame = JSON.parse(wire);
           this._handleStreamFrame(frame, generation);
+          if (frame.type === 'welcome' && frame.wireVersion === 'lbh-multiplayer-json-v2') {
+            this._manifestVerification = this._verifySessionManifest(frame, ticket, generation).catch((error) => {
+              if (generation === this._socketGeneration && socketOpen(this._socket)) this._socket.close(4000, 'manifest-verification-failed');
+              throw error;
+            });
+            this._manifestVerification.catch(() => {});
+          }
           if (this._streamVersion > baselineVersion) finish(resolve);
           return true;
         });
@@ -467,7 +592,7 @@ export function _mergeFrame(snapshotId) {
     && pub.lastEventSeq === owner.lastEventSeq
     && pub.fieldRevision === owner.fieldRevision;
   if (!aligned) return;
-  const state = pub.state || {};
+  const state = hydrateManifestStaticState(this, pub.state || {}, pub.manifestHash);
   const players = Array.isArray(state.players) ? state.players.map((player) =>
     player.clientId === owner.playerId ? { ...player, ...owner.state } : player) : [];
   this.latestSnapshot = { ...state, players };

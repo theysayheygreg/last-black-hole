@@ -133,6 +133,19 @@ async function run() {
       "A finalized overflow-free recipient covering the complete 300 seconds may certify an exact capture window");
   });
 
+  await runner.run("attributes mixed socket traffic to its registry-bound wire version", async () => {
+    const accounting = createReplicationAccounting({ now: () => 1000, maxEvents: 16 });
+    const v1 = { bindingKey: "mixed-v1", schedulerConnectionId: 1, binding: { wireVersion: "lbh-multiplayer-json-v1" } };
+    const v2 = { bindingKey: "mixed-v2", schedulerConnectionId: 2, binding: { wireVersion: "lbh-multiplayer-json-v2" } };
+    accounting.bind(v1);
+    accounting.bind(v2);
+    accounting.accepted(v1, { type: "publicState", snapshotId: 1 }, 100);
+    accounting.accepted(v2, { type: "publicState", snapshotId: 1 }, 80);
+    const versions = accounting.snapshot().events.filter((event) => event.metric === "accepted").map((event) => event.wireVersion).sort();
+    assert(JSON.stringify(versions) === JSON.stringify(["lbh-multiplayer-json-v1", "lbh-multiplayer-json-v2"]),
+      `Mixed accounting must not relabel v2 as v1: ${JSON.stringify(versions)}`);
+  });
+
   await runner.run("does not combine projection halves across connection epochs", async () => {
     let timestamp = 0;
     const accounting = createReplicationAccounting({ now: () => timestamp });

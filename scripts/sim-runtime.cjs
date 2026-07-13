@@ -89,12 +89,17 @@ const { createAuthoredCollapseTestLifecycle } = require("./authored-collapse-tes
 const { createSimWebSocketAdapter } = require("./sim-ws-adapter.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
+  WIRE_PROTOCOL_VERSION_V2,
   SIM_PROTOCOL_VERSION,
 } = require("./multiplayer-wire-protocol.cjs");
 const {
   MultiplayerTicketError,
   createMultiplayerTicketRegistry,
 } = require("./multiplayer-ticket-registry.cjs");
+const {
+  createSessionReplicationManifest,
+  createManifestFetchRegistry,
+} = require("./session-replication-manifest.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -968,6 +973,7 @@ const SIM_INSTANCE_ID = String(args["sim-instance-id"] || process.env.LBH_SIM_IN
 const CONTROL_PLANE_URL = String(args["control-plane-url"] || process.env.LBH_CONTROL_PLANE_URL || "").trim();
 const KEEP_ALIVE = String(args["keep-alive"] || process.env.LBH_SIM_KEEP_ALIVE || "").trim() === "true";
 const MULTIPLAYER_WS_ENABLED = String(process.env.LBH_SIM_WS_ENABLED || "").trim() === "true";
+const MULTIPLAYER_JSON_V2_ENABLED = String(process.env.LBH_SIM_WS_JSON_V2 || "").trim() === "true";
 const MULTIPLAYER_HEARTBEAT_INTERVAL_MS = 10_000;
 const MULTIPLAYER_TICKET_TTL_MS = process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS
   ? Math.max(1, Math.floor(Number(process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS) || 30_000))
@@ -1091,6 +1097,8 @@ let tickHandle = null;
 let currentLoopTickHz = DEFAULT_TICK_HZ;
 let terminalShutdownHandle = null;
 let multiplayerTicketRegistry = null;
+const manifestFetchRegistry = createManifestFetchRegistry();
+let sessionReplicationManifest = null;
 let multiplayerAdapter = null;
 let multiplayerProjectionTask = null;
 let shutdownPromise = null;
@@ -6073,6 +6081,8 @@ function writeFiles() {
 }
 
 function rotateMultiplayerRun(runId) {
+  manifestFetchRegistry.reset();
+  sessionReplicationManifest = null;
   if (multiplayerTicketRegistry) multiplayerTicketRegistry.rotateRun(runId);
   else {
     multiplayerTicketRegistry = createMultiplayerTicketRegistry({
@@ -6082,6 +6092,20 @@ function rotateMultiplayerRun(runId) {
     });
   }
   if (multiplayerAdapter) multiplayerAdapter.rotateRun(runId);
+}
+
+function currentSessionReplicationManifest() {
+  if (sessionReplicationManifest?.manifest.runId === runtime.session.runId) return sessionReplicationManifest;
+  const map = PLAYABLE_MAPS[runtime.session.mapId] || PLAYABLE_MAPS.shallows;
+  sessionReplicationManifest = createSessionReplicationManifest({
+    runId: runtime.session.runId,
+    map: { ...map, worldScale: runtime.session.worldScale || map.worldScale },
+    publicContent: {
+      bodySchema: BODY_SCHEMA_VERSION,
+      simProtocol: SIM_PROTOCOL_VERSION,
+    },
+  });
+  return sessionReplicationManifest;
 }
 
 function currentMultiplayerProfileId(player, authority) {
@@ -6135,6 +6159,13 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
   if (signal?.aborted) throw admissionFailure();
 
   const claims = reservation.claims;
+  const selectedWireVersion = claims.wireVersion || WIRE_PROTOCOL_VERSION;
+  if (frame.wireVersion !== selectedWireVersion) throw admissionFailure();
+  if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2) {
+    if (JSON.stringify(frame.capabilities) !== JSON.stringify(claims.capabilities)
+        || frame.manifestSchema !== claims.manifestSchema
+        || frame.manifestHash !== claims.manifestHash) throw admissionFailure();
+  }
   let authority = runtime.playerAuthorities.get(claims.playerId);
   const player = runtime.players.get(claims.playerId);
   if (
@@ -6193,20 +6224,24 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
     baselineAckEventSeq: acknowledgedEventSeq,
     eventScanSeq: acknowledgedEventSeq,
     highestIssuedEventSeq: acknowledgedEventSeq,
+    wireVersion: selectedWireVersion,
+    capabilities: claims.capabilities || [],
+    manifestHash: claims.manifestHash || null,
   };
-  const publicFrame = buildPublicMultiplayerState();
+  const publicFrame = projectV2StaticManifestState(binding, buildPublicMultiplayerState());
   const ownerFrame = buildOwnerMultiplayerState(binding, publicFrame);
   const rebaseReason = cursorRunChanged
     ? "run-changed"
     : mustRebaseEventCursor && hasResumeCursor
       ? "event-gap"
       : kind === "resume" ? "resume" : "initial";
+  const manifest = selectedWireVersion === WIRE_PROTOCOL_VERSION_V2 ? currentSessionReplicationManifest() : null;
   return {
     binding,
     bindingKey: { runId: binding.runId, membershipId: binding.membershipId },
     welcome: {
       type: "welcome",
-      wireVersion: WIRE_PROTOCOL_VERSION,
+      wireVersion: selectedWireVersion,
       simProtocolVersion: SIM_PROTOCOL_VERSION,
       runId: binding.runId,
       membershipId: binding.membershipId,
@@ -6220,6 +6255,13 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
       lastActionSeq: authority.lastActionSeq || 0,
       heartbeatIntervalMs: MULTIPLAYER_HEARTBEAT_INTERVAL_MS,
       reconnected: kind === "resume",
+      ...(manifest ? {
+        capabilities: claims.capabilities,
+        manifestSchema: manifest.manifestSchema,
+        manifestHash: manifest.manifestHash,
+        manifestBytes: manifest.manifestBytes,
+        fetchPath: manifest.fetchPath,
+      } : {}),
     },
     rebase: {
       type: "rebase",
@@ -6229,6 +6271,8 @@ function redeemMultiplayerHello(frame, { signal } = {}) {
       lastEventSeq: acknowledgedEventSeq,
     },
     baselineFrames: [publicFrame, ownerFrame],
+    manifestRequired: Boolean(manifest),
+    manifestTimeoutMs: 10_000,
   };
 }
 
@@ -6450,6 +6494,49 @@ function executeStreamAction(binding, frame) {
 
 function jsonProjection(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function removeManifestStaticEntityFields(dynamicEntity, staticEntity) {
+  if (!dynamicEntity || !staticEntity || dynamicEntity.id !== staticEntity.id) return dynamicEntity;
+  const projected = {};
+  for (const [key, value] of Object.entries(dynamicEntity)) {
+    if (key !== "id" && Object.hasOwn(staticEntity, key)
+        && JSON.stringify(value) === JSON.stringify(staticEntity[key])) continue;
+    projected[key] = value;
+  }
+  return projected;
+}
+
+function projectV2StaticManifestState(binding, frame) {
+  if (binding?.wireVersion !== WIRE_PROTOCOL_VERSION_V2) return frame;
+  const manifest = currentSessionReplicationManifest();
+  if (binding.manifestHash !== manifest.manifestHash) throw streamCommandFailure("manifest-mismatch");
+  const state = jsonProjection(frame.state);
+  const staticMap = manifest.manifest.map;
+  if (state.world) {
+    for (const lane of ["wells", "stars", "wrecks", "planetoids"]) {
+      const definitions = new Map((staticMap[lane] || []).map((entity) => [entity.id, entity]));
+      state.world[lane] = (state.world[lane] || []).map((entity) => removeManifestStaticEntityFields(entity, definitions.get(entity.id)));
+    }
+  }
+  return {
+    ...frame,
+    manifestHash: manifest.manifestHash,
+    state,
+  };
+}
+
+function verifySessionManifestAck(binding, frame) {
+  try {
+    return manifestFetchRegistry.consumeProof({
+      runId: binding.runId,
+      membershipId: binding.membershipId,
+      manifestHash: frame.manifestHash,
+      connectionEpoch: frame.connectionEpoch,
+    });
+  } catch {
+    return false;
+  }
 }
 
 function buildPublicMultiplayerState() {
@@ -6781,7 +6868,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
     res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", `content-type,${AUTHORITY_HEADER},${PLAYER_ID_HEADER},${RUN_ID_HEADER}`);
+    res.setHeader("Access-Control-Allow-Headers", `content-type,authorization,${AUTHORITY_HEADER},${PLAYER_ID_HEADER},${RUN_ID_HEADER}`);
     res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     res.end();
     return;
@@ -6953,11 +7040,38 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (MULTIPLAYER_WS_ENABLED && req.method === "GET" && req.url?.startsWith("/multiplayer/manifest/")) {
+      const requestUrl = new URL(req.url, `http://${HOST}:${PORT}`);
+      const manifest = currentSessionReplicationManifest();
+      if (requestUrl.search || requestUrl.hash || requestUrl.pathname !== manifest.fetchPath) {
+        res.writeHead(404).end();
+        return;
+      }
+      const authorization = String(req.headers.authorization || "");
+      const capability = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
+      try {
+        manifestFetchRegistry.redeem(capability, {
+          runId: runtime.session.runId,
+          manifestHash: manifest.manifestHash,
+        });
+      } catch {
+        sendJson(res, 401, { ok: false, code: "manifest-unauthorized", error: "Manifest fetch rejected" });
+        return;
+      }
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Content-Length", String(manifest.manifestBytes));
+      res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.end(manifest.bytes);
+      return;
+    }
+
     if (MULTIPLAYER_WS_ENABLED && req.method === "POST" && req.url === "/multiplayer/ticket") {
       const body = await readJson(req);
       // Identity is header-authenticated. The request body selects only the
       // server-owned ticket flow and cannot smuggle identity or cursor claims.
-      const allowed = new Set(["kind"]);
+      const allowed = new Set(["kind", "supportedVersions", "capabilities"]);
       const unsupported = Object.keys(body).find((key) => !allowed.has(key));
       if (unsupported) {
         sendJson(res, 400, {
@@ -6986,10 +7100,37 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 404, { ok: false, error: "Unknown client" });
         return;
       }
+      const supportedVersions = body.supportedVersions === undefined
+        ? [WIRE_PROTOCOL_VERSION]
+        : body.supportedVersions;
+      if (!Array.isArray(supportedVersions) || supportedVersions.length < 1 || supportedVersions.length > 4
+          || supportedVersions.some((value) => typeof value !== "string")) {
+        sendJson(res, 400, { ok: false, code: "invalid-wire-versions", error: "supportedVersions must be a bounded string array" });
+        return;
+      }
+      const selectedWireVersion = MULTIPLAYER_JSON_V2_ENABLED && supportedVersions.includes(WIRE_PROTOCOL_VERSION_V2)
+        ? WIRE_PROTOCOL_VERSION_V2
+        : supportedVersions.includes(WIRE_PROTOCOL_VERSION) ? WIRE_PROTOCOL_VERSION : null;
+      if (!selectedWireVersion) {
+        sendJson(res, 400, { ok: false, code: "unsupported-wire-version", error: "No mutually supported wire version" });
+        return;
+      }
+      const selectedCapabilities = selectedWireVersion === WIRE_PROTOCOL_VERSION_V2
+        ? ["static-manifest-v1"]
+        : [];
+      if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2
+          && (!Array.isArray(body.capabilities) || !body.capabilities.includes("static-manifest-v1"))) {
+        sendJson(res, 400, { ok: false, code: "missing-wire-capability", error: "Required wire capability is unavailable" });
+        return;
+      }
+      const manifest = selectedWireVersion === WIRE_PROTOCOL_VERSION_V2 ? currentSessionReplicationManifest() : null;
       const claims = {
         membershipId: auth.authority.membershipId,
         playerId: auth.authority.playerId,
         profileId: currentMultiplayerProfileId(player, auth.authority),
+        wireVersion: selectedWireVersion,
+        capabilities: selectedCapabilities,
+        ...(manifest ? { manifestSchema: manifest.manifestSchema, manifestHash: manifest.manifestHash } : {}),
       };
       if (kind === "resume") {
         claims.connectionId = auth.authority.connectionId;
@@ -6999,7 +7140,27 @@ const server = http.createServer(async (req, res) => {
         const issued = kind === "resume"
           ? multiplayerTicketRegistry.issueResume(claims)
           : multiplayerTicketRegistry.issueAdmission(claims);
-        sendJson(res, 200, { ok: true, ...issued });
+        let manifestCapabilities;
+        if (manifest) {
+          manifestCapabilities = [0, 1].map(() => manifestFetchRegistry.issue({
+            runId: runtime.session.runId,
+            membershipId: auth.authority.membershipId,
+            manifestHash: manifest.manifestHash,
+            connectionEpoch: kind === "resume" ? auth.authority.connectionEpoch + 1 : auth.authority.connectionEpoch,
+          }).capability);
+        }
+        sendJson(res, 200, {
+          ok: true, ...issued,
+          wireVersion: selectedWireVersion,
+          capabilities: selectedCapabilities,
+          ...(manifest ? {
+            manifestSchema: manifest.manifestSchema,
+            manifestHash: manifest.manifestHash,
+            manifestBytes: manifest.manifestBytes,
+            fetchPath: manifest.fetchPath,
+            manifestCapabilities,
+          } : {}),
+        });
       } catch (error) {
         const failure = admissionFailure(error);
         sendJson(res, error?.code === "ticket-capacity-exceeded" ? 429 : 400, {
@@ -7345,6 +7506,8 @@ if (MULTIPLAYER_WS_ENABLED) {
     onInput: (binding, frame) => executeStreamInput(binding, frame),
     onAction: (binding, frame) => executeStreamAction(binding, frame),
     buildPublicState: buildPublicMultiplayerStateForAdapter,
+    projectPublicStateForBinding: projectV2StaticManifestState,
+    verifyManifestAck: verifySessionManifestAck,
     buildOwnerState: buildOwnerMultiplayerState,
     buildEventRecovery: buildMultiplayerEventRecovery,
     onAck: acknowledgeMultiplayerCursor,

@@ -60,6 +60,26 @@ async function run() {
     );
   });
 
+  await runner.run("protocol selection and manifest identity are registry-bound and immutable", async () => {
+    const registry = createMultiplayerTicketRegistry({ runId: "run-a", now: () => 2_500 });
+    const issued = registry.issueAdmission({
+      ...claims("v2"),
+      wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: ["static-manifest-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1",
+      manifestHash: "sha256:abc",
+    });
+    const redeemed = registry.redeem(issued.ticket, { kind: "admission", runId: "run-a" });
+    assert(redeemed.claims.wireVersion === "lbh-multiplayer-json-v2", "Selected wire must survive redemption");
+    assert(redeemed.claims.manifestHash === "sha256:abc", "Manifest hash must be registry-bound");
+    expectTicketError(() => registry.issueAdmission({
+      ...claims("bad-v1"), wireVersion: "lbh-multiplayer-json-v1", capabilities: [], manifestHash: "sha256:smuggled",
+    }), "invalid-claim");
+    expectTicketError(() => registry.issueAdmission({
+      ...claims("unknown"), wireVersion: "lbh-multiplayer-json-v9", capabilities: [],
+    }), "invalid-claim");
+  });
+
   await runner.run("expiry is deterministic under an injected clock", async () => {
     let clock = 10_000;
     const registry = createMultiplayerTicketRegistry({ runId: "run-a", now: () => clock });

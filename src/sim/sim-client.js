@@ -12,13 +12,20 @@ function socketOpen(socket) {
 export class SimClient {
   constructor(baseUrl, {
     transport = 'http', WebSocketImpl = globalThis.WebSocket, actionDrainTimeoutMs = 8000,
-    scheduleStreamFrame = null,
+    scheduleStreamFrame = null, supportedWireVersions = null,
   } = {}) {
     this.baseUrl = String(baseUrl || '').replace(/\/+$/, '');
     this.transport = transport === 'stream' ? 'stream' : 'http';
     this.activeTransport = 'http';
     this.WebSocketImpl = WebSocketImpl;
     this.actionDrainTimeoutMs = Math.max(1, Number(actionDrainTimeoutMs) || 8000);
+    this.supportedWireVersions = Array.isArray(supportedWireVersions)
+      ? Object.freeze([...new Set(supportedWireVersions)])
+      : null;
+    this._manifestCache = new Map();
+    this._manifestVerification = null;
+    this._acceptedManifest = null;
+    this._acceptedManifestHash = null;
     this._scheduleStreamFrameCallback = typeof scheduleStreamFrame === 'function'
       ? scheduleStreamFrame
       : (typeof scheduleStreamFrame?.schedule === 'function'
@@ -241,6 +248,8 @@ export class SimClient {
     this._eventFrames.clear();
     this._resetDeliveryEpoch();
     this._rebase = null;
+    this._acceptedManifest = null;
+    this._acceptedManifestHash = null;
   }
 
   _clearAuthority(runId = null, joinTicket = null) {
@@ -483,6 +492,7 @@ export class SimClient {
 
   async _discoverProtocol(...args) { return streamOps._discoverProtocol.apply(this, args); }
   async _issueStreamTicket(...args) { return streamOps._issueStreamTicket.apply(this, args); }
+  async _verifySessionManifest(...args) { return streamOps._verifySessionManifest.apply(this, args); }
   async _connectStream(...args) { return streamOps._connectStream.apply(this, args); }
   _handleStreamFrame(...args) { return streamOps._handleStreamFrame.apply(this, args); }
   _resetStreamFrameScheduler(...args) { return streamOps._resetStreamFrameScheduler.apply(this, args); }

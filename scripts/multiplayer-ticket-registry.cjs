@@ -6,6 +6,7 @@ const TICKET_BYTES = 32;
 const TICKET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const TICKET_KINDS = new Set(["admission", "resume"]);
 const MAX_IDENTIFIER_LENGTH = 160;
+const ALLOWED_WIRE_VERSIONS = new Set(["lbh-multiplayer-json-v1", "lbh-multiplayer-json-v2"]);
 
 class MultiplayerTicketError extends Error {
   constructor(code, message) {
@@ -84,7 +85,10 @@ function createMultiplayerTicketRegistry({
     if (!claims || typeof claims !== "object" || Array.isArray(claims)) {
       fail("invalid-claim", "ticket claims must be an object");
     }
-    const allowed = new Set(["membershipId", "playerId", "profileId"]);
+    const allowed = new Set([
+      "membershipId", "playerId", "profileId", "wireVersion", "capabilities",
+      "manifestSchema", "manifestHash",
+    ]);
     if (kind === "resume") {
       allowed.add("connectionId");
       allowed.add("connectionEpoch");
@@ -92,11 +96,28 @@ function createMultiplayerTicketRegistry({
     for (const key of Object.keys(claims)) {
       if (!allowed.has(key)) fail("invalid-claim", `ticket claims contain unsupported field ${key}`);
     }
-    return {
+    const selected = {
       membershipId: identifier(claims.membershipId, "membershipId"),
       playerId: identifier(claims.playerId, "playerId"),
       profileId: identifier(claims.profileId, "profileId"),
     };
+    if (claims.wireVersion !== undefined) {
+      selected.wireVersion = identifier(claims.wireVersion, "wireVersion");
+      if (!ALLOWED_WIRE_VERSIONS.has(selected.wireVersion)) fail("invalid-claim", "wireVersion is unsupported");
+      if (!Array.isArray(claims.capabilities) || claims.capabilities.length > 16) fail("invalid-claim", "capabilities must be a bounded array");
+      const capabilities = claims.capabilities.map((value) => identifier(value, "capability"));
+      if (new Set(capabilities).size !== capabilities.length) fail("invalid-claim", "capabilities must be unique");
+      selected.capabilities = Object.freeze([...capabilities].sort());
+      if (selected.wireVersion === "lbh-multiplayer-json-v2") {
+        selected.manifestSchema = identifier(claims.manifestSchema, "manifestSchema");
+        selected.manifestHash = identifier(claims.manifestHash, "manifestHash");
+      } else if (claims.manifestSchema !== undefined || claims.manifestHash !== undefined) {
+        fail("invalid-claim", "v1 tickets cannot carry a manifest binding");
+      }
+    } else if (claims.capabilities !== undefined || claims.manifestSchema !== undefined || claims.manifestHash !== undefined) {
+      fail("invalid-claim", "wireVersion is required for protocol claims");
+    }
+    return selected;
   }
 
   function generateUniqueTicket() {

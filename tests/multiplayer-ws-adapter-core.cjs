@@ -6,7 +6,7 @@ const nodeAssert = require("assert");
 const { WebSocket } = require("ws");
 const { TestRunner, assert } = require("./helpers.cjs");
 const { DEFAULTS, createSimWebSocketAdapter } = require("../scripts/sim-ws-adapter.cjs");
-const { SIM_PROTOCOL_VERSION } = require("../scripts/multiplayer-wire-protocol.cjs");
+const { SIM_PROTOCOL_VERSION, WIRE_PROTOCOL_VERSION_V2 } = require("../scripts/multiplayer-wire-protocol.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
   waitFor,
@@ -71,6 +71,60 @@ async function run() {
       "Adapter should require an explicit cooperative router instead of racing Upgrade listeners",
     );
     server.removeAllListeners();
+  });
+
+  await runner.run("v2 admission pauses all gameplay and private projection until exact current-epoch manifest ACK", async () => {
+    const manifest = {
+      manifestSchema: "lbh-session-replication-manifest-v1",
+      manifestHash: "sha256:abc",
+      manifestBytes: 321,
+      fetchPath: "/multiplayer/manifest/abc",
+    };
+    const harness = await createHarness({
+      afterRedeem(result) {
+        result.welcome.wireVersion = WIRE_PROTOCOL_VERSION_V2;
+        result.welcome.capabilities = ["static-manifest-v1"];
+        Object.assign(result.welcome, manifest);
+        result.manifestRequired = true;
+        result.manifestTimeoutMs = 150;
+      },
+    });
+    try {
+      const ticket = harness.issueTicket("manifest-ok");
+      const client = await openClient(`${harness.baseUrl}/stream`);
+      client.ws.send(JSON.stringify(hello(ticket)));
+      await waitFor(() => nextFrame(client.messages, "welcome"), { label: "manifest welcome" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert(!nextFrame(client.messages, "rebase") && !nextFrame(client.messages, "ownerState"), "Admission must not leak baseline/private state before proof");
+      const projected = await harness.adapter.projectNow();
+      assert(projected.projected === 0, "Live projection must skip MANIFEST_REQUIRED sockets");
+      client.ws.send(JSON.stringify({
+        type: "manifestAck", manifestSchema: manifest.manifestSchema, manifestHash: manifest.manifestHash,
+        manifestBytes: manifest.manifestBytes, connectionEpoch: 1,
+      }));
+      await waitFor(() => nextFrame(client.messages, "rebase") && nextFrame(client.messages, "ownerState"), { label: "manifest-gated baseline" });
+
+      const badTicket = harness.issueTicket("manifest-bad", { epoch: 2 });
+      const bad = await openClient(`${harness.baseUrl}/stream`);
+      bad.ws.send(JSON.stringify(hello(badTicket)));
+      await waitFor(() => nextFrame(bad.messages, "welcome"), { label: "bad manifest welcome" });
+      bad.ws.send(JSON.stringify({
+        type: "manifestAck", manifestSchema: manifest.manifestSchema, manifestHash: "sha256:wrong",
+        manifestBytes: manifest.manifestBytes, connectionEpoch: 2,
+      }));
+      await waitFor(() => bad.close.code !== null, { label: "bad manifest closed" });
+      assert(!nextFrame(bad.messages, "ownerState"), "Wrong proof must fail closed without owner projection");
+
+      const timeoutTicket = harness.issueTicket("manifest-timeout", { epoch: 1 });
+      const timedOut = await openClient(`${harness.baseUrl}/stream`);
+      timedOut.ws.send(JSON.stringify(hello(timeoutTicket)));
+      await waitFor(() => nextFrame(timedOut.messages, "welcome"), { label: "timeout manifest welcome" });
+      await waitFor(() => timedOut.close.code !== null, { timeout: 500, label: "manifest verification timeout" });
+      assert(!nextFrame(timedOut.messages, "rebase") && !nextFrame(timedOut.messages, "ownerState"),
+        "Manifest timeout must cleanly close without baseline or private state");
+    } finally {
+      await harness.close();
+    }
   });
 
   await runner.run("bounds total connections and pending hellos and recovers capacity after cleanup", async () => {

@@ -6,6 +6,8 @@ const {
 
 const CLIENT_TO_SERVER = "client->server";
 const SERVER_TO_CLIENT = "server->client";
+const WIRE_PROTOCOL_VERSION_V2 = "lbh-multiplayer-json-v2";
+const SUPPORTED_WIRE_VERSIONS = new Set([WIRE_PROTOCOL_VERSION, WIRE_PROTOCOL_VERSION_V2]);
 
 const LIMITS = Object.freeze({
   maxFrameBytes: 256 * 1024,
@@ -41,6 +43,7 @@ const FRAME_DIRECTIONS = Object.freeze({
   rebase: SERVER_TO_CLIENT,
   error: SERVER_TO_CLIENT,
   close: SERVER_TO_CLIENT,
+  manifestAck: CLIENT_TO_SERVER,
 });
 
 const FRAME_BYTE_LIMITS = Object.freeze({
@@ -57,6 +60,7 @@ const FRAME_BYTE_LIMITS = Object.freeze({
   rebase: LIMITS.maxControlBytes,
   error: LIMITS.maxControlBytes,
   close: LIMITS.maxControlBytes,
+  manifestAck: LIMITS.maxControlBytes,
 });
 
 const ACTION_KINDS = new Set([
@@ -170,14 +174,20 @@ function jsonValue(value, label, depth = 0) {
 
 function protocolHeader(frame) {
   requiredString(frame.wireVersion, "wireVersion");
-  if (frame.wireVersion !== WIRE_PROTOCOL_VERSION) {
-    fail("unsupported-wire-version", `wireVersion must be ${WIRE_PROTOCOL_VERSION}`, 4406);
+  if (!SUPPORTED_WIRE_VERSIONS.has(frame.wireVersion)) {
+    fail("unsupported-wire-version", "wireVersion is unsupported", 4406);
   }
 }
 
 function validateHello(frame) {
-  exactKeys(frame, new Set(["type", "wireVersion", "simProtocolVersion", "admissionTicket", "resumeTicket", "lastRunId", "lastSnapshotId", "lastEventSeq"]));
   protocolHeader(frame);
+  const allowed = new Set(["type", "wireVersion", "simProtocolVersion", "admissionTicket", "resumeTicket", "lastRunId", "lastSnapshotId", "lastEventSeq"]);
+  if (frame.wireVersion === WIRE_PROTOCOL_VERSION_V2) {
+    allowed.add("capabilities");
+    allowed.add("manifestSchema");
+    allowed.add("manifestHash");
+  }
+  exactKeys(frame, allowed);
   requiredString(frame.simProtocolVersion, "simProtocolVersion");
   if (frame.simProtocolVersion !== SIM_PROTOCOL_VERSION) {
     fail("unsupported-sim-version", `simProtocolVersion must be ${SIM_PROTOCOL_VERSION}`, 4406);
@@ -195,15 +205,28 @@ function validateHello(frame) {
   if (resume && cursorParts.some(Boolean) && !cursorParts.every(Boolean)) {
     fail("invalid-resume-cursor", "resume cursor requires lastRunId, lastSnapshotId, and lastEventSeq");
   }
+  if (frame.wireVersion === WIRE_PROTOCOL_VERSION_V2) {
+    if (!Array.isArray(frame.capabilities) || frame.capabilities.length > 16 || new Set(frame.capabilities).size !== frame.capabilities.length) {
+      fail("invalid-field", "capabilities must be a bounded unique array");
+    }
+    frame.capabilities.forEach((value, index) => requiredString(value, `capabilities[${index}]`));
+    if (!frame.capabilities.includes("static-manifest-v1")) fail("invalid-field", "v2 requires static-manifest-v1");
+    requiredString(frame.manifestSchema, "manifestSchema");
+    requiredString(frame.manifestHash, "manifestHash");
+  }
 }
 
 function validateWelcome(frame) {
-  exactKeys(frame, new Set([
+  protocolHeader(frame);
+  const allowed = new Set([
     "type", "wireVersion", "simProtocolVersion", "runId", "membershipId", "playerId", "connectionId",
     "connectionEpoch", "commandCredential", "lastCommandSeq", "nextCommandSeq", "lastInputSeq", "lastActionSeq",
     "heartbeatIntervalMs", "reconnected",
-  ]));
-  protocolHeader(frame);
+  ]);
+  if (frame.wireVersion === WIRE_PROTOCOL_VERSION_V2) {
+    for (const key of ["capabilities", "manifestSchema", "manifestHash", "manifestBytes", "fetchPath"]) allowed.add(key);
+  }
+  exactKeys(frame, allowed);
   if (frame.simProtocolVersion !== SIM_PROTOCOL_VERSION) fail("unsupported-sim-version", `simProtocolVersion must be ${SIM_PROTOCOL_VERSION}`, 4406);
   for (const key of ["runId", "membershipId", "playerId", "connectionId"]) requiredString(frame[key], key);
   requiredString(frame.commandCredential, "commandCredential", LIMITS.maxTicketLength);
@@ -215,6 +238,28 @@ function validateWelcome(frame) {
   integer(frame.lastActionSeq, "lastActionSeq");
   integer(frame.heartbeatIntervalMs, "heartbeatIntervalMs", { min: 1000, max: 60000 });
   boolean(frame.reconnected, "reconnected");
+  if (frame.wireVersion === WIRE_PROTOCOL_VERSION_V2) {
+    if (!Array.isArray(frame.capabilities) || frame.capabilities.length > 16 || new Set(frame.capabilities).size !== frame.capabilities.length) {
+      fail("invalid-field", "capabilities must be a bounded unique array");
+    }
+    frame.capabilities.forEach((value, index) => requiredString(value, `capabilities[${index}]`));
+    if (!frame.capabilities.includes("static-manifest-v1")) fail("invalid-field", "v2 requires static-manifest-v1");
+    requiredString(frame.manifestSchema, "manifestSchema");
+    requiredString(frame.manifestHash, "manifestHash");
+    integer(frame.manifestBytes, "manifestBytes", { min: 1, max: 1024 * 1024 });
+    requiredString(frame.fetchPath, "fetchPath", 512);
+    if (!frame.fetchPath.startsWith("/multiplayer/manifest/") || frame.fetchPath.includes("?") || frame.fetchPath.includes("#")) {
+      fail("invalid-field", "fetchPath must be a credential-free manifest path");
+    }
+  }
+}
+
+function validateManifestAck(frame) {
+  exactKeys(frame, new Set(["type", "manifestSchema", "manifestHash", "manifestBytes", "connectionEpoch"]));
+  requiredString(frame.manifestSchema, "manifestSchema");
+  requiredString(frame.manifestHash, "manifestHash");
+  integer(frame.manifestBytes, "manifestBytes", { min: 1, max: 1024 * 1024 });
+  integer(frame.connectionEpoch, "connectionEpoch", { min: 1 });
 }
 
 function validateHeartbeat(frame) {
@@ -394,6 +439,7 @@ const VALIDATORS = Object.freeze({
   rebase: validateRebase,
   error: validateErrorFrame,
   close: validateClose,
+  manifestAck: validateManifestAck,
 });
 
 function byteLength(value) {
@@ -452,6 +498,7 @@ function encodeWireFrame(frame, options = {}) {
 
 module.exports = {
   WIRE_PROTOCOL_VERSION,
+  WIRE_PROTOCOL_VERSION_V2,
   STREAM_PATH,
   SIM_PROTOCOL_VERSION,
   CLIENT_TO_SERVER,
