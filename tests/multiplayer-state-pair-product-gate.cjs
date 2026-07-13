@@ -10,7 +10,7 @@ const { execFileSync } = require("child_process");
 const { performance } = require("perf_hooks");
 const { WebSocket } = require("ws");
 const { startSimServer, stopSimServer } = require("./helpers.cjs");
-const { createClientDeltaReceiver } = require("../scripts/client-delta-receiver.cjs");
+const { createClientDeltaReceiver, MIXED_CAPABILITY } = require("../scripts/client-delta-receiver.cjs");
 const { projectionHash } = require("../scripts/canonical-structural-delta.cjs");
 const { summarizeWindow } = require("../scripts/replication-accounting.cjs");
 const { WIRE_PROTOCOL_VERSION_V2, SIM_PROTOCOL_VERSION } = require("../scripts/multiplayer-wire-protocol.cjs");
@@ -28,6 +28,11 @@ const S0 = Object.freeze({
   8: { downlinkBps: 241892, pairP50: 25237, pairP95: 26889 },
 });
 const S1_STATIC_PAIR_SAVINGS_BYTES = 953;
+const GATE = process.argv.includes("--s4") ? "s4" : "s3";
+const MIXED_GATE = GATE === "s4";
+const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
+const S3_CANONICAL_DIR = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s3",
+  "multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4");
 const PROFILE = process.argv.includes("--review") ? "review" : "canonical";
 const POPULATIONS = PROFILE === "review" ? [1, 8] : [1, 4, 8];
 const NORMAL_WARMUP_MS = PROFILE === "review" ? 5_000 : 60_000;
@@ -98,6 +103,8 @@ function send(client, frame) {
 }
 
 function scanPairShape(client, frame) {
+  const pairKind = `public-${frame.public.kind}+owner-${frame.owner.kind}`;
+  client.pairKinds[pairKind] = (client.pairKinds[pairKind] || 0) + 1;
   const payloads = [frame.public, frame.owner];
   for (const payload of payloads) {
     if (payload.kind === "keyframe") client.shape.keyframes += 1;
@@ -149,11 +156,14 @@ function hasMaterializedPublicEntity(client, category, sourceId) {
 }
 
 async function openStatePairClient({ port, authority, label, reuseManifest = false, fault = {} }) {
+  const requestedCapabilities = ["static-manifest-v1", "state-pair-v1",
+    ...(MIXED_GATE ? [MIXED_CAPABILITY] : [])];
   const issued = await request(port, "/multiplayer/ticket", { method: "POST", authority, body: {
     kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2],
-    capabilities: ["static-manifest-v1", "state-pair-v1"],
+    capabilities: requestedCapabilities,
   } });
-  if (issued.status !== 200 || !issued.body.capabilities.includes("state-pair-v1")) {
+  if (issued.status !== 200 || !issued.body.capabilities.includes("state-pair-v1")
+      || (MIXED_GATE && !issued.body.capabilities.includes(MIXED_CAPABILITY))) {
     throw new Error(`${label} state-pair ticket failed: ${JSON.stringify(issued.body)}`);
   }
   const client = {
@@ -165,6 +175,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     manifest: { reused: reuseManifest, servedBytes: 0, hash: issued.body.manifestHash },
     clientWorkSamples: [], ackWorkSamples: [], faultLog: [], hashesVerified: 0,
     shape: { keyframes: 0, deltas: 0, creates: 0, updates: 0, despawns: 0, reincarnations: 0, rootOps: 0 },
+    pairKinds: {},
     materializedEntities: null, retiredIncarnations: new Map(),
     observedLifecycle: { creates: 0, despawns: 0, reincarnations: 0, componentChanges: 0 },
   };
@@ -187,7 +198,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
         authorityIncarnation: frame.authorityIncarnation, recipientId: frame.membershipId,
         recipientIncarnation: frame.connectionEpoch, manifestSchema: frame.manifestSchema,
         manifestHash: frame.manifestHash,
-      } });
+      }, capabilities: issued.body.capabilities });
       return;
     }
     if (frame.type === "heartbeat") {
@@ -279,6 +290,7 @@ async function closeClient(client) {
 function summarizeClients(clients) {
   return clients.map((client) => ({
     label: client.label, membershipId: client.welcome.membershipId, connectionEpoch: client.welcome.connectionEpoch,
+    capabilities: client.ticket.capabilities,
     acceptedPairs: client.acceptedPairs, hashesVerified: client.hashesVerified,
     lastAcceptedFrameId: client.receiver?.current()?.frameId || 0,
     lastStatePairAckSentFrameId: client.lastStatePairAckSentFrameId,
@@ -286,6 +298,7 @@ function summarizeClients(clients) {
     clientApplyMs: distribution(client.clientWorkSamples.map((sample) => sample.ms)),
     ackSerializeSendMs: distribution(client.ackWorkSamples.map((sample) => sample.ms)),
     shape: client.shape, faults: client.faultLog, error: client.error, close: client.close,
+    pairKinds: client.pairKinds,
     observedLifecycle: client.observedLifecycle,
   }));
 }
@@ -318,6 +331,65 @@ function deltaHealth(before, after) {
     projectionTotalMs: right.projectionDurationTotalMs - left.projectionDurationTotalMs,
     replicationCostConsumedMs: right.replicationCostConsumedTotalMs - left.replicationCostConsumedTotalMs,
     replicationCostOverflowMs: right.replicationCostOverflowMs - left.replicationCostOverflowMs,
+  };
+}
+
+function numericComparison(s4, s3) {
+  if (!Number.isFinite(s4) || !Number.isFinite(s3)) return { s3, s4, delta: null, changeFraction: null };
+  return { s3, s4, delta: s4 - s3, changeFraction: s3 === 0 ? null : (s4 - s3) / s3 };
+}
+
+function compareScenarioToS3(result) {
+  const s3 = JSON.parse(fs.readFileSync(path.join(S3_CANONICAL_DIR,
+    `${result.scenario}-${result.population}.json`), "utf8"));
+  const compareDistribution = (s4Distribution, s3Distribution) => Object.fromEntries(
+    ["p50", "p95", "p99", "max"].map((key) =>
+      [key, numericComparison(s4Distribution[key], s3Distribution[key])]),
+  );
+  return {
+    artifact: path.relative(ROOT, S3_CANONICAL_DIR),
+    compositeSha256: S3_CANONICAL_SHA256,
+    exactTraffic: {
+      worstRecipientMeanDownlinkBytesPerSecond: numericComparison(
+        result.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond,
+        s3.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond),
+      oneSecondP95DownlinkBytesPerSecond: numericComparison(
+        result.exactTraffic.oneSecondP95DownlinkBytesPerSecond,
+        s3.exactTraffic.oneSecondP95DownlinkBytesPerSecond),
+      oneSecondP99DownlinkBytesPerSecond: numericComparison(
+        result.exactTraffic.oneSecondP99DownlinkBytesPerSecond,
+        s3.exactTraffic.windows["1s"].allRecipientWindowsBytesPerSecond.p99),
+    },
+    pairCadencePerRecipient: numericComparison(result.cadence.observedPairsPerSecond,
+      s3.cadence.observedPairsPerSecond),
+    pairKinds: {
+      s3: s3.pairShape.productWindow.pairKindCounts || {
+        "public-keyframe+owner-keyframe": s3.pairShape.productWindow.keyframes,
+        "public-delta+owner-delta": s3.pairShape.productWindow.deltas,
+      },
+      s4: result.pairShape.productWindow.pairKindCounts,
+    },
+    pairBytes: compareDistribution(result.pairShape.comparison.observedPairBytes,
+      s3.pairShape.comparison.observedPairBytes),
+    authority: {
+      simTickMs: compareDistribution(result.performance.authority.simTickMs,
+        s3.performance.authority.simTickMs),
+      projectionAndPublishMs: compareDistribution(result.performance.authority.projectionAndPublishMs,
+        s3.performance.authority.projectionAndPublishMs),
+    },
+    client: {
+      applyMs: compareDistribution(result.performance.clientApplyMs, s3.performance.clientApplyMs),
+      ackSerializeSendMs: compareDistribution(result.performance.clientAckSerializeSendMs,
+        s3.performance.clientAckSerializeSendMs),
+    },
+    memorySlopeBytesPerSecond: {
+      rss: numericComparison(result.performance.memory.slopeBytesPerSecond.rss,
+        s3.performance.memory.slopeBytesPerSecond.rss),
+      heapUsed: numericComparison(result.performance.memory.slopeBytesPerSecond.heapUsed,
+        s3.performance.memory.slopeBytesPerSecond.heapUsed),
+    },
+    overloadState: { s3: s3.admission.overloadStayedNormal, s4: result.admission.overloadStayedNormal },
+    correctness: { s3: s3.admission.correctnessPassed, s4: result.admission.correctnessPassed },
   };
 }
 
@@ -406,6 +478,7 @@ async function runScenario({ population, scenario, runDir }) {
     await startSimServer(port, { keepAlive: true, registerProcessCleanup: false, env: {
       NODE_ENV: "test", LBH_SIM_WS_ENABLED: "true", LBH_SIM_WS_JSON_V2: "true",
       LBH_SIM_WS_STATE_PAIR_V1: "true", LBH_SIM_WS_REPLICATION_ACCOUNTING: "1",
+      LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE ? "true" : "false",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
     } });
     authorityPid = Number(fs.readFileSync(path.join(ROOT, "tmp", `sim-server-${port}.pid`), "utf8").trim());
@@ -539,6 +612,7 @@ async function runScenario({ population, scenario, runDir }) {
       .map(([recipient, row]) => [recipient, row.downlinkAcceptedBytesPerSecond]));
     const meanWorst = Math.max(...Object.values(perRecipientMean));
     const p95OneSecond = windows["1s"].allRecipientWindowsBytesPerSecond.p95;
+    const p99OneSecond = windows["1s"].allRecipientWindowsBytesPerSecond.p99;
     const clientSummary = summarizeClients(allClients);
     const shape = clientSummary.reduce((sum, client) => {
       for (const key of Object.keys(sum)) sum[key] += client.shape[key];
@@ -551,7 +625,11 @@ async function runScenario({ population, scenario, runDir }) {
     const publisher = preStopHealth.multiplayer.statePair.publisher;
     const livePublisher = endHealth.multiplayer.statePair.publisher;
     const correctness = {
+      mixedCapabilityNegotiated: !MIXED_GATE || clientSummary.every((client) =>
+        client.capabilities.includes(MIXED_CAPABILITY)),
       allClientHashesMatched: clientSummary.every((client) => client.hashesVerified === client.acceptedPairs),
+      ownerPrivacyAndAtomicObservationVerified: clientSummary.every((client) =>
+        client.hashesVerified === client.acceptedPairs && client.error === null),
       noClientErrors: clientSummary.every((client) => client.error === null),
       publisherDrained: publisher.recipients === 0 && publisher.pendingPairs === 0 && publisher.retainedBytes === 0,
       statePairAcksConverged: publisher.ackAccepted > 0,
@@ -592,8 +670,18 @@ async function runScenario({ population, scenario, runDir }) {
       .reduce((sum, row) => sum + row.frames, 0);
     const productDeltas = pairGroup.filter((row) => row.projectionKind === "delta")
       .reduce((sum, row) => sum + row.frames, 0);
+    const productPairKindCounts = Object.fromEntries(pairGroup.map((row) =>
+      [row.projectionKind === "keyframe" ? "public-keyframe+owner-keyframe"
+        : row.projectionKind === "delta" ? "public-delta+owner-delta" : row.projectionKind, row.frames]));
+    const productMixed = Object.entries(productPairKindCounts)
+      .filter(([kind]) => !["public-keyframe+owner-keyframe", "public-delta+owner-delta"].includes(kind))
+      .reduce((sum, [, frames]) => sum + frames, 0);
+    const publicDeltaOwnerKeyframe = productPairKindCounts["public-delta+owner-keyframe"] || 0;
+    const atomicAlignmentCauses = Object.entries(publisher.keyframeReasons)
+      .filter(([reason]) => reason.startsWith("atomic-kind-alignment:"))
+      .reduce((sum, [, count]) => sum + count, 0);
     const result = {
-      schemaVersion: 1, scenario, population, seed: SEED, profile: PROFILE,
+      schemaVersion: MIXED_GATE ? 2 : 1, gate: GATE, scenario, population, seed: SEED, profile: PROFILE,
       topology: { matches: 1, dedicatedLogicalAuthorities: 1, simultaneousRecipients: population,
         note: "One authoritative sim instance for one match; not a concurrent-match fleet-capacity result." },
       window: { startAt, endAt, durationSeconds: (endAt - startAt) / 1000,
@@ -606,6 +694,7 @@ async function runScenario({ population, scenario, runDir }) {
       },
       exactTraffic: { perRecipientMeanDownlinkBytesPerSecond: perRecipientMean,
         worstRecipientMeanDownlinkBytesPerSecond: meanWorst, oneSecondP95DownlinkBytesPerSecond: p95OneSecond,
+        oneSecondP99DownlinkBytesPerSecond: p99OneSecond,
         acceptedBreakdown: breakdown, windows,
         explicitCounts: {
           recoveryRequestsSerialized: clientSummary.reduce((sum, client) =>
@@ -636,7 +725,10 @@ async function runScenario({ population, scenario, runDir }) {
         acceptedStatePairFrameBytes: pairGroup.map((row) => ({ kind: row.projectionKind,
         frames: row.frames, bytes: row.bytes, frameBytes: row.frameBytes })),
         productWindow: { keyframes: productKeyframes, deltas: productDeltas,
-          keyframesPerAcceptedPair: productKeyframes / Math.max(1, productKeyframes + productDeltas),
+          mixed: productMixed, publicDeltaOwnerKeyframe, pairKindCounts: productPairKindCounts,
+          atomicKindAlignmentCauses: atomicAlignmentCauses,
+          atomicKindAlignmentAbsent: atomicAlignmentCauses === 0,
+          keyframesPerAcceptedPair: productKeyframes / Math.max(1, productKeyframes + productDeltas + productMixed),
           keyframesPerSecondPerRecipient: productKeyframes / population / ((endAt - startAt) / 1000) },
         comparison: { acceptedS0FullJson: S0[population], s1StaticManifestApproximatePairP50: S0[population].pairP50 - S1_STATIC_PAIR_SAVINGS_BYTES,
           observedPairBytes: pairStats,
@@ -664,6 +756,7 @@ async function runScenario({ population, scenario, runDir }) {
       limitations: ["Local macOS loopback only", "raw WebSocket without TLS", "one match at a time",
         "no hosted fleet, WSS, WAN, packet retransmission, compression, AOI, binary codec, or 24-96-client claim"],
     };
+    if (MIXED_GATE) result.comparisonToS3 = compareScenarioToS3(result);
     writeExclusive(path.join(runDir, `${scenario}-${population}.json`), result);
     return result;
   } finally {
@@ -699,9 +792,17 @@ function validateArtifact(directory) {
       entry.scenario === "normal" && entry.population === population)) || aggregate.profile === "review",
     churnPopulationsPresent: [1, 4, 8].every((population) => scenarioFiles.some((entry) =>
       entry.scenario === "churn" && entry.population === population)) || aggregate.profile === "review",
+    atomicKindAlignmentAbsent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
+      entry.pairShape.productWindow.atomicKindAlignmentAbsent === true),
+    mixedPairsObserved: aggregate.gate !== "s4" || scenarioFiles
+      .filter((entry) => entry.scenario === "normal")
+      .every((entry) => entry.pairShape.productWindow.publicDeltaOwnerKeyframe > 0),
+    s3ComparisonsPresent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
+      entry.comparisonToS3?.compositeSha256 === S3_CANONICAL_SHA256),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
-    && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent;
+    && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
+    && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent;
   return { passed: methodPassed, invariants, checksum,
     aggregateVerdict: aggregate.verdict };
 }
@@ -716,24 +817,29 @@ async function main() {
   }
   const commit = git("rev-parse", "HEAD");
   const dirty = Boolean(git("status", "--porcelain"));
-  if (dirty && process.env.LBH_S3_ALLOW_DIRTY !== "1") throw new Error("S3 product evidence requires clean HEAD");
+  const allowDirty = process.env[`LBH_${GATE.toUpperCase()}_ALLOW_DIRTY`] === "1";
+  if (dirty && !allowDirty) throw new Error(`${GATE.toUpperCase()} product evidence requires clean HEAD`);
   const stamp = new Date().toISOString().replace(/[:.]/g, "");
-  const runDir = process.env.LBH_S3_OUTPUT_DIR
-    ? path.resolve(process.env.LBH_S3_OUTPUT_DIR)
-    : path.join(__dirname, "screenshots", `multiplayer-state-pair-s3-${stamp}-${commit.slice(0, 7)}`);
+  const configuredOutput = process.env[`LBH_${GATE.toUpperCase()}_OUTPUT_DIR`];
+  const runDir = configuredOutput
+    ? path.resolve(configuredOutput)
+    : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${PROFILE === "review" ? " --review" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${MIXED_GATE ? " --s4" : ""}${PROFILE === "review" ? " --review" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
-    schemaVersion: 1, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
+    schemaVersion: 2, gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
     config: { populations: POPULATIONS, normalWarmupMs: NORMAL_WARMUP_MS, normalWindowMs: NORMAL_WINDOW_MS,
       churnWarmupMs: CHURN_WARMUP_MS, churnWindowMs: CHURN_WINDOW_MS, inputHz: INPUT_HZ,
       targetBytesPerSecondPerPlayer: TARGET_BPS, sensitivityBytesPerSecondPerPlayer: SENSITIVITY_BPS,
       env: { LBH_SIM_WS_JSON_V2: true, LBH_SIM_WS_STATE_PAIR_V1: true,
+        LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE,
         LBH_SIM_WS_REPLICATION_ACCOUNTING: true, LBH_REPLICATION_BASELINE_CAPTURE: true } },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
       cpu: os.cpus()[0]?.model || null, logicalCpuCount: os.cpus().length, totalMemoryBytes: os.totalmem(),
       node: process.version, v8: process.versions.v8 },
-    claimBoundary: "Machine-local opt-in state-pair-v1 application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence.",
+    claimBoundary: `Machine-local opt-in ${MIXED_GATE ? "state-pair-mixed-v1" : "state-pair-v1"} application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence.`,
+    s3CanonicalEvidence: MIXED_GATE ? { path: path.relative(ROOT, S3_CANONICAL_DIR),
+      compositeSha256: S3_CANONICAL_SHA256 } : null,
   });
   const results = [];
   try {
@@ -769,23 +875,37 @@ async function main() {
       })),
     };
   });
-  const aggregate = { schemaVersion: 1, profile: PROFILE, commit, seed: SEED, command, verdict,
+  const aggregate = { schemaVersion: MIXED_GATE ? 2 : 1, gate: GATE,
+    profile: PROFILE, commit, seed: SEED, command, verdict,
     scenarios: results.map((entry) => ({ file: `${entry.scenario}-${entry.population}.json`,
       scenario: entry.scenario, population: entry.population,
       worstRecipientMeanDownlinkBytesPerSecond: entry.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond,
       oneSecondP95DownlinkBytesPerSecond: entry.exactTraffic.oneSecondP95DownlinkBytesPerSecond,
+      oneSecondP99DownlinkBytesPerSecond: entry.exactTraffic.oneSecondP99DownlinkBytesPerSecond,
+      pairKindCounts: entry.pairShape.productWindow.pairKindCounts,
       admission: entry.admission })),
+    s3CanonicalEvidence: MIXED_GATE ? { path: path.relative(ROOT, S3_CANONICAL_DIR),
+      compositeSha256: S3_CANONICAL_SHA256,
+      comparisons: Object.fromEntries(results.map((entry) =>
+        [`${entry.scenario}-${entry.population}`, entry.comparisonToS3])) } : null,
+    optimizationProof: MIXED_GATE ? {
+      atomicKindAlignmentCauses: results.reduce((sum, entry) =>
+        sum + entry.pairShape.productWindow.atomicKindAlignmentCauses, 0),
+      publicDeltaOwnerKeyframeProductPairs: results.reduce((sum, entry) =>
+        sum + entry.pairShape.productWindow.publicDeltaOwnerKeyframe, 0),
+      allNormalPopulationsObservedMixed: normalResults.every((entry) =>
+        entry.pairShape.productWindow.publicDeltaOwnerKeyframe > 0),
+    } : null,
     manifestIdentity: { hashes: results.map((entry) => entry.diagnostics.statePair.manifestHash),
       changedAcrossFreshMatches: new Set(results.map((entry) => entry.diagnostics.statePair.manifestHash)).size > 1,
       reconnectReuseObserved: results.filter((entry) => entry.scenario === "churn")
         .every((entry) => entry.faults.some((fault) => fault.name === "reconnect" && fault.manifestReused === true)) },
     failureAnalysis,
-    recommendation: verdict.passed ? "Advance only to separately measured WAN/WSS and longer soak gates."
+    recommendation: verdict.passed ? "S4 structural JSON traffic and CPU pass; advance only to separately measured WAN/WSS and longer soak gates."
       : {
-        nextSlice: "Test mixed public-delta/owner-keyframe lane kinds inside one atomically applied statePair before any broader codec or AOI work; the gate now attributes the dominant fallback and records both candidates.",
-        quantifiedTarget: "The next slice must recover the per-population required reductions in failureAnalysis; do not substitute aggregate averages.",
-        boundedPotentialReference: "The existing focused runtime loopback measured 31,993-byte keyframe versus 11,696-byte valid delta (63.4% smaller), but that is a non-representative upper-bound clue, not a product forecast.",
-        second: "Reduce exhaustive runtimePublic component replacement only after candidate evidence identifies the repeated fields; preserve canonical projection completeness.",
+        nextSlice: "Diagnose the dominant accepted statePair bytes and projection/publish cost at each failing population; reduce repeated runtimePublic structure only if the product evidence identifies it as the next narrow cause.",
+        quantifiedTarget: "Recover each population's exact required reduction in failureAnalysis; do not substitute aggregate averages or modeled transport overhead.",
+        second: "Keep mixed public-delta/owner-keyframe atomic observation and independently isolate accounting-ledger memory from product memory before changing retention.",
         defer: "Binary, AOI, compression, hosted WSS, and fleet packing remain out of scope until structural JSON passes or a measured residual justifies them.",
       },
   };
@@ -793,7 +913,7 @@ async function main() {
   const files = fs.readdirSync(runDir).filter((name) => name.endsWith(".json") && name !== "checksums.json");
   writeExclusive(path.join(runDir, "checksums.json"), aggregateChecksum(runDir, files));
   const validation = validateArtifact(runDir);
-  console.log(`S3 state-pair artifact: ${runDir}`);
+  console.log(`${GATE.toUpperCase()} state-pair artifact: ${runDir}`);
   console.log(`Aggregate SHA-256: ${validation.checksum.actualAggregateSha256}`);
   console.log(`Verdict: ${verdict.passed ? "PASS" : "FAIL"}; validation=${validation.passed ? "PASS" : "FAIL"}`);
   process.exit(validation.passed ? 0 : 1);

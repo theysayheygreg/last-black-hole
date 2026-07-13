@@ -41,6 +41,7 @@
     "test:multiplayer-authority": "node tests/run-all.cjs --lane=multiplayer-authority --renderer=three",
     "test:multiplayer-network": "node tests/run-all.cjs --lane=multiplayer-network --renderer=three",
     "test:multiplayer-state-pair-gate": "node tests/multiplayer-state-pair-product-gate.cjs",
+    "test:multiplayer-state-pair-s4-gate": "node tests/multiplayer-state-pair-product-gate.cjs --s4",
     "test:soak-runtime-diagnostics": "node tests/soak-runtime-diagnostics.cjs",
     "test:multiplayer-soak:smoke": "node tests/multiplayer-soak-smoke.cjs --no-retries",
     "test:multiplayer-soak:normal": "node tests/multiplayer-soak-normal.cjs --no-retries",
