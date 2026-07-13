@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 2,
+  "gate": "s5",
+  "profile": "diagnostic-instrumented",
+  "microProfile": false,
+  "instrumentationEnabled": true,
+  "commit": "eec36ee52235b4f5ef7a4467458a9ce570beff6d",
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s5-profile",
+  "verdict": {
+    "passed": false,
+    "normal": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      },
+      "4": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    "churn": {}
+  },
+  "scenarios": [
+    {
+      "file": "normal-1.json",
+      "scenario": "normal",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 145960.13333333333,
+      "oneSecondP95DownlinkBytesPerSecond": 155638,
+      "oneSecondP99DownlinkBytesPerSecond": 159246,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 291
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-4.json",
+      "scenario": "normal",
+      "population": 4,
+      "worstRecipientMeanDownlinkBytesPerSecond": 71876.93333333333,
+      "oneSecondP95DownlinkBytesPerSecond": 83328,
+      "oneSecondP99DownlinkBytesPerSecond": 86129,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 484
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-8.json",
+      "scenario": "normal",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 47341.333333333336,
+      "oneSecondP95DownlinkBytesPerSecond": 61231,
+      "oneSecondP99DownlinkBytesPerSecond": 70675,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 520
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  ],
+  "s3CanonicalEvidence": null,
+  "optimizationProof": {
+    "atomicKindAlignmentCauses": 0,
+    "publicDeltaOwnerKeyframeProductPairs": 1295,
+    "allNormalPopulationsObservedMixed": true
+  },
+  "manifestIdentity": {
+    "hashes": [
+      "sha256:fcceb3ae1da215a28bc226cba8df735b0defa2ce09e92982a2477145db8f45e5",
+      "sha256:7896b2fa2f54e5581d6b9e4c8d76faa3e162ed1b23f3eeeb31be361c9ef3bf88",
+      "sha256:5ec2b8b169dd7797474602df154a2777de32e3aac93850d973a98be0e7f78edd"
+    ],
+    "changedAcrossFreshMatches": true,
+    "reconnectReuseObserved": true
+  },
+  "failureAnalysis": [
+    {
+      "population": 1,
+      "requiredDownlinkReductionBytesPerSecond": 80424.13333333333,
+      "requiredDownlinkReductionFraction": 0.5510006842050934,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 4364383,
+          "fraction": 0.9967066349624235
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 14263,
+          "fraction": 0.0032572821254388184
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 158,
+          "fraction": 0.0000360829121376522
+        }
+      ]
+    },
+    {
+      "population": 4,
+      "requiredDownlinkReductionBytesPerSecond": 6340.933333333334,
+      "requiredDownlinkReductionFraction": 0.08821930818788415,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 8450879,
+          "fraction": 0.9932107881794588
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 57052,
+          "fraction": 0.0067051796490299395
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 715,
+          "fraction": 0.00008403217151118992
+        }
+      ]
+    },
+    {
+      "population": 8,
+      "requiredDownlinkReductionBytesPerSecond": 0,
+      "requiredDownlinkReductionFraction": 0,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 11062107,
+          "fraction": 0.9896347896473858
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 114104,
+          "fraction": 0.01020793670120216
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 1758,
+          "fraction": 0.00015727365141198727
+        }
+      ]
+    }
+  ],
+  "recommendation": "Diagnostic only: use stage attribution and the A/B control before selecting one narrow CPU optimization."
+}

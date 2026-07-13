@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 2,
+  "gate": "s5",
+  "profile": "diagnostic-micro-instrumented",
+  "microProfile": true,
+  "instrumentationEnabled": true,
+  "commit": "eec36ee52235b4f5ef7a4467458a9ce570beff6d",
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s5-profile --micro",
+  "verdict": {
+    "passed": false,
+    "normal": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    "churn": {}
+  },
+  "scenarios": [
+    {
+      "file": "normal-1.json",
+      "scenario": "normal",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 148053.4,
+      "oneSecondP95DownlinkBytesPerSecond": 157170,
+      "oneSecondP99DownlinkBytesPerSecond": 157170,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 146
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-8.json",
+      "scenario": "normal",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 48754.933333333334,
+      "oneSecondP95DownlinkBytesPerSecond": 70676,
+      "oneSecondP99DownlinkBytesPerSecond": 71174,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 260
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  ],
+  "s3CanonicalEvidence": null,
+  "optimizationProof": {
+    "atomicKindAlignmentCauses": 0,
+    "publicDeltaOwnerKeyframeProductPairs": 406,
+    "allNormalPopulationsObservedMixed": true
+  },
+  "manifestIdentity": {
+    "hashes": [
+      "sha256:dcfea9c7c9701bcd774ad558f36a28f9ecbbdccda9ce86e89241d5235fe75653",
+      "sha256:8089182e56597730df15cac93aa50ca3bde04c4a21b44b8ce427b908849099be"
+    ],
+    "changedAcrossFreshMatches": true,
+    "reconnectReuseObserved": true
+  },
+  "failureAnalysis": [
+    {
+      "population": 1,
+      "requiredDownlinkReductionBytesPerSecond": 82517.4,
+      "requiredDownlinkReductionFraction": 0.5573489024905878,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 2213721,
+          "fraction": 0.9968119610897149
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 7001,
+          "fraction": 0.003152466159732457
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 79,
+          "fraction": 0.000035572750552615925
+        }
+      ]
+    },
+    {
+      "population": 8,
+      "requiredDownlinkReductionBytesPerSecond": 0,
+      "requiredDownlinkReductionFraction": 0,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 5641818,
+          "fraction": 0.9900940022971905
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 55256,
+          "fraction": 0.009696986714377095
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 1191,
+          "fraction": 0.00020901098843244392
+        }
+      ]
+    }
+  ],
+  "recommendation": "Diagnostic only: use stage attribution and the A/B control before selecting one narrow CPU optimization."
+}

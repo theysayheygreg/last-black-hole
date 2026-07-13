@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "gate": "s5",
+  "generatedAt": "2026-07-13T09:09:26.954Z",
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s5-profile --micro --profile-control",
+  "profile": "diagnostic-micro-control",
+  "commit": "eec36ee52235b4f5ef7a4467458a9ce570beff6d",
+  "dirty": false,
+  "seed": 1403105358,
+  "config": {
+    "populations": [
+      1,
+      8
+    ],
+    "normalWarmupMs": 5000,
+    "normalWindowMs": 15000,
+    "churnWarmupMs": 20000,
+    "churnWindowMs": 90000,
+    "inputHz": 10,
+    "targetBytesPerSecondPerPlayer": 65536,
+    "sensitivityBytesPerSecondPerPlayer": 81920,
+    "env": {
+      "LBH_SIM_WS_JSON_V2": true,
+      "LBH_SIM_WS_STATE_PAIR_V1": true,
+      "LBH_SIM_WS_STATE_PAIR_MIXED_V1": true,
+      "LBH_SIM_WS_REPLICATION_ACCOUNTING": true,
+      "LBH_REPLICATION_BASELINE_CAPTURE": true,
+      "LBH_SIM_WS_STAGE_PROFILE": false
+    }
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 34359738368,
+    "node": "v22.22.3",
+    "v8": "12.4.254.21-node.56"
+  },
+  "claimBoundary": "Machine-local opt-in state-pair-mixed-v1 application traffic and CPU gate for one match authority at 1/4/8 recipients; not WAN/WSS/hosted/fleet/high-count evidence.",
+  "s3CanonicalEvidence": null
+}
