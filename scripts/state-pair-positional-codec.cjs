@@ -436,6 +436,66 @@ function encodeStatePair(frame, context) {
   return wire;
 }
 
+function statePairHeader(frame, context) {
+  assertContext(frame, context);
+  const header = [PAIR_TAG, CODEC_VERSION, POSITIONAL_CODEC_MANIFEST_HASH,
+    frame.pairSchema === "lbh-authority-state-pair-mixed-v1" ? 1 : frame.pairSchema === "lbh-authority-state-pair-v1" ? 0 : -1,
+    string(frame.matchId, "matchId"), string(frame.sessionId, "sessionId"), integer(frame.authorityIncarnation, "authorityIncarnation", 1),
+    string(frame.recipientId, "recipientId"), integer(frame.recipientIncarnation, "recipientIncarnation", 1),
+    integer(frame.frameId, "frameId", 1), string(frame.statePairId, "statePairId"), string(frame.snapshotId, "snapshotId"),
+    integer(frame.tick, "tick"), number(frame.simTime, "simTime"), integer(frame.eventWatermark, "eventWatermark"),
+    integer(frame.fieldRevision, "fieldRevision"), tagOf(OVERLOAD_TAG, frame.overloadMode, "overloadMode"),
+    integer(frame.ballparkEpoch, "ballparkEpoch"), string(frame.manifestHash, "manifestHash")];
+  if (header[3] < 0) fail("unknown-schema", "statePair schema is unsupported");
+  return header;
+}
+
+// Exact composed sizing avoids materializing every cartesian state-pair wire.
+// JSON arrays have fixed one-byte comma/bracket framing, so a shared serialized
+// header plus independently serialized lanes is byte-identical to
+// JSON.stringify([...header, publicLane, ownerLane]). Only the selected full
+// wire is composed.
+function composeStatePairCandidates(entries, context, tieOrder) {
+  if (!Array.isArray(entries) || entries.length === 0 || !Array.isArray(tieOrder)) {
+    throw new TypeError("candidate entries and tie order are required");
+  }
+  const firstHeader = statePairHeader(entries[0].frame, context);
+  const headerText = JSON.stringify(firstHeader);
+  const prefix = headerText.slice(0, -1);
+  const prefixBytes = Buffer.byteLength(prefix, "utf8");
+  const laneCache = new Map();
+  const laneText = (payload, label) => {
+    let cached = laneCache.get(payload);
+    if (cached) return cached;
+    const text = JSON.stringify(encodeLane(payload, label));
+    cached = Object.freeze({ text, bytes: Buffer.byteLength(text, "utf8") });
+    laneCache.set(payload, cached);
+    return cached;
+  };
+  const sized = entries.map((entry) => {
+    const header = statePairHeader(entry.frame, context);
+    if (JSON.stringify(header) !== headerText) fail("identity-mismatch", "candidate statePair headers differ");
+    const publicLane = laneText(entry.frame.public, "public");
+    const ownerLane = laneText(entry.frame.owner, "owner");
+    const bytes = prefixBytes + 1 + publicLane.bytes + 1 + ownerLane.bytes + 1;
+    if (bytes > MAX_CODEC_BYTES) fail("frame-too-large", "positional statePair exceeds codec limit");
+    return Object.freeze({ ...entry, bytes, publicLane, ownerLane });
+  });
+  const rank = new Map(tieOrder.map((kind, index) => [kind, index]));
+  const chosen = [...sized].sort((a, b) => a.bytes - b.bytes
+    || (rank.get(a.kind) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.kind) ?? Number.MAX_SAFE_INTEGER))[0];
+  const wire = `${prefix},${chosen.publicLane.text},${chosen.ownerLane.text}]`;
+  const bytes = Buffer.byteLength(wire, "utf8");
+  if (bytes !== chosen.bytes) fail("internal-size-mismatch", "composed positional statePair size disagrees with exact sizing");
+  return Object.freeze({ chosen: Object.freeze({ kind: chosen.kind, frame: chosen.frame, bytes, wire }),
+    candidates: Object.freeze(sized.map((entry) => Object.freeze({ kind: entry.kind, bytes: entry.bytes }))),
+    diagnostics: Object.freeze({ headerSerializations: 1, laneSerializations: laneCache.size,
+      componentSerializations: 1 + laneCache.size, fullCandidateCompositions: 1, winnerSerializations: 1,
+      bytesExamined: sized.reduce((sum, entry) => sum + entry.bytes, 0),
+      allocationProxyBytes: Buffer.byteLength(headerText, "utf8")
+        + [...laneCache.values()].reduce((sum, entry) => sum + entry.bytes, 0) + bytes }) });
+}
+
 function decodeStatePair(encoded, context) {
   exactArray(encoded, 21, "statePair");
   if (encoded[0] !== PAIR_TAG || encoded[1] !== CODEC_VERSION
@@ -561,4 +621,5 @@ function codecContext(input = {}) {
 module.exports = {
   CAPABILITY, CODEC_SCHEMA, CODEC_VERSION, POSITIONAL_CODEC_MANIFEST, POSITIONAL_CODEC_MANIFEST_HASH,
   MAX_CODEC_BYTES, PositionalCodecError, codecContext, encodePositionalFrame, decodePositionalFrame,
+  composeStatePairCandidates,
 };

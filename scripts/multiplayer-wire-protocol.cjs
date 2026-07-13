@@ -9,9 +9,11 @@ const {
   PositionalCodecError,
   encodePositionalFrame,
   decodePositionalFrame,
+  composeStatePairCandidates,
 } = require("./state-pair-positional-codec.cjs");
 
 const trustedStatePairWireEncoders = new WeakSet();
+const trustedStatePairCandidateSelectors = new WeakMap();
 
 const CLIENT_TO_SERVER = "client->server";
 const SERVER_TO_CLIENT = "server->client";
@@ -740,11 +742,35 @@ function createStatePairWireEncoder(positionalContext, observe = null) {
     return wire;
   };
   trustedStatePairWireEncoders.add(encoder);
+  trustedStatePairCandidateSelectors.set(encoder, (entries, tieOrder) => {
+    const started = performance.now();
+    for (const entry of entries) {
+      validateWireFrameSemantic(entry.frame, { direction: SERVER_TO_CLIENT, positionalContext: context });
+    }
+    try {
+      const selected = composeStatePairCandidates(entries, context, tieOrder);
+      observe?.(selected.chosen.wire, performance.now() - started);
+      return selected;
+    } catch (error) {
+      if (error instanceof PositionalCodecError) fail(error.code, error.message);
+      throw error;
+    }
+  });
   return encoder;
 }
 
 function isTrustedStatePairWireEncoder(value) {
   return typeof value === "function" && trustedStatePairWireEncoders.has(value);
+}
+
+function selectTrustedStatePairWireCandidate(encoder, entries, tieOrder) {
+  const selector = trustedStatePairCandidateSelectors.get(encoder);
+  if (!selector) throw new TypeError("encoder does not expose trusted exact candidate composition");
+  return selector(entries, tieOrder);
+}
+
+function hasTrustedStatePairCandidateSelector(encoder) {
+  return trustedStatePairCandidateSelectors.has(encoder);
 }
 
 module.exports = {
@@ -764,5 +790,7 @@ module.exports = {
   parseWireFrame,
   encodeWireFrame,
   createStatePairWireEncoder,
+  selectTrustedStatePairWireCandidate,
+  hasTrustedStatePairCandidateSelector,
   isTrustedStatePairWireEncoder,
 };

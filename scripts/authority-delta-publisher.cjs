@@ -11,9 +11,10 @@ const {
   createPreparedStructuralDelta,
   createStructuralDelta,
 } = require("./canonical-structural-delta.cjs");
-const { canonicalJsonBytes } = require("./session-replication-manifest.cjs");
+const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
-const { isTrustedStatePairWireEncoder } = require("./multiplayer-wire-protocol.cjs");
+const { isTrustedStatePairWireEncoder, hasTrustedStatePairCandidateSelector,
+  selectTrustedStatePairWireCandidate } = require("./multiplayer-wire-protocol.cjs");
 
 const PAIR_SCHEMA = "lbh-authority-state-pair-v1";
 const ACK_SCHEMA = "lbh-authority-state-pair-ack-v1";
@@ -124,6 +125,54 @@ function serializedBytes(value, stageProfiler, recipientKey) {
 
 function wireDigest(wire) {
   return `sha256:${crypto.createHash("sha256").update(wire, "utf8").digest("hex")}`;
+}
+
+function exactCanonicalCandidateSizes(entries) {
+  const first = entries[0].frame;
+  const keys = Object.keys(first).sort((a, b) => {
+    const left = Array.from(a, (character) => character.codePointAt(0));
+    const right = Array.from(b, (character) => character.codePointAt(0));
+    for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
+      if (left[index] !== right[index]) return left[index] - right[index];
+    }
+    return left.length - right.length;
+  });
+  const payloadCache = new Map();
+  const encodedPayload = (payload) => {
+    let value = payloadCache.get(payload);
+    if (value === undefined) {
+      value = canonicalJson(payload);
+      payloadCache.set(payload, value);
+    }
+    return value;
+  };
+  const sharedSegments = new Map();
+  for (const key of keys) {
+    if (key === "public" || key === "owner") continue;
+    sharedSegments.set(key, `${JSON.stringify(key)}:${canonicalJson(first[key])}`);
+  }
+  const sizes = new Map();
+  for (const entry of entries) {
+    const candidateKeys = Object.keys(entry.frame).sort((a, b) => keys.indexOf(a) - keys.indexOf(b));
+    if (candidateKeys.length !== keys.length || candidateKeys.some((key, index) => key !== keys[index])) {
+      fail("invalid-wire-size", "candidate statePair fields differ");
+    }
+    for (const key of keys) {
+      if (key !== "public" && key !== "owner" && entry.frame[key] !== first[key]) {
+        fail("invalid-wire-size", "candidate statePair headers differ");
+      }
+    }
+    let bytes = 2 + Math.max(0, keys.length - 1);
+    for (const key of keys) {
+      const segment = key === "public" || key === "owner"
+        ? `${JSON.stringify(key)}:${encodedPayload(entry.frame[key])}` : sharedSegments.get(key);
+      bytes += Buffer.byteLength(segment, "utf8");
+    }
+    sizes.set(entry.kind, bytes);
+  }
+  return Object.freeze({ sizes, componentSerializations: sharedSegments.size + payloadCache.size,
+    allocationProxyBytes: [...sharedSegments.values()].reduce((sum, value) => sum + Buffer.byteLength(value, "utf8"), 0)
+      + [...payloadCache.values()].reduce((sum, value) => sum + Buffer.byteLength(value, "utf8"), 0) });
 }
 
 function percentile(values, fraction) {
@@ -263,6 +312,13 @@ function createAuthorityDeltaPublisher(options = {}) {
     encodeSamplesDropped: 0,
     fallbacks: new Map(),
     maxEphemeralCandidates: 0,
+    componentSerializations: 0,
+    fullCandidateCompositions: 0,
+    winnerSerializations: 0,
+    bytesExamined: 0,
+    allocationProxyBytes: 0,
+    selectionMilliseconds: [],
+    selectionSamplesDropped: 0,
   };
   const operationCounters = {
     canonicalizations: 0, hashes: 0, diffs: 0, preparations: 0,
@@ -377,6 +433,23 @@ function createAuthorityDeltaPublisher(options = {}) {
     if (codecChoice.encodeMilliseconds.length < CODEC_CHOICE_SAMPLE_LIMIT) {
       codecChoice.encodeMilliseconds.push(elapsedMs);
     } else codecChoice.encodeSamplesDropped += 1;
+  }
+
+  function observeExactSelection(selected, expanded) {
+    for (const entry of selected.candidates) {
+      codecChoice.combinationsEvaluated += 1;
+      const row = codecChoice.encodedByCombination.get(entry.kind) || { count: 0, bytes: 0 };
+      row.count += 1;
+      row.bytes += entry.bytes;
+      codecChoice.encodedByCombination.set(entry.kind, row);
+    }
+    codecChoice.componentSerializations += selected.diagnostics.componentSerializations
+      + expanded.componentSerializations;
+    codecChoice.fullCandidateCompositions += selected.diagnostics.fullCandidateCompositions;
+    codecChoice.winnerSerializations += selected.diagnostics.winnerSerializations;
+    codecChoice.bytesExamined += selected.diagnostics.bytesExamined;
+    codecChoice.allocationProxyBytes += selected.diagnostics.allocationProxyBytes
+      + expanded.allocationProxyBytes;
   }
 
   function stateFor(identity, create = true) {
@@ -554,46 +627,96 @@ function createAuthorityDeltaPublisher(options = {}) {
         prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters }),
     );
     const fullKind = pairCombinationKind("keyframe", "keyframe");
-    let fullMeasured;
-    try { fullMeasured = measureWire(fullKeyframe, fullKind); }
-    catch (error) {
-      forceRebase(state, `wire-fallback:${String(error?.code || error?.name || "unknown").slice(0, 64)}`);
-      throw error;
-    }
-    const fullKeyframeBytes = fullMeasured.bytes;
     let chosen = null;
     const exactSafeBase = Boolean((encodeWire || wireSize) && allowMixed && state.acked && !state.forceKeyframe
       && publicDecision?.deltaPayload && ownerDecision?.deltaPayload);
+    let fullKeyframeBytes = null;
     const choosePair = () => {
-      if (exactSafeBase) {
+      const composedExact = exactSafeBase && encodeWire && hasTrustedStatePairCandidateSelector(encodeWire);
+      if (composedExact) {
         const lanes = {
           public: { keyframe: publicDecision.keyframePayload, delta: publicDecision.deltaPayload },
           owner: { keyframe: ownerDecision.keyframePayload, delta: ownerDecision.deltaPayload },
         };
-        const measured = new Map([[fullKind, fullMeasured]]);
-        let candidateFailure = null;
-        for (const kind of CODEC_PAIR_TIE_ORDER.slice(1)) {
+        const entries = CODEC_PAIR_TIE_ORDER.map((kind) => {
           const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
-          try { measured.set(kind, measureWire(buildFrame(lanes.public[publicKind], lanes.owner[ownerKind]), kind)); }
-          catch (error) { candidateFailure ||= error; }
-        }
-        codecChoice.maxEphemeralCandidates = Math.max(codecChoice.maxEphemeralCandidates, measured.size);
-        if (candidateFailure) {
-          countCodecFallback(`candidate-invalid:${String(candidateFailure.code || candidateFailure.name || "unknown")}`);
-          chosen = fullMeasured;
-          keyframeReason = `codec-candidate-invalid:${String(candidateFailure.code || candidateFailure.name || "unknown")}`;
-        } else {
-          const semanticKind = priorSemanticCombinationKind;
-          const semanticBytes = measured.get(semanticKind)?.bytes ?? fullKeyframeBytes;
-          chosen = [...measured.values()].sort((a, b) => a.bytes - b.bytes
-            || CODEC_PAIR_TIE_ORDER.indexOf(a.kind) - CODEC_PAIR_TIE_ORDER.indexOf(b.kind))[0];
+          return Object.freeze({ kind, frame: buildFrame(lanes.public[publicKind], lanes.owner[ownerKind]) });
+        });
+        codecChoice.maxEphemeralCandidates = Math.max(codecChoice.maxEphemeralCandidates, entries.length);
+        const started = performance.now();
+        try {
+          const expanded = exactCanonicalCandidateSizes(entries);
+          for (const bytes of expanded.sizes.values()) {
+            if (bytes > limits.maxPairBytes) fail("pair-too-large",
+              `atomic state pair exceeds ${limits.maxPairBytes} bytes in expanded form`);
+          }
+          const selected = selectTrustedStatePairWireCandidate(encodeWire, entries, CODEC_PAIR_TIE_ORDER);
+          observeExactSelection(selected, expanded);
+          const selectedExpandedBytes = expanded.sizes.get(selected.chosen.kind);
+          chosen = Object.freeze({ frame: selected.chosen.frame, kind: selected.chosen.kind,
+            bytes: selected.chosen.bytes, expandedBytes: selectedExpandedBytes,
+            encodedWire: selected.chosen.wire, encodedDigest: wireDigest(selected.chosen.wire) });
+          const sizes = new Map(selected.candidates.map((entry) => [entry.kind, entry.bytes]));
+          fullKeyframeBytes = sizes.get(fullKind);
+          const semanticBytes = sizes.get(priorSemanticCombinationKind) ?? fullKeyframeBytes;
           codecChoice.selections += 1;
           codecChoice.combinationsChosen.set(chosen.kind,
             (codecChoice.combinationsChosen.get(chosen.kind) || 0) + 1);
           codecChoice.bytesSavedVsSemanticChoice += Math.max(0, semanticBytes - chosen.bytes);
           if (chosen.kind === fullKind) keyframeReason = "codec-choice:public-keyframe+owner-keyframe";
+        } catch (error) {
+          countCodecFallback(`candidate-invalid:${String(error.code || error.name || "unknown")}`);
+          keyframeReason = `codec-candidate-invalid:${String(error.code || error.name || "unknown")}`;
+          chosen = measureWire(fullKeyframe, fullKind);
+          fullKeyframeBytes = chosen.bytes;
         }
+        const elapsed = performance.now() - started;
+        if (codecChoice.selectionMilliseconds.length < CODEC_CHOICE_SAMPLE_LIMIT) {
+          codecChoice.selectionMilliseconds.push(elapsed);
+        } else codecChoice.selectionSamplesDropped += 1;
       } else {
+        let fullMeasured;
+        try { fullMeasured = measureWire(fullKeyframe, fullKind); }
+        catch (error) {
+          forceRebase(state, `wire-fallback:${String(error?.code || error?.name || "unknown").slice(0, 64)}`);
+          throw error;
+        }
+        fullKeyframeBytes = fullMeasured.bytes;
+        if (encodeWire) {
+          codecChoice.fullCandidateCompositions += 1;
+          codecChoice.winnerSerializations += 1;
+          codecChoice.bytesExamined += fullMeasured.bytes;
+          codecChoice.allocationProxyBytes += fullMeasured.bytes;
+        }
+        if (exactSafeBase) {
+          const lanes = {
+            public: { keyframe: publicDecision.keyframePayload, delta: publicDecision.deltaPayload },
+            owner: { keyframe: ownerDecision.keyframePayload, delta: ownerDecision.deltaPayload },
+          };
+          const measured = new Map([[fullKind, fullMeasured]]);
+          let candidateFailure = null;
+          for (const kind of CODEC_PAIR_TIE_ORDER.slice(1)) {
+            const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
+            try { measured.set(kind, measureWire(buildFrame(lanes.public[publicKind], lanes.owner[ownerKind]), kind)); }
+            catch (error) { candidateFailure ||= error; }
+          }
+          codecChoice.maxEphemeralCandidates = Math.max(codecChoice.maxEphemeralCandidates, measured.size);
+          if (candidateFailure) {
+            countCodecFallback(`candidate-invalid:${String(candidateFailure.code || candidateFailure.name || "unknown")}`);
+            chosen = fullMeasured;
+            keyframeReason = `codec-candidate-invalid:${String(candidateFailure.code || candidateFailure.name || "unknown")}`;
+          } else {
+            const semanticKind = priorSemanticCombinationKind;
+            const semanticBytes = measured.get(semanticKind)?.bytes ?? fullKeyframeBytes;
+            chosen = [...measured.values()].sort((a, b) => a.bytes - b.bytes
+              || CODEC_PAIR_TIE_ORDER.indexOf(a.kind) - CODEC_PAIR_TIE_ORDER.indexOf(b.kind))[0];
+            codecChoice.selections += 1;
+            codecChoice.combinationsChosen.set(chosen.kind,
+              (codecChoice.combinationsChosen.get(chosen.kind) || 0) + 1);
+            codecChoice.bytesSavedVsSemanticChoice += Math.max(0, semanticBytes - chosen.bytes);
+            if (chosen.kind === fullKind) keyframeReason = "codec-choice:public-keyframe+owner-keyframe";
+          }
+        } else {
         if (encodeWire) countCodecFallback(state.acked ? "recovery-precedence" : "missing-exact-acked-base");
         let semanticMeasured;
         const semanticKind = priorSemanticCombinationKind;
@@ -608,6 +731,7 @@ function createAuthorityDeltaPublisher(options = {}) {
           ? fullMeasured : semanticMeasured;
         if (chosen === fullMeasured && semanticKind !== fullKind) {
           keyframeReason = semanticMeasured.bytes >= fullKeyframeBytes ? "pair-not-smaller" : "pair-limit-fallback";
+        }
         }
       }
       frame = chosen.frame;
@@ -813,6 +937,7 @@ function createAuthorityDeltaPublisher(options = {}) {
       ownerKeyframeBytes: candidates.comparisons ? candidates.ownerKeyframeBytes / candidates.comparisons : null,
     });
     const encodeSamples = codecChoice.encodeMilliseconds;
+    const selectionSamples = codecChoice.selectionMilliseconds;
     const codecPairChoice = Object.freeze({
       tieOrder: CODEC_PAIR_TIE_ORDER,
       combinationsEvaluated: codecChoice.combinationsEvaluated,
@@ -829,6 +954,15 @@ function createAuthorityDeltaPublisher(options = {}) {
         p50: percentile(encodeSamples, 0.50), p95: percentile(encodeSamples, 0.95),
         p99: percentile(encodeSamples, 0.99), max: encodeSamples.length ? Math.max(...encodeSamples) : null,
         samplesDropped: codecChoice.encodeSamplesDropped, sampleLimit: CODEC_CHOICE_SAMPLE_LIMIT }),
+      selectionMilliseconds: Object.freeze({ count: selectionSamples.length,
+        p50: percentile(selectionSamples, 0.50), p95: percentile(selectionSamples, 0.95),
+        p99: percentile(selectionSamples, 0.99), max: selectionSamples.length ? Math.max(...selectionSamples) : null,
+        samplesDropped: codecChoice.selectionSamplesDropped, sampleLimit: CODEC_CHOICE_SAMPLE_LIMIT }),
+      operations: Object.freeze({ componentSerializations: codecChoice.componentSerializations,
+        fullCandidateCompositions: codecChoice.fullCandidateCompositions,
+        winnerSerializations: codecChoice.winnerSerializations,
+        bytesExamined: codecChoice.bytesExamined,
+        allocationProxyBytes: codecChoice.allocationProxyBytes }),
       fallbacks: Object.freeze(Object.fromEntries([...codecChoice.fallbacks].sort())),
       ephemeralCandidates: Object.freeze({ retainedAfterPublish: 0,
         maxPerPublish: codecChoice.maxEphemeralCandidates, configuredMaximum: CODEC_PAIR_TIE_ORDER.length }),

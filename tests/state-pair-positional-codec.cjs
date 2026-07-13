@@ -16,7 +16,12 @@ const {
   POSITIONAL_CODEC_MANIFEST,
   POSITIONAL_CODEC_MANIFEST_HASH,
   codecContext,
+  encodePositionalFrame,
+  decodePositionalFrame,
+  composeStatePairCandidates,
 } = require("../scripts/state-pair-positional-codec.cjs");
+const { canonicalJsonBytes } = require("../scripts/session-replication-manifest.cjs");
+const { CODEC_PAIR_TIE_ORDER } = require("../scripts/authority-delta-publisher.cjs");
 
 const MANIFEST_SCHEMA = "lbh-session-replication-manifest-v1";
 const MANIFEST_HASH = `sha256:${"9".repeat(64)}`;
@@ -106,6 +111,63 @@ async function run() {
     assert(Object.isFrozen(POSITIONAL_CODEC_MANIFEST));
   });
 
+  await runner.run("exact component sizing matches brute-force wires across UTF-8 and JSON escaping", () => {
+    const strings = ["plain-ascii", "caf\u00e9-\ud83d\ude80-\u6f22\u5b57", "quote-\"-slash-\\-controls-\n\t\u0000",
+      "x".repeat(8192), "\ud83d\ude80".repeat(2048)];
+    let parityCases = 0;
+    for (let index = 0; index < 80; index += 1) {
+      const marker = strings[index % strings.length];
+      const ctx = codecContext({ matchId: "match-s14", sessionId: "session-s14", authorityIncarnation: 3,
+        recipientId: "member-s14", recipientIncarnation: 2, manifestHash: MANIFEST_HASH });
+      const header = { type: "statePair", pairSchema: "lbh-authority-state-pair-mixed-v1",
+        matchId: ctx.matchId, sessionId: ctx.sessionId, authorityIncarnation: ctx.authorityIncarnation,
+        recipientId: ctx.recipientId, recipientIncarnation: ctx.recipientIncarnation, frameId: index + 1,
+        statePairId: `pair-${index}`, snapshotId: `snapshot-${index}`, tick: index * 6,
+        simTime: index / 10, eventWatermark: index, fieldRevision: index, overloadMode: "NORMAL",
+        ballparkEpoch: 1, manifestHash: MANIFEST_HASH };
+      const keyframe = (lane) => ({ kind: "keyframe", schema: "lbh-canonical-projection-v1",
+        resultHash: `sha256:${lane === "public" ? "a" : "b".repeat(1)}${"0".repeat(63)}`,
+        projection: { schema: "lbh-canonical-projection-v1", lane, runId: header.matchId,
+          authorityEpoch: header.authorityIncarnation, connectionEpoch: header.recipientIncarnation,
+          ballparkEpoch: header.ballparkEpoch, manifestHash: header.manifestHash,
+          statePairId: header.statePairId, snapshotId: header.snapshotId, tick: header.tick,
+          simTime: header.simTime, eventWatermark: header.eventWatermark, fieldRevision: header.fieldRevision,
+          overloadMode: header.overloadMode, world: { publicFacts: { profileId: marker } }, entities: [] } });
+      const delta = (lane) => ({ kind: "delta", schema: "lbh-canonical-structural-delta-v1",
+        baseSnapshotId: `base-${index}`, baseHash: `sha256:${"c".repeat(64)}`,
+        resultHash: `sha256:${"d".repeat(64)}`, delta: { schema: "lbh-canonical-structural-delta-v1",
+          lane, runId: header.matchId, authorityEpoch: header.authorityIncarnation,
+          connectionEpoch: header.recipientIncarnation, ballparkEpoch: header.ballparkEpoch,
+          manifestHash: header.manifestHash, statePairId: header.statePairId,
+          baseSnapshotId: `base-${index}`, snapshotId: header.snapshotId,
+          baseHash: `sha256:${"c".repeat(64)}`, resultHash: `sha256:${"d".repeat(64)}`,
+          rootOps: [{ op: "set", path: ["publicFacts"], value: { profileId: marker } }],
+          creates: [], updates: [], despawns: [] } });
+      const lanes = { public: { keyframe: keyframe("public"), delta: delta("public") },
+        owner: { keyframe: keyframe("owner"), delta: delta("owner") } };
+      const entries = CODEC_PAIR_TIE_ORDER.map((kind) => {
+        const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
+        return { kind, frame: { ...header, public: lanes.public[publicKind], owner: lanes.owner[ownerKind] } };
+      });
+      const oracle = entries.map((entry) => {
+        const wire = encodePositionalFrame(entry.frame, ctx);
+        return { ...entry, wire, bytes: Buffer.byteLength(wire, "utf8") };
+      });
+      const selected = composeStatePairCandidates(entries, ctx, CODEC_PAIR_TIE_ORDER);
+      assert.deepStrictEqual(selected.candidates.map(({ kind, bytes }) => ({ kind, bytes })),
+        oracle.map(({ kind, bytes }) => ({ kind, bytes })));
+      const expected = [...oracle].sort((a, b) => a.bytes - b.bytes
+        || CODEC_PAIR_TIE_ORDER.indexOf(a.kind) - CODEC_PAIR_TIE_ORDER.indexOf(b.kind))[0];
+      assert.strictEqual(selected.chosen.kind, expected.kind);
+      assert.strictEqual(selected.chosen.wire, expected.wire);
+      assert.deepStrictEqual(decodePositionalFrame(selected.chosen.wire, ctx), selected.chosen.frame);
+      assert.strictEqual(crypto.createHash("sha256").update(selected.chosen.wire).digest("hex"),
+        crypto.createHash("sha256").update(expected.wire).digest("hex"));
+      parityCases += entries.length;
+    }
+    assert.strictEqual(parityCases, 320);
+  });
+
   await runner.run("keyframe and mixed deltas preserve semantic hashes and deterministic positional bytes", () => {
     const id = binding();
     const authority = createRuntimeStatePairAuthority({ matchId: id.runId,
@@ -127,6 +189,7 @@ async function run() {
       const wire = encodeWireFrame(produced.frame, { direction: SERVER_TO_CLIENT, positionalContext: context(id) });
       assert.strictEqual(produced.encodedWire, wire, "publisher must retain the exact selected positional bytes");
       assert.strictEqual(produced.bytes, Buffer.byteLength(wire, "utf8"));
+      assert.strictEqual(produced.expandedBytes, canonicalJsonBytes(produced.frame).length);
       assert.strictEqual(produced.encodedDigest,
         `sha256:${crypto.createHash("sha256").update(wire, "utf8").digest("hex")}`);
       assert.strictEqual(wire, encodeWireFrame(produced.frame,
@@ -167,6 +230,9 @@ async function run() {
     assert(choice.bytesSavedVsPriorSemanticChoice > 0);
     assert.strictEqual(choice.ephemeralCandidates.maxPerPublish, 4);
     assert.strictEqual(choice.ephemeralCandidates.retainedAfterPublish, 0);
+    assert.strictEqual(choice.operations.winnerSerializations, 4);
+    assert.strictEqual(choice.operations.fullCandidateCompositions, 4);
+    assert(choice.operations.componentSerializations > 0);
   });
 
   await runner.run("loss applies the next branch from a retained base and preserves despawn reincarnation ACK bases", () => {
