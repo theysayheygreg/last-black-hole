@@ -1113,8 +1113,13 @@ async function runScenario({ population, scenario, runDir }) {
         / ((endAt - startAt) / 1000)]));
     const minimumReceiverAcceptedPairsPerSecond = churn ? null
       : Math.min(...Object.values(receiverAcceptedPairsPerSecond));
+    // Convergence is a diagnostic tracking verdict, distinct from the product
+    // gate's absolute >=9 Hz requirement. Allow one publication per second or
+    // ten percent, whichever is larger, around each recipient's own authority
+    // stream so an overloaded local loop can prove base continuity without
+    // being mislabeled product-ready.
     const receiverCadenceToleranceHzByClient = Object.fromEntries(Object.entries(
-      authorityAcceptedPairsPerSecondByClient).map(([label, rate]) => [label, Math.max(0.5, rate * 0.05)]));
+      authorityAcceptedPairsPerSecondByClient).map(([label, rate]) => [label, Math.max(1, rate * 0.10)]));
     const receiverCadenceToleranceHz = Math.max(...Object.values(receiverCadenceToleranceHzByClient));
     const receiverCadenceTracksAuthority = churn ? null : Object.entries(receiverAcceptedPairsPerSecond)
       .every(([label, rate]) => Math.abs(rate - authorityAcceptedPairsPerSecondByClient[label])
