@@ -217,7 +217,8 @@ function hasMaterializedPublicEntity(client, category, sourceId) {
     entity.category === category && entity.sourceId === sourceId);
 }
 
-async function openStatePairClient({ port, authority, label, reuseManifest = false, fault = {} }) {
+async function openStatePairClient({ port, authority, label, reuseManifest = false, fault = {},
+  waitForFirstPair = true }) {
   const requestedCapabilities = ["static-manifest-v1", "state-pair-v1",
     ...(MIXED_GATE ? [MIXED_CAPABILITY] : []),
     ...(SPARSE_GATE ? [RUNTIME_PUBLIC_COMPONENTS_CAPABILITY] : []),
@@ -423,10 +424,11 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
   send(client, { type: "manifestAck", manifestSchema: issued.body.manifestSchema,
     manifestHash: issued.body.manifestHash, manifestBytes: issued.body.manifestBytes,
     connectionEpoch: client.welcome.connectionEpoch });
-  await waitFor(() => client.acceptedPairs > 0 || client.error || client.close, `${label} first state pair`).catch(async (error) => {
-    const health = await request(port, "/health/compact").catch(() => null);
-    throw new Error(`${error.message}; uplink=${JSON.stringify(client.uplink)}; health=${JSON.stringify(health?.body?.multiplayer?.statePair)}; projection=${JSON.stringify(health?.body?.multiplayer?.projection)}; adapter=${JSON.stringify({ manifestRequiredConnections: health?.body?.multiplayer?.adapter?.manifestRequiredConnections, statePair: health?.body?.multiplayer?.adapter?.statePair })}`);
-  });
+  if (waitForFirstPair) await waitFor(() => client.acceptedPairs > 0 || client.error || client.close,
+    `${label} first state pair`).catch(async (error) => {
+      const health = await request(port, "/health/compact").catch(() => null);
+      throw new Error(`${error.message}; uplink=${JSON.stringify(client.uplink)}; health=${JSON.stringify(health?.body?.multiplayer?.statePair)}; projection=${JSON.stringify(health?.body?.multiplayer?.projection)}; adapter=${JSON.stringify({ manifestRequiredConnections: health?.body?.multiplayer?.adapter?.manifestRequiredConnections, statePair: health?.body?.multiplayer?.adapter?.statePair })}`);
+    });
   if (client.error || client.close) throw new Error(`${label} admission failed: ${client.error || JSON.stringify(client.close)}`);
   return client;
 }
@@ -725,11 +727,22 @@ async function setupPopulation(port, population, scenarioName) {
     if (joined.status !== 200) throw new Error(`join ${seat} failed: ${JSON.stringify(joined.body)}`);
     authorities.push(joined.body.authority);
   }
-  // Complete the cohort's hello handshake before established recipients can
-  // starve later seats with positional publication work. Sequential opening
-  // measures setup-order saturation, not the admitted 1/4/8 product window.
-  const clients = await Promise.all(authorities.map((authority, seat) => openStatePairClient({ port, authority,
-    label: `${scenarioName}-seat-${seat}` })));
+  // Bind accounting ordinals deterministically by completing each lightweight
+  // hello in seat order, but do not wait for a heavy first state pair until all
+  // seats are bound. This avoids both setup-order publication starvation and
+  // nondeterministic per-seat cadence attribution.
+  const clients = [];
+  for (let seat = 0; seat < authorities.length; seat += 1) {
+    clients.push(await openStatePairClient({ port, authority: authorities[seat],
+      label: `${scenarioName}-seat-${seat}`, waitForFirstPair: false }));
+  }
+  await Promise.all(clients.map((client) => waitFor(() => client.acceptedPairs > 0
+    || client.error || client.close, `${client.label} first state pair`)));
+  for (const client of clients) {
+    if (client.error || client.close) {
+      throw new Error(`${client.label} failed before first state pair: ${client.error || JSON.stringify(client.close)}`);
+    }
+  }
   return { started, authorities, clients };
 }
 
