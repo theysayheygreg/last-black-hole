@@ -1,0 +1,57 @@
+{
+  "schema": "lbh-s15-canonical-reuse-benchmark-run-v1",
+  "moduleRoot": "tmp/s15-baseline-a0c950e",
+  "iterations": 1000,
+  "warmup": 100,
+  "execution": {
+    "runLabel": "round-a-baseline",
+    "declaredOrder": 1,
+    "sourceCommit": "a0c950e",
+    "sourceTree": "cbf2594e69de686f019e86ecef8b5d9aa7464320",
+    "testScriptCommit": "5345d21c51293883edb060d03de2123df3c7b47e",
+    "trackedSourceDirty": false,
+    "sourceHashes": {
+      "authorityPublisher": "fb6c28f617ea6c5d9a08fc0aa2af9a8d0ef47101d0531267c8be1953b372d274",
+      "positionalCodec": "5d476721e40f35d9473ffea00ce78d9c5721e34b88f68d75bd898a14922a024c",
+      "wireProtocol": "d352b84dc87d672bd50d85b5e739071e55db5a70cda911b43182f05f638c1de2",
+      "benchmarkScript": "5404a60b3978c681d366b50f2f32315a5c762a76564088d0a1eeb13a3fdff72a"
+    }
+  },
+  "workload": {
+    "publicEntities": 48,
+    "ownerEntities": 1,
+    "candidatesPerSelection": 4
+  },
+  "publishMilliseconds": {
+    "count": 1000,
+    "mean": 7.6066667960000185,
+    "p50": 7.575832999999875,
+    "p95": 7.755666000000019,
+    "p99": 8.083083999999872,
+    "max": 13.698082999999997
+  },
+  "selectionMilliseconds": {
+    "count": 1100,
+    "p50": 4.803915999999845,
+    "p95": 5.079916000000026,
+    "p99": 6.17391600000002,
+    "max": 9.378332999999998,
+    "samplesDropped": 0,
+    "sampleLimit": 2048
+  },
+  "operations": {
+    "componentSerializations": 28600,
+    "fullCandidateCompositions": 1101,
+    "winnerSerializations": 1101,
+    "bytesExamined": 18433641,
+    "allocationProxyBytes": 38916699
+  },
+  "selections": 1100,
+  "fallbackCounts": {
+    "missing-exact-acked-base": 1
+  },
+  "transcriptSha256": "b2795f615f1b0b91588690748106e287db51390defb35e149829b1e400cbe82f",
+  "selectionTranscriptSha256": "c022d7c51f3394cf651625310650982179c5da99873044b67e03244bdab65eeb",
+  "parityComparisons": 1000,
+  "decodedSemanticComparisons": 1000
+}

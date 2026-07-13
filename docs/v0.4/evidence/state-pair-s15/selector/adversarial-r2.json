@@ -1,0 +1,33 @@
+{
+  "schema": "lbh-s15-canonical-reuse-adversarial-v1",
+  "cases": 80,
+  "candidateComparisons": 320,
+  "exactExpandedComparisons": 320,
+  "exactPositionalComparisons": 320,
+  "semanticDecodes": 80,
+  "boundaryChecks": 640,
+  "invalidCanonicalCases": [
+    {
+      "value": "undefined",
+      "oracle": "non-json-value",
+      "candidate": "non-json-value"
+    },
+    {
+      "value": "NaN",
+      "oracle": "non-finite-number",
+      "candidate": "non-finite-number"
+    },
+    {
+      "value": "Infinity",
+      "oracle": "non-finite-number",
+      "candidate": "non-finite-number"
+    },
+    {
+      "value": "-Infinity",
+      "oracle": "non-finite-number",
+      "candidate": "non-finite-number"
+    }
+  ],
+  "mismatches": 0,
+  "transcriptSha256": "6574481de66ecd873e025d7fa1a2fea4515a0ae1d301ea2110fe38ef393af944"
+}

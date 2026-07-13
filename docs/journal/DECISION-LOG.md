@@ -2898,7 +2898,7 @@ cadence as bandwidth savings, or beginning hosted/24/48/96 extrapolation.
 | Date | Event |
 |------|-------|
 | Jul 13 | S15 reuses four exact canonical lane texts/counts within each same-operation expanded-limit check; 1,320 oracle comparisons and both deterministic transcripts remain exact. |
-| Jul 13 | Order-counterbalanced microbenchmarks remove every expanded lane reserialization and improve selector p50 10.45%, but the one-match authority still reaches only 5.45 Hz at four and 3.25 Hz at eight. |
+| Jul 13 | Direct S15 adversarial proof covers expanded/positional sizes, boundaries, decode, and invalid canonical values; exact-source-bound, order-counterbalanced microbenchmarks remove every expanded lane reserialization and improve selector p50 15.99%, but the one-match authority still reaches only 5.35 Hz at four and 3.25 Hz at eight. |
 | Jul 13 | Decision: keep the exact reuse, reject 4/8 admission, close additional positional cleanup as the default next move, and prototype a bounded binary state-pair codec against the JSON oracle. |
 
 **Options:**

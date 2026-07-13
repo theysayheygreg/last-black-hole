@@ -526,17 +526,20 @@ comparison now carry into the same synchronous expanded-pair size check under a
 private proof symbol and exact payload identity. No proof survives the
 selection or crosses a recipient/tick. The order-counterbalanced selector
 benchmark preserves 1,320 representative/adversarial comparisons with
-identical wire and selection transcripts. Expanded lane serializations fall
+identical wire and selection transcripts; the 320 direct S15 adversarial rows
+also bind expanded/positional sizes, boundaries, semantic decode, and invalid
+canonical rejection. Exact commit/tree/source hashes and declared execution
+order bind every selector row. Expanded lane serializations fall
 from 4,400 to zero across 1,100 selections, allocation proxy falls from
-38,916,699 to 13,836,499 bytes, mean publish improves 3.87%, and selector p50
-improves 10.45%.
+38,916,699 to 13,836,499 bytes, mean publish improves 9.15%, and selector p50
+improves 15.99%.
 
 Against S14's isolated-process baseline, 1/4/8 receiver cadence moves from
-9.85/5.25/3.05 to 9.85/5.45/3.25 Hz. Projection/publish p95 moves from
-26.17/111.00/241.71 to 24.80/102.20/225.19 ms; authority CPU moves from
-27.50/60.03/78.35% to 26.27/58.73/78.04% of one core. One player passes.
+9.85/5.25/3.05 to 9.85/5.35/3.25 Hz. Projection/publish p95 moves from
+26.17/111.00/241.71 to 26.26/103.43/224.80 ms; authority CPU moves from
+27.50/60.03/78.35% to 27.18/59.24/78.19% of one core. One player passes.
 Four and eight remain `DILATED`, fail cadence/clock, and normalize to
-66,516/74,117 and 79,377/97,181 B/s mean/p95. Correctness, exact schedules,
+67,019/74,700 and 77,482/97,032 B/s mean/p95. Correctness, exact schedules,
 queues, pressure, and cleanup pass; cadence collapse receives no traffic
 credit.
 

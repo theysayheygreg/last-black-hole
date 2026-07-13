@@ -1,36 +1,41 @@
 {
   "algorithm": "sha256(path NUL sha256 LF, sorted by path)",
-  "sha256": "40ff079c76270e7596a22e27d70abb86194794b8dd71dee41d9897af1bf3350f",
+  "sha256": "c84759a5de422ff5cddba4fb71095d133120cbcd034f5c8fe5c85c2907c356fe",
   "files": [
     {
       "path": "analysis.json",
-      "bytes": 13617,
-      "sha256": "4c13d81e6abc72a3043e5794c9060db120e07497ff7139d5e1c6b30d2f98bd05"
+      "bytes": 18088,
+      "sha256": "6ff2c6e14ea731a4195a0b917c283c04e4e3c6a5763dbfa17b6380c855b6d34d"
     },
     {
       "path": "manifest.json",
-      "bytes": 1559,
-      "sha256": "468cccf5ac02be9894112061ba48bb55726d53d4648fc97054d1cd653e5f23e1"
+      "bytes": 1704,
+      "sha256": "d6d6335491e84ef82e5baa51bdf9e6dba643e17c750fe3c2043723622c8487c1"
     },
     {
-      "path": "selector/round-a-baseline.json",
-      "bytes": 1209,
-      "sha256": "61535a3947603d0ca2a72231f046a8761fbb57597cd6a03cbf16adcfe161798d"
+      "path": "selector/adversarial-r2.json",
+      "bytes": 822,
+      "sha256": "554a14c8f20a8082c6f37aa8e33f7cc6e22a58ca6c70e87e9d595f3f9ad99f5d"
     },
     {
-      "path": "selector/round-a-candidate.json",
-      "bytes": 1431,
-      "sha256": "1ab80682a36994b080323e0cd882645e0cec975b779c1481ecbdcefcdabab134"
+      "path": "selector/round-a-baseline-r2.json",
+      "bytes": 1885,
+      "sha256": "0b3b20304a3576f27b59cc05196c55a5217293c69227d2dad926db8e87a3f06c"
     },
     {
-      "path": "selector/round-b-baseline.json",
-      "bytes": 1212,
-      "sha256": "3f0ef791f5ebfc0ca297842c10742fc1b92adf016fa72482e4056f869a3dcec8"
+      "path": "selector/round-a-candidate-r2.json",
+      "bytes": 2108,
+      "sha256": "12ab6d880f174dca32d4f614e75fa077102e1a8f97fd035b596aba6302443940"
     },
     {
-      "path": "selector/round-b-candidate.json",
-      "bytes": 1431,
-      "sha256": "5b400fceda60799c6af83a6879b89c087a57e1ef2c7a6ac25468effe31ddfaf0"
+      "path": "selector/round-b-baseline-r2.json",
+      "bytes": 1880,
+      "sha256": "b691cadff8670adfca1e7e9956757b5fec6cbb9181b094043b73be6b8ca4d328"
+    },
+    {
+      "path": "selector/round-b-candidate-r2.json",
+      "bytes": 2106,
+      "sha256": "3e8cb63690b484088c9bfa0d776f14023b1aebb23dc3ef4cf6268cff26283dbd"
     }
   ]
 }

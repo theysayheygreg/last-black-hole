@@ -1,0 +1,63 @@
+{
+  "schema": "lbh-s15-canonical-reuse-benchmark-run-v1",
+  "moduleRoot": ".",
+  "iterations": 1000,
+  "warmup": 100,
+  "execution": {
+    "runLabel": "round-b-candidate",
+    "declaredOrder": 3,
+    "sourceCommit": "3604048",
+    "sourceTree": "ef9b90b46bb075cb466075a6a8b0fe768f50ffb9",
+    "testScriptCommit": "5345d21c51293883edb060d03de2123df3c7b47e",
+    "trackedSourceDirty": false,
+    "sourceHashes": {
+      "authorityPublisher": "e82bf499ccb6817bebef178ff2f0b58b9ea46201b44e6e2ee5bbec20ae58883f",
+      "positionalCodec": "5d476721e40f35d9473ffea00ce78d9c5721e34b88f68d75bd898a14922a024c",
+      "wireProtocol": "d352b84dc87d672bd50d85b5e739071e55db5a70cda911b43182f05f638c1de2",
+      "benchmarkScript": "5404a60b3978c681d366b50f2f32315a5c762a76564088d0a1eeb13a3fdff72a"
+    }
+  },
+  "workload": {
+    "publicEntities": 48,
+    "ownerEntities": 1,
+    "candidatesPerSelection": 4
+  },
+  "publishMilliseconds": {
+    "count": 1000,
+    "mean": 7.09239270600001,
+    "p50": 6.92437499999869,
+    "p95": 7.2070830000000115,
+    "p99": 14.193707999999788,
+    "max": 18.526542000000063
+  },
+  "selectionMilliseconds": {
+    "count": 1100,
+    "p50": 4.100207999999839,
+    "p95": 4.273000000001048,
+    "p99": 8.073417000000063,
+    "max": 11.63070800000014,
+    "samplesDropped": 0,
+    "sampleLimit": 2048
+  },
+  "operations": {
+    "componentSerializations": 24200,
+    "fullCandidateCompositions": 1101,
+    "winnerSerializations": 1101,
+    "bytesExamined": 18433641,
+    "allocationProxyBytes": 13836499,
+    "expandedHeaderSerializations": 18700,
+    "expandedLaneSerializations": 0,
+    "expandedLaneSerializationReuses": 4400,
+    "expandedReusedLaneBytes": 25080200,
+    "expandedSerializedLaneBytes": 0,
+    "expandedBytesExamined": 25595684
+  },
+  "selections": 1100,
+  "fallbackCounts": {
+    "missing-exact-acked-base": 1
+  },
+  "transcriptSha256": "b2795f615f1b0b91588690748106e287db51390defb35e149829b1e400cbe82f",
+  "selectionTranscriptSha256": "c022d7c51f3394cf651625310650982179c5da99873044b67e03244bdab65eeb",
+  "parityComparisons": 1000,
+  "decodedSemanticComparisons": 1000
+}

@@ -11,12 +11,14 @@
   comparison in the same expanded-pair limit calculation. Proofs are
   object-identity bound, private, synchronous, and never cached across a tick or
   recipient; wire, limits, fallback, semantics, ACK, and recovery are unchanged.
-- Preserved 1,320 exact comparisons and identical selector/wire transcripts.
-  Order-counterbalanced microbenchmarks remove 4,400 duplicate expanded-lane
+- Preserved 1,320 direct S15 comparisons, including 320 adversarial expanded/
+  positional size, boundary, decode, and invalid-canonical cases, plus identical
+  representative selector/wire transcripts. Exact-source-bound,
+  order-counterbalanced microbenchmarks remove 4,400 duplicate expanded-lane
   serializations, reduce allocation proxy by 64.45%, improve mean publish time
-  3.87%, and improve selector p50 10.45%.
+  9.15%, and improve selector p50 15.99%.
 - Captured immutable one-authority-per-match 1/4/8 evidence under
-  `docs/v0.4/evidence/state-pair-s15/`. One player passes. Four reaches 5.45 Hz
+  `docs/v0.4/evidence/state-pair-s15/`. One player passes. Four reaches 5.35 Hz
   and eight 3.25 Hz, but both remain `DILATED`, miss clock/cadence and normalized
   mean traffic, so product admission remains closed.
 - Closed further positional cleanup as the next default. The next bounded lane
