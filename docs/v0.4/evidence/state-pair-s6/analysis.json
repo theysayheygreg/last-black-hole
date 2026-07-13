@@ -1,0 +1,656 @@
+{
+  "schema": "lbh-s6-prepared-projection-analysis-v1",
+  "generatedAt": "2026-07-13T10:09:23.367Z",
+  "commit": "a243194b32294d750c810f92f5927c97b27868bc",
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "totalMemoryBytes": 34359738368,
+    "node": "v22.22.3",
+    "v8": "12.4.254.21-node.56"
+  },
+  "method": {
+    "alternatingPairs": 4,
+    "warmupMs": 5000,
+    "measuredWindowMs": 15000,
+    "inputHz": 10,
+    "seed": 1403105358,
+    "expectedRepeatPlan": {
+      "1": 3,
+      "4": 1,
+      "8": 3
+    },
+    "observedOrderDirections": [
+      "legacy-first",
+      "prepared-first"
+    ],
+    "timing": "runtime outer projection-and-publish wall timer; S5 stage profiler disabled",
+    "productAdmissionClaimed": false
+  },
+  "artifacts": [
+    {
+      "directory": "r1-legacy",
+      "profile": "diagnostic-legacy",
+      "populations": [
+        1,
+        8
+      ],
+      "compositeSha256": "7de8808915476614b0fd01cfb0590a91e1823d1d4cfb72d2c23e297fc25d0940"
+    },
+    {
+      "directory": "r1-prepared",
+      "profile": "diagnostic-prepared",
+      "populations": [
+        1,
+        8
+      ],
+      "compositeSha256": "97039cea6106aacc9c6c62e8af09ab0e37f3c8a414cf1f48fa6ebd18aa9468d9"
+    },
+    {
+      "directory": "r2-legacy",
+      "profile": "diagnostic-legacy",
+      "populations": [
+        1,
+        8
+      ],
+      "compositeSha256": "44e641551096953301812f93811f6bdb914bd02e204df1612f9d5aa2be3ba05b"
+    },
+    {
+      "directory": "r2-prepared",
+      "profile": "diagnostic-prepared",
+      "populations": [
+        1,
+        8
+      ],
+      "compositeSha256": "bc3ff05609b126cb6ca911110a92aa24a4b89bad6736b95f47fc2d3f3e22454d"
+    },
+    {
+      "directory": "r3-legacy",
+      "profile": "diagnostic-legacy",
+      "populations": [
+        1,
+        8
+      ],
+      "compositeSha256": "358760545b6d6ea2fb0f2a7885e3489766d3c96c8321facc5c4a03e420ebc311"
+    },
+    {
+      "directory": "r3-prepared",
+      "profile": "diagnostic-prepared",
+      "populations": [
+        1,
+        8
+      ],
+      "compositeSha256": "d8e14d6f0d27e684829d038c8fdd3115cd3b950c53e127264d563e4f1044fce3"
+    },
+    {
+      "directory": "r4-legacy",
+      "profile": "diagnostic-legacy",
+      "populations": [
+        4
+      ],
+      "compositeSha256": "97284b9f771a649cb84833128ff80b57d0a85a57dbffb1440bb8ab32211072ad"
+    },
+    {
+      "directory": "r4-prepared",
+      "profile": "diagnostic-prepared",
+      "populations": [
+        4
+      ],
+      "compositeSha256": "2494abf7fd633ebab959e3ee0e422bdd05a8d22ef23a4754d677da90396457e9"
+    }
+  ],
+  "allCorrect": true,
+  "cacheBoundsPassed": true,
+  "summary": {
+    "1": {
+      "repeats": 3,
+      "legacy": {
+        "projectionMeanMs": 28.85760663698636,
+        "projectionP95Ms": 31.81886100000035,
+        "projectionP99Ms": 33.0919166666666,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 0.6373333333334207,
+        "eventLoopP95Ms": 45.350910999999996,
+        "eventLoopP99Ms": 48.45294833333333,
+        "downlinkMeanBps": 149101.37777777776,
+        "downlinkOneSecondP95Bps": 157124.33333333334,
+        "rssP95Bytes": 126266026.66666667,
+        "heapP95Bytes": 37930202.666666664,
+        "canonicalizations": 2348,
+        "hashes": 1564,
+        "diffs": 390
+      },
+      "prepared": {
+        "projectionMeanMs": 16.4696156826484,
+        "projectionP95Ms": 19.347944333333846,
+        "projectionP99Ms": 20.57361133333264,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 1.1741806666668708,
+        "eventLoopP95Ms": 32.740692333333335,
+        "eventLoopP99Ms": 35.17098566666667,
+        "downlinkMeanBps": 150310.8888888889,
+        "downlinkOneSecondP95Bps": 159126.66666666666,
+        "rssP95Bytes": 127068842.66666667,
+        "heapP95Bytes": 35370784,
+        "canonicalizations": 392,
+        "hashes": 392,
+        "diffs": 390
+      },
+      "reduction": {
+        "projectionMean": 0.42927086019781346,
+        "projectionP95": 0.39187862279506674,
+        "projectionP99": 0.37829820599909664,
+        "canonicalizations": 0.8330494037478705,
+        "hashes": 0.7493606138107417
+      }
+    },
+    "4": {
+      "repeats": 1,
+      "legacy": {
+        "projectionMeanMs": 116.94704617567577,
+        "projectionP95Ms": 123.50937499999964,
+        "projectionP99Ms": 124.94404099999883,
+        "publicationHz": 4.933333333333334,
+        "simTickP95Ms": 0.7588749999995343,
+        "eventLoopP95Ms": 140.771327,
+        "eventLoopP99Ms": 144.048127,
+        "downlinkMeanBps": 91471.46666666666,
+        "downlinkOneSecondP95Bps": 101001,
+        "rssP95Bytes": 130187264,
+        "heapP95Bytes": 31386056,
+        "canonicalizations": 4912,
+        "hashes": 3264,
+        "diffs": 808
+      },
+      "prepared": {
+        "projectionMeanMs": 60.18731761643815,
+        "projectionP95Ms": 66.96704200000022,
+        "projectionP99Ms": 74.58550000000014,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 0.7597499999992579,
+        "eventLoopP95Ms": 79.626239,
+        "eventLoopP99Ms": 84.934655,
+        "downlinkMeanBps": 215334.73333333334,
+        "downlinkOneSecondP95Bps": 225014,
+        "rssP95Bytes": 132022272,
+        "heapP95Bytes": 30157664,
+        "canonicalizations": 1592,
+        "hashes": 1592,
+        "diffs": 1474
+      },
+      "reduction": {
+        "projectionMean": 0.4853455509596554,
+        "projectionP95": 0.4577979040052594,
+        "projectionP99": 0.4030487616452166,
+        "canonicalizations": 0.6758957654723127,
+        "hashes": 0.5122549019607843
+      }
+    },
+    "8": {
+      "repeats": 3,
+      "legacy": {
+        "projectionMeanMs": 260.5408564254756,
+        "projectionP95Ms": 279.2848613333329,
+        "projectionP99Ms": 281.9120136666667,
+        "publicationHz": 2.875,
+        "simTickP95Ms": 1.0264443333338324,
+        "eventLoopP95Ms": 288.79530566666665,
+        "eventLoopP99Ms": 300.2422603333334,
+        "downlinkMeanBps": 63092.35555555555,
+        "downlinkOneSecondP95Bps": 70817.66666666667,
+        "rssP95Bytes": 133748053.33333333,
+        "heapP95Bytes": 31364064,
+        "canonicalizations": 6108,
+        "hashes": 4057.3333333333335,
+        "diffs": 1003.3333333333334
+      },
+      "prepared": {
+        "projectionMeanMs": 132.42281966183572,
+        "projectionP95Ms": 141.84891633333336,
+        "projectionP99Ms": 145.7749863333332,
+        "publicationHz": 4.563888888888889,
+        "simTickP95Ms": 0.9950833333338475,
+        "eventLoopP95Ms": 156.84949233333333,
+        "eventLoopP99Ms": 162.61666033333333,
+        "downlinkMeanBps": 98173.46666666667,
+        "downlinkOneSecondP95Bps": 111301.33333333333,
+        "rssP95Bytes": 130957312,
+        "heapP95Bytes": 30734106.666666668,
+        "canonicalizations": 1600,
+        "hashes": 1600,
+        "diffs": 1572
+      },
+      "reduction": {
+        "projectionMean": 0.49168972750511647,
+        "projectionP95": 0.49065438824947005,
+        "projectionP99": 0.48097634382517546,
+        "canonicalizations": 0.7379903198607586,
+        "hashes": 0.6055641523182603
+      }
+    }
+  },
+  "perPair": [
+    {
+      "pair": 1,
+      "population": 1,
+      "legacy": {
+        "projectionMeanMs": 28.99934533561653,
+        "projectionP95Ms": 31.567042000000583,
+        "projectionP99Ms": 32.97570799999994,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 0.6303749999988213,
+        "eventLoopP95Ms": 45.547519,
+        "eventLoopP99Ms": 51.937279,
+        "downlinkMeanBps": 149183.93333333332,
+        "downlinkOneSecondP95Bps": 157073,
+        "rssP95Bytes": 126550016,
+        "heapP95Bytes": 37908280,
+        "canonicalizations": 2348,
+        "hashes": 1564,
+        "diffs": 390,
+        "preparedDiffs": 0,
+        "pendingReferences": 0,
+        "ackedReferences": 0,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 19018,
+        "correctness": true
+      },
+      "prepared": {
+        "projectionMeanMs": 16.406536794520548,
+        "projectionP95Ms": 19.379750000000058,
+        "projectionP99Ms": 19.98254199999974,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 1.1392919999998412,
+        "eventLoopP95Ms": 32.358399,
+        "eventLoopP99Ms": 34.701311,
+        "downlinkMeanBps": 149386.4,
+        "downlinkOneSecondP95Bps": 157246,
+        "rssP95Bytes": 126959616,
+        "heapP95Bytes": 35325936,
+        "canonicalizations": 392,
+        "hashes": 392,
+        "diffs": 390,
+        "preparedDiffs": 390,
+        "pendingReferences": 0,
+        "ackedReferences": 2,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 19355,
+        "correctness": true
+      },
+      "reduction": {
+        "projectionMean": 0.4342445801915982,
+        "projectionP95": 0.38607646544773816,
+        "projectionP99": 0.3940223512411083,
+        "canonicalizations": 0.8330494037478705,
+        "hashes": 0.7493606138107417
+      }
+    },
+    {
+      "pair": 1,
+      "population": 8,
+      "legacy": {
+        "projectionMeanMs": 257.2957830909091,
+        "projectionP95Ms": 268.4162499999984,
+        "projectionP99Ms": 269.4979579999999,
+        "publicationHz": 2.9,
+        "simTickP95Ms": 1.0279170000012527,
+        "eventLoopP95Ms": 286.785535,
+        "eventLoopP99Ms": 289.669119,
+        "downlinkMeanBps": 63542.73333333333,
+        "downlinkOneSecondP95Bps": 70860,
+        "rssP95Bytes": 133234688,
+        "heapP95Bytes": 27921440,
+        "canonicalizations": 6172,
+        "hashes": 4100,
+        "diffs": 1014,
+        "preparedDiffs": 0,
+        "pendingReferences": 0,
+        "ackedReferences": 0,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 28136,
+        "correctness": true
+      },
+      "prepared": {
+        "projectionMeanMs": 130.95272349275365,
+        "projectionP95Ms": 139.55062499999985,
+        "projectionP99Ms": 144.01866699999937,
+        "publicationHz": 4.6,
+        "simTickP95Ms": 1.0235000000011496,
+        "eventLoopP95Ms": 154.664959,
+        "eventLoopP99Ms": 160.038911,
+        "downlinkMeanBps": 97834.26666666666,
+        "downlinkOneSecondP95Bps": 108130,
+        "rssP95Bytes": 130891776,
+        "heapP95Bytes": 34314192,
+        "canonicalizations": 1600,
+        "hashes": 1600,
+        "diffs": 1572,
+        "preparedDiffs": 1572,
+        "pendingReferences": 0,
+        "ackedReferences": 16,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 2,
+        "maxPublisherRetainedBytes": 54124,
+        "correctness": true
+      },
+      "reduction": {
+        "projectionMean": 0.491042092024941,
+        "projectionP95": 0.4800962125057604,
+        "projectionP99": 0.4656038655402376,
+        "canonicalizations": 0.7407647440051847,
+        "hashes": 0.6097560975609756
+      }
+    },
+    {
+      "pair": 2,
+      "population": 1,
+      "legacy": {
+        "projectionMeanMs": 28.689547650685018,
+        "projectionP95Ms": 31.640041000000565,
+        "projectionP99Ms": 32.89741700000013,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 0.628500000000713,
+        "eventLoopP95Ms": 45.219839,
+        "eventLoopP99Ms": 46.727167,
+        "downlinkMeanBps": 148951.66666666666,
+        "downlinkOneSecondP95Bps": 157221,
+        "rssP95Bytes": 126468096,
+        "heapP95Bytes": 39108768,
+        "canonicalizations": 2348,
+        "hashes": 1564,
+        "diffs": 390,
+        "preparedDiffs": 0,
+        "pendingReferences": 0,
+        "ackedReferences": 0,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 19016,
+        "correctness": true
+      },
+      "prepared": {
+        "projectionMeanMs": 16.404945801369898,
+        "projectionP95Ms": 19.313458000000537,
+        "projectionP99Ms": 20.82945899999868,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 1.2110420000008162,
+        "eventLoopP95Ms": 32.571391,
+        "eventLoopP99Ms": 35.356671,
+        "downlinkMeanBps": 152343.53333333333,
+        "downlinkOneSecondP95Bps": 162879,
+        "rssP95Bytes": 127614976,
+        "heapP95Bytes": 33067160,
+        "canonicalizations": 392,
+        "hashes": 392,
+        "diffs": 390,
+        "preparedDiffs": 390,
+        "pendingReferences": 0,
+        "ackedReferences": 2,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 19926,
+        "correctness": true
+      },
+      "reduction": {
+        "projectionMean": 0.42819085190497247,
+        "projectionP95": 0.38958808555272756,
+        "projectionP99": 0.36683603457382097,
+        "canonicalizations": 0.8330494037478705,
+        "hashes": 0.7493606138107417
+      }
+    },
+    {
+      "pair": 2,
+      "population": 8,
+      "legacy": {
+        "projectionMeanMs": 265.6138741627907,
+        "projectionP95Ms": 300.28549999999996,
+        "projectionP99Ms": 305.64550000000054,
+        "publicationHz": 2.841666666666667,
+        "simTickP95Ms": 1.1509580000001733,
+        "eventLoopP95Ms": 293.339135,
+        "eventLoopP99Ms": 320.864255,
+        "downlinkMeanBps": 62786.066666666666,
+        "downlinkOneSecondP95Bps": 70732,
+        "rssP95Bytes": 134316032,
+        "heapP95Bytes": 34789520,
+        "canonicalizations": 5980,
+        "hashes": 3972,
+        "diffs": 982,
+        "preparedDiffs": 0,
+        "pendingReferences": 0,
+        "ackedReferences": 0,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 28128,
+        "correctness": true
+      },
+      "prepared": {
+        "projectionMeanMs": 133.5745876086956,
+        "projectionP95Ms": 141.3454580000007,
+        "projectionP99Ms": 144.55320800000027,
+        "publicationHz": 4.533333333333333,
+        "simTickP95Ms": 0.9628329999995913,
+        "eventLoopP95Ms": 157.024255,
+        "eventLoopP99Ms": 162.136063,
+        "downlinkMeanBps": 98148.93333333333,
+        "downlinkOneSecondP95Bps": 110407,
+        "rssP95Bytes": 131039232,
+        "heapP95Bytes": 33165576,
+        "canonicalizations": 1600,
+        "hashes": 1600,
+        "diffs": 1572,
+        "preparedDiffs": 1572,
+        "pendingReferences": 4,
+        "ackedReferences": 16,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 2,
+        "maxPublisherRetainedBytes": 54124,
+        "correctness": true
+      },
+      "reduction": {
+        "projectionMean": 0.4971099004910046,
+        "projectionP95": 0.5292964262343646,
+        "projectionP99": 0.5270559913363684,
+        "canonicalizations": 0.7324414715719063,
+        "hashes": 0.5971802618328298
+      }
+    },
+    {
+      "pair": 3,
+      "population": 1,
+      "legacy": {
+        "projectionMeanMs": 28.883926924657533,
+        "projectionP95Ms": 32.2494999999999,
+        "projectionP99Ms": 33.402624999999716,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 0.6531250000007276,
+        "eventLoopP95Ms": 45.285375,
+        "eventLoopP99Ms": 46.694399,
+        "downlinkMeanBps": 149168.53333333333,
+        "downlinkOneSecondP95Bps": 157079,
+        "rssP95Bytes": 125779968,
+        "heapP95Bytes": 36773560,
+        "canonicalizations": 2348,
+        "hashes": 1564,
+        "diffs": 390,
+        "preparedDiffs": 0,
+        "pendingReferences": 0,
+        "ackedReferences": 0,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 19493,
+        "correctness": true
+      },
+      "prepared": {
+        "projectionMeanMs": 16.59736445205475,
+        "projectionP95Ms": 19.350625000000946,
+        "projectionP99Ms": 20.908832999999504,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 1.172207999999955,
+        "eventLoopP95Ms": 33.292287,
+        "eventLoopP99Ms": 35.454975,
+        "downlinkMeanBps": 149202.73333333334,
+        "downlinkOneSecondP95Bps": 157255,
+        "rssP95Bytes": 126631936,
+        "heapP95Bytes": 37719256,
+        "canonicalizations": 392,
+        "hashes": 392,
+        "diffs": 390,
+        "preparedDiffs": 390,
+        "pendingReferences": 0,
+        "ackedReferences": 2,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 19356,
+        "correctness": true
+      },
+      "reduction": {
+        "projectionMean": 0.42537714849686975,
+        "projectionP95": 0.3999713173847344,
+        "projectionP99": 0.3740362321823605,
+        "canonicalizations": 0.8330494037478705,
+        "hashes": 0.7493606138107417
+      }
+    },
+    {
+      "pair": 3,
+      "population": 8,
+      "legacy": {
+        "projectionMeanMs": 258.71291202272715,
+        "projectionP95Ms": 269.15283400000044,
+        "projectionP99Ms": 270.59258299999965,
+        "publicationHz": 2.8833333333333333,
+        "simTickP95Ms": 0.9004580000000715,
+        "eventLoopP95Ms": 286.261247,
+        "eventLoopP99Ms": 290.193407,
+        "downlinkMeanBps": 62948.26666666667,
+        "downlinkOneSecondP95Bps": 70861,
+        "rssP95Bytes": 133693440,
+        "heapP95Bytes": 31381232,
+        "canonicalizations": 6172,
+        "hashes": 4100,
+        "diffs": 1014,
+        "preparedDiffs": 0,
+        "pendingReferences": 0,
+        "ackedReferences": 0,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 28135,
+        "correctness": true
+      },
+      "prepared": {
+        "projectionMeanMs": 132.7411478840579,
+        "projectionP95Ms": 144.65066599999955,
+        "projectionP99Ms": 148.75308399999994,
+        "publicationHz": 4.558333333333334,
+        "simTickP95Ms": 0.9989170000008016,
+        "eventLoopP95Ms": 158.859263,
+        "eventLoopP99Ms": 165.675007,
+        "downlinkMeanBps": 98537.2,
+        "downlinkOneSecondP95Bps": 115367,
+        "rssP95Bytes": 130940928,
+        "heapP95Bytes": 24722552,
+        "canonicalizations": 1600,
+        "hashes": 1600,
+        "diffs": 1572,
+        "preparedDiffs": 1572,
+        "pendingReferences": 4,
+        "ackedReferences": 16,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 2,
+        "maxPublisherRetainedBytes": 58127,
+        "correctness": true
+      },
+      "reduction": {
+        "projectionMean": 0.4869171899994037,
+        "projectionP95": 0.4625705260082853,
+        "projectionP99": 0.4502691745989204,
+        "canonicalizations": 0.7407647440051847,
+        "hashes": 0.6097560975609756
+      }
+    },
+    {
+      "pair": 4,
+      "population": 4,
+      "legacy": {
+        "projectionMeanMs": 116.94704617567577,
+        "projectionP95Ms": 123.50937499999964,
+        "projectionP99Ms": 124.94404099999883,
+        "publicationHz": 4.933333333333334,
+        "simTickP95Ms": 0.7588749999995343,
+        "eventLoopP95Ms": 140.771327,
+        "eventLoopP99Ms": 144.048127,
+        "downlinkMeanBps": 91471.46666666666,
+        "downlinkOneSecondP95Bps": 101001,
+        "rssP95Bytes": 130187264,
+        "heapP95Bytes": 31386056,
+        "canonicalizations": 4912,
+        "hashes": 3264,
+        "diffs": 808,
+        "preparedDiffs": 0,
+        "pendingReferences": 0,
+        "ackedReferences": 0,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 1,
+        "maxPublisherRetainedBytes": 33039,
+        "correctness": true
+      },
+      "prepared": {
+        "projectionMeanMs": 60.18731761643815,
+        "projectionP95Ms": 66.96704200000022,
+        "projectionP99Ms": 74.58550000000014,
+        "publicationHz": 9.733333333333333,
+        "simTickP95Ms": 0.7597499999992579,
+        "eventLoopP95Ms": 79.626239,
+        "eventLoopP99Ms": 84.934655,
+        "downlinkMeanBps": 215334.73333333334,
+        "downlinkOneSecondP95Bps": 225014,
+        "rssP95Bytes": 132022272,
+        "heapP95Bytes": 30157664,
+        "canonicalizations": 1592,
+        "hashes": 1592,
+        "diffs": 1474,
+        "preparedDiffs": 1474,
+        "pendingReferences": 0,
+        "ackedReferences": 8,
+        "maxPendingReferences": 256,
+        "maxAckedReferences": 32,
+        "maxPublisherPendingPairs": 10,
+        "maxPublisherRetainedBytes": 220646,
+        "correctness": true
+      },
+      "reduction": {
+        "projectionMean": 0.4853455509596554,
+        "projectionP95": 0.4577979040052594,
+        "projectionP99": 0.4030487616452166,
+        "canonicalizations": 0.6758957654723127,
+        "hashes": 0.5122549019607843
+      }
+    }
+  ],
+  "limitations": [
+    "Short local macOS loopback diagnostic",
+    "One match at a time",
+    "No WAN, WSS, hosted fleet, AOI, compression, binary codec, or product admission claim"
+  ]
+}

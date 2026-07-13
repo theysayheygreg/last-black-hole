@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 2,
+  "gate": "s6",
+  "profile": "diagnostic-legacy",
+  "microProfile": false,
+  "instrumentationEnabled": false,
+  "commit": "a243194b32294d750c810f92f5927c97b27868bc",
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s6-benchmark",
+  "verdict": {
+    "passed": false,
+    "normal": {
+      "4": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    "churn": {}
+  },
+  "expectedPopulations": [
+    4
+  ],
+  "preparedProjectionsEnabled": false,
+  "scenarios": [
+    {
+      "file": "normal-4.json",
+      "scenario": "normal",
+      "population": 4,
+      "worstRecipientMeanDownlinkBytesPerSecond": 91471.46666666666,
+      "oneSecondP95DownlinkBytesPerSecond": 101001,
+      "oneSecondP99DownlinkBytesPerSecond": 101365,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 296
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  ],
+  "s3CanonicalEvidence": null,
+  "optimizationProof": {
+    "atomicKindAlignmentCauses": 0,
+    "publicDeltaOwnerKeyframeProductPairs": 296,
+    "allNormalPopulationsObservedMixed": true
+  },
+  "manifestIdentity": {
+    "hashes": [
+      "sha256:c6dd5676b236254bc64cd942a8c053f90768226821abf42d989ae6ae8de2a813"
+    ],
+    "changedAcrossFreshMatches": false,
+    "reconnectReuseObserved": true
+  },
+  "failureAnalysis": [
+    {
+      "population": 4,
+      "requiredDownlinkReductionBytesPerSecond": 25935.46666666666,
+      "requiredDownlinkReductionFraction": 0.2835361409605326,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 5410914,
+          "fraction": 0.9947644883839959
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 28004,
+          "fraction": 0.005148369523652644
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 474,
+          "fraction": 0.00008714209235149811
+        }
+      ]
+    }
+  ],
+  "recommendation": {
+    "nextSlice": "Diagnose the dominant accepted statePair bytes and projection/publish cost at each failing population; reduce repeated runtimePublic structure only if the product evidence identifies it as the next narrow cause.",
+    "quantifiedTarget": "Recover each population's exact required reduction in failureAnalysis; do not substitute aggregate averages or modeled transport overhead.",
+    "second": "Keep mixed public-delta/owner-keyframe atomic observation and independently isolate accounting-ledger memory from product memory before changing retention.",
+    "defer": "Binary, AOI, compression, hosted WSS, and fleet packing remain out of scope until structural JSON passes or a measured residual justifies them."
+  }
+}
