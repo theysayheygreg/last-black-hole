@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { performance } = require("perf_hooks");
+const { execFileSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const MODULE_ROOT = path.resolve(process.env.LBH_S15_MODULE_ROOT || ROOT);
@@ -20,6 +21,14 @@ const { createStatePairWireEncoder, parseWireFrame, SERVER_TO_CLIENT } =
 const MANIFEST_HASH = `sha256:${"9".repeat(64)}`;
 const identity = Object.freeze({ matchId: "match-s15-selector", sessionId: "session-s15-selector",
   authorityIncarnation: 1, recipientId: "member-s15-selector", recipientIncarnation: 1 });
+
+function fileSha(file) {
+  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function git(...args) {
+  return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+}
 
 function distribution(values) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -85,8 +94,19 @@ function run() {
     }
   }
   const choice = publisher.diagnostics().codecPairChoice;
+  const sourceCommit = process.env.LBH_S15_SOURCE_COMMIT || git("rev-parse", "HEAD");
+  const sourceTree = process.env.LBH_S15_SOURCE_TREE || git("rev-parse", `${sourceCommit}^{tree}`);
   const result = { schema: "lbh-s15-canonical-reuse-benchmark-run-v1",
     moduleRoot: path.relative(ROOT, MODULE_ROOT) || ".", iterations: ITERATIONS, warmup: WARMUP,
+    execution: { runLabel: process.env.LBH_S15_RUN_LABEL || null,
+      declaredOrder: Number(process.env.LBH_S15_RUN_ORDER || 0), sourceCommit, sourceTree,
+      testScriptCommit: git("rev-parse", "HEAD"), testScriptDirty: Boolean(git("status", "--short")),
+      sourceHashes: {
+        authorityPublisher: fileSha(path.join(MODULE_ROOT, "scripts", "authority-delta-publisher.cjs")),
+        positionalCodec: fileSha(path.join(MODULE_ROOT, "scripts", "state-pair-positional-codec.cjs")),
+        wireProtocol: fileSha(path.join(MODULE_ROOT, "scripts", "multiplayer-wire-protocol.cjs")),
+        benchmarkScript: fileSha(__filename),
+      } },
     workload: { publicEntities: 48, ownerEntities: 1, candidatesPerSelection: 4 },
     publishMilliseconds: distribution(samples), selectionMilliseconds: choice.selectionMilliseconds,
     operations: choice.operations, selections: choice.selections,

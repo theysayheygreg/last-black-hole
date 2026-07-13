@@ -1058,6 +1058,26 @@ function createAuthorityDeltaPublisher(options = {}) {
   return Object.freeze({ publish, acknowledge, retransmit, rebase, disconnect, diagnostics });
 }
 
+// Test-only same-operation oracle for the private proof path. It deliberately
+// creates fresh proofs and consumes them immediately; callers cannot provide,
+// retain, or replay a proof token.
+function testExactCanonicalCandidateSizesWithReuse(entries) {
+  const proofs = new Map();
+  for (const entry of entries) {
+    for (const lane of ["public", "owner"]) {
+      const payload = entry?.frame?.[lane];
+      if (payload && !proofs.has(payload)) proofs.set(payload, serializedComponentProof(payload, null, null));
+    }
+  }
+  const exact = exactCanonicalCandidateSizes(entries, proofs);
+  return Object.freeze({ sizes: Object.freeze(Object.fromEntries(exact.sizes)),
+    diagnostics: Object.freeze({ componentSerializations: exact.componentSerializations,
+      headerSerializations: exact.headerSerializations, laneSerializations: exact.laneSerializations,
+      laneSerializationReuses: exact.laneSerializationReuses, reusedLaneBytes: exact.reusedLaneBytes,
+      serializedLaneBytes: exact.serializedLaneBytes, bytesExamined: exact.bytesExamined,
+      allocationProxyBytes: exact.allocationProxyBytes }) });
+}
+
 module.exports = {
   PAIR_SCHEMA,
   ACK_SCHEMA,
@@ -1068,6 +1088,7 @@ module.exports = {
   DEFAULTS,
   AuthorityDeltaError,
   createAuthorityDeltaPublisher,
+  testExactCanonicalCandidateSizesWithReuse,
   isExactEncodedPublication: (value) => Boolean(value && typeof value === "object"
     && exactEncodedPublications.has(value)),
 };
