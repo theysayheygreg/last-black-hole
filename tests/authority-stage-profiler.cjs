@@ -6,7 +6,8 @@ const fs = require("fs");
 const { spawnSync } = require("child_process");
 const { TestRunner, assert, startSimServer, stopSimServer } = require("./helpers.cjs");
 const { createAuthorityStageProfiler, STAGES } = require("../scripts/authority-stage-profiler.cjs");
-const { createAuthorityDeltaPublisher } = require("../scripts/authority-delta-publisher.cjs");
+const { createAuthorityDeltaPublisher, MIXED_ACK_SCHEMA, MIXED_PAIR_SCHEMA } = require("../scripts/authority-delta-publisher.cjs");
+const { encodeWireFrame, SERVER_TO_CLIENT } = require("../scripts/multiplayer-wire-protocol.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const S4 = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s4",
@@ -24,17 +25,37 @@ function identity() {
     recipientId: "private-member-value", recipientIncarnation: 1 };
 }
 
-function view(lane) {
+function view(lane, beat = 1) {
+  const count = lane === "public" ? 24 : 1;
   return {
     schema: "lbh-canonical-projection-v1", lane, runId: "match-profile", authorityEpoch: 1,
     connectionEpoch: 1, ballparkEpoch: 1, manifestHash: `sha256:${"a".repeat(64)}`,
-    statePairId: "pair-1-1", snapshotId: "snapshot-1", tick: 1, simTime: 0.1,
-    eventWatermark: 0, fieldRevision: 1, overloadMode: "NORMAL", world: {},
-    entities: [{ category: lane === "public" ? "player" : "owner", sourceId: "source-1",
-      incarnation: 1, lifecycleRevision: 1,
+    statePairId: `pair-${beat}-1`, snapshotId: `snapshot-${beat}`, tick: beat, simTime: beat / 10,
+    eventWatermark: 0, fieldRevision: beat, overloadMode: "NORMAL", world: {},
+    entities: Array.from({ length: count }, (_, index) => ({
+      category: lane === "public" ? "player" : "owner", sourceId: `source-${index + 1}`,
+      incarnation: 1, lifecycleRevision: lane === "owner" || index === 0 ? beat : 1,
       components: lane === "public"
-        ? { runtimePublic: { revision: 1, value: { x: 0.5, y: 0.5 } } }
-        : { ownerState: { revision: 1, value: { deltaV: 90 } } } }],
+        ? { runtimePublic: { revision: index === 0 ? beat : 1,
+            value: { x: index === 0 ? beat / 10 : index / 100, y: 0.5 } } }
+        : { ownerState: { revision: beat, value: { deltaV: 90 - beat, marker: "x".repeat(256 * beat) } } },
+    })),
+  };
+}
+
+function ackFor(frame) {
+  return {
+    type: "ack", ackKind: "statePair", ackSchema: MIXED_ACK_SCHEMA,
+    matchId: frame.matchId, sessionId: frame.sessionId, authorityIncarnation: frame.authorityIncarnation,
+    recipientId: frame.recipientId, recipientIncarnation: frame.recipientIncarnation,
+    frameId: frame.frameId, statePairId: frame.statePairId, snapshotId: frame.snapshotId,
+    publicHash: frame.public.resultHash, ownerHash: frame.owner.resultHash,
+    pairSchema: MIXED_PAIR_SCHEMA, tick: frame.tick, simTime: frame.simTime,
+    eventWatermark: frame.eventWatermark, fieldRevision: frame.fieldRevision,
+    overloadMode: frame.overloadMode, ballparkEpoch: frame.ballparkEpoch, manifestHash: frame.manifestHash,
+    publicKind: frame.public.kind, ownerKind: frame.owner.kind,
+    publicBaseSnapshotId: frame.public.baseSnapshotId || null,
+    ownerBaseSnapshotId: frame.owner.baseSnapshotId || null,
   };
 }
 
@@ -66,15 +87,28 @@ async function run() {
     const profiler = createAuthorityStageProfiler({ sampleCapacity: 8, maxRecipients: 2 });
     const plain = createAuthorityDeltaPublisher({ maxRecipients: 2 });
     const observed = createAuthorityDeltaPublisher({ maxRecipients: 2, stageProfiler: profiler });
-    const input = { identity: identity(), publicView: view("public"), ownerView: view("owner"), allowMixed: true };
-    const plainPair = plain.publish(input);
-    const observedPair = observed.publish(input);
-    assert(JSON.stringify(plainPair.frame) === JSON.stringify(observedPair.frame),
-      "Profiling must not alter canonical frame bytes");
-    assert(plainPair.bytes === observedPair.bytes
-      && plainPair.frame.public.resultHash === observedPair.frame.public.resultHash
-      && plainPair.frame.owner.resultHash === observedPair.frame.owner.resultHash,
-    "Profiling must preserve byte accounting and projection hashes");
+    for (let beat = 1; beat <= 3; beat += 1) {
+      const input = { identity: identity(), publicView: view("public", beat),
+        ownerView: view("owner", beat), allowMixed: true };
+      const plainPair = plain.publish(input);
+      const observedPair = observed.publish(input);
+      assert(JSON.stringify(plainPair.frame) === JSON.stringify(observedPair.frame),
+        "Profiling must not alter canonical keyframe/delta frame bytes");
+      assert(encodeWireFrame(plainPair.frame, { direction: SERVER_TO_CLIENT })
+          === encodeWireFrame(observedPair.frame, { direction: SERVER_TO_CLIENT }),
+      "Profiling must preserve exact adapter wire serialization");
+      assert(plainPair.bytes === observedPair.bytes
+        && plainPair.frame.public.resultHash === observedPair.frame.public.resultHash
+        && plainPair.frame.owner.resultHash === observedPair.frame.owner.resultHash,
+      "Profiling must preserve byte accounting and projection hashes");
+      assert(plain.acknowledge(identity(), ackFor(plainPair.frame)).accepted === true
+        && observed.acknowledge(identity(), ackFor(observedPair.frame)).accepted === true,
+      "Both publishers must advance the same ACK base");
+      if (beat > 1) {
+        assert(plainPair.publicKind === "delta" && plainPair.ownerKind === "keyframe",
+          "Invariance fixture must exercise mixed public-delta owner-keyframe selection");
+      }
+    }
     assert(profiler.snapshot().stages[STAGES.JSON_SERIALIZATION].aggregate.calls > 0,
       "Enabled publisher must emit bounded serialization observations");
     profiler.stop();

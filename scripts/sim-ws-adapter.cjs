@@ -841,7 +841,7 @@ function createSimWebSocketAdapter(options = {}) {
               ? stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (serialized) => ({
                   recipientKey: profileRecipientKey(state),
                   outputBytes: Buffer.byteLength(serialized, "utf8"),
-                  allocatedBytes: Buffer.byteLength(serialized, "utf8"),
+                  serializedAllocationProxyBytes: Buffer.byteLength(serialized, "utf8"),
                 }), () => encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }))
               : encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
             if (!sendWire(state, wire, frame)) break;
@@ -1541,7 +1541,7 @@ function createSimWebSocketAdapter(options = {}) {
         stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (wire) => ({
           recipientKey: profileRecipientKey(state),
           outputBytes: Buffer.byteLength(wire, "utf8"),
-          allocatedBytes: Buffer.byteLength(wire, "utf8"),
+          serializedAllocationProxyBytes: Buffer.byteLength(wire, "utf8"),
         }), () => encodeWireFrame(frame, { direction: SERVER_TO_CLIENT }));
       } else encodeWireFrame(frame, { direction: SERVER_TO_CLIENT });
     } catch (error) {

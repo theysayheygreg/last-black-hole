@@ -227,6 +227,9 @@ if (AUTHORITY_STAGE_PROFILE_CAPTURE
   && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
   throw new Error("LBH_SIM_WS_STAGE_PROFILE requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
 }
+if (AUTHORITY_STAGE_PROFILE_CAPTURE && !REPLICATION_ACCOUNTING_CAPTURE) {
+  throw new Error("LBH_SIM_WS_STAGE_PROFILE requires LBH_SIM_WS_REPLICATION_ACCOUNTING=1");
+}
 const authorityStageProfiler = AUTHORITY_STAGE_PROFILE_CAPTURE
   ? createAuthorityStageProfiler({ sampleCapacity: 512, maxRecipients: 16 })
   : null;
@@ -7691,7 +7694,7 @@ async function buildPublicMultiplayerStateForAdapter(...args) {
   const frame = authorityStageProfiler
     ? authorityStageProfiler.measureSync(STAGES.RAW_SNAPSHOT_BUILD, (value) => ({
         outputBytes: Buffer.byteLength(JSON.stringify(value), "utf8"),
-        allocatedBytes: Buffer.byteLength(JSON.stringify(value), "utf8"),
+        serializedAllocationProxyBytes: Buffer.byteLength(JSON.stringify(value), "utf8"),
         entities: (value.state?.players?.length || 0)
           + ["wells", "stars", "wrecks", "planetoids", "portals", "scavengers", "fauna", "sentries"]
             .reduce((sum, lane) => sum + (value.state?.world?.[lane]?.length || 0), 0)

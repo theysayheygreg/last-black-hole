@@ -91,7 +91,7 @@ function serializedBytes(value, stageProfiler, recipientKey) {
   return stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (bytes) => ({
     recipientKey,
     outputBytes: bytes.length,
-    allocatedBytes: bytes.length,
+    serializedAllocationProxyBytes: bytes.length,
   }), () => canonicalJsonBytes(value)).length;
 }
 
@@ -102,7 +102,7 @@ function keyframePayload(view, { stageProfiler = null, recipientKey = null, lane
         recipientKey,
         inputBytes: canonicalJsonBytes(view).length,
         outputBytes: Buffer.byteLength(hashValue || "", "utf8"),
-        allocatedBytes: Buffer.byteLength(hashValue || "", "utf8"),
+        serializedAllocationProxyBytes: Buffer.byteLength(hashValue || "", "utf8"),
         entities: view.entities.length,
         components: view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
       }), () => projectionHash(view))
@@ -122,7 +122,7 @@ function deltaPayload(base, current, { stageProfiler = null, recipientKey = null
         recipientKey,
         inputBytes: canonicalJsonBytes({ base: base.view, current }).length,
         outputBytes: result?.deltaBytes || 0,
-        allocatedBytes: result?.deltaBytes || 0,
+        serializedAllocationProxyBytes: result?.deltaBytes || 0,
         entities: current.entities.length,
         components: current.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
       }), () => createStructuralDelta(base.view, current, { expectedBaseHash: base.hash }))
@@ -290,7 +290,7 @@ function createAuthorityDeltaPublisher(options = {}) {
           recipientKey: identity.recipientId,
           inputBytes: canonicalJsonBytes({ public: nextPublic, owner: nextOwner }).length,
           outputBytes: canonicalJsonBytes(builtFrame).length,
-          allocatedBytes: canonicalJsonBytes(builtFrame).length,
+          serializedAllocationProxyBytes: canonicalJsonBytes(builtFrame).length,
         }), () => rawBuildFrame(nextPublic, nextOwner))
       : rawBuildFrame(nextPublic, nextOwner);
     let frame = buildFrame(publicPayload, ownerPayload);

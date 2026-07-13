@@ -368,11 +368,13 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   }
 
   function diagnostics() {
+    resetShareabilityIfNeeded();
     return Object.freeze({ matchId: fixedMatchId, authorityIncarnation: fixedAuthorityIncarnation,
       manifestSchema: fixedManifestSchema, manifestHash: fixedManifestHash, admissions: admissions.size,
       ...(stageProfiler ? { profileShareability: Object.freeze({
         publicCore: Object.freeze({ beats: shareability.beats, comparisons: shareability.comparisons,
-          mismatches: shareability.mismatches, sameWithinEveryObservedBeat: shareability.mismatches === 0 }),
+          mismatches: shareability.mismatches,
+          noMismatchesAmongObservedComparisons: shareability.mismatches === 0 }),
         wholeCanonicalPublicViewReusable: false,
         recipientSpecificCanonicalFields: Object.freeze(["connectionEpoch", "statePairId"]),
         recipientSpecificPublicationWork: Object.freeze(["ACK base", "public delta", "owner projection",

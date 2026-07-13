@@ -25,7 +25,7 @@ const STAGES = Object.freeze({
 });
 const ALLOWED_STAGES = new Set(Object.values(STAGES));
 const METRIC_NAMES = Object.freeze([
-  "inputBytes", "outputBytes", "allocatedBytes", "entities", "components",
+  "inputBytes", "outputBytes", "serializedAllocationProxyBytes", "entities", "components",
 ]);
 
 function positiveInteger(value, fallback, label) {
@@ -55,7 +55,7 @@ function createRecord(sampleCapacity) {
     sampleCursor: 0,
     inputBytes: 0,
     outputBytes: 0,
-    allocatedBytes: 0,
+    serializedAllocationProxyBytes: 0,
     entities: 0,
     components: 0,
   };
@@ -85,7 +85,7 @@ function summarizeRecord(record) {
     retainedSamples: record.sampleCount,
     inputBytes: record.inputBytes,
     outputBytes: record.outputBytes,
-    allocatedBytes: record.allocatedBytes,
+    serializedAllocationProxyBytes: record.serializedAllocationProxyBytes,
     entities: record.entities,
     components: record.components,
   });
@@ -222,7 +222,14 @@ function createAuthorityStageProfiler(options = {}) {
       startedAt,
       capturedAt: Date.now(),
       bounds: Object.freeze({ sampleCapacityPerStage: sampleCapacity, maxRecipients, stageCount: ALLOWED_STAGES.size }),
-      privacy: "Recipient metrics use process-local ordinal slots; identities and values are never emitted.",
+      privacy: "Raw recipient identifiers remain only as bounded process-local map keys; readback emits admission-order-correlatable ordinal slots and never emits identifiers or values.",
+      timingContract: Object.freeze({
+        metricSizingOverheadIncludedInStageTimes: false,
+        metricSizingOverheadMeasuredOnlyByPairedControl: true,
+        serializedAllocationProxyIsMeasuredHeapAllocation: false,
+        socketSendCallbackExcludedFromCpuAttribution: true,
+        note: "Timers do not nest except async socket callback wall latency; opaque diff stages include their own internal normalization, hashing, and canonicalization.",
+      }),
       recipientSlots: recipientSlots.size,
       overflowRecipientObservations,
       eventLoopDelay: eventLoopSnapshot(),

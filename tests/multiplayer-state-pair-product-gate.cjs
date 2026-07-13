@@ -30,17 +30,19 @@ const S0 = Object.freeze({
 const S1_STATIC_PAIR_SAVINGS_BYTES = 953;
 const STAGE_PROFILE = process.argv.includes("--s5-profile");
 const PROFILE_CONTROL = STAGE_PROFILE && process.argv.includes("--profile-control");
+const MICRO_PROFILE = STAGE_PROFILE && process.argv.includes("--micro");
 const GATE = STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
 const MIXED_GATE = GATE !== "s3";
 const COMPARE_S3 = GATE === "s4";
 const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
 const S3_CANONICAL_DIR = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s3",
   "multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4");
-const PROFILE = STAGE_PROFILE ? (PROFILE_CONTROL ? "diagnostic-control" : "diagnostic-instrumented")
+const PROFILE = STAGE_PROFILE
+  ? `diagnostic-${MICRO_PROFILE ? "micro-" : ""}${PROFILE_CONTROL ? "control" : "instrumented"}`
   : process.argv.includes("--review") ? "review" : "canonical";
-const POPULATIONS = PROFILE === "review" ? [1, 8] : [1, 4, 8];
-const NORMAL_WARMUP_MS = STAGE_PROFILE ? 10_000 : PROFILE === "review" ? 5_000 : 60_000;
-const NORMAL_WINDOW_MS = STAGE_PROFILE ? 30_000 : PROFILE === "review" ? 20_000 : 300_000;
+const POPULATIONS = MICRO_PROFILE || PROFILE === "review" ? [1, 8] : [1, 4, 8];
+const NORMAL_WARMUP_MS = MICRO_PROFILE ? 5_000 : STAGE_PROFILE ? 10_000 : PROFILE === "review" ? 5_000 : 60_000;
+const NORMAL_WINDOW_MS = MICRO_PROFILE ? 15_000 : STAGE_PROFILE ? 30_000 : PROFILE === "review" ? 20_000 : 300_000;
 const CHURN_WARMUP_MS = PROFILE === "review" ? 5_000 : 20_000;
 const CHURN_WINDOW_MS = PROFILE === "review" ? 30_000 : 90_000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -594,7 +596,17 @@ async function runScenario({ population, scenario, runDir }) {
     const workload = await runWorkload(clientsRef, churn ? CHURN_WINDOW_MS : NORMAL_WINDOW_MS,
       { port, memorySamples, churn: churnSchedule });
     const endAt = startAt + (churn ? CHURN_WINDOW_MS : NORMAL_WINDOW_MS);
-    const endHealth = (await request(port, "/health/compact")).body;
+    const endHealth = STAGE_PROFILE && !PROFILE_CONTROL ? await waitFor(async () => {
+      const body = (await request(port, "/health/compact")).body;
+      const profile = body.multiplayer.adapter.authorityStageProfile;
+      const rawCalls = profile?.stages["match.rawSnapshotBuild"]?.aggregate.calls || 0;
+      const coreCalls = profile?.stages["recipient.publicCoreProjectionConstruction"]?.aggregate.calls || 0;
+      const proof = body.multiplayer.statePair.profileShareability?.publicCore;
+      return rawCalls > 0 && proof?.beats === rawCalls && coreCalls === rawCalls * population
+        && proof.comparisons === rawCalls * (population - 1)
+        && proof.mismatches === 0 ? body : false;
+    }, `${scenario}/${population} complete stage-profile beats`, 5000)
+      : (await request(port, "/health/compact")).body;
     for (const client of clientsRef.current) await closeClient(client);
     await waitFor(async () => {
       const health = (await request(port, "/health/compact")).body;
@@ -797,8 +809,9 @@ function validateArtifact(directory) {
       JSON.parse(fs.readFileSync(path.join(directory, name), "utf8")).passed === true),
     productCorrectnessPassed: scenarioFiles.every((entry) => entry.admission.correctnessPassed),
     allAccountingComplete: scenarioFiles.every((entry) => entry.correctness.accountingComplete),
-    normalPopulationsPresent: [1, 4, 8].every((population) => scenarioFiles.some((entry) =>
-      entry.scenario === "normal" && entry.population === population)) || aggregate.profile === "review",
+    normalPopulationsPresent: (aggregate.microProfile ? [1, 8] : [1, 4, 8]).every((population) =>
+      scenarioFiles.some((entry) => entry.scenario === "normal" && entry.population === population))
+      || aggregate.profile === "review",
     churnPopulationsPresent: aggregate.gate === "s5" || [1, 4, 8].every((population) => scenarioFiles.some((entry) =>
       entry.scenario === "churn" && entry.population === population)) || aggregate.profile === "review",
     atomicKindAlignmentAbsent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
@@ -813,11 +826,15 @@ function validateArtifact(directory) {
     publicCoreShareabilityProved: aggregate.gate !== "s5" || aggregate.instrumentationEnabled === false
       || scenarioFiles.every((entry) => {
         const proof = entry.diagnostics.statePair.profileShareability?.publicCore;
-        return proof?.sameWithinEveryObservedBeat === true && proof.mismatches === 0
-          && (entry.population === 1 || proof.comparisons > 0);
+        const profile = entry.performance.authorityStageProfile;
+        const rawCalls = profile?.stages["match.rawSnapshotBuild"]?.aggregate.calls || 0;
+        const coreCalls = profile?.stages["recipient.publicCoreProjectionConstruction"]?.aggregate.calls || 0;
+        return proof?.noMismatchesAmongObservedComparisons === true && proof.mismatches === 0
+          && proof.beats === rawCalls && coreCalls === rawCalls * entry.population
+          && proof.comparisons === rawCalls * (entry.population - 1);
       }),
   };
-  const methodPassed = invariants.checksums && invariants.allCleanupPassed
+  const methodPassed = invariants.checksums && invariants.allCleanupPassed && invariants.productCorrectnessPassed
     && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
     && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent
     && invariants.stageProfilePresent && invariants.publicCoreShareabilityProved;
@@ -851,7 +868,7 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
     schemaVersion: 2, gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
     config: { populations: POPULATIONS, normalWarmupMs: NORMAL_WARMUP_MS, normalWindowMs: NORMAL_WINDOW_MS,
@@ -905,7 +922,7 @@ async function main() {
     };
   });
   const aggregate = { schemaVersion: MIXED_GATE ? 2 : 1, gate: GATE,
-    profile: PROFILE, instrumentationEnabled: STAGE_PROFILE && !PROFILE_CONTROL,
+    profile: PROFILE, microProfile: MICRO_PROFILE, instrumentationEnabled: STAGE_PROFILE && !PROFILE_CONTROL,
     commit, seed: SEED, command, verdict,
     scenarios: results.map((entry) => ({ file: `${entry.scenario}-${entry.population}.json`,
       scenario: entry.scenario, population: entry.population,
