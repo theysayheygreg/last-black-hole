@@ -44,6 +44,7 @@
     "test:multiplayer-state-pair-s4-gate": "node tests/multiplayer-state-pair-product-gate.cjs --s4",
     "test:multiplayer-state-pair-s7-gate": "node tests/multiplayer-state-pair-product-gate.cjs --s7 --admission",
     "test:multiplayer-state-pair-s8-prototype": "node tests/multiplayer-state-pair-product-gate.cjs --s8-prototype --review",
+    "test:multiplayer-state-pair-s11-gate": "node tests/multiplayer-state-pair-product-gate.cjs --s11-admission --admission",
     "test:soak-runtime-diagnostics": "node tests/soak-runtime-diagnostics.cjs",
     "test:multiplayer-soak:smoke": "node tests/multiplayer-soak-smoke.cjs --no-retries",
     "test:multiplayer-soak:normal": "node tests/multiplayer-soak-normal.cjs --no-retries",

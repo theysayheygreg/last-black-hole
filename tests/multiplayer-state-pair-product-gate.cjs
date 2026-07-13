@@ -46,13 +46,15 @@ const S7_GATE = process.argv.includes("--s7");
 const S8_PROTOTYPE = process.argv.includes("--s8-prototype");
 const S9_PROTOTYPE = process.argv.includes("--s9-positional");
 const S10_PROTOTYPE = process.argv.includes("--s10-ledger");
-const POSITIONAL_GATE = S9_PROTOTYPE || S10_PROTOTYPE;
+const S11_GATE = process.argv.includes("--s11-admission");
+const LEDGER_GATE = S10_PROTOTYPE || S11_GATE;
+const POSITIONAL_GATE = S9_PROTOTYPE || LEDGER_GATE;
 const SPARSE_GATE = S8_PROTOTYPE || POSITIONAL_GATE;
 const RESIDUAL_GATE = S7_GATE || SPARSE_GATE;
 const ADMISSION_MODE = process.argv.includes("--admission");
 const NORMAL_ONLY = process.argv.includes("--normal-only");
 const S6_PREPARED = !["0", "false"].includes(String(process.env.LBH_S6_PREPARED ?? "true").toLowerCase());
-const GATE = S10_PROTOTYPE ? "s10" : S9_PROTOTYPE ? "s9" : S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
+const GATE = S11_GATE ? "s11" : S10_PROTOTYPE ? "s10" : S9_PROTOTYPE ? "s9" : S8_PROTOTYPE ? "s8" : S7_GATE ? "s7" : S6_BENCHMARK ? "s6" : STAGE_PROFILE ? "s5" : process.argv.includes("--s4") ? "s4" : "s3";
 const MIXED_GATE = GATE !== "s3";
 const COMPARE_S3 = GATE === "s4";
 const S3_CANONICAL_SHA256 = "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90";
@@ -63,12 +65,22 @@ const S4_CANONICAL_DIR = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair
   "multiplayer-state-pair-s4-2026-07-13T074927227Z-a052787");
 const S6_ANALYSIS_PATH = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s6", "analysis.json");
 const S6_ANALYSIS_SHA256 = "32f97d424f929b37a6da624a578fd379261ad030d3965db34d5cd0452219b1c6";
+const S11_COMPARISON_EVIDENCE = Object.freeze({
+  s7: Object.freeze({ path: path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s7", "canonical"),
+    compositeSha256: "e4f16209f70791c8b15dc6b913b99c6fc170c2a4f4491c9da654ab814ef4d068" }),
+  s8: Object.freeze({ path: path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s8", "final"),
+    compositeSha256: "c13db936bebd443ca5befa7906c5226a282d153f3969555f1659a5c47dc86707" }),
+  s9: Object.freeze({ path: path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s9", "pre-gate"),
+    compositeSha256: "34a0de4e4a611bfe5ce298f0a4fc0d6a4d3011c7e08173dbcba35c14dee40d1b" }),
+  s10: Object.freeze({ path: path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s10", "pre-gate"),
+    compositeSha256: "8f38e88f63bd753c8def9a100a2554d7e16acd29e0aa0077295c27233fb1a43d" }),
+});
 const PROFILE = S6_BENCHMARK ? `diagnostic-${S6_PREPARED ? "prepared" : "legacy"}` : STAGE_PROFILE
   ? `diagnostic-${MICRO_PROFILE ? "micro-" : ""}${PROFILE_CONTROL ? "control" : "instrumented"}`
   : process.argv.includes("--review") ? "review" : "canonical";
 const S6_POPULATIONS = String(process.env.LBH_S6_POPULATIONS || "1,4,8").split(",")
   .map((value) => Number(value)).filter((value) => [1, 4, 8].includes(value));
-const POPULATIONS = SPARSE_GATE ? [1, 4, 8] : S6_BENCHMARK ? [...new Set(S6_POPULATIONS)]
+const POPULATIONS = S11_GATE && PROFILE === "review" ? [1, 8] : SPARSE_GATE ? [1, 4, 8] : S6_BENCHMARK ? [...new Set(S6_POPULATIONS)]
   : MICRO_PROFILE || PROFILE === "review" ? [1, 8] : [1, 4, 8];
 const CHURN_POPULATIONS = RESIDUAL_GATE ? [1, 8] : POPULATIONS;
 const NORMAL_WARMUP_MS = S6_BENCHMARK ? 5_000 : MICRO_PROFILE ? 5_000 : STAGE_PROFILE ? 10_000 : PROFILE === "review" ? 5_000 : 60_000;
@@ -83,6 +95,18 @@ function writeExclusive(file, value) {
 
 function git(...args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+}
+
+function s11ComparisonEvidence() {
+  if (!S11_GATE) return null;
+  return Object.fromEntries(Object.entries(S11_COMPARISON_EVIDENCE).map(([gate, evidence]) => {
+    const checksums = JSON.parse(fs.readFileSync(path.join(evidence.path, "checksums.json"), "utf8"));
+    if (checksums.sha256 !== evidence.compositeSha256) {
+      throw new Error(`${gate.toUpperCase()} comparison evidence hash mismatch: ${checksums.sha256}`);
+    }
+    return [gate, { path: path.relative(ROOT, evidence.path),
+      compositeSha256: evidence.compositeSha256 }];
+  }));
 }
 
 async function freePort() {
@@ -422,7 +446,8 @@ async function closeClient(client) {
 
 function summarizeClients(clients) {
   return clients.map((client) => ({
-    label: client.label, membershipId: client.welcome.membershipId, connectionEpoch: client.welcome.connectionEpoch,
+    label: client.label, membershipBound: Boolean(client.welcome.membershipId),
+    connectionEpoch: client.welcome.connectionEpoch,
     capabilities: client.ticket.capabilities,
     acceptedPairs: client.acceptedPairs, validatedPairs: client.validatedPairs,
     staleOrDuplicatePairs: client.staleOrDuplicatePairs, hashesVerified: client.hashesVerified,
@@ -854,7 +879,83 @@ function buildResidualDecisionTable(normalResults) {
   });
 }
 
-async function runScenario({ population, scenario, runDir }) {
+function buildS11AdmissionDecision(normalResults) {
+  const populations = normalResults.map((entry) => {
+    const worst = Object.entries(entry.targetCadenceNormalization.perRecipient)
+      .sort(([, left], [, right]) => right.targetCadenceApplicationBytesPerSecond
+        - left.targetCadenceApplicationBytesPerSecond)[0];
+    const [recipient, row] = worst;
+    const observedPair = row.observedMeanPairBytes;
+    const exactBudget = Math.max(0, (TARGET_BPS - row.observedNonPairBytesPerSecond)
+      / TARGET_PUBLICATION_HZ);
+    const simBudgetMs = 1000 / entry.cadence.authorityTickHz;
+    const publishBudgetMs = 1000 / TARGET_PUBLICATION_HZ;
+    return {
+      population: entry.population,
+      worstRecipient: recipient,
+      trafficVerdict: {
+        actualMeanPassed: entry.admission.steadyMeanAtOrBelow64KiB,
+        actualOneSecondP95Passed: entry.admission.steadyOneSecondP95AtOrBelow80KiB,
+        normalized10HzMeanPassed: entry.admission.targetCadenceMeanAtOrBelow64KiB,
+        normalized10HzOneSecondP95Passed: entry.admission.targetCadenceOneSecondP95AtOrBelow80KiB,
+      },
+      cadenceVerdict: {
+        configuredHz: TARGET_PUBLICATION_HZ,
+        authorityOfferedHz: entry.cadence.authorityOfferedPairsPerSecondByClient[recipient],
+        authorityAcceptedHz: entry.cadence.authorityAcceptedPairsPerSecondByClient[recipient],
+        receiverAcceptedHz: entry.cadence.receiverAcceptedPairsPerSecond[recipient],
+        everyClientAtLeast9Hz: entry.admission.receiverAcceptedCadenceAtLeast90PercentOfConfigured,
+      },
+      exactRemainingPairReductionAt10Hz: {
+        referenceTargetBytes: 6504,
+        exactBudgetBytesForThisRecipient: exactBudget,
+        observedMeanPairBytes: observedPair,
+        bytesPerPairToReferenceTarget: Math.max(0, observedPair - 6504),
+        bytesPerPairToExactBudget: Math.max(0, observedPair - exactBudget),
+        bytesPerSecondTo64KiB: row.targetCadenceRequiredReductionBytesPerSecond,
+      },
+      cpuAndClockVerdict: {
+        simTickP95Ms: entry.performance.authority.simTickMs.p95,
+        simTickBudgetMs: simBudgetMs,
+        simTickMarginMs: simBudgetMs - entry.performance.authority.simTickMs.p95,
+        projectionAndPublishP95Ms: entry.performance.authority.projectionAndPublishMs.p95,
+        projectionAndPublishBudgetMs: publishBudgetMs,
+        projectionAndPublishMarginMs: publishBudgetMs
+          - entry.performance.authority.projectionAndPublishMs.p95,
+        authorityWithinExistingClockBudget: entry.admission.authorityWithinExistingClockBudget,
+        overloadStayedNormal: entry.admission.overloadStayedNormal,
+      },
+      productAdmissionPassed: entry.admission.productAdmissionPassed,
+    };
+  });
+  const byPopulation = Object.fromEntries(populations.map((entry) => [entry.population, entry]));
+  return {
+    target: "Approximately 6,504 application bytes per accepted pair at 10 Hz, adjusted exactly per recipient for measured non-pair traffic.",
+    populations,
+    separatedVerdicts: {
+      oneAndFourClientTraffic: [1, 4].filter((population) => byPopulation[population])
+        .map((population) => ({ population, trafficVerdict: byPopulation[population].trafficVerdict,
+          exactRemainingPairReductionAt10Hz: byPopulation[population].exactRemainingPairReductionAt10Hz })),
+      eightClientCpuAndCadence: byPopulation[8] ? {
+        cpuAndClockVerdict: byPopulation[8].cpuAndClockVerdict,
+        cadenceVerdict: byPopulation[8].cadenceVerdict,
+      } : null,
+    },
+    rankedNextSlices: [
+      { rank: 1, lane: "additional-positional-schema-cleanup",
+        reason: "Preserves the current JSON, exact reconstruction, privacy, and cadence contracts while attacking the measured pair envelope directly." },
+      { rank: 2, lane: "binary-codec",
+        reason: "Potentially larger structural reduction, but adds protocol/versioning/debug costs and still requires exact equivalence evidence." },
+      { rank: 3, lane: "compression",
+        reason: "Measure only after the remaining uncompressed envelope is explicit; adds CPU and tail-latency pressure to the failing 8-client lane." },
+      { rank: 4, lane: "deliberate-cadence-policy",
+        reason: "A product-policy choice, not optimization credit; it must define field age and latency rather than inherit overload collapse." },
+    ],
+    deferred: { lane: "aoi", reason: "No distance/visibility evidence in this gate justifies lifecycle or interest-churn risk." },
+  };
+}
+
+async function runScenario({ population, scenario, runDir, commit }) {
   const churn = scenario === "churn";
   const port = await freePort();
   const clientsRef = { current: [] };
@@ -969,8 +1070,8 @@ async function runScenario({ population, scenario, runDir }) {
         const replacementObserved = await waitFor(() => [...observers, replacement]
           .every((client) => hasMaterializedPublicEntity(client, "player", sourceId)),
         `${scenario}/${population} replacement player create`);
-        return { target: old.label, oldMembership: old.welcome.membershipId,
-          replacementMembership: replacement.welcome.membershipId,
+        return { target: old.label,
+          membershipChanged: old.welcome.membershipId !== replacement.welcome.membershipId,
           observerCount: observers.length, presenceBeforeLeave: Boolean(presenceBeforeLeave),
           authorityAbsenceObserved: Boolean(authorityAbsence),
           clientAbsenceObserved: Boolean(absenceObserved),
@@ -998,9 +1099,11 @@ async function runScenario({ population, scenario, runDir }) {
           encodedBytes: capture.rawFrames.reduce((sum, raw) => sum + Buffer.byteLength(raw, "utf8"), 0),
           meanEncodedBytes: capture.rawFrames.length
             ? capture.rawFrames.reduce((sum, raw) => sum + Buffer.byteLength(raw, "utf8"), 0) / capture.rawFrames.length : null,
-          deterministicDigest: `sha256:${crypto.createHash("sha256").update(capture.rawFrames.join("\n")).digest("hex")}` },
+          aggregateLengthDigest: `sha256:${crypto.createHash("sha256").update(capture.rawFrames
+            .map((raw) => Buffer.byteLength(raw, "utf8")).join(",")).digest("hex")}` },
         codec: POSITIONAL_CODEC_CAPABILITY,
-        privacy: { rawFramesRetained: false, ownerPrivateValuesEmitted: false },
+        privacy: { rawFramesRetained: false, rawFrameDigestRetained: false,
+          ownerPrivateValuesEmitted: false },
       } : analyzeStatePairSample(capture.rawFrames, { maxFrames: ATTRIBUTION_SAMPLE_FRAMES });
       capture.rawFrames.length = 0;
     }
@@ -1060,6 +1163,16 @@ async function runScenario({ population, scenario, runDir }) {
       sum + diagnostics.recoveryRequests, 0);
     const receiverRejectedCount = receiverDiagnostics.reduce((sum, diagnostics) =>
       sum + diagnostics.rejected, 0);
+    const perClientAckBaseAdvancement = Object.fromEntries(clientSummary.map((client, index) => {
+      const authorityAcceptedAckFrames = selected.filter((event) => event.recipientOrdinal === index + 1
+        && event.direction === "client->authority" && event.frameClass === "ack"
+        && event.metric === "accepted").length;
+      return [client.label, { lastAcceptedFrameId: client.lastAcceptedFrameId,
+        lastAckSentFrameId: client.lastStatePairAckSentFrameId,
+        authorityAcceptedAckFrames,
+        proved: client.lastAcceptedFrameId > 0 && client.lastStatePairAckSentFrameId > 0
+          && authorityAcceptedAckFrames > 0 }];
+    }));
     const correctness = {
       mixedCapabilityNegotiated: !MIXED_GATE || clientSummary.every((client) =>
         client.capabilities.includes(MIXED_CAPABILITY)),
@@ -1070,23 +1183,56 @@ async function runScenario({ population, scenario, runDir }) {
         client.legacyReconstructionVerified === client.acceptedPairs),
       noClientErrors: clientSummary.every((client) => client.error === null),
       publisherDrained: publisher.recipients === 0 && publisher.pendingPairs === 0 && publisher.retainedBytes === 0,
-      statePairAcksConverged: publisher.ackRecipientsWithBaseAdvance >= clientSummary.length,
+      statePairAcksConverged: publisher.ackRecipientsWithBaseAdvance >= clientSummary.length
+        && (churn || Object.values(perClientAckBaseAdvancement).every((proof) => proof.proved)),
       ackRejectsExactlyZero: publisher.ackRejected === 0,
       receiverBasesStayedApplicable: receiverBaseMismatchCount === 0,
       receiverRecoveryRequestsExactlyExpected: churn || receiverRecoveryRequestCount === 0,
       receiverRejectionsExactlyZeroInNormal: churn || receiverRejectedCount === 0,
+      receiverRecoveryEpisodesExactlyZeroInNormal: churn || receiverDiagnostics.every((diagnostics) =>
+        diagnostics.recoveryRequests === 0 && diagnostics.recoveryEpisodes === 0
+        && diagnostics.recoveryOutstanding === false),
+      receiverLedgerMissesExactlyZeroInNormal: churn || receiverDiagnostics.every((diagnostics) =>
+        diagnostics.ledger.misses === 0 && diagnostics.ledgerMisses === 0),
       receiverLedgerStayedBounded: receiverDiagnostics.every((diagnostics) =>
         diagnostics.ledger.entries <= diagnostics.limits.maxRetainedPairHistory
         && diagnostics.ledger.bytes <= diagnostics.limits.maxRetainedBytes
-        && diagnostics.ledger.highWaterBytes <= diagnostics.limits.maxRetainedBytes),
+        && diagnostics.ledger.highWaterBytes <= diagnostics.limits.maxRetainedBytes
+        && (!S11_GATE || (diagnostics.mode === POSITIONAL_CODEC_CAPABILITY
+          && diagnostics.limits.maxRetainedPairHistory === 64
+          && diagnostics.limits.maxRetainedBytes === 8 * 1024 * 1024
+          && diagnostics.limits.maxRetainedAgeMs === 60_000
+          && diagnostics.ledger.entries <= 64
+          && diagnostics.ledger.bytes <= 8 * 1024 * 1024
+          && diagnostics.ledger.highWaterBytes <= 8 * 1024 * 1024
+          && (churn || diagnostics.ledger.hits > 0)
+          && diagnostics.ledger.hits === diagnostics.ledgerHits
+          && diagnostics.ledger.misses === diagnostics.ledgerMisses
+          && diagnostics.ledger.evictions === diagnostics.ledgerEvictions
+          && Object.values(diagnostics.ledger.evictionReasons).reduce((sum, count) => sum + count, 0)
+            === diagnostics.ledger.evictions))),
       receiverLedgerCleanedUp: receiverCleanupDiagnostics.length === clientSummary.length
         && receiverCleanupDiagnostics.every((diagnostics) =>
-          diagnostics.closed === true && diagnostics.ledger.entries === 0 && diagnostics.ledger.bytes === 0),
+          diagnostics.closed === true && diagnostics.ledger.entries === 0 && diagnostics.ledger.bytes === 0
+          && (!S11_GATE || diagnostics.retainedPairHistory === 0)),
       accountingComplete: accounting.overflow === 0 && accounting.evidenceFailure === null,
+      projectionErrorsExactlyZero: endHealth.multiplayer.projection.errors
+        - startHealth.multiplayer.projection.errors === 0,
+      noNormalStatePairRetransmits: churn || selected.every((event) => !(event.direction === "authority->client"
+        && event.frameClass === "statePair" && event.metric === "retransmitted")),
+      noNormalStatePairTerminalGap: churn || selected.filter((event) => event.direction === "authority->client"
+        && event.frameClass === "statePair" && event.metric === "offered").length
+        === selected.filter((event) => event.direction === "authority->client"
+          && event.frameClass === "statePair" && event.metric === "accepted").length,
+      ackRejectHistogramsReconciled: publisher.ackRejected === publisher.ackRejectDiagnostics.total
+        && Object.values(publisher.ackRejectDiagnostics.byReason).reduce((sum, count) => sum + count, 0)
+          === publisher.ackRejectDiagnostics.total
+        && endHealth.multiplayer.adapter.statePair.ackRejectDiagnostics.total
+          === publisher.ackRejectDiagnostics.total,
       faultConvergence: !churn || clientSummary.every((client) => {
         const loss = client.faults.find((fault) => fault.type === "frame-loss");
         const ackLoss = client.faults.find((fault) => fault.type === "ack-loss");
-        if (loss && (S10_PROTOTYPE
+        if (loss && (LEDGER_GATE
           ? !(client.lastAcceptedFrameId > loss.frameId)
           : !client.faults.some((fault) => fault.type === "recovery"))) return false;
         if (ackLoss && !(client.lastAcceptedFrameId > ackLoss.frameId
@@ -1097,20 +1243,33 @@ async function runScenario({ population, scenario, runDir }) {
         fault.type === "recovery" && fault.at >= startAt && fault.at < endAt)),
       lifecycleObserved: !churn || (observedLifecycle.componentChanges > 0
         && faultActions.some((entry) => entry.name === "leave"
-          && entry.oldMembership !== entry.replacementMembership
+          && entry.membershipChanged === true
           && entry.presenceBeforeLeave && entry.authorityAbsenceObserved
           && entry.clientAbsenceObserved && entry.clientReplacementObserved)),
     };
     const authorityAcceptedPairsPerSecond = selected.filter((event) => event.direction === "authority->client"
       && event.frameClass === "statePair" && event.metric === "accepted").length
       / population / ((endAt - startAt) / 1000);
-    const authorityAcceptedPairsPerSecondByClient = Object.fromEntries(allClients.map((client, index) => [client.label,
+    const authorityOfferedPairsPerSecond = selected.filter((event) => event.direction === "authority->client"
+      && event.frameClass === "statePair" && event.metric === "offered").length
+      / population / ((endAt - startAt) / 1000);
+    const windowSeconds = (endAt - startAt) / 1000;
+    const authorityOfferedPairCountsByClient = Object.fromEntries(allClients.map((client, index) => [client.label,
       selected.filter((event) => event.recipientOrdinal === index + 1
         && event.direction === "authority->client" && event.frameClass === "statePair"
-        && event.metric === "accepted").length / ((endAt - startAt) / 1000)]));
-    const receiverAcceptedPairsPerSecond = Object.fromEntries(allClients.map((client) => [client.label,
-      client.acceptedPairTimes.filter((at) => at >= startAt && at < endAt).length
-        / ((endAt - startAt) / 1000)]));
+        && event.metric === "offered").length]));
+    const authorityAcceptedPairCountsByClient = Object.fromEntries(allClients.map((client, index) => [client.label,
+      selected.filter((event) => event.recipientOrdinal === index + 1
+        && event.direction === "authority->client" && event.frameClass === "statePair"
+        && event.metric === "accepted").length]));
+    const receiverAcceptedPairCountsByClient = Object.fromEntries(allClients.map((client) => [client.label,
+      client.acceptedPairTimes.filter((at) => at >= startAt && at < endAt).length]));
+    const authorityAcceptedPairsPerSecondByClient = Object.fromEntries(Object.entries(
+      authorityAcceptedPairCountsByClient).map(([label, count]) => [label, count / windowSeconds]));
+    const authorityOfferedPairsPerSecondByClient = Object.fromEntries(Object.entries(
+      authorityOfferedPairCountsByClient).map(([label, count]) => [label, count / windowSeconds]));
+    const receiverAcceptedPairsPerSecond = Object.fromEntries(Object.entries(
+      receiverAcceptedPairCountsByClient).map(([label, count]) => [label, count / windowSeconds]));
     const minimumReceiverAcceptedPairsPerSecond = churn ? null
       : Math.min(...Object.values(receiverAcceptedPairsPerSecond));
     // Convergence is a diagnostic tracking verdict, distinct from the product
@@ -1133,9 +1292,9 @@ async function runScenario({ population, scenario, runDir }) {
         : targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS,
       receiverAcceptedCadenceAtLeast90PercentOfConfigured: churn || !RESIDUAL_GATE ? null
         : minimumReceiverAcceptedPairsPerSecond >= MIN_HEALTHY_PUBLICATION_HZ,
-      receiverCadenceTracksAuthorityWithinTolerance: !S10_PROTOTYPE || churn ? null
+      receiverCadenceTracksAuthorityWithinTolerance: !LEDGER_GATE || churn ? null
         : receiverCadenceTracksAuthority,
-      receiverCadenceToleranceHz: !S10_PROTOTYPE || churn ? null : receiverCadenceToleranceHz,
+      receiverCadenceToleranceHz: !LEDGER_GATE || churn ? null : receiverCadenceToleranceHz,
       correctnessPassed: Object.values(correctness).every(Boolean),
       authorityWithinExistingClockBudget: endHealth.multiplayer.projection.accounting.costDistributions.simTickMs.p95
         <= (1000 / endHealth.session.tickHz)
@@ -1143,10 +1302,10 @@ async function runScenario({ population, scenario, runDir }) {
         <= (1000 / (RESIDUAL_GATE ? TARGET_PUBLICATION_HZ : endHealth.session.snapshotHz)),
       overloadStayedNormal: endHealth.session.overloadState === "NORMAL",
     };
-    admission.convergenceOnlyPassed = !S10_PROTOTYPE ? null
+    admission.convergenceOnlyPassed = !LEDGER_GATE ? null
       : admission.correctnessPassed
         && (churn || admission.receiverCadenceTracksAuthorityWithinTolerance === true);
-    admission.productAdmissionPassed = !S10_PROTOTYPE ? null
+    admission.productAdmissionPassed = !LEDGER_GATE ? null
       : admission.convergenceOnlyPassed
         && (churn || admission.receiverAcceptedCadenceAtLeast90PercentOfConfigured === true)
         && admission.authorityWithinExistingClockBudget === true
@@ -1155,7 +1314,7 @@ async function runScenario({ population, scenario, runDir }) {
           && admission.steadyOneSecondP95AtOrBelow80KiB === true
           && admission.targetCadenceMeanAtOrBelow64KiB === true
           && admission.targetCadenceOneSecondP95AtOrBelow80KiB === true));
-    admission.passed = S10_PROTOTYPE
+    admission.passed = LEDGER_GATE
       ? admission.productAdmissionPassed
       : Object.entries(admission).filter(([key, value]) => value !== null
         && key !== "receiverCadenceToleranceHz").every(([, value]) => Boolean(value));
@@ -1203,8 +1362,8 @@ async function runScenario({ population, scenario, runDir }) {
         bytes: clientSummary.reduce((sum, client) => sum + client.manifest.servedBytes, 0) },
     };
     const result = {
-      schemaVersion: RESIDUAL_GATE ? 3 : MIXED_GATE ? 2 : 1,
-      gate: GATE, scenario, population, seed: SEED, profile: PROFILE,
+      schemaVersion: S11_GATE ? 4 : RESIDUAL_GATE ? 3 : MIXED_GATE ? 2 : 1,
+      gate: GATE, scenario, population, seed: SEED, profile: PROFILE, commit,
       topology: { matches: 1, dedicatedLogicalAuthorities: 1, simultaneousRecipients: population,
         note: "One authoritative sim instance for one match; not a concurrent-match fleet-capacity result." },
       window: { startAt, endAt, durationSeconds: (endAt - startAt) / 1000,
@@ -1244,6 +1403,7 @@ async function runScenario({ population, scenario, runDir }) {
           ackBaseAdvances: publisher.ackBaseAdvances,
           recipientsWithAckedBaseBeforeCleanup: livePublisher.recipientsWithAckedBase,
           maxAckedFrameIdBeforeCleanup: livePublisher.maxAckedFrameId,
+          perClient: perClientAckBaseAdvancement,
           candidateAverageBytes: livePublisher.candidateAverageBytes,
           counterScope: "scenario lifetime including warmup; live base fields are pre-cleanup" },
         acceptedStatePairFrameBytes: pairGroup.map((row) => ({ kind: row.projectionKind,
@@ -1257,12 +1417,22 @@ async function runScenario({ population, scenario, runDir }) {
         comparison: { acceptedS0FullJson: S0[population], s1StaticManifestApproximatePairP50: S0[population].pairP50 - S1_STATIC_PAIR_SAVINGS_BYTES,
           observedPairBytes: pairStats,
           savingsVsS0PairP50: 1 - pairStats.p50 / S0[population].pairP50,
-          savingsVsS1ApproxPairP50: 1 - pairStats.p50 / (S0[population].pairP50 - S1_STATIC_PAIR_SAVINGS_BYTES) } },
+          savingsVsS1ApproxPairP50: 1 - pairStats.p50 / (S0[population].pairP50 - S1_STATIC_PAIR_SAVINGS_BYTES) },
+        byteEvidence: {
+          allAcceptedPairs: pairStats,
+          sampledAcceptedPairs: residualAttribution?.sample || null,
+          statement: "All-accepted statistics come from the exact accounting window; the bounded sample is retained only as a deterministic positional-codec attribution digest.",
+        } },
       cadence: { authorityTickHz: endHealth.session.tickHz, publicationHz: endHealth.session.snapshotHz,
         configuredPublicationHz: TARGET_PUBLICATION_HZ,
         minimumHealthyObservedPublicationHz: MIN_HEALTHY_PUBLICATION_HZ,
+        authorityOfferedPairsPerSecond,
+        authorityOfferedPairCountsByClient,
+        authorityOfferedPairsPerSecondByClient,
         authorityAcceptedPairsPerSecond,
+        authorityAcceptedPairCountsByClient,
         authorityAcceptedPairsPerSecondByClient,
+        receiverAcceptedPairCountsByClient,
         receiverAcceptedPairsPerSecond,
         receiverCadenceToleranceHzByClient,
         minimumReceiverAcceptedPairsPerSecond,
@@ -1283,11 +1453,40 @@ async function runScenario({ population, scenario, runDir }) {
           interpretation: "Unexpected recovery in a normal window fails correctness. Churn results must be read with the injected fault log; retries never satisfy cadence or admission.",
         };
       })(),
+      protocolHistograms: {
+        authorityAckRejectReasons: publisher.ackRejectDiagnostics?.byReason || {},
+        authorityAckRejectRelations: publisher.ackRejectDiagnostics?.byRelation || {},
+        adapterRecovery: {
+          requests: endHealth.multiplayer.adapter.statePair.ackRejectDiagnostics?.recoveryRequests || 0,
+          accepted: endHealth.multiplayer.adapter.statePair.ackRejectDiagnostics?.recoveryAccepted || 0,
+          rejected: endHealth.multiplayer.adapter.statePair.ackRejectDiagnostics?.recoveryRejected || 0,
+          cooldownDrops: endHealth.multiplayer.adapter.statePair.ackRejectDiagnostics?.recoveryCooldownDrops || 0,
+        },
+        receiverRejectionsByReason: receiverDiagnostics.reduce((sum, diagnostics) => {
+          for (const [reason, count] of Object.entries(diagnostics.rejectionReasons || {})) {
+            sum[reason] = (sum[reason] || 0) + count;
+          }
+          return sum;
+        }, {}),
+        receiverRecoveriesByReason: receiverDiagnostics.reduce((sum, diagnostics) => {
+          for (const [reason, count] of Object.entries(diagnostics.recoveryReasons || {})) {
+            sum[reason] = (sum[reason] || 0) + count;
+          }
+          return sum;
+        }, {}),
+      },
       performance: { machineLocal: true,
         authority: { ...deltaHealth(startHealth, endHealth),
           percentileScope: "bounded runtime rolling ring; reset after warmup by evidence-only endpoint" },
         positionalWireDecodeMs: POSITIONAL_GATE ? distribution(allClients.flatMap((client) => client.wireDecodeSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)) : null,
+        codec: POSITIONAL_GATE ? {
+          publisherCandidateEncodeAggregate: endHealth.multiplayer.statePair.positionalJson,
+          adapterEncodeAggregate: endHealth.multiplayer.adapter.statePair.positionalJson,
+          clientWireDecodeMs: distribution(allClients.flatMap((client) => client.wireDecodeSamples)
+            .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
+          boundary: "Authority codec counters expose exact calls/bytes/total/mean; client decode is a bounded p50/p95/p99/max distribution. Stage profiler remains OFF for the product gate.",
+        } : null,
         clientApplyMs: distribution(allClients.flatMap((client) => client.clientWorkSamples)
           .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
         clientAckSerializeSendMs: distribution(allClients.flatMap((client) => client.ackWorkSamples)
@@ -1307,9 +1506,12 @@ async function runScenario({ population, scenario, runDir }) {
       faults: faultActions, clients: clientSummary, correctness, admission,
       diagnostics: { projectionErrors: endHealth.multiplayer.projection.errors - startHealth.multiplayer.projection.errors,
         skippedBeats: endHealth.multiplayer.projection.skippedBeats - startHealth.multiplayer.projection.skippedBeats,
+        overloadState: endHealth.session.overloadState,
+        replicationAccounting: { overflow: accounting.overflow, evidenceFailure: accounting.evidenceFailure },
         statePair: endHealth.multiplayer.statePair,
         adapterStatePair: endHealth.multiplayer.adapter.statePair,
         manifestTransfers: preStopHealth.multiplayer.manifestTransfers },
+      comparisonEvidence: s11ComparisonEvidence(),
       limitations: ["Local macOS loopback only", "raw WebSocket without TLS", "one match at a time",
         "no hosted fleet, WSS, WAN, packet retransmission, compression, AOI, binary codec, or 24-96-client claim"],
     };
@@ -1339,10 +1541,195 @@ async function runScenario({ population, scenario, runDir }) {
   }
 }
 
+function sumValues(record) {
+  return Object.values(record || {}).reduce((sum, value) => sum + value, 0);
+}
+
+function sameKeys(record, expected) {
+  return JSON.stringify(Object.keys(record || {}).sort()) === JSON.stringify([...expected].sort());
+}
+
+function s11ScenarioIntegrity(entry) {
+  const normal = entry.scenario === "normal";
+  const seconds = entry.window.durationSeconds;
+  const labels = entry.clients.map((client) => client.label);
+  const cadence = entry.cadence;
+  const countMaps = [cadence.authorityOfferedPairCountsByClient,
+    cadence.authorityAcceptedPairCountsByClient, cadence.receiverAcceptedPairCountsByClient];
+  const rateMaps = [cadence.authorityOfferedPairsPerSecondByClient,
+    cadence.authorityAcceptedPairsPerSecondByClient, cadence.receiverAcceptedPairsPerSecond];
+  const cadenceKeysExact = [...countMaps, ...rateMaps].every((record) => sameKeys(record, labels));
+  const cadenceArithmetic = !normal || (cadenceKeysExact && labels.every((label) => {
+    const offered = cadence.authorityOfferedPairCountsByClient[label];
+    const accepted = cadence.authorityAcceptedPairCountsByClient[label];
+    const receiver = cadence.receiverAcceptedPairCountsByClient[label];
+    return Number.isSafeInteger(offered) && Number.isSafeInteger(accepted)
+      && Number.isSafeInteger(receiver) && offered >= accepted && accepted >= receiver
+      && Math.abs(cadence.authorityOfferedPairsPerSecondByClient[label] - offered / seconds) < 1e-9
+      && Math.abs(cadence.authorityAcceptedPairsPerSecondByClient[label] - accepted / seconds) < 1e-9
+      && Math.abs(cadence.receiverAcceptedPairsPerSecond[label] - receiver / seconds) < 1e-9;
+  }));
+  const receiverRates = Object.values(cadence.receiverAcceptedPairsPerSecond || {});
+  const minimumReceiverRate = normal ? Math.min(...receiverRates) : null;
+  const cadenceTracking = normal && labels.every((label) => Math.abs(
+    cadence.receiverAcceptedPairsPerSecond[label]
+      - cadence.authorityAcceptedPairsPerSecondByClient[label])
+      <= cadence.receiverCadenceToleranceHzByClient[label]);
+  const ledgerArithmetic = entry.clients.every((client) => {
+    const diagnostics = client.receiverDiagnostics;
+    const cleanup = client.receiverCleanupDiagnostics;
+    return diagnostics?.mode === POSITIONAL_CODEC_CAPABILITY
+      && diagnostics.limits?.maxRetainedPairHistory === 64
+      && diagnostics.limits?.maxRetainedBytes === 8 * 1024 * 1024
+      && diagnostics.limits?.maxRetainedAgeMs === 60_000
+      && diagnostics.ledger?.hits === diagnostics.ledgerHits
+      && diagnostics.ledger?.misses === diagnostics.ledgerMisses
+      && diagnostics.ledger?.evictions === diagnostics.ledgerEvictions
+      && sumValues(diagnostics.ledger?.evictionReasons) === diagnostics.ledger.evictions
+      && sumValues(diagnostics.rejectionReasons) === diagnostics.rejected
+      && sumValues(diagnostics.recoveryReasons) <= diagnostics.recoveryRequests
+      && cleanup?.closed === true && cleanup.retainedPairHistory === 0
+      && cleanup.ledger?.entries === 0 && cleanup.ledger?.bytes === 0;
+  });
+  const ackProofs = entry.pairShape.ackBaseProof.perClient;
+  const ackProofArithmetic = sameKeys(ackProofs, labels) && labels.every((label) => {
+    const proof = ackProofs[label];
+    const expected = proof.lastAcceptedFrameId > 0 && proof.lastAckSentFrameId > 0
+      && proof.authorityAcceptedAckFrames > 0;
+    return proof.proved === expected;
+  });
+  const publisher = entry.diagnostics.statePair.publisher;
+  const ackConvergedExpected = publisher.ackBaseAdvances > 0
+    && (normal ? publisher.ackRecipientsWithBaseAdvance === entry.population
+      && Object.values(ackProofs).every((proof) => proof.proved)
+      : publisher.ackRecipientsWithBaseAdvance >= entry.clients.length);
+  const adapterAck = entry.diagnostics.adapterStatePair.ackRejectDiagnostics;
+  const ackHistogramArithmetic = publisher.ackRejected === publisher.ackRejectDiagnostics.total
+    && sumValues(publisher.ackRejectDiagnostics.byReason) === publisher.ackRejectDiagnostics.total
+    && adapterAck.total === publisher.ackRejectDiagnostics.total;
+  const receiverDiagnostics = entry.clients.map((client) => client.receiverDiagnostics);
+  const cleanupDiagnostics = entry.clients.map((client) => client.receiverCleanupDiagnostics);
+  const baseMisses = receiverDiagnostics.reduce((sum, diagnostics) => sum
+    + (diagnostics.rejectionReasons?.["base-mismatch"] || 0)
+    + (diagnostics.rejectionReasons?.["missing-base"] || 0), 0);
+  const expectedCorrectnessFields = {
+    mixedCapabilityNegotiated: entry.clients.every((client) =>
+      client.capabilities.includes(MIXED_CAPABILITY)),
+    allClientHashesMatched: entry.clients.every((client) => client.hashesVerified === client.acceptedPairs),
+    ownerPrivacyAndAtomicObservationVerified: entry.clients.every((client) =>
+      client.hashesVerified === client.acceptedPairs && client.error === null),
+    legacyPublicStateShapeInternallyConsistent: entry.clients.every((client) =>
+      client.legacyReconstructionVerified === client.acceptedPairs),
+    noClientErrors: entry.clients.every((client) => client.error === null),
+    publisherDrained: entry.performance.boundedState.publisherAfterCleanup.recipients === 0
+      && entry.performance.boundedState.publisherAfterCleanup.pendingPairs === 0
+      && entry.performance.boundedState.publisherAfterCleanup.retainedBytes === 0,
+    statePairAcksConverged: ackConvergedExpected,
+    ackRejectsExactlyZero: publisher.ackRejected === 0,
+    receiverBasesStayedApplicable: baseMisses === 0,
+    receiverRecoveryRequestsExactlyExpected: !normal
+      || receiverDiagnostics.every((diagnostics) => diagnostics.recoveryRequests === 0),
+    receiverRejectionsExactlyZeroInNormal: !normal
+      || receiverDiagnostics.every((diagnostics) => diagnostics.rejected === 0),
+    receiverRecoveryEpisodesExactlyZeroInNormal: !normal
+      || receiverDiagnostics.every((diagnostics) => diagnostics.recoveryRequests === 0
+        && diagnostics.recoveryEpisodes === 0 && diagnostics.recoveryOutstanding === false),
+    receiverLedgerMissesExactlyZeroInNormal: !normal
+      || receiverDiagnostics.every((diagnostics) => diagnostics.ledger.misses === 0
+        && diagnostics.ledgerMisses === 0),
+    receiverLedgerStayedBounded: receiverDiagnostics.every((diagnostics) =>
+      diagnostics.ledger.entries <= 64 && diagnostics.ledger.bytes <= 8 * 1024 * 1024
+      && diagnostics.ledger.highWaterBytes <= 8 * 1024 * 1024
+      && (!normal || diagnostics.ledger.hits > 0)),
+    receiverLedgerCleanedUp: cleanupDiagnostics.every((diagnostics) => diagnostics.closed === true
+      && diagnostics.ledger.entries === 0 && diagnostics.ledger.bytes === 0
+      && diagnostics.retainedPairHistory === 0),
+    accountingComplete: entry.diagnostics.replicationAccounting.overflow === 0
+      && entry.diagnostics.replicationAccounting.evidenceFailure === null,
+    projectionErrorsExactlyZero: entry.diagnostics.projectionErrors === 0,
+    noNormalStatePairRetransmits: !normal
+      || entry.exactTraffic.explicitCounts.retransmittedStatePairs === 0,
+    noNormalStatePairTerminalGap: !normal || labels.every((label) =>
+      cadence.authorityOfferedPairCountsByClient[label]
+        === cadence.authorityAcceptedPairCountsByClient[label]),
+    ackRejectHistogramsReconciled: ackHistogramArithmetic,
+    faultConvergence: normal || entry.clients.every((client) => {
+      const loss = client.faults.find((fault) => fault.type === "frame-loss");
+      const ackLoss = client.faults.find((fault) => fault.type === "ack-loss");
+      return (!loss || client.lastAcceptedFrameId > loss.frameId)
+        && (!ackLoss || (client.lastAcceptedFrameId > ackLoss.frameId
+          && client.lastStatePairAckSentFrameId > ackLoss.frameId));
+    }),
+    noUnexpectedNormalRecovery: !normal || entry.clients.every((client) =>
+      !client.faults.some((fault) => fault.type === "recovery"
+        && fault.at >= entry.window.startAt && fault.at < entry.window.endAt)),
+    lifecycleObserved: normal || (entry.pairShape.observedMaterializedLifecycle.componentChanges > 0
+      && entry.faults.some((fault) => fault.name === "leave" && fault.membershipChanged === true
+        && fault.presenceBeforeLeave && fault.authorityAbsenceObserved
+        && fault.clientAbsenceObserved && fault.clientReplacementObserved)),
+  };
+  const correctnessFieldsRecomputed = Object.entries(expectedCorrectnessFields)
+    .every(([key, value]) => entry.correctness[key] === value);
+  const expectedCorrectness = Object.entries(entry.correctness)
+    .filter(([key]) => key !== "statePairAcksConverged")
+    .every(([, value]) => value === true) && ackConvergedExpected;
+  const storedCorrectness = entry.admission.correctnessPassed === Object.values(entry.correctness).every(Boolean);
+  const expectedAdmission = {
+    steadyMeanAtOrBelow64KiB: normal
+      ? entry.exactTraffic.worstRecipientMeanDownlinkBytesPerSecond <= TARGET_BPS : null,
+    steadyOneSecondP95AtOrBelow80KiB: normal
+      ? entry.exactTraffic.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS : null,
+    targetCadenceMeanAtOrBelow64KiB: normal
+      ? entry.targetCadenceNormalization.worstRecipientMeanDownlinkBytesPerSecond <= TARGET_BPS : null,
+    targetCadenceOneSecondP95AtOrBelow80KiB: normal
+      ? entry.targetCadenceNormalization.oneSecondP95DownlinkBytesPerSecond <= SENSITIVITY_BPS : null,
+    receiverAcceptedCadenceAtLeast90PercentOfConfigured: normal
+      ? minimumReceiverRate >= MIN_HEALTHY_PUBLICATION_HZ : null,
+    receiverCadenceTracksAuthorityWithinTolerance: normal ? cadenceTracking : null,
+    correctnessPassed: Object.values(entry.correctness).every(Boolean),
+    authorityWithinExistingClockBudget: entry.performance.authority.simTickMs.p95
+        <= 1000 / cadence.authorityTickHz
+      && entry.performance.authority.projectionAndPublishMs.p95 <= 1000 / TARGET_PUBLICATION_HZ,
+    overloadStayedNormal: entry.diagnostics.overloadState === "NORMAL",
+  };
+  const admissionInputsMatch = Object.entries(expectedAdmission).every(([key, value]) =>
+    entry.admission[key] === value);
+  const convergence = expectedAdmission.correctnessPassed
+    && (!normal || expectedAdmission.receiverCadenceTracksAuthorityWithinTolerance === true);
+  const product = convergence && (!normal
+    || expectedAdmission.receiverAcceptedCadenceAtLeast90PercentOfConfigured === true)
+    && expectedAdmission.authorityWithinExistingClockBudget
+    && expectedAdmission.overloadStayedNormal
+    && (!normal || (expectedAdmission.steadyMeanAtOrBelow64KiB
+      && expectedAdmission.steadyOneSecondP95AtOrBelow80KiB
+      && expectedAdmission.targetCadenceMeanAtOrBelow64KiB
+      && expectedAdmission.targetCadenceOneSecondP95AtOrBelow80KiB));
+  return cadenceArithmetic && ledgerArithmetic && ackProofArithmetic && ackHistogramArithmetic
+    && correctnessFieldsRecomputed
+    && entry.correctness.statePairAcksConverged === ackConvergedExpected
+    && storedCorrectness && expectedCorrectness === entry.admission.correctnessPassed
+    && admissionInputsMatch && entry.admission.convergenceOnlyPassed === convergence
+    && entry.admission.productAdmissionPassed === product && entry.admission.passed === product
+    && (!normal || (entry.residualAttribution?.privacy?.rawFrameDigestRetained === false
+      && entry.residualAttribution?.sample?.deterministicDigest === undefined));
+}
+
 function validateArtifact(directory) {
   const checksum = validateChecksums(directory);
+  const run = JSON.parse(fs.readFileSync(path.join(directory, "run.json"), "utf8"));
   const aggregate = JSON.parse(fs.readFileSync(path.join(directory, "aggregate.json"), "utf8"));
   const scenarioFiles = aggregate.scenarios.map((entry) => JSON.parse(fs.readFileSync(path.join(directory, entry.file), "utf8")));
+  const isS11 = aggregate.gate === "s11";
+  const s11ExpectedNormal = run.profile === "review" ? [1, 8] : [1, 4, 8];
+  const s11ExpectedChurn = [1, 8];
+  const s11ExpectedScenarios = [...s11ExpectedNormal.map((population) => `normal-${population}`),
+    ...s11ExpectedChurn.map((population) => `churn-${population}`)].sort();
+  const actualScenarioKeys = scenarioFiles.map((entry) => `${entry.scenario}-${entry.population}`).sort();
+  const cleanupFiles = fs.readdirSync(directory).filter((name) => name.startsWith("cleanup-")
+    && name.endsWith(".json")).sort();
+  const expectedCleanupFiles = s11ExpectedScenarios.map((key) => `cleanup-${key}.json`).sort();
+  const s11RecomputedProductVerdict = isS11
+    ? scenarioFiles.every((entry) => entry.admission.productAdmissionPassed === true) : null;
   const invariants = {
     checksums: checksum.passed,
     allCleanupPassed: fs.readdirSync(directory).filter((name) => name.startsWith("cleanup-")).every((name) =>
@@ -1353,13 +1740,13 @@ function validateArtifact(directory) {
     allAccountingComplete: scenarioFiles.every((entry) => entry.correctness.accountingComplete),
     normalPopulationsPresent: (aggregate.expectedPopulations || (aggregate.microProfile ? [1, 8] : [1, 4, 8])).every((population) =>
       scenarioFiles.some((entry) => entry.scenario === "normal" && entry.population === population))
-      || aggregate.profile === "review",
+      || (!isS11 && aggregate.profile === "review"),
     churnPopulationsPresent: ["s5", "s6"].includes(aggregate.gate)
       || (aggregate.expectedChurnPopulations || [1, 4, 8]).every((population) => scenarioFiles.some((entry) =>
-        entry.scenario === "churn" && entry.population === population)) || aggregate.profile === "review",
+        entry.scenario === "churn" && entry.population === population)) || (!isS11 && aggregate.profile === "review"),
     atomicKindAlignmentAbsent: !["s4", "s7", "s8"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.pairShape.productWindow.atomicKindAlignmentAbsent === true),
-    mixedPairsObserved: !["s4", "s7", "s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles
+    mixedPairsObserved: !["s4", "s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.pairShape.productWindow.publicDeltaOwnerKeyframe > 0),
     s3ComparisonsPresent: aggregate.gate !== "s4" || scenarioFiles.every((entry) =>
@@ -1376,19 +1763,19 @@ function validateArtifact(directory) {
           && proof.beats === rawCalls && coreCalls === rawCalls * entry.population
           && proof.comparisons === rawCalls * (entry.population - 1);
       }),
-    s7PreparedProfilerBoundary: !["s7", "s8", "s9", "s10"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
+    s7PreparedProfilerBoundary: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || (aggregate.preparedProjectionsEnabled === true
       && aggregate.instrumentationEnabled === false && aggregate.eventLoopMonitorEnabled === true),
-    s7AckRejectAccountingConsistent: !["s7", "s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
+    s7AckRejectAccountingConsistent: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles.every((entry) => {
       const rejected = entry.pairShape.ackBaseProof.ackRejected;
       return Number.isSafeInteger(rejected) && rejected >= 0
         && entry.correctness.ackRejectsExactlyZero === (rejected === 0);
     }),
-    s7CadenceNormalizationPresent: !["s7", "s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles
+    s7CadenceNormalizationPresent: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.targetCadenceNormalization?.configuredPublicationHz === TARGET_PUBLICATION_HZ
         && Number.isFinite(entry.targetCadenceNormalization?.worstRecipientMeanDownlinkBytesPerSecond)
         && Number.isFinite(entry.targetCadenceNormalization?.oneSecondP95DownlinkBytesPerSecond)),
-    s7AttributionReconciledAndPrivate: ["s9", "s10"].includes(aggregate.gate) ? scenarioFiles
+    s7AttributionReconciledAndPrivate: ["s9", "s10", "s11"].includes(aggregate.gate) ? scenarioFiles
       .filter((entry) => entry.scenario === "normal")
       .every((entry) => entry.residualAttribution?.codec === POSITIONAL_CODEC_CAPABILITY
         && entry.residualAttribution?.sample?.capturedAcceptedFrames > 0
@@ -1402,16 +1789,16 @@ function validateArtifact(directory) {
         && entry.residualAttribution?.ownerKeyframe?.reconciliation?.passed === true
         && entry.residualAttribution?.privacy?.rawFramesRetained === false
         && entry.residualAttribution?.privacy?.ownerPrivateValuesEmitted === false),
-    s7ComparisonsPresent: !["s7", "s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s7ComparisonsPresent: !["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.comparisonToS4?.compositeSha256 === S4_CANONICAL_SHA256
         && (entry.scenario !== "normal"
           || entry.comparisonToS6PreparedDiagnostic?.analysisSha256 === S6_ANALYSIS_SHA256)),
-    s8FieldFreshnessPresent: !["s8", "s9", "s10"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s8FieldFreshnessPresent: !["s8", "s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       Object.values(entry.fieldFreshness?.maximumConfiguredPublicationLagBeats || {})
         .length === 4
       && Object.values(entry.fieldFreshness.maximumConfiguredPublicationLagBeats)
         .every((value) => value === 0)),
-    s9CodecManifestBound: !["s9", "s10"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
+    s9CodecManifestBound: !["s9", "s10", "s11"].includes(aggregate.gate) || scenarioFiles.every((entry) =>
       entry.clients.every((client) => client.manifest?.codecVerified === true
         && client.manifest?.codecManifestHash === POSITIONAL_CODEC_MANIFEST_HASH)
       && entry.diagnostics?.adapterStatePair?.positionalJson?.encodedFrames > 0
@@ -1443,16 +1830,62 @@ function validateArtifact(directory) {
             return Number.isFinite(authorityRate) && Number.isFinite(receiverRate)
               && Number.isFinite(tolerance) && Math.abs(receiverRate - authorityRate) <= tolerance;
           })))),
+    s11RunContract: !isS11 || (run.schemaVersion === 4 && aggregate.schemaVersion === 4
+      && run.gate === "s11" && run.profile === aggregate.profile && run.commit === aggregate.commit
+      && run.dirty === false && aggregate.preparedProjectionsEnabled === true
+      && aggregate.instrumentationEnabled === false && aggregate.eventLoopMonitorEnabled === true
+      && (run.profile !== "canonical" || run.command.includes("--admission"))
+      && JSON.stringify(run.config.populations) === JSON.stringify(s11ExpectedNormal)
+      && run.config.normalWarmupMs === (run.profile === "review" ? 5_000 : 60_000)
+      && run.config.normalWindowMs === (run.profile === "review" ? 20_000 : 300_000)
+      && run.config.churnWarmupMs === (run.profile === "review" ? 5_000 : 20_000)
+      && run.config.churnWindowMs === (run.profile === "review" ? 30_000 : 90_000)
+      && run.config.env.NODE_ENV === "test" && run.config.env.LBH_SIM_WS_ENABLED === true
+      && run.config.env.LBH_SIM_WS_JSON_V2 === true
+      && run.config.env.LBH_SIM_WS_STATE_PAIR_V1 === true
+      && run.config.env.LBH_SIM_WS_STATE_PAIR_MIXED_V1 === true
+      && run.config.env.LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1 === true
+      && run.config.env.LBH_SIM_WS_POSITIONAL_JSON_V1 === true
+      && run.config.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS === true
+      && run.config.env.LBH_SIM_WS_PREPARED_PROJECTIONS === true
+      && run.config.env.LBH_SIM_WS_REPLICATION_ACCOUNTING === true
+      && run.config.env.LBH_REPLICATION_BASELINE_CAPTURE === true
+      && run.config.env.LBH_SIM_WS_BENCH_EVENT_LOOP === true
+      && run.config.env.LBH_SIM_WS_STAGE_PROFILE === false
+      && run.config.env.LBH_SIM_MAX_SIM_TIME === 7200),
+    s11ScenarioSetExact: !isS11 || (JSON.stringify(actualScenarioKeys) === JSON.stringify(s11ExpectedScenarios)
+      && JSON.stringify(cleanupFiles) === JSON.stringify(expectedCleanupFiles)
+      && new Set(aggregate.scenarios.map((entry) => entry.file)).size === s11ExpectedScenarios.length),
+    s11ScenarioContract: !isS11 || scenarioFiles.every((entry) => entry.schemaVersion === 4
+      && entry.gate === "s11" && entry.profile === run.profile && entry.commit === run.commit
+      && entry.window.warmupSeconds === (entry.scenario === "normal"
+        ? (run.profile === "review" ? 5 : 60) : (run.profile === "review" ? 5 : 20))
+      && entry.window.durationSeconds === (entry.scenario === "normal"
+        ? (run.profile === "review" ? 20 : 300) : (run.profile === "review" ? 30 : 90))
+      && s11ScenarioIntegrity(entry)),
+    s11ComparisonBindings: !isS11 || (() => {
+      const expected = s11ComparisonEvidence();
+      return JSON.stringify(run.s11ComparisonEvidence) === JSON.stringify(expected)
+        && JSON.stringify(aggregate.s11ComparisonEvidence) === JSON.stringify(expected)
+        && scenarioFiles.every((entry) => JSON.stringify(entry.comparisonEvidence) === JSON.stringify(expected));
+    })(),
+    s11AggregateVerdictRecomputed: !isS11 || (aggregate.verdict.passed === s11RecomputedProductVerdict
+      && aggregate.verdict.productAdmissionPassed === s11RecomputedProductVerdict
+      && aggregate.verdict.convergenceOnlyPassed === scenarioFiles.every((entry) =>
+        entry.admission.convergenceOnlyPassed === true)),
   };
   const methodPassed = invariants.checksums && invariants.allCleanupPassed
-    && (["s7", "s8", "s9", "s10"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
+    && (["s7", "s8", "s9", "s10", "s11"].includes(aggregate.gate) ? invariants.productCorrectnessOutcomeRecorded : invariants.productCorrectnessPassed)
     && invariants.allAccountingComplete && invariants.normalPopulationsPresent && invariants.churnPopulationsPresent
     && invariants.atomicKindAlignmentAbsent && invariants.mixedPairsObserved && invariants.s3ComparisonsPresent
     && invariants.stageProfilePresent && invariants.publicCoreShareabilityProved
     && invariants.s7PreparedProfilerBoundary && invariants.s7AckRejectAccountingConsistent
     && invariants.s7CadenceNormalizationPresent && invariants.s7AttributionReconciledAndPrivate
     && invariants.s7ComparisonsPresent && invariants.s8FieldFreshnessPresent
-    && invariants.s9CodecManifestBound && invariants.s10LedgerEvidence;
+    && invariants.s9CodecManifestBound && invariants.s10LedgerEvidence
+    && invariants.s11RunContract && invariants.s11ScenarioSetExact
+    && invariants.s11ScenarioContract && invariants.s11ComparisonBindings
+    && invariants.s11AggregateVerdictRecomputed;
   return { passed: methodPassed, invariants, checksum,
     aggregateVerdict: aggregate.verdict };
 }
@@ -1483,9 +1916,9 @@ async function main() {
     ? path.resolve(configuredOutput)
     : path.join(__dirname, "screenshots", `multiplayer-state-pair-${GATE}-${stamp}-${commit.slice(0, 7)}`);
   fs.mkdirSync(runDir, { recursive: false });
-  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S10_PROTOTYPE ? " --s10-ledger" : S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${NORMAL_ONLY ? " --normal-only" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
+  const command = `node tests/multiplayer-state-pair-product-gate.cjs${S11_GATE ? " --s11-admission" : S10_PROTOTYPE ? " --s10-ledger" : S9_PROTOTYPE ? " --s9-positional" : S8_PROTOTYPE ? " --s8-prototype" : S7_GATE ? " --s7" : S6_BENCHMARK ? " --s6-benchmark" : STAGE_PROFILE ? " --s5-profile" : MIXED_GATE ? " --s4" : ""}${MICRO_PROFILE ? " --micro" : ""}${PROFILE_CONTROL ? " --profile-control" : ""}${PROFILE === "review" ? " --review" : ""}${NORMAL_ONLY ? " --normal-only" : ""}${ADMISSION_MODE ? " --admission" : ""}`;
   writeExclusive(path.join(runDir, "run.json"), {
-    schemaVersion: RESIDUAL_GATE ? 3 : 2,
+    schemaVersion: S11_GATE ? 4 : RESIDUAL_GATE ? 3 : 2,
     gate: GATE, generatedAt: new Date().toISOString(), command, profile: PROFILE, commit, dirty, seed: SEED,
     config: { populations: POPULATIONS, normalWarmupMs: NORMAL_WARMUP_MS, normalWindowMs: NORMAL_WINDOW_MS,
       churnWarmupMs: CHURN_WARMUP_MS, churnWindowMs: CHURN_WINDOW_MS, inputHz: INPUT_HZ,
@@ -1493,7 +1926,8 @@ async function main() {
       targetPublicationHz: TARGET_PUBLICATION_HZ,
       minimumHealthyObservedPublicationHz: MIN_HEALTHY_PUBLICATION_HZ,
       attributionSampleFramesPerPopulation: RESIDUAL_GATE ? ATTRIBUTION_SAMPLE_FRAMES : 0,
-      env: { LBH_SIM_WS_JSON_V2: true, LBH_SIM_WS_STATE_PAIR_V1: true,
+      env: { NODE_ENV: "test", LBH_SIM_WS_ENABLED: true,
+        LBH_SIM_WS_JSON_V2: true, LBH_SIM_WS_STATE_PAIR_V1: true,
         LBH_SIM_WS_STATE_PAIR_MIXED_V1: MIXED_GATE,
         LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: SPARSE_GATE,
         LBH_SIM_WS_POSITIONAL_JSON_V1: POSITIONAL_GATE,
@@ -1501,6 +1935,7 @@ async function main() {
         LBH_SIM_WS_PREPARED_PROJECTIONS: S6_BENCHMARK ? S6_PREPARED : true,
         LBH_SIM_WS_BENCH_EVENT_LOOP: S6_BENCHMARK || RESIDUAL_GATE,
         LBH_SIM_WS_REPLICATION_ACCOUNTING: true, LBH_REPLICATION_BASELINE_CAPTURE: true,
+        LBH_SIM_MAX_SIM_TIME: 7200,
         LBH_SIM_WS_STAGE_PROFILE: STAGE_PROFILE && !PROFILE_CONTROL } },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
       cpu: os.cpus()[0]?.model || null, logicalCpuCount: os.cpus().length, totalMemoryBytes: os.totalmem(),
@@ -1512,12 +1947,13 @@ async function main() {
       compositeSha256: S4_CANONICAL_SHA256 } : null,
     s6PreparedDiagnosticEvidence: RESIDUAL_GATE ? { path: path.relative(ROOT, S6_ANALYSIS_PATH),
       analysisSha256: S6_ANALYSIS_SHA256 } : null,
+    s11ComparisonEvidence: s11ComparisonEvidence(),
   });
   const results = [];
   try {
-    for (const population of POPULATIONS) results.push(await runScenario({ population, scenario: "normal", runDir }));
+    for (const population of POPULATIONS) results.push(await runScenario({ population, scenario: "normal", runDir, commit }));
     if (!NORMAL_ONLY && !STAGE_PROFILE && !S6_BENCHMARK) {
-      for (const population of CHURN_POPULATIONS) results.push(await runScenario({ population, scenario: "churn", runDir }));
+      for (const population of CHURN_POPULATIONS) results.push(await runScenario({ population, scenario: "churn", runDir, commit }));
     }
   } catch (error) {
     writeExclusive(path.join(runDir, "failure.json"), { at: new Date().toISOString(), message: error.message,
@@ -1526,9 +1962,9 @@ async function main() {
   }
   const verdict = {
     passed: results.every((entry) => entry.admission.passed),
-    productAdmissionPassed: !S10_PROTOTYPE ? null
+    productAdmissionPassed: !LEDGER_GATE ? null
       : results.every((entry) => entry.admission.productAdmissionPassed === true),
-    convergenceOnlyPassed: !S10_PROTOTYPE ? null
+    convergenceOnlyPassed: !LEDGER_GATE ? null
       : results.every((entry) => entry.admission.convergenceOnlyPassed === true),
     normal: Object.fromEntries(results.filter((entry) => entry.scenario === "normal")
       .map((entry) => [entry.population, entry.admission])),
@@ -1558,7 +1994,7 @@ async function main() {
       })),
     };
   });
-  const aggregate = { schemaVersion: RESIDUAL_GATE ? 3 : MIXED_GATE ? 2 : 1, gate: GATE,
+  const aggregate = { schemaVersion: S11_GATE ? 4 : RESIDUAL_GATE ? 3 : MIXED_GATE ? 2 : 1, gate: GATE,
     profile: PROFILE, microProfile: MICRO_PROFILE, instrumentationEnabled: STAGE_PROFILE && !PROFILE_CONTROL,
     eventLoopMonitorEnabled: S6_BENCHMARK || RESIDUAL_GATE,
     commit, seed: SEED, command, verdict, expectedPopulations: POPULATIONS,
@@ -1589,7 +2025,14 @@ async function main() {
         .every((entry) => entry.faults.some((fault) => fault.name === "reconnect" && fault.manifestReused === true)) },
     failureAnalysis,
     residualDecisionTable: RESIDUAL_GATE && !POSITIONAL_GATE ? buildResidualDecisionTable(normalResults) : null,
+    admissionDecision: S11_GATE ? buildS11AdmissionDecision(normalResults) : null,
+    s11ComparisonEvidence: s11ComparisonEvidence(),
     recommendation: STAGE_PROFILE ? "Diagnostic only: use stage attribution and the A/B control before selecting one narrow CPU optimization."
+      : S11_GATE ? {
+        decision: "Apply the unchanged product thresholds to the full prepared+sparse+positional+bounded-ledger path. Report traffic at 1/4 separately from CPU/cadence at 8 and never credit overload-induced cadence collapse.",
+        nextEvidence: "Use admissionDecision to select the smallest measured next slice; keep binary, compression, and cadence policy separate decisions and leave AOI deferred.",
+        defer: "Do not enable experimental capabilities by default or claim hosted WSS, WAN, fleet, compression, binary, or AOI evidence from this local gate.",
+      }
       : S10_PROTOTYPE ? {
         decision: "Report bounded-base convergence separately from product admission. Convergence requires edge-triggered recovery, exact ACK behavior, and receiver cadence tracking authority; product admission additionally keeps the existing clock, NORMAL overload, and traffic gates.",
         bandwidthBoundary: "A convergence-only pass does not admit the product when positional traffic, authority clock, or overload guards fail.",
