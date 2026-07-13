@@ -319,6 +319,8 @@ async function run() {
     assert.strictEqual(diagnostics.byReason["unknown-frame"], 1);
     assert.strictEqual(publisher.diagnostics().ackDuplicates, 1);
     assert.strictEqual(publisher.diagnostics().ackIgnoredStale, 3);
+    assert(publisher.diagnostics().retiredAckProofs
+      <= publisher.diagnostics().limits.maxRetiredAckProofsPerRecipient * publisher.diagnostics().recipients);
     assert(Object.keys(diagnostics.orderTransitions).length <= 64
       && !JSON.stringify(diagnostics).includes("member-"),
     "ACK diagnostic must remain bounded and identity-free");

@@ -26,6 +26,7 @@ const DEFAULTS = Object.freeze({
   // Match the client base ledger so an ACK delayed by the eight-seat local
   // apply loop can still be authenticated before either side evicts its base.
   maxPendingPairsPerRecipient: 12,
+  maxRetiredAckProofsPerRecipient: 64,
   maxRetainedBytesPerRecipient: 2 * 1024 * 1024,
   maxPairBytes: 256 * 1024,
 });
@@ -198,6 +199,8 @@ function createAuthorityDeltaPublisher(options = {}) {
     maxRecipients: positiveInteger(options.maxRecipients, DEFAULTS.maxRecipients, "maxRecipients"),
     maxPendingPairsPerRecipient: positiveInteger(options.maxPendingPairsPerRecipient,
       DEFAULTS.maxPendingPairsPerRecipient, "maxPendingPairsPerRecipient"),
+    maxRetiredAckProofsPerRecipient: positiveInteger(options.maxRetiredAckProofsPerRecipient,
+      DEFAULTS.maxRetiredAckProofsPerRecipient, "maxRetiredAckProofsPerRecipient"),
     maxRetainedBytesPerRecipient: positiveInteger(options.maxRetainedBytesPerRecipient,
       DEFAULTS.maxRetainedBytesPerRecipient, "maxRetainedBytesPerRecipient"),
     maxPairBytes: positiveInteger(options.maxPairBytes, DEFAULTS.maxPairBytes, "maxPairBytes"),
@@ -345,7 +348,7 @@ function createAuthorityDeltaPublisher(options = {}) {
 
   function retireAckProof(state, frameId, record) {
     state.retiredAcks.set(frameId, ackProof(record));
-    while (state.retiredAcks.size > limits.maxPendingPairsPerRecipient) {
+    while (state.retiredAcks.size > limits.maxRetiredAckProofsPerRecipient) {
       state.retiredAcks.delete(state.retiredAcks.keys().next().value);
     }
   }
