@@ -15,6 +15,11 @@ async function health(port) {
   return { status: response.status, body: await response.json() };
 }
 
+async function compactHealth(port) {
+  const response = await fetch(`http://127.0.0.1:${port}/health/compact`, { headers: { connection: "close" } });
+  return { status: response.status, body: await response.json() };
+}
+
 async function request(port, pathname, { body, authority } = {}) {
   const headers = { "content-type": "application/json", connection: "close" };
   if (authority) {
@@ -85,6 +90,10 @@ async function run() {
         "guarded capture runtime must expose the empty opt-in ledger");
       assert(response.body.multiplayer.adapter.replication.events.length === 0,
         "fresh capture runtime must begin with an empty ledger");
+      const compact = await compactHealth(port);
+      assert(compact.status === 200 && compact.body.multiplayer.adapter.replicationCaptureEnabled === true
+        && !Object.prototype.hasOwnProperty.call(compact.body.multiplayer.adapter, "replication"),
+      "compact health must prove capture is enabled without cloning or serializing retained event evidence");
     } finally {
       await stopSimServer(port).catch(() => {});
     }

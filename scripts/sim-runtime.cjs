@@ -6796,9 +6796,9 @@ function scheduleMultiplayerProjection() {
   multiplayerProjectionTask = task;
 }
 
-function multiplayerDiagnostics() {
+function multiplayerDiagnostics({ includeReplication = true } = {}) {
   const projection = runtime.multiplayerProjection;
-  const adapter = multiplayerAdapter?.diagnostics() || null;
+  const adapter = multiplayerAdapter?.diagnostics({ includeReplication }) || null;
   if (adapter) {
     projection.maxQueuedBytes = Math.max(projection.maxQueuedBytes, adapter.queuedBytes || 0);
     projection.maxPendingInboundBytes = Math.max(
@@ -6994,7 +6994,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    if (req.method === "GET" && req.url === "/health") {
+    if (req.method === "GET" && (req.url === "/health" || req.url === "/health/compact")) {
+      const compactReplicationHealth = req.url === "/health/compact";
       const idleState = getIdleState();
       const health = {
         ok: true,
@@ -7025,7 +7026,7 @@ const server = http.createServer(async (req, res) => {
         },
         idleState,
         shutdownReason: runtime.shutdownReason,
-        multiplayer: multiplayerDiagnostics(),
+        multiplayer: multiplayerDiagnostics({ includeReplication: !compactReplicationHealth }),
       };
       if (soakRuntimeDiagnostics) health.soakDiagnostics = soakRuntimeDiagnostics.status();
       const authoredCollapseTest = authoredCollapseTestLifecycle.health();

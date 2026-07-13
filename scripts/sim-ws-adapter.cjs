@@ -1719,7 +1719,7 @@ function createSimWebSocketAdapter(options = {}) {
   const heartbeatTimer = setInterval(heartbeatSweep, sweepIntervalMs);
   heartbeatTimer.unref?.();
 
-  function diagnostics() {
+  function diagnostics({ includeReplication = true } = {}) {
     const summary = summarizeConnections(connections);
     let pendingEventFrames = 0;
     let pendingEventBytes = 0;
@@ -1763,7 +1763,9 @@ function createSimWebSocketAdapter(options = {}) {
       }),
       statePair: Object.freeze({ ...statePairStats,
         modeConnections: [...connections].filter((state) => state.statePairMode).length }),
-      ...(replicationAccounting ? { replication: replicationAccounting.snapshot() } : {}),
+      ...(replicationAccounting && includeReplication
+        ? { replication: replicationAccounting.snapshot() }
+        : replicationAccounting ? { replicationCaptureEnabled: true } : {}),
     });
   }
 

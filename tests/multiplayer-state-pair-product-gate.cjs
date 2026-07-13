@@ -154,7 +154,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     welcome: null, receiver: null, error: null, close: null, pairCount: 0, acceptedPairs: 0,
     lastPairAt: null, inputSeq: 0, actionSeq: 0, commandSeq: 0, uplink: {}, downlink: {},
     manifest: { reused: reuseManifest, servedBytes: 0, hash: issued.body.manifestHash },
-    clientWorkMs: [], ackWorkMs: [], faultLog: [], hashesVerified: 0,
+    clientWorkSamples: [], ackWorkSamples: [], faultLog: [], hashesVerified: 0,
     shape: { keyframes: 0, deltas: 0, creates: 0, updates: 0, despawns: 0, reincarnations: 0, rootOps: 0 },
     materializedEntities: null, retiredIncarnations: new Map(),
     observedLifecycle: { creates: 0, despawns: 0, reincarnations: 0, componentChanges: 0 },
@@ -204,7 +204,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     }
     const started = performance.now();
     const outcome = client.receiver.receive(text);
-    client.clientWorkMs.push(performance.now() - started);
+    client.clientWorkSamples.push({ at: Date.now(), ms: performance.now() - started });
     if (!outcome.accepted) {
       client.faultLog.push({ type: "recovery", reason: outcome.reason, afterFrameId: frame.frameId, at: Date.now() });
       send(client, outcome.recovery);
@@ -233,7 +233,7 @@ async function openStatePairClient({ port, authority, label, reuseManifest = fal
     }
     const ackStarted = performance.now();
     send(client, outcome.ack);
-    client.ackWorkMs.push(performance.now() - ackStarted);
+    client.ackWorkSamples.push({ at: Date.now(), ms: performance.now() - ackStarted });
   });
   await new Promise((resolve, reject) => { client.ws.once("open", resolve); client.ws.once("error", reject); });
   send(client, { type: "hello", wireVersion: issued.body.wireVersion,
@@ -273,7 +273,8 @@ function summarizeClients(clients) {
     acceptedPairs: client.acceptedPairs, hashesVerified: client.hashesVerified,
     lastAcceptedFrameId: client.receiver?.current()?.frameId || 0,
     manifest: client.manifest, uplinkSerialized: client.uplink, downlinkObserved: client.downlink,
-    clientApplyMs: distribution(client.clientWorkMs), ackSerializeSendMs: distribution(client.ackWorkMs),
+    clientApplyMs: distribution(client.clientWorkSamples.map((sample) => sample.ms)),
+    ackSerializeSendMs: distribution(client.ackWorkSamples.map((sample) => sample.ms)),
     shape: client.shape, faults: client.faultLog, error: client.error, close: client.close,
     observedLifecycle: client.observedLifecycle,
   }));
@@ -339,7 +340,7 @@ async function runWorkload(clientsRef, durationMs, { port, memorySamples, churn 
     }
     const second = Math.floor(elapsed / 1000);
     if (second !== lastMemorySecond) {
-      const health = await request(port, "/health");
+      const health = await request(port, "/health/compact");
       memorySamples.push({ at: Date.now(), memory: health.body.process.memory,
         publisher: health.body.multiplayer.statePair.publisher,
         adapter: { queuedBytes: health.body.multiplayer.adapter.queuedBytes,
@@ -403,7 +404,7 @@ async function runScenario({ population, scenario, runDir }) {
     allClients.push(...setup.clients);
     const warmupMs = churn ? CHURN_WARMUP_MS : NORMAL_WARMUP_MS;
     await runWorkload(clientsRef, warmupMs, { port, memorySamples });
-    const startHealth = (await request(port, "/health")).body;
+    const startHealth = (await request(port, "/health/compact")).body;
     const startAt = Date.now();
     const applied = new Set();
     const churnSchedule = !churn ? null : async (elapsed, ref) => {
@@ -480,10 +481,10 @@ async function runScenario({ population, scenario, runDir }) {
     const workload = await runWorkload(clientsRef, churn ? CHURN_WINDOW_MS : NORMAL_WINDOW_MS,
       { port, memorySamples, churn: churnSchedule });
     const endAt = startAt + (churn ? CHURN_WINDOW_MS : NORMAL_WINDOW_MS);
-    const endHealth = (await request(port, "/health")).body;
+    const endHealth = (await request(port, "/health/compact")).body;
     for (const client of clientsRef.current) await closeClient(client);
     await waitFor(async () => {
-      const health = (await request(port, "/health")).body;
+      const health = (await request(port, "/health/compact")).body;
       return health.multiplayer.adapter.connections === 0
         && health.multiplayer.adapter.pendingScheduledSends === 0 ? health : false;
     }, `${scenario}/${population} final drain`);
@@ -591,14 +592,14 @@ async function runScenario({ population, scenario, runDir }) {
           savingsVsS0PairP50: 1 - pairStats.p50 / S0[population].pairP50,
           savingsVsS1ApproxPairP50: 1 - pairStats.p50 / (S0[population].pairP50 - S1_STATIC_PAIR_SAVINGS_BYTES) } },
       cadence: { authorityTickHz: endHealth.session.tickHz, publicationHz: endHealth.session.snapshotHz,
-        observedPairsPerSecond: clientSummary.reduce((sum, client) => sum + client.acceptedPairs, 0)
-          / population / ((endAt - startAt) / 1000) },
+        observedPairsPerSecond: pairFrameBytes.length / population / ((endAt - startAt) / 1000) },
       performance: { machineLocal: true, authority: deltaHealth(startHealth, endHealth),
-        clientApplyMs: distribution(clientSummary.flatMap((client) => client.clientApplyMs.count
-          ? allClients.find((entry) => entry.label === client.label).clientWorkMs : [])),
-        clientAckSerializeSendMs: distribution(allClients.flatMap((client) => client.ackWorkMs)),
+        clientApplyMs: distribution(allClients.flatMap((client) => client.clientWorkSamples)
+          .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
+        clientAckSerializeSendMs: distribution(allClients.flatMap((client) => client.ackWorkSamples)
+          .filter((sample) => sample.at >= startAt && sample.at < endAt).map((sample) => sample.ms)),
         eventLoopLag: { available: false, reason: "Runtime does not expose event-loop-delay telemetry; no threshold invented." },
-        memory: memorySummary(memorySamples),
+        memory: memorySummary(memorySamples.filter((sample) => sample.at >= startAt && sample.at < endAt)),
         boundedState: { publisherAfterCleanup: publisher,
           maxPublisherPendingPairs: Math.max(...memorySamples.map((sample) => sample.publisher.pendingPairs)),
           maxPublisherRetainedBytes: Math.max(...memorySamples.map((sample) => sample.publisher.retainedBytes)),
