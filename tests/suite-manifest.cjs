@@ -132,6 +132,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairSingleSerializationBenchmark",
+    file: "multiplayer-state-pair-single-serialization-benchmark.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "StatePairSingleSerializationEvidence",
+    file: "multiplayer-state-pair-single-serialization-evidence.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ClientDeltaReceiver",
     file: "client-delta-receiver.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],

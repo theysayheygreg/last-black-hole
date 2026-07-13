@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-07-13 — v0.4 S14 exact single-serialization selector
+
+- Replaced S12's four complete positional candidate serializations with exact
+  shared-header/lane-component sizing and one selected-wire composition. The
+  four safe choices, tie order, fallback, limits, and bytes remain unchanged.
+- Added 1,320 exact oracle comparisons covering UTF-8, JSON escaping, boundary
+  strings, representative payloads, winner/digest parity, and decoded
+  semantics. Added component/composition/winner/allocation/latency diagnostics.
+- Preserved the S13-process-boundary 1/4/8 candidate under
+  `docs/v0.4/evidence/state-pair-s14/`. One player passes; four/eight remain
+  `DILATED`, below 9 Hz, and above the normalized 64 KiB/s mean guard. The full
+  30-suite multiplayer-network lane passes once without retry.
+- Selected only the next bounded duplicate-work lane: reuse already-computed
+  canonical lane byte counts for expanded-limit composition. Hosted and
+  24/48/96 work remains closed.
+
 ## 2026-07-13 — v0.4 S12/S13 authority clock attribution
 
 - Rejected S12's exact-wire four-candidate selector as a product optimization.

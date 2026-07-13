@@ -1,0 +1,60 @@
+{
+  "schema": "lbh-s14-selector-benchmark-v1",
+  "iterations": 1000,
+  "warmup": 100,
+  "workload": {
+    "publicEntities": 48,
+    "ownerEntities": 1,
+    "candidatesPerSelection": 4
+  },
+  "before": {
+    "method": "S12 brute-force four complete positional wires",
+    "milliseconds": {
+      "count": 1000,
+      "mean": 0.23370308099999934,
+      "p50": 0.2110829999999737,
+      "p95": 0.3338749999999777,
+      "p99": 0.6354170000000181,
+      "max": 1.426084000000003
+    },
+    "operations": {
+      "fullCandidateCompositions": 4000,
+      "allocationProxyBytes": 16176928,
+      "bytesExamined": 16176928
+    }
+  },
+  "after": {
+    "method": "S14 exact component sizing and one winner composition",
+    "milliseconds": {
+      "count": 1000,
+      "mean": 0.11627922299999986,
+      "p50": 0.10362499999996544,
+      "p95": 0.20641699999998764,
+      "p99": 0.33083299999998417,
+      "max": 0.9812080000000094
+    },
+    "operations": {
+      "fullCandidateCompositions": 1000,
+      "winnerSerializations": 1000,
+      "componentSerializations": 5000,
+      "allocationProxyBytes": 11793264,
+      "bytesExamined": 16176928
+    }
+  },
+  "comparison": {
+    "meanSpeedup": 2.009843848027774,
+    "meanReductionFraction": 0.5024489086645794,
+    "allocationProxyReductionFraction": 0.2709824757827939
+  },
+  "parity": {
+    "winnerCount": 1000,
+    "mismatches": 0,
+    "transcriptSha256": "d910f3ab96b22c32018b6031545cc79ffdf178ae004479cd7d860f10d14442e3"
+  },
+  "adversarialParity": {
+    "cases": 80,
+    "candidateWires": 320,
+    "mismatches": 0,
+    "transcriptSha256": "372c0c4152d2afca4b3184fd3a971607da3de6f5c86f89647c8d0dfd7ba3b870"
+  }
+}

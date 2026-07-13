@@ -495,6 +495,31 @@ recorded 20.755–20.979 second health-sample envelope. It is not a configured-
 selector that preserves the S12 winner but serializes it once. S13 does not
 admit hosted, concurrent-match, fleet, WAN, or 24/48/96 forecasts.
 
+**S14 exact composed-size selector — useful, still product-rejected:** S14
+preserves the same four safe semantic candidates and S12 tie order, exact
+candidate byte sizes, selected wire, digest, ACK/recovery behavior, and limits.
+It serializes one shared positional header plus four unique lane components and
+composes only the selected full wire. Across 320 adversarial UTF-8/escaping/
+boundary vectors and 1,000 representative selector iterations, all 1,320
+comparisons match the brute-force oracle. The selector microbenchmark cuts
+complete compositions 4:1, allocation proxy 27.10%, and mean time 50.24%.
+
+The one-authority-per-match process candidate binds `bce7e5d` and composite
+`c5259ec1cbeb3de2d0683031af7c2e7ae2f54c26d34f647906d880158d38ecdd`.
+Against S13 round-B isolated, 1/4/8 minimum receiver cadence changes from
+9.80/5.00/2.90 to 9.85/5.25/3.05 Hz and authority CPU from 29.72/61.72/80.45%
+to 27.50/60.03/78.35% of one core. Projection median improves at every
+population, but p95 remains 111.00 ms at four and reaches 241.71 ms at eight;
+both remain `DILATED`. Normalized 10 Hz worst mean/p95 is 57,369/59,213,
+68,456/76,175, and 78,218/95,138 B/s. Only one player passes. All correctness,
+convergence, exact schedules, cleanup, queue, and backpressure checks pass;
+cadence collapse receives no traffic credit.
+
+S14's next bounded lane is to reuse exact canonical lane byte counts already
+computed by delta/keyframe construction while enforcing the unchanged expanded-
+pair limit. Do not begin hosted costs or 24/48/96 extrapolation. The full
+30-suite `multiplayer-network` lane passes once with retries disabled.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

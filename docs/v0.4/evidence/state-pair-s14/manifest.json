@@ -1,0 +1,19 @@
+{
+  "schema": "lbh-s14-single-serialization-manifest-v1",
+  "baselineSha256": "395df97d78fb9cbd8a6e07b13b56ba438b4d0be92d3a82514fe6a4be39870fd1",
+  "candidateSha256": "c5259ec1cbeb3de2d0683031af7c2e7ae2f54c26d34f647906d880158d38ecdd",
+  "selectorBenchmarkSha256": "cd63fe4150bbc863370d2da70b194d3b7ec4f090c8a324354bb587806146e7e5",
+  "analysisSha256": "c0b568d4e29f54b048f6b0845f7c8c87c9c5289949957df002cb1f6371856869",
+  "exactParityComparisons": 1320,
+  "productDecision": {
+    "admittedPopulations": [
+      1
+    ],
+    "rejectedPopulations": [
+      4,
+      8
+    ],
+    "statement": "One player passes. Four and eight remain cadence/overload failures; observed low traffic is not credited as a saving.",
+    "nextLane": "Reuse the already exact lane payload byte counts produced by delta/keyframe construction when enforcing expanded-pair limits, eliminating S14's second canonical serialization of those four lane payloads without changing candidate or wire bytes."
+  }
+}

@@ -1,0 +1,647 @@
+{
+  "schema": "lbh-s13-isolated-client-aggregate-v1",
+  "commit": "bce7e5d5d2bb2c6ad10d1d99c74f7b5c2ae1a108",
+  "s12Binding": {
+    "path": "docs/v0.4/evidence/state-pair-s12/pre-gate",
+    "compositeSha256": "00c6377fcf68b76dfac429054a35a0a9c55c7d93d8e043df7166a4eab5429845"
+  },
+  "scenarios": [
+    {
+      "population": 1,
+      "authorityMinHz": 9.9,
+      "receiverMinHz": 9.85,
+      "projectionP95Ms": 26.17395800000122,
+      "authorityOneCoreFraction": 0.27496183868169993,
+      "aggregateClientOneCoreFraction": 0.22884885443412997,
+      "overloadState": "NORMAL",
+      "queueAndBackpressure": {
+        "maxQueuedBytes": 0,
+        "maxQueuedMessages": 0,
+        "maxPendingScheduledSends": 0,
+        "maxBackpressuredConnections": 0,
+        "maxAuthorityWsBufferedBytes": 0,
+        "maxClientBufferedAmount": 0,
+        "cumulativePressure": {
+          "start": {
+            "current": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingSends": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "maxima": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 16411,
+                "worstConnection": 16411
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 530,
+                "worstConnection": 530
+              },
+              "pendingSends": {
+                "total": 3,
+                "worstConnection": 3
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "policy": {
+              "transportHighWaterBytes": 262144,
+              "applicationQueueBytes": 524288,
+              "applicationQueueMessages": 256,
+              "reliableQueueBytes": 262144,
+              "reliableQueueMessages": 128,
+              "replayEventBytes": 65536,
+              "replayEventMessages": 32,
+              "inboundPendingBytes": 524288,
+              "inboundPendingMessages": 64,
+              "pendingSendMessages": 256,
+              "scheduledSendMessages": 256,
+              "connectionsCrossedTransportHighWater": 0,
+              "transportHighWaterCrossings": 0,
+              "connectionsHitQueuePolicy": 0,
+              "queuePolicyLimitCrossings": 0,
+              "queuePolicyEvents": 0,
+              "queuePolicyRebases": 0,
+              "queuePolicyDisconnects": 0,
+              "queuePolicyReasons": {}
+            },
+            "observer": {
+              "enabled": false,
+              "emitted": 0,
+              "failures": 0,
+              "falseReturns": 0,
+              "throws": 0,
+              "asyncReturns": 0
+            }
+          },
+          "end": {
+            "current": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingSends": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "maxima": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 16411,
+                "worstConnection": 16411
+              },
+              "reliableBytes": {
+                "total": 160,
+                "worstConnection": 160
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 700,
+                "worstConnection": 700
+              },
+              "pendingSends": {
+                "total": 3,
+                "worstConnection": 3
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "policy": {
+              "transportHighWaterBytes": 262144,
+              "applicationQueueBytes": 524288,
+              "applicationQueueMessages": 256,
+              "reliableQueueBytes": 262144,
+              "reliableQueueMessages": 128,
+              "replayEventBytes": 65536,
+              "replayEventMessages": 32,
+              "inboundPendingBytes": 524288,
+              "inboundPendingMessages": 64,
+              "pendingSendMessages": 256,
+              "scheduledSendMessages": 256,
+              "connectionsCrossedTransportHighWater": 0,
+              "transportHighWaterCrossings": 0,
+              "connectionsHitQueuePolicy": 0,
+              "queuePolicyLimitCrossings": 0,
+              "queuePolicyEvents": 0,
+              "queuePolicyRebases": 0,
+              "queuePolicyDisconnects": 0,
+              "queuePolicyReasons": {}
+            },
+            "observer": {
+              "enabled": false,
+              "emitted": 0,
+              "failures": 0,
+              "falseReturns": 0,
+              "throws": 0,
+              "asyncReturns": 0
+            }
+          },
+          "policyDelta": {
+            "connectionsCrossedTransportHighWater": 0,
+            "transportHighWaterCrossings": 0,
+            "connectionsHitQueuePolicy": 0,
+            "queuePolicyLimitCrossings": 0,
+            "queuePolicyEvents": 0,
+            "queuePolicyRebases": 0,
+            "queuePolicyDisconnects": 0
+          },
+          "noHighWaterOrQueuePolicyTransition": true
+        }
+      },
+      "correctnessPassed": true
+    },
+    {
+      "population": 4,
+      "authorityMinHz": 5.25,
+      "receiverMinHz": 5.25,
+      "projectionP95Ms": 111.00045899999986,
+      "authorityOneCoreFraction": 0.6003195297504799,
+      "aggregateClientOneCoreFraction": 0.5505740107111188,
+      "overloadState": "DILATED",
+      "queueAndBackpressure": {
+        "maxQueuedBytes": 0,
+        "maxQueuedMessages": 0,
+        "maxPendingScheduledSends": 0,
+        "maxBackpressuredConnections": 0,
+        "maxAuthorityWsBufferedBytes": 0,
+        "maxClientBufferedAmount": 0,
+        "cumulativePressure": {
+          "start": {
+            "current": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingSends": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "maxima": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 17828,
+                "worstConnection": 17828
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 1068,
+                "worstConnection": 1068
+              },
+              "pendingSends": {
+                "total": 4,
+                "worstConnection": 3
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "policy": {
+              "transportHighWaterBytes": 262144,
+              "applicationQueueBytes": 524288,
+              "applicationQueueMessages": 256,
+              "reliableQueueBytes": 262144,
+              "reliableQueueMessages": 128,
+              "replayEventBytes": 65536,
+              "replayEventMessages": 32,
+              "inboundPendingBytes": 524288,
+              "inboundPendingMessages": 64,
+              "pendingSendMessages": 256,
+              "scheduledSendMessages": 256,
+              "connectionsCrossedTransportHighWater": 0,
+              "transportHighWaterCrossings": 0,
+              "connectionsHitQueuePolicy": 0,
+              "queuePolicyLimitCrossings": 0,
+              "queuePolicyEvents": 0,
+              "queuePolicyRebases": 0,
+              "queuePolicyDisconnects": 0,
+              "queuePolicyReasons": {}
+            },
+            "observer": {
+              "enabled": false,
+              "emitted": 0,
+              "failures": 0,
+              "falseReturns": 0,
+              "throws": 0,
+              "asyncReturns": 0
+            }
+          },
+          "end": {
+            "current": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingSends": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "maxima": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 17828,
+                "worstConnection": 17828
+              },
+              "reliableBytes": {
+                "total": 640,
+                "worstConnection": 160
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 1068,
+                "worstConnection": 1068
+              },
+              "pendingSends": {
+                "total": 4,
+                "worstConnection": 3
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "policy": {
+              "transportHighWaterBytes": 262144,
+              "applicationQueueBytes": 524288,
+              "applicationQueueMessages": 256,
+              "reliableQueueBytes": 262144,
+              "reliableQueueMessages": 128,
+              "replayEventBytes": 65536,
+              "replayEventMessages": 32,
+              "inboundPendingBytes": 524288,
+              "inboundPendingMessages": 64,
+              "pendingSendMessages": 256,
+              "scheduledSendMessages": 256,
+              "connectionsCrossedTransportHighWater": 0,
+              "transportHighWaterCrossings": 0,
+              "connectionsHitQueuePolicy": 0,
+              "queuePolicyLimitCrossings": 0,
+              "queuePolicyEvents": 0,
+              "queuePolicyRebases": 0,
+              "queuePolicyDisconnects": 0,
+              "queuePolicyReasons": {}
+            },
+            "observer": {
+              "enabled": false,
+              "emitted": 0,
+              "failures": 0,
+              "falseReturns": 0,
+              "throws": 0,
+              "asyncReturns": 0
+            }
+          },
+          "policyDelta": {
+            "connectionsCrossedTransportHighWater": 0,
+            "transportHighWaterCrossings": 0,
+            "connectionsHitQueuePolicy": 0,
+            "queuePolicyLimitCrossings": 0,
+            "queuePolicyEvents": 0,
+            "queuePolicyRebases": 0,
+            "queuePolicyDisconnects": 0
+          },
+          "noHighWaterOrQueuePolicyTransition": true
+        }
+      },
+      "correctnessPassed": true
+    },
+    {
+      "population": 8,
+      "authorityMinHz": 3.05,
+      "receiverMinHz": 3.05,
+      "projectionP95Ms": 241.71387499999764,
+      "authorityOneCoreFraction": 0.7834657840849564,
+      "aggregateClientOneCoreFraction": 0.7394926436138033,
+      "overloadState": "DILATED",
+      "queueAndBackpressure": {
+        "maxQueuedBytes": 0,
+        "maxQueuedMessages": 0,
+        "maxPendingScheduledSends": 0,
+        "maxBackpressuredConnections": 0,
+        "maxAuthorityWsBufferedBytes": 0,
+        "maxClientBufferedAmount": 0,
+        "cumulativePressure": {
+          "start": {
+            "current": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingSends": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "maxima": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 20247,
+                "worstConnection": 20247
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 1029,
+                "worstConnection": 1029
+              },
+              "pendingSends": {
+                "total": 8,
+                "worstConnection": 3
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "policy": {
+              "transportHighWaterBytes": 262144,
+              "applicationQueueBytes": 524288,
+              "applicationQueueMessages": 256,
+              "reliableQueueBytes": 262144,
+              "reliableQueueMessages": 128,
+              "replayEventBytes": 65536,
+              "replayEventMessages": 32,
+              "inboundPendingBytes": 524288,
+              "inboundPendingMessages": 64,
+              "pendingSendMessages": 256,
+              "scheduledSendMessages": 256,
+              "connectionsCrossedTransportHighWater": 0,
+              "transportHighWaterCrossings": 0,
+              "connectionsHitQueuePolicy": 0,
+              "queuePolicyLimitCrossings": 0,
+              "queuePolicyEvents": 0,
+              "queuePolicyRebases": 0,
+              "queuePolicyDisconnects": 0,
+              "queuePolicyReasons": {}
+            },
+            "observer": {
+              "enabled": false,
+              "emitted": 0,
+              "failures": 0,
+              "falseReturns": 0,
+              "throws": 0,
+              "asyncReturns": 0
+            }
+          },
+          "end": {
+            "current": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "reliableBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingSends": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "maxima": {
+              "wsBufferedBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "queuedBytes": {
+                "total": 20247,
+                "worstConnection": 20247
+              },
+              "reliableBytes": {
+                "total": 1280,
+                "worstConnection": 160
+              },
+              "replayEventBytes": {
+                "total": 0,
+                "worstConnection": 0
+              },
+              "pendingInboundBytes": {
+                "total": 1176,
+                "worstConnection": 1176
+              },
+              "pendingSends": {
+                "total": 8,
+                "worstConnection": 4
+              },
+              "scheduledSends": {
+                "total": 0,
+                "worstConnection": 0
+              }
+            },
+            "policy": {
+              "transportHighWaterBytes": 262144,
+              "applicationQueueBytes": 524288,
+              "applicationQueueMessages": 256,
+              "reliableQueueBytes": 262144,
+              "reliableQueueMessages": 128,
+              "replayEventBytes": 65536,
+              "replayEventMessages": 32,
+              "inboundPendingBytes": 524288,
+              "inboundPendingMessages": 64,
+              "pendingSendMessages": 256,
+              "scheduledSendMessages": 256,
+              "connectionsCrossedTransportHighWater": 0,
+              "transportHighWaterCrossings": 0,
+              "connectionsHitQueuePolicy": 0,
+              "queuePolicyLimitCrossings": 0,
+              "queuePolicyEvents": 0,
+              "queuePolicyRebases": 0,
+              "queuePolicyDisconnects": 0,
+              "queuePolicyReasons": {}
+            },
+            "observer": {
+              "enabled": false,
+              "emitted": 0,
+              "failures": 0,
+              "falseReturns": 0,
+              "throws": 0,
+              "asyncReturns": 0
+            }
+          },
+          "policyDelta": {
+            "connectionsCrossedTransportHighWater": 0,
+            "transportHighWaterCrossings": 0,
+            "connectionsHitQueuePolicy": 0,
+            "queuePolicyLimitCrossings": 0,
+            "queuePolicyEvents": 0,
+            "queuePolicyRebases": 0,
+            "queuePolicyDisconnects": 0
+          },
+          "noHighWaterOrQueuePolicyTransition": true
+        }
+      },
+      "correctnessPassed": true
+    }
+  ],
+  "decisionBoundary": "Attribution only. Process isolation can distinguish authority work from receiver/harness contention but cannot admit hosted, fleet, WAN, or high-count play."
+}

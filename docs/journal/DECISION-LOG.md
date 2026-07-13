@@ -2879,3 +2879,16 @@ receivers sharing the coordinator event loop.
 **Door status:** Closed for receiver-placement as the primary fix and for
 high-count/hosted extrapolation. Open for serialize-the-winner-once authority
 work with unchanged correctness, privacy, recovery, and exact-wire choice.
+
+### Q: Does S14's serialize-once selector admit four or eight players?
+
+| Date | Event |
+|------|-------|
+| Jul 13 | Exact component sizing matches S12's brute-force oracle for 1,320 adversarial and representative comparisons with zero mismatch. |
+| Jul 13 | Complete positional candidate compositions fall from four to one per selection; the selector microbenchmark is 2.01x faster with a 27.10% smaller positional allocation proxy. |
+| Jul 13 | In the S13 isolated process boundary, one player passes. Four reaches 5.25 Hz and eight 3.05 Hz; both remain `DILATED`, miss normalized traffic, and fail admission. |
+| Jul 13 | Decision: keep S14, but do not promote multiplayer admission. Reuse already-computed exact canonical lane sizes before choosing any broader codec, cadence, hosted, or high-count lane. |
+
+**Door status:** Open for exact lane-size reuse with byte-identical output and
+unchanged limits. Closed for treating S14 as 4/8 admission, crediting collapsed
+cadence as bandwidth savings, or beginning hosted/24/48/96 extrapolation.
