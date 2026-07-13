@@ -34,6 +34,7 @@ const MAX_REPLAY_EVENTS_PER_PASS = 8;
 const MAX_PENDING_REPLAY_BYTES = 64 * 1024;
 const ACTION_RELIABLE_MESSAGE_RESERVE = 16;
 const ACTION_RELIABLE_BYTE_RESERVE = 32 * 1024;
+const STATE_PAIR_RECOVERY_COOLDOWN_MS = 1000;
 
 function createSimWebSocketAdapter(options = {}) {
   const config = normalizeAdapterOptions(options);
@@ -53,7 +54,7 @@ function createSimWebSocketAdapter(options = {}) {
   const onBindingOpened = typeof options.onBindingOpened === "function" ? options.onBindingOpened : null;
   const {
     server, upgradeRouter, redeemHello, revalidateBinding, onInput, onAction, buildPublicState, buildOwnerState,
-    onPong, onAck, onPressureTransition, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
+    onPong, onAck, onStatePairRecovery, onPressureTransition, now, path, helloTimeoutMs, heartbeatIntervalMs, backpressureTimeoutMs, shutdownTimeoutMs, closeGraceMs,
     maxConnections, maxPendingHello, maxPendingInbound, maxPendingInboundBytes, maxPendingInboundBytesTotal,
     sweepIntervalMs, queueOptions,
   } = config;
@@ -921,6 +922,8 @@ function createSimWebSocketAdapter(options = {}) {
     state.binding = result.binding;
     state.wireVersion = result.welcome.wireVersion;
     state.capabilities = Object.freeze([...(result.welcome.capabilities || [])]);
+    state.manifestSchema = result.welcome.manifestSchema || null;
+    state.manifestHash = result.welcome.manifestHash || null;
     state.bindingKey = bindingKey;
     state.identity = identity;
     if (typeof state.binding === "object" && state.binding !== null) bindingKeys.set(state.binding, bindingKey);
@@ -1076,6 +1079,31 @@ function createSimWebSocketAdapter(options = {}) {
     }
     if (frame.type === "pong") {
       await acceptPong();
+      return;
+    }
+    if (frame.type === "statePairRecovery") {
+      const validRecovery = state.statePairMode && state.capabilities?.includes("state-pair-v1")
+        && frame.matchId === state.identity.runId && frame.sessionId === state.identity.connectionId
+        && frame.recipientId === state.identity.membershipId
+        && frame.recipientIncarnation === state.identity.connectionEpoch
+        && Number.isSafeInteger(state.binding?.authorityIncarnation)
+        && frame.authorityIncarnation === state.binding.authorityIncarnation
+        && frame.manifestSchema === state.manifestSchema && frame.manifestHash === state.manifestHash;
+      if (!validRecovery) {
+        throw new WireProtocolError("unexpected-state-pair-recovery", "statePair recovery is not valid for this binding", 4401);
+      }
+      if (!(await isBindingCurrent(state, "state-pair-recovery"))) {
+        if (!stateIsLive(state, expectedGeneration)) return;
+        throw new WireProtocolError("connection-fenced", "statePair recovery binding is stale", 4403);
+      }
+      const recoveryAt = now();
+      if (Number.isFinite(state.lastStatePairRecoveryAt)
+        && recoveryAt - state.lastStatePairRecoveryAt < STATE_PAIR_RECOVERY_COOLDOWN_MS) return;
+      const accepted = await onStatePairRecovery(state.binding, frame, callbackContext(state, "state-pair-recovery"));
+      if (accepted === false) throw new WireProtocolError("state-pair-recovery-rejected", "statePair recovery was rejected", 4401);
+      if (!stateIsLive(state, expectedGeneration)) return;
+      state.lastStatePairRecoveryAt = recoveryAt;
+      resetOutbound(state);
       return;
     }
     if (frame.type === "ack") {

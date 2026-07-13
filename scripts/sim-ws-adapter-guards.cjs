@@ -92,6 +92,9 @@ function normalizeAdapterOptions(options) {
     buildOwnerState: requiredCallback(options.buildOwnerState, "buildOwnerState"),
     onPong: typeof options.onPong === "function" ? options.onPong : async () => {},
     onAck: typeof options.onAck === "function" ? options.onAck : async () => {},
+    onStatePairRecovery: typeof options.onStatePairRecovery === "function"
+      ? options.onStatePairRecovery
+      : async () => true,
     onPressureTransition: typeof options.onPressureTransition === "function"
       ? options.onPressureTransition
       : null,

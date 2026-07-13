@@ -46,6 +46,7 @@ const FRAME_DIRECTIONS = Object.freeze({
   close: SERVER_TO_CLIENT,
   manifestAck: CLIENT_TO_SERVER,
   statePair: SERVER_TO_CLIENT,
+  statePairRecovery: CLIENT_TO_SERVER,
 });
 
 const FRAME_BYTE_LIMITS = Object.freeze({
@@ -64,6 +65,7 @@ const FRAME_BYTE_LIMITS = Object.freeze({
   close: LIMITS.maxControlBytes,
   manifestAck: LIMITS.maxControlBytes,
   statePair: LIMITS.maxFrameBytes,
+  statePairRecovery: LIMITS.maxControlBytes,
 });
 
 const ACTION_KINDS = new Set([
@@ -87,6 +89,12 @@ const REBASE_REASONS = new Set([
   "event-gap",
   "run-changed",
   "server-recovery",
+]);
+const STATE_PAIR_RECOVERY_REASONS = new Set([
+  "reconnect", "match-changed", "session-changed", "authority-changed", "recipient-changed",
+  "manifest-changed", "schema-changed", "frame-gap", "stale-frame", "duplicate-mismatch",
+  "identity-mismatch", "manifest-mismatch", "missing-base", "base-mismatch", "hash-mismatch",
+  "lineage-mismatch", "owner-mismatch", "malformed-frame", "oversize-frame", "rejected-delta",
 ]);
 
 class WireProtocolError extends Error {
@@ -492,6 +500,29 @@ function validateRebase(frame) {
   integer(frame.lastEventSeq, "lastEventSeq");
 }
 
+function validateStatePairRecovery(frame) {
+  exactKeys(frame, new Set(["type", "recoverySchema", "reason", "matchId", "sessionId",
+    "authorityIncarnation", "recipientId", "recipientIncarnation", "manifestSchema", "manifestHash",
+    "lastAcceptedFrameId", "lastAcceptedStatePairId", "lastAcceptedSnapshotId"]));
+  for (const key of ["recoverySchema", "reason", "matchId", "sessionId", "recipientId", "manifestSchema", "manifestHash"]) {
+    requiredString(frame[key], key);
+  }
+  if (frame.recoverySchema !== "lbh-client-state-pair-recovery-v1") fail("invalid-field", "unsupported statePair recovery schema");
+  if (!STATE_PAIR_RECOVERY_REASONS.has(frame.reason)) fail("invalid-field", "unsupported statePair recovery reason");
+  integer(frame.authorityIncarnation, "authorityIncarnation", { min: 1 });
+  integer(frame.recipientIncarnation, "recipientIncarnation", { min: 1 });
+  integer(frame.lastAcceptedFrameId, "lastAcceptedFrameId");
+  for (const key of ["lastAcceptedStatePairId", "lastAcceptedSnapshotId"]) {
+    if (frame[key] !== null) requiredString(frame[key], key);
+  }
+  if ((frame.lastAcceptedStatePairId === null) !== (frame.lastAcceptedSnapshotId === null)) {
+    fail("invalid-field", "statePair recovery cursors must be present or absent together");
+  }
+  if (frame.lastAcceptedFrameId === 0 && frame.lastAcceptedStatePairId !== null) {
+    fail("invalid-field", "zero statePair recovery frame cannot carry cursors");
+  }
+}
+
 function validateErrorFrame(frame) {
   exactKeys(frame, new Set(["type", "code", "message", "fatal", "retryable", "relatedType", "acceptedCommandSeq", "acceptedInputSeq", "acceptedActionSeq"]));
   requiredString(frame.code, "code");
@@ -531,6 +562,7 @@ const VALIDATORS = Object.freeze({
   close: validateClose,
   manifestAck: validateManifestAck,
   statePair: validateStatePair,
+  statePairRecovery: validateStatePairRecovery,
 });
 
 function byteLength(value) {

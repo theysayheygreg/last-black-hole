@@ -134,6 +134,7 @@ async function createHarness(options = {}) {
   const actions = [];
   const pongs = [];
   const acks = [];
+  const statePairRecoveries = [];
   const validations = [];
   const callbackContexts = [];
   let snapshotId = 0;
@@ -281,6 +282,11 @@ async function createHarness(options = {}) {
       callbackContexts.push(context);
       acks.push({ binding, frame });
     },
+    async onStatePairRecovery(binding, frame, context) {
+      callbackContexts.push(context);
+      statePairRecoveries.push({ binding, frame });
+      return options.onStatePairRecovery ? options.onStatePairRecovery(binding, frame, context) : true;
+    },
     async buildPublicState(context = {}, lifecycleContext) {
       callbackContexts.push(lifecycleContext);
       if (options.beforePublicState) await options.beforePublicState(context, lifecycleContext);
@@ -351,6 +357,7 @@ async function createHarness(options = {}) {
     actions,
     pongs,
     acks,
+    statePairRecoveries,
     validations,
     callbackContexts,
     getRedemptionCount: () => redemptionCount,

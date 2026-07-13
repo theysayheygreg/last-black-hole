@@ -247,6 +247,24 @@ async function run() {
     validateWireFrame({ type: "ack", ackKind: "delivery", deliveryId: 18 }, { direction: CLIENT_TO_SERVER });
     validateWireFrame({ type: "ack", ackKind: "input", inputSeq: 22 }, { direction: SERVER_TO_CLIENT });
     validateWireFrame({ type: "rebase", runId: "run-a", reason: "event-gap", snapshotId: 10, lastEventSeq: 8 }, { direction: SERVER_TO_CLIENT });
+    const recovery = {
+      type: "statePairRecovery",
+      recoverySchema: "lbh-client-state-pair-recovery-v1",
+      reason: "frame-gap",
+      matchId: "run-a",
+      sessionId: "connection-a",
+      authorityIncarnation: 1,
+      recipientId: "membership-a",
+      recipientIncarnation: 2,
+      manifestSchema: "lbh-session-replication-manifest-v1",
+      manifestHash: "sha256:manifest",
+      lastAcceptedFrameId: 7,
+      lastAcceptedStatePairId: "pair-7",
+      lastAcceptedSnapshotId: "snapshot-7",
+    };
+    validateWireFrame(recovery, { direction: CLIENT_TO_SERVER });
+    expectProtocolError(() => validateWireFrame(recovery, { direction: SERVER_TO_CLIENT }), "invalid-direction");
+    expectProtocolError(() => validateWireFrame({ ...recovery, reason: "attacker-selected" }, { direction: CLIENT_TO_SERVER }), "invalid-field");
     validateWireFrame({
       type: "error",
       code: "stale-command",

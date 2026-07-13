@@ -120,6 +120,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "ClientDeltaReceiver",
+    file: "client-delta-receiver.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerSendQueue",
     file: "multiplayer-send-queue.cjs",
     lanes: ["multiplayer-network", "static", "full"],
