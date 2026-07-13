@@ -335,6 +335,14 @@ Singularity that:
   about 92.5% of downlink, while shape counts are invalid. Authorize only a
   schema-aware v1 frame-shape fix with nonzero goldens and one new clean run;
   no repeated captures or delta claims yet.
+- Schema-aware frame shape landed at `22c5a6b`, and the one authorized clean
+  capture is independently accepted with SHA-256
+  `ddcefae8841bf5e8da946f7555d38eba4ba2c821ede84859d249bbae677e85c0`.
+  Treat 268.2/249.7/236.2 KiB/s/player at 1/4/8 as the immutable v1 full-JSON
+  baseline; the eight-player rate remains 3.69x target. Advance S1 alone:
+  canonical served-byte-hashed static manifest, authenticated admission pause,
+  ACK/timeout/cap/failure semantics, and exact v1 rollback. Do not combine S2
+  deltas or reinterpret S0 as product-budget acceptance.
 
 ### Post-reset continuation — 2026-07-11 17:50 UTC
 

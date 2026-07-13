@@ -589,3 +589,15 @@ public state 92.5–92.6% of downlink. Pair cadence was about 9.72 Hz; projectio
 p95 context was 4.67/7.65/12.24 ms; reliable retirement and cleanup were exact.
 Add schema-aware nonzero v1 shape goldens and run once from zero before calling
 S0 capture complete.
+
+`22c5a6b` closes schema-aware v1 shape accounting, and the authorized clean
+artifact `multiplayer-replication-s0-2026-07-13T014733765Z-22c5a6b` is
+independently accepted (aggregate SHA-256
+`ddcefae8841bf5e8da946f7555d38eba4ba2c821ede84859d249bbae677e85c0`).
+Exact 300-second downlink per player is 274,607/255,652/241,892 B/s at 1/4/8;
+uplink is 1,722/1,765/1,822 B/s. Pair p50/p95 is 28,501/30,578,
+26,817/28,790, and 25,237/26,889 bytes. At eight players the public projection
+contains 62/65 entities and 704/735 components p50/p95; owner remains exactly
+one entity and 18 components. Reliable retirement, CPU/projection timing,
+hashes, privacy, and cleanup close. S0 is complete only as the local v1 full-
+JSON baseline; it remains 3.69x target at eight. Proceed to S1, not S2.

@@ -309,6 +309,20 @@ than v1 `state.players` and `state.world.*`. Fix that schema with nonzero golden
 fixtures, then run exactly one new clean capture. Do not present the partial
 artifact as complete S0 or delta acceptance.
 
+**S0 1/4/8 baseline — accepted:** `22c5a6b` and artifact
+`multiplayer-replication-s0-2026-07-13T014733765Z-22c5a6b` (aggregate SHA-256
+`ddcefae8841bf5e8da946f7555d38eba4ba2c821ede84859d249bbae677e85c0`)
+close exact 300-second full-JSON directional and shape evidence. Downlink per
+player is 274,607/255,652/241,892 B/s at 1/4/8, or 4.19x/3.90x/3.69x the 64
+KiB target; uplink is 1.68–1.78 KiB/s. Pair p50/p95 falls from
+28,501/30,578 bytes at one player to 25,237/26,889 at eight. Eight-player
+public entity p50/p95 is 62/65 and component p50/p95 704/735; owner remains one
+entity/18 components. Tick p95 is 5.20 ms and projection p95 12.39 ms at eight;
+reliable acceptance/retirement is 3,481/3,481. Hash, cadence, conservation,
+privacy, bounds, and cleanup pass. This accepts only the local-loopback v1
+baseline. S1 static manifest admission is next; no delta, product-budget, WAN,
+hosted, or capacity claim is closed.
+
 - Add RTT, jitter, loss, burst loss, reorder, duplication, blackout, bandwidth
   cap, slow-reader, and simultaneous reconnect cases.
 - Coalesce replaceable public state while preserving reliable consequences.

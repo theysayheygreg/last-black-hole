@@ -116,6 +116,13 @@
   of downlink. Shape counts are invalid because S0 inspected nonexistent
   generic `bodies` instead of v1 `players` and `world.*`; one schema-aware fix
   and one from-zero capture are authorized.
+- Fixed schema-aware v1 frame-shape accounting at `22c5a6b` and independently
+  accepted the clean S0 baseline. Exact 300-second 1/4/8 downlink measured
+  268.2/249.7/236.2 KiB/s/player (4.19x/3.90x/3.69x target); uplink stayed
+  1.68/1.72/1.78 KiB/s. At eight players, pair p50/p95 was 25,237/26,889 bytes,
+  projection p95 12.39 ms, and reliable retirement 3,481/3,481. Shape, hashes,
+  cadence, privacy, bounds, PID/port, and cleanup all passed. This is the v1
+  full-JSON baseline, not delta or product-budget acceptance.
 
 - Froze F5 around a pilot-3-only bidirectional timeout-zero stream drop plus an
   explicit disable/cleanup/re-enable connection fence. The 25-second interval
