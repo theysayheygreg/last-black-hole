@@ -102,8 +102,15 @@ function deltaPayload(base, current) {
     resultHash: built.delta.resultHash,
     delta: built.delta,
   });
-  return canonicalJsonBytes(payload).length < canonicalJsonBytes(keyframePayload(current)).length
-    ? payload : keyframePayload(current);
+  const deltaBytes = canonicalJsonBytes(payload).length;
+  const keyframe = keyframePayload(current);
+  const keyframeBytes = canonicalJsonBytes(keyframe).length;
+  return Object.freeze({
+    payload: deltaBytes < keyframeBytes ? payload : keyframe,
+    decision: deltaBytes < keyframeBytes ? "delta" : "delta-not-smaller",
+    deltaBytes,
+    keyframeBytes,
+  });
 }
 
 function createAuthorityDeltaPublisher(options = {}) {
@@ -122,14 +129,33 @@ function createAuthorityDeltaPublisher(options = {}) {
     throw new RangeError(`maxPairBytes cannot exceed the ${MAX_WIRE_PAIR_BYTES}-byte wire frame limit`);
   }
   const recipients = new Map();
-  const counters = { keyframes: 0, deltas: 0, retransmits: 0, ackAccepted: 0, ackRejected: 0, forcedRebases: 0 };
+  const counters = { keyframes: 0, deltas: 0, retransmits: 0, ackAccepted: 0, ackRejected: 0,
+    ackBaseAdvances: 0, forcedRebases: 0 };
+  const keyframeReasons = new Map();
+  const candidates = {
+    comparisons: 0,
+    publicDeltaBytes: 0, publicKeyframeBytes: 0,
+    ownerDeltaBytes: 0, ownerKeyframeBytes: 0,
+  };
+
+  function countReason(reason) {
+    const normalized = String(reason || "unknown-keyframe-reason").slice(0, 160);
+    keyframeReasons.set(normalized, (keyframeReasons.get(normalized) || 0) + 1);
+  }
+
+  function observeCandidate(lane, decision) {
+    if (lane === "public") candidates.comparisons += 1;
+    candidates[`${lane}DeltaBytes`] += decision.deltaBytes;
+    candidates[`${lane}KeyframeBytes`] += decision.keyframeBytes;
+  }
 
   function stateFor(identity, create = true) {
     const key = recipientKey(identity);
     let state = recipients.get(key);
     if (!state && create) {
       if (recipients.size >= limits.maxRecipients) fail("recipient-cap", "authority recipient cap reached");
-      state = { identity, nextFrameId: 1, acked: null, pending: new Map(), retainedBytes: 0, forceKeyframe: true };
+      state = { identity, nextFrameId: 1, acked: null, pending: new Map(), retainedBytes: 0,
+        forceKeyframe: true, forceReason: "initial-no-acked-base" };
       recipients.set(key, state);
     }
     return state;
@@ -140,10 +166,11 @@ function createAuthorityDeltaPublisher(options = {}) {
     state.retainedBytes = 0;
   }
 
-  function forceRebase(state) {
+  function forceRebase(state, reason = "explicit-rebase") {
     state.acked = null;
     clearPending(state);
     state.forceKeyframe = true;
+    state.forceReason = reason;
     counters.forcedRebases += 1;
   }
 
@@ -159,22 +186,39 @@ function createAuthorityDeltaPublisher(options = {}) {
       || state.acked.public.view.schema !== publicView.schema
       || state.acked.owner.view.schema !== ownerView.schema
     );
-    if (lineageChanged) forceRebase(state);
+    if (lineageChanged) forceRebase(state, "lineage-changed");
 
     let publicPayload;
     let ownerPayload;
+    let keyframeReason = null;
+    let publicDecision = null;
+    let ownerDecision = null;
     try {
-      publicPayload = state.forceKeyframe || !state.acked
-        ? keyframePayload(publicView) : deltaPayload(state.acked.public, publicView, dirtyHints);
-      ownerPayload = state.forceKeyframe || !state.acked
-        ? keyframePayload(ownerView) : deltaPayload(state.acked.owner, ownerView, dirtyHints);
-    } catch {
-      forceRebase(state);
+      if (state.forceKeyframe || !state.acked) {
+        publicPayload = keyframePayload(publicView);
+        ownerPayload = keyframePayload(ownerView);
+        keyframeReason = state.forceReason || "missing-acked-base";
+      } else {
+        publicDecision = deltaPayload(state.acked.public, publicView, dirtyHints);
+        ownerDecision = deltaPayload(state.acked.owner, ownerView, dirtyHints);
+        observeCandidate("public", publicDecision);
+        observeCandidate("owner", ownerDecision);
+        publicPayload = publicDecision.payload;
+        ownerPayload = ownerDecision.payload;
+        if (publicPayload.kind === "keyframe" || ownerPayload.kind === "keyframe") {
+          keyframeReason = `candidate:${publicDecision.decision}+${ownerDecision.decision}`;
+        }
+      }
+    } catch (error) {
+      const code = String(error?.code || error?.name || "unknown").slice(0, 96);
+      forceRebase(state, `semantic-fallback:${code}`);
       publicPayload = keyframePayload(publicView);
       ownerPayload = keyframePayload(ownerView);
+      keyframeReason = state.forceReason;
     }
     // A pair is one transaction. If either lane cannot delta safely, both lanes rebase.
     if (publicPayload.kind !== ownerPayload.kind) {
+      keyframeReason = `atomic-kind-alignment:public-${publicDecision?.decision || publicPayload.kind}+owner-${ownerDecision?.decision || ownerPayload.kind}`;
       publicPayload = keyframePayload(publicView);
       ownerPayload = keyframePayload(ownerView);
     }
@@ -213,7 +257,9 @@ function createAuthorityDeltaPublisher(options = {}) {
     state.pending.set(frame.frameId, record);
     state.retainedBytes += bytes;
     state.forceKeyframe = false;
+    state.forceReason = null;
     counters[publicPayload.kind === "delta" ? "deltas" : "keyframes"] += 1;
+    if (publicPayload.kind === "keyframe") countReason(keyframeReason);
     while (state.pending.size > limits.maxPendingPairsPerRecipient
       || state.retainedBytes > limits.maxRetainedBytesPerRecipient) {
       const oldestId = state.pending.keys().next().value;
@@ -221,6 +267,7 @@ function createAuthorityDeltaPublisher(options = {}) {
       state.pending.delete(oldestId);
       state.retainedBytes -= oldest.bytes;
       state.forceKeyframe = true;
+      state.forceReason = "retention-evicted-acked-base-unsafe";
     }
     return Object.freeze({ frame, bytes, projectionKind: publicPayload.kind });
   }
@@ -230,7 +277,10 @@ function createAuthorityDeltaPublisher(options = {}) {
     const state = stateFor(identity, false);
     const reject = (reason) => {
       counters.ackRejected += 1;
-      if (state) state.forceKeyframe = true;
+      if (state) {
+        state.forceKeyframe = true;
+        state.forceReason = `ack-rejected:${reason}`;
+      }
       return Object.freeze({ accepted: false, reason });
     };
     if (!state || !ack || typeof ack !== "object" || Array.isArray(ack)) return reject("unknown-recipient");
@@ -251,7 +301,9 @@ function createAuthorityDeltaPublisher(options = {}) {
       state.retainedBytes -= pending.bytes;
     }
     state.forceKeyframe = false;
+    state.forceReason = null;
     counters.ackAccepted += 1;
+    counters.ackBaseAdvances += 1;
     return Object.freeze({ accepted: true, frameId: ack.frameId });
   }
 
@@ -266,7 +318,7 @@ function createAuthorityDeltaPublisher(options = {}) {
   function rebase(rawIdentity) {
     const identity = normalizeIdentity(rawIdentity);
     const state = stateFor(identity, false);
-    if (state) forceRebase(state);
+    if (state) forceRebase(state, "client-recovery-request");
   }
 
   function disconnect(rawIdentity) {
@@ -281,7 +333,24 @@ function createAuthorityDeltaPublisher(options = {}) {
       pendingPairs += state.pending.size;
       retainedBytes += state.retainedBytes;
     }
-    return Object.freeze({ recipients: recipients.size, pendingPairs, retainedBytes, ...counters, limits });
+    let recipientsWithAckedBase = 0;
+    let maxAckedFrameId = 0;
+    for (const state of recipients.values()) {
+      if (!state.acked) continue;
+      recipientsWithAckedBase += 1;
+      maxAckedFrameId = Math.max(maxAckedFrameId, state.acked.frameId);
+    }
+    const candidateAverages = Object.freeze({
+      comparisons: candidates.comparisons,
+      publicDeltaBytes: candidates.comparisons ? candidates.publicDeltaBytes / candidates.comparisons : null,
+      publicKeyframeBytes: candidates.comparisons ? candidates.publicKeyframeBytes / candidates.comparisons : null,
+      ownerDeltaBytes: candidates.comparisons ? candidates.ownerDeltaBytes / candidates.comparisons : null,
+      ownerKeyframeBytes: candidates.comparisons ? candidates.ownerKeyframeBytes / candidates.comparisons : null,
+    });
+    return Object.freeze({ recipients: recipients.size, pendingPairs, retainedBytes, ...counters,
+      recipientsWithAckedBase, maxAckedFrameId,
+      keyframeReasons: Object.freeze(Object.fromEntries([...keyframeReasons].sort(([a], [b]) => a.localeCompare(b)))),
+      candidateAverageBytes: candidateAverages, limits });
   }
 
   return Object.freeze({ publish, acknowledge, retransmit, rebase, disconnect, diagnostics });

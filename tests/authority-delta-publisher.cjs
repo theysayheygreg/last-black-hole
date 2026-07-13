@@ -129,6 +129,15 @@ async function run() {
     const appliedOwner = applyStructuralDelta(first.frame.owner.projection, second.frame.owner.delta);
     assert.strictEqual(appliedPublic.resultHash, second.frame.public.resultHash);
     assert.strictEqual(appliedOwner.resultHash, second.frame.owner.resultHash);
+    const diagnostics = publisher.diagnostics();
+    assert.strictEqual(diagnostics.keyframeReasons["initial-no-acked-base"], 1);
+    assert.strictEqual(diagnostics.ackBaseAdvances, 1);
+    assert.strictEqual(diagnostics.recipientsWithAckedBase, 1);
+    assert.strictEqual(diagnostics.maxAckedFrameId, first.frame.frameId);
+    assert(diagnostics.candidateAverageBytes.comparisons === 1
+      && diagnostics.candidateAverageBytes.publicDeltaBytes > 0
+      && diagnostics.candidateAverageBytes.ownerKeyframeBytes > 0,
+    "Diagnostics must attribute bounded candidate size evidence after a real ACK base advance");
     console.log(`  synthetic pair bytes keyframe=${first.bytes} delta=${second.bytes} saved=${first.bytes - second.bytes}`);
   });
 
@@ -167,6 +176,7 @@ async function run() {
     assert.strictEqual(publisher.acknowledge(identity(), ackFor(first.frame)).accepted, false, "duplicate ACK must fail closed");
     const afterDuplicate = publisher.publish(pairInputs(2));
     assert.strictEqual(afterDuplicate.frame.public.kind, "keyframe");
+    assert.strictEqual(publisher.diagnostics().keyframeReasons["ack-rejected:unknown-frame"], 1);
     assert.strictEqual(publisher.acknowledge(identity(), ackFor(afterDuplicate.frame, { publicHash: "sha256:forged" })).accepted, false);
     const other = identity({ recipientId: "member-b" });
     assert.strictEqual(publisher.acknowledge(other, ackFor(afterDuplicate.frame)).accepted, false);
