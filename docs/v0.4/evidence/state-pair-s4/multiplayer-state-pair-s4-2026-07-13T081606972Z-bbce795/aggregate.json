@@ -1,0 +1,996 @@
+{
+  "schemaVersion": 2,
+  "gate": "s4",
+  "profile": "review",
+  "commit": "bbce7956f0f13bfc161f4f980c8b16c47a7e49ae",
+  "seed": 1403105358,
+  "command": "node tests/multiplayer-state-pair-product-gate.cjs --s4 --review",
+  "verdict": {
+    "passed": false,
+    "normal": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    "churn": {
+      "1": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": true
+      },
+      "8": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "file": "normal-1.json",
+      "scenario": "normal",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 159630.8,
+      "oneSecondP95DownlinkBytesPerSecond": 184786,
+      "oneSecondP99DownlinkBytesPerSecond": 189046,
+      "pairKindCounts": {
+        "public-keyframe+owner-keyframe": 7,
+        "public-delta+owner-keyframe": 187
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": false,
+        "steadyOneSecondP95AtOrBelow80KiB": false,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": false
+      }
+    },
+    {
+      "file": "normal-8.json",
+      "scenario": "normal",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 63309.25,
+      "oneSecondP95DownlinkBytesPerSecond": 70702,
+      "oneSecondP99DownlinkBytesPerSecond": 71222,
+      "pairKindCounts": {
+        "public-delta+owner-keyframe": 457
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": true,
+        "steadyOneSecondP95AtOrBelow80KiB": true,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    },
+    {
+      "file": "churn-1.json",
+      "scenario": "churn",
+      "population": 1,
+      "worstRecipientMeanDownlinkBytesPerSecond": 114363.9,
+      "oneSecondP95DownlinkBytesPerSecond": 167696,
+      "oneSecondP99DownlinkBytesPerSecond": 177479,
+      "pairKindCounts": {
+        "public-keyframe+owner-keyframe": 6,
+        "public-delta+owner-keyframe": 283
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": true,
+        "overloadStayedNormal": true,
+        "passed": true
+      }
+    },
+    {
+      "file": "churn-8.json",
+      "scenario": "churn",
+      "population": 8,
+      "worstRecipientMeanDownlinkBytesPerSecond": 63690.166666666664,
+      "oneSecondP95DownlinkBytesPerSecond": 70806,
+      "oneSecondP99DownlinkBytesPerSecond": 87682,
+      "pairKindCounts": {
+        "public-keyframe+owner-keyframe": 5,
+        "public-delta+owner-keyframe": 687
+      },
+      "admission": {
+        "steadyMeanAtOrBelow64KiB": null,
+        "steadyOneSecondP95AtOrBelow80KiB": null,
+        "correctnessPassed": true,
+        "authorityWithinExistingClockBudget": false,
+        "overloadStayedNormal": false,
+        "passed": false
+      }
+    }
+  ],
+  "s3CanonicalEvidence": {
+    "path": "docs/v0.4/evidence/state-pair-s3/multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4",
+    "compositeSha256": "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90",
+    "comparisons": {
+      "normal-1": {
+        "artifact": "docs/v0.4/evidence/state-pair-s3/multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4",
+        "compositeSha256": "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90",
+        "exactTraffic": {
+          "worstRecipientMeanDownlinkBytesPerSecond": {
+            "s3": 450031.84,
+            "s4": 159630.8,
+            "delta": -290401.04000000004,
+            "changeFraction": -0.6452899865929487
+          },
+          "oneSecondP95DownlinkBytesPerSecond": {
+            "s3": 502371,
+            "s4": 184786,
+            "delta": -317585,
+            "changeFraction": -0.6321722392415168
+          },
+          "oneSecondP99DownlinkBytesPerSecond": {
+            "s3": 502554,
+            "s4": 189046,
+            "delta": -313508,
+            "changeFraction": -0.6238294790211599
+          }
+        },
+        "pairCadencePerRecipient": {
+          "s3": 9.71,
+          "s4": 9.7,
+          "delta": -0.010000000000001563,
+          "changeFraction": -0.0010298661174048982
+        },
+        "pairKinds": {
+          "s3": {
+            "public-keyframe+owner-keyframe": 2913,
+            "public-delta+owner-delta": 0
+          },
+          "s4": {
+            "public-keyframe+owner-keyframe": 7,
+            "public-delta+owner-keyframe": 187
+          }
+        },
+        "pairBytes": {
+          "p50": {
+            "s3": 47176,
+            "s4": 16916,
+            "delta": -30260,
+            "changeFraction": -0.6414278446667797
+          },
+          "p95": {
+            "s3": 50194,
+            "s4": 20448,
+            "delta": -29746,
+            "changeFraction": -0.5926206319480416
+          },
+          "p99": {
+            "s3": 50212,
+            "s4": 30642,
+            "delta": -19570,
+            "changeFraction": -0.3897474707241297
+          },
+          "max": {
+            "s3": 50243,
+            "s4": 30654,
+            "delta": -19589,
+            "changeFraction": -0.389885158131481
+          }
+        },
+        "authority": {
+          "simTickMs": {
+            "p50": {
+              "s3": 0.3285829999949783,
+              "s4": 0.5005420000015874,
+              "delta": 0.17195900000660913,
+              "changeFraction": 0.5233350477938212
+            },
+            "p95": {
+              "s3": 0.4192909999983385,
+              "s4": 0.879624999999578,
+              "delta": 0.4603340000012395,
+              "changeFraction": 1.0978866706012378
+            },
+            "p99": {
+              "s3": 0.5026249999646097,
+              "s4": 1.17279199999939,
+              "delta": 0.6701670000347804,
+              "changeFraction": 1.3333339966813575
+            },
+            "max": {
+              "s3": 0.8497080000233836,
+              "s4": 1.2267499999998108,
+              "delta": 0.3770419999764272,
+              "changeFraction": 0.44373125822759246
+            }
+          },
+          "projectionAndPublishMs": {
+            "p50": {
+              "s3": 56.63979200000176,
+              "s4": 29.543375000001106,
+              "delta": -27.096417000000656,
+              "changeFraction": -0.4783989496289078
+            },
+            "p95": {
+              "s3": 58.50883300002897,
+              "s4": 44.13679200000024,
+              "delta": -14.37204100002873,
+              "changeFraction": -0.2456388251671609
+            },
+            "p99": {
+              "s3": 72.29779100004816,
+              "s4": 51.752542000000176,
+              "delta": -20.54524900004799,
+              "changeFraction": -0.28417533531604444
+            },
+            "max": {
+              "s3": 76.48662499996135,
+              "s4": 53.80329199999869,
+              "delta": -22.68333299996266,
+              "changeFraction": -0.2965660074552135
+            }
+          }
+        },
+        "client": {
+          "applyMs": {
+            "p50": {
+              "s3": 17.42620899999747,
+              "s4": 11.538167000002431,
+              "delta": -5.888041999995039,
+              "changeFraction": -0.3378842753461693
+            },
+            "p95": {
+              "s3": 19.063583999988623,
+              "s4": 16.379792000000634,
+              "delta": -2.6837919999879887,
+              "changeFraction": -0.1407810829269874
+            },
+            "p99": {
+              "s3": 23.04937500000233,
+              "s4": 23.570792000000438,
+              "delta": 0.5214169999981095,
+              "changeFraction": 0.022621741370343312
+            },
+            "max": {
+              "s3": 32.018708000017796,
+              "s4": 24.252167000000554,
+              "delta": -7.7665410000172415,
+              "changeFraction": -0.24256259809149466
+            }
+          },
+          "ackSerializeSendMs": {
+            "p50": {
+              "s3": 0.03712499997345731,
+              "s4": 0.03762499999902502,
+              "delta": 0.0005000000255677151,
+              "changeFraction": 0.01346801416633515
+            },
+            "p95": {
+              "s3": 0.049958000003243797,
+              "s4": 0.06149999999979627,
+              "delta": 0.011541999996552477,
+              "changeFraction": 0.23103406853362923
+            },
+            "p99": {
+              "s3": 0.05712500002118759,
+              "s4": 0.1509169999990263,
+              "delta": 0.09379199997783871,
+              "changeFraction": 1.6418730843422562
+            },
+            "max": {
+              "s3": 0.15266700001666322,
+              "s4": 0.19270900000083202,
+              "delta": 0.0400419999841688,
+              "changeFraction": 0.26228326999153917
+            }
+          }
+        },
+        "memorySlopeBytesPerSecond": {
+          "rss": {
+            "s3": 777418.0508676874,
+            "s4": 335651.50340501004,
+            "delta": -441766.5474626774,
+            "changeFraction": -0.5682483793238599
+          },
+          "heapUsed": {
+            "s3": 647581.6103557695,
+            "s4": -1097054.639914912,
+            "delta": -1744636.2502706815,
+            "changeFraction": -2.6940793598388475
+          }
+        },
+        "overloadState": {
+          "s3": true,
+          "s4": true
+        },
+        "correctness": {
+          "s3": true,
+          "s4": true
+        }
+      },
+      "normal-8": {
+        "artifact": "docs/v0.4/evidence/state-pair-s3/multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4",
+        "compositeSha256": "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90",
+        "exactTraffic": {
+          "worstRecipientMeanDownlinkBytesPerSecond": {
+            "s3": 88602.86,
+            "s4": 63309.25,
+            "delta": -25293.61,
+            "changeFraction": -0.28547171050686176
+          },
+          "oneSecondP95DownlinkBytesPerSecond": {
+            "s3": 109797,
+            "s4": 70702,
+            "delta": -39095,
+            "changeFraction": -0.3560661948869277
+          },
+          "oneSecondP99DownlinkBytesPerSecond": {
+            "s3": 130927,
+            "s4": 71222,
+            "delta": -59705,
+            "changeFraction": -0.45601747538704773
+          }
+        },
+        "pairCadencePerRecipient": {
+          "s3": 2.160833333333333,
+          "s4": 2.85625,
+          "delta": 0.695416666666667,
+          "changeFraction": 0.32182799845738547
+        },
+        "pairKinds": {
+          "s3": {
+            "public-keyframe+owner-keyframe": 5186,
+            "public-delta+owner-delta": 0
+          },
+          "s4": {
+            "public-delta+owner-keyframe": 457
+          }
+        },
+        "pairBytes": {
+          "p50": {
+            "s3": 42940,
+            "s4": 23879,
+            "delta": -19061,
+            "changeFraction": -0.44389846297158825
+          },
+          "p95": {
+            "s3": 44362,
+            "s4": 28122,
+            "delta": -16240,
+            "changeFraction": -0.36607907668725487
+          },
+          "p99": {
+            "s3": 44687,
+            "s4": 28566,
+            "delta": -16121,
+            "changeFraction": -0.3607536867545371
+          },
+          "max": {
+            "s3": 45250,
+            "s4": 28583,
+            "delta": -16667,
+            "changeFraction": -0.3683314917127072
+          }
+        },
+        "authority": {
+          "simTickMs": {
+            "p50": {
+              "s3": 0.5825830000103451,
+              "s4": 0.8142910000024131,
+              "delta": 0.23170799999206793,
+              "changeFraction": 0.39772530264005884
+            },
+            "p95": {
+              "s3": 0.7526659999857657,
+              "s4": 1.0869999999995343,
+              "delta": 0.3343340000137687,
+              "changeFraction": 0.4441996848802677
+            },
+            "p99": {
+              "s3": 1.083666999998968,
+              "s4": 1.3479160000006232,
+              "delta": 0.2642490000016551,
+              "changeFraction": 0.24384704895683518
+            },
+            "max": {
+              "s3": 1.6099580000154674,
+              "s4": 1.4917500000010477,
+              "delta": -0.11820800001441967,
+              "changeFraction": -0.0734230334041534
+            }
+          },
+          "projectionAndPublishMs": {
+            "p50": {
+              "s3": 397.70274999999674,
+              "s4": 263.05995899999834,
+              "delta": -134.6427909999984,
+              "changeFraction": -0.3385513200499607
+            },
+            "p95": {
+              "s3": 410.59270899998955,
+              "s4": 273.56366699999853,
+              "delta": -137.02904199999102,
+              "changeFraction": -0.33373471811939676
+            },
+            "p99": {
+              "s3": 437.7772910000058,
+              "s4": 279.2255830000013,
+              "delta": -158.5517080000045,
+              "changeFraction": -0.3621743549964139
+            },
+            "max": {
+              "s3": 775.5744169999962,
+              "s4": 279.2255830000013,
+              "delta": -496.3488339999949,
+              "changeFraction": -0.639975769082127
+            }
+          }
+        },
+        "client": {
+          "applyMs": {
+            "p50": {
+              "s3": 16.55850000004284,
+              "s4": 14.297875000003842,
+              "delta": -2.260625000038999,
+              "changeFraction": -0.13652353776206483
+            },
+            "p95": {
+              "s3": 17.30087499995716,
+              "s4": 15.46387500000128,
+              "delta": -1.8369999999558786,
+              "changeFraction": -0.10617960074044969
+            },
+            "p99": {
+              "s3": 17.900082999956794,
+              "s4": 15.935875000002852,
+              "delta": -1.964207999953942,
+              "changeFraction": -0.109731781688313
+            },
+            "max": {
+              "s3": 63.83608300006017,
+              "s4": 16.110082999999577,
+              "delta": -47.726000000060594,
+              "changeFraction": -0.747633591491126
+            }
+          },
+          "ackSerializeSendMs": {
+            "p50": {
+              "s3": 0.03145899996161461,
+              "s4": 0.03975000000355067,
+              "delta": 0.008291000041936059,
+              "changeFraction": 0.2635493833895707
+            },
+            "p95": {
+              "s3": 0.04320799990091473,
+              "s4": 0.0534170000028098,
+              "delta": 0.010209000101895072,
+              "changeFraction": 0.23627569258717165
+            },
+            "p99": {
+              "s3": 0.05095900013111532,
+              "s4": 0.0627909999966505,
+              "delta": 0.011831999865535181,
+              "changeFraction": 0.23218665662771942
+            },
+            "max": {
+              "s3": 0.15433300007134676,
+              "s4": 0.0823339999988093,
+              "delta": -0.07199900007253746,
+              "changeFraction": -0.46651720655500095
+            }
+          }
+        },
+        "memorySlopeBytesPerSecond": {
+          "rss": {
+            "s3": 1245955.8165660356,
+            "s4": 98950.61879462971,
+            "delta": -1147005.1977714058,
+            "changeFraction": -0.9205825620146415
+          },
+          "heapUsed": {
+            "s3": 1036425.0123230666,
+            "s4": 185078.3910058893,
+            "delta": -851346.6213171773,
+            "changeFraction": -0.8214261632001235
+          }
+        },
+        "overloadState": {
+          "s3": false,
+          "s4": false
+        },
+        "correctness": {
+          "s3": true,
+          "s4": true
+        }
+      },
+      "churn-1": {
+        "artifact": "docs/v0.4/evidence/state-pair-s3/multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4",
+        "compositeSha256": "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90",
+        "exactTraffic": {
+          "worstRecipientMeanDownlinkBytesPerSecond": {
+            "s3": 202794.76666666666,
+            "s4": 114363.9,
+            "delta": -88430.86666666667,
+            "changeFraction": -0.4360608911176702
+          },
+          "oneSecondP95DownlinkBytesPerSecond": {
+            "s3": 440820,
+            "s4": 167696,
+            "delta": -273124,
+            "changeFraction": -0.619581688671113
+          },
+          "oneSecondP99DownlinkBytesPerSecond": {
+            "s3": 462536,
+            "s4": 177479,
+            "delta": -285057,
+            "changeFraction": -0.6162914886625042
+          }
+        },
+        "pairCadencePerRecipient": {
+          "s3": 9.7,
+          "s4": 9.633333333333333,
+          "delta": -0.06666666666666643,
+          "changeFraction": -0.006872852233676952
+        },
+        "pairKinds": {
+          "s3": {
+            "public-keyframe+owner-keyframe": 873,
+            "public-delta+owner-delta": 0
+          },
+          "s4": {
+            "public-keyframe+owner-keyframe": 6,
+            "public-delta+owner-keyframe": 283
+          }
+        },
+        "pairBytes": {
+          "p50": {
+            "s3": 37344,
+            "s4": 15759,
+            "delta": -21585,
+            "changeFraction": -0.578004498714653
+          },
+          "p95": {
+            "s3": 46003,
+            "s4": 19938,
+            "delta": -26065,
+            "changeFraction": -0.5665934830337152
+          },
+          "p99": {
+            "s3": 46470,
+            "s4": 29593,
+            "delta": -16877,
+            "changeFraction": -0.36318054658919735
+          },
+          "max": {
+            "s3": 46512,
+            "s4": 30634,
+            "delta": -15878,
+            "changeFraction": -0.34137426900584794
+          }
+        },
+        "authority": {
+          "simTickMs": {
+            "p50": {
+              "s3": 0.41470800001116004,
+              "s4": 0.4760839999999007,
+              "delta": 0.06137599998874066,
+              "changeFraction": 0.14799810948206688
+            },
+            "p95": {
+              "s3": 0.5442909999983385,
+              "s4": 0.630791000003228,
+              "delta": 0.08650000000488944,
+              "changeFraction": 0.15892234118358284
+            },
+            "p99": {
+              "s3": 0.755791000003228,
+              "s4": 0.7639169999984006,
+              "delta": 0.008125999995172606,
+              "changeFraction": 0.010751649589817688
+            },
+            "max": {
+              "s3": 1.1353329999983544,
+              "s4": 1.2909580000014103,
+              "delta": 0.1556250000030559,
+              "changeFraction": 0.13707432092899746
+            }
+          },
+          "projectionAndPublishMs": {
+            "p50": {
+              "s3": 43.260625000009895,
+              "s4": 28.9929170000014,
+              "delta": -14.267708000008497,
+              "changeFraction": -0.3298081800714907
+            },
+            "p95": {
+              "s3": 54.56450000000768,
+              "s4": 31.457624999999098,
+              "delta": -23.106875000008586,
+              "changeFraction": -0.4234781772032243
+            },
+            "p99": {
+              "s3": 77.86158300000534,
+              "s4": 35.24150000000009,
+              "delta": -42.62008300000525,
+              "changeFraction": -0.5473826932083096
+            },
+            "max": {
+              "s3": 103.41999999999825,
+              "s4": 46.166166999999405,
+              "delta": -57.25383299999885,
+              "changeFraction": -0.5536050377103057
+            }
+          }
+        },
+        "client": {
+          "applyMs": {
+            "p50": {
+              "s3": 14.464374999981374,
+              "s4": 10.935624999998254,
+              "delta": -3.52874999998312,
+              "changeFraction": -0.2439614570271902
+            },
+            "p95": {
+              "s3": 18.080916000064462,
+              "s4": 12.644667000000481,
+              "delta": -5.436249000063981,
+              "changeFraction": -0.3006622562731114
+            },
+            "p99": {
+              "s3": 24.84887499990873,
+              "s4": 12.98179100001289,
+              "delta": -11.86708399989584,
+              "changeFraction": -0.4775702722935919
+            },
+            "max": {
+              "s3": 43.71275000018068,
+              "s4": 21.15512499999022,
+              "delta": -22.557625000190455,
+              "changeFraction": -0.5160422302439728
+            }
+          },
+          "ackSerializeSendMs": {
+            "p50": {
+              "s3": 0.03054200019687414,
+              "s4": 0.030290999995486345,
+              "delta": -0.00025100020138779655,
+              "changeFraction": -0.008218197883892537
+            },
+            "p95": {
+              "s3": 0.05054199998266995,
+              "s4": 0.04045800000312738,
+              "delta": -0.010083999979542568,
+              "changeFraction": -0.19951723285584685
+            },
+            "p99": {
+              "s3": 0.059249999932944775,
+              "s4": 0.046999999998661224,
+              "delta": -0.01224999993428355,
+              "changeFraction": -0.20675105397716945
+            },
+            "max": {
+              "s3": 0.08754199999384582,
+              "s4": 0.05925000000570435,
+              "delta": -0.02829199998814147,
+              "changeFraction": -0.3231820153769664
+            }
+          }
+        },
+        "memorySlopeBytesPerSecond": {
+          "rss": {
+            "s3": 146041.22361824967,
+            "s4": 371066.38458014233,
+            "delta": 225025.16096189266,
+            "changeFraction": 1.5408331660525265
+          },
+          "heapUsed": {
+            "s3": 90802.88447683371,
+            "s4": -306266.87684870744,
+            "delta": -397069.7613255412,
+            "changeFraction": -4.372876077817159
+          }
+        },
+        "overloadState": {
+          "s3": true,
+          "s4": true
+        },
+        "correctness": {
+          "s3": false,
+          "s4": true
+        }
+      },
+      "churn-8": {
+        "artifact": "docs/v0.4/evidence/state-pair-s3/multiplayer-state-pair-s3-2026-07-13T062243917Z-805c5d4",
+        "compositeSha256": "55ff1666b4c8efdabb58bdc77a024a0df33edee2b5681558f62ac8e9fad7cf90",
+        "exactTraffic": {
+          "worstRecipientMeanDownlinkBytesPerSecond": {
+            "s3": 86151.67777777778,
+            "s4": 63690.166666666664,
+            "delta": -22461.51111111111,
+            "changeFraction": -0.26072053023794856
+          },
+          "oneSecondP95DownlinkBytesPerSecond": {
+            "s3": 110741,
+            "s4": 70806,
+            "delta": -39935,
+            "changeFraction": -0.3606162126041845
+          },
+          "oneSecondP99DownlinkBytesPerSecond": {
+            "s3": 111467,
+            "s4": 87682,
+            "delta": -23785,
+            "changeFraction": -0.21338153893080464
+          }
+        },
+        "pairCadencePerRecipient": {
+          "s3": 2.338888888888889,
+          "s4": 2.8833333333333333,
+          "delta": 0.5444444444444443,
+          "changeFraction": 0.2327790973871733
+        },
+        "pairKinds": {
+          "s3": {
+            "public-keyframe+owner-keyframe": 1684,
+            "public-delta+owner-delta": 0
+          },
+          "s4": {
+            "public-keyframe+owner-keyframe": 5,
+            "public-delta+owner-keyframe": 687
+          }
+        },
+        "pairBytes": {
+          "p50": {
+            "s3": 35860,
+            "s4": 22868,
+            "delta": -12992,
+            "changeFraction": -0.362297824874512
+          },
+          "p95": {
+            "s3": 36943,
+            "s4": 27691,
+            "delta": -9252,
+            "changeFraction": -0.2504398668218607
+          },
+          "p99": {
+            "s3": 37516,
+            "s4": 28570,
+            "delta": -8946,
+            "changeFraction": -0.23845825781000107
+          },
+          "max": {
+            "s3": 37557,
+            "s4": 36857,
+            "delta": -700,
+            "changeFraction": -0.01863833639534574
+          }
+        },
+        "authority": {
+          "simTickMs": {
+            "p50": {
+              "s3": 0.7289590000000317,
+              "s4": 0.8601249999992433,
+              "delta": 0.13116599999921164,
+              "changeFraction": 0.1799360457847505
+            },
+            "p95": {
+              "s3": 1.2750420000011218,
+              "s4": 1.2576250000020082,
+              "delta": -0.017416999999113614,
+              "changeFraction": -0.01365994218158954
+            },
+            "p99": {
+              "s3": 2.203417000000627,
+              "s4": 1.5671669999974256,
+              "delta": -0.6362500000032014,
+              "changeFraction": -0.2887560548017104
+            },
+            "max": {
+              "s3": 3.389000000002852,
+              "s4": 1.8418329999985872,
+              "delta": -1.547167000004265,
+              "changeFraction": -0.45652611389877923
+            }
+          },
+          "projectionAndPublishMs": {
+            "p50": {
+              "s3": 341.3620410000003,
+              "s4": 261.5807080000013,
+              "delta": -79.781332999999,
+              "changeFraction": -0.23371471756579673
+            },
+            "p95": {
+              "s3": 360.52345799999966,
+              "s4": 270.99625000000015,
+              "delta": -89.52720799999952,
+              "changeFraction": -0.24832561103416356
+            },
+            "p99": {
+              "s3": 388.3289169999998,
+              "s4": 296.30062499999985,
+              "delta": -92.02829199999996,
+              "changeFraction": -0.2369854213045896
+            },
+            "max": {
+              "s3": 409.8245420000021,
+              "s4": 296.30062499999985,
+              "delta": -113.52391700000226,
+              "changeFraction": -0.27700614620586017
+            }
+          }
+        },
+        "client": {
+          "applyMs": {
+            "p50": {
+              "s3": 14.265249999938533,
+              "s4": 14.09933299999102,
+              "delta": -0.16591699994751252,
+              "changeFraction": -0.011630851190706608
+            },
+            "p95": {
+              "s3": 14.906207999913022,
+              "s4": 15.322625000000698,
+              "delta": 0.41641700008767657,
+              "changeFraction": 0.027935810374449786
+            },
+            "p99": {
+              "s3": 17.611416999949142,
+              "s4": 15.80754199999501,
+              "delta": -1.8038749999541324,
+              "changeFraction": -0.10242645438236693
+            },
+            "max": {
+              "s3": 32.38920799992047,
+              "s4": 24.905375000002095,
+              "delta": -7.483832999918377,
+              "changeFraction": -0.23105946276725114
+            }
+          },
+          "ackSerializeSendMs": {
+            "p50": {
+              "s3": 0.03145800018683076,
+              "s4": 0.03712500000256114,
+              "delta": 0.005666999815730378,
+              "changeFraction": 0.180144948250803
+            },
+            "p95": {
+              "s3": 0.043166999937966466,
+              "s4": 0.04950000000826549,
+              "delta": 0.006333000070299022,
+              "changeFraction": 0.14670929365950652
+            },
+            "p99": {
+              "s3": 0.05099999997764826,
+              "s4": 0.05604200001107529,
+              "delta": 0.00504200003342703,
+              "changeFraction": 0.0988627457967997
+            },
+            "max": {
+              "s3": 0.1695409999229014,
+              "s4": 0.09399999999732245,
+              "delta": -0.07554099992557894,
+              "changeFraction": -0.4455618402624211
+            }
+          }
+        },
+        "memorySlopeBytesPerSecond": {
+          "rss": {
+            "s3": 958824.1725504894,
+            "s4": 95031.49634550116,
+            "delta": -863792.6762049883,
+            "changeFraction": -0.9008874629300222
+          },
+          "heapUsed": {
+            "s3": 738703.2662989774,
+            "s4": 39759.05970167081,
+            "delta": -698944.2065973066,
+            "changeFraction": -0.9461772249893112
+          }
+        },
+        "overloadState": {
+          "s3": false,
+          "s4": false
+        },
+        "correctness": {
+          "s3": false,
+          "s4": true
+        }
+      }
+    }
+  },
+  "optimizationProof": {
+    "atomicKindAlignmentCauses": 0,
+    "publicDeltaOwnerKeyframeProductPairs": 1614,
+    "allNormalPopulationsObservedMixed": true
+  },
+  "manifestIdentity": {
+    "hashes": [
+      "sha256:5d9c7844f566ee0c347b5f7efde305edb3ba9acca8483b6b9c4068621d458cdd",
+      "sha256:c54d51750d7c9e1be1b800dab9c995eef2bbfd5ffb9152ddbd2fe4588bde1a03",
+      "sha256:be14dca19b4afe6b53e167555c4a3bdc50761afe7e00f0814bad93801bcc370c",
+      "sha256:fb63e3529356d7bc4dd82326cb6d36726a764e88f7aa302c859dba4c7d38029a"
+    ],
+    "changedAcrossFreshMatches": true,
+    "reconnectReuseObserved": true
+  },
+  "failureAnalysis": [
+    {
+      "population": 1,
+      "requiredDownlinkReductionBytesPerSecond": 94094.79999999999,
+      "requiredDownlinkReductionFraction": 0.5894526620176056,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 2971425,
+          "fraction": 0.9307179441561403
+        },
+        {
+          "frameClass": "statePair",
+          "projectionKind": "keyframe",
+          "bytes": 211519,
+          "fraction": 0.06625256529441687
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 9514,
+          "fraction": 0.00298000135312233
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 158,
+          "fraction": 0.00004948919632050958
+        }
+      ]
+    },
+    {
+      "population": 8,
+      "requiredDownlinkReductionBytesPerSecond": 0,
+      "requiredDownlinkReductionFraction": 0,
+      "dominantAcceptedDownlink": [
+        {
+          "frameClass": "statePair",
+          "projectionKind": "public-delta+owner-keyframe",
+          "bytes": 9753835,
+          "fraction": 0.9921288491415814
+        },
+        {
+          "frameClass": "ack",
+          "projectionKind": null,
+          "bytes": 76112,
+          "fraction": 0.007741868810151499
+        },
+        {
+          "frameClass": "control",
+          "projectionKind": null,
+          "bytes": 1271,
+          "fraction": 0.00012928204826706112
+        }
+      ]
+    }
+  ],
+  "recommendation": {
+    "nextSlice": "Diagnose the dominant accepted statePair bytes and projection/publish cost at each failing population; reduce repeated runtimePublic structure only if the product evidence identifies it as the next narrow cause.",
+    "quantifiedTarget": "Recover each population's exact required reduction in failureAnalysis; do not substitute aggregate averages or modeled transport overhead.",
+    "second": "Keep mixed public-delta/owner-keyframe atomic observation and independently isolate accounting-ledger memory from product memory before changing retention.",
+    "defer": "Binary, AOI, compression, hosted WSS, and fleet packing remain out of scope until structural JSON passes or a measured residual justifies them."
+  }
+}
