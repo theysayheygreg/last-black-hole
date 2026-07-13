@@ -1,0 +1,37 @@
+{
+  "schema": "lbh-s15-canonical-lane-reuse-manifest-v1",
+  "baselineSha256": "c5259ec1cbeb3de2d0683031af7c2e7ae2f54c26d34f647906d880158d38ecdd",
+  "candidateSha256": "c4afcb83fd50e9f1373402f43233f222662a70e7872b50e441fcef612dd4bff4",
+  "s14TopLevelSha256": "055de7c637163bb25e50dd36993f1e16075d2fa4abeb4be7216aafd95a6bfc4f",
+  "analysisSha256": "4c13d81e6abc72a3043e5794c9060db120e07497ff7139d5e1c6b30d2f98bd05",
+  "selectorFiles": [
+    {
+      "name": "round-a-baseline.json",
+      "sha256": "61535a3947603d0ca2a72231f046a8761fbb57597cd6a03cbf16adcfe161798d"
+    },
+    {
+      "name": "round-a-candidate.json",
+      "sha256": "1ab80682a36994b080323e0cd882645e0cec975b779c1481ecbdcefcdabab134"
+    },
+    {
+      "name": "round-b-baseline.json",
+      "sha256": "3f0ef791f5ebfc0ca297842c10742fc1b92adf016fa72482e4056f869a3dcec8"
+    },
+    {
+      "name": "round-b-candidate.json",
+      "sha256": "5b400fceda60799c6af83a6879b89c087a57e1ef2c7a6ac25468effe31ddfaf0"
+    }
+  ],
+  "exactParityComparisons": 1320,
+  "productDecision": {
+    "admittedPopulations": [
+      1
+    ],
+    "rejectedPopulations": [
+      4,
+      8
+    ],
+    "statement": "Canonical lane reuse is exact and removes expanded lane reserialization, but four and eight still fail cadence, clock, overload, and normalized-mean admission. Low actual traffic receives no credit.",
+    "nextLane": "Prototype a bounded binary state-pair codec against the exact positional JSON oracle; retain JSON fallback and do not change authority, cadence, ACK, recovery, or admission policy."
+  }
+}

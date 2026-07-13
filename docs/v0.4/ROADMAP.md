@@ -520,6 +520,32 @@ computed by delta/keyframe construction while enforcing the unchanged expanded-
 pair limit. Do not begin hosted costs or 24/48/96 extrapolation. The full
 30-suite `multiplayer-network` lane passes once with retries disabled.
 
+**S15 canonical lane reuse — implemented, product admission still rejected:**
+the canonical lane text and exact UTF-8 count produced during delta/keyframe
+comparison now carry into the same synchronous expanded-pair size check under a
+private proof symbol and exact payload identity. No proof survives the
+selection or crosses a recipient/tick. The order-counterbalanced selector
+benchmark preserves 1,320 representative/adversarial comparisons with
+identical wire and selection transcripts. Expanded lane serializations fall
+from 4,400 to zero across 1,100 selections, allocation proxy falls from
+38,916,699 to 13,836,499 bytes, mean publish improves 3.87%, and selector p50
+improves 10.45%.
+
+Against S14's isolated-process baseline, 1/4/8 receiver cadence moves from
+9.85/5.25/3.05 to 9.85/5.45/3.25 Hz. Projection/publish p95 moves from
+26.17/111.00/241.71 to 24.80/102.20/225.19 ms; authority CPU moves from
+27.50/60.03/78.35% to 26.27/58.73/78.04% of one core. One player passes.
+Four and eight remain `DILATED`, fail cadence/clock, and normalize to
+66,516/74,117 and 79,377/97,181 B/s mean/p95. Correctness, exact schedules,
+queues, pressure, and cleanup pass; cadence collapse receives no traffic
+credit.
+
+S15 closes the bounded positional cleanup sequence. The next single lane is a
+binary state-pair codec prototype against the exact positional JSON oracle,
+retaining JSON fallback and every authority/ACK/recovery/privacy/admission
+contract. Compression, deliberate cadence policy, hosted costs, and 24/48/96
+remain closed.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

@@ -5,6 +5,24 @@
 
 ---
 
+## 2026-07-13 — v0.4 S15 canonical lane-size reuse
+
+- Reused exact canonical lane texts and UTF-8 counts from delta/keyframe
+  comparison in the same expanded-pair limit calculation. Proofs are
+  object-identity bound, private, synchronous, and never cached across a tick or
+  recipient; wire, limits, fallback, semantics, ACK, and recovery are unchanged.
+- Preserved 1,320 exact comparisons and identical selector/wire transcripts.
+  Order-counterbalanced microbenchmarks remove 4,400 duplicate expanded-lane
+  serializations, reduce allocation proxy by 64.45%, improve mean publish time
+  3.87%, and improve selector p50 10.45%.
+- Captured immutable one-authority-per-match 1/4/8 evidence under
+  `docs/v0.4/evidence/state-pair-s15/`. One player passes. Four reaches 5.45 Hz
+  and eight 3.25 Hz, but both remain `DILATED`, miss clock/cadence and normalized
+  mean traffic, so product admission remains closed.
+- Closed further positional cleanup as the next default. The next bounded lane
+  is a binary state-pair codec prototype with exact JSON-oracle parity and JSON
+  fallback. Hosted and 24/48/96 work remains closed.
+
 ## 2026-07-13 — v0.4 S14 exact single-serialization selector
 
 - Replaced S12's four complete positional candidate serializations with exact

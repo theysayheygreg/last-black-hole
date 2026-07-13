@@ -2892,3 +2892,28 @@ work with unchanged correctness, privacy, recovery, and exact-wire choice.
 **Door status:** Open for exact lane-size reuse with byte-identical output and
 unchanged limits. Closed for treating S14 as 4/8 admission, crediting collapsed
 cadence as bandwidth savings, or beginning hosted/24/48/96 extrapolation.
+
+### Q: Does S15 canonical lane reuse admit four or eight players?
+
+| Date | Event |
+|------|-------|
+| Jul 13 | S15 reuses four exact canonical lane texts/counts within each same-operation expanded-limit check; 1,320 oracle comparisons and both deterministic transcripts remain exact. |
+| Jul 13 | Order-counterbalanced microbenchmarks remove every expanded lane reserialization and improve selector p50 10.45%, but the one-match authority still reaches only 5.45 Hz at four and 3.25 Hz at eight. |
+| Jul 13 | Decision: keep the exact reuse, reject 4/8 admission, close additional positional cleanup as the default next move, and prototype a bounded binary state-pair codec against the JSON oracle. |
+
+**Options:**
+1. **Continue shaving positional JSON composition** — measurable but now
+   insufficient after two exact cleanup lanes; four/eight remain clock-bound.
+2. **Bounded binary state-pair codec** (chosen) — test structural and CPU
+   savings while preserving JSON fallback, exact semantics, and all authority
+   contracts.
+3. **Compression or implicit cadence reduction** — still deferred because CPU
+   tails fail and collapsed cadence cannot receive bandwidth credit.
+4. **Hosted or 24/48/96 extrapolation** — remains premature until 4/8 target
+   cadence and heavier sim fixtures are admitted.
+
+**Where it landed:** Option 2. Binary is a prototype/bakeoff lane, not a
+promotion; positional JSON remains the exact oracle and fallback.
+**Door status:** Closed for S15 as 4/8 admission and for more unmeasured
+positional shaving. Open only for the bounded binary codec prototype with
+unchanged authority, ACK, recovery, privacy, cadence, and admission policy.

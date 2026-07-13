@@ -1,0 +1,408 @@
+{
+  "schema": "lbh-s15-canonical-lane-reuse-analysis-v1",
+  "authorityBoundary": "One logical authority process for one match/group; no global gameplay writer.",
+  "baselineBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s14/candidate-process",
+    "compositeSha256": "c5259ec1cbeb3de2d0683031af7c2e7ae2f54c26d34f647906d880158d38ecdd",
+    "implementationCommit": "bce7e5d5d2bb2c6ad10d1d99c74f7b5c2ae1a108",
+    "sealedS14Commit": "a0c950e"
+  },
+  "candidateBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s15/candidate-process",
+    "compositeSha256": "c4afcb83fd50e9f1373402f43233f222662a70e7872b50e441fcef612dd4bff4",
+    "implementationCommit": "d62361859ca5e14acaa6fc7d51efcf99b7c555c2",
+    "evidenceCommit": "94d81ec"
+  },
+  "s14TopLevelBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s14",
+    "compositeSha256": "055de7c637163bb25e50dd36993f1e16075d2fa4abeb4be7216aafd95a6bfc4f"
+  },
+  "selector": {
+    "orderCounterbalanced": true,
+    "iterationsPerRun": 1000,
+    "parityComparisons": 1000,
+    "adversarialComparisonsRetainedFromS14": 320,
+    "totalExactComparisons": 1320,
+    "transcriptSha256": "b2795f615f1b0b91588690748106e287db51390defb35e149829b1e400cbe82f",
+    "selectionTranscriptSha256": "c022d7c51f3394cf651625310650982179c5da99873044b67e03244bdab65eeb",
+    "baseline": {
+      "meanPublishMs": 7.869566071999987,
+      "meanSelectionP50Ms": 4.880604000000403,
+      "operations": {
+        "componentSerializations": 28600,
+        "fullCandidateCompositions": 1101,
+        "winnerSerializations": 1101,
+        "bytesExamined": 18433641,
+        "allocationProxyBytes": 38916699
+      }
+    },
+    "candidate": {
+      "meanPublishMs": 7.564788082499982,
+      "meanSelectionP50Ms": 4.370624999999961,
+      "operations": {
+        "componentSerializations": 24200,
+        "fullCandidateCompositions": 1101,
+        "winnerSerializations": 1101,
+        "bytesExamined": 18433641,
+        "allocationProxyBytes": 13836499,
+        "expandedHeaderSerializations": 18700,
+        "expandedLaneSerializations": 0,
+        "expandedLaneSerializationReuses": 4400,
+        "expandedReusedLaneBytes": 25080200,
+        "expandedSerializedLaneBytes": 0,
+        "expandedBytesExamined": 25595684
+      }
+    },
+    "comparison": {
+      "publishMeanReductionFraction": 0.03872869059253581,
+      "selectionP50ReductionFraction": 0.10449096054512919
+    }
+  },
+  "baseline": [
+    {
+      "population": 1,
+      "commit": "bce7e5d5d2bb2c6ad10d1d99c74f7b5c2ae1a108",
+      "cadence": {
+        "authorityMinimumHz": 9.9,
+        "receiverMinimumHz": 9.85
+      },
+      "projectionAndPublishMs": {
+        "count": 204,
+        "totalObserved": 204,
+        "p50": 24.205666999998357,
+        "p95": 26.17395800000122,
+        "p99": 28.931415999999444,
+        "max": 39.322000000000116
+      },
+      "authorityCpuOneCoreFraction": 0.27496183868169993,
+      "overloadMode": "NORMAL",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 56800.1,
+        "actualOneSecondP95BytesPerSecond": 58626,
+        "normalized10HzWorstMeanBytesPerSecond": 57368.95505050506,
+        "normalized10HzOneSecondP95BytesPerSecond": 59213.43434343435
+      },
+      "operations": {
+        "componentSerializations": 6760,
+        "fullCandidateCompositions": 262,
+        "winnerSerializations": 262,
+        "bytesExamined": 11363543,
+        "allocationProxyBytes": 19009887
+      },
+      "chosen": {
+        "public-delta+owner-delta": 4,
+        "public-delta+owner-keyframe": 256
+      },
+      "fallbacks": {
+        "missing-exact-acked-base": 2
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": true,
+        "authorityClockPass": true,
+        "normalModePass": true,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": true,
+        "normalizedP95Pass": true
+      }
+    },
+    {
+      "population": 4,
+      "commit": "bce7e5d5d2bb2c6ad10d1d99c74f7b5c2ae1a108",
+      "cadence": {
+        "authorityMinimumHz": 5.25,
+        "receiverMinimumHz": 5.25
+      },
+      "projectionAndPublishMs": {
+        "count": 109,
+        "totalObserved": 109,
+        "p50": 104.85974999999962,
+        "p95": 111.00045899999986,
+        "p99": 136.5525829999997,
+        "max": 172.6604580000003
+      },
+      "authorityCpuOneCoreFraction": 0.6003195297504799,
+      "overloadMode": "DILATED",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 36168.85,
+        "actualOneSecondP95BytesPerSecond": 40215,
+        "normalized10HzWorstMeanBytesPerSecond": 68455.64047619047,
+        "normalized10HzOneSecondP95BytesPerSecond": 76174.7619047619
+      },
+      "operations": {
+        "componentSerializations": 14690,
+        "fullCandidateCompositions": 573,
+        "winnerSerializations": 573,
+        "bytesExamined": 27273323,
+        "allocationProxyBytes": 45539883
+      },
+      "chosen": {
+        "public-delta+owner-delta": 29,
+        "public-delta+owner-keyframe": 536
+      },
+      "fallbacks": {
+        "missing-exact-acked-base": 8
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": false,
+        "authorityClockPass": false,
+        "normalModePass": false,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": false,
+        "normalizedP95Pass": true
+      }
+    },
+    {
+      "population": 8,
+      "commit": "bce7e5d5d2bb2c6ad10d1d99c74f7b5c2ae1a108",
+      "cadence": {
+        "authorityMinimumHz": 3.05,
+        "receiverMinimumHz": 3.05
+      },
+      "projectionAndPublishMs": {
+        "count": 65,
+        "totalObserved": 65,
+        "p50": 236.88654099999985,
+        "p95": 241.71387499999764,
+        "p99": 243.78625000000102,
+        "max": 243.78625000000102
+      },
+      "authorityCpuOneCoreFraction": 0.7834657840849564,
+      "overloadMode": "DILATED",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 24581.25,
+        "actualOneSecondP95BytesPerSecond": 29611,
+        "normalized10HzWorstMeanBytesPerSecond": 78218.17741935483,
+        "normalized10HzOneSecondP95BytesPerSecond": 95138.48387096774
+      },
+      "operations": {
+        "componentSerializations": 18616,
+        "fullCandidateCompositions": 728,
+        "winnerSerializations": 728,
+        "bytesExamined": 39799210,
+        "allocationProxyBytes": 66313186
+      },
+      "chosen": {
+        "public-delta+owner-delta": 68,
+        "public-delta+owner-keyframe": 648
+      },
+      "fallbacks": {
+        "missing-exact-acked-base": 12
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": false,
+        "authorityClockPass": false,
+        "normalModePass": false,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": false,
+        "normalizedP95Pass": false
+      }
+    }
+  ],
+  "candidate": [
+    {
+      "population": 1,
+      "commit": "d62361859ca5e14acaa6fc7d51efcf99b7c555c2",
+      "cadence": {
+        "authorityMinimumHz": 9.85,
+        "receiverMinimumHz": 9.85
+      },
+      "projectionAndPublishMs": {
+        "count": 204,
+        "totalObserved": 204,
+        "p50": 23.009625000000597,
+        "p95": 24.80291700000089,
+        "p99": 25.204125000000204,
+        "max": 26.279999999998836
+      },
+      "authorityCpuOneCoreFraction": 0.2627464836223507,
+      "overloadMode": "NORMAL",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 58278.2,
+        "actualOneSecondP95BytesPerSecond": 60346,
+        "normalized10HzWorstMeanBytesPerSecond": 59158.32309644669,
+        "normalized10HzOneSecondP95BytesPerSecond": 61257.96954314721
+      },
+      "operations": {
+        "componentSerializations": 5720,
+        "fullCandidateCompositions": 262,
+        "winnerSerializations": 262,
+        "bytesExamined": 11423587,
+        "allocationProxyBytes": 7284628,
+        "expandedHeaderSerializations": 4420,
+        "expandedLaneSerializations": 0,
+        "expandedLaneSerializationReuses": 1040,
+        "expandedReusedLaneBytes": 11846400,
+        "expandedSerializedLaneBytes": 0,
+        "expandedBytesExamined": 11989742
+      },
+      "chosen": {
+        "public-delta+owner-delta": 4,
+        "public-delta+owner-keyframe": 256
+      },
+      "fallbacks": {
+        "missing-exact-acked-base": 2
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": true,
+        "authorityClockPass": true,
+        "normalModePass": true,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": true,
+        "normalizedP95Pass": true
+      }
+    },
+    {
+      "population": 4,
+      "commit": "d62361859ca5e14acaa6fc7d51efcf99b7c555c2",
+      "cadence": {
+        "authorityMinimumHz": 5.45,
+        "receiverMinimumHz": 5.45
+      },
+      "projectionAndPublishMs": {
+        "count": 113,
+        "totalObserved": 113,
+        "p50": 98.05895800000144,
+        "p95": 102.20258300000023,
+        "p99": 103.85920800000167,
+        "max": 104.2875410000006
+      },
+      "authorityCpuOneCoreFraction": 0.5872516502047699,
+      "overloadMode": "DILATED",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 36471.25,
+        "actualOneSecondP95BytesPerSecond": 40586,
+        "normalized10HzWorstMeanBytesPerSecond": 66516.1105504587,
+        "normalized10HzOneSecondP95BytesPerSecond": 74116.57798165137
+      },
+      "operations": {
+        "componentSerializations": 12848,
+        "fullCandidateCompositions": 592,
+        "winnerSerializations": 592,
+        "bytesExamined": 28223642,
+        "allocationProxyBytes": 18054515,
+        "expandedHeaderSerializations": 9928,
+        "expandedLaneSerializations": 0,
+        "expandedLaneSerializationReuses": 2336,
+        "expandedReusedLaneBytes": 29039222,
+        "expandedSerializedLaneBytes": 0,
+        "expandedBytesExamined": 29361327
+      },
+      "chosen": {
+        "public-delta+owner-delta": 24,
+        "public-delta+owner-keyframe": 560
+      },
+      "fallbacks": {
+        "missing-exact-acked-base": 8
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": false,
+        "authorityClockPass": false,
+        "normalModePass": false,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": false,
+        "normalizedP95Pass": true
+      }
+    },
+    {
+      "population": 8,
+      "commit": "d62361859ca5e14acaa6fc7d51efcf99b7c555c2",
+      "cadence": {
+        "authorityMinimumHz": 3.25,
+        "receiverMinimumHz": 3.25
+      },
+      "projectionAndPublishMs": {
+        "count": 68,
+        "totalObserved": 68,
+        "p50": 218.53933400000096,
+        "p95": 225.1869999999999,
+        "p99": 228.6437079999996,
+        "max": 228.6437079999996
+      },
+      "authorityCpuOneCoreFraction": 0.7803579337569806,
+      "overloadMode": "DILATED",
+      "traffic": {
+        "actualWorstMeanBytesPerSecond": 26123.8,
+        "actualOneSecondP95BytesPerSecond": 32255,
+        "normalized10HzWorstMeanBytesPerSecond": 79376.73076923078,
+        "normalized10HzOneSecondP95BytesPerSecond": 97180.76923076923
+      },
+      "operations": {
+        "componentSerializations": 16456,
+        "fullCandidateCompositions": 760,
+        "winnerSerializations": 760,
+        "bytesExamined": 40754608,
+        "allocationProxyBytes": 26258054,
+        "expandedHeaderSerializations": 12716,
+        "expandedLaneSerializations": 0,
+        "expandedLaneSerializationReuses": 2992,
+        "expandedReusedLaneBytes": 41943000,
+        "expandedSerializedLaneBytes": 0,
+        "expandedBytesExamined": 42354916
+      },
+      "chosen": {
+        "public-delta+owner-delta": 68,
+        "public-delta+owner-keyframe": 680
+      },
+      "fallbacks": {
+        "missing-exact-acked-base": 12
+      },
+      "correctnessPassed": true,
+      "queuesClear": true,
+      "productGate": {
+        "correctnessAndConvergencePass": true,
+        "cadencePass": false,
+        "authorityClockPass": false,
+        "normalModePass": false,
+        "actualMeanPass": true,
+        "actualP95Pass": true,
+        "normalizedMeanPass": false,
+        "normalizedP95Pass": false
+      }
+    }
+  ],
+  "parity": {
+    "exactComparisons": 1320,
+    "wireTranscriptEqual": true,
+    "selectionTranscriptEqual": true,
+    "mismatches": 0
+  },
+  "productDecision": {
+    "admittedPopulations": [
+      1
+    ],
+    "rejectedPopulations": [
+      4,
+      8
+    ],
+    "statement": "Canonical lane reuse is exact and removes expanded lane reserialization, but four and eight still fail cadence, clock, overload, and normalized-mean admission. Low actual traffic receives no credit.",
+    "nextLane": "Prototype a bounded binary state-pair codec against the exact positional JSON oracle; retain JSON fallback and do not change authority, cadence, ACK, recovery, or admission policy."
+  },
+  "limitations": [
+    "machine-local loopback",
+    "single 20-second candidate window per population",
+    "microbenchmark timing is order-counterbalanced but machine-local",
+    "no hosted/WAN/TLS/fleet claim",
+    "no 24/48/96 extrapolation",
+    "normalized traffic is counterfactual and cannot replace cadence admission"
+  ]
+}
