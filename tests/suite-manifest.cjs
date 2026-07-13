@@ -144,6 +144,24 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairCanonicalReuseBenchmark",
+    file: "multiplayer-state-pair-canonical-reuse-benchmark.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "StatePairCanonicalReuseAdversarial",
+    file: "multiplayer-state-pair-canonical-reuse-adversarial.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "StatePairCanonicalReuseEvidence",
+    file: "multiplayer-state-pair-canonical-reuse-evidence.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ClientDeltaReceiver",
     file: "client-delta-receiver.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
