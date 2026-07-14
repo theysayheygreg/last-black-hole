@@ -10,7 +10,6 @@ const {
   preparedProjectionHash,
   createPreparedStructuralDelta,
   createStructuralDelta,
-  applyStructuralDelta,
 } = require("./canonical-structural-delta.cjs");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
@@ -498,70 +497,6 @@ function deltaPayload(base, current, { stageProfiler = null, recipientKey = null
   });
 }
 
-function deepFreeze(value, seen = new Set()) {
-  if (!value || typeof value !== "object" || seen.has(value)) return value;
-  seen.add(value);
-  for (const child of Object.values(value)) deepFreeze(child, seen);
-  return Object.freeze(value);
-}
-
-function validatePublicWorkerCandidate(candidate, identity, state, publicView, profile) {
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)
-      || !candidate.keyframe || typeof candidate.keyframe !== "object") {
-    fail("invalid-public-worker-result", "public worker candidate is missing");
-  }
-  const keyframe = deepFreeze(candidate.keyframe);
-  if (keyframe.kind !== "keyframe" || keyframe.schema !== publicView.schema
-      || keyframe.projection?.lane !== "public" || keyframe.projection?.runId !== identity.matchId
-      || keyframe.projection?.authorityEpoch !== identity.authorityIncarnation
-      || keyframe.projection?.connectionEpoch !== identity.recipientIncarnation
-      || keyframe.projection?.manifestHash !== publicView.manifestHash
-      || keyframe.projection?.statePairId !== publicView.statePairId
-      || keyframe.projection?.snapshotId !== publicView.snapshotId
-      || keyframe.projection?.tick !== publicView.tick
-      || keyframe.resultHash !== projectionHash(publicView)
-      || keyframe.resultHash !== projectionHash(keyframe.projection)) {
-    fail("invalid-public-worker-result", "public worker keyframe failed authority validation");
-  }
-  registerAuthorityLanePayload(keyframe, "public", keyframe.projection);
-  const keyframeCanonical = serializedComponentProof(keyframe,
-    profile.stageProfiler, profile.recipientKey);
-  let delta = null;
-  let deltaCanonical = null;
-  if (candidate.delta !== null && candidate.delta !== undefined) {
-    delta = deepFreeze(candidate.delta);
-    if (!state.acked || delta.kind !== "delta" || delta.schema !== "lbh-canonical-structural-delta-v1"
-        || delta.delta?.lane !== "public" || delta.delta?.runId !== identity.matchId
-        || delta.delta?.authorityEpoch !== identity.authorityIncarnation
-        || delta.delta?.connectionEpoch !== identity.recipientIncarnation
-        || delta.baseSnapshotId !== state.acked.public.view.snapshotId
-        || delta.baseHash !== state.acked.public.hash || delta.resultHash !== keyframe.resultHash
-        || delta.delta?.baseSnapshotId !== delta.baseSnapshotId
-        || delta.delta?.snapshotId !== publicView.snapshotId
-        || delta.delta?.statePairId !== publicView.statePairId) {
-      fail("invalid-public-worker-result", "public worker delta lineage failed authority validation");
-    }
-    const applied = applyStructuralDelta(state.acked.public.view, delta.delta);
-    if (projectionHash(applied.view) !== keyframe.resultHash) {
-      fail("invalid-public-worker-result", "public worker delta semantic replay failed");
-    }
-    registerAuthorityLanePayload(delta, "public", delta.delta);
-    deltaCanonical = serializedComponentProof(delta, profile.stageProfiler, profile.recipientKey);
-  }
-  const keyframeBytes = keyframeCanonical.bytes;
-  const deltaBytes = deltaCanonical?.bytes ?? Number.POSITIVE_INFINITY;
-  return Object.freeze({
-    payload: delta && deltaBytes < keyframeBytes ? delta : keyframe,
-    deltaPayload: delta,
-    keyframePayload: keyframe,
-    deltaCanonical,
-    keyframeCanonical,
-    decision: delta && deltaBytes < keyframeBytes ? "delta" : delta ? "delta-not-smaller" : "keyframe",
-    deltaBytes,
-    keyframeBytes,
-  });
-}
-
 function pairProjectionKind(publicKind, ownerKind) {
   return publicKind === ownerKind ? publicKind : `public-${publicKind}+owner-${ownerKind}`;
 }
@@ -851,20 +786,15 @@ function createAuthorityDeltaPublisher(options = {}) {
 
   function publish({ identity: rawIdentity, publicView: publicInput, ownerView: ownerInput,
     publicPrepared: suppliedPublicPrepared = null, ownerPrepared: suppliedOwnerPrepared = null,
-    publicWorkerCandidate = null,
     dirtyHints = null, allowMixed = false, wireSize = null, encodeWire = null }) {
     const identity = normalizeIdentity(rawIdentity);
     const profile = { stageProfiler, recipientKey: identity.recipientId };
-    const preparedPublic = publicWorkerCandidate
-      ? Object.freeze({ view: publicInput, prepared: null, context: null })
-      : prepareCurrent(identity, publicInput, suppliedPublicPrepared, "public");
-    const { view: publicView } = preparedPublic;
-    const state = stateFor(identity);
-    const validatedWorkerPublic = publicWorkerCandidate
-      ? validatePublicWorkerCandidate(publicWorkerCandidate, identity, state, publicView, profile) : null;
+    const preparedPublic = prepareCurrent(identity, publicInput, suppliedPublicPrepared, "public");
     const preparedOwner = prepareCurrent(identity, ownerInput, suppliedOwnerPrepared, "owner");
+    const { view: publicView } = preparedPublic;
     const { view: ownerView } = preparedOwner;
     assertProjectionPair(identity, publicView, ownerView);
+    const state = stateFor(identity);
     const lineageChanged = state.acked && (
       state.acked.public.view.manifestHash !== publicView.manifestHash
       || state.acked.public.view.ballparkEpoch !== publicView.ballparkEpoch
@@ -880,19 +810,14 @@ function createAuthorityDeltaPublisher(options = {}) {
     let ownerDecision = null;
     try {
       if (state.forceKeyframe || !state.acked) {
-        if (validatedWorkerPublic) {
-          publicDecision = validatedWorkerPublic;
-          publicPayload = publicDecision.keyframePayload;
-        } else publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
+        publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
           prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
         ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner",
           prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
         keyframeReason = state.forceReason || "missing-acked-base";
       } else {
-        publicDecision = validatedWorkerPublic
-          ? validatedWorkerPublic
-          : deltaPayload(state.acked.public, publicView, { ...profile, lane: "public",
-              prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
+        publicDecision = deltaPayload(state.acked.public, publicView, { ...profile, lane: "public",
+          prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
         ownerDecision = deltaPayload(state.acked.owner, ownerView, { ...profile, lane: "owner",
           prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
         observeCandidate("public", publicDecision);
@@ -906,7 +831,6 @@ function createAuthorityDeltaPublisher(options = {}) {
     } catch (error) {
       const code = String(error?.code || error?.name || "unknown").slice(0, 96);
       forceRebase(state, `semantic-fallback:${code}`);
-      publicDecision = null;
       publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
         prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
       ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner",
