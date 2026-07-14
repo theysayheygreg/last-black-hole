@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "profiles": {
+    "caller-owned-profile-id": {
+      "id": "caller-owned-profile-id",
+      "name": "Imported Pilot",
+      "exoticMatter": 17,
+      "vaultCapacity": 25,
+      "vault": [
+        { "id": "fixture-relic", "name": "Fixture Relic", "value": 20 }
+      ],
+      "loadout": { "equipped": [null, null], "consumables": [null, null] },
+      "upgrades": { "thrust": 1 },
+      "rigLevels": [1, 0, 0],
+      "hullType": "drifter",
+      "totalExtractions": 1,
+      "totalDeaths": 0,
+      "totalExoticMatterEarned": 17
+    }
+  },
+  "sessions": {
+    "source-session": {
+      "sessionId": "source-session",
+      "players": [
+        { "clientId": "must-not-survive", "profileId": "caller-owned-profile-id" }
+      ]
+    }
+  },
+  "runs": {
+    "source-run": {
+      "runId": "source-run",
+      "profileId": "caller-owned-profile-id",
+      "pilotId": "must-not-survive",
+      "clientId": "must-not-survive",
+      "outcome": "extracted",
+      "runDuration": 42,
+      "mapId": "shallows",
+      "emEarned": 17
+    },
+    "orphan-run": {
+      "profileId": "missing-profile",
+      "outcome": "dead"
+    }
+  },
+  "settlements": {}
+}
