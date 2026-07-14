@@ -29,6 +29,14 @@ This is the first honest local playable milestone, not an internet/public-ready
 claim. Invite UI, WAN/TLS-edge proof, hosted soak, Greg's hands-on movement/art
 judgment, and physical-device validation remain.
 
+**Current v0.4 admission status (2026-07-14):** S20 remains the supported
+replication path for one through four players. The final default-off eight-seat
+split public-fragment experiment failed its short abort screen at 55.905 ms
+projection/publish p95 against a 55 ms boundary, so no sealed capture ran and
+eight remains closed. The only next lane is internet-shaped four-player S20
+productization; the failed experiment remains research scaffolding, not a
+playable or release configuration.
+
 **Current evidence:** `npm run test:multiplayer-structure` and
 `npm run test:multiplayer-authority` pass. The Phase 1
 `npm run test:multiplayer-network` primitive lane also passes. HTTP input and

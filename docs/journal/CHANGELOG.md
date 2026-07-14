@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-07-14 — v0.4 eight-seat split public-fragment experiment rejected
+
+- Added a default-off, fixed-schema lossless public-fragment capability that
+  builds/compresses/hashes one public fragment per match-authority beat, reuses
+  the exact Buffer across eight recipient queues, and sends separate owner
+  overlays for atomic client reconstruction.
+- Preserved one logical gameplay writer per match/group and unchanged S20
+  fallback for one through four; concurrent matches still multiply isolated
+  authorities horizontally.
+- Passed focused codec, authority, runtime, client ordering, ACK, retransmit,
+  recovery, public privacy, recipient teardown, ticket, wire, and queue proofs.
+- Aborted at the short eight-client screen: receiver cadence was 9.667 Hz,
+  bandwidth was about 49.4 kB/s per recipient, CPU was 0.510 core, overload was
+  NORMAL, and client semantics/queueing were clean, but projection/publish p95
+  was 55.905 ms against the 55 ms hard stop. The raw aggregate correctness flag
+  is false only because both physical split frames were initially counted as
+  logical state-pair deliveries.
+- Preserved the failed raw artifact and corrected its two-physical-frames-per-
+  logical-pair accounting classification without rerunning the candidate.
+- Ran no sealed 20-second capture. Eight remains closed, the low-count
+  replication staircase stops, and four-player S20 productization is the only
+  next lane.
+
 ## 2026-07-14 — v0.4 S23P prepared public-source proof retained default-off
 
 - Added negotiated, default-off `state-pair-public-body-prepared-v1` atop S23,

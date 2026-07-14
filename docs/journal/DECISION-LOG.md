@@ -3105,3 +3105,18 @@ promotion, workers, cadence/gate changes, hosted/fleet/heavier-sim work, and
 gate relaxation, hosted/fleet/heavier-sim implementation, and 24/48/96. S20
 remains the one-through-four product path; S24 remains only a reserved future
 scale-track name.
+
+### Q: Does one immutable public fragment plus owner overlays admit eight?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Preserve one logical single-writer gameplay authority per match/group. Concurrent matches multiply isolated authorities; the fragment is immutable replication output, never a second authority. |
+| Jul 14 | Keep `state-pair-split-public-fragment-v1` default-off and dependent on the complete S23P chain. Preserve unchanged S20 when absent. |
+| Jul 14 | Accept focused structural proof: one exact fragment Buffer across eight queues, recipient-local owner overlays, atomic either-order client reconstruction, standard ACK consequences, bounded retransmit/rebase/cleanup, and zero per-recipient public traversal/composition. |
+| Jul 14 | Reject at the short screen. Receiver cadence 9.667 Hz, 49.4 kB/s worst mean traffic, 0.510 authority core, NORMAL overload, and clean clients/queues pass, but 55.905 ms projection/publish p95 exceeds the 55 ms abort boundary. |
+| Jul 14 | Treat the raw 20 Hz authority count as a harness classification bug: both fragment and overlay were labeled logical pairs. Correct classification after the screen but do not rerun or use it to rescue the candidate. |
+| Jul 14 | Run no sealed 20-second capture, keep eight closed for v0.4, stop the low-count replication staircase, and select exactly one next lane: internet-shaped four-player S20 productization. |
+
+**Door status:** Closed for eight-player v0.4 admission and further low-count
+replication experiments. Open only for four-player S20 productization. Hosted,
+fleet, heavier-sim, AOI, and 24/48/96 claims remain outside this result.
