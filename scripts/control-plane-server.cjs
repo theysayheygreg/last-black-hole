@@ -32,6 +32,7 @@ const PID_FILE = path.join(TMP, `control-plane-${PORT}.pid`);
 const META_FILE = path.join(TMP, `control-plane-${PORT}.json`);
 const LOG_FILE = path.join(TMP, `control-plane-${PORT}.log`);
 const SERVER_SCRIPT = path.join(ROOT, "scripts", "control-plane-runtime.cjs");
+const SERVICE_MODE = cliArgs.mode || process.env.LBH_SERVICE_MODE || "local";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -133,6 +134,7 @@ async function start() {
     "--pid-file", PID_FILE,
     "--meta-file", META_FILE,
     "--label", "lbh-control-plane",
+    "--mode", SERVICE_MODE,
   ], {
     cwd: ROOT,
     detached: true,

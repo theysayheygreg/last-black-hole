@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-07-14 — v0.4 Stage A hosted boundary hardened
+
+- Added explicit `local` and `hosted` control-plane service modes. Local stays
+  the default and remains embedded/network-independent; hosted startup fails
+  without a strong service credential and cannot be enabled by request body.
+- Added the versioned `lbh-hosted-boundary-v1` service envelope with exact
+  top-level schemas, bounded bytes/strings/arrays/nodes, duplicate-key and
+  cyclic/accessor/non-plain rejection, and generic external errors.
+- Kept public hosted identity/profile/echo surfaces closed until server-owned
+  identity exists. Added locator authorization and server-derived-id rejection
+  helpers so changing a client/install locator cannot transfer ownership.
+- Enforced the hosted one-through-four product cap at session persistence and
+  reusable ticket/authority admission gates; fifth and eight reject without
+  changing max-eight research fixtures or S20 gameplay frames.
+- Added deterministic HMAC diagnostic aliases and a hosted log scan covering
+  service/ticket/provider/account/profile/client/IP material, plus explicit
+  legacy session/run/membership/connection id mappings.
+- Added `MultiplayerHostedBoundary` adversarial coverage while preserving the
+  existing local control-plane, settlement, membership, ticket, sim-schema,
+  and replication-manifest suites.
+
 ## 2026-07-14 — v0.4 multiplayer decision packet completed
 
 - Reconciled the v0.4 source-of-truth docs around the final admitted product:

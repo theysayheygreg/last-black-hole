@@ -7,6 +7,18 @@ const crypto = require("crypto");
 const { ControlPlaneStore } = require("./control-plane-store.cjs");
 const { SessionRegistry } = require("./session-registry.cjs");
 const { createRuntimeLogger } = require("./runtime-telemetry.cjs");
+const {
+  SERVICE_MODES,
+  HOSTED_SCHEMA_VERSION,
+  HostedBoundaryError,
+  resolveServiceMode,
+  assertHostedBodyBytes,
+  assertNoDuplicateJsonKeys,
+  unwrapHostedRequest,
+  wrapHostedResult,
+  assertHostedProductSeats,
+  diagnosticAlias,
+} = require("./hosted-boundary.cjs");
 
 function parseArgs(argv) {
   const args = {};
@@ -25,12 +37,14 @@ function parseArgs(argv) {
   return args;
 }
 
-function readJson(req) {
+function readJson(req, maxBytes = 1024 * 1024, rejectDuplicateKeys = false) {
   return new Promise((resolve, reject) => {
     let raw = "";
+    let rawBytes = 0;
     req.on("data", (chunk) => {
+      rawBytes += chunk.length;
       raw += chunk;
-      if (raw.length > 1024 * 1024) {
+      if (rawBytes > maxBytes) {
         reject(new Error("Request too large"));
         req.destroy();
       }
@@ -41,6 +55,7 @@ function readJson(req) {
         return;
       }
       try {
+        if (rejectDuplicateKeys) assertNoDuplicateJsonKeys(raw);
         resolve(JSON.parse(raw));
       } catch (error) {
         reject(error);
@@ -90,7 +105,14 @@ const PID_FILE = args["pid-file"] ? path.resolve(args["pid-file"]) : null;
 const META_FILE = args["meta-file"] ? path.resolve(args["meta-file"]) : null;
 const LABEL = args.label || process.env.LBH_CONTROL_PLANE_LABEL || "lbh-control-plane";
 const SERVICE_TOKEN = String(process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN || "");
-const telemetry = createRuntimeLogger("control-plane", { label: LABEL, host: HOST, port: PORT });
+const SERVICE_MODE = resolveServiceMode(args.mode || process.env.LBH_SERVICE_MODE);
+if (SERVICE_MODE === SERVICE_MODES.HOSTED && SERVICE_TOKEN.length < 32) {
+  throw new Error("Hosted control plane requires a service token of at least 32 characters");
+}
+const DIAGNOSTIC_KEY = String(process.env.LBH_DIAGNOSTIC_KEY || SERVICE_TOKEN || "local-diagnostics-only");
+const telemetry = createRuntimeLogger("control-plane", SERVICE_MODE === SERVICE_MODES.HOSTED
+  ? { label: LABEL, serviceMode: SERVICE_MODE, bindScope: "private" }
+  : { label: LABEL, host: HOST, port: PORT, serviceMode: SERVICE_MODE });
 
 const store = new ControlPlaneStore(CONTROL_PLANE_FILE);
 const registry = new SessionRegistry(SESSION_REGISTRY_FILE);
@@ -140,7 +162,7 @@ function removeRegistrySession(sessionId) {
 }
 
 function serviceTokenMatches(req) {
-  if (!SERVICE_TOKEN) return true;
+  if (!SERVICE_TOKEN) return SERVICE_MODE === SERVICE_MODES.LOCAL;
   const supplied = String(req.headers["x-lbh-service-token"] || "");
   const expectedBytes = Buffer.from(SERVICE_TOKEN);
   const suppliedBytes = Buffer.from(supplied);
@@ -149,9 +171,54 @@ function serviceTokenMatches(req) {
     && crypto.timingSafeEqual(expectedBytes, suppliedBytes);
 }
 
+const HOSTED_REQUEST_KEYS = Object.freeze({
+  "/sim/register": { allowed: ["simInstanceId", "url", "host", "port"], required: ["simInstanceId"] },
+  "/sim/heartbeat": { allowed: ["simInstanceId"], required: ["simInstanceId"] },
+  "/sim/unregister": { allowed: ["simInstanceId"], required: ["simInstanceId"] },
+  "/session/upsert": { allowed: ["session", "players"], required: ["session", "players"] },
+  "/session/end": { allowed: ["session", "players", "extra"], required: ["session", "players", "extra"] },
+});
+
+async function readBoundaryBody(req) {
+  if (SERVICE_MODE === SERVICE_MODES.LOCAL) return readJson(req);
+  const route = HOSTED_REQUEST_KEYS[req.url];
+  if (!route) throw new HostedBoundaryError("HOSTED_ENDPOINT_UNAVAILABLE");
+  const rawLength = Number(req.headers["content-length"] || 0);
+  if (rawLength) assertHostedBodyBytes(rawLength);
+  const body = await readJson(req, 256 * 1024, true);
+  return unwrapHostedRequest(body, {
+    allowedPayloadKeys: route.allowed,
+    requiredPayloadKeys: route.required,
+  });
+}
+
+function sendBoundaryResult(res, statusCode, result) {
+  if (SERVICE_MODE === SERVICE_MODES.HOSTED) {
+    sendJson(res, statusCode, wrapHostedResult(result));
+    return;
+  }
+  sendJson(res, statusCode, { ok: true, ...result });
+}
+
+function hostedAlias(kind, value) {
+  return diagnosticAlias(kind, String(value), DIAGNOSTIC_KEY);
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
+      if (SERVICE_MODE === SERVICE_MODES.HOSTED) {
+        sendJson(res, 200, wrapHostedResult({
+          ready: true,
+          serviceMode: SERVICE_MODE,
+          schemaVersion: HOSTED_SCHEMA_VERSION,
+          profileCount: Object.keys(store.state.profiles).length,
+          sessionCount: Object.keys(store.state.sessions).length,
+          runCount: Object.keys(store.state.runs).length,
+          simInstanceCount: simInstances.size,
+        }));
+        return;
+      }
       sendJson(res, 200, {
         ok: true,
         label: LABEL,
@@ -166,8 +233,25 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (SERVICE_MODE === SERVICE_MODES.HOSTED && !serviceTokenMatches(req)) {
+      sendJson(res, 401, { ok: false, error: "Service authentication required", code: "SERVICE_AUTH_REQUIRED" });
+      return;
+    }
+
+    if (SERVICE_MODE === SERVICE_MODES.HOSTED
+        && req.method === "GET" && req.url === "/sessions") {
+      const state = registry.read();
+      sendBoundaryResult(res, 200, { sessions: Object.values(state.sessions || {}) });
+      return;
+    }
+
+    if (SERVICE_MODE === SERVICE_MODES.HOSTED && !HOSTED_REQUEST_KEYS[req.url]) {
+      sendJson(res, 503, { ok: false, error: "Hosted endpoint unavailable", code: "HOSTED_ENDPOINT_UNAVAILABLE" });
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/sim/register") {
-      const body = await readJson(req);
+      const body = await readBoundaryBody(req);
       const simInstanceId = String(body.simInstanceId || "").trim();
       if (!simInstanceId) {
         sendJson(res, 400, { ok: false, error: "simInstanceId is required" });
@@ -182,13 +266,15 @@ const server = http.createServer(async (req, res) => {
         heartbeatAt: new Date().toISOString(),
       };
       simInstances.set(simInstanceId, entry);
-      telemetry.info("sim.registered", { simInstanceId, simPort: entry.port, simUrl: entry.url });
-      sendJson(res, 200, { ok: true, simInstance: entry });
+      telemetry.info("sim.registered", SERVICE_MODE === SERVICE_MODES.HOSTED
+        ? { simAlias: hostedAlias("sim", simInstanceId) }
+        : { simInstanceId, simPort: entry.port, simUrl: entry.url });
+      sendBoundaryResult(res, 200, { simInstance: entry });
       return;
     }
 
     if (req.method === "POST" && req.url === "/sim/heartbeat") {
-      const body = await readJson(req);
+      const body = await readBoundaryBody(req);
       const simInstanceId = String(body.simInstanceId || "").trim();
       if (!simInstanceId || !simInstances.has(simInstanceId)) {
         sendJson(res, 404, { ok: false, error: "Unknown sim instance" });
@@ -199,18 +285,20 @@ const server = http.createServer(async (req, res) => {
         heartbeatAt: new Date().toISOString(),
       };
       simInstances.set(simInstanceId, next);
-      sendJson(res, 200, { ok: true, simInstance: next });
+      sendBoundaryResult(res, 200, { simInstance: next });
       return;
     }
 
     if (req.method === "POST" && req.url === "/sim/unregister") {
-      const body = await readJson(req);
+      const body = await readBoundaryBody(req);
       const simInstanceId = String(body.simInstanceId || "").trim();
       if (simInstanceId) {
         simInstances.delete(simInstanceId);
-        telemetry.info("sim.unregistered", { simInstanceId });
+        telemetry.info("sim.unregistered", SERVICE_MODE === SERVICE_MODES.HOSTED
+          ? { simAlias: hostedAlias("sim", simInstanceId) }
+          : { simInstanceId });
       }
-      sendJson(res, 200, { ok: true });
+      sendBoundaryResult(res, 200, {});
       return;
     }
 
@@ -259,7 +347,7 @@ const server = http.createServer(async (req, res) => {
         sendJson(res, 401, { ok: false, error: "Valid control-plane service authentication is required" });
         return;
       }
-      const body = await readJson(req);
+      const body = await readBoundaryBody(req);
       const committed = store.applyOutcome({
         profileId: body.profileId,
         player: body.player,
@@ -269,23 +357,25 @@ const server = http.createServer(async (req, res) => {
         runResult: body.runResult || null,
         settlement: body.settlement || null,
       });
-      sendJson(res, 200, { ok: true, committed });
+      sendBoundaryResult(res, 200, { committed });
       return;
     }
 
     if (req.method === "POST" && req.url === "/session/upsert") {
-      const body = await readJson(req);
+      const body = await readBoundaryBody(req);
+      if (SERVICE_MODE === SERVICE_MODES.HOSTED) assertHostedProductSeats(body.players);
       const snapshot = store.upsertSession(body.session || {}, sanitizePlayers(body.players));
       upsertRegistrySession(snapshot);
-      sendJson(res, 200, { ok: true, session: snapshot });
+      sendBoundaryResult(res, 200, { session: snapshot });
       return;
     }
 
     if (req.method === "POST" && req.url === "/session/end") {
-      const body = await readJson(req);
+      const body = await readBoundaryBody(req);
+      if (SERVICE_MODE === SERVICE_MODES.HOSTED) assertHostedProductSeats(body.players);
       const snapshot = store.markSessionEnded(body.session || {}, sanitizePlayers(body.players), body.extra || {});
       upsertRegistrySession(snapshot);
-      sendJson(res, 200, { ok: true, session: snapshot });
+      sendBoundaryResult(res, 200, { session: snapshot });
       return;
     }
 
@@ -358,6 +448,21 @@ const server = http.createServer(async (req, res) => {
 
     sendJson(res, 404, { ok: false, error: "Not found" });
   } catch (error) {
+    if (SERVICE_MODE === SERVICE_MODES.HOSTED) {
+      const statusCode = error?.code === "SETTLEMENT_CONFLICT" ? 409
+        : error?.code === "HOSTED_REQUEST_TOO_LARGE" ? 413
+          : error instanceof HostedBoundaryError ? 400 : 500;
+      telemetry.warn("request.rejected", {
+        requestAlias: hostedAlias("request", `${req.method}:${req.url}:${Date.now()}`),
+        category: error instanceof HostedBoundaryError ? "boundary" : "internal",
+      });
+      sendJson(res, statusCode, {
+        ok: false,
+        error: statusCode === 500 ? "Control plane error" : "Hosted request rejected",
+        code: error?.code === "SETTLEMENT_CONFLICT" ? "SETTLEMENT_CONFLICT" : "HOSTED_REQUEST_REJECTED",
+      });
+      return;
+    }
     const statusCode = error?.code === "SETTLEMENT_CONFLICT" ? 409 : 500;
     sendJson(res, statusCode, { ok: false, error: error.message || "Control plane error", code: error?.code || undefined });
   }
@@ -365,8 +470,12 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   writeProcessFiles(server);
-  telemetry.info("runtime.started", { url: `http://${HOST}:${PORT}/`, storeFile: CONTROL_PLANE_FILE, registryFile: SESSION_REGISTRY_FILE });
-  console.error(`${LABEL} listening on http://${HOST}:${PORT}/`);
+  telemetry.info("runtime.started", SERVICE_MODE === SERVICE_MODES.HOSTED
+    ? { endpoint: "private", schemaVersion: HOSTED_SCHEMA_VERSION }
+    : { url: `http://${HOST}:${PORT}/`, storeFile: CONTROL_PLANE_FILE, registryFile: SESSION_REGISTRY_FILE });
+  console.error(SERVICE_MODE === SERVICE_MODES.HOSTED
+    ? `${LABEL} hosted boundary listening on a private endpoint`
+    : `${LABEL} listening on http://${HOST}:${PORT}/`);
 });
 
 function shutdown() {

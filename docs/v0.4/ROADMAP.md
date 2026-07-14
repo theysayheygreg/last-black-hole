@@ -82,6 +82,14 @@ Do not let a provider benchmark silently select product policy.
 
 Goal: build the provider-neutral control plane while retaining local mode.
 
+Stage A boundary checkpoint (2026-07-14): default local/offline behavior is
+unchanged, while explicit hosted mode now requires service authentication,
+uses a strict versioned plain-data envelope, emits generic errors and
+pseudonymous diagnostics, rejects caller bypass/identity smuggling, and binds
+the product cap to one through four at control-plane plus reusable ticket/
+authority gates. Hosted public identity remains deliberately unavailable
+until 3B; this is boundary hardening, not a hosted product claim.
+
 ### 3A. Relational local parity
 
 - put profile revisions, inventory, ledger, result, settlement, session,

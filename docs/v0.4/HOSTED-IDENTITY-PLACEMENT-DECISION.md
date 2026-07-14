@@ -526,6 +526,18 @@ ticket/grant, moderation, IP, or refresh-session data.
 Exit: all current local, authority, S20 one-to-four, profile, result, and
 offline tests pass; no hosted claim.
 
+Implementation checkpoint (2026-07-14): the control-plane boundary now has an
+explicit default-local/fail-closed-hosted mode, `lbh-hosted-boundary-v1`
+service envelopes, exact top-level keys, recursive plain-data and byte/count
+limits, duplicate-key rejection, generic external failures, service-auth on
+every hosted stateful route, pseudonymous diagnostics, and named legacy-to-
+hosted id mappings. The hosted service seam enforces one through four seats;
+the same pure gate covers later ticket issuance and authority admission.
+Public hosted profile/join/echo routes remain unavailable until Stage C can
+derive owner identity; no caller flag or durable id can turn the local bypass
+back on. This completes the Stage A boundary hardening slice, not hosted
+identity, placement, settlement, deployment, or capacity.
+
 ### Stage B — Relational local adapter
 
 - Put a relational repository behind the existing `LocalControlPlaneClient`

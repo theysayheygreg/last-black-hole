@@ -1,19 +1,26 @@
 const { ControlPlaneStore } = require("./control-plane-store.cjs");
 const { SessionRegistry } = require("./session-registry.cjs");
+const {
+  SERVICE_MODES,
+  resolveServiceMode,
+  wrapHostedRequest,
+  unwrapHostedResult,
+} = require("./hosted-boundary.cjs");
 
-async function requestJson(method, baseUrl, route, body = null, extraHeaders = null) {
+async function requestJson(method, baseUrl, route, body = null, extraHeaders = null, serviceMode = SERVICE_MODES.LOCAL) {
+  const requestBody = serviceMode === SERVICE_MODES.HOSTED && body ? wrapHostedRequest(body) : body;
   const response = await fetch(`${String(baseUrl).replace(/\/$/, "")}${route}`, {
     method,
-    headers: body || extraHeaders
-      ? { ...(body ? { "content-type": "application/json" } : {}), ...(extraHeaders || {}) }
+    headers: requestBody || extraHeaders
+      ? { ...(requestBody ? { "content-type": "application/json" } : {}), ...(extraHeaders || {}) }
       : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+    body: requestBody ? JSON.stringify(requestBody) : undefined,
   });
   const json = await response.json().catch(() => ({}));
   if (!response.ok || json.ok === false) {
     throw new Error(json.error || `${method} ${route} failed (${response.status})`);
   }
-  return json;
+  return serviceMode === SERVICE_MODES.HOSTED ? unwrapHostedResult(json) : json;
 }
 
 class LocalControlPlaneClient {
@@ -103,12 +110,35 @@ class LocalControlPlaneClient {
 }
 
 class RemoteControlPlaneClient {
-  constructor({ baseUrl, serviceToken = process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN || "" }) {
+  constructor({
+    baseUrl,
+    serviceToken = process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN || "",
+    serviceMode = process.env.LBH_SERVICE_MODE,
+  }) {
     this.baseUrl = String(baseUrl).replace(/\/$/, "");
     this.serviceToken = String(serviceToken || "");
+    this.serviceMode = resolveServiceMode(serviceMode);
+    if (this.serviceMode === SERVICE_MODES.HOSTED && this.serviceToken.length < 32) {
+      throw new Error("Hosted control-plane client requires service authentication");
+    }
+  }
+
+  serviceHeaders() {
+    return this.serviceToken ? { "x-lbh-service-token": this.serviceToken } : null;
+  }
+
+  async request(method, route, body = null) {
+    return requestJson(method, this.baseUrl, route, body, this.serviceHeaders(), this.serviceMode);
+  }
+
+  hostedIdentityUnavailable() {
+    if (this.serviceMode === SERVICE_MODES.HOSTED) {
+      throw new Error("Hosted identity endpoint unavailable");
+    }
   }
 
   async bootstrapProfile({ profileId, snapshot, fallbackName }) {
+    this.hostedIdentityUnavailable();
     const body = await requestJson("POST", this.baseUrl, "/profile/bootstrap", {
       profileId,
       snapshot,
@@ -118,11 +148,13 @@ class RemoteControlPlaneClient {
   }
 
   async getProfile(profileId) {
+    this.hostedIdentityUnavailable();
     const body = await requestJson("GET", this.baseUrl, `/profile?profileId=${encodeURIComponent(profileId)}`);
     return body.profile;
   }
 
   async getRecentRuns(profileId, limit = 5) {
+    this.hostedIdentityUnavailable();
     const body = await requestJson(
       "GET",
       this.baseUrl,
@@ -132,47 +164,48 @@ class RemoteControlPlaneClient {
   }
 
   async saveProfile(profile) {
+    this.hostedIdentityUnavailable();
     const body = await requestJson("POST", this.baseUrl, "/profile/save", { profile });
     return body.profile;
   }
 
   async applyOutcome(payload) {
-    const serviceHeaders = this.serviceToken
-      ? { "x-lbh-service-token": this.serviceToken }
-      : null;
-    const body = await requestJson("POST", this.baseUrl, "/profile/outcome", payload, serviceHeaders);
+    this.hostedIdentityUnavailable();
+    const body = await this.request("POST", "/profile/outcome", payload);
     return body.committed;
   }
 
   async upsertSession(session, players = []) {
-    const body = await requestJson("POST", this.baseUrl, "/session/upsert", { session, players });
+    const body = await this.request("POST", "/session/upsert", { session, players });
     return body.session;
   }
 
   async markSessionEnded(session, players = [], extra = {}) {
-    const body = await requestJson("POST", this.baseUrl, "/session/end", { session, players, extra });
+    const body = await this.request("POST", "/session/end", { session, players, extra });
     return body.session;
   }
 
   async registerSimInstance(instance) {
-    return requestJson("POST", this.baseUrl, "/sim/register", instance);
+    return this.request("POST", "/sim/register", instance);
   }
 
   async heartbeatSimInstance(instance) {
-    return requestJson("POST", this.baseUrl, "/sim/heartbeat", instance);
+    return this.request("POST", "/sim/heartbeat", instance);
   }
 
   async unregisterSimInstance(instance) {
-    return requestJson("POST", this.baseUrl, "/sim/unregister", instance);
+    return this.request("POST", "/sim/unregister", instance);
   }
 
   // --- Echoes ---
   async saveEchoWreck(wreck) {
+    this.hostedIdentityUnavailable();
     const body = await requestJson("POST", this.baseUrl, "/echoes/save", { wreck });
     return body.echo;
   }
 
   async getEchoesForSeed(seed, mapId = null) {
+    this.hostedIdentityUnavailable();
     const params = new URLSearchParams({ seed: String(seed) });
     if (mapId != null) params.set("mapId", String(mapId));
     const body = await requestJson("GET", this.baseUrl, `/echoes?${params.toString()}`);
@@ -180,6 +213,7 @@ class RemoteControlPlaneClient {
   }
 
   async clearEchoesForSeed(seed, mapId = null) {
+    this.hostedIdentityUnavailable();
     const params = new URLSearchParams({ seed: String(seed) });
     if (mapId != null) params.set("mapId", String(mapId));
     const body = await requestJson("DELETE", this.baseUrl, `/echoes?${params.toString()}`);
@@ -192,7 +226,11 @@ function createControlPlaneClient(options = {}) {
     return new RemoteControlPlaneClient({
       baseUrl: options.baseUrl,
       serviceToken: options.serviceToken ?? process.env.LBH_CONTROL_PLANE_SERVICE_TOKEN ?? "",
+      serviceMode: options.serviceMode ?? process.env.LBH_SERVICE_MODE,
     });
+  }
+  if (resolveServiceMode(options.serviceMode) === SERVICE_MODES.HOSTED) {
+    throw new Error("Hosted control-plane mode requires an explicit remote baseUrl");
   }
   return new LocalControlPlaneClient(options);
 }

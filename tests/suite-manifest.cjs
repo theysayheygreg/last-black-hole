@@ -78,6 +78,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MultiplayerHostedBoundary",
+    file: "multiplayer-hosted-boundary.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerAuthority",
     file: "multiplayer-authority.cjs",
     lanes: ["multiplayer-authority", "authority", "full"],
