@@ -55,3 +55,11 @@ The next bounded lane shares immutable public projection/core/delta work once
 per match tick across recipients while preserving recipient-specific owner
 overlays, connection lineage, ACK bases, and one canonical writer. Compression,
 cadence policy, hosted economics, heavy-sim work, and 24/48/96 remain closed.
+
+## Final validation
+
+The registered 37-suite `multiplayer-network` lane ran exactly once with
+retries disabled. Thirty-six suites passed, including both S18 suites. The sole
+failure was historical S17 evidence comparing its sealed manifest with current
+S18 source. That validator now reads the sealed `e57bf53` Git tree and passes
+focused validation; the full lane was not rerun.

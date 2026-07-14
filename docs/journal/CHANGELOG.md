@@ -27,6 +27,11 @@
 - Selected shared per-tick public projection/core/delta work as the next
   bounded lane. Compression, cadence policy, hosted/heavy-sim work, and
   24/48/96 remain closed.
+- Ran the registered 37-suite `multiplayer-network` lane exactly once with
+  retries disabled: 36 passed; only the historical S17 evidence validator
+  failed because it compared sealed evidence with live S18 source. The
+  validator now hashes the sealed `e57bf53` tree and passes its focused check;
+  the full lane was intentionally not rerun.
 
 ## 2026-07-13 — v0.4 S17 lazy state-pair candidates
 

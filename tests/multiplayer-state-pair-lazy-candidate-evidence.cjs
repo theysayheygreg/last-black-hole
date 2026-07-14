@@ -14,6 +14,7 @@ const CANDIDATE = path.join(EVIDENCE, "candidate-process");
 const BASELINE = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s15", "candidate-process-r2");
 const BENCHMARK = path.join(EVIDENCE, "lazy-benchmark.json");
 const PROFILE_REJECTED = path.join(EVIDENCE, "rejected-profile-timeout");
+const SEALED_EVIDENCE_COMMIT = "e57bf53";
 const CANDIDATE_SHA = "9001726f56fbfd895d32f5d3111dd50b16cb80bd1a0903772bffbdc78307d149";
 const BASELINE_SHA = "c2df9114ce2cfd7ab29ff613b214498b214cebd7df71d1e0c74750b974f6e266";
 const TARGET_HZ = 10;
@@ -23,6 +24,12 @@ const P95_BPS = 80 * 1024;
 
 function shaFile(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+}
+
+function shaGitFile(commit, file) {
+  return crypto.createHash("sha256").update(execFileSync("git", ["show", `${commit}:${file}`], {
+    cwd: ROOT,
+  })).digest("hex");
 }
 
 function distribution(values) {
@@ -181,14 +188,17 @@ function main() {
   const own = validateChecksums(EVIDENCE);
   const storedAnalysis = JSON.parse(fs.readFileSync(path.join(EVIDENCE, "analysis.json")));
   const manifest = JSON.parse(fs.readFileSync(path.join(EVIDENCE, "manifest.json")));
+  // Historical evidence binds the exact sealed S17 tree. Comparing it with
+  // the live working tree would make every later authority optimization
+  // invalidate an otherwise immutable artifact.
   const implementationSources = Object.fromEntries(["authority-delta-publisher.cjs",
     "multiplayer-wire-protocol.cjs", "state-pair-positional-codec.cjs"]
-    .map((file) => [file, shaFile(path.join(ROOT, "scripts", file))]));
+    .map((file) => [file, shaGitFile(SEALED_EVIDENCE_COMMIT, `scripts/${file}`)]));
   const testSources = Object.fromEntries(["state-pair-positional-codec.cjs",
     "multiplayer-state-pair-canonical-reuse-adversarial.cjs",
     "multiplayer-state-pair-lazy-candidate-benchmark.cjs",
     "multiplayer-state-pair-lazy-candidate-evidence.cjs"]
-    .map((file) => [file, shaFile(path.join(ROOT, "tests", file))]));
+    .map((file) => [file, shaGitFile(SEALED_EVIDENCE_COMMIT, `tests/${file}`)]));
   const invariants = {
     ownChecksums: own.passed,
     exactStoredAnalysis: JSON.stringify(storedAnalysis) === JSON.stringify(analysis),

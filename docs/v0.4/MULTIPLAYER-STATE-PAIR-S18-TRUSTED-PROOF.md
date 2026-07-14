@@ -39,3 +39,8 @@ Next, share public projection/core/delta preparation once per match tick across
 recipients. Owner overlays, connection epochs, ACK bases, recovery, accounting,
 and settlement truth remain recipient-specific and under the same one-writer
 authority.
+
+The final no-retry network lane ran once: 36/37 suites passed, including both
+S18 suites. The only failure was a historical S17 source-binding check against
+live S18 files; it now binds the sealed `e57bf53` tree and passes focused
+validation. The full lane was not rerun.

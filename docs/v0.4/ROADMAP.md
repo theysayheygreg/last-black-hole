@@ -636,6 +636,12 @@ eight remains `DILATED`, clock-failing, and normalizes to 79,004 B/s mean. Only
 one player is product-admitted. Correctness, convergence, exact schedules,
 queues, bounded ledgers, and cleanup pass at every population.
 
+Final verification ran the registered 37-suite `multiplayer-network` lane once
+with retries disabled. Thirty-six passed, including both S18 suites. The sole
+failure was historical S17 evidence checking sealed hashes against live S18
+source; it now hashes the sealed `e57bf53` tree and passes focused validation.
+The full lane was intentionally not rerun.
+
 Keep S18. The next bounded lane shares immutable public projection/core/delta
 work once per match tick across recipients, retaining recipient-specific owner
 overlays, connection lineage, ACK/recovery, and one canonical writer. Do not
