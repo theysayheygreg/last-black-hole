@@ -363,6 +363,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
 
   function buildViews(binding, publicFrame, ownerFrame) {
     const identity = requireAdmission(binding);
+    const admission = admissions.get(key(identity));
+    const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
+    const sharedPublicBody = admission.capabilities.includes(PUBLIC_BODY_CAPABILITY);
     const validateSource = () => {
       assertSourceEnvelope(publicFrame, "public");
       assertSourceEnvelope(ownerFrame, "owner");
@@ -380,14 +383,11 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       }
       return sourceBytes;
     };
-    const sourceBytes = s23tProfiler
+    const sourceBytes = s23tProfiler && sharedPublicBody
       ? s23tProfiler.measureSync(
           S23T_STAGES.BODY_NORMALIZE_VALIDATE, identity.recipientId, validateSource)
       : validateSource();
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
-    const admission = admissions.get(key(identity));
-    const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
-    const sharedPublicBody = admission.capabilities.includes(PUBLIC_BODY_CAPABILITY);
     const shared = {
       schema: VIEW_SCHEMA, runId: fixedMatchId, authorityEpoch: fixedAuthorityIncarnation,
       connectionEpoch: identity.recipientIncarnation, ballparkEpoch: fixedBallparkEpoch,
@@ -435,7 +435,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       fail("non-shared-public-source",
         "one public-body source tick must be the same authority-projected object for every recipient");
     }
-    const publicCore = cachedBody ? null : s23tProfiler
+    const publicCore = cachedBody ? null : s23tProfiler && sharedPublicBody
       ? s23tProfiler.measureSync(S23T_STAGES.PUBLIC_CORE, identity.recipientId, buildPublicCore)
       : stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
@@ -472,7 +472,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         },
       }]) }, "owner");
     };
-    const ownerProjection = s23tProfiler
+    const ownerProjection = s23tProfiler && sharedPublicBody
       ? s23tProfiler.measureSync(S23T_STAGES.OWNER_SOURCE, identity.recipientId, buildOwnerView)
       : stageProfiler
       ? stageProfiler.measureSync(STAGES.OWNER_PROJECTION, (value) => ({
