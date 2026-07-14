@@ -1469,6 +1469,14 @@ module.exports = {
   testExactCanonicalCandidateSizesWithReuse,
   testExactCanonicalLaneCandidateSizesWithReuse,
   testAuthorityProofLifecycleAdversarial,
+  registerExactEncodedPublication(value) {
+    if (!value || typeof value !== "object" || !Object.isFrozen(value)
+        || (typeof value.encodedWire !== "string" && !Buffer.isBuffer(value.encodedWire))) {
+      throw new TypeError("exact encoded publication must be a frozen publication with exact wire bytes");
+    }
+    exactEncodedPublications.add(value);
+    return value;
+  },
   isExactEncodedPublication: (value) => Boolean(value && typeof value === "object"
     && exactEncodedPublications.has(value)),
 };
