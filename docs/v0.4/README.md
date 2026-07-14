@@ -7,8 +7,10 @@
 
 ## Final Outcome
 
-The research and architecture program is decision-ready. It does **not** prove
-that LBH is already a public 4–8-player product.
+The research and architecture program is decision-ready, and the hosted
+one-through-four reference path now exists as provider-neutral pure services
+plus durable SQLite repositories. It does **not** prove that LBH is already a
+public 4–8-player product.
 
 - S20 negotiated compression is the admitted replication path for **one
   through four players**. The requested minimum of four is supported by local
@@ -28,6 +30,15 @@ that LBH is already a public 4–8-player product.
   Cloudflare edge plus Postgres is the control-plane default; Hetzner CCX is
   the operational fallback. Cloudflare Durable Objects and Containers are
   measured experiments. Vercel is control-plane/web only.
+- The committed hosted reference path proves server-derived identity and
+  entitlement, one fenced authority incarnation per match, encrypted product
+  state, and exact multi-member result outbox/settlement across SQLite reopen.
+  Local control-plane JSON remains the default; SQLite is explicit opt-in.
+- The public hosted HTTP runtime is still being built. Fly packaging and its
+  preflight pass 13/13, but the actual regional four-client run has not started
+  because provider authentication, external client origins, signing inputs,
+  and a running Docker daemon are not yet available. No host-packing or
+  observed-cost claim follows from packaging.
 - S24 measured a synthetic H24 fixture, not a live 24-client authority. The
   live cohort never admitted and the raw capture never started. H48/H96 are
   far extrapolations and X96 fails its modeled writer and network screens.
@@ -92,8 +103,9 @@ the hot sim; derived client state is boxed; overload is explicit and fair.
 
 ## Program Boundary
 
-The architecture/research objective is complete. Product implementation is
-not. The next work is four-player completion, Greg's hosted-progression choice,
-Phase 5 identity/settlement/placement, and Phase 6 regional measurement. No
-new eight-player optimization or high-count capacity claim is authorized by
+The architecture/research objective and the durable hosted reference path are
+complete. Public product implementation and deployment proof are not. The next
+work is the public HTTP runtime, four-human product completion, Greg's hosted-
+progression choice, Phase 6 regional measurement, and measured host packing.
+No new eight-player optimization or high-count capacity claim is authorized by
 this packet.

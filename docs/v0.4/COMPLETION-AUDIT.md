@@ -6,15 +6,18 @@
 ## Verdict
 
 The **research, architecture, comparison, costing, identity model, forecasting,
-and staged implementation plan are complete and decision-ready** on
+staged implementation plan, and durable hosted one-through-four reference
+path are complete and decision-ready** on
 `codex/v0.4-multiplayer-architecture`.
 
 The ideal gameplay outcome is only partially complete:
 
 - the requested minimum of four is admitted locally through S20;
 - the requested maximum of eight is not admitted and is closed for v0.4;
-- hosted identity/placement/settlement and public regional authority are
-  designed but not implemented;
+- hosted identity/entitlement, placement/incarnation/fencing, encrypted product
+  state, and exact multi-member outbox/settlement are implemented as pure
+  services with durable SQLite adapters;
+- public HTTP exposure and a public regional authority are not complete;
 - live host density, WAN cost/feel, and H24/H48/H96 capacity are unproved.
 
 No document should describe LBH as an already complete 4–8-player public game.
@@ -66,7 +69,8 @@ UI, VFX, and audio. Durable identity/settlement is separate from the hot sim.
 
 ### 4. Multiple clients and unique local/cloud identifiers
 
-**DECIDED, implementation OPEN.** The identity model distinguishes install,
+**PROVEN as a hosted reference path; production integration OPEN.** The
+identity model distinguishes install,
 random device registration, provider identity, entitlement, account, LOCAL and
 CLOUD profiles, party/session membership, run membership, public player alias,
 client process/incarnation, connection/epoch/grant, body incarnation,
@@ -77,6 +81,13 @@ No hardware fingerprint is used. LOCAL and CLOUD economics remain separate;
 safe import excludes currency/vault/upgrades/competitive history. Public
 gameplay/replay excludes provider/account/device/profile/workload/lease ids,
 secrets, raw IP, and moderation records.
+
+The committed provider-neutral service derives account/profile ownership from
+verified provider proof, consumes proof/callback once, checks entitlement
+separately, preserves terminal entitlement state, rotates sessions, and stores
+durable identity in fenced SQLite. Caller-supplied locator/id changes do not
+transfer authorization. The existing local JSON control plane remains default;
+the relational SQLite adapter is explicit opt-in.
 
 ### 5. True no-authority P2P comparison and industry history
 
@@ -98,7 +109,8 @@ settlement, and support are the blockers.
 
 ### 6. Centrally hosted MMO-style source of truth and provider cost
 
-**DECIDED and priced; deployment OPEN.** “One dedicated authority” means one
+**DECIDED, priced, and implemented as a durable reference; deployment OPEN.**
+“One dedicated authority” means one
 logical writer per match/group, multiplied by concurrent matches, not one
 global authority. A central control plane owns account, entitlement, party,
 placement, tickets, cloud profiles, and settlement. Each run receives one
@@ -118,6 +130,19 @@ Provider position from official sources accessed 2026-07-14:
   explicit continuity proof.
 
 No unmeasured packing is credited.
+
+The committed reference composes identity/entitlement, four-seat membership,
+placement, monotonic lease epoch, authority instance plus process incarnation,
+encrypted match state, one placement-owned terminal-result CAS, immutable
+outbox, and exactly-once multi-member settlement. Reopen/retry proof preserves
+one settlement and each exact member's profile/ledger/inventory mutation.
+Accepted authority lineage remains retained until an explicit future
+settlement-ack/archive protocol. This is not yet a public HTTP service.
+
+Fly packaging and fail-closed preflight pass 13/13. The actual regional run is
+**NOT DONE** because provider authentication, external client origins,
+signing/evidence inputs, and a running Docker daemon are unavailable. Therefore
+there is no observed authority density, packing factor, invoice, or cost claim.
 
 ### 7. $4.99 economics at 1K, 10K, 100K, and 1M copies
 
@@ -221,8 +246,12 @@ and relevant local validation without another network suite.
 | one logical authority per concurrent match | PROVEN/DECIDED |
 | authority-free P2P study | COMPLETE; rejected for production |
 | player-host private fallback | DECIDED; implementation open |
-| local/cloud/hybrid identity model | DECIDED; implementation open |
-| fenced per-match lease and settlement model | DECIDED; implementation open |
+| local/cloud/hybrid identity model | PROVEN reference; production integration open |
+| fenced per-match lease and settlement model | PROVEN durable reference; deployment open |
+| hosted public HTTP runtime | IN PROGRESS |
+| Fly benchmark package/preflight | PROVEN; 13/13 |
+| real regional four-client benchmark | INCOMPLETE / not run |
+| measured host packing and observed costs | INCOMPLETE / no claim |
 | provider comparison and official-source cost refresh | COMPLETE as of 2026-07-14 |
 | $4.99 1K/10K/100K/1M economics | COMPLETE model |
 | H24 synthetic component measurement | PROVEN synthetic only |
@@ -239,9 +268,10 @@ and relevant local validation without another network suite.
    review.
 2. Greg selects central, hybrid, or local/private service posture and ratifies
    the remaining product decisions.
-3. Implement Phase 5 identity, privacy, relational settlement, placement,
-   lease fencing, tickets, and hosted result outbox.
-4. Run Phase 6 same-scenario two-region 90-minute four-player benchmarks,
+3. Complete and harden the public HTTP/runtime integration around the committed
+   Phase 5 durable reference path.
+4. Resolve Fly auth, external origins/signing inputs, and Docker availability,
+   then run Phase 6 same-scenario two-region 90-minute four-player benchmarks,
    starting with Fly performance CPU.
 5. Measure noisy-neighbor host packing and derive `safeAuthoritiesPerHost`.
 6. Only then build a production-valid H24 fixture and consider one live capture.

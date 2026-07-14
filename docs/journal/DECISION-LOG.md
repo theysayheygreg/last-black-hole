@@ -3147,3 +3147,22 @@ Phase 5 hosted control-plane trust, Phase 6 regional evidence, and measured
 packing. Closed for another v0.4 eight-player protocol, true authority-free
 verified play, unmeasured packing, Vercel live authority, or any claim that
 synthetic H24/modeled H48/H96 proves capacity.
+
+### Q: What trust and terminal-state rules govern the durable hosted reference path?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Derive internal account/profile ownership from verified provider relationships. Caller locators and supplied identifiers locate requests only; changing them cannot transfer authorization. |
+| Jul 14 | Consume each bound provider proof/callback once and check entitlement separately. Revoked/refunded/terminal entitlement cannot be replayed or replaced by a stale active observation to regain access. |
+| Jul 14 | Bind workload authority to match/run, lease id and monotonic epoch, authority instance, and process incarnation. Restart/replacement creates a new incarnation and fences stale route, heartbeat, ticket, and result work. |
+| Jul 14 | Let placement own the single terminal-result compare-and-set. Outbox enqueue and settlement must revalidate that accepted lineage and hash; retries may reproduce the same fact, never choose another terminal result. |
+| Jul 14 | Retain accepted authority lineage after authority cleanup and through settlement retry. Delete/archive it only after a future explicit settlement-ack protocol proves the durable consequence is acknowledged. |
+
+**Where it landed:** Provider-neutral pure services plus durable SQLite
+repositories now prove the one-through-four reference lifecycle across reopen.
+Local JSON stays default and SQLite is opt-in.
+
+**Door status:** Open for public HTTP integration and real provider deployment.
+Closed for caller-chosen durable identity, reusable provider proof, terminal
+entitlement resurrection, stale process authority, competing terminal results,
+or cleanup that discards accepted lineage before settlement acknowledgement.

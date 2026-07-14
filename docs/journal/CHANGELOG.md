@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-07-14 — v0.4 durable hosted four-player reference path proved
+
+- Composed provider-neutral identity/entitlement, four-seat product state,
+  placement, fenced authority workload, immutable result outbox, and exact
+  multi-member settlement into one durable SQLite lifecycle.
+- Kept local JSON as the default control-plane store and made relational
+  SQLite explicit opt-in, with import/export/delete/reopen boundaries.
+- Derived account/profile ownership server-side, consumed provider proof once,
+  preserved terminal entitlement decisions, and bound workload authority to
+  lease epoch plus process incarnation.
+- Encrypted durable product match state, delegated the single terminal-result
+  compare-and-set to placement, and retained accepted authority lineage until
+  settlement acknowledgement can be made explicit by a future archive
+  protocol.
+- Proved four-member reopen/retry reaches one result and one settlement with
+  each exact member mutated once; the full core harness is green.
+- Added Fly benchmark packaging and a fail-closed 13/13 preflight. No regional
+  run occurred because provider auth, external client origins/signing inputs,
+  and a running Docker daemon remain unavailable. No host-packing, invoice, or
+  observed-cost claim is made; public HTTP runtime work remains in progress.
+
 ## 2026-07-14 — v0.4 Stage A hosted boundary hardened
 
 - Added explicit `local` and `hosted` control-plane service modes. Local stays

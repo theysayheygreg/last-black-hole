@@ -8,7 +8,8 @@
 
 ## Current Checkpoint
 
-The research/planning program is complete. Product implementation is not.
+The research/planning program and durable hosted reference path are complete.
+Public product implementation and deployment proof are not.
 
 - S20 is admitted for one through four players.
 - Eight is closed for v0.4. S23/S23P remain default-off research paths; the
@@ -17,8 +18,14 @@ The research/planning program is complete. Product implementation is not.
 - Phase 0 trust and local evidence, Phase 1 same-process WSS, failure/reconnect/
   pressure work, and the low-count replication staircase are preserved in
   source and evidence history.
-- Hosted identity/placement/settlement and official provider/economics
-  decisions are ready to implement.
+- Provider-neutral hosted identity/entitlement, placement/incarnation/fencing,
+  encrypted product state, immutable result outbox, and exact multi-member
+  settlement are implemented as pure services with durable SQLite adapters.
+  Local JSON remains the default and relational SQLite is explicit opt-in.
+- The full core harness is green. Fly benchmark packaging and preflight pass
+  13/13, but the actual regional run has not started: provider authentication,
+  external client origins/signing inputs, and a running Docker daemon remain
+  external prerequisites. The public HTTP runtime is still in progress.
 - S24 measured a synthetic H24 component fixture only. The live 24-client
   cohort never admitted and raw capture never started. H48/H96 are far
   extrapolations; X96 fails its model screens.
@@ -82,6 +89,17 @@ Do not let a provider benchmark silently select product policy.
 
 Goal: build the provider-neutral control plane while retaining local mode.
 
+Committed reference-path checkpoint (2026-07-14): Stages 3A–3D now compose in
+one durable four-member SQLite lifecycle. Provider proofs are one-shot,
+entitlement is separately checked and terminal states cannot be replayed into
+access, account/profile ids are server-derived, placement fences authority
+instance plus process incarnation, product state is encrypted at rest, and
+placement-owned terminal-result acceptance feeds an immutable outbox and
+exactly-once multi-member settlement. Accepted authority lineage is retained
+through settlement replay until a future explicit settlement-ack/archive
+protocol. This is reference implementation evidence, not a public HTTP or
+regional deployment claim.
+
 Stage A boundary checkpoint (2026-07-14): default local/offline behavior is
 unchanged, while explicit hosted mode now requires service authentication,
 uses a strict versioned plain-data envelope, emits generic errors and
@@ -92,6 +110,9 @@ until 3B; this is boundary hardening, not a hosted product claim.
 
 ### 3A. Relational local parity
 
+**Reference implementation complete.** The JSON adapter remains default;
+SQLite is explicit opt-in and preserves import/export/delete/reopen boundaries.
+
 - put profile revisions, inventory, ledger, result, settlement, session,
   membership, placement, and lease repositories behind current interfaces;
 - import current JSON/local saves with dry-run report, source hash, rollback
@@ -100,6 +121,9 @@ until 3B; this is boundary hardening, not a hosted product claim.
   quarantines.
 
 ### 3B. Hosted identity and privacy
+
+**Pure service plus durable SQLite reference complete.** Public HTTP exposure
+and production provider integration remain open.
 
 - exchange a verified provider ticket for an internal account session; check
   entitlement separately; store no LBH password and no hardware fingerprint;
@@ -111,6 +135,10 @@ until 3B; this is boundary hardening, not a hosted product claim.
 
 ### 3C. Placement, lease fencing, and tickets
 
+**Pure service plus durable SQLite reference complete.** Lease epochs and
+authority process incarnations fence stale work; public fleet wiring remains
+open.
+
 - register capacity and artifact/protocol compatibility;
 - create one active monotonic writer lease for each live run; route every
   member to it; fence stale heartbeat/route/ticket/result work;
@@ -120,6 +148,10 @@ until 3B; this is boundary hardening, not a hosted product claim.
 - leader promotion changes lobby role only, never gameplay authority.
 
 ### 3D. Hosted settlement
+
+**Durable reference complete.** Placement owns the one terminal result CAS;
+the encrypted product path, immutable outbox, exact member set, and SQLite
+settlement remain replay-safe across reopen. Production delivery remains open.
 
 - authenticate each authority workload, not one shared fleet bearer;
 - submit immutable result facts through an encrypted bounded outbox;
@@ -147,6 +179,12 @@ Abort:
 ## Milestone 4 — Phase 6 Regional Four-Player Benchmark
 
 Goal: select authority runtime from measured LBH evidence.
+
+Current checkpoint: the Fly artifact, entrypoint, config, and fail-closed
+preflight are committed and the preflight suite passes 13/13. No Machine has
+been deployed and no regional capture exists. Authentication, external client
+origins, signing/evidence inputs, and Docker daemon availability must be
+resolved before this milestone can produce evidence.
 
 Run the exact same artifact, seed, four-client schedule, Deep Field content,
 and 90-minute soak in at least two regions:
