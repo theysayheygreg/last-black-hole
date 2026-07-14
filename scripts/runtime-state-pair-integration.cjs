@@ -361,7 +361,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     return identity;
   }
 
-  function buildViews(binding, publicFrame, ownerFrame) {
+  function buildViews(binding, publicFrame, ownerFrame, s23tRecipientSlot = null) {
     const identity = requireAdmission(binding);
     const admission = admissions.get(key(identity));
     const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
@@ -385,7 +385,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     };
     const sourceBytes = s23tProfiler && sharedPublicBody
       ? s23tProfiler.measureSync(
-          S23T_STAGES.BODY_NORMALIZE_VALIDATE, identity.recipientId, validateSource)
+          S23T_STAGES.BODY_NORMALIZE_VALIDATE, s23tRecipientSlot, validateSource)
       : validateSource();
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
     const shared = {
@@ -436,7 +436,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         "one public-body source tick must be the same authority-projected object for every recipient");
     }
     const publicCore = cachedBody ? null : s23tProfiler && sharedPublicBody
-      ? s23tProfiler.measureSync(S23T_STAGES.PUBLIC_CORE, identity.recipientId, buildPublicCore)
+      ? s23tProfiler.measureSync(S23T_STAGES.PUBLIC_CORE, s23tRecipientSlot, buildPublicCore)
       : stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
           ...profile,
@@ -473,7 +473,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       }]) }, "owner");
     };
     const ownerProjection = s23tProfiler && sharedPublicBody
-      ? s23tProfiler.measureSync(S23T_STAGES.OWNER_SOURCE, identity.recipientId, buildOwnerView)
+      ? s23tProfiler.measureSync(S23T_STAGES.OWNER_SOURCE, s23tRecipientSlot, buildOwnerView)
       : stageProfiler
       ? stageProfiler.measureSync(STAGES.OWNER_PROJECTION, (value) => ({
           recipientKey: identity.recipientId,
@@ -486,7 +486,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const publicProjection = publicView;
     if (sharedPublicBody) {
       return Object.freeze({ identity, body, ownerView: ownerProjection.view,
-        ownerPrepared: ownerProjection.prepared });
+        ownerPrepared: ownerProjection.prepared, s23tRecipientSlot });
     }
     const binary = admission.capabilities.includes(BINARY_CODEC_CAPABILITY);
     const positionalEncoder = admission.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
@@ -506,8 +506,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       ...(positionalEncoder ? { encodeWire: positionalEncoder } : {}) });
   }
 
-  function publish(binding, publicFrame, ownerFrame) {
-    const views = buildViews(binding, publicFrame, ownerFrame);
+  function publish(binding, publicFrame, ownerFrame, { s23tRecipientSlot = null } = {}) {
+    const views = buildViews(binding, publicFrame, ownerFrame, s23tRecipientSlot);
     return views.body ? publicBodyAuthority.publish(views) : publisher.publish(views);
   }
 

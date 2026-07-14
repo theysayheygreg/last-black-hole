@@ -10,6 +10,16 @@ const ROOT = path.resolve(__dirname, "..");
 const EVIDENCE = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s23t");
 const analysis = JSON.parse(fs.readFileSync(path.join(EVIDENCE, "analysis.json"), "utf8"));
 const FAMILY = ["publicCoreSource", "bodyNormalizeAllowlist", "bodyCanonicalEncodingHash"];
+const CANDIDATE_FAMILIES = Object.freeze({
+  "public source/body preparation": FAMILY,
+  "cohort delta": ["cohortLookupDeltaSerialize"],
+  "owner preparation": ["ownerSourcePreparedProjection"],
+  "legacy publishing": ["legacyPlaceholderOwnerPublisher"],
+  envelope: ["recipientEnvelopeBuildValidate", "envelopeSerializeDigestRetain"],
+  "adapter digest": ["adapterDigestVerification"],
+  compression: ["brotliCompression"],
+  "queue/send": ["accountingEnqueue", "socketSendCall"],
+});
 const EXCLUSIVE_STAGES = new Set([...FAMILY, "cohortLookupDeltaSerialize",
   "ownerSourcePreparedProjection", "legacyPlaceholderOwnerPublisher",
   "recipientEnvelopeBuildValidate", "envelopeSerializeDigestRetain",
@@ -51,27 +61,29 @@ function validateSummary() {
     assert(row.unattributedP95Ms / row.p95Ms < 0.10);
     const overhead = analysis.profiles[round].overheadVersusB;
     const prefix = population === "one" ? "one" : "eight";
+    close(overhead[`${prefix}P50`], row.p50Ms / control[population].p50Ms - 1);
+    close(overhead[`${prefix}P95`], row.p95Ms / control[population].p95Ms - 1);
+    close(overhead[`${prefix}Core`], row.oneCoreFraction - control[population].oneCoreFraction);
     assert(overhead[`${prefix}P50`] <= 0.10 && overhead[`${prefix}P95`] <= 0.10);
     assert(overhead[`${prefix}Core`] <= 0.05);
   }
   const familyRatio = analysis.profiles.a2.eight.sourceBodyPreparationP95Ms
     / analysis.profiles.a1.eight.sourceBodyPreparationP95Ms;
   assert(Math.abs(familyRatio - 1) <= 0.15);
-  assert.deepStrictEqual(analysis.selection.stages, FAMILY);
+  assert.deepStrictEqual(analysis.selection.candidateFamilies, CANDIDATE_FAMILIES);
+  assert.deepStrictEqual(analysis.selection.qualifyingFamilies,
+    ["public source/body preparation"]);
   assert.strictEqual(analysis.selection.nextLane, "S23P prepared public-source proof");
   for (const round of ["a1", "a2"]) {
-    const eight = analysis.profiles[round].eight;
-    const one = analysis.profiles[round].one;
-    const eightExcess = eight.p95Ms - 50;
-    const oneRegression = one.p95Ms - analysis.profiles.s20One.p95Ms;
-    const eightShare = eight.sourceBodyPreparationP95Ms / eightExcess;
-    const oneShare = (one.sourceBodyPreparationP95Ms
-      - analysis.profiles.s20One.sourceBodyPreparationP95Ms) / oneRegression;
-    close(analysis.selection[`${round}EightExcessMs`], eightExcess);
-    close(analysis.selection[`${round}EightFamilyShare`], eightShare);
-    close(analysis.selection[`${round}OneRegressionMs`], oneRegression);
-    close(analysis.selection[`${round}OneFamilyShare`], oneShare);
-    assert(eightShare >= 0.70 && oneShare >= 0.70);
+    for (const population of ["one", "eight"]) {
+      const counterfactual = analysis.selection.counterfactual[round][population];
+      close(counterfactual.outerP95Ms, analysis.profiles[round][population].sourceBeatOuterP95Ms);
+      close(counterfactual.recoveryMs,
+        counterfactual.outerP95Ms - counterfactual.residualP95Ms);
+      close(counterfactual.share, counterfactual.recoveryMs
+        / (counterfactual.outerP95Ms - counterfactual.baselineOrGateMs));
+      assert(counterfactual.share >= 0.70);
+    }
   }
   assert(Object.values(analysis.methodGates).every(Boolean));
 }
@@ -94,6 +106,7 @@ function validateBeatPrivacy(beat) {
 
 function validateRaw(rawRoot) {
   const dirs = { a1: "a1", b: "b", a2: "a2", s20One: "s20-one" };
+  const rawProfiles = {};
   for (const [name, relative] of Object.entries(dirs)) {
     const directory = path.join(rawRoot, relative);
     execFileSync(process.execPath,
@@ -129,8 +142,11 @@ function validateRaw(rawRoot) {
       const compact = name === "b" ? analysis.control[summaryKey]
         : name === "s20One" ? analysis.profiles.s20One : analysis.profiles[name][summaryKey];
       close(row.cadence.minimumAuthorityAcceptedPairsPerSecond, compact.hz);
+      if (compact.overload) assert.strictEqual(row.authorityState.overloadState, compact.overload);
       close(row.performance.authority.projectionAndPublishMs.p50, compact.p50Ms);
       close(row.performance.authority.projectionAndPublishMs.p95, compact.p95Ms);
+      close(row.performance.authority.projectionAndPublishMs.p99, compact.p99Ms);
+      close(row.performance.authority.cpuUsage.oneCoreFraction, compact.oneCoreFraction);
       const retainedProfile = row.performance.authority.s23tPublicBodyProfile;
       assert.strictEqual(Boolean(retainedProfile), name !== "b");
       if (retainedProfile) {
@@ -142,12 +158,55 @@ function validateRaw(rawRoot) {
         assert.strictEqual(profile.recipientSlots, population);
         assert(profile.sourceBeats.length <= 512);
         profile.sourceBeats.forEach(validateBeatPrivacy);
+        assert.strictEqual(profile.completeSourceBeats, compact.completeBeats);
+        close(profile.outer.p95Ms, compact.sourceBeatOuterP95Ms);
+        if (name !== "s20One") {
+          close(profile.reconciliation.aggregateRatio, compact.reconciliationRatio);
+          close(profile.reconciliation.p95UnattributedMs, compact.unattributedP95Ms);
+        }
         const familyP95 = percentile(profile.sourceBeats.map((beat) =>
           FAMILY.reduce((sum, stage) => sum + (beat.stages[stage] || 0), 0)), 0.95);
         close(familyP95, compact.sourceBodyPreparationP95Ms);
+        if (population === 8) {
+          close(profile.gc.duration.p95Ms, compact.gcP95Ms);
+          close(profile.gc.duration.p99Ms, compact.gcP99Ms);
+          close(profile.gc.duration.maxMs, compact.gcMaxMs);
+          assert.strictEqual(profile.gc.byKind["1"], compact.minorGcEvents);
+          assert.strictEqual(profile.memoryHighWater.heapUsed, compact.heapUsedHighWater);
+          assert.strictEqual(profile.memoryHighWater.rss, compact.rssHighWater);
+          assert.strictEqual(profile.memoryHighWater.arrayBuffers, compact.arrayBuffersHighWater);
+        }
+        rawProfiles[name] ||= {};
+        rawProfiles[name][summaryKey] = profile;
       }
     }
   }
+
+  const baselineP95 = rawProfiles.s20One.one.outer.p95Ms;
+  const qualifying = [];
+  for (const [familyName, stages] of Object.entries(CANDIDATE_FAMILIES)) {
+    let passesEveryCapture = true;
+    for (const round of ["a1", "a2"]) for (const population of ["one", "eight"]) {
+      const profile = rawProfiles[round][population];
+      const outerP95 = profile.outer.p95Ms;
+      const residualP95 = percentile(profile.sourceBeats.map((beat) => beat.outerMs
+        - stages.reduce((sum, stage) => sum + (beat.stages[stage] || 0), 0)), 0.95);
+      const baselineOrGate = population === "eight" ? 50 : baselineP95;
+      const share = (outerP95 - residualP95) / (outerP95 - baselineOrGate);
+      if (familyName === analysis.selection.family) {
+        const compact = analysis.selection.counterfactual[round][population];
+        close(compact.outerP95Ms, outerP95);
+        close(compact.baselineOrGateMs, baselineOrGate);
+        close(compact.residualP95Ms, residualP95);
+        close(compact.recoveryMs, outerP95 - residualP95);
+        close(compact.share, share);
+      }
+      if (share < 0.70) passesEveryCapture = false;
+    }
+    if (passesEveryCapture) qualifying.push(familyName);
+  }
+  assert.deepStrictEqual(qualifying, ["public source/body preparation"]);
+  assert.deepStrictEqual(qualifying, analysis.selection.qualifyingFamilies);
 }
 
 validateSummary();

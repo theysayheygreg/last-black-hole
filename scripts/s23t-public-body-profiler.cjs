@@ -54,7 +54,7 @@ function createS23tPublicBodyProfiler() {
   let beatCursor = 0;
   let beatCount = 0;
   const beats = new Array(SAMPLE_CAPACITY);
-  const recipientSlots = new Map();
+  const recipientSlots = new Set();
   let overflowRecipientObservations = 0;
   let incompleteBeats = 0;
   let nestedTimerViolations = 0;
@@ -71,15 +71,13 @@ function createS23tPublicBodyProfiler() {
   });
   gcObserver.observe({ entryTypes: ["gc"] });
 
-  function slotFor(key) {
-    if (key === undefined || key === null) return 0;
-    if (recipientSlots.has(key)) return recipientSlots.get(key);
-    if (recipientSlots.size >= MAX_RECIPIENTS) {
+  function slotFor(slot) {
+    if (slot === undefined || slot === null) return 0;
+    if (!Number.isSafeInteger(slot) || slot < 1 || slot > MAX_RECIPIENTS) {
       overflowRecipientObservations += 1;
       return MAX_RECIPIENTS + 1;
     }
-    const slot = recipientSlots.size + 1;
-    recipientSlots.set(key, slot);
+    recipientSlots.add(slot);
     return slot;
   }
 

@@ -11,7 +11,7 @@ function main() {
   const profiler = createS23tPublicBodyProfiler();
   for (let index = 0; index < SAMPLE_CAPACITY + 7; index += 1) {
     profiler.beginBeat();
-    profiler.measureSync(STAGES.PUBLIC_CORE, `private-recipient-${index % 3}`, () => index);
+    profiler.measureSync(STAGES.PUBLIC_CORE, (index % 3) + 1, () => index);
     profiler.measureSync(STAGES.BODY_NORMALIZE_VALIDATE, null, () => index);
     profiler.endBeat();
   }
@@ -31,6 +31,12 @@ function main() {
   const text = JSON.stringify(snapshot.sourceBeats);
   assert(!text.includes("private-recipient"), "snapshot leaked a recipient identifier");
   assert(!text.includes("world") && !text.includes("ownerState"), "snapshot leaked value-bearing names");
+
+  profiler.beginBeat();
+  profiler.measureSync(STAGES.PUBLIC_CORE, "private-recipient", () => true);
+  profiler.endBeat();
+  assert.strictEqual(profiler.snapshot().overflowRecipientObservations, 1,
+    "raw recipient identifiers must be rejected rather than retained");
 
   profiler.reset();
   profiler.beginBeat();

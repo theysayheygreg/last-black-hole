@@ -792,10 +792,10 @@ sealed S23 p50/p95. Profiler overhead, minimum beat count, 99% reconciliation,
 <10% unattributed tail, and repeatability gates pass.
 
 Public source/body preparation is the only family above the 70% selection
-threshold in both dimensions. It measures 43.67/44.36 ms p95 at eight and
-15.45/14.87 ms more than S20 at one, explaining the full eight-player excess
-and one-player regression after offsetting savings. GC p95 remains <=0.52 ms
-and is not the primary cause. Select only S23P prepared public-source proof:
+threshold in all four counterfactual checks. Removing it per beat recovers
+39.31/42.45 ms at eight and 16.23/15.54 ms at one, while the nearest competitor
+fails both eight-player checks. GC p95 remains <=0.52 ms and is not the primary
+cause. Select only S23P prepared public-source proof:
 one immutable normalized/canonical public proof before the recipient loop,
 with owner validation and every recipient authority boundary left local.
 S23 remains default-off; eight remains closed; `S24` stays reserved for the

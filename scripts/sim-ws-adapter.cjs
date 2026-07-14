@@ -83,6 +83,8 @@ function createSimWebSocketAdapter(options = {}) {
   const stageProfiler = options.stageProfiler || null;
   const s23tProfiler = options.s23tProfiler || null;
   const profileRecipientKey = (state) => state?.binding?.membershipId || state?.schedulerConnectionId;
+  const s23tRecipientSlot = (state) => Number.isSafeInteger(state?.schedulerConnectionId)
+    ? state.schedulerConnectionId : null;
   const scheduleOutboundFrame = typeof options.scheduleOutboundFrame === "function"
     ? options.scheduleOutboundFrame
     : null;
@@ -605,7 +607,7 @@ function createSimWebSocketAdapter(options = {}) {
         }
       });
       if (s23tProfiler && frame?.type === "statePair") {
-        s23tProfiler.measureSync(S23T_STAGES.SOCKET_SEND, profileRecipientKey(state), invokeSend);
+        s23tProfiler.measureSync(S23T_STAGES.SOCKET_SEND, s23tRecipientSlot(state), invokeSend);
       } else if (stageProfiler && frame?.type === "statePair") {
         stageProfiler.measureSync(STAGES.SOCKET_SEND_CALL, {
           recipientKey,
@@ -850,7 +852,7 @@ function createSimWebSocketAdapter(options = {}) {
     const compress = () => compressionContextFor(state).publicBody
       ? encodeCompressedPublicBodyStatePair(wire) : encodeCompressedStatePair(wire);
     const compressed = s23tProfiler
-      ? s23tProfiler.measureSync(S23T_STAGES.COMPRESSION, profileRecipientKey(state), compress)
+      ? s23tProfiler.measureSync(S23T_STAGES.COMPRESSION, s23tRecipientSlot(state), compress)
       : stageProfiler
       ? stageProfiler.measureSync(STAGES.COMPRESSION, (value) => ({
           recipientKey: profileRecipientKey(state),
@@ -1757,7 +1759,7 @@ function createSimWebSocketAdapter(options = {}) {
         );
         const ownerFrame = s23tProfiler
           ? await Promise.resolve(s23tProfiler.measureSync(
-              S23T_STAGES.OWNER_SOURCE, profileRecipientKey(state), buildOwner))
+              S23T_STAGES.OWNER_SOURCE, s23tRecipientSlot(state), buildOwner))
           : stageProfiler
           ? await stageProfiler.measureAsync(STAGES.OWNER_SOURCE, (projectedFrame) => ({
               recipientKey: profileRecipientKey(state),
@@ -1771,10 +1773,11 @@ function createSimWebSocketAdapter(options = {}) {
           ownerFrame,
           context,
           callbackContext(state, "state-pair-project"),
+          s23tRecipientSlot(state),
         );
         const pair = s23tProfiler && !wantsSharedBody
           ? await Promise.resolve(s23tProfiler.measureSync(
-              S23T_STAGES.LEGACY_PUBLISHER, profileRecipientKey(state), buildPair))
+              S23T_STAGES.LEGACY_PUBLISHER, s23tRecipientSlot(state), buildPair))
           : await buildPair();
         if (!stateIsLive(state)) {
           skipped += 1;
@@ -1881,7 +1884,7 @@ function createSimWebSocketAdapter(options = {}) {
           return encodedBytes;
         };
         const encodedBytes = s23tProfiler
-          ? s23tProfiler.measureSync(S23T_STAGES.ADAPTER_DIGEST, profileRecipientKey(state), verifyExact)
+          ? s23tProfiler.measureSync(S23T_STAGES.ADAPTER_DIGEST, s23tRecipientSlot(state), verifyExact)
           : verifyExact();
         const stats = exactCapability === BINARY_CODEC_CAPABILITY ? binaryCodecStats : positionalCodecStats;
         stats.reusedEncodedFrames += 1;
@@ -1913,7 +1916,7 @@ function createSimWebSocketAdapter(options = {}) {
         ...(isExactEncodedPublication(publication) ? { exactWire: encodedWire } : {}) },
     );
     const outcome = s23tProfiler
-      ? s23tProfiler.measureSync(S23T_STAGES.ACCOUNTING_ENQUEUE, profileRecipientKey(state), enqueue)
+      ? s23tProfiler.measureSync(S23T_STAGES.ACCOUNTING_ENQUEUE, s23tRecipientSlot(state), enqueue)
       : stageProfiler
       ? stageProfiler.measureSync(STAGES.ADAPTER_ENQUEUE, {
           recipientKey: profileRecipientKey(state),
@@ -1944,7 +1947,7 @@ function createSimWebSocketAdapter(options = {}) {
         }
       };
       if (s23tProfiler) s23tProfiler.measureSync(
-        S23T_STAGES.ACCOUNTING_ENQUEUE, profileRecipientKey(state), account);
+        S23T_STAGES.ACCOUNTING_ENQUEUE, s23tRecipientSlot(state), account);
       else if (stageProfiler) stageProfiler.measureSync(STAGES.ACCOUNTING, {
         recipientKey: profileRecipientKey(state),
         inputBytes: Buffer.byteLength(JSON.stringify(frame), "utf8"),
@@ -1956,7 +1959,7 @@ function createSimWebSocketAdapter(options = {}) {
       queueOutcome(state, outcome, frame);
     };
     if (s23tProfiler) s23tProfiler.measureSync(
-      S23T_STAGES.ACCOUNTING_ENQUEUE, profileRecipientKey(state), finalizeQueue);
+      S23T_STAGES.ACCOUNTING_ENQUEUE, s23tRecipientSlot(state), finalizeQueue);
     else finalizeQueue();
     flush(state);
     if (outcome.accepted) state.lastStatePairFrameId = frame.frameId;

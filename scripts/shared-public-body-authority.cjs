@@ -312,7 +312,7 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
   }
 
   function publish({ identity: rawIdentity, body: target, ownerView, ownerPrepared = null,
-    dirtyHints = null }) {
+    dirtyHints = null, s23tRecipientSlot = null }) {
     const identity = assertIdentity(rawIdentity);
     if (!target || bodies.get(target.body?.bodyId) !== target) {
       fail("unknown-body", "publication must use a live body prepared by this authority");
@@ -321,13 +321,13 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
     const publishLegacy = () => ownerPublisher.publish({ identity,
       publicView: placeholderPublic(ownerView), ownerView, ownerPrepared, dirtyHints, allowMixed: true });
     const legacy = s23tProfiler
-      ? s23tProfiler.measureSync(S23T_STAGES.LEGACY_PUBLISHER, identity.recipientId, publishLegacy)
+      ? s23tProfiler.measureSync(S23T_STAGES.LEGACY_PUBLISHER, s23tRecipientSlot, publishLegacy)
       : publishLegacy();
     const base = !state.forceKeyframe && state.ackedBody && bodies.has(state.ackedBody.body.bodyId)
       ? state.ackedBody : null;
     const selectPublic = () => base ? deltaPayload(base, target) || keyframePayload(target) : keyframePayload(target);
     const publicPayload = s23tProfiler
-      ? s23tProfiler.measureSync(S23T_STAGES.COHORT_DELTA, identity.recipientId, selectPublic)
+      ? s23tProfiler.measureSync(S23T_STAGES.COHORT_DELTA, s23tRecipientSlot, selectPublic)
       : selectPublic();
     if (publicPayload.kind === "keyframe") counters.bodyKeyframes += 1;
     else counters.bodyDeltas += 1;
@@ -335,10 +335,10 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       bodyId: target.body.bodyId, bodyRevision: target.body.bodyRevision, bodyHash: target.bodyHash,
       public: publicPayload, owner: legacy.frame.owner });
     const frame = s23tProfiler
-      ? s23tProfiler.measureSync(S23T_STAGES.ENVELOPE_BUILD, identity.recipientId, buildEnvelope)
+      ? s23tProfiler.measureSync(S23T_STAGES.ENVELOPE_BUILD, s23tRecipientSlot, buildEnvelope)
       : buildEnvelope();
     const preparedEncodedBody = publicPayload.kind === "keyframe" && s23tProfiler
-      ? s23tProfiler.measureSync(S23T_STAGES.BODY_CANONICAL_HASH, identity.recipientId,
+      ? s23tProfiler.measureSync(S23T_STAGES.BODY_CANONICAL_HASH, s23tRecipientSlot,
         () => encodedBody(target)) : null;
     const serializeRetain = () => {
       const wire = encodePublicBodyFrame(frame,
@@ -368,7 +368,7 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       return publication;
     };
     return s23tProfiler
-      ? s23tProfiler.measureSync(S23T_STAGES.ENVELOPE_SERIALIZE, identity.recipientId, serializeRetain)
+      ? s23tProfiler.measureSync(S23T_STAGES.ENVELOPE_SERIALIZE, s23tRecipientSlot, serializeRetain)
       : serializeRetain();
   }
 

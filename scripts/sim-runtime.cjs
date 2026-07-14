@@ -6735,11 +6735,12 @@ function closeMultiplayerBinding(binding) {
   runtimeStatePairAuthority?.disconnect(binding);
 }
 
-function buildRuntimeStatePair(binding, publicFrame, ownerFrame) {
+function buildRuntimeStatePair(binding, publicFrame, ownerFrame, _context, _callbackContext,
+  s23tRecipientSlot = null) {
   if (!runtimeStatePairAuthority || !binding.capabilities?.includes(STATE_PAIR_CAPABILITY)) {
     throw streamCommandFailure("state-pair-not-admitted");
   }
-  return runtimeStatePairAuthority.publish(binding, publicFrame, ownerFrame);
+  return runtimeStatePairAuthority.publish(binding, publicFrame, ownerFrame, { s23tRecipientSlot });
 }
 
 function acknowledgeRuntimeMultiplayer(binding, frame) {
@@ -7895,6 +7896,7 @@ function shutdown() {
   ]).then(async () => {
     if (multiplayerAdapter) await multiplayerAdapter.shutdown();
     authorityStageProfiler?.stop();
+    s23tPublicBodyProfiler?.stop();
     replicationBenchEventLoop?.disable();
     await new Promise((resolve) => server.close(resolve));
     cleanupFiles(PID_FILE, META_FILE);

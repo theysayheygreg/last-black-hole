@@ -53,12 +53,25 @@ The leading bounded family is **public source/body preparation**:
 2. source/body normalization plus allowlist/source-bound validation;
 3. source/body/structural canonical encoding and hashes.
 
-At eight its p95 is 43.67 ms in A1 and 44.36 ms in A2, a 1.6% repeat
-difference. Those values are 136% and 122% of the measured 32.19/36.26 ms
-excess above the 50 ms product gate. At one, its p95 is 16.25/15.67 ms versus
-0.80 ms in the S20 comparator; the added 15.45/14.87 ms explains 117%/120% of
-S23's 13.19/12.37 ms one-player p95 regression. Savings elsewhere partially
-offset that family, which is why its contribution can exceed 100%.
+The selection gate uses a per-beat counterfactual, not subtraction between
+independent quantiles: remove one fixed candidate family from every source
+beat, recompute the residual p95, and compare the p95 recovery with the 50 ms
+eight-player gate or the S20 source-beat p95.
+
+At eight, A1/A2 source-beat outer p95 is 82.11/86.21 ms and falls to
+42.80/43.76 ms without this family. The 39.31/42.45 ms recovery explains
+122%/117% of the 32.11/36.21 ms excess above 50 ms. At one, outer p95 is
+28.47/27.65 ms versus S20's 15.28 ms and falls to 12.24/12.11 ms without the
+family. The 16.23/15.54 ms recovery explains 123%/126% of the one-player
+regression. Savings elsewhere partially offset this family, which is why its
+counterfactual contribution can exceed 100%. Its direct stage-family p95 is
+43.67/44.36 ms at eight, a 1.6% repeat difference.
+
+The fixed competitors are cohort delta, owner preparation, legacy publishing,
+envelope work, adapter digest, compression, and queue/send. Cohort delta is the
+nearest competitor: it reaches 69.1%/71.5% at one but only 39.8%/36.3% at eight.
+Every other family is lower. Public source/body preparation is therefore the
+only family above 70% in all four A1/A2 by one/eight checks.
 
 The most important repeated operation inside that family is per-recipient
 canonical source validation over the shared public frame plus owner frame.
