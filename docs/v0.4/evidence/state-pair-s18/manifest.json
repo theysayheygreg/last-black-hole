@@ -1,0 +1,19 @@
+{
+  "schema": "lbh-s18-trusted-authority-proof-manifest-v1",
+  "analysisSha256": "5e6f000c10cad736960e1e0e91c7a05980b07dcdf6b2fb526f1894585fb0ff36",
+  "benchmarkSha256": "9a6ac155bc99f9e243932f8dd7f5af7083b264ff0780f11a8ec339f4050bb898",
+  "adversarialSha256": "7236d528262da8823c4e6df74eecaf26ae71d13b158343d5dcd98d96e46c9932",
+  "candidateCompositeSha256": "82a1e0eadea4ee6d6dee36f86b1d937fbd31f3a16e95eb9f24cfa3bb68d69b37",
+  "baselineCompositeSha256": "9001726f56fbfd895d32f5d3111dd50b16cb80bd1a0903772bffbdc78307d149",
+  "implementation": {
+    "authority-delta-publisher.cjs": "226473eeba3f0e1d231d655b154bc27128b9676664a83d8a28ff52cb8e0ed098",
+    "multiplayer-wire-protocol.cjs": "7540e05fe71654c050419f94f19db0e4f7e793c9a9da26363c60993652128bdd",
+    "state-pair-positional-codec.cjs": "d9f07553d9f2fa77ee482e08335eddd5b48fbc2453ea80ba6a84c84179f31c1c"
+  },
+  "tests": {
+    "multiplayer-state-pair-trusted-authority-proof.cjs": "7bae941114583fec254ce613d235e408667ca461fbfe6ee040e3aee6e427046e",
+    "multiplayer-state-pair-trusted-proof-benchmark.cjs": "756436b2f9e3663765fd59aa4f6fdc8d47ce38c24aef6cac131feda5df157003",
+    "multiplayer-state-pair-trusted-proof-evidence.cjs": "25f3adf0329867b65f5e6a030cd4f10c5248f6926adc8f51f079b9ed9de4309c",
+    "multiplayer-state-pair-canonical-reuse-benchmark.cjs": "f61b36897a551970563f203b9c3875d4e98688d858790fdd93846615f6ac94fb"
+  }
+}

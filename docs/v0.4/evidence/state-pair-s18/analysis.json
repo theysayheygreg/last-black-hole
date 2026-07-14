@@ -1,0 +1,501 @@
+{
+  "schema": "lbh-s18-trusted-authority-proof-analysis-v1",
+  "authorityBoundary": "One dedicated logical authority is the sole gameplay writer for one match/group; concurrent matches multiply this boundary horizontally.",
+  "releaseDefault": "S15 positional JSON plus S17 lazy materialization and S18 trusted same-operation proof. S16 binary remains opt-in.",
+  "baselineBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s17/candidate-process",
+    "compositeSha256": "9001726f56fbfd895d32f5d3111dd50b16cb80bd1a0903772bffbdc78307d149",
+    "sealedS17Commit": "e57bf53"
+  },
+  "candidateBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s18/candidate-process",
+    "compositeSha256": "82a1e0eadea4ee6d6dee36f86b1d937fbd31f3a16e95eb9f24cfa3bb68d69b37",
+    "implementationCommit": "149b7d3c9bb04b672ea88dd498d031938aa6724b"
+  },
+  "benchmarkBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s18/trusted-proof-benchmark.json",
+    "sha256": "9a6ac155bc99f9e243932f8dd7f5af7083b264ff0780f11a8ec339f4050bb898",
+    "exactWireComparisons": 1600,
+    "exactSelectionTranscriptComparisons": 1600,
+    "semanticDecodeComparisons": 1600,
+    "mismatches": 0
+  },
+  "adversarialBinding": {
+    "path": "docs/v0.4/evidence/state-pair-s18/trusted-proof-adversarial.json",
+    "sha256": "7236d528262da8823c4e6df74eecaf26ae71d13b158343d5dcd98d96e46c9932",
+    "schema": "lbh-s18-trusted-authority-proof-v1",
+    "cases": 80,
+    "exactWireComparisons": 160,
+    "expandedComparisons": 640,
+    "semanticComparisons": 160,
+    "boundaryChecks": 2,
+    "exactBoundary": 12879,
+    "importOrderBoundaryChecks": 1,
+    "removedProofModuleChecks": 1,
+    "publicIssuerExports": 0,
+    "maliciousBinderCaptures": 0,
+    "consumedTwiceRejects": 1,
+    "lifecycleRejectCounters": {
+      "created": 3,
+      "consumed": 3,
+      "rejected": 3
+    },
+    "staleInputRejects": 1,
+    "crossOperationInputRejects": 1,
+    "forgedExtraArgumentBypasses": 0,
+    "mutationRejects": 1,
+    "hostileCases": 5,
+    "hostileCodes": [
+      "unknown-field",
+      "invalid-field",
+      "invalid-field",
+      "invalid-field",
+      "invalid-field"
+    ],
+    "mismatches": 0,
+    "transcriptSha256": "a9984ce197aecd0b6fd4ae1e714611e135caa1fe8d768630d6985d05355c0c90",
+    "direction": "server->client",
+    "proofOperations": {
+      "componentSerializations": 3960,
+      "fullCandidateCompositions": 181,
+      "winnerSerializations": 181,
+      "bytesExamined": 2968213,
+      "allocationProxyBytes": 2229575,
+      "expandedHeaderSerializations": 3060,
+      "expandedLaneSerializations": 0,
+      "expandedLaneSerializationReuses": 720,
+      "expandedReusedLaneBytes": 4077920,
+      "expandedSerializedLaneBytes": 0,
+      "expandedBytesExamined": 4161496,
+      "outerCandidateDescriptors": 720,
+      "outerCandidateFrames": 180,
+      "lanePayloadsBuilt": 720,
+      "lanePayloadReferenceReuses": 720,
+      "sizeProofOperations": 1440,
+      "chosenFrameMaterializations": 180,
+      "trustedProofsCreated": 180,
+      "trustedProofsConsumed": 180,
+      "trustedProofRejects": 0,
+      "trustedValidationsPerformed": 180,
+      "trustedValidationsReused": 720,
+      "trustedCanonicalSizeOperations": 720,
+      "trustedPositionalSizeOperations": 720,
+      "maxExpandedCandidateBytes": 12879
+    }
+  },
+  "benchmarkSummary": [
+    {
+      "order": "full-trusted",
+      "publishMeanReductionFraction": 0.45018825322155076,
+      "selectionP50ReductionFraction": 0.9263586009365126,
+      "selectionP95ReductionFraction": 0.9132902072711199,
+      "allocationProxyReductionFraction": 0
+    },
+    {
+      "order": "trusted-full",
+      "publishMeanReductionFraction": 0.3980808876197959,
+      "selectionP50ReductionFraction": 0.9230694598563041,
+      "selectionP95ReductionFraction": 0.8764674938092027,
+      "allocationProxyReductionFraction": 0
+    }
+  ],
+  "scenarios": [
+    {
+      "population": 1,
+      "baseline": {
+        "receiverHz": 9.8,
+        "projectionAndPublishMs": {
+          "count": 203,
+          "totalObserved": 203,
+          "p50": 18.432166000000507,
+          "p95": 21.13879199999974,
+          "p99": 22.339332999999897,
+          "max": 23.891749999998865
+        },
+        "authorityOneCoreFraction": 0.2231786161703768
+      },
+      "candidate": {
+        "receiverHz": 9.7,
+        "authorityHz": 9.7,
+        "projectionAndPublishMs": {
+          "count": 202,
+          "totalObserved": 202,
+          "p50": 13.492290999998659,
+          "p95": 15.131916999999703,
+          "p99": 15.871084000002156,
+          "max": 16.032875000000786
+        },
+        "authorityOneCoreFraction": 0.16714702910752946,
+        "actualWorstMeanBytesPerSecond": 57802.85,
+        "actualOneSecondP95BytesPerSecond": 60577,
+        "normalized10Hz": {
+          "noCadenceCredit": true,
+          "perRecipient": {
+            "recipient-1": {
+              "observedHz": 9.7,
+              "pairScale": 1.0309278350515465,
+              "observedMeanPairBytes": 5909.216494845361,
+              "observedOtherBytesPerSecond": 483.45,
+              "normalized10HzBytesPerSecond": 59575.614948453614
+            }
+          },
+          "worstMeanBytesPerSecond": 59575.614948453614,
+          "oneSecondP95BytesPerSecond": 62433.53608247423,
+          "oneSecondP99BytesPerSecond": 62433.53608247423
+        },
+        "overloadMode": "NORMAL",
+        "operations": {
+          "componentSerializations": 5654,
+          "fullCandidateCompositions": 259,
+          "winnerSerializations": 259,
+          "bytesExamined": 11414215,
+          "allocationProxyBytes": 7266552,
+          "expandedHeaderSerializations": 4369,
+          "expandedLaneSerializations": 0,
+          "expandedLaneSerializationReuses": 1028,
+          "expandedReusedLaneBytes": 11794913,
+          "expandedSerializedLaneBytes": 0,
+          "expandedBytesExamined": 11936598,
+          "outerCandidateDescriptors": 1028,
+          "outerCandidateFrames": 257,
+          "lanePayloadsBuilt": 1028,
+          "lanePayloadReferenceReuses": 1028,
+          "sizeProofOperations": 2056,
+          "chosenFrameMaterializations": 257,
+          "trustedProofsCreated": 257,
+          "trustedProofsConsumed": 257,
+          "trustedProofRejects": 0,
+          "trustedValidationsPerformed": 257,
+          "trustedValidationsReused": 1028,
+          "trustedCanonicalSizeOperations": 1028,
+          "trustedPositionalSizeOperations": 1028,
+          "maxExpandedCandidateBytes": 35506
+        },
+        "ledger": {
+          "maxPerClientBytes": 4030555,
+          "currentAggregateBytesAtMeasurementEnd": 4030555
+        },
+        "correctness": {
+          "uniqueRecipientMapping": true,
+          "noClientErrors": true,
+          "authorityReceiverCountDeltaAtMostOnePerClient": true,
+          "receiverBasesApplicable": true,
+          "exactSynchronizedInputSchedule": true,
+          "noHighWaterOrQueuePolicyTransition": true,
+          "accountingComplete": true,
+          "passed": true
+        },
+        "gate": {
+          "correctness": true,
+          "cadence": true,
+          "authorityClock": true,
+          "overloadNormal": true,
+          "normalizedMean": true,
+          "normalizedP95": true,
+          "queuesClear": true
+        },
+        "productAdmissionPassed": true
+      },
+      "comparison": {
+        "cadenceDeltaHz": -0.10000000000000142,
+        "projectionP50ReductionFraction": 0.2680029574387357,
+        "projectionP95ReductionFraction": 0.2841635889127492,
+        "authorityCpuReductionFraction": 0.25106162957867006
+      }
+    },
+    {
+      "population": 4,
+      "baseline": {
+        "receiverHz": 5.6,
+        "projectionAndPublishMs": {
+          "count": 117,
+          "totalObserved": 117,
+          "p50": 89.85279199999786,
+          "p95": 124.80195800000001,
+          "p99": 131.6170000000002,
+          "max": 141.0065829999985
+        },
+        "authorityOneCoreFraction": 0.571342575684767
+      },
+      "candidate": {
+        "receiverHz": 9.85,
+        "authorityHz": 9.85,
+        "projectionAndPublishMs": {
+          "count": 204,
+          "totalObserved": 204,
+          "p50": 51.64574999999968,
+          "p95": 53.95829100000083,
+          "p99": 54.888082999999824,
+          "max": 54.98883399999977
+        },
+        "authorityOneCoreFraction": 0.5854929177105416,
+        "actualWorstMeanBytesPerSecond": 74640.25,
+        "actualOneSecondP95BytesPerSecond": 76415,
+        "normalized10Hz": {
+          "noCadenceCredit": true,
+          "perRecipient": {
+            "recipient-1": {
+              "observedHz": 9.85,
+              "pairScale": 1.015228426395939,
+              "observedMeanPairBytes": 7067.670050761421,
+              "observedOtherBytesPerSecond": 483.45,
+              "normalized10HzBytesPerSecond": 71160.15050761422
+            },
+            "recipient-2": {
+              "observedHz": 9.85,
+              "pairScale": 1.015228426395939,
+              "observedMeanPairBytes": 6902.532994923858,
+              "observedOtherBytesPerSecond": 483.45,
+              "normalized10HzBytesPerSecond": 69508.77994923857
+            },
+            "recipient-3": {
+              "observedHz": 9.85,
+              "pairScale": 1.015228426395939,
+              "observedMeanPairBytes": 6497.766497461929,
+              "observedOtherBytesPerSecond": 483.45,
+              "normalized10HzBytesPerSecond": 65461.11497461928
+            },
+            "recipient-4": {
+              "observedHz": 9.85,
+              "pairScale": 1.015228426395939,
+              "observedMeanPairBytes": 7528.609137055838,
+              "observedOtherBytesPerSecond": 483.45,
+              "normalized10HzBytesPerSecond": 75769.54137055836
+            }
+          },
+          "worstMeanBytesPerSecond": 75769.54137055836,
+          "oneSecondP95BytesPerSecond": 77571.52284263959,
+          "oneSecondP99BytesPerSecond": 78519.89847715736
+        },
+        "overloadMode": "NORMAL",
+        "operations": {
+          "componentSerializations": 23144,
+          "fullCandidateCompositions": 1060,
+          "winnerSerializations": 1060,
+          "bytesExamined": 50964258,
+          "allocationProxyBytes": 33036838,
+          "expandedHeaderSerializations": 17884,
+          "expandedLaneSerializations": 0,
+          "expandedLaneSerializationReuses": 4208,
+          "expandedReusedLaneBytes": 52787674,
+          "expandedSerializedLaneBytes": 0,
+          "expandedBytesExamined": 53368171,
+          "outerCandidateDescriptors": 4208,
+          "outerCandidateFrames": 1052,
+          "lanePayloadsBuilt": 4208,
+          "lanePayloadReferenceReuses": 4208,
+          "sizeProofOperations": 8416,
+          "chosenFrameMaterializations": 1052,
+          "trustedProofsCreated": 1052,
+          "trustedProofsConsumed": 1052,
+          "trustedProofRejects": 0,
+          "trustedValidationsPerformed": 1052,
+          "trustedValidationsReused": 4208,
+          "trustedCanonicalSizeOperations": 4208,
+          "trustedPositionalSizeOperations": 4208,
+          "maxExpandedCandidateBytes": 38277
+        },
+        "ledger": {
+          "maxPerClientBytes": 4429878,
+          "currentAggregateBytesAtMeasurementEnd": 17609551
+        },
+        "correctness": {
+          "uniqueRecipientMapping": true,
+          "noClientErrors": true,
+          "authorityReceiverCountDeltaAtMostOnePerClient": true,
+          "receiverBasesApplicable": true,
+          "exactSynchronizedInputSchedule": true,
+          "noHighWaterOrQueuePolicyTransition": true,
+          "accountingComplete": true,
+          "passed": true
+        },
+        "gate": {
+          "correctness": true,
+          "cadence": true,
+          "authorityClock": true,
+          "overloadNormal": true,
+          "normalizedMean": false,
+          "normalizedP95": true,
+          "queuesClear": true
+        },
+        "productAdmissionPassed": false
+      },
+      "comparison": {
+        "cadenceDeltaHz": 4.25,
+        "projectionP50ReductionFraction": 0.425218194666662,
+        "projectionP95ReductionFraction": 0.567648682242623,
+        "authorityCpuReductionFraction": -0.024766825767911893
+      }
+    },
+    {
+      "population": 8,
+      "baseline": {
+        "receiverHz": 3.8,
+        "projectionAndPublishMs": {
+          "count": 80,
+          "totalObserved": 80,
+          "p50": 171.320334,
+          "p95": 199.1763749999991,
+          "p99": 214.73954100000265,
+          "max": 214.73954100000265
+        },
+        "authorityOneCoreFraction": 0.7287001578871825
+      },
+      "candidate": {
+        "receiverHz": 5,
+        "authorityHz": 5,
+        "projectionAndPublishMs": {
+          "count": 104,
+          "totalObserved": 104,
+          "p50": 113.6158749999995,
+          "p95": 117.96570799999972,
+          "p99": 119.93420799999876,
+          "max": 120.45229199999812
+        },
+        "authorityOneCoreFraction": 0.6440444230305951,
+        "actualWorstMeanBytesPerSecond": 40135.4,
+        "actualOneSecondP95BytesPerSecond": 41161,
+        "normalized10Hz": {
+          "noCadenceCredit": true,
+          "perRecipient": {
+            "recipient-1": {
+              "observedHz": 5.05,
+              "pairScale": 1.9801980198019802,
+              "observedMeanPairBytes": 7187.504950495049,
+              "observedOtherBytesPerSecond": 481.1,
+              "normalized10HzBytesPerSecond": 72356.14950495049
+            },
+            "recipient-2": {
+              "observedHz": 5.05,
+              "pairScale": 1.9801980198019802,
+              "observedMeanPairBytes": 7369.158415841584,
+              "observedOtherBytesPerSecond": 481.15,
+              "normalized10HzBytesPerSecond": 74172.73415841584
+            },
+            "recipient-3": {
+              "observedHz": 5.05,
+              "pairScale": 1.9801980198019802,
+              "observedMeanPairBytes": 7185.3564356435645,
+              "observedOtherBytesPerSecond": 481.15,
+              "normalized10HzBytesPerSecond": 72334.71435643564
+            },
+            "recipient-4": {
+              "observedHz": 5.05,
+              "pairScale": 1.9801980198019802,
+              "observedMeanPairBytes": 7852.3267326732675,
+              "observedOtherBytesPerSecond": 481.15,
+              "normalized10HzBytesPerSecond": 79004.41732673268
+            },
+            "recipient-5": {
+              "observedHz": 5.05,
+              "pairScale": 1.9801980198019802,
+              "observedMeanPairBytes": 7504.207920792079,
+              "observedOtherBytesPerSecond": 481.15,
+              "normalized10HzBytesPerSecond": 75523.2292079208
+            },
+            "recipient-6": {
+              "observedHz": 5.05,
+              "pairScale": 1.9801980198019802,
+              "observedMeanPairBytes": 7198.178217821782,
+              "observedOtherBytesPerSecond": 481.15,
+              "normalized10HzBytesPerSecond": 72462.93217821783
+            },
+            "recipient-7": {
+              "observedHz": 5.05,
+              "pairScale": 1.9801980198019802,
+              "observedMeanPairBytes": 7178.940594059406,
+              "observedOtherBytesPerSecond": 481.15,
+              "normalized10HzBytesPerSecond": 72270.55594059406
+            },
+            "recipient-8": {
+              "observedHz": 5,
+              "pairScale": 2,
+              "observedMeanPairBytes": 7522.48,
+              "observedOtherBytesPerSecond": 481.15,
+              "normalized10HzBytesPerSecond": 75705.95
+            }
+          },
+          "worstMeanBytesPerSecond": 79004.41732673268,
+          "oneSecondP95BytesPerSecond": 81046.23762376237,
+          "oneSecondP99BytesPerSecond": 86652.70297029703
+        },
+        "overloadMode": "DILATED",
+        "operations": {
+          "componentSerializations": 24706,
+          "fullCandidateCompositions": 1137,
+          "winnerSerializations": 1137,
+          "bytesExamined": 60315725,
+          "allocationProxyBytes": 38882219,
+          "expandedHeaderSerializations": 19091,
+          "expandedLaneSerializations": 0,
+          "expandedLaneSerializationReuses": 4492,
+          "expandedReusedLaneBytes": 62345209,
+          "expandedSerializedLaneBytes": 0,
+          "expandedBytesExamined": 62965161,
+          "outerCandidateDescriptors": 4492,
+          "outerCandidateFrames": 1123,
+          "lanePayloadsBuilt": 4492,
+          "lanePayloadReferenceReuses": 4492,
+          "sizeProofOperations": 8984,
+          "chosenFrameMaterializations": 1123,
+          "trustedProofsCreated": 1123,
+          "trustedProofsConsumed": 1123,
+          "trustedProofRejects": 0,
+          "trustedValidationsPerformed": 1123,
+          "trustedValidationsReused": 4492,
+          "trustedCanonicalSizeOperations": 4492,
+          "trustedPositionalSizeOperations": 4492,
+          "maxExpandedCandidateBytes": 43117
+        },
+        "ledger": {
+          "maxPerClientBytes": 4863210,
+          "currentAggregateBytesAtMeasurementEnd": 38157375
+        },
+        "correctness": {
+          "uniqueRecipientMapping": true,
+          "noClientErrors": true,
+          "authorityReceiverCountDeltaAtMostOnePerClient": true,
+          "receiverBasesApplicable": true,
+          "exactSynchronizedInputSchedule": true,
+          "noHighWaterOrQueuePolicyTransition": true,
+          "accountingComplete": true,
+          "passed": true
+        },
+        "gate": {
+          "correctness": true,
+          "cadence": false,
+          "authorityClock": false,
+          "overloadNormal": false,
+          "normalizedMean": false,
+          "normalizedP95": true,
+          "queuesClear": true
+        },
+        "productAdmissionPassed": false
+      },
+      "comparison": {
+        "cadenceDeltaHz": 1.2000000000000002,
+        "projectionP50ReductionFraction": 0.3368220085305256,
+        "projectionP95ReductionFraction": 0.4077324281054906,
+        "authorityCpuReductionFraction": 0.11617361947888283
+      }
+    }
+  ],
+  "decision": {
+    "keep": true,
+    "admittedPopulations": [
+      1
+    ],
+    "rejectedPopulations": [
+      4,
+      8
+    ],
+    "statement": "The trusted proof is exact and material. Four players recover NORMAL 9.85 Hz clock behavior but remain above the normalized 64 KiB/s mean gate at 75,770 B/s, so only one player is product-admitted. Eight reaches 5.00 Hz but remains DILATED at 117.97 ms p95 and 79,004 B/s normalized mean; no cadence or bandwidth credit is awarded.",
+    "nextLane": "Share the immutable public projection/core/delta work once per match tick across recipients, retaining per-recipient owner overlays, connection lineage, ACK bases, and the one-writer authority boundary."
+  },
+  "limitations": [
+    "Machine-local loopback",
+    "One immutable 20-second profiler-off candidate window per population",
+    "S17 baseline and S18 candidate are not a same-minute paired process run",
+    "No WAN, TLS, hosted fleet, compression, cadence policy, heavy sim, or 24/48/96 claim"
+  ]
+}

@@ -2973,3 +2973,34 @@ concurrent matches.
 **Door status:** Closed for 4/8 admission and any claim based on the rejected
 partial profiler. Open only for trusted same-operation validation/size-proof
 cleanup with unchanged S15 bytes and S17 one-frame materialization.
+
+### Q: Does S18 trusted authority proof admit four/eight or weaken validation?
+
+| Date | Event |
+|------|-------|
+| Jul 13 | S18 binds authority-constructed frozen lanes, canonical facts, identity/epoch/manifest/snapshot/base lineage, and tie order into one opaque proof consumed before positional selection. Issuer, consumer, token, ticket, and registry stay inside each publisher closure; general APIs and S16 binary keep full validation. |
+| Jul 13 | The 2 x 800 benchmark preserves exact wire/selection/semantics and improves mean publish 40--45% and selector p95 88--91%. |
+| Jul 13 | One/four/eight reach 9.70/9.85/5.00 Hz. Four is `NORMAL` but fails normalized mean bandwidth at 75,770 B/s; eight remains `DILATED` at 117.97 ms p95 and 79,004 B/s normalized mean. |
+| Jul 13 | Decision: keep S18, product-admit only one, and next share immutable public projection/core/delta work once per tick across recipients. |
+
+**Options:**
+1. **Keep repeated full validation** — rejected because exact private origin
+   facts prove the same authority-created objects and the measured cost is
+   material.
+2. **Expose or cache proof tokens** — rejected. No issuer/binder/token/consumer
+   API is public; all capability state stays in the publisher closure and the
+   private record is deleted before fallible downstream work.
+3. **Call four-player product-ready** — rejected. Its clock recovers, but
+   normalized mean downlink still exceeds the product gate.
+4. **Share immutable public work per match tick** (chosen) — reduce repeated
+   per-recipient authority work while retaining private owner overlays,
+   connection lineage, ACK bases, and one canonical writer.
+
+**Where it landed:** Option 4. S15 positional JSON + S17 lazy composition +
+S18 trusted proof is the release-default experiment; S16 binary remains opt-in.
+Each match/group owns one dedicated logical authority, and concurrent matches
+multiply that isolated authority horizontally.
+
+**Door status:** Closed for 4/8 product admission, compression, cadence policy,
+hosted/heavy-sim work, and 24/48/96. Open only for bounded same-tick public
+projection/core/delta sharing with exact per-recipient correctness evidence.

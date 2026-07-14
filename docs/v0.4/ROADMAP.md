@@ -615,6 +615,33 @@ red-team closes its non-hermetic benchmark-registration and expanded-limit
 proof findings with no remaining P1/P2; the registered 35-suite
 `multiplayer-network` lane passes once with retries disabled.
 
+**S18 trusted same-operation authority proof — implemented, four/eight product
+admission still rejected:** authority-constructed canonical keyframe/delta
+lanes now carry module-private origin facts into one opaque, one-shot proof.
+The proof binds exact frozen object references, header/recipient/epoch/manifest
+and snapshot/base lineage, canonical text/bytes, four positional sizes, and tie
+order. Its issuer, consumer, token, ticket, and registry never leave the
+publisher instance closure; its private
+record is deleted before positional selection. General/untrusted APIs and S16
+binary retain full fail-closed validation.
+
+The 2 x 800 counterbalanced benchmark preserves exact wire, selection, and
+decoded semantics with zero mismatch while improving mean publish 39.8--45.0%
+and selector p95 87.6--91.3%. Profiler-off one-authority-per-match evidence
+moves 1/4/8 receiver cadence from S17's 9.80/5.60/3.80 Hz to
+9.70/9.85/5.00 Hz. Projection/publish p95 moves from
+21.14/124.80/199.18 ms to 15.13/53.96/117.97 ms. Four recovers `NORMAL` clock
+behavior but remains above the normalized 64 KiB/s mean gate at 75,770 B/s;
+eight remains `DILATED`, clock-failing, and normalizes to 79,004 B/s mean. Only
+one player is product-admitted. Correctness, convergence, exact schedules,
+queues, bounded ledgers, and cleanup pass at every population.
+
+Keep S18. The next bounded lane shares immutable public projection/core/delta
+work once per match tick across recipients, retaining recipient-specific owner
+overlays, connection lineage, ACK/recovery, and one canonical writer. Do not
+begin compression, cadence policy, hosted economics, heavy-sim work, or
+24/48/96.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

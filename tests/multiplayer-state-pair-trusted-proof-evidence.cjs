@@ -14,7 +14,7 @@ const CANDIDATE = path.join(EVIDENCE, "candidate-process");
 const BASELINE = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s17", "candidate-process");
 const BENCHMARK = path.join(EVIDENCE, "trusted-proof-benchmark.json");
 const PROOF_OUTPUT = path.join(EVIDENCE, "trusted-proof-adversarial.json");
-const CANDIDATE_SHA = "9ed325212bbfcb7dd3f63cc215b129e4edac3eb9bdd7048781b70a654868e630";
+const CANDIDATE_SHA = "82a1e0eadea4ee6d6dee36f86b1d937fbd31f3a16e95eb9f24cfa3bb68d69b37";
 const BASELINE_SHA = "9001726f56fbfd895d32f5d3111dd50b16cb80bd1a0903772bffbdc78307d149";
 const TARGET_HZ = 10;
 const MIN_HZ = 9;
@@ -116,7 +116,7 @@ function build() {
     baselineBinding: { path: path.relative(ROOT, BASELINE), compositeSha256: BASELINE_SHA,
       sealedS17Commit: "e57bf53" },
     candidateBinding: { path: path.relative(ROOT, CANDIDATE), compositeSha256: CANDIDATE_SHA,
-      implementationCommit: "11bafe23f9387676e1422a08838acb0b07b9e941" },
+      implementationCommit: "149b7d3c9bb04b672ea88dd498d031938aa6724b" },
     benchmarkBinding: { path: path.relative(ROOT, BENCHMARK), sha256: shaFile(BENCHMARK),
       exactWireComparisons: benchmark.parity.exactWireComparisons,
       exactSelectionTranscriptComparisons: benchmark.parity.exactSelectionTranscriptComparisons,
@@ -127,7 +127,7 @@ function build() {
     decision: { keep: true,
       admittedPopulations: scenarios.filter((row) => row.candidate.productAdmissionPassed).map((row) => row.population),
       rejectedPopulations: scenarios.filter((row) => !row.candidate.productAdmissionPassed).map((row) => row.population),
-      statement: "The trusted proof is exact and material. Four players recover NORMAL 9.8 Hz admission. Eight improves to 5.05 Hz but remains DILATED with 118.42 ms projection/publish p95, so no cadence or bandwidth credit is awarded.",
+      statement: "The trusted proof is exact and material. Four players recover NORMAL 9.85 Hz clock behavior but remain above the normalized 64 KiB/s mean gate at 75,770 B/s, so only one player is product-admitted. Eight reaches 5.00 Hz but remains DILATED at 117.97 ms p95 and 79,004 B/s normalized mean; no cadence or bandwidth credit is awarded.",
       nextLane: "Share the immutable public projection/core/delta work once per match tick across recipients, retaining per-recipient owner overlays, connection lineage, ACK bases, and the one-writer authority boundary." },
     limitations: ["Machine-local loopback", "One immutable 20-second profiler-off candidate window per population",
       "S17 baseline and S18 candidate are not a same-minute paired process run",
@@ -136,7 +136,7 @@ function build() {
 
 function sources() {
   return { implementation: Object.fromEntries(["authority-delta-publisher.cjs", "multiplayer-wire-protocol.cjs",
-    "state-pair-authority-proof.cjs", "state-pair-positional-codec.cjs"].map((file) =>
+    "state-pair-positional-codec.cjs"].map((file) =>
     [file, shaFile(path.join(ROOT, "scripts", file))])),
   tests: Object.fromEntries(["multiplayer-state-pair-trusted-authority-proof.cjs",
     "multiplayer-state-pair-trusted-proof-benchmark.cjs", "multiplayer-state-pair-trusted-proof-evidence.cjs",
@@ -168,8 +168,8 @@ function main() {
     adversarialBinding: manifest.adversarialSha256 === shaFile(PROOF_OUTPUT),
     sourceBindings: JSON.stringify(manifest.implementation) === JSON.stringify(currentSources.implementation)
       && JSON.stringify(manifest.tests) === JSON.stringify(currentSources.tests),
-    decision: JSON.stringify(stored.decision.admittedPopulations) === "[1,4]"
-      && JSON.stringify(stored.decision.rejectedPopulations) === "[8]",
+    decision: JSON.stringify(stored.decision.admittedPopulations) === "[1]"
+      && JSON.stringify(stored.decision.rejectedPopulations) === "[4,8]",
     proofAccounting: stored.scenarios.every((row) => row.candidate.operations.trustedProofsCreated
       === row.candidate.operations.trustedProofsConsumed && row.candidate.operations.trustedProofRejects === 0) };
   console.log(JSON.stringify({ passed: Object.values(invariants).every(Boolean), invariants,

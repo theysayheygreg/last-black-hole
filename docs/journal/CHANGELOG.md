@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-07-13 — v0.4 S18 trusted authority state-pair proof
+
+- Added a one-operation, publisher-closure-private proof for canonical lanes constructed
+  inside one dedicated match authority. Exact frozen references, lineage,
+  canonical text/bytes, limits, and positional facts are consumed once; forged,
+  stale, mutated, cross-recipient, and unsupported callers fail closed or use
+  the unchanged full validator. Issuer, consumer, token, ticket, and registry
+  never cross into the wire module; import-order/binder capture is impossible,
+  and failed downstream work is counted as a rejection. S16 binary retains
+  full validation.
+- Preserved S15 bytes/digest/tie order, S17 one-frame materialization,
+  max/max-minus-one fallback, decoded semantics, ACK/recovery/retransmit,
+  privacy, accounting, and ledger bounds. The counterbalanced 2 x 800
+  benchmark has zero mismatch, 40--45% lower mean publish time, and 88--91% lower
+  selector p95.
+- Captured immutable profiler-off one-authority-per-match process evidence.
+  One/four/eight reach 9.70/9.85/5.00 Hz. Four recovers a normal clock but
+  still fails the 64 KiB/s normalized-mean gate; eight remains `DILATED` and
+  clock-failing. Only one player is product-admitted.
+- Selected shared per-tick public projection/core/delta work as the next
+  bounded lane. Compression, cadence policy, hosted/heavy-sim work, and
+  24/48/96 remain closed.
+
 ## 2026-07-13 — v0.4 S17 lazy state-pair candidates
 
 - Replaced four eager positional outer frames with four exact-size descriptors

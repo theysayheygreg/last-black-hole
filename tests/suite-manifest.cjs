@@ -180,6 +180,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairTrustedAuthorityProofEvidence",
+    file: "multiplayer-state-pair-trusted-proof-evidence.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ClientDeltaReceiver",
     file: "client-delta-receiver.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
