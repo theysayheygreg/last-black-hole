@@ -93,6 +93,17 @@
 - Extended direct transport and four-human browser proof through terminal
   failure, stable pending-input bounds, visible recovery copy, and clean return
   to the launch choices.
+- Started P5 with one authority-owned public crew result that classifies full
+  extraction, partial extraction, or crew loss and lists seat-sorted public
+  outcomes without cargo, signal, loadout, profile, or reward leakage.
+- Kept dead and extracted remote clients attached to authority snapshots until
+  canonical crew truth exists, preventing an early personal result from
+  becoming an accidental leave path.
+- Added an explicit terminal S20 projection after gameplay cadence stops, so
+  live stream clients receive the final crew snapshot and event.
+- Updated the result overlay to pair the identical crew outcome with the local
+  player's owner-private cargo/reward detail, with focused authority and UI
+  coverage.
 
 ### External playtest
 

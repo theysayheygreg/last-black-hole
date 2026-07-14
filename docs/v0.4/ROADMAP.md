@@ -42,12 +42,11 @@ production provider composition, and deployment proof are not.
   cohort never admitted and raw capture never started. H48/H96 are far
   extrapolations; X96 fails its model screens.
 
-Crew Muster and the private-room/readiness/front-door slices are implemented
-and green across real browser processes: unavailable-authority offline recovery,
-four admitted humans, and a rejected fifth. Copy/paste invitations, durable
-room failures, retired-code rejection, protocol-version refusal, and stream as
-the configured product default are closed. The next work is shared-run
-readability, not another eight-player rescue.
+Crew Muster through failure continuity are implemented and green across real
+browser processes. P5A now adds one privacy-safe canonical crew result and
+keeps terminal clients attached until it arrives. The next work is exact
+multi-player reward settlement, final-state residency, and party-preserving
+rematch, not another eight-player rescue.
 
 ## Milestone 1 — Four-Player Product Completion
 
@@ -102,8 +101,13 @@ Current execution checkpoint:
   a persistent failed state, stop gameplay dispatch, neutralize stale movement
   before any later admission, explain the live-body reservation, and provide a
   prompt return to launch that never waits on an unavailable authority.
-- Next: P5 canonical crew result and rematch. Costing, hosting, eight-player,
-  and high-count work stay closed.
+- P5A is live: one public seat-sorted crew result distinguishes full extraction,
+  partial extraction, and crew loss; private cargo and rewards remain local.
+  Dead or extracted clients keep polling and cannot leave before crew truth.
+- Next: P5B fixes exact multi-player JSON result persistence and publishes
+  settled owner-only credits, followed by result residency and a new rematch
+  mutation that preserves party/seats while rotating every run-scoped fence.
+  Costing, hosting, eight-player, and high-count work stay closed.
 
 S20 negotiation/fallback, owner privacy, ACK/rebase, reliable actions,
 reconnect fencing, and bounded queues remain frozen guardrails. Local/offline

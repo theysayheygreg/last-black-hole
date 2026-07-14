@@ -74,6 +74,7 @@ function cargoForOutcome(result, fallbackCargo, outcome) {
 
 export function buildRunResultsViewModel({
   runResult = null,
+  crewResult = null,
   phase = 'dead',
   fallbackCargo = [],
   fallbackSurvivalTime = 0,
@@ -98,11 +99,28 @@ export function buildRunResultsViewModel({
     seed: runResult?.seed ?? runResult?.mapContext?.seed ?? null,
     wellCount: runResult?.wellCount ?? runResult?.mapContext?.wellCount ?? null,
   };
+  const crewMembers = Array.isArray(crewResult?.members) ? crewResult.members : [];
+  const crewReturned = crewResult?.outcome === 'full-extraction'
+    || crewResult?.outcome === 'partial-extraction';
+  const localStatus = extracted ? 'EXTRACTED' : deathStatus(runResult);
 
   return {
     outcome,
-    status: extracted ? 'EXTRACTED' : deathStatus(runResult),
-    tone: extracted ? 'extract' : 'death',
+    status: crewResult
+      ? (crewResult.outcome === 'full-extraction' ? 'FULL EXTRACTION'
+        : crewReturned ? 'PARTIAL EXTRACTION' : 'CREW LOST')
+      : localStatus,
+    localStatus,
+    tone: crewResult ? (crewReturned ? 'extract' : 'death') : (extracted ? 'extract' : 'death'),
+    waitingForCrew: !crewResult,
+    crewResult,
+    crewSummary: crewResult
+      ? `${crewResult.extractedCount || 0} extracted / ${crewResult.lostCount || 0} lost / ${crewResult.abandonedCount || 0} abandoned`
+      : 'crew outcome pending',
+    crewLines: crewMembers.map((member) => {
+      const seat = Number.isInteger(member.seatNo) ? `P${member.seatNo + 1}` : 'P?';
+      return `${seat} ${member.name || 'pilot'} — ${String(member.outcome || 'unknown').toUpperCase()}`;
+    }),
     survival: formatTime(survivalTime),
     survivalSeconds: survivalTime,
     signalPeakLabel: `${String(signalZone).toUpperCase()} (${formatSignal(signalPeak)})`,
@@ -144,7 +162,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   const success = view.tone === 'extract';
   const role = success ? 'extract' : 'danger';
   const continueRole = success ? 'extract' : 'flow';
-  const continueLabel = success ? 'review salvage' : 'return home';
+  const continueLabel = view.waitingForCrew ? 'waiting for crew' : 'leave crew';
   const accent = roleColor(role, 0.95);
   const lingerFrac = clamp01(rawTime / lingerDuration);
   const dimEase = lingerFrac * lingerFrac * (3 - 2 * lingerFrac);
@@ -206,7 +224,9 @@ export function drawRunResultsOverlay(ctx, canvas, {
     reducedMotion: motion.reducedMotion,
   }));
   ctx.font = canvasFont(15);
-  ctx.fillText(success ? 'you made it through the aperture' : 'this is what the universe kept', cx, panelY + 84);
+  ctx.fillText(view.crewResult
+    ? `${view.crewSummary} // you: ${view.localStatus}`
+    : `${view.localStatus} // awaiting canonical crew outcome`, cx, panelY + 84);
 
   const contentAlpha = motionProgress(reveal, {
     delay: 0.65,
@@ -288,7 +308,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
   }
 
   ry += 14;
-  const notableLines = [...view.notableLines];
+  const notableLines = [...view.crewLines, ...view.notableLines];
   if (view.aiLines.length > 0) notableLines.push(...view.aiLines);
   drawSectionLabel(ctx, 'NOTABLE', rightX, ry, { role, alpha: contentAlpha });
   ry += 24;
@@ -322,7 +342,7 @@ export function drawRunResultsOverlay(ctx, canvas, {
     }, continueLabel, {
       hotkey: promptLabel('confirm'),
       role: continueRole,
-      active: true,
+      active: !view.waitingForCrew,
       alpha: promptAlpha * blink,
       progress: promptAlpha,
       pulseTime: (totalTime % 1.4) / 1.4,

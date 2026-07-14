@@ -67,6 +67,22 @@ const deathResult = {
   seed: 99,
 };
 
+const partialCrewResult = {
+  sessionId: 'test-session',
+  runId: 'test-run-dead',
+  reason: 'terminal-players',
+  outcome: 'partial-extraction',
+  durationSeconds: 64,
+  crewSize: 2,
+  extractedCount: 1,
+  lostCount: 1,
+  abandonedCount: 0,
+  members: [
+    { clientId: 'pilot-ui', seatNo: 0, name: 'Results Pilot', hullType: 'drifter', outcome: 'dead' },
+    { clientId: 'pilot-ally', seatNo: 1, name: 'Aperture', hullType: 'hauler', outcome: 'extracted' },
+  ],
+};
+
 async function run() {
   console.log(`\n=== RUN RESULTS TESTS (${htmlFile}) ===\n`);
 
@@ -110,6 +126,22 @@ async function run() {
       assert(view.inhibitorLabel === "vessel", `Expected vessel form, got ${view.inhibitorLabel}`);
       assert(view.cargoLabels[0].includes("Drowned Core"), "Expected lost cargo label");
       assert(view.aiLines[0].includes("redline") && view.aiLines[0].includes("4 cargo"), "Expected AI outcome cargo count");
+    });
+
+    await runner.run("Shared result keeps canonical crew truth beside private loss", async () => {
+      const ok = await page.evaluate(({ result, crew }) => {
+        return window.__TEST_API.showRunResultsFixture(result, 'dead', crew);
+      }, { result: deathResult, crew: partialCrewResult });
+      assert(ok, "Expected shared fixture injection to succeed");
+
+      const view = await page.evaluate(() => window.__TEST_API.getRunResultsView());
+      assert(view.status === 'PARTIAL EXTRACTION', `Expected canonical partial extraction, got ${view.status}`);
+      assert(view.localStatus === 'CONSUMED BY CHARYBDIS', 'Expected private local outcome to remain visible');
+      assert(view.crewLines.length === 2 && view.crewLines[1].includes('Aperture')
+          && view.crewLines[1].includes('EXTRACTED'),
+        'Expected seat-sorted public crew outcome lines');
+      assert(view.cargoTitle === 'CARGO LOST' && view.cargoLabels[0].includes('Drowned Core'),
+        'Expected owner-private lost cargo beside shared result');
     });
 
     const filepath = await screenshot(page, "run-results");

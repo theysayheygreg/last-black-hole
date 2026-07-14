@@ -21,12 +21,9 @@ interpolation, Three, fluid presentation, UI, VFX, and audio.
 
 The focused private-room journey now proves four human-surface clients,
 copy/paste invitation, authority-owned launch, fifth-seat rejection, explicit
-offline recovery, and reconnect continuity. The remaining product gap begins
-after admission:
-
-- reconnecting and recovered states need persistent player-facing treatment;
-- multiplayer result/rematch is not yet a coherent crew flow;
-- the strongest run evidence uses test assistance to shorten traversal.
+offline recovery, reconnect continuity, and terminal recovery. The remaining
+product gap is the end-of-run loop: settled per-player rewards, one shared
+result, party-preserving rematch, and human evidence without debug navigation.
 
 ## Player Journey
 
@@ -113,10 +110,31 @@ on an unreachable authority.
 
 ### P5 — Shared Result And Rematch
 
+**Implementation status:** in progress. The authority now commits one public,
+seat-sorted result with full-extraction, partial-extraction, or crew-lost truth.
+Terminal clients continue receiving snapshots until that result exists, and
+the result overlay combines the identical public crew outcome with only the
+local player's private cargo/reward detail. The authority and UI fixture suites
+prove this first slice.
+
 - show one canonical match outcome to the crew;
 - show each player only their private reward/write-back details;
 - let the crew rematch into a new run lineage without rebuilding the party;
 - provide a clean leave-to-home path from both result and lobby.
+
+P5 closes in this order:
+
+1. **P5A canonical result:** public crew summary plus owner-private result;
+   terminal pilots wait for shared truth instead of leaving early. **Live.**
+2. **P5B settled rewards:** fix default JSON multi-player run-record identity,
+   wait for persistence, and publish exact owner-only credited/overflow truth.
+3. **P5C results residency:** final S20 delivery is live; keep the match
+   authority alive while connected crew members are reviewing results.
+4. **P5D rematch:** host proposes a rematch that preserves party, seats, and
+   leader while rotating run lineage, credentials, snapshots, events, and
+   readiness. Old-run commands must fail closed.
+5. **P5E controls:** host sees Rematch, guests see Waiting For Leader, and every
+   player has an explicit Leave To Home action.
 
 ### P6 — Product Evidence And Greg Gate
 
@@ -134,11 +152,11 @@ see the same result, and rematch without terminal intervention.
 
 ## Immediate Next Slice
 
-Begin P5 canonical crew result and rematch. Reuse the authority's committed run
-result rather than assembling different outcomes on each client; keep private
-reward details owner-only; preserve the party while creating a fresh run
-lineage; and retain explicit leave-to-launch/home. Do not reopen hosting,
-costing, or high-count work.
+Continue with P5B settled rewards, then P5C results residency and P5D/E rematch
+controls. Do not build rematch on the legacy `/session/reset`: it destroys the
+party and grants only the host a new join claim. Preserve the party while
+creating a fresh run lineage, and retain explicit leave-to-home. Do not reopen
+hosting, costing, or high-count work.
 
 Engineering guardrails remain:
 

@@ -632,6 +632,26 @@ async function main() {
       await newer.resumed._stopStream("newer-cursor-test");
     });
 
+    await runner.run("terminal authority flushes canonical crew result through the live stream", async () => {
+      const response = await fetch(`${BASE_URL}/debug/player-state`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clientId: client.clientId, status: "dead", cause: "stream-terminal-fixture" }),
+      });
+      assert(response.ok, "Expected debug terminal mutation");
+      const terminal = await waitFor(() => {
+        const snapshot = client.latestSnapshot;
+        return snapshot?.session?.status === "ended" && snapshot.session.crewResult ? snapshot : null;
+      }, "terminal crew result on stream");
+      assert(terminal.session.crewResult.runId === client.runId
+          && terminal.session.crewResult.outcome === "crew-lost",
+        "Stream terminal snapshot did not carry canonical crew truth");
+      const events = client.consumeEvents();
+      assert(events.some((event) => event.type === "session.ended"
+          && event.payload?.crewResult?.runId === client.runId),
+        "Stream terminal event did not carry canonical crew truth");
+    });
+
     await runner.run("leave closes stream and leaves bounded state", async () => {
       const response = await client.leave();
       assert(response.ok === true && client.getMetrics().pendingActionCount === 0,

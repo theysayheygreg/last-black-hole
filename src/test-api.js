@@ -227,13 +227,14 @@ export function initTestAPI(getState) {
       return getChronicleViewModel ? getChronicleViewModel() : null;
     },
 
-    showRunResultsFixture(runResult, phase = null) {
+    showRunResultsFixture(runResult, phase = null, crewResult = null) {
       const state = getState();
       if (!state.setLastRunResult || !state.setEndScreenTimers) return false;
       if (state.profileManager && !state.profileManager.active) {
         state.profileManager.createProfile(0, 'Results Pilot');
       }
       state.setLastRunResult(runResult || null);
+      state.setLastCrewResult?.(crewResult || null);
       const outcome = runResult?.outcome === 'extracted' ? 'escaped' : runResult?.outcome === 'escaped' ? 'escaped' : 'dead';
       state.gamePhase = phase || outcome;
       state.setEndScreenTimers({ death: 3.8, escape: 3.8 });

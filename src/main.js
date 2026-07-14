@@ -335,6 +335,7 @@ let inhibitorState = { form: 0, wx: 0, wy: 0, intensity: 0, radius: 0, localTime
 let inhibitorWakeGlitchTimer = 0;
 let localAbilityState = null;
 let lastRunResult = null;  // populated from run.result event
+let lastCrewResult = null; // public canonical result populated from session truth
 // localAbilityState: null in local-sim mode (hull abilities are server-only).
 // HUD and visual effects gracefully no-op when null.
 
@@ -609,6 +610,7 @@ function currentRunResultsViewModel() {
   const fallbackCargo = inventorySystem?.getCargoItems?.() || [];
   return buildRunResultsViewModel({
     runResult: lastRunResult,
+    crewResult: lastCrewResult,
     phase: gamePhase,
     fallbackCargo,
     fallbackSurvivalTime: simState.runEndTime,
@@ -1370,6 +1372,7 @@ function init() {
       inventorySystem,
       get lastRunResult() { return lastRunResult; },
       setLastRunResult: (result) => { lastRunResult = result ? JSON.parse(JSON.stringify(result)) : null; },
+      setLastCrewResult: (result) => { lastCrewResult = result ? JSON.parse(JSON.stringify(result)) : null; },
       getRunResultsViewModel: currentRunResultsViewModel,
       getChronicleViewModel: buildChronicleViewModel,
       setRecentEchoes: (echoes) => {
@@ -2005,6 +2008,9 @@ function applyRemoteSnapshot(snapshot) {
     showHUD();
   }
   remoteSnapshot = snapshot;
+  if (snapshot.session?.crewResult) {
+    lastCrewResult = snapshot.session.crewResult;
+  }
   if (snapshot.session?.cosmicSignature) {
     currentSignature = { ...snapshot.session.cosmicSignature };
   }
@@ -2660,6 +2666,11 @@ function applyRemoteEvents(events) {
           lastRunResult = payload;
         }
         break;
+      case 'session.ended':
+        if (payload.crewResult) {
+          lastCrewResult = payload.crewResult;
+        }
+        break;
       case 'inhibitor.wake':
         // The Swarm is the irreversible wake. Direction still comes from
         // the edge-dim vignette, not a literal pointer.
@@ -3089,6 +3100,7 @@ function clearRemoteSessionPresentation() {
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
+  lastCrewResult = null;
 }
 
 function abandonFailedRemoteSessionToLaunch() {
@@ -4610,6 +4622,12 @@ function gameLoop(now) {
       const endScreenUnlock = DEATH_LINGER_DURATION + 1.0;
       if (gamePhase === 'dead' && deathTimer > endScreenUnlock) {
         if (remoteAuthorityActive) {
+          if (!lastCrewResult) {
+            showWarning('YOUR SIGNAL ENDED — WAITING FOR CREW OUTCOME', 'rgba(255, 190, 90, 0.9)', 2400);
+            _prevConfirm = confirmNow;
+            requestAnimationFrame(gameLoop);
+            return;
+          }
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave failed:', err);
@@ -4661,6 +4679,12 @@ function gameLoop(now) {
         metaExtractedItems = inventorySystem.extractCargo();
         metaEmCredited = Math.max(0, Math.round(Number(lastRunResult?.emEarned) || 0));
         if (remoteAuthorityActive) {
+          if (!lastCrewResult) {
+            showWarning('YOU EXTRACTED — WAITING FOR CREW OUTCOME', 'rgba(100, 255, 180, 0.9)', 2400);
+            _prevConfirm = confirmNow;
+            requestAnimationFrame(gameLoop);
+            return;
+          }
           triggerTransition(() => {
             void leaveRemoteSessionToHome().catch((err) => {
               console.error('[LBH] remote leave after extraction failed:', err);
@@ -4847,20 +4871,22 @@ function gameLoop(now) {
           });
         }
 
-        if (!remoteSnapshotRequestInFlight) {
-          remoteSnapshotRequestInFlight = true;
-          void simClient.pollSnapshot().then((snapshot) => {
-            applyRemoteSnapshot(snapshot);
-          }).catch((err) => {
-            console.error('[LBH] remote snapshot failed:', err);
-          }).finally(() => {
-            remoteSnapshotRequestInFlight = false;
-          });
-        }
       } else if (gamePhase === 'dead') {
         deathTimer += dt;
       } else if (gamePhase === 'escaped') {
         escapeTimer += dt;
+      }
+      // Terminal pilots remain attached observers until the authority commits
+      // one crew result. This keeps early deaths/extractions on shared truth.
+      if (!remoteSnapshotRequestInFlight) {
+        remoteSnapshotRequestInFlight = true;
+        void simClient.pollSnapshot().then((snapshot) => {
+          applyRemoteSnapshot(snapshot);
+        }).catch((err) => {
+          console.error('[LBH] remote snapshot failed:', err);
+        }).finally(() => {
+          remoteSnapshotRequestInFlight = false;
+        });
       }
     } else {
       // 5. Wave ring forces on ship

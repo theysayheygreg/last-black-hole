@@ -373,6 +373,36 @@ async function runScenario(humanCount) {
     assert(persisted.recentRuns.filter((run) => run.runId === runId).length === 1,
       "100 outcome attempts must produce one durable run record");
 
+    for (let index = 1; index < fixtures.length; index++) {
+      const terminal = await request("/debug/player-state", {
+        method: "POST",
+        body: { clientId: fixtures[index].clientId, status: "dead", cause: "crew-result-fixture" },
+      });
+      assert(terminal.status === 200 && terminal.body.ok,
+        `Expected crew member ${index + 1} death to reach canonical result`);
+    }
+    const terminalSnapshot = await request(`/snapshot?runId=${encodeURIComponent(runId)}`, {
+      authority: resultAuthority,
+    });
+    const crewResult = terminalSnapshot.body.session?.crewResult;
+    assert(terminalSnapshot.body.session?.status === "ended", "Expected terminal crew session");
+    assert(crewResult?.runId === runId && crewResult?.outcome === "crew-lost",
+      "Canonical crew result did not carry shared run/outcome truth");
+    assert(crewResult?.crewSize === humanCount && crewResult?.lostCount === humanCount,
+      `Canonical crew result count mismatch for ${humanCount} humans`);
+    assert(Array.isArray(crewResult?.members) && crewResult.members.length === humanCount,
+      "Canonical crew result omitted public crew members");
+    assert(crewResult.members.every((member) => !Object.keys(member).some((key) => PRIVATE_PLAYER_KEYS.includes(key))),
+      "Canonical crew result leaked owner-private fields");
+
+    const terminalEvents = await request(`/events?runId=${encodeURIComponent(runId)}&since=0`, {
+      authority: resultAuthority,
+    });
+    const endedEvents = terminalEvents.body.events.filter((event) => event.type === "session.ended");
+    assert(endedEvents.length === 1, `Expected one canonical session.ended event, got ${endedEvents.length}`);
+    assert(JSON.stringify(endedEvents[0].payload.crewResult) === JSON.stringify(crewResult),
+      "Crew result diverged between the public event and session snapshot");
+
     const publicSnapshotBytes = publicSamples.map((sample) => sample.bytes);
     const ownerSnapshotBytes = ownerSamples.map((sample) => sample.bytes);
     const publicSnapshotLatencies = publicSamples.map((sample) => sample.elapsedMs);

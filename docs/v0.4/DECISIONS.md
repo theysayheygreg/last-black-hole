@@ -27,6 +27,7 @@ Statuses:
 | configured multiplayer defaults to stream with explicit offline recovery | ACTIVE | entry below |
 | public run identity exposes seat and link state, not private loadout truth | ACTIVE | entry below |
 | connection lifecycle is public match coordination state | ACTIVE | entry below |
+| canonical crew outcome is public; reward settlement is owner-private | ACTIVE | entry below |
 | external test uses a disposable Tailscale shared node | ACTIVE | `OPTIONAL-LOCAL-INTERNET-HOST.md` |
 | hybrid verified authority plus private continuity | PROVISIONAL | `OPEN-DECISIONS.md` |
 
@@ -189,6 +190,25 @@ acceptance gate; one through three humans remain supported party sizes.
 Do not reopen eight-player replication, high-count capacity, provider costing,
 host packing, public matchmaking, built-in voice, or production cloud work as
 a substitute for completing this journey.
+
+## 2026-07-14 — Crew outcome is public; reward settlement is owner-private
+
+**Status:** ACTIVE
+
+When no active human remains, the match authority commits one canonical public
+crew result for the current run. It contains only session/run identity, terminal
+reason, duration, full/partial/lost classification, aggregate counts, and
+seat-sorted public member identity plus outcome. Every client reads that same
+object from session truth and the terminal event.
+
+Individual cargo, signal, profile identity, equipment, earned currency,
+overflow, and persistence acknowledgements remain owner-private. A terminal
+pilot stays attached as an observer until canonical crew truth exists. Private
+reward presentation must distinguish pending from durably settled truth; an
+optimistic calculation is not a settlement acknowledgement.
+
+**Why:** multiplayer needs one shared answer to “what happened to us” without
+turning another player's progression or inventory into public match state.
 
 ## 2026-07-14 — Authority and replication product boundary
 

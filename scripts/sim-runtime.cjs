@@ -2225,6 +2225,68 @@ function scheduleTerminalShutdown(reason) {
   terminalShutdownHandle.unref?.();
 }
 
+function buildCanonicalCrewResult(reason) {
+  const members = getHumanPlayers()
+    .map((player) => {
+      const committed = player.committedOutcome
+        || (player.status === "escaped" ? "escaped" : player.status === "dead" ? "dead" : "abandoned");
+      return {
+        clientId: player.clientId,
+        seatNo: Number.isInteger(player.seatNo) ? player.seatNo : null,
+        name: player.name,
+        hullType: player.hullType || "drifter",
+        outcome: committed === "escaped" ? "extracted" : committed,
+      };
+    })
+    .sort((a, b) => (a.seatNo ?? Number.MAX_SAFE_INTEGER) - (b.seatNo ?? Number.MAX_SAFE_INTEGER));
+  const extractedCount = members.filter((member) => member.outcome === "extracted").length;
+  const lostCount = members.filter((member) => member.outcome === "dead").length;
+  const abandonedCount = members.filter((member) => member.outcome === "abandoned").length;
+  const outcome = extractedCount === members.length && members.length > 0
+    ? "full-extraction"
+    : extractedCount > 0 ? "partial-extraction" : "crew-lost";
+  return {
+    sessionId: runtime.session.id,
+    runId: runtime.session.runId,
+    reason,
+    outcome,
+    durationSeconds: runtime.simTime,
+    crewSize: members.length,
+    extractedCount,
+    lostCount,
+    abandonedCount,
+    members,
+  };
+}
+
+function flushTerminalMultiplayerProjection() {
+  if (!multiplayerAdapter) return;
+  const prior = multiplayerProjectionTask || Promise.resolve();
+  const stats = runtime.multiplayerProjection;
+  const runId = runtime.session.runId;
+  const generation = stats.generation;
+  let task = null;
+  task = Promise.resolve(prior)
+    .catch(() => null)
+    .then(() => {
+      if (!isCurrentProjectionLineage(stats, runId, generation)) return null;
+      return multiplayerAdapter.projectNow();
+    })
+    .then((result) => {
+      if (!isCurrentProjectionLineage(stats, runId, generation) || !result) return;
+      stats.projectedConnections += Math.max(0, Number(result.projected) || 0);
+      stats.lastSnapshotId = Math.max(stats.lastSnapshotId, Number(result.snapshotId) || 0);
+      stats.lastProjectedAt = Date.now();
+    })
+    .catch(() => {
+      if (isCurrentProjectionLineage(stats, runId, generation)) stats.errors += 1;
+    })
+    .finally(() => {
+      if (multiplayerProjectionTask === task) multiplayerProjectionTask = null;
+    });
+  multiplayerProjectionTask = task;
+}
+
 function endSession(reason, extra = {}) {
   if (runtime.session.status !== "running") return false;
   runtime.session.status = "ended";
@@ -2232,12 +2294,17 @@ function endSession(reason, extra = {}) {
   runtime.session.endReason = reason;
   runtime.session.endedAt = new Date().toISOString();
   runtime.session.endedSimTime = runtime.simTime;
+  runtime.session.crewResult = buildCanonicalCrewResult(reason);
   publishEvent("session.ended", {
     reason,
     simTime: runtime.simTime,
     humanPlayerCount: getHumanPlayerCount(),
     activeHumanPlayerCount: getHumanPlayerCount({ activeOnly: true }),
+    crewResult: runtime.session.crewResult,
   });
+  // The normal cadence stops with gameplay. Push the terminal snapshot/event
+  // once so stream clients can enter the shared results phase on S20 truth.
+  flushTerminalMultiplayerProjection();
   telemetry.info("session.ended", {
     sessionId: runtime.session.id,
     runId: runtime.session.runId,
