@@ -1,7 +1,12 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { collectorReady } = require("../scripts/v04-authority-benchmark-entrypoint.cjs");
+const { AUTHORITY_ENV, collectorReady } = require("../scripts/v04-authority-benchmark-entrypoint.cjs");
+
+assert.equal(AUTHORITY_ENV.LBH_SIM_WS_REPLICATION_ACCOUNTING, undefined,
+  "hosted authority must not enable the test-only replication ledger");
+assert.equal(AUTHORITY_ENV.LBH_REPLICATION_BASELINE_CAPTURE, undefined,
+  "hosted authority must not masquerade as a test capture");
 
 const calls = [];
 const execute = (name, args, options) => {

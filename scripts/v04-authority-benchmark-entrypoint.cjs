@@ -5,6 +5,20 @@ const { spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
+const AUTHORITY_ENV = Object.freeze({
+  LBH_SIM_WS_ENABLED: "true",
+  LBH_SIM_WS_JSON_V2: "true",
+  LBH_SIM_WS_STATE_PAIR_V1: "true",
+  LBH_SIM_WS_STATE_PAIR_MIXED_V1: "true",
+  LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: "true",
+  LBH_SIM_WS_POSITIONAL_JSON_V1: "true",
+  LBH_SIM_WS_STATE_PAIR_BINARY_V1: "false",
+  LBH_SIM_WS_STATE_PAIR_COMPRESSION_V1: "true",
+  LBH_SIM_WS_STATE_PAIR_PUBLIC_BODY_V1: "false",
+  LBH_SIM_WS_STATE_PAIR_PREPARED_PUBLIC_SOURCE_V1: "false",
+  LBH_SIM_KEEP_ALIVE: "true",
+});
+
 function fail(message) {
   console.error(`[v04-benchmark] ${message}`);
   process.exit(78);
@@ -56,20 +70,10 @@ function main() {
     fail("per-connection socket/on-wire capture and tuple separation must be attested");
   }
 
-  Object.assign(process.env, {
-  LBH_SIM_WS_ENABLED: "true",
-  LBH_SIM_WS_JSON_V2: "true",
-  LBH_SIM_WS_STATE_PAIR_V1: "true",
-  LBH_SIM_WS_STATE_PAIR_MIXED_V1: "true",
-  LBH_SIM_WS_RUNTIME_PUBLIC_COMPONENTS_V1: "true",
-  LBH_SIM_WS_POSITIONAL_JSON_V1: "true",
-  LBH_SIM_WS_STATE_PAIR_BINARY_V1: "false",
-  LBH_SIM_WS_STATE_PAIR_COMPRESSION_V1: "true",
-  LBH_SIM_WS_STATE_PAIR_PUBLIC_BODY_V1: "false",
-  LBH_SIM_WS_STATE_PAIR_PREPARED_PUBLIC_SOURCE_V1: "false",
-  LBH_SIM_WS_REPLICATION_ACCOUNTING: "1",
-  LBH_SIM_KEEP_ALIVE: "true",
-  });
+  // Hosted evidence must exercise production runtime guards. Application-byte
+  // accounting is collected by the four isolated client processes; the
+  // authority's internal replication ledger is intentionally test-only.
+  Object.assign(process.env, AUTHORITY_ENV);
 
   const child = spawn(process.execPath, [
     path.join(__dirname, "sim-runtime.cjs"),
@@ -87,4 +91,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { collectorReady, main };
+module.exports = { AUTHORITY_ENV, collectorReady, main };

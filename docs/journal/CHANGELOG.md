@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-14 — v0.4 hosted benchmark launch guard corrected
+
+- Removed the test-only internal replication-accounting flag from the hosted
+  benchmark authority environment. A real hosted authority now exercises
+  production runtime guards instead of aborting before readiness.
+- Kept application-byte accounting with the four isolated client capture
+  processes and socket/on-wire accounting with external collectors; no live
+  regional or cost claim was added.
+
 ## 2026-07-14 — v0.4 local hosted lifecycle and erasure closure
 
 - Fenced startup and new linking when legacy identity-subject HMAC rows are
