@@ -393,7 +393,17 @@ async function run() {
     assert(server.finishPreparedPublicSource(unusedProof));
     assert.strictEqual(server.diagnostics().publicBody.authority.bodyBuilds, 0);
 
-    const liveSource = publicBodySourceFrames(prepared, 2);
+    const invalidSource = publicBodySourceFrames(prepared, 2);
+    const invalidPublic = deepFreeze(invalidSource.publicFrame);
+    const invalidProof = server.preparePublicSource(invalidPublic, [{ binding: prepared, ordinal: 0 }]);
+    assert.throws(() => server.publish(prepared, invalidPublic,
+      { ...invalidSource.ownerFrame, playerId: "owner-rival" }, {
+        preparedPublicSource: invalidProof, preparedRecipientOrdinal: 0,
+      }), (error) => error.code === "non-atomic-source");
+    assert.strictEqual(server.diagnostics().publicBody.authority.bodyBuilds, 0);
+    assert(server.finishPreparedPublicSource(invalidProof));
+
+    const liveSource = publicBodySourceFrames(prepared, 3);
     const livePublic = deepFreeze(liveSource.publicFrame);
     const liveProof = server.preparePublicSource(livePublic, [{ binding: prepared, ordinal: 0 }]);
     const candidate = server.publish(prepared, livePublic, liveSource.ownerFrame, {

@@ -502,7 +502,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     fail("invalid-prepared-public-source", message);
   }
 
-  function consumePreparedPublicSource(proof, binding, publicFrame, ordinal) {
+  function inspectPreparedPublicSource(proof, binding, publicFrame, ordinal) {
     const record = preparedPublicSources.get(proof);
     const identity = requireAdmission(binding);
     const admission = admissions.get(key(identity));
@@ -519,6 +519,13 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         preparedPublicSourceCounters.active -= 1;
       }
       rejectPreparedSource("prepared public source proof is forged, stale, duplicate, or cross-scope");
+    }
+    return Object.freeze({ proof, record, admission, ordinal });
+  }
+
+  function commitPreparedPublicSource({ proof, record, admission, ordinal }) {
+    if (preparedPublicSources.get(proof) !== record) {
+      rejectPreparedSource("prepared public source proof became stale before commit");
     }
     record.intended.set(admission.bindingToken, Object.freeze({ ordinal, consumed: true }));
     if (!record.body) {
@@ -559,9 +566,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
     const sharedPublicBody = admission.capabilities.includes(PUBLIC_BODY_CAPABILITY);
     const preparedSourceEnabled = admission.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY);
-    const preparedSource = preparedSourceEnabled
-      ? consumePreparedPublicSource(preparedPublicSource, binding, publicFrame, preparedRecipientOrdinal)
+    const preparedInspection = preparedSourceEnabled
+      ? inspectPreparedPublicSource(preparedPublicSource, binding, publicFrame, preparedRecipientOrdinal)
       : null;
+    const preparedSource = preparedInspection?.record || null;
     const validateSource = () => {
       if (!preparedSource) assertSourceEnvelope(publicFrame, "public");
       assertSourceEnvelope(ownerFrame, "owner");
@@ -586,6 +594,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       ? s23tProfiler.measureSync(
           S23T_STAGES.BODY_NORMALIZE_VALIDATE, s23tRecipientSlot, validateSource)
       : validateSource();
+    if (preparedInspection) commitPreparedPublicSource(preparedInspection);
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
     const shared = {
       schema: VIEW_SCHEMA, runId: fixedMatchId, authorityEpoch: fixedAuthorityIncarnation,
