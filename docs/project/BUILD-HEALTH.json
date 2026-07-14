@@ -1,36 +1,36 @@
 {
   "ok": true,
-  "recordedAt": "2026-07-14T19:59:18.562Z",
+  "recordedAt": "2026-07-14T23:10:45.494Z",
   "branch": "codex/v0.3-ballpark-roadmap",
-  "gitHead": "0212712279fe0e9acdba3abe3ec4563aea2a963e",
+  "gitHead": "d02c979adf4b3ad581b243a492c78a42a26e09c6",
   "checks": [
     {
       "name": "test",
       "command": "npm test",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 92862
+      "durationMs": 83492
     },
     {
       "name": "renderer",
       "command": "npm run test:renderer",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 138003
+      "durationMs": 75972
     },
     {
       "name": "perf",
       "command": "npm run test:perf",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 63469
+      "durationMs": 61234
     },
     {
       "name": "title-prototype",
       "command": "npm run test:title-prototype",
       "exitCode": 0,
       "ok": true,
-      "durationMs": 8762
+      "durationMs": 8192
     }
   ],
   "dirtyPaths": []
