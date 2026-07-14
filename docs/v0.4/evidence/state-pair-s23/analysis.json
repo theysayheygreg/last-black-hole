@@ -1,0 +1,703 @@
+{
+  "schema": "lbh-s23-public-body-counterbalanced-analysis-v1",
+  "commit": "0120926f35e09c10db2e75dd0e53187ee068a981",
+  "methodology": {
+    "rounds": [
+      {
+        "round": "round-a",
+        "treatmentOrder": [
+          "control-s20",
+          "candidate-s23"
+        ],
+        "populationOrder": {
+          "control": [
+            8,
+            4,
+            1
+          ],
+          "candidate": [
+            1,
+            4,
+            8
+          ]
+        }
+      },
+      {
+        "round": "round-b",
+        "treatmentOrder": [
+          "candidate-s23",
+          "control-s20"
+        ],
+        "populationOrder": {
+          "candidate": [
+            8,
+            4,
+            1
+          ],
+          "control": [
+            1,
+            4,
+            8
+          ]
+        }
+      }
+    ],
+    "profiler": "off",
+    "processBoundary": "one authority process plus one isolated client process per recipient",
+    "thresholds": {
+      "minimumCadenceHz": 9,
+      "overload": "NORMAL",
+      "projectionP95Ms": 50,
+      "projectionP99Ms": 70,
+      "meanBytesPerSecond": 65536,
+      "p95BytesPerSecond": 81920
+    }
+  },
+  "rows": [
+    {
+      "round": "round-a",
+      "treatment": "control-s20",
+      "population": 1,
+      "codec": "state-pair-brotli-v1",
+      "artifactCompositeSha256": "98606afd187f9575497faa0add0ead18270a5a11305dd42a111c4d4fbc412eb6",
+      "cadence": {
+        "authorityMinHz": 9.7,
+        "receiverMinHz": 9.7
+      },
+      "performance": {
+        "projectionP95Ms": 15.20116600000074,
+        "projectionP99Ms": 15.802666000001409,
+        "authorityOneCoreFraction": 0.1655341878282658
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 24879.5,
+        "oneSecondP95BytesPerSecond": 26230
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": null,
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": true,
+        "projectionP99": true,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": true
+      }
+    },
+    {
+      "round": "round-a",
+      "treatment": "control-s20",
+      "population": 4,
+      "codec": "state-pair-brotli-v1",
+      "artifactCompositeSha256": "98606afd187f9575497faa0add0ead18270a5a11305dd42a111c4d4fbc412eb6",
+      "cadence": {
+        "authorityMinHz": 9.85,
+        "receiverMinHz": 9.8
+      },
+      "performance": {
+        "projectionP95Ms": 54.42550000000119,
+        "projectionP99Ms": 56.07170899999983,
+        "authorityOneCoreFraction": 0.5859407350394459
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 31067.15,
+        "oneSecondP95BytesPerSecond": 32035
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": null,
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": false,
+        "projectionP99": true,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": false
+      }
+    },
+    {
+      "round": "round-a",
+      "treatment": "control-s20",
+      "population": 8,
+      "codec": "state-pair-brotli-v1",
+      "artifactCompositeSha256": "98606afd187f9575497faa0add0ead18270a5a11305dd42a111c4d4fbc412eb6",
+      "cadence": {
+        "authorityMinHz": 4.95,
+        "receiverMinHz": 5
+      },
+      "performance": {
+        "projectionP95Ms": 128.49291700000322,
+        "projectionP99Ms": 144.0666250000013,
+        "authorityOneCoreFraction": 0.6503630823856821
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 15880.85,
+        "oneSecondP95BytesPerSecond": 16530
+      },
+      "overloadState": "DILATED",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": null,
+      "gates": {
+        "correctness": true,
+        "cadence": false,
+        "normal": false,
+        "projectionP95": false,
+        "projectionP99": false,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": false
+      }
+    },
+    {
+      "round": "round-a",
+      "treatment": "candidate-s23",
+      "population": 1,
+      "codec": "state-pair-public-body-v1",
+      "artifactCompositeSha256": "10aa48320a4579d213475722e3b11f9236e6f20c9dcc58d188abced4be4f9dcc",
+      "cadence": {
+        "authorityMinHz": 9.85,
+        "receiverMinHz": 9.8
+      },
+      "performance": {
+        "projectionP95Ms": 28.219207999998616,
+        "projectionP99Ms": 28.653082999997423,
+        "authorityOneCoreFraction": 0.28647901543195037
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 40018.1,
+        "oneSecondP95BytesPerSecond": 42281
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": {
+        "bodyBuilds": 262,
+        "bodyHashes": 262,
+        "cohortHits": 0,
+        "cohortBuilds": 261,
+        "bodySerializations": 1,
+        "retainedPublicMaterialBytes": 506507,
+        "capBytes": 8388608,
+        "capRespected": true
+      },
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": true,
+        "projectionP99": true,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": true
+      }
+    },
+    {
+      "round": "round-a",
+      "treatment": "candidate-s23",
+      "population": 4,
+      "codec": "state-pair-public-body-v1",
+      "artifactCompositeSha256": "10aa48320a4579d213475722e3b11f9236e6f20c9dcc58d188abced4be4f9dcc",
+      "cadence": {
+        "authorityMinHz": 9.8,
+        "receiverMinHz": 9.85
+      },
+      "performance": {
+        "projectionP95Ms": 50.88462499999878,
+        "projectionP99Ms": 52.841042000000016,
+        "authorityOneCoreFraction": 0.4907224758517949
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 44482.4,
+        "oneSecondP95BytesPerSecond": 45741
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": {
+        "bodyBuilds": 270,
+        "bodyHashes": 270,
+        "cohortHits": 724,
+        "cohortBuilds": 336,
+        "bodySerializations": 7,
+        "retainedPublicMaterialBytes": 524895,
+        "capBytes": 8388608,
+        "capRespected": true
+      },
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": false,
+        "projectionP99": true,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": false
+      }
+    },
+    {
+      "round": "round-a",
+      "treatment": "candidate-s23",
+      "population": 8,
+      "codec": "state-pair-public-body-v1",
+      "artifactCompositeSha256": "10aa48320a4579d213475722e3b11f9236e6f20c9dcc58d188abced4be4f9dcc",
+      "cadence": {
+        "authorityMinHz": 9,
+        "receiverMinHz": 9
+      },
+      "performance": {
+        "projectionP95Ms": 88.57529199999772,
+        "projectionP99Ms": 95.04504199999974,
+        "authorityOneCoreFraction": 0.7444086224415736
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 45800.7,
+        "oneSecondP95BytesPerSecond": 48102
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": {
+        "bodyBuilds": 258,
+        "bodyHashes": 258,
+        "cohortHits": 1722,
+        "cohortBuilds": 260,
+        "bodySerializations": 14,
+        "retainedPublicMaterialBytes": 602146,
+        "capBytes": 8388608,
+        "capRespected": true
+      },
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": false,
+        "projectionP99": false,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": false
+      }
+    },
+    {
+      "round": "round-b",
+      "treatment": "control-s20",
+      "population": 1,
+      "codec": "state-pair-brotli-v1",
+      "artifactCompositeSha256": "aab940a9eaadc7dd875da530b528dcc71df620aaba325a71b69e66b05b49dc45",
+      "cadence": {
+        "authorityMinHz": 9.7,
+        "receiverMinHz": 9.7
+      },
+      "performance": {
+        "projectionP95Ms": 13.141250000000582,
+        "projectionP99Ms": 13.338292000000365,
+        "authorityOneCoreFraction": 0.15147839074921707
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 25279.9,
+        "oneSecondP95BytesPerSecond": 26476
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": null,
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": true,
+        "projectionP99": true,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": true
+      }
+    },
+    {
+      "round": "round-b",
+      "treatment": "control-s20",
+      "population": 4,
+      "codec": "state-pair-brotli-v1",
+      "artifactCompositeSha256": "aab940a9eaadc7dd875da530b528dcc71df620aaba325a71b69e66b05b49dc45",
+      "cadence": {
+        "authorityMinHz": 9.85,
+        "receiverMinHz": 9.8
+      },
+      "performance": {
+        "projectionP95Ms": 53.77533299999959,
+        "projectionP99Ms": 54.66466600000058,
+        "authorityOneCoreFraction": 0.5706576728499156
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 29334.6,
+        "oneSecondP95BytesPerSecond": 30892
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": null,
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": false,
+        "projectionP99": true,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": false
+      }
+    },
+    {
+      "round": "round-b",
+      "treatment": "control-s20",
+      "population": 8,
+      "codec": "state-pair-brotli-v1",
+      "artifactCompositeSha256": "aab940a9eaadc7dd875da530b528dcc71df620aaba325a71b69e66b05b49dc45",
+      "cadence": {
+        "authorityMinHz": 4.95,
+        "receiverMinHz": 4.95
+      },
+      "performance": {
+        "projectionP95Ms": 121.09375,
+        "projectionP99Ms": 121.95929199999955,
+        "authorityOneCoreFraction": 0.6528099908649454
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 15413.55,
+        "oneSecondP95BytesPerSecond": 15936
+      },
+      "overloadState": "DILATED",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": null,
+      "gates": {
+        "correctness": true,
+        "cadence": false,
+        "normal": false,
+        "projectionP95": false,
+        "projectionP99": false,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": false
+      }
+    },
+    {
+      "round": "round-b",
+      "treatment": "candidate-s23",
+      "population": 1,
+      "codec": "state-pair-public-body-v1",
+      "artifactCompositeSha256": "c1c764e91c83ab849158d51235d7f57d8296c7961aa037c85e8930f963a8826b",
+      "cadence": {
+        "authorityMinHz": 9.8,
+        "receiverMinHz": 9.8
+      },
+      "performance": {
+        "projectionP95Ms": 28.30725000000166,
+        "projectionP99Ms": 28.671124999998938,
+        "authorityOneCoreFraction": 0.2877967236810407
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 38894.95,
+        "oneSecondP95BytesPerSecond": 40662
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": {
+        "bodyBuilds": 261,
+        "bodyHashes": 261,
+        "cohortHits": 0,
+        "cohortBuilds": 259,
+        "bodySerializations": 2,
+        "retainedPublicMaterialBytes": 499709,
+        "capBytes": 8388608,
+        "capRespected": true
+      },
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": true,
+        "projectionP99": true,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": true
+      }
+    },
+    {
+      "round": "round-b",
+      "treatment": "candidate-s23",
+      "population": 4,
+      "codec": "state-pair-public-body-v1",
+      "artifactCompositeSha256": "c1c764e91c83ab849158d51235d7f57d8296c7961aa037c85e8930f963a8826b",
+      "cadence": {
+        "authorityMinHz": 9.85,
+        "receiverMinHz": 9.9
+      },
+      "performance": {
+        "projectionP95Ms": 49.16904199999772,
+        "projectionP99Ms": 50.0269159999998,
+        "authorityOneCoreFraction": 0.49044921968787514
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 45711.3,
+        "oneSecondP95BytesPerSecond": 47181
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": {
+        "bodyBuilds": 270,
+        "bodyHashes": 270,
+        "cohortHits": 704,
+        "cohortBuilds": 356,
+        "bodySerializations": 8,
+        "retainedPublicMaterialBytes": 547132,
+        "capBytes": 8388608,
+        "capRespected": true
+      },
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": true,
+        "projectionP99": true,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": true
+      }
+    },
+    {
+      "round": "round-b",
+      "treatment": "candidate-s23",
+      "population": 8,
+      "codec": "state-pair-public-body-v1",
+      "artifactCompositeSha256": "c1c764e91c83ab849158d51235d7f57d8296c7961aa037c85e8930f963a8826b",
+      "cadence": {
+        "authorityMinHz": 9.1,
+        "receiverMinHz": 9.1
+      },
+      "performance": {
+        "projectionP95Ms": 88.33058300000266,
+        "projectionP99Ms": 94.63012499999968,
+        "authorityOneCoreFraction": 0.744032664040734
+      },
+      "traffic": {
+        "worstRecipientMeanBytesPerSecond": 44863.7,
+        "oneSecondP95BytesPerSecond": 48405
+      },
+      "overloadState": "NORMAL",
+      "correctnessPassed": true,
+      "cleanupPassed": true,
+      "publicBody": {
+        "bodyBuilds": 262,
+        "bodyHashes": 262,
+        "cohortHits": 1748,
+        "cohortBuilds": 262,
+        "bodySerializations": 14,
+        "retainedPublicMaterialBytes": 607430,
+        "capBytes": 8388608,
+        "capRespected": true
+      },
+      "gates": {
+        "correctness": true,
+        "cadence": true,
+        "normal": true,
+        "projectionP95": false,
+        "projectionP99": false,
+        "meanTraffic": true,
+        "p95Traffic": true,
+        "passed": false
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "population": 1,
+      "rounds": [
+        {
+          "round": "round-a",
+          "authorityCadenceRatio": 1.0154639175257731,
+          "projectionP95Ratio": 1.8563844378778078,
+          "projectionP99Ratio": 1.813180320332966,
+          "authorityCpuRatio": 1.7306335276744123,
+          "meanTrafficRatio": 1.6084768584577664,
+          "p95TrafficRatio": 1.6119329012581014,
+          "candidateGates": {
+            "correctness": true,
+            "cadence": true,
+            "normal": true,
+            "projectionP95": true,
+            "projectionP99": true,
+            "meanTraffic": true,
+            "p95Traffic": true,
+            "passed": true
+          }
+        },
+        {
+          "round": "round-b",
+          "authorityCadenceRatio": 1.0103092783505156,
+          "projectionP95Ratio": 2.1540759060211476,
+          "projectionP99Ratio": 2.1495349629471416,
+          "authorityCpuRatio": 1.8999193367290788,
+          "meanTrafficRatio": 1.5385721462505784,
+          "p95TrafficRatio": 1.5358060129928992,
+          "candidateGates": {
+            "correctness": true,
+            "cadence": true,
+            "normal": true,
+            "projectionP95": true,
+            "projectionP99": true,
+            "meanTraffic": true,
+            "p95Traffic": true,
+            "passed": true
+          }
+        }
+      ],
+      "medianRatios": {
+        "authorityCadenceRatio": 1.0128865979381443,
+        "projectionP95Ratio": 2.005230171949478,
+        "projectionP99Ratio": 1.9813576416400538,
+        "authorityCpuRatio": 1.8152764322017454,
+        "meanTrafficRatio": 1.5735245023541724,
+        "p95TrafficRatio": 1.5738694571255003
+      }
+    },
+    {
+      "population": 4,
+      "rounds": [
+        {
+          "round": "round-a",
+          "authorityCadenceRatio": 0.9949238578680204,
+          "projectionP95Ratio": 0.9349408824907013,
+          "projectionP99Ratio": 0.9423832970741123,
+          "authorityCpuRatio": 0.8374950681979111,
+          "meanTrafficRatio": 1.431814633785204,
+          "p95TrafficRatio": 1.4278445450288746,
+          "candidateGates": {
+            "correctness": true,
+            "cadence": true,
+            "normal": true,
+            "projectionP95": false,
+            "projectionP99": true,
+            "meanTraffic": true,
+            "p95Traffic": true,
+            "passed": false
+          }
+        },
+        {
+          "round": "round-b",
+          "authorityCadenceRatio": 1,
+          "projectionP95Ratio": 0.914341934432988,
+          "projectionP99Ratio": 0.9151600048191875,
+          "authorityCpuRatio": 0.8594455888738475,
+          "meanTrafficRatio": 1.5582724836882045,
+          "p95TrafficRatio": 1.527288618412534,
+          "candidateGates": {
+            "correctness": true,
+            "cadence": true,
+            "normal": true,
+            "projectionP95": true,
+            "projectionP99": true,
+            "meanTraffic": true,
+            "p95Traffic": true,
+            "passed": true
+          }
+        }
+      ],
+      "medianRatios": {
+        "authorityCadenceRatio": 0.9974619289340102,
+        "projectionP95Ratio": 0.9246414084618446,
+        "projectionP99Ratio": 0.9287716509466499,
+        "authorityCpuRatio": 0.8484703285358792,
+        "meanTrafficRatio": 1.4950435587367044,
+        "p95TrafficRatio": 1.4775665817207044
+      }
+    },
+    {
+      "population": 8,
+      "rounds": [
+        {
+          "round": "round-a",
+          "authorityCadenceRatio": 1.8181818181818181,
+          "projectionP95Ratio": 0.6893398801118003,
+          "projectionP99Ratio": 0.6597297743318336,
+          "authorityCpuRatio": 1.1446046717641332,
+          "meanTrafficRatio": 2.8840206915876667,
+          "p95TrafficRatio": 2.909981851179673,
+          "candidateGates": {
+            "correctness": true,
+            "cadence": true,
+            "normal": true,
+            "projectionP95": false,
+            "projectionP99": false,
+            "meanTraffic": true,
+            "p95Traffic": true,
+            "passed": false
+          }
+        },
+        {
+          "round": "round-b",
+          "authorityCadenceRatio": 1.8383838383838382,
+          "projectionP95Ratio": 0.7294396531613123,
+          "projectionP99Ratio": 0.7759156637281891,
+          "authorityCpuRatio": 1.1397384759000433,
+          "meanTrafficRatio": 2.910666264423186,
+          "p95TrafficRatio": 3.0374623493975905,
+          "candidateGates": {
+            "correctness": true,
+            "cadence": true,
+            "normal": true,
+            "projectionP95": false,
+            "projectionP99": false,
+            "meanTraffic": true,
+            "p95Traffic": true,
+            "passed": false
+          }
+        }
+      ],
+      "medianRatios": {
+        "authorityCadenceRatio": 1.8282828282828283,
+        "projectionP95Ratio": 0.7093897666365563,
+        "projectionP99Ratio": 0.7178227190300113,
+        "authorityCpuRatio": 1.1421715738320883,
+        "meanTrafficRatio": 2.8973434780054266,
+        "p95TrafficRatio": 2.973722100288632
+      }
+    }
+  ],
+  "proof": {
+    "everyCandidateCorrectAndClean": true,
+    "oneBuildAndHashCounterPerBody": true,
+    "realFourAndEightRecipientCohortReuse": true,
+    "boundedCanonicalMaterial": true
+  },
+  "decision": {
+    "promoteS23": false,
+    "defaultEnabled": false,
+    "s20RemainsProductPathForOneThroughFour": true,
+    "eightPlayerAdmission": false,
+    "absoluteCandidatePassBothRounds": [
+      1
+    ],
+    "reasons": [
+      "Four misses the 50 ms projection p95 gate in round A.",
+      "Eight recovers NORMAL >=9 Hz cadence but misses both 50 ms p95 and 70 ms p99 projection gates in both rounds.",
+      "One remains inside absolute gates but materially regresses S20 CPU, projection tails, and traffic, so one/four non-regression is not proven."
+    ],
+    "maintenanceVerdict": "Keep the corrected capability and proof harness default-off as a bounded research seam; do not replace S20 or claim eight-player product admission."
+  },
+  "limitations": [
+    "Machine-local macOS loopback",
+    "Raw WebSocket without TLS",
+    "One match at a time",
+    "Twenty-second fixed windows",
+    "No WAN, hosted WSS, fleet packing, AOI, or high-count claim"
+  ]
+}

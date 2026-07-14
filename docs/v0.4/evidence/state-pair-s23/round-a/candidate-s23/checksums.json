@@ -1,0 +1,46 @@
+{
+  "algorithm": "sha256(path NUL sha256 LF, sorted by path)",
+  "sha256": "10aa48320a4579d213475722e3b11f9236e6f20c9dcc58d188abced4be4f9dcc",
+  "files": [
+    {
+      "path": "aggregate.json",
+      "bytes": 20655,
+      "sha256": "1d55ec98d1752bf4a9d4aa91746dd657cc3f8eeb7afe30a8217bba13a80a7922"
+    },
+    {
+      "path": "cleanup-normal-1.json",
+      "bytes": 227,
+      "sha256": "1a32d43ee2c1735f0933aec9a91ddc205730fc6b42d673aac47fc377c9670f55"
+    },
+    {
+      "path": "cleanup-normal-4.json",
+      "bytes": 227,
+      "sha256": "5f3098c0bd9f34bf3aed154713e8ebd95e8fdc6e3fb3369672b225c9a83d4470"
+    },
+    {
+      "path": "cleanup-normal-8.json",
+      "bytes": 227,
+      "sha256": "7af51fdfc49a00899932c5fa8dcede2556bb7de374f41b5b483d807a55d25a9b"
+    },
+    {
+      "path": "normal-1.json",
+      "bytes": 1161811,
+      "sha256": "9375ec446366b58d30d73abe8e0b0096ea63bd13733242e678418e16cb67cee5"
+    },
+    {
+      "path": "normal-4.json",
+      "bytes": 4458835,
+      "sha256": "37eb9b22bb5f64d594e764ff63b4b5c16e0d07d601dc9fff14ec576f8463fb90"
+    },
+    {
+      "path": "normal-8.json",
+      "bytes": 8493046,
+      "sha256": "be31271681e32f34cc0994372f31587900982a251f62513a2224c74c18b09fd8"
+    },
+    {
+      "path": "run.json",
+      "bytes": 866,
+      "sha256": "3b186790192b3721610e0fbe7c004ce61408bcf58442335a4cf5f26ce3f7e7d4"
+    }
+  ]
+}
