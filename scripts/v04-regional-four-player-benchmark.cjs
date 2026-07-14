@@ -12,6 +12,7 @@ const RUN_CLASSES = new Set(["external-one-shot", "local-contract-smoke"]);
 const REQUIRED_LATENCY = ["authority", "sim", "writer", "projection"];
 const PERCENTILES = ["p50", "p95", "p99"];
 const FORBIDDEN_KEY = /(?:secret|token|ticket|credential|password|providerSubject|accountId|deviceId|profileId|membershipId)/i;
+const FORBIDDEN_VALUE = /(?:-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+/=-]+|\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b|\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b)/i;
 
 function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
@@ -120,6 +121,7 @@ function validateChronology(raw) {
 
 function scanForForbiddenKeys(value, trail = "$") {
   if (Array.isArray(value)) return value.flatMap((item, index) => scanForForbiddenKeys(item, `${trail}[${index}]`));
+  if (typeof value === "string") return FORBIDDEN_VALUE.test(value) ? [trail] : [];
   if (!value || typeof value !== "object") return [];
   const findings = [];
   for (const [key, child] of Object.entries(value)) {

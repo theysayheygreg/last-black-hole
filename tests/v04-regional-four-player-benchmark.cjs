@@ -151,6 +151,7 @@ async function run() {
     const pair = keys();
     mustReject(pair, (raw) => { raw.clients[0].accountId = "acct-private"; }, /secret\/PII leakage/);
     mustReject(pair, (raw) => { raw.outcomes.cleanup.admissionTicket = "secret"; }, /secret\/PII leakage/);
+    mustReject(pair, (raw) => { raw.outcomes.cleanup.note = "Bearer abc.def.ghi"; }, /secret\/PII leakage/);
   });
 
   await runner.run("rejects a false packing claim from single-authority evidence", async () => {
