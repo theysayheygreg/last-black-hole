@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-14 — v0.4 multiplayer architecture and costing closeout
+
+- Closed the architecture-and-costing goal with the admitted one-through-four
+  S20 path, one logical authority per concurrent match, central verified play
+  plus private continuity, and the checked-in $4.99 economics model.
+- Kept the base planning point at $0.0693 per authority-hour and $0.017325 per
+  occupied player-hour, with modeled cohort break-even near 11,598 copies; the
+  worst service posture remains structurally uneconomic.
+- Reclassified regional capture, 90-minute soak, and 1/2/4/8 independent-
+  authority packing as optional future validation. No Fly resources were
+  created and the unfinished one-shot deployment draft was discarded.
+- Moved the next active product work to a playable four-human S20 journey.
+
 ## 2026-07-14 — optional GregBot friends-only Internet host planned
 
 - Added an optional v0.4 plan for one local S20 authority serving Greg plus

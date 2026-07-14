@@ -12,6 +12,25 @@ one-through-four reference path now exists as provider-neutral pure services
 plus durable SQLite repositories. It does **not** prove that LBH is already a
 public 4–8-player product.
 
+### Closeout
+
+This architecture-and-costing goal is closed. The decision is concise:
+
+- ship v0.4 around the admitted one-through-four S20 path; keep eight closed;
+- use one logical single-writer authority per match, multiplied by concurrent
+  matches;
+- prefer central verified authority with private player-host continuity;
+- treat the base central model as roughly **$0.0693 per authority-hour** or
+  **$0.017325 per occupied player-hour**, with modeled cohort break-even near
+  **11,598 copies** at $4.99;
+- do not fund the modeled worst service posture, which remains loss-making even
+  at one million copies;
+- treat regional capture, 90-minute soak, and 1/2/4/8 authority packing as
+  optional future validation, not a blocker for this completed decision packet.
+
+The longer evidence and sensitivity material remains below for auditability;
+it is not the next implementation task.
+
 - S20 negotiated compression is the admitted replication path for **one
   through four players**. The requested minimum of four is supported by local
   product evidence.
@@ -55,12 +74,10 @@ public 4–8-player product.
   workload auth planes, preserves four-seat and authority-incarnation fences,
   and replays safely after restart. It is not a public deployment or a
   production provider composition.
-- The benchmark container now builds locally and binds its image metadata to
-  the copied S20 sources. Startup executes `tcpdump -D` and fails locally
-  without `NET_ADMIN`/`NET_RAW`; Fly capture capability remains unproved until
-  an authenticated runtime probe. Fly auth, four external client origins, and
-  signer/evidence inputs still block the real regional run. No host-packing or
-  observed-cost claim follows from packaging.
+- The benchmark container and signed evidence contracts remain local validation
+  tools. No Fly deployment was performed and no host-packing or observed-cost
+  claim follows from them. A partially hardened one-shot deployment draft was
+  deliberately discarded rather than carrying unsafe operational tooling.
 - S24 measured a synthetic H24 fixture, not a live 24-client authority. The
   live cohort never admitted and the raw capture never started. H48/H96 are
   far extrapolations and X96 fails its modeled writer and network screens.
@@ -128,10 +145,10 @@ the hot sim; derived client state is boxed; overload is explicit and fair.
 
 ## Program Boundary
 
-The architecture/research objective, durable hosted reference path, and local
-fail-closed HTTP reference runtime are complete. Public product implementation,
-production provider composition, and deployment proof are not. The next work
-is four-human product completion, Greg's hosted-progression choice, production
-service integration, Phase 6 regional measurement, and measured host packing.
-No new eight-player optimization or high-count capacity claim is authorized by
-this packet.
+The architecture/research/costing objective, durable hosted reference path, and
+local fail-closed HTTP reference runtime are complete. Public product
+implementation and production provider composition are separate future work.
+The next task is four-human product completion, not more provider-cost or
+packing analysis. Regional measurement may be resumed only as an explicitly
+authorized validation task. No new eight-player optimization or high-count
+capacity claim is authorized by this packet.

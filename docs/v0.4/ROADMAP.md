@@ -8,6 +8,13 @@
 
 ## Current Checkpoint
 
+**Program closeout (2026-07-14):** the multiplayer architecture and costing
+goal is complete. Stop extending provider-cost and deployment-benchmark tooling
+under this goal. Regional capture, 90-minute soak, and 1/2/4/8 independent-
+authority packing remain optional validation work that requires a fresh,
+explicit authorization. The next product milestone is the playable four-human
+S20 journey.
+
 The research/planning program, durable hosted reference path, and fail-closed
 local HTTP reference runtime are complete. Public product implementation,
 production provider composition, and deployment proof are not.

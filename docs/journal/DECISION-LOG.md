@@ -3232,3 +3232,15 @@ erasure mechanics. Open for erasure-key custody/rotation, status/worker auth
 nuance, retention/legal/accounting policy, unsettled dead-letter operations,
 production provider/key custody, and distributed multi-database/cross-region
 semantics. None of this is Fly or public deployment evidence.
+
+### Q: When is the v0.4 multiplayer architecture and costing goal complete?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Close the goal once the authority model, P2P comparison, identity/placement/settlement design, 24/48/96 forecast boundaries, and reproducible $4.99 economics are decision-ready. Do not require a paid regional deployment or host-packing experiment for this research-and-costing closeout. |
+| Jul 14 | Preserve regional capture, 90-minute soak, and 1/2/4/8 independent-authority packing as optional future validation with fresh authorization. Do not carry an unfinished deployment orchestrator forward as if it were safe operational tooling. |
+| Jul 14 | Move the next active product work to a playable four-human S20 journey; keep eight-player admission closed for v0.4. |
+
+**Door status:** Closed for more costing and deployment-benchmark work under
+this goal. Open only as a separately authorized validation task. The modeled
+costs remain planning inputs, not observed invoices or measured host density.

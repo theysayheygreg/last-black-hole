@@ -10,6 +10,11 @@ staged implementation plan, and durable hosted one-through-four reference
 path are complete and decision-ready** on
 `codex/v0.4-multiplayer-architecture`.
 
+Per program closeout on 2026-07-14, the live regional benchmark and packing
+experiment are optional future validation rather than completion requirements
+for this architecture-and-costing goal. Their absence remains explicit and no
+observed-host-cost claim is made.
+
 The ideal gameplay outcome is only partially complete:
 
 - the requested minimum of four is admitted locally through S20;
