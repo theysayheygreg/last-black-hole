@@ -351,29 +351,6 @@ function testLeasedEntriesStillConsumeCaps() {
     "terminal cap failure invalidates the leased token");
 }
 
-function testSplitExactWiresRetainFragmentIdentity() {
-  const queueA = createMultiplayerSendQueue({ maxBytes: 4096 });
-  const queueB = createMultiplayerSendQueue({ maxBytes: 4096 });
-  const fragment = Buffer.from("LBHPF001-shared-public-fragment");
-  const overlayA = Buffer.from("LBHPO001-owner-a");
-  const overlayB = Buffer.from("LBHPO001-owner-b");
-  const envelopeA = { kind: "state-pair", frames: [{ type: "statePair", frameId: 1 },
-    { type: "statePair", frameId: 1 }] };
-  const envelopeB = { kind: "state-pair", frames: [{ type: "statePair", frameId: 1 },
-    { type: "statePair", frameId: 1 }] };
-  assert(queueA.enqueueState(1, envelopeA, { exactWires: [fragment, overlayA] }).accepted);
-  assert(queueB.enqueueState(1, envelopeB, { exactWires: [fragment, overlayB] }).accepted);
-  const first = queueA.drain().messages[0];
-  const second = queueB.drain().messages[0];
-  assert.strictEqual(first.wires[0], fragment);
-  assert.strictEqual(second.wires[0], fragment);
-  assert.strictEqual(first.wires[0], second.wires[0]);
-  assert.notStrictEqual(first.wires[1], second.wires[1]);
-  assert.strictEqual(first.byteLength, fragment.length + overlayA.length);
-  assert.throws(() => createMultiplayerSendQueue().enqueueState(1, {}, {
-    exactWire: "one", exactWires: ["two"] }), /mutually exclusive/);
-}
-
 function main() {
   testStateCoalescingAndOrdering();
   testEncodedStateByteOverrideDrivesEveryQueueBudget();
@@ -388,7 +365,6 @@ function main() {
   testAttemptLeasesAndContiguousPhysicalWatermark();
   testAttemptOmissionDuplicationReplayAndResetFencing();
   testLeasedEntriesStillConsumeCaps();
-  testSplitExactWiresRetainFragmentIdentity();
   console.log("multiplayer send queue: bounded state/reliable lanes, replay, backpressure, and reset passed");
 }
 

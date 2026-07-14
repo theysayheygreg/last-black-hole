@@ -27,35 +27,21 @@ function nonNegativeInteger(value, fallback, name) {
   return parsed;
 }
 
-function serializeFrame(frame, exactWire = null, exactWires = null) {
+function serializeFrame(frame, exactWire = null) {
   const expandedWire = JSON.stringify(frame);
   if (expandedWire === undefined) throw new TypeError("message must be JSON serializable");
-  if (exactWire !== null && exactWires !== null) {
-    throw new TypeError("exactWire and exactWires are mutually exclusive");
-  }
   if (exactWire !== null && typeof exactWire !== "string" && !Buffer.isBuffer(exactWire)) {
     throw new TypeError("exactWire must be a string or Buffer");
   }
-  if (exactWires !== null && (!Array.isArray(exactWires) || exactWires.length < 1
-      || exactWires.some((wire) => typeof wire !== "string" && !Buffer.isBuffer(wire)))) {
-    throw new TypeError("exactWires must be a non-empty bounded array of strings or Buffers");
-  }
   const snapshot = deepFreezeJson(JSON.parse(expandedWire));
   const wire = exactWire === null ? expandedWire : Buffer.isBuffer(exactWire) ? Buffer.from(exactWire) : exactWire;
-  // Split-fragment publications deliberately retain the authority-owned Buffer
-  // references. They are immutable private material and the public fragment
-  // reference must stay identical across all recipient queues.
-  const wires = exactWires === null ? null : Object.freeze([...exactWires]);
-  const byteLength = wires === null ? Buffer.byteLength(wire, "utf8")
-    : wires.reduce((sum, entry) => sum + Buffer.byteLength(entry), 0);
+  const byteLength = Buffer.byteLength(wire, "utf8");
   return Object.freeze({
     envelope: snapshot,
     wire,
-    wires,
     byteLength,
-    retainedByteLength: exactWire === null && exactWires === null
-      ? byteLength : byteLength + Buffer.byteLength(expandedWire, "utf8"),
-    exactWire: exactWire !== null || exactWires !== null,
+    retainedByteLength: exactWire === null ? byteLength : byteLength + Buffer.byteLength(expandedWire, "utf8"),
+    exactWire: exactWire !== null,
   });
 }
 
@@ -113,15 +99,14 @@ class MultiplayerSendQueue {
       return { accepted: false, action: "ignore", reason: "stale-state" };
     }
 
-    const serialized = serializeFrame(payload, options.exactWire ?? null, options.exactWires ?? null);
+    const serialized = serializeFrame(payload, options.exactWire ?? null);
     const byteLength = options.byteLength === undefined
       ? serialized.byteLength
       : positiveInteger(options.byteLength, undefined, "state encoded byteLength");
     const candidate = {
       ...serialized,
       byteLength,
-      retainedByteLength: options.exactWire === undefined && options.exactWires === undefined
-        ? byteLength : serialized.retainedByteLength,
+      retainedByteLength: options.exactWire === undefined ? byteLength : serialized.retainedByteLength,
       lane: "state",
       stateSequence: normalizedSequence,
     };
@@ -300,7 +285,6 @@ class MultiplayerSendQueue {
         reliableId: entry.reliableId,
         envelope: entry.envelope,
         wire: entry.wire,
-        wires: entry.wires,
         byteLength: entry.byteLength,
         exactWire: entry.exactWire,
         sendAttempt: entry.attemptToken,

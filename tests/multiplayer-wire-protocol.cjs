@@ -153,12 +153,6 @@ async function run() {
     const preparedCapabilities = [...bodyCapabilities, "state-pair-public-body-prepared-v1"];
     validateWireFrame({ ...hello, capabilities: preparedCapabilities }, { direction: CLIENT_TO_SERVER });
     validateWireFrame({ ...welcome, capabilities: preparedCapabilities }, { direction: SERVER_TO_CLIENT });
-    const splitCapabilities = [...preparedCapabilities, "state-pair-split-public-fragment-v1"];
-    validateWireFrame({ ...hello, capabilities: splitCapabilities }, { direction: CLIENT_TO_SERVER });
-    validateWireFrame({ ...welcome, capabilities: splitCapabilities }, { direction: SERVER_TO_CLIENT });
-    expectProtocolError(() => validateWireFrame({ ...hello,
-      capabilities: splitCapabilities.filter((value) => value !== "state-pair-public-body-prepared-v1") },
-    { direction: CLIENT_TO_SERVER }), "invalid-field");
     expectProtocolError(() => validateWireFrame({ ...hello,
       capabilities: preparedCapabilities.filter((value) => value !== "state-pair-public-body-v1") },
     { direction: CLIENT_TO_SERVER }), "invalid-field");

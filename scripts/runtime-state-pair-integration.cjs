@@ -30,14 +30,6 @@ const {
   PREPARED_PUBLIC_SOURCE_CAPABILITY,
 } = require("./state-pair-public-body-codec.cjs");
 const { createSharedPublicBodyAuthority } = require("./shared-public-body-authority.cjs");
-const {
-  createSplitPublicFragmentAuthority,
-  CAPABILITY: SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
-} = (() => {
-  const authority = require("./split-public-fragment-authority.cjs");
-  const codec = require("./split-public-fragment-codec.cjs");
-  return { ...authority, CAPABILITY: codec.CAPABILITY };
-})();
 const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY } =
   require("./state-pair-compression-codec.cjs");
 
@@ -261,12 +253,6 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     publisherOptions: { ...publisherOptions, stageProfiler },
     s23tProfiler,
   });
-  const splitPublicFragmentAuthority = createSplitPublicFragmentAuthority({
-    matchId: fixedMatchId,
-    authorityIncarnation: fixedAuthorityIncarnation,
-    ballparkEpoch: fixedBallparkEpoch,
-    manifestHash: fixedManifestHash,
-  });
   const maxAdmissions = Number.isSafeInteger(publisherOptions.maxRecipients)
     ? publisherOptions.maxRecipients : 128;
   // Legacy and split recipients may coexist during rollback. Component-name
@@ -379,13 +365,6 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     if (ticketClaims.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
         && !ticketClaims.capabilities.includes(PUBLIC_BODY_CAPABILITY)) {
       fail("capability-not-admitted", "prepared public source requires public body v1");
-    }
-    if (ticketClaims.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)
-        && (!ticketClaims.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
-          || !ticketClaims.capabilities.includes(PUBLIC_BODY_CAPABILITY)
-          || ticketClaims.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
-      fail("capability-not-admitted",
-        "split public fragment v1 requires prepared public-body source and excludes binary v1");
     }
     const admissionKey = key(identity);
     if (!admissions.has(admissionKey) && admissions.size >= maxAdmissions) fail("recipient-cap", "state-pair admission cap reached");
@@ -586,7 +565,6 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const admission = admissions.get(key(identity));
     const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
     const sharedPublicBody = admission.capabilities.includes(PUBLIC_BODY_CAPABILITY);
-    const splitPublicFragment = admission.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY);
     const preparedSourceEnabled = admission.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY);
     const preparedInspection = preparedSourceEnabled
       ? inspectPreparedPublicSource(preparedPublicSource, binding, publicFrame, preparedRecipientOrdinal)
@@ -715,13 +693,6 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       : buildOwnerView();
     const publicProjection = publicView;
     if (sharedPublicBody) {
-      if (splitPublicFragment) {
-        const fragment = splitPublicFragmentAuthority.prepareFragment({ body,
-          snapshotId: shared.snapshotId, tick: shared.tick, simTime: shared.simTime,
-          eventWatermark: shared.eventWatermark, fieldRevision: shared.fieldRevision,
-          overloadMode: shared.overloadMode });
-        return Object.freeze({ identity, fragment, ownerView: ownerProjection.view });
-      }
       return Object.freeze({ identity, body, ownerView: ownerProjection.view,
         ownerPrepared: ownerProjection.prepared, s23tRecipientSlot });
     }
@@ -745,16 +716,13 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
 
   function publish(binding, publicFrame, ownerFrame, options = {}) {
     const views = buildViews(binding, publicFrame, ownerFrame, options);
-    if (views.fragment) return splitPublicFragmentAuthority.publish(views);
     return views.body ? publicBodyAuthority.publish(views) : publisher.publish(views);
   }
 
   function acknowledge(binding, ack) {
     const identity = requireAdmission(binding);
     const admission = admissions.get(key(identity));
-    return admission.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)
-      ? splitPublicFragmentAuthority.acknowledge(identity, ack)
-      : admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+    return admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)
       ? publicBodyAuthority.acknowledge(identity, ack)
       : publisher.acknowledge(identity, ack);
   }
@@ -762,9 +730,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   function recover(binding) {
     const identity = requireAdmission(binding);
     const admission = admissions.get(key(identity));
-    if (admission.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)) {
-      splitPublicFragmentAuthority.rebase(identity);
-    } else if (admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)) publicBodyAuthority.rebase(identity);
+    if (admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)) publicBodyAuthority.rebase(identity);
     else publisher.rebase(identity);
     return true;
   }
@@ -772,9 +738,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   function retransmit(binding, frameId) {
     const identity = requireAdmission(binding);
     const admission = admissions.get(key(identity));
-    return admission.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)
-      ? splitPublicFragmentAuthority.retransmit(identity, frameId)
-      : admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+    return admission.capabilities.includes(PUBLIC_BODY_CAPABILITY)
       ? publicBodyAuthority.retransmit(identity, frameId)
       : publisher.retransmit(identity, frameId);
   }
@@ -785,9 +749,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     const admission = admissions.get(key(identity));
     admissions.delete(key(identity));
     splitPublicTrackers.delete(key(identity));
-    if (admission?.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)) {
-      splitPublicFragmentAuthority.disconnect(identity);
-    } else if (admission?.capabilities.includes(PUBLIC_BODY_CAPABILITY)) publicBodyAuthority.disconnect(identity);
+    if (admission?.capabilities.includes(PUBLIC_BODY_CAPABILITY)) publicBodyAuthority.disconnect(identity);
     else publisher.disconnect(identity);
     if (![...admissions.values()].some((entry) => entry.identity.recipientId === identity.recipientId)) {
       ownerTrackers.delete(identity.recipientId);
@@ -859,12 +821,6 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
           ...preparedPublicSourceCounters,
         }),
       }),
-      splitPublicFragment: Object.freeze({
-        capability: SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
-        enabledAdmissions: [...admissions.values()].filter((entry) =>
-          entry.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)).length,
-        authority: splitPublicFragmentAuthority.diagnostics(),
-      }),
       publisher: publisher.diagnostics() });
   }
 
@@ -881,7 +837,6 @@ module.exports = {
   BINARY_CODEC_CAPABILITY,
   PUBLIC_BODY_CAPABILITY,
   PREPARED_PUBLIC_SOURCE_CAPABILITY,
-  SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
   SOURCE_FIELD_CLASSIFICATION,
   VIEW_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,

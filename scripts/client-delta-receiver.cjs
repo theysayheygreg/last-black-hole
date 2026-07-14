@@ -45,18 +45,11 @@ const {
 } = require("./state-pair-compression-codec.cjs");
 const {
   CAPABILITY: PUBLIC_BODY_CAPABILITY,
-  PREPARED_PUBLIC_SOURCE_CAPABILITY,
   PAIR_SCHEMA: PUBLIC_BODY_PAIR_SCHEMA,
   BODY_SCHEMA: PUBLIC_BODY_SCHEMA,
   codecContext: publicBodyCodecContext,
   decodePublicBodyFrame,
 } = require("./state-pair-public-body-codec.cjs");
-const {
-  CAPABILITY: SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
-  decodePublicFragment,
-  decodeOwnerOverlay,
-  splitWireKind,
-} = require("./split-public-fragment-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -87,7 +80,6 @@ const MODES = Object.freeze({
   STATE_PAIR_BINARY: BINARY_CODEC_CAPABILITY,
   STATE_PAIR_COMPRESSION: COMPRESSION_CODEC_CAPABILITY,
   STATE_PAIR_PUBLIC_BODY: PUBLIC_BODY_CAPABILITY,
-  STATE_PAIR_SPLIT_PUBLIC_FRAGMENT: SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
 });
 const RECOVERY_REASONS = new Set([
   "reconnect", "match-changed", "session-changed", "authority-changed", "recipient-changed",
@@ -265,17 +257,6 @@ function selectClientReplicationMode({ wireVersion, capabilities = [] } = {}) {
       && capabilities.includes(MIXED_CAPABILITY)
       && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
       && capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
-      && capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
-      && capabilities.includes(PUBLIC_BODY_CAPABILITY)
-      && capabilities.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY)
-      && capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
-      && capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)) {
-    return MODES.STATE_PAIR_SPLIT_PUBLIC_FRAGMENT;
-  }
-  if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
-      && capabilities.includes(MIXED_CAPABILITY)
-      && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
-      && capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
       && capabilities.includes(BINARY_CODEC_CAPABILITY)) {
     return MODES.STATE_PAIR_BINARY;
   }
@@ -319,9 +300,6 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   const compressed = positional && !binary && capabilities.includes(COMPRESSION_CODEC_CAPABILITY);
   const publicBody = compressed && capabilities.includes(PUBLIC_BODY_CAPABILITY)
     && capabilities.includes(PUBLIC_BODY_COMPRESSION_CAPABILITY);
-  const splitPublicFragment = publicBody
-    && capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
-    && capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY);
   let codecContext = positional ? positionalCodecContext({ ...context,
     codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH }) : null;
   let binaryContext = binary ? binaryCodecContext({ ...context,
@@ -386,12 +364,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     observerFailures: 0, ledgerHits: 0, ledgerMisses: 0, ledgerEvictions: 0,
     publicBodyKeyframes: 0, publicBodyDeltas: 0, publicBodyBaseHits: 0,
     publicBodyBaseMisses: 0, publicBodyEvictions: 0,
-    splitFragmentsAccepted: 0, splitOverlaysAccepted: 0, splitAtomicPublishes: 0,
-    splitOverlayWaits: 0, splitFragmentEvictions: 0, splitOverlayEvictions: 0,
   };
   const bodyLedger = new Map();
-  const splitFragments = new Map();
-  const splitOverlays = new Map();
 
   function bodyHash(body) {
     return `sha256:${crypto.createHash("sha256").update(canonicalJsonBytes(body)).digest("hex")}`;
@@ -655,69 +629,10 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       enforceLedgerBounds();
       const bytes = wireBytes(raw);
       if (bytes > maxPairBytes) return reject("oversize-frame");
-      if (compressed && !splitPublicFragment && typeof raw === "string") {
+      if (compressed && typeof raw === "string") {
         fail("compression-frame-required", "negotiated compressed state-pair must use its pinned binary envelope");
       }
-      if (splitPublicFragment) {
-        let kind = splitWireKind(raw);
-        let overlay = null;
-        if (kind === "fragment") {
-          const decoded = decodePublicFragment(raw, {
-            matchId: context.matchId, authorityIncarnation: context.authorityIncarnation,
-            ballparkEpoch: undefined, manifestHash: context.manifestHash,
-          });
-          splitFragments.delete(decoded.value.fragmentId);
-          splitFragments.set(decoded.value.fragmentId, Object.freeze({
-            fragment: decoded.value, fragmentHash: decoded.semanticDigest,
-          }));
-          while (splitFragments.size > 16) {
-            splitFragments.delete(splitFragments.keys().next().value);
-            counters.splitFragmentEvictions += 1;
-          }
-          counters.splitFragmentsAccepted += 1;
-          overlay = splitOverlays.get(decoded.value.fragmentId) || null;
-          if (!overlay) {
-            return Object.freeze({ accepted: true, duplicate: false, published: false,
-              awaitingOwnerOverlay: true, ack: lastAck, state: currentPair });
-          }
-          splitOverlays.delete(decoded.value.fragmentId);
-        } else if (kind === "overlay") {
-          overlay = decodeOwnerOverlay(raw, context).value;
-          counters.splitOverlaysAccepted += 1;
-        } else fail("malformed-frame", "expected a split public fragment or owner overlay");
-        const fragmentRecord = splitFragments.get(overlay.fragmentId);
-        if (!fragmentRecord) {
-          splitOverlays.delete(overlay.fragmentId);
-          splitOverlays.set(overlay.fragmentId, overlay);
-          while (splitOverlays.size > 16) {
-            splitOverlays.delete(splitOverlays.keys().next().value);
-            counters.splitOverlayEvictions += 1;
-          }
-          counters.splitOverlayWaits += 1;
-          return Object.freeze({ accepted: true, duplicate: false, published: false,
-            awaitingPublicFragment: true, ack: lastAck, state: currentPair });
-        }
-        const fragment = fragmentRecord.fragment;
-        for (const key of ["matchId", "authorityIncarnation", "ballparkEpoch", "manifestHash",
-          "snapshotId", "tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode",
-          "bodyId", "bodyHash"]) {
-          if (overlay[key] !== fragment[key]) fail("lineage-mismatch", `split ${key} binding mismatch`);
-        }
-        if (overlay.fragmentRevision !== fragment.fragmentRevision
-            || overlay.fragmentHash !== fragmentRecord.fragmentHash) {
-          fail("hash-mismatch", "owner overlay named a different public fragment");
-        }
-        const bodyFrame = deepFreeze({ ...overlay, type: "statePair",
-          pairSchema: PUBLIC_BODY_PAIR_SCHEMA, bodyRevision: fragment.bodyRevision,
-          public: fragment.public });
-        bodyMeta = materializePublicBody(bodyFrame);
-        frame = deepFreeze({ ...bodyFrame, pairSchema: MIXED_PAIR_SCHEMA,
-          public: deepFreeze({ kind: "keyframe", resultHash: bodyMeta.projectionHash,
-            projection: bodyMeta.projection }),
-          owner: deepFreeze({ kind: "keyframe", resultHash: overlay.owner.resultHash,
-            projection: overlay.owner.view }) });
-        counters.splitAtomicPublishes += 1;
-      } else frame = publicBody
+      frame = publicBody
         ? decodePublicBodyFrame(decodeCompressedPublicBodyStatePair(raw), bodyCodecContext)
         : parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
         ...(compressed ? { compressed: true, compressionContext, positionalContext: codecContext }
@@ -751,7 +666,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
         return Object.freeze({ accepted: true, duplicate: true, published: false,
           ack: lastAck, state: currentPair });
       }
-      if (publicBody && !splitPublicFragment) {
+      if (publicBody) {
         bodyMeta = materializePublicBody(frame);
         frame = deepFreeze({ ...frame, pairSchema: MIXED_PAIR_SCHEMA,
           public: deepFreeze({ kind: "keyframe", resultHash: bodyMeta.projectionHash,
@@ -962,8 +877,6 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     lastAck = null;
     clearLedger();
     bodyLedger.clear();
-    splitFragments.clear();
-    splitOverlays.clear();
     admitted = false;
     lastAcceptedPair = null;
     currentPair = null;
@@ -975,8 +888,6 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function rebase(reason = "reconnect") {
     clearLedger();
     bodyLedger.clear();
-    splitFragments.clear();
-    splitOverlays.clear();
     admitted = false;
     lastAck = null;
     return beginExplicitRecovery(reason);
@@ -985,8 +896,6 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function teardown() {
     clearLedger();
     bodyLedger.clear();
-    splitFragments.clear();
-    splitOverlays.clear();
     admitted = false;
     recoveryEpisode = null;
     currentPair = null;
@@ -1006,8 +915,7 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function diagnostics() {
     return deepFreeze({
       ...counters,
-      mode: splitPublicFragment ? MODES.STATE_PAIR_SPLIT_PUBLIC_FRAGMENT
-        : publicBody ? MODES.STATE_PAIR_PUBLIC_BODY
+      mode: publicBody ? MODES.STATE_PAIR_PUBLIC_BODY
         : binary ? MODES.STATE_PAIR_BINARY : compressed ? MODES.STATE_PAIR_COMPRESSION
         : positional ? MODES.STATE_PAIR_POSITIONAL_JSON : materializeRuntimeComponents
         ? MODES.STATE_PAIR_RUNTIME_COMPONENTS
@@ -1020,8 +928,6 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       retainedOwnerIdentities: Object.keys(visibleOwnerContinuity.retired).length,
       retainedPairHistory: ledger.size,
       retainedPublicBodies: bodyLedger.size,
-      retainedSplitFragments: splitFragments.size,
-      pendingSplitOverlays: splitOverlays.size,
       ledger: {
         entries: ledger.size, bytes: ledgerBytes, highWaterBytes: ledgerHighWaterBytes,
         hits: counters.ledgerHits, misses: counters.ledgerMisses, evictions: counters.ledgerEvictions,
@@ -1052,8 +958,6 @@ module.exports = {
   COMPRESSION_CODEC_CAPABILITY,
   PUBLIC_BODY_CAPABILITY,
   PUBLIC_BODY_COMPRESSION_CAPABILITY,
-  PREPARED_PUBLIC_SOURCE_CAPABILITY,
-  SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
   DEFAULT_BASE_LEDGER_LIMITS,

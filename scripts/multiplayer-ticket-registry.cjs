@@ -13,7 +13,6 @@ const COMPRESSION_CODEC_CAPABILITY = "state-pair-brotli-v1";
 const PUBLIC_BODY_CAPABILITY = "state-pair-public-body-v1";
 const PUBLIC_BODY_COMPRESSION_CAPABILITY = "state-pair-public-body-brotli-v1";
 const PREPARED_PUBLIC_SOURCE_CAPABILITY = "state-pair-public-body-prepared-v1";
-const SPLIT_PUBLIC_FRAGMENT_CAPABILITY = "state-pair-split-public-fragment-v1";
 
 class MultiplayerTicketError extends Error {
   constructor(code, message) {
@@ -158,12 +157,6 @@ function createMultiplayerTicketRegistry({
         if (selected.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
             && !selected.capabilities.includes(PUBLIC_BODY_CAPABILITY)) {
           fail("invalid-claim", `${PREPARED_PUBLIC_SOURCE_CAPABILITY} requires public-body v1`);
-        }
-        if (selected.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)
-            && (!selected.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
-              || !selected.capabilities.includes(PUBLIC_BODY_CAPABILITY)
-              || selected.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
-          fail("invalid-claim", `${SPLIT_PUBLIC_FRAGMENT_CAPABILITY} requires prepared public-body v1 and excludes binary`);
         }
         selected.manifestSchema = identifier(claims.manifestSchema, "manifestSchema");
         selected.manifestHash = identifier(claims.manifestHash, "manifestHash");

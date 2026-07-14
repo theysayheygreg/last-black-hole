@@ -32,11 +32,6 @@ const { STAGES } = require("./authority-stage-profiler.cjs");
 const { STAGES: S23T_STAGES } = require("./s23t-public-body-profiler.cjs");
 const { isExactEncodedPublication } = require("./authority-delta-publisher.cjs");
 const {
-  isSplitPublication,
-  resolveSplitPublication,
-} = require("./split-public-fragment-authority.cjs");
-const { CAPABILITY: SPLIT_PUBLIC_FRAGMENT_CAPABILITY } = require("./split-public-fragment-codec.cjs");
-const {
   CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
   codecContext: positionalCodecContext,
 } = require("./state-pair-positional-codec.cjs");
@@ -1083,8 +1078,7 @@ function createSimWebSocketAdapter(options = {}) {
         if (message.lane === "state") {
           for (let index = 0; index < message.envelope.frames.length; index += 1) {
             const frame = message.envelope.frames[index];
-            const retainedWire = message.wires?.[index]
-              || (message.exactWire && index === 0 ? message.wire : null);
+            const retainedWire = message.exactWire && index === 0 ? message.wire : null;
             const wire = retainedWire || (stageProfiler && frame?.type === "statePair"
               ? stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (serialized) => ({
                   recipientKey: profileRecipientKey(state),
@@ -1962,60 +1956,6 @@ function createSimWebSocketAdapter(options = {}) {
       sendApplicationClose(state, 4003, "connection fenced", true);
       return { accepted: false, action: "disconnect", reason: "connection-fenced" };
     }
-    if (isSplitPublication(publication)) {
-      if (!state.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)
-          || frame.type !== "ownerOverlay") {
-        return { accepted: false, action: "reject", reason: "split-public-fragment-capability-required" };
-      }
-      const enteringStatePairMode = !state.statePairMode;
-      if (enteringStatePairMode
-          && (!publication.projectionKind.startsWith("public-keyframe+")
-            || frame.owner.kind !== "keyframe")) {
-        return { accepted: false, action: "reject", reason: "state-pair-keyframe-required" };
-      }
-      if (!enteringStatePairMode && frame.frameId <= state.lastStatePairFrameId) {
-        return { accepted: false, action: "reject", reason: "stale-state-pair" };
-      }
-      const material = resolveSplitPublication(publication);
-      if (!material) {
-        return { accepted: false, action: "reject", reason: "split-publication-material-missing" };
-      }
-      const encodedBytes = material.fragmentWire.length + material.overlayWire.length;
-      const digest = `sha256:${crypto.createHash("sha256").update(material.fragmentDigest).update("\0")
-        .update(material.overlayDigest).digest("hex")}`;
-      if (encodedBytes !== publication.bytes || digest !== publication.encodedDigest) {
-        return { accepted: false, action: "reject", reason: "split-publication-mismatch" };
-      }
-      if (enteringStatePairMode) {
-        state.statePairMode = true;
-        state.statePairQueueOffset = Math.max(0, state.queue.status().lastStateSequence + 1 - frame.frameId);
-        state.lastStatePairFrameId = 0;
-      }
-      const queueSequence = frame.frameId + state.statePairQueueOffset;
-      const accountingFrame = { ...frame, type: "statePair",
-        pairSchema: "lbh-authority-state-pair-split-v1" };
-      const outcome = state.queue.enqueueState(queueSequence,
-        { kind: "state-pair", frames: [accountingFrame, accountingFrame] },
-        { byteLength: encodedBytes, exactWires: [material.fragmentWire, material.overlayWire] });
-      if (replicationAccounting) {
-        replicationAccounting.outbound(state, accountingFrame, "offered", encodedBytes);
-        if (!outcome.accepted) {
-          replicationAccounting.outbound(state, accountingFrame,
-            outcome.action === "rebase" || outcome.action === "disconnect" ? "policyDropped" : "otherTerminal",
-            encodedBytes);
-        } else {
-          const record = { frame: accountingFrame, bytes: encodedBytes, sendInvoked: false,
-            trackingKey: replicationStateFrameKey(accountingFrame) };
-          state.replicationStateFrames?.set(record.trackingKey, record);
-          state.replicationQueuedStateFrames = { statePair: record };
-        }
-      }
-      samplePressure(state);
-      queueOutcome(state, outcome, frame);
-      flush(state);
-      if (outcome.accepted) state.lastStatePairFrameId = frame.frameId;
-      return outcome;
-    }
     const enteringStatePairMode = !state.statePairMode;
     if (enteringStatePairMode
         && (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe")) {
@@ -2146,28 +2086,6 @@ function createSimWebSocketAdapter(options = {}) {
     }
     if (!(await isBindingCurrent(state, "private-state-pair-retransmit"))) {
       return { accepted: false, action: "ignore", reason: "connection-not-live" };
-    }
-    if (isSplitPublication(publication)) {
-      if (!state.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)) {
-        return { accepted: false, action: "reject", reason: "split-public-fragment-capability-required" };
-      }
-      const material = resolveSplitPublication(publication);
-      if (!material) return { accepted: false, action: "reject", reason: "split-publication-material-missing" };
-      const bytes = material.fragmentWire.length + material.overlayWire.length;
-      const digest = `sha256:${crypto.createHash("sha256").update(material.fragmentDigest).update("\0")
-        .update(material.overlayDigest).digest("hex")}`;
-      if (bytes !== publication.bytes || digest !== publication.encodedDigest) {
-        return { accepted: false, action: "reject", reason: "split-publication-mismatch" };
-      }
-      const accountingFrame = { ...frame, type: "statePair",
-        pairSchema: "lbh-authority-state-pair-split-v1" };
-      replicationAccounting?.outbound(state, accountingFrame, "offered", bytes);
-      replicationAccounting?.outbound(state, accountingFrame, "retransmitted", bytes);
-      const sentFragment = sendWire(state, material.fragmentWire, accountingFrame);
-      const sentOverlay = sentFragment && sendWire(state, material.overlayWire, accountingFrame);
-      return sentFragment && sentOverlay
-        ? { accepted: true, action: "retransmitted" }
-        : { accepted: false, action: "disconnect", reason: "send-failed" };
     }
     const retainedBefore = compressedStatePairWires.get(state)?.entries.get(frame.frameId);
     let wire;

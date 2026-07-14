@@ -52,18 +52,15 @@ function metadata(beat) {
 }
 
 function ack(frame) {
-  return { ackSchema: "lbh-authority-state-pair-mixed-ack-v1",
-    pairSchema: "lbh-authority-state-pair-mixed-v1",
-    matchId: frame.matchId, sessionId: frame.sessionId,
+  return { matchId: frame.matchId, sessionId: frame.sessionId,
     authorityIncarnation: frame.authorityIncarnation, recipientId: frame.recipientId,
     recipientIncarnation: frame.recipientIncarnation, frameId: frame.frameId,
     statePairId: frame.statePairId, snapshotId: frame.snapshotId,
-    publicHash: frame.bodyHash, ownerHash: frame.owner.resultHash,
+    fragmentId: frame.fragmentId, fragmentHash: frame.fragmentHash,
+    bodyHash: frame.bodyHash, ownerHash: frame.owner.resultHash,
     tick: frame.tick, simTime: frame.simTime, eventWatermark: frame.eventWatermark,
     fieldRevision: frame.fieldRevision, overloadMode: frame.overloadMode,
-    ballparkEpoch: frame.ballparkEpoch, manifestHash: frame.manifestHash,
-    publicKind: null, ownerKind: "keyframe", publicBaseSnapshotId: null,
-    ownerBaseSnapshotId: null };
+    ballparkEpoch: frame.ballparkEpoch, manifestHash: frame.manifestHash };
 }
 
 function main() {
@@ -90,9 +87,7 @@ function main() {
     const overlay = decodeOwnerOverlay(material[index].overlayWire, { ...ids[index], manifestHash: MANIFEST_HASH }).value;
     assert.strictEqual(overlay.owner.view.entities[0].components.ownerState.value.cargo[0],
       `private-membership-${index}`);
-    const proof = ack(publications[index].frame);
-    proof.publicKind = fragmentOne.fragment.public.kind;
-    assert(split.acknowledge(ids[index], proof).accepted);
+    assert(split.acknowledge(ids[index], ack(publications[index].frame)).accepted);
   }
   const firstDiagnostics = split.diagnostics();
   assert.strictEqual(firstDiagnostics.fragmentBuilds, 1);
@@ -114,9 +109,7 @@ function main() {
   assert.strictEqual(split.retransmit(ids[0], second[0].frame.frameId), second[0]);
   assert.strictEqual(resolveSplitPublication(split.retransmit(ids[0], second[0].frame.frameId)).fragmentWire,
     resolveSplitPublication(second[0]).fragmentWire);
-  const badAck = { ...ack(second[0].frame), publicHash: `sha256:${"0".repeat(64)}`,
-    publicKind: fragmentTwo.fragment.public.kind,
-    publicBaseSnapshotId: fragmentTwo.fragment.public.baseBodyId };
+  const badAck = { ...ack(second[0].frame), fragmentHash: `sha256:${"0".repeat(64)}` };
   assert.strictEqual(split.acknowledge(ids[0], badAck).reason, "lineage-mismatch");
   split.rebase(ids[0]);
   const bodyThree = bodies.prepareBody(bodySource(3));
