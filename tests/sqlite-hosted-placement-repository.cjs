@@ -28,13 +28,15 @@ function fixture({ measuredPackingLimit = 1 } = {}) {
   const diagnosticKey = crypto.createHash("sha256").update("sqlite-placement-diagnostic").digest();
   const descriptors = new Map([
     ["worker-a", {
-      authorityInstanceId: "authority-a", region: "ord", artifactSha: "a".repeat(64),
+      authorityInstanceId: "authority-a", authorityIncarnation: "authority-a-incarnation-1",
+      region: "ord", artifactSha: "a".repeat(64),
       protocolVersion: "lbh-multiplayer-json-v2", manifestHash: "m".repeat(64),
       capabilities: ["state-pair-v1"], maxMatches: 8, maxSeats: 4,
       workloadKeyId: "key-a", endpoint: "wss://authority-a.internal",
     }],
     ["worker-b", {
-      authorityInstanceId: "authority-b", region: "iad", artifactSha: "a".repeat(64),
+      authorityInstanceId: "authority-b", authorityIncarnation: "authority-b-incarnation-1",
+      region: "iad", artifactSha: "a".repeat(64),
       protocolVersion: "lbh-multiplayer-json-v2", manifestHash: "m".repeat(64),
       capabilities: ["state-pair-v1"], maxMatches: 8, maxSeats: 4,
       workloadKeyId: "key-b", endpoint: "wss://authority-b.internal",
@@ -43,7 +45,8 @@ function fixture({ measuredPackingLimit = 1 } = {}) {
   const repositories = [];
 
   function openRepository(options = {}) {
-    const repository = new SqliteHostedPlacementRepository({ filename, tombstoneLimit: 4, ...options });
+    const repository = new SqliteHostedPlacementRepository({ filename, tombstoneLimit: 4,
+      now: () => clock, ...options });
     repositories.push(repository);
     return repository;
   }
@@ -67,7 +70,8 @@ function fixture({ measuredPackingLimit = 1 } = {}) {
   function registration(credential, overrides = {}) {
     const descriptor = descriptors.get(credential);
     return {
-      authorityInstanceId: descriptor.authorityInstanceId, region: descriptor.region,
+      authorityInstanceId: descriptor.authorityInstanceId,
+      authorityIncarnation: descriptor.authorityIncarnation, region: descriptor.region,
       artifactSha: descriptor.artifactSha, protocolVersion: descriptor.protocolVersion,
       manifestHash: descriptor.manifestHash, capabilities: descriptor.capabilities,
       maxMatches: descriptor.maxMatches, maxSeats: descriptor.maxSeats, observedAllocation: 0,
@@ -145,6 +149,61 @@ function competingWorker(filename, request) {
     worker.once("error", reject);
     worker.once("exit", (code) => { if (code !== 0) reject(new Error(`placement worker exited ${code}`)); });
   });
+}
+
+function authorityRaceWorker(mode, filename, identity, request) {
+  const repositoryPath = path.resolve(__dirname, "../scripts/sqlite-hosted-placement-repository.cjs");
+  const servicePath = path.resolve(__dirname, "../scripts/hosted-placement-service.cjs");
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(`
+      const crypto = require("crypto");
+      const { parentPort, workerData } = require("worker_threads");
+      const { SqliteHostedPlacementRepository } = require(workerData.repositoryPath);
+      const { createHostedPlacementService } = require(workerData.servicePath);
+      try {
+        const repository = new SqliteHostedPlacementRepository({ filename: workerData.filename, now: () => 1_000_100 });
+        let won = false;
+        if (workerData.mode === "accept") {
+          won = Boolean(repository.acceptAuthorityResult(workerData.identity, "sha256:accepted-race"));
+        } else {
+          const fenced = repository.compareAndSetRun(workerData.identity.run_id,
+            (run) => run.state === "DRAINING" && run.leaseStatus === "ACTIVE",
+            (run) => ({ ...run, state: "FAILED", leaseStatus: "FENCED", terminalAt: 1_000_100, updatedAt: 1_000_100 }));
+          if (fenced) {
+            const service = createHostedPlacementService({
+              repository, now: () => 1_000_100, randomBytes: crypto.randomBytes,
+              tokenKey: crypto.createHash("sha256").update("sqlite-placement-token").digest(),
+              diagnosticKey: crypto.createHash("sha256").update("sqlite-placement-diagnostic").digest(),
+              authenticateWorkload: () => null,
+              authenticateControlPlane: (credential) => credential === "control" ? { role: "CONTROL_PLANE" } : null,
+              measuredPackingLimit: 1,
+            });
+            won = service.requestReplacement({ credential: "control", request: workerData.request }).won;
+          }
+        }
+        repository.close();
+        parentPort.postMessage({ ok: true, won });
+      } catch (error) {
+        parentPort.postMessage({ ok: false, message: error.message, code: error.code });
+      }
+    `, { eval: true, workerData: { mode, filename, identity, request, repositoryPath, servicePath } });
+    worker.once("message", (message) => message.ok ? resolve(message.won) : reject(Object.assign(new Error(message.message), { code: message.code })));
+    worker.once("error", reject);
+    worker.once("exit", (code) => { if (code !== 0) reject(new Error(`authority race worker exited ${code}`)); });
+  });
+}
+
+function drainRun(h, repository, service, runId) {
+  const placement = place(service, h, runId);
+  const run = repository.getRun(runId);
+  const claims = service.redeemBootstrap({ credential: "worker-a", bootstrap: placement.bootstrap,
+    audience: "authority:authority-a" });
+  service.markReady({ credential: "worker-a", runId, authorityLeaseId: claims.authorityLeaseId,
+    leaseEpoch: claims.leaseEpoch });
+  service.beginRunDrain({ credential: "worker-a", runId, authorityLeaseId: claims.authorityLeaseId,
+    leaseEpoch: claims.leaseEpoch });
+  return { run_id: runId, lease_id: claims.authorityLeaseId, lease_epoch: claims.leaseEpoch,
+    authority_incarnation: run.authorityIncarnation };
 }
 
 (async () => {
@@ -329,6 +388,117 @@ function competingWorker(filename, request) {
     repository.close();
     assert.strictEqual(db.prepare("SELECT 1 AS value").get().value, 1);
     db.close();
+  });
+
+  await test("accepted authority result is immutable, replayable, and durable across reopen", () => {
+    const h = fixture();
+    try {
+      let repository = h.openRepository();
+      let service = h.service(repository);
+      register(service, h);
+      const identity = drainRun(h, repository, service, "accepted");
+      const accepted = repository.acceptAuthorityResult(identity, "sha256:one");
+      assert.strictEqual(accepted.accepted, true);
+      assert.strictEqual(repository.getRun("accepted").resultAcceptanceState, "ACCEPTED");
+      assert.strictEqual(repository.compareAndSetRun("accepted", () => true,
+        (run) => ({ ...run, updatedAt: 1_000_001 })), null);
+      assert.throws(() => repository.db.prepare(`UPDATE hosted_placement_current_allocations
+        SET accepted_result_hash = 'sha256:tampered' WHERE run_id = 'accepted'`).run(),
+      /accepted hosted placement result is immutable/);
+      rejection(() => service.heartbeat({ credential: "worker-a", runId: "accepted",
+        authorityLeaseId: identity.lease_id, leaseEpoch: identity.lease_epoch }), "STALE_LEASE");
+      rejection(() => service.requestReplacement({ credential: "control", request: h.request("accepted", {
+        requestId: "replacement-after-accept",
+      }) }), "REPLACEMENT_NOT_FENCED");
+      repository.close();
+
+      repository = h.openRepository();
+      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one").accepted, true);
+      assert.throws(() => repository.acceptAuthorityResult(identity, "sha256:other"),
+        (error) => error.code === "HOSTED_RESULT_CONFLICT");
+      assert.strictEqual(repository.getRun("accepted").acceptedResultHash, "sha256:one");
+    } finally { h.closeAll(); }
+  });
+
+  await test("authority process incarnation restart fences old bootstrap and current lease", () => {
+    const h = fixture();
+    try {
+      const repository = h.openRepository();
+      const firstService = h.service(repository);
+      register(firstService, h);
+      const placement = place(firstService, h, "incarnation-fence");
+      const prior = h.descriptors.get("worker-a");
+      h.descriptors.set("worker-a", { ...prior, authorityIncarnation: "authority-a-incarnation-2" });
+      const restartedService = h.service(repository);
+      rejection(() => restartedService.redeemBootstrap({ credential: "worker-a", bootstrap: placement.bootstrap,
+        audience: "authority:authority-a" }), "STALE_LEASE");
+      assert.strictEqual(repository.getRun("incarnation-fence").authorityIncarnation,
+        "authority-a-incarnation-1");
+    } finally { h.closeAll(); }
+  });
+
+  await test("authority result acceptance versus replacement race has one durable winner", async () => {
+    const h = fixture();
+    try {
+      const repository = h.openRepository();
+      const service = h.service(repository);
+      register(service, h, "worker-a");
+      register(service, h, "worker-b");
+      const identity = drainRun(h, repository, service, "accept-replace-race");
+      const replacementRequest = h.request("accept-replace-race", {
+        requestId: "request-accept-replace-race-replacement",
+      });
+      const outcomes = await Promise.all([
+        authorityRaceWorker("accept", h.filename, identity, replacementRequest),
+        authorityRaceWorker("replace", h.filename, identity, replacementRequest),
+      ]);
+      assert.strictEqual(outcomes.filter(Boolean).length, 1);
+      const current = repository.getRun("accept-replace-race");
+      if (current.resultAcceptanceState === "ACCEPTED") {
+        assert.strictEqual(current.leaseEpoch, identity.lease_epoch);
+        assert.strictEqual(current.acceptedResultHash, "sha256:accepted-race");
+      } else {
+        assert.strictEqual(current.leaseEpoch, identity.lease_epoch + 1);
+        assert.strictEqual(current.authorityIncarnation, "authority-b-incarnation-1");
+      }
+    } finally { h.closeAll(); }
+  });
+
+  await test("legacy allocation migration adds result columns and fences unbound incarnation", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-placement-legacy-"));
+    const filename = path.join(directory, "legacy.sqlite");
+    const db = new DatabaseSync(filename);
+    db.exec(`
+      CREATE TABLE hosted_placement_workload_registrations (
+        authority_instance_id TEXT PRIMARY KEY, workload_key_id TEXT NOT NULL,
+        artifact_sha TEXT NOT NULL, protocol_version TEXT NOT NULL, manifest_hash TEXT NOT NULL,
+        registered_at INTEGER NOT NULL
+      );
+      CREATE TABLE hosted_placement_current_allocations (
+        run_id TEXT PRIMARY KEY, authority_instance_id TEXT NOT NULL, request_id TEXT NOT NULL,
+        state TEXT NOT NULL, lease_status TEXT NOT NULL, lease_epoch INTEGER NOT NULL,
+        seat_count INTEGER NOT NULL, admitted_count INTEGER NOT NULL, terminal_at INTEGER,
+        updated_at INTEGER NOT NULL, row_version INTEGER NOT NULL, payload_json TEXT NOT NULL
+      );
+      INSERT INTO hosted_placement_current_allocations VALUES (
+        'legacy-run','legacy-authority','legacy-request','ACTIVE','ACTIVE',1,1,0,NULL,1,1,
+        '{"runId":"legacy-run","authorityInstanceId":"legacy-authority","requestId":"legacy-request","state":"ACTIVE","leaseStatus":"ACTIVE","leaseEpoch":1,"seatCount":1,"admittedCount":0,"history":[]}'
+      );
+    `);
+    db.close();
+    const repository = new SqliteHostedPlacementRepository({ filename });
+    try {
+      const migrated = repository.getRun("legacy-run");
+      assert.strictEqual(migrated.state, "FAILED");
+      assert.strictEqual(migrated.leaseStatus, "FENCED");
+      assert.strictEqual(migrated.authorityIncarnation, "legacy-unbound");
+      assert.strictEqual(migrated.resultAcceptanceState, "OPEN");
+      assert.strictEqual(repository.acceptAuthorityResult({ run_id: "legacy-run", lease_id: "x",
+        lease_epoch: 1, authority_incarnation: "legacy-unbound" }, "sha256:no"), null);
+    } finally {
+      repository.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   process.stdout.write(`\n${passed} SQLite hosted placement repository tests passed.\n`);

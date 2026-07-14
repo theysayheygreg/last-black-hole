@@ -23,6 +23,7 @@ function harness({ capacity = 24, tombstoneLimit = 4 } = {}) {
   for (let index = 0; index < capacity; index++) {
     descriptors.set(`workload-${index}`, {
       authorityInstanceId: `authority-${index}`,
+      authorityIncarnation: `authority-${index}-incarnation-1`,
       region: index < capacity - 1 ? "ord" : "iad",
       artifactSha: "a".repeat(64), protocolVersion: "lbh-multiplayer-json-v2",
       manifestHash: "m".repeat(64), capabilities: ["state-pair-v1", "state-pair-brotli-v1"],
@@ -48,7 +49,8 @@ function harness({ capacity = 24, tombstoneLimit = 4 } = {}) {
   function registration(index, overrides = {}) {
     const trusted = descriptors.get(`workload-${index}`);
     return {
-      authorityInstanceId: trusted.authorityInstanceId, region: trusted.region,
+      authorityInstanceId: trusted.authorityInstanceId, authorityIncarnation: trusted.authorityIncarnation,
+      region: trusted.region,
       artifactSha: trusted.artifactSha, protocolVersion: trusted.protocolVersion,
       manifestHash: trusted.manifestHash, capabilities: trusted.capabilities,
       maxMatches: trusted.maxMatches, maxSeats: trusted.maxSeats, observedAllocation: 0,
@@ -105,6 +107,8 @@ function harness({ capacity = 24, tombstoneLimit = 4 } = {}) {
     const h = harness({ capacity: 1 });
     h.register(0);
     rejection(() => h.service.registerCapacity({ credential: "workload-0", registration: h.registration(0, { region: "bogus" }) }), "WORKLOAD_IDENTITY_MISMATCH");
+    rejection(() => h.service.registerCapacity({ credential: "workload-0", registration: h.registration(0,
+      { authorityIncarnation: "authority-0-incarnation-restarted" }) }), "WORKLOAD_IDENTITY_MISMATCH");
     rejection(() => h.service.registerCapacity({ credential: "bad", registration: h.registration(0) }), "WORKLOAD_AUTH_REQUIRED");
   });
 
@@ -189,6 +193,7 @@ function harness({ capacity = 24, tombstoneLimit = 4 } = {}) {
     assert(!first.bootstrap.includes("bootstrap-first"));
     const claims = h.bootstrap(h.assignedIndex("bootstrap-first"), first);
     assert.strictEqual(claims.maxSeats, 4);
+    assert.strictEqual(claims.authorityIncarnation, "authority-0-incarnation-1");
     rejection(() => h.bootstrap(h.assignedIndex("bootstrap-first"), first), "BOOTSTRAP_REPLAY");
     const second = h.place("bootstrap-audience");
     const secondIndex = h.assignedIndex("bootstrap-audience");

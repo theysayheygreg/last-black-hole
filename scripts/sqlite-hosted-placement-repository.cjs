@@ -23,13 +23,16 @@ function encodeRecord(record) {
 }
 
 class SqliteHostedPlacementRepository {
-  constructor({ filename = ":memory:", db = null, tombstoneLimit = 256, busyTimeoutMs = 5_000 } = {}) {
+  constructor({ filename = ":memory:", db = null, tombstoneLimit = 256, busyTimeoutMs = 5_000,
+    now = Date.now } = {}) {
     this.tombstoneLimit = positiveInteger(tombstoneLimit, "tombstone limit");
     positiveInteger(busyTimeoutMs, "busy timeout");
     if (db !== null && (!db || typeof db.prepare !== "function" || typeof db.exec !== "function")) {
       throw new Error("invalid database");
     }
     if (db === null && (typeof filename !== "string" || filename.length < 1)) throw new Error("invalid filename");
+    if (typeof now !== "function") throw new Error("invalid clock");
+    this.now = now;
     this.db = db || new DatabaseSync(filename);
     this.ownsDatabase = db === null;
     this.db.exec("PRAGMA foreign_keys = ON");
@@ -44,6 +47,7 @@ class SqliteHostedPlacementRepository {
       CREATE TABLE IF NOT EXISTS hosted_placement_workload_registrations (
         authority_instance_id TEXT PRIMARY KEY,
         workload_key_id TEXT NOT NULL,
+        authority_incarnation TEXT NOT NULL,
         artifact_sha TEXT NOT NULL,
         protocol_version TEXT NOT NULL,
         manifest_hash TEXT NOT NULL,
@@ -74,6 +78,7 @@ class SqliteHostedPlacementRepository {
         run_id TEXT PRIMARY KEY REFERENCES hosted_placement_run_lineages(run_id) ON DELETE CASCADE,
         authority_instance_id TEXT NOT NULL
           REFERENCES hosted_placement_workload_registrations(authority_instance_id),
+        authority_incarnation TEXT NOT NULL,
         request_id TEXT NOT NULL,
         state TEXT NOT NULL CHECK (state IN ('ALLOCATING','READY','ACTIVE','DRAINING','ENDED','FAILED')),
         lease_status TEXT NOT NULL CHECK (lease_status IN ('ACTIVE','FENCED','ENDED')),
@@ -83,6 +88,10 @@ class SqliteHostedPlacementRepository {
         terminal_at INTEGER,
         updated_at INTEGER NOT NULL CHECK (updated_at >= 0),
         row_version INTEGER NOT NULL CHECK (row_version >= 1),
+        result_acceptance_state TEXT NOT NULL DEFAULT 'OPEN'
+          CHECK (result_acceptance_state IN ('OPEN','ACCEPTED')),
+        accepted_result_hash TEXT,
+        accepted_at INTEGER,
         payload_json TEXT NOT NULL CHECK (json_valid(payload_json))
       ) STRICT;
 
@@ -125,6 +134,69 @@ class SqliteHostedPlacementRepository {
         terminal_at INTEGER NOT NULL CHECK (terminal_at >= 0)
       ) STRICT;
     `);
+    this.#migrateWorkloadColumns();
+    this.#migrateCurrentAllocationColumns();
+  }
+
+  #migrateWorkloadColumns() {
+    const columns = new Set(this.db.prepare(`
+      SELECT name FROM pragma_table_info('hosted_placement_workload_registrations')
+    `).all().map((row) => row.name));
+    if (!columns.has("authority_incarnation")) {
+      this.db.exec("ALTER TABLE hosted_placement_workload_registrations ADD COLUMN authority_incarnation TEXT");
+    }
+  }
+
+  #migrateCurrentAllocationColumns() {
+    const columns = new Set(this.db.prepare(`
+      SELECT name FROM pragma_table_info('hosted_placement_current_allocations')
+    `).all().map((row) => row.name));
+    if (!columns.has("authority_incarnation")) {
+      this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN authority_incarnation TEXT");
+      // An old allocation cannot prove which process incarnation held its lease.
+      // Fence it instead of equating process identity with a reusable instance ID.
+      this.db.exec(`UPDATE hosted_placement_current_allocations
+        SET authority_incarnation = 'legacy-unbound', state = 'FAILED', lease_status = 'FENCED'
+        WHERE authority_incarnation IS NULL`);
+    }
+    if (!columns.has("result_acceptance_state")) {
+      this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN result_acceptance_state TEXT NOT NULL DEFAULT 'OPEN'");
+    }
+    if (!columns.has("accepted_result_hash")) {
+      this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN accepted_result_hash TEXT");
+    }
+    if (!columns.has("accepted_at")) {
+      this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN accepted_at INTEGER");
+    }
+    this.db.exec(`
+      CREATE TRIGGER IF NOT EXISTS hosted_placement_result_acceptance_shape_insert
+      BEFORE INSERT ON hosted_placement_current_allocations
+      WHEN NOT (
+        (NEW.result_acceptance_state = 'OPEN' AND NEW.accepted_result_hash IS NULL AND NEW.accepted_at IS NULL)
+        OR (NEW.result_acceptance_state = 'ACCEPTED' AND NEW.accepted_result_hash IS NOT NULL
+          AND NEW.accepted_at IS NOT NULL AND NEW.state = 'DRAINING' AND NEW.lease_status = 'ACTIVE')
+      )
+      BEGIN SELECT RAISE(ABORT, 'invalid hosted placement result acceptance'); END;
+
+      CREATE TRIGGER IF NOT EXISTS hosted_placement_result_acceptance_shape_update
+      BEFORE UPDATE ON hosted_placement_current_allocations
+      WHEN NOT (
+        (NEW.result_acceptance_state = 'OPEN' AND NEW.accepted_result_hash IS NULL AND NEW.accepted_at IS NULL)
+        OR (NEW.result_acceptance_state = 'ACCEPTED' AND NEW.accepted_result_hash IS NOT NULL
+          AND NEW.accepted_at IS NOT NULL AND NEW.state = 'DRAINING' AND NEW.lease_status = 'ACTIVE')
+      )
+      BEGIN SELECT RAISE(ABORT, 'invalid hosted placement result acceptance'); END;
+
+      CREATE TRIGGER IF NOT EXISTS hosted_placement_result_acceptance_immutable_update
+      BEFORE UPDATE ON hosted_placement_current_allocations
+      WHEN OLD.result_acceptance_state = 'ACCEPTED'
+      BEGIN SELECT RAISE(ABORT, 'accepted hosted placement result is immutable'); END;
+
+      CREATE TRIGGER IF NOT EXISTS hosted_placement_result_acceptance_immutable_delete
+      BEFORE DELETE ON hosted_placement_current_allocations
+      WHEN OLD.result_acceptance_state = 'ACCEPTED'
+      BEGIN SELECT RAISE(ABORT, 'accepted hosted placement result is immutable'); END;
+    `);
   }
 
   #transaction(callback) {
@@ -148,28 +220,38 @@ class SqliteHostedPlacementRepository {
   #rowToRun(row) {
     if (!row) return null;
     const record = parseJson(row.payload_json);
+    record.state = row.state;
+    record.leaseStatus = row.lease_status;
+    record.authorityIncarnation = row.authority_incarnation;
+    record.resultAcceptanceState = row.result_acceptance_state;
+    record.acceptedResultHash = row.accepted_result_hash;
+    record.acceptedAt = row.accepted_at;
     record.history = this.#history(record.runId);
     return record;
   }
 
   #getRunRow(runId) {
     return this.db.prepare(`
-      SELECT payload_json, row_version FROM hosted_placement_current_allocations WHERE run_id = ?
+      SELECT payload_json, row_version, state, lease_status, authority_incarnation, result_acceptance_state,
+        accepted_result_hash, accepted_at
+      FROM hosted_placement_current_allocations WHERE run_id = ?
     `).get(runId);
   }
 
   #writeCapacity(record) {
     this.db.prepare(`
       INSERT INTO hosted_placement_workload_registrations (
-        authority_instance_id, workload_key_id, artifact_sha, protocol_version, manifest_hash, registered_at
-      ) VALUES (?, ?, ?, ?, ?, ?)
+        authority_instance_id, workload_key_id, authority_incarnation, artifact_sha,
+        protocol_version, manifest_hash, registered_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(authority_instance_id) DO UPDATE SET
         workload_key_id = excluded.workload_key_id,
+        authority_incarnation = excluded.authority_incarnation,
         artifact_sha = excluded.artifact_sha,
         protocol_version = excluded.protocol_version,
         manifest_hash = excluded.manifest_hash,
         registered_at = excluded.registered_at
-    `).run(record.authorityInstanceId, record.workloadKeyId, record.artifactSha,
+    `).run(record.authorityInstanceId, record.workloadKeyId, record.authorityIncarnation, record.artifactSha,
       record.protocolVersion, record.manifestHash, record.updatedAt);
     this.db.prepare(`
       INSERT INTO hosted_placement_capacities (
@@ -259,6 +341,9 @@ class SqliteHostedPlacementRepository {
         if (record.runId !== runId || record.requestId !== requestId || record.authorityInstanceId !== candidateId) {
           throw new Error("placement callback changed identity");
         }
+        if (typeof record.authorityIncarnation !== "string" || record.authorityIncarnation.length < 1) {
+          throw new Error("placement callback omitted authority incarnation");
+        }
         if (record.seatCount < 1 || record.seatCount > 4 || record.admittedCount < 0
           || record.admittedCount > record.seatCount) throw new Error("invalid placement counts");
 
@@ -288,11 +373,12 @@ class SqliteHostedPlacementRepository {
         const nextVersion = Number(existingRow?.row_version || 0) + 1;
         this.db.prepare(`
           INSERT INTO hosted_placement_current_allocations (
-            run_id, authority_instance_id, request_id, state, lease_status, lease_epoch,
+            run_id, authority_instance_id, authority_incarnation, request_id, state, lease_status, lease_epoch,
             seat_count, admitted_count, terminal_at, updated_at, row_version, payload_json
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(run_id) DO UPDATE SET
             authority_instance_id = excluded.authority_instance_id,
+            authority_incarnation = excluded.authority_incarnation,
             request_id = excluded.request_id,
             state = excluded.state,
             lease_status = excluded.lease_status,
@@ -303,7 +389,8 @@ class SqliteHostedPlacementRepository {
             updated_at = excluded.updated_at,
             row_version = excluded.row_version,
             payload_json = excluded.payload_json
-        `).run(runId, candidateId, requestId, record.state, record.leaseStatus, record.leaseEpoch,
+        `).run(runId, candidateId, record.authorityIncarnation, requestId,
+          record.state, record.leaseStatus, record.leaseEpoch,
           record.seatCount, record.admittedCount, record.terminalAt ?? null, record.updatedAt,
           nextVersion, encodeRecord(record));
         this.db.prepare(`
@@ -319,7 +406,7 @@ class SqliteHostedPlacementRepository {
     return this.#transaction(() => {
       const row = this.#getRunRow(runId);
       const current = this.#rowToRun(row);
-      if (!current || !predicate(clone(current))) return null;
+      if (!current || current.resultAcceptanceState === "ACCEPTED" || !predicate(clone(current))) return null;
       const next = mutate(clone(current));
       if (next.runId !== runId || next.seatCount < 1 || next.seatCount > 4
         || next.admittedCount < 0 || next.admittedCount > next.seatCount) throw new Error("invalid run mutation");
@@ -342,13 +429,60 @@ class SqliteHostedPlacementRepository {
     `).get(tokenId));
   }
 
+  acceptAuthorityResult(identity, resultHash) {
+    const keys = identity && typeof identity === "object" && !Array.isArray(identity)
+      ? Object.keys(identity) : [];
+    const expected = ["run_id", "lease_id", "lease_epoch", "authority_incarnation"];
+    if (keys.length !== expected.length || keys.some((key) => !expected.includes(key))
+      || typeof identity.run_id !== "string" || identity.run_id.length < 1
+      || typeof identity.lease_id !== "string" || identity.lease_id.length < 1
+      || !Number.isSafeInteger(identity.lease_epoch) || identity.lease_epoch < 1
+      || typeof identity.authority_incarnation !== "string" || identity.authority_incarnation.length < 1
+      || typeof resultHash !== "string" || resultHash.length < 1 || resultHash.length > 256
+      || resultHash.trim() !== resultHash) throw new Error("invalid authority result identity");
+    return this.#transaction(() => {
+      const row = this.#getRunRow(identity.run_id);
+      const current = this.#rowToRun(row);
+      const exactLineage = current
+        && current.authorityLeaseId === identity.lease_id
+        && current.leaseEpoch === identity.lease_epoch
+        && current.authorityIncarnation === identity.authority_incarnation;
+      if (!exactLineage) return null;
+      if (current.resultAcceptanceState === "ACCEPTED") {
+        if (current.acceptedResultHash !== resultHash) {
+          const error = new Error("authority result conflicts with accepted hash");
+          error.code = "HOSTED_RESULT_CONFLICT";
+          throw error;
+        }
+        return Object.freeze({ accepted: true, run_id: identity.run_id, lease_id: identity.lease_id,
+          lease_epoch: identity.lease_epoch, authority_incarnation: identity.authority_incarnation,
+          result_hash: resultHash, accepted_at: current.acceptedAt });
+      }
+      if (current.state !== "DRAINING" || current.leaseStatus !== "ACTIVE") return null;
+      const acceptedAt = this.now();
+      if (!Number.isSafeInteger(acceptedAt) || acceptedAt < 0) throw new Error("invalid clock");
+      const result = this.db.prepare(`
+        UPDATE hosted_placement_current_allocations SET
+          result_acceptance_state = 'ACCEPTED', accepted_result_hash = ?, accepted_at = ?,
+          row_version = row_version + 1
+        WHERE run_id = ? AND row_version = ? AND state = 'DRAINING' AND lease_status = 'ACTIVE'
+          AND result_acceptance_state = 'OPEN' AND accepted_result_hash IS NULL
+          AND authority_incarnation = ?
+      `).run(resultHash, acceptedAt, identity.run_id, row.row_version, identity.authority_incarnation);
+      if (Number(result.changes) !== 1) return null;
+      return Object.freeze({ accepted: true, run_id: identity.run_id, lease_id: identity.lease_id,
+        lease_epoch: identity.lease_epoch, authority_incarnation: identity.authority_incarnation,
+        result_hash: resultHash, accepted_at: acceptedAt });
+    });
+  }
+
   consumeTokenAndUpdateRun({ tokenId, expiresAt, consumedAt, runId, predicate, mutate }) {
     return this.#transaction(() => {
       this.db.prepare(`DELETE FROM hosted_placement_consumed_tokens WHERE expires_at <= ?`).run(consumedAt);
       if (this.isTokenConsumed(tokenId)) return null;
       const row = this.#getRunRow(runId);
       const current = this.#rowToRun(row);
-      if (!current || !predicate(clone(current))) return null;
+      if (!current || current.resultAcceptanceState === "ACCEPTED" || !predicate(clone(current))) return null;
       const next = mutate(clone(current));
       if (next.runId !== runId || next.seatCount < 1 || next.seatCount > 4
         || next.admittedCount < 0 || next.admittedCount > next.seatCount) throw new Error("invalid run mutation");
@@ -408,7 +542,9 @@ class SqliteHostedPlacementRepository {
   snapshot() {
     const capacities = this.listCapacities();
     const runs = this.db.prepare(`
-      SELECT payload_json, row_version FROM hosted_placement_current_allocations ORDER BY run_id
+      SELECT payload_json, row_version, state, lease_status, authority_incarnation, result_acceptance_state,
+        accepted_result_hash, accepted_at
+      FROM hosted_placement_current_allocations ORDER BY run_id
     `).all().map((row) => this.#rowToRun(row));
     const requestIndex = this.db.prepare(`
       SELECT request_id, run_id FROM hosted_placement_request_bindings ORDER BY request_id

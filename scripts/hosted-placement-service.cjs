@@ -96,9 +96,10 @@ function createHostedPlacementService({
   function workload(credential) {
     const trusted = authenticateWorkload(credential);
     if (!trusted || typeof trusted !== "object") reject("WORKLOAD_AUTH_REQUIRED");
-    exact(trusted, ["authorityInstanceId", "region", "artifactSha", "protocolVersion", "manifestHash", "capabilities", "maxMatches", "maxSeats", "workloadKeyId", "endpoint"]);
+    exact(trusted, ["authorityInstanceId", "authorityIncarnation", "region", "artifactSha", "protocolVersion", "manifestHash", "capabilities", "maxMatches", "maxSeats", "workloadKeyId", "endpoint"]);
     return {
       authorityInstanceId: id(trusted.authorityInstanceId),
+      authorityIncarnation: id(trusted.authorityIncarnation),
       region: id(trusted.region),
       artifactSha: id(trusted.artifactSha),
       protocolVersion: id(trusted.protocolVersion),
@@ -122,6 +123,7 @@ function createHostedPlacementService({
     const run = repository.getRun(id(claims.runId));
     if (!run || !states.has(run.state) || run.leaseStatus !== "ACTIVE" || at >= run.leaseDeadlineAt) reject("STALE_LEASE");
     if (run.authorityInstanceId !== trusted.authorityInstanceId
+      || run.authorityIncarnation !== trusted.authorityIncarnation
       || run.authorityLeaseId !== id(claims.authorityLeaseId)
       || run.leaseEpoch !== integer(claims.leaseEpoch, 1)) reject("STALE_LEASE");
     return run;
@@ -130,17 +132,18 @@ function createHostedPlacementService({
   function registerCapacity({ credential, registration }) {
     const trusted = workload(credential);
     exact(registration, [
-      "authorityInstanceId", "region", "artifactSha", "protocolVersion", "manifestHash", "capabilities",
+      "authorityInstanceId", "authorityIncarnation", "region", "artifactSha", "protocolVersion", "manifestHash", "capabilities",
       "maxMatches", "maxSeats", "observedAllocation", "maintenance", "draining", "heartbeatTtlMs", "workloadKeyId",
     ]);
     const claimed = {
-      authorityInstanceId: id(registration.authorityInstanceId), region: id(registration.region),
+      authorityInstanceId: id(registration.authorityInstanceId),
+      authorityIncarnation: id(registration.authorityIncarnation), region: id(registration.region),
       artifactSha: id(registration.artifactSha), protocolVersion: id(registration.protocolVersion),
       manifestHash: id(registration.manifestHash), capabilities: strings(registration.capabilities),
       maxMatches: integer(registration.maxMatches, 1, 1_024), maxSeats: integer(registration.maxSeats, 1, MAX_SEATS),
       workloadKeyId: id(registration.workloadKeyId),
     };
-    for (const field of ["authorityInstanceId", "region", "artifactSha", "protocolVersion", "manifestHash", "maxMatches", "maxSeats", "workloadKeyId"]) {
+    for (const field of ["authorityInstanceId", "authorityIncarnation", "region", "artifactSha", "protocolVersion", "manifestHash", "maxMatches", "maxSeats", "workloadKeyId"]) {
       if (claimed[field] !== trusted[field]) reject("WORKLOAD_IDENTITY_MISMATCH");
     }
     if (!equalArray(claimed.capabilities, trusted.capabilities)) reject("WORKLOAD_IDENTITY_MISMATCH");
@@ -167,6 +170,7 @@ function createHostedPlacementService({
   function capacityEligible(request, at, regionRank, capacity) {
     return (
       !capacity.maintenance && !capacity.draining && at < capacity.heartbeatDeadlineAt
+      && typeof capacity.authorityIncarnation === "string" && capacity.authorityIncarnation.length > 0
       && capacity.maxSeats >= request.seatCount && capacity.artifactSha === request.artifactSha
       && capacity.protocolVersion === request.protocolVersion && capacity.manifestHash === request.manifestHash
       && request.capabilities.every((capability) => capacity.capabilities.includes(capability))
@@ -216,7 +220,8 @@ function createHostedPlacementService({
         return {
           runId: selected.runId, sessionId: selected.sessionId, seatCount: selected.seatCount,
           requestId: selected.requestId, placementId, placementAttempt: epoch,
-          authorityInstanceId: capacity.authorityInstanceId, authorityLeaseId, leaseEpoch: epoch,
+          authorityInstanceId: capacity.authorityInstanceId, authorityIncarnation: capacity.authorityIncarnation,
+          authorityLeaseId, leaseEpoch: epoch,
           artifactSha: selected.artifactSha, protocolVersion: selected.protocolVersion,
           manifestHash: selected.manifestHash, capabilities: selected.capabilities,
           region: capacity.region, endpoint: capacity.endpoint, workloadKeyId: capacity.workloadKeyId,
@@ -242,7 +247,8 @@ function createHostedPlacementService({
       type: "bootstrap", tokenId: run.bootstrapId, audience: `authority:${run.authorityInstanceId}`,
       runId: run.runId, sessionId: run.sessionId, placementId: run.placementId,
       authorityLeaseId: run.authorityLeaseId, leaseEpoch: run.leaseEpoch,
-      authorityInstanceId: run.authorityInstanceId, artifactSha: run.artifactSha,
+      authorityInstanceId: run.authorityInstanceId, authorityIncarnation: run.authorityIncarnation,
+      artifactSha: run.artifactSha,
       protocolVersion: run.protocolVersion, manifestHash: run.manifestHash,
       capabilities: run.capabilities, seatCount: run.seatCount, maxSeats: MAX_SEATS,
       issuedAt: at, expiresAt: run.bootstrapExpiresAt,
@@ -264,6 +270,7 @@ function createHostedPlacementService({
     if (claims.type !== "bootstrap" || claims.audience !== expectedAudience || at >= claims.expiresAt) reject("BOOTSTRAP_REJECTED");
     const run = requireCurrent(trusted, claims, new Set(["ALLOCATING"]));
     if (run.bootstrapId !== claims.tokenId || run.artifactSha !== claims.artifactSha
+      || run.authorityIncarnation !== claims.authorityIncarnation
       || run.protocolVersion !== claims.protocolVersion || run.manifestHash !== claims.manifestHash
       || run.seatCount !== claims.seatCount || claims.maxSeats !== MAX_SEATS
       || !equalArray(run.capabilities, claims.capabilities)) reject("BOOTSTRAP_REJECTED");
