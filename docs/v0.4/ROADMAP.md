@@ -679,6 +679,29 @@ authority CPU/p95, preserve exact semantics and fallback, and leave cadence
 policy unchanged. Hosted economics, heavy-sim work, and 24/48/96 remain closed
 until this low-count admission sequence is decision-ready.
 
+**S20 negotiated state-pair compression — accepted for 1–4, rejected for 8:**
+Brotli quality 1 wraps the exact S18 positional wire in a 64-byte, manifest-
+bound, independently compressed envelope. Capability/ticket/welcome/client
+mode are pinned per session; S18 positional JSON remains the fresh-session
+fallback, and binary/compressed framing cannot mix. Exact compressed bytes are
+retained once for retransmission under a 12-frame/2 MiB per-connection bound,
+then retired by accepted ACK, cleanup, or rotation.
+
+The representative codec corpus preserves 8,712 exact comparisons plus 121
+envelope semantic/ACK comparisons with zero mismatch. Two counterbalanced
+isolated-process product rounds admit four: 9.80/9.80 and 9.80/9.85 Hz, NORMAL,
+normalized mean 31,018/30,203 B/s and p95 32,766/32,361 B/s. Paired authority
+CPU ratios are 1.001/1.027. Eight remains DILATED at 5.00/4.90 Hz; its median
+cadence, projection-p95, and CPU ratios are 0.995/1.041/1.011, so compression
+does not materially worsen the clock but does not admit it. Evidence is sealed
+under `docs/v0.4/evidence/state-pair-s20/`; design and limits are in
+`docs/v0.4/MULTIPLAYER-STATE-PAIR-S20-COMPRESSION.md`.
+
+Each concurrent match still multiplies one dedicated logical authority. The
+next bounded lane is authority projection/publish clock profiling and isolation
+for the existing eight-player failure. Do not claim 24/48/96 capacity, change
+cadence, or begin hosted/fleet work from S20.
+
 ## Phase 5 — Hosted Identity, Durable Settlement, And Placement
 
 Goal: add the minimum public account/progression plane only after Greg confirms

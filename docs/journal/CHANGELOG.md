@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-07-13 — v0.4 S20 negotiated state-pair compression
+
+- Selected Brotli quality 1 over five Node-builtins alternatives using 8,712
+  exact representative comparisons and 121 envelope semantic/ACK comparisons.
+- Added an explicit manifest-bound binary envelope over the exact S18
+  positional wire, strict malformed/limit gates, immutable session negotiation,
+  exact retransmit reuse, and 12-frame/2 MiB per-connection retention.
+- Reserved 16 KiB of incompressible expansion headroom inside the 256 KiB outer
+  limit and removed duplicate client decompression from the isolated harness.
+- Sealed counterbalanced A/B then B/A one-authority-per-match evidence. Four is
+  admitted at NORMAL >=9 Hz with normalized mean <=31,018 B/s and p95 <=32,766
+  B/s; eight remains DILATED at 5.00/4.90 Hz and is rejected.
+- Kept S18 positional JSON as the fresh-session fallback and selected authority
+  clock profiling/isolation as the next bounded lane before any 24/48/96 claim.
+
 ## 2026-07-13 — v0.4 S19 shared-public experiment rejected
 
 - Implemented one authority-instance/tick-scoped public source/core and exact

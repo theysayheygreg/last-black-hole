@@ -1,0 +1,27 @@
+{
+  "schema": "lbh-s20-compression-codec-adversarial-v1",
+  "manifestHash": "sha256:2c3cd325e00203ca79e18cf5bf6004fe54c7accacbf7901a8fb66db27167b551",
+  "exactComparisons": 512,
+  "malformedCases": 13,
+  "malformedResults": {
+    "truncated": "envelope-length",
+    "trailing": "envelope-length",
+    "magic": "wrong-magic",
+    "version": "wrong-version",
+    "codec": "wrong-codec",
+    "flags": "invalid-flags",
+    "manifest": "wrong-manifest",
+    "compressed-length": "envelope-length",
+    "original-length": "invalid-stream",
+    "checksum": "integrity",
+    "payload": "invalid-stream",
+    "concatenated-stream": "trailing-stream",
+    "bomb-output-bound": "invalid-stream"
+  },
+  "maxAndMaxMinusOneCases": 2,
+  "mutableRetentionComparisons": 1,
+  "pinnedFramingRejects": 1,
+  "clientModeAssertions": 2,
+  "crossCodecRejects": 2,
+  "mismatches": 0
+}

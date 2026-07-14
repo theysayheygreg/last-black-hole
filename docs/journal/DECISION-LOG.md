@@ -3012,3 +3012,16 @@ multiply that isolated authority horizontally.
 **Door status:** Closed for 4/8 product admission, further shared-public work,
 cadence policy, hosted/heavy-sim work, and 24/48/96. Open only for the bounded
 compression pilot above; do not start it from this decision record.
+
+### Q: Does S20 compression admit four without hiding the eight-player clock?
+
+| Date | Decision |
+|------|----------|
+| Jul 13 | Select per-frame Brotli quality 1 over S18 positional JSON. Pin `state-pair-brotli-v1` through ticket/welcome/client mode, retain exact compressed bytes for retransmit, and keep S18 positional JSON as fresh-session fallback. Never mix compressed and S16 binary framing. |
+| Jul 13 | Admit 1–4 when compression is negotiated. Both counterbalanced four-player rounds are NORMAL at >=9 Hz, normalized mean <=31,018 B/s, normalized p95 <=32,766 B/s, projection p95 <=54.65 ms, and paired authority CPU ratio <=1.027. |
+| Jul 13 | Reject 8. It remains DILATED at 5.00/4.90 Hz. Median cadence/projection-p95/authority-CPU ratios of 0.995/1.041/1.011 show no material S20 regression, not admission. |
+
+Each match/group still owns one dedicated logical authority; concurrent matches
+multiply that isolated authority horizontally. The next bounded lane profiles
+and isolates projection/publish clock cost for eight. Hosted/fleet and 24/48/96
+remain closed.

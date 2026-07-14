@@ -1,0 +1,445 @@
+{
+  "schema": "lbh-s20-compression-evidence-v2",
+  "evidenceCommit": "9ff1b06b638e082d760539819d1a678a70e31c40",
+  "bindings": {
+    "round-a/baseline": {
+      "passed": true,
+      "expectedAggregateSha256": "34889e19a112a3288d35eeafa575ace90f0319d14eb27c0ccc53c13245f13594",
+      "actualAggregateSha256": "34889e19a112a3288d35eeafa575ace90f0319d14eb27c0ccc53c13245f13594",
+      "mismatches": []
+    },
+    "round-a/candidate": {
+      "passed": true,
+      "expectedAggregateSha256": "d9b732599aa5e036bdedced3c6d14d8301cc6fa4e9015d633bf7e751bf43d6ac",
+      "actualAggregateSha256": "d9b732599aa5e036bdedced3c6d14d8301cc6fa4e9015d633bf7e751bf43d6ac",
+      "mismatches": []
+    },
+    "round-b/baseline": {
+      "passed": true,
+      "expectedAggregateSha256": "a11dbbefd132173d3f45cba687aa7693a6126a491284c38ae604c24dd92b594d",
+      "actualAggregateSha256": "a11dbbefd132173d3f45cba687aa7693a6126a491284c38ae604c24dd92b594d",
+      "mismatches": []
+    },
+    "round-b/candidate": {
+      "passed": true,
+      "expectedAggregateSha256": "8cc0f77b58048420449a8116e998a27d428240b19e8047608268b9b38e48ee2c",
+      "actualAggregateSha256": "8cc0f77b58048420449a8116e998a27d428240b19e8047608268b9b38e48ee2c",
+      "mismatches": []
+    }
+  },
+  "codecSelection": {
+    "selected": "brotli-q1",
+    "counterbalancedRounds": 12,
+    "representativeWires": 121,
+    "laneClasses": [
+      "delta+keyframe",
+      "keyframe+keyframe"
+    ],
+    "exactComparisons": 8712,
+    "selectedCodec": {
+      "authorityCompressionMilliseconds": {
+        "count": 1452,
+        "mean": 0.009542648071623201,
+        "p50": 0.008790999999973792,
+        "p95": 0.012375000000020009,
+        "p99": 0.017291999999997643,
+        "max": 0.29300000000000637
+      },
+      "clientDecompressionMilliseconds": {
+        "count": 1452,
+        "mean": 0.006103561294765955,
+        "p50": 0.005457999999975982,
+        "p95": 0.008290999999985615,
+        "p99": 0.011083999999982552,
+        "max": 0.19608400000004167
+      },
+      "envelopeRatio": {
+        "count": 1452,
+        "mean": 0.3357019067503743,
+        "p50": 0.33705583756345175,
+        "p95": 0.3458333333333333,
+        "p99": 0.3484139365574623,
+        "max": 0.3491401771756123
+      },
+      "compressedEnvelopeBytes": {
+        "count": 1452,
+        "mean": 654.7520661157025,
+        "p50": 656,
+        "p95": 667,
+        "p99": 671,
+        "max": 1002
+      },
+      "byLaneClass": {
+        "keyframe+keyframe": {
+          "count": 12,
+          "mean": 0.1103159748981614,
+          "p50": 0.1103159748981614,
+          "p95": 0.1103159748981614,
+          "p99": 0.1103159748981614,
+          "max": 0.1103159748981614
+        },
+        "delta+keyframe": {
+          "count": 1440,
+          "mean": 0.33758012284914274,
+          "p50": 0.33705583756345175,
+          "p95": 0.3458333333333333,
+          "p99": 0.3484139365574623,
+          "max": 0.3491401771756123
+        }
+      },
+      "allocationProxyBytes": 950700
+    },
+    "selectedEnvelopeExactComparisons": 121,
+    "selectedEnvelopeSemanticComparisons": 121,
+    "selectedEnvelopeAckTranscriptComparisons": 121
+  },
+  "adversarial": {
+    "schema": "lbh-s20-compression-codec-adversarial-v1",
+    "manifestHash": "sha256:2c3cd325e00203ca79e18cf5bf6004fe54c7accacbf7901a8fb66db27167b551",
+    "exactComparisons": 512,
+    "malformedCases": 13,
+    "malformedResults": {
+      "truncated": "envelope-length",
+      "trailing": "envelope-length",
+      "magic": "wrong-magic",
+      "version": "wrong-version",
+      "codec": "wrong-codec",
+      "flags": "invalid-flags",
+      "manifest": "wrong-manifest",
+      "compressed-length": "envelope-length",
+      "original-length": "invalid-stream",
+      "checksum": "integrity",
+      "payload": "invalid-stream",
+      "concatenated-stream": "trailing-stream",
+      "bomb-output-bound": "invalid-stream"
+    },
+    "maxAndMaxMinusOneCases": 2,
+    "mutableRetentionComparisons": 1,
+    "pinnedFramingRejects": 1,
+    "clientModeAssertions": 2,
+    "crossCodecRejects": 2,
+    "mismatches": 0
+  },
+  "rounds": [
+    {
+      "round": "round-a",
+      "scenarios": [
+        {
+          "population": 1,
+          "baseline": {
+            "cadenceHz": 9.7,
+            "overloadState": "NORMAL",
+            "projectionP95Ms": 16.087625000000116,
+            "authorityOneCoreFraction": 0.17259545147923291,
+            "traffic": {
+              "actualMeanBytesPerSecond": 58901.9,
+              "actualP95BytesPerSecond": 61692,
+              "normalized10MeanBytesPerSecond": 60723.608247422686,
+              "normalized10P95BytesPerSecond": 63600.00000000001
+            }
+          },
+          "candidate": {
+            "cadenceHz": 9.7,
+            "overloadState": "NORMAL",
+            "projectionP95Ms": 16.75304199999664,
+            "authorityOneCoreFraction": 0.1759310693155034,
+            "compression": {
+              "capability": "state-pair-brotli-v1",
+              "manifestHash": "sha256:2c3cd325e00203ca79e18cf5bf6004fe54c7accacbf7901a8fb66db27167b551",
+              "enabledConnections": 1,
+              "compressedFrames": 259,
+              "sourceBytes": 1532336,
+              "encodedBytes": 651487,
+              "compressionMilliseconds": 22.126880999966033,
+              "reusedFrames": 0,
+              "retainedFrames": 0,
+              "retainedBytes": 0,
+              "meanCompressionMs": 0.08543197297284183
+            },
+            "traffic": {
+              "actualMeanBytesPerSecond": 25396.05,
+              "actualP95BytesPerSecond": 26864,
+              "normalized10MeanBytesPerSecond": 26181.494845360827,
+              "normalized10P95BytesPerSecond": 27694.845360824744
+            }
+          },
+          "change": {
+            "cadenceRatio": 1,
+            "projectionP95Ratio": 1.041362040698768,
+            "authorityOneCoreFractionRatio": 1.0193262209848666,
+            "normalizedMeanRatio": 0.431158417640178,
+            "normalizedP95Ratio": 0.435453543409194
+          },
+          "admission": true
+        },
+        {
+          "population": 4,
+          "baseline": {
+            "cadenceHz": 9.8,
+            "overloadState": "NORMAL",
+            "projectionP95Ms": 56.97783299999992,
+            "authorityOneCoreFraction": 0.5841097478829869,
+            "traffic": {
+              "actualMeanBytesPerSecond": 73158.2,
+              "actualP95BytesPerSecond": 76646,
+              "normalized10MeanBytesPerSecond": 74651.22448979592,
+              "normalized10P95BytesPerSecond": 78210.20408163265
+            }
+          },
+          "candidate": {
+            "cadenceHz": 9.8,
+            "overloadState": "NORMAL",
+            "projectionP95Ms": 55.03937500000029,
+            "authorityOneCoreFraction": 0.5845917610214406,
+            "compression": {
+              "capability": "state-pair-brotli-v1",
+              "manifestHash": "sha256:2c3cd325e00203ca79e18cf5bf6004fe54c7accacbf7901a8fb66db27167b551",
+              "enabledConnections": 4,
+              "compressedFrames": 1060,
+              "sourceBytes": 7357096,
+              "encodedBytes": 3003944,
+              "compressionMilliseconds": 83.35662499998847,
+              "reusedFrames": 0,
+              "retainedFrames": 0,
+              "retainedBytes": 0,
+              "meanCompressionMs": 0.07863832547168724
+            },
+            "traffic": {
+              "actualMeanBytesPerSecond": 30553.05,
+              "actualP95BytesPerSecond": 32275,
+              "normalized10MeanBytesPerSecond": 31018.324873096448,
+              "normalized10P95BytesPerSecond": 32766.497461928935
+            }
+          },
+          "change": {
+            "cadenceRatio": 1,
+            "projectionP95Ratio": 0.965978734221085,
+            "authorityOneCoreFractionRatio": 1.0008252098859858,
+            "normalizedMeanRatio": 0.4155099274672493,
+            "normalizedP95Ratio": 0.4189542508766323
+          },
+          "admission": true
+        },
+        {
+          "population": 8,
+          "baseline": {
+            "cadenceHz": 4.95,
+            "overloadState": "DILATED",
+            "projectionP95Ms": 121.39154099999905,
+            "authorityOneCoreFraction": 0.6513914963048277,
+            "traffic": {
+              "actualMeanBytesPerSecond": 39797.1,
+              "actualP95BytesPerSecond": 41829,
+              "normalized10MeanBytesPerSecond": 80398.18181818181,
+              "normalized10P95BytesPerSecond": 84503.0303030303
+            }
+          },
+          "candidate": {
+            "cadenceHz": 5,
+            "overloadState": "DILATED",
+            "projectionP95Ms": 119.93995800000084,
+            "authorityOneCoreFraction": 0.6468681940184049,
+            "compression": {
+              "capability": "state-pair-brotli-v1",
+              "manifestHash": "sha256:2c3cd325e00203ca79e18cf5bf6004fe54c7accacbf7901a8fb66db27167b551",
+              "enabledConnections": 8,
+              "compressedFrames": 1134,
+              "sourceBytes": 8638940,
+              "encodedBytes": 3353115,
+              "compressionMilliseconds": 88.13041300003454,
+              "reusedFrames": 0,
+              "retainedFrames": 0,
+              "retainedBytes": 0,
+              "meanCompressionMs": 0.07771641358027737
+            },
+            "traffic": {
+              "actualMeanBytesPerSecond": 16346.95,
+              "actualP95BytesPerSecond": 17173,
+              "normalized10MeanBytesPerSecond": 32693.9,
+              "normalized10P95BytesPerSecond": 34346
+            }
+          },
+          "change": {
+            "cadenceRatio": 1.0101010101010102,
+            "projectionP95Ratio": 0.9880421404321886,
+            "authorityOneCoreFractionRatio": 0.9930559389981565,
+            "normalizedMeanRatio": 0.406649743323006,
+            "normalizedP95Ratio": 0.40644696263357954
+          },
+          "admission": false
+        }
+      ]
+    },
+    {
+      "round": "round-b",
+      "scenarios": [
+        {
+          "population": 1,
+          "baseline": {
+            "cadenceHz": 9.7,
+            "overloadState": "NORMAL",
+            "projectionP95Ms": 13.248625000000175,
+            "authorityOneCoreFraction": 0.154569751779873,
+            "traffic": {
+              "actualMeanBytesPerSecond": 61157.45,
+              "actualP95BytesPerSecond": 65067,
+              "normalized10MeanBytesPerSecond": 63048.9175257732,
+              "normalized10P95BytesPerSecond": 67079.38144329897
+            }
+          },
+          "candidate": {
+            "cadenceHz": 9.7,
+            "overloadState": "NORMAL",
+            "projectionP95Ms": 15.799541999998837,
+            "authorityOneCoreFraction": 0.16975478244109285,
+            "compression": {
+              "capability": "state-pair-brotli-v1",
+              "manifestHash": "sha256:2c3cd325e00203ca79e18cf5bf6004fe54c7accacbf7901a8fb66db27167b551",
+              "enabledConnections": 1,
+              "compressedFrames": 258,
+              "sourceBytes": 1499079,
+              "encodedBytes": 635844,
+              "compressionMilliseconds": 21.310913999997467,
+              "reusedFrames": 0,
+              "retainedFrames": 0,
+              "retainedBytes": 0,
+              "meanCompressionMs": 0.0826004418604553
+            },
+            "traffic": {
+              "actualMeanBytesPerSecond": 24763.45,
+              "actualP95BytesPerSecond": 26429,
+              "normalized10MeanBytesPerSecond": 25529.329896907217,
+              "normalized10P95BytesPerSecond": 27246.39175257732
+            }
+          },
+          "change": {
+            "cadenceRatio": 1,
+            "projectionP95Ratio": 1.1925420185112514,
+            "authorityOneCoreFractionRatio": 1.098240635611845,
+            "normalizedMeanRatio": 0.40491305638152014,
+            "normalizedP95Ratio": 0.406181320792414
+          },
+          "admission": true
+        },
+        {
+          "population": 4,
+          "baseline": {
+            "cadenceHz": 9.8,
+            "overloadState": "NORMAL",
+            "projectionP95Ms": 53.35491700000057,
+            "authorityOneCoreFraction": 0.5736928653735356,
+            "traffic": {
+              "actualMeanBytesPerSecond": 70914.4,
+              "actualP95BytesPerSecond": 74072,
+              "normalized10MeanBytesPerSecond": 71994.31472081218,
+              "normalized10P95BytesPerSecond": 75200
+            }
+          },
+          "candidate": {
+            "cadenceHz": 9.85,
+            "overloadState": "NORMAL",
+            "projectionP95Ms": 54.653833000000304,
+            "authorityOneCoreFraction": 0.589073039121218,
+            "compression": {
+              "capability": "state-pair-brotli-v1",
+              "manifestHash": "sha256:2c3cd325e00203ca79e18cf5bf6004fe54c7accacbf7901a8fb66db27167b551",
+              "enabledConnections": 4,
+              "compressedFrames": 1060,
+              "sourceBytes": 7483073,
+              "encodedBytes": 3060261,
+              "compressionMilliseconds": 77.19408900004362,
+              "reusedFrames": 0,
+              "retainedFrames": 0,
+              "retainedBytes": 0,
+              "meanCompressionMs": 0.0728246122641921
+            },
+            "traffic": {
+              "actualMeanBytesPerSecond": 29749.75,
+              "actualP95BytesPerSecond": 31876,
+              "normalized10MeanBytesPerSecond": 30202.79187817259,
+              "normalized10P95BytesPerSecond": 32361.421319796955
+            }
+          },
+          "change": {
+            "cadenceRatio": 1.0051020408163265,
+            "projectionP95Ratio": 1.0243448228023617,
+            "authorityOneCoreFractionRatio": 1.0268090727216352,
+            "normalizedMeanRatio": 0.4195163464684183,
+            "normalizedP95Ratio": 0.43033804946538506
+          },
+          "admission": true
+        },
+        {
+          "population": 8,
+          "baseline": {
+            "cadenceHz": 5,
+            "overloadState": "DILATED",
+            "projectionP95Ms": 118.06208299999889,
+            "authorityOneCoreFraction": 0.6403009853400625,
+            "traffic": {
+              "actualMeanBytesPerSecond": 39793.9,
+              "actualP95BytesPerSecond": 41553,
+              "normalized10MeanBytesPerSecond": 79587.8,
+              "normalized10P95BytesPerSecond": 83106
+            }
+          },
+          "candidate": {
+            "cadenceHz": 4.9,
+            "overloadState": "DILATED",
+            "projectionP95Ms": 129.17258300000321,
+            "authorityOneCoreFraction": 0.6587885328836425,
+            "compression": {
+              "capability": "state-pair-brotli-v1",
+              "manifestHash": "sha256:2c3cd325e00203ca79e18cf5bf6004fe54c7accacbf7901a8fb66db27167b551",
+              "enabledConnections": 8,
+              "compressedFrames": 1104,
+              "sourceBytes": 8410293,
+              "encodedBytes": 3234399,
+              "compressionMilliseconds": 89.00270999996542,
+              "reusedFrames": 0,
+              "retainedFrames": 0,
+              "retainedBytes": 0,
+              "meanCompressionMs": 0.08061839673909911
+            },
+            "traffic": {
+              "actualMeanBytesPerSecond": 15819.5,
+              "actualP95BytesPerSecond": 16641,
+              "normalized10MeanBytesPerSecond": 31958.58585858586,
+              "normalized10P95BytesPerSecond": 33618.181818181816
+            }
+          },
+          "change": {
+            "cadenceRatio": 0.9800000000000001,
+            "projectionP95Ratio": 1.0941072672756793,
+            "authorityOneCoreFractionRatio": 1.0288732142646342,
+            "normalizedMeanRatio": 0.40155131639002284,
+            "normalizedP95Ratio": 0.4045217170623278
+          },
+          "admission": false
+        }
+      ]
+    }
+  ],
+  "eightAggregate": {
+    "medianCadenceRatio": 0.9950505050505052,
+    "medianProjectionP95Ratio": 1.0410747038539339,
+    "medianAuthorityOneCoreFractionRatio": 1.0109645766313953
+  },
+  "productAdmission": {
+    "admittedPopulations": [
+      1,
+      4
+    ],
+    "rejectedPopulations": [
+      8
+    ],
+    "fourPlayerReason": "Both counterbalanced rounds are NORMAL at >=9 Hz, projection p95 <=100 ms, normalized mean <=64 KiB/s, normalized p95 <=80 KiB/s, and authority CPU ratio <=1.05.",
+    "eightPlayerReason": "Both rounds remain DILATED below 9 Hz. Counterbalanced median cadence, projection-tail, and authority-CPU ratios stay within the non-regression gate; this does not admit eight."
+  },
+  "authorityTopology": "One dedicated logical authority owns one match/group; concurrent matches multiply these authorities horizontally.",
+  "limitations": [
+    "Machine-local macOS loopback",
+    "Raw WebSocket without TLS",
+    "No permessage-deflate, context takeover, dictionary, worker offload, AOI, hosted fleet, or 24/48/96 claim"
+  ]
+}
