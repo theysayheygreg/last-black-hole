@@ -102,6 +102,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "HostedPlacementToken",
+    file: "hosted-placement-token.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "HostedSettlementService",
     file: "hosted-settlement-service.cjs",
     lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
