@@ -1042,6 +1042,12 @@ const MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED = String(
 const MULTIPLAYER_PREPARED_PROJECTIONS_ENABLED = !["0", "false"].includes(
   String(process.env.LBH_SIM_WS_PREPARED_PROJECTIONS ?? "true").trim().toLowerCase(),
 );
+const MULTIPLAYER_PUBLIC_PROJECTION_WORKERS = Number(
+  String(process.env.LBH_SIM_WS_PUBLIC_PROJECTION_WORKERS || "0").trim(),
+);
+if (![0, 2, 4].includes(MULTIPLAYER_PUBLIC_PROJECTION_WORKERS)) {
+  throw new Error("LBH_SIM_WS_PUBLIC_PROJECTION_WORKERS must be 0, 2, or 4");
+}
 const MULTIPLAYER_HEARTBEAT_INTERVAL_MS = 10_000;
 const MULTIPLAYER_TICKET_TTL_MS = process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS
   ? Math.max(1, Math.floor(Number(process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS) || 30_000))
@@ -6155,6 +6161,9 @@ function writeFiles() {
 }
 
 function rotateMultiplayerRun(runId) {
+  const priorStatePairAuthority = runtimeStatePairAuthority;
+  runtimeStatePairAuthority = null;
+  if (priorStatePairAuthority) priorStatePairAuthority.close().catch(() => null);
   manifestFetchRegistry.reset();
   manifestAdmissions.clear();
   sessionReplicationManifest = null;
@@ -6181,6 +6190,7 @@ function rotateMultiplayerRun(runId) {
         ackRejectDiagnostics: MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED,
       },
       stageProfiler: authorityStageProfiler,
+      publicProjectionWorkers: MULTIPLAYER_PUBLIC_PROJECTION_WORKERS,
       })
     : null;
 }
@@ -7850,6 +7860,7 @@ function shutdown() {
     new Promise((resolve) => setTimeout(resolve, 1200)),
   ]).then(async () => {
     if (multiplayerAdapter) await multiplayerAdapter.shutdown();
+    if (runtimeStatePairAuthority) await runtimeStatePairAuthority.close();
     authorityStageProfiler?.stop();
     replicationBenchEventLoop?.disable();
     await new Promise((resolve) => server.close(resolve));

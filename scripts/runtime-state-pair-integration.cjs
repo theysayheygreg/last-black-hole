@@ -8,6 +8,7 @@ const {
   preparedProjectionView,
 } = require("./canonical-structural-delta.cjs");
 const { createAuthorityDeltaPublisher } = require("./authority-delta-publisher.cjs");
+const { createRuntimePublicProjectionPool } = require("./runtime-public-projection-pool.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
 const { createStatePairWireEncoder } = require("./multiplayer-wire-protocol.cjs");
 const {
@@ -218,7 +219,8 @@ function pairIdentity(binding, authorityIncarnation) {
 }
 
 function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballparkEpoch = 1,
-  manifestSchema = DEFAULT_MANIFEST_SCHEMA, manifestHash, publisherOptions = {}, stageProfiler = null } = {}) {
+  manifestSchema = DEFAULT_MANIFEST_SCHEMA, manifestHash, publisherOptions = {}, stageProfiler = null,
+  publicProjectionWorkers = 0, publicProjectionWorkerOptions = {} } = {}) {
   // This object belongs to one active match/group and its one dedicated
   // authoritative sim instance. A fleet owns many isolated objects like this;
   // it never shares one global gameplay authority or mutable delta history.
@@ -241,6 +243,14 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   let shareability = { beats: 0, comparisons: 0, mismatches: 0, snapshotId: null, coreHash: null };
   const preparedCounters = { preparations: 0, canonicalizations: 0, hashes: 0 };
   const positionalMeasure = { encodedCandidates: 0, encodedBytes: 0, encodeMilliseconds: 0 };
+  const workerPool = publicProjectionWorkers
+    ? createRuntimePublicProjectionPool({ size: publicProjectionWorkers, ...publicProjectionWorkerOptions }) : null;
+  const observeWorkerJob = typeof publicProjectionWorkerOptions.observeJob === "function"
+    ? publicProjectionWorkerOptions.observeJob : null;
+  const workerTestRunOptions = publicProjectionWorkerOptions.testRunOptions || null;
+  const workerAdmissions = new Map();
+  const workerStats = { committed: 0, fallback: 0, fenceRejected: 0, duplicateRejected: 0,
+    staleRejected: 0, cleanupCancelled: 0, fallbackReasons: new Map() };
 
   function resetShareabilityIfNeeded() {
     const currentGeneration = stageProfiler?.generation?.() || 0;
@@ -312,6 +322,8 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     }
     if (needsOwnerTracker) ownerTrackers.set(identity.recipientId, createRevisionTracker());
     admissions.set(admissionKey, Object.freeze({ identity, capabilities: Object.freeze([...ticketClaims.capabilities]) }));
+    if (workerPool) workerAdmissions.set(admissionKey, { token: crypto.randomBytes(16).toString("base64url"),
+      generation: 0, latestCommittedGeneration: 0, ackedPublicView: null, pendingPublicViews: new Map() });
     if (ticketClaims.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
         && !splitPublicTrackers.has(admissionKey)) {
       splitPublicTrackers.set(admissionKey, createRevisionTracker());
@@ -326,7 +338,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     return identity;
   }
 
-  function buildViews(binding, publicFrame, ownerFrame) {
+  function buildViews(binding, publicFrame, ownerFrame, { workerPublic = false, deferOwner = false } = {}) {
     const identity = requireAdmission(binding);
     assertSourceEnvelope(publicFrame, "public");
     assertSourceEnvelope(ownerFrame, "owner");
@@ -343,6 +355,10 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       fail("projection-too-large", "authoritative source exceeds bounded projection input");
     }
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
+    // The worker path deliberately defers owner construction until the public
+    // result is accepted. Capture owner input now so caller mutation during the
+    // await cannot cross that authority barrier.
+    const ownerFrameSnapshot = workerPublic ? clone(ownerFrame) : ownerFrame;
     const admission = admissions.get(key(identity));
     const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
     const shared = {
@@ -393,62 +409,132 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         }), buildPublicCore)
       : buildPublicCore();
     observePublicCore(publicFrame.snapshotId, publicCore);
+    const buildPublicView = () => workerPublic
+      ? Object.freeze({ view: normalizeView({ ...shared, lane: "public", ...publicCore }), prepared: null })
+      : finalizeView({ ...shared, lane: "public", ...publicCore }, "public");
     const publicView = stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_PROJECTION, (value) => ({
           ...profile,
           outputBytes: canonicalJsonBytes(value.view).length,
           entities: value.view.entities.length,
           components: value.view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
-        }), () => finalizeView({ ...shared, lane: "public", ...publicCore }, "public"))
-      : finalizeView({ ...shared, lane: "public", ...publicCore }, "public");
+        }), buildPublicView)
+      : buildPublicView();
     const buildOwnerView = () => {
-      const ownerValue = clone(ownerFrame.state || {});
+      const ownerValue = clone(ownerFrameSnapshot.state || {});
       const ownerTracker = ownerTrackers.get(identity.recipientId);
       return finalizeView({ ...shared, lane: "owner", world: {}, entities: ownerTracker.project([{
         category: "owner", sourceId: identity.recipientId, components: {
           ownerState: ownerValue,
-          transient: { lastInputSeq: ownerFrame.lastInputSeq || 0, lastActionSeq: ownerFrame.lastActionSeq || 0 },
+          transient: { lastInputSeq: ownerFrameSnapshot.lastInputSeq || 0,
+            lastActionSeq: ownerFrameSnapshot.lastActionSeq || 0 },
         },
       }]) }, "owner");
     };
-    const ownerProjection = stageProfiler
-      ? stageProfiler.measureSync(STAGES.OWNER_PROJECTION, (value) => ({
-          recipientKey: identity.recipientId,
-          inputBytes: canonicalJsonBytes(ownerFrame).length,
-          outputBytes: canonicalJsonBytes(value.view).length,
-          entities: value.view.entities.length,
-          components: value.view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
-        }), buildOwnerView)
-      : buildOwnerView();
     const publicProjection = publicView;
-    const binary = admission.capabilities.includes(BINARY_CODEC_CAPABILITY);
-    const positionalEncoder = admission.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
-      ? createStatePairWireEncoder(
-          binary
-            ? binaryCodecContext({ ...identity, manifestHash: fixedManifestHash })
-            : positionalCodecContext({ ...identity, manifestHash: fixedManifestHash }),
-          (wire, milliseconds) => {
-            positionalMeasure.encodedCandidates += 1;
-            positionalMeasure.encodedBytes += Buffer.byteLength(wire);
-            positionalMeasure.encodeMilliseconds += milliseconds;
-          },
-        ) : null;
-    return Object.freeze({ identity, publicView: publicProjection.view, ownerView: ownerProjection.view,
-      publicPrepared: publicProjection.prepared, ownerPrepared: ownerProjection.prepared,
-      allowMixed: admission.capabilities.includes(MIXED_CAPABILITY),
-      ...(positionalEncoder ? { encodeWire: positionalEncoder } : {}) });
+    const completeOwner = () => {
+      const ownerProjection = stageProfiler
+        ? stageProfiler.measureSync(STAGES.OWNER_PROJECTION, (value) => ({
+            recipientKey: identity.recipientId,
+            inputBytes: canonicalJsonBytes(ownerFrameSnapshot).length,
+            outputBytes: canonicalJsonBytes(value.view).length,
+            entities: value.view.entities.length,
+            components: value.view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
+          }), buildOwnerView)
+        : buildOwnerView();
+      const binary = admission.capabilities.includes(BINARY_CODEC_CAPABILITY);
+      const positionalEncoder = admission.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+        ? createStatePairWireEncoder(
+            binary
+              ? binaryCodecContext({ ...identity, manifestHash: fixedManifestHash })
+              : positionalCodecContext({ ...identity, manifestHash: fixedManifestHash }),
+            (wire, milliseconds) => {
+              positionalMeasure.encodedCandidates += 1;
+              positionalMeasure.encodedBytes += Buffer.byteLength(wire);
+              positionalMeasure.encodeMilliseconds += milliseconds;
+            },
+          ) : null;
+      return Object.freeze({ identity, publicView: publicProjection.view, ownerView: ownerProjection.view,
+        publicPrepared: publicProjection.prepared, ownerPrepared: ownerProjection.prepared,
+        allowMixed: admission.capabilities.includes(MIXED_CAPABILITY),
+        ...(positionalEncoder ? { encodeWire: positionalEncoder } : {}) });
+    };
+    return deferOwner
+      ? Object.freeze({ identity, publicView: publicProjection.view,
+          publicPrepared: publicProjection.prepared, completeOwner })
+      : completeOwner();
   }
 
   function publish(binding, publicFrame, ownerFrame) {
-    return publisher.publish(buildViews(binding, publicFrame, ownerFrame));
+    if (!workerPool) return publisher.publish(buildViews(binding, publicFrame, ownerFrame));
+    const publicStage = buildViews(binding, publicFrame, ownerFrame,
+      { workerPublic: true, deferOwner: true });
+    const viewsIdentity = publicStage.identity;
+    const admissionKey = key(viewsIdentity);
+    const workerState = workerAdmissions.get(admissionKey);
+    if (!workerState) fail("capability-not-admitted", "public worker admission is unavailable");
+    const generation = ++workerState.generation;
+    const fence = Object.freeze({ matchId: fixedMatchId, authorityIncarnation: fixedAuthorityIncarnation,
+      ballparkEpoch: fixedBallparkEpoch, manifestHash: fixedManifestHash,
+      recipientToken: workerState.token, recipientIncarnation: viewsIdentity.recipientIncarnation,
+      workGeneration: generation, tick: publicStage.publicView.tick, snapshotId: publicStage.publicView.snapshotId });
+    const job = Object.freeze({ currentPublicView: publicStage.publicView,
+      basePublicView: workerState.ackedPublicView });
+    observeWorkerJob?.(structuredClone({ fence, job }));
+    const fallback = (reason) => {
+      workerStats.fallback += 1;
+      const bounded = String(reason || "unknown").slice(0, 96);
+      workerStats.fallbackReasons.set(bounded, (workerStats.fallbackReasons.get(bounded) || 0) + 1);
+      const views = publicStage.completeOwner();
+      const publication = publisher.publish(views);
+      workerState.latestCommittedGeneration = generation;
+      workerState.pendingPublicViews.set(publication.frame.frameId, publicStage.publicView);
+      return publication;
+    };
+    return workerPool.run(job, fence, workerTestRunOptions || {}).then((candidate) => {
+      const live = workerAdmissions.get(admissionKey);
+      if (live !== workerState || live.token !== fence.recipientToken
+          || live.generation !== generation || generation <= live.latestCommittedGeneration) {
+        workerStats.fenceRejected += 1;
+        if (generation <= workerState.latestCommittedGeneration) workerStats.duplicateRejected += 1;
+        else workerStats.staleRejected += 1;
+        fail("stale-public-worker-result", "public worker result no longer owns the issued generation");
+      }
+      try {
+        const views = publicStage.completeOwner();
+        const publication = publisher.publish({ ...views,
+          publicWorkerCandidate: Object.freeze({ keyframe: candidate.keyframe, delta: candidate.delta }) });
+        live.latestCommittedGeneration = generation;
+        live.pendingPublicViews.set(publication.frame.frameId, publicStage.publicView);
+        workerStats.committed += 1;
+        return publication;
+      } catch (error) {
+        return fallback(`validation:${error?.code || error?.name || "unknown"}`);
+      }
+    }, (error) => fallback(error?.code || error?.name || "worker-failure"));
   }
 
   function acknowledge(binding, ack) {
-    return publisher.acknowledge(requireAdmission(binding), ack);
+    const identity = requireAdmission(binding);
+    const result = publisher.acknowledge(identity, ack);
+    if (workerPool && result.accepted && result.validated !== false && !result.stale) {
+      const state = workerAdmissions.get(key(identity));
+      const view = state?.pendingPublicViews.get(ack.frameId);
+      if (state && view) {
+        state.ackedPublicView = view;
+        for (const frameId of state.pendingPublicViews.keys()) {
+          if (frameId <= ack.frameId) state.pendingPublicViews.delete(frameId);
+        }
+      }
+    }
+    return result;
   }
 
   function recover(binding) {
-    publisher.rebase(requireAdmission(binding));
+    const identity = requireAdmission(binding);
+    publisher.rebase(identity);
+    const state = workerAdmissions.get(key(identity));
+    if (state) { state.generation += 1; state.ackedPublicView = null; state.pendingPublicViews.clear(); }
     return true;
   }
 
@@ -461,6 +547,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     try { identity = context(binding); } catch { return false; }
     admissions.delete(key(identity));
     splitPublicTrackers.delete(key(identity));
+    const workerState = workerAdmissions.get(key(identity));
+    if (workerState) workerStats.cleanupCancelled += workerState.pendingPublicViews.size;
+    workerAdmissions.delete(key(identity));
     publisher.disconnect(identity);
     if (![...admissions.values()].some((entry) => entry.identity.recipientId === identity.recipientId)) {
       ownerTrackers.delete(identity.recipientId);
@@ -517,10 +606,29 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         positionalJsonFallbackRequired: true,
         lossyQuantization: false,
       }),
+      publicProjectionWorkers: workerPool ? Object.freeze({ ...workerPool.diagnostics(),
+        committed: workerStats.committed, fallback: workerStats.fallback,
+        fenceRejected: workerStats.fenceRejected, duplicateRejected: workerStats.duplicateRejected,
+        staleRejected: workerStats.staleRejected, cleanupCancelled: workerStats.cleanupCancelled,
+        fallbackReasons: Object.freeze(Object.fromEntries([...workerStats.fallbackReasons].sort())),
+        admissions: workerAdmissions.size,
+        pendingPublicViews: [...workerAdmissions.values()].reduce((sum, state) =>
+          sum + state.pendingPublicViews.size, 0),
+        privacyBoundary: "Only normalized public current/base views and opaque recipient work tokens cross workers.",
+      }) : Object.freeze({ enabled: false, configuredWorkers: 0 }),
       publisher: publisher.diagnostics() });
   }
 
-  return Object.freeze({ admit, publish, acknowledge, retransmit, recover, disconnect, diagnostics });
+  async function close() {
+    for (const state of workerAdmissions.values()) {
+      state.generation += 1;
+      workerStats.cleanupCancelled += state.pendingPublicViews.size;
+      state.pendingPublicViews.clear();
+    }
+    await workerPool?.close();
+  }
+
+  return Object.freeze({ admit, publish, acknowledge, retransmit, recover, disconnect, diagnostics, close });
 }
 
 module.exports = {

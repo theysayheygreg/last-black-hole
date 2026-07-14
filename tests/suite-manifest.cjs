@@ -228,6 +228,20 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "RuntimePublicProjectionWorkers",
+    file: "runtime-public-projection-workers.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "RuntimePublicProjectionWorkerLifecycle",
+    file: "runtime-public-projection-worker-lifecycle.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+    slow: true,
+    timeout: 30000,
+  },
+  {
     name: "RuntimeStatePairLoopback",
     file: "runtime-state-pair-loopback.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],

@@ -1678,6 +1678,7 @@ function createSimWebSocketAdapter(options = {}) {
         failConnection(state, error, { fatal: error?.fatal === true });
       }
     }
+    const preparedStatePairs = [];
     for (const state of statePairCandidates) {
       try {
         if (!(await isBindingCurrent(state, "private-state-pair-project"))) {
@@ -1715,13 +1716,25 @@ function createSimWebSocketAdapter(options = {}) {
               outputBytes: Buffer.byteLength(JSON.stringify(projectedFrame), "utf8"),
             }), buildOwner)
           : await buildOwner();
-        const pair = await buildStatePair(
+        const pairPromise = Promise.resolve(buildStatePair(
           state.binding,
           recipientPublicFrame,
           ownerFrame,
           context,
           callbackContext(state, "state-pair-project"),
-        );
+        ));
+        preparedStatePairs.push({ state, pairPromise });
+      } catch (error) {
+        skipped += 1;
+        failConnection(state, error, { fatal: error?.fatal === true });
+      }
+    }
+    // Every match still has one deterministic writer. Pure public worker jobs
+    // may finish in any order, but publication/queue/send commits remain in
+    // original connection order on the authority thread.
+    for (const { state, pairPromise } of preparedStatePairs) {
+      try {
+        const pair = await pairPromise;
         if (!stateIsLive(state)) {
           skipped += 1;
           continue;

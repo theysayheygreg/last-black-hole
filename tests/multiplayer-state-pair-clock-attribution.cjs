@@ -24,8 +24,11 @@ const S15_SHA256 = "66c2c751c80f2f0e94c4103eff01352b1e241ce9690fff58c9331a354ec2
 const S16_BINARY = String(process.env.LBH_S16_BINARY || "").trim() === "1";
 const S20_COMPRESSION = String(process.env.LBH_S20_COMPRESSION || "").trim() === "1";
 const S21_STAGE_PROFILE = String(process.env.LBH_S21_STAGE_PROFILE || "").trim() === "1";
+const S22_PUBLIC_WORKERS = Number(String(process.env.LBH_S22_PUBLIC_WORKERS || "0").trim());
+if (![0, 2, 4].includes(S22_PUBLIC_WORKERS)) throw new Error("LBH_S22_PUBLIC_WORKERS must be 0, 2, or 4");
 if (S16_BINARY && S20_COMPRESSION) throw new Error("S20 compression cannot be combined with S16 binary");
-const PROFILE = S20_COMPRESSION ? "s20" : S16_BINARY ? "s16" : "s13";
+const PROFILE = S22_PUBLIC_WORKERS ? `s22-${S22_PUBLIC_WORKERS}`
+  : S20_COMPRESSION ? "s20" : S16_BINARY ? "s16" : "s13";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function git(...args) {
@@ -187,6 +190,7 @@ async function runScenario(population, runDir, commit) {
       LBH_SIM_WS_PREPARED_PROJECTIONS: "true", LBH_SIM_WS_BENCH_EVENT_LOOP: "1",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
       LBH_SIM_WS_STAGE_PROFILE: S21_STAGE_PROFILE ? "1" : "0",
+      LBH_SIM_WS_PUBLIC_PROJECTION_WORKERS: String(S22_PUBLIC_WORKERS),
     } });
     authorityPid = Number(fs.readFileSync(path.join(ROOT, "tmp", `sim-server-${port}.pid`), "utf8"));
     setup = await setupPopulation(port, population);
