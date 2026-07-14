@@ -1,5 +1,7 @@
 import * as streamOps from './sim-stream-transport.js';
 
+const EXPECTED_PROTOCOL_VERSION = 'lbh-local-v2';
+
 function randomId(prefix = 'lbh-client') {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -146,6 +148,13 @@ export class SimClient {
 
   async getHealth() {
     const body = await this._json('/health');
+    if (body?.protocolVersion !== EXPECTED_PROTOCOL_VERSION) {
+      const error = new Error(`Expected ${EXPECTED_PROTOCOL_VERSION}; received ${body?.protocolVersion || 'unknown'}`);
+      error.code = 'room-version-incompatible';
+      error.expectedProtocolVersion = EXPECTED_PROTOCOL_VERSION;
+      error.receivedProtocolVersion = body?.protocolVersion || null;
+      throw error;
+    }
     this._applySessionClocks(body?.session);
     return body;
   }

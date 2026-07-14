@@ -24,6 +24,7 @@ Statuses:
 | four-human product completion is the active goal | ACTIVE | `FOUR-HUMAN-PRODUCT-PLAN.md` |
 | Crew Muster stages players before world time begins | ACTIVE | entry below |
 | readiness belongs to the current connection epoch | ACTIVE | entry below |
+| configured multiplayer defaults to stream with explicit offline recovery | ACTIVE | entry below |
 | external test uses a disposable Tailscale shared node | ACTIVE | `OPTIONAL-LOCAL-INTERNET-HOST.md` |
 | hybrid verified authority plus private continuity | PROVISIONAL | `OPEN-DECISIONS.md` |
 
@@ -44,6 +45,25 @@ treat the result as verified cloud evidence.
 
 **Why:** this is the shortest private path to an external test while keeping
 the shared surface narrow, revocable, and disposable.
+
+## 2026-07-14 — Configured multiplayer defaults to stream and preserves offline choice
+
+**Status:** ACTIVE
+
+A configured authority presents Host Private, Join Private, and Play Offline as
+explicit peer choices. Stream is the normal admitted multiplayer transport;
+`simTransport=http` remains a deliberate diagnostic rollback. Failed or absent
+private rooms never auto-host and never silently become local play. The player
+may instead choose offline, which uses the existing local simulation without
+contacting or depending on the configured authority.
+
+Invitations are bounded six-character codes with copy and labeled-text paste.
+Invalid, full, expired, unavailable, and incompatible-version failures remain
+visible with a recovery action. Retired codes are stored only as a bounded hash
+window.
+
+**Why:** availability and compatibility failures must be honest, while local
+play must remain usable without turning a multiplayer failure into split truth.
 
 ## 2026-07-14 — Crew Muster is the synchronized multiplayer start boundary
 

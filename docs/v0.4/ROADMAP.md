@@ -42,10 +42,12 @@ production provider composition, and deployment proof are not.
   cohort never admitted and raw capture never started. H48/H96 are far
   extrapolations; X96 fails its model screens.
 
-Crew Muster and the first private-room/readiness slice are implemented and now
-green across five real browser processes: four admitted humans plus a rejected
-fifth. The next work is invitation/error/offline-path polish followed by
-shared-run readability, not another eight-player rescue.
+Crew Muster and the private-room/readiness/front-door slices are implemented
+and green across real browser processes: unavailable-authority offline recovery,
+four admitted humans, and a rejected fifth. Copy/paste invitations, durable
+room failures, retired-code rejection, protocol-version refusal, and stream as
+the configured product default are closed. The next work is shared-run
+readability, not another eight-player rescue.
 
 ## Milestone 1 — Four-Player Product Completion
 
@@ -83,9 +85,10 @@ Current execution checkpoint:
 - The human UI now proves host, join-code entry, four converged seats,
   readiness, leader launch, durable fifth rejection, one shared run, and a
   stable membership/client identity across reconnect.
-- Next: close invite/copy/expiry/version language, preserve a visible offline
-  route, select stream as the normal multiplayer transport, then build
-  shared-run crew identity and teammate-state cues.
+- Copy/paste invitation, explicit offline recovery, stream-default transport,
+  and full/invalid/expired/version/unavailable failure semantics are green.
+- Next: build shared-run local/remote identity, teammate-state, salvage/signal,
+  extraction, death, and disconnect cues without obscuring the ASCII fabric.
 
 S20 negotiation/fallback, owner privacy, ACK/rebase, reliable actions,
 reconnect fencing, and bounded queues remain frozen guardrails. Local/offline

@@ -157,6 +157,23 @@ async function run() {
       });
       assert(duplicateLaunch.status === 409 && duplicateLaunch.body.code === 'not-in-lobby',
         'Crew launch must be a one-way, exactly-once phase transition');
+
+      const replacement = await request('/session/reset', {
+        method: 'POST',
+        authority: joins[0],
+        body: command(joins[0], 3, { requesterId: 'crew-host' }),
+      });
+      assert(replacement.status === 200 && replacement.body.session?.status === 'lobby',
+        `Expected host reset to open a replacement lobby, got ${replacement.status}/${replacement.body.code}`);
+      assert(replacement.body.roomCode && replacement.body.roomCode !== started.body.roomCode,
+        'Replacement lobby must rotate the private room code');
+
+      const expired = await request('/join', {
+        method: 'POST',
+        body: { clientId: 'late-crew', name: 'Late Crew', roomCode: started.body.roomCode },
+      });
+      assert(expired.status === 403 && expired.body.code === 'room-expired',
+        `Expected retired invite to report room-expired, got ${expired.status}/${expired.body.code}`);
     });
   } finally {
     await stopSimServer(SIM_PORT).catch(() => null);

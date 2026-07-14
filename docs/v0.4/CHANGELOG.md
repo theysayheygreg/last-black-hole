@@ -45,6 +45,16 @@
 - Preserved finite well presentation data across staggered component arrival
   and made spatial well audio fail safe instead of crashing on a transient
   non-finite pan value.
+- Finished the human multiplayer front door: copyable invitations, labeled-text
+  paste parsing, explicit offline play, and stream as the configured product
+  default while retaining explicit HTTP diagnostics.
+- Added honest durable failures for invalid, full, expired, unavailable, and
+  incompatible-version rooms. Retired invitation hashes are bounded and room
+  codes rotate without reuse across the retained window.
+- Extended the browser proof through unavailable-authority offline recovery,
+  invite copy/paste, wrong-code recovery, fifth-seat rejection, shared launch,
+  and reconnect; added authority proof for expired invitations and protocol
+  proof for incompatible builds.
 
 ### External playtest
 

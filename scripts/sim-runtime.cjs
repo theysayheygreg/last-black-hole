@@ -1165,6 +1165,7 @@ const runtime = {
   joinClaims: new Map(),
   pendingHumanSeats: new Set(),
   privateRoomCode: null,
+  retiredPrivateRoomCodeHashes: [],
   waveRings: [],
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
@@ -1484,6 +1485,7 @@ function startSession(config = {}) {
   const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
   const scaleProfile = getSessionProfile(mapState.id, mapState.worldScale);
   const startMode = config.startMode === "staged" ? "staged" : "immediate";
+  retirePrivateRoomCode(runtime.privateRoomCode);
   runtime.privateRoomCode = startMode === "staged" ? createPrivateRoomCode() : null;
   runtime.pendingHumanSeats.clear();
   runtime.session = {
@@ -1707,12 +1709,35 @@ function newAuthoritySecret() {
 const PRIVATE_ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 function createPrivateRoomCode(length = 6) {
-  const bytes = crypto.randomBytes(length);
-  return Array.from(bytes, (value) => PRIVATE_ROOM_ALPHABET[value % PRIVATE_ROOM_ALPHABET.length]).join("");
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const bytes = crypto.randomBytes(length);
+    const code = Array.from(bytes, (value) => PRIVATE_ROOM_ALPHABET[value % PRIVATE_ROOM_ALPHABET.length]).join("");
+    if (!isRetiredPrivateRoomCode(code)) return code;
+  }
+  throw new Error("Unable to allocate a fresh private room code");
 }
 
 function normalizePrivateRoomCode(value) {
-  return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return String(value || "").trim().toUpperCase().replace(/[^A-HJ-NP-Z2-9]/g, "");
+}
+
+function privateRoomCodeHash(value) {
+  const normalized = normalizePrivateRoomCode(value);
+  return normalized.length === 6
+    ? crypto.createHash("sha256").update(normalized).digest("hex")
+    : null;
+}
+
+function retirePrivateRoomCode(value) {
+  const hash = privateRoomCodeHash(value);
+  if (!hash || runtime.retiredPrivateRoomCodeHashes.includes(hash)) return;
+  runtime.retiredPrivateRoomCodeHashes.push(hash);
+  if (runtime.retiredPrivateRoomCodeHashes.length > 8) runtime.retiredPrivateRoomCodeHashes.shift();
+}
+
+function isRetiredPrivateRoomCode(value) {
+  const hash = privateRoomCodeHash(value);
+  return Boolean(hash && runtime.retiredPrivateRoomCodeHashes.includes(hash));
 }
 
 function secretsMatch(left, right) {
@@ -2192,6 +2217,7 @@ function scheduleTerminalShutdown(reason) {
 function endSession(reason, extra = {}) {
   if (runtime.session.status !== "running") return false;
   runtime.session.status = "ended";
+  retirePrivateRoomCode(runtime.privateRoomCode);
   runtime.session.endReason = reason;
   runtime.session.endedAt = new Date().toISOString();
   runtime.session.endedSimTime = runtime.simTime;
@@ -7913,7 +7939,21 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/join") {
       const body = await readJson(req);
       if (runtime.session.status !== "running" && runtime.session.status !== "lobby") {
-        sendJson(res, 409, { ok: false, error: "No active session" });
+        const retired = isRetiredPrivateRoomCode(body.roomCode);
+        sendJson(res, 409, {
+          ok: false,
+          code: retired ? "room-expired" : "room-unavailable",
+          error: retired ? "Room has expired" : "No private room is available",
+        });
+        return;
+      }
+
+      if (body.roomCode && !runtime.session.privateRoom) {
+        sendJson(res, 409, {
+          ok: false,
+          code: "room-unavailable",
+          error: "No private room is available",
+        });
         return;
       }
 
@@ -7956,7 +7996,12 @@ const server = http.createServer(async (req, res) => {
         }
         if (!pendingClaim && runtime.session.privateRoom
             && !secretsMatch(normalizePrivateRoomCode(body.roomCode), runtime.privateRoomCode)) {
-          sendJson(res, 403, { ok: false, code: "room-code-invalid", error: "Room code is invalid" });
+          const retired = isRetiredPrivateRoomCode(body.roomCode);
+          sendJson(res, 403, {
+            ok: false,
+            code: retired ? "room-expired" : "room-code-invalid",
+            error: retired ? "Room has expired" : "Room code is invalid",
+          });
           return;
         }
       }

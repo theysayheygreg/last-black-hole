@@ -140,6 +140,31 @@ async function main() {
   await startSimServer(PORT, { keepAlive: true, env: { LBH_SIM_WS_ENABLED: "true" } });
 
   try {
+    await runner.run("health rejects an incompatible authority protocol before admission", async () => {
+      const originalFetch = global.fetch;
+      global.fetch = async () => ({
+        ok: true,
+        status: 200,
+        async json() { return { ok: true, protocolVersion: "lbh-local-v1" }; },
+      });
+      try {
+        const incompatible = new SimClient("http://incompatible.invalid");
+        let failure = null;
+        try {
+          await incompatible.getHealth();
+        } catch (error) {
+          failure = error;
+        }
+        assert(failure?.code === "room-version-incompatible",
+          `Expected room-version-incompatible, got ${failure?.code || "no error"}`);
+        assert(failure.expectedProtocolVersion === "lbh-local-v2"
+          && failure.receivedProtocolVersion === "lbh-local-v1",
+        "Protocol rejection must preserve expected and received versions for diagnosis");
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
     await runner.run("client scheduler defaults to byte-identical immediate delivery with privacy-safe metadata", async () => {
       const direct = deliveryHarness(SimClient);
       const seam = controlledStreamScheduler(() => ({ copies: 1 }));

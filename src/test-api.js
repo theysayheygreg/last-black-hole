@@ -206,12 +206,14 @@ export function initTestAPI(getState) {
     },
 
     getMapSelectState() {
-      const { gamePhase, mapSelectIndex, previewSeed, mapList } = getState();
+      const { gamePhase, mapSelectIndex, previewSeed, mapList, remoteControlState, simClient } = getState();
       return {
         phase: gamePhase,
         index: mapSelectIndex ?? null,
         seed: previewSeed ?? null,
         mapName: mapList?.[mapSelectIndex]?.name || null,
+        authorityAction: remoteControlState?.roomAction || (simClient?.enabled ? null : 'offline'),
+        configuredTransport: simClient?.transport || null,
       };
     },
 

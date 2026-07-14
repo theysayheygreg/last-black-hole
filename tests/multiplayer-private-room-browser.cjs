@@ -78,7 +78,6 @@ async function bootPilot(name) {
   const target = withQuery(HTML_FILE, {
     renderer: "three",
     simServer: SIM_URL,
-    simTransport: "stream",
     simMaxPlayers: 4,
     capture: 1,
   });
@@ -89,6 +88,16 @@ async function bootPilot(name) {
     sessionStorage.clear();
   });
   await pilot.page.reload({ waitUntil: "domcontentloaded" });
+  await pilot.page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        async writeText(value) {
+          window.__LBH_TEST_CLIPBOARD__ = String(value);
+        },
+      },
+    });
+  });
   await sleep(1300);
 
   await waitForPhase(pilot.page, "title");
@@ -131,14 +140,22 @@ async function hostRoom(pilot) {
   return journeyState(pilot);
 }
 
-async function enterRoomCode(page, roomCode) {
+async function enterRoomCode(page, roomCode, { paste = false } = {}) {
+  if (paste) {
+    await page.evaluate((code) => {
+      const data = new DataTransfer();
+      data.setData("text/plain", `room code: ${code}`);
+      window.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true }));
+    }, roomCode);
+    return;
+  }
   for (const character of roomCode) {
     const code = /[0-9]/.test(character) ? `Digit${character}` : `Key${character}`;
     await page.keyboard.press(code);
   }
 }
 
-async function joinRoom(pilot, roomCode, { expectFull = false } = {}) {
+async function joinRoom(pilot, roomCode, { expectError = null, paste = false } = {}) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     if ((await controlState(pilot))?.roomAction === "join") break;
     await tap(pilot.page, "ArrowRight", "ArrowRight", 140);
@@ -148,14 +165,25 @@ async function joinRoom(pilot, roomCode, { expectFull = false } = {}) {
   await tap(pilot.page, "Enter", "Enter");
   assert((await controlState(pilot))?.roomCodeInputActive === true,
     `${pilot.name} did not enter room-code input`);
-  await enterRoomCode(pilot.page, roomCode);
+  await enterRoomCode(pilot.page, roomCode, { paste });
   await tap(pilot.page, "Enter", "Enter");
-  if (expectFull) {
-    await waitFor(pilot.page, () => {
-      const state = window.__TEST_API?.getMultiplayerJourneyState?.();
-      return window.__TEST_API?.getGamePhase?.() === "mapSelect"
-        && state?.control?.joinErrorCode === "room-full";
-    }, { timeout: 20000 });
+  if (expectError) {
+    try {
+      await waitFor(pilot.page, (expected) => {
+        const state = window.__TEST_API?.getMultiplayerJourneyState?.();
+        return window.__TEST_API?.getGamePhase?.() === "mapSelect"
+          && state?.control?.joinErrorCode === expected;
+      }, { timeout: 20000 }, expectError);
+    } catch (error) {
+      const observed = await pilot.page.evaluate(() => ({
+        phase: window.__TEST_API?.getGamePhase?.() || null,
+        control: window.__TEST_API?.getMultiplayerJourneyState?.()?.control || null,
+      })).catch(() => null);
+      throw new Error(`${pilot.name} expected ${expectError}: ${JSON.stringify(observed)}`);
+    }
+    const observed = await controlState(pilot);
+    assert(observed?.joinErrorCode === expectError,
+      `${pilot.name} expected ${expectError}, observed ${observed?.joinErrorCode}`);
     return journeyState(pilot);
   }
   await waitForPhase(pilot.page, "crewMuster", 20000);
@@ -209,6 +237,7 @@ async function closePilot(pilot) {
 async function run() {
   const runner = new TestRunner("MultiplayerPrivateRoomBrowser");
   const pilots = [];
+  let offlinePilot = null;
   let fifth = null;
   const report = {
     generatedAt: new Date().toISOString(),
@@ -231,22 +260,51 @@ async function run() {
 
   try {
     await runner.run("four humans host join ready launch reject fifth and reconnect", async () => {
+      report.stage = "unavailable-offline-recovery";
+      offlinePilot = await bootPilot("SCOUT");
+      report.stage = "unavailable-join";
+      const unavailable = await joinRoom(offlinePilot, "AAAAAA", { expectError: "room-unavailable" });
+      assert(unavailable.control.joinError.includes("AUTHORITY UNAVAILABLE"),
+        "Idle authority must offer a human-readable offline recovery path");
+      report.stage = "unavailable-select-offline";
+      await tap(offlinePilot.page, "ArrowRight", "ArrowRight", 140);
+      assert((await controlState(offlinePilot))?.roomAction === "offline",
+        "Unavailable authority must not obstruct explicit offline selection");
+      report.stage = "unavailable-launch-offline";
+      await tap(offlinePilot.page, "Enter", "Enter");
+      await waitForPhase(offlinePilot.page, "playing", 15000);
+      const unavailableOfflineNetwork = await offlinePilot.page.evaluate(() =>
+        window.__TEST_API?.getNetworkState?.() || null);
+      assert(unavailableOfflineNetwork?.remoteAuthorityActive === false,
+        "Unavailable-authority recovery must launch the local simulation");
+      await closePilot(offlinePilot);
+      offlinePilot = null;
+
       report.stage = "boot-host";
       const names = ["ALPHA", "BRAVO", "COMET", "DELTA"];
       const host = await bootPilot(names[0]);
       pilots.push(host);
+      assert((await host.page.evaluate(() => window.__TEST_API?.getMapSelectState?.()?.configuredTransport)) === "stream",
+        "Configured multiplayer must default to the admitted stream transport");
       const hosted = await hostRoom(host);
       const roomCode = hosted.control.roomCode;
       assert(/^[A-Z2-9]{6}$/.test(roomCode), `Invalid private room code ${roomCode}`);
       assert(hosted.tick === 0 && hosted.simTime === 0, "Staged authority must begin frozen");
       assert(hosted.control.localSeat?.seatNo === 0 && hosted.control.localSeat?.isHost,
         "Host must own deterministic leader seat zero");
+      await tap(host.page, "KeyC", "c");
+      await waitFor(host.page, (expected) => {
+        const state = window.__TEST_API?.getMultiplayerJourneyState?.();
+        return state?.control?.inviteCopyState === "copied"
+          && window.__LBH_TEST_CLIPBOARD__ === expected;
+      }, { timeout: 5000 }, roomCode);
+      report.invite = { copied: true, codeLength: roomCode.length };
 
       for (let index = 1; index < names.length; index += 1) {
         report.stage = `join-${names[index]}`;
         const pilot = await bootPilot(names[index]);
         pilots.push(pilot);
-        const joined = await joinRoom(pilot, roomCode);
+        const joined = await joinRoom(pilot, roomCode, { paste: index === 1 });
         assert(joined.runId === hosted.runId, `${names[index]} joined a different authority`);
       }
 
@@ -262,13 +320,37 @@ async function run() {
 
       report.stage = "reject-fifth";
       fifth = await bootPilot("ECHO");
-      const rejected = await joinRoom(fifth, roomCode, { expectFull: true });
+      const invalidCode = roomCode === "AAAAAA" ? "BBBBBB" : "AAAAAA";
+      const invalid = await joinRoom(fifth, invalidCode, { expectError: "room-code-invalid" });
+      assert(invalid.control.joinError.includes("NOT FOUND OR EXPIRED"),
+        "Wrong-code recovery copy must be durable and human-readable");
+      report.screenshots.invalidRoom = await capture(fifth, "room-invalid");
+      await tap(fifth.page, "Enter", "Enter");
+      assert((await controlState(fifth))?.roomCodeInputActive === true,
+        "Confirm after a room error must reopen clean code entry");
+      await enterRoomCode(fifth.page, roomCode);
+      await tap(fifth.page, "Enter", "Enter");
+      await waitFor(fifth.page, () =>
+        window.__TEST_API?.getMultiplayerJourneyState?.()?.control?.joinErrorCode === "room-full",
+      { timeout: 20000 });
+      const rejected = await journeyState(fifth);
       assert(rejected.control.joinErrorCode === "room-full", "Fifth browser must see durable room-full state");
       report.screenshots.roomFull = await capture(fifth, "room-full");
       for (const pilot of pilots) {
         assert((await waitForRoster(pilot, 4)).sessionHumanPlayerCount === 4,
           "Fifth rejection mutated the admitted roster");
       }
+
+      report.stage = "fifth-offline";
+      await tap(fifth.page, "ArrowRight", "ArrowRight", 140);
+      assert((await controlState(fifth))?.roomAction === "offline",
+        "A rejected fifth pilot must be able to select explicit offline play");
+      report.screenshots.offlineChoice = await capture(fifth, "offline-choice");
+      await tap(fifth.page, "Enter", "Enter");
+      await waitForPhase(fifth.page, "playing", 15000);
+      const offlineNetwork = await fifth.page.evaluate(() => window.__TEST_API?.getNetworkState?.() || null);
+      assert(offlineNetwork?.remoteAuthorityActive === false,
+        "Explicit offline play must not attach to the configured authority");
 
       // Ready the leader first to prove that readiness alone cannot launch.
       report.stage = "ready-crew";
@@ -342,8 +424,8 @@ async function run() {
       assert(health.session?.status === "running" && health.session?.maxPlayers === 4,
         "Authority health must remain a four-seat running match");
       assert(health.session?.overloadState === "NORMAL", `Authority left NORMAL: ${health.session?.overloadState}`);
-      assert(pilots.every((pilot) => pilot.errors.length === 0),
-        `Browser errors occurred: ${JSON.stringify(pilots.map((pilot) => pilot.errors))}`);
+      assert([...pilots, fifth].every((pilot) => pilot.errors.length === 0),
+        `Browser errors occurred: ${JSON.stringify([...pilots, fifth].map((pilot) => pilot.errors))}`);
       report.stage = "complete";
     });
     if (runner.results.some((result) => !result.passed)) {
@@ -361,6 +443,7 @@ async function run() {
       };
     }
   } finally {
+    await closePilot(offlinePilot);
     await closePilot(fifth);
     await Promise.allSettled(pilots.map(closePilot));
     await stopSimServer(SIM_PORT).catch(() => null);

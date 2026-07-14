@@ -210,7 +210,13 @@ async function enterRemoteRunWithGamepad(page, { hullType = 'breacher' } = {}) {
   await waitForPhase(page, 'mapSelect');
   await tapGamepadButton(page, 0);
   await waitForPhase(page, 'crewMuster', 12000);
+  await waitFor(page, () => window.__TEST_API?.getUiMotionState?.()?.transition?.active !== true,
+    { timeout: 5000 });
   await tapGamepadButton(page, 0); // host readies
+  await waitForLabeled(page, 'remote host readiness', () => {
+    const control = window.__TEST_API?.getMultiplayerJourneyState?.()?.control;
+    return control?.localReady === true && control?.canLaunch === true;
+  }, { timeout: 5000 });
   await tapGamepadButton(page, 0); // host launches the synchronized crew
   await waitForPhase(page, 'playing', 12000);
   await waitForLabeled(page, 'remote authority activation', () => {
@@ -276,7 +282,7 @@ async function run() {
 
     await runner.run('Synthetic gamepad drives remote gameplay input, brake, inventory, and ability', async () => {
       await withFreshSimServer(SIM_PORT, async () => {
-        await withFreshGame(withQuery(htmlFile, { simServer: SIM_URL }), async ({ page: pageRemote }) => {
+        await withFreshGame(withQuery(htmlFile, { simServer: SIM_URL, simTransport: 'http' }), async ({ page: pageRemote }) => {
           await bootstrapCleanPage(pageRemote);
           await installVirtualGamepad(pageRemote);
           await enterRemoteRunWithGamepad(pageRemote, { hullType: 'breacher' });

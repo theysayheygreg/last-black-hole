@@ -20,10 +20,10 @@ interpolation, Three, fluid presentation, UI, VFX, and audio.
 ## Current Product Gap
 
 The focused private-room journey now proves four human-surface clients,
-authority-owned launch, fifth-seat rejection, and reconnect continuity. The
-remaining product gap begins after admission:
+copy/paste invitation, authority-owned launch, fifth-seat rejection, explicit
+offline recovery, and reconnect continuity. The remaining product gap begins
+after admission:
 
-- invitation copy/expiry/version language still needs finish work;
 - reconnecting and recovered states need persistent player-facing treatment;
 - multiplayer result/rematch is not yet a coherent crew flow;
 - the strongest run evidence uses test assistance to shorten traversal.
@@ -58,11 +58,12 @@ launch, the host launches once, all four enter play, and a fifth seat rejects.
 
 ### P2 — Invitations, Readiness, And Crew Clarity
 
-**Implementation status:** in progress. Private room creation/join, a bounded
-six-character code, deterministic four-seat roster, connection-bound
-readiness, host launch gating, durable wrong-code/full errors, and explicit
-host/join choices are live and browser-proven. Copy affordance and
-expiry/version language remain.
+**Implementation status:** complete. Private room creation/join, copyable and
+paste-tolerant six-character invitations, deterministic four-seat roster,
+connection-bound readiness, host launch gating, explicit host/join/offline
+choices, stream-default transport, and durable wrong/full/expired/version/
+unavailable errors are live. The five-browser journey proves the player-facing
+path; authority tests prove retired invitations and protocol mismatch rejection.
 
 - expose Host Private Game and Join Game as distinct choices;
 - display/copy a bounded private invitation or join code;
@@ -108,11 +109,10 @@ see the same result, and rematch without terminal intervention.
 
 ## Immediate Next Slice
 
-Finish invitation copy plus full/expired/version/unavailable language, preserve
-an explicit offline choice when multiplayer is configured, and default the
-normal multiplayer product path to the admitted stream transport. Then begin
-P3 with readable local/remote crew identity and teammate state in the shared
-ASCII-fluid run. The green five-browser proof does not yet claim shared-run
+Begin P3 with readable local/remote crew identity and teammate state in the
+shared ASCII-fluid run. Make salvage, shared signal pressure, extraction, death,
+and temporary disconnect legible without moving gameplay authority into the
+renderer or HUD. The green browser proof does not yet claim shared-run
 readability, result, or rematch completion.
 
 Engineering guardrails remain:
