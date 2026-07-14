@@ -88,6 +88,7 @@ const { createSimSnapshotRing } = require("./sim-snapshot-ring.cjs");
 const { createAuthoredCollapseTestLifecycle } = require("./authored-collapse-test-lifecycle.cjs");
 const { createSimWebSocketAdapter } = require("./sim-ws-adapter.cjs");
 const { STAGES, createAuthorityStageProfiler } = require("./authority-stage-profiler.cjs");
+const { STAGES: S23T_STAGES, createS23tPublicBodyProfiler } = require("./s23t-public-body-profiler.cjs");
 const {
   WIRE_PROTOCOL_VERSION,
   WIRE_PROTOCOL_VERSION_V2,
@@ -247,6 +248,8 @@ if (REPLICATION_ACCOUNTING_CAPTURE
   throw new Error("LBH_SIM_WS_REPLICATION_ACCOUNTING requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
 }
 const AUTHORITY_STAGE_PROFILE_CAPTURE = readStrictTestFlag("LBH_SIM_WS_STAGE_PROFILE");
+const S23T_PUBLIC_BODY_PROFILE_CAPTURE = readStrictTestFlag("LBH_S23T_PUBLIC_BODY_PROFILE");
+const S23T_EVIDENCE_HARNESS = readStrictTestFlag("LBH_S23T_EVIDENCE_HARNESS");
 const REPLICATION_BENCH_EVENT_LOOP_CAPTURE = readStrictTestFlag("LBH_SIM_WS_BENCH_EVENT_LOOP");
 if (REPLICATION_BENCH_EVENT_LOOP_CAPTURE
   && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
@@ -259,9 +262,19 @@ if (AUTHORITY_STAGE_PROFILE_CAPTURE
 if (AUTHORITY_STAGE_PROFILE_CAPTURE && !REPLICATION_ACCOUNTING_CAPTURE) {
   throw new Error("LBH_SIM_WS_STAGE_PROFILE requires LBH_SIM_WS_REPLICATION_ACCOUNTING=1");
 }
+if (S23T_PUBLIC_BODY_PROFILE_CAPTURE
+    && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD
+      || !S23T_EVIDENCE_HARNESS || !REPLICATION_ACCOUNTING_CAPTURE)) {
+  throw new Error("LBH_S23T_PUBLIC_BODY_PROFILE is restricted to the S23T evidence harness");
+}
+if (S23T_EVIDENCE_HARNESS && process.env.NODE_ENV !== "test") {
+  throw new Error("LBH_S23T_EVIDENCE_HARNESS requires NODE_ENV=test");
+}
 const authorityStageProfiler = AUTHORITY_STAGE_PROFILE_CAPTURE
   ? createAuthorityStageProfiler({ sampleCapacity: 512, maxRecipients: 16 })
   : null;
+const s23tPublicBodyProfiler = S23T_PUBLIC_BODY_PROFILE_CAPTURE
+  ? createS23tPublicBodyProfiler() : null;
 const replicationBenchEventLoop = REPLICATION_BENCH_EVENT_LOOP_CAPTURE
   ? monitorEventLoopDelay({ resolution: 20 }) : null;
 replicationBenchEventLoop?.enable();
@@ -6083,6 +6096,7 @@ function tickSim() {
   );
   const simTickCostMs = performance.now() - tickStart;
   runtime.multiplayerProjection.simTickCostDistribution.observe(simTickCostMs);
+  s23tPublicBodyProfiler?.observe(S23T_STAGES.SIM_TICK, simTickCostMs);
   const replicationCostMs = consumePendingReplicationCost();
   const combinedSampledCostMs = simTickCostMs + replicationCostMs;
   runtime.multiplayerProjection.lastSimTickCostMs = simTickCostMs;
@@ -6191,6 +6205,7 @@ function rotateMultiplayerRun(runId) {
         ackRejectDiagnostics: MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED,
       },
       stageProfiler: authorityStageProfiler,
+      s23tProfiler: s23tPublicBodyProfiler,
       })
     : null;
 }
@@ -7157,6 +7172,7 @@ const server = http.createServer(async (req, res) => {
       runtime.multiplayerProjection.simTickCostDistribution.reset();
       runtime.multiplayerProjection.projectionCostDistribution.reset();
       authorityStageProfiler?.reset();
+      s23tPublicBodyProfiler?.reset();
       replicationBenchEventLoop?.reset();
       sendJson(res, 200, { ok: true,
         generation: runtime.multiplayerProjection.generation,
@@ -7837,6 +7853,7 @@ if (MULTIPLAYER_WS_ENABLED) {
     runId: null,
     replicationAccounting: REPLICATION_ACCOUNTING_CAPTURE,
     stageProfiler: authorityStageProfiler,
+    s23tProfiler: s23tPublicBodyProfiler,
     redeemHello: redeemMultiplayerHello,
     revalidateBinding: revalidateMultiplayerBinding,
     onInput: (binding, frame) => executeStreamInput(binding, frame),

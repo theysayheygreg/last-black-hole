@@ -20,6 +20,7 @@ const {
   assertPublicBody,
   encodePublicBodyFrame,
 } = require("./state-pair-public-body-codec.cjs");
+const { STAGES: S23T_STAGES } = require("./s23t-public-body-profiler.cjs");
 
 const DEFAULTS = Object.freeze({
   maxBodies: 16,
@@ -103,7 +104,7 @@ function bodyInternalView(body) {
 }
 
 function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballparkEpoch,
-  manifestHash, publisherOptions = {}, limits: rawLimits = {} } = {}) {
+  manifestHash, publisherOptions = {}, limits: rawLimits = {}, s23tProfiler = null } = {}) {
   const fixed = Object.freeze({
     matchId: requiredString(matchId, "matchId"),
     authorityIncarnation: positiveInteger(authorityIncarnation, undefined, "authorityIncarnation"),
@@ -179,7 +180,10 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
     const boundedSourceKey = requiredString(String(sourceKey), "sourceKey");
     const prior = sourceBodies.get(boundedSourceKey);
     if (prior) {
-      const candidateHash = sha256(canonicalJsonBytes({ world, entities }));
+      const candidateHash = s23tProfiler
+        ? s23tProfiler.measureSync(S23T_STAGES.BODY_CANONICAL_HASH, null,
+          () => sha256(canonicalJsonBytes({ world, entities })))
+        : sha256(canonicalJsonBytes({ world, entities }));
       if (candidateHash !== prior.sourceHash) {
         fail("source-reuse", "one authoritative source tick produced different public body content");
       }
@@ -189,19 +193,32 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
     if (nextBodyRevision > Number.MAX_SAFE_INTEGER) fail("body-revision-overflow", "public body revision overflowed");
     const bodyRevision = nextBodyRevision++;
     const bodyId = `body-${fixed.authorityIncarnation}-${bodyRevision}`;
-    const sourceHash = sha256(canonicalJsonBytes({ world, entities }));
-    const provisionalBody = { schema: BODY_SCHEMA, ...fixed, bodyId, bodyRevision,
-      world: clone(world), entities: clone(entities) };
-    const internalView = bodyInternalView(provisionalBody);
+    const sourceHash = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.BODY_CANONICAL_HASH, null,
+        () => sha256(canonicalJsonBytes({ world, entities })))
+      : sha256(canonicalJsonBytes({ world, entities }));
+    const normalized = () => {
+      const provisionalBody = { schema: BODY_SCHEMA, ...fixed, bodyId, bodyRevision,
+        world: clone(world), entities: clone(entities) };
+      const internalView = bodyInternalView(provisionalBody);
+      const body = deepFreeze({ ...provisionalBody, world: internalView.world,
+        entities: internalView.entities });
+      assertPublicBody(body);
+      return { body, internalView };
+    };
+    const normalizedBody = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.BODY_NORMALIZE_VALIDATE, null, normalized)
+      : normalized();
+    const { body, internalView } = normalizedBody;
     // The body hash uses the same normalized world/entity order as structural
     // deltas. Delta application can therefore reconstruct byte-identical body
     // semantics instead of depending on source traversal order.
-    const body = deepFreeze({ ...provisionalBody, world: internalView.world,
-      entities: internalView.entities });
-    assertPublicBody(body);
-    const bodyHash = sha256(canonicalJsonBytes(body));
-    const structuralHash = projectionHash(internalView);
-    const bytes = canonicalJsonBytes(body).length;
+    const canonical = () => ({ bodyHash: sha256(canonicalJsonBytes(body)),
+      structuralHash: projectionHash(internalView), bytes: canonicalJsonBytes(body).length });
+    const canonicalFacts = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.BODY_CANONICAL_HASH, null, canonical)
+      : canonical();
+    const { bodyHash, structuralHash, bytes } = canonicalFacts;
     if (bytes > limits.maxBodyBytes) fail("body-too-large", "one public body exceeds the match history byte cap");
     const record = Object.freeze({ sourceKey: boundedSourceKey, sourceHash, body, bodyHash,
       internalView, structuralHash, bytes });
@@ -301,39 +318,58 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       fail("unknown-body", "publication must use a live body prepared by this authority");
     }
     const state = stateFor(identity);
-    const legacy = ownerPublisher.publish({ identity, publicView: placeholderPublic(ownerView), ownerView,
-      ownerPrepared, dirtyHints, allowMixed: true });
+    const publishLegacy = () => ownerPublisher.publish({ identity,
+      publicView: placeholderPublic(ownerView), ownerView, ownerPrepared, dirtyHints, allowMixed: true });
+    const legacy = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.LEGACY_PUBLISHER, identity.recipientId, publishLegacy)
+      : publishLegacy();
     const base = !state.forceKeyframe && state.ackedBody && bodies.has(state.ackedBody.body.bodyId)
       ? state.ackedBody : null;
-    const publicPayload = base ? deltaPayload(base, target) || keyframePayload(target) : keyframePayload(target);
+    const selectPublic = () => base ? deltaPayload(base, target) || keyframePayload(target) : keyframePayload(target);
+    const publicPayload = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.COHORT_DELTA, identity.recipientId, selectPublic)
+      : selectPublic();
     if (publicPayload.kind === "keyframe") counters.bodyKeyframes += 1;
     else counters.bodyDeltas += 1;
-    const frame = deepFreeze({ ...legacy.frame, pairSchema: PAIR_SCHEMA,
+    const buildEnvelope = () => deepFreeze({ ...legacy.frame, pairSchema: PAIR_SCHEMA,
       bodyId: target.body.bodyId, bodyRevision: target.body.bodyRevision, bodyHash: target.bodyHash,
       public: publicPayload, owner: legacy.frame.owner });
-    const wire = encodePublicBodyFrame(frame,
-      codecContext({ ...identity, manifestHash: fixed.manifestHash }),
-      publicPayload.kind === "keyframe" ? { encodedBody: encodedBody(target) } : undefined);
-    const bytes = Buffer.byteLength(wire, "utf8");
-    const encodedDigest = sha256(wire);
-    const publication = registerExactEncodedPublication(Object.freeze({ frame, bytes,
-      encodedWire: wire, encodedDigest, expandedBytes: canonicalJsonBytes(frame).length,
-      projectionKind: publicPayload.kind === frame.owner.kind ? publicPayload.kind
-        : `public-${publicPayload.kind}+owner-${frame.owner.kind}` }));
-    const record = Object.freeze({ publication, frame, body: target, legacy });
-    state.pending.set(frame.frameId, record);
-    state.retainedBytes += bytes;
-    state.forceKeyframe = false;
-    while (state.pending.size > limits.maxPendingPairsPerRecipient
-        || state.retainedBytes > limits.maxRetainedBytesPerRecipient) {
-      const oldestId = state.pending.keys().next().value;
-      const oldest = state.pending.get(oldestId);
-      retire(state, oldestId, oldest);
-      state.pending.delete(oldestId);
-      state.retainedBytes -= oldest.publication.bytes;
-      state.forceKeyframe = true;
-    }
-    return publication;
+    const frame = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.ENVELOPE_BUILD, identity.recipientId, buildEnvelope)
+      : buildEnvelope();
+    const preparedEncodedBody = publicPayload.kind === "keyframe" && s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.BODY_CANONICAL_HASH, identity.recipientId,
+        () => encodedBody(target)) : null;
+    const serializeRetain = () => {
+      const wire = encodePublicBodyFrame(frame,
+        codecContext({ ...identity, manifestHash: fixed.manifestHash }),
+        publicPayload.kind === "keyframe"
+          ? { encodedBody: preparedEncodedBody === null ? encodedBody(target) : preparedEncodedBody }
+          : undefined);
+      const bytes = Buffer.byteLength(wire, "utf8");
+      const encodedDigest = sha256(wire);
+      const publication = registerExactEncodedPublication(Object.freeze({ frame, bytes,
+        encodedWire: wire, encodedDigest, expandedBytes: canonicalJsonBytes(frame).length,
+        projectionKind: publicPayload.kind === frame.owner.kind ? publicPayload.kind
+          : `public-${publicPayload.kind}+owner-${frame.owner.kind}` }));
+      const record = Object.freeze({ publication, frame, body: target, legacy });
+      state.pending.set(frame.frameId, record);
+      state.retainedBytes += bytes;
+      state.forceKeyframe = false;
+      while (state.pending.size > limits.maxPendingPairsPerRecipient
+          || state.retainedBytes > limits.maxRetainedBytesPerRecipient) {
+        const oldestId = state.pending.keys().next().value;
+        const oldest = state.pending.get(oldestId);
+        retire(state, oldestId, oldest);
+        state.pending.delete(oldestId);
+        state.retainedBytes -= oldest.publication.bytes;
+        state.forceKeyframe = true;
+      }
+      return publication;
+    };
+    return s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.ENVELOPE_SERIALIZE, identity.recipientId, serializeRetain)
+      : serializeRetain();
   }
 
   function legacyAck(record, ack) {

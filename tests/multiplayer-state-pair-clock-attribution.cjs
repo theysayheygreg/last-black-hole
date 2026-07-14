@@ -14,12 +14,14 @@ const { distribution, fixedWindowRates, fixedWindowMeanAcceptedRates,
 const ROOT = path.resolve(__dirname, "..");
 const WORKER = path.join(__dirname, "network", "state-pair-isolated-client.cjs");
 const SEED = 0x53A1B04E;
+const S23T_PROFILE = String(process.env.LBH_S23T_PUBLIC_BODY_PROFILE || "").trim() === "1";
 const POPULATIONS = (() => {
   const values = String(process.env.LBH_S13_POPULATIONS || "1,4,8").split(",")
     .map((value) => Number(value.trim()));
-  if (values.length !== 3 || new Set(values).size !== 3
+  const expectedLength = S23T_PROFILE ? 2 : 3;
+  if (values.length !== expectedLength || new Set(values).size !== expectedLength
       || values.some((value) => ![1, 4, 8].includes(value))) {
-    throw new Error("LBH_S13_POPULATIONS must be one permutation of 1,4,8");
+    throw new Error(`LBH_S13_POPULATIONS must contain ${expectedLength} distinct supported populations`);
   }
   return values;
 })();
@@ -212,6 +214,8 @@ async function runScenario(population, runDir, commit) {
       LBH_SIM_WS_PREPARED_PROJECTIONS: "true", LBH_SIM_WS_BENCH_EVENT_LOOP: "1",
       LBH_REPLICATION_BASELINE_CAPTURE: "1", LBH_SIM_MAX_SIM_TIME: "7200",
       LBH_SIM_WS_STAGE_PROFILE: S21_STAGE_PROFILE ? "1" : "0",
+      LBH_S23T_PUBLIC_BODY_PROFILE: S23T_PROFILE ? "1" : "0",
+      LBH_S23T_EVIDENCE_HARNESS: S23T_PROFILE ? "1" : "0",
     } });
     authorityPid = Number(fs.readFileSync(path.join(ROOT, "tmp", `sim-server-${port}.pid`), "utf8"));
     setup = await setupPopulation(port, population);
@@ -336,6 +340,9 @@ async function runScenario(population, runDir, commit) {
           projectionAndPublishMs: endHealth.multiplayer.projection.accounting.costDistributions.projectionReplicationMs,
           ...(S21_STAGE_PROFILE ? {
             stageProfile: endHealth.multiplayer.adapter.authorityStageProfile,
+          } : {}),
+          ...(S23T_PROFILE ? {
+            s23tPublicBodyProfile: endHealth.multiplayer.adapter.s23tPublicBodyProfile,
           } : {}) },
         clients: clients.map((client) => ({ label: client.label, pid: client.pid,
           cpuUsage: client.cpuUsage, eventLoopDelay: client.eventLoopDelay,
@@ -396,12 +403,14 @@ function validateArtifact(directory) {
   const checksums = validateChecksums(directory);
   const run = JSON.parse(fs.readFileSync(path.join(directory, "run.json"), "utf8"));
   const aggregate = JSON.parse(fs.readFileSync(path.join(directory, "aggregate.json"), "utf8"));
-  const scenarios = POPULATIONS.map((population) =>
+  const artifactPopulations = run.config?.populations || [];
+  const scenarios = artifactPopulations.map((population) =>
     JSON.parse(fs.readFileSync(path.join(directory, `normal-${population}.json`), "utf8")));
-  const cleanup = POPULATIONS.map((population) =>
+  const cleanup = artifactPopulations.map((population) =>
     JSON.parse(fs.readFileSync(path.join(directory, `cleanup-normal-${population}.json`), "utf8")));
   const expectedFiles = ["aggregate.json", "checksums.json", "run.json",
-    ...POPULATIONS.flatMap((population) => [`cleanup-normal-${population}.json`, `normal-${population}.json`])].sort();
+    ...artifactPopulations.flatMap((population) =>
+      [`cleanup-normal-${population}.json`, `normal-${population}.json`])].sort();
   const actualFiles = fs.readdirSync(directory).filter((file) => file.endsWith(".json")).sort();
   const s12 = validateChecksums(S12_ARTIFACT);
   const s15 = S16_BINARY ? validateChecksums(S15_ARTIFACT) : null;
@@ -485,13 +494,14 @@ function validateArtifact(directory) {
     runContract: run.schema === (run.config.publicBody ? "lbh-s23-public-body-run-v1"
       : run.config.compression ? "lbh-s20-compression-run-v1"
       : run.config.binary ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1") && run.dirty === false
-      && JSON.stringify(run.config.populations) === JSON.stringify(POPULATIONS)
+      && artifactPopulations.length > 0 && new Set(artifactPopulations).size === artifactPopulations.length
       && run.config.warmupMs === WARMUP_MS && run.config.windowMs === WINDOW_MS,
     aggregateContract: aggregate.schema === (run.config.publicBody ? "lbh-s23-public-body-aggregate-v1"
       : run.config.compression ? "lbh-s20-compression-aggregate-v1"
       : run.config.binary ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1")
       && aggregate.commit === run.commit && aggregate.scenarios.length === POPULATIONS.length,
-    exactPopulations: JSON.stringify(scenarios.map((entry) => entry.population)) === JSON.stringify(POPULATIONS),
+    exactPopulations: JSON.stringify(scenarios.map((entry) => entry.population))
+      === JSON.stringify(artifactPopulations),
     semanticRecomputation: semantic.every((checks) => Object.values(checks).every(Boolean)),
     correctness: scenarios.every((entry) => entry.correctness.passed === true),
     processMetricsPresent: scenarios.every((entry) => entry.performance.authority.cpuUsage.totalMicroseconds > 0
@@ -548,10 +558,11 @@ async function main() {
       + `${S23_PUBLIC_BODY ? "LBH_S23_PUBLIC_BODY=1 LBH_S20_COMPRESSION=1 "
       : S20_COMPRESSION ? "LBH_S20_COMPRESSION=1 " : S16_BINARY ? "LBH_S16_BINARY=1 " : ""}`
       + `${S21_STAGE_PROFILE ? "LBH_S21_STAGE_PROFILE=1 " : ""}`
+      + `${S23T_PROFILE ? "LBH_S23T_PUBLIC_BODY_PROFILE=1 " : ""}`
       + "node tests/multiplayer-state-pair-clock-attribution.cjs",
     config: { populations: POPULATIONS, warmupMs: WARMUP_MS, windowMs: WINDOW_MS,
       binary: S16_BINARY, compression: S20_COMPRESSION, publicBody: S23_PUBLIC_BODY,
-      stageProfile: S21_STAGE_PROFILE },
+      stageProfile: S21_STAGE_PROFILE, s23tProfile: S23T_PROFILE },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),
       cpu: os.cpus()[0]?.model || null, logicalCpuCount: os.cpus().length, node: process.version },
     s12Binding: { path: path.relative(ROOT, S12_ARTIFACT), compositeSha256: S12_SHA256 },

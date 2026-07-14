@@ -9,6 +9,7 @@ const {
 } = require("./canonical-structural-delta.cjs");
 const { createAuthorityDeltaPublisher } = require("./authority-delta-publisher.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
+const { STAGES: S23T_STAGES } = require("./s23t-public-body-profiler.cjs");
 const { createStatePairWireEncoder } = require("./multiplayer-wire-protocol.cjs");
 const {
   CAPABILITY: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
@@ -231,7 +232,8 @@ function pairIdentity(binding, authorityIncarnation) {
 }
 
 function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballparkEpoch = 1,
-  manifestSchema = DEFAULT_MANIFEST_SCHEMA, manifestHash, publisherOptions = {}, stageProfiler = null } = {}) {
+  manifestSchema = DEFAULT_MANIFEST_SCHEMA, manifestHash, publisherOptions = {}, stageProfiler = null,
+  s23tProfiler = null } = {}) {
   // This object belongs to one active match/group and its one dedicated
   // authoritative sim instance. A fleet owns many isolated objects like this;
   // it never shares one global gameplay authority or mutable delta history.
@@ -248,6 +250,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     ballparkEpoch: fixedBallparkEpoch,
     manifestHash: fixedManifestHash,
     publisherOptions: { ...publisherOptions, stageProfiler },
+    s23tProfiler,
   });
   const maxAdmissions = Number.isSafeInteger(publisherOptions.maxRecipients)
     ? publisherOptions.maxRecipients : 128;
@@ -360,20 +363,27 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
 
   function buildViews(binding, publicFrame, ownerFrame) {
     const identity = requireAdmission(binding);
-    assertSourceEnvelope(publicFrame, "public");
-    assertSourceEnvelope(ownerFrame, "owner");
-    if (publicFrame?.runId !== fixedMatchId || ownerFrame?.runId !== fixedMatchId
-        || publicFrame.snapshotId !== ownerFrame.snapshotId || publicFrame.tick !== ownerFrame.tick
-        || publicFrame.simTime !== ownerFrame.simTime || publicFrame.lastEventSeq !== ownerFrame.lastEventSeq
-        || publicFrame.fieldRevision !== ownerFrame.fieldRevision || publicFrame.overloadMode !== ownerFrame.overloadMode
-        || publicFrame.manifestHash !== fixedManifestHash
-        || ownerFrame.membershipId !== identity.recipientId || ownerFrame.playerId !== binding.playerId) {
-      fail("non-atomic-source", "public and owner frames must be one authoritative match tick");
-    }
-    const sourceBytes = canonicalJsonBytes({ publicFrame, ownerFrame }).length;
-    if (sourceBytes > MAX_SOURCE_BYTES) {
-      fail("projection-too-large", "authoritative source exceeds bounded projection input");
-    }
+    const validateSource = () => {
+      assertSourceEnvelope(publicFrame, "public");
+      assertSourceEnvelope(ownerFrame, "owner");
+      if (publicFrame?.runId !== fixedMatchId || ownerFrame?.runId !== fixedMatchId
+          || publicFrame.snapshotId !== ownerFrame.snapshotId || publicFrame.tick !== ownerFrame.tick
+          || publicFrame.simTime !== ownerFrame.simTime || publicFrame.lastEventSeq !== ownerFrame.lastEventSeq
+          || publicFrame.fieldRevision !== ownerFrame.fieldRevision || publicFrame.overloadMode !== ownerFrame.overloadMode
+          || publicFrame.manifestHash !== fixedManifestHash
+          || ownerFrame.membershipId !== identity.recipientId || ownerFrame.playerId !== binding.playerId) {
+        fail("non-atomic-source", "public and owner frames must be one authoritative match tick");
+      }
+      const sourceBytes = canonicalJsonBytes({ publicFrame, ownerFrame }).length;
+      if (sourceBytes > MAX_SOURCE_BYTES) {
+        fail("projection-too-large", "authoritative source exceeds bounded projection input");
+      }
+      return sourceBytes;
+    };
+    const sourceBytes = s23tProfiler
+      ? s23tProfiler.measureSync(
+          S23T_STAGES.BODY_NORMALIZE_VALIDATE, identity.recipientId, validateSource)
+      : validateSource();
     const snapshot = positiveInteger(publicFrame.snapshotId, "snapshotId");
     const admission = admissions.get(key(identity));
     const splitRuntimePublic = admission.capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
@@ -425,7 +435,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
       fail("non-shared-public-source",
         "one public-body source tick must be the same authority-projected object for every recipient");
     }
-    const publicCore = cachedBody ? null : stageProfiler
+    const publicCore = cachedBody ? null : s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.PUBLIC_CORE, identity.recipientId, buildPublicCore)
+      : stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
           ...profile,
           outputBytes: canonicalJsonBytes(value).length,
@@ -460,7 +472,9 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
         },
       }]) }, "owner");
     };
-    const ownerProjection = stageProfiler
+    const ownerProjection = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.OWNER_SOURCE, identity.recipientId, buildOwnerView)
+      : stageProfiler
       ? stageProfiler.measureSync(STAGES.OWNER_PROJECTION, (value) => ({
           recipientKey: identity.recipientId,
           inputBytes: canonicalJsonBytes(ownerFrame).length,

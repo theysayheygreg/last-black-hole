@@ -29,6 +29,7 @@ const {
   enqueueBoundedInbound,
 } = require("./sim-ws-adapter-guards.cjs");
 const { STAGES } = require("./authority-stage-profiler.cjs");
+const { STAGES: S23T_STAGES } = require("./s23t-public-body-profiler.cjs");
 const { isExactEncodedPublication } = require("./authority-delta-publisher.cjs");
 const {
   CAPABILITY: POSITIONAL_CODEC_CAPABILITY,
@@ -80,6 +81,7 @@ function deepFreezeSharedPublicSource(value) {
 function createSimWebSocketAdapter(options = {}) {
   const config = normalizeAdapterOptions(options);
   const stageProfiler = options.stageProfiler || null;
+  const s23tProfiler = options.s23tProfiler || null;
   const profileRecipientKey = (state) => state?.binding?.membershipId || state?.schedulerConnectionId;
   const scheduleOutboundFrame = typeof options.scheduleOutboundFrame === "function"
     ? options.scheduleOutboundFrame
@@ -537,6 +539,8 @@ function createSimWebSocketAdapter(options = {}) {
       if (onPressureTransition) state.pendingSendBytes += Buffer.byteLength(wire, "utf8");
       samplePressure(state);
       const recipientKey = profileRecipientKey(state);
+      const finishS23tCallback = s23tProfiler && frame?.type === "statePair"
+        ? s23tProfiler.startAsync(S23T_STAGES.SOCKET_CALLBACK) : null;
       const finishSocketCallback = stageProfiler && frame?.type === "statePair"
         ? stageProfiler.start(STAGES.SOCKET_SEND_CALLBACK, {
             recipientKey,
@@ -544,6 +548,7 @@ function createSimWebSocketAdapter(options = {}) {
           })
         : null;
       const invokeSend = () => state.ws.send(wire, (error) => {
+        finishS23tCallback?.();
         finishSocketCallback?.({ outputBytes: error ? 0 : Buffer.byteLength(wire, "utf8") });
         state.pendingSends = Math.max(0, state.pendingSends - 1);
         if (replicationAccounting) replicationPendingSendCallbacks = Math.max(0, replicationPendingSendCallbacks - 1);
@@ -599,7 +604,9 @@ function createSimWebSocketAdapter(options = {}) {
           flush(state);
         }
       });
-      if (stageProfiler && frame?.type === "statePair") {
+      if (s23tProfiler && frame?.type === "statePair") {
+        s23tProfiler.measureSync(S23T_STAGES.SOCKET_SEND, profileRecipientKey(state), invokeSend);
+      } else if (stageProfiler && frame?.type === "statePair") {
         stageProfiler.measureSync(STAGES.SOCKET_SEND_CALL, {
           recipientKey,
           inputBytes: Buffer.byteLength(wire, "utf8"),
@@ -842,7 +849,9 @@ function createSimWebSocketAdapter(options = {}) {
     const started = performance.now();
     const compress = () => compressionContextFor(state).publicBody
       ? encodeCompressedPublicBodyStatePair(wire) : encodeCompressedStatePair(wire);
-    const compressed = stageProfiler
+    const compressed = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.COMPRESSION, profileRecipientKey(state), compress)
+      : stageProfiler
       ? stageProfiler.measureSync(STAGES.COMPRESSION, (value) => ({
           recipientKey: profileRecipientKey(state),
           inputBytes: Buffer.byteLength(wire),
@@ -1400,12 +1409,15 @@ function createSimWebSocketAdapter(options = {}) {
       samplePressure(state);
       if (!stateIsLive(state, expectedGeneration)) return;
       const ingestAck = () => onAck(state.binding, frame, callbackContext(state, "ack"));
+      const finishS23tAck = s23tProfiler && frame.ackKind === "statePair"
+        ? s23tProfiler.startAsync(S23T_STAGES.ACK_INGESTION) : null;
       const ackResult = stageProfiler && frame.ackKind === "statePair"
         ? await stageProfiler.measureAsync(STAGES.ACK_INGESTION, {
             recipientKey: profileRecipientKey(state),
             inputBytes: Buffer.byteLength(JSON.stringify(frame), "utf8"),
           }, ingestAck)
         : await ingestAck();
+      finishS23tAck?.();
       if (frame.ackKind === "statePair" && ackResult?.accepted === false) {
         observeAckReject(ackResult.reason, ackResult.diagnostic?.relation);
         throw new WireProtocolError("state-pair-ack-rejected", "statePair ACK was rejected", 4401);
@@ -1539,6 +1551,8 @@ function createSimWebSocketAdapter(options = {}) {
   }
 
   async function projectNow(context = {}) {
+    if (s23tProfiler) s23tProfiler.beginBeat();
+    try {
     if (closed) return { projected: 0, skipped: connections.size };
     const candidates = [...connections].filter((state) => state.bound && !state.manifestRequired
       && !state.capabilities?.includes("state-pair-v1") && !state.statePairMode && !state.closing && !state.cleaned);
@@ -1548,7 +1562,10 @@ function createSimWebSocketAdapter(options = {}) {
     const expectedGeneration = generation;
     let publicFrame;
     try {
-      publicFrame = await buildPublicState(context, callbackContext(null, "public-project"));
+      const buildPublic = () => buildPublicState(context, callbackContext(null, "public-project"));
+      publicFrame = s23tProfiler
+        ? await Promise.resolve(s23tProfiler.measureSync(S23T_STAGES.PUBLIC_CORE, null, buildPublic))
+        : await buildPublic();
       if (closed || generation !== expectedGeneration || lifecycle.signal.aborted) {
         return { projected: 0, skipped: connections.size, aborted: true };
       }
@@ -1736,20 +1753,27 @@ function createSimWebSocketAdapter(options = {}) {
           context,
           callbackContext(state, "state-pair-owner-project"),
         );
-        const ownerFrame = stageProfiler
+        const ownerFrame = s23tProfiler
+          ? await Promise.resolve(s23tProfiler.measureSync(
+              S23T_STAGES.OWNER_SOURCE, profileRecipientKey(state), buildOwner))
+          : stageProfiler
           ? await stageProfiler.measureAsync(STAGES.OWNER_SOURCE, (projectedFrame) => ({
               recipientKey: profileRecipientKey(state),
               inputBytes: Buffer.byteLength(JSON.stringify(recipientPublicFrame), "utf8"),
               outputBytes: Buffer.byteLength(JSON.stringify(projectedFrame), "utf8"),
             }), buildOwner)
           : await buildOwner();
-        const pair = await buildStatePair(
+        const buildPair = () => buildStatePair(
           state.binding,
           recipientPublicFrame,
           ownerFrame,
           context,
           callbackContext(state, "state-pair-project"),
         );
+        const pair = s23tProfiler && !wantsSharedBody
+          ? await Promise.resolve(s23tProfiler.measureSync(
+              S23T_STAGES.LEGACY_PUBLISHER, profileRecipientKey(state), buildPair))
+          : await buildPair();
         if (!stateIsLive(state)) {
           skipped += 1;
           continue;
@@ -1769,6 +1793,9 @@ function createSimWebSocketAdapter(options = {}) {
       }
     }
     return { projected, skipped, snapshotId: publicFrame.snapshotId };
+    } finally {
+      s23tProfiler?.endBeat();
+    }
   }
 
   function bindingKeyFor(binding) {
@@ -1841,13 +1868,19 @@ function createSimWebSocketAdapter(options = {}) {
           throw new WireProtocolError("codec-capability-required",
             "exact state-pair publication must match the active negotiated codec", 4403);
         }
-        encodedWire = publication.encodedWire;
-        const encodedBytes = Buffer.byteLength(encodedWire);
-        const digest = `sha256:${crypto.createHash("sha256").update(encodedWire).digest("hex")}`;
-        if (encodedBytes !== publication.bytes || digest !== publication.encodedDigest) {
-          throw new WireProtocolError("codec-publication-mismatch",
-            "publisher-selected state-pair wire failed byte/digest verification", 4403);
-        }
+        const verifyExact = () => {
+          encodedWire = publication.encodedWire;
+          const encodedBytes = Buffer.byteLength(encodedWire);
+          const digest = `sha256:${crypto.createHash("sha256").update(encodedWire).digest("hex")}`;
+          if (encodedBytes !== publication.bytes || digest !== publication.encodedDigest) {
+            throw new WireProtocolError("codec-publication-mismatch",
+              "publisher-selected state-pair wire failed byte/digest verification", 4403);
+          }
+          return encodedBytes;
+        };
+        const encodedBytes = s23tProfiler
+          ? s23tProfiler.measureSync(S23T_STAGES.ADAPTER_DIGEST, profileRecipientKey(state), verifyExact)
+          : verifyExact();
         const stats = exactCapability === BINARY_CODEC_CAPABILITY ? binaryCodecStats : positionalCodecStats;
         stats.reusedEncodedFrames += 1;
         stats.reusedEncodedBytes += encodedBytes;
@@ -1877,7 +1910,9 @@ function createSimWebSocketAdapter(options = {}) {
       { byteLength: encodedBytes,
         ...(isExactEncodedPublication(publication) ? { exactWire: encodedWire } : {}) },
     );
-    const outcome = stageProfiler
+    const outcome = s23tProfiler
+      ? s23tProfiler.measureSync(S23T_STAGES.ACCOUNTING_ENQUEUE, profileRecipientKey(state), enqueue)
+      : stageProfiler
       ? stageProfiler.measureSync(STAGES.ADAPTER_ENQUEUE, {
           recipientKey: profileRecipientKey(state),
           inputBytes: Buffer.byteLength(JSON.stringify(frame), "utf8"),
@@ -1906,14 +1941,21 @@ function createSimWebSocketAdapter(options = {}) {
           state.replicationQueuedStateFrames = { statePair: record };
         }
       };
-      if (stageProfiler) stageProfiler.measureSync(STAGES.ACCOUNTING, {
+      if (s23tProfiler) s23tProfiler.measureSync(
+        S23T_STAGES.ACCOUNTING_ENQUEUE, profileRecipientKey(state), account);
+      else if (stageProfiler) stageProfiler.measureSync(STAGES.ACCOUNTING, {
         recipientKey: profileRecipientKey(state),
         inputBytes: Buffer.byteLength(JSON.stringify(frame), "utf8"),
       }, account);
       else account();
     }
-    samplePressure(state);
-    queueOutcome(state, outcome, frame);
+    const finalizeQueue = () => {
+      samplePressure(state);
+      queueOutcome(state, outcome, frame);
+    };
+    if (s23tProfiler) s23tProfiler.measureSync(
+      S23T_STAGES.ACCOUNTING_ENQUEUE, profileRecipientKey(state), finalizeQueue);
+    else finalizeQueue();
     flush(state);
     if (outcome.accepted) state.lastStatePairFrameId = frame.frameId;
     return outcome;
@@ -2091,6 +2133,7 @@ function createSimWebSocketAdapter(options = {}) {
     for (const key of Object.keys(compressionCodecStats)) compressionCodecStats[key] = 0;
     replicationAccounting?.reset();
     stageProfiler?.reset();
+    s23tProfiler?.reset();
     return { runId: currentRunId, fenced };
   }
 
@@ -2239,6 +2282,7 @@ function createSimWebSocketAdapter(options = {}) {
             })
           : Object.freeze({ enabled: false }) }),
       ...(stageProfiler ? { authorityStageProfile: stageProfiler.snapshot() } : {}),
+      ...(s23tProfiler ? { s23tPublicBodyProfile: s23tProfiler.snapshot() } : {}),
       ...(replicationAccounting && includeReplication
         ? { replication: replicationAccounting.snapshot() }
         : replicationAccounting ? { replicationCaptureEnabled: true } : {}),
