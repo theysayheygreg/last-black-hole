@@ -14,7 +14,15 @@ const { distribution, fixedWindowRates, fixedWindowMeanAcceptedRates,
 const ROOT = path.resolve(__dirname, "..");
 const WORKER = path.join(__dirname, "network", "state-pair-isolated-client.cjs");
 const SEED = 0x53A1B04E;
-const POPULATIONS = [1, 4, 8];
+const POPULATIONS = (() => {
+  const values = String(process.env.LBH_S13_POPULATIONS || "1,4,8").split(",")
+    .map((value) => Number(value.trim()));
+  if (values.length !== 3 || new Set(values).size !== 3
+      || values.some((value) => ![1, 4, 8].includes(value))) {
+    throw new Error("LBH_S13_POPULATIONS must be one permutation of 1,4,8");
+  }
+  return values;
+})();
 const WARMUP_MS = Number(process.env.LBH_S13_WARMUP_MS || 5_000);
 const WINDOW_MS = Number(process.env.LBH_S13_WINDOW_MS || 20_000);
 const S12_ARTIFACT = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s12", "pre-gate");
@@ -535,7 +543,9 @@ async function main() {
   fs.mkdirSync(runDir, { recursive: false });
   writeExclusive(path.join(runDir, "run.json"), {
     schema: RUN_SCHEMA, commit, dirty, seed: SEED,
-    command: `${S23_PUBLIC_BODY ? "LBH_S23_PUBLIC_BODY=1 LBH_S20_COMPRESSION=1 "
+    command: `${process.env.LBH_S13_POPULATIONS
+      ? `LBH_S13_POPULATIONS=${process.env.LBH_S13_POPULATIONS} ` : ""}`
+      + `${S23_PUBLIC_BODY ? "LBH_S23_PUBLIC_BODY=1 LBH_S20_COMPRESSION=1 "
       : S20_COMPRESSION ? "LBH_S20_COMPRESSION=1 " : S16_BINARY ? "LBH_S16_BINARY=1 " : ""}`
       + `${S21_STAGE_PROFILE ? "LBH_S21_STAGE_PROFILE=1 " : ""}`
       + "node tests/multiplayer-state-pair-clock-attribution.cjs",
