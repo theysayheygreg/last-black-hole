@@ -156,6 +156,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SqliteHostedAccountErasure",
+    file: "sqlite-hosted-account-erasure.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "HostedProductSqliteE2E",
     file: "hosted-product-sqlite-e2e.cjs",
     lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
