@@ -90,7 +90,7 @@
   ],
   "provenance": {
     "branch": "codex/v0.4-multiplayer-architecture",
-    "commit": "3592d6bd08eecd9f17bb476e57c859d63ce85726",
+    "commit": "27dbc73867b75e3fb39f790b0e2465df9652f863",
     "runtime": {
       "path": "scripts/sim-runtime.cjs",
       "sha256": "f8d3fbcd1ebdfe209370362ecd8af6a4faa63c01a42b93a6e904c9cf64b663a0"
@@ -101,7 +101,7 @@
     },
     "generator": {
       "path": "scripts/s24-live-terminal-negative.cjs",
-      "sha256": "d042ccff756e6e9ca555402c113d99dec32d111e92442c83c5a5e3937d266ac2"
+      "sha256": "b7d671823bf28e9f6cef76cab41b80a30f20e536bc5fc4dbd15c562dc9928286"
     }
   }
 }
