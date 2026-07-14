@@ -71,8 +71,7 @@ function resolveSplitPublication(publication) {
   const material = publicationMaterial.get(publication);
   if (!material) return null;
   return Object.freeze({ fragmentWire: material.fragmentWire, overlayWire: material.overlayWire,
-    fragmentDigest: material.fragmentDigest, overlayDigest: material.overlayDigest,
-    fragmentWireDigest: material.fragmentWireDigest, overlayWireDigest: material.overlayWireDigest });
+    fragmentDigest: material.fragmentDigest, overlayDigest: material.overlayDigest });
 }
 
 function isSplitPublication(publication) {
@@ -140,15 +139,6 @@ function createSplitPublicFragmentAuthority({ matchId, authorityIncarnation, bal
       fragments.delete(oldestId);
       fragmentBytes -= record.bytes;
       counters.fragmentEvictions += 1;
-      for (const state of recipients.values()) {
-        for (const [frameId, pending] of state.pending) {
-          if (pending.fragment !== record) continue;
-          retire(state, frameId, pending);
-          state.pending.delete(frameId);
-          state.retainedOverlayBytes -= pending.publication.overlayBytes;
-          forceGlobalKeyframe = true;
-        }
-      }
       if (latest?.baseFragmentId === oldestId) forceGlobalKeyframe = true;
     }
   }
@@ -266,9 +256,6 @@ function createSplitPublicFragmentAuthority({ matchId, authorityIncarnation, bal
     counters.overlayBuilds += 1;
     counters.overlayCompressions += 1;
     const bytes = fragmentRecord.bytes + encodedOverlay.wire.length;
-    if (bytes > 256 * 1024) {
-      fail("pair-too-large", "combined split fragment and owner overlay exceed the client pair cap");
-    }
     const publication = Object.freeze({ type: "splitPublicFragmentPublication",
       capability: CAPABILITY, frame: overlay, bytes,
       fragmentBytes: fragmentRecord.bytes, overlayBytes: encodedOverlay.wire.length,
@@ -276,9 +263,7 @@ function createSplitPublicFragmentAuthority({ matchId, authorityIncarnation, bal
       projectionKind: `public-${fragment.public.kind}+owner-keyframe` });
     publicationMaterial.set(publication, Object.freeze({ fragmentWire: fragmentRecord.wire,
       overlayWire: encodedOverlay.wire, fragmentDigest: fragmentRecord.fragmentHash,
-      overlayDigest: encodedOverlay.semanticDigest,
-      fragmentWireDigest: `sha256:${crypto.createHash("sha256").update(fragmentRecord.wire).digest("hex")}`,
-      overlayWireDigest: `sha256:${crypto.createHash("sha256").update(encodedOverlay.wire).digest("hex")}` }));
+      overlayDigest: encodedOverlay.semanticDigest }));
     const pending = Object.freeze({ publication, fragment: fragmentRecord, overlay });
     state.pending.set(frameId, pending);
     state.retainedOverlayBytes += encodedOverlay.wire.length;

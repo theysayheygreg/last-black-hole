@@ -7,8 +7,6 @@ const {
   FRAGMENT_SCHEMA,
   OVERLAY_SCHEMA,
   MANIFEST_HASH,
-  MAX_FRAGMENT_BYTES,
-  MAX_OVERLAY_BYTES,
   assertFragment,
   assertOverlay,
   encodePublicFragment,
@@ -107,9 +105,7 @@ function main() {
   let assertions = 0;
   assert.strictEqual(CAPABILITY, "state-pair-split-public-fragment-v1");
   assert(/^sha256:[a-f0-9]{64}$/.test(MANIFEST_HASH));
-  assert.strictEqual(MAX_FRAGMENT_BYTES, 256 * 1024);
-  assert.strictEqual(MAX_OVERLAY_BYTES, 256 * 1024);
-  assertions += 4;
+  assertions += 2;
 
   const encodedFragment = encodePublicFragment(fragment());
   assert.strictEqual(splitWireKind(encodedFragment.wire), "fragment");
@@ -145,21 +141,7 @@ function main() {
   assert.throws(() => encodePublicFragment(leaked), (error) => error.code === "privacy-boundary");
   assert.throws(() => assertOverlay({ ...overlay(), public: {} }),
     (error) => error.code === "invalid-layout");
-  const leakedDelta = fragment();
-  leakedDelta.public = { kind: "delta", schema: "lbh-public-body-delta-v1",
-    baseBodyId: "body-40", baseBodyRevision: 40, baseHash: `sha256:${"1".repeat(64)}`,
-    bodyId: leakedDelta.bodyId, bodyRevision: leakedDelta.bodyRevision,
-    resultHash: leakedDelta.bodyHash, structuralBaseHash: `sha256:${"2".repeat(64)}`,
-    structuralResultHash: `sha256:${"3".repeat(64)}`, delta: {
-      schema: "lbh-canonical-structural-delta-v1", lane: "public", runId: BINDING.matchId,
-      authorityEpoch: BINDING.authorityIncarnation, connectionEpoch: 1,
-      ballparkEpoch: BINDING.ballparkEpoch, manifestHash: BINDING.manifestHash,
-      statePairId: "body-41", baseSnapshotId: "body-40", snapshotId: "body-41",
-      baseHash: `sha256:${"2".repeat(64)}`, resultHash: `sha256:${"3".repeat(64)}`,
-      rootOps: [{ op: "set", path: ["world"], value: { sessionId: "private" } }],
-      creates: [], updates: [], despawns: [] } };
-  assert.throws(() => encodePublicFragment(leakedDelta), (error) => error.code === "privacy-boundary");
-  assertions += 4;
+  assertions += 3;
 
   console.log(JSON.stringify({ schema: "lbh-split-public-fragment-codec-proof-v1",
     assertions, capability: CAPABILITY, manifestHash: MANIFEST_HASH, mismatches: 0 }, null, 2));

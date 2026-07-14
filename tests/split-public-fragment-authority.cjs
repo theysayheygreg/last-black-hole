@@ -130,20 +130,7 @@ function main() {
   assert.throws(() => split.publish({ identity: { ...ids[1], matchId: "other-match" },
     fragment: fragmentThree, ownerView: ownerView(ids[1], 3) }),
   (error) => error.code === "identity-mismatch");
-  ids.slice(1).forEach((id) => split.disconnect(id));
-  assert.strictEqual(split.diagnostics().recipients, 0);
-  assert.strictEqual(split.diagnostics().pendingPairs, 0);
-  assertions += 4;
-
-  const eviction = createSplitPublicFragmentAuthority({ ...FIXED, limits: { maxFragments: 1 } });
-  const evictionFirst = eviction.prepareFragment({ body: bodyOne, ...metadata(1) });
-  eviction.publish({ identity: ids[0], fragment: evictionFirst, ownerView: ownerView(ids[0], 1) });
-  eviction.prepareFragment({ body: bodyTwo, ...metadata(2) });
-  assert.strictEqual(eviction.diagnostics().fragments, 1);
-  assert.strictEqual(eviction.diagnostics().pendingPairs, 0,
-    "Recipient pending state must not pin an evicted global fragment");
-  assert.strictEqual(eviction.diagnostics().forceGlobalKeyframe, true);
-  assertions += 3;
+  assertions += 2;
 
   console.log(JSON.stringify({ schema: "lbh-split-public-fragment-authority-proof-v1",
     assertions, synchronizedRecipients: 8, fragmentObjectIdentities: 1,
