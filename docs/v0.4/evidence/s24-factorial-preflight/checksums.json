@@ -1,0 +1,9 @@
+{
+  "schema": "lbh-s24-factorial-preflight-checksums-v1",
+  "sourceCommit": "ccdeff8aaff9963a097082fd7de672789fcbd6d8",
+  "sha256": {
+    "factorial-preflight.json": "b15bd3a1037f710c0643fda6b0eb14f47bed16d32b32685fcc5a96752364f9d4",
+    "scripts/s24-factorial-preflight.cjs": "c2581afdc19f0935e9b59caae1df9e8f10632d53fbc2bc773751a241cf606d20",
+    "tests/s24-factorial-preflight.cjs": "43d7a236534f0fa73db87517a6b9f8485fcd8f9748da7060a9c8bee53a431eb2"
+  }
+}
