@@ -1000,3 +1000,25 @@ Gate:
 - `multiplayer-soak`: 45–90 minute churn, memory, queues, histories, bytes.
 - `multiplayer-playable`: natural four/eight-player journeys and captures.
 - `multiplayer-hosting`: process/container/DO CPU, bytes, startup, cost.
+
+## Terminal low-count replication checkpoint — 2026-07-14
+
+The final default-off eight-seat split public-fragment experiment passed its
+focused structural proofs but crossed the short-screen abort boundary at
+55.9045 ms projection/publish p95 against the operator-provided pre-screen
+`>55 ms` stop. The raw artifact does not itself encode that threshold. The raw
+logical-pair count failure was invalid two-physical-wires-as-two-pairs
+instrumentation, not a semantic failure. No rerun, sealed 20-second capture, or
+full-network lane was run after the abort.
+
+Red-team found high unshipped-prototype retention, mutable Buffer ownership,
+delta schema/privacy, and queue-coalescing recovery risks. No exploit or leak
+was observed. The capability and all live implementation/tests were fully
+reverted. S20 remains the admitted one-through-four product path and v0.4
+remains capped at four. S23/S23P remain live default-off research paths, not
+admitted product paths; split is historical only and absent from live source.
+S24 is terminal/not proven, and the low-count staircase is complete.
+
+Exactly one next phase is selected: hosted identity, match placement, cost,
+and unit economics for the admitted four-player path. A future eight-player
+effort requires a new version decision and materially different architecture.

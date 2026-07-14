@@ -1,0 +1,11 @@
+{
+  "population": 8,
+  "port": 63325,
+  "authorityPid": 58551,
+  "portDead": true,
+  "pidDead": true,
+  "preStopConnections": 0,
+  "preStopCompressedRetainedFrames": 0,
+  "preStopCompressedRetainedBytes": 0,
+  "passed": true
+}

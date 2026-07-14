@@ -3105,3 +3105,21 @@ promotion, workers, cadence/gate changes, hosted/fleet/heavier-sim work, and
 gate relaxation, hosted/fleet/heavier-sim implementation, and 24/48/96. S20
 remains the one-through-four product path; S24 remains only a reserved future
 scale-track name.
+
+### Q: Does one public fragment plus owner overlays admit eight?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Preserve one logical gameplay authority per match/group. Concurrent matches multiply isolated authorities horizontally; no fragment is or was a second gameplay writer. |
+| Jul 14 | Accept focused historical prototype proof only: one exact public fragment Buffer across eight queues, recipient-local overlays, atomic either-order reconstruction, ACK/retransmit/recovery mechanics, and unchanged S20 fallback when absent. These are not production semantic/privacy/pressure claims. |
+| Jul 14 | Reject at the one short screen. `NORMAL`, 9.6667 Hz receiver cadence, 49,386.7 B/s worst mean traffic, 49,922 B/s recipient-window p95, 0.510 core, and no observed queue/recovery/client errors passed, but 55.9045 ms projection/publish p95 independently exceeded the operator-provided pre-screen `>55 ms` abort boundary. The raw artifact does not itself encode the threshold. |
+| Jul 14 | Treat the raw 20 Hz logical-pair count failure as invalid instrumentation, not a semantic failure: both fragment and overlay physical wires were classified as logical pairs. Do not rerun or use it to rescue the candidate. |
+| Jul 14 | Red-team identified high unshipped-prototype risks in retention, mutable Buffer ownership, delta schema/privacy validation, and queue-coalescing recovery. These are reasons to revert, not observed exploits or privacy leaks. Fully revert the capability and its live runtime/client/codec/authority/tests. |
+| Jul 14 | Run no sealed 20-second capture or full-network lane. Close eight-player v0.4 admission at a product cap of four, stop the low-count optimization staircase, and select exactly one next phase: hosted identity, placement, cost, and unit economics. |
+
+**Door status:** S20 remains admitted for one through four. Eight-player v0.4
+admission and further low-count replication experiments are closed. S23 and
+S23P remain live default-off research paths, not admitted product paths; split
+is historical only and absent from live source. S24 remains terminal/not
+proven. The next phase is hosted identity, placement, cost, and unit economics,
+not another eight-player protocol.

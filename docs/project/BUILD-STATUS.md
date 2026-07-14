@@ -29,6 +29,17 @@ This is the first honest local playable milestone, not an internet/public-ready
 claim. Invite UI, WAN/TLS-edge proof, hosted soak, Greg's hands-on movement/art
 judgment, and physical-device validation remain.
 
+**Current v0.4 admission status (2026-07-14):** S20 remains the supported and
+admitted replication path for one through four players. The final eight-seat
+split-fragment experiment failed its short abort screen at 55.9045 ms
+projection/publish p95 against the operator-provided pre-screen `>55 ms`
+boundary. The raw artifact does not itself encode that threshold. No rerun or
+sealed capture ran, the prototype was fully reverted, and v0.4 remains capped
+at four. S23 and S23P remain live default-off research paths, not admitted
+product paths; split is historical only and absent from live source. S24 is
+terminal/not proven. The next phase is hosted identity, match placement, cost,
+and unit economics for the four-player path.
+
 **Current evidence:** `npm run test:multiplayer-structure` and
 `npm run test:multiplayer-authority` pass. The Phase 1
 `npm run test:multiplayer-network` primitive lane also passes. HTTP input and

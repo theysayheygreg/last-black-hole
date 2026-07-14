@@ -82,6 +82,9 @@ coordinator owns the integrated documents.
 - `MULTIPLAYER-STATE-PAIR-S23P-PREPARED-PUBLIC-SOURCE.md` — exact prepared
   public proof lifecycle, adversarial closure, sealed 1/4/8 evidence, and the
   decision to retain S20 and keep eight closed.
+- `MULTIPLAYER-STATE-PAIR-SPLIT-PUBLIC-FRAGMENT.md` — terminal eight-seat
+  fragment/owner-overlay negative, full implementation revert, immutable raw
+  evidence, validator, and the decision to stop the low-count staircase.
 
 ## Evidence Standard
 

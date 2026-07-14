@@ -1,0 +1,35 @@
+{
+  "schema": "lbh-split-public-fragment-run-v1",
+  "commit": "c9d52dac492293976ff6974e002f4b84847df763",
+  "dirty": false,
+  "seed": 1403105358,
+  "command": "LBH_S13_POPULATIONS=8 LBH_SPLIT_PUBLIC_FRAGMENT=1 LBH_S23P_PREPARED_PUBLIC_SOURCE=1 LBH_S23_PUBLIC_BODY=1 LBH_S20_COMPRESSION=1 node tests/multiplayer-state-pair-clock-attribution.cjs",
+  "config": {
+    "populations": [
+      8
+    ],
+    "warmupMs": 2000,
+    "windowMs": 3000,
+    "binary": false,
+    "compression": true,
+    "publicBody": true,
+    "preparedPublicSource": true,
+    "splitPublicFragment": true,
+    "stageProfile": false,
+    "s23tProfile": false,
+    "s23tCaptureMode": "single"
+  },
+  "machine": {
+    "hostname": "GregBot.local",
+    "platform": "darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "logicalCpuCount": 10,
+    "node": "v22.22.3"
+  },
+  "s12Binding": {
+    "path": "docs/v0.4/evidence/state-pair-s12/pre-gate",
+    "compositeSha256": "00c6377fcf68b76dfac429054a35a0a9c55c7d93d8e043df7166a4eab5429845"
+  }
+}

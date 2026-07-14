@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-07-14 — v0.4 eight-seat split-fragment terminal negative sealed
+
+- Preserved the one and only eight-client short-screen artifact at composite
+  SHA-256 `35fdbe0a00e6e3f2ee3e576685c4472466bc8dc8373634e5dd64e7cc9bd6a9a9`.
+  It observed `NORMAL`, 9.6667 Hz receiver cadence, 49,386.7 B/s worst-recipient
+  mean, 49,922 B/s one-second recipient-window p95, 0.510 authority core, and no
+  queue transition, recovery request, or client error.
+- Rejected the experiment because projection/publish p95 was 55.9045 ms,
+  independently exceeding the operator-provided pre-screen `>55 ms` abort
+  boundary. The raw artifact does not itself encode that threshold. Ran no
+  rerun, sealed 20-second capture, or full-network validation after the abort.
+- Recorded the raw logical-pair count failure as invalid instrumentation: the
+  harness counted fragment and overlay physical wires as two logical pairs.
+  It is not a semantic correctness failure and cannot rescue the candidate.
+- Red-team review found high unshipped-prototype risks in retention, mutable
+  Buffer ownership, delta schema/privacy validation, and queue-coalescing
+  recovery. No exploit or leak was observed. The prototype, closure attempt,
+  capability, runtime integration, and focused suites were fully reverted.
+- Added a regenerable terminal validator binding the raw SHA, metrics, declared
+  abort comparison, historical instrumentation cause, exact revert targets,
+  restored baseline tree, and live-source absence. S20 remains admitted for one
+  through four; v0.4 stays capped at four.
+- Stopped the low-count optimization staircase. The one next phase is hosted
+  identity, match placement, cost, and unit economics for the four-player path.
+
 ## 2026-07-14 — v0.4 S23P prepared public-source proof retained default-off
 
 - Added negotiated, default-off `state-pair-public-body-prepared-v1` atop S23,
