@@ -376,6 +376,33 @@
     }
     #hud-portals [data-tone="critical"] { color: var(--lbh-danger); }
     #hud-portals [data-tone="active"] { color: var(--lbh-portal); }
+    #hud-crew {
+      top: 112px; right: var(--lbh-edge-margin);
+      width: 292px;
+      display: grid;
+      gap: 5px;
+      color: var(--lbh-text-primary);
+      border-color: rgba(0, 226, 255, 0.16);
+    }
+    #hud-crew .hud-label {
+      color: rgba(0, 226, 255, 0.62);
+      font-size: var(--lbh-couch-micro);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .hud-crew-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 16px;
+      font-size: var(--lbh-couch-micro);
+      text-transform: uppercase;
+    }
+    .hud-crew-row[data-local="true"] .hud-crew-identity { color: var(--lbh-portal); }
+    .hud-crew-row[data-state="link-lost"] .hud-crew-state,
+    .hud-crew-row[data-state="dead"] .hud-crew-state { color: var(--lbh-danger); }
+    .hud-crew-row[data-state="extracted"] .hud-crew-state { color: var(--lbh-ecology); }
+    .hud-crew-state { color: rgba(120, 220, 180, 0.82); }
     #hud-salvage {
       bottom: var(--lbh-edge-margin); left: var(--lbh-edge-margin);
       width: 254px;
@@ -723,6 +750,7 @@
       <div class="hud-value" id="hud-portals-status">route closed</div>
       <div class="hud-sub" id="hud-portals-next"></div>
     </div>
+    <div id="hud-crew" class="hud-panel" role="status" aria-label="crew status" style="display:none;"></div>
     <div id="hud-salvage" class="hud-panel">
       <div id="hud-salvage-count"></div>
       <div class="hud-sub" id="hud-salvage-value"></div>

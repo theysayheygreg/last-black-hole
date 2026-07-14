@@ -384,6 +384,26 @@ async function run() {
         "Every browser must observe four human players");
       assert(running.every((entry) => entry.transport.hotPathHttpOccurred === false),
         "Admitted S20 stream used a forbidden hot-path HTTP request");
+      await Promise.all(pilots.map((pilot) => waitFor(pilot.page, () => {
+        const rows = [...document.querySelectorAll('#hud-crew .hud-crew-row')];
+        return rows.length === 4
+          && rows.map((row) => row.textContent).join('|').includes('P1')
+          && rows.map((row) => row.textContent).join('|').includes('P4')
+          && rows.filter((row) => row.dataset.local === 'true').length === 1;
+      }, { timeout: 10000 })));
+      const crewRails = await Promise.all(pilots.map((pilot) => pilot.page.evaluate(() =>
+        [...document.querySelectorAll('#hud-crew .hud-crew-row')].map((row) => ({
+          text: row.textContent.trim(),
+          local: row.dataset.local,
+          state: row.dataset.state,
+        }))
+      )));
+      assert(crewRails.every((rail) => rail.length === 4
+        && rail.every((row, index) => row.text.startsWith(`P${index + 1}`))
+        && rail.filter((row) => row.local === 'true').length === 1
+        && rail.every((row) => row.state === 'alive')),
+      `Shared-run crew rails disagree: ${JSON.stringify(crewRails)}`);
+      report.crewRails = crewRails;
       report.screenshots.sharedRun = await capture(pilots[0], "shared-run");
 
       report.stage = "reconnect-guest";

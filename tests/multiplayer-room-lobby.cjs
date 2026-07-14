@@ -165,6 +165,11 @@ async function exercisePopulation(population, port) {
   });
   assert(launched.status === 200 && launched.body.session.status === 'running',
     `${population}p ready crew failed to launch: ${launched.status}/${launched.body.code}`);
+  const snapshot = await request('/snapshot', { authority: authorities[0] });
+  const runningHumans = snapshot.body.players.filter((player) => !player.isAI);
+  assert(runningHumans.length === population
+    && runningHumans.every((player, index) => player.seatNo === index && player.connected === true),
+  `${population}p running projection must preserve public seat and link identity`);
 }
 
 async function run() {

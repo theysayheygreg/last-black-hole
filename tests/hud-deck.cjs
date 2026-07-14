@@ -49,6 +49,19 @@ async function run() {
   assert(route.label.startsWith('aperture '));
   assert(route.detail.includes('enter cyan aperture'));
 
+  assert.deepStrictEqual(hud.getCrewPresentationState([
+    { clientId: 'local', name: 'Alpha', seatNo: 0, connected: true, status: 'alive', hullType: 'drifter' },
+    { clientId: 'lost', name: 'Bravo', seatNo: 1, connected: false, status: 'alive', hullType: 'hauler' },
+    { clientId: 'dead', name: 'Comet', seatNo: 2, connected: true, status: 'dead', hullType: 'breacher' },
+    { clientId: 'gone', name: 'Delta', seatNo: 3, connected: true, status: 'escaped', hullType: 'shroud' },
+    { clientId: 'ai', name: 'Machine', seatNo: null, connected: true, status: 'alive', isAI: true },
+  ], 'local').map(({ seatLabel, isLocal, state }) => ({ seatLabel, isLocal, state })), [
+    { seatLabel: 'P1', isLocal: true, state: 'alive' },
+    { seatLabel: 'P2', isLocal: false, state: 'link lost' },
+    { seatLabel: 'P3', isLocal: false, state: 'dead' },
+    { seatLabel: 'P4', isLocal: false, state: 'extracted' },
+  ]);
+
   await startServer();
   let browser;
   try {

@@ -55,6 +55,13 @@
   invite copy/paste, wrong-code recovery, fifth-seat rejection, shared launch,
   and reconnect; added authority proof for expired invitations and protocol
   proof for incompatible builds.
+- Started shared-run readability with stable public P1–P4 seat/link identity,
+  plus a compact edge crew rail that distinguishes the local pilot from remote
+  crew under Three.
+- Added four-browser agreement checks for ordered crew identity and pure HUD
+  state coverage for alive, link-lost, dead, and extracted presentation.
+- Removed cargo count from the public extraction event; teammate cargo and
+  individual signal remain owner-private and are not inferred by presentation.
 
 ### External playtest
 

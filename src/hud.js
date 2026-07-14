@@ -33,8 +33,10 @@ let _interactionEl, _interactionActionEl, _interactionDetailEl, _interactionCapt
 let _abilitiesEl;
 let _ability1El, _ability2El;
 let _inhibitorEl, _inhibitorFormEl;
+let _crewEl;
 let _dropCallback = null;  // set by main.js for drop handling
 let _lastCollapseStr = '';
+let _lastCrewSignature = '';
 let _promptOptions = {};
 const INHIBITOR_FORM_NAMES = ['dormant', 'glitch', 'swarm', 'vessel'];
 
@@ -72,6 +74,7 @@ export function initHUD() {
   _ability2El = document.getElementById('hud-ability2');
   _inhibitorEl = document.getElementById('hud-inhibitor');
   _inhibitorFormEl = document.getElementById('hud-inhibitor-form');
+  _crewEl = document.getElementById('hud-crew');
   renderAbilitySlot(_ability1El, abilitySlot('Q', '---', { status: '', ready: false }));
   renderAbilitySlot(_ability2El, abilitySlot('R', '---', { status: '', ready: false }));
   void preloadUiAssets().catch(() => {});
@@ -189,6 +192,57 @@ function fmtSeconds(seconds) {
 function clamp01(value) {
   const numeric = Number(value);
   return Math.max(0, Math.min(1, Number.isFinite(numeric) ? numeric : 0));
+}
+
+export function getCrewPresentationState(players = [], localClientId = null) {
+  return players
+    .filter((player) => player && !player.isAI && Number.isInteger(player.seatNo))
+    .sort((left, right) => left.seatNo - right.seatNo)
+    .slice(0, 4)
+    .map((player) => {
+      const isLocal = player.clientId === localClientId;
+      const state = player.status === 'dead' ? 'dead'
+        : player.status === 'escaped' ? 'extracted'
+          : player.connected === false ? 'link lost'
+            : 'alive';
+      return {
+        seatNo: player.seatNo,
+        seatLabel: `P${player.seatNo + 1}`,
+        clientId: player.clientId,
+        name: String(player.name || `pilot ${player.seatNo + 1}`),
+        hullType: String(player.hullType || 'drifter'),
+        isLocal,
+        state,
+      };
+    });
+}
+
+function renderCrewRail(players, localClientId) {
+  if (!_crewEl) return;
+  const crew = getCrewPresentationState(players, localClientId);
+  _crewEl.style.display = crew.length > 0 ? '' : 'none';
+  const signature = JSON.stringify(crew);
+  if (signature === _lastCrewSignature) return;
+  _lastCrewSignature = signature;
+  _crewEl.replaceChildren();
+  const label = document.createElement('div');
+  label.className = 'hud-label';
+  label.textContent = `crew link // ${crew.length}/4`;
+  _crewEl.append(label);
+  for (const member of crew) {
+    const row = document.createElement('div');
+    row.className = 'hud-crew-row';
+    row.dataset.state = member.state.replace(' ', '-');
+    row.dataset.local = member.isLocal ? 'true' : 'false';
+    const identity = document.createElement('span');
+    identity.className = 'hud-crew-identity';
+    identity.textContent = `${member.seatLabel} ${member.isLocal ? 'YOU' : member.name}`;
+    const state = document.createElement('span');
+    state.className = 'hud-crew-state';
+    state.textContent = member.state;
+    row.append(identity, state);
+    _crewEl.append(row);
+  }
 }
 
 function abilityTone(slot) {
@@ -441,6 +495,7 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   const motion = resolveMotionSettings(CONFIG.ui?.motion || {});
   const reducedMotion = opts.reducedMotion ?? motion.reducedMotion;
   _hudEl.dataset.reducedMotion = reducedMotion ? 'true' : 'false';
+  renderCrewRail(opts.crewPlayers || [], opts.localClientId || null);
 
   const runDuration = CONFIG.universe.runDuration;
   const remaining = Math.max(0, runDuration - runElapsedTime);

@@ -1925,6 +1925,8 @@ function publicPlayerSnapshot(player) {
     clientId: player.clientId,
     name: player.name,
     isAI: Boolean(player.isAI),
+    seatNo: Number.isInteger(player.seatNo) ? player.seatNo : null,
+    connected: Boolean(player.connected),
     personality: player.personality || null,
     hullType: player.hullType || "drifter",
     status: player.status,
@@ -3394,7 +3396,6 @@ function tickExtraction(player, confirmRequested = false) {
     clientId: player.clientId,
     portalId: portal.id,
     portalType: portal.type,
-    cargoCount: getCargoCount(player),
   });
 }
 

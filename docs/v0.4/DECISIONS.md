@@ -25,6 +25,7 @@ Statuses:
 | Crew Muster stages players before world time begins | ACTIVE | entry below |
 | readiness belongs to the current connection epoch | ACTIVE | entry below |
 | configured multiplayer defaults to stream with explicit offline recovery | ACTIVE | entry below |
+| public run identity exposes seat and link state, not private loadout truth | ACTIVE | entry below |
 | external test uses a disposable Tailscale shared node | ACTIVE | `OPTIONAL-LOCAL-INTERNET-HOST.md` |
 | hybrid verified authority plus private continuity | PROVISIONAL | `OPEN-DECISIONS.md` |
 
@@ -64,6 +65,23 @@ window.
 
 **Why:** availability and compatibility failures must be honest, while local
 play must remain usable without turning a multiplayer failure into split truth.
+
+## 2026-07-14 — Shared-run identity is public coordination state
+
+**Status:** ACTIVE
+
+Running public player projections retain the stable P1–P4 seat and current link
+state already established in Crew Muster. Presentation may use public pilot
+name, hull, outcome, position, seat, and link state for a compact crew rail and
+future visually proven world markers. Cargo, individual signal, equipment,
+effects, detailed ability state, and private rewards remain owner-private.
+
+Public Inhibitor pressure may later be shown as world pressure; it must not be
+labeled as a sum of crew signal. Public extraction events do not expose cargo
+count.
+
+**Why:** humans need to know who is present and what happened to the crew, but
+readability is not permission to widen private progression or inventory truth.
 
 ## 2026-07-14 — Crew Muster is the synchronized multiplayer start boundary
 

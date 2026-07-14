@@ -87,8 +87,12 @@ Current execution checkpoint:
   stable membership/client identity across reconnect.
 - Copy/paste invitation, explicit offline recovery, stream-default transport,
   and full/invalid/expired/version/unavailable failure semantics are green.
-- Next: build shared-run local/remote identity, teammate-state, salvage/signal,
-  extraction, death, and disconnect cues without obscuring the ASCII fabric.
+- The first shared-run readability slice is live: stable P1–P4 public seats,
+  public link state, a compact edge crew rail, and four-browser agreement on
+  ordered identity.
+- Next: add death, extraction, leave, and recovered-state callouts plus honest
+  public world-pressure treatment. Do not expose or infer teammate cargo or
+  individual signal.
 
 S20 negotiation/fallback, owner privacy, ACK/rebase, reliable actions,
 reconnect fencing, and bounded queues remain frozen guardrails. Local/offline

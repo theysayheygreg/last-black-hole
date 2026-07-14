@@ -5910,6 +5910,8 @@ function gameLoop(now) {
         graceRemaining: authoritativePlayer.effectState?.hullGraceRemaining || 0,
         ratio: authoritativePlayer.status === 'dead' ? 0 : 1,
       } : { status: ship.status || 'alive', ratio: ship.status === 'dead' ? 0 : 1 },
+      crewPlayers: remoteAuthorityActive ? remoteSnapshot?.players || [] : [],
+      localClientId: remoteAuthorityActive ? simClient?.clientId || null : null,
       interaction: portalInteraction?.ready ? {
         action: 'extract',
         label: 'confirm extraction',

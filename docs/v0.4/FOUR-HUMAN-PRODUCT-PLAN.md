@@ -73,6 +73,12 @@ path; authority tests prove retired invitations and protocol mismatch rejection.
 
 ### P3 — Shared-Run Readability
 
+**Implementation status:** in progress. The first slice preserves public seat
+and link identity after launch and adds an edge-mounted P1–P4 crew rail.
+Automated four-browser proof verifies that every client sees the same ordered
+crew while clearly identifying itself. Spatial labels in the ASCII fluid still
+need a visually proven treatment that does not obscure movement or the fabric.
+
 - make local identity and remote crew identity readable in the ASCII fluid;
 - present teammate alive/dead/disconnected state without cluttering the center;
 - clarify salvage ownership, shared signal pressure, extraction, and death;
@@ -109,11 +115,11 @@ see the same result, and rematch without terminal intervention.
 
 ## Immediate Next Slice
 
-Begin P3 with readable local/remote crew identity and teammate state in the
-shared ASCII-fluid run. Make salvage, shared signal pressure, extraction, death,
-and temporary disconnect legible without moving gameplay authority into the
-renderer or HUD. The green browser proof does not yet claim shared-run
-readability, result, or rematch completion.
+Continue P3 from the live identity rail into authoritative death, extraction,
+leave, and recovered-state callouts. Present public Inhibitor pressure as world
+pressure, not “crew signal”; teammate cargo and individual signal remain
+private and must not be inferred. The green browser proof does not yet claim
+completed consequence readability, result, or rematch.
 
 Engineering guardrails remain:
 
