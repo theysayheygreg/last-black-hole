@@ -43,6 +43,7 @@ fixture.seedRuntime(runtime);
 assert.strictEqual(runtime.mapState.fauna.length, 328);
 assert.strictEqual(new Set(runtime.mapState.fauna.map((entry) => entry.id)).size, 328);
 assert(runtime.mapState.fauna.every((entry) => entry.s24EvidenceBody && entry.alive));
+assert(runtime.mapState.fauna.every((entry) => entry.type === "jelly"));
 assert(runtime.mapState.scavengers.every((entry) => entry.s24EvidenceAi));
 for (let index = 0; index < 24; index += 1) runtime.players.set(`seat-${index}`, { isAI: false });
 fixture.observe("simTicks");

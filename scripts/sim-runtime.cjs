@@ -1427,7 +1427,7 @@ function getCargoCount(player) {
   return player.cargo.filter(Boolean).length;
 }
 
-function startSession(config = {}) {
+function startSession(config = {}, internal = {}) {
   if (runtime.session.status === "running") {
     for (const player of runtime.players.values()) {
       if (!player.isAI) {
@@ -1522,12 +1522,14 @@ function startSession(config = {}) {
     configurable: true,
   });
   applyRunSeed(runtime.session.rng, mapState, runtime.session);
-  if (s24LiveEvidence.enabled) s24LiveEvidence.prepareSession(runtime.session, config);
+  if (s24LiveEvidence.enabled && !internal.bootstrap) {
+    s24LiveEvidence.prepareSession(runtime.session, config);
+  }
   runtime.mapState = mapState;
   runtime.mapState.fauna = [];
   runtime.mapState.sentries = spawnSentries(mapState);
   runtime.mapState.scavengers = spawnServerScavengers(runtime.mapState, runtime.session);
-  if (s24LiveEvidence.enabled) s24LiveEvidence.seedRuntime(runtime);
+  if (s24LiveEvidence.enabled && !internal.bootstrap) s24LiveEvidence.seedRuntime(runtime);
 
   // Hydrate persisted echo wrecks for this seed. Injected as live wrecks
   // so they participate in tickPlayerPickups/tickWrecks like any other
@@ -1620,7 +1622,9 @@ function startSession(config = {}) {
   });
   applyOverloadProfile({ rebuildField: false });
   // Spawn AI players
-  if (!s24LiveEvidence.suppressAmbientAiPlayers) spawnAIPlayers(runtime.mapState, runtime.session);
+  if (!s24LiveEvidence.suppressAmbientAiPlayers || internal.bootstrap) {
+    spawnAIPlayers(runtime.mapState, runtime.session);
+  }
   runtime.growthTimer = 0;
   runtime.growthIndex = 0;
   runtime._wreckWaveIndex = 0;
@@ -7963,7 +7967,7 @@ server.listen(PORT, HOST, () => {
   writeFiles();
   telemetry.info("runtime.started", { url: `http://${HOST}:${PORT}/`, controlPlaneUrl: CONTROL_PLANE_URL, keepAlive: runtime.keepAlive, idleShutdownMs: runtime.idleShutdownMs });
   console.log(`[${LOG_LABEL}] listening on http://${HOST}:${PORT}/`);
-  startSession();
+  startSession({}, { bootstrap: true });
   trackControlPlaneWrite(controlPlane.registerSimInstance({
     simInstanceId: SIM_INSTANCE_ID,
     url: `http://${HOST}:${PORT}/`,
