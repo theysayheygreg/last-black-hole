@@ -38,6 +38,11 @@ const {
   CAPABILITY: BINARY_CODEC_CAPABILITY,
   codecContext: binaryCodecContext,
 } = require("./state-pair-binary-codec.cjs");
+const {
+  CAPABILITY: COMPRESSION_CODEC_CAPABILITY,
+  MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
+  encodeCompressedStatePair,
+} = require("./state-pair-compression-codec.cjs");
 
 const MAX_PENDING_REPLAY_EVENTS = 32;
 const MAX_REPLAY_EVENTS_PER_PASS = 8;
@@ -122,6 +127,9 @@ function createSimWebSocketAdapter(options = {}) {
   const binaryCodecStats = { encodedFrames: 0, encodedBytes: 0, encodeMilliseconds: 0,
     reusedEncodedFrames: 0, reusedEncodedBytes: 0, reusedDigestVerified: 0,
     decodedFrames: 0, decodedBytes: 0, decodeMilliseconds: 0 };
+  const compressionCodecStats = { compressedFrames: 0, sourceBytes: 0, encodedBytes: 0,
+    compressionMilliseconds: 0, reusedFrames: 0, retainedFrames: 0, retainedBytes: 0 };
+  const compressedStatePairWires = new WeakMap();
   const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
   const ackRejectDiagnostics = {
     total: 0,
@@ -809,13 +817,38 @@ function createSimWebSocketAdapter(options = {}) {
     });
   }
 
+  function compressionContextFor(state) {
+    if (!state?.capabilities?.includes(COMPRESSION_CODEC_CAPABILITY)) return null;
+    return Object.freeze({ compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH });
+  }
+
+  function compressForState(state, wire, frame) {
+    if (!compressionContextFor(state) || frame?.type !== "statePair") return wire;
+    const started = performance.now();
+    const compressed = encodeCompressedStatePair(wire);
+    compressionCodecStats.compressedFrames += 1;
+    compressionCodecStats.sourceBytes += Buffer.byteLength(wire);
+    compressionCodecStats.encodedBytes += compressed.length;
+    compressionCodecStats.compressionMilliseconds += performance.now() - started;
+    let retained = compressedStatePairWires.get(state);
+    if (!retained) { retained = new Map(); compressedStatePairWires.set(state, retained); }
+    retained.set(frame.frameId, Object.freeze({ digest: frame.statePairId, wire: compressed }));
+    while (retained.size > 64) retained.delete(retained.keys().next().value);
+    compressionCodecStats.retainedFrames = [...connections].reduce((sum, connection) =>
+      sum + (compressedStatePairWires.get(connection)?.size || 0), 0);
+    compressionCodecStats.retainedBytes = [...connections].reduce((sum, connection) => sum
+      + [...(compressedStatePairWires.get(connection)?.values() || [])].reduce((bytes, row) => bytes + row.wire.length, 0), 0);
+    return compressed;
+  }
+
   function encodeForState(state, frame) {
     const binaryContext = binaryContextFor(state);
     const positionalContext = codecContextFor(state);
     const measured = Boolean((binaryContext || positionalContext) && frame?.type === "statePair");
     const started = measured ? performance.now() : 0;
     const wire = encodeWireFrame(frame, { direction: SERVER_TO_CLIENT,
-      ...(binaryContext ? { binaryContext } : positionalContext ? { positionalContext } : {}) });
+      ...(binaryContext ? { binaryContext } : positionalContext ? { positionalContext } : {}),
+      ...(compressionContextFor(state) ? { compressionContext: compressionContextFor(state) } : {}) });
     if (measured) {
       const stats = binaryContext ? binaryCodecStats : positionalCodecStats;
       stats.encodedFrames += 1;
@@ -877,6 +910,7 @@ function createSimWebSocketAdapter(options = {}) {
     if (state.binding && onBindingClosed) {
       try { onBindingClosed(state.binding); } catch {}
     }
+    compressedStatePairWires.delete(state);
     resetOutbound(state, { cause: "cleanup" });
     state.cleaned = true;
     emitPressureTransition(state, "connection-cleanup");
@@ -1692,6 +1726,7 @@ function createSimWebSocketAdapter(options = {}) {
         stats.reusedEncodedFrames += 1;
         stats.reusedEncodedBytes += encodedBytes;
         stats.reusedDigestVerified += 1;
+        encodedWire = compressForState(state, encodedWire, frame);
       } else if (stageProfiler) {
         encodedWire = stageProfiler.measureSync(STAGES.JSON_SERIALIZATION, (wire) => ({
           recipientKey: profileRecipientKey(state),
@@ -1807,6 +1842,11 @@ function createSimWebSocketAdapter(options = {}) {
         stats.reusedEncodedFrames += 1;
         stats.reusedEncodedBytes += bytes;
         stats.reusedDigestVerified += 1;
+        const retained = compressedStatePairWires.get(state)?.get(frame.frameId);
+        if (compressionContextFor(state) && retained?.digest === frame.statePairId) {
+          wire = retained.wire;
+          compressionCodecStats.reusedFrames += 1;
+        } else wire = compressForState(state, wire, frame);
       } else wire = encodeForState(state, frame);
     } catch (error) {
       return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
@@ -1938,6 +1978,7 @@ function createSimWebSocketAdapter(options = {}) {
     ackRejectDiagnostics.recoveryCooldownDrops = 0;
     for (const key of Object.keys(positionalCodecStats)) positionalCodecStats[key] = 0;
     for (const key of Object.keys(binaryCodecStats)) binaryCodecStats[key] = 0;
+    for (const key of Object.keys(compressionCodecStats)) compressionCodecStats[key] = 0;
     replicationAccounting?.reset();
     stageProfiler?.reset();
     return { runId: currentRunId, fenced };
@@ -2061,6 +2102,15 @@ function createSimWebSocketAdapter(options = {}) {
             ? binaryCodecStats.encodeMilliseconds / binaryCodecStats.encodedFrames : null,
           meanDecodeMs: binaryCodecStats.decodedFrames
             ? binaryCodecStats.decodeMilliseconds / binaryCodecStats.decodedFrames : null,
+        }),
+        compression: Object.freeze({
+          capability: COMPRESSION_CODEC_CAPABILITY,
+          manifestHash: COMPRESSION_CODEC_MANIFEST_HASH,
+          enabledConnections: [...connections].filter((state) =>
+            state.capabilities?.includes(COMPRESSION_CODEC_CAPABILITY)).length,
+          ...compressionCodecStats,
+          meanCompressionMs: compressionCodecStats.compressedFrames
+            ? compressionCodecStats.compressionMilliseconds / compressionCodecStats.compressedFrames : null,
         }),
         ackRejectDiagnostics: ackRejectDiagnosticsEnabled
           ? Object.freeze({

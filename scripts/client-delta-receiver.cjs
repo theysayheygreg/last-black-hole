@@ -35,6 +35,10 @@ const {
   BINARY_CODEC_MANIFEST_HASH,
   codecContext: binaryCodecContext,
 } = require("./state-pair-binary-codec.cjs");
+const {
+  CAPABILITY: COMPRESSION_CODEC_CAPABILITY,
+  MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
+} = require("./state-pair-compression-codec.cjs");
 
 const CAPABILITY = "state-pair-v1";
 const MIXED_CAPABILITY = "state-pair-mixed-v1";
@@ -63,6 +67,7 @@ const MODES = Object.freeze({
   STATE_PAIR_RUNTIME_COMPONENTS: RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   STATE_PAIR_POSITIONAL_JSON: POSITIONAL_CODEC_CAPABILITY,
   STATE_PAIR_BINARY: BINARY_CODEC_CAPABILITY,
+  STATE_PAIR_COMPRESSION: COMPRESSION_CODEC_CAPABILITY,
 });
 const RECOVERY_REASONS = new Set([
   "reconnect", "match-changed", "session-changed", "authority-changed", "recipient-changed",
@@ -272,10 +277,13 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
     && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY);
   const positional = materializeRuntimeComponents && capabilities.includes(POSITIONAL_CODEC_CAPABILITY);
   const binary = positional && capabilities.includes(BINARY_CODEC_CAPABILITY);
+  const compressed = positional && !binary && capabilities.includes(COMPRESSION_CODEC_CAPABILITY);
   let codecContext = positional ? positionalCodecContext({ ...context,
     codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH }) : null;
   let binaryContext = binary ? binaryCodecContext({ ...context,
     codecManifestHash: BINARY_CODEC_MANIFEST_HASH }) : null;
+  let compressionContext = compressed
+    ? Object.freeze({ compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH }) : null;
   if (!Number.isSafeInteger(maxPairBytes) || maxPairBytes < 1024 || maxPairBytes > MAX_WIRE_PAIR_BYTES) {
     throw new RangeError(`maxPairBytes must be between 1024 and ${MAX_WIRE_PAIR_BYTES}`);
   }
@@ -529,7 +537,10 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       const bytes = wireBytes(raw);
       if (bytes > maxPairBytes) return reject("oversize-frame");
       frame = parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
-        ...(binary ? (typeof raw !== "string"
+        ...(compressed ? (typeof raw !== "string"
+          ? { compressed: true, compressionContext, positionalContext: codecContext }
+          : { requirePositional: true, positionalContext: codecContext })
+          : binary ? (typeof raw !== "string"
           ? { binary: true, binaryContext }
           : { requireBinary: true })
           : positional ? { positionalContext: codecContext, requirePositional: true } : {}) });
@@ -832,6 +843,7 @@ module.exports = {
   RUNTIME_PUBLIC_COMPONENTS_CAPABILITY,
   POSITIONAL_CODEC_CAPABILITY,
   BINARY_CODEC_CAPABILITY,
+  COMPRESSION_CODEC_CAPABILITY,
   RECOVERY_SCHEMA,
   DEFAULT_MANIFEST_SCHEMA,
   DEFAULT_BASE_LEDGER_LIMITS,

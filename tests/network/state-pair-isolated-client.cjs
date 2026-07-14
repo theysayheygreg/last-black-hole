@@ -15,14 +15,16 @@ const { codecContext: positionalCodecContext, POSITIONAL_CODEC_MANIFEST,
 const { CAPABILITY: BINARY_CODEC_CAPABILITY, codecContext: binaryCodecContext,
   BINARY_CODEC_MANIFEST, BINARY_CODEC_MANIFEST_HASH } =
   require("../../scripts/state-pair-binary-codec.cjs");
+const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH } =
+  require("../../scripts/state-pair-compression-codec.cjs");
 const { canonicalJsonBytes } = require("../../scripts/session-replication-manifest.cjs");
 const { distribution } = require("./state-pair-product-metrics.cjs");
 
 const INPUT_HZ = 10;
-function requestedCapabilities(binary) {
+function requestedCapabilities(binary, compression) {
   return ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY,
     RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY,
-    ...(binary ? [BINARY_CODEC_CAPABILITY] : [])];
+    ...(binary ? [BINARY_CODEC_CAPABILITY] : []), ...(compression ? [COMPRESSION_CODEC_CAPABILITY] : [])];
 }
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
@@ -179,7 +181,7 @@ function startInputs({ startAt, durationMs, phase }) {
 }
 
 async function initialize(config) {
-  const capabilities = requestedCapabilities(config.binary === true);
+  const capabilities = requestedCapabilities(config.binary === true, config.compression === true);
   const issued = await request(config.port, "/multiplayer/ticket", {
     method: "POST", authority: config.authority, body: {
       kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2], capabilities,
@@ -191,7 +193,8 @@ async function initialize(config) {
   }
   state = {
     ...config, ticket: issued.body, ws: new WebSocket(`ws://127.0.0.1:${config.port}/stream`,
-      { perMessageDeflate: false }), codecContext: null, binaryContext: null, receiver: null, welcome: null,
+      { perMessageDeflate: false }), codecContext: null, binaryContext: null, compressionContext: null,
+    receiver: null, welcome: null,
     inputSeq: 0, actionSeq: 0, commandSeq: 0, acceptedPairs: 0,
     acceptedPairEvents: [], error: null, close: null,
   };
@@ -203,7 +206,10 @@ async function initialize(config) {
     try {
       const text = isBinary ? null : raw.toString("utf8");
       const decodeStarted = performance.now();
-      const frame = isBinary
+      const frame = isBinary && config.compression === true
+        ? parseWireFrame(raw, { direction: SERVER_TO_CLIENT, compressed: true,
+            compressionContext: state.compressionContext, positionalContext: state.codecContext })
+        : isBinary
         ? parseWireFrame(raw, { direction: SERVER_TO_CLIENT, binary: true,
             binaryContext: state.binaryContext })
         : text.startsWith("[")
@@ -221,6 +227,9 @@ async function initialize(config) {
           authorityIncarnation: frame.authorityIncarnation, recipientId: frame.membershipId,
           recipientIncarnation: frame.connectionEpoch, manifestHash: frame.manifestHash,
           codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH,
+        });
+        if (config.compression === true) state.compressionContext = Object.freeze({
+          compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH,
         });
         if (config.binary === true) state.binaryContext = binaryCodecContext({
           matchId: frame.runId, sessionId: frame.connectionId,

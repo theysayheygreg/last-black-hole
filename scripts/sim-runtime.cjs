@@ -117,6 +117,11 @@ const {
   BINARY_CODEC_MANIFEST,
   BINARY_CODEC_MANIFEST_HASH,
 } = require("./state-pair-binary-codec.cjs");
+const {
+  CAPABILITY: COMPRESSION_CODEC_CAPABILITY,
+  MANIFEST: COMPRESSION_CODEC_MANIFEST,
+  MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
+} = require("./state-pair-compression-codec.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -1028,6 +1033,9 @@ const MULTIPLAYER_POSITIONAL_JSON_ENABLED = MULTIPLAYER_RUNTIME_PUBLIC_COMPONENT
   && String(process.env.LBH_SIM_WS_POSITIONAL_JSON_V1 || "").trim() === "true";
 const MULTIPLAYER_BINARY_STATE_PAIR_ENABLED = MULTIPLAYER_POSITIONAL_JSON_ENABLED
   && String(process.env.LBH_SIM_WS_STATE_PAIR_BINARY_V1 || "").trim() === "true";
+const MULTIPLAYER_COMPRESSION_STATE_PAIR_ENABLED = MULTIPLAYER_POSITIONAL_JSON_ENABLED
+  && !MULTIPLAYER_BINARY_STATE_PAIR_ENABLED
+  && String(process.env.LBH_SIM_WS_STATE_PAIR_COMPRESSION_V1 || "").trim() === "true";
 const MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED = String(
   process.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS || "",
 ).trim() === "true";
@@ -6222,6 +6230,13 @@ function currentSessionReplicationManifest() {
             manifest: BINARY_CODEC_MANIFEST,
           },
         } : {}),
+        ...(MULTIPLAYER_COMPRESSION_STATE_PAIR_ENABLED ? {
+          statePairCompressionCodec: {
+            capability: COMPRESSION_CODEC_CAPABILITY,
+            codecManifestHash: COMPRESSION_CODEC_MANIFEST_HASH,
+            manifest: COMPRESSION_CODEC_MANIFEST,
+          },
+        } : {}),
       } : {}),
     },
   });
@@ -7388,7 +7403,10 @@ const server = http.createServer(async (req, res) => {
                     ? [POSITIONAL_CODEC_CAPABILITY,
                       ...(MULTIPLAYER_BINARY_STATE_PAIR_ENABLED
                         && body.capabilities.includes(BINARY_CODEC_CAPABILITY)
-                        ? [BINARY_CODEC_CAPABILITY] : [])] : [])] : [])]
+                        ? [BINARY_CODEC_CAPABILITY] : []),
+                      ...(MULTIPLAYER_COMPRESSION_STATE_PAIR_ENABLED
+                        && body.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+                        ? [COMPRESSION_CODEC_CAPABILITY] : [])] : [])] : [])]
             : [])] : [])].sort()
         : [];
       if (selectedWireVersion === WIRE_PROTOCOL_VERSION_V2

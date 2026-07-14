@@ -20,6 +20,13 @@ const {
   decodeBinaryFrame,
   composeBinaryStatePairCandidates,
 } = require("./state-pair-binary-codec.cjs");
+const {
+  CAPABILITY: COMPRESSION_CODEC_CAPABILITY,
+  MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH,
+  CompressionCodecError,
+  encodeCompressedStatePair,
+  decodeCompressedStatePair,
+} = require("./state-pair-compression-codec.cjs");
 const trustedStatePairWireEncoders = new WeakSet();
 const trustedStatePairCandidateSelectors = new WeakMap();
 const trustedStatePairLazyCandidateSelectors = new WeakMap();
@@ -264,6 +271,11 @@ function validateHello(frame) {
           || !frame.capabilities.includes("state-pair-mixed-v1"))) {
       fail("invalid-field", `${BINARY_CODEC_CAPABILITY} requires positional sparse mixed state-pair fallback`);
     }
+    if (frame.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+        && (!frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+          || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
+      fail("invalid-field", `${COMPRESSION_CODEC_CAPABILITY} requires positional state-pair and excludes binary`);
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
   }
@@ -314,6 +326,11 @@ function validateWelcome(frame) {
           || !frame.capabilities.includes("runtime-public-components-v1")
           || !frame.capabilities.includes("state-pair-mixed-v1"))) {
       fail("invalid-field", `${BINARY_CODEC_CAPABILITY} requires positional sparse mixed state-pair fallback`);
+    }
+    if (frame.capabilities.includes(COMPRESSION_CODEC_CAPABILITY)
+        && (!frame.capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+          || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
+      fail("invalid-field", `${COMPRESSION_CODEC_CAPABILITY} requires positional state-pair and excludes binary`);
     }
     if (frame.authorityIncarnation !== undefined) {
       if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");
@@ -732,6 +749,19 @@ function validateWireFrame(frame, options = {}) {
 }
 
 function parseWireFrame(raw, options = {}) {
+  if (options.compressed === true) {
+    if (!options.compressionContext
+        || options.compressionContext.compressionManifestHash !== COMPRESSION_CODEC_MANIFEST_HASH) {
+      fail("unexpected-compressed-frame", "compressed frame was not negotiated", 4403);
+    }
+    let positional;
+    try { positional = decodeCompressedStatePair(raw); }
+    catch (error) {
+      if (error instanceof CompressionCodecError) fail(error.code, error.message, 4403);
+      throw error;
+    }
+    return parseWireFrame(positional, { ...options, compressed: false, requirePositional: true });
+  }
   if (options.binary === true) {
     if (!options.binaryContext) fail("unexpected-binary-frame", "binary frame was not negotiated", 4403);
     let frame;
@@ -789,6 +819,19 @@ function parseWireFrame(raw, options = {}) {
 }
 
 function encodeWireFrame(frame, options = {}) {
+  const compressed = options.compressionContext && frame.type === "statePair";
+  if (compressed) {
+    if (options.binaryContext) fail("cross-codec-framing", "compression does not apply to binary state-pair frames");
+    if (options.compressionContext.compressionManifestHash !== COMPRESSION_CODEC_MANIFEST_HASH) {
+      fail("wrong-compression-manifest", "compression manifest is unsupported");
+    }
+    const positionalWire = encodeWireFrame(frame, { ...options, compressionContext: null });
+    try { return encodeCompressedStatePair(positionalWire); }
+    catch (error) {
+      if (error instanceof CompressionCodecError) fail(error.code, error.message);
+      throw error;
+    }
+  }
   const binary = options.binaryContext
     && (frame.type === "statePair" || frame.type === "statePairRecovery"
       || (frame.type === "ack" && frame.ackKind === "statePair"));
@@ -928,6 +971,7 @@ module.exports = {
   ACK_KINDS: Object.freeze([...ACK_KINDS]),
   POSITIONAL_CODEC_CAPABILITY,
   BINARY_CODEC_CAPABILITY,
+  COMPRESSION_CODEC_CAPABILITY,
   WireProtocolError,
   validateWireFrame,
   parseWireFrame,

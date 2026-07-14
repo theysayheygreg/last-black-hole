@@ -192,6 +192,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "StatePairCompressionCodec",
+    file: "state-pair-compression-codec.cjs",
+    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "ClientDeltaReceiver",
     file: "client-delta-receiver.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
