@@ -13,6 +13,21 @@ Version decision logs:
 - [`v0.3`](../v0.3/DECISIONS.md)
 - [`v0.4`](../v0.4/DECISIONS.md) — current active multiplayer line
 
+## 2026-07-14 — Detailed journals are version-scoped
+
+**Decision:** Each version line owns its detailed `DECISIONS.md` and
+`CHANGELOG.md`. The project-wide journal retains its historical combined
+record, but new entries here are limited to durable cross-version decisions
+and larger summaries written when a version branch merges or promotes.
+
+**Why:** Mixing v0.2, v0.3, and v0.4 work in one continuously growing file made
+current truth harder to scan and obscured which branch a decision governed.
+Version-local journals keep implementation history near its plans while the
+project journal remains a readable release history.
+
+**Door status:** Closed for routine branch-local entries in the project-wide
+journals. Existing history will not be mechanically migrated or rewritten.
+
 ## 2026-07-12 — Long evidence separates infrastructure longevity from natural match lifecycle
 
 **Decision:** The 45-minute steady transport/memory profile may use a guarded,

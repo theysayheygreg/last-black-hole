@@ -9,6 +9,15 @@
 
 ## Unreleased
 
+### Documentation workflow
+
+- Split detailed decisions and changes into version-local journals for v0.2,
+  v0.3, and v0.4 while preserving the combined project journals as archive.
+- Reserved the project-wide decision log for cross-version rules and the
+  project changelog for larger branch-merge or version-promotion summaries.
+- Updated the project contract so future agents write to the active version's
+  journals by default.
+
 ### Human multiplayer product
 
 - Opened `FOUR-HUMAN-PRODUCT-PLAN.md` as the active front-door-through-rematch
@@ -38,4 +47,3 @@
   remain open.
 - Kept additional costing, packing, regional hosting, and high-count work behind
   the completed four-human product gate.
-

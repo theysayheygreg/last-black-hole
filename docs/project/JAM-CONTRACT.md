@@ -511,8 +511,10 @@ Estimated scope: [small: <1hr, medium: 1-3hr, large: 3-8hr]
 - [ ] All criteria met
 - [ ] If movement, spawning, hazards, camera, renderer projection, or sim/client authority changed: run the Math / Authority / Camera Pass above
 - [ ] Working state committed
-- [ ] If any design doc changed: update CHANGELOG.md in the same commit
-- [ ] If a design decision was made: add DECISION-LOG.md entry
+- [ ] If any design doc changed: update the active version's `CHANGELOG.md` in
+      the same commit
+- [ ] If a design decision was made: add it to the active version's
+      `DECISIONS.md`
 - [ ] If this was a substantial LBH session: write a Codex memory checkpoint
       note in `~/.codex/memories/extensions/ad_hoc/notes/`
 - [ ] If this is a release handoff: the exact committed hash passes
@@ -594,7 +596,8 @@ docs/
   design/           # What we're building — feature specs
   project/          # How we work — process, plans, contracts
   reference/        # Why we made those choices — research, reviews
-  journal/          # The record — what happened, what we decided
+  journal/          # Project-wide archive and version-promotion summaries
+  vX.Y/             # Version-local plans, decisions, and changelog
 ```
 
 **`docs/design/`** — Living design docs. These are the specs agents build from and Greg playtests against. They reflect the current state of each feature, not the history. When a design changes, the doc changes.
@@ -603,15 +606,27 @@ docs/
 
 **`docs/reference/`** — Research that informed design decisions. EVE wormhole mechanics, Stellaris patterns, Forge's delivered reviews. These don't change — they're the record of what we studied.
 
-**`docs/journal/`** — The full creative record. Designed to be mined for content after the jam and to let us revisit earlier thinking.
+**`docs/journal/`** — The project-wide archive. It retains the historical jam
+record, durable cross-version decisions, and summarized version promotions.
+Routine branch-local decisions and changes do not go here.
+
+**`docs/vX.Y/`** — The detailed record for a version line. Each active version
+keeps `DECISIONS.md` and `CHANGELOG.md` beside its plans and source-of-truth
+map. When that branch merges or promotes, the project-wide journals receive
+one larger summary linking back to the version files.
 
 ### Journal Files
 
 **`DEVLOG.md`** — Reverse-chronological narrative of the jam. One entry per day (or per shift if a lot happened). Covers what was built, what was cut, design pivots, memorable moments, playtest reactions. The high-level story of the project.
 
-**`DECISION-LOG.md`** — Full decision trees for every significant design fork. Tracks: the question, all options considered, who advocated what, where it landed, and whether the door is still open. When we revisit a decision, we add a new dated entry — never overwrite. This is the record of our thinking, including the roads not taken.
+**`DECISION-LOG.md`** — Durable cross-version decisions and summarized version
+promotions. The historical combined entries remain archival; detailed new
+decisions belong in `docs/vX.Y/DECISIONS.md`.
 
-**`CHANGELOG.md`** — Human-readable version history of design docs. Git is authoritative, but this is for quick scanning without `git log`. Updated whenever a design doc changes meaningfully.
+**`CHANGELOG.md`** — Human-readable project history at version boundaries. Git
+is authoritative. Detailed changes accumulate in `docs/vX.Y/CHANGELOG.md`,
+then this file receives one larger revision summary when the version branch
+merges or promotes.
 
 **`BUILD-STATUS.md`** — Current local build/playability snapshot. This answers:
 what target to launch, whether the local build is green/recovery/blocked, what
@@ -644,8 +659,10 @@ This means:
 |----------|-------|------|----------|
 | **Design docs** | Corb (during build) or Orrery (during planning) | When the feature spec changes due to implementation discoveries or Greg feedback | Yes — same commit as the code change if Corb, separate `Docs:` commit if Orrery |
 | **DEVLOG.md** | Orb | At each `ready_for_greg` transition, morning review, evening handoff, and after major pivots | Yes — Orb commits journal updates with `Docs:` prefix |
-| **DECISION-LOG.md** | Orrery (design decisions) or Greg/Orrery via Claude (during sessions) | Immediately when a design fork is decided or revisited. Don't batch. | Yes — whoever writes the entry commits it |
-| **CHANGELOG.md** | Orb (at state transitions) or Corb (when modifying design docs during build) | When design docs change meaningfully. Orb appends at each completed section. | Yes — same commit as the doc change, or batched by Orb at section completion |
+| **vX.Y/DECISIONS.md** | Orrery (design decisions) or Greg/Orrery via Claude (during sessions) | Immediately when a version-local design fork is decided or revisited. Don't batch. | Yes — whoever writes the entry commits it |
+| **vX.Y/CHANGELOG.md** | Orb (at state transitions) or Corb (when modifying design docs during build) | When version-local design docs change meaningfully. Orb appends at each completed section. | Yes — same commit as the doc change, or batched by Orb at section completion |
+| **journal/DECISION-LOG.md** | Greg or the version integrator | When a decision affects every version line, or when a version promotes and needs one decision summary | Yes — one focused `Docs:` commit or the promotion commit |
+| **journal/CHANGELOG.md** | Version integrator | When a version branch merges or promotes | Yes — summarize the larger revision and link its version changelog |
 | **BUILD-STATUS.md** | Current actor, with Orb as backstop | After playability-affecting bug fixes, platform/deploy changes, fresh playtests, or stale/full build-health decisions | Yes — same commit as the fix when practical, otherwise next `Docs:` commit |
 | **Codex memory checkpoint** | Current Codex actor | After any substantial LBH session, especially renderer/sim/platform/build/playtest/process work | No repo commit; write one short ad-hoc note under `~/.codex/memories/extensions/ad_hoc/notes/` |
 | **Night reports** | Orb (compiled from Corb build reports + Forge review + test results) | End of each night shift cycle, in `docs/journal/reports/` | Yes — Orb commits the report |
@@ -663,7 +680,7 @@ If the next step depends on it, it should exist as a commit first.
 - `PROJECT-STATE.json` and `PROJECT-BOARD.md` state transitions
 - task pulls / card movement / orchestration-state updates
 - `DEVLOG.md` entries at checkpoints
-- `CHANGELOG.md` batched updates at section completion (or sooner if needed for handoff clarity)
+- the active version's `CHANGELOG.md` updates at section completion (or sooner if needed for handoff clarity)
 - `BUILD-STATUS.md` whenever playability status changes and no other actor recorded it
 - Night reports compiled from build/test/review evidence
 - Forge review files when Forge review lands and Orb is the recorder for that step
@@ -671,7 +688,7 @@ If the next step depends on it, it should exist as a commit first.
 
 **Orrery commits:**
 - planning docs, spec docs, and plan revisions produced during task shaping
-- `DECISION-LOG.md` entries when design forks are resolved during planning
+- the active version's `DECISIONS.md` entries when design forks are resolved during planning
 - design doc updates when plans reshape feature specs
 - Commit prefix: `Docs:`
 
@@ -679,7 +696,7 @@ If the next step depends on it, it should exist as a commit first.
 - code in small, atomic units (prefix: `L0:`, `L1:`, etc.)
 - implementation-driven design doc updates when the spec must be clarified
 - test evidence docs/reports produced in Corb's lane before handoff
-- `CHANGELOG.md` entry in the same commit when modifying a design doc
+- the active version's `CHANGELOG.md` entry in the same commit when modifying a design doc
 - Commit prefix per CLAUDE.md layer table
 
 **Forge commits:**
@@ -701,19 +718,26 @@ The journal must be updated at these moments. **Orb is responsible for ensuring 
 1. **Section reaches `ready_for_greg`** — Orb appends a DEVLOG entry summarizing: what was built, test results, Forge review outcome, remaining caveats. Orb commits this.
 2. **Morning review** — Orb appends a DEVLOG entry summarizing overnight work and Greg's reactions. Orb commits this.
 3. **Evening handoff** — Orb appends a DEVLOG entry summarizing the day's work, playtest notes, and the night shift plan. Orb commits this.
-4. **Design pivot** — Orrery (or Greg via Claude) appends a DECISION-LOG entry with the full option tree. Committer commits this.
-5. **Design doc change** — The modifying agent (usually Corb or Orrery) adds a CHANGELOG entry in the same commit.
+4. **Design pivot** — Orrery (or Greg via Claude) appends an entry with the full option tree to the active version's `DECISIONS.md`. Committer commits this.
+5. **Design doc change** — The modifying agent (usually Corb or Orrery) adds an entry to the active version's `CHANGELOG.md` in the same commit.
 6. **Build/playability status changes** — The current actor updates `BUILD-STATUS.md` with the launch target, evidence, caveats, and next evidence needed. Orb backstops this if the status question is asked later and no one recorded it.
-7. **Forge review lands** — Orb saves the review to `docs/project/reviews/` unless the review belongs in long-term reference, and appends relevant decisions to DECISION-LOG if the review influenced any. Orb commits.
-8. **Scope ratchet** — Orb appends a DEVLOG entry explaining what was cut/deferred and why, with pointers to BACKLOG.md. Orb commits.
-9. **Memorable moment** — Whoever notices it adds a DEVLOG entry with enough detail to write a tweet or blog post later.
-10. **Substantial Codex session** — The current Codex actor writes one concise
+7. **Forge review lands** — Orb saves the review to `docs/project/reviews/` unless the review belongs in long-term reference, and appends relevant decisions to the active version's `DECISIONS.md` if the review influenced any. Orb commits.
+8. **Version branch merges or promotes** — The integrator adds one larger
+   revision summary to `docs/journal/CHANGELOG.md` and, when warranted, one
+   promotion-level decision summary to `docs/journal/DECISION-LOG.md`, linking
+   to the detailed version journals.
+9. **Scope ratchet** — Orb appends a DEVLOG entry explaining what was cut/deferred and why, with pointers to BACKLOG.md. Orb commits.
+10. **Memorable moment** — Whoever notices it adds a DEVLOG entry with enough detail to write a tweet or blog post later.
+11. **Substantial Codex session** — The current Codex actor writes one concise
     memory checkpoint note under `~/.codex/memories/extensions/ad_hoc/notes/`
     so future runs can route to the current repo docs and build status.
 
 ### Rules
 
-- **Decision Log entries are append-only.** Never edit a past entry. If a decision is revisited, add a new dated row to the table and update "Where it landed."
+- **Decision entries are append-only.** Never edit a past entry. If a decision
+  is revisited, add a new dated entry to the applicable version log. Use the
+  project-wide decision log only for durable cross-version rules or promotion
+  summaries.
 - **Devlog entries are narrative.** Write them like you're telling someone the story of the day, not filing a report.
 - **Changelog is mechanical.** Just the facts: what file changed, what changed in it.
 - **Capture screenshots and recordings.** Note them in the devlog even if we can't embed them. `[Screenshot: first time ASCII shader looked right, 2026-03-17 3pm]` is enough.
