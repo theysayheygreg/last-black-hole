@@ -109,77 +109,48 @@ async function run() {
         const grid = await page.evaluate(() => window.__TEST_API.getFluidGridState?.());
         const worldScale = grid?.worldScale || 3;
         const wrapWorld = (value) => ((value % worldScale) + worldScale) % worldScale;
-        const testRadius = Math.max((well.killRadius || 0.04) * 1.35, (well.killRadius || 0.04) + 0.03);
+        const testRadius = Math.max((well.killRadius || 0.04) + 0.2, 0.3);
         const offsets = [
           [ testRadius, 0 ],
           [-testRadius, 0 ],
           [0,  testRadius],
           [0, -testRadius],
         ];
+        const wrapDelta = (from, to) => {
+          let delta = to - from;
+          const half = worldScale / 2;
+          if (delta > half) delta -= worldScale;
+          if (delta < -half) delta += worldScale;
+          return delta;
+        };
+        const candidates = offsets.map(([dx, dy]) => ({
+          x: wrapWorld(well.wx + dx),
+          y: wrapWorld(well.wy + dy),
+        }));
+        const safest = candidates.reduce((best, candidate) => {
+          const clearance = Math.min(...wells.map((other) => {
+            const dx = wrapDelta(candidate.x, other.wx);
+            const dy = wrapDelta(candidate.y, other.wy);
+            return Math.hypot(dx, dy) - (other.killRadius || 0.04);
+          }));
+          return !best || clearance > best.clearance ? { ...candidate, clearance } : best;
+        }, null);
+        assert(safest.clearance > 0.1, `No isolated gravity test point found (clearance ${safest.clearance.toFixed(4)})`);
 
-        let bestInwardDelta = -Infinity;
-        for (const [dx, dy] of offsets) {
-          await page.evaluate(
-            (wx, wy) => window.__TEST_API.teleportShip(wx, wy),
-            wrapWorld(well.wx + dx),
-            wrapWorld(well.wy + dy)
-          );
+        await page.evaluate((wx, wy) => window.__TEST_API.teleportShip(wx, wy), safest.x, safest.y);
+        const state = await tickShip(page, 1, {
+          thrustIntensity: 0,
+          brakeIntensity: 0,
+          wellPullStrength: 0.6,
+        });
+        const towardX = wrapDelta(safest.x, well.wx);
+        const towardY = wrapDelta(safest.y, well.wy);
+        const inwardVelocity = state.vel.x * towardX + state.vel.y * towardY;
+        const phase = await page.evaluate(() => window.__TEST_API.getGamePhase());
 
-          const startDist = await page.evaluate(
-            (wx, wy, scale) => {
-              const ship = window.__TEST_API.getShipPos();
-              const wrapDelta = (from, to) => {
-                let d = to - from;
-                const half = scale / 2;
-                if (d > half) d -= scale;
-                if (d < -half) d += scale;
-                return d;
-              };
-              const dx = wrapDelta(wx, ship.x);
-              const dy = wrapDelta(wy, ship.y);
-              return Math.sqrt(dx * dx + dy * dy);
-            },
-            well.wx,
-            well.wy,
-            worldScale
-          );
-
-          await tickShip(page, 60, { thrustIntensity: 0, brakeIntensity: 0, wellPullStrength: 0.6 });
-
-          const result = await page.evaluate(
-            (wx, wy, scale) => {
-              const ship = window.__TEST_API.getShipPos();
-              const wrapDelta = (from, to) => {
-                let d = to - from;
-                const half = scale / 2;
-                if (d > half) d -= scale;
-                if (d < -half) d += scale;
-                return d;
-              };
-              const dx = wrapDelta(wx, ship.x);
-              const dy = wrapDelta(wy, ship.y);
-              return {
-                dist: Math.sqrt(dx * dx + dy * dy),
-                phase: window.__TEST_API.getGamePhase(),
-              };
-            },
-            well.wx,
-            well.wy,
-            worldScale
-          );
-
-          if (result.phase === 'dead') {
-            bestInwardDelta = Math.max(bestInwardDelta, startDist);
-            break;
-          }
-
-          bestInwardDelta = Math.max(bestInwardDelta, startDist - result.dist);
-        }
-
-        assert(
-          bestInwardDelta > 0.001,
-          `Ship didn't show inward pull from any test angle (best distance delta: ${bestInwardDelta.toFixed(4)} world-units)`
-        );
+        assert(phase === 'playing', 'Gravity-pull proof must not count lethal well contact as success');
+        assert(inwardVelocity > 0,
+          `Gravity velocity must point toward the well (dot product ${inwardVelocity.toFixed(6)})`);
       } finally {
         await page.evaluate((value) => window.__TEST_API.setConfig("ship.fluidCoupling", value), previousFluidCoupling);
       }

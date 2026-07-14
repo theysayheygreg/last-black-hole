@@ -1,12 +1,13 @@
 const { BRAIN_DEFAULTS } = require("../player-brain.cjs");
+const { MOVEMENT } = require("../content/movement.cjs");
 
 const SERVER_INPUT = Object.freeze({
-  baseDragPer60HzFrame: 0.015,
-  fluidCoupling: 1.2,
-  brakeThrustScale: 0.4,
-  brakeFuelScale: 0.6,
-  maxSpeedWorld: 8.0,
-  deltaVRegenDelay: 0.5,
+  baseDragPer60HzFrame: MOVEMENT.player.baseDragPer60HzFrame,
+  fluidCoupling: MOVEMENT.player.fluidCoupling,
+  brakeThrustScale: MOVEMENT.player.brakeThrustScale,
+  brakeFuelScale: MOVEMENT.player.brakeFuelScale,
+  maxSpeedWorld: MOVEMENT.player.maxSpeedWorld,
+  deltaVRegenDelay: MOVEMENT.player.deltaVRegenDelay,
 });
 
 function finiteNumber(value, fallback = 0) {
@@ -63,7 +64,8 @@ function applyPlayerDriveAndFlow(player, input, dt, options = {}) {
   const moveX = finiteNumber(input?.moveX, 0);
   const moveY = finiteNumber(input?.moveY, 0);
   const thrustIntensity = consumePlayerDeltaV(player, input?.thrust, dt, 1);
-  const accel = 2.5 * brain.thrustScale * (burnModifiers.thrust || 1) * thrustIntensity * controlMult;
+  const accel = MOVEMENT.player.thrustAccel * brain.thrustScale
+    * (burnModifiers.thrust || 1) * thrustIntensity * controlMult;
 
   player.vx += moveX * accel * dt;
   player.vy += moveY * accel * dt;
@@ -88,7 +90,8 @@ function applyPlayerBrakeAndIntegrate(player, input, dt, options = {}) {
   const brakeIntensity = consumePlayerDeltaV(player, input?.brake, dt, inputConfig.brakeFuelScale);
 
   if (brakeIntensity > 0) {
-    const brakeAccel = 2.5 * brain.thrustScale * inputConfig.brakeThrustScale * brakeIntensity * controlMult;
+    const brakeAccel = MOVEMENT.player.thrustAccel * brain.thrustScale
+      * inputConfig.brakeThrustScale * brakeIntensity * controlMult;
     player.vx -= moveX * brakeAccel * dt;
     player.vy -= moveY * brakeAccel * dt;
   }
