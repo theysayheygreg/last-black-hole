@@ -16,30 +16,84 @@ function stableJson(value) {
   return JSON.stringify(value);
 }
 
-function createOpaqueTokenCodec({ key, randomBytes = crypto.randomBytes } = {}) {
-  if (!Buffer.isBuffer(key) || key.length !== 32) throw new HostedPlacementTokenError("INVALID_TOKEN_KEY");
+const MAX_PREVIOUS_TOKEN_KEYS = 4;
+
+function tokenKey(value) {
+  if (!Buffer.isBuffer(value) || value.length !== 32) throw new HostedPlacementTokenError("INVALID_TOKEN_KEY");
+  return Buffer.from(value);
+}
+
+function tokenKeyId(value) {
+  if (typeof value !== "string" || value.length < 1 || value.length > 128 || value.trim() !== value) {
+    throw new HostedPlacementTokenError("INVALID_TOKEN_KEY");
+  }
+  return value;
+}
+
+function keyring(key, currentKeyId, previousKeys = []) {
+  if (Buffer.isBuffer(key) && currentKeyId == null && previousKeys.length === 0) {
+    const selected = tokenKey(key);
+    const derivedId = crypto.createHash("sha256").update(selected).digest("base64url").slice(0, 22);
+    return { currentKeyId: derivedId, currentKey: selected, keys: new Map([[derivedId, selected]]) };
+  }
+  const current = key && typeof key === "object" && !Array.isArray(key) && !Buffer.isBuffer(key)
+    ? { keyId: key.currentKeyId, key: key.currentKey, previousKeys: key.previousKeys ?? [] }
+    : { keyId: currentKeyId, key, previousKeys };
+  const keyId = tokenKeyId(current.keyId);
+  const currentTokenKey = tokenKey(current.key);
+  if (!Array.isArray(current.previousKeys) || current.previousKeys.length > MAX_PREVIOUS_TOKEN_KEYS) {
+    throw new HostedPlacementTokenError("INVALID_TOKEN_KEY");
+  }
+  const keys = new Map([[keyId, currentTokenKey]]);
+  for (const entry of current.previousKeys) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)
+        || !Object.hasOwn(entry, "keyId") || !Object.hasOwn(entry, "key")
+        || Object.keys(entry).some((name) => name !== "keyId" && name !== "key")) {
+      throw new HostedPlacementTokenError("INVALID_TOKEN_KEY");
+    }
+    const previousId = tokenKeyId(entry.keyId);
+    if (keys.has(previousId)) throw new HostedPlacementTokenError("INVALID_TOKEN_KEY");
+    keys.set(previousId, tokenKey(entry.key));
+  }
+  return { currentKeyId: keyId, currentKey: currentTokenKey, keys };
+}
+
+function decodeCanonical(value) {
+  if (typeof value !== "string" || value.length === 0 || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("shape");
+  const decoded = Buffer.from(value, "base64url");
+  if (decoded.toString("base64url") !== value) throw new Error("shape");
+  return decoded;
+}
+
+function createOpaqueTokenCodec({ key, currentKeyId, previousKeys = [], randomBytes = crypto.randomBytes } = {}) {
+  const configured = keyring(key, currentKeyId, previousKeys);
   if (typeof randomBytes !== "function") throw new HostedPlacementTokenError("INVALID_RANDOM_SOURCE");
 
   function seal(claims, audience) {
     const nonce = randomBytes(12);
     if (!Buffer.isBuffer(nonce) || nonce.length !== 12) throw new HostedPlacementTokenError("INVALID_RANDOM_SOURCE");
-    const cipher = crypto.createCipheriv("aes-256-gcm", key, nonce);
-    cipher.setAAD(Buffer.from(`lbh-placement-v1\u0000${audience}`, "utf8"));
+    const encodedKeyId = Buffer.from(configured.currentKeyId, "utf8").toString("base64url");
+    const cipher = crypto.createCipheriv("aes-256-gcm", configured.currentKey, nonce);
+    cipher.setAAD(Buffer.from(`lbh-placement-v2\u0000${configured.currentKeyId}\u0000${audience}`, "utf8"));
     const ciphertext = Buffer.concat([cipher.update(stableJson(claims), "utf8"), cipher.final()]);
-    return `v1.${nonce.toString("base64url")}.${ciphertext.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}`;
+    return `v2.${encodedKeyId}.${nonce.toString("base64url")}.${ciphertext.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}`;
   }
 
   function open(token, audience) {
     try {
       if (typeof token !== "string" || token.length > 16_384) throw new Error("shape");
-      const [version, encodedNonce, encodedCiphertext, encodedTag, extra] = token.split(".");
-      if (version !== "v1" || extra !== undefined) throw new Error("shape");
-      const nonce = Buffer.from(encodedNonce, "base64url");
-      const ciphertext = Buffer.from(encodedCiphertext, "base64url");
-      const tag = Buffer.from(encodedTag, "base64url");
+      const [version, encodedKeyId, encodedNonce, encodedCiphertext, encodedTag, extra] = token.split(".");
+      if (version !== "v2" || extra !== undefined) throw new Error("shape");
+      const keyId = decodeCanonical(encodedKeyId).toString("utf8");
+      if (Buffer.from(keyId, "utf8").toString("base64url") !== encodedKeyId) throw new Error("shape");
+      const selectedKey = configured.keys.get(keyId);
+      if (!selectedKey) throw new Error("key");
+      const nonce = decodeCanonical(encodedNonce);
+      const ciphertext = decodeCanonical(encodedCiphertext);
+      const tag = decodeCanonical(encodedTag);
       if (nonce.length !== 12 || tag.length !== 16 || ciphertext.length === 0) throw new Error("shape");
-      const decipher = crypto.createDecipheriv("aes-256-gcm", key, nonce);
-      decipher.setAAD(Buffer.from(`lbh-placement-v1\u0000${audience}`, "utf8"));
+      const decipher = crypto.createDecipheriv("aes-256-gcm", selectedKey, nonce);
+      decipher.setAAD(Buffer.from(`lbh-placement-v2\u0000${keyId}\u0000${audience}`, "utf8"));
       decipher.setAuthTag(tag);
       const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
       const claims = JSON.parse(plaintext.toString("utf8"));

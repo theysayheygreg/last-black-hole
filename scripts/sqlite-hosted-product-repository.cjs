@@ -23,14 +23,44 @@ function key(value) {
   return crypto.createHash("sha256").update(bytes).digest();
 }
 
+const MAX_PREVIOUS_ENCRYPTION_KEYS = 4;
+
+function encryptionKeyIdValue(value, name) {
+  const selected = text(value, name);
+  if (selected.length > 128 || selected.trim() !== selected) throw new TypeError(`${name} invalid`);
+  return selected;
+}
+
+function keyring(encryptionKey, encryptionKeyId, previousEncryptionKeys = []) {
+  const current = { keyId: encryptionKeyIdValue(encryptionKeyId, "encryption key id"), key: key(encryptionKey) };
+  if (!Array.isArray(previousEncryptionKeys) || previousEncryptionKeys.length > MAX_PREVIOUS_ENCRYPTION_KEYS) {
+    throw new TypeError("hosted product previous encryption keys invalid");
+  }
+  const keys = new Map([[current.keyId, current.key]]);
+  for (const entry of previousEncryptionKeys) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)
+        || !Object.hasOwn(entry, "keyId") || !Object.hasOwn(entry, "key")
+        || Object.keys(entry).some((name) => name !== "keyId" && name !== "key")) {
+      throw new TypeError("hosted product previous encryption key invalid");
+    }
+    const keyId = encryptionKeyIdValue(entry.keyId, "previous encryption key id");
+    if (keys.has(keyId)) throw new TypeError("hosted product encryption key id collision");
+    keys.set(keyId, key(entry.key));
+  }
+  return { current, keys };
+}
+
 class SqliteHostedProductRepository {
-  constructor({ filepath, db, encryptionKey, encryptionKeyId, busyTimeoutMs = 5000, randomBytes = crypto.randomBytes } = {}) {
+  constructor({ filepath, db, encryptionKey, encryptionKeyId, previousEncryptionKeys = [],
+    busyTimeoutMs = 5000, randomBytes = crypto.randomBytes } = {}) {
     if ((filepath == null) === (db == null)) throw new TypeError("provide exactly one hosted product sqlite filepath or db");
     if (!Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 0 || busyTimeoutMs > 60_000) {
       throw new TypeError("hosted product sqlite busy timeout invalid");
     }
-    this.encryptionKey = key(encryptionKey);
-    this.encryptionKeyId = text(encryptionKeyId, "encryption key id");
+    const configuredKeyring = keyring(encryptionKey, encryptionKeyId, previousEncryptionKeys);
+    this.encryptionKey = configuredKeyring.current.key;
+    this.encryptionKeyId = configuredKeyring.current.keyId;
+    this.encryptionKeys = configuredKeyring.keys;
     if (typeof randomBytes !== "function") throw new TypeError("randomBytes invalid");
     this.randomBytes = randomBytes;
     this.db = db || new DatabaseSync(filepath);
@@ -178,11 +208,22 @@ class SqliteHostedProductRepository {
   }
   _open(row) {
     if (!row) return null;
-    if (row.key_id !== this.encryptionKeyId) throw new Error("hosted product encryption key id unavailable");
-    const decipher = crypto.createDecipheriv("aes-256-gcm", this.encryptionKey, row.nonce);
+    const selectedKey = this.encryptionKeys.get(row.key_id);
+    if (!selectedKey) throw new Error("hosted product encryption key id unavailable");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", selectedKey, row.nonce);
     decipher.setAAD(this._aad(row.match_id, row.key_id));
     decipher.setAuthTag(row.auth_tag);
-    return JSON.parse(Buffer.concat([decipher.update(row.ciphertext), decipher.final()]).toString("utf8"));
+    const match = JSON.parse(Buffer.concat([decipher.update(row.ciphertext), decipher.final()]).toString("utf8"));
+    if (!match || match.matchId !== row.match_id) throw new Error("hosted product encrypted match binding invalid");
+    if (row.key_id !== this.encryptionKeyId) this._rewriteEncryptedMatch(row, match);
+    return match;
+  }
+  _rewriteEncryptedMatch(row, match) {
+    const sealed = this._seal(match);
+    this.db.prepare(`UPDATE hprod_matches SET key_id=?,nonce=?,auth_tag=?,ciphertext=?
+      WHERE match_id=? AND row_version=? AND key_id=? AND nonce=? AND auth_tag=? AND ciphertext=?`)
+      .run(this.encryptionKeyId, sealed.nonce, sealed.authTag, sealed.ciphertext,
+        row.match_id, row.row_version, row.key_id, row.nonce, row.auth_tag, row.ciphertext);
   }
   _matchRow(where, value) {
     return this.db.prepare(`SELECT * FROM hprod_matches WHERE ${where}=?`).get(value);

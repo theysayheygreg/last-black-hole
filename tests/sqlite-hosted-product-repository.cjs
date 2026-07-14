@@ -11,6 +11,8 @@ const { SqliteHostedProductRepository } = require("../scripts/sqlite-hosted-prod
 
 const KEY = crypto.createHash("sha256").update("sqlite hosted product test key").digest();
 const KEY_ID = "hprod-test-key-v1";
+const ROTATED_KEY = crypto.createHash("sha256").update("sqlite hosted product rotated key").digest();
+const ROTATED_KEY_ID = "hprod-test-key-v2";
 
 function match(suffix, seatCount = 4) {
   return { matchId: `match-${suffix}`, runId: `run-${suffix}`, sessionId: `session-${suffix}`,
@@ -92,6 +94,45 @@ test("encrypts match payload including bootstrap at rest", () => {
   const wrong = new SqliteHostedProductRepository({ filepath, encryptionKey: Buffer.alloc(32, 9), encryptionKeyId: KEY_ID });
   rejects(() => wrong.getMatch(value.matchId)); wrong.close();
   fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test("rotation dual-reads an old row and safely rewrites it to the current key", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-hprod-rotate-"));
+  const filepath = path.join(directory, "product.sqlite"); const value = match("rotate");
+  const first = repository(filepath); first.createMatch(value); first.close();
+  const rotating = new SqliteHostedProductRepository({ filepath, encryptionKey: ROTATED_KEY,
+    encryptionKeyId: ROTATED_KEY_ID, previousEncryptionKeys: [{ keyId: KEY_ID, key: KEY }] });
+  assert.deepEqual(rotating.getMatch(value.matchId), value);
+  assert.equal(rotating.db.prepare("SELECT key_id FROM hprod_matches WHERE match_id=?").get(value.matchId).key_id,
+    ROTATED_KEY_ID, "read should migrate the exact encrypted row");
+  rotating.close();
+  const retired = new SqliteHostedProductRepository({ filepath, encryptionKey: ROTATED_KEY, encryptionKeyId: ROTATED_KEY_ID });
+  assert.deepEqual(retired.getMatch(value.matchId), value, "migrated row survives reopen after old-key retirement");
+  retired.close(); fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test("retired unknown and tampered encryption key IDs fail closed", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-hprod-retire-"));
+  const filepath = path.join(directory, "product.sqlite"); const value = match("retire");
+  const first = repository(filepath); first.createMatch(value); first.close();
+  const retired = new SqliteHostedProductRepository({ filepath, encryptionKey: ROTATED_KEY, encryptionKeyId: ROTATED_KEY_ID });
+  rejects(() => retired.getMatch(value.matchId), /key id unavailable/); retired.close();
+  const rotating = new SqliteHostedProductRepository({ filepath, encryptionKey: ROTATED_KEY,
+    encryptionKeyId: ROTATED_KEY_ID, previousEncryptionKeys: [{ keyId: KEY_ID, key: KEY }] });
+  rotating.db.prepare("UPDATE hprod_matches SET key_id=? WHERE match_id=?").run(ROTATED_KEY_ID, value.matchId);
+  rejects(() => rotating.getMatch(value.matchId));
+  rotating.db.prepare("UPDATE hprod_matches SET key_id=? WHERE match_id=?").run("unknown-key", value.matchId);
+  rejects(() => rotating.getMatch(value.matchId), /key id unavailable/);
+  rotating.close(); fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test("rejects duplicate and oversized previous encryption keyrings", () => {
+  rejects(() => new SqliteHostedProductRepository({ filepath: ":memory:", encryptionKey: ROTATED_KEY,
+    encryptionKeyId: ROTATED_KEY_ID, previousEncryptionKeys: [{ keyId: ROTATED_KEY_ID, key: KEY }] }), /collision/);
+  rejects(() => new SqliteHostedProductRepository({ filepath: ":memory:", encryptionKey: ROTATED_KEY,
+    encryptionKeyId: ROTATED_KEY_ID, previousEncryptionKeys: Array.from({ length: 5 }, (_, index) => ({
+      keyId: `old-${index}`, key: KEY,
+    })) }), /previous encryption keys invalid/);
 });
 
 test("enforces 1..4 seats and rejects fifth membership", () => {
