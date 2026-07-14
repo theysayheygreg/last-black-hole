@@ -73,6 +73,20 @@ Abort:
 - any fifth-seat admission, privacy leak, duplicate settlement/consequence,
   queue growth, authority split, or product dependence on S23/S23P/split.
 
+### Optional Lane — GregBot Friends-Only Internet Host
+
+This is an optional private-play bridge, not a prerequisite for the verified
+hosted program. Greg may host one S20 authority locally for himself and exactly
+three invited remote players through an identity-gated outbound tunnel. It
+must use an isolated appliance, loopback-only origin, exact-email perimeter
+authentication, one-use game invitations, four-seat enforcement, unverified
+local results, bounded lifetime, and tunnel-first emergency shutdown.
+
+The complete plan and abort gates are in
+[`OPTIONAL-LOCAL-INTERNET-HOST.md`](OPTIONAL-LOCAL-INTERNET-HOST.md). Its
+evidence cannot prove cloud regional hosting, authority packing, verified
+progression, or 24/48/96-client capacity.
+
 ## Milestone 2 — Greg Chooses The Service Product
 
 This is a product checkpoint, not an engineering benchmark.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-07-14 — optional GregBot friends-only Internet host planned
+
+- Added an optional v0.4 plan for one local S20 authority serving Greg plus
+  three exact invited remote players through identity-gated outbound ingress.
+- Required an isolated loopback-only appliance, exact-email Access policy,
+  one-use game invitations, four-seat enforcement, unverified local results,
+  bounded lifetime, and tunnel-first emergency shutdown.
+- Kept the lane separate from public matchmaking, verified cloud progression,
+  hosted regional evidence, authority packing, and high-count capacity claims.
+
 ## 2026-07-14 — v0.4 hosted benchmark launch guard corrected
 
 - Removed the test-only internal replication-accounting flag from the hosted

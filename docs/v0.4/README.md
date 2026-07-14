@@ -84,6 +84,9 @@ for the executive decision, costs, scale evidence, gates, and next milestones.
    privacy.
 7. [`MULTIPLAYER-UNIT-ECONOMICS.md`](MULTIPLAYER-UNIT-ECONOMICS.md) —
    reproducible $4.99 economics at 1K/10K/100K/1M copies.
+8. [`OPTIONAL-LOCAL-INTERNET-HOST.md`](OPTIONAL-LOCAL-INTERNET-HOST.md) —
+   optional friends-only GregBot host behind identity-gated outbound ingress;
+   not a verified hosted-product or public-matchmaking claim.
 
 ## Evidence And Research Anchors
 
