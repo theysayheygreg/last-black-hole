@@ -242,13 +242,36 @@ function readStrictTestFlag(name) {
   throw new Error(`${name} must be exactly 0 or 1`);
 }
 
-const REPLICATION_ACCOUNTING_CAPTURE = readStrictTestFlag("LBH_SIM_WS_REPLICATION_ACCOUNTING");
+const HOSTED_BENCHMARK_INSTRUMENTATION = readStrictTestFlag(
+  "LBH_HOSTED_BENCHMARK_INSTRUMENTATION",
+);
+const HOSTED_BENCHMARK_CONTROL_PROOF = String(
+  process.env.LBH_HOSTED_BENCHMARK_CONTROL_PROOF || "",
+).trim();
+const HOSTED_BENCHMARK_CONTROL_HEADER = "x-lbh-benchmark-control-proof";
+if (HOSTED_BENCHMARK_INSTRUMENTATION) {
+  const canonicalProof = /^[A-Za-z0-9_-]{43,128}$/.test(HOSTED_BENCHMARK_CONTROL_PROOF);
+  let decodedProofBytes = 0;
+  try {
+    decodedProofBytes = Buffer.from(HOSTED_BENCHMARK_CONTROL_PROOF, "base64url").length;
+  } catch {}
+  if (!canonicalProof || decodedProofBytes < 32) {
+    throw new Error(
+      "LBH_HOSTED_BENCHMARK_CONTROL_PROOF must be an unguessable base64url value of at least 32 bytes",
+    );
+  }
+}
+const TEST_REPLICATION_ACCOUNTING_CAPTURE = readStrictTestFlag("LBH_SIM_WS_REPLICATION_ACCOUNTING");
+const REPLICATION_ACCOUNTING_CAPTURE = TEST_REPLICATION_ACCOUNTING_CAPTURE
+  || HOSTED_BENCHMARK_INSTRUMENTATION;
 const REPLICATION_ACCOUNTING_CAPTURE_GUARD = readStrictTestFlag("LBH_REPLICATION_BASELINE_CAPTURE");
-if (REPLICATION_ACCOUNTING_CAPTURE
+if (TEST_REPLICATION_ACCOUNTING_CAPTURE
   && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
   throw new Error("LBH_SIM_WS_REPLICATION_ACCOUNTING requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
 }
-const AUTHORITY_STAGE_PROFILE_CAPTURE = readStrictTestFlag("LBH_SIM_WS_STAGE_PROFILE");
+const TEST_AUTHORITY_STAGE_PROFILE_CAPTURE = readStrictTestFlag("LBH_SIM_WS_STAGE_PROFILE");
+const AUTHORITY_STAGE_PROFILE_CAPTURE = TEST_AUTHORITY_STAGE_PROFILE_CAPTURE
+  || HOSTED_BENCHMARK_INSTRUMENTATION;
 const S23T_PUBLIC_BODY_PROFILE_CAPTURE = readStrictTestFlag("LBH_S23T_PUBLIC_BODY_PROFILE");
 const S23T_EVIDENCE_HARNESS = readStrictTestFlag("LBH_S23T_EVIDENCE_HARNESS");
 const REPLICATION_BENCH_EVENT_LOOP_CAPTURE = readStrictTestFlag("LBH_SIM_WS_BENCH_EVENT_LOOP");
@@ -256,11 +279,11 @@ if (REPLICATION_BENCH_EVENT_LOOP_CAPTURE
   && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
   throw new Error("LBH_SIM_WS_BENCH_EVENT_LOOP requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
 }
-if (AUTHORITY_STAGE_PROFILE_CAPTURE
+if (TEST_AUTHORITY_STAGE_PROFILE_CAPTURE
   && (process.env.NODE_ENV !== "test" || !REPLICATION_ACCOUNTING_CAPTURE_GUARD)) {
   throw new Error("LBH_SIM_WS_STAGE_PROFILE requires NODE_ENV=test and LBH_REPLICATION_BASELINE_CAPTURE=1");
 }
-if (AUTHORITY_STAGE_PROFILE_CAPTURE && !REPLICATION_ACCOUNTING_CAPTURE) {
+if (TEST_AUTHORITY_STAGE_PROFILE_CAPTURE && !REPLICATION_ACCOUNTING_CAPTURE) {
   throw new Error("LBH_SIM_WS_STAGE_PROFILE requires LBH_SIM_WS_REPLICATION_ACCOUNTING=1");
 }
 if (S23T_PUBLIC_BODY_PROFILE_CAPTURE
@@ -1202,9 +1225,19 @@ let multiplayerAdapter = null;
 let runtimeStatePairAuthority = null;
 let multiplayerProjectionTask = null;
 let shutdownPromise = null;
-const soakRuntimeDiagnostics = process.env.LBH_SOAK_DIAGNOSTICS === "1"
-  ? require("./soak-runtime-diagnostics.cjs").createSoakRuntimeDiagnostics()
-  : null;
+const soakRuntimeDiagnosticsModule = (process.env.LBH_SOAK_DIAGNOSTICS === "1"
+    || HOSTED_BENCHMARK_INSTRUMENTATION)
+  ? require("./soak-runtime-diagnostics.cjs") : null;
+const soakRuntimeDiagnostics = soakRuntimeDiagnosticsModule?.createSoakRuntimeDiagnostics() || null;
+const hostedBenchmarkTickDebt = HOSTED_BENCHMARK_INSTRUMENTATION ? {
+  generation: 1,
+  expectedAtMs: null,
+  observedTicks: 0,
+  lateTicks: 0,
+  cumulativeDebtMs: 0,
+  worstDebtMs: 0,
+  distribution: new BoundedQuantiles(MULTIPLAYER_COST_DISTRIBUTION_CAPACITY),
+} : null;
 
 function publishEvent(type, payload = {}, options = {}) {
   const playerId = String(payload?.clientId || options.playerId || "").trim();
@@ -5951,6 +5984,18 @@ function tickInhibitor(dt) {
 }
 
 function tickSim() {
+  if (hostedBenchmarkTickDebt) {
+    const observedAtMs = performance.now();
+    const intervalMs = 1000 / Math.max(1, currentLoopTickHz);
+    const debtMs = hostedBenchmarkTickDebt.expectedAtMs === null
+      ? 0 : Math.max(0, observedAtMs - hostedBenchmarkTickDebt.expectedAtMs);
+    hostedBenchmarkTickDebt.observedTicks += 1;
+    if (debtMs > 0) hostedBenchmarkTickDebt.lateTicks += 1;
+    hostedBenchmarkTickDebt.cumulativeDebtMs += debtMs;
+    hostedBenchmarkTickDebt.worstDebtMs = Math.max(hostedBenchmarkTickDebt.worstDebtMs, debtMs);
+    hostedBenchmarkTickDebt.distribution.observe(debtMs);
+    hostedBenchmarkTickDebt.expectedAtMs = observedAtMs + intervalMs;
+  }
   if (runtime.session.status !== "running") return;
   if (getHumanPlayerCount() === 0) {
     runtime.emptySince = runtime.emptySince || Date.now();
@@ -6152,6 +6197,10 @@ function restartTickLoop() {
   if (tickHandle) clearInterval(tickHandle);
   currentLoopTickHz = nextTickHz;
   runtime.loopTickHz = nextTickHz;
+  if (hostedBenchmarkTickDebt) {
+    hostedBenchmarkTickDebt.generation += 1;
+    hostedBenchmarkTickDebt.expectedAtMs = null;
+  }
   tickHandle = setInterval(tickSim, Math.max(1, Math.round(1000 / nextTickHz)));
 }
 
@@ -6934,9 +6983,12 @@ function scheduleMultiplayerProjection() {
   multiplayerProjectionTask = task;
 }
 
-function multiplayerDiagnostics({ includeReplication = true } = {}) {
+function multiplayerDiagnostics({ includeReplication = true, includeBenchmarkProfile = false } = {}) {
   const projection = runtime.multiplayerProjection;
-  const adapter = multiplayerAdapter?.diagnostics({ includeReplication }) || null;
+  const rawAdapter = multiplayerAdapter?.diagnostics({ includeReplication }) || null;
+  const adapter = rawAdapter && HOSTED_BENCHMARK_INSTRUMENTATION && !includeBenchmarkProfile
+    ? (({ authorityStageProfile: _privateProfile, ...publicAdapter }) => publicAdapter)(rawAdapter)
+    : rawAdapter;
   if (adapter) {
     projection.maxQueuedBytes = Math.max(projection.maxQueuedBytes, adapter.queuedBytes || 0);
     projection.maxPendingInboundBytes = Math.max(
@@ -7000,6 +7052,112 @@ function multiplayerDiagnostics({ includeReplication = true } = {}) {
           simTickMs: projection.simTickCostDistribution.snapshot(),
           projectionReplicationMs: projection.projectionCostDistribution.snapshot(),
         },
+      },
+    },
+  };
+}
+
+function hostedBenchmarkProofMatches(req) {
+  if (!HOSTED_BENCHMARK_INSTRUMENTATION) return false;
+  const supplied = String(req.headers[HOSTED_BENCHMARK_CONTROL_HEADER] || "").trim();
+  if (!supplied) return false;
+  const expectedDigest = crypto.createHash("sha256")
+    .update(HOSTED_BENCHMARK_CONTROL_PROOF).digest();
+  const suppliedDigest = crypto.createHash("sha256").update(supplied).digest();
+  return crypto.timingSafeEqual(expectedDigest, suppliedDigest);
+}
+
+function boundedRetentionDiagnostics() {
+  const eventJournal = runtime.eventJournal?.describe() || null;
+  const snapshotRing = runtime.snapshotRing?.describe() || null;
+  return {
+    eventJournal: eventJournal ? {
+      capacity: eventJournal.capacity,
+      firstRetainedSeq: eventJournal.firstRetainedSeq,
+      droppedBeforeSeq: eventJournal.droppedBeforeSeq,
+      lastSeq: eventJournal.lastSeq,
+      retainedCount: eventJournal.retainedCount,
+      stats: eventJournal.stats,
+    } : null,
+    snapshotRing: snapshotRing ? {
+      capacity: snapshotRing.capacity,
+      firstRetainedSnapshotId: snapshotRing.firstRetainedSnapshotId,
+      lastSnapshotId: snapshotRing.lastSnapshotId,
+      retainedCount: snapshotRing.retainedCount,
+      stats: snapshotRing.stats,
+    } : null,
+  };
+}
+
+function hostedBenchmarkDiagnostics() {
+  const sampledAtMs = Date.now();
+  const multiplayer = multiplayerDiagnostics({
+    includeReplication: true,
+    includeBenchmarkProfile: true,
+  });
+  const authorityStages = multiplayer.adapter?.authorityStageProfile || null;
+  return {
+    ok: true,
+    schema: "lbh-hosted-benchmark-diagnostics-v1",
+    sampledAtMs,
+    generation: {
+      processStartedAt: runtime.startedAt,
+      authorityStage: authorityStageProfiler?.generation() || 0,
+      multiplayerProjection: runtime.multiplayerProjection.generation,
+      tickSchedule: hostedBenchmarkTickDebt?.generation || 0,
+      tick: runtime.tick,
+    },
+    bounds: {
+      costDistributionSamples: MULTIPLAYER_COST_DISTRIBUTION_CAPACITY,
+      authorityStageSamples: authorityStages?.bounds?.sampleCapacityPerStage || 0,
+      authorityStageRecipients: authorityStages?.bounds?.maxRecipients || 0,
+      soakCompletedWindowCapacity: soakRuntimeDiagnosticsModule?.MAX_COMPLETED_WINDOWS || 0,
+    },
+    process: {
+      pid: process.pid,
+      uptimeSec: Number(process.uptime().toFixed(3)),
+      cpuUsage: process.cpuUsage(),
+      memory: process.memoryUsage(),
+    },
+    runtime: {
+      status: runtime.session.status,
+      tick: runtime.tick,
+      simTime: runtime.simTime,
+      tickHz: runtime.session.tickHz,
+      snapshotHz: runtime.session.snapshotHz,
+      loopTickHz: runtime.loopTickHz,
+      playerCount: runtime.players.size,
+      overload: runtime.overload ? {
+        state: runtime.overload.state,
+        budgetMs: runtime.overload.budgetMs,
+        avgTickMs: runtime.overload.avgTickMs,
+        worstTickMs: runtime.overload.worstTickMs,
+        pressure: runtime.overload.pressure,
+        sampleCount: runtime.overload.sampleCount,
+        breachStreak: runtime.overload.breachStreak,
+        recoverStreak: runtime.overload.recoverStreak,
+      } : null,
+      tickDebt: hostedBenchmarkTickDebt ? {
+        observedTicks: hostedBenchmarkTickDebt.observedTicks,
+        lateTicks: hostedBenchmarkTickDebt.lateTicks,
+        cumulativeDebtMs: hostedBenchmarkTickDebt.cumulativeDebtMs,
+        worstDebtMs: hostedBenchmarkTickDebt.worstDebtMs,
+        distributionMs: hostedBenchmarkTickDebt.distribution.snapshot(),
+      } : null,
+      retention: boundedRetentionDiagnostics(),
+    },
+    soak: soakRuntimeDiagnostics?.status() || null,
+    distributions: {
+      simTickMs: runtime.multiplayerProjection.simTickCostDistribution.snapshot(),
+      projectionReplicationMs: runtime.multiplayerProjection.projectionCostDistribution.snapshot(),
+      authorityStages,
+      stageGroups: {
+        sim: ["distributions.simTickMs", "runtime.tickDebt.distributionMs"],
+        authority: [STAGES.RAW_SNAPSHOT_BUILD],
+        projection: [STAGES.STATIC_MANIFEST_PREP, STAGES.PUBLIC_CORE,
+          STAGES.PUBLIC_PROJECTION, STAGES.OWNER_SOURCE, STAGES.OWNER_PROJECTION],
+        writer: [STAGES.COMPRESSION, STAGES.JSON_SERIALIZATION, STAGES.ACCOUNTING,
+          STAGES.ADAPTER_ENQUEUE, STAGES.SOCKET_SEND_CALL, STAGES.SOCKET_SEND_CALLBACK],
       },
     },
   };
@@ -7133,6 +7291,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    if (req.method === "GET" && req.url === "/benchmark/diagnostics") {
+      if (!hostedBenchmarkProofMatches(req)) {
+        sendJson(res, 404, { ok: false, error: "Not found" });
+        return;
+      }
+      sendJson(res, 200, hostedBenchmarkDiagnostics());
+      return;
+    }
+
     if (req.method === "GET" && (req.url === "/health" || req.url === "/health/compact")) {
       const compactReplicationHealth = req.url === "/health/compact";
       const idleState = getIdleState();

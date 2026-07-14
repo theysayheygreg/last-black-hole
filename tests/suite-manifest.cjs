@@ -423,6 +423,13 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "HostedBenchmarkInstrumentation",
+    file: "hosted-benchmark-instrumentation.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
+    browser: false,
+    slow: true,
+  },
+  {
     name: "AuthoredCollapseTestLifecycle",
     file: "authored-collapse-test-lifecycle.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
