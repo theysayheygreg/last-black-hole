@@ -48,9 +48,46 @@ function lanePayloads(currentInput, baseInput, identity) {
   return Object.freeze({ keyframe, delta });
 }
 
-function replayStatePair(job) {
+function publicWorkerJob(job) {
+  return {
+    fence: { ...job.fence }, identity: { ...job.identity }, frameId: job.frameId,
+    forceKeyframe: job.forceKeyframe,
+    current: { public: structuredClone(job.current.public) },
+    base: job.base ? { public: structuredClone(job.base.public) } : null,
+  };
+}
+
+function replayPublicProjection(job) {
+  if (job.current?.owner || job.base?.owner) throw new Error("worker-input-must-not-contain-owner-lane");
+  const publicLanes = lanePayloads(job.current.public, job.base?.public || null, job.identity);
+  const keyframeBytes = canonicalJsonBytes(publicLanes.keyframe);
+  const deltaBytes = publicLanes.delta ? canonicalJsonBytes(publicLanes.delta) : null;
+  return {
+    fence: { ...job.fence },
+    publicKeyframeBytes: keyframeBytes,
+    publicKeyframeDigest: digest(keyframeBytes),
+    publicDeltaBytes: deltaBytes,
+    publicDeltaDigest: deltaBytes ? digest(deltaBytes) : null,
+  };
+}
+
+function parsePublicWorkerResult(job, result) {
+  if (JSON.stringify(result.fence) !== JSON.stringify(job.fence)) throw new Error("public-worker-fence-mismatch");
+  const keyframeBytes = Buffer.from(result.publicKeyframeBytes);
+  if (digest(keyframeBytes) !== result.publicKeyframeDigest) throw new Error("public-keyframe-digest-mismatch");
+  const keyframe = JSON.parse(keyframeBytes.toString("utf8"));
+  let delta = null;
+  if (result.publicDeltaBytes) {
+    const deltaBytes = Buffer.from(result.publicDeltaBytes);
+    if (digest(deltaBytes) !== result.publicDeltaDigest) throw new Error("public-delta-digest-mismatch");
+    delta = JSON.parse(deltaBytes.toString("utf8"));
+  }
+  return Object.freeze({ keyframe: Object.freeze(keyframe), delta: delta && Object.freeze(delta) });
+}
+
+function finalizeStatePair(job, publicResult) {
   const identity = job.identity;
-  const publicLanes = lanePayloads(job.current.public, job.base?.public || null, identity);
+  const publicLanes = parsePublicWorkerResult(job, publicResult);
   const ownerLanes = lanePayloads(job.current.owner, job.base?.owner || null, identity);
   const publicView = publicLanes.keyframe.projection;
   const header = Object.freeze({ type: "statePair", pairSchema: "lbh-authority-state-pair-mixed-v1",
@@ -86,8 +123,12 @@ function replayStatePair(job) {
     positional, positionalBytes: positional.length, positionalDigest: digest(positional),
     compressed, compressedBytes: compressed.length, compressedDigest: digest(compressed),
     decodedFrame: chosen.frame,
-    sourceAllocationProxyBytes: canonicalJsonBytes(job).length,
   };
 }
 
-module.exports = { TIE_ORDER, digest, replayStatePair };
+function replayStatePair(job) {
+  return finalizeStatePair(job, replayPublicProjection(publicWorkerJob(job)));
+}
+
+module.exports = { TIE_ORDER, digest, publicWorkerJob, replayPublicProjection,
+  finalizeStatePair, replayStatePair };

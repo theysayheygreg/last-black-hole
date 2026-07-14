@@ -515,7 +515,9 @@ async function main() {
   writeExclusive(path.join(runDir, "run.json"), {
     schema: S20_COMPRESSION ? "lbh-s20-compression-run-v1"
       : S16_BINARY ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1", commit, dirty, seed: SEED,
-    command: `${S20_COMPRESSION ? "LBH_S20_COMPRESSION=1 " : S16_BINARY ? "LBH_S16_BINARY=1 " : ""}node tests/multiplayer-state-pair-clock-attribution.cjs`,
+    command: `${S20_COMPRESSION ? "LBH_S20_COMPRESSION=1 " : S16_BINARY ? "LBH_S16_BINARY=1 " : ""}`
+      + `${S21_STAGE_PROFILE ? "LBH_S21_STAGE_PROFILE=1 " : ""}`
+      + "node tests/multiplayer-state-pair-clock-attribution.cjs",
     config: { populations: POPULATIONS, warmupMs: WARMUP_MS, windowMs: WINDOW_MS,
       binary: S16_BINARY, compression: S20_COMPRESSION, stageProfile: S21_STAGE_PROFILE },
     machine: { hostname: os.hostname(), platform: os.platform(), release: os.release(), arch: os.arch(),

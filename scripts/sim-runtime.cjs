@@ -7781,14 +7781,14 @@ const server = http.createServer(async (req, res) => {
 
 async function buildPublicMultiplayerStateForAdapter(...args) {
   const frame = authorityStageProfiler
-    ? authorityStageProfiler.measureSync(STAGES.RAW_SNAPSHOT_BUILD, (value) => ({
-        outputBytes: Buffer.byteLength(JSON.stringify(value), "utf8"),
-        serializedAllocationProxyBytes: Buffer.byteLength(JSON.stringify(value), "utf8"),
-        entities: (value.state?.players?.length || 0)
+    ? authorityStageProfiler.measureSync(STAGES.RAW_SNAPSHOT_BUILD, (value) => {
+        const serializedBytes = Buffer.byteLength(JSON.stringify(value), "utf8");
+        return { outputBytes: serializedBytes, serializedAllocationProxyBytes: serializedBytes,
+          entities: (value.state?.players?.length || 0)
           + ["wells", "stars", "wrecks", "planetoids", "portals", "scavengers", "fauna", "sentries"]
             .reduce((sum, lane) => sum + (value.state?.world?.[lane]?.length || 0), 0)
-          + (value.state?.inhibitor ? 1 : 0),
-      }), () => buildPublicMultiplayerState(...args))
+          + (value.state?.inhibitor ? 1 : 0) };
+      }, () => buildPublicMultiplayerState(...args))
     : buildPublicMultiplayerState(...args);
   if (MULTIPLAYER_PROJECTION_TEST_DELAY_MS > 0) {
     // Test-only suspension occurs inside projectNow's awaited builder so reset

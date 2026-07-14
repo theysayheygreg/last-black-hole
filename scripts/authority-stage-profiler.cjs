@@ -214,6 +214,7 @@ function createAuthorityStageProfiler(options = {}) {
         scope: stage.startsWith("match.") ? "once-per-match-beat" : "per-recipient",
         timingKind: stage === STAGES.SOCKET_SEND_CALLBACK ? "async-wall-latency"
           : stage === STAGES.STATIC_MANIFEST_PREP || stage === STAGES.OWNER_SOURCE
+              || stage === STAGES.ACK_INGESTION
             ? "awaited-wall-time" : "synchronous-exclusive-time",
         aggregate: summarizeRecord(record.aggregate),
         recipients: Object.freeze([...record.recipients.entries()]
@@ -233,7 +234,12 @@ function createAuthorityStageProfiler(options = {}) {
         metricSizingOverheadMeasuredOnlyByPairedControl: true,
         serializedAllocationProxyIsMeasuredHeapAllocation: false,
         socketSendCallbackExcludedFromCpuAttribution: true,
-        note: "Timers do not nest except async socket callback wall latency; opaque diff stages include their own internal normalization, hashing, and canonicalization.",
+        stageRowsAreUniversallyAdditive: false,
+        nestedStages: Object.freeze({
+          "recipient.pairChoiceFallback": Object.freeze(["recipient.trustedAuthorityProof",
+            "recipient.candidateSizeProof", "recipient.candidateComposition"]),
+        }),
+        note: "Pair-choice is an inclusive parent around proof/size/composition. JSON timing may occur inside opaque publisher paths. Socket callback is overlapping async wall latency. Metric callbacks, including large diagnostic JSON sizing, run outside stage timers and are measured only by a paired profiler-off control.",
       }),
       recipientSlots: recipientSlots.size,
       overflowRecipientObservations,
