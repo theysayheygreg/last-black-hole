@@ -16,6 +16,7 @@ const { STAGES } = require("./authority-stage-profiler.cjs");
 const { isTrustedStatePairWireEncoder, hasTrustedStatePairCandidateSelector,
   selectTrustedStatePairWireCandidate, hasTrustedStatePairLazyCandidateSelector,
   selectTrustedStatePairWireLaneCandidate } = require("./multiplayer-wire-protocol.cjs");
+const { bindAuthorityProofIssuer } = require("./state-pair-authority-proof.cjs");
 
 const PAIR_SCHEMA = "lbh-authority-state-pair-v1";
 const ACK_SCHEMA = "lbh-authority-state-pair-ack-v1";
@@ -32,6 +33,7 @@ const CODEC_PAIR_TIE_ORDER = Object.freeze([
   "public-delta+owner-delta",
 ]);
 const exactEncodedPublications = new WeakSet();
+const authorityLaneOrigins = new WeakMap();
 const CANONICAL_COMPONENT_PROOF = Symbol("canonical-component-proof");
 const ACK_REJECT_REASON_CODES = new Set(["unknown-recipient", "identity-mismatch", "invalid-frame-id",
   "unknown-frame", "invalid-ack-schema", "lineage-mismatch", "unexpected-state-pair-ack", "unknown"]);
@@ -143,6 +145,82 @@ function serializedComponentProof(value, stageProfiler, recipientKey) {
   return Object.freeze({ [CANONICAL_COMPONENT_PROOF]: true, payload: value,
     text, bytes: Buffer.byteLength(text, "utf8") });
 }
+
+function authorityCanonicalFact(label, payload, proof) {
+  if (proof?.[CANONICAL_COMPONENT_PROOF] !== true || proof.payload !== payload
+      || typeof proof.text !== "string" || !Number.isSafeInteger(proof.bytes)
+      || proof.bytes !== Buffer.byteLength(proof.text, "utf8")) {
+    fail("invalid-wire-size", `canonical ${label} component proof is invalid`);
+  }
+  return Object.freeze({ label, payload, text: proof.text, bytes: proof.bytes });
+}
+
+function registerAuthorityLanePayload(payload, lane, source) {
+  authorityLaneOrigins.set(payload, Object.freeze({ lane, kind: payload.kind, source,
+    resultHash: payload.resultHash }));
+  return payload;
+}
+
+function validateAuthorityLaneProof(header, lane, kind, payload, canonicalProof) {
+  const origin = authorityLaneOrigins.get(payload);
+  if (!origin || origin.lane !== lane || origin.kind !== kind || origin.resultHash !== payload.resultHash) {
+    fail("invalid-wire-size", `trusted ${lane}-${kind} payload has no authority construction proof`);
+  }
+  const expectedKeys = kind === "keyframe"
+    ? ["kind", "schema", "resultHash", "projection"]
+    : ["kind", "schema", "baseSnapshotId", "baseHash", "resultHash", "delta"];
+  const actualKeys = Object.keys(payload).sort();
+  if (actualKeys.length !== expectedKeys.length
+      || expectedKeys.sort().some((key, index) => key !== actualKeys[index])) {
+    fail("invalid-wire-size", `trusted ${lane}-${kind} payload shape changed`);
+  }
+  const source = kind === "keyframe" ? payload.projection : payload.delta;
+  if (source !== origin.source || !Object.isFrozen(payload) || !Object.isFrozen(source)) {
+    fail("invalid-wire-size", `trusted ${lane}-${kind} payload mutated after construction`);
+  }
+  if (kind === "keyframe") {
+    if (payload.schema !== "lbh-canonical-projection-v1" || source.schema !== payload.schema) {
+      fail("invalid-wire-size", `trusted ${lane} keyframe schema changed`);
+    }
+  } else if (payload.schema !== "lbh-canonical-structural-delta-v1"
+      || source.schema !== payload.schema || payload.baseSnapshotId !== source.baseSnapshotId
+      || payload.baseHash !== source.baseHash || payload.resultHash !== source.resultHash) {
+    fail("invalid-wire-size", `trusted ${lane} delta lineage changed`);
+  }
+  for (const [sourceKey, headerKey] of [["lane", null], ["runId", "matchId"],
+    ["authorityEpoch", "authorityIncarnation"], ["connectionEpoch", "recipientIncarnation"],
+    ["ballparkEpoch", "ballparkEpoch"], ["manifestHash", "manifestHash"],
+    ["statePairId", "statePairId"], ["snapshotId", "snapshotId"]]) {
+    const expected = sourceKey === "lane" ? lane : header[headerKey];
+    if (source[sourceKey] !== expected) fail("invalid-wire-size", `trusted ${lane}-${kind} ${sourceKey} changed`);
+  }
+  if (kind === "keyframe") {
+    for (const key of ["tick", "simTime", "eventWatermark", "fieldRevision", "overloadMode"]) {
+      if (source[key] !== header[key]) fail("invalid-wire-size", `trusted ${lane} keyframe ${key} changed`);
+    }
+  }
+  return authorityCanonicalFact(`${lane}-${kind}`, payload, canonicalProof);
+}
+
+const issueAuthorityStatePairProof = bindAuthorityProofIssuer(({ header, lanes, canonicalFacts, tieOrder }) => {
+  if (tieOrder !== CODEC_PAIR_TIE_ORDER && (tieOrder.length !== CODEC_PAIR_TIE_ORDER.length
+      || tieOrder.some((kind, index) => kind !== CODEC_PAIR_TIE_ORDER[index]))) return false;
+  const expected = [["public", "keyframe"], ["public", "delta"], ["owner", "keyframe"], ["owner", "delta"]];
+  for (const [lane, kind] of expected) {
+    const payload = lanes?.[lane]?.[kind];
+    const fact = canonicalFacts.find((entry) => entry?.label === `${lane}-${kind}`);
+    const origin = authorityLaneOrigins.get(payload);
+    if (!origin || origin.lane !== lane || origin.kind !== kind || fact?.payload !== payload
+        || fact?.bytes !== Buffer.byteLength(fact?.text || "", "utf8")) return false;
+    const source = kind === "keyframe" ? payload.projection : payload.delta;
+    if (origin.source !== source || source.runId !== header.matchId
+        || source.authorityEpoch !== header.authorityIncarnation
+        || source.connectionEpoch !== header.recipientIncarnation
+        || source.ballparkEpoch !== header.ballparkEpoch || source.manifestHash !== header.manifestHash
+        || source.statePairId !== header.statePairId || source.snapshotId !== header.snapshotId) return false;
+  }
+  return true;
+});
 
 function wireDigest(wire) {
   return `sha256:${crypto.createHash("sha256").update(wire, "utf8").digest("hex")}`;
@@ -305,12 +383,13 @@ function keyframePayload(view, { stageProfiler = null, recipientKey = null, lane
         components: view.entities.reduce((sum, entity) => sum + Object.keys(entity.components).length, 0),
       }), computeHash)
     : computeHash();
-  return Object.freeze({
+  const payload = Object.freeze({
     kind: "keyframe",
     schema: view.schema,
     resultHash,
     projection: view,
   });
+  return registerAuthorityLanePayload(payload, lane, view);
 }
 
 function deltaPayload(base, current, { stageProfiler = null, recipientKey = null, lane,
@@ -350,6 +429,7 @@ function deltaPayload(base, current, { stageProfiler = null, recipientKey = null
     resultHash: built.delta.resultHash,
     delta: built.delta,
   });
+  registerAuthorityLanePayload(payload, lane, built.delta);
   const deltaCanonical = serializedComponentProof(payload, stageProfiler, recipientKey);
   const deltaBytes = deltaCanonical.bytes;
   const keyframe = keyframePayload(current, { stageProfiler, recipientKey, lane,
@@ -379,6 +459,7 @@ function pairCombinationKind(publicKind, ownerKind) {
 function createAuthorityDeltaPublisher(options = {}) {
   const stageProfiler = options.stageProfiler || null;
   const preparedProjectionsEnabled = options.preparedProjections !== false;
+  const trustedAuthorityProofsEnabled = options.trustedAuthorityProofs !== false;
   const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
   const limits = Object.freeze({
     maxRecipients: positiveInteger(options.maxRecipients, DEFAULTS.maxRecipients, "maxRecipients"),
@@ -433,6 +514,14 @@ function createAuthorityDeltaPublisher(options = {}) {
     lanePayloadReferenceReuses: 0,
     sizeProofOperations: 0,
     chosenFrameMaterializations: 0,
+    trustedProofsCreated: 0,
+    trustedProofsConsumed: 0,
+    trustedProofRejects: 0,
+    trustedValidationsPerformed: 0,
+    trustedValidationsReused: 0,
+    trustedCanonicalSizeOperations: 0,
+    trustedPositionalSizeOperations: 0,
+    maxExpandedCandidateBytes: 0,
     selectionMilliseconds: [],
     selectionSamplesDropped: 0,
   };
@@ -578,6 +667,18 @@ function createAuthorityDeltaPublisher(options = {}) {
     codecChoice.lanePayloadReferenceReuses += selected.diagnostics.lanePayloadReferenceReuses || 0;
     codecChoice.sizeProofOperations += selected.candidates.length + expanded.sizes.size;
     codecChoice.chosenFrameMaterializations += selected.diagnostics.outerCandidateFrames || 0;
+    codecChoice.maxExpandedCandidateBytes = Math.max(codecChoice.maxExpandedCandidateBytes,
+      ...expanded.sizes.values());
+    const trust = selected.trustDiagnostics;
+    if (trust) {
+      codecChoice.trustedProofsCreated += trust.proofsCreated || 0;
+      codecChoice.trustedProofsConsumed += trust.proofsConsumed || 0;
+      codecChoice.trustedProofRejects += trust.proofRejects || 0;
+      codecChoice.trustedValidationsPerformed += trust.validationsPerformed || 0;
+      codecChoice.trustedValidationsReused += trust.validationsReused || 0;
+      codecChoice.trustedCanonicalSizeOperations += trust.canonicalSizeOperations || 0;
+      codecChoice.trustedPositionalSizeOperations += trust.positionalSizeOperations || 0;
+    }
   }
 
   function stateFor(identity, create = true) {
@@ -768,10 +869,10 @@ function createAuthorityDeltaPublisher(options = {}) {
       const composedExact = exactSafeBase && encodeWire && hasTrustedStatePairCandidateSelector(encodeWire);
       const lazyComposedExact = composedExact && hasTrustedStatePairLazyCandidateSelector(encodeWire);
       if (composedExact) {
-        const lanes = {
-          public: { keyframe: publicDecision.keyframePayload, delta: publicDecision.deltaPayload },
-          owner: { keyframe: ownerDecision.keyframePayload, delta: ownerDecision.deltaPayload },
-        };
+        const lanes = Object.freeze({
+          public: Object.freeze({ keyframe: publicDecision.keyframePayload, delta: publicDecision.deltaPayload }),
+          owner: Object.freeze({ keyframe: ownerDecision.keyframePayload, delta: ownerDecision.deltaPayload }),
+        });
         codecChoice.maxEphemeralCandidates = Math.max(codecChoice.maxEphemeralCandidates, CODEC_PAIR_TIE_ORDER.length);
         const started = performance.now();
         try {
@@ -785,16 +886,41 @@ function createAuthorityDeltaPublisher(options = {}) {
             const [publicKind, ownerKind] = kind.split("+").map((part) => part.split("-")[1]);
             return Object.freeze({ kind, frame: buildFrame(lanes.public[publicKind], lanes.owner[ownerKind]) });
           });
-          const expanded = lazyComposedExact
-            ? exactCanonicalLaneCandidateSizes(frameHeader, lanes, canonicalProofs)
-            : exactCanonicalCandidateSizes(entries, canonicalProofs);
-          for (const bytes of expanded.sizes.values()) {
-            if (bytes > limits.maxPairBytes) fail("pair-too-large",
-              `atomic state pair exceeds ${limits.maxPairBytes} bytes in expanded form`);
+          let expanded;
+          let selected;
+          if (lazyComposedExact && trustedAuthorityProofsEnabled) {
+            // This is the first boundary after the authority has constructed
+            // all four immutable canonical lanes. Validate every lane and
+            // cross-lane relation once, then issue a single-use opaque proof
+            // binding exact references plus the canonical component facts.
+            const canonicalFacts = Object.freeze([
+              validateAuthorityLaneProof(frameHeader, "public", "keyframe", lanes.public.keyframe,
+                canonicalProofs.get(lanes.public.keyframe)),
+              validateAuthorityLaneProof(frameHeader, "public", "delta", lanes.public.delta,
+                canonicalProofs.get(lanes.public.delta)),
+              validateAuthorityLaneProof(frameHeader, "owner", "keyframe", lanes.owner.keyframe,
+                canonicalProofs.get(lanes.owner.keyframe)),
+              validateAuthorityLaneProof(frameHeader, "owner", "delta", lanes.owner.delta,
+                canonicalProofs.get(lanes.owner.delta)),
+            ]);
+            const proof = issueAuthorityStatePairProof({ header: frameHeader, lanes,
+              canonicalFacts, tieOrder: CODEC_PAIR_TIE_ORDER });
+            selected = selectTrustedStatePairWireLaneCandidate(encodeWire, frameHeader, lanes,
+              CODEC_PAIR_TIE_ORDER, proof, limits.maxPairBytes);
+            expanded = Object.freeze({ sizes: selected.expandedSizes,
+              ...selected.expandedDiagnostics });
+          } else {
+            expanded = lazyComposedExact
+              ? exactCanonicalLaneCandidateSizes(frameHeader, lanes, canonicalProofs)
+              : exactCanonicalCandidateSizes(entries, canonicalProofs);
+            for (const bytes of expanded.sizes.values()) {
+              if (bytes > limits.maxPairBytes) fail("pair-too-large",
+                `atomic state pair exceeds ${limits.maxPairBytes} bytes in expanded form`);
+            }
+            selected = lazyComposedExact
+              ? selectTrustedStatePairWireLaneCandidate(encodeWire, frameHeader, lanes, CODEC_PAIR_TIE_ORDER)
+              : selectTrustedStatePairWireCandidate(encodeWire, entries, CODEC_PAIR_TIE_ORDER);
           }
-          const selected = lazyComposedExact
-            ? selectTrustedStatePairWireLaneCandidate(encodeWire, frameHeader, lanes, CODEC_PAIR_TIE_ORDER)
-            : selectTrustedStatePairWireCandidate(encodeWire, entries, CODEC_PAIR_TIE_ORDER);
           observeExactSelection(selected, expanded);
           const selectedExpandedBytes = expanded.sizes.get(selected.chosen.kind);
           chosen = Object.freeze({ frame: selected.chosen.frame, kind: selected.chosen.kind,
@@ -1120,7 +1246,15 @@ function createAuthorityDeltaPublisher(options = {}) {
         lanePayloadsBuilt: codecChoice.lanePayloadsBuilt,
         lanePayloadReferenceReuses: codecChoice.lanePayloadReferenceReuses,
         sizeProofOperations: codecChoice.sizeProofOperations,
-        chosenFrameMaterializations: codecChoice.chosenFrameMaterializations }),
+        chosenFrameMaterializations: codecChoice.chosenFrameMaterializations,
+        trustedProofsCreated: codecChoice.trustedProofsCreated,
+        trustedProofsConsumed: codecChoice.trustedProofsConsumed,
+        trustedProofRejects: codecChoice.trustedProofRejects,
+        trustedValidationsPerformed: codecChoice.trustedValidationsPerformed,
+        trustedValidationsReused: codecChoice.trustedValidationsReused,
+        trustedCanonicalSizeOperations: codecChoice.trustedCanonicalSizeOperations,
+        trustedPositionalSizeOperations: codecChoice.trustedPositionalSizeOperations,
+        maxExpandedCandidateBytes: codecChoice.maxExpandedCandidateBytes }),
       fallbacks: Object.freeze(Object.fromEntries([...codecChoice.fallbacks].sort())),
       ephemeralCandidates: Object.freeze({ retainedAfterPublish: 0,
         maxPerPublish: codecChoice.maxEphemeralCandidates, configuredMaximum: CODEC_PAIR_TIE_ORDER.length }),
@@ -1144,7 +1278,8 @@ function createAuthorityDeltaPublisher(options = {}) {
       preparedProjections: Object.freeze({ enabled: preparedProjectionsEnabled, ...operationCounters,
         pendingReferences: preparedPendingReferences, ackedReferences: preparedAckedReferences,
         maxPendingReferences: limits.maxRecipients * limits.maxPendingPairsPerRecipient * 2,
-        maxAckedReferences: limits.maxRecipients * 2 }) });
+        maxAckedReferences: limits.maxRecipients * 2 }),
+      trustedAuthorityProofs: Object.freeze({ enabled: trustedAuthorityProofsEnabled }) });
   }
 
   return Object.freeze({ publish, acknowledge, retransmit, rebase, disconnect, diagnostics });

@@ -70,7 +70,13 @@ function ack(frame) {
 }
 
 function run() {
-  const publisher = createAuthorityDeltaPublisher({ preparedProjections: true });
+  const publisher = createAuthorityDeltaPublisher({ preparedProjections: true,
+    trustedAuthorityProofs: process.env.LBH_S18_DISABLE_TRUSTED_PROOFS !== "1",
+    ...(process.env.LBH_S18_MAX_PAIR_BYTES
+      ? { maxPairBytes: Number(process.env.LBH_S18_MAX_PAIR_BYTES),
+        maxRetainedBytesPerRecipient: Math.max(2 * 1024 * 1024, Number(process.env.LBH_S18_MAX_PAIR_BYTES)) }
+      : {}),
+  });
   const context = codecContext({ ...identity, manifestHash: MANIFEST_HASH,
     codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH });
   const encoder = createStatePairWireEncoder(context);
@@ -107,6 +113,8 @@ function run() {
         authorityPublisher: fileSha(path.join(MODULE_ROOT, "scripts", "authority-delta-publisher.cjs")),
         positionalCodec: fileSha(path.join(MODULE_ROOT, "scripts", "state-pair-positional-codec.cjs")),
         wireProtocol: fileSha(path.join(MODULE_ROOT, "scripts", "multiplayer-wire-protocol.cjs")),
+        authorityProof: fs.existsSync(path.join(MODULE_ROOT, "scripts", "state-pair-authority-proof.cjs"))
+          ? fileSha(path.join(MODULE_ROOT, "scripts", "state-pair-authority-proof.cjs")) : null,
         benchmarkScript: fileSha(__filename),
       } },
     workload: { publicEntities: 48, ownerEntities: 1, candidatesPerSelection: 4 },

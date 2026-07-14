@@ -20,6 +20,7 @@ const {
   decodeBinaryFrame,
   composeBinaryStatePairCandidates,
 } = require("./state-pair-binary-codec.cjs");
+const { selectAuthorityStatePairWithProof } = require("./state-pair-authority-proof.cjs");
 
 const trustedStatePairWireEncoders = new WeakSet();
 const trustedStatePairCandidateSelectors = new WeakMap();
@@ -857,11 +858,16 @@ function createStatePairWireEncoder(codecContext, observe = null) {
     }
   });
   if (!binary) {
-    trustedStatePairLazyCandidateSelectors.set(encoder, (header, lanes, tieOrder) => {
+    trustedStatePairLazyCandidateSelectors.set(encoder, (header, lanes, tieOrder, authorityProof = null,
+      maxPairBytes = null) => {
       const started = performance.now();
-      validateStatePairLaneCandidates(header, lanes, tieOrder);
       try {
-        const selected = composeStatePairLaneCandidates(header, lanes, context, tieOrder);
+        const selected = authorityProof === null
+          ? (validateStatePairLaneCandidates(header, lanes, tieOrder),
+            composeStatePairLaneCandidates(header, lanes, context, tieOrder))
+          : selectAuthorityStatePairWithProof(authorityProof, {
+              header, lanes, context, tieOrder, maxPairBytes,
+            });
         observe?.(selected.chosen.wire, performance.now() - started);
         return selected;
       } catch (error) {
@@ -887,10 +893,19 @@ function hasTrustedStatePairCandidateSelector(encoder) {
   return trustedStatePairCandidateSelectors.has(encoder);
 }
 
-function selectTrustedStatePairWireLaneCandidate(encoder, header, lanes, tieOrder) {
+function selectTrustedStatePairWireLaneCandidate(encoder, header, lanes, tieOrder,
+  authorityProof = null, maxPairBytes = null) {
   const selector = trustedStatePairLazyCandidateSelectors.get(encoder);
   if (!selector) throw new TypeError("encoder does not expose trusted lazy candidate composition");
-  return selector(header, lanes, tieOrder);
+  return selector(header, lanes, tieOrder, authorityProof, maxPairBytes);
+}
+
+// Internal authority trust-boundary validator. General wire APIs still run the
+// same validator themselves; this entry point exists only so the authority can
+// validate once before issuing its synchronous opaque proof.
+function validateTrustedAuthorityStatePairLaneCandidates(header, lanes, tieOrder) {
+  validateStatePairLaneCandidates(header, lanes, tieOrder);
+  return true;
 }
 
 function hasTrustedStatePairLazyCandidateSelector(encoder) {
@@ -918,6 +933,7 @@ module.exports = {
   selectTrustedStatePairWireCandidate,
   hasTrustedStatePairCandidateSelector,
   selectTrustedStatePairWireLaneCandidate,
+  validateTrustedAuthorityStatePairLaneCandidates,
   hasTrustedStatePairLazyCandidateSelector,
   isTrustedStatePairWireEncoder,
 };
