@@ -204,6 +204,18 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "MovementContract",
+    file: "movement-contract.cjs",
+    lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
+    name: "SimWellGrace",
+    file: "sim-well-grace.cjs",
+    lanes: ["authority", "sim-structure", "full"],
+    browser: false,
+  },
+  {
     name: "SimProtocolInput",
     file: "sim-protocol-input.cjs",
     lanes: ["fast", "core", "static", "authority", "sim-structure", "full"],
@@ -290,6 +302,12 @@ const SUITES = [
   {
     name: "UIMotion",
     file: "ui-motion.cjs",
+    lanes: ["fast", "core", "static", "full"],
+    browser: false,
+  },
+  {
+    name: "BrowserMode",
+    file: "browser-mode.cjs",
     lanes: ["fast", "core", "static", "full"],
     browser: false,
   },

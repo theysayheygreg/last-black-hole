@@ -1181,6 +1181,8 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
       pulseCooldownRemaining: 0,
       hullGraceRemaining: 0,
     },
+    _wellGraceContactActive: false,
+    _wellGraceLastTick: -1,
     signal: {
       level: 0,
       zone: "ghost",
@@ -2683,19 +2685,24 @@ function resolveWellContact(player, well, dt, dx, dy) {
     });
     return "protected";
   }
-  if ((player.effectState.hullGraceRemaining || 0) > 0) {
-    player.effectState.hullGraceRemaining = Math.max(0, player.effectState.hullGraceRemaining - dt);
-    if (player.effectState.hullGraceRemaining > 0) return "protected";
-  } else if ((player.brain?.wellGraceDuration || 0) > 0) {
-    player.effectState.hullGraceRemaining = player.brain.wellGraceDuration;
+  const graceDuration = player.brain?.wellGraceDuration || 0;
+  if (graceDuration > 0 && !player._wellGraceContactActive) {
+    player._wellGraceContactActive = true;
+    player._wellGraceLastTick = runtime.tick;
+    player.effectState.hullGraceRemaining = graceDuration;
     publishEvent("player.hullGraceStarted", {
       clientId: player.clientId,
       wellId: well.id,
       wellName: well.name || well.id,
-      duration: player.brain.wellGraceDuration,
+      duration: graceDuration,
     });
     return "protected";
   }
+  if (player._wellGraceContactActive && player._wellGraceLastTick !== runtime.tick) {
+    player._wellGraceLastTick = runtime.tick;
+    player.effectState.hullGraceRemaining = Math.max(0, player.effectState.hullGraceRemaining - dt);
+  }
+  if ((player.effectState.hullGraceRemaining || 0) > 0) return "protected";
   if (player.abilityState && player.abilityState.hullType === 'hauler'
       && player.abilityState.wellSurvivesRemaining > 0) {
     player.abilityState.wellSurvivesRemaining--;
@@ -2740,14 +2747,19 @@ function applyWellGravity(player, dt) {
     runtime.mapState.wells,
     runtime.session.maxWellInfluencesPerPlayer || runtime.mapState.wells.length || 1
   );
+  let hasWellContact = false;
   for (const { entity: well } of relevantWells) {
     const dx = worldDisplacement(player.wx, well.wx, runtime.session.worldScale);
     const dy = worldDisplacement(player.wy, well.wy, runtime.session.worldScale);
     const dist = Math.hypot(dx, dy);
-    if (dist < 0.0001) continue;
-    if (dist < well.killRadius && resolveWellContact(player, well, dt, dx, dy) === "dead") return;
+    if (dist < well.killRadius) {
+      hasWellContact = true;
+      if (resolveWellContact(player, well, dt, dx, dy) === "dead") return;
+    }
   }
-  if ((player.effectState.hullGraceRemaining || 0) > 0) {
+  if (!hasWellContact && player._wellGraceContactActive) {
+    player._wellGraceContactActive = false;
+    player._wellGraceLastTick = -1;
     player.effectState.hullGraceRemaining = 0;
   }
   let pullX = 0;
