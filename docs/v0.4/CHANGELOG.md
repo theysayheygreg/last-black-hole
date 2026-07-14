@@ -82,6 +82,17 @@
   is test-only.
 - Made Inhibitor audio fail silent on incomplete/non-finite remote spatial state
   instead of allowing Web Audio to stop the presentation loop.
+- Finished the P4 terminal recovery surface: real non-reconnectable closes now
+  become persistently failed instead of remaining ambiguously disconnected.
+- Added a persistent crew-rail recovery panel explaining that the authoritative
+  body remains live until reservation expiry, with a prompt return-to-launch
+  action that does not wait on an unreachable authority or auto-start offline.
+- Stopped gameplay sampling/dispatch while the stream is not open and
+  neutralized continuous movement before resume, while leaving reliable action
+  identities intact for exactly-once recovery.
+- Extended direct transport and four-human browser proof through terminal
+  failure, stable pending-input bounds, visible recovery copy, and clean return
+  to the launch choices.
 
 ### External playtest
 

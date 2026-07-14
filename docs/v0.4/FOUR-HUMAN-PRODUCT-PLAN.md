@@ -89,7 +89,8 @@ insufficient; they must not obscure movement or the fabric.
 
 ### P4 — Failure Continuity
 
-**Implementation status:** in progress. The authority now reserves a dropped
+**Implementation status:** engineering-complete; Greg feel/readability gate
+pending. The authority now reserves a dropped
 human's live body and stable seat for 90 simulation seconds, releases held
 movement and one-shot input immediately, keeps hazards authoritative, and
 publishes a public countdown. Expiry commits an abandoned outcome, removes the
@@ -97,7 +98,12 @@ seat, and promotes the next connected human to crew leader. A focused
 four-human browser journey proves ordinary recovery with a rotated connection
 epoch, explicit leave, host-link countdown, expiry, and leader handoff. The
 three-second timeout in that journey is a test-only override; production stays
-at 90 seconds.
+at 90 seconds. Transient interruption remains visibly reconnecting and resumes
+with neutral continuous input plus preserved reliable-action identity. A
+non-reconnectable or exhausted stream becomes persistently failed, stops
+sampling and sending gameplay input, explains that the body remains live until
+expiry, and offers a prompt local return to the launch choices without waiting
+on an unreachable authority.
 
 - show connecting, reconnecting, recovered, and failed states persistently;
 - reserve a disconnected seat/body under the ratified timeout policy;
@@ -128,10 +134,11 @@ see the same result, and rematch without terminal intervention.
 
 ## Immediate Next Slice
 
-Finish P4 by making terminal recovery failure and its next action persistent at
-the human surface. Old-epoch fencing remains covered by the authority and
-ordinary reconnect journeys. Then move directly to P5 canonical crew result,
-leave, and rematch; do not reopen hosting, costing, or high-count work.
+Begin P5 canonical crew result and rematch. Reuse the authority's committed run
+result rather than assembling different outcomes on each client; keep private
+reward details owner-only; preserve the party while creating a fresh run
+lineage; and retain explicit leave-to-launch/home. Do not reopen hosting,
+costing, or high-count work.
 
 Engineering guardrails remain:
 

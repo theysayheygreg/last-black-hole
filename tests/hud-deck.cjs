@@ -68,6 +68,17 @@ async function run() {
   assert.strictEqual(hud.getCrewPresentationState([
     { clientId: 'remote', name: 'Bravo', seatNo: 1, connected: false, status: 'alive', reconnectSecondsRemaining: 43.2 },
   ], 'local')[0].stateLabel, 'link lost 44s');
+  assert.deepStrictEqual(hud.getLocalConnectionPresentationState('failed', { lastInputSource: 'keyboard' }), {
+    state: 'failed',
+    label: 'recovery failed',
+    detail: 'Space return to launch // body live until reservation expires',
+  });
+  assert.deepStrictEqual(hud.getLocalConnectionPresentationState('reconnecting'), {
+    state: 'reconnecting',
+    label: 'reconnecting',
+    detail: 'body remains live in the universe',
+  });
+  assert.strictEqual(hud.getLocalConnectionPresentationState('open'), null);
 
   const consequenceCrew = [
     { clientId: 'local', name: 'Alpha', seatNo: 0, status: 'alive' },

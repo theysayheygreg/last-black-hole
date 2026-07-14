@@ -448,6 +448,26 @@ async function main() {
       "The fresh socket's pre-welcome window must not emit an ACK for an old binding's event");
     });
 
+    await runner.run("terminal close fails persistently and neutralizes stale continuous intent", async () => {
+      const harness = deliveryHarness(SimClient);
+      harness.client.lastSentInput = {
+        type: "input", inputSeq: 7, moveX: 1, moveY: -1,
+        thrust: 1, brake: 0.5, slingshot: true, ability1: true, ability2: true,
+      };
+      harness.client._closeDirective = { reconnectable: false, reason: "terminal fixture" };
+      harness.client._socket.readyState = 3;
+      harness.client._handleSocketClose({ code: 4012, reason: "terminal fixture" }, 1);
+      assert(harness.client.getMetrics().streamState === "failed"
+        && harness.client.metrics.reconnectReason === "terminal fixture",
+      "A non-reconnectable close must become a persistent failed state");
+      assert(harness.client.lastSentInput.thrust === 0
+        && harness.client.lastSentInput.brake === 0
+        && harness.client.lastSentInput.slingshot === false
+        && harness.client.lastSentInput.ability1 === false
+        && harness.client.lastSentInput.ability2 === false,
+      "A terminal close must neutralize continuous intent before any future admission");
+    });
+
     await runner.run("delivery and semantic event windows fail closed before ACKing unretained frames", async () => {
       const deliveryOverflow = deliveryHarness(SimClient);
       deliveryOverflow.client._handleStreamFrame(eventFrame(129, 129), 1);

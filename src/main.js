@@ -3058,6 +3058,10 @@ async function leaveRemoteSessionToHome() {
       console.error('[LBH] remote profile sync failed:', err);
     }
   }
+  clearRemoteSessionPresentation();
+}
+
+function clearRemoteSessionPresentation() {
   remoteAuthorityActive = false;
   remoteMapId = null;
   remoteSnapshot = null;
@@ -3085,6 +3089,19 @@ async function leaveRemoteSessionToHome() {
   remotePendingSlingshotEdges = [];
   remoteNextSlingshotEdgeId = 1;
   remoteShipPresentation = null;
+}
+
+function abandonFailedRemoteSessionToLaunch() {
+  stopRemoteLobbyPolling();
+  // Terminal recovery must always have a prompt local escape. The authority
+  // keeps the body until its reservation expires; do not wait on unreachable
+  // leave/profile HTTP before honoring the player's return-to-launch action.
+  void simClient?.abandon?.().catch((err) => {
+    console.error('[LBH] failed-session local abandon cleanup failed:', err);
+  });
+  clearRemoteSessionPresentation();
+  remoteJoinErrorCode = 'room-unavailable';
+  remoteJoinError = 'PREVIOUS CREW LINK ENDED — BODY RESERVED UNTIL TIMEOUT';
 }
 
 async function restartRemoteSession() {
@@ -4577,6 +4594,16 @@ function gameLoop(now) {
     if (pauseNow && !_prevPause) togglePause();
 
     if (!transitionActive && confirmNow && !_prevConfirm) {
+      const remoteRecoveryFailed = remoteAuthorityActive
+        && simClient?.getMetrics?.()?.streamState === 'failed';
+      if (remoteRecoveryFailed && gamePhase === 'playing') {
+        triggerTransition(() => {
+          abandonFailedRemoteSessionToLaunch();
+          gamePhase = 'mapSelect';
+          hideHUD();
+          audioEngine.setContext('menu');
+        });
+      }
       // Unlock confirm only after the linger finishes plus a beat for
       // the title to register. Matches the DEATH_LINGER_DURATION used
       // in the end-screen render block.
@@ -4678,7 +4705,9 @@ function gameLoop(now) {
     }
 
     if (remoteAuthorityActive) {
-      if (!inventoryOpen) {
+      const remoteStreamOpen = simClient.transport !== 'stream'
+        || simClient?.getMetrics?.()?.streamState === 'open';
+      if (remoteStreamOpen && !inventoryOpen) {
         inputManager.applyToShip(ship);
       } else {
         ship.setThrustIntensity(0);
@@ -4686,7 +4715,7 @@ function gameLoop(now) {
       }
 
       if (gamePhase === 'playing') {
-        if (inventoryNow && !_prevInventory) {
+        if (remoteStreamOpen && inventoryNow && !_prevInventory) {
           inventoryOpen = !inventoryOpen;
           if (inventoryOpen) resetInventoryCursor();
         }
@@ -4702,35 +4731,35 @@ function gameLoop(now) {
           }
         }
 
-        if (!inventoryOpen && consumable1Now && !_prevConsumable1) {
+        if (remoteStreamOpen && !inventoryOpen && consumable1Now && !_prevConsumable1) {
           remotePendingConsumeSlot = 0;
           remoteConsumeIntentGeneration += 1;
-        } else if (!inventoryOpen && consumable2Now && !_prevConsumable2) {
+        } else if (remoteStreamOpen && !inventoryOpen && consumable2Now && !_prevConsumable2) {
           remotePendingConsumeSlot = 1;
           remoteConsumeIntentGeneration += 1;
         }
-        if (pulseNow && !_prevPulse) {
+        if (remoteStreamOpen && pulseNow && !_prevPulse) {
           remotePendingPulse = true;
           remotePulseIntentGeneration += 1;
         }
-        if (!inventoryOpen && extractNow && !_prevExtract) {
+        if (remoteStreamOpen && !inventoryOpen && extractNow && !_prevExtract) {
           remotePendingExtractConfirm = true;
           remoteExtractIntentGeneration += 1;
         }
-        if (!inventoryOpen && slingshotNow && !_prevSlingshot) {
+        if (remoteStreamOpen && !inventoryOpen && slingshotNow && !_prevSlingshot) {
           remotePendingSlingshotEdges.push(remoteNextSlingshotEdgeId++);
           if (remotePendingSlingshotEdges.length > 8) remotePendingSlingshotEdges.shift();
         }
 
-        const streamHasDispatchableAction = simClient.transport === 'stream'
+        const streamHasDispatchableAction = remoteStreamOpen && simClient.transport === 'stream'
           && !remoteActionSettlementInFlight && (
           remotePendingPulse || remotePendingExtractConfirm || remotePendingConsumeSlot !== null
           || remotePendingSlingshotEdges.length > 0
         );
-        const streamInputDue = simClient.transport !== 'stream'
+        const streamInputDue = remoteStreamOpen && (simClient.transport !== 'stream'
           || performance.now() >= remoteNextStreamInputAt
-          || streamHasDispatchableAction;
-        if (!remoteInputRequestInFlight && streamInputDue) {
+          || streamHasDispatchableAction);
+        if (remoteStreamOpen && !remoteInputRequestInFlight && streamInputDue) {
           const facing = inputManager.facing ?? ship.facing;
           const thrust = inventoryOpen ? 0 : inputManager.thrustIntensity;
           const brake = inventoryOpen ? 0 : inputManager.brakeIntensity;

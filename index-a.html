@@ -415,6 +415,25 @@
     .hud-crew-row[data-state="dead"] .hud-crew-state { color: var(--lbh-danger); }
     .hud-crew-row[data-state="extracted"] .hud-crew-state { color: var(--lbh-ecology); }
     .hud-crew-state { color: rgba(120, 220, 180, 0.82); }
+    .hud-crew-connection {
+      display: grid;
+      gap: 2px;
+      padding: 6px 0 2px;
+      border-top: 1px solid rgba(255, 185, 56, 0.18);
+      text-transform: uppercase;
+    }
+    .hud-crew-connection-label {
+      color: var(--lbh-salvage);
+      font-size: var(--lbh-couch-small);
+    }
+    .hud-crew-connection-detail {
+      color: var(--lbh-text-muted);
+      font-size: var(--lbh-couch-micro);
+    }
+    .hud-crew-connection[data-state="failed"] {
+      border-top-color: rgba(232, 25, 0, 0.32);
+    }
+    .hud-crew-connection[data-state="failed"] .hud-crew-connection-label { color: var(--lbh-danger); }
     #hud-salvage {
       bottom: var(--lbh-edge-margin); left: var(--lbh-edge-margin);
       width: 254px;

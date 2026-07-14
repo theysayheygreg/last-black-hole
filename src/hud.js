@@ -236,6 +236,26 @@ export function getCrewPresentationState(players = [], localClientId = null, loc
     });
 }
 
+export function getLocalConnectionPresentationState(streamState = 'open', options = {}) {
+  const state = String(streamState || 'open').toLowerCase();
+  if (state === 'open' || state === 'idle' || state === 'leave' || state === 'shutdown') return null;
+  if (state === 'failed') {
+    return {
+      state: 'failed',
+      label: 'recovery failed',
+      detail: `${affordanceCaption('confirm', 'return to launch', options)} // body live until reservation expires`,
+    };
+  }
+  if (state === 'connecting') {
+    return { state: 'connecting', label: 'connecting', detail: 'establishing crew authority' };
+  }
+  return {
+    state: 'reconnecting',
+    label: 'reconnecting',
+    detail: 'body remains live in the universe',
+  };
+}
+
 function crewEventMember(event, players) {
   const payload = event?.payload || {};
   const player = (players || []).find((entry) => entry?.clientId === payload.clientId) || null;
@@ -282,11 +302,12 @@ export function getCrewConsequencePresentation(event, players = [], localClientI
   }
 }
 
-function renderCrewRail(players, localClientId, localStreamState) {
+function renderCrewRail(players, localClientId, localStreamState, promptOptions = {}) {
   if (!_crewEl) return;
   const crew = getCrewPresentationState(players, localClientId, localStreamState);
+  const connection = getLocalConnectionPresentationState(localStreamState, promptOptions);
   _crewEl.style.display = crew.length > 0 ? '' : 'none';
-  const signature = JSON.stringify(crew);
+  const signature = JSON.stringify({ crew, connection });
   if (signature === _lastCrewSignature) return;
   _lastCrewSignature = signature;
   _crewEl.replaceChildren();
@@ -294,6 +315,19 @@ function renderCrewRail(players, localClientId, localStreamState) {
   label.className = 'hud-label';
   label.textContent = `crew link // ${crew.length}/4`;
   _crewEl.append(label);
+  if (connection) {
+    const status = document.createElement('div');
+    status.className = 'hud-crew-connection';
+    status.dataset.state = connection.state;
+    const connectionLabel = document.createElement('div');
+    connectionLabel.className = 'hud-crew-connection-label';
+    connectionLabel.textContent = connection.label;
+    const detail = document.createElement('div');
+    detail.className = 'hud-crew-connection-detail';
+    detail.textContent = connection.detail;
+    status.append(connectionLabel, detail);
+    _crewEl.append(status);
+  }
   for (const member of crew) {
     const row = document.createElement('div');
     row.className = 'hud-crew-row';
@@ -562,7 +596,12 @@ export function updateHUD(runElapsedTime, portalSystem, inventory, growthTimer, 
   const motion = resolveMotionSettings(CONFIG.ui?.motion || {});
   const reducedMotion = opts.reducedMotion ?? motion.reducedMotion;
   _hudEl.dataset.reducedMotion = reducedMotion ? 'true' : 'false';
-  renderCrewRail(opts.crewPlayers || [], opts.localClientId || null, opts.localStreamState || 'open');
+  renderCrewRail(
+    opts.crewPlayers || [],
+    opts.localClientId || null,
+    opts.localStreamState || 'open',
+    _promptOptions,
+  );
 
   const runDuration = CONFIG.universe.runDuration;
   const remaining = Math.max(0, runDuration - runElapsedTime);

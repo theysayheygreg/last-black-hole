@@ -258,6 +258,18 @@ export class SimClient {
     await this._stopStream('shutdown');
   }
 
+  async abandon() {
+    this._shuttingDown = true;
+    try {
+      await this._stopStream('abandon');
+      this._clearAuthority(null, null);
+      this._resetStreamState(null);
+      this.roomCode = null;
+    } finally {
+      this._shuttingDown = false;
+    }
+  }
+
   async pollSnapshot(force = false) {
     if (this.transport === 'stream') {
       const version = this._streamVersion;

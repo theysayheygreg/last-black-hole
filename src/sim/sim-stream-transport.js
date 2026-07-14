@@ -788,10 +788,27 @@ export function _handleSocketClose(event, generation) {
   this.activeTransport = 'http';
   this._streamState = 'disconnected';
   const directive = this._closeDirective;
+  this._closeDirective = null;
   const reconnectable = directive ? directive.reconnectable : ![1000, 4400, 4401, 4403, 4406].includes(event.code);
   const reason = directive?.reason || event.reason || `socket-${event.code}`;
   this.metrics.reconnectReason = reason;
+  if (this.lastSentInput) {
+    // A resume must never replay physical intent captured before the blackout.
+    // Reliable one-shot actions retain their identities separately; continuous
+    // movement restarts neutral and the next open-frame input becomes current.
+    this.lastSentInput = {
+      ...this.lastSentInput,
+      moveX: 0,
+      moveY: 0,
+      thrust: 0,
+      brake: 0,
+      slingshot: false,
+      ability1: false,
+      ability2: false,
+    };
+  }
   if (reconnectable) this._scheduleReconnect(reason, directive?.retryAfterMs || 0);
+  else this._streamState = 'failed';
 }
 
 export function _scheduleReconnect(reason, initialDelay = 0) {

@@ -93,14 +93,17 @@ Current execution checkpoint:
 - Observer-visible death, extraction, link-loss/recovery, and explicit leave
   callouts are live beside persistent crew states. Public Inhibitor pressure is
   labeled world pressure; teammate cargo and individual signal stay private.
-- P4 failure continuity is underway: a disconnected live body and seat remain
+- P4 authority continuity is live: a disconnected live body and seat remain
   authority-owned for 90 seconds with input released, a public countdown, and
   no invulnerability. Expiry commits abandonment, removes the seat, and
   promotes the next connected human. Four-browser proof covers reconnect epoch
   rotation, explicit leave, host expiry, and leader handoff.
-- Next: persistent terminal recovery-failure treatment, then P5 canonical crew
-  result and rematch. Costing, hosting, eight-player, and high-count work stay
-  closed.
+- P4 is engineering-complete: exhausted or non-reconnectable streams now become
+  a persistent failed state, stop gameplay dispatch, neutralize stale movement
+  before any later admission, explain the live-body reservation, and provide a
+  prompt return to launch that never waits on an unavailable authority.
+- Next: P5 canonical crew result and rematch. Costing, hosting, eight-player,
+  and high-count work stay closed.
 
 S20 negotiation/fallback, owner privacy, ACK/rebase, reliable actions,
 reconnect fencing, and bounded queues remain frozen guardrails. Local/offline

@@ -582,6 +582,36 @@ async function run() {
       }, { timeout: 10000 }, { clientId: beforeReconnect.clientId });
       report.screenshots.hostPromoted = await capture(reconnectPilot, "host-promoted");
 
+      report.stage = "terminal-recovery-failure";
+      const failedRecoveryBefore = await journeyState(reconnectPilot);
+      const failedRecoveryInterrupted = await reconnectPilot.page.evaluate(() =>
+        window.__TEST_API?.interruptMultiplayerStreamForTest?.(null, { reconnectable: false }));
+      assert(failedRecoveryInterrupted?.connectionEpoch === failedRecoveryBefore.connectionEpoch,
+        "Failed-recovery proof did not close the current connection epoch");
+      await waitFor(reconnectPilot.page, () => {
+        const state = window.__TEST_API?.getMultiplayerJourneyState?.();
+        const panel = document.querySelector('#hud-crew .hud-crew-connection');
+        return state?.transport?.streamState === 'failed'
+          && panel?.dataset.state === 'failed'
+          && panel.textContent.toLowerCase().includes('recovery failed')
+          && panel.textContent.toLowerCase().includes('return to launch')
+          && panel.textContent.toLowerCase().includes('body live until reservation expires');
+      }, { timeout: 5000 });
+      const failedPendingBefore = (await journeyState(reconnectPilot)).transport.pendingInputCount;
+      await sleep(300);
+      const failedPendingAfter = (await journeyState(reconnectPilot)).transport.pendingInputCount;
+      assert(failedPendingAfter <= failedPendingBefore,
+        `Terminal failure kept queuing gameplay input (${failedPendingBefore} -> ${failedPendingAfter})`);
+      report.screenshots.recoveryFailed = await capture(reconnectPilot, "recovery-failed");
+      await tap(reconnectPilot.page, "Enter", "Enter", 250);
+      await waitForPhase(reconnectPilot.page, "mapSelect", 15000);
+      const returnedFromFailure = await reconnectPilot.page.evaluate(() => ({
+        phase: window.__TEST_API?.getGamePhase?.(),
+        hudVisible: getComputedStyle(document.getElementById('hud')).display !== 'none',
+      }));
+      assert(returnedFromFailure.phase === 'mapSelect' && !returnedFromFailure.hudVisible,
+        `Failed recovery did not return cleanly to launch: ${JSON.stringify(returnedFromFailure)}`);
+
       const health = await fetch(`${SIM_URL}/health`).then((response) => response.json());
       assert(health.session?.status === "running" && health.session?.maxPlayers === 4,
         "Authority health must remain a four-seat running match");

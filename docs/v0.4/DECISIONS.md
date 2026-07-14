@@ -98,6 +98,13 @@ authority event and removes the seat immediately.
 These events authorize connection presentation only. They do not transfer
 gameplay authority, reveal private player state, or relax old-epoch fencing.
 
+Transient stream loss presents as reconnecting. Exhausted or explicitly
+non-reconnectable recovery presents as a persistent failure, releases local
+continuous gameplay intent, and stops new gameplay dispatch. Returning to the
+launch choices is a local, immediate UI action: it does not claim that the
+authority removed the body, and it never silently starts offline play. The
+authority continues the existing reservation/expiry contract independently.
+
 **Why:** humans need to distinguish a dead pilot, a temporarily broken link,
 and someone who intentionally left without guessing from a disappearing ship.
 
