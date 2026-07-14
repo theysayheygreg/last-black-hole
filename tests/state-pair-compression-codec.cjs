@@ -12,6 +12,8 @@ const {
 } = require("../scripts/state-pair-compression-codec.cjs");
 const { createClientDeltaReceiver, selectClientReplicationMode, MODES } =
   require("../scripts/client-delta-receiver.cjs");
+const { MAX_CODEC_BYTES: PUBLIC_BODY_MAX_CODEC_BYTES } =
+  require("../scripts/state-pair-public-body-codec.cjs");
 const { encodeWireFrame, parseWireFrame, SERVER_TO_CLIENT } =
   require("../scripts/multiplayer-wire-protocol.cjs");
 
@@ -73,6 +75,8 @@ function main() {
   assert(retained.equals(stable));
   assert(cases.every(([, code]) => code), JSON.stringify(cases));
   const bodyBytes = Buffer.from('{"pairSchema":"lbh-authority-state-pair-body-v1"}');
+  assert.strictEqual(PUBLIC_BODY_MAX_CODEC_BYTES, MAX_ORIGINAL_BYTES,
+    "mandatory S23 compression must carry every codec-valid public-body frame");
   const bodyWire = encodeCompressedPublicBodyStatePair(bodyBytes);
   assert(decodeCompressedPublicBodyStatePair(bodyWire).equals(bodyBytes));
   assert.strictEqual(errorCode(() => decodeCompressedPublicBodyStatePair(wire)), "wrong-magic");

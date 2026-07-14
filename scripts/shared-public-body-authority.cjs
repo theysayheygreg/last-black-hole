@@ -116,9 +116,10 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
   const bodies = new Map();
   const sourceBodies = new Map();
   const keyframes = new Map();
-  const encodedBodies = new Map();
   const recipients = new Map();
   let bodyBytes = 0;
+  let encodedBodyCache = null;
+  let encodedBodyBytes = 0;
   let nextBodyRevision = 1;
   let cohortTargetId = null;
   let cohorts = new Map();
@@ -158,7 +159,10 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       const record = bodies.get(oldestId);
       bodies.delete(oldestId);
       keyframes.delete(oldestId);
-      encodedBodies.delete(oldestId);
+      if (encodedBodyCache?.bodyId === oldestId) {
+        encodedBodyCache = null;
+        encodedBodyBytes = 0;
+      }
       sourceBodies.delete(record.sourceKey);
       bodyBytes -= record.bytes;
       counters.bodyEvictions += 1;
@@ -210,6 +214,8 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       cohortTargetId = bodyId;
       cohorts = new Map();
       cohortBytes = 0;
+      encodedBodyCache = null;
+      encodedBodyBytes = 0;
     }
     evictBodies();
     return record;
@@ -225,11 +231,14 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
   }
 
   function encodedBody(target) {
-    const cached = encodedBodies.get(target.body.bodyId);
-    if (cached) return cached;
+    if (encodedBodyCache?.bodyId === target.body.bodyId) return encodedBodyCache.wire;
     const wire = canonicalJson(target.body);
-    encodedBodies.set(target.body.bodyId, wire);
     counters.bodySerializations += 1;
+    const bytes = Buffer.byteLength(wire, "utf8");
+    if (bodyBytes + cohortBytes + bytes <= limits.maxBodyBytes) {
+      encodedBodyCache = Object.freeze({ bodyId: target.body.bodyId, wire });
+      encodedBodyBytes = bytes;
+    }
     return wire;
   }
 
@@ -263,7 +272,7 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       resultHash: target.bodyHash, structuralBaseHash: base.structuralHash,
       structuralResultHash: target.structuralHash, delta: built.delta });
     const bytes = canonicalJsonBytes(payload).length;
-    if (bodyBytes + cohortBytes + bytes > limits.maxBodyBytes) {
+    if (bodyBytes + encodedBodyBytes + cohortBytes + bytes > limits.maxBodyBytes) {
       counters.cohortCapFallbacks += 1;
       return null;
     }
@@ -426,8 +435,9 @@ function createSharedPublicBodyAuthority({ matchId, authorityIncarnation, ballpa
       retainedBytes += state.retainedBytes;
       retiredAckProofs += state.retired.size;
     }
-    return deepFreeze({ schema: PAIR_SCHEMA, ...counters, bodies: bodies.size, bodyBytes, cohortBytes,
-      retainedPublicMaterialBytes: bodyBytes + cohortBytes,
+    return deepFreeze({ schema: PAIR_SCHEMA, ...counters, bodies: bodies.size, bodyBytes,
+      encodedBodyBytes, cohortBytes,
+      retainedPublicMaterialBytes: bodyBytes + encodedBodyBytes + cohortBytes,
       recipients: recipients.size, pendingPairs, retainedBytes, retiredAckProofs,
       activeTargetCohorts: cohorts.size, cohortTargetId, limits, ownerPublisher: ownerPublisher.diagnostics() });
   }

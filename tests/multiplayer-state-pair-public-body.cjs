@@ -82,6 +82,10 @@ async function main() {
       && publication.frame.public.kind === "keyframe"));
     assert.strictEqual(new Set(first.map((publication) => publication.frame.public)).size, 1,
       "Synchronized keyframes must share one immutable public payload object");
+    const firstDiagnostics = authority.diagnostics();
+    assert.strictEqual(firstDiagnostics.bodySerializations, 1);
+    assert(firstDiagnostics.encodedBodyBytes > 0);
+    assert(firstDiagnostics.retainedPublicMaterialBytes <= firstDiagnostics.limits.maxBodyBytes);
     for (let index = 0; index < ids.length; index += 1) {
       assert(authority.acknowledge(ids[index], ackFor(first[index].frame)).accepted);
     }
@@ -104,7 +108,7 @@ async function main() {
     assert.strictEqual(decoded.public.baseBodyId, firstBody.body.bodyId);
     assert.strictEqual(authority.retransmit(ids[0], second[0].frame.frameId).encodedDigest,
       second[0].encodedDigest, "Retransmit must retain exact source bytes/digest");
-    assertions += 17;
+    assertions += 20;
   }
 
   {
@@ -166,7 +170,21 @@ async function main() {
       "Combined body plus cohort bytes must fail closed to a keyframe when the cap is exhausted");
     assert.strictEqual(bounded.diagnostics().cohortCapFallbacks, 1);
     assert(bounded.diagnostics().retainedPublicMaterialBytes <= combinedCap);
-    assertions += 8;
+
+    const cacheCap = calibrationOne.bytes * 2 - 1;
+    const cacheBounded = createAuthority({ maxBodyBytes: cacheCap });
+    const cacheBody = cacheBounded.prepareBody(bodySource(1));
+    cacheBounded.publish({ identity: identity(0), body: cacheBody,
+      ownerView: ownerView(identity(0), 1) });
+    cacheBounded.publish({ identity: identity(1), body: cacheBody,
+      ownerView: ownerView(identity(1), 1) });
+    const cacheDiagnostics = cacheBounded.diagnostics();
+    assert.strictEqual(cacheDiagnostics.encodedBodyBytes, 0,
+      "A duplicate canonical body string must not bypass the combined material cap");
+    assert.strictEqual(cacheDiagnostics.bodySerializations, 2,
+      "When cache retention is out of budget, serialization stays ephemeral per recipient");
+    assert(cacheDiagnostics.retainedPublicMaterialBytes <= cacheCap);
+    assertions += 11;
   }
 
   {

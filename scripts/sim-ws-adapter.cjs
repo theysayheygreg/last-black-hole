@@ -71,6 +71,12 @@ function replicationStateFrameKey(frame) {
   return null;
 }
 
+function deepFreezeSharedPublicSource(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreezeSharedPublicSource(child);
+  return Object.freeze(value);
+}
+
 function createSimWebSocketAdapter(options = {}) {
   const config = normalizeAdapterOptions(options);
   const stageProfiler = options.stageProfiler || null;
@@ -1721,7 +1727,7 @@ function createSimWebSocketAdapter(options = {}) {
             }), projectStaticManifest)
           : await projectStaticManifest();
         if (wantsSharedBody && !sharedBodyPublicFrame) {
-          sharedBodyPublicFrame = recipientPublicFrame;
+          sharedBodyPublicFrame = deepFreezeSharedPublicSource(recipientPublicFrame);
           sharedBodyManifestHash = state.binding?.manifestHash;
         }
         const buildOwner = () => buildOwnerState(

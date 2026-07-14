@@ -2,14 +2,16 @@
 
 const crypto = require("crypto");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
-const { PUBLIC_BODY_COMPRESSION_CAPABILITY, PUBLIC_BODY_MANIFEST_HASH } =
+const { MAX_ORIGINAL_BYTES, PUBLIC_BODY_COMPRESSION_CAPABILITY, PUBLIC_BODY_MANIFEST_HASH } =
   require("./state-pair-compression-codec.cjs");
 
 const CAPABILITY = "state-pair-public-body-v1";
 const PAIR_SCHEMA = "lbh-authority-state-pair-body-v1";
 const BODY_SCHEMA = "lbh-public-body-v1";
 const BODY_DELTA_SCHEMA = "lbh-public-body-delta-v1";
-const MAX_CODEC_BYTES = 256 * 1024;
+// S23 always rides its negotiated Brotli envelope. The inner codec must never
+// accept a frame that the mandatory outer profile cannot carry.
+const MAX_CODEC_BYTES = MAX_ORIGINAL_BYTES;
 const MAX_DEPTH = 40;
 const MAX_NODES = 120000;
 const CODEC_MANIFEST = Object.freeze({

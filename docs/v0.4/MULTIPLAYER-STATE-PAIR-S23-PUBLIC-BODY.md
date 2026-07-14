@@ -35,12 +35,17 @@ The immutable `lbh-public-body-v1` record contains only:
 - canonical public entities/components and their global revisions;
 - a canonical SHA-256 body hash.
 
-It contains no session/connection id, recipient membership/client/player id,
-recipient incarnation, profile, rig, cargo, equipped/consumable state, private
-progression, input/action cursors, state-pair/frame/snapshot id, ACK state,
-recovery reason, queue state, or retained-wire metadata. The body privacy
-scanner rejects those names recursively and rejects owner-only component
-families.
+It contains no transport session/connection id, recipient membership id,
+recipient-scoped identity/incarnation, authenticated account/profile id, rig,
+cargo, equipped/consumable state, private progression, input/action cursors,
+state-pair/frame/snapshot id, ACK state, recovery reason, queue state, or
+retained-wire metadata. Match-public gameplay handles currently named
+`clientId`/`sourceId` are allowed because public entities and targets already
+refer to them; they are match-visible simulation handles, not command
+credentials, membership ids, profiles, or durable account identities. If that
+runtime contract changes, S23 must first pseudonymize those handles per match.
+The body privacy scanner rejects recipient/private names recursively and
+rejects owner-only component families.
 
 The `lbh-authority-state-pair-body-v1` recipient envelope owns:
 
