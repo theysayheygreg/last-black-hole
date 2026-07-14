@@ -25,6 +25,12 @@ const FACTORS = Object.freeze({
   worldJobsDue: [25, 100],
   events: [8, 32],
 });
+const PROJECTION_FACTORS = Object.freeze({
+  recipients: [6, 24],
+  bodies: [100, 400],
+  changedBodies: [25, 100],
+  keyframe: [0, 1],
+});
 const H_VECTORS = Object.freeze({
   H24: { humans: 24, bodies: 400, ai: 48, fieldTiles: 256, worldJobs: 100, events: 32,
     replicationRecipients: 24, changedBodies: 100, keyframeBodies: 400, density: "distributed" },
@@ -65,6 +71,13 @@ function elapsed(fn) {
   const started = performance.now();
   const value = fn();
   return { value, ms: performance.now() - started };
+}
+
+function elapsedRepeated(fn, repetitions) {
+  const started = performance.now();
+  let value;
+  for (let index = 0; index < repetitions; index += 1) value = fn();
+  return { value, ms: (performance.now() - started) / repetitions };
 }
 
 function cpuWork(count, seed, width) {
@@ -118,25 +131,28 @@ function buildPublicTuples(bodies, tick, count) {
   const tuples = new Array(count);
   for (let index = 0; index < count; index += 1) {
     const body = bodies[index % bodies.length];
+    const packedFlags = cpuWork(1, tick + index, 256) & 255;
     tuples[index] = [index, Math.round(body.wx * 4096), Math.round(body.wy * 4096),
-      (tick + index) & 255, index % 8];
+      (tick + index) & 255, packedFlags];
   }
   return tuples;
 }
 
 function replicationBeat({ bodies, recipients, changedBodies, tick, keyframe = false }) {
   const publicCount = keyframe ? bodies.length : Math.min(changedBodies, bodies.length);
-  const projection = elapsed(() => ({
+  const projection = elapsedRepeated(() => ({
     schema: "lbh-s24-shared-public-fragment-v1", tick, keyframe,
     entities: buildPublicTuples(bodies, tick, publicCount),
     events: Array.from({ length: Math.max(1, Math.ceil(recipients / 6)) }, (_, index) =>
       [tick, index, (tick * 17 + index) & 65535]),
-  }));
-  const serialization = elapsed(() => Buffer.from(JSON.stringify(projection.value)));
-  const compression = elapsed(() => zlib.brotliCompressSync(serialization.value, BROTLI_OPTIONS));
+  }), 64);
+  const serialization = elapsedRepeated(() => Buffer.from(JSON.stringify(projection.value)), 8);
+  const compression = elapsedRepeated(() => zlib.brotliCompressSync(serialization.value, BROTLI_OPTIONS), 32);
   let ownerBytes = 0;
   let ownerRawBytes = 0;
-  const owner = elapsed(() => {
+  const owner = elapsedRepeated(() => {
+    ownerBytes = 0;
+    ownerRawBytes = 0;
     for (let recipient = 0; recipient < recipients; recipient += 1) {
       const raw = Buffer.from(JSON.stringify({ schema: "lbh-s24-owner-overlay-v1", tick,
         ordinal: recipient, inputAck: tick * 3 + recipient, cargo: [recipient % 5, tick % 7],
@@ -144,14 +160,14 @@ function replicationBeat({ bodies, recipients, changedBodies, tick, keyframe = f
       ownerRawBytes += raw.length;
       ownerBytes += zlib.brotliCompressSync(raw, BROTLI_OPTIONS).length;
     }
-  });
-  const socket = elapsed(() => {
+  }, 12);
+  const socket = elapsedRepeated(() => {
     let checksum = 0;
     for (let recipient = 0; recipient < recipients; recipient += 1) {
       checksum ^= compression.value.length + recipient + ownerBytes;
     }
-    return checksum;
-  });
+    return checksum ^ cpuWork(recipients, checksum, 64);
+  }, 1024);
   const perClientPublicBytes = compression.value.length;
   return {
     stages: { projection: projection.ms, serialization: serialization.ms,
@@ -288,6 +304,20 @@ function fitWriter(samples) {
   return fits;
 }
 
+function fitProjection(samples) {
+  const definitions = {
+    projectionMs: ["publicCount"],
+    serializationMs: ["rawPublicBytes"],
+    compressionMs: ["rawPublicBytes"],
+    ownerOverlayMs: ["recipients"],
+    socketAccountingMs: ["recipients"],
+    compressedPublicBytes: ["publicCount", "recipients"],
+    compressedOwnerBytes: ["recipients"],
+  };
+  return Object.fromEntries(Object.entries(definitions).map(([response, predictors]) =>
+    [response, ols(samples, response, predictors)]));
+}
+
 function forecastFromFits(fits, vector, geometry) {
   const modelVector = {
     players: vector.humans, bodies: vector.bodies, aiDue: vector.ai,
@@ -300,7 +330,60 @@ function forecastFromFits(fits, vector, geometry) {
     stages[name] = predict(fit, modelVector);
     for (const band of Object.keys(total)) total[band] += stages[name][band];
   }
-  return { modelVector, stages, writerMs: total };
+  const stageHz = { input: 30, movement: 30, ballparkSync: 30, broadphase: 30,
+    contacts: 30, ai: 6, field: 3.75, world: 3.75, events: 10 };
+  const meanCore = { best: 0, base: 0, worst: 0 };
+  for (const [name, bands] of Object.entries(stages)) {
+    for (const band of Object.keys(meanCore)) meanCore[band] += bands[band] * stageHz[name] / 1000;
+  }
+  return { modelVector, stages, synchronizedDueTickWriterMs: total, meanWriterCores: meanCore };
+}
+
+function forecastReplication(fits, vector) {
+  const recipientVector = { recipients: vector.replicationRecipients };
+  const deltaPublic = predict(fits.compressedPublicBytes,
+    { publicCount: vector.changedBodies, recipients: vector.replicationRecipients });
+  const keyframePublic = predict(fits.compressedPublicBytes,
+    { publicCount: vector.keyframeBodies, recipients: vector.replicationRecipients });
+  const ownerTotal = predict(fits.compressedOwnerBytes, recipientVector);
+  const cpuDelta = {
+    projectionMs: predict(fits.projectionMs, { publicCount: vector.changedBodies }),
+    serializationMs: null,
+    compressionMs: null,
+    ownerOverlayMs: predict(fits.ownerOverlayMs, recipientVector),
+    socketAccountingMs: predict(fits.socketAccountingMs, recipientVector),
+  };
+  const deltaRaw = 90 + vector.changedBodies * 24;
+  const keyframeRaw = 90 + vector.keyframeBodies * 24;
+  cpuDelta.serializationMs = predict(fits.serializationMs, { rawPublicBytes: deltaRaw });
+  cpuDelta.compressionMs = predict(fits.compressionMs, { rawPublicBytes: deltaRaw });
+  const cpuKeyframe = {
+    projectionMs: predict(fits.projectionMs, { publicCount: vector.keyframeBodies }),
+    serializationMs: predict(fits.serializationMs, { rawPublicBytes: keyframeRaw }),
+    compressionMs: predict(fits.compressionMs, { rawPublicBytes: keyframeRaw }),
+    ownerOverlayMs: cpuDelta.ownerOverlayMs,
+    socketAccountingMs: cpuDelta.socketAccountingMs,
+  };
+  const perClientBytesPerSecond = {};
+  const matchBytesPerSecond = {};
+  const meanReplicationCores = {};
+  for (const band of ["best", "base", "worst"]) {
+    const ownerPerClient = ownerTotal[band] / vector.replicationRecipients;
+    perClientBytesPerSecond[band] = deltaPublic[band] * 9.5 + keyframePublic[band] * 0.5 + ownerPerClient * 10;
+    matchBytesPerSecond[band] = perClientBytesPerSecond[band] * vector.replicationRecipients;
+    const deltaCpu = Object.values(cpuDelta).reduce((sum, stage) => sum + stage[band], 0);
+    const keyframeCpu = Object.values(cpuKeyframe).reduce((sum, stage) => sum + stage[band], 0);
+    meanReplicationCores[band] = (deltaCpu * 9.5 + keyframeCpu * 0.5) / 1000;
+  }
+  return {
+    assumptions: { deltaHz: 9.5, keyframeHz: 0.5, framesPerRecipientPerBeat: 2,
+      applicationPayloadOnly: true, publicFragmentEncodingSharedButBytesFannedToEveryClient: true },
+    deltaPublicBytes: deltaPublic, keyframePublicBytes: keyframePublic, ownerBytesPerBeatAllRecipients: ownerTotal,
+    perClientBytesPerSecond, matchBytesPerSecond,
+    matchMbitPerSecond: Object.fromEntries(Object.entries(matchBytesPerSecond).map(([band, bytes]) => [band, bytes * 8 / 1e6])),
+    applicationMessagesPerSecondMatch: vector.replicationRecipients * 2 * REPLICATION_HZ,
+    meanReplicationCores, cpuDelta, cpuKeyframe,
+  };
 }
 
 function geometryFor(vector) {
@@ -324,6 +407,27 @@ function runFactorial({ repetitions = 4 } = {}) {
   }
   return { design: "counterbalanced full 2^7 factorial", factors: FACTORS, repetitions,
     observations: samples.length, samples, fits: fitWriter(samples) };
+}
+
+function runProjectionFactorial({ repetitions = 8 } = {}) {
+  const base = combinations(PROJECTION_FACTORS);
+  const samples = [];
+  for (let repetition = 0; repetition < repetitions; repetition += 1) {
+    const order = repetition % 2 === 0 ? base : [...base].reverse();
+    for (const vector of order) {
+      const bodies = makeBodies(vector.bodies, false, repetition);
+      const frame = replicationBeat({ bodies, recipients: vector.recipients,
+        changedBodies: vector.changedBodies, tick: repetition + 1, keyframe: vector.keyframe === 1 });
+      samples.push({ ...vector, publicCount: vector.keyframe ? vector.bodies : vector.changedBodies,
+        rawPublicBytes: frame.rawPublicBytes, compressedPublicBytes: frame.compressedPublicBytes,
+        compressedOwnerBytes: frame.compressedOwnerBytes,
+        projectionMs: frame.stages.projection, serializationMs: frame.stages.serialization,
+        compressionMs: frame.stages.compression, ownerOverlayMs: frame.stages.ownerOverlay,
+        socketAccountingMs: frame.stages.socketAccounting });
+    }
+  }
+  return { design: "counterbalanced full 2^4 replication factorial", factors: PROJECTION_FACTORS,
+    repetitions, observations: samples.length, samples, fits: fitProjection(samples) };
 }
 
 async function runH24({ beats = 600, dense = false } = {}) {
@@ -399,7 +503,8 @@ async function runH24({ beats = 600, dense = false } = {}) {
       peakSyntheticQueueBytes: Math.max(0, ...queue) },
     gc: { observed: gc.length, pauseMs: stats(gc.map((entry) => entry.durationMs)), entries: gc },
     eventLoop: { p95DelayMs: eventLoop.percentile(95) / 1e6, p99DelayMs: eventLoop.percentile(99) / 1e6,
-      maxDelayMs: eventLoop.max / 1e6 },
+      maxDelayMs: eventLoop.max / 1e6,
+      interpretation: "accelerated synchronous harness blockage only; not a paced 30 Hz event-loop or TiDi measurement" },
     network: { applicationPayloadBytesPerSecondPerClient: matchBytes / seconds / vector.humans,
       applicationPayloadBytesPerSecondMatch: matchBytes / seconds,
       applicationMessagesPerSecondMatch: matchMessages / seconds,
@@ -409,9 +514,11 @@ async function runH24({ beats = 600, dense = false } = {}) {
         "one independently compressed owner-private overlay per recipient",
         "keyframe every two seconds; delta/public change set at ten hertz",
         "application payload only; TLS, WebSocket, TCP/IP, ACK, loss, retransmit, voice, and reconnect excluded"] },
-    gates: { normalWithoutTiDi: true, writerP95Ms: writerStats.p95 <= 1000 / WRITER_HZ * 0.5,
-      writerP99Ms: writerStats.p99 <= 1000 / WRITER_HZ * 0.7,
-      averageDownlink: matchBytes / seconds / vector.humans <= 64 * 1024,
+    gates: { normalWithoutTiDi: null,
+      normalWithoutTiDiReason: "not measurable in an accelerated synthetic fixture",
+      syntheticWriterP95Ms: writerStats.p95 <= 1000 / WRITER_HZ * 0.5,
+      syntheticWriterP99Ms: writerStats.p99 <= 1000 / WRITER_HZ * 0.7,
+      syntheticAverageDownlink: matchBytes / seconds / vector.humans <= 64 * 1024,
       writerP95LimitMs: 1000 / WRITER_HZ * 0.5, writerP99LimitMs: 1000 / WRITER_HZ * 0.7 },
   };
 }
@@ -426,27 +533,44 @@ function machine() {
 async function runPreflight(options = {}) {
   const started = new Date().toISOString();
   const factorial = runFactorial({ repetitions: options.repetitions || 4 });
+  const projectionFactorial = runProjectionFactorial({ repetitions: options.projectionRepetitions || 8 });
   const h24 = await runH24({ beats: options.beats || 600, dense: false });
   const h24Stacked = await runH24({ beats: options.sensitivityBeats || Math.max(180, Math.floor((options.beats || 600) / 2)), dense: true });
   const forecasts = {};
   for (const [name, vector] of Object.entries(H_VECTORS)) {
     const geometry = geometryFor(vector);
+    const writerForecast = forecastFromFits(factorial.fits, vector, geometry);
+    const replicationForecast = forecastReplication(projectionFactorial.fits, vector);
     forecasts[name] = { classification: name === "H24" ? "factor-fit cross-check against measured synthetic H24" : "extrapolated",
-      vector, geometry, ...forecastFromFits(factorial.fits, vector, geometry) };
+      vector, geometry, writer: writerForecast, replication: replicationForecast,
+      totalMeanBillableCores: Object.fromEntries(["best", "base", "worst"].map((band) =>
+        [band, writerForecast.meanWriterCores[band] + replicationForecast.meanReplicationCores[band]])),
+      extrapolation: { maximumMeasuredBodies: FACTORS.bodies[1], bodyRatio: vector.bodies / FACTORS.bodies[1],
+        maximumMeasuredRecipients: PROJECTION_FACTORS.recipients[1], recipientRatio: vector.replicationRecipients / PROJECTION_FACTORS.recipients[1],
+        statisticalBandsExcludeStructuralRuntimeAndWANUncertainty: true } };
   }
-  const identifiable = Object.values(factorial.fits).every((fit) => fit.rSquared >= 0.50)
-    && Object.values(factorial.fits).every((fit) => Object.values(fit.coefficients).every(Number.isFinite));
+  const allFits = [...Object.values(factorial.fits), ...Object.values(projectionFactorial.fits)];
+  const identifiable = allFits.every((fit) => fit.rSquared >= 0.50)
+    && allFits.every((fit) => Object.values(fit.coefficients).every(Number.isFinite));
   const result = {
     schema: SCHEMA, startedAt: started, completedAt: new Date().toISOString(), machine: machine(),
     claimBoundary: "S24 factorized synthetic preflight only. No real 24-client sockets, live runtime, WAN/WSS, host packing, promotion, or 48/96 measurement claim.",
     architectureInvariant: "one dedicated logical single-writer authority for this one match; concurrent matches multiply independent authorities",
-    factorial: { design: factorial.design, factors: factorial.factors, repetitions: factorial.repetitions,
-      observations: factorial.observations, fits: factorial.fits },
+    factorial: {
+      writer: { design: factorial.design, factors: factorial.factors, repetitions: factorial.repetitions,
+        observations: factorial.observations, fits: factorial.fits },
+      replication: { design: projectionFactorial.design, factors: projectionFactorial.factors,
+        repetitions: projectionFactorial.repetitions, observations: projectionFactorial.observations,
+        fits: projectionFactorial.fits },
+    },
     measured: { H24: h24, H24StackedSensitivity: h24Stacked },
     modeled: forecasts,
-    identifiability: { passed: identifiable, minimumRSquared: Math.min(...Object.values(factorial.fits).map((fit) => fit.rSquared)),
+    identifiability: { passed: identifiable, minimumRSquared: Math.min(...allFits.map((fit) => fit.rSquared)),
       rule: "every stage fit has finite coefficients and R^2 >= 0.50; otherwise 48/96 milliseconds are suppressed" },
-    decision: { s24SyntheticGate: identifiable && Object.values(h24.gates).filter((value) => typeof value === "boolean").every(Boolean),
+    decision: { s24Gate: false,
+      syntheticComponentsPassed: identifiable && [h24.gates.syntheticWriterP95Ms,
+        h24.gates.syntheticWriterP99Ms, h24.gates.syntheticAverageDownlink].every(Boolean),
+      gateReason: "NORMAL/no-TiDi, live authority cadence, real queues/sockets, and on-wire traffic remain unmeasured",
       productPromotion: false, real24ClientCaptureRequired: true,
       nextLane: "counterbalanced warmed 24-client loopback capture against the live runtime, after root checkpoint" },
   };
@@ -460,7 +584,7 @@ async function main() {
   const outputIndex = args.indexOf("--output");
   const output = outputIndex >= 0 ? path.resolve(args[outputIndex + 1]) : null;
   const result = await runPreflight({ repetitions: quick ? 2 : 4, beats: quick ? 120 : 600,
-    sensitivityBeats: quick ? 90 : 300 });
+    sensitivityBeats: quick ? 90 : 300, projectionRepetitions: quick ? 4 : 8 });
   const encoded = `${JSON.stringify(result, null, 2)}\n`;
   if (output) { fs.mkdirSync(path.dirname(output), { recursive: true }); fs.writeFileSync(output, encoded); }
   else process.stdout.write(encoded);
@@ -468,5 +592,5 @@ async function main() {
 
 if (require.main === module) main().catch((error) => { console.error(error.stack || error.message); process.exit(1); });
 
-module.exports = { SCHEMA, FACTORS, H_VECTORS, combinations, ols, predict, runFactorial,
-  runH24, runPreflight, replicationBeat, writerBeat, makeBodies };
+module.exports = { SCHEMA, FACTORS, PROJECTION_FACTORS, H_VECTORS, combinations, ols, predict,
+  runFactorial, runProjectionFactorial, runH24, runPreflight, replicationBeat, writerBeat, makeBodies };
