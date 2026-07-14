@@ -20,6 +20,24 @@ function validId(value) {
 function configure(db, { referenceAuthorityMode = false } = {}) {
   db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;");
   db.exec(`
+    CREATE TABLE IF NOT EXISTS hosted_result_journal (
+      result_id TEXT PRIMARY KEY,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      run_id TEXT NOT NULL UNIQUE,
+      result_hash TEXT NOT NULL,
+      lease_id TEXT NOT NULL,
+      lease_epoch INTEGER NOT NULL,
+      authority_incarnation TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      prepared_at INTEGER NOT NULL,
+      placement_accepted_at INTEGER,
+      finalized_at INTEGER,
+      state TEXT NOT NULL CHECK(state IN ('prepared','accepted','finalized')),
+      CHECK((state = 'prepared') = (placement_accepted_at IS NULL)),
+      CHECK((state = 'finalized') = (finalized_at IS NOT NULL))
+    );
+    CREATE INDEX IF NOT EXISTS hosted_result_journal_recovery
+      ON hosted_result_journal(state, prepared_at, result_id);
     CREATE TABLE IF NOT EXISTS hosted_result_outbox (
       result_id TEXT PRIMARY KEY,
       idempotency_key TEXT NOT NULL UNIQUE,
@@ -138,27 +156,116 @@ class SQLiteHostedResultOutbox {
 
   enqueue({ authority, payload } = {}) {
     const canonical = canonicalResult(authority, payload);
-    const now = this.now();
     const prior = this.db.prepare("SELECT * FROM hosted_result_outbox WHERE run_id=?").get(canonical.authority.run_id);
     if (prior) {
       if (prior.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_CONFLICT");
       return this._public(prior);
     }
 
-    // In production, placement owns this durable CAS. It must make the exact
-    // accepted tuple replayable and permanently block authority replacement.
-    // The outbox DB may be separate, so no cross-database atomicity is claimed:
-    // a crash after this call is repaired by retrying the same canonical result.
-    const accepted = this.acceptAuthorityResult(canonical.authority, canonical.result_hash,
-      canonical.result_id, now);
-    if (!this._acceptanceMatches(accepted, canonical)) reject("HOSTED_RESULT_FENCED");
-    this.fault("after-placement-accept-before-outbox");
+    const journal = this._prepare(canonical);
+    return this._recoverJournalRow(journal);
+  }
+
+  // Explicit startup/worker recovery. Every row contains canonical bytes before
+  // placement can become terminal, so recovery never needs a caller to resubmit
+  // (or choose) a payload. Placement acceptance is an idempotent exact-tuple CAS.
+  recoverPrepared({ limit = 100 } = {}) {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) reject("HOSTED_RESULT_INVALID");
+    const rows = this.db.prepare(`SELECT * FROM hosted_result_journal
+      WHERE state!='finalized' ORDER BY prepared_at,result_id LIMIT ?`).all(limit);
+    return rows.map((row) => this._recoverJournalRow(row));
+  }
+
+  _prepare(canonical) {
+    const prior = this.db.prepare("SELECT * FROM hosted_result_journal WHERE run_id=?")
+      .get(canonical.authority.run_id);
+    if (prior) {
+      if (prior.result_hash !== canonical.result_hash
+        || prior.result_id !== canonical.result_id
+        || prior.idempotency_key !== canonical.idempotency_key) reject("HOSTED_RESULT_CONFLICT");
+      return prior;
+    }
+
+    this.fault("before-result-prepare");
+    const preparedAt = this.now();
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const concurrent = this.db.prepare("SELECT * FROM hosted_result_journal WHERE run_id=?")
+        .get(canonical.authority.run_id);
+      if (concurrent) {
+        if (concurrent.result_hash !== canonical.result_hash
+          || concurrent.result_id !== canonical.result_id
+          || concurrent.idempotency_key !== canonical.idempotency_key) reject("HOSTED_RESULT_CONFLICT");
+        this.db.exec("COMMIT");
+        return concurrent;
+      }
+      this.db.prepare(`INSERT INTO hosted_result_journal
+        (result_id,idempotency_key,run_id,result_hash,lease_id,lease_epoch,authority_incarnation,
+         payload_json,prepared_at,state)
+        VALUES (?,?,?,?,?,?,?,?,?,'prepared')`).run(
+        canonical.result_id, canonical.idempotency_key, canonical.authority.run_id,
+        canonical.result_hash, canonical.authority.lease_id, canonical.authority.lease_epoch,
+        canonical.authority.authority_incarnation, json(canonical.payload), preparedAt);
+      this.fault("before-result-prepare-commit");
+      this.db.exec("COMMIT");
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec("ROLLBACK");
+      throw error;
+    }
+    const row = this.db.prepare("SELECT * FROM hosted_result_journal WHERE result_id=?")
+      .get(canonical.result_id);
+    this.fault("after-result-prepare");
+    return row;
+  }
+
+  _recoverJournalRow(row) {
+    const canonical = this._canonicalFromJournal(row);
+    if (row.state === "prepared") {
+      const accepted = this.acceptAuthorityResult(canonical.authority, canonical.result_hash,
+        canonical.result_id, row.prepared_at, Object.keys(canonical.payload.outcomes).sort());
+      if (!this._acceptanceMatches(accepted, canonical)) {
+        // A definitive rejection means this speculative preparation never
+        // became terminal and must not pin the run against its live lineage.
+        // Thrown/ambiguous failures deliberately retain the canonical journal.
+        if (accepted == null || accepted.accepted === false) {
+          this.db.prepare("DELETE FROM hosted_result_journal WHERE result_id=? AND state='prepared'")
+            .run(row.result_id);
+        }
+        reject("HOSTED_RESULT_FENCED");
+      }
+      this.fault("after-placement-accept-before-journal-accepted");
+      // Compatibility hook retained for existing fault-harness callers.
+      this.fault("after-placement-accept-before-outbox");
+      this.db.prepare(`UPDATE hosted_result_journal
+        SET state='accepted', placement_accepted_at=?
+        WHERE result_id=? AND state='prepared'`).run(this.now(), row.result_id);
+      row = this.db.prepare("SELECT * FROM hosted_result_journal WHERE result_id=?").get(row.result_id);
+      this.fault("after-result-journal-accepted");
+    } else {
+      // Do not trust journal state alone across service/database boundaries.
+      // Reverify the immutable tuple with placement before publishing bytes.
+      const accepted = this.acceptAuthorityResult(canonical.authority, canonical.result_hash,
+        canonical.result_id, row.prepared_at, Object.keys(canonical.payload.outcomes).sort());
+      if (!this._acceptanceMatches(accepted, canonical)) reject("HOSTED_RESULT_FENCED");
+    }
+
+    return this._finalizeJournal(row);
+  }
+
+  _finalizeJournal(row) {
+    const now = this.now();
 
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      const concurrent = this.db.prepare("SELECT * FROM hosted_result_outbox WHERE run_id=?").get(canonical.authority.run_id);
+      const current = this.db.prepare("SELECT * FROM hosted_result_journal WHERE result_id=?").get(row.result_id);
+      if (!current || current.state === "prepared") reject("HOSTED_RESULT_FENCED");
+      const concurrent = this.db.prepare("SELECT * FROM hosted_result_outbox WHERE run_id=?").get(row.run_id);
       if (concurrent) {
-        if (concurrent.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_CONFLICT");
+        if (concurrent.result_hash !== row.result_hash || concurrent.result_id !== row.result_id) {
+          reject("HOSTED_RESULT_CONFLICT");
+        }
+        if (current.state !== "finalized") this.db.prepare(`UPDATE hosted_result_journal
+          SET state='finalized', finalized_at=? WHERE result_id=?`).run(now, row.result_id);
         this.db.exec("COMMIT");
         return this._public(concurrent);
       }
@@ -167,16 +274,30 @@ class SQLiteHostedResultOutbox {
           (result_id,idempotency_key,run_id,result_hash,lease_id,lease_epoch,authority_incarnation,
            payload_json,accepted_at,state,attempts,available_at)
         VALUES (?,?,?,?,?,?,?,?,?,'pending',0,?)
-      `).run(canonical.result_id, canonical.idempotency_key, canonical.authority.run_id,
-        canonical.result_hash, canonical.authority.lease_id, canonical.authority.lease_epoch,
-        canonical.authority.authority_incarnation, json(canonical.payload), now, now);
+      `).run(row.result_id, row.idempotency_key, row.run_id, row.result_hash, row.lease_id,
+        row.lease_epoch, row.authority_incarnation, row.payload_json,
+        row.placement_accepted_at || row.prepared_at, now);
+      this.db.prepare(`UPDATE hosted_result_journal SET state='finalized', finalized_at=?
+        WHERE result_id=? AND state='accepted'`).run(now, row.result_id);
+      this.fault("before-result-finalization-commit");
       this.fault("before-enqueue-commit");
       this.db.exec("COMMIT");
-      return this.get(canonical.result_id);
+      const result = this.get(row.result_id);
+      this.fault("after-result-finalization");
+      return result;
     } catch (error) {
       if (this.db.isTransaction) this.db.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  _canonicalFromJournal(row) {
+    const authority = { run_id: row.run_id, lease_id: row.lease_id,
+      lease_epoch: Number(row.lease_epoch), authority_incarnation: row.authority_incarnation };
+    const recovered = canonicalResult(authority, parse(row.payload_json));
+    if (recovered.result_id !== row.result_id || recovered.idempotency_key !== row.idempotency_key
+      || recovered.result_hash !== row.result_hash) reject("HOSTED_RESULT_CONFLICT");
+    return recovered;
   }
 
   claim({ owner, leaseMs = 30_000 } = {}) {

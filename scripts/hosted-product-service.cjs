@@ -47,6 +47,17 @@ function defaultIds() {
   };
 }
 
+const LIFECYCLE_RANK = Object.freeze({
+  ALLOCATING: 0, READY: 1, ACTIVE: 2, DRAINING: 3, FENCED: 4, ENDED: 4,
+});
+
+function monotonicState(current, observed) {
+  if (!Object.hasOwn(LIFECYCLE_RANK, current) || !Object.hasOwn(LIFECYCLE_RANK, observed)) {
+    fail("lifecycle_state_invalid");
+  }
+  return LIFECYCLE_RANK[current] >= LIFECYCLE_RANK[observed] ? current : observed;
+}
+
 function createHostedProductService({
   identity,
   placement,
@@ -61,6 +72,7 @@ function createHostedProductService({
   placementPolicy,
   diagnostics = () => {},
   diagnosticKey,
+  fault = () => {},
 } = {}) {
   const repositoryMethods = [
     "transaction", "createMatch", "getMatch", "getMatchByJoinCode", "getMatchByAllocation", "updateMatch",
@@ -69,12 +81,14 @@ function createHostedProductService({
   ];
   if (!identity || typeof identity.authorizeProfile !== "function"
       || !placement || typeof placement.requestPlacement !== "function"
+      || typeof placement.admittedMemberships !== "function"
       || !outbox || typeof outbox.enqueue !== "function"
       || !settlement || typeof settlement.deliverOne !== "function"
       || !repository || repositoryMethods.some((method) => typeof repository[method] !== "function")
       || !ids || typeof ids.next !== "function" || !clock || typeof clock.now !== "function"
       || typeof authenticateControl !== "function" || typeof resolveWorkloadIdentity !== "function"
       || typeof placementPolicy !== "function"
+      || typeof fault !== "function"
       || !(typeof diagnosticKey === "string" || Buffer.isBuffer(diagnosticKey))
       || Buffer.byteLength(diagnosticKey) < 32) {
     throw new TypeError("hosted product dependencies invalid");
@@ -82,6 +96,12 @@ function createHostedProductService({
 
   function alias(kind, value) {
     return `${kind}_${crypto.createHmac("sha256", diagnosticKey).update(String(value)).digest("base64url").slice(0, 16)}`;
+  }
+
+  function allocationReplayDigest(audience, bootstrap) {
+    return crypto.createHmac("sha256", diagnosticKey)
+      .update(string(audience, { max: 512 })).update("\0")
+      .update(string(bootstrap, { max: 16 * 1024 })).digest("base64url");
   }
 
   function emit(operation, reason, context = {}) {
@@ -234,18 +254,34 @@ function createHostedProductService({
     return guarded("workload_redeem", () => {
       record(input, ["credential", "allocationHandle", "bootstrap", "audience"]);
       const match = repository.transaction((repo) => repo.getMatchByAllocation(string(input.allocationHandle, { max: 160 })));
+      const workload = resolveWorkloadIdentity(input.credential);
+      if (!workload) fail("workload_identity_mismatch");
+      const replayDigest = allocationReplayDigest(input.audience, input.bootstrap);
+      if (!match) fail("allocation_forbidden");
+      if (match.bootstrap == null) {
+        const context = typeof match.workloadRunHandle === "string"
+          ? repository.transaction((repo) => repo.getWorkloadContext(match.workloadRunHandle)) : null;
+        if (!context || match.redeemedBootstrapDigest !== replayDigest
+          || match.redeemedBootstrapAudience !== input.audience
+          || context.authorityInstanceId !== workload.authorityInstanceId
+          || context.authorityIncarnation !== workload.authorityIncarnation
+          || context.credentialBinding !== workload.credentialBinding) fail("allocation_forbidden");
+        return Object.freeze({ workloadRunHandle: context.workloadRunHandle });
+      }
       if (!match || match.bootstrap !== input.bootstrap || match.bootstrapAudience !== input.audience) fail("allocation_forbidden");
       const claims = placement.redeemBootstrap({ credential: input.credential, bootstrap: input.bootstrap, audience: input.audience });
       if (claims.runId !== match.runId || claims.sessionId !== match.sessionId) fail("allocation_smuggling", { runId: match.runId });
-      const workload = resolveWorkloadIdentity(input.credential);
       if (!workload || workload.authorityInstanceId !== claims.authorityInstanceId) fail("workload_identity_mismatch");
+      fault("after-bootstrap-placement-before-product");
       const workloadRunHandle = ids.next("workload_run");
       repository.transaction((repo) => {
         repo.putWorkloadContext({ workloadRunHandle, matchId: match.matchId, runId: match.runId,
           authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch,
           authorityInstanceId: claims.authorityInstanceId, authorityIncarnation: string(workload.authorityIncarnation, { max: 160 }),
           credentialBinding: string(workload.credentialBinding, { max: 160 }), state: "ALLOCATING" });
-        repo.updateMatch(match.matchId, (current) => ({ ...current, bootstrap: null, bootstrapAudience: null }));
+        repo.updateMatch(match.matchId, (current) => ({ ...current, bootstrap: null, bootstrapAudience: null,
+          workloadRunHandle, redeemedBootstrapDigest: replayDigest,
+          redeemedBootstrapAudience: input.audience }));
       });
       return Object.freeze({ workloadRunHandle });
     });
@@ -264,11 +300,17 @@ function createHostedProductService({
     return guarded("workload_ready", () => {
       record(input, ["credential", "workloadRunHandle"]);
       const context = workloadContext(input.credential, input.workloadRunHandle);
+      placement.markReady({ credential: input.credential, runId: context.runId,
+        authorityLeaseId: context.authorityLeaseId, leaseEpoch: context.leaseEpoch });
+      fault("after-ready-placement-before-product");
       const route = placement.markReady({ credential: input.credential, runId: context.runId,
         authorityLeaseId: context.authorityLeaseId, leaseEpoch: context.leaseEpoch });
+      if (!route || !["READY", "ACTIVE", "DRAINING"].includes(route.state)) fail("ready_reconciliation_invalid");
       repository.transaction((repo) => {
-        repo.updateWorkloadContext(context.workloadRunHandle, (current) => ({ ...current, state: "READY" }));
-        repo.updateMatch(context.matchId, (current) => ({ ...current, state: "READY" }));
+        repo.updateWorkloadContext(context.workloadRunHandle, (current) => ({ ...current,
+          state: monotonicState(current.state, route.state) }));
+        repo.updateMatch(context.matchId, (current) => ({ ...current,
+          state: monotonicState(current.state, route.state) }));
       });
       return route;
     });
@@ -289,11 +331,15 @@ function createHostedProductService({
       const context = workloadContext(input.credential, input.workloadRunHandle);
       const admitted = placement.redeemAdmissionTicket({ credential: input.credential, ticket: input.ticket });
       if (admitted.runId !== context.runId) fail("cross_run_smuggling", { runId: context.runId });
+      fault("after-admission-placement-before-product");
       repository.transaction((repo) => {
         const marked = repo.markMembershipAdmitted(context.matchId, admitted.runMembershipId, clock.now());
         if (!marked || marked.profileId !== admitted.profileId || marked.accountId !== admitted.accountId
             || marked.seatNo !== admitted.seatNo) fail("admission_membership_mismatch", { runId: context.runId });
-        repo.updateMatch(context.matchId, (current) => ({ ...current, state: "ACTIVE" }));
+        repo.updateWorkloadContext(context.workloadRunHandle, (current) => ({ ...current,
+          state: monotonicState(current.state, "ACTIVE") }));
+        repo.updateMatch(context.matchId, (current) => ({ ...current,
+          state: monotonicState(current.state, "ACTIVE") }));
       });
       return Object.freeze({ admitted: true, seatNo: admitted.seatNo });
     });
@@ -305,9 +351,12 @@ function createHostedProductService({
       const context = workloadContext(input.credential, input.workloadRunHandle);
       const result = placement.beginRunDrain({ credential: input.credential, runId: context.runId,
         authorityLeaseId: context.authorityLeaseId, leaseEpoch: context.leaseEpoch });
+      fault("after-drain-placement-before-product");
       repository.transaction((repo) => {
-        repo.updateWorkloadContext(context.workloadRunHandle, (current) => ({ ...current, state: "DRAINING" }));
-        repo.updateMatch(context.matchId, (current) => ({ ...current, state: "DRAINING" }));
+        repo.updateWorkloadContext(context.workloadRunHandle, (current) => ({ ...current,
+          state: monotonicState(current.state, "DRAINING") }));
+        repo.updateMatch(context.matchId, (current) => ({ ...current,
+          state: monotonicState(current.state, "DRAINING") }));
       });
       return result;
     });
@@ -318,6 +367,21 @@ function createHostedProductService({
       record(input, ["credential", "workloadRunHandle", "payload"]);
       const context = workloadContext(input.credential, input.workloadRunHandle);
       if (context.state !== "DRAINING") fail("result_not_terminal", { runId: context.runId });
+      const admitted = repository.transaction((repo) => repo.listMemberships(context.matchId)
+        .filter((member) => member.admittedAt != null)
+        .map((member) => member.runMembershipId).sort());
+      const authoritative = placement.admittedMemberships({ credential: input.credential,
+        runId: context.runId, authorityLeaseId: context.authorityLeaseId, leaseEpoch: context.leaseEpoch });
+      if (!authoritative || authoritative.admittedCount !== authoritative.runMembershipIds?.length
+          || admitted.length !== authoritative.admittedCount
+          || admitted.some((id, index) => id !== authoritative.runMembershipIds[index])) {
+        fail("admission_reconciliation_required", { runId: context.runId });
+      }
+      const outcomeIds = Object.keys(input.payload?.outcomes || {}).sort();
+      if (admitted.length < 1 || admitted.length > MAX_SEATS || outcomeIds.length !== admitted.length
+          || outcomeIds.some((id, index) => id !== admitted[index])) {
+        fail("result_membership_mismatch", { runId: context.runId });
+      }
       const accepted = outbox.enqueue({ authority: {
         run_id: context.runId, lease_id: context.authorityLeaseId, lease_epoch: context.leaseEpoch,
         authority_incarnation: context.authorityIncarnation,
@@ -366,6 +430,7 @@ function createHostedProductService({
       repository.transaction((repo) => repo.updateMatch(match.matchId, (current) => ({ ...current,
         state: "ALLOCATING", allocationHandle, bootstrap: replacement.bootstrap,
         bootstrapAudience: replacement.bootstrapAudience, placementRequestId: requestId,
+        workloadRunHandle: null, redeemedBootstrapDigest: null, redeemedBootstrapAudience: null,
       })));
       return Object.freeze({ matchId: match.matchId, state: "ALLOCATING" });
     });

@@ -116,6 +116,8 @@ function main() {
       /acceptAuthorityResult is required/); assertions += 1;
     assert.throws(() => new SQLiteHostedSettlementRepository({ filepath: file.filepath }),
       /verifyAcceptedAuthorityResult is required/); assertions += 1;
+    assert.throws(() => new SQLiteHostedSettlementRepository({ filepath: file.filepath,
+      verifyAcceptedAuthorityResult: () => null }), /resolveRunMemberships is required/); assertions += 1;
     fs.rmSync(file.dir, { recursive: true, force: true });
   }
 
@@ -134,8 +136,11 @@ function main() {
         }
       } });
     const repository = new SQLiteHostedSettlementRepository({ filepath: outboxFile.filepath, now: time.now,
-      verifyAcceptedAuthorityResult: (entry) => placement.verify(entry) });
-    repository.setRunMemberships("run-a", members());
+      verifyAcceptedAuthorityResult: (entry) => placement.verify(entry),
+      resolveRunMemberships: () => members() });
+    rejects(() => repository.setRunMemberships("run-a", [{ run_membership_id: "membership-1",
+      profile_id: "attacker-profile" }]), "HOSTED_SETTLEMENT_FENCED",
+    "production settlement rejects manually injected cross-account profile ownership");
     assert.throws(() => outbox.enqueue({ authority: authority(), payload: result() }), /bridge-gap-crash/); assertions += 1;
     equal(outbox.list().length, 0, "production bridge crash writes no partial outbox row");
     equal(placement.replace(authority({ lease_id: "replacement", lease_epoch: 8,

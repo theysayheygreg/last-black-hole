@@ -138,6 +138,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SqliteHostedResultJournal",
+    file: "sqlite-hosted-result-journal.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "HostedProductSqliteE2E",
     file: "hosted-product-sqlite-e2e.cjs",
     lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],

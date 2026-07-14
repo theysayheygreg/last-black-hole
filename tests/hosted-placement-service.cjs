@@ -195,7 +195,7 @@ function harness({ capacity = 24, tombstoneLimit = 4, expirySweepLimit = 256 } =
     const claims = h.bootstrap(h.assignedIndex("bootstrap-first"), first);
     assert.strictEqual(claims.maxSeats, 4);
     assert.strictEqual(claims.authorityIncarnation, "authority-0-incarnation-1");
-    rejection(() => h.bootstrap(h.assignedIndex("bootstrap-first"), first), "BOOTSTRAP_REPLAY");
+    assert.strictEqual(h.bootstrap(h.assignedIndex("bootstrap-first"), first).replayed, true);
     const second = h.place("bootstrap-audience");
     const secondIndex = h.assignedIndex("bootstrap-audience");
     const wrongIndex = secondIndex === 0 ? 1 : 0;
@@ -205,6 +205,25 @@ function harness({ capacity = 24, tombstoneLimit = 4, expirySweepLimit = 256 } =
     const third = h.place("bootstrap-expiry");
     h.advance(100);
     rejection(() => h.bootstrap(h.assignedIndex("bootstrap-expiry"), third), "BOOTSTRAP_REJECTED");
+  });
+
+  await test("consumed bootstrap replay follows the live readiness lease, not the shorter token TTL", () => {
+    const h = harness({ capacity: 3 });
+    h.register(0); h.register(1); h.register(2);
+    const consumedPlacement = h.place("bootstrap-consumed-ttl");
+    const consumedIndex = h.assignedIndex("bootstrap-consumed-ttl");
+    h.bootstrap(consumedIndex, consumedPlacement);
+    h.advance(101);
+    h.repository.cleanup({ now: h.now() });
+    assert.strictEqual(h.bootstrap(consumedIndex, consumedPlacement).replayed, true,
+      "exact consumed replay remains recoverable after bootstrap TTL while readiness lease is live");
+    h.advance(50);
+    rejection(() => h.bootstrap(consumedIndex, consumedPlacement), "STALE_LEASE");
+
+    const expiredPlacement = h.place("bootstrap-unconsumed-ttl");
+    const expiredIndex = h.assignedIndex("bootstrap-unconsumed-ttl");
+    h.advance(101);
+    rejection(() => h.bootstrap(expiredIndex, expiredPlacement), "BOOTSTRAP_REJECTED");
   });
 
   await test("ready route heartbeat admission and current result eligibility form one fenced lineage", () => {
@@ -221,7 +240,9 @@ function harness({ capacity = 24, tombstoneLimit = 4, expirySweepLimit = 256 } =
     assert(!ticket.ticket.includes("account-secret") && !ticket.ticket.includes("profile-secret"));
     const admitted = h.service.redeemAdmissionTicket({ credential: "workload-0", ticket: ticket.ticket });
     assert.strictEqual(admitted.seatNo, 0);
-    rejection(() => h.service.redeemAdmissionTicket({ credential: "workload-0", ticket: ticket.ticket }), "TICKET_REPLAY");
+    const replay = h.service.redeemAdmissionTicket({ credential: "workload-0", ticket: ticket.ticket });
+    assert.strictEqual(replay.seatNo, 0);
+    assert.strictEqual(replay.replayed, true);
     const renewed = h.service.heartbeat({ credential: "workload-0", runId: claims.runId,
       authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch,
       metrics: { connections: 1, queueDepth: 0, memoryBytes: 2048 } });
@@ -234,12 +255,16 @@ function harness({ capacity = 24, tombstoneLimit = 4, expirySweepLimit = 256 } =
       "wss://authority-0.internal", "current route must survive its original heartbeat deadline after renewal");
   });
 
-  await test("duplicate ready and duplicate end fail closed", () => {
+  await test("exact ready replay converges while duplicate end fails closed", () => {
     const h = harness({ capacity: 1 });
     h.register(0);
     const claims = h.bootstrap(0, h.place("duplicates"));
-    h.ready(0, claims);
-    rejection(() => h.ready(0, claims), "STALE_LEASE");
+    const ready = h.ready(0, claims);
+    const replay = h.ready(0, claims);
+    assert.strictEqual(replay.routeAudience, ready.routeAudience);
+    assert.strictEqual(replay.leaseDeadlineAt, ready.leaseDeadlineAt);
+    assert.strictEqual(h.service.validateRoute({ credential: "workload-0", route: replay.route,
+      runId: claims.runId }).endpoint, "wss://authority-0.internal");
     h.service.endRun({ credential: "workload-0", runId: claims.runId,
       authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch, outcome: "ENDED" });
     rejection(() => h.service.endRun({ credential: "workload-0", runId: claims.runId,
@@ -281,8 +306,19 @@ function harness({ capacity = 24, tombstoneLimit = 4, expirySweepLimit = 256 } =
     h.service.setDrain({ credential: "workload-0", draining: true });
     const next = h.bootstrap(1, h.place("draining-new"));
     assert.strictEqual(next.authorityInstanceId, "authority-1");
+    const consumed = h.service.issueAdmissionTicket({ credential: "control-plane", runId: claims.runId,
+      member: h.member(0, "drain-consumed") });
+    h.service.redeemAdmissionTicket({ credential: "workload-0", ticket: consumed.ticket });
+    const unconsumed = h.service.issueAdmissionTicket({ credential: "control-plane", runId: claims.runId,
+      member: h.member(1, "drain-unconsumed") });
     assert.deepStrictEqual(h.service.beginRunDrain({ credential: "workload-0", runId: claims.runId,
       authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch }), { state: "DRAINING" });
+    assert.deepStrictEqual(h.service.beginRunDrain({ credential: "workload-0", runId: claims.runId,
+      authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch }), { state: "DRAINING" });
+    assert.strictEqual(h.service.redeemAdmissionTicket({ credential: "workload-0",
+      ticket: consumed.ticket }).replayed, true, "exact consumed admission may reconcile after drain");
+    rejection(() => h.service.redeemAdmissionTicket({ credential: "workload-0",
+      ticket: unconsumed.ticket }), "RUN_DRAINING");
     assert.strictEqual(h.service.resultEligible({ credential: "workload-0", runId: claims.runId,
       authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch }), true);
   });

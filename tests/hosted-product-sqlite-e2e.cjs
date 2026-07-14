@@ -19,6 +19,8 @@ const root = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-hosted-product-e2e-"));
 const filepath = path.join(root, "hosted.sqlite");
 let now = 2_000_000;
 let sequence = 0;
+let faultStage = null;
+let faultAction = null;
 const proofs = new Map();
 const diagnostics = [];
 const descriptor = {
@@ -49,12 +51,17 @@ function placementIdentity() {
 
 function acceptedFromPlacement(repository, entry) {
   const run = repository.getRun(entry.run_id);
+  const membershipIds = Object.keys(entry.payload?.outcomes || {}).sort();
+  const membershipDigest = `sha256:${crypto.createHash("sha256").update(JSON.stringify(membershipIds)).digest("hex")}`;
   if (!run || run.resultAcceptanceState !== "ACCEPTED" || run.acceptedResultHash !== entry.result_hash
       || run.authorityLeaseId !== entry.authority.lease_id || run.leaseEpoch !== entry.authority.lease_epoch
-      || run.authorityIncarnation !== entry.authority.authority_incarnation) return null;
+      || run.authorityIncarnation !== entry.authority.authority_incarnation
+      || run.acceptedMembershipDigest !== membershipDigest
+      || run.acceptedMembershipCount !== membershipIds.length) return null;
   return { accepted: true, run_id: run.runId, lease_id: run.authorityLeaseId,
     lease_epoch: run.leaseEpoch, authority_incarnation: run.authorityIncarnation,
-    result_hash: run.acceptedResultHash, accepted_at: run.acceptedAt };
+    result_hash: run.acceptedResultHash, membership_digest: run.acceptedMembershipDigest,
+    membership_count: run.acceptedMembershipCount, accepted_at: run.acceptedAt };
 }
 
 function openStack() {
@@ -64,9 +71,10 @@ function openStack() {
   const productRepository = new SqliteHostedProductRepository({ filepath,
     encryptionKey: "product-encryption-key-at-least-32-bytes", encryptionKeyId: "product-key-1", randomBytes });
   const outbox = new SQLiteHostedResultOutbox({ filepath, now: () => now, randomBytes,
-    acceptAuthorityResult: (identity, resultHash) => placementRepository.acceptAuthorityResult(identity, resultHash) });
+    acceptAuthorityResult: (...args) => placementRepository.acceptAuthorityResult(...args) });
   const settlementRepository = new SQLiteHostedSettlementRepository({ filepath, now: () => now,
-    verifyAcceptedAuthorityResult: (entry) => acceptedFromPlacement(placementRepository, entry) });
+    verifyAcceptedAuthorityResult: (entry) => acceptedFromPlacement(placementRepository, entry),
+    resolveRunMemberships: (runId) => productRepository.getAdmittedRunMemberships(runId) });
   const identity = new HostedIdentityService({
     repository: identityRepository,
     providers: { test: { adapter: provider, issuer: "test-issuer", audience: "lbh-client",
@@ -97,6 +105,16 @@ function openStack() {
       capabilities: descriptor.capabilities }),
     diagnostics: (event) => diagnostics.push(event),
     diagnosticKey: "durable-product-diagnostic-key-32-bytes",
+    fault(stage) {
+      if (faultAction) {
+        const action = faultAction;
+        faultAction = null;
+        action(stage, { placement, productRepository });
+      }
+      if (stage !== faultStage) return;
+      faultStage = null;
+      throw new Error(`injected crash at ${stage}`);
+    },
   });
   return {
     identityRepository, placementRepository, productRepository, outbox, settlementRepository, product, placement,
@@ -132,10 +150,66 @@ try {
     profileId: user.profileId, joinCode: match.joinCode, clientIncarnation: `client-${index + 1}`,
     playerAlias: user.name }));
   const allocation = stack.product.controlGetAllocation({ credential: "operator", matchId: match.matchId });
+  faultStage = "after-bootstrap-placement-before-product";
+  assert.throws(() => stack.product.workloadRedeem({ credential: "workload",
+    allocationHandle: allocation.allocationHandle, bootstrap: allocation.bootstrap, audience: allocation.audience }),
+  /hosted product request rejected/);
+  const allocatedRunId = stack.productRepository.getMatch(match.matchId).runId;
+  assert.notEqual(stack.placementRepository.getRun(allocatedRunId).bootstrapConsumedAt, null);
+  assert.equal(stack.productRepository.getMatch(match.matchId).bootstrap, allocation.bootstrap);
+  stack.close();
+
+  stack = openStack();
   const redeemed = stack.product.workloadRedeem({ credential: "workload", allocationHandle: allocation.allocationHandle,
     bootstrap: allocation.bootstrap, audience: allocation.audience });
-  stack.product.workloadReady({ credential: "workload", workloadRunHandle: redeemed.workloadRunHandle });
-  for (const user of users) {
+  assert.equal(stack.productRepository.getWorkloadContext(redeemed.workloadRunHandle).state, "ALLOCATING");
+  stack.close();
+
+  stack = openStack();
+  const responseLossReplay = stack.product.workloadRedeem({ credential: "workload",
+    allocationHandle: allocation.allocationHandle, bootstrap: allocation.bootstrap, audience: allocation.audience });
+  assert.deepEqual(responseLossReplay, redeemed,
+    "lost workload redemption response is recoverable only as the same durable handle");
+  assert.throws(() => stack.product.workloadRedeem({ credential: "workload-other",
+    allocationHandle: allocation.allocationHandle, bootstrap: allocation.bootstrap, audience: allocation.audience }),
+  /hosted product request rejected/);
+  faultStage = "after-ready-placement-before-product";
+  assert.throws(() => stack.product.workloadReady({ credential: "workload",
+    workloadRunHandle: redeemed.workloadRunHandle }), /hosted product request rejected/);
+  const durableMatchBeforeReadyRepair = stack.productRepository.getMatch(match.matchId);
+  assert.equal(stack.placementRepository.getRun(durableMatchBeforeReadyRepair.runId).state, "READY");
+  assert.equal(durableMatchBeforeReadyRepair.state, "ALLOCATING");
+  assert.equal(stack.productRepository.getWorkloadContext(redeemed.workloadRunHandle).state, "ALLOCATING");
+  stack.close();
+
+  stack = openStack();
+  const repairedRoute = stack.product.workloadReady({ credential: "workload",
+    workloadRunHandle: redeemed.workloadRunHandle });
+  const replayedRoute = stack.product.workloadReady({ credential: "workload",
+    workloadRunHandle: redeemed.workloadRunHandle });
+  assert.equal(replayedRoute.routeAudience, repairedRoute.routeAudience);
+  assert.equal(replayedRoute.leaseDeadlineAt, repairedRoute.leaseDeadlineAt,
+    "ready retry preserves the durable route lineage and lease deadline");
+  assert.equal(stack.productRepository.getMatch(match.matchId).state, "READY");
+  assert.equal(stack.productRepository.getWorkloadContext(redeemed.workloadRunHandle).state, "READY");
+
+  const firstAdmission = stack.product.clientAdmission({ accessToken: users[0].accessToken,
+    profileId: users[0].profileId, matchId: match.matchId });
+  faultStage = "after-admission-placement-before-product";
+  assert.throws(() => stack.product.workloadRedeemAdmission({ credential: "workload",
+    workloadRunHandle: redeemed.workloadRunHandle, ticket: firstAdmission.ticket }), /hosted product request rejected/);
+  const durableRunId = stack.productRepository.getMatch(match.matchId).runId;
+  assert.equal(stack.placementRepository.getRun(durableRunId).admittedCount, 1);
+  assert.equal(stack.productRepository.getMembership(match.matchId, users[0].profileId).admittedAt, undefined);
+  stack.close();
+
+  stack = openStack();
+  assert.equal(stack.product.workloadRedeemAdmission({ credential: "workload",
+    workloadRunHandle: redeemed.workloadRunHandle, ticket: firstAdmission.ticket }).admitted, true);
+  assert.equal(stack.placementRepository.getRun(durableRunId).admittedCount, 1,
+    "admission repair does not increment placement twice");
+  assert.notEqual(stack.productRepository.getMembership(match.matchId, users[0].profileId).admittedAt, null);
+  for (const user of users.slice(1)) {
     const admission = stack.product.clientAdmission({ accessToken: user.accessToken,
       profileId: user.profileId, matchId: match.matchId });
     stack.product.workloadRedeemAdmission({ credential: "workload",
@@ -144,9 +218,10 @@ try {
   const durableMatch = stack.productRepository.getMatch(match.matchId);
   const admitted = stack.productRepository.listMemberships(match.matchId).filter((member) => member.admittedAt != null);
   assert.equal(admitted.length, 4);
-  stack.settlementRepository.setRunMemberships(durableMatch.runId, admitted.map((member) => ({
-    run_membership_id: member.runMembershipId, profile_id: member.profileId,
-  })));
+  assert.throws(() => stack.settlementRepository.setRunMemberships(durableMatch.runId, [{
+    run_membership_id: admitted[0].runMembershipId, profile_id: users[1].profileId,
+  }]), (error) => error.code === "HOSTED_SETTLEMENT_FENCED",
+  "hosted composition rejects caller-injected cross-account settlement membership");
   stack.close();
 
   // Each adapter reopens its own connection to the same durable file. The
@@ -157,10 +232,33 @@ try {
   assert.equal(stack.productRepository.listMemberships(match.matchId).filter((member) => member.admittedAt != null).length, 4);
   stack.product.workloadHeartbeat({ credential: "workload", workloadRunHandle: redeemed.workloadRunHandle,
     metrics: { connections: 4, queueDepth: 0, memoryBytes: 1024 } });
-  stack.product.workloadBeginDrain({ credential: "workload", workloadRunHandle: redeemed.workloadRunHandle });
+  faultStage = "after-drain-placement-before-product";
+  assert.throws(() => stack.product.workloadBeginDrain({ credential: "workload",
+    workloadRunHandle: redeemed.workloadRunHandle }), /hosted product request rejected/);
+  assert.equal(stack.placementRepository.getRun(durableMatch.runId).state, "DRAINING");
+  assert.equal(stack.productRepository.getMatch(match.matchId).state, "ACTIVE");
+  assert.equal(stack.productRepository.getWorkloadContext(redeemed.workloadRunHandle).state, "ACTIVE");
+  stack.close();
+
+  stack = openStack();
+  assert.equal(stack.product.workloadBeginDrain({ credential: "workload",
+    workloadRunHandle: redeemed.workloadRunHandle }).state, "DRAINING");
+  assert.equal(stack.productRepository.getMatch(match.matchId).state, "DRAINING");
+  assert.equal(stack.productRepository.getWorkloadContext(redeemed.workloadRunHandle).state, "DRAINING");
   const outcomes = Object.fromEntries(admitted.map((member) => [member.runMembershipId, {
     outcome: "extracted", duration_ms: 90_000, em_earned: 10 + member.seatNo, cargo: [],
   }]));
+  const forgedOutcomes = { ...outcomes };
+  delete forgedOutcomes[admitted[0].runMembershipId];
+  forgedOutcomes["run-member-forged-cross-account"] = {
+    outcome: "extracted", duration_ms: 90_000, em_earned: 999, cargo: [],
+  };
+  assert.throws(() => stack.product.workloadSubmitResult({ credential: "workload",
+    workloadRunHandle: redeemed.workloadRunHandle,
+    payload: { result_version: 1, outcomes: forgedOutcomes } }),
+  (error) => error.code === "HOSTED_PRODUCT_REJECTED",
+  "authority cannot replace an admitted membership with a forged outcome key before acceptance");
+  assert.equal(stack.outbox.list().length, 0, "forged membership result reaches neither acceptance nor outbox");
   const accepted = stack.product.workloadSubmitResult({ credential: "workload",
     workloadRunHandle: redeemed.workloadRunHandle, payload: { result_version: 1, outcomes } });
   const terminal = stack.placementRepository.getRun(durableMatch.runId);
@@ -170,10 +268,56 @@ try {
   const nextMatch = stack.product.clientCreateMatch({ accessToken: users[0].accessToken,
     profileId: users[0].profileId, seatCount: 1, clientIncarnation: "client-next", playerAlias: "Ada" });
   assert.equal(nextMatch.state, "ALLOCATING", "accepted terminal run releases measured packing capacity");
+  const nextAllocation = stack.product.controlGetAllocation({ credential: "operator", matchId: nextMatch.matchId });
+  const nextRedeemed = stack.product.workloadRedeem({ credential: "workload",
+    allocationHandle: nextAllocation.allocationHandle, bootstrap: nextAllocation.bootstrap,
+    audience: nextAllocation.audience });
+  const nextContext = stack.productRepository.getWorkloadContext(nextRedeemed.workloadRunHandle);
+  faultAction = (stage, components) => {
+    assert.equal(stage, "after-ready-placement-before-product");
+    components.placement.beginRunDrain({ credential: "workload", runId: nextContext.runId,
+      authorityLeaseId: nextContext.authorityLeaseId, leaseEpoch: nextContext.leaseEpoch });
+  };
+  const interleavedReady = stack.product.workloadReady({ credential: "workload",
+    workloadRunHandle: nextRedeemed.workloadRunHandle });
+  assert.equal(interleavedReady.state, "DRAINING");
+  assert.equal(stack.productRepository.getMatch(nextMatch.matchId).state, "DRAINING");
+  assert.equal(stack.productRepository.getWorkloadContext(nextRedeemed.workloadRunHandle).state, "DRAINING",
+    "ready reconciliation re-reads placement and cannot regress a concurrent drain");
+  stack.placement.endRun({ credential: "workload", runId: nextContext.runId,
+    authorityLeaseId: nextContext.authorityLeaseId, leaseEpoch: nextContext.leaseEpoch, outcome: "FAILED" });
+
+  const raceMatch = stack.product.clientCreateMatch({ accessToken: users[0].accessToken,
+    profileId: users[0].profileId, seatCount: 1, clientIncarnation: "client-race", playerAlias: "Ada" });
+  const raceAllocation = stack.product.controlGetAllocation({ credential: "operator", matchId: raceMatch.matchId });
+  const raceRedeemed = stack.product.workloadRedeem({ credential: "workload",
+    allocationHandle: raceAllocation.allocationHandle, bootstrap: raceAllocation.bootstrap,
+    audience: raceAllocation.audience });
+  stack.product.workloadReady({ credential: "workload", workloadRunHandle: raceRedeemed.workloadRunHandle });
+  const raceTicket = stack.product.clientAdmission({ accessToken: users[0].accessToken,
+    profileId: users[0].profileId, matchId: raceMatch.matchId });
+  faultStage = "after-admission-placement-before-product";
+  assert.throws(() => stack.product.workloadRedeemAdmission({ credential: "workload",
+    workloadRunHandle: raceRedeemed.workloadRunHandle, ticket: raceTicket.ticket }),
+  /hosted product request rejected/);
+  stack.product.workloadBeginDrain({ credential: "workload", workloadRunHandle: raceRedeemed.workloadRunHandle });
+  assert.throws(() => stack.product.workloadSubmitResult({ credential: "workload",
+    workloadRunHandle: raceRedeemed.workloadRunHandle, payload: { result_version: 1, outcomes: {} } }),
+  /hosted product request rejected/,
+  "underinclusive local membership cannot become an immutable placement result");
+  assert.equal(stack.product.workloadRedeemAdmission({ credential: "workload",
+    workloadRunHandle: raceRedeemed.workloadRunHandle, ticket: raceTicket.ticket }).admitted, true,
+  "exact consumed ticket reconciles product membership after drain");
+  const raceContext = stack.productRepository.getWorkloadContext(raceRedeemed.workloadRunHandle);
+  assert.deepEqual(stack.placement.admittedMemberships({ credential: "workload", runId: raceContext.runId,
+    authorityLeaseId: raceContext.authorityLeaseId, leaseEpoch: raceContext.leaseEpoch }).runMembershipIds,
+  stack.productRepository.listMemberships(raceMatch.matchId).filter((member) => member.admittedAt != null)
+    .map((member) => member.runMembershipId).sort());
   stack.placementRepository.cleanup({ now, terminalBefore: now, keepTerminal: 8 });
   assert.equal(stack.placementRepository.getRun(durableMatch.runId).resultAcceptanceState, "ACCEPTED",
     "cleanup retains accepted lineage until a future settlement-ack archive protocol");
-  assert.equal(stack.placementRepository.acceptAuthorityResult(accepted.authority, accepted.result_hash).accepted, true,
+  assert.equal(stack.placementRepository.acceptAuthorityResult(accepted.authority, accepted.result_hash,
+    accepted.result_id, accepted.accepted_at, Object.keys(accepted.payload.outcomes)).accepted, true,
     "same accepted lineage and hash remain replayable from the retained tombstone");
   assert.equal(stack.product.workloadEnd({ credential: "workload",
     workloadRunHandle: redeemed.workloadRunHandle }).acceptedResultId, accepted.result_id);

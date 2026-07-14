@@ -149,6 +149,10 @@ test("admission replay is idempotent and cross-match admission is rejected", () 
   assert.equal(repo.markMembershipAdmitted(one.matchId, joined.runMembershipId, 200).admittedAt, 200);
   assert.equal(repo.markMembershipAdmitted(one.matchId, joined.runMembershipId, 999).admittedAt, 200);
   assert.equal(repo.markMembershipAdmitted(two.matchId, joined.runMembershipId, 300), null);
+  rejects(() => repo.db.prepare("UPDATE hprod_memberships SET admitted_at=NULL WHERE membership_id=?")
+    .run(joined.membershipId), /admitted membership immutable/);
+  rejects(() => repo.db.prepare("DELETE FROM hprod_memberships WHERE membership_id=?")
+    .run(joined.membershipId), /admitted membership immutable/);
   repo.close();
 });
 

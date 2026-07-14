@@ -269,44 +269,78 @@ function createHostedPlacementService({
     if (audience !== expectedAudience) reject("BOOTSTRAP_REJECTED");
     const claims = codec.open(bootstrap, expectedAudience);
     const at = time();
-    if (claims.type !== "bootstrap" || claims.audience !== expectedAudience || at >= claims.expiresAt) reject("BOOTSTRAP_REJECTED");
+    if (claims.type !== "bootstrap" || claims.audience !== expectedAudience) reject("BOOTSTRAP_REJECTED");
     const run = requireCurrent(trusted, claims, new Set(["ALLOCATING"]));
     if (run.bootstrapId !== claims.tokenId || run.artifactSha !== claims.artifactSha
       || run.authorityIncarnation !== claims.authorityIncarnation
       || run.protocolVersion !== claims.protocolVersion || run.manifestHash !== claims.manifestHash
       || run.seatCount !== claims.seatCount || claims.maxSeats !== MAX_SEATS
       || !equalArray(run.capabilities, claims.capabilities)) reject("BOOTSTRAP_REJECTED");
+    const exactConsumedReplay = (record) => repository.isTokenConsumed(claims.tokenId)
+      && record?.bootstrapId === claims.tokenId && record.bootstrapConsumedAt !== null
+      && record.authorityLeaseId === claims.authorityLeaseId && record.leaseEpoch === claims.leaseEpoch;
+    if (at >= claims.expiresAt) {
+      if (exactConsumedReplay(run)) {
+        return Object.freeze({ ...claims, bootstrap: undefined, tokenId: undefined, replayed: true });
+      }
+      reject("BOOTSTRAP_REJECTED");
+    }
     const consumed = repository.consumeTokenAndUpdateRun({
-      tokenId: claims.tokenId, expiresAt: claims.expiresAt, consumedAt: at, runId: run.runId,
+      tokenId: claims.tokenId, expiresAt: Math.max(claims.expiresAt, run.readinessDeadlineAt),
+      consumedAt: at, runId: run.runId,
       predicate: (record) => record.state === "ALLOCATING" && record.leaseStatus === "ACTIVE"
         && record.bootstrapId === claims.tokenId && record.bootstrapConsumedAt === null
         && record.authorityLeaseId === claims.authorityLeaseId && record.leaseEpoch === claims.leaseEpoch,
       mutate: (record) => ({ ...record, bootstrapConsumedAt: at, updatedAt: at }),
     });
-    if (!consumed) reject("BOOTSTRAP_REPLAY");
-    return Object.freeze({ ...claims, bootstrap: undefined, tokenId: undefined });
+    if (!consumed) {
+      const latest = repository.getRun(run.runId);
+      if (exactConsumedReplay(latest) && latest?.bootstrapId === claims.tokenId
+        && latest.bootstrapConsumedAt !== null && latest.authorityLeaseId === claims.authorityLeaseId
+        && latest.leaseEpoch === claims.leaseEpoch) {
+        return Object.freeze({ ...claims, bootstrap: undefined, tokenId: undefined, replayed: true });
+      }
+      reject("BOOTSTRAP_REPLAY");
+    }
+    return Object.freeze({ ...claims, bootstrap: undefined, tokenId: undefined, replayed: false });
+  }
+
+  function readyResponse(run) {
+    const routeAudience = `route:${run.runId}`;
+    const route = codec.seal({
+      type: "route", tokenId: run.routeId, audience: routeAudience,
+      runId: run.runId, authorityLeaseId: run.authorityLeaseId, leaseEpoch: run.leaseEpoch,
+      authorityInstanceId: run.authorityInstanceId, endpoint: run.endpoint,
+      artifactSha: run.artifactSha, protocolVersion: run.protocolVersion,
+      manifestHash: run.manifestHash, issuedAt: run.routeIssuedAt,
+      expiresAt: run.leaseDeadlineAt,
+    }, routeAudience);
+    return Object.freeze({ route, routeAudience, leaseDeadlineAt: run.leaseDeadlineAt, state: run.state });
   }
 
   function markReady({ credential, runId, authorityLeaseId, leaseEpoch }) {
     const trusted = workload(credential);
     const at = time();
     const claims = { runId: id(runId), authorityLeaseId: id(authorityLeaseId), leaseEpoch: integer(leaseEpoch, 1) };
-    const current = requireCurrent(trusted, claims, new Set(["ALLOCATING"]));
+    const current = requireCurrent(trusted, claims, new Set(["ALLOCATING", ...LIVE_STATES]));
+    if (["READY", "ACTIVE", "DRAINING"].includes(current.state)) {
+      if (current.bootstrapConsumedAt === null || typeof current.routeId !== "string"
+        || !Number.isSafeInteger(current.routeIssuedAt)) reject("DUPLICATE_OR_STALE_READY");
+      return readyResponse(current);
+    }
     if (at >= current.readinessDeadlineAt) reject("READINESS_EXPIRED");
     const routeId = opaqueId("route");
     const updated = repository.compareAndSetRun(current.runId,
       (run) => run.state === "ALLOCATING" && run.bootstrapConsumedAt !== null
         && run.authorityLeaseId === current.authorityLeaseId && run.leaseEpoch === current.leaseEpoch,
-      (run) => ({ ...run, state: "READY", routeId, leaseDeadlineAt: at + leaseTtlMs, updatedAt: at }));
-    if (!updated) reject("DUPLICATE_OR_STALE_READY");
-    const route = codec.seal({
-      type: "route", tokenId: routeId, audience: `route:${updated.runId}`,
-      runId: updated.runId, authorityLeaseId: updated.authorityLeaseId, leaseEpoch: updated.leaseEpoch,
-      authorityInstanceId: updated.authorityInstanceId, endpoint: updated.endpoint,
-      artifactSha: updated.artifactSha, protocolVersion: updated.protocolVersion,
-      manifestHash: updated.manifestHash, issuedAt: at, expiresAt: updated.leaseDeadlineAt,
-    }, `route:${updated.runId}`);
-    return Object.freeze({ route, routeAudience: `route:${updated.runId}`, leaseDeadlineAt: updated.leaseDeadlineAt });
+      (run) => ({ ...run, state: "READY", routeId, routeIssuedAt: at,
+        leaseDeadlineAt: at + leaseTtlMs, updatedAt: at }));
+    if (updated) return readyResponse(updated);
+    const converged = requireCurrent(trusted, claims, new Set(["ALLOCATING", ...LIVE_STATES]));
+    if (!["READY", "ACTIVE", "DRAINING"].includes(converged.state)
+      || converged.bootstrapConsumedAt === null || typeof converged.routeId !== "string"
+      || !Number.isSafeInteger(converged.routeIssuedAt)) reject("DUPLICATE_OR_STALE_READY");
+    return readyResponse(converged);
   }
 
   function validateRoute({ credential, route, runId }) {
@@ -368,9 +402,18 @@ function createHostedPlacementService({
     if (claims.seatNo < 0 || claims.seatNo >= run.seatCount || claims.seatNo >= MAX_SEATS
       || run.protocolVersion !== claims.protocolVersion || run.manifestHash !== claims.manifestHash
       || !equalArray(run.capabilities, claims.capabilities)) reject("TICKET_REJECTED");
+    if (run.state === "DRAINING") {
+      if (repository.isTokenConsumed(claims.tokenId)
+        && run.admittedMemberships.includes(claims.runMembershipId)
+        && run.admittedSeats.includes(claims.seatNo)) {
+        return Object.freeze({ ...claims, tokenId: undefined, accountId: claims.accountId,
+          profileId: claims.profileId, replayed: true });
+      }
+      reject("RUN_DRAINING");
+    }
     const updated = repository.consumeTokenAndUpdateRun({
       tokenId: claims.tokenId, expiresAt: claims.expiresAt, consumedAt: at, runId: run.runId,
-      predicate: (record) => LIVE_STATES.has(record.state) && record.leaseStatus === "ACTIVE"
+      predicate: (record) => ["READY", "ACTIVE"].includes(record.state) && record.leaseStatus === "ACTIVE"
         && record.admittedCount < record.seatCount && !record.admittedMemberships.includes(claims.runMembershipId)
         && !record.admittedSeats.includes(claims.seatNo),
       mutate: (record) => ({ ...record, state: record.state === "READY" ? "ACTIVE" : record.state,
@@ -379,12 +422,19 @@ function createHostedPlacementService({
         admittedSeats: [...record.admittedSeats, claims.seatNo], updatedAt: at }),
     });
     if (!updated) {
-      if (repository.isTokenConsumed(claims.tokenId)) reject("TICKET_REPLAY");
-      if (repository.getRun(run.runId)?.admittedMemberships?.includes(claims.runMembershipId)) reject("MEMBERSHIP_ALREADY_ADMITTED");
-      if (repository.getRun(run.runId)?.admittedSeats?.includes(claims.seatNo)) reject("SEAT_ALREADY_ADMITTED");
+      const latest = repository.getRun(run.runId);
+      if (repository.isTokenConsumed(claims.tokenId)
+        && latest?.admittedMemberships?.includes(claims.runMembershipId)
+        && latest?.admittedSeats?.includes(claims.seatNo)) {
+        return Object.freeze({ ...claims, tokenId: undefined, accountId: claims.accountId,
+          profileId: claims.profileId, replayed: true });
+      }
+      if (latest?.admittedMemberships?.includes(claims.runMembershipId)) reject("MEMBERSHIP_ALREADY_ADMITTED");
+      if (latest?.admittedSeats?.includes(claims.seatNo)) reject("SEAT_ALREADY_ADMITTED");
       reject("TICKET_REPLAY");
     }
-    return Object.freeze({ ...claims, tokenId: undefined, accountId: claims.accountId, profileId: claims.profileId });
+    return Object.freeze({ ...claims, tokenId: undefined, accountId: claims.accountId,
+      profileId: claims.profileId, replayed: false });
   }
 
   function resultEligible({ credential, runId, authorityLeaseId, leaseEpoch }) {
@@ -393,16 +443,28 @@ function createHostedPlacementService({
     return true;
   }
 
+  function admittedMemberships({ credential, runId, authorityLeaseId, leaseEpoch }) {
+    const trusted = workload(credential);
+    const current = requireCurrent(trusted, { runId: id(runId), authorityLeaseId: id(authorityLeaseId),
+      leaseEpoch: integer(leaseEpoch, 1) });
+    return Object.freeze({ runMembershipIds: Object.freeze([...current.admittedMemberships].sort()),
+      admittedCount: current.admittedCount, state: current.state });
+  }
+
   function beginRunDrain({ credential, runId, authorityLeaseId, leaseEpoch }) {
     const trusted = workload(credential);
     const claims = { runId: id(runId), authorityLeaseId: id(authorityLeaseId), leaseEpoch: integer(leaseEpoch, 1) };
     const current = requireCurrent(trusted, claims);
+    if (current.state === "DRAINING") return { state: current.state };
     const at = time();
     const updated = repository.compareAndSetRun(current.runId,
-      (run) => ["READY", "ACTIVE"].includes(run.state) && run.authorityLeaseId === current.authorityLeaseId,
+      (run) => ["READY", "ACTIVE"].includes(run.state) && run.authorityLeaseId === current.authorityLeaseId
+        && run.leaseEpoch === current.leaseEpoch,
       (run) => ({ ...run, state: "DRAINING", updatedAt: at }));
-    if (!updated) reject("STALE_LEASE");
-    return { state: updated.state };
+    if (updated) return { state: updated.state };
+    const converged = requireCurrent(trusted, claims);
+    if (converged.state !== "DRAINING") reject("STALE_LEASE");
+    return { state: converged.state };
   }
 
   function endRun({ credential, runId, authorityLeaseId, leaseEpoch, outcome }) {
@@ -441,7 +503,7 @@ function createHostedPlacementService({
   return Object.freeze({
     registerCapacity, setDrain, requestPlacement, requestReplacement, redeemBootstrap, markReady,
     validateRoute, heartbeat, issueAdmissionTicket, redeemAdmissionTicket, resultEligible,
-    beginRunDrain, endRun, fenceExpired, cleanup,
+    admittedMemberships, beginRunDrain, endRun, fenceExpired, cleanup,
   });
 }
 

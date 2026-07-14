@@ -155,7 +155,9 @@ class InMemoryHostedResultOutbox {
     // authority lease row: validate current active terminal lineage, record
     // (run, lineage, result_hash) as accepted, and make later replacement or a
     // second hash impossible. Idempotent retry of that exact tuple is allowed.
-    const accepted = this.acceptAuthorityResult(canonical.authority, canonical.result_hash);
+    const membershipIds = Object.keys(canonical.payload.outcomes).sort();
+    const accepted = this.acceptAuthorityResult(canonical.authority, canonical.result_hash,
+      canonical.result_id, this.now(), membershipIds);
     if (!accepted || accepted.accepted !== true || accepted.run_id !== canonical.authority.run_id
         || accepted.lease_id !== canonical.authority.lease_id
         || accepted.lease_epoch !== canonical.authority.lease_epoch

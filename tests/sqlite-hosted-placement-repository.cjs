@@ -164,22 +164,13 @@ function authorityRaceWorker(mode, filename, identity, request) {
         const repository = new SqliteHostedPlacementRepository({ filename: workerData.filename, now: () => 1_000_100 });
         let won = false;
         if (workerData.mode === "accept") {
-          won = Boolean(repository.acceptAuthorityResult(workerData.identity, "sha256:accepted-race"));
+          won = Boolean(repository.acceptAuthorityResult(workerData.identity, "sha256:accepted-race",
+            null, null, ["run-membership-0"]));
         } else {
           const fenced = repository.compareAndSetRun(workerData.identity.run_id,
             (run) => run.state === "DRAINING" && run.leaseStatus === "ACTIVE",
             (run) => ({ ...run, state: "FAILED", leaseStatus: "FENCED", terminalAt: 1_000_100, updatedAt: 1_000_100 }));
-          if (fenced) {
-            const service = createHostedPlacementService({
-              repository, now: () => 1_000_100, randomBytes: crypto.randomBytes,
-              tokenKey: crypto.createHash("sha256").update("sqlite-placement-token").digest(),
-              diagnosticKey: crypto.createHash("sha256").update("sqlite-placement-diagnostic").digest(),
-              authenticateWorkload: () => null,
-              authenticateControlPlane: (credential) => credential === "control" ? { role: "CONTROL_PLANE" } : null,
-              measuredPackingLimit: 1,
-            });
-            won = service.requestReplacement({ credential: "control", request: workerData.request }).won;
-          }
+          won = Boolean(fenced);
         }
         repository.close();
         parentPort.postMessage({ ok: true, won });
@@ -200,6 +191,8 @@ function drainRun(h, repository, service, runId) {
     audience: "authority:authority-a" });
   service.markReady({ credential: "worker-a", runId, authorityLeaseId: claims.authorityLeaseId,
     leaseEpoch: claims.leaseEpoch });
+  const ticket = service.issueAdmissionTicket({ credential: "control", runId, member: h.member(0) });
+  service.redeemAdmissionTicket({ credential: "worker-a", ticket: ticket.ticket });
   service.beginRunDrain({ credential: "worker-a", runId, authorityLeaseId: claims.authorityLeaseId,
     leaseEpoch: claims.leaseEpoch });
   return { run_id: runId, lease_id: claims.authorityLeaseId, lease_epoch: claims.leaseEpoch,
@@ -292,10 +285,12 @@ function drainRun(h, repository, service, runId) {
         audience: "authority:authority-a" });
       repository.close();
 
+      h.advance(1_001);
       repository = h.openRepository();
       service = h.service(repository);
-      rejection(() => service.redeemBootstrap({ credential: "worker-a", bootstrap: placement.bootstrap,
-        audience: "authority:authority-a" }), "BOOTSTRAP_REPLAY");
+      assert.strictEqual(service.redeemBootstrap({ credential: "worker-a", bootstrap: placement.bootstrap,
+        audience: "authority:authority-a" }).replayed, true,
+      "consumed bootstrap survives reopen beyond token TTL while readiness lease is live");
       service.markReady({ credential: "worker-a", runId: claims.runId,
         authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch });
       const ticket = service.issueAdmissionTicket({ credential: "control", runId: claims.runId, member: h.member(0) });
@@ -304,7 +299,7 @@ function drainRun(h, repository, service, runId) {
 
       repository = h.openRepository();
       service = h.service(repository);
-      rejection(() => service.redeemAdmissionTicket({ credential: "worker-a", ticket: ticket.ticket }), "TICKET_REPLAY");
+      assert.strictEqual(service.redeemAdmissionTicket({ credential: "worker-a", ticket: ticket.ticket }).replayed, true);
       assert.strictEqual(repository.getRun("replay").admittedCount, 1);
     } finally { h.closeAll(); }
   });
@@ -411,7 +406,7 @@ function drainRun(h, repository, service, runId) {
       let service = h.service(repository);
       register(service, h);
       const identity = drainRun(h, repository, service, "accepted");
-      const accepted = repository.acceptAuthorityResult(identity, "sha256:one");
+      const accepted = repository.acceptAuthorityResult(identity, "sha256:one", null, null, ["run-membership-0"]);
       assert.strictEqual(accepted.accepted, true);
       assert.strictEqual(repository.getRun("accepted").resultAcceptanceState, "ACCEPTED");
       assert.strictEqual(repository.getRun("accepted").state, "ENDED");
@@ -433,13 +428,48 @@ function drainRun(h, repository, service, runId) {
       repository.close();
 
       repository = h.openRepository();
-      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one").accepted, true);
+      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one", null, null, ["run-membership-0"]).accepted, true);
       repository.cleanup({ now: 1_010_000, terminalBefore: 1_010_000, keepTerminal: 4 });
       assert.strictEqual(repository.getRun("accepted").resultAcceptanceState, "ACCEPTED");
-      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one").accepted, true);
-      assert.throws(() => repository.acceptAuthorityResult(identity, "sha256:other"),
+      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one", null, null, ["run-membership-0"]).accepted, true);
+      assert.throws(() => repository.acceptAuthorityResult(identity, "sha256:other", null, null, ["run-membership-0"]),
         (error) => error.code === "HOSTED_RESULT_CONFLICT");
       assert.strictEqual(repository.getRun("accepted").acceptedResultHash, "sha256:one");
+    } finally { h.closeAll(); }
+  });
+
+  await test("authority acceptance binds the exact canonical admitted membership set", () => {
+    const h = fixture();
+    try {
+      const repository = h.openRepository();
+      const service = h.service(repository);
+      register(service, h);
+      const runId = "accepted-membership-set";
+      const placement = place(service, h, runId);
+      const claims = service.redeemBootstrap({ credential: "worker-a", bootstrap: placement.bootstrap,
+        audience: "authority:authority-a" });
+      service.markReady({ credential: "worker-a", runId, authorityLeaseId: claims.authorityLeaseId,
+        leaseEpoch: claims.leaseEpoch });
+      for (const seatNo of [0, 1]) {
+        const ticket = service.issueAdmissionTicket({ credential: "control", runId, member: h.member(seatNo) });
+        service.redeemAdmissionTicket({ credential: "worker-a", ticket: ticket.ticket });
+      }
+      service.beginRunDrain({ credential: "worker-a", runId, authorityLeaseId: claims.authorityLeaseId,
+        leaseEpoch: claims.leaseEpoch });
+      const identity = { run_id: runId, lease_id: claims.authorityLeaseId, lease_epoch: claims.leaseEpoch,
+        authority_incarnation: repository.getRun(runId).authorityIncarnation };
+      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:underinclusive", null, null,
+        ["run-membership-0"]), null);
+      assert.strictEqual(repository.getRun(runId).state, "DRAINING");
+      const accepted = repository.acceptAuthorityResult(identity, "sha256:exact", null, null,
+        ["run-membership-1", "run-membership-0"]);
+      assert.strictEqual(accepted.membership_count, 2);
+      assert.match(accepted.membership_digest, /^sha256:[0-9a-f]{64}$/);
+      assert.strictEqual(repository.getRun(runId).acceptedMembershipDigest, accepted.membership_digest);
+      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:exact", null, null,
+        ["run-membership-0"]), null, "accepted tuple cannot replay under a different membership set");
+      assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:exact", null, null,
+        ["run-membership-0", "run-membership-1"]).accepted, true);
     } finally { h.closeAll(); }
   });
 
@@ -453,7 +483,7 @@ function drainRun(h, repository, service, runId) {
       for (let index = 0; index < 7; index++) {
         const identity = drainRun(h, repository, service, `accepted-retained-${index}`);
         const resultHash = `sha256:retained-${index}`;
-        repository.acceptAuthorityResult(identity, resultHash);
+        repository.acceptAuthorityResult(identity, resultHash, null, null, ["run-membership-0"]);
         accepted.push({ identity, resultHash });
       }
       for (let index = 0; index < 7; index++) {
@@ -471,7 +501,8 @@ function drainRun(h, repository, service, runId) {
       assert.strictEqual(summary.tombstones, 3);
       assert(repository.snapshot().tombstones.every((entry) => entry.runId.startsWith("ordinary-terminal-")));
       for (const entry of accepted) {
-        assert.strictEqual(repository.acceptAuthorityResult(entry.identity, entry.resultHash).accepted, true);
+        assert.strictEqual(repository.acceptAuthorityResult(entry.identity, entry.resultHash,
+          null, null, ["run-membership-0"]).accepted, true);
       }
       assert.strictEqual(repository.getRun("accepted-retained-0").acceptedResultHash, "sha256:retained-0");
     } finally { h.closeAll(); }
@@ -494,7 +525,7 @@ function drainRun(h, repository, service, runId) {
     } finally { h.closeAll(); }
   });
 
-  await test("authority result acceptance versus replacement race has one durable winner", async () => {
+  await test("authority result acceptance versus fencing race has one durable winner", async () => {
     const h = fixture();
     try {
       const repository = h.openRepository();
@@ -502,12 +533,9 @@ function drainRun(h, repository, service, runId) {
       register(service, h, "worker-a");
       register(service, h, "worker-b");
       const identity = drainRun(h, repository, service, "accept-replace-race");
-      const replacementRequest = h.request("accept-replace-race", {
-        requestId: "request-accept-replace-race-replacement",
-      });
       const outcomes = await Promise.all([
-        authorityRaceWorker("accept", h.filename, identity, replacementRequest),
-        authorityRaceWorker("replace", h.filename, identity, replacementRequest),
+        authorityRaceWorker("accept", h.filename, identity, null),
+        authorityRaceWorker("fence", h.filename, identity, null),
       ]);
       assert.strictEqual(outcomes.filter(Boolean).length, 1);
       const current = repository.getRun("accept-replace-race");
@@ -515,8 +543,9 @@ function drainRun(h, repository, service, runId) {
         assert.strictEqual(current.leaseEpoch, identity.lease_epoch);
         assert.strictEqual(current.acceptedResultHash, "sha256:accepted-race");
       } else {
-        assert.strictEqual(current.leaseEpoch, identity.lease_epoch + 1);
-        assert.strictEqual(current.authorityIncarnation, "authority-b-incarnation-1");
+        assert.strictEqual(current.leaseEpoch, identity.lease_epoch);
+        assert.strictEqual(current.state, "FAILED");
+        assert.strictEqual(current.leaseStatus, "FENCED");
       }
     } finally { h.closeAll(); }
   });
@@ -551,7 +580,8 @@ function drainRun(h, repository, service, runId) {
       assert.strictEqual(migrated.authorityIncarnation, "legacy-unbound");
       assert.strictEqual(migrated.resultAcceptanceState, "OPEN");
       assert.strictEqual(repository.acceptAuthorityResult({ run_id: "legacy-run", lease_id: "x",
-        lease_epoch: 1, authority_incarnation: "legacy-unbound" }, "sha256:no"), null);
+        lease_epoch: 1, authority_incarnation: "legacy-unbound" }, "sha256:no",
+      null, null, ["run-membership-0"]), null);
     } finally {
       repository.close();
       fs.rmSync(directory, { recursive: true, force: true });

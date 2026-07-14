@@ -103,6 +103,16 @@ class SqliteHostedProductRepository {
         run_membership_id,session_membership_id ON hprod_memberships
       BEGIN SELECT RAISE(ABORT, 'hosted product membership lineage immutable'); END;
 
+      CREATE TRIGGER IF NOT EXISTS hprod_admitted_membership_update
+      BEFORE UPDATE OF admitted_at ON hprod_memberships
+      WHEN OLD.admitted_at IS NOT NULL OR NEW.admitted_at IS NULL
+      BEGIN SELECT RAISE(ABORT, 'hosted product admitted membership immutable'); END;
+
+      CREATE TRIGGER IF NOT EXISTS hprod_admitted_membership_delete
+      BEFORE DELETE ON hprod_memberships
+      WHEN OLD.admitted_at IS NOT NULL
+      BEGIN SELECT RAISE(ABORT, 'hosted product admitted membership immutable'); END;
+
       CREATE TRIGGER IF NOT EXISTS hprod_match_seat_count_update
       BEFORE UPDATE OF seat_count ON hprod_matches
       BEGIN
@@ -250,6 +260,20 @@ class SqliteHostedProductRepository {
   listMemberships(matchId) {
     return this.db.prepare("SELECT * FROM hprod_memberships WHERE match_id=? ORDER BY seat_no,membership_id")
       .all(matchId).map((row) => this._member(row));
+  }
+  getAdmittedRunMemberships(runId) {
+    text(runId, "runId");
+    const admitted = this.db.prepare(`SELECT count(*) AS count FROM hprod_memberships
+      WHERE run_id=? AND admitted_at IS NOT NULL`).get(runId).count;
+    const rows = this.db.prepare(`SELECT m.run_membership_id,m.profile_id
+      FROM hprod_memberships AS m
+      JOIN hid_profiles AS p ON p.profile_id=m.profile_id AND p.account_id=m.account_id
+      WHERE m.run_id=? AND m.admitted_at IS NOT NULL
+      ORDER BY m.run_membership_id`).all(runId);
+    if (rows.length !== admitted) {
+      throw new Error("hosted product membership identity binding invalid");
+    }
+    return rows.map((row) => ({ run_membership_id: row.run_membership_id, profile_id: row.profile_id }));
   }
   markMembershipAdmitted(matchId, runMembershipId, admittedAt) {
     integer(admittedAt, "admittedAt");

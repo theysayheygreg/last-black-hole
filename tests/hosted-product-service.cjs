@@ -123,13 +123,16 @@ function rig() {
   const acceptedResults = new Map();
   const outbox = new InMemoryHostedResultOutbox({
     now: () => now, baseBackoffMs: 10, randomBytes: () => Buffer.alloc(20, 9),
-    acceptAuthorityResult(authority, resultHash) {
+    acceptAuthorityResult(authority, resultHash, resultId, preparedAt, outcomeMembershipIds) {
       const run = placementRepository.getRun(authority.run_id);
       if (!run) return null;
       const descriptor = [...descriptors.values()].find((value) => value.authorityInstanceId === run.authorityInstanceId);
       const valid = run.leaseStatus === "ACTIVE" && run.state === "DRAINING"
         && run.authorityLeaseId === authority.lease_id && run.leaseEpoch === authority.lease_epoch
-        && descriptor.authorityIncarnation === authority.authority_incarnation;
+        && descriptor.authorityIncarnation === authority.authority_incarnation
+        && Array.isArray(outcomeMembershipIds)
+        && outcomeMembershipIds.length === run.admittedMemberships.length
+        && [...run.admittedMemberships].sort().every((id, index) => id === [...outcomeMembershipIds].sort()[index]);
       if (!valid) return null;
       const prior = acceptedResults.get(run.runId);
       if (prior && (prior.result_hash !== resultHash || prior.lease_id !== authority.lease_id

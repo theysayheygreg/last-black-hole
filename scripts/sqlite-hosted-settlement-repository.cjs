@@ -100,10 +100,6 @@ function configure(db, { referenceAuthorityMode = false } = {}) {
       (SELECT count(*) FROM hosted_run_memberships
        WHERE run_id=NEW.run_id AND membership_state='admitted') >= 4
     BEGIN SELECT RAISE(ABORT, 'hosted membership capacity'); END;
-    CREATE TRIGGER IF NOT EXISTS hosted_run_memberships_lock_insert
-    BEFORE INSERT ON hosted_run_memberships
-    WHEN EXISTS(SELECT 1 FROM hosted_result_outbox WHERE run_id=NEW.run_id)
-    BEGIN SELECT RAISE(ABORT, 'hosted membership accepted'); END;
     CREATE TRIGGER IF NOT EXISTS hosted_run_memberships_lock_update
     BEFORE UPDATE ON hosted_run_memberships
     WHEN EXISTS(SELECT 1 FROM hosted_result_outbox WHERE run_id=OLD.run_id)
@@ -113,6 +109,11 @@ function configure(db, { referenceAuthorityMode = false } = {}) {
     WHEN EXISTS(SELECT 1 FROM hosted_result_outbox WHERE run_id=OLD.run_id)
     BEGIN SELECT RAISE(ABORT, 'hosted membership accepted'); END;
   `);
+  // Older reference builds blocked every post-accept insert because callers
+  // supplied membership rows before result acceptance. Hosted composition now
+  // resolves immutable product/identity ownership while settling, so only the
+  // repository's trusted snapshot path may create the first terminal rows.
+  db.exec("DROP TRIGGER IF EXISTS hosted_run_memberships_lock_insert");
   return db;
 }
 
@@ -150,9 +151,12 @@ function assertExactOutcomeSet(payload, memberships) {
 
 class SQLiteHostedSettlementRepository {
   constructor({ filepath, db, now = Date.now, fault = () => {},
-    verifyAcceptedAuthorityResult, referenceAuthorityMode = false } = {}) {
+    verifyAcceptedAuthorityResult, resolveRunMemberships, referenceAuthorityMode = false } = {}) {
     if (!referenceAuthorityMode && typeof verifyAcceptedAuthorityResult !== "function") {
       throw new TypeError("verifyAcceptedAuthorityResult is required outside explicit reference authority mode");
+    }
+    if (!referenceAuthorityMode && typeof resolveRunMemberships !== "function") {
+      throw new TypeError("resolveRunMemberships is required outside explicit reference authority mode");
     }
     const opened = openDatabase({ filepath, db, referenceAuthorityMode });
     this.db = opened.db;
@@ -163,11 +167,13 @@ class SQLiteHostedSettlementRepository {
     this.verifyAcceptedAuthorityResult = referenceAuthorityMode
       ? (entry) => this._verifyReferenceAcceptance(entry)
       : verifyAcceptedAuthorityResult;
+    this.resolveRunMemberships = resolveRunMemberships;
   }
 
   close() { if (this.ownsDb) this.db.close(); }
 
   setRunMemberships(runId, rows) {
+    if (!this.referenceAuthorityMode) reject("HOSTED_SETTLEMENT_FENCED");
     runId = validId(runId);
     const memberships = normalizeMemberships(rows);
     this.db.exec("BEGIN IMMEDIATE");
@@ -228,6 +234,24 @@ class SQLiteHostedSettlementRepository {
         }
         this.db.exec("COMMIT");
         return Object.freeze({ ...parse(prior.response_json), replayed: true });
+      }
+
+      if (!this.referenceAuthorityMode) {
+        const resolvedMemberships = normalizeMemberships(this.resolveRunMemberships(entry.run_id));
+        const existing = this.db.prepare(`SELECT run_membership_id,profile_id FROM hosted_run_memberships
+          WHERE run_id=? AND membership_state='admitted' ORDER BY run_membership_id`).all(entry.run_id);
+        if (existing.length) {
+          const normalizedExisting = normalizeMemberships(existing);
+          if (json(normalizedExisting) !== json(resolvedMemberships)) {
+            reject("HOSTED_SETTLEMENT_MEMBERSHIP_MISMATCH");
+          }
+        } else {
+          const insert = this.db.prepare(`INSERT INTO hosted_run_memberships
+            (run_id,run_membership_id,profile_id,membership_state) VALUES (?,?,?,'admitted')`);
+          for (const member of resolvedMemberships) {
+            insert.run(entry.run_id, member.run_membership_id, member.profile_id);
+          }
+        }
       }
 
       const memberships = this.db.prepare(`SELECT run_membership_id,profile_id FROM hosted_run_memberships
