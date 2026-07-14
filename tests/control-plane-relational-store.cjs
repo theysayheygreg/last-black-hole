@@ -55,6 +55,7 @@ function payload(overrides = {}) {
       outcome: "extracted",
       survivalTime: 120,
       emEarned: 60,
+      clientId: "nested-raw-client-id-must-not-persist",
       cargoExtracted: [{ id: itemId, name: "Relational Relic", value: 20 }],
       cargoLost: [],
     },
@@ -166,6 +167,8 @@ async function main() {
     rejects(() => store.applyOutcome({ ...payload({ profileId: "profile-stale", runId: "run-stale" }), settlement: { authorityInstanceId: "authority-local-test", authorityEpoch: 2 } }), "STALE_LEASE", "first result cannot invent epoch two");
     const bytes = fs.readFileSync(filepath);
     check(!bytes.includes(Buffer.from("raw-client-id-must-not-persist")), "raw client id must not persist in main database");
+    const resultPayloads = store.db.prepare("SELECT payload_json FROM run_results").all().map((row) => row.payload_json).join("\n");
+    check(!resultPayloads.includes("client-id-must-not-persist"), "nested result payload must strip raw client ids");
     store.close();
   }
 
@@ -222,6 +225,9 @@ async function main() {
     equal(store.getProfile(importedProfileId).exoticMatter, 17, "import should preserve local balance without cloud trust claim");
     const databaseText = fs.readFileSync(store.filepath);
     check(!databaseText.includes(Buffer.from("must-not-survive")), "import must strip raw client and pilot ids");
+    const importedRows = store.db.prepare("SELECT payload_json FROM run_results").all().map((row) => row.payload_json).join("\n");
+    check(!importedRows.includes("source-run") && !importedRows.includes("caller-owned-profile-id"), "imported payload must not trust source durable ids");
+    check(store.getProfile(importedProfileId).vault[0].id !== "fixture-relic", "imported inventory id must be repository-derived");
 
     store.bootstrapProfile({ profileId: "other-profile", snapshot: { name: "Other Secret Pilot" } });
     const exported = store.exportProfile(importedProfileId);

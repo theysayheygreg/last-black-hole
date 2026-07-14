@@ -97,6 +97,17 @@ function safeItem(item, index) {
   return record;
 }
 
+function sanitizeResultValue(value) {
+  if (Array.isArray(value)) return value.map(sanitizeResultValue);
+  if (!value || typeof value !== "object") return value;
+  const sanitized = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (/^(clientId|authorityInstanceId|authorityLeaseId|commandCredential|serviceToken)$/i.test(key)) continue;
+    sanitized[key] = sanitizeResultValue(child);
+  }
+  return sanitized;
+}
+
 class RelationalControlPlaneStore {
   constructor(filepath, options = {}) {
     this.filepath = path.resolve(filepath);
@@ -422,7 +433,7 @@ class RelationalControlPlaneStore {
       runDuration: payload.runDuration || 0,
       session: payload.session ? { id: payload.session.id || null, runId, mapId: payload.session.mapId || null } : null,
       player: sanitizedPlayer,
-      runResult: payload.runResult ? clone(payload.runResult) : null,
+      runResult: payload.runResult ? sanitizeResultValue(payload.runResult) : null,
     };
     return { immutable, json: boundedJson(immutable, "result payload", 131072), hash: sha256(stableJson(immutable)) };
   }

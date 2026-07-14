@@ -23,9 +23,30 @@ function cleanImportedValue(value) {
   if (!value || typeof value !== "object") return value;
   const cleaned = {};
   for (const [key, child] of Object.entries(value)) {
-    if (/^(clientId|pilotId|playerId|profileId|authorityInstanceId|authorityLeaseId|commandCredential|serviceToken)$/i.test(key)) continue;
+    if (/^(id|clientId|pilotId|playerId|profileId|sessionId|runId|membershipId|sessionMembershipId|runMembershipId|connectionId|authorityInstanceId|authorityLeaseId|commandCredential|serviceToken)$/i.test(key)) continue;
     cleaned[key] = cleanImportedValue(child);
   }
+  return cleaned;
+}
+
+function importedItem(item, sourceId, sourceKey, lane, index) {
+  if (!item || typeof item !== "object") return null;
+  return {
+    ...cleanImportedValue(item),
+    id: derivedId("item-import", sourceId, sourceKey, lane, index),
+  };
+}
+
+function normalizeImportedProfileSnapshot(snapshot, sourceId, sourceKey) {
+  const cleaned = cleanImportedValue(snapshot && typeof snapshot === "object" ? snapshot : {});
+  cleaned.vault = Array.isArray(snapshot?.vault)
+    ? snapshot.vault.map((item, index) => importedItem(item, sourceId, sourceKey, "vault", index)).filter(Boolean)
+    : [];
+  const loadout = snapshot?.loadout || {};
+  cleaned.loadout = {
+    equipped: Array.from({ length: 2 }, (_, index) => importedItem(loadout.equipped?.[index], sourceId, sourceKey, "equipped", index)),
+    consumables: Array.from({ length: 2 }, (_, index) => importedItem(loadout.consumables?.[index], sourceId, sourceKey, "consumable", index)),
+  };
   return cleaned;
 }
 
@@ -48,7 +69,9 @@ function inspectJsonSnapshot(sourcePath) {
     sourceRecordHash: digest(`profile\u001f${sourceKey}`),
     profileId: derivedId("profile-import", sourceId, sourceKey),
     name: typeof snapshot?.name === "string" && snapshot.name.trim() ? snapshot.name.slice(0, 64) : "Imported Pilot",
-    snapshot: snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? cleanImportedValue(snapshot) : {},
+    snapshot: snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)
+      ? normalizeImportedProfileSnapshot(snapshot, sourceId, sourceKey)
+      : {},
   }));
   const profileBySourceId = new Map();
   for (const [sourceKey, snapshot] of Object.entries(parsed.profiles || {})) {
