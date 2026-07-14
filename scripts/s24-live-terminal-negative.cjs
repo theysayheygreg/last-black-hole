@@ -44,6 +44,14 @@ function buildTerminalNegative() {
   const profileId = profiles.MAP_SESSION_PROFILES["deep-field"];
   const profile = profiles.SESSION_PROFILES[profileId];
   if (!profile) throw new Error("could not prove restored Deep Field profile");
+  const runtimeWebSocketConnections = Number(cap[1]);
+  const deepFieldMaxScavengers = profile.maxScavengers;
+  if (runtimeWebSocketConnections !== 16) {
+    throw new Error(`expected restored runtime adapter cap 16, got ${runtimeWebSocketConnections}`);
+  }
+  if (deepFieldMaxScavengers !== 7) {
+    throw new Error(`expected restored Deep Field scavenger cap 7, got ${deepFieldMaxScavengers}`);
+  }
   const chronology = Object.entries(COMMITS).map(([role, commit]) => ({ role, commit: assertCommit(commit) }));
   return {
     schema: "lbh-s24-live-eligibility-terminal-negative-v1",
@@ -59,8 +67,8 @@ function buildTerminalNegative() {
         cohortBound: false },
     ],
     observedBoundaries: {
-      defaultRuntimeWebSocketConnections: 16,
-      defaultDeepFieldMaxScavengers: 7,
+      defaultRuntimeWebSocketConnections: runtimeWebSocketConnections,
+      defaultDeepFieldMaxScavengers: deepFieldMaxScavengers,
       defaultBoundaryTestPassedBeforeEachAdmissionAttempt: true,
       twentyFourClientCohortBound: false,
       rawArtifactPresent: fs.existsSync(RAW),
