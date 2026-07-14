@@ -508,6 +508,67 @@ function drainRun(h, repository, service, runId) {
     } finally { h.closeAll(); }
   });
 
+  await test("settlement receipt archives only the exact accepted tuple and permanently burns the run lineage", () => {
+    const h = fixture();
+    try {
+      let repository = h.openRepository();
+      let service = h.service(repository);
+      register(service, h);
+      const identity = drainRun(h, repository, service, "archive-exact");
+      const accepted = repository.acceptAuthorityResult(identity, "sha256:archive-result",
+        "result-archive-exact", 999_999, ["run-membership-0"]);
+      const receipt = {
+        receipt_schema: "lbh.hosted.placement-settlement-receipt", receipt_version: 1,
+        result_version: 1, receipt_id: "receipt-archive-exact", settlement_id: "settlement-archive-exact",
+        result_id: accepted.result_id, run_id: accepted.run_id, result_hash: accepted.result_hash,
+        idempotency_key: "idempotency-archive-exact", committed_at: 999_999,
+        lease_id: accepted.lease_id, lease_epoch: accepted.lease_epoch,
+        authority_incarnation: accepted.authority_incarnation,
+        membership_digest: accepted.membership_digest, membership_count: accepted.membership_count,
+        archived_at: 1_000_000, retain_until: 1_001_000,
+      };
+      const acknowledged = service.acknowledgePlacementResult({ credential: "control", receipt });
+      assert.deepStrictEqual(acknowledged, { acknowledged: true, replayed: false,
+        run_id: "archive-exact", result_id: "result-archive-exact",
+        result_hash: "sha256:archive-result", settlement_id: "settlement-archive-exact",
+        receipt_id: "receipt-archive-exact", idempotency_key: "idempotency-archive-exact" });
+      assert.strictEqual(repository.getRun("archive-exact"), null, "heavy current allocation is removed");
+      assert.strictEqual(repository.snapshot().tombstones.some((row) => row.runId === "archive-exact"), false,
+        "duplicate accepted tombstone is removed after the audit fence commits");
+      assert.strictEqual(repository.acceptAuthorityResult(identity, accepted.result_hash, accepted.result_id,
+        accepted.accepted_at, ["run-membership-0"]).archived, true,
+      "exact authority replay resolves from the minimal archive fence");
+      assert.throws(() => repository.acceptAuthorityResult(identity, accepted.result_hash, "result-replacement",
+        accepted.accepted_at, ["run-membership-0"]), (error) => error.code === "HOSTED_RESULT_CONFLICT");
+      assert.throws(() => service.acknowledgePlacementResult({ credential: "control",
+        receipt: { ...receipt, settlement_id: "settlement-forged" } }),
+      (error) => error.code === "HOSTED_PLACEMENT_ARCHIVE_CONFLICT");
+      repository.close();
+
+      repository = h.openRepository();
+      service = h.service(repository);
+      assert.deepStrictEqual(service.acknowledgePlacementResult({ credential: "control",
+        receipt: { ...receipt, replayed: true } }), { acknowledged: true, replayed: true,
+        run_id: "archive-exact", result_id: "result-archive-exact",
+        result_hash: "sha256:archive-result", settlement_id: "settlement-archive-exact",
+        receipt_id: "receipt-archive-exact", idempotency_key: "idempotency-archive-exact" },
+      "ambiguous crash replays the same placement mutation after reopen");
+      rejection(() => service.requestPlacement({ credential: "control", request: h.request("archive-exact", {
+        requestId: "request-archive-resurrection",
+      }) }), "RUN_QUARANTINED");
+      assert.deepStrictEqual(repository.cleanupResultAudit({ now: 1_000_000, limit: 10 }),
+        { deleted: 0, limit: 10 }, "declared retention protects the audit tuple");
+      h.advance(1_001);
+      assert.deepStrictEqual(repository.cleanupResultAudit({ now: 1_001_001, limit: 10 }),
+        { deleted: 1, limit: 10 });
+      assert.strictEqual(repository.isRunClosed("archive-exact"), true,
+        "permanent lineage closure survives finite audit retention");
+      rejection(() => service.requestPlacement({ credential: "control", request: h.request("archive-exact", {
+        requestId: "request-after-audit-retention",
+      }) }), "RUN_QUARANTINED");
+    } finally { h.closeAll(); }
+  });
+
   await test("authority process incarnation restart fences old bootstrap and current lease", () => {
     const h = fixture();
     try {
@@ -629,6 +690,21 @@ function drainRun(h, repository, service, runId) {
       assert.strictEqual(repository.acceptAuthorityResult({ run_id: "legacy-current", lease_id: "legacy-lease",
         lease_epoch: 1, authority_incarnation: "legacy-incarnation" }, "sha256:legacy-current",
       null, null, ["unknown-legacy-member"]), null, "quarantine never promotes payload membership into trusted binding");
+      assert.throws(() => repository.claimPlacement({ requestId: "resurrection-request",
+        runId: "legacy-current", candidates: [], isEligible: () => true, create: () => null }),
+      (error) => error.code === "HOSTED_PLACEMENT_RUN_QUARANTINED",
+      "durable migration quarantine prevents the run id from being resurrected as a fresh placement");
+      const quarantineService = createHostedPlacementService({ repository, now: () => 100,
+        randomBytes: crypto.randomBytes,
+        tokenKey: crypto.createHash("sha256").update("quarantine-token").digest(),
+        diagnosticKey: crypto.createHash("sha256").update("quarantine-diagnostic").digest(),
+        authenticateWorkload: () => null,
+        authenticateControlPlane: (credential) => credential === "control" ? { role: "CONTROL_PLANE" } : null });
+      rejection(() => quarantineService.requestPlacement({ credential: "control", request: {
+        requestId: "service-resurrection-request", runId: "legacy-current", sessionId: "legacy-session",
+        seatCount: 1, regionPreferences: ["ord"], artifactSha: "a".repeat(64),
+        protocolVersion: "lbh-multiplayer-json-v2", manifestHash: "m".repeat(64), capabilities: [],
+      } }), "RUN_QUARANTINED");
       const quarantined = repository.db.prepare(`SELECT payload_json FROM hosted_placement_migration_quarantine
         WHERE run_id='legacy-current' AND source_table='current'`).get();
       assert.strictEqual(JSON.parse(quarantined.payload_json).accepted_membership_digest, null);

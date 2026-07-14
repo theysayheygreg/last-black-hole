@@ -78,7 +78,10 @@ class HostedSettlementService {
       // local payload deletion on restart.
       const acknowledged = this.acknowledgePlacementResult(receipt);
       if (acknowledged?.acknowledged !== true || acknowledged.result_id !== receipt.result_id
-          || acknowledged.result_hash !== receipt.result_hash) {
+          || acknowledged.result_hash !== receipt.result_hash || acknowledged.run_id !== receipt.run_id
+          || acknowledged.settlement_id !== receipt.settlement_id
+          || acknowledged.receipt_id !== receipt.receipt_id
+          || acknowledged.idempotency_key !== receipt.idempotency_key) {
         throw new Error("settlement archive placement acknowledgement rejected");
       }
       this.outbox.archiveSettled({ receipt });

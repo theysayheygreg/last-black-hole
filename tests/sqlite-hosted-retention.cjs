@@ -48,7 +48,9 @@ function ack(receipts, { crashOnce = false } = {}) {
   return (receipt) => {
     receipts.push(structuredClone(receipt));
     if (crash) { crash = false; throw Object.assign(new Error("archive-callback-crash"), { crash: true }); }
-    return { acknowledged: true, result_id: receipt.result_id, result_hash: receipt.result_hash };
+    return { acknowledged: true, run_id: receipt.run_id, result_id: receipt.result_id,
+      result_hash: receipt.result_hash, settlement_id: receipt.settlement_id,
+      receipt_id: receipt.receipt_id, idempotency_key: receipt.idempotency_key };
   };
 }
 function close(rig) {
@@ -57,6 +59,22 @@ function close(rig) {
 }
 
 function main() {
+  {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-retention-legacy-audit-"));
+    const filepath = path.join(dir, "hosted.sqlite");
+    const outbox = new SQLiteHostedResultOutbox({ filepath, now: () => 100,
+      randomBytes: () => Buffer.alloc(20, 9), referenceAuthorityMode: true });
+    outbox.db.prepare(`INSERT INTO hosted_result_audit
+      (result_id,idempotency_key,run_id,result_hash,settlement_id,committed_at,archived_at,retain_until,
+       placement_acknowledged_at) VALUES (?,?,?,?,?,?,?,?,?)`).run("legacy-result", "legacy-key",
+      "legacy-run", "sha256:legacy", "legacy-settlement", 10, 11, 1000, 12);
+    outbox.close();
+    assert.throws(() => new SQLiteHostedSettlementRepository({ filepath, referenceAuthorityMode: true }),
+      (error) => error.code === "HOSTED_SETTLEMENT_LEGACY_AUDIT_REVIEW_REQUIRED"
+        && error.resultIds.includes("legacy-result")); assertions += 1;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
   {
     const rig = makeRig("roundtrip");
     const accepted = add(rig, "run-one");

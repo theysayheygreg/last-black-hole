@@ -202,6 +202,10 @@ function createHostedPlacementService({
   function claim(credential, request, replacement = false) {
     control(credential);
     const selected = normalizedPlacementRequest(request);
+    if ((typeof repository.isRunQuarantined === "function" && repository.isRunQuarantined(selected.runId))
+        || (typeof repository.isRunClosed === "function" && repository.isRunClosed(selected.runId))) {
+      reject("RUN_QUARANTINED");
+    }
     const at = time();
     const prior = repository.getRun(selected.runId);
     if (replacement && (!prior || prior.state !== "FAILED" || prior.leaseStatus !== "FENCED")) reject("REPLACEMENT_NOT_FENCED");
@@ -467,6 +471,17 @@ function createHostedPlacementService({
       admittedCount: current.admittedCount, state: current.state });
   }
 
+  function acknowledgePlacementResult({ credential, receipt }) {
+    control(credential);
+    if (typeof repository.acknowledgePlacementResult !== "function") reject("INVALID_CONFIG");
+    try {
+      return repository.acknowledgePlacementResult(receipt);
+    } catch (error) {
+      if (typeof error?.code === "string") throw error;
+      reject("PLACEMENT_ARCHIVE_REJECTED");
+    }
+  }
+
   function beginRunDrain({ credential, runId, authorityLeaseId, leaseEpoch }) {
     const trusted = workload(credential);
     const claims = { runId: id(runId), authorityLeaseId: id(authorityLeaseId), leaseEpoch: integer(leaseEpoch, 1) };
@@ -519,7 +534,7 @@ function createHostedPlacementService({
   return Object.freeze({
     registerCapacity, setDrain, requestPlacement, requestReplacement, cancelUnredeemedPlacement, redeemBootstrap, markReady,
     validateRoute, heartbeat, issueAdmissionTicket, redeemAdmissionTicket, resultEligible,
-    admittedMemberships, beginRunDrain, endRun, fenceExpired, cleanup,
+    admittedMemberships, acknowledgePlacementResult, beginRunDrain, endRun, fenceExpired, cleanup,
   });
 }
 

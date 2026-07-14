@@ -93,7 +93,10 @@ class SqliteHostedPlacementRepository {
 
       CREATE TABLE IF NOT EXISTS hosted_placement_run_lineages (
         run_id TEXT PRIMARY KEY,
-        created_at INTEGER NOT NULL CHECK (created_at >= 0)
+        created_at INTEGER NOT NULL CHECK (created_at >= 0),
+        closed_at INTEGER,
+        closure_kind TEXT CHECK(closure_kind IS NULL OR closure_kind IN ('SETTLED_ARCHIVE')),
+        CHECK((closed_at IS NULL) = (closure_kind IS NULL))
       ) STRICT;
 
       CREATE TABLE IF NOT EXISTS hosted_placement_current_allocations (
@@ -113,6 +116,7 @@ class SqliteHostedPlacementRepository {
         row_version INTEGER NOT NULL CHECK (row_version >= 1),
         result_acceptance_state TEXT NOT NULL DEFAULT 'OPEN'
           CHECK (result_acceptance_state IN ('OPEN','ACCEPTED')),
+        accepted_result_id TEXT,
         accepted_result_hash TEXT,
         accepted_membership_digest TEXT,
         accepted_membership_count INTEGER,
@@ -159,10 +163,31 @@ class SqliteHostedPlacementRepository {
         terminal_at INTEGER NOT NULL CHECK (terminal_at >= 0),
         authority_lease_id TEXT,
         authority_incarnation TEXT,
+        accepted_result_id TEXT,
         accepted_result_hash TEXT,
         accepted_membership_digest TEXT,
         accepted_membership_count INTEGER,
         accepted_at INTEGER
+      ) STRICT;
+
+      CREATE TABLE IF NOT EXISTS hosted_placement_result_audit (
+        run_id TEXT PRIMARY KEY REFERENCES hosted_placement_run_lineages(run_id) ON DELETE CASCADE,
+        receipt_schema TEXT NOT NULL,
+        receipt_version INTEGER NOT NULL CHECK(receipt_version = 1),
+        result_version INTEGER NOT NULL CHECK(result_version = 1),
+        result_id TEXT NOT NULL UNIQUE,
+        result_hash TEXT NOT NULL,
+        authority_lease_id TEXT NOT NULL,
+        lease_epoch INTEGER NOT NULL CHECK(lease_epoch >= 1),
+        authority_incarnation TEXT NOT NULL,
+        membership_digest TEXT NOT NULL,
+        membership_count INTEGER NOT NULL CHECK(membership_count BETWEEN 1 AND 4),
+        settlement_receipt_id TEXT NOT NULL UNIQUE,
+        settlement_id TEXT NOT NULL UNIQUE,
+        settlement_idempotency_key TEXT NOT NULL UNIQUE,
+        committed_at INTEGER NOT NULL CHECK(committed_at >= 0),
+        acknowledged_at INTEGER NOT NULL CHECK(acknowledged_at >= committed_at),
+        retain_until INTEGER NOT NULL CHECK(retain_until >= acknowledged_at)
       ) STRICT;
 
       CREATE TABLE IF NOT EXISTS hosted_placement_schema_meta (
@@ -180,10 +205,16 @@ class SqliteHostedPlacementRepository {
       ) STRICT;
     `);
     this.#migrateWorkloadColumns();
+    this.#migrateLineageColumns();
     this.#migrateCurrentAllocationColumns();
     this.#migrateTombstoneColumns();
     this.db.prepare(`INSERT INTO hosted_placement_schema_meta(key,value) VALUES('acceptance_membership_binding','2')
       ON CONFLICT(key) DO UPDATE SET value=excluded.value`).run();
+    this.db.exec(`
+      CREATE TRIGGER IF NOT EXISTS hosted_placement_result_audit_immutable_update
+      BEFORE UPDATE ON hosted_placement_result_audit
+      BEGIN SELECT RAISE(ABORT, 'hosted placement result audit is immutable'); END;
+    `);
   }
 
   #legacyAcceptanceRows(table, source) {
@@ -219,6 +250,17 @@ class SqliteHostedPlacementRepository {
     }
   }
 
+  #migrateLineageColumns() {
+    const columns = new Set(this.db.prepare(
+      "SELECT name FROM pragma_table_info('hosted_placement_run_lineages')").all().map((row) => row.name));
+    if (!columns.has("closed_at")) {
+      this.db.exec("ALTER TABLE hosted_placement_run_lineages ADD COLUMN closed_at INTEGER");
+    }
+    if (!columns.has("closure_kind")) {
+      this.db.exec("ALTER TABLE hosted_placement_run_lineages ADD COLUMN closure_kind TEXT");
+    }
+  }
+
   #migrateCurrentAllocationColumns() {
     const columns = new Set(this.db.prepare(`
       SELECT name FROM pragma_table_info('hosted_placement_current_allocations')
@@ -236,6 +278,9 @@ class SqliteHostedPlacementRepository {
     }
     if (!columns.has("accepted_result_hash")) {
       this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN accepted_result_hash TEXT");
+    }
+    if (!columns.has("accepted_result_id")) {
+      this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN accepted_result_id TEXT");
     }
     if (!columns.has("accepted_membership_digest")) {
       this.db.exec("ALTER TABLE hosted_placement_current_allocations ADD COLUMN accepted_membership_digest TEXT");
@@ -262,7 +307,7 @@ class SqliteHostedPlacementRepository {
       CREATE TRIGGER IF NOT EXISTS hosted_placement_result_acceptance_shape_insert
       BEFORE INSERT ON hosted_placement_current_allocations
       WHEN NOT (
-        (NEW.result_acceptance_state = 'OPEN' AND NEW.accepted_result_hash IS NULL
+        (NEW.result_acceptance_state = 'OPEN' AND NEW.accepted_result_id IS NULL AND NEW.accepted_result_hash IS NULL
           AND NEW.accepted_membership_digest IS NULL AND NEW.accepted_membership_count IS NULL AND NEW.accepted_at IS NULL)
         OR (NEW.result_acceptance_state = 'ACCEPTED' AND NEW.accepted_result_hash IS NOT NULL
           AND NEW.accepted_membership_digest IS NOT NULL AND NEW.accepted_membership_count BETWEEN 1 AND 4
@@ -274,7 +319,7 @@ class SqliteHostedPlacementRepository {
       CREATE TRIGGER IF NOT EXISTS hosted_placement_result_acceptance_shape_update
       BEFORE UPDATE ON hosted_placement_current_allocations
       WHEN NOT (
-        (NEW.result_acceptance_state = 'OPEN' AND NEW.accepted_result_hash IS NULL
+        (NEW.result_acceptance_state = 'OPEN' AND NEW.accepted_result_id IS NULL AND NEW.accepted_result_hash IS NULL
           AND NEW.accepted_membership_digest IS NULL AND NEW.accepted_membership_count IS NULL AND NEW.accepted_at IS NULL)
         OR (NEW.result_acceptance_state = 'ACCEPTED' AND NEW.accepted_result_hash IS NOT NULL
           AND NEW.accepted_membership_digest IS NOT NULL AND NEW.accepted_membership_count BETWEEN 1 AND 4
@@ -296,7 +341,7 @@ class SqliteHostedPlacementRepository {
       SELECT name FROM pragma_table_info('hosted_placement_terminal_tombstones')
     `).all().map((row) => row.name));
     for (const [name, type] of [["authority_lease_id", "TEXT"], ["authority_incarnation", "TEXT"],
-      ["accepted_result_hash", "TEXT"], ["accepted_membership_digest", "TEXT"],
+      ["accepted_result_id", "TEXT"], ["accepted_result_hash", "TEXT"], ["accepted_membership_digest", "TEXT"],
       ["accepted_membership_count", "INTEGER"], ["accepted_at", "INTEGER"]]) {
       if (!columns.has(name)) this.db.exec(`ALTER TABLE hosted_placement_terminal_tombstones ADD COLUMN ${name} ${type}`);
     }
@@ -309,14 +354,14 @@ class SqliteHostedPlacementRepository {
       BEGIN
         INSERT INTO hosted_placement_terminal_tombstones(
           run_id,state,lease_epoch,terminal_at,authority_lease_id,authority_incarnation,
-          accepted_result_hash,accepted_membership_digest,accepted_membership_count,accepted_at
+          accepted_result_id,accepted_result_hash,accepted_membership_digest,accepted_membership_count,accepted_at
         ) VALUES (OLD.run_id,'ENDED',OLD.lease_epoch,OLD.terminal_at,
           json_extract(OLD.payload_json, '$.authorityLeaseId'),OLD.authority_incarnation,
-          OLD.accepted_result_hash,OLD.accepted_membership_digest,OLD.accepted_membership_count,OLD.accepted_at)
+          OLD.accepted_result_id,OLD.accepted_result_hash,OLD.accepted_membership_digest,OLD.accepted_membership_count,OLD.accepted_at)
         ON CONFLICT(run_id) DO UPDATE SET
           state='ENDED',lease_epoch=excluded.lease_epoch,terminal_at=excluded.terminal_at,
           authority_lease_id=excluded.authority_lease_id,authority_incarnation=excluded.authority_incarnation,
-          accepted_result_hash=excluded.accepted_result_hash,
+          accepted_result_id=excluded.accepted_result_id,accepted_result_hash=excluded.accepted_result_hash,
           accepted_membership_digest=excluded.accepted_membership_digest,
           accepted_membership_count=excluded.accepted_membership_count,accepted_at=excluded.accepted_at;
       END;
@@ -350,6 +395,7 @@ class SqliteHostedPlacementRepository {
     record.updatedAt = row.updated_at;
     record.authorityIncarnation = row.authority_incarnation;
     record.resultAcceptanceState = row.result_acceptance_state;
+    record.acceptedResultId = row.accepted_result_id;
     record.acceptedResultHash = row.accepted_result_hash;
     record.acceptedMembershipDigest = row.accepted_membership_digest;
     record.acceptedMembershipCount = row.accepted_membership_count;
@@ -362,7 +408,7 @@ class SqliteHostedPlacementRepository {
     return this.db.prepare(`
       SELECT payload_json, row_version, state, lease_status, terminal_at, updated_at,
         authority_incarnation, result_acceptance_state,
-        accepted_result_hash, accepted_membership_digest, accepted_membership_count, accepted_at
+        accepted_result_id, accepted_result_hash, accepted_membership_digest, accepted_membership_count, accepted_at
       FROM hosted_placement_current_allocations WHERE run_id = ?
     `).get(runId);
   }
@@ -437,6 +483,16 @@ class SqliteHostedPlacementRepository {
     return this.#rowToRun(this.#getRunRow(runId));
   }
 
+  isRunQuarantined(runId) {
+    return Boolean(this.db.prepare(`SELECT 1 FROM hosted_placement_migration_quarantine
+      WHERE run_id=? LIMIT 1`).get(runId));
+  }
+
+  isRunClosed(runId) {
+    return Boolean(this.db.prepare(`SELECT 1 FROM hosted_placement_run_lineages
+      WHERE run_id=? AND closed_at IS NOT NULL LIMIT 1`).get(runId));
+  }
+
   listMigrationQuarantine() {
     return this.db.prepare(`SELECT run_id AS runId, source_table AS sourceTable, reason, quarantined_at AS quarantinedAt
       FROM hosted_placement_migration_quarantine ORDER BY quarantined_at, run_id, source_table`).all().map(clone);
@@ -463,6 +519,12 @@ class SqliteHostedPlacementRepository {
 
   claimPlacement({ requestId, runId, candidates, isEligible, create }) {
     return this.#transaction(() => {
+      if (this.isRunQuarantined(runId) || this.isRunClosed(runId)
+          || this.db.prepare(`SELECT 1 FROM hosted_placement_result_audit WHERE run_id=?`).get(runId)) {
+        const error = new Error("quarantined hosted placement lineage");
+        error.code = "HOSTED_PLACEMENT_RUN_QUARANTINED";
+        throw error;
+      }
       const binding = this.db.prepare(`
         SELECT run_id FROM hosted_placement_request_bindings WHERE request_id = ?
       `).get(requestId);
@@ -594,6 +656,8 @@ class SqliteHostedPlacementRepository {
       || typeof identity.lease_id !== "string" || identity.lease_id.length < 1
       || !Number.isSafeInteger(identity.lease_epoch) || identity.lease_epoch < 1
       || typeof identity.authority_incarnation !== "string" || identity.authority_incarnation.length < 1
+      || (resultId !== null && (typeof resultId !== "string" || resultId.length < 1 || resultId.length > 160
+        || resultId.trim() !== resultId))
       || typeof resultHash !== "string" || resultHash.length < 1 || resultHash.length > 256
       || resultHash.trim() !== resultHash) throw new Error("invalid authority result identity");
     const memberships = canonicalMemberships(outcomeMembershipIds);
@@ -602,6 +666,26 @@ class SqliteHostedPlacementRepository {
       const row = this.#getRunRow(identity.run_id);
       const current = this.#rowToRun(row);
       if (!current) {
+        const audit = this.db.prepare(`SELECT * FROM hosted_placement_result_audit WHERE run_id=?`)
+          .get(identity.run_id);
+        if (audit) {
+          const exactAudit = audit.authority_lease_id === identity.lease_id
+            && Number(audit.lease_epoch) === identity.lease_epoch
+            && audit.authority_incarnation === identity.authority_incarnation;
+          if (!exactAudit) return null;
+          if (audit.result_hash !== resultHash || audit.result_id !== resultId
+              || audit.membership_digest !== acceptedMembershipDigest
+              || Number(audit.membership_count) !== memberships.length) {
+            const error = new Error("authority result conflicts with archived acceptance");
+            error.code = "HOSTED_RESULT_CONFLICT";
+            throw error;
+          }
+          return Object.freeze({ accepted: true, archived: true, run_id: identity.run_id,
+            lease_id: identity.lease_id, lease_epoch: identity.lease_epoch,
+            authority_incarnation: identity.authority_incarnation, result_id: audit.result_id,
+            result_hash: audit.result_hash, membership_digest: audit.membership_digest,
+            membership_count: Number(audit.membership_count) });
+        }
         const tombstone = this.db.prepare(`SELECT * FROM hosted_placement_terminal_tombstones
           WHERE run_id = ?`).get(identity.run_id);
         const exactTombstone = tombstone && tombstone.authority_lease_id === identity.lease_id
@@ -610,6 +694,7 @@ class SqliteHostedPlacementRepository {
           && tombstone.accepted_result_hash !== null;
         if (!exactTombstone) return null;
         if (tombstone.accepted_result_hash !== resultHash
+          || (tombstone.accepted_result_id !== null && tombstone.accepted_result_id !== resultId)
           || tombstone.accepted_membership_digest !== acceptedMembershipDigest
           || Number(tombstone.accepted_membership_count) !== memberships.length) {
           const error = new Error("authority result conflicts with accepted hash");
@@ -618,7 +703,7 @@ class SqliteHostedPlacementRepository {
         }
         return Object.freeze({ accepted: true, run_id: identity.run_id, lease_id: identity.lease_id,
           lease_epoch: identity.lease_epoch, authority_incarnation: identity.authority_incarnation,
-          result_hash: resultHash, membership_digest: acceptedMembershipDigest,
+          result_id: tombstone.accepted_result_id, result_hash: resultHash, membership_digest: acceptedMembershipDigest,
           membership_count: memberships.length, accepted_at: Number(tombstone.accepted_at) });
       }
       const exactLineage = current
@@ -631,6 +716,7 @@ class SqliteHostedPlacementRepository {
         || admitted.some((id, index) => id !== memberships[index])) return null;
       if (current.resultAcceptanceState === "ACCEPTED") {
         if (current.acceptedResultHash !== resultHash
+          || (current.acceptedResultId !== null && current.acceptedResultId !== resultId)
           || current.acceptedMembershipDigest !== acceptedMembershipDigest
           || current.acceptedMembershipCount !== memberships.length) {
           const error = new Error("authority result conflicts with accepted hash");
@@ -639,7 +725,7 @@ class SqliteHostedPlacementRepository {
         }
         return Object.freeze({ accepted: true, run_id: identity.run_id, lease_id: identity.lease_id,
           lease_epoch: identity.lease_epoch, authority_incarnation: identity.authority_incarnation,
-          result_hash: resultHash, membership_digest: acceptedMembershipDigest,
+          result_id: current.acceptedResultId, result_hash: resultHash, membership_digest: acceptedMembershipDigest,
           membership_count: memberships.length, accepted_at: current.acceptedAt });
       }
       if (current.state !== "DRAINING" || current.leaseStatus !== "ACTIVE") return null;
@@ -647,21 +733,138 @@ class SqliteHostedPlacementRepository {
       if (!Number.isSafeInteger(acceptedAt) || acceptedAt < 0) throw new Error("invalid clock");
       const result = this.db.prepare(`
         UPDATE hosted_placement_current_allocations SET
-          result_acceptance_state = 'ACCEPTED', accepted_result_hash = ?,
+          result_acceptance_state = 'ACCEPTED', accepted_result_id = ?, accepted_result_hash = ?,
           accepted_membership_digest = ?, accepted_membership_count = ?, accepted_at = ?,
           state = 'ENDED', lease_status = 'ENDED', terminal_at = ?, updated_at = ?,
           expiry_deadline_at = ?, row_version = row_version + 1
         WHERE run_id = ? AND row_version = ? AND state = 'DRAINING' AND lease_status = 'ACTIVE'
           AND result_acceptance_state = 'OPEN' AND accepted_result_hash IS NULL
           AND authority_incarnation = ?
-      `).run(resultHash, acceptedMembershipDigest, memberships.length, acceptedAt,
+      `).run(resultId, resultHash, acceptedMembershipDigest, memberships.length, acceptedAt,
         acceptedAt, acceptedAt, acceptedAt,
         identity.run_id, row.row_version, identity.authority_incarnation);
       if (Number(result.changes) !== 1) return null;
       return Object.freeze({ accepted: true, run_id: identity.run_id, lease_id: identity.lease_id,
         lease_epoch: identity.lease_epoch, authority_incarnation: identity.authority_incarnation,
-        result_hash: resultHash, membership_digest: acceptedMembershipDigest,
+        result_id: resultId, result_hash: resultHash, membership_digest: acceptedMembershipDigest,
         membership_count: memberships.length, accepted_at: acceptedAt });
+    });
+  }
+
+  acknowledgePlacementResult(receipt) {
+    const allowed = ["receipt_schema", "receipt_version", "result_version", "receipt_id",
+      "settlement_id", "result_id", "run_id", "result_hash", "idempotency_key", "committed_at",
+      "lease_id", "lease_epoch", "authority_incarnation", "membership_digest", "membership_count",
+      "archived_at", "retain_until", "replayed"];
+    if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)
+        || Object.keys(receipt).some((key) => !allowed.includes(key))
+        || allowed.slice(0, -1).some((key) => !Object.hasOwn(receipt, key))
+        || receipt.receipt_schema !== "lbh.hosted.placement-settlement-receipt"
+        || receipt.receipt_version !== 1 || receipt.result_version !== 1
+        || (Object.hasOwn(receipt, "replayed") && receipt.replayed !== true)
+        || !Number.isSafeInteger(receipt.lease_epoch) || receipt.lease_epoch < 1
+        || !Number.isSafeInteger(receipt.membership_count) || receipt.membership_count < 1
+        || receipt.membership_count > 4
+        || !Number.isSafeInteger(receipt.committed_at) || receipt.committed_at < 0
+        || !Number.isSafeInteger(receipt.archived_at) || receipt.archived_at < receipt.committed_at
+        || !Number.isSafeInteger(receipt.retain_until) || receipt.retain_until < receipt.archived_at) {
+      const error = new Error("invalid placement settlement receipt");
+      error.code = "HOSTED_PLACEMENT_ARCHIVE_INVALID";
+      throw error;
+    }
+    for (const field of ["receipt_id", "settlement_id", "result_id", "run_id", "result_hash",
+      "idempotency_key", "lease_id", "authority_incarnation", "membership_digest"]) {
+      const value = receipt[field];
+      if (typeof value !== "string" || value.length < 1 || value.length > 256 || value.trim() !== value) {
+        const error = new Error("invalid placement settlement receipt");
+        error.code = "HOSTED_PLACEMENT_ARCHIVE_INVALID";
+        throw error;
+      }
+    }
+    const at = this.now();
+    if (!Number.isSafeInteger(at) || at < receipt.committed_at || receipt.retain_until < at) {
+      const error = new Error("expired placement settlement receipt");
+      error.code = "HOSTED_PLACEMENT_ARCHIVE_INVALID";
+      throw error;
+    }
+    const tuple = (row) => row && row.receipt_schema === receipt.receipt_schema
+      && Number(row.receipt_version) === receipt.receipt_version
+      && Number(row.result_version) === receipt.result_version && row.result_id === receipt.result_id
+      && row.result_hash === receipt.result_hash && row.authority_lease_id === receipt.lease_id
+      && Number(row.lease_epoch) === receipt.lease_epoch
+      && row.authority_incarnation === receipt.authority_incarnation
+      && row.membership_digest === receipt.membership_digest
+      && Number(row.membership_count) === receipt.membership_count
+      && row.settlement_receipt_id === receipt.receipt_id && row.settlement_id === receipt.settlement_id
+      && row.settlement_idempotency_key === receipt.idempotency_key
+      && Number(row.committed_at) === receipt.committed_at
+      && Number(row.retain_until) === receipt.retain_until;
+    return this.#transaction(() => {
+      const prior = this.db.prepare(`SELECT * FROM hosted_placement_result_audit WHERE run_id=?`)
+        .get(receipt.run_id);
+      if (prior) {
+        if (!tuple(prior)) {
+          const error = new Error("placement settlement receipt conflicts with archive fence");
+          error.code = "HOSTED_PLACEMENT_ARCHIVE_CONFLICT";
+          throw error;
+        }
+        return Object.freeze({ acknowledged: true, replayed: true, run_id: prior.run_id,
+          result_id: prior.result_id, result_hash: prior.result_hash, settlement_id: prior.settlement_id,
+          receipt_id: prior.settlement_receipt_id, idempotency_key: prior.settlement_idempotency_key });
+      }
+      const current = this.#rowToRun(this.#getRunRow(receipt.run_id));
+      const tombstone = current ? null : this.db.prepare(`SELECT * FROM hosted_placement_terminal_tombstones
+        WHERE run_id=?`).get(receipt.run_id);
+      const accepted = current ? {
+        state: current.state, lease_status: current.leaseStatus, result_id: current.acceptedResultId,
+        result_hash: current.acceptedResultHash, authority_lease_id: current.authorityLeaseId,
+        lease_epoch: current.leaseEpoch, authority_incarnation: current.authorityIncarnation,
+        membership_digest: current.acceptedMembershipDigest, membership_count: current.acceptedMembershipCount,
+      } : tombstone;
+      if (!accepted || accepted.state !== "ENDED"
+          || (current && accepted.lease_status !== "ENDED")
+          || accepted.result_id !== receipt.result_id || accepted.result_hash !== receipt.result_hash
+          || accepted.authority_lease_id !== receipt.lease_id
+          || Number(accepted.lease_epoch) !== receipt.lease_epoch
+          || accepted.authority_incarnation !== receipt.authority_incarnation
+          || accepted.membership_digest !== receipt.membership_digest
+          || Number(accepted.membership_count) !== receipt.membership_count) {
+        const error = new Error("placement settlement receipt does not match accepted terminal tuple");
+        error.code = "HOSTED_PLACEMENT_ARCHIVE_FENCED";
+        throw error;
+      }
+      this.db.prepare(`INSERT INTO hosted_placement_result_audit
+        (run_id,receipt_schema,receipt_version,result_version,result_id,result_hash,authority_lease_id,
+         lease_epoch,authority_incarnation,membership_digest,membership_count,settlement_receipt_id,
+         settlement_id,settlement_idempotency_key,committed_at,acknowledged_at,retain_until)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(receipt.run_id, receipt.receipt_schema,
+        receipt.receipt_version, receipt.result_version, receipt.result_id, receipt.result_hash,
+        receipt.lease_id, receipt.lease_epoch, receipt.authority_incarnation, receipt.membership_digest,
+        receipt.membership_count, receipt.receipt_id, receipt.settlement_id, receipt.idempotency_key,
+        receipt.committed_at, at, receipt.retain_until);
+      this.db.prepare(`UPDATE hosted_placement_run_lineages
+        SET closed_at=?,closure_kind='SETTLED_ARCHIVE'
+        WHERE run_id=? AND closed_at IS NULL`).run(at, receipt.run_id);
+      this.db.prepare(`DELETE FROM hosted_placement_current_allocations WHERE run_id=?`).run(receipt.run_id);
+      this.db.prepare(`DELETE FROM hosted_placement_terminal_tombstones WHERE run_id=?`).run(receipt.run_id);
+      this.db.prepare(`DELETE FROM hosted_placement_history WHERE run_id=?`).run(receipt.run_id);
+      this.db.prepare(`DELETE FROM hosted_placement_consumed_tokens WHERE run_id=?`).run(receipt.run_id);
+      this.db.prepare(`DELETE FROM hosted_placement_request_bindings WHERE run_id=?`).run(receipt.run_id);
+      return Object.freeze({ acknowledged: true, replayed: false, run_id: receipt.run_id,
+        result_id: receipt.result_id, result_hash: receipt.result_hash, settlement_id: receipt.settlement_id,
+        receipt_id: receipt.receipt_id, idempotency_key: receipt.idempotency_key });
+    });
+  }
+
+  cleanupResultAudit({ now = this.now(), limit = 100 } = {}) {
+    if (!Number.isSafeInteger(now) || now < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 10_000) {
+      throw new Error("invalid placement audit cleanup");
+    }
+    return this.#transaction(() => {
+      const removed = this.db.prepare(`DELETE FROM hosted_placement_result_audit WHERE run_id IN (
+        SELECT run_id FROM hosted_placement_result_audit WHERE retain_until<=?
+        ORDER BY retain_until,run_id LIMIT ?)` ).run(now, limit);
+      return Object.freeze({ deleted: Number(removed.changes), limit });
     });
   }
 
@@ -737,7 +940,7 @@ class SqliteHostedPlacementRepository {
     const runs = this.db.prepare(`
       SELECT payload_json, row_version, state, lease_status, terminal_at, updated_at,
         authority_incarnation, result_acceptance_state,
-        accepted_result_hash, accepted_at
+        accepted_result_id, accepted_result_hash, accepted_membership_digest, accepted_membership_count, accepted_at
       FROM hosted_placement_current_allocations ORDER BY run_id
     `).all().map((row) => this.#rowToRun(row));
     const requestIndex = this.db.prepare(`

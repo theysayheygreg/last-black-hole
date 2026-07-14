@@ -155,6 +155,11 @@ function assertExactOutcomeSet(payload, memberships) {
   }
 }
 
+function membershipDigest(memberships) {
+  const ids = memberships.map((row) => row.run_membership_id).sort();
+  return `sha256:${crypto.createHash("sha256").update(JSON.stringify(ids)).digest("hex")}`;
+}
+
 class SQLiteHostedSettlementRepository {
   constructor({ filepath, db, now = Date.now, fault = () => {},
     verifyAcceptedAuthorityResult, resolveRunMemberships, referenceAuthorityMode = false,
@@ -184,6 +189,27 @@ class SQLiteHostedSettlementRepository {
       throw new TypeError("conflictRetentionMs must be a positive safe integer");
     }
     this.conflictRetentionMs = conflictRetentionMs;
+    const auditColumns = new Set(this.db.prepare(
+      "SELECT name FROM pragma_table_info('hosted_result_audit')").all().map((row) => row.name));
+    for (const [name, type] of [
+      ["receipt_schema", "TEXT"], ["receipt_version", "INTEGER"], ["result_version", "INTEGER"],
+      ["lease_id", "TEXT"], ["lease_epoch", "INTEGER"], ["authority_incarnation", "TEXT"],
+      ["membership_digest", "TEXT"], ["membership_count", "INTEGER"],
+    ]) {
+      if (!auditColumns.has(name)) this.db.exec(`ALTER TABLE hosted_result_audit ADD COLUMN ${name} ${type}`);
+    }
+    const legacyAudit = this.db.prepare(`SELECT result_id FROM hosted_result_audit
+      WHERE receipt_schema IS NULL OR receipt_version IS NULL OR result_version IS NULL
+        OR lease_id IS NULL OR lease_epoch IS NULL OR authority_incarnation IS NULL
+        OR membership_digest IS NULL OR membership_count IS NULL
+      ORDER BY result_id`).all();
+    if (legacyAudit.length) {
+      const error = new Error("legacy hosted settlement audit lacks exact placement receipt binding");
+      error.code = "HOSTED_SETTLEMENT_LEGACY_AUDIT_REVIEW_REQUIRED";
+      error.resultIds = Object.freeze(legacyAudit.map((row) => row.result_id));
+      if (this.ownsDb) this.db.close();
+      throw error;
+    }
     this.db.prepare(`UPDATE hosted_settlement_conflicts
       SET retain_until=quarantined_at+? WHERE retain_until IS NULL`).run(conflictRetentionMs);
   }
@@ -382,25 +408,44 @@ class SQLiteHostedSettlementRepository {
         WHERE result_id=? AND run_id=? AND result_hash=?`).get(candidate.result_id,
         candidate.run_id, candidate.result_hash);
       if (!settlement || !result) reject("HOSTED_SETTLEMENT_FENCED");
-      const receipt = Object.freeze({ receipt_id: stableId("settlement_receipt", settlement.settlement_id),
+      const memberships = normalizeMemberships(this.db.prepare(`SELECT run_membership_id,profile_id
+        FROM hosted_run_memberships WHERE run_id=? AND membership_state='admitted'
+        ORDER BY run_membership_id`).all(candidate.run_id));
+      const prior = this.db.prepare("SELECT * FROM hosted_result_audit WHERE result_id=?")
+        .get(candidate.result_id);
+      const resultVersion = prior ? Number(prior.result_version) : parse(result.payload_json).result_version;
+      const receipt = Object.freeze({ receipt_schema: "lbh.hosted.placement-settlement-receipt",
+        receipt_version: 1, result_version: resultVersion,
+        receipt_id: stableId("settlement_receipt", settlement.settlement_id),
         settlement_id: settlement.settlement_id, result_id: settlement.result_id,
         run_id: settlement.run_id, result_hash: settlement.result_hash,
         idempotency_key: settlement.idempotency_key, committed_at: settlement.committed_at,
+        lease_id: result.lease_id, lease_epoch: Number(result.lease_epoch),
+        authority_incarnation: result.authority_incarnation,
+        membership_digest: membershipDigest(memberships), membership_count: memberships.length,
         archived_at: archivedAt, retain_until: archivedAt + this.auditRetentionMs });
-      const prior = this.db.prepare("SELECT * FROM hosted_result_audit WHERE result_id=?")
-        .get(receipt.result_id);
       if (prior) {
         if (prior.run_id !== receipt.run_id || prior.result_hash !== receipt.result_hash
-            || prior.settlement_id !== receipt.settlement_id) reject("HOSTED_SETTLEMENT_CONFLICT");
+            || prior.settlement_id !== receipt.settlement_id || prior.receipt_schema !== receipt.receipt_schema
+            || Number(prior.receipt_version) !== receipt.receipt_version
+            || Number(prior.result_version) !== receipt.result_version || prior.lease_id !== receipt.lease_id
+            || Number(prior.lease_epoch) !== receipt.lease_epoch
+            || prior.authority_incarnation !== receipt.authority_incarnation
+            || prior.membership_digest !== receipt.membership_digest
+            || Number(prior.membership_count) !== receipt.membership_count) reject("HOSTED_SETTLEMENT_CONFLICT");
         this.db.exec("COMMIT");
         return Object.freeze({ ...receipt, archived_at: prior.archived_at,
           retain_until: prior.retain_until, replayed: true });
       }
       this.db.prepare(`INSERT INTO hosted_result_audit
-        (result_id,idempotency_key,run_id,result_hash,settlement_id,committed_at,archived_at,retain_until)
-        VALUES (?,?,?,?,?,?,?,?)`).run(receipt.result_id, receipt.idempotency_key, receipt.run_id,
-        receipt.result_hash, receipt.settlement_id, receipt.committed_at, receipt.archived_at,
-        receipt.retain_until);
+        (result_id,idempotency_key,run_id,result_hash,settlement_id,committed_at,archived_at,retain_until,
+         receipt_schema,receipt_version,result_version,lease_id,lease_epoch,authority_incarnation,
+         membership_digest,membership_count)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(receipt.result_id, receipt.idempotency_key,
+        receipt.run_id, receipt.result_hash, receipt.settlement_id, receipt.committed_at,
+        receipt.archived_at, receipt.retain_until, receipt.receipt_schema, receipt.receipt_version,
+        receipt.result_version, receipt.lease_id, receipt.lease_epoch, receipt.authority_incarnation,
+        receipt.membership_digest, receipt.membership_count);
       this.db.prepare("UPDATE hosted_match_results SET payload_json='{}' WHERE result_id=?")
         .run(receipt.result_id);
       this.db.prepare("UPDATE hosted_settlements SET response_json=? WHERE settlement_id=?")

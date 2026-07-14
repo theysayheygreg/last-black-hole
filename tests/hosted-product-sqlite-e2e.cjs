@@ -21,6 +21,7 @@ let now = 2_000_000;
 let sequence = 0;
 let faultStage = null;
 let faultAction = null;
+let placementAckCrashOnce = false;
 const proofs = new Map();
 const diagnostics = [];
 const descriptor = {
@@ -60,7 +61,8 @@ function acceptedFromPlacement(repository, entry) {
       || run.acceptedMembershipCount !== membershipIds.length) return null;
   return { accepted: true, run_id: run.runId, lease_id: run.authorityLeaseId,
     lease_epoch: run.leaseEpoch, authority_incarnation: run.authorityIncarnation,
-    result_hash: run.acceptedResultHash, membership_digest: run.acceptedMembershipDigest,
+    result_id: run.acceptedResultId, result_hash: run.acceptedResultHash,
+    membership_digest: run.acceptedMembershipDigest,
     membership_count: run.acceptedMembershipCount, accepted_at: run.acceptedAt };
 }
 
@@ -94,7 +96,15 @@ function openStack() {
     ticketTtlMs: 10_000, measuredPackingLimit: 1,
   });
   const settlement = new HostedSettlementService({ outbox, repository: settlementRepository,
-    workerId: "durable-worker", leaseMs: 1_000 });
+    workerId: "durable-worker", leaseMs: 1_000,
+    acknowledgePlacementResult(receipt) {
+      const acknowledged = placement.acknowledgePlacementResult({ credential: "internal-control", receipt });
+      if (placementAckCrashOnce) {
+        placementAckCrashOnce = false;
+        throw Object.assign(new Error("injected crash after placement archive commit"), { crash: true });
+      }
+      return acknowledged;
+    } });
   const product = createHostedProductService({
     identity, placement, outbox, settlement, repository: productRepository, ids, clock: { now: () => now },
     controlCredential: "internal-control",
@@ -328,24 +338,34 @@ try {
     .map((member) => member.runMembershipId).sort());
   stack.placementRepository.cleanup({ now, terminalBefore: now, keepTerminal: 8 });
   assert.equal(stack.placementRepository.getRun(durableMatch.runId).resultAcceptanceState, "ACCEPTED",
-    "cleanup retains accepted lineage until a future settlement-ack archive protocol");
+    "cleanup retains accepted lineage until the settlement-ack archive protocol runs");
   assert.equal(stack.placementRepository.acceptAuthorityResult(accepted.authority, accepted.result_hash,
     accepted.result_id, accepted.accepted_at, Object.keys(accepted.payload.outcomes)).accepted, true,
     "same accepted lineage and hash remain replayable from the retained tombstone");
   assert.equal(stack.product.workloadEnd({ credential: "workload",
     workloadRunHandle: redeemed.workloadRunHandle }).acceptedResultId, accepted.result_id);
-  let committed;
-  try { committed = stack.product.controlDeliverSettlement({ credential: "operator" }); }
-  catch (error) { error.message += ` (${JSON.stringify(diagnostics.at(-1))})`; throw error; }
-  assert.equal(committed.members.length, 4);
+  placementAckCrashOnce = true;
+  assert.throws(() => stack.product.controlDeliverSettlement({ credential: "operator" }),
+    (error) => error.code === "HOSTED_PRODUCT_REJECTED",
+  "crash after placement mutation but before callback response leaves recovery work durable");
   assert.equal(stack.settlementRepository.counts().hosted_settlements, 1);
+  assert.equal(stack.placementRepository.getRun(durableMatch.runId), null,
+    "placement heavy state is retired only after durable settlement");
+  assert.equal(stack.placementRepository.db.prepare(`SELECT count(*) count
+    FROM hosted_placement_result_audit WHERE run_id=?`).get(durableMatch.runId).count, 1,
+  "exact minimal placement audit survives the ambiguous callback crash");
+  assert.equal(stack.outbox.get(accepted.result_id).state, "delivered",
+    "ambiguous callback crash keeps the delivered row for receipt replay");
   stack.close();
 
   stack = openStack();
   assert.equal(stack.product.controlDeliverSettlement({ credential: "operator" }), null);
   assert.equal(stack.settlementRepository.counts().hosted_settlements, 1);
-  const replay = stack.settlementRepository.settle(stack.outbox.get(accepted.result_id));
-  assert.equal(replay.replayed, true);
+  assert.equal(stack.outbox.get(accepted.result_id), null,
+    "restart replays the exact receipt and deletes the delivered transport payload");
+  assert.equal(stack.placementRepository.db.prepare(`SELECT count(*) count
+    FROM hosted_placement_result_audit WHERE run_id=?`).get(durableMatch.runId).count, 1,
+  "idempotent receipt replay does not duplicate placement audit state");
   assert.equal(stack.settlementRepository.counts().hosted_settlements, 1);
   for (let index = 0; index < users.length; index += 1) {
     assert.equal(stack.settlementRepository.getProfile(users[index].profileId).balance, 10 + index);
