@@ -93,6 +93,75 @@ test("configuration requires one database source and a strong subject HMAC key",
   assert.throws(() => new SqliteHostedIdentityRepository({
     filepath: ":memory:", subjectLookupKeyring: keyring("bad id", LOOKUP_KEY),
   }), /key id invalid/);
+  assert.throws(() => new SqliteHostedIdentityRepository({
+    filepath: ":memory:",
+    subjectLookupKeyring: { ...keyring("current", LOOKUP_KEY), untaggedLegacyKeyId: "missing" },
+  }), /must reference a configured key/);
+});
+
+test("pre-keyring rows reject new-only startup until reviewed legacy migration", () => {
+  const { filepath } = tempDatabase();
+  const subject = "pre-keyring-subject";
+  const old = harness(filepath, { subjectLookupKeyring: keyring("old", LOOKUP_KEY) });
+  old.addProof("pre-keyring-proof", subject);
+  old.service.exchangeProviderProof({
+    provider: "test", proof: "pre-keyring-proof", callbackId: "pre-keyring-callback",
+  });
+  old.repo.db.prepare("UPDATE hid_provider_identities SET subject_key_id=NULL").run();
+  old.repo.close();
+
+  assert.throws(() => harness(filepath, {
+    subjectLookupKeyring: keyring("new", LOOKUP_KEY_V2),
+  }), /untagged legacy subjects; reviewed migration key required/);
+  assert.throws(() => harness(filepath, {
+    subjectLookupKeyring: keyring("new", LOOKUP_KEY_V2, [{ id: "old", key: LOOKUP_KEY }]),
+  }), /untagged legacy subjects; reviewed migration key required/);
+});
+
+test("reviewed pre-keyring migration prevents duplicates and permits retirement", () => {
+  const { filepath } = tempDatabase();
+  const subject = "pre-keyring-migrate-subject";
+  const old = harness(filepath, { subjectLookupKeyring: keyring("old", LOOKUP_KEY) });
+  old.addProof("old-proof", subject);
+  const original = old.service.exchangeProviderProof({
+    provider: "test", proof: "old-proof", callbackId: "old-callback",
+  });
+  old.repo.db.prepare("UPDATE hid_provider_identities SET subject_key_id=NULL").run();
+  old.repo.close();
+
+  const reviewedRing = {
+    ...keyring("new", LOOKUP_KEY_V2, [{ id: "old", key: LOOKUP_KEY }]),
+    untaggedLegacyKeyId: "old",
+  };
+  const a = harness(filepath, { subjectLookupKeyring: reviewedRing });
+  const b = harness(filepath, { subjectLookupKeyring: reviewedRing });
+  b.addProof("new-link-proof", "genuinely-new-subject");
+  isRejected(() => b.service.exchangeProviderProof({
+    provider: "test", proof: "new-link-proof", callbackId: "new-link-callback",
+  }));
+  assert.equal(rows(a.repo.db, "hid_accounts"), 1);
+  assert.equal(rows(a.repo.db, "hid_provider_identities"), 1);
+
+  a.addProof("migrate-proof", subject, "active", 2);
+  b.addProof("converge-proof", subject, "active", 3);
+  const migrated = a.service.exchangeProviderProof({
+    provider: "test", proof: "migrate-proof", callbackId: "migrate-callback",
+  });
+  const converged = b.service.exchangeProviderProof({
+    provider: "test", proof: "converge-proof", callbackId: "converge-callback",
+  });
+  assert.equal(migrated.accountId, original.accountId);
+  assert.equal(converged.accountId, original.accountId);
+  assert.equal(rows(a.repo.db, "hid_accounts"), 1);
+  assert.equal(rows(a.repo.db, "hid_provider_identities"), 1);
+  assert.equal(a.repo.db.prepare(`SELECT count(*) AS count FROM hid_provider_identities
+    WHERE subject_key_id IS NULL`).get().count, 0);
+  a.repo.close();
+  b.repo.close();
+
+  const retired = harness(filepath, { subjectLookupKeyring: keyring("new", LOOKUP_KEY_V2) });
+  assert.equal(retired.repo.getIdentity("test", subject).accountId, original.accountId);
+  retired.repo.close();
 });
 
 test("key rotation dual-reads, re-HMACs, and survives close before old-key retirement", () => {

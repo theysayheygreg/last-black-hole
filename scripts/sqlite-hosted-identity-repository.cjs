@@ -33,7 +33,13 @@ function subjectKeyring(subjectLookupKey, subjectLookupKeyring) {
     throw new TypeError("provide one hosted identity subject lookup key or keyring");
   }
   if (subjectLookupKeyring == null) {
-    return [{ id: LEGACY_SUBJECT_KEY_ID, key: keyBuffer(subjectLookupKey), current: true }];
+    return {
+      entries: [{ id: LEGACY_SUBJECT_KEY_ID, key: keyBuffer(subjectLookupKey), current: true }],
+      // The single-key constructor is the pre-keyring compatibility path. It
+      // may read/tag legacy rows, but writes remain fenced until none remain.
+      untaggedLegacyKeyId: LEGACY_SUBJECT_KEY_ID,
+      explicit: false,
+    };
   }
   if (!subjectLookupKeyring || typeof subjectLookupKeyring !== "object" ||
       !subjectLookupKeyring.current || !Array.isArray(subjectLookupKeyring.previous ?? [])) {
@@ -51,7 +57,12 @@ function subjectKeyring(subjectLookupKey, subjectLookupKeyring) {
     if (ids.has(entry.id)) throw new TypeError("hosted identity subject lookup key ids must be unique");
     ids.add(entry.id);
   }
-  return entries;
+  const untaggedLegacyKeyId = subjectLookupKeyring.untaggedLegacyKeyId == null
+    ? null : keyId(subjectLookupKeyring.untaggedLegacyKeyId);
+  if (untaggedLegacyKeyId != null && !ids.has(untaggedLegacyKeyId)) {
+    throw new TypeError("hosted identity untagged legacy key id must reference a configured key");
+  }
+  return { entries, untaggedLegacyKeyId, explicit: true };
 }
 
 function json(value) { return JSON.stringify(value); }
@@ -74,9 +85,12 @@ class SqliteHostedIdentityRepository {
     if (!Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 0 || busyTimeoutMs > 60_000) {
       throw new TypeError("hosted identity sqlite busy timeout invalid");
     }
-    this.subjectLookupKeys = subjectKeyring(subjectLookupKey, subjectLookupKeyring);
+    const lookupKeyring = subjectKeyring(subjectLookupKey, subjectLookupKeyring);
+    this.subjectLookupKeys = lookupKeyring.entries;
     this.currentSubjectLookupKey = this.subjectLookupKeys[0];
     this.subjectLookupKeyIds = new Set(this.subjectLookupKeys.map((entry) => entry.id));
+    this.untaggedLegacyKeyId = lookupKeyring.untaggedLegacyKeyId;
+    this.explicitSubjectLookupKeyring = lookupKeyring.explicit;
     this.db = db || new DatabaseSync(filepath);
     this.ownsDb = !db;
     this.inTransaction = false;
@@ -213,6 +227,11 @@ class SqliteHostedIdentityRepository {
         throw new Error(`hosted identity database references unknown subject lookup key id: ${row.id}`);
       }
     }
+    const untaggedRows = Number(this.db.prepare(`SELECT count(*) AS count
+      FROM hid_provider_identities WHERE subject_key_id IS NULL`).get().count);
+    if (untaggedRows > 0 && this.explicitSubjectLookupKeyring && this.untaggedLegacyKeyId == null) {
+      throw new Error("hosted identity database has untagged legacy subjects; reviewed migration key required");
+    }
   }
 
   _subjectLookup(provider, subject, key = this.currentSubjectLookupKey.key) {
@@ -270,6 +289,9 @@ class SqliteHostedIdentityRepository {
     }
     const matched = candidates.find((candidate) => candidate.lookup === row.subject_lookup);
     if (!matched) throw new Error("hosted identity subject lookup key mismatch");
+    if (row.subject_key_id == null && matched.id !== this.untaggedLegacyKeyId) {
+      throw new Error("hosted identity untagged subject did not match reviewed legacy key");
+    }
     if (!matched.current || row.subject_key_id !== this.currentSubjectLookupKey.id) {
       // Lazy dual-read migration is atomic. Operators must retain bounded old
       // keys until every identity that must remain discoverable has traversed
@@ -285,6 +307,14 @@ class SqliteHostedIdentityRepository {
     };
   }
   putIdentity(record) {
+    // An untagged row could be the same provider subject under an unknown old
+    // key. Until all such rows have been looked up and migrated, refusing new
+    // links is the only way to rule out duplicate accounts without raw subjects.
+    const untaggedRows = Number(this.db.prepare(`SELECT count(*) AS count
+      FROM hid_provider_identities WHERE subject_key_id IS NULL`).get().count);
+    if (untaggedRows > 0) {
+      throw new Error("hosted identity links fenced until untagged legacy subjects migrate");
+    }
     this.db.prepare(`INSERT INTO hid_provider_identities
       (identity_id,provider,subject_lookup,subject_key_id,account_id,created_at) VALUES(?,?,?,?,?,?)`)
       .run(record.identityId, record.provider,
