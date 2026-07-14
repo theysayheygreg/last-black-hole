@@ -9,6 +9,15 @@ const path = require("path");
 const SCHEMA = "lbh-v04-regional-four-player-raw-v1";
 const ANALYSIS_SCHEMA = "lbh-v04-regional-four-player-analysis-v1";
 const RUN_CLASSES = new Set(["external-one-shot", "local-contract-smoke"]);
+const EXACT_PROTOCOL = "s20-v1+brotli-q1";
+const TOP_LEVEL_KEYS = new Set(["schema", "metadata", "processes", "chronology", "admission", "metrics",
+  "budgets", "clients", "redTeam", "outcomes", "packing", "followOn", "integrity"]);
+const REQUIRED_OUTCOMES = Object.freeze({
+  correctness: ["stateConverged", "consequencesTruthful", "exactlyOnceResult"],
+  privacy: ["ownerFieldsIsolated", "structuredLogScanClean"],
+  fallback: ["s20Negotiated", "unsupportedCodecRejected"],
+  cleanup: ["socketsClosed", "authorityExited", "queuesReleased"],
+});
 const REQUIRED_LATENCY = ["authority", "sim", "writer", "projection"];
 const PERCENTILES = ["p50", "p95", "p99"];
 const FORBIDDEN_KEY = /(?:secret|token|ticket|credential|password|providerSubject|accountId|deviceId|profileId|membershipId)/i;
@@ -144,6 +153,8 @@ function verifyIntegrity(raw, trustedPublicKeyPem) {
 }
 
 function validateMetadata(raw) {
+  const unknownTopLevel = Object.keys(raw).filter((key) => !TOP_LEVEL_KEYS.has(key));
+  if (unknownTopLevel.length) throw new Error(`unknown top-level evidence fields: ${unknownTopLevel.join(", ")}`);
   assertObject(raw.metadata, "metadata");
   if (!RUN_CLASSES.has(raw.metadata.runClass)) throw new Error("metadata.runClass is invalid");
   if (raw.metadata.runClass === "external-one-shot" && raw.metadata.retries !== 0) throw new Error("external final run must have zero retries");
@@ -153,14 +164,29 @@ function validateMetadata(raw) {
   for (const key of ["runId", "scenarioId", "gitCommit", "artifactSha256", "protocolVersion", "provider", "region", "runtime", "hostClass", "seed"]) {
     if (raw.metadata[key] == null || raw.metadata[key] === "") throw new Error(`metadata.${key} is required`);
   }
+  if (!/^[a-f0-9]{40}$/.test(raw.metadata.gitCommit)) throw new Error("metadata.gitCommit is invalid");
   if (!/^sha256:[a-f0-9]{64}$/.test(raw.metadata.artifactSha256)) throw new Error("metadata.artifactSha256 is invalid");
+  if (raw.metadata.protocolVersion !== EXACT_PROTOCOL) throw new Error(`metadata.protocolVersion must equal ${EXACT_PROTOCOL}`);
   if (!Array.isArray(raw.processes) || raw.processes.length !== 1 || raw.processes[0].role !== "authority") {
     throw new Error("exactly one authority process per match is required");
   }
   if (raw.processes.some((process) => process.gitCommit !== raw.metadata.gitCommit)) throw new Error("mixed commits are forbidden");
+  if (raw.processes.some((process) => process.artifactSha256 !== raw.metadata.artifactSha256)) {
+    throw new Error("process artifact must match metadata artifact");
+  }
   assertObject(raw.metadata.invoice, "metadata.invoice");
   for (const key of ["currency", "computeRate", "egressRate", "billingSource", "invoiceObserved"]) {
     if (!Object.hasOwn(raw.metadata.invoice, key)) throw new Error(`metadata.invoice.${key} is required`);
+  }
+}
+
+function validateOutcomes(raw) {
+  assertObject(raw.outcomes, "outcomes");
+  for (const [group, required] of Object.entries(REQUIRED_OUTCOMES)) {
+    assertObject(raw.outcomes[group], `outcomes.${group}`);
+    for (const key of required) {
+      if (raw.outcomes[group][key] !== true) throw new Error(`outcomes.${group}.${key} must be true`);
+    }
   }
 }
 
@@ -274,6 +300,7 @@ function analyze(raw, { trustedPublicKeyPem } = {}) {
   validateMetadata(raw);
   validateChronology(raw);
   validateMetrics(raw);
+  validateOutcomes(raw);
   if (raw.metadata.runClass === "external-one-shot") {
     validateMeasurement(raw.chronology.replacementMs, "chronology.replacementMs", { allowUnavailable: false });
     raw.clients.forEach((client, index) => validateMeasurement(client.reconnectMs,

@@ -117,6 +117,20 @@ async function run() {
     mustReject(pair, (raw) => { raw.processes[0].gitCommit = "f".repeat(40); }, /mixed commits/, { external: true });
   });
 
+  await runner.run("binds exact S20 protocol and process artifact", async () => {
+    const pair = keys();
+    mustReject(pair, (raw) => { raw.metadata.protocolVersion = "s23-v1"; }, /must equal s20-v1\+brotli-q1/);
+    mustReject(pair, (raw) => { raw.processes[0].artifactSha256 = `sha256:${"2".repeat(64)}`; },
+      /process artifact must match metadata artifact/);
+  });
+
+  await runner.run("rejects unknown top-level fields and vacuous outcomes", async () => {
+    const pair = keys();
+    mustReject(pair, (raw) => { raw.captureSchedule = { forged: true }; }, /unknown top-level evidence fields/);
+    mustReject(pair, (raw) => { raw.outcomes.correctness = {}; }, /stateConverged must be true/);
+    mustReject(pair, (raw) => { delete raw.outcomes.cleanup.queuesReleased; }, /queuesReleased must be true/);
+  });
+
   await runner.run("rejects application bytes relabeled as wire bytes", async () => {
     const pair = keys();
     mustReject(pair, (raw) => {

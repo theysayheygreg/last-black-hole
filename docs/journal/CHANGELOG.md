@@ -8,6 +8,9 @@
 - Kept application-byte accounting with the four isolated client capture
   processes and socket/on-wire accounting with external collectors; no live
   regional or cost claim was added.
+- Tightened the signed raw-evidence analyzer to require exact S20, bind the
+  authority process to the metadata commit and artifact digest, reject unknown
+  top-level fields, and refuse empty or incomplete outcome groups.
 
 ## 2026-07-14 — v0.4 local hosted lifecycle and erasure closure
 
