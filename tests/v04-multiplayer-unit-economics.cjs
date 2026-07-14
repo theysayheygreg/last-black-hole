@@ -2,7 +2,7 @@
 "use strict";
 
 const assert = require("assert");
-const { SCHEMA, validateConfig, receiptLedger, evaluate, model, money } = require("../scripts/v04-multiplayer-unit-economics.cjs");
+const { SCHEMA, sha256, validateConfig, receiptLedger, evaluate, model, money } = require("../scripts/v04-multiplayer-unit-economics.cjs");
 
 function price(value) { return { value, status: "planningAssumption", source: "test" }; }
 function fixture() {
@@ -77,4 +77,5 @@ for (const mutation of [
 }
 
 assert.strictEqual(money(1.005), 1.01, "money rounding must be half-up at cent precision");
+assert.strictEqual(sha256(Buffer.from("abc")), sha256("abc"), "artifact SHA must hash raw file bytes");
 console.log("v0.4 multiplayer unit-economics tests passed");

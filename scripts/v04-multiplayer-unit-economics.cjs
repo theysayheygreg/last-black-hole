@@ -18,7 +18,8 @@ function stable(value) {
 }
 
 function sha256(value) {
-  return crypto.createHash("sha256").update(typeof value === "string" ? value : stable(value)).digest("hex");
+  const bytes = Buffer.isBuffer(value) || typeof value === "string" ? value : stable(value);
+  return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
 function finite(name, value, { min = 0, max = Infinity, integer = false } = {}) {
