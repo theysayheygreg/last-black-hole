@@ -14,6 +14,9 @@
   B/s; eight remains DILATED at 5.00/4.90 Hz and is rejected.
 - Kept S18 positional JSON as the fresh-session fallback and selected authority
   clock profiling/isolation as the next bounded lane before any 24/48/96 claim.
+- Ran the 40-suite `multiplayer-network` lane once without retries: 39 passed.
+  Repaired the sole historical S18 source-binding failure to read sealed commit
+  `266e8c8`, then passed that focused checker without rerunning the lane.
 
 ## 2026-07-13 — v0.4 S19 shared-public experiment rejected
 

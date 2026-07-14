@@ -16,12 +16,17 @@ const BENCHMARK = path.join(EVIDENCE, "trusted-proof-benchmark.json");
 const PROOF_OUTPUT = path.join(EVIDENCE, "trusted-proof-adversarial.json");
 const CANDIDATE_SHA = "82a1e0eadea4ee6d6dee36f86b1d937fbd31f3a16e95eb9f24cfa3bb68d69b37";
 const BASELINE_SHA = "9001726f56fbfd895d32f5d3111dd50b16cb80bd1a0903772bffbdc78307d149";
+const SEALED_SOURCE_COMMIT = "266e8c8";
 const TARGET_HZ = 10;
 const MIN_HZ = 9;
 const TARGET_BPS = 64 * 1024;
 const P95_BPS = 80 * 1024;
 
 function shaFile(file) { return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex"); }
+function shaGitFile(revision, file) {
+  return crypto.createHash("sha256").update(execFileSync("git", ["show", `${revision}:${file}`],
+    { cwd: ROOT })).digest("hex");
+}
 function distribution(values) { const sorted = [...values].sort((a, b) => a - b);
   const at = (fraction) => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))];
   return { count: sorted.length, mean: sorted.reduce((sum, value) => sum + value, 0) / sorted.length,
@@ -134,14 +139,15 @@ function build() {
       "No WAN, TLS, hosted fleet, compression, cadence policy, heavy sim, or 24/48/96 claim"] };
 }
 
-function sources() {
+function sources(revision = null) {
+  const hash = (file) => revision ? shaGitFile(revision, file) : shaFile(path.join(ROOT, file));
   return { implementation: Object.fromEntries(["authority-delta-publisher.cjs", "multiplayer-wire-protocol.cjs",
     "state-pair-positional-codec.cjs"].map((file) =>
-    [file, shaFile(path.join(ROOT, "scripts", file))])),
+    [file, hash(path.join("scripts", file))])),
   tests: Object.fromEntries(["multiplayer-state-pair-trusted-authority-proof.cjs",
     "multiplayer-state-pair-trusted-proof-benchmark.cjs", "multiplayer-state-pair-trusted-proof-evidence.cjs",
     "multiplayer-state-pair-canonical-reuse-benchmark.cjs"].map((file) =>
-    [file, shaFile(path.join(ROOT, "tests", file))])) };
+    [file, hash(path.join("tests", file))])) };
 }
 
 function main() {
@@ -161,7 +167,7 @@ function main() {
   const own = validateChecksums(EVIDENCE);
   const stored = JSON.parse(fs.readFileSync(path.join(EVIDENCE, "analysis.json")));
   const manifest = JSON.parse(fs.readFileSync(path.join(EVIDENCE, "manifest.json")));
-  const currentSources = sources();
+  const currentSources = sources(SEALED_SOURCE_COMMIT);
   const invariants = { checksums: own.passed, exactAnalysis: JSON.stringify(stored) === JSON.stringify(analysis),
     analysisBinding: manifest.analysisSha256 === shaFile(path.join(EVIDENCE, "analysis.json")),
     benchmarkBinding: manifest.benchmarkSha256 === shaFile(BENCHMARK),

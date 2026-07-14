@@ -82,6 +82,12 @@ not solve it.
 These are machine-local macOS loopback results without TLS, hosted placement,
 fleet packing, AOI, or WAN effects. They make no 24/48/96-client claim.
 
+The registered 40-suite `multiplayer-network` lane ran once with retries
+disabled: 39 passed. Its sole failure was the historical S18 evidence checker
+comparing a sealed source manifest with current S20 wire source. The checker
+now hashes sealed commit `266e8c8` and passes focused validation; the full lane
+was intentionally not rerun.
+
 ## Decision
 
 Keep S20 as the preferred negotiated codec for 1–4 player sessions and keep
@@ -89,4 +95,3 @@ S18 positional JSON as fresh-session fallback. Do not admit 8, change cadence,
 or infer high-count capacity from compression. The next bounded lane should
 profile and isolate the authority projection/publish clock cost that still
 forces eight into DILATED mode before any 24/48/96 extrapolation.
-

@@ -59,7 +59,7 @@ cadence policy, hosted economics, heavy-sim work, and 24/48/96 remain closed.
 ## Final validation
 
 The registered 37-suite `multiplayer-network` lane ran exactly once with
-retries disabled. Thirty-six suites passed, including both S18 suites. The sole
-failure was historical S17 evidence comparing its sealed manifest with current
-S18 source. That validator now reads the sealed `e57bf53` Git tree and passes
-focused validation; the full lane was not rerun.
+retries disabled. Thirty-six suites passed, including both S18 suites. A later
+S20 lane exposed that this historical S18 checker had regressed to comparing
+its sealed manifest with current source. It now reads the exact sealed
+`266e8c8` Git tree and passes focused validation; the full lane was not rerun.
