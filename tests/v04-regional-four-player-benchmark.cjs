@@ -124,6 +124,11 @@ async function run() {
       client.network.onWireAccountingSource = "application-only";
       client.network.onWireBytesPerSecondMean = structuredClone(client.network.applicationBytesPerSecondMean);
     }, /cannot be relabeled as real socket\/on-wire bytes/, { external: true });
+    mustReject(pair, (raw) => {
+      raw.clients[1].network.onWireBytesPerSecondMean = {
+        status: "unavailable", unit: "B/s", reason: "packet capture missing",
+      };
+    }, /cannot be unavailable/, { external: true });
   });
 
   await runner.run("rejects unavailable metrics masquerading as zero", async () => {
