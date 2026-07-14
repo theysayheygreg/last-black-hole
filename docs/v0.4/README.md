@@ -34,6 +34,12 @@ public 4–8-player product.
   entitlement, one fenced authority incarnation per match, encrypted product
   state, and exact multi-member result outbox/settlement across SQLite reopen.
   Local control-plane JSON remains the default; SQLite is explicit opt-in.
+- Local identity-subject HMAC, encrypted product-state, and placement-token
+  key rotation are implemented and tested with bounded current/previous
+  keyrings, authenticated placement/product key identifiers, validated identity
+  key identifiers, dual-read/lazy migration, safe old-key retirement, and fail-
+  closed unknown identifiers. This does not prove production key custody or
+  multi-database rollout.
 - A fail-closed hosted HTTP reference runtime is implemented and tested over
   the local co-located SQLite composition. It separates client, control, and
   workload auth planes, preserves four-seat and authority-incarnation fences,

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-14 — v0.4 hosted key rotation proved locally
+
+- Added bounded current-plus-previous keyrings for provider-subject HMAC
+  lookup, encrypted product match state, and opaque placement tokens.
+- Authenticated or validated key identifiers, dual-read old generations, and
+  lazily migrated identity/product rows with compare-and-set protection.
+  Migrated data survives safe old-key retirement; unknown, retired-before-
+  migration, or tampered identifiers fail closed.
+- Closed the previously listed local crypto-rotation P2. Production key
+  custody/coordinated rollout, retention/privacy, create-orphan reclamation,
+  pre-repair accepted-row migration/reset, provider composition, and the
+  single-SQLite/direct-callback boundary remain open.
+
 ## 2026-07-14 — v0.4 hosted HTTP and lifecycle crash windows closed locally
 
 - Added and tested a fail-closed hosted HTTP reference runtime with separate
@@ -12,9 +25,10 @@
   digest/count, and a prepared-result journal with bounded settlement recovery.
   Independent final review found no P0/P1 in that local composition.
 - Preserved explicit P2s for create-time placement capacity reclamation via
-  sweep, pre-repair accepted-row migration/reset policy, key rotation,
-  retention/privacy operations, and replacing single-SQLite direct callbacks
-  with production distributed boundaries.
+  sweep, pre-repair accepted-row migration/reset policy, retention/privacy
+  operations, production key custody, and replacing single-SQLite direct
+  callbacks with production distributed boundaries. Local rotation closure is
+  recorded above.
 - Built the source-bound benchmark container locally. Its startup now executes
   `tcpdump -D` and correctly fails without `NET_ADMIN`/`NET_RAW`; Fly capture
   capability remains unproved pending authenticated runtime probing. Fly auth,

@@ -3174,7 +3174,7 @@ or cleanup that discards accepted lineage before settlement acknowledgement.
 | Jul 14 | Accept the fail-closed local HTTP runtime as reference proof for separate client/control/workload auth planes, bounded envelopes, four-seat admission, incarnation fencing, terminal result/settlement, and restart replay. Do not call it a public deployment or production provider composition. |
 | Jul 14 | Repair bootstrap, ready, admission, and drain response-loss/crash windows by replaying only the exact durable operation. Placement owns the exact admitted-membership digest/count used by terminal acceptance. |
 | Jul 14 | Bridge placement acceptance to outbox publication with durable prepared canonical result bytes and bounded settlement-worker recovery. Recovery cannot substitute caller-selected payload or lineage. |
-| Jul 14 | Accept independent final review's no-P0/P1 verdict only for the demonstrated co-located single-SQLite/direct-callback composition. Keep capacity compensation, old-row migration/reset, key rotation, retention/privacy, and distributed-boundary work open as P2. |
+| Jul 14 | Accept independent final review's no-P0/P1 verdict only for the demonstrated co-located single-SQLite/direct-callback composition. At this review checkpoint, keep capacity compensation, old-row migration/reset, key rotation, retention/privacy, and distributed-boundary work open as P2; the local key-rotation item is closed by the later decision below. |
 | Jul 14 | Treat local source-bound container build and `tcpdump -D` fail-closed behavior as packaging evidence only. Require an authenticated Fly capability probe before any runtime capture claim. |
 
 **Door status:** Open for production provider/storage composition, P2 closure,
@@ -3182,3 +3182,16 @@ authenticated Fly capture probing, and the real four-client regional run.
 Closed for calling local HTTP proof public deployment, treating a prepared
 container as performance evidence, or claiming host density, invoice, packing,
 regional cost, or 24/48/96 live capacity.
+
+### Q: Is hosted cryptographic key rotation still an open local P2?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Close the local rotation P2 for provider-subject HMAC lookup, encrypted product match state, and placement tokens. Bound each current-plus-previous keyring and reject duplicate, malformed, or oversized generations. |
+| Jul 14 | Authenticate placement/product key identifiers with AES-GCM associated data and validate stored identity key ids against the configured ring. Unknown, tampered, or prematurely retired ids fail closed without fallback guessing. |
+| Jul 14 | Dual-read old generations and lazily migrate identity HMAC/product ciphertext under the current key with compare-and-set protection. After migration and reopen, retiring the old key preserves access; unmigrated identity rows block unsafe retirement. |
+| Jul 14 | Scope the proof to local repositories/codecs. Production key custody, coordinated multi-process/multi-database rollout, retention/privacy, create-orphan sweep, and pre-repair accepted-row migration/reset remain open. |
+
+**Door status:** Closed for the local rotation primitives and their failure
+semantics. Open for production custody/rotation operations and distributed
+rollout; do not infer public deployment or production provider composition.

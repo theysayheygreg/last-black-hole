@@ -153,8 +153,17 @@ admitted-membership digest/count; and uses a prepared-result journal with
 bounded settlement recovery. Independent final review found no P0/P1 for the
 demonstrated local composition. Remaining P2s are create-time placement
 capacity reclamation via sweep, migration/reset policy for pre-repair accepted
-rows, key rotation, retention/privacy operations, and the co-located single-
-SQLite/direct-callback boundary.
+rows, retention/privacy operations, production key custody, and the co-located
+single-SQLite/direct-callback boundary.
+
+Identity-subject HMAC, encrypted product-state, and placement-token key
+rotation are **PROVEN locally**. Each uses a bounded current/previous keyring;
+placement/product key identifiers are authenticated and identity key
+identifiers are validated against the configured ring; old generations dual-
+read; identity and encrypted product rows lazily migrate with compare-and-set
+protection; migrated state survives safe retirement; and unknown/tampered key
+identifiers fail closed. This is not a public, multi-database, or production
+key-management deployment claim.
 
 Fly packaging and fail-closed preflight pass 13/13. The source-bound container
 builds locally; startup executes `tcpdump -D` and fails without local
@@ -272,6 +281,7 @@ and relevant local validation without another network suite.
 | public hosted deployment/provider composition | INCOMPLETE |
 | local co-located SQLite lifecycle P0/P1 | CLOSED for demonstrated composition |
 | hosted lifecycle P2 operations/migration/distribution gaps | OPEN |
+| identity/product/placement-token key rotation | PROVEN locally |
 | Fly benchmark package/preflight | PROVEN; 13/13 |
 | real regional four-client benchmark | INCOMPLETE / not run |
 | measured host packing and observed costs | INCOMPLETE / no claim |
@@ -293,7 +303,7 @@ and relevant local validation without another network suite.
    the remaining product decisions.
 3. Compose the tested HTTP/runtime reference with production provider/storage
    boundaries; close capacity compensation, accepted-row migration/reset, key
-   rotation, retention/privacy, and distributed transaction P2s.
+   custody/rollout, retention/privacy, and distributed transaction P2s.
 4. Resolve Fly auth and external origins/signing/evidence inputs, prove packet-
    capture capability in Fly runtime,
    then run Phase 6 same-scenario two-region 90-minute four-player benchmarks,

@@ -115,10 +115,20 @@ in this demonstrated local composition.
 
 Remaining P2 work is explicit: create-time placement capacity is reclaimed by
 sweep rather than inline compensation; databases containing pre-repair
-accepted rows need a declared migration/reset policy; encryption/signing key
-rotation and retention/privacy operations are not production-complete; and the
-proof is co-located single-SQLite with direct in-process callbacks, not a
-distributed production transaction.
+accepted rows need a declared migration/reset policy; retention/privacy
+operations are not production-complete; and the proof is co-located single-
+SQLite with direct in-process callbacks, not a distributed production
+transaction.
+
+Local crypto-rotation checkpoint (2026-07-14): identity-subject HMACs,
+encrypted product match state, and placement bootstrap/admission tokens now use
+bounded current-plus-previous keyrings. Placement/product key identifiers are
+authenticated and identity key identifiers are validated against the configured
+ring; old generations dual-read, identity and product rows lazily migrate with
+compare-and-set protection, migrated data survives safe old-key retirement,
+and unknown/tampered identifiers fail closed. This is local repository/codec
+proof, not production key custody, public deployment, or a coordinated multi-
+database rotation protocol.
 
 Stage A boundary checkpoint (2026-07-14): default local/offline behavior is
 unchanged, while explicit hosted mode now requires service authentication,
@@ -340,8 +350,9 @@ A hosted v0.4 alpha requires all of the following:
 
 - Greg has ratified the service/product decisions;
 - natural four-human invite, play, reconnect, result, and rematch journeys;
-- Phase 5 identity/privacy/lease/settlement gates and no P0/P1, with all P2
-  migration, key, retention/privacy, and distributed-boundary work closed;
+- Phase 5 identity/privacy/lease/settlement gates and no P0/P1, with remaining
+  P2 accepted-row migration/reset, retention/privacy, capacity compensation,
+  production key custody, and distributed-boundary work closed;
 - Phase 6 two-region 90-minute proof and Greg movement/art judgment;
 - measured authority density or an explicit one-authority-per-host budget;
 - current provider prices refreshed and the unit-economics model regenerated;
