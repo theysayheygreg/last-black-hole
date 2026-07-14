@@ -11,8 +11,13 @@ const CODEC_ID = 1;
 const CODEC_NAME = "brotli-quality-1";
 const MAGIC = Buffer.from("LBHZ", "ascii");
 const HEADER_BYTES = 64;
-const MAX_ORIGINAL_BYTES = 256 * 1024;
-const MAX_COMPRESSED_BYTES = MAX_ORIGINAL_BYTES - HEADER_BYTES;
+const MAX_ENVELOPE_BYTES = 256 * 1024;
+// Brotli can expand incompressible input. Keep an explicit 16 KiB admission
+// reserve so every admitted inner frame still fits the fixed outer envelope;
+// positional sessions retain their independent 256 KiB fallback limit.
+const EXPANSION_RESERVE_BYTES = 16 * 1024;
+const MAX_COMPRESSED_BYTES = MAX_ENVELOPE_BYTES - HEADER_BYTES;
+const MAX_ORIGINAL_BYTES = MAX_COMPRESSED_BYTES - EXPANSION_RESERVE_BYTES;
 const MANIFEST = Object.freeze({
   schema: CODEC_SCHEMA,
   version: CODEC_VERSION,
@@ -27,7 +32,9 @@ const MANIFEST = Object.freeze({
     contextTakeover: false, dictionary: false }),
   integrity: Object.freeze({ algorithm: "sha256", digestBytes: 16,
     binding: "manifestHash || original positional bytes" }),
-  limits: Object.freeze({ maxCompressedBytes: MAX_COMPRESSED_BYTES, maxOriginalBytes: MAX_ORIGINAL_BYTES }),
+  limits: Object.freeze({ maxEnvelopeBytes: MAX_ENVELOPE_BYTES,
+    expansionReserveBytes: EXPANSION_RESERVE_BYTES,
+    maxCompressedBytes: MAX_COMPRESSED_BYTES, maxOriginalBytes: MAX_ORIGINAL_BYTES }),
   inner: "canonical state-pair-positional-json-v1 bytes",
 });
 const MANIFEST_DIGEST = crypto.createHash("sha256").update(canonicalJsonBytes(MANIFEST)).digest();
@@ -126,6 +133,8 @@ module.exports = {
   CODEC_ID,
   CODEC_NAME,
   HEADER_BYTES,
+  MAX_ENVELOPE_BYTES,
+  EXPANSION_RESERVE_BYTES,
   MAX_COMPRESSED_BYTES,
   MAX_ORIGINAL_BYTES,
   MANIFEST,

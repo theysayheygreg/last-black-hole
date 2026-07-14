@@ -168,6 +168,39 @@ async function run() {
     assert(redeemed.claims.capabilities.includes("state-pair-positional-json-v1"));
   });
 
+  await runner.run("compression capability is immutable, positional-only, and excludes binary", async () => {
+    const registry = createMultiplayerTicketRegistry({ runId: "run-a" });
+    const dependencies = ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
+      "runtime-public-components-v1", "state-pair-positional-json-v1"];
+    expectTicketError(() => registry.issueAdmission({
+      membershipId: "membership-compression-bad", playerId: "player-compression-bad",
+      profileId: "profile-compression-bad", wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: [...dependencies.slice(0, -1), "state-pair-brotli-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    }), "invalid-claim");
+    expectTicketError(() => registry.issueAdmission({
+      membershipId: "membership-compression-binary", playerId: "player-compression-binary",
+      profileId: "profile-compression-binary", wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: [...dependencies, "state-pair-binary-v1", "state-pair-brotli-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    }), "invalid-claim");
+    const issued = registry.issueAdmission({
+      membershipId: "membership-compression", playerId: "player-compression",
+      profileId: "profile-compression", wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: [...dependencies, "state-pair-brotli-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    });
+    const redeemed = registry.redeem(issued.ticket, { kind: "admission", runId: "run-a" });
+    const expected = [...dependencies, "state-pair-brotli-v1"].sort();
+    assert(JSON.stringify(redeemed.claims.capabilities) === JSON.stringify(expected),
+      "Redemption must return the exact deterministic compression capability set");
+    assert(!redeemed.claims.capabilities.includes("state-pair-binary-v1"),
+      "Compression ticket must remain outside the binary codec branch");
+  });
+
   await runner.run("expiry is deterministic under an injected clock", async () => {
     let clock = 10_000;
     const registry = createMultiplayerTicketRegistry({ runId: "run-a", now: () => clock });

@@ -15,7 +15,7 @@ const { codecContext: positionalCodecContext, POSITIONAL_CODEC_MANIFEST,
 const { CAPABILITY: BINARY_CODEC_CAPABILITY, codecContext: binaryCodecContext,
   BINARY_CODEC_MANIFEST, BINARY_CODEC_MANIFEST_HASH } =
   require("../../scripts/state-pair-binary-codec.cjs");
-const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY, MANIFEST_HASH: COMPRESSION_CODEC_MANIFEST_HASH } =
+const { CAPABILITY: COMPRESSION_CODEC_CAPABILITY } =
   require("../../scripts/state-pair-compression-codec.cjs");
 const { canonicalJsonBytes } = require("../../scripts/session-replication-manifest.cjs");
 const { distribution } = require("./state-pair-product-metrics.cjs");
@@ -95,7 +95,7 @@ function resetMeasurement(startAt) {
   if (measurementStartTimer) clearTimeout(measurementStartTimer);
   measuring = false;
   measurement = { scheduledStartAt: startAt, acceptedEvents: [],
-    decodeMs: [], applyMs: [], ackMs: [], uplinkFrames: 0, uplinkBytes: 0,
+    decodeApplyMs: [], ackMs: [], uplinkFrames: 0, uplinkBytes: 0,
     maxBufferedAmount: Number(state?.ws?.bufferedAmount) || 0,
     inputSteps: 0, errors: [],
   };
@@ -129,7 +129,7 @@ function stopMeasurement() {
     acceptedPairBytes: measurement.acceptedEvents.reduce((sum, event) => sum + event.bytes, 0),
     acceptedEvents: measurement.acceptedEvents,
     acceptedPairEvents: state.acceptedPairEvents,
-    decodeMs: distribution(measurement.decodeMs), applyMs: distribution(measurement.applyMs),
+    decodeApplyMs: distribution(measurement.decodeApplyMs),
     ackSerializeSendMs: distribution(measurement.ackMs),
     uplinkFrames: measurement.uplinkFrames, uplinkBytes: measurement.uplinkBytes,
     maxBufferedAmount: measurement.maxBufferedAmount, inputSteps: measurement.inputSteps,
@@ -193,7 +193,7 @@ async function initialize(config) {
   }
   state = {
     ...config, ticket: issued.body, ws: new WebSocket(`ws://127.0.0.1:${config.port}/stream`,
-      { perMessageDeflate: false }), codecContext: null, binaryContext: null, compressionContext: null,
+      { perMessageDeflate: false }), codecContext: null, binaryContext: null,
     receiver: null, welcome: null,
     inputSeq: 0, actionSeq: 0, commandSeq: 0, acceptedPairs: 0,
     acceptedPairEvents: [], error: null, close: null,
@@ -205,19 +205,12 @@ async function initialize(config) {
   state.ws.on("message", (raw, isBinary) => {
     try {
       const text = isBinary ? null : raw.toString("utf8");
-      const decodeStarted = performance.now();
-      const frame = isBinary && config.compression === true
-        ? parseWireFrame(raw, { direction: SERVER_TO_CLIENT, compressed: true,
-            compressionContext: state.compressionContext, positionalContext: state.codecContext })
-        : isBinary
-        ? parseWireFrame(raw, { direction: SERVER_TO_CLIENT, binary: true,
-            binaryContext: state.binaryContext })
-        : text.startsWith("[")
-        ? parseWireFrame(text, { direction: SERVER_TO_CLIENT,
-            positionalContext: state.codecContext, requirePositional: true })
-        : parseWireFrame(text, { direction: SERVER_TO_CLIENT });
-      if (measuring && (isBinary || text.startsWith("["))) measurement.decodeMs.push(performance.now() - decodeStarted);
-      if (frame.type === "welcome") {
+      // Every negotiated binary/positional data frame is a statePair. Dispatch
+      // by framing and let the receiver perform the one authoritative parse;
+      // parsing here too would decompress/validate each S20 frame twice.
+      const statePairWire = isBinary || text.startsWith("[");
+      const frame = statePairWire ? null : parseWireFrame(text, { direction: SERVER_TO_CLIENT });
+      if (frame?.type === "welcome") {
         state.welcome = frame;
         state.inputSeq = frame.lastInputSeq;
         state.actionSeq = frame.lastActionSeq;
@@ -227,9 +220,6 @@ async function initialize(config) {
           authorityIncarnation: frame.authorityIncarnation, recipientId: frame.membershipId,
           recipientIncarnation: frame.connectionEpoch, manifestHash: frame.manifestHash,
           codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH,
-        });
-        if (config.compression === true) state.compressionContext = Object.freeze({
-          compressionManifestHash: COMPRESSION_CODEC_MANIFEST_HASH,
         });
         if (config.binary === true) state.binaryContext = binaryCodecContext({
           matchId: frame.runId, sessionId: frame.connectionId,
@@ -245,24 +235,24 @@ async function initialize(config) {
         }, capabilities: issued.body.capabilities });
         return;
       }
-      if (frame.type === "heartbeat") {
+      if (frame?.type === "heartbeat") {
         send({ type: "pong", heartbeatId: frame.heartbeatId, clientTimeMs: Date.now() });
         return;
       }
-      if (frame.type === "event") {
+      if (frame?.type === "event") {
         send({ type: "ack", ackKind: "delivery", deliveryId: frame.deliveryId });
         send({ type: "ack", ackKind: "event", eventSeq: frame.eventSeq });
         return;
       }
-      if (frame.type === "ack" && frame.ackKind === "action" && Number.isSafeInteger(frame.deliveryId)) {
+      if (frame?.type === "ack" && frame.ackKind === "action" && Number.isSafeInteger(frame.deliveryId)) {
         send({ type: "ack", ackKind: "delivery", deliveryId: frame.deliveryId });
         return;
       }
-      if (frame.type === "error") throw new Error(`${frame.code}:${frame.message}`);
-      if (frame.type !== "statePair") return;
-      const applyStarted = performance.now();
+      if (frame?.type === "error") throw new Error(`${frame.code}:${frame.message}`);
+      if (!statePairWire) return;
+      const decodeApplyStarted = performance.now();
       const outcome = state.receiver.receive(isBinary ? raw : text);
-      if (measuring) measurement.applyMs.push(performance.now() - applyStarted);
+      if (measuring) measurement.decodeApplyMs.push(performance.now() - decodeApplyStarted);
       if (!outcome.accepted) {
         if (outcome.recovery) send(outcome.recovery);
         if (measuring) measurement.errors.push(`receiver:${outcome.reason}`);

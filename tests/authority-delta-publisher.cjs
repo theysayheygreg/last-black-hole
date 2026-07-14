@@ -15,10 +15,16 @@ const {
 const {
   CLIENT_TO_SERVER,
   SERVER_TO_CLIENT,
+  COMPRESSION_CODEC_CAPABILITY,
+  createStatePairWireEncoder,
   encodeWireFrame,
   parseWireFrame,
 } = require("../scripts/multiplayer-wire-protocol.cjs");
 const { SIM_PROTOCOL_VERSION, WIRE_PROTOCOL_VERSION_V2 } = require("../scripts/multiplayer-wire-protocol.cjs");
+const { CAPABILITY: POSITIONAL_CODEC_CAPABILITY, codecContext: positionalCodecContext } =
+  require("../scripts/state-pair-positional-codec.cjs");
+const { MANIFEST_HASH: COMPRESSION_MANIFEST_HASH } =
+  require("../scripts/state-pair-compression-codec.cjs");
 const { createHarness, openClient, waitFor, nextFrame } = require("./multiplayer-ws-adapter-fixture.cjs");
 
 function identity(overrides = {}) {
@@ -520,6 +526,106 @@ async function run() {
         && statePairGroup.acceptedFrames === 2 && statePairGroup.retransmittedFrames === 1,
       `explicit statePair retransmission must conserve its own offer and accepted copy: ${JSON.stringify(statePairGroup)}`);
     } finally {
+      await harness.close();
+    }
+  });
+
+  await runner.run("compression overlay retains one exact positional wire across retransmit and retires it on ACK", async () => {
+    const manifest = { manifestSchema: "lbh-session-replication-manifest-v1",
+      manifestHash: "sha256:test", manifestBytes: 42 };
+    const capabilities = ["static-manifest-v1", "state-pair-v1", "state-pair-mixed-v1",
+      "runtime-public-components-v1", POSITIONAL_CODEC_CAPABILITY, COMPRESSION_CODEC_CAPABILITY];
+    const harness = await createHarness({
+      replicationAccounting: true,
+      onAck(_binding, frame) {
+        return frame.ackKind === "statePair" ? { accepted: true } : undefined;
+      },
+      afterRedeem(result) {
+        result.welcome.wireVersion = WIRE_PROTOCOL_VERSION_V2;
+        result.welcome.capabilities = capabilities;
+        result.welcome.manifestSchema = manifest.manifestSchema;
+        result.welcome.manifestHash = manifest.manifestHash;
+        result.welcome.manifestBytes = manifest.manifestBytes;
+        result.welcome.fetchPath = "/multiplayer/manifest/test";
+        result.binding.wireVersion = WIRE_PROTOCOL_VERSION_V2;
+        result.binding.capabilities = capabilities;
+        result.binding.authorityIncarnation = 1;
+        result.binding.manifestSchema = manifest.manifestSchema;
+        result.binding.manifestHash = manifest.manifestHash;
+      },
+    });
+    const client = await openClient(`${harness.baseUrl}/stream`, { collect: false });
+    const received = [];
+    client.ws.on("message", (raw, isBinary) => received.push({ wire: Buffer.from(raw), isBinary }));
+    try {
+      const ticket = harness.issueTicket("compressed-wire");
+      client.ws.send(JSON.stringify({
+        type: "hello", wireVersion: WIRE_PROTOCOL_VERSION_V2, simProtocolVersion: SIM_PROTOCOL_VERSION,
+        admissionTicket: ticket, capabilities, manifestSchema: manifest.manifestSchema,
+        manifestHash: manifest.manifestHash,
+      }));
+      await waitFor(() => received.filter((entry) => !entry.isBinary)
+        .map((entry) => parseWireFrame(entry.wire, { direction: SERVER_TO_CLIENT }))
+        .some((frame) => frame.type === "welcome"), { label: "compressed v2 admission" });
+      const binding = harness.bindings.find((entry) => entry.name === "compressed-wire");
+      const id = identity({ matchId: "run-a", sessionId: "connection-compressed-wire",
+        recipientId: "membership-compressed-wire" });
+      const positionalContext = positionalCodecContext({ ...id, manifestHash: manifest.manifestHash });
+      const source = pairInputs(1, id, {
+        public: { manifestHash: manifest.manifestHash }, owner: { manifestHash: manifest.manifestHash },
+      });
+      const publication = createAuthorityDeltaPublisher().publish({
+        ...source,
+        publicView: { ...source.publicView, world: { publicFacts: { formTimes: [null, null, null, null] } },
+          entities: [] },
+        ownerView: { ...source.ownerView, world: {}, entities: [] },
+        allowMixed: true,
+        encodeWire: createStatePairWireEncoder(positionalContext),
+      });
+      assert.strictEqual(typeof publication.encodedWire, "string");
+      const firstOutcome = await harness.adapter.publishStatePair(binding, publication);
+      assert.strictEqual(firstOutcome.accepted, true, JSON.stringify(firstOutcome));
+      await waitFor(() => received.filter((entry) => entry.isBinary).length === 1,
+        { label: "first compressed state pair" });
+      const firstWire = received.find((entry) => entry.isBinary).wire;
+      const decoded = parseWireFrame(firstWire, { direction: SERVER_TO_CLIENT, compressed: true,
+        compressionContext: { compressionManifestHash: COMPRESSION_MANIFEST_HASH }, positionalContext });
+      assert.deepStrictEqual(decoded, publication.frame);
+      const retransmit = await harness.adapter.retransmitStatePair(binding, publication);
+      assert.strictEqual(retransmit.accepted, true, JSON.stringify(retransmit));
+      await waitFor(() => received.filter((entry) => entry.isBinary).length === 2,
+        { label: "exact compressed retransmission" });
+      const binaryFrames = received.filter((entry) => entry.isBinary);
+      assert(binaryFrames[0].wire.equals(binaryFrames[1].wire),
+        "Retransmission must reuse the exact retained compressed bytes");
+      const accountingEvents = harness.adapter.diagnostics().replication.events.filter((event) =>
+        event.frameClass === "statePair" && event.projectionBeat === publication.frame.frameId
+        && ["offered", "accepted", "retransmitted"].includes(event.metric));
+      const metricCounts = Object.fromEntries(["offered", "accepted", "retransmitted"].map((metric) =>
+        [metric, accountingEvents.filter((event) => event.metric === metric).length]));
+      assert.deepStrictEqual(metricCounts, { offered: 2, accepted: 2, retransmitted: 1 });
+      assert(accountingEvents.every((event) => event.bytes === firstWire.length),
+        `Every accepted/retransmitted accounting edge must charge the exact envelope bytes: ${JSON.stringify(accountingEvents)}`);
+      let compression = harness.adapter.diagnostics().statePair.compression;
+      assert.deepStrictEqual({ compressedFrames: compression.compressedFrames, reusedFrames: compression.reusedFrames,
+        retainedFrames: compression.retainedFrames }, { compressedFrames: 1, reusedFrames: 1, retainedFrames: 1 });
+      assert.strictEqual(compression.encodedBytes, firstWire.length);
+      assert.strictEqual(compression.retainedBytes, firstWire.length);
+      client.ws.send(encodeWireFrame(ackFor(publication.frame), {
+        direction: CLIENT_TO_SERVER, positionalContext,
+      }));
+      await waitFor(() => harness.acks.some((entry) => entry.frame.frameId === publication.frame.frameId),
+        { label: "compressed state-pair ACK" });
+      await waitFor(() => harness.adapter.diagnostics().statePair.compression.retainedFrames === 0,
+        { label: "compressed retention ACK retirement" });
+      compression = harness.adapter.diagnostics().statePair.compression;
+      assert.strictEqual(compression.retainedBytes, 0);
+      client.ws.close();
+      await waitFor(() => harness.adapter.diagnostics().connections === 0,
+        { label: "compressed socket cleanup" });
+      assert.strictEqual(harness.adapter.diagnostics().statePair.compression.retainedFrames, 0);
+    } finally {
+      client.ws.terminate();
       await harness.close();
     }
   });

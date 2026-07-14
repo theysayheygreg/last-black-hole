@@ -312,7 +312,7 @@ async function runScenario(population, runDir, commit) {
           projectionAndPublishMs: endHealth.multiplayer.projection.accounting.costDistributions.projectionReplicationMs },
         clients: clients.map((client) => ({ label: client.label, pid: client.pid,
           cpuUsage: client.cpuUsage, eventLoopDelay: client.eventLoopDelay,
-          decodeMs: client.decodeMs, applyMs: client.applyMs,
+          decodeApplyMs: client.decodeApplyMs,
           ackSerializeSendMs: client.ackSerializeSendMs, inputSteps: client.inputSteps })),
         aggregateClientOneCoreFraction: clients.reduce((sum, client) => sum + client.cpuUsage.oneCoreFraction, 0),
         queueAndBackpressure: queue,
@@ -352,7 +352,14 @@ async function runScenario(population, runDir, commit) {
     writeExclusive(path.join(runDir, `cleanup-normal-${population}.json`), {
       population, port, authorityPid, portDead, pidDead,
       preStopConnections: preStopHealth?.multiplayer?.adapter?.connections ?? null,
-      passed: portDead && pidDead && preStopHealth?.multiplayer?.adapter?.connections === 0,
+      preStopCompressedRetainedFrames:
+        preStopHealth?.multiplayer?.adapter?.statePair?.compression?.retainedFrames ?? null,
+      preStopCompressedRetainedBytes:
+        preStopHealth?.multiplayer?.adapter?.statePair?.compression?.retainedBytes ?? null,
+      passed: portDead && pidDead && preStopHealth?.multiplayer?.adapter?.connections === 0
+        && (!S20_COMPRESSION
+          || (preStopHealth?.multiplayer?.adapter?.statePair?.compression?.retainedFrames === 0
+            && preStopHealth?.multiplayer?.adapter?.statePair?.compression?.retainedBytes === 0)),
     });
   }
 }
@@ -403,11 +410,11 @@ function validateArtifact(directory) {
     const processIds = [entry.topology.authorityPid, entry.topology.coordinatorPid,
       ...entry.topology.isolatedClientProcesses];
     return {
-      schemaCommit: entry.schema === (run.config.binary
-        ? "lbh-s16-binary-candidate-v1" : "lbh-s13-isolated-client-attribution-v1")
+      schemaCommit: entry.schema === (run.config.compression ? "lbh-s20-compression-candidate-v1"
+        : run.config.binary ? "lbh-s16-binary-candidate-v1" : "lbh-s13-isolated-client-attribution-v1")
         && entry.commit === run.commit,
-      codecContract: entry.codec === (run.config.binary
-        ? "state-pair-binary-v1" : "state-pair-positional-json-v1")
+      codecContract: entry.codec === (run.config.compression ? "state-pair-brotli-v1"
+        : run.config.binary ? "state-pair-binary-v1" : "state-pair-positional-json-v1")
         && entry.clients.every((client) => client.receiver.mode === entry.codec),
       exactProcessIsolation: new Set(processIds).size === processIds.length
         && entry.topology.isolatedClientProcesses.length === entry.population,
@@ -445,12 +452,12 @@ function validateArtifact(directory) {
   const invariants = {
     checksums: checksums.passed,
     exactFileSet: JSON.stringify(actualFiles) === JSON.stringify(expectedFiles),
-    runContract: run.schema === (run.config.binary
-      ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1") && run.dirty === false
+    runContract: run.schema === (run.config.compression ? "lbh-s20-compression-run-v1"
+      : run.config.binary ? "lbh-s16-binary-run-v1" : "lbh-s13-isolated-client-run-v1") && run.dirty === false
       && JSON.stringify(run.config.populations) === JSON.stringify(POPULATIONS)
       && run.config.warmupMs === WARMUP_MS && run.config.windowMs === WINDOW_MS,
-    aggregateContract: aggregate.schema === (run.config.binary
-      ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1")
+    aggregateContract: aggregate.schema === (run.config.compression ? "lbh-s20-compression-aggregate-v1"
+      : run.config.binary ? "lbh-s16-binary-aggregate-v1" : "lbh-s13-isolated-client-aggregate-v1")
       && aggregate.commit === run.commit && aggregate.scenarios.length === POPULATIONS.length,
     exactPopulations: JSON.stringify(scenarios.map((entry) => entry.population)) === JSON.stringify(POPULATIONS),
     semanticRecomputation: semantic.every((checks) => Object.values(checks).every(Boolean)),
@@ -462,7 +469,9 @@ function validateArtifact(directory) {
     cleanup: cleanup.every((entry, index) => entry.population === POPULATIONS[index]
       && entry.authorityPid === scenarios[index].topology.authorityPid
       && entry.passed === true && entry.portDead === true && entry.pidDead === true
-      && entry.preStopConnections === 0),
+      && entry.preStopConnections === 0
+      && (!run.config.compression
+        || (entry.preStopCompressedRetainedFrames === 0 && entry.preStopCompressedRetainedBytes === 0))),
     s12Binding: s12.passed && s12.actualAggregateSha256 === S12_SHA256
       && run.s12Binding.compositeSha256 === S12_SHA256
       && aggregate.s12Binding.compositeSha256 === S12_SHA256,

@@ -19,6 +19,7 @@ const IDENTITY = Object.freeze({ matchId: "match-s20-bench", sessionId: "session
   authorityIncarnation: 1, recipientId: "member-s20-bench", recipientIncarnation: 1 });
 const ROUNDS = Number(process.env.LBH_S20_BENCH_ROUNDS || 12);
 const BEATS = Number(process.env.LBH_S20_BENCH_BEATS || 120);
+const WARMUP_BEATS = Number(process.env.LBH_S20_BENCH_WARMUP || 40);
 
 function distribution(values) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -35,13 +36,14 @@ function views(beat) {
     eventWatermark: beat, fieldRevision: beat, overloadMode: "NORMAL" };
   const publicView = { ...shared, lane: "public", world: { publicFacts: {
     formTimes: [null, beat % 3 ? null : beat / 10, null, null] } },
-  entities: Array.from({ length: beat === 1 ? 16 : 48 }, (_, index) => ({ category: "player",
-    sourceId: `seat-${index}`, incarnation: 1, lifecycleRevision: beat,
-    components: { runtimeMotion: component(beat, { wx: (index + beat) / 100,
-      wy: 0.4 + ((beat + index) % 5) / 1000, vx: 0.1, vy: -0.2 }) } })) };
+  entities: Array.from({ length: 128 }, (_, index) => {
+    const revision = Math.max(1, beat - (((beat - index) % 8 + 8) % 8));
+    return { category: "player", sourceId: `seat-${index}`, incarnation: 1,
+      lifecycleRevision: revision, components: { runtimeMotion: component(revision,
+        { wx: (index + revision) / 100, wy: 0.4, vx: 0.1, vy: -0.2 }) } }; }) };
   const ownerView = { ...shared, lane: "owner", world: {}, entities: [{ category: "owner",
     sourceId: IDENTITY.recipientId, incarnation: 1, lifecycleRevision: beat,
-    components: { ownerState: component(beat, { profileId: `pilot-${beat % 7}`,
+    components: { ownerState: component(beat, { profileId: `pilot-café-🚀-${beat % 7}`,
       rigLevels: [1, 0, 0], cargo: Array.from({ length: 8 }, (_, i) => `cargo-${i}`), cargoCount: 8 }) } }] };
   return { publicView, ownerView };
 }
@@ -64,9 +66,9 @@ function corpus() {
     codecManifestHash: POSITIONAL_CODEC_MANIFEST_HASH });
   const encoder = createStatePairWireEncoder(context);
   const wires = [];
-  for (let beat = 1; beat <= BEATS; beat += 1) {
+  for (let beat = 1; beat <= WARMUP_BEATS + BEATS; beat += 1) {
     const produced = publisher.publish({ identity: IDENTITY, ...views(beat), allowMixed: true, encodeWire: encoder });
-    wires.push({ bytes: Buffer.from(produced.encodedWire, "utf8"), frame: produced.frame,
+    if (beat === 1 || beat > WARMUP_BEATS) wires.push({ bytes: Buffer.from(produced.encodedWire, "utf8"), frame: produced.frame,
       laneClass: `${produced.publicKind}+${produced.ownerKind}` });
     assert.strictEqual(publisher.acknowledge(IDENTITY, ack(produced.frame)).accepted, true);
   }
@@ -93,6 +95,11 @@ const CODECS = Object.freeze([
 
 function main() {
   const { wires, context } = corpus();
+  const laneClasses = [...new Set(wires.map((entry) => entry.laneClass))].sort();
+  assert(laneClasses.includes("delta+keyframe"),
+    `representative corpus lost the product-dominant public-delta+owner-keyframe class: ${laneClasses}`);
+  assert(laneClasses.includes("keyframe+keyframe"),
+    `representative corpus lost its cold keyframe: ${laneClasses}`);
   let selectedEnvelopeExactComparisons = 0;
   let selectedEnvelopeSemanticComparisons = 0;
   let selectedEnvelopeAckTranscriptComparisons = 0;
@@ -146,7 +153,7 @@ function main() {
   const selected = eligible[0]?.[0] || null;
   const result = { schema: "lbh-s20-codec-selection-benchmark-v1", counterbalancedRounds: ROUNDS,
     representativeWires: wires.length, sourceWireBytes: distribution(wires.map((entry) => entry.bytes.length)),
-    laneClasses: [...new Set(wires.map((entry) => entry.laneClass))].sort(), exactComparisons,
+    laneClasses, exactComparisons,
     selectedEnvelopeExactComparisons, selectedEnvelopeSemanticComparisons,
     selectedEnvelopeAckTranscriptComparisons,
     envelopeBytesCharged: 64, hiddenPerMessageDeflate: false, codecs, selectionGate: {

@@ -750,6 +750,9 @@ function validateWireFrame(frame, options = {}) {
 
 function parseWireFrame(raw, options = {}) {
   if (options.compressed === true) {
+    if (options.binaryContext || !options.positionalContext) {
+      fail("cross-codec-framing", "compressed state-pair requires positional context and excludes binary", 4403);
+    }
     if (!options.compressionContext
         || options.compressionContext.compressionManifestHash !== COMPRESSION_CODEC_MANIFEST_HASH) {
       fail("unexpected-compressed-frame", "compressed frame was not negotiated", 4403);
@@ -821,7 +824,9 @@ function parseWireFrame(raw, options = {}) {
 function encodeWireFrame(frame, options = {}) {
   const compressed = options.compressionContext && frame.type === "statePair";
   if (compressed) {
-    if (options.binaryContext) fail("cross-codec-framing", "compression does not apply to binary state-pair frames");
+    if (options.binaryContext || !options.positionalContext) {
+      fail("cross-codec-framing", "compression requires positional state-pair context and excludes binary");
+    }
     if (options.compressionContext.compressionManifestHash !== COMPRESSION_CODEC_MANIFEST_HASH) {
       fail("wrong-compression-manifest", "compression manifest is unsupported");
     }

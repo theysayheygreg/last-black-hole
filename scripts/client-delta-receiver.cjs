@@ -231,6 +231,7 @@ function normalizeRecoveryReason(reason) {
   if (RECOVERY_REASONS.has(reason)) return reason;
   if (/hash/i.test(reason)) return "hash-mismatch";
   if (/base/i.test(reason)) return "base-mismatch";
+  if (/compression/i.test(reason)) return "malformed-frame";
   if (/identity|recipient|owner/i.test(reason)) return "identity-mismatch";
   if (/large|oversize|bytes/i.test(reason)) return "oversize-frame";
   if (/lineage|order|cursor|incarnation|revision|lifecycle/i.test(reason)) return "lineage-mismatch";
@@ -246,6 +247,13 @@ function selectClientReplicationMode({ wireVersion, capabilities = [] } = {}) {
       && capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
       && capabilities.includes(BINARY_CODEC_CAPABILITY)) {
     return MODES.STATE_PAIR_BINARY;
+  }
+  if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
+      && capabilities.includes(MIXED_CAPABILITY)
+      && capabilities.includes(RUNTIME_PUBLIC_COMPONENTS_CAPABILITY)
+      && capabilities.includes(POSITIONAL_CODEC_CAPABILITY)
+      && capabilities.includes(COMPRESSION_CODEC_CAPABILITY)) {
+    return MODES.STATE_PAIR_COMPRESSION;
   }
   if (capabilities.includes(STATIC_MANIFEST_CAPABILITY) && capabilities.includes(CAPABILITY)
       && capabilities.includes(MIXED_CAPABILITY)
@@ -536,10 +544,11 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
       enforceLedgerBounds();
       const bytes = wireBytes(raw);
       if (bytes > maxPairBytes) return reject("oversize-frame");
+      if (compressed && typeof raw === "string") {
+        fail("compression-frame-required", "negotiated compressed state-pair must use its pinned binary envelope");
+      }
       frame = parseWireFrame(raw, { direction: SERVER_TO_CLIENT,
-        ...(compressed ? (typeof raw !== "string"
-          ? { compressed: true, compressionContext, positionalContext: codecContext }
-          : { requirePositional: true, positionalContext: codecContext })
+        ...(compressed ? { compressed: true, compressionContext, positionalContext: codecContext }
           : binary ? (typeof raw !== "string"
           ? { binary: true, binaryContext }
           : { requireBinary: true })
@@ -806,7 +815,8 @@ function createClientDeltaReceiver({ context: rawContext, capabilities = [CAPABI
   function diagnostics() {
     return deepFreeze({
       ...counters,
-      mode: binary ? MODES.STATE_PAIR_BINARY : positional ? MODES.STATE_PAIR_POSITIONAL_JSON : materializeRuntimeComponents
+      mode: binary ? MODES.STATE_PAIR_BINARY : compressed ? MODES.STATE_PAIR_COMPRESSION
+        : positional ? MODES.STATE_PAIR_POSITIONAL_JSON : materializeRuntimeComponents
         ? MODES.STATE_PAIR_RUNTIME_COMPONENTS
         : allowMixed ? MODES.STATE_PAIR_MIXED : MODES.STATE_PAIR,
       awaitingKeyframe: !admitted,

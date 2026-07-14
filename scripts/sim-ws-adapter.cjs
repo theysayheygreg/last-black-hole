@@ -130,6 +130,8 @@ function createSimWebSocketAdapter(options = {}) {
   const compressionCodecStats = { compressedFrames: 0, sourceBytes: 0, encodedBytes: 0,
     compressionMilliseconds: 0, reusedFrames: 0, retainedFrames: 0, retainedBytes: 0 };
   const compressedStatePairWires = new WeakMap();
+  const MAX_COMPRESSED_RETAINED_FRAMES = 12;
+  const MAX_COMPRESSED_RETAINED_BYTES = 2 * 1024 * 1024;
   const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
   const ackRejectDiagnostics = {
     total: 0,
@@ -831,15 +833,60 @@ function createSimWebSocketAdapter(options = {}) {
     compressionCodecStats.encodedBytes += compressed.length;
     compressionCodecStats.compressionMilliseconds += performance.now() - started;
     let retained = compressedStatePairWires.get(state);
-    if (!retained) { retained = new Map(); compressedStatePairWires.set(state, retained); }
+    if (!retained) {
+      retained = { entries: new Map(), bytes: 0 };
+      compressedStatePairWires.set(state, retained);
+    }
     const digest = sourceDigest || `sha256:${crypto.createHash("sha256").update(wire).digest("hex")}`;
-    retained.set(frame.frameId, Object.freeze({ sourceDigest: digest, wire: compressed }));
-    while (retained.size > 64) retained.delete(retained.keys().next().value);
-    compressionCodecStats.retainedFrames = [...connections].reduce((sum, connection) =>
-      sum + (compressedStatePairWires.get(connection)?.size || 0), 0);
-    compressionCodecStats.retainedBytes = [...connections].reduce((sum, connection) => sum
-      + [...(compressedStatePairWires.get(connection)?.values() || [])].reduce((bytes, row) => bytes + row.wire.length, 0), 0);
+    const replaced = retained.entries.get(frame.frameId);
+    if (replaced) retained.bytes -= replaced.wire.length;
+    else compressionCodecStats.retainedFrames += 1;
+    retained.entries.set(frame.frameId, Object.freeze({ sourceDigest: digest, wire: compressed }));
+    retained.bytes += compressed.length;
+    compressionCodecStats.retainedBytes += compressed.length - (replaced?.wire.length || 0);
+    while (retained.entries.size > MAX_COMPRESSED_RETAINED_FRAMES
+        || retained.bytes > MAX_COMPRESSED_RETAINED_BYTES) {
+      const oldest = retained.entries.keys().next().value;
+      const removed = retained.entries.get(oldest);
+      retained.entries.delete(oldest);
+      retained.bytes -= removed.wire.length;
+      compressionCodecStats.retainedFrames -= 1;
+      compressionCodecStats.retainedBytes -= removed.wire.length;
+    }
     return compressed;
+  }
+
+  function releaseCompressedState(state) {
+    const retained = compressedStatePairWires.get(state);
+    if (!retained) return;
+    compressionCodecStats.retainedFrames = Math.max(0,
+      compressionCodecStats.retainedFrames - retained.entries.size);
+    compressionCodecStats.retainedBytes = Math.max(0,
+      compressionCodecStats.retainedBytes - retained.bytes);
+    compressedStatePairWires.delete(state);
+  }
+
+  function retireCompressedThrough(state, frameId) {
+    const retained = compressedStatePairWires.get(state);
+    if (!retained) return;
+    for (const [retainedFrameId, row] of retained.entries) {
+      if (retainedFrameId > frameId) continue;
+      retained.entries.delete(retainedFrameId);
+      retained.bytes -= row.wire.length;
+      compressionCodecStats.retainedFrames = Math.max(0, compressionCodecStats.retainedFrames - 1);
+      compressionCodecStats.retainedBytes = Math.max(0, compressionCodecStats.retainedBytes - row.wire.length);
+    }
+  }
+
+  function retireCompressedFrame(state, frameId, sourceDigest = null) {
+    const retained = compressedStatePairWires.get(state);
+    const row = retained?.entries.get(frameId);
+    if (!row || (sourceDigest !== null && row.sourceDigest !== sourceDigest)) return false;
+    retained.entries.delete(frameId);
+    retained.bytes -= row.wire.length;
+    compressionCodecStats.retainedFrames = Math.max(0, compressionCodecStats.retainedFrames - 1);
+    compressionCodecStats.retainedBytes = Math.max(0, compressionCodecStats.retainedBytes - row.wire.length);
+    return true;
   }
 
   function encodeForState(state, frame) {
@@ -911,11 +958,7 @@ function createSimWebSocketAdapter(options = {}) {
     if (state.binding && onBindingClosed) {
       try { onBindingClosed(state.binding); } catch {}
     }
-    compressedStatePairWires.delete(state);
-    compressionCodecStats.retainedFrames = [...connections].reduce((sum, connection) =>
-      sum + (compressedStatePairWires.get(connection)?.size || 0), 0);
-    compressionCodecStats.retainedBytes = [...connections].reduce((sum, connection) => sum
-      + [...(compressedStatePairWires.get(connection)?.values() || [])].reduce((bytes, row) => bytes + row.wire.length, 0), 0);
+    releaseCompressedState(state);
     resetOutbound(state, { cause: "cleanup" });
     state.cleaned = true;
     emitPressureTransition(state, "connection-cleanup");
@@ -1339,6 +1382,9 @@ function createSimWebSocketAdapter(options = {}) {
         observeAckReject(ackResult.reason, ackResult.diagnostic?.relation);
         throw new WireProtocolError("state-pair-ack-rejected", "statePair ACK was rejected", 4401);
       }
+      if (frame.ackKind === "statePair" && ackResult?.accepted === true) {
+        retireCompressedThrough(state, frame.frameId);
+      }
       if (!stateIsLive(state, expectedGeneration)) return;
       if (frame.ackKind === "event" || frame.ackKind === "baseline") {
         const eventSeq = frame.eventSeq;
@@ -1710,6 +1756,35 @@ function createSimWebSocketAdapter(options = {}) {
       return { accepted: false, action: "ignore", reason: "state-pair-requires-v2" };
     }
     const frame = publication?.frame || publication;
+    if (!state.capabilities?.includes("state-pair-v1")) {
+      return { accepted: false, action: "reject", reason: "state-pair-capability-required" };
+    }
+    if (frame.pairSchema === "lbh-authority-state-pair-mixed-v1"
+        && !state.capabilities.includes("state-pair-mixed-v1")) {
+      return { accepted: false, action: "reject", reason: "state-pair-mixed-capability-required" };
+    }
+    if (frame.matchId !== state.identity.runId || frame.sessionId !== state.identity.connectionId
+      || frame.recipientId !== state.identity.membershipId
+      || frame.recipientIncarnation !== state.identity.connectionEpoch
+      || frame.manifestHash !== state.binding?.manifestHash
+      || !Number.isSafeInteger(state.binding?.authorityIncarnation)
+      || frame.authorityIncarnation !== state.binding.authorityIncarnation) {
+      return { accepted: false, action: "reject", reason: "state-pair-identity-mismatch" };
+    }
+    if (!(await isBindingCurrent(state, "private-state-pair-send"))) {
+      if (!stateIsLive(state)) return { accepted: false, action: "ignore", reason: "connection-not-live" };
+      state.closing = true;
+      sendApplicationClose(state, 4003, "connection fenced", true);
+      return { accepted: false, action: "disconnect", reason: "connection-fenced" };
+    }
+    const enteringStatePairMode = !state.statePairMode;
+    if (enteringStatePairMode
+        && (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe")) {
+      return { accepted: false, action: "reject", reason: "state-pair-keyframe-required" };
+    }
+    if (!enteringStatePairMode && frame.frameId <= state.lastStatePairFrameId) {
+      return { accepted: false, action: "reject", reason: "stale-state-pair" };
+    }
     let encodedWire;
     try {
       if (isExactEncodedPublication(publication)) {
@@ -1742,36 +1817,10 @@ function createSimWebSocketAdapter(options = {}) {
     } catch (error) {
       return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
     }
-    if (!state.capabilities?.includes("state-pair-v1")) {
-      return { accepted: false, action: "reject", reason: "state-pair-capability-required" };
-    }
-    if (frame.pairSchema === "lbh-authority-state-pair-mixed-v1"
-        && !state.capabilities.includes("state-pair-mixed-v1")) {
-      return { accepted: false, action: "reject", reason: "state-pair-mixed-capability-required" };
-    }
-    if (frame.matchId !== state.identity.runId || frame.sessionId !== state.identity.connectionId
-      || frame.recipientId !== state.identity.membershipId
-      || frame.recipientIncarnation !== state.identity.connectionEpoch
-      || frame.manifestHash !== state.binding?.manifestHash
-      || !Number.isSafeInteger(state.binding?.authorityIncarnation)
-      || frame.authorityIncarnation !== state.binding.authorityIncarnation) {
-      return { accepted: false, action: "reject", reason: "state-pair-identity-mismatch" };
-    }
-    if (!(await isBindingCurrent(state, "private-state-pair-send"))) {
-      if (!stateIsLive(state)) return { accepted: false, action: "ignore", reason: "connection-not-live" };
-      state.closing = true;
-      sendApplicationClose(state, 4003, "connection fenced", true);
-      return { accepted: false, action: "disconnect", reason: "connection-fenced" };
-    }
-    if (!state.statePairMode) {
-      if (frame.public.kind !== "keyframe" || frame.owner.kind !== "keyframe") {
-        return { accepted: false, action: "reject", reason: "state-pair-keyframe-required" };
-      }
+    if (enteringStatePairMode) {
       state.statePairMode = true;
       state.statePairQueueOffset = Math.max(0, state.queue.status().lastStateSequence + 1 - frame.frameId);
       state.lastStatePairFrameId = 0;
-    } else if (frame.frameId <= state.lastStatePairFrameId) {
-      return { accepted: false, action: "reject", reason: "stale-state-pair" };
     }
     const priorRecords = Object.values(state.replicationQueuedStateFrames || {});
     const queueSequence = frame.frameId + state.statePairQueueOffset;
@@ -1788,6 +1837,9 @@ function createSimWebSocketAdapter(options = {}) {
           inputBytes: Buffer.byteLength(JSON.stringify(frame), "utf8"),
         }, enqueue)
       : enqueue();
+    if (!outcome.accepted && isExactEncodedPublication(publication) && compressionContextFor(state)) {
+      retireCompressedFrame(state, frame.frameId, publication.encodedDigest);
+    }
     if (replicationAccounting) {
       const account = () => {
         const bytes = encodedBytes;
@@ -1826,6 +1878,20 @@ function createSimWebSocketAdapter(options = {}) {
     const state = key ? byBindingKey.get(key) : null;
     if (!state) return { accepted: false, action: "ignore", reason: "binding-not-connected" };
     const frame = publication?.frame || publication;
+    if (state.wireVersion !== "lbh-multiplayer-json-v2" || !state.statePairMode
+      || !state.capabilities?.includes("state-pair-v1") || frame.matchId !== state.identity.runId
+      || (frame.pairSchema === "lbh-authority-state-pair-mixed-v1"
+        && !state.capabilities.includes("state-pair-mixed-v1"))
+      || frame.sessionId !== state.identity.connectionId || frame.recipientId !== state.identity.membershipId
+      || frame.recipientIncarnation !== state.identity.connectionEpoch
+      || frame.manifestHash !== state.binding?.manifestHash
+      || frame.authorityIncarnation !== state.binding?.authorityIncarnation) {
+      return { accepted: false, action: "reject", reason: "state-pair-identity-mismatch" };
+    }
+    if (!(await isBindingCurrent(state, "private-state-pair-retransmit"))) {
+      return { accepted: false, action: "ignore", reason: "connection-not-live" };
+    }
+    const retainedBefore = compressedStatePairWires.get(state)?.entries.get(frame.frameId);
     let wire;
     try {
       if (isExactEncodedPublication(publication)) {
@@ -1847,7 +1913,7 @@ function createSimWebSocketAdapter(options = {}) {
         stats.reusedEncodedFrames += 1;
         stats.reusedEncodedBytes += bytes;
         stats.reusedDigestVerified += 1;
-        const retained = compressedStatePairWires.get(state)?.get(frame.frameId);
+        const retained = compressedStatePairWires.get(state)?.entries.get(frame.frameId);
         if (compressionContextFor(state) && retained?.sourceDigest === publication.encodedDigest) {
           wire = retained.wire;
           compressionCodecStats.reusedFrames += 1;
@@ -1856,23 +1922,13 @@ function createSimWebSocketAdapter(options = {}) {
     } catch (error) {
       return { accepted: false, action: "reject", reason: publicError(error, "state-pair-invalid").code };
     }
-    if (state.wireVersion !== "lbh-multiplayer-json-v2" || !state.statePairMode
-      || !state.capabilities?.includes("state-pair-v1") || frame.matchId !== state.identity.runId
-      || (frame.pairSchema === "lbh-authority-state-pair-mixed-v1"
-        && !state.capabilities.includes("state-pair-mixed-v1"))
-      || frame.sessionId !== state.identity.connectionId || frame.recipientId !== state.identity.membershipId
-      || frame.recipientIncarnation !== state.identity.connectionEpoch
-      || frame.manifestHash !== state.binding?.manifestHash
-      || frame.authorityIncarnation !== state.binding?.authorityIncarnation) {
-      return { accepted: false, action: "reject", reason: "state-pair-identity-mismatch" };
-    }
-    if (!(await isBindingCurrent(state, "private-state-pair-retransmit"))) {
-      return { accepted: false, action: "ignore", reason: "connection-not-live" };
-    }
     const retransmitBytes = Buffer.byteLength(wire, "utf8");
     replicationAccounting?.outbound(state, frame, "offered", retransmitBytes);
     replicationAccounting?.outbound(state, frame, "retransmitted", retransmitBytes);
     const accepted = sendWire(state, wire, frame);
+    if (!accepted && !retainedBefore && isExactEncodedPublication(publication) && compressionContextFor(state)) {
+      retireCompressedFrame(state, frame.frameId, publication.encodedDigest);
+    }
     return accepted
       ? { accepted: true, action: "retransmitted" }
       : { accepted: false, action: "disconnect", reason: "send-failed" };
@@ -1963,6 +2019,7 @@ function createSimWebSocketAdapter(options = {}) {
     let fenced = 0;
     for (const state of [...connections]) {
       resetOutbound(state);
+      releaseCompressedState(state);
       state.pendingEventSeqs?.clear();
       state.pendingEventBytes = 0;
       if (!state.closing) {
