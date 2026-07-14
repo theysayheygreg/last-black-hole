@@ -435,12 +435,45 @@ function drainRun(h, repository, service, runId) {
       repository = h.openRepository();
       assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one").accepted, true);
       repository.cleanup({ now: 1_010_000, terminalBefore: 1_010_000, keepTerminal: 4 });
-      assert.strictEqual(repository.getRun("accepted"), null);
+      assert.strictEqual(repository.getRun("accepted").resultAcceptanceState, "ACCEPTED");
       assert.strictEqual(repository.acceptAuthorityResult(identity, "sha256:one").accepted, true);
       assert.throws(() => repository.acceptAuthorityResult(identity, "sha256:other"),
         (error) => error.code === "HOSTED_RESULT_CONFLICT");
-      assert.strictEqual(repository.db.prepare(`SELECT accepted_result_hash FROM hosted_placement_terminal_tombstones
-        WHERE run_id = 'accepted'`).get().accepted_result_hash, "sha256:one");
+      assert.strictEqual(repository.getRun("accepted").acceptedResultHash, "sha256:one");
+    } finally { h.closeAll(); }
+  });
+
+  await test("cleanup never evicts accepted authority tuples while ordinary tombstones stay bounded", () => {
+    const h = fixture();
+    try {
+      const repository = h.openRepository({ tombstoneLimit: 3 });
+      const service = h.service(repository);
+      register(service, h);
+      const accepted = [];
+      for (let index = 0; index < 7; index++) {
+        const identity = drainRun(h, repository, service, `accepted-retained-${index}`);
+        const resultHash = `sha256:retained-${index}`;
+        repository.acceptAuthorityResult(identity, resultHash);
+        accepted.push({ identity, resultHash });
+      }
+      for (let index = 0; index < 7; index++) {
+        const runId = `ordinary-terminal-${index}`;
+        const placement = place(service, h, runId);
+        const claims = service.redeemBootstrap({ credential: "worker-a", bootstrap: placement.bootstrap,
+          audience: "authority:authority-a" });
+        service.markReady({ credential: "worker-a", runId,
+          authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch });
+        service.endRun({ credential: "worker-a", runId,
+          authorityLeaseId: claims.authorityLeaseId, leaseEpoch: claims.leaseEpoch, outcome: "ENDED" });
+      }
+      const summary = repository.cleanup({ now: 1_000_000, terminalBefore: 1_000_000, keepTerminal: 3 });
+      assert.strictEqual(summary.activeRuns, accepted.length);
+      assert.strictEqual(summary.tombstones, 3);
+      assert(repository.snapshot().tombstones.every((entry) => entry.runId.startsWith("ordinary-terminal-")));
+      for (const entry of accepted) {
+        assert.strictEqual(repository.acceptAuthorityResult(entry.identity, entry.resultHash).accepted, true);
+      }
+      assert.strictEqual(repository.getRun("accepted-retained-0").acceptedResultHash, "sha256:retained-0");
     } finally { h.closeAll(); }
   });
 

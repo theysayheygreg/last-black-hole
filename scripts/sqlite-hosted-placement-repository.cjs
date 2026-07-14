@@ -598,7 +598,8 @@ class SqliteHostedPlacementRepository {
       this.db.prepare(`DELETE FROM hosted_placement_consumed_tokens WHERE expires_at <= ?`).run(now);
       const terminal = this.db.prepare(`
         SELECT run_id, state, lease_epoch, terminal_at FROM hosted_placement_current_allocations
-        WHERE state IN ('ENDED','FAILED') AND terminal_at IS NOT NULL AND terminal_at <= ?
+        WHERE state IN ('ENDED','FAILED') AND result_acceptance_state != 'ACCEPTED'
+          AND terminal_at IS NOT NULL AND terminal_at <= ?
       `).all(terminalBefore);
       const tombstone = this.db.prepare(`
         INSERT INTO hosted_placement_terminal_tombstones(run_id, state, lease_epoch, terminal_at)
@@ -614,6 +615,7 @@ class SqliteHostedPlacementRepository {
       const retain = Math.min(keepTerminal, this.tombstoneLimit);
       const excess = this.db.prepare(`
         SELECT run_id FROM hosted_placement_terminal_tombstones
+        WHERE accepted_result_hash IS NULL
         ORDER BY terminal_at DESC, run_id ASC LIMIT -1 OFFSET ?
       `).all(retain);
       for (const row of excess) {
