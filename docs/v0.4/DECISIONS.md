@@ -101,6 +101,26 @@ gameplay authority, reveal private player state, or relax old-epoch fencing.
 **Why:** humans need to distinguish a dead pilot, a temporarily broken link,
 and someone who intentionally left without guessing from a disappearing ship.
 
+## 2026-07-14 — A disconnected live body remains authoritative for 90 seconds
+
+**Status:** ACTIVE
+
+When an active human connection closes, the match authority releases held
+thrust, braking, slingshot, ability, pulse, extraction, and consumable input but
+does not freeze, despawn, protect, or transfer the body. The stable seat and
+body remain reserved for 90 simulation seconds while currents, collisions,
+hazards, death, and extraction continue normally. Public crew state may show
+the remaining reservation time.
+
+A valid resume rotates the connection epoch and clears the deadline. Expiry
+commits an abandoned outcome, removes the player and its authority grant, and
+promotes the next connected human when the departed player was crew leader.
+Tests may shorten the window explicitly; the product default remains 90
+seconds.
+
+**Why:** a network interruption must not grant invulnerability, duplicate a
+body, preserve stale control, or dissolve the crew's leadership state.
+
 ## 2026-07-14 — Crew Muster is the synchronized multiplayer start boundary
 
 **Status:** ACTIVE

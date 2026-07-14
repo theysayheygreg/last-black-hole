@@ -65,6 +65,9 @@ async function run() {
   assert.strictEqual(hud.getCrewPresentationState([
     { clientId: 'local', name: 'Alpha', seatNo: 0, connected: true, status: 'alive' },
   ], 'local', 'reconnecting')[0].state, 'link lost');
+  assert.strictEqual(hud.getCrewPresentationState([
+    { clientId: 'remote', name: 'Bravo', seatNo: 1, connected: false, status: 'alive', reconnectSecondsRemaining: 43.2 },
+  ], 'local')[0].stateLabel, 'link lost 44s');
 
   const consequenceCrew = [
     { clientId: 'local', name: 'Alpha', seatNo: 0, status: 'alive' },
@@ -85,6 +88,10 @@ async function run() {
   assert.strictEqual(
     hud.getCrewConsequencePresentation({ type: 'player.disconnected', payload: { clientId: 'local' } }, consequenceCrew, 'local'),
     null,
+  );
+  assert.deepStrictEqual(
+    hud.getCrewConsequencePresentation({ type: 'session.hostAssigned', payload: { clientId: 'local' } }, consequenceCrew, 'local'),
+    { text: 'YOU ARE CREW LEADER', tone: 'success', state: 'leader' },
   );
   assert.deepStrictEqual(hud.getWorldPressurePresentationState({ form: 0, pressureFrac: 0.64 }), {
     visible: true, form: 0, formLabel: 'dormant', pressureFrac: 0.64, percent: 64, label: 'building // 64%',

@@ -517,9 +517,9 @@ export function initTestAPI(getState) {
         connectionEpoch: simClient.connectionEpoch || 0,
       };
       const holdReconnectMs = Math.max(0, Math.min(5000, Number(options?.holdReconnectMs) || 0));
-      if (holdReconnectMs > 0) {
+      if (holdReconnectMs > 0 || options?.reconnectable === false) {
         simClient._closeDirective = {
-          reconnectable: true,
+          reconnectable: options?.reconnectable !== false,
           reason: 'multiplayer journey reconnect',
           retryAfterMs: holdReconnectMs,
         };

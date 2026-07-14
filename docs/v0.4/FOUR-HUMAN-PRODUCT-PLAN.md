@@ -89,6 +89,16 @@ insufficient; they must not obscure movement or the fabric.
 
 ### P4 — Failure Continuity
 
+**Implementation status:** in progress. The authority now reserves a dropped
+human's live body and stable seat for 90 simulation seconds, releases held
+movement and one-shot input immediately, keeps hazards authoritative, and
+publishes a public countdown. Expiry commits an abandoned outcome, removes the
+seat, and promotes the next connected human to crew leader. A focused
+four-human browser journey proves ordinary recovery with a rotated connection
+epoch, explicit leave, host-link countdown, expiry, and leader handoff. The
+three-second timeout in that journey is a test-only override; production stays
+at 90 seconds.
+
 - show connecting, reconnecting, recovered, and failed states persistently;
 - reserve a disconnected seat/body under the ratified timeout policy;
 - prove old connection epochs cannot control the resumed body;
@@ -118,12 +128,10 @@ see the same result, and rematch without terminal intervention.
 
 ## Immediate Next Slice
 
-Begin P4 continuity hardening from the now-proven consequence surface. Preserve
-the disconnected body/seat for the ratified window, make failed recovery and
-host departure understandable, and prove the old connection epoch remains
-fenced throughout recovery. The green browser proof now covers shared-run
-consequences and ordinary reconnect, but does not yet claim host-loss
-continuity, canonical result, or rematch.
+Finish P4 by making terminal recovery failure and its next action persistent at
+the human surface. Old-epoch fencing remains covered by the authority and
+ordinary reconnect journeys. Then move directly to P5 canonical crew result,
+leave, and rematch; do not reopen hosting, costing, or high-count work.
 
 Engineering guardrails remain:
 

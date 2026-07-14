@@ -219,6 +219,8 @@ export function getCrewPresentationState(players = [], localClientId = null, loc
         : player.status === 'escaped' ? 'extracted'
           : player.connected === false || (isLocal && localStreamState !== 'open') ? 'link lost'
             : 'alive';
+      const reconnectSecondsRemaining = Number.isFinite(player.reconnectSecondsRemaining)
+        ? Math.max(0, Math.ceil(player.reconnectSecondsRemaining)) : null;
       return {
         seatNo: player.seatNo,
         seatLabel: `P${player.seatNo + 1}`,
@@ -227,6 +229,9 @@ export function getCrewPresentationState(players = [], localClientId = null, loc
         hullType: String(player.hullType || 'drifter'),
         isLocal,
         state,
+        stateLabel: state === 'link lost' && reconnectSecondsRemaining != null
+          ? `link lost ${reconnectSecondsRemaining}s`
+          : state,
       };
     });
 }
@@ -266,6 +271,12 @@ export function getCrewConsequencePresentation(event, players = [], localClientI
       return { text: `${identity} LEFT THE CREW`, tone: 'warning', state: 'left' };
     case 'session.ended':
       return { text: `CYCLE ENDED // ${String(event.payload?.reason || 'complete').replaceAll('_', ' ')}`, tone: 'warning', state: 'ended' };
+    case 'session.hostAssigned':
+      return {
+        text: isLocal ? 'YOU ARE CREW LEADER' : `${identity} IS CREW LEADER`,
+        tone: 'success',
+        state: 'leader',
+      };
     default:
       return null;
   }
@@ -293,7 +304,7 @@ function renderCrewRail(players, localClientId, localStreamState) {
     identity.textContent = `${member.seatLabel} ${member.isLocal ? 'YOU' : member.name}`;
     const state = document.createElement('span');
     state.className = 'hud-crew-state';
-    state.textContent = member.state;
+    state.textContent = member.stateLabel;
     row.append(identity, state);
     _crewEl.append(row);
   }

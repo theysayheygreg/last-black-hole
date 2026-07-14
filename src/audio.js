@@ -437,7 +437,11 @@ export class AudioEngine {
     const proximity = Math.max(0, Math.min(1, 1 - dist / 1.4));
     const intensity = Math.max(0, Math.min(1, inhibitorState.intensity ?? 1));
     const formWeight = form === 1 ? 0.25 : form === 2 ? 0.55 : 0.9;
-    const gain = CONFIG.audio.droneVolume * formWeight * (0.25 + proximity * 0.75) * intensity;
+    const requestedGain = CONFIG.audio.droneVolume * formWeight * (0.25 + proximity * 0.75) * intensity;
+    // Remote authority state can arrive component-by-component. A newly visible
+    // Inhibitor must fail silent until its spatial fields are finite rather than
+    // throwing from Web Audio and stopping the entire presentation loop.
+    const gain = Number.isFinite(requestedGain) ? requestedGain : 0;
     const base = form === 1 ? 740 : form === 2 ? 62 * Math.SQRT2 : 41;
     const wobble = Math.sin((inhibitorState.localTime || 0) * (form === 3 ? 1.2 : 4.1)) * (form === 1 ? 18 : 5);
     this.inhibitorVoice.osc.frequency.linearRampToValueAtTime(Math.max(20, base + wobble), now + ramp);

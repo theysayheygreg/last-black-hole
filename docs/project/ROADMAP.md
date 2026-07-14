@@ -17,8 +17,11 @@ room/readiness journey are live and proven with four admitted browsers and a
 rejected fifth. Copy/paste invitations, honest room failures, explicit offline
 recovery, and stream-default configured play are also green. Shared-run crew
 identity, consequences, world pressure, link loss/recovery, and explicit leave
-are now observer-proven. The immediate slice is P4 failure continuity: reserved
-seats/bodies, failed recovery, host departure, and old-epoch fencing. See
+are now observer-proven. P4 now reserves a disconnected live body and seat for
+90 seconds, releases input, exposes the countdown, expires to abandonment, and
+promotes a new crew leader; browser proof covers host loss and epoch-rotated
+recovery. The immediate slice is persistent terminal recovery failure, followed
+by the canonical crew result and rematch. See
 `docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md`.
 
 **Version:** v0.2 - Authority and Three foundation. Everything prior to this snapshot is now treated as the v0.1 playable-prototype era. See `docs/v0.2/V0.1-PATCH-NOTES.md`, `docs/v0.2/V0.2-RELEASE-NOTES.md`, `docs/v0.2/DESIGN.md`, and `docs/v0.2/ROADMAP.md` for the current canonical version set. The next structural line is v0.3, tracked in `docs/v0.3/README.md` and `docs/v0.3/ROADMAP.md`.
@@ -81,7 +84,7 @@ reading stale health records or reconstructing status from `git log`.
 | UI visual pass plan | `docs/project/UI-VISUAL-PASS-PLAN.md` | First implementation slices shipped 2026-06-28; shared primitives, result/title slices, UI visual harness, shared motion kit, reduced-motion coverage, UI motion/VFX bridge, Home instrument-console pass, and Map Select drop-briefing pass are live. Next UI work is HUD, pause, profile destructive states, and richer route/objective language. |
 | Carbon Engine source research | `docs/reference/CARBON-ENGINE-RESEARCH.md` | Added 2026-07-01; mine Carbon/Destiny/Trinity for stamped sim authority, relevance lanes, explicit render-plan discipline, asset manifests, and audio/VFX budgets without adopting Carbon as a dependency. |
 | v0.3 Ballpark architecture plan | `docs/v0.3/ROADMAP.md` | Active on `codex/v0.3-ballpark-roadmap`; branch-first structural roadmap for Ballpark Lite sim authority, ECS-ready data shape, multiplayer-minded snapshots/events, renderer contracts, and harness gates while `main` stays v0.2 demo-focused. Mirror, read-only relevance, wreck pickup + portal extraction adapters, remote slingshot edge delivery, event journal, movement fixtures, bounded-growth soak, and S0/S1 review fixes are live on the v0.3 branch. |
-| v0.4 four-human multiplayer product | `docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md` | Active on `codex/v0.4-multiplayer-architecture`; architecture and costing are closed, S20 is the admitted 1–4 path, eight remains rejected, private-room/front-door/reconnect is green, and P1–P4 shared-run identity plus observer consequences are proven. Failure continuity, results/rematch, and Greg's four-human gate remain. Do not infer public hosted or 24–96 capacity. |
+| v0.4 four-human multiplayer product | `docs/v0.4/FOUR-HUMAN-PRODUCT-PLAN.md` | Active on `codex/v0.4-multiplayer-architecture`; architecture and costing are closed, S20 is the admitted 1–4 path, eight remains rejected, private-room/front-door/reconnect is green, shared-run identity and observer consequences are proven, and P4 now covers body reservation, host expiry, and leader handoff. Failed recovery, results/rematch, and Greg's four-human gate remain. Do not infer public hosted or 24–96 capacity. |
 | Meta-loop (results/vault/loadout/chronicle) | META-LOOP.md | Results/home/loadout foundations exist, and ledger credit is now separated from salvage value; chronicle and UI clarity still need finish work |
 | Rig upgrade tracks (all 5 hulls) | CLASSES-AND-PROGRESSION.md + META-LOOP.md | Manifest-backed tracks exist; purchase/write-back and balance need finish work |
 | Loot economy (time-pressure, tier gates, wreck aging) | LOOT-ECONOMY.md | Item tiers, values, wreck aging, ledger credit, and salvage values exist; balance/playtest remains |

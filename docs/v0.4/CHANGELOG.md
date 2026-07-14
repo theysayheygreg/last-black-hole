@@ -72,6 +72,16 @@
   extraction, delayed disconnect/recovery, and explicit UI leave, with captured
   evidence for each transition.
 - Prevented malformed portal coordinates from leaking `NaN` into the route HUD.
+- Added the P4 disconnected-body contract: live bodies and stable seats remain
+  authority-owned for 90 seconds with all held and one-shot input released.
+- Added public reservation countdown, abandonment expiry, seat removal, and
+  deterministic next-connected-human crew-leader promotion.
+- Extended the four-human browser journey through explicit leave, permanent
+  host loss, visible reservation expiry, and leader handoff while retaining the
+  ordinary reconnect epoch-rotation proof. The accelerated three-second window
+  is test-only.
+- Made Inhibitor audio fail silent on incomplete/non-finite remote spatial state
+  instead of allowing Web Audio to stop the presentation loop.
 
 ### External playtest
 

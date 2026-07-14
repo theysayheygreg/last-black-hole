@@ -1093,6 +1093,9 @@ const MULTIPLAYER_PREPARED_PROJECTIONS_ENABLED = !["0", "false"].includes(
   String(process.env.LBH_SIM_WS_PREPARED_PROJECTIONS ?? "true").trim().toLowerCase(),
 );
 const MULTIPLAYER_HEARTBEAT_INTERVAL_MS = 10_000;
+const DISCONNECTED_BODY_RESERVATION_SECONDS = process.env.LBH_DISCONNECTED_BODY_RESERVATION_SECONDS
+  ? Math.max(0.25, Math.min(90, Number(process.env.LBH_DISCONNECTED_BODY_RESERVATION_SECONDS) || 90))
+  : 90;
 const MULTIPLAYER_TICKET_TTL_MS = process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS
   ? Math.max(1, Math.floor(Number(process.env.LBH_SIM_WS_TEST_TICKET_TTL_MS) || 30_000))
   : 30_000;
@@ -1392,6 +1395,8 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     name: name || clientId,
     ready: false,
     connected: false,
+    disconnectedAtSimTime: null,
+    reconnectDeadlineSimTime: null,
     seatNo: Number.isInteger(options.seatNo) ? options.seatNo : null,
     hullType: normalizedHullType,
     brain,
@@ -1897,8 +1902,9 @@ function promoteHostIfNeeded() {
   runtime.emptySince = null;
   restartTickLoop();
   if (runtime.session.hostClientId && runtime.players.has(runtime.session.hostClientId)) return;
-  // Only promote human players to host — AI can't accept /start or /reset
-  const nextHost = humanPlayers[0];
+  // Only a connected human can accept /start or /reset. Reserved disconnected
+  // bodies remain players, but they cannot become the new control-plane host.
+  const nextHost = humanPlayers.find((player) => player.connected !== false);
   if (nextHost) assignHost(nextHost.clientId, nextHost.name);
 }
 
@@ -1927,6 +1933,9 @@ function publicPlayerSnapshot(player) {
     isAI: Boolean(player.isAI),
     seatNo: Number.isInteger(player.seatNo) ? player.seatNo : null,
     connected: Boolean(player.connected),
+    reconnectSecondsRemaining: !player.connected && Number.isFinite(player.reconnectDeadlineSimTime)
+      ? Math.max(0, Math.ceil(player.reconnectDeadlineSimTime - runtime.simTime))
+      : null,
     personality: player.personality || null,
     hullType: player.hullType || "drifter",
     status: player.status,
@@ -6089,6 +6098,7 @@ function tickSim() {
   const dt = runtime.session.timeScale / runtime.session.tickHz;
   runtime.tick += 1;
   runtime.simTime += dt;
+  expireDisconnectedBodyReservations();
   if (maybeEnforceMatchLifetime()) return;
   const relevance = buildRelevanceView();
 
@@ -6873,6 +6883,31 @@ function closeMultiplayerBinding(binding) {
       const wasConnected = player.connected !== false;
       player.connected = false;
       player.ready = false;
+      if (wasConnected) {
+        player.disconnectedAtSimTime = runtime.simTime;
+        player.reconnectDeadlineSimTime = runtime.simTime + DISCONNECTED_BODY_RESERVATION_SECONDS;
+        if (player.slingshot?.engaged) {
+          releasePlayerSlingshot(player, runtime.simTime, player.lastInput, {
+            applyBoost: false,
+            reason: "disconnect",
+          });
+        }
+        player.lastInput = {
+          ...player.lastInput,
+          moveX: 0,
+          moveY: 0,
+          thrust: 0,
+          brake: 0,
+          slingshot: false,
+          slingshotEdges: [],
+          pulse: false,
+          extractConfirm: false,
+          ability1: false,
+          ability2: false,
+          consumeSlot: null,
+          consumeItemId: null,
+        };
+      }
       if (wasConnected && (runtime.session.status === "running" || runtime.session.status === "lobby")) {
         publishEvent("player.disconnected", {
           clientId: player.clientId,
@@ -6919,6 +6954,8 @@ function openSessionManifestAdmission(binding) {
   if (player) {
     const wasConnected = player.connected !== false;
     player.connected = true;
+    player.disconnectedAtSimTime = null;
+    player.reconnectDeadlineSimTime = null;
     if (!wasConnected && binding?.connectionKind === "resume") {
       publishEvent("player.reconnected", {
         clientId: player.clientId,
@@ -6926,6 +6963,7 @@ function openSessionManifestAdmission(binding) {
         seatNo: player.seatNo,
       });
     }
+    if (!runtime.session.hostClientId) promoteHostIfNeeded();
   }
   if (!binding?.manifestHash) return;
   for (const key of manifestAdmissions) {
@@ -6939,6 +6977,29 @@ function openSessionManifestAdmission(binding) {
     manifestHash: binding.manifestHash,
     connectionEpoch: binding.connectionEpoch,
   }));
+}
+
+function expireDisconnectedBodyReservations() {
+  let removedAny = false;
+  for (const [clientId, player] of runtime.players) {
+    if (player.isAI || player.connected || !Number.isFinite(player.reconnectDeadlineSimTime)) continue;
+    if (runtime.simTime < player.reconnectDeadlineSimTime) continue;
+    if (!player.committedOutcome) commitPlayerOutcome(player, "abandoned");
+    publishEvent("player.left", {
+      clientId,
+      name: player.name,
+      seatNo: player.seatNo,
+      reason: "reservation-expired",
+    });
+    runtime.players.delete(clientId);
+    runtime.playerAuthorities.delete(clientId);
+    removedAny = true;
+  }
+  if (removedAny) {
+    promoteHostIfNeeded();
+    persistSessionRegistry();
+    refreshBallparkMirror("disconnect-reservation-expired");
+  }
 }
 
 function buildPublicMultiplayerState() {
@@ -8091,7 +8152,10 @@ const server = http.createServer(async (req, res) => {
         // are intentionally ignored at this boundary.
         authority = issuePlayerAuthority(clientId, authority);
         player.connected = true;
+        player.disconnectedAtSimTime = null;
+        player.reconnectDeadlineSimTime = null;
         player.ready = false;
+        if (!runtime.session.hostClientId) promoteHostIfNeeded();
         telemetry.info("player.reconnected", {
           sessionId: runtime.session.id,
           clientId,
