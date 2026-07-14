@@ -339,7 +339,8 @@ async function runScenario(population, runDir, commit) {
       authorityState: { overloadState: endHealth.session.overloadState,
         skippedProjectionBeats: endHealth.multiplayer.projection.skippedBeats
           - startHealth.multiplayer.projection.skippedBeats,
-        statePair: endHealth.multiplayer.statePair.publisher,
+        statePair: S23_PUBLIC_BODY ? endHealth.multiplayer.statePair
+          : endHealth.multiplayer.statePair.publisher,
         adapter: endHealth.multiplayer.adapter.statePair },
       processBoundary: {
         authority: "sim tick, overload controller, public/owner projection, codec-candidate work per admitted recipient, pair selection, queueing, publish callbacks, ACK ingestion",
