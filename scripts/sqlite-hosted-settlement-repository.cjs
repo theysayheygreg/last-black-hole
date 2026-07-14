@@ -18,11 +18,11 @@ function validId(value) {
 function parse(value) { return JSON.parse(value); }
 function json(value) { return JSON.stringify(value); }
 
-function configure(db) {
-  configureHostedResultOutboxDatabase(db);
+function configure(db, { referenceAuthorityMode = false } = {}) {
+  configureHostedResultOutboxDatabase(db, { referenceAuthorityMode });
   db.exec(`
     CREATE TABLE IF NOT EXISTS hosted_run_memberships (
-      run_id TEXT NOT NULL REFERENCES hosted_authority_lineages(run_id) ON DELETE RESTRICT,
+      run_id TEXT NOT NULL,
       run_membership_id TEXT NOT NULL,
       profile_id TEXT NOT NULL,
       membership_state TEXT NOT NULL DEFAULT 'admitted' CHECK(membership_state IN ('admitted','removed')),
@@ -45,7 +45,7 @@ function configure(db) {
     );
     CREATE TABLE IF NOT EXISTS hosted_match_results (
       result_id TEXT PRIMARY KEY,
-      run_id TEXT NOT NULL UNIQUE REFERENCES hosted_authority_lineages(run_id) ON DELETE RESTRICT,
+      run_id TEXT NOT NULL UNIQUE,
       result_hash TEXT NOT NULL,
       lease_id TEXT NOT NULL,
       lease_epoch INTEGER NOT NULL,
@@ -57,7 +57,7 @@ function configure(db) {
     CREATE TABLE IF NOT EXISTS hosted_settlements (
       settlement_id TEXT PRIMARY KEY,
       result_id TEXT NOT NULL UNIQUE REFERENCES hosted_match_results(result_id) ON DELETE RESTRICT,
-      run_id TEXT NOT NULL UNIQUE REFERENCES hosted_authority_lineages(run_id) ON DELETE RESTRICT,
+      run_id TEXT NOT NULL UNIQUE,
       result_hash TEXT NOT NULL,
       idempotency_key TEXT NOT NULL UNIQUE,
       response_json TEXT NOT NULL,
@@ -102,24 +102,24 @@ function configure(db) {
     BEGIN SELECT RAISE(ABORT, 'hosted membership capacity'); END;
     CREATE TRIGGER IF NOT EXISTS hosted_run_memberships_lock_insert
     BEFORE INSERT ON hosted_run_memberships
-    WHEN (SELECT accepted_result_hash FROM hosted_authority_lineages WHERE run_id=NEW.run_id) IS NOT NULL
+    WHEN EXISTS(SELECT 1 FROM hosted_result_outbox WHERE run_id=NEW.run_id)
     BEGIN SELECT RAISE(ABORT, 'hosted membership accepted'); END;
     CREATE TRIGGER IF NOT EXISTS hosted_run_memberships_lock_update
     BEFORE UPDATE ON hosted_run_memberships
-    WHEN (SELECT accepted_result_hash FROM hosted_authority_lineages WHERE run_id=OLD.run_id) IS NOT NULL
+    WHEN EXISTS(SELECT 1 FROM hosted_result_outbox WHERE run_id=OLD.run_id)
     BEGIN SELECT RAISE(ABORT, 'hosted membership accepted'); END;
     CREATE TRIGGER IF NOT EXISTS hosted_run_memberships_lock_delete
     BEFORE DELETE ON hosted_run_memberships
-    WHEN (SELECT accepted_result_hash FROM hosted_authority_lineages WHERE run_id=OLD.run_id) IS NOT NULL
+    WHEN EXISTS(SELECT 1 FROM hosted_result_outbox WHERE run_id=OLD.run_id)
     BEGIN SELECT RAISE(ABORT, 'hosted membership accepted'); END;
   `);
   return db;
 }
 
-function openDatabase({ filepath, db } = {}) {
-  if (db) return { db: configure(db), ownsDb: false };
+function openDatabase({ filepath, db, referenceAuthorityMode = false } = {}) {
+  if (db) return { db: configure(db, { referenceAuthorityMode }), ownsDb: false };
   if (typeof filepath !== "string" || !filepath) throw new TypeError("filepath or db is required");
-  return { db: configure(new DatabaseSync(filepath)), ownsDb: true };
+  return { db: configure(new DatabaseSync(filepath), { referenceAuthorityMode }), ownsDb: true };
 }
 
 function normalizeMemberships(rows) {
@@ -149,12 +149,20 @@ function assertExactOutcomeSet(payload, memberships) {
 }
 
 class SQLiteHostedSettlementRepository {
-  constructor({ filepath, db, now = Date.now, fault = () => {} } = {}) {
-    const opened = openDatabase({ filepath, db });
+  constructor({ filepath, db, now = Date.now, fault = () => {},
+    verifyAcceptedAuthorityResult, referenceAuthorityMode = false } = {}) {
+    if (!referenceAuthorityMode && typeof verifyAcceptedAuthorityResult !== "function") {
+      throw new TypeError("verifyAcceptedAuthorityResult is required outside explicit reference authority mode");
+    }
+    const opened = openDatabase({ filepath, db, referenceAuthorityMode });
     this.db = opened.db;
     this.ownsDb = opened.ownsDb;
     this.now = now;
     this.fault = fault;
+    this.referenceAuthorityMode = referenceAuthorityMode;
+    this.verifyAcceptedAuthorityResult = referenceAuthorityMode
+      ? (entry) => this._verifyReferenceAcceptance(entry)
+      : verifyAcceptedAuthorityResult;
   }
 
   close() { if (this.ownsDb) this.db.close(); }
@@ -164,8 +172,12 @@ class SQLiteHostedSettlementRepository {
     const memberships = normalizeMemberships(rows);
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      const lineage = this.db.prepare("SELECT accepted_result_hash FROM hosted_authority_lineages WHERE run_id=?").get(runId);
-      if (!lineage || lineage.accepted_result_hash != null) reject("HOSTED_SETTLEMENT_FENCED");
+      if (this.db.prepare("SELECT 1 FROM hosted_result_outbox WHERE run_id=?").get(runId)) {
+        reject("HOSTED_SETTLEMENT_FENCED");
+      }
+      if (this.referenceAuthorityMode && !this.db.prepare(
+        "SELECT 1 FROM hosted_reference_authority_lineages WHERE run_id=? AND accepted_result_hash IS NULL"
+      ).get(runId)) reject("HOSTED_SETTLEMENT_FENCED");
       this.db.prepare("DELETE FROM hosted_run_memberships WHERE run_id=?").run(runId);
       const insert = this.db.prepare(`INSERT INTO hosted_run_memberships
         (run_id,run_membership_id,profile_id,membership_state) VALUES (?,?,?,'admitted')`);
@@ -188,13 +200,16 @@ class SQLiteHostedSettlementRepository {
     try {
       const prior = this.db.prepare(`SELECT * FROM hosted_settlements
         WHERE run_id=? OR result_id=? ORDER BY committed_at LIMIT 1`).get(entry.run_id, entry.result_id);
-      const accepted = this.db.prepare(`SELECT * FROM hosted_authority_lineages WHERE run_id=?`).get(entry.run_id);
-      const lineageMatches = accepted && accepted.accepted_result_hash != null
+      // Placement acceptance is immutable and authoritative. When placement
+      // uses another DB, this is a fresh revalidation immediately before local
+      // writes, not a claim of cross-database serializability.
+      const accepted = this.verifyAcceptedAuthorityResult(entry);
+      const lineageMatches = accepted?.accepted === true && accepted.run_id === entry.run_id
         && accepted.lease_id === authority.lease_id
         && Number(accepted.lease_epoch) === authority.lease_epoch
         && accepted.authority_incarnation === authority.authority_incarnation
-        && accepted.accepted_result_id === entry.result_id
-        && accepted.accepted_result_hash === entry.result_hash;
+        && (accepted.result_id == null || accepted.result_id === entry.result_id)
+        && accepted.result_hash === entry.result_hash;
 
       if (!lineageMatches) {
         if (prior && (prior.result_id !== entry.result_id || prior.result_hash !== entry.result_hash)) {
@@ -302,6 +317,14 @@ class SQLiteHostedSettlementRepository {
       (quarantine_id,run_id,presented_result_id,presented_hash,accepted_result_id,accepted_hash,quarantined_at)
       VALUES (?,?,?,?,?,?,?)`).run(stableId("quarantine", entry.run_id, entry.result_hash), entry.run_id,
       entry.result_id, entry.result_hash, prior?.result_id || null, prior?.result_hash || null, now);
+  }
+
+  _verifyReferenceAcceptance(entry) {
+    const row = this.db.prepare(`SELECT * FROM hosted_reference_authority_lineages
+      WHERE run_id=? AND accepted_result_hash IS NOT NULL`).get(entry.run_id);
+    return row ? { accepted: true, run_id: row.run_id, lease_id: row.lease_id,
+      lease_epoch: row.lease_epoch, authority_incarnation: row.authority_incarnation,
+      result_id: row.accepted_result_id, result_hash: row.accepted_result_hash } : null;
   }
 
   getProfile(profileId) {

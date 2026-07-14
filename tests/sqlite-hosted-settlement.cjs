@@ -4,6 +4,7 @@ const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { DatabaseSync } = require("node:sqlite");
 const { canonicalResult, HostedResultError, OUTBOX_STATES } = require("../scripts/hosted-result-outbox.cjs");
 const { HostedSettlementService } = require("../scripts/hosted-settlement-service.cjs");
 const { SQLiteHostedResultOutbox } = require("../scripts/sqlite-hosted-result-outbox.cjs");
@@ -44,9 +45,11 @@ function result(count = 4) {
 function setup(label, { time = clock(), outboxFault = () => {}, repoFault = () => {} } = {}) {
   const file = tmp(label);
   const outbox = new SQLiteHostedResultOutbox({ filepath: file.filepath, now: time.now,
-    randomBytes: () => Buffer.alloc(20, 7), maxAttempts: 4, baseBackoffMs: 10, fault: outboxFault });
+    randomBytes: () => Buffer.alloc(20, 7), maxAttempts: 4, baseBackoffMs: 10,
+    fault: outboxFault, referenceAuthorityMode: true });
   outbox.registerAuthority(authority(), { runState: "DRAINING", active: true });
-  const repository = new SQLiteHostedSettlementRepository({ filepath: file.filepath, now: time.now, fault: repoFault });
+  const repository = new SQLiteHostedSettlementRepository({ filepath: file.filepath, now: time.now,
+    fault: repoFault, referenceAuthorityMode: true });
   repository.setRunMemberships("run-a", members());
   return { ...file, time, outbox, repository };
 }
@@ -55,7 +58,107 @@ function close(rig) {
   fs.rmSync(rig.dir, { recursive: true, force: true });
 }
 
+class SQLitePlacementAcceptanceAdapter {
+  constructor(filepath) {
+    this.db = new DatabaseSync(filepath);
+    this.db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;");
+    this.db.exec(`CREATE TABLE placement_terminal_acceptance (
+      run_id TEXT PRIMARY KEY, lease_id TEXT NOT NULL, lease_epoch INTEGER NOT NULL,
+      authority_incarnation TEXT NOT NULL, run_state TEXT NOT NULL, accepted_result_id TEXT,
+      accepted_result_hash TEXT, accepted_at INTEGER)`);
+  }
+  register(identity) {
+    this.db.prepare(`INSERT INTO placement_terminal_acceptance
+      (run_id,lease_id,lease_epoch,authority_incarnation,run_state) VALUES (?,?,?,?,'DRAINING')`)
+      .run(identity.run_id, identity.lease_id, identity.lease_epoch, identity.authority_incarnation);
+  }
+  accept(identity, resultHash, resultId, acceptedAt) {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const changed = this.db.prepare(`UPDATE placement_terminal_acceptance
+        SET accepted_result_id=?,accepted_result_hash=?,accepted_at=?
+        WHERE run_id=? AND lease_id=? AND lease_epoch=? AND authority_incarnation=?
+          AND run_state IN ('DRAINING','ENDED') AND accepted_result_hash IS NULL RETURNING *`)
+        .get(resultId, resultHash, acceptedAt, identity.run_id, identity.lease_id,
+          identity.lease_epoch, identity.authority_incarnation);
+      const row = changed || this.db.prepare(`SELECT * FROM placement_terminal_acceptance
+        WHERE run_id=? AND lease_id=? AND lease_epoch=? AND authority_incarnation=?
+          AND accepted_result_id=? AND accepted_result_hash=?`).get(identity.run_id, identity.lease_id,
+        identity.lease_epoch, identity.authority_incarnation, resultId, resultHash);
+      this.db.exec("COMMIT");
+      return this.public(row);
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  verify(entry) {
+    return this.public(this.db.prepare("SELECT * FROM placement_terminal_acceptance WHERE run_id=?")
+      .get(entry.run_id));
+  }
+  replace(identity) {
+    return Number(this.db.prepare(`UPDATE placement_terminal_acceptance SET lease_id=?,lease_epoch=?,
+      authority_incarnation=?,run_state='ACTIVE' WHERE run_id=? AND accepted_result_hash IS NULL`)
+      .run(identity.lease_id, identity.lease_epoch, identity.authority_incarnation, identity.run_id).changes) === 1;
+  }
+  public(row) {
+    return row?.accepted_result_hash ? { accepted: true, run_id: row.run_id, lease_id: row.lease_id,
+      lease_epoch: row.lease_epoch, authority_incarnation: row.authority_incarnation,
+      result_id: row.accepted_result_id, result_hash: row.accepted_result_hash } : null;
+  }
+  close() { this.db.close(); }
+}
+
 function main() {
+  {
+    const file = tmp("required-adapters");
+    assert.throws(() => new SQLiteHostedResultOutbox({ filepath: file.filepath }),
+      /acceptAuthorityResult is required/); assertions += 1;
+    assert.throws(() => new SQLiteHostedSettlementRepository({ filepath: file.filepath }),
+      /verifyAcceptedAuthorityResult is required/); assertions += 1;
+    fs.rmSync(file.dir, { recursive: true, force: true });
+  }
+
+  {
+    const outboxFile = tmp("placement-bridge-outbox");
+    const placementFile = tmp("placement-bridge-source");
+    const time = clock();
+    const placement = new SQLitePlacementAcceptanceAdapter(placementFile.filepath);
+    placement.register(authority());
+    let crash = true;
+    const outbox = new SQLiteHostedResultOutbox({ filepath: outboxFile.filepath, now: time.now,
+      acceptAuthorityResult: (...args) => placement.accept(...args),
+      fault(step) {
+        if (step === "after-placement-accept-before-outbox" && crash) {
+          crash = false; throw new Error("bridge-gap-crash");
+        }
+      } });
+    const repository = new SQLiteHostedSettlementRepository({ filepath: outboxFile.filepath, now: time.now,
+      verifyAcceptedAuthorityResult: (entry) => placement.verify(entry) });
+    repository.setRunMemberships("run-a", members());
+    assert.throws(() => outbox.enqueue({ authority: authority(), payload: result() }), /bridge-gap-crash/); assertions += 1;
+    equal(outbox.list().length, 0, "production bridge crash writes no partial outbox row");
+    equal(placement.replace(authority({ lease_id: "replacement", lease_epoch: 8,
+      authority_incarnation: "replacement" })), false,
+    "placement acceptance blocks replacement before outbox repair");
+    const repaired = outbox.enqueue({ authority: authority(), payload: result() });
+    equal(repaired.state, OUTBOX_STATES.PENDING, "production bridge same-hash retry repairs outbox");
+    equal(outbox.db.prepare(`SELECT name FROM sqlite_master
+      WHERE type='table' AND name='hosted_reference_authority_lineages'`).get(), undefined,
+    "production composition creates no independent authority registry");
+    const claim = outbox.claim({ owner: "bridge-worker", leaseMs: 100 });
+    equal(repository.settle(claim).members.length, 4,
+      "settlement revalidates placement acceptance and commits exact membership");
+    placement.db.prepare("UPDATE placement_terminal_acceptance SET accepted_result_hash='sha256:fenced'")
+      .run();
+    rejects(() => repository.settle(claim), "HOSTED_SETTLEMENT_FENCED",
+      "settlement replay still revalidates placement acceptance");
+    equal(repository.getProfile("server-profile-4").balance, 40,
+      "failed placement revalidation mutates no settled economics");
+    repository.close(); outbox.close(); placement.close();
+    fs.rmSync(outboxFile.dir, { recursive: true, force: true });
+    fs.rmSync(placementFile.dir, { recursive: true, force: true });
+  }
   {
     const r = setup("reopen");
     const accepted = r.outbox.enqueue({ authority: authority(), payload: result() });
@@ -67,8 +170,10 @@ function main() {
     equal(r.repository.getProfile("server-profile-4").balance, 40, "all-member settlement applies profile four");
     r.repository.close(); r.outbox.close();
 
-    const reopenedOutbox = new SQLiteHostedResultOutbox({ filepath: r.filepath, now: r.time.now });
-    const reopenedRepo = new SQLiteHostedSettlementRepository({ filepath: r.filepath, now: r.time.now });
+    const reopenedOutbox = new SQLiteHostedResultOutbox({ filepath: r.filepath, now: r.time.now,
+      referenceAuthorityMode: true });
+    const reopenedRepo = new SQLiteHostedSettlementRepository({ filepath: r.filepath, now: r.time.now,
+      referenceAuthorityMode: true });
     equal(reopenedOutbox.get(accepted.result_id).state, OUTBOX_STATES.DELIVERED,
       "delivery acknowledgment survives reopen");
     equal(reopenedRepo.settle({ ...claim, delivery_lease_id: "redelivery" }).settlement_id,
@@ -83,7 +188,8 @@ function main() {
   {
     const r = setup("workers");
     const second = new SQLiteHostedResultOutbox({ filepath: r.filepath, now: r.time.now,
-      randomBytes: () => Buffer.alloc(20, 8), maxAttempts: 4, baseBackoffMs: 10 });
+      randomBytes: () => Buffer.alloc(20, 8), maxAttempts: 4, baseBackoffMs: 10,
+      referenceAuthorityMode: true });
     r.outbox.enqueue({ authority: authority(), payload: result() });
     const firstClaim = r.outbox.claim({ owner: "worker-a", leaseMs: 100 });
     equal(second.claim({ owner: "worker-b", leaseMs: 100 }), null,
@@ -110,7 +216,8 @@ function main() {
       else equal(failed.state, OUTBOX_STATES.DEAD_LETTER, "retry exhaustion reaches dead letter");
     }
     r.outbox.close();
-    const reopened = new SQLiteHostedResultOutbox({ filepath: r.filepath, now: r.time.now });
+    const reopened = new SQLiteHostedResultOutbox({ filepath: r.filepath, now: r.time.now,
+      referenceAuthorityMode: true });
     equal(reopened.list()[0].state, OUTBOX_STATES.DEAD_LETTER, "dead letter survives reopen");
     equal(reopened.claim({ owner: "late-worker", leaseMs: 100 }), null, "dead letter is not reclaimed");
     reopened.close(); r.repository.close(); fs.rmSync(r.dir, { recursive: true, force: true });
@@ -140,13 +247,24 @@ function main() {
   {
     const time = clock();
     const file = tmp("accept-rollback");
+    let crash = true;
     const outbox = new SQLiteHostedResultOutbox({ filepath: file.filepath, now: time.now,
-      fault(step) { if (step === "after-accept-before-outbox") throw new Error("accept-crash"); } });
+      referenceAuthorityMode: true,
+      fault(step) {
+        if (step === "after-placement-accept-before-outbox" && crash) {
+          crash = false; throw new Error("accept-crash");
+        }
+      } });
     outbox.registerAuthority(authority(), { runState: "DRAINING" });
     assert.throws(() => outbox.enqueue({ authority: authority(), payload: result() }), /accept-crash/); assertions += 1;
-    equal(outbox.getAuthority("run-a").accepted, false,
-      "crash between acceptance and outbox insertion rolls back both");
-    equal(outbox.list().length, 0, "acceptance crash leaves no orphan outbox row");
+    equal(outbox.getAuthority("run-a").accepted, true,
+      "placement acceptance remains durable across the cross-database crash gap");
+    equal(outbox.list().length, 0, "cross-database crash gap leaves no partial outbox row");
+    equal(outbox.enqueue({ authority: authority(), payload: result() }).state, OUTBOX_STATES.PENDING,
+      "same-hash retry repairs acceptance-before-outbox crash gap");
+    equal(outbox.replaceAuthority(authority({ lease_id: "replacement", lease_epoch: 8,
+      authority_incarnation: "replacement" })), false,
+    "durable acceptance blocks replacement throughout repair gap");
     outbox.close(); fs.rmSync(file.dir, { recursive: true, force: true });
   }
 

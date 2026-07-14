@@ -17,26 +17,13 @@ function validId(value) {
   return value;
 }
 
-function configure(db) {
+function configure(db, { referenceAuthorityMode = false } = {}) {
   db.exec("PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;");
   db.exec(`
-    CREATE TABLE IF NOT EXISTS hosted_authority_lineages (
-      run_id TEXT PRIMARY KEY,
-      lease_id TEXT NOT NULL,
-      lease_epoch INTEGER NOT NULL CHECK(lease_epoch >= 1),
-      authority_incarnation TEXT NOT NULL,
-      run_state TEXT NOT NULL CHECK(run_state IN ('ALLOCATING','READY','ACTIVE','DRAINING','ENDED','FENCED')),
-      active INTEGER NOT NULL CHECK(active IN (0,1)),
-      accepted_result_id TEXT,
-      accepted_result_hash TEXT,
-      accepted_at INTEGER,
-      CHECK((accepted_result_id IS NULL) = (accepted_result_hash IS NULL)),
-      CHECK((accepted_result_hash IS NULL) = (accepted_at IS NULL))
-    );
     CREATE TABLE IF NOT EXISTS hosted_result_outbox (
       result_id TEXT PRIMARY KEY,
       idempotency_key TEXT NOT NULL UNIQUE,
-      run_id TEXT NOT NULL UNIQUE REFERENCES hosted_authority_lineages(run_id) ON DELETE RESTRICT,
+      run_id TEXT NOT NULL UNIQUE,
       result_hash TEXT NOT NULL,
       lease_id TEXT NOT NULL,
       lease_epoch INTEGER NOT NULL,
@@ -58,19 +45,38 @@ function configure(db) {
     CREATE INDEX IF NOT EXISTS hosted_result_outbox_claim
       ON hosted_result_outbox(state, available_at, accepted_at, result_id);
   `);
+  if (referenceAuthorityMode) db.exec(`
+    CREATE TABLE IF NOT EXISTS hosted_reference_authority_lineages (
+      run_id TEXT PRIMARY KEY,
+      lease_id TEXT NOT NULL,
+      lease_epoch INTEGER NOT NULL CHECK(lease_epoch >= 1),
+      authority_incarnation TEXT NOT NULL,
+      run_state TEXT NOT NULL CHECK(run_state IN ('ALLOCATING','READY','ACTIVE','DRAINING','ENDED','FENCED')),
+      active INTEGER NOT NULL CHECK(active IN (0,1)),
+      accepted_result_id TEXT,
+      accepted_result_hash TEXT,
+      accepted_at INTEGER,
+      CHECK((accepted_result_id IS NULL) = (accepted_result_hash IS NULL)),
+      CHECK((accepted_result_hash IS NULL) = (accepted_at IS NULL))
+    );
+  `);
   return db;
 }
 
-function openDatabase({ filepath, db } = {}) {
-  if (db) return { db: configure(db), ownsDb: false };
+function openDatabase({ filepath, db, referenceAuthorityMode = false } = {}) {
+  if (db) return { db: configure(db, { referenceAuthorityMode }), ownsDb: false };
   if (typeof filepath !== "string" || !filepath) throw new TypeError("filepath or db is required");
-  return { db: configure(new DatabaseSync(filepath)), ownsDb: true };
+  return { db: configure(new DatabaseSync(filepath), { referenceAuthorityMode }), ownsDb: true };
 }
 
 class SQLiteHostedResultOutbox {
   constructor({ filepath, db, now = Date.now, randomBytes = crypto.randomBytes,
-    maxAttempts = 8, baseBackoffMs = 1000, fault = () => {} } = {}) {
-    const opened = openDatabase({ filepath, db });
+    maxAttempts = 8, baseBackoffMs = 1000, fault = () => {},
+    acceptAuthorityResult, referenceAuthorityMode = false } = {}) {
+    if (!referenceAuthorityMode && typeof acceptAuthorityResult !== "function") {
+      throw new TypeError("acceptAuthorityResult is required outside explicit reference authority mode");
+    }
+    const opened = openDatabase({ filepath, db, referenceAuthorityMode });
     this.db = opened.db;
     this.ownsDb = opened.ownsDb;
     this.now = now;
@@ -78,24 +84,29 @@ class SQLiteHostedResultOutbox {
     this.maxAttempts = maxAttempts;
     this.baseBackoffMs = baseBackoffMs;
     this.fault = fault;
+    this.referenceAuthorityMode = referenceAuthorityMode;
+    this.acceptAuthorityResult = referenceAuthorityMode
+      ? (identity, resultHash, resultId, acceptedAt) => this._acceptReference(identity, resultHash, resultId, acceptedAt)
+      : acceptAuthorityResult;
   }
 
   close() { if (this.ownsDb) this.db.close(); }
 
   registerAuthority(authority, { runState = "DRAINING", active = true } = {}) {
+    this._requireReferenceMode();
     const identity = validateAuthorityIdentity(authority);
     if (!["ALLOCATING", "READY", "ACTIVE", "DRAINING", "ENDED", "FENCED"].includes(runState)) {
       reject("HOSTED_RESULT_INVALID");
     }
     this.db.prepare(`
-      INSERT INTO hosted_authority_lineages
+      INSERT INTO hosted_reference_authority_lineages
         (run_id, lease_id, lease_epoch, authority_incarnation, run_state, active)
       VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(run_id) DO UPDATE SET
         lease_id=excluded.lease_id, lease_epoch=excluded.lease_epoch,
         authority_incarnation=excluded.authority_incarnation, run_state=excluded.run_state, active=excluded.active
-      WHERE hosted_authority_lineages.accepted_result_hash IS NULL
-        AND excluded.lease_epoch >= hosted_authority_lineages.lease_epoch
+      WHERE hosted_reference_authority_lineages.accepted_result_hash IS NULL
+        AND excluded.lease_epoch >= hosted_reference_authority_lineages.lease_epoch
     `).run(identity.run_id, identity.lease_id, identity.lease_epoch,
       identity.authority_incarnation, runState, active ? 1 : 0);
     return this.getAuthority(identity.run_id);
@@ -109,50 +120,48 @@ class SQLiteHostedResultOutbox {
   }
 
   setAuthorityState(runId, runState, active = true) {
+    this._requireReferenceMode();
     validId(runId);
     if (!["ALLOCATING", "READY", "ACTIVE", "DRAINING", "ENDED", "FENCED"].includes(runState)) {
       reject("HOSTED_RESULT_INVALID");
     }
-    this.db.prepare(`UPDATE hosted_authority_lineages SET run_state=?, active=?
+    this.db.prepare(`UPDATE hosted_reference_authority_lineages SET run_state=?, active=?
       WHERE run_id=?`).run(runState, active ? 1 : 0, runId);
     return this.getAuthority(runId);
   }
 
   getAuthority(runId) {
-    const row = this.db.prepare("SELECT * FROM hosted_authority_lineages WHERE run_id=?").get(validId(runId));
+    this._requireReferenceMode();
+    const row = this.db.prepare("SELECT * FROM hosted_reference_authority_lineages WHERE run_id=?").get(validId(runId));
     return row ? Object.freeze({ ...row, active: Boolean(row.active), accepted: row.accepted_result_hash != null }) : null;
   }
 
   enqueue({ authority, payload } = {}) {
     const canonical = canonicalResult(authority, payload);
     const now = this.now();
+    const prior = this.db.prepare("SELECT * FROM hosted_result_outbox WHERE run_id=?").get(canonical.authority.run_id);
+    if (prior) {
+      if (prior.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_CONFLICT");
+      return this._public(prior);
+    }
+
+    // In production, placement owns this durable CAS. It must make the exact
+    // accepted tuple replayable and permanently block authority replacement.
+    // The outbox DB may be separate, so no cross-database atomicity is claimed:
+    // a crash after this call is repaired by retrying the same canonical result.
+    const accepted = this.acceptAuthorityResult(canonical.authority, canonical.result_hash,
+      canonical.result_id, now);
+    if (!this._acceptanceMatches(accepted, canonical)) reject("HOSTED_RESULT_FENCED");
+    this.fault("after-placement-accept-before-outbox");
+
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      const prior = this.db.prepare("SELECT * FROM hosted_result_outbox WHERE run_id=?").get(canonical.authority.run_id);
-      if (prior) {
-        if (prior.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_CONFLICT");
+      const concurrent = this.db.prepare("SELECT * FROM hosted_result_outbox WHERE run_id=?").get(canonical.authority.run_id);
+      if (concurrent) {
+        if (concurrent.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_CONFLICT");
         this.db.exec("COMMIT");
-        return this._public(prior);
+        return this._public(concurrent);
       }
-      const accepted = this.db.prepare(`
-        UPDATE hosted_authority_lineages
-        SET accepted_result_id=?, accepted_result_hash=?, accepted_at=?
-        WHERE run_id=? AND lease_id=? AND lease_epoch=? AND authority_incarnation=?
-          AND active=1 AND run_state IN ('DRAINING','ENDED')
-          AND accepted_result_hash IS NULL
-        RETURNING *
-      `).get(canonical.result_id, canonical.result_hash, now, canonical.authority.run_id,
-        canonical.authority.lease_id, canonical.authority.lease_epoch,
-        canonical.authority.authority_incarnation);
-      if (!accepted) {
-        const replay = this.db.prepare(`SELECT * FROM hosted_authority_lineages
-          WHERE run_id=? AND lease_id=? AND lease_epoch=? AND authority_incarnation=?
-            AND accepted_result_id=? AND accepted_result_hash=?`).get(
-          canonical.authority.run_id, canonical.authority.lease_id, canonical.authority.lease_epoch,
-          canonical.authority.authority_incarnation, canonical.result_id, canonical.result_hash);
-        if (!replay) reject("HOSTED_RESULT_FENCED");
-      }
-      this.fault("after-accept-before-outbox");
       this.db.prepare(`
         INSERT INTO hosted_result_outbox
           (result_id,idempotency_key,run_id,result_hash,lease_id,lease_epoch,authority_incarnation,
@@ -250,10 +259,46 @@ class SQLiteHostedResultOutbox {
   }
   list() { return this.db.prepare("SELECT * FROM hosted_result_outbox ORDER BY accepted_at,result_id").all().map((row) => this._public(row)); }
   accepted(runId) {
+    this._requireReferenceMode();
     const row = this.getAuthority(runId);
     return row?.accepted ? Object.freeze({ accepted: true, run_id: row.run_id, lease_id: row.lease_id,
       lease_epoch: row.lease_epoch, authority_incarnation: row.authority_incarnation,
       result_hash: row.accepted_result_hash, result_id: row.accepted_result_id }) : null;
+  }
+  _requireReferenceMode() {
+    if (!this.referenceAuthorityMode) throw new TypeError("reference authority mode is not enabled");
+  }
+  _acceptReference(identity, resultHash, resultId, acceptedAt) {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const accepted = this.db.prepare(`
+        UPDATE hosted_reference_authority_lineages
+        SET accepted_result_id=?, accepted_result_hash=?, accepted_at=?
+        WHERE run_id=? AND lease_id=? AND lease_epoch=? AND authority_incarnation=?
+          AND active=1 AND run_state IN ('DRAINING','ENDED') AND accepted_result_hash IS NULL
+        RETURNING *
+      `).get(resultId, resultHash, acceptedAt, identity.run_id, identity.lease_id,
+        identity.lease_epoch, identity.authority_incarnation);
+      const row = accepted || this.db.prepare(`SELECT * FROM hosted_reference_authority_lineages
+        WHERE run_id=? AND lease_id=? AND lease_epoch=? AND authority_incarnation=?
+          AND accepted_result_id=? AND accepted_result_hash=?`).get(identity.run_id, identity.lease_id,
+        identity.lease_epoch, identity.authority_incarnation, resultId, resultHash);
+      this.db.exec("COMMIT");
+      return row ? { accepted: true, run_id: row.run_id, lease_id: row.lease_id,
+        lease_epoch: row.lease_epoch, authority_incarnation: row.authority_incarnation,
+        result_hash: row.accepted_result_hash, result_id: row.accepted_result_id } : null;
+    } catch (error) {
+      if (this.db.isTransaction) this.db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+  _acceptanceMatches(accepted, canonical) {
+    return accepted?.accepted === true && accepted.run_id === canonical.authority.run_id
+      && accepted.lease_id === canonical.authority.lease_id
+      && Number(accepted.lease_epoch) === canonical.authority.lease_epoch
+      && accepted.authority_incarnation === canonical.authority.authority_incarnation
+      && accepted.result_hash === canonical.result_hash
+      && (accepted.result_id == null || accepted.result_id === canonical.result_id);
   }
   _public(row) {
     return Object.freeze({
