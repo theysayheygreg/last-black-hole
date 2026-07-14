@@ -4,6 +4,8 @@ const crypto = require("node:crypto");
 const { DatabaseSync } = require("node:sqlite");
 
 const SUBJECT_KEY_BYTES = 32;
+const MAX_PREVIOUS_SUBJECT_KEYS = 3;
+const LEGACY_SUBJECT_KEY_ID = "legacy-v1";
 
 function clone(value) {
   return value == null ? value : structuredClone(value);
@@ -19,6 +21,39 @@ function keyBuffer(value) {
   return key;
 }
 
+function keyId(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)) {
+    throw new TypeError("hosted identity subject lookup key id invalid");
+  }
+  return value;
+}
+
+function subjectKeyring(subjectLookupKey, subjectLookupKeyring) {
+  if (subjectLookupKey != null && subjectLookupKeyring != null) {
+    throw new TypeError("provide one hosted identity subject lookup key or keyring");
+  }
+  if (subjectLookupKeyring == null) {
+    return [{ id: LEGACY_SUBJECT_KEY_ID, key: keyBuffer(subjectLookupKey), current: true }];
+  }
+  if (!subjectLookupKeyring || typeof subjectLookupKeyring !== "object" ||
+      !subjectLookupKeyring.current || !Array.isArray(subjectLookupKeyring.previous ?? [])) {
+    throw new TypeError("hosted identity subject lookup keyring invalid");
+  }
+  const previous = subjectLookupKeyring.previous ?? [];
+  if (previous.length > MAX_PREVIOUS_SUBJECT_KEYS) {
+    throw new TypeError(`hosted identity subject lookup keyring allows at most ${MAX_PREVIOUS_SUBJECT_KEYS} previous keys`);
+  }
+  const entries = [subjectLookupKeyring.current, ...previous].map((entry, index) => ({
+    id: keyId(entry?.id), key: keyBuffer(entry?.key), current: index === 0,
+  }));
+  const ids = new Set();
+  for (const entry of entries) {
+    if (ids.has(entry.id)) throw new TypeError("hosted identity subject lookup key ids must be unique");
+    ids.add(entry.id);
+  }
+  return entries;
+}
+
 function json(value) { return JSON.stringify(value); }
 function parse(row) { return row ? JSON.parse(row.payload_json) : undefined; }
 
@@ -32,14 +67,16 @@ function parse(row) { return row ? JSON.parse(row.payload_json) : undefined; }
  * directory.
  */
 class SqliteHostedIdentityRepository {
-  constructor({ filepath, db, subjectLookupKey, busyTimeoutMs = 5000 } = {}) {
+  constructor({ filepath, db, subjectLookupKey, subjectLookupKeyring, busyTimeoutMs = 5000 } = {}) {
     if ((filepath == null) === (db == null)) {
       throw new TypeError("provide exactly one hosted identity sqlite filepath or db");
     }
     if (!Number.isSafeInteger(busyTimeoutMs) || busyTimeoutMs < 0 || busyTimeoutMs > 60_000) {
       throw new TypeError("hosted identity sqlite busy timeout invalid");
     }
-    this.subjectLookupKey = keyBuffer(subjectLookupKey);
+    this.subjectLookupKeys = subjectKeyring(subjectLookupKey, subjectLookupKeyring);
+    this.currentSubjectLookupKey = this.subjectLookupKeys[0];
+    this.subjectLookupKeyIds = new Set(this.subjectLookupKeys.map((entry) => entry.id));
     this.db = db || new DatabaseSync(filepath);
     this.ownsDb = !db;
     this.inTransaction = false;
@@ -64,6 +101,7 @@ class SqliteHostedIdentityRepository {
         identity_id TEXT PRIMARY KEY,
         provider TEXT NOT NULL,
         subject_lookup TEXT NOT NULL,
+        subject_key_id TEXT,
         account_id TEXT NOT NULL REFERENCES hid_accounts(account_id) ON DELETE CASCADE,
         created_at INTEGER NOT NULL,
         UNIQUE (provider, subject_lookup)
@@ -161,12 +199,32 @@ class SqliteHostedIdentityRepository {
       CREATE INDEX IF NOT EXISTS hid_refresh_family_idx ON hid_refresh_tokens(family_id);
       CREATE INDEX IF NOT EXISTS hid_entitlement_account_idx ON hid_entitlements(account_id);
     `);
+    // Databases created before keyring support have an untagged HMAC column.
+    // A successful lookup under a configured key is enough to tag and migrate
+    // that row; no raw provider subject is needed or persisted.
+    const identityColumns = this.db.prepare("PRAGMA table_info(hid_provider_identities)").all();
+    if (!identityColumns.some((column) => column.name === "subject_key_id")) {
+      this.db.exec("ALTER TABLE hid_provider_identities ADD COLUMN subject_key_id TEXT");
+    }
+    const storedKeyIds = this.db.prepare(`SELECT DISTINCT subject_key_id AS id
+      FROM hid_provider_identities WHERE subject_key_id IS NOT NULL`).all();
+    for (const row of storedKeyIds) {
+      if (!this.subjectLookupKeyIds.has(row.id)) {
+        throw new Error(`hosted identity database references unknown subject lookup key id: ${row.id}`);
+      }
+    }
   }
 
-  _subjectLookup(provider, subject) {
+  _subjectLookup(provider, subject, key = this.currentSubjectLookupKey.key) {
     if (typeof provider !== "string" || typeof subject !== "string") throw new TypeError("identity lookup invalid");
-    return crypto.createHmac("sha256", this.subjectLookupKey)
+    return crypto.createHmac("sha256", key)
       .update(provider, "utf8").update("\0").update(subject, "utf8").digest("base64url");
+  }
+
+  _subjectLookups(provider, subject) {
+    return this.subjectLookupKeys.map((entry) => ({
+      id: entry.id, lookup: this._subjectLookup(provider, subject, entry.key), current: entry.current,
+    }));
   }
 
   transaction(operation) {
@@ -199,10 +257,28 @@ class SqliteHostedIdentityRepository {
   }
 
   getIdentity(provider, providerSubject) {
-    const row = this.db.prepare(`SELECT identity_id,provider,account_id,created_at
-      FROM hid_provider_identities WHERE provider=? AND subject_lookup=?`)
-      .get(provider, this._subjectLookup(provider, providerSubject));
-    if (!row) return undefined;
+    const candidates = this._subjectLookups(provider, providerSubject);
+    const placeholders = candidates.map(() => "?").join(",");
+    const matches = this.db.prepare(`SELECT identity_id,provider,subject_lookup,subject_key_id,account_id,created_at
+      FROM hid_provider_identities WHERE provider=? AND subject_lookup IN (${placeholders})`)
+      .all(provider, ...candidates.map((candidate) => candidate.lookup));
+    if (matches.length === 0) return undefined;
+    if (matches.length !== 1) throw new Error("hosted identity subject lookup collision across key generations");
+    const row = matches[0];
+    if (row.subject_key_id != null && !this.subjectLookupKeyIds.has(row.subject_key_id)) {
+      throw new Error("hosted identity subject lookup references unknown key id");
+    }
+    const matched = candidates.find((candidate) => candidate.lookup === row.subject_lookup);
+    if (!matched) throw new Error("hosted identity subject lookup key mismatch");
+    if (!matched.current || row.subject_key_id !== this.currentSubjectLookupKey.id) {
+      // Lazy dual-read migration is atomic. Operators must retain bounded old
+      // keys until every identity that must remain discoverable has traversed
+      // this path; a migrated identity is safe after its old key is retired.
+      this.db.prepare(`UPDATE hid_provider_identities
+        SET subject_lookup=?,subject_key_id=?
+        WHERE identity_id=? AND subject_lookup=?`)
+        .run(candidates[0].lookup, this.currentSubjectLookupKey.id, row.identity_id, row.subject_lookup);
+    }
     return {
       identityId: row.identity_id, provider: row.provider, providerSubject,
       accountId: row.account_id, createdAt: row.created_at,
@@ -210,9 +286,10 @@ class SqliteHostedIdentityRepository {
   }
   putIdentity(record) {
     this.db.prepare(`INSERT INTO hid_provider_identities
-      (identity_id,provider,subject_lookup,account_id,created_at) VALUES(?,?,?,?,?)`)
+      (identity_id,provider,subject_lookup,subject_key_id,account_id,created_at) VALUES(?,?,?,?,?,?)`)
       .run(record.identityId, record.provider,
-        this._subjectLookup(record.provider, record.providerSubject), record.accountId, record.createdAt);
+        this._subjectLookup(record.provider, record.providerSubject), this.currentSubjectLookupKey.id,
+        record.accountId, record.createdAt);
   }
 
   getCallback(provider, callbackId) {
@@ -326,4 +403,9 @@ class SqliteHostedIdentityRepository {
   }
 }
 
-module.exports = { SqliteHostedIdentityRepository, SUBJECT_KEY_BYTES };
+module.exports = {
+  SqliteHostedIdentityRepository,
+  SUBJECT_KEY_BYTES,
+  MAX_PREVIOUS_SUBJECT_KEYS,
+  LEGACY_SUBJECT_KEY_ID,
+};

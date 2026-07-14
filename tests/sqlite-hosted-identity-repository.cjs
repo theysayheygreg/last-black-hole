@@ -10,17 +10,24 @@ const { HostedIdentityService, HostedIdentityPublicError } = require("../scripts
 const { SqliteHostedIdentityRepository } = require("../scripts/sqlite-hosted-identity-repository.cjs");
 
 const LOOKUP_KEY = Buffer.from("sqlite-hosted-identity-lookup-key-v1-32-plus-bytes", "utf8");
+const LOOKUP_KEY_V2 = Buffer.from("sqlite-hosted-identity-lookup-key-v2-32-plus-bytes", "utf8");
+
+function keyring(currentId, currentKey, previous = []) {
+  return { current: { id: currentId, key: currentKey }, previous };
+}
 
 function tempDatabase() {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-hosted-identity-"));
   return { directory, filepath: path.join(directory, "identity.sqlite") };
 }
 
-function harness(filepath, { repository } = {}) {
+function harness(filepath, { repository, subjectLookupKeyring } = {}) {
   let sequence = 0;
   let now = 1_800_000_000_000;
   const proofs = new Map();
-  const repo = repository || new SqliteHostedIdentityRepository({ filepath, subjectLookupKey: LOOKUP_KEY });
+  const repo = repository || new SqliteHostedIdentityRepository(subjectLookupKeyring
+    ? { filepath, subjectLookupKeyring }
+    : { filepath, subjectLookupKey: LOOKUP_KEY });
   const provider = {
     verifyGrant({ proof }) {
       const value = proofs.get(proof);
@@ -72,6 +79,113 @@ test("configuration requires one database source and a strong subject HMAC key",
   const db = new DatabaseSync(":memory:");
   assert.throws(() => new SqliteHostedIdentityRepository({ filepath: ":memory:", db, subjectLookupKey: LOOKUP_KEY }), /exactly one/);
   db.close();
+  assert.throws(() => new SqliteHostedIdentityRepository({
+    filepath: ":memory:",
+    subjectLookupKeyring: keyring("duplicate", LOOKUP_KEY, [{ id: "duplicate", key: LOOKUP_KEY_V2 }]),
+  }), /ids must be unique/);
+  assert.throws(() => new SqliteHostedIdentityRepository({
+    filepath: ":memory:",
+    subjectLookupKeyring: keyring("current", LOOKUP_KEY, [
+      { id: "old-1", key: LOOKUP_KEY_V2 }, { id: "old-2", key: LOOKUP_KEY },
+      { id: "old-3", key: LOOKUP_KEY_V2 }, { id: "old-4", key: LOOKUP_KEY },
+    ]),
+  }), /at most 3/);
+  assert.throws(() => new SqliteHostedIdentityRepository({
+    filepath: ":memory:", subjectLookupKeyring: keyring("bad id", LOOKUP_KEY),
+  }), /key id invalid/);
+});
+
+test("key rotation dual-reads, re-HMACs, and survives close before old-key retirement", () => {
+  const { filepath } = tempDatabase();
+  const oldRing = keyring("subject-2026-01", LOOKUP_KEY);
+  const rotatingRing = keyring("subject-2026-02", LOOKUP_KEY_V2,
+    [{ id: "subject-2026-01", key: LOOKUP_KEY }]);
+  const subject = "rotation-subject-secret-481516";
+  const first = harness(filepath, { subjectLookupKeyring: oldRing });
+  first.addProof("rotation-proof", subject);
+  const session = first.service.exchangeProviderProof({
+    provider: "test", proof: "rotation-proof", callbackId: "rotation-callback",
+  });
+  first.repo.close();
+
+  const rotating = harness(filepath, { subjectLookupKeyring: rotatingRing });
+  assert.equal(rotating.repo.getIdentity("test", subject).accountId, session.accountId);
+  const migrated = rotating.repo.db.prepare(`SELECT subject_key_id,subject_lookup
+    FROM hid_provider_identities`).get();
+  assert.equal(migrated.subject_key_id, "subject-2026-02");
+  assert.equal(migrated.subject_lookup,
+    crypto.createHmac("sha256", LOOKUP_KEY_V2).update(`test\0${subject}`).digest("base64url"));
+  rotating.repo.close();
+
+  const retired = harness(filepath, {
+    subjectLookupKeyring: keyring("subject-2026-02", LOOKUP_KEY_V2),
+  });
+  assert.equal(retired.repo.getIdentity("test", subject).accountId, session.accountId);
+  retired.repo.close();
+});
+
+test("two rotated connections converge concurrent lookup and linking on one account", () => {
+  const { filepath } = tempDatabase();
+  const subject = "rotation-race-subject";
+  const old = harness(filepath, { subjectLookupKeyring: keyring("old", LOOKUP_KEY) });
+  old.addProof("proof-old", subject);
+  const original = old.service.exchangeProviderProof({ provider: "test", proof: "proof-old", callbackId: "callback-old" });
+  old.repo.close();
+
+  const ring = keyring("new", LOOKUP_KEY_V2, [{ id: "old", key: LOOKUP_KEY }]);
+  const a = harness(filepath, { subjectLookupKeyring: ring });
+  const b = harness(filepath, { subjectLookupKeyring: ring });
+  a.addProof("proof-a", subject, "active", 2);
+  b.addProof("proof-b", subject, "active", 3);
+  const linkedA = a.service.exchangeProviderProof({ provider: "test", proof: "proof-a", callbackId: "callback-a" });
+  const linkedB = b.service.exchangeProviderProof({ provider: "test", proof: "proof-b", callbackId: "callback-b" });
+  assert.equal(linkedA.accountId, original.accountId);
+  assert.equal(linkedB.accountId, original.accountId);
+  assert.equal(rows(a.repo.db, "hid_accounts"), 1);
+  assert.equal(rows(a.repo.db, "hid_provider_identities"), 1);
+  assert.equal(a.repo.db.prepare("SELECT subject_key_id FROM hid_provider_identities").get().subject_key_id, "new");
+  a.repo.close();
+  b.repo.close();
+});
+
+test("old-key retirement fails closed until every stored identity has migrated", () => {
+  const { filepath } = tempDatabase();
+  const old = harness(filepath, { subjectLookupKeyring: keyring("old", LOOKUP_KEY) });
+  old.addProof("proof-unmigrated", "unmigrated-subject");
+  old.service.exchangeProviderProof({ provider: "test", proof: "proof-unmigrated", callbackId: "callback-unmigrated" });
+  old.repo.close();
+  assert.throws(() => harness(filepath, {
+    subjectLookupKeyring: keyring("new", LOOKUP_KEY_V2),
+  }), /unknown subject lookup key id: old/);
+
+  const migrating = harness(filepath, {
+    subjectLookupKeyring: keyring("new", LOOKUP_KEY_V2, [{ id: "old", key: LOOKUP_KEY }]),
+  });
+  assert.ok(migrating.repo.getIdentity("test", "unmigrated-subject"));
+  migrating.repo.close();
+  const retired = harness(filepath, { subjectLookupKeyring: keyring("new", LOOKUP_KEY_V2) });
+  assert.ok(retired.repo.getIdentity("test", "unmigrated-subject"));
+  retired.repo.close();
+});
+
+test("rotation keeps raw subjects and key material out of sqlite files", () => {
+  const { filepath } = tempDatabase();
+  const subject = "RAW-ROTATED-SUBJECT-SECRET-001122";
+  const old = harness(filepath, { subjectLookupKeyring: keyring("old", LOOKUP_KEY) });
+  old.addProof("raw-rotation-proof", subject);
+  old.service.exchangeProviderProof({ provider: "test", proof: "raw-rotation-proof", callbackId: "raw-rotation-callback" });
+  old.repo.close();
+  const rotated = harness(filepath, {
+    subjectLookupKeyring: keyring("new", LOOKUP_KEY_V2, [{ id: "old", key: LOOKUP_KEY }]),
+  });
+  assert.ok(rotated.repo.getIdentity("test", subject));
+  rotated.repo.db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+  rotated.repo.close();
+  const bytes = Buffer.concat([filepath, `${filepath}-wal`, `${filepath}-shm`]
+    .filter((candidate) => fs.existsSync(candidate)).map((candidate) => fs.readFileSync(candidate)));
+  for (const secret of [subject, LOOKUP_KEY, LOOKUP_KEY_V2]) {
+    assert.equal(bytes.includes(Buffer.from(secret)), false, "rotation secret leaked to sqlite storage");
+  }
 });
 
 test("exchange, profile ownership, and token families survive close and reopen", () => {
