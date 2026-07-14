@@ -306,11 +306,8 @@ class BrowserInstance {
   }
 }
 
-async function launchBrowser({ viewport = DEFAULT_VIEWPORT } = {}) {
-  const chromePath = findChrome();
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-chrome-"));
-  const proc = spawn(chromePath, [
-    "--headless=new",
+function browserLaunchArgs({ viewport = DEFAULT_VIEWPORT, headless = true, userDataDir } = {}) {
+  const args = [
     "--remote-debugging-port=0",
     `--user-data-dir=${userDataDir}`,
     "--no-first-run",
@@ -320,7 +317,18 @@ async function launchBrowser({ viewport = DEFAULT_VIEWPORT } = {}) {
     "--disable-renderer-backgrounding",
     `--window-size=${viewport.width},${viewport.height}`,
     "about:blank",
-  ], {
+  ];
+  if (headless) args.unshift("--headless=new");
+  return args;
+}
+
+async function launchBrowser({
+  viewport = DEFAULT_VIEWPORT,
+  headless = process.env.LBH_BROWSER_MODE !== "headed",
+} = {}) {
+  const chromePath = findChrome();
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lbh-chrome-"));
+  const proc = spawn(chromePath, browserLaunchArgs({ viewport, headless, userDataDir }), {
     stdio: ["ignore", "ignore", "ignore"],
   });
   proc.unref();
@@ -329,6 +337,7 @@ async function launchBrowser({ viewport = DEFAULT_VIEWPORT } = {}) {
 }
 
 module.exports = {
+  browserLaunchArgs,
   launchBrowser,
   findChrome,
 };

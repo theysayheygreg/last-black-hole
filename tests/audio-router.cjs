@@ -46,6 +46,8 @@ async function run() {
   assert(!remoteEvents.includes("audioEngine.playEvent('scavDeath')"), 'authoritative scavenger audio must not bypass the router');
   assert(mainSource.includes('audioRouter?.reset(`local:${localSeed}`)'), 'local runs reset router dedupe');
   assert(mainSource.includes('audioRouter?.reset(`remote:${targetMapEntry.id}:${briefingSeed}`)'), 'remote runs reset router dedupe');
+  const testApiSource = fs.readFileSync(path.join(ROOT, 'src/test-api.js'), 'utf8');
+  assert(testApiSource.includes('getAudioDiagnostics()'), 'reviewers need structural audio diagnostics when output is inaudible');
   console.log('AudioRouter: 1 passed, 0 failed');
 }
 run().catch((error) => { console.error(error.stack || error.message); process.exit(1); });

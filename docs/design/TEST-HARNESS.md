@@ -54,6 +54,14 @@ journey mutates sim debug state.
 This lane is not a replacement for manual playfeel. It is the handoff receipt
 that should exist before asking Greg to spend attention on a build.
 
+Use `npm run test:agent-eval:visible` when a reviewer needs to watch the same
+CDP-controlled journey in a real Chrome window. A headed launch proves that a
+window was created and remains automation-controlled; it does not prove that a
+remote agent can see an unlocked macOS desktop or hear host audio. When those
+capabilities are unavailable, retain screenshots/video as visual evidence and
+inspect `window.__TEST_API.getAudioDiagnostics()` for audio phase and mixer
+activity instead of reporting that the product cannot run non-headless.
+
 Browser suites run through `tests/browser-driver.cjs`, a small Chrome DevTools
 Protocol wrapper around system Chrome. In Codex desktop sessions headless Chrome
 may not advance ambient `requestAnimationFrame`, so frame-sensitive tests call
@@ -161,6 +169,7 @@ did not drift; they cannot prove the ship feels good.
 | `npm run test:sim-structure` | v0.3 structural gate for persistent Ballpark identity/lifecycle, required relevance/pickup/portal queries, toroidal geometry and swept contacts, movement fixtures, protocol v2, bounded growth, journal, and live snapshot rebase. |
 | `npm run test:playtest` | Synthetic menu/input flows. Useful, but not a substitute for Codex app browser review. |
 | `npm run test:agent-eval` | Natural Shallows product journey plus 1280x800 visual/readability evidence before Greg reviews feel and taste. |
+| `npm run test:agent-eval:visible` | The same agent journey in a visible, CDP-controlled Chrome window for attended review. |
 | `npm run test:full` | All committed automated suites on the Three target. Long and more timing-sensitive. |
 
 ## Forge Pass Alignment

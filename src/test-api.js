@@ -182,6 +182,14 @@ export function initTestAPI(getState) {
       return perfStats ? JSON.parse(JSON.stringify(perfStats)) : null;
     },
 
+    getAudioDiagnostics() {
+      const { audioEngine } = getState();
+      return clone(audioEngine?.getDiagnostics?.() || {
+        phase: 'unavailable',
+        mixer: null,
+      });
+    },
+
     getFluidGridState() {
       const { getFluidGridStateForTest, perfStats } = getState();
       const direct = getFluidGridStateForTest ? getFluidGridStateForTest() : null;

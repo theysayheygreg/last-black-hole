@@ -1191,6 +1191,7 @@ function init() {
       camX, camY,
       fps,
       perfStats,
+      audioEngine,
       getFluidGridStateForTest: () => {
         const renderInputs = getVisibleWellRenderInputs(camX, camY);
         return {

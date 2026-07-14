@@ -39,7 +39,7 @@
 
 ## Test Tooling
 
-### Browser Automation: CDP Driver (headless Chrome)
+### Browser Automation: CDP Driver
 
 The live harness uses `tests/browser-driver.cjs`, a small Chrome DevTools
 Protocol wrapper around system Chrome. No external browser automation package is required.
@@ -47,6 +47,10 @@ Protocol wrapper around system Chrome. No external browser automation package is
 ```
 npm install
 ```
+
+A test script launches disposable headless Chrome by default. Run `npm run
+test:agent-eval:visible` for an attended, headed review of the natural journey.
+The window remains CDP-controlled in both modes.
 
 A test script:
 1. Launches headless Chrome (or headed, for screenshot review)
