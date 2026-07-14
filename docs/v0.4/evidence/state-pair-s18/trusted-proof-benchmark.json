@@ -1,0 +1,420 @@
+{
+  "schema": "lbh-s18-trusted-proof-benchmark-v1",
+  "authorityBoundary": "One dedicated logical authority owns one match/group; concurrent matches multiply that isolated boundary horizontally.",
+  "releaseDefault": "S15 positional JSON plus S17 lazy materialization and S18 trusted same-operation proof; S16 binary remains opt-in.",
+  "implementationCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+  "implementationTree": "a3a23d61abc534270befb043df141f700ada125c",
+  "trackedClean": true,
+  "iterations": 800,
+  "warmup": 80,
+  "rounds": [
+    {
+      "order": "full-trusted",
+      "full": {
+        "schema": "lbh-s15-canonical-reuse-benchmark-run-v1",
+        "moduleRoot": ".",
+        "iterations": 800,
+        "warmup": 80,
+        "execution": {
+          "runLabel": "round-a-full",
+          "declaredOrder": 1,
+          "sourceCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+          "sourceTree": "a3a23d61abc534270befb043df141f700ada125c",
+          "testScriptCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+          "trackedSourceDirty": false,
+          "sourceHashes": {
+            "authorityPublisher": "a71dfb114bf19648344072516aee93bdea25d2180d2f9abf471f704b903ffa0c",
+            "positionalCodec": "d9f07553d9f2fa77ee482e08335eddd5b48fbc2453ea80ba6a84c84179f31c1c",
+            "wireProtocol": "179884190c4c9bfa694f64bff08e538c6b88bd6f1b45d5e86d32405d190b5739",
+            "authorityProof": "6f72b75d5039e80ea27064adbb4724d4e890b67f001880db068269259d6d52c9",
+            "benchmarkScript": "f61b36897a551970563f203b9c3875d4e98688d858790fdd93846615f6ac94fb"
+          }
+        },
+        "workload": {
+          "publicEntities": 48,
+          "ownerEntities": 1,
+          "candidatesPerSelection": 4
+        },
+        "publishMilliseconds": {
+          "count": 800,
+          "mean": 4.863245975000003,
+          "p50": 4.837915999999495,
+          "p95": 4.946666999999707,
+          "p99": 5.313625000000002,
+          "max": 11.604749999999967
+        },
+        "selectionMilliseconds": {
+          "count": 880,
+          "p50": 2.0730419999999867,
+          "p95": 2.3442909999999983,
+          "p99": 3.3046249999999873,
+          "max": 4.598167000000103,
+          "samplesDropped": 0,
+          "sampleLimit": 2048
+        },
+        "operations": {
+          "componentSerializations": 19360,
+          "fullCandidateCompositions": 881,
+          "winnerSerializations": 881,
+          "bytesExamined": 14682965,
+          "allocationProxyBytes": 11022079,
+          "expandedHeaderSerializations": 14960,
+          "expandedLaneSerializations": 0,
+          "expandedLaneSerializationReuses": 3520,
+          "expandedReusedLaneBytes": 20031396,
+          "expandedSerializedLaneBytes": 0,
+          "expandedBytesExamined": 20443132,
+          "outerCandidateDescriptors": 3520,
+          "outerCandidateFrames": 880,
+          "lanePayloadsBuilt": 3520,
+          "lanePayloadReferenceReuses": 3520,
+          "sizeProofOperations": 7040,
+          "chosenFrameMaterializations": 880,
+          "trustedProofsCreated": 0,
+          "trustedProofsConsumed": 0,
+          "trustedProofRejects": 0,
+          "trustedValidationsPerformed": 0,
+          "trustedValidationsReused": 0,
+          "trustedCanonicalSizeOperations": 0,
+          "trustedPositionalSizeOperations": 0,
+          "maxExpandedCandidateBytes": 12881
+        },
+        "preparedProjectionOperations": {
+          "enabled": true,
+          "canonicalizations": 1762,
+          "hashes": 1762,
+          "diffs": 1760,
+          "preparations": 1762,
+          "preparedHashHits": 1762,
+          "preparedDiffs": 1760,
+          "suppliedPreparedHits": 0,
+          "pendingReferences": 0,
+          "ackedReferences": 2,
+          "maxPendingReferences": 3072,
+          "maxAckedReferences": 256
+        },
+        "selections": 880,
+        "fallbackCounts": {
+          "missing-exact-acked-base": 1
+        },
+        "transcriptSha256": "9a062361b33e2d2efdf695683d5d0f8b0627149cc8cec04cb66ce1ce58487652",
+        "selectionTranscriptSha256": "73712f18975acb66eb789414efb9d51f383bf0ea9a2fc23e2370d053a263360c",
+        "parityComparisons": 800,
+        "decodedSemanticComparisons": 800
+      },
+      "trusted": {
+        "schema": "lbh-s15-canonical-reuse-benchmark-run-v1",
+        "moduleRoot": ".",
+        "iterations": 800,
+        "warmup": 80,
+        "execution": {
+          "runLabel": "round-a-trusted",
+          "declaredOrder": 2,
+          "sourceCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+          "sourceTree": "a3a23d61abc534270befb043df141f700ada125c",
+          "testScriptCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+          "trackedSourceDirty": false,
+          "sourceHashes": {
+            "authorityPublisher": "a71dfb114bf19648344072516aee93bdea25d2180d2f9abf471f704b903ffa0c",
+            "positionalCodec": "d9f07553d9f2fa77ee482e08335eddd5b48fbc2453ea80ba6a84c84179f31c1c",
+            "wireProtocol": "179884190c4c9bfa694f64bff08e538c6b88bd6f1b45d5e86d32405d190b5739",
+            "authorityProof": "6f72b75d5039e80ea27064adbb4724d4e890b67f001880db068269259d6d52c9",
+            "benchmarkScript": "f61b36897a551970563f203b9c3875d4e98688d858790fdd93846615f6ac94fb"
+          }
+        },
+        "workload": {
+          "publicEntities": 48,
+          "ownerEntities": 1,
+          "candidatesPerSelection": 4
+        },
+        "publishMilliseconds": {
+          "count": 800,
+          "mean": 2.9539785287499942,
+          "p50": 2.953041999999641,
+          "p95": 3.0574579999997695,
+          "p99": 3.093417000000045,
+          "max": 4.142166999999972
+        },
+        "selectionMilliseconds": {
+          "count": 880,
+          "p50": 0.18895800000018426,
+          "p95": 0.3047919999999067,
+          "p99": 0.34466699999995853,
+          "max": 1.336790999999998,
+          "samplesDropped": 0,
+          "sampleLimit": 2048
+        },
+        "operations": {
+          "componentSerializations": 19360,
+          "fullCandidateCompositions": 881,
+          "winnerSerializations": 881,
+          "bytesExamined": 14682965,
+          "allocationProxyBytes": 11022079,
+          "expandedHeaderSerializations": 14960,
+          "expandedLaneSerializations": 0,
+          "expandedLaneSerializationReuses": 3520,
+          "expandedReusedLaneBytes": 20031396,
+          "expandedSerializedLaneBytes": 0,
+          "expandedBytesExamined": 20443132,
+          "outerCandidateDescriptors": 3520,
+          "outerCandidateFrames": 880,
+          "lanePayloadsBuilt": 3520,
+          "lanePayloadReferenceReuses": 3520,
+          "sizeProofOperations": 7040,
+          "chosenFrameMaterializations": 880,
+          "trustedProofsCreated": 880,
+          "trustedProofsConsumed": 880,
+          "trustedProofRejects": 0,
+          "trustedValidationsPerformed": 880,
+          "trustedValidationsReused": 3520,
+          "trustedCanonicalSizeOperations": 3520,
+          "trustedPositionalSizeOperations": 3520,
+          "maxExpandedCandidateBytes": 12881
+        },
+        "preparedProjectionOperations": {
+          "enabled": true,
+          "canonicalizations": 1762,
+          "hashes": 1762,
+          "diffs": 1760,
+          "preparations": 1762,
+          "preparedHashHits": 1762,
+          "preparedDiffs": 1760,
+          "suppliedPreparedHits": 0,
+          "pendingReferences": 0,
+          "ackedReferences": 2,
+          "maxPendingReferences": 3072,
+          "maxAckedReferences": 256
+        },
+        "selections": 880,
+        "fallbackCounts": {
+          "missing-exact-acked-base": 1
+        },
+        "transcriptSha256": "9a062361b33e2d2efdf695683d5d0f8b0627149cc8cec04cb66ce1ce58487652",
+        "selectionTranscriptSha256": "73712f18975acb66eb789414efb9d51f383bf0ea9a2fc23e2370d053a263360c",
+        "parityComparisons": 800,
+        "decodedSemanticComparisons": 800
+      }
+    },
+    {
+      "order": "trusted-full",
+      "trusted": {
+        "schema": "lbh-s15-canonical-reuse-benchmark-run-v1",
+        "moduleRoot": ".",
+        "iterations": 800,
+        "warmup": 80,
+        "execution": {
+          "runLabel": "round-b-trusted",
+          "declaredOrder": 1,
+          "sourceCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+          "sourceTree": "a3a23d61abc534270befb043df141f700ada125c",
+          "testScriptCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+          "trackedSourceDirty": false,
+          "sourceHashes": {
+            "authorityPublisher": "a71dfb114bf19648344072516aee93bdea25d2180d2f9abf471f704b903ffa0c",
+            "positionalCodec": "d9f07553d9f2fa77ee482e08335eddd5b48fbc2453ea80ba6a84c84179f31c1c",
+            "wireProtocol": "179884190c4c9bfa694f64bff08e538c6b88bd6f1b45d5e86d32405d190b5739",
+            "authorityProof": "6f72b75d5039e80ea27064adbb4724d4e890b67f001880db068269259d6d52c9",
+            "benchmarkScript": "f61b36897a551970563f203b9c3875d4e98688d858790fdd93846615f6ac94fb"
+          }
+        },
+        "workload": {
+          "publicEntities": 48,
+          "ownerEntities": 1,
+          "candidatesPerSelection": 4
+        },
+        "publishMilliseconds": {
+          "count": 800,
+          "mean": 2.9496120825000003,
+          "p50": 2.9487919999996848,
+          "p95": 3.0458750000000236,
+          "p99": 3.088083000000097,
+          "max": 4.421374999999898
+        },
+        "selectionMilliseconds": {
+          "count": 880,
+          "p50": 0.19004199999994853,
+          "p95": 0.30570799999986775,
+          "p99": 0.3555830000000242,
+          "max": 1.366540999999998,
+          "samplesDropped": 0,
+          "sampleLimit": 2048
+        },
+        "operations": {
+          "componentSerializations": 19360,
+          "fullCandidateCompositions": 881,
+          "winnerSerializations": 881,
+          "bytesExamined": 14682965,
+          "allocationProxyBytes": 11022079,
+          "expandedHeaderSerializations": 14960,
+          "expandedLaneSerializations": 0,
+          "expandedLaneSerializationReuses": 3520,
+          "expandedReusedLaneBytes": 20031396,
+          "expandedSerializedLaneBytes": 0,
+          "expandedBytesExamined": 20443132,
+          "outerCandidateDescriptors": 3520,
+          "outerCandidateFrames": 880,
+          "lanePayloadsBuilt": 3520,
+          "lanePayloadReferenceReuses": 3520,
+          "sizeProofOperations": 7040,
+          "chosenFrameMaterializations": 880,
+          "trustedProofsCreated": 880,
+          "trustedProofsConsumed": 880,
+          "trustedProofRejects": 0,
+          "trustedValidationsPerformed": 880,
+          "trustedValidationsReused": 3520,
+          "trustedCanonicalSizeOperations": 3520,
+          "trustedPositionalSizeOperations": 3520,
+          "maxExpandedCandidateBytes": 12881
+        },
+        "preparedProjectionOperations": {
+          "enabled": true,
+          "canonicalizations": 1762,
+          "hashes": 1762,
+          "diffs": 1760,
+          "preparations": 1762,
+          "preparedHashHits": 1762,
+          "preparedDiffs": 1760,
+          "suppliedPreparedHits": 0,
+          "pendingReferences": 0,
+          "ackedReferences": 2,
+          "maxPendingReferences": 3072,
+          "maxAckedReferences": 256
+        },
+        "selections": 880,
+        "fallbackCounts": {
+          "missing-exact-acked-base": 1
+        },
+        "transcriptSha256": "9a062361b33e2d2efdf695683d5d0f8b0627149cc8cec04cb66ce1ce58487652",
+        "selectionTranscriptSha256": "73712f18975acb66eb789414efb9d51f383bf0ea9a2fc23e2370d053a263360c",
+        "parityComparisons": 800,
+        "decodedSemanticComparisons": 800
+      },
+      "full": {
+        "schema": "lbh-s15-canonical-reuse-benchmark-run-v1",
+        "moduleRoot": ".",
+        "iterations": 800,
+        "warmup": 80,
+        "execution": {
+          "runLabel": "round-b-full",
+          "declaredOrder": 2,
+          "sourceCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+          "sourceTree": "a3a23d61abc534270befb043df141f700ada125c",
+          "testScriptCommit": "da7fa52e922d07e06e14f3b813f78d6e9830622b",
+          "trackedSourceDirty": false,
+          "sourceHashes": {
+            "authorityPublisher": "a71dfb114bf19648344072516aee93bdea25d2180d2f9abf471f704b903ffa0c",
+            "positionalCodec": "d9f07553d9f2fa77ee482e08335eddd5b48fbc2453ea80ba6a84c84179f31c1c",
+            "wireProtocol": "179884190c4c9bfa694f64bff08e538c6b88bd6f1b45d5e86d32405d190b5739",
+            "authorityProof": "6f72b75d5039e80ea27064adbb4724d4e890b67f001880db068269259d6d52c9",
+            "benchmarkScript": "f61b36897a551970563f203b9c3875d4e98688d858790fdd93846615f6ac94fb"
+          }
+        },
+        "workload": {
+          "publicEntities": 48,
+          "ownerEntities": 1,
+          "candidatesPerSelection": 4
+        },
+        "publishMilliseconds": {
+          "count": 800,
+          "mean": 4.824329996250031,
+          "p50": 4.827290999999832,
+          "p95": 4.908959000000323,
+          "p99": 5.024874999999952,
+          "max": 6.284707999999682
+        },
+        "selectionMilliseconds": {
+          "count": 880,
+          "p50": 2.0617090000000644,
+          "p95": 2.1951249999997344,
+          "p99": 2.4352499999999964,
+          "max": 3.6202090000000027,
+          "samplesDropped": 0,
+          "sampleLimit": 2048
+        },
+        "operations": {
+          "componentSerializations": 19360,
+          "fullCandidateCompositions": 881,
+          "winnerSerializations": 881,
+          "bytesExamined": 14682965,
+          "allocationProxyBytes": 11022079,
+          "expandedHeaderSerializations": 14960,
+          "expandedLaneSerializations": 0,
+          "expandedLaneSerializationReuses": 3520,
+          "expandedReusedLaneBytes": 20031396,
+          "expandedSerializedLaneBytes": 0,
+          "expandedBytesExamined": 20443132,
+          "outerCandidateDescriptors": 3520,
+          "outerCandidateFrames": 880,
+          "lanePayloadsBuilt": 3520,
+          "lanePayloadReferenceReuses": 3520,
+          "sizeProofOperations": 7040,
+          "chosenFrameMaterializations": 880,
+          "trustedProofsCreated": 0,
+          "trustedProofsConsumed": 0,
+          "trustedProofRejects": 0,
+          "trustedValidationsPerformed": 0,
+          "trustedValidationsReused": 0,
+          "trustedCanonicalSizeOperations": 0,
+          "trustedPositionalSizeOperations": 0,
+          "maxExpandedCandidateBytes": 12881
+        },
+        "preparedProjectionOperations": {
+          "enabled": true,
+          "canonicalizations": 1762,
+          "hashes": 1762,
+          "diffs": 1760,
+          "preparations": 1762,
+          "preparedHashHits": 1762,
+          "preparedDiffs": 1760,
+          "suppliedPreparedHits": 0,
+          "pendingReferences": 0,
+          "ackedReferences": 2,
+          "maxPendingReferences": 3072,
+          "maxAckedReferences": 256
+        },
+        "selections": 880,
+        "fallbackCounts": {
+          "missing-exact-acked-base": 1
+        },
+        "transcriptSha256": "9a062361b33e2d2efdf695683d5d0f8b0627149cc8cec04cb66ce1ce58487652",
+        "selectionTranscriptSha256": "73712f18975acb66eb789414efb9d51f383bf0ea9a2fc23e2370d053a263360c",
+        "parityComparisons": 800,
+        "decodedSemanticComparisons": 800
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "order": "full-trusted",
+      "publishMeanReductionFraction": 0.3925911738918383,
+      "selectionP50ReductionFraction": 0.9088498930556228,
+      "selectionP95ReductionFraction": 0.8699854241645313,
+      "allocationProxyReductionFraction": 0
+    },
+    {
+      "order": "trusted-full",
+      "publishMeanReductionFraction": 0.38859653365488167,
+      "selectionP50ReductionFraction": 0.9078230729943253,
+      "selectionP95ReductionFraction": 0.860733215648355,
+      "allocationProxyReductionFraction": 0
+    }
+  ],
+  "parity": {
+    "exactWireComparisons": 1600,
+    "exactSelectionTranscriptComparisons": 1600,
+    "semanticDecodeComparisons": 1600,
+    "mismatches": 0,
+    "transcriptSha256": "9a062361b33e2d2efdf695683d5d0f8b0627149cc8cec04cb66ce1ce58487652",
+    "combinedSha256": "41715d2c484645a7214b25c3d102d63d33f4c7c36e006e4880a10539bca53a03"
+  },
+  "attribution": {
+    "material": true,
+    "skipped": "Four repeated full semantic/hash validations and the separate expanded-size pass are replaced by one authority-origin validation plus one consumed proof.",
+    "retained": "All four positional lane encodes, exact four-candidate sizes, one chosen composition, digest, queue, and send remain unchanged.",
+    "allocationProxyNote": "Existing labeled serialization/reference proxy only; not measured V8 heap allocation."
+  },
+  "limitations": [
+    "Machine-local synthetic 48-public-entity plus one-owner workload",
+    "Profiler-off counterbalanced microbenchmark; no hosted, cadence-policy, compression, or 24/48/96 claim"
+  ]
+}

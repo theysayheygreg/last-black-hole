@@ -3,6 +3,7 @@
 
 const assert = require("assert");
 const crypto = require("crypto");
+const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const { projectionHash } = require("../scripts/canonical-structural-delta.cjs");
@@ -130,6 +131,8 @@ function main() {
     mismatches: 0, transcriptSha256: crypto.createHash("sha256")
       .update(trusted.transcriptSha256).digest("hex"), direction: SERVER_TO_CLIENT,
     proofOperations: trusted.operations };
+  if (process.env.LBH_S18_PROOF_OUTPUT) fs.writeFileSync(path.resolve(process.env.LBH_S18_PROOF_OUTPUT),
+    `${JSON.stringify(result, null, 2)}\n`, { flag: "wx" });
   console.log(JSON.stringify(result, null, 2));
 }
 
