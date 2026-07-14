@@ -318,10 +318,21 @@ function createHostedProductService({
       record(input, ["credential", "workloadRunHandle", "payload"]);
       const context = workloadContext(input.credential, input.workloadRunHandle);
       if (context.state !== "DRAINING") fail("result_not_terminal", { runId: context.runId });
-      return outbox.enqueue({ authority: {
+      const accepted = outbox.enqueue({ authority: {
         run_id: context.runId, lease_id: context.authorityLeaseId, lease_epoch: context.leaseEpoch,
         authority_incarnation: context.authorityIncarnation,
       }, payload: input.payload });
+      // The placement-owned acceptance CAS is the immutable terminal
+      // transition. Once accepted, placement deliberately rejects every later
+      // lease mutation, including endRun. Persist the recoverable product-side
+      // acknowledgement only after the outbox confirms that exact lineage.
+      repository.transaction((repo) => {
+        repo.updateWorkloadContext(context.workloadRunHandle, (current) => ({ ...current,
+          state: "ENDED", acceptedResultId: accepted.result_id }));
+        repo.updateMatch(context.matchId, (current) => ({ ...current,
+          state: "ENDED", acceptedResultId: accepted.result_id }));
+      });
+      return accepted;
     });
   }
 
@@ -329,14 +340,10 @@ function createHostedProductService({
     return guarded("workload_end", () => {
       record(input, ["credential", "workloadRunHandle"]);
       const context = workloadContext(input.credential, input.workloadRunHandle);
-      if (context.state !== "DRAINING") fail("end_not_draining", { runId: context.runId });
-      const result = placement.endRun({ credential: input.credential, runId: context.runId,
-        authorityLeaseId: context.authorityLeaseId, leaseEpoch: context.leaseEpoch, outcome: "ENDED" });
-      repository.transaction((repo) => {
-        repo.updateWorkloadContext(context.workloadRunHandle, (current) => ({ ...current, state: "ENDED" }));
-        repo.updateMatch(context.matchId, (current) => ({ ...current, state: "ENDED" }));
-      });
-      return result;
+      if (context.state !== "ENDED" || typeof context.acceptedResultId !== "string") {
+        fail("end_without_accepted_result", { runId: context.runId });
+      }
+      return Object.freeze({ state: "ENDED", acceptedResultId: context.acceptedResultId });
     });
   }
 

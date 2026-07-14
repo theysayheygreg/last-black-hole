@@ -103,7 +103,7 @@ function rig() {
     diagnosticKey: crypto.createHash("sha256").update("product-diagnostic-key").digest(),
     authenticateWorkload: (credential) => {
       const row = descriptors.get(credential); if (!row) return null;
-      const { authorityIncarnation, credentialBinding, ...placementIdentity } = row; return placementIdentity;
+      const { credentialBinding, ...placementIdentity } = row; return placementIdentity;
     },
     authenticateControlPlane: (credential) => credential === "internal-control" ? { role: "CONTROL_PLANE" } : null,
     readinessTtlMs: 100, leaseTtlMs: 200, bootstrapTtlMs: 100, ticketTtlMs: 1_000,
@@ -112,7 +112,8 @@ function rig() {
   for (let index = 0; index < 6; index += 1) {
     const row = descriptors.get(`workload-${index}`);
     placement.registerCapacity({ credential: `workload-${index}`, registration: {
-      authorityInstanceId: row.authorityInstanceId, region: row.region, artifactSha: row.artifactSha,
+      authorityInstanceId: row.authorityInstanceId, authorityIncarnation: row.authorityIncarnation,
+      region: row.region, artifactSha: row.artifactSha,
       protocolVersion: row.protocolVersion, manifestHash: row.manifestHash, capabilities: row.capabilities,
       maxMatches: row.maxMatches, maxSeats: row.maxSeats, observedAllocation: 0, maintenance: false,
       draining: false, heartbeatTtlMs: 10_000, workloadKeyId: row.workloadKeyId,
@@ -215,6 +216,12 @@ function main() {
 
   const handleA = h.allocation(matchA, 0);
   const handleB = h.allocation(matchB, 1);
+  h.descriptors.set("workload-0-reincarnated", {
+    ...h.descriptors.get("workload-0"), authorityIncarnation: "authority-0-incarnation-2",
+    credentialBinding: "binding-0-incarnation-2",
+  });
+  h.rejected(() => h.service.workloadHeartbeat({ credential: "workload-0-reincarnated",
+    workloadRunHandle: handleA, metrics: { connections: 0, queueDepth: 0, memoryBytes: 1 } }));
   for (let index = 1; index < 4; index += 1) {
     const joined = h.service.clientJoinMatch({ accessToken: users[index].accessToken, profileId: users[index].profileId,
       joinCode: matchA.joinCode, clientIncarnation: `client-${index}`, playerAlias: users[index].name });
