@@ -104,38 +104,44 @@ class HostedIdentityService {
 
   exchangeProviderProof(input) {
     return this._public("provider_exchange", () => {
-      strictRecord(input, ["provider", "proof", "audience", "appId", "grantType", "callbackId"]);
+      strictRecord(input, ["provider", "proof", "callbackId"]);
       const provider = this._provider(input.provider);
       const proof = boundedString(input.proof, "proof", { max: 4096 });
-      const audience = boundedString(input.audience, "audience", { max: 160 });
-      const appId = boundedString(input.appId, "appId", { max: 160 });
-      const grantType = boundedString(input.grantType, "grantType", { max: 80 });
       const callbackId = boundedString(input.callbackId, "callbackId", { max: 256 });
-      const verified = this._verifyProvider(provider, { proof, audience, appId, grantType });
+      const verified = this._verifyProvider(provider, proof);
       return this.repository.transaction((repo) => {
-        const accountId = this._upsertIdentity(repo, input.provider, verified.subject, callbackId);
-        this._recordVerifiedEntitlement(repo, accountId, input.provider, appId, grantType, verified.entitlement);
-        return this._issueFamily(repo, accountId, { provider: input.provider, appId, grantType });
+        if (repo.getCallback(input.provider, callbackId) || repo.getExchangeProof(input.provider, verified.proofUseHash)) {
+          fail("exchange_replay");
+        }
+        const accountId = this._upsertIdentity(repo, input.provider, verified.subject);
+        const entitlement = this._applyObservation(repo, accountId, input.provider, verified);
+        if (entitlement.state !== "active") fail("entitlement_absent", { accountId });
+        repo.putCallback({
+          provider: input.provider, callbackId, accountId, subjectHash: this.crypto.hash(verified.subject),
+          observationHash: verified.observationHash, kind: "exchange", createdAt: this.clock.now(),
+        });
+        repo.putExchangeProof({
+          provider: input.provider, proofUseHash: verified.proofUseHash, accountId, callbackId, consumedAt: this.clock.now(),
+        });
+        return this._issueFamily(repo, accountId, provider.scope);
       });
     });
   }
 
   linkProvider(input) {
     return this._public("provider_link", () => {
-      strictRecord(input, ["accessToken", "provider", "proof", "audience", "appId", "grantType", "callbackId"]);
+      strictRecord(input, ["accessToken", "provider", "proof", "callbackId"]);
       const principal = this._authenticate(input.accessToken);
       const provider = this._provider(input.provider);
       const proof = boundedString(input.proof, "proof", { max: 4096 });
-      const audience = boundedString(input.audience, "audience", { max: 160 });
-      const appId = boundedString(input.appId, "appId", { max: 160 });
-      const grantType = boundedString(input.grantType, "grantType", { max: 80 });
       const callbackId = boundedString(input.callbackId, "callbackId", { max: 256 });
-      const verified = this._verifyProvider(provider, { proof, audience, appId, grantType });
+      const verified = this._verifyProvider(provider, proof);
       return this.repository.transaction((repo) => {
         const existing = repo.getIdentity(input.provider, verified.subject);
         if (existing && existing.accountId !== principal.accountId) fail("identity_collision", { accountId: principal.accountId });
         const callback = repo.getCallback(input.provider, callbackId);
-        if (callback && (callback.accountId !== principal.accountId || callback.subjectHash !== this.crypto.hash(verified.subject))) {
+        if (callback && (callback.accountId !== principal.accountId || callback.subjectHash !== this.crypto.hash(verified.subject) ||
+            callback.observationHash !== verified.observationHash || callback.kind !== "link")) {
           fail("callback_collision", { accountId: principal.accountId });
         }
         if (!existing) repo.putIdentity({
@@ -150,9 +156,11 @@ class HostedIdentityService {
           callbackId,
           accountId: principal.accountId,
           subjectHash: this.crypto.hash(verified.subject),
+          observationHash: verified.observationHash,
+          kind: "link",
           createdAt: this.clock.now(),
         });
-        this._recordVerifiedEntitlement(repo, principal.accountId, input.provider, appId, grantType, verified.entitlement);
+        this._applyObservation(repo, principal.accountId, input.provider, verified);
         return { accountId: principal.accountId, linked: true };
       });
     });
@@ -160,24 +168,18 @@ class HostedIdentityService {
 
   reconcileEntitlement(input) {
     return this._public("entitlement_reconcile", () => {
-      strictRecord(input, ["provider", "proof", "audience", "appId", "grantType", "callbackId"]);
+      strictRecord(input, ["provider", "proof", "callbackId"]);
       const provider = this._provider(input.provider);
       const proof = boundedString(input.proof, "proof", { max: 4096 });
-      const audience = boundedString(input.audience, "audience", { max: 160 });
-      const appId = boundedString(input.appId, "appId", { max: 160 });
-      const grantType = boundedString(input.grantType, "grantType", { max: 80 });
       const callbackId = boundedString(input.callbackId, "callbackId", { max: 256 });
-      const verified = this._verifyProvider(provider, { proof, audience, appId, grantType }, { requireActive: false });
+      const verified = this._verifyProvider(provider, proof, { requireActive: false });
       return this.repository.transaction((repo) => {
         const identity = repo.getIdentity(input.provider, verified.subject);
         if (!identity) fail("identity_unknown");
         const subjectHash = this.crypto.hash(verified.subject);
-        const observationHash = this.crypto.hash([
-          input.provider, appId, grantType, verified.entitlement.state, verified.entitlement.providerGrantId,
-        ].join("\u0000"));
         const callback = repo.getCallback(input.provider, callbackId);
         if (callback && (callback.accountId !== identity.accountId || callback.subjectHash !== subjectHash ||
-            callback.observationHash !== observationHash)) {
+            callback.observationHash !== verified.observationHash || callback.kind !== "reconcile")) {
           fail("callback_collision", { accountId: identity.accountId });
         }
         if (!callback) repo.putCallback({
@@ -185,21 +187,20 @@ class HostedIdentityService {
           callbackId,
           accountId: identity.accountId,
           subjectHash,
-          observationHash,
+          observationHash: verified.observationHash,
+          kind: "reconcile",
           createdAt: this.clock.now(),
         });
-        this._recordVerifiedEntitlement(
-          repo, identity.accountId, input.provider, appId, grantType, verified.entitlement,
-        );
-        if (verified.entitlement.state !== "active") {
+        const entitlement = this._applyObservation(repo, identity.accountId, input.provider, verified);
+        if (entitlement.state !== "active") {
           repo.revokeFamiliesForEntitlement(
             identity.accountId,
-            { provider: input.provider, appId, grantType },
+            provider.scope,
             this.clock.now(),
-            `entitlement_${verified.entitlement.state}`,
+            `entitlement_${entitlement.state}`,
           );
         }
-        return { reconciled: true, state: verified.entitlement.state };
+        return { reconciled: true, state: entitlement.state };
       });
     });
   }
@@ -263,64 +264,132 @@ class HostedIdentityService {
 
   _provider(name) {
     boundedString(name, "provider", { max: 80, pattern: /^[a-z0-9_-]+$/ });
-    const adapter = this.providers[name];
-    if (!adapter || typeof adapter.verifyIdentity !== "function" || typeof adapter.verifyEntitlement !== "function") {
+    const config = this.providers[name];
+    if (!config || typeof config !== "object" || !config.adapter || typeof config.adapter.verifyGrant !== "function") {
       fail("provider_unavailable");
     }
-    return adapter;
+    try {
+      const prototype = Object.getPrototypeOf(config);
+      const keys = Object.keys(config).sort();
+      if ((prototype !== Object.prototype && prototype !== null) ||
+          JSON.stringify(keys) !== JSON.stringify(["adapter", "appId", "audience", "grantType", "issuer"])) {
+        fail("provider_unavailable");
+      }
+      return {
+        adapter: config.adapter,
+        issuer: boundedString(config.issuer, "issuer", { max: 160 }),
+        scope: {
+          provider: name,
+          audience: boundedString(config.audience, "audience", { max: 160 }),
+          appId: boundedString(config.appId, "appId", { max: 160 }),
+          grantType: boundedString(config.grantType, "grantType", { max: 80 }),
+        },
+      };
+    } catch {
+      fail("provider_unavailable");
+    }
   }
 
-  _verifyProvider(adapter, request, { requireActive = true } = {}) {
-    let identity;
-    let entitlement;
+  _verifyProvider(provider, proof, { requireActive = true } = {}) {
+    let observation;
     try {
-      identity = adapter.verifyIdentity({ proof: request.proof, audience: request.audience });
-      entitlement = adapter.verifyEntitlement({ proof: request.proof, appId: request.appId, grantType: request.grantType });
+      observation = provider.adapter.verifyGrant({
+        proof,
+        expected: Object.freeze({
+          issuer: provider.issuer,
+          audience: provider.scope.audience,
+          appId: provider.scope.appId,
+          grantType: provider.scope.grantType,
+        }),
+      });
     } catch {
       fail("provider_unavailable");
     }
     try {
-      strictRecord(identity, ["subject"]);
-      strictRecord(entitlement, ["state", "providerGrantId"]);
+      strictRecord(observation, [
+        "subject", "issuer", "audience", "appId", "grantType", "providerGrantId", "state",
+        "observationVersion", "observedAt",
+      ]);
     } catch {
       fail("provider_ambiguous");
     }
-    const subject = boundedString(identity.subject, "subject", { max: 512 });
-    if (!ENTITLEMENT_STATES.includes(entitlement.state)) fail("entitlement_absent");
-    if (requireActive && entitlement.state !== "active") fail("entitlement_absent");
-    boundedString(entitlement.providerGrantId, "providerGrantId", { max: 512 });
-    return { subject, entitlement };
+    const verified = {
+      subject: boundedString(observation.subject, "subject", { max: 512 }),
+      issuer: boundedString(observation.issuer, "issuer", { max: 160 }),
+      audience: boundedString(observation.audience, "audience", { max: 160 }),
+      appId: boundedString(observation.appId, "appId", { max: 160 }),
+      grantType: boundedString(observation.grantType, "grantType", { max: 80 }),
+      providerGrantId: boundedString(observation.providerGrantId, "providerGrantId", { max: 512 }),
+      state: observation.state,
+      observationVersion: observation.observationVersion,
+      observedAt: observation.observedAt,
+    };
+    if (verified.issuer !== provider.issuer || verified.audience !== provider.scope.audience ||
+        verified.appId !== provider.scope.appId || verified.grantType !== provider.scope.grantType) {
+      fail("provider_binding_mismatch");
+    }
+    if (!ENTITLEMENT_STATES.includes(verified.state)) fail("entitlement_absent");
+    if (requireActive && verified.state !== "active") fail("entitlement_absent");
+    if (!Number.isSafeInteger(verified.observationVersion) || verified.observationVersion < 1 ||
+        !Number.isSafeInteger(verified.observedAt) || verified.observedAt < 0) {
+      fail("provider_ambiguous");
+    }
+    verified.observationHash = this.crypto.hash([
+      verified.subject, verified.issuer, verified.audience, verified.appId, verified.grantType,
+      verified.providerGrantId, verified.state, String(verified.observationVersion), String(verified.observedAt),
+    ].join("\u0000"));
+    verified.proofUseHash = this.crypto.hash([
+      verified.subject, verified.issuer, verified.providerGrantId, String(verified.observationVersion),
+    ].join("\u0000"));
+    return verified;
   }
 
-  _upsertIdentity(repo, provider, subject, callbackId) {
-    const subjectHash = this.crypto.hash(subject);
-    const callback = repo.getCallback(provider, callbackId);
+  _upsertIdentity(repo, provider, subject) {
     const existing = repo.getIdentity(provider, subject);
-    if (callback && callback.subjectHash !== subjectHash) fail("callback_collision", { accountId: callback.accountId });
-    if (callback && existing && callback.accountId !== existing.accountId) fail("identity_ambiguous");
-    if (existing) {
-      if (!callback) repo.putCallback({ provider, callbackId, accountId: existing.accountId, subjectHash, createdAt: this.clock.now() });
-      return existing.accountId;
-    }
-    if (callback) fail("identity_ambiguous", { accountId: callback.accountId });
+    if (existing) return existing.accountId;
     const accountId = this.crypto.randomId("account");
     repo.putAccount({ accountId, state: "active", createdAt: this.clock.now() });
     repo.putIdentity({
       identityId: this.crypto.randomId("identity"), provider, providerSubject: subject, accountId, createdAt: this.clock.now(),
     });
-    repo.putCallback({ provider, callbackId, accountId, subjectHash, createdAt: this.clock.now() });
     return accountId;
   }
 
-  _recordVerifiedEntitlement(repo, accountId, provider, appId, grantType, observation) {
-    const existing = repo.getEntitlement(accountId, provider, appId, grantType);
-    repo.putEntitlement({
+  _applyObservation(repo, accountId, provider, observation) {
+    const existing = repo.getEntitlement(accountId, provider, observation.appId, observation.grantType);
+    if (existing) {
+      if (existing.providerGrantHash !== this.crypto.hash(observation.providerGrantId)) {
+        fail("entitlement_grant_collision", { accountId });
+      }
+      if (existing.state !== "active" && observation.state !== existing.state) {
+        fail("entitlement_terminal", { accountId });
+      }
+      if (observation.observationVersion < existing.observationVersion) {
+        fail("entitlement_stale", { accountId });
+      }
+      if (observation.observationVersion === existing.observationVersion &&
+          observation.observationHash !== existing.observationHash) {
+        fail("entitlement_conflict", { accountId });
+      }
+      if (observation.observationVersion === existing.observationVersion) return existing;
+      if (observation.observedAt <= existing.providerObservedAt) {
+        fail("entitlement_stale", { accountId });
+      }
+    }
+    const record = {
       entitlementId: existing?.entitlementId || this.crypto.randomId("entitlement"),
-      accountId, provider, appId, grantType,
+      accountId, provider, appId: observation.appId, grantType: observation.grantType,
+      issuer: observation.issuer,
+      audience: observation.audience,
       providerGrantHash: this.crypto.hash(observation.providerGrantId),
       state: observation.state,
-      observedAt: this.clock.now(),
-    });
+      observationVersion: observation.observationVersion,
+      providerObservedAt: observation.observedAt,
+      observationHash: observation.observationHash,
+      recordedAt: this.clock.now(),
+    };
+    repo.putEntitlement(record);
+    return record;
   }
 
   _issueFamily(repo, accountId, scope) {

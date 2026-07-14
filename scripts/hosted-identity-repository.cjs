@@ -20,6 +20,7 @@ class InMemoryHostedIdentityRepository {
     this.accounts = new Map();
     this.identities = new Map();
     this.callbacks = new Map();
+    this.exchangeProofs = new Map();
     this.entitlements = new Map();
     this.profiles = new Map();
     this.accessSessions = new Map();
@@ -32,6 +33,7 @@ class InMemoryHostedIdentityRepository {
       accounts: copyMap(this.accounts),
       identities: copyMap(this.identities),
       callbacks: copyMap(this.callbacks),
+      exchangeProofs: copyMap(this.exchangeProofs),
       entitlements: copyMap(this.entitlements),
       profiles: copyMap(this.profiles),
       accessSessions: copyMap(this.accessSessions),
@@ -60,7 +62,18 @@ class InMemoryHostedIdentityRepository {
     return copy(this.callbacks.get(`${provider}\u0000${callbackId}`));
   }
   putCallback(record) {
-    this.callbacks.set(`${record.provider}\u0000${record.callbackId}`, copy(record));
+    const key = `${record.provider}\u0000${record.callbackId}`;
+    if (this.callbacks.has(key)) throw new Error("identity callback already consumed");
+    this.callbacks.set(key, copy(record));
+  }
+
+  getExchangeProof(provider, proofUseHash) {
+    return copy(this.exchangeProofs.get(`${provider}\u0000${proofUseHash}`));
+  }
+  putExchangeProof(record) {
+    const key = `${record.provider}\u0000${record.proofUseHash}`;
+    if (this.exchangeProofs.has(key)) throw new Error("identity proof already consumed");
+    this.exchangeProofs.set(key, copy(record));
   }
 
   entitlementKey(accountId, provider, appId, grantType) {

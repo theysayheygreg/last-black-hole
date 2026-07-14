@@ -7,33 +7,38 @@ const { InMemoryHostedIdentityRepository } = require("../scripts/hosted-identity
 function harness() {
   let now = 1_700_000_000_000;
   let sequence = 0;
+  let randomIdHook;
   const proofs = new Map();
   const diagnostics = [];
   const provider = {
     outage: false,
-    verifyIdentity({ proof, audience }) {
+    verifyGrant({ proof, expected }) {
       if (this.outage) throw new Error("offline");
+      this.lastExpected = expected;
       const record = proofs.get(proof);
-      if (!record || audience !== "lbh-client") return null;
-      if (record.ambiguous) return { subject: record.subject, secondSubject: "other" };
-      return { subject: record.subject };
-    },
-    verifyEntitlement({ proof, appId, grantType }) {
-      if (this.outage) throw new Error("offline");
-      const record = proofs.get(proof);
-      if (!record || appId !== "lbh" || grantType !== "base_game") return null;
-      return { state: record.state, providerGrantId: record.grantId };
+      if (!record) return null;
+      const result = { ...record };
+      delete result.ambiguous;
+      if (record.ambiguous) result.secondSubject = "other";
+      return result;
     },
   };
   const repository = new InMemoryHostedIdentityRepository();
   const crypto = {
-    randomId(prefix) { sequence += 1; return `${prefix}_${String(sequence).padStart(6, "0")}`; },
+    randomId(prefix) {
+      sequence += 1;
+      if (randomIdHook) randomIdHook(prefix);
+      return `${prefix}_${String(sequence).padStart(6, "0")}`;
+    },
     randomToken() { sequence += 1; return `token_${String(sequence).padStart(58, "x")}`; },
     hash(value) { return require("node:crypto").createHash("sha256").update(value).digest("hex"); },
   };
   const service = new HostedIdentityService({
     repository,
-    providers: { test: provider },
+    providers: {
+      test: { adapter: provider, issuer: "test-issuer", audience: "lbh-client", appId: "lbh", grantType: "base_game" },
+      test2: { adapter: provider, issuer: "test-issuer", audience: "lbh-client", appId: "lbh", grantType: "base_game" },
+    },
     clock: { now: () => now },
     crypto,
     diagnostics: (event) => diagnostics.push(event),
@@ -41,15 +46,25 @@ function harness() {
     accessTtlMs: 10_000,
     refreshTtlMs: 100_000,
   });
-  const addProof = (proof, subject, state = "active") => proofs.set(proof, {
-    subject, state, grantId: `grant-${proof}`,
+  const addProof = (proof, subject, state = "active", observationVersion = 1, overrides = {}) => proofs.set(proof, {
+    subject,
+    issuer: "test-issuer",
+    audience: "lbh-client",
+    appId: "lbh",
+    grantType: "base_game",
+    providerGrantId: `grant-${subject}`,
+    state,
+    observationVersion,
+    observedAt: now + observationVersion,
+    ...overrides,
   });
   const exchange = (proof, callbackId = `callback-${proof}`) => service.exchangeProviderProof({
-    provider: "test", proof, audience: "lbh-client", appId: "lbh", grantType: "base_game", callbackId,
+    provider: "test", proof, callbackId,
   });
   return {
     service, repository, provider, proofs, diagnostics, addProof, exchange,
     advance: (milliseconds) => { now += milliseconds; },
+    setRandomIdHook: (hook) => { randomIdHook = hook; },
   };
 }
 
@@ -78,36 +93,69 @@ test("provider exchange creates opaque internal ids and separate entitlement", (
   const entitlement = h.repository.getEntitlement(session.accountId, "test", "lbh", "base_game");
   assert.equal(entitlement.state, "active");
   assert.notEqual(entitlement.entitlementId, session.accountId);
+  assert.deepEqual(h.provider.lastExpected, {
+    issuer: "test-issuer", audience: "lbh-client", appId: "lbh", grantType: "base_game",
+  });
+  assert.equal(Object.isFrozen(h.provider.lastExpected), true);
 });
 
-test("provider callback and linking are idempotent", () => {
+test("exchange callback and proof are durable one-shot consumptions", () => {
   const h = harness();
   h.addProof("proof-a", "subject-a");
-  h.addProof("proof-b", "subject-b");
   const first = h.exchange("proof-a", "callback-a");
-  const again = h.exchange("proof-a", "callback-a");
-  assert.equal(again.accountId, first.accountId);
+  rejected(() => h.exchange("proof-a", "callback-a"));
+  rejected(() => h.exchange("proof-a", "different-callback"));
+  h.addProof("different-proof", "subject-a", "active", 2);
+  rejected(() => h.exchange("different-proof", "callback-a"));
+  assert.equal(h.repository.refreshFamilies.size, 1);
+  assert.equal(h.repository.exchangeProofs.size, 1);
+  assert.equal([...h.repository.refreshFamilies.values()][0].accountId, first.accountId);
+  const durableRecords = JSON.stringify([
+    ...h.repository.callbacks.values(), ...h.repository.exchangeProofs.values(),
+    ...h.repository.accessSessions.values(), ...h.repository.refreshTokens.values(),
+  ]);
+  assert.equal(durableRecords.includes(first.accessToken), false);
+  assert.equal(durableRecords.includes(first.refreshToken), false);
+});
+
+test("an interleaved exchange replay observes the durable claim before family issuance", () => {
+  const h = harness();
+  h.addProof("proof-a", "subject-a");
+  let interleaved = false;
+  h.setRandomIdHook((prefix) => {
+    if (prefix !== "refresh_family" || interleaved) return;
+    interleaved = true;
+    rejected(() => h.exchange("proof-a", "concurrent-callback"));
+  });
+  h.exchange("proof-a", "winning-callback");
+  assert.equal(interleaved, true);
+  assert.equal(h.repository.exchangeProofs.size, 1);
+  assert.equal(h.repository.refreshFamilies.size, 1);
+});
+
+test("provider linking is idempotent without minting a family", () => {
+  const h = harness();
+  h.addProof("proof-a", "subject-a");
+  h.addProof("proof-b", "subject-b", "active", 2);
+  const first = h.exchange("proof-a", "callback-a");
   const linkOne = h.service.linkProvider({
-    accessToken: first.accessToken, provider: "test", proof: "proof-b", audience: "lbh-client",
-    appId: "lbh", grantType: "base_game", callbackId: "callback-b",
+    accessToken: first.accessToken, provider: "test2", proof: "proof-b", callbackId: "callback-b",
   });
   const linkTwo = h.service.linkProvider({
-    accessToken: first.accessToken, provider: "test", proof: "proof-b", audience: "lbh-client",
-    appId: "lbh", grantType: "base_game", callbackId: "callback-b",
+    accessToken: first.accessToken, provider: "test2", proof: "proof-b", callbackId: "callback-b",
   });
   assert.deepEqual(linkOne, linkTwo);
-  assert.equal(h.repository.getIdentity("test", "subject-b").accountId, first.accountId);
+  assert.equal(h.repository.getIdentity("test2", "subject-b").accountId, first.accountId);
 });
 
 test("account-link collision fails closed without moving identity", () => {
   const h = harness();
   h.addProof("proof-a", "subject-a");
-  h.addProof("proof-b", "subject-b");
+  h.addProof("proof-b", "subject-b", "active", 2);
   const a = h.exchange("proof-a");
   const b = h.exchange("proof-b");
   rejected(() => h.service.linkProvider({
-    accessToken: a.accessToken, provider: "test", proof: "proof-b", audience: "lbh-client",
-    appId: "lbh", grantType: "base_game", callbackId: "collision-link",
+    accessToken: a.accessToken, provider: "test", proof: "proof-b", callbackId: "collision-link",
   }));
   assert.equal(h.repository.getIdentity("test", "subject-b").accountId, b.accountId);
   assert.notEqual(a.accountId, b.accountId);
@@ -146,13 +194,13 @@ test("revoked and refunded entitlement immediately fail authorization", () => {
 test("provider reconciliation persists revoke/refund and fences every scoped family", () => {
   for (const state of ["revoked", "refunded"]) {
     const h = harness();
-    h.addProof("proof-a", "subject-a");
+    h.addProof("proof-a", "subject-a", "active", 1);
+    h.addProof("proof-b", "subject-a", "active", 2);
     const first = h.exchange("proof-a", "sign-in-a");
-    const second = h.exchange("proof-a", "sign-in-b");
-    h.proofs.get("proof-a").state = state;
+    const second = h.exchange("proof-b", "sign-in-b");
+    h.addProof("terminal-proof", "subject-a", state, 3);
     const observation = {
-      provider: "test", proof: "proof-a", audience: "lbh-client", appId: "lbh", grantType: "base_game",
-      callbackId: `provider-${state}`,
+      provider: "test", proof: "terminal-proof", callbackId: `provider-${state}`,
     };
     assert.deepEqual(h.service.reconcileEntitlement(observation), { reconciled: true, state });
     assert.deepEqual(h.service.reconcileEntitlement(observation), { reconciled: true, state });
@@ -170,8 +218,7 @@ test("provider reconciliation never creates an account for an unknown identity",
   const h = harness();
   h.addProof("unknown-proof", "never-linked-subject", "refunded");
   rejected(() => h.service.reconcileEntitlement({
-    provider: "test", proof: "unknown-proof", audience: "lbh-client", appId: "lbh", grantType: "base_game",
-    callbackId: "unknown-callback",
+    provider: "test", proof: "unknown-proof", callbackId: "unknown-callback",
   }));
   assert.equal(h.repository.accounts.size, 0);
   assert.equal(h.repository.identities.size, 0);
@@ -184,6 +231,52 @@ test("entitlement absence and non-active provider observation fail closed", () =
   rejected(() => h.exchange("revoked-proof"));
   rejected(() => h.exchange("missing-proof"));
   assert.equal(h.repository.accounts.size, 0);
+});
+
+test("provider assertion binding rejects every trusted-configuration mismatch", () => {
+  for (const [field, value] of [
+    ["issuer", "evil-issuer"],
+    ["audience", "other-client"],
+    ["appId", "other-game"],
+    ["grantType", "friend-pass"],
+  ]) {
+    const h = harness();
+    h.addProof("mismatch", "subject-a", "active", 1, { [field]: value });
+    rejected(() => h.exchange("mismatch"));
+    assert.equal(h.repository.accounts.size, 0);
+    assert.equal(h.repository.refreshFamilies.size, 0);
+  }
+});
+
+test("monotonic observations reject stale time/version and terminal reactivation", () => {
+  const h = harness();
+  h.addProof("active-v2", "subject-a", "active", 2);
+  const session = h.exchange("active-v2");
+  const initial = h.repository.getEntitlement(session.accountId, "test", "lbh", "base_game");
+
+  h.addProof("active-v1", "subject-a", "active", 1);
+  rejected(() => h.exchange("active-v1", "stale-version"));
+  h.addProof("active-v3-old-time", "subject-a", "active", 3, { observedAt: initial.providerObservedAt });
+  rejected(() => h.exchange("active-v3-old-time", "stale-time"));
+  h.addProof("other-grant-v3", "subject-a", "active", 3, { providerGrantId: "different-grant" });
+  rejected(() => h.exchange("other-grant-v3", "grant-collision"));
+  assert.equal(h.repository.refreshFamilies.size, 1);
+
+  h.addProof("revoked-v3", "subject-a", "revoked", 3);
+  assert.equal(h.service.reconcileEntitlement({
+    provider: "test", proof: "revoked-v3", callbackId: "revoke-v3",
+  }).state, "revoked");
+  h.addProof("active-v4", "subject-a", "active", 4);
+  rejected(() => h.exchange("active-v4", "reactivate-v4"));
+  h.addProof("refunded-v4", "subject-a", "refunded", 4);
+  rejected(() => h.service.reconcileEntitlement({
+    provider: "test", proof: "refunded-v4", callbackId: "change-terminal-state",
+  }));
+  const terminal = h.repository.getEntitlement(session.accountId, "test", "lbh", "base_game");
+  assert.equal(terminal.state, "revoked");
+  assert.equal(terminal.observationVersion, 3);
+  assert.equal(h.repository.refreshFamilies.size, 1);
+  assert.equal([...h.repository.refreshFamilies.values()][0].state, "revoked");
 });
 
 test("profile authorization is owner-only", () => {
@@ -204,7 +297,8 @@ test("access and refresh expiry use the injected clock", () => {
   const accessExpired = h.exchange("proof-a");
   h.advance(10_001);
   rejected(() => h.service.createProfile({ accessToken: accessExpired.accessToken, displayName: "Late" }));
-  const fresh = h.exchange("proof-a", "fresh-callback");
+  h.addProof("fresh-proof", "subject-a", "active", 2);
+  const fresh = h.exchange("fresh-proof", "fresh-callback");
   h.advance(100_001);
   rejected(() => h.service.refresh({ refreshToken: fresh.refreshToken }));
 });
@@ -213,11 +307,12 @@ test("malformed and smuggled fields receive one generic error", () => {
   const h = harness();
   h.addProof("proof-a", "subject-a");
   const valid = {
-    provider: "test", proof: "proof-a", audience: "lbh-client", appId: "lbh", grantType: "base_game",
-    callbackId: "callback-a",
+    provider: "test", proof: "proof-a", callbackId: "callback-a",
   };
   rejected(() => h.service.exchangeProviderProof({ ...valid, accountId: "caller-selected" }));
   rejected(() => h.service.exchangeProviderProof({ ...valid, deviceFingerprint: "hardware-hash" }));
+  rejected(() => h.service.exchangeProviderProof({ ...valid, audience: "caller-selected" }));
+  rejected(() => h.service.exchangeProviderProof({ ...valid, appId: "caller-selected" }));
   rejected(() => h.service.exchangeProviderProof({ ...valid, provider: "../test" }));
   rejected(() => h.service.exchangeProviderProof(Object.assign(Object.create({}), valid)));
   rejected(() => h.service.exchangeProviderProof({ ...valid, proof: "x".repeat(4097) }));
@@ -242,8 +337,7 @@ test("diagnostics are pseudonymous and contain no provider subjects or secrets",
   const a = h.exchange("proof-a");
   h.exchange("proof-b");
   rejected(() => h.service.linkProvider({
-    accessToken: a.accessToken, provider: "test", proof: "proof-b", audience: "lbh-client",
-    appId: "lbh", grantType: "base_game", callbackId: "collision",
+    accessToken: a.accessToken, provider: "test", proof: "proof-b", callbackId: "collision",
   }));
   const serialized = JSON.stringify(h.diagnostics);
   assert.equal(serialized.includes("very-secret-provider-subject"), false);
