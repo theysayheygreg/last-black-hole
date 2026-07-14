@@ -16,8 +16,9 @@ gameplay authority and its cheat/settlement benefits.
 
 This model does **not** assume eight-player admission or 24/48/96 density. Every
 concurrent match owns one logical single-writer authority. Multiple authorities
-may be packed on a host only through the explicit `safeAuthoritiesPerHost`
-input, which is never derived from copies sold.
+may be packed on a host only through the explicit density evidence inputs.
+`safeAuthoritiesPerHost` is derived as
+`floor(measuredAuthoritiesPerHost * safetyFactor)`, never from copies sold.
 
 ## Reproducible model
 
@@ -29,7 +30,7 @@ node tests/v04-multiplayer-unit-economics.cjs
 node scripts/v04-multiplayer-unit-economics.cjs \
   --config docs/v0.4/evidence/unit-economics/config.json \
   --output docs/v0.4/evidence/unit-economics/model.json \
-  --source-commit 867e42639ae6b564831e3477d7e29fca373bef49
+  --source-commit 00f91f14fe0281bfc643b2c239763a9ecd55314c
 ```
 
 The receipt ledger applies deductions in this explicit order:

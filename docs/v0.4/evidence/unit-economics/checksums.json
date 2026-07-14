@@ -1,9 +1,9 @@
 {
   "schema": "lbh-v04-multiplayer-unit-economics-checksums-v1",
-  "sourceCommit": "867e42639ae6b564831e3477d7e29fca373bef49",
+  "sourceCommit": "00f91f14fe0281bfc643b2c239763a9ecd55314c",
   "sha256": {
-    "config.json": "897115e0b161133979f6f2d0e97bdf0124a41337074cb81c6bfcc8605f0dec40",
-    "model.json": "c4b64d1757a3fd67edd73989550c4afd2a43c8501130ec41ea9b1a8758c14b33",
-    "scripts/v04-multiplayer-unit-economics.cjs": "10685a5adc5e5dc31d078731ea69482cdeb4d9aa0fc909c9dcec718f4268e820"
+    "config.json": "fa745eb7e05b82c6a3f7e6a81bff3dbce6e20746385599ec813f7c17fe5295cc",
+    "model.json": "859d24bd4d3b560d6ca6598fd81692d04fffc92ea31fd8e7f1f2a407505a0bae",
+    "scripts/v04-multiplayer-unit-economics.cjs": "0365d806b831d81aa346945cf20ac9d85a4ce5b10171246640b593c25fcf1e7c"
   }
 }
