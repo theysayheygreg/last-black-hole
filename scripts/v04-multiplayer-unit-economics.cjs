@@ -72,7 +72,12 @@ function validateConfig(config) {
     finite(`${topologyName}.averagePlayersPerMatch`, topology.averagePlayersPerMatch, { min: 1, max: 4 });
     finite(`${topologyName}.matchDurationHours`, topology.matchDurationHours, { min: 0.01 });
     for (const [caseName, infrastructure] of Object.entries(topology.caseInfrastructure || {})) {
-      finite(`${topologyName}.${caseName}.safeAuthoritiesPerHost`, infrastructure.safeAuthoritiesPerHost, { min: 1 });
+      if (!infrastructure.densityEvidence || typeof infrastructure.densityEvidence !== "object") {
+        throw new Error(`${topologyName}.${caseName}.densityEvidence is required`);
+      }
+      finite(`${topologyName}.${caseName}.densityEvidence.measuredAuthoritiesPerHost`,
+        infrastructure.densityEvidence.measuredAuthoritiesPerHost, { min: 1 });
+      rate(`${topologyName}.${caseName}.densityEvidence.safetyFactor`, infrastructure.densityEvidence.safetyFactor);
       finite(`${topologyName}.${caseName}.warmCapacityFactor`, infrastructure.warmCapacityFactor, { min: 1 });
       finite(`${topologyName}.${caseName}.egressKiBPerSecondPerClient`, infrastructure.egressKiBPerSecondPerClient);
       finite(`${topologyName}.${caseName}.variableControlCostPerMultiplayerPlayerHourUsd`, infrastructure.variableControlCostPerMultiplayerPlayerHourUsd);
@@ -103,10 +108,16 @@ function receiptLedger(copies, commercial, behavior) {
     netReceiptsPerCopy: netReceiptsBeforeOperations / copies };
 }
 
+function safeAuthorityDensity(infrastructure) {
+  return Math.max(1, Math.floor(infrastructure.densityEvidence.measuredAuthoritiesPerHost
+    * infrastructure.densityEvidence.safetyFactor));
+}
+
 function evaluate(config, copies, caseName, topologyName) {
   const behavior = config.cases[caseName];
   const topology = config.topologies[topologyName];
   const infra = topology.caseInfrastructure[caseName];
+  const safeAuthoritiesPerHost = safeAuthorityDensity(infra);
   if (!behavior || !topology || !infra) throw new Error(`unknown case/topology ${caseName}/${topologyName}`);
   const receipts = receiptLedger(copies, config.commercial, behavior);
   const activePlayers = copies * behavior.activePlayerConversion;
@@ -120,9 +131,9 @@ function evaluate(config, copies, caseName, topologyName) {
   const peakHostedPlayerCcu = averageHostedPlayerCcu * behavior.peakToMean;
   const averageConcurrentMatches = averageHostedPlayerCcu / topology.averagePlayersPerMatch;
   const peakConcurrentMatches = peakHostedPlayerCcu / topology.averagePlayersPerMatch;
-  const peakHosts = peakConcurrentMatches === 0 ? 0 : Math.ceil(peakConcurrentMatches / infra.safeAuthoritiesPerHost);
+  const peakHosts = peakConcurrentMatches === 0 ? 0 : Math.ceil(peakConcurrentMatches / safeAuthoritiesPerHost);
 
-  const costPerAuthorityHour = infra.hostHourUsd.value * infra.warmCapacityFactor / infra.safeAuthoritiesPerHost;
+  const costPerAuthorityHour = infra.hostHourUsd.value * infra.warmCapacityFactor / safeAuthoritiesPerHost;
   const transportGbPerPlayerHour = infra.egressKiBPerSecondPerClient * 1024 * 3600 / DECIMAL_GB;
   const egressCostPerHostedPlayerHour = transportGbPerPlayerHour * infra.egressUsdPerGb.value;
   const computeCostPerHostedPlayerHour = costPerAuthorityHour / topology.averagePlayersPerMatch;
@@ -161,7 +172,7 @@ function evaluate(config, copies, caseName, topologyName) {
       totalOperationsCost, fixedMonthlyComponents: infra.fixedMonthlyUsd,
       oneTimeComponents: infra.oneTimeUsd },
     capacityInputs: { averagePlayersPerMatch: topology.averagePlayersPerMatch,
-      matchDurationHours: topology.matchDurationHours, safeAuthoritiesPerHost: infra.safeAuthoritiesPerHost,
+      matchDurationHours: topology.matchDurationHours, safeAuthoritiesPerHost,
       densityEvidence: infra.densityEvidence, warmCapacityFactor: infra.warmCapacityFactor,
       egressKiBPerSecondPerClient: infra.egressKiBPerSecondPerClient },
     breakEven: { availableForVariableHosting, breakEvenHostedPlayerHours, breakEvenCopies,
@@ -263,7 +274,7 @@ function main() {
   process.stdout.write(`${outputPath}\nsha256 ${sha256(fs.readFileSync(outputPath))}\n`);
 }
 
-module.exports = { SCHEMA, stable, sha256, validateConfig, receiptLedger, evaluate, model, money };
+module.exports = { SCHEMA, stable, sha256, validateConfig, receiptLedger, safeAuthorityDensity, evaluate, model, money };
 if (require.main === module) {
   try { main(); } catch (error) { console.error(error.stack || error.message); process.exit(1); }
 }

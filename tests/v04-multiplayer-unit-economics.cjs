@@ -2,7 +2,7 @@
 "use strict";
 
 const assert = require("assert");
-const { SCHEMA, sha256, validateConfig, receiptLedger, evaluate, model, money } = require("../scripts/v04-multiplayer-unit-economics.cjs");
+const { SCHEMA, sha256, validateConfig, receiptLedger, safeAuthorityDensity, evaluate, model, money } = require("../scripts/v04-multiplayer-unit-economics.cjs");
 
 function price(value) { return { value, status: "planningAssumption", source: "test" }; }
 function fixture() {
@@ -13,12 +13,13 @@ function fixture() {
       monthlyPlayHoursPerActive: 4, activeLifetimeMonths: 3, serviceMonths: 12,
       peakToMean: 4, supportCostPerActivePlayerUsd: 0.1 };
   }
-  const infrastructure = () => ({ safeAuthoritiesPerHost: 2, warmCapacityFactor: 1.25,
+  const infrastructure = () => ({ warmCapacityFactor: 1.25,
     egressKiBPerSecondPerClient: 32, variableControlCostPerMultiplayerPlayerHourUsd: 0.001,
     storageGbPerActivePlayer: 0.01, storageRetentionMonths: 3,
     fixedMonthlyUsd: { control: 10 }, oneTimeUsd: { setup: 100 }, hostHourUsd: price(0.01),
     egressUsdPerGb: price(0.02), storageUsdPerGbMonth: price(0.015),
-    densityEvidence: { status: "planningAssumptionPendingMeasurement", source: "test" } });
+    densityEvidence: { status: "planningAssumptionPendingMeasurement", source: "test",
+      measuredAuthoritiesPerHost: 3, safetyFactor: 0.8 } });
   return { schema: SCHEMA, commercial: { listPriceUsd: 4.99 }, capacity: { hoursPerMonth: 730 },
     salesScales: [1000, 10000], cases, exclusions: ["income tax"], topologies: {
       central: { hostedGameplayShare: 1, averagePlayersPerMatch: 4, matchDurationHours: 0.5,
@@ -45,6 +46,7 @@ const row10k = evaluate(config, 10000, "base", "central");
 assert.strictEqual(row1k.demand.authorityHours,
   row1k.demand.hostedMultiplayerPlayerHours / row1k.capacityInputs.averagePlayersPerMatch);
 assert.strictEqual(row1k.capacityInputs.safeAuthoritiesPerHost, 2);
+assert.strictEqual(safeAuthorityDensity(config.topologies.central.caseInfrastructure.base), 2);
 assert(row10k.demand.lifetimePlayerHours > row1k.demand.lifetimePlayerHours);
 assert(row10k.operations.totalOperationsCost > row1k.operations.totalOperationsCost);
 assert(row10k.commercial.netReceiptsBeforeOperations > row1k.commercial.netReceiptsBeforeOperations);
@@ -88,7 +90,7 @@ for (const mutation of [
   (c) => { c.commercial.listPriceUsd = -1; },
   (c) => { c.cases.base.refundRate = 1.1; },
   (c) => { c.topologies.central.averagePlayersPerMatch = 8; },
-  (c) => { c.topologies.central.caseInfrastructure.base.safeAuthoritiesPerHost = 0; },
+  (c) => { c.topologies.central.caseInfrastructure.base.densityEvidence.measuredAuthoritiesPerHost = 0; },
   (c) => { c.topologies.central.caseInfrastructure.base.hostHourUsd.value = -0.01; },
 ]) {
   const invalid = fixture(); mutation(invalid); assert.throws(() => validateConfig(invalid));
