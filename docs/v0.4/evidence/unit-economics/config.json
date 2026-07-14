@@ -1,0 +1,209 @@
+{
+  "schema": "lbh-v04-multiplayer-unit-economics-v1",
+  "commercial": {
+    "listPriceUsd": 4.99
+  },
+  "capacity": {
+    "hoursPerMonth": 730
+  },
+  "salesScales": [1000, 10000, 100000, 1000000],
+  "cases": {
+    "best": {
+      "storefrontFeeRate": 0.15,
+      "refundRate": 0.03,
+      "chargebackRate": 0.002,
+      "taxVatFxRate": 0.01,
+      "activePlayerConversion": 0.45,
+      "monthlyPlayHoursPerActive": 4,
+      "activeLifetimeMonths": 3,
+      "multiplayerShare": 0.45,
+      "serviceMonths": 12,
+      "peakToMean": 4,
+      "supportCostPerActivePlayerUsd": 0.1
+    },
+    "base": {
+      "storefrontFeeRate": 0.2,
+      "refundRate": 0.08,
+      "chargebackRate": 0.005,
+      "taxVatFxRate": 0.03,
+      "activePlayerConversion": 0.65,
+      "monthlyPlayHoursPerActive": 6,
+      "activeLifetimeMonths": 6,
+      "multiplayerShare": 0.6,
+      "serviceMonths": 36,
+      "peakToMean": 4.5,
+      "supportCostPerActivePlayerUsd": 0.5
+    },
+    "worst": {
+      "storefrontFeeRate": 0.3,
+      "refundRate": 0.12,
+      "chargebackRate": 0.015,
+      "taxVatFxRate": 0.07,
+      "activePlayerConversion": 0.8,
+      "monthlyPlayHoursPerActive": 10,
+      "activeLifetimeMonths": 12,
+      "multiplayerShare": 0.75,
+      "serviceMonths": 84,
+      "peakToMean": 5,
+      "supportCostPerActivePlayerUsd": 1.5
+    }
+  },
+  "topologies": {
+    "localPrivate": {
+      "hostedGameplayShare": 0,
+      "averagePlayersPerMatch": 3,
+      "matchDurationHours": 0.75,
+      "caseInfrastructure": {
+        "best": {
+          "safeAuthoritiesPerHost": 1,
+          "warmCapacityFactor": 1,
+          "egressKiBPerSecondPerClient": 0,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0,
+          "storageGbPerActivePlayer": 0,
+          "storageRetentionMonths": 0,
+          "fixedMonthlyUsd": {},
+          "oneTimeUsd": {},
+          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "storageUsdPerGbMonth": {"value": 0, "status": "planningAssumption", "source": "no hosted storage"},
+          "densityEvidence": {"status": "notApplicable", "source": "player-owned authority; no central host-density claim"}
+        },
+        "base": {
+          "safeAuthoritiesPerHost": 1,
+          "warmCapacityFactor": 1,
+          "egressKiBPerSecondPerClient": 0,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0,
+          "storageGbPerActivePlayer": 0,
+          "storageRetentionMonths": 0,
+          "fixedMonthlyUsd": {"updateManifestAndDomain": 2},
+          "oneTimeUsd": {"privateMatchPackaging": 100},
+          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "storageUsdPerGbMonth": {"value": 0, "status": "planningAssumption", "source": "no hosted storage"},
+          "densityEvidence": {"status": "notApplicable", "source": "player-owned authority; no central host-density claim"}
+        },
+        "worst": {
+          "safeAuthoritiesPerHost": 1,
+          "warmCapacityFactor": 1,
+          "egressKiBPerSecondPerClient": 0,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0,
+          "storageGbPerActivePlayer": 0,
+          "storageRetentionMonths": 0,
+          "fixedMonthlyUsd": {"distributionAndManifest": 5},
+          "oneTimeUsd": {"natAndPackagingHardening": 500},
+          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "no hosted gameplay"},
+          "storageUsdPerGbMonth": {"value": 0, "status": "planningAssumption", "source": "no hosted storage"},
+          "densityEvidence": {"status": "notApplicable", "source": "player-owned authority; no central host-density claim"}
+        }
+      }
+    },
+    "centralPerMatchAuthority": {
+      "hostedGameplayShare": 1,
+      "averagePlayersPerMatch": 3,
+      "matchDurationHours": 0.75,
+      "caseInfrastructure": {
+        "best": {
+          "safeAuthoritiesPerHost": 2,
+          "warmCapacityFactor": 1.2,
+          "egressKiBPerSecondPerClient": 32,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0.001,
+          "storageGbPerActivePlayer": 0.01,
+          "storageRetentionMonths": 12,
+          "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 25, "objectStorage": 5, "observability": 19, "paging": 42, "warmFleetFloor": 18, "backupDomainReserve": 48},
+          "oneTimeUsd": {"deploymentAndRecoverySetup": 500},
+          "hostHourUsd": {"value": 0.0082, "status": "pendingRefresh", "source": "docs/v0.4/research/hosted-costs-unit-economics.md snapshot 2026-07-10; Fly NA shared 1x/1GB"},
+          "egressUsdPerGb": {"value": 0.02, "status": "pendingRefresh", "source": "same research snapshot; Fly NA/EU"},
+          "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "docs/v0.4/research/fixed-stack-cohort-unit-economics.md snapshot 2026-07-10; R2 Standard"},
+          "densityEvidence": {"status": "planningAssumptionPendingMeasurement", "source": "two admitted four-player S20 authorities per host; no production packing benchmark exists"}
+        },
+        "base": {
+          "safeAuthoritiesPerHost": 1,
+          "warmCapacityFactor": 1.4,
+          "egressKiBPerSecondPerClient": 64,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0.003,
+          "storageGbPerActivePlayer": 0.03,
+          "storageRetentionMonths": 36,
+          "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 185, "objectStorage": 25, "observability": 119, "paging": 84, "warmFleetFloor": 58, "backupSupportDomain": 327},
+          "oneTimeUsd": {"productionizationAndRecovery": 5000},
+          "hostHourUsd": {"value": 0.0082, "status": "pendingRefresh", "source": "docs/v0.4/research/hosted-costs-unit-economics.md snapshot 2026-07-10; Fly NA shared 1x/1GB"},
+          "egressUsdPerGb": {"value": 0.023, "status": "pendingRefresh", "source": "docs/v0.4/research/fixed-stack-cohort-unit-economics.md blended NA/EU/APAC planning rate"},
+          "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "same fixed-stack research snapshot; R2 Standard"},
+          "densityEvidence": {"status": "planningAssumptionPendingMeasurement", "source": "one admitted four-player S20 authority per host; conservative until a production packing benchmark exists"}
+        },
+        "worst": {
+          "safeAuthoritiesPerHost": 1,
+          "warmCapacityFactor": 1.8,
+          "egressKiBPerSecondPerClient": 96,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0.01,
+          "storageGbPerActivePlayer": 0.1,
+          "storageRetentionMonths": 84,
+          "fixedMonthlyUsd": {"edgeWafSupport": 2500, "databaseAuthHa": 4099, "objectStorage": 500, "observabilityPaging": 4293, "warmFleetFloor": 1500, "backupSupportContracts": 4000, "incidentVarianceReserve": 3408},
+          "oneTimeUsd": {"multiRegionProductionAndMigration": 50000},
+          "hostHourUsd": {"value": 0.0082, "status": "pendingRefresh", "source": "docs/v0.4/research/hosted-costs-unit-economics.md snapshot 2026-07-10; placeholder before regional fleet quote"},
+          "egressUsdPerGb": {"value": 0.04, "status": "pendingRefresh", "source": "same research snapshot; stressed regional blend assumption"},
+          "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "same fixed-stack research snapshot; R2 Standard"},
+          "densityEvidence": {"status": "planningAssumptionPendingMeasurement", "source": "one admitted four-player S20 authority per host; no eight/24 capacity assumed"}
+        }
+      }
+    },
+    "hybridControlPlayerHosted": {
+      "hostedGameplayShare": 0,
+      "averagePlayersPerMatch": 3,
+      "matchDurationHours": 0.75,
+      "caseInfrastructure": {
+        "best": {
+          "safeAuthoritiesPerHost": 1,
+          "warmCapacityFactor": 1,
+          "egressKiBPerSecondPerClient": 0,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0.0005,
+          "storageGbPerActivePlayer": 0.01,
+          "storageRetentionMonths": 12,
+          "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 25, "objectStorage": 5},
+          "oneTimeUsd": {"identityEntitlementSetup": 200},
+          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "docs/v0.4/research/fixed-stack-cohort-unit-economics.md snapshot 2026-07-10; R2 Standard"},
+          "densityEvidence": {"status": "notApplicable", "source": "player-hosted match; hosted control plane has no match-authority density"}
+        },
+        "base": {
+          "safeAuthoritiesPerHost": 1,
+          "warmCapacityFactor": 1,
+          "egressKiBPerSecondPerClient": 0,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0.002,
+          "storageGbPerActivePlayer": 0.03,
+          "storageRetentionMonths": 36,
+          "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 25, "objectStorage": 5, "observability": 19, "domainBackup": 2},
+          "oneTimeUsd": {"identitySettlementAndRecovery": 1000},
+          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "same fixed-stack research snapshot; R2 Standard"},
+          "densityEvidence": {"status": "notApplicable", "source": "player-hosted match; hosted control plane has no match-authority density"}
+        },
+        "worst": {
+          "safeAuthoritiesPerHost": 1,
+          "warmCapacityFactor": 1,
+          "egressKiBPerSecondPerClient": 0,
+          "variableControlCostPerMultiplayerPlayerHourUsd": 0.01,
+          "storageGbPerActivePlayer": 0.1,
+          "storageRetentionMonths": 84,
+          "fixedMonthlyUsd": {"edgeControl": 5, "databaseAuth": 25, "objectStorage": 5, "observability": 19, "paging": 42, "backupSupportDomain": 66},
+          "oneTimeUsd": {"identityAbuseRecoveryHardening": 5000},
+          "hostHourUsd": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "egressUsdPerGb": {"value": 0, "status": "planningAssumption", "source": "player-hosted gameplay"},
+          "storageUsdPerGbMonth": {"value": 0.015, "status": "pendingRefresh", "source": "same fixed-stack research snapshot; R2 Standard"},
+          "densityEvidence": {"status": "notApplicable", "source": "player-hosted match; hosted control plane has no match-authority density"}
+        }
+      }
+    }
+  },
+  "exclusions": [
+    "corporate income tax",
+    "publisher share or recoupment",
+    "game development and marketing",
+    "regional price mix and discounts",
+    "storefront payout timing and reserves",
+    "voice/TURN until bitrate, relay share, and speaking duty cycle are chosen",
+    "eight, 24, 48, or 96 player capacity; v0.4 product authority is capped at four"
+  ]
+}
