@@ -2492,7 +2492,6 @@ function applyRemoteEvents(events) {
           }
           const [cr, cg, cb] = payload.starColor;
           showWarning(`${payload.starName} consumed — stellar remnant!`, `rgba(${cr}, ${cg}, ${cb}, 0.95)`, 4000);
-          audioEngine.playEvent('starConsumed', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
           _starFlashTimer = 0.8;
           _starFlashColor = payload.starColor;
         }
@@ -2516,9 +2515,6 @@ function applyRemoteEvents(events) {
             ? `${payload.name} destroyed — loot scattered`
             : `${payload.name} consumed`;
           showWarning(message, 'rgba(200, 140, 80, 0.9)', 3000);
-        }
-        if (Number.isFinite(payload.wx) && Number.isFinite(payload.wy)) {
-          audioEngine.playEvent('scavDeath', payload.wx, payload.wy, camX, camY, overlayCanvas.width, overlayCanvas.height);
         }
         break;
       default:
@@ -3306,6 +3302,7 @@ function collectTitleVfxEvents(ctx, w, h, time, {
   fixtureVfx = null,
   layoutName = titleLayout,
 } = {}) {
+  if (currentUiMotionSettings().reducedMotion) return [];
   const glitchState = titleGlitchForVfx(time, fixtureVfx);
   if ((glitchState.active || 0) <= 0.01) return [];
   const layout = titleLayoutMetrics(w, h, layoutName);
@@ -3417,7 +3414,7 @@ function drawTitleScreenOverlay(ctx, w, h, time, readyTimer) {
   ctx.fillStyle = roleColor('bone', 0.96 * titleReveal);
   ctx.fillText(cleanTitle, layout.textX + baseJitterX, layout.titleY + baseJitterY);
 
-  if (titleReveal > 0.2 && glitchState.active > 0.01) {
+  if (!motion.reducedMotion && titleReveal > 0.2 && glitchState.active > 0.01) {
     const glitchTitle = corruptGlyphText(cleanTitle, glitchState.amount, `title-burst-${glitchState.seed}`, {
       density: 0.92,
       frequencyHz: 9 + glitchState.amount * 24,
