@@ -1,0 +1,64 @@
+{
+  "schema": "lbh-s24-live-loopback-eligibility-v1",
+  "eligible": false,
+  "rawArtifactPresent": false,
+  "runConsumption": {
+    "operatorReported": "not-launched",
+    "machineVerifiableFromRepository": false,
+    "note": "Repository state proves only that the expected raw artifact is absent; it cannot prove historical process execution."
+  },
+  "decision": "stop-before-live-run",
+  "requested": {
+    "logicalGameplayWritersPerMatch": 1,
+    "matches": 1,
+    "isolatedClientProcesses": 24,
+    "workers": 0,
+    "humanClients": 24,
+    "dynamicBodies": 400,
+    "expensiveAi": 48
+  },
+  "observedStaticRuntimeBoundary": {
+    "websocketAdapterMaxConnections": 16,
+    "deepFieldProfile": "large",
+    "deepFieldMaxScavengers": 7
+  },
+  "reasons": [
+    {
+      "code": "adapter-connection-cap",
+      "requested": 24,
+      "supported": 16,
+      "detail": "The one match authority instantiates one WebSocket adapter capped below the requested simultaneous clients."
+    },
+    {
+      "code": "expensive-ai-vector-unavailable",
+      "requested": 48,
+      "supported": 7,
+      "detail": "The largest existing live profile cannot instantiate the requested 48-scavenger load."
+    },
+    {
+      "code": "body-vector-unconfigured",
+      "requested": 400,
+      "supported": null,
+      "detail": "No authorized production-free runtime control instantiates an exact 400-dynamic-body H24 vector."
+    }
+  ],
+  "authorityBoundary": "One logical writer for this one match; concurrent matches would each own a separate writer.",
+  "requiredScopeExpansion": [
+    "Raise or parameterize the live match adapter connection cap above 16.",
+    "Add an evidence-only or product-approved live load vector for 400 bodies and 48 expensive AI.",
+    "Re-review correctness, memory, and admission behavior before authorizing a fresh one-run capture."
+  ],
+  "provenance": {
+    "branch": "codex/v0.4-multiplayer-architecture",
+    "commit": "a365db1591fa011dfbe1ca59f39daa7a072f802a",
+    "sealedSyntheticPreflightCommit": "eaaa811",
+    "runtime": {
+      "path": "scripts/sim-runtime.cjs",
+      "sha256": "f8d3fbcd1ebdfe209370362ecd8af6a4faa63c01a42b93a6e904c9cf64b663a0"
+    },
+    "sessionProfiles": {
+      "path": "src/content/session-profiles.data.json",
+      "sha256": "9500bf14fb82cf7921c5094a6b5ce0699d005f914fb2b156b3e2ee9885190acb"
+    }
+  }
+}
