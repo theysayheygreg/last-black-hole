@@ -42,7 +42,9 @@ production provider composition, and deployment proof are not.
   cohort never admitted and raw capture never started. H48/H96 are far
   extrapolations; X96 fails its model screens.
 
-The next work is a four-player product path, not another eight-player rescue.
+Crew Muster and the first private-room/readiness slice are implemented. The
+next work is the focused four-browser host/join/readiness/launch/reconnect
+journey, not another eight-player rescue.
 
 ## Milestone 1 — Four-Player Product Completion
 
@@ -67,6 +69,18 @@ this order:
    run lineage, and clean leave-to-home.
 6. **Evidence and Greg gate:** coherent 1/2/3/4-browser journeys, a real fifth
    browser rejection, four-human playtest pack, and 80/120/160 ms feel passes.
+
+Current execution checkpoint:
+
+- Crew Muster authority and UI are live: staged matches freeze, only the host
+  launches, and multiplayer failures never fall into a separate local run.
+- Private-room authority and UI are live: six-character code, deterministic
+  seats, connected/readiness state, launch gate, wrong-code rejection, and
+  fifth-seat rejection.
+- The fast 1/2/3/4 authority matrix, reconnect epoch fence, and full-room
+  invariants are green on the complete multiplayer-authority lane.
+- Next: automate and visually inspect the same journey across four real browser
+  clients, then close invite/copy/expiry language before shared-run cues.
 
 S20 negotiation/fallback, owner privacy, ACK/rebase, reliable actions,
 reconnect fencing, and bounded queues remain frozen guardrails. Local/offline

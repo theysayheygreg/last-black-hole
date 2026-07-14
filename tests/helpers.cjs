@@ -6,7 +6,7 @@ const { launchBrowser } = require("./browser-driver.cjs");
 const SCREENSHOT_DIR = path.join(__dirname, "screenshots");
 if (!fs.existsSync(SCREENSHOT_DIR)) fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 
-const PORT = 8719; // dedicated transient harness port; separate from dev server on 8080
+const PORT = Number(process.env.LBH_HARNESS_PORT || 8719); // override when another version lane owns the default
 const ROOT = path.resolve(__dirname, "..");
 const TMP = path.join(ROOT, "tmp");
 const PID_FILE = path.join(TMP, "harness-server.pid");

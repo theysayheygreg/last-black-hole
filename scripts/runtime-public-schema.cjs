@@ -88,7 +88,7 @@ const ENTITY_FIELD_CLASSIFICATION = Object.freeze({
 const PUBLIC_FACT_CLASSIFICATION = Object.freeze({
   rootLineage: Object.freeze(["type", "protocolVersion", "bodySchemaVersion", "snapshotSchemaVersion", "runId",
     "baselineSnapshotId", "snapshotId", "tick", "simTime", "fieldRevision", "serverTime", "lastEventSeq"]),
-  staticSession: Object.freeze(["id", "runId", "mapId", "mapName", "seed", "maxPlayers", "worldScale",
+  staticSession: Object.freeze(["id", "runId", "startMode", "mapId", "mapName", "seed", "maxPlayers", "worldScale",
     "simScaleProfile", "clientPerfProfile", "cosmicSignature", "aiSeed", "lootQualityBias", "hasNamedWreck",
     "baseTickHz", "baseSnapshotHz", "baseWorldTickHz", "basePortalTickHz", "baseScavengerTickHz",
     "baseWaveTickHz", "baseGrowthTickHz", "baseFieldTickHz", "baseFlowFieldCellSize", "baseFieldFlowScale",

@@ -57,6 +57,16 @@ async function run() {
       });
       assert(started.status === 200 && started.body.session?.status === 'lobby',
         `Expected staged lobby, got ${started.status}/${started.body.session?.status}`);
+      assert(/^[A-Z2-9]{6}$/.test(started.body.roomCode || ''), 'Host must receive a bounded six-character room code');
+      const healthBeforeJoin = await request('/health');
+      assert(!JSON.stringify(healthBeforeJoin.body).includes(started.body.roomCode), 'Unauthenticated health must not reveal the room code');
+
+      const wrongCode = await request('/join', {
+        method: 'POST',
+        body: { runId: started.body.session.runId, clientId: 'wrong-code', name: 'Wrong Code', roomCode: 'AAAAAA' },
+      });
+      assert(wrongCode.status === 403 && wrongCode.body.code === 'room-code-invalid',
+        `Expected invalid room code rejection, got ${wrongCode.status}/${wrongCode.body.code}`);
 
       const joins = [];
       for (let index = 0; index < 4; index += 1) {
@@ -68,6 +78,7 @@ async function run() {
             clientId,
             name: index === 0 ? 'Crew Host' : `Crew ${index + 1}`,
             ...(index === 0 ? { joinTicket: started.body.joinTicket } : {}),
+            ...(index > 0 ? { roomCode: started.body.roomCode } : {}),
           },
         });
         assert(joined.status === 200 && joined.body.authority?.playerId === clientId,
@@ -82,6 +93,13 @@ async function run() {
       assert(stagedHealth.body.tick === 0 && stagedHealth.body.simTime === 0,
         `Staged universe advanced: tick=${stagedHealth.body.tick} simTime=${stagedHealth.body.simTime}`);
 
+      const lobby = await request('/lobby', { authority: joins[0] });
+      const humanLobbyPlayers = lobby.body.players?.filter((player) => !player.isAI) || [];
+      assert(lobby.status === 200 && humanLobbyPlayers.length === 4,
+        `Authenticated lobby must expose the four-seat roster: ${lobby.status}/${JSON.stringify(lobby.body)}`);
+      assert(humanLobbyPlayers.every((player, index) => player.seatNo === index && player.ready === false),
+        'Seats must allocate deterministically and begin unready');
+
       const prematureInput = await request('/input', {
         method: 'POST',
         authority: joins[1],
@@ -91,10 +109,10 @@ async function run() {
 
       const fifth = await request('/join', {
         method: 'POST',
-        body: { runId: started.body.session.runId, clientId: 'crew-5', name: 'Crew 5' },
+        body: { runId: started.body.session.runId, clientId: 'crew-5', name: 'Crew 5', roomCode: started.body.roomCode },
       });
-      assert(fifth.status === 409 && fifth.body.error === 'Session full',
-        `Expected fifth-seat rejection, got ${fifth.status}/${fifth.body.error}`);
+      assert(fifth.status === 409 && fifth.body.code === 'room-full',
+        `Expected fifth-seat rejection, got ${fifth.status}/${fifth.body.code}`);
 
       const nonHostLaunch = await request('/session/launch', {
         method: 'POST',
@@ -104,10 +122,28 @@ async function run() {
       assert(nonHostLaunch.status === 403,
         `Expected non-host launch rejection, got ${nonHostLaunch.status}/${nonHostLaunch.body.code}`);
 
-      const launched = await request('/session/launch', {
+      const earlyLaunch = await request('/session/launch', {
         method: 'POST',
         authority: joins[0],
         body: command(joins[0], 1, { requesterId: 'crew-host' }),
+      });
+      assert(earlyLaunch.status === 409 && earlyLaunch.body.code === 'crew-not-ready',
+        `Expected readiness gate, got ${earlyLaunch.status}/${earlyLaunch.body.code}`);
+
+      for (let index = 0; index < joins.length; index += 1) {
+        const ready = await request('/session/ready', {
+          method: 'POST',
+          authority: joins[index],
+          body: command(joins[index], 1, { ready: true }),
+        });
+        assert(ready.status === 200 && ready.body.player?.ready === true,
+          `Expected seat ${index + 1} to become ready`);
+      }
+
+      const launched = await request('/session/launch', {
+        method: 'POST',
+        authority: joins[0],
+        body: command(joins[0], 2, { requesterId: 'crew-host' }),
       });
       assert(launched.status === 200 && launched.body.session?.status === 'running',
         `Expected host launch, got ${launched.status}/${launched.body.session?.status}`);
@@ -117,7 +153,7 @@ async function run() {
       const duplicateLaunch = await request('/session/launch', {
         method: 'POST',
         authority: joins[0],
-        body: command(joins[0], 2, { requesterId: 'crew-host' }),
+        body: command(joins[0], 3, { requesterId: 'crew-host' }),
       });
       assert(duplicateLaunch.status === 409 && duplicateLaunch.body.code === 'not-in-lobby',
         'Crew launch must be a one-way, exactly-once phase transition');

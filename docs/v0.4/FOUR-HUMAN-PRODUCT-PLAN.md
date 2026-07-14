@@ -44,6 +44,9 @@ with me, and what action is required next?
 
 ### P1 — Crew Muster And Synchronized Start
 
+**Implementation status:** landed. Authority-matrix proof is green; the
+focused four-browser player journey is the remaining acceptance proof.
+
 - create a four-seat private crew on the existing authority;
 - keep sim time, AI, hazards, and world consequences frozen while staging;
 - admit one through four humans and show host/crew role plus occupied seats;
@@ -56,6 +59,12 @@ Proof: four browsers remain staged with unchanged sim time, a non-host cannot
 launch, the host launches once, all four enter play, and a fifth seat rejects.
 
 ### P2 — Invitations, Readiness, And Crew Clarity
+
+**Implementation status:** in progress. Private room creation/join, a bounded
+six-character code, deterministic four-seat roster, connection-bound
+readiness, host launch gating, durable wrong-code/full errors, and explicit
+host/join choices are live. Copy affordance, expiry/version language, and the
+four-browser product proof remain.
 
 - expose Host Private Game and Join Game as distinct choices;
 - display/copy a bounded private invitation or join code;
@@ -99,6 +108,16 @@ The milestone is complete when four humans can create/join one crew, launch
 together, finish extraction or death, reconnect one player, reject a fifth,
 see the same result, and rematch without terminal intervention.
 
+## Immediate Next Proof
+
+Build one focused four-browser journey that uses the human UI only: browser A
+hosts and reads the code, browsers B-D join with it, all four see the same
+ordered seats, readiness gates launch, a fifth browser receives a durable full
+message, all four enter the same running authority, and one guest reconnects
+without changing seat or accepting stale control. This proof closes P1 and the
+first half of P2; it does not yet claim shared-run readability, result, or
+rematch completion.
+
 Engineering guardrails remain:
 
 - S20 stays `NORMAL`, every active recipient receives at least 9 Hz, and mean
@@ -128,4 +147,3 @@ service policy:
 - public matchmaking, social graphs, moderation, or built-in voice;
 - verified cloud progression or production provider deployment;
 - replacement of the S20 protocol or authority architecture.
-

@@ -23,6 +23,7 @@ Statuses:
 | eight-player v0.4 admission remains closed | REJECTED | `COMPLETION-AUDIT.md` |
 | four-human product completion is the active goal | ACTIVE | `FOUR-HUMAN-PRODUCT-PLAN.md` |
 | Crew Muster stages players before world time begins | ACTIVE | entry below |
+| readiness belongs to the current connection epoch | ACTIVE | entry below |
 | external test uses a disposable Tailscale shared node | ACTIVE | `OPTIONAL-LOCAL-INTERNET-HOST.md` |
 | hybrid verified authority plus private continuity | PROVISIONAL | `OPEN-DECISIONS.md` |
 
@@ -59,6 +60,25 @@ available only through its explicit product path.
 **Why:** the earlier auto-host/auto-join flow let the first player and AI begin
 consuming the universe while later humans navigated menus. That was technically
 multiplayer but not a fair or understandable human game.
+
+## 2026-07-14 — Private-room readiness is connection-bound lobby state
+
+**Status:** ACTIVE
+
+A staged private match exposes a bounded six-character room code through the
+host's authenticated control response. Joining guests must present that code;
+the authority assigns the lowest free seat from zero through three. Readiness
+is self-authored, visible through the authenticated lobby projection, and reset
+whenever that membership reconnects or loses its current connection epoch.
+Only the host may launch, and launch requires every occupied human seat to be
+connected and ready.
+
+Lobby connection/readiness fields do not widen S20 gameplay entity components
+or become a second authority stream. They remain control-plane state owned by
+the same per-match authority.
+
+**Why:** a human lobby needs truthful seats and readiness, while the admitted
+gameplay replication contract should stay fixed and fail-closed.
 
 ## 2026-07-14 — Four-human product completion follows architecture closeout
 
@@ -97,4 +117,3 @@ in `CHANGELOG.md`.
 When v0.4 is promoted, add one project-wide summary to
 `docs/journal/DECISION-LOG.md` linking here. Do not copy every entry into the
 project log.
-

@@ -275,7 +275,15 @@ let remoteSessionHealth = null;
 let remoteSessionRequestInFlight = false;
 let remoteSessionLastFetchedAt = 0;
 let remoteJoinError = null;
+let remoteJoinErrorCode = null;
 let remoteLaunchRequestInFlight = false;
+let remoteReadyRequestInFlight = false;
+let remoteLobbyRequestInFlight = false;
+let remoteLobbyLastFetchedAt = 0;
+let remoteRoomAction = 'host';
+let remoteRoomCodeInputActive = false;
+let remoteRoomCodeInput = '';
+let remoteRoomCodePendingSubmit = false;
 let remotePendingPulse = false;
 let remotePendingExtractConfirm = false;
 let remotePendingConsumeSlot = null;
@@ -523,6 +531,20 @@ function setNameInputBuffer(value) {
 
 function appendNameInput(text) {
   setNameInputBuffer(`${nameInputBuffer}${text || ''}`);
+}
+
+function normalizeRoomCode(value) {
+  return String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+}
+
+function multiplayerErrorCopy(error) {
+  const code = error?.code || null;
+  if (code === 'room-full') return 'ROOM FULL — THIS CREW ALREADY HAS FOUR PILOTS';
+  if (code === 'room-code-invalid') return 'ROOM NOT FOUND — CHECK THE SIX-CHARACTER CODE';
+  if (code === 'crew-not-ready') return 'CREW NOT READY — EVERY LINKED PILOT MUST READY UP';
+  if (code === 'host-required') return 'CREW LEADER REQUIRED';
+  if (code === 'stale-run') return 'ROOM EXPIRED — ASK THE HOST FOR A NEW CODE';
+  return String(error?.message || error || 'AUTHORITY UNAVAILABLE — RETRY OR PLAY OFFLINE').toUpperCase();
 }
 
 function currentRunResultsViewModel() {
@@ -1138,7 +1160,7 @@ function init() {
         togglePause();
       } else if (gamePhase === 'paused') {
         togglePause();  // resume, not quit
-      } else if (gamePhase === 'mapSelect' && !transitionActive) {
+      } else if (gamePhase === 'mapSelect' && !transitionActive && !remoteRoomCodeInputActive) {
         // No transition needed — same scene (title map), just change UI
         gamePhase = 'title';
         titleTimer = 0;
@@ -1146,6 +1168,21 @@ function init() {
     }
     if (e.code === 'Space') e.preventDefault();
     if (e.code === 'Tab') e.preventDefault();
+
+    if (remoteRoomCodeInputActive) {
+      e.preventDefault();
+      if (e.key === 'Enter') {
+        if (remoteRoomCodeInput.length === 6) remoteRoomCodePendingSubmit = true;
+        remoteRoomCodeInputActive = false;
+      } else if (e.key === 'Escape') {
+        remoteRoomCodeInputActive = false;
+      } else if (e.key === 'Backspace') {
+        remoteRoomCodeInput = remoteRoomCodeInput.slice(0, -1);
+      } else if (e.key.length === 1) {
+        remoteRoomCodeInput = normalizeRoomCode(`${remoteRoomCodeInput}${e.key}`);
+      }
+      return;
+    }
 
     // Name input for profile creation
     if (nameInputActive) {
@@ -1167,6 +1204,11 @@ function init() {
   });
 
   window.addEventListener('paste', (e) => {
+    if (remoteRoomCodeInputActive) {
+      e.preventDefault();
+      remoteRoomCodeInput = normalizeRoomCode(`${remoteRoomCodeInput}${e.clipboardData?.getData('text') || ''}`);
+      return;
+    }
     if (!nameInputActive) return;
     e.preventDefault();
     appendNameInput(e.clipboardData?.getData('text') || '');
@@ -2044,11 +2086,27 @@ function currentRemoteControlState() {
     && (remoteSessionHealth?.humanPlayerCount ?? 0) > 0;
   const liveEntry = hasLiveSession ? (getPlayableMapEntryById(session.mapId) || null) : null;
   const isHost = Boolean(hasLiveSession && simClient?.clientId && session?.hostClientId === simClient.clientId);
+  const roster = Array.from({ length: Math.max(1, session?.maxPlayers || getConfiguredSimMaxPlayers()) }, (_, seatNo) => {
+    const player = remoteSnapshot?.players?.find((entry) => !entry.isAI && entry.seatNo === seatNo) || null;
+    return {
+      seatNo,
+      player,
+      occupied: Boolean(player),
+      isLocal: Boolean(player && player.clientId === simClient?.clientId),
+      isHost: Boolean(player && player.clientId === session?.hostClientId),
+      ready: Boolean(player?.ready),
+      connected: Boolean(player?.connected),
+    };
+  });
+  const localSeat = roster.find((seat) => seat.isLocal) || null;
+  const occupiedSeats = roster.filter((seat) => seat.occupied);
+  const allReady = occupiedSeats.length > 0 && occupiedSeats.every((seat) => seat.ready && seat.connected);
   return {
     enabled: Boolean(simClient?.enabled),
     loading: remoteSessionRequestInFlight,
     error: remoteSessionHealth?.ok === false ? remoteSessionHealth.error || 'remote health unavailable' : null,
     joinError: remoteJoinError,
+    joinErrorCode: remoteJoinErrorCode,
     hasLiveSession,
     sessionStatus: session?.status ?? 'idle',
     sessionMapId: liveEntry?.id ?? session?.mapId ?? null,
@@ -2060,6 +2118,15 @@ function currentRemoteControlState() {
     hostClientId: session?.hostClientId ?? null,
     hostName: session?.hostName ?? null,
     isHost,
+    roomCode: simClient?.roomCode || null,
+    roomAction: remoteRoomAction,
+    roomCodeInput: remoteRoomCodeInput,
+    roomCodeInputActive: remoteRoomCodeInputActive,
+    roster,
+    localSeat,
+    localReady: Boolean(localSeat?.ready),
+    allReady,
+    canLaunch: Boolean(isHost && session?.status === 'lobby' && allReady),
     canHostReset: Boolean(hasLiveSession && isHost),
     selectedMapId: selectedEntry?.id ?? null,
     selectedMapName: selectedEntry?.name ?? null,
@@ -2098,6 +2165,22 @@ async function refreshRemoteSessionHealth(force = false) {
     return remoteSessionHealth;
   } finally {
     remoteSessionRequestInFlight = false;
+  }
+}
+
+async function refreshRemoteLobby(force = false) {
+  if (!simClient?.enabled || !simClient.commandCredential) return null;
+  const now = Date.now();
+  if (remoteLobbyRequestInFlight) return remoteSnapshot;
+  if (!force && now - remoteLobbyLastFetchedAt < 350) return remoteSnapshot;
+  remoteLobbyRequestInFlight = true;
+  remoteLobbyLastFetchedAt = now;
+  try {
+    const lobby = await simClient.getLobby();
+    applyRemoteSnapshot(lobby);
+    return lobby;
+  } finally {
+    remoteLobbyRequestInFlight = false;
   }
 }
 
@@ -2693,7 +2776,12 @@ function syncRemoteWorldState(world) {
   }
 }
 
-async function startRemoteGame(mapEntry, { forceReset = false, staged = true } = {}) {
+async function startRemoteGame(mapEntry, {
+  forceReset = false,
+  staged = true,
+  roomAction = 'auto',
+  roomCode = null,
+} = {}) {
   resetPhantomForNewSession();
   resetHauntForNewSession();
   if (!simClient?.enabled) {
@@ -2702,11 +2790,18 @@ async function startRemoteGame(mapEntry, { forceReset = false, staged = true } =
   }
 
   remoteJoinError = null;
+  remoteJoinErrorCode = null;
   const health = await refreshRemoteSessionHealth(true);
-  const runningSession = (health?.session?.status === 'running' || health?.session?.status === 'lobby')
+  let runningSession = (health?.session?.status === 'running' || health?.session?.status === 'lobby')
     && (health?.humanPlayerCount ?? 0) > 0
     ? health.session
     : null;
+  if (roomAction === 'host') runningSession = null;
+  if (roomAction === 'join' && !runningSession) {
+    const error = new Error('No private room is waiting on this authority');
+    error.code = 'room-code-invalid';
+    throw error;
+  }
   const isHost = Boolean(runningSession?.hostClientId && runningSession.hostClientId === simClient.clientId);
   if (forceReset && runningSession && !isHost) {
     throw new Error('Only the host can reset the live cycle');
@@ -2782,9 +2877,13 @@ async function startRemoteGame(mapEntry, { forceReset = false, staged = true } =
     profileSnapshot,
     equipped: inventorySystem.equipped,
     consumables: inventorySystem.consumables,
+    roomCode: roomAction === 'join' ? normalizeRoomCode(roomCode) : null,
   });
-  const snapshot = await simClient.pollSnapshot(true);
+  const snapshot = (!runningSession && staged) || runningSession?.status === 'lobby'
+    ? await simClient.getLobby()
+    : await simClient.pollSnapshot(true);
   remoteJoinError = null;
+  remoteJoinErrorCode = null;
   applyRemoteSnapshot(snapshot);
 }
 
@@ -2792,7 +2891,8 @@ function transitionToRemoteGame(mapEntry, options = {}) {
   triggerTransition(() => {
     void startRemoteGame(mapEntry, options).catch((err) => {
       console.error('[LBH] remote start failed:', err);
-      remoteJoinError = err.message || 'multiplayer admission failed';
+      remoteJoinErrorCode = err.code || null;
+      remoteJoinError = multiplayerErrorCopy(err);
       showWarning(`crew link failed: ${remoteJoinError}`, 'rgba(255, 100, 80, 0.95)', 4000);
       remoteAuthorityActive = false;
       remoteMapId = null;
@@ -2834,7 +2934,11 @@ async function leaveRemoteSessionToHome() {
   remotePlayers = [];
   remoteSessionHealth = null;
   remoteJoinError = null;
+  remoteJoinErrorCode = null;
   remoteLaunchRequestInFlight = false;
+  remoteReadyRequestInFlight = false;
+  remoteLobbyRequestInFlight = false;
+  remoteLobbyLastFetchedAt = 0;
   remoteLastAckSeq = 0;
   remoteLastEventSeq = 0;
   remoteInputRequestInFlight = false;
@@ -4216,14 +4320,23 @@ function gameLoop(now) {
 
   } else if (gamePhase === 'mapSelect') {
     if (simClient?.enabled) void refreshRemoteSessionHealth(false);
-    if (upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
-    if (downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
+    if (!remoteRoomCodeInputActive && upNow && !_prevUp) { mapSelectIndex = (mapSelectIndex - 1 + MAP_LIST.length) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
+    if (!remoteRoomCodeInputActive && downNow && !_prevDown) { mapSelectIndex = (mapSelectIndex + 1) % MAP_LIST.length; audioEngine.playEvent('menuMove'); }
+    if (simClient?.enabled && !remoteRoomCodeInputActive
+        && ((leftNow && !_prevLeft) || (rightNow && !_prevRight))) {
+      remoteRoomAction = remoteRoomAction === 'host' ? 'join' : 'host';
+      remoteJoinError = null;
+      remoteJoinErrorCode = null;
+      audioEngine.playEvent('menuMove');
+    }
     if (inputManager.rerollPressed && !_prevSeedReroll) {
       rerollPreviewSeed();
       audioEngine.playEvent('menuMove');
     }
     _prevSeedReroll = inputManager.rerollPressed;
-    if (!transitionActive && confirmNow && !_prevConfirm) {
+    const submitRoomCode = remoteRoomCodePendingSubmit;
+    remoteRoomCodePendingSubmit = false;
+    if (!transitionActive && ((confirmNow && !_prevConfirm && !remoteRoomCodeInputActive) || submitRoomCode)) {
       audioEngine.init();
       audioEngine.playEvent('launch');
       // Load loadout from profile before entering run
@@ -4233,8 +4346,18 @@ function gameLoop(now) {
         inventorySystem.consumables = p.loadout.consumables.map(i => i ? { ...i } : null);
       }
       const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];
-      if (simClient?.enabled) transitionToRemoteGame(selectedEntry);
-      else transitionToGame(selectedEntry.map, previewSeed);
+      if (simClient?.enabled) {
+        if (remoteRoomAction === 'join' && remoteRoomCodeInput.length !== 6) {
+          remoteRoomCodeInputActive = true;
+          remoteJoinError = null;
+          remoteJoinErrorCode = null;
+        } else {
+          transitionToRemoteGame(selectedEntry, {
+            roomAction: remoteRoomAction,
+            roomCode: remoteRoomCodeInput,
+          });
+        }
+      } else transitionToGame(selectedEntry.map, previewSeed);
     }
     if (!transitionActive && inputManager.deletePressed && !_prevDelete && simClient?.enabled) {
       const selectedEntry = PLAYABLE_MAPS[mapSelectIndex];
@@ -4252,13 +4375,21 @@ function gameLoop(now) {
         showWarning('only the host can reset the live cycle', 'rgba(255, 150, 120, 0.95)', 2400);
       }
     }
-    if (!transitionActive && backNow && !_prevBack) {
+    if (!transitionActive && backNow && !_prevBack && !remoteRoomCodeInputActive) {
       gamePhase = 'home';
     }
     applySceneCamera(dt);
 
   } else if (gamePhase === 'crewMuster') {
-    if (simClient?.enabled) void refreshRemoteSessionHealth(false);
+    if (simClient?.enabled) {
+      void refreshRemoteSessionHealth(false);
+      void refreshRemoteLobby(false).catch((err) => {
+        if (err.code !== 'not-in-lobby') {
+          remoteJoinErrorCode = err.code || null;
+          remoteJoinError = multiplayerErrorCopy(err);
+        }
+      });
+    }
     const remoteControl = currentRemoteControlState();
     if (remoteControl.sessionStatus === 'running' && !remoteSnapshotRequestInFlight) {
       remoteSnapshotRequestInFlight = true;
@@ -4270,23 +4401,39 @@ function gameLoop(now) {
         remoteSnapshotRequestInFlight = false;
       });
     }
-    if (!transitionActive && confirmNow && !_prevConfirm && remoteControl.isHost
-        && remoteControl.isLobby && !remoteLaunchRequestInFlight) {
-      remoteLaunchRequestInFlight = true;
-      remoteJoinError = null;
-      audioEngine.init();
-      audioEngine.playEvent('launch');
-      void simClient.launchSession().then((session) => {
-        remoteSessionHealth = { ...remoteSessionHealth, ok: true, session };
-        return simClient.pollSnapshot(true);
-      }).then((snapshot) => {
-        applyRemoteSnapshot(snapshot);
-      }).catch((err) => {
-        remoteJoinError = err.message || 'crew launch failed';
-        showWarning(`crew launch failed: ${remoteJoinError}`, 'rgba(255, 100, 80, 0.95)', 3200);
-      }).finally(() => {
-        remoteLaunchRequestInFlight = false;
-      });
+    if (!transitionActive && confirmNow && !_prevConfirm && remoteControl.isLobby
+        && !remoteReadyRequestInFlight && !remoteLaunchRequestInFlight) {
+      if (remoteControl.canLaunch && remoteControl.localReady) {
+        remoteLaunchRequestInFlight = true;
+        remoteJoinError = null;
+        remoteJoinErrorCode = null;
+        audioEngine.init();
+        audioEngine.playEvent('launch');
+        void simClient.launchSession().then((session) => {
+          remoteSessionHealth = { ...remoteSessionHealth, ok: true, session };
+          return simClient.pollSnapshot(true);
+        }).then((snapshot) => {
+          applyRemoteSnapshot(snapshot);
+        }).catch((err) => {
+          remoteJoinErrorCode = err.code || null;
+          remoteJoinError = multiplayerErrorCopy(err);
+          showWarning(remoteJoinError, 'rgba(255, 100, 80, 0.95)', 3200);
+        }).finally(() => {
+          remoteLaunchRequestInFlight = false;
+        });
+      } else {
+        remoteReadyRequestInFlight = true;
+        remoteJoinError = null;
+        remoteJoinErrorCode = null;
+        void simClient.setReady(!remoteControl.localReady)
+          .then(() => refreshRemoteLobby(true))
+          .catch((err) => {
+            remoteJoinErrorCode = err.code || null;
+            remoteJoinError = multiplayerErrorCopy(err);
+          }).finally(() => {
+            remoteReadyRequestInFlight = false;
+          });
+      }
     }
     if (!transitionActive && backNow && !_prevBack) {
       void leaveRemoteSessionToHome().finally(() => {
@@ -5020,7 +5167,7 @@ function gameLoop(now) {
     const w = overlayCanvas.width;
     const h = overlayCanvas.height;
     const panelW = Math.min(620, w - 48);
-    const panelH = Math.min(430, h - 56);
+    const panelH = Math.min(520, h - 40);
     const panel = { x: (w - panelW) / 2, y: (h - panelH) / 2, w: panelW, h: panelH };
     const control = currentRemoteControlState();
     const motion = currentUiMotionSettings();
@@ -5048,22 +5195,45 @@ function gameLoop(now) {
     drawStatusPill(ctx, { x, y: y - 18, w: 128, h: 26 }, `${humans} / ${capacity} CREW`, { role: humans >= capacity ? 'salvage' : 'flow', alpha: 0.94 });
     drawStatusPill(ctx, { x: x + 140, y: y - 18, w: 128, h: 26 }, control.isHost ? 'CREW LEADER' : 'CREW MEMBER', { role: control.isHost ? 'anomaly' : 'muted', alpha: 0.88 });
     drawStatusPill(ctx, { x: x + 280, y: y - 18, w: 144, h: 26 }, 'UNIVERSE FROZEN', { role: 'flow', alpha: 0.80 });
-    y += 46;
-
-    drawKeyValueRow(ctx, 'host', control.hostName || 'assigning', x, y, { labelWidth: 112, valueRole: 'anomaly' });
-    y += 24;
-    drawKeyValueRow(ctx, 'authority', 'one match // one writer', x, y, { labelWidth: 112, valueRole: 'flow' });
-    y += 24;
-    drawKeyValueRow(ctx, 'world time', 'paused until launch', x, y, { labelWidth: 112, valueRole: 'muted' });
     y += 42;
+
+    drawKeyValueRow(ctx, 'room code', control.roomCode || '••••••', x, y, { labelWidth: 112, valueRole: 'anomaly' });
+    y += 30;
+    ctx.textAlign = 'left';
+    for (const seat of control.roster.slice(0, 4)) {
+      const row = { x, y: y - 18, w: panel.w - 68, h: 34 };
+      ctx.fillStyle = roleColor(seat.isLocal ? 'flow' : 'muted', seat.occupied ? 0.12 : 0.045);
+      ctx.fillRect(row.x, row.y, row.w, row.h);
+      ctx.strokeStyle = roleColor(seat.isLocal ? 'flow' : 'muted', seat.occupied ? 0.40 : 0.14);
+      ctx.strokeRect(row.x + 0.5, row.y + 0.5, row.w - 1, row.h - 1);
+      ctx.font = canvasFont(11, { weight: seat.isLocal ? '700' : '600' });
+      ctx.fillStyle = roleColor(seat.occupied ? 'text' : 'muted', seat.occupied ? 0.94 : 0.48);
+      const seatName = seat.occupied ? seat.player.name : 'EMPTY SEAT';
+      ctx.fillText(fitUiText(ctx, `${seat.seatNo + 1}  ${seatName}${seat.isLocal ? '  [YOU]' : ''}`, row.w * 0.48), row.x + 12, row.y + 22);
+      ctx.font = canvasFont(9, { weight: '700' });
+      ctx.fillStyle = roleColor(seat.isHost ? 'anomaly' : 'muted', seat.occupied ? 0.82 : 0.34);
+      ctx.fillText(seat.occupied ? (seat.isHost ? 'LEADER' : 'MEMBER') : 'OPEN', row.x + row.w * 0.53, row.y + 22);
+      ctx.fillStyle = roleColor(seat.ready ? 'salvage' : 'muted', seat.occupied ? 0.86 : 0.30);
+      ctx.fillText(seat.occupied ? (seat.ready ? 'READY' : 'NOT READY') : '—', row.x + row.w * 0.68, row.y + 22);
+      ctx.fillStyle = roleColor(seat.connected ? 'flow' : 'danger', seat.occupied ? 0.84 : 0.26);
+      ctx.fillText(seat.occupied ? (seat.connected ? 'LINKED' : 'LINK LOST') : '—', row.x + row.w * 0.84, row.y + 22);
+      y += 39;
+    }
+    y += 8;
 
     ctx.font = canvasFont(12);
     ctx.fillStyle = roleColor(remoteJoinError ? 'danger' : 'muted', 0.86);
     const statusCopy = remoteJoinError
       ? `CREW LINK ERROR // ${remoteJoinError}`
-      : control.isHost
-        ? (remoteLaunchRequestInFlight ? 'LAUNCHING SHARED AUTHORITY...' : 'Launch when your crew is assembled.')
-        : 'Waiting for the crew leader to launch.';
+      : remoteLaunchRequestInFlight
+        ? 'LAUNCHING SHARED AUTHORITY...'
+        : remoteReadyRequestInFlight
+          ? 'UPDATING READINESS...'
+          : control.canLaunch
+            ? 'ALL LINKED // CREW LEADER MAY LAUNCH'
+            : control.localReady
+              ? 'YOU ARE READY // WAITING FOR THE CREW'
+              : 'READY UP WHEN YOU ARE PREPARED TO DROP';
     ctx.fillText(fitUiText(ctx, statusCopy, panel.w - 68), x, y);
 
     drawCommandButtonMotion(ctx, {
@@ -5071,11 +5241,11 @@ function gameLoop(now) {
       y: panel.y + panel.h - 92,
       w: panel.w - 68,
       h: 44,
-    }, control.isHost ? 'launch crew' : 'waiting for leader', {
-      hotkey: control.isHost ? promptLabel('confirm', promptOptions) : '',
-      role: control.isHost ? 'flow' : 'muted',
-      active: control.isHost && !remoteLaunchRequestInFlight,
-      alpha: control.isHost ? 0.96 : 0.64,
+    }, control.canLaunch ? 'launch crew' : (control.localReady ? 'stand down' : 'ready up'), {
+      hotkey: promptLabel('confirm', promptOptions),
+      role: control.canLaunch ? 'flow' : (control.localReady ? 'muted' : 'salvage'),
+      active: !remoteLaunchRequestInFlight && !remoteReadyRequestInFlight,
+      alpha: 0.96,
       progress: 1,
       reducedMotion: motion.reducedMotion,
       commandPulse: motion.commandPulse,
@@ -6533,23 +6703,15 @@ function gameLoop(now) {
         authorityLine2 = `${promptLabel('confirm', promptOptions)} retry // ${promptLabel('back', promptOptions)} back`;
       } else if (remoteControl.error) {
         authorityLine = `remote sim unavailable: ${remoteControl.error}`;
-        authorityLine2 = 'falling back to local readiness';
-      } else if (remoteControl.loading && !remoteControl.hasLiveSession) {
-        authorityLine = 'checking live authority...';
-        authorityLine2 = 'stand by';
-      } else if (remoteControl.hasLiveSession) {
-        const hostLabel = remoteControl.hostName || 'unknown host';
-        authorityLine = `${remoteControl.isLobby ? 'muster' : 'live'} ${remoteControl.sessionMapName} // ${hostLabel} // ${remoteControl.sessionHumanPlayerCount}/${remoteControl.sessionMaxPlayers}`;
-        authorityLine2 = remoteControl.selectedDiffersFromLive
-          ? (remoteControl.canHostReset
-            ? `${promptLabel('confirm', promptOptions)} join live // ${promptLabel('delete', promptOptions)} reset host`
-            : `${promptLabel('confirm', promptOptions)} join live // host owns reset`)
-          : (remoteControl.canHostReset
-            ? `${promptLabel('confirm', promptOptions)} join // ${promptLabel('delete', promptOptions)} host reset`
-            : `${promptLabel('confirm', promptOptions)} join live`);
+        authorityLine2 = 'retry or return home';
+      } else if (remoteRoomAction === 'join') {
+        authorityLine = 'JOIN PRIVATE GAME';
+        authorityLine2 = remoteRoomCodeInputActive
+          ? `TYPE ROOM CODE // ${remoteRoomCodeInput.padEnd(6, '·')}`
+          : `${promptLabel('select', promptOptions)} switch // ${promptLabel('confirm', promptOptions)} enter code`;
       } else {
-        authorityLine = 'no live cycle detected';
-        authorityLine2 = 'this client will host selected map';
+        authorityLine = 'HOST PRIVATE GAME';
+        authorityLine2 = `${promptLabel('select', promptOptions)} switch // ${promptLabel('confirm', promptOptions)} create room`;
       }
     }
     ctx.fillText(fitUiText(ctx, authorityLine, briefPanel.w - 44), briefX, authorityY + 22);
@@ -6560,7 +6722,7 @@ function gameLoop(now) {
       y: briefPanel.y + briefPanel.h - 70,
       w: briefPanel.w - 40,
       h: 42,
-    }, 'begin drop', {
+    }, simClient?.enabled ? (remoteRoomAction === 'host' ? 'create private room' : 'join private room') : 'begin drop', {
       hotkey: promptLabel('confirm', promptOptions),
       role: routeRole === 'danger' ? 'salvage' : routeRole,
       active: true,

@@ -846,6 +846,13 @@ const SUITES = [
     timeout: 30000,
   },
   {
+    name: "MultiplayerRoomLobby",
+    file: "multiplayer-room-lobby.cjs",
+    lanes: ["multiplayer-authority", "multiplayer-playable", "full"],
+    browser: false,
+    timeout: 60000,
+  },
+  {
     name: "MultiplayerNetworkImpairment",
     file: "multiplayer-network-impairment.cjs",
     lanes: ["multiplayer-impairment-browser"],

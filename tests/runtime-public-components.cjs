@@ -122,6 +122,7 @@ async function run() {
       assert.deepStrictEqual(reconstructed, JSON.parse(JSON.stringify(EXAMPLES[category])));
     }
     assert(PUBLIC_FACT_CLASSIFICATION.staticSession.includes("seed")
+      && PUBLIC_FACT_CLASSIFICATION.staticSession.includes("startMode")
       && PUBLIC_FACT_CLASSIFICATION.dynamicSession.includes("overloadState"));
     for (const [category, example] of Object.entries(EXAMPLES)) {
       const lifecycleExample = { ...example, sourceId: `${category}-source`, incarnation: 2 };

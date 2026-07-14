@@ -1162,6 +1162,8 @@ const runtime = {
   players: new Map(),
   playerAuthorities: new Map(),
   joinClaims: new Map(),
+  pendingHumanSeats: new Set(),
+  privateRoomCode: null,
   waveRings: [],
   ballparkMirror: createBallparkMirror({ worldScale: DEFAULT_WORLD_SCALE }),
   ballparkRelevance: { mode: "not-run", tick: null, categories: {} },
@@ -1386,6 +1388,9 @@ function createPlayer(clientId, name, hullType = 'drifter', options = {}) {
     profileUpgrades,
     rigLevels,
     name: name || clientId,
+    ready: false,
+    connected: false,
+    seatNo: Number.isInteger(options.seatNo) ? options.seatNo : null,
     hullType: normalizedHullType,
     brain,
     abilityState: createAbilityState(normalizedHullType, brain),
@@ -1478,11 +1483,15 @@ function startSession(config = {}) {
   const mapState = cloneMapState(requestedMapId, requestedWorldScale, rngStreams);
   const scaleProfile = getSessionProfile(mapState.id, mapState.worldScale);
   const startMode = config.startMode === "staged" ? "staged" : "immediate";
+  runtime.privateRoomCode = startMode === "staged" ? createPrivateRoomCode() : null;
+  runtime.pendingHumanSeats.clear();
   runtime.session = {
     id: crypto.randomUUID(),
     runId: crypto.randomUUID(),
     status: startMode === "staged" ? "lobby" : "running",
     startMode,
+    privateRoom: startMode === "staged",
+    roomCodeLength: startMode === "staged" ? 6 : 0,
     mapId: mapState.id,
     mapName: mapState.name,
     hostClientId: config.requesterId ? String(config.requesterId) : null,
@@ -1694,6 +1703,17 @@ function newAuthoritySecret() {
   return crypto.randomBytes(32).toString("base64url");
 }
 
+const PRIVATE_ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function createPrivateRoomCode(length = 6) {
+  const bytes = crypto.randomBytes(length);
+  return Array.from(bytes, (value) => PRIVATE_ROOM_ALPHABET[value % PRIVATE_ROOM_ALPHABET.length]).join("");
+}
+
+function normalizePrivateRoomCode(value) {
+  return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
 function secretsMatch(left, right) {
   const a = Buffer.from(String(left || ""));
   const b = Buffer.from(String(right || ""));
@@ -1857,8 +1877,21 @@ function promoteHostIfNeeded() {
 }
 
 function publicSessionSnapshot() {
-  const { hostProfileId: _hostProfileId, ...session } = runtime.session;
+  const {
+    hostProfileId: _hostProfileId,
+    privateRoom: _privateRoom,
+    roomCodeLength: _roomCodeLength,
+    ...session
+  } = runtime.session;
   return { ...session };
+}
+
+function publicLobbySessionSnapshot() {
+  return {
+    ...publicSessionSnapshot(),
+    privateRoom: Boolean(runtime.session.privateRoom),
+    roomCodeLength: runtime.session.roomCodeLength || 0,
+  };
 }
 
 function publicPlayerSnapshot(player) {
@@ -1882,6 +1915,19 @@ function publicPlayerSnapshot(player) {
       anchorRange: player.slingshot.anchorRange ?? 0,
       orbitDir: player.slingshot.orbitDir || 0,
     } : null,
+  };
+}
+
+function publicLobbyPlayerSnapshot(player) {
+  return {
+    clientId: player.clientId,
+    name: player.name,
+    ready: Boolean(player.ready),
+    connected: Boolean(player.connected),
+    seatNo: Number.isInteger(player.seatNo) ? player.seatNo : null,
+    isAI: Boolean(player.isAI),
+    hullType: player.hullType || "drifter",
+    status: player.status,
   };
 }
 
@@ -6790,6 +6836,15 @@ function closeSessionManifestAdmission(binding) {
 function closeMultiplayerBinding(binding) {
   closeSessionManifestAdmission(binding);
   runtimeStatePairAuthority?.disconnect(binding);
+  const authority = runtime.playerAuthorities.get(binding?.playerId);
+  if (authority && authority.connectionId === binding?.connectionId
+      && authority.connectionEpoch === binding?.connectionEpoch) {
+    const player = runtime.players.get(binding.playerId);
+    if (player) {
+      player.connected = false;
+      player.ready = false;
+    }
+  }
 }
 
 function prepareRuntimeStatePairPublicSource(publicFrame, consumers) {
@@ -6823,6 +6878,10 @@ function recoverRuntimeStatePair(binding) {
 }
 
 function openSessionManifestAdmission(binding) {
+  const player = runtime.players.get(binding?.playerId);
+  if (player) {
+    player.connected = true;
+  }
   if (!binding?.manifestHash) return;
   for (const key of manifestAdmissions) {
     const [runId, membershipId] = JSON.parse(key);
@@ -7314,7 +7373,7 @@ const server = http.createServer(async (req, res) => {
         protocolVersion: PROTOCOL_VERSION,
         simInstanceId: SIM_INSTANCE_ID,
         controlPlaneUrl: CONTROL_PLANE_URL || null,
-        session: runtime.session,
+        session: publicLobbySessionSnapshot(),
         tick: runtime.tick,
         simTime: runtime.simTime,
         fieldRevision: runtime.fieldRevision,
@@ -7718,7 +7777,65 @@ const server = http.createServer(async (req, res) => {
       }
       startSession(body);
       const joinTicket = issueJoinClaim(body.requesterId || body.playerId);
-      sendJson(res, 200, { ok: true, session: runtime.session, joinTicket });
+      sendJson(res, 200, {
+        ok: true,
+        session: publicLobbySessionSnapshot(),
+        joinTicket,
+        roomCode: runtime.privateRoomCode,
+      });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/lobby") {
+      if (runtime.session.status !== "lobby") {
+        sendJson(res, 409, { ok: false, code: "not-in-lobby", error: "Crew is not waiting in a lobby" });
+        return;
+      }
+      const auth = authorizePlayerRequest(req, { runId: runtime.session.runId }, { requireCommandSeq: false });
+      if (!auth.ok) {
+        sendAuthorityError(res, auth);
+        return;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        type: "lobby",
+        protocolVersion: PROTOCOL_VERSION,
+        session: publicLobbySessionSnapshot(),
+        tick: runtime.tick,
+        simTime: runtime.simTime,
+        players: Array.from(runtime.players.values()).map(publicLobbyPlayerSnapshot),
+      });
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/session/ready") {
+      const body = await readJson(req);
+      if (runtime.session.status !== "lobby") {
+        sendJson(res, 409, { ok: false, code: "not-in-lobby", error: "Readiness is only available in Crew Muster" });
+        return;
+      }
+      if (typeof body.ready !== "boolean") {
+        sendJson(res, 400, { ok: false, code: "invalid-ready-state", error: "ready must be boolean" });
+        return;
+      }
+      const auth = authorizePlayerRequest(req, body, { requireCommandSeq: true });
+      if (!auth.ok) {
+        sendAuthorityError(res, auth);
+        return;
+      }
+      acceptCommand(auth);
+      const player = runtime.players.get(auth.authority.playerId);
+      if (!player || player.isAI) {
+        sendJson(res, 404, { ok: false, code: "unknown-player", error: "Unknown human player" });
+        return;
+      }
+      player.ready = body.ready;
+      publishEvent("player.readyChanged", { clientId: player.clientId, ready: player.ready });
+      sendJson(res, 200, {
+        ok: true,
+        player: publicLobbyPlayerSnapshot(player),
+        players: Array.from(runtime.players.values()).map(publicLobbyPlayerSnapshot),
+      });
       return;
     }
 
@@ -7734,6 +7851,17 @@ const server = http.createServer(async (req, res) => {
       });
       if (!permission.ok) {
         sendAuthorityError(res, permission);
+        return;
+      }
+      const humanPlayers = getHumanPlayers();
+      if (humanPlayers.length < 1 || humanPlayers.some((player) => !player.ready || !player.connected)) {
+        sendJson(res, 409, {
+          ok: false,
+          code: "crew-not-ready",
+          error: "Every occupied human seat must be connected and ready before launch",
+          readyCount: humanPlayers.filter((player) => player.ready && player.connected).length,
+          humanPlayerCount: humanPlayers.length,
+        });
         return;
       }
       if (permission.authority) acceptCommand(permission);
@@ -7754,7 +7882,7 @@ const server = http.createServer(async (req, res) => {
       persistSessionRegistry();
       refreshBallparkMirror("session-launched");
       restartTickLoop();
-      sendJson(res, 200, { ok: true, session: runtime.session });
+      sendJson(res, 200, { ok: true, session: publicSessionSnapshot() });
       return;
     }
 
@@ -7777,7 +7905,7 @@ const server = http.createServer(async (req, res) => {
         requesterName,
       });
       const joinTicket = issueJoinClaim(requesterId);
-      sendJson(res, 200, { ok: true, session: runtime.session, joinTicket });
+      sendJson(res, 200, { ok: true, session: publicLobbySessionSnapshot(), joinTicket, roomCode: runtime.privateRoomCode });
       return;
     }
 
@@ -7825,21 +7953,37 @@ const server = http.createServer(async (req, res) => {
           sendJson(res, 403, { ok: false, code: "join-claim-required", error: "A valid host join ticket is required" });
           return;
         }
-      }
-      if (!player) {
-        const humanCount = Array.from(runtime.players.values()).filter(p => !p.isAI).length;
-        if (humanCount >= runtime.session.maxPlayers) {
-          sendJson(res, 409, { ok: false, error: "Session full" });
+        if (!pendingClaim && runtime.session.privateRoom
+            && !secretsMatch(normalizePrivateRoomCode(body.roomCode), runtime.privateRoomCode)) {
+          sendJson(res, 403, { ok: false, code: "room-code-invalid", error: "Room code is invalid" });
           return;
         }
+      }
+      if (!player) {
+        const occupiedSeats = new Set(Array.from(runtime.players.values())
+          .filter((entry) => !entry.isAI && Number.isInteger(entry.seatNo))
+          .map((entry) => entry.seatNo));
+        const seatNo = Array.from({ length: runtime.session.maxPlayers }, (_, index) => index)
+          .find((index) => !occupiedSeats.has(index) && !runtime.pendingHumanSeats.has(index));
+        if (!Number.isInteger(seatNo)) {
+          sendJson(res, 409, { ok: false, code: "room-full", error: "Room is full" });
+          return;
+        }
+        runtime.pendingHumanSeats.add(seatNo);
         const profileId = body.profileId ? String(body.profileId).trim() : null;
-        const durableProfile = profileId
-          ? await controlPlane.bootstrapProfile({
-              profileId,
-              snapshot: body.profileSnapshot || null,
-              fallbackName: body.name,
-            })
-          : null;
+        let durableProfile;
+        try {
+          durableProfile = profileId
+            ? await controlPlane.bootstrapProfile({
+                profileId,
+                snapshot: body.profileSnapshot || null,
+                fallbackName: body.name,
+              })
+            : null;
+        } catch (error) {
+          runtime.pendingHumanSeats.delete(seatNo);
+          throw error;
+        }
         const explicitHullType = normalizePublicHullType(
           body.hullType,
           durableProfile?.hullType,
@@ -7856,6 +8000,7 @@ const server = http.createServer(async (req, res) => {
           rigLevels: durableProfile?.rigLevels || body.profileSnapshot?.rigLevels || null,
           equipped,
           consumables,
+          seatNo,
         });
         player.profileId = durableProfile?.id || profileId || null;
         player.name = durableProfile?.name || player.name;
@@ -7868,6 +8013,8 @@ const server = http.createServer(async (req, res) => {
         player.wy = spawn.wy;
         runtime.players.set(clientId, player);
         authority = issuePlayerAuthority(clientId);
+        player.connected = true;
+        runtime.pendingHumanSeats.delete(seatNo);
         runtime.joinClaims.delete(clientId);
         telemetry.info("player.joined", { sessionId: runtime.session.id, clientId, profileId: player.profileId, name: player.name, hullType: player.hullType, mapId: runtime.session.mapId });
         if (!runtime.session.hostClientId) assignHost(clientId, player.name);
@@ -7879,6 +8026,8 @@ const server = http.createServer(async (req, res) => {
         // the live server record; caller-supplied loadout/profile mutations
         // are intentionally ignored at this boundary.
         authority = issuePlayerAuthority(clientId, authority);
+        player.connected = true;
+        player.ready = false;
         telemetry.info("player.reconnected", {
           sessionId: runtime.session.id,
           clientId,

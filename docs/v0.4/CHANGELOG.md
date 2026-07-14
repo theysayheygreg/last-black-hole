@@ -28,6 +28,13 @@
 - Removed split-reality fallback. Failed multiplayer admission remains visible
   instead of silently starting a separate local universe.
 - Preserved immediate-start harness behavior and explicit offline/local play.
+- Added explicit private host/join choices, a bounded six-character room code,
+  deterministic four-seat roster, connection-bound readiness, and host launch
+  gating.
+- Added durable wrong-code, not-ready, and room-full errors plus reconnect
+  readiness invalidation without widening the fixed S20 gameplay projection.
+- Added a fast one/two/three/four-player lobby matrix covering seat order,
+  non-host denial, reconnect epoch fencing, and fifth-seat rejection.
 
 ### External playtest
 

@@ -42,6 +42,7 @@ export class SimClient {
     this.connectionId = null;
     this.connectionEpoch = 0;
     this.joinTicket = null;
+    this.roomCode = null;
     this._commandTail = Promise.resolve();
     this.latestSnapshot = null;
     this.latestEvents = [];
@@ -133,7 +134,13 @@ export class SimClient {
       },
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body?.error || `HTTP ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(body?.error || `HTTP ${response.status}`);
+      error.code = body?.code || null;
+      error.status = response.status;
+      error.details = body;
+      throw error;
+    }
     return body;
   }
 
@@ -157,6 +164,7 @@ export class SimClient {
     });
     const body = await (this.commandCredential ? this._enqueueCommand(request) : request());
     this._applySessionClocks(body?.session);
+    this.roomCode = body?.roomCode || null;
     this._clearAuthority(body?.session?.runId || null, body?.joinTicket || null);
     this._resetStreamState(body?.session?.runId || null);
     return body.session;
@@ -170,6 +178,17 @@ export class SimClient {
     }));
     this._applySessionClocks(body?.session);
     return body.session;
+  }
+
+  async getLobby() {
+    return this._json('/lobby');
+  }
+
+  async setReady(ready) {
+    const command = this._nextCommandEnvelope();
+    return this._enqueueCommand(() => this._json('/session/ready', {
+      method: 'POST', body: JSON.stringify({ ready: Boolean(ready), ...command }),
+    }));
   }
 
   async ensureSession({ mapId, worldScale, maxPlayers = 4 }) {
@@ -191,16 +210,18 @@ export class SimClient {
       method: 'POST', body: JSON.stringify({ requesterId, ...command }),
     }));
     this._applySessionClocks(body?.session);
+    this.roomCode = body?.roomCode || null;
     this._clearAuthority(body?.session?.runId || null, body?.joinTicket || null);
     this._resetStreamState(body?.session?.runId || null);
     return body.session;
   }
 
-  async join({ name, profileId = null, profileSnapshot = null, equipped = null, consumables = null }) {
+  async join({ name, profileId = null, profileSnapshot = null, equipped = null, consumables = null, roomCode = null }) {
     const body = await this._json('/join', {
       method: 'POST',
-      body: JSON.stringify({ clientId: this.clientId, runId: this.runId, joinTicket: this.joinTicket, name, profileId, profileSnapshot, equipped, consumables }),
+      body: JSON.stringify({ clientId: this.clientId, runId: this.runId, joinTicket: this.joinTicket, roomCode, name, profileId, profileSnapshot, equipped, consumables }),
     });
+    if (roomCode) this.roomCode = String(roomCode).trim().toUpperCase();
     this._adoptAuthority(body?.authority);
     if (this.transport === 'stream') await this._connectStream('admission');
     return body;
@@ -216,6 +237,7 @@ export class SimClient {
       }));
       await this._stopStream('leave');
       this._clearAuthority(this.runId, null);
+      this.roomCode = null;
       return response;
     } finally {
       this._shuttingDown = false;
