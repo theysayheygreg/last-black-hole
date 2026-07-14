@@ -48,7 +48,12 @@ function inspectEligibility() {
   return {
     schema: "lbh-s24-live-loopback-eligibility-v1",
     eligible: false,
-    rawRunConsumed: fs.existsSync(RAW_OUTPUT),
+    rawArtifactPresent: fs.existsSync(RAW_OUTPUT),
+    runConsumption: {
+      operatorReported: "not-launched",
+      machineVerifiableFromRepository: false,
+      note: "Repository state proves only that the expected raw artifact is absent; it cannot prove historical process execution.",
+    },
     decision: "stop-before-live-run",
     requested: { logicalGameplayWritersPerMatch: 1, matches: 1,
       isolatedClientProcesses: REQUESTED_CLIENTS, workers: 0,

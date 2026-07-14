@@ -19,8 +19,10 @@ Deep Field profile caps scavengers at 7 rather than 48, and no authorized
 production-free control instantiates exactly 400 dynamic bodies. These factors
 must not be filled with synthetic work inside a document labeled live.
 
-No authority or client process was launched, no raw artifact exists, and the
-single authorized live run remains unconsumed.
+No raw artifact exists. The orchestrator reports that it stopped at static
+inspection before launching an authority or client process, so the authorized
+run was not knowingly consumed. Repository state alone cannot prove historical
+non-execution; the evidence keeps those two claims separate.
 
 The static eligibility result can be regenerated without starting the runtime:
 
