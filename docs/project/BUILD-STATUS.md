@@ -16,8 +16,12 @@ does not erase newer committed work.
 
 ## v0.3 Candidate
 
-**Source status:** green RC source candidate. The 2026-07-14 full lane passed
-without retries after correcting the visual harness timeout.
+**Source status:** feature-stability candidate. Orrery's S0/S1 findings are
+fixed on the v0.3 line. Fresh remote-authority (18/18), controller (3/3), Three
+renderer (5/5), and fast gates pass. A fresh autonomous journey no longer
+crashes after extraction; one later run missed its portal after exhausting
+most of its fuel, so the complete no-retry promotion gate remains open rather
+than being hidden behind evaluator retuning.
 
 **Package status:** green. `release:internal` built all targets, the release
 checker found the matching hash directory, and the Linux artifact's actual
@@ -28,7 +32,9 @@ live run through normal keyboard input. `npm run release:status` is the
 authority for the exact current HEAD hash.
 
 **Physical Steam Deck status:** pending Gaming Mode acceptance. Automated
-1280x800 evidence exists; that is not a substitute for the real device.
+1280x800 evidence exists; that is not a substitute for the real device. The
+review-fix replacement was packaged on 2026-07-14, but the Deck was offline on
+Tailscale and has not received it yet.
 
 **Human status:** Greg has not yet made the final movement-feel or visual-taste
 call.

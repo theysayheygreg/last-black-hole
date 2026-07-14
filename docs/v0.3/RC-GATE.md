@@ -5,18 +5,24 @@
 
 ## Current Verdict
 
-**Source and packaged candidates are green. Physical-device acceptance and
-Greg's final review remain.**
+**Feature-stability and packaged candidates are green. The complete autonomous
+promotion gate, physical-device acceptance, and Greg's final review remain.**
 
 `codex/v0.3-ballpark-roadmap` contains the intended authority, Ballpark,
 protocol, route, product-loop, renderer-contract, HUD/audio, performance, and
 agent-eval work, plus the v0.3 generated visual kit and UI motion system.
 `main` remains the v0.2 public/demo line.
 
-The final committed hash has a matching packaged artifact whose extracted
+The review-fix commit has a matching packaged artifact whose extracted
 authority and Electron client boot. A physical Steam Deck Gaming Mode pass and
 Greg's feel/taste pass are explicit residual gates, not claims automation
 should fake.
+
+Orrery's review exposed a client ownership bug during extraction: after the
+phase changed, local `SimCore` could advance server-owned snapshot entities.
+Remote authority now remains presentation-only through results and transitions
+until the session is explicitly released. Fresh authority, controller, Three
+renderer, fast, and package gates pass with that fix.
 
 ## Current Evidence
 
@@ -38,6 +44,10 @@ Latest completed evidence from the clean 2026-07-14 RC pass:
 - Package closure tests stage authority, extract and boot the real Linux
   `app.asar`, then boot the macOS Three client through title and authoritative
   launch after a 31-second idle wait.
+- The 2026-07-14 review-fix pass produced a clean multi-target package and
+  passed `test:package`. Its fresh autonomous journey showed no browser runtime
+  errors, but one route attempt missed the portal after running low on fuel;
+  the full no-retry promotion checkbox is therefore still open.
 
 ## Automated Candidate Gate
 
