@@ -32,6 +32,7 @@ const DEFAULT_MANIFEST_SCHEMA = "lbh-session-replication-manifest-v1";
 const MAX_SOURCE_ENTITIES = 4096;
 const MAX_SOURCE_BYTES = 1024 * 1024;
 const MAX_TRACKED_IDENTITIES = 8192;
+const MAX_SHARED_PUBLIC_SOURCES_PER_TICK = 4;
 const SOURCE_FIELD_CLASSIFICATION = Object.freeze({
   public: Object.freeze({
     canonicalLineage: Object.freeze(["runId", "snapshotId", "tick", "simTime", "lastEventSeq", "fieldRevision", "overloadMode"]),
@@ -73,6 +74,12 @@ function positiveInteger(value, label) {
 
 function clone(value) {
   return JSON.parse(canonicalJson(value));
+}
+
+function freezeTree(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) freezeTree(child);
+  return Object.freeze(value);
 }
 
 function hash(value) {
@@ -158,11 +165,15 @@ function collectPublicEntities(publicFrame, splitRuntimePublic = false) {
   return entities;
 }
 
-function createRevisionTracker() {
-  const states = new Map();
-  const retired = new Map();
+const EMPTY_REVISION_TRACKER_SNAPSHOT = Object.freeze({ states: new Map(), retired: new Map() });
 
-  function project(rawEntities) {
+function createRevisionTracker() {
+  let snapshot = EMPTY_REVISION_TRACKER_SNAPSHOT;
+
+  function transition(rawEntities) {
+    const before = snapshot;
+    const states = new Map(before.states);
+    const retired = new Map(before.retired);
     const current = new Set();
     const output = [];
     for (const raw of rawEntities) {
@@ -201,10 +212,24 @@ function createRevisionTracker() {
       retired.set(key, Math.max(retired.get(key) || 0, prior.incarnation));
       states.set(key, { ...prior, present: false });
     }
-    return output;
+    const after = Object.freeze({ states, retired });
+    snapshot = after;
+    return Object.freeze({ before, after, output: freezeTree(output) });
   }
 
-  return Object.freeze({ project });
+  function adopt(cached) {
+    if (!cached || cached.before !== snapshot) fail("shared-public-cohort-mismatch",
+      "shared public revision transition does not match this recipient history");
+    snapshot = cached.after;
+    return cached.output;
+  }
+
+  return Object.freeze({
+    project(rawEntities) { return transition(rawEntities).output; },
+    transition,
+    adopt,
+    snapshot: () => snapshot,
+  });
 }
 
 function pairIdentity(binding, authorityIncarnation) {
@@ -228,6 +253,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   const fixedManifestSchema = requiredString(manifestSchema, "manifestSchema");
   const fixedManifestHash = requiredString(manifestHash, "manifestHash");
   const preparedProjectionsEnabled = publisherOptions.preparedProjections !== false;
+  const sharedPublicWorkEnabled = publisherOptions.sharedPublicWork !== false;
   const publisher = createAuthorityDeltaPublisher({ ...publisherOptions, stageProfiler });
   const maxAdmissions = Number.isSafeInteger(publisherOptions.maxRecipients)
     ? publisherOptions.maxRecipients : 128;
@@ -241,6 +267,94 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
   let shareability = { beats: 0, comparisons: 0, mismatches: 0, snapshotId: null, coreHash: null };
   const preparedCounters = { preparations: 0, canonicalizations: 0, hashes: 0 };
   const positionalMeasure = { encodedCandidates: 0, encodedBytes: 0, encodeMilliseconds: 0 };
+  const sharedPublic = {
+    scope: null,
+    sources: new Map(),
+    ticks: 0,
+    eligibleRecipients: 0,
+    sourceBuilds: 0,
+    sourceReuses: 0,
+    coreBuilds: 0,
+    coreReuses: 0,
+    misses: new Map(),
+    cleanupCount: 0,
+    sourceHighWater: 0,
+    cohortHighWater: 0,
+    allocationProxyBytes: 0,
+    reusedAllocationProxyBytes: 0,
+  };
+
+  function observeSharedMiss(reason) {
+    sharedPublic.misses.set(reason, (sharedPublic.misses.get(reason) || 0) + 1);
+  }
+
+  function sharedPublicCore(publicFrame, splitRuntimePublic, tracker) {
+    if (!sharedPublicWorkEnabled) {
+      observeSharedMiss("disabled");
+      return {
+        world: { publicFacts: publicFacts(publicFrame.state, splitRuntimePublic) },
+        entities: tracker.project(collectPublicEntities(publicFrame, splitRuntimePublic)),
+      };
+    }
+    const scope = canonicalJson([fixedMatchId, fixedAuthorityIncarnation, fixedBallparkEpoch,
+      fixedManifestSchema, fixedManifestHash, publicFrame.snapshotId, publicFrame.tick,
+      publicFrame.fieldRevision]);
+    if (sharedPublic.scope !== scope) {
+      if (sharedPublic.scope !== null && sharedPublic.sources.size) sharedPublic.cleanupCount += 1;
+      sharedPublic.scope = scope;
+      sharedPublic.sources.clear();
+      sharedPublic.ticks += 1;
+    }
+    sharedPublic.eligibleRecipients += 1;
+    // The source hash is public-only and binds every state value. It keeps a
+    // same-cursor mutation from inheriting a prior recipient's projection.
+    const sourceHash = hash(publicFrame);
+    const sourceKey = canonicalJson([splitRuntimePublic ? RUNTIME_PUBLIC_COMPONENT_SCHEMA : "legacy",
+      fixedAuthorityIncarnation, fixedBallparkEpoch, fixedManifestSchema, fixedManifestHash,
+      publicFrame.snapshotId, publicFrame.tick, publicFrame.simTime, publicFrame.lastEventSeq,
+      publicFrame.fieldRevision, publicFrame.overloadMode, sourceHash]);
+    let source = sharedPublic.sources.get(sourceKey);
+    if (!source) {
+      if (sharedPublic.sources.size >= MAX_SHARED_PUBLIC_SOURCES_PER_TICK) {
+        observeSharedMiss("source-cap");
+        return {
+          world: { publicFacts: publicFacts(publicFrame.state, splitRuntimePublic) },
+          entities: tracker.project(collectPublicEntities(publicFrame, splitRuntimePublic)),
+        };
+      }
+      const facts = freezeTree(publicFacts(publicFrame.state, splitRuntimePublic));
+      const entities = freezeTree(collectPublicEntities(publicFrame, splitRuntimePublic));
+      // Raw tracker inputs intentionally carry optional undefined incarnation
+      // hints, so use the already schema-closed public source as the bounded
+      // allocation proxy rather than serializing that internal shape.
+      const bytes = canonicalJsonBytes(publicFrame).length;
+      source = { facts, entities, transitions: new Map(), bytes };
+      sharedPublic.sources.set(sourceKey, source);
+      sharedPublic.sourceBuilds += 1;
+      sharedPublic.allocationProxyBytes += bytes;
+      sharedPublic.sourceHighWater = Math.max(sharedPublic.sourceHighWater, sharedPublic.sources.size);
+    } else {
+      sharedPublic.sourceReuses += 1;
+      sharedPublic.reusedAllocationProxyBytes += source.bytes;
+    }
+    const before = tracker.snapshot();
+    let cached = source.transitions.get(before);
+    let entities;
+    if (cached) {
+      entities = tracker.adopt(cached);
+      sharedPublic.coreReuses += 1;
+      sharedPublic.reusedAllocationProxyBytes += canonicalJsonBytes(cached.output).length;
+    } else {
+      cached = tracker.transition(source.entities);
+      source.transitions.set(before, cached);
+      entities = cached.output;
+      sharedPublic.coreBuilds += 1;
+      sharedPublic.allocationProxyBytes += canonicalJsonBytes(entities).length;
+      sharedPublic.cohortHighWater = Math.max(sharedPublic.cohortHighWater, source.transitions.size);
+      observeSharedMiss("tracker-cohort");
+    }
+    return { world: { publicFacts: source.facts }, entities };
+  }
 
   function resetShareabilityIfNeeded() {
     const currentGeneration = stageProfiler?.generation?.() || 0;
@@ -380,10 +494,7 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
     };
     const publicTracker = splitRuntimePublic ? splitPublicTrackers.get(key(identity)) : legacyPublicTracker;
     if (!publicTracker) fail("capability-not-admitted", "split public history is unavailable for this admission");
-    const buildPublicCore = () => ({
-      world: { publicFacts: publicFacts(publicFrame.state, splitRuntimePublic) },
-      entities: publicTracker.project(collectPublicEntities(publicFrame, splitRuntimePublic)),
-    });
+    const buildPublicCore = () => sharedPublicCore(publicFrame, splitRuntimePublic, publicTracker);
     const publicCore = stageProfiler
       ? stageProfiler.measureSync(STAGES.PUBLIC_CORE, (value) => ({
           ...profile,
@@ -498,6 +609,25 @@ function createRuntimeStatePairAuthority({ matchId, authorityIncarnation, ballpa
             runtimePresentation: 0,
           }),
         }),
+      }),
+      sharedPublicWork: Object.freeze({
+        enabled: sharedPublicWorkEnabled,
+        scope: "one authority instance and one authoritative tick",
+        ticks: sharedPublic.ticks,
+        eligibleRecipients: sharedPublic.eligibleRecipients,
+        sourceBuilds: sharedPublic.sourceBuilds,
+        sourceReuses: sharedPublic.sourceReuses,
+        coreBuilds: sharedPublic.coreBuilds,
+        coreReuses: sharedPublic.coreReuses,
+        misses: Object.freeze(Object.fromEntries([...sharedPublic.misses].sort())),
+        activeSources: sharedPublic.sources.size,
+        sourceHighWater: sharedPublic.sourceHighWater,
+        cohortHighWater: sharedPublic.cohortHighWater,
+        sourceCapPerTick: MAX_SHARED_PUBLIC_SOURCES_PER_TICK,
+        cleanupCount: sharedPublic.cleanupCount,
+        allocationProxyBytes: sharedPublic.allocationProxyBytes,
+        reusedAllocationProxyBytes: sharedPublic.reusedAllocationProxyBytes,
+        rawClientIdentityKeys: 0,
       }),
       positionalJson: Object.freeze({
         capability: POSITIONAL_CODEC_CAPABILITY,

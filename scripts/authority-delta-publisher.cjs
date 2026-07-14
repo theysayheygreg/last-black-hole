@@ -509,6 +509,7 @@ function createAuthorityDeltaPublisher(options = {}) {
   const stageProfiler = options.stageProfiler || null;
   const preparedProjectionsEnabled = options.preparedProjections !== false;
   const trustedAuthorityProofsEnabled = options.trustedAuthorityProofs !== false;
+  const sharedPublicWorkEnabled = options.sharedPublicWork !== false;
   const ackRejectDiagnosticsEnabled = options.ackRejectDiagnostics === true;
   const limits = Object.freeze({
     maxRecipients: positiveInteger(options.maxRecipients, DEFAULTS.maxRecipients, "maxRecipients"),
@@ -583,6 +584,118 @@ function createAuthorityDeltaPublisher(options = {}) {
     canonicalizations: 0, hashes: 0, diffs: 0, preparations: 0,
     preparedHashHits: 0, preparedDiffs: 0, suppliedPreparedHits: 0,
   };
+  const sharedPublic = {
+    scope: null,
+    keyframes: new Map(),
+    deltas: new Map(),
+    ticks: 0,
+    eligibleRecipients: 0,
+    keyframeBuilds: 0,
+    keyframeReuses: 0,
+    deltaBuilds: 0,
+    deltaReuses: 0,
+    misses: new Map(),
+    cleanupCount: 0,
+    keyframeHighWater: 0,
+    deltaHighWater: 0,
+    reusedCanonicalBytes: 0,
+  };
+
+  function observeSharedPublicMiss(reason) {
+    sharedPublic.misses.set(reason, (sharedPublic.misses.get(reason) || 0) + 1);
+  }
+
+  function resetSharedPublicScope(view) {
+    const scope = canonicalJson([view.runId, view.authorityEpoch, view.ballparkEpoch,
+      view.manifestHash, view.schema, view.snapshotId, view.tick, view.simTime,
+      view.eventWatermark, view.fieldRevision, view.overloadMode]);
+    if (sharedPublic.scope === scope) return;
+    if (sharedPublic.scope !== null && (sharedPublic.keyframes.size || sharedPublic.deltas.size)) {
+      sharedPublic.cleanupCount += 1;
+    }
+    sharedPublic.scope = scope;
+    sharedPublic.keyframes.clear();
+    sharedPublic.deltas.clear();
+    sharedPublic.ticks += 1;
+  }
+
+  function exactPublicHash(current, prepared, preparedContext) {
+    if (prepared) {
+      operationCounters.preparedHashHits += 1;
+      return preparedProjectionHash(prepared, preparedContext);
+    }
+    operationCounters.hashes += 1;
+    operationCounters.canonicalizations += 1;
+    return projectionHash(current);
+  }
+
+  function sharedPublicKeyframe(current, options) {
+    if (!sharedPublicWorkEnabled) {
+      observeSharedPublicMiss("disabled");
+      return keyframePayload(current, options);
+    }
+    resetSharedPublicScope(current);
+    sharedPublic.eligibleRecipients += 1;
+    const currentHash = exactPublicHash(current, options.prepared, options.preparedContext);
+    const key = canonicalJson([current.schema, current.runId, current.authorityEpoch,
+      current.connectionEpoch, current.ballparkEpoch, current.manifestHash,
+      current.statePairId, current.snapshotId, current.tick, current.fieldRevision, currentHash]);
+    const cached = sharedPublic.keyframes.get(key);
+    if (cached) {
+      sharedPublic.keyframeReuses += 1;
+      sharedPublic.reusedCanonicalBytes += cached.canonical?.bytes || 0;
+      return cached.payload;
+    }
+    if (sharedPublic.keyframes.size >= limits.maxRecipients) {
+      observeSharedPublicMiss("keyframe-cohort-cap");
+      return keyframePayload(current, options);
+    }
+    const payload = keyframePayload(current, options);
+    sharedPublic.keyframes.set(key, Object.freeze({ payload, canonical: null }));
+    sharedPublic.keyframeBuilds += 1;
+    sharedPublic.keyframeHighWater = Math.max(sharedPublic.keyframeHighWater, sharedPublic.keyframes.size);
+    observeSharedPublicMiss("target-hash");
+    return payload;
+  }
+
+  function sharedPublicDelta(base, current, options) {
+    if (!sharedPublicWorkEnabled) {
+      observeSharedPublicMiss("disabled");
+      return deltaPayload(base, current, options);
+    }
+    resetSharedPublicScope(current);
+    sharedPublic.eligibleRecipients += 1;
+    const currentHash = exactPublicHash(current, options.prepared, options.preparedContext);
+    const key = canonicalJson([current.schema, current.runId, current.authorityEpoch,
+      current.connectionEpoch, current.ballparkEpoch, current.manifestHash,
+      base.view.snapshotId, base.hash, current.statePairId, current.snapshotId,
+      current.tick, current.fieldRevision, currentHash]);
+    const cached = sharedPublic.deltas.get(key);
+    if (cached) {
+      sharedPublic.deltaReuses += 1;
+      sharedPublic.reusedCanonicalBytes += cached.deltaCanonical.bytes + cached.keyframeCanonical.bytes;
+      return cached;
+    }
+    if (sharedPublic.deltas.size >= limits.maxRecipients) {
+      observeSharedPublicMiss("delta-cohort-cap");
+      return deltaPayload(base, current, options);
+    }
+    const decision = deltaPayload(base, current, options);
+    sharedPublic.deltas.set(key, decision);
+    const keyframeKey = canonicalJson([current.schema, current.runId, current.authorityEpoch,
+      current.connectionEpoch, current.ballparkEpoch, current.manifestHash,
+      current.statePairId, current.snapshotId, current.tick, current.fieldRevision, currentHash]);
+    if (!sharedPublic.keyframes.has(keyframeKey)) {
+      sharedPublic.keyframes.set(keyframeKey, Object.freeze({ payload: decision.keyframePayload,
+        canonical: decision.keyframeCanonical }));
+      sharedPublic.keyframeBuilds += 1;
+      sharedPublic.keyframeHighWater = Math.max(sharedPublic.keyframeHighWater, sharedPublic.keyframes.size);
+    }
+    sharedPublic.deltaBuilds += 1;
+    sharedPublic.deltaHighWater = Math.max(sharedPublic.deltaHighWater, sharedPublic.deltas.size);
+    observeSharedPublicMiss(base?.hash ? "ack-base-cohort" : "missing-ack-base");
+    return decision;
+  }
   const ackRejectDiagnostics = {
     total: 0,
     byReason: new Map(),
@@ -810,13 +923,13 @@ function createAuthorityDeltaPublisher(options = {}) {
     let ownerDecision = null;
     try {
       if (state.forceKeyframe || !state.acked) {
-        publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
+        publicPayload = sharedPublicKeyframe(publicView, { ...profile, lane: "public",
           prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
         ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner",
           prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
         keyframeReason = state.forceReason || "missing-acked-base";
       } else {
-        publicDecision = deltaPayload(state.acked.public, publicView, { ...profile, lane: "public",
+        publicDecision = sharedPublicDelta(state.acked.public, publicView, { ...profile, lane: "public",
           prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
         ownerDecision = deltaPayload(state.acked.owner, ownerView, { ...profile, lane: "owner",
           prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
@@ -831,7 +944,7 @@ function createAuthorityDeltaPublisher(options = {}) {
     } catch (error) {
       const code = String(error?.code || error?.name || "unknown").slice(0, 96);
       forceRebase(state, `semantic-fallback:${code}`);
-      publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
+      publicPayload = sharedPublicKeyframe(publicView, { ...profile, lane: "public",
         prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
       ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner",
         prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
@@ -840,7 +953,7 @@ function createAuthorityDeltaPublisher(options = {}) {
     // Legacy state-pair-v1 recipients retain the original same-kind contract.
     if (!allowMixed && publicPayload.kind !== ownerPayload.kind) {
       keyframeReason = `atomic-kind-alignment:public-${publicDecision?.decision || publicPayload.kind}+owner-${ownerDecision?.decision || ownerPayload.kind}`;
-      publicPayload = keyframePayload(publicView, { ...profile, lane: "public",
+      publicPayload = sharedPublicKeyframe(publicView, { ...profile, lane: "public",
         prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters });
       ownerPayload = keyframePayload(ownerView, { ...profile, lane: "owner",
         prepared: preparedOwner.prepared, preparedContext: preparedOwner.context, operationCounters });
@@ -907,7 +1020,7 @@ function createAuthorityDeltaPublisher(options = {}) {
         encodedWire, encodedDigest: encodedWire === null ? null : wireDigest(encodedWire) });
     };
     const fullPublicKeyframe = publicDecision?.keyframePayload
-      || (publicPayload.kind === "keyframe" ? publicPayload : keyframePayload(publicView, { ...profile, lane: "public",
+      || (publicPayload.kind === "keyframe" ? publicPayload : sharedPublicKeyframe(publicView, { ...profile, lane: "public",
         prepared: preparedPublic.prepared, preparedContext: preparedPublic.context, operationCounters }));
     const fullOwnerKeyframe = ownerDecision?.keyframePayload
       || (ownerPayload.kind === "keyframe" ? ownerPayload : keyframePayload(ownerView, { ...profile, lane: "owner",
@@ -1352,6 +1465,25 @@ function createAuthorityDeltaPublisher(options = {}) {
         pendingReferences: preparedPendingReferences, ackedReferences: preparedAckedReferences,
         maxPendingReferences: limits.maxRecipients * limits.maxPendingPairsPerRecipient * 2,
         maxAckedReferences: limits.maxRecipients * 2 }),
+      sharedPublicWork: Object.freeze({
+        enabled: sharedPublicWorkEnabled,
+        scope: "one authority instance and one authoritative target tick",
+        ticks: sharedPublic.ticks,
+        eligibleRecipients: sharedPublic.eligibleRecipients,
+        keyframeBuilds: sharedPublic.keyframeBuilds,
+        keyframeReuses: sharedPublic.keyframeReuses,
+        deltaBuilds: sharedPublic.deltaBuilds,
+        deltaReuses: sharedPublic.deltaReuses,
+        misses: Object.freeze(Object.fromEntries([...sharedPublic.misses].sort())),
+        activeKeyframeCohorts: sharedPublic.keyframes.size,
+        activeDeltaCohorts: sharedPublic.deltas.size,
+        keyframeHighWater: sharedPublic.keyframeHighWater,
+        deltaHighWater: sharedPublic.deltaHighWater,
+        configuredCohortBound: limits.maxRecipients,
+        cleanupCount: sharedPublic.cleanupCount,
+        reusedCanonicalBytes: sharedPublic.reusedCanonicalBytes,
+        rawClientIdentityKeys: 0,
+      }),
       trustedAuthorityProofs: Object.freeze({ enabled: trustedAuthorityProofsEnabled }) });
   }
 

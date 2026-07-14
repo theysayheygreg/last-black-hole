@@ -376,6 +376,87 @@ async function run() {
     console.log(`  pre-gate local evidence ${JSON.stringify(evidence)}`);
   });
 
+  await runner.run("S19 shared public cohorts preserve exact wire across ACK skew churn and mutation", async () => {
+    const capabilities = [CAPABILITY, MIXED_CAPABILITY, "runtime-public-components-v1",
+      "state-pair-positional-json-v1", "static-manifest-v1"].sort();
+    const make = (sharedPublicWork) => authority({ publisherOptions: { sharedPublicWork } });
+    const candidate = make(true);
+    const baseline = make(false);
+    const seats = Array.from({ length: 4 }, (_, index) => binding(`shared-${index}`, { capabilities }));
+    const candidateClients = new Map();
+    const baselineClients = new Map();
+    const splitSource = (id, beat, options) => {
+      const source = sourceFrames(id, beat, options);
+      source.publicFrame.state.world.portals = [{ id: "portal-live", alive: true,
+        lifespan: 20, spawnTime: beat }];
+      source.publicFrame.state.world.fauna = [{ id: "fauna-live", alive: true,
+        age: beat, lifespan: 30, phase: beat }];
+      source.publicFrame.state.world.sentries = [{ id: "sentry-live", alive: true,
+        state: "watch", wellId: "well-static" }];
+      return source;
+    };
+    for (const id of seats) {
+      candidate.admit(id, claims(id));
+      baseline.admit(id, claims(id));
+      candidateClients.set(id.membershipId, receiver(id));
+      baselineClients.set(id.membershipId, receiver(id));
+    }
+    let comparisons = 0;
+    for (let beat = 1; beat <= 5; beat += 1) {
+      for (let index = 0; index < seats.length; index += 1) {
+        const id = seats[index];
+        const source = splitSource(id, beat, { marker: `private-${index}-${beat}` });
+        const after = candidate.publish(id, source.publicFrame, source.ownerFrame);
+        const before = baseline.publish(id, source.publicFrame, source.ownerFrame);
+        assert.deepStrictEqual(after.frame, before.frame);
+        assert.strictEqual(after.bytes, before.bytes);
+        assert.strictEqual(Buffer.from(after.encodedWire).equals(Buffer.from(before.encodedWire)), true);
+        comparisons += 1;
+        const afterAccepted = candidateClients.get(id.membershipId).receive(after.encodedWire);
+        const beforeAccepted = baselineClients.get(id.membershipId).receive(before.encodedWire);
+        assert.deepStrictEqual(afterAccepted.ack, beforeAccepted.ack);
+        // One lagging recipient deliberately remains on an older exact public
+        // base; it must form its own cohort and never inherit another ACK.
+        if (!(index === 3 && (beat === 2 || beat === 3))) {
+          assert(candidate.acknowledge(id, afterAccepted.ack).accepted);
+          assert(baseline.acknowledge(id, beforeAccepted.ack).accepted);
+        }
+      }
+    }
+    const old = seats[2];
+    candidate.disconnect(old);
+    baseline.disconnect(old);
+    const rotated = binding("shared-2r", { capabilities, membershipId: old.membershipId,
+      playerId: old.playerId, connectionEpoch: 2 });
+    candidate.admit(rotated, claims(rotated));
+    baseline.admit(rotated, claims(rotated));
+    const rotatedSource = splitSource(rotated, 6, { marker: "rotated-private" });
+    const afterRotated = candidate.publish(rotated, rotatedSource.publicFrame, rotatedSource.ownerFrame);
+    const beforeRotated = baseline.publish(rotated, rotatedSource.publicFrame, rotatedSource.ownerFrame);
+    assert.deepStrictEqual(afterRotated.frame, beforeRotated.frame);
+    assert.strictEqual(Buffer.from(afterRotated.encodedWire).equals(Buffer.from(beforeRotated.encodedWire)), true);
+    comparisons += 1;
+
+    const mutated = splitSource(seats[0], 6, { marker: "mutation-private" });
+    mutated.publicFrame.state.world.portals[0].spawnTime = 999;
+    const afterMutation = candidate.publish(seats[0], mutated.publicFrame, mutated.ownerFrame);
+    const beforeMutation = baseline.publish(seats[0], mutated.publicFrame, mutated.ownerFrame);
+    assert.deepStrictEqual(afterMutation.frame, beforeMutation.frame,
+      "same-tick public mutation must miss the cache and preserve oracle bytes");
+    comparisons += 1;
+    const diagnostics = candidate.diagnostics();
+    assert(diagnostics.sharedPublicWork.coreReuses > 0);
+    assert(diagnostics.publisher.sharedPublicWork.deltaReuses > 0);
+    assert.strictEqual(diagnostics.sharedPublicWork.rawClientIdentityKeys, 0);
+    assert.strictEqual(diagnostics.publisher.sharedPublicWork.rawClientIdentityKeys, 0);
+    assert(diagnostics.sharedPublicWork.sourceHighWater <= diagnostics.sharedPublicWork.sourceCapPerTick);
+    assert(diagnostics.publisher.sharedPublicWork.deltaHighWater
+      <= diagnostics.publisher.sharedPublicWork.configuredCohortBound);
+    assert.strictEqual(JSON.stringify(afterMutation.frame).includes("private-1-"), false,
+      "another recipient's owner marker must never enter the public/shared lane");
+    console.log(`  S19 exact shared-public comparisons=${comparisons} coreReuses=${diagnostics.sharedPublicWork.coreReuses} deltaReuses=${diagnostics.publisher.sharedPublicWork.deltaReuses}`);
+  });
+
   const passed = runner.summary();
   process.exit(passed ? 0 : 1);
 }

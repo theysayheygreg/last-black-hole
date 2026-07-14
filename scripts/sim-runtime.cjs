@@ -6171,6 +6171,7 @@ function rotateMultiplayerRun(runId) {
         maxRecipients: 16,
         preparedProjections: MULTIPLAYER_PREPARED_PROJECTIONS_ENABLED,
         ackRejectDiagnostics: MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED,
+        sharedPublicWork: process.env.LBH_S19_DISABLE_SHARED_PUBLIC !== "1",
       },
       stageProfiler: authorityStageProfiler,
       })
