@@ -1,0 +1,107 @@
+{
+  "schema": "lbh-s24-live-eligibility-terminal-negative-v1",
+  "status": "not-proven",
+  "decision": "terminal-negative-no-more-retries",
+  "summary": "The guarded live H24 direction failed before a 24-client cohort bound; no capacity claim is available.",
+  "attempts": [
+    {
+      "ordinal": 1,
+      "publicFaunaType": "s24-load",
+      "productionSchemaValidType": false,
+      "observed": "First isolated client received generic authority-error after manifest ACK during state-pair admission.",
+      "cohortBound": false
+    },
+    {
+      "ordinal": 2,
+      "publicFaunaType": "jelly",
+      "productionSchemaValidType": true,
+      "observed": "First isolated client received generic authority-error after manifest ACK during state-pair admission.",
+      "cohortBound": false
+    }
+  ],
+  "observedBoundaries": {
+    "defaultRuntimeWebSocketConnections": 16,
+    "defaultDeepFieldMaxScavengers": 7,
+    "defaultBoundaryTestPassedBeforeEachAdmissionAttempt": true,
+    "twentyFourClientCohortBound": false,
+    "rawArtifactPresent": false,
+    "rawCapture": {
+      "operatorReportedStarted": false,
+      "repositoryCanProveHistoricalNonExecution": false,
+      "note": "Repository state proves raw.json is absent; the orchestrator reports the raw command was never started."
+    }
+  },
+  "rootCause": {
+    "observed": false,
+    "reason": "The adapter emitted a public generic authority-error and intentionally redacted the internal exception.",
+    "unprovenHypotheses": [
+      "The evidence-only s24EvidenceBody property may have entered public projection shape.",
+      "Another public projection validation, representation, or size boundary may have rejected the state pair."
+    ],
+    "claimBoundary": "No hypothesis is promoted to cause because the internal exception was not observed and retries are forbidden."
+  },
+  "topologyTarget": {
+    "matches": 1,
+    "logicalGameplayWritersPerMatch": 1,
+    "workers": 0,
+    "note": "Concurrent matches remain independent authorities; this failed lane did not create another writer."
+  },
+  "cleanup": {
+    "failedFixturePreservedInHistory": true,
+    "liveTreeFixtureRemoved": true,
+    "rawRunForbiddenAfterTerminalDecision": true
+  },
+  "syntheticPreflight": {
+    "commit": "eaaa811",
+    "artifactSha256": "b15bd3a1037f710c0643fda6b0eb14f47bed16d32b32685fcc5a96752364f9d4",
+    "status": "synthetic-factor-screen-only",
+    "limitations": [
+      "No live sockets, paced authority, actual process CPU, or observed on-wire traffic.",
+      "H48/H96 remain extrapolations and are not promoted by this terminal negative.",
+      "The synthetic S24 gate remains false and is not a capacity claim."
+    ]
+  },
+  "retryDisposition": "Root forbids additional fixture patches, eligibility attempts, and raw captures in this lane.",
+  "chronology": [
+    {
+      "role": "syntheticSeal",
+      "commit": "eaaa81107a6f3d51981c8bb1fcf1185c6fc41e52"
+    },
+    {
+      "role": "initialEligibilitySeal",
+      "commit": "66ab98dc5e0d3211b824f2467267c767f35504e0"
+    },
+    {
+      "role": "guardedSeam",
+      "commit": "67afbe8600175e815a59a50687cf5e4183448def"
+    },
+    {
+      "role": "failedDirectionWip",
+      "commit": "bdc766827594ed2d80adcf38e41e0eee479e9c4f"
+    },
+    {
+      "role": "failedDirectionRevert",
+      "commit": "4e8395b670a7999b022c4485f20d8fa2759ceee6"
+    },
+    {
+      "role": "guardedSeamRevert",
+      "commit": "0b3390fe2e210c8bd84427d6a651023342ab0060"
+    }
+  ],
+  "provenance": {
+    "branch": "codex/v0.4-multiplayer-architecture",
+    "commit": "3592d6bd08eecd9f17bb476e57c859d63ce85726",
+    "runtime": {
+      "path": "scripts/sim-runtime.cjs",
+      "sha256": "f8d3fbcd1ebdfe209370362ecd8af6a4faa63c01a42b93a6e904c9cf64b663a0"
+    },
+    "profiles": {
+      "path": "src/content/session-profiles.data.json",
+      "sha256": "9500bf14fb82cf7921c5094a6b5ce0699d005f914fb2b156b3e2ee9885190acb"
+    },
+    "generator": {
+      "path": "scripts/s24-live-terminal-negative.cjs",
+      "sha256": "d042ccff756e6e9ca555402c113d99dec32d111e92442c83c5a5e3937d266ac2"
+    }
+  }
+}
