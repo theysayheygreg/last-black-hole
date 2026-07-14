@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-07-14 — v0.4 local hosted lifecycle and erasure closure
+
+- Fenced startup and new linking when legacy identity-subject HMAC rows are
+  untagged; only an explicitly reviewed legacy key may migrate them before safe
+  retirement.
+- Refused unverifiable legacy accepted placements by default and added an
+  explicit operator-reviewed quarantine that permanently fences their lineage
+  without trusting old payload membership.
+- Compensated exact placement after catchable create persistence failure and
+  bounded hard-crash orphan capacity with readiness-deadline sweep.
+- Added exact placement settlement acknowledgement, finite payload-free audit,
+  and permanent closed lineage. Bounded archive/cleanup redacts settled result,
+  outbox, and journal payloads while preserving pending, leased, and unsettled
+  dead-letter work.
+- Added bounded restartable account erasure/de-identification after archive
+  acknowledgement, with blocker checks repeated inside the SQLite writer lock
+  to close TOCTOU races. Independent final red-team found no P0/P1 in the
+  demonstrated co-located SQLite composition.
+- Kept erasure-key custody/rotation, worker/status authorization policy,
+  legal/accounting/privacy schedules, dead-letter operations, production
+  provider/key custody, and distributed multi-database/cross-region semantics
+  open. No regional, packing, invoice, or observed-cost claim changes.
+
 ## 2026-07-14 — v0.4 hosted key rotation proved locally
 
 - Added bounded current-plus-previous keyrings for provider-subject HMAC
@@ -8,10 +31,10 @@
   lazily migrated identity/product rows with compare-and-set protection.
   Migrated data survives safe old-key retirement; unknown, retired-before-
   migration, or tampered identifiers fail closed.
-- Closed the previously listed local crypto-rotation P2. Production key
-  custody/coordinated rollout, retention/privacy, create-orphan reclamation,
-  pre-repair accepted-row migration/reset, provider composition, and the
-  single-SQLite/direct-callback boundary remain open.
+- Closed the previously listed local crypto-rotation P2. Later local lifecycle
+  closure for create orphans, legacy acceptance quarantine, retention mechanics,
+  and erasure is recorded above; production custody, policy, and distributed
+  boundaries remain open.
 
 ## 2026-07-14 — v0.4 hosted HTTP and lifecycle crash windows closed locally
 
@@ -24,11 +47,10 @@
   for bootstrap/ready/admission/drain, placement-owned exact admitted-membership
   digest/count, and a prepared-result journal with bounded settlement recovery.
   Independent final review found no P0/P1 in that local composition.
-- Preserved explicit P2s for create-time placement capacity reclamation via
-  sweep, pre-repair accepted-row migration/reset policy, retention/privacy
-  operations, production key custody, and replacing single-SQLite direct
-  callbacks with production distributed boundaries. Local rotation closure is
-  recorded above.
+- At this checkpoint, preserved P2s for create-time placement capacity,
+  pre-repair accepted rows, retention/privacy, production key custody, and
+  distributed boundaries. Their later local mechanical closures and remaining
+  policy/deployment gaps are recorded above.
 - Built the source-bound benchmark container locally. Its startup now executes
   `tcpdump -D` and correctly fails without `NET_ADMIN`/`NET_RAW`; Fly capture
   capability remains unproved pending authenticated runtime probing. Fly auth,

@@ -40,6 +40,16 @@ public 4–8-player product.
   key identifiers, dual-read/lazy migration, safe old-key retirement, and fail-
   closed unknown identifiers. This does not prove production key custody or
   multi-database rollout.
+- The co-located SQLite lifecycle now also proves reviewed migration fencing
+  for legacy identity HMACs, permanent quarantine for unverifiable legacy
+  placement acceptances, create-placement compensation/readiness sweep,
+  exact settlement acknowledgement, finite payload-free lineage audit,
+  settled-result redaction/cleanup, and bounded post-archive account erasure.
+  Independent final red-team found no P0/P1 in this demonstrated composition.
+- Production erasure-key custody/rotation, worker/status authorization policy,
+  legal/accounting retention schedules, dead-letter operations, production
+  provider/key custody, and distributed multi-database/cross-region semantics
+  remain open. None of the local closure proves public deployment.
 - A fail-closed hosted HTTP reference runtime is implemented and tested over
   the local co-located SQLite composition. It separates client, control, and
   workload auth planes, preserves four-seat and authority-incarnation fences,

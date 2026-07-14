@@ -101,8 +101,8 @@ access, account/profile ids are server-derived, placement fences authority
 instance plus process incarnation, product state is encrypted at rest, and
 placement-owned terminal-result acceptance feeds an immutable outbox and
 exactly-once multi-member settlement. Accepted authority lineage is retained
-through settlement replay until a future explicit settlement-ack/archive
-protocol. At that checkpoint this was service/repository evidence only; the
+through settlement replay until the exact settlement-ack/archive protocol
+closes it. At that checkpoint this was service/repository evidence only; the
 later fail-closed local HTTP reference still does not constitute a public or
 regional deployment claim.
 
@@ -113,12 +113,27 @@ and a prepared-result journal plus bounded settlement-worker recovery closes
 the terminal placement-to-outbox gap. Independent final review found no P0/P1
 in this demonstrated local composition.
 
-Remaining P2 work is explicit: create-time placement capacity is reclaimed by
-sweep rather than inline compensation; databases containing pre-repair
-accepted rows need a declared migration/reset policy; retention/privacy
-operations are not production-complete; and the proof is co-located single-
-SQLite with direct in-process callbacks, not a distributed production
-transaction.
+Final local lifecycle checkpoint (2026-07-14): reviewed legacy identity-HMAC
+migration now fences startup and new linking until untagged rows migrate.
+Unverifiable pre-repair placement acceptances refuse startup by default and
+only an explicit operator-reviewed quarantine permanently fences their run
+lineage without fabricating member truth. Catchable create failures compensate
+the exact placement; hard crashes are bounded by readiness-deadline sweep.
+
+Exact settlement receipts now acknowledge placement's accepted tuple and move
+it into a finite payload-free audit plus permanent closed-lineage fence.
+Delivered/settled outbox, journal, and result payloads redact and clean up under
+bounded retention while pending, leased, and unsettled dead-letter rows remain
+safe. Bounded restartable account erasure/de-identification runs only after
+archive acknowledgement and repeats its live-run/settlement safety checks
+inside the same SQLite writer lock to close TOCTOU races. Independent final
+red-team found no P0/P1 in this demonstrated co-located composition.
+
+Remaining P2/policy work is explicit: erasure-key custody and rotation;
+status/worker authorization nuance; legal, accounting, and privacy retention
+schedules; unsettled dead-letter operator workflow; production provider and
+key custody; and distributed multi-database/cross-region transaction,
+acknowledgement, cleanup, and erasure semantics.
 
 Local crypto-rotation checkpoint (2026-07-14): identity-subject HMACs,
 encrypted product match state, and placement bootstrap/admission tokens now use
@@ -351,8 +366,9 @@ A hosted v0.4 alpha requires all of the following:
 - Greg has ratified the service/product decisions;
 - natural four-human invite, play, reconnect, result, and rematch journeys;
 - Phase 5 identity/privacy/lease/settlement gates and no P0/P1, with remaining
-  P2 accepted-row migration/reset, retention/privacy, capacity compensation,
-  production key custody, and distributed-boundary work closed;
+  P2 erasure-key custody/rotation, status/worker auth nuance, retention/legal/
+  accounting policy, dead-letter operations, production provider/key custody,
+  and distributed multi-database/cross-region semantics closed;
 - Phase 6 two-region 90-minute proof and Greg movement/art judgment;
 - measured authority density or an explicit one-authority-per-host budget;
 - current provider prices refreshed and the unit-economics model regenerated;

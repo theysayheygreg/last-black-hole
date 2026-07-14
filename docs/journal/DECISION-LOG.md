@@ -3156,13 +3156,13 @@ synthetic H24/modeled H48/H96 proves capacity.
 | Jul 14 | Consume each bound provider proof/callback once and check entitlement separately. Revoked/refunded/terminal entitlement cannot be replayed or replaced by a stale active observation to regain access. |
 | Jul 14 | Bind workload authority to match/run, lease id and monotonic epoch, authority instance, and process incarnation. Restart/replacement creates a new incarnation and fences stale route, heartbeat, ticket, and result work. |
 | Jul 14 | Let placement own the single terminal-result compare-and-set. Outbox enqueue and settlement must revalidate that accepted lineage and hash; retries may reproduce the same fact, never choose another terminal result. |
-| Jul 14 | Retain accepted authority lineage after authority cleanup and through settlement retry. Delete/archive it only after a future explicit settlement-ack protocol proves the durable consequence is acknowledged. |
+| Jul 14 | Retain accepted authority lineage after authority cleanup and through settlement retry. Delete/archive it only after an exact settlement-ack protocol proves the durable consequence is acknowledged; that local protocol is implemented by the later closure below. |
 
 **Where it landed:** Provider-neutral pure services plus durable SQLite
 repositories now prove the one-through-four reference lifecycle across reopen.
 Local JSON stays default and SQLite is opt-in.
 
-**Door status:** Open for public HTTP integration and real provider deployment.
+**Door status:** Open for public deployment and real provider integration.
 Closed for caller-chosen durable identity, reusable provider proof, terminal
 entitlement resurrection, stale process authority, competing terminal results,
 or cleanup that discards accepted lineage before settlement acknowledgement.
@@ -3174,7 +3174,7 @@ or cleanup that discards accepted lineage before settlement acknowledgement.
 | Jul 14 | Accept the fail-closed local HTTP runtime as reference proof for separate client/control/workload auth planes, bounded envelopes, four-seat admission, incarnation fencing, terminal result/settlement, and restart replay. Do not call it a public deployment or production provider composition. |
 | Jul 14 | Repair bootstrap, ready, admission, and drain response-loss/crash windows by replaying only the exact durable operation. Placement owns the exact admitted-membership digest/count used by terminal acceptance. |
 | Jul 14 | Bridge placement acceptance to outbox publication with durable prepared canonical result bytes and bounded settlement-worker recovery. Recovery cannot substitute caller-selected payload or lineage. |
-| Jul 14 | Accept independent final review's no-P0/P1 verdict only for the demonstrated co-located single-SQLite/direct-callback composition. At this review checkpoint, keep capacity compensation, old-row migration/reset, key rotation, retention/privacy, and distributed-boundary work open as P2; the local key-rotation item is closed by the later decision below. |
+| Jul 14 | Accept independent final review's no-P0/P1 verdict only for the demonstrated co-located single-SQLite/direct-callback composition. At this review checkpoint, keep capacity compensation, old-row migration/reset, key rotation, retention/privacy, and distributed-boundary work open as P2; later decisions below close the local mechanics and preserve the remaining policy/custody/distributed gaps. |
 | Jul 14 | Treat local source-bound container build and `tcpdump -D` fail-closed behavior as packaging evidence only. Require an authenticated Fly capability probe before any runtime capture claim. |
 
 **Door status:** Open for production provider/storage composition, P2 closure,
@@ -3190,8 +3190,27 @@ regional cost, or 24/48/96 live capacity.
 | Jul 14 | Close the local rotation P2 for provider-subject HMAC lookup, encrypted product match state, and placement tokens. Bound each current-plus-previous keyring and reject duplicate, malformed, or oversized generations. |
 | Jul 14 | Authenticate placement/product key identifiers with AES-GCM associated data and validate stored identity key ids against the configured ring. Unknown, tampered, or prematurely retired ids fail closed without fallback guessing. |
 | Jul 14 | Dual-read old generations and lazily migrate identity HMAC/product ciphertext under the current key with compare-and-set protection. After migration and reopen, retiring the old key preserves access; unmigrated identity rows block unsafe retirement. |
-| Jul 14 | Scope the proof to local repositories/codecs. Production key custody, coordinated multi-process/multi-database rollout, retention/privacy, create-orphan sweep, and pre-repair accepted-row migration/reset remain open. |
+| Jul 14 | Scope the proof to local repositories/codecs. At this checkpoint production key custody, coordinated multi-process/multi-database rollout, retention/privacy, create-orphan sweep, and pre-repair accepted-row migration/reset remain open; the later local lifecycle decision closes the mechanical items without changing production scope. |
 
 **Door status:** Closed for the local rotation primitives and their failure
 semantics. Open for production custody/rotation operations and distributed
 rollout; do not infer public deployment or production provider composition.
+
+### Q: Which hosted lifecycle, retention, and erasure gaps are closed locally?
+
+| Date | Decision |
+|------|----------|
+| Jul 14 | Fence startup and new identity linking when legacy subject HMAC rows are untagged. Migration requires an operator-reviewed configured legacy key; after lazy migration/reopen, safe key retirement preserves one account. |
+| Jul 14 | Refuse unverifiable legacy accepted placements by default. Explicit quarantine preserves payload-free review evidence, never fabricates member binding, and permanently fences the run lineage. |
+| Jul 14 | Compensate the exact placement after catchable match-create persistence failure. Treat process death as a readiness-deadline case and reclaim it through the bounded placement sweep. |
+| Jul 14 | Archive only an exact settlement receipt acknowledged by placement. Replace accepted payload state with finite payload-free audit while preserving a permanent closed-lineage fence and idempotent replay. |
+| Jul 14 | Redact and clean settled/delivered outbox, result, and journal payloads under bounded retention. Never delete pending, leased, or unsettled dead-letter work; settled dead letters may archive through the exact receipt protocol. |
+| Jul 14 | Permit bounded restartable account erasure/de-identification only after placement archive acknowledgement. Recheck live-run and settlement blockers inside the same SQLite writer lock before mutation, preserving other accounts and required audit/accounting facts. |
+| Jul 14 | Accept independent final red-team's no-P0/P1 verdict only for this demonstrated co-located single-SQLite/direct-callback composition. |
+
+**Door status:** Closed locally for the listed legacy fences, placement orphan
+recovery, settlement acknowledgement, payload cleanup, and post-archive account
+erasure mechanics. Open for erasure-key custody/rotation, status/worker auth
+nuance, retention/legal/accounting policy, unsettled dead-letter operations,
+production provider/key custody, and distributed multi-database/cross-region
+semantics. None of this is Fly or public deployment evidence.

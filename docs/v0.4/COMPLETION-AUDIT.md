@@ -138,8 +138,9 @@ placement, monotonic lease epoch, authority instance plus process incarnation,
 encrypted match state, one placement-owned terminal-result CAS, immutable
 outbox, and exactly-once multi-member settlement. Reopen/retry proof preserves
 one settlement and each exact member's profile/ledger/inventory mutation.
-Accepted authority lineage remains retained until an explicit future
-settlement-ack/archive protocol.
+Accepted authority lineage is retained through settlement replay, then moves
+through the now-implemented exact settlement-ack/archive protocol into finite
+payload-free audit plus permanent closed lineage.
 
 The fail-closed HTTP reference runtime exercises distinct client/control/
 workload auth planes, strict bounded envelopes, one-through-four admission,
@@ -151,10 +152,23 @@ The local co-located SQLite durability proof closes exact bootstrap, ready,
 admission, and drain replay windows; makes placement authoritative for exact
 admitted-membership digest/count; and uses a prepared-result journal with
 bounded settlement recovery. Independent final review found no P0/P1 for the
-demonstrated local composition. Remaining P2s are create-time placement
-capacity reclamation via sweep, migration/reset policy for pre-repair accepted
-rows, retention/privacy operations, production key custody, and the co-located
-single-SQLite/direct-callback boundary.
+demonstrated local composition.
+
+The final local closure adds: a fail-closed startup/reviewed migration path for
+untagged legacy identity HMACs; default refusal plus explicit permanent
+quarantine for unverifiable legacy accepted placement rows; exact compensation
+for catchable create-placement failures and readiness sweep after hard crash;
+exact placement settlement acknowledgement; a finite payload-free audit backed
+by permanent closed lineage; bounded settled-result outbox/journal redaction
+and cleanup that preserves unsettled work; and bounded account erasure/de-
+identification only after archive acknowledgement. Erasure rechecks blockers
+inside the SQLite writer lock, closing the demonstrated TOCTOU race.
+
+Independent final red-team reports no P0/P1 for this demonstrated co-located
+SQLite composition. Remaining P2/policy work is erasure-key custody/rotation,
+status/worker authorization nuance, retention/legal/accounting schedules,
+unsettled dead-letter operator workflow, production provider/key custody, and
+distributed multi-database/cross-region semantics.
 
 Identity-subject HMAC, encrypted product-state, and placement-token key
 rotation are **PROVEN locally**. Each uses a bounded current/previous keyring;
@@ -280,7 +294,12 @@ and relevant local validation without another network suite.
 | fail-closed local hosted HTTP reference runtime | PROVEN locally |
 | public hosted deployment/provider composition | INCOMPLETE |
 | local co-located SQLite lifecycle P0/P1 | CLOSED for demonstrated composition |
-| hosted lifecycle P2 operations/migration/distribution gaps | OPEN |
+| legacy identity/placement migration fences | PROVEN locally |
+| placement compensation/readiness recovery | PROVEN locally |
+| exact settlement ack and permanent lineage fence | PROVEN locally |
+| settled payload redaction/bounded cleanup | PROVEN locally |
+| bounded post-archive account erasure | PROVEN locally |
+| hosted policy/custody/distributed semantics | OPEN |
 | identity/product/placement-token key rotation | PROVEN locally |
 | Fly benchmark package/preflight | PROVEN; 13/13 |
 | real regional four-client benchmark | INCOMPLETE / not run |
@@ -302,8 +321,9 @@ and relevant local validation without another network suite.
 2. Greg selects central, hybrid, or local/private service posture and ratifies
    the remaining product decisions.
 3. Compose the tested HTTP/runtime reference with production provider/storage
-   boundaries; close capacity compensation, accepted-row migration/reset, key
-   custody/rollout, retention/privacy, and distributed transaction P2s.
+   boundaries; define erasure-key custody/rotation, status/worker authorization,
+   retention/legal/accounting schedules, dead-letter operations, production
+   key custody, and distributed/cross-region transaction semantics.
 4. Resolve Fly auth and external origins/signing/evidence inputs, prove packet-
    capture capability in Fly runtime,
    then run Phase 6 same-scenario two-region 90-minute four-player benchmarks,
