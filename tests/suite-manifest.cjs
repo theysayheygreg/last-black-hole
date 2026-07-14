@@ -162,6 +162,12 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "V04AuthorityBenchmarkEntrypoint",
+    file: "v04-authority-benchmark-entrypoint.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "MultiplayerAuthority",
     file: "multiplayer-authority.cjs",
     lanes: ["multiplayer-authority", "authority", "full"],

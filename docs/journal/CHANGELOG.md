@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-14 — v0.4 benchmark collector capability gate
+
+- Changed the Fly authority benchmark startup from collector discovery to an
+  execution probe: `ss --version` and the non-capturing `tcpdump -D` must both
+  succeed before the authority starts. This fails closed when packet capture is
+  installed but blocked by the runtime capability set.
+- Bound the image label to the actual copied S20 sources by recomputing their
+  stable hash during the Docker build. Moving revision-only build arguments
+  after dependency installation also avoids invalidating apt/npm layers.
+- Added the entrypoint capability contract to the registered multiplayer,
+  authority, and full harness lanes. This is packaging proof only; Fly runtime
+  capability and regional performance remain unmeasured.
+
 ## 2026-07-14 — v0.4 durable hosted four-player reference path proved
 
 - Composed provider-neutral identity/entitlement, four-seat product state,
