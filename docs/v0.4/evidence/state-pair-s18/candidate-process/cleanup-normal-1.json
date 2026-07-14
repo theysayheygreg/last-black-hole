@@ -1,0 +1,9 @@
+{
+  "population": 1,
+  "port": 55738,
+  "authorityPid": 90248,
+  "portDead": true,
+  "pidDead": true,
+  "preStopConnections": 0,
+  "passed": true
+}
