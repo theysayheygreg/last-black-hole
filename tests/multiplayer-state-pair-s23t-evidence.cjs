@@ -10,6 +10,10 @@ const ROOT = path.resolve(__dirname, "..");
 const EVIDENCE = path.join(ROOT, "docs", "v0.4", "evidence", "state-pair-s23t");
 const analysis = JSON.parse(fs.readFileSync(path.join(EVIDENCE, "analysis.json"), "utf8"));
 const FAMILY = ["publicCoreSource", "bodyNormalizeAllowlist", "bodyCanonicalEncodingHash"];
+const EXCLUSIVE_STAGES = new Set([...FAMILY, "cohortLookupDeltaSerialize",
+  "ownerSourcePreparedProjection", "legacyPlaceholderOwnerPublisher",
+  "recipientEnvelopeBuildValidate", "envelopeSerializeDigestRetain",
+  "adapterDigestVerification", "brotliCompression", "accountingEnqueue", "socketSendCall"]);
 
 function percentile(values, q) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -53,9 +57,39 @@ function validateSummary() {
   const familyRatio = analysis.profiles.a2.eight.sourceBodyPreparationP95Ms
     / analysis.profiles.a1.eight.sourceBodyPreparationP95Ms;
   assert(Math.abs(familyRatio - 1) <= 0.15);
-  for (const key of ["a1EightFamilyShare", "a2EightFamilyShare",
-    "a1OneFamilyShare", "a2OneFamilyShare"]) assert(analysis.selection[key] >= 0.70);
+  assert.deepStrictEqual(analysis.selection.stages, FAMILY);
+  assert.strictEqual(analysis.selection.nextLane, "S23P prepared public-source proof");
+  for (const round of ["a1", "a2"]) {
+    const eight = analysis.profiles[round].eight;
+    const one = analysis.profiles[round].one;
+    const eightExcess = eight.p95Ms - 50;
+    const oneRegression = one.p95Ms - analysis.profiles.s20One.p95Ms;
+    const eightShare = eight.sourceBodyPreparationP95Ms / eightExcess;
+    const oneShare = (one.sourceBodyPreparationP95Ms
+      - analysis.profiles.s20One.sourceBodyPreparationP95Ms) / oneRegression;
+    close(analysis.selection[`${round}EightExcessMs`], eightExcess);
+    close(analysis.selection[`${round}EightFamilyShare`], eightShare);
+    close(analysis.selection[`${round}OneRegressionMs`], oneRegression);
+    close(analysis.selection[`${round}OneFamilyShare`], oneShare);
+    assert(eightShare >= 0.70 && oneShare >= 0.70);
+  }
   assert(Object.values(analysis.methodGates).every(Boolean));
+}
+
+function validateBeatPrivacy(beat) {
+  assert.deepStrictEqual(Object.keys(beat).sort(), ["arrayBuffers", "cpuMicroseconds", "elu",
+    "exclusiveMs", "external", "gcEvents", "heapTotal", "heapUsed", "invocations", "ordinal",
+    "outerMs", "recipientSlots", "reconciliationRatio", "rss", "stages", "unattributedMs"].sort());
+  for (const [key, value] of Object.entries(beat)) {
+    if (key === "recipientSlots") {
+      assert(value.every((slot) => Number.isSafeInteger(slot) && slot >= 1 && slot <= 16));
+    } else if (key === "stages" || key === "invocations") {
+      for (const [stage, numeric] of Object.entries(value)) {
+        assert(EXCLUSIVE_STAGES.has(stage), `unexpected retained stage ${stage}`);
+        assert(Number.isFinite(numeric) && numeric >= 0);
+      }
+    } else assert(Number.isFinite(value) && value >= 0, `non-numeric retained field ${key}`);
+  }
 }
 
 function validateRaw(rawRoot) {
@@ -69,21 +103,45 @@ function validateRaw(rawRoot) {
     assert.strictEqual(checksums.sha256, analysis.captures[name].compositeSha256);
     const run = JSON.parse(fs.readFileSync(path.join(directory, "run.json"), "utf8"));
     assert.strictEqual(run.commit, analysis.commit);
+    assert.deepStrictEqual(run.config.populations, analysis.captures[name].populations);
+    assert.strictEqual(run.config.warmupMs, 5_000);
+    assert.strictEqual(run.config.windowMs, 20_000);
+    assert.strictEqual(run.config.binary, false);
+    assert.strictEqual(run.config.compression, true);
+    assert.strictEqual(run.config.publicBody, name !== "s20One");
+    assert.strictEqual(run.config.s23tProfile, analysis.captures[name].profile);
     for (const population of run.config.populations) {
       const row = JSON.parse(fs.readFileSync(path.join(directory, `normal-${population}.json`), "utf8"));
+      assert.strictEqual(row.commit, analysis.commit);
+      assert.strictEqual(row.population, population);
+      assert.strictEqual(row.window.warmupMs, 5_000);
+      assert.strictEqual(row.window.requestedMeasurementMs, 20_000);
+      assert.strictEqual(row.window.endAt - row.window.startAt, 20_000);
+      assert.strictEqual(row.window.durationSeconds, 20);
+      assert.strictEqual(row.topology.matches, 1);
+      assert.strictEqual(row.topology.dedicatedLogicalAuthorities, 1);
+      assert.strictEqual(row.topology.simultaneousRecipients, population);
+      assert.strictEqual(row.topology.isolatedClientProcesses.length, population);
+      assert(new Set(row.topology.isolatedClientProcesses).size === population);
+      assert(!row.topology.isolatedClientProcesses.includes(row.topology.authorityPid));
+      assert.strictEqual(row.correctness.passed, true);
       const summaryKey = population === 1 ? "one" : "eight";
       const compact = name === "b" ? analysis.control[summaryKey]
         : name === "s20One" ? analysis.profiles.s20One : analysis.profiles[name][summaryKey];
       close(row.cadence.minimumAuthorityAcceptedPairsPerSecond, compact.hz);
       close(row.performance.authority.projectionAndPublishMs.p50, compact.p50Ms);
       close(row.performance.authority.projectionAndPublishMs.p95, compact.p95Ms);
-      if (row.performance.authority.s23tPublicBodyProfile && name !== "b") {
-        const profile = row.performance.authority.s23tPublicBodyProfile;
+      const retainedProfile = row.performance.authority.s23tPublicBodyProfile;
+      assert.strictEqual(Boolean(retainedProfile), name !== "b");
+      if (retainedProfile) {
+        const profile = retainedProfile;
         assert(profile.bounds.sourceBeatCapacity === 512);
+        assert(profile.bounds.maxRecipientSlots === 16);
         assert(profile.nestedTimerViolations === 0);
         assert(profile.overflowRecipientObservations === 0);
-        assert(JSON.stringify(profile.sourceBeats).includes("recipientSlots"));
-        assert(!JSON.stringify(profile.sourceBeats).includes("membershipId"));
+        assert.strictEqual(profile.recipientSlots, population);
+        assert(profile.sourceBeats.length <= 512);
+        profile.sourceBeats.forEach(validateBeatPrivacy);
         const familyP95 = percentile(profile.sourceBeats.map((beat) =>
           FAMILY.reduce((sum, stage) => sum + (beat.stages[stage] || 0), 0)), 0.95);
         close(familyP95, compact.sourceBodyPreparationP95Ms);
