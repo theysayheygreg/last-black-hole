@@ -30,6 +30,8 @@ const {
 } = require("./state-pair-compression-codec.cjs");
 const { CAPABILITY: PUBLIC_BODY_CAPABILITY, PREPARED_PUBLIC_SOURCE_CAPABILITY } =
   require("./state-pair-public-body-codec.cjs");
+const { CAPABILITY: SPLIT_PUBLIC_FRAGMENT_CAPABILITY } =
+  require("./split-public-fragment-codec.cjs");
 const trustedStatePairWireEncoders = new WeakSet();
 const trustedStatePairCandidateSelectors = new WeakMap();
 const trustedStatePairLazyCandidateSelectors = new WeakMap();
@@ -298,6 +300,12 @@ function validateHello(frame) {
         && !frame.capabilities.includes(PUBLIC_BODY_CAPABILITY)) {
       fail("invalid-field", `${PREPARED_PUBLIC_SOURCE_CAPABILITY} requires public-body v1`);
     }
+    if (frame.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)
+        && (!frame.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
+          || !frame.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+          || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
+      fail("invalid-field", `${SPLIT_PUBLIC_FRAGMENT_CAPABILITY} requires prepared public-body v1 and excludes binary`);
+    }
     requiredString(frame.manifestSchema, "manifestSchema");
     requiredString(frame.manifestHash, "manifestHash");
   }
@@ -372,6 +380,12 @@ function validateWelcome(frame) {
     if (frame.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
         && !frame.capabilities.includes(PUBLIC_BODY_CAPABILITY)) {
       fail("invalid-field", `${PREPARED_PUBLIC_SOURCE_CAPABILITY} requires public-body v1`);
+    }
+    if (frame.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)
+        && (!frame.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
+          || !frame.capabilities.includes(PUBLIC_BODY_CAPABILITY)
+          || frame.capabilities.includes(BINARY_CODEC_CAPABILITY))) {
+      fail("invalid-field", `${SPLIT_PUBLIC_FRAGMENT_CAPABILITY} requires prepared public-body v1 and excludes binary`);
     }
     if (frame.authorityIncarnation !== undefined) {
       if (!frame.capabilities.includes("state-pair-v1")) fail("invalid-field", "authorityIncarnation requires state-pair-v1");

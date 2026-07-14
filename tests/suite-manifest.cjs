@@ -228,6 +228,24 @@ const SUITES = [
     browser: false,
   },
   {
+    name: "SplitPublicFragmentCodec",
+    file: "split-public-fragment-codec.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "SplitPublicFragmentAuthority",
+    file: "split-public-fragment-authority.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
+    name: "SplitPublicFragmentRuntime",
+    file: "split-public-fragment-runtime.cjs",
+    lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],
+    browser: false,
+  },
+  {
     name: "RuntimePublicComponents",
     file: "runtime-public-components.cjs",
     lanes: ["multiplayer-structure", "multiplayer-network", "multiplayer-authority", "authority", "full"],

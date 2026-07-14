@@ -110,6 +110,7 @@ const {
   BINARY_CODEC_CAPABILITY,
   PUBLIC_BODY_CAPABILITY,
   PREPARED_PUBLIC_SOURCE_CAPABILITY,
+  SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
   createRuntimeStatePairAuthority,
 } = require("./runtime-state-pair-integration.cjs");
 const {
@@ -132,6 +133,10 @@ const {
   CODEC_MANIFEST: PUBLIC_BODY_CODEC_MANIFEST,
   CODEC_MANIFEST_HASH: PUBLIC_BODY_CODEC_MANIFEST_HASH,
 } = require("./state-pair-public-body-codec.cjs");
+const {
+  MANIFEST: SPLIT_PUBLIC_FRAGMENT_MANIFEST,
+  MANIFEST_HASH: SPLIT_PUBLIC_FRAGMENT_MANIFEST_HASH,
+} = require("./split-public-fragment-codec.cjs");
 
 const PLAYABLE_MAPS = loadPlayableMaps();
 const PORTAL_CONFIG = {
@@ -1062,6 +1067,8 @@ const MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED = MULTIPLAYER_COMPRESSION_STATE
   && String(process.env.LBH_SIM_WS_STATE_PAIR_PUBLIC_BODY_V1 || "").trim() === "true";
 const MULTIPLAYER_PREPARED_PUBLIC_SOURCE_ENABLED = MULTIPLAYER_PUBLIC_BODY_STATE_PAIR_ENABLED
   && String(process.env.LBH_SIM_WS_STATE_PAIR_PREPARED_PUBLIC_SOURCE_V1 || "").trim() === "true";
+const MULTIPLAYER_SPLIT_PUBLIC_FRAGMENT_ENABLED = MULTIPLAYER_PREPARED_PUBLIC_SOURCE_ENABLED
+  && String(process.env.LBH_SIM_WS_SPLIT_PUBLIC_FRAGMENT_V1 || "").trim() === "true";
 const MULTIPLAYER_ACK_REJECT_DIAGNOSTICS_ENABLED = String(
   process.env.LBH_SIM_WS_ACK_REJECT_DIAGNOSTICS || "",
 ).trim() === "true";
@@ -6275,6 +6282,13 @@ function currentSessionReplicationManifest() {
               codecManifestHash: PUBLIC_BODY_COMPRESSION_MANIFEST_HASH,
               manifest: PUBLIC_BODY_COMPRESSION_MANIFEST,
             },
+            ...(MULTIPLAYER_SPLIT_PUBLIC_FRAGMENT_ENABLED ? {
+              statePairSplitPublicFragmentCodec: {
+                capability: SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
+                codecManifestHash: SPLIT_PUBLIC_FRAGMENT_MANIFEST_HASH,
+                manifest: SPLIT_PUBLIC_FRAGMENT_MANIFEST,
+              },
+            } : {}),
           } : {}),
         } : {}),
       } : {}),
@@ -7464,7 +7478,10 @@ const server = http.createServer(async (req, res) => {
                             ? [PUBLIC_BODY_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY,
                               ...(MULTIPLAYER_PREPARED_PUBLIC_SOURCE_ENABLED
                                 && body.capabilities.includes(PREPARED_PUBLIC_SOURCE_CAPABILITY)
-                                ? [PREPARED_PUBLIC_SOURCE_CAPABILITY] : [])] : [])]
+                                ? [PREPARED_PUBLIC_SOURCE_CAPABILITY,
+                                  ...(MULTIPLAYER_SPLIT_PUBLIC_FRAGMENT_ENABLED
+                                    && body.capabilities.includes(SPLIT_PUBLIC_FRAGMENT_CAPABILITY)
+                                    ? [SPLIT_PUBLIC_FRAGMENT_CAPABILITY] : [])] : [])] : [])]
                         : [])] : [])] : [])]
             : [])] : [])].sort()
         : [];

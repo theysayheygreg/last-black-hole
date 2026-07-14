@@ -239,6 +239,23 @@ async function run() {
     });
     const redeemedPrepared = registry.redeem(prepared.ticket, { kind: "admission", runId: "run-a" });
     assert(redeemedPrepared.claims.capabilities.includes("state-pair-public-body-prepared-v1"));
+    expectTicketError(() => registry.issueAdmission({
+      membershipId: "membership-split-bad", playerId: "player-split-bad",
+      profileId: "profile-split-bad", wireVersion: "lbh-multiplayer-json-v2",
+      capabilities: [...dependencies, "state-pair-public-body-v1", "state-pair-split-public-fragment-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    }), "invalid-claim");
+    const split = registry.issueAdmission({
+      membershipId: "membership-split", playerId: "player-split", profileId: "profile-split",
+      wireVersion: "lbh-multiplayer-json-v2", capabilities: [...dependencies,
+        "state-pair-public-body-v1", "state-pair-public-body-prepared-v1",
+        "state-pair-split-public-fragment-v1"],
+      manifestSchema: "lbh-session-replication-manifest-v1", manifestHash: "sha256:manifest",
+      authorityIncarnation: 1,
+    });
+    assert(registry.redeem(split.ticket, { kind: "admission", runId: "run-a" })
+      .claims.capabilities.includes("state-pair-split-public-fragment-v1"));
   });
 
   await runner.run("expiry is deterministic under an injected clock", async () => {

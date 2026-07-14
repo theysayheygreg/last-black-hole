@@ -2,7 +2,7 @@
 
 const crypto = require("crypto");
 const { canonicalJson, canonicalJsonBytes } = require("./session-replication-manifest.cjs");
-const { projectionHash, createStructuralDelta } = require("./canonical-structural-delta.cjs");
+const { normalizeView, projectionHash, createStructuralDelta } = require("./canonical-structural-delta.cjs");
 const { BODY_SCHEMA, BODY_DELTA_SCHEMA } = require("./state-pair-public-body-codec.cjs");
 const {
   CAPABILITY,
@@ -218,7 +218,7 @@ function createSplitPublicFragmentAuthority({ matchId, authorityIncarnation, bal
   }
 
   function retire(state, frameId, record) {
-    state.retired.set(frameId, Object.freeze({ fragmentHash: record.fragment.fragmentHash,
+    state.retired.set(frameId, Object.freeze({ bodyHash: record.fragment.fragment.bodyHash,
       ownerHash: record.overlay.owner.resultHash }));
     while (state.retired.size > limits.maxRetiredAckProofsPerRecipient) {
       state.retired.delete(state.retired.keys().next().value);
@@ -233,20 +233,25 @@ function createSplitPublicFragmentAuthority({ matchId, authorityIncarnation, bal
     const state = stateFor(identity);
     const frameId = state.nextFrameId++;
     const fragment = fragmentRecord.fragment;
-    const ownerHash = projectionHash(ownerView);
+    const statePairId = `split-${fragment.fragmentId}-${frameId}-${identity.recipientIncarnation}`;
+    const overlayOwnerView = normalizeView({ ...ownerView, statePairId,
+      snapshotId: fragment.snapshotId, tick: fragment.tick, simTime: fragment.simTime,
+      eventWatermark: fragment.eventWatermark, fieldRevision: fragment.fieldRevision,
+      overloadMode: fragment.overloadMode });
+    const ownerHash = projectionHash(overlayOwnerView);
     counters.overlayHashes += 1;
     const overlay = deepFreeze({ type: "ownerOverlay", schema: OVERLAY_SCHEMA,
       matchId: fixed.matchId, sessionId: identity.sessionId,
       authorityIncarnation: fixed.authorityIncarnation, recipientId: identity.recipientId,
       recipientIncarnation: identity.recipientIncarnation, frameId,
-      statePairId: `split-${fragment.fragmentId}-${frameId}-${identity.recipientIncarnation}`,
+      statePairId,
       snapshotId: fragment.snapshotId, tick: fragment.tick, simTime: fragment.simTime,
       eventWatermark: fragment.eventWatermark, fieldRevision: fragment.fieldRevision,
       overloadMode: fragment.overloadMode, ballparkEpoch: fixed.ballparkEpoch,
       manifestHash: fixed.manifestHash, fragmentId: fragment.fragmentId,
       fragmentRevision: fragment.fragmentRevision, fragmentHash: fragmentRecord.fragmentHash,
       bodyId: fragment.bodyId, bodyHash: fragment.bodyHash,
-      owner: { kind: "keyframe", resultHash: ownerHash, view: ownerView } });
+      owner: { kind: "keyframe", resultHash: ownerHash, view: overlayOwnerView } });
     const encodedOverlay = encodeOwnerOverlay(overlay);
     counters.overlayBuilds += 1;
     counters.overlayCompressions += 1;
@@ -292,19 +297,25 @@ function createSplitPublicFragmentAuthority({ matchId, authorityIncarnation, bal
     const record = state.pending.get(ack.frameId);
     if (!record) {
       const retired = state.retired.get(ack.frameId);
-      if (retired && ack.fragmentHash === retired.fragmentHash && ack.ownerHash === retired.ownerHash) {
+      if (retired && ack.publicHash === retired.bodyHash && ack.ownerHash === retired.ownerHash) {
         return Object.freeze({ accepted: true, stale: true, retired: true, frameId: ack.frameId });
       }
       return reject("unknown-frame");
     }
     const overlay = record.overlay;
-    if (ack.statePairId !== overlay.statePairId || ack.snapshotId !== overlay.snapshotId
-        || ack.fragmentHash !== overlay.fragmentHash || ack.ownerHash !== overlay.owner.resultHash
-        || ack.fragmentId !== overlay.fragmentId || ack.bodyHash !== overlay.bodyHash
+    const expectedBase = record.fragment.fragment.public.kind === "delta"
+      ? record.fragment.fragment.public.baseBodyId : null;
+    if (ack.ackSchema !== "lbh-authority-state-pair-mixed-ack-v1"
+        || ack.pairSchema !== "lbh-authority-state-pair-mixed-v1"
+        || ack.statePairId !== overlay.statePairId || ack.snapshotId !== overlay.snapshotId
+        || ack.publicHash !== overlay.bodyHash || ack.ownerHash !== overlay.owner.resultHash
         || ack.tick !== overlay.tick || ack.simTime !== overlay.simTime
         || ack.eventWatermark !== overlay.eventWatermark || ack.fieldRevision !== overlay.fieldRevision
         || ack.overloadMode !== overlay.overloadMode || ack.ballparkEpoch !== overlay.ballparkEpoch
-        || ack.manifestHash !== overlay.manifestHash) return reject("lineage-mismatch");
+        || ack.manifestHash !== overlay.manifestHash
+        || ack.publicKind !== record.fragment.fragment.public.kind || ack.ownerKind !== "keyframe"
+        || ack.publicBaseSnapshotId !== expectedBase
+        || ack.ownerBaseSnapshotId !== null) return reject("lineage-mismatch");
     for (const [frameId, pending] of state.pending) {
       if (frameId > ack.frameId) continue;
       state.pending.delete(frameId);

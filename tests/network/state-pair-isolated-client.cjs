@@ -23,16 +23,21 @@ const { CAPABILITY: PUBLIC_BODY_CAPABILITY, PREPARED_PUBLIC_SOURCE_CAPABILITY,
   CODEC_MANIFEST: PUBLIC_BODY_CODEC_MANIFEST,
   CODEC_MANIFEST_HASH: PUBLIC_BODY_CODEC_MANIFEST_HASH } =
   require("../../scripts/state-pair-public-body-codec.cjs");
+const { CAPABILITY: SPLIT_PUBLIC_FRAGMENT_CAPABILITY,
+  MANIFEST: SPLIT_PUBLIC_FRAGMENT_MANIFEST,
+  MANIFEST_HASH: SPLIT_PUBLIC_FRAGMENT_MANIFEST_HASH } =
+  require("../../scripts/split-public-fragment-codec.cjs");
 const { canonicalJsonBytes } = require("../../scripts/session-replication-manifest.cjs");
 const { distribution } = require("./state-pair-product-metrics.cjs");
 
 const INPUT_HZ = 10;
-function requestedCapabilities(binary, compression, publicBody, preparedPublicSource) {
+function requestedCapabilities(binary, compression, publicBody, preparedPublicSource, splitPublicFragment) {
   return ["static-manifest-v1", "state-pair-v1", MIXED_CAPABILITY,
     RUNTIME_PUBLIC_COMPONENTS_CAPABILITY, POSITIONAL_CODEC_CAPABILITY,
     ...(binary ? [BINARY_CODEC_CAPABILITY] : []), ...(compression ? [COMPRESSION_CODEC_CAPABILITY] : []),
     ...(publicBody ? [PUBLIC_BODY_CAPABILITY, PUBLIC_BODY_COMPRESSION_CAPABILITY,
-      ...(preparedPublicSource ? [PREPARED_PUBLIC_SOURCE_CAPABILITY] : [])] : [])];
+      ...(preparedPublicSource ? [PREPARED_PUBLIC_SOURCE_CAPABILITY,
+        ...(splitPublicFragment ? [SPLIT_PUBLIC_FRAGMENT_CAPABILITY] : [])] : [])] : [])];
 }
 const eventLoop = monitorEventLoopDelay({ resolution: 20 });
 eventLoop.enable();
@@ -190,7 +195,8 @@ function startInputs({ startAt, durationMs, phase }) {
 
 async function initialize(config) {
   const capabilities = requestedCapabilities(config.binary === true, config.compression === true,
-    config.publicBody === true, config.preparedPublicSource === true);
+    config.publicBody === true, config.preparedPublicSource === true,
+    config.splitPublicFragment === true);
   const issued = await request(config.port, "/multiplayer/ticket", {
     method: "POST", authority: config.authority, body: {
       kind: "admission", supportedVersions: [WIRE_PROTOCOL_VERSION_V2], capabilities,
@@ -267,19 +273,18 @@ async function initialize(config) {
         if (measuring) measurement.errors.push(`receiver:${outcome.reason}`);
         return;
       }
+      if (outcome.published === false) return;
       if ((outcome.state.publicBodyHash
         ? outcome.state.publicBodyHash !== outcome.ack.publicHash
         : projectionHash(outcome.state.public) !== outcome.ack.publicHash)
           || projectionHash(outcome.state.owner) !== outcome.ack.ownerHash) {
         throw new Error("materialized authority/client projection hash mismatch");
       }
-      if (outcome.published !== false) {
-        state.acceptedPairs += 1;
-        const event = { at: Date.now(), frameId: outcome.state.frameId,
-          bytes: Buffer.byteLength(isBinary ? raw : text) };
-        state.acceptedPairEvents.push(event);
-        if (measuring) measurement.acceptedEvents.push(event);
-      }
+      state.acceptedPairs += 1;
+      const event = { at: Date.now(), frameId: outcome.state.frameId,
+        bytes: Buffer.byteLength(isBinary ? raw : text) };
+      state.acceptedPairEvents.push(event);
+      if (measuring) measurement.acceptedEvents.push(event);
       const ackStarted = performance.now();
       send(outcome.ack);
       if (measuring) measurement.ackMs.push(performance.now() - ackStarted);
@@ -343,6 +348,18 @@ async function initialize(config) {
         || !canonicalJsonBytes(compression.manifest)
           .equals(canonicalJsonBytes(PUBLIC_BODY_COMPRESSION_MANIFEST))) {
       throw new Error("content-addressed public-body compression manifest verification failed");
+    }
+  }
+  if (config.splitPublicFragment === true) {
+    const splitCodec = sessionManifest.publicContent?.statePairSplitPublicFragmentCodec;
+    const splitHash = splitCodec?.manifest
+      ? `sha256:${crypto.createHash("sha256").update(canonicalJsonBytes(splitCodec.manifest)).digest("hex")}` : null;
+    if (splitCodec?.capability !== SPLIT_PUBLIC_FRAGMENT_CAPABILITY
+        || splitCodec?.codecManifestHash !== SPLIT_PUBLIC_FRAGMENT_MANIFEST_HASH
+        || splitHash !== SPLIT_PUBLIC_FRAGMENT_MANIFEST_HASH
+        || !canonicalJsonBytes(splitCodec.manifest)
+          .equals(canonicalJsonBytes(SPLIT_PUBLIC_FRAGMENT_MANIFEST))) {
+      throw new Error("content-addressed split public fragment manifest verification failed");
     }
   }
   send({ type: "manifestAck", manifestSchema: issued.body.manifestSchema,
