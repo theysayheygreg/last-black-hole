@@ -432,7 +432,8 @@ const SUITES = [
     lanes: ["visual", "full", "three"],
     browser: true,
     visual: true,
-    timeout: 360000,
+    // Sixteen settled animation/layout captures take over six minutes on GregBot.
+    timeout: 600000,
   },
 ];
 
