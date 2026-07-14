@@ -1,6 +1,6 @@
 # v0.3 Playable RC Gate
 
-> Document revision: v0.3. Updated 2026-07-10. This is branch acceptance
+> Document revision: v0.3. Updated 2026-07-14. This is branch acceptance
 > truth, not a public release announcement.
 
 ## Current Verdict
@@ -20,20 +20,21 @@ should fake.
 
 ## Current Evidence
 
-Latest completed evidence:
+Latest completed evidence from the clean 2026-07-14 RC pass:
 
-- `npm run test:fast` passed on 2026-07-10.
-- `npm run test:authority` passed on 2026-07-10.
+- `npm run test:full -- --no-retries` passed after the UI visual harness budget
+  was updated for its sixteen settled animation/layout captures.
+- The full lane includes static, authority, sim-structure, Three, UI, visual,
+  playtest, and agent-eval coverage.
 - Deep Field stayed inside the explicit tick, latency, snapshot, transport,
   heap, and Ballpark-sync budgets recorded in `ROADMAP.md`.
 - `npm run test:agent-eval` passed from a fresh sim and disposable browser.
 - Passing playable report:
-  `tests/screenshots/agent-play-eval-2026-07-10T205224580Z/summary.md`.
+  `tests/screenshots/agent-play-eval-2026-07-14T191436848Z/summary.md`.
 - The report contains eighteen 1280x800 frames across extraction/continuity and
   death/recovery journeys.
-- `npm run test:full` passed after visual integration. AgentPlayEval used its
-  explicit timing retry before both natural journeys passed; review the first
-  attempt when tuning movement/play-eval reliability.
+- AgentPlayEval completed both natural journeys without a retry in the final
+  full lane.
 - Package closure tests stage authority, extract and boot the real Linux
   `app.asar`, then boot the macOS Three client through title and authoritative
   launch after a 31-second idle wait.
@@ -124,6 +125,10 @@ Requirements:
 - [x] Agent evidence includes in-match HUD, portal confirmation, results, rig,
   Chronicle, second-run, named death, and recovery screens.
 - [ ] Greg performs final couch/handheld readability and visual-taste review.
+- [ ] Greg performs the final headphone/target-speaker mix review; structural
+  audio bounds and routing are automated, sound quality is not.
+- [ ] Complete the browser audio-graph/source-count inspection before audio is
+  treated as final polish.
 
 ## Package Gate
 
@@ -142,6 +147,9 @@ npm run test:package
   resources.
 - [x] Packaged client reaches a rendered Three title, retains idle authority,
   and performs an authoritative launch.
+
+The package checks above apply only when `npm run release:status` names the
+current committed hash. `-test` drop artifacts do not satisfy this gate.
 
 ## Steam Deck Gate
 

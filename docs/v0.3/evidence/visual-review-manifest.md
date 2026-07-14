@@ -18,6 +18,18 @@ those outputs without copying them into source control.
   evidence. A reviewer must rerun the lane and record fresh paths before making
   a visual acceptance claim.
 
+## RC baseline record
+
+- Source lineage: `codex/v0.3-ballpark-roadmap`, final RC hash reported by
+  `npm run release:status`.
+- Evidence type: deterministic renderer/UI fixtures plus two natural journeys.
+- Commands: `npm run test:visual` and `npm run test:agent-eval` as part of the
+  no-retry full lane.
+- Result: HudDeck, Renderer, UIVisual, and both AgentPlayEval journeys passed on
+  2026-07-14.
+- Artifact retention: raw timestamped captures remain ignored. The current run
+  paths are recorded in the build-status and RC-gate documents for local review.
+
 Do not turn this index into an artifact archive. Durable selected evidence may
 be added later as a small curated set; raw frame sequences, duplicate exports,
 and historical promo directories remain outside source control.

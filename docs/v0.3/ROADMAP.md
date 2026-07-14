@@ -1,6 +1,6 @@
 # v0.3 Roadmap: Ballpark Authority
 
-> Document revision: v0.3. Updated 2026-07-10 from live branch and harness
+> Document revision: v0.3. Updated 2026-07-14 from live branch and harness
 > evidence. Earlier mirror-scaffold plans are retained as history in the review
 > documents they came from, not as current implementation claims.
 
@@ -11,9 +11,9 @@
 **Public/demo line:** `main` remains the v0.2 line until Greg explicitly calls
 the version promotion.
 
-**Current state:** visual-production candidate. The architecture, generated
-asset kit, two natural Shallows outcome journeys, automated gates, and
-hash-named package boot proof are green.
+**Current state:** release-candidate source. The architecture, generated asset
+kit, two natural Shallows outcome journeys, and no-retry automated gate are
+green. The clean hash-named package is the final machine closure step.
 Promotion still needs any available physical Steam Deck Gaming Mode check.
 Movement feel and visual taste remain Greg's final calls.
 
@@ -145,16 +145,16 @@ explicit presentation contracts.
 - Deep Field has explicit tick, snapshot latency/size, transport, heap-growth,
   and Ballpark-sync budgets.
 
-Latest authority evidence on 2026-07-10:
+Latest authority evidence on 2026-07-14:
 
 | Measure | Observed |
 |---|---:|
-| authority tick | 7.74 / 8 Hz |
-| snapshot p95 latency | 5.72 ms |
+| authority tick | 7.65 / 8 Hz |
+| snapshot p95 latency | 5.32 ms |
 | snapshot p95 size | 107.88 KiB |
 | estimated snapshot transport | 0.33 MB/s |
-| heap growth | 4.12 MiB |
-| Ballpark sync p95 | 1.555 ms |
+| heap growth | 1.12 MiB |
+| Ballpark sync p95 | 1.142 ms |
 
 ## Playable Evidence
 
@@ -163,9 +163,9 @@ The natural agent journey starts a fresh sim and disposable browser at
 controller input, and world contact. It does not mutate player, portal, wreck,
 or Inhibitor debug state.
 
-Latest passing report after the visual production pass:
+Latest passing report from the clean no-retry RC pass:
 
-`tests/screenshots/agent-play-eval-2026-07-10T205224580Z/summary.md`
+`tests/screenshots/agent-play-eval-2026-07-14T191436848Z/summary.md`
 
 It proves:
 
@@ -182,24 +182,25 @@ It proves:
   including generated entity sprites and a populated icon-bearing salvage
   report.
 
-The complete lane passed after the visual integration. Its first AgentPlayEval
-attempt missed one movement-timing target and the declared isolated retry
-passed both journeys. That is a residual play-eval variability signal, not a
-suppressed failure or a reason to weaken authority assertions.
+The complete lane passed without retries after the visual integration and
+harness-timeout correction. Earlier timing variability remains useful tuning
+history, but it did not recur in this RC pass.
 
 ## Remaining Release Gates
 
 These are evidence gates, not missing architecture:
 
-- [x] Build the final hash-named artifact from a clean committed tree.
-- [x] Boot the embedded control plane, sim, and packaged Three client from that
-  artifact.
-- [x] Run the complete automated candidate lane after the final docs/source
-  commit.
+- [ ] Build the final hash-named artifact from the clean committed RC tree.
+- [ ] Boot the embedded control plane, sim, and packaged Three client from that
+  exact artifact.
+- [x] Run the complete no-retry automated candidate lane after the final
+  source changes.
 - [ ] If the physical Deck is online, deploy and verify Gaming Mode launch,
   Steam Input, 1280x800 readability, suspend/resume, and log paths.
 - [ ] Greg reviews movement feel, route pleasure, visual hierarchy, and final
   polish.
+- [ ] Greg reviews the target-speaker/headphone mix; browser audio-graph
+  inspection and the prioritized runtime copy retunes remain polish follow-up.
 - [ ] Greg explicitly decides when v0.3 promotes to `main`.
 
 ## Deferred Beyond v0.3

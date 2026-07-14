@@ -26,6 +26,11 @@ volume-control persistence, executor routing, and troubadorb plan ratification
 are Greg's calls. The troubadorb plan is an Orrery reconstruction because the
 overnight lane produced no output.
 
+**Follow-through (2026-07-14):** The reviewed audio and public-roster code waves
+did land, so the automated candidate gate was reopened and rerun. Palette's
+larger runtime execution and Troubadorb's prioritized string retunes remain
+polish work rather than silently completed scope.
+
 ## 2026-07-10 — Promo evidence must disclose how the state was reached
 
 **Decision:** A social capture manifest must distinguish product-flow,

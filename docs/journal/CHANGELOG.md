@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-07-14 — v0.3 clean RC evidence and visual harness closure
+
+- Re-ran the complete v0.3 automated lane from a stopped stack with timing
+  retries disabled. Authority, protocol, Ballpark, movement, product flow,
+  controller, keyboard/mouse, natural agent play, renderer, and UI evidence
+  remained green.
+- Raised the UI visual suite budget from six to ten minutes. Its sixteen
+  settled animation/layout captures had outgrown the old wrapper timeout; the
+  captured states themselves were passing.
+- Refreshed the RC, roadmap, build-status, and visual-evidence ledgers around
+  current no-retry proof and removed a stale pointer to ignored promo media.
+- Kept physical Steam Deck Gaming Mode, Greg's feel/visual/audio review, browser
+  audio-graph inspection, and prioritized runtime copy retunes explicit rather
+  than folding them into automated acceptance.
+
 > Human-readable version history of design docs.
 > Git is authoritative. This is for quick scanning without `git log`.
 
