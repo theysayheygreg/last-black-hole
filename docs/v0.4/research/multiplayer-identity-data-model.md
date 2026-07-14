@@ -1,15 +1,29 @@
 # Multiplayer Identity, Authentication, And Data Model
 
-> Research memo for v0.4. Evidence checked 2026-07-10. This is an architecture recommendation, not an implementation claim or legal opinion.
+> Research memo for v0.4. Evidence checked 2026-07-10 and reconciled with the
+> terminal low-count decision on 2026-07-14. This is an architecture
+> recommendation, not an implementation claim or legal opinion. The concise
+> ratification surface is
+> [`../HOSTED-IDENTITY-PLACEMENT-DECISION.md`](../HOSTED-IDENTITY-PLACEMENT-DECISION.md).
 
 ## Recommendation
 
-Keep LBH local-first, but make hosted progression server-authoritative. For the first 4–8-player release:
+Keep LBH local-first, but make hosted progression server-authoritative. For the
+admitted one-to-four-player product path:
 
-1. Use Steam session tickets as the only hosted sign-in and entitlement path. Exchange the ticket at the LBH control plane, verify it with Steam, map the returned SteamID to an internal account, and issue LBH-scoped sessions. Do not collect passwords.
+1. Put hosted identity behind a narrow platform-ticket adapter. If Greg chooses
+   an every-seat-entitled Steam MVP, Steam session tickets are the first
+   adapter: exchange the ticket at the LBH control plane, verify it with Steam,
+   map the returned SteamID to an internal account, and issue LBH-scoped
+   sessions. Do not collect passwords. A storefront or friend-pass choice must
+   not be silently decided by implementation convenience.
 2. Keep offline profiles fully playable and clearly labeled `LOCAL`. A local profile can be linked to an account, but local currency, vault contents, upgrades, and run history are not silently merged into the authoritative online ledger. Linking creates or selects a `CLOUD` profile and may copy non-economic settings and the display name.
 3. Extend the existing split: the control plane owns accounts, entitlements, profiles, progression, parties, session placement, bans, audit, and settlement; one disposable sim owns each live run; clients own presentation and input intent.
-4. Replace caller-chosen `clientId` authority with a server-created run membership and short-lived command grant. Preserve protocol-v2 `runId`, `playerId`, two monotonic sequences, event watermarks, and snapshot rebase.
+4. Replace caller-chosen `clientId` authority with server-created session/run
+   memberships and a signed, short-lived admission/resume ticket. Preserve the
+   implemented protocol-v2 `runId`, `playerId`, `membershipId`,
+   `connectionId`/`connectionEpoch`, two monotonic sequences, event
+   watermarks, snapshot rebase, and capability/manifest bindings.
 5. Use a small relational database for hosted truth. Store inventory and currency as explicit records/ledger entries, not a mutable profile JSON blob. Use JSON only for versioned, bounded payloads such as loadout snapshots and run telemetry.
 
 This is the smallest secure design for a $4.99 game. It avoids a custom password system, preserves offline play, and does not pretend a compromised local client can prove earned progression.
@@ -24,14 +38,40 @@ The v0.3 architecture already has the correct coarse boundary:
 - Profiles currently begin in browser `localStorage`; the control plane stores the durable copy after bootstrap.
 - `applyOutcome()` writes profile and then run data to a JSON file. A repeat call can credit EM and update counters twice even though the run row is overwritten by `runId`.
 
-Those are good local/private foundations, not internet-safe APIs. Current hosted blockers include:
+Those are good local/private foundations, not internet-safe APIs. The current
+runtime also has an in-memory 30-second single-use admission/resume ticket
+registry bound to run, membership, player, profile, negotiated capabilities,
+manifest, and (for resume) connection identity. It is a match-local protocol
+primitive, not a hosted identity, placement, or durable lease service.
+
+Current hosted blockers include:
 
 - `/profile?profileId=...`, `/profile/save`, `/profile/outcome`, session mutation, and echo mutation have no end-user or service authentication.
 - `profileId`, `clientId`, profile snapshots, run results, and whole profile objects are caller supplied. An opaque UUID reduces guessing; it does not confer authorization. OWASP identifies object-ID manipulation as the defining API object-authorization failure and requires an authorization check for every operation that uses a client-supplied object id ([OWASP API1:2023](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)).
-- Long-lived command credentials are held in process memory but are effectively bearer secrets. There is no expiry, authority epoch, durable revocation, or device session.
+- Command credentials are held in process memory and rotate with the
+  implemented connection epoch, but remain bearer secrets without expiry,
+  durable revocation, account/device session binding, or a control-plane
+  authority lease.
 - Writes are whole-file and non-transactional. Profile mutation, run recording, and echo persistence cannot commit atomically across crashes or concurrent sims.
-- A reconnect currently accepts profile/loadout fields that could mutate the live player after authority validation. Hosted reconnect must rehydrate from server state, not accept durable or run inventory from the client.
-- Session host is a gameplay-control role, but is represented as `hostClientId`. It needs a versioned membership lease, not special account privilege.
+- Reconnect now preserves server-owned player/profile/loadout state and ignores
+  caller mutation attempts. Initial join still accepts caller-selected
+  `clientId`, `profileId`, and a bootstrap snapshot at unauthenticated local
+  endpoints; hosted join must resolve all durable bootstrap from the
+  authenticated reservation.
+- Session host/lobby leader remains represented as `hostClientId`. It needs a
+  versioned session-membership role, not special account privilege.
+- `/sim/register` and `/sim/heartbeat` track a caller-chosen `simInstanceId`
+  in memory, with no service authentication, lease deadline, fencing token,
+  drain state, placement record, or run assignment. They are health discovery,
+  not production placement.
+- The local service token on `/profile/outcome` authenticates a shared caller
+  when configured, and `(runId, profileId)` plus a result hash makes retry
+  idempotent. It does not prove workload identity, active authority lease,
+  membership ownership, or atomically normalize result/settlement/ledger rows
+  in a relational transaction.
+- The final v0.4 low-count decision admits S20 only for one through four
+  players. Eight is closed; S24 produced no eligible live cohort and is not a
+  capacity claim. Hosted schema and placement must enforce `max_players <= 4`.
 - Echoes include a pilot display name. They need visibility, moderation, anonymization, and deletion behavior before becoming shared hosted content.
 
 ## Trust Boundaries
@@ -69,35 +109,47 @@ Trust rules:
 
 ## Identifier Taxonomy
 
-Use UUIDv7 for new database primary keys: it is opaque enough for public locators, time-sortable for indexes, and standardized with a 48-bit Unix-millisecond time field plus random bits ([RFC 9562](https://www.rfc-editor.org/info/rfc9562/)). Continue accepting existing UUIDv4 local profile ids during migration. Never infer permission, creation order, or shard from an id.
+Use UUIDv7 for new server/database identifiers: it is time-sortable for indexes
+and standardized with a 48-bit Unix-millisecond time field plus random bits
+([RFC 9562](https://www.rfc-editor.org/info/rfc9562/)). Continue accepting
+existing UUIDv4 local profile ids during migration. UUID opacity is only
+defense in depth: never infer permission, shard, provider, or trust from an id.
+Tokens are 256-bit random opaque values or signed claims; they are not ids.
 
-| Identifier | Lifetime / creator | Exposure | Security role |
-|---|---|---|---|
-| `account_id` | Stable until account deletion; control plane | Private internal; may appear in owner export/admin audit | Principal joining platform identities and cloud profiles. Never a public player handle. |
-| `provider_subject` | Stable per provider; Steam supplies SteamID | Private to backend/support; unique with `provider` | Verified external identity. Store canonical value and a keyed lookup hash if logs/search require pseudonymization. |
-| `entitlement_id` | One record per account/provider/app/grant | Private | Evidence and cache of product ownership; not an auth session. |
-| `device_id` | Random per physical-device registration; control plane acknowledges | Owner-visible, backend-visible, rotating/revocable | Names a device for session inventory and notifications. Not authority by itself. |
-| `install_id` | Random on install; client creates, backend registers | Backend-visible, reset on reinstall | Diagnostics and local migration correlation only. Never ban or authorize by install id. |
-| `device_key_id` | Per install/device keypair | Public key private to backend; private key in OS credential store | Optional proof-of-possession and refresh-session binding. Secret key never leaves device. |
-| `local_profile_id` | Stable inside an offline save lineage | Local/private | Local save key. It can be recorded as import provenance, never used to fetch another account's cloud profile. |
-| `profile_id` | Stable cloud pilot; control plane | Owner and authorized session participants receive bounded presentation form | Owns progression/vault/Chronicle. Authorization derives from `profile.account_id`, not possession of id. |
-| `party_id` | Until party disbands/expires | Party members | Matchmaking grouping, no gameplay authority. |
-| `session_id` | Lobby/session lifecycle; control plane | Members/invite resolution | Social container and placement. Survives a run reset only if product design wants a rematch lobby. |
-| `run_id` | Exactly one authoritative simulation epoch; control plane | Members, sim, run history | Coarse EVE-style authority unit. Reset creates a new run id. |
-| `membership_id` | One account/profile seat in one run | Member, sim, control plane | Stable reconnect subject and role holder. Unique `(run_id, account_id)` and `(run_id, seat_no)`. |
-| `player_id` | Server-issued public alias for membership within a run | All clients in that run | Protocol subject and presentation identity. Stable across reconnect; not globally linkable. Prefer random per run. |
-| `incarnation_id` | Each spawned/live body generation; sim | Run participants | Rejects stale body references after death/rejoin/respawn. Complements Ballpark generation handles. |
-| `connection_id` | Each transport connection; gateway/sim | Client + services, short-retention logs | Rotates on reconnect. Carries no durable identity. |
-| `authority_grant_id` | Each join/reconnect authority epoch; control plane/sim | Identifier may be logged; token is secret | Server-side record for command capability, scopes, expiry, revocation, and last accepted sequences. |
-| `authority_secret` | Random 256-bit bearer value or signed proof; server | Secret, shown once to client over TLS; store only hash if opaque | Actual command capability. Rotate on reconnect and host-role change; expire shortly after run/reconnect window. |
-| `authority_epoch` | Monotonic per membership | Run services/client | Invalidates commands from an earlier connection or stolen old grant. Included in command MAC/claims and settlement evidence. |
-| `join_ticket_id` / secret | Single-use, short TTL | Invite exchange only; secret never in URL/log | Claims a reserved membership. Store a hash, audience, expiry, use count, and intended account/party where known. |
-| `command_seq` | Monotonic per authority epoch/membership | Client/sim | Idempotency and ordering for mutations. Do not reset merely because the socket reconnects unless the authority epoch also rotates. |
-| `input_seq` | Monotonic per input stream | Client/sim | Drops stale continuous input independently of command mutations. |
-| `event_seq` / `snapshot_id` | Per run, server | Run participants | Recovery watermarks, not secrets. |
-| `result_id` | One per `(run_id, membership_id)` outcome | Services and owner history | Immutable run-result identity. |
-| `settlement_id` | One per result settlement attempt/finalization | Private services/audit | Transaction and idempotency boundary for durable writes. |
-| `idempotency_key` | Caller-generated only for safe client APIs; service-derived for settlement | Header/body, short retention | Deduplicates retries. Settlement key should be derived from `run_id + membership_id + result_version`, not trusted client randomness. |
+Privacy classes below are `PUBLIC_RUN`, `OWNER`, `INTERNAL`, `SECURITY`, and
+`SECRET`. `wire` means only the specifically authorized control/gameplay wire;
+it does not mean public discovery.
+
+| Identifier | Format and issuer | Lifetime, rotation, persistence | Scope and privacy | Logs / replay / wire |
+|---|---|---|---|---|
+| `install_id` | UUIDv4/v7 random; installation creates | One install; resets on reinstall; local + registered metadata | Diagnostics/import correlation; `INTERNAL`; never authority or ban identity | Pseudonymized in short logs; never replay/public wire; registration wire only |
+| `device_id` | UUIDv7; control plane after registration | Until device removal/account deletion; revocable; cloud | Account device/session inventory; `OWNER`/`INTERNAL`; no fingerprinting | Owner/security logs and account API only; never replay/game wire |
+| `device_key_id` | UUIDv7; control plane | Key lifetime; rotate/revoke; public key cloud, private key OS credential store | Optional refresh proof-of-possession; `SECURITY`; private key is `SECRET` | Key id in security log/auth wire; never replay/game wire |
+| `local_profile_id` | Existing UUIDv4 or UUIDv7; local profile store | Local lineage lifetime; never rotates; local save/export | Offline pilot key; `OWNER`; cannot authorize cloud access | Local diagnostics/save only; import sends keyed provenance hash, not raw id |
+| `provider_subject` | Provider-native canonical string; verified provider | Provider account lifetime; changes only by unlink/relink; encrypted cloud | External principal; `SECURITY`; unique `(provider, subject)` | Restricted audit/auth wire only; keyed alias in general logs; never replay/game wire |
+| `account_id` | UUIDv7; control plane | Cloud account lifetime; tombstoned/deleted by policy | Internal principal joining identities, entitlements, pilots; `INTERNAL` | Restricted audit/export; pseudonym in general logs; never replay/game wire |
+| `entitlement_id` | UUIDv7; control plane | Grant observation lifetime; refreshed/revoked; cloud | Product/friend-pass grant; `INTERNAL`; not an auth session | Restricted audit/account response; never replay/game wire |
+| `profile_id` | UUIDv7; control plane | Cloud pilot lifetime; no rotation; cloud + read cache | Durable progression owner; `OWNER`/`INTERNAL`; possession grants nothing | Owner APIs and restricted audit; never public roster/replay; bootstrap service wire only |
+| `client_process_id` | UUIDv4 random; client process | One OS process launch; rotates on restart; memory/short diagnostics | Correlates transport attempts, not a person/device; `INTERNAL` | Short pseudonymous logs and admission request; never replay/snapshot |
+| `client_incarnation_id` | UUIDv4 random; client | One gameplay client state machine incarnation; rotates on hard reset/reinstall of active state; memory | Fences stale client callbacks/cursors inside a process; `INTERNAL`; no gameplay authority | Short diagnostics/admission ticket claim if needed; never replay/public wire |
+| `party_id` | UUIDv7; control plane | Party lifetime; cloud until expiry | Social group only; `OWNER`; no gameplay authority | Member APIs/logs; never gameplay replay; placement control wire only |
+| `session_id` | UUIDv7; control plane | Lobby/rematch-container lifetime; cloud | Invite/join/region container; `OWNER` | Member APIs/control logs; optional replay metadata only if non-linkable |
+| `session_membership_id` | UUIDv7; control plane | One account/profile membership in lobby; ends on leave/expiry; cloud | Leader/member role; `OWNER`/`INTERNAL`; leader has no sim power | Member control wire and audit; replay uses run alias instead |
+| `run_id` | UUIDv7; control plane (existing runtime uses UUIDv4) | Exactly one sim/run lifecycle; immutable; cloud + sim | Coarse authority/settlement unit; `OWNER`/`INTERNAL` | Operational logs, authorized replay, admission/game wire |
+| `run_membership_id` (`membershipId` today) | UUIDv7; control plane (runtime currently creates UUIDv4-prefixed) | One profile seat in one run; stable through reconnect; cloud + sim | Reconnect/private-state subject; `INTERNAL` | Pseudonymous ops logs and admission/game control wire; exclude public replay |
+| `player_id` | Random run-scoped UUID/alias; control plane | One run; stable through reconnect; sim + run record | Public run identity; `PUBLIC_RUN`; not globally linkable | Roster, game wire, authorized replay; acceptable in run logs |
+| `body_incarnation_id` | UUID/monotonic generation; authority/Ballpark | One spawned body generation; sim and bounded event history | Fences stale entity refs; `PUBLIC_RUN` only when body observable | Game wire/replay/run logs; never account mapping |
+| `connection_id` | UUIDv7/random; authority/gateway | One socket; rotates every reconnect; short cloud/sim record | Transport attempt; `INTERNAL` | Short ops logs and resume/admission wire; never replay/public state |
+| `connection_epoch` | Positive integer; authority lease/membership service | Monotonic per run membership; increments on reconnect; cloud + sim | Fences an older connection; `INTERNAL` | Control/game wire and ops logs; replay only if diagnostic/private |
+| `authority_instance_id` | UUIDv7; placement service | One workload process/actor incarnation; durable placement record | Workload identity, not match identity; `INTERNAL` | Fleet/audit/service wire; never client replay or public roster |
+| `authority_lease_id` | UUIDv7 plus monotonic `lease_epoch`; placement service | One writer lease; renews heartbeat deadline, epoch rotates on replacement; cloud + authority | Single-writer fence for one `run_id`; `SECURITY` | Restricted fleet/settlement logs and service wire; never client wire/replay |
+| `admission_ticket_id` / `resume_ticket_id` | UUIDv7 `jti` inside signed token or opaque digest record; control plane | Single use, 30–60 s; rotate/reissue; digest/replay record until TTL | Binds account/profile/session/run/authority lease/connection incarnation/capabilities; id `SECURITY`, token `SECRET` | `jti` in restricted audit, token never logged/replayed/URL; token only admission wire |
+| `authority_grant_id` / command secret | UUIDv7 record plus 256-bit opaque secret or signed proof; authority/control plane | Connection/reconnect-window lifetime; rotate each connection/role change; hash only | Input/action capability for one membership/epoch; id `SECURITY`, secret `SECRET` | Grant id in restricted logs/wire; secret never logs/replay/snapshot |
+| `command_seq` / `input_seq` | Unsigned monotonic integer; client, accepted by authority | Per membership/grant stream; persisted through reconnect cursor as declared | Ordering/idempotency, not authentication; `PUBLIC_RUN`/`INTERNAL` | Game wire and diagnostic replay are allowed |
+| `event_id` / `event_seq` / `snapshot_id` | UUIDv7 or run-local monotonic integer; authority | Run lifetime plus bounded replay/result retention | Causal recovery/idempotency keys; visibility follows event lane | Authorized game wire/replay/logs; private lane never enters public replay |
+| `result_id` | UUIDv7; authority derives or control plane assigns | Immutable, one per `(run, membership, result_version)`; cloud | Final sim fact envelope; `OWNER`/`INTERNAL` | Service wire/audit/owner history; public replay receives projection only |
+| `settlement_id` | UUIDv7; durable control plane | Immutable transaction boundary; cloud | Exactly-once durable mutation; `INTERNAL` | Service/audit/owner receipt; never gameplay wire/replay |
+| `idempotency_key` | Client random UUID for safe public API; server-derived key for settlement | Operation retention window; cloud/cache | Retry dedupe only; never permission. Settlement key is server-derived from run/membership/version | Request/audit logs with retention; never public replay |
 
 Public player presentation should contain only `player_id`, sanitized display name, hull/affiliation, and game-visible state. Never expose `account_id`, provider subject, device/install ids, email, IP, access/refresh tokens, command secrets, or internal moderation fields.
 
@@ -170,7 +222,12 @@ erDiagram
     PROFILE ||--o{ PROFILE_REVISION : versions
     PARTY ||--o{ PARTY_MEMBER : contains
     ACCOUNT ||--o{ PARTY_MEMBER : joins
-    SESSION ||--o{ RUN : contains
+    SESSION ||--o{ SESSION_MEMBER : contains
+    ACCOUNT ||--o{ SESSION_MEMBER : joins
+    SESSION ||--o{ RUN : creates
+    RUN ||--|| RUN_PLACEMENT : placed_by
+    AUTHORITY_INSTANCE ||--o{ AUTHORITY_LEASE : acquires
+    RUN ||--o{ AUTHORITY_LEASE : fenced_by
     RUN ||--o{ RUN_MEMBERSHIP : seats
     PROFILE ||--o{ RUN_MEMBERSHIP : pilots
     RUN_MEMBERSHIP ||--o{ PLAYER_INCARNATION : spawns
@@ -221,32 +278,57 @@ party(party_id PK, state, leader_account_id FK, version, expires_at)
 party_member(party_id FK, account_id FK, role, joined_at,
              PRIMARY KEY(party_id, account_id))
 session(session_id PK, party_id FK NULL, state, visibility, region,
-        max_players CHECK(max_players BETWEEN 4 AND 8), version, created_at, expires_at)
-run(run_id PK, session_id FK, sim_instance_id, state, map_id, seed_commitment,
-    protocol_version, result_schema_version, created_at, live_at, ended_at,
-    UNIQUE(sim_instance_id, run_id))
+        max_players CHECK(max_players BETWEEN 1 AND 4), version, created_at, expires_at)
+session_member(session_membership_id PK, session_id FK, account_id FK,
+               profile_id FK, role CHECK(role IN ('leader','member')), state,
+               joined_at, left_at, row_version,
+               UNIQUE(session_id, account_id), UNIQUE(session_id, profile_id))
+run(run_id PK, session_id FK, state, map_id, seed_commitment,
+    protocol_version, result_schema_version, created_at, live_at, ended_at)
 run_membership(membership_id PK, run_id FK, account_id FK, profile_id FK,
-               player_id, seat_no, role, state, authority_epoch, joined_at,
+               session_membership_id FK, player_id, seat_no, state,
+               connection_epoch, joined_at,
                disconnected_at, reconnect_until,
                UNIQUE(run_id, account_id), UNIQUE(run_id, player_id), UNIQUE(run_id, seat_no))
 player_incarnation(incarnation_id PK, membership_id FK, ordinal, body_public_id,
                    spawned_tick, retired_tick, reason,
                    UNIQUE(membership_id, ordinal))
-connection(connection_id PK, membership_id FK, authority_epoch, transport,
+connection(connection_id PK, membership_id FK, connection_epoch, transport,
+           client_process_id, client_incarnation_id,
            opened_at, closed_at, close_reason)
-authority_grant(authority_grant_id PK, membership_id FK, authority_epoch,
+authority_grant(authority_grant_id PK, membership_id FK, connection_epoch,
                 secret_hash, scopes, issued_at, expires_at, revoked_at,
                 last_command_seq, last_input_seq,
-                UNIQUE(membership_id, authority_epoch))
-join_ticket(join_ticket_id PK, session_id FK, intended_account_id FK NULL,
-            secret_hash, expires_at, redeemed_at, max_uses, use_count)
+                UNIQUE(membership_id, connection_epoch))
+admission_ticket(ticket_id PK, kind, session_id FK, run_id FK,
+                 membership_id FK, account_id FK, profile_id FK,
+                 authority_lease_id FK, connection_epoch,
+                 client_incarnation_id, capability_hash, secret_hash,
+                 issued_at, expires_at, consumed_at,
+                 CHECK(kind IN ('admission','resume')))
+
+authority_instance(authority_instance_id PK, region, host_id, workload_identity,
+                   artifact_digest, state, started_at, heartbeat_at, drained_at)
+run_placement(placement_id PK, run_id FK UNIQUE, requested_region,
+              selected_region, authority_instance_id FK, placement_attempt,
+              state, created_at, assigned_at,
+              UNIQUE(run_id, placement_attempt))
+authority_lease(authority_lease_id PK, run_id FK, authority_instance_id FK,
+                lease_epoch, state, acquired_at, heartbeat_deadline, fenced_at,
+                UNIQUE(run_id, lease_epoch))
 
 run_result(result_id PK, run_id FK, membership_id FK, outcome, result_version,
-           sim_instance_id, final_tick, result_hash, payload_json, received_at,
-           UNIQUE(run_id, membership_id), UNIQUE(run_id, result_hash))
+           authority_lease_id FK, final_tick, result_hash, payload_json, received_at,
+           UNIQUE(run_id, membership_id, result_version))
 run_settlement(settlement_id PK, result_id FK UNIQUE, profile_id FK,
                status, profile_revision_before, profile_revision_after,
                settled_at, failure_code)
+result_outbox(outbox_id PK, authority_instance_id FK, authority_lease_id FK,
+              result_id, result_hash, encrypted_payload, state, attempt_count,
+              next_attempt_at, created_at, acknowledged_at,
+              UNIQUE(authority_lease_id, result_id))
+service_identity(service_identity_id PK, workload_identity UNIQUE, state,
+                 allowed_audience, created_at, revoked_at)
 chronicle_echo(echo_id PK, source_result_id FK, owner_profile_id FK NULL,
                map_id, seed, public_pilot_name, payload_json, visibility,
                created_at, expires_at, anonymized_at)
@@ -263,12 +345,18 @@ Recommended operational indexes:
 
 - `auth_identity(provider, provider_subject)` and `auth_session(refresh_token_hash)` for sign-in.
 - `profile(account_id, state)`; every profile query still checks the authenticated account relationship.
-- `run(state, region, created_at)`, `run(sim_instance_id, state)`, `session(state, expires_at)`, and `run_membership(account_id, state, reconnect_until)` for placement/reconnect.
+- `run(state, created_at)`, `run_placement(selected_region, state, created_at)`,
+  `authority_lease(run_id, state, heartbeat_deadline)`,
+  `authority_instance(region, state, heartbeat_at)`, `session(state,
+  expires_at)`, and `run_membership(account_id, state, reconnect_until)` for
+  placement/reconnect.
 - `run_result(run_id, membership_id)` and `run_settlement(status, settled_at)` for settlement/retry queues.
 - `ledger_entry(profile_id, created_at DESC)` and `profile_revision(profile_id, revision DESC)` for Chronicle/export/conflict checks.
 - `ban(account_id, scope, ends_at)` plus provider subject lookup through `auth_identity` for join checks.
 - `audit_event(actor_id, occurred_at DESC)`, `audit_event(target_id, occurred_at DESC)`, and time partitioning. Keep sensitive metadata out of general analytics.
-- `chronicle_echo(map_id, seed, visibility, created_at DESC)` with the existing maximum-eight policy enforced in the write transaction.
+- `chronicle_echo(map_id, seed, visibility, created_at DESC)` with the existing
+  maximum-eight echo policy enforced in the write transaction. This echo cap
+  is unrelated to the product's four-player match cap.
 
 ## Atomic Settlement And Idempotency
 
@@ -276,15 +364,26 @@ The sim must never call a generic profile-save endpoint. It sends a versioned im
 
 Settlement transaction:
 
-1. Verify service identity, run-to-sim assignment, run state, result schema, membership, final outcome, payload limits, and result hash.
-2. `INSERT run_result ... ON CONFLICT (run_id, membership_id)`; if the existing hash matches, return the prior settlement. If it differs, quarantine and audit `conflicting_result`.
+1. Authenticate the authority workload, then verify `authority_instance_id`,
+   `authority_lease_id`, monotonically current `lease_epoch`, run assignment,
+   run state, result schema, membership, final outcome, payload limits, and
+   result hash. A shared fleet token or merely knowing `run_id` is insufficient.
+2. `INSERT run_result ... ON CONFLICT (run_id, membership_id,
+   result_version)`; if the existing hash matches, return the prior settlement.
+   If it differs, quarantine and audit `conflicting_result` without applying
+   either version automatically.
 3. Lock the profile/progression row or use `revision = expected_revision` compare-and-swap.
 4. Insert `run_settlement` and all currency ledger/inventory grants with unique settlement references.
 5. Materialize balance, vault, stats, run history, and eligible Chronicle echo from those immutable facts.
 6. Increment profile revision and commit everything together.
 7. Acknowledge only after commit. Retries are safe because the result and settlement keys are unique.
 
-If the database is unavailable, the sim retains the final result in a bounded durable outbox and the control plane keeps the run `SETTLING`; the player sees `result pending`, not a fabricated balance. Never credit on the client and reconcile later.
+If the database is unavailable, the authority retains the final result in a
+bounded encrypted durable outbox and the control plane keeps the run
+`SETTLING`; the player sees `result pending`, not a fabricated balance. A
+replacement authority may deliver an outbox item only with control-plane
+recovery authorization that binds the original lease/result hash. Never credit
+on the client and reconcile later.
 
 ## Lifecycle And State Machines
 
@@ -315,9 +414,22 @@ stateDiagram-v2
     SettlementPending --> Settled: idempotent retry
 ```
 
-Reconnect policy for MVP: reserve the authoritative live body for 60–120 seconds, neutralize/continue it according to game design, and rotate `connection_id`, command secret, and `authority_epoch` on successful reconnect. The stable membership/player id preserves private event lanes and sequences. A new device may reconnect only after normal account authentication; possession of `player_id` is insufficient.
+Reconnect policy for MVP: reserve the authoritative live body for 90 seconds,
+release thrust and one-shot actions, and let inertia, current, hazards, and
+consequences continue. Rotate `connection_id`, command secret, and
+`connection_epoch` on successful reconnect. The stable run membership/player
+id preserves private event lanes and sequences. A new device may reconnect
+only after normal account authentication and explicit multi-device concurrency
+policy; possession of `player_id` is insufficient.
 
-Host migration is control-plane role migration, not sim migration. Update `(membership.role, session.version)` with compare-and-swap, increment the promoted member's authority epoch, and issue a new host-scoped grant. If the authoritative sim dies, MVP ends the run as `failed` and settles only already-finalized per-player results; restoring a live sim from a signed checkpoint is a later feature and must create a new sim lease/epoch.
+Lobby-leader migration is control-plane role migration, not sim migration.
+Update `(session_member.role, session.version)` with compare-and-swap. No
+gameplay command epoch or privilege changes because the leader never controls
+the sim. If the authoritative sim dies, MVP fences its lease and ends the run
+as `interrupted`; already-final immutable results may settle once, incomplete
+outcomes are void. Restoring live play from a signed checkpoint is later work
+and must allocate a new authority instance/lease epoch while fencing the old
+writer before routing any client.
 
 ## API Surface
 
@@ -343,7 +455,10 @@ POST   /v1/parties/{party_id}/invites      leader creates opaque short invite
 POST   /v1/invites/redeem                  authenticated redemption; secret in body
 POST   /v1/sessions                        entitled party -> session
 GET    /v1/sessions/{session_id}           authorized member view
-POST   /v1/sessions/{session_id}/join      reserve membership + run assignment
+POST   /v1/sessions/{session_id}/join      reserve session membership
+POST   /v1/sessions/{session_id}/runs      leader asks control plane to place run
+GET    /v1/runs/{run_id}/placement         member polls/watches placement
+POST   /v1/runs/{run_id}/admission         issue one-use admission ticket
 POST   /v1/runs/{run_id}/reconnect         rotate run grant for own membership
 POST   /v1/runs/{run_id}/leave             own membership intent
 ```
@@ -351,8 +466,10 @@ POST   /v1/runs/{run_id}/leave             own membership intent
 Internal service API:
 
 ```text
-POST /internal/v1/runs/{run_id}/claim       sim lease/assignment
-POST /internal/v1/runs/{run_id}/heartbeat   lease + health
+POST /internal/v1/authorities/register       workload identity + artifact/region
+POST /internal/v1/runs/{run_id}/claim        CAS assignment -> writer lease epoch
+POST /internal/v1/runs/{run_id}/heartbeat    authenticated lease + health
+POST /internal/v1/runs/{run_id}/drain        stop new placement; preserve live run
 POST /internal/v1/runs/{run_id}/bootstrap   bounded player/loadout snapshots
 POST /internal/v1/runs/{run_id}/results     immutable idempotent result
 POST /internal/v1/runs/{run_id}/ended       lifecycle close
@@ -446,9 +563,11 @@ Deletion flow:
 - Add local/cloud profile UX and the conservative migration policy.
 - Keep local/offline stack fully functional when hosted services are unavailable.
 
-### Phase 3 — 4–8-player session identity
+### Phase 3 — one-to-four-player session identity and placement
 
-- Introduce party, session, run membership, per-run public `player_id`, incarnation, connection, authority epoch, and short reconnect reservation.
+- Introduce party, session membership, run membership, per-run public
+  `player_id`, body/client incarnation, connection epoch, authority
+  instance/lease epoch, and short reconnect reservation.
 - Move host promotion to versioned membership roles.
 - Bind event privacy, snapshot relevance, and command sequences to membership/grant, not request-body ids.
 - Run adversarial tests for stolen/stale grants, cross-profile access, reconnect races, duplicate settlement, and host migration.
@@ -460,10 +579,17 @@ Deletion flow:
 
 ## MVP Acceptance Gates
 
-- Four and eight separately entitled players can join one run; each has a stable membership/player id and rotating connection/grant identity.
+- One through four separately entitled players can join one run; each has a
+  stable membership/player id and rotating connection/grant identity. A fifth
+  seat and every eight-seat configuration fail closed. S24 is not an admitted
+  or measured hosted capacity.
 - Changing any id in a profile, session, reconnect, or result request never changes authorization.
 - A dropped client can reconnect within the configured window without spawning a duplicate body or accepting stale commands.
-- Host departure promotes exactly one eligible membership without granting gameplay or profile authority.
+- Lobby-leader departure promotes exactly one eligible session membership
+  without granting gameplay, connection, profile, or settlement authority.
+- Two authority instances racing to claim one run yield one active
+  `authority_lease_id`; a stale lease cannot admit, heartbeat as current,
+  route, or commit a result.
 - Delivering the same result 100 times produces one run result, one settlement, one set of inventory grants, and one currency/stat delta.
 - Killing the control plane between result receipt and commit either commits once or retries to the same result; the client never becomes durable truth.
 - Offline launch, local profiles, local sim, and local Chronicle work without network/account services.
@@ -473,7 +599,10 @@ Deletion flow:
 
 ## Decisions For Greg
 
-1. **Recommended:** Steam-authenticated hosted play only for MVP; no anonymous hosted guests and no LBH passwords.
+1. **Recommended if every hosted seat is entitled:** Steam-authenticated hosted
+   play for MVP; no anonymous hosted guests and no LBH passwords. Greg still
+   decides whether storefront/friend-pass requirements instead require a
+   different provider adapter or grant type.
 2. **Recommended:** keep local and cloud progression as separate lineages. Copy settings/name on link, not economic state.
 3. **Recommended:** 90–120 second reconnect reservation; disconnected bodies remain sim-owned and cannot be locally frozen or restored.
 4. **Recommended:** host controls lobby/reset/kick proposals only; the dedicated authority controls all gameplay outcomes and settlement.
