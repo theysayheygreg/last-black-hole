@@ -13,6 +13,9 @@
   not fuel exhaustion, so production movement/fuel tuning was left alone.
 - Made title corruption honor reduced motion and removed duplicate remote
   star/scavenger audio cues.
+- Kept every remote-authority phase presentation-only until the session is
+  released, preventing results transitions from locally advancing snapshot
+  entities and crashing on server-only scavenger death state.
 - Added a portable visible agent-eval lane and exposed structural audio
   diagnostics for hosts where a reviewer cannot see an unlocked desktop or
   hear the audio device.

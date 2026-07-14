@@ -3922,7 +3922,10 @@ function gameLoop(now) {
   }
 
   const inMenu = gamePhase === 'title' || gamePhase === 'profileSelect' || gamePhase === 'home' || gamePhase === 'mapSelect' || gamePhase === 'loading' || rendererFixtureActive;
-  const remoteVisualMode = remoteAuthorityActive && (gamePhase === 'playing' || gamePhase === 'dead');
+  // A remote session owns gameplay state until it is explicitly released.
+  // Results and transitions still render its final snapshot, but must never
+  // resume local simulation of those server-owned entities.
+  const remoteVisualMode = remoteAuthorityActive;
 
   // === SIMULATION (runs during gameplay AND menus for background ambiance, frozen when paused) ===
   if (gamePhase !== 'paused') {
