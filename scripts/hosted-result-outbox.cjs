@@ -5,7 +5,6 @@ const { canonicalJsonBytes } = require("./session-replication-manifest.cjs");
 
 const RESULT_SCHEMA = "lbh-hosted-authority-result-v1";
 const MAX_RESULT_BYTES = 128 * 1024;
-const TERMINAL_RUN_STATES = new Set(["DRAINING", "ENDED"]);
 const OUTBOX_STATES = Object.freeze({
   PENDING: "pending", LEASED: "leased", DELIVERED: "delivered", DEAD_LETTER: "dead-letter",
 });
@@ -84,9 +83,41 @@ function inspectPlainData(value, depth = 0, seen = new Set(), counter = { nodes:
   seen.delete(value);
 }
 
+function exactKeys(value, allowed, required = allowed) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) reject("HOSTED_RESULT_INVALID");
+  const keys = Object.keys(value);
+  if (keys.some((key) => !allowed.includes(key)) || required.some((key) => !Object.hasOwn(value, key))) {
+    reject("HOSTED_RESULT_INVALID");
+  }
+}
+
+function validateResultPayload(payload) {
+  inspectPlainData(payload);
+  exactKeys(payload, ["result_version", "outcomes"]);
+  if (!Number.isSafeInteger(payload.result_version) || payload.result_version < 1) reject("HOSTED_RESULT_INVALID");
+  if (!payload.outcomes || typeof payload.outcomes !== "object" || Array.isArray(payload.outcomes)) {
+    reject("HOSTED_RESULT_INVALID");
+  }
+  const membershipIds = Object.keys(payload.outcomes);
+  if (membershipIds.length < 1 || membershipIds.length > 4) reject("HOSTED_RESULT_INVALID");
+  for (const membershipId of membershipIds) {
+    validateIdentifier(membershipId);
+    const outcome = payload.outcomes[membershipId];
+    exactKeys(outcome, ["outcome", "duration_ms", "em_earned", "cargo"],
+      ["outcome", "duration_ms", "em_earned"]);
+    if (!["extracted", "dead", "abandoned"].includes(outcome.outcome)
+        || !Number.isSafeInteger(outcome.duration_ms) || outcome.duration_ms < 0
+        || !Number.isSafeInteger(outcome.em_earned) || outcome.em_earned < 0
+        || (Object.hasOwn(outcome, "cargo") && !Array.isArray(outcome.cargo))) {
+      reject("HOSTED_RESULT_INVALID");
+    }
+  }
+  return payload;
+}
+
 function canonicalResult(identity, payload) {
   const authority = validateAuthorityIdentity(identity);
-  inspectPlainData(payload);
+  validateResultPayload(payload);
   const body = { schema: RESULT_SCHEMA, authority, payload };
   let bytes;
   try { bytes = canonicalJsonBytes(body); } catch { reject("HOSTED_RESULT_INVALID"); }
@@ -100,11 +131,11 @@ function canonicalResult(identity, payload) {
 }
 
 class InMemoryHostedResultOutbox {
-  constructor({ now = Date.now, verifyAuthority, randomBytes = crypto.randomBytes, maxAttempts = 8,
+  constructor({ now = Date.now, acceptAuthorityResult, randomBytes = crypto.randomBytes, maxAttempts = 8,
     baseBackoffMs = 1000 } = {}) {
-    if (typeof verifyAuthority !== "function") throw new TypeError("verifyAuthority is required");
+    if (typeof acceptAuthorityResult !== "function") throw new TypeError("acceptAuthorityResult is required");
     this.now = now;
-    this.verifyAuthority = verifyAuthority;
+    this.acceptAuthorityResult = acceptAuthorityResult;
     this.randomBytes = randomBytes;
     this.maxAttempts = maxAttempts;
     this.baseBackoffMs = baseBackoffMs;
@@ -114,19 +145,22 @@ class InMemoryHostedResultOutbox {
 
   enqueue({ authority, payload } = {}) {
     const canonical = canonicalResult(authority, payload);
-    const lease = this.verifyAuthority(canonical.authority);
-    if (!lease || lease.active !== true || !TERMINAL_RUN_STATES.has(lease.run_state)
-        || lease.run_id !== canonical.authority.run_id || lease.lease_id !== canonical.authority.lease_id
-        || lease.lease_epoch !== canonical.authority.lease_epoch
-        || lease.authority_incarnation !== canonical.authority.authority_incarnation) {
-      reject("HOSTED_RESULT_FENCED");
-    }
     const priorId = this.byRun.get(canonical.authority.run_id);
     if (priorId) {
       const prior = this.entries.get(priorId);
       if (prior.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_CONFLICT");
       return this._public(prior);
     }
+    // Durable adapters MUST implement this as one transaction/CAS with the
+    // authority lease row: validate current active terminal lineage, record
+    // (run, lineage, result_hash) as accepted, and make later replacement or a
+    // second hash impossible. Idempotent retry of that exact tuple is allowed.
+    const accepted = this.acceptAuthorityResult(canonical.authority, canonical.result_hash);
+    if (!accepted || accepted.accepted !== true || accepted.run_id !== canonical.authority.run_id
+        || accepted.lease_id !== canonical.authority.lease_id
+        || accepted.lease_epoch !== canonical.authority.lease_epoch
+        || accepted.authority_incarnation !== canonical.authority.authority_incarnation
+        || accepted.result_hash !== canonical.result_hash) reject("HOSTED_RESULT_FENCED");
     const now = this.now();
     const entry = {
       result_id: canonical.result_id, idempotency_key: canonical.idempotency_key,
@@ -207,5 +241,5 @@ class InMemoryHostedResultOutbox {
 
 module.exports = {
   RESULT_SCHEMA, MAX_RESULT_BYTES, OUTBOX_STATES, HostedResultError,
-  canonicalResult, validateAuthorityIdentity, InMemoryHostedResultOutbox,
+  canonicalResult, validateAuthorityIdentity, validateResultPayload, InMemoryHostedResultOutbox,
 };
