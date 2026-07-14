@@ -168,12 +168,6 @@ const SUITES = [
     browser: false,
   },
   {
-    name: "StatePairLazyCandidateBenchmark",
-    file: "multiplayer-state-pair-lazy-candidate-benchmark.cjs",
-    lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
-    browser: false,
-  },
-  {
     name: "StatePairLazyCandidateEvidence",
     file: "multiplayer-state-pair-lazy-candidate-evidence.cjs",
     lanes: ["multiplayer-network", "multiplayer-authority", "authority", "full"],
